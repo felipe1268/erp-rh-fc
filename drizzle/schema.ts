@@ -8792,6 +8792,9 @@ export const systemDocumentTemplates = pgTable("system_document_templates", {
   aprovadoEm: timestamp("aprovado_em", { mode: 'string' }),
   dataVigencia: varchar("data_vigencia", { length: 20 }),          // ISO yyyy-mm-dd
   proximaRevisao: varchar("proxima_revisao", { length: 20 }),      // ISO yyyy-mm-dd
+  // Rev. 2754 — soft-delete (exclusão pelo admin). NULL = ativo; com data = excluído
+  // (some das listas/consumo). NUNCA fazemos DELETE físico (R-001/R-007/R-010).
+  deletedAt: timestamp("deleted_at", { mode: 'string' }),
 }, (table) => [
   uniqueIndex("uq_sys_doc_tpl_tipo").on(table.tipo),
 ]);

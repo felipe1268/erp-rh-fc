@@ -25,13 +25,14 @@ import { Progress } from "@/components/ui/progress";
 import {
   FileSignature, ShieldCheck, Megaphone, AlertTriangle, BellRing,
   UserX, Hammer, Save, History, RotateCcw, Eye, FileText, Search, Info, Loader2,
-  XCircle, Sparkles, Upload, BadgeCheck, FilePlus2, Undo2, Printer,
+  XCircle, Sparkles, Upload, BadgeCheck, FilePlus2, Undo2, Printer, Trash2,
 } from "lucide-react";
 import RichTextEditor, { type RichTextEditorHandle } from "@/components/RichTextEditor";
 import {
   DOCUMENT_TEMPLATES_META,
   renderTemplate,
   getDocMetaOrFallback,
+  isCustomTipo,
   type DocumentTemplateTipo,
   type DocumentTemplateMeta,
   type PlaceholderDef,
@@ -330,6 +331,17 @@ export default function TemplatesDocsTab() {
   const rascunhoMut = trpc.systemDocumentTemplates.voltarParaRascunho.useMutation({
     onSuccess: () => { toast.success("Documento voltou para RASCUNHO."); invalidarTudo(); },
     onError: (e) => toast.error(e.message || "Falha ao reabrir."),
+  });
+  // Rev. 2754 — exclusão (soft-delete). Custom some de vez; fixo volta a "ausente".
+  const excluirMut = trpc.systemDocumentTemplates.excluir.useMutation({
+    onSuccess: (res) => {
+      toast.success(res.isCustom
+        ? "Documento excluído."
+        : "Documento excluído. Ele pode ser recriado em \"Inicializar padrões\".");
+      setTipoSelecionado(DOCUMENT_TEMPLATES_META[0].tipo);
+      invalidarTudo();
+    },
+    onError: (e) => toast.error(e.message || "Falha ao excluir."),
   });
   const seedMut = trpc.systemDocumentTemplates.seedDefaults.useMutation({
     onSuccess: (res) => {
@@ -638,6 +650,24 @@ export default function TemplatesDocsTab() {
                 {statusAtual !== "obsoleto" && selRow?.existe && (
                   <Button size="sm" variant="outline" className="text-gray-600" onClick={() => { if (confirm("Marcar como obsoleto? Os módulos deixarão de consumir este documento.")) obsoletoMut.mutate({ tipo: tipoSelecionado }); }} disabled={obsoletoMut.isPending}>
                     <XCircle className="w-4 h-4 mr-1" /> Obsoleto
+                  </Button>
+                )}
+                {selRow?.existe && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                    onClick={() => {
+                      const ehCustom = isCustomTipo(tipoSelecionado);
+                      const msg = ehCustom
+                        ? `Excluir o documento "${meta.titulo}"? Ele sairá da Central e não poderá mais ser recuperado por aqui.`
+                        : `Excluir o documento "${meta.titulo}"? Os módulos deixarão de consumi-lo. Por ser um documento institucional fixo, você pode recriá-lo depois em "Inicializar padrões".`;
+                      if (confirm(msg)) excluirMut.mutate({ tipo: tipoSelecionado });
+                    }}
+                    disabled={excluirMut.isPending}
+                  >
+                    {excluirMut.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Trash2 className="w-4 h-4 mr-1" />}
+                    Excluir
                   </Button>
                 )}
               </div>

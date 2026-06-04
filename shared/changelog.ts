@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2754 — **CONFIGURAÇÕES · CENTRAL DE DOCUMENTOS: AGORA DÁ PRA EXCLUIR UM DOCUMENTO (SOFT-DELETE) — SAI DA
+ * CENTRAL E DO CONSUMO DOS MÓDULOS, SEM APAGAR NADA FISICAMENTE.**
+ *
+ * PEDIDO (Felipe): "preciso ter a opção de apagar o documento". A Central tinha criar / editar / aprovar / obsoletar,
+ * mas não havia como REMOVER um documento da lista — nem um custom criado por engano (Rev. 2751), nem esconder um
+ * fixo que não se usa. "Obsoleto" só tira do consumo, mas o doc continua aparecendo na Central.
+ *
+ * MUDANÇA (SCHEMA ADITIVO + SERVER + CLIENT; ZERO ALTER DESTRUTIVO / DROP / DELETE FÍSICO — R-001/R-007/R-010):
+ *   (1) SCHEMA (`drizzle/schema.ts`): NOVA coluna `deleted_at TIMESTAMP` (nullable) em `system_document_templates`
+ *       (soft-delete). Garantida por `ALTER TABLE ... ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP` no self-heal
+ *       `[SyncSchema+]` (`server/_core/index.ts`) — aditivo, idempotente, nunca destrutivo.
+ *   (2) SERVER (`server/routers/systemDocumentTemplates.ts`): NOVO endpoint `excluir(tipo)` (requireAdmin) que carimba
+ *       `deleted_at = NOW()` (JAMAIS DELETE físico). TODAS as leituras passaram a filtrar `isNull(deletedAt)`
+ *       (`listAll`, `get`, `listVersions`, `getVigente`) — o doc some das listas e do consumo dos módulos. O `save`
+ *       (path de bump de versão E path no-op-ISO) volta `deleted_at = null`, então RE-SALVAR um doc excluído o REVIVE.
+ *       `seedDefaults` ("Inicializar padrões") deixou de pular pelo `tipo` cru: pula só ATIVOS e, p/ um fixo excluído,
+ *       REVIVE a linha (UPDATE limpando `deleted_at` + reseed) em vez de inserir — evitaria violar o índice único
+ *       `uq_sys_doc_tpl_tipo`. `excluir` devolve `{ isCustom }` p/ a UI orientar a recuperação.
+ *   (3) CLIENT (`client/src/pages/configuracoes/TemplatesDocsTab.tsx`): NOVA mutation `excluirMut` + botão "Excluir"
+ *       (vermelho, ícone `Trash2`) na barra de ações do editor, com `confirm()` de texto DIFERENTE p/ custom
+ *       (some de vez) vs fixo (pode recriar em "Inicializar padrões"). Ao excluir, deseleciona o doc (volta ao 1º
+ *       fixo) e invalida as queries.
+ *
+ * RESSALVA: documento CUSTOM (criado na Rev. 2751, slug `custom_*`) excluído sai de vez da Central — não há tela de
+ * lixeira p/ ele (a linha fica no banco com `deleted_at`, mas a UI não a reexibe). Documento FIXO (1 dos 7) excluído
+ * vira "ausente" e é recriável por "Inicializar padrões" ou re-salvando. O slug do custom excluído permanece RESERVADO
+ * (criarNovo conta TODOS os slugs, inclusive deletados, p/ não violar o tipo único).
+ *
+ * VALIDAÇÃO: esbuild parse server + client EXIT 0 (sem imports órfãos); `vitest server/rescisao.test.ts` 41/41 verde.
+ *
+ * ---------------------------------------------------------------------------------------------------------------------
+ *
  * Rev. 2753 — **CONFIGURAÇÕES · CENTRAL DE DOCUMENTOS: A GERAÇÃO POR IA AGORA MOSTRA UMA BARRA DE PROGRESSO 0–100% E
  * NUNCA PASSA DE ~1 MINUTO.**
  *

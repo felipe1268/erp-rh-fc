@@ -2085,8 +2085,10 @@ Regras:
           await db.execute(sql`ALTER TABLE system_document_templates ADD COLUMN IF NOT EXISTS aprovado_em TIMESTAMP`);
           await db.execute(sql`ALTER TABLE system_document_templates ADD COLUMN IF NOT EXISTS data_vigencia VARCHAR(20)`);
           await db.execute(sql`ALTER TABLE system_document_templates ADD COLUMN IF NOT EXISTS proxima_revisao VARCHAR(20)`);
+          await db.execute(sql`ALTER TABLE system_document_templates ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP`);
           console.log(`[SyncSchema+] Rev. 2141: tabelas system_document_templates + versions garantidas.`);
           console.log(`[SyncSchema+] Rev. 2747: colunas ISO documentais garantidas em system_document_templates.`);
+          console.log(`[SyncSchema+] Rev. 2754: coluna deleted_at (soft-delete) garantida em system_document_templates.`);
           // Rev. 2747 — Auto-seed dos 7 documentos institucionais quando a tabela
           // está vazia, garantindo que NENHUM tipo fique "Não criado" sem ação
           // manual (acceptance Task #59). Idempotente: só roda com count=0

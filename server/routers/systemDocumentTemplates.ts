@@ -12,7 +12,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
 import { systemDocumentTemplates, systemDocumentTemplateVersions } from "../../drizzle/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import {
   DOCUMENT_TEMPLATES_META,
@@ -98,7 +98,10 @@ export const systemDocumentTemplatesRouter = router({
   listAll: protectedProcedure.query(async ({ ctx }) => {
     requireAdmin(ctx);
     const db = await getDb();
-    const rows = await db.select().from(systemDocumentTemplates);
+    // Rev. 2754 — soft-delete: documentos excluídos (deleted_at != NULL) somem
+    // da lista. Fixos excluídos voltam a aparecer como "ausente" (recriáveis);
+    // custom excluídos somem de vez.
+    const rows = await db.select().from(systemDocumentTemplates).where(isNull(systemDocumentTemplates.deletedAt));
     const byTipo = new Map<string, any>(rows.map(r => [r.tipo, r]));
     // (1) Os 7 tipos FIXOS (sempre listados, mesmo sem linha no banco).
     const fixos = DOCUMENT_TEMPLATES_META.map(meta => {
@@ -156,7 +159,10 @@ export const systemDocumentTemplatesRouter = router({
     .query(async ({ input, ctx }) => {
       requireAdmin(ctx);
       const db = await getDb();
-      const [row] = await db.select().from(systemDocumentTemplates).where(eq(systemDocumentTemplates.tipo, input.tipo));
+      const [row] = await db.select().from(systemDocumentTemplates).where(and(
+        eq(systemDocumentTemplates.tipo, input.tipo),
+        isNull(systemDocumentTemplates.deletedAt),
+      ));
       // Custom: a meta vem da própria linha (placeholders comuns). Fixos: meta do catálogo.
       const meta = getDocMetaOrFallback(input.tipo, row?.titulo);
       if (!getTemplateMeta(input.tipo) && !row) {
@@ -192,7 +198,10 @@ export const systemDocumentTemplatesRouter = router({
     .query(async ({ input, ctx }) => {
       requireAdmin(ctx);
       const db = await getDb();
-      const [tpl] = await db.select().from(systemDocumentTemplates).where(eq(systemDocumentTemplates.tipo, input.tipo));
+      const [tpl] = await db.select().from(systemDocumentTemplates).where(and(
+        eq(systemDocumentTemplates.tipo, input.tipo),
+        isNull(systemDocumentTemplates.deletedAt),
+      ));
       if (!tpl) return [];
       const versions = await db.select({
         id: systemDocumentTemplateVersions.id,
@@ -252,7 +261,7 @@ export const systemDocumentTemplatesRouter = router({
         await tx.execute(sql`SELECT pg_advisory_xact_lock(${lockKey})`);
 
         const existingRows: any[] = await tx.execute(sql`
-          SELECT id, versao_atual, conteudo_html, status
+          SELECT id, versao_atual, conteudo_html, status, deleted_at
             FROM system_document_templates
            WHERE tipo = ${input.tipo}
            FOR UPDATE
@@ -297,9 +306,13 @@ export const systemDocumentTemplatesRouter = router({
         // No-op de CONTEÚDO (não polui histórico). Mesmo assim, se vieram
         // metadados ISO novos, atualiza só a ficha (sem bumpar versão).
         if (existing.conteudo_html === input.conteudoHtml) {
-          if (Object.keys(isoSet).length > 0) {
+          // Rev. 2754 — re-salvar SEMPRE revive um doc excluído, mesmo sem mudança
+          // de conteúdo OU de ISO (revive determinístico). Sem ISO novo e sem estar
+          // excluído, é no-op real (não toca a linha).
+          if (Object.keys(isoSet).length > 0 || existing.deleted_at != null) {
             await tx.update(systemDocumentTemplates).set({
               ...isoSet,
+              deletedAt: null,
               updatedAt: sql`NOW()`,
             } as any).where(eq(systemDocumentTemplates.id, existing.id));
           }
@@ -330,6 +343,7 @@ export const systemDocumentTemplatesRouter = router({
           aprovadoPorId: null,
           aprovadoPorNome: null,
           aprovadoEm: null,
+          deletedAt: null, // Rev. 2754 — re-salvar revive um doc que estava excluído.
           atualizadoPorId: userId,
           atualizadoPorNome: userName,
           updatedAt: sql`NOW()`,
@@ -358,7 +372,7 @@ export const systemDocumentTemplatesRouter = router({
         await tx.execute(sql`SELECT pg_advisory_xact_lock(${lockKey})`);
 
         const tplRows: any[] = await tx.execute(sql`
-          SELECT id, versao_atual FROM system_document_templates WHERE tipo = ${input.tipo} FOR UPDATE
+          SELECT id, versao_atual FROM system_document_templates WHERE tipo = ${input.tipo} AND deleted_at IS NULL FOR UPDATE
         `);
         const tpl = (tplRows as any).rows?.[0] ?? (Array.isArray(tplRows) ? tplRows[0] : null);
         if (!tpl) throw new TRPCError({ code: "NOT_FOUND", message: "Template não encontrado." });
@@ -413,7 +427,7 @@ export const systemDocumentTemplatesRouter = router({
       const db = await getDb();
       const userId = (ctx.user as any)?.id ?? null;
       const userName = (ctx.user as any)?.name ?? (ctx.user as any)?.email ?? "Sistema";
-      const [row] = await db.select().from(systemDocumentTemplates).where(eq(systemDocumentTemplates.tipo, input.tipo));
+      const [row] = await db.select().from(systemDocumentTemplates).where(and(eq(systemDocumentTemplates.tipo, input.tipo), isNull(systemDocumentTemplates.deletedAt)));
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Salve o template antes de aprovar." });
       const hoje = new Date().toISOString().slice(0, 10);
       await db.update(systemDocumentTemplates).set({
@@ -434,7 +448,7 @@ export const systemDocumentTemplatesRouter = router({
     .mutation(async ({ input, ctx }) => {
       requireAdmin(ctx);
       const db = await getDb();
-      const [row] = await db.select().from(systemDocumentTemplates).where(eq(systemDocumentTemplates.tipo, input.tipo));
+      const [row] = await db.select().from(systemDocumentTemplates).where(and(eq(systemDocumentTemplates.tipo, input.tipo), isNull(systemDocumentTemplates.deletedAt)));
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Template não encontrado." });
       await db.update(systemDocumentTemplates).set({ status: "obsoleto", updatedAt: sql`NOW()` } as any)
         .where(eq(systemDocumentTemplates.id, row.id));
@@ -447,11 +461,30 @@ export const systemDocumentTemplatesRouter = router({
     .mutation(async ({ input, ctx }) => {
       requireAdmin(ctx);
       const db = await getDb();
-      const [row] = await db.select().from(systemDocumentTemplates).where(eq(systemDocumentTemplates.tipo, input.tipo));
+      const [row] = await db.select().from(systemDocumentTemplates).where(and(eq(systemDocumentTemplates.tipo, input.tipo), isNull(systemDocumentTemplates.deletedAt)));
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Template não encontrado." });
       await db.update(systemDocumentTemplates).set({ status: "rascunho", updatedAt: sql`NOW()` } as any)
         .where(eq(systemDocumentTemplates.id, row.id));
       return { ok: true };
+    }),
+
+  // ── Excluir (Rev. 2754): SOFT-DELETE — carimba deleted_at. NUNCA faz DELETE
+  //    físico (R-001/R-007/R-010). O doc some das listas e do consumo (getVigente).
+  //    Custom: some de vez. Fixo: volta a aparecer como "ausente" e pode ser
+  //    recriado por "Inicializar padrões" ou re-salvando (que revive a linha).
+  excluir: protectedProcedure
+    .input(z.object({ tipo: tipoFlexSchema }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx);
+      const db = await getDb();
+      const [row] = await db.select().from(systemDocumentTemplates).where(and(
+        eq(systemDocumentTemplates.tipo, input.tipo),
+        isNull(systemDocumentTemplates.deletedAt),
+      ));
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Documento não encontrado." });
+      await db.update(systemDocumentTemplates).set({ deletedAt: sql`NOW()`, updatedAt: sql`NOW()` } as any)
+        .where(eq(systemDocumentTemplates.id, row.id));
+      return { ok: true, isCustom: isCustomTipo(row.tipo) };
     }),
 
   // ── getVigente: usado pelos MÓDULOS (não-admin) p/ consumir o template ───
@@ -467,7 +500,10 @@ export const systemDocumentTemplatesRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       const meta = getTemplateMeta(input.tipo);
-      const [row] = await db.select().from(systemDocumentTemplates).where(eq(systemDocumentTemplates.tipo, input.tipo));
+      const [row] = await db.select().from(systemDocumentTemplates).where(and(
+        eq(systemDocumentTemplates.tipo, input.tipo),
+        isNull(systemDocumentTemplates.deletedAt),
+      ));
       const titulo = meta?.titulo ?? row?.titulo ?? input.tipo;
       if (!row || row.status !== "vigente") {
         return { tipo: input.tipo, vigente: false, conteudoHtml: null as string | null, codigo: row?.codigo ?? null, versao: row?.versaoAtual ?? null, titulo };
@@ -495,13 +531,47 @@ export const systemDocumentTemplatesRouter = router({
       const userName = (ctx.user as any)?.name ?? (ctx.user as any)?.email ?? "Sistema";
       const hoje = new Date().toISOString().slice(0, 10);
 
-      const existentes = await db.select({ tipo: systemDocumentTemplates.tipo }).from(systemDocumentTemplates);
-      const setExist = new Set(existentes.map((r: any) => r.tipo));
+      const existentes = await db.select({
+        tipo: systemDocumentTemplates.tipo,
+        id: systemDocumentTemplates.id,
+        deletedAt: systemDocumentTemplates.deletedAt,
+      }).from(systemDocumentTemplates);
+      // Ativos (deleted_at = NULL) são pulados; excluídos (Rev. 2754) são REVIVIDOS
+      // (clear deleted_at + reseed), não reinseridos — a linha ocupa o `tipo` único.
+      const setAtivos = new Set(existentes.filter((r: any) => !r.deletedAt).map((r: any) => r.tipo));
+      const deletedByTipo = new Map<string, number>(
+        existentes.filter((r: any) => r.deletedAt).map((r: any) => [r.tipo, r.id]),
+      );
 
       const criados: string[] = [];
       for (const meta of DOCUMENT_TEMPLATES_META) {
-        if (setExist.has(meta.tipo)) continue;
+        if (setAtivos.has(meta.tipo)) continue;
         const seed = getSeedTemplate(meta.tipo as DocumentTemplateTipo);
+        // Reviver um fixo previamente excluído: atualiza a linha (some o deleted_at)
+        // e reseeda o conteúdo/estado, em vez de inserir (violaria o tipo único).
+        const deletedId = deletedByTipo.get(meta.tipo);
+        if (deletedId) {
+          await db.update(systemDocumentTemplates).set({
+            titulo: meta.titulo,
+            descricao: meta.descricao,
+            conteudoHtml: seed.conteudoHtml,
+            ativo: 1,
+            atualizadoPorId: userId,
+            atualizadoPorNome: userName,
+            codigo: seed.codigo,
+            status: ativarVigente ? "vigente" : "rascunho",
+            elaboradoPorId: userId,
+            elaboradoPorNome: userName,
+            aprovadoPorId: ativarVigente ? userId : null,
+            aprovadoPorNome: ativarVigente ? userName : null,
+            aprovadoEm: ativarVigente ? (sql`NOW()` as any) : null,
+            dataVigencia: ativarVigente ? hoje : null,
+            deletedAt: null,
+            updatedAt: sql`NOW()`,
+          } as any).where(eq(systemDocumentTemplates.id, deletedId));
+          criados.push(meta.tipo);
+          continue;
+        }
         const [created] = await db.insert(systemDocumentTemplates).values({
           tipo: meta.tipo,
           titulo: meta.titulo,
