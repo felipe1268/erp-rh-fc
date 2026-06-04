@@ -65,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 2739** — PLANEJAMENTO · PREVISÃO DE MEDIÇÃO (POR AVANÇO FÍSICO): A TABELA DEIXA EXPLÍCITO QUE "O QUE É PRODUZIDO NUM MÊS (COMPETÊNCIA) É RECEBIDO DEPOIS (mês seguinte)" SEM ROLAR PARA A DIREITA. A relação já existia no motor (coluna "Recebimento" em `previsoesMensais`/`PlanejamentoDetalhe.tsx` = corte `cfgDiaCorte` + `cfgPrazoRecDiasUteis` dias úteis, c/ trava de sinal da Rev. 2730), mas a coluna ficava cortada no celular. Fix (SÓ CLIENT/UI; não muda valores/cálculo): "Competência" ganhou sub-rótulo "→ recebe em mmm/aaaa" (verde; âmbar "(aguarda sinal)"), cabeçalho "Competência (produção)" e legenda no rodapé. ZERO SERVER/SCHEMA. `vitest` 41/41 verde. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 2738** — RH · EPI · FICHA DE ENTREGA DE EPI · IMPRESSÃO (window.print): A FICHA AGORA SAI INTEIRA EM UMA PÁGINA LIMPA (acabou a pág.1 em branco com só "Controle de EPIs" e o conteúdo espremido em 3 páginas). Causa: o container imprimível (`Epis.tsx`, `viewMode==="ficha_epi"`) não era `print-only` → o `@media print` global (`index.css`) não escondia o cromo do DashboardLayout e os espaçamentos de tela empurravam p/ 3 páginas. Fix: container ganhou `print-only` + `print:max-w-none` + classe `epi-ficha-print`; novo bloco `@media print` zera borda/padding, reduz fonte e aplica `page-break-inside: avoid` nos blocos críticos. NÃO mexido: `generateFichaEpiPdf`. SÓ CLIENT/UI; ZERO SERVER/SCHEMA. Detalhe: `shared/changelog.ts`.
-
 ### REGRA DE OURO — Cabeçalho de documentos institucionais FC (Rev. 2106+)
 
 Todo documento oficial FC (contrato, aviso prévio, termo de rescisão, comunicado interno, carta MDO, advertência etc.) DEVE usar este cabeçalho HTML:
