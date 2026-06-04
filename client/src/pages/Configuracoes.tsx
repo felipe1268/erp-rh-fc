@@ -1236,12 +1236,10 @@ function GestoresContratoTab({ companyId }: { companyId: number }) {
   });
 
   const [finId, setFinId] = useState<string>("");
-  const [projId, setProjId] = useState<string>("");
 
   useEffect(() => {
     if (gestoresQuery.data) {
       setFinId(gestoresQuery.data.gestorFinanceiroId ? String(gestoresQuery.data.gestorFinanceiroId) : "");
-      setProjId(gestoresQuery.data.gestorProjetoId ? String(gestoresQuery.data.gestorProjetoId) : "");
     }
   }, [gestoresQuery.data]);
 
@@ -1269,17 +1267,17 @@ function GestoresContratoTab({ companyId }: { companyId: number }) {
     return sel ? [sel, ...base] : base;
   };
   const optsFin = useMemo(() => withSelected(ativosIndiretos, finId), [ativosIndiretos, finId, ativos]);
-  const optsProj = useMemo(() => withSelected(ativosIndiretos, projId), [ativosIndiretos, projId, ativos]);
 
   const handleSalvar = () => {
     const finEmp = ativos.find((e: any) => String(e.id) === finId);
-    const projEmp = ativos.find((e: any) => String(e.id) === projId);
     salvarMut.mutate({
       companyId,
       gestorFinanceiroId: finId ? Number(finId) : null,
       gestorFinanceiroNome: finEmp ? finEmp.nomeCompleto : null,
-      gestorProjetoId: projId ? Number(projId) : null,
-      gestorProjetoNome: projEmp ? projEmp.nomeCompleto : null,
+      // Gestor de Projeto (testemunha 2) deixou de ser configurado aqui — o ERP
+      // adota SEMPRE o "Engenheiro / Responsável" do cadastro da obra.
+      gestorProjetoId: null,
+      gestorProjetoNome: null,
     });
   };
 
@@ -1291,7 +1289,7 @@ function GestoresContratoTab({ companyId }: { companyId: number }) {
           Gestores para Contratos de Terceiros
         </CardTitle>
         <CardDescription>
-          Defina os colaboradores que serão automaticamente preenchidos como testemunhas nos contratos de terceiros (Testemunha Financeiro e Gestor de Projeto). Apenas funções da categoria <strong>indireta</strong> aparecem na lista; digite o nome para filtrar.
+          Defina o colaborador que será automaticamente preenchido como <strong>Testemunha Financeiro</strong> nos contratos de terceiros. Apenas funções da categoria <strong>indireta</strong> aparecem na lista; digite o nome para filtrar. A <strong>Testemunha Gestor de Projeto</strong> é adotada automaticamente como o <strong>Engenheiro / Responsável</strong> do cadastro de cada obra.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -1316,15 +1314,9 @@ function GestoresContratoTab({ companyId }: { companyId: number }) {
               <Hammer className="w-4 h-4 text-blue-600" />
               Gestor de Projeto (Testemunha)
             </Label>
-            <EmployeeCombobox
-              value={projId}
-              onChange={setProjId}
-              options={optsProj}
-              placeholder="Selecione o gestor de projeto..."
-            />
-            {gestoresQuery.data?.gestorProjetoNome && (
-              <p className="text-xs text-muted-foreground">Atual: {gestoresQuery.data.gestorProjetoNome}</p>
-            )}
+            <div className="rounded-md border border-dashed border-blue-200 bg-blue-50/50 px-3 py-2 text-xs text-blue-700">
+              Preenchido automaticamente com o <strong>Engenheiro / Responsável</strong> do cadastro da obra vinculada ao contrato.
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2 pt-2">
@@ -1332,7 +1324,7 @@ function GestoresContratoTab({ companyId }: { companyId: number }) {
             {salvarMut.isPending ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Salvando...</> : <><Save className="w-4 h-4 mr-1" /> Salvar Gestores</>}
           </Button>
           <p className="text-xs text-muted-foreground">
-            Os nomes selecionados serão usados automaticamente como testemunhas ao gerar novos contratos de terceiros.
+            O nome selecionado será usado automaticamente como Testemunha Financeiro ao gerar novos contratos de terceiros.
           </p>
         </div>
       </CardContent>

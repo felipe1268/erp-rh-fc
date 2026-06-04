@@ -99,6 +99,14 @@ export const terceiroContratosRouter = router({
         .orderBy(desc(terceiroDocumentos.criadoEm));
 
       const [empresa] = await db.select().from(empresasTerceiras).where(eq(empresasTerceiras.id, contrato.empresaTerceiraId));
+      // Gestor de Projeto (testemunha 2) = SEMPRE o "Engenheiro / Responsável" do cadastro da obra.
+      let obraResponsavel: string | null = null;
+      if (contrato.obraId) {
+        try {
+          const [o] = await db.select({ responsavel: obras.responsavel }).from(obras).where(eq(obras.id, contrato.obraId));
+          obraResponsavel = o?.responsavel || null;
+        } catch {}
+      }
       const [companyData] = await db.select({
         razaoSocial: companies.razaoSocial,
         nomeFantasia: companies.nomeFantasia,
@@ -333,6 +341,7 @@ export const terceiroContratosRouter = router({
         ...contrato,
         empresa: empresa || null,
         companyData: companyData || null,
+        obraResponsavel,
         itens,
         itensHierarchy,
         medicoes,
@@ -3277,7 +3286,7 @@ TESTEMUNHAS:
         "TABELA_ITENS": tabelaItens,
         "QTD_ITENS": String(itensContrato.length),
         "TESTEMUNHA_FINANCEIRO": contrato.testemunhaFinanceiro || (company as any)?.gestorFinanceiroNome || "_______________",
-        "TESTEMUNHA_GESTOR_PROJETO": contrato.testemunhaGestorProjeto || (company as any)?.gestorProjetoNome || obra?.responsavel || "_______________",
+        "TESTEMUNHA_GESTOR_PROJETO": obra?.responsavel || contrato.testemunhaGestorProjeto || (company as any)?.gestorProjetoNome || "_______________",
         "REVISAO_CRONOGRAMA": revisaoCronoLabel || "—",
         "DIA_MEDICAO": String(contrato.diaMedicao ?? 25),
         "PRAZO_APROVACAO": String(contrato.prazoAprovacaoDias ?? 5),

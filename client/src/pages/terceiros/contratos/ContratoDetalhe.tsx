@@ -981,7 +981,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                       const emp = (contrato as any).empresa;
                       setFcSignSignatarios([
                         { papel: "fornecedor", ordemAssinatura: 1, nome: emp?.responsavelNome || emp?.razaoSocial || "", email: emp?.email || "", cpfCnpj: emp?.cnpj || "", cargo: "Representante Legal", empresaNome: emp?.razaoSocial || "" },
-                        { papel: "gestor_projeto", ordemAssinatura: 2, nome: "", email: "", cpfCnpj: "", cargo: "Gestor de Projeto", empresaNome: "FC Engenharia" },
+                        { papel: "gestor_projeto", ordemAssinatura: 2, nome: (contrato as any).obraResponsavel || "", email: "", cpfCnpj: "", cargo: "Gestor de Projeto", empresaNome: "FC Engenharia" },
                       ]);
                       setShowFcSignModal(true);
                     }}
@@ -1217,7 +1217,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                           </div>
                           <div className="text-center">
                             <div className="mt-8 pt-2 border-t border-gray-400">
-                              <p className="text-[10px] text-gray-700 font-medium">{(contrato as any).testemunhaGestorProjeto || "_______________"}</p>
+                              <p className="text-[10px] text-gray-700 font-medium">{(contrato as any).obraResponsavel || (contrato as any).testemunhaGestorProjeto || "_______________"}</p>
                               <p className="text-[9px] text-gray-400 mt-0.5">Gestor de Projeto</p>
                             </div>
                           </div>

@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2750 — **TERCEIROS · CONTRATOS · TESTEMUNHA "GESTOR DE PROJETO" DEIXOU DE SER UM CAMPO CONFIGURÁVEL — O ERP
+ * ADOTA SEMPRE O "ENGENHEIRO / RESPONSÁVEL" DO CADASTRO DA OBRA.**
+ *
+ * PEDIDO (Felipe, prints): "não precisa ter o campo do gestor de projeto (testemunha). o ERP sempre deve adotar o gestor
+ * como o nome do responsável pela obra adotado no cadastro da obra". Em Configurações · Terceiros · "Gestores para
+ * Contratos de Terceiros" havia DOIS seletores (Gestor Financeiro + Gestor de Projeto). O segundo era redundante: o
+ * responsável técnico já existe no cadastro da obra (campo "Engenheiro / Responsável" = `obras.responsavel`), então
+ * manter um seletor separado abria espaço pra divergência entre o que está na obra e o que sai no contrato.
+ *
+ * MUDANÇA (CLIENT + SERVER; ZERO SCHEMA; ZERO ALTER/DROP/DELETE — R-001/R-007/R-010):
+ *   (1) CONFIG UI (`client/src/pages/Configuracoes.tsx`, `GestoresContratoTab`): REMOVIDO o seletor "Gestor de Projeto
+ *       (Testemunha)". No lugar ficou um aviso (caixa pontilhada) explicando que essa testemunha é preenchida
+ *       automaticamente com o "Engenheiro / Responsável" do cadastro da obra. Estado `projId`/`optsProj` e o `projEmp`
+ *       do `handleSalvar` removidos; o save agora grava `gestorProjetoId/Nome = null` (a coluna fica inerte; nada
+ *       destrutivo no banco). O seletor de Gestor Financeiro permanece igual.
+ *   (2) SERVER (`server/routers/terceiroContratos.ts`): `getContrato` passou a buscar e devolver `obraResponsavel`
+ *       (`obras.responsavel` da obra vinculada). Na renderização do contrato, a var de template `TESTEMUNHA_GESTOR_PROJETO`
+ *       agora PRIORIZA `obra?.responsavel` (antes ele era só o último fallback, atrás de `contrato.testemunhaGestorProjeto`
+ *       e `company.gestorProjetoNome`). A `TESTEMUNHA_FINANCEIRO` não mudou.
+ *   (3) CLIENT (`ContratoDetalhe.tsx`): o bloco "Testemunhas" do preview e o pré-preenchimento dos signatários do FcSign
+ *       (papel `gestor_projeto`) passaram a usar `contrato.obraResponsavel`. (`ContratoTemplate.tsx`): a descrição do
+ *       placeholder `{{TESTEMUNHA_GESTOR_PROJETO}}` agora diz "Engenheiro / Responsável do cadastro da obra".
+ *
+ * RESSALVA: a coluna `companies.gestor_projeto_*` e `terceiro_contratos.testemunha_gestor_projeto` continuam existindo
+ * (inertes) — nada foi dropado. Contratos antigos que tivessem `testemunhaGestorProjeto` gravado agora são sobrepostos
+ * pelo responsável da obra na renderização (comportamento desejado pelo pedido).
+ *
+ * VALIDAÇÃO: esbuild parse (stdin) EXIT 0 em `terceiroContratos.ts`, `Configuracoes.tsx`, `ContratoDetalhe.tsx`,
+ * `ContratoTemplate.tsx`; `vitest run server/rescisao.test.ts` 41/41 verde.
+ *
+ * ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2749 — **CONFIGURAÇÕES · CENTRAL DE DOCUMENTOS: LAYOUT REDESENHADO PARA LEITURA — LISTA DE TEMPLATES SAIU DA
  * LATERAL E FOI PRO TOPO (SELETOR HORIZONTAL), E A ÁREA DE TEXTO FICOU MUITO MAIS LARGA E CONFORTÁVEL DE LER.**
  *

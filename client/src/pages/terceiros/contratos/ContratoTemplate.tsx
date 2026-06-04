@@ -45,7 +45,7 @@ const VARIAVEIS: { chave: string; descricao: string; categoria: string }[] = [
   { chave: "{{TABELA_ITENS}}", descricao: "Tabela completa da EAP com descrição, unidade, quantidade, valor unitário e total", categoria: "Contrato" },
   { chave: "{{QTD_ITENS}}", descricao: "Quantidade de itens/atividades do contrato", categoria: "Contrato" },
   { chave: "{{TESTEMUNHA_FINANCEIRO}}", descricao: "Nome do responsável financeiro (testemunha 1)", categoria: "Testemunhas" },
-  { chave: "{{TESTEMUNHA_GESTOR_PROJETO}}", descricao: "Nome do gestor de projeto (testemunha 2)", categoria: "Testemunhas" },
+  { chave: "{{TESTEMUNHA_GESTOR_PROJETO}}", descricao: "Engenheiro / Responsável do cadastro da obra (testemunha 2)", categoria: "Testemunhas" },
   { chave: "{{REVISAO_CRONOGRAMA}}", descricao: "Revisão do cronograma considerada para o prazo (ex: Baseline Rev 00)", categoria: "Contrato" },
   { chave: "{{FLUXOGRAMA_PAGAMENTO}}", descricao: "Diagrama visual do fluxo de medição e pagamento (6 etapas)", categoria: "Medição/Pagamento" },
   { chave: "{{DIA_MEDICAO}}", descricao: "Dia da medição física (ex: 25)", categoria: "Medição/Pagamento" },
