@@ -30,6 +30,7 @@ import RichTextEditor, { type RichTextEditorHandle } from "@/components/RichText
 import {
   DOCUMENT_TEMPLATES_META,
   renderTemplate,
+  getDocMetaOrFallback,
   type DocumentTemplateTipo,
   type PlaceholderDef,
 } from "@shared/documentTemplates";
@@ -71,7 +72,8 @@ export default function TemplatesDocsTab() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin" || user?.role === "admin_master";
 
-  const [tipoSelecionado, setTipoSelecionado] = useState<DocumentTemplateTipo>("contrato_experiencia");
+  // string (não DocumentTemplateTipo): aceita também os tipos custom (custom_<slug>).
+  const [tipoSelecionado, setTipoSelecionado] = useState<string>("contrato_experiencia");
   const [conteudoEditado, setConteudoEditado] = useState("");
   const [comentario, setComentario] = useState("");
   const [versaoVisualizada, setVersaoVisualizada] = useState<number | undefined>(undefined);
@@ -96,6 +98,16 @@ export default function TemplatesDocsTab() {
   const [iaPainel, setIaPainel] = useState(false);
   const [iaInstrucoes, setIaInstrucoes] = useState("");
 
+  // ── Novo Documento (Rev. 2751) — modal de criação via IA ──
+  const [novoOpen, setNovoOpen] = useState(false);
+  const [novoTab, setNovoTab] = useState<"assunto" | "pdf">("assunto");
+  const [novoTitulo, setNovoTitulo] = useState("");
+  const [novoCodigo, setNovoCodigo] = useState("");
+  const [novoInstrucoes, setNovoInstrucoes] = useState("");
+  const [novoConteudo, setNovoConteudo] = useState("");
+  const [novoSugestoes, setNovoSugestoes] = useState<string[]>([]);
+  const novoPdfRef = useRef<HTMLInputElement>(null);
+
   const utils = trpc.useUtils();
   const listAllQuery = trpc.systemDocumentTemplates.listAll.useQuery();
   const iaStatusQuery = trpc.systemDocumentTemplates.iaStatus.useQuery();
@@ -108,14 +120,16 @@ export default function TemplatesDocsTab() {
     { enabled: !!tipoSelecionado && mostrarHistorico }
   );
 
-  const meta = useMemo(
-    () => DOCUMENT_TEMPLATES_META.find(m => m.tipo === tipoSelecionado)!,
-    [tipoSelecionado]
-  );
-
   const selRow = useMemo(
     () => (listAllQuery.data ?? []).find((r: any) => r.tipo === tipoSelecionado) as any,
     [listAllQuery.data, tipoSelecionado]
+  );
+
+  // meta resolvida: tipo fixo → catálogo; tipo custom → meta sintética
+  // (placeholders comuns) usando o título da linha do servidor.
+  const meta = useMemo(
+    () => getDocMetaOrFallback(tipoSelecionado, selRow?.titulo),
+    [tipoSelecionado, selRow]
   );
   const statusAtual: string = selRow?.status ?? "ausente";
 
@@ -239,6 +253,30 @@ export default function TemplatesDocsTab() {
     onError: (e) => toast.error(e.message || "Falha ao ler o PDF."),
   });
 
+  // ── Novo Documento (Rev. 2751): mutations dedicadas (populam o MODAL, não o editor) ──
+  const novoGerarMut = trpc.systemDocumentTemplates.iaGerarDoZero.useMutation({
+    onSuccess: (res) => { setNovoConteudo(res.conteudoHtml); setNovoSugestoes([]); toast.success("Texto gerado pela IA. Revise e crie o documento."); },
+    onError: (e) => toast.error(e.message || "Falha ao gerar com IA."),
+  });
+  const novoPdfMut = trpc.systemDocumentTemplates.iaLerPdfSugerir.useMutation({
+    onSuccess: (res) => {
+      setNovoConteudo(res.conteudoHtml);
+      setNovoSugestoes((res as any).sugestoes ?? []);
+      toast.success("Modelo extraído do PDF. Revise e crie o documento.");
+    },
+    onError: (e) => toast.error(e.message || "Falha ao ler o PDF."),
+  });
+  const criarNovoMut = trpc.systemDocumentTemplates.criarNovo.useMutation({
+    onSuccess: (res) => {
+      toast.success(`Documento criado (${res.codigo}). Revise e aprove para deixar Vigente.`);
+      setNovoOpen(false);
+      setTipoSelecionado(res.tipo);
+      setNovoTitulo(""); setNovoCodigo(""); setNovoInstrucoes(""); setNovoConteudo(""); setNovoSugestoes([]);
+      utils.systemDocumentTemplates.listAll.invalidate();
+    },
+    onError: (e) => toast.error(e.message || "Falha ao criar documento."),
+  });
+
   // Preview com dados de exemplo — XSS hardening via DOMPurify.
   const previewHtml = useMemo(() => {
     if (!conteudoEditado) return "";
@@ -312,6 +350,55 @@ export default function TemplatesDocsTab() {
     e.target.value = "";
   };
 
+  // ── Novo Documento (Rev. 2751) ──
+  const abrirNovo = () => {
+    setNovoTab(iaSt?.lerPdf ? "pdf" : "assunto");
+    setNovoTitulo(""); setNovoCodigo(""); setNovoInstrucoes(""); setNovoConteudo(""); setNovoSugestoes([]);
+    setNovoOpen(true);
+  };
+
+  const handleNovoGerar = () => {
+    if (novoInstrucoes.trim().length < 5) { toast.error("Descreva o que o documento deve conter."); return; }
+    novoGerarMut.mutate({ tituloDoc: novoTitulo || undefined, instrucoes: novoInstrucoes });
+  };
+
+  const handleNovoPdf = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== "application/pdf") { toast.error("Selecione um arquivo PDF."); e.target.value = ""; return; }
+    if (file.size > 6 * 1024 * 1024) { toast.error("PDF muito grande (máx. 6MB)."); e.target.value = ""; return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || "");
+      const b64 = dataUrl.includes(",") ? dataUrl.split(",").pop()! : dataUrl;
+      novoPdfMut.mutate({ tituloDoc: novoTitulo || undefined, pdfBase64: b64 });
+    };
+    reader.onerror = () => toast.error("Não consegui ler o arquivo.");
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handleCriarNovo = () => {
+    if (novoTitulo.trim().length < 3) { toast.error("Informe um título (mín. 3 caracteres)."); return; }
+    if (!novoConteudo || novoConteudo.replace(/<[^>]*>/g, "").trim().length < 5) {
+      toast.error("Gere ou escreva o conteúdo do documento antes de criar.");
+      return;
+    }
+    criarNovoMut.mutate({ titulo: novoTitulo.trim(), codigo: novoCodigo || undefined, conteudoHtml: novoConteudo });
+  };
+
+  // Preview seguro do conteúdo gerado no modal (placeholders renderizados c/ exemplo).
+  const novoPreviewHtml = useMemo(() => {
+    if (!novoConteudo) return "";
+    const dados: Record<string, string> = {};
+    getDocMetaOrFallback("", novoTitulo).placeholders.forEach(p => { dados[p.chave] = p.exemplo; });
+    return DOMPurify.sanitize(renderTemplate(novoConteudo, dados), {
+      FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "input", "button", "link", "meta", "base"],
+      FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur", "onchange", "onsubmit", "formaction"],
+      ALLOW_DATA_ATTR: false,
+    });
+  }, [novoConteudo, novoTitulo]);
+
   const visualizandoVersaoAntiga = versaoVisualizada != null && getQuery.data?.template?.versaoAtual && versaoVisualizada !== getQuery.data.template.versaoAtual;
   const iaSt = iaStatusQuery.data;
   const algumPendente = saveMut.isPending || aprovarMut.isPending || obsoletoMut.isPending || rascunhoMut.isPending;
@@ -333,14 +420,23 @@ export default function TemplatesDocsTab() {
           <div className="flex-1">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <h2 className="text-lg font-semibold text-gray-800">Central de Documentos Institucionais (ISO)</h2>
-              <Button
-                variant="outline" size="sm"
-                onClick={() => { if (confirm("Criar os documentos institucionais que ainda não existem, já como Rev. 1 Vigente?")) seedMut.mutate({ ativarVigente: true }); }}
-                disabled={seedMut.isPending}
-              >
-                {seedMut.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <FilePlus2 className="w-4 h-4 mr-1" />}
-                Inicializar padrões
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  onClick={abrirNovo}
+                >
+                  <FilePlus2 className="w-4 h-4 mr-1" /> Novo Documento
+                </Button>
+                <Button
+                  variant="outline" size="sm"
+                  onClick={() => { if (confirm("Criar os documentos institucionais que ainda não existem, já como Rev. 1 Vigente?")) seedMut.mutate({ ativarVigente: true }); }}
+                  disabled={seedMut.isPending}
+                >
+                  {seedMut.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <FilePlus2 className="w-4 h-4 mr-1" />}
+                  Inicializar padrões
+                </Button>
+              </div>
             </div>
             <p className="text-sm text-gray-600 mt-1">
               Fonte oficial dos documentos FC. Edite o texto, controle a revisão (código, vigência, aprovação) e aprove para deixar <strong>Vigente</strong> — os módulos passam a consumir o documento aprovado.
@@ -671,6 +767,118 @@ export default function TemplatesDocsTab() {
           )}
         </div>
       </div>
+
+      {/* ── MODAL: Novo Documento (Rev. 2751) — criar doc custom via IA ── */}
+      {novoOpen && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 overflow-y-auto" onMouseDown={(e) => { if (e.target === e.currentTarget && !criarNovoMut.isPending) setNovoOpen(false); }}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl my-8">
+            <div className="flex items-center justify-between px-5 py-3 border-b">
+              <h3 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+                <FilePlus2 className="w-5 h-5 text-blue-600" /> Novo Documento Institucional
+              </h3>
+              <button onClick={() => { if (!criarNovoMut.isPending) setNovoOpen(false); }} className="text-gray-400 hover:text-gray-600"><XCircle className="w-5 h-5" /></button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="text-[11px] font-medium text-gray-600">Título do documento *</label>
+                  <Input value={novoTitulo} onChange={e => setNovoTitulo(e.target.value)} placeholder="Ex: Carta de Apresentação para Conta Salário" className="h-9 text-sm" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-medium text-gray-600">Código ISO (opcional)</label>
+                  <Input value={novoCodigo} onChange={e => setNovoCodigo(e.target.value)} placeholder="auto (FC-DOC-NNN)" className="h-9 text-sm font-mono" />
+                </div>
+              </div>
+
+              {/* Abas de fluxo */}
+              <div className="flex gap-1 border-b">
+                <button
+                  onClick={() => setNovoTab("pdf")}
+                  className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${novoTab === "pdf" ? "border-violet-600 text-violet-700" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+                >
+                  <Upload className="w-4 h-4 inline mr-1" /> Subir modelo (PDF)
+                </button>
+                <button
+                  onClick={() => setNovoTab("assunto")}
+                  className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${novoTab === "assunto" ? "border-violet-600 text-violet-700" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+                >
+                  <Sparkles className="w-4 h-4 inline mr-1" /> Gerar do assunto
+                </button>
+              </div>
+
+              {novoTab === "pdf" ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-gray-600">Envie um PDF modelo. A IA lê o documento, reproduz o texto como corpo HTML e troca os dados específicos por placeholders.</p>
+                  <Button
+                    variant="outline" size="sm"
+                    className="border-violet-300 text-violet-700 hover:bg-violet-50"
+                    onClick={() => novoPdfRef.current?.click()}
+                    disabled={!iaSt?.lerPdf || novoPdfMut.isPending}
+                    title={iaSt?.lerPdf ? "Selecionar PDF" : "Leitura de PDF exige IA Anthropic"}
+                  >
+                    {novoPdfMut.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Upload className="w-4 h-4 mr-1" />} Selecionar PDF (máx. 6MB)
+                  </Button>
+                  {!iaSt?.lerPdf && <span className="text-[11px] text-amber-600 ml-2">Leitura de PDF exige IA Anthropic configurada.</span>}
+                  <input ref={novoPdfRef} type="file" accept="application/pdf" className="hidden" onChange={handleNovoPdf} />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-violet-800 flex items-center gap-1"><Sparkles className="w-3.5 h-3.5" /> Descreva o documento para a IA gerar</label>
+                  <Textarea
+                    value={novoInstrucoes}
+                    onChange={e => setNovoInstrucoes(e.target.value)}
+                    placeholder="Ex: Carta formal de apresentação para abertura de conta salário, citando os dados do colaborador e da empresa..."
+                    className="text-sm"
+                    rows={3}
+                  />
+                  <Button
+                    size="sm" className="bg-violet-600 hover:bg-violet-700 text-white"
+                    onClick={handleNovoGerar}
+                    disabled={!iaSt?.gerarDoZero || novoGerarMut.isPending || novoInstrucoes.trim().length < 5}
+                    title={iaSt?.gerarDoZero ? "Gerar texto com IA" : "Nenhuma IA configurada"}
+                  >
+                    {novoGerarMut.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1" />} Gerar texto
+                  </Button>
+                  {!iaSt?.gerarDoZero && <span className="text-[11px] text-amber-600 ml-2">Nenhuma IA configurada.</span>}
+                </div>
+              )}
+
+              {novoSugestoes.length > 0 && (
+                <div className="p-3 border border-violet-200 bg-violet-50/60 rounded-lg">
+                  <span className="text-xs font-semibold text-violet-800 flex items-center gap-1 mb-1.5"><Sparkles className="w-3.5 h-3.5" /> Sugestões da IA ({novoSugestoes.length})</span>
+                  <ul className="space-y-1.5">
+                    {novoSugestoes.map((s, i) => (
+                      <li key={i} className="flex items-start gap-2 text-xs text-gray-700 bg-white border border-violet-100 rounded px-2 py-1.5">
+                        <Info className="w-3.5 h-3.5 text-violet-500 flex-shrink-0 mt-0.5" /><span className="flex-1">{s}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {novoConteudo && (
+                <div>
+                  <div className="text-[11px] font-medium text-gray-600 mb-1 flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> Pré-visualização (placeholders com dados de exemplo)</div>
+                  <div className="border rounded-lg bg-white px-5 py-4 prose prose-sm max-w-none max-h-[40vh] overflow-y-auto" dangerouslySetInnerHTML={{ __html: novoPreviewHtml }} />
+                  <p className="text-[11px] text-gray-500 mt-1">Após criar, o documento abre no editor para você ajustar e aprovar (ficará como Rascunho).</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 px-5 py-3 border-t bg-gray-50 rounded-b-xl">
+              <Button variant="outline" size="sm" onClick={() => setNovoOpen(false)} disabled={criarNovoMut.isPending}>Cancelar</Button>
+              <Button
+                size="sm" className="bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={handleCriarNovo}
+                disabled={criarNovoMut.isPending || novoTitulo.trim().length < 3 || !novoConteudo}
+              >
+                {criarNovoMut.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <FilePlus2 className="w-4 h-4 mr-1" />} Criar documento
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

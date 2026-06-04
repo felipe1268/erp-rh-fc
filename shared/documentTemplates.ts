@@ -175,6 +175,55 @@ export function getTemplateMeta(tipo: string): DocumentTemplateMeta | undefined 
   return DOCUMENT_TEMPLATES_META.find(m => m.tipo === tipo);
 }
 
+// ── Documentos CUSTOM (Rev. 2751) ──────────────────────────────────────────
+// Além dos 7 tipos fixos, a Central de Documentos permite CRIAR documentos
+// avulsos (institucionais, fora dos geradores) via IA: subir um PDF modelo →
+// IA extrai corpo+placeholders, ou digitar o assunto → IA gera o texto. Esses
+// docs usam um `tipo` slug com prefixo `custom_` e os placeholders COMUNS
+// (colaborador/empresa/documento/obra), já que não têm campos específicos.
+
+export const PH_COMUM: PlaceholderDef[] = [
+  ...PH_COLABORADOR,
+  ...PH_EMPRESA,
+  ...PH_DOCUMENTO,
+  ...PH_OBRA,
+];
+
+/** Slug determinístico p/ o `tipo` de um documento custom a partir do título. */
+export function slugifyDocTipo(titulo: string): string {
+  const base = String(titulo || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")  // remove acentos
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40);
+  const slug = base || "documento";
+  return `custom_${slug}`.slice(0, 60);
+}
+
+/** Um `tipo` é custom quando não pertence aos 7 fixos. */
+export function isCustomTipo(tipo: string): boolean {
+  return !DOCUMENT_TEMPLATE_TIPOS.includes(tipo as DocumentTemplateTipo);
+}
+
+/**
+ * Meta resolvida p/ QUALQUER tipo: devolve a meta fixa dos 7 tipos, ou uma
+ * meta sintética (placeholders comuns) p/ documentos custom. `titulo` permite
+ * dar nome ao doc custom (ex.: vindo da linha do banco ou do que o usuário
+ * digitou no "Novo Documento").
+ */
+export function getDocMetaOrFallback(tipo: string, titulo?: string): DocumentTemplateMeta {
+  const fixed = getTemplateMeta(tipo);
+  if (fixed) return fixed;
+  return {
+    tipo: tipo as DocumentTemplateTipo,
+    titulo: titulo || "Documento Institucional",
+    descricao: "Documento institucional avulso (custom).",
+    icone: "FileText",
+    placeholders: PH_COMUM,
+  };
+}
+
 /**
  * Interpola placeholders {{chave}} no HTML do template.
  * Mantém intactos placeholders desconhecidos (útil pra debug).

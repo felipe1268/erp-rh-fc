@@ -18,7 +18,10 @@ import {
   DOCUMENT_TEMPLATES_META,
   DOCUMENT_TEMPLATE_TIPOS,
   getTemplateMeta,
+  getDocMetaOrFallback,
   getSeedTemplate,
+  slugifyDocTipo,
+  isCustomTipo,
   DEFAULT_CODIGOS,
   type DocumentTemplateTipo,
 } from "../../shared/documentTemplates";
@@ -31,7 +34,11 @@ function requireAdmin(ctx: any) {
   }
 }
 
+// Schema FIXO (7 tipos institucionais) usado por endpoints exclusivos deles.
 const tipoSchema = z.enum(DOCUMENT_TEMPLATE_TIPOS as [string, ...string[]]);
+// Schema FLEXÍVEL (Rev. 2751): aceita os 7 fixos OU um slug custom_<...>.
+// Slug seguro (a-z0-9_, 3..60) — casa com slugifyDocTipo e o varchar(60) do banco.
+const tipoFlexSchema = z.string().regex(/^[a-z0-9_]{3,60}$/, "Tipo de documento inválido.");
 
 /** Disponibilidade de IA (alguma chave configurada). Usado p/ degradar a UI. */
 function iaDisponivel(): { anthropic: boolean; algum: boolean } {
@@ -74,13 +81,15 @@ export const systemDocumentTemplatesRouter = router({
     const db = await getDb();
     const rows = await db.select().from(systemDocumentTemplates);
     const byTipo = new Map<string, any>(rows.map(r => [r.tipo, r]));
-    return DOCUMENT_TEMPLATES_META.map(meta => {
+    // (1) Os 7 tipos FIXOS (sempre listados, mesmo sem linha no banco).
+    const fixos = DOCUMENT_TEMPLATES_META.map(meta => {
       const row = byTipo.get(meta.tipo);
       return {
         tipo: meta.tipo,
         titulo: meta.titulo,
         descricao: meta.descricao,
         icone: meta.icone,
+        isCustom: false,
         templateId: row?.id ?? null,
         versaoAtual: row?.versaoAtual ?? 0,
         atualizadoEm: row?.updatedAt ?? null,
@@ -96,18 +105,44 @@ export const systemDocumentTemplatesRouter = router({
         proximaRevisao: row?.proximaRevisao ?? null,
       };
     });
+    // (2) Documentos CUSTOM (Rev. 2751): qualquer linha cujo tipo não é fixo.
+    const customs = rows
+      .filter((row: any) => isCustomTipo(row.tipo))
+      .map((row: any) => ({
+        tipo: row.tipo,
+        titulo: row.titulo,
+        descricao: row.descricao ?? "",
+        icone: "FileText",
+        isCustom: true,
+        templateId: row.id,
+        versaoAtual: row.versaoAtual ?? 0,
+        atualizadoEm: row.updatedAt ?? null,
+        atualizadoPorNome: row.atualizadoPorNome ?? null,
+        existe: true,
+        codigo: row.codigo ?? null,
+        status: (row.status ?? "rascunho") as string,
+        elaboradoPorNome: row.elaboradoPorNome ?? null,
+        aprovadoPorNome: row.aprovadoPorNome ?? null,
+        aprovadoEm: row.aprovadoEm ?? null,
+        dataVigencia: row.dataVigencia ?? null,
+        proximaRevisao: row.proximaRevisao ?? null,
+      }))
+      .sort((a, b) => a.titulo.localeCompare(b.titulo, "pt-BR"));
+    return [...fixos, ...customs];
   }),
 
   // ── Pega 1 template (versão atual ou versão específica) ───────────────────
   get: protectedProcedure
-    .input(z.object({ tipo: tipoSchema, versao: z.number().optional() }))
+    .input(z.object({ tipo: tipoFlexSchema, versao: z.number().optional() }))
     .query(async ({ input, ctx }) => {
       requireAdmin(ctx);
       const db = await getDb();
-      const meta = getTemplateMeta(input.tipo);
-      if (!meta) throw new TRPCError({ code: "NOT_FOUND", message: "Tipo de template desconhecido." });
-
       const [row] = await db.select().from(systemDocumentTemplates).where(eq(systemDocumentTemplates.tipo, input.tipo));
+      // Custom: a meta vem da própria linha (placeholders comuns). Fixos: meta do catálogo.
+      const meta = getDocMetaOrFallback(input.tipo, row?.titulo);
+      if (!getTemplateMeta(input.tipo) && !row) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Documento não encontrado." });
+      }
       if (!row) {
         return {
           meta,
@@ -134,7 +169,7 @@ export const systemDocumentTemplatesRouter = router({
 
   // ── Histórico de versões de 1 template ────────────────────────────────────
   listVersions: protectedProcedure
-    .input(z.object({ tipo: tipoSchema }))
+    .input(z.object({ tipo: tipoFlexSchema }))
     .query(async ({ input, ctx }) => {
       requireAdmin(ctx);
       const db = await getDb();
@@ -159,7 +194,7 @@ export const systemDocumentTemplatesRouter = router({
   // versaoAtual inconsistente com o histórico).
   save: protectedProcedure
     .input(z.object({
-      tipo: tipoSchema,
+      tipo: tipoFlexSchema,
       conteudoHtml: z.string().min(1, "Conteúdo não pode ser vazio."),
       comentario: z.string().max(500).optional(),
       // ── Metadados ISO (opcionais; gravados na LINHA do template, não na versão) ──
@@ -172,7 +207,9 @@ export const systemDocumentTemplatesRouter = router({
       requireAdmin(ctx);
       const db = await getDb();
       const meta = getTemplateMeta(input.tipo);
-      if (!meta) throw new TRPCError({ code: "BAD_REQUEST", message: "Tipo inválido." });
+      const custom = isCustomTipo(input.tipo);
+      // Fixos exigem meta do catálogo; custom não tem (criado via criarNovo).
+      if (!meta && !custom) throw new TRPCError({ code: "BAD_REQUEST", message: "Tipo inválido." });
 
       const userId = (ctx.user as any)?.id ?? null;
       const userName = (ctx.user as any)?.name ?? (ctx.user as any)?.email ?? "Sistema";
@@ -204,6 +241,11 @@ export const systemDocumentTemplatesRouter = router({
         const existing = (existingRows as any).rows?.[0] ?? (Array.isArray(existingRows) ? existingRows[0] : null);
 
         if (!existing) {
+          // Documento custom é criado pelo endpoint `criarNovo` (precisa de
+          // título/código). Aqui `save` só ATUALIZA custom já existente.
+          if (custom || !meta) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Documento não encontrado. Use o botão \"Novo Documento\" para criá-lo." });
+          }
           // Cria template + versão 1 (mesma transação). Nasce como RASCUNHO ISO,
           // com código default FC-XX-NNN e o autor como "elaborado por".
           const [created] = await tx.insert(systemDocumentTemplates).values({
@@ -280,7 +322,7 @@ export const systemDocumentTemplatesRouter = router({
   // ── Restaurar versão antiga (cria nova versão idêntica à escolhida) ──────
   // Mesma proteção atômica do save().
   restoreVersion: protectedProcedure
-    .input(z.object({ tipo: tipoSchema, versao: z.number().int().positive() }))
+    .input(z.object({ tipo: tipoFlexSchema, versao: z.number().int().positive() }))
     .mutation(async ({ input, ctx }) => {
       requireAdmin(ctx);
       const db = await getDb();
@@ -343,7 +385,7 @@ export const systemDocumentTemplatesRouter = router({
   // ── Aprovar (rascunho → vigente). Carimba aprovador + data. ───────────────
   aprovar: protectedProcedure
     .input(z.object({
-      tipo: tipoSchema,
+      tipo: tipoFlexSchema,
       dataVigencia: z.string().max(20).optional().nullable(),
       proximaRevisao: z.string().max(20).optional().nullable(),
     }))
@@ -369,7 +411,7 @@ export const systemDocumentTemplatesRouter = router({
 
   // ── Marcar obsoleto (deixa de ser consumido pelos módulos). ───────────────
   marcarObsoleto: protectedProcedure
-    .input(z.object({ tipo: tipoSchema }))
+    .input(z.object({ tipo: tipoFlexSchema }))
     .mutation(async ({ input, ctx }) => {
       requireAdmin(ctx);
       const db = await getDb();
@@ -382,7 +424,7 @@ export const systemDocumentTemplatesRouter = router({
 
   // ── Voltar para rascunho (reabre p/ edição/reaprovação). ──────────────────
   voltarParaRascunho: protectedProcedure
-    .input(z.object({ tipo: tipoSchema }))
+    .input(z.object({ tipo: tipoFlexSchema }))
     .mutation(async ({ input, ctx }) => {
       requireAdmin(ctx);
       const db = await getDb();
@@ -397,13 +439,19 @@ export const systemDocumentTemplatesRouter = router({
   //    oficial. Só devolve conteúdo quando status === 'vigente'. Caso contrário
   //    retorna template:null → o gerador cai no HTML hard-coded (fallback).
   getVigente: protectedProcedure
+    // SEGURANÇA (Rev. 2751): este endpoint é NÃO-admin (consumido pelos módulos/
+    // geradores). Só os 7 tipos FIXOS alimentam geradores; documentos CUSTOM são
+    // avulsos e NÃO devem ser legíveis por aqui — senão qualquer usuário autenticado
+    // que adivinhe o slug `custom_*` leria o conteúdo vigente. Por isso o input volta
+    // ao enum fixo (`tipoSchema`): um `tipo` custom é rejeitado na validação.
     .input(z.object({ tipo: tipoSchema }))
     .query(async ({ input }) => {
       const db = await getDb();
       const meta = getTemplateMeta(input.tipo);
       const [row] = await db.select().from(systemDocumentTemplates).where(eq(systemDocumentTemplates.tipo, input.tipo));
+      const titulo = meta?.titulo ?? row?.titulo ?? input.tipo;
       if (!row || row.status !== "vigente") {
-        return { tipo: input.tipo, vigente: false, conteudoHtml: null as string | null, codigo: row?.codigo ?? null, versao: row?.versaoAtual ?? null, titulo: meta?.titulo ?? input.tipo };
+        return { tipo: input.tipo, vigente: false, conteudoHtml: null as string | null, codigo: row?.codigo ?? null, versao: row?.versaoAtual ?? null, titulo };
       }
       return {
         tipo: input.tipo,
@@ -411,7 +459,7 @@ export const systemDocumentTemplatesRouter = router({
         conteudoHtml: row.conteudoHtml,
         codigo: row.codigo ?? null,
         versao: row.versaoAtual,
-        titulo: meta?.titulo ?? input.tipo,
+        titulo,
       };
     }),
 
@@ -466,6 +514,87 @@ export const systemDocumentTemplatesRouter = router({
       return { ok: true, criados, total: criados.length };
     }),
 
+  // ── criarNovo (Rev. 2751): cria um documento CUSTOM (fora dos 7 fixos). ────
+  //    Gera um `tipo` slug único (custom_<slug>, com sufixo numérico se colidir)
+  //    e um código ISO auto (FC-DOC-NNN) quando não informado. Nasce RASCUNHO
+  //    Rev. 1. Não é consumido por geradores — é um documento institucional avulso.
+  criarNovo: protectedProcedure
+    .input(z.object({
+      titulo: z.string().min(3, "Informe um título.").max(200),
+      descricao: z.string().max(500).optional(),
+      conteudoHtml: z.string().min(1, "Conteúdo não pode ser vazio."),
+      codigo: z.string().max(40).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx);
+      const db = await getDb();
+      const userId = (ctx.user as any)?.id ?? null;
+      const userName = (ctx.user as any)?.name ?? (ctx.user as any)?.email ?? "Sistema";
+
+      return await db.transaction(async (tx: any) => {
+        // Lock GLOBAL único de criação de docs custom (chave constante). Criar
+        // documento avulso é ação rara de admin, então serializar todas as criações
+        // é aceitável e resolve DOIS races de uma vez: (a) slug duplicado e
+        // (b) código auto FC-DOC-NNN duplicado — se o lock fosse por título, duas
+        // criações com TÍTULOS diferentes pegariam locks diferentes e poderiam ler
+        // o mesmo `max` de código, gerando o mesmo NNN.
+        const CRIAR_DOC_LOCK = 0x46434443; // "FCDC"
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${CRIAR_DOC_LOCK})`);
+
+        // (1) Slug único: base + sufixo _2, _3... se já existir (respeita varchar(60)).
+        const base = slugifyDocTipo(input.titulo);
+        const usados = new Set<string>(
+          (await tx.select({ tipo: systemDocumentTemplates.tipo }).from(systemDocumentTemplates))
+            .map((r: any) => r.tipo as string),
+        );
+        let tipo = base;
+        let n = 2;
+        while (usados.has(tipo)) {
+          const suf = `_${n++}`;
+          tipo = `${base.slice(0, 60 - suf.length)}${suf}`;
+        }
+
+        // (2) Código ISO: usa o informado ou gera FC-DOC-NNN (próximo livre).
+        let codigo = (input.codigo || "").trim();
+        if (!codigo) {
+          const rows = await tx.select({ codigo: systemDocumentTemplates.codigo }).from(systemDocumentTemplates);
+          let max = 0;
+          for (const r of rows as any[]) {
+            const m = /^FC-DOC-(\d+)$/.exec(String(r.codigo || ""));
+            if (m) max = Math.max(max, parseInt(m[1], 10));
+          }
+          codigo = `FC-DOC-${String(max + 1).padStart(3, "0")}`;
+        }
+
+        // (3) Insere a linha (RASCUNHO) + versão 1, na mesma transação.
+        const [created] = await tx.insert(systemDocumentTemplates).values({
+          tipo,
+          titulo: input.titulo.trim(),
+          descricao: input.descricao?.trim() || "Documento institucional avulso.",
+          conteudoHtml: input.conteudoHtml,
+          versaoAtual: 1,
+          ativo: 1,
+          atualizadoPorId: userId,
+          atualizadoPorNome: userName,
+          codigo,
+          status: "rascunho",
+          elaboradoPorId: userId,
+          elaboradoPorNome: userName,
+        } as any).returning({ id: systemDocumentTemplates.id });
+
+        await tx.insert(systemDocumentTemplateVersions).values({
+          templateId: created.id,
+          versao: 1,
+          conteudoHtml: input.conteudoHtml,
+          comentario: "Criação do documento (Rev. 1)",
+          criadoPorId: userId,
+          criadoPorNome: userName,
+        } as any);
+
+        return { ok: true, tipo, templateId: created.id, codigo };
+      });
+    }),
+
   // ── IA: status (p/ a UI degradar botões quando não há chave). ─────────────
   iaStatus: protectedProcedure.query(async ({ ctx }) => {
     requireAdmin(ctx);
@@ -478,7 +607,10 @@ export const systemDocumentTemplatesRouter = router({
   //    placeholders {{chave}}. Valida que veio HTML não-vazio + sanitiza. ─────
   iaGerarDoZero: protectedProcedure
     .input(z.object({
-      tipo: tipoSchema,
+      // tipo é OPCIONAL (Rev. 2751): ao criar um documento NOVO ainda não há tipo,
+      // então passa-se `tituloDoc` e usam-se os placeholders comuns.
+      tipo: tipoFlexSchema.optional(),
+      tituloDoc: z.string().max(200).optional(),
       instrucoes: z.string().min(5, "Descreva o que o documento deve conter.").max(4000),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -486,8 +618,7 @@ export const systemDocumentTemplatesRouter = router({
       if (!iaDisponivel().algum) {
         throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Nenhuma IA configurada. Cadastre uma chave (ex.: ANTHROPIC_API_KEY) para usar a geração automática." });
       }
-      const meta = getTemplateMeta(input.tipo);
-      if (!meta) throw new TRPCError({ code: "BAD_REQUEST", message: "Tipo inválido." });
+      const meta = getDocMetaOrFallback(input.tipo ?? "", input.tituloDoc);
       const placeholders = meta.placeholders.map(p => `{{${p.chave}}} = ${p.rotulo}`).join("\n");
       const systemPrompt =
         `Você é um redator jurídico-trabalhista da FC Engenharia (construção civil, Brasil). ` +
@@ -521,7 +652,9 @@ export const systemDocumentTemplatesRouter = router({
   //    com placeholders, espelhando o documento enviado. Exige Anthropic. ─────
   iaLerPdfSugerir: protectedProcedure
     .input(z.object({
-      tipo: tipoSchema,
+      // tipo OPCIONAL (Rev. 2751): documento NOVO ainda não tem tipo → usa tituloDoc.
+      tipo: tipoFlexSchema.optional(),
+      tituloDoc: z.string().max(200).optional(),
       pdfBase64: z.string().min(1),
       observacoes: z.string().max(2000).optional(),
     }))
@@ -530,8 +663,7 @@ export const systemDocumentTemplatesRouter = router({
       if (!iaDisponivel().anthropic) {
         throw new TRPCError({ code: "PRECONDITION_FAILED", message: "A leitura de PDF exige a IA Anthropic configurada (ANTHROPIC_API_KEY)." });
       }
-      const meta = getTemplateMeta(input.tipo);
-      if (!meta) throw new TRPCError({ code: "BAD_REQUEST", message: "Tipo inválido." });
+      const meta = getDocMetaOrFallback(input.tipo ?? "", input.tituloDoc);
       // Limite defensivo de tamanho (~8MB base64 ≈ 6MB binário).
       if (input.pdfBase64.length > 8_500_000) {
         throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: "PDF muito grande (máx. ~6MB)." });

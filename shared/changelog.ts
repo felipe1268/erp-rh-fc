@@ -1,6 +1,51 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2751 — **CONFIGURAÇÕES · CENTRAL DE DOCUMENTOS: AGORA DÁ PRA CRIAR DOCUMENTOS NOVOS (ALÉM DOS 7 FIXOS) VIA IA —
+ * SUBINDO UM PDF MODELO OU DIGITANDO O ASSUNTO.**
+ *
+ * PEDIDO (Felipe): além dos 7 documentos institucionais fixos, poder CRIAR documentos novos na Central de Documentos,
+ * por dois caminhos com IA: (a) subir um PDF modelo → a IA lê, reproduz o texto como corpo HTML e troca os dados por
+ * placeholders + sugere melhorias; (b) digitar o assunto/título → a IA gera o texto completo. Sem mexer no schema.
+ *
+ * MUDANÇA (SHARED + SERVER + CLIENT; ZERO SCHEMA; ZERO ALTER/DROP/DELETE — R-001/R-007/R-010):
+ *   (1) SHARED (`shared/documentTemplates.ts`): novos helpers reutilizados nos dois lados — `PH_COMUM` (placeholders
+ *       comuns: colaborador + empresa + documento + obra), `slugifyDocTipo(titulo)` (gera `custom_<slug>` ≤60ch,
+ *       sem acento), `isCustomTipo(tipo)` (tipo ∉ os 7 fixos) e `getDocMetaOrFallback(tipo, titulo?)` (devolve a meta
+ *       fixa do catálogo OU uma meta sintética com `PH_COMUM` + ícone `FileText` p/ docs custom).
+ *   (2) SERVER (`server/routers/systemDocumentTemplates.ts`): introduzido `tipoFlexSchema` (`/^[a-z0-9_]{3,60}$/`) que
+ *       aceita os 7 fixos OU um slug custom; trocado o `tipoSchema` (enum) por ele nos endpoints ADMIN get/listVersions/
+ *       save/restoreVersion/aprovar/marcarObsoleto/voltarParaRascunho. **EXCEÇÃO DE SEGURANÇA:** `getVigente` (consumido
+ *       pelos módulos/geradores, NÃO-admin) PERMANECE em `tipoSchema` (só os 7 fixos) — senão qualquer usuário autenticado
+ *       que adivinhasse um slug `custom_*` leria o conteúdo vigente de um doc avulso (gap de leitura horizontal apontado
+ *       pelo architect; docs custom não alimentam geradores, então não há razão p/ getVigente aceitá-los). `listAll`
+ *       passou a anexar as linhas custom (tipo não-fixo) com `isCustom:true` + ícone FileText, ordenadas por título.
+ *       `get` busca a linha ANTES e resolve a meta via `getDocMetaOrFallback` (não dá mais throw em tipo desconhecido
+ *       com linha). NOVO endpoint `criarNovo` {titulo, descricao?, conteudoHtml, codigo?}: dentro de transação com
+ *       advisory-lock GLOBAL constante (`CRIAR_DOC_LOCK`, serializa todas as criações — ação rara de admin — evitando
+ *       tanto slug duplicado quanto código `FC-DOC-NNN` repetido entre criações concorrentes de títulos diferentes),
+ *       gera slug ÚNICO (sufixo _2, _3… em colisão), código ISO auto `FC-DOC-NNN` (próximo livre) quando não informado,
+ *       insere a linha como RASCUNHO + versão 1 e devolve {tipo, templateId, codigo}. `save` ganhou guarda: criar (linha
+ *       inexistente) só vale p/ tipo fixo — custom precisa vir do `criarNovo`. As IAs `iaGerarDoZero`/`iaLerPdfSugerir`
+ *       ganharam `tipo` OPCIONAL + `tituloDoc` opcional e resolvem a meta por `getDocMetaOrFallback` (usam `PH_COMUM`
+ *       quando não há tipo).
+ *   (3) CLIENT (`client/src/pages/configuracoes/TemplatesDocsTab.tsx`): `tipoSelecionado` afrouxado p/ `string` (aceita
+ *       custom); a `meta` (que antes fazia `.find(...)!` e QUEBRARIA em custom) agora usa `getDocMetaOrFallback(tipo,
+ *       selRow?.titulo)`. NOVO botão "Novo Documento" no topo, abrindo um MODAL com 2 abas — "Subir modelo (PDF)" e
+ *       "Gerar do assunto" — campos Título (obrigatório) + Código ISO (opcional/auto), pré-visualização segura do corpo
+ *       gerado (DOMPurify + placeholders de exemplo) e lista de sugestões da IA. Mutations dedicadas (`novoGerarMut`,
+ *       `novoPdfMut`, `criarNovoMut`) populam o MODAL (não o editor principal); ao criar, seleciona o novo tipo e
+ *       invalida `listAll`. Botões de IA degradam conforme `iaStatus` (PDF exige Anthropic; gerar-do-zero qualquer LLM).
+ *
+ * RESSALVA: documentos custom NÃO são consumidos por geradores (só os 7 fixos alimentam módulos) — são documentos
+ * institucionais avulsos, editáveis/aprováveis pelo mesmo fluxo ISO (rascunho→vigente→obsoleto) e versionados. Sem
+ * exclusão (R-rules): `marcarObsoleto` é o caminho p/ aposentar um custom. Nenhuma coluna nova; `tipo` já é varchar(60).
+ *
+ * VALIDAÇÃO: esbuild parse (stdin) EXIT 0 em `documentTemplates.ts`, `systemDocumentTemplates.ts`, `TemplatesDocsTab.tsx`;
+ * `vitest run server/rescisao.test.ts` 41/41 verde; HMR aplicou o client sem erro.
+ *
+ * ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2750 — **TERCEIROS · CONTRATOS · TESTEMUNHA "GESTOR DE PROJETO" DEIXOU DE SER UM CAMPO CONFIGURÁVEL — O ERP
  * ADOTA SEMPRE O "ENGENHEIRO / RESPONSÁVEL" DO CADASTRO DA OBRA.**
  *
