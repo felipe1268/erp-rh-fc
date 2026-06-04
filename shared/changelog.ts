@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2740 — **PAINEL RH · MODAIS DE EXPANSÃO (ASOs VENCIDOS / ASOs VENCENDO / FÉRIAS / ANIVERSÁRIOS DE EMPRESA):
+ * ACABOU A BARRA DE ROLAGEM HORIZONTAL — O LISTÃO AGORA CABE NA LARGURA DO MODAL (só rola na vertical quando precisa).**
+ *
+ * PEDIDO (print do modal "ASOs Vencidos · 1 funcionário" no `PainelRH`): "arrume a tela com um layout sem precisar de
+ * barra de rolagem". O print mostrava uma barra de rolagem HORIZONTAL na base do modal mesmo com 1 único item, que não
+ * deveria existir (o conteúdo cabe folgado em `max-w-2xl`).
+ *
+ * CAUSA (`client/src/pages/PainelRH.tsx`): os dois modais de expansão (o de "Aniversários de Empresa" e o genérico de
+ * KPI usado por ASOs Vencidos / ASOs Vencendo / Férias) embrulhavam a lista no `<ScrollArea>` do shadcn/Radix. O
+ * viewport interno do Radix ScrollArea renderiza um wrapper com `display: table`, que faz a largura do conteúdo
+ * EXPANDIR para caber a maior linha (em vez de respeitar a largura do container) — quebrando o `min-w-0`/`flex-wrap`
+ * dos filhos e disparando uma barra de rolagem horizontal espúria.
+ *
+ * SOLUÇÃO (SÓ CLIENT/UI; ZERO SERVER; ZERO SCHEMA; ZERO ALTER/DROP/DELETE — R-001/R-007/R-010; não muda dados nem
+ * lógica — só o container de scroll): os dois `<ScrollArea className="max-h-[...] pr-2">` foram trocados por um
+ * `<div className="max-h-[...] overflow-y-auto overflow-x-hidden pr-2">`. O `overflow-x-hidden` mata a barra horizontal
+ * e o `overflow-y-auto` preserva a rolagem vertical para listas longas. O import órfão de `ScrollArea` foi removido.
+ *
+ * VALIDAÇÃO: esbuild parse de `PainelRH.tsx` EXIT 0; `vitest server/rescisao.test.ts` 41/41 verde; app rodando, console
+ * limpo.
+ *
+ * ARQUIVOS: `client/src/pages/PainelRH.tsx`.
+ *
  * Rev. 2739 — **PLANEJAMENTO · PREVISÃO DE MEDIÇÃO (POR AVANÇO FÍSICO): A TABELA AGORA DEIXA EXPLÍCITO QUE "O QUE É
  * PRODUZIDO NUM MÊS (COMPETÊNCIA) É RECEBIDO DEPOIS (mês seguinte)" — SEM PRECISAR ROLAR A TABELA PARA A DIREITA.**
  *

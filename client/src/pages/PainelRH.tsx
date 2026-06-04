@@ -27,7 +27,6 @@ import {
   Maximize2, Save, X, ChevronLeft, MapPin, UsersRound
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDateTime, nowBrasilia } from "@/lib/dateUtils";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -1121,7 +1120,7 @@ export default function PainelRH() {
               <Badge className="bg-amber-100 text-amber-700 text-sm ml-1">{homeData?.aniversariosEmpresa?.length ?? 0} funcionários</Badge>
             </DialogTitle>
           </DialogHeader>
-          <ScrollArea className="max-h-[75vh] pr-2">
+          <div className="max-h-[75vh] overflow-y-auto overflow-x-hidden pr-2">
             <div className="space-y-2 py-2">
               {(homeData?.aniversariosEmpresa ?? []).map((a: any, i: number) => (
                 <div
@@ -1151,7 +1150,7 @@ export default function PainelRH() {
                 </div>
               ))}
             </div>
-          </ScrollArea>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1165,7 +1164,7 @@ export default function PainelRH() {
               <Badge variant="secondary" className="text-sm ml-1">{kpiExpand?.items.length ?? 0} funcionário{(kpiExpand?.items.length ?? 0) !== 1 ? 's' : ''}</Badge>
             </DialogTitle>
           </DialogHeader>
-          <ScrollArea className="max-h-[72vh] pr-2">
+          <div className="max-h-[72vh] overflow-y-auto overflow-x-hidden pr-2">
             <div className="space-y-2 py-2">
               {kpiExpand?.items.map((item, i) => (
                 <div key={i} className={`flex items-center gap-4 px-4 py-3 rounded-lg border text-sm ${item.urgencia === 'critico' ? 'border-red-200 bg-red-50' : item.urgencia === 'urgente' ? 'border-orange-200 bg-orange-50' : 'border-border bg-card'}`}>
@@ -1184,7 +1183,7 @@ export default function PainelRH() {
                 </div>
               ))}
             </div>
-          </ScrollArea>
+          </div>
         </DialogContent>
       </Dialog>
 
