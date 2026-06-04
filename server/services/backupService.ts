@@ -146,7 +146,7 @@ export async function executarBackup(
   if (!db) throw new Error("Banco de dados não disponível");
 
   const insertResult = await db.execute(sql`
-    INSERT INTO backups (tipo, status, iniciado_por)
+    INSERT INTO backups (tipo, status, "iniciadoPor")
     VALUES (${tipo}, 'em_andamento', ${iniciadoPor})
     RETURNING id
   `);
@@ -158,7 +158,7 @@ export async function executarBackup(
 
     // Grava o total de tabelas logo no início para o painel calcular o progresso (0-100%).
     await db.execute(sql`
-      UPDATE backups SET tabelas_total = ${allTables.length}, tabelas_exportadas = 0
+      UPDATE backups SET "tabelasTotal" = ${allTables.length}, "tabelasExportadas" = 0
       WHERE id = ${backupId}
     `);
 
@@ -199,7 +199,7 @@ export async function executarBackup(
       if (tabelasExportadas % 10 === 0) {
         try {
           await db.execute(sql`
-            UPDATE backups SET tabelas_exportadas = ${tabelasExportadas} WHERE id = ${backupId}
+            UPDATE backups SET "tabelasExportadas" = ${tabelasExportadas} WHERE id = ${backupId}
           `);
         } catch { /* progresso é best-effort; não interrompe o backup */ }
       }
@@ -208,7 +208,7 @@ export async function executarBackup(
     // Checkpoint final do contador ao sair do loop (cobre a defasagem se o último passo não foi múltiplo de 10).
     try {
       await db.execute(sql`
-        UPDATE backups SET tabelas_exportadas = ${tabelasExportadas} WHERE id = ${backupId}
+        UPDATE backups SET "tabelasExportadas" = ${tabelasExportadas} WHERE id = ${backupId}
       `);
     } catch { /* best-effort */ }
 
@@ -239,12 +239,12 @@ export async function executarBackup(
     await db.execute(sql`
       UPDATE backups SET
         status = 'concluido',
-        tabelas_exportadas = ${tabelasExportadas},
-        registros_exportados = ${totalRegistros},
-        tamanho_bytes = ${tamanhoBytes},
-        s3_key = ${s3Key},
-        s3_url = ${s3Url},
-        concluido_em = NOW()
+        "tabelasExportadas" = ${tabelasExportadas},
+        "registrosExportados" = ${totalRegistros},
+        "tamanhoBytes" = ${tamanhoBytes},
+        "s3Key" = ${s3Key},
+        "s3Url" = ${s3Url},
+        "concluidoEm" = NOW()
       WHERE id = ${backupId}
     `);
 
@@ -281,7 +281,7 @@ export async function executarBackup(
       UPDATE backups SET
         status = 'erro',
         erro = ${(err.message || "").slice(0, 500)},
-        concluido_em = NOW()
+        "concluidoEm" = NOW()
       WHERE id = ${backupId}
     `);
 

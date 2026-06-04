@@ -628,11 +628,13 @@ Regras:
         await db.execute(sql`ALTER TABLE curriculos ADD COLUMN IF NOT EXISTS historico_status_json TEXT`);
         console.log(`[SyncSchema+] Coluna historico_status_json garantida na tabela curriculos.`);
 
-        // Rev. 2743 — coluna tabelas_total em backups (progresso 0-100% do backup em andamento).
+        // Rev. 2743/2745 — coluna "tabelasTotal" (camelCase, igual ao schema Drizzle) em backups (progresso 0-100%).
+        // A Rev. 2743 criou erroneamente "tabelas_total" (snake_case), que o Drizzle/select não enxerga; aqui
+        // garantimos a coluna camelCase correta. A coluna snake antiga (se existir) fica órfã/inerte (não removida — R-001/R-007/R-010).
         try {
-          await db.execute(sql`ALTER TABLE backups ADD COLUMN IF NOT EXISTS tabelas_total INTEGER DEFAULT 0 NOT NULL`);
-          console.log(`[SyncSchema+] Rev. 2743: coluna tabelas_total garantida em backups (progresso %).`);
-        } catch (e: any) { console.error(`[SyncSchema+] FALHA backups.tabelas_total:`, e?.message || e); }
+          await db.execute(sql`ALTER TABLE backups ADD COLUMN IF NOT EXISTS "tabelasTotal" INTEGER DEFAULT 0 NOT NULL`);
+          console.log(`[SyncSchema+] Rev. 2745: coluna "tabelasTotal" garantida em backups (progresso %).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA backups."tabelasTotal":`, e?.message || e); }
 
         // Rev. 2004 — Tabela de participações em DDS (Diálogo Diário de Segurança)
         try {

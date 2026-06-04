@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2745 — **CONFIGURAÇÕES · BACKUP & SINCRONIZAÇÃO: BACKUP MANUAL/AUTOMÁTICO, HISTÓRICO E SAÚDE VOLTARAM A
+ * FUNCIONAR — TODO O SQL DO SERVIÇO E O SELF-HEAL ESTAVAM EM snake_case ENQUANTO A TABELA `backups` NO NEON É
+ * camelCase (`column "iniciado_por" does not exist`, `column "tabelasTotal" does not exist`).**
+ *
+ * BUG (reportado por Felipe — print do toast): clicar em "Backup Manual" estourava
+ * `Failed query: INSERT INTO backups (tipo, status, iniciado_por) ... column "iniciado_por" of relation "backups"
+ * does not exist`. Em paralelo, `backup.listar`, `backup.health` e o `[SyncMonitor]` falhavam com
+ * `column "tabelasTotal" does not exist`.
+ *
+ * CAUSA-RAIZ (descoberta consultando o information_schema do NEON real): a tabela `backups` foi criada com nomes de
+ * coluna em **camelCase** (padrão do Drizzle quando o `pgTable` não passa string de nome explícita) —
+ * `iniciadoPor`, `tabelasExportadas`, `registrosExportados`, `tamanhoBytes`, `s3Key`, `s3Url`, `concluidoEm`. Porém:
+ *   (a) `server/services/backupService.ts` montava TODO o SQL cru de INSERT/UPDATE em **snake_case** (`iniciado_por`,
+ *       `tabelas_exportadas`, `registros_exportados`, `tamanho_bytes`, `s3_key`, `s3_url`, `concluido_em`) →
+ *       nenhuma dessas colunas existe com esse nome → INSERT/UPDATE quebravam (backup nunca concluía).
+ *   (b) o self-heal da Rev. 2743 (`server/_core/index.ts`) adicionou a coluna nova como `tabelas_total` (snake_case),
+ *       mas o schema Drizzle (`drizzle/schema.ts`) declara `tabelasTotal` (camelCase) → o `db.select()` de
+ *       `backup.listar`/`health` procurava `"tabelasTotal"`, que não existia → essas queries quebravam.
+ *
+ * FIX (SERVER ONLY; ZERO ALTER destrutivo/DROP/DELETE — R-001/R-007/R-010): (1) `backupService.ts` passa a referenciar
+ * TODAS as colunas da `backups` em camelCase entre aspas (`"iniciadoPor"`, `"tabelasTotal"`, `"tabelasExportadas"`,
+ * `"registrosExportados"`, `"tamanhoBytes"`, `"s3Key"`, `"s3Url"`, `"concluidoEm"`), batendo com a tabela real e com o
+ * schema; (2) o self-heal passa a garantir a coluna **camelCase** correta
+ * (`ALTER TABLE backups ADD COLUMN IF NOT EXISTS "tabelasTotal" INTEGER DEFAULT 0 NOT NULL`) — idempotente. A coluna
+ * `tabelas_total` (snake) criada por engano na Rev. 2743 fica ÓRFÃ/inerte (NOT NULL DEFAULT 0 → inofensiva em INSERT);
+ * não é removida por respeito ao R-001/R-007/R-010. A coluna camelCase foi também aplicada ao Neon em runtime nesta
+ * revisão para destravar a instância em execução. A tabela `backup_snapshots` (criada por `CREATE TABLE` próprio em
+ * snake_case) NÃO foi tocada — é autoconsistente.
+ *
+ * VALIDAÇÃO: esbuild parse EXIT 0 (`backupService.ts`, `index.ts`); `vitest server/rescisao.test.ts` 41/41 verde;
+ * app reiniciado — somem os erros `column ... does not exist` de `backup.listar`/`health`/`executar` e do `[SyncMonitor]`.
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2744 — **COMPRAS · COTAÇÃO · APROVAÇÃO ("APROVAR E GERAR OC"): O AVISO DE "ACIMA DA META / DÉFICIT" SÓ APARECE
  * QUANDO HÁ DÉBITO REAL — ANTES ESTOURAVA FALSO DÉFICIT EM COTAÇÃO POR PACOTE MESMO COM CRÉDITO (ex.: COT-2026-0283).**
  *
