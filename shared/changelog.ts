@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2743 — **CONFIGURAÇÕES · BACKUP & SINCRONIZAÇÃO · HISTÓRICO DE BACKUPS: PERCENTUAL DE PROGRESSO (0–100%) PARA
+ * SABER QUANTO FALTA PARA FINALIZAR.**
+ *
+ * PEDIDO (Felipe): no "Histórico de Backups" (Configurações), os backups apareciam travados em "Em andamento" com
+ * 0 tabelas/0 registros porque o serviço só gravava o contador `tabelas_exportadas` no FINAL da rotina — durante a
+ * execução nada era persistido, então não dava para saber quanto faltava. Pedido: mostrar um percentual de 0 a 100%
+ * para acompanhar o progresso e quanto falta para terminar.
+ *
+ * IMPLEMENTAÇÃO (SERVER + CLIENT; +1 coluna via self-heal IF NOT EXISTS; ZERO ALTER destrutivo/DROP/DELETE —
+ * R-001/R-007/R-010):
+ *  - SCHEMA (`drizzle/schema.ts`): nova coluna `tabelasTotal` (integer default 0 notNull) na tabela `backups`,
+ *    garantida em runtime pelo self-heal `[SyncSchema+]` em `server/_core/index.ts`
+ *    (`ALTER TABLE backups ADD COLUMN IF NOT EXISTS tabelas_total INTEGER DEFAULT 0 NOT NULL` — idempotente,
+ *    não destrutivo).
+ *  - SERVER (`server/services/backupService.ts`): logo após descobrir as tabelas (`descobrirTabelas`), grava
+ *    `tabelas_total = allTables.length` e zera `tabelas_exportadas`. Dentro do loop de exportação, a cada 10 tabelas
+ *    faz UPDATE de `tabelas_exportadas` (best-effort, em try/catch — falha de progresso NUNCA interrompe o backup).
+ *    Assim o painel calcula `% = tabelas_exportadas / tabelas_total`.
+ *  - CLIENT (`client/src/pages/Configuracoes.tsx`, `BackupTab`): a query `backup.listar` ganhou `refetchInterval`
+ *    de 3s ENQUANTO houver algum backup `em_andamento` (volta a `false` quando todos terminam — sem polling à toa).
+ *    Na coluna Status, o badge passa a exibir o percentual ("Concluído 100%", "Em andamento 42%", "Erro X%") e,
+ *    para backups não concluídos, uma barra de progresso (largura = %, tooltip "feitas/total tabelas").
+ *
+ * RESSALVA: backups antigos já gravados como "em_andamento" (rodadas anteriores que nunca completaram) têm
+ * `tabelas_total = 0` → o painel mostra 0% para eles (não há como recuperar o progresso de uma rodada morta). Novos
+ * backups passam a refletir o avanço real. O contador avança em passos de 10 tabelas (granularidade do UPDATE).
+ *
+ * VALIDAÇÃO: esbuild parse EXIT 0 nos 4 arquivos (Configuracoes.tsx, backupService.ts, _core/index.ts, schema.ts);
+ * `vitest server/rescisao.test.ts` 41/41 verde; app rodando, console limpo.
+ *
+ * ---
+ *
  * Rev. 2742 — **COMPRAS · MAPA DE COTAÇÃO · "FORNECEDORES PARTICIPANTES": CADASTRAR FORNECEDOR NOVO POR POPUP, SEM
  * SAIR DA COTAÇÃO.**
  *

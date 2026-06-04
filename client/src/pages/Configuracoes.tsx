@@ -2678,7 +2678,13 @@ function BackupTab() {
   const [horarioEdit, setHorarioEdit] = useState("");
   const [ativoEdit, setAtivoEdit] = useState(true);
 
-  const backupsQuery = trpc.backup.listar.useQuery({ limit: 20 });
+  const backupsQuery = trpc.backup.listar.useQuery({ limit: 20 }, {
+    // Enquanto houver backup "em_andamento", atualiza a cada 3s para o % avançar ao vivo.
+    refetchInterval: (q: any) => {
+      const d = q?.state?.data;
+      return Array.isArray(d) && d.some((b: any) => b.status === "em_andamento") ? 3000 : false;
+    },
+  });
   const configQuery = (trpc as any).backup.obterConfig.useQuery();
   const [configInit, setConfigInit] = useState(false);
 
@@ -3051,15 +3057,36 @@ function BackupTab() {
                       <td className="px-3 py-2 text-center font-mono">{b.registrosExportados?.toLocaleString("pt-BR") ?? "—"}</td>
                       <td className="px-3 py-2 text-center font-mono">{b.tamanhoBytes ? formatBytes(b.tamanhoBytes) : "—"}</td>
                       <td className="px-3 py-2 text-center">
-                        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
-                          b.status === "concluido" ? "bg-green-100 text-green-700" :
-                          b.status === "em_andamento" ? "bg-yellow-100 text-yellow-700" :
-                          "bg-red-100 text-red-700"
-                        }`}>
-                          {b.status === "concluido" ? <><Check className="w-3 h-3" /> Concluído</> :
-                           b.status === "em_andamento" ? <><Loader2 className="w-3 h-3 animate-spin" /> Em andamento</> :
-                           <><X className="w-3 h-3" /> Erro</>}
-                        </span>
+                        {(() => {
+                          const total = b.tabelasTotal ?? 0;
+                          const feitas = b.tabelasExportadas ?? 0;
+                          const pct = b.status === "concluido"
+                            ? 100
+                            : b.status === "em_andamento"
+                              ? (total > 0 ? Math.min(100, Math.round((feitas / total) * 100)) : 0)
+                              : (total > 0 ? Math.min(100, Math.round((feitas / total) * 100)) : 0);
+                          return (
+                            <div className="flex flex-col items-center gap-1">
+                              <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
+                                b.status === "concluido" ? "bg-green-100 text-green-700" :
+                                b.status === "em_andamento" ? "bg-yellow-100 text-yellow-700" :
+                                "bg-red-100 text-red-700"
+                              }`}>
+                                {b.status === "concluido" ? <><Check className="w-3 h-3" /> Concluído 100%</> :
+                                 b.status === "em_andamento" ? <><Loader2 className="w-3 h-3 animate-spin" /> Em andamento {pct}%</> :
+                                 <><X className="w-3 h-3" /> Erro {pct}%</>}
+                              </span>
+                              {b.status !== "concluido" && (
+                                <div className="w-24 h-1.5 bg-gray-200 rounded-full overflow-hidden" title={`${feitas}/${total} tabelas`}>
+                                  <div
+                                    className={`h-full rounded-full transition-all ${b.status === "em_andamento" ? "bg-yellow-500" : "bg-red-400"}`}
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="px-3 py-2 text-center">
                         {b.s3Url && b.status === "concluido" && (

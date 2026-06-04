@@ -156,6 +156,12 @@ export async function executarBackup(
     const allTables = await descobrirTabelas(db);
     console.log(`[Backup] ${allTables.length} tabelas descobertas no banco`);
 
+    // Grava o total de tabelas logo no início para o painel calcular o progresso (0-100%).
+    await db.execute(sql`
+      UPDATE backups SET tabelas_total = ${allTables.length}, tabelas_exportadas = 0
+      WHERE id = ${backupId}
+    `);
+
     const exportData: Record<string, unknown[]> = {};
     let totalRegistros = 0;
     let tabelasExportadas = 0;
@@ -188,7 +194,23 @@ export async function executarBackup(
       } catch (err: any) {
         console.warn(`[Backup] Tabela ${tableName} ignorada: ${err.message}`);
       }
+
+      // Progresso incremental: a cada 10 tabelas, atualiza o contador para o painel mostrar o %.
+      if (tabelasExportadas % 10 === 0) {
+        try {
+          await db.execute(sql`
+            UPDATE backups SET tabelas_exportadas = ${tabelasExportadas} WHERE id = ${backupId}
+          `);
+        } catch { /* progresso é best-effort; não interrompe o backup */ }
+      }
     }
+
+    // Checkpoint final do contador ao sair do loop (cobre a defasagem se o último passo não foi múltiplo de 10).
+    try {
+      await db.execute(sql`
+        UPDATE backups SET tabelas_exportadas = ${tabelasExportadas} WHERE id = ${backupId}
+      `);
+    } catch { /* best-effort */ }
 
     const now = new Date();
     const timestamp = now.toISOString().replace(/[:.]/g, "-").slice(0, 19);

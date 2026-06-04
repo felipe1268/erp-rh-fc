@@ -628,6 +628,12 @@ Regras:
         await db.execute(sql`ALTER TABLE curriculos ADD COLUMN IF NOT EXISTS historico_status_json TEXT`);
         console.log(`[SyncSchema+] Coluna historico_status_json garantida na tabela curriculos.`);
 
+        // Rev. 2743 — coluna tabelas_total em backups (progresso 0-100% do backup em andamento).
+        try {
+          await db.execute(sql`ALTER TABLE backups ADD COLUMN IF NOT EXISTS tabelas_total INTEGER DEFAULT 0 NOT NULL`);
+          console.log(`[SyncSchema+] Rev. 2743: coluna tabelas_total garantida em backups (progresso %).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA backups.tabelas_total:`, e?.message || e); }
+
         // Rev. 2004 — Tabela de participações em DDS (Diálogo Diário de Segurança)
         try {
           await db.execute(sql`

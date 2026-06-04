@@ -4899,6 +4899,7 @@ export const backups = pgTable("backups", {
         tipo: text().notNull().default("automatico"),
         status: text().notNull().default("em_andamento"),
         tabelasExportadas: integer().default(0).notNull(),
+        tabelasTotal: integer().default(0).notNull(),
         registrosExportados: integer().default(0).notNull(),
         tamanhoBytes: integer().default(0).notNull(),
         s3Key: varchar({ length: 500 }),
