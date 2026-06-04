@@ -1,13 +1,14 @@
 /**
- * Rev. 2141 — Aba "Templates de Documentos" em Configurações.
+ * Rev. 2747 — Aba "Templates de Documentos" em Configurações (Central ISO + IA).
  *
- * UI 3 colunas:
- *  [esquerda] Lista dos 7 tipos de template
- *  [centro]   Editor WYSIWYG (TipTap) + toolbar + comentário + ações
- *  [direita]  Sidebar de placeholders clicáveis + histórico de revisões
+ * A aba é a FONTE OFICIAL dos documentos institucionais FC. Layout master-detail:
+ *  [esquerda] Lista dos 7 tipos com selo de status ISO (Vigente/Rascunho/Obsoleto)
+ *  [centro]   Ficha ISO (código/status/elaborado/aprovado/datas) + editor + ações
+ *  [direita]  Placeholders pesquisáveis + histórico de revisões
  *
- * Cada Salvar cria uma nova Rev. (1, 2, ...) com autor/data/comentário.
- * Possível restaurar qualquer versão antiga (vira nova Rev. atual).
+ * Controle ISO: código FC-XX-NNN, status (rascunho→vigente→obsoleto), elaborado/
+ * aprovado por, data de vigência e próxima revisão. IA: gerar do zero (instruções)
+ * e ler PDF→sugerir modelo. Cada Salvar cria uma nova Rev.; restaurável.
  */
 
 import { useState, useRef, useMemo, useEffect } from "react";
@@ -21,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   FileSignature, ShieldCheck, Megaphone, AlertTriangle, BellRing,
   UserX, Hammer, Save, History, RotateCcw, Eye, FileText, Search, Info, Loader2,
+  XCircle, Sparkles, Upload, BadgeCheck, FilePlus2, Undo2,
 } from "lucide-react";
 import RichTextEditor, { type RichTextEditorHandle } from "@/components/RichTextEditor";
 import {
@@ -42,6 +44,27 @@ function formatDataHora(iso?: string | null) {
   } catch { return "—"; }
 }
 
+function formatData(iso?: string | null) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso.length <= 10 ? iso + "T00:00:00" : iso);
+    return d.toLocaleDateString("pt-BR");
+  } catch { return iso || "—"; }
+}
+
+// Selo de status ISO (cores + rótulo).
+function StatusBadge({ status, size = "sm" }: { status: string; size?: "sm" | "xs" }) {
+  const pad = size === "xs" ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-xs";
+  const map: Record<string, { cls: string; label: string }> = {
+    vigente: { cls: "bg-green-100 text-green-700 border border-green-200", label: "Vigente" },
+    rascunho: { cls: "bg-amber-100 text-amber-700 border border-amber-200", label: "Rascunho" },
+    obsoleto: { cls: "bg-gray-200 text-gray-600 border border-gray-300", label: "Obsoleto" },
+    ausente: { cls: "bg-red-50 text-red-600 border border-red-200", label: "Não criado" },
+  };
+  const it = map[status] ?? map.ausente;
+  return <span className={`inline-flex items-center rounded font-semibold ${pad} ${it.cls}`}>{it.label}</span>;
+}
+
 export default function TemplatesDocsTab() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin" || user?.role === "admin_master";
@@ -52,10 +75,23 @@ export default function TemplatesDocsTab() {
   const [versaoVisualizada, setVersaoVisualizada] = useState<number | undefined>(undefined);
   const [mostrarHistorico, setMostrarHistorico] = useState(false);
   const [mostrarPreview, setMostrarPreview] = useState(false);
+  const [buscaPlaceholder, setBuscaPlaceholder] = useState("");
   const editorRef = useRef<RichTextEditorHandle>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Ficha ISO (estado local, sincronizado com a linha do servidor) ──
+  const [codigo, setCodigo] = useState("");
+  const [dataVigencia, setDataVigencia] = useState("");
+  const [proximaRevisao, setProximaRevisao] = useState("");
+  const [elaboradoPorNome, setElaboradoPorNome] = useState("");
+
+  // ── IA ──
+  const [iaPainel, setIaPainel] = useState(false);
+  const [iaInstrucoes, setIaInstrucoes] = useState("");
 
   const utils = trpc.useUtils();
   const listAllQuery = trpc.systemDocumentTemplates.listAll.useQuery();
+  const iaStatusQuery = trpc.systemDocumentTemplates.iaStatus.useQuery();
   const getQuery = trpc.systemDocumentTemplates.get.useQuery(
     { tipo: tipoSelecionado, versao: versaoVisualizada },
     { enabled: !!tipoSelecionado }
@@ -70,6 +106,12 @@ export default function TemplatesDocsTab() {
     [tipoSelecionado]
   );
 
+  const selRow = useMemo(
+    () => (listAllQuery.data ?? []).find((r: any) => r.tipo === tipoSelecionado) as any,
+    [listAllQuery.data, tipoSelecionado]
+  );
+  const statusAtual: string = selRow?.status ?? "ausente";
+
   // Quando muda tipo / versão / dados do servidor → recarrega editor
   useEffect(() => {
     if (getQuery.data) {
@@ -77,24 +119,39 @@ export default function TemplatesDocsTab() {
     }
   }, [getQuery.data]);
 
-  // Quando muda o tipo, reseta versão visualizada e comentário
+  // Quando muda o tipo, reseta versão/comentário/IA e ressincroniza a ficha ISO
   useEffect(() => {
     setVersaoVisualizada(undefined);
     setComentario("");
+    setIaPainel(false);
+    setIaInstrucoes("");
+    setMostrarPreview(false);
   }, [tipoSelecionado]);
+
+  useEffect(() => {
+    if (!selRow) return;
+    setCodigo(selRow.codigo || "");
+    setDataVigencia(selRow.dataVigencia || "");
+    setProximaRevisao(selRow.proximaRevisao || "");
+    setElaboradoPorNome(selRow.elaboradoPorNome || "");
+  }, [selRow]);
+
+  const invalidarTudo = () => {
+    utils.systemDocumentTemplates.listAll.invalidate();
+    utils.systemDocumentTemplates.get.invalidate({ tipo: tipoSelecionado });
+    utils.systemDocumentTemplates.listVersions.invalidate({ tipo: tipoSelecionado });
+  };
 
   const saveMut = trpc.systemDocumentTemplates.save.useMutation({
     onSuccess: (res) => {
       if ((res as any).semMudanca) {
-        toast.info("Nada para salvar — o conteúdo é igual ao da versão atual.");
-        return;
+        toast.success("Ficha ISO atualizada.");
+      } else {
+        toast.success(`Template salvo como Rev. ${res.versao}.`);
+        setComentario("");
+        setVersaoVisualizada(undefined);
       }
-      toast.success(`Template salvo como Rev. ${res.versao}.`);
-      setComentario("");
-      setVersaoVisualizada(undefined);
-      utils.systemDocumentTemplates.listAll.invalidate();
-      utils.systemDocumentTemplates.get.invalidate({ tipo: tipoSelecionado });
-      utils.systemDocumentTemplates.listVersions.invalidate({ tipo: tipoSelecionado });
+      invalidarTudo();
     },
     onError: (e) => toast.error(e.message || "Falha ao salvar template."),
   });
@@ -103,16 +160,50 @@ export default function TemplatesDocsTab() {
     onSuccess: (res) => {
       toast.success(`Versão restaurada como Rev. ${res.novaVersao}.`);
       setVersaoVisualizada(undefined);
-      utils.systemDocumentTemplates.listAll.invalidate();
-      utils.systemDocumentTemplates.get.invalidate({ tipo: tipoSelecionado });
-      utils.systemDocumentTemplates.listVersions.invalidate({ tipo: tipoSelecionado });
+      invalidarTudo();
     },
     onError: (e) => toast.error(e.message || "Falha ao restaurar versão."),
   });
 
-  // Preview com dados de exemplo — XSS hardening: sanitiza HTML com DOMPurify
-  // antes de injetar via dangerouslySetInnerHTML. O conteúdo do template é
-  // editável por admins; defense in depth contra conta comprometida.
+  const aprovarMut = trpc.systemDocumentTemplates.aprovar.useMutation({
+    onSuccess: () => { toast.success("Documento aprovado — agora está VIGENTE."); invalidarTudo(); },
+    onError: (e) => toast.error(e.message || "Falha ao aprovar."),
+  });
+  const obsoletoMut = trpc.systemDocumentTemplates.marcarObsoleto.useMutation({
+    onSuccess: () => { toast.success("Documento marcado como OBSOLETO."); invalidarTudo(); },
+    onError: (e) => toast.error(e.message || "Falha ao marcar obsoleto."),
+  });
+  const rascunhoMut = trpc.systemDocumentTemplates.voltarParaRascunho.useMutation({
+    onSuccess: () => { toast.success("Documento voltou para RASCUNHO."); invalidarTudo(); },
+    onError: (e) => toast.error(e.message || "Falha ao reabrir."),
+  });
+  const seedMut = trpc.systemDocumentTemplates.seedDefaults.useMutation({
+    onSuccess: (res) => {
+      toast.success(res.total > 0 ? `${res.total} documento(s) institucional(is) criado(s) como Vigente.` : "Todos os documentos já existem — nada a criar.");
+      invalidarTudo();
+    },
+    onError: (e) => toast.error(e.message || "Falha ao inicializar padrões."),
+  });
+
+  const iaGerarMut = trpc.systemDocumentTemplates.iaGerarDoZero.useMutation({
+    onSuccess: (res) => {
+      setConteudoEditado(res.conteudoHtml);
+      setMostrarPreview(false);
+      setIaPainel(false);
+      toast.success("Rascunho gerado pela IA. Revise e salve a nova revisão.");
+    },
+    onError: (e) => toast.error(e.message || "Falha ao gerar com IA."),
+  });
+  const iaPdfMut = trpc.systemDocumentTemplates.iaLerPdfSugerir.useMutation({
+    onSuccess: (res) => {
+      setConteudoEditado(res.conteudoHtml);
+      setMostrarPreview(false);
+      toast.success("Modelo extraído do PDF. Revise os placeholders e salve.");
+    },
+    onError: (e) => toast.error(e.message || "Falha ao ler o PDF."),
+  });
+
+  // Preview com dados de exemplo — XSS hardening via DOMPurify.
   const previewHtml = useMemo(() => {
     if (!conteudoEditado) return "";
     const dadosExemplo: Record<string, string> = {};
@@ -125,27 +216,37 @@ export default function TemplatesDocsTab() {
     });
   }, [conteudoEditado, meta]);
 
-  // Agrupa placeholders por grupo
+  // Placeholders agrupados + filtrados pela busca
   const placeholdersPorGrupo = useMemo(() => {
+    const q = buscaPlaceholder.trim().toLowerCase();
     const map = new Map<string, PlaceholderDef[]>();
-    meta.placeholders.forEach(p => {
-      const arr = map.get(p.grupo) ?? [];
-      arr.push(p);
-      map.set(p.grupo, arr);
-    });
+    meta.placeholders
+      .filter(p => !q || p.rotulo.toLowerCase().includes(q) || p.chave.toLowerCase().includes(q))
+      .forEach(p => {
+        const arr = map.get(p.grupo) ?? [];
+        arr.push(p);
+        map.set(p.grupo, arr);
+      });
     return Array.from(map.entries());
-  }, [meta]);
+  }, [meta, buscaPlaceholder]);
 
   const insertPlaceholder = (chave: string) => {
     editorRef.current?.insertText(`{{${chave}}}`);
   };
+
+  const isoPayload = () => ({
+    codigo: codigo || undefined,
+    dataVigencia: dataVigencia || null,
+    proximaRevisao: proximaRevisao || null,
+    elaboradoPorNome: elaboradoPorNome || null,
+  });
 
   const handleSalvar = () => {
     if (!conteudoEditado || conteudoEditado === "<p></p>") {
       toast.error("Conteúdo não pode ser vazio.");
       return;
     }
-    saveMut.mutate({ tipo: tipoSelecionado, conteudoHtml: conteudoEditado, comentario: comentario || undefined });
+    saveMut.mutate({ tipo: tipoSelecionado, conteudoHtml: conteudoEditado, comentario: comentario || undefined, ...isoPayload() });
   };
 
   const handleRestaurar = (versao: number) => {
@@ -153,7 +254,31 @@ export default function TemplatesDocsTab() {
     restoreMut.mutate({ tipo: tipoSelecionado, versao });
   };
 
+  const handleAprovar = () => {
+    if (!selRow?.existe) { toast.error("Salve o template antes de aprovar."); return; }
+    if (!confirm(`Aprovar "${meta.titulo}" e torná-lo VIGENTE? Os módulos passarão a consumir este texto.`)) return;
+    aprovarMut.mutate({ tipo: tipoSelecionado, dataVigencia: dataVigencia || null, proximaRevisao: proximaRevisao || null });
+  };
+
+  const handlePdfSelecionado = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== "application/pdf") { toast.error("Selecione um arquivo PDF."); e.target.value = ""; return; }
+    if (file.size > 6 * 1024 * 1024) { toast.error("PDF muito grande (máx. 6MB)."); e.target.value = ""; return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || "");
+      const b64 = dataUrl.includes(",") ? dataUrl.split(",").pop()! : dataUrl;
+      iaPdfMut.mutate({ tipo: tipoSelecionado, pdfBase64: b64 });
+    };
+    reader.onerror = () => toast.error("Não consegui ler o arquivo.");
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
   const visualizandoVersaoAntiga = versaoVisualizada != null && getQuery.data?.template?.versaoAtual && versaoVisualizada !== getQuery.data.template.versaoAtual;
+  const iaSt = iaStatusQuery.data;
+  const algumPendente = saveMut.isPending || aprovarMut.isPending || obsoletoMut.isPending || rascunhoMut.isPending;
 
   if (!isAdmin) {
     return (
@@ -170,9 +295,19 @@ export default function TemplatesDocsTab() {
         <div className="flex items-start gap-3">
           <FileText className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
-            <h2 className="text-lg font-semibold text-gray-800">Templates de Documentos Institucionais</h2>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <h2 className="text-lg font-semibold text-gray-800">Central de Documentos Institucionais (ISO)</h2>
+              <Button
+                variant="outline" size="sm"
+                onClick={() => { if (confirm("Criar os documentos institucionais que ainda não existem, já como Rev. 1 Vigente?")) seedMut.mutate({ ativarVigente: true }); }}
+                disabled={seedMut.isPending}
+              >
+                {seedMut.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <FilePlus2 className="w-4 h-4 mr-1" />}
+                Inicializar padrões
+              </Button>
+            </div>
             <p className="text-sm text-gray-600 mt-1">
-              Edite aqui os textos dos documentos oficiais FC sem precisar mexer no código. Cada alteração gera uma nova revisão (Rev. 1, 2, 3...) com autor/data e é possível restaurar qualquer versão antiga.
+              Fonte oficial dos documentos FC. Edite o texto, controle a revisão (código, vigência, aprovação) e aprove para deixar <strong>Vigente</strong> — os módulos passam a consumir o documento aprovado.
               Use placeholders como <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">{`{{empNome}}`}</code> para campos dinâmicos.
             </p>
           </div>
@@ -190,8 +325,8 @@ export default function TemplatesDocsTab() {
               {(listAllQuery.data ?? DOCUMENT_TEMPLATES_META).map((row: any) => {
                 const Icon = ICON_MAP[row.icone] || FileText;
                 const isAtivo = row.tipo === tipoSelecionado;
-                const existe = (row as any).existe ?? false;
                 const versaoAtual = (row as any).versaoAtual ?? 0;
+                const st = (row as any).status ?? "ausente";
                 return (
                   <button
                     key={row.tipo}
@@ -201,8 +336,12 @@ export default function TemplatesDocsTab() {
                     <Icon className={`w-4 h-4 mt-0.5 flex-shrink-0 ${isAtivo ? "text-blue-700" : "text-gray-500"}`} />
                     <div className="flex-1 min-w-0">
                       <div className={`text-sm font-medium ${isAtivo ? "text-blue-900" : "text-gray-800"}`}>{row.titulo}</div>
-                      <div className="text-xs text-gray-500 mt-0.5">
-                        {existe ? `Rev. ${versaoAtual}` : <span className="italic text-amber-600">Não criado</span>}
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <StatusBadge status={st} size="xs" />
+                        {(row as any).codigo && <span className="text-[10px] text-gray-400 font-mono">{(row as any).codigo}</span>}
+                      </div>
+                      <div className="text-[10px] text-gray-400 mt-0.5">
+                        {st === "ausente" ? "—" : `Rev. ${versaoAtual}`}
                       </div>
                     </div>
                   </button>
@@ -212,25 +351,113 @@ export default function TemplatesDocsTab() {
           </div>
         </div>
 
-        {/* COLUNA CENTRO — Editor */}
-        <div className="col-span-12 md:col-span-6">
+        {/* COLUNA CENTRO — Ficha ISO + Editor */}
+        <div className="col-span-12 md:col-span-6 space-y-4">
+          {/* Ficha ISO */}
           <div className="bg-white border rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
-              <div>
+              <div className="flex items-center gap-2">
                 <h3 className="text-base font-semibold text-gray-800">{meta.titulo}</h3>
-                <p className="text-xs text-gray-500">{meta.descricao}</p>
+                <StatusBadge status={statusAtual} />
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => setMostrarHistorico(v => !v)}>
-                  <History className="w-4 h-4 mr-1" />
-                  Histórico
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => setMostrarPreview(v => !v)}>
-                  <Eye className="w-4 h-4 mr-1" />
-                  {mostrarPreview ? "Editor" : "Preview"}
-                </Button>
+                {statusAtual !== "vigente" && (
+                  <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={handleAprovar} disabled={aprovarMut.isPending || !selRow?.existe}>
+                    {aprovarMut.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <BadgeCheck className="w-4 h-4 mr-1" />}
+                    Aprovar (Vigente)
+                  </Button>
+                )}
+                {statusAtual === "vigente" && (
+                  <Button size="sm" variant="outline" onClick={() => rascunhoMut.mutate({ tipo: tipoSelecionado })} disabled={rascunhoMut.isPending}>
+                    <Undo2 className="w-4 h-4 mr-1" /> Reabrir
+                  </Button>
+                )}
+                {statusAtual !== "obsoleto" && selRow?.existe && (
+                  <Button size="sm" variant="outline" className="text-gray-600" onClick={() => { if (confirm("Marcar como obsoleto? Os módulos deixarão de consumir este documento.")) obsoletoMut.mutate({ tipo: tipoSelecionado }); }} disabled={obsoletoMut.isPending}>
+                    <XCircle className="w-4 h-4 mr-1" /> Obsoleto
+                  </Button>
+                )}
               </div>
             </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div>
+                <label className="text-[11px] font-medium text-gray-600">Código ISO</label>
+                <Input value={codigo} onChange={e => setCodigo(e.target.value)} placeholder="FC-RH-001" className="h-8 text-sm font-mono" />
+              </div>
+              <div>
+                <label className="text-[11px] font-medium text-gray-600">Elaborado por</label>
+                <Input value={elaboradoPorNome} onChange={e => setElaboradoPorNome(e.target.value)} placeholder="Nome" className="h-8 text-sm" />
+              </div>
+              <div>
+                <label className="text-[11px] font-medium text-gray-600">Data de vigência</label>
+                <Input type="date" value={dataVigencia} onChange={e => setDataVigencia(e.target.value)} className="h-8 text-sm" />
+              </div>
+              <div>
+                <label className="text-[11px] font-medium text-gray-600">Próxima revisão</label>
+                <Input type="date" value={proximaRevisao} onChange={e => setProximaRevisao(e.target.value)} className="h-8 text-sm" />
+              </div>
+            </div>
+            <div className="mt-2 text-[11px] text-gray-500 flex flex-wrap gap-x-4 gap-y-0.5">
+              <span>Aprovado por: <strong>{selRow?.aprovadoPorNome || "—"}</strong></span>
+              <span>Aprovado em: <strong>{formatDataHora(selRow?.aprovadoEm)}</strong></span>
+              <span>Vigência: <strong>{formatData(selRow?.dataVigencia)}</strong></span>
+              <span>Próx. revisão: <strong>{formatData(selRow?.proximaRevisao)}</strong></span>
+            </div>
+          </div>
+
+          {/* Editor */}
+          <div className="bg-white border rounded-lg p-4">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => setMostrarHistorico(v => !v)}>
+                  <History className="w-4 h-4 mr-1" /> Histórico
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setMostrarPreview(v => !v)}>
+                  <Eye className="w-4 h-4 mr-1" /> {mostrarPreview ? "Editor" : "Preview"}
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline" size="sm"
+                  className="border-violet-300 text-violet-700 hover:bg-violet-50"
+                  onClick={() => setIaPainel(v => !v)}
+                  disabled={!iaSt?.gerarDoZero}
+                  title={iaSt?.gerarDoZero ? "Gerar um rascunho do documento com IA" : "Nenhuma IA configurada"}
+                >
+                  <Sparkles className="w-4 h-4 mr-1" /> Gerar com IA
+                </Button>
+                <Button
+                  variant="outline" size="sm"
+                  className="border-violet-300 text-violet-700 hover:bg-violet-50"
+                  onClick={() => pdfInputRef.current?.click()}
+                  disabled={!iaSt?.lerPdf || iaPdfMut.isPending}
+                  title={iaSt?.lerPdf ? "Enviar um PDF para a IA extrair o modelo" : "Leitura de PDF exige IA Anthropic"}
+                >
+                  {iaPdfMut.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Upload className="w-4 h-4 mr-1" />} Ler PDF
+                </Button>
+                <input ref={pdfInputRef} type="file" accept="application/pdf" className="hidden" onChange={handlePdfSelecionado} />
+              </div>
+            </div>
+
+            {iaPainel && (
+              <div className="mb-3 p-3 border border-violet-200 bg-violet-50/60 rounded-lg">
+                <label className="text-xs font-semibold text-violet-800 flex items-center gap-1"><Sparkles className="w-3.5 h-3.5" /> Descreva o documento para a IA gerar</label>
+                <Textarea
+                  value={iaInstrucoes}
+                  onChange={e => setIaInstrucoes(e.target.value)}
+                  placeholder="Ex: Carta de apresentação para abertura de conta salário, formal, citando os dados do colaborador e da empresa..."
+                  className="mt-1 text-sm"
+                  rows={3}
+                />
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-[11px] text-violet-700">A IA usa os placeholders catalogados deste tipo. Revise antes de salvar.</span>
+                  <Button size="sm" className="bg-violet-600 hover:bg-violet-700 text-white" onClick={() => iaGerarMut.mutate({ tipo: tipoSelecionado, instrucoes: iaInstrucoes })} disabled={iaGerarMut.isPending || iaInstrucoes.trim().length < 5}>
+                    {iaGerarMut.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1" />} Gerar rascunho
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {visualizandoVersaoAntiga && (
               <div className="mb-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800 flex items-center justify-between gap-2">
@@ -280,7 +507,7 @@ export default function TemplatesDocsTab() {
                       <span className="italic">Template ainda não foi criado — ao salvar, será criada a Rev. 1.</span>
                     )}
                   </div>
-                  <Button onClick={handleSalvar} disabled={saveMut.isPending}>
+                  <Button onClick={handleSalvar} disabled={algumPendente}>
                     {saveMut.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
                     Salvar Nova Revisão
                   </Button>
@@ -296,26 +523,36 @@ export default function TemplatesDocsTab() {
             <div className="px-3 py-2 bg-gray-50 border-b text-xs font-semibold text-gray-600 uppercase flex items-center gap-1">
               <Search className="w-3.5 h-3.5" /> Placeholders disponíveis
             </div>
-            <div className="p-2 max-h-[480px] overflow-y-auto">
-              {placeholdersPorGrupo.map(([grupo, items]) => (
-                <div key={grupo} className="mb-3">
-                  <div className="text-[10px] font-bold text-gray-500 uppercase mb-1 px-1">{grupo}</div>
-                  <div className="space-y-1">
-                    {items.map(ph => (
-                      <button
-                        key={ph.chave}
-                        onClick={() => insertPlaceholder(ph.chave)}
-                        title={`Inserir {{${ph.chave}}} no cursor — Ex: ${ph.exemplo}`}
-                        disabled={!!visualizandoVersaoAntiga || mostrarPreview}
-                        className="w-full text-left px-2 py-1.5 rounded hover:bg-blue-50 hover:text-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed group"
-                      >
-                        <div className="text-xs font-medium text-gray-800 group-hover:text-blue-700 truncate">{ph.rotulo}</div>
-                        <div className="text-[10px] text-gray-500 font-mono truncate">{`{{${ph.chave}}}`}</div>
-                      </button>
-                    ))}
+            <div className="p-2">
+              <Input
+                value={buscaPlaceholder}
+                onChange={e => setBuscaPlaceholder(e.target.value)}
+                placeholder="Buscar campo..."
+                className="h-8 text-sm mb-2"
+              />
+              <div className="max-h-[440px] overflow-y-auto">
+                {placeholdersPorGrupo.length === 0 ? (
+                  <div className="text-xs text-gray-400 italic px-1 py-2">Nenhum campo encontrado.</div>
+                ) : placeholdersPorGrupo.map(([grupo, items]) => (
+                  <div key={grupo} className="mb-3">
+                    <div className="text-[10px] font-bold text-gray-500 uppercase mb-1 px-1">{grupo}</div>
+                    <div className="space-y-1">
+                      {items.map(ph => (
+                        <button
+                          key={ph.chave}
+                          onClick={() => insertPlaceholder(ph.chave)}
+                          title={`Inserir {{${ph.chave}}} no cursor — Ex: ${ph.exemplo}`}
+                          disabled={!!visualizandoVersaoAntiga || mostrarPreview}
+                          className="w-full text-left px-2 py-1.5 rounded hover:bg-blue-50 hover:text-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed group"
+                        >
+                          <div className="text-xs font-medium text-gray-800 group-hover:text-blue-700 truncate">{ph.rotulo}</div>
+                          <div className="text-[10px] text-gray-500 font-mono truncate">{`{{${ph.chave}}}`}</div>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
 

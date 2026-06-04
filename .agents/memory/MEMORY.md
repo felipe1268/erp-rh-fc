@@ -17,5 +17,6 @@
 - [valorEstimadoTotal fica defasado](valorEstimado-stale-column.md) — coluna persistida congela na criação do aviso; list/getById/homeData devem recalcular ao vivo, nunca ler a coluna direto.
 - [Rescisão Grupo A x Grupo B](rescisao-grupos-custo.md) — incremento da projeção do aviso = custo da demissão SÓ quando aviso.tipo começa com "empregador"; em pedido de demissão fica no Grupo A. Incremento de férias usa contagem crua de avos (sem atalho 12/12).
 - [Rescisão férias model](rescisao-ferias-model.md) — proporcional×vencidas com `-1`: último período completo vira 12/12 proporcional; ano exato retorna 12 ANTES da fração; regra dos 15 dias só no período incompleto.
+- [Central de Documentos ISO — gate](document-templates-iso-gate.md) — getVigente só entrega status='vigente'; mudar conteúdo no save rebaixa p/ rascunho + limpa aprovação; dados dos geradores devem cobrir TODO o seed.
 - [Employee Direto/Indireto source](employee-categoria-source.md) — `employees.list`/getEmployees NÃO traz `categoria`; classifique via `jobFunctions.categoriaMO` (indireta_obra|escritorio_central=Indireto, senão Direto).
 - [signatures.create caller-company guard](fcsign-create-tenancy.md) — FCSign `create` só conferia que o EMPLOYEE ∈ company, não que o CHAMADOR tinha acesso; gap cross-tenant compartilhado por TODOS os tipos. Use `getCompaniesForUser` no create.

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { buildFcDocument } from "@/lib/fcDocumentTemplate";
+import { renderTemplate } from "@shared/documentTemplates";
 
 // Rev. 2137 — Dialog do Termo de Responsabilidade. Espelha o fluxo FCSign
 // do Contrato de Experiência mas com 3 diferenças chave:
@@ -162,6 +163,13 @@ export default function TermoResponsabilidadeDialog({
   );
   const adminDeleteMut = trpc.signatures.adminDelete.useMutation();
   const allocateMut = trpc.employees.allocateTermoResponsabilidadeNumero.useMutation();
+  // Rev. 2747 — template VIGENTE do Termo de Responsabilidade (Central de Docs ISO).
+  // Se vigente, o corpo sai do template + tabela de itens/obs/local-data anexados;
+  // senão, usa o corpo hard-coded abaixo (fallback).
+  const termoVigenteQ = trpc.systemDocumentTemplates.getVigente.useQuery(
+    { tipo: "termo_responsabilidade" },
+    { enabled: open },
+  );
 
   const sessoesTermo = useMemo(
     () => (q.data || []).filter((s: any) => s.tipo === "termo_responsabilidade"),
@@ -425,6 +433,24 @@ ${obsHtml}
 </p>
 `;
 
+      // Rev. 2747 — se houver template VIGENTE na Central de Documentos, o corpo
+      // sai dele (com a tabela de itens renderizada via {{itensTabela}}) e
+      // anexamos observações + rodapé local/data (que não fazem parte do seed).
+      const dadosTermo: Record<string, string> = {
+        empNome: esc(empNome),
+        empRg: esc(empRg || "________________"),
+        empCpf: esc(empCpf || "________________"),
+        empFuncao: esc(empFuncao || "________________"),
+        empresaRazaoSocial: esc(comp?.razaoSocial || ""),
+        empresaCnpj: esc(comp?.cnpj || ""),
+        itensTabela,
+      };
+      const localFooterHtml = `<p style="text-align:right;margin-top:18px;font-size:10.5pt;color:#475569">${esc(local)}, ${esc(dataPt)}.</p>`;
+      const vigenteTermoHtml = termoVigenteQ.data?.vigente ? termoVigenteQ.data.conteudoHtml : null;
+      const corpoHtmlFinal = vigenteTermoHtml
+        ? `${renderTemplate(vigenteTermoHtml, dadosTermo)}${obsHtml}${localFooterHtml}`
+        : corpoHtml;
+
       const documentTitle = `Termo de Responsabilidade ${numeroFmt} - ${empNome}`;
       const documentHtml = buildFcDocument({
         empresa: {
@@ -443,7 +469,7 @@ ${obsHtml}
           label: "COLABORADOR:",
           valor: `${empNome}${empCpf ? ` — CPF ${empCpf}` : ""}`,
         },
-        corpoHtml,
+        corpoHtml: corpoHtmlFinal,
         assinaturas: {
           partes: [
             { role: "empregador", label: "EMPRESA", nome: comp?.razaoSocial || "", documento: comp?.cnpj || "" },

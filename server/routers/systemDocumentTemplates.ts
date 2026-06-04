@@ -18,8 +18,11 @@ import {
   DOCUMENT_TEMPLATES_META,
   DOCUMENT_TEMPLATE_TIPOS,
   getTemplateMeta,
+  getSeedTemplate,
+  DEFAULT_CODIGOS,
   type DocumentTemplateTipo,
 } from "../../shared/documentTemplates";
+import { invokeLLM, invokeAnthropicVision } from "../_core/llm";
 
 function requireAdmin(ctx: any) {
   const role = ctx?.user?.role;
@@ -29,6 +32,40 @@ function requireAdmin(ctx: any) {
 }
 
 const tipoSchema = z.enum(DOCUMENT_TEMPLATE_TIPOS as [string, ...string[]]);
+
+/** Disponibilidade de IA (alguma chave configurada). Usado p/ degradar a UI. */
+function iaDisponivel(): { anthropic: boolean; algum: boolean } {
+  const anthropic = !!(
+    (process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL && process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY) ||
+    process.env.ANTHROPIC_API_KEY
+  );
+  const algum = anthropic || !!process.env.GOOGLE_API_KEY || !!process.env.OPENAI_API_KEY;
+  return { anthropic, algum };
+}
+
+/**
+ * Sanitização server-side do HTML vindo da IA (defesa em profundidade — o
+ * render no /assinar/:token já filtra via DOMPurify, mas templates institucionais
+ * não devem nem PERSISTIR vetores). Remove <script>/<style>/<iframe>, handlers
+ * on*, javascript:/data:text-html e tags de documento (html/head/body) já que o
+ * conteúdo é apenas o CORPO injetado no buildFcDocument.
+ */
+function sanitizeAiHtml(raw: string): string {
+  let h = String(raw || "");
+  // Extrai bloco de código markdown se a IA devolver ```html ... ```
+  const fence = h.match(/```(?:html)?\s*([\s\S]*?)```/i);
+  if (fence) h = fence[1];
+  h = h
+    .replace(/<\s*(script|style|iframe|object|embed|link|meta)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
+    .replace(/<\s*(script|style|iframe|object|embed|link|meta)\b[^>]*\/?>/gi, "")
+    .replace(/<\/?\s*(html|head|body)\b[^>]*>/gi, "")
+    .replace(/\son\w+\s*=\s*"[^"]*"/gi, "")
+    .replace(/\son\w+\s*=\s*'[^']*'/gi, "")
+    .replace(/\son\w+\s*=\s*[^\s>]+/gi, "")
+    .replace(/(href|src)\s*=\s*"(?:javascript|data):[^"]*"/gi, '$1="#"')
+    .replace(/(href|src)\s*=\s*'(?:javascript|data):[^']*'/gi, "$1='#'");
+  return h.trim();
+}
 
 export const systemDocumentTemplatesRouter = router({
   // ── Lista todos os 7 tipos (com ou sem template salvo) ────────────────────
@@ -49,6 +86,14 @@ export const systemDocumentTemplatesRouter = router({
         atualizadoEm: row?.updatedAt ?? null,
         atualizadoPorNome: row?.atualizadoPorNome ?? null,
         existe: !!row,
+        // ── ISO ──
+        codigo: row?.codigo ?? DEFAULT_CODIGOS[meta.tipo as DocumentTemplateTipo],
+        status: (row?.status ?? (row ? "rascunho" : "ausente")) as string,
+        elaboradoPorNome: row?.elaboradoPorNome ?? null,
+        aprovadoPorNome: row?.aprovadoPorNome ?? null,
+        aprovadoEm: row?.aprovadoEm ?? null,
+        dataVigencia: row?.dataVigencia ?? null,
+        proximaRevisao: row?.proximaRevisao ?? null,
       };
     });
   }),
@@ -117,6 +162,11 @@ export const systemDocumentTemplatesRouter = router({
       tipo: tipoSchema,
       conteudoHtml: z.string().min(1, "Conteúdo não pode ser vazio."),
       comentario: z.string().max(500).optional(),
+      // ── Metadados ISO (opcionais; gravados na LINHA do template, não na versão) ──
+      codigo: z.string().max(40).optional(),
+      dataVigencia: z.string().max(20).optional().nullable(),
+      proximaRevisao: z.string().max(20).optional().nullable(),
+      elaboradoPorNome: z.string().max(255).optional().nullable(),
     }))
     .mutation(async ({ input, ctx }) => {
       requireAdmin(ctx);
@@ -126,6 +176,12 @@ export const systemDocumentTemplatesRouter = router({
 
       const userId = (ctx.user as any)?.id ?? null;
       const userName = (ctx.user as any)?.name ?? (ctx.user as any)?.email ?? "Sistema";
+      // Campos ISO normalizados (undefined = não mexe; null/"" = limpa)
+      const isoSet: Record<string, any> = {};
+      if (input.codigo !== undefined) isoSet.codigo = input.codigo || null;
+      if (input.dataVigencia !== undefined) isoSet.dataVigencia = input.dataVigencia || null;
+      if (input.proximaRevisao !== undefined) isoSet.proximaRevisao = input.proximaRevisao || null;
+      if (input.elaboradoPorNome !== undefined) isoSet.elaboradoPorNome = input.elaboradoPorNome || null;
 
       return await db.transaction(async (tx: any) => {
         // FOR UPDATE serializa concorrência por tipo. Se a linha ainda não
@@ -140,7 +196,7 @@ export const systemDocumentTemplatesRouter = router({
         await tx.execute(sql`SELECT pg_advisory_xact_lock(${lockKey})`);
 
         const existingRows: any[] = await tx.execute(sql`
-          SELECT id, versao_atual, conteudo_html
+          SELECT id, versao_atual, conteudo_html, status
             FROM system_document_templates
            WHERE tipo = ${input.tipo}
            FOR UPDATE
@@ -148,7 +204,8 @@ export const systemDocumentTemplatesRouter = router({
         const existing = (existingRows as any).rows?.[0] ?? (Array.isArray(existingRows) ? existingRows[0] : null);
 
         if (!existing) {
-          // Cria template + versão 1 (mesma transação)
+          // Cria template + versão 1 (mesma transação). Nasce como RASCUNHO ISO,
+          // com código default FC-XX-NNN e o autor como "elaborado por".
           const [created] = await tx.insert(systemDocumentTemplates).values({
             tipo: input.tipo,
             titulo: meta.titulo,
@@ -158,6 +215,12 @@ export const systemDocumentTemplatesRouter = router({
             ativo: 1,
             atualizadoPorId: userId,
             atualizadoPorNome: userName,
+            codigo: isoSet.codigo ?? DEFAULT_CODIGOS[input.tipo as DocumentTemplateTipo],
+            status: "rascunho",
+            elaboradoPorId: userId,
+            elaboradoPorNome: isoSet.elaboradoPorNome ?? userName,
+            dataVigencia: isoSet.dataVigencia ?? null,
+            proximaRevisao: isoSet.proximaRevisao ?? null,
           } as any).returning({ id: systemDocumentTemplates.id });
           await tx.insert(systemDocumentTemplateVersions).values({
             templateId: created.id,
@@ -170,8 +233,15 @@ export const systemDocumentTemplatesRouter = router({
           return { ok: true, templateId: created.id, versao: 1 };
         }
 
-        // No-op se conteúdo idêntico (não polui histórico)
+        // No-op de CONTEÚDO (não polui histórico). Mesmo assim, se vieram
+        // metadados ISO novos, atualiza só a ficha (sem bumpar versão).
         if (existing.conteudo_html === input.conteudoHtml) {
+          if (Object.keys(isoSet).length > 0) {
+            await tx.update(systemDocumentTemplates).set({
+              ...isoSet,
+              updatedAt: sql`NOW()`,
+            } as any).where(eq(systemDocumentTemplates.id, existing.id));
+          }
           return { ok: true, templateId: existing.id, versao: existing.versao_atual, semMudanca: true };
         }
 
@@ -186,14 +256,24 @@ export const systemDocumentTemplatesRouter = router({
           criadoPorId: userId,
           criadoPorNome: userName,
         } as any);
+        // GATE ISO: qualquer mudança de CONTEÚDO rebaixa o documento para
+        // RASCUNHO e LIMPA a aprovação anterior — uma nova revisão SÓ volta a
+        // ser entregue por getVigente após passar por `aprovar` de novo. Isso
+        // impede que editar um documento JÁ VIGENTE publique texto institucional
+        // sem aprovação formal (Rev. 2747).
         await tx.update(systemDocumentTemplates).set({
+          ...isoSet,
           conteudoHtml: input.conteudoHtml,
           versaoAtual: novaVersao,
+          status: "rascunho",
+          aprovadoPorId: null,
+          aprovadoPorNome: null,
+          aprovadoEm: null,
           atualizadoPorId: userId,
           atualizadoPorNome: userName,
           updatedAt: sql`NOW()`,
         } as any).where(eq(systemDocumentTemplates.id, existing.id));
-        return { ok: true, templateId: existing.id, versao: novaVersao };
+        return { ok: true, templateId: existing.id, versao: novaVersao, rebaixadoParaRascunho: true };
       });
     }),
 
@@ -237,14 +317,251 @@ export const systemDocumentTemplatesRouter = router({
           criadoPorId: userId,
           criadoPorNome: userName,
         } as any);
+        // GATE ISO (igual ao `save`): restaurar uma versão antiga é uma mudança
+        // de conteúdo → rebaixa p/ `rascunho` e LIMPA a aprovação, exigindo
+        // `aprovar` de novo antes de `getVigente` voltar a entregá-lo. Sem isso,
+        // restaurar num doc vigente publicaria conteúdo histórico sem aprovação.
         await tx.update(systemDocumentTemplates).set({
           conteudoHtml: ver.conteudoHtml,
           versaoAtual: novaVersao,
+          status: "rascunho",
+          aprovadoPorId: null,
+          aprovadoPorNome: null,
+          aprovadoEm: null,
           atualizadoPorId: userId,
           atualizadoPorNome: userName,
           updatedAt: sql`NOW()`,
         } as any).where(eq(systemDocumentTemplates.id, tpl.id));
-        return { ok: true, novaVersao };
+        return { ok: true, novaVersao, rebaixadoParaRascunho: true };
       });
+    }),
+
+  // ════════════════════════════════════════════════════════════════════════
+  // Rev. 2747 — CONTROLE ISO + getVigente + seedDefaults + IA
+  // ════════════════════════════════════════════════════════════════════════
+
+  // ── Aprovar (rascunho → vigente). Carimba aprovador + data. ───────────────
+  aprovar: protectedProcedure
+    .input(z.object({
+      tipo: tipoSchema,
+      dataVigencia: z.string().max(20).optional().nullable(),
+      proximaRevisao: z.string().max(20).optional().nullable(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx);
+      const db = await getDb();
+      const userId = (ctx.user as any)?.id ?? null;
+      const userName = (ctx.user as any)?.name ?? (ctx.user as any)?.email ?? "Sistema";
+      const [row] = await db.select().from(systemDocumentTemplates).where(eq(systemDocumentTemplates.tipo, input.tipo));
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Salve o template antes de aprovar." });
+      const hoje = new Date().toISOString().slice(0, 10);
+      await db.update(systemDocumentTemplates).set({
+        status: "vigente",
+        aprovadoPorId: userId,
+        aprovadoPorNome: userName,
+        aprovadoEm: sql`NOW()`,
+        dataVigencia: input.dataVigencia ?? row.dataVigencia ?? hoje,
+        proximaRevisao: input.proximaRevisao ?? row.proximaRevisao ?? null,
+        updatedAt: sql`NOW()`,
+      } as any).where(eq(systemDocumentTemplates.id, row.id));
+      return { ok: true };
+    }),
+
+  // ── Marcar obsoleto (deixa de ser consumido pelos módulos). ───────────────
+  marcarObsoleto: protectedProcedure
+    .input(z.object({ tipo: tipoSchema }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx);
+      const db = await getDb();
+      const [row] = await db.select().from(systemDocumentTemplates).where(eq(systemDocumentTemplates.tipo, input.tipo));
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Template não encontrado." });
+      await db.update(systemDocumentTemplates).set({ status: "obsoleto", updatedAt: sql`NOW()` } as any)
+        .where(eq(systemDocumentTemplates.id, row.id));
+      return { ok: true };
+    }),
+
+  // ── Voltar para rascunho (reabre p/ edição/reaprovação). ──────────────────
+  voltarParaRascunho: protectedProcedure
+    .input(z.object({ tipo: tipoSchema }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx);
+      const db = await getDb();
+      const [row] = await db.select().from(systemDocumentTemplates).where(eq(systemDocumentTemplates.tipo, input.tipo));
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Template não encontrado." });
+      await db.update(systemDocumentTemplates).set({ status: "rascunho", updatedAt: sql`NOW()` } as any)
+        .where(eq(systemDocumentTemplates.id, row.id));
+      return { ok: true };
+    }),
+
+  // ── getVigente: usado pelos MÓDULOS (não-admin) p/ consumir o template ───
+  //    oficial. Só devolve conteúdo quando status === 'vigente'. Caso contrário
+  //    retorna template:null → o gerador cai no HTML hard-coded (fallback).
+  getVigente: protectedProcedure
+    .input(z.object({ tipo: tipoSchema }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const meta = getTemplateMeta(input.tipo);
+      const [row] = await db.select().from(systemDocumentTemplates).where(eq(systemDocumentTemplates.tipo, input.tipo));
+      if (!row || row.status !== "vigente") {
+        return { tipo: input.tipo, vigente: false, conteudoHtml: null as string | null, codigo: row?.codigo ?? null, versao: row?.versaoAtual ?? null, titulo: meta?.titulo ?? input.tipo };
+      }
+      return {
+        tipo: input.tipo,
+        vigente: true,
+        conteudoHtml: row.conteudoHtml,
+        codigo: row.codigo ?? null,
+        versao: row.versaoAtual,
+        titulo: meta?.titulo ?? input.tipo,
+      };
+    }),
+
+  // ── seedDefaults: cria os 7 tipos faltantes a partir do seed institucional,
+  //    já como Rev. 1 VIGENTE (fonte oficial imediata). Idempotente: nunca
+  //    sobrescreve um template já existente. ──────────────────────────────────
+  seedDefaults: protectedProcedure
+    .input(z.object({ ativarVigente: z.boolean().default(true) }).optional())
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx);
+      const db = await getDb();
+      const ativarVigente = input?.ativarVigente ?? true;
+      const userId = (ctx.user as any)?.id ?? null;
+      const userName = (ctx.user as any)?.name ?? (ctx.user as any)?.email ?? "Sistema";
+      const hoje = new Date().toISOString().slice(0, 10);
+
+      const existentes = await db.select({ tipo: systemDocumentTemplates.tipo }).from(systemDocumentTemplates);
+      const setExist = new Set(existentes.map((r: any) => r.tipo));
+
+      const criados: string[] = [];
+      for (const meta of DOCUMENT_TEMPLATES_META) {
+        if (setExist.has(meta.tipo)) continue;
+        const seed = getSeedTemplate(meta.tipo as DocumentTemplateTipo);
+        const [created] = await db.insert(systemDocumentTemplates).values({
+          tipo: meta.tipo,
+          titulo: meta.titulo,
+          descricao: meta.descricao,
+          conteudoHtml: seed.conteudoHtml,
+          versaoAtual: 1,
+          ativo: 1,
+          atualizadoPorId: userId,
+          atualizadoPorNome: userName,
+          codigo: seed.codigo,
+          status: ativarVigente ? "vigente" : "rascunho",
+          elaboradoPorId: userId,
+          elaboradoPorNome: userName,
+          aprovadoPorId: ativarVigente ? userId : null,
+          aprovadoPorNome: ativarVigente ? userName : null,
+          aprovadoEm: ativarVigente ? (sql`NOW()` as any) : null,
+          dataVigencia: ativarVigente ? hoje : null,
+        } as any).returning({ id: systemDocumentTemplates.id });
+        await db.insert(systemDocumentTemplateVersions).values({
+          templateId: created.id,
+          versao: 1,
+          conteudoHtml: seed.conteudoHtml,
+          comentario: "Seed institucional (Rev. 2747)",
+          criadoPorId: userId,
+          criadoPorNome: userName,
+        } as any);
+        criados.push(meta.tipo);
+      }
+      return { ok: true, criados, total: criados.length };
+    }),
+
+  // ── IA: status (p/ a UI degradar botões quando não há chave). ─────────────
+  iaStatus: protectedProcedure.query(async ({ ctx }) => {
+    requireAdmin(ctx);
+    const { anthropic, algum } = iaDisponivel();
+    // PDF→sugerir exige Anthropic (document vision); gerar-do-zero usa qualquer LLM.
+    return { lerPdf: anthropic, gerarDoZero: algum };
+  }),
+
+  // ── IA: gerar do zero. Instruções em linguagem natural → CORPO HTML c/
+  //    placeholders {{chave}}. Valida que veio HTML não-vazio + sanitiza. ─────
+  iaGerarDoZero: protectedProcedure
+    .input(z.object({
+      tipo: tipoSchema,
+      instrucoes: z.string().min(5, "Descreva o que o documento deve conter.").max(4000),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx);
+      if (!iaDisponivel().algum) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Nenhuma IA configurada. Cadastre uma chave (ex.: ANTHROPIC_API_KEY) para usar a geração automática." });
+      }
+      const meta = getTemplateMeta(input.tipo);
+      if (!meta) throw new TRPCError({ code: "BAD_REQUEST", message: "Tipo inválido." });
+      const placeholders = meta.placeholders.map(p => `{{${p.chave}}} = ${p.rotulo}`).join("\n");
+      const systemPrompt =
+        `Você é um redator jurídico-trabalhista da FC Engenharia (construção civil, Brasil). ` +
+        `Gere APENAS o CORPO (em HTML) de um documento institucional do tipo "${meta.titulo}". ` +
+        `NÃO inclua cabeçalho, logo, faixa de título, blocos de assinatura nem as tags <html>/<head>/<body> — ` +
+        `tudo isso é adicionado automaticamente pelo sistema. ` +
+        `Use parágrafos <p>, listas <ul>/<ol> e títulos de cláusula em <strong>. ` +
+        `Para os dados variáveis use EXATAMENTE estes placeholders (formato {{chave}}), sem inventar outros:\n${placeholders}\n` +
+        `Linguagem formal, pt-BR, fundamentação na CLT quando cabível. Responda só com o HTML do corpo.`;
+      let out = "";
+      try {
+        const res = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: input.instrucoes },
+          ],
+          maxTokens: 4096,
+        });
+        out = (res.choices?.[0]?.message?.content as string) ?? "";
+      } catch (e: any) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Falha na IA: ${String(e?.message ?? e).slice(0, 160)}` });
+      }
+      const html = sanitizeAiHtml(out);
+      if (!html || html.replace(/<[^>]*>/g, "").trim().length < 20) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "A IA não retornou um corpo de documento válido. Tente refinar as instruções." });
+      }
+      return { ok: true, conteudoHtml: html };
+    }),
+
+  // ── IA: ler PDF e sugerir o template. Recebe PDF base64, devolve CORPO HTML
+  //    com placeholders, espelhando o documento enviado. Exige Anthropic. ─────
+  iaLerPdfSugerir: protectedProcedure
+    .input(z.object({
+      tipo: tipoSchema,
+      pdfBase64: z.string().min(1),
+      observacoes: z.string().max(2000).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdmin(ctx);
+      if (!iaDisponivel().anthropic) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "A leitura de PDF exige a IA Anthropic configurada (ANTHROPIC_API_KEY)." });
+      }
+      const meta = getTemplateMeta(input.tipo);
+      if (!meta) throw new TRPCError({ code: "BAD_REQUEST", message: "Tipo inválido." });
+      // Limite defensivo de tamanho (~8MB base64 ≈ 6MB binário).
+      if (input.pdfBase64.length > 8_500_000) {
+        throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: "PDF muito grande (máx. ~6MB)." });
+      }
+      const b64 = input.pdfBase64.includes(",") ? input.pdfBase64.split(",").pop()! : input.pdfBase64;
+      const placeholders = meta.placeholders.map(p => `{{${p.chave}}} = ${p.rotulo}`).join("\n");
+      const systemPrompt =
+        `Você converte documentos institucionais em MODELOS reutilizáveis para a FC Engenharia. ` +
+        `Leia o PDF anexado (um "${meta.titulo}") e reproduza fielmente o TEXTO/estrutura como CORPO em HTML, ` +
+        `substituindo os dados específicos (nomes, CPF, datas, valores, função, empresa) pelos placeholders {{chave}}. ` +
+        `Use EXATAMENTE estes placeholders quando o dado existir:\n${placeholders}\n` +
+        `NÃO inclua cabeçalho, logo, faixa de título, assinaturas nem tags <html>/<head>/<body>. ` +
+        `Responda só com o HTML do corpo.`;
+      const prompt = `Converta este documento em um modelo com placeholders.${input.observacoes ? ` Observações do usuário: ${input.observacoes}` : ""}`;
+      let out = "";
+      try {
+        out = await invokeAnthropicVision({
+          prompt,
+          base64: b64,
+          mimeType: "application/pdf",
+          systemPrompt,
+          maxTokens: 4096,
+        });
+      } catch (e: any) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Falha ao ler o PDF: ${String(e?.message ?? e).slice(0, 160)}` });
+      }
+      const html = sanitizeAiHtml(out);
+      if (!html || html.replace(/<[^>]*>/g, "").trim().length < 20) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não consegui extrair um modelo do PDF. Verifique se o arquivo tem texto legível." });
+      }
+      return { ok: true, conteudoHtml: html };
     }),
 });

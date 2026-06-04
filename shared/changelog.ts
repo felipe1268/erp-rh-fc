@@ -1,6 +1,54 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2747 — **CONFIGURAÇÕES · CENTRAL DE DOCUMENTOS (TEMPLATES DE DOCUMENTOS) VIROU FONTE OFICIAL ISO: CONTROLE
+ * DE REVISÃO COMPLETO (CÓDIGO/STATUS/ELABORADO/APROVADO/VIGÊNCIA), SEED DOS 7 TIPOS, PLACEHOLDERS PESQUISÁVEIS,
+ * IA (LER PDF→SUGERIR / GERAR DO ZERO→VALIDAR) E OS GERADORES DE CONTRATO DE EXPERIÊNCIA + TERMO DE RESPONSABILIDADE
+ * PASSARAM A CONSUMIR O TEMPLATE VIGENTE COM FALLBACK AO HTML ATUAL.**
+ *
+ * PEDIDO (Task #59): transformar a aba "Templates de Documentos" na fonte oficial dos documentos institucionais FC,
+ * com controle de revisão no padrão ISO (cada documento tem código, status, quem elaborou/aprovou, data de vigência e
+ * próxima revisão), seed faithful dos 7 tipos já existentes (contrato de experiência, termo de responsabilidade, aviso
+ * prévio, comunicado interno, advertência, carta MDO, rescisão), busca de placeholders, recursos de IA (ler um PDF e
+ * sugerir o HTML / gerar do zero validando o resultado) e — o ponto central — que os módulos que GERAM esses documentos
+ * passem a usar o template VIGENTE quando existir, sem quebrar nada (fallback ao HTML hard-coded atual).
+ *
+ * MUDANÇAS:
+ *   (1) SCHEMA (aditivo, self-heal — `drizzle/schema.ts`): `system_document_templates` ganhou os campos ISO
+ *       `codigo`, `status`, `elaborado_por`/`elaborado_em`, `aprovado_por`/`aprovado_em`, `data_vigencia`,
+ *       `proxima_revisao`. TODOS via `ADD COLUMN IF NOT EXISTS` no `[SyncSchema+]` (que de qualquer forma é 100%
+ *       automático por introspecção do `information_schema`). ZERO destrutivo — R-001/R-007/R-010.
+ *   (2) SHARED (`shared/documentTemplates.ts` NOVO): `DOCUMENT_TEMPLATES_META`, `getTemplateMeta`, `getSeedTemplate`,
+ *       `DEFAULT_CODIGOS` (FC-RH-001..007), `SEED_BODIES` (corpo HTML faithful por tipo, com header institucional FC e
+ *       placeholders `{{chave}}`), enum de status (`rascunho`/`vigente`/`obsoleto`) e `renderTemplate(html, dados)` que
+ *       substitui `{{chave}}` preservando placeholders desconhecidos.
+ *   (3) ROUTER (`server/routers/systemDocumentTemplates.ts`): `save` grava metadados ISO na criação/UPDATE/no-op;
+ *       NOVAS procedures `aprovar`, `marcarObsoleto`, `voltarParaRascunho`, `getVigente(tipo)` (acessível a não-admin,
+ *       usado pelos módulos), `seedDefaults` (idempotente, semeia os 7 tipos como `vigente`), `iaStatus`,
+ *       `iaGerarDoZero` (invokeLLM + sanitize) e `iaLerPdfSugerir` (invokeAnthropicVision sobre PDF base64).
+ *       GATE ISO (review architect): toda mudança de CONTEÚDO REBAIXA o template para `rascunho` e LIMPA a
+ *       aprovação (`aprovadoPorId/Nome/Em`=null) — uma revisão editada só volta a ser entregue por `getVigente` depois
+ *       de passar por `aprovar` de novo (evita publicar texto institucional sem aprovação formal). O gate vale nos DOIS
+ *       caminhos de escrita: `save` E `restoreVersion` (restaurar versão antiga num doc vigente também rebaixa).
+ *   (4) UI (`client/src/pages/configuracoes/TemplatesDocsTab.tsx`): master-detail com ficha ISO (código/status/elaborado/
+ *       aprovado/datas), selo de status, ações salvar/aprovar/marcar obsoleto/reabrir, botão "Inicializar padrões"
+ *       (`seedDefaults`), busca de placeholders, painel de IA (gerar do zero + ler PDF via FileReader base64). O painel
+ *       de IA degrada graciosamente via `iaStatus` quando faltam chaves.
+ *   (5) GERADORES LIGADOS AO VIGENTE (fallback): `client/src/pages/Colaboradores.tsx` (Contrato de Experiência) e
+ *       `client/src/components/TermoResponsabilidadeDialog.tsx` (Termo de Responsabilidade) consultam
+ *       `systemDocumentTemplates.getVigente` e, havendo template VIGENTE, montam o corpo via `renderTemplate(...)` com
+ *       os mesmos dados que já alimentavam o HTML inline; sem vigente, caem no HTML atual (saída idêntica preservada).
+ *       No termo, a tabela de itens entra via `{{itensTabela}}` e as observações + rodapé local/data são anexados após o
+ *       template (não fazem parte do seed). O contrato PJ NÃO foi tocado (drift documentado — segue com HTML próprio).
+ *
+ * IA — DISPONIBILIDADE: `iaStatus` reporta o que dá pra usar conforme as chaves presentes. Hoje GOOGLE_API_KEY está
+ * presente mas ANTHROPIC/OPENAI ausentes → "gerar do zero" funciona com qualquer LLM disponível; "ler PDF" exige
+ * Anthropic Vision (indisponível até a chave ser provida) e o botão degrada com aviso.
+ *
+ * VALIDAÇÃO: esbuild parse (stdin, loader ts/tsx) EXIT 0 em `shared/documentTemplates.ts`, `systemDocumentTemplates.ts`,
+ * `TemplatesDocsTab.tsx`, `Colaboradores.tsx` e `TermoResponsabilidadeDialog.tsx`; `vitest server/rescisao.test.ts`
+ * 41/41 verde; app rodando.
+ *
  * Rev. 2746 — **CONFIGURAÇÕES · TERCEIROS · "GESTORES PARA CONTRATOS DE TERCEIROS": OS DOIS SELETORES (GESTOR
  * FINANCEIRO / GESTOR DE PROJETO) VIRARAM CAMPOS PESQUISÁVEIS POR NOME E PASSARAM A LISTAR SOMENTE COLABORADORES
  * CUJA FUNÇÃO É DA CATEGORIA INDIRETA — SUMIU A MÃO DE OBRA DIRETA (PEDREIRO, SERVENTE, ARMADOR...).**

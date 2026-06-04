@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
 import { buildFcDocument } from "@/lib/fcDocumentTemplate";
+import { renderTemplate } from "@shared/documentTemplates";
 import { formatBRL, valorPorExtenso } from "@/lib/numeroExtenso";
 import { Users, UsersRound, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Shield, ShieldX, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon, Wrench, Star, Award, CalendarDays, UserCheck, UserX, Palmtree, HeartPulse, Clock, Save, ChevronsUpDown, Check } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -248,6 +249,11 @@ export default function Colaboradores() {
   const { data: funcoesList } = trpc.jobFunctions.list.useQuery({ companyId: formCompanyIdNum ?? 0 }, { enabled: !!formCompanyIdNum });
   const { data: contasBancariasEmpresa } = trpc.folha.listarContasBancarias.useQuery({ companyId: formCompanyIdNum ?? 0 }, { enabled: !!formCompanyIdNum });
   const contasAtivas = (contasBancariasEmpresa || []).filter((c: any) => c.ativo !== 0);
+
+  // Rev. 2747 — template VIGENTE do Contrato de Experiência (Central de Docs ISO).
+  // Se aprovado/vigente, o corpo do contrato passa a sair deste template; senão,
+  // cai no HTML hard-coded abaixo (fallback). Garante continuidade total.
+  const contratoVigenteQ = trpc.systemDocumentTemplates.getVigente.useQuery({ tipo: "contrato_experiencia" });
 
   // Buscar critérios globais de HE da empresa
   const { data: criteriosHE } = trpc.criteria.getByCategory.useQuery(
@@ -2121,6 +2127,35 @@ ${(() => {
                     const numeroPreviewStr = (numeroJaAlocado && anoJaAlocado)
                       ? `${String(numeroJaAlocado).padStart(3, '0')}/${anoJaAlocado}`
                       : `___/${new Date().getFullYear()}`;
+                    // Rev. 2747 — se houver template VIGENTE na Central de Documentos,
+                    // o corpo sai dele (renderizado com os dados deste contrato);
+                    // senão usa o `corpoHtml` hard-coded acima (fallback intacto).
+                    const tipoRemDados = ((form as any).tipoRemuneracao || 'horista').toLowerCase();
+                    const clausulaRemuneracaoHtml = tipoRemDados === 'horista'
+                      ? `<p style="margin-top:8px"><strong>CLÁUSULA 2ª — DA REMUNERAÇÃO.</strong> O(A) EMPREGADO(A) receberá a título de remuneração por hora no valor de <strong>R$ ${esc(formatBRL(form.valorHora))}</strong> (${esc(valorPorExtenso(form.valorHora))}), pago até o 5º dia útil do mês subsequente ao trabalhado, com os descontos legais previstos em lei.</p>`
+                      : `<p style="margin-top:8px"><strong>CLÁUSULA 2ª — DA REMUNERAÇÃO.</strong> O(A) EMPREGADO(A) receberá a título de remuneração mensal o valor de <strong>R$ ${esc(empSalarioBRL)}</strong> (${esc(empSalarioExtenso)}), pago até o 5º dia útil do mês subsequente ao trabalhado, com os descontos legais previstos em lei.</p>`;
+                    const dadosContrato: Record<string, string> = {
+                      empresaRazaoSocial: esc(comp?.razaoSocial || '________________________________'),
+                      empresaCnpj: esc(comp?.cnpj || '___.___.___/____-__'),
+                      empresaEndereco: esc(`${comp?.endereco || '________________'}, ${comp?.cidade || '________'}/${comp?.estado || '__'}`),
+                      empNome: esc(empNome),
+                      empCpf: esc(formatCPF(empCpf)) || '___.___.___-__',
+                      empRg: esc(empRg || '____________'),
+                      empCtps: esc(empCtps || '____________'),
+                      empEndereco: empEndereco ? esc(`${empEndereco}, ${empCidade || ''}/${empEstado || ''}`) : '________________________________',
+                      empFuncao: esc(empFuncao || '________________'),
+                      clausulaRemuneracao: clausulaRemuneracaoHtml,
+                      jornadaSemanal: esc(jornadaDesc || '________________'),
+                      prazo1: String(dias1),
+                      prazo2: String(dias1),
+                      prazoTotal: String(dias2),
+                      dataInicio: esc(fmtDate(inicio)),
+                      dataFim: esc(fmtDate(fim1)),
+                      dataFimFinal: esc(fmtDate(fim2)),
+                      docLocal: esc(`${comp?.cidade || '________'}/${comp?.estado || '__'}`),
+                    };
+                    const vigenteHtml = contratoVigenteQ.data?.vigente ? contratoVigenteQ.data.conteudoHtml : null;
+                    const corpoHtmlFinal = vigenteHtml ? renderTemplate(vigenteHtml, dadosContrato) : corpoHtml;
                     const buildContratoHtmlWithNumero = (numeroStr: string) => buildFcDocument({
                       empresa: {
                         razaoSocial: comp?.razaoSocial || 'FC Engenharia',
@@ -2136,7 +2171,7 @@ ${(() => {
                       assunto: {
                         valor: `CONTRATO DE EXPERIÊNCIA — ${empNome}${empFuncao ? ' (' + empFuncao + ')' : ''}`,
                       },
-                      corpoHtml,
+                      corpoHtml: corpoHtmlFinal,
                       assinaturas: {
                         partes: [
                           {

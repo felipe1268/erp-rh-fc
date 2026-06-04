@@ -8777,6 +8777,18 @@ export const systemDocumentTemplates = pgTable("system_document_templates", {
   atualizadoPorNome: varchar("atualizado_por_nome", { length: 255 }),
   createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+  // ── Rev. 2747 — Controle ISO documental (aditivo; self-heal ADD COLUMN) ──
+  // Códigos/estados/aprovação seguem a lógica de norma ISO 9001 (controle de
+  // documentos). snake_case explícito p/ casar com o que o [SyncSchema] cria.
+  codigo: varchar("codigo", { length: 40 }),                       // ex: FC-RH-001
+  status: varchar("status", { length: 20 }).default("rascunho").notNull(), // rascunho|vigente|obsoleto
+  elaboradoPorId: integer("elaborado_por_id"),
+  elaboradoPorNome: varchar("elaborado_por_nome", { length: 255 }),
+  aprovadoPorId: integer("aprovado_por_id"),
+  aprovadoPorNome: varchar("aprovado_por_nome", { length: 255 }),
+  aprovadoEm: timestamp("aprovado_em", { mode: 'string' }),
+  dataVigencia: varchar("data_vigencia", { length: 20 }),          // ISO yyyy-mm-dd
+  proximaRevisao: varchar("proxima_revisao", { length: 20 }),      // ISO yyyy-mm-dd
 }, (table) => [
   uniqueIndex("uq_sys_doc_tpl_tipo").on(table.tipo),
 ]);
