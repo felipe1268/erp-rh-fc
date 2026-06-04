@@ -39,6 +39,7 @@ import {
   Home, Tag, GripVertical, Network, ScanFace, PackageCheck, PenLine, ChevronLeft,
   Camera, Blocks, CheckSquare, FileCheck2, Milestone, Fuel,
   UserMinus, Search, X, GraduationCap, Sparkles, HeartPulse, Award,
+  RefreshCw,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -84,6 +85,7 @@ const menuSectionsRHDP: MenuSection[] = [
     items: [
       { icon: LayoutDashboard, label: "Painel RH", path: "/painel/rh" },
       { icon: Users, label: "Colaboradores", path: "/colaboradores" },
+      { icon: RefreshCw, label: "Recontratações Pendentes", path: "/recontratacoes-pendentes" },
     ],
   },
   {

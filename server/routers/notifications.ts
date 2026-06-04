@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
-import { getDb } from "../db";
-import { notificationRecipients, notificationLogs, menuLabels, companies, notificationViews, heSolicitacoes, smoSolicitacoes, obras, employees, fieldNotes } from "../../drizzle/schema";
+import { getDb, getCompaniesForUser } from "../db";
+import { notificationRecipients, notificationLogs, menuLabels, companies, notificationViews, heSolicitacoes, smoSolicitacoes, obras, employees, fieldNotes, recontratacaoSolicitacoes } from "../../drizzle/schema";
 import { eq, and, desc, sql, inArray, isNull, gt } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { dispararNotificacao, gerarTextoNotificacao } from "../services/emailNotification";
@@ -263,9 +263,25 @@ export const notificationsRouter = router({
   // ============================================================
   pendingRequestCounts: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
-      if (!db) return { heNovas: 0, mdoNovas: 0, apontamentosNovas: 0, heItems: [], mdoItems: [], apontamentosItems: [] };
+      if (!db) return { heNovas: 0, mdoNovas: 0, apontamentosNovas: 0, recontratacoesNovas: 0, heItems: [], mdoItems: [], apontamentosItems: [], recontratacaoItems: [] };
+
+      // Rev. 2755 — Tenancy: o servidor NÃO confia nos companyId(s) do cliente.
+      // Restringe a consulta às empresas que o usuário pode acessar (admin =
+      // tudo). Sem empresas permitidas → retorna vazio. Fecha IDOR/PII (inclui
+      // os recontratacaoItems adicionados nesta revisão).
+      const role = ctx?.user?.role;
+      let safeInput: { companyId: number; companyIds?: number[] } = input;
+      if (role !== "admin_master" && role !== "admin") {
+        const comps = await getCompaniesForUser(ctx.user.id, role);
+        const permitidas = new Set(comps.map((c: any) => c.id));
+        const ids = resolveCompanyIds(input).filter((id) => permitidas.has(id));
+        if (ids.length === 0) {
+          return { heNovas: 0, mdoNovas: 0, apontamentosNovas: 0, recontratacoesNovas: 0, heItems: [], mdoItems: [], apontamentosItems: [], recontratacaoItems: [] };
+        }
+        safeInput = { companyId: ids[0], companyIds: ids };
+      }
 
       // ── HE: TODAS as solicitações com status "pendente"
       const heAllRows = await db.select({
@@ -279,7 +295,7 @@ export const notificationsRouter = router({
         .from(heSolicitacoes)
         .leftJoin(obras, eq(heSolicitacoes.obraId, obras.id))
         .where(and(
-          companyFilter(heSolicitacoes.companyId, input),
+          companyFilter(heSolicitacoes.companyId, safeInput),
           eq(heSolicitacoes.status, "pendente"),
         ))
         .orderBy(desc(heSolicitacoes.createdAt));
@@ -298,7 +314,7 @@ export const notificationsRouter = router({
         .from(smoSolicitacoes)
         .leftJoin(obras, eq(smoSolicitacoes.obraId, obras.id))
         .where(and(
-          companyFilter(smoSolicitacoes.companyId, input),
+          companyFilter(smoSolicitacoes.companyId, safeInput),
           isNull(smoSolicitacoes.deletedAt),
           inArray(smoSolicitacoes.status, ["enviada", "aprovada_rh"]),
         ))
@@ -321,19 +337,38 @@ export const notificationsRouter = router({
         .from(fieldNotes)
         .leftJoin(obras, eq(fieldNotes.obraId, obras.id))
         .where(and(
-          companyFilter(fieldNotes.companyId, input),
+          companyFilter(fieldNotes.companyId, safeInput),
           isNull(fieldNotes.deletedAt),
           inArray(fieldNotes.status, ["pendente", "em_analise"]),
         ))
         .orderBy(desc(fieldNotes.createdAt));
 
+      // ── Recontratações: solicitações em staging aguardando liberação do sócio
+      const reconAllRows = await db.select({
+        id: recontratacaoSolicitacoes.id,
+        nomeCompleto: recontratacaoSolicitacoes.nomeCompleto,
+        funcao: recontratacaoSolicitacoes.funcao,
+        solicitadoPor: recontratacaoSolicitacoes.solicitadoPor,
+        experienciaPermitida: recontratacaoSolicitacoes.experienciaPermitida,
+        mesmaEmpresa: recontratacaoSolicitacoes.mesmaEmpresa,
+        createdAt: recontratacaoSolicitacoes.createdAt,
+      })
+        .from(recontratacaoSolicitacoes)
+        .where(and(
+          companyFilter(recontratacaoSolicitacoes.companyId, safeInput),
+          eq(recontratacaoSolicitacoes.status, "pendente"),
+        ))
+        .orderBy(desc(recontratacaoSolicitacoes.createdAt));
+
       return {
         heNovas: heAllRows.length,
         mdoNovas: mdoAllRows.length,
         apontamentosNovas: apontAllRows.length,
+        recontratacoesNovas: reconAllRows.length,
         heItems: heAllRows,
         mdoItems: mdoAllRows,
         apontamentosItems: apontAllRows,
+        recontratacaoItems: reconAllRows,
       };
     }),
 

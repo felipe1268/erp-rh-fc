@@ -863,7 +863,7 @@ function AlertasDialog({
   homeData: any;
   stats: any;
   navigate: (path: string) => void;
-  requestsData?: { heNovas: number; mdoNovas: number; heItems: any[]; mdoItems: any[] };
+  requestsData?: { heNovas: number; mdoNovas: number; heItems: any[]; mdoItems: any[]; recontratacoesNovas?: number; recontratacaoItems?: any[] };
 }) {
   const s = stats;
   const handlePrint = () => {
@@ -1015,6 +1015,24 @@ function AlertasDialog({
       }),
       action: () => { onClose(); navigate("/solicitacao-mdo"); },
       actionLabel: "Ver Solicitações de MO",
+    },
+    // Recontratações aguardando liberação do sócio
+    {
+      title: "Recontratações Pendentes",
+      icon: RefreshCw,
+      color: "text-amber-600",
+      bgColor: "bg-amber-50",
+      borderColor: "border-amber-200",
+      count: requestsData?.recontratacaoItems?.length ?? 0,
+      items: (requestsData?.recontratacaoItems ?? []).map((r: any) => ({
+        label: r.nomeCompleto || "Candidato",
+        empStatus: undefined,
+        sublabel: `${r.funcao || "Função a definir"} · solic.: ${r.solicitadoPor || "-"}`,
+        detail: r.experienciaPermitida === 0 ? "Sem experiência (CLT/TST)" : (r.mesmaEmpresa === 1 ? "Mesma empresa" : "Outra empresa do grupo"),
+        detailColor: r.experienciaPermitida === 0 ? "text-red-600 font-semibold" : "text-amber-700",
+      })),
+      action: () => { onClose(); navigate("/recontratacoes-pendentes"); },
+      actionLabel: "Liberar Recontratações",
     },
   ].filter(g => g.count > 0);
 

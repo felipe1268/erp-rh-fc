@@ -22,7 +22,7 @@ import { FinanceiroConfigSection } from "@/pages/configuracoes/FinanceiroConfigS
 import { AlmoxarifadoConfigSection } from "@/pages/configuracoes/AlmoxarifadoConfigSection";
 import { PlanejamentoConfigSection } from "@/pages/configuracoes/PlanejamentoConfigSection";
 import TemplatesDocsTab from "@/pages/configuracoes/TemplatesDocsTab";
-import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, ChevronDown, Info, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign, FolderOpen, FileBarChart, Hammer, Truck, Megaphone, Briefcase, Brain, SlidersHorizontal, GitBranch, Upload, ShieldCheck, ShieldAlert } from "lucide-react";
+import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, ChevronDown, Info, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign, FolderOpen, FileBarChart, Hammer, Truck, Megaphone, Briefcase, Brain, SlidersHorizontal, GitBranch, Upload, ShieldCheck, ShieldAlert, UserCheck } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { removeAccents } from "@/lib/searchUtils";
@@ -82,6 +82,7 @@ const CATEGORIAS = [
   { key: "crachas", label: "Crachás", icon: BadgeCheck, color: "text-sky-600", bgColor: "bg-sky-50", borderColor: "border-sky-200" },
   { key: "convencao", label: "Convenção Coletiva", icon: BookOpen, color: "text-rose-600", bgColor: "bg-rose-50", borderColor: "border-rose-200" },
   { key: "cadastro", label: "Cadastro", icon: Users, color: "text-indigo-600", bgColor: "bg-indigo-50", borderColor: "border-indigo-200" },
+  { key: "recontratacao", label: "Recontratação", icon: UserCheck, color: "text-lime-600", bgColor: "bg-lime-50", borderColor: "border-lime-200" },
   { key: "competencias", label: "Gestão de Competências", icon: CalendarCheck, color: "text-amber-600", bgColor: "bg-amber-50", borderColor: "border-amber-200" },
   { key: "notificacoes_sistema", label: "Notificações do Sistema", icon: Bell, color: "text-pink-600", bgColor: "bg-pink-50", borderColor: "border-pink-200" },
 ];
@@ -776,6 +777,9 @@ export default function Configuracoes() {
                 })}
               </div>
             )}
+
+            {/* ============ RECONTRATAÇÃO · Suplentes de Aprovação ============ */}
+            <RecontratacaoAprovadoresSection companyId={companyId} isMaster={isMaster} />
 
             {/* ============ BASE CAEPI (Certificados de Aprovação) ============ */}
             <CaepiStatsSection />
@@ -3142,5 +3146,102 @@ function BackupTab() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// ============ RECONTRATAÇÃO · Suplentes de Aprovação ============
+// O sócio (Admin Master) é SEMPRE aprovador titular. Aqui ele indica usuários
+// suplentes autorizados a liberar/recusar recontratações na sua ausência.
+function RecontratacaoAprovadoresSection({ companyId, isMaster }: { companyId: number; isMaster: boolean }) {
+  const utils = trpc.useUtils();
+  const suplentesQuery = trpc.recontratacao.getSuplentes.useQuery({ companyId }, { enabled: companyId > 0 });
+  const [selecionados, setSelecionados] = useState<number[]>([]);
+  const [busca, setBusca] = useState("");
+
+  useEffect(() => {
+    if (suplentesQuery.data) setSelecionados(suplentesQuery.data.suplenteIds || []);
+  }, [suplentesQuery.data]);
+
+  const salvarMut = trpc.recontratacao.setSuplentes.useMutation({
+    onSuccess: () => { toast.success("Suplentes atualizados com sucesso!"); utils.recontratacao.getSuplentes.invalidate(); },
+    onError: (e: any) => toast.error("Erro: " + e.message),
+  });
+
+  const usuarios = (suplentesQuery.data?.usuarios || []) as any[];
+  const usuariosFiltrados = useMemo(() => {
+    const q = busca.trim().toLowerCase();
+    const base = usuarios.filter((u: any) => u.role !== "admin_master");
+    if (!q) return base;
+    return base.filter((u: any) => `${u.name || ""} ${u.email || ""} ${u.username || ""}`.toLowerCase().includes(q));
+  }, [usuarios, busca]);
+
+  const toggle = (id: number) => setSelecionados(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const dirty = useMemo(() => {
+    const a = [...(suplentesQuery.data?.suplenteIds || [])].sort().join(",");
+    const b = [...selecionados].sort().join(",");
+    return a !== b;
+  }, [suplentesQuery.data, selecionados]);
+
+  return (
+    <Card className="border-lime-200 mt-4">
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2 text-lime-700">
+          <UserCheck className="w-5 h-5" />
+          Recontratação · Suplentes de Aprovação
+        </CardTitle>
+        <CardDescription>
+          O sócio (Admin Master) é sempre o aprovador titular das recontratações. Selecione abaixo os usuários
+          autorizados a liberar ou recusar na ausência dele. {isMaster ? "" : "Apenas o Admin Master pode alterar esta lista."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {suplentesQuery.isLoading ? (
+          <div className="text-center py-6 text-gray-400">Carregando usuários...</div>
+        ) : (
+          <div className="space-y-3">
+            <Input
+              placeholder="Buscar usuário por nome, e-mail ou login..."
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              className="max-w-md"
+            />
+            <div className="border rounded-lg divide-y max-h-72 overflow-y-auto">
+              {usuariosFiltrados.length === 0 ? (
+                <div className="px-4 py-6 text-center text-sm text-gray-400">Nenhum usuário encontrado.</div>
+              ) : usuariosFiltrados.map((u: any) => {
+                const checked = selecionados.includes(u.id);
+                return (
+                  <label key={u.id} className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer ${checked ? "bg-lime-50" : "hover:bg-gray-50"} ${!isMaster ? "opacity-70 cursor-not-allowed" : ""}`}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={!isMaster}
+                      onChange={() => toggle(u.id)}
+                      className="accent-lime-600 w-4 h-4"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium truncate">{u.name || u.username || `Usuário #${u.id}`}</div>
+                      <div className="text-xs text-gray-500 truncate">{u.email || u.username} · {u.role}</div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-xs text-gray-500">{selecionados.length} suplente(s) selecionado(s)</span>
+              <Button
+                size="sm"
+                onClick={() => salvarMut.mutate({ companyId, suplenteIds: selecionados })}
+                disabled={!isMaster || !dirty || salvarMut.isPending}
+                className={dirty && isMaster ? "bg-lime-600 hover:bg-lime-700" : ""}
+              >
+                <Save className="w-3.5 h-3.5 mr-1" />
+                {salvarMut.isPending ? "Salvando..." : "Salvar Suplentes"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

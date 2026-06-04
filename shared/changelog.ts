@@ -1,6 +1,56 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2755 — **RH/DP · RECONTRATAÇÃO DE FUNCIONÁRIOS DESLIGADOS COM LIBERAÇÃO DO SÓCIO (FILA DE APROVAÇÃO EM
+ * SEPARADO) — NADA VIRA FUNCIONÁRIO ATÉ A LIBERAÇÃO; FICHA/RAIO-X NOVO LIGADO AO ANTIGO POR CPF.**
+ *
+ * PEDIDO (Felipe, aprovado): recontratar quem já trabalhou na FC sem refazer cadastro do zero, mas com CONTROLE — o
+ * sócio (ou suplente) precisa LIBERAR antes de virar colaborador. Inclui alerta jurídico de experiência (CLT/TST:
+ * mesma empresa + MESMA FUNÇÃO = novo contrato SEM período de experiência), critérios configuráveis (prazo de
+ * resolução, carência, permitir experiência em função diferente), card métrico "Recontratados" e Raio-X novo
+ * (o antigo permanece intacto, encerrado no desligamento).
+ *
+ * MUDANÇA (SCHEMA ADITIVO + SERVER + CLIENT; ZERO ALTER DESTRUTIVO / DROP / DELETE — R-001/R-007/R-010):
+ *   (1) SCHEMA (`drizzle/schema.ts`): NOVA tabela `recontratacao_solicitacoes` (staging — fila de aprovação, nada
+ *       vira funcionário até liberar) + colunas ADITIVAS em `employees` (`recontratado_de_employee_id`,
+ *       `recontratado_de_company_id`, `recontratado_data`). Garantidas por `CREATE TABLE IF NOT EXISTS` +
+ *       `ADD COLUMN IF NOT EXISTS` no self-heal `[SyncSchema+]` (`server/_core/index.ts`).
+ *   (2) CRITÉRIOS (`server/routers.ts` initDefaults): keys `recontratacao_prazo_resolucao_dias=30`,
+ *       `recontratacao_carencia_dias=90`, `recontratacao_permitir_experiencia_funcao_diferente=1`; categoria
+ *       `recontratacao` auto-renderizada em Configurações · Critérios.
+ *   (3) ROUTER (`server/routers/recontratacao.ts`, registrado em `server/routers.ts`): `verificarCpf`,
+ *       `getDadosCopia`, `criarSolicitacao` (notifica tela + e-mail), `listarSolicitacoes`, `contarPendentes`,
+ *       `aprovar` (cria colaborador NOVO + link recontratado_de_*), `recusar`, `souAprovador`, `getSuplentes`,
+ *       `setSuplentes` (admin_master), `cardRecontratados`. Aprovador = admin_master + suplentes configuráveis.
+ *   (4) CLIENT — fluxo no cadastro (`Colaboradores.tsx`): banner âmbar ao digitar CPF com vínculo anterior +
+ *       alerta jurídico de experiência + carência; picker de blocos a copiar (multi, tudo marcado por padrão;
+ *       salário/cargo/obra sempre em branco; docs "revalidar"); botão "Enviar para liberação do sócio".
+ *   (5) CLIENT — Configurações (`Configuracoes.tsx`): `RecontratacaoAprovadoresSection` (checkbox de usuários
+ *       suplentes via get/setSuplentes; só master grava).
+ *   (6) CLIENT — nova página `RecontratacoesPendentes.tsx` (fila aprovar/recusar; só aprovador age) + card métrico
+ *       "Recontratados" (total no período, tempo fora médio, link Raio-X); rota `/recontratacoes-pendentes`,
+ *       sidebar RH/DP (`DashboardLayout.tsx`), `ModuleContext` (ROUTE_MODULE_MAP), `shared/modules.ts` (feature
+ *       rh-dp); Home alerta "Recontratações Pendentes" + `notifications.ts` (recontratacaoItems/recontratacoesNovas).
+ *   (7) CLIENT — Raio-X (`RaioXFuncionario.tsx`): banner/badge "Recontratado de [código]" quando a ficha nasce de
+ *       recontratação (raioX enriquecido com `recontratadoDeCodigo` em `controleDocumentos.ts`).
+ *
+ * HARDENING DE SEGURANÇA (code review — fechado antes de mergear):
+ *   (a) GATE DE STAGING: `employees.create` NÃO recontrata mais direto — o ramo `_recontratacao` agora SEMPRE lança
+ *       e direciona à fila (`criarSolicitacao` → `aprovar`). Nada vira funcionário sem liberação.
+ *   (b) TENANCY/IDOR: novo helper `assertAcessoEmpresas(ctx, ids)` (servidor NUNCA confia no companyId do cliente)
+ *       em `verificarCpf`/`getDadosCopia`/`criarSolicitacao`/`listarSolicitacoes`/`contarPendentes`/`cardRecontratados`/
+ *       `getSuplentes`/`souAprovador`; `getSuplentes` só devolve a lista de usuários (PII) ao admin_master. Novo
+ *       `empresasGrupoPermitidas(ctx, db, companyId)` intersecta o grupo com as empresas acessíveis do usuário
+ *       (admin = grupo inteiro), fechando vazamento de desligados/PII entre empresas do grupo.
+ *   (c) INTEGRIDADE DO VÍNCULO: `criarSolicitacao` exige vínculo anterior DESLIGADO/INATIVO, do grupo permitido e
+ *       com CPF coincidente — bloqueia solicitação forjada.
+ *   (d) NOTIFICAÇÕES: `notifications.pendingRequestCounts` deixou de confiar no companyId do cliente — filtra os ids
+ *       pelas empresas acessíveis (`safeInput`) em TODOS os blocos (HE/MDO/apontamentos/recontratação).
+ *
+ * VALIDAÇÃO: esbuild parse client+server EXIT 0; `vitest server/rescisao.test.ts` 41/41 verde; architect review PASS.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2754 — **CONFIGURAÇÕES · CENTRAL DE DOCUMENTOS: AGORA DÁ PRA EXCLUIR UM DOCUMENTO (SOFT-DELETE) — SAI DA
  * CENTRAL E DO CONSUMO DOS MÓDULOS, SEM APAGAR NADA FISICAMENTE.**
  *

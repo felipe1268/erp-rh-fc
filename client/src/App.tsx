@@ -83,6 +83,7 @@ const Home = lazy(() => import("./pages/Home"));
 const Oraculo = lazy(() => import("./pages/Oraculo"));
 const Empresas = lazy(() => import("./pages/Empresas"));
 const Colaboradores = lazy(() => import("./pages/Colaboradores"));
+const RecontratacoesPendentes = lazy(() => import("./pages/RecontratacoesPendentes"));
 const Usuarios = lazy(() => import("./pages/Usuarios"));
 const GruposUsuarios = lazy(() => import("./pages/GruposUsuarios"));
 const Auditoria = lazy(() => import("./pages/Auditoria"));
@@ -364,6 +365,7 @@ function Router() {
         <Route path={"/painel/civil"} component={PainelCivil} />
         <Route path={"/empresas"} component={() => <RouteGuard component={Empresas} route="/empresas" />} />
         <Route path={"/colaboradores"} component={() => <RouteGuard component={Colaboradores} route="/colaboradores" />} />
+        <Route path={"/recontratacoes-pendentes"} component={() => <RouteGuard component={RecontratacoesPendentes} route="/recontratacoes-pendentes" />} />
         <Route path={"/clientes"} component={() => <RouteGuard component={Clientes} route="/empresas" />} />
         <Route path={"/gerenciadoras"} component={() => <RouteGuard component={Gerenciadoras} route="/empresas" />} />
         <Route path={"/obras"} component={() => <RouteGuard component={Obras} route="/obras" />} />

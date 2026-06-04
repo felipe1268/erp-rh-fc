@@ -16,7 +16,7 @@ import { trpc } from "@/lib/trpc";
 import { buildFcDocument } from "@/lib/fcDocumentTemplate";
 import { renderTemplate } from "@shared/documentTemplates";
 import { formatBRL, valorPorExtenso } from "@/lib/numeroExtenso";
-import { Users, UsersRound, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Shield, ShieldX, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon, Wrench, Star, Award, CalendarDays, UserCheck, UserX, Palmtree, HeartPulse, Clock, Save, ChevronsUpDown, Check } from "lucide-react";
+import { Users, UsersRound, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Shield, ShieldX, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon, Wrench, Star, Award, CalendarDays, UserCheck, UserX, Palmtree, HeartPulse, Clock, Save, ChevronsUpDown, Check, RefreshCw } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
@@ -225,6 +225,13 @@ export default function Colaboradores() {
   const [desligamentoDialogOpen, setDesligamentoDialogOpen] = useState(false);
   const [previousStatus, setPreviousStatus] = useState<string>("");
 
+  // === Recontratação (Rev. 2755) — staging com liberação do sócio ===
+  const [recontratacaoMode, setRecontratacaoMode] = useState(false);
+  const [recontratacaoVinculo, setRecontratacaoVinculo] = useState<any>(null);
+  const [recontratacaoPickerOpen, setRecontratacaoPickerOpen] = useState(false);
+  const [recontratacaoPickEmployeeId, setRecontratacaoPickEmployeeId] = useState<number | null>(null);
+  const [blocosCopiados, setBlocosCopiados] = useState<string[]>([]);
+
   // === FCSign — assinatura digital interna (Rev. 2104) ===
   const [fcsignOpen, setFcsignOpen] = useState(false);
   const [fcsignPayload, setFcsignPayload] = useState<{
@@ -371,6 +378,18 @@ export default function Colaboradores() {
       utils.employees.stats.invalidate();
       setDialogOpen(false);
       toast.success("Colaborador cadastrado!");
+    },
+    onError: (e) => toast.error("Erro: " + e.message),
+  });
+  // Recontratação — cria a SOLICITAÇÃO (staging); NÃO cria funcionário.
+  const criarSolicitacaoMut = trpc.recontratacao.criarSolicitacao.useMutation({
+    onSuccess: () => {
+      utils.recontratacao.contarPendentes.invalidate();
+      utils.recontratacao.listarSolicitacoes.invalidate();
+      setDialogOpen(false);
+      setRecontratacaoMode(false);
+      setRecontratacaoVinculo(null);
+      toast.success("Solicitação de recontratação enviada para liberação do sócio.");
     },
     onError: (e) => toast.error("Erro: " + e.message),
   });
@@ -635,6 +654,61 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
     { enabled: cpfClean.length >= 11 }
   );
 
+  // Recontratação — detecta vínculos DESLIGADOS (mesma empresa/grupo) e sinais jurídicos.
+  const verificarRecontratacao = trpc.recontratacao.verificarCpf.useQuery(
+    { cpf: cpfClean, companyId: companyId ?? 0, funcao: form.funcao || undefined },
+    { enabled: cpfClean.length >= 11 && !editingId && !!companyId }
+  );
+  const recontratacaoVinculos: any[] = (verificarRecontratacao.data as any)?.vinculos ?? [];
+  const temVinculoDesligado = recontratacaoVinculos.length > 0;
+  const ativoMesmaEmpresa = (verificarRecontratacao.data as any)?.ativoMesmaEmpresa ?? null;
+  const pickedVinculo = recontratacaoVinculos.find((v: any) => v.employeeId === recontratacaoPickEmployeeId)
+    || (recontratacaoVinculos.length === 1 ? recontratacaoVinculos[0] : null);
+  const dadosCopia = trpc.recontratacao.getDadosCopia.useQuery(
+    { employeeId: pickedVinculo?.employeeId ?? 0, companyId: pickedVinculo?.companyId ?? 0 },
+    { enabled: recontratacaoPickerOpen && !!pickedVinculo }
+  );
+
+  // Blocos copiáveis do vínculo anterior. NUNCA copiamos salário/função/cargo/setor/obra/código/status/datas.
+  const BLOCOS_RECONTRATACAO = [
+    { key: "pessoais", label: "Dados pessoais", fields: ["nomeCompleto", "dataNascimento", "sexo", "estadoCivil", "nacionalidade", "naturalidade", "nomeMae", "nomePai"] },
+    { key: "documentos", label: "Documentos", fields: ["rg", "orgaoEmissor", "ctps", "serieCtps", "pis", "tituloEleitor", "certificadoReservista", "cnh", "categoriaCnh", "validadeCnh"] },
+    { key: "contato", label: "Contato", fields: ["celular", "email", "contatoEmergencia", "telefoneEmergencia", "parentescoEmergencia"] },
+    { key: "endereco", label: "Endereço", fields: ["cep", "logradouro", "numero", "complemento", "bairro", "cidade", "estado"] },
+    { key: "bancarios", label: "Dados bancários / PIX", fields: ["banco", "bancoNome", "agencia", "conta", "tipoConta", "tipoChavePix", "chavePix", "bancoPix"] },
+    { key: "dependentes", label: "Dependentes IR", fields: ["dependentesIR"] },
+  ];
+
+  const abrirPickerRecontratacao = () => {
+    setBlocosCopiados(BLOCOS_RECONTRATACAO.map(b => b.key));
+    setRecontratacaoPickEmployeeId(recontratacaoVinculos.length === 1 ? recontratacaoVinculos[0].employeeId : null);
+    setRecontratacaoPickerOpen(true);
+  };
+
+  const aplicarRecontratacao = () => {
+    const vinc = pickedVinculo;
+    if (!vinc) { toast.error("Selecione o vínculo anterior."); return; }
+    const dados = dadosCopia.data as any;
+    const novo: Record<string, string> = { status: "Ativo", companyId: String(companyId ?? ""), cpf: form.cpf ?? "" };
+    if (dados) {
+      for (const bloco of BLOCOS_RECONTRATACAO) {
+        if (!blocosCopiados.includes(bloco.key)) continue;
+        for (const f of bloco.fields) {
+          const v = dados[f];
+          if (v !== null && v !== undefined && typeof v !== "object") {
+            novo[f] = /^\d{4}-\d{2}-\d{2}/.test(String(v)) ? String(v).split("T")[0] : String(v);
+          }
+        }
+      }
+      if (!novo.cpf && dados.cpf) novo.cpf = String(dados.cpf);
+    }
+    setForm(novo);
+    setRecontratacaoVinculo(vinc);
+    setRecontratacaoMode(true);
+    setRecontratacaoPickerOpen(false);
+    toast.info("Modo recontratação ativo. Preencha salário/função/obra e envie para liberação do sócio.");
+  };
+
   useEffect(() => {
     const d = checkBlacklistMut.data as any;
     if (d && d.status === "ListaNegra") {
@@ -647,8 +721,15 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
   useEffect(() => {
     const duplicates = checkDuplicateCpf.data as any[];
     if (duplicates && duplicates.length > 0) {
-      const msgs = duplicates.map((d: any) => `"${d.nomeCompleto}" na empresa ${d.empresa} (Status: ${statusLabels[d.status] ?? d.status})`);
-      setCpfDuplicateAlert(`CPF já cadastrado no grupo: ${msgs.join("; ")}`);
+      // Só BLOQUEIA se houver vínculo ATIVO (não-desligado). Desligados acionam
+      // o fluxo de RECONTRATAÇÃO (banner próprio), não o bloqueio de duplicidade.
+      const ativos = duplicates.filter((d: any) => d.status !== "Desligado" && d.status !== "Inativo");
+      if (ativos.length > 0) {
+        const msgs = ativos.map((d: any) => `"${d.nomeCompleto}" na empresa ${d.empresa} (Status: ${statusLabels[d.status] ?? d.status})`);
+        setCpfDuplicateAlert(`CPF já cadastrado no grupo: ${msgs.join("; ")}`);
+      } else {
+        setCpfDuplicateAlert(null);
+      }
     } else {
       setCpfDuplicateAlert(null);
     }
@@ -662,6 +743,9 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
     setForm({ status: "Ativo", companyId: selectedCompany });
     setBlacklistAlert(null);
     setCpfDuplicateAlert(null);
+    setRecontratacaoMode(false);
+    setRecontratacaoVinculo(null);
+    setRecontratacaoPickerOpen(false);
     pendingFotoRef.current = null;
     setDialogOpen(true);
   };
@@ -774,7 +858,18 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
       if (typeof createData.fotoUrl === "string" && createData.fotoUrl.startsWith("data:")) delete createData.fotoUrl;
       Object.keys(createData).forEach(k => { if ((createData as any)[k] === "none") (createData as any)[k] = ""; });
       (createData as any).jornadaTrabalho = jornadaStr;
-      createMut.mutate({ ...createData, companyId: targetCompanyId } as any);
+      if (recontratacaoMode) {
+        // Staging: vira SOLICITAÇÃO; NÃO cria funcionário até a liberação do sócio.
+        criarSolicitacaoMut.mutate({
+          companyId: targetCompanyId,
+          ficha: { ...createData, companyId: targetCompanyId },
+          vinculoAnteriorEmployeeId: recontratacaoVinculo?.employeeId,
+          vinculoAnteriorCompanyId: recontratacaoVinculo?.companyId,
+          blocosCopiados,
+        });
+      } else {
+        createMut.mutate({ ...createData, companyId: targetCompanyId } as any);
+      }
     }
   };
 
@@ -1422,6 +1517,37 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
                   <div className="sm:col-span-2 lg:col-span-3 bg-red-600/10 border border-red-600/30 rounded-lg p-3 flex items-center gap-2">
                     <AlertTriangle className="h-5 w-5 text-red-600 shrink-0" />
                     <p className="text-sm font-medium text-red-600">⛔ {cpfDuplicateAlert}. Cadastro bloqueado.</p>
+                  </div>
+                ) : null}
+                {!editingId && temVinculoDesligado && !recontratacaoMode && !cpfDuplicateAlert ? (
+                  <div className="sm:col-span-2 lg:col-span-3 bg-amber-500/10 border border-amber-500/40 rounded-lg p-3 flex items-start gap-3">
+                    <RefreshCw className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-amber-700">Vínculo desligado encontrado neste grupo ({recontratacaoVinculos.length})</p>
+                      <p className="text-xs text-amber-700/80 mt-0.5">Use o fluxo de RECONTRATAÇÃO para reaproveitar os dados e enviar para a liberação do sócio. Nada é cadastrado até a aprovação.</p>
+                      <Button type="button" size="sm" className="mt-2 bg-amber-600 hover:bg-amber-700 text-white" onClick={abrirPickerRecontratacao}>
+                        <RefreshCw className="h-4 w-4 mr-1" /> Iniciar recontratação
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+                {recontratacaoMode && recontratacaoVinculo ? (
+                  <div className="sm:col-span-2 lg:col-span-3 bg-lime-500/10 border border-lime-500/40 rounded-lg p-3 flex items-start gap-3">
+                    <UserCheck className="h-5 w-5 text-lime-600 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-lime-700">Modo recontratação ativo</p>
+                      <p className="text-xs text-lime-700/80 mt-0.5">
+                        Vínculo anterior: {recontratacaoVinculo.codigoInterno || "—"} · {recontratacaoVinculo.companyNome} · desligado em {recontratacaoVinculo.dataDesligamento ? new Date(recontratacaoVinculo.dataDesligamento).toLocaleDateString("pt-BR") : "—"}
+                        {recontratacaoVinculo.diasFora != null ? ` (${recontratacaoVinculo.diasFora} dias fora)` : ""}
+                      </p>
+                      {recontratacaoVinculo.alertaJuridico ? (
+                        <p className={`text-xs mt-1 font-medium ${recontratacaoVinculo.experienciaPermitida ? "text-amber-700" : "text-red-600"}`}>{recontratacaoVinculo.alertaJuridico}</p>
+                      ) : null}
+                      <p className="text-xs text-lime-700/80 mt-1">Ao salvar, será criada uma SOLICITAÇÃO pendente — não um funcionário.</p>
+                      <Button type="button" variant="ghost" size="sm" className="mt-1 h-7 text-xs text-muted-foreground" onClick={() => { setRecontratacaoMode(false); setRecontratacaoVinculo(null); }}>
+                        <XIcon className="h-3 w-3 mr-1" /> Cancelar recontratação
+                      </Button>
+                    </div>
                   </div>
                 ) : null}
                 <div>
@@ -3483,12 +3609,85 @@ ${(() => {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button
               onClick={handleSubmit}
-              disabled={createMut.isPending || updateMut.isPending || (!editingId && !!cpfDuplicateAlert)}
+              className={recontratacaoMode ? "bg-lime-600 hover:bg-lime-700 text-white" : ""}
+              disabled={createMut.isPending || updateMut.isPending || criarSolicitacaoMut.isPending || (!editingId && !!cpfDuplicateAlert)}
             >
-              {createMut.isPending || updateMut.isPending ? "Salvando..." : "Salvar"}
+              {criarSolicitacaoMut.isPending
+                ? "Enviando..."
+                : createMut.isPending || updateMut.isPending
+                  ? "Salvando..."
+                  : recontratacaoMode
+                    ? "Enviar para liberação do sócio"
+                    : "Salvar"}
             </Button>
           </div>
       </FullScreenDialog>
+
+      {/* Recontratação — seletor do vínculo anterior + blocos a copiar */}
+      <Dialog open={recontratacaoPickerOpen} onOpenChange={setRecontratacaoPickerOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><RefreshCw className="h-5 w-5 text-amber-600" /> Iniciar recontratação</DialogTitle>
+            <DialogDescription>Escolha o vínculo anterior e os blocos de dados a reaproveitar. Salário, função, cargo e obra são SEMPRE preenchidos do zero.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <Label className="text-xs font-semibold text-muted-foreground">Vínculo anterior</Label>
+              <div className="mt-1 space-y-2">
+                {recontratacaoVinculos.map((v: any) => (
+                  <button
+                    key={v.employeeId}
+                    type="button"
+                    onClick={() => setRecontratacaoPickEmployeeId(v.employeeId)}
+                    className={`w-full text-left rounded-lg border p-3 transition ${pickedVinculo?.employeeId === v.employeeId ? "border-amber-500 bg-amber-500/10" : "border-border hover:bg-muted/40"}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-sm">{v.nomeCompleto} · {v.codigoInterno || "s/ código"}</span>
+                      <span className="text-xs text-muted-foreground">{v.companyNome}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      Função anterior: {v.funcaoAnterior || "—"} · Desligado em {v.dataDesligamento ? new Date(v.dataDesligamento).toLocaleDateString("pt-BR") : "—"}
+                      {v.diasFora != null ? ` · ${v.diasFora} dias fora` : ""}
+                    </div>
+                    {v.alertaJuridico ? (
+                      <div className={`text-xs mt-1 font-medium ${v.experienciaPermitida ? "text-amber-700" : "text-red-600"}`}>{v.alertaJuridico}</div>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs font-semibold text-muted-foreground">Blocos a copiar</Label>
+              <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {BLOCOS_RECONTRATACAO.map(b => {
+                  const checked = blocosCopiados.includes(b.key);
+                  return (
+                    <label key={b.key} className={`flex items-center gap-2 rounded-md border p-2 cursor-pointer text-sm ${checked ? "border-lime-500 bg-lime-500/10" : "border-border"}`}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => setBlocosCopiados(prev => prev.includes(b.key) ? prev.filter(k => k !== b.key) : [...prev, b.key])}
+                        className="accent-lime-600"
+                      />
+                      {b.label}
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Documentos do colaborador devem ser sempre revalidados após a recontratação.</p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRecontratacaoPickerOpen(false)}>Cancelar</Button>
+            <Button className="bg-amber-600 hover:bg-amber-700 text-white" onClick={aplicarRecontratacao} disabled={!pickedVinculo || dadosCopia.isLoading}>
+              {dadosCopia.isLoading ? "Carregando..." : "Aplicar e preencher ficha"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* DIALOG DE CONFIRMAÇÃO DE DESLIGAMENTO */}
       <AlertDialog open={desligamentoDialogOpen} onOpenChange={setDesligamentoDialogOpen}>

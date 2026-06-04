@@ -1471,6 +1471,50 @@ Regras:
           await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS cargo_confianca_termo_assinado_em TIMESTAMP`);
           console.log(`[SyncSchema+] Rev. 1874/1878: colunas cargo_confianca_inciso/observacao/termo_* garantidas em employees.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.1874/1878 cargo_confianca_*:`, e?.message || e); }
+
+        // Rev. 2755 — RECONTRATAÇÃO: tabela de staging + vínculo do funcionário novo com o registro anterior.
+        try {
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS recontratacao_solicitacoes (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            cpf VARCHAR(14) NOT NULL,
+            nome_completo VARCHAR(255) NOT NULL,
+            funcao VARCHAR(255),
+            vinculo_anterior_employee_id INTEGER,
+            vinculo_anterior_company_id INTEGER,
+            vinculo_anterior_codigo VARCHAR(30),
+            vinculo_anterior_funcao VARCHAR(255),
+            vinculo_anterior_desligamento VARCHAR(30),
+            mesma_empresa SMALLINT NOT NULL DEFAULT 1,
+            mesma_funcao SMALLINT NOT NULL DEFAULT 0,
+            dias_fora INTEGER,
+            experiencia_permitida SMALLINT NOT NULL DEFAULT 1,
+            alerta_juridico TEXT,
+            carencia_dias INTEGER,
+            dentro_carencia SMALLINT NOT NULL DEFAULT 0,
+            ficha_json TEXT NOT NULL,
+            blocos_copiados TEXT,
+            status TEXT NOT NULL DEFAULT 'pendente',
+            prazo_limite TIMESTAMP,
+            solicitado_por VARCHAR(255) NOT NULL,
+            solicitado_por_id INTEGER NOT NULL,
+            observacao_solicitante TEXT,
+            resolvido_por VARCHAR(255),
+            resolvido_por_id INTEGER,
+            resolvido_data TIMESTAMP,
+            parecer TEXT,
+            employee_criado_id INTEGER,
+            created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+            updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+          )`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS recon_company ON recontratacao_solicitacoes (company_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS recon_status ON recontratacao_solicitacoes (company_id, status)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS recon_cpf ON recontratacao_solicitacoes (cpf)`);
+          await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS recontratado_de_employee_id INTEGER`);
+          await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS recontratado_de_company_id INTEGER`);
+          await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS recontratado_data TIMESTAMP`);
+          console.log(`[SyncSchema+] Rev. 2755: tabela recontratacao_solicitacoes + colunas recontratado_de_* garantidas.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2755 recontratacao:`, e?.message || e); }
         console.log(`[SyncSchema+] Tabelas DDS (dds_temas/dds_sessoes/dds_sessao_funcionarios) garantidas.`);
 
         // Tabelas do Portal do Cliente (comentários cliente↔FC e avaliações NPS)

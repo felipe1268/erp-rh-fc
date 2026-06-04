@@ -2313,8 +2313,17 @@ export const controleDocumentosRouter = router({
         return raw.slice(0, 10) <= hojeStr;
       });
 
+      // Vínculo de recontratação: se este colaborador nasceu de uma recontratação,
+      // resolve o código do registro anterior para exibir o banner no Raio-X.
+      let recontratadoDeCodigo: string | null = null;
+      if ((emp as any).recontratadoDeEmployeeId) {
+        const [ant] = await db.select({ codigoInterno: employees.codigoInterno })
+          .from(employees).where(eq(employees.id, (emp as any).recontratadoDeEmployeeId));
+        if (ant) recontratadoDeCodigo = ant.codigoInterno || null;
+      }
+
       return {
-        funcionario: { ...emp, obraAtualNome },
+        funcionario: { ...emp, obraAtualNome, recontratadoDeCodigo },
         funcaoDetalhes,
         asos: asosComStatus,
         treinamentos: empTreinamentos,

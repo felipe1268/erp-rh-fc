@@ -16,7 +16,7 @@ import {
   Palmtree, Shield, FileSignature, Ban, Star, Eye, ScrollText, Wrench,
   Package, PackageX, CheckCircle, XCircle, ShoppingCart,
   Trash2, Camera, Video, ImageIcon, Upload, ShieldCheck, Plus, Loader2, Pencil, RotateCcw, UserCheck, Handshake, Receipt, ExternalLink, MessageSquare,
-  Lock,
+  Lock, RefreshCw,
 } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
@@ -918,7 +918,22 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                     {(emp as any).codigoInterno && (
                       <Badge variant="outline" className="text-sm px-3 py-1 border-blue-300 text-blue-700 font-mono">{(emp as any).codigoInterno}</Badge>
                     )}
+                    {(emp as any).recontratadoDeEmployeeId && (
+                      <Badge className="text-sm px-3 py-1 bg-lime-100 text-lime-800 border border-lime-300 flex items-center gap-1">
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Recontratado{(emp as any).recontratadoDeCodigo ? ` de ${(emp as any).recontratadoDeCodigo}` : ""}
+                      </Badge>
+                    )}
                   </div>
+                  {(emp as any).recontratadoDeEmployeeId && (
+                    <div className="mb-2 sm:mb-3 bg-lime-50 border border-lime-200 rounded-lg px-3 py-2 text-xs sm:text-sm text-lime-800 flex items-center gap-2">
+                      <RefreshCw className="h-4 w-4 shrink-0 text-lime-600" />
+                      <span>
+                        Esta é uma ficha NOVA originada por recontratação{(emp as any).recontratadoDeCodigo ? ` do vínculo anterior ${(emp as any).recontratadoDeCodigo}` : ""}
+                        {(emp as any).recontratadoData ? ` em ${new Date((emp as any).recontratadoData).toLocaleDateString("pt-BR")}` : ""}. O histórico anterior permanece encerrado no desligamento, ligado por CPF.
+                      </span>
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-x-4 sm:gap-x-8 gap-y-2 sm:gap-y-3">
                     {(() => {
                       const anivInfo = calcDiasAniversarioSafe(emp.dataNascimento);

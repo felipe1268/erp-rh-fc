@@ -329,6 +329,53 @@ export const blacklistReactivationRequests = pgTable("blacklist_reactivation_req
         index("brr_status").on(table.companyId, table.status),
 ]);
 
+// Recontratação (Rev. 2755) — fila de solicitações em STAGING. Nada vira funcionário até a liberação do sócio.
+// A ficha completa do candidato fica em `fichaJson` (NÃO grava em employees enquanto pendente).
+export const recontratacaoSolicitacoes = pgTable("recontratacao_solicitacoes", {
+        id: serial().notNull(),
+        companyId: integer("company_id").notNull(),
+        cpf: varchar({ length: 14 }).notNull(),
+        nomeCompleto: varchar("nome_completo", { length: 255 }).notNull(),
+        funcao: varchar({ length: 255 }),
+        // Vínculo anterior (registro desligado que originou a recontratação)
+        vinculoAnteriorEmployeeId: integer("vinculo_anterior_employee_id"),
+        vinculoAnteriorCompanyId: integer("vinculo_anterior_company_id"),
+        vinculoAnteriorCodigo: varchar("vinculo_anterior_codigo", { length: 30 }),
+        vinculoAnteriorFuncao: varchar("vinculo_anterior_funcao", { length: 255 }),
+        vinculoAnteriorDesligamento: varchar("vinculo_anterior_desligamento", { length: 30 }),
+        mesmaEmpresa: smallint("mesma_empresa").default(1).notNull(),
+        mesmaFuncao: smallint("mesma_funcao").default(0).notNull(),
+        diasFora: integer("dias_fora"),
+        // Sinalizações jurídicas computadas no momento da solicitação (snapshot)
+        experienciaPermitida: smallint("experiencia_permitida").default(1).notNull(),
+        alertaJuridico: text("alerta_juridico"),
+        carenciaDias: integer("carencia_dias"),
+        dentroCarencia: smallint("dentro_carencia").default(0).notNull(),
+        // Ficha completa do candidato + blocos copiados (JSON serializado)
+        fichaJson: text("ficha_json").notNull(),
+        blocosCopiados: text("blocos_copiados"),
+        // Workflow de liberação
+        status: text().default('pendente').notNull(), // pendente | aprovada | recusada | vencida
+        prazoLimite: timestamp("prazo_limite", { mode: 'string' }),
+        solicitadoPor: varchar("solicitado_por", { length: 255 }).notNull(),
+        solicitadoPorId: integer("solicitado_por_id").notNull(),
+        observacaoSolicitante: text("observacao_solicitante"),
+        // Resolução
+        resolvidoPor: varchar("resolvido_por", { length: 255 }),
+        resolvidoPorId: integer("resolvido_por_id"),
+        resolvidoData: timestamp("resolvido_data", { mode: 'string' }),
+        parecer: text(),
+        // Funcionário criado quando aprovada
+        employeeCriadoId: integer("employee_criado_id"),
+        createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+        updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
+},
+(table) => [
+        index("recon_company").on(table.companyId),
+        index("recon_status").on(table.companyId, table.status),
+        index("recon_cpf").on(table.cpf),
+]);
+
 export const caepiDatabase = pgTable("caepi_database", {
         id: serial().notNull(),
         ca: varchar({ length: 20 }).notNull(),
@@ -1146,6 +1193,11 @@ export const employees = pgTable("employees", {
         benefObs: text(),
         assinaturaMemorial: text("assinatura_memorial"),
         assinaturaMemorialAt: timestamp("assinatura_memorial_at", { mode: "string" }),
+        // Recontratação (Rev. 2755) — vínculo do funcionário NOVO com o registro ANTERIOR (mesmo CPF).
+        // O registro antigo permanece intacto, encerrado no desligamento; o novo ganha ficha/timeline própria.
+        recontratadoDeEmployeeId: integer("recontratado_de_employee_id"),
+        recontratadoDeCompanyId: integer("recontratado_de_company_id"),
+        recontratadoData: timestamp("recontratado_data", { mode: "string" }),
 },
 (table) => [
         index("idx_company_codigo_interno").on(table.companyId, table.codigoInterno),

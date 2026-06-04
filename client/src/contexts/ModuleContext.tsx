@@ -28,6 +28,7 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/painel/tributario": "juridico",
   "/painel/civil": "juridico",
   "/colaboradores": "rh-dp",
+  "/recontratacoes-pendentes": "rh-dp",
   "/fechamento-ponto": "rh-dp",
   "/folha-pagamento": "rh-dp",
   "/controle-documentos": "rh-dp",

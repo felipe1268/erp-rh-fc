@@ -70,6 +70,7 @@ import { visaoPanoramicaRouter } from "./routers/visaoPanoramica";
 import { datajudAutoCheckRouter, startAutoCheckJob } from "./routers/datajudAutoCheck";
 import { valeAlimentacaoRouter } from "./routers/valeAlimentacao";
 import { notificationsRouter } from "./routers/notifications";
+import { recontratacaoRouter } from "./routers/recontratacao";
 import { avisoPrevioFeriasRouter } from "./routers/avisoPrevioFerias";
 import { cipaRouter } from "./routers/cipa";
 import { pjContractsRouter } from "./routers/pjContracts";
@@ -167,6 +168,7 @@ export const appRouter = router({
   menuConfig: menuConfigRouter,
   goldenRules: goldenRulesRouter,
   notifications: notificationsRouter,
+  recontratacao: recontratacaoRouter,
   avaliacao: avaliacaoRouter,
   orcamentista: orcamentistaRouter,
   iaModulos: iaModulosRouter,
@@ -478,15 +480,11 @@ export const appRouter = router({
           const dupInfo = (dup as any[])[0];
           const isDesligado = dupInfo.status === 'Desligado' || dupInfo.status === 'Inativo';
           if (isDesligado && input._recontratacao) {
-            // Recontratação com carência de 90 dias
-            if (dupInfo.dataDesligamento) {
-              const dataDeslig = new Date(dupInfo.dataDesligamento);
-              const diffDias = Math.floor((new Date().getTime() - dataDeslig.getTime()) / (1000 * 60 * 60 * 24));
-              if (diffDias < 90) {
-                throw new TRPCError({ code: "CONFLICT", message: `⚠️ Carência de recontratação!\n\n${dupInfo.nomeCompleto} foi desligado há ${diffDias} dias.\nCarência mínima: 90 dias.\nData de desligamento: ${dupInfo.dataDesligamento}\n\nAguarde o término da carência para recontratação.` });
-              }
-            }
-            // Dentro da carência OK — permite seguir
+            // Rev. 2755 — GATE DE STAGING: a recontratação NÃO cria mais funcionário
+            // direto por aqui. TODO retorno de desligado passa OBRIGATORIAMENTE pela
+            // fila de liberação do sócio (recontratacao.criarSolicitacao → aprovar).
+            // Fecha o bypass que permitia virar funcionário sem aprovação.
+            throw new TRPCError({ code: "CONFLICT", message: `🔄 Recontratação requer liberação do sócio.\n\nO CPF ${input.cpf} pertence a ${dupInfo.nomeCompleto} (desligado). Use o fluxo de Recontratação no cadastro para enviar a solicitação à fila de liberação. Nada vira funcionário até a aprovação do Admin Master ou suplente.` });
           } else if (isDesligado) {
             throw new TRPCError({ code: "CONFLICT", message: `⚠️ CPF já cadastrado nesta empresa (Funcionário Desligado)\n\nO CPF ${input.cpf} pertence a: ${dupInfo.nomeCompleto}\nStatus: ${dupInfo.status}\nData Desligamento: ${dupInfo.dataDesligamento || 'N/A'}\n\n🔄 Este funcionário pode ser RECONTRATADO.\nUse a opção de recontratação no cadastro para prosseguir.` });
           } else {
@@ -2847,6 +2845,9 @@ export const appRouter = router({
         // RECONTRATAÇÃO
         { categoria: "cadastro", chave: "cadastro_permitir_recontratacao", valor: "1", descricao: "Permitir recontratação de funcionário desligado com mesmo CPF (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
         { categoria: "cadastro", chave: "cadastro_recontratacao_carencia_dias", valor: "90", descricao: "Carência mínima em dias para recontratação", valorPadraoClt: "90", unidade: "dias" },
+        { categoria: "recontratacao", chave: "recontratacao_prazo_resolucao_dias", valor: "30", descricao: "Prazo máximo (em dias) para o sócio liberar/recusar uma solicitação de recontratação antes de marcá-la como VENCIDA", valorPadraoClt: "30", unidade: "dias" },
+        { categoria: "recontratacao", chave: "recontratacao_carencia_dias", valor: "90", descricao: "Carência (em dias) após o desligamento — vira apenas ALERTA, não bloqueia (a liberação do sócio é a autoridade final)", valorPadraoClt: "90", unidade: "dias" },
+        { categoria: "recontratacao", chave: "recontratacao_permitir_experiencia_funcao_diferente", valor: "1", descricao: "Permitir contrato de experiência quando a recontratação for para FUNÇÃO DIFERENTE na mesma empresa (0=Não, 1=Sim). Mesma função nunca permite experiência (TST: fraude)", valorPadraoClt: "1", unidade: "bool" },
         // TERCEIROS
         { categoria: "terceiros", chave: "terceiros_prazo_docs_dias", valor: "10", descricao: "Prazo em dias para envio de documentos mensais", valorPadraoClt: "10", unidade: "dias" },
         { categoria: "terceiros", chave: "terceiros_alerta_vencimento_dias", valor: "10", descricao: "Dias antes do vencimento para enviar alerta", valorPadraoClt: "10", unidade: "dias" },

@@ -20,3 +20,4 @@
 - [Central de Documentos ISO — gate](document-templates-iso-gate.md) — só consome template vigente; editar (ou restaurar) conteúdo rebaixa p/ rascunho e limpa aprovação; auto-seed garante os 7 tipos; dados devem cobrir TODO o seed.
 - [Employee Direto/Indireto source](employee-categoria-source.md) — `employees.list`/getEmployees NÃO traz `categoria`; classifique via `jobFunctions.categoriaMO` (indireta_obra|escritorio_central=Indireto, senão Direto).
 - [signatures.create caller-company guard](fcsign-create-tenancy.md) — FCSign `create` só conferia que o EMPLOYEE ∈ company, não que o CHAMADOR tinha acesso; gap cross-tenant compartilhado por TODOS os tipos. Use `getCompaniesForUser` no create.
+- [Group-expansion IDOR](group-expansion-idor.md) — reads que expandem por grupo (getCompanyIdsDoGrupo) devem INTERSECTAR com as empresas acessíveis do user, não só validar o companyId de entrada; notification-aggregators confiam no companyId do cliente por padrão.
