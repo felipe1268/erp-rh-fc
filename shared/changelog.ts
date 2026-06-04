@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2756 — **RH/DP · RECONTRATAÇÃO: O BANNER "INICIAR RECONTRATAÇÃO" NÃO APARECIA QUANDO A EMPRESA DO
+ * HEADER (GLOBAL) ERA DIFERENTE DA EMPRESA ESCOLHIDA NO FORMULÁRIO — AGORA A DETECÇÃO SEGUE A EMPRESA DO FORM.**
+ *
+ * SINTOMA (Felipe, prints): ao abrir "Novo Colaborador", selecionar a empresa no form (ex.: FC ENGENHARIA
+ * PROJETOS E OBRAS, id 60002) e digitar o CPF de um DESLIGADO, NENHUM banner aparecia (nem o âmbar de
+ * recontratação nem o vermelho de duplicidade). Ao clicar "Salvar", o servidor BLOQUEAVA com "CPF já
+ * cadastrado (Funcionário Desligado)... Use a opção de recontratação" — beco sem saída: a tela mandava usar
+ * uma opção que nunca era exibida.
+ *
+ * CAUSA-RAIZ (SÓ CLIENT — ZERO SCHEMA/SERVER): as duas queries de detecção em `Colaboradores.tsx`
+ * (`employees.checkDuplicateCpf` e `recontratacao.verificarCpf`) usavam o `companyId` GLOBAL do header
+ * (`CompanyContext`), enquanto o `employees.create` (Salvar) usa a empresa do FORMULÁRIO (`form.companyId`).
+ * Quando o header está apontado para outra empresa/grupo, a detecção rodava contra a empresa ERRADA →
+ * `verificarCpf` devolvia `vinculos: []` (sem vínculo desligado naquele grupo) → `temVinculoDesligado=false` →
+ * banner âmbar oculto; e `checkDuplicateCpf` (que é company-scoped, `eq(companyId)`) também não achava nada na
+ * empresa errada → sem banner vermelho. Mas o Salvar batia em 60002 (onde o CPF É desligado) e era barrado.
+ *
+ * FIX: NOVO memo `formCompanyId = parseInt(form.companyId || selectedCompany)` (a empresa REAL de destino do
+ * cadastro, com fallback p/ o global). Ambas as queries passam a usar `formCompanyId` e a habilitar em
+ * `!!formCompanyId`. Assim a detecção fica SEMPRE alinhada ao que o Salvar vai fazer. Confirmado contra dados
+ * reais (Neon): o CPF de exemplo tem 1 registro DESLIGADO em 60002 (FC ENGENHARIA) e 1 ATIVO em 60005 (JULIO
+ * FERRAZ) — ambas grupo "Construtora". Como `checkDuplicateCpf` e o `ativoMesmaEmpresa` do `verificarCpf` são
+ * company-scoped (não grupo), recontratar em 60002 é liberado mesmo havendo ativo na coligada 60005 (entidade
+ * jurídica distinta) — comportamento correto. ARQUIVO: `client/src/pages/Colaboradores.tsx`.
+ *
+ * HARDENING (architect): `aplicarRecontratacao` montava o form novo com `companyId` GLOBAL do header — se
+ * header≠form, a solicitação de recontratação sairia no CNPJ ERRADO. Passou a usar `formCompanyId` (mesma
+ * divergência, mesma origem), com fallback p/ o global.
+ *
+ * VALIDAÇÃO: esbuild parse client+server EXIT 0; `vitest server/rescisao.test.ts` 41/41 verde; architect.
+ *
  * Rev. 2755 — **RH/DP · RECONTRATAÇÃO DE FUNCIONÁRIOS DESLIGADOS COM LIBERAÇÃO DO SÓCIO (FILA DE APROVAÇÃO EM
  * SEPARADO) — NADA VIRA FUNCIONÁRIO ATÉ A LIBERAÇÃO; FICHA/RAIO-X NOVO LIGADO AO ANTIGO POR CPF.**
  *

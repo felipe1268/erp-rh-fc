@@ -649,15 +649,24 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
 
   // Verificação de CPF duplicado
   const cpfClean = useMemo(() => (form.cpf ?? "").replace(/\D/g, ""), [form.cpf]);
+  // Rev. 2756 — a detecção (duplicidade + recontratação) DEVE usar a EMPRESA do
+  // FORMULÁRIO (o destino real do cadastro/save), não o company global do header.
+  // Quando os dois divergem (header em outra empresa/grupo), as queries rodavam
+  // contra a empresa errada → nenhum banner aparecia, mas o SAVE batia na empresa
+  // do form e era bloqueado pelo servidor (beco sem saída). Fallback p/ o global.
+  const formCompanyId = useMemo(() => {
+    const n = parseInt(String(form.companyId || selectedCompany || ""), 10);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  }, [form.companyId, selectedCompany]);
   const checkDuplicateCpf = trpc.employees.checkDuplicateCpf.useQuery(
-    { cpf: cpfClean, companyId: companyId ?? 0 },
-    { enabled: cpfClean.length >= 11 }
+    { cpf: cpfClean, companyId: formCompanyId ?? 0 },
+    { enabled: cpfClean.length >= 11 && !!formCompanyId }
   );
 
   // Recontratação — detecta vínculos DESLIGADOS (mesma empresa/grupo) e sinais jurídicos.
   const verificarRecontratacao = trpc.recontratacao.verificarCpf.useQuery(
-    { cpf: cpfClean, companyId: companyId ?? 0, funcao: form.funcao || undefined },
-    { enabled: cpfClean.length >= 11 && !editingId && !!companyId }
+    { cpf: cpfClean, companyId: formCompanyId ?? 0, funcao: form.funcao || undefined },
+    { enabled: cpfClean.length >= 11 && !editingId && !!formCompanyId }
   );
   const recontratacaoVinculos: any[] = (verificarRecontratacao.data as any)?.vinculos ?? [];
   const temVinculoDesligado = recontratacaoVinculos.length > 0;
@@ -689,7 +698,10 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
     const vinc = pickedVinculo;
     if (!vinc) { toast.error("Selecione o vínculo anterior."); return; }
     const dados = dadosCopia.data as any;
-    const novo: Record<string, string> = { status: "Ativo", companyId: String(companyId ?? ""), cpf: form.cpf ?? "" };
+    // Rev. 2756 — preserva a EMPRESA do formulário (destino real do cadastro), não o
+    // company global do header; senão a solicitação de recontratação sairia no CNPJ errado
+    // quando header≠form (mesma divergência que ocultava o banner).
+    const novo: Record<string, string> = { status: "Ativo", companyId: String(formCompanyId ?? companyId ?? ""), cpf: form.cpf ?? "" };
     if (dados) {
       for (const bloco of BLOCOS_RECONTRATACAO) {
         if (!blocosCopiados.includes(bloco.key)) continue;
