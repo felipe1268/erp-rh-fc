@@ -1,10 +1,12 @@
 /**
  * Rev. 2747 — Aba "Templates de Documentos" em Configurações (Central ISO + IA).
  *
- * A aba é a FONTE OFICIAL dos documentos institucionais FC. Layout master-detail:
- *  [esquerda] Lista dos 7 tipos com selo de status ISO (Vigente/Rascunho/Obsoleto)
- *  [centro]   Ficha ISO (código/status/elaborado/aprovado/datas) + editor + ações
- *  [direita]  Placeholders pesquisáveis + histórico de revisões
+ * A aba é a FONTE OFICIAL dos documentos institucionais FC. Layout (Rev. 2749):
+ *  [topo]     Seletor horizontal dos 7 tipos (busca + filtro de status + cards)
+ *  [principal] Ficha ISO (código/status/elaborado/aprovado/datas) + editor LARGO
+ *  [lateral]  Placeholders pesquisáveis + histórico de revisões (coluna estreita)
+ *
+ * Editor ocupa ~75% da largura e usa tipografia confortável (readable) p/ leitura.
  *
  * Controle ISO: código FC-XX-NNN, status (rascunho→vigente→obsoleto), elaborado/
  * aprovado por, data de vigência e próxima revisão. IA: gerar do zero (instruções)
@@ -348,70 +350,64 @@ export default function TemplatesDocsTab() {
         </div>
       </div>
 
-      <div className="grid grid-cols-12 gap-4">
-        {/* COLUNA ESQUERDA — Lista de tipos */}
-        <div className="col-span-12 md:col-span-3">
-          <div className="bg-white border rounded-lg overflow-hidden">
-            <div className="px-3 py-2 bg-gray-50 border-b text-xs font-semibold text-gray-600 uppercase">
-              Documentos
-            </div>
-            <div className="p-2 border-b space-y-2">
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
-                <Input
-                  value={buscaDoc}
-                  onChange={e => setBuscaDoc(e.target.value)}
-                  placeholder="Buscar por nome ou código..."
-                  className="h-8 text-sm pl-7"
-                />
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {STATUS_FILTROS.map(f => (
-                  <button
-                    key={f.value}
-                    onClick={() => setFiltroStatus(f.value)}
-                    className={`text-[11px] px-2 py-0.5 rounded-full border transition-colors ${filtroStatus === f.value ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="divide-y">
-              {docsLista.length === 0 && (
-                <div className="px-3 py-4 text-xs text-gray-400 italic">Nenhum documento encontrado.</div>
-              )}
-              {docsLista.map((row: any) => {
-                const Icon = ICON_MAP[row.icone] || FileText;
-                const isAtivo = row.tipo === tipoSelecionado;
-                const versaoAtual = (row as any).versaoAtual ?? 0;
-                const st = (row as any).status ?? "ausente";
-                return (
-                  <button
-                    key={row.tipo}
-                    onClick={() => setTipoSelecionado(row.tipo as DocumentTemplateTipo)}
-                    className={`w-full text-left px-3 py-2.5 hover:bg-gray-50 transition-colors flex items-start gap-2 ${isAtivo ? "bg-blue-50 border-l-4 border-blue-600" : "border-l-4 border-transparent"}`}
-                  >
-                    <Icon className={`w-4 h-4 mt-0.5 flex-shrink-0 ${isAtivo ? "text-blue-700" : "text-gray-500"}`} />
-                    <div className="flex-1 min-w-0">
-                      <div className={`text-sm font-medium ${isAtivo ? "text-blue-900" : "text-gray-800"}`}>{row.titulo}</div>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <StatusBadge status={st} size="xs" />
-                        {(row as any).codigo && <span className="text-[10px] text-gray-400 font-mono">{(row as any).codigo}</span>}
-                      </div>
-                      <div className="text-[10px] text-gray-400 mt-0.5">
-                        {st === "ausente" ? "—" : `Rev. ${versaoAtual}`}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+      {/* SELETOR HORIZONTAL NO TOPO — substitui a antiga coluna lateral de documentos */}
+      <div className="bg-white border rounded-lg p-3">
+        <div className="flex items-center gap-3 flex-wrap mb-3">
+          <div className="text-xs font-semibold text-gray-600 uppercase mr-1">Documentos</div>
+          <div className="relative flex-1 min-w-[220px] max-w-md">
+            <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Input
+              value={buscaDoc}
+              onChange={e => setBuscaDoc(e.target.value)}
+              placeholder="Buscar por nome ou código..."
+              className="h-8 text-sm pl-7"
+            />
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {STATUS_FILTROS.map(f => (
+              <button
+                key={f.value}
+                onClick={() => setFiltroStatus(f.value)}
+                className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${filtroStatus === f.value ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}
+              >
+                {f.label}
+              </button>
+            ))}
           </div>
         </div>
+        {docsLista.length === 0 ? (
+          <div className="px-1 py-3 text-xs text-gray-400 italic">Nenhum documento encontrado.</div>
+        ) : (
+          <div className="flex gap-2 flex-wrap">
+            {docsLista.map((row: any) => {
+              const Icon = ICON_MAP[row.icone] || FileText;
+              const isAtivo = row.tipo === tipoSelecionado;
+              const versaoAtual = (row as any).versaoAtual ?? 0;
+              const st = (row as any).status ?? "ausente";
+              return (
+                <button
+                  key={row.tipo}
+                  onClick={() => setTipoSelecionado(row.tipo as DocumentTemplateTipo)}
+                  className={`text-left rounded-lg border px-3 py-2 flex items-center gap-2.5 transition-colors min-w-[190px] flex-1 sm:flex-none ${isAtivo ? "bg-blue-50 border-blue-500 ring-1 ring-blue-500" : "bg-white border-gray-200 hover:bg-gray-50"}`}
+                >
+                  <Icon className={`w-5 h-5 flex-shrink-0 ${isAtivo ? "text-blue-700" : "text-gray-500"}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className={`text-sm font-medium truncate ${isAtivo ? "text-blue-900" : "text-gray-800"}`}>{row.titulo}</div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <StatusBadge status={st} size="xs" />
+                      <span className="text-[10px] text-gray-400">{st === "ausente" ? "—" : `Rev. ${versaoAtual}`}</span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
-        {/* COLUNA CENTRO — Ficha ISO + Editor */}
-        <div className="col-span-12 md:col-span-6 space-y-4">
+      <div className="grid grid-cols-12 gap-4">
+        {/* PRINCIPAL — Ficha ISO + Editor (largo) */}
+        <div className="col-span-12 lg:col-span-9 space-y-4">
           {/* Ficha ISO */}
           <div className="bg-white border rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
@@ -566,14 +562,15 @@ export default function TemplatesDocsTab() {
                 <Loader2 className="w-5 h-5 animate-spin mr-2" /> Carregando...
               </div>
             ) : mostrarPreview ? (
-              <div className="border rounded-lg bg-white p-6 prose prose-sm max-w-none min-h-[420px]" dangerouslySetInnerHTML={{ __html: previewHtml || "<p class='text-gray-400'>Sem conteúdo.</p>" }} />
+              <div className="border rounded-lg bg-white px-6 py-5 prose prose-base leading-relaxed max-w-none min-h-[560px] [&>*]:max-w-[820px] [&>*]:mx-auto" dangerouslySetInnerHTML={{ __html: previewHtml || "<p class='text-gray-400'>Sem conteúdo.</p>" }} />
             ) : (
               <RichTextEditor
                 ref={editorRef}
                 value={conteudoEditado}
                 onChange={setConteudoEditado}
                 readOnly={!!visualizandoVersaoAntiga}
-                minHeight={420}
+                minHeight={560}
+                readable
               />
             )}
 
@@ -604,8 +601,8 @@ export default function TemplatesDocsTab() {
           </div>
         </div>
 
-        {/* COLUNA DIREITA — Placeholders + Histórico */}
-        <div className="col-span-12 md:col-span-3 space-y-4">
+        {/* COLUNA LATERAL — Placeholders + Histórico (estreita) */}
+        <div className="col-span-12 lg:col-span-3 space-y-4">
           <div className="bg-white border rounded-lg overflow-hidden">
             <div className="px-3 py-2 bg-gray-50 border-b text-xs font-semibold text-gray-600 uppercase flex items-center gap-1">
               <Search className="w-3.5 h-3.5" /> Placeholders disponíveis

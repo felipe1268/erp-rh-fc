@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2749 — **CONFIGURAÇÕES · CENTRAL DE DOCUMENTOS: LAYOUT REDESENHADO PARA LEITURA — LISTA DE TEMPLATES SAIU DA
+ * LATERAL E FOI PRO TOPO (SELETOR HORIZONTAL), E A ÁREA DE TEXTO FICOU MUITO MAIS LARGA E CONFORTÁVEL DE LER.**
+ *
+ * PEDIDO (Felipe, print da tela): "quero um layout mais agradável que facilite a visualização e leitura; o texto está
+ * comprimido, não dá pra ler direito; faça de forma que dê pra ler o texto na tela toda; eu tiraria da lateral os
+ * templates e colocaria tudo no topo, deixando a área de texto mais larga e fácil leitura". O layout anterior era
+ * master-detail em 3 colunas (3/6/3): lista dos 7 documentos à ESQUERDA, ficha ISO + editor no CENTRO (só 6/12 ≈ 50%
+ * da largura) e placeholders/histórico à DIREITA — o editor ficava estreito e o texto apertado.
+ *
+ * MUDANÇA (SÓ CLIENT/UI; ZERO SERVER/SCHEMA; ZERO ALTER/DROP/DELETE — R-001/R-007/R-010):
+ *   (1) `client/src/pages/configuracoes/TemplatesDocsTab.tsx` — a antiga COLUNA ESQUERDA virou um SELETOR HORIZONTAL no
+ *       TOPO: um card full-width com a busca por nome/código + os chips de filtro de status numa linha, e abaixo os 7
+ *       documentos como cards horizontais (`flex flex-wrap`), cada um com ícone, título, selo de status ISO e Rev. O
+ *       card ativo ganha realce azul (`ring`). Com a lista fora da lateral, o grid principal passou de 3/6/3 para
+ *       **9/3**: o editor (ficha ISO + área de texto) agora ocupa `lg:col-span-9` (~75% da largura) e os
+ *       placeholders/histórico foram para uma coluna lateral estreita `lg:col-span-3`. Toda a LÓGICA (estados, queries,
+ *       mutations, handlers, gate ISO, IA, busca de placeholders, histórico) ficou intacta — mudou só a disposição.
+ *   (2) `client/src/components/RichTextEditor.tsx` — nova prop OPCIONAL `readable` (default `false`, então
+ *       `ComunicadosInternos.tsx` NÃO muda): quando ligada, troca a tipografia de `prose-sm` (0.875rem) para
+ *       `prose-base` com `leading-relaxed` e limita a largura da linha a ~820px centralizada (medida de leitura
+ *       confortável, evitando linhas longas demais numa área agora bem larga). O editor da Central de Documentos passou
+ *       a usar `readable` e `minHeight={560}` (era 420); o painel de Preview recebeu a mesma tipografia/limite de linha.
+ *
+ * VALIDAÇÃO: esbuild parse (stdin) EXIT 0 em `TemplatesDocsTab.tsx` e `RichTextEditor.tsx`; `vitest run
+ * server/rescisao.test.ts` 41/41 verde. (Screenshot do preview cai na tela de login — validação visual depende de auth.)
+ *
+ * ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2748 — **TESTES · CENTRAL DE DOCUMENTOS ISO: GATE DE APROVAÇÃO GANHOU COBERTURA AUTOMATIZADA (REGRESSÃO).**
  *
  * PEDIDO (Task #60): o gate ISO da Central de Documentos (editar via `save` OU restaurar via `restoreVersion` um

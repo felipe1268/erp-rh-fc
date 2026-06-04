@@ -31,6 +31,8 @@ type Props = {
   onChange: (html: string) => void;
   readOnly?: boolean;
   minHeight?: number;
+  /** Tipografia mais larga/confortável para leitura (fonte maior, espaçamento). */
+  readable?: boolean;
 };
 
 function ToolbarButton({
@@ -57,7 +59,7 @@ function Sep() {
 }
 
 const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichTextEditor(
-  { value, onChange, readOnly, minHeight = 420 }, ref
+  { value, onChange, readOnly, minHeight = 420, readable = false }, ref
 ) {
   const editor = useEditor({
     extensions: [
@@ -163,7 +165,7 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, Props>(function RichText
       )}
       <EditorContent
         editor={editor}
-        className="prose prose-sm max-w-none p-4 focus:outline-none [&_.ProseMirror]:outline-none [&_.ProseMirror]:min-h-[var(--min-h)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-gray-400 [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0"
+        className={`prose ${readable ? "prose-base leading-relaxed [&_.ProseMirror]:leading-relaxed [&_.ProseMirror>*]:max-w-[820px] [&_.ProseMirror>*]:mx-auto px-6 py-5" : "prose-sm p-4"} max-w-none focus:outline-none [&_.ProseMirror]:outline-none [&_.ProseMirror]:min-h-[var(--min-h)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-gray-400 [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0`}
         style={{ ["--min-h" as any]: `${minHeight}px` }}
       />
     </div>
