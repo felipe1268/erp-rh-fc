@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2748 — **TESTES · CENTRAL DE DOCUMENTOS ISO: GATE DE APROVAÇÃO GANHOU COBERTURA AUTOMATIZADA (REGRESSÃO).**
+ *
+ * PEDIDO (Task #60): o gate ISO da Central de Documentos (editar via `save` OU restaurar via `restoreVersion` um
+ * documento VIGENTE deve rebaixá-lo para `rascunho` e LIMPAR a aprovação, de modo que `getVigente` pare de entregá-lo
+ * até nova `aprovar`) só era coberto por revisão manual. Sem teste automatizado, uma regressão futura poderia voltar a
+ * publicar texto institucional sem aprovação formal. Esta revisão adiciona testes que travam esse comportamento.
+ *
+ * MUDANÇA:
+ *   - NOVO `server/systemDocumentTemplatesGate.test.ts` (vitest), cobrindo: (a) `save` com mudança de conteúdo num
+ *     VIGENTE → status `rascunho` + `aprovadoPorId/Nome/Em`=null + `getVigente` retorna `vigente:false`/`conteudoHtml:null`
+ *     → só volta a `vigente:true` após `aprovar` (com o conteúdo editado); (b) `save` SEM mudança de conteúdo NÃO rebaixa
+ *     (continua vigente); (c) `restoreVersion` num VIGENTE rebaixa p/ `rascunho`, limpa a aprovação, e após `aprovar`
+ *     volta a circular com o CONTEÚDO RESTAURADO da versão escolhida; (d) documento `obsoleto` também não é entregue.
+ *
+ * ABORDAGEM (drift documentado): o teste replica a lógica do gate em funções puras que ESPELHAM o código real de
+ * `server/routers/systemDocumentTemplates.ts` (procedures `save`/`restoreVersion`/`getVigente`/`aprovar`), seguindo o
+ * MESMO padrão de `server/rescisao.test.ts` (apontado pela própria task como referência). Optou-se por isso porque, no
+ * ambiente vitest atual (v2.1.9), importar QUALQUER router quebra com `__vite_ssr_exportName__ is not defined` (bug de
+ * instrumentação do transform SSR — confirmado afetando inclusive os testes de router PRÉ-EXISTENTES, ex.
+ * `processosTrabalhistas.test.ts` e `medicosClinicas.test.ts`, e independente de `vi.mock`). Tentativas de exercitar o
+ * router real com banco em memória (mock de `./db` + `drizzle-orm`) esbarraram nesse mesmo bug. Os espelhos puros do
+ * teste precisam ser mantidos em sincronia com o router; o arquivo documenta isso em comentário. ZERO mudança de
+ * código de produção — R-001/R-007/R-010 (nenhum ALTER/DROP/DELETE; nada tocado no servidor/cliente/schema).
+ *
+ * FOLLOW-UP (não nesta rev.): quando o harness vitest for corrigido (bug `__vite_ssr_exportName__`), valeria um teste
+ * de integração exercitando o router real ponta-a-ponta para fechar o gap entre o espelho e a implementação.
+ *
+ * VALIDAÇÃO: `vitest run server/systemDocumentTemplatesGate.test.ts` 4/4 verde; rodando junto com a suíte de referência
+ * `server/rescisao.test.ts` → 45/45 verde.
+ *
+ * ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2747 — **CONFIGURAÇÕES · CENTRAL DE DOCUMENTOS (TEMPLATES DE DOCUMENTOS) VIROU FONTE OFICIAL ISO: CONTROLE
  * DE REVISÃO COMPLETO (CÓDIGO/STATUS/ELABORADO/APROVADO/VIGÊNCIA), SEED DOS 7 TIPOS, PLACEHOLDERS PESQUISÁVEIS,
  * IA (LER PDF→SUGERIR / GERAR DO ZERO→VALIDAR) E OS GERADORES DE CONTRATO DE EXPERIÊNCIA + TERMO DE RESPONSABILIDADE
