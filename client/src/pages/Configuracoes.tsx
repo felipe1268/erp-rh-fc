@@ -15,6 +15,7 @@ import FullScreenDialog from "@/components/FullScreenDialog";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useModuleConfig } from "@/contexts/ModuleConfigContext";
 import GoldenRulesPanel from "@/components/GoldenRulesPanel";
+import EmployeeCombobox from "@/components/EmployeeCombobox";
 import BeneficiosAlimentacaoTab from "@/components/BeneficiosAlimentacaoTab";
 import { ComprasConfigSection } from "@/pages/configuracoes/ComprasConfigSection";
 import { FinanceiroConfigSection } from "@/pages/configuracoes/FinanceiroConfigSection";
@@ -1228,6 +1229,7 @@ function GestoresContratoTab({ companyId }: { companyId: number }) {
   const utils = trpc.useUtils();
   const gestoresQuery = trpc.companies.getGestoresContrato.useQuery({ companyId }, { enabled: companyId > 0 });
   const empQuery = trpc.employees.list.useQuery({ companyId }, { enabled: companyId > 0 });
+  const funcoesQuery = trpc.jobFunctions.list.useQuery({ companyId }, { enabled: companyId > 0 });
   const salvarMut = trpc.companies.salvarGestoresContrato.useMutation({
     onSuccess: () => { toast.success("Gestores salvos com sucesso!"); utils.companies.getGestoresContrato.invalidate(); },
     onError: (e: any) => toast.error("Erro: " + e.message),
@@ -1244,6 +1246,30 @@ function GestoresContratoTab({ companyId }: { companyId: number }) {
   }, [gestoresQuery.data]);
 
   const ativos = useMemo(() => (empQuery.data || []).filter((e: any) => (e.status || "").toLowerCase() === "ativo").sort((a: any, b: any) => (a.nomeCompleto || "").localeCompare(b.nomeCompleto || "", "pt-BR")), [empQuery.data]);
+
+  // Rev. 2746 — Nestes seletores só se enquadram funções da categoria INDIRETA
+  // (jobFunctions.categoriaMO = "indireta_obra" | "escritorio_central"). Mão de
+  // obra direta (pedreiro, servente, armador...) não serve como gestor/testemunha.
+  const catByFn = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const f of (funcoesQuery.data || []) as any[]) {
+      if (f?.nome) m.set(String(f.nome).trim().toUpperCase(), String(f.categoriaMO || "").toLowerCase());
+    }
+    return m;
+  }, [funcoesQuery.data]);
+  const isIndireta = (funcao?: string | null) => {
+    const c = catByFn.get(String(funcao || "").trim().toUpperCase()) || "";
+    return c === "indireta_obra" || c === "escritorio_central";
+  };
+  const ativosIndiretos = useMemo(() => ativos.filter((e: any) => isIndireta(e.funcao || e.cargo)), [ativos, catByFn]);
+  // Mantém o gestor já salvo visível mesmo que sua função não seja indireta.
+  const withSelected = (base: any[], selId: string) => {
+    if (!selId || base.some((e: any) => String(e.id) === selId)) return base;
+    const sel = ativos.find((e: any) => String(e.id) === selId);
+    return sel ? [sel, ...base] : base;
+  };
+  const optsFin = useMemo(() => withSelected(ativosIndiretos, finId), [ativosIndiretos, finId, ativos]);
+  const optsProj = useMemo(() => withSelected(ativosIndiretos, projId), [ativosIndiretos, projId, ativos]);
 
   const handleSalvar = () => {
     const finEmp = ativos.find((e: any) => String(e.id) === finId);
@@ -1265,7 +1291,7 @@ function GestoresContratoTab({ companyId }: { companyId: number }) {
           Gestores para Contratos de Terceiros
         </CardTitle>
         <CardDescription>
-          Defina os colaboradores que serão automaticamente preenchidos como testemunhas nos contratos de terceiros (Testemunha Financeiro e Gestor de Projeto).
+          Defina os colaboradores que serão automaticamente preenchidos como testemunhas nos contratos de terceiros (Testemunha Financeiro e Gestor de Projeto). Apenas funções da categoria <strong>indireta</strong> aparecem na lista; digite o nome para filtrar.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -1275,17 +1301,12 @@ function GestoresContratoTab({ companyId }: { companyId: number }) {
               <DollarSign className="w-4 h-4 text-green-600" />
               Gestor Financeiro (Testemunha)
             </Label>
-            <Select value={finId || "__none__"} onValueChange={(v) => setFinId(v === "__none__" ? "" : v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o gestor financeiro..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">Nenhum</SelectItem>
-                {ativos.map((e: any) => (
-                  <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto} — {e.funcao || "Sem função"}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <EmployeeCombobox
+              value={finId}
+              onChange={setFinId}
+              options={optsFin}
+              placeholder="Selecione o gestor financeiro..."
+            />
             {gestoresQuery.data?.gestorFinanceiroNome && (
               <p className="text-xs text-muted-foreground">Atual: {gestoresQuery.data.gestorFinanceiroNome}</p>
             )}
@@ -1295,17 +1316,12 @@ function GestoresContratoTab({ companyId }: { companyId: number }) {
               <Hammer className="w-4 h-4 text-blue-600" />
               Gestor de Projeto (Testemunha)
             </Label>
-            <Select value={projId || "__none__"} onValueChange={(v) => setProjId(v === "__none__" ? "" : v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o gestor de projeto..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">Nenhum</SelectItem>
-                {ativos.map((e: any) => (
-                  <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto} — {e.funcao || "Sem função"}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <EmployeeCombobox
+              value={projId}
+              onChange={setProjId}
+              options={optsProj}
+              placeholder="Selecione o gestor de projeto..."
+            />
             {gestoresQuery.data?.gestorProjetoNome && (
               <p className="text-xs text-muted-foreground">Atual: {gestoresQuery.data.gestorProjetoNome}</p>
             )}

@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2746 — **CONFIGURAÇÕES · TERCEIROS · "GESTORES PARA CONTRATOS DE TERCEIROS": OS DOIS SELETORES (GESTOR
+ * FINANCEIRO / GESTOR DE PROJETO) VIRARAM CAMPOS PESQUISÁVEIS POR NOME E PASSARAM A LISTAR SOMENTE COLABORADORES
+ * CUJA FUNÇÃO É DA CATEGORIA INDIRETA — SUMIU A MÃO DE OBRA DIRETA (PEDREIRO, SERVENTE, ARMADOR...).**
+ *
+ * PEDIDO (Felipe — print da tela Configurações > Terceiros/Gestores): os dois dropdowns listavam TODOS os
+ * colaboradores ativos, inclusive mão de obra direta, o que poluía a lista e permitia escolher alguém que não
+ * faz sentido como gestor/testemunha de contrato. Pediu (1) poder DIGITAR o nome para filtrar e (2) que "nestas
+ * só se enquadram as funções da categoria indiretas".
+ *
+ * CAUSA/CONTEXTO (`client/src/pages/Configuracoes.tsx` — `GestoresContratoTab`): os dois `<Select>` shadcn mapeavam
+ * o memo `ativos` (todos os ativos via `trpc.employees.list`) sem nenhuma classificação de categoria. O endpoint
+ * `employees.list` (`getEmployees` em `server/db.ts`) NÃO retorna `categoria`; a classificação Direto/Indireto vive
+ * em `jobFunctions.categoriaMO` (`indireta_obra` | `escritorio_central` → Indireto; senão Direto — mesma regra de
+ * `categoriaDe` em `getEquipeObra`).
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SERVER/SCHEMA; ZERO ALTER/DROP/DELETE — R-001/R-007/R-010):
+ *   (1) NOVO componente `client/src/components/EmployeeCombobox.tsx` — combobox pesquisável (Popover + cmdk),
+ *       busca por nome acento/caixa-insensitive, item "— Nenhum —" para limpar e "×" no trigger. Reaproveita o
+ *       MESMO padrão do `FuncaoCombobox`/`PlanoDeContaCombobox` já usados no app.
+ *   (2) `GestoresContratoTab` ganhou `trpc.jobFunctions.list` → monta `catByFn` (nome UPPER/trim → categoriaMO) →
+ *       `isIndireta()` → `ativosIndiretos` (filtra `ativos` para só categoria indireta). Os dois `<Select>` foram
+ *       trocados pelo `<EmployeeCombobox>` recebendo `optsFin`/`optsProj`.
+ *   (3) SALVAGUARDA: `withSelected()` reinclui o gestor JÁ SALVO na lista mesmo que sua função não seja indireta
+ *       (ex.: cadastro legado), pra ele não sumir do seletor; o `handleSalvar` (resolve nome/id em `ativos`) é
+ *       preservado intacto. CardDescription atualizada avisando "apenas funções da categoria indireta".
+ *
+ * RESSALVA: função NÃO cadastrada em `jobFunctions` (ou sem `categoriaMO`) cai como Direto por padrão e é filtrada
+ * — comportamento desejado (estrito a indiretas), exceto pelo gestor já salvo que a salvaguarda preserva.
+ *
+ * VALIDAÇÃO: esbuild parse (stdin) EXIT 0 em `EmployeeCombobox.tsx` e `Configuracoes.tsx`; `vitest server/rescisao.test.ts`
+ * 41/41 verde; app rodando.
+ *
  * Rev. 2745 — **CONFIGURAÇÕES · BACKUP & SINCRONIZAÇÃO: BACKUP MANUAL/AUTOMÁTICO, HISTÓRICO E SAÚDE VOLTARAM A
  * FUNCIONAR — TODO O SQL DO SERVIÇO E O SELF-HEAL ESTAVAM EM snake_case ENQUANTO A TABELA `backups` NO NEON É
  * camelCase (`column "iniciado_por" does not exist`, `column "tabelasTotal" does not exist`).**
