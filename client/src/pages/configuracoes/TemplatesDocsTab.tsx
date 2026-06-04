@@ -24,7 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   FileSignature, ShieldCheck, Megaphone, AlertTriangle, BellRing,
   UserX, Hammer, Save, History, RotateCcw, Eye, FileText, Search, Info, Loader2,
-  XCircle, Sparkles, Upload, BadgeCheck, FilePlus2, Undo2,
+  XCircle, Sparkles, Upload, BadgeCheck, FilePlus2, Undo2, Printer,
 } from "lucide-react";
 import RichTextEditor, { type RichTextEditorHandle } from "@/components/RichTextEditor";
 import {
@@ -32,12 +32,69 @@ import {
   renderTemplate,
   getDocMetaOrFallback,
   type DocumentTemplateTipo,
+  type DocumentTemplateMeta,
   type PlaceholderDef,
 } from "@shared/documentTemplates";
+import { buildFcDocument } from "@/lib/fcDocumentTemplate";
 
 const ICON_MAP: Record<string, any> = {
   FileSignature, ShieldCheck, Megaphone, AlertTriangle, BellRing, UserX, Hammer,
 };
+
+// XSS hardening do corpo antes de injetar no documento institucional.
+const SANITIZE_OPTS = {
+  FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "input", "button", "link", "meta", "base"],
+  FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur", "onchange", "onsubmit", "formaction"],
+  ALLOW_DATA_ATTR: false,
+} as const;
+
+/**
+ * Rev. 2752 — Monta o HTML COMPLETO de um documento da Central exatamente como
+ * os geradores dos 7 docs fixos produzem: cabeçalho FC (logo + razão social +
+ * CNPJ + endereço), faixa azul com o título, linha Nº/Data, bloco ASSUNTO,
+ * corpo, assinaturas (2 partes + testemunhas), rodapé e @page A4 (margens
+ * 25mm/15mm) — via `buildFcDocument`. O corpo é renderizado com os dados de
+ * EXEMPLO dos placeholders e sanitizado (DOMPurify) antes de ser injetado.
+ *
+ * Usado tanto na pré-visualização (iframe srcDoc, isolado do CSS do app) quanto
+ * na impressão (window.open), garantindo que o que se vê = o que se imprime,
+ * 100% fiel ao modelo institucional. Empresa vem dos exemplos dos placeholders
+ * (já são os dados reais da FC); logo sempre com fallback ${origin}/logo-fc.jpg.
+ */
+function buildFcPreviewHtml(bodyHtml: string, meta: DocumentTemplateMeta, geradoPor: string): string {
+  if (!bodyHtml) return "";
+  const dados: Record<string, string> = {};
+  meta.placeholders.forEach(p => { dados[p.chave] = p.exemplo; });
+  const corpo = DOMPurify.sanitize(renderTemplate(bodyHtml, dados), SANITIZE_OPTS);
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const hoje = new Date();
+  const dataBr = hoje.toLocaleDateString("pt-BR");
+  const razao = dados.empresaRazaoSocial || "FC ENGENHARIA E CONSTRUCAO LTDA";
+  return buildFcDocument({
+    empresa: {
+      razaoSocial: razao,
+      cnpj: dados.empresaCnpj || "",
+      endereco: dados.empresaEndereco || "",
+      logoUrl: `${origin}/logo-fc.jpg`,
+    },
+    titulo: meta.titulo,
+    numero: `001/${hoje.getFullYear()}`,
+    dataEmissao: dataBr,
+    assunto: { valor: meta.titulo },
+    corpoHtml: corpo,
+    assinaturas: {
+      localData: `Guaratinguetá - SP, ${dataBr}`,
+      partes: [
+        { nome: razao, subtitulo: dados.empresaCnpj ? `CNPJ: ${dados.empresaCnpj}` : undefined },
+        { nome: dados.empNome || "Colaborador(a)", subtitulo: dados.empCpf ? `CPF: ${dados.empCpf}` : undefined },
+      ],
+      testemunhas: true,
+    },
+    geradoPor,
+    pageTitle: meta.titulo,
+    logoSrc: `${origin}/logo-fc.jpg`,
+  });
+}
 
 function formatDataHora(iso?: string | null) {
   if (!iso) return "—";
@@ -277,18 +334,12 @@ export default function TemplatesDocsTab() {
     onError: (e) => toast.error(e.message || "Falha ao criar documento."),
   });
 
-  // Preview com dados de exemplo — XSS hardening via DOMPurify.
-  const previewHtml = useMemo(() => {
-    if (!conteudoEditado) return "";
-    const dadosExemplo: Record<string, string> = {};
-    meta.placeholders.forEach(p => { dadosExemplo[p.chave] = p.exemplo; });
-    const rendered = renderTemplate(conteudoEditado, dadosExemplo);
-    return DOMPurify.sanitize(rendered, {
-      FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "input", "button", "link", "meta", "base"],
-      FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur", "onchange", "onsubmit", "formaction"],
-      ALLOW_DATA_ATTR: false,
-    });
-  }, [conteudoEditado, meta]);
+  // Rev. 2752 — Preview = documento institucional COMPLETO (cabeçalho/logo/faixa/
+  // margens/assinaturas), idêntico à impressão. Renderizado em <iframe srcDoc>.
+  const previewHtml = useMemo(
+    () => buildFcPreviewHtml(conteudoEditado, meta, user?.name || "Sistema"),
+    [conteudoEditado, meta, user]
+  );
 
   // Placeholders agrupados + filtrados pela busca
   const placeholdersPorGrupo = useMemo(() => {
@@ -378,6 +429,20 @@ export default function TemplatesDocsTab() {
     e.target.value = "";
   };
 
+  // Rev. 2752 — Abre o documento institucional COMPLETO numa janela isolada e
+  // dispara a impressão (réplica exata do que será impresso/lido).
+  const handleImprimir = () => {
+    const html = buildFcPreviewHtml(conteudoEditado, meta, user?.name || "Sistema");
+    if (!html) { toast.error("Sem conteúdo para imprimir."); return; }
+    const w = window.open("", "_blank");
+    if (!w) { toast.error("Permita pop-ups para imprimir o documento."); return; }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    w.addEventListener("load", () => setTimeout(() => { try { w.print(); } catch { /* usuário imprime manualmente */ } }, 350));
+  };
+
   const handleCriarNovo = () => {
     if (novoTitulo.trim().length < 3) { toast.error("Informe um título (mín. 3 caracteres)."); return; }
     if (!novoConteudo || novoConteudo.replace(/<[^>]*>/g, "").trim().length < 5) {
@@ -387,17 +452,12 @@ export default function TemplatesDocsTab() {
     criarNovoMut.mutate({ titulo: novoTitulo.trim(), codigo: novoCodigo || undefined, conteudoHtml: novoConteudo });
   };
 
-  // Preview seguro do conteúdo gerado no modal (placeholders renderizados c/ exemplo).
-  const novoPreviewHtml = useMemo(() => {
-    if (!novoConteudo) return "";
-    const dados: Record<string, string> = {};
-    getDocMetaOrFallback("", novoTitulo).placeholders.forEach(p => { dados[p.chave] = p.exemplo; });
-    return DOMPurify.sanitize(renderTemplate(novoConteudo, dados), {
-      FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "input", "button", "link", "meta", "base"],
-      FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur", "onchange", "onsubmit", "formaction"],
-      ALLOW_DATA_ATTR: false,
-    });
-  }, [novoConteudo, novoTitulo]);
+  // Rev. 2752 — Preview do modal "Novo Documento" = documento institucional
+  // COMPLETO (mesmo wrapper da impressão), renderizado em <iframe srcDoc>.
+  const novoPreviewHtml = useMemo(
+    () => buildFcPreviewHtml(novoConteudo, getDocMetaOrFallback("", novoTitulo), user?.name || "Sistema"),
+    [novoConteudo, novoTitulo, user]
+  );
 
   const visualizandoVersaoAntiga = versaoVisualizada != null && getQuery.data?.template?.versaoAtual && versaoVisualizada !== getQuery.data.template.versaoAtual;
   const iaSt = iaStatusQuery.data;
@@ -567,6 +627,14 @@ export default function TemplatesDocsTab() {
                 <Button variant="outline" size="sm" onClick={() => setMostrarPreview(v => !v)}>
                   <Eye className="w-4 h-4 mr-1" /> {mostrarPreview ? "Editor" : "Preview"}
                 </Button>
+                <Button
+                  variant="outline" size="sm"
+                  onClick={handleImprimir}
+                  disabled={!conteudoEditado || conteudoEditado === "<p></p>"}
+                  title="Abrir o documento institucional completo (cabeçalho, logo, faixa, margens) para impressão"
+                >
+                  <Printer className="w-4 h-4 mr-1" /> Imprimir
+                </Button>
               </div>
               <div className="flex items-center gap-2">
                 <Button
@@ -658,7 +726,14 @@ export default function TemplatesDocsTab() {
                 <Loader2 className="w-5 h-5 animate-spin mr-2" /> Carregando...
               </div>
             ) : mostrarPreview ? (
-              <div className="border rounded-lg bg-white px-6 py-5 prose prose-base leading-relaxed max-w-none min-h-[560px] [&>*]:max-w-[820px] [&>*]:mx-auto" dangerouslySetInnerHTML={{ __html: previewHtml || "<p class='text-gray-400'>Sem conteúdo.</p>" }} />
+              <div className="border rounded-lg bg-gray-100 p-3">
+                <iframe
+                  title="Pré-visualização do documento institucional"
+                  srcDoc={previewHtml || "<p style='color:#9ca3af;font-family:sans-serif;padding:24px'>Sem conteúdo.</p>"}
+                  sandbox="allow-same-origin"
+                  className="w-full h-[760px] bg-white rounded shadow-sm border-0"
+                />
+              </div>
             ) : (
               <RichTextEditor
                 ref={editorRef}
@@ -859,8 +934,15 @@ export default function TemplatesDocsTab() {
 
               {novoConteudo && (
                 <div>
-                  <div className="text-[11px] font-medium text-gray-600 mb-1 flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> Pré-visualização (placeholders com dados de exemplo)</div>
-                  <div className="border rounded-lg bg-white px-5 py-4 prose prose-sm max-w-none max-h-[40vh] overflow-y-auto" dangerouslySetInnerHTML={{ __html: novoPreviewHtml }} />
+                  <div className="text-[11px] font-medium text-gray-600 mb-1 flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> Pré-visualização fiel à impressão (cabeçalho, logo, faixa e margens · placeholders com dados de exemplo)</div>
+                  <div className="border rounded-lg bg-gray-100 p-2">
+                    <iframe
+                      title="Pré-visualização do novo documento"
+                      srcDoc={novoPreviewHtml}
+                      sandbox="allow-same-origin"
+                      className="w-full h-[46vh] bg-white rounded shadow-sm border-0"
+                    />
+                  </div>
                   <p className="text-[11px] text-gray-500 mt-1">Após criar, o documento abre no editor para você ajustar e aprovar (ficará como Rascunho).</p>
                 </div>
               )}

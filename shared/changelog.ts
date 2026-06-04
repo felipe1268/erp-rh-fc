@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2752 — **CONFIGURAÇÕES · CENTRAL DE DOCUMENTOS: A PRÉ-VISUALIZAÇÃO (E A NOVA IMPRESSÃO) AGORA SAEM 100% FIÉIS AO
+ * MODELO INSTITUCIONAL FC — CABEÇALHO, LOGO, FAIXA AZUL, MARGENS, TIPOGRAFIA E ASSINATURAS — IGUAL AO QUE SERÁ IMPRESSO.**
+ *
+ * PEDIDO (Felipe): "aqui precisa vir com todas as formatações que já tem hoje — cabeçalho, logo... mantenha a réplica
+ * exata do que o usuário vai ler para impressão... margem, tipo de texto, posição do logo, modelo... quero tudo 100%
+ * fiel ao modelo que já temos hoje". O preview da Central (tanto do documento selecionado quanto do modal "Novo
+ * Documento" da Rev. 2751) só mostrava o CORPO bruto num `<div class="prose">` — SEM cabeçalho, logo, faixa azul,
+ * margens nem assinaturas. Os 7 docs fixos recebem esse envelope institucional dos GERADORES (via `buildFcDocument`);
+ * docs custom não passam por gerador, então o usuário não tinha como ver/imprimir o documento como ele realmente sai.
+ *
+ * MUDANÇA (SÓ CLIENT/UI; ZERO SCHEMA; ZERO SERVER; ZERO ALTER/DROP/DELETE — R-001/R-007/R-010):
+ *   Arquivo único `client/src/pages/configuracoes/TemplatesDocsTab.tsx`:
+ *   (1) NOVO helper puro `buildFcPreviewHtml(bodyHtml, meta, geradoPor)` que monta o documento COMPLETO via
+ *       `buildFcDocument` (mesmo wrapper canônico usado pelos geradores): cabeçalho com logo (64px, fallback
+ *       `${origin}/logo-fc.jpg`), razão social #1B2A4A, CNPJ/endereço, faixa azul com o título, linha Nº/Data, bloco
+ *       ASSUNTO, corpo, assinaturas (2 partes + testemunhas + local/data) e rodapé, com `@page A4 margin 25mm 15mm`.
+ *       O corpo é renderizado com os DADOS DE EXEMPLO dos placeholders (que para a empresa já são os dados reais da FC:
+ *       razão social, CNPJ, endereço) e SANITIZADO (DOMPurify, mesmas FORBID_TAGS/ATTR de antes) antes de ser injetado
+ *       (buildFcDocument injeta o corpo RAW). Constante `SANITIZE_OPTS` extraída p/ reuso.
+ *   (2) `previewHtml` (doc selecionado) e `novoPreviewHtml` (modal) passaram a chamar `buildFcPreviewHtml` (antes só
+ *       sanitizavam o corpo). Como o retorno agora é um `<!DOCTYPE html>` COMPLETO (com `<style>`/@page próprios),
+ *       a renderização migrou de `<div dangerouslySetInnerHTML>` para `<iframe srcDoc sandbox="allow-same-origin">`
+ *       (isola do CSS/Tailwind do app, sem scripts) — tanto no editor (h-760px) quanto no modal (h-46vh).
+ *   (3) NOVO botão "Imprimir" na barra do editor (ao lado de Preview): `handleImprimir` abre `window.open`, escreve o
+ *       mesmo HTML do `buildFcPreviewHtml` e dispara `print()` após o load (réplica exata da impressão). Desabilitado
+ *       quando o corpo está vazio; avisa se o pop-up for bloqueado.
+ *
+ * RESSALVA: o preview usa os VALORES DE EXEMPLO dos placeholders (o documento real, preenchido com dados de um
+ * colaborador/obra, continua sendo produzido pelos geradores dos 7 tipos fixos; docs custom seguem avulsos, fora dos
+ * geradores — Rev. 2751). Assinaturas no preview são genéricas (empresa + colaborador + 2 testemunhas), suficientes
+ * para a fidelidade visual do modelo. Nenhuma alteração de schema, router ou seed.
+ *
+ * VALIDAÇÃO: `npx esbuild --loader=tsx` parseou o arquivo (EXIT 0) sem imports órfãos; `vitest server/rescisao.test.ts`
+ * 41/41 verde; architect review.
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2751 — **CONFIGURAÇÕES · CENTRAL DE DOCUMENTOS: AGORA DÁ PRA CRIAR DOCUMENTOS NOVOS (ALÉM DOS 7 FIXOS) VIA IA —
  * SUBINDO UM PDF MODELO OU DIGITANDO O ASSUNTO.**
  *
