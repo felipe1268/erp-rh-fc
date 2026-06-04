@@ -116,3 +116,5 @@ package-lock.json
 server/uploads/documentos/
 # Vehicle documents (CRLV, comprovante de compra, laudo) — sensitive, must NOT be versioned
 server/uploads/vehicles/
+# Employee photos (fotos 3x4 de colaboradores) — PII, must NOT be versioned
+server/uploads/photos/
