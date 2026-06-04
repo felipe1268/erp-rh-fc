@@ -40,6 +40,19 @@ other tables created via raw `CREATE TABLE` (e.g. `backup_snapshots`) ARE
 snake_case and self-consistent — check how each table was actually created before
 assuming a convention.
 
+**The reverse trap (timestamp default columns):** a table created via raw
+`CREATE TABLE` with snake_case `created_at`/`updated_at`, but whose Drizzle schema
+declares `createdAt: timestamp({ mode: 'string' })` (NO name arg), makes Drizzle
+emit `"createdAt"` in `db.select()` → `column "createdAt" does not exist`, breaking
+EVERY proc on that table (list/get/save). Fix = give the schema column an explicit
+snake name: `timestamp("created_at", ...)`. Watch the auto-default columns
+(`createdAt`/`updatedAt`) specifically — they're the ones people leave unnamed.
+Also: `[SyncSchema]` auto-introspection does NOT add missing columns to a
+PRE-EXISTING table here (it logged "todas as colunas OK" while 9 ISO columns were
+absent) — always add explicit `[SyncSchema+]` ALTER guards AND extend the
+`CREATE TABLE IF NOT EXISTS` DDL for fresh DBs; verify by introspecting Neon after
+a restart, never trust the "all OK" log.
+
 **Inspecting REAL app data:** the app reads `NEON_DATABASE_URL`. The `executeSql`
 tool hits a different (Replit) Postgres. To query the real Neon DB, run a node
 script via bash: `new Pool({ connectionString: process.env.NEON_DATABASE_URL,

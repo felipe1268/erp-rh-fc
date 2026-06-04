@@ -18,6 +18,8 @@ import FullScreenDialog from "@/components/FullScreenDialog";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 import { formatCPF, formatMoeda, fmtNum } from "@/lib/formatters";
 import { removeAccents } from "@/lib/searchUtils";
+import { buildFcDocument } from "@/lib/fcDocumentTemplate";
+import { renderTemplate } from "@shared/documentTemplates";
 import {
   AlertTriangle, Plus, Search, Clock, Calendar, DollarSign,
   Users, Trash2, Pencil, Eye, X, FileText, ArrowRight,
@@ -70,6 +72,9 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const { user } = useAuth();
+  // Rev. 2747 — geradores consomem o template Vigente quando existir (fallback HTML atual).
+  const avisoTplQ = trpc.systemDocumentTemplates.getVigente.useQuery({ tipo: "aviso_previo" });
+  const rescisaoTplQ = trpc.systemDocumentTemplates.getVigente.useQuery({ tipo: "termo_rescisao" });
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("em_andamento");
   const [showDialog, setShowDialog] = useState(false);
@@ -584,6 +589,49 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
     const empSerie = emp.serieCtps || "";
     const empFuncao = (emp.cargo || emp.funcao || "").toUpperCase();
     const logoUrl = empresa.logoUrl || "";
+
+    // Rev. 2747 — quando há template Vigente (aviso_previo), o documento é montado
+    // a partir dele (renderTemplate → buildFcDocument). Sem Vigente, cai no HTML
+    // hard-coded abaixo (fallback EXATO, trabalhado/indenizado). `dados` é escapado
+    // (escV) porque o corpoHtml é injetado RAW por buildFcDocument.
+    const avisoVigenteHtml = avisoTplQ.data?.vigente ? avisoTplQ.data.conteudoHtml : null;
+    if (avisoVigenteHtml) {
+      const escV = (s: any) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" } as any)[c]);
+      const modalidade = isIndenizado ? "INDENIZADO" : "TRABALHADO";
+      const dados: Record<string, string> = {
+        empNome: escV(empNome), empCpf: escV(formatCPF(empCpf)),
+        empCtps: escV(empCtps + (empSerie ? ` / ${empSerie}` : "")),
+        empRg: "", empFuncao: escV(empFuncao), empMatricula: "", empAdmissao: "", empSalario: "",
+        empresaRazaoSocial: escV(empresaNome), empresaCnpj: escV(empresaCnpj),
+        empresaEndereco: escV([empresaEndereco, cidadeUf].filter(Boolean).join(" - ")),
+        docNumero: "—", docData: escV(fmtBR(dtAviso)), docLocal: escV(cidadeUf || empresaCidade),
+        modalidade, dataAviso: escV(fmtBR(dtAviso)),
+        dataDesligamento: escV(isIndenizado ? fmtBR(dtPagamento) : fmtBR(dtFim)), diasAviso: String(diasAviso),
+      };
+      const htmlVig = buildFcDocument({
+        empresa: { razaoSocial: empresaNome, cnpj: empresaCnpj, endereco: empresaEndereco, cidade: empresaCidade, estado: empresaUf, logoUrl },
+        titulo: `AVISO PRÉVIO ${modalidade}`,
+        numero: "—",
+        dataEmissao: fmtBR(dtAviso),
+        assunto: { label: "ASSUNTO:", valor: `Aviso Prévio ${modalidade} — ${empNome}` },
+        corpoHtml: renderTemplate(avisoVigenteHtml, dados),
+        assinaturas: {
+          partes: [
+            { nome: empresaNome, subtitulo: empresaCnpj ? `CNPJ: ${empresaCnpj}` : undefined },
+            { nome: empNome, subtitulo: "Ciente — Empregado(a)" },
+          ],
+          localData: cidadeUf ? `${cidadeUf}, ${fmtExtenso(dtAviso)}` : fmtExtenso(dtAviso),
+        },
+        geradoPor: user?.name || "Sistema",
+        pageTitle: `Aviso Prévio ${modalidade} — ${empNome}`,
+      });
+      const wv = window.open("", "_blank", "width=820,height=1100");
+      if (!wv) { toast.error("Popup bloqueado. Permita popups para gerar o documento."); return; }
+      wv.document.write(htmlVig);
+      wv.document.write(`<script>setTimeout(function(){window.print()},500)<\/script>`);
+      wv.document.close();
+      return;
+    }
 
     const w = window.open("", "_blank", "width=820,height=1100");
     if (!w) { toast.error("Popup bloqueado. Permita popups para gerar o documento."); return; }
@@ -2025,6 +2073,67 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                       toast.info('Gerando TRCT...');
                       const pdfDataRaw = await utils.avisoPrevio.avisoPrevio.gerarPdf.fetch({ id: selectedItem.id });
                       const pdfData = { ...pdfDataRaw, aviso: { ...pdfDataRaw.aviso, isPedidoDemissao } };
+
+                      // Rev. 2747 — quando há template Vigente (termo_rescisao), o documento é
+                      // montado a partir dele. {{verbasRescisao}} recebe a tabela de verbas
+                      // construída a partir do pdfData (markup controlado). Sem Vigente, cai no
+                      // TRCT hard-coded abaixo (fallback EXATO).
+                      const rescVigenteHtml = rescisaoTplQ.data?.vigente ? rescisaoTplQ.data.conteudoHtml : null;
+                      if (rescVigenteHtml) {
+                        const escR = (s: any) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" } as any)[c]);
+                        const prev: any = pdfData.previsaoRescisao || {};
+                        const tdL = 'style="border:1px solid #ccc;padding:4px 6px"';
+                        const tdR = 'style="border:1px solid #ccc;padding:4px 6px;text-align:right"';
+                        const rowV = (lbl: string, ref: string, val: string) => `<tr><td ${tdL}>${lbl}</td><td ${tdL}>${ref}</td><td ${tdR}>${val}</td></tr>`;
+                        const verbasTabela = `<table style="width:100%;border-collapse:collapse;font-size:10.5pt">
+  <thead><tr><th ${tdL}>Verba</th><th ${tdL}>Referência</th><th ${tdR}>Valor (R$)</th></tr></thead>
+  <tbody>
+    ${rowV("Saldo de Salário", `${prev.diasTrabalhadosMes || '-'}/${prev.diasReaisMes || 30} dias`, prev.saldoSalario || '0,00')}
+    ${rowV("Férias Proporcionais + 1/3", `${prev.mesesFerias || '-'} meses`, prev.totalFerias || '0,00')}
+    ${parseFloat(prev.feriasVencidas || '0') > 0 ? rowV("Férias Vencidas (em dobro)", `${prev.periodosVencidos || '-'} períodos`, prev.feriasVencidas) : ''}
+    ${rowV("VR Proporcional", `${prev.diasTrabalhadosMes || '-'} dias`, prev.vrProporcional || '0,00')}
+    ${rowV("13º Salário Proporcional", `${prev.meses13o || '-'}/12`, prev.decimoTerceiroProporcional || '0,00')}
+    ${pdfData.aviso.isPedidoDemissao ? '' : rowV("Aviso Prévio Indenizado", `${prev.diasExtrasAviso || '0'} dias extras`, prev.avisoPrevioIndenizado || '0,00')}
+    <tr style="font-weight:bold;background:#e8f5e9"><td colspan="2" ${tdL}>TOTAL BRUTO RESCISÃO</td><td ${tdR}>${prev.total || pdfData.valorEstimadoTotal || '0,00'}</td></tr>
+    ${parseFloat(prev.totalDescontos || '0') > 0 ? `<tr style="color:#c00"><td ${tdL}>(–) Subtotal Descontos</td><td ${tdL}>-</td><td ${tdR}>– ${prev.totalDescontos}</td></tr><tr style="font-weight:bold;background:#e6f7ec"><td colspan="2" ${tdL}>TOTAL LÍQUIDO A PAGAR</td><td ${tdR}>${prev.totalLiquido || prev.total || '0,00'}</td></tr>` : ''}
+  </tbody>
+</table>`;
+                        const dadosR: Record<string, string> = {
+                          empNome: escR(pdfData.funcionario.nome), empCpf: escR(pdfData.funcionario.cpf), empRg: "",
+                          empFuncao: escR(pdfData.funcionario.cargo), empMatricula: "",
+                          empAdmissao: pdfData.funcionario.dataAdmissao ? pdfData.funcionario.dataAdmissao.split('-').reverse().join('/') : "", empSalario: "",
+                          empresaRazaoSocial: escR(pdfData.empresa.nome), empresaCnpj: escR(pdfData.empresa.cnpj),
+                          empresaEndereco: escR([pdfData.empresa.endereco, pdfData.empresa.cidade, pdfData.empresa.estado].filter(Boolean).join(" - ")),
+                          docNumero: "—", docData: new Date().toLocaleDateString('pt-BR'), docLocal: escR(pdfData.empresa.cidade || ""),
+                          motivoRescisao: escR(pdfData.aviso.tipoLabel || (pdfData.aviso.isPedidoDemissao ? "Pedido de demissão" : "Rescisão sem justa causa")),
+                          dataRescisao: pdfData.aviso.dataFim ? pdfData.aviso.dataFim.split('-').reverse().join('/') : "",
+                          verbasRescisao: verbasTabela,
+                        };
+                        const htmlVig = buildFcDocument({
+                          empresa: { razaoSocial: pdfData.empresa.nome, cnpj: pdfData.empresa.cnpj, endereco: pdfData.empresa.endereco, cidade: pdfData.empresa.cidade, estado: pdfData.empresa.estado, logoUrl: (pdfData.empresa as any).logoUrl || "" },
+                          titulo: "TERMO DE RESCISÃO DO CONTRATO DE TRABALHO",
+                          numero: "—",
+                          dataEmissao: new Date().toLocaleDateString('pt-BR'),
+                          assunto: { label: "ASSUNTO:", valor: `Rescisão Contratual — ${pdfData.funcionario.nome}` },
+                          corpoHtml: renderTemplate(rescVigenteHtml, dadosR),
+                          assinaturas: {
+                            partes: [
+                              { nome: pdfData.empresa.nome, subtitulo: "Empregador" },
+                              { nome: pdfData.funcionario.nome, subtitulo: "Empregado(a)" },
+                            ],
+                          },
+                          geradoPor: user?.name || "Sistema",
+                          pageTitle: `Termo de Rescisão — ${pdfData.funcionario.nome}`,
+                        });
+                        const wv = window.open('', '_blank', 'width=800,height=1100');
+                        if (!wv) { toast.error('Popup bloqueado. Permita popups para gerar o PDF.'); return; }
+                        wv.document.write(htmlVig);
+                        wv.document.write(`<script>setTimeout(function(){window.print()},500)<\/script>`);
+                        wv.document.close();
+                        toast.success('Termo de rescisão gerado com sucesso!');
+                        return;
+                      }
+
                       const w = window.open('', '_blank', 'width=800,height=1100');
                       if (!w) { toast.error('Popup bloqueado. Permita popups para gerar o PDF.'); return; }
                       w.document.write(`<!DOCTYPE html><html><head><title>TRCT - ${pdfData.funcionario.nome}</title>

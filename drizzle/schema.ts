@@ -8775,8 +8775,11 @@ export const systemDocumentTemplates = pgTable("system_document_templates", {
   ativo: smallint().default(1).notNull(),
   atualizadoPorId: integer("atualizado_por_id"),
   atualizadoPorNome: varchar("atualizado_por_nome", { length: 255 }),
-  createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
-  updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+  // Rev. 2747 — nomes explícitos snake_case: a tabela no Neon foi criada (Rev. 2141)
+  // com created_at/updated_at; sem o nome explícito o Drizzle emitia "createdAt" e
+  // o db.select() quebrava com `column "createdAt" does not exist`.
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
   // ── Rev. 2747 — Controle ISO documental (aditivo; self-heal ADD COLUMN) ──
   // Códigos/estados/aprovação seguem a lógica de norma ISO 9001 (controle de
   // documentos). snake_case explícito p/ casar com o que o [SyncSchema] cria.
@@ -8801,7 +8804,8 @@ export const systemDocumentTemplateVersions = pgTable("system_document_template_
   comentario: text(),                                       // descrição do que mudou
   criadoPorId: integer("criado_por_id"),
   criadoPorNome: varchar("criado_por_nome", { length: 255 }),
-  createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+  // Rev. 2747 — nome explícito snake_case (mesmo motivo do template pai).
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
   uniqueIndex("uq_sys_doc_tpl_ver_tpl_versao").on(table.templateId, table.versao),
   index("idx_sys_doc_tpl_ver_tpl").on(table.templateId),

@@ -14,10 +14,19 @@
  * passem a usar o template VIGENTE quando existir, sem quebrar nada (fallback ao HTML hard-coded atual).
  *
  * MUDANÇAS:
- *   (1) SCHEMA (aditivo, self-heal — `drizzle/schema.ts`): `system_document_templates` ganhou os campos ISO
- *       `codigo`, `status`, `elaborado_por`/`elaborado_em`, `aprovado_por`/`aprovado_em`, `data_vigencia`,
- *       `proxima_revisao`. TODOS via `ADD COLUMN IF NOT EXISTS` no `[SyncSchema+]` (que de qualquer forma é 100%
- *       automático por introspecção do `information_schema`). ZERO destrutivo — R-001/R-007/R-010.
+ *   (1) SCHEMA (aditivo, self-heal — `drizzle/schema.ts` + `server/_core/index.ts`): `system_document_templates`
+ *       ganhou os campos ISO `codigo`, `status`, `elaborado_por_id`/`_nome`, `aprovado_por_id`/`_nome`, `aprovado_em`,
+ *       `data_vigencia`, `proxima_revisao`. IMPORTANTE — a introspecção automática do `[SyncSchema]` NÃO adicionou
+ *       essas colunas (a tabela já existia da Rev. 2141 e o boot seguia reportando "todas as colunas OK"), então foram
+ *       garantidas por `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` EXPLÍCITOS no bloco `[SyncSchema+]` do
+ *       `server/_core/index.ts` (a DDL `CREATE TABLE IF NOT EXISTS` também passou a incluí-las p/ bancos novos). ZERO
+ *       destrutivo — R-001/R-007/R-010.
+ *       BUG CORRIGIDO NA MESMA REV.: `getVigente`/`list`/`save` faziam `db.select()` (todas as colunas) e quebravam com
+ *       `column "createdAt" does not exist` — a tabela no Neon foi criada (Rev. 2141) com `created_at`/`updated_at`
+ *       (snake_case), mas o schema Drizzle declarava `createdAt`/`updatedAt` SEM nome explícito, fazendo o Drizzle emitir
+ *       `"createdAt"`. Fix: nome explícito `timestamp("created_at"/"updated_at", ...)` nas DUAS tabelas
+ *       (`system_document_templates` e `system_document_template_versions`). Sem o fix a feature inteira (incl. todos os
+ *       geradores ligados ao Vigente) caía sempre no fallback e o erro inundava os logs.
  *   (2) SHARED (`shared/documentTemplates.ts` NOVO): `DOCUMENT_TEMPLATES_META`, `getTemplateMeta`, `getSeedTemplate`,
  *       `DEFAULT_CODIGOS` (FC-RH-001..007), `SEED_BODIES` (corpo HTML faithful por tipo, com header institucional FC e
  *       placeholders `{{chave}}`), enum de status (`rascunho`/`vigente`/`obsoleto`) e `renderTemplate(html, dados)` que
@@ -34,20 +43,25 @@
  *       aprovado/datas), selo de status, ações salvar/aprovar/marcar obsoleto/reabrir, botão "Inicializar padrões"
  *       (`seedDefaults`), busca de placeholders, painel de IA (gerar do zero + ler PDF via FileReader base64). O painel
  *       de IA degrada graciosamente via `iaStatus` quando faltam chaves.
- *   (5) GERADORES LIGADOS AO VIGENTE (fallback): `client/src/pages/Colaboradores.tsx` (Contrato de Experiência) e
- *       `client/src/components/TermoResponsabilidadeDialog.tsx` (Termo de Responsabilidade) consultam
- *       `systemDocumentTemplates.getVigente` e, havendo template VIGENTE, montam o corpo via `renderTemplate(...)` com
- *       os mesmos dados que já alimentavam o HTML inline; sem vigente, caem no HTML atual (saída idêntica preservada).
- *       No termo, a tabela de itens entra via `{{itensTabela}}` e as observações + rodapé local/data são anexados após o
- *       template (não fazem parte do seed). O contrato PJ NÃO foi tocado (drift documentado — segue com HTML próprio).
+ *   (5) GERADORES LIGADOS AO VIGENTE (fallback) — TODOS OS 7 TIPOS: consultam `systemDocumentTemplates.getVigente(tipo)`
+ *       e, havendo template VIGENTE, montam o corpo via `renderTemplate(...)` com os mesmos dados que já alimentavam o
+ *       HTML inline; sem vigente, caem no HTML atual (saída idêntica preservada). Ligados:
+ *       `client/src/pages/Colaboradores.tsx` (Contrato de Experiência), `client/src/components/TermoResponsabilidadeDialog.tsx`
+ *       (Termo de Responsabilidade), e em `client/src/pages/ControleDocumentos.tsx` a Carta MDO, o Aviso Prévio, o Termo de
+ *       Rescisão/TRCT e a Advertência (2 blocos); `client/src/pages/ComunicadosInternos.tsx` (Comunicado Interno — swap só do
+ *       bloco de conteúdo via IIFE, preservando header/footer JSX FC). No termo, a tabela de itens entra via `{{itensTabela}}`
+ *       e as observações + rodapé local/data são anexados após o template (não fazem parte do seed). O contrato PJ NÃO foi
+ *       tocado (drift documentado — segue com HTML próprio).
  *
  * IA — DISPONIBILIDADE: `iaStatus` reporta o que dá pra usar conforme as chaves presentes. Hoje GOOGLE_API_KEY está
  * presente mas ANTHROPIC/OPENAI ausentes → "gerar do zero" funciona com qualquer LLM disponível; "ler PDF" exige
  * Anthropic Vision (indisponível até a chave ser provida) e o botão degrada com aviso.
  *
  * VALIDAÇÃO: esbuild parse (stdin, loader ts/tsx) EXIT 0 em `shared/documentTemplates.ts`, `systemDocumentTemplates.ts`,
- * `TemplatesDocsTab.tsx`, `Colaboradores.tsx` e `TermoResponsabilidadeDialog.tsx`; `vitest server/rescisao.test.ts`
- * 41/41 verde; app rodando.
+ * `server/_core/index.ts`, `drizzle/schema.ts`, `TemplatesDocsTab.tsx`, `Colaboradores.tsx`,
+ * `TermoResponsabilidadeDialog.tsx`, `ControleDocumentos.tsx` e `ComunicadosInternos.tsx`; `vitest server/rescisao.test.ts`
+ * 41/41 verde. Pós-fix do `createdAt`: restart do workflow → introspeção no Neon confirma as 9 colunas ISO presentes,
+ * `SELECT` de todas as colunas funciona e os `[tRPC Error] getVigente: column "createdAt" does not exist` SUMIRAM do log.
  *
  * Rev. 2746 — **CONFIGURAÇÕES · TERCEIROS · "GESTORES PARA CONTRATOS DE TERCEIROS": OS DOIS SELETORES (GESTOR
  * FINANCEIRO / GESTOR DE PROJETO) VIRARAM CAMPOS PESQUISÁVEIS POR NOME E PASSARAM A LISTAR SOMENTE COLABORADORES

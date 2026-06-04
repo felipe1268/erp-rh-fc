@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
+import { buildFcDocument } from "@/lib/fcDocumentTemplate";
+import { renderTemplate } from "@shared/documentTemplates";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/hooks/useCompany";
 import { usePermissions } from "@/contexts/PermissionsContext";
@@ -88,6 +90,9 @@ function ChecklistOnboarding({ checklist, companyId, companyIds, userName, check
     { enabled: !!cartaEmpId }
   );
 
+  // Rev. 2747 — Carta MDO consome o template Vigente (carta_mdo) quando existir.
+  const cartaTplQ = trpc.systemDocumentTemplates.getVigente.useQuery({ tipo: "carta_mdo" });
+
   const empsFiltrados = React.useMemo(() => {
     const list = empList.data || [];
     if (!cartaBusca.trim()) return list.slice(0, 20);
@@ -137,6 +142,49 @@ function ChecklistOnboarding({ checklist, companyId, companyIds, userName, check
       responsavelNome: escHtml(d.responsavelNome),
       cidadeData: escHtml(d.cidadeData),
     };
+
+    // Rev. 2747 — quando existe um template Vigente (carta_mdo), o documento é
+    // montado a partir dele (renderTemplate → buildFcDocument). Sem Vigente, cai
+    // no HTML hard-coded abaixo (fallback EXATO). Valores de `dados` já vêm
+    // escapados via escHtml (e.*) porque o corpoHtml é injetado RAW.
+    const cartaVigenteHtml = cartaTplQ.data?.vigente ? cartaTplQ.data.conteudoHtml : null;
+    if (cartaVigenteHtml) {
+      const dados: Record<string, string> = {
+        empNome: e.nomeColaborador, empCpf: e.cpf, empRg: e.rg, empFuncao: e.cargo,
+        empAdmissao: e.dataAdmissao, empMatricula: "", empSalario: "",
+        empresaRazaoSocial: e.nomeEmpresa, empresaCnpj: e.cnpj, empresaEndereco: e.enderecoEmpresa,
+        docNumero: "—", docData: e.cidadeData, docLocal: e.cidadeData,
+        obraNome: "", obraEndereco: "", clienteNome: "",
+      };
+      const htmlVig = buildFcDocument({
+        empresa: {
+          razaoSocial: d.nomeEmpresa, nomeFantasia: headerNome, cnpj: d.cnpj,
+          endereco: (d as any).endereco, cidade: (d as any).cidade, estado: (d as any).estado,
+          logoUrl: (d as any).logoUrl || "",
+        },
+        titulo: "CARTA DE ENCAMINHAMENTO",
+        numero: "—",
+        dataEmissao: e.cidadeData,
+        assunto: { label: "ASSUNTO:", valor: "Abertura de Conta Salário" },
+        corpoHtml: renderTemplate(cartaVigenteHtml, dados),
+        assinaturas: {
+          partes: [
+            { nome: d.responsavelNome, subtitulo: "Responsável pelo encaminhamento" },
+            { nome: d.nomeEmpresa, subtitulo: d.cnpj ? `CNPJ: ${d.cnpj}` : undefined },
+          ],
+          localData: `Local e data: ${d.cidadeData}`,
+        },
+        geradoPor: userName || d.responsavelNome,
+        pageTitle: `Carta de Encaminhamento — ${d.nomeColaborador}`,
+      });
+      const wv = window.open("", "_blank");
+      if (!wv) { toast.error("Bloqueador de popup ativo."); return; }
+      wv.document.write(htmlVig);
+      wv.document.write(`<script>setTimeout(function(){window.print()},500)<\/script>`);
+      wv.document.close();
+      return;
+    }
+
     const w = window.open("", "_blank");
     if (!w) { toast.error("Bloqueador de popup ativo."); return; }
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Carta de Encaminhamento — ${e.nomeColaborador}</title>

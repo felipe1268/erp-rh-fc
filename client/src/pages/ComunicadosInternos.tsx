@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import RichTextEditor, { stripHtml, sanitizeHtml, isHtmlContent } from "@/components/RichTextEditor";
+import { renderTemplate } from "@shared/documentTemplates";
 import { Megaphone, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, Printer, Eye, ChevronLeft, Pencil, CheckCircle2, RotateCcw, Lock, X, Maximize2, Minimize2, ClipboardSignature, Eraser, MonitorSmartphone, Users, Signature, Building2, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -161,6 +162,8 @@ export default function ComunicadosInternos() {
     onError: (e) => toast.error(e.message),
   });
 
+  // Rev. 2747 — Comunicado consome o template Vigente (comunicado_interno) quando existir.
+  const comTplQ = trpc.systemDocumentTemplates.getVigente.useQuery({ tipo: "comunicado_interno" });
   const { data: comunicados = [], isLoading } = trpc.comunicadosInternos.listar.useQuery(
     { companyId },
     { enabled: companyId > 0 }
@@ -653,16 +656,38 @@ export default function ComunicadosInternos() {
             </div>
 
             <div className="border border-gray-200 rounded p-6 mb-6 min-h-[200px]">
-              {c.conteudo ? (
-                isHtmlContent(c.conteudo) ? (
-                  <div
-                    className="comunicado-conteudo prose prose-sm max-w-none text-gray-800 leading-relaxed prose-headings:text-[#1B2A4A] prose-p:my-2"
-                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(c.conteudo) }}
-                  />
-                ) : (
-                  <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{c.conteudo}</div>
-                )
-              ) : null}
+              {(() => {
+                // Rev. 2747 — quando há template Vigente (comunicado_interno), o corpo é
+                // montado a partir dele (renderTemplate). {{corpoMsg}} recebe o conteúdo do
+                // comunicado; comunicado é company-wide, então {{empNome}} fica vazio. Sem
+                // Vigente, cai no render atual EXATO (fallback).
+                const comVigente = comTplQ.data?.vigente ? comTplQ.data.conteudoHtml : null;
+                if (comVigente && c.conteudo) {
+                  const escC = (s: any) => String(s ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" } as any)[ch]);
+                  const corpoMsg = isHtmlContent(c.conteudo) ? c.conteudo : escC(c.conteudo).replace(/\n/g, "<br/>");
+                  const rendered = renderTemplate(comVigente, {
+                    empNome: "", corpoMsg, assunto: escC(c.titulo || ""),
+                    empresaRazaoSocial: escC(nomeEmpresa), empresaCnpj: escC(cnpj),
+                    docNumero: escC(String(c.numero || "")), docData: escC(formatDateBR(c.dataEmissao)),
+                  });
+                  return (
+                    <div
+                      className="comunicado-conteudo prose prose-sm max-w-none text-gray-800 leading-relaxed prose-headings:text-[#1B2A4A] prose-p:my-2"
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(rendered) }}
+                    />
+                  );
+                }
+                return c.conteudo ? (
+                  isHtmlContent(c.conteudo) ? (
+                    <div
+                      className="comunicado-conteudo prose prose-sm max-w-none text-gray-800 leading-relaxed prose-headings:text-[#1B2A4A] prose-p:my-2"
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(c.conteudo) }}
+                    />
+                  ) : (
+                    <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{c.conteudo}</div>
+                  )
+                ) : null;
+              })()}
             </div>
 
             <div className="mt-12 pt-6">

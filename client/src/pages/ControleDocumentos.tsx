@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
+import { buildFcDocument } from "@/lib/fcDocumentTemplate";
+import { renderTemplate } from "@shared/documentTemplates";
 import { formatCPF, fmtNum } from "@/lib/formatters";
 import { nowBrasilia, todayBrasiliaLong } from "@/lib/dateUtils";
 import { removeAccents } from "@/lib/searchUtils";
@@ -1695,6 +1697,8 @@ export default function ControleDocumentos() {
   const nomeEmpresaCompleto = selectedCompany?.razaoSocial || selectedCompany?.nomeFantasia || "Empresa";
   const nomeEmpresaCurto = selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || "Empresa";
   const companyLogoUrl = selectedCompany?.logoUrl || "";
+  // Rev. 2747 — Advertência consome o template Vigente (advertencia) quando existir.
+  const advTplQ = trpc.systemDocumentTemplates.getVigente.useQuery({ tipo: "advertencia" });
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("aso");
 
@@ -2948,6 +2952,30 @@ export default function ControleDocumentos() {
                                 const t1 = testemunhasArr[0] || { nome: "", doc: "" };
                                 const t2 = testemunhasArr[1] || { nome: "", doc: "" };
                                 const t3 = testemunhasArr[2] || { nome: "", doc: "" };
+                                // Rev. 2747 — quando há template Vigente (advertencia), monta a partir dele
+                                // (renderTemplate → buildFcDocument). Sem Vigente, cai no HTML CLT abaixo (fallback EXATO).
+                                const advVigenteHtml = advTplQ.data?.vigente ? advTplQ.data.conteudoHtml : null;
+                                if (advVigenteHtml) {
+                                  const escA = (s: any) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" } as any)[c]);
+                                  const tipoAdvLbl = a.tipoAdvertencia === "Escrita" ? "POR ESCRITO" : a.tipoAdvertencia === "Suspensao" ? "— SUSPENSÃO DISCIPLINAR" : a.tipoAdvertencia === "JustaCausa" ? "— JUSTA CAUSA" : tipo.toUpperCase();
+                                  const dadosA: Record<string, string> = {
+                                    empresaRazaoSocial: escA(nomeEmpresaCompleto), empresaCnpj: escA((selectedCompany as any)?.cnpj || ""),
+                                    empNome: escA(a.nomeCompleto), empCpf: escA(formatCPF(a.cpf)), empFuncao: escA(a.funcao || "N/I"),
+                                    tipoAdv: escA(tipoAdvLbl), ocorrenciaData: escA(formatDate(a.dataOcorrencia)),
+                                    motivo: escA(a.motivo + (a.descricao ? " — " + a.descricao : "")), baseLegal: "Art. 482 da CLT",
+                                  };
+                                  const htmlVig = buildFcDocument({
+                                    empresa: { razaoSocial: nomeEmpresaCompleto, cnpj: (selectedCompany as any)?.cnpj || "", endereco: (selectedCompany as any)?.endereco, cidade: (selectedCompany as any)?.cidade, estado: (selectedCompany as any)?.estado, logoUrl: companyLogoUrl },
+                                    titulo: tipoTitulo, numero: `${numAdv}ª MEDIDA`, dataEmissao,
+                                    assunto: { label: "ASSUNTO:", valor: `${tipoTitulo} — ${a.nomeCompleto}` },
+                                    corpoHtml: renderTemplate(advVigenteHtml, dadosA),
+                                    assinaturas: { partes: [{ nome: "Empregador / Representante Legal", subtitulo: nomeEmpresaCompleto }, { nome: a.nomeCompleto, subtitulo: "Colaborador(a)" }] },
+                                    geradoPor: userName, pageTitle: tipoTitulo,
+                                  });
+                                  const wv = window.open("", "_blank");
+                                  if (wv) { wv.document.write(htmlVig); wv.document.write(`<script>setTimeout(function(){window.print()},500)<\/script>`); wv.document.close(); }
+                                  return;
+                                }
                                 const printHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${tipoTitulo}</title>
                                 <style>
                                   @page { size: A4 portrait; margin: 20mm 18mm 25mm 18mm; }
@@ -3902,6 +3930,29 @@ export default function ControleDocumentos() {
                   const t1 = testemunhasArr[0] || { nome: "", doc: "" };
                   const t2 = testemunhasArr[1] || { nome: "", doc: "" };
                   const t3 = testemunhasArr[2] || { nome: "", doc: "" };
+                  // Rev. 2747 — quando há template Vigente (advertencia), monta a partir dele; senão fallback EXATO.
+                  const advVigenteHtml = advTplQ.data?.vigente ? advTplQ.data.conteudoHtml : null;
+                  if (advVigenteHtml) {
+                    const escA = (s: any) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" } as any)[c]);
+                    const tipoAdvLbl = a.tipoAdvertencia === "Escrita" ? "POR ESCRITO" : a.tipoAdvertencia === "Suspensao" ? "— SUSPENSÃO DISCIPLINAR" : a.tipoAdvertencia === "JustaCausa" ? "— JUSTA CAUSA" : tipo.toUpperCase();
+                    const dadosA: Record<string, string> = {
+                      empresaRazaoSocial: escA(nomeEmpresaCompleto), empresaCnpj: escA((selectedCompany as any)?.cnpj || ""),
+                      empNome: escA(a.nomeCompleto), empCpf: escA(formatCPF(a.cpf)), empFuncao: escA(a.funcao || "N/I"),
+                      tipoAdv: escA(tipoAdvLbl), ocorrenciaData: escA(formatDate(a.dataOcorrencia)),
+                      motivo: escA(a.motivo + (a.descricao ? " — " + a.descricao : "")), baseLegal: "Art. 482 da CLT",
+                    };
+                    const htmlVig = buildFcDocument({
+                      empresa: { razaoSocial: nomeEmpresaCompleto, cnpj: (selectedCompany as any)?.cnpj || "", endereco: (selectedCompany as any)?.endereco, cidade: (selectedCompany as any)?.cidade, estado: (selectedCompany as any)?.estado, logoUrl: companyLogoUrl },
+                      titulo: tipoTitulo, numero: `${numAdv}ª MEDIDA`, dataEmissao,
+                      assunto: { label: "ASSUNTO:", valor: `${tipoTitulo} — ${a.nomeCompleto}` },
+                      corpoHtml: renderTemplate(advVigenteHtml, dadosA),
+                      assinaturas: { partes: [{ nome: "Empregador / Representante Legal", subtitulo: nomeEmpresaCompleto }, { nome: a.nomeCompleto, subtitulo: "Colaborador(a)" }] },
+                      geradoPor: userName, pageTitle: tipoTitulo,
+                    });
+                    const wv = window.open("", "_blank");
+                    if (wv) { wv.document.write(htmlVig); wv.document.write(`<script>setTimeout(function(){window.print()},500)<\/script>`); wv.document.close(); }
+                    return;
+                  }
                   const printHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${tipoTitulo}</title>
                   <style>
                     @page { size: A4 portrait; margin: 20mm 18mm 25mm 18mm; }

@@ -2048,7 +2048,16 @@ Regras:
             atualizado_por_id INTEGER,
             atualizado_por_nome VARCHAR(255),
             created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            codigo VARCHAR(40),
+            status VARCHAR(20) NOT NULL DEFAULT 'rascunho',
+            elaborado_por_id INTEGER,
+            elaborado_por_nome VARCHAR(255),
+            aprovado_por_id INTEGER,
+            aprovado_por_nome VARCHAR(255),
+            aprovado_em TIMESTAMP,
+            data_vigencia VARCHAR(20),
+            proxima_revisao VARCHAR(20)
           )`);
           await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_sys_doc_tpl_tipo ON system_document_templates (tipo)`);
           await db.execute(sql`CREATE TABLE IF NOT EXISTS system_document_template_versions (
@@ -2063,7 +2072,20 @@ Regras:
           )`);
           await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_sys_doc_tpl_ver_tpl_versao ON system_document_template_versions (template_id, versao)`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_sys_doc_tpl_ver_tpl ON system_document_template_versions (template_id)`);
+          // Rev. 2747 — Controle ISO documental: colunas aditivas garantidas em
+          // tabelas system_document_templates PRÉ-EXISTENTES (criadas na Rev. 2141
+          // sem estas colunas). ADD COLUMN IF NOT EXISTS — zero destrutivo (R-001/R-007/R-010).
+          await db.execute(sql`ALTER TABLE system_document_templates ADD COLUMN IF NOT EXISTS codigo VARCHAR(40)`);
+          await db.execute(sql`ALTER TABLE system_document_templates ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'rascunho'`);
+          await db.execute(sql`ALTER TABLE system_document_templates ADD COLUMN IF NOT EXISTS elaborado_por_id INTEGER`);
+          await db.execute(sql`ALTER TABLE system_document_templates ADD COLUMN IF NOT EXISTS elaborado_por_nome VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE system_document_templates ADD COLUMN IF NOT EXISTS aprovado_por_id INTEGER`);
+          await db.execute(sql`ALTER TABLE system_document_templates ADD COLUMN IF NOT EXISTS aprovado_por_nome VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE system_document_templates ADD COLUMN IF NOT EXISTS aprovado_em TIMESTAMP`);
+          await db.execute(sql`ALTER TABLE system_document_templates ADD COLUMN IF NOT EXISTS data_vigencia VARCHAR(20)`);
+          await db.execute(sql`ALTER TABLE system_document_templates ADD COLUMN IF NOT EXISTS proxima_revisao VARCHAR(20)`);
           console.log(`[SyncSchema+] Rev. 2141: tabelas system_document_templates + versions garantidas.`);
+          console.log(`[SyncSchema+] Rev. 2747: colunas ISO documentais garantidas em system_document_templates.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2141 system_document_templates:`, e?.message || e); }
 
         // Rev. 2179 — Split de HE por origem (aprovada / sem_solicitacao).
