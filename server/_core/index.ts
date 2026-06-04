@@ -17,6 +17,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { securityHeaders, apiRateLimit, authRateLimit } from "../security";
 import { sdk } from "./sdk";
+import { DOCUMENT_TEMPLATES_META, getSeedTemplate } from "../../shared/documentTemplates";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -2086,6 +2087,43 @@ Regras:
           await db.execute(sql`ALTER TABLE system_document_templates ADD COLUMN IF NOT EXISTS proxima_revisao VARCHAR(20)`);
           console.log(`[SyncSchema+] Rev. 2141: tabelas system_document_templates + versions garantidas.`);
           console.log(`[SyncSchema+] Rev. 2747: colunas ISO documentais garantidas em system_document_templates.`);
+          // Rev. 2747 — Auto-seed dos 7 documentos institucionais quando a tabela
+          // está vazia, garantindo que NENHUM tipo fique "Não criado" sem ação
+          // manual (acceptance Task #59). Idempotente: só roda com count=0
+          // (instalação nova / Neon recém-provisionado). Em bancos já populados
+          // ou com lacunas pontuais, a aba oferece "Inicializar padrões".
+          try {
+            const cntRes = await db.execute(sql`SELECT COUNT(*)::int AS n FROM system_document_templates`);
+            const cntRow = ((cntRes as any)?.rows ?? cntRes)?.[0] ?? {};
+            const n = Number(cntRow.n ?? 0);
+            if (n === 0) {
+              const hoje = new Date().toISOString().slice(0, 10);
+              for (const meta of DOCUMENT_TEMPLATES_META) {
+                const seed = getSeedTemplate(meta.tipo);
+                const insRes = await db.execute(sql`
+                  INSERT INTO system_document_templates
+                    (tipo, titulo, descricao, conteudo_html, versao_atual, ativo,
+                     atualizado_por_nome, codigo, status, elaborado_por_nome,
+                     aprovado_por_nome, aprovado_em, data_vigencia)
+                  VALUES
+                    (${meta.tipo}, ${meta.titulo}, ${meta.descricao}, ${seed.conteudoHtml}, 1, 1,
+                     'Sistema', ${seed.codigo}, 'vigente', 'Sistema',
+                     'Sistema', NOW(), ${hoje})
+                  ON CONFLICT (tipo) DO NOTHING
+                  RETURNING id`);
+                const insRow = ((insRes as any)?.rows ?? insRes)?.[0] ?? {};
+                const newId = Number(insRow.id ?? 0);
+                if (newId) {
+                  await db.execute(sql`
+                    INSERT INTO system_document_template_versions
+                      (template_id, versao, conteudo_html, comentario, criado_por_nome)
+                    VALUES (${newId}, 1, ${seed.conteudoHtml}, 'Seed institucional automático (Rev. 2747)', 'Sistema')
+                    ON CONFLICT (template_id, versao) DO NOTHING`);
+                }
+              }
+              console.log(`[SyncSchema+] Rev. 2747: auto-seed de ${DOCUMENT_TEMPLATES_META.length} documentos institucionais (tabela estava vazia → todos como Rev. 1 VIGENTE).`);
+            }
+          } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2747 auto-seed system_document_templates:`, e?.message || e); }
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2141 system_document_templates:`, e?.message || e); }
 
         // Rev. 2179 — Split de HE por origem (aprovada / sem_solicitacao).

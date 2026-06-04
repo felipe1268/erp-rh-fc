@@ -63,6 +63,18 @@
  * 41/41 verde. Pós-fix do `createdAt`: restart do workflow → introspeção no Neon confirma as 9 colunas ISO presentes,
  * `SELECT` de todas as colunas funciona e os `[tRPC Error] getVigente: column "createdAt" does not exist` SUMIRAM do log.
  *
+ * COMPLETUDE (3 pendências apontadas no code review do Task #59, corrigidas na mesma rev.):
+ *   (A) AUTO-SEED GARANTIDO: além do botão manual "Inicializar padrões" (`seedDefaults`), o boot agora SEMEIA os 7
+ *       documentos institucionais (Rev. 1 VIGENTE) quando a tabela está VAZIA, dentro do `[SyncSchema+]`
+ *       (`server/_core/index.ts`), via INSERT raw `ON CONFLICT (tipo) DO NOTHING`. Idempotente (só roda com count=0),
+ *       zero destrutivo — bancos já populados não são tocados. Garante que nenhum tipo fique "Não criado" sem ação.
+ *   (B) IA · LER PDF → SUGESTÕES: `iaLerPdfSugerir` passou a pedir à IA um JSON `{html, sugestoes[]}` e a devolver
+ *       AMBOS (parser tolerante `parseIaModeloComSugestoes` — extrai o JSON mesmo embrulhado em ```; degrada pro HTML
+ *       cru com sugestões vazias se a IA fugir do formato). A UI mostra o modelo no editor + um painel "Sugestões de
+ *       melhoria da IA" listando cada item para o usuário revisar/ajustar/dispensar ANTES de salvar a revisão.
+ *   (C) LISTA DE DOCUMENTOS · BUSCA + FILTRO POR STATUS: a coluna esquerda ganhou um campo de busca (por nome/código)
+ *       e chips de filtro por status ISO (Todos/Vigente/Rascunho/Obsoleto/Não criado), filtrando os 7 tipos em memo.
+ *
  * Rev. 2746 — **CONFIGURAÇÕES · TERCEIROS · "GESTORES PARA CONTRATOS DE TERCEIROS": OS DOIS SELETORES (GESTOR
  * FINANCEIRO / GESTOR DE PROJETO) VIRARAM CAMPOS PESQUISÁVEIS POR NOME E PASSARAM A LISTAR SOMENTE COLABORADORES
  * CUJA FUNÇÃO É DA CATEGORIA INDIRETA — SUMIU A MÃO DE OBRA DIRETA (PEDREIRO, SERVENTE, ARMADOR...).**

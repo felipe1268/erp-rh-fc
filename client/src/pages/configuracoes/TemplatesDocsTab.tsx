@@ -76,6 +76,11 @@ export default function TemplatesDocsTab() {
   const [mostrarHistorico, setMostrarHistorico] = useState(false);
   const [mostrarPreview, setMostrarPreview] = useState(false);
   const [buscaPlaceholder, setBuscaPlaceholder] = useState("");
+  // Busca/filtro da lista de documentos (coluna esquerda)
+  const [buscaDoc, setBuscaDoc] = useState("");
+  const [filtroStatus, setFiltroStatus] = useState<string>("todos");
+  // Sugestões de melhoria devolvidas pela IA ao ler um PDF
+  const [iaSugestoes, setIaSugestoes] = useState<string[]>([]);
   const editorRef = useRef<RichTextEditorHandle>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
@@ -112,6 +117,29 @@ export default function TemplatesDocsTab() {
   );
   const statusAtual: string = selRow?.status ?? "ausente";
 
+  // Lista de documentos (coluna esquerda) com busca por título/código + filtro
+  // por status ISO. Mantém DOCUMENT_TEMPLATES_META como base quando a query
+  // ainda não carregou, garantindo os 7 tipos visíveis.
+  const docsLista = useMemo(() => {
+    const base: any[] = (listAllQuery.data ?? DOCUMENT_TEMPLATES_META) as any[];
+    const q = buscaDoc.trim().toLowerCase();
+    return base.filter((row: any) => {
+      const st = row.status ?? "ausente";
+      if (filtroStatus !== "todos" && st !== filtroStatus) return false;
+      if (!q) return true;
+      const cod = (row.codigo ?? "").toString().toLowerCase();
+      return row.titulo.toLowerCase().includes(q) || cod.includes(q);
+    });
+  }, [listAllQuery.data, buscaDoc, filtroStatus]);
+
+  const STATUS_FILTROS: { value: string; label: string }[] = [
+    { value: "todos", label: "Todos" },
+    { value: "vigente", label: "Vigente" },
+    { value: "rascunho", label: "Rascunho" },
+    { value: "obsoleto", label: "Obsoleto" },
+    { value: "ausente", label: "Não criado" },
+  ];
+
   // Quando muda tipo / versão / dados do servidor → recarrega editor
   useEffect(() => {
     if (getQuery.data) {
@@ -126,6 +154,7 @@ export default function TemplatesDocsTab() {
     setIaPainel(false);
     setIaInstrucoes("");
     setMostrarPreview(false);
+    setIaSugestoes([]);
   }, [tipoSelecionado]);
 
   useEffect(() => {
@@ -190,6 +219,7 @@ export default function TemplatesDocsTab() {
       setConteudoEditado(res.conteudoHtml);
       setMostrarPreview(false);
       setIaPainel(false);
+      setIaSugestoes([]);
       toast.success("Rascunho gerado pela IA. Revise e salve a nova revisão.");
     },
     onError: (e) => toast.error(e.message || "Falha ao gerar com IA."),
@@ -198,7 +228,11 @@ export default function TemplatesDocsTab() {
     onSuccess: (res) => {
       setConteudoEditado(res.conteudoHtml);
       setMostrarPreview(false);
-      toast.success("Modelo extraído do PDF. Revise os placeholders e salve.");
+      setIaSugestoes((res as any).sugestoes ?? []);
+      const nSug = ((res as any).sugestoes ?? []).length;
+      toast.success(nSug > 0
+        ? `Modelo extraído do PDF com ${nSug} sugestão(ões) de melhoria. Revise e salve.`
+        : "Modelo extraído do PDF. Revise os placeholders e salve.");
     },
     onError: (e) => toast.error(e.message || "Falha ao ler o PDF."),
   });
@@ -321,8 +355,33 @@ export default function TemplatesDocsTab() {
             <div className="px-3 py-2 bg-gray-50 border-b text-xs font-semibold text-gray-600 uppercase">
               Documentos
             </div>
+            <div className="p-2 border-b space-y-2">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Input
+                  value={buscaDoc}
+                  onChange={e => setBuscaDoc(e.target.value)}
+                  placeholder="Buscar por nome ou código..."
+                  className="h-8 text-sm pl-7"
+                />
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {STATUS_FILTROS.map(f => (
+                  <button
+                    key={f.value}
+                    onClick={() => setFiltroStatus(f.value)}
+                    className={`text-[11px] px-2 py-0.5 rounded-full border transition-colors ${filtroStatus === f.value ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="divide-y">
-              {(listAllQuery.data ?? DOCUMENT_TEMPLATES_META).map((row: any) => {
+              {docsLista.length === 0 && (
+                <div className="px-3 py-4 text-xs text-gray-400 italic">Nenhum documento encontrado.</div>
+              )}
+              {docsLista.map((row: any) => {
                 const Icon = ICON_MAP[row.icone] || FileText;
                 const isAtivo = row.tipo === tipoSelecionado;
                 const versaoAtual = (row as any).versaoAtual ?? 0;
@@ -456,6 +515,34 @@ export default function TemplatesDocsTab() {
                     {iaGerarMut.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1" />} Gerar rascunho
                   </Button>
                 </div>
+              </div>
+            )}
+
+            {iaSugestoes.length > 0 && (
+              <div className="mb-3 p-3 border border-violet-200 bg-violet-50/60 rounded-lg">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-semibold text-violet-800 flex items-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5" /> Sugestões de melhoria da IA ({iaSugestoes.length})
+                  </span>
+                  <button
+                    onClick={() => setIaSugestoes([])}
+                    className="text-[11px] text-violet-700 hover:underline flex items-center gap-0.5"
+                    title="Dispensar sugestões"
+                  >
+                    <XCircle className="w-3.5 h-3.5" /> Dispensar
+                  </button>
+                </div>
+                <p className="text-[11px] text-violet-700 mb-2">
+                  Revise as sugestões abaixo. O modelo extraído já está no editor — ajuste o que achar pertinente antes de salvar.
+                </p>
+                <ul className="space-y-1.5">
+                  {iaSugestoes.map((s, i) => (
+                    <li key={i} className="flex items-start gap-2 text-xs text-gray-700 bg-white border border-violet-100 rounded px-2 py-1.5">
+                      <Info className="w-3.5 h-3.5 text-violet-500 flex-shrink-0 mt-0.5" />
+                      <span className="flex-1">{s}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 

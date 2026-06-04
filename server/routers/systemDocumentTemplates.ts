@@ -544,8 +544,12 @@ export const systemDocumentTemplatesRouter = router({
         `substituindo os dados específicos (nomes, CPF, datas, valores, função, empresa) pelos placeholders {{chave}}. ` +
         `Use EXATAMENTE estes placeholders quando o dado existir:\n${placeholders}\n` +
         `NÃO inclua cabeçalho, logo, faixa de título, assinaturas nem tags <html>/<head>/<body>. ` +
-        `Responda só com o HTML do corpo.`;
-      const prompt = `Converta este documento em um modelo com placeholders.${input.observacoes ? ` Observações do usuário: ${input.observacoes}` : ""}`;
+        `Além do modelo, AVALIE o documento e proponha melhorias objetivas (cláusulas faltantes, ` +
+        `riscos jurídicos/trabalhistas, dados que deveriam virar placeholder, clareza/formatação). ` +
+        `Responda SOMENTE com um objeto JSON válido, sem texto fora dele, no formato: ` +
+        `{"html":"<o corpo HTML do modelo>","sugestoes":["sugestão 1","sugestão 2", ...]}. ` +
+        `A lista "sugestoes" pode ser vazia se o documento já estiver bom.`;
+      const prompt = `Converta este documento em um modelo com placeholders e liste sugestões de melhoria.${input.observacoes ? ` Observações do usuário: ${input.observacoes}` : ""}`;
       let out = "";
       try {
         out = await invokeAnthropicVision({
@@ -558,10 +562,55 @@ export const systemDocumentTemplatesRouter = router({
       } catch (e: any) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Falha ao ler o PDF: ${String(e?.message ?? e).slice(0, 160)}` });
       }
-      const html = sanitizeAiHtml(out);
+      // A IA deve devolver JSON {html, sugestoes[]}. Parsing tolerante: extrai o
+      // bloco JSON (mesmo embrulhado em ```), e cai pro texto cru como HTML se a
+      // IA ignorar o formato (degradação graciosa — nunca quebra o fluxo).
+      const { html: rawHtml, sugestoes } = parseIaModeloComSugestoes(out);
+      const html = sanitizeAiHtml(rawHtml);
       if (!html || html.replace(/<[^>]*>/g, "").trim().length < 20) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Não consegui extrair um modelo do PDF. Verifique se o arquivo tem texto legível." });
       }
-      return { ok: true, conteudoHtml: html };
+      return { ok: true, conteudoHtml: html, sugestoes };
     }),
 });
+
+/**
+ * Faz o parse tolerante da resposta da IA esperada como JSON
+ * `{ html, sugestoes[] }`. Estratégia em camadas:
+ *  1) Remove cercas markdown (```json ... ```).
+ *  2) Tenta JSON.parse direto; se falhar, extrai o 1º {...} balanceado.
+ *  3) Se nada parsear, trata a resposta inteira como HTML e devolve sugestões
+ *     vazias — assim o fluxo NUNCA quebra por desvio de formato da IA.
+ * As sugestões são limitadas/limpas (strings curtas, no máx. 12).
+ */
+function parseIaModeloComSugestoes(raw: string): { html: string; sugestoes: string[] } {
+  let txt = String(raw || "").trim();
+  const fence = txt.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) txt = fence[1].trim();
+
+  const tentarObjeto = (s: string): { html: string; sugestoes: string[] } | null => {
+    try {
+      const obj = JSON.parse(s);
+      if (obj && typeof obj === "object" && typeof obj.html === "string") {
+        const sug = Array.isArray(obj.sugestoes)
+          ? obj.sugestoes.map((x: any) => String(x).trim()).filter((x: string) => x.length > 0).slice(0, 12)
+          : [];
+        return { html: obj.html, sugestoes: sug };
+      }
+    } catch { /* ignora — tenta próxima estratégia */ }
+    return null;
+  };
+
+  const direto = tentarObjeto(txt);
+  if (direto) return direto;
+
+  const inicio = txt.indexOf("{");
+  const fim = txt.lastIndexOf("}");
+  if (inicio !== -1 && fim > inicio) {
+    const recorte = tentarObjeto(txt.slice(inicio, fim + 1));
+    if (recorte) return recorte;
+  }
+
+  // Fallback: a IA devolveu HTML puro (sem JSON). Mantém o comportamento antigo.
+  return { html: txt, sugestoes: [] };
+}

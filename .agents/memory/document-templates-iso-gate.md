@@ -1,12 +1,16 @@
 ---
 name: Central de Documentos ISO — gate de aprovação
-description: Regra de vigência/aprovação dos system_document_templates e como os geradores consomem o template Vigente.
+description: Regra de vigência/aprovação dos templates de documentos institucionais e como os geradores os consomem.
 ---
 
 A aba "Templates de Documentos" (Configurações) é a fonte oficial ISO dos documentos institucionais FC.
 
-**Regra:** `getVigente(tipo)` só entrega `conteudoHtml` quando `status === 'vigente'`. Toda mudança de CONTEÚDO no `save` REBAIXA o template para `rascunho` e LIMPA a aprovação (`aprovadoPorId/Nome/Em = null`) — a revisão editada só volta a circular após `aprovar` de novo.
+**Regra:** o consumo pelos módulos só entrega conteúdo de um template com status `vigente`. Toda mudança de CONTEÚDO rebaixa o template para `rascunho` e LIMPA a aprovação — a revisão editada só volta a circular após ser aprovada de novo.
 
-**Why:** Sem o rebaixamento, editar um documento já vigente publicaria texto institucional novo sem aprovação formal (fura o fluxo ISO rascunho→vigente→obsoleto). Apontado em review do architect na criação do módulo.
+**Why:** sem o rebaixamento, editar um documento já vigente publicaria texto institucional novo sem aprovação formal, furando o fluxo ISO rascunho→vigente→obsoleto.
 
-**How to apply:** TODO writer de `system_document_templates.conteudoHtml` deve manter esse gate (setar `status='rascunho'` + limpar aprovação ao mudar conteúdo). Há DOIS caminhos de escrita de conteúdo: `save` E `restoreVersion` (restaurar versão antiga TAMBÉM rebaixa — senão restaurar num doc vigente publicaria conteúdo histórico sem aprovação; achado de review). Geradores (contrato de experiência em `Colaboradores.tsx`, termo em `TermoResponsabilidadeDialog.tsx`) consomem via `getVigente` + `renderTemplate(html, dados)` com FALLBACK ao HTML inline quando não houver vigente. Os placeholders dos `dados` devem cobrir TODO o seed (ex.: contrato precisa de `prazoTotal`/`dataFimFinal` além de `prazo1/prazo2/dataFim`), senão o doc gerado perde conteúdo material vs o HTML antigo.
+**How to apply:**
+- TODO caminho de escrita de conteúdo deve manter o gate (rebaixar p/ rascunho + limpar aprovação). Lembrar que RESTAURAR uma versão antiga também é escrita de conteúdo — também precisa rebaixar, senão restaurar num doc vigente republica conteúdo histórico sem aprovação.
+- Geradores consomem o vigente com FALLBACK ao HTML inline quando não houver vigente.
+- Os dados passados ao render devem cobrir TODOS os placeholders do seed; se faltar algum, o documento gerado perde conteúdo material vs o HTML antigo.
+- Garantir que os 7 tipos existam sem ação manual: auto-seed quando a tabela está vazia (idempotente) além do botão manual de inicializar padrões — usuário nunca deve cair em "Não criado".
