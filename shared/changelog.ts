@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2744 — **COMPRAS · COTAÇÃO · APROVAÇÃO ("APROVAR E GERAR OC"): O AVISO DE "ACIMA DA META / DÉFICIT" SÓ APARECE
+ * QUANDO HÁ DÉBITO REAL — ANTES ESTOURAVA FALSO DÉFICIT EM COTAÇÃO POR PACOTE MESMO COM CRÉDITO (ex.: COT-2026-0283).**
+ *
+ * BUG (reportado por Felipe): na cotação COT-2026-0283 ("Cotação por Pacote — itens agrupados por composição"), o
+ * fornecedor vencedor (Marmoraria Max Pisos, R$ 235.002,01) ficou ABAIXO da meta total (R$ 256.811,34) → SALDO POSITIVO
+ * de +R$ 21.809,33 (CRÉDITO, negociação abaixo da meta). Mesmo assim, ao clicar em "Aprovar e Gerar OC" o ERP exibia
+ * o alerta "⚠️ ATENÇÃO: O valor do fornecedor está acima da meta orçamentária (R$ 10.339,59). Déficit: R$ 224.662,42",
+ * como se houvesse DÉBITO. A meta exibida (R$ 10.339,59) estava errada.
+ *
+ * CAUSA-RAIZ (`client/src/pages/compras/Cotacoes.tsx`): os DOIS gatilhos do popup de aprovação (`handleConfirmarTotal`
+ * e o onClick do card "Total" no diálogo de tipo de cotação) RECOMPUTAVAM a meta com um reduce ingênuo somando os
+ * INSUMOS CRUS de `mapa.itens` (`metaUnitario * metaQtd` por linha). Em cotação POR PACOTE, `mapa.itens` são os insumos
+ * das composições — cujos `metaUnitario/metaQtd` não representam a meta do pacote — então a soma dava um número muito
+ * menor (R$ 10.339,59) e disparava o falso `fornTotal > metaTotal`. A tabela/visão da tela, por outro lado, já calcula
+ * o saldo CORRETO via `metaGrandTotal`/`saldoTotal`/`deficit` (que respeitam `isPacoteTotals`, agrupando por
+ * `composicaoCodigo` e usando `composicaoMetaTotal`/`composicaoQtdOrcada`, e per-item via `getItemSaldo` = meta −
+ * custoCompra). Ou seja: duas fontes de verdade divergentes para a MESMA pergunta.
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SERVER/SCHEMA): os dois gatilhos deixam de recomputar a meta e passam a usar o
+ * `deficit` (já = `saldoTotal < 0 ? abs(saldoTotal) : 0`, pacote-aware) e o `metaGrandTotal` (ambos já calculados no
+ * escopo do componente e usados na tabela). Agora o alerta só aparece quando `deficit > 0` (DÉBITO real, fornecedor
+ * acima da meta) e nunca quando há CRÉDITO. A mensagem exibe a meta correta (`metaGrandTotal`) e o déficit correto.
+ * `fornTotal` continua vindo de `fornParaSaldo.totalOrcado` para exibição. ZERO ALTER/DROP/DELETE (R-001/R-007/R-010).
+ *
+ * RESSALVA: a checagem de risco/realocação (`cobertoPorRisco`, `semVerbaAutorizado`) e o fluxo de "Realocação de Verba"
+ * permanecem idênticos — só o critério de "tem déficit?" passou a usar a fonte única correta. Cotações não-pacote já
+ * funcionavam (lá `metaGrandTotal` == a soma antiga), mas agora também compartilham a mesma fonte.
+ *
+ * VALIDAÇÃO: esbuild parse EXIT 0 (`Cotacoes.tsx`); `vitest server/rescisao.test.ts` 41/41 verde; app rodando,
+ * console limpo.
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2743 — **CONFIGURAÇÕES · BACKUP & SINCRONIZAÇÃO · HISTÓRICO DE BACKUPS: PERCENTUAL DE PROGRESSO (0–100%) PARA
  * SABER QUANTO FALTA PARA FINALIZAR.**
  *

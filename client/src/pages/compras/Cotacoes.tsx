@@ -2830,14 +2830,14 @@ export default function Cotacoes() {
       setShowConfirmarTipoCotDialog(false);
       if (!validarCondicoesVencedor()) return;
       const fornTotal = parseFloat(fornParaSaldo?.totalOrcado ?? "0");
-      const metaTotal = (mapa?.itens ?? []).reduce((acc: number, it: any) =>
-        acc + (Math.round(parseFloat(it.metaUnitario ?? "0") * 100) / 100 * parseFloat(it.metaQtd ?? it.quantidade ?? "0")), 0);
-      if (metaTotal > 0 && fornTotal > metaTotal && !cobertoPorRisco && !semVerbaAutorizado) {
-        const defVal = (fornTotal - metaTotal).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+      // Usa o saldo pacote-aware (mesmo cálculo da tabela). Antes somava insumos crus do mapa,
+      // o que estourava falso "déficit" em cotações por pacote mesmo havendo CRÉDITO (ex.: COT-2026-0283).
+      if (deficit > 0 && !cobertoPorRisco && !semVerbaAutorizado) {
+        const defVal = deficit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
         const fornNome = fornParaSaldo?.fornecedor?.nomeFantasia || fornParaSaldo?.fornecedor?.razaoSocial || "Fornecedor";
         const ok = confirm(
           `⚠️ ATENÇÃO: O valor do fornecedor ${fornNome} (${fornTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) ` +
-          `está acima da meta orçamentária (${metaTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}).\n\n` +
+          `está acima da meta orçamentária (${metaGrandTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}).\n\n` +
           `Déficit: ${defVal}\n\n` +
           `Recomendamos utilizar o painel de Realocação de Verba antes de aprovar.\n\n` +
           `Deseja continuar mesmo assim?`
@@ -5922,14 +5922,14 @@ export default function Cotacoes() {
               setShowConfirmarTipoCotDialog(false);
               if (!validarCondicoesVencedor()) return;
               const fornTotal = parseFloat(fornParaSaldo?.totalOrcado ?? "0");
-              const metaTotal = (mapa?.itens ?? []).reduce((acc: number, it: any) =>
-                acc + (Math.round(parseFloat(it.metaUnitario ?? "0") * 100) / 100 * parseFloat(it.metaQtd ?? it.quantidade ?? "0")), 0);
-              if (metaTotal > 0 && fornTotal > metaTotal && !cobertoPorRisco && !semVerbaAutorizado) {
-                const defVal = (fornTotal - metaTotal).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+              // Usa o saldo pacote-aware (mesmo cálculo da tabela). Antes somava insumos crus do mapa,
+              // o que estourava falso "déficit" em cotações por pacote mesmo havendo CRÉDITO (ex.: COT-2026-0283).
+              if (deficit > 0 && !cobertoPorRisco && !semVerbaAutorizado) {
+                const defVal = deficit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
                 const fornNome = fornParaSaldo?.fornecedor?.nomeFantasia || fornParaSaldo?.fornecedor?.razaoSocial || "Fornecedor";
                 const ok = confirm(
                   `⚠️ ATENÇÃO: O valor do fornecedor ${fornNome} (${fornTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) ` +
-                  `está acima da meta orçamentária (${metaTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}).\n\n` +
+                  `está acima da meta orçamentária (${metaGrandTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}).\n\n` +
                   `Déficit: ${defVal}\n\nRecomendamos utilizar o painel de Realocação de Verba antes de aprovar.\n\nDeseja continuar mesmo assim?`
                 );
                 if (!ok) return;
