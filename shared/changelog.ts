@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2742 — **COMPRAS · MAPA DE COTAÇÃO · "FORNECEDORES PARTICIPANTES": CADASTRAR FORNECEDOR NOVO POR POPUP, SEM
+ * SAIR DA COTAÇÃO.**
+ *
+ * PEDIDO (Felipe): na tela de Cotação, no seletor "Fornecedores Participantes", quando o fornecedor desejado não
+ * existe (ex.: aparece "Nenhum fornecedor encontrado"), poder cadastrar um fornecedor NOVO ali mesmo via popup/modal,
+ * sem precisar abandonar a cotação e ir até a tela de Fornecedores.
+ *
+ * IMPLEMENTAÇÃO (SÓ CLIENT/UI — reusa endpoints existentes; ZERO SERVER NOVO; ZERO SCHEMA; ZERO ALTER/DROP/DELETE —
+ * R-001/R-007/R-010):
+ *  - `client/src/pages/compras/Cotacoes.tsx`: dentro do `PopoverContent` do seletor de fornecedores, abaixo da lista
+ *    (e do "Nenhum fornecedor encontrado"), novo link "Cadastrar novo fornecedor" (ícone UserPlus). Ao clicar, fecha
+ *    o popover e abre um `Dialog` de cadastro rápido. Se já havia texto digitado na busca, ele é aproveitado como
+ *    Razão Social inicial.
+ *  - Form mínimo no Dialog: CNPJ (com botão "Buscar" que auto-preenche via `trpc.compras.buscarCNPJ` — BrasilAPI/
+ *    ReceitaWS, mesmo endpoint da tela de Fornecedores), Razão Social (obrigatória), Nome Fantasia, Telefone, E-mail,
+ *    Cidade e UF. Validação client: exige Razão Social e empresa selecionada (`companyId > 0`).
+ *  - Salvar usa `trpc.compras.criarFornecedor` (anti-duplicidade de CNPJ já é garantida no server). No sucesso:
+ *    toast, fecha o popup, `fornQ.refetch()` e PRÉ-SELECIONA o fornecedor recém-criado no seletor (`mapaFornSelectId`),
+ *    deixando o usuário a um clique de "Adicionar" ao mapa.
+ *
+ * RESSALVA: o cadastro rápido grava só os campos essenciais; o cadastro completo (dados bancários, sócios, CNAEs,
+ * categorias etc.) continua na tela de Fornecedores. Erros de CNPJ/Receita degradam graciosamente (preencher manual).
+ *
+ * VALIDAÇÃO: esbuild parse EXIT 0 no arquivo tocado; `vitest server/rescisao.test.ts` 41/41 verde; app rodando,
+ * console limpo.
+ *
  * Rev. 2741 — **CONFIGURAÇÕES · NOVO MÓDULO "BACKUP & SINCRONIZAÇÃO": SAÚDE DO BACKUP DE DADOS COM ALERTAS +
  * PAINEL DE SINCRONIZAÇÃO DO CÓDIGO COM O GITHUB (comparação de versão + alertas) + REDUNDÂNCIA (enviar cópia do
  * código-fonte ao GitHub por conta própria).**

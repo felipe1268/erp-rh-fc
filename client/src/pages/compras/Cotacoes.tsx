@@ -866,6 +866,11 @@ export default function Cotacoes() {
   const [mapaFornSelectId, setMapaFornSelectId] = useState("");
   const [mapaFornSearch, setMapaFornSearch] = useState("");
   const [mapaFornOpen, setMapaFornOpen] = useState(false);
+  // Cadastro rápido de fornecedor sem sair da cotação (popup)
+  const [showNovoForn, setShowNovoForn] = useState(false);
+  const [novoForn, setNovoForn] = useState({ cnpj: "", razaoSocial: "", nomeFantasia: "", telefone: "", email: "", cidade: "", estado: "" });
+  const [buscandoCnpjForn, setBuscandoCnpjForn] = useState(false);
+  const [cnpjFornErro, setCnpjFornErro] = useState<string | null>(null);
   const [editPrecos, setEditPrecos] = useState<Record<string, string>>({});
   const [editQtds, setEditQtds] = useState<Record<string, string>>({});
   const [editPrazo, setEditPrazo] = useState<Record<number, string>>({});
@@ -1153,6 +1158,72 @@ export default function Cotacoes() {
     onSuccess: () => { toast.success("Fornecedor adicionado!"); setMapaFornSelectId(""); mapaQ.refetch(); },
     onError: (e) => toast.error(e.message),
   });
+
+  // Cadastro rápido de fornecedor (popup, sem sair da cotação)
+  const buscarCnpjFornQuery = trpc.compras.buscarCNPJ.useQuery(
+    { cnpj: novoForn.cnpj.replace(/\D/g, "") },
+    { enabled: false, retry: false }
+  );
+  const resetNovoForn = () => {
+    setNovoForn({ cnpj: "", razaoSocial: "", nomeFantasia: "", telefone: "", email: "", cidade: "", estado: "" });
+    setCnpjFornErro(null);
+    setBuscandoCnpjForn(false);
+  };
+  const buscarCnpjForn = async () => {
+    const cnpj = novoForn.cnpj.replace(/\D/g, "");
+    if (cnpj.length !== 14) { setCnpjFornErro("Digite um CNPJ completo (14 dígitos)."); return; }
+    setBuscandoCnpjForn(true);
+    setCnpjFornErro(null);
+    try {
+      const res = await buscarCnpjFornQuery.refetch();
+      const d = res.data;
+      if (!d) {
+        setCnpjFornErro(res.error
+          ? "Não foi possível consultar a Receita Federal agora. Preencha manualmente."
+          : "CNPJ não encontrado na Receita Federal.");
+        return;
+      }
+      setNovoForn(prev => ({
+        ...prev,
+        razaoSocial: d.razaoSocial || prev.razaoSocial,
+        nomeFantasia: d.nomeFantasia || prev.nomeFantasia,
+        telefone: d.telefone || prev.telefone,
+        email: d.email || prev.email,
+        cidade: d.cidade || prev.cidade,
+        estado: d.estado || prev.estado,
+      }));
+    } catch {
+      setCnpjFornErro("Falha ao consultar o CNPJ. Preencha manualmente.");
+    } finally {
+      setBuscandoCnpjForn(false);
+    }
+  };
+  const criarFornRapido = trpc.compras.criarFornecedor.useMutation({
+    onSuccess: (f: any) => {
+      toast.success("Fornecedor cadastrado!");
+      setShowNovoForn(false);
+      resetNovoForn();
+      fornQ.refetch();
+      // Já deixa o novo fornecedor selecionado pra adicionar ao mapa num clique.
+      if (f?.id) setMapaFornSelectId(String(f.id));
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const salvarNovoForn = () => {
+    if (!novoForn.razaoSocial.trim()) { toast.error("Informe a Razão Social."); return; }
+    if (companyId <= 0) { toast.error("Selecione uma empresa antes de cadastrar."); return; }
+    criarFornRapido.mutate({
+      companyId,
+      cnpj: novoForn.cnpj.trim() || undefined,
+      razaoSocial: novoForn.razaoSocial.trim(),
+      nomeFantasia: novoForn.nomeFantasia.trim() || undefined,
+      telefone: novoForn.telefone.trim() || undefined,
+      email: novoForn.email.trim() || undefined,
+      cidade: novoForn.cidade.trim() || undefined,
+      estado: novoForn.estado.trim() || undefined,
+      isFornecedor: true,
+    });
+  };
   const removerForn = trpc.compras.removerFornecedorMapa.useMutation({
     onSuccess: () => { toast.success("Fornecedor removido!"); mapaQ.refetch(); },
     onError: (e) => toast.error(e.message),
@@ -3678,6 +3749,20 @@ export default function Cotacoes() {
                               <p className="px-4 py-3 text-sm text-gray-400 text-center">Nenhum fornecedor encontrado</p>
                             )}
                           </div>
+                          <div className="p-2 border-t border-gray-100">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMapaFornOpen(false);
+                                resetNovoForn();
+                                // Se a busca já tinha um texto, aproveita como razão social inicial.
+                                if (mapaFornSearch.trim()) setNovoForn(prev => ({ ...prev, razaoSocial: mapaFornSearch.trim() }));
+                                setShowNovoForn(true);
+                              }}
+                              className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors">
+                              <UserPlus className="h-4 w-4" /> Cadastrar novo fornecedor
+                            </button>
+                          </div>
                         </PopoverContent>
                       </Popover>
                       <Button onClick={() => { if (mapaFornSelectId && showDetalhe) { adicionarForn.mutate({ cotacaoId: showDetalhe, fornecedorId: parseInt(mapaFornSelectId) }); setMapaFornSelectId(""); } }}
@@ -3706,6 +3791,101 @@ export default function Cotacoes() {
                         </Button>
                       )}
                     </div>
+
+                    {/* Cadastro rápido de fornecedor sem sair da cotação */}
+                    <Dialog open={showNovoForn} onOpenChange={(o) => { setShowNovoForn(o); if (!o) resetNovoForn(); }}>
+                      <DialogContent className="max-w-lg border-gray-200" style={{ background: "#fff", color: "#111827" }}>
+                        <DialogHeader>
+                          <DialogTitle className="flex items-center gap-2 text-gray-900">
+                            <UserPlus className="h-5 w-5 text-blue-600" /> Novo Fornecedor
+                          </DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-3 py-1">
+                          <div>
+                            <label className="text-xs font-medium text-gray-600">CNPJ</label>
+                            <div className="flex gap-2 mt-1">
+                              <input
+                                value={novoForn.cnpj}
+                                onChange={e => { setNovoForn(prev => ({ ...prev, cnpj: e.target.value })); if (cnpjFornErro) setCnpjFornErro(null); }}
+                                placeholder="00.000.000/0000-00"
+                                className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-md outline-none focus:ring-1 focus:ring-blue-500 text-gray-900"
+                              />
+                              <Button type="button" variant="outline" onClick={buscarCnpjForn} disabled={buscandoCnpjForn} className="gap-2 whitespace-nowrap">
+                                {buscandoCnpjForn ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                                Buscar
+                              </Button>
+                            </div>
+                            {cnpjFornErro && <p className="text-xs text-amber-600 mt-1">{cnpjFornErro}</p>}
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-gray-600">Razão Social <span className="text-red-500">*</span></label>
+                            <input
+                              value={novoForn.razaoSocial}
+                              onChange={e => setNovoForn(prev => ({ ...prev, razaoSocial: e.target.value }))}
+                              placeholder="Razão social"
+                              className="w-full mt-1 px-3 py-2 text-sm border border-gray-200 rounded-md outline-none focus:ring-1 focus:ring-blue-500 text-gray-900"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-gray-600">Nome Fantasia</label>
+                            <input
+                              value={novoForn.nomeFantasia}
+                              onChange={e => setNovoForn(prev => ({ ...prev, nomeFantasia: e.target.value }))}
+                              placeholder="Nome fantasia"
+                              className="w-full mt-1 px-3 py-2 text-sm border border-gray-200 rounded-md outline-none focus:ring-1 focus:ring-blue-500 text-gray-900"
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-xs font-medium text-gray-600">Telefone</label>
+                              <input
+                                value={novoForn.telefone}
+                                onChange={e => setNovoForn(prev => ({ ...prev, telefone: e.target.value }))}
+                                placeholder="(00) 00000-0000"
+                                className="w-full mt-1 px-3 py-2 text-sm border border-gray-200 rounded-md outline-none focus:ring-1 focus:ring-blue-500 text-gray-900"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs font-medium text-gray-600">E-mail</label>
+                              <input
+                                value={novoForn.email}
+                                onChange={e => setNovoForn(prev => ({ ...prev, email: e.target.value }))}
+                                placeholder="email@empresa.com"
+                                className="w-full mt-1 px-3 py-2 text-sm border border-gray-200 rounded-md outline-none focus:ring-1 focus:ring-blue-500 text-gray-900"
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-3 gap-3">
+                            <div className="col-span-2">
+                              <label className="text-xs font-medium text-gray-600">Cidade</label>
+                              <input
+                                value={novoForn.cidade}
+                                onChange={e => setNovoForn(prev => ({ ...prev, cidade: e.target.value }))}
+                                placeholder="Cidade"
+                                className="w-full mt-1 px-3 py-2 text-sm border border-gray-200 rounded-md outline-none focus:ring-1 focus:ring-blue-500 text-gray-900"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs font-medium text-gray-600">UF</label>
+                              <input
+                                value={novoForn.estado}
+                                onChange={e => setNovoForn(prev => ({ ...prev, estado: e.target.value.toUpperCase().slice(0, 2) }))}
+                                placeholder="UF"
+                                maxLength={2}
+                                className="w-full mt-1 px-3 py-2 text-sm border border-gray-200 rounded-md outline-none focus:ring-1 focus:ring-blue-500 text-gray-900"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button type="button" variant="outline" onClick={() => { setShowNovoForn(false); resetNovoForn(); }}>Cancelar</Button>
+                          <Button type="button" onClick={salvarNovoForn} disabled={criarFornRapido.isPending} className="bg-blue-600 hover:bg-blue-500 text-white gap-2">
+                            {criarFornRapido.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+                            Cadastrar
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
 
                     {sugestoesFiltradas.length > 0 && detalheFullscreen?.status === "pendente" && (
                       <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 space-y-2">
