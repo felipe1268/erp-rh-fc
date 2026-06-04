@@ -3286,7 +3286,8 @@ TESTEMUNHAS:
         "TABELA_ITENS": tabelaItens,
         "QTD_ITENS": String(itensContrato.length),
         "TESTEMUNHA_FINANCEIRO": contrato.testemunhaFinanceiro || (company as any)?.gestorFinanceiroNome || "_______________",
-        "TESTEMUNHA_GESTOR_PROJETO": obra?.responsavel || contrato.testemunhaGestorProjeto || (company as any)?.gestorProjetoNome || "_______________",
+        // SEMPRE o "Engenheiro / Responsável" do cadastro da obra (sem fallback legado).
+        "TESTEMUNHA_GESTOR_PROJETO": obra?.responsavel || "_______________",
         "REVISAO_CRONOGRAMA": revisaoCronoLabel || "—",
         "DIA_MEDICAO": String(contrato.diaMedicao ?? 25),
         "PRAZO_APROVACAO": String(contrato.prazoAprovacaoDias ?? 5),

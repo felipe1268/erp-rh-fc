@@ -18,15 +18,17 @@
  *       destrutivo no banco). O seletor de Gestor Financeiro permanece igual.
  *   (2) SERVER (`server/routers/terceiroContratos.ts`): `getContrato` passou a buscar e devolver `obraResponsavel`
  *       (`obras.responsavel` da obra vinculada). Na renderização do contrato, a var de template `TESTEMUNHA_GESTOR_PROJETO`
- *       agora PRIORIZA `obra?.responsavel` (antes ele era só o último fallback, atrás de `contrato.testemunhaGestorProjeto`
- *       e `company.gestorProjetoNome`). A `TESTEMUNHA_FINANCEIRO` não mudou.
- *   (3) CLIENT (`ContratoDetalhe.tsx`): o bloco "Testemunhas" do preview e o pré-preenchimento dos signatários do FcSign
- *       (papel `gestor_projeto`) passaram a usar `contrato.obraResponsavel`. (`ContratoTemplate.tsx`): a descrição do
- *       placeholder `{{TESTEMUNHA_GESTOR_PROJETO}}` agora diz "Engenheiro / Responsável do cadastro da obra".
+ *       agora é ESTRITAMENTE `obra?.responsavel` (sem fallback legado — antes caía em `contrato.testemunhaGestorProjeto`
+ *       e `company.gestorProjetoNome`); quando a obra não tem responsável cadastrado, mostra o placeholder em branco
+ *       (`_______________`). A `TESTEMUNHA_FINANCEIRO` não mudou.
+ *   (3) CLIENT (`ContratoDetalhe.tsx`): o bloco "Testemunhas" do preview usa ESTRITAMENTE `contrato.obraResponsavel`
+ *       (sem fallback) e o pré-preenchimento dos signatários do FcSign (papel `gestor_projeto`) usa o mesmo dado.
+ *       (`ContratoTemplate.tsx`): a descrição do placeholder `{{TESTEMUNHA_GESTOR_PROJETO}}` agora diz "Engenheiro /
+ *       Responsável do cadastro da obra".
  *
  * RESSALVA: a coluna `companies.gestor_projeto_*` e `terceiro_contratos.testemunha_gestor_projeto` continuam existindo
- * (inertes) — nada foi dropado. Contratos antigos que tivessem `testemunhaGestorProjeto` gravado agora são sobrepostos
- * pelo responsável da obra na renderização (comportamento desejado pelo pedido).
+ * (inertes) — nada foi dropado. Contratos antigos que tivessem `testemunhaGestorProjeto` gravado são IGNORADOS na
+ * renderização (a fonte agora é única: o responsável da obra), comportamento desejado pelo pedido.
  *
  * VALIDAÇÃO: esbuild parse (stdin) EXIT 0 em `terceiroContratos.ts`, `Configuracoes.tsx`, `ContratoDetalhe.tsx`,
  * `ContratoTemplate.tsx`; `vitest run server/rescisao.test.ts` 41/41 verde.
