@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2753 — **CONFIGURAÇÕES · CENTRAL DE DOCUMENTOS: A GERAÇÃO POR IA AGORA MOSTRA UMA BARRA DE PROGRESSO 0–100% E
+ * NUNCA PASSA DE ~1 MINUTO.**
+ *
+ * PEDIDO (Felipe): "precisa ter o percentual de 0 a 100% para saber como está a evolução... quero tbm que não demore
+ * mais de 1 minuto." Ao gerar texto por IA na Central (modal "Novo Documento" — abas "Gerar do assunto" e "Subir
+ * modelo (PDF)" — e no editor dos 7 docs fixos), a UI só mostrava um spinner indefinido, sem noção de quanto falta,
+ * e a chamada da IA não tinha teto de tempo (podia demorar bem mais de 1 min ou travar).
+ *
+ * MUDANÇA (SERVER + CLIENT; ZERO SCHEMA; ZERO ALTER/DROP/DELETE — R-001/R-007/R-010):
+ *   (1) SERVER (`server/routers/systemDocumentTemplates.ts`): NOVO helper `withTimeout(promise, ms=58_000)` que corre
+ *       a promise da IA contra um timeout (58s, folga antes do limite de 60s do proxy/cliente) e, se estourar, rejeita
+ *       com "A IA demorou mais de 1 minuto...". Aplicado em `iaGerarDoZero` (invokeLLM) e `iaLerPdfSugerir`
+ *       (invokeAnthropicVision). Além disso, `iaGerarDoZero` passou a usar `fast: true` no `invokeLLM` (caminho rápido
+ *       Gemini Flash com thinking OFF, com fallback automático ao Claude), reduzindo MUITO a latência típica.
+ *   (2) CLIENT (`client/src/pages/configuracoes/TemplatesDocsTab.tsx`): NOVO hook `useIaProgress(active)` + componente
+ *       `IaProgressBar` (shadcn `Progress`). Como a mutation tRPC NÃO é streaming (sem progresso token-a-token real),
+ *       a barra anima uma ESTIMATIVA que avança em direção a 95% ao longo de ~55s (curva ease-out: rápida no início,
+ *       desacelerando), alinhada ao teto de 1 min do servidor; ao terminar (sucesso OU erro) crava 100% por um instante
+ *       e zera. A barra aparece no modal "Novo Documento" (gerar do assunto / ler PDF) e no editor (gerar rascunho /
+ *       ler PDF), com rótulo dinâmico ("Gerando o texto…" / "Lendo o PDF…" + "(até ~1 min)").
+ *
+ * RESSALVA: o progresso é uma ESTIMATIVA visual (não há streaming real da IA); o que é garantido de fato é o TETO de
+ * ~1 min (timeout no servidor). Nenhuma alteração de schema, seed ou contrato de dados.
+ *
+ * VALIDAÇÃO: `npx esbuild` parseou client (tsx) e server (ts) EXIT 0; `vitest server/rescisao.test.ts` 41/41 verde;
+ * architect review.
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2752 — **CONFIGURAÇÕES · CENTRAL DE DOCUMENTOS: A PRÉ-VISUALIZAÇÃO (E A NOVA IMPRESSÃO) AGORA SAEM 100% FIÉIS AO
  * MODELO INSTITUCIONAL FC — CABEÇALHO, LOGO, FAIXA AZUL, MARGENS, TIPOGRAFIA E ASSINATURAS — IGUAL AO QUE SERÁ IMPRESSO.**
  *

@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import {
   FileSignature, ShieldCheck, Megaphone, AlertTriangle, BellRing,
   UserX, Hammer, Save, History, RotateCcw, Eye, FileText, Search, Info, Loader2,
@@ -47,6 +48,57 @@ const SANITIZE_OPTS = {
   FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur", "onchange", "onsubmit", "formaction"],
   ALLOW_DATA_ATTR: false,
 } as const;
+
+/**
+ * Rev. 2753 — Progresso 0–100% das gerações por IA.
+ *
+ * A chamada da IA é uma mutation tRPC (não-streaming), então não há progresso
+ * REAL token-a-token; animamos uma estimativa que avança em direção a 95% ao
+ * longo de ~55s (curva ease-out: rápido no início, desacelerando) — alinhada ao
+ * teto de 1 min do servidor. Quando a mutation termina (sucesso OU erro) o
+ * `active` vira false: cravamos 100% por um instante e zeramos. Assim o usuário
+ * vê a "evolução" e sabe que nunca passa de ~1 min.
+ */
+function useIaProgress(active: boolean): number {
+  const [pct, setPct] = useState(0);
+  useEffect(() => {
+    if (!active) {
+      let resetId: ReturnType<typeof setTimeout> | undefined;
+      setPct((p) => {
+        if (p <= 0) return 0;
+        resetId = setTimeout(() => setPct(0), 700);
+        return 100;
+      });
+      return () => { if (resetId) clearTimeout(resetId); };
+    }
+    setPct(6);
+    const start = Date.now();
+    const TARGET = 95;
+    const DURATION = 55_000;
+    const id = setInterval(() => {
+      const frac = Math.min(1, (Date.now() - start) / DURATION);
+      const val = Math.round(6 + (TARGET - 6) * (1 - Math.pow(1 - frac, 2)));
+      setPct(val);
+    }, 350);
+    return () => clearInterval(id);
+  }, [active]);
+  return pct;
+}
+
+/** Barra de progresso da IA: aparece enquanto a geração roda e some depois. */
+function IaProgressBar({ active, label }: { active: boolean; label: string }) {
+  const pct = useIaProgress(active);
+  if (!active && pct === 0) return null;
+  return (
+    <div className="space-y-1 p-2.5 border border-violet-200 bg-violet-50/60 rounded-lg">
+      <div className="flex items-center justify-between text-[11px] text-violet-700">
+        <span className="flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {label}</span>
+        <span className="tabular-nums font-semibold">{pct}%</span>
+      </div>
+      <Progress value={pct} className="h-2" />
+    </div>
+  );
+}
 
 /**
  * Rev. 2752 — Monta o HTML COMPLETO de um documento da Central exatamente como
@@ -678,6 +730,13 @@ export default function TemplatesDocsTab() {
               </div>
             )}
 
+            <div className="mb-3">
+              <IaProgressBar
+                active={iaGerarMut.isPending || iaPdfMut.isPending}
+                label={iaPdfMut.isPending ? "Lendo o PDF com IA… (até ~1 min)" : "Gerando o rascunho com IA… (até ~1 min)"}
+              />
+            </div>
+
             {iaSugestoes.length > 0 && (
               <div className="mb-3 p-3 border border-violet-200 bg-violet-50/60 rounded-lg">
                 <div className="flex items-center justify-between mb-1.5">
@@ -918,6 +977,11 @@ export default function TemplatesDocsTab() {
                   {!iaSt?.gerarDoZero && <span className="text-[11px] text-amber-600 ml-2">Nenhuma IA configurada.</span>}
                 </div>
               )}
+
+              <IaProgressBar
+                active={novoGerarMut.isPending || novoPdfMut.isPending}
+                label={novoPdfMut.isPending ? "Lendo o PDF com IA… (até ~1 min)" : "Gerando o texto com IA… (até ~1 min)"}
+              />
 
               {novoSugestoes.length > 0 && (
                 <div className="p-3 border border-violet-200 bg-violet-50/60 rounded-lg">

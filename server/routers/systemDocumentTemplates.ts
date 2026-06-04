@@ -34,6 +34,25 @@ function requireAdmin(ctx: any) {
   }
 }
 
+// Rev. 2753 — Teto de tempo para as chamadas de IA da Central de Documentos.
+// O usuário pediu que a geração NUNCA passe de ~1 minuto: corremos a promise
+// da IA contra um timeout e, se estourar, abortamos com mensagem clara (a UI
+// mostra o erro e a barra de progresso para). 58s deixa folga antes do limite
+// de 60s do proxy/cliente.
+const IA_TIMEOUT_MS = 58_000;
+function withTimeout<T>(p: Promise<T>, ms = IA_TIMEOUT_MS): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(
+      () => reject(new Error("A IA demorou mais de 1 minuto para responder. Tente novamente ou simplifique o pedido.")),
+      ms,
+    );
+    p.then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); },
+    );
+  });
+}
+
 // Schema FIXO (7 tipos institucionais) usado por endpoints exclusivos deles.
 const tipoSchema = z.enum(DOCUMENT_TEMPLATE_TIPOS as [string, ...string[]]);
 // Schema FLEXÍVEL (Rev. 2751): aceita os 7 fixos OU um slug custom_<...>.
@@ -630,13 +649,16 @@ export const systemDocumentTemplatesRouter = router({
         `Linguagem formal, pt-BR, fundamentação na CLT quando cabível. Responda só com o HTML do corpo.`;
       let out = "";
       try {
-        const res = await invokeLLM({
+        const res = await withTimeout(invokeLLM({
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: input.instrucoes },
           ],
           maxTokens: 4096,
-        });
+          // Rev. 2753 — caminho rápido (Gemini Flash, thinking OFF) p/ responder
+          // bem abaixo de 1 min; cai pro fluxo padrão (Claude) se falhar.
+          fast: true,
+        }));
         out = (res.choices?.[0]?.message?.content as string) ?? "";
       } catch (e: any) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Falha na IA: ${String(e?.message ?? e).slice(0, 160)}` });
@@ -684,13 +706,13 @@ export const systemDocumentTemplatesRouter = router({
       const prompt = `Converta este documento em um modelo com placeholders e liste sugestões de melhoria.${input.observacoes ? ` Observações do usuário: ${input.observacoes}` : ""}`;
       let out = "";
       try {
-        out = await invokeAnthropicVision({
+        out = await withTimeout(invokeAnthropicVision({
           prompt,
           base64: b64,
           mimeType: "application/pdf",
           systemPrompt,
           maxTokens: 4096,
-        });
+        }));
       } catch (e: any) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Falha ao ler o PDF: ${String(e?.message ?? e).slice(0, 160)}` });
       }
