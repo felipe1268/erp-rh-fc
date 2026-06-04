@@ -1,6 +1,51 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2741 — **CONFIGURAÇÕES · NOVO MÓDULO "BACKUP & SINCRONIZAÇÃO": SAÚDE DO BACKUP DE DADOS COM ALERTAS +
+ * PAINEL DE SINCRONIZAÇÃO DO CÓDIGO COM O GITHUB (comparação de versão + alertas) + REDUNDÂNCIA (enviar cópia do
+ * código-fonte ao GitHub por conta própria).**
+ *
+ * PEDIDO (Felipe): um módulo nas Configurações que mostre (1) se o backup dos DADOS está saudável e alerte quando
+ * não estiver; (2) se o CÓDIGO do ERP está realmente salvo no GitHub, comparando versões e alertando quando não
+ * bater; (3) "sim" à redundância extra: o próprio ERP enviar uma cópia do código pro GitHub além do push que o
+ * Replit já faz.
+ *
+ * ACHADO CRÍTICO QUE MOTIVA O ALERTA: a branch `main` no GitHub (felipe1268/erp-rh-fc) estava travada no commit
+ * `e7f3f3f` de 28/03/2026, enquanto o workspace já estava em commit de hoje (04/06) — ou seja, o código NÃO chegava
+ * ao GitHub há mais de 2 meses (só o backup interno do Replit estava atualizado). O painel agora torna isso visível.
+ *
+ * IMPLEMENTAÇÃO:
+ *  - SERVER · `server/services/githubClient.ts` (NOVO): obtém o access_token do GitHub em runtime via endpoint de
+ *    connectors do Replit (`REPLIT_CONNECTORS_HOSTNAME` + `REPL_IDENTITY`/`WEB_REPL_RENEWAL`), sem cachear o token;
+ *    `githubFetch()` autentica contra api.github.com. Degrada graciosamente (sem token → `GitHubNotConnectedError`).
+ *  - SERVER · `server/services/codeSyncService.ts` (NOVO): `getRunningCommit()` (lê `dist/build-info.json` em
+ *    produção; fallback `git rev-parse` em dev), `getGitHubLatest()` (último commit da `main`), `getCodeSyncStatus()`
+ *    (status `em_dia`/`github_atrasado`/`deploy_pendente`/`erro` + `alerta` + `diasDesdeGithub` + `ultimoSnapshot`),
+ *    e `pushCodeSnapshotToGitHub()` — zipa o código-fonte (archiver, excluindo node_modules/.git/dist/etc) e envia
+ *    via Git Data API (blob → tree → commit → ref) para a branch dedicada `erp-code-snapshots`. Bloqueia com mensagem
+ *    clara quando o código-fonte não está presente (ambiente publicado só tem o build).
+ *  - SERVER · `server/services/backupService.ts`: `getBackupHealth()` (último backup, idade em horas, stale>36h,
+ *    último falhou, motivo, config). `server/routers/backup.ts`: endpoints `health`, `githubStatus`,
+ *    `pushCodeSnapshot` (checagem de admin/admin_master). `server/_core/index.ts` + `syncMonitorJob.ts` (NOVO):
+ *    monitor a cada 12h que notifica o owner (dedupe diário) quando backup stale/erro OU github desatualizado.
+ *  - BUILD · `scripts/gen-build-info.mjs` (NOVO) grava `dist/build-info.json` (commit/data/branch); `package.json`
+ *    roda esse script por ÚLTIMO no build (após vite+esbuild; vite só esvazia `dist/public`, então não apaga o arquivo).
+ *  - CLIENT · `client/src/pages/Configuracoes.tsx`: aba renomeada para "Backup & Sincronização"; banner de saúde no
+ *    topo (verde quando ok / âmbar com a lista de problemas), card "Sincronização de Código (GitHub)" com status
+ *    colorido, commit em execução × último no GitHub, dias parado, última cópia enviada e botão "Enviar cópia do
+ *    código agora".
+ *
+ * RESSALVAS: o status do GitHub depende do connector (funciona onde o Replit injeta a identidade); fora disso o painel
+ * mostra "GitHub não conectado" em vez de quebrar. O envio da cópia do código só funciona a partir do ambiente de
+ * desenvolvimento (onde o código-fonte completo existe). ZERO ALTER/DROP/DELETE (R-001/R-007/R-010); ZERO schema novo.
+ *
+ * VALIDAÇÃO: esbuild parse EXIT 0 nos 5 arquivos server + `Configuracoes.tsx`; `vitest server/rescisao.test.ts` 41/41
+ * verde; integração GitHub validada (último commit lido com sucesso, status 200).
+ *
+ * ARQUIVOS: `server/services/githubClient.ts`, `server/services/codeSyncService.ts`, `server/services/syncMonitorJob.ts`,
+ * `server/services/backupService.ts`, `server/routers/backup.ts`, `server/_core/index.ts`, `scripts/gen-build-info.mjs`,
+ * `package.json`, `client/src/pages/Configuracoes.tsx`.
+ *
  * Rev. 2740 — **PAINEL RH · MODAIS DE EXPANSÃO (ASOs VENCIDOS / ASOs VENCENDO / FÉRIAS / ANIVERSÁRIOS DE EMPRESA):
  * ACABOU A BARRA DE ROLAGEM HORIZONTAL — O LISTÃO AGORA CABE NA LARGURA DO MODAL (só rola na vertical quando precisa).**
  *

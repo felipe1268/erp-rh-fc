@@ -291,6 +291,56 @@ export async function listarBackups(limit: number = 30) {
   return db.select().from(backups).orderBy(desc(backups.iniciadoEm)).limit(limit);
 }
 
+const BACKUP_STALE_HORAS = 36;
+
+export interface BackupHealth {
+  ok: boolean;
+  alerta: boolean;
+  motivo: "ok" | "sem_db" | "sem_backup" | "stale" | "ultimo_falhou";
+  stale: boolean;
+  ultimoFalhou: boolean;
+  idadeHoras: number | null;
+  staleLimiteHoras: number;
+  ultimo: any | null;
+  ultimoConcluido: any | null;
+  config: { horario: string; ativo: boolean };
+}
+
+/** Saúde do backup de dados: idade do último backup concluído, falhas e configuração. */
+export async function getBackupHealth(): Promise<BackupHealth> {
+  const config = await obterConfigBackup();
+  const db = await getDb();
+  if (!db) {
+    return {
+      ok: false, alerta: true, motivo: "sem_db", stale: true, ultimoFalhou: false,
+      idadeHoras: null, staleLimiteHoras: BACKUP_STALE_HORAS, ultimo: null, ultimoConcluido: null, config,
+    };
+  }
+
+  const lista: any[] = await listarBackups(10);
+  const ultimo = lista[0] || null;
+  const ultimoConcluido = lista.find((b) => b.status === "concluido") || null;
+
+  let idadeHoras: number | null = null;
+  if (ultimoConcluido?.concluidoEm) {
+    idadeHoras = Math.floor((Date.now() - new Date(ultimoConcluido.concluidoEm).getTime()) / 3_600_000);
+  }
+
+  const stale = idadeHoras === null || idadeHoras > BACKUP_STALE_HORAS;
+  const ultimoFalhou = !!(ultimo && ultimo.status === "erro");
+
+  let motivo: BackupHealth["motivo"] = "ok";
+  if (!ultimoConcluido) motivo = "sem_backup";
+  else if (ultimoFalhou) motivo = "ultimo_falhou";
+  else if (stale) motivo = "stale";
+
+  const alerta = motivo !== "ok";
+  return {
+    ok: !alerta, alerta, motivo, stale, ultimoFalhou, idadeHoras,
+    staleLimiteHoras: BACKUP_STALE_HORAS, ultimo, ultimoConcluido, config,
+  };
+}
+
 // ============================================================
 // NOTIFICAÇÕES
 // ============================================================

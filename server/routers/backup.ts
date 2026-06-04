@@ -1,14 +1,19 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
-import { executarBackup, listarBackups, obterConfigBackup, salvarConfigBackup } from "../services/backupService";
+import { executarBackup, listarBackups, obterConfigBackup, salvarConfigBackup, getBackupHealth } from "../services/backupService";
+import { getCodeSyncStatus, pushCodeSnapshotToGitHub } from "../services/codeSyncService";
 import { TRPCError } from "@trpc/server";
+
+function assertAdmin(ctx: any) {
+  if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores" });
+  }
+}
 
 export const backupRouter = router({
   executar: protectedProcedure
     .mutation(async ({ ctx }) => {
-      if (ctx.user.role !== "admin") {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores podem executar backups" });
-      }
+      assertAdmin(ctx);
       const result = await executarBackup("manual", ctx.user.name || "Admin");
       return result;
     }),
@@ -16,17 +21,13 @@ export const backupRouter = router({
   listar: protectedProcedure
     .input(z.object({ limit: z.number().min(1).max(100).optional() }).optional())
     .query(async ({ ctx, input }) => {
-      if (ctx.user.role !== "admin") {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores podem ver backups" });
-      }
+      assertAdmin(ctx);
       return listarBackups(input?.limit ?? 30);
     }),
 
   obterConfig: protectedProcedure
     .query(async ({ ctx }) => {
-      if (ctx.user.role !== "admin") {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores" });
-      }
+      assertAdmin(ctx);
       return obterConfigBackup();
     }),
 
@@ -36,9 +37,7 @@ export const backupRouter = router({
       ativo: z.boolean(),
     }))
     .mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== "admin") {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores" });
-      }
+      assertAdmin(ctx);
       const [h, m] = input.horario.split(":").map(Number);
       if (h < 0 || h > 23 || m < 0 || m > 59) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Horário inválido" });
@@ -46,4 +45,22 @@ export const backupRouter = router({
       await salvarConfigBackup(input.horario, input.ativo, ctx.user.name || "Admin");
       return { success: true };
     }),
+
+  // Saúde do backup de dados (idade, falhas, configuração).
+  health: protectedProcedure.query(async ({ ctx }) => {
+    assertAdmin(ctx);
+    return getBackupHealth();
+  }),
+
+  // Status da sincronização do código com o GitHub.
+  githubStatus: protectedProcedure.query(async ({ ctx }) => {
+    assertAdmin(ctx);
+    return getCodeSyncStatus();
+  }),
+
+  // Redundância: envia uma cópia do código-fonte para a branch dedicada no GitHub.
+  pushCodeSnapshot: protectedProcedure.mutation(async ({ ctx }) => {
+    assertAdmin(ctx);
+    return pushCodeSnapshotToGitHub(ctx.user.name || "Admin");
+  }),
 });

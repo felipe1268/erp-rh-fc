@@ -21,7 +21,7 @@ import { FinanceiroConfigSection } from "@/pages/configuracoes/FinanceiroConfigS
 import { AlmoxarifadoConfigSection } from "@/pages/configuracoes/AlmoxarifadoConfigSection";
 import { PlanejamentoConfigSection } from "@/pages/configuracoes/PlanejamentoConfigSection";
 import TemplatesDocsTab from "@/pages/configuracoes/TemplatesDocsTab";
-import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, ChevronDown, Info, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign, FolderOpen, FileBarChart, Hammer, Truck, Megaphone, Briefcase, Brain, SlidersHorizontal } from "lucide-react";
+import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, ChevronDown, Info, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign, FolderOpen, FileBarChart, Hammer, Truck, Megaphone, Briefcase, Brain, SlidersHorizontal, GitBranch, Upload, ShieldCheck, ShieldAlert } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { removeAccents } from "@/lib/searchUtils";
@@ -333,7 +333,7 @@ export default function Configuracoes() {
     { key: "terceiros" as TabKey, label: "Terceiros / Gestores", icon: Building2, minRole: "admin", color: "fuchsia" },
     { key: "portal_cliente" as TabKey, label: "Portal do Cliente", icon: Shield, minRole: "admin", color: "purple" },
     { key: "limpeza" as TabKey, label: "Limpeza de Dados", icon: Trash2, minRole: "admin_master", color: "rose" },
-    { key: "backup" as TabKey, label: "Backup do Banco", icon: Database, minRole: "admin", color: "slate" },
+    { key: "backup" as TabKey, label: "Backup & Sincronização", icon: Database, minRole: "admin", color: "slate" },
   ];
   const tabs = allTabs.filter(tab => {
     if (tab.minRole === "user") return true;
@@ -2682,6 +2682,21 @@ function BackupTab() {
   const configQuery = (trpc as any).backup.obterConfig.useQuery();
   const [configInit, setConfigInit] = useState(false);
 
+  const healthQuery = (trpc as any).backup.health.useQuery(undefined, { refetchOnWindowFocus: false });
+  const githubQuery = (trpc as any).backup.githubStatus.useQuery(undefined, { refetchOnWindowFocus: false });
+  const [enviandoSnapshot, setEnviandoSnapshot] = useState(false);
+  const pushSnapshotMut = (trpc as any).backup.pushCodeSnapshot.useMutation({
+    onSuccess: (data: any) => {
+      toast.success(`Cópia do código enviada ao GitHub (${data.shortSha}) — ${formatBytes(data.tamanhoBytes)}`);
+      setEnviandoSnapshot(false);
+      githubQuery.refetch();
+    },
+    onError: (err: any) => {
+      toast.error("Erro ao enviar código: " + err.message);
+      setEnviandoSnapshot(false);
+    },
+  });
+
   useEffect(() => {
     const d = configQuery.data as any;
     if (d && !configInit) {
@@ -2739,8 +2754,51 @@ function BackupTab() {
   const backups = backupsQuery.data || [];
   const configData = (configQuery.data || {}) as any;
 
+  const fmtDateBr = (d: string | null | undefined) =>
+    d ? new Date(d).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—";
+
   return (
     <div className="space-y-4">
+      {/* Banner de saúde (backup + código) */}
+      {(() => {
+        const h = healthQuery.data as any;
+        const g = githubQuery.data as any;
+        if (healthQuery.isLoading || githubQuery.isLoading) return null;
+        const problemas: string[] = [];
+        if (h?.alerta) {
+          if (h.motivo === "ultimo_falhou") problemas.push("O último backup do banco falhou.");
+          else if (h.motivo === "sem_backup") problemas.push("Nenhum backup concluído foi encontrado.");
+          else if (h.motivo === "stale") problemas.push(`Backup atrasado: último concluído há ~${h.idadeHoras}h (limite ${h.staleLimiteHoras}h).`);
+          else if (h.motivo === "sem_db") problemas.push("Banco indisponível para verificar o backup.");
+        }
+        if (g?.alerta) {
+          if (g.status === "github_atrasado") problemas.push(`O código em execução é mais novo que o salvo no GitHub (último commit no GitHub há ${g.diasDesdeGithub ?? "?"} dia(s)).`);
+          else if (g.status === "erro") problemas.push(g.conectado === false ? "GitHub não conectado neste ambiente." : `Não foi possível verificar o GitHub${g.erro ? ": " + g.erro : "."}`);
+        }
+        if (problemas.length === 0) {
+          return (
+            <Card className="border-green-200 bg-green-50">
+              <CardContent className="p-3 flex items-center gap-2 text-sm text-green-800">
+                <ShieldCheck className="w-4 h-4 text-green-600 flex-shrink-0" />
+                Tudo certo: backup de dados em dia e código sincronizado com o GitHub.
+              </CardContent>
+            </Card>
+          );
+        }
+        return (
+          <Card className="border-amber-300 bg-amber-50">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-amber-800 mb-1">
+                <ShieldAlert className="w-4 h-4 text-amber-600 flex-shrink-0" /> Atenção necessária
+              </div>
+              <ul className="text-xs text-amber-700 space-y-1 ml-6 list-disc">
+                {problemas.map((p, i) => <li key={i}>{p}</li>)}
+              </ul>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       {/* Cabeçalho */}
       <Card>
         <CardHeader>
@@ -2836,6 +2894,107 @@ function BackupTab() {
               </ul>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Sincronização de Código com o GitHub */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <GitBranch className="w-4 h-4 text-gray-700" />
+                Sincronização de Código (GitHub)
+              </CardTitle>
+              <CardDescription>
+                Compara o código do ERP em execução com o que está salvo no GitHub e permite enviar uma cópia de segurança do código.
+              </CardDescription>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => githubQuery.refetch()}
+              disabled={githubQuery.isFetching}
+              className="gap-1.5 h-8"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${githubQuery.isFetching ? "animate-spin" : ""}`} /> Atualizar
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {githubQuery.isLoading ? (
+            <div className="text-center py-4 text-muted-foreground text-sm">
+              <Loader2 className="w-5 h-5 animate-spin mx-auto mb-1" /> Verificando GitHub...
+            </div>
+          ) : (() => {
+            const g = githubQuery.data as any;
+            if (!g) return <p className="text-sm text-muted-foreground">Não foi possível carregar o status.</p>;
+            const cfgMap: Record<string, { label: string; cls: string; icon: any }> = {
+              em_dia: { label: "Em dia", cls: "bg-green-100 text-green-700", icon: <Check className="w-3.5 h-3.5" /> },
+              github_atrasado: { label: "GitHub desatualizado", cls: "bg-amber-100 text-amber-700", icon: <AlertTriangle className="w-3.5 h-3.5" /> },
+              deploy_pendente: { label: "Deploy pendente", cls: "bg-blue-100 text-blue-700", icon: <Info className="w-3.5 h-3.5" /> },
+              divergente: { label: "Divergente", cls: "bg-amber-100 text-amber-700", icon: <AlertTriangle className="w-3.5 h-3.5" /> },
+              erro: { label: g.conectado === false ? "GitHub não conectado" : "Erro ao verificar", cls: "bg-red-100 text-red-700", icon: <X className="w-3.5 h-3.5" /> },
+              desconhecido: { label: "Desconhecido", cls: "bg-gray-100 text-gray-700", icon: <Info className="w-3.5 h-3.5" /> },
+            };
+            const cfg = cfgMap[g.status] || cfgMap.desconhecido;
+            return (
+              <>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full ${cfg.cls}`}>
+                    {cfg.icon} {cfg.label}
+                  </span>
+                  <a href={`https://github.com/${g.repo}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1">
+                    <ExternalLink className="w-3 h-3" /> {g.repo}
+                  </a>
+                </div>
+                {g.status === "github_atrasado" && (
+                  <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                    O código mais recente do ERP <strong>ainda não está no GitHub</strong>. Verifique a sincronização automática do Replit (painel Git) ou use o botão abaixo para enviar uma cópia manual.
+                  </div>
+                )}
+                {g.status === "erro" && g.erro && (
+                  <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2">{g.erro}</div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <div className="border rounded p-3">
+                    <p className="text-xs text-muted-foreground mb-1">ERP em execução</p>
+                    <p className="font-mono text-gray-900">{g.running?.shortSha || "—"}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{fmtDateBr(g.running?.date)}</p>
+                    {g.running?.message && <p className="text-xs text-gray-600 mt-1 line-clamp-2">{g.running.message}</p>}
+                  </div>
+                  <div className="border rounded p-3">
+                    <p className="text-xs text-muted-foreground mb-1">Último no GitHub (main)</p>
+                    <p className="font-mono text-gray-900">{g.github?.shortSha || "—"}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {fmtDateBr(g.github?.date)}{g.diasDesdeGithub != null && ` · há ${g.diasDesdeGithub} dia(s)`}
+                    </p>
+                    {g.github?.message && <p className="text-xs text-gray-600 mt-1 line-clamp-2">{g.github.message}</p>}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
+                  <p className="text-xs text-muted-foreground">
+                    {g.ultimoSnapshot?.date
+                      ? <>Última cópia de segurança do código enviada em <strong>{fmtDateBr(g.ultimoSnapshot.date)}</strong>.</>
+                      : "Nenhuma cópia de segurança do código enviada ainda."}
+                  </p>
+                  <Button
+                    size="sm"
+                    onClick={() => { setEnviandoSnapshot(true); pushSnapshotMut.mutate(); }}
+                    disabled={enviandoSnapshot || g.conectado === false}
+                    className="gap-1.5 h-8"
+                  >
+                    {enviandoSnapshot
+                      ? <><Loader2 className="w-4 h-4 animate-spin" /> Enviando...</>
+                      : <><Upload className="w-4 h-4" /> Enviar cópia do código agora</>}
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  A cópia de segurança envia um .zip do código-fonte para a branch <code>erp-code-snapshots</code> no GitHub. Funciona a partir do ambiente de desenvolvimento (onde o código-fonte completo está disponível).
+                </p>
+              </>
+            );
+          })()}
         </CardContent>
       </Card>
 

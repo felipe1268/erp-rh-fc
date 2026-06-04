@@ -3700,6 +3700,11 @@ Regras:
     delay(135_000).then(() =>
       import("../services/pjConformidadeJobs").then(m => m.startPJConformidadeJobs()).catch(e => console.error("[PJConformidadeJobs] Erro:", e))
     );
+
+    // t=150s — SyncMonitor (saúde do backup + sincronização do código com o GitHub)
+    delay(150_000).then(() =>
+      import("../services/syncMonitorJob").then(m => m.startSyncMonitorJob()).catch(e => console.error("[SyncMonitor] Erro:", e))
+    );
   });
 }
 
