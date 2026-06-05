@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2778 — **EPI · OS NÚMEROS DA TELA "ESTOQUE POR OBRA" AGORA SÃO FORMATADOS COM SEPARADOR DE MILHAR
+ * (PADRÃO pt-BR) — O TOTAL DE UNIDADES E AS QUANTIDADES POR LOCAL FICAM LEGÍVEIS (ex.: "2.102 unid." EM VEZ
+ * DE "2102 unid." / o número colado).**
+ *
+ * PEDIDO (usuário, print): "separe tudo com ponto e vírgula certinho" — após a Rev. 2777 (que corrigiu a
+ * concatenação de string no total), o usuário pediu que TODOS os números da tela "Estoque por Obra" usem o
+ * separador de milhar do padrão brasileiro (ponto), pra ficarem fáceis de ler.
+ *
+ * FIX (SÓ CLIENT; ZERO SCHEMA/SERVER) em `client/src/pages/Epis.tsx`: aplicado `.toLocaleString('pt-BR')` em
+ * TODOS os contadores inteiros do bloco de resumo/cards da aba "Estoque por Obra":
+ *  - card resumo: total de unidades (`unidTotal`);
+ *  - card do Almoxarifado Central: unidades (`unidCentral`) e "tipo(s) de EPI" (`estoqueCentral.totalItens`);
+ *  - cards por obra: unidades (`r.totalUnidades`) e "tipo(s) de EPI" (`r.totalItens`).
+ * Os valores que vêm do banco como STRING (`SUM()`/`COUNT()` do Postgres) foram blindados com
+ * `Number(... || 0)` antes do `.toLocaleString`, eliminando qualquer risco de concatenação ou `NaN`. Os
+ * valores monetários (R$) já usavam `toLocaleString('pt-BR', { minimumFractionDigits: 2 })` e ficaram intactos.
+ * ZERO ALTER/DROP/DELETE. Validação: HMR ok; architect.
+ *
  * Rev. 2777 — **EPI · CORRIGIDO O TOTAL DE UNIDADES DO CARD "VALOR TOTAL EM ESTOQUE" DA TELA "ESTOQUE POR
  * OBRA": MOSTRAVA UM NÚMERO GIGANTE SEM SENTIDO (ex.: "10130191981646164110158 unid.") — ERA CONCATENAÇÃO DE
  * STRING EM VEZ DE SOMA.**

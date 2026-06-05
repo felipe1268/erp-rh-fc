@@ -2874,8 +2874,8 @@ export default function Epis() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-semibold">{unidTotal} unid.</p>
-                      <p className="text-xs text-muted-foreground">{totalLocais} local(is)</p>
+                      <p className="text-sm font-semibold">{unidTotal.toLocaleString('pt-BR')} unid.</p>
+                      <p className="text-xs text-muted-foreground">{Number(totalLocais || 0).toLocaleString('pt-BR')} local(is)</p>
                     </div>
                   </div>
                 </CardContent>
@@ -2892,11 +2892,11 @@ export default function Epis() {
                           <p className="font-semibold text-sm text-emerald-700 flex items-center gap-1.5">
                             <Building2 className="h-3.5 w-3.5" /> Almoxarifado Central
                           </p>
-                          <p className="text-xs text-muted-foreground mt-1">{estoqueCentral.totalItens} tipo(s) de EPI</p>
+                          <p className="text-xs text-muted-foreground mt-1">{Number(estoqueCentral.totalItens || 0).toLocaleString('pt-BR')} tipo(s) de EPI</p>
                           <p className="text-xs text-emerald-600 font-medium mt-0.5">R$ {valorCentral.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                         </div>
                         <Badge variant="outline" className="text-emerald-600 border-emerald-300 bg-emerald-50">
-                          {unidCentral} unid.
+                          {unidCentral.toLocaleString('pt-BR')} unid.
                         </Badge>
                       </div>
                     </CardContent>
@@ -2912,11 +2912,11 @@ export default function Epis() {
                       <div className="flex justify-between items-start">
                         <div>
                           <p className="font-semibold text-sm text-[#1B3A5C]">{r.nomeObra}</p>
-                          <p className="text-xs text-muted-foreground mt-1">{r.totalItens} tipo(s) de EPI</p>
+                          <p className="text-xs text-muted-foreground mt-1">{Number(r.totalItens || 0).toLocaleString('pt-BR')} tipo(s) de EPI</p>
                           <p className="text-xs text-emerald-600 font-medium mt-0.5">R$ {parseFloat(String(r.valorTotal || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                         </div>
                         <Badge variant="outline" className="text-blue-600 border-blue-300 bg-blue-50">
-                          {r.totalUnidades} unid.
+                          {Number(r.totalUnidades || 0).toLocaleString('pt-BR')} unid.
                         </Badge>
                       </div>
                     </CardContent>
