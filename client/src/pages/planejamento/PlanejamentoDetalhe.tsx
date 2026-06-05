@@ -7279,12 +7279,16 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       // única exceção (estimativa do ERP), pois não têm coluna no XML.
 
       // Rev. 2266 — REGRAVA o `calendarioJson` no banco com o snapshot
-      // FRESCO da raiz UID=0 (previstoMspSnapshot / realizadoMspSnapshot
-      // / statusDateSnapshot / envelope). Sem isso, os cards do topo
-      // (Rev. 2265 / mspReadOnly) continuam mostrando o snapshot do
-      // import inicial. Fire-and-forget: erro aqui não invalida o import
-      // de avanços (que já foi feito acima). Só XML — XLSX não traz
-      // metadados do MSP suficientes pra um snapshot confiável.
+      // FRESCO da raiz UID=0 (realizadoMspSnapshot / statusDateSnapshot).
+      // Sem isso, os cards do topo (Rev. 2265 / mspReadOnly) continuam
+      // mostrando o snapshot do import inicial. Fire-and-forget: erro aqui
+      // não invalida o import de avanços (que já foi feito acima). Só XML —
+      // XLSX não traz metadados do MSP suficientes pra um snapshot confiável.
+      //
+      // Rev. 2765 — `origem: "avanco"`: o servidor SÓ atualiza o REALIZADO +
+      // StatusDate e NUNCA toca o previsto (não regenera a curva e preserva o
+      // previstoMspSnapshot/calendário do cadastro). A aba Avanço Semanal cuida
+      // apenas do % Concluída; o "% Previsto" é congelado na aba Cronograma.
       let snapshotRegravado = false;
       if (xmlTextSnapshot) {
         try {
@@ -7296,6 +7300,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
             calendarioJson: full.calendarioJson ?? undefined,
             projetoStart:   full.projetoStart   ?? undefined,
             projetoFinish:  full.projetoFinish  ?? undefined,
+            origem:         "avanco",
           });
           snapshotRegravado = true;
           utils.planejamento.getProjetoById.invalidate({ id: projetoId });

@@ -1202,6 +1202,9 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
         calendarioJson: metadadosMSP.calendarioJson,
         projetoStart:   metadadosMSP.projetoStart,
         projetoFinish:  metadadosMSP.projetoFinish,
+        // Rev. 2765 — cadastro inicial (aba Cronograma): PODE (re)gerar a curva
+        // "% Previsto" do MSP. É aqui — e só aqui — que o previsto é definido.
+        origem:         "cadastro",
       });
       utils.planejamento.getProjetoById.invalidate();
       utils.planejamento.getDataCorte.invalidate();

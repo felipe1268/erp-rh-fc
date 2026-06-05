@@ -1,6 +1,58 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2765 — **PLANEJAMENTO · "% PREVISTO": A CURVA AGORA É CONGELADA NO CADASTRO DO CRONOGRAMA E O UPLOAD
+ * SEMANAL (AVANÇO) NUNCA MAIS A REGENERA — ELIMINA A DERIVA DE ±1% EM RELAÇÃO AO MS PROJECT EM SEMANAS
+ * AVANÇADAS.**
+ *
+ * PEDIDO/SINTOMA (Felipe): o "% Previsto" exibido no ERP divergia ±1% do MS Project, e a diferença CRESCIA
+ * nas semanas mais avançadas. Decisão do usuário (confirmada em conversa): (1) a aba CRONOGRAMA faz APENAS
+ * o cadastro inicial e é ali que a previsão semana-a-semana é lida do XML (baseline FIXA); (2) a aba AVANÇO
+ * SEMANAL registra SÓ o % Concluída (realizado) e NUNCA toca o previsto; (3) o "% Previsto" avança por
+ * semana (curva sobe), sempre a partir da MESMA baseline.
+ *
+ * CAUSA-RAIZ (SÓ SERVER): a curva "% Previsto" (Caminho B) vive em `planejamento_projetos.previsto_semanas_json`
+ * e era gerada 1x no cadastro (`importarComModo`/`salvarAtividades` → `regenerarPrevistoSemanasCaminhoB`).
+ * PORÉM, desde a Rev. 2646, `salvarMetadadosMSProject` REGENERAVA a curva em TODO upload que trouxesse
+ * `calendarioJson` — INCLUSIVE o upload SEMANAL da aba Avanço. Cada upload semanal reescrevia o
+ * `calendarioJson` com o calendário/jornada DAQUELE XML e re-rodava o motor; pequenas diferenças de
+ * calendário entre semanas faziam a curva oscilar ±1% (mais visível nas semanas avançadas). A baseline em
+ * si é imutável dentro da revisão, mas o calendário usado pelo motor não estava sendo congelado.
+ *
+ * INVESTIGAÇÃO DO XML (scripts em /tmp + attached_assets, arquivos `_-_CADASTRO_`/`_-_BASE_LINE_` e
+ * semanais 00–05): NÃO existe coluna literal "previsto semana a semana" no XML. O MSP guarda a BASELINE
+ * (`<Baseline Number="0">` com Start/Finish/Duration COM HORA por folha) + o calendário, e o "% Previsto"
+ * (Texto10/188743750) é só UM valor por status date (raiz). Logo, a curva por semana é necessariamente
+ * DERIVADA da baseline pelo motor minuto-a-minuto — e por isso precisa ser gerada UMA vez (no cadastro) e
+ * CONGELADA, em vez de re-derivada a cada semana.
+ *
+ * FIX (SERVER + CLIENT; ZERO SCHEMA — R-001/R-007/R-010; só UPDATE de coluna JSON via app):
+ * - `server/routers/planejamento.ts` (`salvarMetadadosMSProject`): NOVO input `origem: "cadastro" | "avanco"`
+ *   (default "cadastro" p/ backward compat). Quando `origem === "avanco"`:
+ *     (a) NÃO regenera o previsto (gate `input.calendarioJson && input.origem !== "avanco"` no bloco da
+ *         Rev. 2646); e
+ *     (b) ao gravar o `calendarioJson`, MESCLA preservando do CADASTRO o `previstoMspSnapshot` + o calendário
+ *         (`weekDayIntervals`/`exceptions`/`weekDays`), tomando do XML semanal só o realizado + StatusDate.
+ *         Assim o card de previsto (curva congelada) e o self-heal de leitura (que relê o calendário) ficam
+ *         idempotentes — o avanço semanal nunca contamina o previsto.
+ * - `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (`importarDoMSProject`, fluxo da aba Avanço):
+ *   a chamada de `salvarMetadadosMSProject` passa `origem: "avanco"`.
+ * - `client/src/pages/planejamento/ImportarCronograma.tsx` (`gravarMetadadosMSP`, fluxo do cadastro): passa
+ *   `origem: "cadastro"` (explícito; é onde a curva PODE ser gerada).
+ *
+ * O cliente JÁ lia a curva congelada por semana (`previstoCurva.raizAt(semana)` de `previsto_semanas_json`)
+ * como FONTE PRIMÁRIA dos cards — `previstoMspSnapshot` é só fallback. Por isso o fix é cirúrgico no servidor:
+ * basta parar de re-derivar a curva nos avanços e preservar o calendário do cadastro.
+ *
+ * RESSALVA DE PARIDADE NUMÉRICA: o congelamento ELIMINA a deriva entre semanas (a curva fica estável e igual
+ * à derivada no cadastro). A fidelidade absoluta do motor à fórmula do MSP (Texto10) continua valendo a
+ * mesma régua da Rev. 2646 (rollup das folhas + round, minuto-a-minuto sobre a baseline com hora). Projetos
+ * ANTIGOS só recongelam a curva no PRÓXIMO upload pela aba CRONOGRAMA (reimport do cronograma inicial);
+ * uploads semanais não mais a alteram (nem pra pior, nem pra "auto-curar").
+ *
+ * VALIDAÇÃO: servidor sobe limpo (tsx watch, sem erros de compilação); fluxos de cadastro e avanço
+ * separados pelo flag `origem`; architect.
+ *
  * Rev. 2764 — **RH/DP · RECONTRATAÇÃO (FILA DE APROVAÇÃO): OS MODAIS "LIBERAR RECONTRATAÇÃO" E "RECUSAR
  * RECONTRATAÇÃO" FORAM MODERNIZADOS E PERDERAM A BARRA DE ROLAGEM HORIZONTAL — CABEÇALHO EM FAIXA COLORIDA,
  * CARD DE COLABORADOR LIMPO, ALERTA DE EXPERIÊNCIA EM CAIXA E RODAPÉ FIXO.**

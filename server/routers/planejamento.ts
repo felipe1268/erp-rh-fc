@@ -3075,10 +3075,19 @@ export const planejamentoRouter = router({
       // (paridade Texto10), em vez de min/max das folhas que pode inflar o total.
       projetoStart:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
       projetoFinish:  z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
+      // Rev. 2765 — DE ONDE veio a chamada. "cadastro" = aba Cronograma (import
+      // inicial): pode (re)gerar a curva "% Previsto". "avanco" = aba Avanço
+      // Semanal: SÓ atualiza o REALIZADO (% Concluída) + StatusDate; NUNCA toca
+      // no previsto (não regenera a curva e preserva o snapshot/calendário do
+      // cadastro). Default "cadastro" p/ backward compat de chamadas antigas.
+      origem:         z.enum(["cadastro", "avanco"]).default("cadastro"),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-      const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
+      const [proj] = await db.select({
+        companyId: planejamentoProjetos.companyId,
+        calendarioJson: planejamentoProjetos.calendarioJson,
+      })
         .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId));
       if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
       const isAdminMet = ctx.user.role === "admin" || ctx.user.role === "admin_master";
@@ -3097,7 +3106,29 @@ export const planejamentoRouter = router({
         patch.dataCorteIso = input.statusDateIso;
       }
       if (input.calendarioJson !== undefined && input.calendarioJson !== null) {
-        patch.calendarioJson = input.calendarioJson;
+        if (input.origem === "avanco") {
+          // Rev. 2765 — Avanço Semanal NUNCA toca o previsto. O calendarioJson
+          // que chega do XML SEMANAL traz o realizado/StatusDate frescos, mas
+          // também o `previstoMspSnapshot` e o calendário (jornada/feriados) DAQUELE
+          // upload — que NÃO devem sobrescrever a baseline congelada no cadastro.
+          // Mesclamos: previsto + calendário ficam do CADASTRO (valor antigo);
+          // realizado + StatusDate vêm do novo. Assim o card de previsto (curva
+          // congelada) e o self-heal (que relê o calendário) seguem idempotentes.
+          try {
+            const oldCal = proj.calendarioJson ? JSON.parse(proj.calendarioJson) : {};
+            const newCal = JSON.parse(input.calendarioJson);
+            if (oldCal.previstoMspSnapshot != null) newCal.previstoMspSnapshot = oldCal.previstoMspSnapshot;
+            if (oldCal.weekDayIntervals)            newCal.weekDayIntervals    = oldCal.weekDayIntervals;
+            if (oldCal.exceptions)                  newCal.exceptions          = oldCal.exceptions;
+            if (oldCal.weekDays)                    newCal.weekDays            = oldCal.weekDays;
+            patch.calendarioJson = JSON.stringify(newCal);
+          } catch {
+            // JSON inesperado → mantém o que chegou (não derruba o save).
+            patch.calendarioJson = input.calendarioJson;
+          }
+        } else {
+          patch.calendarioJson = input.calendarioJson;
+        }
       }
       // Rev. 1646.2 — sobrescreve dataInicio + dataTerminoContratual com os
       // valores da linha-resumo raiz do MSP. Cópia plena (sem inventar).
@@ -3119,7 +3150,14 @@ export const planejamentoRouter = router({
       // ALTER/DROP/DELETE — R-001/R-007/R-010 OK) e idempotente (a baseline é
       // imutável dentro da revisão → mesma curva a cada upload). Só dispara
       // quando veio calendário novo (= é um import real, não chamada avulsa).
-      if (input.calendarioJson) {
+      //
+      // Rev. 2765 — MAS NUNCA no fluxo de AVANÇO SEMANAL (`origem === "avanco"`):
+      // a aba Avanço Semanal só registra o REALIZADO (% Concluída). Regenerar o
+      // previsto a cada upload semanal — com o calendário daquela semana — era
+      // justamente o que fazia a curva "% Previsto" DERIVAR ±1% do MSP em semanas
+      // avançadas. O previsto agora é CONGELADO no cadastro (aba Cronograma) e só
+      // é regerado por chamadas `origem === "cadastro"`.
+      if (input.calendarioJson && input.origem !== "avanco") {
         try {
           const revs = await db.select({
             id: planejamentoRevisoes.id,
