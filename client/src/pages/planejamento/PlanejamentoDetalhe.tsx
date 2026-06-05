@@ -821,6 +821,20 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     return refStr;
   }, [semanaVisualizacao, cutoffDowTop, dataCorteInfo?.dataCorteOficial, refDateStr]);
 
+  // Rev. 2766 — `previstoRefStr`: ponto de leitura da CURVA "% Previsto" (passo
+  // semanal) na barra superior. Quando uma semana está selecionada, lê SEMPRE no
+  // FIM da semana (cutoff), igual ao card "Previsto (Semana)" (`raizAt(semanaFim)`).
+  // O `topRefStr` usa o `cutoffOficial` (StatusDate) na semana CORRENTE, mas a
+  // curva só tem degraus nos cutoffs semanais: na 1ª semana o StatusDate cai ANTES
+  // de `semanas[0]` → `raizAt` devolvia 0 (barra vazia) enquanto o card mostrava 2%.
+  // Em modo Live (sem semana) mantém `topRefStr` (hoje). Só afeta o PREVISTO.
+  const previstoRefStr = useMemo(() => {
+    if (semanaVisualizacao) {
+      return cutoffWeekFromMonday(semanaVisualizacao, cutoffDowTop).fim;
+    }
+    return topRefStr;
+  }, [semanaVisualizacao, cutoffDowTop, topRefStr]);
+
   const avancoPrevistoDia = useMemo(() => {
     // Rev. 2425 — REGRA DE OURO MSP (replit.md / Rev. 2265): o ERP NÃO calcula
     // avanço, só LÊ o snapshot do XML do MS Project (Texto10 → Texto11 →
@@ -836,8 +850,8 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     // congelado na StatusDate do último XML — por isso o "Previsto" do topo
     // travava em ~1% mesmo no modo Live. Continua "ERP só LÊ": apenas lê a curva
     // gerada no cadastro. Snapshot vira FALLBACK quando a curva está ausente.
-    if (previstoCurva && topRefStr) {
-      const c = previstoCurva.raizAt(topRefStr);
+    if (previstoCurva && previstoRefStr) {
+      const c = previstoCurva.raizAt(previstoRefStr);
       if (c != null) return Math.min(100, Math.max(0, c));
     }
     const _calMSP_P = parseCalendarioJson((proj as any)?.calendarioJson);
@@ -847,7 +861,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
       (!_calMSP_P.envelopeFinishSnapshot || _calMSP_P.envelopeFinishSnapshot === (proj as any)?.dataTerminoContratual);
     if (!envOk) return null;
     return Math.min(100, Math.max(0, Number(_calMSP_P.previstoMspSnapshot)));
-  }, [refisComIndiretasGlobal, previstoCurva, topRefStr, (proj as any)?.calendarioJson, (proj as any)?.dataInicio, (proj as any)?.dataTerminoContratual]);
+  }, [refisComIndiretasGlobal, previstoCurva, previstoRefStr, (proj as any)?.calendarioJson, (proj as any)?.dataInicio, (proj as any)?.dataTerminoContratual]);
 
   // ── Rev. 1715 — pvMacro elevado ao escopo do Inner ─────────────────────
   // A Rev. 1713 começou a propagar `pvMacro={pvMacro}` para `<Refis>` (L~1053)

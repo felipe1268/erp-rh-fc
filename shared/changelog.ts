@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2766 — **PLANEJAMENTO · AVANÇO SEMANAL · BARRA "AVANÇO FÍSICO" DO TOPO: O "% PREVISTO" DA 1ª SEMANA
+ * VOLTA A APARECER (mostrava 0% / barra vazia, só "acendia" da 2ª semana em diante), ficando idêntico ao
+ * card "Previsto (Semana)".**
+ *
+ * SINTOMA (Felipe, print): na aba Avanço Semanal, o card "PREVISTO (SEMANA)" exibia 2,00% na 1ª semana, mas
+ * a barra "Previsto" do topo ("Avanço Físico") ficava vazia (0,00%). O previsto do topo só passava a aparecer
+ * a partir da 2ª semana.
+ *
+ * CAUSA-RAIZ (SÓ CLIENT; ZERO SERVER/SCHEMA): a curva "% Previsto" (Caminho B, `previsto_semanas_json`) é uma
+ * função-DEGRAU com valores ancorados nos CUTOFFS semanais (`semanas[]`); `raizAt(alvo)` devolve o degrau do
+ * maior cutoff ≤ alvo, e ANTES do 1º cutoff devolve 0%. O card "Previsto (Semana)" lê a curva no FIM da semana
+ * (`raizAt(semanaFim)` = o cutoff da semana) → 1ª semana = `raiz[0]` = 2%. JÁ a barra do topo
+ * (`avancoPrevistoDia`) lia em `topRefStr`, que na SEMANA CORRENTE (a que contém o StatusDate) usa o
+ * `cutoffOficial` (StatusDate, no MEIO da semana). Na 1ª semana o StatusDate (ex.: 04/05) cai ANTES do 1º
+ * cutoff da curva (ex.: Qui 07/05) → `raizAt` devolvia 0 → barra vazia. Da 2ª semana em diante a semana
+ * exibida não contém o StatusDate, então `topRefStr` já era o fim-de-semana → funcionava.
+ *
+ * FIX (SÓ CLIENT — R-001/R-007/R-010): novo memo `previstoRefStr` em
+ * `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`: quando há semana selecionada (`semanaVisualizacao`),
+ * lê SEMPRE o FIM da semana (`cutoffWeekFromMonday(semanaVisualizacao, cutoffDowTop).fim`) — idêntico ao card;
+ * em modo Live (sem semana) mantém `topRefStr` (hoje). `avancoPrevistoDia` passou a ler a curva em
+ * `previstoRefStr` (antes `topRefStr`). Só afeta o PREVISTO da barra do topo — `topRefStr` (usado por REALIZADO,
+ * REFIS e demais consumidores) fica intacto. Sem mudança de cálculo: o ERP continua só LENDO a curva congelada.
+ *
+ * VALIDAÇÃO: HMR sem erros; mudança cirúrgica (1 memo + troca de variável de leitura + deps); architect.
+ *
  * Rev. 2765 — **PLANEJAMENTO · "% PREVISTO": A CURVA AGORA É CONGELADA NO CADASTRO DO CRONOGRAMA E O UPLOAD
  * SEMANAL (AVANÇO) NUNCA MAIS A REGENERA — ELIMINA A DERIVA DE ±1% EM RELAÇÃO AO MS PROJECT EM SEMANAS
  * AVANÇADAS.**

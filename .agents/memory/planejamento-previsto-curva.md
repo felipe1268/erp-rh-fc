@@ -39,3 +39,14 @@ deleting only the activity rows leaves both alive.
 activity rows; nothing cascades. **How to apply:** gate the clear on the
 revisaoId match so curves of OTHER revisions survive; do it best-effort
 (try/catch that only logs) so the core deletion never fails because of it.
+
+**The curve is a STEP function anchored at weekly cutoffs — read consumers at
+end-of-week, not mid-week.** `previstoCurva.raizAt(alvo)` returns the step of the
+largest cutoff `<= alvo`, and 0% BEFORE the first cutoff (`semanas[0]`). The
+"Previsto (Semana)" card reads at `semanaFim` (the week's cutoff) → correct. Any
+OTHER consumer that reads at a mid-week date breaks on the FIRST week only: in the
+current week the top "Avanço Físico" bar's `topRefStr` is the `cutoffOficial`
+(StatusDate, mid-week), which in week 1 falls BEFORE `semanas[0]` → `raizAt`=0 →
+empty bar while the card shows 2%. **How to apply:** when a week is selected, read
+the curve at end-of-week (`cutoffWeekFromMonday(...).fim`) to match the card; keep
+`topRefStr` (StatusDate) only for REALIZADO/REFIS, which are not step-curve reads.
