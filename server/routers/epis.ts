@@ -1832,7 +1832,7 @@ Exemplos de referência:
       }
       return rows.map(r => ({
         ...r,
-        origemNome: r.tipoOrigem === 'central' ? 'Escritório Central' : (r.origemObraId ? obraMap[r.origemObraId] || 'Obra' : 'Obra'),
+        origemNome: r.tipoOrigem === 'central' ? 'Almoxarifado Central' : (r.origemObraId ? obraMap[r.origemObraId] || 'Obra' : 'Obra'),
         destinoNome: obraMap[r.destinoObraId] || 'Obra',
       }));
     }),

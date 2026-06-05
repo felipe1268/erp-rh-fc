@@ -248,7 +248,7 @@ export default function Epis() {
     .map((e: any) => ({
       id: `central-${e.id}`,
       obraId: "central",
-      nomeObra: "Escritório Central",
+      nomeObra: "Almoxarifado Central",
       epiId: e.id,
       nomeEpi: e.nome,
       caEpi: e.ca,
@@ -1423,7 +1423,7 @@ export default function Epis() {
                   <button type="button" onClick={() => setEntregaForm(f => ({ ...f, origemEntrega: 'central', origemObraId: '' }))}
                     className={`flex-1 p-3 rounded-lg border-2 text-center transition-all ${entregaForm.origemEntrega === 'central' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5 shadow-sm' : 'border-gray-200 hover:border-gray-300'}`}>
                     <Package className={`h-5 w-5 mx-auto mb-1 ${entregaForm.origemEntrega === 'central' ? 'text-[#1B2A4A]' : 'text-gray-400'}`} />
-                    <p className={`text-sm font-semibold ${entregaForm.origemEntrega === 'central' ? 'text-[#1B2A4A]' : 'text-gray-500'}`}>Escritório Central</p>
+                    <p className={`text-sm font-semibold ${entregaForm.origemEntrega === 'central' ? 'text-[#1B2A4A]' : 'text-gray-500'}`}>Almoxarifado Central</p>
                     <p className="text-[10px] text-muted-foreground">Estoque central</p>
                   </button>
                   <button type="button" onClick={() => setEntregaForm(f => ({ ...f, origemEntrega: 'obra', origemObraId: '' }))}
@@ -2830,7 +2830,7 @@ export default function Epis() {
                   <SelectTrigger className="w-full sm:w-[220px]"><SelectValue placeholder="Filtrar por obra..." /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todas">Todas as Obras</SelectItem>
-                    <SelectItem value="central">🏢 Escritório Central</SelectItem>
+                    <SelectItem value="central">🏢 Almoxarifado Central</SelectItem>
                     {obrasList.map((o: any) => (
                       <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
                     ))}
@@ -2889,7 +2889,7 @@ export default function Epis() {
                       <div className="flex justify-between items-start">
                         <div>
                           <p className="font-semibold text-sm text-emerald-700 flex items-center gap-1.5">
-                            <Building2 className="h-3.5 w-3.5" /> Escritório Central
+                            <Building2 className="h-3.5 w-3.5" /> Almoxarifado Central
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">{estoqueCentral.totalItens} tipo(s) de EPI</p>
                           <p className="text-xs text-emerald-600 font-medium mt-0.5">R$ {valorCentral.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
@@ -3042,7 +3042,7 @@ export default function Epis() {
                   <div className="flex flex-col items-center justify-center py-16">
                     <ArrowLeftRight className="h-12 w-12 text-muted-foreground/50 mb-4" />
                     <h3 className="font-semibold text-lg">Nenhuma transferência registrada</h3>
-                    <p className="text-muted-foreground text-sm mt-1">Transfira EPIs do escritório central para as obras.</p>
+                    <p className="text-muted-foreground text-sm mt-1">Transfira EPIs do almoxarifado central para as obras.</p>
                     <Button onClick={() => setShowTransferDialog(true)} className="mt-4 bg-[#1B2A4A] hover:bg-[#243660]">
                       <Plus className="h-4 w-4 mr-2" /> Nova Transferência
                     </Button>
@@ -3099,7 +3099,7 @@ export default function Epis() {
                             <td className="p-3 text-center"><ArrowRight className="h-4 w-4 text-muted-foreground mx-auto" /></td>
                             <td className="p-3">
                               <Badge variant="outline" className={t.destinoObraId ? 'bg-green-50 text-green-700 border-green-300' : 'bg-blue-50 text-blue-700 border-blue-300'}>
-                                {t.destinoObraId ? `🏗️ ${t.destinoNome || 'Obra #' + t.destinoObraId}` : '🏢 Escritório Central'}
+                                {t.destinoObraId ? `🏗️ ${t.destinoNome || 'Obra #' + t.destinoObraId}` : '🏢 Almoxarifado Central'}
                               </Badge>
                             </td>
                             <td className="p-3 text-xs whitespace-nowrap">
@@ -3180,7 +3180,7 @@ export default function Epis() {
                 <div className="flex gap-2 mt-1">
                   <button type="button" onClick={() => setTransForm(f => ({ ...f, tipoOrigem: 'central', origemObraId: '' }))}
                     className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all ${transForm.tipoOrigem === 'central' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'}`}>
-                    🏢 Escritório Central
+                    🏢 Almoxarifado Central
                   </button>
                   <button type="button" onClick={() => setTransForm(f => ({ ...f, tipoOrigem: 'obra' }))}
                     className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all ${transForm.tipoOrigem === 'obra' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'}`}>
@@ -3211,7 +3211,7 @@ export default function Epis() {
                   {transForm.tipoOrigem === 'obra' && (
                     <button type="button" onClick={() => setTransForm(f => ({ ...f, tipoDestino: 'central', destinoObraId: '' }))}
                       className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all ${transForm.tipoDestino === 'central' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'}`}>
-                      🏢 Escritório Central
+                      🏢 Almoxarifado Central
                     </button>
                   )}
                 </div>

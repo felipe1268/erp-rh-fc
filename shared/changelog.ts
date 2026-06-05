@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2775 — **EPI · O "ESTOQUE CENTRAL" DO ERP AGORA SE CHAMA "ALMOXARIFADO CENTRAL" NA TELA DE EPIs —
+ * ACABOU A CONFUSÃO COM A OBRA REAL "ESCRITÓRIO CENTRAL" (QUE EXISTE NO CADASTRO DE OBRAS P/ ALOCAR
+ * FUNCIONÁRIOS).**
+ *
+ * PEDIDO (usuário): havia DOIS "Escritório Central" no dropdown da tela de EPIs (print): (1) "🏢 Escritório
+ * Central" — o conceito de ESTOQUE CENTRAL que o ERP cria sozinho (`value="central"`); e (2) "ESCRITÓRIO
+ * CENTRAL" — uma OBRA REAL cadastrada em Obras p/ alocar os funcionários que trabalham no escritório. Os dois
+ * tinham o MESMO nome → confusão. O módulo ALMOXARIFADO já chamava o conceito do ERP de "Almoxarifado
+ * Central"; faltava só o módulo de EPIs seguir o mesmo padrão.
+ *
+ * FIX (SÓ LABEL; ZERO SCHEMA; ZERO MUDANÇA DE VALOR/LÓGICA): renomeado o RÓTULO de "Escritório Central" →
+ * "Almoxarifado Central" em TODOS os pontos do conceito-central no módulo de EPIs — o valor interno
+ * (`"central"` / `tipoOrigem==='central'`) NÃO mudou, então nada de dados/transferências é afetado:
+ *  - `client/src/pages/Epis.tsx`: dropdown "Estoque por Obra" (SelectItem central), card do estoque central
+ *    (título), `centralItensList.nomeObra` (linhas da tabela detalhada), botão de origem da entrega, botões de
+ *    origem/destino do modal de transferência, badge de destino no histórico e o texto do empty-state.
+ *  - `server/routers/epis.ts` (`listarTransferencias`): `origemNome` do central passou a retornar "Almoxarifado
+ *    Central".
+ *
+ * A OBRA REAL "ESCRITÓRIO CENTRAL" (vinda do cadastro de Obras) MANTÉM o nome — quem renomeia uma obra é o
+ * cadastro de Obras, não esta tela. ZERO ALTER/DROP/DELETE (R-001/R-007/R-010).
+ *
+ * VALIDAÇÃO: servidor sobe limpo; HMR ok; grep confirma zero "Escritório Central" remanescente no módulo de
+ * EPIs; architect. Detalhe: este arquivo.
+ *
  * Rev. 2774 — **LOGIN/INFRA · CORRIGIDO O "ERRO" AO ENTRAR (TELA DE LOGIN ESTOURAVA UM TEXTÃO DE QUERY): A
  * CAUSA REAL ERA `timeout exceeded when trying to connect` — O POOL NÃO CONSEGUIA ABRIR CONEXÃO COM O NEON
  * NO 1º REQUEST APÓS ELE HIBERNAR. AGORA O LOGIN TOLERA O COLD-START E RE-TENTA.**
