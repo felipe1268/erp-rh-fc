@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2759 — **RH/DP · RECONTRATAÇÃO: A VERIFICAÇÃO DE CPF VOLTOU A FUNCIONAR — CORRIGIDO O ERRO DE SQL
+ * "syntax error at or near 'desc'" QUE FAZIA TODO CPF CAIR NO CARD LARANJA "NÃO FOI POSSÍVEL VERIFICAR".**
+ *
+ * SINTOMA (Felipe, print): ao digitar QUALQUER CPF em "Novo Colaborador" aparecia o card laranja "Não foi
+ * possível verificar o CPF" (estado de erro introduzido na Rev. 2758). Ou seja: a Rev. 2758 expôs corretamente
+ * uma falha REAL que já existia — `recontratacao.verificarCpf` SEMPRE quebrava no banco.
+ *
+ * CAUSA-RAIZ (SÓ SERVER; ZERO SCHEMA — R-001/R-007/R-010): `server/routers/recontratacao.ts` ordenava por
+ * `desc(employees.dataDesligamento)`, MAS a tabela `employees` NÃO tem a coluna `dataDesligamento` — ela tem
+ * `dataDemissao` e `dataDesligamentoEfetiva` (o nome `dataDesligamento` pertence a `processos_trabalhistas`).
+ * Como `employees.dataDesligamento` resolvia para `undefined`, o Drizzle gerava `ORDER BY  desc` → o Postgres
+ * lançava `syntax error at or near "desc"` e a query inteira falhava. Bug presente desde que a recontratação
+ * foi criada (Rev. 2755); só não era percebido porque antes da Rev. 2758 a falha ficava silenciosa.
+ *
+ * FIX: (1) `verificarCpf` passa a ordenar por `desc(employees.dataDemissao)`. (2) o endpoint `recontratados`
+ * (listar/raio-x) tinha o MESMO erro num `select` (`dataDesligamento: employees.dataDesligamento`) — agora lê
+ * `employees.dataDesligamentoEfetiva` aliased como `dataDesligamento` (preserva a semântica de "data de
+ * desligamento" e o fallback p/ `dataDemissao` na lógica de "tempo fora"). Nenhuma mudança de client/schema.
+ *
+ * HARDENING (architect): havia ainda acessos RUNTIME a `r.dataDesligamento` / `vinc.dataDesligamento` sobre
+ * linhas vindas de `db.select().from(employees)` (full row) — como a coluna NÃO existe em `employees`, esses
+ * acessos eram SEMPRE `undefined` e caíam silenciosamente no fallback `dataDemissao`, IGNORANDO a
+ * `dataDesligamentoEfetiva` (data real do desligamento usada em "dias fora"/carência/alerta jurídico). Não
+ * quebrava SQL, mas empobrecia a semântica. Trocados para `dataDesligamentoEfetiva || dataDemissao` em
+ * `verificarCpf` (cálculo de `diasFora` + campo `dataDesligamento` do retorno) e em `criarSolicitacao`
+ * (`diasFora`, `vinculoAnteriorDesligamento` e o corpo do e-mail aos aprovadores). O endpoint `recontratados`
+ * já estava correto (lê via alias). Nenhuma mudança de client/schema.
+ *
+ * VALIDAÇÃO: esbuild parse server EXIT 0; `vitest server/rescisao.test.ts` 41/41 verde; architect.
+ *
  * Rev. 2758 — **RH/DP · NOVO COLABORADOR: O VEREDITO DO CPF VIRA UM CARD FIXO E SEMPRE CONCLUSIVO —
  * "NOVO", "JÁ CADASTRADO", "JÁ EM RECONTRATAÇÃO" OU "JÁ FOI COLABORADOR (DESLIGADO) → RECONTRATAR?".**
  *

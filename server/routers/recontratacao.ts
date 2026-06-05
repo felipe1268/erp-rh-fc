@@ -157,7 +157,7 @@ export const recontratacaoRouter = router({
         or(eq(employees.cpf, input.cpf), eq(employees.cpf, cleanCpf)),
         inArray(employees.companyId, grupoIds),
         isNull(employees.deletedAt),
-      )).orderBy(desc(employees.dataDesligamento));
+      )).orderBy(desc(employees.dataDemissao));
 
       const carenciaDias = parseInt(await getCriterioValor(db, input.companyId, "recontratacao_carencia_dias", "90"), 10) || 90;
       const permitirExpFuncaoDif = (await getCriterioValor(db, input.companyId, "recontratacao_permitir_experiencia_funcao_diferente", "1")) === "1";
@@ -175,7 +175,7 @@ export const recontratacaoRouter = router({
         .filter((r: any) => r.status === "Desligado" || r.status === "Inativo")
         .map((r: any) => {
           const mesmaEmpresa = r.companyId === input.companyId;
-          const diasFora = diasEntre(r.dataDesligamento || r.dataDemissao);
+          const diasFora = diasEntre(r.dataDesligamentoEfetiva || r.dataDemissao);
           const sinais = computarSinais({
             mesmaEmpresa, funcaoNova: input.funcao, funcaoAnterior: r.funcao,
             diasFora, carenciaDias, permitirExpFuncaoDif,
@@ -190,7 +190,7 @@ export const recontratacaoRouter = router({
             cargoAnterior: r.cargo,
             status: r.status,
             dataAdmissao: r.dataAdmissao,
-            dataDesligamento: r.dataDesligamento || r.dataDemissao,
+            dataDesligamento: r.dataDesligamentoEfetiva || r.dataDemissao,
             motivoDesligamento: r.motivoDesligamento,
             categoriaDesligamento: r.categoriaDesligamento,
             listaNegra: r.listaNegra === 1,
@@ -326,7 +326,7 @@ export const recontratacaoRouter = router({
       const prazoDias = parseInt(await getCriterioValor(db, input.companyId, "recontratacao_prazo_resolucao_dias", "30"), 10) || 30;
 
       const mesmaEmpresa = vinc ? vinc.companyId === input.companyId : true;
-      const diasFora = vinc ? diasEntre(vinc.dataDesligamento || vinc.dataDemissao) : null;
+      const diasFora = vinc ? diasEntre(vinc.dataDesligamentoEfetiva || vinc.dataDemissao) : null;
       const sinais = computarSinais({
         mesmaEmpresa, funcaoNova: ficha.funcao, funcaoAnterior: vinc?.funcao,
         diasFora, carenciaDias, permitirExpFuncaoDif,
@@ -343,7 +343,7 @@ export const recontratacaoRouter = router({
         vinculoAnteriorCompanyId: vinc?.companyId ?? null,
         vinculoAnteriorCodigo: vinc?.codigoInterno ?? null,
         vinculoAnteriorFuncao: vinc?.funcao ?? null,
-        vinculoAnteriorDesligamento: vinc?.dataDesligamento || vinc?.dataDemissao || null,
+        vinculoAnteriorDesligamento: vinc?.dataDesligamentoEfetiva || vinc?.dataDemissao || null,
         mesmaEmpresa: mesmaEmpresa ? 1 : 0,
         mesmaFuncao: sinais.mesmaFuncao ? 1 : 0,
         diasFora: diasFora ?? null,
@@ -377,7 +377,7 @@ export const recontratacaoRouter = router({
             `Candidato: ${ficha.nomeCompleto}\nCPF: ${cpf}\nFunção: ${ficha.funcao || "—"}\n` +
             `Empresa: ${company?.razaoSocial || company?.nomeFantasia || ""}\n` +
             `Solicitante: ${ctx.user.name ?? "Sistema"}\n` +
-            (vinc ? `Vínculo anterior: ${vinc.codigoInterno || "—"} (desligado em ${vinc.dataDesligamento || vinc.dataDemissao || "—"}, ${diasFora ?? "—"} dias fora)\n` : "") +
+            (vinc ? `Vínculo anterior: ${vinc.codigoInterno || "—"} (desligado em ${vinc.dataDesligamentoEfetiva || vinc.dataDemissao || "—"}, ${diasFora ?? "—"} dias fora)\n` : "") +
             `\n${sinais.alertaJuridico}\n\nPrazo para resolução: ${new Date(prazoLimite).toLocaleDateString("pt-BR")}\n\n` +
             `Acesse o ERP > RH/DP > Recontratações Pendentes para liberar ou recusar.`;
           for (const a of aprovadores) {
@@ -595,7 +595,7 @@ export const recontratacaoRouter = router({
       const anterioresIds = rows.map((r: any) => r.recontratadoDeEmployeeId).filter(Boolean);
       const anteriores = new Map<number, any>();
       if (anterioresIds.length > 0) {
-        const ant = await db.select({ id: employees.id, codigoInterno: employees.codigoInterno, dataDesligamento: employees.dataDesligamento, dataDemissao: employees.dataDemissao })
+        const ant = await db.select({ id: employees.id, codigoInterno: employees.codigoInterno, dataDesligamento: employees.dataDesligamentoEfetiva, dataDemissao: employees.dataDemissao })
           .from(employees).where(inArray(employees.id, anterioresIds));
         for (const a of ant) anteriores.set(a.id, a);
       }
