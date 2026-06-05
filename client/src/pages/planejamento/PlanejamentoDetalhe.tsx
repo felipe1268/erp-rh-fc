@@ -515,7 +515,10 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
       if (rawLit) {
         const lit = typeof rawLit === "string" ? JSON.parse(rawLit) : rawLit;
         const litRev = lit?.revisaoId ?? null;
-        const revOk = litRev == null || revisaoAtiva?.id == null || litRev === revisaoAtiva.id;
+        // Guarda endurecida (Rev. 2767+): com revisão ativa conhecida, exige match
+        // EXATO (litRev null = legado → ignora, cai no motor); só aceita sem checar
+        // quando a revisão ativa ainda não carregou (não há como comparar).
+        const revOk = revisaoAtiva?.id == null ? true : litRev === revisaoAtiva.id;
         if (revOk && lit?.valores && typeof lit.valores === "object") literalMap = lit.valores;
       }
     } catch { literalMap = null; }

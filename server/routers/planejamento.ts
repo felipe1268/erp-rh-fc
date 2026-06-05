@@ -333,8 +333,10 @@ async function capturarPrevistoLiteralSemana(
   const key = semanas[idx];
   let store: any = {};
   try { store = proj.lit ? JSON.parse(proj.lit) : {}; } catch { store = {}; }
-  // Guarda de revisão: se a coluna pertence a outra revisão, recomeça do zero.
-  if (store?.revisaoId != null && revId != null && store.revisaoId !== revId) store = {};
+  // Guarda de revisão: quando a curva ATUAL tem revisão (revId numérico), qualquer
+  // store cuja revisão DIVIRJA — inclusive `null`/`undefined` de dados legados —
+  // é descartado, pra nunca herdar valores de outra revisão. (Rev. 2767+ endurecido.)
+  if (revId != null && store?.revisaoId !== revId) store = {};
   const valores = (store && typeof store.valores === "object" && store.valores) ? store.valores : {};
   valores[key] = Math.min(100, Math.max(0, Number(literal)));
   await db.update(planejamentoProjetos)
