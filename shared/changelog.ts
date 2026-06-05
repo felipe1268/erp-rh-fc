@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2772 — **ALMOXARIFADO · NOVA VISÃO "📍 SALDO POR OBRA": MOSTRA, OBRA A OBRA, TODOS OS INSUMOS
+ * ALOCADOS NO ESTOQUE — PRA AFERIR DE RELANCE ONDE TEM SALDO E ONDE ESTÁ ZERADO.**
+ *
+ * PEDIDO (usuário): faltava uma forma de ver, por obra, quais insumos estão alocados no estoque daquela
+ * obra e em que quantidade — pra saber rapidamente onde há saldo e onde acabou, sem ter que abrir item por
+ * item. A tela já tinha "Consolidado" (item → obras) e "por obra específica", mas não a visão invertida
+ * (obra → insumos) com todas as obras de uma vez.
+ *
+ * FIX (SÓ CLIENT; ZERO SCHEMA/SERVER) em `client/src/pages/almoxarifado/index.tsx`: o seletor de contexto
+ * ganhou a opção "📍 Saldo por Obra" (`obraContexto = "porObra"`). A query existente `listarItensConsolidado`
+ * (que já respeita busca/categoria/estoque-baixo/equip via `consListFinal` E o guard de obras permitidas no
+ * backend) foi habilitada também p/ "porObra" — ZERO endpoint novo. Um novo bloco INVERTE a estrutura
+ * "item → almoxarifados[]" do consolidado p/ "obra → insumos", consolidando duplicados por `nome|unidade`
+ * dentro de cada obra (soma quantidade/valorTotal num `itensMap`, sem linha repetida), com: filtro de saldo
+ * (todos / só com saldo / só sem saldo), seções colapsáveis por obra (Central primeiro), tabela
+ * Insumo/Categoria/Saldo/Vlr Unit/Vlr Total e destaque vermelho p/ itens zerados.
+ *
+ * HARDENING tRPC (efeito colateral do novo valor sentinela "porObra"): TODOS os payloads que derivavam
+ * `obraId` de `obraContexto` (que antes só era `number|null|"todos"`) passaram a usar guarda de tipo
+ * `typeof obraContexto === "number" ? obraContexto : null/undefined`, nunca a string "porObra" — em
+ * `listarItens` (+ `enabled` exclui "porObra"), `identificarPorFoto`, `preencherIA`, `salvarItem`
+ * (`obraParaCriar`). Sem isso, esses fluxos quebrariam com erro de validação Zod (`obraId` espera
+ * `number`). `sugerirCategs`/`formMov` e os handlers de TRANSFERIR/devolução já usavam `typeof`.
+ *
+ * VALIDAÇÃO: servidor sobe limpo; HMR ok; architect PASS (2 bloqueantes + 1 remanescente corrigidos em
+ * iterações). Detalhe: este arquivo.
+ *
  * Rev. 2771 — **EPI · HISTÓRICO DE TRANSFERÊNCIAS 100% RASTREÁVEL: A DESCRIÇÃO DO ITEM AGORA MOSTRA O
  * TAMANHO (Nº DA BOTA / TAM. DA CAMISA), A DATA GANHA HORA E APARECE O USUÁRIO QUE FEZ A TRANSFERÊNCIA.**
  *

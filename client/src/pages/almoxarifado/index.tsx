@@ -8,7 +8,7 @@ import {
   Search, Plus, Pencil, Package, ArrowDownCircle, ArrowUpCircle,
   AlertTriangle, Loader2, History, X, BarChart2, Boxes,
   LayoutGrid, List, Camera, Trash2, ImageOff, Barcode,
-  Wrench, ClipboardCheck, User, CheckCircle2, XCircle, ChevronRight, ChevronLeft,
+  Wrench, ClipboardCheck, User, CheckCircle2, XCircle, ChevronRight, ChevronLeft, ChevronDown,
   Building2, HardHat, Sparkles, ScanLine, ShoppingCart, ArrowLeftRight, Truck,
   CheckSquare, Square, Globe, Check, Tag, Layers,
 } from "lucide-react";
@@ -282,8 +282,11 @@ export default function AlmoxarifadoPage() {
   // todos | proprio | locado | vinculado (qualquer) | nenhum (sem vínculo)
   const [filtroEquip, setFiltroEquip] = useState<"todos" | "proprio" | "locado" | "vinculado" | "nenhum">("todos");
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
-  const [obraContexto, setObraContexto] = useState<number | null | "todos">(null);
+  const [obraContexto, setObraContexto] = useState<number | null | "todos" | "porObra">(null);
   const [fotoExpandida, setFotoExpandida] = useState<{ url: string; nome: string } | null>(null);
+  // Rev. 2772 — visão "Saldo por Obra": filtro de saldo + seções colapsáveis por obra.
+  const [porObraSaldo, setPorObraSaldo] = useState<"todos" | "com" | "sem">("todos");
+  const [porObraColapsadas, setPorObraColapsadas] = useState<Set<string>>(new Set());
 
   // Rev. 2375/2384 — alerta visual de OCs de locação aguardando recebimento.
   // Filtra pela obra do contexto quando o user está vendo uma obra específica;
@@ -398,7 +401,7 @@ export default function AlmoxarifadoPage() {
       setFotoIAMatches([]);
       setModalFotoIA(true);
       const base64 = dataUrl.split(",")[1];
-      identificarPorFoto.mutate({ companyId, obraId: obraContexto === "todos" ? undefined : obraContexto, base64, mimeType: file.type });
+      identificarPorFoto.mutate({ companyId, obraId: typeof obraContexto === "number" ? obraContexto : obraContexto === null ? null : undefined, base64, mimeType: file.type });
     };
     reader.readAsDataURL(file);
     e.target.value = "";
@@ -424,8 +427,8 @@ export default function AlmoxarifadoPage() {
   }, [obrasAtivas]);
 
   const { data: itens = [], refetch, isLoading } = trpc.compras.listarItens.useQuery(
-    { companyId, obraId: obraContexto === "todos" ? undefined : obraContexto },
-    { enabled: !!companyId && obraContexto !== "todos" }
+    { companyId, obraId: typeof obraContexto === "number" ? obraContexto : obraContexto === null ? null : undefined },
+    { enabled: !!companyId && obraContexto !== "todos" && obraContexto !== "porObra" }
   );
   // Lista de todos os itens da empresa (usada pelo modal de empréstimo de ferramentas
   // quando o usuário está no view Consolidado — onde `itens` fica vazio)
@@ -435,7 +438,7 @@ export default function AlmoxarifadoPage() {
   );
   const { data: consolidado, isLoading: loadingConsolidado } = trpc.compras.listarItensConsolidado.useQuery(
     { companyId, busca: busca || undefined },
-    { enabled: !!companyId && obraContexto === "todos" }
+    { enabled: !!companyId && (obraContexto === "todos" || obraContexto === "porObra") }
   );
   // Rev. 2451 — Hoist da lista consolidada filtrada pra escopo do componente.
   // Antes (Rev. 2406+) ela vivia DENTRO do IIFE da visão consolidada (L1727),
@@ -500,7 +503,7 @@ export default function AlmoxarifadoPage() {
     setPreenchendoIA(true);
     preencherIAMut.mutate({
       companyId,
-      ...(escopo === "obra" && obraContexto !== "todos" ? { obraId: obraContexto === "central" ? null : Number(obraContexto) } : {}),
+      ...(escopo === "obra" && typeof obraContexto === "number" ? { obraId: obraContexto } : escopo === "obra" && obraContexto === null ? { obraId: null } : {}),
     });
   };
   // Rev. 2381 — Rebusca com termo customizado: dryRun pra preview, depois apply.
@@ -1262,7 +1265,7 @@ export default function AlmoxarifadoPage() {
       diasAlertaLocacao: pDiasAlerta,
       observacoesLocacao: formItem.observacoesLocacao || undefined,
     } : { origem: "proprio" as const, fornecedorLocacao: null, dataInicioLocacao: null, dataVencimentoLocacao: null, valorLocacaoMensal: null, diasAlertaLocacao: null, observacoesLocacao: null };
-    const obraParaCriar = obraContexto === "todos" ? null : obraContexto;
+    const obraParaCriar = typeof obraContexto === "number" ? obraContexto : null;
     if (editandoId) {
       const payload: any = {
         id: editandoId, nome: formItem.nome, unidade: formItem.unidade,
@@ -1606,14 +1609,15 @@ export default function AlmoxarifadoPage() {
               ? <Building2 className="h-4 w-4 text-emerald-600 shrink-0" />
               : <HardHat className="h-4 w-4 text-blue-600 shrink-0" />}
             <select
-              value={obraContexto === "todos" ? "todos" : (obraContexto ?? "central")}
+              value={obraContexto === "todos" ? "todos" : obraContexto === "porObra" ? "porObra" : (obraContexto ?? "central")}
               onChange={e => {
                 const v = e.target.value;
-                setObraContexto(v === "central" ? null : v === "todos" ? "todos" : Number(v));
+                setObraContexto(v === "central" ? null : v === "todos" ? "todos" : v === "porObra" ? "porObra" : Number(v));
               }}
               className="flex-1 h-9 text-sm font-medium border border-gray-200 rounded-lg px-3 bg-white text-gray-800 outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-200"
             >
               <option value="todos">📊 Todos os Almoxarifados (Consolidado)</option>
+              <option value="porObra">📍 Saldo por Obra (insumos em cada obra)</option>
               <option value="central">🏢 Almoxarifado Central</option>
               {obrasAtivas.length > 0 && (
                 <optgroup label="── Por Obra ──">
@@ -2254,7 +2258,156 @@ export default function AlmoxarifadoPage() {
           );
         })()}
 
-        {obraContexto !== "todos" && (() => {
+        {/* ── VISÃO: SALDO POR OBRA (Rev. 2772) ──────────────────── */}
+        {obraContexto === "porObra" && (() => {
+          const fmtBRLpo = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          const obraLookup = new Map<number, any>();
+          (obrasAtivas as any[]).forEach((o: any) => obraLookup.set(o.id, o));
+          // Agrupa os insumos do consolidado POR obra (e central), invertendo a visão
+          // "item → obras" do consolidado para "obra → insumos".
+          const grupos = new Map<string, any>();
+          for (const item of consListFinal as any[]) {
+            for (const a of ((item.almoxarifados || []) as any[])) {
+              const isCentral = a.tipo === "central";
+              const key = isCentral ? "central" : `obra-${a.obraId}`;
+              if (!grupos.has(key)) {
+                const obra = isCentral ? null : obraLookup.get(a.obraId);
+                grupos.set(key, {
+                  key, isCentral, obraId: a.obraId ?? null,
+                  label: isCentral ? "Almoxarifado Central" : (obra ? (obra.codigo ? `${obra.codigo} – ${obra.nome}` : obra.nome) : `Obra #${a.obraId}`),
+                  // Consolida por insumo (nome+unidade) DENTRO da obra: se o mesmo
+                  // insumo tiver mais de um registro na obra, soma sem duplicar linha.
+                  itensMap: new Map<string, any>(),
+                });
+              }
+              const g = grupos.get(key);
+              const qtd = n(a.quantidade);
+              const valorUnit = n(item.valorUnitario);
+              const itemKey = `${String(item.nome).toLowerCase()}|${item.unidade}`;
+              const existente = g.itensMap.get(itemKey);
+              if (existente) {
+                existente.quantidade += qtd;
+                existente.valorTotal += qtd * valorUnit;
+                if (!existente.valorUnitario && valorUnit) existente.valorUnitario = valorUnit;
+                existente.abaixo = item.quantidadeMinima > 0 && existente.quantidade < item.quantidadeMinima;
+              } else {
+                g.itensMap.set(itemKey, {
+                  nome: item.nome, unidade: item.unidade, categoria: item.categoria,
+                  quantidade: qtd, valorUnitario: valorUnit, valorTotal: qtd * valorUnit,
+                  abaixo: item.quantidadeMinima > 0 && qtd < item.quantidadeMinima,
+                });
+              }
+            }
+          }
+          // Filtro de saldo (todos / com saldo / sem saldo) + ordenação.
+          const listaGrupos = Array.from(grupos.values()).map((g: any) => {
+            const itensArr = Array.from(g.itensMap.values()) as any[];
+            const itensF = porObraSaldo === "com"
+              ? itensArr.filter((i: any) => i.quantidade > 0)
+              : porObraSaldo === "sem"
+                ? itensArr.filter((i: any) => i.quantidade <= 0)
+                : itensArr;
+            const itensSorted = [...itensF].sort((a: any, b: any) => String(a.nome).localeCompare(String(b.nome), "pt-BR"));
+            const valorTotal = itensSorted.reduce((s: number, i: any) => s + i.valorTotal, 0);
+            const semSaldo = itensSorted.filter((i: any) => i.quantidade <= 0).length;
+            return { ...g, itens: itensSorted, valorTotal, semSaldo };
+          }).filter((g: any) => g.itens.length > 0)
+            .sort((a: any, b: any) => {
+              if (a.isCentral !== b.isCentral) return a.isCentral ? -1 : 1;
+              return String(a.label).localeCompare(String(b.label), "pt-BR");
+            });
+
+          if (loadingConsolidado) {
+            return (
+              <div className="max-w-7xl mx-auto px-4 py-16 flex items-center justify-center text-gray-500">
+                <Loader2 className="h-5 w-5 animate-spin mr-2" /> Carregando saldos por obra…
+              </div>
+            );
+          }
+          if (listaGrupos.length === 0) {
+            return (
+              <div className="max-w-7xl mx-auto px-4 py-16 flex flex-col items-center justify-center text-gray-500">
+                <Boxes className="h-10 w-10 text-gray-300 mb-3" />
+                <p className="font-medium">Nenhum insumo encontrado para este filtro.</p>
+                <p className="text-sm text-gray-400">Ajuste a busca, a categoria ou o filtro de saldo acima.</p>
+              </div>
+            );
+          }
+
+          return (
+            <div className="max-w-7xl mx-auto px-4 pb-10">
+              {/* Filtro de saldo */}
+              <div className="flex flex-wrap items-center gap-2 mb-4">
+                <span className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                  <Boxes className="h-4 w-4 text-emerald-600" /> Saldo dos insumos em cada obra
+                </span>
+                <div className="ml-auto inline-flex rounded-lg border border-gray-200 bg-white overflow-hidden text-xs font-medium">
+                  {([["todos", "Todos"], ["com", "Com saldo"], ["sem", "Sem saldo"]] as const).map(([v, lbl]) => (
+                    <button key={v} onClick={() => setPorObraSaldo(v)}
+                      className={`px-3 py-1.5 transition ${porObraSaldo === v ? "bg-emerald-500 text-white" : "text-gray-600 hover:bg-gray-50"}`}>
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {listaGrupos.map((g: any) => {
+                  const colapsada = porObraColapsadas.has(g.key);
+                  return (
+                    <div key={g.key} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                      <button
+                        onClick={() => setPorObraColapsadas(prev => { const s = new Set(prev); s.has(g.key) ? s.delete(g.key) : s.add(g.key); return s; })}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition text-left"
+                      >
+                        {g.isCentral
+                          ? <Building2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                          : <HardHat className="h-4 w-4 text-blue-600 shrink-0" />}
+                        <span className="font-semibold text-gray-800 text-sm">{g.label}</span>
+                        <span className="text-[11px] text-gray-500">{g.itens.length} insumo{g.itens.length !== 1 ? "s" : ""}</span>
+                        {g.semSaldo > 0 && (
+                          <span className="text-[10px] font-semibold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{g.semSaldo} sem saldo</span>
+                        )}
+                        <span className="ml-auto text-sm font-bold text-emerald-700">R$ {fmtBRLpo(g.valorTotal)}</span>
+                        {colapsada ? <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" /> : <ChevronDown className="h-4 w-4 text-gray-400 shrink-0" />}
+                      </button>
+                      {!colapsada && (
+                        <div className="overflow-x-auto border-t border-gray-100">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-gray-50 text-gray-500 text-xs">
+                                <th className="text-left font-medium px-4 py-2">Insumo</th>
+                                <th className="text-left font-medium px-4 py-2">Categoria</th>
+                                <th className="text-right font-medium px-4 py-2">Saldo</th>
+                                <th className="text-right font-medium px-4 py-2">Vlr. Unit.</th>
+                                <th className="text-right font-medium px-4 py-2">Vlr. Total</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {g.itens.map((it: any, idx: number) => (
+                                <tr key={idx} className={`border-t border-gray-50 ${it.quantidade <= 0 ? "bg-red-50/50" : ""}`}>
+                                  <td className="px-4 py-2 font-medium text-gray-800">{it.nome}</td>
+                                  <td className="px-4 py-2 text-gray-500 text-xs">{it.categoria || "—"}</td>
+                                  <td className={`px-4 py-2 text-right font-bold whitespace-nowrap ${it.quantidade <= 0 ? "text-red-600" : it.abaixo ? "text-amber-600" : "text-gray-800"}`}>
+                                    {it.quantidade.toLocaleString("pt-BR")} <span className="text-[10px] font-normal text-gray-400">{it.unidade}</span>
+                                  </td>
+                                  <td className="px-4 py-2 text-right text-gray-600 whitespace-nowrap">{it.valorUnitario > 0 ? `R$ ${fmtBRLpo(it.valorUnitario)}` : "—"}</td>
+                                  <td className="px-4 py-2 text-right font-semibold text-gray-700 whitespace-nowrap">{it.valorTotal > 0 ? `R$ ${fmtBRLpo(it.valorTotal)}` : "—"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
+        {obraContexto !== "todos" && obraContexto !== "porObra" && (() => {
           // FIX 100x: numeric do Drizzle vem em formato US ("106.33"). Só tratar como
           // pt-BR ("1.500,00") quando a string explicitamente tem vírgula decimal.
           const parseValorI = (v: any): number => {
