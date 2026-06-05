@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2769 — **COMPRAS · GERAÇÃO DE OC A PARTIR DE COTAÇÃO POR PACOTE: OS ITENS DA SOLICITAÇÃO NÃO PERDEM
+ * MAIS O VÍNCULO/QUANTIDADE — ACABOU A OC COM "MONTE DE ITENS EM BRANCO" (QTD 0 / R$ 0,00).**
+ *
+ * SINTOMA (usuário): ao gerar a OC `OS-2026-013` a partir da cotação por pacote `COT-2026-0283` ("Bancada
+ * Mármore Pinta Verde"), a OC saiu com várias linhas do MESMO item repetidas e a maioria ZERADA (Qtd 0 /
+ * R$ 0,00), enquanto NO MAPA DE COTAÇÃO "tá certo". Relato-chave: "antes os itens não perdiam o vínculo; tudo
+ * que era definido na solicitação era mantido em todo o processo" → é uma REGRESSÃO.
+ *
+ * INVESTIGAÇÃO (dados reais no Neon — read-only): a "Cotação 283" do usuário é o NÚMERO `COT-2026-0283`
+ * (= cotação id 422, tipo `pacote`, fornecedor 1178), que gerou a OC id 403 (`OS-2026-013`, total
+ * R$ 234.998,90 — íntegro). A cotação tem 37 itens "Bancada Mármore" (cada um qtd 1, vindos da SC). O
+ * fornecedor preencheu a proposta CONSOLIDANDO as quantidades em 8 linhas com valor real (69,6 / 179,6 /
+ * 446 / 116,48 / 220 / 98,08 / 37 / 13,2 m²) e deixou as outras 29 linhas ZERADAS (qtd 0 / preço 0). As
+ * respostas (`compras_cotacao_respostas`) gravam esses 29 zeros DE PROPÓSITO — é o `isPacoteChildZero` em
+ * `salvarRespostasLote` (qtd 0 E preço 0 = não cotou; não faz fallback p/ a qtd da SC), o que deixa o MAPA
+ * agrupado/correto. O problema é que a geração da OC herdava o zero literal das respostas.
+ *
+ * CAUSA-RAIZ (SÓ SERVER): em `server/routers/compras.ts` · `criarOrdemDeCotacao`, o insert dos itens da OC
+ * fazia `qty = resp ? n(resp.quantidade) : n(it.quantidade)`. Como TODAS as 37 linhas tinham resposta
+ * (29 delas zeradas pelo `isPacoteChildZero`), a OC copiava qtd 0 / preço 0 / total 0 nessas 29 → o item
+ * "perdia o vínculo" (aparecia em branco) em vez de manter a quantidade definida na solicitação.
+ *
+ * FIX (SÓ SERVER; ZERO SCHEMA; ZERO CLIENT): SOMENTE em cotação por PACOTE (`ordemTipo === "pacote" ||
+ * cot.tipo === "pacote"`), uma resposta ZERADA (`n(resp.quantidade) === 0 && n(resp.precoUnitario) === 0`)
+ * passa a ser tratada como "não cotada": a OC mantém a QUANTIDADE DA SOLICITAÇÃO (`it.quantidade`) mas com
+ * PREÇO/TOTAL 0 (o fornecedor não cotou aquela linha). Restaura o vínculo SEM injetar preço fantasma — assim
+ * a soma das linhas continua idêntica ao `total` da OC, que é calculado de `cot.total` (`subtotalItens =
+ * cot.total - frete`), e os títulos financeiros (parcelas usam `oc.total`) não divergem. Linhas que o
+ * fornecedor REALMENTE cotou (qtd>0 ou preço>0) seguem usando a resposta do vencedor, intactas; itens SEM
+ * resposta mantêm o fallback antigo (`it.quantidade`/`it.precoUnitario`). O `total` da OC NÃO muda
+ * (R$ 234.998,90) — só a coluna Quantidade volta a refletir a solicitação (restaura o vínculo). O gate em
+ * pacote evita mudar a semântica de cotações material/serviço (recomendação do architect). O MAPA DE COTAÇÃO
+ * e o `salvarRespostasLote`/`isPacoteChildZero` permanecem INTACTOS (o mapa continua "certo").
+ *
+ * RESSALVA: a correção vale para OCs GERADAS A PARTIR DESTA REVISÃO. A `OS-2026-013` JÁ existente continua com
+ * as 29 linhas zeradas gravadas em `compras_ordens_itens` (R-001/R-007/R-010: não fazemos UPDATE/DELETE em
+ * produção) — para corrigi-la, basta REGERAR a OC pela aplicação.
+ *
+ * VALIDAÇÃO: servidor sobe limpo; HMR ok; architect. Arquivos: `server/routers/compras.ts`.
+ *
  * Rev. 2768 — **FOLHA DE PAGAMENTO · "LISTA POR BANCO" + "GERAR REMESSA CNAB": AGORA AGRUPAM PELA CONTA DA
  * EMPRESA PARA PAGAMENTO (CONTA SALÁRIO), NÃO MAIS PELO BANCO PESSOAL DO FUNCIONÁRIO.**
  *

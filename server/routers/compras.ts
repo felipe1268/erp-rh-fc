@@ -7177,9 +7177,20 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         await db.insert(comprasOrdensItens).values(
           itens.map(it => {
             const resp = precoMap.get(it.id);
-            const pu = resp ? n(resp.precoUnitario) : n(it.precoUnitario);
-            const qty = resp ? n(resp.quantidade) : n(it.quantidade);
-            const tot = resp ? n(resp.total) : (pu * qty);
+            // Rev. 2769 — VÍNCULO DA SOLICITAÇÃO PRESERVADO NA OC (cotação por PACOTE).
+            // Em cotação por pacote o fornecedor consolida os valores em poucas linhas e
+            // deixa as demais ZERADAS (qtd 0 E preço 0 = não cotou aquela linha). A OC herdava
+            // esse zero e o item "perdia o vínculo" (qtd 0 / em branco). Agora, SÓ em pacote,
+            // uma resposta zerada é tratada como "não cotada": a OC mantém a QUANTIDADE DA
+            // SOLICITAÇÃO (it.quantidade) mas com PREÇO/TOTAL 0 (o fornecedor não cotou esta
+            // linha) — restaura o vínculo SEM injetar preço fantasma, de modo que a soma dos
+            // itens continua idêntica ao total da OC (que vem de cot.total).
+            const isPacoteCot = ordemTipo === "pacote" || (cot as any).tipo === "pacote";
+            const respZerado = !!resp && isPacoteCot && n(resp.quantidade) === 0 && n(resp.precoUnitario) === 0;
+            const usarResp = !!resp && !respZerado;
+            const pu = usarResp ? n(resp!.precoUnitario) : (respZerado ? 0 : n(it.precoUnitario));
+            const qty = usarResp ? n(resp!.quantidade) : n(it.quantidade);
+            const tot = usarResp ? n(resp!.total) : (pu * qty);
             return {
               ordemId: oc.id,
               solicitacaoItemId: it.solicitacaoItemId ?? null,
