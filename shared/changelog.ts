@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2767 — **PLANEJAMENTO · "% PREVISTO": PARIDADE 100% COM O MS PROJECT — O ERP AGORA EXIBE O Texto10
+ * LITERAL (O NÚMERO QUE O MSP JÁ CALCULOU) DE CADA UPLOAD SEMANAL, EM VEZ DO VALOR DO MOTOR. ELIMINA O +1%
+ * QUE APARECIA A PARTIR DA ~4ª SEMANA.**
+ *
+ * SINTOMA (Felipe): no projeto 42 (REVTE-CIVIL, revisão 61, cutoff=Quinta), o "% Previsto" do ERP batia com o
+ * MSP nas 3 primeiras semanas e depois ficava +1% acima (MSP=[2,4,6,7,8,9,10,11,12,15]; motor EoD/round=
+ * [2,4,6,8,9,10,11,12,13,15]). O gap CRESCIA do início ao miolo do projeto e caía no fim.
+ *
+ * INVESTIGAÇÃO (empírica, contra os 10 valores reais do MSP): o motor `regenerarPrevistoSemanasCaminhoB`
+ * conta TEMPO ÚTIL MINUTO-A-MINUTO contínuo da baseline (parcial do dia em curso entra na conta), enquanto o
+ * MSP conta DURAÇÃO DECORRIDA em DIAS ÚTEIS FECHADOS por tarefa. Quanto mais tarefas em curso numa semana,
+ * maior o excesso do motor → daí o gap crescente no miolo. Testei ~20 modelos de truncamento (dias fechados
+ * round/floor, denominador em dias/min, vários horários de StatusDate): NENHUM cravou 100% (melhor 8/10),
+ * porque a Data de Status real de CADA XML semanal varia e não cai exatamente na quinta de corte uniforme do
+ * ERP. CONCLUSÃO: qualquer motor é aproximação; o único jeito de bater 100% em TODAS as semanas é GUARDAR o
+ * Texto10 que o MSP já entregou em cada XML semanal (decisão do usuário via 3 perguntas).
+ *
+ * FIX (SERVER + CLIENT + SCHEMA aditivo; R-001/R-007/R-010 OK — só ADD COLUMN IF NOT EXISTS, sem ALTER/DROP/
+ * DELETE; NÃO re-roda o motor → zero oscilação):
+ *   1) NOVA coluna `planejamento_projetos.previsto_literal_json` (TEXT) — `drizzle/schema.ts` + self-heal
+ *      `[SyncSchema+]` em `server/_core/index.ts`. JSON: `{ revisaoId, valores: { "<cutoffIso>": pct } }`.
+ *   2) `server/routers/planejamento.ts`: novo helper `capturarPrevistoLiteralSemana` + chamada no
+ *      `salvarMetadadosMSProject` quando `origem === "avanco"`. Lê o Texto10 LITERAL (`previstoMspSnapshot`
+ *      do calendarioJson FRESCO, ANTES do merge da Rev. 2765 sobrescrevê-lo pelo valor do cadastro), mapeia o
+ *      StatusDate ao cutoff da curva (mesma lógica `idxAt` do cliente: maior cutoff ≤ StatusDate) e grava
+ *      `valores[cutoff] = pct`. Guarda de revisão (recomeça se a coluna for de outra revisão). Nunca derruba
+ *      o save (try/catch). O motor (`previsto_semanas_json`) NÃO é tocado — segue projetando as FUTURAS.
+ *   3) `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (hook `previstoCurva`): `raizAt(alvo)` passa a
+ *      PREFERIR `previsto_literal_json[cutoff]` quando existe (semana já enviada → paridade 100%), caindo no
+ *      motor `raiz[]` para as semanas futuras. Como TODOS os cards agregados já preferem `raizAt` (snapshot
+ *      `previstoMspSnapshot` é só fallback), um único ponto cobre topo, "Previsto (Semana)", PV macro etc.
+ *      `ativAt` (por folha; REFIS/Curva S) segue no motor — escopo na RAIZ (origem do bug).
+ *
+ * SEMÂNTICA: os literais ACUMULAM a cada upload semanal; um novo CADASTRO (reimport do cronograma inicial)
+ * regenera a curva do motor mas a coluna literal só é descartada/reiniciada pela guarda de revisão quando a
+ * baseline muda de revisão. Semanas ainda não enviadas continuam exibindo a projeção do motor.
+ *
+ * VALIDAÇÃO: servidor sobe limpo (tsx); HMR sem erros; mudança aditiva e isolada; architect.
+ *
  * Rev. 2766 — **PLANEJAMENTO · AVANÇO SEMANAL · BARRA "AVANÇO FÍSICO" DO TOPO: O "% PREVISTO" DA 1ª SEMANA
  * VOLTA A APARECER (mostrava 0% / barra vazia, só "acendia" da 2ª semana em diante), ficando idêntico ao
  * card "Previsto (Semana)".**

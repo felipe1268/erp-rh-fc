@@ -504,10 +504,35 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
       if (i < 0) return alvo && alvo < semanas[0] ? 0 : null; // antes do início → 0%
       return arr[i] ?? null;
     };
+    // Rev. 2767 — Override "% Previsto" LITERAL por semana (Texto10 capturado em
+    // CADA upload da aba Avanço). Para as semanas JÁ enviadas, o número que o MSP
+    // já calculou VENCE o motor (paridade 100%); as semanas FUTURAS seguem o
+    // motor (raiz[]). Só afeta a RAIZ (cards agregados) — `ativAt` (por folha,
+    // usado em REFIS/Curva S) continua no motor. Chave = cutoff (= `semanas[i]`).
+    let literalMap: Record<string, number> | null = null;
+    try {
+      const rawLit = (proj as any)?.previstoLiteralJson;
+      if (rawLit) {
+        const lit = typeof rawLit === "string" ? JSON.parse(rawLit) : rawLit;
+        const litRev = lit?.revisaoId ?? null;
+        const revOk = litRev == null || revisaoAtiva?.id == null || litRev === revisaoAtiva.id;
+        if (revOk && lit?.valores && typeof lit.valores === "object") literalMap = lit.valores;
+      }
+    } catch { literalMap = null; }
+    const raizAt = (alvo: string): number | null => {
+      if (literalMap) {
+        const i = idxAt(alvo);
+        if (i >= 0) {
+          const lit = literalMap[semanas[i]];
+          if (typeof lit === "number" && Number.isFinite(lit)) return lit;
+        }
+      }
+      return valAt(raiz, alvo);
+    };
     return {
       semanas, raiz, porAtividadeId,
       revisaoId: snap?.revisaoId ?? null,
-      raizAt: (alvo: string) => valAt(raiz, alvo),
+      raizAt,
       ativAt: (id: number | string, alvo: string) => valAt(porAtividadeId[String(id)], alvo),
     };
   }, [proj, revisaoAtiva]);

@@ -299,6 +299,51 @@ async function regenerarPrevistoSemanasCaminhoB(
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// Rev. 2767 — Captura o "% Previsto" LITERAL (Texto10 da raiz UID=0) de CADA
+// upload da aba "Avanço Semanal" e o grava por semana em `previsto_literal_json`.
+// É o número que o MS Project JÁ calculou (paridade 100% com o cliente) — NÃO
+// re-roda o motor (zero oscilação; revoga só a LEITURA do motor para as semanas
+// JÁ enviadas — o motor segue projetando as FUTURAS). Estrutura:
+//   { revisaoId: number, valores: { "<cutoffIso>": pct } }
+// A chave é o cutoff (Quinta) da curva em que o StatusDate cai — MESMA lógica
+// `idxAt` do cliente (maior cutoff <= StatusDate) — para o override no `raizAt`
+// casar exatamente onde o card lê. É UPDATE de coluna JSON (R-001/R-007/R-010 OK).
+async function capturarPrevistoLiteralSemana(
+  db: any,
+  projetoId: number,
+  statusDateStr: string | null | undefined,
+  literal: number | null | undefined,
+): Promise<void> {
+  if (statusDateStr == null || literal == null || !Number.isFinite(literal)) return;
+  const alvo = String(statusDateStr).slice(0, 10);
+  const [proj] = await db.select({
+    curva: planejamentoProjetos.previstoSemanasJson,
+    lit:   planejamentoProjetos.previstoLiteralJson,
+  }).from(planejamentoProjetos).where(eq(planejamentoProjetos.id, projetoId)).limit(1);
+  if (!proj?.curva) return; // sem curva → sem cutoffs p/ mapear (motor é a fonte)
+  let curva: any;
+  try { curva = JSON.parse(proj.curva); } catch { return; }
+  const semanas: string[] = Array.isArray(curva?.semanas) ? curva.semanas : [];
+  const revId = curva?.revisaoId ?? null;
+  if (semanas.length === 0) return;
+  // idxAt: maior cutoff <= StatusDate (espelha o cliente em PlanejamentoDetalhe).
+  let idx = -1;
+  for (let i = 0; i < semanas.length; i++) { if (semanas[i] <= alvo) idx = i; else break; }
+  if (idx < 0) return; // StatusDate antes do 1º cutoff → previsto 0 (motor já dá 0)
+  const key = semanas[idx];
+  let store: any = {};
+  try { store = proj.lit ? JSON.parse(proj.lit) : {}; } catch { store = {}; }
+  // Guarda de revisão: se a coluna pertence a outra revisão, recomeça do zero.
+  if (store?.revisaoId != null && revId != null && store.revisaoId !== revId) store = {};
+  const valores = (store && typeof store.valores === "object" && store.valores) ? store.valores : {};
+  valores[key] = Math.min(100, Math.max(0, Number(literal)));
+  await db.update(planejamentoProjetos)
+    .set({ previstoLiteralJson: JSON.stringify({ revisaoId: revId, valores }) as any })
+    .where(eq(planejamentoProjetos.id, projetoId));
+  console.log(`[capturarPrevistoLiteral] projeto=${projetoId} rev=${revId} ${key}=${valores[key]}% (Texto10 literal MSP).`);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // Rev. 2633 — MODO MANUAL do "% Previsto".
 // Constrói a curva (`previsto_semanas_json`) a partir dos uploads semanais crus
 // (`previsto_manual_json`), reaproveitando o MESMO grid de semanas do motor
@@ -3105,6 +3150,9 @@ export const planejamentoRouter = router({
       if (input.statusDateIso) {
         patch.dataCorteIso = input.statusDateIso;
       }
+      // Rev. 2767 — literal "% Previsto" (Texto10) DESTE upload semanal, capturado
+      // do calendarioJson FRESCO (antes do merge sobrescrever pelo valor do cadastro).
+      let literalSemanaAvanco: number | null = null;
       if (input.calendarioJson !== undefined && input.calendarioJson !== null) {
         if (input.origem === "avanco") {
           // Rev. 2765 — Avanço Semanal NUNCA toca o previsto. O calendarioJson
@@ -3117,6 +3165,10 @@ export const planejamentoRouter = router({
           try {
             const oldCal = proj.calendarioJson ? JSON.parse(proj.calendarioJson) : {};
             const newCal = JSON.parse(input.calendarioJson);
+            // Rev. 2767 — guarda o Texto10 LITERAL desta semana ANTES do override.
+            if (newCal.previstoMspSnapshot != null && Number.isFinite(Number(newCal.previstoMspSnapshot))) {
+              literalSemanaAvanco = Number(newCal.previstoMspSnapshot);
+            }
             if (oldCal.previstoMspSnapshot != null) newCal.previstoMspSnapshot = oldCal.previstoMspSnapshot;
             if (oldCal.weekDayIntervals)            newCal.weekDayIntervals    = oldCal.weekDayIntervals;
             if (oldCal.exceptions)                  newCal.exceptions          = oldCal.exceptions;
@@ -3136,6 +3188,22 @@ export const planejamentoRouter = router({
       if (input.projetoFinish) patch.dataTerminoContratual = input.projetoFinish as any;
       await db.update(planejamentoProjetos).set(patch)
         .where(eq(planejamentoProjetos.id, input.projetoId));
+
+      // ── Rev. 2767 — CAPTURA DO "% PREVISTO" LITERAL (Texto10) POR SEMANA ────
+      // No upload da aba "Avanço Semanal", grava o Texto10 LITERAL desta semana
+      // (o número que o MSP já calculou) em `previsto_literal_json`, indexado
+      // pelo cutoff. O cliente passa a EXIBIR esse literal nas semanas JÁ
+      // enviadas (paridade 100% com o MSP) e mantém o motor só para projetar as
+      // FUTURAS. NÃO re-roda o motor → zero oscilação. Nunca derruba o save.
+      if (input.origem === "avanco") {
+        try {
+          const sdStr = input.statusDate
+            ?? (input.statusDateIso ? String(input.statusDateIso).slice(0, 10) : null);
+          await capturarPrevistoLiteralSemana(db, input.projetoId, sdStr, literalSemanaAvanco);
+        } catch (e: any) {
+          console.error(`[salvarMetadadosMSProject→literalPrevisto] projeto ${input.projetoId}:`, e?.message || e);
+        }
+      }
 
       // ── Rev. 2646 — PROPAGAÇÃO DO FIX DA Rev. 2645 A TODOS OS PROJETOS ──────
       // O calendário recém-parseado do XML (já SEM auto-injeção de feriados

@@ -5517,6 +5517,14 @@ export const planejamentoProjetos = pgTable("planejamento_projetos", {
   // `regenerarPrevistoManual` consome isto e produz `previsto_semanas_json` na
   // MESMA forma do motor — a tela continua lendo só a curva, sem saber a origem.
   previstoManualJson:       text("previsto_manual_json"),
+  // Rev. 2767 — "% Previsto" LITERAL (Texto10 da raiz UID=0) capturado em CADA
+  // upload semanal (aba Avanço), gravado por semana. JSON:
+  //   { revisaoId: number, valores: { "<cutoffIso>": pct } }
+  // É o número que o MS Project já calculou — paridade 100%. Guardado SEM
+  // re-rodar o motor (zero oscilação). A curva `previsto_semanas_json` (motor)
+  // segue projetando as semanas FUTURAS; o cliente só sobrepõe as semanas JÁ
+  // enviadas. Chave = o cutoff (Quinta) da curva em que o StatusDate cai.
+  previstoLiteralJson:      text("previsto_literal_json"),
   criadoEm:               timestamp("criado_em").defaultNow(),
   atualizadoEm:           timestamp("atualizado_em").defaultNow(),
 });

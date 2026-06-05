@@ -629,6 +629,13 @@ Regras:
         await db.execute(sql`ALTER TABLE curriculos ADD COLUMN IF NOT EXISTS historico_status_json TEXT`);
         console.log(`[SyncSchema+] Coluna historico_status_json garantida na tabela curriculos.`);
 
+        // Rev. 2767 — "% Previsto" LITERAL por semana (Texto10 capturado em cada
+        // upload da aba Avanço). Coluna JSON; ADD COLUMN IF NOT EXISTS (R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`ALTER TABLE planejamento_projetos ADD COLUMN IF NOT EXISTS previsto_literal_json TEXT`);
+          console.log(`[SyncSchema+] Rev. 2767: coluna previsto_literal_json garantida em planejamento_projetos.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA planejamento_projetos.previsto_literal_json:`, e?.message || e); }
+
         // Rev. 2743/2745 — coluna "tabelasTotal" (camelCase, igual ao schema Drizzle) em backups (progresso 0-100%).
         // A Rev. 2743 criou erroneamente "tabelas_total" (snake_case), que o Drizzle/select não enxerga; aqui
         // garantimos a coluna camelCase correta. A coluna snake antiga (se existir) fica órfã/inerte (não removida — R-001/R-007/R-010).
