@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2779 — **EPI · TELA "ESTOQUE POR OBRA": OS CARDS (RESUMO + ALMOXARIFADO CENTRAL + OBRAS) FICARAM FIXOS
+ * (STICKY) NO TOPO — SÓ A TABELA DE INSUMOS ABAIXO ROLA; E O CARD CLICADO GANHOU UMA COR DE DESTAQUE DISTINTA
+ * (ÂMBAR), EM VEZ DO REALCE FRACO QUE QUASE NÃO APARECIA.**
+ *
+ * PEDIDO (usuário, 2 prints): "quero que fique fixo os cards mude somente os insumos abaixo por favor, e o card
+ * que estiver clicado deve ficar com uma cor diferente de destaque". Antes, ao rolar a tela os cards subiam
+ * junto e o usuário perdia a referência de qual local estava selecionado; e o card selecionado ficava com um
+ * `ring` da MESMA cor do card (esmeralda no central / azul na obra), pouco perceptível.
+ *
+ * FIX (SÓ CLIENT; ZERO SCHEMA/SERVER) em `client/src/pages/Epis.tsx`:
+ *  - O bloco do card-resumo + a grade de cards foram envolvidos num container `sticky top-0 z-20 bg-background`
+ *    com `border-b`, então eles GRUDAM no topo enquanto a tabela detalhada (insumos) rola por baixo.
+ *  - A grade de cards ganhou `max-h-[42vh] overflow-y-auto` — se houver muitas obras, os cards rolam DENTRO do
+ *    painel fixo sem empurrar a tabela.
+ *  - O realce do card selecionado mudou de `ring-2 ring-emerald-500 bg-emerald-50/60` (central) e
+ *    `ring-2 ring-blue-500 bg-blue-50/60` (obra) para `ring-2 ring-amber-500 bg-amber-100/70 shadow-md` nos
+ *    DOIS — cor âmbar contrasta com o esmeralda/azul do card, deixando ÓBVIO qual está selecionado.
+ * ZERO ALTER/DROP/DELETE. Validação: HMR ok (tela exige login p/ preview); architect.
+ *
  * Rev. 2778 — **EPI · OS NÚMEROS DA TELA "ESTOQUE POR OBRA" AGORA SÃO FORMATADOS COM SEPARADOR DE MILHAR
  * (PADRÃO pt-BR) — O TOTAL DE UNIDADES E AS QUANTIDADES POR LOCAL FICAM LEGÍVEIS (ex.: "2.102 unid." EM VEZ
  * DE "2102 unid." / o número colado).**

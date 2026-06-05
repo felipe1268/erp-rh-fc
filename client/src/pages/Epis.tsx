@@ -2861,6 +2861,8 @@ export default function Epis() {
               const totalLocais = filteredObras.length + (showCentral ? 1 : 0);
               return (
               <>
+              {/* Rev. 2779 — cards fixos (sticky) no topo; só a tabela de insumos abaixo rola */}
+              <div className="sticky top-0 z-20 bg-background pt-1 pb-3 space-y-3 border-b mb-1">
               <Card className="border-emerald-200 bg-emerald-50/50">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
@@ -2880,11 +2882,11 @@ export default function Epis() {
                   </div>
                 </CardContent>
               </Card>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[42vh] overflow-y-auto pr-1">
                 {showCentral && (
                   <Card
                     onClick={() => setFilterObraEstoque(filterObraEstoque === "central" ? "todas" : "central")}
-                    className={`border-l-4 border-l-emerald-500 cursor-pointer transition hover:shadow-md ${filterObraEstoque === "central" ? "ring-2 ring-emerald-500 bg-emerald-50/60" : ""}`}
+                    className={`border-l-4 border-l-emerald-500 cursor-pointer transition hover:shadow-md ${filterObraEstoque === "central" ? "ring-2 ring-amber-500 bg-amber-100/70 shadow-md" : ""}`}
                   >
                     <CardContent className="p-4">
                       <div className="flex justify-between items-start">
@@ -2906,7 +2908,7 @@ export default function Epis() {
                   <Card
                     key={r.obraId}
                     onClick={() => setFilterObraEstoque(filterObraEstoque === String(r.obraId) ? "todas" : String(r.obraId))}
-                    className={`border-l-4 border-l-blue-500 cursor-pointer transition hover:shadow-md ${filterObraEstoque === String(r.obraId) ? "ring-2 ring-blue-500 bg-blue-50/60" : ""}`}
+                    className={`border-l-4 border-l-blue-500 cursor-pointer transition hover:shadow-md ${filterObraEstoque === String(r.obraId) ? "ring-2 ring-amber-500 bg-amber-100/70 shadow-md" : ""}`}
                   >
                     <CardContent className="p-4">
                       <div className="flex justify-between items-start">
@@ -2922,6 +2924,7 @@ export default function Epis() {
                     </CardContent>
                   </Card>
                 ))}
+              </div>
               </div>
               </>
               );
