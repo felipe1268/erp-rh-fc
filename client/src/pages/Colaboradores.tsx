@@ -672,15 +672,28 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
   const temVinculoDesligado = recontratacaoVinculos.length > 0;
   const ativoMesmaEmpresa = (verificarRecontratacao.data as any)?.ativoMesmaEmpresa ?? null;
   const solicitacaoPendente = (verificarRecontratacao.data as any)?.solicitacaoPendente ?? null;
-  // Rev. 2757 — feedback explícito da verificação de CPF ao terminar de digitar:
-  // "verificando…", "já em processo de recontratação", "já cadastrado" ou "CPF livre".
+  // Rev. 2757/2758 — veredito EXPLÍCITO da verificação de CPF ao terminar de digitar.
+  // FONTE ÚNICA = recontratacao.verificarCpf (já devolve ativoMesmaEmpresa, vínculos
+  // desligados e solicitação pendente). NÃO dependemos mais de checkDuplicateCpf resolver
+  // (Rev. 2757 travava o spinner quando aquela query demorava/falhava). checkDuplicateCpf
+  // continua só como reforço do bloqueio (duplicado ATIVO em coligada).
   const cpfCompleto = cpfClean.length >= 11;
   const podeVerificarCpf = cpfCompleto && !editingId && !!formCompanyId;
-  const verificandoCpf = podeVerificarCpf && (verificarRecontratacao.isFetching || checkDuplicateCpf.isFetching);
-  const cpfVerificado = podeVerificarCpf && !verificarRecontratacao.isFetching && !checkDuplicateCpf.isFetching
-    && verificarRecontratacao.data !== undefined && checkDuplicateCpf.data !== undefined;
-  const cpfLivre = cpfVerificado && !recontratacaoMode && !cpfDuplicateAlert && !blacklistAlert
-    && !temVinculoDesligado && !solicitacaoPendente;
+  const verificandoCpf = podeVerificarCpf && (verificarRecontratacao.isLoading || verificarRecontratacao.isFetching);
+  // Veredito SEMPRE conclusivo após o loading: sucesso (data) OU erro da query.
+  const cpfQueryConcluiu = podeVerificarCpf && !verificarRecontratacao.isFetching && !verificarRecontratacao.isLoading;
+  const cpfVerificado = cpfQueryConcluiu && verificarRecontratacao.data !== undefined;
+  const cpfErro = cpfQueryConcluiu && verificarRecontratacao.data === undefined && !!verificarRecontratacao.error;
+  // Veredito mutuamente exclusivo: erro (falha na verificação) > ativo (já cadastrado)
+  // > pendente (em recontratação) > desligado (oferecer recontratação) > novo (CPF livre).
+  const cpfVeredito: "erro" | "ativo" | "pendente" | "desligado" | "novo" | null =
+    recontratacaoMode || blacklistAlert ? null
+    : cpfErro ? "erro"
+    : !cpfVerificado ? null
+    : (ativoMesmaEmpresa || cpfDuplicateAlert) ? "ativo"
+    : solicitacaoPendente ? "pendente"
+    : temVinculoDesligado ? "desligado"
+    : "novo";
   const pickedVinculo = recontratacaoVinculos.find((v: any) => v.employeeId === recontratacaoPickEmployeeId)
     || (recontratacaoVinculos.length === 1 ? recontratacaoVinculos[0] : null);
   const dadosCopia = trpc.recontratacao.getDadosCopia.useQuery(
@@ -1535,24 +1548,44 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
                     <p className="text-sm font-medium text-red-600">{blacklistAlert}</p>
                   </div>
                 ) : null}
-                {cpfDuplicateAlert && !editingId ? (
-                  <div className="sm:col-span-2 lg:col-span-3 bg-red-600/10 border border-red-600/30 rounded-lg p-3 flex items-center gap-2">
-                    <AlertTriangle className="h-5 w-5 text-red-600 shrink-0" />
-                    <p className="text-sm font-medium text-red-600">⛔ {cpfDuplicateAlert}. Cadastro bloqueado.</p>
-                  </div>
-                ) : null}
                 {verificandoCpf ? (
-                  <div className="sm:col-span-2 lg:col-span-3 bg-muted/40 border border-border rounded-lg p-2.5 flex items-center gap-2">
-                    <RefreshCw className="h-4 w-4 text-muted-foreground shrink-0 animate-spin" />
-                    <p className="text-sm text-muted-foreground">Verificando CPF na base (cadastro ativo, desligamento e recontratação)…</p>
+                  <div className="sm:col-span-2 lg:col-span-3 bg-muted/40 border border-border rounded-lg p-3 flex items-center gap-2">
+                    <RefreshCw className="h-5 w-5 text-muted-foreground shrink-0 animate-spin" />
+                    <p className="text-sm font-medium text-muted-foreground">Verificando CPF na base (cadastro ativo, desligamento e recontratação)…</p>
                   </div>
                 ) : null}
-                {!editingId && !verificandoCpf && solicitacaoPendente ? (
-                  <div className="sm:col-span-2 lg:col-span-3 bg-indigo-500/10 border border-indigo-500/40 rounded-lg p-3 flex items-start gap-3">
-                    <Clock className="h-5 w-5 text-indigo-600 shrink-0 mt-0.5" />
+                {cpfVeredito === "erro" ? (
+                  <div className="sm:col-span-2 lg:col-span-3 bg-orange-500/10 border-2 border-orange-500/40 rounded-lg p-4 flex items-start gap-3">
+                    <Ban className="h-6 w-6 text-orange-600 shrink-0 mt-0.5" />
                     <div className="flex-1">
-                      <p className="text-sm font-semibold text-indigo-700">Já existe uma solicitação de recontratação pendente para este CPF</p>
-                      <p className="text-xs text-indigo-700/80 mt-0.5">
+                      <p className="text-base font-bold text-orange-700 uppercase tracking-wide">Não foi possível verificar o CPF</p>
+                      <p className="text-sm text-orange-700/90 mt-1">A verificação na base falhou (conexão ou servidor). O CPF NÃO foi confirmado como novo nem como existente.</p>
+                      <Button type="button" size="sm" className="mt-2 bg-orange-600 hover:bg-orange-700 text-white" onClick={() => verificarRecontratacao.refetch()}>
+                        <RefreshCw className="h-4 w-4 mr-1" /> Tentar novamente
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+                {cpfVeredito === "ativo" ? (
+                  <div className="sm:col-span-2 lg:col-span-3 bg-red-600/10 border-2 border-red-600/40 rounded-lg p-4 flex items-start gap-3">
+                    <Ban className="h-6 w-6 text-red-600 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-base font-bold text-red-700 uppercase tracking-wide">CPF já cadastrado</p>
+                      <p className="text-sm text-red-700/90 mt-1">
+                        {cpfDuplicateAlert
+                          ? `${cpfDuplicateAlert}.`
+                          : `Já existe um colaborador ATIVO com este CPF nesta empresa${ativoMesmaEmpresa?.nomeCompleto ? `: "${ativoMesmaEmpresa.nomeCompleto}"` : ""}.`}
+                      </p>
+                      <p className="text-xs text-red-700/80 mt-1">Cadastro bloqueado — não é possível criar um novo colaborador com o mesmo CPF ativo.</p>
+                    </div>
+                  </div>
+                ) : null}
+                {cpfVeredito === "pendente" ? (
+                  <div className="sm:col-span-2 lg:col-span-3 bg-indigo-500/10 border-2 border-indigo-500/40 rounded-lg p-4 flex items-start gap-3">
+                    <Clock className="h-6 w-6 text-indigo-600 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-base font-bold text-indigo-700 uppercase tracking-wide">Já em processo de recontratação</p>
+                      <p className="text-sm text-indigo-700/90 mt-1">
                         {solicitacaoPendente.nomeCompleto || "—"}
                         {solicitacaoPendente.companyNome ? ` · ${solicitacaoPendente.companyNome}` : ""}
                         {solicitacaoPendente.createdAt ? ` · enviada em ${new Date(solicitacaoPendente.createdAt).toLocaleDateString("pt-BR")}` : ""}
@@ -1562,21 +1595,28 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
                     </div>
                   </div>
                 ) : null}
-                {cpfLivre ? (
-                  <div className="sm:col-span-2 lg:col-span-3 bg-emerald-500/10 border border-emerald-500/40 rounded-lg p-2.5 flex items-center gap-2">
-                    <Check className="h-4 w-4 text-emerald-600 shrink-0" />
-                    <p className="text-sm font-medium text-emerald-700">CPF livre — sem cadastro ativo, desligamento ou recontratação neste grupo. Pode prosseguir com o cadastro.</p>
+                {cpfVeredito === "desligado" ? (
+                  <div className="sm:col-span-2 lg:col-span-3 bg-amber-500/10 border-2 border-amber-500/40 rounded-lg p-4 flex items-start gap-3">
+                    <RefreshCw className="h-6 w-6 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-base font-bold text-amber-700 uppercase tracking-wide">Já foi colaborador (desligado)</p>
+                      <p className="text-sm text-amber-700/90 mt-1">
+                        Encontramos {recontratacaoVinculos.length} vínculo(s) desligado(s) neste grupo para este CPF
+                        {pickedVinculo?.nomeCompleto ? `: "${pickedVinculo.nomeCompleto}"` : ""}.
+                      </p>
+                      <p className="text-xs text-amber-700/80 mt-1">Deseja realizar a RECONTRATAÇÃO? Os dados anteriores são reaproveitados e a solicitação vai para a liberação do sócio. Nada é cadastrado até a aprovação.</p>
+                      <Button type="button" size="sm" className="mt-2 bg-amber-600 hover:bg-amber-700 text-white" onClick={abrirPickerRecontratacao}>
+                        <RefreshCw className="h-4 w-4 mr-1" /> Realizar recontratação
+                      </Button>
+                    </div>
                   </div>
                 ) : null}
-                {!editingId && temVinculoDesligado && !recontratacaoMode && !cpfDuplicateAlert && !solicitacaoPendente ? (
-                  <div className="sm:col-span-2 lg:col-span-3 bg-amber-500/10 border border-amber-500/40 rounded-lg p-3 flex items-start gap-3">
-                    <RefreshCw className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                {cpfVeredito === "novo" ? (
+                  <div className="sm:col-span-2 lg:col-span-3 bg-emerald-500/10 border-2 border-emerald-500/40 rounded-lg p-4 flex items-start gap-3">
+                    <UserCheck className="h-6 w-6 text-emerald-600 shrink-0 mt-0.5" />
                     <div className="flex-1">
-                      <p className="text-sm font-semibold text-amber-700">Vínculo desligado encontrado neste grupo ({recontratacaoVinculos.length})</p>
-                      <p className="text-xs text-amber-700/80 mt-0.5">Use o fluxo de RECONTRATAÇÃO para reaproveitar os dados e enviar para a liberação do sócio. Nada é cadastrado até a aprovação.</p>
-                      <Button type="button" size="sm" className="mt-2 bg-amber-600 hover:bg-amber-700 text-white" onClick={abrirPickerRecontratacao}>
-                        <RefreshCw className="h-4 w-4 mr-1" /> Iniciar recontratação
-                      </Button>
+                      <p className="text-base font-bold text-emerald-700 uppercase tracking-wide">Novo colaborador — CPF livre</p>
+                      <p className="text-sm text-emerald-700/90 mt-1">Nenhum cadastro ativo, desligamento ou recontratação encontrado para este CPF neste grupo. Pode prosseguir com o cadastro.</p>
                     </div>
                   </div>
                 ) : null}

@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2758 — **RH/DP · NOVO COLABORADOR: O VEREDITO DO CPF VIRA UM CARD FIXO E SEMPRE CONCLUSIVO —
+ * "NOVO", "JÁ CADASTRADO", "JÁ EM RECONTRATAÇÃO" OU "JÁ FOI COLABORADOR (DESLIGADO) → RECONTRATAR?".**
+ *
+ * SINTOMA (Felipe, prints): ao terminar de digitar o CPF aparecia o "Verificando CPF na base…" mas a tela
+ * NÃO concluía em um veredito — ficava só no spinner / não mostrava nada. Causa-raiz (SÓ CLIENT; ZERO
+ * SCHEMA/SERVER): a Rev. 2757 amarrava o spinner E o veredito ao resultado de DUAS queries
+ * (`recontratacao.verificarCpf` E `employees.checkDuplicateCpf`) — exigindo `data !== undefined` das duas e
+ * `isFetching` de ambas. Se `checkDuplicateCpf` demorava/falhava, o spinner travava (ou nada resolvia) e o
+ * usuário nunca via o resultado.
+ *
+ * FIX: o veredito passa a derivar de UMA FONTE ÚNICA — `recontratacao.verificarCpf`, que já devolve
+ * `ativoMesmaEmpresa` (cadastro ativo), `vinculos` (desligados) e `solicitacaoPendente`. Novo derivado
+ * `cpfVeredito: "erro" | "ativo" | "pendente" | "desligado" | "novo" | null` (mutuamente exclusivo, prioridade
+ * erro>ativo>pendente>desligado>novo). O spinner agora depende SÓ de `verificarRecontratacao.isLoading/isFetching`.
+ * Render: UM card FIXO e prominente (borda 2px, título caixa-alta) por estado — vermelho "CPF já cadastrado",
+ * índigo "Já em processo de recontratação", âmbar "Já foi colaborador (desligado)" com botão "Realizar
+ * recontratação", verde "Novo colaborador — CPF livre". `checkDuplicateCpf` continua só como REFORÇO do
+ * bloqueio (duplicado ativo em coligada): alimenta o card vermelho e o bloqueio do botão Salvar, mas não
+ * trava mais o veredito. `client/src/pages/Colaboradores.tsx` apenas.
+ *
+ * HARDENING (architect): para o veredito ser SEMPRE conclusivo após o loading, se a query `verificarCpf`
+ * FALHAR (rede/servidor) — `isFetching` cai, `data` fica undefined — entra o estado `"erro"` com card LARANJA
+ * "Não foi possível verificar o CPF" + botão "Tentar novamente" (`refetch`). Antes desse hardening, falha de
+ * query deixava a tela sem card final (spinner sumia e nada renderizava).
+ *
+ * VALIDAÇÃO: esbuild parse client EXIT 0; `vitest server/rescisao.test.ts` 41/41 verde.
+ *
  * Rev. 2757 — **RH/DP · NOVO COLABORADOR: AO TERMINAR DE DIGITAR O CPF, O ERP AGORA DÁ UM VEREDITO
  * EXPLÍCITO DA VERIFICAÇÃO — "VERIFICANDO…", "JÁ EM PROCESSO DE RECONTRATAÇÃO", "JÁ CADASTRADO" OU "CPF LIVRE".**
  *
