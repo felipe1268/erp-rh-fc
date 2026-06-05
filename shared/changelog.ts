@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2770 — **EPI · FILTRO DE CATEGORIA "CALÇADO" ZERAVA A LISTA DO CATÁLOGO — MISMATCH DE ACENTO
+ * ("Calçado" COM CEDILHA NO FILTRO vs "Calcado" SEM CEDILHA NO BANCO).**
+ *
+ * SINTOMA (usuário): na tela de EPIs (aba Catálogo), ao selecionar a categoria "Calçado" no filtro
+ * "Todas Categorias", a lista ficava VAZIA (zerada), mesmo existindo calçados cadastrados.
+ *
+ * INVESTIGAÇÃO (dados reais no Neon — read-only): a coluna `epis.categoria` (company 60002) tem só três
+ * valores distintos: "Uniforme" (42), "EPI" (36) e "Calcado" (19) — TODOS SEM CEDILHA. O formulário de
+ * cadastro/edição salva corretamente `value="Calcado"` (sem cedilha; só o RÓTULO exibido é "Calçado").
+ * Já o FILTRO de categoria do catálogo usava `<SelectItem value="Calçado">` (COM cedilha).
+ *
+ * CAUSA-RAIZ (SÓ CLIENT): em `client/src/pages/Epis.tsx`, o filtro mandava `categoria="Calçado"` (com
+ * cedilha) para `epis.list`, que faz `eq(epis.categoria, input.categoria)`. Como o banco guarda "Calcado"
+ * (sem cedilha), a comparação nunca casava → 0 linhas → "item fica zerado". O estado `filterCategoria` e a
+ * derivação de tamanhos por categoria (`tamanhosFiltro`) também comparavam contra "Calçado" com cedilha.
+ *
+ * FIX (SÓ CLIENT; ZERO SCHEMA/SERVER): alinhado o filtro ao valor REAL do banco — o tipo do estado
+ * `filterCategoria` passou de "Calçado" → "Calcado", a comparação em `tamanhosFiltro` passou a testar
+ * "Calcado", e o `<SelectItem>` do filtro passou a usar `value="Calcado"` mantendo o RÓTULO visível
+ * "Calçado". Mesma convenção já adotada pelo formulário de cadastro. EPI / Uniforme não mudaram.
+ *
+ * VALIDAÇÃO: servidor sobe limpo; HMR ok; architect. Detalhe: este arquivo.
+ *
  * Rev. 2769 — **COMPRAS · GERAÇÃO DE OC A PARTIR DE COTAÇÃO POR PACOTE: OS ITENS DA SOLICITAÇÃO NÃO PERDEM
  * MAIS O VÍNCULO/QUANTIDADE — ACABOU A OC COM "MONTE DE ITENS EM BRANCO" (QTD 0 / R$ 0,00).**
  *

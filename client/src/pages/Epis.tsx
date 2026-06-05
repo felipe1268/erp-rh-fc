@@ -175,7 +175,7 @@ export default function Epis() {
   }, [validTabs]);
   const [search, setSearch] = useState("");
   const [filterCondicao, setFilterCondicao] = useState<"Todos" | "Novo" | "Reutilizado">("Todos");
-  const [filterCategoria, setFilterCategoria] = useState<"Todos" | "EPI" | "Uniforme" | "Calçado">("Todos");
+  const [filterCategoria, setFilterCategoria] = useState<"Todos" | "EPI" | "Uniforme" | "Calcado">("Todos");
   const [filterTamanho, setFilterTamanho] = useState<string>("Todos");
   const [filterEstoque, setFilterEstoque] = useState<"todos" | "zerado" | "critico" | "baixo">("todos");
   const [editingEpi, setEditingEpi] = useState<any>(null);
@@ -560,7 +560,7 @@ export default function Epis() {
     const TAMANHOS_ROUPA_LIST = ['Único', 'PP', 'P', 'M', 'G', 'GG', 'XGG', 'XXGG', 'XXXGG'];
     const TAMANHOS_CALCADO_LIST = ['34', '35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46', '47', '48'];
     if (filterCategoria === "Uniforme") return TAMANHOS_ROUPA_LIST;
-    if (filterCategoria === "Calçado") return TAMANHOS_CALCADO_LIST;
+    if (filterCategoria === "Calcado") return TAMANHOS_CALCADO_LIST;
     // Para "Todos" ou "EPI", mostrar tamanhos que existem nos dados
     const tamanhos = new Set(episList.map((e: any) => e.tamanho).filter(Boolean));
     return Array.from(tamanhos).sort() as string[];
@@ -2160,7 +2160,7 @@ export default function Epis() {
                 <SelectItem value="Todos">Todas Categorias</SelectItem>
                 <SelectItem value="EPI">EPI</SelectItem>
                 <SelectItem value="Uniforme">Uniforme</SelectItem>
-                <SelectItem value="Calçado">Calçado</SelectItem>
+                <SelectItem value="Calcado">Calçado</SelectItem>
               </SelectContent>
             </Select>
             <Select value={filterCondicao} onValueChange={(v: any) => setFilterCondicao(v)}>
