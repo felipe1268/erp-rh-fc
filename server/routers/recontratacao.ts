@@ -3,7 +3,8 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb, createEmployee, getCompanyById, createAuditLog, getCompaniesForUser } from "../db";
 import { recontratacaoSolicitacoes, employees, companies, systemCriteria, users } from "../../drizzle/schema";
-import { and, eq, or, desc, isNull, inArray, sql, ne } from "drizzle-orm";
+import { and, eq, or, desc, isNull, inArray, notInArray, sql, ne } from "drizzle-orm";
+import { EMPLOYEE_STATUS_DESLIGADOS } from "../../shared/modules";
 import { sendEmail } from "../services/smtpService";
 import { dispararNotificacao } from "../services/emailNotification";
 
@@ -172,10 +173,10 @@ export const recontratacaoRouter = router({
       for (const c of compRows) nomeEmpresa.set(c.id, c.nome || c.razao || `Empresa ${c.id}`);
 
       const ativoMesmaEmpresa = rows.find((r: any) =>
-        r.companyId === input.companyId && r.status !== "Desligado" && r.status !== "Inativo") || null;
+        r.companyId === input.companyId && !EMPLOYEE_STATUS_DESLIGADOS.includes(r.status)) || null;
 
       const vinculos = rows
-        .filter((r: any) => r.status === "Desligado" || r.status === "Inativo")
+        .filter((r: any) => EMPLOYEE_STATUS_DESLIGADOS.includes(r.status))
         .map((r: any) => {
           const mesmaEmpresa = r.companyId === input.companyId;
           const diasFora = diasEntre(r.dataDesligamentoEfetiva || r.dataDemissao);
@@ -254,7 +255,7 @@ export const recontratacaoRouter = router({
           eq(employees.id, input.employeeId),
           inArray(employees.companyId, grupoIds),
           isNull(employees.deletedAt),
-          or(eq(employees.status, "Desligado"), eq(employees.status, "Inativo")),
+          inArray(employees.status, EMPLOYEE_STATUS_DESLIGADOS),
         ));
       if (!emp) throw new TRPCError({ code: "NOT_FOUND", message: "Vínculo anterior não encontrado" });
       return emp;
@@ -285,7 +286,7 @@ export const recontratacaoRouter = router({
       const ativos = await db.select({ id: employees.id, nome: employees.nomeCompleto }).from(employees).where(and(
         or(eq(employees.cpf, cpf), eq(employees.cpf, cleanCpf)),
         eq(employees.companyId, input.companyId), isNull(employees.deletedAt),
-        ne(employees.status, "Desligado"), ne(employees.status, "Inativo"),
+        notInArray(employees.status, EMPLOYEE_STATUS_DESLIGADOS),
       ));
       if (ativos.length > 0) {
         throw new TRPCError({ code: "CONFLICT", message: `Já existe um funcionário ATIVO com este CPF: ${ativos[0].nome}.` });
@@ -315,7 +316,7 @@ export const recontratacaoRouter = router({
         eq(employees.id, input.vinculoAnteriorEmployeeId),
         eq(employees.companyId, input.vinculoAnteriorCompanyId),
         isNull(employees.deletedAt),
-        or(eq(employees.status, "Desligado"), eq(employees.status, "Inativo")),
+        inArray(employees.status, EMPLOYEE_STATUS_DESLIGADOS),
       ));
       if (!vinc) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Vínculo anterior não encontrado ou não está desligado/inativo." });
@@ -442,7 +443,7 @@ export const recontratacaoRouter = router({
       const novo = await createEmployee({
         ...ficha,
         companyId: input.companyId,
-        status: ficha.status && ficha.status !== "Desligado" && ficha.status !== "Inativo" ? ficha.status : "Ativo",
+        status: ficha.status && !EMPLOYEE_STATUS_DESLIGADOS.includes(ficha.status) ? ficha.status : "Ativo",
         listaNegra: 0,
         recontratadoDeEmployeeId: sol.vinculoAnteriorEmployeeId ?? null,
         recontratadoDeCompanyId: sol.vinculoAnteriorCompanyId ?? null,

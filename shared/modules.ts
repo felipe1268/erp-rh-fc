@@ -74,6 +74,15 @@ export const EMPLOYEE_STATUS_MANUAL = [
   { value: "Desligado", label: "Desligado", color: "#ef4444" },
 ] as const;
 
+// Status que indicam que o funcionário NÃO está mais ATIVO na empresa (vínculo
+// encerrado). É a MESMA tripla que o resto do ERP usa em SQL cru
+// (`NOT IN ('Desligado','Lista_Negra','Inativo')`): "Lista_Negra" e "Inativo"
+// são valores legados presentes no banco (ex.: 22 registros Lista_Negra) que NÃO
+// aparecem em EMPLOYEE_STATUS mas DEVEM contar como desligados em qualquer
+// verificação de CPF / recontratação / contagem de ativos — senão um desligado
+// vira falso "ATIVO" e some da análise. Fonte única p/ evitar drift.
+export const EMPLOYEE_STATUS_DESLIGADOS: string[] = ["Desligado", "Lista_Negra", "Inativo"];
+
 // ============================================================
 // MAPA DE MÓDULOS E FUNCIONALIDADES GRANULARES
 // Usado para controle de acesso por usuário na sidebar e rotas

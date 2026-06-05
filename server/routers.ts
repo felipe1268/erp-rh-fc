@@ -41,7 +41,7 @@ import {
   getEffectiveAllowedObraIds, userCanSeeAvisoStatus,
   listTrashEntries, getTrashEntry, markTrashEntryRestored, deleteTrashEntry, reinsertSnapshot,
 } from "./db";
-import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
+import { DEFAULT_PERMISSIONS, MODULE_KEYS, EMPLOYEE_STATUS_DESLIGADOS } from "../shared/modules";
 import { getDb, encerrarContratosPjDoFuncionario } from "./db";
 import { normalizeCidadeInput } from "../shared/normalizeCidade";
 import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory, employeeTerminationChecklist, asos, trainings, sstIntegracaoRegistros, employeeIntegrations, contractCounters, almoxarifadoItens, obraFuncionarios } from "../drizzle/schema";
@@ -478,7 +478,7 @@ export const appRouter = router({
         const dup = await checkDuplicateCpf(input.cpf, targetCompanyId);
         if (dup && (dup as any[]).length > 0) {
           const dupInfo = (dup as any[])[0];
-          const isDesligado = dupInfo.status === 'Desligado' || dupInfo.status === 'Inativo';
+          const isDesligado = EMPLOYEE_STATUS_DESLIGADOS.includes(dupInfo.status);
           if (isDesligado && input._recontratacao) {
             // Rev. 2755 — GATE DE STAGING: a recontratação NÃO cria mais funcionário
             // direto por aqui. TODO retorno de desligado passa OBRIGATORIAMENTE pela

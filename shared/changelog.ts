@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2761 — **RH/DP · NOVO COLABORADOR / RECONTRATAÇÃO: A VERIFICAÇÃO DE CPF AGORA ENXERGA FUNCIONÁRIOS
+ * DE TODOS OS STATUS — INCLUSIVE OS 22 EM "LISTA_NEGRA" QUE ANTES ERAM CLASSIFICADOS COMO "ATIVO" E SUMIAM
+ * DA ANÁLISE DE RECONTRATAÇÃO.**
+ *
+ * CONTEXTO (pedido do Felipe): "garantir que o ERP pesquisa funcionários de TODOS os status para não haver
+ * bug/erro na análise das informações". A query de CPF (`verificarCpf`/`checkDuplicateCpf`) JÁ buscava todos
+ * os status (sem filtro de status no WHERE), mas a CLASSIFICAÇÃO posterior estava errada.
+ *
+ * CAUSA-RAIZ (SÓ SERVER; ZERO SCHEMA — R-001/R-007/R-010): o ERP inteiro trata o conjunto terminal de status
+ * como `('Desligado', 'Lista_Negra', 'Inativo')` (padrão repetido em ~10 queries de `server/db.ts`,
+ * `controleDocumentos.ts`, `pjConformidadeJobs.ts`, `_core/index.ts` etc.). Mas a verificação de CPF
+ * (`recontratacao.verificarCpf`, `criarSolicitacao`, `getDadosCopia`, `aprovar` e o `create` em
+ * `server/routers.ts`) só checava DOIS valores — `"Desligado"` e `"Inativo"` — ESQUECENDO `"Lista_Negra"`.
+ * Como o banco tem 22 funcionários com status `"Lista_Negra"` (e `"Inativo"` nem existe na lista canônica
+ * `EMPLOYEE_STATUS`), esses 22 caíam na regra `status !== "Desligado" && status !== "Inativo"` → eram
+ * tratados como `ativoMesmaEmpresa` (falso "CPF já cadastrado ATIVO", mensagem errada e bloqueio) E sumiam
+ * de `vinculos` (filter só pegava Desligado/Inativo) → não apareciam no fluxo de recontratação nem
+ * recebiam o alerta de blacklist. Exatamente o "erro na análise" relatado.
+ *
+ * FIX: NOVA fonte única `EMPLOYEE_STATUS_DESLIGADOS = ["Desligado", "Lista_Negra", "Inativo"]` em
+ * `shared/modules.ts` (espelha a tripla canônica do SQL cru). Todos os pontos da verificação de CPF passam a
+ * usá-la: `recontratacao.ts` — `ativoMesmaEmpresa` (`!includes`), `vinculos` (`includes`), `getDadosCopia` e
+ * `vínculo anterior` em `criarSolicitacao` (`inArray`), bloqueio de ATIVO em `criarSolicitacao`
+ * (`notInArray`), passthrough de status em `aprovar` (`!includes`); e `server/routers.ts` `create`
+ * (`isDesligado = EMPLOYEE_STATUS_DESLIGADOS.includes(...)`). Agora um Lista_Negra é corretamente
+ * reconhecido como vínculo DESLIGADO (com alerta de blacklist no card), nunca mais como "ativo".
+ *
+ * VALIDAÇÃO: confirmado no Neon que existem 22 registros `Lista_Negra` (e 0 `Inativo`) entre os 7 status
+ * reais (Desligado 165, Ativo 126, Lista_Negra 22, Afastado 8, Aviso 6, Ferias 4, Recluso 2). esbuild server
+ * EXIT 0; `tsc --noEmit` limpo nos arquivos tocados; `vitest rescisao + employees` 46/46 verde
+ * (`erp.test.ts` falha por limitação pré-existente do vitest 2.1.9 ao importar router); architect.
+ *
  * Rev. 2760 — **RH/DP · NOVO COLABORADOR: A VERIFICAÇÃO DE CPF AGORA RECONHECE FUNCIONÁRIO JÁ CADASTRADO
  * MESMO QUANDO O CPF ESTÁ GRAVADO FORMATADO NO BANCO — ACABOU O "CPF LIVRE" FALSO.**
  *
