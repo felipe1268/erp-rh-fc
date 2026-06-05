@@ -671,6 +671,16 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
   const recontratacaoVinculos: any[] = (verificarRecontratacao.data as any)?.vinculos ?? [];
   const temVinculoDesligado = recontratacaoVinculos.length > 0;
   const ativoMesmaEmpresa = (verificarRecontratacao.data as any)?.ativoMesmaEmpresa ?? null;
+  const solicitacaoPendente = (verificarRecontratacao.data as any)?.solicitacaoPendente ?? null;
+  // Rev. 2757 — feedback explícito da verificação de CPF ao terminar de digitar:
+  // "verificando…", "já em processo de recontratação", "já cadastrado" ou "CPF livre".
+  const cpfCompleto = cpfClean.length >= 11;
+  const podeVerificarCpf = cpfCompleto && !editingId && !!formCompanyId;
+  const verificandoCpf = podeVerificarCpf && (verificarRecontratacao.isFetching || checkDuplicateCpf.isFetching);
+  const cpfVerificado = podeVerificarCpf && !verificarRecontratacao.isFetching && !checkDuplicateCpf.isFetching
+    && verificarRecontratacao.data !== undefined && checkDuplicateCpf.data !== undefined;
+  const cpfLivre = cpfVerificado && !recontratacaoMode && !cpfDuplicateAlert && !blacklistAlert
+    && !temVinculoDesligado && !solicitacaoPendente;
   const pickedVinculo = recontratacaoVinculos.find((v: any) => v.employeeId === recontratacaoPickEmployeeId)
     || (recontratacaoVinculos.length === 1 ? recontratacaoVinculos[0] : null);
   const dadosCopia = trpc.recontratacao.getDadosCopia.useQuery(
@@ -1531,7 +1541,34 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
                     <p className="text-sm font-medium text-red-600">⛔ {cpfDuplicateAlert}. Cadastro bloqueado.</p>
                   </div>
                 ) : null}
-                {!editingId && temVinculoDesligado && !recontratacaoMode && !cpfDuplicateAlert ? (
+                {verificandoCpf ? (
+                  <div className="sm:col-span-2 lg:col-span-3 bg-muted/40 border border-border rounded-lg p-2.5 flex items-center gap-2">
+                    <RefreshCw className="h-4 w-4 text-muted-foreground shrink-0 animate-spin" />
+                    <p className="text-sm text-muted-foreground">Verificando CPF na base (cadastro ativo, desligamento e recontratação)…</p>
+                  </div>
+                ) : null}
+                {!editingId && !verificandoCpf && solicitacaoPendente ? (
+                  <div className="sm:col-span-2 lg:col-span-3 bg-indigo-500/10 border border-indigo-500/40 rounded-lg p-3 flex items-start gap-3">
+                    <Clock className="h-5 w-5 text-indigo-600 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-indigo-700">Já existe uma solicitação de recontratação pendente para este CPF</p>
+                      <p className="text-xs text-indigo-700/80 mt-0.5">
+                        {solicitacaoPendente.nomeCompleto || "—"}
+                        {solicitacaoPendente.companyNome ? ` · ${solicitacaoPendente.companyNome}` : ""}
+                        {solicitacaoPendente.createdAt ? ` · enviada em ${new Date(solicitacaoPendente.createdAt).toLocaleDateString("pt-BR")}` : ""}
+                        {solicitacaoPendente.solicitadoPor ? ` por ${solicitacaoPendente.solicitadoPor}` : ""}.
+                      </p>
+                      <p className="text-xs text-indigo-700/80 mt-1">Aguardando a liberação do sócio. Não é preciso abrir outra — acompanhe em <span className="font-medium">Recontratações Pendentes</span>.</p>
+                    </div>
+                  </div>
+                ) : null}
+                {cpfLivre ? (
+                  <div className="sm:col-span-2 lg:col-span-3 bg-emerald-500/10 border border-emerald-500/40 rounded-lg p-2.5 flex items-center gap-2">
+                    <Check className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <p className="text-sm font-medium text-emerald-700">CPF livre — sem cadastro ativo, desligamento ou recontratação neste grupo. Pode prosseguir com o cadastro.</p>
+                  </div>
+                ) : null}
+                {!editingId && temVinculoDesligado && !recontratacaoMode && !cpfDuplicateAlert && !solicitacaoPendente ? (
                   <div className="sm:col-span-2 lg:col-span-3 bg-amber-500/10 border border-amber-500/40 rounded-lg p-3 flex items-start gap-3">
                     <RefreshCw className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
                     <div className="flex-1">

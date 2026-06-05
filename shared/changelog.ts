@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2757 — **RH/DP · NOVO COLABORADOR: AO TERMINAR DE DIGITAR O CPF, O ERP AGORA DÁ UM VEREDITO
+ * EXPLÍCITO DA VERIFICAÇÃO — "VERIFICANDO…", "JÁ EM PROCESSO DE RECONTRATAÇÃO", "JÁ CADASTRADO" OU "CPF LIVRE".**
+ *
+ * PEDIDO (Felipe): ao finalizar de digitar o CPF, o ERP precisa VERIFICAR se a pessoa já foi/está sendo
+ * recontratada, se já existe na base (ativo) ou se foi desligada — e, nesse caso, seguir o fluxo de
+ * recontratação criado na Rev. 2755/2756. Antes, quando o CPF não batia em nada, a tela ficava MUDA (nenhum
+ * sinal de que a verificação rodou), e não havia detecção de uma solicitação de recontratação JÁ pendente
+ * (risco de abrir duplicata / confusão de "já mandei isso").
+ *
+ * MUDANÇA (SERVER + CLIENT; ZERO SCHEMA — R-001/R-007/R-010):
+ *   (1) `server/routers/recontratacao.ts` (`verificarCpf`): além de `ativoMesmaEmpresa` e `vinculos`
+ *       (desligados), passa a retornar `solicitacaoPendente` — busca em `recontratacao_solicitacoes` por uma
+ *       solicitação com status `pendente` para o MESMO CPF dentro do grupo permitido (`grupoIds`), devolvendo
+ *       id/empresa/nome/quem solicitou/data. Tenancy preservada (mesmos `assertAcessoEmpresas`/`grupoIds`).
+ *   (2) `client/src/pages/Colaboradores.tsx`: feedback explícito ao completar o CPF (11 dígitos, empresa do
+ *       form definida, modo novo): "Verificando CPF…" (spinner) enquanto as queries carregam; banner ÍNDIGO
+ *       "Já existe uma solicitação de recontratação pendente" (com nome/empresa/data/solicitante) que TAMBÉM
+ *       SUPRIME o botão "Iniciar recontratação" (não abre duplicata); e um selo VERDE "CPF livre" quando não
+ *       há ativo, desligado nem solicitação pendente — confirmando ao usuário que a verificação rodou. O banner
+ *       âmbar de recontratação (desligado) ganhou `&& !solicitacaoPendente` no gate.
+ *
+ * RESSALVA: o servidor `criarSolicitacao` já barrava duplicata pendente (CONFLICT); esta revisão antecipa o
+ * aviso na digitação do CPF. Não altera schema nem o fluxo de aprovação.
+ *
+ * VALIDAÇÃO: esbuild parse client+server EXIT 0; `vitest server/rescisao.test.ts` 41/41 verde; architect.
+ *
  * Rev. 2756 — **RH/DP · RECONTRATAÇÃO: O BANNER "INICIAR RECONTRATAÇÃO" NÃO APARECIA QUANDO A EMPRESA DO
  * HEADER (GLOBAL) ERA DIFERENTE DA EMPRESA ESCOLHIDA NO FORMULÁRIO — AGORA A DETECÇÃO SEGUE A EMPRESA DO FORM.**
  *

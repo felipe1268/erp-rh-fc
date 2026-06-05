@@ -202,12 +202,36 @@ export const recontratacaoRouter = router({
           };
         });
 
+      // Solicitação de recontratação PENDENTE já existente p/ este CPF no grupo:
+      // evita duplicar a fila e informa "já está em processo de liberação".
+      const pendRows = await db.select({
+        id: recontratacaoSolicitacoes.id,
+        companyId: recontratacaoSolicitacoes.companyId,
+        nomeCompleto: recontratacaoSolicitacoes.nomeCompleto,
+        createdAt: recontratacaoSolicitacoes.createdAt,
+        solicitadoPor: recontratacaoSolicitacoes.solicitadoPor,
+      }).from(recontratacaoSolicitacoes).where(and(
+        or(eq(recontratacaoSolicitacoes.cpf, input.cpf), eq(recontratacaoSolicitacoes.cpf, cleanCpf)),
+        inArray(recontratacaoSolicitacoes.companyId, grupoIds),
+        eq(recontratacaoSolicitacoes.status, "pendente"),
+      )).orderBy(desc(recontratacaoSolicitacoes.createdAt));
+      const solicitacaoPendente = pendRows[0] ? {
+        id: pendRows[0].id,
+        companyId: pendRows[0].companyId,
+        companyNome: nomeEmpresa.get(pendRows[0].companyId) || "",
+        nomeCompleto: pendRows[0].nomeCompleto,
+        createdAt: pendRows[0].createdAt,
+        solicitadoPor: pendRows[0].solicitadoPor,
+        mesmaEmpresa: pendRows[0].companyId === input.companyId,
+      } : null;
+
       return {
         ok: !ativoMesmaEmpresa,
         ativoMesmaEmpresa: ativoMesmaEmpresa ? {
           employeeId: ativoMesmaEmpresa.id, nomeCompleto: ativoMesmaEmpresa.nomeCompleto, status: ativoMesmaEmpresa.status,
         } : null,
         vinculos,
+        solicitacaoPendente,
       };
     }),
 
