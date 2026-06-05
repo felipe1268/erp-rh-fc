@@ -2850,12 +2850,14 @@ export default function Epis() {
 
             {/* Resumo por obra */}
             {(estoqueResumo.length > 0 || estoqueCentral.totalUnidades > 0) && (() => {
-              const filteredObras = estoqueResumo.filter((r: any) => filterObraEstoque === "todas" || String(r.obraId) === filterObraEstoque);
+              // Rev. 2780 — cards e resumo SEMPRE mostram TODOS os locais (painel fixo completo);
+              // o clique só destaca o card e filtra a TABELA abaixo (tabelaEstoqueList), não some com os cards.
+              const filteredObras = estoqueResumo;
               const valorObras = filteredObras.reduce((s: number, r: any) => s + parseFloat(String(r.valorTotal || 0)), 0);
               const unidObras = filteredObras.reduce((s: number, r: any) => s + Number(r.totalUnidades || 0), 0); // Rev. 2777 — Number() evita concatenação de string (SUM do pg vem string)
               const valorCentral = parseFloat(String(estoqueCentral.valorTotal || 0));
               const unidCentral = Number(estoqueCentral.totalUnidades || 0);
-              const showCentral = filterObraEstoque === "todas" || filterObraEstoque === "central";
+              const showCentral = true;
               const valorTotal = showCentral ? valorCentral + valorObras : valorObras;
               const unidTotal = showCentral ? unidCentral + unidObras : unidObras;
               const totalLocais = filteredObras.length + (showCentral ? 1 : 0);

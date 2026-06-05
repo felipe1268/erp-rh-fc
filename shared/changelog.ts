@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2780 — **EPI · TELA "ESTOQUE POR OBRA": AO CLICAR NUMA OBRA, OS DEMAIS CARDS NÃO SOMEM MAIS — TODOS OS
+ * LOCAIS PERMANECEM VISÍVEIS NO PAINEL FIXO (COMO NA 1ª FOTO); O CLIQUE SÓ DESTACA O CARD (ÂMBAR) E FILTRA A
+ * TABELA DE INSUMOS ABAIXO.**
+ *
+ * PEDIDO (usuário, 2 prints): "quando eu clico em uma obra ele tá sumindo com as demais, não queria isso...
+ * deixar como está na primeira foto, todas obras no painel fixas, somente dar um destaque na obra que está
+ * selecionada". Na Rev. 2779 o clique escondia os outros cards (o painel passava a mostrar só o local
+ * selecionado) — o usuário perdia a visão geral.
+ *
+ * CAUSA (SÓ CLIENT) em `client/src/pages/Epis.tsx`: o MESMO `filterObraEstoque` que filtra a tabela também
+ * encolhia o painel — `filteredObras` filtrava a grade (`String(r.obraId) === filterObraEstoque`) e
+ * `showCentral` escondia o card central quando uma obra estava selecionada.
+ *
+ * FIX (SÓ CLIENT; ZERO SCHEMA/SERVER): DESACOPLADO o painel de cards do filtro. `filteredObras = estoqueResumo`
+ * (sempre TODAS as obras) e `showCentral = true` (central sempre visível) → a grade e o card-resumo voltam a
+ * mostrar TUDO, independente da seleção. O destaque âmbar do card selecionado (`filterObraEstoque ===
+ * String(r.obraId)`) e a filtragem da TABELA (`tabelaEstoqueList`, memo independente) continuam intactos.
+ * Resultado: clicar num card NÃO some mais com os demais; só realça o escolhido e filtra a tabela.
+ * ZERO ALTER/DROP/DELETE. Validação: HMR ok; architect.
+ *
  * Rev. 2779 — **EPI · TELA "ESTOQUE POR OBRA": OS CARDS (RESUMO + ALMOXARIFADO CENTRAL + OBRAS) FICARAM FIXOS
  * (STICKY) NO TOPO — SÓ A TABELA DE INSUMOS ABAIXO ROLA; E O CARD CLICADO GANHOU UMA COR DE DESTAQUE DISTINTA
  * (ÂMBAR), EM VEZ DO REALCE FRACO QUE QUASE NÃO APARECIA.**
