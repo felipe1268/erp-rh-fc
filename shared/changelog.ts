@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2782 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): O CABEÇALHO DE IMPRESSÃO AGORA EXIBE
+ * OS LOGOS DO CLIENTE E DA GERENCIADORA (GESTORA) ALÉM DO DA EXECUTORA (FC); LAYOUT REORGANIZADO E MARGENS DE
+ * IMPRESSÃO ENXUTAS (UNIFORME 8mm, ≤ 2,5cm).**
+ *
+ * PEDIDO (usuário): "arrume o layout de impressão do REFIS que tenha o logo do cliente e da gestora, arrume de
+ * forma que fique organizado e fácil leitura, ajuste as margens (superior, inferior e laterais) para não ter
+ * espaço branco — espessura da margem de no máximo 2,5cm".
+ *
+ * CAUSA (estado anterior): o cabeçalho print-only do REFIS só tinha a marca textual "FC" (sem nenhum logo de
+ * imagem) na célula esquerda da faixa azul-escuro (#1A3461) e NÃO mostrava cliente nem gerenciadora. As margens
+ * do `@page` eram assimétricas (`8mm 10mm 10mm 10mm`).
+ *
+ * FIX (SÓ CLIENT; ZERO SCHEMA/SERVER) em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (componente
+ * `Refis`):
+ *  1. Os logos já vinham do backend SEM mudança: `getProjetoById` retorna `proj.obra` com `empresaLogoUrl`
+ *     (executora/companies.logoUrl), `gerenciadoraLogoUrl`, `gerenciadoraNome` e `clienteLogoUrl`. Adicionadas 5
+ *     consts no topo do `return` (`refisFcLogo` com fallback `${origin}/logo-fc.jpg`, `refisGerLogo/Nome`,
+ *     `refisCliLogo`, `refisCliNome = proj.cliente`).
+ *  2. Nova FAIXA BRANCA `.refis-logo-strip` no TOPO do cabeçalho (antes da faixa azul) com até 3 células
+ *     (`.refis-logo-cell`): EXECUÇÃO (FC, sempre — fallback no asset fixo), GERENCIAMENTO e CLIENTE. Cada célula
+ *     só renderiza quando há logo OU nome; sem logo cai no nome em texto (`.refis-logo-name`). Divisores finos
+ *     entre células. Logos sobre fundo BRANCO (casa com logos institucionais que costumam ter fundo claro).
+ *  3. REMOVIDA a célula textual "FC" da faixa azul (evita redundância com o logo da faixa branca); a faixa azul
+ *     fica só com título (centro) + ref R0X/relatório/data (direita).
+ *  4. Margens do `@page` unificadas para `margin: 8mm` (era `8mm 10mm 10mm 10mm`) — enxuga o espaço branco
+ *     lateral e fica bem abaixo do teto de 2,5cm pedido.
+ *
+ * `<img>` em JSX React (renderização direta na página, NÃO passa por DOMPurify/`signatures.create`) — a
+ * proibição de handlers `on*` da Regra de Ouro não se aplica aqui; mesmo assim nenhum `on*` foi usado.
+ *
+ * ZERO ALTER/DROP/DELETE/UPDATE (R-001/R-007/R-010 OK). Validação: tsc limpo; HMR; architect.
+ *
  * Rev. 2781 — **PLANEJAMENTO · AVANÇO SEMANAL: O "% CONCLUÍDA" (REALIZADO ACUM.) AGORA FICA SALVO EM TODAS AS
  * SEMANAS JÁ ENVIADAS — ANTES SÓ APARECIA NA ÚLTIMA SEMANA CADASTRADA E AS ANTERIORES MOSTRAVAM "—".**
  *

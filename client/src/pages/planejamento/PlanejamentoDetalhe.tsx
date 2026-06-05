@@ -14485,6 +14485,16 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     setAnaliseSemana(null);
   }, [semana]);
 
+  // Rev. 2782 — logos para o cabeçalho de impressão do REFIS. Lidos do cadastro
+  // da obra (proj.obra) que o getProjetoById já retorna. FC (executora) cai no
+  // asset fixo `/logo-fc.jpg` quando a empresa não tem logo próprio.
+  const _refisObra: any = (proj as any)?.obra ?? {};
+  const refisFcLogo = _refisObra.empresaLogoUrl || `${window.location.origin}/logo-fc.jpg`;
+  const refisGerLogo: string | null = _refisObra.gerenciadoraLogoUrl || null;
+  const refisGerNome: string | null = _refisObra.gerenciadoraNome || null;
+  const refisCliLogo: string | null = _refisObra.clienteLogoUrl || null;
+  const refisCliNome: string | null = (proj as any)?.cliente || null;
+
   return (
     <div className="space-y-5" id="refis-print-area">
 
@@ -14618,7 +14628,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       {/* Print styles */}
       <style>{`
         @media print {
-          @page { size: A4 ${orientacaoPdf}; margin: 8mm 10mm 10mm 10mm; }
+          @page { size: A4 ${orientacaoPdf}; margin: 8mm; }
 
           html, body { background: white !important; margin: 0 !important; padding: 0 !important; }
           body * { visibility: hidden !important; }
@@ -14673,6 +14683,21 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             border-left: 0.5pt solid rgba(255,255,255,0.22) !important;
             padding: 5pt 9pt !important; text-align: right !important; display: flex !important; flex-direction: column !important; justify-content: center !important; min-width: 68pt !important;
           }
+          /* Rev. 2782 — faixa branca com os 3 logos (executora · gerenciamento · cliente) */
+          .refis-logo-strip {
+            display: flex !important; align-items: center !important; justify-content: space-around !important;
+            gap: 10pt !important; background: white !important;
+            border: 0.5pt solid #cbd5e1 !important; border-bottom: none !important;
+            padding: 5pt 14pt !important;
+          }
+          .refis-logo-cell {
+            display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important;
+            gap: 2pt !important; flex: 1 1 0 !important;
+          }
+          .refis-logo-cell img { max-height: 30pt !important; max-width: 150pt !important; object-fit: contain !important; }
+          .refis-logo-label { font-size: 5pt !important; font-weight: 700 !important; letter-spacing: 0.14em !important; text-transform: uppercase !important; color: #64748b !important; }
+          .refis-logo-name { font-size: 7pt !important; font-weight: 700 !important; color: #1A3461 !important; text-align: center !important; line-height: 1.15 !important; }
+          .refis-logo-divider { align-self: stretch !important; width: 0.5pt !important; background: #e2e8f0 !important; }
 
           .refis-block {
             break-inside: avoid !important;
@@ -14797,12 +14822,36 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
       {/* ━━━ PRINT-ONLY: Cabeçalho do documento (FC Engenharia) ━━━━━━━━━━━━━━ */}
       <div className="refis-doc-header refis-print-only-block" style={{ display: 'none' }}>
-        <div className="refis-doc-header-inner">
-          <div className="refis-doc-header-brand">
-            <div style={{ fontSize: '20pt', fontWeight: 900, color: 'white', letterSpacing: '-0.02em', lineHeight: 1 }}>FC</div>
-            <div style={{ fontSize: '5.5pt', fontWeight: 700, color: 'rgba(255,255,255,0.72)', textTransform: 'uppercase', letterSpacing: '0.2em', marginTop: '2pt' }}>Engenharia</div>
-            <div style={{ fontSize: '5pt', color: 'rgba(255,255,255,0.48)', marginTop: '4pt', lineHeight: 1.4 }}>Planejamento<br/>e Controle</div>
+        {/* Rev. 2782 — faixa branca com os 3 logos (executora · gerenciamento · cliente) */}
+        <div className="refis-logo-strip">
+          <div className="refis-logo-cell">
+            <img src={refisFcLogo} alt="FC Engenharia" onError={(e) => { const t = e.currentTarget; const fb = `${window.location.origin}/logo-fc.jpg`; if (t.src !== fb) { t.src = fb; } else { t.style.display = 'none'; } }} />
+            <div className="refis-logo-label">Execução</div>
           </div>
+          {(refisGerLogo || refisGerNome) && (
+            <>
+              <div className="refis-logo-divider" />
+              <div className="refis-logo-cell">
+                {refisGerLogo
+                  ? <img src={refisGerLogo} alt={refisGerNome ?? 'Gerenciadora'} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                  : <div className="refis-logo-name">{refisGerNome}</div>}
+                <div className="refis-logo-label">Gerenciamento</div>
+              </div>
+            </>
+          )}
+          {(refisCliLogo || refisCliNome) && (
+            <>
+              <div className="refis-logo-divider" />
+              <div className="refis-logo-cell">
+                {refisCliLogo
+                  ? <img src={refisCliLogo} alt={refisCliNome ?? 'Cliente'} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                  : <div className="refis-logo-name">{refisCliNome}</div>}
+                <div className="refis-logo-label">Cliente</div>
+              </div>
+            </>
+          )}
+        </div>
+        <div className="refis-doc-header-inner">
           <div className="refis-doc-header-center">
             <div style={{ fontSize: '10.5pt', fontWeight: 800, color: 'white', textTransform: 'uppercase', letterSpacing: '0.06em', lineHeight: 1.2 }}>
               Relatório de Evolução Física da Obra
