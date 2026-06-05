@@ -2426,8 +2426,8 @@ export const appRouter = router({
       username: z.string(), password: z.string(),
     })).mutation(async ({ input, ctx }) => {
       const bcrypt = await import("bcryptjs");
-      const { getDb } = await import("./db");
-      const db = await getDb();
+      const { getDb, withDbRetry } = await import("./db");
+      let db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const { users } = await import("../drizzle/schema");
       const { eq, or, sql } = await import("drizzle-orm");
@@ -2439,12 +2439,19 @@ export const appRouter = router({
       const stripAccents = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       const loginNorm = stripAccents(loginInput).toLowerCase();
       // Buscar por username OU email (case-insensitive + accent-insensitive)
-      const results = await db.select().from(users).where(
-        or(
-          sql`LOWER(translate(COALESCE(${users.username},''), ${ACENTOS_FROM}, ${ACENTOS_TO})) = ${loginNorm}`,
-          sql`LOWER(translate(COALESCE(${users.email},''),    ${ACENTOS_FROM}, ${ACENTOS_TO})) = ${loginNorm}`
-        )
-      );
+      // Rev. 2774 — retry transiente: o 1º request após o Neon hibernar estourava
+      // "timeout exceeded when trying to connect" e derrubava o login. `withDbRetry`
+      // reseta o pool e re-tenta; refaz `getDb()` a cada tentativa (o reset zera o _db).
+      const results = await withDbRetry(async () => {
+        db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+        return db.select().from(users).where(
+          or(
+            sql`LOWER(translate(COALESCE(${users.username},''), ${ACENTOS_FROM}, ${ACENTOS_TO})) = ${loginNorm}`,
+            sql`LOWER(translate(COALESCE(${users.email},''),    ${ACENTOS_FROM}, ${ACENTOS_TO})) = ${loginNorm}`
+          )
+        );
+      });
       // Filtrar usuários deletados e sem senha
       const activeResults = results.filter(u => !u.deletedAt);
       const candidatos = activeResults.filter(u => !!u.password);

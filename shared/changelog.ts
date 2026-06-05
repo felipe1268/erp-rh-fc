@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2774 — **LOGIN/INFRA · CORRIGIDO O "ERRO" AO ENTRAR (TELA DE LOGIN ESTOURAVA UM TEXTÃO DE QUERY): A
+ * CAUSA REAL ERA `timeout exceeded when trying to connect` — O POOL NÃO CONSEGUIA ABRIR CONEXÃO COM O NEON
+ * NO 1º REQUEST APÓS ELE HIBERNAR. AGORA O LOGIN TOLERA O COLD-START E RE-TENTA.**
+ *
+ * SINTOMA (usuário, screenshot em produção): ao tentar entrar, a tela mostrava um tooltip enorme com o texto
+ * da query `select ... from users where (LOWER(translate(COALESCE("users"."username",''), $1, $2)) = $3 or
+ * ...)` + os parâmetros de acentos. Parecia erro NA query de normalização de acento (Rev. 1661), MAS não era:
+ * esse texto é só a query que estava PENDENTE quando a conexão estourou. A causa real (logs de produção):
+ * `[tRPC Error] userManagement.loginLocal: DB error: timeout exceeded when trying to connect`, repetido —
+ * junto com vários jobs de fundo (`AutoCheck`, `StatusSync`, `PurchaseJobs`, `OperacionalJobs`, `FleetKmJob`)
+ * falhando pelo MESMO motivo (sem conexão).
+ *
+ * CAUSA-RAIZ: o `getDb()` retorna o `db` na hora, mas a conexão TCP com o Neon é PREGUIÇOSA — só acontece
+ * quando a 1ª query roda. Em deploy autoscale o container fica suspenso quando não há requests, então o
+ * keep-alive (ping a cada 4 min p/ impedir o Neon de hibernar) NÃO roda → o Neon dorme (~5 min de
+ * ociosidade) → o 1º request seguinte paga o COLD-START do Neon (pode passar de 5s) → o pool estourava
+ * `connectionTimeoutMillis: 5000` antes de conectar → o login (que NÃO tinha retry, diferente do
+ * `getCompanies`) caía direto.
+ *
+ * FIX (SÓ SERVER; ZERO SCHEMA/CLIENT):
+ *  - `server/db.ts`: `connectionTimeoutMillis` 5000 → 15000 (tolera o cold-start do Neon) + `keepAlive: true`
+ *    (TCP keep-alive). Corrigido também um VAZAMENTO: a cada `resetDbPool()` + `getDb()` um novo `setInterval`
+ *    de keep-alive era criado e o antigo nunca limpo → agora há um handle `_keepAliveTimer` único com
+ *    `clearInterval` antes de recriar. NOVO helper EXPORTADO `withDbRetry(fn, attempts=3)` — espelha o padrão
+ *    de retry transiente do `getCompanies` (reseta o pool e re-tenta em erro de conexão/timeout/socket).
+ *  - `server/routers.ts` (`loginLocal`): a busca do usuário passou a rodar dentro de `withDbRetry`, refazendo
+ *    `getDb()` a cada tentativa (o reset zera o `_db`). Assim o 1º login após o Neon dormir re-tenta em vez de
+ *    falhar.
+ *
+ * RESSALVA: a query de acento (`translate`) NÃO foi alterada — está correta. Esta revisão só ataca a
+ * resiliência de conexão. ZERO ALTER/DROP/DELETE (R-001/R-007/R-010).
+ *
+ * VALIDAÇÃO: servidor sobe limpo; conecta ao Neon; HMR ok; architect. Detalhe: este arquivo.
+ *
  * Rev. 2773 — **EPI · TELA "ESTOQUE POR OBRA": OS CARDS DAS OBRAS E O CARD DO ESCRITÓRIO CENTRAL FICARAM
  * CLICÁVEIS — AO CLICAR, A TABELA DETALHADA ABAIXO FILTRA E MOSTRA, ITEM A ITEM, O QUE ESTÁ NO ESTOQUE
  * DAQUELE LOCAL.**

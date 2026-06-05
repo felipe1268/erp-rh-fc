@@ -37,6 +37,7 @@ import { normalizeModulePerm } from '../shared/modulePages';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: Pool | null = null;
+let _keepAliveTimer: ReturnType<typeof setInterval> | null = null;
 
 export async function getDb() {
   // Garante que SEMPRE usamos o Neon — nunca o banco local do Replit
@@ -57,7 +58,12 @@ export async function getDb() {
         max: 10,
         min: 1,
         idleTimeoutMillis: 60000,
-        connectionTimeoutMillis: 5000,  // falha rápido em vez de bloquear 30s
+        // Rev. 2774 — o Neon hiberna após ~5 min de ociosidade; em deploy
+        // autoscale o keep-alive não roda suspenso, então o 1º request após
+        // dormir paga o cold-start (pode passar de 5s) e o login estourava
+        // "timeout exceeded when trying to connect". 15s tolera o cold-start.
+        connectionTimeoutMillis: 15000,
+        keepAlive: true,
         allowExitOnIdle: false,
       });
       _pool.on('error', (err) => {
@@ -96,9 +102,13 @@ export async function getDb() {
 
       // Keep-alive: ping a cada 4 min para impedir o Neon de hibernar
       // O Neon entra em sleep após ~5 min de inatividade — o ping mantém vivo
-      setInterval(async () => {
+      // Rev. 2774 — limpa o interval anterior antes de criar um novo: a cada
+      // resetDbPool()+getDb() um novo interval era criado e o antigo nunca era
+      // limpo, acumulando timers/conexões a cada recuperação do pool.
+      if (_keepAliveTimer) clearInterval(_keepAliveTimer);
+      _keepAliveTimer = setInterval(async () => {
         try {
-          await _pool!.query('SELECT 1');
+          if (_pool) await _pool.query('SELECT 1');
         } catch {
           // silencioso — se falhar, resetDbPool cuidará na próxima query real
         }
@@ -112,12 +122,41 @@ export async function getDb() {
   return _db;
 }
 
-function resetDbPool() {
+export function resetDbPool() {
   if (_pool) {
     _pool.end().catch(() => {});
   }
+  // Rev. 2774 — limpa o interval órfão se o pool for resetado sem recriação imediata.
+  if (_keepAliveTimer) {
+    clearInterval(_keepAliveTimer);
+    _keepAliveTimer = null;
+  }
   _pool = null;
   _db = null;
+}
+
+// Rev. 2774 — Helper genérico de retry para erros TRANSIENTES de conexão
+// (cold-start do Neon, socket/timeout). Reseta o pool entre tentativas e
+// re-executa a função. Reaproveitado pelo login (que antes não tinha retry e
+// estourava "timeout exceeded when trying to connect" no 1º request após o
+// Neon hibernar). Erros NÃO-transientes propagam imediatamente.
+export async function withDbRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await fn();
+    } catch (e: any) {
+      lastErr = e;
+      const causeMsg = (e as any)?.cause?.message || '';
+      const isTransient = /connection|timeout|socket|ECONNRE|terminating/i.test(causeMsg) ||
+                          /connection|timeout|socket|ECONNRE|terminating/i.test(e?.message || '');
+      if (!isTransient || attempt === attempts) throw e;
+      console.warn(`[withDbRetry] Attempt ${attempt}/${attempts} falhou (transient):`, (causeMsg || e?.message || '').slice(0, 120));
+      resetDbPool();
+      await new Promise(r => setTimeout(r, 1000 * attempt));
+    }
+  }
+  throw lastErr;
 }
 
 // ============================================================
