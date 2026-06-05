@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2776 — **EPI · A NUMERAÇÃO DA BOTA (Nº) E O TAMANHO DO UNIFORME (TAM.) AGORA APARECEM CLARAMENTE NA
+ * TABELA "ESTOQUE POR OBRA" DA TELA DE EPIs — ANTES SÓ O NOME DO ITEM ERA EXIBIDO, SEM A NUMERAÇÃO/TAMANHO.**
+ *
+ * PEDIDO (usuário, print): na tabela de Controle/Estoque de EPIs (colunas Obra · EPI · CA · Categoria ·
+ * Quantidade · Valor Unit. · Valor Total · Status) ele queria ver, item a item, a NUMERAÇÃO da bota (calçado)
+ * e o TAMANHO do uniforme — informação que o EPI já tem cadastrada (`epis.tamanho`) mas não era trazida nem
+ * exibida nessa tabela.
+ *
+ * FIX (SERVER + CLIENT; ZERO SCHEMA): a coluna já existe (`epis.tamanho`), só faltava trazer/exibir.
+ *  - `server/routers/epis.ts` (`estoqueObraList`): o select passou a retornar `tamanhoEpi: epis.tamanho`.
+ *  - `client/src/pages/Epis.tsx`: o memo `centralItensList` (linhas do Almoxarifado Central derivadas do
+ *    catálogo) passou a carregar `tamanhoEpi: e.tamanho`; e a célula do EPI na tabela "Estoque por Obra" ganhou
+ *    uma 2ª linha que mostra a numeração/tamanho — "Nº X" quando `categoriaEpi === 'Calcado'` e "Tam. X" para
+ *    uniforme/EPI (mesmo padrão já usado no histórico de transferências, Rev. 2771). Só renderiza quando há
+ *    tamanho (itens EPI sem tamanho não mostram nada).
+ *
+ * RESSALVA: itens cadastrados sem `tamanho` continuam sem a 2ª linha (esperado). ZERO ALTER/DROP/DELETE.
+ * Validação: servidor sobe limpo; HMR ok; architect.
+ *
  * Rev. 2775 — **EPI · O "ESTOQUE CENTRAL" DO ERP AGORA SE CHAMA "ALMOXARIFADO CENTRAL" NA TELA DE EPIs —
  * ACABOU A CONFUSÃO COM A OBRA REAL "ESCRITÓRIO CENTRAL" (QUE EXISTE NO CADASTRO DE OBRAS P/ ALOCAR
  * FUNCIONÁRIOS).**

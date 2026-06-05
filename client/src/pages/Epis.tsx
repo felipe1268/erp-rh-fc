@@ -253,6 +253,7 @@ export default function Epis() {
       nomeEpi: e.nome,
       caEpi: e.ca,
       categoriaEpi: e.categoria,
+      tamanhoEpi: e.tamanho, // Rev. 2776 — mostrar numeração/tamanho na tela
       quantidade: Number(e.quantidadeEstoque || 0),
       valorProdutoEpi: e.valorProduto,
     })), [episAllList]);
@@ -2975,7 +2976,14 @@ export default function Epis() {
                             <td className="p-3">
                               <div className="flex items-center gap-2">
                                 {getEpiIcon(e.nomeEpi || '', 'h-3.5 w-3.5')}
-                                <span className="text-xs font-medium">{e.nomeEpi || 'EPI #' + e.epiId}</span>
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-medium">{e.nomeEpi || 'EPI #' + e.epiId}</span>
+                                  {e.tamanhoEpi && (
+                                    <span className="text-[10px] font-semibold text-blue-700 mt-0.5">
+                                      {e.categoriaEpi === 'Calcado' ? `Nº ${e.tamanhoEpi}` : `Tam. ${e.tamanhoEpi}`}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </td>
                             <td className="p-3 text-center">

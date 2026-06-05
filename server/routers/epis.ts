@@ -1640,6 +1640,7 @@ Exemplos de referência:
         nomeEpi: epis.nome,
         caEpi: epis.ca,
         categoriaEpi: epis.categoria,
+        tamanhoEpi: epis.tamanho, // Rev. 2776 — mostrar numeração/tamanho na tela
         valorProdutoEpi: epis.valorProduto,
         nomeObra: obras.nome,
         createdAt: epiEstoqueObra.createdAt,
