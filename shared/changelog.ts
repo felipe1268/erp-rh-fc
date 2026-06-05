@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2773 — **EPI · TELA "ESTOQUE POR OBRA": OS CARDS DAS OBRAS E O CARD DO ESCRITÓRIO CENTRAL FICARAM
+ * CLICÁVEIS — AO CLICAR, A TABELA DETALHADA ABAIXO FILTRA E MOSTRA, ITEM A ITEM, O QUE ESTÁ NO ESTOQUE
+ * DAQUELE LOCAL.**
+ *
+ * PEDIDO (usuário): na aba "Estoque por Obra" da tela de EPIs, os cards (um por obra + o card do Escritório
+ * Central) só mostravam o RESUMO (qtd itens / unidades / valor). O usuário queria CLICAR no card de uma obra
+ * (ou do Central) e ver, na tabela detalhada abaixo, CADA item daquele estoque com seu saldo — sem precisar
+ * usar o dropdown de filtro.
+ *
+ * FIX (SÓ CLIENT; ZERO SCHEMA/SERVER) em `client/src/pages/Epis.tsx` (bloco `viewMode === "estoque_obra"`):
+ *  (1) NOVO memo `centralItensList` — o Estoque Central NÃO tem lista de itens no servidor (só
+ *      `estoqueCentralResumo` devolve {totalItens,totalUnidades,valorTotal}); então a lista detalhada do
+ *      Central é DERIVADA do catálogo `episAllList` (epis c/ `quantidadeEstoque > 0`), normalizada no MESMO
+ *      shape das linhas de obra (inclui `epiId` p/ manter o clique-na-linha → abrir edição do EPI).
+ *  (2) NOVO memo `tabelaEstoqueList` decide a FONTE da tabela: `filterObraEstoque === "central"` → central;
+ *      número (obraId) → filtra `estoqueObraList2` pela obra; `"todas"` → todos os itens de obra.
+ *  (3) Cards de obra E card do Central ganharam `onClick` com TOGGLE — clica → filtra por aquele local;
+ *      clica de novo → volta p/ "todas" — mais `ring`/realce no card selecionado e `cursor-pointer`.
+ *  (4) Dropdown de filtro ganhou a opção "🏢 Escritório Central" (`value="central"`).
+ *  (5) `showCentral` passou a incluir `filterObraEstoque === "central"` (o card Central aparece quando
+ *      "todas" OU quando o próprio Central está selecionado).
+ *  (6) Empty-state e corpo da tabela passaram a usar `tabelaEstoqueList`; empty-state ficou contextual
+ *      (mensagem diferente p/ Central vs obra).
+ *  (7) Robustez: a query `episAllQ` (que alimenta `episAllList`/`centralItensList`) teve o `limit` subido de
+ *      200 → 1000, pra a lista detalhada do Central não ficar incompleta quando o catálogo de EPIs for grande
+ *      (o card-resumo do Central conta TODOS os epis no servidor; a lista derivada precisa acompanhar).
+ *
+ * BUG CORRIGIDO NA ITERAÇÃO: os novos memos referenciavam `filterObraEstoque` ANTES da sua declaração
+ * `useState` (que ficava mais abaixo) → `ReferenceError: Cannot access 'filterObraEstoque' before
+ * initialization` (TDZ). A declaração do state foi MOVIDA p/ antes dos memos e a antiga removida (sem
+ * duplicata).
+ *
+ * VALIDAÇÃO: servidor sobe limpo; HMR ok (sem erro babel/TDZ); architect PASS (observação não-bloqueante
+ * sobre o limite do catálogo — endereçada subindo o `limit` p/ 1000). Tela exige login; validação visual por
+ * código. Detalhe: este arquivo.
+ *
  * Rev. 2772 — **ALMOXARIFADO · NOVA VISÃO "📍 SALDO POR OBRA": MOSTRA, OBRA A OBRA, TODOS OS INSUMOS
  * ALOCADOS NO ESTOQUE — PRA AFERIR DE RELANCE ONDE TEM SALDO E ONDE ESTÁ ZERADO.**
  *

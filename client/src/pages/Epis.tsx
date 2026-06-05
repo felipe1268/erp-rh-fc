@@ -210,7 +210,7 @@ export default function Epis() {
   useEffect(() => { setEpisPage(0); }, [filterCategoria, filterCondicao, filterTamanho, filterEstoque]);
 
   const episQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: PAGE_SIZE, offset: episPage * PAGE_SIZE, search: debouncedSearch || undefined, categoria: filterCategoria !== "Todos" ? filterCategoria : undefined, condicao: filterCondicao !== "Todos" ? filterCondicao : undefined, tamanho: filterTamanho !== "Todos" ? filterTamanho : undefined, filtroEstoque: filterEstoque !== "todos" ? filterEstoque : undefined }, { enabled: hasValidCompany });
-  const episAllQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: 200, offset: 0 }, { enabled: hasValidCompany && (viewMode === "nova_entrega" || viewMode === "ficha_epi" || viewMode === "estoque_obra" || viewMode === "transferencias") });
+  const episAllQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: 1000, offset: 0 }, { enabled: hasValidCompany && (viewMode === "nova_entrega" || viewMode === "ficha_epi" || viewMode === "estoque_obra" || viewMode === "transferencias") });
   const deliveriesQ = trpc.epis.listDeliveries.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: PAGE_SIZE, offset: deliveriesPage * PAGE_SIZE }, { enabled: hasValidCompany && (viewMode === "entregas" || viewMode === "nova_entrega" || viewMode === "ficha_epi") });
   const statsQ = trpc.epis.stats.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
   const employeesQ = trpc.employees.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, excludeTerminated: true }, { enabled: hasValidCompany && (viewMode === "nova_entrega" || viewMode === "ficha_epi") });
@@ -237,6 +237,32 @@ export default function Epis() {
   const episList = episQ.data?.items ?? [];
   const episTotal = episQ.data?.total ?? 0;
   const episAllList = episAllQ.data?.items ?? episList;
+
+  // Rev. 2773 — declarado aqui (antes dos memos abaixo) pra evitar TDZ.
+  const [filterObraEstoque, setFilterObraEstoque] = useState<string>("todas");
+
+  // Rev. 2773 — Itens do Estoque Central derivados do catálogo (epis c/ quantidadeEstoque > 0),
+  // normalizados no MESMO formato das linhas de obra pra alimentar a tabela detalhada.
+  const centralItensList = useMemo(() => (episAllList as any[])
+    .filter((e: any) => Number(e.quantidadeEstoque || 0) > 0)
+    .map((e: any) => ({
+      id: `central-${e.id}`,
+      obraId: "central",
+      nomeObra: "Escritório Central",
+      epiId: e.id,
+      nomeEpi: e.nome,
+      caEpi: e.ca,
+      categoriaEpi: e.categoria,
+      quantidade: Number(e.quantidadeEstoque || 0),
+      valorProdutoEpi: e.valorProduto,
+    })), [episAllList]);
+
+  // Rev. 2773 — Lista que alimenta a tabela detalhada conforme o card/obra selecionado:
+  // "central" → itens do central; obraId → itens daquela obra; "todas" → todos os de obra.
+  const tabelaEstoqueList = useMemo(() => {
+    if (filterObraEstoque === "central") return centralItensList;
+    return (estoqueObraList2 as any[]).filter((e: any) => filterObraEstoque === "todas" || String(e.obraId) === filterObraEstoque);
+  }, [filterObraEstoque, estoqueObraList2, centralItensList]);
   const deliveriesList = deliveriesQ.data?.items ?? [];
   const deliveriesTotal = deliveriesQ.data?.total ?? 0;
   const stats = statsQ.data;
@@ -313,7 +339,6 @@ export default function Epis() {
   });
   const [transItens, setTransItens] = useState<Array<{ epiId: string; quantidade: number }>>([]);
   const [transSaving, setTransSaving] = useState(false);
-  const [filterObraEstoque, setFilterObraEstoque] = useState<string>("todas");
   // Rev. 2186 — filtro de assinatura na lista de Entregas de EPI
   const [filterAssinatura, setFilterAssinatura] = useState<"todas" | "assinadas" | "nao_assinadas">("todas");
   const [showTransferDialog, setShowTransferDialog] = useState(false);
@@ -2805,6 +2830,7 @@ export default function Epis() {
                   <SelectTrigger className="w-full sm:w-[220px]"><SelectValue placeholder="Filtrar por obra..." /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todas">Todas as Obras</SelectItem>
+                    <SelectItem value="central">🏢 Escritório Central</SelectItem>
                     {obrasList.map((o: any) => (
                       <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
                     ))}
@@ -2828,7 +2854,7 @@ export default function Epis() {
               const unidObras = filteredObras.reduce((s: number, r: any) => s + (r.totalUnidades || 0), 0);
               const valorCentral = parseFloat(String(estoqueCentral.valorTotal || 0));
               const unidCentral = Number(estoqueCentral.totalUnidades || 0);
-              const showCentral = filterObraEstoque === "todas";
+              const showCentral = filterObraEstoque === "todas" || filterObraEstoque === "central";
               const valorTotal = showCentral ? valorCentral + valorObras : valorObras;
               const unidTotal = showCentral ? unidCentral + unidObras : unidObras;
               const totalLocais = filteredObras.length + (showCentral ? 1 : 0);
@@ -2855,7 +2881,10 @@ export default function Epis() {
               </Card>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {showCentral && (
-                  <Card className="border-l-4 border-l-emerald-500">
+                  <Card
+                    onClick={() => setFilterObraEstoque(filterObraEstoque === "central" ? "todas" : "central")}
+                    className={`border-l-4 border-l-emerald-500 cursor-pointer transition hover:shadow-md ${filterObraEstoque === "central" ? "ring-2 ring-emerald-500 bg-emerald-50/60" : ""}`}
+                  >
                     <CardContent className="p-4">
                       <div className="flex justify-between items-start">
                         <div>
@@ -2873,7 +2902,11 @@ export default function Epis() {
                   </Card>
                 )}
                 {filteredObras.map((r: any) => (
-                  <Card key={r.obraId} className="border-l-4 border-l-blue-500">
+                  <Card
+                    key={r.obraId}
+                    onClick={() => setFilterObraEstoque(filterObraEstoque === String(r.obraId) ? "todas" : String(r.obraId))}
+                    className={`border-l-4 border-l-blue-500 cursor-pointer transition hover:shadow-md ${filterObraEstoque === String(r.obraId) ? "ring-2 ring-blue-500 bg-blue-50/60" : ""}`}
+                  >
                     <CardContent className="p-4">
                       <div className="flex justify-between items-start">
                         <div>
@@ -2896,11 +2929,11 @@ export default function Epis() {
             {/* Tabela detalhada */}
             <Card>
               <CardContent className="p-0">
-                {estoqueObraList2.filter((e: any) => filterObraEstoque === "todas" || String(e.obraId) === filterObraEstoque).length === 0 ? (
+                {tabelaEstoqueList.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16">
                     <Warehouse className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                    <h3 className="font-semibold text-lg">Nenhum estoque em obra</h3>
-                    <p className="text-muted-foreground text-sm mt-1">Faça transferências ou cadastre EPIs já existentes na obra.</p>
+                    <h3 className="font-semibold text-lg">{filterObraEstoque === "central" ? "Nenhum item no Estoque Central" : "Nenhum estoque em obra"}</h3>
+                    <p className="text-muted-foreground text-sm mt-1">{filterObraEstoque === "central" ? "Cadastre EPIs com quantidade em estoque ou faça uma entrada direta." : "Faça transferências ou cadastre EPIs já existentes na obra."}</p>
                     <div className="flex gap-2 mt-4">
                       <Button onClick={() => setShowEntradaDiretaDialog(true)} variant="outline" className="border-green-500 text-green-700 hover:bg-green-50">
                         <Plus className="h-4 w-4 mr-2" /> Entrada Direta
@@ -2927,8 +2960,7 @@ export default function Epis() {
                         </tr>
                       </thead>
                       <tbody>
-                        {estoqueObraList2
-                          .filter((e: any) => filterObraEstoque === "todas" || String(e.obraId) === filterObraEstoque)
+                        {tabelaEstoqueList
                           .map((e: any) => (
                           <tr key={e.id} className="border-b last:border-0 hover:bg-muted/30 cursor-pointer" onClick={() => {
                             const epi = episAllList.find((ep: any) => ep.id === e.epiId);
