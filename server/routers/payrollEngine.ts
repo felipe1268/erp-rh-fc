@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
-import { getDb } from "../db";
-import { employees, timeRecords, systemCriteria, obras, heSolicitacoes, vrBenefits, advances, vacationPeriods } from "../../drizzle/schema";
+import { getDb, getCompaniesForUser } from "../db";
+import { employees, timeRecords, systemCriteria, obras, heSolicitacoes, vrBenefits, advances, vacationPeriods, companyBankAccounts } from "../../drizzle/schema";
 import { eq, and, sql, between, inArray, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
@@ -2932,6 +2932,10 @@ export const payrollEngineRouter = router({
         status: employees.status,
         jornadaTrabalho: employees.jornadaTrabalho,
         companyId: employees.companyId,
+        // Rev. — Conta da Empresa para Pagamento (conta salário pela qual a
+        // empresa paga o colaborador). É a CHAVE de agrupamento da remessa por
+        // banco — NÃO o banco pessoal do funcionário.
+        contaBancariaEmpresaId: employees.contaBancariaEmpresaId,
       }).from(employees).where(
         and(
           companyFilter(employees.companyId, input),
@@ -2978,6 +2982,12 @@ export const payrollEngineRouter = router({
 
       const allCompanyIds = resolveCompanyIds(input);
       const allCompanyIdsSql = sql.join(allCompanyIds.map(id => sql`${id}`), sql`,`);
+
+      // Rev. — Contas bancárias da empresa (conta salário). A remessa por banco
+      // agrupa por ESTA conta (a que a empresa paga), não pelo banco pessoal.
+      const contasEmpresa = await db.select().from(companyBankAccounts)
+        .where(inArray(companyBankAccounts.companyId, allCompanyIds));
+      const contaEmpresaMap = new Map(contasEmpresa.map((c: any) => [c.id, c]));
 
       console.log(`[SimPag DIAG] mesRef=${input.mesReferencia}, companyId=${input.companyId}, allCompanyIds=[${allCompanyIds.join(',')}], empList=${empList.length}`);
 
@@ -3714,6 +3724,24 @@ export const payrollEngineRouter = router({
           agencia: emp.agencia || null, conta: emp.conta || null,
           tipoConta: emp.tipoConta || null, tipoChavePix: emp.tipoChavePix || null,
           chavePix: emp.chavePix || null, bancoPix: emp.bancoPix || null, cpf: emp.cpf || null,
+          // Rev. — Conta da Empresa para Pagamento (chave de agrupamento da
+          // remessa por banco). Quando ausente → grupo "Sem conta definida".
+          contaEmpresaId: emp.contaBancariaEmpresaId || null,
+          ...(emp.contaBancariaEmpresaId && contaEmpresaMap.has(emp.contaBancariaEmpresaId) ? (() => {
+            const ce: any = contaEmpresaMap.get(emp.contaBancariaEmpresaId);
+            return {
+              contaEmpresaBanco: ce.banco || null,
+              contaEmpresaCodigoBanco: ce.codigoBanco || null,
+              contaEmpresaAgencia: ce.agencia || null,
+              contaEmpresaConta: ce.conta || null,
+              contaEmpresaTipo: ce.tipoConta || null,
+              contaEmpresaApelido: ce.apelido || null,
+            };
+          })() : {
+            contaEmpresaBanco: null, contaEmpresaCodigoBanco: null,
+            contaEmpresaAgencia: null, contaEmpresaConta: null,
+            contaEmpresaTipo: null, contaEmpresaApelido: null,
+          }),
         });
       }
 
@@ -5402,9 +5430,17 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       codigoBanco: z.string(),
       contaBancariaId: z.number().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      // Guard de tenancy: o usuário precisa ter acesso à empresa informada.
+      // protectedProcedure só garante login; sem este check, `companyId` forjado
+      // permitiria gerar remessa CNAB de empresa fora do tenant (IDOR).
+      const empresasPermitidas = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!empresasPermitidas.some((c: any) => c.id === input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa" });
+      }
 
       const companyRows = ((await db.execute(sql`
         SELECT cnpj, "razaoSocial" FROM companies WHERE id = ${input.companyId} LIMIT 1
@@ -5414,7 +5450,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
 
       let bankAccountFilter = sql`"companyId" = ${input.companyId} AND "codigoBanco" = ${input.codigoBanco} AND ativo = 1 AND "deletedAt" IS NULL`;
       if (input.contaBancariaId) {
-        bankAccountFilter = sql`id = ${input.contaBancariaId} AND "companyId" = ${input.companyId}`;
+        bankAccountFilter = sql`id = ${input.contaBancariaId} AND "companyId" = ${input.companyId} AND ativo = 1 AND "deletedAt" IS NULL`;
       }
       const bankRows = ((await db.execute(sql`
         SELECT * FROM company_bank_accounts WHERE ${bankAccountFilter} LIMIT 1
@@ -5425,7 +5461,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       const payRows = ((await db.execute(sql`
         SELECT pp."salarioLiquido", pp."dataPagamentoPrevista",
           e."nomeCompleto", e.cpf, e.banco, e.agencia, e.conta, e."tipoConta",
-          e."tipoChavePix", e."chavePix"
+          e."tipoChavePix", e."chavePix", e."contaBancariaEmpresaId"
         FROM payroll_payments pp
         LEFT JOIN employees e ON pp."employeeId" = e.id
         WHERE pp."companyId" = ${input.companyId} AND pp."mesReferencia" = ${input.mesReferencia}
@@ -5446,23 +5482,29 @@ Responda EXATAMENTE no formato JSON abaixo:`;
         return '000';
       }
 
-      const funcionariosFiltrados = payRows.filter((r: any) => {
-        const empBankCode = matchBankCode(r.banco || '');
-        return empBankCode === funcBancoCodigo;
-      });
+      // Rev. — A remessa agrupa pela CONTA DA EMPRESA PARA PAGAMENTO (conta salário
+      // pela qual a empresa paga), NÃO pelo banco pessoal do funcionário. Quando o
+      // cliente envia `contaBancariaId`, filtramos os funcionários vinculados a essa
+      // conta-empresa. Fallback legado (sem contaBancariaId): filtra pelo banco
+      // pessoal por compatibilidade.
+      const funcionariosFiltrados = input.contaBancariaId
+        ? payRows.filter((r: any) => Number(r.contaBancariaEmpresaId) === input.contaBancariaId)
+        : payRows.filter((r: any) => matchBankCode(r.banco || '') === funcBancoCodigo);
 
       if (funcionariosFiltrados.length === 0) {
-        throw new TRPCError({ code: "NOT_FOUND", message: `Nenhum funcionário encontrado para o banco ${input.codigoBanco}` });
+        throw new TRPCError({ code: "NOT_FOUND", message: `Nenhum funcionário vinculado a esta conta de pagamento para ${input.mesReferencia}.` });
       }
 
+      // Favorecido = conta da empresa para pagamento (conta salário). O banco
+      // identifica o colaborador pelo CPF. Não usamos a conta pessoal.
       const cnabFuncionarios = funcionariosFiltrados.map((r: any) => ({
         nome: r.nomeCompleto || '',
         cpf: r.cpf || '',
-        banco: r.banco || '',
-        codigoBanco: matchBankCode(r.banco || ''),
-        agencia: r.agencia || '',
-        conta: r.conta || '',
-        tipoConta: r.tipoConta || 'corrente',
+        banco: bankAccount.banco || '',
+        codigoBanco: bankAccount.codigoBanco || input.codigoBanco,
+        agencia: bankAccount.agencia || '',
+        conta: bankAccount.conta || '',
+        tipoConta: bankAccount.tipoConta || 'corrente',
         valorLiquido: parseFloat(r.salarioLiquido || '0'),
         dataPagamento: r.dataPagamentoPrevista || '',
         tipoChavePix: r.tipoChavePix || '',

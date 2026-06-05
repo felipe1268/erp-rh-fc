@@ -3881,16 +3881,34 @@ export default function FolhaPagamento() {
 
           {pagamentoSubView === "por_banco" ? (() => {
             const funcs = (pagamentoResult.funcionarios || []) as any[];
-            const byBank: Record<string, any[]> = {};
+            // Rev. — Agrupa pela CONTA DA EMPRESA PARA PAGAMENTO (conta salário
+            // pela qual a empresa paga), NÃO pelo banco pessoal do funcionário.
+            // Funcionários sem conta-empresa definida caem em "Sem conta definida"
+            // (sem botão de remessa CNAB).
+            const SEM_CONTA = "__sem_conta__";
+            const byAcct: Record<string, any[]> = {};
+            const acctMeta: Record<string, any> = {};
             for (const f of funcs) {
-              const bankKey = f.banco || "Sem banco definido";
-              if (!byBank[bankKey]) byBank[bankKey] = [];
-              byBank[bankKey].push(f);
+              const key = f.contaEmpresaId ? String(f.contaEmpresaId) : SEM_CONTA;
+              if (!byAcct[key]) {
+                byAcct[key] = [];
+                acctMeta[key] = key === SEM_CONTA ? null : {
+                  id: f.contaEmpresaId,
+                  banco: f.contaEmpresaBanco || "Banco",
+                  codigoBanco: f.contaEmpresaCodigoBanco || null,
+                  agencia: f.contaEmpresaAgencia || null,
+                  conta: f.contaEmpresaConta || null,
+                  tipo: f.contaEmpresaTipo || null,
+                  apelido: f.contaEmpresaApelido || null,
+                };
+              }
+              byAcct[key].push(f);
             }
-            const bankKeys = Object.keys(byBank).sort((a, b) => {
-              if (a === "Sem banco definido") return 1;
-              if (b === "Sem banco definido") return -1;
-              return a.localeCompare(b);
+            const acctKeys = Object.keys(byAcct).sort((a, b) => {
+              if (a === SEM_CONTA) return 1;
+              if (b === SEM_CONTA) return -1;
+              const ma = acctMeta[a], mb = acctMeta[b];
+              return ((ma?.banco || '').localeCompare(mb?.banco || '')) || ((ma?.agencia || '').localeCompare(mb?.agencia || ''));
             });
             const bankColors: Record<string, string> = {
               "Caixa": "bg-blue-600",
@@ -3901,7 +3919,6 @@ export default function FolhaPagamento() {
               "Nubank": "bg-purple-600",
               "Inter": "bg-orange-600",
               "Banco do Brasil": "bg-yellow-600",
-              "Sem banco definido": "bg-gray-400",
             };
             function getBankCode(bancoName: string): string | null {
               const lower = (bancoName || '').toLowerCase();
@@ -3915,19 +3932,42 @@ export default function FolhaPagamento() {
               if (lower.includes('banco do brasil')) return '001';
               return null;
             }
+            function dotColorFor(meta: any): string {
+              if (!meta) return "bg-gray-400";
+              const banco = meta.banco || '';
+              for (const k of Object.keys(bankColors)) {
+                if (banco.toLowerCase().includes(k.toLowerCase())) return bankColors[k];
+              }
+              return "bg-gray-500";
+            }
+            function acctLabel(meta: any): string {
+              if (!meta) return "Sem conta definida";
+              return meta.apelido || meta.banco;
+            }
+            function acctSubtitle(meta: any): string | null {
+              if (!meta) return null;
+              const parts: string[] = [];
+              if (meta.apelido && meta.banco && meta.apelido !== meta.banco) parts.push(meta.banco);
+              if (meta.agencia) parts.push(`Ag ${meta.agencia}`);
+              if (meta.conta) parts.push(`Cc ${meta.conta}`);
+              return parts.length ? parts.join(' • ') : null;
+            }
             return (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {bankKeys.map(bk => {
-                    const bkFuncs = byBank[bk];
+                  {acctKeys.map(key => {
+                    const meta = acctMeta[key];
+                    const bkFuncs = byAcct[key];
                     const totalLiq = bkFuncs.reduce((s: number, f: any) => s + (f.salarioLiquido || 0), 0);
-                    const dotColor = bankColors[bk] || "bg-gray-500";
+                    const dotColor = dotColorFor(meta);
+                    const subtitle = acctSubtitle(meta);
                     return (
-                      <div key={bk} className="bg-white border rounded-lg p-3">
+                      <div key={key} className="bg-white border rounded-lg p-3">
                         <div className="flex items-center gap-2 mb-1">
                           <div className={`h-3 w-3 rounded-full ${dotColor}`} />
-                          <span className="text-sm font-semibold">{bk}</span>
+                          <span className="text-sm font-semibold">{acctLabel(meta)}</span>
                         </div>
+                        {subtitle && <p className="text-[10px] text-muted-foreground font-mono mb-0.5">{subtitle}</p>}
                         <p className="text-lg font-bold text-[#1B2A4A]">{formatBRL(totalLiq)}</p>
                         <p className="text-[10px] text-muted-foreground">{bkFuncs.length} funcionário{bkFuncs.length !== 1 ? 's' : ''}</p>
                       </div>
@@ -3935,25 +3975,29 @@ export default function FolhaPagamento() {
                   })}
                 </div>
 
-                {bankKeys.map(bk => {
-                  const bkFuncs = byBank[bk];
+                {acctKeys.map(key => {
+                  const meta = acctMeta[key];
+                  const bkFuncs = byAcct[key];
                   const totalLiq = bkFuncs.reduce((s: number, f: any) => s + (f.salarioLiquido || 0), 0);
                   const totalBruto = bkFuncs.reduce((s: number, f: any) => s + (f.totalProventos || 0), 0);
                   const totalDesc = bkFuncs.reduce((s: number, f: any) => s + (f.totalDescontos || 0), 0);
-                  const dotColor = bankColors[bk] || "bg-gray-500";
+                  const dotColor = dotColorFor(meta);
+                  const subtitle = acctSubtitle(meta);
+                  const codigoBanco = meta ? (meta.codigoBanco || getBankCode(meta.banco)) : null;
                   return (
-                    <Card key={bk} className="overflow-hidden">
+                    <Card key={key} className="overflow-hidden">
                       <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
-                        <div className="flex items-center gap-2">
-                          <div className={`h-3.5 w-3.5 rounded-full ${dotColor}`} />
-                          <h3 className="font-semibold text-sm">{bk}</h3>
-                          <span className="text-xs text-muted-foreground bg-gray-200 px-2 py-0.5 rounded-full">{bkFuncs.length}</span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className={`h-3.5 w-3.5 rounded-full shrink-0 ${dotColor}`} />
+                          <h3 className="font-semibold text-sm truncate">{acctLabel(meta)}</h3>
+                          {subtitle && <span className="text-[10px] text-muted-foreground font-mono truncate hidden sm:inline">{subtitle}</span>}
+                          <span className="text-xs text-muted-foreground bg-gray-200 px-2 py-0.5 rounded-full shrink-0">{bkFuncs.length}</span>
                         </div>
                         <div className="flex items-center gap-4 text-xs">
                           <span className="text-green-700">Bruto: <strong>{formatBRL(totalBruto)}</strong></span>
                           <span className="text-red-600">Desc: <strong>{formatBRL(totalDesc)}</strong></span>
                           <span className="text-[#1B2A4A] text-sm font-bold">{formatBRL(totalLiq)}</span>
-                          {bk !== "Sem banco definido" && getBankCode(bk) && (
+                          {meta && codigoBanco && Number.isFinite(Number(meta.id)) && (
                             <Button
                               size="sm"
                               variant="outline"
@@ -3962,7 +4006,8 @@ export default function FolhaPagamento() {
                               onClick={() => gerarRemessaMut.mutate({
                                 companyId,
                                 mesReferencia: mesAno,
-                                codigoBanco: getBankCode(bk)!,
+                                codigoBanco: codigoBanco!,
+                                contaBancariaId: Number(meta.id),
                               })}
                             >
                               <FileDown className="h-3.5 w-3.5 mr-1" />
@@ -3995,9 +4040,9 @@ export default function FolhaPagamento() {
                                   <tr key={i} className={`border-b border-gray-100 hover:bg-blue-50/40 transition-colors ${zebra}`}>
                                     <td className="py-2 px-3 font-medium whitespace-nowrap">{f.nome}</td>
                                     <td className="py-2 px-2 text-muted-foreground font-mono text-[10px]">{f.cpf || '—'}</td>
-                                    <td className="py-2 px-2 font-mono text-[10px]">{f.agencia || '—'}</td>
-                                    <td className="py-2 px-2 font-mono text-[10px]">{f.conta || '—'}</td>
-                                    <td className="py-2 px-2 text-[10px]">{f.tipoConta || '—'}</td>
+                                    <td className="py-2 px-2 font-mono text-[10px]">{meta?.agencia || '—'}</td>
+                                    <td className="py-2 px-2 font-mono text-[10px]">{meta?.conta || '—'}</td>
+                                    <td className="py-2 px-2 text-[10px]">{meta?.tipo || '—'}</td>
                                     <td className="py-2 px-2 text-[10px] max-w-[160px] truncate" title={pixInfo}>{pixInfo}</td>
                                     <td className="text-right py-2 px-2 text-green-700">{formatBRL(f.totalProventos)}</td>
                                     <td className="text-right py-2 px-2 text-red-600">{formatBRL(f.totalDescontos)}</td>

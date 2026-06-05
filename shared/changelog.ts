@@ -1,6 +1,47 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2768 — **FOLHA DE PAGAMENTO · "LISTA POR BANCO" + "GERAR REMESSA CNAB": AGORA AGRUPAM PELA CONTA DA
+ * EMPRESA PARA PAGAMENTO (CONTA SALÁRIO), NÃO MAIS PELO BANCO PESSOAL DO FUNCIONÁRIO.**
+ *
+ * SINTOMA (usuário): na aba "Cálculo do Pagamento" → subview "Por Banco", a lista era separada pelo banco
+ * da conta PESSOAL de cada funcionário (`employees.banco` → ex.: Santander da Ana) e as colunas Agência/Conta
+ * mostravam a conta pessoal. Mas a empresa paga todos por uma CONTA SALÁRIO específica (ex.: Caixa, ag 0306 /
+ * cc 1596-0). A lista e a remessa CNAB precisam refletir a conta pela qual a EMPRESA paga, não o banco pessoal.
+ *
+ * REGRAS (confirmadas pelo usuário):
+ *   1) Agrupar pela CONTA DA EMPRESA (`employees.contaBancariaEmpresaId` → `company_bank_accounts`), nunca pela
+ *      conta pessoal — mesmo que a conta-salário individual não esteja preenchida.
+ *   2) Funcionário SEM conta-empresa vinculada → grupo "Sem conta definida" (sem botão de remessa CNAB).
+ *   3) Agrupar pela conta ESPECÍFICA (id → agência/cc), não só pelo banco — a empresa pode ter 2 contas no
+ *      mesmo banco (ex.: 2 contas Caixa) que devem aparecer separadas.
+ *
+ * FIX (SERVER + CLIENT; ZERO SCHEMA — a coluna `contaBancariaEmpresaId` já existe):
+ *   1) `server/routers/payrollEngine.ts` · `simularPagamento`: select passou a trazer
+ *      `employees.contaBancariaEmpresaId`; carrega `company_bank_accounts` da(s) empresa(s) num Map e anexa a
+ *      cada funcionário do resultado os campos `contaEmpresaId/Banco/CodigoBanco/Agencia/Conta/Tipo/Apelido`
+ *      (ou null). Esses campos vão no `pagamentoResultJson` persistido.
+ *   2) `client/src/pages/FolhaPagamento.tsx` · subview "por_banco": agrupa por `contaEmpresaId` (chave por
+ *      conta específica), exibe rótulo = apelido/banco + "Ag X • Cc Y", colunas Agência/Conta mostram a
+ *      conta-empresa; grupo "Sem conta definida" sem botão CNAB. O botão envia
+ *      `gerarRemessaCnab({ contaBancariaId: contaEmpresaId, codigoBanco })`.
+ *   3) `server/routers/payrollEngine.ts` · `gerarRemessaCnab`: quando recebe `contaBancariaId`, filtra os
+ *      funcionários por `contaBancariaEmpresaId === contaBancariaId` (antes filtrava pelo banco pessoal); o
+ *      favorecido do detalhe CNAB usa a conta da empresa (conta salário, identificação por CPF), não a pessoal.
+ *      Fallback legado (sem `contaBancariaId`) mantém o filtro por banco pessoal por compatibilidade.
+ *
+ * HARDENING DE SEGURANÇA (architect): `gerarRemessaCnab` era `protectedProcedure` mas NÃO validava que o
+ * usuário tinha acesso à `companyId` informada → IDOR (gerar remessa de empresa fora do tenant via companyId
+ * forjado). Adicionado guard `getCompaniesForUser(ctx.user.id, ctx.user.role)` + `FORBIDDEN`. Também: o branch
+ * de seleção da conta por `contaBancariaId` agora exige `ativo = 1 AND deletedAt IS NULL` (antes pulava); e o
+ * cliente envia `contaBancariaId: Number(meta.id)` (com guard `Number.isFinite`) p/ não quebrar o `z.number()`.
+ *
+ * RESSALVA: o `pagamentoResultJson` de meses JÁ simulados antes desta revisão não tem os campos
+ * `contaEmpresa*` → esses cairão em "Sem conta definida" até resimular o pagamento do mês. Resimular resolve.
+ *
+ * VALIDAÇÃO: servidor sobe limpo; HMR ok; architect PASS (IDOR/conta inativa/tipo resolvidos, sem regressão).
+ * (`tsc` full estoura memória no ambiente — limitação conhecida.)
+ *
  * Rev. 2767 — **PLANEJAMENTO · "% PREVISTO": PARIDADE 100% COM O MS PROJECT — O ERP AGORA EXIBE O Texto10
  * LITERAL (O NÚMERO QUE O MSP JÁ CALCULOU) DE CADA UPLOAD SEMANAL, EM VEZ DO VALOR DO MOTOR. ELIMINA O +1%
  * QUE APARECIA A PARTIR DA ~4ª SEMANA.**
