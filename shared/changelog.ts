@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2777 — **EPI · CORRIGIDO O TOTAL DE UNIDADES DO CARD "VALOR TOTAL EM ESTOQUE" DA TELA "ESTOQUE POR
+ * OBRA": MOSTRAVA UM NÚMERO GIGANTE SEM SENTIDO (ex.: "10130191981646164110158 unid.") — ERA CONCATENAÇÃO DE
+ * STRING EM VEZ DE SOMA.**
+ *
+ * SINTOMA (usuário, print): no topo da tela "Estoque por Obra", ao lado de "9 local(is)", o total de unidades
+ * aparecia como uma sequência enorme de dígitos colados (as quantidades de cada local grudadas: 1013, 0, 19,
+ * 19, 8, ...), em vez da soma real.
+ *
+ * CAUSA-RAIZ (SÓ CLIENT) em `client/src/pages/Epis.tsx`: o `reduce` que somava `unidObras` fazia
+ * `s + (r.totalUnidades || 0)`, mas `r.totalUnidades` vem do `SUM()` do Postgres como STRING (o driver pg
+ * devolve numeric/bigint como texto). Com o acumulador iniciando em `0` (número), `0 + "1013"` vira
+ * concatenação de string em JS → cada iteração GRUDAVA o próximo número em vez de somar. O `unidCentral` já
+ * estava blindado com `Number()`; só o `unidObras` faltava.
+ *
+ * FIX (SÓ CLIENT; ZERO SCHEMA/SERVER): `unidObras` agora soma com `s + Number(r.totalUnidades || 0)`,
+ * convertendo cada parcela para número antes de somar. `unidTotal` (= `unidCentral + unidObras`) volta a ser
+ * uma soma numérica correta. ZERO ALTER/DROP/DELETE. Validação: HMR ok; architect.
+ *
  * Rev. 2776 — **EPI · A NUMERAÇÃO DA BOTA (Nº) E O TAMANHO DO UNIFORME (TAM.) AGORA APARECEM CLARAMENTE NA
  * TABELA "ESTOQUE POR OBRA" DA TELA DE EPIs — ANTES SÓ O NOME DO ITEM ERA EXIBIDO, SEM A NUMERAÇÃO/TAMANHO.**
  *
