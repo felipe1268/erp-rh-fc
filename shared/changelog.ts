@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2764 — **RH/DP · RECONTRATAÇÃO (FILA DE APROVAÇÃO): OS MODAIS "LIBERAR RECONTRATAÇÃO" E "RECUSAR
+ * RECONTRATAÇÃO" FORAM MODERNIZADOS E PERDERAM A BARRA DE ROLAGEM HORIZONTAL — CABEÇALHO EM FAIXA COLORIDA,
+ * CARD DE COLABORADOR LIMPO, ALERTA DE EXPERIÊNCIA EM CAIXA E RODAPÉ FIXO.**
+ *
+ * PEDIDO (Felipe, print): o modal "Liberar recontratação" (página RecontratacoesPendentes / fila de
+ * aprovação) aparecia com barra de rolagem horizontal e layout pouco amigável; ele queria algo mais
+ * moderno e sem a barra horizontal.
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA/SERVER — R-001/R-007/R-010), em
+ * `client/src/pages/RecontratacoesPendentes.tsx` (os DOIS modais — "Liberar" e "Recusar", que tinham o
+ * mesmo defeito):
+ * - `DialogContent` ganhou `resizable={false}` (remove os handles de resize que induziam overflow
+ *   horizontal) + `p-0 gap-0 overflow-x-hidden w-[calc(100vw-2rem)] max-w-md` (some a barra horizontal e
+ *   o modal fica responsivo).
+ * - Cabeçalho virou uma FAIXA com gradiente (emerald→lime no "Liberar", red→rose no "Recusar") com ícone
+ *   em chip translúcido + descrição na própria faixa.
+ * - Corpo padronizado: card do colaborador (nome + função com `break-words`), e — no "Liberar" — o aviso
+ *   de "sem período de experiência" virou uma caixa âmbar com ícone (antes ficava concatenado na
+ *   descrição). Inputs com `Label` e espaçamento consistentes.
+ * - Rodapé fixo com borda + leve fundo (`border-t bg-muted/30`), botões com `gap-2`.
+ *
+ * Sem mudança de lógica: states (`aprovarAlvo`/`recusarAlvo`/`parecer`/`motivoRecusa`), mutations e
+ * validações (motivo ≥ 3 chars) intactos. Apenas reestruturação de JSX/estilo.
+ *
+ * VALIDAÇÃO: client-only; `tsc --noEmit` limpo nos arquivos tocados; vite HMR sem erros.
+ *
  * Rev. 2763 — **RH/DP · RECONTRATAÇÃO: A FOTO DO COLABORADOR AGORA É COPIADA JUNTO COM OS "DADOS PESSOAIS"
  * AO INICIAR UMA RECONTRATAÇÃO — NÃO PRECISA MAIS RE-FOTOGRAFAR / RE-ANEXAR A FOTO.**
  *

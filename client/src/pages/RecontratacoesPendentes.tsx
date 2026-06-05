@@ -268,25 +268,46 @@ export default function RecontratacoesPendentes() {
 
       {/* Aprovar */}
       <Dialog open={!!aprovarAlvo} onOpenChange={(o) => { if (!o) setAprovarAlvo(null); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lime-700"><CheckCircle2 className="h-5 w-5" /> Liberar recontratação</DialogTitle>
-            <DialogDescription>
-              Ao liberar, o ERP cria um colaborador NOVO (número novo), vinculado ao registro anterior por CPF.
-              {aprovarAlvo?.experienciaPermitida === 0 ? " Atenção: este caso NÃO terá período de experiência (mesma empresa + mesma função)." : ""}
-            </DialogDescription>
+        <DialogContent resizable={false} className="p-0 gap-0 overflow-x-hidden w-[calc(100vw-2rem)] max-w-md">
+          <DialogHeader className="space-y-0 p-0">
+            <div className="bg-gradient-to-r from-emerald-600 to-lime-600 px-5 py-4 text-white">
+              <DialogTitle className="flex items-center gap-3 text-white">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/20">
+                  <CheckCircle2 className="h-5 w-5" />
+                </span>
+                <span className="text-base font-semibold leading-tight">Liberar recontratação</span>
+              </DialogTitle>
+              <DialogDescription className="mt-2 text-[13px] leading-snug text-emerald-50">
+                Ao liberar, o ERP cria um colaborador <span className="font-semibold">NOVO</span> (número novo), vinculado ao registro anterior por CPF.
+              </DialogDescription>
+            </div>
           </DialogHeader>
-          <div className="space-y-2">
-            <p className="text-sm"><span className="font-semibold">{aprovarAlvo?.nomeCompleto}</span> · {aprovarAlvo?.funcao || "—"}</p>
-            <div>
-              <Label className="text-xs">Parecer (opcional)</Label>
+
+          <div className="space-y-3 px-5 py-4">
+            <div className="rounded-lg border bg-muted/40 p-3">
+              <p className="text-sm font-semibold leading-tight break-words">{aprovarAlvo?.nomeCompleto}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground break-words">{aprovarAlvo?.funcao || "—"}</p>
+            </div>
+
+            {aprovarAlvo?.experienciaPermitida === 0 && (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                <p className="text-xs leading-snug text-amber-800">
+                  Este caso <span className="font-semibold">NÃO</span> terá período de experiência (mesma empresa + mesma função).
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Parecer (opcional)</Label>
               <Input value={parecer} onChange={(e) => setParecer(e.target.value)} placeholder="Observação da liberação..." />
             </div>
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="gap-2 border-t bg-muted/30 px-5 py-3">
             <Button variant="outline" onClick={() => setAprovarAlvo(null)}>Cancelar</Button>
             <Button
-              className="bg-lime-600 hover:bg-lime-700 text-white"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
               disabled={aprovarMut.isPending}
               onClick={() => aprovarAlvo && aprovarMut.mutate({ id: aprovarAlvo.id, companyId: aprovarAlvo.companyId, parecer: parecer || undefined })}
             >
@@ -298,19 +319,34 @@ export default function RecontratacoesPendentes() {
 
       {/* Recusar */}
       <Dialog open={!!recusarAlvo} onOpenChange={(o) => { if (!o) setRecusarAlvo(null); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600"><XCircle className="h-5 w-5" /> Recusar recontratação</DialogTitle>
-            <DialogDescription>A solicitação será encerrada como recusada. Informe o motivo para o histórico.</DialogDescription>
+        <DialogContent resizable={false} className="p-0 gap-0 overflow-x-hidden w-[calc(100vw-2rem)] max-w-md">
+          <DialogHeader className="space-y-0 p-0">
+            <div className="bg-gradient-to-r from-red-600 to-rose-600 px-5 py-4 text-white">
+              <DialogTitle className="flex items-center gap-3 text-white">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/20">
+                  <XCircle className="h-5 w-5" />
+                </span>
+                <span className="text-base font-semibold leading-tight">Recusar recontratação</span>
+              </DialogTitle>
+              <DialogDescription className="mt-2 text-[13px] leading-snug text-red-50">
+                A solicitação será encerrada como recusada. Informe o motivo para o histórico.
+              </DialogDescription>
+            </div>
           </DialogHeader>
-          <div className="space-y-2">
-            <p className="text-sm"><span className="font-semibold">{recusarAlvo?.nomeCompleto}</span> · {recusarAlvo?.funcao || "—"}</p>
-            <div>
-              <Label className="text-xs">Motivo da recusa <span className="text-red-500">*</span></Label>
+
+          <div className="space-y-3 px-5 py-4">
+            <div className="rounded-lg border bg-muted/40 p-3">
+              <p className="text-sm font-semibold leading-tight break-words">{recusarAlvo?.nomeCompleto}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground break-words">{recusarAlvo?.funcao || "—"}</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Motivo da recusa <span className="text-red-500">*</span></Label>
               <Input value={motivoRecusa} onChange={(e) => setMotivoRecusa(e.target.value)} placeholder="Ex.: histórico disciplinar, sem vaga aprovada..." />
             </div>
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="gap-2 border-t bg-muted/30 px-5 py-3">
             <Button variant="outline" onClick={() => setRecusarAlvo(null)}>Cancelar</Button>
             <Button
               variant="destructive"
