@@ -2852,7 +2852,7 @@ export default function Epis() {
             {(estoqueResumo.length > 0 || estoqueCentral.totalUnidades > 0) && (() => {
               const filteredObras = estoqueResumo.filter((r: any) => filterObraEstoque === "todas" || String(r.obraId) === filterObraEstoque);
               const valorObras = filteredObras.reduce((s: number, r: any) => s + parseFloat(String(r.valorTotal || 0)), 0);
-              const unidObras = filteredObras.reduce((s: number, r: any) => s + (r.totalUnidades || 0), 0);
+              const unidObras = filteredObras.reduce((s: number, r: any) => s + Number(r.totalUnidades || 0), 0); // Rev. 2777 — Number() evita concatenação de string (SUM do pg vem string)
               const valorCentral = parseFloat(String(estoqueCentral.valorTotal || 0));
               const unidCentral = Number(estoqueCentral.totalUnidades || 0);
               const showCentral = filterObraEstoque === "todas" || filterObraEstoque === "central";
