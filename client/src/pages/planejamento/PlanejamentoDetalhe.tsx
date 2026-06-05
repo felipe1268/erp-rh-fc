@@ -7082,7 +7082,30 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     } else if (!envOk) {
       realMissing = "Datas de início/término da obra foram alteradas no ERP após o último import. Reimporte o XML para restaurar o Realizado.";
     } else if (semanaFim < cal.statusDateSnapshot) {
-      realMissing = `A semana visualizada (fim ${fmtBR(semanaFim)}) é anterior ao StatusDate do XML mais recente (${fmtBR(cal.statusDateSnapshot)}). O XML do MSP guarda apenas a última foto — não há snapshot histórico para o Realizado em semanas passadas.`;
+      // Rev. 2781 — antes mostrava "—" em semana passada (snapshot guardava só a
+      // última foto). Agora lê o HISTÓRICO `realizadoSemanas` (cada upload semanal
+      // grava sua foto): usa a foto da própria semana; na falta, carrega a mais
+      // recente ANTERIOR (realizado acumulado é monotônico → carry-forward, mesma
+      // natureza do degrau da curva PREVISTO). Continua só LENDO snapshot — zero
+      // cálculo ponderado (regra de ouro replit.md).
+      const hist = (cal as any).realizadoSemanas as Record<string, number> | undefined;
+      let hv: number | null = null;
+      if (hist && typeof hist === "object") {
+        if (hist[semanaFim] != null && Number.isFinite(Number(hist[semanaFim]))) {
+          hv = Number(hist[semanaFim]);
+        } else {
+          let bestK: string | null = null;
+          for (const k of Object.keys(hist)) {
+            if (k <= semanaFim && (bestK == null || k > bestK)) bestK = k;
+          }
+          if (bestK != null && Number.isFinite(Number(hist[bestK]))) hv = Number(hist[bestK]);
+        }
+      }
+      if (hv != null) {
+        real = hv;
+      } else {
+        realMissing = `A semana visualizada (fim ${fmtBR(semanaFim)}) é anterior ao StatusDate do XML mais recente (${fmtBR(cal.statusDateSnapshot)}). O XML do MSP guarda apenas a última foto — não há snapshot histórico para o Realizado em semanas passadas.`;
+      }
     } else if (cal.realizadoMspSnapshot != null) {
       real = Number(cal.realizadoMspSnapshot);
       if (semanaFim > cal.statusDateSnapshot) staleFromDate = cal.statusDateSnapshot;

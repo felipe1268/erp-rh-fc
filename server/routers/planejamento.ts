@@ -78,6 +78,9 @@ async function limparSnapshotMspDoProjeto(db: any, projetoId: number) {
       delete cal.statusDateSnapshot;
       delete cal.envelopeStartSnapshot;
       delete cal.envelopeFinishSnapshot;
+      // Rev. 2781 — "Limpar Avanços" também zera o HISTÓRICO de realizado por
+      // semana (senão o card continuaria mostrando fotos antigas em semanas passadas).
+      delete cal.realizadoSemanas;
       calLimpo = JSON.stringify(cal);
     } catch {
       calLimpo = proj.calendarioJson as any;
@@ -3156,17 +3159,17 @@ export const planejamentoRouter = router({
       // do calendarioJson FRESCO (antes do merge sobrescrever pelo valor do cadastro).
       let literalSemanaAvanco: number | null = null;
       if (input.calendarioJson !== undefined && input.calendarioJson !== null) {
-        if (input.origem === "avanco") {
-          // Rev. 2765 — Avanço Semanal NUNCA toca o previsto. O calendarioJson
-          // que chega do XML SEMANAL traz o realizado/StatusDate frescos, mas
-          // também o `previstoMspSnapshot` e o calendário (jornada/feriados) DAQUELE
-          // upload — que NÃO devem sobrescrever a baseline congelada no cadastro.
-          // Mesclamos: previsto + calendário ficam do CADASTRO (valor antigo);
-          // realizado + StatusDate vêm do novo. Assim o card de previsto (curva
-          // congelada) e o self-heal (que relê o calendário) seguem idempotentes.
-          try {
-            const oldCal = proj.calendarioJson ? JSON.parse(proj.calendarioJson) : {};
-            const newCal = JSON.parse(input.calendarioJson);
+        try {
+          const oldCal = proj.calendarioJson ? JSON.parse(proj.calendarioJson) : {};
+          const newCal = JSON.parse(input.calendarioJson);
+          if (input.origem === "avanco") {
+            // Rev. 2765 — Avanço Semanal NUNCA toca o previsto. O calendarioJson
+            // que chega do XML SEMANAL traz o realizado/StatusDate frescos, mas
+            // também o `previstoMspSnapshot` e o calendário (jornada/feriados) DAQUELE
+            // upload — que NÃO devem sobrescrever a baseline congelada no cadastro.
+            // Mesclamos: previsto + calendário ficam do CADASTRO (valor antigo);
+            // realizado + StatusDate vêm do novo. Assim o card de previsto (curva
+            // congelada) e o self-heal (que relê o calendário) seguem idempotentes.
             // Rev. 2767 — guarda o Texto10 LITERAL desta semana ANTES do override.
             if (newCal.previstoMspSnapshot != null && Number.isFinite(Number(newCal.previstoMspSnapshot))) {
               literalSemanaAvanco = Number(newCal.previstoMspSnapshot);
@@ -3175,12 +3178,24 @@ export const planejamentoRouter = router({
             if (oldCal.weekDayIntervals)            newCal.weekDayIntervals    = oldCal.weekDayIntervals;
             if (oldCal.exceptions)                  newCal.exceptions          = oldCal.exceptions;
             if (oldCal.weekDays)                    newCal.weekDays            = oldCal.weekDays;
-            patch.calendarioJson = JSON.stringify(newCal);
-          } catch {
-            // JSON inesperado → mantém o que chegou (não derruba o save).
-            patch.calendarioJson = input.calendarioJson;
           }
-        } else {
+          // Rev. 2781 — HISTÓRICO DE REALIZADO POR SEMANA (merge ADITIVO). O snapshot
+          // único (`realizadoMspSnapshot`/`statusDateSnapshot`) guardava só a ÚLTIMA
+          // foto → semanas passadas mostravam "—". Agora acumulamos cada foto num
+          // mapa { [statusDate]: %realizado } preservando as anteriores, p/ o card
+          // "REALIZADO (ACUM.)" reexibir o valor em TODAS as semanas já enviadas.
+          // É UPDATE de coluna JSON via app (NÃO ALTER/DROP/DELETE — R-001/R-007/R-010 OK).
+          const histReal: Record<string, number> = { ...(oldCal.realizadoSemanas || {}) };
+          const sdKey = newCal.statusDateSnapshot
+            ?? input.statusDate
+            ?? (input.statusDateIso ? String(input.statusDateIso).slice(0, 10) : null);
+          if (sdKey && newCal.realizadoMspSnapshot != null && Number.isFinite(Number(newCal.realizadoMspSnapshot))) {
+            histReal[String(sdKey).slice(0, 10)] = Number(newCal.realizadoMspSnapshot);
+          }
+          if (Object.keys(histReal).length > 0) newCal.realizadoSemanas = histReal;
+          patch.calendarioJson = JSON.stringify(newCal);
+        } catch {
+          // JSON inesperado → mantém o que chegou (não derruba o save).
           patch.calendarioJson = input.calendarioJson;
         }
       }

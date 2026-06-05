@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2781 — **PLANEJAMENTO · AVANÇO SEMANAL: O "% CONCLUÍDA" (REALIZADO ACUM.) AGORA FICA SALVO EM TODAS AS
+ * SEMANAS JÁ ENVIADAS — ANTES SÓ APARECIA NA ÚLTIMA SEMANA CADASTRADA E AS ANTERIORES MOSTRAVAM "—".**
+ *
+ * PEDIDO (usuário): "o valor da semana que já passou não está ficando salvo o % concluído... só fica salvo na
+ * última semana que foi cadastrado o avanço... quero que fique o valor em todas as semanas".
+ *
+ * CAUSA-RAIZ (arquitetural): o PREVISTO tem curva por-semana (`previsto_semanas_json` → `raizAt(semanaFim)`),
+ * por isso aparece em TODAS as semanas. O REALIZADO, porém, só tinha UM snapshot único no `calendarioJson`
+ * (`realizadoMspSnapshot` + `statusDateSnapshot`) — a ÚLTIMA foto. No hook single-source-of-truth `mspReadOnly`
+ * (`PlanejamentoDetalhe.tsx`), o branch `semanaFim < statusDateSnapshot` (semana passada) caía direto em
+ * `realMissing` ("o XML guarda apenas a última foto"), então o card "REALIZADO (ACUM.)" mostrava "—" em toda
+ * semana anterior à do último upload. O dado por-atividade até existe em `planejamento_avancos`, mas a Regra de
+ * Ouro (Rev. 2265) proíbe o card de recalcular agregado ponderado — ele só pode LER snapshot.
+ *
+ * FIX (SERVER + CLIENT + SHARED; ZERO SCHEMA — só novas chaves no JSON `calendarioJson`, gravadas via UPDATE do
+ * app → R-001/R-007/R-010 OK, ZERO ALTER/DROP/DELETE):
+ *  - `shared/diasUteis.ts`: nova chave `realizadoSemanas?: Record<string, number>` na interface
+ *    `CalendarioMSProject` + preservação no `parseCalendarioJson` (o parser faz WHITELIST de chaves e descartaria
+ *    a nova chave; agora copia só entradas numéricas válidas).
+ *  - `server/routers/planejamento.ts` (`salvarMetadadosMSProject`): unifiquei o tratamento do `calendarioJson`
+ *    (origens "avanco" e "cadastro" agora ambas parseiam) e ACUMULO um histórico ADITIVO
+ *    `realizadoSemanas[statusDate] = realizadoMspSnapshot`, preservando as fotos anteriores (`...oldCal`). A
+ *    chave é o StatusDate desta semana (`statusDateSnapshot ?? input.statusDate ?? input.statusDateIso`); o
+ *    merge da origem "avanco" (previsto/calendário congelados do cadastro) segue intacto. Em `limparSnapshot`
+ *    adicionei `delete cal.realizadoSemanas` para "Limpar Avanços" zerar também o histórico.
+ *  - `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (`mspReadOnly`): no branch da semana passada, antes
+ *    de cair em "—", lê `cal.realizadoSemanas[semanaFim]` (foto exata da semana) ou, na falta, a foto mais
+ *    recente ANTERIOR (carry-forward — realizado acumulado é monotônico, mesma natureza do degrau da curva
+ *    PREVISTO). Continua sendo LEITURA pura de snapshot — zero cálculo ponderado (Regra de Ouro replit.md).
+ *
+ * KEYING: a chave `statusDate` (YYYY-MM-DD) casa com `semanaFim = cutoffWeekFromMonday(semanaAtual,cutoffDow).fim`
+ * na semana correspondente (mesma escala usada na condição `semanaFim === statusDateSnapshot` em todo o arquivo).
+ *
+ * RESSALVA: projetos antigos NÃO têm o histórico retroativo (sem backfill — R-001); cada projeto AUTO-CURA a
+ * partir do próximo upload semanal, que passa a gravar a foto daquela semana. A semana atual + futuras seguem
+ * idênticas (lêem o snapshot único como antes). Validação: HMR ok; restart server; architect.
+ *
  * Rev. 2780 — **EPI · TELA "ESTOQUE POR OBRA": AO CLICAR NUMA OBRA, OS DEMAIS CARDS NÃO SOMEM MAIS — TODOS OS
  * LOCAIS PERMANECEM VISÍVEIS NO PAINEL FIXO (COMO NA 1ª FOTO); O CLIQUE SÓ DESTACA O CARD (ÂMBAR) E FILTRA A
  * TABELA DE INSUMOS ABAIXO.**

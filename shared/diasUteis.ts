@@ -49,6 +49,11 @@ export interface CalendarioMSProject {
   // (Σ avanco × pesoFin). Ex.: REVTE-CIVIL UID=0 AD=2043min RD=151317min
   // → 1.3324% (= 1,33% que o MSP exibe).
   realizadoMspSnapshot?:   number;            // ex.: 1.3324
+  // Rev. 2781 — HISTÓRICO do %REALIZADO ACUMULADO por semana. O snapshot único
+  // acima guarda só a ÚLTIMA foto; este mapa acumula CADA upload semanal
+  // { [statusDate "YYYY-MM-DD"]: %realizado } pra o card "REALIZADO (ACUM.)"
+  // reexibir o valor em TODAS as semanas já enviadas (não só na última).
+  realizadoSemanas?:       Record<string, number>;
 }
 
 export function parseCalendarioJson(raw: unknown): CalendarioMSProject | null {
@@ -75,6 +80,14 @@ export function parseCalendarioJson(raw: unknown): CalendarioMSProject | null {
       envelopeStartSnapshot:  typeof obj.envelopeStartSnapshot  === "string" ? obj.envelopeStartSnapshot  : undefined,
       envelopeFinishSnapshot: typeof obj.envelopeFinishSnapshot === "string" ? obj.envelopeFinishSnapshot : undefined,
       realizadoMspSnapshot:   typeof obj.realizadoMspSnapshot   === "number" ? obj.realizadoMspSnapshot   : undefined,
+      // Rev. 2781 — preserva o histórico de realizado por semana (whitelist do
+      // parser descartava chaves desconhecidas). Mantém só entradas numéricas.
+      realizadoSemanas:       (obj.realizadoSemanas && typeof obj.realizadoSemanas === "object" && !Array.isArray(obj.realizadoSemanas))
+        ? Object.fromEntries(
+            Object.entries(obj.realizadoSemanas)
+              .filter(([, v]) => Number.isFinite(Number(v)))
+              .map(([k, v]) => [k, Number(v)]))
+        : undefined,
     };
   } catch { return null; }
 }
