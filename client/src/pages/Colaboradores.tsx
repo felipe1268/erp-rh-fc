@@ -703,7 +703,7 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
 
   // Blocos copiáveis do vínculo anterior. NUNCA copiamos salário/função/cargo/setor/obra/código/status/datas.
   const BLOCOS_RECONTRATACAO = [
-    { key: "pessoais", label: "Dados pessoais", icon: UserCheck, fields: ["nomeCompleto", "dataNascimento", "sexo", "estadoCivil", "nacionalidade", "naturalidade", "nomeMae", "nomePai"] },
+    { key: "pessoais", label: "Dados pessoais (com foto)", icon: UserCheck, fields: ["nomeCompleto", "dataNascimento", "sexo", "estadoCivil", "nacionalidade", "naturalidade", "nomeMae", "nomePai", "fotoUrl"] },
     { key: "documentos", label: "Documentos", icon: FileText, fields: ["rg", "orgaoEmissor", "ctps", "serieCtps", "pis", "tituloEleitor", "certificadoReservista", "cnh", "categoriaCnh", "validadeCnh"] },
     { key: "contato", label: "Contato", icon: HeartPulse, fields: ["celular", "email", "contatoEmergencia", "telefoneEmergencia", "parentescoEmergencia"] },
     { key: "endereco", label: "Endereço", icon: Building2, fields: ["cep", "logradouro", "numero", "complemento", "bairro", "cidade", "estado"] },

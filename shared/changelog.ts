@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2763 — **RH/DP · RECONTRATAÇÃO: A FOTO DO COLABORADOR AGORA É COPIADA JUNTO COM OS "DADOS PESSOAIS"
+ * AO INICIAR UMA RECONTRATAÇÃO — NÃO PRECISA MAIS RE-FOTOGRAFAR / RE-ANEXAR A FOTO.**
+ *
+ * PEDIDO (Felipe, print): no card de recontratação, o avatar aparecia VAZIO (ícone de câmera) mesmo o
+ * vínculo anterior já tendo foto — ele queria que a foto também fosse copiada "para facilitar".
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA/SERVER — R-001/R-007/R-010), em `client/src/pages/Colaboradores.tsx`:
+ * o bloco "Dados pessoais" de `BLOCOS_RECONTRATACAO` (selecionado por padrão) ganhou o campo `fotoUrl` na
+ * lista de `fields`. Como a `fotoUrl` copiada é uma URL REAL já hospedada (não um data-URL), o
+ * `aplicarRecontratacao` a injeta no `form` (avatar passa a exibir a foto) e o submit a preserva: o guard
+ * de submit só descarta `fotoUrl` quando começa com `data:`, então a URL segue na `ficha` →
+ * `criarSolicitacao` → na liberação do sócio, `aprovar` faz `createEmployee({ ...ficha })` e o
+ * `createEmployee` (whitelist em `server/db.ts`) persiste `fotoUrl`. Label do bloco virou "Dados pessoais
+ * (com foto)" para deixar explícito. Reaproveita a MESMA URL do vínculo anterior (é a mesma pessoa).
+ *
+ * VALIDAÇÃO: client-only; vite HMR sem erros no log; mudança é apenas a inclusão de um campo string num
+ * array existente (sem risco de tipo). Server/schema intocados.
+ *
  * Rev. 2762 — **RH/DP · RECONTRATAÇÃO: O MODAL "INICIAR RECONTRATAÇÃO" FOI MODERNIZADO E PERDEU A BARRA DE
  * ROLAGEM HORIZONTAL — CABEÇALHO COM FAIXA ÂMBAR, ETAPAS NUMERADAS, CARD DE VÍNCULO LIMPO E BLOCOS A COPIAR
  * COMO CARDS COM ÍCONE + ATALHOS "SELECIONAR TUDO / LIMPAR".**
