@@ -154,7 +154,10 @@ export const recontratacaoRouter = router({
 
       const grupoIds = await empresasGrupoPermitidas(ctx, db, input.companyId);
       const rows = await db.select().from(employees).where(and(
-        or(eq(employees.cpf, input.cpf), eq(employees.cpf, cleanCpf)),
+        // Compara só os DÍGITOS dos dois lados: o cliente manda o CPF limpo, mas no
+        // banco ele pode estar formatado ("362.506.888-54") ou limpo. Sem isto, um
+        // funcionário ATIVO com CPF formatado não era detectado (caía em "CPF livre").
+        sql`regexp_replace(${employees.cpf}, '[^0-9]', '', 'g') = ${cleanCpf}`,
         inArray(employees.companyId, grupoIds),
         isNull(employees.deletedAt),
       )).orderBy(desc(employees.dataDemissao));
@@ -211,7 +214,7 @@ export const recontratacaoRouter = router({
         createdAt: recontratacaoSolicitacoes.createdAt,
         solicitadoPor: recontratacaoSolicitacoes.solicitadoPor,
       }).from(recontratacaoSolicitacoes).where(and(
-        or(eq(recontratacaoSolicitacoes.cpf, input.cpf), eq(recontratacaoSolicitacoes.cpf, cleanCpf)),
+        sql`regexp_replace(${recontratacaoSolicitacoes.cpf}, '[^0-9]', '', 'g') = ${cleanCpf}`,
         inArray(recontratacaoSolicitacoes.companyId, grupoIds),
         eq(recontratacaoSolicitacoes.status, "pendente"),
       )).orderBy(desc(recontratacaoSolicitacoes.createdAt));

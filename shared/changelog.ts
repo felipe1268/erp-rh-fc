@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2760 — **RH/DP · NOVO COLABORADOR: A VERIFICAÇÃO DE CPF AGORA RECONHECE FUNCIONÁRIO JÁ CADASTRADO
+ * MESMO QUANDO O CPF ESTÁ GRAVADO FORMATADO NO BANCO — ACABOU O "CPF LIVRE" FALSO.**
+ *
+ * SINTOMA (Felipe, prints): ao digitar o CPF 362.506.888-54 (que pertence a FELIPE COSTA ALVES — ATIVO,
+ * cód. JFC200, na FC ENGENHARIA), o card mostrava "NOVO COLABORADOR — CPF LIVRE" em vez de "JÁ CADASTRADO".
+ *
+ * CAUSA-RAIZ (SÓ SERVER; ZERO SCHEMA — R-001/R-007/R-010): o cliente (`Colaboradores.tsx`) envia o CPF
+ * LIMPO (só dígitos, `cpfClean` = "36250688854"), mas a query comparava com `or(eq(cpf, input.cpf),
+ * eq(cpf, cleanCpf))` — ou seja, só batia se o CPF no banco estivesse IGUAL ao texto cru OU já limpo. Como
+ * no banco o CPF do Felipe está FORMATADO ("362.506.888-54"), NENHUMA das duas igualdades casava → a query
+ * voltava vazia → `ativoMesmaEmpresa = null` → veredito "CPF livre". O mesmo padrão frágil existia em
+ * `checkDuplicateCpf` (o reforço do bloqueio do Salvar) e na detecção de solicitação PENDENTE. Note que
+ * outro ponto do código (busca textual em `server/db.ts` L991) JÁ usava `regexp_replace` — confirmando que
+ * CPFs ficam gravados em formatos MISTOS (formatado e/ou limpo).
+ *
+ * FIX: as três comparações de CPF passam a NORMALIZAR OS DOIS LADOS pelos dígitos via
+ * `regexp_replace(<coluna_cpf>, '[^0-9]', '', 'g') = ${cleanCpf}` — `recontratacao.verificarCpf` (match em
+ * `employees` + match da solicitação PENDENTE em `recontratacao_solicitacoes`) e `checkDuplicateCpf`
+ * (`server/db.ts`). Format-agnóstico: detecta o vínculo independentemente de o CPF estar formatado ou limpo
+ * no banco. Nenhuma mudança de client/schema.
+ *
+ * VALIDAÇÃO: esbuild parse server EXIT 0; `vitest server/rescisao.test.ts + server/employees.test.ts`
+ * 46/46 verde; architect.
+ *
  * Rev. 2759 — **RH/DP · RECONTRATAÇÃO: A VERIFICAÇÃO DE CPF VOLTOU A FUNCIONAR — CORRIGIDO O ERRO DE SQL
  * "syntax error at or near 'desc'" QUE FAZIA TODO CPF CAIR NO CARD LARANJA "NÃO FOI POSSÍVEL VERIFICAR".**
  *

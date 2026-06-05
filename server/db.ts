@@ -1805,7 +1805,9 @@ export async function checkDuplicateCpf(cpf: string, companyId: number, excludeE
   const cleanCpf = cpf.replace(/\D/g, "");
   if (cleanCpf.length < 11) return [];
   const conditions: any[] = [
-    or(eq(employees.cpf, cpf), eq(employees.cpf, cleanCpf)),
+    // Compara só os DÍGITOS dos dois lados: no banco o CPF pode estar formatado
+    // ("362.506.888-54") ou limpo; sem isto um duplicado formatado não era detectado.
+    sql`regexp_replace(${employees.cpf}, '[^0-9]', '', 'g') = ${cleanCpf}`,
     isNull(employees.deletedAt),
     eq(employees.companyId, companyId),
   ];
