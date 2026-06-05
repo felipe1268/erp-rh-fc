@@ -3020,25 +3020,42 @@ export default function Epis() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b bg-muted/50">
-                          <th className="p-3 text-left font-medium">Data</th>
+                          <th className="p-3 text-left font-medium">Data / Hora</th>
                           <th className="p-3 text-left font-medium">EPI</th>
                           <th className="p-3 text-center font-medium">Qtd</th>
                           <th className="p-3 text-left font-medium">Origem</th>
                           <th className="p-3 text-center font-medium">→</th>
                           <th className="p-3 text-left font-medium">Destino</th>
+                          <th className="p-3 text-left font-medium">Usuário</th>
                           <th className="p-3 text-left font-medium">Obs</th>
                         </tr>
                       </thead>
                       <tbody>
                         {transferenciasList.map((t: any) => (
                           <tr key={t.id} className="border-b last:border-0 hover:bg-muted/30">
-                            <td className="p-3 text-xs">
-                              {t.data ? new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
+                            <td className="p-3 text-xs whitespace-nowrap">
+                              {(() => {
+                                const d = t.createdAt ? new Date(t.createdAt) : (t.data ? new Date(t.data + 'T00:00:00') : null);
+                                if (!d || isNaN(d.getTime())) return '—';
+                                return (
+                                  <div className="flex flex-col leading-tight">
+                                    <span className="font-medium">{d.toLocaleDateString('pt-BR')}</span>
+                                    <span className="text-[10px] text-muted-foreground">{t.createdAt ? d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—'}</span>
+                                  </div>
+                                );
+                              })()}
                             </td>
                             <td className="p-3">
                               <div className="flex items-center gap-2">
                                 {getEpiIcon(t.nomeEpi || '', 'h-3.5 w-3.5')}
-                                <span className="text-xs">{t.nomeEpi || 'EPI #' + t.epiId}</span>
+                                <div className="flex flex-col leading-tight">
+                                  <span className="text-xs font-medium">{t.nomeEpi || 'EPI #' + t.epiId}</span>
+                                  {t.tamanhoEpi ? (
+                                    <span className="text-[10px] text-muted-foreground">
+                                      {t.categoriaEpi === 'Calcado' ? `Nº ${t.tamanhoEpi}` : `Tam. ${t.tamanhoEpi}`}
+                                    </span>
+                                  ) : null}
+                                </div>
                               </div>
                             </td>
                             <td className="p-3 text-center font-bold">{t.quantidade}</td>
@@ -3052,6 +3069,13 @@ export default function Epis() {
                               <Badge variant="outline" className={t.destinoObraId ? 'bg-green-50 text-green-700 border-green-300' : 'bg-blue-50 text-blue-700 border-blue-300'}>
                                 {t.destinoObraId ? `🏗️ ${t.destinoNome || 'Obra #' + t.destinoObraId}` : '🏢 Escritório Central'}
                               </Badge>
+                            </td>
+                            <td className="p-3 text-xs whitespace-nowrap">
+                              {t.criadoPor ? (
+                                <span className="inline-flex items-center gap-1 text-muted-foreground">
+                                  <User className="h-3 w-3" /> {t.criadoPor}
+                                </span>
+                              ) : <span className="text-muted-foreground">—</span>}
                             </td>
                             <td className="p-3 text-xs text-muted-foreground">{t.observacoes || '—'}</td>
                           </tr>

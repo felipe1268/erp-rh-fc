@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2771 — **EPI · HISTÓRICO DE TRANSFERÊNCIAS 100% RASTREÁVEL: A DESCRIÇÃO DO ITEM AGORA MOSTRA O
+ * TAMANHO (Nº DA BOTA / TAM. DA CAMISA), A DATA GANHA HORA E APARECE O USUÁRIO QUE FEZ A TRANSFERÊNCIA.**
+ *
+ * PEDIDO (usuário): no "Histórico de Transferências" (aba Transferências da tela de EPIs), a linha só
+ * mostrava o NOME do EPI (ex.: "Bota Bico Plástico") sem o número/tamanho, a data sem hora e sem indicar
+ * QUEM fez a transferência — pediu rastreabilidade total (tamanho + data/hora + usuário).
+ *
+ * CONSTATAÇÃO: o backend JÁ persistia tudo o que faltava exibir — `epi_transferencias.criadoPor` (nome),
+ * `criadoPorUserId` e `createdAt` (timestamp COM hora) são gravados no `transferir` (`ctx.user`). Só faltava
+ * (a) trazer o tamanho/categoria do EPI na query e (b) exibir esses campos na tabela.
+ *
+ * FIX (SERVER+CLIENT; ZERO SCHEMA): em `server/routers/epis.ts` · `listarTransferencias`, o select passou a
+ * trazer `tamanhoEpi` (`epis.tamanho`), `categoriaEpi` (`epis.categoria`) e `criadoPorUserId`. No
+ * `client/src/pages/Epis.tsx`, a tabela do histórico: (1) coluna "Data / Hora" agora usa `createdAt`
+ * (data em cima, hora embaixo) com fallback p/ `data` quando não houver timestamp; (2) a descrição do EPI
+ * ganhou uma 2ª linha com o tamanho — "Nº {tamanho}" p/ Calçado e "Tam. {tamanho}" p/ Uniforme/EPI; (3) NOVA
+ * coluna "Usuário" exibindo `criadoPor` (com ícone), "—" quando ausente (transferências antigas pré-captura).
+ *
+ * RESSALVA: transferências antigas sem `criadoPor`/`createdAt` mostram "—" no usuário/hora (dado não foi
+ * gravado à época; R-001/R-007/R-010: sem backfill em produção). Daqui pra frente fica 100% rastreável.
+ *
+ * VALIDAÇÃO: servidor sobe limpo; HMR ok; architect. Detalhe: este arquivo.
+ *
  * Rev. 2770 — **EPI · FILTRO DE CATEGORIA "CALÇADO" ZERAVA A LISTA DO CATÁLOGO — MISMATCH DE ACENTO
  * ("Calçado" COM CEDILHA NO FILTRO vs "Calcado" SEM CEDILHA NO BANCO).**
  *

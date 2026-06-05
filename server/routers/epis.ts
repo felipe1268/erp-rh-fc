@@ -1807,9 +1807,12 @@ Exemplos de referência:
         data: epiTransferencias.data,
         observacoes: epiTransferencias.observacoes,
         criadoPor: epiTransferencias.criadoPor,
+        criadoPorUserId: epiTransferencias.criadoPorUserId,
         createdAt: epiTransferencias.createdAt,
         nomeEpi: epis.nome,
         caEpi: epis.ca,
+        tamanhoEpi: epis.tamanho,
+        categoriaEpi: epis.categoria,
       })
         .from(epiTransferencias)
         .leftJoin(epis, eq(epiTransferencias.epiId, epis.id))
