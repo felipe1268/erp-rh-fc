@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2762 — **RH/DP · RECONTRATAÇÃO: O MODAL "INICIAR RECONTRATAÇÃO" FOI MODERNIZADO E PERDEU A BARRA DE
+ * ROLAGEM HORIZONTAL — CABEÇALHO COM FAIXA ÂMBAR, ETAPAS NUMERADAS, CARD DE VÍNCULO LIMPO E BLOCOS A COPIAR
+ * COMO CARDS COM ÍCONE + ATALHOS "SELECIONAR TUDO / LIMPAR".**
+ *
+ * PEDIDO (Felipe, print): o modal de recontratação aparecia com uma barra de rolagem horizontal e o layout
+ * era pouco amigável; queria algo mais moderno e fácil de cadastrar.
+ *
+ * FIX (SÓ CLIENT/UI; ZERO SCHEMA/SERVER — R-001/R-007/R-010), em `client/src/pages/Colaboradores.tsx`:
+ * - `DialogContent` ganhou `overflow-x-hidden` + largura responsiva `w-[calc(100vw-2rem)]` (some a barra
+ *   horizontal em qualquer viewport); `p-0 gap-0` com cabeçalho/rodapé fixos e corpo paddado.
+ * - Cabeçalho com faixa âmbar (gradiente) + ícone `RefreshCw` em chip arredondado.
+ * - Conteúdo dividido em DUAS etapas numeradas: "1 Vínculo anterior" e "2 Blocos a copiar".
+ * - Card de vínculo redesenhado: nome truncável + badge de código, metadados com ícones
+ *   (função/data de desligamento/dias fora), alerta jurídico em caixa destacada com ícone `Scale`, e
+ *   indicador de seleção (check âmbar no canto).
+ * - "Blocos a copiar" viraram cards com ícone (grid 2/3 colunas), check no canto e atalhos
+ *   "Selecionar tudo / Limpar". `BLOCOS_RECONTRATACAO` ganhou campo `icon` (UserCheck/FileText/HeartPulse/
+ *   Building2/ShieldCheck/UsersRound) — campo puramente visual, não muda a lógica de cópia.
+ * - Rodapé fixo com aviso de revalidação de documentos e botão de aplicar com spinner.
+ *
+ * VALIDAÇÃO: `tsc --noEmit` limpo em `Colaboradores.tsx`; mudança client-only (server não afetado). Não foi
+ * possível abrir o modal no preview (tela exige login), mas o diff é exclusivamente de layout/Tailwind.
+ *
  * Rev. 2761 — **RH/DP · NOVO COLABORADOR / RECONTRATAÇÃO: A VERIFICAÇÃO DE CPF AGORA ENXERGA FUNCIONÁRIOS
  * DE TODOS OS STATUS — INCLUSIVE OS 22 EM "LISTA_NEGRA" QUE ANTES ERAM CLASSIFICADOS COMO "ATIVO" E SUMIAM
  * DA ANÁLISE DE RECONTRATAÇÃO.**

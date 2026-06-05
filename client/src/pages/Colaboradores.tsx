@@ -703,12 +703,12 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
 
   // Blocos copiáveis do vínculo anterior. NUNCA copiamos salário/função/cargo/setor/obra/código/status/datas.
   const BLOCOS_RECONTRATACAO = [
-    { key: "pessoais", label: "Dados pessoais", fields: ["nomeCompleto", "dataNascimento", "sexo", "estadoCivil", "nacionalidade", "naturalidade", "nomeMae", "nomePai"] },
-    { key: "documentos", label: "Documentos", fields: ["rg", "orgaoEmissor", "ctps", "serieCtps", "pis", "tituloEleitor", "certificadoReservista", "cnh", "categoriaCnh", "validadeCnh"] },
-    { key: "contato", label: "Contato", fields: ["celular", "email", "contatoEmergencia", "telefoneEmergencia", "parentescoEmergencia"] },
-    { key: "endereco", label: "Endereço", fields: ["cep", "logradouro", "numero", "complemento", "bairro", "cidade", "estado"] },
-    { key: "bancarios", label: "Dados bancários / PIX", fields: ["banco", "bancoNome", "agencia", "conta", "tipoConta", "tipoChavePix", "chavePix", "bancoPix"] },
-    { key: "dependentes", label: "Dependentes IR", fields: ["dependentesIR"] },
+    { key: "pessoais", label: "Dados pessoais", icon: UserCheck, fields: ["nomeCompleto", "dataNascimento", "sexo", "estadoCivil", "nacionalidade", "naturalidade", "nomeMae", "nomePai"] },
+    { key: "documentos", label: "Documentos", icon: FileText, fields: ["rg", "orgaoEmissor", "ctps", "serieCtps", "pis", "tituloEleitor", "certificadoReservista", "cnh", "categoriaCnh", "validadeCnh"] },
+    { key: "contato", label: "Contato", icon: HeartPulse, fields: ["celular", "email", "contatoEmergencia", "telefoneEmergencia", "parentescoEmergencia"] },
+    { key: "endereco", label: "Endereço", icon: Building2, fields: ["cep", "logradouro", "numero", "complemento", "bairro", "cidade", "estado"] },
+    { key: "bancarios", label: "Dados bancários / PIX", icon: ShieldCheck, fields: ["banco", "bancoNome", "agencia", "conta", "tipoConta", "tipoChavePix", "chavePix", "bancoPix"] },
+    { key: "dependentes", label: "Dependentes IR", icon: UsersRound, fields: ["dependentesIR"] },
   ];
 
   const abrirPickerRecontratacao = () => {
@@ -3714,64 +3714,112 @@ ${(() => {
 
       {/* Recontratação — seletor do vínculo anterior + blocos a copiar */}
       <Dialog open={recontratacaoPickerOpen} onOpenChange={setRecontratacaoPickerOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><RefreshCw className="h-5 w-5 text-amber-600" /> Iniciar recontratação</DialogTitle>
-            <DialogDescription>Escolha o vínculo anterior e os blocos de dados a reaproveitar. Salário, função, cargo e obra são SEMPRE preenchidos do zero.</DialogDescription>
+        <DialogContent className="max-w-2xl w-[calc(100vw-2rem)] max-h-[90vh] overflow-x-hidden overflow-y-auto p-0 gap-0">
+          {/* Cabeçalho com faixa âmbar */}
+          <DialogHeader className="space-y-1.5 border-b bg-gradient-to-br from-amber-50 to-orange-50 px-6 py-5 dark:from-amber-950/30 dark:to-orange-950/20">
+            <DialogTitle className="flex items-center gap-2.5 text-lg">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:ring-amber-800">
+                <RefreshCw className="h-5 w-5" />
+              </span>
+              Iniciar recontratação
+            </DialogTitle>
+            <DialogDescription className="text-sm">
+              Escolha o vínculo anterior e os blocos a reaproveitar. <span className="font-medium text-foreground/80">Salário, função, cargo e obra</span> são sempre preenchidos do zero.
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div>
-              <Label className="text-xs font-semibold text-muted-foreground">Vínculo anterior</Label>
-              <div className="mt-1 space-y-2">
-                {recontratacaoVinculos.map((v: any) => (
-                  <button
-                    key={v.employeeId}
-                    type="button"
-                    onClick={() => setRecontratacaoPickEmployeeId(v.employeeId)}
-                    className={`w-full text-left rounded-lg border p-3 transition ${pickedVinculo?.employeeId === v.employeeId ? "border-amber-500 bg-amber-500/10" : "border-border hover:bg-muted/40"}`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-sm">{v.nomeCompleto} · {v.codigoInterno || "s/ código"}</span>
-                      <span className="text-xs text-muted-foreground">{v.companyNome}</span>
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      Função anterior: {v.funcaoAnterior || "—"} · Desligado em {v.dataDesligamento ? new Date(v.dataDesligamento).toLocaleDateString("pt-BR") : "—"}
-                      {v.diasFora != null ? ` · ${v.diasFora} dias fora` : ""}
-                    </div>
-                    {v.alertaJuridico ? (
-                      <div className={`text-xs mt-1 font-medium ${v.experienciaPermitida ? "text-amber-700" : "text-red-600"}`}>{v.alertaJuridico}</div>
-                    ) : null}
-                  </button>
-                ))}
+          <div className="space-y-6 px-6 py-5">
+            {/* Vínculo anterior */}
+            <section>
+              <div className="mb-2 flex items-center gap-2">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-600 text-[11px] font-bold text-white">1</span>
+                <Label className="text-sm font-semibold">Vínculo anterior</Label>
               </div>
-            </div>
-
-            <div>
-              <Label className="text-xs font-semibold text-muted-foreground">Blocos a copiar</Label>
-              <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {BLOCOS_RECONTRATACAO.map(b => {
-                  const checked = blocosCopiados.includes(b.key);
+              <div className="space-y-2">
+                {recontratacaoVinculos.map((v: any) => {
+                  const ativo = pickedVinculo?.employeeId === v.employeeId;
                   return (
-                    <label key={b.key} className={`flex items-center gap-2 rounded-md border p-2 cursor-pointer text-sm ${checked ? "border-lime-500 bg-lime-500/10" : "border-border"}`}>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => setBlocosCopiados(prev => prev.includes(b.key) ? prev.filter(k => k !== b.key) : [...prev, b.key])}
-                        className="accent-lime-600"
-                      />
-                      {b.label}
-                    </label>
+                    <button
+                      key={v.employeeId}
+                      type="button"
+                      onClick={() => setRecontratacaoPickEmployeeId(v.employeeId)}
+                      className={`relative w-full overflow-hidden rounded-xl border p-3.5 text-left transition-all ${ativo ? "border-amber-500 bg-amber-500/10 shadow-sm ring-1 ring-amber-500/30" : "border-border hover:border-amber-300 hover:bg-muted/40"}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate font-semibold text-sm">{v.nomeCompleto}</span>
+                            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">{v.codigoInterno || "s/ código"}</span>
+                          </div>
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">{v.companyNome}</p>
+                        </div>
+                        <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition ${ativo ? "border-amber-500 bg-amber-500 text-white" : "border-muted-foreground/30"}`}>
+                          {ativo ? <Check className="h-3.5 w-3.5" /> : null}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        <span className="inline-flex items-center gap-1"><Wrench className="h-3 w-3" /> {v.funcaoAnterior || "—"}</span>
+                        <span className="inline-flex items-center gap-1"><CalendarDays className="h-3 w-3" /> Desligado em {v.dataDesligamento ? new Date(v.dataDesligamento).toLocaleDateString("pt-BR") : "—"}</span>
+                        {v.diasFora != null ? <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> {v.diasFora} dias fora</span> : null}
+                      </div>
+                      {v.alertaJuridico ? (
+                        <div className={`mt-2 flex items-start gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium ${v.experienciaPermitida ? "bg-amber-100/70 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" : "bg-red-100/70 text-red-700 dark:bg-red-900/30 dark:text-red-300"}`}>
+                          <Scale className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          <span className="break-words">{v.alertaJuridico}</span>
+                        </div>
+                      ) : null}
+                    </button>
                   );
                 })}
               </div>
-              <p className="text-xs text-muted-foreground mt-1">Documentos do colaborador devem ser sempre revalidados após a recontratação.</p>
-            </div>
+            </section>
+
+            {/* Blocos a copiar */}
+            <section>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-lime-600 text-[11px] font-bold text-white">2</span>
+                  <Label className="text-sm font-semibold">Blocos a copiar</Label>
+                </div>
+                <div className="flex items-center gap-1 text-xs">
+                  <button type="button" onClick={() => setBlocosCopiados(BLOCOS_RECONTRATACAO.map(b => b.key))} className="rounded px-1.5 py-0.5 font-medium text-lime-700 hover:bg-lime-500/10 dark:text-lime-400">Selecionar tudo</button>
+                  <span className="text-muted-foreground/40">·</span>
+                  <button type="button" onClick={() => setBlocosCopiados([])} className="rounded px-1.5 py-0.5 font-medium text-muted-foreground hover:bg-muted">Limpar</button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {BLOCOS_RECONTRATACAO.map(b => {
+                  const checked = blocosCopiados.includes(b.key);
+                  const Icon = b.icon;
+                  return (
+                    <button
+                      key={b.key}
+                      type="button"
+                      onClick={() => setBlocosCopiados(prev => prev.includes(b.key) ? prev.filter(k => k !== b.key) : [...prev, b.key])}
+                      className={`group relative flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition-all ${checked ? "border-lime-500 bg-lime-500/10 shadow-sm" : "border-border hover:border-lime-300 hover:bg-muted/40"}`}
+                    >
+                      <span className={`absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full border transition ${checked ? "border-lime-500 bg-lime-500 text-white" : "border-muted-foreground/30 group-hover:border-lime-400"}`}>
+                        {checked ? <Check className="h-3 w-3" /> : null}
+                      </span>
+                      <span className={`flex h-8 w-8 items-center justify-center rounded-lg transition ${checked ? "bg-lime-500/20 text-lime-700 dark:text-lime-400" : "bg-muted text-muted-foreground"}`}>
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <span className="text-xs font-medium leading-tight">{b.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-2.5 flex items-start gap-1.5 text-xs text-muted-foreground">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+                Documentos do colaborador devem ser sempre revalidados após a recontratação.
+              </p>
+            </section>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 border-t bg-muted/30 px-6 py-4">
             <Button variant="outline" onClick={() => setRecontratacaoPickerOpen(false)}>Cancelar</Button>
             <Button className="bg-amber-600 hover:bg-amber-700 text-white" onClick={aplicarRecontratacao} disabled={!pickedVinculo || dadosCopia.isLoading}>
+              <RefreshCw className={`mr-1.5 h-4 w-4 ${dadosCopia.isLoading ? "animate-spin" : ""}`} />
               {dadosCopia.isLoading ? "Carregando..." : "Aplicar e preencher ficha"}
             </Button>
           </DialogFooter>
