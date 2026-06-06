@@ -17,6 +17,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
+import { formatNumeroCotacaoDisplay } from "@shared/numeroCotacao";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Check, Paperclip, Upload, X, FileText, Save, Edit3, ClipboardCheck, Calendar, RotateCcw } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -805,7 +806,7 @@ export default function Ordens() {
       case "obra":             return nomeObraSort((o as any).obraId) || null;
       case "fornecedor":       return nomeFornSort(o.fornecedorId) || null;
       // "Origem" sempre tem valor (Manual ou COT-N), nunca vazio.
-      case "origem":           return (o as any).cotacaoId ? `COT-${(o as any).cotacaoId}` : "Manual";
+      case "origem":           return (o as any).cotacaoNumero ? formatNumeroCotacaoDisplay((o as any).cotacaoNumero) : ((o as any).cotacaoId ? "Cotação" : "Manual");
       case "total":            { const v = parseFloat((o as any).total ?? ""); return isNaN(v) ? null : v; }
       case "entregaPrevista":  return ((o as any).dataEntregaPrevista ?? null) || null;
       case "status":           return (o.status ?? null) || null;
@@ -1239,7 +1240,7 @@ export default function Ordens() {
                       })()}
                     </div>
                   </TableCell>
-                  <TableCell className="text-gray-400 text-xs">{oc.cotacaoId ? `COT #${oc.cotacaoId}` : "Manual"}</TableCell>
+                  <TableCell className="text-gray-400 text-xs">{(oc as any).cotacaoNumero ? formatNumeroCotacaoDisplay((oc as any).cotacaoNumero) : (oc.cotacaoId ? "Cotação" : "Manual")}</TableCell>
                   <TableCell className="text-emerald-700 font-semibold text-sm">
                     {parseFloat(oc.total ?? "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                   </TableCell>
@@ -1952,7 +1953,7 @@ export default function Ordens() {
                   <div><span className="text-gray-400 text-xs">Fornecedor</span><p className="text-gray-900 font-medium">{(detalhe as { fornecedor?: FornecedorContatoData | null }).fornecedor?.nomeFantasia || (detalhe as { fornecedor?: FornecedorContatoData | null }).fornecedor?.razaoSocial || "—"}</p></div>
                   <div><span className="text-gray-400 text-xs">{["servico", "pacote"].includes((detalhe as any)?.tipo) ? "Mobilização prevista" : "Entrega prevista"}</span><p className="text-gray-900 font-medium">{detalhe.dataEntregaPrevista ? new Date(detalhe.dataEntregaPrevista + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</p></div>
                   <div><span className="text-gray-400 text-xs">{["servico", "pacote"].includes((detalhe as any)?.tipo) ? "Mobilização real" : "Entrega real"}</span><p className="text-gray-900 font-medium">{detalhe.dataEntregaReal ? new Date(detalhe.dataEntregaReal + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</p></div>
-                  <div><span className="text-gray-400 text-xs">Origem</span><p className="text-gray-900 font-medium">{detalhe.cotacaoId ? `Cotação #${detalhe.cotacaoId}` : "Manual"}</p></div>
+                  <div><span className="text-gray-400 text-xs">Origem</span><p className="text-gray-900 font-medium">{(detalhe as any).cotInfo?.numeroCotacao ? formatNumeroCotacaoDisplay((detalhe as any).cotInfo.numeroCotacao) : (detalhe.cotacaoId ? "Cotação" : "Manual")}</p></div>
                   <div><span className="text-gray-400 text-xs">Criado em</span><p className="text-gray-900 font-medium">{new Date(detalhe.criadoEm).toLocaleDateString("pt-BR")}</p></div>
                   <div className="col-span-2">
                     <span className="text-gray-400 text-xs">Tipo de Faturamento</span>

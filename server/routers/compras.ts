@@ -7150,6 +7150,18 @@ Retorne APENAS um JSON válido neste formato:
         }
       }
 
+      // NÚMERO REAL DA COTAÇÃO DE ORIGEM: a tela mostrava "Cotação #<id>" usando o ID INTERNO
+      // (`cotacaoId`), que NÃO bate com o número visível da cotação (`COT-AAAA-NNNN`). Busca o
+      // `numeroCotacao` em lote p/ expor `cotacaoNumero` e exibir o número correto (mesma ideia
+      // da Rev. 2803, que trouxe o número real da SC pra tela de cotação).
+      const cotacaoIdsList = [...new Set(rows.map(r => r.cotacaoId).filter(Boolean) as number[])];
+      const cotacaoNumeroMap: Record<number, string> = {};
+      if (cotacaoIdsList.length > 0) {
+        const cotRows = await db.select({ id: comprasCotacoes.id, numeroCotacao: comprasCotacoes.numeroCotacao })
+          .from(comprasCotacoes).where(inArray(comprasCotacoes.id, cotacaoIdsList));
+        for (const c of cotRows) cotacaoNumeroMap[c.id] = c.numeroCotacao;
+      }
+
       const result = rows.map(r => {
         const itemIds = itemsByOrdem[r.id] || [];
         let proximaEntregaProgramada: string | null = null;
@@ -7162,7 +7174,7 @@ Retorne APENAS um JSON válido neste formato:
             }
           }
         }
-        return { ...r, proximaEntregaProgramada };
+        return { ...r, proximaEntregaProgramada, cotacaoNumero: r.cotacaoId ? (cotacaoNumeroMap[r.cotacaoId] ?? null) : null };
       });
 
       if (input.apenasAtrasadas) {

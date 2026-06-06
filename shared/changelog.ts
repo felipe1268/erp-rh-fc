@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2813 — **COMPRAS · ORDENS — HOTFIX (DADOS INCONSISTENTES): NA OC, O CAMPO "ORIGEM" MOSTRAVA "Cotação #<id>"
+ * USANDO O ID INTERNO DA COTAÇÃO (ex.: "Cotação #433"), QUE NÃO BATE COM O NÚMERO VISÍVEL DA COTAÇÃO
+ * (`COT-2026-0292`). AGORA EXIBE O NÚMERO REAL FORMATADO EM DETALHE, LISTA E ORDENAÇÃO/EXPORT.**
+ *
+ * PEDIDO (usuário, screenshot OC-2026-388, item "7. DADOS INCONSISTENTES"): "Utilizando OC388 ele informa que a
+ * cotação é 433, porém esse número não existe; na verdade está vinculado à cotação COT-2026-0292. Esse erro acontece
+ * em todas as solicitações — quando você vai procurar pelo número não bate."
+ *
+ * CAUSA-RAIZ: a tela `Ordens.tsx` renderizava a "Origem" da OC concatenando o ID INTERNO da cotação
+ * (`detalhe.cotacaoId` / `oc.cotacaoId` — uma serial PK, ex.: 433), e NÃO o `numeroCotacao` (o número humano
+ * `COT-AAAA-NNNN`, ex.: COT-2026-0292). Como o ID interno e o número sequencial divergem, o usuário não conseguia
+ * localizar a cotação pelo número exibido.
+ *
+ * O QUE FOI FEITO: (1) BACKEND — `getOrdem` JÁ retornava `cotInfo.numeroCotacao`; `listarOrdens` passou a buscar em
+ * LOTE o `numeroCotacao` das cotações de origem (set de `cotacaoId` → query única em `comprasCotacoes`) e expõe
+ * `cotacaoNumero` em cada linha. (2) FRONT (`Ordens.tsx`) — os TRÊS pontos de exibição da "Origem" (detalhe linha
+ * ~1959, célula da lista ~1246, e a chave de ordenação/export "origem" ~812) passaram a exibir o número real via
+ * `formatNumeroCotacaoDisplay` (helper da Rev. 2808 → `COT-NNNN-AAAA`), com fallback "Cotação" quando há vínculo mas
+ * o número não veio, e "Manual" quando não há cotação.
+ *
+ * RESSALVA: só EXIBIÇÃO; nenhum valor gravado mudou. ZERO ALTER/DROP/DELETE; ZERO schema novo. Validação: esbuild OK
+ * em `compras.ts` e `Ordens.tsx`. Detalhe: este arquivo.
+ *
  * Rev. 2812 — **COMPRAS · ORDENS — HOTFIX: AO CLICAR EM "EDITAR OC" O VÍNCULO DA ETAPA (EAP) SE PERDIA — O SELETOR
  * "SELECIONAR ETAPA DO ORÇAMENTO (EAP)" ABRIA VAZIO, MESMO A OC TENDO ORIGEM NA SOLICITAÇÃO/COTAÇÃO. AGORA A ETAPA
  * É PRESERVADA (PROPAGADA NA CRIAÇÃO + HERDADA DA SC NA LEITURA, CORRIGINDO OCs JÁ EXISTENTES).**
