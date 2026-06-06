@@ -13749,19 +13749,19 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   }, [proj?.ultimaAnaliseJulinho]);
   const [orientacaoPdf, setOrientacaoPdf] = useState<"portrait" | "landscape">("landscape");
   // Rev. 2784 — calibração de impressão pelo próprio usuário (margem + zoom), persistida no navegador
-  // Rev. 2786 — repaginação: margem padrão 3cm (30mm) em todos os lados; range ampliado p/ 0-40mm.
-  // Chave migrada (refisMargemMmV2) p/ o novo default valer já — sem ficar preso ao 8mm antigo.
+  // Rev. 2789 — margem padrão 36mm (3x a anterior de 12mm); range ampliado p/ 0-60mm.
+  // Chave migrada (refisMargemMmV4) p/ o novo default valer já — sem ficar preso ao 12mm antigo.
   const [refisMargemMm, setRefisMargemMm] = useState<number>(() => {
-    if (typeof window === "undefined") return 12;
-    const v = Number(window.localStorage.getItem("refisMargemMmV3"));
-    return Number.isFinite(v) && v >= 0 && v <= 40 ? v : 12;
+    if (typeof window === "undefined") return 36;
+    const v = Number(window.localStorage.getItem("refisMargemMmV4"));
+    return Number.isFinite(v) && v >= 0 && v <= 60 ? v : 36;
   });
   const [refisZoom, setRefisZoom] = useState<number>(() => {
     if (typeof window === "undefined") return 100;
     const v = Number(window.localStorage.getItem("refisZoom"));
     return Number.isFinite(v) && v >= 40 && v <= 160 ? v : 100;
   });
-  useEffect(() => { try { window.localStorage.setItem("refisMargemMmV3", String(refisMargemMm)); } catch {} }, [refisMargemMm]);
+  useEffect(() => { try { window.localStorage.setItem("refisMargemMmV4", String(refisMargemMm)); } catch {} }, [refisMargemMm]);
   useEffect(() => { try { window.localStorage.setItem("refisZoom", String(refisZoom)); } catch {} }, [refisZoom]);
   const [colBloco2, setColBloco2] = useState(false);
   const [colBloco3A, setColBloco3A] = useState(false);
@@ -14573,8 +14573,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           <div className="flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 no-print" title="Margem da folha (mm) — aplicada ao imprimir">
             <span className="text-[11px] text-slate-500">Margem</span>
             <input
-              type="number" min={0} max={40} step={1} value={refisMargemMm}
-              onChange={(e) => setRefisMargemMm(Math.max(0, Math.min(40, Math.round(Number(e.target.value) || 0))))}
+              type="number" min={0} max={60} step={1} value={refisMargemMm}
+              onChange={(e) => setRefisMargemMm(Math.max(0, Math.min(60, Math.round(Number(e.target.value) || 0))))}
               className="w-11 text-xs border border-slate-200 rounded px-1 py-0.5 text-center"
             />
             <span className="text-[11px] text-slate-400">mm</span>
@@ -14584,7 +14584,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             <button type="button" className="px-1.5 py-0.5 text-sm leading-none text-slate-600 hover:bg-slate-100 rounded" onClick={() => setRefisZoom(z => Math.max(40, z - 5))}>−</button>
             <span className="text-xs font-semibold text-slate-700 w-9 text-center tabular-nums">{refisZoom}%</span>
             <button type="button" className="px-1.5 py-0.5 text-sm leading-none text-slate-600 hover:bg-slate-100 rounded" onClick={() => setRefisZoom(z => Math.min(160, z + 5))}>+</button>
-            <button type="button" className="text-[10px] text-blue-600 hover:underline ml-1" onClick={() => { setRefisZoom(100); setRefisMargemMm(12); }}>reset</button>
+            <button type="button" className="text-[10px] text-blue-600 hover:underline ml-1" onClick={() => { setRefisZoom(100); setRefisMargemMm(36); }}>reset</button>
           </div>
           <Button size="sm" variant="outline"
             className="gap-1.5 border-slate-300 text-slate-600 hover:bg-slate-50 no-print"
@@ -14719,45 +14719,36 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           #refis-print-area .shadow-md,
           #refis-print-area .shadow { box-shadow: none !important; }
 
-          .refis-doc-header { background: #1A3461 !important; color: white !important; margin-bottom: 3pt !important; page-break-after: avoid !important; border-top: 2.5pt solid #FFB800 !important; border-radius: 3pt 3pt 0 0 !important; overflow: hidden !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-          .refis-doc-header-inner { display: flex !important; align-items: stretch !important; min-height: 26pt !important; }
-          .refis-doc-header-brand {
-            border-right: 0.5pt solid rgba(255,255,255,0.22) !important;
-            padding: 5pt 9pt !important; display: flex !important; flex-direction: column !important; justify-content: center !important; min-width: 80pt !important;
-          }
-          .refis-doc-header-center {
-            flex: 1 !important; padding: 5pt 10pt !important; display: flex !important; flex-direction: column !important; justify-content: center !important;
-          }
-          .refis-doc-header-ref {
-            border-left: 0.5pt solid rgba(255,255,255,0.22) !important;
-            padding: 5pt 9pt !important; text-align: right !important; display: flex !important; flex-direction: column !important; justify-content: center !important; min-width: 68pt !important;
-          }
-          /* Rev. 2787 — barra de marcas INTEGRADA ao cabeçalho azul (Execução · Gerenciamento · Cliente) */
-          .refis-brand-bar {
-            display: flex !important; align-items: stretch !important; justify-content: space-between !important;
-            background: rgba(255,255,255,0.06) !important;
-            border-bottom: 0.5pt solid rgba(255,255,255,0.16) !important;
-            padding: 3pt 10pt 3pt !important;
-            -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
-          }
-          .refis-brand-zone {
-            flex: 1 1 0 !important; display: flex !important; flex-direction: column !important;
-            align-items: center !important; justify-content: flex-start !important; gap: 1.5pt !important; padding: 0 6pt !important;
-          }
-          .refis-brand-tag {
-            font-size: 5.5pt !important; font-weight: 800 !important; letter-spacing: 0.22em !important;
-            text-transform: uppercase !important; color: #FFC233 !important;
-          }
-          .refis-brand-chip {
-            background: white !important; border-radius: 3pt !important; padding: 2pt 7pt !important;
-            display: flex !important; align-items: center !important; justify-content: center !important;
-            min-height: 13pt !important; width: 100% !important; max-width: 118pt !important;
-            box-shadow: 0 0.5pt 1.5pt rgba(0,0,0,0.18) !important;
-            -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
-          }
-          .refis-brand-chip img { max-height: 11pt !important; max-width: 102pt !important; object-fit: contain !important; display: block !important; }
-          .refis-brand-name { font-size: 7pt !important; font-weight: 800 !important; color: #1A3461 !important; text-align: center !important; line-height: 1.1 !important; }
-          .refis-brand-sep { width: 0.5pt !important; background: rgba(255,255,255,0.2) !important; align-self: stretch !important; margin: 7pt 0 !important; }
+          /* ===== Rev. 2789 — CABEÇALHO DO DOCUMENTO REMODELADO =====================
+             Três bandas: (1) LOGOS em fundo branco, grid de 3 colunas UNIFORMES e
+             INCLUSIVAS (Execução/Gerenciamento/Cliente — célula sempre existe; sem
+             logo cai no nome); (2) TÍTULO em faixa azul-marinho com selo de revisão;
+             (3) FICHA TÉCNICA — grid de campos rotulados p/ leitura objetiva. */
+          .refis-doc-header { margin-bottom: 4pt !important; page-break-after: avoid !important; border: 0.75pt solid #1A3461 !important; border-radius: 0 !important; overflow: hidden !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+          /* (1) Banda de logos — fundo branco, 3 colunas iguais */
+          .refis-logo-band { display: grid !important; grid-template-columns: 1fr 1fr 1fr !important; background: #ffffff !important; border-bottom: 2pt solid #FFC107 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          .refis-logo-cell { display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; gap: 3pt !important; padding: 6pt 10pt !important; border-right: 0.5pt solid #e2e8f0 !important; min-height: 44pt !important; }
+          .refis-logo-cell:last-child { border-right: 0 !important; }
+          .refis-logo-tag { font-size: 5.5pt !important; font-weight: 800 !important; letter-spacing: 0.26em !important; text-transform: uppercase !important; color: #94a3b8 !important; }
+          .refis-logo-slot { display: flex !important; align-items: center !important; justify-content: center !important; height: 28pt !important; width: 100% !important; }
+          .refis-logo-slot img { max-height: 28pt !important; max-width: 88% !important; object-fit: contain !important; display: block !important; }
+          .refis-logo-name { font-size: 8.5pt !important; font-weight: 800 !important; color: #1A3461 !important; text-align: center !important; line-height: 1.15 !important; }
+
+          /* (2) Banda de título — azul-marinho + selo de revisão dourado */
+          .refis-title-band { display: flex !important; align-items: center !important; justify-content: space-between !important; background: #1A3461 !important; color: white !important; padding: 7pt 12pt !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          .refis-title-main { font-size: 13pt !important; font-weight: 800 !important; text-transform: uppercase !important; letter-spacing: 0.04em !important; line-height: 1.12 !important; color: white !important; }
+          .refis-title-sub { font-size: 7pt !important; color: rgba(255,255,255,0.72) !important; margin-top: 2.5pt !important; letter-spacing: 0.02em !important; }
+          .refis-title-ref { text-align: right !important; padding-left: 14pt !important; margin-left: 14pt !important; border-left: 0.5pt solid rgba(255,255,255,0.28) !important; white-space: nowrap !important; }
+          .refis-title-rev { font-size: 19pt !important; font-weight: 900 !important; line-height: 1 !important; color: #FFC107 !important; letter-spacing: -0.02em !important; }
+          .refis-title-meta { font-size: 6pt !important; color: rgba(255,255,255,0.62) !important; margin-top: 2.5pt !important; text-transform: uppercase !important; letter-spacing: 0.05em !important; }
+
+          /* (3) Ficha técnica — grid de campos rotulados */
+          .refis-spec-grid { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; background: #f8fafc !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          .refis-spec-cell { padding: 3.5pt 10pt !important; border-right: 0.5pt solid #e2e8f0 !important; border-top: 0.5pt solid #e2e8f0 !important; }
+          .refis-spec-cell:nth-child(3n) { border-right: 0 !important; }
+          .refis-spec-k { font-size: 5.5pt !important; font-weight: 800 !important; letter-spacing: 0.12em !important; text-transform: uppercase !important; color: #94a3b8 !important; }
+          .refis-spec-v { font-size: 8pt !important; font-weight: 700 !important; color: #1A3461 !important; margin-top: 1pt !important; line-height: 1.2 !important; }
 
           .refis-block {
             break-inside: avoid !important;
@@ -14921,84 +14912,78 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
       {/* ━━━ PRINT-ONLY: Cabeçalho do documento (FC Engenharia) ━━━━━━━━━━━━━━ */}
       <div className="refis-doc-header refis-print-only-block" style={{ display: 'none' }}>
-        {/* Rev. 2787 — barra de marcas INTEGRADA ao cabeçalho (Execução · Gerenciamento · Cliente) */}
-        <div className="refis-brand-bar">
-          <div className="refis-brand-zone">
-            <div className="refis-brand-tag">Execução</div>
-            <div className="refis-brand-chip">
-              <img src={refisFcLogo} alt="FC Engenharia" onError={(e) => { const t = e.currentTarget; const fb = `${window.location.origin}/logo-fc.jpg`; if (t.src !== fb) { t.src = fb; } else { t.style.display = 'none'; } }} />
+        {/* Rev. 2789 — (1) BANDA DE LOGOS: área uniforme e inclusiva, fundo branco,
+            3 colunas fixas (Execução · Gerenciamento · Cliente). Célula sempre
+            presente; sem logo (ou logo quebrado) cai no NOME da empresa. */}
+        <div className="refis-logo-band">
+          <div className="refis-logo-cell">
+            <div className="refis-logo-tag">Execução</div>
+            <div className="refis-logo-slot">
+              <img src={refisFcLogo} alt="FC Engenharia" onError={(e) => { const t = e.currentTarget; const fb = `${window.location.origin}/logo-fc.jpg`; if (t.src !== fb) { t.src = fb; } else { t.style.display = 'none'; const n = t.parentElement?.querySelector('.refis-logo-name') as HTMLElement | null; if (n) n.style.display = 'block'; } }} />
+              <div className="refis-logo-name" style={{ display: 'none' }}>FC Engenharia</div>
             </div>
           </div>
-          {(refisGerLogo || refisGerNome) && (
-            <>
-              <div className="refis-brand-sep" />
-              <div className="refis-brand-zone">
-                <div className="refis-brand-tag">Gerenciamento</div>
-                <div className="refis-brand-chip">
-                  {refisGerLogo
-                    ? <img src={refisGerLogo} alt={refisGerNome ?? 'Gerenciadora'} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                    : <div className="refis-brand-name">{refisGerNome}</div>}
-                </div>
-              </div>
-            </>
-          )}
-          {(refisCliLogo || refisCliNome) && (
-            <>
-              <div className="refis-brand-sep" />
-              <div className="refis-brand-zone">
-                <div className="refis-brand-tag">Cliente</div>
-                <div className="refis-brand-chip">
-                  {refisCliLogo
-                    ? <img src={refisCliLogo} alt={refisCliNome ?? 'Cliente'} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                    : <div className="refis-brand-name">{refisCliNome}</div>}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-        <div className="refis-doc-header-inner">
-          <div className="refis-doc-header-center">
-            <div style={{ fontSize: '10.5pt', fontWeight: 800, color: 'white', textTransform: 'uppercase', letterSpacing: '0.06em', lineHeight: 1.2 }}>
-              Relatório de Evolução Física da Obra
-            </div>
-            <div style={{ fontSize: '7.5pt', color: 'rgba(255,255,255,0.65)', marginTop: '3pt', letterSpacing: '0.03em' }}>
-              REFIS · Revisão Base: {revisaoAtiva?.descricao ?? proj.nome}
-            </div>
-            <div style={{ fontSize: '7pt', color: 'rgba(255,255,255,0.5)', marginTop: '2pt' }}>
-              {proj.nome}{proj.local ? ` · ${proj.local}` : ''}
+          <div className="refis-logo-cell">
+            <div className="refis-logo-tag">Gerenciamento</div>
+            <div className="refis-logo-slot">
+              {refisGerLogo
+                ? <img src={refisGerLogo} alt={refisGerNome ?? 'Gerenciadora'} onError={(e) => { const t = e.currentTarget; t.style.display = 'none'; const n = t.parentElement?.querySelector('.refis-logo-name') as HTMLElement | null; if (n) n.style.display = 'block'; }} />
+                : null}
+              <div className="refis-logo-name" style={{ display: refisGerLogo ? 'none' : 'block' }}>{refisGerNome ?? '—'}</div>
             </div>
           </div>
-          <div className="refis-doc-header-ref">
-            <div style={{ fontSize: '20pt', fontWeight: 900, color: 'white', lineHeight: 1, letterSpacing: '-0.02em' }}>
-              R{String(revisaoAtiva?.numero ?? 0).padStart(2, '0')}
-            </div>
-            <div style={{ fontSize: '7pt', color: 'rgba(255,255,255,0.7)', marginTop: '3pt' }}>
-              Relat. Nº {existente ? String(existente.numero ?? 1).padStart(3, '0') : '—'}
-            </div>
-            <div style={{ fontSize: '6.5pt', color: 'rgba(255,255,255,0.52)', marginTop: '2pt' }}>
-              {new Date(semana + 'T12:00:00').toLocaleDateString('pt-BR')}
-            </div>
-            <div style={{ fontSize: '5.5pt', color: 'rgba(255,255,255,0.38)', marginTop: '2pt', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Status em
+          <div className="refis-logo-cell">
+            <div className="refis-logo-tag">Cliente</div>
+            <div className="refis-logo-slot">
+              {refisCliLogo
+                ? <img src={refisCliLogo} alt={refisCliNome ?? 'Cliente'} onError={(e) => { const t = e.currentTarget; t.style.display = 'none'; const n = t.parentElement?.querySelector('.refis-logo-name') as HTMLElement | null; if (n) n.style.display = 'block'; }} />
+                : null}
+              <div className="refis-logo-name" style={{ display: refisCliLogo ? 'none' : 'block' }}>{refisCliNome ?? '—'}</div>
             </div>
           </div>
         </div>
-        {/* Faixa de identificação da obra */}
-        <div style={{ background: 'rgba(0,0,0,0.25)', borderTop: '0.5pt solid rgba(255,255,255,0.15)', padding: '3pt 12pt', display: 'flex', gap: '24pt', alignItems: 'center' }}>
-          <div style={{ fontSize: '7pt', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            Obra: <span style={{ color: 'rgba(255,255,255,0.85)', fontWeight: 700 }}>{proj.nome}</span>
+
+        {/* (2) BANDA DE TÍTULO — azul-marinho + selo de revisão */}
+        <div className="refis-title-band">
+          <div>
+            <div className="refis-title-main">Relatório de Evolução Física da Obra</div>
+            <div className="refis-title-sub">REFIS · Revisão Base: {revisaoAtiva?.descricao ?? proj.nome}</div>
           </div>
-          {proj.cliente && (
-            <div style={{ fontSize: '7pt', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Cliente: <span style={{ color: 'rgba(255,255,255,0.85)', fontWeight: 700 }}>{proj.cliente}</span>
-            </div>
-          )}
-          <div style={{ fontSize: '7pt', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            Período: <span style={{ color: 'rgba(255,255,255,0.85)', fontWeight: 700 }}>
+          <div className="refis-title-ref">
+            <div className="refis-title-rev">R{String(revisaoAtiva?.numero ?? 0).padStart(2, '0')}</div>
+            <div className="refis-title-meta">Status em {new Date(semana + 'T12:00:00').toLocaleDateString('pt-BR')}</div>
+          </div>
+        </div>
+
+        {/* (3) FICHA TÉCNICA — grid de campos rotulados p/ leitura objetiva */}
+        <div className="refis-spec-grid">
+          <div className="refis-spec-cell">
+            <div className="refis-spec-k">Obra</div>
+            <div className="refis-spec-v">{proj.nome}</div>
+          </div>
+          <div className="refis-spec-cell">
+            <div className="refis-spec-k">Cliente</div>
+            <div className="refis-spec-v">{proj.cliente || '—'}</div>
+          </div>
+          <div className="refis-spec-cell">
+            <div className="refis-spec-k">Local</div>
+            <div className="refis-spec-v">{proj.local || '—'}</div>
+          </div>
+          <div className="refis-spec-cell">
+            <div className="refis-spec-k">Período Contratual</div>
+            <div className="refis-spec-v">
               {proj.dataInicio ? new Date(proj.dataInicio + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
-              {' → '}
+              {' — '}
               {proj.dataTerminoContratual ? new Date(proj.dataTerminoContratual + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
-            </span>
+            </div>
+          </div>
+          <div className="refis-spec-cell">
+            <div className="refis-spec-k">Data-Status</div>
+            <div className="refis-spec-v">{new Date(semana + 'T12:00:00').toLocaleDateString('pt-BR')}</div>
+          </div>
+          <div className="refis-spec-cell">
+            <div className="refis-spec-k">Relatório Nº</div>
+            <div className="refis-spec-v">{existente ? String(existente.numero ?? 1).padStart(3, '0') : '—'} · R{String(revisaoAtiva?.numero ?? 0).padStart(2, '0')}</div>
           </div>
         </div>
       </div>

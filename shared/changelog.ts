@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2789 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): CABEÇALHO DE IMPRESSÃO REMODELADO
+ * DO ZERO EM 3 BANDAS (LOGOS UNIFORMES EM FUNDO BRANCO · TÍTULO NAVY COM SELO DE REVISÃO · FICHA TÉCNICA) E
+ * MARGEM PADRÃO TRIPLICADA (12mm → 36mm).**
+ *
+ * PEDIDO (usuário): "precisa remodelar completamente o cabeçalho.. ele não está nada visualmente bonito. quero
+ * que vc ache uma área de incluir os logos de forma uniforme e inclusiva.. quero as margens maiores 3x mais do
+ * que está hoje.. e quero um relatório extremamente técnico de forma que o usuário ou gestor analise de forma
+ * clara e objetiva." (anexou print do cabeçalho atual ruim — chips de logo desalinhados na faixa azul, cabeçalho
+ * cramped).
+ *
+ * CONTEXTO: o cabeçalho vinha da Rev. 2787 — os 3 logos ficavam em "chips" brancos pequenos DENTRO da faixa azul
+ * (`.refis-brand-bar`), visualmente apertados e mal distribuídos; o título e o selo de revisão dividiam a mesma
+ * faixa navy; a identificação da obra era uma linha de texto solta sobre fundo escuro. A margem padrão era 12mm
+ * (Rev. 2788).
+ *
+ * FIX (SÓ CLIENT; ZERO SCHEMA/SERVER) em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (componente
+ * `Refis`): o `.refis-doc-header` (PRINT-ONLY) foi reconstruído em 3 BANDAS:
+ *  1. BANDA DE LOGOS (`.refis-logo-band`) — área UNIFORME e INCLUSIVA: grid de 3 colunas FIXAS de igual largura
+ *     (Execução · Gerenciamento · Cliente) em FUNDO BRANCO (todo logo fica legível), cada célula com micro-rótulo
+ *     cinza + slot de altura fixa (28pt) p/ o logo centralizado (`object-fit:contain`). A célula SEMPRE existe;
+ *     quando falta logo (ou a imagem quebra no `onError`) cai no NOME da empresa (`.refis-logo-name`) — layout
+ *     idêntico em todos os projetos. Friso dourado (2pt #FFC107) separa da banda de título.
+ *  2. BANDA DE TÍTULO (`.refis-title-band`) — faixa azul-marinho (#1A3461): à esquerda o título grande +
+ *     subtítulo "REFIS · Revisão Base: …"; à direita um SELO de revisão (`Rxx` em dourado #FFC107) + "Status em
+ *     DD/MM/AAAA", separados por divisória sutil.
+ *  3. FICHA TÉCNICA (`.refis-spec-grid`) — grid de 3 colunas de campos ROTULADOS (Obra · Cliente · Local ·
+ *     Período Contratual · Data-Status · Relatório Nº), rótulo uppercase cinza + valor navy bold, p/ leitura
+ *     técnica e objetiva pelo gestor. O bloco inteiro ganhou MOLDURA `border:0.75pt solid #1A3461`.
+ *  4. MARGEM 3x — default 12mm → 36mm; range do controle 0-40mm → 0-60mm; MIGRAÇÃO da chave do `localStorage`
+ *     (`refisMargemMmV3`→`V4`) p/ o novo default valer já; "reset" agora volta p/ 36mm.
+ *
+ * NOTA TÉCNICA: removidas as classes/JSX antigas do cabeçalho (`.refis-doc-header-inner/-brand/-center/-ref`,
+ * `.refis-brand-bar/-zone/-tag/-chip/-name/-sep`). Mantidas as faixas de seção DOURADAS da Rev. 2788
+ * (`.refis-section-head`) e o motor de impressão (Rev. 2785) + Zoom (Rev. 2784). Cores de fundo levam
+ * `print-color-adjust: exact`. ZERO ALTER/DROP/DELETE. VALIDAÇÃO: esbuild OK (exit 0); HMR; architect. Print é
+ * PRINT-ONLY (sem screenshot, app atrás de login) — usuário valida no Ctrl+P.
+ *
  * Rev. 2788 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): REPAGINAÇÃO EXECUTIVA DA IMPRESSÃO
  * NO ESTILO DO MODELO CLÁSSICO FC — AS FAIXAS DE SEÇÃO PASSARAM DE AZUL-MARINHO/CINZA PARA DOURADO COM TEXTO
  * AZUL-MARINHO, GANHOU MOLDURA DO DOCUMENTO, A BARRA DE LOGOS FICOU SLIM E A MARGEM PADRÃO CAIU DE 3cm PARA 12mm.**
