@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2785 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): NA IMPRESSÃO, O RELATÓRIO PASSOU
+ * A OCUPAR A FOLHA INTEIRA E FICAR CENTRALIZADO — ACABOU A FAIXA DE "ESPAÇO LIVRE" À ESQUERDA/EM VOLTA QUE
+ * VINHA DO LAYOUT DO APP (SIDEBAR).**
+ *
+ * PEDIDO (usuário): mandou um screenshot do PDF com GRANDES ÁREAS MARCADAS EM AMARELO em volta do relatório e
+ * disse "estas áreas em amarelo não podem ficar; quero layout mais ajustado nas margens, pode considerar ele
+ * centralizado na folha". DEPOIS esclareceu: "o amarelo não é do arquivo, eu demarquei pra você saber onde NÃO
+ * deve ter espaço livre e a tela deve estar centralizada". Ou seja: o amarelo era ANOTAÇÃO do usuário apontando
+ * o espaço desperdiçado, não uma cor do sistema.
+ *
+ * CAUSA-RAIZ: o `#refis-print-area` é `position: absolute` e, no print, se ancorava no ancestral posicionado
+ * mais próximo = o `<SidebarInset>` do shadcn (`<main class="relative flex w-full flex-1 ...">`), que no layout
+ * fica À DIREITA da sidebar. Mesmo com a sidebar escondida no print (`aside { display:none }`), o relatório
+ * HERDAVA o deslocamento horizontal desse container + o `padding` do `<main>` (`p-2/p-3/p-4`) → daí a "faixa de
+ * espaço livre" lateral e o desalinhamento em relação à folha. A largura/zoom da Rev. 2784 já garantia densidade,
+ * mas a âncora errada jogava tudo para o lado.
+ *
+ * FIX (SÓ CLIENT; ZERO SCHEMA/SERVER) em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (componente
+ * `Refis`, bloco `<style>` `@media print`):
+ *  1. NEUTRALIZAÇÃO DO SHELL no print: `#root, #root > *, [data-slot="sidebar-inset"], main, [role="main"]`
+ *     recebem `position: static`, `margin/padding: 0`, `width: 100%`, `max-width: none`, `min-height: 0`,
+ *     `overflow: visible`, `border-radius/box-shadow: 0`. Assim NENHUM ancestral fica posicionado e o
+ *     `#refis-print-area` passa a ancorar no INITIAL CONTAINING BLOCK (a folha inteira), sem offset lateral.
+ *  2. Esconde explicitamente os contêineres da sidebar do shadcn: `[data-slot="sidebar"]`,
+ *     `[data-slot="sidebar-container"]`, `aside`.
+ *  3. CENTRALIZAÇÃO: o `#refis-print-area` ganhou `left:0; right:0; margin-left:auto; margin-right:auto` (além do
+ *     `top:0`), então fica centralizado na folha e ocupa toda a área útil entre as margens do `@page`.
+ *
+ * MANTIDO: controles de Margem (mm) e Zoom (%) da Rev. 2784 (a "faixa lateral" agora some sozinha; a margem de
+ * impressão segue sendo o que o usuário define no controle, default 8mm). O "espaço livre" VERTICAL inerente a
+ * quebras de página/curva-S não é desta revisão — segue calibrável via Zoom. ZERO ALTER/DROP/DELETE.
+ * VALIDAÇÃO: esbuild OK (exit 0); HMR; architect.
+ *
  * Rev. 2784 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): A BARRA DO RELATÓRIO GANHOU
  * CONTROLES DE "MARGEM" (mm) E "ZOOM" (%) PARA O PRÓPRIO USUÁRIO CALIBRAR A IMPRESSÃO AO VIVO — A CONFIGURAÇÃO
  * FICA SALVA NO NAVEGADOR.**

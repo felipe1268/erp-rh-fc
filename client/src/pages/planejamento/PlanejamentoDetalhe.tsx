@@ -14662,10 +14662,26 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
           html, body { background: white !important; margin: 0 !important; padding: 0 !important; }
           body * { visibility: hidden !important; }
+          /* Rev. 2785 — NEUTRALIZA O SHELL NO PRINT. O #refis-print-area é
+             position:absolute e se ancorava no <SidebarInset> (shadcn = <main
+             class="relative">), que fica à DIREITA da sidebar → o relatório
+             herdava esse deslocamento (faixa livre à esquerda) e ainda o padding
+             do <main>. Zerando posição/padding/margin/max-width do shell, o
+             relatório passa a ancorar na FOLHA inteira (initial containing block),
+             ocupando toda a área útil e centralizado. */
+          [data-slot="sidebar"], [data-slot="sidebar-container"], aside { display: none !important; }
+          #root, #root > *, [data-slot="sidebar-inset"], main, [role="main"] {
+            position: static !important;
+            margin: 0 !important; padding: 0 !important;
+            width: 100% !important; max-width: none !important;
+            min-height: 0 !important; overflow: visible !important;
+            border-radius: 0 !important; box-shadow: none !important;
+          }
           #refis-print-area {
             visibility: visible !important;
             position: absolute !important;
-            top: 0 !important; left: 0 !important;
+            top: 0 !important; left: 0 !important; right: 0 !important;
+            margin-left: auto !important; margin-right: auto !important;
             width: ${(10000 / refisZoom).toFixed(2)}% !important;
             zoom: ${(refisZoom / 100).toFixed(3)} !important;
             background: white !important;
