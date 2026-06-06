@@ -14726,14 +14726,14 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
              (3) FICHA TÉCNICA — grid de campos rotulados p/ leitura objetiva. */
           .refis-doc-header { margin-bottom: 4pt !important; page-break-after: avoid !important; border: 0.75pt solid #1A3461 !important; border-radius: 0 !important; overflow: hidden !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 
-          /* (1) Banda de logos — fundo branco, 3 colunas iguais */
-          .refis-logo-band { display: grid !important; grid-template-columns: 1fr 1fr 1fr !important; background: #ffffff !important; border-bottom: 2pt solid #FFC107 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-          .refis-logo-cell { display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; gap: 3pt !important; padding: 6pt 10pt !important; border-right: 0.5pt solid #e2e8f0 !important; min-height: 44pt !important; }
+          /* (1) Banda de logos — fundo branco, 3 colunas iguais; MARCAS VALORIZADAS (logos grandes) */
+          .refis-logo-band { display: grid !important; grid-template-columns: 1fr 1fr 1fr !important; background: #ffffff !important; border-bottom: 2.5pt solid #FFC107 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          .refis-logo-cell { display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; gap: 6pt !important; padding: 11pt 14pt !important; border-right: 0.5pt solid #e2e8f0 !important; min-height: 76pt !important; }
           .refis-logo-cell:last-child { border-right: 0 !important; }
-          .refis-logo-tag { font-size: 5.5pt !important; font-weight: 800 !important; letter-spacing: 0.26em !important; text-transform: uppercase !important; color: #94a3b8 !important; }
-          .refis-logo-slot { display: flex !important; align-items: center !important; justify-content: center !important; height: 28pt !important; width: 100% !important; }
-          .refis-logo-slot img { max-height: 28pt !important; max-width: 88% !important; object-fit: contain !important; display: block !important; }
-          .refis-logo-name { font-size: 8.5pt !important; font-weight: 800 !important; color: #1A3461 !important; text-align: center !important; line-height: 1.15 !important; }
+          .refis-logo-tag { font-size: 6pt !important; font-weight: 800 !important; letter-spacing: 0.28em !important; text-transform: uppercase !important; color: #94a3b8 !important; }
+          .refis-logo-slot { display: flex !important; align-items: center !important; justify-content: center !important; height: 52pt !important; width: 100% !important; }
+          .refis-logo-slot img { max-height: 52pt !important; max-width: 94% !important; object-fit: contain !important; display: block !important; }
+          .refis-logo-name { font-size: 11pt !important; font-weight: 800 !important; color: #1A3461 !important; text-align: center !important; line-height: 1.18 !important; }
 
           /* (2) Banda de título — azul-marinho + selo de revisão dourado */
           .refis-title-band { display: flex !important; align-items: center !important; justify-content: space-between !important; background: #1A3461 !important; color: white !important; padding: 7pt 12pt !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }

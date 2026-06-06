@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2790 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): LOGOS DA BANDA DE MARCAS GANHARAM
+ * EVIDÊNCIA — SLOT QUASE DOBROU (28pt → 52pt) E A BANDA FICOU MAIS ALTA P/ VALORIZAR AS 3 MARCAS (ESQUERDA =
+ * CONSTRUTORA/EXECUÇÃO · MEIO = GERENCIADORA · DIREITA = CLIENTE).**
+ *
+ * PEDIDO (usuário): "quero os logos com evidência.. considerando o da direita o logo do cliente, do meio a
+ * gerenciadora e da esquerda construtora.. as marcas devem ser valorizadas.." (anexou print da Rev. 2789 onde os
+ * logos saíam pequenos na faixa branca).
+ *
+ * CONTEXTO: a Rev. 2789 já criou a banda de logos uniforme/inclusiva em 3 colunas (ordem já correta: Execução à
+ * esquerda, Gerenciamento no meio, Cliente à direita), mas com slot pequeno (28pt) — as marcas ficavam discretas.
+ *
+ * FIX (SÓ CLIENT; ZERO SCHEMA/SERVER) em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (componente
+ * `Refis`, CSS `@media print`): a ORDEM das colunas foi mantida; apenas as marcas foram VALORIZADAS —
+ * `.refis-logo-slot` altura 28pt → 52pt (img `max-height` 28→52pt, `max-width` 88%→94%), `.refis-logo-cell`
+ * `min-height` 44→76pt + padding 6/10 → 11/14pt + gap 3→6pt, micro-rótulo 5.5→6pt, nome-fallback 8.5→11pt, friso
+ * dourado 2→2.5pt. Bandas de título e ficha técnica intactas. ZERO ALTER/DROP/DELETE. VALIDAÇÃO: esbuild OK
+ * (exit 0); HMR; architect. Print é PRINT-ONLY — usuário valida no Ctrl+P.
+ *
  * Rev. 2789 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): CABEÇALHO DE IMPRESSÃO REMODELADO
  * DO ZERO EM 3 BANDAS (LOGOS UNIFORMES EM FUNDO BRANCO · TÍTULO NAVY COM SELO DE REVISÃO · FICHA TÉCNICA) E
  * MARGEM PADRÃO TRIPLICADA (12mm → 36mm).**
