@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2786 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): REPAGINAÇÃO DA IMPRESSÃO — A
+ * MARGEM PADRÃO PASSOU A SER 3cm EM TODOS OS LADOS (LATERAIS + SUPERIOR + INFERIOR). ACABOU O RELATÓRIO
+ * "COLADO NA BORDA" DA FOLHA.**
+ *
+ * PEDIDO (usuário): "faz uma repaginação completa do layout de impressão, quero uma margem lateral de 3cm e
+ * superior e inferior de 3cm tbm.. esta colada na porta não pode" (anexou os PDFs paisagem/retrato exportados,
+ * mostrando o relatório encostado nas bordas). A Rev. 2785 havia corrigido o deslocamento lateral fazendo o
+ * relatório OCUPAR A FOLHA INTEIRA — mas isso o deixou encostado nas margens; agora o usuário quer 3cm de
+ * respiro em volta.
+ *
+ * CAUSA: a margem de impressão é controlada pelo `@page { margin: ${refisMargemMm}mm }` (controle de calibração
+ * da Rev. 2784), cujo DEFAULT era 8mm (~0.8cm) — visualmente "colado na borda". Além disso, o valor antigo ficava
+ * gravado no `localStorage` (chave `refisMargemMm`), então mesmo mudando o default um navegador que já tinha
+ * salvo 8mm continuaria apertado.
+ *
+ * FIX (SÓ CLIENT; ZERO SCHEMA/SERVER) em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (componente
+ * `Refis`):
+ *  1. DEFAULT da margem = 30mm (3cm) em todos os lados — aplicado via `@page { margin: ${refisMargemMm}mm }`,
+ *     que já era a fonte única da margem de impressão (Rev. 2784). O `#refis-print-area` (position:absolute,
+ *     `left:0; right:0; width:100%@zoom100`) ancora no INITIAL CONTAINING BLOCK = área útil DENTRO das margens
+ *     do `@page` (graças à neutralização do shell da Rev. 2785), então a margem do `@page` vira margem REAL e
+ *     uniforme nos 4 lados, em todas as páginas.
+ *  2. MIGRAÇÃO da chave do `localStorage` (`refisMargemMm` → `refisMargemMmV2`) para o novo default de 3cm valer
+ *     IMEDIATAMENTE — sem o usuário ficar preso ao 8mm antigo já salvo.
+ *  3. RANGE do controle ampliado de 0-25mm para 0-40mm (input + clamp do onChange), permitindo de fato chegar a
+ *     30mm e ajustar acima/abaixo conforme a impressora; botão "reset" agora volta para 30mm (era 8mm).
+ *
+ * MANTIDO: todo o motor de impressão da Rev. 2785 (neutralização do shell + centralização) e o controle de Zoom
+ * (%) da Rev. 2784 (default 100%, persistido). A margem segue 100% calibrável pelo usuário — só mudou o ponto de
+ * partida. ZERO ALTER/DROP/DELETE. VALIDAÇÃO: esbuild OK (exit 0); HMR; architect.
+ *
  * Rev. 2785 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): NA IMPRESSÃO, O RELATÓRIO PASSOU
  * A OCUPAR A FOLHA INTEIRA E FICAR CENTRALIZADO — ACABOU A FAIXA DE "ESPAÇO LIVRE" À ESQUERDA/EM VOLTA QUE
  * VINHA DO LAYOUT DO APP (SIDEBAR).**

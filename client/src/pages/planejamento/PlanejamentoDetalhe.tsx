@@ -13749,17 +13749,19 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   }, [proj?.ultimaAnaliseJulinho]);
   const [orientacaoPdf, setOrientacaoPdf] = useState<"portrait" | "landscape">("landscape");
   // Rev. 2784 — calibração de impressão pelo próprio usuário (margem + zoom), persistida no navegador
+  // Rev. 2786 — repaginação: margem padrão 3cm (30mm) em todos os lados; range ampliado p/ 0-40mm.
+  // Chave migrada (refisMargemMmV2) p/ o novo default valer já — sem ficar preso ao 8mm antigo.
   const [refisMargemMm, setRefisMargemMm] = useState<number>(() => {
-    if (typeof window === "undefined") return 8;
-    const v = Number(window.localStorage.getItem("refisMargemMm"));
-    return Number.isFinite(v) && v >= 0 && v <= 25 ? v : 8;
+    if (typeof window === "undefined") return 30;
+    const v = Number(window.localStorage.getItem("refisMargemMmV2"));
+    return Number.isFinite(v) && v >= 0 && v <= 40 ? v : 30;
   });
   const [refisZoom, setRefisZoom] = useState<number>(() => {
     if (typeof window === "undefined") return 100;
     const v = Number(window.localStorage.getItem("refisZoom"));
     return Number.isFinite(v) && v >= 40 && v <= 160 ? v : 100;
   });
-  useEffect(() => { try { window.localStorage.setItem("refisMargemMm", String(refisMargemMm)); } catch {} }, [refisMargemMm]);
+  useEffect(() => { try { window.localStorage.setItem("refisMargemMmV2", String(refisMargemMm)); } catch {} }, [refisMargemMm]);
   useEffect(() => { try { window.localStorage.setItem("refisZoom", String(refisZoom)); } catch {} }, [refisZoom]);
   const [colBloco2, setColBloco2] = useState(false);
   const [colBloco3A, setColBloco3A] = useState(false);
@@ -14571,8 +14573,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           <div className="flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 no-print" title="Margem da folha (mm) — aplicada ao imprimir">
             <span className="text-[11px] text-slate-500">Margem</span>
             <input
-              type="number" min={0} max={25} step={1} value={refisMargemMm}
-              onChange={(e) => setRefisMargemMm(Math.max(0, Math.min(25, Math.round(Number(e.target.value) || 0))))}
+              type="number" min={0} max={40} step={1} value={refisMargemMm}
+              onChange={(e) => setRefisMargemMm(Math.max(0, Math.min(40, Math.round(Number(e.target.value) || 0))))}
               className="w-11 text-xs border border-slate-200 rounded px-1 py-0.5 text-center"
             />
             <span className="text-[11px] text-slate-400">mm</span>
@@ -14582,7 +14584,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             <button type="button" className="px-1.5 py-0.5 text-sm leading-none text-slate-600 hover:bg-slate-100 rounded" onClick={() => setRefisZoom(z => Math.max(40, z - 5))}>−</button>
             <span className="text-xs font-semibold text-slate-700 w-9 text-center tabular-nums">{refisZoom}%</span>
             <button type="button" className="px-1.5 py-0.5 text-sm leading-none text-slate-600 hover:bg-slate-100 rounded" onClick={() => setRefisZoom(z => Math.min(160, z + 5))}>+</button>
-            <button type="button" className="text-[10px] text-blue-600 hover:underline ml-1" onClick={() => { setRefisZoom(100); setRefisMargemMm(8); }}>reset</button>
+            <button type="button" className="text-[10px] text-blue-600 hover:underline ml-1" onClick={() => { setRefisZoom(100); setRefisMargemMm(30); }}>reset</button>
           </div>
           <Button size="sm" variant="outline"
             className="gap-1.5 border-slate-300 text-slate-600 hover:bg-slate-50 no-print"
