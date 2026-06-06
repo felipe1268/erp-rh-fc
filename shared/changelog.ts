@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2815 — **COMPRAS · PAINEL FD — HOTFIX (CONTINUAÇÃO DA REV. 2814): MESMO COM O FILTRO `fd_fc` CORRIGIDO, AS
+ * OCs DE FATURAMENTO DIRETO AINDA NÃO APARECIAM NO PAINEL FD QUANDO A OBRA NÃO TINHA ORÇAMENTO FD VINCULADO (ex.:
+ * REVTE-CIVIL, OC-2026-339). AGORA APARECEM SEMPRE.**
+ *
+ * PEDIDO (usuário, screenshot Painel FD vazio para REVTE-CIVIL): "Aí também não deu certo o FD — lancei FD da obra
+ * REVTE e continua sem aparecer no painel." A Rev. 2814 corrigiu SÓ o filtro de modalidade (`fd_fc`), mas o painel
+ * seguia vazio.
+ *
+ * CAUSA-RAIZ: o `getSaldoFd` (server/routers/compras.ts) fazia um EARLY-RETURN logo no início quando a obra não
+ * tinha `orcamento_id` vinculado (`if (!orcamentoId) return {... itensFd: [] }`). Esse return acontecia ANTES da
+ * query de `ocsComFd` e NÃO incluía a lista de OCs — então qualquer obra sem orçamento FD cadastrado (como
+ * REVTE-CIVIL) devolvia o painel completamente vazio, mesmo tendo OCs marcadas "FAT. DIRETO". A correção da Rev.
+ * 2814 (incluir `fd_fc` no filtro) era necessária mas insuficiente: o curto-circuito impedia a query de rodar.
+ *
+ * O QUE FOI FEITO: a query de `ocsComFd` (e o cálculo de `totalFdComprometido` + o mapeamento de saída) foi MOVIDA
+ * para ANTES da checagem de orçamento. Agora a lista de OCs com FD é computada SEMPRE e devolvida nos DOIS caminhos
+ * de retorno: (1) sem orçamento → `{ totalFdOrcado: 0, totalFdComprometido, saldoFd: -totalFdComprometido, itensFd:
+ * [], ocsComFd }`; (2) com orçamento → comportamento normal + `ocsComFd`. O front (`PainelFd.tsx`) já renderiza a
+ * seção "OCs com Faturamento Direto" sempre que `saldo` existe, então passa a exibir as OCs sem mudança no client.
+ *
+ * RESSALVA: só LEITURA/reordenação de query. ZERO ALTER/DROP/DELETE; ZERO schema novo; ZERO front. Validação:
+ * esbuild OK em `compras.ts`. Detalhe: este arquivo.
+ *
  * Rev. 2814 — **COMPRAS · PAINEL FD — HOTFIX: AS OCs DE FATURAMENTO DIRETO CRIADAS DIRETO NA TELA DE ORDENS (SELO
  * "FAT. DIRETO") NÃO APARECIAM NO "PAINEL DE FATURAMENTO DIRETO" DA OBRA. AGORA APARECEM.**
  *

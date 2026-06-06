@@ -12762,14 +12762,13 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
     .query(async ({ input, ctx }) => {
       await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
-      const obraRes = await db.execute(sql`SELECT orcamento_id FROM obras WHERE id = ${input.obraId} AND company_id = ${input.companyId} LIMIT 1`);
-      const orcamentoId = (obraRes as any).rows?.[0]?.orcamento_id;
-      if (!orcamentoId) return { totalFdOrcado: 0, totalFdComprometido: 0, saldoFd: 0, itensFd: [] };
 
-      const itensFd = await db.select().from(bdiFd).where(and(eq(bdiFd.orcamentoId, orcamentoId), eq(bdiFd.companyId, input.companyId)));
-      const totalFdOrcado = itensFd.reduce((s, i) => s + n(i.total), 0);
-
-      const ocsComFd = await db.select({
+      // Rev. 2815 — As OCs com FD são listadas SEMPRE, independente de a obra ter
+      // (ou não) um orçamento FD vinculado. Antes, o early-return abaixo (`!orcamentoId`)
+      // descartava ESTA lista inteira: obras como REVTE-CIVIL, sem orçamento FD cadastrado,
+      // mostravam o painel vazio mesmo tendo OCs "FAT. DIRETO" (ex.: OC-2026-339).
+      // Por isso a query de OCs roda ANTES da checagem de orçamento.
+      const ocsComFdRows = await db.select({
           id: comprasOrdens.id,
           numeroOc: comprasOrdens.numeroOc,
           descricao: comprasOrdens.descricao,
@@ -12788,7 +12787,22 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           sql`${comprasOrdens.modalidadeFd} IN ('fd_cliente', 'fd_terceiro', 'fd_fc')`,
           sql`${comprasOrdens.status} != 'cancelada'`,
         ));
-      const totalFdComprometido = ocsComFd.filter(oc => (oc as any).modalidadeFd === "fd_cliente").reduce((s, oc) => s + n(oc.fdValor), 0);
+      const totalFdComprometido = ocsComFdRows.filter(oc => (oc as any).modalidadeFd === "fd_cliente").reduce((s, oc) => s + n(oc.fdValor), 0);
+      const ocsComFd = ocsComFdRows.map(oc => ({
+        id: oc.id,
+        numeroOc: oc.numeroOc,
+        descricao: oc.descricao,
+        fdValor: oc.fdValor,
+        fdStatus: (oc as any).fdStatus,
+        modalidadeFd: (oc as any).modalidadeFd,
+      }));
+
+      const obraRes = await db.execute(sql`SELECT orcamento_id FROM obras WHERE id = ${input.obraId} AND company_id = ${input.companyId} LIMIT 1`);
+      const orcamentoId = (obraRes as any).rows?.[0]?.orcamento_id;
+      if (!orcamentoId) return { totalFdOrcado: 0, totalFdComprometido, saldoFd: -totalFdComprometido, itensFd: [], ocsComFd };
+
+      const itensFd = await db.select().from(bdiFd).where(and(eq(bdiFd.orcamentoId, orcamentoId), eq(bdiFd.companyId, input.companyId)));
+      const totalFdOrcado = itensFd.reduce((s, i) => s + n(i.total), 0);
 
       return {
         totalFdOrcado,
@@ -12803,14 +12817,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           precoUnit: n(i.precoUnit),
           total: n(i.total),
         })),
-        ocsComFd: ocsComFd.map(oc => ({
-          id: oc.id,
-          numeroOc: oc.numeroOc,
-          descricao: oc.descricao,
-          fdValor: oc.fdValor,
-          fdStatus: (oc as any).fdStatus,
-          modalidadeFd: (oc as any).modalidadeFd,
-        })),
+        ocsComFd,
       };
     }),
 
