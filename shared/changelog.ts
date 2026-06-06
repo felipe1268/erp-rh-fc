@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2793 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): A IMPRESSÃO GANHOU MOLDURA FECHANDO O
+ * RETÂNGULO DE CADA PÁGINA, UM CABEÇALHO FIXO REPETIDO EM TODA PÁGINA (LOGO FC + OBRA + DATA DE STATUS) E A DATA DE
+ * STATUS PASSOU A SAIR EM VERMELHO/DESTAQUE; REFORÇO ANTI-CORTE DE LINHAS E CABEÇALHOS DE TABELA.**
+ *
+ * PEDIDO (usuário): "Quero que o ERP evite de cortar informações, de forma que, ao final de cada página tenha uma
+ * linha fechando o retângulo da página... e cada página deve ter o cabeçalho fixado, quero a data de status em
+ * destaque e na cor vermelha."
+ *
+ * FIX (SÓ CLIENT; ZERO SCHEMA/SERVER) em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (componente `Refis`):
+ *   1) MOLDURA POR PÁGINA — novo `.refis-page-frame` (`position:fixed`, inset ≈ margem−3mm, borda 1pt navy). Por ser
+ *      `fixed`, o motor de impressão o repinta em TODA página → a moldura fecha o retângulo de cada folha.
+ *   2) CABEÇALHO FIXO REPETIDO — novo `.refis-running-header` (`position:fixed`, topo, faixa branca com borda dourada)
+ *      contendo logo da FC + nome da obra à esquerda e "DATA DE STATUS" + a data em VERMELHO à direita. Também `fixed`
+ *      → repete em todas as páginas. O `@page` ganhou +16mm de margem SÓ no TOPO p/ reservar o espaço do cabeçalho e
+ *      NÃO sobrepor o conteúdo. Tanto a moldura quanto o cabeçalho ficam FORA do `#refis-print-area` (que tem `zoom`)
+ *      p/ não serem escalados; posições em mm relativas à folha. Renderizados via Fragment como irmãos do print-area,
+ *      `display:none` na tela e `visibility:visible` só no print.
+ *   3) DATA DE STATUS EM DESTAQUE VERMELHO — além do cabeçalho fixo, a faixa-título virou um chip branco com a data em
+ *      vermelho (`.refis-title-statuschip`) e a célula "Data-Status" da ficha técnica ganhou fundo rosado + valor
+ *      vermelho/negrito (`.refis-status-cell` / `.refis-status-red`).
+ *   4) NÃO CORTAR INFORMAÇÕES — `#refis-print-area tr { break-inside: avoid }`, `thead{display:table-header-group}` +
+ *      `tfoot{display:table-footer-group}` (cabeçalho/rodapé de tabela repetem entre páginas), `orphans/widows:3` e
+ *      `.refis-section-head { break-after: avoid }` p/ não deixar título órfão no fim da página. Os blocos já tinham
+ *      `break-inside: avoid` (mantido).
+ *
+ * Nenhuma série, cálculo ou dado foi alterado — só apresentação de impressão. ZERO ALTER/DROP/DELETE. Validação:
+ * esbuild OK (exit 0); HMR; architect. RESSALVA: é PRINT-ONLY e o app está atrás de login — o comportamento de
+ * repetição de `position:fixed` por página depende do motor de impressão do navegador (validado para Chrome/print);
+ * validar no Ctrl+P / "Imprimir PDF" e ajustar a reserva de topo (16mm) se o cabeçalho encostar no conteúdo.
+ *
  * Rev. 2792 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): NA IMPRESSÃO OS GRÁFICOS DA CURVA S
  * AGORA PREENCHEM A LARGURA DA FOLHA (ACABOU O ESPAÇO BRANCO À DIREITA) E OS RÓTULOS DO EIXO X NÃO SE SOBREPÕEM
  * MAIS — FICARAM LEGÍVEIS.**

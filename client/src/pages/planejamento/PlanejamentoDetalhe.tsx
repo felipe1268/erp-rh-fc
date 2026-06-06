@@ -14516,7 +14516,23 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   const refisCliNome: string | null = (proj as any)?.cliente || null;
 
   return (
-    <div className="space-y-5" id="refis-print-area">
+    <>
+      {/* ━━━ PRINT-ONLY: moldura por página + cabeçalho fixo repetido (Rev. 2793) ━━━
+          Ficam FORA do #refis-print-area (que tem zoom) — só aparecem na impressão. */}
+      <div className="refis-page-frame" aria-hidden="true" style={{ display: 'none' }} />
+      <div className="refis-running-header" style={{ display: 'none' }}>
+        <div className="refis-rh-left">
+          <img className="refis-rh-logo" src={refisFcLogo} alt="FC"
+            onError={(e) => { const t = e.currentTarget; const fb = `${window.location.origin}/logo-fc.jpg`; if (t.src !== fb) { t.src = fb; } else { t.style.display = 'none'; } }} />
+          <span className="refis-rh-obra">{proj.nome}</span>
+        </div>
+        <div className="refis-rh-status">
+          <span className="k">Data de Status</span>
+          <span className="v">{new Date(semana + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+        </div>
+      </div>
+
+      <div className="space-y-5" id="refis-print-area">
 
       {/* ── TOOLBAR ────────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3 refis-no-print">
@@ -14706,7 +14722,64 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       {/* Print styles */}
       <style>{`
         @media print {
-          @page { size: A4 ${orientacaoPdf}; margin: ${refisMargemMm}mm; }
+          /* Rev. 2793 — reserva 16mm extra no TOPO de TODA página p/ o cabeçalho
+             fixo repetido (.refis-running-header) não sobrepor o conteúdo. */
+          @page { size: A4 ${orientacaoPdf}; margin: ${(refisMargemMm + 16).toFixed(1)}mm ${refisMargemMm}mm ${refisMargemMm}mm ${refisMargemMm}mm; }
+
+          /* ===== Rev. 2793 — MOLDURA POR PÁGINA + CABEÇALHO FIXO REPETIDO =========
+             Ambos são position:fixed → o motor de impressão os repinta em TODA
+             página. Ficam FORA do #refis-print-area (que tem zoom) p/ não serem
+             escalados; posições em mm relativas à folha. */
+          .refis-page-frame {
+            display: block !important; visibility: visible !important;
+            position: fixed !important;
+            top: ${Math.max(3, refisMargemMm - 3).toFixed(1)}mm;
+            left: ${Math.max(3, refisMargemMm - 3).toFixed(1)}mm;
+            right: ${Math.max(3, refisMargemMm - 3).toFixed(1)}mm;
+            bottom: ${Math.max(3, refisMargemMm - 3).toFixed(1)}mm;
+            border: 1pt solid #1A3461 !important;
+            border-radius: 2pt !important;
+            background: transparent !important;
+            pointer-events: none !important;
+            z-index: 100000 !important;
+            -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
+          }
+          .refis-running-header {
+            display: flex !important; visibility: visible !important;
+            align-items: center !important; justify-content: space-between !important; gap: 8pt !important;
+            position: fixed !important;
+            top: ${Math.max(3, refisMargemMm - 1).toFixed(1)}mm;
+            left: ${(refisMargemMm + 1).toFixed(1)}mm;
+            right: ${(refisMargemMm + 1).toFixed(1)}mm;
+            height: 12mm !important;
+            padding: 0 4pt 2pt 4pt !important;
+            background: #ffffff !important;
+            border-bottom: 1.2pt solid #FFC107 !important;
+            overflow: hidden !important;
+            z-index: 100001 !important;
+            -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
+          }
+          .refis-running-header * { visibility: visible !important; }
+          .refis-rh-left { display: flex !important; align-items: center !important; gap: 6pt !important; min-width: 0 !important; }
+          .refis-rh-logo { height: 8mm !important; max-width: 38mm !important; object-fit: contain !important; display: block !important; }
+          .refis-rh-obra { font-size: 7pt !important; font-weight: 800 !important; color: #1A3461 !important; text-transform: uppercase !important; letter-spacing: 0.04em !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; max-width: 95mm !important; }
+          .refis-rh-status { display: flex !important; flex-direction: column !important; align-items: flex-end !important; white-space: nowrap !important; }
+          .refis-rh-status .k { font-size: 5pt !important; font-weight: 800 !important; letter-spacing: 0.18em !important; text-transform: uppercase !important; color: #94a3b8 !important; }
+          .refis-rh-status .v { font-size: 10pt !important; font-weight: 900 !important; color: #dc2626 !important; line-height: 1 !important; }
+
+          /* Data de Status em destaque vermelho (chip na faixa-título + célula da ficha) */
+          .refis-title-statuschip { display: inline-block !important; background: #ffffff !important; color: #dc2626 !important; font-weight: 900 !important; padding: 1pt 5pt !important; border-radius: 2pt !important; font-size: 7.5pt !important; letter-spacing: 0 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          .refis-spec-cell.refis-status-cell { background: #fef2f2 !important; }
+          .refis-spec-cell.refis-status-cell .refis-spec-k { color: #dc2626 !important; }
+          .refis-status-red { color: #dc2626 !important; font-weight: 900 !important; font-size: 9pt !important; }
+
+          /* Rev. 2793 — NÃO CORTAR INFORMAÇÕES: protege linhas/cabeçalhos de tabela
+             e evita títulos órfãos no fim da página. */
+          #refis-print-area { orphans: 3 !important; widows: 3 !important; }
+          #refis-print-area tr { break-inside: avoid !important; page-break-inside: avoid !important; }
+          #refis-print-area thead { display: table-header-group !important; }
+          #refis-print-area tfoot { display: table-footer-group !important; }
+          .refis-section-head { break-after: avoid !important; page-break-after: avoid !important; }
 
           html, body { background: white !important; margin: 0 !important; padding: 0 !important; }
           body * { visibility: hidden !important; }
@@ -14997,7 +15070,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           </div>
           <div className="refis-title-ref">
             <div className="refis-title-rev">R{String(revisaoAtiva?.numero ?? 0).padStart(2, '0')}</div>
-            <div className="refis-title-meta">Status em {new Date(semana + 'T12:00:00').toLocaleDateString('pt-BR')}</div>
+            <div className="refis-title-meta">Status em <span className="refis-title-statuschip">{new Date(semana + 'T12:00:00').toLocaleDateString('pt-BR')}</span></div>
           </div>
         </div>
 
@@ -15023,9 +15096,9 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               {proj.dataTerminoContratual ? new Date(proj.dataTerminoContratual + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
             </div>
           </div>
-          <div className="refis-spec-cell">
+          <div className="refis-spec-cell refis-status-cell">
             <div className="refis-spec-k">Data-Status</div>
-            <div className="refis-spec-v">{new Date(semana + 'T12:00:00').toLocaleDateString('pt-BR')}</div>
+            <div className="refis-spec-v refis-status-red">{new Date(semana + 'T12:00:00').toLocaleDateString('pt-BR')}</div>
           </div>
           <div className="refis-spec-cell">
             <div className="refis-spec-k">Relatório Nº</div>
@@ -16954,7 +17027,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         </span>
       </div>
 
-    </div>
+      </div>
+    </>
   );
 }
 
