@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2795 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): REVERTIDA A ALTURA "ORIENTATION-AWARE"
+ * DA REV. 2794 (QUE BUGAVA — EM RETRATO O BLOCO FAIXA+KPIs+GRÁFICO ESTOURAVA A PÁGINA); A IMPRESSÃO DA CURVA S
+ * VOLTOU A UM VALOR ÚNICO E SEGURO, AGORA UM POUCO MAIOR (330pt → 360pt) E O GRÁFICO SEGUE GRANDE NA TELA (560).**
+ *
+ * PEDIDO (usuário): "Está bugado, volte como era; é só deixar o gráfico maior e em evidência" (anexou print do REFIS
+ * inteiro em RETRATO com o layout quebrado pela altura agressiva de 480pt da Rev. 2794).
+ *
+ * CAUSA-RAIZ DO BUG (Rev. 2794): em RETRATO a altura do gráfico foi a `480pt`, mas a faixa de seção + a linha de KPIs
+ * + o gráfico vivem no MESMO bloco com `break-inside: avoid` → o conjunto passava da área útil da folha e o motor de
+ * impressão empurrava/quebrava em ponto ruim (architect já havia sinalizado o risco de overflow).
+ *
+ * FIX (SÓ CLIENT; ZERO SCHEMA/SERVER) em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (componente `Refis`):
+ *   - REMOVIDA a interpolação `${orientacaoPdf === "landscape" ? "330pt" : "480pt"}` do seletor de impressão; volta a
+ *     ser um VALOR ÚNICO `#refis-print-area [style*="height: 560"] { height: 360pt !important; }` — sem ramo por
+ *     orientação (a parte que o usuário considerou "bugada"). 360pt > os 330pt antigos = gráfico um pouco MAIOR no
+ *     PDF, mas sem o estouro do bloco.
+ *   - Os 2 containers (BLOCO 3A físico + 3B financeiro) MANTÊM `style={{ height: 560 }}` → gráfico grande e em
+ *     evidência na TELA.
+ *   `break-inside: avoid` mantido; largura já forçada à largura útil da folha no clique de "Imprimir PDF" (Rev. 2792).
+ *   Nenhuma série/cálculo/eixo mudou — só a APRESENTAÇÃO (altura). ZERO ALTER/DROP/DELETE. Validação: esbuild OK; HMR;
+ *   architect. RESSALVA: 360pt é um meio-termo seguro p/ retrato; quem usa LANDSCAPE tem menos altura útil — se voltar
+ *   a apertar, baixar este valor é trivial.
+ *
  * Rev. 2794 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): NA IMPRESSÃO OS GRÁFICOS DA CURVA S
  * (FÍSICA 3A E FINANCEIRA 3B) FICARAM MAIS ALTOS / "MAIS RETANGULARES" — DEIXARAM DE OCUPAR SÓ A FAIXA SUPERIOR
  * DA FOLHA COM MUITO BRANCO ABAIXO; ALTURA DE IMPRESSÃO AGORA ACOMPANHA A ORIENTAÇÃO (RETRATO MUITO MAIS ALTO).**

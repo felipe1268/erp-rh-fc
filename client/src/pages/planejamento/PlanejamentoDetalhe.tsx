@@ -14972,7 +14972,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
           #refis-print-area .recharts-wrapper,
           #refis-print-area .recharts-responsive-container { height: 100% !important; max-height: none !important; }
-          #refis-print-area [style*="height: 560"] { height: ${orientacaoPdf === "landscape" ? "330pt" : "480pt"} !important; }
+          #refis-print-area [style*="height: 560"] { height: 360pt !important; }
           #refis-print-area [style*="height: 320"] { height: 180pt !important; }
 
           #refis-print-area .no-print { display: none !important; }
