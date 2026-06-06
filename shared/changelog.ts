@@ -1,6 +1,65 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2804 — **COMPRAS · SEGURANÇA — FECHADO IDOR (BROKEN ACCESS CONTROL) MULTI-EMPRESA EM ~86 ENDPOINTS DO ROUTER DE
+ * COMPRAS QUE RECEBIAM `companyId` DO CLIENTE SEM VALIDAR SE O USUÁRIO TEM ACESSO ÀQUELA EMPRESA. AGORA TODOS CHAMAM O
+ * GUARD CANÔNICO `_assertCompanyAccess` ANTES DE USAR O `companyId`.**
+ *
+ * ORIGEM: code review (architect) da Rev. 2803 apontou que `listarCotacoes`/`listarSolicitacoes` (e, na auditoria
+ * subsequente do router inteiro, dezenas de outros queries/mutations) aceitavam `input.companyId` e o usavam direto no
+ * `WHERE company_id = ...` SEM nenhuma checagem de pertencimento — um usuário autenticado podia enumerar/alterar dados de
+ * OUTRA empresa só trocando o `companyId` no payload. Usuário aprovou a correção ("pode fazer as correções").
+ *
+ * O QUE MUDOU (SÓ `server/routers/compras.ts`):
+ *   - Auditoria programática: todo procedure que declara `companyId: z.number()` no input e NÃO tinha guard
+ *     (`_assertCompanyAccess` / `getCompaniesForUser` / `getEffectiveAllowedObraIds`) recebeu, como PRIMEIRA instrução do
+ *     handler, `await _assertCompanyAccess(ctx.user, input.companyId);` (handlers que só tinham `{ input }` ganharam
+ *     `ctx`; o `classificacaoProgresso`, que era síncrono, virou `async`). Total: 85 endpoints.
+ *   - `getCotacao` (detalhe, recebe só `id`) NÃO tem companyId no input → guard derivado da linha:
+ *     `await _assertCompanyAccess(ctx.user, cot.companyId);` logo após o fetch (1 endpoint, manual).
+ *   - O helper `_assertCompanyAccess` (já existente no arquivo, Rev. 1702) é PERMISSIVO POR DESIGN: admin/admin_master
+ *     liberam; usuário SEM vínculo em `user_companies` libera (controle por grupo/módulo); só BLOQUEIA usuário VINCULADO
+ *     tentando empresa fora dos seus vínculos. Regra do dono: "só restringe quando o master restringir" — por isso o
+ *     sweep amplo é seguro (não tranca admin nem usuário sem vínculo; só fecha o vazamento cross-tenant real).
+ *
+ * RESSALVA: endpoints que recebem `companyId` mas NÃO o cruzam com o recurso por `id` (ex.: `solicitarAutorizacaoCompra`
+ * atualiza a cotação só por `cotacaoId`) continuam com IDOR de RECURSO mais profundo (passar companyId próprio + id
+ * alheio) — fora do escopo deste sweep, que fecha o vazamento por `companyId`. Follow-up recomendado: escopar mutations
+ * por `(id + companyId)`.
+ *
+ * 2º PASSE (code review architect): a 1ª varredura (regex `companyId: z.number()`) deixou escapar 8 endpoints — 4 que
+ * usam `companyId` mas com schema/uso fora do padrão (`criarItem`, `registrarMovimento`, `avaliarFornecedor`,
+ * `cancelarAprovacaoCotacao`) e 4 dashboards que recebem `companyIds: z.array(z.number())` (PLURAL): `getDashboardCompras`,
+ * `getComprasBadgeCounts`, `getAlertasCompras`, `getDashboardPorObra`. Todos ganharam guard: os singulares com
+ * `await _assertCompanyAccess(ctx.user, input.companyId)`; os de array com `for (const _cid of ids) await
+ * _assertCompanyAccess(ctx.user, _cid)`. Re-auditoria ampliada (qualquer procedure que referencie companyId/companyIds e
+ * não tenha guard) confirmou 0 endpoints descobertos.
+ *
+ * 3º PASSE (code review architect): além dos que recebem `companyId`, o review pediu fechar também os endpoints que agem
+ * por `id`/`cotacaoId`/`solicitacaoId` cruzando o recurso. Ganharam GUARD DERIVADO-DO-RECURSO (mesmo padrão do `getCotacao`:
+ * fetch da linha dona → `await _assertCompanyAccess(ctx.user, <linha>.companyId)`): `atualizarItem`, `excluirItem`,
+ * `aprovarSolicitacao`, `getMapaCotacao` (ganhou `ctx`), `atualizarStatusOrdem` (companyId add ao select existente) e
+ * `estornarRecebimentoOC`.
+ *
+ * 4º PASSE (code review architect): auditoria programática ampliada (procedures id-only que TOCAM tabelas tenant-scoped e
+ * NÃO têm guard) achou +18 endpoints ainda abertos. Todos ganharam guard derivado-do-recurso, derivando o `companyId` da
+ * tabela DONA (a própria linha quando há companyId direto; ou o PAI via `comprasCotacoes`/`comprasSolicitacoes` quando o
+ * input traz só `cotacaoId`/`solicitacaoId`): `getFornecedor`, `devolverLocacaoItem`, `atualizarStatusSolicitacao`,
+ * `registrarRecebimentoItem`, `cancelarItemSc`, `excluirSolicitacao`, `aprovarCotacao`, `atualizarStatusCotacao`,
+ * `excluirCotacao`, `adicionarFornecedorMapa`, `removerFornecedorMapa`, `salvarRespostasLote`, `salvarAnexoFornecedor`,
+ * `selecionarVencedorMapa`, `cancelarVencedorMapa`, `getOrdem`, `atualizarOrdem`, `excluirOrdem` (handlers só com
+ * `{ input }` ganharam `ctx`; selects que não traziam `companyId` ganharam a coluna). 2 correções pós-review:
+ * `excluirOrdem` (faltou `ctx` na assinatura — `ctx is not defined` em runtime) e `registrarRecebimentoItem`
+ * (resource-binding forte `item.solicitacaoId === input.solicitacaoId` antes do update, como `cancelarItemSc` já tinha).
+ * 5º PASSE: a auditoria id-only com lista de tabelas HARD-CODED tinha escapado `deletarCondicaoPagamento` (tabela
+ * `comprasCondicoesPagamento`, fora da lista) — DELETE direto por `id` sem guard; ganhou guard derivado. A auditoria foi
+ * refeita SCHEMA-DRIVEN (derivando dinamicamente do `drizzle/schema.ts` TODAS as 392 tabelas com coluna `company_id`),
+ * eliminando o ponto cego de lista manual. Re-auditoria DUPLA final (companyId-referencing + id-only tenant-touching) =
+ * 0 endpoints sem guard.
+ *
+ * ZERO ALTER/DROP/DELETE; ZERO schema novo; ZERO mudança de comportamento p/ usuários legítimos. Validação: esbuild OK em
+ * `compras.ts`; servidor reiniciado e reconectado ao Neon sem erros; re-auditoria final = 0 endpoints sem guard.
+ *
  * Rev. 2803 — **COMPRAS · COTAÇÕES — A LISTA E O DETALHE DA COTAÇÃO PASSAM A MOSTRAR O NÚMERO **REAL** DA SC VINCULADA
  * (`numero_sc` GRAVADO NO BANCO, EXIBIDO COMO `SC-NNNN-AAAA`) EM VEZ DO ID INTERNO `SC #<id>`; E O NÚMERO VIROU UM LINK
  * CLICÁVEL QUE ABRE A SOLICITAÇÃO (DEEP-LINK `?destaque=<id>` NA TELA DE SOLICITAÇÕES).**

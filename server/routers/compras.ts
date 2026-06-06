@@ -1144,7 +1144,8 @@ export const comprasRouter = router({
       categoria: z.string().optional(),
       ativo:     z.boolean().optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const rows = await db.select().from(fornecedores)
         .where(and(
@@ -1176,10 +1177,11 @@ export const comprasRouter = router({
 
   getFornecedor: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       const [f] = await db.select().from(fornecedores).where(eq(fornecedores.id, input.id));
       if (!f) throw new TRPCError({ code: "NOT_FOUND", message: "Fornecedor não encontrado" });
+      await _assertCompanyAccess(ctx.user, f.companyId);
       return f;
     }),
 
@@ -1608,6 +1610,7 @@ export const comprasRouter = router({
       tipoControle:          z.enum(["estoque", "aplicacao_direta"]).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
 
       // Rev. 1607 — Classificação automática por IA do tipo de controle.
@@ -1790,6 +1793,8 @@ export const comprasRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       const { id, auditoria, ...data } = input;
+      const [itemAcc] = await db.select({ companyId: almoxarifadoItens.companyId }).from(almoxarifadoItens).where(eq(almoxarifadoItens.id, id));
+      if (itemAcc) await _assertCompanyAccess(ctx.user, itemAcc.companyId);
       // Rev. 2388 — Detectar alteração manual de quantidade.
       let qtdAnterior: number | null = null;
       let qtdNova: number | null = null;
@@ -2189,7 +2194,8 @@ export const comprasRouter = router({
 
   getItensLocadosVencendo: protectedProcedure
     .input(z.object({ companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const rows = await db.select().from(almoxarifadoItens)
         .where(and(
@@ -2212,8 +2218,10 @@ export const comprasRouter = router({
 
   devolverLocacaoItem: protectedProcedure
     .input(z.object({ id: z.number(), observacao: z.string().optional() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      const [itemAcc] = await db.select({ companyId: almoxarifadoItens.companyId }).from(almoxarifadoItens).where(eq(almoxarifadoItens.id, input.id));
+      if (itemAcc) await _assertCompanyAccess(ctx.user, itemAcc.companyId);
       const obs = input.observacao ? `\nDevolução em ${new Date().toLocaleDateString("pt-BR")}: ${input.observacao}` : `\nDevolução em ${new Date().toLocaleDateString("pt-BR")}`;
       await db.update(almoxarifadoItens).set({
         origem: "proprio",
@@ -2243,6 +2251,7 @@ export const comprasRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const [item] = await db.select().from(almoxarifadoItens).where(eq(almoxarifadoItens.id, input.id));
       if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Item não encontrado." });
+      await _assertCompanyAccess(ctx.user, item.companyId);
       const cfg = await getAlmoxAuditoriaConfig(item.companyId);
       const justUsada = justificativaFinal(input.justificativa, cfg.exigeJustificativa);
       await verificarSenhaSeLocal(ctx, input.senha, cfg.exigeSenha);
@@ -2701,7 +2710,8 @@ Responda APENAS com um objeto JSON no formato:
       companyId: z.number(),
       codigo: z.string().min(1),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const code = input.codigo.trim();
 
@@ -2793,7 +2803,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       usuarioNome: z.string().optional(),
       observacoes: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
 
       // Verifica saldo disponível para saída
@@ -2844,7 +2855,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       itemId:    z.number().optional(),
       limite:    z.number().optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       return db.select().from(almoxarifadoMovimentacoes)
         .where(and(
@@ -2858,7 +2870,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
   // Categorias distintas dos itens do almoxarifado (legado - mantido para compatibilidade)
   listarCategoriasAlmoxarifado: protectedProcedure
     .input(z.object({ companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const rows = await db.select().from(almoxarifadoCategorias)
         .where(eq(almoxarifadoCategorias.companyId, input.companyId))
@@ -2871,7 +2884,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
   // ══════════════════════════════════════════════════════════════
   listarCategorias: protectedProcedure
     .input(z.object({ companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       return db.select().from(almoxarifadoCategorias)
         .where(eq(almoxarifadoCategorias.companyId, input.companyId))
@@ -2880,7 +2894,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
 
   criarCategoria: protectedProcedure
     .input(z.object({ companyId: z.number(), nome: z.string().min(1, "Nome obrigatório"), ordem: z.number().optional() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const existing = await db.select().from(almoxarifadoCategorias)
         .where(and(eq(almoxarifadoCategorias.companyId, input.companyId), eq(almoxarifadoCategorias.nome, input.nome.trim())));
@@ -2895,7 +2910,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
 
   atualizarCategoria: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number(), nome: z.string().min(1), ordem: z.number().optional() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const dup = await db.select().from(almoxarifadoCategorias)
         .where(and(
@@ -2914,7 +2930,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
   // depois DELETE da row de categoria. Retorna count de itens migrados.
   excluirCategoria: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       return await db.transaction(async (tx: any) => {
         const [cat] = await tx.select().from(almoxarifadoCategorias)
@@ -2937,7 +2954,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
   // antes de excluir.
   contarItensPorCategoria: protectedProcedure
     .input(z.object({ companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const rows = await db.execute(sql`
         SELECT COALESCE(NULLIF(TRIM(categoria), ''), '__sem__') AS categoria, COUNT(*)::int AS total
@@ -2959,7 +2977,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
   // Retorna count + lista das categorias órfãs encontradas.
   limparCategoriasOrfas: protectedProcedure
     .input(z.object({ companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const orfasRows = await db.execute(sql`
         SELECT TRIM(categoria) AS categoria, COUNT(*)::int AS total
@@ -3000,7 +3019,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
   // ══════════════════════════════════════════════════════════════
   listarUnidades: protectedProcedure
     .input(z.object({ companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const rows = await db.select().from(almoxarifadoUnidades)
         .where(eq(almoxarifadoUnidades.companyId, input.companyId))
@@ -3046,7 +3066,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       sigla:     z.string().min(1).max(20),
       descricao: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const sigla = input.sigla.trim();
       const existing = await db.select().from(almoxarifadoUnidades)
@@ -3069,6 +3090,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       justificativa: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const [unidade] = await db.select().from(almoxarifadoUnidades)
@@ -3111,7 +3133,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
   // Categorias distintas dos fornecedores
   listarCategoriasFornecedores: protectedProcedure
     .input(z.object({ companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const rows = await db.select({ categorias: fornecedores.categorias })
         .from(fornecedores)
@@ -3132,7 +3155,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
 
   listarSolicitacoes: protectedProcedure
     .input(z.object({ companyId: z.number(), status: z.string().optional(), aprovacaoStatus: z.string().optional(), busca: z.string().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const rows = await db.select().from(comprasSolicitacoes)
         .where(and(
@@ -3525,7 +3549,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         metaMdoAjudante: z.number().optional(),
       })),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       if (input.tipo === "pecas_veiculo" && !input.vehicleId) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Selecione um veículo para SC de Peças Veículo." });
@@ -3718,7 +3743,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       fileBase64: z.string().max(14_000_000),
       fileName: z.string(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const allowedExts = new Set(["jpg", "jpeg", "png", "webp", "gif", "pdf", "mp4", "mov", "avi", "mkv", "heic", "heif", "bmp", "tiff", "tif", "svg"]);
       const ext = input.fileName.split(".").pop()?.toLowerCase() || "jpg";
@@ -3759,7 +3785,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
 
   removeAnexoSC: protectedProcedure
     .input(z.object({ solicitacaoId: z.number(), companyId: z.number(), url: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const [sc] = await db.select({ anexos: comprasSolicitacoes.anexos, imagemReferenciaUrl: comprasSolicitacoes.imagemReferenciaUrl }).from(comprasSolicitacoes)
         .where(and(eq(comprasSolicitacoes.id, input.solicitacaoId), eq(comprasSolicitacoes.companyId, input.companyId)));
@@ -3783,7 +3810,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       fileBase64: z.string().max(30_000_000),
       fileName: z.string(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const allowedExts = new Set(["png", "pdf", "docx", "xlsx"]);
       const ext = input.fileName.split(".").pop()?.toLowerCase() || "";
@@ -3817,7 +3845,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
 
   removeAnexoOrdem: protectedProcedure
     .input(z.object({ ordemId: z.number(), companyId: z.number(), url: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const [oc] = await db.select({ anexos: comprasOrdens.anexos }).from(comprasOrdens)
         .where(and(eq(comprasOrdens.id, input.ordemId), eq(comprasOrdens.companyId, input.companyId)));
@@ -3831,8 +3860,10 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
 
   atualizarStatusSolicitacao: protectedProcedure
     .input(z.object({ id: z.number(), status: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      const [scAcc] = await db.select({ companyId: comprasSolicitacoes.companyId }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, input.id));
+      if (scAcc) await _assertCompanyAccess(ctx.user, scAcc.companyId);
       await db.update(comprasSolicitacoes).set({ status: input.status, atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, input.id));
       return { ok: true };
     }),
@@ -3841,6 +3872,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
     .input(z.object({ id: z.number(), aprovacaoStatus: z.string(), aprovadorId: z.number().optional(), aprovadorNome: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      const [scAcc] = await db.select({ companyId: comprasSolicitacoes.companyId }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, input.id));
+      if (scAcc) await _assertCompanyAccess(ctx.user, scAcc.companyId);
       const aprovId = input.aprovadorId ?? ctx.user?.id ?? null;
       const aprovNome = input.aprovadorNome || ctx.user?.name || ctx.user?.email || null;
       await db.update(comprasSolicitacoes).set({
@@ -3924,7 +3957,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
 
   desaprovarSolicitacao: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const [sc] = await db.select().from(comprasSolicitacoes).where(and(eq(comprasSolicitacoes.id, input.id), eq(comprasSolicitacoes.companyId, input.companyId)));
       if (!sc) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada." });
@@ -3965,10 +3999,13 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
 
   registrarRecebimentoItem: protectedProcedure
     .input(z.object({ itemId: z.number(), solicitacaoId: z.number(), quantidadeAtendida: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      const [scAcc] = await db.select({ companyId: comprasSolicitacoes.companyId }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, input.solicitacaoId));
+      if (scAcc) await _assertCompanyAccess(ctx.user, scAcc.companyId);
       const [item] = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.id, input.itemId));
       if (!item) throw new TRPCError({ code: "NOT_FOUND" });
+      if (item.solicitacaoId !== input.solicitacaoId) throw new TRPCError({ code: "BAD_REQUEST", message: "Item não pertence a esta solicitação" });
       const qtdTotal = n(item.quantidade);
       const novaQtd = Math.min(input.quantidadeAtendida, qtdTotal);
       const novoStatus = novaQtd >= qtdTotal ? "recebido" : novaQtd > 0 ? "recebido_parcial" : "pendente";
@@ -3990,8 +4027,10 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
 
   cancelarItemSc: protectedProcedure
     .input(z.object({ itemId: z.number(), solicitacaoId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      const [scAcc] = await db.select({ companyId: comprasSolicitacoes.companyId }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, input.solicitacaoId));
+      if (scAcc) await _assertCompanyAccess(ctx.user, scAcc.companyId);
       const [item] = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.id, input.itemId));
       if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Item não encontrado" });
       if (item.solicitacaoId !== input.solicitacaoId) throw new TRPCError({ code: "BAD_REQUEST", message: "Item não pertence a esta solicitação" });
@@ -4004,8 +4043,11 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
 
   excluirSolicitacao: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+
+      const [scAcc] = await db.select({ companyId: comprasSolicitacoes.companyId }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, input.id));
+      if (scAcc) await _assertCompanyAccess(ctx.user, scAcc.companyId);
 
       const linkedCots = await db.select({ id: comprasCotacoes.id, numeroCotacao: comprasCotacoes.numeroCotacao, status: comprasCotacoes.status })
         .from(comprasCotacoes)
@@ -4093,7 +4135,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
 
   listarCotacoes: protectedProcedure
     .input(z.object({ companyId: z.number(), status: z.string().optional(), solicitacaoId: z.number().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const rows = await db.select().from(comprasCotacoes)
         .where(and(
@@ -4125,10 +4168,11 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
 
   getCotacao: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.id));
       if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
+      await _assertCompanyAccess(ctx.user, cot.companyId);
       const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.id));
 
       // Rastreabilidade: SC vinculada
@@ -4219,7 +4263,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         descontoPct: z.number().optional(),
       })),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
 
       let tipoFinal = input.tipo ?? "material";
@@ -4331,6 +4376,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      const [cotAcc] = await db.select({ companyId: comprasCotacoes.companyId }).from(comprasCotacoes).where(eq(comprasCotacoes.id, input.id));
+      if (cotAcc) await _assertCompanyAccess(ctx.user, cotAcc.companyId);
       await db.update(comprasCotacoes).set({
         status: "aprovada",
         aprovadoPorId: ctx.user?.id ?? null,
@@ -4342,21 +4389,24 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
 
   atualizarStatusCotacao: protectedProcedure
     .input(z.object({ id: z.number(), status: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      const [cotAcc] = await db.select({ companyId: comprasCotacoes.companyId }).from(comprasCotacoes).where(eq(comprasCotacoes.id, input.id));
+      if (cotAcc) await _assertCompanyAccess(ctx.user, cotAcc.companyId);
       await db.update(comprasCotacoes).set({ status: input.status }).where(eq(comprasCotacoes.id, input.id));
       return { ok: true };
     }),
 
   excluirCotacao: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
 
       // 0. Buscar a cotação para pegar solicitacaoId (revertida ao final)
-      const [cot] = await db.select({ solicitacaoId: comprasCotacoes.solicitacaoId })
+      const [cot] = await db.select({ solicitacaoId: comprasCotacoes.solicitacaoId, companyId: comprasCotacoes.companyId })
         .from(comprasCotacoes)
         .where(eq(comprasCotacoes.id, input.id));
+      if (cot) await _assertCompanyAccess(ctx.user, cot.companyId);
 
       // 1. Encontrar OCs vinculadas a esta cotação
       const ocs = await db.select({ id: comprasOrdens.id })
@@ -4450,10 +4500,11 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
 
   getMapaCotacao: protectedProcedure
     .input(z.object({ cotacaoId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
       if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
+      await _assertCompanyAccess(ctx.user, cot.companyId);
       const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
       const participantes = await db.select().from(comprasCotacaoFornecedores).where(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId));
       const respostas = await db.select().from(comprasCotacaoRespostas).where(eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId));
@@ -4974,16 +5025,20 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
 
   adicionarFornecedorMapa: protectedProcedure
     .input(z.object({ cotacaoId: z.number(), fornecedorId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      const [cotAcc] = await db.select({ companyId: comprasCotacoes.companyId }).from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
+      if (cotAcc) await _assertCompanyAccess(ctx.user, cotAcc.companyId);
       await db.insert(comprasCotacaoFornecedores).values({ cotacaoId: input.cotacaoId, fornecedorId: input.fornecedorId }).onConflictDoNothing();
       return { ok: true };
     }),
 
   removerFornecedorMapa: protectedProcedure
     .input(z.object({ cotacaoId: z.number(), fornecedorId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      const [cotAcc] = await db.select({ companyId: comprasCotacoes.companyId }).from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
+      if (cotAcc) await _assertCompanyAccess(ctx.user, cotAcc.companyId);
       await db.delete(comprasCotacaoRespostas).where(and(eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId), eq(comprasCotacaoRespostas.fornecedorId, input.fornecedorId)));
       await db.delete(comprasCotacaoFornecedores).where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
       return { ok: true };
@@ -5175,8 +5230,10 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         quantidade: z.number().optional(),
       })),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      const [cotAcc] = await db.select({ companyId: comprasCotacoes.companyId }).from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
+      if (cotAcc) await _assertCompanyAccess(ctx.user, cotAcc.companyId);
       const validItemIds = new Set(
         (await db.select({ id: comprasCotacoesItens.id }).from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId)))
           .map(r => r.id)
@@ -5224,7 +5281,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
 
   listarPropostasFornecedor: protectedProcedure
     .input(z.object({ cotacaoId: z.number(), fornecedorId: z.number(), companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const propostas = await db.select().from(comprasCotacaoPropostas)
         .where(and(
@@ -5238,7 +5296,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
 
   excluirProposta: protectedProcedure
     .input(z.object({ propostaId: z.number(), cotacaoId: z.number(), fornecedorId: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const [proposta] = await db.select().from(comprasCotacaoPropostas)
         .where(and(
@@ -5279,7 +5338,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       observacoes: z.string().optional(),
       moduloMedicao: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const [cot] = await db.select({ companyId: comprasCotacoes.companyId }).from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
       if (!cot || cot.companyId !== input.companyId) throw new TRPCError({ code: "FORBIDDEN", message: "Cotação não pertence à empresa" });
@@ -5307,8 +5367,10 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
 
   salvarAnexoFornecedor: protectedProcedure
     .input(z.object({ cotacaoId: z.number(), fornecedorId: z.number(), arquivoUrl: z.string(), arquivoNome: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      const [cotAcc] = await db.select({ companyId: comprasCotacoes.companyId }).from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
+      if (cotAcc) await _assertCompanyAccess(ctx.user, cotAcc.companyId);
       await db.update(comprasCotacaoFornecedores)
         .set({ arquivoUrl: input.arquivoUrl, arquivoNome: input.arquivoNome })
         .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
@@ -5324,7 +5386,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       fileName: z.string(),
       mimeType: z.string(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const buffer = Buffer.from(input.fileBase64, 'base64');
       const ext = input.fileName.split('.').pop() || 'pdf';
@@ -5356,7 +5419,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       })).min(1).max(10).optional(),
       tipoProposta: z.enum(["complemento", "revisao"]).default("complemento"),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       // Rev. 2800 — normaliza p/ lista de arquivos (array tem prioridade).
       const arquivos = (input.arquivos && input.arquivos.length > 0)
         ? input.arquivos
@@ -5676,7 +5740,8 @@ Retorne APENAS um JSON válido neste formato:
 
   getSaldosRealocacaoGeral: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
 
       // ── 1. DI-08: pega o latest orcamento por obra ─────────────────────
@@ -5892,7 +5957,8 @@ Retorne APENAS um JSON válido neste formato:
 
   buscarSaldosRealocacao: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number().optional(), cotacaoId: z.number().optional(), deficit: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
 
       // ── 1. RESERVA DE RISCO (BDI DI-08) ──────────────────────────────
@@ -6118,7 +6184,8 @@ Retorne APENAS um JSON válido neste formato:
       deficit: z.number().optional(),
       observacao: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       // Valida que não excede disponível na reserva global
       const debitos = await db.select({ valor: comprasRiscoDebitos.valor })
@@ -6202,7 +6269,8 @@ Retorne APENAS um JSON válido neste formato:
       usuarioId: z.number(),
       usuarioNome: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
 
       // FIX: removido "aguardando_aprovacao_extra" para alinhar com getSaldosRealocacaoGeral/buscarSaldosRealocacao.
@@ -6405,6 +6473,7 @@ Retorne APENAS um JSON válido neste formato:
   reverterDebitoRisco: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number(), senhaMaster: z.string().min(1, "Senha do ADM Master obrigatória") }))
     .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       if ((ctx.user as any)?.role !== "admin_master") {
         throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o Administrador Master pode desfazer um débito da Reserva de Risco." });
       }
@@ -6422,7 +6491,8 @@ Retorne APENAS um JSON válido neste formato:
 
   listarDebitosRisco: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const conds: any[] = [eq(comprasRiscoDebitos.companyId, input.companyId)];
       if (input.obraId) conds.push(eq(comprasRiscoDebitos.obraId, input.obraId));
@@ -6455,7 +6525,8 @@ Retorne APENAS um JSON válido neste formato:
   // Usado na tela de Realocação para mostrar a origem da "Economia em Compras"
   listarEconomiasOC: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
 
       // FIX: removido "aguardando_aprovacao_extra" — só conta economia de OCs efetivamente aprovadas.
@@ -6617,7 +6688,8 @@ Retorne APENAS um JSON válido neste formato:
       deficit: z.number(),
       solicitanteNome: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       // Grava um registro de pedido de autorização como observação especial na cotação
       await db.update(comprasCotacoes)
@@ -6628,8 +6700,10 @@ Retorne APENAS um JSON válido neste formato:
 
   selecionarVencedorMapa: protectedProcedure
     .input(z.object({ cotacaoId: z.number(), fornecedorId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      const [cotAcc] = await db.select({ companyId: comprasCotacoes.companyId }).from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
+      if (cotAcc) await _assertCompanyAccess(ctx.user, cotAcc.companyId);
       await db.update(comprasCotacaoFornecedores).set({ selecionado: false }).where(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId));
       await db.update(comprasCotacaoFornecedores).set({ selecionado: true }).where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
       const [p] = await db.select().from(comprasCotacaoFornecedores).where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, input.fornecedorId)));
@@ -6647,8 +6721,10 @@ Retorne APENAS um JSON válido neste formato:
 
   cancelarVencedorMapa: protectedProcedure
     .input(z.object({ cotacaoId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      const [cotAcc] = await db.select({ companyId: comprasCotacoes.companyId }).from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
+      if (cotAcc) await _assertCompanyAccess(ctx.user, cotAcc.companyId);
       // Remove seleção de todos os fornecedores
       await db.update(comprasCotacaoFornecedores)
         .set({ selecionado: false })
@@ -6666,7 +6742,8 @@ Retorne APENAS um JSON válido neste formato:
 
   listarOrdens: protectedProcedure
     .input(z.object({ companyId: z.number(), status: z.string().optional(), busca: z.string().optional(), apenasAtrasadas: z.boolean().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       let rows = await db.select().from(comprasOrdens)
         .where(and(
@@ -6737,10 +6814,11 @@ Retorne APENAS um JSON válido neste formato:
 
   getOrdem: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       const [oc] = await db.select().from(comprasOrdens).where(eq(comprasOrdens.id, input.id));
       if (!oc) throw new TRPCError({ code: "NOT_FOUND" });
+      await _assertCompanyAccess(ctx.user, oc.companyId);
       const itensRaw = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
       const scItemIdsForEnrich = itensRaw.map(i => i.solicitacaoItemId).filter(Boolean) as number[];
       let scSemVerbaMap: Record<number, { semVerba: boolean; motivoSemVerba: string | null }> = {};
@@ -7527,6 +7605,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       autorizacaoSemVerba: z.object({ adminId: z.number(), adminNome: z.string(), justificativa: z.string() }).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
       if (!cot) throw new TRPCError({ code: "NOT_FOUND", message: "Cotação não encontrada" });
@@ -7749,6 +7828,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       justificativa: z.string().min(1, "Informe a justificativa"),
     }))
     .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const userRole = (ctx.user as any)?.role;
       console.log(`[CancelarAprovacao] cotacaoId=${input.cotacaoId} companyId=${input.companyId} userRole=${userRole}`);
       if (userRole !== "admin_master") {
@@ -7793,7 +7873,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       cotacaoId: z.number(),
       companyId: z.number(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const [cot] = await db.select().from(comprasCotacoes).where(
         and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, input.companyId))
@@ -7878,7 +7959,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         insumoCodigo: z.string().optional(),
       })),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       if (!input.condicaoPagamento?.trim()) throw new TRPCError({ code: "BAD_REQUEST", message: "Condição de pagamento é obrigatória para gerar OC." });
       if (!input.prazoEntregaDias && !input.dataEntregaPrevista) throw new TRPCError({ code: "BAD_REQUEST", message: "Prazo de entrega é obrigatório para gerar OC." });
       const db = await getDb();
@@ -7978,7 +8060,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         insumoCodigo: z.string().optional(),
       })).optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const n = (v: any) => parseFloat(String(v ?? "0")) || 0;
       const subtotal = (input.itens ?? []).reduce((s, it) => s + n(it.quantidade) * n(it.precoUnitario), 0);
@@ -8099,7 +8182,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         insumoCodigo: z.string().optional(),
       })).optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const n = (v: any) => parseFloat(String(v ?? "0")) || 0;
       const [oc] = await db.select().from(comprasOrdens)
@@ -8185,10 +8269,11 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       dataEntregaPrevista: z.string().optional(),
       observacoes: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       const [oc] = await db.select().from(comprasOrdens).where(eq(comprasOrdens.id, input.id));
       if (!oc) throw new TRPCError({ code: "NOT_FOUND" });
+      await _assertCompanyAccess(ctx.user, oc.companyId);
       const itens = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
       const subtotal = itens.reduce((s, it) => s + n(it.total), 0);
       const frete = n(input.frete ?? oc.frete);
@@ -8215,7 +8300,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
 
-      const [ocCurrent] = await db.select({ status: comprasOrdens.status, aprovacaoExtraRequerida: comprasOrdens.aprovacaoExtraRequerida }).from(comprasOrdens).where(eq(comprasOrdens.id, input.id));
+      const [ocCurrent] = await db.select({ status: comprasOrdens.status, aprovacaoExtraRequerida: comprasOrdens.aprovacaoExtraRequerida, companyId: comprasOrdens.companyId }).from(comprasOrdens).where(eq(comprasOrdens.id, input.id));
+      if (ocCurrent) await _assertCompanyAccess(ctx.user, ocCurrent.companyId);
       if (ocCurrent?.status === "aguardando_aprovacao_extra" && input.status === "aprovada") {
         throw new TRPCError({ code: "FORBIDDEN", message: "Esta OC requer aprovação de administrador (compra extra-orçamento). Use o fluxo de aprovação com senha admin." });
       }
@@ -8519,6 +8605,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       const db = await getDb();
       const [oc] = await db.select().from(comprasOrdens).where(eq(comprasOrdens.id, input.id));
       if (!oc) throw new TRPCError({ code: "NOT_FOUND", message: "Ordem não encontrada" });
+      await _assertCompanyAccess(ctx.user, oc.companyId);
       if (!["entregue", "entregue_parcial"].includes(oc.status)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Somente OCs com status 'Entregue' podem ser estornadas." });
       }
@@ -8644,7 +8731,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       transportadora: z.string().optional(),
       codigoRastreamento: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const [oc] = await db.select({ id: comprasOrdens.id }).from(comprasOrdens)
         .where(and(eq(comprasOrdens.id, input.id), eq(comprasOrdens.companyId, input.companyId)))
@@ -8659,13 +8747,14 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   excluirOrdem: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       // FIX: se esta OC era a última OC ativa de uma cotação que tinha débito
       // de risco/realocação de sobras, estornar — para manter o saldo da
       // Reserva de Risco e da Economia em Compras coerente.
-      const [oc] = await db.select({ cotacaoId: comprasOrdens.cotacaoId })
+      const [oc] = await db.select({ cotacaoId: comprasOrdens.cotacaoId, companyId: comprasOrdens.companyId })
         .from(comprasOrdens).where(eq(comprasOrdens.id, input.id));
+      if (oc) await _assertCompanyAccess(ctx.user, oc.companyId);
       await db.delete(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
       await db.delete(comprasOrdens).where(eq(comprasOrdens.id, input.id));
       if (oc?.cotacaoId) {
@@ -8726,7 +8815,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
   // Resumo/contadores para dashboard (legado)
   resumoCompras: protectedProcedure
     .input(z.object({ companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const [scs, cots, ocs] = await Promise.all([
         db.select().from(comprasSolicitacoes).where(eq(comprasSolicitacoes.companyId, input.companyId)),
@@ -8746,10 +8836,11 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   getDashboardCompras: protectedProcedure
     .input(z.object({ companyIds: z.array(z.number()).min(1) }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       const today = new Date().toISOString().slice(0, 10);
       const ids = input.companyIds;
+      for (const _cid of ids) await _assertCompanyAccess(ctx.user, _cid);
 
       const [scs, cots, ocs, forn, obrasRows] = await Promise.all([
         db.select().from(comprasSolicitacoes).where(inArray(comprasSolicitacoes.companyId, ids)).orderBy(desc(comprasSolicitacoes.criadoEm)),
@@ -8869,9 +8960,10 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   getComprasBadgeCounts: protectedProcedure
     .input(z.object({ companyIds: z.array(z.number()).min(1) }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       const ids = input.companyIds;
+      for (const _cid of ids) await _assertCompanyAccess(ctx.user, _cid);
       const hoje = new Date().toISOString().slice(0, 10);
 
       const [scs, ocs] = await Promise.all([
@@ -8895,9 +8987,10 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   getAlertasCompras: protectedProcedure
     .input(z.object({ companyIds: z.array(z.number()).min(1) }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       const ids = input.companyIds;
+      for (const _cid of ids) await _assertCompanyAccess(ctx.user, _cid);
       const hoje = new Date().toISOString().slice(0, 10);
       const em7dias = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
 
@@ -9070,9 +9163,10 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   getDashboardPorObra: protectedProcedure
     .input(z.object({ companyIds: z.array(z.number()).min(1) }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       const ids = input.companyIds;
+      for (const _cid of ids) await _assertCompanyAccess(ctx.user, _cid);
       const hoje = new Date().toISOString().slice(0, 10);
 
       const [ocsRows, scsRows, obrasRows, fornRows, pagRows] = await Promise.all([
@@ -9208,7 +9302,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       comentario:   z.string().optional(),
       criadoPor:    z.number().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       await db.insert(avaliacoesFornecedor).values({
         fornecedorId: input.fornecedorId,
@@ -9222,7 +9317,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   listarAvaliacoesFornecedor: protectedProcedure
     .input(z.object({ fornecedorId: z.number(), companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const rows = await db
         .select()
@@ -9237,7 +9333,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   rankingFornecedores: protectedProcedure
     .input(z.object({ companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const rows = await db.execute(sql`
         SELECT
@@ -9268,7 +9365,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
   // ══════════════════════════════════════════════════════════════
   getInsumosComposicao: protectedProcedure
     .input(z.object({ companyId: z.number(), servicoCodigo: z.string(), orcamentoItemId: z.number().optional(), tipoSC: z.enum(["material", "servico", "pacote", "equipamento", "pecas_veiculo"]).optional(), incluirEquip: z.boolean().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const insumos = await db.select({
         insumoCodigo: composicaoInsumos.insumoCodigo,
@@ -9324,7 +9422,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   getSaldoOrcamentario: protectedProcedure
     .input(z.object({ companyId: z.number(), orcamentoItemId: z.number(), obraId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
 
       const [orcItem] = await db.select({
@@ -9391,7 +9490,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   getSaldoItensSC: protectedProcedure
     .input(z.object({ companyId: z.number(), solicitacaoId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const [sc] = await db.select({ id: comprasSolicitacoes.id, obraId: comprasSolicitacoes.obraId, tipo: comprasSolicitacoes.tipo, incluirEquipamentos: comprasSolicitacoes.incluirEquipamentos }).from(comprasSolicitacoes)
         .where(and(eq(comprasSolicitacoes.id, input.solicitacaoId), eq(comprasSolicitacoes.companyId, input.companyId)));
@@ -9704,7 +9804,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   getItensCotacaoFromSC: protectedProcedure
     .input(z.object({ companyId: z.number(), solicitacaoId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const [sc] = await db.select().from(comprasSolicitacoes).where(and(eq(comprasSolicitacoes.id, input.solicitacaoId), eq(comprasSolicitacoes.companyId, input.companyId)));
       if (!sc) throw new Error("SC não encontrada");
@@ -9882,7 +9983,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   getHistoricoPrecos: protectedProcedure
     .input(z.object({ companyId: z.number(), insumoCodigo: z.string().optional(), descricao: z.string().optional(), descricaoInsumo: z.string().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
 
       const conditions = [eq(comprasOrdensItens.id, comprasOrdensItens.id)];
@@ -9920,7 +10022,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   getInsumosConsolidados: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number(), busca: z.string().optional(), tipoSC: z.enum(["material", "servico", "pacote", "equipamento", "pecas_veiculo"]).optional(), incluirEquip: z.boolean().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
         .from(orcamentos)
@@ -10084,7 +10187,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   getSugestoesCompra: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
         .from(orcamentos)
@@ -10173,7 +10277,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   getAlertasEstoque: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const conditions = [eq(almoxarifadoItens.companyId, input.companyId), eq(almoxarifadoItens.ativo, true)];
       if (input.obraId) conditions.push(eq(almoxarifadoItens.obraId, input.obraId));
@@ -10207,7 +10312,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   getSCsPendentesAgrupamento: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const conditions = [
         eq(comprasSolicitacoes.companyId, input.companyId),
@@ -10246,7 +10352,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   getEapParaObra: protectedProcedure
     .input(z.object({ obraId: z.number(), companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
 
       // Orçamento mais recente da obra
@@ -10418,7 +10525,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   listarCondicoesPagamento: protectedProcedure
     .input(z.object({ companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       return db.select()
         .from(comprasCondicoesPagamento)
@@ -10428,7 +10536,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   criarCondicaoPagamento: protectedProcedure
     .input(z.object({ companyId: z.number(), descricao: z.string().min(1).max(150) }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const existente = await db.select().from(comprasCondicoesPagamento)
         .where(and(eq(comprasCondicoesPagamento.companyId, input.companyId), eq(comprasCondicoesPagamento.descricao, input.descricao.trim())));
@@ -10442,15 +10551,18 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   deletarCondicaoPagamento: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      const [cpAcc] = await db.select({ companyId: comprasCondicoesPagamento.companyId }).from(comprasCondicoesPagamento).where(eq(comprasCondicoesPagamento.id, input.id));
+      if (cpAcc) await _assertCompanyAccess(ctx.user, cpAcc.companyId);
       await db.delete(comprasCondicoesPagamento).where(eq(comprasCondicoesPagamento.id, input.id));
       return { ok: true };
     }),
 
   getEntregasProgramadas: protectedProcedure
     .input(z.object({ ordemItemId: z.number(), companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const [item] = await db.select({ id: comprasOrdensItens.id, ordemId: comprasOrdensItens.ordemId }).from(comprasOrdensItens).where(eq(comprasOrdensItens.id, input.ordemItemId));
       if (!item) return [];
@@ -10472,7 +10584,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         observacoes: z.string().optional(),
       })),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const [item] = await db.select({ id: comprasOrdensItens.id, ordemId: comprasOrdensItens.ordemId }).from(comprasOrdensItens).where(eq(comprasOrdensItens.id, input.ordemItemId));
       if (!item) throw new TRPCError({ code: "NOT_FOUND" });
@@ -10495,7 +10608,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   registrarEntregaProgramada: protectedProcedure
     .input(z.object({ id: z.number(), quantidadeEntregue: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const [entrega] = await db.select().from(comprasEntregasProgramadas).where(eq(comprasEntregasProgramadas.id, input.id));
       if (!entrega) throw new TRPCError({ code: "NOT_FOUND" });
@@ -10519,7 +10633,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       cotacaoId: z.number().optional(),
       ordemId: z.number().optional(),
     }).refine(d => d.cotacaoId || d.ordemId, { message: "cotacaoId ou ordemId é obrigatório" }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const { companyId } = input;
 
@@ -10921,7 +11036,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       descricao: z.string().optional(),
       insumoCodigo: z.string().optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       if (!input.descricao && !input.insumoCodigo) return null;
 
@@ -11012,7 +11128,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       descricoes: z.array(z.string()),
       insumoCodigos: z.array(z.string()).optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       if (input.descricoes.length === 0 && (!input.insumoCodigos || input.insumoCodigos.length === 0)) return [];
 
@@ -11244,7 +11361,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       statusFiltro: z.string().optional(),
       statusObra: z.string().optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
 
       const obraConditions: any[] = [
@@ -11458,7 +11576,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       obraId: z.number(),
       orcamentoItemIds: z.array(z.number()).optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
 
       const [orc] = await db.select({ id: orcamentos.id }).from(orcamentos)
@@ -11523,7 +11642,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   getCoberturaInsumosEAP: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number(), tipoSC: z.enum(["material", "servico", "pacote", "equipamento", "pecas_veiculo"]).optional(), incluirEquip: z.boolean().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
         .from(orcamentos)
@@ -11654,7 +11774,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         metaMdoAjudante: z.number().optional(),
       })).optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
 
       const [sc] = await db.select().from(comprasSolicitacoes)
@@ -11798,7 +11919,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       aprovadorId: z.number().optional(),
       aprovadorNome: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const resultados: { id: number; ok: boolean; cotacaoCriada?: any; erro?: string }[] = [];
 
@@ -11875,7 +11997,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   duplicarSolicitacao: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number(), userId: z.number().optional(), userName: z.string().optional() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
 
       const [sc] = await db.select().from(comprasSolicitacoes)
@@ -11958,7 +12081,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   verificarSaldoOrcamentarioParaOC: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number(), itens: z.array(z.object({ insumoCodigo: z.string().optional(), descricao: z.string(), quantidade: z.number() })) }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       if (!input.obraId || input.itens.length === 0) return { ok: true, estouros: [] };
 
@@ -12221,7 +12345,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   getSaldoFd: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const obraRes = await db.execute(sql`SELECT orcamento_id FROM obras WHERE id = ${input.obraId} AND company_id = ${input.companyId} LIMIT 1`);
       const orcamentoId = (obraRes as any).rows?.[0]?.orcamento_id;
@@ -12273,7 +12398,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   getCotacaoSplitMatMdo: protectedProcedure
     .input(z.object({ cotacaoId: z.number(), companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const [cot] = await db.select().from(comprasCotacoes).where(and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, input.companyId)));
       if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
@@ -12421,7 +12547,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       valor: z.number().positive("Valor do FD deve ser maior que zero"),
       bdiItemId: z.number().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const [cot] = await db.select().from(comprasCotacoes)
         .where(and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, input.companyId)));
@@ -12590,7 +12717,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   removerCotacaoFd: protectedProcedure
     .input(z.object({ cotacaoId: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const [cot] = await db.select().from(comprasCotacoes)
         .where(and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, input.companyId)));
@@ -12613,7 +12741,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       valor: z.number(),
       bdiItemId: z.number().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const [oc] = await db.select().from(comprasOrdens)
         .where(and(eq(comprasOrdens.id, input.ocId), eq(comprasOrdens.companyId, input.companyId)));
@@ -12670,6 +12799,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
   aprovarFdCliente: protectedProcedure
     .input(z.object({ ocId: z.number(), companyId: z.number(), aprovadoPor: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const userRole = (ctx.user as any)?.role;
       if (!["admin", "admin_master"].includes(userRole)) {
@@ -12727,7 +12857,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       adminEmail: z.string(),
       adminSenha: z.string(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
 
       const [admin] = await db.select({ id: users.id, name: users.name, role: users.role, password: users.password })
@@ -12764,7 +12895,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
   getHistoricoFdAjustes: protectedProcedure
     .input(z.object({ companyId: z.number(), orcamentoId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       return db.select().from(fdAjustes)
         .where(and(eq(fdAjustes.companyId, input.companyId), eq(fdAjustes.orcamentoId, input.orcamentoId)))
@@ -12785,7 +12917,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       adminSenha: z.string(),
       justificativa: z.string().min(5),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
 
       const [admin] = await db.select({ id: users.id, name: users.name, role: users.role, password: users.password })
@@ -12837,7 +12970,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       adminSenha: z.string(),
       justificativa: z.string().min(5),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
 
       const [admin] = await db.select({ id: users.id, name: users.name, role: users.role, password: users.password })
@@ -12889,7 +13023,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       eapCodigoSelecionado: z.string(),
       tipo: z.string(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const prefix = input.eapCodigoSelecionado.split(".").slice(0, 2).join(".");
 
@@ -13338,7 +13473,8 @@ Responda APENAS com JSON válido, sem markdown, no formato:
   classificacaoProgresso: protectedProcedure.input(z.object({
     orcamentoId: z.number(),
     companyId: z.number(),
-  })).query(({ input }) => {
+  })).query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
     const p = classificacaoProgress.get(classifKey(input.orcamentoId, input.companyId));
     if (!p) return null;
     const pct = p.totalLotes > 0 ? Math.round((p.loteAtual / p.totalLotes) * 100) : 0;
@@ -13988,7 +14124,8 @@ Responda APENAS com JSON válido, sem markdown, no formato:
       companyId: z.number(),
       dryRun:    z.boolean().default(true),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       return await db.transaction(async (tx: any) => {
         await tx.execute(sql`SELECT pg_advisory_xact_lock(${input.companyId}::int, 1001::int)`);
