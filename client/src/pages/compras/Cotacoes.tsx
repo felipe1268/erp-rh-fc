@@ -4570,27 +4570,43 @@ export default function Cotacoes() {
                                           (extrairIA.isPending || !!iaJobId) ? "opacity-50 pointer-events-none border-gray-200 bg-gray-50 text-gray-400" :
                                           "bg-violet-600 border-violet-600 text-white hover:bg-violet-500"
                                         }`}
-                                        title="Ler cotação (PDF ou JPG) com IA e preencher os preços automaticamente"
+                                        title="Ler cotação (PDF ou JPG) com IA — pode selecionar VÁRIOS arquivos de uma vez (páginas/fotos da mesma cotação)"
                                       >
                                         <Sparkles className="h-3.5 w-3.5" />
                                         Ler cotação (IA)
                                         <input
                                           type="file"
+                                          multiple
                                           accept=".jpg,.jpeg,.pdf,image/jpeg,application/pdf"
                                           className="hidden"
                                           disabled={extrairIA.isPending || !!iaJobId}
-                                          onChange={e => {
-                                            const file = e.target.files?.[0];
-                                            if (!file) return;
-                                            const reader = new FileReader();
-                                            reader.onload = ev => {
-                                              const base64 = (ev.target?.result as string).split(",")[1];
-                                              setIaFileBuffer({ fornecedorId: p.fornecedorId, base64, fileName: file.name, mimeType: file.type });
-                                              uploadAnexo.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, companyId, fileBase64: base64, fileName: file.name, mimeType: file.type });
-                                              extrairIA.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, companyId, fileBase64: base64, fileName: file.name, mimeType: file.type, tipoProposta: iaTipoProposta });
-                                            };
-                                            reader.readAsDataURL(file);
+                                          onChange={async e => {
+                                            const files = Array.from(e.target.files ?? []);
                                             e.target.value = "";
+                                            if (files.length === 0) return;
+                                            if (files.length > 10) { toast.error("Máximo de 10 arquivos por leitura."); return; }
+                                            const normMime = (f: File) => {
+                                              if (f.type === "application/pdf") return "application/pdf" as const;
+                                              if (f.type === "image/jpeg" || f.type === "image/jpg") return "image/jpeg" as const;
+                                              const ext = f.name.split(".").pop()?.toLowerCase();
+                                              if (ext === "pdf") return "application/pdf" as const;
+                                              return "image/jpeg" as const;
+                                            };
+                                            const readOne = (f: File) => new Promise<{ fileBase64: string; fileName: string; mimeType: "application/pdf" | "image/jpeg" }>((resolve, reject) => {
+                                              const r = new FileReader();
+                                              r.onload = ev => resolve({ fileBase64: (ev.target?.result as string).split(",")[1], fileName: f.name, mimeType: normMime(f) });
+                                              r.onerror = () => reject(new Error("Falha ao ler " + f.name));
+                                              r.readAsDataURL(f);
+                                            });
+                                            try {
+                                              const arquivos = await Promise.all(files.map(readOne));
+                                              const first = arquivos[0];
+                                              setIaFileBuffer({ fornecedorId: p.fornecedorId, base64: first.fileBase64, fileName: first.fileName, mimeType: first.mimeType });
+                                              uploadAnexo.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, companyId, fileBase64: first.fileBase64, fileName: first.fileName, mimeType: first.mimeType });
+                                              extrairIA.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, companyId, arquivos, tipoProposta: iaTipoProposta });
+                                            } catch (err: any) {
+                                              toast.error(err?.message || "Falha ao ler os arquivos");
+                                            }
                                           }}
                                         />
                                       </label>

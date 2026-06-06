@@ -508,39 +508,48 @@ async function invokeGeminiFast(params: InvokeParams): Promise<InvokeResult> {
 // ── Exported helper: invoke Anthropic with raw base64 image ─────────────────
 export async function invokeAnthropicVision(params: {
   prompt: string;
-  base64: string;
-  mimeType: string;
+  base64?: string;
+  mimeType?: string;
+  // Rev. 2800 — suporte a MÚLTIPLOS arquivos numa única chamada (vários blocos
+  // de imagem/PDF). Retrocompatível: se `files` vier vazio, usa base64+mimeType.
+  files?: { base64: string; mimeType: string }[];
   systemPrompt?: string;
   maxTokens?: number;
 }): Promise<string> {
   const client = getAnthropicClient();
   if (!client) throw new Error("Anthropic não configurado");
 
-  const isPdf = params.mimeType === "application/pdf";
+  const fileList = (params.files && params.files.length > 0)
+    ? params.files
+    : (params.base64 && params.mimeType ? [{ base64: params.base64, mimeType: params.mimeType }] : []);
+  if (fileList.length === 0) throw new Error("Nenhum arquivo fornecido para análise");
 
-  const contentBlock: any = isPdf
-    ? {
-        type: "document",
-        source: {
-          type: "base64",
-          media_type: "application/pdf",
-          data: params.base64,
-        },
-      }
-    : {
-        type: "image",
-        source: {
-          type: "base64",
-          media_type: params.mimeType as Anthropic.Messages.Base64ImageSource["media_type"],
-          data: params.base64,
-        },
-      };
+  const contentBlocks: any[] = fileList.map((f) => {
+    const isPdf = f.mimeType === "application/pdf";
+    return isPdf
+      ? {
+          type: "document",
+          source: {
+            type: "base64",
+            media_type: "application/pdf",
+            data: f.base64,
+          },
+        }
+      : {
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: f.mimeType as Anthropic.Messages.Base64ImageSource["media_type"],
+            data: f.base64,
+          },
+        };
+  });
 
   const messages: Anthropic.Messages.MessageParam[] = [
     {
       role: "user",
       content: [
-        contentBlock,
+        ...contentBlocks,
         { type: "text", text: params.prompt },
       ],
     },

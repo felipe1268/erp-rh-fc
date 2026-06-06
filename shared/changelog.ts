@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2800 — **COMPRAS · COTAÇÕES — LEITURA POR IA AGORA ACEITA ENVIAR VÁRIOS ARQUIVOS DE UMA VEZ (PÁGINAS/FOTOS DA
+ * MESMA COTAÇÃO) NUMA ÚNICA LEITURA. O BOTÃO "LER COTAÇÃO (IA)" GANHOU `multiple`; TODOS OS ARQUIVOS VÃO JUNTOS NUMA
+ * SÓ CHAMADA AO CLAUDE VISION (UM ÚNICO JOB / UMA ÚNICA PROPOSTA), SEM DUPLICAR ITENS REPETIDOS ENTRE PÁGINAS.**
+ *
+ * PEDIDO (usuário): permitir enviar VÁRIOS arquivos ao mesmo tempo na leitura por IA da cotação (antes só 1 por vez).
+ *
+ * O QUE MUDOU:
+ *   - `server/_core/llm.ts` (`invokeAnthropicVision`): além de `base64`+`mimeType` (1 arquivo, retrocompatível), passou
+ *     a aceitar `files: {base64,mimeType}[]`. Monta UM array de `contentBlocks` (vários blocos image/document) enviados
+ *     numa ÚNICA chamada `messages.create`, seguidos do bloco de texto do prompt. Se `files` vier vazio, cai no
+ *     base64+mimeType legado. Mudança retrocompatível — demais chamadores (frotas, warehouse, etc.) seguem iguais.
+ *   - `server/routers/compras.ts` (`extrairCotacaoIA`): input passou a aceitar `arquivos: {fileBase64,fileName,mimeType}[]`
+ *     (`.min(1).max(10)`), mantendo `fileBase64`/`fileName`/`mimeType` como opcionais (retrocompat). Normaliza para uma
+ *     lista única (`arquivos` tem prioridade); `fileNameRef` = nome único quando 1 arquivo, ou "N arquivos (primeiro …)"
+ *     quando vários (gravado em `comprasCotacaoPropostas.fileName` e no resultado do job). Passa `files:` ao
+ *     `invokeAnthropicVision`. Prompt no plural quando >1 arquivo (instrui considerar TODOS em conjunto, sem duplicar
+ *     itens repetidos entre páginas). ZERO schema novo — `uploadAnexoFornecedor` segue gravando só 1 `arquivoUrl`.
+ *   - `client/src/pages/compras/Cotacoes.tsx` (botão violeta "Ler cotação (IA)"): file input ganhou `multiple`; o
+ *     `onChange` lê TODOS os arquivos (Promise.all de FileReader → base64), normaliza o mimeType por arquivo, faz o
+ *     upload do PRIMEIRO como anexo (schema só tem 1 slot de anexo) e chama `extrairIA` UMA vez com `arquivos`. Guarda
+ *     limite de 10 arquivos (toast). Tooltip atualizado avisando que dá pra selecionar vários.
+ *
+ * ZERO ALTER/DROP/DELETE (R-001/R-007/R-010). Validação: esbuild OK em `compras.ts`, `llm.ts` e `Cotacoes.tsx`; HMR limpo.
+ *
  * Rev. 2799 — **COMPRAS · COTAÇÕES — OVERLAY "CONFERÊNCIA — LEITURA IA" REFEITO COM LIBERDADE TOTAL DE MATCH POR
  * LINHA + BOTÃO CLARO "LER COTAÇÃO (IA)" NO TOOLBAR DO FORNECEDOR (1 CLIQUE: ANEXA + LÊ + ABRE A CONFERÊNCIA). TUDO
  * CLIENT-ONLY; ZERO SCHEMA/SERVER; REUSA `extrairCotacaoIA` E `salvarRespostasLote`.**

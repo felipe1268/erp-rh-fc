@@ -5341,12 +5341,30 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       cotacaoId: z.number(),
       fornecedorId: z.number(),
       companyId: z.number(),
-      fileBase64: z.string().max(15_000_000),
-      fileName: z.string(),
-      mimeType: z.enum(["application/pdf", "image/jpeg", "image/jpg"]),
+      // Rev. 2800 — leitura por IA passou a aceitar MÚLTIPLOS arquivos numa só
+      // chamada (várias fotos/páginas da mesma cotação). `fileBase64`/`fileName`/
+      // `mimeType` continuam aceitos (1 arquivo, retrocompat); `arquivos` (array)
+      // tem prioridade quando enviado.
+      fileBase64: z.string().max(15_000_000).optional(),
+      fileName: z.string().optional(),
+      mimeType: z.enum(["application/pdf", "image/jpeg", "image/jpg"]).optional(),
+      arquivos: z.array(z.object({
+        fileBase64: z.string().max(15_000_000),
+        fileName: z.string(),
+        mimeType: z.enum(["application/pdf", "image/jpeg", "image/jpg"]),
+      })).min(1).max(10).optional(),
       tipoProposta: z.enum(["complemento", "revisao"]).default("complemento"),
     }))
     .mutation(async ({ input }) => {
+      // Rev. 2800 — normaliza p/ lista de arquivos (array tem prioridade).
+      const arquivos = (input.arquivos && input.arquivos.length > 0)
+        ? input.arquivos
+        : (input.fileBase64 && input.fileName && input.mimeType
+            ? [{ fileBase64: input.fileBase64, fileName: input.fileName, mimeType: input.mimeType }]
+            : []);
+      if (arquivos.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum arquivo enviado para leitura" });
+      const fileNameRef = arquivos.length === 1 ? arquivos[0].fileName : `${arquivos.length} arquivos (${arquivos[0].fileName} …)`;
+
       const db = await getDb();
       const [cot] = await db.select().from(comprasCotacoes)
         .where(and(eq(comprasCotacoes.id, input.cotacaoId), eq(comprasCotacoes.companyId, input.companyId)));
@@ -5398,7 +5416,7 @@ INTELIGÊNCIA DE MATCHING:
             ? `\n\nITENS JÁ PREENCHIDOS POR PROPOSTAS ANTERIORES (para contexto):\n${itensRef.filter(it => it.jaPreenchido).map(it => `- [ID:${it.id}] ${it.descricao}: R$ ${it.jaPreenchido!.precoUnitario.toFixed(2)} x ${it.jaPreenchido!.quantidade}`).join("\n")}`
             : "";
 
-          const prompt = `Analise este documento de cotação/orçamento de fornecedor e extraia todos os itens.
+          const prompt = `Analise ${arquivos.length > 1 ? `estes ${arquivos.length} documentos/imagens (são páginas/partes da MESMA cotação do mesmo fornecedor — considere TODOS em conjunto, sem duplicar itens repetidos entre páginas)` : "este documento"} de cotação/orçamento de fornecedor e extraia todos os itens.
 
 ITENS DA SOLICITAÇÃO DE COMPRA (para referência de matching):
 ${itensRef.map((it, i) => `${i + 1}. [ID:${it.id}] ${it.descricao} | Qtd solicitada: ${it.quantidade} ${it.unidade || "un"}${it.jaPreenchido ? " (JÁ PREENCHIDO)" : ""}`).join("\n")}
@@ -5436,11 +5454,9 @@ Retorne APENAS um JSON válido neste formato:
   "observacoes": "informações relevantes extraídas" ou null
 }`;
 
-          const isPdf = input.mimeType === "application/pdf";
           const resultText = await invokeAnthropicVision({
             prompt,
-            base64: input.fileBase64,
-            mimeType: isPdf ? "application/pdf" : input.mimeType,
+            files: arquivos.map(a => ({ base64: a.fileBase64, mimeType: a.mimeType === "image/jpg" ? "image/jpeg" : a.mimeType })),
             systemPrompt,
             maxTokens: 4096,
           });
@@ -5562,7 +5578,7 @@ Retorne APENAS um JSON válido neste formato:
             cotacaoId: input.cotacaoId,
             fornecedorId: input.fornecedorId,
             companyId: input.companyId,
-            fileName: input.fileName,
+            fileName: fileNameRef,
             tipo: input.tipoProposta,
             status: "ativa",
             itensExtraidos: itensExtraidos.length,
@@ -5629,7 +5645,7 @@ Retorne APENAS um JSON válido neste formato:
               totalExtras: itensExtras.length,
               totalAlertas: alertas.length,
               tipoProposta: input.tipoProposta,
-              fileName: input.fileName,
+              fileName: fileNameRef,
             },
           });
           console.log("[extrairCotacaoIA] Job", jobId, "concluído. Proposta", proposta.id, "tipo:", input.tipoProposta, "matches:", matchedIds.size, "alertas:", alertas.length);
