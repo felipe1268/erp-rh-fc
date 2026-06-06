@@ -7187,18 +7187,25 @@ Retorne APENAS um JSON válido neste formato:
       await _assertCompanyAccess(ctx.user, oc.companyId);
       const itensRaw = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
       const scItemIdsForEnrich = itensRaw.map(i => i.solicitacaoItemId).filter(Boolean) as number[];
-      let scSemVerbaMap: Record<number, { semVerba: boolean; motivoSemVerba: string | null }> = {};
+      let scSemVerbaMap: Record<number, { semVerba: boolean; motivoSemVerba: string | null; eapCodigo: string | null }> = {};
       if (scItemIdsForEnrich.length > 0) {
         const scFlags = await db.select({
           id: comprasSolicitacoesItens.id,
           semVerba: comprasSolicitacoesItens.semVerba,
           motivoSemVerba: comprasSolicitacoesItens.motivoSemVerba,
+          eapCodigo: comprasSolicitacoesItens.eapCodigo,
         }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIdsForEnrich));
-        for (const f of scFlags) scSemVerbaMap[f.id] = { semVerba: f.semVerba ?? false, motivoSemVerba: f.motivoSemVerba ?? null };
+        for (const f of scFlags) scSemVerbaMap[f.id] = { semVerba: f.semVerba ?? false, motivoSemVerba: f.motivoSemVerba ?? null, eapCodigo: f.eapCodigo ?? null };
       }
       const itens = itensRaw.map(it => {
         const scFlags = it.solicitacaoItemId ? scSemVerbaMap[it.solicitacaoItemId] : null;
-        return { ...it, semVerba: scFlags?.semVerba ?? false, motivoSemVerba: scFlags?.motivoSemVerba ?? null };
+        // VÍNCULO DE ETAPA (EAP) RESTAURADO: OCs criadas a partir de cotação não persistiam o
+        // `insumoCodigo` (código da etapa do orçamento) no item da OC, então o seletor de etapa
+        // abria VAZIO ao editar. Quando o item da OC não tem `insumoCodigo` próprio, herda o
+        // `eapCodigo` do item da SC de origem (read-only; não grava no banco). Persiste no
+        // primeiro save da edição (confirmarRascunhoOrdem grava `insumoCodigo = eapCodigo`).
+        const insumoCodigo = (it as any).insumoCodigo || scFlags?.eapCodigo || null;
+        return { ...it, insumoCodigo, semVerba: scFlags?.semVerba ?? false, motivoSemVerba: scFlags?.motivoSemVerba ?? null };
       });
       let fornecedor = null;
       if (oc.fornecedorId) {
@@ -7389,6 +7396,20 @@ Retorne APENAS um JSON válido neste formato:
       }
 
       const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
+
+      // VÍNCULO DE ETAPA (EAP) NA OC: o item da cotação não carrega o código da etapa; ele vive
+      // no item da SC de origem (`comprasSolicitacoesItens.eapCodigo`). Mapeia scItemId→eapCodigo
+      // para gravar em `comprasOrdensItens.insumoCodigo` no insert abaixo (caso contrário o
+      // seletor de etapa abre vazio ao editar a OC).
+      const scEapMapCot: Record<number, string | null> = {};
+      {
+        const scIds = [...new Set(itens.map(i => i.solicitacaoItemId).filter(Boolean) as number[])];
+        if (scIds.length > 0) {
+          const scRows = await db.select({ id: comprasSolicitacoesItens.id, eapCodigo: comprasSolicitacoesItens.eapCodigo })
+            .from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scIds));
+          for (const r of scRows) scEapMapCot[r.id] = r.eapCodigo ?? null;
+        }
+      }
 
       // Busca preços do fornecedor vencedor no mapa de cotação
       const respostasForn = await db.select().from(comprasCotacaoRespostas).where(
@@ -7655,6 +7676,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
             return {
               ordemId: oc.id,
               solicitacaoItemId: it.solicitacaoItemId ?? null,
+              insumoCodigo: it.solicitacaoItemId ? (scEapMapCot[it.solicitacaoItemId] ?? null) : null,
               descricao: normalizarTexto(it.descricao),
               unidade: it.unidade,
               quantidade: String(qty),
@@ -7981,6 +8003,19 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
       const todosItens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
 
+      // VÍNCULO DE ETAPA (EAP) NA OC: item da cotação não carrega o código da etapa; ele vive no
+      // item da SC (`comprasSolicitacoesItens.eapCodigo`). Mapeia scItemId→eapCodigo p/ gravar em
+      // `comprasOrdensItens.insumoCodigo` (senão o seletor de etapa abre vazio ao editar a OC).
+      const scEapMapParcial: Record<number, string | null> = {};
+      {
+        const scIds = [...new Set(todosItens.map(i => i.solicitacaoItemId).filter(Boolean) as number[])];
+        if (scIds.length > 0) {
+          const scRows = await db.select({ id: comprasSolicitacoesItens.id, eapCodigo: comprasSolicitacoesItens.eapCodigo })
+            .from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scIds));
+          for (const r of scRows) scEapMapParcial[r.id] = r.eapCodigo ?? null;
+        }
+      }
+
       // Rev. 2290 — Carrega tipo + dados de locação da SC origem
       // numa única query, para herdar em TODAS as OCs parciais geradas.
       const scSrc = cot.solicitacaoId
@@ -8105,6 +8140,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
                 ordemId: oc.id,
                 solicitacaoItemId: it.solicitacaoItemId ?? null,
                 cotacaoItemId: it.id,
+                insumoCodigo: it.solicitacaoItemId ? (scEapMapParcial[it.solicitacaoItemId] ?? null) : null,
                 descricao: normalizarTexto(it.descricao),
                 unidade: it.unidade,
                 quantidade: String(qty),

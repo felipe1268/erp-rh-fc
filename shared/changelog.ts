@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2812 — **COMPRAS · ORDENS — HOTFIX: AO CLICAR EM "EDITAR OC" O VÍNCULO DA ETAPA (EAP) SE PERDIA — O SELETOR
+ * "SELECIONAR ETAPA DO ORÇAMENTO (EAP)" ABRIA VAZIO, MESMO A OC TENDO ORIGEM NA SOLICITAÇÃO/COTAÇÃO. AGORA A ETAPA
+ * É PRESERVADA (PROPAGADA NA CRIAÇÃO + HERDADA DA SC NA LEITURA, CORRIGINDO OCs JÁ EXISTENTES).**
+ *
+ * PEDIDO (usuário, com screenshot da OC-2026-388, criada a partir da Cotação #433): ao abrir "Editar OC", o chip de
+ * etapa de cada item ficava em branco ("Selecionar etapa do orçamento (EAP)"), perdendo o vínculo orçamentário.
+ *
+ * CAUSA-RAIZ: o front (`Ordens.tsx`) usa a coluna `insumoCodigo` do item da OC como CÓDIGO DA ETAPA (EAP) — ao editar
+ * lê `eapCodigo = it.insumoCodigo` e ao salvar grava `insumoCodigo = i.eapCodigo`, casando contra `getEapParaObra`
+ * (`eapCodigo`). Porém os DOIS caminhos de criação de OC a partir de cotação (`criarOrdemDeCotacao` e
+ * `criarOCsParciais` em `server/routers/compras.ts`) inseriam os itens em `comprasOrdensItens` SEM gravar
+ * `insumoCodigo`. Isso porque o item da COTAÇÃO (`comprasCotacoesItens`) não carrega o código da etapa — ele vive no
+ * item da SC de origem (`comprasSolicitacoesItens.eapCodigo`), acessível via `solicitacaoItemId`. Resultado:
+ * `insumoCodigo` nulo no item da OC → chip vazio na edição.
+ *
+ * O QUE FOI FEITO: (1) LEITURA — `getOrdem` passou a buscar também `eapCodigo` do item da SC (já fazia a query de
+ * `semVerba`/`motivoSemVerba` por `solicitacaoItemId`); quando o item da OC não tem `insumoCodigo` próprio, herda o
+ * `eapCodigo` da SC (`insumoCodigo = it.insumoCodigo || scFlags.eapCodigo`). Isso é READ-ONLY (não grava no banco) e
+ * conserta TODAS as OCs já existentes (inclusive a #388) ao reabrir a edição; ao salvar, o `confirmarRascunhoOrdem`
+ * persiste o valor. (2) CRIAÇÃO — nos dois caminhos (`criarOrdemDeCotacao` e `criarOCsParciais`) foi montado um mapa
+ * `scItemId → eapCodigo` (uma query a `comprasSolicitacoesItens`) e o insert de `comprasOrdensItens` passou a gravar
+ * `insumoCodigo` derivado dele, persistindo a etapa para TODA OC nova.
+ *
+ * RESSALVA: a coluna da OC se chama `insumoCodigo`, mas por convenção do front guarda o CÓDIGO DA ETAPA (EAP) — não
+ * foi renomeada (fora de escopo). ZERO ALTER/DROP/DELETE; ZERO schema novo; backend mexido apenas em leitura/insert.
+ * Validação: esbuild OK em `compras.ts`. Detalhe: este arquivo.
+ *
  * Rev. 2811 — **COMPRAS · SOLICITAÇÕES — HOTFIX: NO PDF DA SC ("GERAR PDF") AS QUANTIDADES APARECIAM COM "ESCALA EM
  * MIL" (ex.: QTD 50 SAÍA COMO "50.000", QTD 1 COMO "1.000"). AGORA A COLUNA "QTD" É FORMATADA EM pt-BR ANTES DE
  * IMPRIMIR.**
