@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2797 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): OS DOIS GRÁFICOS DA CURVA S (FÍSICA 3A
+ * E FINANCEIRA 3B) FICARAM BEM MAIORES NA TELA — A ALTURA DO CHART-BOX SUBIU DE 560 → 760px PARA PREENCHER A ÁREA
+ * QUE O USUÁRIO MARCOU (ANTES SOBRAVA BRANCO ABAIXO DA CURVA DENTRO DO CARD).**
+ *
+ * PEDIDO (usuário): "A, quero eles do tamanho da área que deixei marcada" (anexou 2 prints — Curva S Física e
+ * Financeira — com uma MOLDURA AMARELA desenhada à mão em volta de TODO o card, bem ABAIXO de onde a curva termina,
+ * indicando que o gráfico deveria descer até preencher esse retângulo).
+ *
+ * CAUSA: o card de cada bloco é só faixa-título + KPI strip + chart-box; o chart-box tinha `height: 560` e a curva
+ * ocupava só a faixa superior, deixando branco até a borda do card.
+ *
+ * FIX (SÓ CLIENT; ZERO SCHEMA/SERVER) em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (componente `Refis`):
+ *   - os 2 containers `.refis-chart-box` (BLOCO 3A físico + 3B financeiro) passaram de `style={{ height: 560 }}` →
+ *     `760` (ResponsiveContainer `height="100%"` acompanha → curva enche o card até a área marcada).
+ *   - o seletor de impressão acompanhou: `#refis-print-area [style*="height: 560"]` → `[style*="height: 760"]`
+ *     (continua capando o PDF em `360pt` — o aumento é só NA TELA; a impressão segue no valor seguro da Rev. 2795).
+ *   `break-inside: avoid` e a largura forçada à folha (Rev. 2792) mantidos. Nenhuma série/cálculo/eixo/dado mudou —
+ *   só a ALTURA na tela. ZERO ALTER/DROP/DELETE. Validação: esbuild OK; HMR. RESSALVA: no PDF a altura segue 360pt
+ *   (página A4 não comporta 760px); se quiser o gráfico maior TAMBÉM no PDF, subir o `360pt` é trivial (com atenção
+ *   ao limite da folha em LANDSCAPE).
+ *
  * Rev. 2796 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): REMOVIDOS DE VEZ A MOLDURA POR PÁGINA
  * E O CABEÇALHO FIXO REPETIDO (LOGO FC + DATA DE STATUS) ADICIONADOS NA REV. 2793 — ELES DUPLICAVAM A MOLDURA E O
  * LOGO QUE O PRÓPRIO DOCUMENTO JÁ TEM (NA PÁGINA 1 APARECIAM 2 LOGOS FC E UMA LINHA DE MOLDURA INDEVIDA).**
