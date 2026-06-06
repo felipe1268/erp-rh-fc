@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2794 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): NA IMPRESSÃO OS GRÁFICOS DA CURVA S
+ * (FÍSICA 3A E FINANCEIRA 3B) FICARAM MAIS ALTOS / "MAIS RETANGULARES" — DEIXARAM DE OCUPAR SÓ A FAIXA SUPERIOR
+ * DA FOLHA COM MUITO BRANCO ABAIXO; ALTURA DE IMPRESSÃO AGORA ACOMPANHA A ORIENTAÇÃO (RETRATO MUITO MAIS ALTO).**
+ *
+ * PEDIDO (usuário): "Faça ela mais retangular e maior não tá bom assim" (anexou print da Curva S Física com o
+ * gráfico ocupando só ~45% do topo da folha e ~55% de espaço branco abaixo).
+ *
+ * CAUSA-RAIZ: a altura de impressão dos 2 gráficos da Curva S era FIXA em `330pt` (≈11,6cm) — perto do máximo no
+ * RETRATO em LANDSCAPE, mas em RETRATO (folha alta) sobra ~metade da página em branco abaixo do gráfico.
+ *
+ * FIX (SÓ CLIENT; ZERO SCHEMA/SERVER) em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (componente `Refis`):
+ *   1) Os 2 containers (BLOCO 3A físico + 3B financeiro) passaram de `style={{ height: 460 }}` → `560` (maiores na TELA
+ *      também).
+ *   2) O seletor de impressão `[style*="height: 460"] { height: 330pt }` virou `[style*="height: 560"]` com altura
+ *      ORIENTATION-AWARE: `landscape` → `330pt` (já perto do máximo da folha deitada); `portrait` → `480pt` (≈16,9cm,
+ *      preenche a folha em pé e elimina o branco abaixo, deixando folga p/ a faixa de seção + KPIs e evitando overflow
+ *      apontado pelo architect). O `<style>` já é template-literal, então interpola `orientacaoPdf` direto.
+ *   `break-inside: avoid` da `.recharts-wrapper` mantido (gráfico não corta). A largura já é forçada à largura útil da
+ *   folha no clique de "Imprimir PDF" (Rev. 2792), então o gráfico agora fica grande nas DUAS dimensões. Nenhuma
+ *   série/cálculo/eixo mudou — só a APRESENTAÇÃO (altura). Demais gráficos (BLOCO 4, altura computada) intactos.
+ *   ZERO ALTER/DROP/DELETE. Validação: esbuild OK; HMR; architect. RESSALVA: o branco abaixo só some de fato quando a
+ *   orientação escolhida bate com a folha física do Ctrl+P; em LANDSCAPE a altura é limitada pela folha deitada.
+ *
  * Rev. 2793 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): A IMPRESSÃO GANHOU MOLDURA FECHANDO O
  * RETÂNGULO DE CADA PÁGINA, UM CABEÇALHO FIXO REPETIDO EM TODA PÁGINA (LOGO FC + OBRA + DATA DE STATUS) E A DATA DE
  * STATUS PASSOU A SAIR EM VERMELHO/DESTAQUE; REFORÇO ANTI-CORTE DE LINHAS E CABEÇALHOS DE TABELA.**
