@@ -7041,51 +7041,89 @@ export default function Cotacoes() {
       const totalSel = itensCot.filter(it => sel.has(it.id)).reduce((s, it) => s + (parseFloat(it.total) || 0), 0);
       const restam = itensCot.length - sel.size;
       const podeDividir = sel.size >= 1 && sel.size < itensCot.length;
+      const restamTotal = itensCot.filter(it => !sel.has(it.id)).reduce((s, it) => s + (parseFloat(it.total) || 0), 0);
+      const todosMarcados = itensCot.length > 0 && sel.size === itensCot.length;
       return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => setShowDividirModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-violet-100"><GitBranch className="h-5 w-5 text-violet-600" /></div>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setShowDividirModal(false)}>
+          <div className="bg-white rounded-3xl shadow-2xl ring-1 ring-black/5 w-full max-w-2xl max-h-[88vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            {/* Header com gradiente */}
+            <div className="relative px-6 pt-6 pb-5 bg-gradient-to-br from-violet-600 via-violet-600 to-fuchsia-600 text-white">
+              <button onClick={() => setShowDividirModal(false)} className="absolute top-4 right-4 p-1.5 rounded-full text-white/80 hover:text-white hover:bg-white/15 transition-colors"><X className="h-5 w-5" /></button>
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25 backdrop-blur"><GitBranch className="h-5 w-5" /></div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-800">Dividir Cotação</h3>
-                  <p className="text-xs text-gray-500">Marque os itens que vão sair para uma <strong>nova cotação separada</strong> (mesma SC). Os itens marcados saem desta cotação.</p>
+                  <h3 className="text-xl font-bold tracking-tight">Dividir Cotação</h3>
+                  <p className="text-[13px] text-white/80 mt-0.5">Selecione os itens que vão sair para uma nova cotação separada — mesma SC, fornecedores diferentes.</p>
                 </div>
               </div>
-              <button onClick={() => setShowDividirModal(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
             </div>
-            <div className="flex items-center gap-2 px-6 py-2 border-b border-gray-100 bg-gray-50">
-              <button type="button" onClick={() => setDividirSel(new Set(itensCot.map(it => it.id)))} className="text-xs text-violet-700 hover:underline">Selecionar todos</button>
-              <span className="text-gray-300">·</span>
-              <button type="button" onClick={() => setDividirSel(new Set())} className="text-xs text-gray-600 hover:underline">Limpar</button>
+
+            {/* Toolbar de seleção */}
+            <div className="flex items-center justify-between gap-2 px-6 py-3 border-b border-gray-100 bg-gray-50/70">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-700">
+                  <Check className="h-3.5 w-3.5" /> {sel.size} selecionado{sel.size === 1 ? "" : "s"}
+                </span>
+                <span className="text-xs text-gray-400">de {itensCot.length}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button type="button" onClick={() => setDividirSel(todosMarcados ? new Set() : new Set(itensCot.map(it => it.id)))}
+                  className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-100 transition-colors">
+                  {todosMarcados ? "Desmarcar todos" : "Selecionar todos"}
+                </button>
+                <button type="button" onClick={() => setDividirSel(new Set())}
+                  className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-200/70 transition-colors">Limpar</button>
+              </div>
             </div>
-            <div className="flex-1 overflow-auto px-6 py-3 space-y-1.5">
+
+            {/* Lista de itens */}
+            <div className="flex-1 overflow-auto px-4 sm:px-6 py-3 space-y-2 bg-gray-50/40">
               {itensCot.map(it => {
                 const checked = sel.has(it.id);
                 return (
-                  <label key={it.id} className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${checked ? "border-violet-300 bg-violet-50" : "border-gray-200 hover:bg-gray-50"}`}>
-                    <input type="checkbox" checked={checked} onChange={() => setDividirSel(prev => { const next = new Set(prev); if (next.has(it.id)) next.delete(it.id); else next.add(it.id); return next; })}
-                      className="rounded border-gray-300 text-violet-600 focus:ring-violet-500 h-4 w-4" />
+                  <label key={it.id}
+                    className={`group flex items-center gap-3 px-3.5 py-3 rounded-xl border cursor-pointer transition-all ${checked ? "border-violet-400 bg-violet-50 shadow-sm ring-1 ring-violet-200" : "border-gray-200 bg-white hover:border-violet-200 hover:shadow-sm"}`}>
+                    <span className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border-2 transition-colors ${checked ? "border-violet-600 bg-violet-600" : "border-gray-300 group-hover:border-violet-400 bg-white"}`}>
+                      {checked && <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />}
+                    </span>
+                    <input type="checkbox" checked={checked} onChange={() => setDividirSel(prev => { const next = new Set(prev); if (next.has(it.id)) next.delete(it.id); else next.add(it.id); return next; })} className="sr-only" />
+                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-400 group-hover:bg-violet-100 group-hover:text-violet-500 transition-colors">
+                      <Package className="h-4 w-4" />
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-800 truncate">{it.descricao}</p>
-                      <p className="text-[11px] text-gray-500">{Number(it.quantidade)} {it.unidade || "un"}{parseFloat(it.total) > 0 ? ` · ${fmt(parseFloat(it.total))}` : ""}</p>
+                      <p className={`text-sm font-medium truncate ${checked ? "text-violet-900" : "text-gray-800"}`}>{it.descricao}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="inline-flex items-center rounded-md bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium text-gray-600">{Number(it.quantidade)} {it.unidade || "un"}</span>
+                        {parseFloat(it.total) > 0 && <span className="text-[11px] text-gray-400">{fmt(parseFloat(it.total))}</span>}
+                      </div>
                     </div>
                   </label>
                 );
               })}
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 space-y-3">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-500">{sel.size} {sel.size === 1 ? "item sairá" : "itens sairão"} para nova cotação · {restam} {restam === 1 ? "permanece" : "permanecem"}</span>
-                {totalSel > 0 && <span className="font-semibold text-gray-700">{fmt(totalSel)}</span>}
+
+            {/* Rodapé: resumo visual da divisão + ações */}
+            <div className="px-6 py-4 border-t border-gray-100 bg-white space-y-3">
+              <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-2">
+                <div className="rounded-xl border border-violet-200 bg-violet-50 px-3 py-2">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-violet-500">Nova cotação</p>
+                  <p className="text-sm font-bold text-violet-800">{sel.size} {sel.size === 1 ? "item" : "itens"}</p>
+                  {totalSel > 0 && <p className="text-[11px] text-violet-500">{fmt(totalSel)}</p>}
+                </div>
+                <div className="flex items-center justify-center text-violet-400"><ArrowLeftRight className="h-4 w-4" /></div>
+                <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">Permanecem aqui</p>
+                  <p className="text-sm font-bold text-gray-700">{restam} {restam === 1 ? "item" : "itens"}</p>
+                  {restamTotal > 0 && <p className="text-[11px] text-gray-400">{fmt(restamTotal)}</p>}
+                </div>
               </div>
-              {!podeDividir && sel.size > 0 && sel.size >= itensCot.length && (
-                <p className="text-xs text-amber-600">Deixe pelo menos 1 item na cotação original.</p>
+              {sel.size > 0 && sel.size >= itensCot.length && (
+                <p className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2"><AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" /> Deixe pelo menos 1 item na cotação original.</p>
               )}
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setShowDividirModal(false)}>Cancelar</Button>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button variant="outline" onClick={() => setShowDividirModal(false)} className="rounded-xl">Cancelar</Button>
                 <Button disabled={!podeDividir || dividirCotacao.isPending} onClick={() => dividirCotacao.mutate({ cotacaoId: showDetalhe!, itemIds: [...sel], userId: user?.id ? parseInt(String(user.id)) : undefined, userName: user?.nome || user?.name || undefined })}
-                  className="bg-violet-600 hover:bg-violet-700 text-white gap-2">
+                  className="rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white gap-2 shadow-lg shadow-violet-600/20 disabled:shadow-none disabled:opacity-50">
                   {dividirCotacao.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitBranch className="h-4 w-4" />} Mover para nova cotação
                 </Button>
               </div>
