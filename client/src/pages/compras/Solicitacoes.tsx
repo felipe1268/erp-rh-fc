@@ -1211,6 +1211,15 @@ export default function Solicitacoes() {
   const scOcId = (detalhe?.rastreio?.ordens as any[])?.[0]?.id ?? null;
   const scCotacaoQ = trpc.compras.getCotacao.useQuery({ id: scCotacaoId! }, { enabled: scCotacaoId !== null && abaScDetalhe === "cotacao" });
   const scMapaQ = trpc.compras.getMapaCotacao.useQuery({ cotacaoId: scCotacaoId! }, { enabled: scCotacaoId !== null && abaScDetalhe === "cotacao" });
+  // Rev. 2806 — Cobertura de itens da SC (quantos já estão em cotação) + "cotar restantes"
+  const coberturaScQ = trpc.compras.getCoberturaSolicitacao.useQuery({ solicitacaoId: showDetalhe! }, { enabled: showDetalhe !== null });
+  const cotarRestantesMut = trpc.compras.cotarItensRestantes.useMutation({
+    onSuccess: (data: any) => {
+      toast.success(`Nova cotação ${data.nova.numeroCotacao} criada com ${data.itens} ${data.itens === 1 ? "item restante" : "itens restantes"}.`);
+      detalheQ.refetch(); q.refetch(); coberturaScQ.refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
   useEffect(() => {
     if (abaScDetalhe === "cotacao" && !scCotacaoId) setAbaScDetalhe("detalhes");
     if (abaScDetalhe === "oc" && !scOcId) setAbaScDetalhe("detalhes");
@@ -5255,6 +5264,31 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                         );
                       })()}
                     </div>
+
+                    {/* Rev. 2806 — Selo de cobertura: quantos itens da SC já estão em cotação */}
+                    {coberturaScQ.data && coberturaScQ.data.total > 0 && (coberturaScQ.data.cotacoes?.length ?? 0) > 0 && (() => {
+                      const cob = coberturaScQ.data;
+                      const completo = cob.pendentes === 0;
+                      return (
+                        <div className={`flex items-center flex-wrap gap-2 rounded-lg border px-3 py-2 mb-1 ${completo ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}>
+                          {completo
+                            ? <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                            : <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />}
+                          <span className={`text-xs font-semibold ${completo ? "text-emerald-800" : "text-amber-800"}`}>
+                            {completo
+                              ? `Todos os ${cob.total} itens estão em cotação`
+                              : `${cob.cobertos} de ${cob.total} itens em cotação · ${cob.pendentes} pendente${cob.pendentes === 1 ? "" : "s"}`}
+                          </span>
+                          {!completo && (
+                            <button type="button" disabled={cotarRestantesMut.isPending}
+                              onClick={() => cotarRestantesMut.mutate({ solicitacaoId: showDetalhe!, userId: user?.id ? parseInt(String(user.id)) : undefined, userName: user?.nome || user?.name || undefined })}
+                              className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-40 transition-colors">
+                              {cotarRestantesMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileSearch className="h-3 w-3" />} Cotar {cob.pendentes} restante{cob.pendentes === 1 ? "" : "s"}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {/* Cotações */}
                     {(detalhe.rastreio?.cotacoes ?? []).length > 0 ? (

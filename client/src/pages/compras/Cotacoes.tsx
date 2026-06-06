@@ -935,6 +935,9 @@ export default function Cotacoes() {
   const [showTransferenciaDialog, setShowTransferenciaDialog] = useState(false);
   // obraOrigemId: null = "Almoxarifado Central" (obra_id IS NULL); número = obra específica; undefined = ainda não escolhido.
   const [transfObraOrigemId, setTransfObraOrigemId] = useState<number | null | undefined>(undefined);
+  // Rev. 2806 — Cotação parcial: modal "Dividir cotação" (move itens p/ nova cotação).
+  const [showDividirModal, setShowDividirModal] = useState(false);
+  const [dividirSel, setDividirSel] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1120,6 +1123,29 @@ export default function Cotacoes() {
     { enabled: companyId > 0 }
   );
   const detalheQ = trpc.compras.getCotacao.useQuery({ id: showDetalhe! }, { enabled: showDetalhe !== null });
+  // Rev. 2806 — Cobertura da SC (cotações irmãs + itens pendentes) p/ navegação e "cotar restantes".
+  const detalheScId = (detalheQ.data as any)?.solicitacaoId as number | null | undefined;
+  const coberturaScQ = trpc.compras.getCoberturaSolicitacao.useQuery(
+    { solicitacaoId: detalheScId! },
+    { enabled: showDetalhe !== null && !!detalheScId }
+  );
+  const dividirCotacao = trpc.compras.dividirCotacao.useMutation({
+    onSuccess: (data: any) => {
+      toast.success(`Cotação dividida! ${data.movidos} ${data.movidos === 1 ? "item movido" : "itens movidos"} para ${data.nova.numeroCotacao}.`);
+      setShowDividirModal(false);
+      setDividirSel(new Set());
+      detalheQ.refetch(); mapaQ.refetch(); q.refetch(); coberturaScQ.refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const cotarRestantes = trpc.compras.cotarItensRestantes.useMutation({
+    onSuccess: (data: any) => {
+      toast.success(`Nova cotação ${data.nova.numeroCotacao} criada com ${data.itens} ${data.itens === 1 ? "item restante" : "itens restantes"}.`);
+      coberturaScQ.refetch(); q.refetch();
+      setShowDetalhe(data.nova.id);
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const coberturaAutoQ = trpc.compras.buscarSaldosRealocacao.useQuery(
     { companyId, obraId: (detalheQ.data as any)?.obraId, cotacaoId: showDetalhe ?? undefined, deficit: 1 },
     { enabled: showDetalhe !== null && !!detalheQ.data }
@@ -3577,6 +3603,12 @@ export default function Cotacoes() {
                       {atualizarStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Reabrir Cotação
                     </Button>
                   )}
+                  {!["cancelada", "recusada", "aprovada", "concluida"].includes(detalheFullscreen.status ?? "") && ((detalheFullscreen as any)?.itens?.length ?? 0) >= 2 && (
+                    <Button variant="outline" onClick={() => { setDividirSel(new Set()); setShowDividirModal(true); }}
+                      className="border-violet-200 text-violet-700 hover:bg-violet-50 gap-2">
+                      <GitBranch className="h-4 w-4" /> Dividir Cotação
+                    </Button>
+                  )}
                   {!["cancelada", "recusada", "aprovada", "concluida"].includes(detalheFullscreen.status ?? "") && (
                     <Button variant="outline" onClick={async () => {
                       if (await confirm({
@@ -3596,6 +3628,40 @@ export default function Cotacoes() {
                   )}
                 </div>
               </div>
+
+              {/* Rev. 2806 — Navegação entre cotações "irmãs" da mesma SC + itens pendentes */}
+              {detalheScId && (coberturaScQ.data?.cotacoes?.length ?? 0) > 1 && (() => {
+                const irmas = (coberturaScQ.data?.cotacoes ?? []);
+                const idxAtual = irmas.findIndex(c => c.id === showDetalhe);
+                const pendentes = coberturaScQ.data?.pendentes ?? 0;
+                return (
+                  <div className="flex items-center flex-wrap gap-2 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2 mb-2">
+                    <GitBranch className="h-4 w-4 text-violet-600 shrink-0" />
+                    <span className="text-xs font-semibold text-violet-800">
+                      Cotação {idxAtual >= 0 ? idxAtual + 1 : "?"} de {irmas.length} desta solicitação:
+                    </span>
+                    <div className="flex items-center flex-wrap gap-1.5">
+                      {irmas.map(c => (
+                        <button key={c.id} type="button" onClick={() => { if (c.id !== showDetalhe) { setAbaAtiva("detalhes"); setShowDetalhe(c.id); } }}
+                          className={`px-2 py-0.5 rounded text-[11px] font-medium border transition-colors ${c.id === showDetalhe ? "bg-violet-600 text-white border-violet-600" : "bg-white text-violet-700 border-violet-300 hover:bg-violet-100"} ${["cancelada", "recusada"].includes(c.status ?? "") ? "line-through opacity-60" : ""}`}
+                          title={["cancelada", "recusada"].includes(c.status ?? "") ? "Cotação cancelada/recusada" : ""}>
+                          {c.numeroCotacao}
+                        </button>
+                      ))}
+                    </div>
+                    {pendentes > 0 && (
+                      <>
+                        <span className="text-xs text-violet-700">· {pendentes} {pendentes === 1 ? "item da SC ainda não cotado" : "itens da SC ainda não cotados"}</span>
+                        <button type="button" disabled={cotarRestantes.isPending}
+                          onClick={() => cotarRestantes.mutate({ solicitacaoId: detalheScId, userId: user?.id ? parseInt(String(user.id)) : undefined, userName: user?.nome || user?.name || undefined })}
+                          className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-40 transition-colors">
+                          {cotarRestantes.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} Cotar {pendentes} restante{pendentes === 1 ? "" : "s"}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Alerta: condições comerciais do vencedor incompletas */}
               {condicoesIncompletas && (
@@ -6967,6 +7033,67 @@ export default function Cotacoes() {
         })()}
       </DialogContent>
     </Dialog>
+
+    {/* Rev. 2806 — Modal "Dividir Cotação" (move itens p/ nova cotação) */}
+    {showDividirModal && detalheFullscreen && (() => {
+      const itensCot = ((detalheFullscreen as any).itens ?? []) as any[];
+      const sel = dividirSel;
+      const totalSel = itensCot.filter(it => sel.has(it.id)).reduce((s, it) => s + (parseFloat(it.total) || 0), 0);
+      const restam = itensCot.length - sel.size;
+      const podeDividir = sel.size >= 1 && sel.size < itensCot.length;
+      return (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => setShowDividirModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-violet-100"><GitBranch className="h-5 w-5 text-violet-600" /></div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800">Dividir Cotação</h3>
+                  <p className="text-xs text-gray-500">Marque os itens que vão sair para uma <strong>nova cotação separada</strong> (mesma SC). Os itens marcados saem desta cotação.</p>
+                </div>
+              </div>
+              <button onClick={() => setShowDividirModal(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="flex items-center gap-2 px-6 py-2 border-b border-gray-100 bg-gray-50">
+              <button type="button" onClick={() => setDividirSel(new Set(itensCot.map(it => it.id)))} className="text-xs text-violet-700 hover:underline">Selecionar todos</button>
+              <span className="text-gray-300">·</span>
+              <button type="button" onClick={() => setDividirSel(new Set())} className="text-xs text-gray-600 hover:underline">Limpar</button>
+            </div>
+            <div className="flex-1 overflow-auto px-6 py-3 space-y-1.5">
+              {itensCot.map(it => {
+                const checked = sel.has(it.id);
+                return (
+                  <label key={it.id} className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${checked ? "border-violet-300 bg-violet-50" : "border-gray-200 hover:bg-gray-50"}`}>
+                    <input type="checkbox" checked={checked} onChange={() => setDividirSel(prev => { const next = new Set(prev); if (next.has(it.id)) next.delete(it.id); else next.add(it.id); return next; })}
+                      className="rounded border-gray-300 text-violet-600 focus:ring-violet-500 h-4 w-4" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-800 truncate">{it.descricao}</p>
+                      <p className="text-[11px] text-gray-500">{Number(it.quantidade)} {it.unidade || "un"}{parseFloat(it.total) > 0 ? ` · ${fmt(parseFloat(it.total))}` : ""}</p>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 space-y-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-500">{sel.size} {sel.size === 1 ? "item sairá" : "itens sairão"} para nova cotação · {restam} {restam === 1 ? "permanece" : "permanecem"}</span>
+                {totalSel > 0 && <span className="font-semibold text-gray-700">{fmt(totalSel)}</span>}
+              </div>
+              {!podeDividir && sel.size > 0 && sel.size >= itensCot.length && (
+                <p className="text-xs text-amber-600">Deixe pelo menos 1 item na cotação original.</p>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowDividirModal(false)}>Cancelar</Button>
+                <Button disabled={!podeDividir || dividirCotacao.isPending} onClick={() => dividirCotacao.mutate({ cotacaoId: showDetalhe!, itemIds: [...sel], userId: user?.id ? parseInt(String(user.id)) : undefined, userName: user?.nome || user?.name || undefined })}
+                  className="bg-violet-600 hover:bg-violet-700 text-white gap-2">
+                  {dividirCotacao.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitBranch className="h-4 w-4" />} Mover para nova cotação
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
       </DetalheWrapper>
     );
   }

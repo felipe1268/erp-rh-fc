@@ -4321,16 +4321,28 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           }
           const stillActive = activeCots.filter(c => cotsComItens.has(c.id));
           if (stillActive.length > 0) {
-            const existingOCs = await db.select({ id: comprasOrdens.id, numeroOc: comprasOrdens.numeroOc })
-              .from(comprasOrdens)
-              .where(and(
-                inArray(comprasOrdens.cotacaoId, stillActive.map(c => c.id)),
-                eq(comprasOrdens.companyId, input.companyId),
-              ));
-            if (existingOCs.length > 0) {
-              throw new Error(`Esta solicitação já possui Ordem de Compra em andamento (${existingOCs.map(o => o.numeroOc).join(", ")}). Não é possível criar nova cotação.`);
+            // Rev. 2806 — COTAÇÃO PARCIAL: uma SC pode ter VÁRIAS cotações
+            // ativas ao mesmo tempo, desde que o MESMO item não esteja em
+            // duas delas (anti-duplicidade — evita comprar o item 2x). A regra
+            // passou de "1 cotação ativa por SC" para "1 cotação ativa por ITEM".
+            const stillActiveIds = stillActive.map(c => c.id);
+            const numeroPorCotacao = new Map(stillActive.map(c => [c.id, c.numeroCotacao]));
+            const itensCobertos = await db.select({ solicitacaoItemId: comprasCotacoesItens.solicitacaoItemId, cotacaoId: comprasCotacoesItens.cotacaoId })
+              .from(comprasCotacoesItens)
+              .where(inArray(comprasCotacoesItens.cotacaoId, stillActiveIds));
+            const cobertoPara = new Map<number, string>(); // solicitacaoItemId -> numeroCotacao que já o cobre
+            for (const r of itensCobertos) {
+              if (r.solicitacaoItemId != null && !cobertoPara.has(r.solicitacaoItemId)) {
+                cobertoPara.set(r.solicitacaoItemId, numeroPorCotacao.get(r.cotacaoId) ?? "");
+              }
             }
-            throw new Error(`Esta solicitação já possui cotação ativa (${stillActive.map(c => c.numeroCotacao).join(", ")}). Cancele a cotação existente antes de criar uma nova.`);
+            const requestedIds = input.itens.map(it => it.solicitacaoItemId).filter((x): x is number => x != null);
+            const conflitos = [...new Set(requestedIds.filter(id => cobertoPara.has(id)))];
+            if (conflitos.length > 0) {
+              const cotsConflito = [...new Set(conflitos.map(id => cobertoPara.get(id)).filter(Boolean))];
+              throw new Error(`${conflitos.length} ${conflitos.length === 1 ? "item já está" : "itens já estão"} em cotação ativa (${cotsConflito.join(", ")}). Para cotá-${conflitos.length === 1 ? "lo" : "los"} novamente, cancele a cotação correspondente ou remova ${conflitos.length === 1 ? "esse item dela" : "esses itens dela"}.`);
+            }
+            // Sem conflito de itens → permite criar cotação parcial adicional para a mesma SC.
           }
         }
       }
@@ -4382,6 +4394,241 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         await db.update(comprasSolicitacoes).set({ status: "cotacao", atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, input.solicitacaoId));
       }
       return cot;
+    }),
+
+  // Rev. 2806 — COTAÇÃO PARCIAL: divide uma cotação existente, MOVENDO um
+  // subconjunto de itens para uma NOVA cotação separada (mesma SC). Os itens
+  // (e as respostas dos fornecedores referentes a eles) saem da original; os
+  // fornecedores convidados são replicados na nova cotação para continuar a
+  // disputa. Cada cotação fica com seu próprio número COT-AAAA-NNNN.
+  dividirCotacao: protectedProcedure
+    .input(z.object({
+      cotacaoId: z.number(),
+      itemIds: z.array(z.number()).min(1),
+      descricao: z.string().optional(),
+      userId: z.number().optional(),
+      userName: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
+      if (!cot) throw new Error("Cotação não encontrada.");
+      await _assertCompanyAccess(ctx.user, cot.companyId);
+      if (["cancelada", "recusada", "aprovada", "concluida"].includes(cot.status ?? "")) {
+        throw new Error("Só é possível dividir cotações ainda em aberto (pendentes). Esta cotação já foi aprovada/cancelada/concluída.");
+      }
+      const ocs = await db.select({ id: comprasOrdens.id, numeroOc: comprasOrdens.numeroOc })
+        .from(comprasOrdens)
+        .where(eq(comprasOrdens.cotacaoId, cot.id));
+      if (ocs.length > 0) {
+        throw new Error(`Esta cotação já gerou Ordem de Compra (${ocs.map(o => o.numeroOc).join(", ")}) e não pode ser dividida.`);
+      }
+      const allItens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, cot.id));
+      const allIds = new Set(allItens.map(it => it.id));
+      const moveIds = [...new Set(input.itemIds)].filter(id => allIds.has(id));
+      if (moveIds.length === 0) throw new Error("Nenhum item válido selecionado para dividir.");
+      if (moveIds.length >= allItens.length) {
+        throw new Error("Selecione menos itens — pelo menos 1 item deve permanecer na cotação original.");
+      }
+
+      const movedItens = allItens.filter(it => moveIds.includes(it.id));
+      const movedTotal = movedItens.reduce((s, it) => s + n(it.total), 0);
+      const restantesTotal = allItens.filter(it => !moveIds.includes(it.id)).reduce((s, it) => s + n(it.total), 0);
+
+      // Rev. 2806 — TODO o split roda dentro de UMA transação com advisory lock
+      // por empresa (serializa numeração + re-parent + recálculo de totais).
+      // Se qualquer passo falhar, ROLLBACK total (sem estado meio-movido).
+      const nova = await db.transaction(async (tx: any) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${cot.companyId}::int, 1001::int)`);
+
+        const count = await tx.select({ c: sql<number>`count(*)` }).from(comprasCotacoes).where(eq(comprasCotacoes.companyId, cot.companyId));
+        const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
+        const numeroCotacao = `COT-${new Date().getFullYear()}-${seq}`;
+
+        const [novaRow] = await tx.insert(comprasCotacoes).values({
+          companyId: cot.companyId,
+          numeroCotacao,
+          descricao: normalizarTexto(input.descricao) ?? cot.descricao,
+          prioridade: cot.prioridade ?? "normal",
+          tipo: cot.tipo ?? "material",
+          obraId: cot.obraId ?? null,
+          solicitacaoId: cot.solicitacaoId ?? null,
+          fornecedorId: cot.fornecedorId ?? null,
+          dataValidade: cot.dataValidade ?? null,
+          condicaoPagamento: cot.condicaoPagamento ?? null,
+          tipoPagamento: cot.tipoPagamento ?? null,
+          formaPagamento: cot.formaPagamento ?? null,
+          numeroParcelas: cot.numeroParcelas ?? 1,
+          prazoEntregaDias: cot.prazoEntregaDias ?? null,
+          observacoes: `Dividida da cotação ${cot.numeroCotacao}.`,
+          total: String(movedTotal.toFixed(2)),
+          status: "pendente",
+          criadoPorId: input.userId ?? ctx.user?.id ?? null,
+          criadoPorNome: input.userName ?? ctx.user?.name ?? ctx.user?.email ?? null,
+        } as any).returning();
+
+        // Move os itens selecionados (re-parent: preserva os ids, mantendo válidas
+        // as referências de OC/respostas que apontam pra cotacao_item.id).
+        await tx.update(comprasCotacoesItens).set({ cotacaoId: novaRow.id }).where(inArray(comprasCotacoesItens.id, moveIds));
+        // Move as respostas dos fornecedores referentes a esses itens.
+        await tx.update(comprasCotacaoRespostas)
+          .set({ cotacaoId: novaRow.id, propostaId: null })
+          .where(and(eq(comprasCotacaoRespostas.cotacaoId, cot.id), inArray(comprasCotacaoRespostas.itemId, moveIds)));
+
+        // Replica os fornecedores convidados na nova cotação, recalculando o
+        // totalOrcado a partir das respostas QUE FORAM MOVIDAS.
+        const forns = await tx.select().from(comprasCotacaoFornecedores).where(eq(comprasCotacaoFornecedores.cotacaoId, cot.id));
+        if (forns.length > 0) {
+          const movedResp = await tx.select({ fornecedorId: comprasCotacaoRespostas.fornecedorId, total: comprasCotacaoRespostas.total })
+            .from(comprasCotacaoRespostas).where(eq(comprasCotacaoRespostas.cotacaoId, novaRow.id));
+          const totalPorFornNova = new Map<number, number>();
+          for (const r of movedResp) totalPorFornNova.set(r.fornecedorId, (totalPorFornNova.get(r.fornecedorId) ?? 0) + n(r.total));
+          await tx.insert(comprasCotacaoFornecedores).values(
+            forns.map((f: any) => ({
+              cotacaoId: novaRow.id,
+              fornecedorId: f.fornecedorId,
+              prazoEntregaDias: f.prazoEntregaDias,
+              condicaoPagamento: f.condicaoPagamento,
+              tipoPagamento: f.tipoPagamento,
+              formaPagamento: f.formaPagamento,
+              numeroParcelas: f.numeroParcelas,
+              observacoes: f.observacoes,
+              totalOrcado: String((totalPorFornNova.get(f.fornecedorId) ?? 0).toFixed(2)),
+              selecionado: false,
+              freteTipo: f.freteTipo ?? "cif",
+              valorFrete: f.valorFrete ?? "0",
+              transportadora: f.transportadora,
+              moduloMedicao: f.moduloMedicao,
+              isEstoque: f.isEstoque ?? false,
+              almoxarifadoOrigemId: f.almoxarifadoOrigemId,
+            })) as any
+          );
+
+          // Recalcula o totalOrcado dos fornecedores da cotação ORIGINAL (as
+          // respostas dos itens movidos saíram — sem isso o valor fica stale).
+          const respRestantes = await tx.select({ fornecedorId: comprasCotacaoRespostas.fornecedorId, total: comprasCotacaoRespostas.total })
+            .from(comprasCotacaoRespostas).where(eq(comprasCotacaoRespostas.cotacaoId, cot.id));
+          const totalPorFornOrig = new Map<number, number>();
+          for (const r of respRestantes) totalPorFornOrig.set(r.fornecedorId, (totalPorFornOrig.get(r.fornecedorId) ?? 0) + n(r.total));
+          for (const f of forns) {
+            await tx.update(comprasCotacaoFornecedores)
+              .set({ totalOrcado: String((totalPorFornOrig.get(f.fornecedorId) ?? 0).toFixed(2)) })
+              .where(eq(comprasCotacaoFornecedores.id, f.id));
+          }
+        }
+
+        // Atualiza o total da cotação original (sem os itens movidos).
+        await tx.update(comprasCotacoes).set({ total: String(restantesTotal.toFixed(2)) }).where(eq(comprasCotacoes.id, cot.id));
+
+        return novaRow;
+      });
+
+      return { nova, movidos: moveIds.length };
+    }),
+
+  // Rev. 2806 — Cria, em 1 clique, uma nova cotação só com os itens da SC que
+  // ainda NÃO estão cobertos por nenhuma cotação ativa ("cotar restantes").
+  cotarItensRestantes: protectedProcedure
+    .input(z.object({ solicitacaoId: z.number(), userId: z.number().optional(), userName: z.string().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [sc] = await db.select().from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, input.solicitacaoId));
+      if (!sc) throw new Error("Solicitação não encontrada.");
+      await _assertCompanyAccess(ctx.user, sc.companyId);
+      if (sc.aprovacaoStatus === "recusada") throw new Error("Esta solicitação foi recusada e não pode ser cotada.");
+
+      // Rev. 2806 — Tudo dentro de UMA transação com advisory lock por empresa:
+      // o check de cobertura + insert da cotação rodam serializados, evitando que
+      // 2 requisições paralelas criem cobertura duplicada do mesmo item.
+      return await db.transaction(async (tx: any) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${sc.companyId}::int, 1001::int)`);
+
+        const scItens = await tx.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, sc.id));
+        const cots = await tx.select({ id: comprasCotacoes.id, status: comprasCotacoes.status })
+          .from(comprasCotacoes)
+          .where(and(eq(comprasCotacoes.solicitacaoId, sc.id), eq(comprasCotacoes.companyId, sc.companyId)));
+        const ativas = cots.filter((c: any) => !["cancelada", "recusada"].includes(c.status ?? "")).map((c: any) => c.id);
+        const cobertos = new Set<number>();
+        if (ativas.length > 0) {
+          const rows = await tx.select({ solicitacaoItemId: comprasCotacoesItens.solicitacaoItemId })
+            .from(comprasCotacoesItens).where(inArray(comprasCotacoesItens.cotacaoId, ativas));
+          for (const r of rows) if (r.solicitacaoItemId != null) cobertos.add(r.solicitacaoItemId);
+        }
+        const restantes = scItens.filter((it: any) => !cobertos.has(it.id));
+        if (restantes.length === 0) throw new Error("Todos os itens desta solicitação já estão em cotação.");
+
+        const count = await tx.select({ c: sql<number>`count(*)` }).from(comprasCotacoes).where(eq(comprasCotacoes.companyId, sc.companyId));
+        const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
+        const numeroCotacao = `COT-${new Date().getFullYear()}-${seq}`;
+        const [nova] = await tx.insert(comprasCotacoes).values({
+          companyId: sc.companyId,
+          numeroCotacao,
+          descricao: sc.titulo || sc.numeroSc,
+          prioridade: sc.prioridade ?? "normal",
+          tipo: (sc.tipo as string) ?? "material",
+          obraId: sc.obraId ?? null,
+          solicitacaoId: sc.id,
+          observacoes: "Cotação dos itens restantes da solicitação.",
+          total: "0",
+          status: "pendente",
+          criadoPorId: input.userId ?? ctx.user?.id ?? null,
+          criadoPorNome: input.userName ?? ctx.user?.name ?? ctx.user?.email ?? null,
+        } as any).returning();
+        await tx.insert(comprasCotacoesItens).values(
+          restantes.map((it: any) => ({
+            cotacaoId: nova.id,
+            solicitacaoItemId: it.id,
+            descricao: it.descricao,
+            unidade: it.unidade,
+            quantidade: String(it.quantidade),
+            precoUnitario: "0",
+            descontoPct: "0",
+            total: "0",
+          })) as any
+        );
+        await tx.update(comprasSolicitacoes).set({ status: "cotacao", atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, sc.id));
+        return { nova, itens: restantes.length };
+      });
+    }),
+
+  // Rev. 2806 — Cobertura de itens da SC: quantos itens já estão em cotação
+  // ativa vs pendentes, e a lista de cotações "irmãs" da mesma SC (navegação).
+  getCoberturaSolicitacao: protectedProcedure
+    .input(z.object({ solicitacaoId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [sc] = await db.select({ companyId: comprasSolicitacoes.companyId }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, input.solicitacaoId));
+      if (!sc) return { total: 0, cobertos: 0, pendentes: 0, itens: [], cotacoes: [] };
+      await _assertCompanyAccess(ctx.user, sc.companyId);
+      const scItens = await db.select({ id: comprasSolicitacoesItens.id, descricao: comprasSolicitacoesItens.descricao })
+        .from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.solicitacaoId));
+      const cots = await db.select({ id: comprasCotacoes.id, numeroCotacao: comprasCotacoes.numeroCotacao, status: comprasCotacoes.status })
+        .from(comprasCotacoes)
+        .where(and(eq(comprasCotacoes.solicitacaoId, input.solicitacaoId), eq(comprasCotacoes.companyId, sc.companyId)));
+      const ativas = cots.filter(c => !["cancelada", "recusada"].includes(c.status ?? ""));
+      const numeroPorCotacao = new Map(ativas.map(c => [c.id, c.numeroCotacao]));
+      const coberturaItem = new Map<number, { cotacaoId: number; numeroCotacao: string }>();
+      if (ativas.length > 0) {
+        const rows = await db.select({ solicitacaoItemId: comprasCotacoesItens.solicitacaoItemId, cotacaoId: comprasCotacoesItens.cotacaoId })
+          .from(comprasCotacoesItens).where(inArray(comprasCotacoesItens.cotacaoId, ativas.map(c => c.id)));
+        for (const r of rows) {
+          if (r.solicitacaoItemId != null && !coberturaItem.has(r.solicitacaoItemId)) {
+            coberturaItem.set(r.solicitacaoItemId, { cotacaoId: r.cotacaoId, numeroCotacao: numeroPorCotacao.get(r.cotacaoId) ?? "" });
+          }
+        }
+      }
+      const itens = scItens.map(it => {
+        const cov = coberturaItem.get(it.id);
+        return { solicitacaoItemId: it.id, descricao: it.descricao, cotacaoId: cov?.cotacaoId ?? null, numeroCotacao: cov?.numeroCotacao ?? null };
+      });
+      const cobertos = itens.filter(it => it.cotacaoId != null).length;
+      return {
+        total: scItens.length,
+        cobertos,
+        pendentes: scItens.length - cobertos,
+        itens,
+        cotacoes: cots.map(c => ({ id: c.id, numeroCotacao: c.numeroCotacao, status: c.status })),
+      };
     }),
 
   aprovarCotacao: protectedProcedure

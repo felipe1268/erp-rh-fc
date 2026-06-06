@@ -1,6 +1,49 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2806 — **COMPRAS · COTAÇÕES — "COTAÇÃO PARCIAL": DIVIDIR UMA COTAÇÃO EM VÁRIAS (CADA UMA COM UM SUBCONJUNTO
+ * DE ITENS PARA FORNECEDORES DIFERENTES), + SELO DE COBERTURA NA SC, "COTAR ITENS RESTANTES" EM 1 CLIQUE E
+ * NAVEGAÇÃO ENTRE COTAÇÕES "IRMÃS" DA MESMA SOLICITAÇÃO.**
+ *
+ * PEDIDO (usuário): poder quebrar uma cotação existente em várias cotações separadas, cada uma com parte dos itens,
+ * para enviar a fornecedores diferentes. Decisões do usuário: (1) ao dividir = MOVER os itens (saem da original);
+ * (2) função SÓ na tela de Cotação; (3) MANTER as duas formas de trabalhar (vencedor-por-item no mapa + cotações
+ * separadas). Aprovou as 3 melhorias opcionais: selo de cobertura na SC, "cotar restantes" 1-clique e navegação
+ * entre cotações irmãs.
+ *
+ * O QUE FOI FEITO:
+ *   BACKEND (`server/routers/compras.ts`):
+ *   - `criarCotacao`: a trava anti-duplicidade deixou de ser "1 cotação ativa por SC" e passou a ser "1 cotação
+ *     ativa por ITEM" — assim a mesma SC pode ter várias cotações ativas, desde que NÃO repitam itens.
+ *   - NOVO `dividirCotacao({cotacaoId,itemIds[],descricao?,userId?,userName?})`: MOVE os itens selecionados para uma
+ *     NOVA cotação via UPDATE de `cotacao_id` (PRESERVA os ids dos `cotacoes_itens`, mantendo válidas as referências
+ *     de OC/respostas). Move também as `cotacao_respostas` dos itens (zerando `propostaId`). Replica os fornecedores
+ *     convidados na nova cotação recalculando `totalOrcado` pelas respostas movidas, E recalcula o `totalOrcado` dos
+ *     fornecedores da cotação ORIGINAL (as respostas que saíram não contam mais — sem isso o valor ficava stale —
+ *     apontado pelo code review). Recalcula `total` de ambas as cotações. Guard `_assertCompanyAccess`. BLOQUEIA se a
+ *     cotação está aprovada/cancelada/concluída, se já gerou OC, ou se a seleção tentar mover TODOS os itens (≥1 tem
+ *     de permanecer na original). TUDO dentro de UMA `db.transaction` com `pg_advisory_xact_lock(companyId,1001)` —
+ *     atomicidade (rollback total em falha) + serialização da numeração `COT-AAAA-NNNN` (correções do code review).
+ *   - NOVO `cotarItensRestantes({solicitacaoId,userId?,userName?})`: cria, em 1 clique, uma cotação só com os itens da
+ *     SC que ainda NÃO estão cobertos por nenhuma cotação ATIVA. O check de cobertura + insert rodam DENTRO da mesma
+ *     transação com advisory lock, evitando que 2 requisições paralelas criem cobertura duplicada do mesmo item.
+ *   - NOVO `getCoberturaSolicitacao({solicitacaoId})`: devolve `{total,cobertos,pendentes,itens[],cotacoes[]}` — base
+ *     do selo de cobertura na SC e da navegação entre cotações irmãs na tela de Cotação.
+ *
+ *   FRONTEND:
+ *   - `client/src/pages/compras/Cotacoes.tsx`: botão "Dividir Cotação" no header do detalhe (só em cotação aberta e com
+ *     ≥2 itens) abrindo um modal de seleção de itens por checkbox (selecionar todos/limpar, resumo "X sairão / Y
+ *     permanecem", trava ≥1 na original). Faixa violeta de navegação entre as cotações irmãs da mesma SC (chips
+ *     clicáveis, atual destacada, canceladas riscadas) + contador de itens pendentes e botão "Cotar N restantes".
+ *   - `client/src/pages/compras/Solicitacoes.tsx`: no detalhe da SC, selo de cobertura ("N de M itens em cotação · P
+ *     pendentes", verde quando 100%) com botão "Cotar restantes" embutido.
+ *
+ * REGRAS FC: ZERO ALTER/DROP/DELETE; ZERO schema novo (reusa tabelas existentes). Validação: esbuild OK nos 3 arquivos
+ * tocados; servidor reiniciado e reconectado ao Neon. Code review (architect) apontou atomicidade/race/recalc — todos
+ * endereçados (transações + advisory lock + recálculo do fornecedor da original). RESSALVA: a trava por item de
+ * `criarCotacao` segue check-then-insert fora de transação no fluxo legado de criação manual — os 2 endpoints NOVOS de
+ * split/restantes já estão serializados.
+ *
  * Rev. 2805 — **CONFIGURAÇÕES · IA — NOVO PAINEL "INTELIGÊNCIA ARTIFICIAL" QUE LIGA/DESLIGA, POR EMPRESA, AS
  * FUNCIONALIDADES DE IA DE CADA MÓDULO (COMPRAS, RH/CONVENÇÃO, RECRUTAMENTO, SST, PLANEJAMENTO, ORÁCULO E ASSISTENTE).**
  *
