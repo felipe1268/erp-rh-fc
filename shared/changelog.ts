@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2798 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): REVERTIDA A ALTURA 760px DA REV. 2797 —
+ * QUE FICOU PÉSSIMA (CURVA ESTICADA DENTRO DE UM BOX ALTO E VAZIO, LONGE DO MODELO DE CURVA S, QUE É LARGO E BAIXO).
+ * OS 2 CHART-BOX DA CURVA S (FÍSICA 3A + FINANCEIRA 3B) VOLTARAM PARA `height: 560` → PROPORÇÃO LARGA, COMO O MODELO.**
+ *
+ * PEDIDO (usuário): "Está péssimo, ajuste a curva igual ao modelo somente na largura, arrume isso" (anexou 2 prints:
+ * o estado atual com os gráficos altos/esticados da Rev. 2797 + o MODELO clássico de Curva S "AVANÇO FÍSICO ACUMULADO
+ * — PREVISTO x REALIZADO", que é um gráfico LARGO e BAIXO com a curva preenchendo toda a largura).
+ *
+ * CAUSA: na Rev. 2797 eu interpretei a "área marcada" como pedido de MAIS ALTURA e subi o chart-box 560→760px; na
+ * prática o S-curve não preencheu o box — ficou uma curva fina esticada num retângulo alto com muito vazio, oposto
+ * do modelo (largo/baixo). A proporção certa é a LARGA.
+ *
+ * FIX (SÓ CLIENT; ZERO SCHEMA/SERVER) em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (componente `Refis`):
+ *   - REVERTIDOS os 2 `.refis-chart-box` (BLOCO 3A físico + 3B financeiro) de `style={{ height: 760 }}` → `560`
+ *     (volta à proporção larga; ResponsiveContainer `width="100%" height="100%"` segue ocupando toda a largura útil).
+ *   - o seletor de impressão acompanhou de volta: `[style*="height: 760"]` → `[style*="height: 560"]` (PDF segue
+ *     capado em `360pt`, inalterado desde a Rev. 2795).
+ *   `break-inside: avoid` + largura forçada à folha (Rev. 2792) mantidos. Nenhuma série/cálculo/eixo/dado mudou —
+ *   só ALTURA (revert). ZERO ALTER/DROP/DELETE. Validação: esbuild OK; HMR. RESSALVA: se o usuário ainda quiser a
+ *   curva mais "achatada/larga" tipo o modelo de Excel, o próximo passo é BAIXAR a altura (ex.: 360–420px) — NÃO
+ *   subir; o eixo X já mostra todas as semanas (a aparência de "vazio à direita" vem da baseline atingir 100% antes
+ *   do fim do eixo, que é dado, não largura).
+ *
  * Rev. 2797 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): OS DOIS GRÁFICOS DA CURVA S (FÍSICA 3A
  * E FINANCEIRA 3B) FICARAM BEM MAIORES NA TELA — A ALTURA DO CHART-BOX SUBIU DE 560 → 760px PARA PREENCHER A ÁREA
  * QUE O USUÁRIO MARCOU (ANTES SOBRAVA BRANCO ABAIXO DA CURVA DENTRO DO CARD).**
