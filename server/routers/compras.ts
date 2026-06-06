@@ -4448,6 +4448,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         const [novaRow] = await tx.insert(comprasCotacoes).values({
           companyId: cot.companyId,
           numeroCotacao,
+          divididaDeId: cot.id,
           descricao: normalizarTexto(input.descricao) ?? cot.descricao,
           prioridade: cot.prioridade ?? "normal",
           tipo: cot.tipo ?? "material",
@@ -4524,6 +4525,111 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       });
 
       return { nova, movidos: moveIds.length };
+    }),
+
+  // Rev. 2807 — Cancela a DIVISÃO de uma cotação: devolve TODOS os itens (e as
+  // respostas) da cotação-filha de volta à cotação ORIGINAL e remove a filha,
+  // como se a divisão nunca tivesse acontecido. Só funciona em cotações criadas
+  // por uma divisão (têm `dividida_de_id`) e ainda em aberto, sem OC gerada.
+  cancelarDivisaoCotacao: protectedProcedure
+    .input(z.object({ cotacaoId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      // Leitura "rápida" só p/ o guard de empresa (barata, sem lock). TODA a
+      // validação que decide se a operação prossegue é RE-FEITA dentro da
+      // transação sob lock (abaixo) p/ evitar TOCTOU — apontado no code review.
+      const [filhaPre] = await db.select({ companyId: comprasCotacoes.companyId })
+        .from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
+      if (!filhaPre) throw new Error("Cotação não encontrada.");
+      await _assertCompanyAccess(ctx.user, filhaPre.companyId);
+
+      // Rev. 2807 — Tudo dentro de UMA transação com advisory lock por empresa:
+      // (re)validação sob lock + re-parent dos itens/respostas + recálculo dos
+      // totais + remoção da filha rodam serializados. Falha em qualquer passo
+      // (inclusive validação) → ROLLBACK total.
+      const resultado = await db.transaction(async (tx: any) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${filhaPre.companyId}::int, 1001::int)`);
+
+        // Re-lê a FILHA já sob lock (snapshot autoritativo).
+        const [filha] = await tx.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
+        if (!filha) throw new Error("Cotação não encontrada.");
+        if (!filha.divididaDeId) {
+          throw new Error("Esta cotação não foi criada por uma divisão — não há divisão para cancelar.");
+        }
+        if (["cancelada", "recusada", "aprovada", "concluida"].includes(filha.status ?? "")) {
+          throw new Error("Só é possível cancelar a divisão de cotações ainda em aberto (pendentes).");
+        }
+        const [orig] = await tx.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, filha.divididaDeId));
+        if (!orig) throw new Error("A cotação original não existe mais — não é possível devolver os itens.");
+        if (orig.companyId !== filha.companyId) throw new Error("Cotação original de outra empresa.");
+        if (["cancelada", "recusada", "aprovada", "concluida"].includes(orig.status ?? "")) {
+          throw new Error("A cotação original já foi aprovada/cancelada/concluída — não é possível devolver os itens a ela.");
+        }
+        const ocs = await tx.select({ numeroOc: comprasOrdens.numeroOc })
+          .from(comprasOrdens).where(eq(comprasOrdens.cotacaoId, filha.id));
+        if (ocs.length > 0) {
+          throw new Error(`Esta cotação já gerou Ordem de Compra (${ocs.map((o: any) => o.numeroOc).join(", ")}) e não pode ser desfeita.`);
+        }
+
+        const itensFilha = await tx.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, filha.id));
+        const devolvidos = itensFilha.length;
+
+        // Fornecedores replicados da filha (lidos ANTES de apagar) — usados p/
+        // recriar na original qualquer fornecedor que tenha resposta mas não
+        // exista mais na original (consistência fornecedor↔resposta).
+        const fornsFilha = await tx.select().from(comprasCotacaoFornecedores).where(eq(comprasCotacaoFornecedores.cotacaoId, filha.id));
+
+        // Devolve itens + respostas pra cotação original (re-parent: preserva ids).
+        await tx.update(comprasCotacoesItens).set({ cotacaoId: orig.id }).where(eq(comprasCotacoesItens.cotacaoId, filha.id));
+        await tx.update(comprasCotacaoRespostas).set({ cotacaoId: orig.id, propostaId: null }).where(eq(comprasCotacaoRespostas.cotacaoId, filha.id));
+
+        // Remove os fornecedores replicados da filha (a original já tem os seus).
+        await tx.delete(comprasCotacaoFornecedores).where(eq(comprasCotacaoFornecedores.cotacaoId, filha.id));
+
+        // Recalcula o totalOrcado dos fornecedores da ORIGINAL (agora com todas
+        // as respostas de volta) e o total geral da original.
+        const respOrig = await tx.select({ fornecedorId: comprasCotacaoRespostas.fornecedorId, total: comprasCotacaoRespostas.total })
+          .from(comprasCotacaoRespostas).where(eq(comprasCotacaoRespostas.cotacaoId, orig.id));
+        const totalPorForn = new Map<number, number>();
+        for (const r of respOrig) totalPorForn.set(r.fornecedorId, (totalPorForn.get(r.fornecedorId) ?? 0) + n(r.total));
+
+        // Garante que TODO fornecedor com resposta na original tenha sua linha
+        // em comprasCotacaoFornecedores (se sumiu, recria a partir da filha).
+        const fornsOrig = await tx.select().from(comprasCotacaoFornecedores).where(eq(comprasCotacaoFornecedores.cotacaoId, orig.id));
+        const fornsOrigIds = new Set(fornsOrig.map((f: any) => f.fornecedorId));
+        const fornsFilhaPorId = new Map(fornsFilha.map((f: any) => [f.fornecedorId, f]));
+        for (const fid of totalPorForn.keys()) {
+          if (!fornsOrigIds.has(fid)) {
+            const base: any = fornsFilhaPorId.get(fid);
+            await tx.insert(comprasCotacaoFornecedores).values({
+              cotacaoId: orig.id,
+              fornecedorId: fid,
+              condicaoPagamento: base?.condicaoPagamento ?? null,
+              tipoPagamento: base?.tipoPagamento ?? null,
+              formaPagamento: base?.formaPagamento ?? null,
+              numeroParcelas: base?.numeroParcelas ?? null,
+              prazoEntregaDias: base?.prazoEntregaDias ?? null,
+              totalOrcado: String((totalPorForn.get(fid) ?? 0).toFixed(2)),
+            });
+            fornsOrigIds.add(fid);
+          }
+        }
+        for (const f of fornsOrig) {
+          await tx.update(comprasCotacaoFornecedores)
+            .set({ totalOrcado: String((totalPorForn.get(f.fornecedorId) ?? 0).toFixed(2)) })
+            .where(eq(comprasCotacaoFornecedores.id, f.id));
+        }
+        const itensOrig = await tx.select({ total: comprasCotacoesItens.total }).from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, orig.id));
+        const totalOrig = itensOrig.reduce((s: number, it: any) => s + n(it.total), 0);
+        await tx.update(comprasCotacoes).set({ total: String(totalOrig.toFixed(2)) }).where(eq(comprasCotacoes.id, orig.id));
+
+        // Remove a cotação-filha (agora vazia).
+        await tx.delete(comprasCotacoes).where(eq(comprasCotacoes.id, filha.id));
+
+        return { devolvidos, originalId: orig.id, originalNumero: orig.numeroCotacao };
+      });
+
+      return { ok: true, originalId: resultado.originalId, originalNumero: resultado.originalNumero, devolvidos: resultado.devolvidos };
     }),
 
   // Rev. 2806 — Cria, em 1 clique, uma nova cotação só com os itens da SC que

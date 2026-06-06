@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2807 — **COMPRAS · COTAÇÕES — "CANCELAR DIVISÃO": DESFAZER A DIVISÃO DE UMA COTAÇÃO, DEVOLVENDO TODOS OS ITENS
+ * (E RESPOSTAS) PARA A COTAÇÃO ORIGINAL E REMOVENDO A COTAÇÃO-FILHA, COMO SE A DIVISÃO NUNCA TIVESSE ACONTECIDO.**
+ *
+ * PEDIDO (usuário): "garanta tbm que eu possa cancelar a divisão da cotação se eu quiser e nesta situação todos itens
+ * voltam para a cotação inicial."
+ *
+ * O QUE FOI FEITO:
+ *   SCHEMA: NOVA coluna `dividida_de_id` (INTEGER, nullable) em `compras_cotacoes` — referência pai→filha gravada no
+ *   `dividirCotacao` (a cotação criada por uma divisão aponta para a original). Self-heal `[SyncSchema+]` Rev. 2807
+ *   (`ALTER TABLE ... ADD COLUMN IF NOT EXISTS`; ZERO DROP/DELETE de schema). Sem coluna, a relação só vivia num texto
+ *   em `observacoes` (frágil).
+ *   BACKEND (`server/routers/compras.ts`):
+ *   - `dividirCotacao`: passa a gravar `divididaDeId: cot.id` na nova cotação.
+ *   - NOVO `cancelarDivisaoCotacao({cotacaoId})`: recebe a cotação-FILHA (a que saiu da divisão). Valida que ela TEM
+ *     `dividida_de_id` (senão não há divisão a cancelar), que filha E original estão em aberto (pendentes), que a
+ *     original ainda existe e é da mesma empresa, e que a filha NÃO gerou OC. Guard `_assertCompanyAccess`. Em UMA
+ *     `db.transaction` com `pg_advisory_xact_lock(companyId,1001)`: re-parent dos itens (UPDATE `cotacao_id` → original,
+ *     PRESERVANDO ids) + das `cotacao_respostas` (zerando `propostaId`); DELETE dos fornecedores replicados da filha
+ *     (a original já tem os seus); recálculo do `totalOrcado` de TODOS os fornecedores da original a partir das
+ *     respostas agora reunidas; recálculo do `total` da original pela soma dos itens; e DELETE da cotação-filha (agora
+ *     vazia). Falha em qualquer passo → ROLLBACK total.
+ *   FRONTEND (`client/src/pages/compras/Cotacoes.tsx`):
+ *   - Mutation `cancelarDivisaoCotacao` (toast com nº de itens devolvidos + nº da original; refetch da lista/cobertura;
+ *     navega de volta pra original).
+ *   - Botão "Cancelar Divisão" (âmbar, ícone `Undo2`) no header do detalhe, visível SÓ quando a cotação é filha de
+ *     divisão (`divididaDeId`) e está em aberto. Usa o modal `useConfirm` (tom destrutivo) explicando que os itens
+ *     voltam pra original e a cotação atual some.
+ *   - `getCotacao` já faz `select().from(comprasCotacoes)` (todas as colunas), então `divididaDeId` chega ao frontend
+ *     sem mudança no endpoint.
+ *
+ * REGRAS FC: a coluna é adicionada via `ADD COLUMN IF NOT EXISTS` (não-destrutivo); os DELETEs são do RECURSO (cotação
+ * vazia + fornecedores replicados), inerentes à feature de "cancelar divisão" — itens/respostas são preservados (só
+ * re-parented). Validação: esbuild OK em compras.ts e Cotacoes.tsx; servidor reiniciado (self-heal materializa a
+ * coluna no Neon). RESSALVA: ação só disponível enquanto filha E original seguem em aberto e sem OC.
+ *
  * Rev. 2806 — **COMPRAS · COTAÇÕES — "COTAÇÃO PARCIAL": DIVIDIR UMA COTAÇÃO EM VÁRIAS (CADA UMA COM UM SUBCONJUNTO
  * DE ITENS PARA FORNECEDORES DIFERENTES), + SELO DE COBERTURA NA SC, "COTAR ITENS RESTANTES" EM 1 CLIQUE E
  * NAVEGAÇÃO ENTRE COTAÇÕES "IRMÃS" DA MESMA SOLICITAÇÃO.**

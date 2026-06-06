@@ -6235,6 +6235,7 @@ export const comprasCotacoes = pgTable("compras_cotacoes", {
   companyId:        integer("company_id").notNull(),
   numeroCotacao:    varchar("numero_cotacao", { length: 20 }).notNull(),
   solicitacaoId:    integer("solicitacao_id"),
+  divididaDeId:     integer("dividida_de_id"),
   obraId:           integer("obra_id"),
   fornecedorId:     integer("fornecedor_id"),
   descricao:        varchar({ length: 200 }),

@@ -798,6 +798,12 @@ Regras:
           console.log(`[SyncSchema+] Coluna numero_interno garantida em funcionarios_terceiros.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA funcionarios_terceiros numero_interno:`, e?.message || e); }
 
+        // Rev. 2807 — "Cancelar divisão" de cotação: referência pai→filha.
+        try {
+          await db.execute(sql`ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS dividida_de_id INTEGER`);
+          console.log(`[SyncSchema+] Rev. 2807: coluna dividida_de_id garantida em compras_cotacoes (cancelar divisão de cotação).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 2807 dividida_de_id:`, e?.message || e); }
+
         // Rev. 2633 — Modo MANUAL do "% Previsto" no Planejamento.
         try {
           await db.execute(sql`ALTER TABLE oc_number_config ADD COLUMN IF NOT EXISTS previsto_fonte VARCHAR(10) DEFAULT 'motor'`);

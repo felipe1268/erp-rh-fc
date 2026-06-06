@@ -1146,6 +1146,14 @@ export default function Cotacoes() {
     },
     onError: (e) => toast.error(e.message),
   });
+  const cancelarDivisao = trpc.compras.cancelarDivisaoCotacao.useMutation({
+    onSuccess: (data: any) => {
+      toast.success(`Divisão cancelada! ${data.devolvidos} ${data.devolvidos === 1 ? "item devolvido" : "itens devolvidos"} para ${data.originalNumero}.`);
+      q.refetch(); coberturaScQ.refetch();
+      setShowDetalhe(data.originalId);
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const coberturaAutoQ = trpc.compras.buscarSaldosRealocacao.useQuery(
     { companyId, obraId: (detalheQ.data as any)?.obraId, cotacaoId: showDetalhe ?? undefined, deficit: 1 },
     { enabled: showDetalhe !== null && !!detalheQ.data }
@@ -3607,6 +3615,23 @@ export default function Cotacoes() {
                     <Button variant="outline" onClick={() => { setDividirSel(new Set()); setShowDividirModal(true); }}
                       className="border-violet-200 text-violet-700 hover:bg-violet-50 gap-2">
                       <GitBranch className="h-4 w-4" /> Dividir Cotação
+                    </Button>
+                  )}
+                  {!["cancelada", "recusada", "aprovada", "concluida"].includes(detalheFullscreen.status ?? "") && (detalheFullscreen as any)?.divididaDeId && (
+                    <Button variant="outline" onClick={async () => {
+                      if (await confirm({
+                        title: "Cancelar divisão?",
+                        description: "Todos os itens desta cotação voltam para a cotação original e esta cotação será removida.",
+                        tone: "destructive",
+                        confirmText: "Cancelar divisão",
+                        cancelText: "Voltar",
+                      })) {
+                        cancelarDivisao.mutate({ cotacaoId: showDetalhe! });
+                      }
+                    }}
+                      disabled={cancelarDivisao.isPending}
+                      className="border-amber-200 text-amber-700 hover:bg-amber-50 gap-2">
+                      {cancelarDivisao.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />} Cancelar Divisão
                     </Button>
                   )}
                   {!["cancelada", "recusada", "aprovada", "concluida"].includes(detalheFullscreen.status ?? "") && (
