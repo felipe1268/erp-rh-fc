@@ -223,6 +223,13 @@ export default function IAModuloChat({
   const config = MODULE_CONFIG[modulo];
   const Icon = config.icon;
 
+  // Rev. 2809 — o assistente se auto-oculta quando a IA de perguntas/respostas
+  // deste módulo está desativada em Configurações › Inteligência Artificial.
+  const { data: qaEnabled } = trpc.aiConfig.isQaModuloEnabled.useQuery(
+    { companyId, modulo },
+    { staleTime: 60_000 },
+  );
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs, loading]);
@@ -273,6 +280,7 @@ export default function IAModuloChat({
   };
 
   if (dismissed) return null;
+  if (qaEnabled?.enabled === false) return null;
 
   if (!open) {
     return (

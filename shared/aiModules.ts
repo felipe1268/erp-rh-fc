@@ -61,3 +61,90 @@ export const AI_MODULE_KEYS: AiModuleKey[] = AI_MODULES.map(m => m.key);
 export function isAiModuleKey(v: string): v is AiModuleKey {
   return (AI_MODULE_KEYS as string[]).includes(v);
 }
+
+// Rev. 2809 — Catálogo das PERSONAS do chat de "Perguntas e Respostas"
+// (componente `IAModuloChat` — o botão verde flutuante com o ícone de
+// Sparkles). É a ÚNICA IA que o liga/desliga da tela Configurações controla.
+// A persona crua (`planejamento`, `orcamento`, ...) é o `modulo` enviado ao
+// endpoint `iaModulos.chat`; a chave gravada em `ai_module_config.modulo` é
+// SEMPRE prefixada `qa_` p/ NÃO colidir com as chaves de feature acima
+// (ex.: a feature "compras" = leitura de cotações é distinta do chat "compras").
+export type QaChatPersona =
+  | "planejamento"
+  | "orcamento"
+  | "compras"
+  | "rh"
+  | "financeiro"
+  | "sst"
+  | "medicao";
+
+export type QaChatModuleKey =
+  | "qa_planejamento"
+  | "qa_orcamento"
+  | "qa_compras"
+  | "qa_rh"
+  | "qa_financeiro"
+  | "qa_sst"
+  | "qa_medicao";
+
+export interface QaChatModuleDef {
+  key: QaChatModuleKey;
+  persona: QaChatPersona;
+  label: string;
+  descricao: string;
+}
+
+export const QA_CHAT_MODULES: QaChatModuleDef[] = [
+  {
+    key: "qa_planejamento",
+    persona: "planejamento",
+    label: "Planejamento",
+    descricao: "Eng. de Planejamento — cronograma, avanço físico, Curva S, produtividade.",
+  },
+  {
+    key: "qa_orcamento",
+    persona: "orcamento",
+    label: "Orçamento",
+    descricao: "Orçamentista — custos, BDI, composições, SINAPI, Curva ABC.",
+  },
+  {
+    key: "qa_compras",
+    persona: "compras",
+    label: "Compras / Suprimentos",
+    descricao: "Gestor de Suprimentos — fornecedores, cotações, negociação, lead times.",
+  },
+  {
+    key: "qa_rh",
+    persona: "rh",
+    label: "RH / DP",
+    descricao: "Especialista RH/DP — CLT, folha, rescisão, férias, eSocial.",
+  },
+  {
+    key: "qa_financeiro",
+    persona: "financeiro",
+    label: "Financeiro",
+    descricao: "Controller Financeiro — fluxo de caixa, medições, DRE, viabilidade.",
+  },
+  {
+    key: "qa_sst",
+    persona: "sst",
+    label: "Segurança (SST)",
+    descricao: "Eng. de Segurança — NRs, EPIs, treinamentos, CIPA.",
+  },
+  {
+    key: "qa_medicao",
+    persona: "medicao",
+    label: "Medição",
+    descricao: "Especialista em Medição — critérios, retenções, aditivos contratuais.",
+  },
+];
+
+export const QA_CHAT_MODULE_KEYS: QaChatModuleKey[] = QA_CHAT_MODULES.map(m => m.key);
+
+export function qaChatModuleKey(persona: string): QaChatModuleKey {
+  return `qa_${persona}` as QaChatModuleKey;
+}
+
+export function isQaChatModuleKey(v: string): v is QaChatModuleKey {
+  return (QA_CHAT_MODULE_KEYS as string[]).includes(v);
+}

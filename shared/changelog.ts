@@ -1,6 +1,49 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2809 — **CONFIGURAÇÕES · IA — O PAINEL "INTELIGÊNCIA ARTIFICIAL" PASSA A CONTROLAR EXCLUSIVAMENTE O CHAT DE
+ * "PERGUNTAS E RESPOSTAS" (O BOTÃO VERDE FLUTUANTE / `IAModuloChat`), POR MÓDULO OU TODOS, E O BUG "0 DE 0 ATIVAS"
+ * FOI CORRIGIDO.**
+ *
+ * PEDIDO (usuário, com 2 screenshots — o botão verde flutuante e o painel mostrando "0 de 0 ativas"): "nao to
+ * conseguindo habilitar e desabilitar.. quero que tenha a possibilidade de desativar por modulo.. ou todas.. para
+ * facilitar.. porem somente a IA de perguntas e respostas que demarquei na foto." A foto é o assistente de chat
+ * (Sparkles verde) renderizado por `IAModuloChat`.
+ *
+ * CAUSA-RAIZ DO "0 DE 0 ATIVAS": no front (`IAConfigSection.tsx`) a query `getConfig` tinha `enabled: !!companyId`
+ * com `companyId = Number(selectedCompanyId) || 0`. Para o admin-master sem empresa resolvível → companyId=0 → query
+ * DESABILITADA → `data` undefined → lista vazia → "0 de 0". Além disso, o painel listava 7 FEATURES de IA heterogêneas
+ * (leitura de cotações, currículos, EPIs, etc.) — não o chat Q&A que o usuário queria.
+ *
+ * O QUE FOI FEITO:
+ *   SHARED (`shared/aiModules.ts`): NOVO catálogo `QA_CHAT_MODULES` com as 7 PERSONAS do chat (planejamento,
+ *   orçamento, compras, rh, financeiro, sst, medição) + helpers `qaChatModuleKey(persona)` e `isQaChatModuleKey`. As
+ *   chaves gravadas em `ai_module_config.modulo` são SEMPRE prefixadas `qa_` p/ NÃO colidir com as chaves de feature
+ *   já existentes (ex.: a feature "compras" = leitura de cotações é distinta do chat "compras").
+ *   BACKEND ENFORCEMENT (`server/_core/aiConfig.ts`): `isAiModuleEnabled`/`assertAiModuleEnabled` passam a aceitar
+ *   `string` e ganham FALLBACK GLOBAL (sentinela `companyId = 0`). Precedência: linha da EMPRESA > linha GLOBAL > 
+ *   habilitado (default permissivo). Necessário porque o admin-master frequentemente opera com companyId=0 — sem o
+ *   fallback global o liga/desliga nunca surtiria efeito p/ ele (antes a função retornava `true` cedo quando
+ *   `!companyId`).
+ *   ROUTER (`server/routers/aiConfig.ts`): NOVOS `getQaConfig` (lê linhas da empresa + globais, default true),
+ *   `setQaModulo` (upsert de 1 persona), `setQaTodos` (upsert das 7) e `isQaModuloEnabled` (leitura leve p/ o botão se
+ *   auto-ocultar). Reusa a tabela `ai_module_config` e um upsert genérico `upsertModuloEnabled`. Guard
+ *   `assertCompanyAccess` permissivo mantido.
+ *   CHAT (`server/routers/iaModulos.ts`): o gate do `chat` deixa de ser a chave única "assistente" e passa a ser
+ *   POR PERSONA via `qaChatModuleKey(input.modulo)`.
+ *   FRONT PAINEL (`client/src/pages/configuracoes/IAConfigSection.tsx`): reescrito — renderiza SEMPRE a partir do
+ *   catálogo estático `QA_CHAT_MODULES` (nunca mais "0 de 0"; o estado on/off vem do servidor, default ligado), query
+ *   `getQaConfig` SEM o `enabled:!!companyId` (companyId=0 = escopo GLOBAL), toggles por módulo + "Ativar/Desativar
+ *   todos", textos atualizados deixando claro que controla o botão verde.
+ *   FRONT BOTÃO (`client/src/components/IAModuloChat.tsx`): consulta `isQaModuloEnabled` e retorna `null` (some da
+ *   tela) quando aquela persona está desativada.
+ *
+ * REGRAS FC: ZERO ALTER/DROP/DELETE; ZERO schema novo (a tabela `ai_module_config` já existe e é auto-curada;
+ * defaults permissivos = sem linha = habilitado). RESSALVA: as 7 FEATURES de IA antigas (getConfig/setModulo/setTodos)
+ * continuam no router p/ retrocompat e seguem permissivas por default, mas não têm mais UI — o usuário pediu só o chat.
+ * Validação: esbuild OK nos 6 arquivos (client browser / server node); servidor reiniciado e conectado ao Neon; code
+ * review (architect) PASS. Detalhe: este arquivo.
+ *
  * Rev. 2808 — **COMPRAS · COTAÇÕES — O NÚMERO DA COTAÇÃO PASSA A SER EXIBIDO COMO `COT-NNNN-AAAA`
  * (NÚMERO PRIMEIRO, ANO DEPOIS) EM VEZ DE `COT-AAAA-NNNN` — SÓ EXIBIÇÃO; O VALOR GRAVADO CONTINUA CANÔNICO.**
  *
