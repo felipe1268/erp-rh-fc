@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2799 — **COMPRAS · COTAÇÕES — OVERLAY "CONFERÊNCIA — LEITURA IA" REFEITO COM LIBERDADE TOTAL DE MATCH POR
+ * LINHA + BOTÃO CLARO "LER COTAÇÃO (IA)" NO TOOLBAR DO FORNECEDOR (1 CLIQUE: ANEXA + LÊ + ABRE A CONFERÊNCIA). TUDO
+ * CLIENT-ONLY; ZERO SCHEMA/SERVER; REUSA `extrairCotacaoIA` E `salvarRespostasLote`.**
+ *
+ * PEDIDO (usuário): melhorar a conferência da leitura por IA dando LIBERDADE TOTAL pro comprador corrigir o match de
+ * cada linha lida do documento (vincular / trocar / remover o item da cotação), além de um botão de upload claro de
+ * PDF/JPG (antes a leitura ficava escondida atrás de ícones).
+ *
+ * O QUE MUDOU (SÓ `client/src/pages/compras/Cotacoes.tsx`):
+ *   - STATE EDITÁVEL `iaLinhas`: ao abrir o overlay, semeia (useEffect) a partir de `iaExtracao.dados.itensExtraidos`
+ *     uma cópia EDITÁVEL por linha (`matchItemId`, `quantidade`, `precoUnitario`, `matchConfianca`, `distribuido`,
+ *     `descricaoFornecedor`, `quantidadeSC`). `setIaLinha(key, patch)` atualiza uma linha. Nada é gravado até "Salvar".
+ *   - COMBOBOX `ItemMatchCombobox` (Popover + Command/cmdk): busca por descrição/código, lista TODOS os itens da
+ *     cotação, mostra as TOP-3 SUGESTÕES (ranqueadas por similaridade de tokens da descrição do fornecedor, helper
+ *     `scoreSimilaridadeIA`/`_iaTokens`) marcadas com ★ no topo, e opção "Remover vínculo". Substitui o vínculo fixo.
+ *   - TABELA ÚNICA "Itens lidos do documento" (substitui as 3 seções antigas — cards live, "com match", "sem match",
+ *     "extras"): por linha → selo de confiança (alta/média/baixa via `confBadge`), descrição do fornecedor, COMBOBOX
+ *     do item, Qtd (input editável), Qtd SC (derivada do item vinculado), Preço Unit. (input editável), Total
+ *     (qtd×preço ao vivo) e Status (OK / Parcial / Excedente / Sem vínculo). `parseBRNumber` nos inputs.
+ *   - ORDENAÇÃO `linhasOrd`: linhas SEM vínculo e de BAIXA confiança sobem ao topo (onde precisam de atenção).
+ *   - DUPLICIDADE: `usoItem` conta quantas linhas apontam pro mesmo item; `temDuplicidade` exibe banner vermelho e as
+ *     linhas duplicadas ficam destacadas (bg vermelho) — avisa que, ao salvar, vale o ÚLTIMO preço (last-wins do
+ *     upsert por (cotacaoId,fornecedorId,itemId)).
+ *   - "ITENS DA SC SEM CORRESPONDÊNCIA" (`semMatchSC`): lista DINÂMICA dos itens da cotação ainda sem nenhuma linha
+ *     vinculada, recalculada ao vivo conforme o usuário mexe nos vínculos.
+ *   - KPIs do topo (Qtd Parcial `nParcial` / Qtd Excedente `nExcedente` / SC sem cotação) recalculados de `iaLinhas`.
+ *   - "CONFIRMAR E SALVAR": monta `respostasValidas` (linhas com `matchItemId` != null E preço != null) e envia via
+ *     `salvarRespostasLote` ({itemId, precoUnitario, quantidade?, descontoPct:0}); contador ao vivo no botão; desabilita
+ *     quando não há nenhuma linha válida.
+ *   - BOTÃO CLARO "Ler cotação (IA)" no toolbar do fornecedor (`<label>` violeta com ícone Sparkles + file input
+ *     `accept=".jpg,.jpeg,.pdf"`): num clique faz `uploadAnexo` + `extrairIA` com o MESMO base64 (FileReader), abrindo
+ *     a conferência ao concluir. Os ícones antigos (clipe/anexo/✨) seguem funcionando em paralelo.
+ *
+ * ZERO ALTER/DROP/DELETE; nenhuma rota/coluna nova. Validação: tsc sem erros no arquivo; HMR compilou limpo; logs
+ * mostram `extrairCotacaoIA` retornando 26 itens/26 matches normalmente. RESSALVA: o overlay continua dependendo do
+ * shape de `itensExtraidos` do `extrairCotacaoIA` (server inalterado); a edição por linha é em memória até "Salvar".
+ *
  * Rev. 2798 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): REVERTIDA A ALTURA 760px DA REV. 2797 —
  * QUE FICOU PÉSSIMA (CURVA ESTICADA DENTRO DE UM BOX ALTO E VAZIO, LONGE DO MODELO DE CURVA S, QUE É LARGO E BAIXO).
  * OS 2 CHART-BOX DA CURVA S (FÍSICA 3A + FINANCEIRA 3B) VOLTARAM PARA `height: 560` → PROPORÇÃO LARGA, COMO O MODELO.**

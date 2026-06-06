@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -35,6 +36,96 @@ function parseBRNumber(v: string): number {
 }
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+// Rev. 2799 — similaridade por sobreposição de tokens (p/ ranquear sugestões de match na Leitura IA).
+function _iaTokens(s: string): string[] {
+  return normalizarTexto(s || "").split(/\s+/).filter(t => t.length >= 2);
+}
+function scoreSimilaridadeIA(a: string, b: string): number {
+  const ta = _iaTokens(a), tb = _iaTokens(b);
+  if (ta.length === 0 || tb.length === 0) return 0;
+  const setA = new Set(ta), setB = new Set(tb);
+  let inter = 0;
+  setA.forEach(t => { if (setB.has(t)) inter++; });
+  const union = new Set([...ta, ...tb]).size;
+  let score = union > 0 ? inter / union : 0;
+  const na = normalizarTexto(a), nb = normalizarTexto(b);
+  if (na && nb && (na.includes(nb) || nb.includes(na))) score += 0.3;
+  return score;
+}
+
+// Rev. 2799 — combobox com busca p/ vincular/trocar o item da cotação numa linha lida pela IA.
+// `descricaoFornecedor` ranqueia as sugestões mais parecidas no topo (★).
+function ItemMatchCombobox({ itens, value, onChange, descricaoFornecedor, duplicado }: {
+  itens: any[];
+  value: number | null;
+  onChange: (id: number | null) => void;
+  descricaoFornecedor: string;
+  duplicado?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const selecionado = value != null ? itens.find((it: any) => it.id === value) : null;
+  const ordenados = React.useMemo(() => {
+    const arr = itens.map((it: any) => ({ it, score: scoreSimilaridadeIA(descricaoFornecedor, it.descricao || "") }));
+    arr.sort((a, b) => b.score - a.score);
+    return arr;
+  }, [itens, descricaoFornecedor]);
+  const topSugestoes = new Set(ordenados.filter(o => o.score > 0.05).slice(0, 3).map(o => o.it.id));
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={`w-full flex items-center justify-between gap-1 h-7 px-2 rounded border text-left text-[11px] transition-colors ${
+            duplicado ? "border-red-300 bg-red-50 text-red-700" :
+            selecionado ? "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100" :
+            "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
+          }`}
+          title={selecionado ? selecionado.descricao : "Vincular a um item da cotação"}
+        >
+          <span className="truncate">{selecionado ? selecionado.descricao : "Vincular item..."}</span>
+          <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="p-0 w-[360px] z-[10000]" align="start">
+        <Command filter={(val, search) => {
+          const s = normalizarTexto(search);
+          return normalizarTexto(val).includes(s) ? 1 : 0;
+        }}>
+          <CommandInput placeholder="Buscar item por descrição ou código..." className="text-xs" />
+          <CommandList className="max-h-[260px]">
+            <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
+            {value != null && (
+              <CommandGroup>
+                <CommandItem
+                  value="__remover__ remover vínculo desvincular"
+                  onSelect={() => { onChange(null); setOpen(false); }}
+                  className="text-red-600 gap-2"
+                >
+                  <X className="h-3.5 w-3.5" /> Remover vínculo
+                </CommandItem>
+              </CommandGroup>
+            )}
+            <CommandGroup>
+              {ordenados.map(({ it }: any) => (
+                <CommandItem
+                  key={it.id}
+                  value={`${it.descricao ?? ""} ${it.insumoCodigo ?? ""} #${it.id}`}
+                  onSelect={() => { onChange(it.id); setOpen(false); }}
+                  className="gap-2 text-xs"
+                >
+                  {topSugestoes.has(it.id) ? <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-400 shrink-0" /> : <span className="w-3.5 shrink-0" />}
+                  <span className="flex-1 truncate">{it.descricao}</span>
+                  {it.id === value && <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 function SaldosRealocacaoPanel({ companyId, obraId, cotacaoId, deficit, showContent, onAcao, onCoberto, userId, userName }: {
   companyId: number; obraId?: number; cotacaoId?: number; deficit: number; showContent?: boolean; onAcao?: () => void; onCoberto?: () => void; userId?: number; userName?: string;
@@ -927,6 +1018,25 @@ export default function Cotacoes() {
   const [iaJobId, setIaJobId] = useState<string | null>(null);
   const [iaPollingFornId, setIaPollingFornId] = useState<number | null>(null);
   const [showPropostas, setShowPropostas] = useState<number | null>(null);
+  // Rev. 2799 — linhas editáveis da Conferência IA (match/preço/qtd livres por linha).
+  const [iaLinhas, setIaLinhas] = useState<any[]>([]);
+  useEffect(() => {
+    if (!iaExtracao) { setIaLinhas([]); return; }
+    const arr = (iaExtracao.dados?.itensExtraidos ?? []).map((it: any, idx: number) => ({
+      key: `l${idx}`,
+      descricaoFornecedor: it.descricaoFornecedor ?? "",
+      quantidade: it.quantidade ?? null,
+      precoUnitario: it.precoUnitario ?? null,
+      unidade: it.unidade ?? null,
+      matchItemId: it.matchItemId ?? null,
+      matchConfianca: it.matchConfianca ?? null,
+      distribuido: !!it.distribuido,
+    }));
+    setIaLinhas(arr);
+  }, [iaExtracao]);
+  const setIaLinha = useCallback((key: string, patch: Record<string, any>) => {
+    setIaLinhas(prev => prev.map(l => l.key === key ? { ...l, ...patch } : l));
+  }, []);
 
   const [editFornId, setEditFornId] = useState<number | null>(null);
   const [editFornForm, setEditFornForm] = useState({
@@ -1674,13 +1784,39 @@ export default function Cotacoes() {
 
   const iaOverlayPortal = iaExtracao ? createPortal((() => {
     const d = iaExtracao.dados;
-    const matched = (d.itensExtraidos ?? []).filter((i: any) => i.matchItemId);
-    const extras = d.itensExtras ?? [];
-    const semMatch = d.itensSemMatch ?? [];
-    const alertas = d.alertas ?? [];
-    const alertasParcial = alertas.filter((a: any) => a.tipo === "parcial");
-    const alertasExcedente = alertas.filter((a: any) => a.tipo === "excedente");
-    const alertasSemCotacao = alertas.filter((a: any) => a.tipo === "sem_cotacao");
+    const itemById = new Map<number, any>((mapaItens as any[]).map((it: any) => [it.id, it]));
+    const confRank = (c: string | null) => c === "baixa" ? 0 : c === "media" ? 1 : c === "alta" ? 2 : 1.5;
+    // Rev. 2799 — uso por item p/ aviso de duplicidade (2+ linhas → mesmo item; last-wins ao salvar)
+    const usoItem = new Map<number, number>();
+    for (const l of iaLinhas) { if (l.matchItemId != null) usoItem.set(l.matchItemId, (usoItem.get(l.matchItemId) ?? 0) + 1); }
+    const temDuplicidade = Array.from(usoItem.values()).some(v => v > 1);
+    // linhas ordenadas: sem-match e baixa-confiança no topo (revisão prioritária)
+    const linhasOrd = [...iaLinhas].sort((a, b) => {
+      const pa = a.matchItemId == null ? -1 : confRank(a.matchConfianca);
+      const pb = b.matchItemId == null ? -1 : confRank(b.matchConfianca);
+      return pa - pb;
+    });
+    const idsVinculados = new Set(iaLinhas.filter(l => l.matchItemId != null).map(l => l.matchItemId));
+    const semMatchSC = (mapaItens as any[]).filter((it: any) => !idsVinculados.has(it.id));
+    // resumo ao vivo (recalculado a cada edição de match/qtd)
+    let nParcial = 0, nExcedente = 0;
+    for (const l of iaLinhas) {
+      if (l.matchItemId == null) continue;
+      const sc = itemById.get(l.matchItemId);
+      const qSC = sc ? Number(sc.quantidade) : null;
+      const qCot = l.quantidade != null ? Number(l.quantidade) : null;
+      if (qSC == null || qCot == null) continue;
+      const diff = qCot - qSC;
+      if (diff < -0.01) nParcial++;
+      else if (diff > 0.01) nExcedente++;
+    }
+    const respostasValidas = iaLinhas.filter(l => l.matchItemId != null && l.precoUnitario != null && Number.isFinite(Number(l.precoUnitario)) && Number(l.precoUnitario) > 0);
+    const confBadge = (c: string | null) => {
+      if (c === "alta") return { txt: "Alta", cls: "bg-emerald-100 text-emerald-700" };
+      if (c === "media") return { txt: "Média", cls: "bg-amber-100 text-amber-700" };
+      if (c === "baixa") return { txt: "Baixa", cls: "bg-red-100 text-red-700" };
+      return { txt: "—", cls: "bg-gray-100 text-gray-500" };
+    };
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{ pointerEvents: "auto" }}>
         <div className="absolute inset-0 bg-black/50" onClick={() => setIaExtracao(null)} />
@@ -1727,105 +1863,136 @@ export default function Cotacoes() {
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-xs text-gray-600">{d.observacoes}</div>
           )}
 
-          {alertas.length > 0 && (
-            <div className="grid grid-cols-3 gap-2">
-              <div className={`rounded-lg p-2.5 text-center ${alertasParcial.length > 0 ? "bg-amber-50 border border-amber-200" : "bg-green-50 border border-green-200"}`}>
-                <div className="text-lg font-bold">{alertasParcial.length}</div>
-                <div className="text-[10px] font-medium text-amber-700">Qtd Parcial</div>
-              </div>
-              <div className={`rounded-lg p-2.5 text-center ${alertasExcedente.length > 0 ? "bg-blue-50 border border-blue-200" : "bg-green-50 border border-green-200"}`}>
-                <div className="text-lg font-bold">{alertasExcedente.length}</div>
-                <div className="text-[10px] font-medium text-blue-700">Qtd Excedente</div>
-              </div>
-              <div className={`rounded-lg p-2.5 text-center ${alertasSemCotacao.length > 0 ? "bg-red-50 border border-red-200" : "bg-green-50 border border-green-200"}`}>
-                <div className="text-lg font-bold">{alertasSemCotacao.length}</div>
-                <div className="text-[10px] font-medium text-red-700">Sem Cotação</div>
-              </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className={`rounded-lg p-2.5 text-center ${nParcial > 0 ? "bg-amber-50 border border-amber-200" : "bg-green-50 border border-green-200"}`}>
+              <div className="text-lg font-bold">{nParcial}</div>
+              <div className="text-[10px] font-medium text-amber-700">Qtd Parcial</div>
+            </div>
+            <div className={`rounded-lg p-2.5 text-center ${nExcedente > 0 ? "bg-blue-50 border border-blue-200" : "bg-green-50 border border-green-200"}`}>
+              <div className="text-lg font-bold">{nExcedente}</div>
+              <div className="text-[10px] font-medium text-blue-700">Qtd Excedente</div>
+            </div>
+            <div className={`rounded-lg p-2.5 text-center ${semMatchSC.length > 0 ? "bg-red-50 border border-red-200" : "bg-green-50 border border-green-200"}`}>
+              <div className="text-lg font-bold">{semMatchSC.length}</div>
+              <div className="text-[10px] font-medium text-red-700">SC sem cotação</div>
+            </div>
+          </div>
+
+          {temDuplicidade && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-2.5 text-xs text-red-700 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>Há duas ou mais linhas vinculadas ao <strong>mesmo item</strong> (marcadas em vermelho). Ao salvar, vale o <strong>último preço</strong> — ajuste os vínculos se não for intencional.</span>
             </div>
           )}
 
-          {matched.length > 0 && (
-            <div>
-              <h4 className="text-sm font-semibold text-emerald-700 flex items-center gap-1.5 mb-2">
-                <CheckCircle className="h-4 w-4" /> Itens com Match ({matched.length})
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-semibold text-violet-700 flex items-center gap-1.5">
+                <FileSearch className="h-4 w-4" /> Itens lidos do documento ({iaLinhas.length})
               </h4>
-              <div className="border rounded-lg overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead className="bg-emerald-50">
-                    <tr>
-                      <th className="text-left px-2 py-2 font-medium text-emerald-700">Item SC</th>
-                      <th className="text-left px-2 py-2 font-medium text-emerald-700">Fornecedor</th>
-                      <th className="text-right px-2 py-2 font-medium text-emerald-700">Qtd Cotada</th>
-                      <th className="text-right px-2 py-2 font-medium text-emerald-700">Qtd SC</th>
-                      <th className="text-right px-2 py-2 font-medium text-emerald-700">Preço Unit.</th>
-                      <th className="text-right px-2 py-2 font-medium text-emerald-700">Total</th>
-                      <th className="text-center px-2 py-2 font-medium text-emerald-700">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {matched.map((it: any, idx: number) => {
-                      const qtdCot = it.quantidade ?? 0;
-                      const qtdSC = it.quantidadeSC ?? 0;
-                      const diff = qtdCot - qtdSC;
-                      const statusQtd = Math.abs(diff) < 0.01 ? "ok" : diff < 0 ? "parcial" : "excedente";
-                      return (
-                        <tr key={idx} className="border-t border-emerald-100 hover:bg-emerald-50/50">
-                          <td className="px-2 py-2 text-gray-700 max-w-[150px] truncate" title={it.matchDescricaoSC || ""}>{it.matchDescricaoSC || "—"}</td>
-                          <td className="px-2 py-2 text-gray-500 max-w-[120px] truncate" title={it.descricaoFornecedor}>{it.descricaoFornecedor}</td>
-                          <td className="px-2 py-2 text-right font-mono">{it.quantidade ?? "—"}</td>
-                          <td className={`px-2 py-2 text-right font-mono ${statusQtd !== "ok" ? "font-semibold" : ""} ${statusQtd === "parcial" ? "text-amber-600" : statusQtd === "excedente" ? "text-blue-600" : "text-gray-500"}`}>
-                            {qtdSC || "—"}
-                            {statusQtd === "parcial" && <span className="text-[9px] ml-0.5">(-{Math.abs(diff).toFixed(0)})</span>}
-                            {statusQtd === "excedente" && <span className="text-[9px] ml-0.5">(+{diff.toFixed(0)})</span>}
-                          </td>
-                          <td className="px-2 py-2 text-right font-mono font-semibold text-emerald-700">
-                            {it.precoUnitario != null ? `R$ ${Number(it.precoUnitario).toFixed(2)}` : "—"}
-                          </td>
-                          <td className="px-2 py-2 text-right font-mono">
-                            {it.precoTotal != null ? `R$ ${Number(it.precoTotal).toFixed(2)}` : "—"}
-                          </td>
-                          <td className="px-2 py-2 text-center">
+              <span className="text-[10px] text-gray-400">Edite preço, qtd e o item vinculado em cada linha. ★ = sugestão mais parecida.</span>
+            </div>
+            <div className="border rounded-lg overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-violet-50">
+                  <tr>
+                    <th className="text-center px-2 py-2 font-medium text-violet-700 whitespace-nowrap">IA</th>
+                    <th className="text-left px-2 py-2 font-medium text-violet-700">Descrição (fornecedor)</th>
+                    <th className="text-left px-2 py-2 font-medium text-violet-700 w-[220px]">Item da cotação</th>
+                    <th className="text-right px-2 py-2 font-medium text-violet-700">Qtd</th>
+                    <th className="text-right px-2 py-2 font-medium text-violet-700">Qtd SC</th>
+                    <th className="text-right px-2 py-2 font-medium text-violet-700">Preço Unit.</th>
+                    <th className="text-right px-2 py-2 font-medium text-violet-700">Total</th>
+                    <th className="text-center px-2 py-2 font-medium text-violet-700">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {linhasOrd.map((l: any) => {
+                    const sc = l.matchItemId != null ? itemById.get(l.matchItemId) : null;
+                    const qSC = sc ? Number(sc.quantidade) : null;
+                    const qCot = l.quantidade != null ? Number(l.quantidade) : null;
+                    const diff = (qSC != null && qCot != null) ? qCot - qSC : null;
+                    const statusQtd = l.matchItemId == null ? "nenhum" : diff == null ? "ok" : Math.abs(diff) < 0.01 ? "ok" : diff < 0 ? "parcial" : "excedente";
+                    const total = (qCot != null && l.precoUnitario != null) ? qCot * Number(l.precoUnitario) : (l.precoUnitario != null ? Number(l.precoUnitario) : null);
+                    const dup = l.matchItemId != null && (usoItem.get(l.matchItemId) ?? 0) > 1;
+                    const badge = confBadge(l.matchConfianca);
+                    return (
+                      <tr key={l.key} className={`border-t border-gray-100 ${dup ? "bg-red-50/60" : l.matchItemId == null ? "bg-amber-50/40" : "hover:bg-violet-50/40"}`}>
+                        <td className="px-2 py-2 text-center">
+                          <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold ${badge.cls}`}>{badge.txt}</span>
+                        </td>
+                        <td className="px-2 py-2 text-gray-600 max-w-[200px] truncate" title={l.descricaoFornecedor}>{l.descricaoFornecedor || "—"}</td>
+                        <td className="px-2 py-2">
+                          <ItemMatchCombobox
+                            itens={mapaItens as any[]}
+                            value={l.matchItemId}
+                            onChange={(id) => setIaLinha(l.key, { matchItemId: id })}
+                            descricaoFornecedor={l.descricaoFornecedor}
+                            duplicado={dup}
+                          />
+                        </td>
+                        <td className="px-1 py-1 text-right">
+                          <input
+                            type="text" inputMode="decimal"
+                            value={l.quantidade != null ? String(l.quantidade) : ""}
+                            onChange={e => setIaLinha(l.key, { quantidade: e.target.value.trim() === "" ? null : parseBRNumber(e.target.value) })}
+                            className="w-16 h-7 text-right font-mono text-[11px] border border-gray-200 rounded px-1.5 focus:border-violet-400 focus:ring-1 focus:ring-violet-200 outline-none"
+                            placeholder="—"
+                          />
+                        </td>
+                        <td className={`px-2 py-2 text-right font-mono ${statusQtd === "parcial" ? "text-amber-600 font-semibold" : statusQtd === "excedente" ? "text-blue-600 font-semibold" : "text-gray-400"}`}>
+                          {qSC != null ? qSC : "—"}
+                          {statusQtd === "parcial" && diff != null && <span className="text-[9px] ml-0.5">(-{Math.abs(diff).toFixed(0)})</span>}
+                          {statusQtd === "excedente" && diff != null && <span className="text-[9px] ml-0.5">(+{diff.toFixed(0)})</span>}
+                        </td>
+                        <td className="px-1 py-1 text-right">
+                          <div className="flex items-center gap-0.5 justify-end">
+                            <span className="text-[10px] text-gray-400">R$</span>
+                            <input
+                              type="text" inputMode="decimal"
+                              value={l.precoUnitario != null ? String(l.precoUnitario) : ""}
+                              onChange={e => setIaLinha(l.key, { precoUnitario: e.target.value.trim() === "" ? null : parseBRNumber(e.target.value) })}
+                              className={`w-20 h-7 text-right font-mono text-[11px] border rounded px-1.5 outline-none focus:ring-1 ${(l.precoUnitario == null || !(Number(l.precoUnitario) > 0)) ? "border-red-200 focus:border-red-400 focus:ring-red-200" : "border-gray-200 focus:border-violet-400 focus:ring-violet-200"}`}
+                              placeholder="0,00"
+                            />
+                          </div>
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono text-gray-700">
+                          {total != null ? `R$ ${Number(total).toFixed(2)}` : "—"}
+                        </td>
+                        <td className="px-2 py-2 text-center">
+                          {statusQtd === "nenhum" ? (
+                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">Sem vínculo</span>
+                          ) : (
                             <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${statusQtd === "ok" ? "bg-emerald-100 text-emerald-700" : statusQtd === "parcial" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
                               {statusQtd === "ok" ? "OK" : statusQtd === "parcial" ? "Parcial" : "Excedente"}
                             </span>
-                            {it.distribuido && <span className="block text-[9px] text-violet-500 mt-0.5">distrib.</span>}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                          )}
+                          {l.distribuido && <span className="block text-[9px] text-violet-500 mt-0.5">distrib.</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {iaLinhas.length === 0 && (
+                    <tr><td colSpan={8} className="px-2 py-6 text-center text-gray-400">Nenhum item lido do documento.</td></tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-          )}
+          </div>
 
-          {semMatch.length > 0 && (
+          {semMatchSC.length > 0 && (
             <div>
               <h4 className="text-sm font-semibold text-amber-700 flex items-center gap-1.5 mb-2">
-                <AlertTriangle className="h-4 w-4" /> Itens da SC sem correspondência ({semMatch.length})
+                <AlertTriangle className="h-4 w-4" /> Itens da SC sem correspondência ({semMatchSC.length})
               </h4>
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                <ul className="space-y-1 text-xs text-amber-800">
-                  {semMatch.map((it: any) => (
+                <ul className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-amber-800">
+                  {semMatchSC.map((it: any) => (
                     <li key={it.id}>• {it.descricao} (Qtd: {it.quantidade} {it.unidade || "un"})</li>
                   ))}
                 </ul>
-              </div>
-            </div>
-          )}
-
-          {extras.length > 0 && (
-            <div>
-              <h4 className="text-sm font-semibold text-orange-700 flex items-center gap-1.5 mb-2">
-                <Package className="h-4 w-4" /> Itens extras do fornecedor ({extras.length})
-              </h4>
-              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                <ul className="space-y-1 text-xs text-orange-800">
-                  {extras.map((it: any, idx: number) => (
-                    <li key={idx}>• {it.descricaoFornecedor} — Qtd: {it.quantidade ?? "?"} — R$ {it.precoUnitario != null ? Number(it.precoUnitario).toFixed(2) : "?"}</li>
-                  ))}
-                </ul>
-                <p className="text-[10px] text-orange-500 mt-2">Estes itens não foram associados a nenhum item da SC. Revise manualmente se necessário.</p>
+                <p className="text-[10px] text-amber-500 mt-2">Estes itens da cotação ainda não têm preço vinculado. Use o seletor "Item da cotação" nas linhas acima para vinculá-los.</p>
               </div>
             </div>
           )}
@@ -1833,17 +2000,15 @@ export default function Cotacoes() {
           <div className="flex justify-end gap-2 pt-2 border-t">
             <Button variant="outline" onClick={() => setIaExtracao(null)}>Cancelar</Button>
             <Button
-              disabled={matched.length === 0}
+              disabled={respostasValidas.length === 0}
               onClick={() => {
-                const respostas = matched
-                  .filter((it: any) => it.matchItemId && it.precoUnitario != null)
-                  .map((it: any) => ({
-                    itemId: it.matchItemId,
-                    precoUnitario: Number(it.precoUnitario),
-                    quantidade: it.quantidade ? Number(it.quantidade) : undefined,
-                    descontoPct: 0,
-                  }));
-                if (respostas.length === 0) { toast.error("Nenhum item com preço para salvar"); return; }
+                const respostas = respostasValidas.map((l: any) => ({
+                  itemId: l.matchItemId as number,
+                  precoUnitario: Number(l.precoUnitario),
+                  quantidade: l.quantidade != null ? Number(l.quantidade) : undefined,
+                  descontoPct: 0,
+                }));
+                if (respostas.length === 0) { toast.error("Nenhum item vinculado com preço para salvar"); return; }
                 salvarRespostas.mutate({
                   cotacaoId: showDetalhe!,
                   fornecedorId: iaExtracao.fornecedorId,
@@ -1863,7 +2028,7 @@ export default function Cotacoes() {
               className="bg-violet-600 hover:bg-violet-500 text-white gap-2"
             >
               <CheckCircle className="h-4 w-4" />
-              Confirmar e Salvar ({matched.filter((i: any) => i.precoUnitario != null).length} itens)
+              Confirmar e Salvar ({respostasValidas.length} {respostasValidas.length === 1 ? "item" : "itens"})
             </Button>
           </div>
         </div>
@@ -4399,6 +4564,36 @@ export default function Cotacoes() {
                                       </div>
                                       {/* Rev. 1989 — Toolbar compacto: icon-only, sem wrap, gap mínimo. */}
                                       <div className="flex items-center gap-0.5 justify-center">
+                                      {/* Rev. 2799 — Botão claro: 1 clique anexa + lê com IA + abre conferência. */}
+                                      <label
+                                        className={`flex items-center gap-1 h-7 px-2 rounded-lg border text-[11px] font-medium cursor-pointer transition-colors whitespace-nowrap ${
+                                          (extrairIA.isPending || !!iaJobId) ? "opacity-50 pointer-events-none border-gray-200 bg-gray-50 text-gray-400" :
+                                          "bg-violet-600 border-violet-600 text-white hover:bg-violet-500"
+                                        }`}
+                                        title="Ler cotação (PDF ou JPG) com IA e preencher os preços automaticamente"
+                                      >
+                                        <Sparkles className="h-3.5 w-3.5" />
+                                        Ler cotação (IA)
+                                        <input
+                                          type="file"
+                                          accept=".jpg,.jpeg,.pdf,image/jpeg,application/pdf"
+                                          className="hidden"
+                                          disabled={extrairIA.isPending || !!iaJobId}
+                                          onChange={e => {
+                                            const file = e.target.files?.[0];
+                                            if (!file) return;
+                                            const reader = new FileReader();
+                                            reader.onload = ev => {
+                                              const base64 = (ev.target?.result as string).split(",")[1];
+                                              setIaFileBuffer({ fornecedorId: p.fornecedorId, base64, fileName: file.name, mimeType: file.type });
+                                              uploadAnexo.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, companyId, fileBase64: base64, fileName: file.name, mimeType: file.type });
+                                              extrairIA.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, companyId, fileBase64: base64, fileName: file.name, mimeType: file.type, tipoProposta: iaTipoProposta });
+                                            };
+                                            reader.readAsDataURL(file);
+                                            e.target.value = "";
+                                          }}
+                                        />
+                                      </label>
                                       <div className="relative">
                                         {showAnexoInput === p.fornecedorId ? (
                                           <div className="absolute z-50 top-full left-0 mt-1 w-72 bg-white border border-gray-200 rounded-xl shadow-xl p-3 space-y-3" onClick={e => e.stopPropagation()}>
