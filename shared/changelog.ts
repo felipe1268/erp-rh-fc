@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2788 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): REPAGINAÇÃO EXECUTIVA DA IMPRESSÃO
+ * NO ESTILO DO MODELO CLÁSSICO FC — AS FAIXAS DE SEÇÃO PASSARAM DE AZUL-MARINHO/CINZA PARA DOURADO COM TEXTO
+ * AZUL-MARINHO, GANHOU MOLDURA DO DOCUMENTO, A BARRA DE LOGOS FICOU SLIM E A MARGEM PADRÃO CAIU DE 3cm PARA 12mm.**
+ *
+ * PEDIDO (usuário): "ficou péssimo... vou te mandar um modelo que fazíamos anteriormente, não é para seguir o
+ * modelo exatamente, mantenha as nossas informações mas quero que entenda a formatação das margens, e da
+ * organização das informações" (anexou o MODELO antigo — 1 página A4 paisagem, cabeçalho navy compacto, FAIXAS
+ * DE SEÇÃO DOURADAS sobre fundo branco, gráficos densos — + os 2 PDFs do resultado atual ruim: 4 páginas, cards
+ * navy gigantes, baixa densidade, cores lavadas).
+ *
+ * CONTEXTO: a Rev. 2787 deixou o REFIS com a estética de "dashboard escuro": cabeçalho de seção em AZUL-MARINHO
+ * (#1A3461) / cinza (`bg-slate-800`/`bg-slate-700`) e gradiente navy inline (`linear-gradient(135deg,#1e293b...)`),
+ * a barra de 3 logos com chips brancos GRANDES (min-height 24pt) e margem de 3cm — o oposto do modelo (dourado +
+ * branco + denso + emoldurado).
+ *
+ * FIX (SÓ CLIENT; ZERO SCHEMA/SERVER) em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (componente
+ * `Refis`):
+ *  1. FAIXAS DE SEÇÃO DOURADAS — nova classe `.refis-section-head` aplicada aos cabeçalhos do BLOCO 1 (título
+ *     REFIS), BLOCO 2 (Evolução Física Global) e Curva S 3A/3B; no `@media print` ela vira faixa DOURADA
+ *     (`linear-gradient(180deg,#FFD24A,#FFC107)`) com texto AZUL-MARINHO (#1A3461) bold, borda inferior navy.
+ *     Como a regra só vale na IMPRESSÃO (com `!important` vencendo o inline navy/gradiente), a tela continua
+ *     navy (WYSIWYG mínimo) e o PDF sai dourado como o modelo.
+ *  2. FALLBACK — qualquer outra faixa `bg-slate-800`/`bg-slate-700` dentro de um `.refis-block` (cabeçalho de
+ *     tabela por grupo, faixas de KPI) também vira dourada no print; os NÚMEROS de KPI que eram claros
+ *     (`text-blue-300`/`emerald-300`/`red-300`) foram recoloridos p/ tons escuros legíveis no dourado
+ *     (#1d4ed8 / #047857 / #b91c1c) e os textos `slate-100/200/300/white` → navy.
+ *  3. MOLDURA DO DOCUMENTO — `#refis-print-area` ganhou `border: 1pt solid #1A3461` + `padding: 5pt`
+ *     (`box-sizing: border-box`), recriando o enquadramento do modelo antigo.
+ *  4. BARRA DE LOGOS SLIM — os chips brancos da `.refis-brand-bar` (Execução/Gerenciamento/Cliente) encolheram
+ *     (min-height 24pt→13pt, padding 4/10→2/7pt, img 19pt→11pt, nome 8.5pt→7pt, gaps menores) — deixa de ser
+ *     o bloco dominante feio e vira um friso elegante dentro da faixa azul do cabeçalho (que segue navy).
+ *  5. MARGEM — default 30mm (3cm) → 12mm, com MIGRAÇÃO da chave do `localStorage` (`refisMargemMmV2`→`V3`) p/ o
+ *     novo valor valer já sem ficar preso ao 3cm salvo; o "reset" agora volta p/ 12mm (era 30mm). Com a moldura,
+ *     o relatório não fica "colado na borda" mesmo com a margem menor, e ocupa mais a folha (menos páginas).
+ *
+ * NOTA TÉCNICA: o cabeçalho-TOPO do documento (`.refis-doc-header`) PERMANECE AZUL-MARINHO de propósito (igual ao
+ * modelo). Cores de fundo novas levam `-webkit-print-color-adjust/print-color-adjust: exact`. MANTIDOS: motor de
+ * impressão (Rev. 2785), Zoom (Rev. 2784). ZERO ALTER/DROP/DELETE. VALIDAÇÃO: esbuild OK (exit 0); HMR; architect.
+ * O usuário valida o resultado final no Ctrl+P.
+ *
  * Rev. 2787 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): CABEÇALHO REPAGINADO — OS 3 LOGOS
  * (EXECUÇÃO/FC · GERENCIAMENTO · CLIENTE) PASSARAM A FAZER PARTE DA FAIXA AZUL DO CABEÇALHO, EM CHIPS BRANCOS
  * BEM AJUSTADOS COM MICRO-RÓTULO DOURADO; E OS GRÁFICOS DA CURVA S GANHARAM DESTAQUE (CABEÇALHO AZUL-MARINHO FC

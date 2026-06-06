@@ -13752,16 +13752,16 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   // Rev. 2786 — repaginação: margem padrão 3cm (30mm) em todos os lados; range ampliado p/ 0-40mm.
   // Chave migrada (refisMargemMmV2) p/ o novo default valer já — sem ficar preso ao 8mm antigo.
   const [refisMargemMm, setRefisMargemMm] = useState<number>(() => {
-    if (typeof window === "undefined") return 30;
-    const v = Number(window.localStorage.getItem("refisMargemMmV2"));
-    return Number.isFinite(v) && v >= 0 && v <= 40 ? v : 30;
+    if (typeof window === "undefined") return 12;
+    const v = Number(window.localStorage.getItem("refisMargemMmV3"));
+    return Number.isFinite(v) && v >= 0 && v <= 40 ? v : 12;
   });
   const [refisZoom, setRefisZoom] = useState<number>(() => {
     if (typeof window === "undefined") return 100;
     const v = Number(window.localStorage.getItem("refisZoom"));
     return Number.isFinite(v) && v >= 40 && v <= 160 ? v : 100;
   });
-  useEffect(() => { try { window.localStorage.setItem("refisMargemMmV2", String(refisMargemMm)); } catch {} }, [refisMargemMm]);
+  useEffect(() => { try { window.localStorage.setItem("refisMargemMmV3", String(refisMargemMm)); } catch {} }, [refisMargemMm]);
   useEffect(() => { try { window.localStorage.setItem("refisZoom", String(refisZoom)); } catch {} }, [refisZoom]);
   const [colBloco2, setColBloco2] = useState(false);
   const [colBloco3A, setColBloco3A] = useState(false);
@@ -14584,7 +14584,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             <button type="button" className="px-1.5 py-0.5 text-sm leading-none text-slate-600 hover:bg-slate-100 rounded" onClick={() => setRefisZoom(z => Math.max(40, z - 5))}>−</button>
             <span className="text-xs font-semibold text-slate-700 w-9 text-center tabular-nums">{refisZoom}%</span>
             <button type="button" className="px-1.5 py-0.5 text-sm leading-none text-slate-600 hover:bg-slate-100 rounded" onClick={() => setRefisZoom(z => Math.min(160, z + 5))}>+</button>
-            <button type="button" className="text-[10px] text-blue-600 hover:underline ml-1" onClick={() => { setRefisZoom(100); setRefisMargemMm(30); }}>reset</button>
+            <button type="button" className="text-[10px] text-blue-600 hover:underline ml-1" onClick={() => { setRefisZoom(100); setRefisMargemMm(12); }}>reset</button>
           </div>
           <Button size="sm" variant="outline"
             className="gap-1.5 border-slate-300 text-slate-600 hover:bg-slate-50 no-print"
@@ -14737,26 +14737,26 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             display: flex !important; align-items: stretch !important; justify-content: space-between !important;
             background: rgba(255,255,255,0.06) !important;
             border-bottom: 0.5pt solid rgba(255,255,255,0.16) !important;
-            padding: 6pt 12pt 7pt !important;
+            padding: 3pt 10pt 3pt !important;
             -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
           }
           .refis-brand-zone {
             flex: 1 1 0 !important; display: flex !important; flex-direction: column !important;
-            align-items: center !important; justify-content: flex-start !important; gap: 4pt !important; padding: 0 8pt !important;
+            align-items: center !important; justify-content: flex-start !important; gap: 1.5pt !important; padding: 0 6pt !important;
           }
           .refis-brand-tag {
             font-size: 5.5pt !important; font-weight: 800 !important; letter-spacing: 0.22em !important;
             text-transform: uppercase !important; color: #FFC233 !important;
           }
           .refis-brand-chip {
-            background: white !important; border-radius: 4pt !important; padding: 4pt 10pt !important;
+            background: white !important; border-radius: 3pt !important; padding: 2pt 7pt !important;
             display: flex !important; align-items: center !important; justify-content: center !important;
-            min-height: 24pt !important; width: 100% !important; max-width: 160pt !important;
+            min-height: 13pt !important; width: 100% !important; max-width: 118pt !important;
             box-shadow: 0 0.5pt 1.5pt rgba(0,0,0,0.18) !important;
             -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
           }
-          .refis-brand-chip img { max-height: 19pt !important; max-width: 132pt !important; object-fit: contain !important; display: block !important; }
-          .refis-brand-name { font-size: 8.5pt !important; font-weight: 800 !important; color: #1A3461 !important; text-align: center !important; line-height: 1.1 !important; }
+          .refis-brand-chip img { max-height: 11pt !important; max-width: 102pt !important; object-fit: contain !important; display: block !important; }
+          .refis-brand-name { font-size: 7pt !important; font-weight: 800 !important; color: #1A3461 !important; text-align: center !important; line-height: 1.1 !important; }
           .refis-brand-sep { width: 0.5pt !important; background: rgba(255,255,255,0.2) !important; align-self: stretch !important; margin: 7pt 0 !important; }
 
           .refis-block {
@@ -14877,6 +14877,45 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           #refis-print-area .refis-block .divide-x > * { border-width: 0.3pt !important; }
           #refis-print-area .border-b { border-bottom-width: 0.3pt !important; }
           #refis-print-area .border { border-width: 0.3pt !important; }
+
+          /* ━━━ Rev. 2788 — REPAGINAÇÃO EXECUTIVA (modelo clássico FC) ━━━━━━━━━━
+             Faixas de seção DOURADAS com texto azul-marinho (substitui as faixas
+             escuras navy/slate da Rev. 2787), fundo branco e MOLDURA do documento
+             — alinha o REFIS ao modelo antigo. O cabeçalho-TOPO do documento
+             (.refis-doc-header) permanece azul-marinho de propósito. */
+          #refis-print-area { border: 1pt solid #1A3461 !important; padding: 5pt !important; box-sizing: border-box !important; }
+
+          /* Faixa de seção marcada explicitamente (BLOCO 1/2 + Curva S 3A/3B) */
+          #refis-print-area .refis-section-head {
+            background: linear-gradient(180deg,#FFD24A 0%,#FFC107 100%) !important;
+            border-top: 0.5pt solid #E6B400 !important;
+            border-bottom: 0.75pt solid #1A3461 !important;
+            border-left: 0 !important;
+            padding: 3pt 9pt !important;
+            -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
+          }
+          #refis-print-area .refis-section-head,
+          #refis-print-area .refis-section-head * { color: #1A3461 !important; }
+          #refis-print-area .refis-section-head p { font-weight: 800 !important; }
+
+          /* Fallback: faixas navy/slate (cabecalhos de secao/tabela) dentro de um
+             bloco -> douradas. Os :not(.rounded)/:not(.font-mono) excluem os
+             BADGES e PILLS pequenos (codigo EAP, pilula de status), que devem
+             manter sua cor original -- so faixas/headers viram dourado. */
+          #refis-print-area .refis-block .bg-slate-800:not(.rounded):not(.rounded-full):not(.font-mono),
+          #refis-print-area .refis-block .bg-slate-700:not(.rounded):not(.rounded-full):not(.font-mono) {
+            background: linear-gradient(180deg,#FFD24A 0%,#FFC107 100%) !important;
+            border-bottom: 0.5pt solid #1A3461 !important;
+          }
+          #refis-print-area .refis-block .bg-slate-800:not(.rounded):not(.rounded-full):not(.font-mono) *,
+          #refis-print-area .refis-block .bg-slate-700:not(.rounded):not(.rounded-full):not(.font-mono) .text-slate-100,
+          #refis-print-area .refis-block .bg-slate-700:not(.rounded):not(.rounded-full):not(.font-mono) .text-slate-200,
+          #refis-print-area .refis-block .bg-slate-700:not(.rounded):not(.rounded-full):not(.font-mono) .text-slate-300,
+          #refis-print-area .refis-block .bg-slate-700:not(.rounded):not(.rounded-full):not(.font-mono) .text-white { color: #1A3461 !important; }
+          /* Números de KPI nas faixas (eram claros) → tons escuros legíveis no dourado */
+          #refis-print-area .refis-block .bg-slate-700:not(.rounded):not(.rounded-full):not(.font-mono) .text-blue-300    { color: #1d4ed8 !important; }
+          #refis-print-area .refis-block .bg-slate-700:not(.rounded):not(.rounded-full):not(.font-mono) .text-emerald-300 { color: #047857 !important; }
+          #refis-print-area .refis-block .bg-slate-700:not(.rounded):not(.rounded-full):not(.font-mono) .text-red-300     { color: #b91c1c !important; }
         }
       `}</style>
 
@@ -14988,7 +15027,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       ══════════════════════════════════════════════════════════════════════ */}
       <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {/* Faixa título */}
-        <div className="bg-slate-800 text-white px-5 py-3 flex items-center justify-between">
+        <div className="refis-section-head bg-slate-800 text-white px-5 py-3 flex items-center justify-between">
           <div>
             <p className="font-bold tracking-wide text-sm uppercase">
               Relatório de Evolução Física da Obra (REFIS)
@@ -15039,7 +15078,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       ══════════════════════════════════════════════════════════════════════ */}
       <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {/* Cabeçalho profissional */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 cursor-pointer select-none" style={{ background: "linear-gradient(135deg,#1e293b 0%,#0f172a 100%)" }} onClick={() => setColBloco2(v => !v)}>
+        <div className="refis-section-head flex items-center justify-between px-5 py-3 border-b border-slate-200 cursor-pointer select-none" style={{ background: "linear-gradient(135deg,#1e293b 0%,#0f172a 100%)" }} onClick={() => setColBloco2(v => !v)}>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Evolução Física Global</p>
             <p className="text-sm font-bold text-white mt-0.5">Avanço Acumulado da Obra</p>
@@ -15530,7 +15569,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       {/* BLOCO 3A — Curva S Física */}
       {curvaFiltrada.length > 1 && (
         <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="border-b border-slate-600 px-5 py-2.5 flex items-center justify-between cursor-pointer select-none" style={{ background: "#1A3461", borderLeft: "3px solid #FFB800", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }} onClick={() => setColBloco3A(v => !v)}>
+          <div className="refis-section-head border-b border-slate-600 px-5 py-2.5 flex items-center justify-between cursor-pointer select-none" style={{ background: "#1A3461", borderLeft: "3px solid #FFB800", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }} onClick={() => setColBloco3A(v => !v)}>
             <p className="text-xs font-bold uppercase tracking-wider text-white">
               Curva S Física — Avanço Acumulado (%)
             </p>
@@ -15669,7 +15708,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         const finTickFmt   = (v: number) => v === 0 ? "0" : v.toLocaleString("pt-BR");
         return (
         <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="border-b border-slate-600 px-5 py-2.5 flex items-center justify-between cursor-pointer select-none" style={{ background: "#1A3461", borderLeft: "3px solid #FFB800", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }} onClick={() => setColBloco3B(v => !v)}>
+          <div className="refis-section-head border-b border-slate-600 px-5 py-2.5 flex items-center justify-between cursor-pointer select-none" style={{ background: "#1A3461", borderLeft: "3px solid #FFB800", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }} onClick={() => setColBloco3B(v => !v)}>
             <p className="text-xs font-bold uppercase tracking-wider text-white">
               Curva S Financeira — Faturamento Acumulado (R$)
             </p>
