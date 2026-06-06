@@ -21,6 +21,7 @@ import { ComprasConfigSection } from "@/pages/configuracoes/ComprasConfigSection
 import { FinanceiroConfigSection } from "@/pages/configuracoes/FinanceiroConfigSection";
 import { AlmoxarifadoConfigSection } from "@/pages/configuracoes/AlmoxarifadoConfigSection";
 import { PlanejamentoConfigSection } from "@/pages/configuracoes/PlanejamentoConfigSection";
+import { IAConfigSection } from "@/pages/configuracoes/IAConfigSection";
 import TemplatesDocsTab from "@/pages/configuracoes/TemplatesDocsTab";
 import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, ChevronDown, Info, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign, FolderOpen, FileBarChart, Hammer, Truck, Megaphone, Briefcase, Brain, SlidersHorizontal, GitBranch, Upload, ShieldCheck, ShieldAlert, UserCheck } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
@@ -679,6 +680,7 @@ export default function Configuracoes() {
                 <div className="flex-1 h-px bg-gray-200" />
               </div>
               <div className="space-y-3">
+                <IAConfigSection />
                 <ComprasConfigSection />
                 <AlmoxarifadoConfigSection />
                 <FinanceiroConfigSection />

@@ -1,6 +1,60 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2805 — **CONFIGURAÇÕES · IA — NOVO PAINEL "INTELIGÊNCIA ARTIFICIAL" QUE LIGA/DESLIGA, POR EMPRESA, AS
+ * FUNCIONALIDADES DE IA DE CADA MÓDULO (COMPRAS, RH/CONVENÇÃO, RECRUTAMENTO, SST, PLANEJAMENTO, ORÁCULO E ASSISTENTE).**
+ *
+ * PEDIDO (usuário, com screenshot da tela "Configurações" + o botão flutuante da IA): "Quero um botão nas configurações
+ * para poder habilitar e desativar todas as ias de cada módulo... quero essa opção na tela de configurações."
+ *
+ * O QUE FOI FEITO:
+ *   - NOVO catálogo canônico `shared/aiModules.ts` (`AI_MODULES` / `AiModuleKey`): 7 módulos com IA — `compras`, `rh`,
+ *     `recrutamento`, `sst`, `planejamento`, `oraculo`, `assistente`. A CHAVE é a identidade estável gravada no banco.
+ *   - NOVA tabela `ai_module_config` (drizzle/schema.ts: `aiModuleConfig`) — (company_id, modulo, enabled, updated_by,
+ *     timestamps), índice ÚNICO (company_id, modulo). DEFAULT PERMISSIVO: ausência de linha = IA HABILITADA. Self-heal
+ *     `[SyncSchema+]` em `server/_core/index.ts` com `CREATE TABLE IF NOT EXISTS` + `CREATE UNIQUE INDEX IF NOT EXISTS`
+ *     (ZERO ALTER/DROP/DELETE — segue R-001/R-007/R-010).
+ *   - NOVO router `server/routers/aiConfig.ts` (registrado em `server/routers.ts` como `aiConfig`): `getConfig` (devolve
+ *     os 7 módulos com `enabled`, default true), `setModulo` (liga/desliga 1) e `setTodos` (liga/desliga todos de uma
+ *     vez). Guard de empresa PERMISSIVO copiado do padrão `compras._assertCompanyAccess` (admin livre; user sem vínculo
+ *     livre; só bloqueia user vinculado fora dos vínculos) — fecha IDOR cross-tenant na própria config.
+ *   - ENFORCEMENT REAL no backend: novo helper `server/_core/aiConfig.ts` (`isAiModuleEnabled` / `assertAiModuleEnabled`,
+ *     default permissivo: sem companyId resolvível ou sem linha = habilitado; só bloqueia quando enabled=0). Chamado como
+ *     1ª instrução nos endpoints de IA. COBERTURA COMPLETA POR MÓDULO (code review architect apontou que a 1ª passada
+ *     gateava só 1 endpoint por módulo, deixando bypass nos demais):
+ *       · compras → `extrairCotacaoIA`, `preencherPrecosFaltantesIA`, `sugerirCategoriasIA`, `sugerirPrecoIA`,
+ *         `classificarDisciplinas`, `reclassificarTipoControleIA`;
+ *       · rh → `convencaoIA.processarPdf` (cobre os helpers Vision Anthropic/Gemini, só alcançáveis por ele);
+ *       · recrutamento → `curriculos.processarArquivosIA`;
+ *       · sst → `epiAvancado.iaSugerir{Kits,Cores,VidaUtil,Treinamentos}` + `analisarEstoqueIA`;
+ *       · planejamento → `iaCronograma` TODOS os endpoints com LLM: `chat`, `gerarAlertasClima`, `simularCenario`,
+ *         `sugerirRecursos`, `analisarDesvio`, `analisarLOB`, `analisarEfetivo`, `simularEfetivo`, `perguntarEfetivo`,
+ *         `alertasSemana` (novo helper `companyIdDoProjeto(projetoId)` resolve o companyId REAL pela linha do projeto —
+ *         não pelo `ctx.user.companyId`, que fica vazio p/ admin-master — garantindo enforce p/ todos os usuários);
+ *       · oraculo → `oraculo.sendMessage`; assistente → `iaModulos.chat`.
+ *     Endpoints com companyId opcional (oraculo/iaModulos/sugerirPrecoIA) caem para `ctx.user.companyId`. Bloqueio devolve
+ *     FORBIDDEN com mensagem "Ative em Configurações › Inteligência Artificial.".
+ *   - FRONTEND: novo `client/src/pages/configuracoes/IAConfigSection.tsx` (card violeta colapsável no padrão das demais
+ *     seções "Configurações por Módulo") com Switch por módulo + botões "Ativar todas / Desativar todas" + badge
+ *     "N de 7 ativas". Inserido no TOPO de "Configurações por Módulo" em `client/src/pages/Configuracoes.tsx` (aba
+ *     "Critérios do Sistema").
+ *
+ * RESSALVA: o catálogo cobre os endpoints de IA HOJE existentes; novos endpoints de IA devem chamar `assertAiModuleEnabled`
+ * explicitamente (não há interceptação automática no helper `invokeLLM`/`invokeAnthropicVision`). NÃO foram gateados (de
+ * propósito) os HELPERS de IA que rodam EM BACKGROUND como parte de um fluxo não-IA, pois bloqueá-los quebraria o fluxo
+ * principal: `compras.classificarTipoControleIA` e o resolvedor de embalagem comercial (auto-disparados na criação de item
+ * de almoxarifado). JÁ no `compras.buscarPorCodigoBarras` (acionado pelo usuário, com fallback IA quando não acha item
+ * local) o RAMO IA é condicionado por `isAiModuleEnabled` — o lookup local segue funcionando com IA desligada; só o
+ * fallback IA (que chama o LLM) é suprimido (retorna `found:false`). O liga/desliga atua em TODA inferência IA acionável
+ * pelo usuário no módulo.
+ *
+ * ARQUIVOS: `shared/aiModules.ts` (novo), `drizzle/schema.ts` (+aiModuleConfig), `server/_core/index.ts` (self-heal),
+ * `server/_core/aiConfig.ts` (novo helper), `server/routers/aiConfig.ts` (novo router), `server/routers.ts` (registro),
+ * `server/routers/{compras,convencaoIA,curriculos,epiAvancado,iaCronograma,oraculo,iaModulos}.ts` (guards),
+ * `client/src/pages/configuracoes/IAConfigSection.tsx` (novo) + `client/src/pages/Configuracoes.tsx`. Validação: esbuild
+ * OK em todos os routers tocados; servidor reiniciado e reconectado ao Neon (self-heal materializa `ai_module_config`).
+ * ZERO ALTER/DROP/DELETE.
+ *
  * Rev. 2804 — **COMPRAS · SEGURANÇA — FECHADO IDOR (BROKEN ACCESS CONTROL) MULTI-EMPRESA EM ~86 ENDPOINTS DO ROUTER DE
  * COMPRAS QUE RECEBIAM `companyId` DO CLIENTE SEM VALIDAR SE O USUÁRIO TEM ACESSO ÀQUELA EMPRESA. AGORA TODOS CHAMAM O
  * GUARD CANÔNICO `_assertCompanyAccess` ANTES DE USAR O `companyId`.**

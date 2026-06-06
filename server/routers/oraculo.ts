@@ -1,6 +1,7 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
+import { assertAiModuleEnabled } from "../_core/aiConfig";
 import { oraculoSessions, oraculoMessages } from "../../drizzle/schema";
 import { eq, and, sql, desc, asc } from "drizzle-orm";
 import { invokeLLM } from "../_core/llm";
@@ -609,6 +610,7 @@ export const oraculoRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN" });
+      await assertAiModuleEnabled(input.companyId ?? (ctx.user as any)?.companyId, "oraculo");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 

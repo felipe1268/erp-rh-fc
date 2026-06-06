@@ -6,6 +6,7 @@ import { eq, and, sql, desc, isNull, or } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { TRPCError } from "@trpc/server";
 import { invokeAnthropicVision } from "../_core/llm";
+import { assertAiModuleEnabled } from "../_core/aiConfig";
 
 const FUNCOES_PADRAO = [
   "SERVENTE", "PEDREIRO", "CARPINTEIRO", "ARMADOR",
@@ -492,6 +493,7 @@ export const curriculosRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       assertCompanyAccess(ctx, input.companyId);
+      await assertAiModuleEnabled(input.companyId, "recrutamento");
       const db = (await getDb())!;
       const funcoesDb = await db.select().from(curriculoFuncoes)
         .where(and(

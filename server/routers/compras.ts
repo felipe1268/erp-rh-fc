@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
 import { getDb, getCompaniesForUser, getEffectiveAllowedObraIds, getUserCompanyLinks } from "../db";
+import { assertAiModuleEnabled, isAiModuleEnabled } from "../_core/aiConfig";
 import { triggerFinancialSync } from "../services/financialEventTrigger";
 import { criarParcelasFinanceiras } from "../services/purchaseFinancialBridge";
 import { getTipoPagamentoInfo } from "../../shared/paymentConditions";
@@ -1680,6 +1681,7 @@ export const comprasRouter = router({
       if (!allowedIds.includes(input.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
       }
+      await assertAiModuleEnabled(input.companyId, "compras");
 
       const [it] = await db.select().from(almoxarifadoItens).where(and(
         eq(almoxarifadoItens.id, input.itemId),
@@ -2373,6 +2375,8 @@ export const comprasRouter = router({
       tamanhoLote: z.number().min(5).max(40).default(20),
     }))
     .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      await assertAiModuleEnabled(input.companyId, "compras");
       const db = await getDb();
 
       // 1) Pega todos itens sem preço
@@ -2496,6 +2500,7 @@ Responda APENAS com um JSON no formato (sem markdown, sem comentários):
       if (!allowedCompanyIds.includes(input.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
       }
+      await assertAiModuleEnabled(input.companyId, "compras");
 
       // 1) Categorias disponíveis (vocabulário fechado pra IA escolher)
       const categoriasRows = await db.select().from(almoxarifadoCategorias)
@@ -2655,7 +2660,8 @@ Responda APENAS com um JSON (sem markdown, sem comentários extras):
       categoria: z.string().optional(),
       fotoUrl: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await assertAiModuleEnabled((ctx.user as any)?.companyId, "compras");
       const content: any[] = [];
       if (input.fotoUrl) {
         try {
@@ -2735,6 +2741,12 @@ Responda APENAS com um objeto JSON no formato:
           fotoUrl: (item as any).fotoUrl ?? null,
           descricao: `Item já cadastrado no almoxarifado`,
         };
+      }
+
+      // Fallback IA — só dispara se o módulo de IA "compras" estiver ligado p/ a empresa.
+      // (lookup local acima continua valendo mesmo com IA desligada)
+      if (!(await isAiModuleEnabled(input.companyId, "compras"))) {
+        return { found: false as const, source: "ia" as const };
       }
 
       try {
@@ -5421,6 +5433,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
     }))
     .mutation(async ({ input, ctx }) => {
       await _assertCompanyAccess(ctx.user, input.companyId);
+      await assertAiModuleEnabled(input.companyId, "compras");
       // Rev. 2800 — normaliza p/ lista de arquivos (array tem prioridade).
       const arquivos = (input.arquivos && input.arquivos.length > 0)
         ? input.arquivos
@@ -13272,6 +13285,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
     const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
     if (!(allowed || []).some((c: any) => c.id === input.companyId)) throw new TRPCError({ code: "FORBIDDEN" });
+    await assertAiModuleEnabled(input.companyId, "compras");
 
     const [orc] = await db.select({ id: orcamentos.id }).from(orcamentos)
       .where(and(eq(orcamentos.id, input.orcamentoId), eq(orcamentos.companyId, input.companyId), isNull(orcamentos.deletedAt)))

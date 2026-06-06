@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { invokeLLM } from "../_core/llm";
+import { assertAiModuleEnabled } from "../_core/aiConfig";
 import { getDb, getObraFuncionarios } from "../db";
 import {
   iaCronogramaConhecimento,
@@ -48,6 +49,25 @@ async function assertCompanyAccessIa(
   _companyId: number,
 ) {
   if (!ctx.user?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
+}
+
+// Rev. 2805 — companyId REAL do projeto, p/ o gate liga/desliga da IA do módulo
+// "planejamento". Resolve pela linha do projeto (não pelo `ctx.user.companyId`,
+// que fica vazio p/ admin-master que alterna empresa pela UI) para que o toggle
+// enforce corretamente em todos os usuários.
+async function companyIdDoProjeto(projetoId: number): Promise<number | null> {
+  try {
+    const db = await getDb();
+    if (!db) return null;
+    const [row] = await db
+      .select({ companyId: planejamentoProjetos.companyId })
+      .from(planejamentoProjetos)
+      .where(eq(planejamentoProjetos.id, projetoId))
+      .limit(1);
+    return (row?.companyId as number | undefined) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 // ── WMO weather codes severity ────────────────────────────────────────────
@@ -665,6 +685,7 @@ export const iaCronogramaRouter = router({
       }).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
+      await assertAiModuleEnabled(await companyIdDoProjeto(input.projetoId), "planejamento");
       const db = await getDb();
       const companyId = (ctx.user as any).companyId;
 
@@ -799,6 +820,7 @@ ${climaTexto}`;
       }),
     }))
     .mutation(async ({ input }) => {
+      await assertAiModuleEnabled(await companyIdDoProjeto(input.projetoId), "planejamento");
       const db = await getDb();
       const rev = await db.select().from(planejamentoRevisoes)
         .where(eq(planejamentoRevisoes.projetoId, input.projetoId))
@@ -915,6 +937,7 @@ ${climaTexto}`;
       sessaoId:    z.string(),
     }))
     .mutation(async ({ input, ctx }) => {
+      await assertAiModuleEnabled(await companyIdDoProjeto(input.projetoId), "planejamento");
       const db = await getDb();
       const companyId = (ctx.user as any).companyId;
 
@@ -1146,6 +1169,7 @@ Descrição: ${input.mensagem}`;
       tipoObra:        z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
+      await assertAiModuleEnabled(await companyIdDoProjeto(input.projetoId), "planejamento");
       const db = await getDb();
       const companyId = (ctx.user as any).companyId;
 
@@ -1289,6 +1313,7 @@ Responda com um JSON no formato:
       })).optional(),
     }))
     .mutation(async ({ input }) => {
+      await assertAiModuleEnabled(await companyIdDoProjeto(input.projetoId), "planejamento");
       const db = await getDb();
 
       const [conhecimentos, projetoRows] = await Promise.all([
@@ -1616,6 +1641,7 @@ Responda EXATAMENTE neste formato:
       disciplinaMaisAdiantada: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
+      await assertAiModuleEnabled(await companyIdDoProjeto(input.projetoId), "planejamento");
       const systemPrompt = `Você é JULINHO, IA especialista em gestão de obras verticais e Linha de Balanços (LOB).
 Analise os dados LOB desta obra e forneça diagnóstico técnico preciso sobre colisões entre frentes, desvios de ritmo e risco ao prazo.
 Seja específico, técnico e prático. Use linguagem direta de engenharia de obras.`;
@@ -1711,6 +1737,7 @@ Responda EXATAMENTE neste formato (seja conciso e direto):
       // admin_master livre; demais só a própria empresa (evita IDOR cross-company).
       const companyId = input.companyId;
       await assertCompanyAccessIa(ctx, companyId);
+      await assertAiModuleEnabled(companyId, "planejamento");
 
       const {
         projeto, obra, revisao, porCargo,
@@ -1867,6 +1894,7 @@ Regras: inclua em "porCargo" TODAS as funções listadas no efetivo (mesmo as qu
       if (!db) throw new Error("Banco de dados indisponível.");
       const companyId = input.companyId;
       await assertCompanyAccessIa(ctx, companyId);
+      await assertAiModuleEnabled(companyId, "planejamento");
       const {
         projeto, obra, revisao, porCargo,
         totalEfetivo, totalAtivos, totalIndisponiveis,
@@ -1897,6 +1925,7 @@ Regras: inclua em "porCargo" TODAS as funções listadas no efetivo (mesmo as qu
       if (!db) throw new Error("Banco de dados indisponível.");
       const companyId = input.companyId;
       await assertCompanyAccessIa(ctx, companyId);
+      await assertAiModuleEnabled(companyId, "planejamento");
       const {
         projeto, obra, revisao, porCargo,
         totalEfetivo, totalAtivos, totalIndisponiveis,
@@ -2167,6 +2196,7 @@ DIDÁTICA GERAL (obrigatória em TODA a resposta): escreva para ser fácil de en
       if (!db) throw new Error("Banco de dados indisponível.");
       const companyId = input.companyId;
       await assertCompanyAccessIa(ctx, companyId);
+      await assertAiModuleEnabled(companyId, "planejamento");
       try {
         const rows = await db
           .select({
@@ -2240,6 +2270,7 @@ DIDÁTICA GERAL (obrigatória em TODA a resposta): escreva para ser fácil de en
       if (!db) throw new Error("Banco de dados indisponível.");
       const companyId = input.companyId;
       await assertCompanyAccessIa(ctx, companyId);
+      await assertAiModuleEnabled(companyId, "planejamento");
       try {
         const [row] = await db
           .select()
@@ -2279,6 +2310,7 @@ DIDÁTICA GERAL (obrigatória em TODA a resposta): escreva para ser fácil de en
       if (!db) throw new Error("Banco de dados indisponível.");
       const companyId = input.companyId;
       await assertCompanyAccessIa(ctx, companyId);
+      await assertAiModuleEnabled(companyId, "planejamento");
 
       const {
         projeto, obra, revisao,
@@ -2397,6 +2429,7 @@ DÚVIDA DO USUÁRIO: ${input.pergunta}`;
       })),
     }))
     .mutation(async ({ input }) => {
+      await assertAiModuleEnabled(await companyIdDoProjeto(input.projetoId), "planejamento");
       const semanasTexto = input.semanas.map(s => {
         const atv = s.atividades.map(a => {
           const status = a.atrasada ? " [ATRASADA]" : "";

@@ -717,6 +717,23 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2551: tabelas convencao_analises + convencao_analise_itens garantidas (Convenção Coletiva com IA).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA convencao_analises/itens:`, e?.message || e); }
 
+        // Rev. 2805 — Liga/desliga de IA por módulo/empresa (Configurações › Inteligência Artificial).
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS ai_module_config (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              modulo VARCHAR(40) NOT NULL,
+              enabled SMALLINT DEFAULT 1 NOT NULL,
+              updated_by VARCHAR(255),
+              updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uniq_ai_module_company ON ai_module_config(company_id, modulo)`);
+          console.log(`[SyncSchema+] Rev. 2805: tabela ai_module_config garantida (liga/desliga IA por módulo).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA ai_module_config:`, e?.message || e); }
+
         // Rev. 2429 — Aprovadores delegados de Auditoria do Almoxarifado por obra.
         try {
           await db.execute(sql`

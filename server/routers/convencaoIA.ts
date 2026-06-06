@@ -2,6 +2,7 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
+import { assertAiModuleEnabled } from "../_core/aiConfig";
 import {
   convencaoAnalises,
   convencaoAnaliseItens,
@@ -196,6 +197,7 @@ export const convencaoIARouter = router({
       mimeType: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
+      await assertAiModuleEnabled(input.companyId, "rh");
       const db = (await getDb())!;
 
       const mimeType = input.mimeType || "application/pdf";

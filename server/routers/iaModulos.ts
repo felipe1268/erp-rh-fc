@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { invokeLLM } from "../_core/llm";
+import { assertAiModuleEnabled } from "../_core/aiConfig";
 import { getDb } from "../db";
 import { sql } from "drizzle-orm";
 
@@ -278,6 +279,7 @@ export const iaModulosRouter = router({
       companyId: z.number().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
+      await assertAiModuleEnabled(input.companyId ?? (ctx.user as any)?.companyId, "assistente");
       const hasImages = input.messages.some(m => m.images && m.images.length > 0);
       const systemPrompt = SYSTEM_PROMPTS[input.modulo] + (hasImages ? VISION_INSTRUCTION : "");
       const contextoExtra = input.contexto

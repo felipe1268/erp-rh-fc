@@ -4176,6 +4176,22 @@ export const moduleConfig = pgTable("module_config", {
 ]);
 
 
+// ========== IA POR MÓDULO - LIGA/DESLIGA (Rev. 2805) ==========
+// Toggle por empresa que habilita/desabilita as funcionalidades de IA de cada
+// módulo. Ausência de linha = HABILITADO (default permissivo). Ver shared/aiModules.ts.
+export const aiModuleConfig = pgTable("ai_module_config", {
+  id: serial().primaryKey(),
+  companyId: integer().notNull(),
+  modulo: varchar({ length: 40 }).notNull(), // AiModuleKey — ver shared/aiModules.ts
+  enabled: smallint().default(1).notNull(),  // 1 = habilitado, 0 = desabilitado
+  updatedBy: varchar("updated_by", { length: 255 }),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uniq_ai_module_company").on(table.companyId, table.modulo),
+]);
+
+
 // ========== PORTAL EXTERNO - CREDENCIAIS ==========
 export const portalCredentials = pgTable("portal_credentials", {
   id: serial().primaryKey(),

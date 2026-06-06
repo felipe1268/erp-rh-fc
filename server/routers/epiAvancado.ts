@@ -2,6 +2,7 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
+import { assertAiModuleEnabled } from "../_core/aiConfig";
 import {
   epiKits, epiKitItems, epiCoresCapacete, epiVidaUtil,
   epiAssinaturas, epiTreinamentosVinculados, epiEstoqueMinimo,
@@ -1304,6 +1305,7 @@ export const epiAvancadoRouter = router({
   analisarEstoqueIA: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .mutation(async ({ input, ctx }) => {
+      await assertAiModuleEnabled(input.companyId, "sst");
       const db = (await getDb())!;
       
       // Get all obras with CEP
@@ -2283,6 +2285,7 @@ Forneça sugestões concretas com quantidades específicas.`;
   iaSugerirKitsPorFuncao: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), funcao: z.string().optional() }))
     .mutation(async ({ input }) => {
+      await assertAiModuleEnabled(input.companyId, "sst");
       const db = (await getDb())!;
 
       // Buscar funções da empresa
@@ -2349,6 +2352,7 @@ Retorne APENAS JSON com o formato: { "kits": [ { "nome": string, "funcao": strin
   iaSugerirCoresCapacete: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .mutation(async ({ input }) => {
+      await assertAiModuleEnabled(input.companyId, "sst");
       const db = (await getDb())!;
 
       const funcoes = await db.select({ nome: jobFunctions.nome })
@@ -2393,6 +2397,7 @@ Considere as funções reais da empresa e o padrão: Branco (engenheiros/mestres
   iaSugerirVidaUtil: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .mutation(async ({ input }) => {
+      await assertAiModuleEnabled(input.companyId, "sst");
       const db = (await getDb())!;
 
       // Buscar EPIs do catálogo
@@ -2442,6 +2447,7 @@ Inclua: nome do EPI, categoria, vida útil em meses e observações.`;
   iaSugerirTreinamentos: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .mutation(async ({ input }) => {
+      await assertAiModuleEnabled(input.companyId, "sst");
       const db = (await getDb())!;
 
       const episCatalogo = await db.select({ nome: epis.nome, categoria: epis.categoria })
