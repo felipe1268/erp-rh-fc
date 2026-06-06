@@ -13748,6 +13748,19 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     }
   }, [proj?.ultimaAnaliseJulinho]);
   const [orientacaoPdf, setOrientacaoPdf] = useState<"portrait" | "landscape">("landscape");
+  // Rev. 2784 — calibração de impressão pelo próprio usuário (margem + zoom), persistida no navegador
+  const [refisMargemMm, setRefisMargemMm] = useState<number>(() => {
+    if (typeof window === "undefined") return 8;
+    const v = Number(window.localStorage.getItem("refisMargemMm"));
+    return Number.isFinite(v) && v >= 0 && v <= 25 ? v : 8;
+  });
+  const [refisZoom, setRefisZoom] = useState<number>(() => {
+    if (typeof window === "undefined") return 100;
+    const v = Number(window.localStorage.getItem("refisZoom"));
+    return Number.isFinite(v) && v >= 40 && v <= 160 ? v : 100;
+  });
+  useEffect(() => { try { window.localStorage.setItem("refisMargemMm", String(refisMargemMm)); } catch {} }, [refisMargemMm]);
+  useEffect(() => { try { window.localStorage.setItem("refisZoom", String(refisZoom)); } catch {} }, [refisZoom]);
   const [colBloco2, setColBloco2] = useState(false);
   const [colBloco3A, setColBloco3A] = useState(false);
   const [colBloco3B, setColBloco3B] = useState(false);
@@ -14554,6 +14567,23 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               Paisagem
             </button>
           </div>
+          {/* Rev. 2784 — calibração: margem (mm) + zoom (%) da impressão */}
+          <div className="flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 no-print" title="Margem da folha (mm) — aplicada ao imprimir">
+            <span className="text-[11px] text-slate-500">Margem</span>
+            <input
+              type="number" min={0} max={25} step={1} value={refisMargemMm}
+              onChange={(e) => setRefisMargemMm(Math.max(0, Math.min(25, Math.round(Number(e.target.value) || 0))))}
+              className="w-11 text-xs border border-slate-200 rounded px-1 py-0.5 text-center"
+            />
+            <span className="text-[11px] text-slate-400">mm</span>
+          </div>
+          <div className="flex items-center gap-0.5 rounded-md border border-slate-200 px-1.5 py-0.5 no-print" title="Zoom da impressão — diminua para caber mais por página">
+            <span className="text-[11px] text-slate-500 mr-0.5">Zoom</span>
+            <button type="button" className="px-1.5 py-0.5 text-sm leading-none text-slate-600 hover:bg-slate-100 rounded" onClick={() => setRefisZoom(z => Math.max(40, z - 5))}>−</button>
+            <span className="text-xs font-semibold text-slate-700 w-9 text-center tabular-nums">{refisZoom}%</span>
+            <button type="button" className="px-1.5 py-0.5 text-sm leading-none text-slate-600 hover:bg-slate-100 rounded" onClick={() => setRefisZoom(z => Math.min(160, z + 5))}>+</button>
+            <button type="button" className="text-[10px] text-blue-600 hover:underline ml-1" onClick={() => { setRefisZoom(100); setRefisMargemMm(8); }}>reset</button>
+          </div>
           <Button size="sm" variant="outline"
             className="gap-1.5 border-slate-300 text-slate-600 hover:bg-slate-50 no-print"
             onClick={() => window.print()}>
@@ -14628,7 +14658,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       {/* Print styles */}
       <style>{`
         @media print {
-          @page { size: A4 ${orientacaoPdf}; margin: 8mm; }
+          @page { size: A4 ${orientacaoPdf}; margin: ${refisMargemMm}mm; }
 
           html, body { background: white !important; margin: 0 !important; padding: 0 !important; }
           body * { visibility: hidden !important; }
@@ -14636,7 +14666,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             visibility: visible !important;
             position: absolute !important;
             top: 0 !important; left: 0 !important;
-            width: 100% !important;
+            width: ${(10000 / refisZoom).toFixed(2)}% !important;
+            zoom: ${(refisZoom / 100).toFixed(3)} !important;
             background: white !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;

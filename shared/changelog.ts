@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2784 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): A BARRA DO RELATÓRIO GANHOU
+ * CONTROLES DE "MARGEM" (mm) E "ZOOM" (%) PARA O PRÓPRIO USUÁRIO CALIBRAR A IMPRESSÃO AO VIVO — A CONFIGURAÇÃO
+ * FICA SALVA NO NAVEGADOR.**
+ *
+ * PEDIDO (usuário): "ainda está errado... não está funcionando... arrume isso de vez... OU criar uma forma de
+ * configurar os critérios de margem e zoom para o usuário calibrar o formato da página". Depois de 2 rodadas de
+ * ajuste de CSS de impressão às cegas (Rev. 2782/2783) que não convergiram (o agente não enxerga o PDF gerado
+ * via Ctrl+P), adotada a 2ª opção do próprio usuário: COLOCAR O CONTROLE NA MÃO DELE.
+ *
+ * FIX (SÓ CLIENT; ZERO SCHEMA/SERVER) em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (componente
+ * `Refis`):
+ *  1. Dois novos estados `refisMargemMm` (0-25mm, default 8) e `refisZoom` (40-160%, default 100), inicializados
+ *     a partir do `localStorage` e persistidos por 2 `useEffect` (calibração "gruda" entre sessões/relatórios).
+ *  2. Dois controles novos na barra de ações (todos `no-print`, ao lado do toggle Retrato/Paisagem): input
+ *     numérico de Margem (mm) e um stepper −/+ de Zoom (%) com botão "reset" (volta a 100% / 8mm).
+ *  3. Aplicação no bloco `@media print`: `@page { margin: ${refisMargemMm}mm }` (era fixo `8mm`); e o
+ *     `#refis-print-area` recebeu `zoom: ${refisZoom/100}` COMPENSADO por `width: ${10000/refisZoom}%` — assim o
+ *     zoom funciona como DENSIDADE real (encolher p/ caber mais por página / ampliar p/ ler melhor) SEM deixar
+ *     faixa branca à direita (a largura é pré-inflada para que, após o `zoom`, volte a ocupar 100% da folha).
+ *
+ * FLUXO DE USO: ajusta Margem/Zoom → Ctrl+P (pré-visualização do navegador atualiza com os novos valores) →
+ * repete até caber bem. Mantidas as melhorias estruturais da Rev. 2783 (sem quebras forçadas, gráficos maiores,
+ * cabeçalho enxuto, fontes legíveis). Ressalva mantida: "cores não saem" depende da opção "Gráficos de plano de
+ * fundo" LIGADA no diálogo Ctrl+P (CSS já força `print-color-adjust: exact`).
+ *
+ * ZERO ALTER/DROP/DELETE/UPDATE (R-001/R-007/R-010 OK). Validação: esbuild syntax OK; HMR; architect.
+ *
  * Rev. 2783 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): IMPRESSÃO REDESENHADA PARA PADRÃO
  * EXECUTIVO DENSO — ACABARAM AS PÁGINAS MEIO-VAZIAS (QUEBRAS FORÇADAS REMOVIDAS), OS GRÁFICOS DA CURVA S FICARAM
  * GRANDES E EM LARGURA TOTAL, O CABEÇALHO ENCOLHEU (LOGOS MENORES) E AS LETRAS MINÚSCULAS (5pt) FORAM AMPLIADAS
