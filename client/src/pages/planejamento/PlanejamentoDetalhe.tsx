@@ -14853,7 +14853,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
           #refis-print-area .recharts-wrapper,
           #refis-print-area .recharts-responsive-container { height: 100% !important; max-height: none !important; }
-          #refis-print-area [style*="height: 360"] { height: 215pt !important; }
+          #refis-print-area [style*="height: 460"] { height: 330pt !important; }
           #refis-print-area [style*="height: 320"] { height: 180pt !important; }
 
           #refis-print-area .no-print { display: none !important; }
@@ -15611,7 +15611,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                 </div>
               </div>
               {/* Chart */}
-              <div className="px-5 py-4" style={{ height: 360 }}>
+              <div className="px-5 py-4" style={{ height: 460 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={curvaFiltrada} margin={{ top: 5, right: 60, bottom: curvaFiltrada.length > 10 ? 55 : 20, left: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -15775,7 +15775,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                 )}
               </div>
               {/* Chart */}
-              <div className="px-5 py-4" style={{ height: 360 }}>
+              <div className="px-5 py-4" style={{ height: 460 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={curvaFinanceiraFull as any[]} margin={{ top: 5, right: 90, bottom: (curvaFinanceiraFull as any[]).length > 10 ? 55 : 20, left: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />

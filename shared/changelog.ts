@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2791 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): OS GRÁFICOS DA CURVA S (FÍSICA 3A E
+ * FINANCEIRA 3B) GANHARAM EVIDÊNCIA — FICARAM MAIS ALTOS NA TELA (360 → 460px) E, PRINCIPALMENTE, NA IMPRESSÃO
+ * (215pt → 330pt), ONDE SAÍAM PEQUENOS.**
+ *
+ * PEDIDO (usuário): "quero um gráfico maior, este gráfico é importante para análise quero ele em evidência e
+ * grande destaque" (anexou 2 prints da impressão do REFIS — Curva S Financeira "Faturamento Acumulado (R$)" e
+ * Curva S Física "Avanço Acumulado (%)" — em que os gráficos saíam baixos, sem destaque na folha).
+ *
+ * CONTEXTO: os 2 gráficos da Curva S do REFIS usavam container inline `height: 360` (tela) e o `@media print` os
+ * forçava a apenas `215pt` (≈7,6cm) via seletor `#refis-print-area [style*="height: 360"]`. No A4 isso deixava o
+ * gráfico — peça central de análise gerencial — pequeno e sem evidência.
+ *
+ * FIX (SÓ CLIENT; ZERO SCHEMA/SERVER) em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (componente
+ * `Refis`):
+ *   1) Os 2 containers de gráfico (BLOCO 3A Curva S Física + BLOCO 3B Curva S Financeira) passaram de
+ *      `style={{ height: 360 }}` → `style={{ height: 460 }}` (tela mais alta, ResponsiveContainer 100% acompanha).
+ *   2) O seletor de impressão `#refis-print-area [style*="height: 360"] { height: 215pt }` foi atualizado para
+ *      `[style*="height: 460"] { height: 330pt }` — o gráfico no PDF/impressão saltou de ~7,6cm para ~11,6cm de
+ *      altura, ganhando o destaque pedido. `break-inside: avoid` da `.recharts-wrapper` (Rev. anterior) mantido,
+ *      então cada gráfico continua íntegro (não corta entre páginas).
+ *
+ * Nenhuma série, cálculo, eixo ou dado foi alterado — só a ALTURA do palco. Os demais gráficos do REFIS (BLOCO 4
+ * por grupo, com altura computada) NÃO foram afetados (não usam `height: 360/460`). ZERO ALTER/DROP/DELETE.
+ * Validação: esbuild OK (exit 0); HMR; architect.
+ *
  * Rev. 2790 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): LOGOS DA BANDA DE MARCAS GANHARAM
  * EVIDÊNCIA — SLOT QUASE DOBROU (28pt → 52pt) E A BANDA FICOU MAIS ALTA P/ VALORIZAR AS 3 MARCAS (ESQUERDA =
  * CONSTRUTORA/EXECUÇÃO · MEIO = GERENCIADORA · DIREITA = CLIENTE).**
