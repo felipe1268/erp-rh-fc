@@ -18,6 +18,7 @@ import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, Command
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
 import { formatNumeroScDisplay } from "@shared/numeroSc";
+import { formatNumeroCotacaoDisplay } from "@shared/numeroCotacao";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, TrendingUp, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart, RotateCcw, Pin, GitBranch, Zap, PenTool, CreditCard, Banknote, Calendar, Truck, Target, BarChart2, Clock, Wallet, Layers, ArrowLeftRight, Warehouse, HardHat, Info, Printer, type LucideIcon } from "lucide-react";
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
@@ -556,7 +557,7 @@ function HistoricoPrecoPopover({ companyId, descricao }: { companyId: number; de
                 <div key={i} className="px-3 py-1.5 flex items-center justify-between text-xs">
                   <div className="min-w-0">
                     <div className="text-gray-700 truncate">{h.fornecedor || "—"}</div>
-                    <div className="text-[10px] text-gray-400">{h.data ? new Date(h.data).toLocaleDateString("pt-BR") : "—"} · {h.numeroCotacao || h.numeroOc || "—"}</div>
+                    <div className="text-[10px] text-gray-400">{h.data ? new Date(h.data).toLocaleDateString("pt-BR") : "—"} · {formatNumeroCotacaoDisplay(h.numeroCotacao) || h.numeroOc || "—"}</div>
                   </div>
                   <div className="font-semibold text-gray-900 shrink-0 ml-2">
                     {parseFloat(h.precoUnitario || "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
@@ -3472,7 +3473,7 @@ export default function Cotacoes() {
               <ChevronRight className="h-4 w-4 rotate-180" /> Cotações
             </button>
             <span className="text-gray-300">/</span>
-            <span className="text-sm font-semibold text-gray-900 font-mono">{detalheFullscreen?.numeroCotacao ?? "…"}</span>
+            <span className="text-sm font-semibold text-gray-900 font-mono">{detalheFullscreen?.numeroCotacao ? formatNumeroCotacaoDisplay(detalheFullscreen.numeroCotacao) : "…"}</span>
           </div>
 
           {detalheQ.isLoading ? (
@@ -3483,7 +3484,7 @@ export default function Cotacoes() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h1 className="text-2xl font-bold text-gray-900 font-mono">{detalheFullscreen.numeroCotacao}</h1>
+                    <h1 className="text-2xl font-bold text-gray-900 font-mono">{formatNumeroCotacaoDisplay(detalheFullscreen.numeroCotacao)}</h1>
                     <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase ${(detalheFullscreen as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : (detalheFullscreen as any).tipo === "pacote" ? "bg-indigo-100 text-indigo-700" : (detalheFullscreen as any).tipo === "equipamento" ? "bg-cyan-100 text-cyan-700" : "bg-blue-100 text-blue-700"}`}>
                       {(detalheFullscreen as any).tipo === "servico" ? "MDO" : (detalheFullscreen as any).tipo === "pacote" ? "MAT+MDO" : (detalheFullscreen as any).tipo === "equipamento" ? "EQUIP" : "MAT"}
                     </span>
@@ -3670,7 +3671,7 @@ export default function Cotacoes() {
                         <button key={c.id} type="button" onClick={() => { if (c.id !== showDetalhe) { setAbaAtiva("detalhes"); setShowDetalhe(c.id); } }}
                           className={`px-2 py-0.5 rounded text-[11px] font-medium border transition-colors ${c.id === showDetalhe ? "bg-violet-600 text-white border-violet-600" : "bg-white text-violet-700 border-violet-300 hover:bg-violet-100"} ${["cancelada", "recusada"].includes(c.status ?? "") ? "line-through opacity-60" : ""}`}
                           title={["cancelada", "recusada"].includes(c.status ?? "") ? "Cotação cancelada/recusada" : ""}>
-                          {c.numeroCotacao}
+                          {formatNumeroCotacaoDisplay(c.numeroCotacao)}
                         </button>
                       ))}
                     </div>
@@ -7324,7 +7325,7 @@ export default function Cotacoes() {
                   <TableCell className="px-2" onClick={e => e.stopPropagation()}>
                     <Checkbox checked={selectedIds.has(cot.id)} onCheckedChange={() => toggleSelect(cot.id)} aria-label={`Selecionar ${cot.numeroCotacao}`} />
                   </TableCell>
-                  <TableCell className="text-gray-900 font-mono font-semibold text-xs">{cot.numeroCotacao}</TableCell>
+                  <TableCell className="text-gray-900 font-mono font-semibold text-xs">{formatNumeroCotacaoDisplay(cot.numeroCotacao)}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">
                       <span className="text-gray-900 text-sm">{(cot as any).descricao || "—"}</span>
@@ -7616,7 +7617,7 @@ export default function Cotacoes() {
       <Dialog open={showDetalhe !== null} onOpenChange={v => !v && setShowDetalhe(null)}>
         <DialogContent className="border-gray-200 max-w-2xl max-h-[90vh] overflow-y-auto" style={{ background: '#ffffff', color: '#111827' }}>
           <DialogHeader>
-            <DialogTitle className="text-gray-900">{detalhe?.numeroCotacao} — Detalhes</DialogTitle>
+            <DialogTitle className="text-gray-900">{formatNumeroCotacaoDisplay(detalhe?.numeroCotacao)} — Detalhes</DialogTitle>
           </DialogHeader>
           {detalheQ.isLoading ? (
             <div className="py-10 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>

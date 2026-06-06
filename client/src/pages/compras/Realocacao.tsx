@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { formatNumeroCotacaoDisplay } from "@shared/numeroCotacao";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -468,7 +469,7 @@ export default function ComprasRealocacao() {
                       {debitos.map((d: any) => (
                         <TableRow key={d.id}>
                           <TableCell className="font-mono text-xs text-gray-400">#{d.id}</TableCell>
-                          <TableCell>{d.numeroCotacao ? <span className="font-medium text-blue-700">#{d.numeroCotacao}</span> : <span className="text-gray-400">—</span>}</TableCell>
+                          <TableCell>{d.numeroCotacao ? <span className="font-medium text-blue-700">#{formatNumeroCotacaoDisplay(d.numeroCotacao)}</span> : <span className="text-gray-400">—</span>}</TableCell>
                           <TableCell className="max-w-[180px] truncate">{d.obraNome || "—"}</TableCell>
                           <TableCell><span className="font-semibold text-orange-700">{fmt(Number(d.valor))}</span></TableCell>
                           <TableCell className="max-w-xs truncate text-xs text-gray-600">{d.observacao || "—"}</TableCell>
@@ -844,7 +845,7 @@ export default function ComprasRealocacao() {
               <div className="space-y-4">
                 <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-800">
                   <p>Você está prestes a reverter o débito de <strong>{fmt(desfazerModal.valor)}</strong>
-                  {desfazerModal.numeroCotacao ? ` da cotação #${desfazerModal.numeroCotacao}` : ""}.</p>
+                  {desfazerModal.numeroCotacao ? ` da cotação #${formatNumeroCotacaoDisplay(desfazerModal.numeroCotacao)}` : ""}.</p>
                   <p className="mt-1">O valor será restituído à Reserva de Risco (DI-08).</p>
                   <p className="mt-1 font-bold text-red-900">Esta operação requer a senha do Administrador Master.</p>
                 </div>

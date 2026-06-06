@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "sonner";
 import { normalizarTexto, stripAccents } from "@shared/textNormalization";
 import { formatNumeroScDisplay } from "@shared/numeroSc";
+import { formatNumeroCotacaoDisplay } from "@shared/numeroCotacao";
 import {
   Plus, Search, Trash2, ClipboardList, ChevronRight, ChevronDown, Loader2,
   CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays, ShoppingCart, AlertTriangle, Zap, FileText, Package,
@@ -5113,7 +5114,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
               <div className="flex items-center gap-0 bg-gray-100 rounded-xl p-1 mt-1">
                 {([
                   { key: "detalhes" as const, label: "Detalhes", icon: <ClipboardList className="h-4 w-4" /> },
-                  ...(scCotacaoId ? [{ key: "cotacao" as const, label: `Cotação ${(detalhe.rastreio?.cotacoes as any[])?.[0]?.numeroCotacao ?? ""}`, icon: <FileSearch className="h-4 w-4" /> }] : []),
+                  ...(scCotacaoId ? [{ key: "cotacao" as const, label: `Cotação ${formatNumeroCotacaoDisplay((detalhe.rastreio?.cotacoes as any[])?.[0]?.numeroCotacao)}`, icon: <FileSearch className="h-4 w-4" /> }] : []),
                   ...(scOcId ? [{ key: "oc" as const, label: `OC ${(detalhe.rastreio?.ordens as any[])?.[0]?.numeroOc ?? ""}`, icon: <ShoppingCart className="h-4 w-4" /> }] : []),
                 ] as { key: "detalhes" | "cotacao" | "oc"; label: string; icon: React.ReactNode }[]).map(tab => (
                   <button key={tab.key} type="button" onClick={() => setAbaScDetalhe(tab.key)}
@@ -5299,7 +5300,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="text-xs font-semibold text-gray-900">
-                              Cotação {cot.numeroCotacao}
+                              Cotação {formatNumeroCotacaoDisplay(cot.numeroCotacao)}
                               {/* Rev. 1687 — Quando há OC ativa vinculada, força badge "Aprovada"
                                   mesmo se o status cru no banco ficou em 'pendente' (path manual / legado). */}
                               {(() => {
@@ -5589,7 +5590,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <div>
-                            <h3 className="text-sm font-bold text-gray-900">{(cot as any).numeroCotacao}</h3>
+                            <h3 className="text-sm font-bold text-gray-900">{formatNumeroCotacaoDisplay((cot as any).numeroCotacao)}</h3>
                             <p className="text-xs text-gray-500">{(cot as any).descricao || "Sem descrição"}</p>
                           </div>
                           <div className="flex items-center gap-2">

@@ -4,6 +4,7 @@ import { useCompany } from "@/hooks/useCompany";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { formatNumeroScDisplay } from "@shared/numeroSc";
+import { formatNumeroCotacaoDisplay } from "@shared/numeroCotacao";
 import {
   ClipboardList, FileText, ShoppingCart, AlertTriangle,
   CheckCircle, Clock, TrendingUp, ArrowRight, RefreshCw, Building2,
@@ -402,7 +403,7 @@ export default function PainelCompras() {
                         <tr key={cot.id}
                           className="border-b border-gray-50 hover:bg-blue-50 transition-colors cursor-pointer"
                           onClick={() => navigate("/compras/cotacoes")}>
-                          <td className="py-2 pr-3 font-mono text-gray-700">{cot.numeroCotacao}</td>
+                          <td className="py-2 pr-3 font-mono text-gray-700">{formatNumeroCotacaoDisplay(cot.numeroCotacao)}</td>
                           <td className="py-2 pr-3 text-gray-800 truncate max-w-[200px]">{cot.descricao || cot.titulo || "-"}</td>
                           <td className="py-2 pr-3 text-gray-500">{fmtDate(cot.dataValidade)}</td>
                           <td className="py-2">

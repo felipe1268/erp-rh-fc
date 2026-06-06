@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2808 — **COMPRAS · COTAÇÕES — O NÚMERO DA COTAÇÃO PASSA A SER EXIBIDO COMO `COT-NNNN-AAAA`
+ * (NÚMERO PRIMEIRO, ANO DEPOIS) EM VEZ DE `COT-AAAA-NNNN` — SÓ EXIBIÇÃO; O VALOR GRAVADO CONTINUA CANÔNICO.**
+ *
+ * PEDIDO (usuário, com screenshots da tela "Cotações"): "preciso que alterar o número da cotação tbm, quero o número
+ * da cotação primeiro depois o ano." Espelha a Rev. 2802, que fez o mesmo para a SC.
+ *
+ * O QUE FOI FEITO:
+ *   NOVO helper `shared/numeroCotacao.ts` (`formatNumeroCotacaoDisplay`) que SÓ inverte a ORDEM na TELA: recebe o
+ *   canônico `COT-AAAA-NNNN` e devolve `COT-NNNN-AAAA` (regex `^COT-(\d{4})-(\d+)$`; se não casar, devolve o valor
+ *   intacto — robusto a formatos legados). O valor PERSISTIDO no banco continua `COT-${year}-${seq}` — a geração, a
+ *   busca por número e a ordenação seguem o canônico, INTOCADOS.
+ *   APLICADO nos pontos de EXIBIÇÃO: `Cotacoes.tsx` (breadcrumb + título do detalhe fullscreen, chips de navegação
+ *   entre cotações irmãs, célula "Número" da tabela, título do dialog de detalhe, linha do histórico de preços),
+ *   `Solicitacoes.tsx` (aba "Cotação NNNN" do rastreio, cartões de cotação no detalhe da SC), `Painel.tsx` (tabela de
+ *   cotações recentes) e `Realocacao.tsx` (coluna "Cotação" da lista de débitos + texto do modal de desfazer).
+ *
+ * RESSALVA: toasts de criação/divisão e os logs continuam mostrando o número cru (canônico) — não são "exibição de
+ * registro" e mudar criaria inconsistência com a busca. ZERO schema novo; ZERO ALTER/DROP/DELETE. Validação: esbuild
+ * OK nos 4 arquivos client tocados. Detalhe: este arquivo.
+ *
  * Rev. 2807 — **COMPRAS · COTAÇÕES — "CANCELAR DIVISÃO": DESFAZER A DIVISÃO DE UMA COTAÇÃO, DEVOLVENDO TODOS OS ITENS
  * (E RESPOSTAS) PARA A COTAÇÃO ORIGINAL E REMOVENDO A COTAÇÃO-FILHA, COMO SE A DIVISÃO NUNCA TIVESSE ACONTECIDO.**
  *
