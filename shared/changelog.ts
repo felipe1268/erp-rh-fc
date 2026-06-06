@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2803 — **COMPRAS · COTAÇÕES — A LISTA E O DETALHE DA COTAÇÃO PASSAM A MOSTRAR O NÚMERO **REAL** DA SC VINCULADA
+ * (`numero_sc` GRAVADO NO BANCO, EXIBIDO COMO `SC-NNNN-AAAA`) EM VEZ DO ID INTERNO `SC #<id>`; E O NÚMERO VIROU UM LINK
+ * CLICÁVEL QUE ABRE A SOLICITAÇÃO (DEEP-LINK `?destaque=<id>` NA TELA DE SOLICITAÇÕES).**
+ *
+ * PEDIDO (usuário, com screenshot da lista "Cotações" mostrando "SC #617"/"SC #622"): "quero que em cada cotação apareça
+ * o número correto da solicitação, garanta que o número será real, e quando eu clicar na solicitação seja possível abrir
+ * ela". O "SC #617" exibido era o ID interno (`comprasCotacoes.solicitacaoId`), NÃO o `numero_sc` real — counters
+ * distintos, então o número parecia "errado".
+ *
+ * O QUE MUDOU:
+ *   - `server/routers/compras.ts` (`listarCotacoes`): o enriquecimento por SC (`scMap`) passou a trazer também o
+ *     `numeroSc` (já buscava `titulo`/`tipo` via `inArray`), devolvido em cada linha como `numeroSc: sc?.numeroSc ?? null`.
+ *     ZERO query nova — só +1 coluna no `select` que já existia.
+ *   - `client/src/pages/compras/Cotacoes.tsx`:
+ *     · LISTA — a linha "SC #<id>" virou um `<button>` que mostra `formatNumeroScDisplay(cot.numeroSc)` (link azul com
+ *       ícone) e, no clique (`stopPropagation` p/ não abrir o detalhe da cotação), navega via wouter para
+ *       `/compras/solicitacoes?destaque=<solicitacaoId>`. Fallback `SC #<id>` só se `numeroSc` faltar.
+ *     · DETALHE FULLSCREEN — o card "SC Vinculada" agora usa `detalheFullscreen.scInfo.numeroSc` (já vinha do `getCotacao`)
+ *       formatado + mesmo link clicável.
+ *   - A tela de Solicitações já suportava o deep-link `?destaque=<id>` (abre o detalhe + destaca por 3s) — reusado, ZERO
+ *     mudança lá.
+ *
+ * ZERO ALTER/DROP/DELETE (R-001/R-007/R-010); ZERO schema novo. Validação: esbuild OK em `compras.ts` + `Cotacoes.tsx`;
+ * servidor reiniciado e reconectado ao Neon sem erros.
+ *
  * Rev. 2802 — **COMPRAS · SOLICITAÇÕES — O NÚMERO DA SC PASSA A SER EXIBIDO COMO `SC-NNNN-AAAA` (NÚMERO DA SOLICITAÇÃO
  * PRIMEIRO, ANO DEPOIS) EM VEZ DE `SC-AAAA-NNNN`. MUDANÇA SÓ DE EXIBIÇÃO — O VALOR PERSISTIDO NO BANCO CONTINUA
  * CANÔNICO `SC-AAAA-NNNN`. TUDO CLIENT-ONLY; ZERO SCHEMA/SERVER.**

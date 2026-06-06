@@ -3722,7 +3722,16 @@ export default function Cotacoes() {
                         ? []
                         : [{ label: (() => { const tp = (detalheFullscreen as any).tipoPagamento ?? ""; const cp = detalheFullscreen.condicaoPagamento ?? ""; const t = (detalheFullscreen as any).tipo; return (t === "pacote" && (tp === "medicao" || cp.toLowerCase().includes("medição"))) ? "Mobilização" : "Prazo Entrega"; })(), value: detalheFullscreen.prazoEntregaDias ? `${detalheFullscreen.prazoEntregaDias} dias` : "—" }]),
                       { label: "Validade", value: detalheFullscreen.dataValidade ? new Date(detalheFullscreen.dataValidade + "T00:00:00").toLocaleDateString("pt-BR") : "—" },
-                      { label: "SC Vinculada", value: detalheFullscreen.solicitacaoId ? `SC #${detalheFullscreen.solicitacaoId}` : "—" },
+                      { label: "SC Vinculada", value: detalheFullscreen.solicitacaoId ? (
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/compras/solicitacoes?destaque=${detalheFullscreen.solicitacaoId}`)}
+                          className="text-blue-600 hover:text-blue-800 hover:underline font-medium inline-flex items-center gap-1"
+                          title="Abrir solicitação de compra"
+                        >
+                          <Link2 className="h-3.5 w-3.5" />{(detalheFullscreen as any).scInfo?.numeroSc ? formatNumeroScDisplay((detalheFullscreen as any).scInfo.numeroSc) : `SC #${detalheFullscreen.solicitacaoId}`}
+                        </button>
+                      ) : "—" },
                     ].map(f => (
                       <div key={f.label} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
                         <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">{f.label}</p>
@@ -7138,7 +7147,20 @@ export default function Cotacoes() {
                         </span>
                       )}
                     </div>
-                    {cot.solicitacaoId && <div className="text-gray-400 text-xs">SC #{cot.solicitacaoId}</div>}
+                    {cot.solicitacaoId && (
+                      (cot as any).numeroSc ? (
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); navigate(`/compras/solicitacoes?destaque=${cot.solicitacaoId}`); }}
+                          className="text-blue-600 hover:text-blue-800 hover:underline text-xs font-medium inline-flex items-center gap-1 mt-0.5"
+                          title="Abrir solicitação de compra"
+                        >
+                          <Link2 className="h-3 w-3" />{formatNumeroScDisplay((cot as any).numeroSc)}
+                        </button>
+                      ) : (
+                        <div className="text-gray-400 text-xs">SC #{cot.solicitacaoId}</div>
+                      )
+                    )}
                   </TableCell>
                   <TableCell>
                     {(cot as any).obraId ? (

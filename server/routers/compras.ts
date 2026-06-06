@@ -4103,10 +4103,10 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         ))
         .orderBy(desc(comprasCotacoes.criadoEm));
       const scIds = [...new Set(rows.map(r => r.solicitacaoId).filter(Boolean))] as number[];
-      let scMap: Record<number, { titulo: string; tipo: string }> = {};
+      let scMap: Record<number, { titulo: string; tipo: string; numeroSc: string | null }> = {};
       if (scIds.length > 0) {
-        const scs = await db.select({ id: comprasSolicitacoes.id, titulo: comprasSolicitacoes.titulo, tipo: comprasSolicitacoes.tipo }).from(comprasSolicitacoes).where(inArray(comprasSolicitacoes.id, scIds));
-        for (const sc of scs) scMap[sc.id] = { titulo: sc.titulo, tipo: sc.tipo };
+        const scs = await db.select({ id: comprasSolicitacoes.id, titulo: comprasSolicitacoes.titulo, tipo: comprasSolicitacoes.tipo, numeroSc: comprasSolicitacoes.numeroSc }).from(comprasSolicitacoes).where(inArray(comprasSolicitacoes.id, scIds));
+        for (const sc of scs) scMap[sc.id] = { titulo: sc.titulo, tipo: sc.tipo, numeroSc: sc.numeroSc };
       }
       return rows.map(r => {
         const sc = r.solicitacaoId ? scMap[r.solicitacaoId] : null;
@@ -4117,6 +4117,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         return {
           ...r,
           descricao: sc?.titulo || r.descricao,
+          numeroSc: sc?.numeroSc ?? null,
           tipo,
         };
       });
