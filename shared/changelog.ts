@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2796 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): REMOVIDOS DE VEZ A MOLDURA POR PÁGINA
+ * E O CABEÇALHO FIXO REPETIDO (LOGO FC + DATA DE STATUS) ADICIONADOS NA REV. 2793 — ELES DUPLICAVAM A MOLDURA E O
+ * LOGO QUE O PRÓPRIO DOCUMENTO JÁ TEM (NA PÁGINA 1 APARECIAM 2 LOGOS FC E UMA LINHA DE MOLDURA INDEVIDA).**
+ *
+ * PEDIDO (usuário): "Tem uma linha de moldura que não pode ter, juntamente com dois logos; arrume a tela em
+ * definitivo" (anexou print do preview de impressão "1 de 3" mostrando a moldura navy + o logo FC do cabeçalho
+ * fixo SOBREPOSTO ao cabeçalho próprio do documento na 1ª página = logo FC e data de status DUPLICADOS).
+ *
+ * CAUSA-RAIZ: a Rev. 2793 introduziu `.refis-page-frame` (moldura `position:fixed` repetida por página) e
+ * `.refis-running-header` (faixa fixa com logo FC + "DATA DE STATUS" vermelha). Como o REFIS já tem seu PRÓPRIO
+ * cabeçalho institucional (banda de logos + faixa-título + ficha técnica com data de status), na página 1 os dois
+ * se sobrepunham → moldura "a mais" + 2 logos FC + data duplicada.
+ *
+ * FIX (SÓ CLIENT; ZERO SCHEMA/SERVER) em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (componente `Refis`):
+ *   - REMOVIDO o JSX da `.refis-page-frame` e da `.refis-running-header` (com `.refis-rh-left/-logo/-obra/-status`).
+ *   - REMOVIDO todo o CSS `@media print` dessas duas classes (frame + running header + filhos `.refis-rh-*`).
+ *   - DESFEITA a reserva de +16mm no TOPO do `@page` (existia só p/ o cabeçalho fixo não sobrepor o conteúdo);
+ *     volta a margem UNIFORME `margin: ${refisMargemMm}mm` nos 4 lados.
+ *   - MANTIDA a data de status em VERMELHO no cabeçalho do PRÓPRIO documento (chip `.refis-title-statuschip` na
+ *     faixa-título + célula `.refis-status-cell`/`.refis-status-red` na ficha) — isso NÃO duplica nada.
+ *   `refisFcLogo` segue usado só no cabeçalho institucional do documento (sem variável órfã). Nenhuma série/cálculo/
+ *   eixo/dado mudou — só a remoção dos overlays de impressão. ZERO ALTER/DROP/DELETE. Validação: esbuild OK; HMR.
+ *   RESSALVA: o relatório volta a NÃO ter moldura nem cabeçalho repetido nas páginas 2+ (era o efeito da Rev. 2793);
+ *   se no futuro quiser cabeçalho/rodapé por página, fazer SEM sobrepor a página 1 (ex.: só a partir da 2ª).
+ *
  * Rev. 2795 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): REVERTIDA A ALTURA "ORIENTATION-AWARE"
  * DA REV. 2794 (QUE BUGAVA — EM RETRATO O BLOCO FAIXA+KPIs+GRÁFICO ESTOURAVA A PÁGINA); A IMPRESSÃO DA CURVA S
  * VOLTOU A UM VALOR ÚNICO E SEGURO, AGORA UM POUCO MAIOR (330pt → 360pt) E O GRÁFICO SEGUE GRANDE NA TELA (560).**
