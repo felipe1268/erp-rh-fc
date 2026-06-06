@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2792 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): NA IMPRESSÃO OS GRÁFICOS DA CURVA S
+ * AGORA PREENCHEM A LARGURA DA FOLHA (ACABOU O ESPAÇO BRANCO À DIREITA) E OS RÓTULOS DO EIXO X NÃO SE SOBREPÕEM
+ * MAIS — FICARAM LEGÍVEIS.**
+ *
+ * PEDIDO (usuário): "Ainda não está bom, temos muito espaço branco na tela, onde o gráfico pode ficar maior... a
+ * legenda deve ser nítida e não pode ter textos sobrepostos" (anexou 3 prints da impressão do REFIS — Curva S
+ * Financeira e Física saindo ESTREITAS, com muito branco à direita, e o eixo X um borrão de datas sobrepostas).
+ *
+ * CAUSA-RAIZ (DUAS):
+ *   (A) LARGURA: o Recharts `ResponsiveContainer width="100%"` mede a largura via ResizeObserver do CONTAINER no
+ *       momento da renderização em TELA. Como o usuário gera o PDF pelo CELULAR (tela estreita), o SVG nasce
+ *       pequeno e, ao acionar `window.print()`, o Recharts NÃO re-mede para a largura útil da folha A4 → o gráfico
+ *       sai estreito, deixando muito espaço branco à direita (pior na Curva S Financeira).
+ *   (B) EIXO X SOBREPOSTO: ambos os XAxis usavam `interval={0}` (FORÇA todos os rótulos), e com dezenas de semanas
+ *       as datas rotacionadas viram um borrão ilegível.
+ *
+ * FIX (SÓ CLIENT; ZERO SCHEMA/SERVER) em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (componente
+ * `Refis`):
+ *   1) LARGURA — os 2 containers de gráfico (BLOCO 3A físico + 3B financeiro) ganharam a classe `refis-chart-box`.
+ *      O botão "Imprimir PDF" deixou de ser `window.print()` cru: antes de imprimir, calcula a LARGURA ÚTIL da
+ *      folha (A4 retrato/paisagem − 2× margem, convertida mm→px a 96dpi e compensada pelo `zoom` do print), aplica
+ *      essa largura em px inline nos `.refis-chart-box`, dispara `window.dispatchEvent(new Event("resize"))` p/ o
+ *      ResizeObserver do Recharts recalcular, aguarda ~260ms e então `window.print()`. No `afterprint` (e num
+ *      timeout de segurança) restaura a largura original. Resultado: o SVG é remedido na largura da FOLHA → o
+ *      gráfico ocupa a página inteira, sem espaço branco. Try/catch cai no `window.print()` puro se algo falhar.
+ *   2) EIXO X — `interval={0}` → `interval={Math.max(0, Math.ceil(data.length / 24) - 1)}` (no máx. ~24 rótulos,
+ *      independe do nº de semanas) + `minTickGap={6}` nos 2 gráficos. As datas deixaram de se sobrepor; a curva
+ *      continua contínua (só os RÓTULOS são ralos, os pontos/linha permanecem todos).
+ *
+ * Nenhuma série, cálculo ou dado foi alterado — só apresentação (largura de palco no print + densidade de rótulos
+ * do eixo). ZERO ALTER/DROP/DELETE. Validação: esbuild OK (exit 0); HMR; architect. RESSALVA: print é PRINT-ONLY
+ * e o app está atrás de login — validar no Ctrl+P / "Imprimir PDF".
+ *
  * Rev. 2791 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): OS GRÁFICOS DA CURVA S (FÍSICA 3A E
  * FINANCEIRA 3B) GANHARAM EVIDÊNCIA — FICARAM MAIS ALTOS NA TELA (360 → 460px) E, PRINCIPALMENTE, NA IMPRESSÃO
  * (215pt → 330pt), ONDE SAÍAM PEQUENOS.**

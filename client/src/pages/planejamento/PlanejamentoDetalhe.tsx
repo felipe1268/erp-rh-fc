@@ -13763,6 +13763,11 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   });
   useEffect(() => { try { window.localStorage.setItem("refisMargemMmV4", String(refisMargemMm)); } catch {} }, [refisMargemMm]);
   useEffect(() => { try { window.localStorage.setItem("refisZoom", String(refisZoom)); } catch {} }, [refisZoom]);
+  // Rev. 2792 — lifecycle single-flight da impressão (evita empilhar
+  // listener/timer em cliques repetidos no "Imprimir PDF").
+  const refisPrintRef = useRef<{ active: boolean; timer: any; safety: any; onAfter: (() => void) | null }>(
+    { active: false, timer: null, safety: null, onAfter: null },
+  );
   const [colBloco2, setColBloco2] = useState(false);
   const [colBloco3A, setColBloco3A] = useState(false);
   const [colBloco3B, setColBloco3B] = useState(false);
@@ -14588,7 +14593,48 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           </div>
           <Button size="sm" variant="outline"
             className="gap-1.5 border-slate-300 text-slate-600 hover:bg-slate-50 no-print"
-            onClick={() => window.print()}>
+            onClick={() => {
+              // Rev. 2792 — Antes de imprimir, força os gráficos da Curva S
+              // (Recharts ResponsiveContainer) a RE-MEDIREM na largura ÚTIL da
+              // folha, em vez de herdar a largura da TELA (no celular fica
+              // estreito → SVG pequeno → muito espaço branco na impressão).
+              // Aplica uma largura fixa em px nos `.refis-chart-box`, dispara
+              // `resize` p/ o ResizeObserver do Recharts recalcular, imprime e
+              // restaura no `afterprint`. Single-flight via `refisPrintRef`:
+              // clique repetido enquanto um ciclo está ativo é ignorado, e o
+              // restore SEMPRE limpa listener + ambos os timers.
+              const st = refisPrintRef.current;
+              if (st.active) return;
+              let boxes: HTMLElement[] = [];
+              let prev: string[] = [];
+              const restore = () => {
+                boxes.forEach((b, i) => { b.style.width = prev[i] || ""; });
+                if (st.onAfter) { window.removeEventListener("afterprint", st.onAfter); st.onAfter = null; }
+                if (st.timer) { clearTimeout(st.timer); st.timer = null; }
+                if (st.safety) { clearTimeout(st.safety); st.safety = null; }
+                st.active = false;
+              };
+              try {
+                st.active = true;
+                const pageWmm = orientacaoPdf === "landscape" ? 297 : 210;
+                const usableMm = Math.max(80, pageWmm - 2 * refisMargemMm);
+                const targetPx = Math.round((usableMm * 96 / 25.4) * (100 / Math.max(40, refisZoom))) - 10;
+                boxes = Array.from(
+                  document.querySelectorAll<HTMLElement>("#refis-print-area .refis-chart-box"),
+                );
+                prev = boxes.map((b) => b.style.width);
+                boxes.forEach((b) => { b.style.width = `${targetPx}px`; });
+                window.dispatchEvent(new Event("resize"));
+                const onAfter = () => { setTimeout(restore, 50); };
+                st.onAfter = onAfter;
+                window.addEventListener("afterprint", onAfter, { once: true });
+                st.timer = setTimeout(() => { window.print(); }, 260);
+                st.safety = setTimeout(restore, 10000);
+              } catch {
+                restore();
+                window.print();
+              }
+            }}>
             <Printer className="h-3.5 w-3.5" />
             Imprimir PDF
           </Button>
@@ -15611,7 +15657,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                 </div>
               </div>
               {/* Chart */}
-              <div className="px-5 py-4" style={{ height: 460 }}>
+              <div className="px-5 py-4 refis-chart-box" style={{ height: 460 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={curvaFiltrada} margin={{ top: 5, right: 60, bottom: curvaFiltrada.length > 10 ? 55 : 20, left: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -15621,7 +15667,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                       angle={-45}
                       textAnchor="end"
                       height={55}
-                      interval={0}
+                      interval={Math.max(0, Math.ceil(curvaFiltrada.length / 24) - 1)}
+                      minTickGap={6}
                     />
                     <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />
                     <Tooltip
@@ -15775,7 +15822,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                 )}
               </div>
               {/* Chart */}
-              <div className="px-5 py-4" style={{ height: 460 }}>
+              <div className="px-5 py-4 refis-chart-box" style={{ height: 460 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={curvaFinanceiraFull as any[]} margin={{ top: 5, right: 90, bottom: (curvaFinanceiraFull as any[]).length > 10 ? 55 : 20, left: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -15785,7 +15832,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                       angle={-45}
                       textAnchor="end"
                       height={55}
-                      interval={0}
+                      interval={Math.max(0, Math.ceil((curvaFinanceiraFull as any[]).length / 24) - 1)}
+                      minTickGap={6}
                     />
                     <YAxis
                       tickFormatter={finTickFmt}
