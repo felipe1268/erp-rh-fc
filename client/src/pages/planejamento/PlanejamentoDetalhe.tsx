@@ -14719,7 +14719,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           #refis-print-area .shadow-md,
           #refis-print-area .shadow { box-shadow: none !important; }
 
-          .refis-doc-header { background: #1A3461 !important; color: white !important; margin-bottom: 3pt !important; page-break-after: avoid !important; }
+          .refis-doc-header { background: #1A3461 !important; color: white !important; margin-bottom: 3pt !important; page-break-after: avoid !important; border-top: 2.5pt solid #FFB800 !important; border-radius: 3pt 3pt 0 0 !important; overflow: hidden !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           .refis-doc-header-inner { display: flex !important; align-items: stretch !important; min-height: 26pt !important; }
           .refis-doc-header-brand {
             border-right: 0.5pt solid rgba(255,255,255,0.22) !important;
@@ -14732,21 +14732,32 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             border-left: 0.5pt solid rgba(255,255,255,0.22) !important;
             padding: 5pt 9pt !important; text-align: right !important; display: flex !important; flex-direction: column !important; justify-content: center !important; min-width: 68pt !important;
           }
-          /* Rev. 2782 — faixa branca com os 3 logos (executora · gerenciamento · cliente) */
-          .refis-logo-strip {
-            display: flex !important; align-items: center !important; justify-content: space-around !important;
-            gap: 10pt !important; background: white !important;
-            border: 0.5pt solid #cbd5e1 !important; border-bottom: none !important;
-            padding: 3pt 12pt !important;
+          /* Rev. 2787 — barra de marcas INTEGRADA ao cabeçalho azul (Execução · Gerenciamento · Cliente) */
+          .refis-brand-bar {
+            display: flex !important; align-items: stretch !important; justify-content: space-between !important;
+            background: rgba(255,255,255,0.06) !important;
+            border-bottom: 0.5pt solid rgba(255,255,255,0.16) !important;
+            padding: 6pt 12pt 7pt !important;
+            -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
           }
-          .refis-logo-cell {
-            display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important;
-            gap: 2pt !important; flex: 1 1 0 !important;
+          .refis-brand-zone {
+            flex: 1 1 0 !important; display: flex !important; flex-direction: column !important;
+            align-items: center !important; justify-content: flex-start !important; gap: 4pt !important; padding: 0 8pt !important;
           }
-          .refis-logo-cell img { max-height: 20pt !important; max-width: 130pt !important; object-fit: contain !important; }
-          .refis-logo-label { font-size: 6pt !important; font-weight: 700 !important; letter-spacing: 0.14em !important; text-transform: uppercase !important; color: #64748b !important; }
-          .refis-logo-name { font-size: 7pt !important; font-weight: 700 !important; color: #1A3461 !important; text-align: center !important; line-height: 1.15 !important; }
-          .refis-logo-divider { align-self: stretch !important; width: 0.5pt !important; background: #e2e8f0 !important; }
+          .refis-brand-tag {
+            font-size: 5.5pt !important; font-weight: 800 !important; letter-spacing: 0.22em !important;
+            text-transform: uppercase !important; color: #FFC233 !important;
+          }
+          .refis-brand-chip {
+            background: white !important; border-radius: 4pt !important; padding: 4pt 10pt !important;
+            display: flex !important; align-items: center !important; justify-content: center !important;
+            min-height: 24pt !important; width: 100% !important; max-width: 160pt !important;
+            box-shadow: 0 0.5pt 1.5pt rgba(0,0,0,0.18) !important;
+            -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
+          }
+          .refis-brand-chip img { max-height: 19pt !important; max-width: 132pt !important; object-fit: contain !important; display: block !important; }
+          .refis-brand-name { font-size: 8.5pt !important; font-weight: 800 !important; color: #1A3461 !important; text-align: center !important; line-height: 1.1 !important; }
+          .refis-brand-sep { width: 0.5pt !important; background: rgba(255,255,255,0.2) !important; align-self: stretch !important; margin: 7pt 0 !important; }
 
           .refis-block {
             break-inside: avoid !important;
@@ -14871,31 +14882,37 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
       {/* ━━━ PRINT-ONLY: Cabeçalho do documento (FC Engenharia) ━━━━━━━━━━━━━━ */}
       <div className="refis-doc-header refis-print-only-block" style={{ display: 'none' }}>
-        {/* Rev. 2782 — faixa branca com os 3 logos (executora · gerenciamento · cliente) */}
-        <div className="refis-logo-strip">
-          <div className="refis-logo-cell">
-            <img src={refisFcLogo} alt="FC Engenharia" onError={(e) => { const t = e.currentTarget; const fb = `${window.location.origin}/logo-fc.jpg`; if (t.src !== fb) { t.src = fb; } else { t.style.display = 'none'; } }} />
-            <div className="refis-logo-label">Execução</div>
+        {/* Rev. 2787 — barra de marcas INTEGRADA ao cabeçalho (Execução · Gerenciamento · Cliente) */}
+        <div className="refis-brand-bar">
+          <div className="refis-brand-zone">
+            <div className="refis-brand-tag">Execução</div>
+            <div className="refis-brand-chip">
+              <img src={refisFcLogo} alt="FC Engenharia" onError={(e) => { const t = e.currentTarget; const fb = `${window.location.origin}/logo-fc.jpg`; if (t.src !== fb) { t.src = fb; } else { t.style.display = 'none'; } }} />
+            </div>
           </div>
           {(refisGerLogo || refisGerNome) && (
             <>
-              <div className="refis-logo-divider" />
-              <div className="refis-logo-cell">
-                {refisGerLogo
-                  ? <img src={refisGerLogo} alt={refisGerNome ?? 'Gerenciadora'} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                  : <div className="refis-logo-name">{refisGerNome}</div>}
-                <div className="refis-logo-label">Gerenciamento</div>
+              <div className="refis-brand-sep" />
+              <div className="refis-brand-zone">
+                <div className="refis-brand-tag">Gerenciamento</div>
+                <div className="refis-brand-chip">
+                  {refisGerLogo
+                    ? <img src={refisGerLogo} alt={refisGerNome ?? 'Gerenciadora'} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                    : <div className="refis-brand-name">{refisGerNome}</div>}
+                </div>
               </div>
             </>
           )}
           {(refisCliLogo || refisCliNome) && (
             <>
-              <div className="refis-logo-divider" />
-              <div className="refis-logo-cell">
-                {refisCliLogo
-                  ? <img src={refisCliLogo} alt={refisCliNome ?? 'Cliente'} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                  : <div className="refis-logo-name">{refisCliNome}</div>}
-                <div className="refis-logo-label">Cliente</div>
+              <div className="refis-brand-sep" />
+              <div className="refis-brand-zone">
+                <div className="refis-brand-tag">Cliente</div>
+                <div className="refis-brand-chip">
+                  {refisCliLogo
+                    ? <img src={refisCliLogo} alt={refisCliNome ?? 'Cliente'} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                    : <div className="refis-brand-name">{refisCliNome}</div>}
+                </div>
               </div>
             </>
           )}
@@ -15513,7 +15530,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       {/* BLOCO 3A — Curva S Física */}
       {curvaFiltrada.length > 1 && (
         <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-700 border-b border-slate-600 px-5 py-2.5 flex items-center justify-between cursor-pointer select-none" onClick={() => setColBloco3A(v => !v)}>
+          <div className="border-b border-slate-600 px-5 py-2.5 flex items-center justify-between cursor-pointer select-none" style={{ background: "#1A3461", borderLeft: "3px solid #FFB800", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }} onClick={() => setColBloco3A(v => !v)}>
             <p className="text-xs font-bold uppercase tracking-wider text-white">
               Curva S Física — Avanço Acumulado (%)
             </p>
@@ -15652,7 +15669,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         const finTickFmt   = (v: number) => v === 0 ? "0" : v.toLocaleString("pt-BR");
         return (
         <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="bg-slate-700 border-b border-slate-600 px-5 py-2.5 flex items-center justify-between cursor-pointer select-none" onClick={() => setColBloco3B(v => !v)}>
+          <div className="border-b border-slate-600 px-5 py-2.5 flex items-center justify-between cursor-pointer select-none" style={{ background: "#1A3461", borderLeft: "3px solid #FFB800", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }} onClick={() => setColBloco3B(v => !v)}>
             <p className="text-xs font-bold uppercase tracking-wider text-white">
               Curva S Financeira — Faturamento Acumulado (R$)
             </p>

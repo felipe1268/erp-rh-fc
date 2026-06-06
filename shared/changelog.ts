@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2787 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): CABEÇALHO REPAGINADO — OS 3 LOGOS
+ * (EXECUÇÃO/FC · GERENCIAMENTO · CLIENTE) PASSARAM A FAZER PARTE DA FAIXA AZUL DO CABEÇALHO, EM CHIPS BRANCOS
+ * BEM AJUSTADOS COM MICRO-RÓTULO DOURADO; E OS GRÁFICOS DA CURVA S GANHARAM DESTAQUE (CABEÇALHO AZUL-MARINHO FC
+ * + ACENTO DOURADO).**
+ *
+ * PEDIDO (usuário): "quero o logo do cliente, da construtora e da gerenciadora melhor ajustado... faça ele fazer
+ * parte do cabeçalho de forma interativa... dê destaque aos gráficos, quero tudo altamente moderno" (anexou o PDF
+ * exportado do REFIS com os 3 logos numa faixa branca solta por cima da faixa azul).
+ *
+ * CONTEXTO: a Rev. 2782 colocou os 3 logos numa FAIXA BRANCA separada (`.refis-logo-strip`) ACIMA da faixa azul
+ * do cabeçalho — visualmente "descolada" do cabeçalho institucional. Os cabeçalhos dos gráficos da Curva S eram
+ * cinza (`bg-slate-700`), sem destaque.
+ *
+ * FIX (SÓ CLIENT; ZERO SCHEMA/SERVER) em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (componente
+ * `Refis`):
+ *  1. CABEÇALHO — os 3 logos viraram uma BARRA DE MARCAS INTEGRADA (`.refis-brand-bar`) que é o PRIMEIRO bloco
+ *     DENTRO da faixa azul `.refis-doc-header` (não mais uma faixa branca solta por cima). Cada marca fica numa
+ *     zona com micro-rótulo DOURADO (#FFC233, "Execução/Gerenciamento/Cliente") sobre um CHIP BRANCO arredondado
+ *     (logo legível sobre o azul), distribuídos uniformemente (`flex:1 1 0`) com separadores verticais sutis.
+ *     Quando a obra não tem logo da gerenciadora/cliente, cai no NOME (`.refis-brand-name`); FC mantém o fallback
+ *     `/logo-fc.jpg`.
+ *  2. ACENTO MODERNO — `.refis-doc-header` ganhou borda superior dourada (2.5pt #FFB800) + cantos arredondados,
+ *     amarrando a identidade FC (azul-marinho + dourado).
+ *  3. DESTAQUE AOS GRÁFICOS — os cabeçalhos dos blocos da Curva S (Física 3A e Financeira 3B) passaram de cinza
+ *     (`bg-slate-700`) para AZUL-MARINHO FC sólido (#1A3461) com ACENTO DOURADO à esquerda (3px #FFB800) e
+ *     `print-color-adjust: exact` p/ imprimir a cor; ficam como o ponto focal do relatório.
+ *
+ * NOTA TÉCNICA: o cabeçalho do REFIS é PRINT-ONLY (`.refis-doc-header` fica `display:none` na tela e só aparece
+ * na impressão via `.refis-print-only-block`), então o redesenho aparece no PDF/Ctrl+P. Cores de fundo novas
+ * levam `-webkit-print-color-adjust/print-color-adjust: exact`. MANTIDOS: margem 3cm (Rev. 2786), motor de
+ * impressão (Rev. 2785) e Zoom (Rev. 2784). ZERO ALTER/DROP/DELETE. VALIDAÇÃO: esbuild OK (exit 0); HMR; architect.
+ *
  * Rev. 2786 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): REPAGINAÇÃO DA IMPRESSÃO — A
  * MARGEM PADRÃO PASSOU A SER 3cm EM TODOS OS LADOS (LATERAIS + SUPERIOR + INFERIOR). ACABOU O RELATÓRIO
  * "COLADO NA BORDA" DA FOLHA.**
