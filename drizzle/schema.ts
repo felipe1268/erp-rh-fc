@@ -4181,7 +4181,7 @@ export const moduleConfig = pgTable("module_config", {
 // módulo. Ausência de linha = HABILITADO (default permissivo). Ver shared/aiModules.ts.
 export const aiModuleConfig = pgTable("ai_module_config", {
   id: serial().primaryKey(),
-  companyId: integer().notNull(),
+  companyId: integer("company_id").notNull(), // Rev. 2810 — coluna real é snake_case (self-heal); sem o nome explícito o Drizzle gerava "companyId" e TODA query falhava
   modulo: varchar({ length: 40 }).notNull(), // AiModuleKey — ver shared/aiModules.ts
   enabled: smallint().default(1).notNull(),  // 1 = habilitado, 0 = desabilitado
   updatedBy: varchar("updated_by", { length: 255 }),

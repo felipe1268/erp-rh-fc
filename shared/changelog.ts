@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2810 — **CONFIGURAÇÕES · IA — HOTFIX: O LIGA/DESLIGA DO ASSISTENTE DE PERGUNTAS E RESPOSTAS NÃO SALVAVA
+ * ("ERRO AO SALVAR CONFIGURAÇÃO DE IA" / O PAINEL VOLTAVA SEMPRE A "7 DE 7 ATIVAS"). O SCHEMA DRIZZLE DA TABELA
+ * `ai_module_config` ESTAVA DESALINHADO DA COLUNA REAL DO BANCO.**
+ *
+ * PEDIDO (usuário, com screenshot): "Não tá deixando desligar, eu clico e não acontece nada" — toast vermelho
+ * "Erro ao salvar configuração de IA" no rodapé.
+ *
+ * CAUSA-RAIZ: a tabela `ai_module_config` foi CRIADA pelo self-heal (Rev. 2805) com a coluna `company_id`
+ * (snake_case). Mas no `drizzle/schema.ts` o campo estava `companyId: integer().notNull()` SEM nome de coluna
+ * explícito — e o Drizzle desta instância NÃO usa casing global snake_case, então gerava a coluna `"companyId"`
+ * (camelCase). Resultado: TODA query a essa tabela falhava com `column "companyId" does not exist`. Na LEITURA
+ * (`getQaConfig`) o erro era silencioso → `data` undefined → o front caía no default permissivo do catálogo estático
+ * → "7 de 7 ativas". Na ESCRITA (`setQaModulo`/`setQaTodos`) o erro subia como TRPCError → `onError` → toast
+ * "Erro ao salvar". Por isso a tabela estava VAZIA (nenhuma escrita jamais persistiu). Confirmado: insert raw em
+ * `company_id` funciona; o mesmo insert via Drizzle falhava gerando `"companyId"`.
+ *
+ * O QUE FOI FEITO: 1 LINHA em `drizzle/schema.ts` — `companyId: integer().notNull()` → `companyId:
+ * integer("company_id").notNull()`, alinhando o ORM à coluna `company_id` que JÁ existe no Neon. As demais colunas
+ * (`updated_by`/`updated_at`/`created_at`) já tinham nome explícito; `modulo`/`enabled`/`id` são monossílabas
+ * idênticas nos dois lados.
+ *
+ * REGRAS FC: ZERO ALTER/DROP/DELETE — a coluna `company_id` já existia; só o mapeamento do ORM foi corrigido.
+ * Validação: teste real via Drizzle contra o Neon (INSERT/READ/UPDATE/DELETE OK); esbuild OK no schema; servidor
+ * reiniciado e conectado ao Neon. Detalhe: este arquivo.
+ *
  * Rev. 2809 — **CONFIGURAÇÕES · IA — O PAINEL "INTELIGÊNCIA ARTIFICIAL" PASSA A CONTROLAR EXCLUSIVAMENTE O CHAT DE
  * "PERGUNTAS E RESPOSTAS" (O BOTÃO VERDE FLUTUANTE / `IAModuloChat`), POR MÓDULO OU TODOS, E O BUG "0 DE 0 ATIVAS"
  * FOI CORRIGIDO.**
