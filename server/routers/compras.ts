@@ -12781,7 +12781,11 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         .where(and(
           eq(comprasOrdens.companyId, input.companyId),
           eq(comprasOrdens.obraId, input.obraId),
-          sql`${comprasOrdens.modalidadeFd} IN ('fd_cliente', 'fd_terceiro')`,
+          // FD pode estar gravado como 'fd_fc' (criação DIRETA da OC — enum do front
+          // ["normal","fd_cliente","fd_fc"]) OU 'fd_terceiro' (caminho via cotação, que
+          // mapeia fd_fc→fd_terceiro). O filtro antigo só pegava 'fd_terceiro', então as
+          // OCs FD criadas direto na tela de Ordens (selo "FAT. DIRETO") sumiam do painel.
+          sql`${comprasOrdens.modalidadeFd} IN ('fd_cliente', 'fd_terceiro', 'fd_fc')`,
           sql`${comprasOrdens.status} != 'cancelada'`,
         ));
       const totalFdComprometido = ocsComFd.filter(oc => (oc as any).modalidadeFd === "fd_cliente").reduce((s, oc) => s + n(oc.fdValor), 0);

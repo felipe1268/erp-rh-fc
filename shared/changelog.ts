@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2814 — **COMPRAS · PAINEL FD — HOTFIX: AS OCs DE FATURAMENTO DIRETO CRIADAS DIRETO NA TELA DE ORDENS (SELO
+ * "FAT. DIRETO") NÃO APARECIAM NO "PAINEL DE FATURAMENTO DIRETO" DA OBRA. AGORA APARECEM.**
+ *
+ * PEDIDO (usuário, screenshot, item "8. Visualização de AFD"): "No painel de FD não aparecem as FDs vinculadas à
+ * obra. Por exemplo lancei faturamento direto da obra REVTE e não aparece" — a OC-2026-339 (REVTE-CIVIL, selo
+ * "FAT. DIRETO") não constava no Painel FD da obra.
+ *
+ * CAUSA-RAIZ: a modalidade de FD é gravada com DOIS valores diferentes conforme o caminho de criação. Na criação
+ * DIRETA da OC (tela Ordens → enum do front `["normal","fd_cliente","fd_fc"]`) grava `modalidadeFd = 'fd_fc'`. No
+ * caminho via cotação (`criarOrdemDeCotacao`) há um mapeamento `fd_fc → fd_terceiro` antes de gravar. O
+ * `getSaldoFd` (que alimenta o Painel FD) filtrava só `modalidadeFd IN ('fd_cliente', 'fd_terceiro')` — então toda
+ * OC FD criada DIRETO (valor `fd_fc`) ficava de fora da lista `ocsComFd`.
+ *
+ * O QUE FOI FEITO: o filtro do `getSaldoFd` em `server/routers/compras.ts` passou a incluir também `'fd_fc'`
+ * (`IN ('fd_cliente', 'fd_terceiro', 'fd_fc')`), cobrindo OS DOIS formatos persistidos. O front (`PainelFd.tsx`) já
+ * trata qualquer modalidade ≠ `fd_cliente` como "FD Terceiro", então a exibição fica correta sem mudança. O
+ * `totalFdComprometido` continua contando SÓ `fd_cliente` (só FD-cliente consome o orçamento de FD) — inalterado.
+ *
+ * RESSALVA: só LEITURA/filtro. ZERO ALTER/DROP/DELETE; ZERO schema novo; ZERO front. Validação: esbuild OK em
+ * `compras.ts`. Detalhe: este arquivo.
+ *
  * Rev. 2813 — **COMPRAS · ORDENS — HOTFIX (DADOS INCONSISTENTES): NA OC, O CAMPO "ORIGEM" MOSTRAVA "Cotação #<id>"
  * USANDO O ID INTERNO DA COTAÇÃO (ex.: "Cotação #433"), QUE NÃO BATE COM O NÚMERO VISÍVEL DA COTAÇÃO
  * (`COT-2026-0292`). AGORA EXIBE O NÚMERO REAL FORMATADO EM DETALHE, LISTA E ORDENAÇÃO/EXPORT.**
