@@ -12771,7 +12771,12 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       const ocsComFdRows = await db.select({
           id: comprasOrdens.id,
           numeroOc: comprasOrdens.numeroOc,
-          descricao: comprasOrdens.descricao,
+          // Rev. 2816 — `comprasOrdens` NÃO tem coluna `descricao` (o campo livre é
+          // `observacoes`). A Rev. 2814/2815 selecionava `comprasOrdens.descricao`
+          // (=undefined no Drizzle) → o `db.select` quebrava em RUNTIME → `getSaldoFd`
+          // lançava exceção → Painel FD ficava VAZIO (nem os cards apareciam). E como a
+          // Rev. 2815 moveu esta query p/ ANTES do early-return, quebrou TODAS as obras.
+          observacoes: comprasOrdens.observacoes,
           fdValor: comprasOrdens.fdValor,
           fdStatus: comprasOrdens.fdStatus,
           modalidadeFd: comprasOrdens.modalidadeFd,
@@ -12791,7 +12796,9 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       const ocsComFd = ocsComFdRows.map(oc => ({
         id: oc.id,
         numeroOc: oc.numeroOc,
-        descricao: oc.descricao,
+        // Mantém a chave `descricao` no payload (o front PainelFd lê `oc.descricao`),
+        // mas a fonte real é `observacoes` da OC.
+        descricao: (oc as any).observacoes,
         fdValor: oc.fdValor,
         fdStatus: (oc as any).fdStatus,
         modalidadeFd: (oc as any).modalidadeFd,

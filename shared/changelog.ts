@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2816 — **COMPRAS · PAINEL FD — HOTFIX (CONTINUAÇÃO DAS REV. 2814/2815): O PAINEL FD CONTINUAVA TOTALMENTE
+ * VAZIO (NEM OS 3 CARDS APARECIAM) PARA REVTE-CIVIL/OC-2026-339. A QUERY `getSaldoFd` ESTAVA LANÇANDO EXCEÇÃO EM
+ * RUNTIME PORQUE SELECIONAVA UMA COLUNA INEXISTENTE. AGORA O PAINEL CARREGA E A OC FD APARECE.**
+ *
+ * PEDIDO (usuário, screenshots): OC-2026-339 (REVTE-CIVIL, fornecedor "Regional Telhas", selo "Faturamento Direto",
+ * criada Manual/direto) + Painel FD da REVTE-CIVIL completamente vazio abaixo do seletor de obra. "Veja a oc."
+ *
+ * CAUSA-RAIZ: a query `ocsComFdRows` introduzida nas Rev. 2814/2815 (server/routers/compras.ts, `getSaldoFd`)
+ * selecionava `descricao: comprasOrdens.descricao` — MAS a tabela `compras_ordens` NÃO tem coluna `descricao` (o
+ * campo de texto livre é `observacoes`). No Drizzle, `comprasOrdens.descricao` é `undefined`, então `db.select({...,
+ * descricao: undefined, ...})` gera SQL inválido e LANÇA em runtime. O esbuild (sem type-check) não pega isso. Como
+ * a Rev. 2815 moveu essa query para ANTES do early-return de orçamento, ela passou a rodar SEMPRE → `getSaldoFd`
+ * quebrava para TODAS as obras → `saldoQ.data` ficava `undefined` → o front `PainelFd.tsx` (que só renderiza os
+ * cards quando `selectedObra > 0 && saldo`, e cujo único empty-state é gated em `selectedObra === 0`) não desenhava
+ * NADA. Confirmado no Neon real: `compras_ordens` tem `observacoes`/`fd_valor`/`fd_status`/`modalidade_fd` mas NÃO
+ * `descricao`; OC-2026-339 = obra_id 12, company_id 60002, `modalidade_fd='fd_fc'` (já coberto pelo filtro da Rev.
+ * 2814).
+ *
+ * O QUE FOI FEITO: o `SELECT` de `ocsComFdRows` troca `descricao: comprasOrdens.descricao` por
+ * `observacoes: comprasOrdens.observacoes`; o mapeamento de saída `ocsComFd` mantém a chave `descricao` no payload
+ * (o front lê `oc.descricao`) porém abastecida por `observacoes` (`descricao: (oc as any).observacoes`). Nenhuma
+ * outra coluna do select é fantasma (id/numeroOc/fdValor/fdStatus/modalidadeFd existem). ZERO mudança no front.
+ *
+ * RESSALVA: só LEITURA/correção de coluna no select. ZERO ALTER/DROP/DELETE; ZERO schema novo; ZERO front. Validação:
+ * esbuild OK em `compras.ts` + consulta direta ao Neon confirmando colunas e dado da OC. Detalhe: este arquivo.
+ *
  * Rev. 2815 — **COMPRAS · PAINEL FD — HOTFIX (CONTINUAÇÃO DA REV. 2814): MESMO COM O FILTRO `fd_fc` CORRIGIDO, AS
  * OCs DE FATURAMENTO DIRETO AINDA NÃO APARECIAM NO PAINEL FD QUANDO A OBRA NÃO TINHA ORÇAMENTO FD VINCULADO (ex.:
  * REVTE-CIVIL, OC-2026-339). AGORA APARECEM SEMPRE.**

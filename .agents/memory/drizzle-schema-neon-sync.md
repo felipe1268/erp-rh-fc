@@ -58,3 +58,16 @@ tool hits a different (Replit) Postgres. To query the real Neon DB, run a node
 script via bash: `new Pool({ connectionString: process.env.NEON_DATABASE_URL,
 ssl: { rejectUnauthorized: false } })`. (The code_execution sandbox does NOT
 expose `process.env`, so use bash + node for this.)
+
+## Variant: explicit `db.select({ k: table.colThatIsNotInSchema })`
+
+Same failure class, different trigger. If you write `db.select({ descricao: comprasOrdens.descricao })`
+but `descricao` is NOT a declared column on that `pgTable` (the real free-text field is
+`observacoes`), Drizzle resolves `comprasOrdens.descricao` to `undefined` → builds invalid SQL
+→ the query THROWS at runtime. esbuild does NOT catch this (no type-check in the build path),
+so it ships and only blows up when the endpoint runs. The tRPC query then errors, `useQuery.data`
+stays `undefined`, and a panel whose render is gated on `data` truthiness shows NOTHING.
+
+**How to apply:** before adding a field to an explicit `db.select({...})`, confirm the column
+actually exists on that table in `drizzle/schema.ts` (grep the pgTable block). For OC free text
+use `comprasOrdens.observacoes` — `comprasOrdens` has NO `descricao` column.
