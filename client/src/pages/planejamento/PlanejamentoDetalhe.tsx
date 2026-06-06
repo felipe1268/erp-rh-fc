@@ -14671,7 +14671,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           #refis-print-area .shadow { box-shadow: none !important; }
 
           .refis-doc-header { background: #1A3461 !important; color: white !important; margin-bottom: 3pt !important; page-break-after: avoid !important; }
-          .refis-doc-header-inner { display: flex !important; align-items: stretch !important; min-height: 36pt !important; }
+          .refis-doc-header-inner { display: flex !important; align-items: stretch !important; min-height: 26pt !important; }
           .refis-doc-header-brand {
             border-right: 0.5pt solid rgba(255,255,255,0.22) !important;
             padding: 5pt 9pt !important; display: flex !important; flex-direction: column !important; justify-content: center !important; min-width: 80pt !important;
@@ -14688,14 +14688,14 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             display: flex !important; align-items: center !important; justify-content: space-around !important;
             gap: 10pt !important; background: white !important;
             border: 0.5pt solid #cbd5e1 !important; border-bottom: none !important;
-            padding: 5pt 14pt !important;
+            padding: 3pt 12pt !important;
           }
           .refis-logo-cell {
             display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important;
             gap: 2pt !important; flex: 1 1 0 !important;
           }
-          .refis-logo-cell img { max-height: 30pt !important; max-width: 150pt !important; object-fit: contain !important; }
-          .refis-logo-label { font-size: 5pt !important; font-weight: 700 !important; letter-spacing: 0.14em !important; text-transform: uppercase !important; color: #64748b !important; }
+          .refis-logo-cell img { max-height: 20pt !important; max-width: 130pt !important; object-fit: contain !important; }
+          .refis-logo-label { font-size: 6pt !important; font-weight: 700 !important; letter-spacing: 0.14em !important; text-transform: uppercase !important; color: #64748b !important; }
           .refis-logo-name { font-size: 7pt !important; font-weight: 700 !important; color: #1A3461 !important; text-align: center !important; line-height: 1.15 !important; }
           .refis-logo-divider { align-self: stretch !important; width: 0.5pt !important; background: #e2e8f0 !important; }
 
@@ -14752,8 +14752,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           #refis-print-area .border-blue-200  { border-color: #bfdbfe !important; }
 
           #refis-print-area .overflow-x-auto { overflow: visible !important; }
-          #refis-print-area table { width: 100% !important; border-collapse: collapse !important; font-size: 6.5pt !important; }
-          #refis-print-area table th { background: #f1f5f9 !important; border: 0.5pt solid #cbd5e1 !important; padding: 2pt 3pt !important; font-size: 5.5pt !important; text-transform: uppercase !important; letter-spacing: 0.04em !important; color: #475569 !important; }
+          #refis-print-area table { width: 100% !important; border-collapse: collapse !important; font-size: 7pt !important; }
+          #refis-print-area table th { background: #f1f5f9 !important; border: 0.5pt solid #cbd5e1 !important; padding: 2pt 3pt !important; font-size: 6pt !important; text-transform: uppercase !important; letter-spacing: 0.04em !important; color: #475569 !important; }
           #refis-print-area table td { border: 0.5pt solid #e2e8f0 !important; padding: 2pt 3pt !important; }
 
           #refis-print-area textarea { border: 0.5pt solid #cbd5e1 !important; font-size: 7pt !important; padding: 3pt !important; width: 100% !important; resize: none !important; display: block !important; min-height: 24pt !important; box-sizing: border-box !important; }
@@ -14794,16 +14794,16 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           #refis-print-area .text-xl { font-size: 10pt !important; }
           #refis-print-area .text-2xl { font-size: 11pt !important; }
           #refis-print-area .text-3xl { font-size: 12pt !important; }
-          #refis-print-area .text-\\[10px\\] { font-size: 5pt !important; }
-          #refis-print-area .text-\\[11px\\] { font-size: 5.5pt !important; }
+          #refis-print-area .text-\\[10px\\] { font-size: 6pt !important; }
+          #refis-print-area .text-\\[11px\\] { font-size: 6pt !important; }
 
           #refis-print-area .grid-cols-5 { grid-template-columns: repeat(5, 1fr) !important; }
           #refis-print-area .grid-cols-6 { grid-template-columns: repeat(6, 1fr) !important; }
 
           #refis-print-area .recharts-wrapper,
-          #refis-print-area .recharts-responsive-container { height: 130pt !important; max-height: 130pt !important; }
-          #refis-print-area [style*="height: 360"] { height: 130pt !important; }
-          #refis-print-area [style*="height: 320"] { height: 130pt !important; }
+          #refis-print-area .recharts-responsive-container { height: 100% !important; max-height: none !important; }
+          #refis-print-area [style*="height: 360"] { height: 215pt !important; }
+          #refis-print-area [style*="height: 320"] { height: 180pt !important; }
 
           #refis-print-area .no-print { display: none !important; }
 
@@ -15463,7 +15463,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       ══════════════════════════════════════════════════════════════════════ */}
       {/* BLOCO 3A — Curva S Física */}
       {curvaFiltrada.length > 1 && (
-        <div className="refis-block refis-break-before bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="bg-slate-700 border-b border-slate-600 px-5 py-2.5 flex items-center justify-between cursor-pointer select-none" onClick={() => setColBloco3A(v => !v)}>
             <p className="text-xs font-bold uppercase tracking-wider text-white">
               Curva S Física — Avanço Acumulado (%)
@@ -15798,7 +15798,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         const yWidthG = Math.min(260, Math.max(140, maxLenG * 6.4));
         const rowHG = 72;
         return (
-        <div className="refis-block refis-break-before bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="bg-slate-100 border-b border-slate-200 px-5 py-2 flex items-center justify-between gap-3 select-none">
             <p
               className="text-xs font-bold uppercase tracking-wider text-slate-600 cursor-pointer flex-1"

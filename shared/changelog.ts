@@ -1,6 +1,49 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2783 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): IMPRESSÃO REDESENHADA PARA PADRÃO
+ * EXECUTIVO DENSO — ACABARAM AS PÁGINAS MEIO-VAZIAS (QUEBRAS FORÇADAS REMOVIDAS), OS GRÁFICOS DA CURVA S FICARAM
+ * GRANDES E EM LARGURA TOTAL, O CABEÇALHO ENCOLHEU (LOGOS MENORES) E AS LETRAS MINÚSCULAS (5pt) FORAM AMPLIADAS
+ * PARA LEGIBILIDADE.**
+ *
+ * PEDIDO (usuário): "ficou péssimo ainda". Após user_query, marcou COMO RUIM: logos (tamanho/posição), layout
+ * bagunçado, margens/espaço em branco, conteúdo quebrando entre páginas, cores/gráficos não saem e tamanho das
+ * letras. Gera via Ctrl+P no navegador → papel. Colou uma "REGRA GLOBAL DE DIAGRAMAÇÃO" pedindo padrão executivo
+ * premium (estilo Primavera P6 / Power BI): ocupação 85-95% da folha A4, espaço branco ≤15%, gráficos ≥90% da
+ * largura (altura 280-500px), tabelas em largura total, cabeçalho ≤10% da altura (logos NÃO grandes), evitar
+ * quebras desnecessárias e fragmentação, modo de impressão denso.
+ *
+ * CAUSA (estado anterior, herdado): (a) os 3 blocos da Curva S (Física e Financeira) tinham a classe
+ * `refis-break-before` (`page-break-before: always`), FORÇANDO cada um a começar em página nova → páginas
+ * anteriores ficavam meio-vazias; (b) os gráficos eram ENCOLHIDOS no print para `130pt` (~46mm), minúsculos numa
+ * A4 de 297mm; (c) o cabeçalho usava logos de até `30pt` + faixa de `36pt` (≈14% da folha); (d) muitos textos
+ * caíam para `5pt`/`5.5pt`, ilegíveis no papel.
+ *
+ * FIX (SÓ CLIENT; ZERO SCHEMA/SERVER) em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (componente
+ * `Refis`, bloco `<style>` de `@media print` + JSX dos blocos da Curva S):
+ *  1. QUEBRAS FORÇADAS REMOVIDAS — tirada a classe `refis-break-before` dos 2 `<div>` dos blocos da Curva S
+ *     (Física e Financeira). Eles seguem com `refis-block` (que tem `break-inside: avoid`), então cada bloco
+ *     continua inteiro, mas agora FLUI logo após o conteúdo anterior, preenchendo a página (85-95%) em vez de
+ *     forçar página nova quase em branco. A definição CSS `.refis-break-before` foi mantida (inócua, sem uso).
+ *  2. GRÁFICOS GRANDES E FULL-WIDTH — `[style*="height: 360"]` passou de `130pt` para `215pt` e
+ *     `[style*="height: 320"]` para `180pt`; o `.recharts-responsive-container`/`.recharts-wrapper` deixou de ser
+ *     travado em `130pt`/`max-height:130pt` e passou a `height:100% / max-height:none`, ACOMPANHANDO a altura do
+ *     `<div>` pai (antes o wrapper de `130pt` brigava com o SVG renderizado e cortava/achatava o gráfico). A
+ *     largura já era `width="100%"`.
+ *  3. CABEÇALHO ENXUTO (≤10%) — logos de `max-height:30pt` → `20pt` (`max-width:150pt` → `130pt`); padding da
+ *     faixa branca de logos `5pt 14pt` → `3pt 12pt`; `min-height` da faixa azul `36pt` → `26pt`.
+ *  4. LEGIBILIDADE — pisos de fonte ampliados: tabela `6.5pt` → `7pt`, `<th>` `5.5pt` → `6pt`,
+ *     `.text-[10px]` `5pt` → `6pt`, `.text-[11px]` `5.5pt` → `6pt`, rótulo de logo `5pt` → `6pt`.
+ *
+ * RESSALVA (lado do usuário, não-código): "cores/gráficos não saem na impressão" é, na grande maioria dos casos,
+ * a opção **"Gráficos de plano de fundo" / "Background graphics"** DESMARCADA no diálogo Ctrl+P do navegador —
+ * precisa estar LIGADA. As linhas dos gráficos (SVG) saem sempre; o que depende dessa opção são os fundos
+ * coloridos (faixas, cards). O CSS já força `print-color-adjust: exact`, mas alguns navegadores ainda respeitam
+ * o checkbox. Paginação "Página X de Y" por página não é viável no print de tela do Chrome (sem suporte a
+ * contadores em `@page`); o rodapé institucional estático foi mantido.
+ *
+ * ZERO ALTER/DROP/DELETE/UPDATE (R-001/R-007/R-010 OK). Validação: esbuild syntax OK; HMR; architect.
+ *
  * Rev. 2782 — **PLANEJAMENTO · REFIS (RELATÓRIO DE EVOLUÇÃO FÍSICA DA OBRA): O CABEÇALHO DE IMPRESSÃO AGORA EXIBE
  * OS LOGOS DO CLIENTE E DA GERENCIADORA (GESTORA) ALÉM DO DA EXECUTORA (FC); LAYOUT REORGANIZADO E MARGENS DE
  * IMPRESSÃO ENXUTAS (UNIFORME 8mm, ≤ 2,5cm).**
