@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { normalizarTexto, stripAccents } from "@shared/textNormalization";
+import { formatNumeroScDisplay } from "@shared/numeroSc";
 import {
   Plus, Search, Trash2, ClipboardList, ChevronRight, ChevronDown, Loader2,
   CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays, ShoppingCart, AlertTriangle, Zap, FileText, Package,
@@ -634,7 +635,7 @@ function DisciplinasModal({ open, onClose, orcamentoId, companyId, disciplinasQ,
                               <span className="text-[10px] text-amber-700 font-medium">Já solicitado:</span>
                               {item.scs.map((sc: any) => (
                                 <span key={sc.scId} className="inline-flex items-center gap-1 text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200 rounded px-1.5 py-0.5" title={`Qtd: ${sc.qtd} · Status: ${sc.status}`}>
-                                  {sc.numeroSc} <span className="text-amber-600 font-normal">({sc.qtd} {item.unidade})</span>
+                                  {formatNumeroScDisplay(sc.numeroSc)} <span className="text-amber-600 font-normal">({sc.qtd} {item.unidade})</span>
                                 </span>
                               ))}
                               {isContratado && <span className="text-[10px] text-red-600 font-bold ml-1">ESCOPO 100% CONTRATADO</span>}
@@ -1369,7 +1370,7 @@ export default function Solicitacoes() {
     onError: (e) => toast.error(e.message),
   });
   const duplicar = trpc.compras.duplicarSolicitacao.useMutation({
-    onSuccess: (data) => { toast.success(`SC ${data.numeroSc} criada (cópia)!`); q.refetch(); setShowDetalhe(data.id); },
+    onSuccess: (data) => { toast.success(`SC ${formatNumeroScDisplay(data.numeroSc)} criada (cópia)!`); q.refetch(); setShowDetalhe(data.id); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -1393,7 +1394,7 @@ export default function Solicitacoes() {
         </tr>`).join("");
       const tipoLabel = sc.tipo === "servico" ? "Mão de Obra" : sc.tipo === "pacote" ? "Pacote (MAT+MO)" : sc.tipo === "equipamento" ? "Equipamento" : sc.tipo === "pecas_veiculo" ? "Manutenção de Veículos" : "Material";
       const prioLabel: Record<string, string> = { baixa: "Baixa", normal: "Normal", urgente: "URGENTE" };
-      const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(sc.numeroSc)}</title>
+      const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(formatNumeroScDisplay(sc.numeroSc))}</title>
 <style>
   *{box-sizing:border-box} body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1f2937;margin:24px;font-size:12px}
   h1{font-size:20px;margin:0 0 4px 0;color:#0f172a}
@@ -1413,7 +1414,7 @@ export default function Solicitacoes() {
 </style></head><body>
 <div class="head">
   <div>
-    <h1>Solicitação de Compra ${esc(sc.numeroSc)}</h1>
+    <h1>Solicitação de Compra ${esc(formatNumeroScDisplay(sc.numeroSc))}</h1>
     <div style="color:#64748b;font-size:11px">${esc(sc.titulo || "")}</div>
   </div>
   <div style="text-align:right">
@@ -2555,7 +2556,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
           <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
           <span className="text-sm font-semibold text-red-700">
             {urgentesAtivos.length === 1
-              ? `1 solicitação URGENTE aguardando atenção — ${urgentesAtivos[0].numeroSc}: ${urgentesAtivos[0].titulo}`
+              ? `1 solicitação URGENTE aguardando atenção — ${formatNumeroScDisplay(urgentesAtivos[0].numeroSc)}: ${urgentesAtivos[0].titulo}`
               : `${urgentesAtivos.length} solicitações URGENTES aguardando atenção imediata`
             }
           </span>
@@ -2699,7 +2700,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                           <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-600" />
                         </span>
                       )}
-                      {sc.numeroSc}
+                      {formatNumeroScDisplay(sc.numeroSc)}
                       <span className={`ml-1 px-1.5 py-0.5 text-[9px] font-semibold rounded ${(sc as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : (sc as any).tipo === "pacote" ? "bg-indigo-100 text-indigo-700" : (sc as any).tipo === "equipamento" ? "bg-cyan-100 text-cyan-700" : (sc as any).tipo === "pecas_veiculo" || (sc as any).tipo === "manutencao" ? "bg-teal-100 text-teal-700" : "bg-blue-100 text-blue-700"}`}>
                         {(sc as any).tipo === "servico" ? "MDO" : (sc as any).tipo === "pacote" ? "MAT+MDO" : (sc as any).tipo === "equipamento" ? ((sc as any).isLocacao ? "EQUIP·LOC" : "EQUIP") : (sc as any).tipo === "pecas_veiculo" || (sc as any).tipo === "manutencao" ? "VEÍC" : "MAT"}
                       </span>
@@ -2774,7 +2775,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                         className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (confirm(`Excluir ${sc.numeroSc}? Cotações vinculadas sem OC ativa serão canceladas automaticamente.`)) {
+                          if (confirm(`Excluir ${formatNumeroScDisplay(sc.numeroSc)}? Cotações vinculadas sem OC ativa serão canceladas automaticamente.`)) {
                             excluir.mutate({ id: sc.id });
                           }
                         }}
@@ -4959,7 +4960,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                     {(detalhe as any).tipo === "servico" ? "Solicitação de Serviço" : (detalhe as any).tipo === "pacote" ? "Solicitação de Pacote" : (detalhe as any).tipo === "pecas_veiculo" ? "Manutenção de Veículos" : "Solicitação de Compra"}
                   </div>
                   <DialogTitle className="text-gray-900 text-lg">
-                    {detalhe.numeroSc}
+                    {formatNumeroScDisplay(detalhe.numeroSc)}
                     {detalhe.titulo && <span className="ml-2 text-gray-500 font-normal">— {detalhe.titulo}</span>}
                     {(detalhe as any).tipo && (detalhe as any).tipo !== "material" && (
                       <span className={`ml-2 px-2 py-0.5 text-[10px] font-semibold rounded ${

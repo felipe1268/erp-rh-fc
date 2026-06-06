@@ -17,6 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
+import { formatNumeroScDisplay } from "@shared/numeroSc";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, TrendingUp, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart, RotateCcw, Pin, GitBranch, Zap, PenTool, CreditCard, Banknote, Calendar, Truck, Target, BarChart2, Clock, Wallet, Layers, ArrowLeftRight, Warehouse, HardHat, Info, Printer, type LucideIcon } from "lucide-react";
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
@@ -576,7 +577,7 @@ function RastreabilidadeTag({ scNumero, eapCodigo, origemEap }: { scNumero?: str
     <div className="flex items-center gap-1 mt-0.5">
       {scNumero && (
         <span className="inline-flex items-center gap-0.5 text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full border border-blue-200">
-          <Link2 className="h-2 w-2" />{scNumero}
+          <Link2 className="h-2 w-2" />{formatNumeroScDisplay(scNumero)}
         </span>
       )}
       {eapCodigo && (
@@ -5076,7 +5077,7 @@ export default function Cotacoes() {
                                               partes.push(`↳ Item EAP${(it as any).parentEapCodigo ? ` ${(it as any).parentEapCodigo}` : ""}: ${(it as any).parentEapDescricao}`);
                                             }
                                             if (it.eapPath) partes.push(`Etapa: ${it.eapPath}`);
-                                            if ((it as any).scNumero) partes.push(`SC: ${(it as any).scNumero}`);
+                                            if ((it as any).scNumero) partes.push(`SC: ${formatNumeroScDisplay((it as any).scNumero)}`);
                                             if ((mapa?.itensJaEmOC ?? []).includes(it.id)) partes.push("✓ Já em OC");
                                             const orcada = (it as any).qtdOrcada ?? 0;
                                             const totalSolic = (it as any).qtdTotalSolicitada ?? 0;
@@ -7209,7 +7210,7 @@ export default function Cotacoes() {
                     <SelectItem value="none">Nenhuma</SelectItem>
                     {(scsQ.data ?? []).filter(s => s.status === "pendente" && (s as any).aprovacaoStatus === "aprovada").map(s => (
                       <SelectItem key={s.id} value={String(s.id)}>
-                        {s.numeroSc}{(s as any).titulo ? ` — ${(s as any).titulo}` : s.departamento ? ` — ${s.departamento}` : ""}
+                        {formatNumeroScDisplay(s.numeroSc)}{(s as any).titulo ? ` — ${(s as any).titulo}` : s.departamento ? ` — ${s.departamento}` : ""}
                         {(s as any).tipo === "servico" ? " [MDO]" : (s as any).tipo === "pacote" ? " [MAT+MDO]" : (s as any).tipo === "equipamento" ? " [EQUIP]" : ""}
                       </SelectItem>
                     ))}

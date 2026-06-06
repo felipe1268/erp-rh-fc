@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2802 — **COMPRAS · SOLICITAÇÕES — O NÚMERO DA SC PASSA A SER EXIBIDO COMO `SC-NNNN-AAAA` (NÚMERO DA SOLICITAÇÃO
+ * PRIMEIRO, ANO DEPOIS) EM VEZ DE `SC-AAAA-NNNN`. MUDANÇA SÓ DE EXIBIÇÃO — O VALOR PERSISTIDO NO BANCO CONTINUA
+ * CANÔNICO `SC-AAAA-NNNN`. TUDO CLIENT-ONLY; ZERO SCHEMA/SERVER.**
+ *
+ * PEDIDO (usuário, com screenshot da lista "Solicitações de Compra" / coluna "Número"): "Ajuste o número de forma que
+ * primeiro apareça o número da solicitação depois o ano".
+ *
+ * POR QUE NÃO MEXER NO VALOR GRAVADO: o `numero_sc` é gerado de forma atômica via counter table + índice único
+ * `uq_compras_solicitacoes_numero (company_id, numero_sc)` e o seed/ColFix usa regex `^SC-\d{4}-\d+$` (ano-sequencial).
+ * Inverter o formato persistido quebraria geração, unicidade e ordenação — então só invertemos a ORDEM na TELA.
+ *
+ * O QUE MUDOU:
+ *   - Novo helper de exibição `shared/numeroSc.ts` → `formatNumeroScDisplay("SC-2026-0325") === "SC-0325-2026"`
+ *     (regex casa `SC-AAAA-NNNN`; preserva o zero-padding do sequencial; qualquer formato fora do padrão — ex.: fallback
+ *     `SC-<id>` — é devolvido intacto; null/undefined → "").
+ *   - Aplicado nos pontos de EXIBIÇÃO do número (sem tocar em filtros/sort/geração):
+ *     · `client/src/pages/compras/Solicitacoes.tsx` — linha da lista, cabeçalho do detalhe, selo "já solicitado",
+ *       banner de URGENTE, toast de duplicação e o HTML do PDF (título + H1).
+ *     · `client/src/pages/compras/Painel.tsx` — duas tabelas/listas de SCs recentes.
+ *     · `client/src/pages/compras/Cotacoes.tsx` — `RastreabilidadeTag` (tag de SC), linha "SC: …" no print e o dropdown
+ *       de seleção de SC.
+ *     · `client/src/pages/frotas/Manutencoes.tsx` — toast "Solicitação de Compra … criada".
+ *   - BUSCA e ORDENAÇÃO seguem usando o valor canônico (`numero_sc` no servidor / `r.numeroSc` no sort) — buscar por
+ *     dígitos (ex.: "0325") continua funcionando e a ordem cronológica (ano→sequencial) é preservada.
+ *
+ * ZERO ALTER/DROP/DELETE (R-001/R-007/R-010). Validação: esbuild OK nos 4 arquivos + helper; HMR limpo.
+ *
  * Rev. 2801 — **COMPRAS · COTAÇÕES — OS DIÁLOGOS DE CONFIRMAÇÃO DO `window.confirm()` NATIVO (QUE EXIBIAM A URL FEIA DO
  * REPLIT.DEV NO TÍTULO — EX.: "…picard.replit.dev diz") FORAM SUBSTITUÍDOS PELO MODAL CUSTOMIZADO `useConfirm`
  * (ALERTDIALOG shadcn, COM ÍCONE/TOM, TÍTULO LIMPO E BOTÕES ROTULADOS). TUDO CLIENT-ONLY; ZERO SCHEMA/SERVER.**

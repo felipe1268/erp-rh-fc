@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
+import { formatNumeroScDisplay } from "@shared/numeroSc";
 import {
   ClipboardList, FileText, ShoppingCart, AlertTriangle,
   CheckCircle, Clock, TrendingUp, ArrowRight, RefreshCw, Building2,
@@ -360,7 +361,7 @@ export default function PainelCompras() {
                         <tr key={sc.id}
                           className="border-b border-gray-50 hover:bg-yellow-50 transition-colors cursor-pointer"
                           onClick={() => navigate("/compras/solicitacoes")}>
-                          <td className="py-2 pr-3 font-mono text-gray-700">{sc.numero || sc.numeroSc}</td>
+                          <td className="py-2 pr-3 font-mono text-gray-700">{formatNumeroScDisplay(sc.numero || sc.numeroSc)}</td>
                           <td className="py-2 pr-3 max-w-[200px]">
                             <div className="text-gray-800 truncate">{sc.titulo}</div>
                             {sc.obraNome && <div className="text-[10px] text-blue-600 truncate">{sc.obraNome}</div>}
@@ -555,7 +556,7 @@ export default function PainelCompras() {
                       <button key={sc.id} onClick={() => navigate("/compras/solicitacoes")}
                         className="flex items-center justify-between gap-2 py-1.5 px-2 rounded-lg w-full hover:bg-gray-50 border-b border-gray-50 transition-colors">
                         <div className="min-w-0 text-left">
-                          <div className="text-xs font-mono text-gray-600">{sc.numero || sc.numeroSc}</div>
+                          <div className="text-xs font-mono text-gray-600">{formatNumeroScDisplay(sc.numero || sc.numeroSc)}</div>
                           <div className="text-xs text-gray-800 truncate">{sc.titulo}</div>
                           {sc.obraNome && <div className="text-[10px] text-blue-600 truncate">{sc.obraNome}</div>}
                         </div>

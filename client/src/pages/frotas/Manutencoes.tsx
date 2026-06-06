@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useState, useRef, useCallback, useEffect, useMemo, Fragment } from "react";
 import { toast } from "sonner";
+import { formatNumeroScDisplay } from "@shared/numeroSc";
 
 function fmt(v: any) {
   return parseFloat(v || "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -171,7 +172,7 @@ export default function Manutencoes() {
   });
   const createPurchaseMut = trpc.frotas.createPurchaseFromMaintenance.useMutation({
     onSuccess: (r) => {
-      toast.success(`Solicitação de Compra ${r.numeroSc} criada com ${r.qtdItens} item(ns)! Encaminhe ao setor de Compras.`);
+      toast.success(`Solicitação de Compra ${formatNumeroScDisplay(r.numeroSc)} criada com ${r.qtdItens} item(ns)! Encaminhe ao setor de Compras.`);
       manut.refetch();
     },
     onError: (e) => toast.error(e.message),
