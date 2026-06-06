@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2811 — **COMPRAS · SOLICITAÇÕES — HOTFIX: NO PDF DA SC ("GERAR PDF") AS QUANTIDADES APARECIAM COM "ESCALA EM
+ * MIL" (ex.: QTD 50 SAÍA COMO "50.000", QTD 1 COMO "1.000"). AGORA A COLUNA "QTD" É FORMATADA EM pt-BR ANTES DE
+ * IMPRIMIR.**
+ *
+ * PEDIDO (usuário, com screenshot da SC-2026-0320 → "Gerar PDF"): "Ao clicar em gerar pdf as unidades de medida estão
+ * com escala em mil" — a tabela do PDF mostrava "50.000", "30.000", "1.000" para quantidades que são 50, 30 e 1.
+ *
+ * CAUSA-RAIZ: a coluna `quantidade` é numeric com escala 3 no banco, então o valor cru chega como string "50.000"
+ * (ponto = separador decimal). O gerador de PDF (`gerarPdfSC` em `Solicitacoes.tsx`) imprimia esse valor BRUTO via
+ * `esc(it.quantidade)` — e em pt-BR o ponto vira separador de MILHAR, fazendo "50.000" parecer cinquenta mil. A
+ * própria tela de detalhe da SC já formatava certo com `parseFloat(...).toLocaleString("pt-BR", { maximumFractionDigits: 2 })`;
+ * só o PDF ficou de fora.
+ *
+ * O QUE FOI FEITO: novo helper local `fmtQtd` em `gerarPdfSC` (`parseFloat(String(v)) → toLocaleString("pt-BR",
+ * { maximumFractionDigits: 2 })`, com guarda `Number.isFinite` → "—"). A célula "Qtd" passou de `esc(it.quantidade)`
+ * para `esc(fmtQtd(it.quantidade))`. Assim 50.000 → "50", 1.5 → "1,5", removendo zeros decimais supérfluos.
+ *
+ * RESSALVA: só o PDF da SC foi tocado; os demais PDFs de Compras (Ordens/Aprovações) não tinham o mesmo render cru.
+ * ZERO ALTER/DROP/DELETE; ZERO schema novo; ZERO mudança de backend. Validação: esbuild OK no arquivo. Detalhe: este
+ * arquivo.
+ *
  * Rev. 2810 — **CONFIGURAÇÕES · IA — HOTFIX: O LIGA/DESLIGA DO ASSISTENTE DE PERGUNTAS E RESPOSTAS NÃO SALVAVA
  * ("ERRO AO SALVAR CONFIGURAÇÃO DE IA" / O PAINEL VOLTAVA SEMPRE A "7 DE 7 ATIVAS"). O SCHEMA DRIZZLE DA TABELA
  * `ai_module_config` ESTAVA DESALINHADO DA COLUNA REAL DO BANCO.**

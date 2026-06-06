@@ -1392,12 +1392,13 @@ export default function Solicitacoes() {
       if (!sc) { toast.error("SC não encontrada"); return; }
       const fmtBR = (s?: string | null) => s ? String(s).split("T")[0].split("-").reverse().join("/") : "—";
       const fmtMoeda = (v: any) => v != null ? `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
+      const fmtQtd = (v: any) => { const n = parseFloat(String(v ?? "0")); return Number.isFinite(n) ? n.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : "—"; };
       const esc = (s: any) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
       const itensHtml = (sc.itens as any[] || []).map((it, i) => `
         <tr>
           <td style="text-align:center">${i + 1}</td>
           <td>${esc(it.descricao)}${it.eapCodigo ? `<div style="font-size:10px;color:#666">EAP: ${esc(it.eapCodigo)}</div>` : ""}</td>
-          <td style="text-align:right">${esc(it.quantidade)}</td>
+          <td style="text-align:right">${esc(fmtQtd(it.quantidade))}</td>
           <td style="text-align:center">${esc(it.unidade || "—")}</td>
           <td style="text-align:right">${it.precoMeta ? fmtMoeda(it.precoMeta) : "—"}</td>
           <td>${esc(it.observacoes || "")}</td>
