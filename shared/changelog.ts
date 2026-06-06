@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2801 — **COMPRAS · COTAÇÕES — OS DIÁLOGOS DE CONFIRMAÇÃO DO `window.confirm()` NATIVO (QUE EXIBIAM A URL FEIA DO
+ * REPLIT.DEV NO TÍTULO — EX.: "…picard.replit.dev diz") FORAM SUBSTITUÍDOS PELO MODAL CUSTOMIZADO `useConfirm`
+ * (ALERTDIALOG shadcn, COM ÍCONE/TOM, TÍTULO LIMPO E BOTÕES ROTULADOS). TUDO CLIENT-ONLY; ZERO SCHEMA/SERVER.**
+ *
+ * PEDIDO (usuário): "Melhore o layout, não quero o código que aparece na mensagem" (print do confirm nativo "Excluir
+ * proposta e remover preços vinculados?" mostrando a URL do túnel replit.dev no cabeçalho).
+ *
+ * O QUE MUDOU (SÓ `client/src/pages/compras/Cotacoes.tsx`):
+ *   - Importado o hook já existente `@/hooks/useConfirm` e instanciado uma vez no componente `Cotacoes`
+ *     (`const { confirm, ConfirmDialog } = useConfirm()`); `{ConfirmDialog}` renderizado antes do fechamento do
+ *     `DashboardLayout`.
+ *   - Substituídas TODAS as 7 chamadas de `window.confirm()` do componente por `await confirm({ title, description,
+ *     tone, confirmText, cancelText })`, com os onClick/handlers convertidos para `async`:
+ *     · "Excluir proposta e remover preços vinculados?" (o do print) → tom destrutivo, "Excluir".
+ *     · 2× "Reabrir cotação?" → tom info.
+ *     · "Reverter aprovação?" (excluir contrato de serviço) → tom warning.
+ *     · "Cancelar cotação?" → tom destrutivo.
+ *     · 2× "Valor acima da meta orçamentária" (botões Aprovar/Total) → tom warning, "Continuar mesmo assim".
+ *   - `handleConfirmarTotal` virou `async`; os textos longos viraram `description` (mantêm `\n\n`, o modal usa
+ *     `whitespace-pre-wrap`); títulos limpos sem a URL do navegador.
+ *
+ * ZERO ALTER/DROP/DELETE (R-001/R-007/R-010). Validação: esbuild OK em `Cotacoes.tsx`; HMR limpo.
+ *
  * Rev. 2800 — **COMPRAS · COTAÇÕES — LEITURA POR IA AGORA ACEITA ENVIAR VÁRIOS ARQUIVOS DE UMA VEZ (PÁGINAS/FOTOS DA
  * MESMA COTAÇÃO) NUMA ÚNICA LEITURA. O BOTÃO "LER COTAÇÃO (IA)" GANHOU `multiple`; TODOS OS ARQUIVOS VÃO JUNTOS NUMA
  * SÓ CHAMADA AO CLAUDE VISION (UM ÚNICO JOB / UMA ÚNICA PROPOSTA), SEM DUPLICAR ITENS REPETIDOS ENTRE PÁGINAS.**

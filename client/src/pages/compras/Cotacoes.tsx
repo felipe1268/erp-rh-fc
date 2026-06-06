@@ -21,6 +21,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, TrendingUp, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart, RotateCcw, Pin, GitBranch, Zap, PenTool, CreditCard, Banknote, Calendar, Truck, Target, BarChart2, Clock, Wallet, Layers, ArrowLeftRight, Warehouse, HardHat, Info, Printer, type LucideIcon } from "lucide-react";
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
 import { PurchaseTimeline, TimelineBadge } from "@/components/compras/PurchaseTimeline";
+import { useConfirm } from "@/hooks/useConfirm";
 
 function parseBRNumber(v: string): number {
   if (!v) return 0;
@@ -894,6 +895,7 @@ export default function Cotacoes() {
   const [, navigate] = useLocation();
   const { user } = useAuth();
   const isAdminMaster = user?.role === "admin_master";
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
@@ -2991,7 +2993,7 @@ export default function Cotacoes() {
       setShowConfirmarTipoCotDialog(true);
     }
 
-    function handleConfirmarTotal() {
+    async function handleConfirmarTotal() {
       setShowConfirmarTipoCotDialog(false);
       if (!validarCondicoesVencedor()) return;
       const fornTotal = parseFloat(fornParaSaldo?.totalOrcado ?? "0");
@@ -3000,13 +3002,18 @@ export default function Cotacoes() {
       if (deficit > 0 && !cobertoPorRisco && !semVerbaAutorizado) {
         const defVal = deficit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
         const fornNome = fornParaSaldo?.fornecedor?.nomeFantasia || fornParaSaldo?.fornecedor?.razaoSocial || "Fornecedor";
-        const ok = confirm(
-          `⚠️ ATENÇÃO: O valor do fornecedor ${fornNome} (${fornTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) ` +
-          `está acima da meta orçamentária (${metaGrandTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}).\n\n` +
-          `Déficit: ${defVal}\n\n` +
-          `Recomendamos utilizar o painel de Realocação de Verba antes de aprovar.\n\n` +
-          `Deseja continuar mesmo assim?`
-        );
+        const ok = await confirm({
+          title: "Valor acima da meta orçamentária",
+          description:
+            `O valor do fornecedor ${fornNome} (${fornTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) ` +
+            `está acima da meta orçamentária (${metaGrandTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}).\n\n` +
+            `Déficit: ${defVal}\n\n` +
+            `Recomendamos utilizar o painel de Realocação de Verba antes de aprovar.\n\n` +
+            `Deseja continuar mesmo assim?`,
+          tone: "warning",
+          confirmText: "Continuar mesmo assim",
+          cancelText: "Cancelar",
+        });
         if (!ok) return;
       }
       setShowGerarOCModeDialog(true);
@@ -3516,8 +3523,13 @@ export default function Cotacoes() {
                     </Button>
                   )}
                   {detalheFullscreen.status === "concluida" && (detalheFullscreen as any).contratoTerceiroId && isAdminMaster && (
-                    <Button variant="outline" onClick={() => {
-                      if (confirm("Tem certeza? O contrato de serviço será excluído e a cotação voltará para 'Aprovada', permitindo edições e nova geração de contrato.")) {
+                    <Button variant="outline" onClick={async () => {
+                      if (await confirm({
+                        title: "Reverter aprovação?",
+                        description: "O contrato de serviço será excluído e a cotação voltará para 'Aprovada', permitindo edições e nova geração de contrato.",
+                        tone: "warning",
+                        confirmText: "Reverter",
+                      })) {
                         reverterOS.mutate({ cotacaoId: showDetalhe!, companyId });
                       }
                     }}
@@ -3549,8 +3561,13 @@ export default function Cotacoes() {
                     </Button>
                   )}
                   {["cancelada", "recusada"].includes(detalheFullscreen.status ?? "") && (
-                    <Button variant="outline" onClick={() => {
-                      if (confirm("Deseja reabrir esta cotação? O status voltará para 'Pendente' e será possível aprová-la novamente.")) {
+                    <Button variant="outline" onClick={async () => {
+                      if (await confirm({
+                        title: "Reabrir cotação?",
+                        description: "O status voltará para 'Pendente' e será possível aprová-la novamente.",
+                        tone: "info",
+                        confirmText: "Reabrir",
+                      })) {
                         atualizarStatus.mutate({ id: detalheFullscreen.id, status: "pendente" });
                       }
                     }}
@@ -3560,8 +3577,14 @@ export default function Cotacoes() {
                     </Button>
                   )}
                   {!["cancelada", "recusada", "aprovada", "concluida"].includes(detalheFullscreen.status ?? "") && (
-                    <Button variant="outline" onClick={() => {
-                      if (confirm("Tem certeza que deseja cancelar esta cotação? A SC voltará para o status 'Aprovado' e poderá gerar nova cotação.")) {
+                    <Button variant="outline" onClick={async () => {
+                      if (await confirm({
+                        title: "Cancelar cotação?",
+                        description: "A SC voltará para o status 'Aprovado' e poderá gerar nova cotação.",
+                        tone: "destructive",
+                        confirmText: "Cancelar cotação",
+                        cancelText: "Voltar",
+                      })) {
                         cancelarCotacaoMut.mutate({ cotacaoId: showDetalhe!, companyId });
                       }
                     }}
@@ -4822,7 +4845,7 @@ export default function Cotacoes() {
                                               <div className="flex items-center gap-1 flex-shrink-0">
                                                 {prop.status === "ativa" && (
                                                   <button
-                                                    onClick={() => { if (confirm("Excluir proposta e remover preços vinculados?")) excluirProposta.mutate({ propostaId: prop.id, cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, companyId }); }}
+                                                    onClick={async () => { if (await confirm({ title: "Excluir proposta?", description: "A proposta e os preços vinculados a ela serão removidos. Esta ação não pode ser desfeita.", tone: "destructive", confirmText: "Excluir", cancelText: "Cancelar" })) excluirProposta.mutate({ propostaId: prop.id, cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, companyId }); }}
                                                     className="text-red-400 hover:text-red-600 p-0.5"
                                                     title="Excluir proposta"
                                                   >
@@ -6129,7 +6152,7 @@ export default function Cotacoes() {
         )}
         <div className="grid grid-cols-2 gap-3 pt-1">
           <button
-            onClick={() => {
+            onClick={async () => {
               setShowConfirmarTipoCotDialog(false);
               if (!validarCondicoesVencedor()) return;
               const fornTotal = parseFloat(fornParaSaldo?.totalOrcado ?? "0");
@@ -6138,11 +6161,16 @@ export default function Cotacoes() {
               if (deficit > 0 && !cobertoPorRisco && !semVerbaAutorizado) {
                 const defVal = deficit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
                 const fornNome = fornParaSaldo?.fornecedor?.nomeFantasia || fornParaSaldo?.fornecedor?.razaoSocial || "Fornecedor";
-                const ok = confirm(
-                  `⚠️ ATENÇÃO: O valor do fornecedor ${fornNome} (${fornTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) ` +
-                  `está acima da meta orçamentária (${metaGrandTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}).\n\n` +
-                  `Déficit: ${defVal}\n\nRecomendamos utilizar o painel de Realocação de Verba antes de aprovar.\n\nDeseja continuar mesmo assim?`
-                );
+                const ok = await confirm({
+                  title: "Valor acima da meta orçamentária",
+                  description:
+                    `O valor do fornecedor ${fornNome} (${fornTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) ` +
+                    `está acima da meta orçamentária (${metaGrandTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}).\n\n` +
+                    `Déficit: ${defVal}\n\nRecomendamos utilizar o painel de Realocação de Verba antes de aprovar.\n\nDeseja continuar mesmo assim?`,
+                  tone: "warning",
+                  confirmText: "Continuar mesmo assim",
+                  cancelText: "Cancelar",
+                });
                 if (!ok) return;
               }
               setShowGerarOCModeDialog(true);
@@ -7522,8 +7550,13 @@ export default function Cotacoes() {
                     </Button>
                   )}
                   {["cancelada", "recusada"].includes(detalhe.status ?? "") && (
-                    <Button size="sm" variant="outline" onClick={() => {
-                      if (confirm("Deseja reabrir esta cotação? O status voltará para 'Pendente' e será possível aprová-la novamente.")) {
+                    <Button size="sm" variant="outline" onClick={async () => {
+                      if (await confirm({
+                        title: "Reabrir cotação?",
+                        description: "O status voltará para 'Pendente' e será possível aprová-la novamente.",
+                        tone: "info",
+                        confirmText: "Reabrir",
+                      })) {
                         atualizarStatus.mutate({ id: detalhe.id, status: "pendente" });
                       }
                     }}
@@ -7965,6 +7998,7 @@ export default function Cotacoes() {
 
 
     </div>
+    {ConfirmDialog}
     </DashboardLayout>
   );
 }
