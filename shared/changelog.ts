@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2862 — **DATABOOK DE OBRA (`/compras/databook`) — REPAGINADA VISUAL:
+ * MODERNO, INTUITIVO E FÁCIL DE VISUALIZAR (SÓ UI, ZERO MUDANÇA DE LÓGICA).**
+ *
+ * PEDIDO: "repaginada na tela do databook, algo moderno, intuitivo e fácil
+ * visualização." (anexo IMG_1679 = empty state antigo, cinza e sem graça). Só a
+ * camada visual — TODOS os handlers/mutations/queries/useMemos permanecem
+ * intactos (nada de `handleGerarCompleto`, `fichasAgrupadas`, `codigoFicha`,
+ * tRPC, retry 3x da Rev. 2861 foi tocado).
+ *
+ * FEITO (`client/src/pages/compras/Databook.tsx`, SÓ frontend):
+ *  - NOVA paleta `DISCIPLINA_CORES` (13 disciplinas → bg/soft/text/border/dot,
+ *    classes Tailwind LITERAIS p/ o JIT) + helper `corDisciplina()`, usada nos
+ *    cabeçalhos de grupo, no código da ficha (chip colorido), nos dots da aba
+ *    "Por Disciplina" e nas barras de progresso por disciplina.
+ *  - SELETOR DE OBRA virou faixa institucional FC navy (gradiente
+ *    `#1B2A4A`→`#2d4373`, ícone `BookOpen` em chip `white/15`, título + nome da
+ *    obra) com `Select` branco; container externo `space-y-5`.
+ *  - EMPTY STATE (sem obra) virou card `border-dashed rounded-2xl` com ícone
+ *    grande em chip arredondado e copy mais clara.
+ *  - ABAS viraram SEGMENTED CONTROL (pílula `bg-slate-100`, aba ativa branca com
+ *    sombra e texto navy).
+ *  - DASHBOARD: bloco "Gerar Databook Completo" promovido a card de destaque no
+ *    topo (ícone + descrição + botões navy/outline); 7 KPI cards ganharam ícone
+ *    em chip colorido, ring por status e hover-shadow; "Progresso Geral" e "Por
+ *    Disciplina" viraram cards `rounded-2xl` com dots coloridos.
+ *  - ABA FICHAS: filtros/tabela `rounded-xl` com sombra; cabeçalhos de grupo por
+ *    disciplina agora coloridos (soft bg + dot + texto + badge de contagem) e o
+ *    código da ficha vira chip colorido por disciplina.
+ *
+ * ZERO ALTER/DROP/DELETE; ZERO schema; ZERO backend. Arquivo único:
+ * `client/src/pages/compras/Databook.tsx`.
+ *
  * Rev. 2861 — **DATABOOK DE OBRA — (1) "NÃO HAJA FALHAS" NA GERAÇÃO DE
  * ESPECIFICAÇÕES IA, (2) FICHAS NUMERADAS E SEPARADAS POR DISCIPLINA, (3)
  * FICHAS APROVADAS NÃO SÃO PERDIDAS AO GERAR NOVAMENTE.**

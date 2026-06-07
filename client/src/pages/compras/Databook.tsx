@@ -35,6 +35,25 @@ const DISCIPLINAS = [
   "Incêndio / SPDA", "Paisagismo", "Equipamentos", "Outros",
 ];
 
+// Rev. 2862 — paleta por disciplina (classes Tailwind LITERAIS p/ o JIT) usada
+// nos cabeçalhos de grupo, chips e dots da lista de fichas.
+const DISCIPLINA_CORES: Record<string, { bg: string; soft: string; hoverSoft: string; text: string; border: string; dot: string }> = {
+  "Estrutura":            { bg: "bg-slate-600",   soft: "bg-slate-50",   hoverSoft: "hover:bg-slate-50",   text: "text-slate-700",   border: "border-slate-200",   dot: "bg-slate-500" },
+  "Hidráulica":           { bg: "bg-sky-600",     soft: "bg-sky-50",     hoverSoft: "hover:bg-sky-50",     text: "text-sky-700",     border: "border-sky-200",     dot: "bg-sky-500" },
+  "Elétrica":             { bg: "bg-amber-500",   soft: "bg-amber-50",   hoverSoft: "hover:bg-amber-50",   text: "text-amber-700",   border: "border-amber-200",   dot: "bg-amber-500" },
+  "Acabamento":           { bg: "bg-rose-500",    soft: "bg-rose-50",    hoverSoft: "hover:bg-rose-50",    text: "text-rose-700",    border: "border-rose-200",    dot: "bg-rose-500" },
+  "Impermeabilização":    { bg: "bg-cyan-600",    soft: "bg-cyan-50",    hoverSoft: "hover:bg-cyan-50",    text: "text-cyan-700",    border: "border-cyan-200",    dot: "bg-cyan-500" },
+  "Esquadrias / Vidros":  { bg: "bg-teal-600",    soft: "bg-teal-50",    hoverSoft: "hover:bg-teal-50",    text: "text-teal-700",    border: "border-teal-200",    dot: "bg-teal-500" },
+  "Pintura":              { bg: "bg-fuchsia-600", soft: "bg-fuchsia-50", hoverSoft: "hover:bg-fuchsia-50", text: "text-fuchsia-700", border: "border-fuchsia-200", dot: "bg-fuchsia-500" },
+  "Cobertura / Telhado":  { bg: "bg-orange-600",  soft: "bg-orange-50",  hoverSoft: "hover:bg-orange-50",  text: "text-orange-700",  border: "border-orange-200",  dot: "bg-orange-500" },
+  "Climatização / HVAC":  { bg: "bg-blue-600",    soft: "bg-blue-50",    hoverSoft: "hover:bg-blue-50",    text: "text-blue-700",    border: "border-blue-200",    dot: "bg-blue-500" },
+  "Incêndio / SPDA":      { bg: "bg-red-600",     soft: "bg-red-50",     hoverSoft: "hover:bg-red-50",     text: "text-red-700",     border: "border-red-200",     dot: "bg-red-500" },
+  "Paisagismo":           { bg: "bg-green-600",   soft: "bg-green-50",   hoverSoft: "hover:bg-green-50",   text: "text-green-700",   border: "border-green-200",   dot: "bg-green-500" },
+  "Equipamentos":         { bg: "bg-violet-600",  soft: "bg-violet-50",  hoverSoft: "hover:bg-violet-50",  text: "text-violet-700",  border: "border-violet-200",  dot: "bg-violet-500" },
+  "Outros":               { bg: "bg-gray-500",    soft: "bg-gray-50",    hoverSoft: "hover:bg-gray-50",    text: "text-gray-600",    border: "border-gray-200",    dot: "bg-gray-400" },
+};
+const corDisciplina = (d?: string | null) => DISCIPLINA_CORES[d || "Outros"] || DISCIPLINA_CORES["Outros"];
+
 function StatusBadge({ status }: { status: string }) {
   const cfg = STATUS_LABELS[status] || { label: status, cls: "bg-gray-100 text-gray-600", icon: Clock };
   const Icon = cfg.icon;
@@ -576,36 +595,51 @@ export default function Databook() {
 
   return (
     <DashboardLayout title="Databook de Obra" subtitle={obraId ? obraNome : "Selecione uma obra"}>
-      <div className="space-y-4">
-        {/* Obra Selector */}
-        <div className="bg-white rounded-lg border p-3 flex items-center gap-3">
-          <HardHat className="w-5 h-5 text-gray-400" />
-          <Label className="text-sm font-medium text-gray-600 whitespace-nowrap">Obra:</Label>
-          <Select value={obraId ? String(obraId) : "none"} onValueChange={(v) => { setObraId(v === "none" ? 0 : parseInt(v)); setSelecionados([]); }}>
-            <SelectTrigger className="w-80 h-9">
-              <SelectValue placeholder="Selecione a obra..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">Selecione uma obra...</SelectItem>
-              {obrasLista.map((o: any) => (
-                <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {obrasQ.isLoading && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
+      <div className="space-y-5">
+        {/* Obra Selector — faixa institucional FC */}
+        <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-[#1B2A4A] to-[#2d4373] p-4 sm:p-5 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20">
+                <BookOpen className="h-6 w-6 text-white" />
+              </div>
+              <div className="leading-tight">
+                <p className="text-[11px] uppercase tracking-widest text-white/60 font-semibold">Databook de Obra</p>
+                <p className="text-sm font-bold text-white">{obraId ? obraNome : "Selecione uma obra"}</p>
+              </div>
+            </div>
+            <div className="flex-1" />
+            <div className="flex items-center gap-2">
+              <Label className="text-xs font-medium text-white/70 whitespace-nowrap hidden sm:block">Obra:</Label>
+              <Select value={obraId ? String(obraId) : "none"} onValueChange={(v) => { setObraId(v === "none" ? 0 : parseInt(v)); setSelecionados([]); }}>
+                <SelectTrigger className="w-full sm:w-80 h-10 bg-white/95 border-0 shadow-sm font-medium">
+                  <SelectValue placeholder="Selecione a obra..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Selecione uma obra...</SelectItem>
+                  {obrasLista.map((o: any) => (
+                    <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {obrasQ.isLoading && <Loader2 className="w-4 h-4 animate-spin text-white/70" />}
+            </div>
+          </div>
         </div>
 
         {!obraId && (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-            <BookOpen className="w-16 h-16 mb-4 opacity-30" />
-            <p className="text-lg font-medium">Selecione uma obra para visualizar o Databook</p>
-            <p className="text-sm mt-1">O Databook agrupa fichas técnicas de todos os materiais da obra</p>
+          <div className="flex flex-col items-center justify-center py-20 rounded-2xl border border-dashed border-slate-200 bg-white">
+            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-50 ring-1 ring-slate-100 mb-5">
+              <BookOpen className="w-10 h-10 text-slate-300" />
+            </div>
+            <p className="text-lg font-semibold text-slate-700">Selecione uma obra para começar</p>
+            <p className="text-sm mt-1 text-slate-400 max-w-md text-center">O Databook reúne e organiza por disciplina as fichas técnicas de todos os materiais da obra.</p>
           </div>
         )}
 
         {obraId > 0 && <>
-        {/* Tabs */}
-        <div className="flex items-center gap-1 border-b">
+        {/* Tabs — segmented control */}
+        <div className="inline-flex items-center gap-1 rounded-xl bg-slate-100 p-1">
           {[
             { key: "dashboard" as const, label: "Dashboard", icon: BarChart3 },
             { key: "fichas" as const, label: "Fichas Técnicas", icon: FileText },
@@ -614,10 +648,10 @@ export default function Databook() {
             <button
               key={tab.key}
               onClick={() => setAbaAtiva(tab.key)}
-              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
                 abaAtiva === tab.key
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
+                  ? "bg-white text-[#1B2A4A] shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
               }`}
             >
               <tab.icon className="w-4 h-4" />
@@ -629,79 +663,109 @@ export default function Databook() {
         {/* Dashboard Tab */}
         {abaAtiva === "dashboard" && (
           <div className="space-y-4">
+            {/* Actions — destaque no topo */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center gap-3 flex-1">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50">
+                  <Wand2 className="h-5 w-5 text-blue-600" />
+                </div>
+                <div className="leading-tight">
+                  <p className="text-sm font-semibold text-slate-800">Gerar Databook Completo</p>
+                  <p className="text-xs text-slate-400">Importa materiais das OCs, gera especificações e fotos por IA.</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={handleGerarCompleto}
+                  disabled={!!loteProgress?.running}
+                  className="bg-[#1B2A4A] hover:bg-[#243760]"
+                >
+                  {loteProgress?.running ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Wand2 className="w-4 h-4 mr-1" />}
+                  Gerar Completo
+                </Button>
+                <Button
+                  onClick={() => gerarPdfIndice.mutate({ companyId, obraId })}
+                  disabled={gerarPdfIndice.isPending}
+                  variant="outline"
+                >
+                  {gerarPdfIndice.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <FileDown className="w-4 h-4 mr-1" />}
+                  Índice PDF
+                </Button>
+              </div>
+            </div>
+
             {/* Summary Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
               {[
-                { label: "Total", value: dashboard.data?.totais?.total || 0, color: "text-gray-700" },
-                { label: "Pendente IA", value: dashboard.data?.totais?.pendente_ia || 0, color: "text-amber-600" },
-                { label: "Gerado", value: dashboard.data?.totais?.gerado || 0, color: "text-blue-600" },
-                { label: "Revisado", value: dashboard.data?.totais?.revisado || 0, color: "text-indigo-600" },
-                { label: "Enviado", value: dashboard.data?.totais?.enviado || 0, color: "text-purple-600" },
-                { label: "Aprovado", value: dashboard.data?.totais?.aprovado || 0, color: "text-emerald-600" },
-                { label: "Reprovado", value: dashboard.data?.totais?.reprovado || 0, color: "text-red-600" },
+                { label: "Total", value: dashboard.data?.totais?.total || 0, ring: "ring-slate-200", soft: "bg-slate-50", text: "text-slate-700", icon: FileText },
+                { label: "Pendente IA", value: dashboard.data?.totais?.pendente_ia || 0, ring: "ring-amber-200", soft: "bg-amber-50", text: "text-amber-600", icon: Clock },
+                { label: "Gerado", value: dashboard.data?.totais?.gerado || 0, ring: "ring-blue-200", soft: "bg-blue-50", text: "text-blue-600", icon: Sparkles },
+                { label: "Revisado", value: dashboard.data?.totais?.revisado || 0, ring: "ring-indigo-200", soft: "bg-indigo-50", text: "text-indigo-600", icon: Edit },
+                { label: "Enviado", value: dashboard.data?.totais?.enviado || 0, ring: "ring-purple-200", soft: "bg-purple-50", text: "text-purple-600", icon: Send },
+                { label: "Aprovado", value: dashboard.data?.totais?.aprovado || 0, ring: "ring-emerald-200", soft: "bg-emerald-50", text: "text-emerald-600", icon: CheckCircle },
+                { label: "Reprovado", value: dashboard.data?.totais?.reprovado || 0, ring: "ring-red-200", soft: "bg-red-50", text: "text-red-600", icon: XCircle },
               ].map(card => (
-                <div key={card.label} className="bg-white rounded-lg border p-3 text-center">
-                  <p className="text-xs text-gray-500">{card.label}</p>
-                  <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
+                <div key={card.label} className={`bg-white rounded-xl border border-slate-100 ring-1 ${card.ring} p-3 transition-shadow hover:shadow-md`}>
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-medium text-slate-500">{card.label}</p>
+                    <span className={`flex h-6 w-6 items-center justify-center rounded-lg ${card.soft}`}>
+                      <card.icon className={`h-3.5 w-3.5 ${card.text}`} />
+                    </span>
+                  </div>
+                  <p className={`mt-1 text-2xl font-bold ${card.text}`}>{card.value}</p>
                 </div>
               ))}
             </div>
 
             {/* Progress */}
-            <div className="bg-white rounded-lg border p-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Progresso Geral</h3>
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-slate-800">Progresso Geral</h3>
+                <span className="text-xs text-slate-400">
+                  {(dashboard.data?.totais?.aprovado || 0) + (dashboard.data?.totais?.enviado || 0) + (dashboard.data?.totais?.revisado || 0)} de {dashboard.data?.totais?.total || 0} fichas
+                </span>
+              </div>
               <ProgressBar
                 value={(dashboard.data?.totais?.aprovado || 0) + (dashboard.data?.totais?.enviado || 0) + (dashboard.data?.totais?.revisado || 0)}
                 max={dashboard.data?.totais?.total || 1}
                 color="bg-emerald-500"
                 showScale
               />
-              <p className="text-xs text-gray-500 mt-1">
-                {dashboard.data?.totais?.aprovado || 0} aprovados + {dashboard.data?.totais?.enviado || 0} enviados + {dashboard.data?.totais?.revisado || 0} revisados de {dashboard.data?.totais?.total || 0} fichas
+              <p className="text-xs text-slate-400 mt-2">
+                {dashboard.data?.totais?.aprovado || 0} aprovados · {dashboard.data?.totais?.enviado || 0} enviados · {dashboard.data?.totais?.revisado || 0} revisados
               </p>
             </div>
 
             {/* Per Discipline */}
-            <div className="bg-white rounded-lg border p-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Por Disciplina</h3>
-              <div className="space-y-2">
-                {((dashboard.data?.disciplinas || []) as any[]).map((d: any) => (
-                  <div key={d.disciplina} className="flex items-center gap-3">
-                    <span className="text-xs text-gray-600 w-40 truncate">{d.disciplina}</span>
-                    <div className="flex-1">
-                      <ProgressBar
-                        value={parseInt(d.aprovado || "0") + parseInt(d.enviado || "0") + parseInt(d.revisado || "0")}
-                        max={parseInt(d.total || "1")}
-                        color="bg-blue-500"
-                      />
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+              <h3 className="text-sm font-semibold text-slate-800 mb-4">Por Disciplina</h3>
+              <div className="space-y-3">
+                {((dashboard.data?.disciplinas || []) as any[]).map((d: any) => {
+                  const c = corDisciplina(d.disciplina);
+                  return (
+                    <div key={d.disciplina} className="flex items-center gap-3">
+                      <span className="flex items-center gap-2 w-44 shrink-0 min-w-0">
+                        <span className={`h-2.5 w-2.5 rounded-full ${c.dot} shrink-0`} />
+                        <span className="text-xs font-medium text-slate-700 truncate">{d.disciplina}</span>
+                      </span>
+                      <div className="flex-1">
+                        <ProgressBar
+                          value={parseInt(d.aprovado || "0") + parseInt(d.enviado || "0") + parseInt(d.revisado || "0")}
+                          max={parseInt(d.total || "1")}
+                          color={c.dot}
+                        />
+                      </div>
+                      <span className="text-xs text-slate-400 w-14 text-right shrink-0">{d.total} itens</span>
                     </div>
-                    <span className="text-xs text-gray-500 w-12 text-right">{d.total} itens</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               {((dashboard.data?.disciplinas || []) as any[]).length === 0 && (
-                <p className="text-sm text-gray-400 text-center py-4">Nenhuma ficha gerada ainda</p>
+                <div className="flex flex-col items-center py-8 text-slate-300">
+                  <Package className="w-8 h-8 mb-2 opacity-50" />
+                  <p className="text-sm text-slate-400">Nenhuma ficha gerada ainda</p>
+                </div>
               )}
-            </div>
-
-            {/* Actions */}
-            <div className="flex flex-wrap gap-2">
-              <Button
-                onClick={handleGerarCompleto}
-                disabled={!!loteProgress?.running}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                {loteProgress?.running ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Wand2 className="w-4 h-4 mr-1" />}
-                Gerar Databook Completo
-              </Button>
-              <Button
-                onClick={() => gerarPdfIndice.mutate({ companyId, obraId })}
-                disabled={gerarPdfIndice.isPending}
-                variant="outline"
-              >
-                {gerarPdfIndice.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <FileDown className="w-4 h-4 mr-1" />}
-                Exportar Índice PDF
-              </Button>
             </div>
 
           {loteProgress && (
@@ -778,7 +842,7 @@ export default function Databook() {
         {abaAtiva === "fichas" && (
           <div className="space-y-3">
             {/* Filters */}
-            <div className="flex flex-wrap items-center gap-2 bg-white p-3 rounded-lg border">
+            <div className="flex flex-wrap items-center gap-2 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
               <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-gray-400" />
                 <Input
@@ -841,7 +905,7 @@ export default function Databook() {
             )}
 
             {/* Table */}
-            <div className="bg-white rounded-lg border overflow-hidden">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -865,19 +929,21 @@ export default function Databook() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {fichasAgrupadas.map((grupo) => (
+                  {fichasAgrupadas.map((grupo) => {
+                    const c = corDisciplina(grupo.disciplina);
+                    return (
                     <Fragment key={grupo.disciplina}>
-                      <TableRow className="bg-slate-100 hover:bg-slate-100">
-                        <TableCell colSpan={9} className="py-1.5">
-                          <span className="inline-flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wide">
-                            <HardHat className="w-3.5 h-3.5 text-slate-500" />
-                            {grupo.disciplina}
-                            <span className="text-slate-400 font-normal normal-case">({grupo.itens.length})</span>
+                      <TableRow className={`${c.soft} ${c.hoverSoft} border-0`}>
+                        <TableCell colSpan={9} className="py-2">
+                          <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide">
+                            <span className={`h-2.5 w-2.5 rounded-full ${c.dot}`} />
+                            <span className={c.text}>{grupo.disciplina}</span>
+                            <span className={`${c.text} font-semibold normal-case rounded-full ${c.soft} ring-1 ${c.border} px-2 py-0.5`}>{grupo.itens.length}</span>
                           </span>
                         </TableCell>
                       </TableRow>
                       {grupo.itens.map((f: any) => (
-                    <TableRow key={f.id} className="cursor-pointer hover:bg-gray-50">
+                    <TableRow key={f.id} className="cursor-pointer hover:bg-slate-50">
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           checked={selecionados.includes(f.id)}
@@ -887,8 +953,10 @@ export default function Databook() {
                           }}
                         />
                       </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {codigoFicha(f.disciplina, f.numero_sequencial)}
+                      <TableCell>
+                        <span className={`inline-flex items-center rounded-md ${c.soft} ${c.text} ring-1 ${c.border} px-1.5 py-0.5 font-mono text-xs font-semibold`}>
+                          {codigoFicha(f.disciplina, f.numero_sequencial)}
+                        </span>
                       </TableCell>
                       <TableCell className="max-w-xs truncate text-sm" onClick={() => {
                         setFichaDialog(f);
@@ -952,7 +1020,8 @@ export default function Databook() {
                     </TableRow>
                       ))}
                     </Fragment>
-                  ))}
+                  );
+                  })}
                   {fichasList.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={9} className="text-center py-8 text-gray-400">
