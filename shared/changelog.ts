@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2840 — **TERCEIROS · RAIO-X 360° · ABA CONTRATOS — NÚMERO DO CONTRATO EM DESTAQUE + COLUNA "SALDO".**
+ *
+ * PEDIDO (usuário, print do iPad da aba "Contratos" do Raio-X do terceiro): "Faltou o Saldo e quero o número do contrato
+ * Em destaque." No card de contrato (`TerceiroRaioX.tsx`), o número (ex.: CT-2026-0007) aparecia como um chip cinza
+ * pequeno em `font-mono text-xs` no meio dos badges, e a linha de números só mostrava Valor / FD material / Líq. MDO /
+ * Pago — sem o SALDO (quanto ainda falta pagar).
+ *
+ * O QUE FOI FEITO (`client/src/pages/terceiros/TerceiroRaioX.tsx`, só frontend, aba "contratos"):
+ *  - NÚMERO EM DESTAQUE: o `numeroContrato` saiu do chip cinza e virou um cabeçalho próprio NO TOPO do card —
+ *    ícone `FileText` laranja + texto `text-base font-bold text-[#1B2A4A] font-mono` (navy institucional). Os badges
+ *    de status/natureza/obra ficaram na linha de baixo.
+ *  - NOVA coluna "Saldo" na grade de números: `saldoContrato = baseContrato − valorPago`, onde
+ *    `baseContrato = fdMaterialObra > 0 ? valorLiquidoMdo : valorTotal` (respeita o abatimento de FD de material).
+ *    Pintada de VERMELHO (`text-red-600`) quando há saldo > 0 (devendo) e cinza/zerada quando quitado.
+ *
+ * RACIONAL DO SALDO: para contratos COM material em FD, o que efetivamente se deve é o líquido de MDO (valor já
+ * descontado do material faturado direto); para contratos só de MDO, é o valor total. Em ambos, subtrai-se o pago.
+ *
+ * ZERO ALTER/DROP/DELETE; ZERO schema; ZERO backend (o endpoint `terceiros.empresas.raioX` já trazia
+ * `valorTotal`/`valorPago`/`valorLiquidoMdo`/`fdMaterialObra`).
+ *
+ * ARQUIVOS: `client/src/pages/terceiros/TerceiroRaioX.tsx`.
+ *
+ * ---
+ *
  * Rev. 2839 — **TERCEIROS · NOME DO TERCEIRO SEMPRE EM MAIÚSCULAS NA EXIBIÇÃO (LISTA "EMPRESAS DE SERVIÇO" + RAIO-X 360°).**
  *
  * PEDIDO (usuário, print do iPad da lista "Empresas de Serviço"): "Independente de como for cadastrado quero que o nome

@@ -178,13 +178,20 @@ function TerceiroRaioXInner({ id }: { id: number }) {
             <div className="space-y-2">
               {data.contratos.map((c: any) => {
                 const nt = naturezaInfo(c.naturezaContrato);
+                const baseContrato = c.fdMaterialObra > 0 ? (c.valorLiquidoMdo ?? 0) : (c.valorTotal ?? 0);
+                const saldoContrato = baseContrato - (c.valorPago ?? 0);
                 return (
                   <div key={c.id} className="bg-white rounded-2xl border border-gray-200 p-3 hover:shadow-sm transition-shadow cursor-pointer"
                     onClick={() => navigate(`/terceiros/contratos/${c.id}`)}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
+                        {c.numeroContrato && (
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <FileText className="w-4 h-4 text-orange-600 shrink-0" />
+                            <span className="text-base font-bold text-[#1B2A4A] font-mono tracking-tight">{c.numeroContrato}</span>
+                          </div>
+                        )}
                         <div className="flex items-center gap-2 flex-wrap">
-                          {c.numeroContrato && <span className="text-xs bg-gray-100 px-2 py-0.5 rounded font-mono">{c.numeroContrato}</span>}
                           <Badge className={`text-xs border ${STATUS_CONTRATO[c.status] || "bg-gray-100 text-gray-600 border-gray-200"}`}>{c.status}</Badge>
                           <Badge className={`text-xs border ${nt.cls}`}>{nt.label}</Badge>
                           {c.obraNome && <span className="text-xs text-gray-500 flex items-center gap-0.5"><MapPin className="w-3 h-3" />{c.obraNome}</span>}
@@ -198,6 +205,7 @@ function TerceiroRaioXInner({ id }: { id: number }) {
                       {c.fdMaterialObra > 0 && <div><span className="text-gray-400">FD material: </span><span className="font-semibold text-amber-700">− {BRL(c.fdMaterialObra)}</span></div>}
                       {c.fdMaterialObra > 0 && <div><span className="text-gray-400">Líq. MDO: </span><span className="font-semibold text-blue-700">{BRL(c.valorLiquidoMdo)}</span></div>}
                       <div><span className="text-gray-400">Pago: </span><span className="font-semibold text-green-700">{BRL(c.valorPago)}</span></div>
+                      <div><span className="text-gray-400">Saldo: </span><span className={`font-bold ${saldoContrato > 0 ? "text-red-600" : "text-gray-900"}`}>{BRL(saldoContrato)}</span></div>
                     </div>
                   </div>
                 );
