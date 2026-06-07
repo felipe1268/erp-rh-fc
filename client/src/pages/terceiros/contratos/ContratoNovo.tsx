@@ -180,6 +180,7 @@ export default function ContratoNovo() {
     obraId: "",
     descricao: "",
     tipoContrato: "empreitada_global",
+    naturezaContrato: "mao_de_obra",
     dataInicio: "",
     dataTermino: "",
     observacoes: "",
@@ -269,6 +270,7 @@ export default function ContratoNovo() {
       obraNome: obraObj?.nome,
       descricao: form.descricao,
       tipoContrato: form.tipoContrato,
+      naturezaContrato: form.naturezaContrato as any,
       planejamentoProjetoId: selectedProjetoId ?? undefined,
       dataInicio: form.dataInicio || undefined,
       dataTermino: form.dataTermino || undefined,
@@ -325,9 +327,25 @@ export default function ContratoNovo() {
               />
             </div>
 
-            {/* Tipo de Contrato */}
+            {/* Natureza do Contrato — o QUE ele cobre */}
             <div className="col-span-2">
-              <Label className="mb-1 block">Tipo de Contrato</Label>
+              <Label className="mb-1 block">Natureza do Contrato</Label>
+              <Select value={form.naturezaContrato} onValueChange={set("naturezaContrato")}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mao_de_obra">Mão de Obra</SelectItem>
+                  <SelectItem value="material">Material</SelectItem>
+                  <SelectItem value="mao_de_obra_material">Mão de Obra + Material</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500 mt-1">
+                Quando o contrato inclui <b>Material</b>, o material comprado via cotações/OCs entra como <b>FD</b> e é descontado do valor do contrato.
+              </p>
+            </div>
+
+            {/* Tipo de Contrato — modelo de PREÇO */}
+            <div className="col-span-2">
+              <Label className="mb-1 block">Tipo de Contrato (modelo de preço)</Label>
               <Select value={form.tipoContrato} onValueChange={set("tipoContrato")}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>

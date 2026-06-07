@@ -804,6 +804,12 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2807: coluna dividida_de_id garantida em compras_cotacoes (cancelar divisão de cotação).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 2807 dividida_de_id:`, e?.message || e); }
 
+        // Rev. 2830 — Natureza do contrato de terceiro (MDO / material / MDO+material).
+        try {
+          await db.execute(sql`ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS natureza_contrato VARCHAR(30) DEFAULT 'mao_de_obra'`);
+          console.log(`[SyncSchema+] Rev. 2830: coluna natureza_contrato garantida em terceiro_contratos (MDO/material/ambos).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 2830 natureza_contrato:`, e?.message || e); }
+
         // Rev. 2633 — Modo MANUAL do "% Previsto" no Planejamento.
         try {
           await db.execute(sql`ALTER TABLE oc_number_config ADD COLUMN IF NOT EXISTS previsto_fonte VARCHAR(10) DEFAULT 'motor'`);

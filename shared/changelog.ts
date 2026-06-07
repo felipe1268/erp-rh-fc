@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2830 — **TERCEIROS — UM CONTRATO COBRE MDO + MATERIAL; MATERIAL VIRA FD E É DESCONTADO + RAIO-X 360° DA EMPRESA TERCEIRA.**
+ *
+ * PEDIDO (usuário): um MESMO contrato/terceiro pode cobrir Mão de Obra E Material juntos. O material comprado entra
+ * como Faturamento Direto (FD), vindo das cotações/OCs de Compras, e deve ser DESCONTADO do valor do contrato.
+ * Entregar a tela completa em etapas, sem parar — incluindo um Raio-X (visão 360°) da empresa terceira.
+ *
+ * O QUE FOI FEITO (banco + backend + frontend; ZERO ALTER/DROP/DELETE — coluna nova via ADD COLUMN IF NOT EXISTS):
+ *
+ *  (1) NATUREZA DO CONTRATO (fundação). Nova coluna `natureza_contrato VARCHAR(30) DEFAULT 'mao_de_obra'` em
+ *      `terceiro_contratos` (`drizzle/schema.ts`), garantida pelo self-heal `[SyncSchema+] Rev. 2830` em
+ *      `server/_core/index.ts`. Valores: `mao_de_obra` | `material` | `mao_de_obra_material`. O router
+ *      `terceiroContratos.criar`/`atualizar` recebe e grava o enum. `ContratoNovo.tsx` ganhou o select "Natureza do
+ *      Contrato" (com nota explicando que material vira FD e é descontado). Badge de natureza na `ContratosList.tsx`,
+ *      no header do `ContratoDetalhe.tsx` e nos cards do Raio-X. Mapa de rótulos/cores centralizado em
+ *      `shared/terceiroNatureza.ts` (`NATUREZA_CONTRATO`/`naturezaInfo`).
+ *
+ *  (2) FD DE MATERIAL ATRELADO AO CONTRATO (read-only, abate o valor). Helper `_fdMaterialDoContrato` em
+ *      `server/routers/terceiroContratos.ts`: lê OCs de Compras marcadas como FD (`modalidade_fd != 'normal'` OU
+ *      `fd_valor > 0`), ignorando canceladas/rascunho, vinculadas ao contrato por (a) `contrato_id` explícito OU
+ *      (b) heurística obra+fornecedor (a empresa terceira aponta para um `fornecedor_id`). `valorEfetivo = fd_valor>0 ?
+ *      fd_valor : total`. `getContrato` passou a devolver `fdMaterialTotal`, `fdMaterialRegistros`, `naturezaIncluiMaterial`
+ *      e `valorLiquidoMdo` (= valor do contrato − FD, quando natureza inclui material). Nova aba "FD" no `ContratoDetalhe.tsx`
+ *      (componente `FdTab`), exibida quando a natureza inclui material OU há FDs; lista as OCs, modalidade, vínculo e total.
+ *
+ *  (3) MDO × MATERIAL NOS NÚMEROS. O "Resumo financeiro" do `ContratoDetalhe.tsx` passa a separar, quando há FD de
+ *      material: Valor Fechado → (− Material em FD) → Líquido de Mão de Obra → Total Pago.
+ *
+ *  (4) RAIO-X 360° DA EMPRESA TERCEIRA. Novo endpoint `terceiros.empresas.raioX(id)` (com `_assertCompanyAccess` por
+ *      tenant): agrega contratos (com split MDO/material via FD por obra), totais contratado/pago/saldo, FD total de
+ *      material (OCs FD do fornecedor nas obras), funcionários + conformidade de ASO (vencido/sem data) e documentos da
+ *      empresa (PGR/PCMSO/Alvará/Seguro/Contrato Social com validade). Nova página `client/src/pages/terceiros/TerceiroRaioX.tsx`
+ *      (KPIs + alertas de conformidade + abas Contratos/Funcionários/Documentos), rota `/terceiros/empresas/:id` em
+ *      `App.tsx`. Cards de `EmpresasTerceiras.tsx` ficaram clicáveis (título + botão "Raio-X") abrindo a visão 360°.
+ *
+ * RESSALVAS: o FD é DERIVADO em leitura (sem coluna persistida); a heurística obra+fornecedor pode somar FD de mais de
+ * um contrato quando há vários contratos no mesmo par obra/fornecedor — o vínculo explícito por `contrato_id` tem
+ * precedência na exibição. ZERO ALTER/DROP/DELETE; a única mudança de schema é ADD COLUMN IF NOT EXISTS.
+ * VALIDAÇÃO: dev server sobe, conecta no Neon e compila o server sem erro; self-heal Rev. 2830 confirmado nos logs
+ * ("coluna natureza_contrato garantida em terceiro_contratos"). Code review via architect.
+ *
  * Rev. 2829 — **TERCEIROS · CONTRATOS — NOVO LAYOUT DO TOPO DA TELA DE DETALHE DO CONTRATO (ESCOPO ENXUTO + INFO CLARA).**
  *
  * PEDIDO (usuário, com print do iPad): o topo da tela de detalhe do contrato estava com o "texto muito grande e não

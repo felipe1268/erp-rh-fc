@@ -204,6 +204,7 @@ const ImportacaoHabilidades = lazy(() => import("./pages/ImportacaoHabilidades")
 // Terceiros
 const PainelTerceiros = lazy(() => import("./pages/terceiros/PainelTerceiros"));
 const EmpresasTerceiras = lazy(() => import("./pages/terceiros/EmpresasTerceiras"));
+const TerceiroRaioX = lazy(() => import("./pages/terceiros/TerceiroRaioX"));
 const FuncionariosTerceiros = lazy(() => import("./pages/terceiros/FuncionariosTerceiros"));
 const ObrigacoesMensais = lazy(() => import("./pages/terceiros/ObrigacoesMensais"));
 const PainelConformidade = lazy(() => import("./pages/terceiros/PainelConformidade"));
@@ -477,6 +478,7 @@ function Router() {
         {/* Terceiros */}
         <Route path="/terceiros" component={() => <RouteGuard component={PainelTerceiros} route="/terceiros/painel" />} />
         <Route path="/terceiros/empresas" component={() => <RouteGuard component={EmpresasTerceiras} route="/terceiros/empresas" />} />
+        <Route path="/terceiros/empresas/:id" component={() => <RouteGuard component={TerceiroRaioX} route="/terceiros/empresas" />} />
         <Route path="/terceiros/funcionarios" component={() => <RouteGuard component={FuncionariosTerceiros} route="/terceiros/funcionarios" />} />
         <Route path="/terceiros/obrigacoes-mensais" component={() => <RouteGuard component={ObrigacoesMensais} route="/terceiros/obrigacoes" />} />
         <Route path="/terceiros/obrigacoes" component={() => <RouteGuard component={ObrigacoesMensais} route="/terceiros/obrigacoes" />} />

@@ -59,8 +59,10 @@ import {
   obras,
   warningsTerceiros,
   fornecedores,
+  terceiroContratos,
+  comprasOrdens,
 } from "../../drizzle/schema";
-import { eq, and, desc, sql, isNull, like, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, or, desc, sql, isNull, like, gte, lte, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
 import { invokeLLM } from "../_core/llm";
@@ -279,6 +281,147 @@ export const terceirosRouter = router({
         const db = (await getDb())!;
         const [row] = await db.select().from(empresasTerceiras).where(eq(empresasTerceiras.id, input.id));
         return row || null;
+      }),
+
+    // Rev. 2830 — Raio-X 360° da empresa terceira: agrega contratos (com valores
+    // e split MDO/material via FD), funcionários + conformidade de ASO, documentos
+    // da empresa (PGR/PCMSO/Alvará/Seguro) e FD de material da obra/fornecedor.
+    raioX: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const [emp] = await db.select().from(empresasTerceiras).where(eq(empresasTerceiras.id, input.id));
+        if (!emp) throw new TRPCError({ code: "NOT_FOUND", message: "Empresa terceira não encontrada." });
+        await _assertCompanyAccess(ctx.user, { companyId: (emp as any).companyId });
+
+        const num = (v: any) => parseFloat(String(v ?? 0)) || 0;
+        const hoje = new Date();
+        const empAny = emp as any;
+
+        // --- Contratos da empresa ---
+        const contratos = await db.select().from(terceiroContratos)
+          .where(and(
+            eq(terceiroContratos.empresaTerceiraId, input.id),
+            eq(terceiroContratos.companyId, empAny.companyId),
+          ))
+          .orderBy(desc(terceiroContratos.id));
+
+        // Obras envolvidas (nomes)
+        const obraIds = Array.from(new Set(
+          (contratos as any[]).map(c => c.obraId).filter((v: any) => typeof v === "number")
+        ));
+        let obrasMap: Record<number, string> = {};
+        if (obraIds.length > 0) {
+          const obrasRows = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(inArray(obras.id, obraIds));
+          obrasMap = Object.fromEntries((obrasRows as any[]).map(o => [o.id, o.nome]));
+        }
+
+        // --- FD de material (OCs FD do fornecedor nas obras dos contratos) ---
+        const fornecedorId = empAny.fornecedorId ?? null;
+        let fdTotalGeral = 0;
+        const fdPorObra: Record<number, number> = {};
+        if (fornecedorId && obraIds.length > 0) {
+          const ocs = await db.select({
+            obraId: comprasOrdens.obraId,
+            total: comprasOrdens.total,
+            fdValor: comprasOrdens.fdValor,
+            modalidadeFd: comprasOrdens.modalidadeFd,
+            status: comprasOrdens.status,
+          }).from(comprasOrdens).where(and(
+            eq(comprasOrdens.companyId, empAny.companyId),
+            eq(comprasOrdens.fornecedorId, fornecedorId),
+            inArray(comprasOrdens.obraId, obraIds),
+          ));
+          for (const oc of ocs as any[]) {
+            const isFd = (oc.modalidadeFd && oc.modalidadeFd !== "normal") || num(oc.fdValor) > 0;
+            if (!isFd) continue;
+            if (oc.status === "cancelada" || oc.status === "rascunho") continue;
+            const valor = num(oc.fdValor) > 0 ? num(oc.fdValor) : num(oc.total);
+            if (valor <= 0) continue;
+            fdTotalGeral += valor;
+            if (typeof oc.obraId === "number") fdPorObra[oc.obraId] = (fdPorObra[oc.obraId] || 0) + valor;
+          }
+        }
+
+        const contratosEnriquecidos = (contratos as any[]).map(c => {
+          const fdObra = c.obraId != null ? (fdPorObra[c.obraId] || 0) : 0;
+          const incluiMaterial = c.naturezaContrato === "material" || c.naturezaContrato === "mao_de_obra_material";
+          const valorTotal = num(c.valorTotal);
+          const valorLiquidoMdo = incluiMaterial ? Math.max(valorTotal - fdObra, 0) : valorTotal;
+          return {
+            id: c.id,
+            numeroContrato: c.numeroContrato,
+            descricao: c.descricao,
+            naturezaContrato: c.naturezaContrato || "mao_de_obra",
+            status: c.status,
+            obraId: c.obraId,
+            obraNome: c.obraId != null ? (obrasMap[c.obraId] || null) : null,
+            valorTotal,
+            valorPago: num(c.valorPago),
+            dataInicio: c.dataInicio,
+            fdMaterialObra: incluiMaterial ? fdObra : 0,
+            valorLiquidoMdo,
+          };
+        });
+
+        const totalContratado = contratosEnriquecidos.reduce((s, c) => s + c.valorTotal, 0);
+        const totalPago = contratosEnriquecidos.reduce((s, c) => s + c.valorPago, 0);
+        const contratosAtivos = contratosEnriquecidos.filter(c => c.status === "ativo").length;
+
+        // --- Funcionários + conformidade ASO ---
+        const funcs = await db.select().from(funcionariosTerceiros).where(and(
+          eq(funcionariosTerceiros.empresaTerceiraId, input.id),
+          eq(funcionariosTerceiros.companyId, empAny.companyId),
+          isNull(funcionariosTerceiros.deletedAt),
+        )).orderBy(funcionariosTerceiros.nome);
+
+        const isVencido = (d: any) => d ? new Date(String(d)) < hoje : false;
+        const funcAtivos = (funcs as any[]).filter(f => f.status === "ativo");
+        const asoVencidos = funcAtivos.filter(f => isVencido(f.asoValidade)).length;
+        const asoSemData = funcAtivos.filter(f => !f.asoValidade).length;
+
+        // --- Documentos da empresa (validades) ---
+        const documentos = [
+          { tipo: "PGR", url: empAny.pgrUrl, validade: empAny.pgrValidade },
+          { tipo: "PCMSO", url: empAny.pcmsoUrl, validade: empAny.pcmsoValidade },
+          { tipo: "Alvará", url: empAny.alvaraUrl, validade: empAny.alvaraValidade },
+          { tipo: "Seguro de Vida", url: empAny.seguroVidaUrl, validade: empAny.seguroVidaValidade },
+          { tipo: "Contrato Social", url: empAny.contratoSocialUrl, validade: null },
+        ].map(d => ({
+          ...d,
+          status: !d.url ? "ausente" : (d.validade && isVencido(d.validade)) ? "vencido" : "ok",
+        }));
+        const docsVencidos = documentos.filter(d => d.status === "vencido").length;
+        const docsAusentes = documentos.filter(d => d.status === "ausente").length;
+
+        return {
+          empresa: emp,
+          resumo: {
+            totalContratado,
+            totalPago,
+            saldo: totalContratado - totalPago,
+            contratosAtivos,
+            contratosTotal: contratosEnriquecidos.length,
+            fdMaterialTotal: fdTotalGeral,
+            funcionariosAtivos: funcAtivos.length,
+            funcionariosTotal: (funcs as any[]).length,
+            asoVencidos,
+            asoSemData,
+            docsVencidos,
+            docsAusentes,
+          },
+          contratos: contratosEnriquecidos,
+          funcionarios: (funcs as any[]).map(f => ({
+            id: f.id,
+            nome: f.nome,
+            funcao: f.funcao,
+            status: f.status,
+            obraNome: f.obraNome,
+            asoValidade: f.asoValidade,
+            asoStatus: !f.asoValidade ? "sem_data" : isVencido(f.asoValidade) ? "vencido" : "ok",
+          })),
+          documentos,
+        };
       }),
 
     create: protectedProcedure

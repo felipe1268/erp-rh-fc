@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
+import { NATUREZA_CONTRATO } from "@shared/terceiroNatureza";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -224,6 +225,7 @@ export default function ContratosList() {
                     <div className="flex items-center gap-2 mb-1">
                       {c.numeroContrato && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">{c.numeroContrato}</span>}
                       <Badge className={`text-xs border ${st.cls}`}>{st.label}</Badge>
+                      {(() => { const nt = NATUREZA_CONTRATO[(c as any).naturezaContrato || "mao_de_obra"] || NATUREZA_CONTRATO.mao_de_obra; return <Badge className={`text-xs border ${nt.cls}`}>{nt.label}</Badge>; })()}
                       {valOrc > 0 && (
                         <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded border font-medium ${
                           variacao > 0 ? "bg-red-50 text-red-700 border-red-200" :

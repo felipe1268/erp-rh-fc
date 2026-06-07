@@ -3901,6 +3901,10 @@ export const terceiroContratos = pgTable("terceiro_contratos", {
   versaoTexto:       integer("versao_texto").default(0),
   descricao:         varchar({ length: 500 }).notNull(),
   tipoContrato:      varchar("tipo_contrato", { length: 50 }).default("empreitada_global"), // empreitada_global | preco_unitario | misto
+  // Rev. 2830 — NATUREZA do contrato (o QUE ele cobre), distinta do tipoContrato (modelo de PREÇO):
+  // mao_de_obra (só MDO) | material (só material) | mao_de_obra_material (MDO + material juntos).
+  // Material pode virar FD (vindo das cotações/OCs) e é DESCONTADO do valor do contrato.
+  naturezaContrato:  varchar("natureza_contrato", { length: 30 }).default("mao_de_obra"),
   valorOrcamento:    numeric("valor_orcamento", { precision: 18, scale: 2 }).default("0"),
   valorTotal:        numeric("valor_total", { precision: 18, scale: 2 }).default("0"),
   valorPago:         numeric("valor_pago", { precision: 18, scale: 2 }).default("0"),

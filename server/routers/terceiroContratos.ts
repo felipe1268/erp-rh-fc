@@ -1,8 +1,9 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
-import { getDb } from "../db";
+import { getDb, getUserCompanyLinks } from "../db";
 import { triggerFinancialSync, triggerFinancialSyncAwaited } from "../services/financialEventTrigger";
-import { eq, and, desc, inArray, sql, asc } from "drizzle-orm";
+import { eq, and, or, desc, inArray, sql, asc } from "drizzle-orm";
 import {
   terceiroContratos,
   terceiroContratoItens,
@@ -18,6 +19,7 @@ import {
   comprasCotacoesItens,
   comprasCotacaoFornecedores,
   comprasCotacaoRespostas,
+  comprasOrdens,
   comprasSolicitacoes,
   comprasSolicitacoesItens,
   planejamentoRevisoes,
@@ -32,6 +34,86 @@ import {
 } from "../../drizzle/schema";
 
 const n = (v: any) => parseFloat(String(v ?? 0)) || 0;
+
+// Rev. 2830 — guarda de tenancy contra IDOR cross-tenant. Endpoints que recebem só
+// `{ id }` devem carregar a linha e validar o companyId contra os vínculos do chamador
+// (mesma semântica do _assertCompanyAccess de terceiros.ts: admin/admin_master livre;
+// sem vínculos explícitos = acesso global controlado por grupo/módulo; senão exige match).
+async function _assertCompanyAccess(ctxUser: any, companyId: number | null | undefined) {
+  if (!ctxUser?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
+  if (ctxUser.role === "admin" || ctxUser.role === "admin_master") return;
+  const links = await getUserCompanyLinks(ctxUser.id);
+  const allowedIds = (links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === "number");
+  if (allowedIds.length === 0) return;
+  if (typeof companyId !== "number" || !new Set<number>(allowedIds).has(companyId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este contrato." });
+  }
+}
+
+// Rev. 2830 — FD (Faturamento Direto) de MATERIAL atrelado a um contrato de terceiro.
+// Origem: OCs de Compras marcadas como FD (modalidade_fd != 'normal' OU fd_valor > 0),
+// vinculadas ao contrato por (1) contrato_id explícito OU (2) heurística obra+fornecedor
+// (a empresa terceira aponta para um fornecedor via fornecedor_id). É read-only e abate o
+// valor do contrato (decisão do usuário: material vira FD e é descontado do contrato).
+async function _fdMaterialDoContrato(db: any, contrato: any): Promise<{
+  registros: Array<{ id: number; numeroOc: string | null; descricao: string | null; fornecedorNome: string | null; valor: number; data: string | null; modalidadeFd: string | null; status: string | null; vinculo: "contrato" | "obra_fornecedor" }>;
+  total: number;
+}> {
+  try {
+    let fornecedorId: number | null = null;
+    if (contrato.empresaTerceiraId) {
+      const [emp] = await db.select({ fornecedorId: empresasTerceiras.fornecedorId })
+        .from(empresasTerceiras).where(eq(empresasTerceiras.id, contrato.empresaTerceiraId));
+      fornecedorId = (emp as any)?.fornecedorId ?? null;
+    }
+    const heuristica = (fornecedorId && contrato.obraId)
+      ? and(eq(comprasOrdens.obraId, contrato.obraId), eq(comprasOrdens.fornecedorId, fornecedorId))
+      : sql`false`;
+
+    const ocs = await db.select({
+      id: comprasOrdens.id,
+      numeroOc: comprasOrdens.numeroOc,
+      descricao: comprasOrdens.observacoes,
+      fornecedorNome: comprasOrdens.fornecedorNome,
+      total: comprasOrdens.total,
+      fdValor: comprasOrdens.fdValor,
+      modalidadeFd: comprasOrdens.modalidadeFd,
+      status: comprasOrdens.status,
+      data: comprasOrdens.criadoEm,
+      contratoId: comprasOrdens.contratoId,
+    }).from(comprasOrdens).where(and(
+      eq(comprasOrdens.companyId, contrato.companyId),
+      or(eq(comprasOrdens.contratoId, contrato.id), heuristica),
+    ));
+
+    const registros: any[] = [];
+    let total = 0;
+    for (const oc of ocs as any[]) {
+      const isFd = (oc.modalidadeFd && oc.modalidadeFd !== "normal") || n(oc.fdValor) > 0;
+      if (!isFd) continue;
+      if (oc.status === "cancelada" || oc.status === "rascunho") continue;
+      const valorEfetivo = n(oc.fdValor) > 0 ? n(oc.fdValor) : n(oc.total);
+      if (valorEfetivo <= 0) continue;
+      total += valorEfetivo;
+      registros.push({
+        id: oc.id,
+        numeroOc: oc.numeroOc ?? null,
+        descricao: oc.descricao ?? null,
+        fornecedorNome: oc.fornecedorNome ?? null,
+        valor: valorEfetivo,
+        data: oc.data ? String(oc.data) : null,
+        modalidadeFd: oc.modalidadeFd ?? null,
+        status: oc.status ?? null,
+        vinculo: oc.contratoId === contrato.id ? "contrato" : "obra_fornecedor",
+      });
+    }
+    registros.sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+    return { registros, total };
+  } catch (e: any) {
+    console.error("[_fdMaterialDoContrato] erro:", e?.message || e);
+    return { registros: [], total: 0 };
+  }
+}
 
 // ══════════════════════════════════════════════════════════════
 // CONTRATOS
@@ -70,11 +152,12 @@ export const terceiroContratosRouter = router({
 
   getContrato: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       try {
       const db = await getDb();
       const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, input.id));
       if (!contrato) return null;
+      await _assertCompanyAccess(ctx.user, (contrato as any).companyId);
 
       const itensRaw = await db.select().from(terceiroContratoItens)
         .where(eq(terceiroContratoItens.contratoId, input.id))
@@ -305,6 +388,13 @@ export const terceiroContratosRouter = router({
       const saldoAMedir = n(contrato.valorTotal) - valorMedidoAcumulado;
       const saldoALiberar = valorMedidoAcumulado - n(contrato.valorPago);
 
+      // Rev. 2830 — FD de material atrelado ao contrato (read-only, abate o valor).
+      const fd = await _fdMaterialDoContrato(db, contrato);
+      const valorTotalContrato = n(contrato.valorTotal);
+      // Bruto de MDO = valor do contrato − material que virou FD (quando natureza inclui material).
+      const naturezaIncluiMaterial = contrato.naturezaContrato === "material" || contrato.naturezaContrato === "mao_de_obra_material";
+      const valorLiquidoMdo = naturezaIncluiMaterial ? Math.max(valorTotalContrato - fd.total, 0) : valorTotalContrato;
+
       let assinaturaStatus: string | null = null;
       try {
         const [envelope] = await db.select({ status: integrasignEnvelopes.status })
@@ -350,6 +440,10 @@ export const terceiroContratosRouter = router({
         percentualMedidoGlobal,
         saldoAMedir,
         saldoALiberar,
+        fdMaterialTotal: fd.total,
+        fdMaterialRegistros: fd.registros,
+        naturezaIncluiMaterial,
+        valorLiquidoMdo,
         docsComPendencia: documentos.filter(d => d.status === "pendente" && d.bloqueiaPagemento).length,
         assinaturaStatus,
         portalLogin,
@@ -387,6 +481,7 @@ export const terceiroContratosRouter = router({
       numeroContrato: z.string().optional(),
       descricao: z.string(),
       tipoContrato: z.string().default("empreitada_global"),
+      naturezaContrato: z.enum(["mao_de_obra", "material", "mao_de_obra_material"]).default("mao_de_obra"),
       valorOrcamento: z.number().default(0),
       valorTotal: z.number().default(0),
       dataInicio: z.string().optional(),
@@ -421,6 +516,7 @@ export const terceiroContratosRouter = router({
         numeroSequencia,
         descricao: input.descricao,
         tipoContrato: input.tipoContrato,
+        naturezaContrato: input.naturezaContrato,
         valorOrcamento: String(input.valorOrcamento),
         valorTotal: String(input.valorTotal),
         dataInicio: input.dataInicio ?? null,
@@ -437,6 +533,7 @@ export const terceiroContratosRouter = router({
       companyId: z.number(),
       descricao: z.string().optional(),
       numeroContrato: z.string().optional(),
+      naturezaContrato: z.enum(["mao_de_obra", "material", "mao_de_obra_material"]).optional(),
       valorOrcamento: z.number().optional(),
       valorTotal: z.number().optional(),
       dataInicio: z.string().optional(),
@@ -458,6 +555,7 @@ export const terceiroContratosRouter = router({
       const upd: any = { atualizadoEm: new Date().toISOString() };
       if (rest.descricao !== undefined) upd.descricao = rest.descricao;
       if (rest.numeroContrato !== undefined) upd.numeroContrato = rest.numeroContrato;
+      if (rest.naturezaContrato !== undefined) upd.naturezaContrato = rest.naturezaContrato;
       if (rest.valorOrcamento !== undefined) upd.valorOrcamento = String(rest.valorOrcamento);
       if (rest.valorTotal !== undefined) upd.valorTotal = String(rest.valorTotal);
       if (rest.dataInicio !== undefined) upd.dataInicio = rest.dataInicio;

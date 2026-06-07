@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import { useLocation } from "wouter";
 import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -30,6 +31,7 @@ function cnpjMask(v: string): string {
 // Use inferred types from tRPC
 
 export default function EmpresasTerceiras() {
+  const [, navigate] = useLocation();
   const { user } = useAuth();
   const { selectedCompanyId: selCompId } = useCompany();
   const companyId = selCompId ? parseInt(selCompId) : undefined;
@@ -294,9 +296,9 @@ export default function EmpresasTerceiras() {
             filtered.map((emp: any) => (
               <div key={emp.id} className="bg-card rounded-xl border p-4 hover:shadow-sm transition-shadow">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 cursor-pointer" onClick={() => navigate(`/terceiros/empresas/${emp.id}`)}>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-semibold text-foreground truncate">{emp.razaoSocial}</h3>
+                      <h3 className="font-semibold text-foreground truncate hover:text-orange-600 hover:underline">{emp.razaoSocial}</h3>
                       {statusBadge(emp.status)}
                     </div>
                     {emp.nomeFantasia && <p className="text-sm text-muted-foreground">{emp.nomeFantasia}</p>}
@@ -308,6 +310,9 @@ export default function EmpresasTerceiras() {
                     </div>
                   </div>
                   <div className="flex gap-2">
+                    <Button size="sm" variant="outline" className="text-orange-600 hover:bg-orange-50" onClick={() => navigate(`/terceiros/empresas/${emp.id}`)}>
+                      <Eye className="h-3.5 w-3.5 mr-1" /> Raio-X
+                    </Button>
                     <Button size="sm" variant="outline" onClick={() => openEdit(emp)}>
                       <Edit className="h-3.5 w-3.5 mr-1" /> Editar
                     </Button>
