@@ -716,6 +716,7 @@ const menuSectionsPortalCliente: MenuSection[] = [
     title: "Administração",
     items: [
       { icon: ShieldCheck, label: "Acessos do Portal", path: "/clientes/portal" },
+      { icon: Star, label: "Pesquisa de Satisfação (NPS)", path: "/clientes/portal?tab=avaliacoes" },
       { icon: Users, label: "Cadastro de Clientes", path: "/clientes" },
     ],
   },

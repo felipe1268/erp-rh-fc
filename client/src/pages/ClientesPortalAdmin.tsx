@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -37,7 +37,29 @@ const LIMITE_SUGERIDO = 4;
 export default function ClientesPortalAdmin() {
   const { selectedCompanyId } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : 0;
-  const [tab, setTab] = useState<"acessos" | "comentarios" | "avaliacoes">("acessos");
+  // Aba inicial via deep-link (?tab=) OU navegação pela sidebar (_navParams).
+  const readNavTab = (): "acessos" | "comentarios" | "avaliacoes" => {
+    if (typeof window === "undefined") return "acessos";
+    const stored = sessionStorage.getItem("_navParams");
+    const params = stored ? new URLSearchParams(stored) : new URLSearchParams(window.location.search);
+    const t = params.get("tab");
+    return t === "avaliacoes" || t === "comentarios" ? t : "acessos";
+  };
+  const [tab, setTab] = useState<"acessos" | "comentarios" | "avaliacoes">(readNavTab);
+  // Sincroniza com cliques na sidebar (sessionStorage._navParams + evento) e deep-link.
+  const applyNavParams = useCallback(() => {
+    const stored = sessionStorage.getItem("_navParams");
+    const params = stored ? new URLSearchParams(stored) : new URLSearchParams(window.location.search);
+    const t = params.get("tab");
+    if (stored) sessionStorage.removeItem("_navParams");
+    if (t === "avaliacoes" || t === "comentarios" || t === "acessos") setTab(t);
+  }, []);
+  useEffect(() => { applyNavParams(); }, [applyNavParams]);
+  useEffect(() => {
+    const handler = () => applyNavParams();
+    window.addEventListener("navParamsUpdated", handler);
+    return () => window.removeEventListener("navParamsUpdated", handler);
+  }, [applyNavParams]);
   const [busca, setBusca] = useState("");
 
   const utils = trpc.useUtils();

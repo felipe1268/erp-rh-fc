@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2889 — **PORTAL DO CLIENTE — NOVO ATALHO "PESQUISA DE SATISFAÇÃO (NPS)"
+ * NA BARRA LATERAL, ABRINDO DIRETO A ABA DE AVALIAÇÕES.**
+ *
+ * PEDIDO (usuário): a pesquisa de satisfação do cliente (avaliações/NPS) só era
+ * acessível entrando em "Acessos do Portal" e trocando para a aba "Avaliações
+ * (NPS)" manualmente — o usuário pediu um acesso direto no menu lateral.
+ *
+ * FIX (só frontend): (1) `client/src/components/DashboardLayout.tsx` — novo item
+ * "Pesquisa de Satisfação (NPS)" (ícone `Star`) na seção Administração do menu
+ * "Portal do Cliente", path `/clientes/portal?tab=avaliacoes`. A filtragem de
+ * permissão já normaliza a query string (`route.split("?")[0]` em
+ * `groupCanAccessRoute` e `item.path.split('?')[0]` no check individual), então o
+ * item herda a visibilidade de "Acessos do Portal" (sem precisar registrar nova
+ * rota). (2) `client/src/pages/ClientesPortalAdmin.tsx` — a página passa a LER o
+ * param `?tab=` via `useSearch` (wouter) p/ inicializar e sincronizar a aba ativa
+ * (acessos|comentarios|avaliacoes); antes era `useState("acessos")` fixo e
+ * ignorava a URL.
+ *
+ * ZERO schema; ZERO backend; ZERO ALTER/DROP/DELETE. Só front. Arquivos:
+ * `client/src/components/DashboardLayout.tsx`, `client/src/pages/ClientesPortalAdmin.tsx`.
+ *
  * Rev. 2888 — **CONTROLE DE REVISÕES — CARD "TOTAL" PASSA A MOSTRAR O NÚMERO DA
  * REVISÃO ATUAL (2888) EM VEZ DA CONTAGEM DE REGISTROS DISTINTOS (2503).**
  *
