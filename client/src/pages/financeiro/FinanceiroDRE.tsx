@@ -316,7 +316,66 @@ export default function FinanceiroDRE() {
           </div>
         )}
 
-        {/* Análise de IA */}
+        {/* Tabela DRE */}
+        <Card className="border-0 shadow-sm">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <h2 className="text-base font-bold text-gray-900">DRE — {tituloPeriodo}</h2>
+            <Badge variant="outline" className="text-[11px] text-gray-500 font-normal">passe o mouse no <Info className="w-3 h-3 mx-1" /> para a legenda</Badge>
+          </div>
+          <CardContent className="p-0">
+            {isLoading ? (
+              <div className="p-6 space-y-3">
+                {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-6 w-full" />)}
+              </div>
+            ) : !dre ? (
+              <div className="p-10 text-center text-gray-400">Selecione um período para visualizar o DRE.</div>
+            ) : (
+              <div>
+                {rows.map((row, idx) => {
+                  if (row.isSeparator) return <div key={idx} className="border-t border-gray-200 my-1" />;
+                  const isMargin = isPct(row);
+                  const val = row.value;
+                  const displayVal = isMargin ? formatPct(val) : formatBRL(Math.abs(val));
+
+                  let textColor = "text-gray-700";
+                  if (row.highlight === "green") textColor = "text-emerald-700";
+                  if (row.highlight === "red") textColor = "text-red-600";
+                  if (row.highlight === "blue") textColor = "text-blue-700";
+                  if (isMargin) textColor = val >= 0 ? "text-emerald-600" : "text-red-600";
+
+                  return (
+                    <div
+                      key={idx}
+                      className={`flex items-center justify-between px-5 py-2.5 ${row.isTotal ? "font-semibold bg-gray-50/80" : ""} hover:bg-orange-50/30 transition-colors`}
+                      style={{ paddingLeft: `${20 + (row.indent ?? 0) * 20}px` }}
+                    >
+                      <span className={`text-sm flex items-center gap-1.5 ${row.isTotal ? "font-bold text-gray-800" : "text-gray-600"}`}>
+                        {row.label}
+                        {row.info && (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button className="text-gray-300 hover:text-orange-500 transition-colors" aria-label="legenda">
+                                <Info className="w-3.5 h-3.5" />
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-64 text-xs text-gray-600 leading-relaxed" align="start">
+                              {row.info}
+                            </PopoverContent>
+                          </Popover>
+                        )}
+                      </span>
+                      <span className={`text-sm font-medium ${textColor} tabular-nums`}>
+                        {isMargin ? displayVal : (row.isNegative ? `(${displayVal})` : displayVal)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Análise de IA — abaixo do DRE */}
         <Card className="border-0 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-orange-50/60 to-transparent">
             <div className="flex items-center gap-2.5">
@@ -470,65 +529,6 @@ export default function FinanceiroDRE() {
                 <p className="text-[11px] text-gray-400 italic">
                   Análise gerada por IA com base nos lançamentos do período e em fontes públicas do setor. Use como apoio à decisão, não como aconselhamento contábil/fiscal definitivo.
                 </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Tabela DRE */}
-        <Card className="border-0 shadow-sm">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-            <h2 className="text-base font-bold text-gray-900">DRE — {tituloPeriodo}</h2>
-            <Badge variant="outline" className="text-[11px] text-gray-500 font-normal">passe o mouse no <Info className="w-3 h-3 mx-1" /> para a legenda</Badge>
-          </div>
-          <CardContent className="p-0">
-            {isLoading ? (
-              <div className="p-6 space-y-3">
-                {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-6 w-full" />)}
-              </div>
-            ) : !dre ? (
-              <div className="p-10 text-center text-gray-400">Selecione um período para visualizar o DRE.</div>
-            ) : (
-              <div>
-                {rows.map((row, idx) => {
-                  if (row.isSeparator) return <div key={idx} className="border-t border-gray-200 my-1" />;
-                  const isMargin = isPct(row);
-                  const val = row.value;
-                  const displayVal = isMargin ? formatPct(val) : formatBRL(Math.abs(val));
-
-                  let textColor = "text-gray-700";
-                  if (row.highlight === "green") textColor = "text-emerald-700";
-                  if (row.highlight === "red") textColor = "text-red-600";
-                  if (row.highlight === "blue") textColor = "text-blue-700";
-                  if (isMargin) textColor = val >= 0 ? "text-emerald-600" : "text-red-600";
-
-                  return (
-                    <div
-                      key={idx}
-                      className={`flex items-center justify-between px-5 py-2.5 ${row.isTotal ? "font-semibold bg-gray-50/80" : ""} hover:bg-orange-50/30 transition-colors`}
-                      style={{ paddingLeft: `${20 + (row.indent ?? 0) * 20}px` }}
-                    >
-                      <span className={`text-sm flex items-center gap-1.5 ${row.isTotal ? "font-bold text-gray-800" : "text-gray-600"}`}>
-                        {row.label}
-                        {row.info && (
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <button className="text-gray-300 hover:text-orange-500 transition-colors" aria-label="legenda">
-                                <Info className="w-3.5 h-3.5" />
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-64 text-xs text-gray-600 leading-relaxed" align="start">
-                              {row.info}
-                            </PopoverContent>
-                          </Popover>
-                        )}
-                      </span>
-                      <span className={`text-sm font-medium ${textColor} tabular-nums`}>
-                        {isMargin ? displayVal : (row.isNegative ? `(${displayVal})` : displayVal)}
-                      </span>
-                    </div>
-                  );
-                })}
               </div>
             )}
           </CardContent>

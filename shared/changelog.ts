@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2844 — **FINANCEIRO · DRE — PAINEL "ANÁLISE INTELIGENTE" (IA) MOVIDO PARA ABAIXO DO DRE.**
+ *
+ * PEDIDO (usuário, com 2 prints do iPad): "Quero que a análise e IA fique abaixo do DRE". O painel
+ * "Análise Inteligente" (botão Analisar com IA) estava renderizado ACIMA da tabela do DRE, empurrando o
+ * demonstrativo para baixo da dobra.
+ *
+ * FEITO (`client/src/pages/financeiro/FinanceiroDRE.tsx`, SÓ frontend/ordem de render): a tabela DRE
+ * (`{/* Tabela DRE *​/}`) subiu para logo após os KPIs e o card de Análise IA (`{/* Análise de IA — abaixo do
+ * DRE *​/}`) passou para DEPOIS dela, antes do rodapé. NENHUMA lógica alterada — só a ordem dos dois `<Card>`
+ * irmãos foi trocada; estado, mutation `financial.analiseDRE`, fontes e comportamento on-demand intactos.
+ *
+ * ZERO backend; ZERO ALTER/DROP/DELETE; ZERO schema.
+ *
  * Rev. 2843 — **FINANCEIRO · EFD-REINF (R-2010) RECONSTRUÍDO CONTRA O SCHEMA REAL — RETENÇÃO DE INSS SOBRE
  * SERVIÇOS TOMADOS (TERCEIROS), SEM FABRICAR VALOR.**
  *
