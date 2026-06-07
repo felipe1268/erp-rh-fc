@@ -179,11 +179,15 @@ export default function MedicaoContratos() {
     let autoSinalPct = "";
     let autoSinalValor = "";
     let autoRetencaoPct = "";
+    let autoFdValor = "";
 
     try {
       const config = await utils.medicao.getProjetoMedicaoConfig.fetch({ projetoId: parseInt(projetoId) });
       if (config) {
         if (config.tipoMedicao === "parcelas") autoCriterio = "parcela_fixa";
+        // Rev. 2891 — "Valor Mínimo para FD" vem da config de Medição do Planejamento.
+        const fdV = parseFloat(config.fdValor || "0");
+        if (fdV > 0) autoFdValor = formatBrlInput(fdV);
         const sP = parseFloat(config.sinalPct || "0");
         if (sP > 0) autoSinalPct = String(sP);
         const sinalV = parseFloat(config.sinalValor || "0");
@@ -213,6 +217,7 @@ export default function MedicaoContratos() {
       percentualSinal: autoSinalPct,
       valorSinalRecebido: autoSinalValor,
       percentualRetencao: autoRetencaoPct,
+      valorMinimoFd: autoFdValor,
     }));
   }
 
@@ -538,8 +543,11 @@ export default function MedicaoContratos() {
                   </div>
 
                   <div>
-                    <Label className="text-sm font-medium text-gray-700 mb-2 block">
+                    <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
                       Valor Mínimo para FD — Faturamento Direto
+                      {form.valorMinimoFd && (
+                        <span className="text-[10px] text-emerald-600 font-normal normal-case">• do planejamento</span>
+                      )}
                     </Label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium">R$</span>

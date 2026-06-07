@@ -157,6 +157,9 @@ export const medicaoRouter = router({
         retencaoPct: planejamentoMedicaoConfig.retencaoPct,
         entrada: planejamentoMedicaoConfig.entrada,
         diaCorte: planejamentoMedicaoConfig.diaCorte,
+        // Rev. 2891 — também expõe o Valor p/ FD configurado no Planejamento (Medição),
+        // p/ auto-preencher "Valor Mínimo para FD" no Novo Contrato de Medição.
+        fdValor: planejamentoMedicaoConfig.fdValor,
       })
       .from(planejamentoMedicaoConfig)
       .where(eq(planejamentoMedicaoConfig.projetoId, input.projetoId))

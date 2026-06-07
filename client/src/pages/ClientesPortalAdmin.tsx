@@ -87,11 +87,19 @@ export default function ClientesPortalAdmin() {
     onError: (e) => toast.error(e.message),
   });
   // Rev. 2890 — Gerar link público de avaliação (NPS) p/ enviar ao cliente.
+  // Rev. 2892 — link SEPARADO POR OBRA: seletor opcional de obra embutida no token.
   const [linkAvaliacao, setLinkAvaliacao] = useState<string>("");
+  const [linkObraNome, setLinkObraNome] = useState<string | null>(null);
+  const [linkObraId, setLinkObraId] = useState<number | "">("");
+  const obrasEmpresa = trpc.portalExterno.admin.obrasDaEmpresaAdmin.useQuery(
+    { companyId: companyId ?? 0 },
+    { enabled: !!companyId },
+  );
   const gerarLinkAvalMut = trpc.portalExterno.admin.gerarLinkAvaliacao.useMutation({
     onSuccess: (r) => {
       const url = `${window.location.origin}/portal/avaliacao/${r.token}`;
       setLinkAvaliacao(url);
+      setLinkObraNome(r.obraNome ?? null);
       navigator.clipboard?.writeText(url).then(
         () => toast.success("Link gerado e copiado para a área de transferência!"),
         () => toast.success("Link de avaliação gerado!"),
@@ -566,8 +574,20 @@ export default function ClientesPortalAdmin() {
                 <span className="text-xs text-slate-400">
                   Gere um link público p/ enviar ao cliente responder a pesquisa de satisfação direto, sem precisar de acesso ao portal. Validade de 180 dias.
                 </span>
+                {/* Rev. 2892 — seletor de obra: o link gerado fica TRAVADO nessa obra */}
+                <select
+                  value={linkObraId}
+                  onChange={(e) => setLinkObraId(e.target.value ? Number(e.target.value) : "")}
+                  className="border rounded-md px-2 py-1.5 text-sm bg-white max-w-[220px]"
+                  title="Obra à qual o link será vinculado"
+                >
+                  <option value="">Avaliação geral (sem obra)</option>
+                  {(obrasEmpresa.data ?? []).map((o: any) => (
+                    <option key={o.id} value={o.id}>{o.nome}</option>
+                  ))}
+                </select>
                 <Button
-                  onClick={() => companyId && gerarLinkAvalMut.mutate({ companyId })}
+                  onClick={() => companyId && gerarLinkAvalMut.mutate({ companyId, obraId: linkObraId === "" ? null : linkObraId })}
                   disabled={gerarLinkAvalMut.isPending || !companyId}
                   size="sm"
                   className="ml-auto gap-1.5 bg-blue-600 hover:bg-blue-700"
@@ -578,6 +598,9 @@ export default function ClientesPortalAdmin() {
               </div>
               {linkAvaliacao && (
                 <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium text-slate-600 w-full">
+                    {linkObraNome ? <>Link vinculado à obra: <b className="text-slate-800">{linkObraNome}</b></> : "Link de avaliação geral (sem obra específica)"}
+                  </span>
                   <Input readOnly value={linkAvaliacao} onFocus={(e) => e.currentTarget.select()} className="flex-1 min-w-[260px] text-xs font-mono" />
                   <Button
                     variant="outline"

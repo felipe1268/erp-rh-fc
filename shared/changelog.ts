@@ -1,6 +1,60 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2892 — **PORTAL DO CLIENTE — LINK PÚBLICO DE AVALIAÇÃO (NPS) AGORA PODE SER
+ * SEPARADO POR OBRA, EVITANDO AVALIAÇÃO ATRIBUÍDA À OBRA ERRADA.**
+ *
+ * PEDIDO (usuário, print iPad da aba "Avaliações (NPS)" do Portal do Cliente —
+ * Administração): "Precisa separar o link por obra... para não ter erro de
+ * avaliação." O link público de avaliação (Rev. 2890) era ÚNICO por empresa, sem
+ * vínculo de obra. Como no modo público o seletor de obra fica vazio (as queries
+ * que dependem de credencial — `minhasObras` — ficam desabilitadas), o cliente não
+ * tinha como escolher a obra → a avaliação caía como "geral" / na obra errada.
+ *
+ * SOLUÇÃO — embute (e TRAVA) a obra dentro do próprio token (payload JWT público,
+ * stateless, ZERO schema):
+ * (1) BACKEND `server/routers/portalExterno.ts` — `admin.gerarLinkAvaliacao` ganha
+ * `obraId` opcional: valida que a obra pertence à empresa (tenant guard — NOT_FOUND
+ * se não pertencer), captura o `obraNome` e assina o JWT com `{ obraId, obraNome }`
+ * quando informado; retorna `{ token, obraId, obraNome }`. Nova query
+ * `admin.obrasDaEmpresaAdmin` (admin/admin_master, guard cross-tenant) lista as
+ * obras ativas da empresa p/ o seletor. Em `criarAvaliacao`, a obra do token MANDA:
+ * `obraIdEfetivo = decoded.obraId ?? input.obraId` — ignora qualquer obraId enviado
+ * pelo cliente quando o link é por obra, gravando sempre na obra certa.
+ * (2) FRONTEND ADMIN `client/src/pages/ClientesPortalAdmin.tsx` — `<select>` de obra
+ * ("Avaliação geral" + obras da empresa) ao lado do botão "Gerar link"; passa
+ * `obraId` p/ a mutation e exibe "Link vinculado à obra: X" no resultado.
+ * (3) FRONTEND PÚBLICO `client/src/pages/portal/PortalDashboardCliente.tsx` —
+ * decodifica o payload (base64url) do `publicToken` p/ ler `obraId`/`obraNome`,
+ * trava `aval.obraId` na obra do link e substitui o `<select>` por um campo de
+ * leitura "Obra avaliada: X" no modo público por obra.
+ *
+ * ZERO schema; ZERO ALTER/DROP/DELETE. Arquivos: `server/routers/portalExterno.ts`,
+ * `client/src/pages/ClientesPortalAdmin.tsx`,
+ * `client/src/pages/portal/PortalDashboardCliente.tsx`.
+ *
+ * Rev. 2891 — **MEDIÇÃO DE CONTRATOS — NOVO CONTRATO AGORA AUTO-PREENCHE TAMBÉM O
+ * "VALOR MÍNIMO PARA FD" A PARTIR DA CONFIG DE MEDIÇÃO DO PLANEJAMENTO.**
+ *
+ * PEDIDO (usuário, print iPad do modal "Novo Contrato de Medição"): "Tem mais
+ * dados que podem ser preenchidos automaticamente, que está no orçamento e no
+ * planejamento... verifique isso." O modal já auto-preenchia Valor Total do
+ * Contrato (do orçamento), Critério, % Desconto de Sinal, Sinal Recebido e %
+ * Retenção de Garantia (do planejamento), mas o campo "Valor Mínimo para FD —
+ * Faturamento Direto" ficava SEMPRE vazio mesmo havendo `fd_valor` configurado na
+ * Medição do Planejamento (`planejamento_medicao_config.fd_valor`).
+ *
+ * FIX: (1) BACKEND `server/routers/medicao.ts` — a query `getProjetoMedicaoConfig`
+ * passa a SELECIONAR também `fdValor` (`planejamentoMedicaoConfig.fdValor`), que
+ * antes não era exposto. (2) FRONTEND `client/src/pages/medicao/MedicaoContratos.tsx`
+ * — em `handleProjetoSelect`, novo `autoFdValor` lê `config.fdValor` (>0 →
+ * `formatBrlInput`) e seta `form.valorMinimoFd`; o `<Label>` do campo ganha o selo
+ * "• do planejamento" (paridade com os demais campos auto-preenchidos).
+ *
+ * ZERO schema (coluna `fd_valor` já existe em `planejamento_medicao_config`);
+ * ZERO backend novo além do SELECT; ZERO ALTER/DROP/DELETE. Arquivos:
+ * `server/routers/medicao.ts`, `client/src/pages/medicao/MedicaoContratos.tsx`.
+ *
  * Rev. 2890 — **PORTAL DO CLIENTE — LINK PÚBLICO DE AVALIAÇÃO (NPS) PARA ENVIAR
  * DIRETO AO CLIENTE, SEM PRECISAR DE LOGIN/ACESSO AO PORTAL.**
  *

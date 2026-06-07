@@ -1382,6 +1382,9 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
     // ZERO schema: token autocontido (stateless), validade 180 dias.
     gerarLinkAvaliacao: protectedProcedure.input(z.object({
       companyId: z.number(),
+      // Rev. 2892 — link público SEPARADO POR OBRA: quando informado, a obra
+      // fica embutida (e travada) no token, evitando avaliação na obra errada.
+      obraId: z.number().nullable().optional(),
     })).mutation(async ({ input, ctx }) => {
       if (ctx.user.role !== "admin_master" && ctx.user.role !== "admin") {
         throw new TRPCError({ code: "FORBIDDEN", message: "Acesso restrito a administradores." });
@@ -1390,13 +1393,49 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       if (ctx.user.role !== "admin_master" && ctx.user.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
       }
+      const db = (await getDb())!;
+      // Rev. 2892 — valida que a obra pertence à empresa (tenant guard) e captura
+      // o nome p/ exibir no link público sem nova chamada (payload do JWT é público).
+      let obraId: number | null = null;
+      let obraNome: string | null = null;
+      if (input.obraId) {
+        const [o] = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(and(
+          eq(obras.id, input.obraId),
+          eq(obras.companyId, input.companyId),
+          isNull(obras.deletedAt),
+        ));
+        if (!o) throw new TRPCError({ code: "NOT_FOUND", message: "Obra não encontrada nesta empresa." });
+        obraId = o.id;
+        obraNome = o.nome ?? null;
+      }
       const secret = process.env.JWT_SECRET || "portal-secret";
       const token = jwt.sign({
         tipo: "cliente",
         companyId: input.companyId,
         linkAberto: true,
+        ...(obraId ? { obraId, obraNome } : {}),
       }, secret, { expiresIn: "180d" });
-      return { token };
+      return { token, obraId, obraNome };
+    }),
+
+    // Rev. 2892 — lista todas as obras da empresa p/ o seletor do "link por obra".
+    obrasDaEmpresaAdmin: protectedProcedure.input(z.object({
+      companyId: z.number(),
+    })).query(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master" && ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Acesso restrito a administradores." });
+      }
+      if (ctx.user.role !== "admin_master" && ctx.user.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const db = (await getDb())!;
+      const list = await db.select({
+        id: obras.id, nome: obras.nome, codigo: obras.codigo, status: obras.status,
+      }).from(obras).where(and(
+        eq(obras.companyId, input.companyId),
+        isNull(obras.deletedAt),
+      )).orderBy(desc(obras.createdAt));
+      return list;
     }),
 
     // Approve/reject funcionario from portal
@@ -1828,12 +1867,23 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       let decoded: any;
       try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
       if (decoded.tipo !== "cliente") throw new TRPCError({ code: "FORBIDDEN" });
-      if (input.obraId) await _assertObraPermitida(db, decoded, input.obraId); // Rev. 2851
+      // Rev. 2892 — se o link foi gerado POR OBRA, a obra do token MANDA (trava):
+      // ignora qualquer obraId vindo do cliente p/ evitar avaliação na obra errada.
+      const obraIdEfetivo: number | null = (decoded.obraId ? Number(decoded.obraId) : null) ?? (input.obraId ?? null);
       // ANÔNIMA: NÃO armazena clienteId, credId, IP nem user-agent.
       let obraNome: string | null = null;
-      if (input.obraId) {
-        const [o] = await db.select().from(obras).where(eq(obras.id, input.obraId));
-        obraNome = o?.nome ?? null;
+      if (obraIdEfetivo) {
+        await _assertObraPermitida(db, decoded, obraIdEfetivo); // Rev. 2851 — whitelist da credencial
+        // Rev. 2892 — tenant guard: a obra DEVE pertencer à empresa do token,
+        // independentemente de credencial (link público geral pula a whitelist).
+        // Sem isso, um obraId arbitrário gravaria com o companyId do token (IDOR).
+        const [o] = await db.select({ nome: obras.nome }).from(obras).where(and(
+          eq(obras.id, obraIdEfetivo),
+          eq(obras.companyId, decoded.companyId),
+          isNull(obras.deletedAt),
+        ));
+        if (!o) throw new TRPCError({ code: "FORBIDDEN", message: "Obra inválida para esta avaliação." });
+        obraNome = o.nome ?? null;
       }
       // Rev. 1569 — periodicidade configurável (mensal | anual) por empresa.
       // ano_periodo: 'YYYY-MM' (mensal) ou 'YYYY' (anual). Calculado no
@@ -1860,7 +1910,7 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       }
       const [novaAval] = await db.insert(clienteAvaliacoes).values({
         companyId: decoded.companyId,
-        obraId: input.obraId ?? null,
+        obraId: obraIdEfetivo,
         obraNome,
         notaEquipe: input.notaEquipe ?? null,
         notaObra: input.notaObra ?? null,

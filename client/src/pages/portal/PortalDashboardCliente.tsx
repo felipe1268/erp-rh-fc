@@ -76,6 +76,21 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
   const focoAvaliacao = isPublic || initialTab === "avaliacao";
   const [tab, setTab] = useState<"obras" | "comentarios" | "avaliacao">(initialTab);
 
+  // Rev. 2892 — link público POR OBRA: lê obraId/obraNome embutidos no payload
+  // (público) do JWT p/ travar a obra da avaliação e exibi-la ao cliente.
+  const linkObra = useMemo<{ id: number; nome: string | null } | null>(() => {
+    if (!isPublic || !publicToken) return null;
+    try {
+      const part = publicToken.split(".")[1];
+      if (!part) return null;
+      let b64 = part.replace(/-/g, "+").replace(/_/g, "/");
+      while (b64.length % 4 !== 0) b64 += "="; // normaliza padding base64url
+      const json = JSON.parse(decodeURIComponent(escape(atob(b64))));
+      if (json?.obraId) return { id: Number(json.obraId), nome: json.obraNome ?? null };
+    } catch { /* token malformado → avaliação geral */ }
+    return null;
+  }, [isPublic, publicToken]);
+
   // Guard (não se aplica ao link público, que é acessível sem login)
   useEffect(() => {
     if (isPublic) return;
@@ -94,6 +109,11 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
 
   const { data: meusDados } = trpc.portalExterno.cliente.meusDados.useQuery({ token }, { enabled: !!token && tipo === "cliente" && !isPublic });
   const { data: minhasObras = [] } = trpc.portalExterno.cliente.minhasObras.useQuery({ token }, { enabled: !!token && tipo === "cliente" && !isPublic });
+
+  // Rev. 2892 — trava a obra do link público no estado da avaliação.
+  useEffect(() => {
+    if (linkObra) setAval((prev) => ({ ...prev, obraId: linkObra.id }));
+  }, [linkObra]);
 
   // ===== Comentários =====
   const [obraFiltro, setObraFiltro] = useState<number | null>(null);
@@ -494,17 +514,27 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                   </div>
                 </div>
 
-                <div>
-                  <Label className="text-sm font-medium">Sobre qual obra? <span className="text-slate-400 text-xs">(opcional)</span></Label>
-                  <select
-                    value={aval.obraId ?? ""}
-                    onChange={(e) => setAval({ ...aval, obraId: e.target.value ? Number(e.target.value) : null })}
-                    className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
-                  >
-                    <option value="">Avaliação geral / não específica</option>
-                    {obrasOptions.map((o) => <option key={o.id} value={o.id}>{o.nome}</option>)}
-                  </select>
-                </div>
+                {linkObra ? (
+                  // Rev. 2892 — link público POR OBRA: obra travada, exibida só p/ leitura.
+                  <div>
+                    <Label className="text-sm font-medium">Obra avaliada</Label>
+                    <div className="mt-1 w-full border rounded-md px-3 py-2 text-sm bg-slate-50 text-slate-700 font-medium">
+                      {linkObra.nome ?? `Obra #${linkObra.id}`}
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <Label className="text-sm font-medium">Sobre qual obra? <span className="text-slate-400 text-xs">(opcional)</span></Label>
+                    <select
+                      value={aval.obraId ?? ""}
+                      onChange={(e) => setAval({ ...aval, obraId: e.target.value ? Number(e.target.value) : null })}
+                      className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
+                    >
+                      <option value="">Avaliação geral / não específica</option>
+                      {obrasOptions.map((o) => <option key={o.id} value={o.id}>{o.nome}</option>)}
+                    </select>
+                  </div>
+                )}
 
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                   <NotaSelector label={lbl("notaGeral", "Nota geral (0 = péssimo · 10 = excelente) ★")} value={aval.notaGeral} onChange={(n) => setAval({ ...aval, notaGeral: n })} />
