@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2831 — **TERCEIROS · CONTRATOS — NATUREZA DO CONTRATO EDITÁVEL NO DETALHE (DESTRAVA A ABA FD EM CONTRATOS EXISTENTES).**
+ *
+ * PEDIDO (usuário, com print do iPad): "Cadê a aba do FD?" — abriu o contrato CT-2026-0007 (THIAGO MATERIAIS) e não
+ * achou a aba FD entregue na Rev. 2830.
+ *
+ * CAUSA: a aba "FD" só aparece quando o contrato INCLUI material (`naturezaIncluiMaterial`) OU já tem FDs vinculados.
+ * O contrato em questão estava como "Mão de Obra" (natureza default de TODOS os contratos criados ANTES da Rev. 2830,
+ * pois a coluna `natureza_contrato` nasceu com DEFAULT 'mao_de_obra'). E NÃO havia rota/tela de EDIÇÃO de contrato — só
+ * criação (`/terceiros/contratos/novo`) e detalhe (`/terceiros/contratos/:id`) — então era IMPOSSÍVEL trocar a natureza
+ * de um contrato já existente pela UI, deixando a aba FD inalcançável nesses contratos.
+ *
+ * O QUE FOI FEITO (`client/src/pages/terceiros/contratos/ContratoDetalhe.tsx`, SÓ frontend; ZERO backend/schema novo —
+ * reusa a mutation `terceiroContratos.atualizarContrato` que JÁ aceitava `naturezaContrato` desde a Rev. 2830):
+ *  - O BADGE de natureza no cabeçalho do detalhe virou CLICÁVEL (ícone de lápis). Ao clicar, vira um `<Select>` inline
+ *    com as 3 opções (Mão de Obra | Material | MDO + Material) montadas a partir de `NATUREZA_CONTRATO` de
+ *    `shared/terceiroNatureza.ts`. Escolher uma opção dispara `atualizarContratoMut.mutate({id, companyId, naturezaContrato})`,
+ *    invalida `getContrato` e fecha o editor (novo state `editingNatureza`, resetado no `onSuccess`).
+ *  - Resultado: marcar o contrato como "Material" ou "MDO + Material" faz a aba "FD" aparecer na hora (gate já existente
+ *    `naturezaIncluiMaterial`), além de habilitar o desconto de material em FD nos números (Líquido de Mão de Obra).
+ *
+ * RESSALVA: continua sem tela de edição completa do contrato — só a natureza é editável inline aqui. ZERO ALTER/DROP/DELETE.
+ * VALIDAÇÃO: dev server sobe, conecta no Neon e compila o client sem erro.
+ *
  * Rev. 2830 — **TERCEIROS — UM CONTRATO COBRE MDO + MATERIAL; MATERIAL VIRA FD E É DESCONTADO + RAIO-X 360° DA EMPRESA TERCEIRA.**
  *
  * PEDIDO (usuário): um MESMO contrato/terceiro pode cobrir Mão de Obra E Material juntos. O material comprado entra

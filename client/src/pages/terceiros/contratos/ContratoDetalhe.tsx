@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useLocation, useRoute } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
-import { naturezaInfo } from "@shared/terceiroNatureza";
+import { naturezaInfo, NATUREZA_CONTRATO } from "@shared/terceiroNatureza";
 import FluxogramaPagamento from "./FluxogramaPagamento";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -79,6 +79,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   const [newDoc, setNewDoc] = useState({ tipo: "INSS", descricao: "", competencia: "", dataVencimento: "", bloqueiaPagemento: false });
   const [editMedicao, setEditMedicao] = useState<{ id: number; periodo: string; dataReferencia: string; observacoes: string; status: string } | null>(null);
   const [descExpanded, setDescExpanded] = useState(false);
+  const [editingNatureza, setEditingNatureza] = useState(false);
 
   // Documento tab state
   const [textoEditado, setTextoEditado] = useState<string | null>(null);
@@ -99,7 +100,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   });
 
   const atualizarContratoMut = trpc.terceiroContratos.atualizarContrato.useMutation({
-    onSuccess: () => { toast.success("Contrato atualizado!"); utils.terceiroContratos.getContrato.invalidate({ id }); setEditingDates(false); setEditingCriterios(false); setEditingDocDate(null); },
+    onSuccess: () => { toast.success("Contrato atualizado!"); utils.terceiroContratos.getContrato.invalidate({ id }); setEditingDates(false); setEditingCriterios(false); setEditingDocDate(null); setEditingNatureza(false); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -234,7 +235,30 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               {contrato.numeroContrato && <span className="text-xs bg-gray-100 px-2 py-0.5 rounded font-mono">{contrato.numeroContrato}</span>}
               <Badge className={`text-xs border ${STATUS_MEDICAO[contrato.status || "ativo"]?.cls || ""}`}>{contrato.status}</Badge>
-              {(() => { const nt = naturezaInfo((contrato as any).naturezaContrato); return <Badge className={`text-xs border ${nt.cls}`}>{nt.label}</Badge>; })()}
+              {editingNatureza ? (
+                <Select
+                  value={(contrato as any).naturezaContrato || "mao_de_obra"}
+                  onValueChange={(v) => atualizarContratoMut.mutate({ id, companyId: contrato.companyId, naturezaContrato: v as any })}
+                >
+                  <SelectTrigger className="h-7 text-xs w-[170px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(NATUREZA_CONTRATO).map(([k, v]) => (
+                      <SelectItem key={k} value={k} className="text-xs">{v.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                (() => {
+                  const nt = naturezaInfo((contrato as any).naturezaContrato);
+                  return (
+                    <button onClick={() => setEditingNatureza(true)} title="Clique para alterar a natureza do contrato">
+                      <Badge className={`text-xs border cursor-pointer hover:opacity-80 ${nt.cls}`}>
+                        {nt.label}<Pencil className="w-2.5 h-2.5 ml-1" />
+                      </Badge>
+                    </button>
+                  );
+                })()
+              )}
               {contrato.docsComPendencia > 0 && (
                 <Badge className="text-xs border bg-red-100 text-red-700 border-red-200">
                   <AlertTriangle className="w-3 h-3 mr-1" />{contrato.docsComPendencia} doc(s) pendente(s)
