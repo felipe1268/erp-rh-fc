@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2885 — **CLIENTES — BOTÕES "EDITAR"/"EXCLUIR" DOS CARDS AGORA SEMPRE
+ * VISÍVEIS (ANTES DEPENDIAM DE HOVER → INVISÍVEIS EM IPAD/TOUCH).**
+ *
+ * SINTOMA (usuário, print de iPad): na tela Clientes os cards não mostravam
+ * nenhuma forma de editar o cadastro. Em telas de toque (iPad/celular landscape
+ * ≥ md) os botões existiam mas estavam ocultos.
+ *
+ * CAUSA-RAIZ: a barra de ações do card de cliente em `client/src/pages/Clientes.tsx`
+ * usava `opacity-100 md:opacity-0 md:group-hover:opacity-100` — ou seja, a partir
+ * do breakpoint `md` (≥768px) os botões "Editar"/"Excluir" ficavam transparentes e
+ * só apareciam no `:hover` do card. Dispositivos de toque (iPad da FC) não têm
+ * estado de hover real, então em ~768px+ os botões nunca apareciam → impressão de
+ * que "não dá pra editar".
+ *
+ * FIX: classe trocada para `opacity-100 transition-opacity` (sem o gate de hover).
+ * Os botões passam a ficar SEMPRE visíveis em todas as larguras. A tela de Obras
+ * já mostrava "Editar" sempre visível (sem hover-gate), então NÃO foi alterada.
+ *
+ * ZERO schema; ZERO backend; ZERO ALTER/DROP/DELETE. Só 1 linha de classe CSS no
+ * front. Arquivo: `client/src/pages/Clientes.tsx`.
+ *
  * Rev. 2884 — **HOTFIX: LISTA DE OBRAS VOLTOU VAZIA ("Nenhuma obra encontrada") —
  * COLUNAS databook_logo_* (Rev. 2879) + numero_contrato (Rev. 2882) NUNCA FORAM
  * CRIADAS NO NEON; SELF-HEAL MIGRADO P/ BLOCO UNGATED.**

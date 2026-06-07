@@ -350,7 +350,7 @@ export default function Clientes() {
                   <span className="text-[10px] text-slate-400">
                     {new Date(c.criadoEm).toLocaleDateString("pt-BR")}
                   </span>
-                  <div className="flex gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                  <div className="flex gap-1 opacity-100 transition-opacity">
                     <button
                       onClick={() => abrirEditar(c)}
                       className="p-1.5 rounded-md border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-600 flex items-center gap-1"
