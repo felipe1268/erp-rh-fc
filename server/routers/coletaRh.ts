@@ -161,6 +161,66 @@ export const coletaRhRouter = router({
       return { id: novo.id, token: novo.token };
     }),
 
+  // Gera links de coleta para TODAS as obras ativas de uma vez. Idempotente:
+  // obra que JÁ tem um link ativo (e não expirado) é reaproveitada (não duplica).
+  criarSessoesTodas: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      expiraEm: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const companyIds = resolveCompanyIds(input);
+      await assertColetaCompanyAccess(ctx.user, companyIds);
+
+      // Obras ativas (mesmo filtro canônico de obrasDisponiveis).
+      const obrasAtivas = await db
+        .select({ id: obras.id, companyId: obras.companyId, nome: obras.nome })
+        .from(obras)
+        .where(and(
+          inArray(obras.companyId, companyIds),
+          eq(obras.isActive, 1),
+          isNull(obras.deletedAt),
+          eq(obras.status, "Em_Andamento"),
+        ))
+        .orderBy(obras.nome);
+
+      // Links ativos existentes (para não duplicar).
+      const ativas = await db
+        .select({ id: coletaRhSessoes.id, obraId: coletaRhSessoes.obraId, token: coletaRhSessoes.token, expiraEm: coletaRhSessoes.expiraEm })
+        .from(coletaRhSessoes)
+        .where(and(inArray(coletaRhSessoes.companyId, companyIds), eq(coletaRhSessoes.ativo, 1)));
+      const ativaPorObra = new Map<number, { token: string }>();
+      for (const s of ativas) {
+        if (!sessaoExpirada(s.expiraEm)) ativaPorObra.set(s.obraId, { token: s.token });
+      }
+
+      let criadas = 0;
+      let reaproveitadas = 0;
+      for (const obra of obrasAtivas) {
+        if (ativaPorObra.has(obra.id)) {
+          reaproveitadas++;
+          continue;
+        }
+        const token = gerarToken();
+        await db
+          .insert(coletaRhSessoes)
+          .values({
+            companyId: obra.companyId,
+            obraId: obra.id,
+            token,
+            titulo: `Coleta — ${obra.nome}`,
+            ativo: 1,
+            criadoPor: ctx.user?.name ?? null,
+            criadoPorId: ctx.user?.id ?? null,
+            expiraEm: input.expiraEm || null,
+          });
+        criadas++;
+      }
+      return { criadas, reaproveitadas, totalObras: obrasAtivas.length };
+    }),
+
   // Lista links da empresa, com contagem de respostas pendentes por link.
   listarSessoes: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))

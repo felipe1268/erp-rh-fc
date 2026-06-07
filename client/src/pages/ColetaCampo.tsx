@@ -82,6 +82,18 @@ export default function ColetaCampo() {
     onSuccess: () => utils.coletaRh.listarSessoes.invalidate(),
     onError: (e) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
+  const criarTodasM = trpc.coletaRh.criarSessoesTodas.useMutation({
+    onSuccess: (r) => {
+      toast({
+        title: "Links gerados",
+        description: r.criadas > 0
+          ? `${r.criadas} novo(s) link(s) criado(s)${r.reaproveitadas > 0 ? ` · ${r.reaproveitadas} já existiam` : ""} (${r.totalObras} obra(s) ativa(s)).`
+          : `Todas as ${r.totalObras} obra(s) ativa(s) já tinham link.`,
+      });
+      utils.coletaRh.listarSessoes.invalidate();
+    },
+    onError: (e) => toast({ title: "Erro ao gerar links", description: e.message, variant: "destructive" }),
+  });
 
   const linkFor = (token: string) => `${window.location.origin}/portal/coleta-rh/${token}`;
   const copiar = async (s: any) => {
@@ -91,6 +103,27 @@ export default function ColetaCampo() {
       setTimeout(() => setCopiado(null), 1500);
     } catch {
       toast({ title: "Copie manualmente", description: linkFor(s.token) });
+    }
+  };
+
+  // Copia TODOS os links ativos de uma vez (obra → link), prontos p/ colar e enviar.
+  const [copiouTodos, setCopiouTodos] = useState(false);
+  const copiarTodos = async () => {
+    const ativos = (sessoesQ.data || []).filter((s: any) => s.ativo === 1 && !s.expirada);
+    if (ativos.length === 0) {
+      toast({ title: "Nenhum link ativo", description: "Gere os links primeiro.", variant: "destructive" });
+      return;
+    }
+    const texto = ativos
+      .map((s: any) => `${s.obraNome || s.titulo}: ${linkFor(s.token)}`)
+      .join("\n");
+    try {
+      await navigator.clipboard.writeText(texto);
+      setCopiouTodos(true);
+      setTimeout(() => setCopiouTodos(false), 1500);
+      toast({ title: "Copiado", description: `${ativos.length} link(s) copiado(s) para a área de transferência.` });
+    } catch {
+      toast({ title: "Copie manualmente", description: texto });
     }
   };
 
@@ -185,6 +218,30 @@ export default function ColetaCampo() {
 
       {tab === "links" && (
         <div className="space-y-4">
+          {/* Gerar para todas as obras ativas de uma vez */}
+          <div className="rounded-xl border bg-card p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex-1">
+              <h2 className="font-semibold">Gerar para todas as obras ativas</h2>
+              <p className="text-xs text-muted-foreground">
+                Cria um link para cada obra ativa de uma vez{obrasQ.data ? ` (${obrasQ.data.length} ativa(s))` : ""}. Obras que já têm link ativo são reaproveitadas. Depois é só copiar e enviar para cada responsável.
+              </p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Button
+                disabled={criarTodasM.isPending || (obrasQ.data || []).length === 0}
+                onClick={() => criarTodasM.mutate({ ...baseInput })}
+                style={{ background: FC_NAVY }}
+              >
+                {criarTodasM.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Link2 className="h-4 w-4 mr-1" />}
+                Gerar todos
+              </Button>
+              <Button variant="outline" onClick={copiarTodos}>
+                {copiouTodos ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
+                Copiar todos
+              </Button>
+            </div>
+          </div>
+
           {/* Criar */}
           <div className="rounded-xl border bg-card p-4">
             <h2 className="font-semibold mb-3">Novo link de coleta</h2>

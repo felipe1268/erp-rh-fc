@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2860 — **COLETA DE CAMPO (RH) — "GERAR TODOS" + "COPIAR TODOS": GERA UM
+ * LINK PARA TODAS AS OBRAS ATIVAS DE UMA VEZ E COPIA A LISTA (OBRA → LINK) PRONTA
+ * PARA ENVIAR A CADA RESPONSÁVEL.**
+ *
+ * PEDIDO (tela `/coleta-campo`): "quero poder gerar link para todas obras ativas
+ * de uma vez... assim ganhamos tempo... depois só copio e envio para cada
+ * responsável." Antes era 1 link por vez (selecionar obra → "Gerar link").
+ *
+ * FEITO — BACKEND (`server/routers/coletaRh.ts`): NOVO endpoint protegido
+ * `criarSessoesTodas` (mesmo guard anti-IDOR `assertColetaCompanyAccess` +
+ * escopo por empresa). Busca as obras ATIVAS pelo MESMO filtro canônico de
+ * `obrasDisponiveis` (`isActive=1` AND `deletedAt IS NULL` AND
+ * `status='Em_Andamento'`); é IDEMPOTENTE: obra que JÁ tem link ATIVO e não
+ * expirado é REAPROVEITADA (não duplica). Retorna `{criadas, reaproveitadas,
+ * totalObras}`.
+ *
+ * FEITO — FRONTEND (`client/src/pages/ColetaCampo.tsx`): NOVO card "Gerar para
+ * todas as obras ativas" com botões "Gerar todos" (chama `criarSessoesTodas`) e
+ * "Copiar todos" (monta `obraNome: link` de TODOS os links ativos/não-expirados
+ * e joga no clipboard, pronto p/ colar e enviar). Toasts informam quantos foram
+ * criados/reaproveitados. O fluxo 1-a-1 continua intacto.
+ *
+ * ZERO ALTER/DROP/DELETE; ZERO schema (reusa tabelas da Rev. 2858); 1 endpoint +
+ * UI.
+ *
  * Rev. 2859 — **COLETA DE CAMPO (RH) — O SELETOR DE OBRA DO "NOVO LINK DE COLETA"
  * AGORA LISTA SOMENTE OBRAS ATIVAS (EM ANDAMENTO).**
  *
