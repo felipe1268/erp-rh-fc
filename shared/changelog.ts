@@ -1,6 +1,68 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2842 — **FINANCEIRO · DRE — REDESIGN MODERNO + ANÁLISE INTELIGENTE (IA) COM INDICADORES DO SETOR DE
+ * CONSTRUÇÃO E FONTES CLICÁVEIS.**
+ *
+ * PEDIDO (usuário): redesenhar a tela do DRE — "layout extremamente moderno, com legenda de fácil entendimento,
+ * uma análise feita por IA, indicadores de mercado do setor (construção), com as FONTES sendo CLICÁVEIS e baseado
+ * em literatura financeira mundial". A tela anterior (`FinanceiroDRE.tsx`) já trazia os números corretos (Rev.
+ * 2833/2838) mas era uma tabela seca, sem leitura guiada nem comparação com o mercado.
+ *
+ * O QUE FOI FEITO:
+ *  - NOVO serviço `server/services/dreAnaliseIA.ts` (`analisarDRE`): chama `calcularDRE`, monta o prompt com os
+ *    NÚMEROS REAIS do período + um conjunto de BENCHMARKS do setor de construção (margem bruta 15–30%, EBITDA
+ *    8–15%, líquida 4–8%, custos de obra/receita 70–85%, despesas operacionais 8–18%) e um CATÁLOGO CURADO de
+ *    fontes reais e verificáveis: `FONTES_DRE` = Damodaran (NYU Stern, margens por setor), IBGE/PAIC, CBIC,
+ *    INCC-FGV, BACEN/Selic, Assaf Neto, Matarazzo, Brigham & Houston, Lei 6.404/76 art. 187 + CPC 26 — cada uma
+ *    com `titulo/autor/tipo/url ESTÁVEL/nota`.
+ *  - ANTI-ALUCINAÇÃO: o prompt instrui a IA a usar SOMENTE os números fornecidos e citar APENAS ids existentes no
+ *    catálogo; no servidor, `sanitizeFontes` filtra qualquer id fora do catálogo, `parseJsonLoose` tolera cercas
+ *    de código, e os campos são "clampados" (enum de saúde/status/severidade, limites de tamanho). Só as fontes
+ *    EFETIVAMENTE citadas são devolvidas ao cliente. Período sem lançamentos → resposta honesta (sem chamar a IA).
+ *  - IA via `invokeLLM({ fast: true, responseFormat: { type: "json_object" } })`: caminho rápido Gemini 2.5 Flash
+ *    (thinkingBudget=0, anti-"trava" no iPad) com FALLBACK automático para Claude. Validado no Neon (company
+ *    60002, fev/2026): Gemini caiu por 429 e o fallback Claude entregou 6 indicadores, 4 riscos, 4 recomendações
+ *    e fontes válidas.
+ *  - NOVO endpoint `financial.analiseDRE` (MUTATION, sob demanda por ser chamada cara) com `import()` dinâmico do
+ *    serviço e o mesmo guard `_assertFinanceiroCompanyAccess` do `getDRE`.
+ *  - FRONTEND `client/src/pages/financeiro/FinanceiroDRE.tsx` redesenhado no tema FC (navy #1B2A4A + laranja):
+ *    header em banner navy gradiente; KPIs com anel/ícone + margem; LEGENDA por linha do DRE (ícone `Info` →
+ *    Popover explicando cada termo, ex.: o que é EBITDA, LAIR, margem bruta); painel "Análise Inteligente"
+ *    on-demand (botão laranja "Analisar com IA") com badge de SAÚDE (excelente/boa/atenção/crítica), resumo
+ *    executivo, cards de INDICADORES x setor (valor, faixa do setor, status acima/dentro/abaixo) com chips de
+ *    fonte CLICÁVEIS (Popover navy mostrando autor/tipo/nota + botão "Abrir fonte" externo), blocos de RISCOS e
+ *    RECOMENDAÇÕES (cada item com suas fontes), lista consolidada de "Fontes citadas" e skeleton de loading.
+ *
+ * RESSALVA: a análise é gerada por IA como APOIO à decisão (não aconselhamento contábil/fiscal definitivo) — há
+ * disclaimer na própria tela. Se o período exibido mudar após gerar a análise, a tela avisa que a análise é de
+ * outro período e oferece refazer.
+ *
+ * ZERO ALTER/DROP/DELETE; ZERO schema; ZERO mutação de dados (a análise é read-only sobre `financial_entries`/
+ * `financial_tax_obligations`).
+ *
+ * Rev. 2841 — **FINANCEIRO · KPIs — TODAS AS QUERIES PASSAM A LIGAR OS PARÂMETROS POSICIONAIS ($1/$2/$3) +
+ * CORREÇÃO DO SALDO BANCÁRIO (TABELA REAL).**
+ *
+ * CONTINUAÇÃO da Rev. 2838 (que corrigiu só o DRE). CAUSA-RAIZ: o `.execute(sqlString, [params])` do drizzle
+ * node-postgres IGNORA o array de parâmetros → `$1/$2/$3` ficam sem bind → erro "there is no parameter $1",
+ * deixando os KPIs/fluxo de caixa quebrados. FIX (`server/services/financialKpiService.ts`, só backend): TODAS as
+ * chamadas remanescentes `db!.execute(sql, [params])` migradas para o helper `q(db!, sql, [params])` (que usa o
+ * pool pg via `db.$client.query`) — `calcularKpis`, `projetarFluxoCaixa90Dias` e `gerarEFDReinf`. Não sobrou
+ * nenhum `db!.execute`.
+ *
+ * A validação no Neon (company 60002) expôs um bug ALÉM do bind: a query de SALDO BANCÁRIO (em `calcularKpis` E
+ * em `projetarFluxoCaixa90Dias`) lia colunas que NUNCA existiram (`company_bank_accounts.saldo_inicial/entradas/
+ * saidas`). Trocada pela tabela REAL `financial_opening_balances` (JOIN `company_bank_accounts cba ON cba.id =
+ * fob.conta_bancaria_id WHERE fob.company_id = $1 AND cba.ativo = 1 AND cba."deletedAt" IS NULL`). Ambas as
+ * funções revalidadas OK (calcularKpis: receita ~1.6M, tributos ~29.300; saldo = 0 é o valor real da base).
+ *
+ * RESSALVA (follow-up): `gerarEFDReinf` teve o BIND corrigido, mas ainda referencia colunas inexistentes
+ * (`pjc.nome_fantasia/cnpj/natureza_servico`, `pjp.medicao_id`, `tc.nome_empresa/cnpj/retencao_inss`) — precisa
+ * de reconstrução do SQL contra o schema real antes de voltar a funcionar.
+ *
+ * ZERO ALTER/DROP/DELETE; ZERO schema.
+ *
  * Rev. 2840 — **TERCEIROS · RAIO-X 360° · ABA CONTRATOS — NÚMERO DO CONTRATO EM DESTAQUE + COLUNA "SALDO".**
  *
  * PEDIDO (usuário, print do iPad da aba "Contratos" do Raio-X do terceiro): "Faltou o Saldo e quero o número do contrato
