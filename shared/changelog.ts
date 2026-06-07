@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2861 — **DATABOOK DE OBRA — (1) "NÃO HAJA FALHAS" NA GERAÇÃO DE
+ * ESPECIFICAÇÕES IA, (2) FICHAS NUMERADAS E SEPARADAS POR DISCIPLINA, (3)
+ * FICHAS APROVADAS NÃO SÃO PERDIDAS AO GERAR NOVAMENTE.**
+ *
+ * PEDIDO (tela `/compras/databook`): na fase "Gerar Especificações IA" deram 19
+ * falhas de 99 fichas; o usuário pediu: (1) "não haja falhas — corrija em
+ * definitivo"; (2) "as fichas precisam ser numeradas e separadas por disciplina
+ * para facilitar a busca"; (3) "as aprovadas não podem ser perdidas quando gerar
+ * novamente mais fichas".
+ *
+ * CAUSA-RAIZ das falhas (`server/_core/llm.ts`): ao processar 99 fichas em
+ * sequência, o Claude (claude-sonnet-4-6) retorna 529 "Overloaded" sob carga.
+ * `invokeAnthropic` só dava retry em `status === 429` — NÃO tratava 529/
+ * overloaded; e o fallback Claude→Gemini de `invokeLLM` checava
+ * `msg.includes("overloaded")` CASE-SENSITIVE (a SDK manda "Overloaded" com O
+ * maiúsculo) → a condição falhava e a ficha estourava em vez de cair pro Gemini.
+ *
+ * FEITO (1) NÃO HAJA FALHAS: `invokeAnthropic` agora trata 429 (rate limit) E
+ * 529/"overloaded" (sobrecarga) como retryable (regex `/overloaded/i` +
+ * `err.error.type === "overloaded_error"`), com backoff exponencial; o fallback
+ * de `invokeLLM` virou regex CASE-INSENSITIVE incluindo 529/overloaded → a
+ * sobrecarga do Claude cai pro Gemini em vez de derrubar a ficha. No front
+ * (`client/src/pages/compras/Databook.tsx`, `handleGerarCompleto` fase 2) cada
+ * ficha é tentada até 3x com backoff antes de contar como falha.
+ *
+ * FEITO (2) NUMERADAS + POR DISCIPLINA: NOVO `shared/databookDisciplinas.ts`
+ * (`DISCIPLINA_PREFIXOS`, `DISCIPLINAS_ORDEM`, `codigoFicha`, `ordemDisciplina`).
+ * O `numeroSequencial` continua o ID estável e global (nunca muda → aprovadas
+ * mantêm o número); o CÓDIGO exibido vira `<PREFIXO>-NNN` (ex.: "EST-014" =
+ * Estrutura, ficha 14). A lista de Fichas Técnicas agora é AGRUPADA por
+ * disciplina (cabeçalho de seção com contagem, ordem canônica); o índice PDF
+ * (`server/services/databookPdf.ts`) ganha faixas de seção por disciplina e usa
+ * `codigoFicha`; o nome do PDF da ficha e o título do diálogo também usam o
+ * código novo.
+ *
+ * FEITO (3) APROVADAS NÃO SE PERDEM: já era seguro (dedup por hash em
+ * `gerarFichasOC`, sem DELETE, e as fases pulam quem já tem espec/foto). Reforço
+ * à prova de bala em `gerarEspecificacoesIA`: fichas em status avançado
+ * (`revisado`/`enviado`/`aprovado`/`reprovado`) JAMAIS são reescritas pela IA
+ * (early-return `protegida: true`), mesmo se o filtro do front falhar.
+ *
+ * ZERO ALTER/DROP/DELETE; ZERO schema (só leitura/lógica + 1 arquivo shared novo
+ * + UI). Arquivos: `server/_core/llm.ts`, `server/routers/databook.ts`,
+ * `server/services/databookPdf.ts`, `client/src/pages/compras/Databook.tsx`,
+ * `shared/databookDisciplinas.ts`.
+ *
  * Rev. 2860 — **COLETA DE CAMPO (RH) — "GERAR TODOS" + "COPIAR TODOS": GERA UM
  * LINK PARA TODAS AS OBRAS ATIVAS DE UMA VEZ E COPIA A LISTA (OBRA → LINK) PRONTA
  * PARA ENVIAR A CADA RESPONSÁVEL.**

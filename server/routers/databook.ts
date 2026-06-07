@@ -6,6 +6,7 @@ import { databookFichas, databookTerceiroEntregas, comprasOrdens, comprasOrdensI
 import { invokeLLM } from "../_core/llm";
 import { createHash } from "crypto";
 import { gerarDatabookFichaPdf, gerarIndicePdf, gerarDatabookCompletoPdf } from "../services/databookPdf";
+import { codigoFicha } from "@shared/databookDisciplinas";
 
 const DISCIPLINAS = [
   "Estrutura", "Hidráulica", "Elétrica", "Acabamento", "Impermeabilização",
@@ -390,6 +391,15 @@ export const databookRouter = router({
         and(eq(databookFichas.id, input.fichaId), eq(databookFichas.companyId, input.companyId))
       );
       if (!ficha) throw new Error("Ficha não encontrada");
+
+      // Rev. 2861 — "AS APROVADAS NÃO PODEM SER PERDIDAS QUANDO GERAR NOVAMENTE":
+      // fichas em status avançado (já revisadas/enviadas/aprovadas/reprovadas
+      // pelo RH/cliente) JAMAIS são reescritas pela IA. Blindagem à prova de
+      // bala mesmo se o filtro do front falhar.
+      const STATUS_PROTEGIDOS = ["revisado", "enviado", "aprovado", "reprovado"];
+      if (STATUS_PROTEGIDOS.includes(ficha.status as string)) {
+        return { disciplina: ficha.disciplina, especificacoes: ficha.especificacoes, protegida: true };
+      }
 
       if (ficha.especificacoes && (ficha.especificacoes as string).trim().length > 10) {
         return { disciplina: ficha.disciplina, especificacoes: ficha.especificacoes, jaExistia: true };
@@ -982,7 +992,7 @@ Responda APENAS o JSON.`;
         fornecedorData,
       );
 
-      return { pdf: pdfBuffer.toString("base64"), filename: `DATABOOK-${String(ficha.numero_sequencial).padStart(3, "0")}_${ficha.descricao.substring(0, 30).replace(/[^a-zA-Z0-9]/g, "_")}.pdf` };
+      return { pdf: pdfBuffer.toString("base64"), filename: `${codigoFicha(ficha.disciplina, ficha.numero_sequencial)}_${ficha.descricao.substring(0, 30).replace(/[^a-zA-Z0-9]/g, "_")}.pdf` };
     }),
 
   gerarPdfIndice: protectedProcedure

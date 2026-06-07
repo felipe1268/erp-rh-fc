@@ -1,5 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import { useState, useMemo } from "react";
+import { useState, useMemo, Fragment } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import { codigoFicha, ordemDisciplina } from "@shared/databookDisciplinas";
 import {
   BookOpen, Search, Loader2, CheckCircle, Clock, AlertTriangle, AlertCircle, Eye,
   FileDown, Sparkles, Image, Edit, Trash2, Send, ThumbsUp, ThumbsDown,
@@ -270,12 +271,20 @@ export default function Databook() {
           currentDesc: f.descricao?.substring(0, 50) || "",
           fases: [...fases],
         } : null);
-        try {
-          await gerarEspecIA_single.mutateAsync({ companyId, fichaId: f.id });
-          specOk++;
-        } catch {
-          specFail++;
+        // Rev. 2861 — "NÃO HAJA FALHAS": cada ficha é tentada até 3x com
+        // backoff antes de contar como falha. Combinado com o fallback
+        // Claude→Gemini do backend, sobrecarga transitória (429/529) deixa
+        // de derrubar fichas.
+        let ok = false;
+        for (let attempt = 0; attempt < 3 && !ok; attempt++) {
+          try {
+            await gerarEspecIA_single.mutateAsync({ companyId, fichaId: f.id });
+            ok = true;
+          } catch {
+            if (attempt < 2) await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+          }
         }
+        if (ok) specOk++; else specFail++;
       }
       fases[1].resultado = `${specOk} geradas, ${specFail} falhas`;
     } else {
@@ -534,6 +543,25 @@ export default function Databook() {
 
   const fichasList = (fichas.data as any[]) || [];
   const allSelected = fichasList.length > 0 && selecionados.length === fichasList.length;
+
+  // Rev. 2861 — fichas agrupadas e SEPARADAS POR DISCIPLINA (ordem canônica),
+  // numeradas dentro de cada grupo, para facilitar a busca.
+  const fichasAgrupadas = useMemo(() => {
+    const grupos = new Map<string, any[]>();
+    for (const f of fichasList) {
+      const disc = f.disciplina || "Outros";
+      if (!grupos.has(disc)) grupos.set(disc, []);
+      grupos.get(disc)!.push(f);
+    }
+    return Array.from(grupos.entries())
+      .map(([disciplina, itens]) => ({
+        disciplina,
+        itens: [...itens].sort(
+          (a, b) => (a.numero_sequencial || 0) - (b.numero_sequencial || 0),
+        ),
+      }))
+      .sort((a, b) => ordemDisciplina(a.disciplina) - ordemDisciplina(b.disciplina));
+  }, [fichasList]);
 
   if (!companyId) {
     return (
@@ -837,7 +865,18 @@ export default function Databook() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {fichasList.map((f: any) => (
+                  {fichasAgrupadas.map((grupo) => (
+                    <Fragment key={grupo.disciplina}>
+                      <TableRow className="bg-slate-100 hover:bg-slate-100">
+                        <TableCell colSpan={9} className="py-1.5">
+                          <span className="inline-flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wide">
+                            <HardHat className="w-3.5 h-3.5 text-slate-500" />
+                            {grupo.disciplina}
+                            <span className="text-slate-400 font-normal normal-case">({grupo.itens.length})</span>
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                      {grupo.itens.map((f: any) => (
                     <TableRow key={f.id} className="cursor-pointer hover:bg-gray-50">
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <Checkbox
@@ -849,7 +888,7 @@ export default function Databook() {
                         />
                       </TableCell>
                       <TableCell className="font-mono text-xs">
-                        DATABOOK-{String(f.numero_sequencial).padStart(3, "0")}
+                        {codigoFicha(f.disciplina, f.numero_sequencial)}
                       </TableCell>
                       <TableCell className="max-w-xs truncate text-sm" onClick={() => {
                         setFichaDialog(f);
@@ -911,10 +950,12 @@ export default function Databook() {
                         </div>
                       </TableCell>
                     </TableRow>
+                      ))}
+                    </Fragment>
                   ))}
                   {fichasList.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-gray-400">
+                      <TableCell colSpan={9} className="text-center py-8 text-gray-400">
                         <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-30" />
                         <p>Nenhuma ficha encontrada</p>
                         <p className="text-xs mt-1">Clique em "Importar Itens de OCs" no Dashboard para começar</p>
@@ -1018,7 +1059,7 @@ export default function Databook() {
           <DialogContent className="!max-w-[100vw] !w-[100vw] !h-[100vh] !max-h-[100vh] !rounded-none !border-0 m-0 p-0 overflow-hidden [&>button]:top-3 [&>button]:right-4 [&>button]:z-50">
             <div className="flex items-center gap-3 px-6 py-3 border-b bg-white shrink-0">
               <BookOpen className="w-5 h-5 text-blue-600" />
-              <span className="text-lg font-bold text-gray-800">DATABOOK-{String(fichaDialog?.numero_sequencial || 0).padStart(3, "0")}</span>
+              <span className="text-lg font-bold text-gray-800">{codigoFicha(fichaDialog?.disciplina, fichaDialog?.numero_sequencial || 0)}</span>
               <span className="text-sm text-gray-400 ml-2 truncate max-w-[400px]">{fichaDialog?.descricao}</span>
             </div>
             {fichaDialog && (

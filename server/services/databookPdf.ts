@@ -2,6 +2,7 @@ import PDFDocument from "pdfkit";
 import { getDb } from "../db";
 import { obras, companies } from "../../drizzle/schema";
 import { eq, sql } from "drizzle-orm";
+import { codigoFicha, ordemDisciplina } from "@shared/databookDisciplinas";
 
 interface FornecedorData {
   razaoSocial?: string | null;
@@ -246,12 +247,33 @@ export async function gerarIndicePdf(
     doc.moveTo(margin, y).lineTo(pageW - margin, y).strokeColor("black").lineWidth(0.5).stroke();
     y += 6;
 
-    doc.font("Helvetica").fontSize(8);
-    for (const ficha of fichas) {
+    // Rev. 2861 — índice SEPARADO POR DISCIPLINA, numerado dentro de cada
+    // disciplina (código EST-001, HID-002, ...), para facilitar a busca.
+    const ordenadas = [...fichas].sort((a, b) => {
+      const od = ordemDisciplina(a.disciplina) - ordemDisciplina(b.disciplina);
+      if (od !== 0) return od;
+      return (a.numero_sequencial || 0) - (b.numero_sequencial || 0);
+    });
+
+    let disciplinaAtual: string | null = null;
+    const pageW2 = pageW - margin * 2;
+    for (const ficha of ordenadas) {
+      const disc = ficha.disciplina || "Outros";
+      if (disc !== disciplinaAtual) {
+        if (y > 520) { doc.addPage(); y = 40; }
+        y += 4;
+        doc.font("Helvetica-Bold").fontSize(9).fillColor("#1B2A4A");
+        doc.rect(margin, y - 2, pageW2, 16).fill("#E8EDF5");
+        doc.fillColor("#1B2A4A").text(disc.toUpperCase(), margin + 5, y + 1, { width: pageW2 - 10 });
+        doc.fillColor("black");
+        y += 18;
+        disciplinaAtual = disc;
+      }
       if (y > 540) { doc.addPage(); y = 40; }
+      doc.font("Helvetica").fontSize(8).fillColor("black");
       cx = margin + 5;
       const row = [
-        "DATABOOK-" + String(ficha.numero_sequencial).padStart(3, "0"),
+        codigoFicha(ficha.disciplina, ficha.numero_sequencial),
         ficha.disciplina || "—",
         ficha.descricao.substring(0, 60) + (ficha.descricao.length > 60 ? "..." : ""),
         ficha.fornecedor_nome || "—",

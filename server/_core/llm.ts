@@ -270,8 +270,21 @@ async function invokeAnthropic(params: InvokeParams): Promise<InvokeResult> {
           : undefined,
       };
     } catch (err: any) {
-      const status = err?.status ?? err?.statusCode ?? (typeof err?.message === "string" && err.message.includes("429") ? 429 : 0);
-      if (status === 429 && attempt < MAX_RETRIES) {
+      const msg = typeof err?.message === "string" ? err.message : "";
+      const status =
+        err?.status ??
+        err?.statusCode ??
+        (msg.includes("429") ? 429 : msg.includes("529") ? 529 : 0);
+      // Rev. 2861 — Claude também retorna 529 "Overloaded" sob carga (99 fichas
+      // do Databook em sequência). Tratamos 429 (rate limit) E 529/"overloaded"
+      // (sobrecarga) como retryable. A detecção de "overloaded" é
+      // CASE-INSENSITIVE (a SDK manda "Overloaded" com O maiúsculo).
+      const isOverloaded =
+        status === 529 ||
+        /overloaded/i.test(msg) ||
+        err?.error?.type === "overloaded_error";
+      const isRateLimited = status === 429;
+      if ((isRateLimited || isOverloaded) && attempt < MAX_RETRIES) {
         const retryAfter = err?.headers?.["retry-after"];
         let waitMs: number;
         if (retryAfter) {
@@ -281,11 +294,12 @@ async function invokeAnthropic(params: InvokeParams): Promise<InvokeResult> {
           waitMs = 1000 * Math.pow(2, attempt) + Math.random() * 500;
         }
         waitMs = Math.min(waitMs, 60000);
-        console.warn(`[LLM] Claude 429 rate limit (tentativa ${attempt + 1}/${MAX_RETRIES + 1}). Aguardando ${Math.round(waitMs)}ms...`);
+        const motivo = isRateLimited ? "429 rate limit" : "529 overloaded";
+        console.warn(`[LLM] Claude ${motivo} (tentativa ${attempt + 1}/${MAX_RETRIES + 1}). Aguardando ${Math.round(waitMs)}ms...`);
         await new Promise(r => setTimeout(r, waitMs));
         continue;
       }
-      if (status === 429) {
+      if (isRateLimited) {
         throw new Error("Limite de requisições da IA atingido. Aguarde alguns minutos e tente novamente.");
       }
       throw err;
@@ -331,7 +345,9 @@ export async function invokeLLM(
       return await invokeAnthropic(params);
     } catch (err: any) {
       const msg = err?.message || "";
-      const isRetryable = msg.includes("429") || msg.includes("rate limit") || msg.includes("503") || msg.includes("UNAVAILABLE") || msg.includes("500") || msg.includes("overloaded");
+      // Rev. 2861 — detecção CASE-INSENSITIVE + inclui 529 (overloaded) para
+      // que a sobrecarga do Claude caia para o Gemini em vez de falhar a ficha.
+      const isRetryable = /429|rate limit|503|unavailable|500|529|overloaded/i.test(msg);
       if (isRetryable && process.env.GOOGLE_API_KEY) {
         console.warn("[LLM] Claude falhou (" + msg.slice(0, 80) + "). Tentando fallback para Gemini...");
       } else {
