@@ -186,14 +186,11 @@ export async function gerarDatabookFichaPdf(
       y = boxY + contentH + 18;
     }
 
-    // ===== OUTRAS INFORMAÇÕES / FOTO — caixa com foto centralizada + obs =====
+    // ===== OUTRAS INFORMAÇÕES / FOTO — caixa SÓ com a foto centralizada =====
     {
       const pad = 8;
       const maxW = cw * 0.6;
       const maxH = 250;
-      doc.font("Helvetica").fontSize(9).fillColor("black");
-      const obsTxt = s(ficha.observacoes) ? "OBSERVAÇÕES: " + s(ficha.observacoes) : "OBSERVAÇÕES:";
-      const obsH = doc.heightOfString(obsTxt, { width: cw - 2 * pad });
 
       let imgObj: any = null;
       let photoW = 0;
@@ -208,24 +205,37 @@ export async function gerarDatabookFichaPdf(
         if (!imgObj) { photoW = maxW; photoH = 170; } // fallback sem openImage
       }
 
-      const gap = photoH ? 10 : 0;
-      const boxH = pad + photoH + gap + obsH + pad;
+      const boxH = Math.max(40, pad + photoH + pad);
       ensureSpace(boxH);
       sectionTitle("OUTRAS INFORMAÇÕES / FOTO:");
       const boxY = y;
       doc.lineWidth(0.5).strokeColor("black").rect(ml, boxY, cw, boxH).stroke();
-
-      let iy = boxY + pad;
       if (photoBuf && photoH) {
         try {
           const px = ml + (cw - photoW) / 2;
-          if (imgObj) doc.image(imgObj, px, iy, { width: photoW, height: photoH });
-          else doc.image(photoBuf, px, iy, { fit: [photoW, photoH], align: "center" });
+          const py = boxY + pad;
+          if (imgObj) doc.image(imgObj, px, py, { width: photoW, height: photoH });
+          else doc.image(photoBuf, px, py, { fit: [photoW, photoH], align: "center" });
         } catch {}
-        iy += photoH + gap;
       }
+      y = boxY + boxH + 18;
+    }
+
+    // ===== OBSERVAÇÕES — SEÇÃO SEPARADA com caixa própria (modelo LOTUS) =====
+    {
+      const pad = 6;
       doc.font("Helvetica").fontSize(9).fillColor("black");
-      doc.text(obsTxt, ml + pad, iy, { width: cw - 2 * pad });
+      const txt = s(ficha.observacoes);
+      const th = txt ? doc.heightOfString(txt, { width: cw - 2 * pad }) : 0;
+      const boxH = Math.max(40, th + 2 * pad);
+      ensureSpace(boxH);
+      sectionTitle("OBSERVAÇÕES:");
+      const boxY = y;
+      doc.lineWidth(0.5).strokeColor("black").rect(ml, boxY, cw, boxH).stroke();
+      if (txt) {
+        doc.font("Helvetica").fontSize(9).fillColor("black");
+        doc.text(txt, ml + pad, boxY + pad, { width: cw - 2 * pad });
+      }
       y = boxY + boxH;
     }
 

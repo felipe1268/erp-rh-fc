@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2875 — **DATABOOK (FICHA PDF) — "OBSERVAÇÕES" VIRA SEÇÃO SEPARADA, COM
+ * TÍTULO E CAIXA PRÓPRIOS (ABAIXO DE "OUTRAS INFORMAÇÕES / FOTO"), REPLICANDO O
+ * MODELO LOTUS.**
+ *
+ * PEDIDO: "Está quase perfeito, só falta corrigir o campo observações — veja que
+ * ele é separado e tem um campo próprio." Anexos IMG_1698/IMG_1699 (modelo LOTUS):
+ * a foto fica na caixa "OUTRAS INFORMAÇÕES / FOTO" e logo abaixo há uma seção
+ * "OBSERVAÇÕES:" INDEPENDENTE, com seu próprio título + régua + caixa.
+ *
+ * CONTEXTO: na Rev. 2873 (que emoldurou todas as seções) o texto de observações
+ * tinha sido DOBRADO p/ dentro da caixa de "OUTRAS INFORMAÇÕES / FOTO" (prefixo
+ * "OBSERVAÇÕES: " logo abaixo da foto). O modelo LOTUS, porém, trata observações
+ * como um "assunto" próprio com caixa separada.
+ *
+ * FEITO (SÓ backend `server/services/databookPdf.ts`, em `gerarDatabookFichaPdf`):
+ *  - A caixa "OUTRAS INFORMAÇÕES / FOTO" agora contém SOMENTE a foto centralizada
+ *    (escala exata via `doc.openImage`, maxW=60%/maxH=250; fallback fit+170px).
+ *    `boxH = max(40, pad + photoH + pad)` (sem mais espaço de obs); avança +18.
+ *  - NOVA seção "OBSERVAÇÕES:" usando o mesmo helper `sectionTitle` (negrito +
+ *    régua) + caixa própria medida via `heightOfString` (`boxH = max(40, th + 2*pad)`),
+ *    com o texto DENTRO da caixa (sem o prefixo "OBSERVAÇÕES: ", pois agora é título).
+ *    Quando não há observações, a caixa fica vazia (igual ao modelo IMG_1699).
+ *  - `ensureSpace` aplicado às duas seções (page-break antes do título órfão).
+ *
+ * ZERO schema; ZERO frontend; ZERO ALTER/DROP/DELETE. R-001/R-007/R-010 ok.
+ * Validado: typecheck sem erros novos + smoke test (caixa de OBSERVAÇÕES separada
+ * confirmada via pdftoppm).
+ *
  * Rev. 2874 — **MENU LATERAL — "EMPRESAS TERCEIRAS" VIRA "FORNECEDORES" (LOGO
  * ABAIXO DE GERENCIADORAS) + ORDEM DO MENU AGORA É GLOBAL, ARRASTÁVEL SÓ PELO
  * ADMIN MASTER E VALENDO PARA TODOS OS USUÁRIOS.**
