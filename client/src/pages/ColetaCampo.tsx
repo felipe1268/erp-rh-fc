@@ -483,10 +483,11 @@ export default function ColetaCampo() {
             )}
             {(respostasQ.data || []).map((r: any) => {
               const nEnviados = Object.keys(r.dados || {}).length;
+              const fotoExibir = r.fotoUrl || r.empFotoAtual;
               return (
                 <div key={r.id} className="p-4 flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-muted overflow-hidden shrink-0 flex items-center justify-center">
-                    {r.fotoUrl ? <img src={r.fotoUrl} alt="" className="h-full w-full object-cover" /> : <ImageIcon className="h-5 w-5 text-muted-foreground" />}
+                  <div className="h-12 w-12 rounded-full bg-muted overflow-hidden shrink-0 flex items-center justify-center ring-1 ring-border">
+                    {fotoExibir ? <img src={fotoExibir} alt={r.empNome || ""} className="h-full w-full object-cover" /> : <ImageIcon className="h-5 w-5 text-muted-foreground" />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-medium truncate">{r.empNome || `#${r.employeeId}`}</div>

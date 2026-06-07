@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2870 — **COLETA DE CAMPO (RH) — FILA DE REVISÃO MOSTRA A FOTO DO
+ * FUNCIONÁRIO (FOTO COLETADA OU, NA FALTA, A FOTO ATUAL DA FICHA).**
+ *
+ * PEDIDO: "Aqui precisa aparecer a fotografia do funcionário" (print IMG_1688 =
+ * aba "Fila de Revisão" com avatar placeholder cinza em vez da foto).
+ *
+ * CONTEXTO: o avatar de cada item da fila só renderizava `r.fotoUrl` (a foto
+ * COLETADA naquela sessão). Quando o auxiliar não tirou foto (grupo "foto" não
+ * selecionado ou não enviado), o card caía no ícone placeholder — mesmo quando o
+ * funcionário JÁ tem foto cadastrada na ficha. O backend `listarRespostas` JÁ
+ * devolvia ambas (`fotoUrl` da resposta + `empFotoAtual` = `employees.fotoUrl`),
+ * mas o front ignorava a segunda.
+ *
+ * FEITO (SÓ frontend `client/src/pages/ColetaCampo.tsx`): NOVO `fotoExibir =
+ * r.fotoUrl || r.empFotoAtual` (prioriza a foto coletada; senão usa a foto atual
+ * da ficha). Avatar levemente maior (`h-12 w-12`) com `ring-1 ring-border` e
+ * `alt` com o nome. Placeholder só quando NÃO há nenhuma das duas. A linha de
+ * detalhe mantém o "+ foto" condicionado SÓ à foto coletada (`r.fotoUrl`), para
+ * não confundir foto-da-ficha com foto-recém-coletada.
+ *
+ * ZERO ALTER/DROP/DELETE; ZERO schema; ZERO backend.
+ *
  * Rev. 2869 — **COLETA DE CAMPO (RH) — CABEÇALHO GANHA BOTÕES "VOLTAR" E
  * "FECHAR" (BARRA LATERAL MANTIDA INTACTA).**
  *
