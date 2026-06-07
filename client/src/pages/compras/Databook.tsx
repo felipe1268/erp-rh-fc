@@ -91,17 +91,21 @@ function ProgressBar({ value, max, color = "bg-emerald-500", showScale = false }
   );
 }
 
-function downloadBase64Pdf(base64: string, filename: string) {
+function downloadBase64(base64: string, filename: string, mime: string) {
   const bytes = atob(base64);
   const arr = new Uint8Array(bytes.length);
   for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
-  const blob = new Blob([arr], { type: "application/pdf" });
+  const blob = new Blob([arr], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function downloadBase64Pdf(base64: string, filename: string) {
+  downloadBase64(base64, filename, "application/pdf");
 }
 
 export default function Databook() {
@@ -517,6 +521,15 @@ export default function Databook() {
     onError: (e) => toast.error(e.message),
   });
 
+  // Rev. 2877 — download em massa em ZIP (pastas por disciplina, arquivo = nº do databook).
+  const gerarZip = trpc.databook.gerarZipVersao.useMutation({
+    onSuccess: (data) => {
+      downloadBase64(data.zip, data.filename, "application/zip");
+      toast.success(`ZIP gerado com ${data.total} ficha(s)`);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const cadastrarEntrega = trpc.databook.cadastrarEntregaTerceiro.useMutation({
     onSuccess: () => {
       toast.success("Entrega cadastrada");
@@ -690,6 +703,15 @@ export default function Databook() {
                 >
                   {gerarPdfIndice.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <FileDown className="w-4 h-4 mr-1" />}
                   Índice PDF
+                </Button>
+                <Button
+                  onClick={() => gerarZip.mutate({ companyId, obraId })}
+                  disabled={gerarZip.isPending}
+                  variant="outline"
+                  title="Baixa todas as fichas em um ZIP, separadas por disciplina, cada arquivo com o número do databook"
+                >
+                  {gerarZip.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Package className="w-4 h-4 mr-1" />}
+                  Baixar Tudo (ZIP)
                 </Button>
               </div>
             </div>
@@ -897,6 +919,9 @@ export default function Databook() {
                 </Button>
                 <Button size="sm" variant="outline" className="h-7 text-xs border-purple-200 text-purple-700 hover:bg-purple-50" onClick={() => alterarStatusLote.mutate({ companyId, fichaIds: selecionados, novoStatus: "enviado", userName })}>
                   <Send className="w-3 h-3 mr-1" /> Enviar ao Cliente
+                </Button>
+                <Button size="sm" variant="outline" className="h-7 text-xs" disabled={gerarZip.isPending} onClick={() => gerarZip.mutate({ companyId, obraId, fichaIds: selecionados })}>
+                  {gerarZip.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Package className="w-3 h-3 mr-1" />} Baixar (ZIP)
                 </Button>
                 <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelecionados([])}>
                   Limpar

@@ -1,6 +1,7 @@
 import { router, protectedProcedure } from "../_core/trpc";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { getDb } from "../db";
+import { getDb, getUserCompanyLinks } from "../db";
 import { sql, eq, and, desc, isNull } from "drizzle-orm";
 import { databookFichas, databookTerceiroEntregas, comprasOrdens, comprasOrdensItens, fornecedores, obras, terceiroContratos, empresasTerceiras, companies } from "../../drizzle/schema";
 import { invokeLLM } from "../_core/llm";
@@ -13,6 +14,94 @@ const DISCIPLINAS = [
   "Esquadrias / Vidros", "Pintura", "Cobertura / Telhado", "Climatização / HVAC",
   "Incêndio / SPDA", "Paisagismo", "Equipamentos", "Outros",
 ];
+
+// Rev. 2877 — guard de acesso à empresa (mesma regra robusta de compras.ts):
+// admin/admin_master liberam; usuário com vínculos enforça membership; sem
+// vínculo (controle por grupo/módulo) libera. Usado no download em massa (ZIP),
+// que é uma superfície sensível (gera TODAS as fichas de uma obra de uma vez).
+async function assertCompanyAccess(ctxUser: any, companyId: number) {
+  if (!ctxUser?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
+  if (ctxUser.role === "admin" || ctxUser.role === "admin_master") return;
+  const links = await getUserCompanyLinks(ctxUser.id);
+  const allowedIds = (links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === "number");
+  if (allowedIds.length === 0) return;
+  if (!allowedIds.includes(companyId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+  }
+}
+
+// Rev. 2877 — helper único de geração do PDF de uma ficha, reaproveitado pelo
+// download individual (`gerarPdfFicha`) e pelo download em massa em ZIP
+// (`gerarZipVersao`). Resolve o fornecedor mesclando `empresas_terceiras`
+// (dados ricos, ligados ao mestre via `fornecedor_id`) com `fornecedores`
+// (mestre de Compras). `obraRow`/`companyRow` podem ser passados pré-carregados
+// para evitar N consultas no laço do ZIP.
+async function gerarPdfBufferDeFicha(
+  db: any,
+  ficha: any,
+  companyId: number,
+  obraRowIn?: any,
+  companyRowIn?: any,
+): Promise<Buffer> {
+  const obraRow = obraRowIn ?? (await db.select().from(obras).where(and(eq(obras.id, ficha.obra_id), eq((obras as any).companyId, companyId))))[0];
+  const companyRow = companyRowIn ?? (await db.select().from(companies).where(eq(companies.id, companyId)))[0];
+
+  let fornecedorData = null;
+  if (ficha.fornecedor_id) {
+    const [et, fn] = await Promise.all([
+      db.select().from(empresasTerceiras).where(and(
+        eq(empresasTerceiras.fornecedorId, ficha.fornecedor_id),
+        eq(empresasTerceiras.companyId, companyId),
+        isNull(empresasTerceiras.deletedAt),
+      )).orderBy(desc(empresasTerceiras.id)).limit(1).then((r: any[]) => r[0] ?? null),
+      db.select().from(fornecedores).where(and(
+        eq(fornecedores.id, ficha.fornecedor_id),
+        eq(fornecedores.companyId, companyId),
+      )).limit(1).then((r: any[]) => r[0] ?? null),
+    ]);
+    if (et || fn) {
+      const pick = (...vals: any[]) => {
+        for (const v of vals) { if (v != null && String(v).trim() !== "") return v; }
+        return null;
+      };
+      const enderecoEt = [et?.logradouro, et?.numero].filter(Boolean).join(", ");
+      const enderecoFn = [fn?.endereco, fn?.numero].filter(Boolean).join(", ");
+      fornecedorData = {
+        razaoSocial: pick(et?.razaoSocial, et?.nomeFantasia, fn?.razaoSocial, fn?.nomeFantasia, ficha.fornecedor_nome),
+        endereco: pick(enderecoEt, enderecoFn),
+        bairro: pick(et?.bairro, fn?.bairro),
+        cidade: pick(et?.cidade, fn?.cidade),
+        estado: pick(et?.estado, fn?.estado),
+        cep: pick(et?.cep, fn?.cep),
+        contato: pick(et?.responsavelNome, fn?.contatoNome),
+        telefone: pick(et?.telefone, fn?.telefone),
+        celular: pick(et?.celular, fn?.contatoCelular),
+        email: pick(et?.email, fn?.email, fn?.contatoEmail),
+      };
+    }
+  }
+
+  return gerarDatabookFichaPdf(
+    ficha,
+    {
+      nome: obraRow?.nome || "Obra",
+      endereco: obraRow?.endereco,
+      gerenciadoraNome: (obraRow as any)?.gerenciadoraNome,
+      gerenciadoraLogoUrl: (obraRow as any)?.gerenciadoraLogoUrl,
+      clienteLogoUrl: (obraRow as any)?.clienteLogoUrl,
+    },
+    {
+      razaoSocial: companyRow?.razaoSocial || "Empresa",
+      logoUrl: companyRow?.logoUrl,
+    },
+    fornecedorData,
+  );
+}
+
+// Sanitiza um trecho para uso seguro como nome de pasta/arquivo dentro do ZIP.
+function sanitizeNomeArquivo(s: string): string {
+  return (s || "").replace(/[\/\\:*?"<>|]/g, "_").replace(/\s+/g, " ").trim();
+}
 
 async function buscarImagemDuckDuckGo(query: string): Promise<string[]> {
   try {
@@ -949,67 +1038,83 @@ Responda APENAS o JSON.`;
       const ficha = ((fichaResult as any).rows ?? fichaResult ?? [])[0];
       if (!ficha) throw new Error("Ficha não encontrada");
 
-      const [obraRow] = await db.select().from(obras).where(and(eq(obras.id, ficha.obra_id), eq((obras as any).companyId, input.companyId)));
-      const [companyRow] = await db.select().from(companies).where(eq(companies.id, input.companyId));
-
-      let fornecedorData = null;
-      if (ficha.fornecedor_id) {
-        // Rev. 2876 — `ficha.fornecedor_id` referencia `fornecedores.id` (mestre de
-        // Compras, vindo da OC). A empresa terceira — onde ficam os dados ricos de
-        // endereço/contato — liga ao mestre via coluna `fornecedor_id` (NÃO por `id`).
-        // O código antigo casava `empresas_terceiras.id = ficha.fornecedor_id`, então
-        // quase nunca achava nada e o PDF saía parcial. Carrega AMBAS as fontes e
-        // mescla campo-a-campo (1ª não-vazia) p/ preencher automático e por completo.
-        const [et, fn] = await Promise.all([
-          db.select().from(empresasTerceiras).where(and(
-            eq(empresasTerceiras.fornecedorId, ficha.fornecedor_id),
-            eq(empresasTerceiras.companyId, input.companyId),
-            isNull(empresasTerceiras.deletedAt),
-          )).orderBy(desc(empresasTerceiras.id)).limit(1).then((r) => r[0] ?? null),
-          db.select().from(fornecedores).where(and(
-            eq(fornecedores.id, ficha.fornecedor_id),
-            eq(fornecedores.companyId, input.companyId),
-          )).limit(1).then((r) => r[0] ?? null),
-        ]);
-        if (et || fn) {
-          const pick = (...vals: any[]) => {
-            for (const v of vals) { if (v != null && String(v).trim() !== "") return v; }
-            return null;
-          };
-          const enderecoEt = [et?.logradouro, et?.numero].filter(Boolean).join(", ");
-          const enderecoFn = [fn?.endereco, fn?.numero].filter(Boolean).join(", ");
-          fornecedorData = {
-            razaoSocial: pick(et?.razaoSocial, et?.nomeFantasia, fn?.razaoSocial, fn?.nomeFantasia, ficha.fornecedor_nome),
-            endereco: pick(enderecoEt, enderecoFn),
-            bairro: pick(et?.bairro, fn?.bairro),
-            cidade: pick(et?.cidade, fn?.cidade),
-            estado: pick(et?.estado, fn?.estado),
-            cep: pick(et?.cep, fn?.cep),
-            contato: pick(et?.responsavelNome, fn?.contatoNome),
-            telefone: pick(et?.telefone, fn?.telefone),
-            celular: pick(et?.celular, fn?.contatoCelular),
-            email: pick(et?.email, fn?.email, fn?.contatoEmail),
-          };
-        }
-      }
-
-      const pdfBuffer = await gerarDatabookFichaPdf(
-        ficha,
-        {
-          nome: obraRow?.nome || "Obra",
-          endereco: obraRow?.endereco,
-          gerenciadoraNome: (obraRow as any)?.gerenciadoraNome,
-          gerenciadoraLogoUrl: (obraRow as any)?.gerenciadoraLogoUrl,
-          clienteLogoUrl: (obraRow as any)?.clienteLogoUrl,
-        },
-        {
-          razaoSocial: companyRow?.razaoSocial || "Empresa",
-          logoUrl: companyRow?.logoUrl,
-        },
-        fornecedorData,
-      );
+      // Rev. 2877 — geração da ficha extraída para `gerarPdfBufferDeFicha`
+      // (reutilizada pelo download em massa em ZIP). O resolvedor de fornecedor
+      // (Rev. 2876, mescla empresas_terceiras × fornecedores) vive lá.
+      const pdfBuffer = await gerarPdfBufferDeFicha(db, ficha, input.companyId);
 
       return { pdf: pdfBuffer.toString("base64"), filename: `${codigoFicha(ficha.disciplina, ficha.numero_sequencial)}_${ficha.descricao.substring(0, 30).replace(/[^a-zA-Z0-9]/g, "_")}.pdf` };
+    }),
+
+  // Rev. 2877 — DOWNLOAD EM MASSA: baixa TODAS as fichas do databook da obra
+  // (ou só as selecionadas) num único ZIP, com PASTAS POR DISCIPLINA e cada
+  // arquivo nomeado pelo NÚMERO DO DATABOOK (ex.: "Estrutura/EST-010 - Corrente 6mm.pdf").
+  gerarZipVersao: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number(),
+      fichaIds: z.array(z.number()).optional(),
+      disciplina: z.string().optional(),
+      status: z.string().optional(),
+      origem: z.string().optional(),
+      busca: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const conditions = [
+        sql`company_id = ${input.companyId}`,
+        sql`obra_id = ${input.obraId}`,
+      ];
+      if (input.fichaIds && input.fichaIds.length > 0) {
+        conditions.push(sql`id IN (${sql.join(input.fichaIds.map((i) => sql`${i}`), sql`, `)})`);
+      }
+      if (input.disciplina) conditions.push(sql`disciplina = ${input.disciplina}`);
+      if (input.status) conditions.push(sql`status = ${input.status}`);
+      if (input.origem) conditions.push(sql`origem = ${input.origem}`);
+      if (input.busca) conditions.push(sql`LOWER(descricao) LIKE ${"%" + input.busca.toLowerCase() + "%"}`);
+      const where = sql.join(conditions, sql` AND `);
+      const result = await db.execute(sql`SELECT * FROM databook_fichas WHERE ${where} ORDER BY disciplina ASC, numero_sequencial ASC`);
+      const fichas = (result as any).rows ?? result ?? [];
+      if (fichas.length === 0) throw new Error("Nenhuma ficha encontrada para baixar.");
+
+      const [obraRow] = await db.select().from(obras).where(and(eq(obras.id, input.obraId), eq((obras as any).companyId, input.companyId)));
+      const [companyRow] = await db.select().from(companies).where(eq(companies.id, input.companyId));
+
+      const archiver = (await import("archiver")).default;
+      const archive = archiver("zip", { zlib: { level: 9 } });
+      const chunks: Buffer[] = [];
+      archive.on("data", (c: Buffer) => chunks.push(c));
+      const done = new Promise<void>((resolve, reject) => {
+        archive.on("end", () => resolve());
+        archive.on("error", (e: any) => reject(e));
+      });
+
+      const usados = new Set<string>();
+      for (const ficha of fichas) {
+        const pdfBuffer = await gerarPdfBufferDeFicha(db, ficha, input.companyId, obraRow, companyRow);
+        const codigo = codigoFicha(ficha.disciplina, ficha.numero_sequencial);
+        const pasta = sanitizeNomeArquivo(ficha.disciplina || "Outros");
+        const desc = sanitizeNomeArquivo((ficha.descricao || "").substring(0, 40));
+        let nome = `${pasta}/${codigo}${desc ? " - " + desc : ""}.pdf`;
+        // Evita colisão de nome (ex.: descrições iguais na mesma disciplina).
+        if (usados.has(nome)) {
+          nome = `${pasta}/${codigo}-${ficha.id}${desc ? " - " + desc : ""}.pdf`;
+        }
+        usados.add(nome);
+        archive.append(pdfBuffer, { name: nome });
+      }
+
+      await archive.finalize();
+      await done;
+      const zipBuffer = Buffer.concat(chunks);
+
+      const obraSlug = sanitizeNomeArquivo(obraRow?.nome || "Obra").replace(/\s+/g, "_");
+      return {
+        zip: zipBuffer.toString("base64"),
+        filename: `DATABOOK_${obraSlug}.zip`,
+        total: fichas.length,
+      };
     }),
 
   gerarPdfIndice: protectedProcedure

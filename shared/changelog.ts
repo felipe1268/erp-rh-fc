@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2877 — **DATABOOK — DOWNLOAD EM MASSA DE TODAS AS FICHAS EM UM ZIP, COM
+ * PASTAS POR DISCIPLINA E CADA ARQUIVO NOMEADO PELO NÚMERO DO DATABOOK.**
+ *
+ * PEDIDO (usuário, com print IMG_1702 da lista de Fichas Técnicas da obra
+ * REVTE-CIVIL): "Preciso poder baixar todos os databook de uma versão, separados
+ * por disciplina em pastas separadas, e cada arquivo deve ser salvo com o número
+ * do databook de cada um para facilitar o registro." Hoje só era possível baixar
+ * o PDF de uma ficha por vez ou o Índice; faltava a exportação em massa.
+ *
+ * FEITO (1) — backend `server/routers/databook.ts`:
+ *  - REFATORAÇÃO: a geração do PDF de uma ficha (incluindo o resolvedor de
+ *    fornecedor da Rev. 2876 — mescla `empresas_terceiras` × `fornecedores`) saiu
+ *    de dentro de `gerarPdfFicha` para um helper único `gerarPdfBufferDeFicha(db,
+ *    ficha, companyId, obraRow?, companyRow?)`, que aceita `obraRow`/`companyRow`
+ *    pré-carregados para evitar N consultas no laço do ZIP. `gerarPdfFicha` passou
+ *    a só chamar o helper (comportamento idêntico).
+ *  - NOVO endpoint `gerarZipVersao` ({ companyId, obraId, fichaIds?, disciplina?,
+ *    status?, origem?, busca? }): seleciona as fichas da obra (todas, ou só as
+ *    `fichaIds` selecionadas, respeitando os mesmos filtros de `listarFichas`),
+ *    ordena por disciplina + nº sequencial, gera o PDF de cada uma e monta um ZIP
+ *    via `archiver` (dep já existente). Cada arquivo vai numa PASTA com o nome da
+ *    disciplina e é nomeado `"<código> - <descrição>.pdf"` (ex.: "Estrutura/EST-010
+ *    - Corrente 6mm.pdf"); nomes colidentes ganham sufixo do id da ficha. Helper
+ *    `sanitizeNomeArquivo` remove caracteres inválidos de pasta/arquivo. Retorna o
+ *    ZIP em base64 + filename `DATABOOK_<obra>.zip` + total de fichas. Tenant-scoped
+ *    por `company_id`/`obra_id` em TODAS as queries.
+ *
+ * FEITO (2) — frontend `client/src/pages/compras/Databook.tsx`:
+ *  - `downloadBase64Pdf` generalizado para `downloadBase64(base64, filename, mime)`
+ *    (o de PDF virou um wrapper); novo uso com `application/zip`.
+ *  - NOVA mutation `gerarZip` (databook.gerarZipVersao) + 2 botões: "Baixar Tudo
+ *    (ZIP)" no cabeçalho (ao lado do Índice PDF, ícone `Package`, baixa toda a obra)
+ *    e "Baixar (ZIP)" na barra de ações em lote (baixa só os `selecionados`). Ambos
+ *    com spinner e toasts de sucesso/erro.
+ *
+ * ZERO schema; ZERO ALTER/DROP/DELETE. R-001/R-007/R-010 ok. Validado: typecheck
+ * limpo nos arquivos do databook + smoke test do `archiver` (ZIP válido com a
+ * estrutura de pastas por disciplina) + app compilando sem erros.
+ *
  * Rev. 2876 — **DATABOOK (FICHA PDF) — DADOS DO FORNECEDOR PREENCHIDOS AUTOMÁTICA
  * E COMPLETAMENTE (FIX DO VÍNCULO ERRADO) + NUMERAÇÃO SUTIL COM REVISÃO NO TOPO
  * PARA RASTREIO.**
