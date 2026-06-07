@@ -2422,6 +2422,11 @@ export const obras = pgTable("obras", {
         gerenciadoraNome: varchar("gerenciadora_nome", { length: 255 }),
         gerenciadoraLogoUrl: text("gerenciadora_logo_url"),
         clienteLogoUrl: text("cliente_logo_url"),
+        // Rev. 2879 — quais dos 3 logos aparecem no cabeçalho das fichas do Databook (por obra).
+        // Defaults preservam a saída atual: Cliente + Gestora ON, Construtora OFF.
+        databookLogoCliente: smallint("databook_logo_cliente").default(1).notNull(),
+        databookLogoGestora: smallint("databook_logo_gestora").default(1).notNull(),
+        databookLogoConstrutora: smallint("databook_logo_construtora").default(0).notNull(),
         tipoContrato: varchar("tipo_contrato", { length: 30 }).default('global').notNull(),
         percentualGerenciamentoMaterial: numeric("percentual_gerenciamento_material", { precision: 5, scale: 2 }).default("0"),
         percentualAdm: numeric("percentual_adm", { precision: 5, scale: 2 }).default("0"),

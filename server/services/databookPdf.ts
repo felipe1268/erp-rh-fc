@@ -40,6 +40,11 @@ interface ObraData {
   gerenciadoraNome?: string | null;
   gerenciadoraLogoUrl?: string | null;
   clienteLogoUrl?: string | null;
+  // Rev. 2879 — flags (0/1) que controlam quais logos aparecem no cabeçalho do Databook.
+  // Ausente (null/undefined) = comportamento legado: Cliente ON, Gestora ON, Construtora OFF.
+  databookLogoCliente?: number | boolean | null;
+  databookLogoGestora?: number | boolean | null;
+  databookLogoConstrutora?: number | boolean | null;
 }
 
 interface CompanyData {
@@ -68,10 +73,15 @@ export async function gerarDatabookFichaPdf(
   company: CompanyData,
   fornecedor?: FornecedorData | null,
 ): Promise<Buffer> {
-  const [photoBuf, clienteLogoBuf, gerenciadoraLogoBuf] = await Promise.all([
+  // Rev. 2879 — quais dos 3 logos exibir (por obra). Construtora = logo da própria empresa (company.logoUrl).
+  const showCliente = obra.databookLogoCliente == null ? true : Number(obra.databookLogoCliente) === 1 || obra.databookLogoCliente === true;
+  const showGestora = obra.databookLogoGestora == null ? true : Number(obra.databookLogoGestora) === 1 || obra.databookLogoGestora === true;
+  const showConstrutora = obra.databookLogoConstrutora == null ? false : Number(obra.databookLogoConstrutora) === 1 || obra.databookLogoConstrutora === true;
+  const [photoBuf, clienteLogoBuf, gerenciadoraLogoBuf, construtoraLogoBuf] = await Promise.all([
     loadImage(ficha.foto_url),
-    loadImage(obra.clienteLogoUrl),
-    loadImage(obra.gerenciadoraLogoUrl),
+    showCliente ? loadImage(obra.clienteLogoUrl) : Promise.resolve(null),
+    showGestora ? loadImage(obra.gerenciadoraLogoUrl) : Promise.resolve(null),
+    showConstrutora ? loadImage(company.logoUrl) : Promise.resolve(null),
   ]);
 
   return new Promise((resolve, reject) => {
@@ -88,25 +98,27 @@ export async function gerarDatabookFichaPdf(
     const cw = pageW - ml - mr;
     const s = (v: any) => (v == null || v === "") ? "" : String(v);
 
-    let y = 35;
-
-    if (clienteLogoBuf) {
-      try { doc.image(clienteLogoBuf, ml, y, { fit: [100, 65] }); } catch {}
-    }
-    if (gerenciadoraLogoBuf) {
-      try { doc.image(gerenciadoraLogoBuf, pageW - mr - 100, y, { fit: [100, 65] }); } catch {}
-    }
-
     // Rev. 2876 — numeração sutil do databook (código da ficha + revisão) no topo,
-    // centralizada entre os logos, para rastreio/controle de versão. Cinza claro,
-    // fonte pequena — discreto, mas suficiente p/ rastrear a ficha e a revisão.
+    // para rastreio/controle de versão. Cinza claro, fonte pequena — discreto.
     const codigoDatabook =
       `${codigoFicha(ficha.disciplina, ficha.numero_sequencial)} · Rev. ${String(ficha.versao ?? 1).padStart(2, "0")}`;
     doc.font("Helvetica").fontSize(7.5).fillColor("#9aa0a6");
-    doc.text(codigoDatabook, ml, 30, { width: cw, align: "center" });
+    doc.text(codigoDatabook, ml, 28, { width: cw, align: "center" });
     doc.fillColor("black");
 
-    y += 75;
+    // Rev. 2879 — até 3 logos configuráveis por obra: Cliente (esq), Construtora (centro), Gestora (dir).
+    const LOGO_W = 100, LOGO_H = 60, logoY = 40;
+    if (clienteLogoBuf) {
+      try { doc.image(clienteLogoBuf, ml, logoY, { fit: [LOGO_W, LOGO_H] }); } catch {}
+    }
+    if (construtoraLogoBuf) {
+      try { doc.image(construtoraLogoBuf, (pageW - LOGO_W) / 2, logoY, { fit: [LOGO_W, LOGO_H] }); } catch {}
+    }
+    if (gerenciadoraLogoBuf) {
+      try { doc.image(gerenciadoraLogoBuf, pageW - mr - LOGO_W, logoY, { fit: [LOGO_W, LOGO_H] }); } catch {}
+    }
+    const anyLogo = !!(clienteLogoBuf || construtoraLogoBuf || gerenciadoraLogoBuf);
+    let y = anyLogo ? logoY + LOGO_H + 13 : 48;
 
     // Rev. 2873 — CADA SEÇÃO ("assunto") ganha MOLDURA (caixa) em volta do
     // conteúdo, replicando o modelo LOTUS: título em negrito + régua + caixa.

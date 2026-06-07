@@ -1,6 +1,77 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2880 — **DATABOOK (FICHAS TÉCNICAS) — EXCLUSÃO DEFINITIVA EM MASSA +
+ * CANCELAR APROVAÇÃO (FICHA APROVADA VOLTA PARA "REVISADO"), EM LOTE E POR LINHA.**
+ *
+ * PEDIDO (usuário, na tela de Fichas Técnicas do Databook): "Preciso ter a opção de
+ * excluir todos [os selecionados] e também de cancelar a aprovação." Hoje a barra de
+ * seleção só permitia Marcar Revisado / Aprovar / Enviar / Baixar ZIP — não havia
+ * exclusão em massa, e uma ficha APROVADA ficava "presa" (a transição `aprovado` era
+ * terminal em `VALID_TRANSITIONS`, sem caminho de volta). O usuário confirmou, ciente,
+ * que a exclusão deve ser DEFINITIVA (sem lixeira) — o que já é o comportamento do
+ * `excluirFicha` por linha (DELETE físico nesta tabela).
+ *
+ * FEITO (1) — backend `server/routers/databook.ts` (+ `inArray` no import drizzle):
+ *  - NOVO `excluirLote` ({ companyId, fichaIds[] }): DELETE FÍSICO em massa, espelhando
+ *    `excluirFicha`. Usa `db.delete(databookFichas)` com `inArray(id, fichaIds)` ∩
+ *    `eq(companyId)` (tenant-scoped) e `.returning({id})` para devolver a contagem real
+ *    de excluídas.
+ *  - NOVO `cancelarAprovacaoLote` ({ companyId, fichaIds[], userName }): reverte SÓ as
+ *    fichas que estão `aprovado` (filtro `eq(status,"aprovado")` no WHERE) para
+ *    `revisado`, limpando os campos de aprovação (`aprovadoCliente=false`,
+ *    `aprovadoClientePor=null`, `aprovadoClienteEm=null`) e gravando `revisadoPor/Em`.
+ *    Ignora de propósito fichas em outro estado p/ não rebaixá-las por engano. Retorna
+ *    a contagem de revertidas. Tenant-scoped.
+ *
+ * FEITO (2) — frontend `client/src/pages/compras/Databook.tsx`:
+ *  - 2 mutations novas (`excluirLote`, `cancelarAprovacaoLote`) com toasts + refetch.
+ *  - Barra de seleção em massa: NOVOS botões "Cancelar Aprovação" (âmbar, `XCircle`) e
+ *    "Excluir" (vermelho, `Trash2`); o Excluir abre `confirm()` avisando que a ação é
+ *    DEFINITIVA e não pode ser desfeita.
+ *  - Por linha: para fichas `aprovado`, além do "Marcar como Enviado", NOVO ícone
+ *    "Cancelar Aprovação" (`XCircle` âmbar) que chama `cancelarAprovacaoLote([f.id])`.
+ *
+ * RESULTADO: dá p/ apagar de vez várias fichas de uma vez e reabrir fichas aprovadas
+ * (voltam a "revisado") tanto em lote quanto individualmente. ZERO schema; ZERO
+ * ALTER/DROP físico de tabela. Validado: typecheck limpo nos arquivos tocados.
+ *
+ * Rev. 2879 — **DATABOOK (FICHA PDF) — OS 3 LOGOS DO CABEÇALHO (CLIENTE / GESTORA /
+ * CONSTRUTORA) AGORA SÃO CONFIGURÁVEIS POR OBRA, COM A CONSTRUTORA AO CENTRO.**
+ *
+ * PEDIDO (usuário): poder escolher, POR OBRA, quais logos aparecem no cabeçalho das
+ * fichas técnicas do Databook — os 3: Cliente, Gestora (gerenciadora) e Construtora.
+ * Até aqui o cabeçalho desenhava SEMPRE só Cliente (esq) + Gestora (dir); o logo da
+ * própria empresa (construtora) nunca era exibido e nada era configurável.
+ *
+ * FEITO (1) — schema `drizzle/schema.ts` (tabela `obras`) + self-heal aditivo em
+ * `server/_core/index.ts` (`ALTER TABLE obras ADD COLUMN IF NOT EXISTS ...`): 3 flags
+ * `smallint` — `databook_logo_cliente` (default 1), `databook_logo_gestora` (default 1)
+ * e `databook_logo_construtora` (default 0). Os defaults PRESERVAM a saída atual
+ * (Cliente+Gestora ligados, Construtora desligada), então obras existentes não mudam.
+ *
+ * FEITO (2) — PDF `server/services/databookPdf.ts` (`gerarDatabookFichaPdf`):
+ *  - `ObraData` ganhou os 3 flags (number|boolean|null; ausente = legado).
+ *  - Carrega o logo da Construtora a partir de `company.logoUrl` (logo da empresa) e só
+ *    busca cada imagem se o respectivo flag estiver ligado.
+ *  - Cabeçalho redesenhado: Cliente (esq), Construtora (CENTRO) e Gestora (dir), todos
+ *    em `fit [100,60]` na mesma linha; o código/Rev. sutil continua no topo. Quando
+ *    NENHUM logo está ligado, o bloco colapsa (economiza altura — ajuda a Rev. 2878 a
+ *    manter a ficha em 1 página).
+ *
+ * FEITO (3) — passagem dos flags: `server/routers/databook.ts` (`gerarPdfBufferDeFicha`,
+ * fonte única de PDF de ficha p/ download avulso e ZIP) repassa os 3 campos de `obraRow`
+ * para a `ObraData`.
+ *
+ * FEITO (4) — frontend `client/src/pages/Obras.tsx` (cadastro/edição de obra): NOVA
+ * seção "Logos no Databook" com 3 checkboxes (Cliente / Construtora / Gestora),
+ * persistidos como 0/1 no form; `createObra`/`updateObra` já são genéricos
+ * (`.values`/`.set`), então gravam automaticamente.
+ *
+ * RESULTADO: cada obra decide quais dos 3 logos saem nas fichas, com a Construtora
+ * (logo da empresa) ao centro. ZERO ALTER/DROP/DELETE físico. Validado: typecheck
+ * limpo nos arquivos tocados.
+ *
  * Rev. 2878 — **DATABOOK (FICHA PDF) — TUDO EM UMA ÚNICA PÁGINA (FOTO ADAPTATIVA +
  * ESPAÇAMENTO ENXUTO), EVITANDO QUE OBSERVAÇÕES CAIA NA 2ª PÁGINA.**
  *

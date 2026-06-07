@@ -493,6 +493,29 @@ export default function Databook() {
     onError: (e) => toast.error(e.message),
   });
 
+  // Rev. 2880 — exclusão DEFINITIVA em massa.
+  const excluirLote = trpc.databook.excluirLote.useMutation({
+    onSuccess: (data) => {
+      toast.success(`${data.excluidas} ficha(s) excluída(s) definitivamente`);
+      fichas.refetch();
+      dashboard.refetch();
+      setSelecionados([]);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  // Rev. 2880 — cancelar aprovação (volta a ficha aprovada para "revisado").
+  const cancelarAprovacaoLote = trpc.databook.cancelarAprovacaoLote.useMutation({
+    onSuccess: (data) => {
+      if (data.revertidas > 0) toast.success(`${data.revertidas} aprovação(ões) cancelada(s)`);
+      else toast.info("Nenhuma ficha aprovada na seleção");
+      fichas.refetch();
+      dashboard.refetch();
+      setSelecionados([]);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const gerarPdfFicha = trpc.databook.gerarPdfFicha.useMutation({
     onSuccess: (data) => {
       downloadBase64Pdf(data.pdf, data.filename);
@@ -923,6 +946,16 @@ export default function Databook() {
                 <Button size="sm" variant="outline" className="h-7 text-xs" disabled={gerarZip.isPending} onClick={() => gerarZip.mutate({ companyId, obraId, fichaIds: selecionados })}>
                   {gerarZip.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Package className="w-3 h-3 mr-1" />} Baixar (ZIP)
                 </Button>
+                <Button size="sm" variant="outline" className="h-7 text-xs border-amber-200 text-amber-700 hover:bg-amber-50" disabled={cancelarAprovacaoLote.isPending} onClick={() => cancelarAprovacaoLote.mutate({ companyId, fichaIds: selecionados, userName })}>
+                  <XCircle className="w-3 h-3 mr-1" /> Cancelar Aprovação
+                </Button>
+                <Button size="sm" variant="outline" className="h-7 text-xs border-red-200 text-red-700 hover:bg-red-50" disabled={excluirLote.isPending} onClick={() => {
+                  if (confirm(`Excluir DEFINITIVAMENTE ${selecionados.length} ficha(s)? Esta ação NÃO pode ser desfeita.`)) {
+                    excluirLote.mutate({ companyId, fichaIds: selecionados });
+                  }
+                }}>
+                  {excluirLote.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Trash2 className="w-3 h-3 mr-1" />} Excluir
+                </Button>
                 <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelecionados([])}>
                   Limpar
                 </Button>
@@ -1031,6 +1064,11 @@ export default function Databook() {
                           {f.status === "aprovado" && (
                             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Marcar como Enviado ao Cliente" onClick={() => alterarStatus.mutate({ companyId, fichaId: f.id, novoStatus: "enviado", userName })} disabled={alterarStatus.isPending}>
                               <Send className="w-3.5 h-3.5 text-purple-500" />
+                            </Button>
+                          )}
+                          {f.status === "aprovado" && (
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Cancelar Aprovação (volta para Revisado)" onClick={() => cancelarAprovacaoLote.mutate({ companyId, fichaIds: [f.id], userName })} disabled={cancelarAprovacaoLote.isPending}>
+                              <XCircle className="w-3.5 h-3.5 text-amber-500" />
                             </Button>
                           )}
                           {!["aprovado", "enviado"].includes(f.status) && (

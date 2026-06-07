@@ -43,6 +43,9 @@ type ObraForm = {
   gerenciadoraNome: string;
   gerenciadoraLogoUrl: string;
   clienteLogoUrl: string;
+  databookLogoCliente: number;
+  databookLogoGestora: number;
+  databookLogoConstrutora: number;
   tipoContrato: string;
   percentualGerenciamentoMaterial: string;
   percentualAdm: string;
@@ -69,6 +72,9 @@ const emptyForm: ObraForm = {
   gerenciadoraNome: "",
   gerenciadoraLogoUrl: "",
   clienteLogoUrl: "",
+  databookLogoCliente: 1,
+  databookLogoGestora: 1,
+  databookLogoConstrutora: 0,
   tipoContrato: "global",
   percentualGerenciamentoMaterial: "0",
   percentualAdm: "0",
@@ -247,6 +253,9 @@ export default function Obras() {
       periculosidade: obra.periculosidade ?? 0,
       adicionalNoturnoAtivo: obra.adicionalNoturnoAtivo ?? 0,
       condicoesVigenciaInicio: obra.condicoesVigenciaInicio || "",
+      databookLogoCliente: obra.databookLogoCliente ?? 1,
+      databookLogoGestora: obra.databookLogoGestora ?? 1,
+      databookLogoConstrutora: obra.databookLogoConstrutora ?? 0,
       gerenciadoraNome: obra.gerenciadoraNome || "",
       gerenciadoraLogoUrl: obra.gerenciadoraLogoUrl || "",
       clienteLogoUrl: obra.clienteLogoUrl || "",
@@ -922,6 +931,41 @@ export default function Obras() {
                     : "Cadastre o logo ao criar a gerenciadora — ele aparece aqui automaticamente."}
                 </p>
               </div>
+            </div>
+
+            {/* ── LOGOS NO DATABOOK (Rev. 2879) — quais logos aparecem nas fichas ── */}
+            <div className="sm:col-span-2">
+              <Label className="flex items-center gap-1.5 mb-1">
+                <ImageIcon className="h-3.5 w-3.5 text-blue-500" />
+                Logos no Databook
+                <span className="text-xs text-slate-400 font-normal">(cabeçalho das fichas)</span>
+              </Label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {([
+                  { key: "databookLogoCliente", label: "Cliente", hint: "à esquerda" },
+                  { key: "databookLogoConstrutora", label: "Construtora", hint: "ao centro (logo da empresa)" },
+                  { key: "databookLogoGestora", label: "Gestora", hint: "à direita" },
+                ] as const).map(opt => (
+                  <label
+                    key={opt.key}
+                    className="flex items-start gap-2 rounded-lg border border-slate-200 p-2.5 cursor-pointer hover:bg-slate-50"
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-4 w-4 accent-blue-600 cursor-pointer"
+                      checked={(form as any)[opt.key] === 1}
+                      onChange={e => setForm(f => ({ ...f, [opt.key]: e.target.checked ? 1 : 0 }))}
+                    />
+                    <span className="leading-tight">
+                      <span className="block text-sm font-medium text-slate-700">{opt.label}</span>
+                      <span className="block text-[11px] text-slate-400">{opt.hint}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <p className="text-[11px] text-slate-400 leading-tight mt-1">
+                Marque quais logos aparecem no topo das fichas técnicas. O logo da Construtora usa o logo da empresa; Cliente e Gestora usam os logos cadastrados acima.
+              </p>
             </div>
 
             {/* ── ENGENHEIRO RESPONSÁVEL ── */}

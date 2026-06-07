@@ -2,7 +2,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { getDb, getUserCompanyLinks } from "../db";
-import { sql, eq, and, desc, isNull } from "drizzle-orm";
+import { sql, eq, and, desc, isNull, inArray } from "drizzle-orm";
 import { databookFichas, databookTerceiroEntregas, comprasOrdens, comprasOrdensItens, fornecedores, obras, terceiroContratos, empresasTerceiras, companies } from "../../drizzle/schema";
 import { invokeLLM } from "../_core/llm";
 import { createHash } from "crypto";
@@ -89,6 +89,9 @@ async function gerarPdfBufferDeFicha(
       gerenciadoraNome: (obraRow as any)?.gerenciadoraNome,
       gerenciadoraLogoUrl: (obraRow as any)?.gerenciadoraLogoUrl,
       clienteLogoUrl: (obraRow as any)?.clienteLogoUrl,
+      databookLogoCliente: (obraRow as any)?.databookLogoCliente,
+      databookLogoGestora: (obraRow as any)?.databookLogoGestora,
+      databookLogoConstrutora: (obraRow as any)?.databookLogoConstrutora,
     },
     {
       razaoSocial: companyRow?.razaoSocial || "Empresa",
@@ -1025,6 +1028,46 @@ Responda APENAS o JSON.`;
         WHERE id = ${input.fichaId} AND company_id = ${input.companyId}
       `);
       return { success: true };
+    }),
+
+  // Rev. 2880 — EXCLUSÃO DEFINITIVA EM MASSA. Espelha `excluirFicha` (que já é DELETE
+  // físico nesta tabela): apaga de vez as fichas selecionadas, tenant-scoped.
+  excluirLote: protectedProcedure
+    .input(z.object({ companyId: z.number(), fichaIds: z.array(z.number()).min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const deleted = await db.delete(databookFichas).where(
+        and(inArray(databookFichas.id, input.fichaIds), eq(databookFichas.companyId, input.companyId)),
+      ).returning({ id: databookFichas.id });
+      return { success: true, excluidas: deleted.length };
+    }),
+
+  // Rev. 2880 — CANCELAR APROVAÇÃO EM MASSA. Só reverte fichas que estão APROVADAS
+  // (volta p/ "revisado" e limpa os campos de aprovação do cliente); ignora as demais
+  // p/ não rebaixar por engano fichas em outro estado. Tenant-scoped.
+  cancelarAprovacaoLote: protectedProcedure
+    .input(z.object({ companyId: z.number(), fichaIds: z.array(z.number()).min(1), userName: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const agora = new Date().toISOString();
+      const revertidas = await db.update(databookFichas).set({
+        status: "revisado",
+        aprovadoCliente: false,
+        aprovadoClientePor: null,
+        aprovadoClienteEm: null,
+        revisadoPor: input.userName,
+        revisadoEm: agora,
+        updatedAt: agora,
+      }).where(
+        and(
+          inArray(databookFichas.id, input.fichaIds),
+          eq(databookFichas.companyId, input.companyId),
+          eq(databookFichas.status, "aprovado"),
+        ),
+      ).returning({ id: databookFichas.id });
+      return { revertidas: revertidas.length };
     }),
 
   gerarPdfFicha: protectedProcedure

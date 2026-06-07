@@ -3503,6 +3503,9 @@ Regras:
             ALTER TABLE obras ADD COLUMN IF NOT EXISTS tipo_contrato VARCHAR(30) NOT NULL DEFAULT 'global';
             ALTER TABLE obras ADD COLUMN IF NOT EXISTS percentual_gerenciamento_material NUMERIC(5,2) DEFAULT 0;
             ALTER TABLE obras ADD COLUMN IF NOT EXISTS percentual_adm NUMERIC(5,2) DEFAULT 0;
+            ALTER TABLE obras ADD COLUMN IF NOT EXISTS databook_logo_cliente SMALLINT NOT NULL DEFAULT 1;
+            ALTER TABLE obras ADD COLUMN IF NOT EXISTS databook_logo_gestora SMALLINT NOT NULL DEFAULT 1;
+            ALTER TABLE obras ADD COLUMN IF NOT EXISTS databook_logo_construtora SMALLINT NOT NULL DEFAULT 0;
             ALTER TABLE oc_number_config ADD COLUMN IF NOT EXISTS alerta_reservas_ativo SMALLINT DEFAULT 1;
             ALTER TABLE dds_sessao_funcionarios ADD COLUMN IF NOT EXISTS assinatura_img TEXT;
           EXCEPTION WHEN OTHERS THEN NULL;
