@@ -98,16 +98,28 @@ export async function gerarDatabookFichaPdf(
 
     y += 75;
 
-    doc.font("Helvetica-Bold").fontSize(10).fillColor("black");
-    doc.text("DADOS CONTRATUAIS:", ml, y);
-    y = doc.y + 1;
-    doc.moveTo(ml, y).lineTo(ml + cw, y).lineWidth(1).strokeColor("black").stroke();
-    y += 3;
+    // Rev. 2873 — CADA SEÇÃO ("assunto") ganha MOLDURA (caixa) em volta do
+    // conteúdo, replicando o modelo LOTUS: título em negrito + régua + caixa.
+    const sectionTitle = (label: string) => {
+      doc.font("Helvetica-Bold").fontSize(10).fillColor("black");
+      doc.text(label, ml, y);
+      y = doc.y + 1;
+      doc.moveTo(ml, y).lineTo(ml + cw, y).lineWidth(1).strokeColor("black").stroke();
+      y += 3;
+    };
 
+    // Reserva espaço p/ TÍTULO + RÉGUA + CAIXA juntos: se não couber, vira a
+    // página ANTES de desenhar o título (evita título/régua órfãos). ~20px = bloco título.
+    const TITLE_BLOCK = 20;
+    const bottomY = pageH - 40;
+    const ensureSpace = (contentH: number) => {
+      if (y + TITLE_BLOCK + contentH > bottomY) { doc.addPage(); y = 40; }
+    };
+
+    // ===== DADOS CONTRATUAIS — tabela emoldurada (célula a célula) =====
     const rowH = 18;
     const c1w = Math.round(cw * 0.55);
     const c2w = cw - c1w;
-
     const tRows = [
       ["Contratada: " + (s(fornecedor?.razaoSocial) || s(ficha.fornecedor_nome)), "Contrato nº: " + s(ficha.contrato_numero)],
       ["Endereço: " + s(fornecedor?.endereco), "Bairro: " + s(fornecedor?.bairro)],
@@ -115,90 +127,107 @@ export async function gerarDatabookFichaPdf(
       ["Contato: " + s(fornecedor?.contato), "Fone Comercial: " + s(fornecedor?.telefone)],
       ["Email: " + s(fornecedor?.email), "Celular: " + s(fornecedor?.celular)],
     ];
-
+    ensureSpace(tRows.length * rowH);
+    sectionTitle("DADOS CONTRATUAIS:");
     doc.lineWidth(0.5).strokeColor("black");
     for (let i = 0; i < tRows.length; i++) {
       const ry = y + i * rowH;
       doc.rect(ml, ry, c1w, rowH).stroke();
       doc.rect(ml + c1w, ry, c2w, rowH).stroke();
-      doc.font("Helvetica").fontSize(8.5);
+      doc.font("Helvetica").fontSize(8.5).fillColor("black");
       doc.text(tRows[i][0], ml + 4, ry + 4, { width: c1w - 8 });
       doc.text(tRows[i][1], ml + c1w + 4, ry + 4, { width: c2w - 8 });
     }
-
     y += tRows.length * rowH + 18;
 
-    doc.font("Helvetica-Bold").fontSize(10).fillColor("black");
-    doc.text("DESCRIÇÃO DO PRODUTO / SERVIÇO:", ml, y);
-    y = doc.y + 1;
-    doc.moveTo(ml, y).lineTo(ml + cw, y).lineWidth(1).strokeColor("black").stroke();
-    y += 4;
+    // ===== DESCRIÇÃO DO PRODUTO / SERVIÇO — caixa única =====
+    {
+      const pad = 4;
+      doc.font("Helvetica").fontSize(9).fillColor("black");
+      const txt = s(ficha.descricao);
+      const th = doc.heightOfString(txt, { width: cw - 2 * pad });
+      const boxH = Math.max(22, th + 2 * pad);
+      ensureSpace(boxH);
+      sectionTitle("DESCRIÇÃO DO PRODUTO / SERVIÇO:");
+      doc.font("Helvetica").fontSize(9).fillColor("black");
+      doc.lineWidth(0.5).strokeColor("black").rect(ml, y, cw, boxH).stroke();
+      doc.text(txt, ml + pad, y + pad, { width: cw - 2 * pad });
+      y += boxH + 18;
+    }
 
-    doc.font("Helvetica").fontSize(9);
-    const descStartY = y;
-    doc.text(ficha.descricao, ml + 4, y + 3, { width: cw - 8 });
-    const descEndY = doc.y + 5;
-    const descH = Math.max(22, descEndY - descStartY);
-    doc.lineWidth(0.5).rect(ml, descStartY, cw, descH).stroke();
-    y = descStartY + descH + 18;
-
-    doc.font("Helvetica-Bold").fontSize(10).fillColor("black");
-    doc.text("ESPECIFICAÇÕES:", ml, y);
-    y = doc.y + 1;
-    doc.moveTo(ml, y).lineTo(ml + cw, y).lineWidth(1).strokeColor("black").stroke();
-    y += 8;
-
-    if (ficha.especificacoes) {
-      const lines = ficha.especificacoes.split("\n").filter(l => l.trim());
-      doc.font("Helvetica").fontSize(8.5);
+    // ===== ESPECIFICAÇÕES — caixa em volta da lista de itens =====
+    {
+      const pad = 6;
+      const indent = 16;
+      const lineW = cw - indent - pad;
+      const lines = s(ficha.especificacoes)
+        .split("\n")
+        .map((l) => l.replace(/^[\s•\-\*○◦▪o]+/, "").trim())
+        .filter(Boolean);
+      doc.font("Helvetica").fontSize(8.5).fillColor("black");
+      const lineHs: number[] = [];
+      let contentH = pad;
       for (const line of lines) {
-        if (y > pageH - 120) { doc.addPage(); y = 40; }
-        const clean = line.replace(/^[\s•\-\*○◦▪o]+/, "").trim();
-        if (clean) {
-          doc.text("     o    " + clean, ml + 20, y, { width: cw - 30 });
-          y = doc.y + 3;
-        }
+        const h = doc.heightOfString("o    " + line, { width: lineW });
+        lineHs.push(h);
+        contentH += h + 3;
       }
+      contentH = Math.max(22, contentH + pad - 3);
+      ensureSpace(contentH);
+      sectionTitle("ESPECIFICAÇÕES:");
+      const boxY = y;
+      doc.lineWidth(0.5).strokeColor("black").rect(ml, boxY, cw, contentH).stroke();
+      let ly = boxY + pad;
+      doc.font("Helvetica").fontSize(8.5).fillColor("black");
+      for (let i = 0; i < lines.length; i++) {
+        doc.text("o    " + lines[i], ml + indent, ly, { width: lineW });
+        ly += lineHs[i] + 3;
+      }
+      y = boxY + contentH + 18;
     }
 
-    y += 18;
-    if (y > pageH - 300) { doc.addPage(); y = 40; }
+    // ===== OUTRAS INFORMAÇÕES / FOTO — caixa com foto centralizada + obs =====
+    {
+      const pad = 8;
+      const maxW = cw * 0.6;
+      const maxH = 250;
+      doc.font("Helvetica").fontSize(9).fillColor("black");
+      const obsTxt = s(ficha.observacoes) ? "OBSERVAÇÕES: " + s(ficha.observacoes) : "OBSERVAÇÕES:";
+      const obsH = doc.heightOfString(obsTxt, { width: cw - 2 * pad });
 
-    doc.font("Helvetica-Bold").fontSize(10).fillColor("black");
-    doc.text("OUTRAS INFORMAÇÕES / FOTO:", ml, y);
-    y = doc.y + 1;
-    doc.moveTo(ml, y).lineTo(ml + cw, y).lineWidth(1).strokeColor("black").stroke();
-    y += 10;
+      let imgObj: any = null;
+      let photoW = 0;
+      let photoH = 0;
+      if (photoBuf) {
+        try {
+          imgObj = (doc as any).openImage(photoBuf);
+          const scale = Math.min(maxW / imgObj.width, maxH / imgObj.height);
+          photoW = imgObj.width * scale;
+          photoH = imgObj.height * scale;
+        } catch { imgObj = null; }
+        if (!imgObj) { photoW = maxW; photoH = 170; } // fallback sem openImage
+      }
 
-    if (photoBuf) {
-      try {
-        const maxPhotoH = Math.min(250, pageH - y - 130);
-        if (maxPhotoH > 50) {
-          const photoW = cw * 0.6;
-          const photoX = ml + (cw - photoW) / 2;
-          doc.image(photoBuf, photoX, y, { fit: [photoW, maxPhotoH] });
-          y += maxPhotoH + 10;
-        }
-      } catch { y += 20; }
-    } else {
-      y += 80;
+      const gap = photoH ? 10 : 0;
+      const boxH = pad + photoH + gap + obsH + pad;
+      ensureSpace(boxH);
+      sectionTitle("OUTRAS INFORMAÇÕES / FOTO:");
+      const boxY = y;
+      doc.lineWidth(0.5).strokeColor("black").rect(ml, boxY, cw, boxH).stroke();
+
+      let iy = boxY + pad;
+      if (photoBuf && photoH) {
+        try {
+          const px = ml + (cw - photoW) / 2;
+          if (imgObj) doc.image(imgObj, px, iy, { width: photoW, height: photoH });
+          else doc.image(photoBuf, px, iy, { fit: [photoW, photoH], align: "center" });
+        } catch {}
+        iy += photoH + gap;
+      }
+      doc.font("Helvetica").fontSize(9).fillColor("black");
+      doc.text(obsTxt, ml + pad, iy, { width: cw - 2 * pad });
+      y = boxY + boxH;
     }
-
-    y += 18;
-    if (y > pageH - 80) { doc.addPage(); y = 40; }
-
-    doc.font("Helvetica-Bold").fontSize(10).fillColor("black");
-    doc.text("OBSERVAÇÕES:", ml, y);
-    y = doc.y + 1;
-    doc.moveTo(ml, y).lineTo(ml + cw, y).lineWidth(1).strokeColor("black").stroke();
-    y += 4;
-
-    doc.font("Helvetica").fontSize(9);
-    const obsStartY = y;
-    doc.text(ficha.observacoes || "", ml + 4, y + 3, { width: cw - 8 });
-    const obsEndY = doc.y + 5;
-    const obsH = Math.max(22, obsEndY - obsStartY);
-    doc.lineWidth(0.5).rect(ml, obsStartY, cw, obsH).stroke();
 
     doc.end();
   });

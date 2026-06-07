@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2873 — **DATABOOK (FICHA PDF) — TODAS AS 4 SEÇÕES GANHAM MOLDURA (CAIXA),
+ * REPLICANDO O MODELO LOTUS.**
+ *
+ * PEDIDO: "Quero que o data book fique exatamente igual ao modelo do PDF; note
+ * que eles fazem uma moldura em volta de cada assunto" (anexos IMG_1694 +
+ * 027_COIMBRA.pdf). USUÁRIO CONFIRMOU (user_query): moldura em volta de TODAS as
+ * seções — Dados Contratuais, Descrição, Especificações e Outras Informações/Foto.
+ *
+ * CONTEXTO: o gerador de ficha (`gerarDatabookFichaPdf`) já emoldurava só DADOS
+ * CONTRATUAIS (tabela) e DESCRIÇÃO (caixa). ESPECIFICAÇÕES ficava só com a lista
+ * de bullets solta (sem caixa) e a FOTO/OBSERVAÇÕES também sem caixa — divergindo
+ * do modelo. Além disso OBSERVAÇÕES era uma 5ª seção separada.
+ *
+ * FEITO (SÓ backend `server/services/databookPdf.ts`, função `gerarDatabookFichaPdf`):
+ *  - NOVO helper local `sectionTitle(label)`: título negrito + régua horizontal,
+ *    padronizando o cabeçalho de cada seção.
+ *  - DADOS CONTRATUAIS: mantida a tabela emoldurada célula a célula (5 linhas,
+ *    c1=55% da largura). Sem mudança visual.
+ *  - DESCRIÇÃO: caixa medida com `doc.heightOfString` (rect desenhado com a
+ *    altura exata do texto + padding).
+ *  - ESPECIFICAÇÕES: AGORA emoldurada — limpa cada bullet (`replace` de
+ *    `•-*○◦▪o` no início + trim, descarta vazias), mede cada linha com
+ *    `heightOfString`, soma a altura total, faz page-break do bloco inteiro se
+ *    não couber e desenha UMA caixa em volta da lista ("o    " + item, indent 16).
+ *  - OUTRAS INFORMAÇÕES / FOTO: AGORA caixa ÚNICA com a foto centralizada (medida
+ *    via `doc.openImage` p/ escala exata — `min(maxW/ w, maxH/h)`, maxW=60% da
+ *    coluna, maxH=250; FALLBACK fit + 170px se `openImage` indisponível) +
+ *    "OBSERVAÇÕES: ..." DENTRO da mesma caixa (a antiga 5ª seção OBSERVAÇÕES foi
+ *    DOBRADA p/ cá, como no modelo). Page-break do bloco se não couber.
+ *
+ * ZERO schema; ZERO backend lógico (só geração de PDF); ZERO frontend.
+ * R-001/R-007/R-010: nenhum ALTER/DROP/DELETE. Validado: typecheck limpo +
+ * smoke test renderizando o PDF (as 4 caixas conferidas via pdftoppm).
+ *
  * Rev. 2872 — **COLETA DE CAMPO (RH) — FILA DE REVISÃO GANHA EDITAR E EXCLUIR
  * RESPOSTA (ALÉM DE APROVAR/REJEITAR), SÓ PARA O ADM MASTER.**
  *
