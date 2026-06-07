@@ -1,6 +1,47 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2876 — **DATABOOK (FICHA PDF) — DADOS DO FORNECEDOR PREENCHIDOS AUTOMÁTICA
+ * E COMPLETAMENTE (FIX DO VÍNCULO ERRADO) + NUMERAÇÃO SUTIL COM REVISÃO NO TOPO
+ * PARA RASTREIO.**
+ *
+ * PEDIDO: "Os dados do fornecedor precisam ser preenchidos automaticamente, arruma
+ * isso de vez... não pode ficar parcialmente preenchido. No databook, no topo
+ * superior, coloca uma numeração do databook com revisão para garantir o controle —
+ * quero algo sutil para fácil rastreio." Anexos: IMG_1698 (PDF atual, DADOS
+ * CONTRATUAIS vinha só com "Contratada" + "Contrato nº", resto VAZIO) e IMG_1700
+ * (empresa terceira #204 "Casa Brasil" COM endereço/bairro/cidade/UF/telefone/email
+ * preenchidos).
+ *
+ * CAUSA-RAIZ (1): em `server/routers/databook.ts` (`gerarPdfFicha`), o carregamento
+ * do fornecedor casava `empresas_terceiras.id = ficha.fornecedor_id`. Mas
+ * `ficha.fornecedor_id` vem da OC e referencia `fornecedores.id` (mestre de Compras),
+ * NÃO o `id` de `empresas_terceiras`. A empresa terceira (onde ficam os dados ricos)
+ * liga ao mestre pela coluna `fornecedor_id`. Resultado: o SELECT quase nunca achava
+ * a linha certa e o PDF saía parcial.
+ *
+ * FEITO (1) — backend `server/routers/databook.ts`: substituído o SELECT raw por
+ * query builder Drizzle carregando AMBAS as fontes em paralelo:
+ *  - `empresas_terceiras` por `fornecedor_id = ficha.fornecedor_id` (tenant +
+ *    `deleted_at IS NULL`, mais recente);
+ *  - `fornecedores` (mestre) por `id = ficha.fornecedor_id` (tenant).
+ *  Mescla campo-a-campo via helper `pick` (1ª não-vazia, empresa terceira primeiro,
+ *  fornecedor mestre como fallback): razão social, endereço (logradouro+nº ou
+ *  endereço+nº), bairro, cidade, estado, CEP, contato (responsável/contato), telefone,
+ *  celular (celular/contato_celular), email (email/contato_email). Garante
+ *  preenchimento automático e completo sem ficar parcial.
+ *
+ * FEITO (2) — backend `server/services/databookPdf.ts` (`gerarDatabookFichaPdf`):
+ *  NOVA numeração sutil no TOPO, centralizada entre os logos, em cinza claro
+ *  (#9aa0a6, Helvetica 7.5pt): `"<código da ficha> · Rev. <versão>"` (ex.:
+ *  "EST-001 · Rev. 03"), usando `codigoFicha(disciplina, numero_sequencial)` +
+ *  `ficha.versao` (coluna já existente, default 1, padded p/ 2 dígitos). Campo
+ *  `versao?` adicionado à interface `DatabookFichaData`.
+ *
+ * ZERO schema novo; ZERO ALTER/DROP/DELETE; ZERO frontend. R-001/R-007/R-010 ok.
+ * Validado: typecheck sem erros novos no databook + smoke test (pdftoppm) confirmou
+ * DADOS CONTRATUAIS completo e a numeração "EST-001 · Rev. 03" no topo.
+ *
  * Rev. 2875 — **DATABOOK (FICHA PDF) — "OBSERVAÇÕES" VIRA SEÇÃO SEPARADA, COM
  * TÍTULO E CAIXA PRÓPRIOS (ABAIXO DE "OUTRAS INFORMAÇÕES / FOTO"), REPLICANDO O
  * MODELO LOTUS.**

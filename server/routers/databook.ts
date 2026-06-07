@@ -1,7 +1,7 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
-import { sql, eq, and, desc } from "drizzle-orm";
+import { sql, eq, and, desc, isNull } from "drizzle-orm";
 import { databookFichas, databookTerceiroEntregas, comprasOrdens, comprasOrdensItens, fornecedores, obras, terceiroContratos, empresasTerceiras, companies } from "../../drizzle/schema";
 import { invokeLLM } from "../_core/llm";
 import { createHash } from "crypto";
@@ -954,24 +954,41 @@ Responda APENAS o JSON.`;
 
       let fornecedorData = null;
       if (ficha.fornecedor_id) {
-        const fornResult = await db.execute(sql`
-          SELECT razao_social, logradouro, numero, bairro, cidade, estado, cep,
-                 responsavel_nome, telefone, celular, email
-          FROM empresas_terceiras WHERE id = ${ficha.fornecedor_id}
-        `);
-        const forn = ((fornResult as any).rows ?? fornResult ?? [])[0];
-        if (forn) {
+        // Rev. 2876 — `ficha.fornecedor_id` referencia `fornecedores.id` (mestre de
+        // Compras, vindo da OC). A empresa terceira — onde ficam os dados ricos de
+        // endereço/contato — liga ao mestre via coluna `fornecedor_id` (NÃO por `id`).
+        // O código antigo casava `empresas_terceiras.id = ficha.fornecedor_id`, então
+        // quase nunca achava nada e o PDF saía parcial. Carrega AMBAS as fontes e
+        // mescla campo-a-campo (1ª não-vazia) p/ preencher automático e por completo.
+        const [et, fn] = await Promise.all([
+          db.select().from(empresasTerceiras).where(and(
+            eq(empresasTerceiras.fornecedorId, ficha.fornecedor_id),
+            eq(empresasTerceiras.companyId, input.companyId),
+            isNull(empresasTerceiras.deletedAt),
+          )).orderBy(desc(empresasTerceiras.id)).limit(1).then((r) => r[0] ?? null),
+          db.select().from(fornecedores).where(and(
+            eq(fornecedores.id, ficha.fornecedor_id),
+            eq(fornecedores.companyId, input.companyId),
+          )).limit(1).then((r) => r[0] ?? null),
+        ]);
+        if (et || fn) {
+          const pick = (...vals: any[]) => {
+            for (const v of vals) { if (v != null && String(v).trim() !== "") return v; }
+            return null;
+          };
+          const enderecoEt = [et?.logradouro, et?.numero].filter(Boolean).join(", ");
+          const enderecoFn = [fn?.endereco, fn?.numero].filter(Boolean).join(", ");
           fornecedorData = {
-            razaoSocial: forn.razao_social || forn.nome_fantasia,
-            endereco: [forn.logradouro, forn.numero].filter(Boolean).join(", "),
-            bairro: forn.bairro,
-            cidade: forn.cidade,
-            estado: forn.estado,
-            cep: forn.cep,
-            contato: forn.responsavel_nome,
-            telefone: forn.telefone,
-            celular: forn.celular,
-            email: forn.email,
+            razaoSocial: pick(et?.razaoSocial, et?.nomeFantasia, fn?.razaoSocial, fn?.nomeFantasia, ficha.fornecedor_nome),
+            endereco: pick(enderecoEt, enderecoFn),
+            bairro: pick(et?.bairro, fn?.bairro),
+            cidade: pick(et?.cidade, fn?.cidade),
+            estado: pick(et?.estado, fn?.estado),
+            cep: pick(et?.cep, fn?.cep),
+            contato: pick(et?.responsavelNome, fn?.contatoNome),
+            telefone: pick(et?.telefone, fn?.telefone),
+            celular: pick(et?.celular, fn?.contatoCelular),
+            email: pick(et?.email, fn?.email, fn?.contatoEmail),
           };
         }
       }

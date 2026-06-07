@@ -31,6 +31,7 @@ interface DatabookFichaData {
   eap_codigo?: string | null;
   origem: string;
   status: string;
+  versao?: number | null;
 }
 
 interface ObraData {
@@ -95,6 +96,15 @@ export async function gerarDatabookFichaPdf(
     if (gerenciadoraLogoBuf) {
       try { doc.image(gerenciadoraLogoBuf, pageW - mr - 100, y, { fit: [100, 65] }); } catch {}
     }
+
+    // Rev. 2876 — numeração sutil do databook (código da ficha + revisão) no topo,
+    // centralizada entre os logos, para rastreio/controle de versão. Cinza claro,
+    // fonte pequena — discreto, mas suficiente p/ rastrear a ficha e a revisão.
+    const codigoDatabook =
+      `${codigoFicha(ficha.disciplina, ficha.numero_sequencial)} · Rev. ${String(ficha.versao ?? 1).padStart(2, "0")}`;
+    doc.font("Helvetica").fontSize(7.5).fillColor("#9aa0a6");
+    doc.text(codigoDatabook, ml, 30, { width: cw, align: "center" });
+    doc.fillColor("black");
 
     y += 75;
 
