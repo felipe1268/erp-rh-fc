@@ -35,3 +35,4 @@
 - [% Previsto congelado no cadastro](previsto-congelado-cadastro.md) — curva previsto_semanas_json gera 1x no cadastro; upload SEMANAL (origem:"avanco") NUNCA regenera nem toca o calendário-base; regenerar a cada semana causa deriva ±1% vs MSP.
 - [obras schema quirks](obras-orcamento-schema-quirks.md) — `obras` columns are camelCase (`companyId`/`isActive`) and have NO orcamento col; obra→orçamento link lives in `orcamentos.obraId`. Raw snake_case SQL on obras throws.
 - [Numeração de FD (Painel FD)](fd-numbering.md) — FD-001… é DERIVADO (não persistido): por obra, data/criadoEm asc + id; mesma regra nas 2 rotas; cancelar reindexar.
+- [Coleta de Campo — grupos](coleta-campo-grupos.md) — link público coleta por GRUPO (campos_json; NULL=todos); "Gerar todos" deve atualizar campos_json no reaproveitamento; whitelist server-side.

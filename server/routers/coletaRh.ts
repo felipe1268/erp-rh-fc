@@ -25,6 +25,11 @@ import {
 } from "../../drizzle/schema";
 import { resolveCompanyIds } from "../companyHelper";
 import { storagePut } from "../storage";
+import {
+  resolverGruposColeta,
+  serializeGruposColeta,
+  camposHabilitados,
+} from "../../shared/coletaCampos";
 
 /**
  * Guarda de acesso por empresa (anti-IDOR) para os endpoints INTERNOS.
@@ -130,6 +135,9 @@ export const coletaRhRouter = router({
       obraId: z.number(),
       titulo: z.string().optional(),
       expiraEm: z.string().optional(),
+      // Rev. 2865 — grupos a coletar (foto/epi/contato/emergencia/endereco).
+      // Ausente/todos = null (= todos). Ver shared/coletaCampos.ts.
+      grupos: z.array(z.string()).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
@@ -153,6 +161,7 @@ export const coletaRhRouter = router({
           token,
           titulo: input.titulo?.trim() || `Coleta — ${obra.nome}`,
           ativo: 1,
+          camposJson: serializeGruposColeta(input.grupos),
           criadoPor: ctx.user?.name ?? null,
           criadoPorId: ctx.user?.id ?? null,
           expiraEm: input.expiraEm || null,
@@ -168,11 +177,14 @@ export const coletaRhRouter = router({
       companyId: z.number(),
       companyIds: z.array(z.number()).optional(),
       expiraEm: z.string().optional(),
+      // Rev. 2865 — grupos a coletar aplicados a TODOS os links gerados.
+      grupos: z.array(z.string()).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const companyIds = resolveCompanyIds(input);
       await assertColetaCompanyAccess(ctx.user, companyIds);
+      const camposJson = serializeGruposColeta(input.grupos);
 
       // Obras ativas (mesmo filtro canônico de obrasDisponiveis).
       const obrasAtivas = await db
@@ -191,15 +203,21 @@ export const coletaRhRouter = router({
         .select({ id: coletaRhSessoes.id, obraId: coletaRhSessoes.obraId, token: coletaRhSessoes.token, expiraEm: coletaRhSessoes.expiraEm })
         .from(coletaRhSessoes)
         .where(and(inArray(coletaRhSessoes.companyId, companyIds), eq(coletaRhSessoes.ativo, 1)));
-      const ativaPorObra = new Map<number, { token: string }>();
+      const ativaPorObra = new Map<number, { id: number; token: string }>();
       for (const s of ativas) {
-        if (!sessaoExpirada(s.expiraEm)) ativaPorObra.set(s.obraId, { token: s.token });
+        if (!sessaoExpirada(s.expiraEm)) ativaPorObra.set(s.obraId, { id: s.id, token: s.token });
       }
 
       let criadas = 0;
       let reaproveitadas = 0;
       for (const obra of obrasAtivas) {
-        if (ativaPorObra.has(obra.id)) {
+        const existente = ativaPorObra.get(obra.id);
+        if (existente) {
+          // Reaproveita o link ativo, mas alinha os grupos coletados à seleção atual.
+          await db
+            .update(coletaRhSessoes)
+            .set({ camposJson })
+            .where(eq(coletaRhSessoes.id, existente.id));
           reaproveitadas++;
           continue;
         }
@@ -212,6 +230,7 @@ export const coletaRhRouter = router({
             token,
             titulo: `Coleta — ${obra.nome}`,
             ativo: 1,
+            camposJson,
             criadoPor: ctx.user?.name ?? null,
             criadoPorId: ctx.user?.id ?? null,
             expiraEm: input.expiraEm || null,
@@ -236,6 +255,7 @@ export const coletaRhRouter = router({
           token: coletaRhSessoes.token,
           titulo: coletaRhSessoes.titulo,
           ativo: coletaRhSessoes.ativo,
+          camposJson: coletaRhSessoes.camposJson,
           criadoPor: coletaRhSessoes.criadoPor,
           expiraEm: coletaRhSessoes.expiraEm,
           createdAt: coletaRhSessoes.createdAt,
@@ -257,12 +277,16 @@ export const coletaRhRouter = router({
         if (r.status === "pendente") pendPorSessao.set(r.sessaoId, (pendPorSessao.get(r.sessaoId) ?? 0) + 1);
       }
 
-      return sessoes.map((s) => ({
-        ...s,
-        expirada: sessaoExpirada(s.expiraEm),
-        totalRespostas: totalPorSessao.get(s.id) ?? 0,
-        pendentes: pendPorSessao.get(s.id) ?? 0,
-      }));
+      return sessoes.map((s) => {
+        const { camposJson, ...rest } = s;
+        return {
+          ...rest,
+          grupos: resolverGruposColeta(camposJson),
+          expirada: sessaoExpirada(s.expiraEm),
+          totalRespostas: totalPorSessao.get(s.id) ?? 0,
+          pendentes: pendPorSessao.get(s.id) ?? 0,
+        };
+      });
     }),
 
   desativarSessao: protectedProcedure
@@ -490,6 +514,7 @@ export const coletaRhRouter = router({
       return {
         valido: true as const,
         titulo: sessao.titulo,
+        grupos: resolverGruposColeta(sessao.camposJson),
         obra: obra ? { nome: obra.nome, cidade: obra.cidade, codigo: obra.codigo } : null,
         funcionarios: alocados.map((a) => ({
           id: a.id,
@@ -534,16 +559,22 @@ export const coletaRhRouter = router({
         .limit(1);
       if (!aloc) throw new Error("Funcionário não está alocado nesta obra.");
 
-      // Sanitiza os dados (só whitelist, sem strings vazias).
+      // Rev. 2865 — só aceita campos dos GRUPOS habilitados nesta sessão.
+      const grupos = resolverGruposColeta(sessao.camposJson);
+      const permitidos = camposHabilitados(grupos);
+      const fotoPermitida = grupos.includes("foto");
+
+      // Sanitiza os dados (só whitelist + grupo habilitado, sem strings vazias).
       const dados: Record<string, any> = {};
       for (const c of CAMPOS_COLETA) {
+        if (!permitidos.has(c)) continue;
         const v = (input.dados as any)[c];
         if (typeof v === "string" && v.trim() !== "") dados[c] = v.trim();
       }
 
-      // Upload da foto (se houver).
+      // Upload da foto (se houver E o grupo "foto" estiver habilitado).
       let fotoUrl: string | null = null;
-      if (input.fotoBase64) {
+      if (input.fotoBase64 && fotoPermitida) {
         try {
           const b64 = input.fotoBase64.replace(/^data:[^;]+;base64,/, "");
           const buf = Buffer.from(b64, "base64");

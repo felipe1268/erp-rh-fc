@@ -1630,6 +1630,9 @@ Regras:
           await db.execute(sql`CREATE INDEX IF NOT EXISTS coleta_rh_resp_status ON coleta_rh_respostas (company_id, status)`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS coleta_rh_resp_emp ON coleta_rh_respostas (employee_id)`);
           console.log(`[SyncSchema+] Rev. 2858: tabelas coleta_rh_sessoes + coleta_rh_respostas garantidas (Coleta de Campo RH).`);
+          // Rev. 2865 — seleção de grupos a coletar por link (NULL = todos).
+          await db.execute(sql`ALTER TABLE coleta_rh_sessoes ADD COLUMN IF NOT EXISTS campos_json TEXT`);
+          console.log(`[SyncSchema+] Rev. 2865: coluna campos_json garantida em coleta_rh_sessoes (escolha de grupos a coletar).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2858 coleta_rh:`, e?.message || e); }
         console.log(`[SyncSchema+] Tabelas DDS (dds_temas/dds_sessoes/dds_sessao_funcionarios) garantidas.`);
 

@@ -6,6 +6,7 @@
 import { useMemo, useState } from "react";
 import { useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { GRUPOS_COLETA_KEYS, type GrupoColetaKey } from "@shared/coletaCampos";
 
 const FC_NAVY = "#1B2A4A";
 
@@ -71,6 +72,12 @@ export default function ColetaCampoPublica() {
     return list.filter((f: any) => (f.nome || "").toLowerCase().includes(q));
   }, [sessaoQ.data, busca]);
 
+  // Rev. 2865 — grupos habilitados nesta sessão (ausente = todos, compat).
+  const grupos = useMemo<Set<GrupoColetaKey>>(() => {
+    const g = (sessaoQ.data && "grupos" in sessaoQ.data ? (sessaoQ.data as any).grupos : null) as GrupoColetaKey[] | null;
+    return new Set<GrupoColetaKey>(Array.isArray(g) && g.length > 0 ? g : GRUPOS_COLETA_KEYS);
+  }, [sessaoQ.data]);
+
   const podeEnviar = Object.values(dados).some((v) => v && v.trim() !== "") || !!fotoBase64;
 
   // ── Estados de carregamento / inválido ────────────────────────────────────
@@ -131,6 +138,7 @@ export default function ColetaCampoPublica() {
         ) : (
           <FormColeta
             func={selFunc}
+            grupos={grupos}
             dados={dados}
             set={set}
             toggleTam={toggleTam}
@@ -188,7 +196,8 @@ export default function ColetaCampoPublica() {
   );
 }
 
-function FormColeta({ func, dados, set, toggleTam, fotoPreview, onFoto, removerFoto, enviadoPor, setEnviadoPor, voltar }: any) {
+function FormColeta({ func, grupos, dados, set, toggleTam, fotoPreview, onFoto, removerFoto, enviadoPor, setEnviadoPor, voltar }: any) {
+  const tem = (k: GrupoColetaKey) => !grupos || grupos.has(k);
   return (
     <div className="space-y-4">
       {/* Funcionário selecionado */}
@@ -204,78 +213,88 @@ function FormColeta({ func, dados, set, toggleTam, fotoPreview, onFoto, removerF
       </div>
 
       {/* Foto */}
-      <Secao titulo="Foto">
-        <div className="flex items-center gap-3">
-          <div className="h-20 w-20 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center text-slate-400">
-            {fotoPreview ? <img src={fotoPreview} alt="" className="h-full w-full object-cover" /> : <span className="text-2xl">📷</span>}
+      {tem("foto") && (
+        <Secao titulo="Foto">
+          <div className="flex items-center gap-3">
+            <div className="h-20 w-20 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center text-slate-400">
+              {fotoPreview ? <img src={fotoPreview} alt="" className="h-full w-full object-cover" /> : <span className="text-2xl">📷</span>}
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="px-3 py-2 rounded-lg text-white text-sm font-medium cursor-pointer text-center" style={{ background: FC_NAVY }}>
+                {fotoPreview ? "Trocar foto" : "Tirar / escolher foto"}
+                <input type="file" accept="image/*" capture="environment" onChange={onFoto} className="hidden" />
+              </label>
+              {fotoPreview && <button onClick={removerFoto} className="text-xs text-red-600 underline">remover</button>}
+            </div>
           </div>
-          <div className="flex flex-col gap-2">
-            <label className="px-3 py-2 rounded-lg text-white text-sm font-medium cursor-pointer text-center" style={{ background: FC_NAVY }}>
-              {fotoPreview ? "Trocar foto" : "Tirar / escolher foto"}
-              <input type="file" accept="image/*" capture="environment" onChange={onFoto} className="hidden" />
-            </label>
-            {fotoPreview && <button onClick={removerFoto} className="text-xs text-red-600 underline">remover</button>}
-          </div>
-        </div>
-      </Secao>
+        </Secao>
+      )}
 
       {/* EPI / Uniforme */}
-      <Secao titulo="EPI / Uniforme">
-        <div className="space-y-3">
-          {EPI_CARDS.map((card) => (
-            <div key={card.key} className="rounded-lg border border-slate-200 overflow-hidden">
-              <div className="px-3 py-2 text-sm font-medium flex items-center gap-2" style={{ background: card.soft }}>
-                <span>{card.emoji}</span><span style={{ color: card.accent }}>{card.label}</span>
+      {tem("epi") && (
+        <Secao titulo="EPI / Uniforme">
+          <div className="space-y-3">
+            {EPI_CARDS.map((card) => (
+              <div key={card.key} className="rounded-lg border border-slate-200 overflow-hidden">
+                <div className="px-3 py-2 text-sm font-medium flex items-center gap-2" style={{ background: card.soft }}>
+                  <span>{card.emoji}</span><span style={{ color: card.accent }}>{card.label}</span>
+                </div>
+                <div className="p-2 flex flex-wrap gap-1.5">
+                  {card.opts.map((o) => {
+                    const on = dados[card.key] === o;
+                    return (
+                      <button
+                        key={o}
+                        onClick={() => toggleTam(card.key, o)}
+                        className="px-2.5 py-1.5 rounded-md text-sm font-medium border transition"
+                        style={on
+                          ? { background: card.accent, borderColor: card.accent, color: "#fff" }
+                          : { background: "#fff", borderColor: "#e2e8f0", color: "#334155" }}
+                      >
+                        {o}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="p-2 flex flex-wrap gap-1.5">
-                {card.opts.map((o) => {
-                  const on = dados[card.key] === o;
-                  return (
-                    <button
-                      key={o}
-                      onClick={() => toggleTam(card.key, o)}
-                      className="px-2.5 py-1.5 rounded-md text-sm font-medium border transition"
-                      style={on
-                        ? { background: card.accent, borderColor: card.accent, color: "#fff" }
-                        : { background: "#fff", borderColor: "#e2e8f0", color: "#334155" }}
-                    >
-                      {o}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      </Secao>
+            ))}
+          </div>
+        </Secao>
+      )}
 
       {/* Contato */}
-      <Secao titulo="Contato">
-        <Campo label="Telefone" value={dados.telefone || ""} onChange={(v) => set("telefone", v)} type="tel" />
-        <Campo label="Celular / WhatsApp" value={dados.celular || ""} onChange={(v) => set("celular", v)} type="tel" />
-      </Secao>
+      {tem("contato") && (
+        <Secao titulo="Contato">
+          <Campo label="Telefone" value={dados.telefone || ""} onChange={(v) => set("telefone", v)} type="tel" />
+          <Campo label="Celular / WhatsApp" value={dados.celular || ""} onChange={(v) => set("celular", v)} type="tel" />
+        </Secao>
+      )}
 
       {/* Emergência */}
-      <Secao titulo="Contato de emergência">
-        <Campo label="Nome do contato" value={dados.contatoEmergencia || ""} onChange={(v) => set("contatoEmergencia", v)} />
-        <Campo label="Telefone" value={dados.telefoneEmergencia || ""} onChange={(v) => set("telefoneEmergencia", v)} type="tel" />
-        <Campo label="Parentesco" value={dados.parentescoEmergencia || ""} onChange={(v) => set("parentescoEmergencia", v)} />
-      </Secao>
+      {tem("emergencia") && (
+        <Secao titulo="Contato de emergência">
+          <Campo label="Nome do contato" value={dados.contatoEmergencia || ""} onChange={(v) => set("contatoEmergencia", v)} />
+          <Campo label="Telefone" value={dados.telefoneEmergencia || ""} onChange={(v) => set("telefoneEmergencia", v)} type="tel" />
+          <Campo label="Parentesco" value={dados.parentescoEmergencia || ""} onChange={(v) => set("parentescoEmergencia", v)} />
+        </Secao>
+      )}
 
       {/* Endereço */}
-      <Secao titulo="Endereço">
-        <Campo label="Logradouro" value={dados.logradouro || ""} onChange={(v) => set("logradouro", v)} />
-        <div className="grid grid-cols-2 gap-2">
-          <Campo label="Número" value={dados.numero || ""} onChange={(v) => set("numero", v)} />
-          <Campo label="Complemento" value={dados.complemento || ""} onChange={(v) => set("complemento", v)} />
-        </div>
-        <Campo label="Bairro" value={dados.bairro || ""} onChange={(v) => set("bairro", v)} />
-        <div className="grid grid-cols-2 gap-2">
-          <Campo label="Cidade" value={dados.cidade || ""} onChange={(v) => set("cidade", v)} />
-          <Campo label="UF" value={dados.estado || ""} onChange={(v) => set("estado", v.toUpperCase().slice(0, 2))} />
-        </div>
-        <Campo label="CEP" value={dados.cep || ""} onChange={(v) => set("cep", v)} />
-      </Secao>
+      {tem("endereco") && (
+        <Secao titulo="Endereço">
+          <Campo label="Logradouro" value={dados.logradouro || ""} onChange={(v) => set("logradouro", v)} />
+          <div className="grid grid-cols-2 gap-2">
+            <Campo label="Número" value={dados.numero || ""} onChange={(v) => set("numero", v)} />
+            <Campo label="Complemento" value={dados.complemento || ""} onChange={(v) => set("complemento", v)} />
+          </div>
+          <Campo label="Bairro" value={dados.bairro || ""} onChange={(v) => set("bairro", v)} />
+          <div className="grid grid-cols-2 gap-2">
+            <Campo label="Cidade" value={dados.cidade || ""} onChange={(v) => set("cidade", v)} />
+            <Campo label="UF" value={dados.estado || ""} onChange={(v) => set("estado", v.toUpperCase().slice(0, 2))} />
+          </div>
+          <Campo label="CEP" value={dados.cep || ""} onChange={(v) => set("cep", v)} />
+        </Secao>
+      )}
 
       {/* Quem coletou */}
       <Secao titulo="Quem está preenchendo">

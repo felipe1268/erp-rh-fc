@@ -1,6 +1,56 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2865 — **COLETA DE CAMPO (RH) — ESCOLHER, ANTES DE GERAR O LINK, QUAIS
+ * INFORMAÇÕES SERÃO COLETADAS NO FORMULÁRIO DO AUXILIAR DE CAMPO.**
+ *
+ * PEDIDO: "Antes de gerar o link quero poder fazer a escolha de qual informação
+ * iremos coletar... quero poder fazer a escolha correta." (anexo IMG_1684 = o
+ * formulário público atual, que sempre pedia TODAS as seções: Foto, EPI/Uniforme
+ * — Calçado/Camisa/Calça —, Contato, Contato de Emergência e Endereço).
+ *
+ * MODELO (100% ADITIVO, ZERO ALTER/DROP/DELETE): a escolha é por GRUPO de
+ * informação, não campo a campo (mais simples para o RH). 5 grupos:
+ *  - `foto`       → foto do funcionário (fotoUrl/fotoBase64)
+ *  - `epi`        → tamanhoCalcado, tamanhoCamisa, tamanhoCalca
+ *  - `contato`    → telefone, celular
+ *  - `emergencia` → contatoEmergencia, telefoneEmergencia, parentescoEmergencia
+ *  - `endereco`   → logradouro, numero, complemento, bairro, cidade, estado, cep
+ * A seleção é persistida em `coleta_rh_sessoes.campos_json` (JSON array de chaves
+ * de grupo). NULL/ausente = TODOS os grupos (backward compat para links antigos).
+ *
+ * FONTE ÚNICA: NOVO `shared/coletaCampos.ts` define os grupos + helpers
+ * (`resolverGruposColeta`, `serializeGruposColeta`, `camposHabilitados`),
+ * compartilhado entre seletor interno, formulário público e backend.
+ *
+ * SCHEMA: `drizzle/schema.ts` ganha `camposJson` (text) em `coletaRhSessoes`;
+ * self-heal `[SyncSchema+]` em `server/_core/index.ts` garante
+ * `ALTER TABLE coleta_rh_sessoes ADD COLUMN IF NOT EXISTS campos_json TEXT`
+ * (confirmado no Neon real após restart).
+ *
+ * BACKEND (`server/routers/coletaRh.ts`): `criarSessao` e `criarSessoesTodas`
+ * aceitam `grupos[]` e gravam via `serializeGruposColeta` (vazio/igual-a-todos →
+ * null = todos, idempotente). Em `criarSessoesTodas`, quando uma obra JÁ tem link
+ * ativo, o link é REAPROVEITADO mas o `campos_json` é ATUALIZADO para a seleção
+ * atual (a escolha de grupos vale uniformemente p/ "Gerar todos", inclusive nos
+ * reaproveitados). `dadosSessao` e `listarSessoes` devolvem `grupos`
+ * resolvidos. `enviarResposta` agora SÓ aceita campos dos grupos habilitados
+ * (whitelist por grupo) e ignora a foto se o grupo `foto` estiver desligado —
+ * blindagem server-side, não só UI.
+ *
+ * FRONTEND INTERNO (`client/src/pages/ColetaCampo.tsx`): NOVO seletor "O que o
+ * auxiliar vai coletar?" (5 cards toggle com emoji/descrição + "Marcar todos"/
+ * "Limpar") logo abaixo de "Novo link de coleta"; a escolha vale tanto para
+ * "Gerar link" quanto para "Gerar todos" (ambos passam `grupos`). Botões ficam
+ * desabilitados se nenhum grupo estiver marcado. A lista de links mostra chips
+ * dos grupos de cada sessão.
+ *
+ * FRONTEND PÚBLICO (`client/src/pages/portal/ColetaCampoPublica.tsx`): lê
+ * `sessao.grupos` e renderiza SOMENTE as seções habilitadas (Foto/EPI/Contato/
+ * Emergência/Endereço); "Quem está preenchendo" permanece sempre.
+ *
+ * ZERO ALTER/DROP/DELETE; schema só aditivo (1 coluna nullable).
+ *
  * Rev. 2864 — **CONTROLE DE REVISÕES (`/revisoes`) — DEDUPLICAÇÃO NA LEITURA
  * (CADA REVISÃO APARECE UMA ÚNICA VEZ) + RE-SINCRONIZAÇÃO DAS REVISÕES RECENTES.**
  *

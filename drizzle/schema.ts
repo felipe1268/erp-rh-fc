@@ -2287,6 +2287,9 @@ export const coletaRhSessoes = pgTable("coleta_rh_sessoes", {
         token: varchar({ length: 64 }).notNull(),
         titulo: varchar({ length: 255 }),
         ativo: smallint().default(1).notNull(),
+        // Rev. 2865 — JSON array de chaves de grupo a coletar (foto/epi/contato/
+        // emergencia/endereco). NULL = todos (backward compat). Ver shared/coletaCampos.ts.
+        camposJson: text("campos_json"),
         criadoPor: varchar("criado_por", { length: 255 }),
         criadoPorId: integer("criado_por_id"),
         expiraEm: timestamp("expira_em", { mode: 'string' }),

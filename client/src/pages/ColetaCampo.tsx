@@ -22,6 +22,7 @@ import {
   ClipboardList, Link2, QrCode, Copy, Check, X, Power, Eye, Loader2,
   CheckCircle2, XCircle, Clock, ArrowRight, ImageIcon,
 } from "lucide-react";
+import { GRUPOS_COLETA, GRUPOS_COLETA_KEYS, type GrupoColetaKey } from "@shared/coletaCampos";
 
 const FC_NAVY = "#1B2A4A";
 
@@ -69,6 +70,18 @@ export default function ColetaCampo() {
   const [novoTitulo, setNovoTitulo] = useState<string>("");
   const [qrSessao, setQrSessao] = useState<any | null>(null);
   const [copiado, setCopiado] = useState<number | null>(null);
+
+  // Rev. 2865 — grupos de informação que o auxiliar de campo vai coletar.
+  // Default: todos marcados. A escolha vale para "Gerar link" e "Gerar todos".
+  const [gruposSel, setGruposSel] = useState<Set<GrupoColetaKey>>(new Set(GRUPOS_COLETA_KEYS));
+  const toggleGrupo = (k: GrupoColetaKey) =>
+    setGruposSel((prev) => {
+      const n = new Set(prev);
+      if (n.has(k)) n.delete(k); else n.add(k);
+      return n;
+    });
+  const gruposArray = useMemo(() => GRUPOS_COLETA_KEYS.filter((k) => gruposSel.has(k)), [gruposSel]);
+  const algumGrupo = gruposArray.length > 0;
 
   const criarM = trpc.coletaRh.criarSessao.useMutation({
     onSuccess: () => {
@@ -228,8 +241,8 @@ export default function ColetaCampo() {
             </div>
             <div className="flex gap-2 shrink-0">
               <Button
-                disabled={criarTodasM.isPending || (obrasQ.data || []).length === 0}
-                onClick={() => criarTodasM.mutate({ ...baseInput })}
+                disabled={criarTodasM.isPending || (obrasQ.data || []).length === 0 || !algumGrupo}
+                onClick={() => criarTodasM.mutate({ ...baseInput, grupos: gruposArray })}
                 style={{ background: FC_NAVY }}
               >
                 {criarTodasM.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Link2 className="h-4 w-4 mr-1" />}
@@ -264,13 +277,62 @@ export default function ColetaCampo() {
                 <Input value={novoTitulo} onChange={(e) => setNovoTitulo(e.target.value)} placeholder="Ex.: Coleta EPI — Outubro" />
               </div>
               <Button
-                disabled={!novaObraId || criarM.isPending}
-                onClick={() => criarM.mutate({ ...baseInput, obraId: parseInt(novaObraId), titulo: novoTitulo || undefined })}
+                disabled={!novaObraId || criarM.isPending || !algumGrupo}
+                onClick={() => criarM.mutate({ ...baseInput, obraId: parseInt(novaObraId), titulo: novoTitulo || undefined, grupos: gruposArray })}
                 style={{ background: FC_NAVY }}
               >
                 {criarM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4 mr-1" />}
                 Gerar link
               </Button>
+            </div>
+
+            {/* Rev. 2865 — escolha do que será coletado (aplica a este link e ao "Gerar todos") */}
+            <div className="mt-4 border-t pt-3">
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-xs font-medium">O que o auxiliar vai coletar?</Label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setGruposSel(new Set(GRUPOS_COLETA_KEYS))}
+                    className="text-[11px] text-muted-foreground hover:text-foreground underline"
+                  >
+                    Marcar todos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGruposSel(new Set())}
+                    className="text-[11px] text-muted-foreground hover:text-foreground underline"
+                  >
+                    Limpar
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                {GRUPOS_COLETA.map((g) => {
+                  const on = gruposSel.has(g.key);
+                  return (
+                    <button
+                      key={g.key}
+                      type="button"
+                      onClick={() => toggleGrupo(g.key)}
+                      title={g.descricao}
+                      className={`flex flex-col items-start gap-1 rounded-lg border p-2.5 text-left transition ${on ? "border-[#1B2A4A] bg-[#1B2A4A]/5 ring-1 ring-[#1B2A4A]/30" : "border-border bg-background hover:bg-muted"}`}
+                    >
+                      <div className="flex items-center gap-1.5 w-full">
+                        <span className="text-base leading-none">{g.emoji}</span>
+                        <span className="text-sm font-medium truncate flex-1">{g.label}</span>
+                        {on
+                          ? <CheckCircle2 className="h-4 w-4 text-[#1B2A4A] shrink-0" />
+                          : <span className="h-4 w-4 rounded-full border border-muted-foreground/40 shrink-0" />}
+                      </div>
+                      <span className="text-[10px] text-muted-foreground leading-tight">{g.descricao}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {!algumGrupo && (
+                <p className="text-[11px] text-amber-600 mt-2">Selecione ao menos um grupo para gerar o link.</p>
+              )}
             </div>
           </div>
 
@@ -293,6 +355,15 @@ export default function ColetaCampo() {
                   <div className="text-xs text-muted-foreground mt-0.5 truncate">
                     {s.obraNome} · {s.totalRespostas} envio(s) · criado por {s.criadoPor || "—"}
                   </div>
+                  {Array.isArray(s.grupos) && s.grupos.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {GRUPOS_COLETA.filter((g) => s.grupos.includes(g.key)).map((g) => (
+                        <span key={g.key} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                          {g.emoji} {g.label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <Button size="sm" variant="outline" onClick={() => copiar(s)}>
