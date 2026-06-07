@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2836 — **TERCEIROS · REDESIGN DAS TELAS "EMPRESAS DE SERVIÇO" (LISTA) E "RAIO-X 360°" — LAYOUT MODERNO, LEITURA FÁCIL E INTUITIVA.**
+ *
+ * PEDIDO (usuário, com 2 prints do iPad): "Melhore o layout, quero tudo moderno e fácil leitura... e tudo intuitivo."
+ * Print 1 = tela lista "Empresas de Serviço"; Print 2 = tela "Raio-X 360°" de uma empresa terceira. Tarefa SÓ frontend/design;
+ * ZERO mudança de backend, schema, rota, endpoint ou lógica de negócio — apenas apresentação/markup.
+ *
+ * O QUE FOI FEITO:
+ *  - `client/src/pages/terceiros/EmpresasTerceiras.tsx` (apenas a VIEW da lista; form/dialogs intactos):
+ *      • CABEÇALHO virou banner com faixa navy institucional (gradiente `#1B2A4A → #2c3f63`), ícone laranja em quadrado
+ *        arredondado e chips de contadores ("N cadastrada(s)" + "N ativa(s)" em verde) — novo `useMemo ativasCount`.
+ *      • BUSCA mais alta (h-11, rounded-xl) com contador de resultados ("N resultado(s)") quando há termo.
+ *      • CARDS de empresa redesenhados: AVATAR com iniciais (gradiente determinístico por nome via helpers `initials`
+ *        + `avatarColor`/`AVATAR_COLORS`), hierarquia clara (razão social + status + fantasia), metadados em CHIPS
+ *        (CNPJ mono, tipo de serviço, cidade/UF, telefone) e barra de ações compacta (Raio-X laranja sólido, Editar,
+ *        Portal, excluir como ghost vermelho). Hover eleva o card (`hover:shadow-md` + borda laranja).
+ *      • EMPTY STATE melhorado (distingue "sem cadastro" de "busca sem resultado").
+ *  - `client/src/pages/terceiros/TerceiroRaioX.tsx`:
+ *      • Link "Voltar para Empresas" textual no topo + HEADER CARD navy com avatar de iniciais, nome, status, chips de
+ *        CNPJ/cidade/tipo e badge Conforme/Pendências.
+ *      • KPIs com ícone colorido em chip (cinza/verde/âmbar/azul), valores maiores e hover.
+ *      • ABAS convertidas de underline para PÍLULAS (ativa = laranja sólido) com scroll horizontal no mobile.
+ *      • Raio dos cards de conteúdo unificado em `rounded-2xl`.
+ *      • Helper `initials` adicionado.
+ *
+ * RESSALVA: as cores de status (ativa=emerald, suspensa=amber, inativa=red) e o accent laranja seguem o design system FC
+ * já existente. NENHUMA query nova; toda a funcionalidade (navegação Raio-X, editar, gerar acesso ao portal, excluir,
+ * busca, upload de docs) preservada byte-a-byte na lógica. ZERO ALTER/DROP/DELETE; ZERO schema.
+ *
+ * OBSERVAÇÃO COLATERAL (fora do escopo, não tocado): os logs do dev server mostram `financial.getDRE` e
+ * `financial.getDREDisponibilidade` retornando "DB error: Failed query" no banco real — pendência da Rev. 2835 a investigar
+ * em revisão própria.
+ *
+ * ARQUIVOS: `client/src/pages/terceiros/EmpresasTerceiras.tsx`, `client/src/pages/terceiros/TerceiroRaioX.tsx`.
+ *
+ * ---
+ *
  * Rev. 2835 — **FINANCEIRO · DRE — SELETOR DE MÊS/ANO NO PADRÃO DA TELA DE CONTAS A PAGAR (CHIPS DE MESES + NAVEGAÇÃO DE ANO + "ANO INTEIRO") + DIAGNÓSTICO DA "TELA BRANCA".**
  *
  * PEDIDO (usuário, com 2 prints do iPad): "Quero o DRE por mês e ano desta forma" (apontando o seletor da tela "Despesas

@@ -28,6 +28,25 @@ function cnpjMask(v: string): string {
   return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12)}`;
 }
 
+// Iniciais a partir do nome (avatar)
+function initials(name: string): string {
+  const parts = (name || "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+const AVATAR_COLORS = [
+  "from-orange-400 to-orange-600", "from-blue-400 to-blue-600",
+  "from-emerald-400 to-emerald-600", "from-violet-400 to-violet-600",
+  "from-rose-400 to-rose-600", "from-amber-400 to-amber-600",
+  "from-cyan-400 to-cyan-600", "from-indigo-400 to-indigo-600",
+];
+function avatarColor(seed: string): string {
+  let h = 0;
+  for (let i = 0; i < (seed || "").length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+
 // Use inferred types from tRPC
 
 export default function EmpresasTerceiras() {
@@ -203,6 +222,8 @@ export default function EmpresasTerceiras() {
     );
   }, [empresas, search]);
 
+  const ativasCount = useMemo(() => empresas.filter((e: any) => (e.status || "ativa") === "ativa").length, [empresas]);
+
   const openNew = () => {
     setForm({ companyId: companyId ?? 0 });
     setEditingId(null);
@@ -264,62 +285,73 @@ export default function EmpresasTerceiras() {
     <DashboardLayout>
       <div className="w-full max-w-7xl mx-auto px-4 py-6 space-y-4">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="rounded-2xl bg-gradient-to-r from-[#1B2A4A] to-[#2c3f63] p-5 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-orange-500 flex items-center justify-center">
-              <Building2 className="h-5 w-5 text-white" />
+            <div className="h-12 w-12 rounded-2xl bg-orange-500 flex items-center justify-center shadow-lg shrink-0">
+              <Building2 className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold">Empresas de Serviço</h1>
-              <p className="text-sm text-muted-foreground">{empresas.length} empresa(s) de serviço (material + mão de obra)</p>
+              <h1 className="text-xl font-bold text-white">Empresas de Serviço</h1>
+              <p className="text-sm text-white/70">Fornecedores de material + mão de obra</p>
+              <div className="flex items-center gap-2 mt-2">
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-white bg-white/10 rounded-full px-2.5 py-0.5">{empresas.length} cadastrada(s)</span>
+                {ativasCount > 0 && <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-300 bg-emerald-500/15 rounded-full px-2.5 py-0.5"><CheckCircle className="h-3 w-3" />{ativasCount} ativa(s)</span>}
+              </div>
             </div>
           </div>
           <DraggableCommandBar barId="empresas-terceiras" items={[
-            { id: "nova", node: <Button onClick={openNew} className="bg-orange-500 hover:bg-orange-600"><Plus className="h-4 w-4 mr-1" /> Nova Empresa</Button> },
+            { id: "nova", node: <Button onClick={openNew} className="bg-orange-500 hover:bg-orange-600 shadow-md"><Plus className="h-4 w-4 mr-1" /> Nova Empresa</Button> },
           ]} />
         </div>
 
         {/* Search */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar por nome, CNPJ ou tipo de serviço..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Buscar por nome, CNPJ ou tipo de serviço..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10 h-11 rounded-xl bg-card" />
+          {search && <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">{filtered.length} resultado(s)</span>}
         </div>
 
         {/* List */}
         <div className="space-y-3">
           {filtered.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
+            <div className="text-center py-16 text-muted-foreground bg-card rounded-2xl border border-dashed">
               <Building2 className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p>Nenhuma empresa terceira cadastrada</p>
+              <p className="font-medium">{search ? "Nenhuma empresa encontrada" : "Nenhuma empresa de serviço cadastrada"}</p>
+              <p className="text-sm mt-1">{search ? "Tente outro termo de busca." : "Clique em \"Nova Empresa\" para começar."}</p>
             </div>
           ) : (
             filtered.map((emp: any) => (
-              <div key={emp.id} className="bg-card rounded-xl border p-4 hover:shadow-sm transition-shadow">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                  <div className="flex-1 min-w-0 cursor-pointer" onClick={() => navigate(`/terceiros/empresas/${emp.id}`)}>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-semibold text-foreground truncate hover:text-orange-600 hover:underline">{emp.razaoSocial}</h3>
-                      {statusBadge(emp.status)}
+              <div key={emp.id} className="group bg-card rounded-2xl border border-border/80 p-4 hover:border-orange-200 hover:shadow-md transition-all">
+                <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+                  <div className="flex items-start gap-3 flex-1 min-w-0 cursor-pointer" onClick={() => navigate(`/terceiros/empresas/${emp.id}`)}>
+                    <div className={`h-12 w-12 rounded-xl bg-gradient-to-br ${avatarColor(emp.razaoSocial)} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
+                      {initials(emp.nomeFantasia || emp.razaoSocial)}
                     </div>
-                    {emp.nomeFantasia && <p className="text-sm text-muted-foreground">{emp.nomeFantasia}</p>}
-                    <div className="flex flex-wrap gap-3 mt-1 text-xs text-muted-foreground">
-                      <span className="font-mono">CNPJ: {formatCNPJ(emp.cnpj)}</span>
-                      {emp.tipoServico && <span>| {emp.tipoServico}</span>}
-                      {emp.cidade && <span className="flex items-center gap-0.5"><MapPin className="h-3 w-3" />{emp.cidade}/{emp.estado}</span>}
-                      {emp.telefone && <span className="flex items-center gap-0.5"><Phone className="h-3 w-3" />{emp.telefone}</span>}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-semibold text-foreground truncate group-hover:text-orange-600 transition-colors">{emp.razaoSocial}</h3>
+                        {statusBadge(emp.status)}
+                      </div>
+                      {emp.nomeFantasia && <p className="text-sm text-muted-foreground truncate">{emp.nomeFantasia}</p>}
+                      <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                        <span className="inline-flex items-center text-xs text-muted-foreground bg-muted/60 border border-border/60 rounded-md px-2 py-0.5 font-mono">{formatCNPJ(emp.cnpj)}</span>
+                        {emp.tipoServico && <span className="inline-flex items-center text-xs text-muted-foreground bg-muted/60 border border-border/60 rounded-md px-2 py-0.5">{emp.tipoServico}</span>}
+                        {emp.cidade && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><MapPin className="h-3 w-3" />{emp.cidade}/{emp.estado}</span>}
+                        {emp.telefone && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Phone className="h-3 w-3" />{emp.telefone}</span>}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" className="text-orange-600 hover:bg-orange-50" onClick={() => navigate(`/terceiros/empresas/${emp.id}`)}>
+                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                    <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white" onClick={() => navigate(`/terceiros/empresas/${emp.id}`)}>
                       <Eye className="h-3.5 w-3.5 mr-1" /> Raio-X
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => openEdit(emp)}>
                       <Edit className="h-3.5 w-3.5 mr-1" /> Editar
                     </Button>
-                    <Button size="sm" variant="outline" className="text-amber-600 hover:bg-amber-50" onClick={() => handleGerarAcesso(emp)}>
-                      <KeyRound className="h-3.5 w-3.5 mr-1" /> Acesso Portal
+                    <Button size="sm" variant="outline" className="text-amber-600 hover:bg-amber-50 hover:text-amber-700" onClick={() => handleGerarAcesso(emp)}>
+                      <KeyRound className="h-3.5 w-3.5 mr-1" /> Portal
                     </Button>
-                    <Button size="sm" variant="outline" className="text-red-600 hover:bg-red-50" onClick={() => {
+                    <Button size="sm" variant="ghost" className="text-red-500 hover:bg-red-50 hover:text-red-600" onClick={() => {
                       if (confirm("Excluir esta empresa?")) deleteMut.mutate({ id: emp.id });
                     }}>
                       <Trash2 className="h-3.5 w-3.5" />

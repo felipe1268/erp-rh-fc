@@ -17,6 +17,13 @@ const fmtDate = (d: string | null | undefined) => {
   try { return new Date(String(d)).toLocaleDateString("pt-BR"); } catch { return "—"; }
 };
 
+function initials(name: string): string {
+  const parts = (name || "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 const STATUS_CONTRATO: Record<string, string> = {
   ativo: "bg-green-100 text-green-700 border-green-200",
   encerrado: "bg-gray-100 text-gray-600 border-gray-200",
@@ -52,45 +59,51 @@ function TerceiroRaioXInner({ id }: { id: number }) {
   return (
     <DashboardLayout>
       <div className="max-w-6xl mx-auto p-4 space-y-4">
-        {/* Header */}
-        <div className="flex items-start gap-3">
-          <button onClick={() => navigate("/terceiros/empresas")} className="p-2 hover:bg-gray-100 rounded-lg shrink-0">
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Building2 className="w-5 h-5 text-orange-500 shrink-0" />
-              <h1 className="text-lg font-bold text-gray-900 truncate">{emp.razaoSocial}</h1>
-              <Badge className={`text-xs border ${emp.status === "ativa" ? "bg-green-100 text-green-700 border-green-200" : "bg-gray-100 text-gray-600 border-gray-200"}`}>{emp.status}</Badge>
+        {/* Voltar */}
+        <button onClick={() => navigate("/terceiros/empresas")} className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors">
+          <ArrowLeft className="w-4 h-4" /> Voltar para Empresas
+        </button>
+
+        {/* Header card */}
+        <div className="rounded-2xl bg-gradient-to-r from-[#1B2A4A] to-[#2c3f63] p-5 shadow-sm">
+          <div className="flex items-start gap-4">
+            <div className="h-14 w-14 rounded-2xl bg-orange-500 flex items-center justify-center text-white font-bold text-lg shrink-0 shadow-lg">
+              {initials(emp.nomeFantasia || emp.razaoSocial)}
             </div>
-            <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-500">
-              {emp.nomeFantasia && <span>{emp.nomeFantasia}</span>}
-              <span className="font-mono">CNPJ: {emp.cnpj}</span>
-              {emp.cidade && <span className="flex items-center gap-0.5"><MapPin className="w-3 h-3" />{emp.cidade}/{emp.estado}</span>}
-              {emp.tipoServico && <span>{emp.tipoServico}</span>}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-lg font-bold text-white truncate">{emp.razaoSocial}</h1>
+                <Badge className={`text-xs border ${emp.status === "ativa" ? "bg-emerald-500/20 text-emerald-200 border-emerald-400/30" : "bg-white/10 text-white/70 border-white/20"}`}>{emp.status}</Badge>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs text-white/70">
+                {emp.nomeFantasia && <span>{emp.nomeFantasia}</span>}
+                <span className="font-mono">CNPJ: {emp.cnpj}</span>
+                {emp.cidade && <span className="flex items-center gap-0.5"><MapPin className="w-3 h-3" />{emp.cidade}/{emp.estado}</span>}
+                {emp.tipoServico && <span className="inline-flex items-center bg-white/10 rounded-md px-2 py-0.5">{emp.tipoServico}</span>}
+              </div>
             </div>
+            <Badge className={`text-xs border shrink-0 ${conformidadeOk ? "bg-emerald-500/20 text-emerald-200 border-emerald-400/30" : "bg-red-500/20 text-red-200 border-red-400/30"}`}>
+              {conformidadeOk ? <CheckCircle className="w-3 h-3 mr-1" /> : <AlertTriangle className="w-3 h-3 mr-1" />}
+              {conformidadeOk ? "Conforme" : "Pendências"}
+            </Badge>
           </div>
-          <Badge className={`text-xs border shrink-0 ${conformidadeOk ? "bg-green-100 text-green-700 border-green-200" : "bg-red-100 text-red-700 border-red-200"}`}>
-            {conformidadeOk ? <CheckCircle className="w-3 h-3 mr-1" /> : <AlertTriangle className="w-3 h-3 mr-1" />}
-            {conformidadeOk ? "Conforme" : "Pendências"}
-          </Badge>
         </div>
 
         {/* KPIs */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
-            { label: "Total Contratado", value: BRL(r.totalContratado), color: "text-gray-900", icon: DollarSign, sub: `${r.contratosAtivos} ativo(s) / ${r.contratosTotal}` },
-            { label: "Total Pago", value: BRL(r.totalPago), color: "text-green-700", icon: DollarSign, sub: `Saldo ${BRL(r.saldo)}` },
-            { label: "Material em FD", value: BRL(r.fdMaterialTotal), color: "text-amber-700", icon: Truck, sub: "desconta dos contratos" },
-            { label: "Funcionários", value: `${r.funcionariosAtivos}`, color: "text-blue-700", icon: Users, sub: `${r.funcionariosTotal} no total` },
+            { label: "Total Contratado", value: BRL(r.totalContratado), color: "text-gray-900", icon: DollarSign, iconBg: "bg-gray-100 text-gray-500", sub: `${r.contratosAtivos} ativo(s) / ${r.contratosTotal}` },
+            { label: "Total Pago", value: BRL(r.totalPago), color: "text-emerald-700", icon: DollarSign, iconBg: "bg-emerald-100 text-emerald-600", sub: `Saldo ${BRL(r.saldo)}` },
+            { label: "Material em FD", value: BRL(r.fdMaterialTotal), color: "text-amber-700", icon: Truck, iconBg: "bg-amber-100 text-amber-600", sub: "desconta dos contratos" },
+            { label: "Funcionários", value: `${r.funcionariosAtivos}`, color: "text-blue-700", icon: Users, iconBg: "bg-blue-100 text-blue-600", sub: `${r.funcionariosTotal} no total` },
           ].map((k, i) => (
-            <div key={i} className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-gray-500">{k.label}</p>
-                <k.icon className="w-4 h-4 text-gray-300" />
+            <div key={i} className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium text-gray-500">{k.label}</p>
+                <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${k.iconBg}`}><k.icon className="w-4 h-4" /></div>
               </div>
-              <p className={`text-base font-bold ${k.color}`}>{k.value}</p>
-              {k.sub && <p className="text-xs text-gray-400">{k.sub}</p>}
+              <p className={`text-lg font-bold ${k.color}`}>{k.value}</p>
+              {k.sub && <p className="text-xs text-gray-400 mt-0.5">{k.sub}</p>}
             </div>
           ))}
         </div>
@@ -106,7 +119,7 @@ function TerceiroRaioXInner({ id }: { id: number }) {
         )}
 
         {/* Tabs */}
-        <div className="flex border-b border-gray-200">
+        <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
           {([
             ["geral", "Visão Geral", LayoutDashboard],
             ["contratos", `Contratos (${data.contratos.length})`, FileText],
@@ -116,7 +129,7 @@ function TerceiroRaioXInner({ id }: { id: number }) {
             ["movimentacoes", `Movimentações (${(data as any).movimentacoes?.length ?? 0})`, History],
           ] as [Tab, string, any][]).map(([t, label, Icon]) => (
             <button key={t} onClick={() => setTab(t)}
-              className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-1.5 ${tab === t ? "border-b-2 border-orange-500 text-orange-600" : "text-gray-500 hover:text-gray-700"}`}>
+              className={`px-3.5 py-2 text-sm font-medium rounded-xl transition-colors whitespace-nowrap flex items-center gap-1.5 shrink-0 ${tab === t ? "bg-orange-500 text-white shadow-sm" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
               <Icon className="w-3.5 h-3.5" />{label}
             </button>
           ))}
@@ -126,7 +139,7 @@ function TerceiroRaioXInner({ id }: { id: number }) {
         {tab === "geral" && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {/* Faturamento líquido */}
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="bg-white rounded-2xl border border-gray-200 p-4">
               <p className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1.5"><Receipt className="w-4 h-4 text-gray-400" />Faturamento (medições)</p>
               <div className="space-y-1.5 text-sm">
                 <div className="flex justify-between"><span className="text-gray-500">Bruto medido</span><span className="font-semibold text-gray-900">{BRL(r.faturamentoBruto)}</span></div>
@@ -135,7 +148,7 @@ function TerceiroRaioXInner({ id }: { id: number }) {
               </div>
             </div>
             {/* MDO x Material */}
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="bg-white rounded-2xl border border-gray-200 p-4">
               <p className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1.5"><DollarSign className="w-4 h-4 text-gray-400" />Contratos (MDO × Material)</p>
               <div className="space-y-1.5 text-sm">
                 <div className="flex justify-between"><span className="text-gray-500">Total contratado</span><span className="font-semibold text-gray-900">{BRL(r.totalContratado)}</span></div>
@@ -145,7 +158,7 @@ function TerceiroRaioXInner({ id }: { id: number }) {
               </div>
             </div>
             {/* Conformidade */}
-            <div className="bg-white rounded-xl border border-gray-200 p-4 lg:col-span-2">
+            <div className="bg-white rounded-2xl border border-gray-200 p-4 lg:col-span-2">
               <p className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1.5"><ShieldCheck className="w-4 h-4 text-gray-400" />Conformidade</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
                 <div><span className="text-gray-400 text-xs block">ASO vencidos</span><span className={`font-semibold ${r.asoVencidos > 0 ? "text-red-600" : "text-green-700"}`}>{r.asoVencidos}</span></div>
@@ -166,7 +179,7 @@ function TerceiroRaioXInner({ id }: { id: number }) {
               {data.contratos.map((c: any) => {
                 const nt = naturezaInfo(c.naturezaContrato);
                 return (
-                  <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-3 hover:shadow-sm transition-shadow cursor-pointer"
+                  <div key={c.id} className="bg-white rounded-2xl border border-gray-200 p-3 hover:shadow-sm transition-shadow cursor-pointer"
                     onClick={() => navigate(`/terceiros/contratos/${c.id}`)}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
@@ -198,7 +211,7 @@ function TerceiroRaioXInner({ id }: { id: number }) {
           data.funcionarios.length === 0 ? (
             <div className="py-10 text-center text-gray-400 text-sm"><Users className="w-8 h-8 mx-auto mb-2 opacity-30" />Nenhum funcionário cadastrado.</div>
           ) : (
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-gray-500 text-xs">
                   <tr>
@@ -235,7 +248,7 @@ function TerceiroRaioXInner({ id }: { id: number }) {
         {tab === "documentos" && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {data.documentos.map((d: any, i: number) => (
-              <div key={i} className="bg-white rounded-xl border border-gray-200 p-3">
+              <div key={i} className="bg-white rounded-2xl border border-gray-200 p-3">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-medium text-gray-800">{d.tipo}</p>
                   {d.status === "ok" ? <CheckCircle className="w-4 h-4 text-green-500" />
@@ -256,7 +269,7 @@ function TerceiroRaioXInner({ id }: { id: number }) {
           ((data as any).faturamento?.length ?? 0) === 0 ? (
             <div className="py-10 text-center text-gray-400 text-sm"><Receipt className="w-8 h-8 mx-auto mb-2 opacity-30" />Nenhuma medição lançada para esta empresa.</div>
           ) : (
-            <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-gray-500 text-xs">
                   <tr>
@@ -300,7 +313,7 @@ function TerceiroRaioXInner({ id }: { id: number }) {
           ) : (
             <div className="space-y-2">
               {(data as any).movimentacoes.map((m: any, i: number) => (
-                <div key={i} className="bg-white rounded-xl border border-gray-200 p-3 flex items-start gap-3 hover:shadow-sm transition-shadow cursor-pointer"
+                <div key={i} className="bg-white rounded-2xl border border-gray-200 p-3 flex items-start gap-3 hover:shadow-sm transition-shadow cursor-pointer"
                   onClick={() => m.refTipo === "contrato" && navigate(`/terceiros/contratos/${m.refId}`)}>
                   <div className={`mt-0.5 w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${m.tipo === "contrato" ? "bg-orange-100 text-orange-600" : "bg-blue-100 text-blue-600"}`}>
                     {m.tipo === "contrato" ? <FileText className="w-3.5 h-3.5" /> : <Receipt className="w-3.5 h-3.5" />}
