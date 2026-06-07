@@ -2,10 +2,9 @@ import { useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
-import { BarChart2, TrendingUp, TrendingDown, Download, RefreshCw } from "lucide-react";
+import { BarChart2, TrendingUp, TrendingDown, RefreshCw, ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -15,24 +14,13 @@ function formatPct(v: number) {
   return `${v.toFixed(2)}%`;
 }
 
-function getMesAtual() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
 const MESES_PT = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
+const MESES_ABREV = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
-// Formata o período no padrão brasileiro. "AAAA-MM" → "Junho/2026"; "AAAA" → "2026".
-function fmtPeriodo(p: string) {
-  if (!p) return "—";
-  const [ano, mes] = p.split("-");
-  if (!mes) return ano;
-  const idx = parseInt(mes, 10) - 1;
-  return `${MESES_PT[idx] || mes}/${ano}`;
-}
+type MesStatus = "sem_dados" | "lancamento" | "consolidado";
 
 interface DRERow {
   label: string;
@@ -47,16 +35,27 @@ interface DRERow {
 
 export default function FinanceiroDRE() {
   const { companyId } = useCompany();
-  const [periodo, setPeriodo] = useState(getMesAtual());
-  const [tipoPeriodo, setTipoPeriodo] = useState<"mensal" | "trimestral" | "anual">("mensal");
+  const hoje = new Date();
+  const [ano, setAno] = useState(hoje.getFullYear());
+  // mesSel: 1..12 = DRE mensal daquele mês; null = DRE do ano inteiro.
+  const [mesSel, setMesSel] = useState<number | null>(hoje.getMonth() + 1);
 
-  const meses = Array.from({ length: 24 }, (_, i) => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - i);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  });
+  const tipoPeriodo: "mensal" | "anual" = mesSel === null ? "anual" : "mensal";
+  const periodo = mesSel === null ? `${ano}` : `${ano}-${String(mesSel).padStart(2, "0")}`;
 
-  const anos = Array.from({ length: 5 }, (_, i) => `${new Date().getFullYear() - i}`);
+  // Disponibilidade por mês (pontinhos do seletor)
+  const { data: disp } = (trpc as any).financial.getDREDisponibilidade.useQuery(
+    { companyId, ano: `${ano}` },
+    { enabled: !!companyId }
+  );
+
+  const mesesStatus: Record<number, MesStatus> = {};
+  for (let m = 1; m <= 12; m++) {
+    const info = disp?.meses?.[m] ?? disp?.meses?.[String(m)];
+    const total = Number(info?.n ?? 0);
+    const realizado = Number(info?.nRealizado ?? 0);
+    mesesStatus[m] = total === 0 ? "sem_dados" : (realizado >= total ? "consolidado" : "lancamento");
+  }
 
   const { data: dre, isLoading, refetch } = (trpc as any).financial.getDRE.useQuery(
     { companyId, periodo, tipoPeriodo },
@@ -100,41 +99,69 @@ export default function FinanceiroDRE() {
             </h1>
             <p className="text-sm text-gray-500 mt-1">Demonstrativo do Exercício conforme CPC</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Select
-              value={tipoPeriodo}
-              onValueChange={v => {
-                const novo = v as "mensal" | "trimestral" | "anual";
-                setTipoPeriodo(novo);
-                // Ao trocar o tipo, o período precisa ser válido para a nova lista
-                // (anual lista anos "AAAA"; mensal/trimestral listam meses "AAAA-MM").
-                setPeriodo(novo === "anual" ? anos[0] : getMesAtual());
-              }}
-            >
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="mensal">Mensal</SelectItem>
-                <SelectItem value="trimestral">Trimestral</SelectItem>
-                <SelectItem value="anual">Anual</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={periodo} onValueChange={setPeriodo}>
-              <SelectTrigger className="w-36">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(tipoPeriodo === "anual" ? anos : meses).map(p => (
-                  <SelectItem key={p} value={p}>{fmtPeriodo(p)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button variant="outline" size="sm" onClick={() => refetch()}>
-              <RefreshCw className="w-4 h-4" />
-            </Button>
-          </div>
+          <Button variant="outline" size="sm" onClick={() => refetch()} className="self-start sm:self-auto">
+            <RefreshCw className="w-4 h-4 mr-1.5" /> Atualizar
+          </Button>
         </div>
+
+        {/* Seletor: Ano + Meses (chips) + Ano inteiro */}
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <button onClick={() => setAno(a => a - 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-base font-bold text-gray-800 min-w-[3.5rem] text-center">{ano}</span>
+                <button onClick={() => setAno(a => a + 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="flex items-center gap-4 text-xs text-gray-500">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Com lançamento</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Consolidado</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Sem dados</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+              {MESES_ABREV.map((m, i) => {
+                const num = i + 1;
+                const status = mesesStatus[num];
+                const isSelected = mesSel === num;
+                return (
+                  <button
+                    key={m}
+                    onClick={() => setMesSel(num)}
+                    className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
+                      ${isSelected
+                        ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
+                        : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"
+                      }`}
+                  >
+                    <span>{m}</span>
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      status === "consolidado" ? "bg-green-500" :
+                      status === "lancamento" ? "bg-blue-500" :
+                      "bg-gray-300"
+                    }`} />
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-3 flex justify-end">
+              <button
+                onClick={() => setMesSel(null)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all
+                  ${mesSel === null
+                    ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
+                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                  }`}
+              >
+                <CalendarDays className="w-3.5 h-3.5" /> Ano inteiro ({ano})
+              </button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* KPIs rápidos */}
         {dre && (
@@ -165,7 +192,7 @@ export default function FinanceiroDRE() {
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">
-              DRE — {fmtPeriodo(periodo)} ({tipoPeriodo})
+              DRE — {mesSel === null ? `${ano} (ano inteiro)` : `${MESES_PT[mesSel - 1]}/${ano}`}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">

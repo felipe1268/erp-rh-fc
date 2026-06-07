@@ -1,5 +1,5 @@
 import { router, protectedProcedure } from "../_core/trpc";
-import { getDb, createAuditLog } from "../db";
+import { getDb, createAuditLog, getUserCompanyLinks } from "../db";
 import { resolveCompanyIds } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -22,6 +22,7 @@ import {
 import {
   calcularKpis,
   calcularDRE,
+  dreDisponibilidade,
   projetarFluxoCaixa90Dias,
   gerarEFDReinf,
 } from "../services/financialKpiService";
@@ -39,6 +40,24 @@ import {
 
 function rows(res: any): any[] {
   return (res as any)?.rows ?? (res as any) ?? [];
+}
+
+/**
+ * Guarda de acesso por empresa (anti-IDOR) p/ endpoints de leitura financeira
+ * que recebem `companyId` no input. Mesma regra do `_assertCompanyAccess` de
+ * Terceiros: admin/admin_master liberam; usuário COM vínculos em
+ * `user_companies` enforça membership; usuário SEM vínculos (config global por
+ * grupo/módulo) libera.
+ */
+async function _assertFinanceiroCompanyAccess(ctxUser: any, companyId: number) {
+  if (!ctxUser?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
+  if (ctxUser.role === "admin" || ctxUser.role === "admin_master") return;
+  const links = await getUserCompanyLinks(ctxUser.id);
+  const allowedIds = (links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === "number");
+  if (allowedIds.length === 0) return;
+  if (!allowedIds.includes(companyId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+  }
 }
 
 // Executa queries parametrizadas corretamente no Drizzle ORM
@@ -3654,12 +3673,25 @@ export const financialRouter = router({
     companyId: z.number(),
     periodo: z.string(),
     tipoPeriodo: z.enum(["mensal", "trimestral", "anual"]).default("mensal"),
-  })).query(async ({ input }) => {
+  })).query(async ({ ctx, input }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
     try {
       const dre = await calcularDRE(input.companyId, input.periodo, input.tipoPeriodo);
       return dre;
     } catch (e: any) {
       throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: e?.message ?? "Erro ao calcular DRE" });
+    }
+  }),
+
+  getDREDisponibilidade: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    ano: z.string().regex(/^\d{4}$/, "Ano deve ter 4 dígitos."),
+  })).query(async ({ ctx, input }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    try {
+      return await dreDisponibilidade(input.companyId, input.ano);
+    } catch (e: any) {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: e?.message ?? "Erro ao obter disponibilidade do DRE" });
     }
   }),
 

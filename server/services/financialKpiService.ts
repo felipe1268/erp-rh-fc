@@ -451,6 +451,36 @@ export async function calcularDRE(
   };
 }
 
+// Disponibilidade de dados por mês de um ano (para o seletor de meses do DRE).
+// Para cada mês 1..12 retorna { n, nRealizado }:
+//  - n         = total de lançamentos no mês (status != cancelado, tipo != transferencia)
+//  - nRealizado= lançamentos já realizados (valor_realizado preenchido / status pago)
+// Cliente deriva: n===0 → "sem_dados"; n>0 e nRealizado===n → "consolidado"; senão "lancamento".
+export async function dreDisponibilidade(companyId: number, ano: string) {
+  const db = await getDb();
+  const yyyy = (ano || "").slice(0, 4);
+  const res = await db!.execute(
+    `SELECT TO_CHAR(data_competencia,'MM') AS mes,
+            COUNT(*) AS n,
+            COUNT(*) FILTER (WHERE status='pago' OR valor_realizado IS NOT NULL) AS n_realizado
+     FROM financial_entries
+     WHERE company_id=$1
+       AND status NOT IN ('cancelado')
+       AND tipo <> 'transferencia'
+       AND data_competencia IS NOT NULL
+       AND TO_CHAR(data_competencia,'YYYY') = $2
+     GROUP BY TO_CHAR(data_competencia,'MM')`,
+    [companyId, yyyy]
+  );
+  const meses: Record<number, { n: number; nRealizado: number }> = {};
+  for (let m = 1; m <= 12; m++) meses[m] = { n: 0, nRealizado: 0 };
+  for (const row of r(res)) {
+    const m = parseInt(row.mes, 10);
+    if (m >= 1 && m <= 12) meses[m] = { n: n(row.n), nRealizado: n(row.n_realizado) };
+  }
+  return { ano: yyyy, meses };
+}
+
 // Projeção de Caixa 90 dias
 export async function projetarFluxoCaixa90Dias(companyId: number) {
   const db = await getDb();

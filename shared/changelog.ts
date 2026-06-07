@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2835 — **FINANCEIRO · DRE — SELETOR DE MÊS/ANO NO PADRÃO DA TELA DE CONTAS A PAGAR (CHIPS DE MESES + NAVEGAÇÃO DE ANO + "ANO INTEIRO") + DIAGNÓSTICO DA "TELA BRANCA".**
+ *
+ * PEDIDO (usuário, com 2 prints do iPad): "Quero o DRE por mês e ano desta forma" (apontando o seletor da tela "Despesas
+ * e obrigações financeiras por mês" — chips de Jan…Dez com pontinho de status + setas de ano + legenda Com lançamento /
+ * Consolidado / Sem dados) "e ainda não tá aparecendo nada, tela branca sem dados".
+ *
+ * DIAGNÓSTICO DA "TELA BRANCA": NÃO era bug do cálculo. O front mostra "Selecione um período para visualizar o DRE."
+ * SOMENTE quando `dre` é falsy (query desabilitada/erro). Validei a query REAL do `calcularDRE` direto no Neon p/ a
+ * company 60002 anual 2026 → retorna números reais (Receita Bruta R$ 9,17M / Custos Obra R$ 20,4M / 9.539 lançamentos),
+ * sem erro. O print do usuário (00:51) é ANTERIOR ao restart do servidor que subiu o fix da Rev. 2833 (04:06) — ou seja,
+ * a tela já estava curada no servidor atual; o print era stale. (Observação colateral: a 60002 tem datas corrompidas em
+ * `data_competencia` — anos `0026`/`22026` — que naturalmente caem fora do filtro por ano; não quebram a query.)
+ *
+ * O QUE FOI FEITO (reaproveitando o padrão visual de `FinanceiroContasAPagar.tsx`):
+ *  - NOVO endpoint `financial.getDREDisponibilidade({companyId, ano})` + service `dreDisponibilidade(companyId, ano)`
+ *    (`server/services/financialKpiService.ts`): UMA query agregada em `financial_entries` (status!=cancelado,
+ *    tipo!=transferencia, `TO_CHAR(data_competencia,'YYYY')=ano`) agrupada por mês, devolvendo por mês `{ n, nRealizado }`
+ *    (nRealizado = `status='pago' OR valor_realizado IS NOT NULL`). O cliente deriva o status do pontinho:
+ *    n===0 → "sem_dados" (cinza); n>0 e nRealizado>=n → "consolidado" (verde); senão → "lancamento" (azul).
+ *  - `client/src/pages/financeiro/FinanceiroDRE.tsx` (frontend): os dois `<Select>` (tipoPeriodo + período ISO) foram
+ *    SUBSTITUÍDOS por um card-seletor idêntico ao de Contas a Pagar — setas ‹ ANO › + grade de 12 chips de mês com
+ *    pontinho de status + legenda. Estado virou `ano` + `mesSel` (1..12 = DRE mensal daquele mês; `null` = DRE do ANO
+ *    INTEIRO via botão "Ano inteiro"). `periodo`/`tipoPeriodo` são DERIVADOS de `ano`/`mesSel` e alimentam o
+ *    `financial.getDRE` já existente (Rev. 2833). Título da tabela passou a exibir "Mês/AAAA" ou "AAAA (ano inteiro)".
+ *    Removidos helpers órfãos (`getMesAtual`, `fmtPeriodo`) e os imports de `Select`.
+ *
+ * RESSALVA: o "Consolidado" do DRE espelha a semântica de Contas a Pagar (todos os lançamentos do mês realizados/pagos);
+ * é indicador de PREENCHIMENTO, não de fechamento contábil. O modo "Trimestral" da Rev. 2833 foi aposentado da UI (o
+ * backend ainda aceita, mas o seletor agora oferece só Mês e Ano inteiro, conforme o pedido). ZERO ALTER/DROP/DELETE;
+ * ZERO schema novo (só leitura).
+ *
+ * ARQUIVOS: `server/services/financialKpiService.ts` (`dreDisponibilidade`), `server/routers/financial.ts`
+ * (`getDREDisponibilidade` + import), `client/src/pages/financeiro/FinanceiroDRE.tsx` (seletor de chips + estado).
+ *
+ * ---
+ *
  * Rev. 2834 — **TERCEIROS · MENU REORGANIZADO EM TORNO DE EMPRESA → CONTRATOS (DE 7 SEÇÕES PARA 3) + SEPARAÇÃO CLARA EMPRESAS DE SERVIÇO × PRESTADORES PJ.**
  *
  * PEDIDO (usuário): "Acho que o menu [de Terceiros] está muito confuso. Temos dois grupos — os PJ que fornecem mão de
