@@ -1636,6 +1636,9 @@ Regras:
           // Rev. 2868 — soft-delete de link (excluir sem DELETE físico; R-001/R-007/R-010).
           await db.execute(sql`ALTER TABLE coleta_rh_sessoes ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP`);
           console.log(`[SyncSchema+] Rev. 2868: coluna deleted_at garantida em coleta_rh_sessoes (excluir link = soft-delete).`);
+
+          await db.execute(sql`ALTER TABLE coleta_rh_respostas ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP`);
+          console.log(`[SyncSchema+] Rev. 2872: coluna deleted_at garantida em coleta_rh_respostas (excluir resposta = soft-delete).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2858 coleta_rh:`, e?.message || e); }
         console.log(`[SyncSchema+] Tabelas DDS (dds_temas/dds_sessoes/dds_sessao_funcionarios) garantidas.`);
 

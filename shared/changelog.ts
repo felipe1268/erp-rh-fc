@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2872 — **COLETA DE CAMPO (RH) — FILA DE REVISÃO GANHA EDITAR E EXCLUIR
+ * RESPOSTA (ALÉM DE APROVAR/REJEITAR), SÓ PARA O ADM MASTER.**
+ *
+ * PEDIDO: "Quero poder editar e apagar tbm" (prints IMG_1690/IMG_1691 = abas
+ * "Aprovadas" e "Rejeitadas" mostravam só o badge, sem nenhuma ação).
+ *
+ * CONTEXTO: na fila só dava p/ aprovar/rejeitar PENDENTES (via "Revisar"). Não
+ * havia como corrigir um dado digitado errado pelo auxiliar nem remover um envio
+ * indevido — em nenhuma das abas.
+ *
+ * FEITO (backend `server/routers/coletaRh.ts`):
+ *  - NOVO `editarResposta` (admin) — `{ companyId, companyIds?, id, dados }`.
+ *    Mescla os campos editados (whitelist `CAMPOS_COLETA`, texto trim; vazio =
+ *    remove o campo) sobre o `dadosJson` existente e regrava. NÃO toca na ficha
+ *    do employee nem no `status`; só corrige o registro coletado. Vale p/
+ *    qualquer status. Guard `assertColetaCompanyAccess` + `assertColetaAdmin`.
+ *  - NOVO `excluirResposta` (admin) — SOFT-DELETE (`deleted_at`); some de
+ *    `listarRespostas`. Mesmos guards. R-001/R-007/R-010: zero DELETE físico.
+ *  - `listarRespostas` passa a filtrar `isNull(deletedAt)`.
+ *
+ * SCHEMA: NOVA coluna `coleta_rh_respostas.deleted_at` (`drizzle/schema.ts`) +
+ * self-heal aditivo `[SyncSchema+]` (`ALTER TABLE ... ADD COLUMN IF NOT EXISTS`).
+ *
+ * FEITO (frontend `client/src/pages/ColetaCampo.tsx`): cada item da fila (em
+ * TODAS as abas) ganha, SÓ p/ `isAdminMaster`, 2 botões-ícone à direita: Editar
+ * (`Pencil`) abre dialog com inputs por campo (`CAMPO_ORDER`/`CAMPO_LABELS`,
+ * grade 2 col) pré-preenchidos; Excluir (`Trash2`, vermelho) abre dialog de
+ * confirmação. Sucesso invalida `listarRespostas`.
+ *
+ * ZERO ALTER/DROP/DELETE físico; schema só aditivo.
+ *
  * Rev. 2871 — **COLETA DE CAMPO (RH) — FILA DE REVISÃO GANHA SELEÇÃO MÚLTIPLA
  * PARA APROVAR VÁRIOS DE UMA VEZ.**
  *

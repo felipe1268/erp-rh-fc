@@ -65,6 +65,18 @@ function assertColetaAdmin(ctxUser: any) {
   }
 }
 
+/**
+ * Rev. 2872 — guarda de PRIVILÉGIO ESTRITO (só `admin_master`). Editar/excluir
+ * uma RESPOSTA da fila é ação exclusiva do Adm Master, espelhando a UI (botões
+ * só p/ `isAdminMaster`). NÃO reaproveita `assertColetaAdmin` (que libera `admin`
+ * também), pois isso seria desvio de privilégio frente ao requisito.
+ */
+function assertColetaAdminMaster(ctxUser: any) {
+  if (ctxUser?.role !== "admin_master") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o Administrador Master pode editar ou excluir respostas da fila." });
+  }
+}
+
 // Campos que o auxiliar de campo pode coletar. Whitelist espelha colunas que
 // JÁ existem em employees e que updateEmployee aceita.
 const CAMPOS_COLETA = [
@@ -414,7 +426,10 @@ export const coletaRhRouter = router({
       const db = (await getDb())!;
       const companyIds = resolveCompanyIds(input);
       await assertColetaCompanyAccess(ctx.user, companyIds);
-      const conds = [inArray(coletaRhRespostas.companyId, companyIds)];
+      const conds = [
+        inArray(coletaRhRespostas.companyId, companyIds),
+        isNull(coletaRhRespostas.deletedAt),
+      ];
       if (input.status) conds.push(eq(coletaRhRespostas.status, input.status));
 
       const respostas = await db
@@ -614,6 +629,84 @@ export const coletaRhRouter = router({
           revisadoPorId: ctx.user?.id ?? null,
           revisadoEm: new Date().toISOString(),
         })
+        .where(eq(coletaRhRespostas.id, resp.id));
+      return { ok: true };
+    }),
+
+  // Rev. 2872 — Adm edita os DADOS COLETADOS de uma resposta (corrigir o que o
+  // auxiliar digitou). NÃO toca na ficha do employee nem no status; só corrige o
+  // registro coletado. Funciona em qualquer status (pendente/aprovada/rejeitada).
+  editarResposta: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      id: z.number(),
+      dados: dadosColetaSchema,
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const companyIds = resolveCompanyIds(input);
+      await assertColetaCompanyAccess(ctx.user, companyIds);
+      assertColetaAdmin(ctx.user);
+
+      const [resp] = await db
+        .select()
+        .from(coletaRhRespostas)
+        .where(and(
+          eq(coletaRhRespostas.id, input.id),
+          inArray(coletaRhRespostas.companyId, companyIds),
+          isNull(coletaRhRespostas.deletedAt),
+        ))
+        .limit(1);
+      if (!resp) throw new Error("Resposta não encontrada ou sem acesso.");
+
+      // Mescla: preserva chaves fora da whitelist (ex.: marcadores) e sobrescreve
+      // os campos editados com texto limpo (vazio = remove o campo coletado).
+      let dados: Record<string, any> = {};
+      try { dados = JSON.parse(resp.dadosJson || "{}"); } catch { dados = {}; }
+      for (const c of CAMPOS_COLETA) {
+        const v = (input.dados as Record<string, any>)[c];
+        if (v === undefined) continue;
+        const t = typeof v === "string" ? v.trim() : v;
+        if (t === "" || t === null) delete dados[c];
+        else dados[c] = t;
+      }
+
+      await db
+        .update(coletaRhRespostas)
+        .set({ dadosJson: JSON.stringify(dados) })
+        .where(eq(coletaRhRespostas.id, resp.id));
+      return { ok: true };
+    }),
+
+  // Rev. 2872 — Adm exclui uma resposta da fila (SOFT-DELETE: deleted_at).
+  // R-001/R-007/R-010: jamais DELETE físico. Some de listarRespostas.
+  excluirResposta: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      id: z.number(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const companyIds = resolveCompanyIds(input);
+      await assertColetaCompanyAccess(ctx.user, companyIds);
+      assertColetaAdmin(ctx.user);
+
+      const [resp] = await db
+        .select({ id: coletaRhRespostas.id })
+        .from(coletaRhRespostas)
+        .where(and(
+          eq(coletaRhRespostas.id, input.id),
+          inArray(coletaRhRespostas.companyId, companyIds),
+          isNull(coletaRhRespostas.deletedAt),
+        ))
+        .limit(1);
+      if (!resp) throw new Error("Resposta não encontrada ou sem acesso.");
+
+      await db
+        .update(coletaRhRespostas)
+        .set({ deletedAt: new Date().toISOString() })
         .where(eq(coletaRhRespostas.id, resp.id));
       return { ok: true };
     }),

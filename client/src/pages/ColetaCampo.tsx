@@ -192,6 +192,10 @@ export default function ColetaCampo() {
   const [motivoRej, setMotivoRej] = useState("");
   const [camposAceitos, setCamposAceitos] = useState<Set<string>>(new Set());
   const [aplicarFoto, setAplicarFoto] = useState(true);
+  // Rev. 2872 — editar/excluir resposta da fila (Adm Master).
+  const [editResp, setEditResp] = useState<any | null>(null);
+  const [editRespDados, setEditRespDados] = useState<Record<string, string>>({});
+  const [excluirRespState, setExcluirRespState] = useState<any | null>(null);
   // Rev. 2871 — seleção múltipla na fila (aprovar vários de uma vez).
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
   // Reconcilia a seleção com os itens PENDENTES ainda visíveis (remove IDs
@@ -240,6 +244,32 @@ export default function ColetaCampo() {
     },
     onError: (e) => toast({ title: "Erro ao aprovar em lote", description: e.message, variant: "destructive" }),
   });
+  const editarRespM = trpc.coletaRh.editarResposta.useMutation({
+    onSuccess: () => {
+      toast({ title: "Resposta atualizada", description: "Os dados coletados foram corrigidos." });
+      setEditResp(null); setEditRespDados({});
+      utils.coletaRh.listarRespostas.invalidate();
+    },
+    onError: (e) => toast({ title: "Erro ao editar", description: e.message, variant: "destructive" }),
+  });
+  const excluirRespM = trpc.coletaRh.excluirResposta.useMutation({
+    onSuccess: () => {
+      toast({ title: "Resposta excluída", description: "Removida da fila de revisão." });
+      setExcluirRespState(null);
+      utils.coletaRh.listarRespostas.invalidate();
+    },
+    onError: (e) => toast({ title: "Erro ao excluir", description: e.message, variant: "destructive" }),
+  });
+
+  const abrirEditarResp = (r: any) => {
+    const d: Record<string, string> = {};
+    for (const k of CAMPO_ORDER) {
+      const v = r.dados?.[k];
+      d[k] = v == null ? "" : String(v);
+    }
+    setEditRespDados(d);
+    setEditResp(r);
+  };
 
   const toggleSelecionado = (id: number) => {
     setSelecionados((prev) => {
@@ -570,11 +600,23 @@ export default function ColetaCampo() {
                             {r.enviadoPor ? ` · por ${r.enviadoPor}` : ""}
                           </div>
                         </div>
-                        {r.status === "pendente"
-                          ? <Button size="sm" onClick={() => abrirRevisao(r)} style={{ background: FC_NAVY }}><Eye className="h-4 w-4 mr-1" />Revisar</Button>
-                          : r.status === "aprovada"
-                            ? <Badge className="bg-emerald-600"><CheckCircle2 className="h-3 w-3 mr-1" />Aprovada</Badge>
-                            : <Badge variant="secondary"><XCircle className="h-3 w-3 mr-1" />Rejeitada</Badge>}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {r.status === "pendente"
+                            ? <Button size="sm" onClick={() => abrirRevisao(r)} style={{ background: FC_NAVY }}><Eye className="h-4 w-4 mr-1" />Revisar</Button>
+                            : r.status === "aprovada"
+                              ? <Badge className="bg-emerald-600"><CheckCircle2 className="h-3 w-3 mr-1" />Aprovada</Badge>
+                              : <Badge variant="secondary"><XCircle className="h-3 w-3 mr-1" />Rejeitada</Badge>}
+                          {isAdminMaster && (
+                            <>
+                              <Button size="icon" variant="ghost" className="h-8 w-8" title="Editar dados coletados" onClick={() => abrirEditarResp(r)}>
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:text-red-700" title="Excluir resposta" onClick={() => setExcluirRespState(r)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -790,6 +832,68 @@ export default function ColetaCampo() {
             >
               {aprovarM.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
               Aprovar e gravar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rev. 2872 — Dialog editar dados coletados (Adm Master) */}
+      <Dialog open={!!editResp} onOpenChange={(o) => { if (!o) { setEditResp(null); setEditRespDados({}); } }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar dados coletados — {editResp?.empNome}</DialogTitle>
+            <DialogDescription>
+              Corrija o que o auxiliar digitou. Campos em branco ficam sem valor. Isto NÃO altera a ficha do funcionário nem o status da revisão.
+            </DialogDescription>
+          </DialogHeader>
+          {editResp && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {CAMPO_ORDER.map((k) => (
+                <div key={k}>
+                  <Label className="text-xs">{CAMPO_LABELS[k]}</Label>
+                  <Input
+                    value={editRespDados[k] ?? ""}
+                    onChange={(e) => setEditRespDados((prev) => ({ ...prev, [k]: e.target.value }))}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setEditResp(null); setEditRespDados({}); }}>Cancelar</Button>
+            <Button
+              disabled={editarRespM.isPending}
+              onClick={() => editResp && editarRespM.mutate({ ...baseInput, id: editResp.id, dados: editRespDados })}
+              style={{ background: FC_NAVY }}
+            >
+              {editarRespM.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rev. 2872 — Dialog confirmar exclusão de resposta (Adm Master) */}
+      <Dialog open={!!excluirRespState} onOpenChange={(o) => !o && setExcluirRespState(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="h-5 w-5" /> Excluir resposta
+            </DialogTitle>
+            <DialogDescription>
+              A coleta de <span className="font-medium">{excluirRespState?.empNome}</span> sairá da fila de revisão.
+              {" "}Isto não altera a ficha do funcionário e não pode ser desfeito.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExcluirRespState(null)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={excluirRespM.isPending}
+              onClick={() => excluirRespState && excluirRespM.mutate({ ...baseInput, id: excluirRespState.id })}
+            >
+              {excluirRespM.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
+              Excluir
             </Button>
           </DialogFooter>
         </DialogContent>

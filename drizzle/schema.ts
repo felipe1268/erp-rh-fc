@@ -2314,6 +2314,7 @@ export const coletaRhRespostas = pgTable("coleta_rh_respostas", {
         revisadoPorId: integer("revisado_por_id"),
         revisadoEm: timestamp("revisado_em", { mode: 'string' }),
         motivoRejeicao: text("motivo_rejeicao"),
+        deletedAt: timestamp("deleted_at", { mode: 'string' }),
 });
 
 export const obraHorasRateio = pgTable("obra_horas_rateio", {
