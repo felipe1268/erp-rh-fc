@@ -2534,14 +2534,68 @@ export async function createRevision(data: {
   version: number;
   titulo: string;
   descricao: string;
-  tipo: 'feature' | 'bugfix' | 'melhoria' | 'seguranca' | 'performance';
+  tipo: string;
   modulos?: string;
   criadoPor: string;
+  dataPublicacao?: string;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const result = await db.insert(systemRevisions).values(data).returning();
   return { id: Number(result[0].id) };
+}
+
+/** Retorna o conjunto de versões já registradas (leve — só a coluna version). */
+export async function getRegisteredRevisionVersions(): Promise<Set<number>> {
+  const db = await getDb();
+  if (!db) return new Set();
+  const rows = await db.select({ version: systemRevisions.version }).from(systemRevisions);
+  return new Set(rows.map((r) => Number(r.version)));
+}
+
+/**
+ * Advisory lock (best-effort) para serializar o backfill de revisões entre múltiplas
+ * réplicas/instâncias subindo ao mesmo tempo. `system_revisions.version` não é UNIQUE,
+ * então sem isto dois startups simultâneos poderiam inserir as mesmas versões duplicadas.
+ * Retorna true se ESTE processo obteve o lock (deve então rodar o sync e liberar depois).
+ */
+const REVISION_SYNC_LOCK_KEY = 47_2852;
+export async function tryRevisionSyncLock(): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  try {
+    const r: any = await db.execute(sql`SELECT pg_try_advisory_lock(${REVISION_SYNC_LOCK_KEY}) AS locked`);
+    const rows = r?.rows ?? r;
+    return rows?.[0]?.locked === true;
+  } catch {
+    return false;
+  }
+}
+export async function releaseRevisionSyncLock(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.execute(sql`SELECT pg_advisory_unlock(${REVISION_SYNC_LOCK_KEY})`);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Insere várias revisões de uma vez (uma viagem ao banco). */
+export async function createRevisionsBulk(rows: Array<{
+  version: number;
+  titulo: string;
+  descricao: string;
+  tipo: string;
+  modulos?: string;
+  criadoPor: string;
+  dataPublicacao?: string;
+}>): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  if (rows.length === 0) return 0;
+  await db.insert(systemRevisions).values(rows);
+  return rows.length;
 }
 
 export async function deleteRevision(id: number) {

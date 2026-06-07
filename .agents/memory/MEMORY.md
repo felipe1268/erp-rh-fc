@@ -1,4 +1,5 @@
 - [Which DB the app uses](db-connection.md) — `executeSql` tool hits the Replit Postgres (`DATABASE_URL`/helium), but the app reads `NEON_DATABASE_URL`. To inspect REAL app data, query Neon.
+- [Revision registry](revision-registry.md) — "Controle de Revisões" auto-registra via parse JSDoc do changelog.ts (NÃO carregar como módulo=OOM); array congelou na 1878; version sem UNIQUE → UPDATE não DELETE.
 - [MSP columns — % Concluída vs % Previsto](msp-analysis-columns.md) — previsto = coluna FIXA Texto10 (188743750), sem alias/fallback (faltou → "—"); realizado = % Concluída (`PercentComplete`).
 - [MSP %Previsto parity](msp-previsto-parity.md) — %PREVISTO must use baseline WITH TIME + minute-by-minute working-time engine (Fri shorter); date-only/day-granular diverge. Validate vs real XML.
 - [Sidebar menu visibility](sidebar-menu-visibility.md) — new menu item needs permission registration in `shared/modules.ts` + `sharedPaths` too, or non-master users won't see it; admin-master bypasses filters.

@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2852 — **CONTROLE DE REVISÕES — AUTO-REGISTRO DE TODA REVISÃO (1879→ATUAL) QUE FALTAVA NA TELA.
+ * O ARRAY ESTRUTURADO TINHA CONGELADO NA 1878; AGORA AS REVISÕES SE REGISTRAM SOZINHAS NO STARTUP.**
+ *
+ * PROBLEMA: a tela "Controle de Revisões" lê a tabela `system_revisions`, populada no startup por
+ * `syncRevisions` a partir do array estruturado `CHANGELOG` (em `shared/changelog.ts`). Esse array
+ * CONGELOU na Rev. 1878 — da 1879 em diante TODA revisão virou apenas bloco JSDoc `Rev. NNNN — ...`
+ * no topo deste arquivo + bump de `shared/version.ts`, e NUNCA chegava ao banco. Resultado: 973
+ * revisões (1879→2851) invisíveis na tela; o banco Neon parava na 1878.
+ *
+ * O QUE FOI FEITO:
+ *  - NOVO PARSER (`server/changelogJsdoc.ts`): `parseChangelogJsdoc()` lê o PRÓPRIO `shared/changelog.ts`
+ *    (via fs) e extrai cada bloco `Rev. NNNN — ...` → version/titulo/descricao/tipo/modulos/dataPublicacao.
+ *    O corpo de cada revisão para no PRÓXIMO header `Rev. NNNN —` ou no `*/` (revisões compartilham um
+ *    mesmo bloco JSDoc — sem isso o corpo "engolia" as revisões seguintes, gerando descrições de ~947KB).
+ *    `tipo` classificado por título+sinais fortes (feature/bugfix/melhoria/seguranca/performance);
+ *    `modulos` = segmento antes do " — "; `dataPublicacao` = 1ª data dd/mm/aaaa do corpo.
+ *  - SYNC REESCRITO (`server/syncRevisions.ts`): usa SOMENTE o parser JSDoc (não importa mais o array
+ *    `CHANGELOG`, de ~4.6MB — versões ≤1878 já estão no banco e o módulo pesado causava OOM no heap de
+ *    1GB). Insere QUALQUER versão ausente (preenche lacunas, não só o topo) em LOTES de 100 (chunked) pra
+ *    não estourar memória.
+ *  - DB (`server/db.ts`): NOVOS `getRegisteredRevisionVersions()` (Set leve — só a coluna version) e
+ *    `createRevisionsBulk()` (insert em lote); `createRevision` aceita `tipo:string` + `dataPublicacao`.
+ *  - BACKFILL: as 973 revisões 1879→2851 foram registradas no banco (total subiu de 1495 → 2468). As
+ *    linhas gravadas com o bug de bloat foram CORRIGIDAS via UPDATE (sem DELETE) com o parser consertado.
+ *  - GO-FORWARD: toda revisão futura (incl. esta 2852) se AUTO-REGISTRA no próximo startup — basta o bloco
+ *    JSDoc no topo + bump de versão (a própria convenção FC). ZERO ALTER/DROP/DELETE.
+ *
  * Rev. 2851 — **PORTAL DO CLIENTE — CONTROLE GRANULAR DE QUAIS OBRAS CADA USUÁRIO (CREDENCIAL) DO
  * CLIENTE PODE VER. 100% GERENCIÁVEL PELO ADMIN.**
  *
