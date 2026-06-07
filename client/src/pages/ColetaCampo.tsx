@@ -2,7 +2,7 @@
 // Gera/gerencia links externos por obra (token + QR, sem login) para um auxiliar
 // de campo coletar dados dos funcionários alocados pelo celular, e revisa a fila
 // (aprova → grava na ficha do employee; rejeita).
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   ClipboardList, Link2, QrCode, Copy, Check, X, Power, Eye, Loader2,
   CheckCircle2, XCircle, Clock, ArrowRight, ImageIcon, Pencil, Trash2, AlertTriangle,
-  ArrowLeft,
+  ArrowLeft, CheckSquare, Square,
 } from "lucide-react";
 import { GRUPOS_COLETA, GRUPOS_COLETA_KEYS, type GrupoColetaKey } from "@shared/coletaCampos";
 
@@ -192,6 +192,23 @@ export default function ColetaCampo() {
   const [motivoRej, setMotivoRej] = useState("");
   const [camposAceitos, setCamposAceitos] = useState<Set<string>>(new Set());
   const [aplicarFoto, setAplicarFoto] = useState(true);
+  // Rev. 2871 — seleção múltipla na fila (aprovar vários de uma vez).
+  const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
+  // Reconcilia a seleção com os itens PENDENTES ainda visíveis (remove IDs
+  // "fantasma" de respostas já aprovadas/rejeitadas individualmente).
+  useEffect(() => {
+    const visiveis = new Set(
+      (respostasQ.data || [])
+        .filter((r: any) => r.status === "pendente")
+        .map((r: any) => r.id),
+    );
+    setSelecionados((prev) => {
+      let mudou = false;
+      const n = new Set<number>();
+      prev.forEach((id) => { if (visiveis.has(id)) n.add(id); else mudou = true; });
+      return mudou ? n : prev;
+    });
+  }, [respostasQ.data]);
 
   const aprovarM = trpc.coletaRh.aprovarResposta.useMutation({
     onSuccess: (r) => {
@@ -211,6 +228,26 @@ export default function ColetaCampo() {
     },
     onError: (e) => toast({ title: "Erro ao rejeitar", description: e.message, variant: "destructive" }),
   });
+  const aprovarVariasM = trpc.coletaRh.aprovarVarias.useMutation({
+    onSuccess: (r) => {
+      toast({
+        title: "Aprovação em lote concluída",
+        description: `${r.aprovadas} aprovado(s)${r.ignoradas ? ` · ${r.ignoradas} ignorado(s)` : ""}.`,
+      });
+      setSelecionados(new Set());
+      utils.coletaRh.listarRespostas.invalidate();
+      utils.coletaRh.listarSessoes.invalidate();
+    },
+    onError: (e) => toast({ title: "Erro ao aprovar em lote", description: e.message, variant: "destructive" }),
+  });
+
+  const toggleSelecionado = (id: number) => {
+    setSelecionados((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  };
 
   const abrirRevisao = (r: any) => {
     setRevisar(r);
@@ -468,7 +505,7 @@ export default function ColetaCampo() {
             {(["pendente", "aprovada", "rejeitada"] as const).map((st) => (
               <button
                 key={st}
-                onClick={() => setStatusFila(st)}
+                onClick={() => { setStatusFila(st); setSelecionados(new Set()); }}
                 className={`px-3 py-1.5 rounded-full text-sm border transition ${statusFila === st ? "bg-[#1B2A4A] text-white border-[#1B2A4A]" : "bg-transparent text-muted-foreground hover:bg-muted"}`}
               >
                 {st === "pendente" ? "Pendentes" : st === "aprovada" ? "Aprovadas" : "Rejeitadas"}
@@ -476,35 +513,75 @@ export default function ColetaCampo() {
             ))}
           </div>
 
-          <div className="rounded-xl border bg-card divide-y">
-            {respostasQ.isLoading && <div className="p-4 text-sm text-muted-foreground"><Loader2 className="inline h-4 w-4 animate-spin mr-2" />Carregando…</div>}
-            {!respostasQ.isLoading && (respostasQ.data || []).length === 0 && (
-              <div className="p-6 text-center text-sm text-muted-foreground">Nenhuma resposta {statusFila === "pendente" ? "pendente" : statusFila + "s"}.</div>
-            )}
-            {(respostasQ.data || []).map((r: any) => {
-              const nEnviados = Object.keys(r.dados || {}).length;
-              const fotoExibir = r.fotoUrl || r.empFotoAtual;
-              return (
-                <div key={r.id} className="p-4 flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-full bg-muted overflow-hidden shrink-0 flex items-center justify-center ring-1 ring-border">
-                    {fotoExibir ? <img src={fotoExibir} alt={r.empNome || ""} className="h-full w-full object-cover" /> : <ImageIcon className="h-5 w-5 text-muted-foreground" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{r.empNome || `#${r.employeeId}`}</div>
-                    <div className="text-xs text-muted-foreground truncate">
-                      {r.empFuncao || "—"} · {r.obraNome} · {nEnviados} campo(s){r.fotoUrl ? " + foto" : ""}
-                      {r.enviadoPor ? ` · por ${r.enviadoPor}` : ""}
+          {(() => {
+            const lista = respostasQ.data || [];
+            const pendentes = statusFila === "pendente" ? lista.filter((r: any) => r.status === "pendente") : [];
+            const todosSel = pendentes.length > 0 && pendentes.every((r: any) => selecionados.has(r.id));
+            const toggleTodos = () => {
+              setSelecionados(todosSel ? new Set() : new Set(pendentes.map((r: any) => r.id)));
+            };
+            return (
+              <>
+                {statusFila === "pendente" && pendentes.length > 0 && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-muted/40 px-4 py-2.5">
+                    <button onClick={toggleTodos} className="flex items-center gap-2 text-sm font-medium">
+                      {todosSel ? <CheckSquare className="h-4 w-4 text-[#1B2A4A]" /> : <Square className="h-4 w-4 text-muted-foreground" />}
+                      {todosSel ? "Desmarcar todos" : "Selecionar todos"}
+                    </button>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground">{selecionados.size} selecionado(s)</span>
+                      <Button
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700"
+                        disabled={selecionados.size === 0 || aprovarVariasM.isPending}
+                        onClick={() => aprovarVariasM.mutate({ ...baseInput, ids: Array.from(selecionados) })}
+                      >
+                        {aprovarVariasM.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
+                        Aprovar selecionados
+                      </Button>
                     </div>
                   </div>
-                  {r.status === "pendente"
-                    ? <Button size="sm" onClick={() => abrirRevisao(r)} style={{ background: FC_NAVY }}><Eye className="h-4 w-4 mr-1" />Revisar</Button>
-                    : r.status === "aprovada"
-                      ? <Badge className="bg-emerald-600"><CheckCircle2 className="h-3 w-3 mr-1" />Aprovada</Badge>
-                      : <Badge variant="secondary"><XCircle className="h-3 w-3 mr-1" />Rejeitada</Badge>}
+                )}
+
+                <div className="rounded-xl border bg-card divide-y">
+                  {respostasQ.isLoading && <div className="p-4 text-sm text-muted-foreground"><Loader2 className="inline h-4 w-4 animate-spin mr-2" />Carregando…</div>}
+                  {!respostasQ.isLoading && lista.length === 0 && (
+                    <div className="p-6 text-center text-sm text-muted-foreground">Nenhuma resposta {statusFila === "pendente" ? "pendente" : statusFila + "s"}.</div>
+                  )}
+                  {lista.map((r: any) => {
+                    const nEnviados = Object.keys(r.dados || {}).length;
+                    const fotoExibir = r.fotoUrl || r.empFotoAtual;
+                    const selecionavel = statusFila === "pendente" && r.status === "pendente";
+                    const sel = selecionados.has(r.id);
+                    return (
+                      <div key={r.id} className={`p-4 flex items-center gap-3 ${sel ? "bg-emerald-50/60" : ""}`}>
+                        {selecionavel && (
+                          <button onClick={() => toggleSelecionado(r.id)} className="shrink-0" aria-label="Selecionar">
+                            {sel ? <CheckSquare className="h-5 w-5 text-emerald-600" /> : <Square className="h-5 w-5 text-muted-foreground" />}
+                          </button>
+                        )}
+                        <div className="h-12 w-12 rounded-full bg-muted overflow-hidden shrink-0 flex items-center justify-center ring-1 ring-border">
+                          {fotoExibir ? <img src={fotoExibir} alt={r.empNome || ""} className="h-full w-full object-cover" /> : <ImageIcon className="h-5 w-5 text-muted-foreground" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium truncate">{r.empNome || `#${r.employeeId}`}</div>
+                          <div className="text-xs text-muted-foreground truncate">
+                            {r.empFuncao || "—"} · {r.obraNome} · {nEnviados} campo(s){r.fotoUrl ? " + foto" : ""}
+                            {r.enviadoPor ? ` · por ${r.enviadoPor}` : ""}
+                          </div>
+                        </div>
+                        {r.status === "pendente"
+                          ? <Button size="sm" onClick={() => abrirRevisao(r)} style={{ background: FC_NAVY }}><Eye className="h-4 w-4 mr-1" />Revisar</Button>
+                          : r.status === "aprovada"
+                            ? <Badge className="bg-emerald-600"><CheckCircle2 className="h-3 w-3 mr-1" />Aprovada</Badge>
+                            : <Badge variant="secondary"><XCircle className="h-3 w-3 mr-1" />Rejeitada</Badge>}
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </div>
+              </>
+            );
+          })()}
         </div>
       )}
 

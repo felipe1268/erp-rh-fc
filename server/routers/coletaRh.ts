@@ -525,6 +525,67 @@ export const coletaRhRouter = router({
       return { ok: true, camposGravados: Object.keys(payload) };
     }),
 
+  // Rev. 2871 — Aprova VÁRIAS respostas pendentes de uma vez (seleção múltipla).
+  // Aplica o comportamento padrão: grava TODOS os campos enviados não-vazios +
+  // a foto coletada (quando houver). Idempotente por item (pula já revisadas).
+  aprovarVarias: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      ids: z.array(z.number()).min(1),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const companyIds = resolveCompanyIds(input);
+      await assertColetaCompanyAccess(ctx.user, companyIds);
+
+      const respostas = await db
+        .select()
+        .from(coletaRhRespostas)
+        .where(and(
+          inArray(coletaRhRespostas.id, input.ids),
+          inArray(coletaRhRespostas.companyId, companyIds),
+        ));
+
+      let aprovadas = 0;
+      let ignoradas = 0;
+      for (const resp of respostas) {
+        if (resp.status !== "pendente") { ignoradas++; continue; }
+
+        let dados: Record<string, any> = {};
+        try { dados = JSON.parse(resp.dadosJson || "{}"); } catch { dados = {}; }
+
+        const payload: Record<string, any> = {};
+        for (const c of CAMPOS_COLETA) {
+          const v = dados[c];
+          if (v === undefined || v === null) continue;
+          if (typeof v === "string" && v.trim() === "") continue;
+          payload[c] = v;
+        }
+        if (resp.fotoUrl) payload.fotoUrl = resp.fotoUrl;
+
+        if (Object.keys(payload).length > 0) {
+          await updateEmployee(resp.employeeId, resp.companyId, payload, {
+            name: ctx.user?.name ?? undefined,
+            id: ctx.user?.id ?? undefined,
+          });
+        }
+
+        await db
+          .update(coletaRhRespostas)
+          .set({
+            status: "aprovada",
+            revisadoPor: ctx.user?.name ?? null,
+            revisadoPorId: ctx.user?.id ?? null,
+            revisadoEm: new Date().toISOString(),
+          })
+          .where(eq(coletaRhRespostas.id, resp.id));
+        aprovadas++;
+      }
+
+      return { ok: true, aprovadas, ignoradas };
+    }),
+
   rejeitarResposta: protectedProcedure
     .input(z.object({
       companyId: z.number(),

@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2871 — **COLETA DE CAMPO (RH) — FILA DE REVISÃO GANHA SELEÇÃO MÚLTIPLA
+ * PARA APROVAR VÁRIOS DE UMA VEZ.**
+ *
+ * PEDIDO: "Quero opção de múltipla seleção para aprovar vários de uma vez"
+ * (print IMG_1689 = aba "Fila de Revisão", aba "Pendentes", com itens que só
+ * podiam ser aprovados um a um via "Revisar").
+ *
+ * CONTEXTO: a aprovação só existia individualmente (`aprovarResposta`, dentro do
+ * dialog de revisão). Para grandes lotes coletados em campo, revisar cada item
+ * isoladamente era lento. Faltava um caminho de aprovação em massa.
+ *
+ * FEITO (backend `server/routers/coletaRh.ts`): NOVO endpoint `aprovarVarias`
+ * (protectedProcedure) recebe `{ companyId, companyIds?, ids: number[] }`. Aplica
+ * `assertColetaCompanyAccess` sobre os companyIds resolvidos, busca as respostas
+ * por `inArray(id)` ∩ `inArray(companyId)` (tenancy), e para cada uma PENDENTE
+ * aplica o comportamento PADRÃO da aprovação: grava TODOS os campos enviados
+ * não-vazios (whitelist `CAMPOS_COLETA`) + a foto coletada (`fotoUrl`) quando
+ * houver, via `updateEmployee`, e marca `status="aprovada"` com auditoria
+ * (`revisadoPor`/`revisadoPorId`/`revisadoEm`). Itens já revisados são PULADOS
+ * (idempotente). Retorna `{ ok, aprovadas, ignoradas }`.
+ *
+ * FEITO (frontend `client/src/pages/ColetaCampo.tsx`): NOVO estado
+ * `selecionados: Set<number>` + mutation `aprovarVariasM`. Na aba "Pendentes":
+ * barra de ação com "Selecionar/Desmarcar todos", contador "N selecionado(s)" e
+ * botão verde "Aprovar selecionados" (desabilitado sem seleção / durante o
+ * pending). Cada card pendente ganha um checkbox (ícones `CheckSquare`/`Square`)
+ * e destaque `bg-emerald-50/60` quando marcado. Trocar de aba/status limpa a
+ * seleção; o sucesso invalida `listarRespostas`/`listarSessoes` e zera a seleção.
+ * Checkbox/seleção só aparece na aba "Pendentes" (aprovadas/rejeitadas inalteradas).
+ *
+ * ZERO ALTER/DROP/DELETE; ZERO schema (reusa `updateEmployee` existente).
+ *
  * Rev. 2870 — **COLETA DE CAMPO (RH) — FILA DE REVISÃO MOSTRA A FOTO DO
  * FUNCIONÁRIO (FOTO COLETADA OU, NA FALTA, A FOTO ATUAL DA FICHA).**
  *
