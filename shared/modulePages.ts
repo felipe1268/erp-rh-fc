@@ -31,6 +31,7 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
     pages: [
       { id: "painel_rh",           label: "Painel RH (visão consolidada)",        actions: ["view"] },
       { id: "colaboradores",       label: "Colaboradores / Funcionários",        actions: ["view","create","edit","delete"] },
+      { id: "coleta_campo",        label: "Coleta de Campo (RH)",                 actions: ["view","create","edit","delete"] },
       { id: "efetivo_obra",        label: "Efetivo por Obra",                     actions: ["view"] },
       { id: "ferias",              label: "Férias e Afastamentos",                actions: ["view","create","edit","delete"] },
       { id: "aviso_previo",        label: "Aviso Prévio",                         actions: ["view","create","edit","delete"] },
@@ -443,6 +444,7 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
   "rh-dp": {
     "/painel/rh":                       "painel_rh",
     "/colaboradores":                   "colaboradores",
+    "/coleta-campo":                    "coleta_campo",
     "/obras/efetivo":                   "efetivo_obra",
     "/controle-documentos?tab=atestados":     "controle_documentos",
     "/controle-documentos?tab=advertencias":  "controle_documentos",

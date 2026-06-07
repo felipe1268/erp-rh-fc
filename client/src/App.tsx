@@ -83,6 +83,8 @@ const Home = lazy(() => import("./pages/Home"));
 const Oraculo = lazy(() => import("./pages/Oraculo"));
 const Empresas = lazy(() => import("./pages/Empresas"));
 const Colaboradores = lazy(() => import("./pages/Colaboradores"));
+const ColetaCampo = lazy(() => import("./pages/ColetaCampo"));
+const ColetaCampoPublica = lazy(() => import("./pages/portal/ColetaCampoPublica"));
 const RecontratacoesPendentes = lazy(() => import("./pages/RecontratacoesPendentes"));
 const Usuarios = lazy(() => import("./pages/Usuarios"));
 const GruposUsuarios = lazy(() => import("./pages/GruposUsuarios"));
@@ -366,6 +368,7 @@ function Router() {
         <Route path={"/painel/civil"} component={PainelCivil} />
         <Route path={"/empresas"} component={() => <RouteGuard component={Empresas} route="/empresas" />} />
         <Route path={"/colaboradores"} component={() => <RouteGuard component={Colaboradores} route="/colaboradores" />} />
+        <Route path={"/coleta-campo"} component={() => <RouteGuard component={ColetaCampo} route="/coleta-campo" />} />
         <Route path={"/recontratacoes-pendentes"} component={() => <RouteGuard component={RecontratacoesPendentes} route="/recontratacoes-pendentes" />} />
         <Route path={"/clientes"} component={() => <RouteGuard component={Clientes} route="/empresas" />} />
         <Route path={"/gerenciadoras"} component={() => <RouteGuard component={Gerenciadoras} route="/empresas" />} />
@@ -595,6 +598,8 @@ function Router() {
         {/* Sprint 6 - IA */}
         <Route path="/comparativo-convencoes" component={() => <RouteGuard component={ComparativoConvencoes} route="/comparativo-convencoes" />} />
         <Route path="/pesquisa-publica/pesquisa/:token" component={PesquisaPublicaPage} />
+        {/* Coleta de Campo (RH) — link externo por obra, sem login */}
+        <Route path="/portal/coleta-rh/:token" component={ColetaCampoPublica} />
         {/* Portal Externo (Terceiros/Parceiros) */}
         <Route path="/portal/login" component={PortalLogin} />
         <Route path="/portal/cliente/login" component={PortalLoginCliente} />

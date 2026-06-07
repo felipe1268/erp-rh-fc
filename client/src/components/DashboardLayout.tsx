@@ -85,6 +85,7 @@ const menuSectionsRHDP: MenuSection[] = [
     items: [
       { icon: LayoutDashboard, label: "Painel RH", path: "/painel/rh" },
       { icon: Users, label: "Colaboradores", path: "/colaboradores" },
+      { icon: ClipboardList, label: "Coleta de Campo", path: "/coleta-campo" },
       { icon: RefreshCw, label: "Recontratações Pendentes", path: "/recontratacoes-pendentes" },
     ],
   },

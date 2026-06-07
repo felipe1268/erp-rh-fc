@@ -1590,6 +1590,47 @@ Regras:
           await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS recontratado_data TIMESTAMP`);
           console.log(`[SyncSchema+] Rev. 2755: tabela recontratacao_solicitacoes + colunas recontratado_de_* garantidas.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2755 recontratacao:`, e?.message || e); }
+
+        // Rev. 2858 — COLETA DE CAMPO (RH): link externo por obra (token+QR, sem
+        // login) + fila de revisão. Tabelas 100% aditivas; nenhuma coluna nova em
+        // employees (todas já existem). RH aprova antes de gravar na ficha.
+        try {
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS coleta_rh_sessoes (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            obra_id INTEGER NOT NULL,
+            token VARCHAR(64) NOT NULL,
+            titulo VARCHAR(255),
+            ativo SMALLINT NOT NULL DEFAULT 1,
+            criado_por VARCHAR(255),
+            criado_por_id INTEGER,
+            expira_em TIMESTAMP,
+            created_at TIMESTAMP DEFAULT NOW() NOT NULL
+          )`);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS coleta_rh_sessoes_token_uq ON coleta_rh_sessoes (token)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS coleta_rh_sessoes_company ON coleta_rh_sessoes (company_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS coleta_rh_sessoes_obra ON coleta_rh_sessoes (company_id, obra_id)`);
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS coleta_rh_respostas (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            sessao_id INTEGER NOT NULL,
+            obra_id INTEGER NOT NULL,
+            employee_id INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pendente',
+            dados_json TEXT NOT NULL,
+            foto_url TEXT,
+            enviado_por VARCHAR(255),
+            created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+            revisado_por VARCHAR(255),
+            revisado_por_id INTEGER,
+            revisado_em TIMESTAMP,
+            motivo_rejeicao TEXT
+          )`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS coleta_rh_resp_sessao ON coleta_rh_respostas (sessao_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS coleta_rh_resp_status ON coleta_rh_respostas (company_id, status)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS coleta_rh_resp_emp ON coleta_rh_respostas (employee_id)`);
+          console.log(`[SyncSchema+] Rev. 2858: tabelas coleta_rh_sessoes + coleta_rh_respostas garantidas (Coleta de Campo RH).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2858 coleta_rh:`, e?.message || e); }
         console.log(`[SyncSchema+] Tabelas DDS (dds_temas/dds_sessoes/dds_sessao_funcionarios) garantidas.`);
 
         // Tabelas do Portal do Cliente (comentários cliente↔FC e avaliações NPS)

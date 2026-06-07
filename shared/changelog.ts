@@ -1,6 +1,65 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2858 — **NOVO MÓDULO "COLETA DE CAMPO" (RH) — LINK EXTERNO POR OBRA
+ * (TOKEN + QR, SEM LOGIN) PARA UM AUXILIAR DE CAMPO COLETAR/ATUALIZAR DADOS DOS
+ * FUNCIONÁRIOS ALOCADOS PELO CELULAR, COM FILA DE REVISÃO (RH APROVA ANTES DE
+ * GRAVAR NA FICHA).**
+ *
+ * PEDIDO: criar uma função em que o RH gera um link (e QR) por obra; um auxiliar
+ * de campo abre no celular, vê a lista de funcionários alocados na obra e coleta
+ * dados — EPI/uniforme (calçado/camisa/calça), telefone/WhatsApp, contato de
+ * emergência, endereço e foto. Nada grava direto na ficha: tudo entra numa FILA
+ * DE REVISÃO e o RH aprova/rejeita. Acesso também por tela interna no ERP.
+ *
+ * MODELO DE DADOS (100% ADITIVO — ZERO coluna nova em employees, pois ela JÁ tem
+ * telefone/celular/contatoEmergencia/telefoneEmergencia/parentescoEmergencia/
+ * logradouro/numero/complemento/bairro/cidade/estado/cep/fotoUrl/tamanhoCalcado/
+ * tamanhoCamisa/tamanhoCalca):
+ *  - `coleta_rh_sessoes` (link por obra): id, company_id, obra_id, token
+ *    VARCHAR(64) UNIQUE, titulo, ativo SMALLINT, criado_por(+id), expira_em,
+ *    created_at.
+ *  - `coleta_rh_respostas` (fila de revisão): id, company_id, sessao_id, obra_id,
+ *    employee_id, status TEXT ('pendente'|'aprovada'|'rejeitada'), dados_json
+ *    TEXT, foto_url TEXT, enviado_por, created_at, revisado_por(+id), revisado_em,
+ *    motivo_rejeicao.
+ *  Tabelas em `drizzle/schema.ts` (coletaRhSessoes/coletaRhRespostas) + self-heal
+ *  `[SyncSchema+]` em `server/_core/index.ts` (CREATE TABLE/INDEX IF NOT EXISTS).
+ *
+ * BACKEND (`server/routers/coletaRh.ts`, registrado em `server/routers.ts` como
+ * `coletaRh`):
+ *  - INTERNO (protectedProcedure, escopo por empresa via resolveCompanyIds/
+ *    companyFilter): `obrasDisponiveis`, `criarSessao` (token =
+ *    crypto.randomBytes(24).hex, valida obra∈empresa), `listarSessoes` (+contagem
+ *    de pendentes/total por link), `desativarSessao`, `listarRespostas` (devolve
+ *    valores ATUAIS dos campos p/ o RH comparar no diff), `aprovarResposta`
+ *    (grava SÓ campos whitelisted aceitos via `updateEmployee` — respeita a
+ *    whitelist de server/db.ts; foto vira fotoUrl), `rejeitarResposta`.
+ *  - PÚBLICO (publicProcedure por token, SEM login): `dadosSessao` (valida
+ *    ativo/expira; devolve obra + funcionários ATIVOS alocados — LGPD: só
+ *    nome/função/foto, sem prefill de dado pessoal — e marca quem já enviou);
+ *    `enviarResposta` (confere alocação na obra, sanitiza whitelist, sobe foto
+ *    via `storagePut`, cria resposta 'pendente'). NUNCA grava direto na ficha.
+ *
+ * FRONTEND:
+ *  - `client/src/pages/portal/ColetaCampoPublica.tsx` (rota PÚBLICA sem guard
+ *    `/portal/coleta-rh/:token`): mobile-first, header navy FC, busca + lista de
+ *    funcionários, formulário com chips de tamanho (EPI), contato, emergência,
+ *    endereço, foto (input capture câmera → base64) e "enviar para o RH".
+ *  - `client/src/pages/ColetaCampo.tsx` (rota interna `/coleta-campo`): aba
+ *    "Links por Obra" (criar link, listar, copiar, QR via QRCodeSVG, ativar/
+ *    desativar) + aba "Fila de Revisão" (pendentes/aprovadas/rejeitadas, diff
+ *    atual×coletado por campo com checkboxes, aplicar foto, aprovar/rejeitar).
+ *
+ * REGISTRO/PERMISSÃO/MENU: feature `coleta-campo` em `shared/modules.ts` (rh-dp),
+ * page `coleta_campo` + `ROUTE_TO_PAGEID` em `shared/modulePages.ts`, rota interna
+ * (RouteGuard) + rota pública em `client/src/App.tsx`, item de sidebar em
+ * `DashboardLayout.tsx` (RH & DP › Principal).
+ *
+ * ESCOPO/SEGURANÇA: ZERO ALTER/DROP/DELETE; schema 100% ADITIVO (2 tabelas
+ * novas); link público read-only de dados sensíveis (LGPD) e gravação só após
+ * aprovação do RH; endpoints internos com escopo de empresa.
+ *
  * Rev. 2857 — **DATABOOK DE OBRA — "GERAR DATABOOK COMPLETO" / "FASE 1 DE 3:
  * IMPORTAR MATERIAIS DE OCs" FALHAVA COM ERRO DE INSERT (eap_codigo
  * ESTOURANDO varchar(100) AO CONSOLIDAR PRODUTOS REPETIDOS).**

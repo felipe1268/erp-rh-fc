@@ -140,6 +140,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "painel-rh", label: "Painel RH", route: "/painel/rh", icon: "LayoutDashboard" },
       // === Cadastro ===
       { key: "colaboradores", label: "Colaboradores", route: "/colaboradores", icon: "Users" },
+      { key: "coleta-campo", label: "Coleta de Campo", route: "/coleta-campo", icon: "ClipboardList" },
       { key: "recontratacoes-pendentes", label: "Recontratações Pendentes", route: "/recontratacoes-pendentes", icon: "RefreshCw" },
       { key: "efetivo-obra", label: "Efetivo por Obra", route: "/obras/efetivo", icon: "HardHat" },
       { key: "relogios-ponto", label: "Relógios de Ponto", route: "/relogios-ponto", icon: "Wifi" },

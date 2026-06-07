@@ -98,6 +98,7 @@ import { terceirosRouter } from "./routers/terceiros";
 import { terceiroContratosRouter } from "./routers/terceiroContratos";
 import { parceirosRouter } from "./routers/parceiros";
 import { portalExternoRouter } from "./routers/portalExterno";
+import { coletaRhRouter } from "./routers/coletaRh";
 import { payrollEngineRouter } from "./routers/payrollEngine";
 import { horasExtrasRouter } from "./routers/horasExtras";
 import { fieldNotesRouter } from "./routers/fieldNotes";
@@ -204,6 +205,7 @@ export const appRouter = router({
   databook: databookRouter,
   operacional: operacionalRouter,
   portalExterno: portalExternoRouter,
+  coletaRh: coletaRhRouter,
   payrollEngine: payrollEngineRouter,
   horasExtras: horasExtrasRouter,
   fieldNotes: fieldNotesRouter,

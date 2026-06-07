@@ -2275,6 +2275,41 @@ export const obraFuncionarios = pgTable("obra_funcionarios", {
         adicionalEscolhido: varchar("adicional_escolhido", { length: 20 }).default('auto'),
 });
 
+// Rev. 2858 — COLETA DE CAMPO (RH): link externo por obra (token+QR, sem login)
+// para auxiliar de campo coletar/atualizar dados dos funcionários alocados pelo
+// celular. Toda resposta entra numa FILA DE REVISÃO e só grava na ficha do
+// employee após o RH aprovar. Tabelas 100% aditivas (nenhuma coluna nova em
+// employees — todas já existem).
+export const coletaRhSessoes = pgTable("coleta_rh_sessoes", {
+        id: serial().notNull(),
+        companyId: integer("company_id").notNull(),
+        obraId: integer("obra_id").notNull(),
+        token: varchar({ length: 64 }).notNull(),
+        titulo: varchar({ length: 255 }),
+        ativo: smallint().default(1).notNull(),
+        criadoPor: varchar("criado_por", { length: 255 }),
+        criadoPorId: integer("criado_por_id"),
+        expiraEm: timestamp("expira_em", { mode: 'string' }),
+        createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const coletaRhRespostas = pgTable("coleta_rh_respostas", {
+        id: serial().notNull(),
+        companyId: integer("company_id").notNull(),
+        sessaoId: integer("sessao_id").notNull(),
+        obraId: integer("obra_id").notNull(),
+        employeeId: integer("employee_id").notNull(),
+        status: text().default('pendente').notNull(), // pendente | aprovada | rejeitada
+        dadosJson: text("dados_json").notNull(),
+        fotoUrl: text("foto_url"),
+        enviadoPor: varchar("enviado_por", { length: 255 }),
+        createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+        revisadoPor: varchar("revisado_por", { length: 255 }),
+        revisadoPorId: integer("revisado_por_id"),
+        revisadoEm: timestamp("revisado_em", { mode: 'string' }),
+        motivoRejeicao: text("motivo_rejeicao"),
+});
+
 export const obraHorasRateio = pgTable("obra_horas_rateio", {
         id: serial().notNull(),
         companyId: integer().notNull(),
