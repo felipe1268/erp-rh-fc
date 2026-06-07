@@ -12804,8 +12804,23 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         modalidadeFd: (oc as any).modalidadeFd,
       }));
 
-      const obraRes = await db.execute(sql`SELECT orcamento_id FROM obras WHERE id = ${input.obraId} AND company_id = ${input.companyId} LIMIT 1`);
-      const orcamentoId = (obraRes as any).rows?.[0]?.orcamento_id;
+      // Rev. 2817 — A tabela `obras` NÃO tem coluna `orcamento_id` (nem `company_id`:
+      // as colunas reais são camelCase `companyId`/`isActive`). O SELECT cru antigo
+      // (`SELECT orcamento_id FROM obras WHERE ... company_id = ...`) lançava em RUNTIME
+      // (`column "company_id" does not exist`) → `getSaldoFd` quebrava → Painel FD VAZIO,
+      // mesmo após o fix da Rev. 2816 (descricao). O vínculo obra→orçamento vive na
+      // tabela `orcamentos` (`companyId`/`obraId`/`deletedAt`). Lemos por lá (primeiro
+      // orçamento ativo da obra), via Drizzle (nomes introspectados corretos).
+      const orcRows = await db.select({ id: orcamentos.id })
+        .from(orcamentos)
+        .where(and(
+          eq(orcamentos.companyId, input.companyId),
+          eq(orcamentos.obraId, input.obraId),
+          isNull(orcamentos.deletedAt),
+        ))
+        .orderBy(asc(orcamentos.id))
+        .limit(1);
+      const orcamentoId = orcRows[0]?.id;
       if (!orcamentoId) return { totalFdOrcado: 0, totalFdComprometido, saldoFd: -totalFdComprometido, itensFd: [], ocsComFd };
 
       const itensFd = await db.select().from(bdiFd).where(and(eq(bdiFd.orcamentoId, orcamentoId), eq(bdiFd.companyId, input.companyId)));
@@ -12826,6 +12841,108 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         })),
         ocsComFd,
       };
+    }),
+
+  // Rev. 2817 — Visão "Todas as obras" do Painel FD: agrega orçado/comprometido/saldo
+  // de FD por obra da empresa + lista consolidada das OCs com FD (com o nome da obra).
+  // Usa os MESMOS critérios do getSaldoFd (modalidade IN fd_cliente/fd_terceiro/fd_fc,
+  // status != cancelada; comprometido = soma fdValor das fd_cliente; orçado = soma bdi_fd
+  // do orçamento ativo da obra).
+  getSaldoFdTodasObras: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+
+      // OCs com FD de TODA a empresa (qualquer obra)
+      const ocsRows = await db.select({
+          id: comprasOrdens.id,
+          numeroOc: comprasOrdens.numeroOc,
+          obraId: comprasOrdens.obraId,
+          observacoes: comprasOrdens.observacoes,
+          fdValor: comprasOrdens.fdValor,
+          fdStatus: comprasOrdens.fdStatus,
+          modalidadeFd: comprasOrdens.modalidadeFd,
+        })
+        .from(comprasOrdens)
+        .where(and(
+          eq(comprasOrdens.companyId, input.companyId),
+          sql`${comprasOrdens.modalidadeFd} IN ('fd_cliente', 'fd_terceiro', 'fd_fc')`,
+          sql`${comprasOrdens.status} != 'cancelada'`,
+        ));
+
+      // Nomes das obras ativas (colunas reais camelCase: companyId/isActive)
+      const obrasRows = await db.select({ id: obras.id, nome: obras.nome })
+        .from(obras)
+        .where(and(eq(obras.companyId, input.companyId), eq(obras.isActive, 1)));
+      const obraNomeById = new Map<number, string>();
+      for (const o of obrasRows) obraNomeById.set(o.id, o.nome);
+
+      // Orçamento ativo (primeiro) por obra
+      const orcRows = await db.select({ id: orcamentos.id, obraId: orcamentos.obraId })
+        .from(orcamentos)
+        .where(and(eq(orcamentos.companyId, input.companyId), isNull(orcamentos.deletedAt)))
+        .orderBy(asc(orcamentos.id));
+      const orcamentoIdByObra = new Map<number, number>();
+      for (const r of orcRows) {
+        if (r.obraId != null && !orcamentoIdByObra.has(r.obraId)) orcamentoIdByObra.set(r.obraId, r.id);
+      }
+
+      // Total FD orçado por orçamento (soma bdi_fd)
+      const bdiRows = await db.select({
+          orcamentoId: bdiFd.orcamentoId,
+          total: sql<string>`SUM(${bdiFd.total})`,
+        })
+        .from(bdiFd)
+        .where(eq(bdiFd.companyId, input.companyId))
+        .groupBy(bdiFd.orcamentoId);
+      const orcadoByOrcamento = new Map<number, number>();
+      for (const r of bdiRows) orcadoByOrcamento.set(r.orcamentoId, n(r.total));
+
+      type Row = { obraId: number; obraNome: string; totalFdOrcado: number; totalFdComprometido: number; saldoFd: number; qtdOcsFd: number };
+      const byObra = new Map<number, Row>();
+      const ensure = (obraId: number): Row => {
+        let r = byObra.get(obraId);
+        if (!r) {
+          const orcId = orcamentoIdByObra.get(obraId);
+          const orcado = orcId ? (orcadoByOrcamento.get(orcId) ?? 0) : 0;
+          r = { obraId, obraNome: obraNomeById.get(obraId) ?? `Obra #${obraId}`, totalFdOrcado: orcado, totalFdComprometido: 0, saldoFd: orcado, qtdOcsFd: 0 };
+          byObra.set(obraId, r);
+        }
+        return r;
+      };
+      // Semeia obras que têm orçamento FD (>0) mesmo sem nenhuma OC FD
+      for (const [obraId, orcId] of orcamentoIdByObra) {
+        if ((orcadoByOrcamento.get(orcId) ?? 0) > 0) ensure(obraId);
+      }
+
+      const ocsComFd = ocsRows.map(oc => ({
+        id: oc.id,
+        numeroOc: oc.numeroOc,
+        obraId: oc.obraId,
+        obraNome: oc.obraId != null ? (obraNomeById.get(oc.obraId) ?? `Obra #${oc.obraId}`) : "—",
+        descricao: oc.observacoes,
+        fdValor: oc.fdValor,
+        fdStatus: oc.fdStatus,
+        modalidadeFd: oc.modalidadeFd,
+      }));
+      for (const oc of ocsRows) {
+        if (oc.obraId == null) continue;
+        const r = ensure(oc.obraId);
+        r.qtdOcsFd += 1;
+        if ((oc as any).modalidadeFd === "fd_cliente") r.totalFdComprometido += n(oc.fdValor);
+      }
+      for (const r of byObra.values()) r.saldoFd = r.totalFdOrcado - r.totalFdComprometido;
+
+      const porObra = [...byObra.values()].sort((a, b) => a.obraNome.localeCompare(b.obraNome, "pt-BR"));
+      const totais = porObra.reduce((acc, r) => {
+        acc.totalFdOrcado += r.totalFdOrcado;
+        acc.totalFdComprometido += r.totalFdComprometido;
+        return acc;
+      }, { totalFdOrcado: 0, totalFdComprometido: 0, saldoFd: 0 });
+      totais.saldoFd = totais.totalFdOrcado - totais.totalFdComprometido;
+
+      return { porObra, ocsComFd, totais };
     }),
 
   getCotacaoSplitMatMdo: protectedProcedure

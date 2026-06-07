@@ -14,10 +14,17 @@ import { Receipt, DollarSign, AlertTriangle, CheckCircle, Loader2, Shield, Histo
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+const fdBadgeClass = (m: string) =>
+  m === "fd_cliente" ? "bg-blue-100 text-blue-700"
+  : m === "fd_fc" ? "bg-indigo-100 text-indigo-700"
+  : "bg-purple-100 text-purple-700";
+const fdBadgeLabel = (m: string) =>
+  m === "fd_cliente" ? "FD Cliente" : m === "fd_fc" ? "Fat. Direto FC" : "FD Terceiro";
+
 export default function PainelFd() {
   const { selectedCompanyId } = useCompany();
   const companyId = parseInt(selectedCompanyId || "0");
-  const [selectedObra, setSelectedObra] = useState<number>(0);
+  const [selectedObra, setSelectedObra] = useState<number>(-1);
   const [showAjuste, setShowAjuste] = useState<any>(null);
   const [ajusteForm, setAjusteForm] = useState({ novoValor: "", justificativa: "", adminEmail: "", adminSenha: "" });
   const [showAddItem, setShowAddItem] = useState(false);
@@ -34,6 +41,12 @@ export default function PainelFd() {
     { companyId, obraId: selectedObra },
     { enabled: selectedObra > 0 }
   );
+
+  const todasQ = trpc.compras.getSaldoFdTodasObras.useQuery(
+    { companyId },
+    { enabled: companyId > 0 && selectedObra === -1 }
+  );
+  const todas = todasQ.data;
 
   const historicoQ = trpc.compras.getHistoricoFdAjustes.useQuery(
     { companyId, orcamentoId },
@@ -91,6 +104,7 @@ export default function PainelFd() {
             <Select value={String(selectedObra)} onValueChange={v => setSelectedObra(parseInt(v))}>
               <SelectTrigger className="h-9 bg-white border-gray-300 text-gray-900"><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="-1">Todas as obras</SelectItem>
                 {obras.map((o: any) => (
                   <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
                 ))}
@@ -98,6 +112,117 @@ export default function PainelFd() {
             </Select>
           </div>
         </div>
+
+        {selectedObra === -1 && todasQ.isLoading && (
+          <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+        )}
+
+        {selectedObra === -1 && todas && (
+          <>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-1">
+                <p className="text-xs text-gray-500 font-medium">Orçamento FD Total</p>
+                <p className="text-xl font-bold text-gray-900">{fmt(todas.totais.totalFdOrcado)}</p>
+              </div>
+              <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-1">
+                <p className="text-xs text-gray-500 font-medium">FD Comprometido</p>
+                <p className="text-xl font-bold text-amber-600">{fmt(todas.totais.totalFdComprometido)}</p>
+              </div>
+              <div className={`bg-white border rounded-lg p-4 space-y-1 ${todas.totais.saldoFd < 0 ? "border-red-300 bg-red-50" : "border-gray-200"}`}>
+                <p className="text-xs text-gray-500 font-medium">Saldo Disponível</p>
+                <p className={`text-xl font-bold ${todas.totais.saldoFd < 0 ? "text-red-600" : "text-emerald-600"}`}>{fmt(todas.totais.saldoFd)}</p>
+              </div>
+            </div>
+
+            <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
+              <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                <DollarSign className="h-4 w-4 text-indigo-500" /> Saldo de FD por Obra
+              </h3>
+              {todas.porObra.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-gray-200">
+                      <TableHead className="text-xs text-gray-500">Obra</TableHead>
+                      <TableHead className="text-xs text-gray-500 text-center">OCs FD</TableHead>
+                      <TableHead className="text-xs text-gray-500 text-right">Orçado</TableHead>
+                      <TableHead className="text-xs text-gray-500 text-right">Comprometido</TableHead>
+                      <TableHead className="text-xs text-gray-500 text-right">Saldo</TableHead>
+                      <TableHead className="text-xs text-gray-500 w-20"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {todas.porObra.map((o: any) => (
+                      <TableRow key={o.obraId} className="border-gray-100">
+                        <TableCell className="text-xs text-gray-900 font-medium">{o.obraNome}</TableCell>
+                        <TableCell className="text-xs text-center">{o.qtdOcsFd}</TableCell>
+                        <TableCell className="text-xs text-right">{fmt(o.totalFdOrcado)}</TableCell>
+                        <TableCell className="text-xs text-right text-amber-600">{fmt(o.totalFdComprometido)}</TableCell>
+                        <TableCell className={`text-xs text-right font-semibold ${o.saldoFd < 0 ? "text-red-600" : "text-emerald-600"}`}>{fmt(o.saldoFd)}</TableCell>
+                        <TableCell>
+                          <Button size="sm" variant="ghost" className="h-6 text-[10px] text-indigo-600 hover:text-indigo-800"
+                            onClick={() => setSelectedObra(o.obraId)}>
+                            Detalhar
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="text-xs text-gray-400 text-center py-4">Nenhuma obra com Faturamento Direto nesta empresa.</p>
+              )}
+            </div>
+
+            {todas.ocsComFd && (todas.ocsComFd as any[]).length > 0 && (
+              <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
+                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                  <Receipt className="h-4 w-4 text-indigo-500" /> OCs com Faturamento Direto (todas as obras)
+                </h3>
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-gray-200">
+                      <TableHead className="text-xs text-gray-500">OC</TableHead>
+                      <TableHead className="text-xs text-gray-500">Obra</TableHead>
+                      <TableHead className="text-xs text-gray-500">Descrição</TableHead>
+                      <TableHead className="text-xs text-gray-500">Modalidade</TableHead>
+                      <TableHead className="text-xs text-gray-500">Status FD</TableHead>
+                      <TableHead className="text-xs text-gray-500 text-right">Valor FD</TableHead>
+                      <TableHead className="text-xs text-gray-500 w-20">PDF</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(todas.ocsComFd as any[]).map((oc: any) => (
+                      <TableRow key={oc.id} className="border-gray-100">
+                        <TableCell className="text-xs font-mono text-gray-700">{oc.numeroOc || `#${oc.id}`}</TableCell>
+                        <TableCell className="text-xs text-gray-700">{oc.obraNome}</TableCell>
+                        <TableCell className="text-xs text-gray-900">{oc.descricao || "—"}</TableCell>
+                        <TableCell className="text-xs">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${fdBadgeClass(oc.modalidadeFd)}`}>
+                            {fdBadgeLabel(oc.modalidadeFd)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          <span className={`font-medium ${oc.fdStatus === "aprovado" ? "text-emerald-600" : "text-amber-600"}`}>
+                            {oc.fdStatus === "aprovado" ? "Aprovado" : "Pendente"}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-xs text-right font-semibold">{fmt(parseFloat(oc.fdValor ?? "0"))}</TableCell>
+                        <TableCell>
+                          {oc.modalidadeFd === "fd_cliente" && (
+                            <Button size="sm" variant="ghost" className="h-6 text-[10px] text-indigo-600 hover:text-indigo-800 gap-1"
+                              onClick={() => window.open(`/api/download/fd/${oc.id}?mode=view`, "_blank")}>
+                              <FileDown className="h-3 w-3" /> PDF
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </>
+        )}
 
         {selectedObra > 0 && saldo && (
           <>
@@ -210,8 +335,8 @@ export default function PainelFd() {
                         <TableCell className="text-xs font-mono text-gray-700">{oc.numeroOc || `#${oc.id}`}</TableCell>
                         <TableCell className="text-xs text-gray-900">{oc.descricao || "—"}</TableCell>
                         <TableCell className="text-xs">
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${oc.modalidadeFd === "fd_cliente" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>
-                            {oc.modalidadeFd === "fd_cliente" ? "FD Cliente" : "FD Terceiro"}
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${fdBadgeClass(oc.modalidadeFd)}`}>
+                            {fdBadgeLabel(oc.modalidadeFd)}
                           </span>
                         </TableCell>
                         <TableCell className="text-xs">
@@ -260,6 +385,12 @@ export default function PainelFd() {
 
         {selectedObra > 0 && !saldo && saldoQ.isLoading && (
           <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+        )}
+
+        {selectedObra > 0 && !saldo && !saldoQ.isLoading && (
+          <div className="text-center py-16 text-gray-400 text-sm">
+            {saldoQ.isError ? "Erro ao carregar o saldo de FD desta obra." : "Esta obra ainda não possui dados de Faturamento Direto."}
+          </div>
         )}
 
         {selectedObra === 0 && (

@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2817 — **COMPRAS · PAINEL FD — HOTFIX FINAL (SEGUNDO BUG, "AINDA VAZIO" APÓS A REV. 2816) + NOVA VISÃO
+ * "TODAS AS OBRAS": O PAINEL FD CONTINUAVA VAZIO PORQUE O `getSaldoFd` TINHA UMA SEGUNDA QUERY QUEBRADA QUE
+ * SELECIONAVA EM `obras` COLUNAS QUE NÃO EXISTEM. ALÉM DE CORRIGIR, ADICIONA A OPÇÃO DE VER O SALDO DE FD
+ * CONSOLIDADO DE TODAS AS OBRAS (AGORA O PADRÃO AO ABRIR A TELA).**
+ *
+ * PEDIDO (usuário, screenshot Painel FD REVTE-CIVIL ainda vazio): "Ainda vazio, arruma isso de vez e quero ver
+ * por obra e ter a opção de ver todas as obras."
+ *
+ * CAUSA-RAIZ (segundo bug, independente do `descricao` da Rev. 2816): após listar as OCs com FD, o `getSaldoFd`
+ * resolvia o orçamento da obra com `db.execute(sql\`SELECT orcamento_id FROM obras WHERE id = ... AND company_id =
+ * ...\`)`. MAS a tabela real `obras` no Neon NÃO tem coluna `company_id` (a coluna é camelCase `companyId`) e NÃO
+ * tem coluna `orcamento_id` (o vínculo obra→orçamento vive na tabela `orcamentos`, via `obraId`/`companyId`). Esse
+ * SELECT cru lançava em runtime (`column "company_id" does not exist`) → `getSaldoFd` continuava quebrando p/ TODAS
+ * as obras → `saldoQ.data` undefined → `PainelFd.tsx` não desenhava nada. Confirmado no Neon: `obras` tem
+ * `companyId`/`isActive`/`nome` (camelCase), sem `company_id`/`orcamento_id`; obra 12 (REVTE-CIVIL) → orçamento 57
+ * (R$ 270.855,12 de BDI FD). A Rev. 2816 (troca `descricao`→`observacoes`) era necessária mas insuficiente.
+ *
+ * O QUE FOI FEITO:
+ *  1) `getSaldoFd` (server/routers/compras.ts) — substitui o SELECT cru em `obras` por uma query Drizzle na tabela
+ *     `orcamentos` (`eq(companyId)` + `eq(obraId)` + `isNull(deletedAt)`, `orderBy(asc(id)).limit(1)`), usando os
+ *     nomes de coluna introspectados (corretos). Isso conserta o "ainda vazio" de vez.
+ *  2) NOVO endpoint `getSaldoFdTodasObras(companyId)` — agrega por obra (orçado = soma `bdi_fd` do orçamento ativo;
+ *     comprometido = soma `fdValor` das OCs `fd_cliente`; qtd de OCs FD; saldo) + lista consolidada das OCs FD com o
+ *     nome da obra + totais gerais. Mesmos critérios do `getSaldoFd` (modalidade IN fd_cliente/fd_terceiro/fd_fc,
+ *     status != cancelada). Lê `obras` por colunas explícitas camelCase (`companyId`/`isActive`).
+ *  3) `client/src/pages/compras/PainelFd.tsx` — seletor de obra ganha a opção "Todas as obras" (valor sentinela -1,
+ *     agora o DEFAULT ao abrir). Quando selecionada, renderiza 3 cards de totais + tabela "Saldo de FD por Obra"
+ *     (com botão "Detalhar" que abre a obra) + tabela consolidada de OCs FD com a coluna Obra. Quando uma obra
+ *     específica é escolhida, mantém a visão detalhada existente. Estados vazios/erro explícitos por obra.
+ *
+ * RESSALVA: correção de query + leitura/agregação + UI. ZERO ALTER/DROP/DELETE; ZERO schema novo; ZERO mutation
+ * nova. Validação: esbuild OK em compras.ts e PainelFd.tsx + consultas diretas ao Neon (37 OCs FD na company 60002;
+ * obra 12 → orçamento 57). Arquivos: server/routers/compras.ts (getSaldoFd ~12810 + getSaldoFdTodasObras ~12854),
+ * client/src/pages/compras/PainelFd.tsx.
+ *
  * Rev. 2816 — **COMPRAS · PAINEL FD — HOTFIX (CONTINUAÇÃO DAS REV. 2814/2815): O PAINEL FD CONTINUAVA TOTALMENTE
  * VAZIO (NEM OS 3 CARDS APARECIAM) PARA REVTE-CIVIL/OC-2026-339. A QUERY `getSaldoFd` ESTAVA LANÇANDO EXCEÇÃO EM
  * RUNTIME PORQUE SELECIONAVA UMA COLUNA INEXISTENTE. AGORA O PAINEL CARREGA E A OC FD APARECE.**
