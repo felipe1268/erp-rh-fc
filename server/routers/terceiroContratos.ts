@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, getUserCompanyLinks } from "../db";
 import { triggerFinancialSync, triggerFinancialSyncAwaited } from "../services/financialEventTrigger";
-import { eq, and, or, desc, inArray, sql, asc } from "drizzle-orm";
+import { eq, and, or, desc, inArray, sql, asc, isNull } from "drizzle-orm";
 import {
   terceiroContratos,
   terceiroContratoItens,
@@ -83,7 +83,10 @@ async function _fdMaterialDoContrato(db: any, contrato: any): Promise<{
       contratoId: comprasOrdens.contratoId,
     }).from(comprasOrdens).where(and(
       eq(comprasOrdens.companyId, contrato.companyId),
-      or(eq(comprasOrdens.contratoId, contrato.id), heuristica),
+      // Precedência do vínculo EXPLÍCITO: a heurística obra+fornecedor só captura OCs SEM
+      // contrato_id (ou apontando para ESTE contrato). OCs presas a OUTRO contrato no mesmo
+      // par obra+fornecedor NÃO são duplicadas aqui (evita dupla contagem de FD — Rev. 2830).
+      or(eq(comprasOrdens.contratoId, contrato.id), and(heuristica, isNull(comprasOrdens.contratoId))),
     ));
 
     const registros: any[] = [];

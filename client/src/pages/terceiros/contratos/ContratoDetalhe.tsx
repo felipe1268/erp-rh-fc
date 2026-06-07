@@ -1977,6 +1977,7 @@ function FdTab({ contrato }: { contrato: any }) {
                 <th className="text-left px-3 py-2 font-medium">OC</th>
                 <th className="text-left px-3 py-2 font-medium">Fornecedor</th>
                 <th className="text-left px-3 py-2 font-medium">Modalidade</th>
+                <th className="text-left px-3 py-2 font-medium">Status</th>
                 <th className="text-left px-3 py-2 font-medium">Vínculo</th>
                 <th className="text-left px-3 py-2 font-medium">Data</th>
                 <th className="text-right px-3 py-2 font-medium">Valor</th>
@@ -1989,6 +1990,19 @@ function FdTab({ contrato }: { contrato: any }) {
                   <td className="px-3 py-2">{r.fornecedorNome || "—"}</td>
                   <td className="px-3 py-2 text-xs">{modalidadeLabel[r.modalidadeFd || "normal"] || r.modalidadeFd || "—"}</td>
                   <td className="px-3 py-2 text-xs">
+                    {(() => {
+                      const st = String(r.status || "—");
+                      const cls = ["entregue", "entregue_parcial", "concluida", "recebido"].includes(st)
+                        ? "bg-green-100 text-green-700"
+                        : st === "aprovada" || st === "gerada"
+                        ? "bg-blue-100 text-blue-700"
+                        : st === "cancelada"
+                        ? "bg-red-100 text-red-600"
+                        : "bg-gray-100 text-gray-500";
+                      return <span className={`text-xs px-2 py-0.5 rounded-full ${cls}`}>{st.replace(/_/g, " ")}</span>;
+                    })()}
+                  </td>
+                  <td className="px-3 py-2 text-xs">
                     {r.vinculo === "contrato"
                       ? <span className="text-green-600">Contrato</span>
                       : <span className="text-gray-400">Obra+Forn.</span>}
@@ -2000,7 +2014,7 @@ function FdTab({ contrato }: { contrato: any }) {
             </tbody>
             <tfoot className="bg-gray-50 font-semibold">
               <tr>
-                <td className="px-3 py-2 text-xs text-gray-500" colSpan={5}>Total FD</td>
+                <td className="px-3 py-2 text-xs text-gray-500" colSpan={6}>Total FD</td>
                 <td className="px-3 py-2 text-right text-amber-700">{BRL(fdTotal)}</td>
               </tr>
             </tfoot>

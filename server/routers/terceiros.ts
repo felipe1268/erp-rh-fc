@@ -60,6 +60,7 @@ import {
   warningsTerceiros,
   fornecedores,
   terceiroContratos,
+  terceiroMedicoes,
   comprasOrdens,
 } from "../../drizzle/schema";
 import { eq, and, or, desc, sql, isNull, like, gte, lte, inArray } from "drizzle-orm";
@@ -317,12 +318,18 @@ export const terceirosRouter = router({
         }
 
         // --- FD de material (OCs FD do fornecedor nas obras dos contratos) ---
+        // Precedência do vínculo EXPLÍCITO (Rev. 2830): OCs com contrato_id são atribuídas
+        // DIRETO ao contrato; OCs sem contrato_id caem no rateio por obra. Isso evita dupla
+        // contagem quando vários contratos compartilham o mesmo par obra+fornecedor.
         const fornecedorId = empAny.fornecedorId ?? null;
+        const contratoIds = (contratos as any[]).map(c => c.id);
         let fdTotalGeral = 0;
-        const fdPorObra: Record<number, number> = {};
+        const fdPorObraUnbound: Record<number, number> = {};
+        const fdPorContratoExplicito: Record<number, number> = {};
         if (fornecedorId && obraIds.length > 0) {
           const ocs = await db.select({
             obraId: comprasOrdens.obraId,
+            contratoId: comprasOrdens.contratoId,
             total: comprasOrdens.total,
             fdValor: comprasOrdens.fdValor,
             modalidadeFd: comprasOrdens.modalidadeFd,
@@ -339,13 +346,37 @@ export const terceirosRouter = router({
             const valor = num(oc.fdValor) > 0 ? num(oc.fdValor) : num(oc.total);
             if (valor <= 0) continue;
             fdTotalGeral += valor;
-            if (typeof oc.obraId === "number") fdPorObra[oc.obraId] = (fdPorObra[oc.obraId] || 0) + valor;
+            if (typeof oc.contratoId === "number" && contratoIds.includes(oc.contratoId)) {
+              fdPorContratoExplicito[oc.contratoId] = (fdPorContratoExplicito[oc.contratoId] || 0) + valor;
+            } else if (oc.contratoId == null && typeof oc.obraId === "number") {
+              fdPorObraUnbound[oc.obraId] = (fdPorObraUnbound[oc.obraId] || 0) + valor;
+            }
           }
         }
 
+        // Aloca o FD "unbound" (OCs sem contrato_id) de cada obra a UM ÚNICO contrato
+        // p/ evitar dupla contagem quando há 2+ contratos no mesmo par obra+fornecedor.
+        // Prioriza contrato que INCLUI material; desempate determinístico pelo menor id.
+        const fdUnboundDono: Record<number, number> = {};
+        for (const obraIdStr of Object.keys(fdPorObraUnbound)) {
+          const obraId = Number(obraIdStr);
+          const candidatos = (contratos as any[])
+            .filter(c => c.obraId === obraId && !(fdPorContratoExplicito[c.id] > 0))
+            .sort((a, b) => {
+              const am = (a.naturezaContrato === "material" || a.naturezaContrato === "mao_de_obra_material") ? 0 : 1;
+              const bm = (b.naturezaContrato === "material" || b.naturezaContrato === "mao_de_obra_material") ? 0 : 1;
+              return am !== bm ? am - bm : a.id - b.id;
+            });
+          if (candidatos.length > 0) fdUnboundDono[obraId] = candidatos[0].id;
+        }
+
         const contratosEnriquecidos = (contratos as any[]).map(c => {
-          const fdObra = c.obraId != null ? (fdPorObra[c.obraId] || 0) : 0;
           const incluiMaterial = c.naturezaContrato === "material" || c.naturezaContrato === "mao_de_obra_material";
+          // FD explícito (contrato_id) tem precedência; só recorre ao FD por obra de OCs
+          // soltas se não houver vínculo explícito p/ este contrato E ele for o dono do unbound da obra.
+          const fdExplicito = fdPorContratoExplicito[c.id] || 0;
+          const ehDonoUnbound = c.obraId != null && fdUnboundDono[c.obraId] === c.id;
+          const fdObra = fdExplicito > 0 ? fdExplicito : (ehDonoUnbound ? (fdPorObraUnbound[c.obraId] || 0) : 0);
           const valorTotal = num(c.valorTotal);
           const valorLiquidoMdo = incluiMaterial ? Math.max(valorTotal - fdObra, 0) : valorTotal;
           return {
@@ -394,6 +425,68 @@ export const terceirosRouter = router({
         const docsVencidos = documentos.filter(d => d.status === "vencido").length;
         const docsAusentes = documentos.filter(d => d.status === "ausente").length;
 
+        // --- Faturamento (medições do terceiro) — fonte real de NF/fatura com retenções ---
+        // Cada medição é a "fatura" do período: bruto medido − retenções (ISS/INSS/IRRF/téc./outras/descontos) = líquido.
+        let medicoes: any[] = [];
+        if (contratoIds.length > 0) {
+          medicoes = await db.select().from(terceiroMedicoes).where(and(
+            eq(terceiroMedicoes.empresaTerceiraId, input.id),
+            eq(terceiroMedicoes.companyId, empAny.companyId),
+            inArray(terceiroMedicoes.contratoId, contratoIds),
+          )).orderBy(desc(terceiroMedicoes.criadoEm));
+        }
+        const contratoNumMap: Record<number, string | null> = Object.fromEntries(
+          contratosEnriquecidos.map(c => [c.id, c.numeroContrato || null])
+        );
+        const faturamento = (medicoes as any[]).map(m => {
+          const bruto = num(m.valorMedido);
+          const retencoes = num(m.retencaoISS) + num(m.retencaoINSS) + num(m.retencaoIRRF)
+            + num(m.outrasRetencoes) + num(m.retencaoTecnica) + num(m.descontos);
+          return {
+            id: m.id,
+            contratoId: m.contratoId,
+            numeroContrato: contratoNumMap[m.contratoId] || null,
+            numero: m.numero,
+            periodo: m.periodo,
+            status: m.status,
+            bruto,
+            retencaoISS: num(m.retencaoISS),
+            retencaoINSS: num(m.retencaoINSS),
+            retencaoIRRF: num(m.retencaoIRRF),
+            retencaoTecnica: num(m.retencaoTecnica),
+            outrasRetencoes: num(m.outrasRetencoes),
+            descontos: num(m.descontos),
+            retencoes,
+            liquido: Math.max(bruto - retencoes, 0),
+            data: m.aprovadoEm || m.criadoEm,
+          };
+        });
+        const faturamentoResumo = {
+          bruto: faturamento.reduce((s, f) => s + f.bruto, 0),
+          retencoes: faturamento.reduce((s, f) => s + f.retencoes, 0),
+          liquido: faturamento.reduce((s, f) => s + f.liquido, 0),
+          medicoesTotal: faturamento.length,
+          medicoesPagas: faturamento.filter(f => f.status === "paga").length,
+        };
+
+        // --- Movimentações (timeline) — contratos criados, medições, FD de material ---
+        const movimentacoes: Array<{ tipo: string; titulo: string; descricao: string | null; valor: number | null; data: string | null; refId: number; refTipo: string }> = [];
+        for (const c of contratos as any[]) {
+          movimentacoes.push({
+            tipo: "contrato", titulo: `Contrato ${c.numeroContrato || "#" + c.id} criado`,
+            descricao: c.descricao || null, valor: num(c.valorTotal),
+            data: c.criadoEm ? String(c.criadoEm) : null, refId: c.id, refTipo: "contrato",
+          });
+        }
+        for (const f of faturamento) {
+          movimentacoes.push({
+            tipo: "medicao", titulo: `Medição ${f.numero ?? ""} (${f.periodo}) — ${f.status}`,
+            descricao: f.numeroContrato ? `Contrato ${f.numeroContrato}` : null, valor: f.liquido,
+            data: f.data ? String(f.data) : null, refId: f.contratoId, refTipo: "contrato",
+          });
+        }
+        movimentacoes.sort((a, b) => String(b.data || "").localeCompare(String(a.data || "")));
+
         return {
           empresa: emp,
           resumo: {
@@ -409,8 +502,14 @@ export const terceirosRouter = router({
             asoSemData,
             docsVencidos,
             docsAusentes,
+            faturamentoBruto: faturamentoResumo.bruto,
+            faturamentoRetencoes: faturamentoResumo.retencoes,
+            faturamentoLiquido: faturamentoResumo.liquido,
           },
           contratos: contratosEnriquecidos,
+          faturamento,
+          faturamentoResumo,
+          movimentacoes,
           funcionarios: (funcs as any[]).map(f => ({
             id: f.id,
             nome: f.nome,

@@ -23,23 +23,32 @@
  *      (b) heurística obra+fornecedor (a empresa terceira aponta para um `fornecedor_id`). `valorEfetivo = fd_valor>0 ?
  *      fd_valor : total`. `getContrato` passou a devolver `fdMaterialTotal`, `fdMaterialRegistros`, `naturezaIncluiMaterial`
  *      e `valorLiquidoMdo` (= valor do contrato − FD, quando natureza inclui material). Nova aba "FD" no `ContratoDetalhe.tsx`
- *      (componente `FdTab`), exibida quando a natureza inclui material OU há FDs; lista as OCs, modalidade, vínculo e total.
+ *      (componente `FdTab`), exibida quando a natureza inclui material OU há FDs; lista as OCs, modalidade, STATUS (badge
+ *      colorido: entregue/aprovada/cancelada…), vínculo (Contrato × Obra+Forn.) e total. PRECEDÊNCIA: `_fdMaterialDoContrato`
+ *      só recorre à heurística obra+fornecedor para OCs SEM `contrato_id`, evitando recontar OCs já vinculadas a OUTRO contrato.
  *
  *  (3) MDO × MATERIAL NOS NÚMEROS. O "Resumo financeiro" do `ContratoDetalhe.tsx` passa a separar, quando há FD de
- *      material: Valor Fechado → (− Material em FD) → Líquido de Mão de Obra → Total Pago.
+ *      material: Valor Fechado → (− Material em FD) → Líquido de Mão de Obra → Total Pago. O breakdown medição-level
+ *      (bruto medido − retenções ISS/INSS/IRRF/técnica/outras − descontos = líquido) já existia e permanece por medição.
  *
  *  (4) RAIO-X 360° DA EMPRESA TERCEIRA. Novo endpoint `terceiros.empresas.raioX(id)` (com `_assertCompanyAccess` por
  *      tenant): agrega contratos (com split MDO/material via FD por obra), totais contratado/pago/saldo, FD total de
- *      material (OCs FD do fornecedor nas obras), funcionários + conformidade de ASO (vencido/sem data) e documentos da
- *      empresa (PGR/PCMSO/Alvará/Seguro/Contrato Social com validade). Nova página `client/src/pages/terceiros/TerceiroRaioX.tsx`
- *      (KPIs + alertas de conformidade + abas Contratos/Funcionários/Documentos), rota `/terceiros/empresas/:id` em
- *      `App.tsx`. Cards de `EmpresasTerceiras.tsx` ficaram clicáveis (título + botão "Raio-X") abrindo a visão 360°.
+ *      material (OCs FD do fornecedor nas obras), FATURAMENTO por MEDIÇÃO (bruto − retenções = líquido; resumo bruto/
+ *      retenções/líquido), MOVIMENTAÇÕES (timeline de contratos criados + medições), funcionários + conformidade de ASO
+ *      (vencido/sem data) e documentos da empresa (PGR/PCMSO/Alvará/Seguro/Contrato Social com validade). Nova página
+ *      `client/src/pages/terceiros/TerceiroRaioX.tsx` com 6 abas: Visão Geral (KPIs faturamento + MDO×Material +
+ *      conformidade), Contratos, Faturamento (medições = "notas fiscais" com breakdown), Funcionários, Documentos e
+ *      Movimentações (timeline). Rota `/terceiros/empresas/:id` em `App.tsx`. Cards de `EmpresasTerceiras.tsx` ficaram
+ *      clicáveis (título + botão "Raio-X") abrindo a visão 360°. ANTI-DUPLA-CONTAGEM: o FD "unbound" (OCs sem `contrato_id`)
+ *      de cada obra é alocado a UM ÚNICO contrato (prioriza o que inclui material; desempate por menor id), nunca replicado
+ *      em todos os contratos do mesmo par obra+fornecedor.
  *
- * RESSALVAS: o FD é DERIVADO em leitura (sem coluna persistida); a heurística obra+fornecedor pode somar FD de mais de
- * um contrato quando há vários contratos no mesmo par obra/fornecedor — o vínculo explícito por `contrato_id` tem
- * precedência na exibição. ZERO ALTER/DROP/DELETE; a única mudança de schema é ADD COLUMN IF NOT EXISTS.
+ * RESSALVAS: o FD é DERIVADO em leitura (sem coluna persistida). O `fdMaterialTotal` do resumo é o total bruto de OCs FD
+ * do fornecedor nas obras; a soma dos contratos (`fdMaterialObra`) atribui cada FD a um único contrato (explícito tem
+ * precedência sobre o dono do unbound). ZERO ALTER/DROP/DELETE; a única mudança de schema é ADD COLUMN IF NOT EXISTS.
  * VALIDAÇÃO: dev server sobe, conecta no Neon e compila o server sem erro; self-heal Rev. 2830 confirmado nos logs
- * ("coluna natureza_contrato garantida em terceiro_contratos"). Code review via architect.
+ * ("coluna natureza_contrato garantida em terceiro_contratos"). Code review via architect (2 rodadas; dupla contagem
+ * de FD por obra corrigida na 2ª).
  *
  * Rev. 2829 — **TERCEIROS · CONTRATOS — NOVO LAYOUT DO TOPO DA TELA DE DETALHE DO CONTRATO (ESCOPO ENXUTO + INFO CLARA).**
  *
