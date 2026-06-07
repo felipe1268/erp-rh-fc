@@ -37,6 +37,12 @@ import { TimeCombobox, ENTRADA_OPTIONS, INTERVALO_OPTIONS, SAIDA_OPTIONS } from 
 import FCSignSendDialog from "@/components/FCSignSendDialog";
 import FCSignContratoExperienciaPanel from "@/components/FCSignContratoExperienciaPanel";
 
+// Rev. 2855 — Listas prontas de tamanhos (EPI/uniforme) — usuário só seleciona
+const TAMANHOS_CALCADO = ["33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48"];
+const TAMANHOS_CAMISA = ["PP", "P", "M", "G", "GG", "XG", "XGG", "EXG"];
+const TAMANHOS_CALCA = ["36", "38", "40", "42", "44", "46", "48", "50", "52", "54", "56", "58"];
+const TAMANHO_NONE = "__none__";
+
 const statusColors: Record<string, string> = {
   Ativo: "bg-green-400/10 text-green-400",
   Ferias: "bg-blue-400/10 text-blue-400",
@@ -1600,6 +1606,7 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
               <TabsTrigger value="documentos" className="flex-1 text-xs sm:text-sm">Documentos</TabsTrigger>
               <TabsTrigger value="endereco" className="flex-1 text-xs sm:text-sm">Endereço</TabsTrigger>
               <TabsTrigger value="profissional" className="flex-1 text-xs sm:text-sm">Profissional</TabsTrigger>
+              <TabsTrigger value="uniforme" className="flex-1 text-xs sm:text-sm">🦺 Uniforme / EPI</TabsTrigger>
               <TabsTrigger value="bancario" className="flex-1 text-xs sm:text-sm">Bancário</TabsTrigger>
               <TabsTrigger value="beneficios" className="flex-1 text-xs sm:text-sm">Benefícios</TabsTrigger>
               <TabsTrigger value="obrigacoes" className="flex-1 text-xs sm:text-sm">Obrigações</TabsTrigger>
@@ -2176,30 +2183,6 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
                     Horista: remuneração por hora trabalhada. Mensalista: salário mensal fixo.
                   </span>
                 </div>
-              </div>
-
-              {/* Rev. 2854 — Uniforme / EPI: tamanhos p/ mapear compra e estoque */}
-              <div className="mt-4 p-4 rounded-lg border-2 border-sky-200 bg-sky-50/50 dark:bg-sky-950/20 dark:border-sky-800">
-                <h4 className="text-sm font-bold text-sky-700 dark:text-sky-400 mb-3 flex items-center gap-2">
-                  <span className="text-lg">🦺</span> Uniforme / EPI
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <Label className="text-xs font-medium text-muted-foreground">Calçado (nº)</Label>
-                    <Input value={(form as any).tamanhoCalcado ?? ""} onChange={e => set("tamanhoCalcado" as any, e.target.value)} placeholder="Ex.: 42" className="bg-input mt-1" />
-                  </div>
-                  <div>
-                    <Label className="text-xs font-medium text-muted-foreground">Camisa</Label>
-                    <Input value={(form as any).tamanhoCamisa ?? ""} onChange={e => set("tamanhoCamisa" as any, e.target.value.toUpperCase())} placeholder="Ex.: M, G, GG" className="bg-input mt-1" />
-                  </div>
-                  <div>
-                    <Label className="text-xs font-medium text-muted-foreground">Calça</Label>
-                    <Input value={(form as any).tamanhoCalca ?? ""} onChange={e => set("tamanhoCalca" as any, e.target.value.toUpperCase())} placeholder="Ex.: 42, M, G" className="bg-input mt-1" />
-                  </div>
-                </div>
-                <span className="text-[10px] text-muted-foreground mt-2 block">
-                  Usado para mapear a compra de EPI/uniforme e garantir o estoque por tamanho.
-                </span>
               </div>
 
               {/* Contrato de Experiência CLT */}
@@ -3220,6 +3203,61 @@ ${(() => {
                     </div>
                   )}
 
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* ===== ABA UNIFORME / EPI (Rev. 2855) — listas prontas, só selecionar ===== */}
+            <TabsContent value="uniforme" className="pt-4">
+              <div className="space-y-5">
+                <div className="p-4 rounded-lg border-2 border-sky-200 bg-sky-50/50 dark:bg-sky-950/20 dark:border-sky-800">
+                  <h4 className="text-sm font-bold text-sky-700 dark:text-sky-400 mb-1 flex items-center gap-2">
+                    <span className="text-lg">🦺</span> Tamanhos de Uniforme / EPI
+                  </h4>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Selecione os tamanhos nas listas abaixo. Usado para mapear a compra de EPI/uniforme e garantir o estoque por tamanho.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Calçado (nº)</Label>
+                      <Select
+                        value={(form as any).tamanhoCalcado || TAMANHO_NONE}
+                        onValueChange={(v) => set("tamanhoCalcado" as any, v === TAMANHO_NONE ? "" : v)}
+                      >
+                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={TAMANHO_NONE}>— Não informado —</SelectItem>
+                          {TAMANHOS_CALCADO.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Camisa</Label>
+                      <Select
+                        value={(form as any).tamanhoCamisa || TAMANHO_NONE}
+                        onValueChange={(v) => set("tamanhoCamisa" as any, v === TAMANHO_NONE ? "" : v)}
+                      >
+                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={TAMANHO_NONE}>— Não informado —</SelectItem>
+                          {TAMANHOS_CAMISA.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Calça</Label>
+                      <Select
+                        value={(form as any).tamanhoCalca || TAMANHO_NONE}
+                        onValueChange={(v) => set("tamanhoCalca" as any, v === TAMANHO_NONE ? "" : v)}
+                      >
+                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={TAMANHO_NONE}>— Não informado —</SelectItem>
+                          {TAMANHOS_CALCA.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                 </div>
               </div>
             </TabsContent>

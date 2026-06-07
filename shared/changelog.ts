@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2855 — **CADASTRO DO COLABORADOR — TAMANHOS DE EPI/UNIFORME VIRAM ABA
+ * PRÓPRIA COM LISTAS PRONTAS (DROPDOWN), SEM DIGITAÇÃO LIVRE.**
+ *
+ * PEDIDO (follow-up da Rev. 2854): "Não quero que digite, quero que tenha uma
+ * lista pronta de forma que o usuário apenas informe qual é, e o módulo cadastro
+ * crie uma aba nova para cadastro dos tamanhos dos pés e do tamanho do uniforme."
+ *
+ * CONTEXTO: a Rev. 2854 entregou os 3 campos como inputs de TEXTO LIVRE dentro de
+ * uma subseção da aba "Profissional". O usuário quer (a) seleção por LISTA pronta
+ * (padroniza os valores e elimina erro de digitação que atrapalha a agregação da
+ * Grade) e (b) uma ABA dedicada no formulário do colaborador.
+ *
+ * O QUE FOI FEITO (`client/src/pages/Colaboradores.tsx`, SÓ frontend):
+ *  - NOVA ABA "🦺 Uniforme / EPI" no formulário (TabsTrigger/TabsContent
+ *    `value="uniforme"`, entre "Profissional" e "Bancário"). A subseção antiga
+ *    dentro de "Profissional" foi REMOVIDA (movida para a aba nova).
+ *  - Os 3 inputs de texto viraram `Select` (shadcn) com LISTAS PRONTAS:
+ *    `TAMANHOS_CALCADO` (33–48), `TAMANHOS_CAMISA` (PP…EXG), `TAMANHOS_CALCA`
+ *    (36–58 par) — constantes module-level. Cada select tem opção "— Não
+ *    informado —" (sentinel `TAMANHO_NONE`, gravada como string vazia, pois o
+ *    Radix Select não aceita value="").
+ *  - SEM mudança de schema/backend/persistência: as colunas `tamanhoCalcado/
+ *    tamanhoCamisa/tamanhoCalca` (Rev. 2854) e o whitelist de `updateEmployee`
+ *    seguem valendo; a "Grade de Tamanhos" continua agregando (já fazia
+ *    `.toUpperCase()`, então os valores padronizados das listas casam perfeito).
+ *
+ * ESCOPO/SEGURANÇA: ZERO ALTER/DROP/DELETE; ZERO schema; ZERO backend; só UI.
+ *
  * Rev. 2854 — **CADASTRO DO COLABORADOR — TAMANHOS DE EPI/UNIFORME (CALÇADO,
  * CAMISA E CALÇA) + GRADE DE TAMANHOS PARA MAPEAR COMPRA E ESTOQUE.**
  *
