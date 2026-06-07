@@ -30,6 +30,7 @@ const STATUS_OPTIONS = [
 
 type ObraForm = {
   nome: string; numOrcamento: string;
+  numeroContrato: string;
   cliente: string;
   responsavel: string;
   responsavelId: number | null;
@@ -59,6 +60,7 @@ const TIPO_CONTRATO_OPTIONS = [
 
 const emptyForm: ObraForm = {
   nome: "", numOrcamento: "",
+  numeroContrato: "",
   cliente: "",
   responsavel: "",
   responsavelId: null,
@@ -240,6 +242,7 @@ export default function Obras() {
     setEditingId(obra.id);
     setForm({
       nome: obra.nome || "", numOrcamento: obra.numOrcamento || obra.codigo || "",
+      numeroContrato: obra.numeroContrato || "",
       cliente: obra.cliente || "",
       responsavel: obra.responsavel || "",
       responsavelId: obra.responsavelId ?? null,
@@ -1045,6 +1048,11 @@ export default function Obras() {
             <div>
               <Label>N° do Orçamento</Label>
               <Input value={form.numOrcamento} onChange={e => setForm(f => ({ ...f, numOrcamento: e.target.value }))} placeholder="Ex: ORC-2026-001" />
+            </div>
+            <div>
+              <Label>N° do Contrato</Label>
+              <Input value={form.numeroContrato} onChange={e => setForm(f => ({ ...f, numeroContrato: e.target.value }))} placeholder="Ex: CT-2026-0214" />
+              <p className="text-[11px] text-muted-foreground mt-1">Aparece no campo "Contrato nº" das fichas do Databook.</p>
             </div>
             <div>
               <Label>Status</Label>

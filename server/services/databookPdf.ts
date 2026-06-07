@@ -45,6 +45,9 @@ interface ObraData {
   databookLogoCliente?: number | boolean | null;
   databookLogoGestora?: number | boolean | null;
   databookLogoConstrutora?: number | boolean | null;
+  // Rev. 2882 — número do contrato da obra (cadastro). Preenche o campo "Contrato nº"
+  // do doc. do cliente, no lugar do nº da OC. Fallback p/ ficha.contrato_numero se vazio.
+  numeroContrato?: string | null;
 }
 
 interface CompanyData {
@@ -145,7 +148,7 @@ export async function gerarDatabookFichaPdf(
     const c1w = Math.round(cw * 0.55);
     const c2w = cw - c1w;
     const tRows = [
-      ["Contratada: " + (s(fornecedor?.razaoSocial) || s(ficha.fornecedor_nome)), "Contrato nº: " + s(ficha.contrato_numero)],
+      ["Contratada: " + (s(fornecedor?.razaoSocial) || s(ficha.fornecedor_nome)), "Contrato nº: " + s(obra.numeroContrato || ficha.contrato_numero)],
       ["Endereço: " + s(fornecedor?.endereco), "Bairro: " + s(fornecedor?.bairro)],
       ["Município: " + s(fornecedor?.cidade), "Estado: " + s(fornecedor?.estado) + "       CEP: " + s(fornecedor?.cep)],
       ["Contato: " + s(fornecedor?.contato), "Fone Comercial: " + s(fornecedor?.telefone)],
@@ -385,6 +388,7 @@ export async function gerarDatabookCompletoPdf(
     gerenciadoraNome: (obraRow as any)?.gerenciadoraNome,
     gerenciadoraLogoUrl: (obraRow as any)?.gerenciadoraLogoUrl,
     clienteLogoUrl: (obraRow as any)?.clienteLogoUrl,
+    numeroContrato: (obraRow as any)?.numeroContrato,
   };
   const companyData: CompanyData = {
     razaoSocial: companyRow?.razaoSocial || "Empresa",

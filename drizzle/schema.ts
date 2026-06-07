@@ -2430,6 +2430,9 @@ export const obras = pgTable("obras", {
         tipoContrato: varchar("tipo_contrato", { length: 30 }).default('global').notNull(),
         percentualGerenciamentoMaterial: numeric("percentual_gerenciamento_material", { precision: 5, scale: 2 }).default("0"),
         percentualAdm: numeric("percentual_adm", { precision: 5, scale: 2 }).default("0"),
+        // Rev. 2882 — número do contrato da obra (cadastro), usado no campo "Contrato nº"
+        // das fichas do Databook (substitui o nº da Ordem de Compra no doc. do cliente).
+        numeroContrato: varchar("numero_contrato", { length: 50 }),
 },
 (table) => [
         index("idx_obra_company").on(table.companyId),

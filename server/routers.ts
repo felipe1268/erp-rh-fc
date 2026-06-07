@@ -1685,6 +1685,7 @@ export const appRouter = router({
       tipoContrato: z.enum(["global", "mdo", "adm"]).optional(),
       percentualGerenciamentoMaterial: z.string().nullable().optional(),
       percentualAdm: z.string().nullable().optional(),
+      numeroContrato: z.string().nullable().optional(),
     })).mutation(async ({ input, ctx }) => {
       const { sns, ...obraData } = input;
       const result = await createObra(obraData as any);
@@ -1786,6 +1787,7 @@ export const appRouter = router({
       tipoContrato: z.enum(["global", "mdo", "adm"]).optional(),
       percentualGerenciamentoMaterial: z.string().nullable().optional(),
       percentualAdm: z.string().nullable().optional(),
+      numeroContrato: z.string().nullable().optional(),
     })).mutation(async ({ input, ctx }) => {
       const { id, responsavelId, ...data } = input;
       // Rev. 2391 — Guard server-side: não permitir TRANSITAR obra pra status encerrador

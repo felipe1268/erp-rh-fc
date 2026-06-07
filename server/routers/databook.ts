@@ -92,6 +92,7 @@ async function gerarPdfBufferDeFicha(
       databookLogoCliente: (obraRow as any)?.databookLogoCliente,
       databookLogoGestora: (obraRow as any)?.databookLogoGestora,
       databookLogoConstrutora: (obraRow as any)?.databookLogoConstrutora,
+      numeroContrato: (obraRow as any)?.numeroContrato,
     },
     {
       razaoSocial: companyRow?.razaoSocial || "Empresa",

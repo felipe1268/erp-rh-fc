@@ -3506,6 +3506,7 @@ Regras:
             ALTER TABLE obras ADD COLUMN IF NOT EXISTS databook_logo_cliente SMALLINT NOT NULL DEFAULT 1;
             ALTER TABLE obras ADD COLUMN IF NOT EXISTS databook_logo_gestora SMALLINT NOT NULL DEFAULT 1;
             ALTER TABLE obras ADD COLUMN IF NOT EXISTS databook_logo_construtora SMALLINT NOT NULL DEFAULT 0;
+            ALTER TABLE obras ADD COLUMN IF NOT EXISTS numero_contrato VARCHAR(50);
             ALTER TABLE oc_number_config ADD COLUMN IF NOT EXISTS alerta_reservas_ativo SMALLINT DEFAULT 1;
             ALTER TABLE dds_sessao_funcionarios ADD COLUMN IF NOT EXISTS assinatura_img TEXT;
           EXCEPTION WHEN OTHERS THEN NULL;

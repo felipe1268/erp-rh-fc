@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2882 — **DATABOOK (FICHA PDF) — CAMPO "CONTRATO Nº" PASSA A USAR O NÚMERO DO
+ * CONTRATO DA OBRA (NOVO CAMPO NO CADASTRO), NÃO MAIS O NÚMERO DA ORDEM DE COMPRA.**
+ *
+ * PEDIDO (usuário): no documento padrão do cliente (ficha técnica do Databook, modelo
+ * LOTUS), o campo "Contrato nº" estava mostrando o número da ORDEM DE COMPRA (ex.:
+ * "OC-2026-0214"). O cliente não trabalha com ordem de compra nesse documento — ali
+ * deve constar o NÚMERO DO CONTRATO que está cadastrado na obra. "Garanta que a
+ * informação será correta." O usuário escolheu (via pergunta) CRIAR UM CAMPO NOVO
+ * "Número do contrato" no cadastro da obra e usá-lo no documento.
+ *
+ * CAUSA-RAIZ: fichas geradas a partir de OC gravam `databook_fichas.contrato_numero =
+ * item.numero_oc` (o nº da OC). O PDF (`databookPdf.ts`) imprimia esse valor cru no
+ * campo "Contrato nº". Não existia, no cadastro da obra, um campo de número de contrato.
+ *
+ * FEITO:
+ *  - SCHEMA `obras` (`drizzle/schema.ts`) + self-heal aditivo em `server/_core/index.ts`
+ *    (`ALTER TABLE obras ADD COLUMN IF NOT EXISTS numero_contrato VARCHAR(50)`): nova
+ *    coluna `numeroContrato` / `numero_contrato` (nullable, sem default; ZERO destrutivo).
+ *  - BACKEND `server/routers.ts`: `obras.create` e `obras.update` aceitam
+ *    `numeroContrato` (z.string().nullable().optional()). Como `createObra`/`updateObra`
+ *    (`server/db.ts`) fazem `insert(...).values(data)` / `update(...).set(data)`, o
+ *    campo persiste automaticamente.
+ *  - PDF `server/services/databookPdf.ts`: `interface ObraData` ganha `numeroContrato`;
+ *    o campo "Contrato nº" agora imprime `obra.numeroContrato || ficha.contrato_numero`
+ *    (prioriza o contrato da obra; cai no valor antigo da ficha só enquanto a obra não
+ *    tiver o número preenchido — sem regressão p/ dados existentes). `gerarDatabookCompletoPdf`
+ *    também propaga o `numeroContrato` do `obraRow`.
+ *  - BACKEND `server/routers/databook.ts` (`gerarPdfBufferDeFicha`): inclui
+ *    `numeroContrato: obraRow?.numeroContrato` no objeto da obra passado ao gerador.
+ *  - FRONTEND `client/src/pages/Obras.tsx`: novo campo "N° do Contrato" no formulário de
+ *    obra (com dica "Aparece no campo 'Contrato nº' das fichas do Databook"), incluído no
+ *    tipo `ObraForm`, `emptyForm`, no carregamento de edição e no payload de salvamento.
+ *
+ * ESCOPO: só material/ficha do Databook + cadastro da obra. ZERO ALTER/DROP/DELETE
+ * destrutivo (apenas ADD COLUMN IF NOT EXISTS aditivo + UPDATE via formulário).
+ * Validado: typecheck limpo nos arquivos tocados; app sobe sem erros.
+ *
  * Rev. 2881 — **FORNECEDORES / EMPRESAS TERCEIRAS — NOME SEMPRE PADRONIZADO EM
  * "TITLE CASE" CULTO NO SALVAMENTO, NÃO IMPORTA COMO O USUÁRIO DIGITAR.**
  *
