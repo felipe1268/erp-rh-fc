@@ -977,12 +977,14 @@ async function _liberarReservasDaCotacao(opts: {
   motivo?: string;
   executadoPorId?: number | null;
   executadoPorNome?: string | null;
+  companyId?: number; // guarda de tenant (Rev. 2820): quando informado, libera SÓ reservas da empresa
 }) {
   const db = await getDb();
   const ativas = await db.select().from(comprasReservasSaldo)
     .where(and(
       eq(comprasReservasSaldo.cotacaoId, opts.cotacaoId),
       eq(comprasReservasSaldo.status, "ativa"),
+      opts.companyId != null ? eq(comprasReservasSaldo.companyId, opts.companyId) : undefined,
     ));
   for (const r of ativas) {
     await db.update(comprasReservasSaldo).set({
@@ -1009,12 +1011,51 @@ async function _liberarReservasDeCotacoes(cotacaoIds: number[], acao: "consumida
 }
 
 /**
+ * AUTO-BAIXA (Rev. 2820): toda reserva preventiva ATIVA cuja cotação JÁ tem
+ * pelo menos uma OC gerada (não-cancelada) é automaticamente liberada como
+ * "consumida". Reflete a regra de negócio: a reserva só faz sentido enquanto
+ * a cotação está em aberto; assim que o comprador gera a OC, a compra está
+ * encaminhada e o saldo deve voltar. Idempotente (só toca em reservas "ativa")
+ * e cobre tanto o passado (reservas órfãs/vencidas) quanto o futuro. Reusa
+ * `_liberarReservasDaCotacao` (logging + status). ZERO ALTER/DROP/DELETE.
+ */
+async function _autoLiberarReservasComOcGerada(companyId: number): Promise<number> {
+  const db = await getDb();
+  const ativas = await db.select({ cotacaoId: comprasReservasSaldo.cotacaoId })
+    .from(comprasReservasSaldo)
+    .where(and(
+      eq(comprasReservasSaldo.companyId, companyId),
+      eq(comprasReservasSaldo.status, "ativa"),
+    ));
+  const cotacaoIds = [...new Set(ativas.map(r => r.cotacaoId).filter((x): x is number => x != null))];
+  if (cotacaoIds.length === 0) return 0;
+  const ocs = await db.select({ cotacaoId: comprasOrdens.cotacaoId })
+    .from(comprasOrdens)
+    .where(and(
+      eq(comprasOrdens.companyId, companyId),
+      inArray(comprasOrdens.cotacaoId, cotacaoIds),
+      sql`${comprasOrdens.status} != 'cancelada'`,
+    ));
+  const comOc = [...new Set(ocs.map(o => o.cotacaoId).filter((x): x is number => x != null))];
+  let total = 0;
+  for (const cid of comOc) {
+    total += await _liberarReservasDaCotacao({
+      cotacaoId: cid, acao: "consumida",
+      motivo: "OC já gerada para a cotação (baixa automática)",
+      companyId,
+    });
+  }
+  return total;
+}
+
+/**
  * Verifica se um usuário (perfil de Compras) está travado para criar
  * novas operações deficitárias. Retorna lista de reservas pendentes da empresa.
  * Travamento ocorre quando há ≥1 reserva ativa cujo prazo expirou (≥7 dias).
  */
 async function _statusTravamentoCompras(companyId: number) {
   const db = await getDb();
+  try { await _autoLiberarReservasComOcGerada(companyId); } catch (e: any) { console.warn("[_statusTravamentoCompras] auto-baixa falhou:", e?.message); }
   const agora = new Date();
   const reservas = await db.select().from(comprasReservasSaldo)
     .where(and(
@@ -6109,6 +6150,7 @@ Retorne APENAS um JSON válido neste formato:
     .query(async ({ input, ctx }) => {
       await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
+      try { await _autoLiberarReservasComOcGerada(input.companyId); } catch (e: any) { console.warn("[getSaldosRealocacaoGeral] auto-baixa falhou:", e?.message); }
 
       // ── 1. DI-08: pega o latest orcamento por obra ─────────────────────
       // FIX: filtrar isNull(deletedAt) e padronizar ordering por createdAt (igual a listarEconomiasOC).
@@ -7649,6 +7691,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
       // Rascunho: skip financial sync and downstream actions
       if (input.comoRascunho) {
+        try { await _liberarReservasDaCotacao({ cotacaoId: input.cotacaoId, acao: "consumida", motivo: "OC gerada para a cotação (rascunho)", executadoPorId: input.userId, executadoPorNome: input.userName ?? null, companyId: input.companyId }); } catch (e: any) { console.warn("[criarOrdemDeCotacao] baixa de reserva (rascunho) falhou:", e?.message); }
         return { id: oc.id, numeroOc, rascunho: true };
       }
 
@@ -7988,6 +8031,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         }
       }
 
+      try { await _liberarReservasDaCotacao({ cotacaoId: input.cotacaoId, acao: "consumida", motivo: "OC gerada para a cotação", executadoPorId: input.userId, executadoPorNome: input.userName ?? null, companyId: input.companyId }); } catch (e: any) { console.warn("[criarOrdemDeCotacao] baixa de reserva falhou:", e?.message); }
       return { ...oc, contratoGeradoId, terceiroContratoGeradoId };
     }),
 
@@ -8232,6 +8276,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         triggerFinancialSync(input.companyId);
       }
 
+      try { await _liberarReservasDaCotacao({ cotacaoId: input.cotacaoId, acao: "consumida", motivo: "OC(s) gerada(s) para a cotação", executadoPorId: input.userId, executadoPorNome: input.userName ?? null, companyId: input.companyId }); } catch (e: any) { console.warn("[criarOCsParciais] baixa de reserva falhou:", e?.message); }
       return { ocsGeradas };
     }),
 
@@ -14147,6 +14192,7 @@ Responda APENAS com JSON válido, sem markdown, no formato:
     .query(async ({ input, ctx }) => {
       await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
+      try { await _autoLiberarReservasComOcGerada(input.companyId); } catch (e: any) { console.warn("[listarReservasAtivas] auto-baixa falhou:", e?.message); }
       const conds: any[] = [
         eq(comprasReservasSaldo.companyId, input.companyId),
         eq(comprasReservasSaldo.status, "ativa"),

@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2820 — **COMPRAS · REALOCAÇÃO/RESERVAS PREVENTIVAS — BAIXA AUTOMÁTICA DA RESERVA QUANDO A COTAÇÃO JÁ TEM OC GERADA.**
+ *
+ * PEDIDO/DÚVIDA (usuário, confuso com a tela de Realocação de Verba / Reservas Preventivas): "Tem MUITA reserva
+ * aqui que não deveria estar — a ideia era reservar só enquanto a cotação está em aberto; assim que o comprador
+ * gera a OC (compra finalizada), a reserva deveria SAIR SOZINHA da lista. A lista só serviria pra itens AINDA em
+ * cotação. Estou correto?" — SIM, estava correto. Decisão do usuário (user_query): liberar a reserva assim que
+ * QUALQUER OC for gerada para a cotação (mesmo pendente de entrega).
+ *
+ * CAUSA-RAIZ: `_liberarReservasDaCotacao` só era chamada em caminhos específicos — cotação excluída/cancelada,
+ * última OC excluída, déficit formalmente coberto (debitarDoRisco/confirmarRealocacao) e OC com aprovação extra
+ * APROVADA. As DUAS rotas que de fato GERAM a OC a partir da cotação (`criarOrdemDeCotacao` e `criarOCsParciais`)
+ * NÃO liberavam a reserva — só faziam o BLOQUEIO (verificarTravamento). Resultado: gerar uma OC "saudável"
+ * deixava a reserva "ativa", que vencia em 7 dias (RESERVA_PRAZO_DIAS) e entupia a lista de VENCIDAs — além de
+ * travar indevidamente novas OCs deficitárias. Somado a isso, o backlog histórico (reservas criadas antes desses
+ * ganchos) ficava órfão pra sempre, incluindo resíduos de R$ 1,00 (arredondamento) que ninguém "resolve".
+ *
+ * O QUE FOI FEITO (server/routers/compras.ts, só lógica/leitura — ZERO ALTER/DROP/DELETE; ZERO schema novo):
+ *  1) NOVO helper `_autoLiberarReservasComOcGerada(companyId)`: busca reservas ATIVAS da empresa, cruza o
+ *     `cotacaoId` com `comprasOrdens` (status != 'cancelada') e libera (reusando `_liberarReservasDaCotacao` com
+ *     acao "consumida" + logging) toda reserva cuja cotação já tem ≥1 OC. Idempotente (só toca "ativa") e cobre
+ *     PASSADO (auto-cura do backlog/vencidas) e FUTURO.
+ *  2) Auto-cura nos pontos de LEITURA e no TRAVAMENTO: chamado no início de `getSaldosRealocacaoGeral`,
+ *     `listarReservasAtivas` e `_statusTravamentoCompras` (todos em try/catch — auto-baixa nunca quebra a tela
+ *     nem o fluxo de criação). Assim as reservas órfãs somem ao abrir a tela e o travamento deixa de disparar por
+ *     reserva que já tem OC.
+ *  3) Baixa DIRETA na geração da OC: `criarOrdemDeCotacao` (return final + return de rascunho) e `criarOCsParciais`
+ *     chamam `_liberarReservasDaCotacao(acao "consumida", motivo "OC gerada para a cotação")` ao concluir — baixa
+ *     imediata, com autoria (userId/userName) no log.
+ *
+ * RESSALVA: a reserva é liberada na GERAÇÃO da OC (não na entrega) — decisão explícita do usuário. Se a OC for
+ * depois excluída/cancelada, os ganchos existentes ("última OC excluída", cancelamento) seguem coerentes.
+ * Validação: esbuild OK em compras.ts.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2819 — **COMPRAS · PAINEL FD — LANÇAMENTOS FD AGORA ABREM A OC AO CLICAR (NAVEGAÇÃO PARA A TELA DE ORDENS).**
  *
  * PEDIDO (usuário, sobre o Painel FD redesenhado na Rev. 2818): "Quero poder clicar e abrir a OC por aqui" — nas
