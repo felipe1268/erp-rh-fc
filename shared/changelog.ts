@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2881 — **FORNECEDORES / EMPRESAS TERCEIRAS — NOME SEMPRE PADRONIZADO EM
+ * "TITLE CASE" CULTO NO SALVAMENTO, NÃO IMPORTA COMO O USUÁRIO DIGITAR.**
+ *
+ * PEDIDO (usuário): "Não importa como o usuário digitar o nome, quero todos SEMPRE
+ * SALVOS em letras mais culta (Title Case), para padronizar tudo." A lista de
+ * empresas terceiras / fornecedores estava bagunçada — alguns nomes TODOS EM
+ * MAIÚSCULAS ("REFRIGERAÇÃO E ELÉTRICA SÃO MIGUEL", "HUMBERTO DE ALMEIDA"), outros
+ * já em Title Case. O usuário quer um padrão único.
+ *
+ * FEITO (1) — NOVO helper compartilhado `shared/normalizeNomeEmpresa.ts`
+ * (`titleCaseEmpresa`): faz trim + colapsa espaços, baixa tudo p/ minúsculo e
+ * recapitaliza palavra a palavra. Regras pt-BR cultas:
+ *  - Preposições/artigos/conectivos (de/da/do/das/dos/e/em/a/o/com/para/no/na/à/ou...)
+ *    ficam minúsculos, EXCETO quando são a 1ª palavra.
+ *  - Formas jurídicas e siglas conhecidas ficam MAIÚSCULAS (LTDA, ME, EPP, EIRELI,
+ *    MEI, EI, SA, S/A, CIA, SS, SLU, SPE...).
+ *  - Numerais romanos conhecidos (II..XV) ficam MAIÚSCULOS.
+ *  - Hífens preservados, capitalizando cada parte (ex.: "Santa-Rita").
+ *  - Idempotente (aplicar 2x = mesmo resultado).
+ *
+ * FEITO (2) — backend, em TODOS os pontos de escrita de nome de empresa (fonte da
+ * verdade; a normalização não depende do frontend):
+ *  - `server/routers/terceiros.ts` — `empresas.create` e `empresas.update`
+ *    (usados pela tela terceiros/EmpresasTerceiras.tsx): `razaoSocial`/`nomeFantasia`
+ *    passam por `titleCaseEmpresa`.
+ *  - `server/routers/compras.ts` — `criarFornecedor` e `atualizarFornecedor` (a tela
+ *    compras/Fornecedores.tsx salva por AQUI, na tabela mestre `fornecedores`, NÃO
+ *    nos endpoints de terceiros): idem. ATENÇÃO p/ futuras revisões: a tela
+ *    "Fornecedores" grava no router `compras`, não em `terceiros`.
+ *  - Auto-criações indiretas de `empresas_terceiras` também normalizadas:
+ *    `terceiros.empresas.ensureFromFornecedor`, `compras.ts` (geração de contrato/OS,
+ *    insert drizzle + SQL raw) e `terceiroContratos.ts`. Como `titleCaseEmpresa` é
+ *    idempotente, re-normalizar nomes já corretos não causa efeito colateral.
+ *
+ * FEITO (3) — frontend (feedback imediato, não substitui o backend): `onBlur` nos
+ * inputs Razão Social / Nome Fantasia das DUAS telas aplica `titleCaseEmpresa` assim
+ * que o campo perde o foco. Em `EmpresasTerceiras.tsx`, removida a classe CSS
+ * `uppercase` que FORÇAVA a exibição da razão social em caixa alta (mascarava o valor
+ * real salvo) — agora mostra o nome padronizado de verdade.
+ *
+ * ESCOPO / RESSALVA: a normalização vale para CADASTROS NOVOS e EDIÇÕES daqui pra
+ * frente. Os ~1198 registros JÁ existentes NÃO foram reescritos em massa nesta
+ * revisão (backfill é UPDATE em massa no Neon, far-reaching e não coberto pelos
+ * checkpoints do Replit) — fica como decisão/pergunta ao usuário. ZERO schema; ZERO
+ * ALTER/DROP/DELETE. Validado: typecheck limpo nos arquivos tocados.
+ *
  * Rev. 2880 — **DATABOOK (FICHAS TÉCNICAS) — EXCLUSÃO DEFINITIVA EM MASSA +
  * CANCELAR APROVAÇÃO (FICHA APROVADA VOLTA PARA "REVISADO"), EM LOTE E POR LINHA.**
  *

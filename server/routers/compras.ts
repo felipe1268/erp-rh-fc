@@ -7,6 +7,7 @@ import { triggerFinancialSync } from "../services/financialEventTrigger";
 import { criarParcelasFinanceiras } from "../services/purchaseFinancialBridge";
 import { getTipoPagamentoInfo } from "../../shared/paymentConditions";
 import { normalizarTexto } from "../../shared/textNormalization";
+import { titleCaseEmpresa } from "../../shared/normalizeNomeEmpresa";
 import { invokeLLM, invokeAnthropicVision } from "../_core/llm";
 import { storagePut } from "../storage";
 import { enviarConviteAssinatura } from "../services/integrasignEmail";
@@ -405,7 +406,7 @@ async function gerarContratoTerceiroDeOS(params: {
         } else {
           const [novaEmp] = await tx.insert(empresasTerceiras).values({
             companyId: params.companyId,
-            razaoSocial: razaoSocial || params.fornecedorNome || "Empresa Terceira",
+            razaoSocial: titleCaseEmpresa(razaoSocial || params.fornecedorNome || "Empresa Terceira"),
             cnpj,
             responsavelNome: razaoSocial || params.fornecedorNome || "",
             status: "ativa",
@@ -414,7 +415,7 @@ async function gerarContratoTerceiroDeOS(params: {
           empTerceiraId = novaEmp.id;
         }
       } else {
-        const nomeEmpresa = razaoSocial || params.fornecedorNome || "Empresa Terceira";
+        const nomeEmpresa = titleCaseEmpresa(razaoSocial || params.fornecedorNome || "Empresa Terceira");
         const existEmpByName = await tx.execute(sql`
           SELECT id FROM empresas_terceiras WHERE "companyId" = ${params.companyId} AND razao_social = ${nomeEmpresa} AND (cnpj IS NULL OR cnpj = '') LIMIT 1
         `);
@@ -1378,8 +1379,8 @@ export const comprasRouter = router({
       const [f] = await db.insert(fornecedores).values({
         companyId:       input.companyId,
         cnpj:            input.cnpj ?? null,
-        razaoSocial:     input.razaoSocial,
-        nomeFantasia:    input.nomeFantasia ?? null,
+        razaoSocial:     titleCaseEmpresa(input.razaoSocial),
+        nomeFantasia:    input.nomeFantasia ? titleCaseEmpresa(input.nomeFantasia) : null,
         situacaoReceita: input.situacaoReceita ?? null,
         endereco:        input.endereco ?? null,
         numero:          input.numero ?? null,
@@ -1487,6 +1488,9 @@ export const comprasRouter = router({
       if (socios !== undefined) {
         data.socios = sql`${JSON.stringify(socios)}::json`;
       }
+      // Rev. 2881 — padroniza nome em Title Case culto também na edição de fornecedor.
+      if (data.razaoSocial !== undefined && data.razaoSocial !== null) data.razaoSocial = titleCaseEmpresa(data.razaoSocial);
+      if (data.nomeFantasia !== undefined && data.nomeFantasia !== null) data.nomeFantasia = titleCaseEmpresa(data.nomeFantasia);
       await db.update(fornecedores)
         .set(data)
         .where(eq(fornecedores.id, id));

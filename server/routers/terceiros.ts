@@ -65,6 +65,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, or, desc, sql, isNull, like, gte, lte, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
+import { titleCaseEmpresa } from "../../shared/normalizeNomeEmpresa";
 import { storagePut } from "../storage";
 import { invokeLLM } from "../_core/llm";
 
@@ -251,8 +252,8 @@ export const terceirosRouter = router({
         // Cria novo registro a partir do fornecedor
         const [created] = await db.insert(empresasTerceiras).values({
           companyId: input.companyId,
-          razaoSocial: forn.razaoSocial,
-          nomeFantasia: forn.nomeFantasia ?? undefined,
+          razaoSocial: titleCaseEmpresa(forn.razaoSocial),
+          nomeFantasia: forn.nomeFantasia ? titleCaseEmpresa(forn.nomeFantasia) : undefined,
           cnpj: forn.cnpj || "",
           inscricaoEstadual: forn.inscricaoEstadual ?? undefined,
           inscricaoMunicipal: forn.inscricaoMunicipal ?? undefined,
@@ -575,8 +576,12 @@ export const terceirosRouter = router({
             });
           }
         }
+        // Rev. 2881 — padroniza o nome em Title Case culto, independentemente de
+        // como o usuário digitou (TUDO MAIÚSCULO/minúsculo/misturado).
         const [result] = await db.insert(empresasTerceiras).values({
           ...input,
+          razaoSocial: titleCaseEmpresa(input.razaoSocial),
+          ...(input.nomeFantasia !== undefined ? { nomeFantasia: titleCaseEmpresa(input.nomeFantasia) } : {}),
           createdBy: ctx.user?.name || "Sistema",
         }).returning({ id: empresasTerceiras.id });
         return { id: result.id };
@@ -649,6 +654,9 @@ export const terceirosRouter = router({
             });
           }
         }
+        // Rev. 2881 — padroniza o nome em Title Case culto também na edição.
+        if ((data as any).razaoSocial !== undefined) (data as any).razaoSocial = titleCaseEmpresa((data as any).razaoSocial);
+        if ((data as any).nomeFantasia !== undefined) (data as any).nomeFantasia = titleCaseEmpresa((data as any).nomeFantasia);
         await db.update(empresasTerceiras).set(data as any).where(eq(empresasTerceiras.id, id));
         return { success: true };
       }),
