@@ -1001,11 +1001,11 @@ async function _liberarReservasDaCotacao(opts: {
   return ativas.length;
 }
 
-async function _liberarReservasDeCotacoes(cotacaoIds: number[], acao: "consumida" | "liberada" | "expirada", motivo?: string) {
+async function _liberarReservasDeCotacoes(cotacaoIds: number[], acao: "consumida" | "liberada" | "expirada", motivo?: string, companyId?: number) {
   if (cotacaoIds.length === 0) return 0;
   let total = 0;
   for (const id of cotacaoIds) {
-    total += await _liberarReservasDaCotacao({ cotacaoId: id, acao, motivo });
+    total += await _liberarReservasDaCotacao({ cotacaoId: id, acao, motivo, companyId });
   }
   return total;
 }
@@ -1088,13 +1088,53 @@ async function _autoLiberarReservasOrfas(companyId: number): Promise<number> {
 }
 
 /**
- * SANEAMENTO COMPLETO DAS RESERVAS (Rev. 2822): roda as duas auto-baixas em
- * sequência (OC já gerada + cotação inexistente). Cada uma é tolerante a falha
- * (try/catch) para nunca derrubar a leitura que a chama. Idempotente.
+ * AUTO-LIMPEZA (Rev. 2823): toda reserva preventiva ATIVA cuja cotação ainda
+ * EXISTE mas está CANCELADA/RECUSADA é liberada automaticamente. Diferente das
+ * órfãs (cotação excluída — Rev. 2822), aqui a cotação continua na tabela, só
+ * que com status final, então o self-heal de órfãs não a pega. Cobre os caminhos
+ * de cancelamento que não soltaram a reserva (ex.: auto-cancelamento por estar
+ * sem itens — Rev. 2295) e qualquer backlog histórico. Reusa
+ * `_liberarReservasDaCotacao` (acao "liberada" + log), idempotente (só toca
+ * "ativa"). ZERO ALTER/DROP/DELETE.
+ */
+async function _autoLiberarReservasCotacaoCancelada(companyId: number): Promise<number> {
+  const db = await getDb();
+  const ativas = await db.select({ cotacaoId: comprasReservasSaldo.cotacaoId })
+    .from(comprasReservasSaldo)
+    .where(and(
+      eq(comprasReservasSaldo.companyId, companyId),
+      eq(comprasReservasSaldo.status, "ativa"),
+    ));
+  const cotacaoIds = [...new Set(ativas.map(r => r.cotacaoId).filter((x): x is number => x != null))];
+  if (cotacaoIds.length === 0) return 0;
+  const canceladas = await db.select({ id: comprasCotacoes.id })
+    .from(comprasCotacoes)
+    .where(and(
+      eq(comprasCotacoes.companyId, companyId),
+      inArray(comprasCotacoes.id, cotacaoIds),
+      sql`${comprasCotacoes.status} IN ('cancelada', 'recusada')`,
+    ));
+  let total = 0;
+  for (const c of canceladas) {
+    total += await _liberarReservasDaCotacao({
+      cotacaoId: c.id, acao: "liberada",
+      motivo: "Cotação cancelada/recusada — limpeza automática",
+      companyId,
+    });
+  }
+  return total;
+}
+
+/**
+ * SANEAMENTO COMPLETO DAS RESERVAS (Rev. 2822 + 2823): roda as três auto-baixas
+ * em sequência (OC já gerada + cotação inexistente + cotação cancelada/recusada).
+ * Cada uma é tolerante a falha (try/catch) para nunca derrubar a leitura que a
+ * chama. Idempotente.
  */
 async function _autoSanearReservas(companyId: number): Promise<void> {
   try { await _autoLiberarReservasComOcGerada(companyId); } catch (e: any) { console.warn("[saneamentoReservas] OC já gerada falhou:", e?.message); }
   try { await _autoLiberarReservasOrfas(companyId); } catch (e: any) { console.warn("[saneamentoReservas] órfãs falhou:", e?.message); }
+  try { await _autoLiberarReservasCotacaoCancelada(companyId); } catch (e: any) { console.warn("[saneamentoReservas] canceladas falhou:", e?.message); }
 }
 
 /**
@@ -4407,6 +4447,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
             await db.update(comprasCotacoes)
               .set({ status: "cancelada", observacoes: sql`COALESCE(${comprasCotacoes.observacoes}, '') || ' [Rev.2295: auto-cancelada por estar sem itens]'` })
               .where(inArray(comprasCotacoes.id, cotsOrfas.map(c => c.id)));
+            // Rev. 2823 — libera reservas preventivas das cotações auto-canceladas.
+            await _liberarReservasDeCotacoes(cotsOrfas.map(c => c.id), "liberada", "Cotação auto-cancelada (sem itens)", input.companyId);
             console.log(`[compras.criarCotacao] Rev. 2295 auto-cancelou ${cotsOrfas.length} cotação(ões) órfã(s) sem itens pra SC ${input.solicitacaoId}:`, cotsOrfas.map(c => c.numeroCotacao).join(", "));
           }
           const stillActive = activeCots.filter(c => cotsComItens.has(c.id));

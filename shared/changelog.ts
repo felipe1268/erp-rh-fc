@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2823 — **COMPRAS · RESERVAS PREVENTIVAS — LIBERAÇÃO QUANDO A COTAÇÃO É APAGADA OU CANCELADA.**
+ *
+ * PEDIDO (usuário, sobre a tela de Reservas Preventivas, após a Rev. 2822): "Quando a cotação for apagada ou
+ * cancelada deve sair daqui também." DIAGNÓSTICO: os caminhos EXPLÍCITOS do usuário já liberavam a reserva
+ * (`excluirCotacao`, `excluirCotacoesEmLote`, `cancelarCotacao`, e a transição de OC p/ cancelada/recusada). O GAP
+ * eram (a) o AUTO-CANCELAMENTO por estar sem itens (Rev. 2295 em `criarCotacao`) que muda o status p/ "cancelada"
+ * SEM soltar a reserva, e (b) o fato de que uma cotação CANCELADA continua EXISTINDO na tabela — então o self-heal
+ * de órfãs da Rev. 2822 (que só pega cotação INEXISTENTE) NÃO a alcançava. Neon real: hoje 0 reservas ativas
+ * apontam p/ cotação cancelada/recusada (as 47 legítimas são pendente/aprovada), então a correção é preventiva +
+ * fecha o vazamento do auto-cancelamento.
+ *
+ * O QUE FOI FEITO (`server/routers/compras.ts`, só lógica/leitura — ZERO ALTER/DROP/DELETE; ZERO schema novo):
+ *  (1) NOVO `_autoLiberarReservasCotacaoCancelada(companyId)`: pega as reservas ATIVAS, descobre os cotacaoIds
+ *      DISTINTOS, consulta `comprasCotacoes` (inArray + companyId) filtrando status IN ('cancelada','recusada') e
+ *      libera (status "liberada" via `_liberarReservasDaCotacao`). Idempotente; cobre todo o backlog histórico e
+ *      qualquer caminho de cancelamento que não tenha soltado a reserva.
+ *  (2) `_autoSanearReservas` agora roda AS TRÊS auto-baixas (OC gerada — Rev. 2820 + órfã — Rev. 2822 + cancelada),
+ *      cada uma em try/catch → os 3 self-heals (`_statusTravamentoCompras`, `getSaldosRealocacaoGeral`,
+ *      `listarReservasAtivas`) já a herdam.
+ *  (3) LIBERAÇÃO DIRETA no auto-cancelamento por estar sem itens (Rev. 2295 em `criarCotacao`): passou a chamar
+ *      `_liberarReservasDeCotacoes(..., "liberada")` na hora, sem depender só do self-heal.
+ *
+ * RESSALVA: libera (status "liberada"), NUNCA deleta. Validação: esbuild OK; diagnóstico Neon confirmou 0 backlog de
+ * canceladas-com-reserva-ativa. Detalhe: este arquivo.
+ *
+ * ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2822 — **COMPRAS · RESERVAS PREVENTIVAS — LIMPEZA AUTOMÁTICA DE RESERVAS ÓRFÃS (COTAÇÃO INEXISTENTE).**
  *
  * PERGUNTA/PEDIDO (usuário, sobre a tela de Reservas Preventivas, vendo linhas com id interno `#253`, `#272`,
