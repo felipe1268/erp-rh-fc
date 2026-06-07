@@ -13,7 +13,7 @@ import {
   ChevronRight, ChevronDown, Building2, Calendar, DollarSign, FileText,
   Zap, ClipboardCheck, X, TrendingUp, TrendingDown, Minus,
   FileEdit, Save, Clock, RefreshCw, History, ExternalLink, Trash2, Pencil, FolderOpen,
-  Eye, EyeOff, BarChart3, Loader2, FileDown, Settings, Undo2, Send
+  Eye, EyeOff, BarChart3, Loader2, FileDown, Settings, Undo2, Send, MapPin
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -77,6 +77,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   const [newItem, setNewItem] = useState({ descricao: "", unidade: "m²", quantidade: "1", valorUnitario: "0", eapCodigo: "", planejamentoAtividadeId: "" });
   const [newDoc, setNewDoc] = useState({ tipo: "INSS", descricao: "", competencia: "", dataVencimento: "", bloqueiaPagemento: false });
   const [editMedicao, setEditMedicao] = useState<{ id: number; periodo: string; dataReferencia: string; observacoes: string; status: string } | null>(null);
+  const [descExpanded, setDescExpanded] = useState(false);
 
   // Documento tab state
   const [textoEditado, setTextoEditado] = useState<string | null>(null);
@@ -225,11 +226,11 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
       <div className="p-5 space-y-5 max-w-5xl mx-auto">
         {/* Header */}
         <div className="flex items-start gap-3">
-          <button onClick={() => navigate("/terceiros/contratos")} className="p-2 hover:bg-gray-100 rounded-lg mt-0.5">
+          <button onClick={() => navigate("/terceiros/contratos")} className="p-2 hover:bg-gray-100 rounded-lg mt-0.5 shrink-0">
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
               {contrato.numeroContrato && <span className="text-xs bg-gray-100 px-2 py-0.5 rounded font-mono">{contrato.numeroContrato}</span>}
               <Badge className={`text-xs border ${STATUS_MEDICAO[contrato.status || "ativo"]?.cls || ""}`}>{contrato.status}</Badge>
               {contrato.docsComPendencia > 0 && (
@@ -238,18 +239,24 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                 </Badge>
               )}
             </div>
-            <h1 className="text-xl font-bold text-gray-900">{contrato.descricao}</h1>
-            <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
-              <span className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" />{contrato.empresa?.nomeFantasia || contrato.empresa?.razaoSocial || "—"}</span>
-              {contrato.obraNome && <span>📍 {contrato.obraNome}</span>}
+            <div className="flex items-center gap-x-4 gap-y-1 text-sm text-gray-700 flex-wrap">
+              <span className="flex items-center gap-1.5 font-semibold">
+                <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
+                {contrato.empresa?.nomeFantasia || contrato.empresa?.razaoSocial || "—"}
+              </span>
+              {contrato.obraNome && (
+                <span className="flex items-center gap-1 text-gray-500">
+                  <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" /> {contrato.obraNome}
+                </span>
+              )}
             </div>
           </div>
           {(contrato as any).assinaturaStatus === "concluido" ? (
-            <Button onClick={() => setShowGerarMedicao(true)} className="gap-2 bg-blue-600 hover:bg-blue-700">
+            <Button onClick={() => setShowGerarMedicao(true)} className="gap-2 bg-blue-600 hover:bg-blue-700 shrink-0">
               <Zap className="w-4 h-4" /> Gerar Medição
             </Button>
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               {(contrato as any).assinaturaStatus ? (
                 <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5" />
@@ -264,6 +271,24 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
             </div>
           )}
         </div>
+
+        {/* Objeto do Contrato — escopo resumido e legível */}
+        {contrato.descricao && (
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <p className="text-[10px] text-gray-500 uppercase font-semibold tracking-wide mb-1.5">Objeto do Contrato</p>
+            <p className={`text-sm text-gray-700 leading-relaxed whitespace-pre-line ${descExpanded ? "" : "line-clamp-2"}`}>
+              {contrato.descricao}
+            </p>
+            {(contrato.descricao.length > 130) && (
+              <button
+                onClick={() => setDescExpanded(v => !v)}
+                className="mt-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline"
+              >
+                {descExpanded ? "Ver menos" : "Ver mais"}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Vigência do Contrato — destaque */}
         {(() => {

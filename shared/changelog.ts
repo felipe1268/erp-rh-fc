@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2829 — **TERCEIROS · CONTRATOS — NOVO LAYOUT DO TOPO DA TELA DE DETALHE DO CONTRATO (ESCOPO ENXUTO + INFO CLARA).**
+ *
+ * PEDIDO (usuário, com print do iPad): o topo da tela de detalhe do contrato estava com o "texto muito grande e não
+ * tá bacana" — quer algo "extremamente intuitivo e fácil entendimento" e com as informações claras.
+ *
+ * CAUSA-RAIZ DO INCÔMODO: o `<h1>` do cabeçalho renderizava o `contrato.descricao` INTEIRO em `text-xl font-bold`.
+ * Como em contratos de prestação de serviços a "descrição" é o OBJETO/ESCOPO completo (ex.: "Prestação de serviços —
+ * OS 403: Instalação de granitos... 116.48 m²; Peitoril...; Baguete...; Divisória...; Mão francesa...; Cuba..."), o
+ * título virava uma PAREDE de texto enorme ocupando metade da tela antes de qualquer informação útil.
+ *
+ * O QUE FOI FEITO (`client/src/pages/terceiros/contratos/ContratoDetalhe.tsx` — SÓ FRONTEND; ZERO backend; ZERO
+ * schema; ZERO mutation; ZERO ALTER/DROP/DELETE):
+ *  (1) O `<h1>` que jogava a descrição inteira FOI REMOVIDO. O cabeçalho agora prioriza o que IDENTIFICA o contrato:
+ *      linha de badges (nº do contrato + status + pendências de doc) e, logo abaixo, a EMPRESA contratada em destaque
+ *      (negrito, ícone `Building2`) + a obra (ícone `MapPin`) — informação imediata e legível.
+ *  (2) NOVO card "Objeto do Contrato": o escopo longo passou a ser um parágrafo `text-sm leading-relaxed` com
+ *      `line-clamp-2` (mostra 2 linhas por padrão) + botão "Ver mais"/"Ver menos" (state `descExpanded`) que só
+ *      aparece quando o texto passa de 130 caracteres; `whitespace-pre-line` preserva quebras do texto original.
+ *  (3) Robustez de layout no tablet: `min-w-0` no bloco central, `shrink-0` no botão de voltar/ação e nos selos de
+ *      status, e `flex-wrap` nas linhas de badges/meta para não estourar a largura no iPad.
+ *  Import novo: ícone `MapPin` (lucide-react).
+ *
+ * RESSALVA: mudança puramente visual/UX no TOPO da tela de detalhe; os cards de Vigência, Critérios de Medição e
+ * Fluxograma do processo seguem inalterados. Nenhum dado é alterado — o objeto continua sendo o mesmo `contrato.descricao`.
+ * VALIDAÇÃO: dev server sobe e compila o client sem erro (HMR sem erros nos logs).
+ *
  * Rev. 2828 — **TERCEIROS · FCSIGN (INTEGRASIGN) — OPÇÃO DE COPIAR O LINK DE ASSINATURA PARA ENVIAR AO TERCEIRO (WHATSAPP).**
  *
  * PEDIDO (usuário, "vamos por parte"): primeiro, ter a OPÇÃO de ENVIAR O LINK para o terceiro assinar o contrato —
