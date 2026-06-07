@@ -53,6 +53,18 @@ absent) — always add explicit `[SyncSchema+]` ALTER guards AND extend the
 `CREATE TABLE IF NOT EXISTS` DDL for fresh DBs; verify by introspecting Neon after
 a restart, never trust the "all OK" log.
 
+**The version-gated atomic block trap (NEVER put new column self-heals there):**
+there is a SECOND, OLDER self-heal block (`[ColFix] Bloco2`) that is (a)
+VERSION-GATED — when the DB version already matches it logs "Versão ok, pulando
+migrations" and the WHOLE block is skipped — and (b) a single atomic
+`DO $$ ... EXCEPTION WHEN OTHERS THEN NULL; END $$` (one failing statement rolls
+back ALL the ALTERs in it, silently). Net effect: a new `ALTER` added there NEVER
+runs on databases already at the current version, so the column is missing in Neon
+and `db.select()` on that table throws → the list renders empty. This is exactly
+how the `obras` list went blank (cols `databook_logo_*`, `numero_contrato` lived
+only in Bloco2). ALWAYS put column guards in the UNGATED `[SyncSchema+]` block
+instead, and each `ALTER` in its OWN try/catch so one failure can't block the rest.
+
 **Inspecting REAL app data:** the app reads `NEON_DATABASE_URL`. The `executeSql`
 tool hits a different (Replit) Postgres. To query the real Neon DB, run a node
 script via bash: `new Pool({ connectionString: process.env.NEON_DATABASE_URL,

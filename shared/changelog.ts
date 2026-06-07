@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2884 — **HOTFIX: LISTA DE OBRAS VOLTOU VAZIA ("Nenhuma obra encontrada") —
+ * COLUNAS databook_logo_* (Rev. 2879) + numero_contrato (Rev. 2882) NUNCA FORAM
+ * CRIADAS NO NEON; SELF-HEAL MIGRADO P/ BLOCO UNGATED.**
+ *
+ * SINTOMA (usuário): a tela Obras passou a mostrar "Nenhuma obra encontrada" em
+ * TODAS as obras/empresas, mesmo com 36 obras no banco (25 na FC ENGENHARIA
+ * PROJETO / companyId 60002, 10 em 60005, 1 em 3). Print anexado.
+ *
+ * CAUSA-RAIZ: o drizzle `select()` de obras pede TODAS as colunas do schema
+ * (`drizzle/schema.ts` → `obras`). As colunas `databook_logo_cliente/gestora/
+ * construtora` (Rev. 2879) e `numero_contrato` (Rev. 2882) existiam no schema mas
+ * NÃO no Neon, então toda query de obras estourava `column does not exist` (42703)
+ * e o front renderizava lista vazia. O self-heal dessas colunas vivia SÓ no bloco
+ * `[ColFix] Bloco2`, que é (a) VERSION-GATED — quando a versão do banco já está
+ * "ok" o log diz "Versão ok, pulando migrations" e o bloco é PULADO — e (b) um
+ * único `DO $$ … EXCEPTION WHEN OTHERS THEN NULL; END $$` atômico (uma falha
+ * derruba todos os ALTERs juntos). Em bancos já na versão atual, os ALTERs novos
+ * nunca rodaram → colunas faltando.
+ *
+ * FEITO (1) — DADOS (Neon, aditivo NÃO destrutivo): rodado `ALTER TABLE obras ADD
+ * COLUMN IF NOT EXISTS` para as 4 colunas (databook_logo_cliente SMALLINT NOT NULL
+ * DEFAULT 1, databook_logo_gestora SMALLINT NOT NULL DEFAULT 1,
+ * databook_logo_construtora SMALLINT NOT NULL DEFAULT 0, numero_contrato
+ * VARCHAR(50)). Lista de Obras restaurada na hora.
+ *
+ * FEITO (2) — SELF-HEAL RESILIENTE: novo bloco em `server/_core/index.ts` na seção
+ * `[SyncSchema+]` (UNGATED — roda SEMPRE) com os 4 ALTERs em statements SEPARADOS
+ * (uma falha não derruba as demais), espelhando o padrão das demais colunas. Isso
+ * garante que bancos antigos/futuros se auto-curem no próximo boot, sem depender do
+ * Bloco2 version-gated.
+ *
+ * ZERO schema novo (colunas já existiam no schema); ZERO ALTER/DROP/DELETE
+ * destrutivo (só ADD COLUMN IF NOT EXISTS aditivo). R-001/R-007/R-010 respeitadas.
+ *
  * Rev. 2883 — **FORNECEDORES / EMPRESAS TERCEIRAS — NOME SEMPRE SALVO EM CAIXA ALTA
  * (TUDO EM MAIÚSCULAS), REVERTENDO O TITLE CASE DA REV. 2881.**
  *

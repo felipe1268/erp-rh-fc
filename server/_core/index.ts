@@ -811,6 +811,31 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2854: colunas tamanhoCalcado/tamanhoCamisa/tamanhoCalca garantidas em employees (mapeamento de EPI).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA tamanhos EPI:`, e?.message || e); }
 
+        // Rev. 2884 — BACKSTOP DAS COLUNAS DE obras (Databook logos Rev. 2879 +
+        // numero_contrato Rev. 2882). Essas colunas viviam SÓ no bloco [ColFix]
+        // Bloco2, que é VERSION-GATED ("Versão ok, pulando migrations") e um único
+        // DO/EXCEPTION atômico — então, em bancos cuja versão já estava "ok", os
+        // ALTERs NUNCA rodavam e o drizzle `select()` de obras (que pede TODAS as
+        // colunas do schema) quebrava → a lista de Obras voltava VAZIA. Aqui,
+        // UNGATED e em statements separados (uma falha não derruba as demais),
+        // garantimos que obras tenha sempre o shape do schema.
+        {
+          // Cada ALTER em seu PRÓPRIO try — uma falha NÃO impede as demais
+          // (failure-isolation real, não só "sem rollback atômico").
+          const obrasCols: Array<readonly [string, ReturnType<typeof sql>]> = [
+            ["databook_logo_cliente",     sql`ALTER TABLE obras ADD COLUMN IF NOT EXISTS databook_logo_cliente SMALLINT NOT NULL DEFAULT 1`],
+            ["databook_logo_gestora",     sql`ALTER TABLE obras ADD COLUMN IF NOT EXISTS databook_logo_gestora SMALLINT NOT NULL DEFAULT 1`],
+            ["databook_logo_construtora", sql`ALTER TABLE obras ADD COLUMN IF NOT EXISTS databook_logo_construtora SMALLINT NOT NULL DEFAULT 0`],
+            ["numero_contrato",           sql`ALTER TABLE obras ADD COLUMN IF NOT EXISTS numero_contrato VARCHAR(50)`],
+          ];
+          let okObras = 0;
+          for (const [nome, stmt] of obrasCols) {
+            try { await db.execute(stmt); okObras++; }
+            catch (e: any) { console.error(`[SyncSchema+] FALHA coluna obras.${nome}:`, e?.message || e); }
+          }
+          console.log(`[SyncSchema+] Rev. 2884: ${okObras}/${obrasCols.length} colunas databook_logo_* (Rev. 2879) + numero_contrato (Rev. 2882) garantidas em obras (UNGATED — corrige lista de Obras vazia).`);
+        }
+
         // Rev. 2560 — BACKSTOP DE BANCO: 1 só alocação ATIVA por funcionário.
         // Índice único parcial fecha de vez "mesmo funcionário em 2 obras ao
         // mesmo tempo": qualquer write futuro que tente ativar uma 2ª alocação
