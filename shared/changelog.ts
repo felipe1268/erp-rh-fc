@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2818 — **COMPRAS · PAINEL FD — REDESIGN COMPLETO + FIX "FD REALIZADA NÃO APARECE": A REVTE TINHA R$ 89.524,35
+ * DE FD REALIZADO (2 OCs `fd_fc`) QUE O PAINEL MOSTRAVA COMO R$ 0,00 PORQUE O "UTILIZADO" SÓ SOMAVA `fd_valor` DE OCs
+ * `fd_cliente` — E `fd_valor` ESTÁ NULL EM 35 DAS 37 OCs FD DA EMPRESA. NOVO LAYOUT EM ABAS PARA ANÁLISE DIÁRIA.**
+ *
+ * PEDIDO (usuário): "A REVTE tem FD realizada e não aparece. Refaça um layout COMPLETAMENTE NOVO do Painel FD — uma
+ * aba inicial com os itens considerados no FD, uma lista com a numeração do FD, e informação de valor total/utilizado/
+ * saldo. Facilitar a análise diária."
+ *
+ * CAUSA-RAIZ (independente das Rev. 2814–2817, que só fizeram o painel CARREGAR): mesmo carregando, o "Utilizado"
+ * (antes rotulado "FD Comprometido") só somava `fd_valor` das OCs com `modalidadeFd === 'fd_cliente'`. Mas (a) as OCs
+ * de Faturamento Direto da REVTE são `fd_fc` (criação direta na tela de Ordens), e (b) o campo `fd_valor` é
+ * raramente preenchido — confirmado no Neon (company 60002): das 37 OCs FD, 35 têm `fd_valor` NULL. As 2 OCs `fd_fc`
+ * da REVTE (obra 12) somam R$ 22.478,72 + R$ 67.045,63 = R$ 89.524,35, valor que vive em `compras_ordens.total`, não
+ * em `fd_valor`. Resultado: o painel reportava R$ 0,00 de utilizado para a REVTE.
+ *
+ * REGRA NOVA (Rev. 2818): o VALOR EFETIVO de uma OC FD = `fd_valor` quando preenchido e > 0; caso contrário, o
+ * `total` da OC. O "Utilizado" passa a ser a soma do valorEfetivo de TODAS as modalidades FD (fd_cliente, fd_fc,
+ * fd_terceiro), não só fd_cliente. Aplicado igual em `getSaldoFd` e `getSaldoFdTodasObras`.
+ *
+ * O QUE FOI FEITO:
+ *  1) BACKEND (server/routers/compras.ts) — `getSaldoFd` e `getSaldoFdTodasObras`: o SELECT das OCs FD agora traz
+ *     `total` e `criadoEm`; cada OC ganha `valorEfetivo` (= fd_valor>0 ? fd_valor : total), `total` e `data`
+ *     (criadoEm). O "totalFdComprometido" passou a somar o `valorEfetivo` de TODAS as OCs FD (antes: só `fd_valor`
+ *     das fd_cliente). Zero schema novo; zero mutation.
+ *  2) FRONTEND (client/src/pages/compras/PainelFd.tsx) — REDESIGN COMPLETO. KPIs sempre visíveis no topo
+ *     (Orçamento FD / Utilizado (Realizado) / Saldo Disponível) + barra de % de utilização com alerta ≥90%.
+ *     Layout em ABAS:
+ *       • Obra específica: "Itens do FD" (BDI FD considerado, default, com Adicionar/Ajustar/Remover) ·
+ *         "Lançamentos FD" (lista numerada: Nº FD/OC, Data, Descrição, Modalidade, Status, Valor=valorEfetivo, PDF,
+ *         + rodapé com total utilizado) · "Histórico" (log de ajustes).
+ *       • Todas as obras: "Por Obra" (tabela com coluna Utilização % + Detalhar) · "Lançamentos FD" (consolidado
+ *         com coluna Obra).
+ *     Relabel "FD Comprometido" → "Utilizado (Realizado)". O front lê `oc.valorEfetivo` e `oc.data`.
+ *
+ * RESSALVA: correção de leitura/agregação + redesign de UI. ZERO ALTER/DROP/DELETE; ZERO schema novo; ZERO mutation.
+ * Validação: esbuild OK (compras.ts + PainelFd.tsx) + diagnóstico direto no Neon (REVTE obra 12 → 2 OCs fd_fc =
+ * R$ 89.524,35; empresa: 35/37 OCs FD com fd_valor NULL).
+ *
  * Rev. 2817 — **COMPRAS · PAINEL FD — HOTFIX FINAL (SEGUNDO BUG, "AINDA VAZIO" APÓS A REV. 2816) + NOVA VISÃO
  * "TODAS AS OBRAS": O PAINEL FD CONTINUAVA VAZIO PORQUE O `getSaldoFd` TINHA UMA SEGUNDA QUERY QUEBRADA QUE
  * SELECIONAVA EM `obras` COLUNAS QUE NÃO EXISTEM. ALÉM DE CORRIGIR, ADICIONA A OPÇÃO DE VER O SALDO DE FD

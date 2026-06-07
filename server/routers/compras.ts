@@ -12780,6 +12780,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           fdValor: comprasOrdens.fdValor,
           fdStatus: comprasOrdens.fdStatus,
           modalidadeFd: comprasOrdens.modalidadeFd,
+          total: comprasOrdens.total,
+          criadoEm: comprasOrdens.criadoEm,
         })
         .from(comprasOrdens)
         .where(and(
@@ -12792,17 +12794,29 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           sql`${comprasOrdens.modalidadeFd} IN ('fd_cliente', 'fd_terceiro', 'fd_fc')`,
           sql`${comprasOrdens.status} != 'cancelada'`,
         ));
-      const totalFdComprometido = ocsComFdRows.filter(oc => (oc as any).modalidadeFd === "fd_cliente").reduce((s, oc) => s + n(oc.fdValor), 0);
-      const ocsComFd = ocsComFdRows.map(oc => ({
-        id: oc.id,
-        numeroOc: oc.numeroOc,
-        // Mantém a chave `descricao` no payload (o front PainelFd lê `oc.descricao`),
-        // mas a fonte real é `observacoes` da OC.
-        descricao: (oc as any).observacoes,
-        fdValor: oc.fdValor,
-        fdStatus: (oc as any).fdStatus,
-        modalidadeFd: (oc as any).modalidadeFd,
-      }));
+      // Rev. 2818 — "Utilizado" do FD = soma do VALOR EFETIVO de TODAS as OCs FD
+      // (fd_cliente/fd_terceiro/fd_fc). `fd_valor` raramente é preenchido (35 de 37
+      // OCs FD desta base têm NULL); quando ausente/zero, o valor real do FD é o
+      // `total` da OC. Por isso valorEfetivo = fd_valor>0 ? fd_valor : total. Antes só
+      // somava fd_valor das fd_cliente → FD real (ex.: REVTE, 2 OCs fd_fc =
+      // R$ 89.524,35) não aparecia no painel.
+      const ocsComFd = ocsComFdRows.map(oc => {
+        const valorEfetivo = n(oc.fdValor) > 0 ? n(oc.fdValor) : n((oc as any).total);
+        return {
+          id: oc.id,
+          numeroOc: oc.numeroOc,
+          // Mantém a chave `descricao` no payload (o front PainelFd lê `oc.descricao`),
+          // mas a fonte real é `observacoes` da OC.
+          descricao: (oc as any).observacoes,
+          fdValor: oc.fdValor,
+          valorEfetivo,
+          total: n((oc as any).total),
+          fdStatus: (oc as any).fdStatus,
+          modalidadeFd: (oc as any).modalidadeFd,
+          data: (oc as any).criadoEm,
+        };
+      });
+      const totalFdComprometido = ocsComFd.reduce((s, oc) => s + oc.valorEfetivo, 0);
 
       // Rev. 2817 — A tabela `obras` NÃO tem coluna `orcamento_id` (nem `company_id`:
       // as colunas reais são camelCase `companyId`/`isActive`). O SELECT cru antigo
@@ -12846,8 +12860,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
   // Rev. 2817 — Visão "Todas as obras" do Painel FD: agrega orçado/comprometido/saldo
   // de FD por obra da empresa + lista consolidada das OCs com FD (com o nome da obra).
   // Usa os MESMOS critérios do getSaldoFd (modalidade IN fd_cliente/fd_terceiro/fd_fc,
-  // status != cancelada; comprometido = soma fdValor das fd_cliente; orçado = soma bdi_fd
-  // do orçamento ativo da obra).
+  // status != cancelada; comprometido/utilizado = soma do valorEfetivo (fd_valor>0 ? fd_valor :
+  // total) de TODAS as OCs FD — Rev. 2818; orçado = soma bdi_fd do orçamento ativo da obra).
   getSaldoFdTodasObras: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input, ctx }) => {
@@ -12863,6 +12877,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           fdValor: comprasOrdens.fdValor,
           fdStatus: comprasOrdens.fdStatus,
           modalidadeFd: comprasOrdens.modalidadeFd,
+          total: comprasOrdens.total,
+          criadoEm: comprasOrdens.criadoEm,
         })
         .from(comprasOrdens)
         .where(and(
@@ -12916,21 +12932,28 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         if ((orcadoByOrcamento.get(orcId) ?? 0) > 0) ensure(obraId);
       }
 
-      const ocsComFd = ocsRows.map(oc => ({
-        id: oc.id,
-        numeroOc: oc.numeroOc,
-        obraId: oc.obraId,
-        obraNome: oc.obraId != null ? (obraNomeById.get(oc.obraId) ?? `Obra #${oc.obraId}`) : "—",
-        descricao: oc.observacoes,
-        fdValor: oc.fdValor,
-        fdStatus: oc.fdStatus,
-        modalidadeFd: oc.modalidadeFd,
-      }));
+      // Rev. 2818 — valorEfetivo = fd_valor>0 ? fd_valor : total (mesma regra do getSaldoFd).
+      const ocsComFd = ocsRows.map(oc => {
+        const valorEfetivo = n(oc.fdValor) > 0 ? n(oc.fdValor) : n((oc as any).total);
+        return {
+          id: oc.id,
+          numeroOc: oc.numeroOc,
+          obraId: oc.obraId,
+          obraNome: oc.obraId != null ? (obraNomeById.get(oc.obraId) ?? `Obra #${oc.obraId}`) : "—",
+          descricao: oc.observacoes,
+          fdValor: oc.fdValor,
+          valorEfetivo,
+          total: n((oc as any).total),
+          fdStatus: oc.fdStatus,
+          modalidadeFd: oc.modalidadeFd,
+          data: (oc as any).criadoEm,
+        };
+      });
       for (const oc of ocsRows) {
         if (oc.obraId == null) continue;
         const r = ensure(oc.obraId);
         r.qtdOcsFd += 1;
-        if ((oc as any).modalidadeFd === "fd_cliente") r.totalFdComprometido += n(oc.fdValor);
+        r.totalFdComprometido += n(oc.fdValor) > 0 ? n(oc.fdValor) : n((oc as any).total);
       }
       for (const r of byObra.values()) r.saldoFd = r.totalFdOrcado - r.totalFdComprometido;
 

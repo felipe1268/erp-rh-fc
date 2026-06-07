@@ -9,10 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Receipt, DollarSign, AlertTriangle, CheckCircle, Loader2, Shield, History, Plus, Trash2, FileDown } from "lucide-react";
+import { Receipt, DollarSign, AlertTriangle, CheckCircle, Loader2, Shield, History, Plus, Trash2, FileDown, Wallet, TrendingUp, Building2, Layers, ListChecks } from "lucide-react";
 
-const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const fmt = (v: number) => (Number.isFinite(v) ? v : 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const fmtData = (d: any) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
 
 const fdBadgeClass = (m: string) =>
   m === "fd_cliente" ? "bg-blue-100 text-blue-700"
@@ -20,6 +22,59 @@ const fdBadgeClass = (m: string) =>
   : "bg-purple-100 text-purple-700";
 const fdBadgeLabel = (m: string) =>
   m === "fd_cliente" ? "FD Cliente" : m === "fd_fc" ? "Fat. Direto FC" : "FD Terceiro";
+
+function KpiRow({ orcado, utilizado, saldo }: { orcado: number; utilizado: number; saldo: number }) {
+  const pct = orcado > 0 ? (utilizado / orcado) * 100 : 0;
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center gap-2 text-gray-500">
+            <Wallet className="h-4 w-4 text-indigo-500" />
+            <span className="text-xs font-medium">Orçamento FD (Total)</span>
+          </div>
+          <p className="mt-2 text-2xl font-bold text-gray-900">{fmt(orcado)}</p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center gap-2 text-gray-500">
+            <TrendingUp className="h-4 w-4 text-amber-500" />
+            <span className="text-xs font-medium">Utilizado (Realizado)</span>
+          </div>
+          <p className="mt-2 text-2xl font-bold text-amber-600">{fmt(utilizado)}</p>
+        </div>
+        <div className={`rounded-xl border p-4 shadow-sm ${saldo < 0 ? "border-red-300 bg-red-50" : "border-emerald-200 bg-emerald-50/50"}`}>
+          <div className="flex items-center gap-2 text-gray-500">
+            <DollarSign className="h-4 w-4 text-emerald-500" />
+            <span className="text-xs font-medium">Saldo Disponível</span>
+          </div>
+          <p className={`mt-2 text-2xl font-bold ${saldo < 0 ? "text-red-600" : "text-emerald-600"}`}>{fmt(saldo)}</p>
+        </div>
+      </div>
+      {orcado > 0 && (
+        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm space-y-2">
+          <div className="flex justify-between text-xs">
+            <span className="text-gray-500">Utilização do FD</span>
+            <span className={pct > 90 ? "text-red-600 font-semibold" : "font-medium text-gray-700"}>{pct.toFixed(1)}%</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2.5">
+            <div
+              className={`h-2.5 rounded-full transition-all ${pct > 90 ? "bg-red-500" : pct > 70 ? "bg-amber-500" : "bg-indigo-500"}`}
+              style={{ width: `${Math.min(pct, 100)}%` }}
+            />
+          </div>
+          {pct >= 90 && (
+            <div className="flex items-center gap-2 text-xs text-red-600">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              <span>Atenção: saldo de FD abaixo de 10%. Novas OCs FD podem ser bloqueadas.</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const tabTriggerCls = "data-[state=active]:bg-indigo-600 data-[state=active]:text-white text-gray-600 gap-1.5 text-xs";
 
 export default function PainelFd() {
   const { selectedCompanyId } = useCompany();
@@ -86,16 +141,16 @@ export default function PainelFd() {
 
   const saldo = saldoQ.data;
   const historico = historicoQ.data ?? [];
-  const pctUsado = saldo && saldo.totalFdOrcado > 0 ? (saldo.totalFdComprometido / saldo.totalFdOrcado) * 100 : 0;
+  const ocsObra = (saldo?.ocsComFd ?? []) as any[];
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 max-w-5xl">
+      <div className="space-y-6 max-w-6xl">
         <div>
           <h1 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
             <Receipt className="h-5 w-5 text-indigo-600" /> Painel de Faturamento Direto
           </h1>
-          <p className="text-sm text-gray-500">Controle de saldo, itens e ajustes de FD por obra</p>
+          <p className="text-sm text-gray-500">Controle diário de saldo, itens e lançamentos de FD por obra.</p>
         </div>
 
         <div className="flex gap-3 items-end">
@@ -113,273 +168,274 @@ export default function PainelFd() {
           </div>
         </div>
 
+        {/* ===================== TODAS AS OBRAS ===================== */}
         {selectedObra === -1 && todasQ.isLoading && (
           <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
         )}
 
+        {selectedObra === -1 && !todas && !todasQ.isLoading && todasQ.isError && (
+          <div className="text-center py-16 text-gray-400 text-sm">Erro ao carregar o saldo de FD das obras. Tente novamente.</div>
+        )}
+
         {selectedObra === -1 && todas && (
           <>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-1">
-                <p className="text-xs text-gray-500 font-medium">Orçamento FD Total</p>
-                <p className="text-xl font-bold text-gray-900">{fmt(todas.totais.totalFdOrcado)}</p>
-              </div>
-              <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-1">
-                <p className="text-xs text-gray-500 font-medium">FD Comprometido</p>
-                <p className="text-xl font-bold text-amber-600">{fmt(todas.totais.totalFdComprometido)}</p>
-              </div>
-              <div className={`bg-white border rounded-lg p-4 space-y-1 ${todas.totais.saldoFd < 0 ? "border-red-300 bg-red-50" : "border-gray-200"}`}>
-                <p className="text-xs text-gray-500 font-medium">Saldo Disponível</p>
-                <p className={`text-xl font-bold ${todas.totais.saldoFd < 0 ? "text-red-600" : "text-emerald-600"}`}>{fmt(todas.totais.saldoFd)}</p>
-              </div>
-            </div>
+            <KpiRow orcado={todas.totais.totalFdOrcado} utilizado={todas.totais.totalFdComprometido} saldo={todas.totais.saldoFd} />
 
-            <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
-              <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-                <DollarSign className="h-4 w-4 text-indigo-500" /> Saldo de FD por Obra
-              </h3>
-              {todas.porObra.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-gray-200">
-                      <TableHead className="text-xs text-gray-500">Obra</TableHead>
-                      <TableHead className="text-xs text-gray-500 text-center">OCs FD</TableHead>
-                      <TableHead className="text-xs text-gray-500 text-right">Orçado</TableHead>
-                      <TableHead className="text-xs text-gray-500 text-right">Comprometido</TableHead>
-                      <TableHead className="text-xs text-gray-500 text-right">Saldo</TableHead>
-                      <TableHead className="text-xs text-gray-500 w-20"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {todas.porObra.map((o: any) => (
-                      <TableRow key={o.obraId} className="border-gray-100">
-                        <TableCell className="text-xs text-gray-900 font-medium">{o.obraNome}</TableCell>
-                        <TableCell className="text-xs text-center">{o.qtdOcsFd}</TableCell>
-                        <TableCell className="text-xs text-right">{fmt(o.totalFdOrcado)}</TableCell>
-                        <TableCell className="text-xs text-right text-amber-600">{fmt(o.totalFdComprometido)}</TableCell>
-                        <TableCell className={`text-xs text-right font-semibold ${o.saldoFd < 0 ? "text-red-600" : "text-emerald-600"}`}>{fmt(o.saldoFd)}</TableCell>
-                        <TableCell>
-                          <Button size="sm" variant="ghost" className="h-6 text-[10px] text-indigo-600 hover:text-indigo-800"
-                            onClick={() => setSelectedObra(o.obraId)}>
-                            Detalhar
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <p className="text-xs text-gray-400 text-center py-4">Nenhuma obra com Faturamento Direto nesta empresa.</p>
-              )}
-            </div>
+            <Tabs defaultValue="obras" className="w-full">
+              <TabsList className="bg-gray-100">
+                <TabsTrigger value="obras" className={tabTriggerCls}><Building2 className="h-3.5 w-3.5" /> Por Obra</TabsTrigger>
+                <TabsTrigger value="lancamentos" className={tabTriggerCls}><ListChecks className="h-3.5 w-3.5" /> Lançamentos FD ({(todas.ocsComFd as any[])?.length ?? 0})</TabsTrigger>
+              </TabsList>
 
-            {todas.ocsComFd && (todas.ocsComFd as any[]).length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
-                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-                  <Receipt className="h-4 w-4 text-indigo-500" /> OCs com Faturamento Direto (todas as obras)
-                </h3>
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-gray-200">
-                      <TableHead className="text-xs text-gray-500">OC</TableHead>
-                      <TableHead className="text-xs text-gray-500">Obra</TableHead>
-                      <TableHead className="text-xs text-gray-500">Descrição</TableHead>
-                      <TableHead className="text-xs text-gray-500">Modalidade</TableHead>
-                      <TableHead className="text-xs text-gray-500">Status FD</TableHead>
-                      <TableHead className="text-xs text-gray-500 text-right">Valor FD</TableHead>
-                      <TableHead className="text-xs text-gray-500 w-20">PDF</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(todas.ocsComFd as any[]).map((oc: any) => (
-                      <TableRow key={oc.id} className="border-gray-100">
-                        <TableCell className="text-xs font-mono text-gray-700">{oc.numeroOc || `#${oc.id}`}</TableCell>
-                        <TableCell className="text-xs text-gray-700">{oc.obraNome}</TableCell>
-                        <TableCell className="text-xs text-gray-900">{oc.descricao || "—"}</TableCell>
-                        <TableCell className="text-xs">
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${fdBadgeClass(oc.modalidadeFd)}`}>
-                            {fdBadgeLabel(oc.modalidadeFd)}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          <span className={`font-medium ${oc.fdStatus === "aprovado" ? "text-emerald-600" : "text-amber-600"}`}>
-                            {oc.fdStatus === "aprovado" ? "Aprovado" : "Pendente"}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-xs text-right font-semibold">{fmt(parseFloat(oc.fdValor ?? "0"))}</TableCell>
-                        <TableCell>
-                          {oc.modalidadeFd === "fd_cliente" && (
-                            <Button size="sm" variant="ghost" className="h-6 text-[10px] text-indigo-600 hover:text-indigo-800 gap-1"
-                              onClick={() => window.open(`/api/download/fd/${oc.id}?mode=view`, "_blank")}>
-                              <FileDown className="h-3 w-3" /> PDF
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
+              <TabsContent value="obras" className="mt-4">
+                <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                  {todas.porObra.length > 0 ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-gray-200">
+                          <TableHead className="text-xs text-gray-500">Obra</TableHead>
+                          <TableHead className="text-xs text-gray-500 text-center">OCs FD</TableHead>
+                          <TableHead className="text-xs text-gray-500 text-right">Orçado</TableHead>
+                          <TableHead className="text-xs text-gray-500 text-right">Utilizado</TableHead>
+                          <TableHead className="text-xs text-gray-500 text-right">Saldo</TableHead>
+                          <TableHead className="text-xs text-gray-500 text-center">Utilização</TableHead>
+                          <TableHead className="text-xs text-gray-500 w-20"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {todas.porObra.map((o: any) => {
+                          const pct = o.totalFdOrcado > 0 ? (o.totalFdComprometido / o.totalFdOrcado) * 100 : 0;
+                          return (
+                            <TableRow key={o.obraId} className="border-gray-100">
+                              <TableCell className="text-xs text-gray-900 font-medium">{o.obraNome}</TableCell>
+                              <TableCell className="text-xs text-center">{o.qtdOcsFd}</TableCell>
+                              <TableCell className="text-xs text-right">{fmt(o.totalFdOrcado)}</TableCell>
+                              <TableCell className="text-xs text-right text-amber-600">{fmt(o.totalFdComprometido)}</TableCell>
+                              <TableCell className={`text-xs text-right font-semibold ${o.saldoFd < 0 ? "text-red-600" : "text-emerald-600"}`}>{fmt(o.saldoFd)}</TableCell>
+                              <TableCell className="text-xs text-center">
+                                {o.totalFdOrcado > 0 ? (
+                                  <span className={pct > 90 ? "text-red-600 font-semibold" : "text-gray-600"}>{pct.toFixed(0)}%</span>
+                                ) : <span className="text-gray-300">—</span>}
+                              </TableCell>
+                              <TableCell>
+                                <Button size="sm" variant="ghost" className="h-6 text-[10px] text-indigo-600 hover:text-indigo-800"
+                                  onClick={() => setSelectedObra(o.obraId)}>
+                                  Detalhar
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <p className="text-xs text-gray-400 text-center py-6">Nenhuma obra com Faturamento Direto nesta empresa.</p>
+                  )}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="lancamentos" className="mt-4">
+                <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                  {todas.ocsComFd && (todas.ocsComFd as any[]).length > 0 ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-gray-200">
+                          <TableHead className="text-xs text-gray-500">Nº FD / OC</TableHead>
+                          <TableHead className="text-xs text-gray-500">Data</TableHead>
+                          <TableHead className="text-xs text-gray-500">Obra</TableHead>
+                          <TableHead className="text-xs text-gray-500">Descrição</TableHead>
+                          <TableHead className="text-xs text-gray-500">Modalidade</TableHead>
+                          <TableHead className="text-xs text-gray-500">Status</TableHead>
+                          <TableHead className="text-xs text-gray-500 text-right">Valor</TableHead>
+                          <TableHead className="text-xs text-gray-500 w-16">PDF</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(todas.ocsComFd as any[]).map((oc: any) => (
+                          <TableRow key={oc.id} className="border-gray-100">
+                            <TableCell className="text-xs font-mono text-gray-700">{oc.numeroOc || `#${oc.id}`}</TableCell>
+                            <TableCell className="text-xs text-gray-500">{fmtData(oc.data)}</TableCell>
+                            <TableCell className="text-xs text-gray-700">{oc.obraNome}</TableCell>
+                            <TableCell className="text-xs text-gray-900 max-w-[220px] truncate">{oc.descricao || "—"}</TableCell>
+                            <TableCell className="text-xs">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${fdBadgeClass(oc.modalidadeFd)}`}>{fdBadgeLabel(oc.modalidadeFd)}</span>
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              <span className={`font-medium ${oc.fdStatus === "aprovado" ? "text-emerald-600" : "text-amber-600"}`}>{oc.fdStatus === "aprovado" ? "Aprovado" : "Pendente"}</span>
+                            </TableCell>
+                            <TableCell className="text-xs text-right font-semibold text-gray-900">{fmt(Number(oc.valorEfetivo ?? 0))}</TableCell>
+                            <TableCell>
+                              {oc.modalidadeFd === "fd_cliente" && (
+                                <Button size="sm" variant="ghost" className="h-6 text-[10px] text-indigo-600 hover:text-indigo-800 gap-1"
+                                  onClick={() => window.open(`/api/download/fd/${oc.id}?mode=view`, "_blank")}>
+                                  <FileDown className="h-3 w-3" /> PDF
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <p className="text-xs text-gray-400 text-center py-6">Nenhum lançamento de FD nesta empresa.</p>
+                  )}
+                  <p className="text-[10px] text-gray-400 mt-3">Valor = valor FD aprovado quando informado; caso contrário, o total da OC.</p>
+                </div>
+              </TabsContent>
+            </Tabs>
           </>
         )}
 
+        {/* ===================== OBRA ESPECÍFICA ===================== */}
         {selectedObra > 0 && saldo && (
           <>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-1">
-                <p className="text-xs text-gray-500 font-medium">Orçamento FD Total</p>
-                <p className="text-xl font-bold text-gray-900">{fmt(saldo.totalFdOrcado)}</p>
-              </div>
-              <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-1">
-                <p className="text-xs text-gray-500 font-medium">FD Comprometido</p>
-                <p className="text-xl font-bold text-amber-600">{fmt(saldo.totalFdComprometido)}</p>
-              </div>
-              <div className={`bg-white border rounded-lg p-4 space-y-1 ${saldo.saldoFd < 0 ? "border-red-300 bg-red-50" : "border-gray-200"}`}>
-                <p className="text-xs text-gray-500 font-medium">Saldo Disponível</p>
-                <p className={`text-xl font-bold ${saldo.saldoFd < 0 ? "text-red-600" : "text-emerald-600"}`}>{fmt(saldo.saldoFd)}</p>
-              </div>
-            </div>
+            <KpiRow orcado={saldo.totalFdOrcado} utilizado={saldo.totalFdComprometido} saldo={saldo.saldoFd} />
 
-            {pctUsado > 0 && (
-              <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-2">
-                <div className="flex justify-between text-xs text-gray-500">
-                  <span>Utilização FD</span>
-                  <span className={pctUsado > 90 ? "text-red-600 font-semibold" : ""}>{pctUsado.toFixed(1)}%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
-                  <div
-                    className={`h-3 rounded-full transition-all ${pctUsado > 90 ? "bg-red-500" : pctUsado > 70 ? "bg-amber-500" : "bg-indigo-500"}`}
-                    style={{ width: `${Math.min(pctUsado, 100)}%` }}
-                  />
-                </div>
-                {pctUsado >= 90 && (
-                  <div className="flex items-center gap-2 text-xs text-red-600">
-                    <AlertTriangle className="h-3.5 w-3.5" />
-                    <span>Atenção: saldo de FD abaixo de 10%. Novas OCs FD podem ser bloqueadas.</span>
+            <Tabs defaultValue="itens" className="w-full">
+              <TabsList className="bg-gray-100">
+                <TabsTrigger value="itens" className={tabTriggerCls}><Layers className="h-3.5 w-3.5" /> Itens do FD ({saldo.itensFd.length})</TabsTrigger>
+                <TabsTrigger value="lancamentos" className={tabTriggerCls}><ListChecks className="h-3.5 w-3.5" /> Lançamentos FD ({ocsObra.length})</TabsTrigger>
+                <TabsTrigger value="historico" className={tabTriggerCls}><History className="h-3.5 w-3.5" /> Histórico ({historico.length})</TabsTrigger>
+              </TabsList>
+
+              {/* --- Itens considerados no FD (BDI FD) --- */}
+              <TabsContent value="itens" className="mt-4">
+                <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                      <DollarSign className="h-4 w-4 text-indigo-500" /> Itens considerados no FD
+                    </h3>
+                    <Button size="sm" className="h-7 text-xs bg-indigo-600 hover:bg-indigo-500 text-white gap-1"
+                      onClick={() => setShowAddItem(true)}>
+                      <Plus className="h-3 w-3" /> Adicionar Item
+                    </Button>
                   </div>
-                )}
-              </div>
-            )}
-
-            <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-                  <DollarSign className="h-4 w-4 text-indigo-500" /> Itens do BDI FD
-                </h3>
-                <Button size="sm" className="h-7 text-xs bg-indigo-600 hover:bg-indigo-500 text-white gap-1"
-                  onClick={() => setShowAddItem(true)}>
-                  <Plus className="h-3 w-3" /> Adicionar Item
-                </Button>
-              </div>
-              {saldo.itensFd.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-gray-200">
-                      <TableHead className="text-xs text-gray-500">Código</TableHead>
-                      <TableHead className="text-xs text-gray-500">Descrição</TableHead>
-                      <TableHead className="text-xs text-gray-500 text-right">Qtd</TableHead>
-                      <TableHead className="text-xs text-gray-500 text-right">Preço Unit</TableHead>
-                      <TableHead className="text-xs text-gray-500 text-right">Total</TableHead>
-                      <TableHead className="text-xs text-gray-500 w-32">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {saldo.itensFd.map((item: any) => (
-                      <TableRow key={item.id} className="border-gray-100">
-                        <TableCell className="text-xs font-mono text-gray-700">{item.codigoInsumo || "—"}</TableCell>
-                        <TableCell className="text-xs text-gray-900">{item.descricao}</TableCell>
-                        <TableCell className="text-xs text-right">{item.qtdOrcada}</TableCell>
-                        <TableCell className="text-xs text-right">{fmt(item.precoUnit)}</TableCell>
-                        <TableCell className="text-xs text-right font-semibold">{fmt(item.total)}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            <Button size="sm" variant="ghost" className="h-6 text-[10px] text-indigo-600 hover:text-indigo-800 gap-1"
-                              onClick={() => { setShowAjuste(item); setAjusteForm({ novoValor: String(item.total), justificativa: "", adminEmail: "", adminSenha: "" }); }}>
-                              <Shield className="h-3 w-3" /> Ajustar
-                            </Button>
-                            <Button size="sm" variant="ghost" className="h-6 text-[10px] text-red-600 hover:text-red-800 gap-1"
-                              onClick={() => { setShowRemoveItem(item); setRemoveForm({ justificativa: "", adminEmail: "", adminSenha: "" }); }}>
-                              <Trash2 className="h-3 w-3" /> Remover
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <p className="text-xs text-gray-400 text-center py-4">Nenhum item FD cadastrado neste orçamento.</p>
-              )}
-            </div>
-
-            {saldo.ocsComFd && (saldo.ocsComFd as any[]).length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
-                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-                  <Receipt className="h-4 w-4 text-indigo-500" /> OCs com Faturamento Direto
-                </h3>
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-gray-200">
-                      <TableHead className="text-xs text-gray-500">OC</TableHead>
-                      <TableHead className="text-xs text-gray-500">Descrição</TableHead>
-                      <TableHead className="text-xs text-gray-500">Modalidade</TableHead>
-                      <TableHead className="text-xs text-gray-500">Status FD</TableHead>
-                      <TableHead className="text-xs text-gray-500 text-right">Valor FD</TableHead>
-                      <TableHead className="text-xs text-gray-500 w-20">PDF</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(saldo.ocsComFd as any[]).map((oc: any) => (
-                      <TableRow key={oc.id} className="border-gray-100">
-                        <TableCell className="text-xs font-mono text-gray-700">{oc.numeroOc || `#${oc.id}`}</TableCell>
-                        <TableCell className="text-xs text-gray-900">{oc.descricao || "—"}</TableCell>
-                        <TableCell className="text-xs">
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${fdBadgeClass(oc.modalidadeFd)}`}>
-                            {fdBadgeLabel(oc.modalidadeFd)}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          <span className={`font-medium ${oc.fdStatus === "aprovado" ? "text-emerald-600" : "text-amber-600"}`}>
-                            {oc.fdStatus === "aprovado" ? "Aprovado" : "Pendente"}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-xs text-right font-semibold">{fmt(parseFloat(oc.fdValor ?? "0"))}</TableCell>
-                        <TableCell>
-                          {oc.modalidadeFd === "fd_cliente" && (
-                            <Button size="sm" variant="ghost" className="h-6 text-[10px] text-indigo-600 hover:text-indigo-800 gap-1"
-                              onClick={() => window.open(`/api/download/fd/${oc.id}?mode=view`, "_blank")}>
-                              <FileDown className="h-3 w-3" /> PDF
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-
-            {historico.length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
-                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-                  <History className="h-4 w-4 text-gray-400" /> Histórico de Ajustes FD
-                </h3>
-                <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {historico.map((h: any) => (
-                    <div key={h.id} className="flex items-start gap-3 text-xs border-b border-gray-100 pb-2">
-                      <div className="bg-indigo-100 text-indigo-700 rounded-full p-1.5 mt-0.5"><Shield className="h-3 w-3" /></div>
-                      <div className="flex-1">
-                        <p className="text-gray-900 font-medium">{h.descricao}</p>
-                        <p className="text-gray-500">{fmt(parseFloat(h.valorAnterior ?? "0"))} → {fmt(parseFloat(h.valorNovo ?? "0"))}</p>
-                        <p className="text-gray-400 mt-0.5">por {h.adminNome} — {h.justificativa}</p>
-                      </div>
-                      <span className="text-gray-400 text-[10px] shrink-0">{new Date(h.createdAt).toLocaleDateString("pt-BR")}</span>
-                    </div>
-                  ))}
+                  {saldo.itensFd.length > 0 ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-gray-200">
+                          <TableHead className="text-xs text-gray-500">Código</TableHead>
+                          <TableHead className="text-xs text-gray-500">Descrição</TableHead>
+                          <TableHead className="text-xs text-gray-500 text-right">Qtd</TableHead>
+                          <TableHead className="text-xs text-gray-500 text-right">Preço Unit</TableHead>
+                          <TableHead className="text-xs text-gray-500 text-right">Total</TableHead>
+                          <TableHead className="text-xs text-gray-500 w-32">Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {saldo.itensFd.map((item: any) => (
+                          <TableRow key={item.id} className="border-gray-100">
+                            <TableCell className="text-xs font-mono text-gray-700">{item.codigoInsumo || "—"}</TableCell>
+                            <TableCell className="text-xs text-gray-900">{item.descricao}</TableCell>
+                            <TableCell className="text-xs text-right">{item.qtdOrcada}</TableCell>
+                            <TableCell className="text-xs text-right">{fmt(item.precoUnit)}</TableCell>
+                            <TableCell className="text-xs text-right font-semibold">{fmt(item.total)}</TableCell>
+                            <TableCell>
+                              <div className="flex gap-1">
+                                <Button size="sm" variant="ghost" className="h-6 text-[10px] text-indigo-600 hover:text-indigo-800 gap-1"
+                                  onClick={() => { setShowAjuste(item); setAjusteForm({ novoValor: String(item.total), justificativa: "", adminEmail: "", adminSenha: "" }); }}>
+                                  <Shield className="h-3 w-3" /> Ajustar
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-6 text-[10px] text-red-600 hover:text-red-800 gap-1"
+                                  onClick={() => { setShowRemoveItem(item); setRemoveForm({ justificativa: "", adminEmail: "", adminSenha: "" }); }}>
+                                  <Trash2 className="h-3 w-3" /> Remover
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <p className="text-xs text-gray-400 text-center py-6">Nenhum item FD cadastrado neste orçamento.</p>
+                  )}
                 </div>
-              </div>
-            )}
+              </TabsContent>
+
+              {/* --- Lançamentos FD (OCs com numeração) --- */}
+              <TabsContent value="lancamentos" className="mt-4">
+                <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+                  <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                    <Receipt className="h-4 w-4 text-indigo-500" /> Lançamentos de FD (OCs)
+                  </h3>
+                  {ocsObra.length > 0 ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-gray-200">
+                          <TableHead className="text-xs text-gray-500">Nº FD / OC</TableHead>
+                          <TableHead className="text-xs text-gray-500">Data</TableHead>
+                          <TableHead className="text-xs text-gray-500">Descrição</TableHead>
+                          <TableHead className="text-xs text-gray-500">Modalidade</TableHead>
+                          <TableHead className="text-xs text-gray-500">Status</TableHead>
+                          <TableHead className="text-xs text-gray-500 text-right">Valor</TableHead>
+                          <TableHead className="text-xs text-gray-500 w-16">PDF</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {ocsObra.map((oc: any) => (
+                          <TableRow key={oc.id} className="border-gray-100">
+                            <TableCell className="text-xs font-mono text-gray-700">{oc.numeroOc || `#${oc.id}`}</TableCell>
+                            <TableCell className="text-xs text-gray-500">{fmtData(oc.data)}</TableCell>
+                            <TableCell className="text-xs text-gray-900 max-w-[260px] truncate">{oc.descricao || "—"}</TableCell>
+                            <TableCell className="text-xs">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${fdBadgeClass(oc.modalidadeFd)}`}>{fdBadgeLabel(oc.modalidadeFd)}</span>
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              <span className={`font-medium ${oc.fdStatus === "aprovado" ? "text-emerald-600" : "text-amber-600"}`}>{oc.fdStatus === "aprovado" ? "Aprovado" : "Pendente"}</span>
+                            </TableCell>
+                            <TableCell className="text-xs text-right font-semibold text-gray-900">{fmt(Number(oc.valorEfetivo ?? 0))}</TableCell>
+                            <TableCell>
+                              {oc.modalidadeFd === "fd_cliente" && (
+                                <Button size="sm" variant="ghost" className="h-6 text-[10px] text-indigo-600 hover:text-indigo-800 gap-1"
+                                  onClick={() => window.open(`/api/download/fd/${oc.id}?mode=view`, "_blank")}>
+                                  <FileDown className="h-3 w-3" /> PDF
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                      <tfoot>
+                        <tr className="border-t border-gray-200">
+                          <td colSpan={5} className="text-xs text-gray-500 font-medium pt-2 pr-3 text-right">Total utilizado</td>
+                          <td className="text-xs text-right font-bold text-amber-600 pt-2">{fmt(saldo.totalFdComprometido)}</td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </Table>
+                  ) : (
+                    <p className="text-xs text-gray-400 text-center py-6">Nenhum lançamento de FD para esta obra.</p>
+                  )}
+                  <p className="text-[10px] text-gray-400">Valor = valor FD aprovado quando informado; caso contrário, o total da OC.</p>
+                </div>
+              </TabsContent>
+
+              {/* --- Histórico de ajustes --- */}
+              <TabsContent value="historico" className="mt-4">
+                <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+                  <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                    <History className="h-4 w-4 text-gray-400" /> Histórico de Ajustes FD
+                  </h3>
+                  {historico.length > 0 ? (
+                    <div className="space-y-2 max-h-80 overflow-y-auto">
+                      {historico.map((h: any) => (
+                        <div key={h.id} className="flex items-start gap-3 text-xs border-b border-gray-100 pb-2">
+                          <div className="bg-indigo-100 text-indigo-700 rounded-full p-1.5 mt-0.5"><Shield className="h-3 w-3" /></div>
+                          <div className="flex-1">
+                            <p className="text-gray-900 font-medium">{h.descricao}</p>
+                            <p className="text-gray-500">{fmt(parseFloat(h.valorAnterior ?? "0"))} → {fmt(parseFloat(h.valorNovo ?? "0"))}</p>
+                            <p className="text-gray-400 mt-0.5">por {h.adminNome} — {h.justificativa}</p>
+                          </div>
+                          <span className="text-gray-400 text-[10px] shrink-0">{new Date(h.createdAt).toLocaleDateString("pt-BR")}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400 text-center py-6">Nenhum ajuste registrado para este orçamento.</p>
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
           </>
         )}
 
