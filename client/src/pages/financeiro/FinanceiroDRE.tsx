@@ -1,17 +1,25 @@
 import { useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
-import { BarChart2, TrendingUp, TrendingDown, RefreshCw, ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
+import {
+  BarChart2, TrendingUp, TrendingDown, RefreshCw, ChevronLeft, ChevronRight,
+  CalendarDays, Sparkles, Info, BookOpen, ExternalLink, AlertTriangle,
+  Lightbulb, Activity, ArrowUpRight, ArrowDownRight, Minus, ShieldCheck,
+} from "lucide-react";
+
+const NAVY = "#1B2A4A";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
-
 function formatPct(v: number) {
-  return `${v.toFixed(2)}%`;
+  return `${(v ?? 0).toFixed(2)}%`;
 }
 
 const MESES_PT = [
@@ -31,6 +39,7 @@ interface DRERow {
   isNegative?: boolean;
   percentOf?: number;
   highlight?: "green" | "red" | "blue";
+  info?: string;
 }
 
 type Sel =
@@ -39,11 +48,64 @@ type Sel =
   | { tipo: "semestral"; sem: number }
   | { tipo: "anual" };
 
+interface Fonte {
+  id: string;
+  titulo: string;
+  autor: string;
+  tipo: string;
+  url: string;
+  nota: string;
+}
+
+// Chip clicável que abre a ficha completa da fonte (autor, tipo, nota, link).
+function FonteChip({ fonte }: { fonte?: Fonte }) {
+  if (!fonte) return null;
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button className="inline-flex items-center gap-1 rounded-full border border-[#1B2A4A]/15 bg-[#1B2A4A]/[0.04] px-2 py-0.5 text-[11px] font-medium text-[#1B2A4A] hover:bg-[#1B2A4A]/10 transition-colors">
+          <BookOpen className="w-3 h-3 text-orange-500" />
+          <span className="max-w-[140px] truncate">{fonte.autor}</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 p-0 overflow-hidden" align="start">
+        <div className="bg-[#1B2A4A] px-4 py-3">
+          <div className="flex items-center gap-1.5 mb-1">
+            <BookOpen className="w-3.5 h-3.5 text-orange-400" />
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-300">{fonte.tipo}</span>
+          </div>
+          <p className="text-sm font-bold text-white leading-snug">{fonte.titulo}</p>
+          <p className="text-xs text-white/70 mt-0.5">{fonte.autor}</p>
+        </div>
+        <div className="p-4">
+          <p className="text-xs text-gray-600 leading-relaxed">{fonte.nota}</p>
+          <a
+            href={fonte.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-600 transition-colors"
+          >
+            <ExternalLink className="w-3.5 h-3.5" /> Abrir fonte
+          </a>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function FonteChips({ ids, map }: { ids: string[]; map: Record<string, Fonte> }) {
+  if (!ids?.length) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-2">
+      {ids.map((id) => <FonteChip key={id} fonte={map[id]} />)}
+    </div>
+  );
+}
+
 export default function FinanceiroDRE() {
   const { companyId } = useCompany();
   const hoje = new Date();
   const [ano, setAno] = useState(hoje.getFullYear());
-  // Seleção do período: mês, trimestre, semestre ou ano inteiro.
   const [sel, setSel] = useState<Sel>({ tipo: "mensal", mes: hoje.getMonth() + 1 });
 
   const tipoPeriodo: "mensal" | "trimestral" | "semestral" | "anual" = sel.tipo;
@@ -62,11 +124,10 @@ export default function FinanceiroDRE() {
   const chipCls = (active: boolean) =>
     `flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
       active
-        ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
+        ? "border-orange-500 bg-orange-50 text-orange-700 shadow-sm"
         : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
     }`;
 
-  // Disponibilidade por mês (pontinhos do seletor)
   const { data: disp } = (trpc as any).financial.getDREDisponibilidade.useQuery(
     { companyId, ano: `${ano}` },
     { enabled: !!companyId }
@@ -85,49 +146,83 @@ export default function FinanceiroDRE() {
     { enabled: !!companyId }
   );
 
+  // Análise de IA — sob demanda (botão), por ser uma chamada cara ao modelo.
+  const analiseMut = (trpc as any).financial.analiseDRE.useMutation();
+  const analise = analiseMut.data;
+  const fontesMap: Record<string, Fonte> = {};
+  (analise?.fontes ?? []).forEach((f: Fonte) => { fontesMap[f.id] = f; });
+  const analiseDesatualizada = analise && analise.periodo !== (dre?.periodo ?? periodo);
+
+  const gerarAnalise = () =>
+    analiseMut.mutate({ companyId, periodo, tipoPeriodo });
+
   const rows: DRERow[] = dre ? [
-    { label: "1. RECEITA BRUTA", value: dre.receitaBruta, isTotal: false, highlight: "green" },
-    { label: "  (-) Deduções da Receita", value: -dre.deducoes, indent: 1, isNegative: true },
-    { label: "= RECEITA LÍQUIDA", value: dre.receitaLiquida, isTotal: true, highlight: "blue" },
+    { label: "1. RECEITA BRUTA", value: dre.receitaBruta, highlight: "green", info: "Total faturado no período (vendas e serviços), antes de qualquer dedução." },
+    { label: "  (-) Deduções da Receita", value: -dre.deducoes, indent: 1, isNegative: true, info: "Impostos sobre vendas, devoluções e abatimentos que reduzem a receita bruta." },
+    { label: "= RECEITA LÍQUIDA", value: dre.receitaLiquida, isTotal: true, highlight: "blue", info: "Receita bruta menos as deduções. É a base de cálculo de todas as margens." },
     { label: "", value: 0, isSeparator: true },
-    { label: "  (-) Custos Diretos das Obras", value: -dre.custosObra, indent: 1, isNegative: true },
-    { label: "= LUCRO BRUTO", value: dre.lucroBruto, isTotal: true, percentOf: dre.receitaLiquida, highlight: dre.lucroBruto >= 0 ? "green" : "red" },
-    { label: "    Margem Bruta", value: dre.margemBruta, indent: 2 },
+    { label: "  (-) Custos Diretos das Obras", value: -dre.custosObra, indent: 1, isNegative: true, info: "Gastos diretamente ligados à execução das obras: material, mão de obra e subcontratos." },
+    { label: "= LUCRO BRUTO", value: dre.lucroBruto, isTotal: true, percentOf: dre.receitaLiquida, highlight: dre.lucroBruto >= 0 ? "green" : "red", info: "Receita líquida menos os custos diretos das obras." },
+    { label: "    Margem Bruta", value: dre.margemBruta, indent: 2, info: "Lucro bruto ÷ receita líquida. Mostra quanto sobra após os custos das obras." },
     { label: "", value: 0, isSeparator: true },
-    { label: "  (-) Despesas Fixas", value: -dre.despesasFixas, indent: 1, isNegative: true },
-    { label: "  (-) Despesas Variáveis", value: -dre.despesasVariaveis, indent: 1, isNegative: true },
-    { label: "= EBITDA", value: dre.ebitda, isTotal: true, percentOf: dre.receitaLiquida, highlight: dre.ebitda >= 0 ? "green" : "red" },
-    { label: "    Margem EBITDA", value: dre.margemEbitda, indent: 2 },
+    { label: "  (-) Despesas Fixas", value: -dre.despesasFixas, indent: 1, isNegative: true, info: "Gastos administrativos recorrentes (aluguel, salários do escritório, etc.)." },
+    { label: "  (-) Despesas Variáveis", value: -dre.despesasVariaveis, indent: 1, isNegative: true, info: "Gastos que variam com o nível de atividade (comissões, fretes, etc.)." },
+    { label: "= EBITDA", value: dre.ebitda, isTotal: true, percentOf: dre.receitaLiquida, highlight: dre.ebitda >= 0 ? "green" : "red", info: "Resultado operacional antes de juros, impostos, depreciação e amortização." },
+    { label: "    Margem EBITDA", value: dre.margemEbitda, indent: 2, info: "EBITDA ÷ receita líquida. Mede a eficiência operacional do negócio." },
     { label: "", value: 0, isSeparator: true },
-    { label: "  (+) Receitas Financeiras", value: dre.receitasFinanceiras, indent: 1 },
-    { label: "  (-) Despesas Financeiras", value: -dre.despesasFinanceiras, indent: 1, isNegative: true },
-    { label: "= RESULTADO FINANCEIRO", value: dre.resultadoFinanceiro, isTotal: true, highlight: dre.resultadoFinanceiro >= 0 ? "green" : "red" },
+    { label: "  (+) Receitas Financeiras", value: dre.receitasFinanceiras, indent: 1, info: "Juros e rendimentos de aplicações financeiras." },
+    { label: "  (-) Despesas Financeiras", value: -dre.despesasFinanceiras, indent: 1, isNegative: true, info: "Juros, tarifas bancárias e IOF pagos no período." },
+    { label: "= RESULTADO FINANCEIRO", value: dre.resultadoFinanceiro, isTotal: true, highlight: dre.resultadoFinanceiro >= 0 ? "green" : "red", info: "Receitas financeiras menos despesas financeiras." },
     { label: "", value: 0, isSeparator: true },
-    { label: "= LAIR (Antes dos Impostos)", value: dre.lair, isTotal: true, highlight: dre.lair >= 0 ? "green" : "red" },
-    { label: "  (-) Impostos sobre o Resultado", value: -dre.impostos, indent: 1, isNegative: true },
-    { label: "= LUCRO LÍQUIDO", value: dre.lucroLiquido, isTotal: true, highlight: dre.lucroLiquido >= 0 ? "green" : "red" },
-    { label: "    Margem Líquida", value: dre.margemLiquida, indent: 2 },
+    { label: "= LAIR (Antes dos Impostos)", value: dre.lair, isTotal: true, highlight: dre.lair >= 0 ? "green" : "red", info: "Lucro Antes do Imposto de Renda = EBITDA + resultado financeiro." },
+    { label: "  (-) Impostos sobre o Resultado", value: -dre.impostos, indent: 1, isNegative: true, info: "IRPJ, CSLL e demais tributos incidentes sobre o lucro." },
+    { label: "= LUCRO LÍQUIDO", value: dre.lucroLiquido, isTotal: true, highlight: dre.lucroLiquido >= 0 ? "green" : "red", info: "Resultado final do período, após todos os custos, despesas e impostos." },
+    { label: "    Margem Líquida", value: dre.margemLiquida, indent: 2, info: "Lucro líquido ÷ receita líquida. É a rentabilidade final do negócio." },
   ] : [];
 
   const isPct = (row: DRERow) => row.label.includes("Margem");
 
+  const saudeMap: Record<string, { label: string; cls: string; dot: string }> = {
+    excelente: { label: "Excelente", cls: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
+    boa: { label: "Boa", cls: "bg-blue-50 text-blue-700 border-blue-200", dot: "bg-blue-500" },
+    atencao: { label: "Atenção", cls: "bg-amber-50 text-amber-700 border-amber-200", dot: "bg-amber-500" },
+    critica: { label: "Crítica", cls: "bg-red-50 text-red-700 border-red-200", dot: "bg-red-500" },
+  };
+
+  const statusInd: Record<string, { cls: string; Icon: any; txt: string }> = {
+    acima: { cls: "text-blue-600 bg-blue-50 border-blue-200", Icon: ArrowUpRight, txt: "Acima do setor" },
+    dentro: { cls: "text-emerald-600 bg-emerald-50 border-emerald-200", Icon: Minus, txt: "Dentro do setor" },
+    abaixo: { cls: "text-amber-600 bg-amber-50 border-amber-200", Icon: ArrowDownRight, txt: "Abaixo do setor" },
+  };
+
+  const sevMap: Record<string, string> = {
+    alta: "bg-red-50 text-red-700 border-red-200",
+    media: "bg-amber-50 text-amber-700 border-amber-200",
+    baixa: "bg-gray-50 text-gray-600 border-gray-200",
+  };
+
   return (
     <DashboardLayout>
-      <div className="max-w-5xl mx-auto p-6 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <BarChart2 className="w-6 h-6 text-blue-600" />
-              DRE — Demonstrativo de Resultado
-            </h1>
-            <p className="text-sm text-gray-500 mt-1">Demonstrativo do Exercício conforme CPC</p>
+      <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-5">
+        {/* Header navy */}
+        <div className="rounded-2xl text-white p-5 sm:p-6 shadow-sm" style={{ background: `linear-gradient(135deg, ${NAVY} 0%, #243a63 100%)` }}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center">
+                <BarChart2 className="w-6 h-6 text-orange-400" />
+              </div>
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold leading-tight">DRE — Demonstrativo de Resultado</h1>
+                <p className="text-sm text-white/70 mt-0.5">Demonstração do Exercício (Lei 6.404/76 art. 187 · CPC 26) com análise inteligente</p>
+              </div>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => refetch()} className="self-start sm:self-auto bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white">
+              <RefreshCw className="w-4 h-4 mr-1.5" /> Atualizar
+            </Button>
           </div>
-          <Button variant="outline" size="sm" onClick={() => refetch()} className="self-start sm:self-auto">
-            <RefreshCw className="w-4 h-4 mr-1.5" /> Atualizar
-          </Button>
         </div>
 
-        {/* Seletor: Ano + Meses (chips) + Ano inteiro */}
+        {/* Seletor de período */}
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
@@ -157,7 +252,7 @@ export default function FinanceiroDRE() {
                     onClick={() => setSel({ tipo: "mensal", mes: num })}
                     className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
                       ${isSelected
-                        ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
+                        ? "border-orange-500 bg-orange-50 text-orange-700 shadow-sm"
                         : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"
                       }`}
                   >
@@ -174,28 +269,17 @@ export default function FinanceiroDRE() {
             <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-2">
               <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide mr-0.5">Trimestre</span>
               {[1, 2, 3, 4].map((t) => (
-                <button
-                  key={`t${t}`}
-                  onClick={() => setSel({ tipo: "trimestral", tri: t })}
-                  className={chipCls(sel.tipo === "trimestral" && sel.tri === t)}
-                >
+                <button key={`t${t}`} onClick={() => setSel({ tipo: "trimestral", tri: t })} className={chipCls(sel.tipo === "trimestral" && sel.tri === t)}>
                   {t}º Tri
                 </button>
               ))}
               <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide ml-2 mr-0.5">Semestre</span>
               {[1, 2].map((s) => (
-                <button
-                  key={`s${s}`}
-                  onClick={() => setSel({ tipo: "semestral", sem: s })}
-                  className={chipCls(sel.tipo === "semestral" && sel.sem === s)}
-                >
+                <button key={`s${s}`} onClick={() => setSel({ tipo: "semestral", sem: s })} className={chipCls(sel.tipo === "semestral" && sel.sem === s)}>
                   {s}º Sem
                 </button>
               ))}
-              <button
-                onClick={() => setSel({ tipo: "anual" })}
-                className={`${chipCls(sel.tipo === "anual")} ml-auto`}
-              >
+              <button onClick={() => setSel({ tipo: "anual" })} className={`${chipCls(sel.tipo === "anual")} ml-auto`}>
                 <CalendarDays className="w-3.5 h-3.5" /> Ano inteiro ({ano})
               </button>
             </div>
@@ -204,22 +288,27 @@ export default function FinanceiroDRE() {
 
         {/* KPIs rápidos */}
         {dre && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
             {[
-              { label: "Receita Líquida", value: dre.receitaLiquida, icon: TrendingUp, color: "text-blue-600" },
-              { label: "Lucro Bruto", value: dre.lucroBruto, icon: BarChart2, color: dre.lucroBruto >= 0 ? "text-green-600" : "text-red-600" },
-              { label: "EBITDA", value: dre.ebitda, icon: BarChart2, color: dre.ebitda >= 0 ? "text-green-600" : "text-red-600" },
-              { label: "Lucro Líquido", value: dre.lucroLiquido, icon: dre.lucroLiquido >= 0 ? TrendingUp : TrendingDown, color: dre.lucroLiquido >= 0 ? "text-green-600" : "text-red-600" },
+              { label: "Receita Líquida", value: dre.receitaLiquida, pct: null, icon: TrendingUp, color: "text-blue-600", ring: "ring-blue-100" },
+              { label: "Lucro Bruto", value: dre.lucroBruto, pct: dre.margemBruta, icon: BarChart2, color: dre.lucroBruto >= 0 ? "text-emerald-600" : "text-red-600", ring: dre.lucroBruto >= 0 ? "ring-emerald-100" : "ring-red-100" },
+              { label: "EBITDA", value: dre.ebitda, pct: dre.margemEbitda, icon: Activity, color: dre.ebitda >= 0 ? "text-emerald-600" : "text-red-600", ring: dre.ebitda >= 0 ? "ring-emerald-100" : "ring-red-100" },
+              { label: "Lucro Líquido", value: dre.lucroLiquido, pct: dre.margemLiquida, icon: dre.lucroLiquido >= 0 ? TrendingUp : TrendingDown, color: dre.lucroLiquido >= 0 ? "text-emerald-600" : "text-red-600", ring: dre.lucroLiquido >= 0 ? "ring-emerald-100" : "ring-red-100" },
             ].map(kpi => {
               const Icon = kpi.icon;
               return (
                 <Card key={kpi.label} className="border-0 shadow-sm">
                   <CardContent className="p-4">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Icon className={`w-4 h-4 ${kpi.color}`} />
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className={`w-7 h-7 rounded-lg bg-gray-50 ring-1 ${kpi.ring} flex items-center justify-center`}>
+                        <Icon className={`w-4 h-4 ${kpi.color}`} />
+                      </span>
                       <span className="text-xs text-gray-500">{kpi.label}</span>
                     </div>
-                    <p className={`text-lg font-bold ${kpi.color}`}>{formatBRL(kpi.value)}</p>
+                    <p className={`text-base sm:text-lg font-bold ${kpi.color} tabular-nums`}>{formatBRL(kpi.value)}</p>
+                    {kpi.pct !== null && (
+                      <p className="text-[11px] text-gray-400 mt-0.5">Margem {formatPct(kpi.pct)}</p>
+                    )}
                   </CardContent>
                 </Card>
               );
@@ -227,16 +316,176 @@ export default function FinanceiroDRE() {
           </div>
         )}
 
+        {/* Análise de IA */}
+        <Card className="border-0 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-orange-50/60 to-transparent">
+            <div className="flex items-center gap-2.5">
+              <span className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center">
+                <Sparkles className="w-5 h-5 text-orange-500" />
+              </span>
+              <div>
+                <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  Análise Inteligente
+                  {analise?.saude && (
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${saudeMap[analise.saude]?.cls ?? ""}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${saudeMap[analise.saude]?.dot ?? "bg-gray-400"}`} /> {saudeMap[analise.saude]?.label ?? analise.saude}
+                    </span>
+                  )}
+                </h2>
+                <p className="text-xs text-gray-500">Diagnóstico do resultado com benchmarks do setor de construção e fontes citadas</p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              onClick={gerarAnalise}
+              disabled={analiseMut.isPending || !dre}
+              className="bg-orange-500 hover:bg-orange-600 text-white shrink-0"
+            >
+              <Sparkles className="w-4 h-4 mr-1.5" />
+              {analiseMut.isPending ? "Analisando..." : analise ? "Refazer análise" : "Analisar com IA"}
+            </Button>
+          </div>
+
+          <CardContent className="p-5">
+            {analiseMut.isPending ? (
+              <div className="space-y-3">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-2/3" />
+                <div className="grid sm:grid-cols-2 gap-3 pt-2">
+                  <Skeleton className="h-20 w-full rounded-xl" />
+                  <Skeleton className="h-20 w-full rounded-xl" />
+                </div>
+              </div>
+            ) : analiseMut.isError ? (
+              <p className="text-sm text-red-600">Não foi possível gerar a análise. Tente novamente em instantes.</p>
+            ) : !analise ? (
+              <div className="text-center py-6">
+                <p className="text-sm text-gray-500 max-w-md mx-auto">
+                  Clique em <span className="font-semibold text-orange-600">Analisar com IA</span> para receber um diagnóstico do resultado de <span className="font-medium">{tituloPeriodo}</span>, comparado aos indicadores do setor de construção e fundamentado em literatura financeira.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {analiseDesatualizada && (
+                  <div className="flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
+                    <Info className="w-3.5 h-3.5 shrink-0" />
+                    Esta análise é do período <strong>{analise.periodo}</strong>. Refaça para o período selecionado.
+                  </div>
+                )}
+
+                {/* Resumo executivo */}
+                <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4">
+                  <div className="flex items-center gap-1.5 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                    <ShieldCheck className="w-3.5 h-3.5" /> Resumo executivo
+                  </div>
+                  <p className="text-sm text-gray-700 leading-relaxed">{analise.resumoExecutivo}</p>
+                </div>
+
+                {/* Indicadores x setor */}
+                {analise.indicadores?.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                      <Activity className="w-3.5 h-3.5" /> Indicadores x setor
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      {analise.indicadores.map((ind: any, i: number) => {
+                        const st = statusInd[ind.status] ?? statusInd.dentro;
+                        const StIcon = st.Icon;
+                        return (
+                          <div key={i} className="rounded-xl border border-gray-100 p-3.5 hover:border-gray-200 transition-colors">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <p className="text-sm font-semibold text-gray-800">{ind.nome}</p>
+                                <p className="text-lg font-bold tabular-nums" style={{ color: NAVY }}>
+                                  {ind.unidade === "%" ? formatPct(ind.valor) : formatBRL(ind.valor)}
+                                </p>
+                              </div>
+                              <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${st.cls}`}>
+                                <StIcon className="w-3 h-3" /> {st.txt}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-gray-400 mt-1">Setor: <span className="font-medium text-gray-500">{ind.benchmarkSetor}</span></p>
+                            <p className="text-xs text-gray-600 leading-relaxed mt-1.5">{ind.leitura}</p>
+                            <FonteChips ids={ind.fontes} map={fontesMap} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Riscos + Recomendações */}
+                <div className="grid md:grid-cols-2 gap-4">
+                  {analise.riscos?.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> Riscos identificados
+                      </div>
+                      <div className="space-y-2.5">
+                        {analise.riscos.map((r: any, i: number) => (
+                          <div key={i} className="rounded-xl border border-gray-100 p-3">
+                            <div className="flex items-start gap-2">
+                              <span className={`mt-0.5 inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${sevMap[r.severidade] ?? sevMap.media}`}>{r.severidade}</span>
+                              <p className="text-xs text-gray-700 leading-relaxed">{r.texto}</p>
+                            </div>
+                            <FonteChips ids={r.fontes} map={fontesMap} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {analise.recomendacoes?.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                        <Lightbulb className="w-3.5 h-3.5 text-orange-500" /> Recomendações
+                      </div>
+                      <div className="space-y-2.5">
+                        {analise.recomendacoes.map((r: any, i: number) => (
+                          <div key={i} className="rounded-xl border border-gray-100 p-3">
+                            <div className="flex items-start gap-2">
+                              <Lightbulb className="w-3.5 h-3.5 text-orange-400 mt-0.5 shrink-0" />
+                              <p className="text-xs text-gray-700 leading-relaxed">{r.texto}</p>
+                            </div>
+                            <FonteChips ids={r.fontes} map={fontesMap} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Todas as fontes citadas */}
+                {analise.fontes?.length > 0 && (
+                  <div className="pt-3 border-t border-gray-100">
+                    <div className="flex items-center gap-1.5 mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                      <BookOpen className="w-3.5 h-3.5" /> Fontes citadas ({analise.fontes.length})
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {analise.fontes.map((f: Fonte) => <FonteChip key={f.id} fonte={f} />)}
+                    </div>
+                  </div>
+                )}
+
+                <p className="text-[11px] text-gray-400 italic">
+                  Análise gerada por IA com base nos lançamentos do período e em fontes públicas do setor. Use como apoio à decisão, não como aconselhamento contábil/fiscal definitivo.
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Tabela DRE */}
         <Card className="border-0 shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">
-              DRE — {tituloPeriodo}
-            </CardTitle>
-          </CardHeader>
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <h2 className="text-base font-bold text-gray-900">DRE — {tituloPeriodo}</h2>
+            <Badge variant="outline" className="text-[11px] text-gray-500 font-normal">passe o mouse no <Info className="w-3 h-3 mx-1" /> para a legenda</Badge>
+          </div>
           <CardContent className="p-0">
             {isLoading ? (
-              <div className="p-10 text-center text-gray-500">Calculando DRE...</div>
+              <div className="p-6 space-y-3">
+                {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-6 w-full" />)}
+              </div>
             ) : !dre ? (
               <div className="p-10 text-center text-gray-400">Selecione um período para visualizar o DRE.</div>
             ) : (
@@ -248,7 +497,7 @@ export default function FinanceiroDRE() {
                   const displayVal = isMargin ? formatPct(val) : formatBRL(Math.abs(val));
 
                   let textColor = "text-gray-700";
-                  if (row.highlight === "green") textColor = "text-green-700";
+                  if (row.highlight === "green") textColor = "text-emerald-700";
                   if (row.highlight === "red") textColor = "text-red-600";
                   if (row.highlight === "blue") textColor = "text-blue-700";
                   if (isMargin) textColor = val >= 0 ? "text-emerald-600" : "text-red-600";
@@ -256,10 +505,24 @@ export default function FinanceiroDRE() {
                   return (
                     <div
                       key={idx}
-                      className={`flex items-center justify-between px-5 py-2.5 ${row.isTotal ? "font-semibold bg-gray-50" : ""} hover:bg-gray-50/50`}
+                      className={`flex items-center justify-between px-5 py-2.5 ${row.isTotal ? "font-semibold bg-gray-50/80" : ""} hover:bg-orange-50/30 transition-colors`}
                       style={{ paddingLeft: `${20 + (row.indent ?? 0) * 20}px` }}
                     >
-                      <span className={`text-sm ${row.isTotal ? "font-bold" : "text-gray-600"}`}>{row.label}</span>
+                      <span className={`text-sm flex items-center gap-1.5 ${row.isTotal ? "font-bold text-gray-800" : "text-gray-600"}`}>
+                        {row.label}
+                        {row.info && (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button className="text-gray-300 hover:text-orange-500 transition-colors" aria-label="legenda">
+                                <Info className="w-3.5 h-3.5" />
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-64 text-xs text-gray-600 leading-relaxed" align="start">
+                              {row.info}
+                            </PopoverContent>
+                          </Popover>
+                        )}
+                      </span>
                       <span className={`text-sm font-medium ${textColor} tabular-nums`}>
                         {isMargin ? displayVal : (row.isNegative ? `(${displayVal})` : displayVal)}
                       </span>

@@ -3683,6 +3683,20 @@ export const financialRouter = router({
     }
   }),
 
+  analiseDRE: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    periodo: z.string(),
+    tipoPeriodo: z.enum(["mensal", "trimestral", "semestral", "anual"]).default("mensal"),
+  })).mutation(async ({ ctx, input }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    try {
+      const { analisarDRE } = await import("../services/dreAnaliseIA");
+      return await analisarDRE(input.companyId, input.periodo, input.tipoPeriodo);
+    } catch (e: any) {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: e?.message ?? "Erro ao gerar análise do DRE" });
+    }
+  }),
+
   getDREDisponibilidade: protectedProcedure.input(z.object({
     companyId: z.number(),
     ano: z.string().regex(/^\d{4}$/, "Ano deve ter 4 dígitos."),
