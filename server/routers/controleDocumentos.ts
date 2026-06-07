@@ -2,8 +2,8 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb, userCanSeeAvisoStatus, userCanAccessEmployeeDossier } from "../db";
 import { TRPCError } from "@trpc/server";
-import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, employeeSiteHistory, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, heSolicitacaoFuncionarios, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados, ddsSessoes, ddsSessaoFuncionarios, signatureSessions, signatureSigners, equipamentoLocadoEventos, equipamentosLocados, users } from "../../drizzle/schema";
-import { eq, and, desc, sql, ne, isNull, inArray, gte, lte } from "drizzle-orm";
+import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, employeeSiteHistory, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, heSolicitacaoFuncionarios, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados, ddsSessoes, ddsSessaoFuncionarios, signatureSessions, signatureSigners, equipamentoLocadoEventos, equipamentosLocados, users, clienteAvaliacoes } from "../../drizzle/schema";
+import { eq, and, desc, sql, ne, isNull, inArray, gte, lte, or, ilike } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
 import { verificarAssinaturaMemorial } from "../services/assinaturaMemorial";
@@ -2322,8 +2322,81 @@ export const controleDocumentosRouter = router({
         if (ant) recontratadoDeCodigo = ant.codigoInterno || null;
       }
 
+      // ===================== DESEMPENHO DO COLABORADOR (Rev. 2853) =====================
+      // Indicadores de performance que faltavam no Raio-X: atrasos (resumo), obras
+      // GERIDAS quando o colaborador é gestor (responsavelId), e a AVALIAÇÃO DO CLIENTE
+      // (Portal do Cliente, anônima) cruzada por obra gerida OU pelo nome do gestor.
+      // OBS.: a avaliação INTERNA de desempenho já existe (aba "Avaliações" via
+      // trpc.avaliacao.avaliacoes.getByEmployee) — não é reprocessada aqui.
+
+      // 1) ATRASOS — total de ocorrências + minutos acumulados (parse "H:MM").
+      const atrasosTotalMinutos = atrasosDetalhados.reduce((acc: number, a: any) => {
+        const partes = String(a.atraso || "0:00").split(":");
+        const h = parseInt(partes[0], 10) || 0;
+        const m = parseInt(partes[1], 10) || 0;
+        return acc + (h * 60 + m);
+      }, 0);
+
+      // 2) OBRAS GERIDAS — obras em que este colaborador é o responsável (gestor).
+      const obrasGeridas = await db.select({
+        id: obras.id, nome: obras.nome, codigo: obras.codigo,
+        cidade: obras.cidade, status: obras.status, cliente: obras.cliente,
+      }).from(obras)
+        .where(and(eq(obras.responsavelId, input.employeeId), eq(obras.companyId, emp.companyId), isNull(obras.deletedAt)))
+        .orderBy(desc(obras.id));
+      const obrasGeridasIds = obrasGeridas.map(o => o.id);
+
+      // 3) AVALIAÇÃO DO CLIENTE — Portal do Cliente (anônima). Cruza por obra gerida
+      // OU pelo nome do gestor (snapshot gestor_nome no momento da avaliação). Ignora
+      // canceladas. Sem vínculo nenhum → lista vazia (nada a mostrar).
+      const filtrosCliente: any[] = [];
+      if (obrasGeridasIds.length > 0) filtrosCliente.push(inArray(clienteAvaliacoes.obraId, obrasGeridasIds));
+      if (emp.nomeCompleto && emp.nomeCompleto.trim() !== "") {
+        filtrosCliente.push(ilike(clienteAvaliacoes.gestorNome, emp.nomeCompleto.trim()));
+      }
+      let avalClienteRows: any[] = [];
+      if (filtrosCliente.length > 0) {
+        avalClienteRows = await db.select({
+          id: clienteAvaliacoes.id, obraId: clienteAvaliacoes.obraId, obraNome: clienteAvaliacoes.obraNome,
+          notaGeral: clienteAvaliacoes.notaGeral, notaGestor: clienteAvaliacoes.notaGestor,
+          notaEquipe: clienteAvaliacoes.notaEquipe, notaPrazo: clienteAvaliacoes.notaPrazo,
+          notaQualidade: clienteAvaliacoes.notaQualidade, notaObra: clienteAvaliacoes.notaObra,
+          comentarioPositivo: clienteAvaliacoes.comentarioPositivo, comentarioMelhoria: clienteAvaliacoes.comentarioMelhoria,
+          comentarioGestor: clienteAvaliacoes.comentarioGestor, anoPeriodo: clienteAvaliacoes.anoPeriodo,
+          criadoEm: clienteAvaliacoes.criadoEm, gestorNome: clienteAvaliacoes.gestorNome,
+        }).from(clienteAvaliacoes)
+          .where(and(
+            eq(clienteAvaliacoes.companyId, emp.companyId),
+            isNull(clienteAvaliacoes.canceladaEm),
+            or(...filtrosCliente),
+          ))
+          .orderBy(desc(clienteAvaliacoes.criadoEm))
+          .limit(200);
+      }
+      const _avg = (vals: Array<number | null>) => {
+        const nums = vals.filter((n): n is number => n != null);
+        return nums.length > 0 ? Math.round((nums.reduce((s, v) => s + v, 0) / nums.length) * 10) / 10 : null;
+      };
+      const avaliacaoCliente = {
+        total: avalClienteRows.length,
+        mediaGeral: _avg(avalClienteRows.map(r => r.notaGeral)),
+        mediaGestor: _avg(avalClienteRows.map(r => r.notaGestor)),
+        mediaEquipe: _avg(avalClienteRows.map(r => r.notaEquipe)),
+        mediaPrazo: _avg(avalClienteRows.map(r => r.notaPrazo)),
+        mediaQualidade: _avg(avalClienteRows.map(r => r.notaQualidade)),
+        historico: avalClienteRows.slice(0, 30),
+      };
+
+      const desempenho = {
+        isGestor: obrasGeridas.length > 0,
+        atrasos: { total: atrasosDetalhados.length, totalMinutos: atrasosTotalMinutos },
+        obrasGeridas,
+        avaliacaoCliente,
+      };
+
       return {
         funcionario: { ...emp, obraAtualNome, recontratadoDeCodigo },
+        desempenho,
         funcaoDetalhes,
         asos: asosComStatus,
         treinamentos: empTreinamentos,

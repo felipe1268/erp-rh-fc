@@ -319,6 +319,7 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   const atrasosDetalhados = raioX?.atrasosDetalhados || [];
   const faltasDetalhadas = raioX?.faltasDetalhadas || [];
   const assiduidade = (raioX as any)?.assiduidade || { media: 100, totalDiasTrabalhados: 0, totalFaltas: 0, mesesAvaliados: 0 };
+  const desempenho = (raioX as any)?.desempenho || { isGestor: false, atrasos: { total: 0, totalMinutos: 0 }, obrasGeridas: [], avaliacaoCliente: { total: 0, mediaGeral: null, mediaGestor: null, mediaEquipe: null, mediaPrazo: null, mediaQualidade: null, historico: [] } };
   const folhaPagamento = raioX?.folhaPagamento || [];
   const episEntregas = raioX?.epis || [];
   const horasExtras = raioX?.horasExtras || [];
@@ -1115,6 +1116,47 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                     iconColor: assiduidade.media >= 95 ? "text-emerald-400" : assiduidade.media >= 85 ? "text-amber-400" : "text-red-400",
                     icon: UserCheck,
                   }] : []),
+                  // Rev. 2853 — Indicadores de DESEMPENHO
+                  {
+                    label: "Atrasos",
+                    value: desempenho.atrasos.total as any,
+                    tab: "ponto",
+                    bg: desempenho.atrasos.total === 0 ? "bg-emerald-50 border-emerald-200" : desempenho.atrasos.total >= 5 ? "bg-red-50 border-red-300" : "bg-amber-50 border-amber-200",
+                    textColor: desempenho.atrasos.total === 0 ? "text-emerald-700" : desempenho.atrasos.total >= 5 ? "text-red-700" : "text-amber-700",
+                    iconColor: desempenho.atrasos.total === 0 ? "text-emerald-400" : desempenho.atrasos.total >= 5 ? "text-red-400" : "text-amber-400",
+                    icon: Timer,
+                  },
+                  ...(() => {
+                    const medias = avaliacoesList.map((a: any) => parseFloat(a.mediaGeral || '0')).filter((n: number) => n > 0);
+                    const mediaInt = medias.length > 0 ? Math.round((medias.reduce((s: number, v: number) => s + v, 0) / medias.length) * 10) / 10 : null;
+                    return [{
+                      label: "Aval. Interna",
+                      value: (mediaInt != null ? `${mediaInt}` : "—") as any,
+                      tab: "avaliacoes",
+                      bg: mediaInt == null ? "bg-gray-50 border-gray-200" : mediaInt >= 4 ? "bg-emerald-50 border-emerald-200" : mediaInt >= 3 ? "bg-amber-50 border-amber-200" : "bg-red-50 border-red-300",
+                      textColor: mediaInt == null ? "text-gray-500" : mediaInt >= 4 ? "text-emerald-700" : mediaInt >= 3 ? "text-amber-700" : "text-red-700",
+                      iconColor: mediaInt == null ? "text-gray-400" : mediaInt >= 4 ? "text-emerald-400" : mediaInt >= 3 ? "text-amber-400" : "text-red-400",
+                      icon: Star,
+                    }];
+                  })(),
+                  {
+                    label: "Aval. Cliente",
+                    value: (desempenho.avaliacaoCliente.mediaGeral != null ? `${desempenho.avaliacaoCliente.mediaGeral}` : "—") as any,
+                    tab: "desempenho",
+                    bg: desempenho.avaliacaoCliente.mediaGeral == null ? "bg-gray-50 border-gray-200" : desempenho.avaliacaoCliente.mediaGeral >= 8 ? "bg-emerald-50 border-emerald-200" : desempenho.avaliacaoCliente.mediaGeral >= 6 ? "bg-amber-50 border-amber-200" : "bg-red-50 border-red-300",
+                    textColor: desempenho.avaliacaoCliente.mediaGeral == null ? "text-gray-500" : desempenho.avaliacaoCliente.mediaGeral >= 8 ? "text-emerald-700" : desempenho.avaliacaoCliente.mediaGeral >= 6 ? "text-amber-700" : "text-red-700",
+                    iconColor: desempenho.avaliacaoCliente.mediaGeral == null ? "text-gray-400" : desempenho.avaliacaoCliente.mediaGeral >= 8 ? "text-emerald-400" : desempenho.avaliacaoCliente.mediaGeral >= 6 ? "text-amber-400" : "text-red-400",
+                    icon: Handshake,
+                  },
+                  ...(desempenho.isGestor ? [{
+                    label: "Obras Geridas",
+                    value: desempenho.obrasGeridas.length as any,
+                    tab: "desempenho",
+                    bg: "bg-cyan-50 border-cyan-200",
+                    textColor: "text-cyan-700",
+                    iconColor: "text-cyan-400",
+                    icon: Building2,
+                  }] : []),
                 ].map(c => {
                   const Icon = c.icon;
                   return (
@@ -1282,6 +1324,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                     color: "amber",
                     tabs: [
                       { value: "avaliacoes", label: "Avaliações", icon: Star, count: avaliacoesList.length },
+                      { value: "desempenho", label: "Desempenho", icon: Handshake, count: desempenho.obrasGeridas.length + desempenho.avaliacaoCliente.total },
                     ],
                   },
                   {
@@ -3227,6 +3270,135 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                     })()}
                   </div>
                 )}
+              </TabsContent>
+
+              {/* ============ DESEMPENHO / CLIENTE (Rev. 2853) ============ */}
+              <TabsContent value="desempenho" className="mt-4">
+                <div className="space-y-4">
+                  {/* Resumo de indicadores */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="bg-white rounded-xl border p-4 text-center">
+                      <div className={`text-2xl font-bold ${desempenho.atrasos.total === 0 ? "text-emerald-700" : desempenho.atrasos.total >= 5 ? "text-red-700" : "text-amber-700"}`}>{fmtNum(desempenho.atrasos.total)}</div>
+                      <div className="text-[11px] text-muted-foreground font-medium mt-0.5">Atrasos no Ponto</div>
+                      {desempenho.atrasos.totalMinutos > 0 && (
+                        <div className="text-[10px] text-gray-400 mt-0.5">{Math.floor(desempenho.atrasos.totalMinutos / 60)}h{String(desempenho.atrasos.totalMinutos % 60).padStart(2, "0")} acumulados</div>
+                      )}
+                    </div>
+                    <div className="bg-white rounded-xl border p-4 text-center">
+                      <div className="text-2xl font-bold text-cyan-700">{fmtNum(desempenho.obrasGeridas.length)}</div>
+                      <div className="text-[11px] text-muted-foreground font-medium mt-0.5">Obras Geridas</div>
+                      <div className="text-[10px] text-gray-400 mt-0.5">{desempenho.isGestor ? "É gestor de obra" : "Não é gestor"}</div>
+                    </div>
+                    <div className="bg-white rounded-xl border p-4 text-center">
+                      <div className="text-2xl font-bold text-amber-700">{desempenho.avaliacaoCliente.mediaGeral != null ? desempenho.avaliacaoCliente.mediaGeral : "—"}</div>
+                      <div className="text-[11px] text-muted-foreground font-medium mt-0.5">Aval. Cliente (0-10)</div>
+                      <div className="text-[10px] text-gray-400 mt-0.5">{fmtNum(desempenho.avaliacaoCliente.total)} avaliações</div>
+                    </div>
+                    <div className="bg-white rounded-xl border p-4 text-center">
+                      <div className="text-2xl font-bold text-purple-700">{desempenho.avaliacaoCliente.mediaGestor != null ? desempenho.avaliacaoCliente.mediaGestor : "—"}</div>
+                      <div className="text-[11px] text-muted-foreground font-medium mt-0.5">Nota como Gestor</div>
+                      <div className="text-[10px] text-gray-400 mt-0.5">média do cliente</div>
+                    </div>
+                  </div>
+
+                  {/* Obras geridas */}
+                  {desempenho.obrasGeridas.length > 0 && (
+                    <div className="bg-white rounded-xl border p-6">
+                      <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-4">
+                        <Building2 className="h-5 w-5 text-cyan-600" /> Obras que Gerencia — {desempenho.obrasGeridas.length}
+                      </h3>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b bg-muted/30">
+                              <th className="p-2 text-left">Código</th>
+                              <th className="p-2 text-left">Obra</th>
+                              <th className="p-2 text-left">Cliente</th>
+                              <th className="p-2 text-left">Cidade</th>
+                              <th className="p-2 text-center">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {desempenho.obrasGeridas.map((o: any) => (
+                              <tr key={o.id} className="border-b last:border-0 hover:bg-gray-50">
+                                <td className="p-2 text-xs font-mono text-gray-500">{o.codigo || "—"}</td>
+                                <td className="p-2 font-medium">{o.nome}</td>
+                                <td className="p-2 text-xs">{o.cliente || "—"}</td>
+                                <td className="p-2 text-xs">{o.cidade || "—"}</td>
+                                <td className="p-2 text-center"><Badge variant="outline" className="text-[10px]">{o.status}</Badge></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Avaliação do cliente */}
+                  {desempenho.avaliacaoCliente.total === 0 ? (
+                    <div className="bg-white rounded-xl border p-6 text-center py-10 text-muted-foreground">
+                      <Handshake className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                      Nenhuma avaliação do cliente registrada para as obras deste colaborador.
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-xl border p-6">
+                      <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-4">
+                        <Handshake className="h-5 w-5 text-amber-500" /> Avaliação do Cliente — {desempenho.avaliacaoCliente.total}
+                      </h3>
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+                        {[
+                          { label: "Geral", v: desempenho.avaliacaoCliente.mediaGeral },
+                          { label: "Gestor", v: desempenho.avaliacaoCliente.mediaGestor },
+                          { label: "Equipe", v: desempenho.avaliacaoCliente.mediaEquipe },
+                          { label: "Prazo", v: desempenho.avaliacaoCliente.mediaPrazo },
+                          { label: "Qualidade", v: desempenho.avaliacaoCliente.mediaQualidade },
+                        ].map((m) => {
+                          const cor = m.v == null ? "text-gray-400" : m.v >= 8 ? "text-emerald-700" : m.v >= 6 ? "text-amber-700" : "text-red-700";
+                          return (
+                            <div key={m.label} className="bg-gray-50 rounded-lg p-3 text-center border">
+                              <div className={`text-xl font-bold ${cor}`}>{m.v != null ? m.v : "—"}</div>
+                              <div className="text-[10px] text-gray-500 font-medium">{m.label}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b bg-muted/30">
+                              <th className="p-2 text-left">Data</th>
+                              <th className="p-2 text-left">Obra</th>
+                              <th className="p-2 text-center">Geral</th>
+                              <th className="p-2 text-center">Gestor</th>
+                              <th className="p-2 text-center">Equipe</th>
+                              <th className="p-2 text-center">Prazo</th>
+                              <th className="p-2 text-center">Qualidade</th>
+                              <th className="p-2 text-left">Comentários</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {desempenho.avaliacaoCliente.historico.map((a: any) => {
+                              const cor = (n: any) => n == null ? "text-gray-400" : Number(n) >= 8 ? "text-emerald-700 font-bold" : Number(n) >= 6 ? "text-amber-700 font-bold" : "text-red-700 font-bold";
+                              const coments = [a.comentarioPositivo, a.comentarioMelhoria, a.comentarioGestor].filter(Boolean).join(" • ");
+                              return (
+                                <tr key={a.id} className="border-b last:border-0 hover:bg-gray-50 align-top">
+                                  <td className="p-2 text-xs whitespace-nowrap">{a.criadoEm ? formatDate(String(a.criadoEm).split("T")[0]) : (a.anoPeriodo || "—")}</td>
+                                  <td className="p-2 text-xs font-medium">{a.obraNome || "—"}</td>
+                                  <td className={`p-2 text-center ${cor(a.notaGeral)}`}>{a.notaGeral ?? "—"}</td>
+                                  <td className={`p-2 text-center ${cor(a.notaGestor)}`}>{a.notaGestor ?? "—"}</td>
+                                  <td className={`p-2 text-center ${cor(a.notaEquipe)}`}>{a.notaEquipe ?? "—"}</td>
+                                  <td className={`p-2 text-center ${cor(a.notaPrazo)}`}>{a.notaPrazo ?? "—"}</td>
+                                  <td className={`p-2 text-center ${cor(a.notaQualidade)}`}>{a.notaQualidade ?? "—"}</td>
+                                  <td className="p-2 text-xs text-gray-600 max-w-xs">{coments || "—"}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </TabsContent>
 
               {/* ============ HABILIDADES ============ */}

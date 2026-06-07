@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2853 — **RAIO-X DO FUNCIONÁRIO — NOVOS INDICADORES DE DESEMPENHO: ATRASOS,
+ * OBRAS GERIDAS (SE GESTOR), AVALIAÇÃO INTERNA E AVALIAÇÃO DO CLIENTE.**
+ *
+ * PEDIDO: incluir no Raio-X do colaborador indicadores de desempenho — atrasos, o
+ * desempenho das obras que ele gerencia (quando é gestor), a avaliação interna e a
+ * avaliação do cliente.
+ *
+ * CONTEXTO: a avaliação INTERNA de desempenho JÁ existia (aba "Avaliações" via
+ * `trpc.avaliacao.avaliacoes.getByEmployee`, modelo de pilares mediaPilar1/2/3 +
+ * recomendação) e os ATRASOS já vinham no return como `atrasosDetalhados` (campo
+ * `.atraso` = "H:MM", exibidos na aba Ponto). FALTAVA: (a) consolidar tudo em
+ * INDICADORES no topo, (b) as OBRAS GERIDAS pelo colaborador e (c) a AVALIAÇÃO DO
+ * CLIENTE (Portal do Cliente, anônima, notas 0-10) das obras que ele gerencia.
+ *
+ * O QUE FOI FEITO:
+ *  - BACKEND (`server/routers/controleDocumentos.ts`, proc `docs.raioX`): NOVO bloco
+ *    `desempenho` no return, montado APÓS o guard LGPD `userCanAccessEmployeeDossier`
+ *    (herda a proteção existente) e escopado por `emp.companyId`:
+ *      • `atrasos` = { total, totalMinutos } — soma os "H:MM" de `atrasosDetalhados`.
+ *      • `obrasGeridas` = obras onde `responsavelId == employeeId` (companyId + não
+ *        deletadas) → id/nome/codigo/cidade/status/cliente; `isGestor` = há ≥1 obra.
+ *      • `avaliacaoCliente` = `clienteAvaliacoes` (canceladaEm IS NULL) cruzadas por
+ *        `obraId ∈ obrasGeridas` OU `ilike(gestorNome, nomeCompleto)` (match exato
+ *        case-insensitive — evita agregar homônimos por match parcial); médias
+ *        geral/gestor/equipe/prazo/qualidade (0-10) + histórico (limit 200, slice 30).
+ *    IMPORTS: + `clienteAvaliacoes` (schema) e `or, ilike` (drizzle-orm).
+ *  - FRONTEND (`client/src/components/RaioXFuncionario.tsx`): destructure `desempenho`;
+ *    +4 KPI cards (Atrasos vermelho se ≥5 / Aval. Interna da `avaliacoesList` / Aval.
+ *    Cliente / Obras Geridas só quando `isGestor`); NOVA aba "Desempenho" (grupo
+ *    Avaliação, ícone Handshake) com resumo de 4 indicadores, tabela de Obras que
+ *    Gerencia e bloco de Avaliação do Cliente (médias por critério + histórico com
+ *    comentários). A aba "Avaliações" (interna) permanece intacta.
+ *  - PÓS-REVIEW (architect): adicionado `.limit(200)` no SQL do histórico do cliente
+ *    (antes só `slice(0,30)` em memória) para limitar custo de fetch.
+ *
+ * ESCOPO/SEGURANÇA: read-only; herda guard LGPD do proc; queries tenant-scoped por
+ * companyId. ZERO ALTER/DROP/DELETE; ZERO mudança de schema.
+ *
  * Rev. 2852 — **CONTROLE DE REVISÕES — AUTO-REGISTRO DE TODA REVISÃO (1879→ATUAL) QUE FALTAVA NA TELA.
  * O ARRAY ESTRUTURADO TINHA CONGELADO NA 1878; AGORA AS REVISÕES SE REGISTRAM SOZINHAS NO STARTUP.**
  *
