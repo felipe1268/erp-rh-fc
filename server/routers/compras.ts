@@ -1049,13 +1049,62 @@ async function _autoLiberarReservasComOcGerada(companyId: number): Promise<numbe
 }
 
 /**
+ * AUTO-LIMPEZA (Rev. 2822): toda reserva preventiva ATIVA cuja cotação NÃO existe
+ * mais (foi excluída do sistema) é liberada automaticamente. Essas reservas órfãs
+ * ficaram presas em status "ativa" porque foram criadas antes dos ganchos de
+ * liberação por exclusão de cotação (ou por um caminho de exclusão que não as
+ * soltou). Como a cotação sumiu, a reserva não reserva nada que faça sentido — só
+ * entope a lista e vence em 7 dias. Reusa `_liberarReservasDaCotacao` (acao
+ * "liberada" + log), é idempotente (só toca "ativa") e cobre todo o backlog
+ * histórico. ZERO ALTER/DROP/DELETE.
+ */
+async function _autoLiberarReservasOrfas(companyId: number): Promise<number> {
+  const db = await getDb();
+  const ativas = await db.select({ cotacaoId: comprasReservasSaldo.cotacaoId })
+    .from(comprasReservasSaldo)
+    .where(and(
+      eq(comprasReservasSaldo.companyId, companyId),
+      eq(comprasReservasSaldo.status, "ativa"),
+    ));
+  const cotacaoIds = [...new Set(ativas.map(r => r.cotacaoId).filter((x): x is number => x != null))];
+  if (cotacaoIds.length === 0) return 0;
+  const existentes = await db.select({ id: comprasCotacoes.id })
+    .from(comprasCotacoes)
+    .where(and(
+      eq(comprasCotacoes.companyId, companyId),
+      inArray(comprasCotacoes.id, cotacaoIds),
+    ));
+  const existSet = new Set(existentes.map(c => c.id));
+  const orfas = cotacaoIds.filter(id => !existSet.has(id));
+  let total = 0;
+  for (const cid of orfas) {
+    total += await _liberarReservasDaCotacao({
+      cotacaoId: cid, acao: "liberada",
+      motivo: "Cotação não existe mais — limpeza automática",
+      companyId,
+    });
+  }
+  return total;
+}
+
+/**
+ * SANEAMENTO COMPLETO DAS RESERVAS (Rev. 2822): roda as duas auto-baixas em
+ * sequência (OC já gerada + cotação inexistente). Cada uma é tolerante a falha
+ * (try/catch) para nunca derrubar a leitura que a chama. Idempotente.
+ */
+async function _autoSanearReservas(companyId: number): Promise<void> {
+  try { await _autoLiberarReservasComOcGerada(companyId); } catch (e: any) { console.warn("[saneamentoReservas] OC já gerada falhou:", e?.message); }
+  try { await _autoLiberarReservasOrfas(companyId); } catch (e: any) { console.warn("[saneamentoReservas] órfãs falhou:", e?.message); }
+}
+
+/**
  * Verifica se um usuário (perfil de Compras) está travado para criar
  * novas operações deficitárias. Retorna lista de reservas pendentes da empresa.
  * Travamento ocorre quando há ≥1 reserva ativa cujo prazo expirou (≥7 dias).
  */
 async function _statusTravamentoCompras(companyId: number) {
   const db = await getDb();
-  try { await _autoLiberarReservasComOcGerada(companyId); } catch (e: any) { console.warn("[_statusTravamentoCompras] auto-baixa falhou:", e?.message); }
+  await _autoSanearReservas(companyId);
   const agora = new Date();
   const reservas = await db.select().from(comprasReservasSaldo)
     .where(and(
@@ -6150,7 +6199,7 @@ Retorne APENAS um JSON válido neste formato:
     .query(async ({ input, ctx }) => {
       await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
-      try { await _autoLiberarReservasComOcGerada(input.companyId); } catch (e: any) { console.warn("[getSaldosRealocacaoGeral] auto-baixa falhou:", e?.message); }
+      await _autoSanearReservas(input.companyId);
 
       // ── 1. DI-08: pega o latest orcamento por obra ─────────────────────
       // FIX: filtrar isNull(deletedAt) e padronizar ordering por createdAt (igual a listarEconomiasOC).
@@ -14192,7 +14241,7 @@ Responda APENAS com JSON válido, sem markdown, no formato:
     .query(async ({ input, ctx }) => {
       await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
-      try { await _autoLiberarReservasComOcGerada(input.companyId); } catch (e: any) { console.warn("[listarReservasAtivas] auto-baixa falhou:", e?.message); }
+      await _autoSanearReservas(input.companyId);
       const conds: any[] = [
         eq(comprasReservasSaldo.companyId, input.companyId),
         eq(comprasReservasSaldo.status, "ativa"),

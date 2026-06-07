@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2822 — **COMPRAS · RESERVAS PREVENTIVAS — LIMPEZA AUTOMÁTICA DE RESERVAS ÓRFÃS (COTAÇÃO INEXISTENTE).**
+ *
+ * PERGUNTA/PEDIDO (usuário, sobre a tela de Reservas Preventivas, vendo linhas com id interno `#253`, `#272`,
+ * `#275`...): "Tem cotações que não existem, por quê? Faça um limpa no sistema e valide somente as que realmente
+ * fazem sentido." DIAGNÓSTICO (Neon real): das 59 reservas ATIVAS, 12 eram ÓRFÃS — a cotação tinha sido EXCLUÍDA do
+ * sistema, mas a reserva continuou em status "ativa" (LEFT JOIN em comprasCotacoes não encontrava a cotação → a Rev.
+ * 2821 mostrava o fallback `#<cotacaoId>` justamente nesses casos). As outras 47 eram legítimas (cotação ainda
+ * existe, status pendente/aprovada, sem OC). 0 com OC gerada (a Rev. 2820 já cobria) e 0 com cotação cancelada.
+ *
+ * CAUSA-RAIZ: essas reservas órfãs foram criadas ANTES dos ganchos de liberação por exclusão de cotação, ou por um
+ * caminho de exclusão que não as soltou. Como a cotação sumiu, a reserva não reserva nada que faça sentido — só
+ * entope a lista e vence em 7 dias, podendo travar novas OCs deficitárias.
+ *
+ * O QUE FOI FEITO (server/routers/compras.ts, só lógica/leitura — ZERO ALTER/DROP/DELETE; ZERO schema novo):
+ *  (1) NOVO `_autoLiberarReservasOrfas(companyId)`: pega as reservas ATIVAS da empresa, descobre os cotacaoIds
+ *      DISTINTOS, consulta `comprasCotacoes` (inArray + companyId) pra saber quais ainda EXISTEM e libera (via
+ *      `_liberarReservasDaCotacao`, acao "liberada", motivo "Cotação não existe mais — limpeza automática") as que
+ *      não existem mais. Idempotente (só toca "ativa"); cobre todo o backlog histórico.
+ *  (2) NOVO wrapper `_autoSanearReservas(companyId)`: roda as DUAS auto-baixas em sequência (OC já gerada — Rev. 2820
+ *      — + órfãs), cada uma em try/catch pra nunca derrubar a leitura chamadora.
+ *  (3) Os 3 pontos de self-heal (`_statusTravamentoCompras`, `getSaldosRealocacaoGeral`, `listarReservasAtivas`)
+ *      passaram a chamar `_autoSanearReservas` no lugar do `_autoLiberarReservasComOcGerada` direto → as órfãs somem
+ *      sozinhas assim que a tela de Realocação carrega.
+ *
+ * RESSALVA: libera (status "liberada"), NUNCA deleta — a linha e o histórico permanecem auditáveis. As 47 reservas
+ * legítimas (cotação existente pendente/aprovada sem OC) são preservadas. Validação: esbuild OK; diagnóstico Neon
+ * confirmou exatamente as 12 órfãs-alvo. Detalhe: este arquivo.
+ *
+ * ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2821 — **COMPRAS · RESERVAS PREVENTIVAS — Nº DA COTAÇÃO CORRETO + CLICAR PRA ABRIR A COTAÇÃO.**
  *
  * PEDIDO (usuário, sobre a tela "Realocação de Verba → Reservas Preventivas em Andamento"): "Quero poder clicar e
