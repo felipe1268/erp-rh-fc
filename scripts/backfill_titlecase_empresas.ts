@@ -1,5 +1,5 @@
 import { Pool } from "pg";
-import { titleCaseEmpresa } from "../shared/normalizeNomeEmpresa";
+import { upperCaseEmpresa } from "../shared/normalizeNomeEmpresa";
 
 const url = process.env.NEON_DATABASE_URL;
 if (!url || /localhost|127\.0\.0\.1|helium/i.test(url)) {
@@ -15,8 +15,8 @@ async function backfill(table: string) {
   const { rows } = await pool.query(`SELECT id, razao_social, nome_fantasia FROM ${table}`);
   const changes: Chg[] = [];
   for (const r of rows) {
-    const novaRazao = r.razao_social != null ? titleCaseEmpresa(r.razao_social) : null;
-    const novoFant = r.nome_fantasia != null ? titleCaseEmpresa(r.nome_fantasia) : null;
+    const novaRazao = r.razao_social != null ? upperCaseEmpresa(r.razao_social) : null;
+    const novoFant = r.nome_fantasia != null ? upperCaseEmpresa(r.nome_fantasia) : null;
     if (novaRazao !== r.razao_social || novoFant !== r.nome_fantasia) {
       changes.push({ id: r.id, rs: novaRazao, nf: novoFant });
     }

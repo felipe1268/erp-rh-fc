@@ -4,7 +4,7 @@ import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/contexts/CompanyContext";
 import { trpc } from "@/lib/trpc";
-import { titleCaseEmpresa } from "@shared/normalizeNomeEmpresa";
+import { upperCaseEmpresa } from "@shared/normalizeNomeEmpresa";
 import DashboardLayout from "@/components/DashboardLayout";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { Button } from "@/components/ui/button";
@@ -390,8 +390,8 @@ export default function EmpresasTerceiras() {
             {activeTab === "dados" && (
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div><Label>Razão Social *</Label><Input value={form.razaoSocial || ""} onChange={(e) => setForm({ ...form, razaoSocial: e.target.value })} onBlur={(e) => setForm({ ...form, razaoSocial: titleCaseEmpresa(e.target.value) })} /></div>
-                  <div><Label>Nome Fantasia</Label><Input value={form.nomeFantasia || ""} onChange={(e) => setForm({ ...form, nomeFantasia: e.target.value })} onBlur={(e) => setForm({ ...form, nomeFantasia: titleCaseEmpresa(e.target.value) })} /></div>
+                  <div><Label>Razão Social *</Label><Input value={form.razaoSocial || ""} onChange={(e) => setForm({ ...form, razaoSocial: e.target.value })} onBlur={(e) => setForm({ ...form, razaoSocial: upperCaseEmpresa(e.target.value) })} /></div>
+                  <div><Label>Nome Fantasia</Label><Input value={form.nomeFantasia || ""} onChange={(e) => setForm({ ...form, nomeFantasia: e.target.value })} onBlur={(e) => setForm({ ...form, nomeFantasia: upperCaseEmpresa(e.target.value) })} /></div>
                   <div><Label>CNPJ *</Label><div className="flex gap-2"><Input placeholder="00.000.000/0000-00" value={form.cnpj || ""} onChange={(e) => { setForm({ ...form, cnpj: cnpjMask(e.target.value) }); }} onBlur={(e) => buscarCNPJ(e.target.value)} className="flex-1 font-mono" />{cnpjLoading && <Loader2 className="h-5 w-5 animate-spin text-blue-500 self-center" />}</div></div>
                   <div><Label>Tipo de Serviço</Label><Input placeholder="Ex: Elétrica, Hidráulica, Gesso..." value={form.tipoServico || ""} onChange={(e) => setForm({ ...form, tipoServico: e.target.value })} /></div>
                   <div><Label>Inscrição Estadual</Label><Input value={form.inscricaoEstadual || ""} onChange={(e) => setForm({ ...form, inscricaoEstadual: e.target.value })} /></div>

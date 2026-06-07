@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2883 — **FORNECEDORES / EMPRESAS TERCEIRAS — NOME SEMPRE SALVO EM CAIXA ALTA
+ * (TUDO EM MAIÚSCULAS), REVERTENDO O TITLE CASE DA REV. 2881.**
+ *
+ * PEDIDO (usuário): vendo a lista de fornecedores ainda em Title Case (após a Rev.
+ * 2881), o usuário perguntou "ainda não estão todos com os nomes em letras maiúsculas
+ * pq?" e, ao ser questionado, ESCOLHEU explicitamente: nomes em TUDO EM MAIÚSCULAS
+ * (caixa alta), ex. "RENATO GARCIA CLARO". Isso reverte a decisão da Rev. 2881 (que
+ * havia padronizado em Title Case culto + removido a classe CSS `uppercase`).
+ *
+ * FEITO (1) — helper `shared/normalizeNomeEmpresa.ts` REESCRITO: removida a máquina de
+ * Title Case (`titleCaseEmpresa`, listas LOWER/UPPER/ROMAN, `capToken`); NOVO export
+ * único `upperCaseEmpresa(input)` = trim + colapsa espaços + `toUpperCase()`. Idempotente.
+ *
+ * FEITO (2) — TODOS os pontos de escrita de nome (fonte da verdade, mesma cobertura da
+ * Rev. 2881) trocados de `titleCaseEmpresa` → `upperCaseEmpresa`:
+ *  - `server/routers/compras.ts` (`criarFornecedor`/`atualizarFornecedor` — tela
+ *    Fornecedores grava AQUI, tabela mestre `fornecedores`; + auto-criação de
+ *    `empresas_terceiras` em contrato/OS).
+ *  - `server/routers/terceiros.ts` (`empresas.create`/`update` + `ensureFromFornecedor`).
+ *  - `server/routers/terceiroContratos.ts` (auto-criação indireta).
+ *  - `server/routers/masControle.ts` (importação de fornecedores via API e via CSV —
+ *    gap que escapava da Rev. 2881; razão social / nome fantasia agora normalizados no
+ *    insert, fechando a brecha de nomes mixed-case reentrarem pelo import).
+ *  - FRONTEND `compras/Fornecedores.tsx` + `terceiros/EmpresasTerceiras.tsx` — `onBlur`
+ *    dos inputs Razão Social / Nome Fantasia agora aplica `upperCaseEmpresa`.
+ *
+ * FEITO (3) — BACKFILL (UPDATE, NÃO destrutivo): `scripts/backfill_titlecase_empresas.ts`
+ * atualizado p/ `upperCaseEmpresa` e rodado no Neon → `fornecedores` 1202/1202 e
+ * `empresas_terceiras` 23/23 atualizados p/ CAIXA ALTA. Como os dados estão armazenados
+ * em maiúsculas, a tela já exibe em maiúsculas (sem depender de CSS).
+ *
+ * ESCOPO: só nomes de empresa (fornecedores/terceiros). ZERO schema; ZERO ALTER/DROP/
+ * DELETE (só UPDATE via backfill + writes normais). Validado: typecheck limpo.
+ *
  * Rev. 2882 — **DATABOOK (FICHA PDF) — CAMPO "CONTRATO Nº" PASSA A USAR O NÚMERO DO
  * CONTRATO DA OBRA (NOVO CAMPO NO CADASTRO), NÃO MAIS O NÚMERO DA ORDEM DE COMPRA.**
  *

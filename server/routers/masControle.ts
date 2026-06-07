@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
+import { upperCaseEmpresa } from "../../shared/normalizeNomeEmpresa";
 import { eq, and, desc, sql } from "drizzle-orm";
 import {
   obras, fornecedores, almoxarifadoItens,
@@ -204,7 +205,7 @@ export const masControleRouter = router({
 
       for (const f of rawForn) {
         try {
-          const razao = f.razao_social || f.razaoSocial || f.nome || f.name || "";
+          const razao = upperCaseEmpresa(f.razao_social || f.razaoSocial || f.nome || f.name || "");
           if (!razao) { erros.push("Registro sem razão social — ignorado"); continue; }
           const cnpj = (f.cnpj || "").replace(/\D/g, "");
 
@@ -218,7 +219,7 @@ export const masControleRouter = router({
           await db.insert(fornecedores).values({
             companyId:       input.companyId,
             razaoSocial:     razao,
-            nomeFantasia:    f.nome_fantasia || f.nomeFantasia || null,
+            nomeFantasia:    upperCaseEmpresa(f.nome_fantasia || f.nomeFantasia || "") || null,
             cnpj:            cnpj || null,
             email:           f.email || null,
             telefone:        f.telefone || f.phone || null,
@@ -370,7 +371,7 @@ export const masControleRouter = router({
 
       for (const row of input.rows) {
         try {
-          const razao = col(row, "Razão Social", "Razao Social", "razao_social", "Nome", "FORNECEDOR", "Fornecedor");
+          const razao = upperCaseEmpresa(col(row, "Razão Social", "Razao Social", "razao_social", "Nome", "FORNECEDOR", "Fornecedor"));
           if (!razao) { erros.push("Linha ignorada — sem razão social"); continue; }
 
           const cnpjRaw = col(row, "CNPJ", "cnpj");
@@ -389,7 +390,7 @@ export const masControleRouter = router({
           await db.insert(fornecedores).values({
             companyId:       input.companyId,
             razaoSocial:     razao,
-            nomeFantasia:    col(row, "Nome Fantasia", "nomeFantasia", "nome_fantasia", "Fantasia") || null,
+            nomeFantasia:    upperCaseEmpresa(col(row, "Nome Fantasia", "nomeFantasia", "nome_fantasia", "Fantasia")) || null,
             cnpj,
             email:           col(row, "E-mail", "Email", "email", "E-Mail") || null,
             telefone:        col(row, "Telefone", "Fone", "telefone", "Tel", "Celular") || null,

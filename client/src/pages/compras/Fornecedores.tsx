@@ -2,7 +2,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
-import { titleCaseEmpresa } from "@shared/normalizeNomeEmpresa";
+import { upperCaseEmpresa } from "@shared/normalizeNomeEmpresa";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -951,11 +951,11 @@ export default function Fornecedores() {
                 </div>
                 <div className="col-span-5">
                   <Label className="text-xs font-medium text-slate-600 mb-1 block">Razão Social *</Label>
-                  <Input value={form.razaoSocial} onChange={e => setForm(p => ({ ...p, razaoSocial: e.target.value }))} onBlur={e => setForm(p => ({ ...p, razaoSocial: titleCaseEmpresa(e.target.value) }))} className="h-9 text-sm" />
+                  <Input value={form.razaoSocial} onChange={e => setForm(p => ({ ...p, razaoSocial: e.target.value }))} onBlur={e => setForm(p => ({ ...p, razaoSocial: upperCaseEmpresa(e.target.value) }))} className="h-9 text-sm" />
                 </div>
                 <div className="col-span-4">
                   <Label className="text-xs font-medium text-slate-600 mb-1 block">Nome Fantasia</Label>
-                  <Input value={form.nomeFantasia} onChange={e => setForm(p => ({ ...p, nomeFantasia: e.target.value }))} onBlur={e => setForm(p => ({ ...p, nomeFantasia: titleCaseEmpresa(e.target.value) }))} className="h-9 text-sm" />
+                  <Input value={form.nomeFantasia} onChange={e => setForm(p => ({ ...p, nomeFantasia: e.target.value }))} onBlur={e => setForm(p => ({ ...p, nomeFantasia: upperCaseEmpresa(e.target.value) }))} className="h-9 text-sm" />
                 </div>
               </div>
               {erroCNPJ && (

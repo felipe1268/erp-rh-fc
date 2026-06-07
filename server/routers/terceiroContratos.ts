@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, getUserCompanyLinks } from "../db";
-import { titleCaseEmpresa } from "../../shared/normalizeNomeEmpresa";
+import { upperCaseEmpresa } from "../../shared/normalizeNomeEmpresa";
 import { triggerFinancialSync, triggerFinancialSyncAwaited } from "../services/financialEventTrigger";
 import { eq, and, or, desc, inArray, sql, asc, isNull } from "drizzle-orm";
 import {
@@ -2848,8 +2848,8 @@ export const terceiroContratosRouter = router({
         const [nova] = await db.insert(empresasTerceiras).values({
           companyId: input.companyId,
           fornecedorId: forn.id,
-          razaoSocial: titleCaseEmpresa(forn.razaoSocial),
-          nomeFantasia: forn.nomeFantasia ? titleCaseEmpresa(forn.nomeFantasia) : null,
+          razaoSocial: upperCaseEmpresa(forn.razaoSocial),
+          nomeFantasia: forn.nomeFantasia ? upperCaseEmpresa(forn.nomeFantasia) : null,
           cnpj: forn.cnpj || "",
           cep: forn.cep || null,
           logradouro: forn.endereco || null,
