@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2832 — **FINANCEIRO · DRE — MESES NO PADRÃO BRASILEIRO (NOME DO MÊS) NO SELETOR DE PERÍODO E NO TÍTULO.**
+ *
+ * PEDIDO (usuário, com print do iPad): "Quero os meses com nome e no padrão brasileiro" — o seletor de período do DRE
+ * listava os meses no formato técnico ISO `AAAA-MM` (ex.: "2026-06"), pouco legível.
+ *
+ * O QUE FOI FEITO (`client/src/pages/financeiro/FinanceiroDRE.tsx`, SÓ frontend; ZERO backend/schema/mutation):
+ *  - NOVO array `MESES_PT` (Janeiro…Dezembro) + helper `fmtPeriodo(p)` que converte o valor interno `AAAA-MM` em
+ *    `Mês/AAAA` (ex.: "Junho/2026") e mantém `AAAA` puro para o tipo anual.
+ *  - O `<SelectItem>` do dropdown de período passa a exibir `fmtPeriodo(p)` no LABEL, preservando o `value` ISO `AAAA-MM`
+ *    (usado pela query `financial.getDRE`) — sem mexer no contrato de dados.
+ *  - O título do card "DRE — …" também passa a usar `fmtPeriodo(periodo)`.
+ *
+ * RESSALVA: só formatação de exibição; o valor enviado ao backend continua `AAAA-MM`/`AAAA`. ZERO ALTER/DROP/DELETE.
+ * VALIDAÇÃO: dev server compila o client sem erro (HMR limpo).
+ *
  * Rev. 2831 — **TERCEIROS · CONTRATOS — NATUREZA DO CONTRATO EDITÁVEL NO DETALHE (DESTRAVA A ABA FD EM CONTRATOS EXISTENTES).**
  *
  * PEDIDO (usuário, com print do iPad): "Cadê a aba do FD?" — abriu o contrato CT-2026-0007 (THIAGO MATERIAIS) e não

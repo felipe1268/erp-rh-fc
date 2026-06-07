@@ -20,6 +20,20 @@ function getMesAtual() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+const MESES_PT = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+];
+
+// Formata o período no padrão brasileiro. "AAAA-MM" → "Junho/2026"; "AAAA" → "2026".
+function fmtPeriodo(p: string) {
+  if (!p) return "—";
+  const [ano, mes] = p.split("-");
+  if (!mes) return ano;
+  const idx = parseInt(mes, 10) - 1;
+  return `${MESES_PT[idx] || mes}/${ano}`;
+}
+
 interface DRERow {
   label: string;
   value: number;
@@ -103,7 +117,7 @@ export default function FinanceiroDRE() {
               </SelectTrigger>
               <SelectContent>
                 {(tipoPeriodo === "anual" ? anos : meses).map(p => (
-                  <SelectItem key={p} value={p}>{p}</SelectItem>
+                  <SelectItem key={p} value={p}>{fmtPeriodo(p)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -142,7 +156,7 @@ export default function FinanceiroDRE() {
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">
-              DRE — {periodo} ({tipoPeriodo})
+              DRE — {fmtPeriodo(periodo)} ({tipoPeriodo})
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
