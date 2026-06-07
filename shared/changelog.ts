@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2847 — **TERCEIROS · PREVISÃO DE CAIXA — CONTROLE MÊS A MÊS / ANO A ANO, TABELA COMPARATIVA ANUAL
+ * COM VARIAÇÃO (AUMENTO/REDUÇÃO) E DRILL-DOWN CLICÁVEL DO HISTÓRICO.**
+ *
+ * PEDIDO (usuário, com prints do iPad — IMG_1658/IMG_1662, tela "Previsão de Caixa" de Contratos de Terceiros):
+ * (1) adicionar controle MÊS A MÊS e ANO A ANO usando o MESMO seletor padronizado do DRE/Painel Financeiro
+ * (navegação de ano "< 2026 >" + 12 chips de mês com pontinhos de status azul=Com lançamento / verde=Consolidado /
+ * cinza=Sem dados); (2) uma TABELA COMPARATIVA do ano todo, separada por mês, analisando se houve AUMENTO ou
+ * REDUÇÃO no valor (variação mês a mês); (3) tudo RESPONSIVO e CLICÁVEL para ver o HISTÓRICO da informação (drill-down).
+ *
+ * O QUE FOI FEITO (BACKEND — `server/routers/terceiroContratos.ts`, endpoint `previsaoCaixa`):
+ *  - NOVO helper `getMonthsBetween(start,end)` (chaves "YYYY-MM" inclusivas) e `contratoMap` (descrição + nome da
+ *    empresa terceira) para enriquecer o detalhamento.
+ *  - PREVISTO mensal: além da distribuição semanal existente (mantida p/ o gráfico), o valor de cada item de contrato
+ *    é distribuído também pelos MESES entre dataInicio/dataFim da atividade vinculada; acumula `mesesMapPrev[mes]` e
+ *    `previstoDetalhe[mes][contratoId] = { contratoDescricao, empresaNome, valor }` (histórico do previsto por contrato).
+ *  - REALIZADO mensal: a chave do mês é o `periodo` (YYYY-MM) gravado na própria medição (verdade contábil; fallback
+ *    p/ aprovadoEm||criadoEm quando o periodo é inválido), acumulando `mesesMapReal[mes]` e
+ *    `realizadoDetalhe[mes] = Array<{ id, numero, contratoDescricao, empresaNome, valor, periodo, dataReferencia, status }>`
+ *    (histórico clicável das medições). Mantém o filtro `status != cancelada/rejeitada` e `valorMedido > 0`.
+ *  - O `return` ganhou `meses: Array<{ mes, previsto, realizado, previstoDetalhe, realizadoDetalhe }>` (ordenado),
+ *    PRESERVANDO `semanas`/`totalPrevisto`/`totalRealizado`/`contratos` (backward-compat do gráfico semanal). Early-return
+ *    sem contratos também devolve `meses: []`.
+ *  - ZERO ALTER/DROP/DELETE; ZERO schema; read-only.
+ *
+ * O QUE FOI FEITO (FRONTEND — `client/src/pages/terceiros/PrevisaoCaixa.tsx`, redesenhado):
+ *  - SELETOR DE PERÍODO PADRONIZADO (padrão DRE): navegação de ano (< {ano} >) + 12 chips de mês com pontinho de
+ *    status (verde=tem realizado / azul=só previsto / cinza=sem dados) + botão "Ano inteiro". Selecionar um mês foca
+ *    KPIs/gráfico nele; clicar de novo volta p/ ano inteiro.
+ *  - KPIs do período em foco: Previsto, Realizado, "Realizado vs Previsto" (variação %) e "Realizado {ano} vs {ano-1}"
+ *    (análise ANO A ANO).
+ *  - NOVA TABELA COMPARATIVA "Mês a Mês — {ano}" com 12 linhas (Jan–Dez): Previsto, Realizado, Dif. (R−P), coluna
+ *    "vs mês ant." com ▲ (aumento, verde) / ▼ (redução, vermelho) sobre o realizado do mês anterior, mini-barra de
+ *    comparação previsto×realizado, e `tfoot` "Total {ano}" com a variação ano a ano. LINHAS CLICÁVEIS expandem o
+ *    drill-down do mês: medições realizadas (nº, contrato, empresa, data/período, status, valor) + previsto por contrato.
+ *  - Gráfico de barras semanal mantido, agora FILTRADO pelo período em foco (ano e, se houver, mês).
+ *  - RESPONSIVO: grids `grid-cols-2 lg:grid-cols-4`, tabelas em `overflow-x-auto`, chips com `flex-wrap`.
+ *
+ * ESCOPO: tela de Previsão de Caixa de Contratos de Terceiros. ZERO ALTER/DROP/DELETE; ZERO schema; read-only.
+ * Validação: HMR do Vite compilou limpo; tela atrás de login, então a validação foi via review de código.
+ *
  * Rev. 2846 — **COMPRAS · PAINEL FD — ITENS SOMENTE-LEITURA (EDIÇÃO SÓ ADMIN MASTER), VERDE PARA COMPRADOS
  * E FILTROS FATURADO/PENDENTE NAS DUAS ABAS.**
  *

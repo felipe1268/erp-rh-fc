@@ -2454,7 +2454,8 @@ export const terceiroContratosRouter = router({
 
   previsaoCaixa: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       let contratos = await db.select().from(terceiroContratos)
         .where(and(
@@ -2462,7 +2463,7 @@ export const terceiroContratosRouter = router({
           eq(terceiroContratos.status, "ativo")
         ));
       if (input.obraId) contratos = contratos.filter(c => c.obraId === input.obraId);
-      if (!contratos.length) return { semanas: [], totalPrevisto: 0, contratos: [] };
+      if (!contratos.length) return { semanas: [], meses: [], totalPrevisto: 0, totalRealizado: 0, contratos: [] };
 
       const empresas = await db.select({ id: empresasTerceiras.id, nomeFantasia: empresasTerceiras.nomeFantasia, razaoSocial: empresasTerceiras.razaoSocial })
         .from(empresasTerceiras).where(eq(empresasTerceiras.companyId, input.companyId));
@@ -2557,8 +2558,35 @@ export const terceiroContratosRouter = router({
         }
       }
 
-      // PREVISTO: distribute item value across weeks between dataInicio and dataFim of linked atividade
+      // Helper: generate all month keys (YYYY-MM) between two dates, inclusive
+      function getMonthsBetween(start: Date, end: Date): string[] {
+        const months: string[] = [];
+        let y = start.getFullYear();
+        let m = start.getMonth();
+        const ey = end.getFullYear();
+        const em = end.getMonth();
+        while (y < ey || (y === ey && m <= em)) {
+          months.push(`${y}-${String(m + 1).padStart(2, "0")}`);
+          m++;
+          if (m > 11) { m = 0; y++; }
+        }
+        return months;
+      }
+
+      // Mapa de contratos p/ enriquecer o detalhamento (drill-down do histórico)
+      const contratoMap: Record<number, { descricao: string; empresaNome: string }> = {};
+      for (const c of contratos) {
+        contratoMap[c.id] = {
+          descricao: c.descricao || `Contrato #${c.id}`,
+          empresaNome: empMap[c.empresaTerceiraId] || "—",
+        };
+      }
+
+      // PREVISTO: distribute item value across weeks (chart) AND months (análise) between dataInicio/dataFim
       const semanasMapPrev: Record<string, number> = {};
+      const mesesMapPrev: Record<string, number> = {};
+      // previstoDetalhe[mes][contratoId] = { contratoDescricao, empresaNome, valor }
+      const previstoDetalhe: Record<string, Record<number, { contratoDescricao: string; empresaNome: string; valor: number }>> = {};
       for (const item of todosItens) {
         if (!item.planejamentoAtividadeId) continue;
         const ativ = atividadesMap[item.planejamentoAtividadeId];
@@ -2569,16 +2597,37 @@ export const terceiroContratosRouter = router({
         if (fim < inicio) continue;
 
         const weeks = getWeeksBetween(inicio, fim);
-        if (weeks.length === 0) continue;
+        if (weeks.length > 0) {
+          const valorPorSemana = n(item.valorTotal) / weeks.length;
+          for (const sem of weeks) {
+            semanasMapPrev[sem] = (semanasMapPrev[sem] || 0) + valorPorSemana;
+          }
+        }
 
-        const valorPorSemana = n(item.valorTotal) / weeks.length;
-        for (const sem of weeks) {
-          semanasMapPrev[sem] = (semanasMapPrev[sem] || 0) + valorPorSemana;
+        const meses = getMonthsBetween(inicio, fim);
+        if (meses.length > 0) {
+          const valorPorMes = n(item.valorTotal) / meses.length;
+          const ctr = contratoMap[item.contratoId];
+          for (const mes of meses) {
+            mesesMapPrev[mes] = (mesesMapPrev[mes] || 0) + valorPorMes;
+            if (!previstoDetalhe[mes]) previstoDetalhe[mes] = {};
+            if (!previstoDetalhe[mes][item.contratoId]) {
+              previstoDetalhe[mes][item.contratoId] = {
+                contratoDescricao: ctr?.descricao || `Contrato #${item.contratoId}`,
+                empresaNome: ctr?.empresaNome || "—",
+                valor: 0,
+              };
+            }
+            previstoDetalhe[mes][item.contratoId].valor += valorPorMes;
+          }
         }
       }
 
       // REALIZADO: usa medições do contrato (todas exceto cancelada/rejeitada)
       const semanasMapReal: Record<string, number> = {};
+      const mesesMapReal: Record<string, number> = {};
+      // realizadoDetalhe[mes] = lista de medições (histórico clicável)
+      const realizadoDetalhe: Record<string, Array<{ id: number; numero: number; contratoDescricao: string; empresaNome: string; valor: number; periodo: string; dataReferencia: string | null; status: string }>> = {};
       let totalRealizado = 0;
       if (contratosIds.length > 0) {
         const todasMedicoes = await db.select().from(terceiroMedicoes)
@@ -2596,6 +2645,24 @@ export const terceiroContratosRouter = router({
           const refDate = med.aprovadoEm ? new Date(med.aprovadoEm) : new Date(med.criadoEm);
           const semanaKey = getMonday(refDate);
           semanasMapReal[semanaKey] = (semanasMapReal[semanaKey] || 0) + valorMed;
+
+          // Mês do realizado = periodo (YYYY-MM) da medição (verdade contábil); fallback p/ refDate
+          const mesKey = (med.periodo && /^\d{4}-\d{2}$/.test(med.periodo))
+            ? med.periodo
+            : `${refDate.getFullYear()}-${String(refDate.getMonth() + 1).padStart(2, "0")}`;
+          mesesMapReal[mesKey] = (mesesMapReal[mesKey] || 0) + valorMed;
+          const ctr = contratoMap[med.contratoId];
+          if (!realizadoDetalhe[mesKey]) realizadoDetalhe[mesKey] = [];
+          realizadoDetalhe[mesKey].push({
+            id: med.id,
+            numero: med.numero ?? 1,
+            contratoDescricao: ctr?.descricao || `Contrato #${med.contratoId}`,
+            empresaNome: ctr?.empresaNome || "—",
+            valor: valorMed,
+            periodo: med.periodo,
+            dataReferencia: med.dataReferencia ?? null,
+            status: med.status || "—",
+          });
         }
       }
 
@@ -2610,8 +2677,21 @@ export const terceiroContratosRouter = router({
 
       const totalPrevisto = semanas.reduce((s, w) => s + w.previsto, 0);
 
+      // Agregação MENSAL (mês a mês / ano a ano) + detalhe p/ drill-down clicável
+      const allMeses = new Set([...Object.keys(mesesMapPrev), ...Object.keys(mesesMapReal)]);
+      const meses = [...allMeses]
+        .sort()
+        .map(mes => ({
+          mes,
+          previsto: mesesMapPrev[mes] || 0,
+          realizado: mesesMapReal[mes] || 0,
+          previstoDetalhe: Object.values(previstoDetalhe[mes] || {}).sort((a, b) => b.valor - a.valor),
+          realizadoDetalhe: (realizadoDetalhe[mes] || []).sort((a, b) => b.valor - a.valor),
+        }));
+
       return {
         semanas,
+        meses,
         totalPrevisto,
         totalRealizado,
         contratos: contratos.map(c => ({
