@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2834 — **TERCEIROS · MENU REORGANIZADO EM TORNO DE EMPRESA → CONTRATOS (DE 7 SEÇÕES PARA 3) + SEPARAÇÃO CLARA EMPRESAS DE SERVIÇO × PRESTADORES PJ.**
+ *
+ * PEDIDO (usuário): "Acho que o menu [de Terceiros] está muito confuso. Temos dois grupos — os PJ que fornecem mão de
+ * obra, e os contratos de serviço que fornecem material e mão de obra. Uma empresa pode ter vários contratos. Queria um
+ * menu mais limpo, organizado em torno da empresa e seus contratos." Validações do usuário: (1) DOIS menus SEPARADOS —
+ * Empresas de Serviço × Prestadores PJ (NÃO unificar numa lista só); (2) avaliação completa dada pelo GESTOR DO CONTRATO
+ * (entregue em revisão seguinte); (3) SIM reduzir o menu de 7 → 3 seções, sem apagar nada (só reagrupar/renomear).
+ *
+ * CONTEXTO DO MODELO DE DADOS (por que dois menus): "Empresas de Serviço" = tabela `empresas_terceiras` (contratos em
+ * `terceiro_contratos`, FK `empresa_terceira_id`, coluna `natureza_contrato` material/MDO). "Prestadores PJ" = INDIVÍDUOS
+ * na tabela `employees` com `pj_contracts` (FK `employeeId`) — NÃO são empresas. São duas entidades distintas, então os
+ * dois grupos de fornecedor pedem entradas de menu separadas.
+ *
+ * O QUE FOI FEITO (SÓ frontend; ZERO backend/schema/mutation/rota nova):
+ *  - `client/src/components/DashboardLayout.tsx` (`menuSectionsTerceiros`): as 7 seções antigas (Contratos e Assinaturas,
+ *    Medições e Financeiro, Cadastro de Terceiros, PJ, Conformidade, Operacional, Inteligência Artificial — 18 itens)
+ *    foram reagrupadas em 3 seções, preservando TODOS os 18 itens (nenhuma rota removida):
+ *      1. "Empresas & Contratos": Empresas de Serviço, Contratos de Serviço, Medições, Prestadores PJ, Medições PJ,
+ *         Painel Terceiros.
+ *      2. "Conformidade & Pessoas": Funcionários Terceiros, Obrigações Mensais, Painel de Conformidade, Conformidade PJ,
+ *         Dashboard Conformidade PJ, Alertas e Cobranças, Advertências.
+ *      3. "Ferramentas": Template de Contrato, IntegraSign, Previsão de Caixa, Portal Externo, Validação IA de Docs.
+ *    RENOMEAÇÕES p/ refletir os dois grupos: "Empresas Terceiras" → "Empresas de Serviço"; "Contratos PJ" → "Prestadores PJ".
+ *  - `client/src/pages/terceiros/EmpresasTerceiras.tsx`: cabeçalho "Empresas Terceiras" → "Empresas de Serviço" +
+ *    subtítulo "N empresa(s) de serviço (material + mão de obra)" p/ alinhar a nomenclatura.
+ *
+ * RESSALVA: o `savedMenuConfig` (menu customizado, gravado POR USUÁRIO em `menuConfig`) sobrescreve o default — usuários que
+ * já salvaram um menu custom mantêm a ordem/labels salvos (paths novos seriam anexados, mas esta revisão não adiciona path
+ * novo, só reagrupa/renomeia existentes). Quem usa o menu DEFAULT (a maioria) vê a nova organização imediatamente; quem tem
+ * config própria pode resetar pelo Painel de Controle. ZERO ALTER/DROP/DELETE. VALIDAÇÃO: dev server compila o client sem erro.
+ *
  * Rev. 2833 — **FINANCEIRO · DRE — O DEMONSTRATIVO PASSA A FUNCIONAR (CALCULA E EXIBE NÚMEROS REAIS DOS LANÇAMENTOS) + MENSAL/TRIMESTRAL/ANUAL.**
  *
  * PEDIDO (usuário, com print do iPad): "E já temos dados para fazer o DRE funcionar" — a tela do DRE mostrava

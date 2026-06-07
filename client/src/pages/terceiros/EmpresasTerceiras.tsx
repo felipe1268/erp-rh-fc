@@ -270,8 +270,8 @@ export default function EmpresasTerceiras() {
               <Building2 className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold">Empresas Terceiras</h1>
-              <p className="text-sm text-muted-foreground">{empresas.length} empresa(s) cadastrada(s)</p>
+              <h1 className="text-xl font-bold">Empresas de Serviço</h1>
+              <p className="text-sm text-muted-foreground">{empresas.length} empresa(s) de serviço (material + mão de obra)</p>
             </div>
           </div>
           <DraggableCommandBar barId="empresas-terceiras" items={[

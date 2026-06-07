@@ -288,57 +288,41 @@ const menuSectionsAvaliacao: MenuSection[] = [
   },
 ];
 
+// Rev. 2834 — Menu de Terceiros reorganizado em torno de EMPRESA → CONTRATOS.
+// De 7 seções/18 itens para 3 seções claras (nada apagado — só reagrupado/renomeado).
+// Dois grupos de fornecedor SEPARADOS: "Empresas de Serviço" (material + MDO, tabela
+// empresas_terceiras) × "Prestadores PJ" (mão de obra, indivíduos em employees/pj_contracts).
 const menuSectionsTerceiros: MenuSection[] = [
   {
-    title: "Contratos e Assinaturas",
+    title: "Empresas & Contratos",
     items: [
+      { icon: Building2, label: "Empresas de Serviço", path: "/terceiros/empresas" },
       { icon: FileSignature, label: "Contratos de Serviço", path: "/terceiros/contratos" },
-      { icon: Settings2, label: "Template de Contrato", path: "/terceiros/contratos/template" },
-      { icon: PenLine, label: "IntegraSign", path: "/integrasign" },
-    ],
-  },
-  {
-    title: "Medições e Financeiro",
-    items: [
       { icon: Receipt, label: "Medições", path: "/terceiros/medicoes" },
-      { icon: TrendingUp, label: "Previsão de Caixa", path: "/terceiros/previsao-caixa" },
-    ],
-  },
-  {
-    title: "Cadastro de Terceiros",
-    items: [
-      { icon: LayoutDashboard, label: "Painel Terceiros", path: "/terceiros/painel" },
-      { icon: Building2, label: "Empresas Terceiras", path: "/terceiros/empresas" },
-      { icon: Users, label: "Funcionários Terceiros", path: "/terceiros/funcionarios" },
-    ],
-  },
-  {
-    title: "PJ",
-    items: [
-      { icon: FileSignature, label: "Contratos PJ", path: "/modulo-pj" },
+      { icon: Briefcase, label: "Prestadores PJ", path: "/modulo-pj" },
       { icon: FileSpreadsheet, label: "Medições PJ", path: "/pj-medicoes" },
-      { icon: ShieldCheck, label: "Conformidade PJ", path: "/terceiros/pj/conformidade" },
-      { icon: BarChart3, label: "Dashboard Conformidade PJ", path: "/terceiros/pj/dashboard-conformidade" },
+      { icon: LayoutDashboard, label: "Painel Terceiros", path: "/terceiros/painel" },
     ],
   },
   {
-    title: "Conformidade",
+    title: "Conformidade & Pessoas",
     items: [
+      { icon: Users, label: "Funcionários Terceiros", path: "/terceiros/funcionarios" },
       { icon: ClipboardCheck, label: "Obrigações Mensais", path: "/terceiros/obrigacoes" },
       { icon: ShieldCheck, label: "Painel de Conformidade", path: "/terceiros/conformidade" },
+      { icon: ShieldCheck, label: "Conformidade PJ", path: "/terceiros/pj/conformidade" },
+      { icon: BarChart3, label: "Dashboard Conformidade PJ", path: "/terceiros/pj/dashboard-conformidade" },
       { icon: BellIcon, label: "Alertas e Cobranças", path: "/terceiros/alertas" },
       { icon: ShieldAlert, label: "Advertências", path: "/terceiros/advertencias" },
     ],
   },
   {
-    title: "Operacional",
+    title: "Ferramentas",
     items: [
+      { icon: Settings2, label: "Template de Contrato", path: "/terceiros/contratos/template" },
+      { icon: PenLine, label: "IntegraSign", path: "/integrasign" },
+      { icon: TrendingUp, label: "Previsão de Caixa", path: "/terceiros/previsao-caixa" },
       { icon: Globe, label: "Portal Externo", path: "/terceiros/portal" },
-    ],
-  },
-  {
-    title: "Inteligência Artificial",
-    items: [
       { icon: FileSearch, label: "Validação IA de Docs", path: "/terceiros/validacao-ia" },
     ],
   },
