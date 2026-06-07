@@ -1733,15 +1733,23 @@ export default function Cotacoes() {
   // tipo, o contador de status reflete só aquele tipo, e vice-versa.
   function tipoOf(c: any) { return String(c?.tipo ?? "material"); }
   function statusOf(c: any) { return String(c?.status ?? "pendente"); }
+  // Rev. 2826 — filtro virtual "A entregar": OC gerada mas ainda não entregue
+  // (campo `entregaPendente` vindo do backend). Não é um status real da cotação.
+  function matchStatus(c: any) {
+    if (filtroStatus === "todos") return true;
+    if (filtroStatus === "a_entregar") return !!c?.entregaPendente;
+    return statusOf(c) === filtroStatus;
+  }
 
   const baseTipoFiltered = listaSearched.filter(c => filtroTipo === "todos" || tipoOf(c) === filtroTipo);
-  const baseStatusFiltered = listaSearched.filter(c => filtroStatus === "todos" || statusOf(c) === filtroStatus);
+  const baseStatusFiltered = listaSearched.filter(matchStatus);
 
   const countsPorStatus = baseTipoFiltered.reduce<Record<string, number>>((acc, c) => {
     const s = statusOf(c);
     acc[s] = (acc[s] ?? 0) + 1;
     return acc;
   }, {});
+  const countAEntregar = baseTipoFiltered.filter(c => c?.entregaPendente).length;
   const countTodos = baseTipoFiltered.length;
 
   const countsPorTipo = baseStatusFiltered.reduce<Record<string, number>>((acc, c) => {
@@ -1752,7 +1760,7 @@ export default function Cotacoes() {
   const countTodosTipo = baseStatusFiltered.length;
 
   const filtBase = listaSearched.filter(c =>
-    (filtroStatus === "todos" || statusOf(c) === filtroStatus) &&
+    matchStatus(c) &&
     (filtroTipo === "todos" || tipoOf(c) === filtroTipo)
   );
   // Rev. 2487 — Ordenação clicável por coluna.
@@ -7200,6 +7208,7 @@ export default function Cotacoes() {
             { s: "concluida", label: "Concluída", Icon: ShieldCheck,   count: countsPorStatus.concluida ?? 0, accent: "border-blue-300 text-blue-800",          activeBg: "bg-blue-600 border-blue-600 text-white",         idleHoverBg: "hover:bg-blue-50",   dot: "bg-blue-500" },
             { s: "recusada",  label: "Recusada",  Icon: XCircle,       count: countsPorStatus.recusada  ?? 0, accent: "border-red-300 text-red-800",            activeBg: "bg-red-600 border-red-600 text-white",           idleHoverBg: "hover:bg-red-50",    dot: "bg-red-500" },
             { s: "expirada",  label: "Expirada",  Icon: AlertTriangle, count: countsPorStatus.expirada  ?? 0, accent: "border-gray-300 text-gray-600",          activeBg: "bg-gray-600 border-gray-600 text-white",         idleHoverBg: "hover:bg-gray-100",  dot: "bg-gray-400" },
+            { s: "a_entregar", label: "A entregar", Icon: Truck,        count: countAEntregar,                  accent: "border-orange-300 text-orange-800",      activeBg: "bg-orange-600 border-orange-600 text-white",     idleHoverBg: "hover:bg-orange-50",  dot: "bg-orange-500" },
           ] as const).map(({ s, label, Icon, count, accent, activeBg, idleHoverBg, dot }) => {
             const active = filtroStatus === s;
             return (

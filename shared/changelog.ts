@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2826 — **COMPRAS · COTAÇÕES — NOVO FILTRO "A ENTREGAR" (OC APROVADA/GERADA MAS AINDA NÃO ENTREGUE).**
+ *
+ * PEDIDO (usuário, na tela Cotações): quer um filtro para ISOLAR as cotações cuja OC já foi aprovada/gerada
+ * mas a ENTREGA ainda não ocorreu — para "cobrar a obra" e zerar pendências de entrega. Hoje os filtros da tela
+ * eram só por STATUS da cotação (Todos/Pendente/Aprovada/Concluída/Recusada/Expirada) e por TIPO; não havia como
+ * separar "aprovada porém não entregue" sem abrir uma a uma (o badge de "Entrega Atrasada" vem de query por linha).
+ *
+ * O QUE FOI FEITO (`server/routers/compras.ts` + `client/src/pages/compras/Cotacoes.tsx` — só leitura/derivação +
+ * UI; ZERO ALTER/DROP/DELETE; ZERO schema novo; ZERO mutation):
+ *  (1) BACKEND — `listarCotacoes` passou a ENRIQUECER cada cotação com status de ENTREGA em LOTE. Após montar as
+ *      linhas, faz UMA query nas `comprasOrdens` (por `companyId` + `inArray(cotacaoId, cotIds)`), ignora OCs
+ *      `cancelada` E `rascunho` (alinhado ao resto do módulo — rascunho não é OC ativa), e por cotação deriva:
+ *      `temOc` (tem OC ativa), `entregaPendente` (tem OC NÃO entregue) e
+ *      `entregaAtrasada` (pendente + `dataEntregaPrevista < hoje`). "Entregue" = status em
+ *      (entregue/entregue_parcial/concluida/recebido) OU `dataEntregaReal` preenchida — mesma régua usada nos
+ *      dashboards/timeline. Comparação de data por string ISO 'YYYY-MM-DD' (mesmo padrão já usado no código).
+ *  (2) FRONTEND — NOVO pill de filtro "A entregar" (ícone Truck, laranja) na linha de filtros de status, com
+ *      contador próprio `countAEntregar`. Como NÃO é um status real da cotação, a filtragem virou helper
+ *      `matchStatus(c)` (todos → tudo; `a_entregar` → `c.entregaPendente`; senão `statusOf(c) === filtroStatus`),
+ *      usado tanto no `baseStatusFiltered` (contadores de tipo) quanto no `filtBase` (lista renderizada). Os
+ *      contadores por status real e por tipo continuam intactos.
+ *
+ * RESSALVA: "A entregar" considera QUALQUER cotação com OC não-cancelada e não-entregue (na prática só cotações já
+ * aprovadas geram OC, então o conjunto é "aprovada porém não entregue"); cotações aprovadas SEM OC gerada não entram
+ * (nada a cobrar de entrega ainda). O status de entrega é DERIVADO em tempo de leitura — não há coluna persistida.
+ *
+ * VALIDAÇÃO: esbuild OK (server); dev server sobe e compila o client sem erro.
+ *
  * Rev. 2825 — **COMPRAS · RESERVAS PREVENTIVAS — SELEÇÃO MÚLTIPLA (CHECKBOXES) PARA ESTENDER VÁRIAS RESERVAS DE UMA VEZ.**
  *
  * PEDIDO (usuário, na tela "Reservas Preventivas em Andamento"): "múltipla escolha" — poder selecionar VÁRIAS

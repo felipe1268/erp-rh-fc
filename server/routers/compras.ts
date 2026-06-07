@@ -4293,17 +4293,54 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         const scs = await db.select({ id: comprasSolicitacoes.id, titulo: comprasSolicitacoes.titulo, tipo: comprasSolicitacoes.tipo, numeroSc: comprasSolicitacoes.numeroSc }).from(comprasSolicitacoes).where(inArray(comprasSolicitacoes.id, scIds));
         for (const sc of scs) scMap[sc.id] = { titulo: sc.titulo, tipo: sc.tipo, numeroSc: sc.numeroSc };
       }
+
+      // Rev. 2826 — Status de ENTREGA por cotação (read-only) para o filtro "A entregar"
+      // (OC gerada mas ainda não entregue). Cruza as OCs não-canceladas vinculadas a cada
+      // cotação; "entregue" = status em (entregue/entregue_parcial/concluida/recebido) OU
+      // dataEntregaReal preenchida. "atrasada" = pendente + dataEntregaPrevista < hoje.
+      const cotIds = rows.map(r => r.id);
+      const ocByCot: Record<number, { temOc: boolean; entregaPendente: boolean; entregaAtrasada: boolean }> = {};
+      if (cotIds.length > 0) {
+        const ocs = await db.select({
+          cotacaoId: comprasOrdens.cotacaoId,
+          status: comprasOrdens.status,
+          dataEntregaPrevista: comprasOrdens.dataEntregaPrevista,
+          dataEntregaReal: comprasOrdens.dataEntregaReal,
+        }).from(comprasOrdens).where(and(
+          eq(comprasOrdens.companyId, input.companyId),
+          inArray(comprasOrdens.cotacaoId, cotIds),
+        ));
+        const hoje = new Date().toISOString().slice(0, 10);
+        const ENTREGUE = new Set(["entregue", "entregue_parcial", "concluida", "recebido"]);
+        // Alinhado ao resto do módulo: rascunho/cancelada NÃO contam como OC ativa.
+        for (const o of ocs) {
+          if (o.cotacaoId == null || o.status === "cancelada" || o.status === "rascunho") continue;
+          const cur = ocByCot[o.cotacaoId] ?? { temOc: false, entregaPendente: false, entregaAtrasada: false };
+          cur.temOc = true;
+          const entregue = ENTREGUE.has(String(o.status)) || !!o.dataEntregaReal;
+          if (!entregue) {
+            cur.entregaPendente = true;
+            if (o.dataEntregaPrevista && o.dataEntregaPrevista < hoje) cur.entregaAtrasada = true;
+          }
+          ocByCot[o.cotacaoId] = cur;
+        }
+      }
+
       return rows.map(r => {
         const sc = r.solicitacaoId ? scMap[r.solicitacaoId] : null;
         let tipo = r.tipo;
         if (sc && sc.tipo && (sc.tipo === "servico" || sc.tipo === "pacote") && tipo === "material") {
           tipo = sc.tipo === "pacote" ? "servico" : sc.tipo;
         }
+        const oc = ocByCot[r.id];
         return {
           ...r,
           descricao: sc?.titulo || r.descricao,
           numeroSc: sc?.numeroSc ?? null,
           tipo,
+          temOc: !!oc?.temOc,
+          entregaPendente: !!oc?.entregaPendente,
+          entregaAtrasada: !!oc?.entregaAtrasada,
         };
       });
     }),
