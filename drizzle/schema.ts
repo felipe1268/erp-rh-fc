@@ -2294,6 +2294,9 @@ export const coletaRhSessoes = pgTable("coleta_rh_sessoes", {
         criadoPorId: integer("criado_por_id"),
         expiraEm: timestamp("expira_em", { mode: 'string' }),
         createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+        // Rev. 2868 — soft-delete (excluir link sem DELETE físico; R-001/R-007/R-010).
+        // NULL = ativo/visível; preenchido = excluído (sai das listas e invalida o link).
+        deletedAt: timestamp("deleted_at", { mode: 'string' }),
 });
 
 export const coletaRhRespostas = pgTable("coleta_rh_respostas", {

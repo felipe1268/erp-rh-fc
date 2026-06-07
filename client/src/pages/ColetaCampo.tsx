@@ -5,6 +5,7 @@
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import { usePermissions } from "@/contexts/PermissionsContext";
 import { useToast } from "@/hooks/use-toast";
 import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   ClipboardList, Link2, QrCode, Copy, Check, X, Power, Eye, Loader2,
-  CheckCircle2, XCircle, Clock, ArrowRight, ImageIcon,
+  CheckCircle2, XCircle, Clock, ArrowRight, ImageIcon, Pencil, Trash2, AlertTriangle,
 } from "lucide-react";
 import { GRUPOS_COLETA, GRUPOS_COLETA_KEYS, type GrupoColetaKey } from "@shared/coletaCampos";
 
@@ -48,6 +49,7 @@ const CAMPO_ORDER = Object.keys(CAMPO_LABELS);
 
 export default function ColetaCampo() {
   const { selectedCompanyId, companies, isConstrutoras, getCompanyIdsForQuery } = useCompany();
+  const { isAdminMaster } = usePermissions();
   const { toast } = useToast();
   const utils = trpc.useUtils();
 
@@ -70,6 +72,27 @@ export default function ColetaCampo() {
   const [novoTitulo, setNovoTitulo] = useState<string>("");
   const [qrSessao, setQrSessao] = useState<any | null>(null);
   const [copiado, setCopiado] = useState<number | null>(null);
+
+  // Rev. 2868 — editar / excluir link (Adm Master).
+  const [editSessao, setEditSessao] = useState<any | null>(null);
+  const [editTitulo, setEditTitulo] = useState("");
+  const [editGrupos, setEditGrupos] = useState<Set<GrupoColetaKey>>(new Set());
+  const [excluirSessaoState, setExcluirSessaoState] = useState<any | null>(null);
+  const editGruposArray = useMemo(() => GRUPOS_COLETA_KEYS.filter((k) => editGrupos.has(k)), [editGrupos]);
+  const abrirEdicao = (s: any) => {
+    setEditSessao(s);
+    setEditTitulo(s.titulo || "");
+    const atuais: GrupoColetaKey[] = Array.isArray(s.grupos) && s.grupos.length > 0
+      ? (s.grupos as GrupoColetaKey[])
+      : [...GRUPOS_COLETA_KEYS];
+    setEditGrupos(new Set(atuais));
+  };
+  const toggleEditGrupo = (k: GrupoColetaKey) =>
+    setEditGrupos((prev) => {
+      const n = new Set(prev);
+      if (n.has(k)) n.delete(k); else n.add(k);
+      return n;
+    });
 
   // Rev. 2865 — grupos de informação que o auxiliar de campo vai coletar.
   // Default: todos marcados. A escolha vale para "Gerar link" e "Gerar todos".
@@ -94,6 +117,22 @@ export default function ColetaCampo() {
   const toggleM = trpc.coletaRh.desativarSessao.useMutation({
     onSuccess: () => utils.coletaRh.listarSessoes.invalidate(),
     onError: (e) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+  const editarM = trpc.coletaRh.editarSessao.useMutation({
+    onSuccess: () => {
+      toast({ title: "Link atualizado", description: "Alterações salvas com sucesso." });
+      setEditSessao(null);
+      utils.coletaRh.listarSessoes.invalidate();
+    },
+    onError: (e) => toast({ title: "Erro ao editar", description: e.message, variant: "destructive" }),
+  });
+  const excluirM = trpc.coletaRh.excluirSessao.useMutation({
+    onSuccess: () => {
+      toast({ title: "Link excluído", description: "O link de coleta foi removido." });
+      setExcluirSessaoState(null);
+      utils.coletaRh.listarSessoes.invalidate();
+    },
+    onError: (e) => toast({ title: "Erro ao excluir", description: e.message, variant: "destructive" }),
   });
   const criarTodasM = trpc.coletaRh.criarSessoesTodas.useMutation({
     onSuccess: (r) => {
@@ -382,6 +421,21 @@ export default function ColetaCampo() {
                   >
                     <Power className="h-4 w-4" /><span className="ml-1 hidden sm:inline">{s.ativo === 1 ? "Desativar" : "Ativar"}</span>
                   </Button>
+                  {isAdminMaster && (
+                    <>
+                      <Button size="sm" variant="outline" onClick={() => abrirEdicao(s)}>
+                        <Pencil className="h-4 w-4" /><span className="ml-1 hidden sm:inline">Editar</span>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                        onClick={() => setExcluirSessaoState(s)}
+                      >
+                        <Trash2 className="h-4 w-4" /><span className="ml-1 hidden sm:inline">Excluir</span>
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             ))}
@@ -452,6 +506,120 @@ export default function ColetaCampo() {
               </Button>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Rev. 2868 — Dialog editar link (Adm Master) */}
+      <Dialog open={!!editSessao} onOpenChange={(o) => !o && setEditSessao(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Editar link de coleta</DialogTitle>
+            <DialogDescription>
+              {editSessao?.obraNome ? `Obra: ${editSessao.obraNome}` : "Ajuste o título e o que será coletado."}
+            </DialogDescription>
+          </DialogHeader>
+          {editSessao && (
+            <div className="space-y-4">
+              <div>
+                <Label className="text-xs">Título</Label>
+                <Input
+                  value={editTitulo}
+                  onChange={(e) => setEditTitulo(e.target.value)}
+                  placeholder="Ex.: Coleta EPI — Outubro"
+                />
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <Label className="text-xs font-medium">O que o auxiliar vai coletar?</Label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditGrupos(new Set(GRUPOS_COLETA_KEYS))}
+                      className="text-[11px] text-muted-foreground hover:text-foreground underline"
+                    >
+                      Marcar todos
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditGrupos(new Set())}
+                      className="text-[11px] text-muted-foreground hover:text-foreground underline"
+                    >
+                      Limpar
+                    </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {GRUPOS_COLETA.map((g) => {
+                    const on = editGrupos.has(g.key);
+                    return (
+                      <button
+                        key={g.key}
+                        type="button"
+                        onClick={() => toggleEditGrupo(g.key)}
+                        title={g.descricao}
+                        className={`flex items-center gap-1.5 rounded-lg border p-2.5 text-left transition ${on ? "border-[#1B2A4A] bg-[#1B2A4A]/5 ring-1 ring-[#1B2A4A]/30" : "border-border bg-background hover:bg-muted"}`}
+                      >
+                        <span className="text-base leading-none">{g.emoji}</span>
+                        <span className="text-sm font-medium truncate flex-1">{g.label}</span>
+                        {on
+                          ? <CheckCircle2 className="h-4 w-4 text-[#1B2A4A] shrink-0" />
+                          : <span className="h-4 w-4 rounded-full border border-muted-foreground/40 shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+                {editGruposArray.length === 0 && (
+                  <p className="text-[11px] text-amber-600 mt-2">Selecione ao menos um grupo.</p>
+                )}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditSessao(null)}>Cancelar</Button>
+            <Button
+              disabled={editarM.isPending || editGruposArray.length === 0}
+              onClick={() => editSessao && editarM.mutate({
+                ...baseInput,
+                id: editSessao.id,
+                titulo: editTitulo.trim() || undefined,
+                grupos: editGruposArray,
+              })}
+              style={{ background: FC_NAVY }}
+            >
+              {editarM.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rev. 2868 — Dialog confirmar exclusão (Adm Master) */}
+      <Dialog open={!!excluirSessaoState} onOpenChange={(o) => !o && setExcluirSessaoState(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="h-5 w-5" /> Excluir link de coleta
+            </DialogTitle>
+            <DialogDescription>
+              O link <span className="font-medium">{excluirSessaoState?.titulo}</span>
+              {excluirSessaoState?.obraNome ? ` (${excluirSessaoState.obraNome})` : ""} deixará de funcionar e sairá da lista.
+              {excluirSessaoState?.totalRespostas > 0
+                ? ` Os ${excluirSessaoState.totalRespostas} envio(s) já recebidos permanecem na fila de revisão.`
+                : ""}
+              {" "}Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExcluirSessaoState(null)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={excluirM.isPending}
+              onClick={() => excluirSessaoState && excluirM.mutate({ ...baseInput, id: excluirSessaoState.id })}
+            >
+              {excluirM.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
+              Excluir
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

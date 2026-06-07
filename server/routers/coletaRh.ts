@@ -54,6 +54,17 @@ async function assertColetaCompanyAccess(ctxUser: any, companyIds: number[]) {
   }
 }
 
+/**
+ * Rev. 2868 — guarda de PRIVILÉGIO para editar/excluir um link de coleta.
+ * Só admin/admin_master. Operações destrutivas/de reconfiguração de link ficam
+ * restritas, independentemente do acesso de empresa (que já é checado à parte).
+ */
+function assertColetaAdmin(ctxUser: any) {
+  if (ctxUser?.role !== "admin" && ctxUser?.role !== "admin_master") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o administrador pode editar ou excluir links de coleta." });
+  }
+}
+
 // Campos que o auxiliar de campo pode coletar. Whitelist espelha colunas que
 // JÁ existem em employees e que updateEmployee aceita.
 const CAMPOS_COLETA = [
@@ -202,7 +213,11 @@ export const coletaRhRouter = router({
       const ativas = await db
         .select({ id: coletaRhSessoes.id, obraId: coletaRhSessoes.obraId, token: coletaRhSessoes.token, expiraEm: coletaRhSessoes.expiraEm })
         .from(coletaRhSessoes)
-        .where(and(inArray(coletaRhSessoes.companyId, companyIds), eq(coletaRhSessoes.ativo, 1)));
+        .where(and(
+          inArray(coletaRhSessoes.companyId, companyIds),
+          eq(coletaRhSessoes.ativo, 1),
+          isNull(coletaRhSessoes.deletedAt),
+        ));
       const ativaPorObra = new Map<number, { id: number; token: string }>();
       for (const s of ativas) {
         if (!sessaoExpirada(s.expiraEm)) ativaPorObra.set(s.obraId, { id: s.id, token: s.token });
@@ -262,7 +277,10 @@ export const coletaRhRouter = router({
         })
         .from(coletaRhSessoes)
         .leftJoin(obras, eq(coletaRhSessoes.obraId, obras.id))
-        .where(inArray(coletaRhSessoes.companyId, companyIds))
+        .where(and(
+          inArray(coletaRhSessoes.companyId, companyIds),
+          isNull(coletaRhSessoes.deletedAt),
+        ))
         .orderBy(desc(coletaRhSessoes.createdAt));
 
       // Contagem de pendentes por sessão.
@@ -298,6 +316,88 @@ export const coletaRhRouter = router({
       await db
         .update(coletaRhSessoes)
         .set({ ativo: input.ativo === 1 ? 1 : 0 })
+        .where(and(
+          eq(coletaRhSessoes.id, input.id),
+          inArray(coletaRhSessoes.companyId, companyIds),
+          isNull(coletaRhSessoes.deletedAt),
+        ));
+      return { ok: true };
+    }),
+
+  // Rev. 2868 — EDITAR um link de coleta (Adm Master). Permite trocar o título
+  // e/ou os grupos que o auxiliar vai coletar. A obra/token permanecem fixos
+  // (não recriam o link nem invalidam o que já foi enviado).
+  editarSessao: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      id: z.number(),
+      titulo: z.string().optional(),
+      grupos: z.array(z.string()).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const companyIds = resolveCompanyIds(input);
+      await assertColetaCompanyAccess(ctx.user, companyIds);
+      assertColetaAdmin(ctx.user);
+
+      const [sessao] = await db
+        .select({ id: coletaRhSessoes.id })
+        .from(coletaRhSessoes)
+        .where(and(
+          eq(coletaRhSessoes.id, input.id),
+          inArray(coletaRhSessoes.companyId, companyIds),
+          isNull(coletaRhSessoes.deletedAt),
+        ))
+        .limit(1);
+      if (!sessao) throw new TRPCError({ code: "NOT_FOUND", message: "Link não encontrado ou sem acesso." });
+
+      const patch: Record<string, any> = {};
+      if (input.titulo !== undefined) {
+        const t = input.titulo.trim();
+        if (t) patch.titulo = t;
+      }
+      if (input.grupos !== undefined) {
+        patch.camposJson = serializeGruposColeta(input.grupos);
+      }
+      if (Object.keys(patch).length === 0) return { ok: true };
+
+      await db
+        .update(coletaRhSessoes)
+        .set(patch)
+        .where(and(eq(coletaRhSessoes.id, input.id), inArray(coletaRhSessoes.companyId, companyIds)));
+      return { ok: true };
+    }),
+
+  // Rev. 2868 — EXCLUIR um link de coleta (Adm Master). SOFT-DELETE: marca
+  // deleted_at (NUNCA DELETE físico — R-001/R-007/R-010). Some das listagens e
+  // invalida o link público; respostas já enviadas permanecem na base.
+  excluirSessao: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      id: z.number(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const companyIds = resolveCompanyIds(input);
+      await assertColetaCompanyAccess(ctx.user, companyIds);
+      assertColetaAdmin(ctx.user);
+
+      const [sessao] = await db
+        .select({ id: coletaRhSessoes.id })
+        .from(coletaRhSessoes)
+        .where(and(
+          eq(coletaRhSessoes.id, input.id),
+          inArray(coletaRhSessoes.companyId, companyIds),
+          isNull(coletaRhSessoes.deletedAt),
+        ))
+        .limit(1);
+      if (!sessao) throw new TRPCError({ code: "NOT_FOUND", message: "Link não encontrado ou sem acesso." });
+
+      await db
+        .update(coletaRhSessoes)
+        .set({ ativo: 0, deletedAt: new Date().toISOString() })
         .where(and(eq(coletaRhSessoes.id, input.id), inArray(coletaRhSessoes.companyId, companyIds)));
       return { ok: true };
     }),
@@ -472,7 +572,7 @@ export const coletaRhRouter = router({
         .from(coletaRhSessoes)
         .where(eq(coletaRhSessoes.token, input.token))
         .limit(1);
-      if (!sessao || sessao.ativo !== 1 || sessaoExpirada(sessao.expiraEm)) {
+      if (!sessao || sessao.ativo !== 1 || sessao.deletedAt || sessaoExpirada(sessao.expiraEm)) {
         return { valido: false as const };
       }
 

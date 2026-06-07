@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2868 — **COLETA DE CAMPO (RH) — O ADM MASTER PODE EDITAR OU EXCLUIR UM
+ * LINK DE COLETA (ALÉM DE COPIAR / QR / DESATIVAR).**
+ *
+ * PEDIDO: "O Adm master precisa poder editar ou excluir a coleta de campo"
+ * (print IMG_1686 = tela interna "Coleta de Campo — RH"; os cards de link só
+ * tinham Copiar link / QR / Desativar — sem editar nem excluir).
+ *
+ * CONTEXTO: os cards de sessão (`ColetaCampo.tsx`) permitiam apenas alternar
+ * ativo/inativo. Não dava para corrigir o título nem ajustar os grupos a coletar
+ * de um link já gerado, nem remover um link errado da lista. "Desativar" só
+ * pausa (o card continua visível).
+ *
+ * FEITO:
+ *  - BACKEND (`server/routers/coletaRh.ts`): 2 endpoints novos protegidos —
+ *    `editarSessao` (título e/ou grupos; obra/token permanecem fixos, não recria
+ *    o link nem invalida o que já foi enviado) e `excluirSessao` (SOFT-DELETE).
+ *    Ambos checam acesso de empresa (`assertColetaCompanyAccess`, anti-IDOR) E
+ *    privilégio via NOVO `assertColetaAdmin` (só admin/admin_master) — operações
+ *    de reconfiguração/remoção ficam restritas.
+ *  - EXCLUIR = SOFT-DELETE (R-001/R-007/R-010, JAMAIS DELETE físico): marca
+ *    `deleted_at` + `ativo=0`. O link some das listagens (`listarSessoes`),
+ *    deixa de ser reaproveitado em `criarSessoesTodas` e é invalidado no público
+ *    (`dadosSessao` agora também barra `deletedAt`). Respostas já enviadas
+ *    permanecem na base/fila de revisão.
+ *  - SCHEMA: NOVA coluna `coleta_rh_sessoes.deleted_at` (TIMESTAMP, NULL=ativo)
+ *    em `drizzle/schema.ts` + self-heal `[SyncSchema+]` aditivo (ADD COLUMN IF
+ *    NOT EXISTS) — confirmado criado no Neon.
+ *  - FRONTEND (`ColetaCampo.tsx`): botões "Editar" (Dialog com Título + chips de
+ *    grupos, mesma UX do "Novo link") e "Excluir" (Dialog de confirmação em
+ *    vermelho avisando que envios já recebidos permanecem) nos cards, visíveis
+ *    SÓ para `isAdminMaster` (`usePermissions`). Mutations com invalidate do
+ *    `listarSessoes`.
+ *
+ * ZERO ALTER/DROP/DELETE (schema só ADITIVO via IF NOT EXISTS).
+ *
  * Rev. 2867 — **COLETA DE CAMPO (RH) — NA PÁGINA PÚBLICA, QUEM JÁ FOI COLETADO
  * SAI DA LISTA; FICAM SÓ OS QUE FALTAM FAZER.**
  *
