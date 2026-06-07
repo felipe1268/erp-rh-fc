@@ -2522,13 +2522,36 @@ export async function findObraBySn(companyId: number, sn: string) {
 export async function getRevisions() {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(systemRevisions).orderBy(desc(systemRevisions.version));
+  // `system_revisions.version` NÃO é UNIQUE — backfills antigos (Rev. 2852) geraram
+  // DUPLICATAS (ex.: faixa 1859–1876 com 2–3 linhas por versão), inflando a contagem
+  // e repetindo cards na tela "Controle de Revisões". Deduplicamos NA LEITURA por
+  // versão, mantendo UMA entrada — a de MAIOR id (último sync via JSDoc = fonte
+  // canônica mais completa). Não-destrutivo: zero ALTER/DELETE, só filtra ao ler.
+  const rows = await db
+    .select()
+    .from(systemRevisions)
+    .orderBy(desc(systemRevisions.version), desc(systemRevisions.id));
+  const seen = new Set<number>();
+  const out: typeof rows = [];
+  for (const r of rows) {
+    const v = Number(r.version);
+    if (seen.has(v)) continue;
+    seen.add(v);
+    out.push(r);
+  }
+  return out;
 }
 
 export async function getLatestRevision() {
   const db = await getDb();
   if (!db) return null;
-  const rows = await db.select().from(systemRevisions).orderBy(desc(systemRevisions.version)).limit(1);
+  // `version` não é UNIQUE — sob duplicatas da versão máxima, desempata por `id`
+  // (maior = insert mais recente via JSDoc) p/ retorno determinístico entre réplicas.
+  const rows = await db
+    .select()
+    .from(systemRevisions)
+    .orderBy(desc(systemRevisions.version), desc(systemRevisions.id))
+    .limit(1);
   return rows[0] || null;
 }
 

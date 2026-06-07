@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2864 — **CONTROLE DE REVISÕES (`/revisoes`) — DEDUPLICAÇÃO NA LEITURA
+ * (CADA REVISÃO APARECE UMA ÚNICA VEZ) + RE-SINCRONIZAÇÃO DAS REVISÕES RECENTES.**
+ *
+ * PEDIDO: "O número da revisão não está correto, preciso que seja 100%
+ * controlado identificando cada melhoria para garantir o controle." (anexos
+ * IMG_1682 = tela "Controle de Revisões" com "0 Total" / "Nenhuma revisão
+ * registrada ainda"; IMG_1683 = card de perfil mostrando um nº de revisão
+ * defasado).
+ *
+ * INVESTIGAÇÃO (banco Neon real, leitura): a tabela `system_revisions` NÃO
+ * estava vazia — tinha 2602 linhas (versões 1→2861). Ou seja, o "0 Total" do
+ * print era estado transitório/antigo (antes do sync de startup popular). Dois
+ * problemas REAIS de controle foram confirmados:
+ *  1. DUPLICATAS — a coluna `system_revisions.version` NÃO é UNIQUE; backfills
+ *     antigos (Rev. 2852) geraram 2–3 linhas para a MESMA versão (faixa
+ *     1859–1876), inflando a contagem ("Total") e repetindo cards na timeline.
+ *  2. REVISÕES RECENTES não registradas — o sync (`server/syncRevisions.ts`)
+ *     só roda no STARTUP; como o app não havia reiniciado após as Rev. 2862/2863,
+ *     o máximo no banco era 2861 e o badge de versão ficava defasado.
+ *
+ * FEITO:
+ *  - `server/db.ts` (`getRevisions`): a leitura agora DEDUPLICA por `version`,
+ *    mantendo UMA entrada por versão — a de MAIOR `id` (último insert via JSDoc
+ *    = fonte canônica mais completa). Ordena `version DESC, id DESC` e filtra em
+ *    JS com um `Set`. NÃO-DESTRUTIVO: zero ALTER, zero DELETE, zero UNIQUE — as
+ *    linhas físicas continuam no banco; só a LEITURA fica limpa. Reflete direto
+ *    na tela `/revisoes` (contagem "Total" e cards por tipo agora corretos) e em
+ *    `revisions.latest`.
+ *  - RESTART do app para o `syncRevisions()` de startup registrar as versões
+ *    faltantes (2862, 2863 e a própria 2864), realinhando o badge de versão e o
+ *    "Total" com a régua real do changelog.
+ *
+ * RESSALVA: GAPS históricos (ex.: faixas 1055–1185) permanecem — são versões sem
+ * registro NEM no changelog JSDoc NEM no backfill; preenchê-las exigiria a fonte
+ * legada (array de 4.6MB, removido do sync por OOM) e está fora de escopo.
+ *
+ * ZERO ALTER/DROP/DELETE; ZERO schema novo; só backend (1 função) + restart.
+ *
  * Rev. 2863 — **DRE (`/financeiro/dre`) — "ANÁLISE INTELIGENTE" GANHA BARRA DE
  * PROGRESSO 0→100% (EVOLUÇÃO VISÍVEL DA IA), NO LUGAR DO "ANALISANDO..." PARADO.**
  *
