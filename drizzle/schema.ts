@@ -9160,3 +9160,21 @@ export const obraResponsaveisEstoque = pgTable("obra_responsaveis_estoque", {
   index("idx_resp_estoque_obra").on(table.obraId),
   index("idx_resp_estoque_user").on(table.userId),
 ]);
+
+// Rev. 2850 — Persistência da Análise Inteligente (IA) do DRE.
+// A análise (cara, chamada ao modelo) passa a ficar SALVA por
+// company + período + tipo de período, junto com uma NOTA de 0 a 100.
+// Fica disponível até o usuário mandar PROCESSAR NOVAMENTE (upsert).
+export const dreAnalisesIa = pgTable("dre_analises_ia", {
+  id:            serial().primaryKey(),
+  companyId:     integer("company_id").notNull(),
+  periodo:       varchar({ length: 20 }).notNull(),
+  tipoPeriodo:   varchar("tipo_periodo", { length: 20 }).notNull().default("mensal"),
+  nota:          integer().default(0),
+  payload:       jsonb().notNull(),
+  geradoEm:      timestamp("gerado_em", { mode: "string" }).defaultNow().notNull(),
+  geradoPorId:   integer("gerado_por_id"),
+  geradoPorNome: varchar("gerado_por_nome", { length: 255 }),
+}, (table) => [
+  uniqueIndex("uniq_dre_analise_chave").on(table.companyId, table.periodo, table.tipoPeriodo),
+]);

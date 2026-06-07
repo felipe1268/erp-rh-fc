@@ -21,6 +21,14 @@ function formatBRL(v: number) {
 function formatPct(v: number) {
   return `${(v ?? 0).toFixed(2)}%`;
 }
+// Cor da NOTA (0-100) por faixa: crítica (vermelho) → atenção (âmbar) →
+// boa (azul) → excelente (verde). Espelha a escala de 'saude'.
+function notaCor(n: number): string {
+  if (n >= 85) return "#059669"; // emerald-600
+  if (n >= 60) return "#2563eb"; // blue-600
+  if (n >= 40) return "#d97706"; // amber-600
+  return "#dc2626"; // red-600
+}
 
 const MESES_PT = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -147,14 +155,33 @@ export default function FinanceiroDRE() {
   );
 
   // Análise de IA — sob demanda (botão), por ser uma chamada cara ao modelo.
+  // A última análise fica SALVA por período (Rev. 2850): ao abrir a tela ou
+  // trocar de período, lemos a versão persistida; o botão regenera/atualiza.
   const analiseMut = (trpc as any).financial.analiseDRE.useMutation();
-  const analise = analiseMut.data;
+  const { data: analiseSalva, refetch: refetchSalva } = (trpc as any).financial.getAnaliseDRESalva.useQuery(
+    { companyId, periodo, tipoPeriodo },
+    { enabled: !!companyId }
+  );
+  // Prioriza o resultado recém-gerado SÓ se for do período atualmente
+  // selecionado (mutation.data persiste entre renders; ao trocar de período
+  // sem refazer, deve cair para a análise SALVA do novo período).
+  const mutVars: any = (analiseMut as any).variables;
+  const mutMatchesPeriodo = !!analiseMut.data
+    && mutVars?.periodo === periodo
+    && mutVars?.tipoPeriodo === tipoPeriodo;
+  const analise = mutMatchesPeriodo ? analiseMut.data : (analiseSalva ?? undefined);
+  const analiseSalvaEm: string | undefined = (analise as any)?.geradoEm;
+  const nota: number | null = analise && typeof (analise as any).nota === "number"
+    ? Math.max(0, Math.min(100, Math.round((analise as any).nota)))
+    : null;
   const fontesMap: Record<string, Fonte> = {};
   (analise?.fontes ?? []).forEach((f: Fonte) => { fontesMap[f.id] = f; });
   const analiseDesatualizada = analise && analise.periodo !== (dre?.periodo ?? periodo);
 
   const gerarAnalise = () =>
-    analiseMut.mutate({ companyId, periodo, tipoPeriodo });
+    analiseMut.mutate({ companyId, periodo, tipoPeriodo }, {
+      onSuccess: () => { refetchSalva(); },
+    });
 
   const rows: DRERow[] = dre ? [
     { label: "1. RECEITA BRUTA", value: dre.receitaBruta, highlight: "green", info: "Total faturado no período (vendas e serviços), antes de qualquer dedução." },
@@ -383,7 +410,7 @@ export default function FinanceiroDRE() {
                 <Sparkles className="w-5 h-5 text-orange-500" />
               </span>
               <div>
-                <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2 flex-wrap">
                   Análise Inteligente
                   {analise?.saude && (
                     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${saudeMap[analise.saude]?.cls ?? ""}`}>
@@ -392,17 +419,40 @@ export default function FinanceiroDRE() {
                   )}
                 </h2>
                 <p className="text-xs text-gray-500">Diagnóstico do resultado com benchmarks do setor de construção e fontes citadas</p>
+                {!analiseMut.isPending && analiseSalvaEm && (
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    Salva em {new Date(analiseSalvaEm).toLocaleString("pt-BR")}
+                    {(analise as any)?.geradoPorNome ? ` · por ${(analise as any).geradoPorNome}` : ""}
+                  </p>
+                )}
               </div>
             </div>
-            <Button
-              size="sm"
-              onClick={gerarAnalise}
-              disabled={analiseMut.isPending || !dre}
-              className="bg-orange-500 hover:bg-orange-600 text-white shrink-0"
-            >
-              <Sparkles className="w-4 h-4 mr-1.5" />
-              {analiseMut.isPending ? "Analisando..." : analise ? "Refazer análise" : "Analisar com IA"}
-            </Button>
+            <div className="flex items-center gap-3 shrink-0">
+              {nota !== null && !analiseMut.isPending && (
+                <div className="flex flex-col items-center" title="Nota geral de saúde financeira (0 a 100)">
+                  <div
+                    className="w-14 h-14 rounded-full flex items-center justify-center font-extrabold text-base tabular-nums border-4"
+                    style={{
+                      color: notaCor(nota),
+                      borderColor: notaCor(nota),
+                      background: `${notaCor(nota)}14`,
+                    }}
+                  >
+                    {nota}
+                  </div>
+                  <span className="text-[10px] text-gray-400 mt-0.5 font-medium">NOTA /100</span>
+                </div>
+              )}
+              <Button
+                size="sm"
+                onClick={gerarAnalise}
+                disabled={analiseMut.isPending || !dre}
+                className="bg-orange-500 hover:bg-orange-600 text-white"
+              >
+                <Sparkles className="w-4 h-4 mr-1.5" />
+                {analiseMut.isPending ? "Analisando..." : analise ? "Refazer análise" : "Analisar com IA"}
+              </Button>
+            </div>
           </div>
 
           <CardContent className="p-5">

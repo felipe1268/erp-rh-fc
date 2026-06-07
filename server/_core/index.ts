@@ -759,6 +759,29 @@ Regras:
           console.log(`[SyncSchema+] Tabela obra_responsaveis_estoque garantida.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA obra_responsaveis_estoque:`, e?.message || e); }
 
+        // Rev. 2850 — Persistência da Análise Inteligente (IA) do DRE.
+        // A análise (chamada cara ao modelo) fica SALVA por
+        // company_id + periodo + tipo_periodo, junto com a NOTA 0-100. Disponível
+        // até o usuário mandar "Refazer análise" (upsert na mutation analiseDRE).
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS dre_analises_ia (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              periodo VARCHAR(20) NOT NULL,
+              tipo_periodo VARCHAR(20) NOT NULL DEFAULT 'mensal',
+              nota INTEGER DEFAULT 0,
+              payload JSONB NOT NULL,
+              gerado_em TIMESTAMP DEFAULT NOW() NOT NULL,
+              gerado_por_id INTEGER,
+              gerado_por_nome VARCHAR(255)
+            )
+          `);
+          // Índice ÚNICO p/ o ON CONFLICT do upsert (1 análise por chave).
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uniq_dre_analise_chave ON dre_analises_ia(company_id, periodo, tipo_periodo)`);
+          console.log(`[SyncSchema+] Rev. 2850: tabela dre_analises_ia garantida (análise IA do DRE salva + nota 0-100).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA dre_analises_ia:`, e?.message || e); }
+
         // Rev. 2560 — BACKSTOP DE BANCO: 1 só alocação ATIVA por funcionário.
         // Índice único parcial fecha de vez "mesmo funcionário em 2 obras ao
         // mesmo tempo": qualquer write futuro que tente ativar uma 2ª alocação

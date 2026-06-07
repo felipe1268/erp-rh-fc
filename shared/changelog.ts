@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2850 — **FINANCEIRO · DRE — ANÁLISE INTELIGENTE (IA) AGORA TEM NOTA DE 0 A 100 E FICA SALVA
+ * (PERSISTIDA) ATÉ O USUÁRIO MANDAR REFAZER.**
+ *
+ * PEDIDO (usuário, print iPad — IMG_1667, card "Análise Inteligente" do DRE travado em "Analisando..."):
+ * (1) a análise precisa de uma NOTA de 0 a 100% e (2) precisa FICAR SALVA — hoje ela é só on-demand
+ * (mutation), não persiste e some ao trocar de tela/período. Ou seja: ao reabrir o DRE a última análise
+ * daquele período deve reaparecer pronta, com a nota, e o botão passa a ser "Refazer análise".
+ *
+ * O QUE FOI FEITO:
+ *  - SERVIÇO (`server/services/dreAnaliseIA.ts`): `AnaliseDREResult` ganhou `nota: number` (0-100). O prompt
+ *    pede a nota geral de saúde financeira coerente com `saude` (crítica ~0-39 / atenção ~40-59 / boa ~60-84 /
+ *    excelente ~85-100). Pós-parse: `nota` clampada 0-100 + arredondada; se a IA não devolver número válido,
+ *    FALLBACK determinístico pela `saude` (excelente=90 / boa=72 / atencao=45 / critica=20) — anti-fabricação,
+ *    a nota é sempre coerente com o diagnóstico. Esqueletos vazio/erro recebem `nota: 0`.
+ *  - SCHEMA (`drizzle/schema.ts`): NOVA tabela `dre_analises_ia` (id, company_id, periodo, tipo_periodo
+ *    default 'mensal', nota, payload JSONB, gerado_em, gerado_por_id/nome + índice `idx_dre_analise_chave`).
+ *    DIAGNÓSTICO IMPORTANTE: o auto-create genérico do `server/syncSchema.ts` está MORTO nesta versão do
+ *    drizzle — `extractSchemaTables` procura `table["_"]` mas o drizzle expõe a config via Symbols, então
+ *    detecta 0 tabelas. Por isso a tabela foi garantida via guard manual `[SyncSchema+]` em
+ *    `server/_core/index.ts` com `CREATE TABLE IF NOT EXISTS` (mesmo padrão das demais tabelas do projeto).
+ *  - BACKEND (`server/routers/financial.ts`): mutation `analiseDRE` agora PERSISTE o resultado (UPSERT manual
+ *    sem DELETE: SELECT existente por company+periodo+tipo → UPDATE, senão INSERT), gravando nota + payload +
+ *    gerado_em/por. Não grava quando `modeloAusente` (não congela erro). Persistência é best-effort (try/catch:
+ *    se falhar, ainda devolve a análise). NOVA query `getAnaliseDRESalva` (guard `_assertFinanceiroCompanyAccess`)
+ *    lê a última análise salva do período (null se nada / se a tabela ainda não existir).
+ *  - FRONTEND (`client/src/pages/financeiro/FinanceiroDRE.tsx`): NOVA query `getAnaliseDRESalva` carrega a
+ *    análise salva ao abrir/trocar período; `analise = analiseMut.data ?? salva`. Após refazer, `refetchSalva()`.
+ *    Header da seção ganhou um ANEL com a NOTA /100 colorido por faixa (`notaCor`: <40 vermelho, <60 âmbar,
+ *    <85 azul, ≥85 verde) + linha "Salva em {data} · por {nome}".
+ *  - ZERO ALTER/DROP/DELETE (apenas CREATE TABLE IF NOT EXISTS + UPDATE/INSERT na nova tabela própria).
+ *
  * Rev. 2849 — **TERCEIROS · PREVISÃO DE CAIXA — REDESIGN MODERNO COM RASTREIO DA INFORMAÇÃO (TRILHA
  * CONTRATOS → PREVISTO/CRONOGRAMA → REALIZADO/MEDIÇÕES) E LEITURA MAIS FÁCIL.**
  *

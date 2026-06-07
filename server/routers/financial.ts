@@ -3711,9 +3711,73 @@ export const financialRouter = router({
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
     try {
       const { analisarDRE } = await import("../services/dreAnaliseIA");
-      return await analisarDRE(input.companyId, input.periodo, input.tipoPeriodo);
+      const result = await analisarDRE(input.companyId, input.periodo, input.tipoPeriodo);
+
+      // Persiste a análise (fica salva até o usuário processar novamente).
+      // Não grava quando o modelo falhou (modeloAusente) — evita "congelar" erro.
+      if (!result.modeloAusente) {
+        try {
+          const db = await getDb();
+          const nota = Number((result as any).nota ?? 0) || 0;
+          const payload = JSON.stringify(result);
+          const geradoPorNome = ctx.user?.name ?? ctx.user?.username ?? null;
+          const geradoPorId = ctx.user?.id ?? null;
+          // UPSERT atômico (sem DELETE) via ON CONFLICT no índice único
+          // (company_id, periodo, tipo_periodo) — garante 1 análise por chave
+          // mesmo sob concorrência (não há SELECT+INSERT em janela de corrida).
+          await dbExecute(db,
+            `INSERT INTO dre_analises_ia
+               (company_id, periodo, tipo_periodo, nota, payload, gerado_em, gerado_por_id, gerado_por_nome)
+             VALUES ($1,$2,$3,$4,$5::jsonb,NOW(),$6,$7)
+             ON CONFLICT (company_id, periodo, tipo_periodo)
+             DO UPDATE SET nota=EXCLUDED.nota, payload=EXCLUDED.payload, gerado_em=NOW(),
+                           gerado_por_id=EXCLUDED.gerado_por_id, gerado_por_nome=EXCLUDED.gerado_por_nome`,
+            [input.companyId, input.periodo, input.tipoPeriodo, nota, payload, geradoPorId, geradoPorNome]
+          );
+        } catch (persistErr: any) {
+          // Persistência é best-effort: se falhar, ainda devolvemos a análise.
+          console.warn("[analiseDRE] falha ao persistir:", persistErr?.message ?? persistErr);
+        }
+      }
+      return result;
     } catch (e: any) {
       throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: e?.message ?? "Erro ao gerar análise do DRE" });
+    }
+  }),
+
+  // Carrega a análise IA SALVA (se houver) para o período. Fica disponível
+  // até o usuário mandar processar novamente (Rev. 2850).
+  getAnaliseDRESalva: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    periodo: z.string(),
+    tipoPeriodo: z.enum(["mensal", "trimestral", "semestral", "anual"]).default("mensal"),
+  })).query(async ({ ctx, input }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    try {
+      const db = await getDb();
+      const res = await dbExecute(db,
+        `SELECT nota, payload, gerado_em, gerado_por_nome
+           FROM dre_analises_ia
+          WHERE company_id=$1 AND periodo=$2 AND tipo_periodo=$3
+          ORDER BY gerado_em DESC LIMIT 1`,
+        [input.companyId, input.periodo, input.tipoPeriodo]
+      );
+      const row = rows(res)[0];
+      if (!row) return null;
+      const payload = typeof row.payload === "string" ? JSON.parse(row.payload) : row.payload;
+      const notaRaw = Number(row.nota ?? payload?.nota ?? 0);
+      const notaSafe = Number.isFinite(notaRaw) ? Math.max(0, Math.min(100, Math.round(notaRaw))) : 0;
+      return {
+        ...payload,
+        nota: notaSafe,
+        geradoEm: row.gerado_em ?? payload?.geradoEm,
+        geradoPorNome: row.gerado_por_nome ?? null,
+        salva: true,
+      };
+    } catch (e: any) {
+      // Tabela pode não existir ainda no primeiríssimo boot — devolve null.
+      console.warn("[getAnaliseDRESalva]:", e?.message ?? e);
+      return null;
     }
   }),
 

@@ -120,6 +120,7 @@ export interface IndicadorAnalise {
 export interface AnaliseDREResult {
   resumoExecutivo: string;
   saude: "excelente" | "boa" | "atencao" | "critica";
+  nota: number; // Nota geral de saúde financeira, 0 a 100.
   indicadores: IndicadorAnalise[];
   riscos: { texto: string; severidade: "alta" | "media" | "baixa"; fontes: string[] }[];
   recomendacoes: { texto: string; fontes: string[] }[];
@@ -188,6 +189,7 @@ export async function analisarDRE(
       resumoExecutivo:
         "Não há lançamentos financeiros suficientes neste período para uma análise de resultado. Lance receitas e despesas do período para habilitar a leitura inteligente.",
       saude: "atencao",
+      nota: 0,
       indicadores: [],
       riscos: [],
       recomendacoes: [],
@@ -218,6 +220,7 @@ export async function analisarDRE(
     `{
   "resumoExecutivo": "2 a 4 frases resumindo a saúde do resultado e o destaque do período",
   "saude": "excelente|boa|atencao|critica",
+  "nota": <number de 0 a 100 — NOTA GERAL de saúde financeira do período, coerente com 'saude' (crítica ~0-39, atenção ~40-59, boa ~60-84, excelente ~85-100), ponderando margens vs setor, resultado e riscos>,
   "indicadores": [
     {
       "nome": "Margem Bruta",
@@ -256,6 +259,7 @@ export async function analisarDRE(
         String(e?.message ?? "erro").slice(0, 120) +
         "). Os números do DRE permanecem disponíveis na tabela abaixo.",
       saude: "atencao",
+      nota: 0,
       indicadores: [],
       riscos: [],
       recomendacoes: [],
@@ -268,6 +272,14 @@ export async function analisarDRE(
 
   const saudeValida = ["excelente", "boa", "atencao", "critica"];
   const saude = saudeValida.includes(parsed?.saude) ? parsed.saude : "atencao";
+
+  // Nota geral 0-100. Usa a nota da IA quando válida; senão deriva da 'saude'
+  // (anti-fabricação: nota sempre coerente com o diagnóstico).
+  const saudeNotaPadrao: Record<string, number> = { excelente: 90, boa: 72, atencao: 45, critica: 20 };
+  const notaIA = Number(parsed?.nota);
+  const nota = Number.isFinite(notaIA)
+    ? Math.max(0, Math.min(100, Math.round(notaIA)))
+    : (saudeNotaPadrao[saude] ?? 45);
 
   const indicadores: IndicadorAnalise[] = Array.isArray(parsed?.indicadores)
     ? parsed.indicadores.slice(0, 8).map((i: any) => ({
@@ -306,6 +318,7 @@ export async function analisarDRE(
   return {
     resumoExecutivo: String(parsed?.resumoExecutivo ?? "").slice(0, 800) || `Resultado de ${brl(dre.lucroLiquido)} no período.`,
     saude,
+    nota,
     indicadores,
     riscos,
     recomendacoes,
