@@ -99,7 +99,7 @@ export async function calcularKpis(
   const hoje = new Date().toISOString().split("T")[0];
 
   // 1. Receitas do mês
-  const recRes = await db!.execute(
+  const recRes = await q(db!,
     `SELECT
        COALESCE(SUM(CASE WHEN status NOT IN ('cancelado') THEN valor_previsto ELSE 0 END), 0) AS bruta,
        COALESCE(SUM(CASE WHEN status IN ('recebido','pago') THEN valor_realizado ELSE 0 END), 0) AS realizada
@@ -113,7 +113,7 @@ export async function calcularKpis(
   const receitaRealizada = n(rec.realizada);
 
   // 2. Despesas do mês
-  const despRes = await db!.execute(
+  const despRes = await q(db!,
     `SELECT
        COALESCE(SUM(CASE WHEN status NOT IN ('cancelado') THEN valor_previsto ELSE 0 END), 0) AS total,
        COALESCE(SUM(CASE WHEN status IN ('pago','recebido') THEN COALESCE(valor_realizado, valor_previsto) ELSE 0 END), 0) AS realizada
@@ -127,16 +127,17 @@ export async function calcularKpis(
   const despesaRealizada = n(desp.realizada);
 
   // 3. Saldo bancário atual
-  const saldoRes = await db!.execute(
-    `SELECT COALESCE(SUM(saldo_inicial + COALESCE(entradas,0) - COALESCE(saidas,0)), 0) AS saldo
-     FROM company_bank_accounts
-     WHERE company_id=$1 AND ativo=1`,
+  const saldoRes = await q(db!,
+    `SELECT COALESCE(SUM(fob.valor), 0) AS saldo
+     FROM financial_opening_balances fob
+     JOIN company_bank_accounts cba ON cba.id = fob.conta_bancaria_id
+     WHERE fob.company_id=$1 AND cba.ativo=1 AND cba."deletedAt" IS NULL`,
     [companyId]
   );
   const saldoCaixaAtual = n(r(saldoRes)[0]?.saldo);
 
   // 4. A receber total (contas a receber)
-  const arRes = await db!.execute(
+  const arRes = await q(db!,
     `SELECT COALESCE(SUM(valor_previsto), 0) AS total
      FROM financial_entries
      WHERE company_id=$1 AND tipo='receita' AND status IN ('a_receber','previsto')`,
@@ -145,7 +146,7 @@ export async function calcularKpis(
   const contasReceber = n(r(arRes)[0]?.total);
 
   // 5. A pagar total (contas a pagar)
-  const apRes = await db!.execute(
+  const apRes = await q(db!,
     `SELECT COALESCE(SUM(valor_previsto), 0) AS total
      FROM financial_entries
      WHERE company_id=$1 AND tipo='despesa' AND status IN ('a_pagar','previsto')`,
@@ -160,7 +161,7 @@ export async function calcularKpis(
 
   // 7. DPO — Days Payables Outstanding
   // DPO = Contas a Pagar / (Compras / 30)
-  const comprasRes = await db!.execute(
+  const comprasRes = await q(db!,
     `SELECT COALESCE(SUM(valor_previsto), 0) AS total
      FROM financial_entries
      WHERE company_id=$1 AND tipo='despesa'
@@ -173,7 +174,7 @@ export async function calcularKpis(
   const dpo = comprasDiaria > 0 ? contasPagar / comprasDiaria : 0;
 
   // 8. Burn Rate (despesas fixas mensais — custos independentes de receita)
-  const burnRes = await db!.execute(
+  const burnRes = await q(db!,
     `SELECT COALESCE(SUM(valor_previsto), 0) AS burn
      FROM financial_entries
      WHERE company_id=$1 AND tipo='despesa' AND natureza='fixo'
@@ -194,7 +195,7 @@ export async function calcularKpis(
   // FCO = Receita Realizada − Despesa Realizada
   const fco = receitaRealizada - despesaRealizada;
   // CAPEX: investimentos em veículos/equipamentos no mês
-  const capexRes = await db!.execute(
+  const capexRes = await q(db!,
     `SELECT COALESCE(SUM(valor_previsto), 0) AS capex
      FROM financial_entries
      WHERE company_id=$1 AND tipo='despesa'
@@ -211,7 +212,7 @@ export async function calcularKpis(
   const ebitda = resultadoBruto; // Simplificado — sem depreciação
 
   // 12. Margem por Obra
-  const obraRes = await db!.execute(
+  const obraRes = await q(db!,
     `SELECT obra_id AS "obraId", obra_nome AS "obraNome",
             COALESCE(SUM(CASE WHEN tipo='receita' AND status NOT IN ('cancelado') THEN valor_previsto ELSE 0 END), 0) AS receita,
             COALESCE(SUM(CASE WHEN tipo='despesa' AND status NOT IN ('cancelado') THEN valor_previsto ELSE 0 END), 0) AS despesa
@@ -239,7 +240,7 @@ export async function calcularKpis(
   });
 
   // 13. Inadimplência
-  const inadimRes = await db!.execute(
+  const inadimRes = await q(db!,
     `SELECT
        COALESCE(SUM(CASE WHEN tipo='receita' AND status='a_receber' AND data_vencimento < CURRENT_DATE THEN valor_previsto ELSE 0 END), 0) AS inadimplente,
        COALESCE(SUM(CASE WHEN tipo='despesa' AND status='a_pagar' AND data_vencimento < CURRENT_DATE THEN valor_previsto ELSE 0 END), 0) AS atrasado_pagar,
@@ -254,7 +255,7 @@ export async function calcularKpis(
   const diasAtrasoMedioPagar = n(inadim.dias_atraso);
 
   // 14. Tributos do mês
-  const tributosRes = await db!.execute(
+  const tributosRes = await q(db!,
     `SELECT COALESCE(SUM(valor_total), 0) AS total
      FROM financial_tax_obligations
      WHERE company_id=$1 AND mes_competencia=$2`,
@@ -271,7 +272,7 @@ export async function calcularKpis(
   const coberturaJuros = tributosMes > 0 ? ebitda / tributosMes : 999;
 
   // 17. Projeção de fluxo de caixa — próximos 90 dias
-  const fluxoRes = await db!.execute(
+  const fluxoRes = await q(db!,
     `SELECT data_vencimento::text AS data,
             COALESCE(SUM(CASE WHEN tipo='receita' THEN valor_previsto ELSE 0 END), 0) AS entradas,
             COALESCE(SUM(CASE WHEN tipo='despesa' THEN valor_previsto ELSE 0 END), 0) AS saidas
@@ -322,7 +323,7 @@ export async function calcularKpis(
 
   // Salvar no cache
   try {
-    await db!.execute(
+    await q(db!,
       `INSERT INTO financial_kpi_cache (company_id, periodo, tipo_periodo, kpi_json, calculado_em)
        VALUES ($1,$2,'mensal',$3,NOW())
        ON CONFLICT (company_id, periodo) DO UPDATE SET kpi_json=EXCLUDED.kpi_json, calculado_em=NOW()`,
@@ -502,7 +503,7 @@ export async function dreDisponibilidade(companyId: number, ano: string) {
 export async function projetarFluxoCaixa90Dias(companyId: number) {
   const db = await getDb();
 
-  const res = await db!.execute(
+  const res = await q(db!,
     `SELECT data_vencimento::text AS data,
             COALESCE(SUM(CASE WHEN tipo='receita' THEN valor_previsto ELSE 0 END), 0) AS entradas,
             COALESCE(SUM(CASE WHEN tipo='despesa' THEN valor_previsto ELSE 0 END), 0) AS saidas,
@@ -518,9 +519,11 @@ export async function projetarFluxoCaixa90Dias(companyId: number) {
   );
 
   // Saldo atual
-  const saldoRes = await db!.execute(
-    `SELECT COALESCE(SUM(saldo_inicial + COALESCE(entradas,0) - COALESCE(saidas,0)), 0) AS saldo
-     FROM company_bank_accounts WHERE company_id=$1 AND ativo=1`,
+  const saldoRes = await q(db!,
+    `SELECT COALESCE(SUM(fob.valor), 0) AS saldo
+     FROM financial_opening_balances fob
+     JOIN company_bank_accounts cba ON cba.id = fob.conta_bancaria_id
+     WHERE fob.company_id=$1 AND cba.ativo=1 AND cba."deletedAt" IS NULL`,
     [companyId]
   );
   let saldo = n(r(saldoRes)[0]?.saldo);
@@ -555,7 +558,7 @@ export async function gerarEFDReinf(companyId: number, mesRef: string) {
   const db = await getDb();
 
   // Buscar serviços PJ com retenção
-  const pjRes = await db!.execute(
+  const pjRes = await q(db!,
     `SELECT pjp.id, pjp.valor, pjp.data_pagamento,
             pjc.nome_fantasia, pjc.cnpj,
             pjc.natureza_servico, pjm.valor_bruto
@@ -569,7 +572,7 @@ export async function gerarEFDReinf(companyId: number, mesRef: string) {
   const pjs = r(pjRes);
 
   // Buscar terceiros com INSS retido
-  const tercRes = await db!.execute(
+  const tercRes = await q(db!,
     `SELECT tm.id, tm.valor_medido, tm.periodo,
             tc.nome_empresa, tc.cnpj, tc.retencao_inss
      FROM terceiro_medicoes tm
