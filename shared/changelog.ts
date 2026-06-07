@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2839 — **TERCEIROS · NOME DO TERCEIRO SEMPRE EM MAIÚSCULAS NA EXIBIÇÃO (LISTA "EMPRESAS DE SERVIÇO" + RAIO-X 360°).**
+ *
+ * PEDIDO (usuário, print do iPad da lista "Empresas de Serviço"): "Independente de como for cadastrado quero que o nome
+ * do terceiro Sempre fique maiúsculo." Na lista, alguns nomes apareciam em caixa mista (ex.: "Gesso Moreira", "Promatel",
+ * "RF Gesso", "Sergovale Construções LTDA") e outros em caixa alta — sem padronização.
+ *
+ * O QUE FOI FEITO (só frontend/exibição — ZERO backend, ZERO dados):
+ *  - `client/src/pages/terceiros/EmpresasTerceiras.tsx`: o `<h3>` da razão social no card da lista ganhou a classe
+ *    Tailwind `uppercase`.
+ *  - `client/src/pages/terceiros/TerceiroRaioX.tsx`: o `<h1>` da razão social no cabeçalho navy do Raio-X 360° ganhou
+ *    a classe `uppercase`.
+ *
+ * DECISÃO/RACIONAL: optou-se por transformação de EXIBIÇÃO via CSS (`text-transform: uppercase`) em vez de normalizar
+ * o dado gravado. Assim cobre TODOS os registros já existentes (independente de como foram cadastrados) sem nenhum
+ * `UPDATE` em massa, e os nomes futuros também aparecem em caixa alta independentemente do que o usuário digitar.
+ * O dado original permanece intacto no banco (preserva razão social oficial para documentos/integrações). Aplicou-se
+ * só à RAZÃO SOCIAL (nome principal do terceiro); o nome fantasia (subtítulo) segue como cadastrado.
+ *
+ * ZERO ALTER/DROP/DELETE; ZERO schema; ZERO backend.
+ *
+ * ARQUIVOS: `client/src/pages/terceiros/EmpresasTerceiras.tsx`, `client/src/pages/terceiros/TerceiroRaioX.tsx`.
+ *
+ * ---
+ *
  * Rev. 2838 — **FINANCEIRO · DRE — CORRIGE "SEM QUALQUER VALOR": QUERIES NÃO LIGAVAM OS PARÂMETROS POSICIONAIS.**
  *
  * PEDIDO (usuário, print do iPad da tela DRE): "Ainda sem qualquer valor." Mesmo com um mês selecionado (ex.: Janeiro),

@@ -72,7 +72,7 @@ function TerceiroRaioXInner({ id }: { id: number }) {
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-lg font-bold text-white truncate">{emp.razaoSocial}</h1>
+                <h1 className="text-lg font-bold text-white truncate uppercase">{emp.razaoSocial}</h1>
                 <Badge className={`text-xs border ${emp.status === "ativa" ? "bg-emerald-500/20 text-emerald-200 border-emerald-400/30" : "bg-white/10 text-white/70 border-white/20"}`}>{emp.status}</Badge>
               </div>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs text-white/70">

@@ -329,7 +329,7 @@ export default function EmpresasTerceiras() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-semibold text-foreground truncate group-hover:text-orange-600 transition-colors">{emp.razaoSocial}</h3>
+                        <h3 className="font-semibold text-foreground truncate group-hover:text-orange-600 transition-colors uppercase">{emp.razaoSocial}</h3>
                         {statusBadge(emp.status)}
                       </div>
                       {emp.nomeFantasia && <p className="text-sm text-muted-foreground truncate">{emp.nomeFantasia}</p>}
