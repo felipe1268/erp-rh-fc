@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   TrendingUp, TrendingDown, DollarSign, Building2, CheckCircle2, BarChart3,
   ChevronLeft, ChevronRight, Minus, Receipt, CalendarDays, ChevronDown,
+  ArrowRight, FileText, CalendarClock, Wallet, Info, Route,
 } from "lucide-react";
 
 const BRL = (v: any) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(v) || 0);
@@ -53,13 +54,6 @@ export default function PrevisaoCaixa() {
 
   const mesesRaw = (data?.meses || []) as MesData[];
 
-  // Anos disponíveis nos dados (p/ pontinhos/navegação)
-  const anosComDados = useMemo(() => {
-    const set = new Set<number>();
-    mesesRaw.forEach(m => set.add(parseInt(m.mes.slice(0, 4))));
-    return set;
-  }, [mesesRaw]);
-
   // 12 meses do ano selecionado (preenche zeros onde não houver dados)
   const meses12 = useMemo(() => {
     const byKey: Record<string, MesData> = {};
@@ -91,6 +85,23 @@ export default function PrevisaoCaixa() {
 
   const tituloPeriodo = mesSel === "ano" ? `Ano ${ano}` : `${MESES_FULL[parseInt(mesSel) - 1]} ${ano}`;
 
+  // RASTREIO / TRILHA: origem dos números (contratos → previsto → realizado)
+  const trilha = useMemo(() => {
+    const nContratos = data?.contratos?.length || 0;
+    const valorContratos = (data?.contratos || []).reduce((a: number, c: any) => a + (Number(c.valorTotal) || 0), 0);
+    // medições do ano em foco (count + meses distintos com lançamento)
+    const medAno = meses12.flatMap(m => m.realizadoDetalhe);
+    const mesesComPrevisto = meses12.filter(m => m.previsto > 0).length;
+    return {
+      nContratos,
+      valorContratos,
+      nMedicoes: medAno.length,
+      mesesComPrevisto,
+      previsto: totaisAno.atual.previsto,
+      realizado: totaisAno.atual.realizado,
+    };
+  }, [data?.contratos, meses12, totaisAno]);
+
   // Semanas filtradas (gráfico) pelo período em foco
   const semanasFiltradas = useMemo(() => {
     const all = data?.semanas || [];
@@ -117,14 +128,20 @@ export default function PrevisaoCaixa() {
 
   return (
     <DashboardLayout>
-      <div className="p-5 space-y-5 max-w-[1400px] mx-auto">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">Previsão de Caixa</h1>
-            <p className="text-sm text-gray-500">Previsto (cronograma) vs Realizado (medições) — Contratos de Terceiros</p>
+      <div className="p-4 sm:p-6 space-y-5 max-w-[1400px] mx-auto">
+        {/* CABEÇALHO */}
+        <div className="flex items-start justify-between flex-wrap gap-3">
+          <div className="flex items-start gap-3">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#1B2A4A] to-[#2d4373] flex items-center justify-center shadow-sm flex-shrink-0">
+              <Wallet className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-[#1B2A4A] leading-tight">Previsão de Caixa</h1>
+              <p className="text-sm text-gray-500">Contratos de Terceiros · quanto a obra vai pagar e quanto já pagou</p>
+            </div>
           </div>
           <Select value={obraId} onValueChange={setObraId}>
-            <SelectTrigger className="w-52"><SelectValue placeholder="Todas as obras" /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-56 bg-white"><SelectValue placeholder="Todas as obras" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todas as obras</SelectItem>
               {obrasData.map((o: any) => (
@@ -134,14 +151,54 @@ export default function PrevisaoCaixa() {
           </Select>
         </div>
 
+        {/* RASTREIO DA INFORMAÇÃO — de onde vem cada número */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <Route className="w-4 h-4 text-[#1B2A4A]" />
+            <h2 className="text-sm font-bold text-[#1B2A4A] uppercase tracking-wide">Rastreio da informação</h2>
+            <span className="text-xs text-gray-400 hidden sm:inline">— siga o caminho de cada valor</span>
+          </div>
+          <div className="flex flex-col lg:flex-row items-stretch gap-2 lg:gap-0">
+            <TrilhaPasso
+              n={1}
+              icon={<FileText className="w-4 h-4" />}
+              cor="bg-indigo-500"
+              titulo="Contratos de Terceiros"
+              valor={BRL(trilha.valorContratos)}
+              legenda={`${trilha.nContratos} contrato${trilha.nContratos === 1 ? "" : "s"} ativo${trilha.nContratos === 1 ? "" : "s"}`}
+              fonte="Origem · cadastro dos contratos"
+            />
+            <TrilhaSeta />
+            <TrilhaPasso
+              n={2}
+              icon={<CalendarClock className="w-4 h-4" />}
+              cor="bg-blue-500"
+              titulo="Previsto"
+              valor={BRL(trilha.previsto)}
+              legenda={`distribuído em ${trilha.mesesComPrevisto} ${trilha.mesesComPrevisto === 1 ? "mês" : "meses"} de ${ano}`}
+              fonte="Datas do cronograma (EAP)"
+            />
+            <TrilhaSeta />
+            <TrilhaPasso
+              n={3}
+              icon={<CheckCircle2 className="w-4 h-4" />}
+              cor="bg-emerald-500"
+              titulo="Realizado"
+              valor={BRL(trilha.realizado)}
+              legenda={trilha.nMedicoes > 0 ? `${trilha.nMedicoes} medição${trilha.nMedicoes === 1 ? "" : "ões"} em ${ano}` : "nenhuma medição ainda"}
+              fonte="Medições lançadas/aprovadas"
+            />
+          </div>
+        </div>
+
         {/* SELETOR DE PERÍODO PADRONIZADO (mês a mês / ano a ano) */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
           <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
             <div className="flex items-center gap-2">
               <button onClick={() => setAno(a => a - 1)} className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 text-gray-600">
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <span className="text-lg font-bold text-gray-900 w-16 text-center">{ano}</span>
+              <span className="text-lg font-bold text-[#1B2A4A] w-16 text-center">{ano}</span>
               <button onClick={() => setAno(a => a + 1)} className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 text-gray-600">
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -179,28 +236,32 @@ export default function PrevisaoCaixa() {
 
         {/* KPIs do período em foco */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <KPICard icon={<DollarSign className="w-5 h-5 text-white" />} bg="bg-blue-500" label={`Previsto · ${tituloPeriodo}`} value={BRL(foco.previsto)} color="text-gray-900" />
-          <KPICard icon={<CheckCircle2 className="w-5 h-5 text-white" />} bg="bg-emerald-500" label={`Realizado · ${tituloPeriodo}`} value={BRL(foco.realizado)} color="text-emerald-700" />
+          <KPICard icon={<DollarSign className="w-5 h-5 text-white" />} bg="bg-blue-500" label="Previsto" sub={tituloPeriodo} value={BRL(foco.previsto)} color="text-gray-900" fonte="cronograma" />
+          <KPICard icon={<CheckCircle2 className="w-5 h-5 text-white" />} bg="bg-emerald-500" label="Realizado" sub={tituloPeriodo} value={BRL(foco.realizado)} color="text-emerald-700" fonte="medições" />
           <KPICard
             icon={variacao >= 0 ? <TrendingUp className="w-5 h-5 text-white" /> : <TrendingDown className="w-5 h-5 text-white" />}
             bg={variacao > 0 ? "bg-red-500" : variacao < 0 ? "bg-amber-500" : "bg-gray-400"}
             label="Realizado vs Previsto"
+            sub={tituloPeriodo}
             value={foco.previsto > 0 ? `${variacao > 0 ? "+" : ""}${variacao.toFixed(1)}%` : "—"}
             color={variacao > 0 ? "text-red-600" : variacao < 0 ? "text-amber-600" : "text-gray-600"}
+            fonte="R − P"
           />
           <KPICard
             icon={<CalendarDays className="w-5 h-5 text-white" />}
             bg={varAnoAno == null ? "bg-gray-400" : varAnoAno >= 0 ? "bg-emerald-500" : "bg-red-500"}
             label={`Realizado ${ano} vs ${ano - 1}`}
+            sub="ano a ano"
             value={varAnoAno == null ? "—" : `${varAnoAno > 0 ? "+" : ""}${varAnoAno.toFixed(1)}%`}
             color={varAnoAno == null ? "text-gray-600" : varAnoAno >= 0 ? "text-emerald-700" : "text-red-600"}
+            fonte={varAnoAno == null ? `sem base ${ano - 1}` : `vs ${ano - 1}`}
           />
         </div>
 
         {isLoading ? (
           <div className="py-12 text-center text-gray-400">Calculando previsão...</div>
         ) : mesesRaw.length === 0 ? (
-          <div className="py-12 text-center text-gray-400">
+          <div className="py-12 text-center text-gray-400 bg-white rounded-2xl border border-gray-200">
             <BarChart3 className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p className="font-medium">Sem dados de previsão</p>
             <p className="text-sm">Vincule os itens dos contratos a atividades do planejamento para gerar a previsão</p>
@@ -208,11 +269,11 @@ export default function PrevisaoCaixa() {
         ) : (
           <>
             {/* TABELA COMPARATIVA ANUAL POR MÊS */}
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+              <div className="px-4 sm:px-5 py-3.5 border-b border-gray-100 flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-blue-600" />
-                <h3 className="font-semibold text-gray-800 text-sm">Comparativo Mês a Mês — {ano}</h3>
-                <span className="text-xs text-gray-400">(clique no mês para ver o histórico)</span>
+                <h3 className="font-bold text-[#1B2A4A] text-sm">Comparativo Mês a Mês — {ano}</h3>
+                <span className="hidden sm:inline-flex items-center gap-1 text-xs text-gray-400 ml-1"><Info className="w-3 h-3" /> clique no mês para rastrear a origem</span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -243,7 +304,7 @@ export default function PrevisaoCaixa() {
                             className={`transition-colors ${vazio ? "text-gray-300" : "hover:bg-blue-50/40 cursor-pointer"} ${aberto ? "bg-blue-50/60" : ""}`}
                             onClick={() => { if (!vazio && temDetalhe) setExpandedMes(aberto ? null : m.mes); }}
                           >
-                            <td className="px-4 py-2.5 font-medium text-gray-700">{MESES_FULL[i]}</td>
+                            <td className="px-4 py-2.5 font-medium text-gray-700 whitespace-nowrap">{MESES_FULL[i]}</td>
                             <td className="px-4 py-2.5 text-right font-semibold text-blue-600">{m.previsto > 0 ? BRL(m.previsto) : "—"}</td>
                             <td className="px-4 py-2.5 text-right font-semibold text-emerald-600">{m.realizado > 0 ? BRL(m.realizado) : "—"}</td>
                             <td className={`px-4 py-2.5 text-right font-semibold ${diff > 0 ? "text-green-600" : diff < 0 ? "text-red-500" : "text-gray-300"}`}>
@@ -268,18 +329,44 @@ export default function PrevisaoCaixa() {
                             </td>
                           </tr>
                           {aberto && (
-                            <tr key={m.mes + "-det"} className="bg-gray-50/60">
-                              <td colSpan={7} className="px-4 py-3">
+                            <tr key={m.mes + "-det"} className="bg-gradient-to-b from-blue-50/40 to-gray-50/30">
+                              <td colSpan={7} className="px-4 sm:px-5 py-4">
+                                <div className="flex items-center gap-2 mb-3 text-xs text-gray-500">
+                                  <Route className="w-3.5 h-3.5 text-[#1B2A4A]" />
+                                  <span className="font-semibold text-[#1B2A4A]">Rastreio de {MESES_FULL[i]} {ano}</span>
+                                  <span>— de onde vêm os valores deste mês</span>
+                                </div>
                                 <div className="grid md:grid-cols-2 gap-4">
+                                  {/* Previsto: por contrato (origem) */}
+                                  <div className="bg-white rounded-xl border border-blue-100 p-3">
+                                    <p className="text-xs font-semibold text-blue-700 flex items-center justify-between gap-1.5 mb-2 pb-2 border-b border-blue-50">
+                                      <span className="flex items-center gap-1.5"><CalendarClock className="w-3.5 h-3.5" /> Previsto pelo cronograma</span>
+                                      <span className="font-bold">{BRL(m.previsto)}</span>
+                                    </p>
+                                    {m.previstoDetalhe.length > 0 ? (
+                                      <div className="space-y-1">
+                                        {m.previstoDetalhe.map((d, idx) => (
+                                          <div key={idx} className="flex items-center justify-between text-xs rounded-lg hover:bg-blue-50/50 px-2 py-1.5">
+                                            <div className="min-w-0">
+                                              <span className="font-medium text-gray-800 truncate block">{d.contratoDescricao}</span>
+                                              <span className="text-gray-400">{d.empresaNome}</span>
+                                            </div>
+                                            <span className="font-semibold text-blue-600 flex-shrink-0 ml-2">{BRL(d.valor)}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : <p className="text-xs text-gray-400 px-2 py-1.5">Sem previsão de cronograma neste mês.</p>}
+                                  </div>
                                   {/* Realizado: medições */}
-                                  <div>
-                                    <p className="text-xs font-semibold text-emerald-700 flex items-center gap-1.5 mb-2">
-                                      <Receipt className="w-3.5 h-3.5" /> Medições realizadas em {MESES_FULL[i]}
+                                  <div className="bg-white rounded-xl border border-emerald-100 p-3">
+                                    <p className="text-xs font-semibold text-emerald-700 flex items-center justify-between gap-1.5 mb-2 pb-2 border-b border-emerald-50">
+                                      <span className="flex items-center gap-1.5"><Receipt className="w-3.5 h-3.5" /> Realizado pelas medições</span>
+                                      <span className="font-bold">{BRL(m.realizado)}</span>
                                     </p>
                                     {m.realizadoDetalhe.length > 0 ? (
                                       <div className="space-y-1">
                                         {m.realizadoDetalhe.map(d => (
-                                          <div key={d.id} className="flex items-center justify-between text-xs bg-white rounded-lg border border-gray-100 px-2.5 py-1.5">
+                                          <div key={d.id} className="flex items-center justify-between text-xs rounded-lg hover:bg-emerald-50/50 px-2 py-1.5">
                                             <div className="min-w-0">
                                               <span className="font-medium text-gray-800">Medição #{d.numero}</span>
                                               <span className="text-gray-400"> · {d.contratoDescricao}</span>
@@ -289,26 +376,7 @@ export default function PrevisaoCaixa() {
                                           </div>
                                         ))}
                                       </div>
-                                    ) : <p className="text-xs text-gray-400">Nenhuma medição neste mês.</p>}
-                                  </div>
-                                  {/* Previsto: por contrato */}
-                                  <div>
-                                    <p className="text-xs font-semibold text-blue-700 flex items-center gap-1.5 mb-2">
-                                      <Building2 className="w-3.5 h-3.5" /> Previsto por contrato em {MESES_FULL[i]}
-                                    </p>
-                                    {m.previstoDetalhe.length > 0 ? (
-                                      <div className="space-y-1">
-                                        {m.previstoDetalhe.map((d, idx) => (
-                                          <div key={idx} className="flex items-center justify-between text-xs bg-white rounded-lg border border-gray-100 px-2.5 py-1.5">
-                                            <div className="min-w-0">
-                                              <span className="font-medium text-gray-800 truncate block">{d.contratoDescricao}</span>
-                                              <span className="text-gray-400">{d.empresaNome}</span>
-                                            </div>
-                                            <span className="font-semibold text-blue-600 flex-shrink-0 ml-2">{BRL(d.valor)}</span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    ) : <p className="text-xs text-gray-400">Sem previsão de cronograma neste mês.</p>}
+                                    ) : <p className="text-xs text-gray-400 px-2 py-1.5">Nenhuma medição neste mês.</p>}
                                   </div>
                                 </div>
                               </td>
@@ -338,9 +406,9 @@ export default function PrevisaoCaixa() {
             </div>
 
             {/* CHART semanal do período em foco */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 shadow-sm">
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                <h3 className="font-semibold text-gray-800 text-sm flex items-center gap-2">
+                <h3 className="font-bold text-[#1B2A4A] text-sm flex items-center gap-2">
                   <BarChart3 className="w-4 h-4 text-blue-600" /> Fluxo Semanal — {tituloPeriodo}
                 </h3>
                 <div className="flex items-center gap-4 text-xs">
@@ -414,26 +482,41 @@ export default function PrevisaoCaixa() {
               )}
             </div>
 
-            {/* CONTRATOS */}
+            {/* CONTRATOS — origem dos números (rastreio) */}
             {data?.contratos && data.contratos.length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 p-4">
-                <h3 className="font-semibold text-gray-800 text-sm mb-3 flex items-center gap-2">
-                  <Building2 className="w-4 h-4 text-indigo-500" /> Contratos Incluídos
-                </h3>
-                <div className="space-y-2">
-                  {data.contratos.map((c: any) => (
-                    <div key={c.id} className="flex items-center justify-between text-sm py-1.5 px-2 rounded-lg hover:bg-gray-50">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" />
-                        <span className="font-medium text-gray-900 truncate">{c.descricao}</span>
-                        <span className="text-gray-400 text-xs flex-shrink-0">{c.empresaNome}</span>
+              <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 shadow-sm">
+                <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                  <h3 className="font-bold text-[#1B2A4A] text-sm flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-indigo-500" /> Contratos Incluídos
+                  </h3>
+                  <span className="text-xs text-gray-400 flex items-center gap-1"><FileText className="w-3 h-3" /> origem da previsão</span>
+                </div>
+                <div className="space-y-1.5">
+                  {data.contratos.map((c: any) => {
+                    const pago = Number(c.percentualPago) || 0;
+                    return (
+                      <div key={c.id} className="flex items-center justify-between gap-3 text-sm py-2 px-2.5 rounded-xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-colors">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center flex-shrink-0">
+                            <FileText className="w-4 h-4 text-indigo-500" />
+                          </div>
+                          <div className="min-w-0">
+                            <span className="font-medium text-gray-900 truncate block">{c.descricao}</span>
+                            <span className="text-gray-400 text-xs truncate block">{c.empresaNome}</span>
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0 flex items-center gap-3">
+                          <div className="hidden sm:flex flex-col items-end w-24">
+                            <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full ${pago >= 100 ? "bg-emerald-500" : "bg-blue-400"}`} style={{ width: `${Math.min(pago, 100)}%` }} />
+                            </div>
+                            <span className="text-gray-400 text-[11px] mt-0.5">{pago.toFixed(0)}% pago</span>
+                          </div>
+                          <span className="font-bold text-gray-900 w-28 text-right">{BRL(c.valorTotal)}</span>
+                        </div>
                       </div>
-                      <div className="text-right flex-shrink-0 ml-4">
-                        <span className="font-semibold text-gray-900">{BRL(c.valorTotal)}</span>
-                        <span className="text-gray-400 text-xs ml-2">{(c.percentualPago || 0).toFixed(0)}% pago</span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -444,14 +527,43 @@ export default function PrevisaoCaixa() {
   );
 }
 
-function KPICard({ icon, bg, label, value, color }: { icon: React.ReactNode; bg: string; label: string; value: string; color: string }) {
+function TrilhaPasso({ n, icon, cor, titulo, valor, legenda, fonte }: { n: number; icon: React.ReactNode; cor: string; titulo: string; valor: string; legenda: string; fonte: string }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-3 shadow-sm">
-      <div className={`w-10 h-10 ${bg} rounded-lg flex items-center justify-center flex-shrink-0`}>{icon}</div>
-      <div className="min-w-0">
-        <p className="text-xs text-gray-500 truncate">{label}</p>
-        <p className={`text-lg font-bold ${color} truncate`}>{value}</p>
+    <div className="flex-1 rounded-xl border border-gray-100 bg-gray-50/50 p-3.5 relative">
+      <div className="flex items-center gap-2 mb-1.5">
+        <div className={`w-7 h-7 rounded-lg ${cor} text-white flex items-center justify-center flex-shrink-0`}>{icon}</div>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-[10px] font-bold text-gray-400">{n}.</span>
+          <span className="text-sm font-semibold text-gray-700 truncate">{titulo}</span>
+        </div>
       </div>
+      <p className="text-lg font-bold text-[#1B2A4A] leading-tight">{valor}</p>
+      <p className="text-xs text-gray-500 mt-0.5">{legenda}</p>
+      <p className="text-[10px] text-gray-400 mt-1.5 flex items-center gap-1 uppercase tracking-wide"><Info className="w-2.5 h-2.5" /> {fonte}</p>
+    </div>
+  );
+}
+
+function TrilhaSeta() {
+  return (
+    <div className="flex items-center justify-center px-1 lg:px-2 text-gray-300 self-center rotate-90 lg:rotate-0">
+      <ArrowRight className="w-5 h-5" />
+    </div>
+  );
+}
+
+function KPICard({ icon, bg, label, sub, value, color, fonte }: { icon: React.ReactNode; bg: string; label: string; sub: string; value: string; color: string; fonte: string }) {
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
+      <div className="flex items-center gap-3 mb-2">
+        <div className={`w-10 h-10 ${bg} rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm`}>{icon}</div>
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-gray-600 truncate">{label}</p>
+          <p className="text-[11px] text-gray-400 truncate">{sub}</p>
+        </div>
+      </div>
+      <p className={`text-xl font-bold ${color} truncate`}>{value}</p>
+      <p className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1"><Info className="w-2.5 h-2.5" /> {fonte}</p>
     </div>
   );
 }

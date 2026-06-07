@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2849 — **TERCEIROS · PREVISÃO DE CAIXA — REDESIGN MODERNO COM RASTREIO DA INFORMAÇÃO (TRILHA
+ * CONTRATOS → PREVISTO/CRONOGRAMA → REALIZADO/MEDIÇÕES) E LEITURA MAIS FÁCIL.**
+ *
+ * PEDIDO (usuário, prints iPad — IMG_1665/IMG_1666, tela "Previsão de Caixa"): "FC um layout completamente
+ * moderno e fácil entendimento, para facilitar a leitura, com rastreio das informações." Ou seja: deixar a tela
+ * mais clara, com hierarquia visual moderna e, principalmente, DEIXAR EXPLÍCITO DE ONDE VEM CADA NÚMERO.
+ *
+ * O QUE FOI FEITO (FRONTEND — `client/src/pages/terceiros/PrevisaoCaixa.tsx`, SÓ UI/leitura — ZERO backend):
+ *  - NOVO bloco "RASTREIO DA INFORMAÇÃO": trilha horizontal de 3 passos com setas conectando a ORIGEM →
+ *    cálculo → resultado: (1) Contratos de Terceiros (nº contratos + valor; fonte = cadastro), (2) Previsto
+ *    (valor + nº de meses; fonte = datas do cronograma/EAP), (3) Realizado (valor + nº de medições; fonte =
+ *    medições lançadas/aprovadas). Cada passo carrega um micro-rótulo "fonte" explicando a procedência.
+ *    Responsivo: vira coluna (setas giram 90°) no mobile/iPad.
+ *  - KPIs redesenhados: cada card ganhou sub-rótulo de período + micro-rótulo de FONTE ("cronograma",
+ *    "medições", "R − P", "vs ano"). Cantos 2xl, sombras suaves, ícone em chip arredondado.
+ *  - Cabeçalho com identidade FC (chip navy #1B2A4A + ícone carteira) e subtítulo em linguagem do engenheiro
+ *    ("quanto a obra vai pagar e quanto já pagou").
+ *  - Drill-down do mês reescrito como "RASTREIO DE {mês}": dois cartões (Previsto pelo cronograma / Realizado
+ *    pelas medições), cada um com TOTAL no topo e a lista de origem (contratos previstos / medições com nº,
+ *    contrato, empresa, data e status). Mantém o mesmo dado do backend, só reorganiza p/ leitura.
+ *  - "Contratos Incluídos" enriquecido: ícone por contrato, barra de % pago (verde quando 100%), rótulo
+ *    "origem da previsão" — reforçando o início da trilha.
+ *  - NOVOS helpers de UI `TrilhaPasso` / `TrilhaSeta`; `KPICard` ganhou `sub`/`fonte`. Removido o
+ *    `anosComDados` (não usado). TODA a lógica de dados (useMemo de meses12/totaisAno/foco/semanas) intacta.
+ *  - ZERO ALTER/DROP/DELETE; ZERO schema; ZERO backend; read-only.
+ *
  * Rev. 2848 — **TERCEIROS · PREVISÃO DE CAIXA — FALLBACK POR CÓDIGO EAP: PREVISTO RECUPERA AUTOMATICAMENTE
  * MESMO COM VÍNCULO DE ATIVIDADE ÓRFÃO OU CONTRATO SEM PROJETO DE PLANEJAMENTO.**
  *
