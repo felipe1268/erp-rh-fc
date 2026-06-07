@@ -14412,6 +14412,61 @@ Responda APENAS com JSON válido, sem markdown, no formato:
       return { ok: true, novoPrazo: novoPrazo.toISOString() };
     }),
 
+  /**
+   * Rev. 2825 — Estender prazo de VÁRIAS reservas de uma vez (seleção múltipla na tela
+   * de Reservas Preventivas). Mesmos limites por perfil do `estenderPrazoReserva`
+   * (admin_master 60 / diretor 7 / gerente_compras 3). Cada reserva é validada
+   * individualmente (existe? company? status 'ativa'?); as que não passam são IGNORADAS
+   * (não derrubam o lote) e contabilizadas. Só UPDATE de prazo/log — ZERO ALTER/DROP/DELETE.
+   */
+  estenderPrazoReservasEmLote: protectedProcedure
+    .input(z.object({
+      reservaIds: z.array(z.number()).min(1, "Selecione ao menos uma reserva"),
+      diasAdicionais: z.number().min(1).max(60),
+      motivo: z.string().min(3, "Justificativa obrigatória"),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const role: string | undefined = (ctx?.user as any)?.role;
+      const limites: Record<string, number> = {
+        admin_master: 60,
+        diretor: 7,
+        gerente_compras: 3,
+      };
+      const limite = limites[role ?? ""];
+      if (!limite) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin_master, diretor ou gerente_compras podem estender prazos." });
+      }
+      if (input.diasAdicionais > limite) {
+        throw new TRPCError({ code: "FORBIDDEN", message: `Seu perfil pode estender no máximo ${limite} dia(s).` });
+      }
+      const ids = [...new Set(input.reservaIds)];
+      const reservas = await db.select().from(comprasReservasSaldo).where(inArray(comprasReservasSaldo.id, ids));
+      let estendidas = 0;
+      let ignoradas = 0;
+      for (const r of reservas) {
+        // Tenancy: só estende reservas de empresas que o chamador acessa; senão ignora.
+        try { await _assertCompanyAccess(ctx.user, r.companyId); } catch { ignoradas++; continue; }
+        if (r.status !== "ativa") { ignoradas++; continue; }
+        const novoPrazo = new Date(r.prazoLimite);
+        novoPrazo.setDate(novoPrazo.getDate() + input.diasAdicionais);
+        await db.update(comprasReservasSaldo).set({
+          prazoLimite: novoPrazo.toISOString(),
+          atualizadoEm: new Date().toISOString(),
+        } as any).where(eq(comprasReservasSaldo.id, r.id));
+        await _registrarLogReserva({
+          reservaId: r.id, acao: "estendida", companyId: r.companyId,
+          executadoPorId: ctx.user?.id, executadoPorNome: ctx.user?.name ?? ctx.user?.email,
+          prazoAdicionalDias: input.diasAdicionais, motivo: input.motivo,
+          detalhes: `Extensão em lote — novo prazo: ${novoPrazo.toISOString().slice(0,10).split("-").reverse().join("/")}`,
+        });
+        estendidas++;
+      }
+      // IDs pedidos que nem existem mais (já liberados/consumidos) também contam como ignorados.
+      ignoradas += ids.length - reservas.length;
+      return { ok: true, estendidas, ignoradas };
+    }),
+
   /** Override em lote — admin_master libera todas reservas pendentes de um usuário. */
   estenderPrazoUsuario: protectedProcedure
     .input(z.object({

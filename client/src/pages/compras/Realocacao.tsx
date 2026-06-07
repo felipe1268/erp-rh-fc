@@ -1,5 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -15,8 +15,9 @@ import { formatNumeroCotacaoDisplay } from "@shared/numeroCotacao";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ArrowLeftRight, Plus, Loader2, Building2, ShieldAlert, Undo2, TrendingDown, Lock, Wallet, CheckCircle, PackageSearch, HardHat, FileText, Clock, Hourglass, UserCog } from "lucide-react";
+import { ArrowLeftRight, Plus, Loader2, Building2, ShieldAlert, Undo2, TrendingDown, Lock, Wallet, CheckCircle, PackageSearch, HardHat, FileText, Clock, Hourglass, UserCog, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ReservasBanner } from "@/components/compras/ReservasAlertModal";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -97,6 +98,27 @@ export default function ComprasRealocacao() {
     onSuccess: () => {
       toast.success("Prazo estendido com sucesso!");
       setEstenderModal(null); setDiasEstender("3"); setMotivoEstender("");
+      refetchReservas();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  // ── Rev. 2825 — Seleção múltipla + extensão em lote ──
+  const [selecionadas, setSelecionadas] = useState<Set<number>>(new Set());
+  const [loteModalOpen, setLoteModalOpen] = useState(false);
+  const [diasLote, setDiasLote] = useState("3");
+  const [motivoLote, setMotivoLote] = useState("");
+  const toggleSel = (id: number) =>
+    setSelecionadas(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+  const limparSel = () => setSelecionadas(new Set());
+  const podeEstender = ["admin_master", "diretor", "gerente_compras"].includes((user as any)?.role);
+  // Trocar de obra/empresa limpa a seleção pra evitar estender reservas fora da visão atual.
+  useEffect(() => { setSelecionadas(new Set()); setLoteModalOpen(false); }, [obraFiltro, companyId]);
+  const estenderLoteMut = trpc.compras.estenderPrazoReservasEmLote.useMutation({
+    onSuccess: (d) => {
+      toast.success(`${d.estendidas} reserva(s) estendida(s)${d.ignoradas > 0 ? ` · ${d.ignoradas} ignorada(s)` : ""}.`);
+      setLoteModalOpen(false); setDiasLote("3"); setMotivoLote("");
+      limparSel();
       refetchReservas();
     },
     onError: (e) => toast.error(e.message),
@@ -659,6 +681,23 @@ export default function ComprasRealocacao() {
                 </p>
               </CardHeader>
               <CardContent>
+                {podeEstender && selecionadas.size > 0 && (
+                  <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5">
+                    <span className="text-sm font-medium text-amber-800">
+                      {selecionadas.size} reserva(s) selecionada(s)
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="ghost" onClick={limparSel}
+                        className="h-7 text-xs text-gray-600 hover:bg-gray-100 gap-1">
+                        <X className="h-3 w-3" /> Limpar
+                      </Button>
+                      <Button size="sm" onClick={() => setLoteModalOpen(true)}
+                        className="h-7 text-xs bg-amber-600 hover:bg-amber-700 text-white gap-1">
+                        <Hourglass className="h-3 w-3" /> Estender selecionadas
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 {loadingReservas ? (
                   <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
                 ) : reservas.length === 0 ? (
@@ -671,6 +710,17 @@ export default function ComprasRealocacao() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        {podeEstender && (
+                          <TableHead className="w-10">
+                            <Checkbox
+                              aria-label="Selecionar todas"
+                              checked={reservas.length > 0 && reservas.every((r: any) => selecionadas.has(r.id))}
+                              onCheckedChange={(c) =>
+                                setSelecionadas(c ? new Set(reservas.map((r: any) => r.id)) : new Set())
+                              }
+                            />
+                          </TableHead>
+                        )}
                         <TableHead>Cotação</TableHead>
                         <TableHead>Responsável</TableHead>
                         <TableHead className="text-right">DI-08</TableHead>
@@ -683,7 +733,16 @@ export default function ComprasRealocacao() {
                     </TableHeader>
                     <TableBody>
                       {reservas.map((r: any) => (
-                        <TableRow key={r.id} className={r.vencida ? "bg-red-50" : r.diasRestantes <= 2 ? "bg-amber-50" : undefined}>
+                        <TableRow key={r.id} className={selecionadas.has(r.id) ? "bg-amber-100/60" : r.vencida ? "bg-red-50" : r.diasRestantes <= 2 ? "bg-amber-50" : undefined}>
+                          {podeEstender && (
+                            <TableCell className="w-10">
+                              <Checkbox
+                                aria-label={`Selecionar reserva ${r.numeroCotacao ?? r.id}`}
+                                checked={selecionadas.has(r.id)}
+                                onCheckedChange={() => toggleSel(r.id)}
+                              />
+                            </TableCell>
+                          )}
                           <TableCell
                             className="font-mono text-blue-700 cursor-pointer hover:underline hover:text-blue-900"
                             title="Abrir cotação"
@@ -777,6 +836,50 @@ export default function ComprasRealocacao() {
                 </div>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Modal Estender Prazo em LOTE (Rev. 2825) ─────────── */}
+        <Dialog open={loteModalOpen} onOpenChange={(o) => { if (!o) { setLoteModalOpen(false); setDiasLote("3"); setMotivoLote(""); } }}>
+          <DialogContent className="bg-white">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-amber-700">
+                <Hourglass className="h-5 w-5" /> Estender Prazo em Lote
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+                <p>Aplicar a <strong>{selecionadas.size} reserva(s) selecionada(s)</strong>.</p>
+                <p className="mt-1 text-xs">
+                  Limite por perfil — admin_master: 60d • diretor: 7d • gerente_compras: 3d
+                </p>
+              </div>
+              <div>
+                <Label>Dias adicionais <span className="text-red-500">*</span></Label>
+                <Input type="number" min="1" max="60" className="mt-1"
+                  value={diasLote} onChange={e => setDiasLote(e.target.value)} />
+              </div>
+              <div>
+                <Label>Justificativa <span className="text-red-500">*</span></Label>
+                <Textarea rows={3} className="mt-1" placeholder="Por que está estendendo estes prazos?"
+                  value={motivoLote} onChange={e => setMotivoLote(e.target.value)} />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => { setLoteModalOpen(false); setDiasLote("3"); setMotivoLote(""); }}>Cancelar</Button>
+                <Button
+                  className="bg-amber-600 hover:bg-amber-700 text-white"
+                  disabled={!diasLote || !motivoLote.trim() || selecionadas.size === 0 || estenderLoteMut.isPending}
+                  onClick={() => estenderLoteMut.mutate({
+                    reservaIds: [...selecionadas],
+                    diasAdicionais: parseInt(diasLote) || 0,
+                    motivo: motivoLote.trim(),
+                  })}
+                >
+                  {estenderLoteMut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+                  Confirmar Extensão ({selecionadas.size})
+                </Button>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
 

@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2825 — **COMPRAS · RESERVAS PREVENTIVAS — SELEÇÃO MÚLTIPLA (CHECKBOXES) PARA ESTENDER VÁRIAS RESERVAS DE UMA VEZ.**
+ *
+ * PEDIDO (usuário, na tela "Reservas Preventivas em Andamento"): "múltipla escolha" — poder selecionar VÁRIAS
+ * reservas via checkboxes e estender/ajustar o prazo de todas de uma só vez, em vez de uma por uma.
+ *
+ * O QUE FOI FEITO (`server/routers/compras.ts` + `client/src/pages/compras/Realocacao.tsx` — só lógica/leitura +
+ * UPDATE de prazo/log; ZERO ALTER/DROP/DELETE; ZERO schema novo):
+ *  (1) BACKEND — NOVO endpoint `estenderPrazoReservasEmLote` (logo após `estenderPrazoReserva`). Input:
+ *      `{ reservaIds: number[].min(1), diasAdicionais: 1..60, motivo: min3 }`. Mesmos LIMITES por perfil do
+ *      endpoint singular (admin_master 60d / diretor 7d / gerente_compras 3d) — valida o teto ANTES de iterar.
+ *      Busca as reservas via `inArray(comprasReservasSaldo.id, ids)` (dedup do input). Por reserva: tenta
+ *      `_assertCompanyAccess` (empresa fora do acesso → IGNORA, não derruba o lote), pula se `status != 'ativa'`,
+ *      senão UPDATE de `prazoLimite` (+diasAdicionais) + `atualizadoEm` e `_registrarLogReserva` acao "estendida"
+ *      (detalhe marca "Extensão em lote"). IDs pedidos que nem existem mais contam como ignorados. Retorna
+ *      `{ ok, estendidas, ignoradas }`.
+ *  (2) FRONTEND — seleção múltipla na tabela "Reservas Preventivas em Andamento":
+ *      • `selecionadas: Set<number>` + helpers `toggleSel`/`limparSel`; gate de UI por `podeEstender`
+ *        (admin_master/diretor/gerente_compras — mesmo critério do botão "Estender" singular).
+ *      • Coluna de checkbox (componente `@/components/ui/checkbox`): header com SELECIONAR TODAS (marca/desmarca
+ *        todas as reservas listadas) + checkbox por linha; linha selecionada ganha realce âmbar.
+ *      • Barra de ação em lote (aparece quando há seleção): contador "N reserva(s) selecionada(s)" + "Limpar" +
+ *        "Estender selecionadas" → abre o modal em lote.
+ *      • Modal em lote (reaproveita o visual do singular): dias adicionais + justificativa, dispara
+ *        `estenderPrazoReservasEmLote`; toast com "estendidas/ignoradas"; limpa seleção + `refetchReservas` no sucesso.
+ *
+ * RESSALVA: a seleção é por `r.id` da reserva; trocar de obra NÃO limpa a seleção automaticamente, mas o backend
+ * IGNORA com segurança qualquer reserva fora do acesso/empresa ou já não-ativa (contabilizada em "ignoradas"), então
+ * o lote nunca estende algo indevido. Os limites por perfil são idênticos ao fluxo singular.
+ *
+ * VALIDAÇÃO: esbuild OK (server); dev server sobe sem erro de compilação no client. ZERO mutation além de UPDATE de
+ * prazo + log de reserva.
+ *
  * Rev. 2824 — **COMPRAS · PAINEL FD — NUMERAÇÃO PRÓPRIA DOS FDs (FD-001, FD-002…), COMEÇANDO EM 001.**
  *
  * PEDIDO (usuário, na tela Painel FD): "Quero q as fds sejam numeradas começando por 001." A coluna "Nº FD / OC"
