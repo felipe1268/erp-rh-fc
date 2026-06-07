@@ -259,7 +259,10 @@ export default function PainelFd() {
                       <TableBody>
                         {(todas.ocsComFd as any[]).map((oc: any) => (
                           <TableRow key={oc.id} className="border-gray-100 cursor-pointer hover:bg-indigo-50/50" onClick={() => abrirOc(oc.id)} title="Abrir OC">
-                            <TableCell className="text-xs font-mono font-medium text-indigo-600 hover:underline">{oc.numeroOc || `#${oc.id}`}</TableCell>
+                            <TableCell className="text-xs font-mono text-indigo-600 hover:underline">
+                              <span className="font-semibold">{oc.numeroFd || "—"}</span>
+                              <span className="text-gray-400"> · {oc.numeroOc || `#${oc.id}`}</span>
+                            </TableCell>
                             <TableCell className="text-xs text-gray-500">{fmtData(oc.data)}</TableCell>
                             <TableCell className="text-xs text-gray-700">{oc.obraNome}</TableCell>
                             <TableCell className="text-xs text-gray-900 max-w-[220px] truncate">{oc.descricao || "—"}</TableCell>
@@ -380,7 +383,10 @@ export default function PainelFd() {
                       <TableBody>
                         {ocsObra.map((oc: any) => (
                           <TableRow key={oc.id} className="border-gray-100 cursor-pointer hover:bg-indigo-50/50" onClick={() => abrirOc(oc.id)} title="Abrir OC">
-                            <TableCell className="text-xs font-mono font-medium text-indigo-600 hover:underline">{oc.numeroOc || `#${oc.id}`}</TableCell>
+                            <TableCell className="text-xs font-mono text-indigo-600 hover:underline">
+                              <span className="font-semibold">{oc.numeroFd || "—"}</span>
+                              <span className="text-gray-400"> · {oc.numeroOc || `#${oc.id}`}</span>
+                            </TableCell>
                             <TableCell className="text-xs text-gray-500">{fmtData(oc.data)}</TableCell>
                             <TableCell className="text-xs text-gray-900 max-w-[260px] truncate">{oc.descricao || "—"}</TableCell>
                             <TableCell className="text-xs">

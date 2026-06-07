@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2824 — **COMPRAS · PAINEL FD — NUMERAÇÃO PRÓPRIA DOS FDs (FD-001, FD-002…), COMEÇANDO EM 001.**
+ *
+ * PEDIDO (usuário, na tela Painel FD): "Quero q as fds sejam numeradas começando por 001." A coluna "Nº FD / OC"
+ * dos "Lançamentos de FD (OCs)" mostrava SOMENTE o número da OC (ex.: OC-2026-192 / OC-2026-339), sem um número
+ * de FD sequencial próprio.
+ *
+ * O QUE FOI FEITO (`server/routers/compras.ts` + `client/src/pages/compras/PainelFd.tsx` — só lógica/leitura +
+ * UI; ZERO ALTER/DROP/DELETE; ZERO schema novo):
+ *  (1) Numeração DERIVADA (read-only, sem coluna nova): a ordem cronológica das OCs FD DENTRO de cada obra
+ *      (por `data`/criadoEm asc, desempate por `id`) define o nº sequencial. O FD mais ANTIGO da obra = FD-001,
+ *      o seguinte FD-002, etc. (zero-pad 3 dígitos).
+ *  (2) `getSaldoFd` (obra específica): novo `ocsComFdNumerado` ordena+numera e é retornado no lugar de `ocsComFd`
+ *      (inclusive no early-return de obra sem orçamento FD).
+ *  (3) `getSaldoFdTodasObras` (consolidado): numera POR OBRA com a MESMA regra (agrupa por obraId, ordena, atribui
+ *      `numeroFd`) → o mesmo lançamento recebe o MESMO nº de FD nas duas visões (obra específica e "Todas as obras").
+ *  (4) Front: a coluna "Nº FD / OC" das duas tabelas passa a exibir `FD-NNN · OC-AAAA-NNN` (FD em destaque, OC em
+ *      cinza); fallback "—" se `numeroFd` ausente. Clique segue abrindo a OC.
+ *
+ * RESSALVA: o nº de FD é POSICIONAL/derivado, não persistido — se uma OC FD for cancelada (sai da lista, pois o
+ * filtro exclui status 'cancelada'), os FDs posteriores daquela obra reindexam (o que antes era FD-003 vira FD-002).
+ * Decisão: numeração estável-por-ordem-cronológica atende o pedido sem ALTER/coluna nova; se for preciso nº imutável
+ * por lançamento no futuro, exige coluna persistida (ADD COLUMN via self-heal) + atribuição na criação da OC FD.
+ *
+ * VALIDAÇÃO: esbuild OK; app reinicia limpo (Neon conectado). ZERO mutation de dados.
+ *
  * Rev. 2823 — **COMPRAS · RESERVAS PREVENTIVAS — LIBERAÇÃO QUANDO A COTAÇÃO É APAGADA OU CANCELADA.**
  *
  * PEDIDO (usuário, sobre a tela de Reservas Preventivas, após a Rev. 2822): "Quando a cotação for apagada ou

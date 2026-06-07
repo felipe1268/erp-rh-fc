@@ -12954,6 +12954,21 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       });
       const totalFdComprometido = ocsComFd.reduce((s, oc) => s + oc.valorEfetivo, 0);
 
+      // Rev. 2824 — Numeração própria do FD (FD-001, FD-002…), começando em 001.
+      // É DERIVADA (read-only, sem coluna nova): a ordem cronológica das OCs FD da
+      // obra (por `data`/criadoEm asc, desempate por id) define o nº sequencial. O FD
+      // mais ANTIGO = FD-001. A mesma regra roda no getSaldoFdTodasObras (por obra),
+      // então o mesmo lançamento recebe o MESMO nº de FD nas duas visões.
+      const ocsComFdNumerado = ocsComFd
+        .slice()
+        .sort((a, b) => {
+          const ta = (a as any).data ? new Date((a as any).data).getTime() : 0;
+          const tb = (b as any).data ? new Date((b as any).data).getTime() : 0;
+          if (ta !== tb) return ta - tb;
+          return a.id - b.id;
+        })
+        .map((oc, i) => ({ ...oc, numeroFd: `FD-${String(i + 1).padStart(3, "0")}` }));
+
       // Rev. 2817 — A tabela `obras` NÃO tem coluna `orcamento_id` (nem `company_id`:
       // as colunas reais são camelCase `companyId`/`isActive`). O SELECT cru antigo
       // (`SELECT orcamento_id FROM obras WHERE ... company_id = ...`) lançava em RUNTIME
@@ -12971,7 +12986,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         .orderBy(asc(orcamentos.id))
         .limit(1);
       const orcamentoId = orcRows[0]?.id;
-      if (!orcamentoId) return { totalFdOrcado: 0, totalFdComprometido, saldoFd: -totalFdComprometido, itensFd: [], ocsComFd };
+      if (!orcamentoId) return { totalFdOrcado: 0, totalFdComprometido, saldoFd: -totalFdComprometido, itensFd: [], ocsComFd: ocsComFdNumerado };
 
       const itensFd = await db.select().from(bdiFd).where(and(eq(bdiFd.orcamentoId, orcamentoId), eq(bdiFd.companyId, input.companyId)));
       const totalFdOrcado = itensFd.reduce((s, i) => s + n(i.total), 0);
@@ -12989,7 +13004,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           precoUnit: n(i.precoUnit),
           total: n(i.total),
         })),
-        ocsComFd,
+        ocsComFd: ocsComFdNumerado,
       };
     }),
 
@@ -13085,6 +13100,26 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           data: (oc as any).criadoEm,
         };
       });
+      // Rev. 2824 — Numeração própria do FD por OBRA (FD-001…), mesma regra do
+      // getSaldoFd: ordem cronológica (data/criadoEm asc, desempate por id) dentro de
+      // cada obra → o mesmo lançamento recebe o MESMO nº de FD nas duas visões. Muta
+      // os objetos do array `ocsComFd` (referências), preservando a ordem de retorno.
+      const ocsPorObra = new Map<number | string, any[]>();
+      for (const oc of ocsComFd) {
+        const k = oc.obraId ?? "__sem_obra__";
+        if (!ocsPorObra.has(k)) ocsPorObra.set(k, []);
+        ocsPorObra.get(k)!.push(oc);
+      }
+      for (const lista of ocsPorObra.values()) {
+        lista.sort((a, b) => {
+          const ta = a.data ? new Date(a.data).getTime() : 0;
+          const tb = b.data ? new Date(b.data).getTime() : 0;
+          if (ta !== tb) return ta - tb;
+          return a.id - b.id;
+        });
+        lista.forEach((oc, i) => { oc.numeroFd = `FD-${String(i + 1).padStart(3, "0")}`; });
+      }
+
       for (const oc of ocsRows) {
         if (oc.obraId == null) continue;
         const r = ensure(oc.obraId);
