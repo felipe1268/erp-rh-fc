@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2837 — **FINANCEIRO · DRE — SELETOR GANHA TRIMESTRE E SEMESTRE (ALÉM DE MÊS E ANO INTEIRO).**
+ *
+ * PEDIDO (usuário, print do iPad da tela DRE com chips de meses + "Ano inteiro"): "Faltou o trimestre e o semestre."
+ * O seletor de período do DRE (Rev. 2835) só oferecia os 12 meses (chips) e "Ano inteiro"; faltavam agrupamentos
+ * trimestral e semestral.
+ *
+ * O QUE FOI FEITO:
+ *  - BACKEND (`server/services/financialKpiService.ts`): `dreRange()` ganhou o caso `"semestral"` (1º = Jan-Jun,
+ *    2º = Jul-Dez) — o caso `"trimestral"` já existia desde a Rev. 2833. A assinatura de `calcularDRE()` e o tipo
+ *    de `tipoPeriodo` passaram a aceitar `"mensal" | "trimestral" | "semestral" | "anual"`.
+ *  - ROUTER (`server/routers/financial.ts`): o enum de `getDRE.tipoPeriodo` passou a incluir `"semestral"`.
+ *  - FRONTEND (`client/src/pages/financeiro/FinanceiroDRE.tsx`): o estado virou um objeto discriminado `Sel`
+ *    (`{tipo:"mensal",mes}` | `{tipo:"trimestral",tri}` | `{tipo:"semestral",sem}` | `{tipo:"anual"}`) que deriva
+ *    `periodo` + `tipoPeriodo` para o `getDRE` existente. Abaixo da grade de meses, NOVA barra com 4 chips de
+ *    trimestre (1º…4º Tri), 2 chips de semestre (1º/2º Sem) e o botão "Ano inteiro" (à direita). Título da tabela
+ *    derivado de `tituloPeriodo` (ex.: "2º Trimestre/2026", "1º Semestre/2026"). Para trimestre/semestre o cliente
+ *    manda um mês-âncora dentro do bloco e o backend resolve o intervalo.
+ *
+ * RESSALVA: os pontinhos de status (com lançamento / consolidado / sem dados) continuam sendo POR MÊS — a barra de
+ * trimestre/semestre não tem pontinho próprio (agregaria status de vários meses). ZERO ALTER/DROP/DELETE; ZERO schema.
+ *
+ * ARQUIVOS: `server/services/financialKpiService.ts`, `server/routers/financial.ts`,
+ * `client/src/pages/financeiro/FinanceiroDRE.tsx`.
+ *
+ * ---
+ *
  * Rev. 2836 — **TERCEIROS · REDESIGN DAS TELAS "EMPRESAS DE SERVIÇO" (LISTA) E "RAIO-X 360°" — LAYOUT MODERNO, LEITURA FÁCIL E INTUITIVA.**
  *
  * PEDIDO (usuário, com 2 prints do iPad): "Melhore o layout, quero tudo moderno e fácil leitura... e tudo intuitivo."

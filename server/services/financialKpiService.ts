@@ -327,8 +327,12 @@ export async function calcularKpis(
 
 // DRE Automático (Lei 6.404/76 art. 187 + NBC TG 26)
 // Resolve o intervalo [mesIni, mesFim] (formato 'YYYY-MM') a partir do período + tipo.
-// mensal: o próprio mês. trimestral: o trimestre que contém o mês. anual: ano inteiro.
-function dreRange(periodo: string, tipoPeriodo: "mensal" | "trimestral" | "anual"): [string, string] {
+// mensal: o próprio mês. trimestral: o trimestre que contém o mês.
+// semestral: o semestre que contém o mês (1º=Jan-Jun, 2º=Jul-Dez). anual: ano inteiro.
+function dreRange(
+  periodo: string,
+  tipoPeriodo: "mensal" | "trimestral" | "semestral" | "anual",
+): [string, string] {
   if (tipoPeriodo === "anual") {
     const ano = (periodo || "").slice(0, 4);
     return [`${ano}-01`, `${ano}-12`];
@@ -338,6 +342,11 @@ function dreRange(periodo: string, tipoPeriodo: "mensal" | "trimestral" | "anual
   if (tipoPeriodo === "trimestral") {
     const ini = Math.floor((mes - 1) / 3) * 3 + 1;
     const fim = ini + 2;
+    return [`${ano}-${String(ini).padStart(2, "0")}`, `${ano}-${String(fim).padStart(2, "0")}`];
+  }
+  if (tipoPeriodo === "semestral") {
+    const ini = mes <= 6 ? 1 : 7;
+    const fim = ini + 5;
     return [`${ano}-${String(ini).padStart(2, "0")}`, `${ano}-${String(fim).padStart(2, "0")}`];
   }
   const mm = String(mes).padStart(2, "0");
@@ -356,7 +365,7 @@ function dreRange(periodo: string, tipoPeriodo: "mensal" | "trimestral" | "anual
 export async function calcularDRE(
   companyId: number,
   periodo: string,
-  tipoPeriodo: "mensal" | "trimestral" | "anual" = "mensal",
+  tipoPeriodo: "mensal" | "trimestral" | "semestral" | "anual" = "mensal",
 ) {
   const db = await getDb();
   const [mesIni, mesFim] = dreRange(periodo, tipoPeriodo);

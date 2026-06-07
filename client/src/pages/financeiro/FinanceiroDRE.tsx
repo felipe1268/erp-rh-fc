@@ -33,15 +33,38 @@ interface DRERow {
   highlight?: "green" | "red" | "blue";
 }
 
+type Sel =
+  | { tipo: "mensal"; mes: number }
+  | { tipo: "trimestral"; tri: number }
+  | { tipo: "semestral"; sem: number }
+  | { tipo: "anual" };
+
 export default function FinanceiroDRE() {
   const { companyId } = useCompany();
   const hoje = new Date();
   const [ano, setAno] = useState(hoje.getFullYear());
-  // mesSel: 1..12 = DRE mensal daquele mês; null = DRE do ano inteiro.
-  const [mesSel, setMesSel] = useState<number | null>(hoje.getMonth() + 1);
+  // Seleção do período: mês, trimestre, semestre ou ano inteiro.
+  const [sel, setSel] = useState<Sel>({ tipo: "mensal", mes: hoje.getMonth() + 1 });
 
-  const tipoPeriodo: "mensal" | "anual" = mesSel === null ? "anual" : "mensal";
-  const periodo = mesSel === null ? `${ano}` : `${ano}-${String(mesSel).padStart(2, "0")}`;
+  const tipoPeriodo: "mensal" | "trimestral" | "semestral" | "anual" = sel.tipo;
+  const periodo =
+    sel.tipo === "anual" ? `${ano}` :
+    sel.tipo === "mensal" ? `${ano}-${String(sel.mes).padStart(2, "0")}` :
+    sel.tipo === "trimestral" ? `${ano}-${String((sel.tri - 1) * 3 + 1).padStart(2, "0")}` :
+    `${ano}-${sel.sem === 1 ? "01" : "07"}`;
+
+  const tituloPeriodo =
+    sel.tipo === "anual" ? `${ano} (ano inteiro)` :
+    sel.tipo === "mensal" ? `${MESES_PT[sel.mes - 1]}/${ano}` :
+    sel.tipo === "trimestral" ? `${sel.tri}º Trimestre/${ano}` :
+    `${sel.sem}º Semestre/${ano}`;
+
+  const chipCls = (active: boolean) =>
+    `flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+      active
+        ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
+        : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+    }`;
 
   // Disponibilidade por mês (pontinhos do seletor)
   const { data: disp } = (trpc as any).financial.getDREDisponibilidade.useQuery(
@@ -127,11 +150,11 @@ export default function FinanceiroDRE() {
               {MESES_ABREV.map((m, i) => {
                 const num = i + 1;
                 const status = mesesStatus[num];
-                const isSelected = mesSel === num;
+                const isSelected = sel.tipo === "mensal" && sel.mes === num;
                 return (
                   <button
                     key={m}
-                    onClick={() => setMesSel(num)}
+                    onClick={() => setSel({ tipo: "mensal", mes: num })}
                     className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
                       ${isSelected
                         ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
@@ -148,14 +171,30 @@ export default function FinanceiroDRE() {
                 );
               })}
             </div>
-            <div className="mt-3 flex justify-end">
+            <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide mr-0.5">Trimestre</span>
+              {[1, 2, 3, 4].map((t) => (
+                <button
+                  key={`t${t}`}
+                  onClick={() => setSel({ tipo: "trimestral", tri: t })}
+                  className={chipCls(sel.tipo === "trimestral" && sel.tri === t)}
+                >
+                  {t}º Tri
+                </button>
+              ))}
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide ml-2 mr-0.5">Semestre</span>
+              {[1, 2].map((s) => (
+                <button
+                  key={`s${s}`}
+                  onClick={() => setSel({ tipo: "semestral", sem: s })}
+                  className={chipCls(sel.tipo === "semestral" && sel.sem === s)}
+                >
+                  {s}º Sem
+                </button>
+              ))}
               <button
-                onClick={() => setMesSel(null)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all
-                  ${mesSel === null
-                    ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
-                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
-                  }`}
+                onClick={() => setSel({ tipo: "anual" })}
+                className={`${chipCls(sel.tipo === "anual")} ml-auto`}
               >
                 <CalendarDays className="w-3.5 h-3.5" /> Ano inteiro ({ano})
               </button>
@@ -192,7 +231,7 @@ export default function FinanceiroDRE() {
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">
-              DRE — {mesSel === null ? `${ano} (ano inteiro)` : `${MESES_PT[mesSel - 1]}/${ano}`}
+              DRE — {tituloPeriodo}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">

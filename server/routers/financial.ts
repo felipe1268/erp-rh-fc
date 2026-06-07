@@ -3672,7 +3672,7 @@ export const financialRouter = router({
   getDRE: protectedProcedure.input(z.object({
     companyId: z.number(),
     periodo: z.string(),
-    tipoPeriodo: z.enum(["mensal", "trimestral", "anual"]).default("mensal"),
+    tipoPeriodo: z.enum(["mensal", "trimestral", "semestral", "anual"]).default("mensal"),
   })).query(async ({ ctx, input }) => {
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
     try {
