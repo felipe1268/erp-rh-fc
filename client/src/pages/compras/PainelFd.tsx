@@ -1,6 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,6 +79,11 @@ const tabTriggerCls = "data-[state=active]:bg-indigo-600 data-[state=active]:tex
 
 export default function PainelFd() {
   const { selectedCompanyId } = useCompany();
+  const [, navigate] = useLocation();
+  const abrirOc = (id: number) => {
+    if (!Number.isFinite(Number(id)) || Number(id) <= 0) return;
+    navigate(`/compras/ordens?destaque=${id}`);
+  };
   const companyId = parseInt(selectedCompanyId || "0");
   const [selectedObra, setSelectedObra] = useState<number>(-1);
   const [showAjuste, setShowAjuste] = useState<any>(null);
@@ -252,8 +258,8 @@ export default function PainelFd() {
                       </TableHeader>
                       <TableBody>
                         {(todas.ocsComFd as any[]).map((oc: any) => (
-                          <TableRow key={oc.id} className="border-gray-100">
-                            <TableCell className="text-xs font-mono text-gray-700">{oc.numeroOc || `#${oc.id}`}</TableCell>
+                          <TableRow key={oc.id} className="border-gray-100 cursor-pointer hover:bg-indigo-50/50" onClick={() => abrirOc(oc.id)} title="Abrir OC">
+                            <TableCell className="text-xs font-mono font-medium text-indigo-600 hover:underline">{oc.numeroOc || `#${oc.id}`}</TableCell>
                             <TableCell className="text-xs text-gray-500">{fmtData(oc.data)}</TableCell>
                             <TableCell className="text-xs text-gray-700">{oc.obraNome}</TableCell>
                             <TableCell className="text-xs text-gray-900 max-w-[220px] truncate">{oc.descricao || "—"}</TableCell>
@@ -267,7 +273,7 @@ export default function PainelFd() {
                             <TableCell>
                               {oc.modalidadeFd === "fd_cliente" && (
                                 <Button size="sm" variant="ghost" className="h-6 text-[10px] text-indigo-600 hover:text-indigo-800 gap-1"
-                                  onClick={() => window.open(`/api/download/fd/${oc.id}?mode=view`, "_blank")}>
+                                  onClick={(e) => { e.stopPropagation(); window.open(`/api/download/fd/${oc.id}?mode=view`, "_blank"); }}>
                                   <FileDown className="h-3 w-3" /> PDF
                                 </Button>
                               )}
@@ -373,8 +379,8 @@ export default function PainelFd() {
                       </TableHeader>
                       <TableBody>
                         {ocsObra.map((oc: any) => (
-                          <TableRow key={oc.id} className="border-gray-100">
-                            <TableCell className="text-xs font-mono text-gray-700">{oc.numeroOc || `#${oc.id}`}</TableCell>
+                          <TableRow key={oc.id} className="border-gray-100 cursor-pointer hover:bg-indigo-50/50" onClick={() => abrirOc(oc.id)} title="Abrir OC">
+                            <TableCell className="text-xs font-mono font-medium text-indigo-600 hover:underline">{oc.numeroOc || `#${oc.id}`}</TableCell>
                             <TableCell className="text-xs text-gray-500">{fmtData(oc.data)}</TableCell>
                             <TableCell className="text-xs text-gray-900 max-w-[260px] truncate">{oc.descricao || "—"}</TableCell>
                             <TableCell className="text-xs">
@@ -387,7 +393,7 @@ export default function PainelFd() {
                             <TableCell>
                               {oc.modalidadeFd === "fd_cliente" && (
                                 <Button size="sm" variant="ghost" className="h-6 text-[10px] text-indigo-600 hover:text-indigo-800 gap-1"
-                                  onClick={() => window.open(`/api/download/fd/${oc.id}?mode=view`, "_blank")}>
+                                  onClick={(e) => { e.stopPropagation(); window.open(`/api/download/fd/${oc.id}?mode=view`, "_blank"); }}>
                                   <FileDown className="h-3 w-3" /> PDF
                                 </Button>
                               )}

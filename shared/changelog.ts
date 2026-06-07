@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2819 — **COMPRAS · PAINEL FD — LANÇAMENTOS FD AGORA ABREM A OC AO CLICAR (NAVEGAÇÃO PARA A TELA DE ORDENS).**
+ *
+ * PEDIDO (usuário, sobre o Painel FD redesenhado na Rev. 2818): "Quero poder clicar e abrir a OC por aqui" — nas
+ * tabelas de "Lançamentos de FD (OCs)" cada linha lista o Nº FD/OC mas não havia como abrir a OC correspondente.
+ *
+ * O QUE FOI FEITO (client/src/pages/compras/PainelFd.tsx, somente frontend):
+ *  1) As linhas das DUAS tabelas de Lançamentos FD (visão "Todas as obras" e visão de obra específica) ficaram
+ *     clicáveis: `cursor-pointer` + hover indigo + `title="Abrir OC"`; o Nº FD/OC ganhou cor indigo + underline no
+ *     hover para sinalizar o link. Ao clicar, navega para `/compras/ordens?destaque=<oc.id>`.
+ *  2) Reaproveita o mecanismo JÁ EXISTENTE da tela de Ordens (Ordens.tsx lê `?destaque=<id>` no mount e abre o
+ *     modal de detalhe da OC via `setShowDetalhe`), então nenhuma mudança de backend ou de rota foi necessária.
+ *  3) Navegação via `useLocation` do wouter (helper `abrirOc(id)`). O botão "PDF" de cada linha recebeu
+ *     `e.stopPropagation()` para não disparar a navegação ao baixar/visualizar o PDF da FD.
+ *
+ * RESSALVA: apenas UI/navegação. ZERO ALTER/DROP/DELETE; ZERO schema novo; ZERO mutation; ZERO backend.
+ * Validação: esbuild OK em PainelFd.tsx.
+ *
  * Rev. 2818 — **COMPRAS · PAINEL FD — REDESIGN COMPLETO + FIX "FD REALIZADA NÃO APARECE": A REVTE TINHA R$ 89.524,35
  * DE FD REALIZADO (2 OCs `fd_fc`) QUE O PAINEL MOSTRAVA COMO R$ 0,00 PORQUE O "UTILIZADO" SÓ SOMAVA `fd_valor` DE OCs
  * `fd_cliente` — E `fd_valor` ESTÁ NULL EM 35 DAS 37 OCs FD DA EMPRESA. NOVO LAYOUT EM ABAS PARA ANÁLISE DIÁRIA.**
