@@ -643,7 +643,7 @@ export const coletaRhRouter = router({
         .from(coletaRhSessoes)
         .where(eq(coletaRhSessoes.token, input.token))
         .limit(1);
-      if (!sessao || sessao.ativo !== 1 || sessaoExpirada(sessao.expiraEm)) {
+      if (!sessao || sessao.ativo !== 1 || sessao.deletedAt || sessaoExpirada(sessao.expiraEm)) {
         throw new Error("Link de coleta inválido ou expirado.");
       }
 
