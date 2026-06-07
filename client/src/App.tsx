@@ -85,6 +85,7 @@ const Empresas = lazy(() => import("./pages/Empresas"));
 const Colaboradores = lazy(() => import("./pages/Colaboradores"));
 const ColetaCampo = lazy(() => import("./pages/ColetaCampo"));
 const ColetaCampoPublica = lazy(() => import("./pages/portal/ColetaCampoPublica"));
+const AvaliacaoPublica = lazy(() => import("./pages/portal/AvaliacaoPublica"));
 const RecontratacoesPendentes = lazy(() => import("./pages/RecontratacoesPendentes"));
 const Usuarios = lazy(() => import("./pages/Usuarios"));
 const GruposUsuarios = lazy(() => import("./pages/GruposUsuarios"));
@@ -600,6 +601,8 @@ function Router() {
         <Route path="/pesquisa-publica/pesquisa/:token" component={PesquisaPublicaPage} />
         {/* Coleta de Campo (RH) — link externo por obra, sem login */}
         <Route path="/portal/coleta-rh/:token" component={ColetaCampoPublica} />
+        {/* Avaliação (NPS) — link público enviado ao cliente, sem login */}
+        <Route path="/portal/avaliacao/:token" component={AvaliacaoPublica} />
         {/* Portal Externo (Terceiros/Parceiros) */}
         <Route path="/portal/login" component={PortalLogin} />
         <Route path="/portal/cliente/login" component={PortalLoginCliente} />

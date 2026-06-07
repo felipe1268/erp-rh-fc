@@ -56,46 +56,51 @@ function NotaSelector({ value, onChange, label }: { value: number | null; onChan
   );
 }
 
-export default function PortalDashboardCliente() {
+// Rev. 2890 — `publicToken` ativa o MODO LINK PÚBLICO: a página é aberta por um
+// link aberto enviado ao cliente (sem login/credencial), focando só a avaliação.
+export default function PortalDashboardCliente({ publicToken }: { publicToken?: string } = {}) {
   const [, navigate] = useLocation();
-  const token = localStorage.getItem("portal_token") || "";
-  const tipo = localStorage.getItem("portal_tipo") || "";
+  const isPublic = !!publicToken;
+  const token = publicToken || localStorage.getItem("portal_token") || "";
+  const tipo = isPublic ? "cliente" : (localStorage.getItem("portal_tipo") || "");
   // Rev. 1563 — quando o cliente entra pelo card "Avaliação" do Hub
   // (?tab=avaliacao), o dashboard foca exclusivamente na avaliação:
   // tab inicial já em "avaliacao" e as outras abas (Obras / Comentários)
   // ficam ocultas. Sem o parâmetro o comportamento clássico é mantido.
   const initialTab = (() => {
+    if (isPublic) return "avaliacao" as const;
     if (typeof window === "undefined") return "obras" as const;
     const t = new URLSearchParams(window.location.search).get("tab");
     return t === "avaliacao" || t === "comentarios" || t === "obras" ? (t as "obras" | "comentarios" | "avaliacao") : "obras";
   })();
-  const focoAvaliacao = initialTab === "avaliacao";
+  const focoAvaliacao = isPublic || initialTab === "avaliacao";
   const [tab, setTab] = useState<"obras" | "comentarios" | "avaliacao">(initialTab);
 
-  // Guard
+  // Guard (não se aplica ao link público, que é acessível sem login)
   useEffect(() => {
+    if (isPublic) return;
     if (!token) { navigate("/portal/login"); return; }
     if (tipo && tipo !== "cliente") { navigate("/portal/dashboard"); }
   }, [token, tipo]);
 
-  const tokenCheck = trpc.portalExterno.auth.verificarToken.useQuery({ token }, { enabled: !!token });
+  const tokenCheck = trpc.portalExterno.auth.verificarToken.useQuery({ token }, { enabled: !!token && !isPublic });
   useEffect(() => {
-    if (tokenCheck.data && !tokenCheck.data.valid) {
+    if (!isPublic && tokenCheck.data && !tokenCheck.data.valid) {
       localStorage.clear();
       toast.error("Sessão expirada");
       navigate("/portal/login");
     }
   }, [tokenCheck.data]);
 
-  const { data: meusDados } = trpc.portalExterno.cliente.meusDados.useQuery({ token }, { enabled: !!token && tipo === "cliente" });
-  const { data: minhasObras = [] } = trpc.portalExterno.cliente.minhasObras.useQuery({ token }, { enabled: !!token && tipo === "cliente" });
+  const { data: meusDados } = trpc.portalExterno.cliente.meusDados.useQuery({ token }, { enabled: !!token && tipo === "cliente" && !isPublic });
+  const { data: minhasObras = [] } = trpc.portalExterno.cliente.minhasObras.useQuery({ token }, { enabled: !!token && tipo === "cliente" && !isPublic });
 
   // ===== Comentários =====
   const [obraFiltro, setObraFiltro] = useState<number | null>(null);
   const utils = trpc.useUtils();
   const { data: comentarios = [] } = trpc.portalExterno.cliente.listarComentarios.useQuery(
     { token, obraId: obraFiltro },
-    { enabled: !!token && tipo === "cliente" }
+    { enabled: !!token && tipo === "cliente" && !isPublic }
   );
   const marcarLidosMut = trpc.portalExterno.cliente.marcarComentariosLidos.useMutation();
   useEffect(() => {
@@ -268,15 +273,17 @@ export default function PortalDashboardCliente() {
               <Building2 className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="font-bold text-slate-800 text-base leading-tight">Portal do Cliente</h1>
-              <p className="text-xs text-slate-500">{meusDados?.razaoSocial ?? localStorage.getItem("portal_nome") ?? ""}</p>
+              <h1 className="font-bold text-slate-800 text-base leading-tight">{isPublic ? "Pesquisa de Satisfação" : "Portal do Cliente"}</h1>
+              <p className="text-xs text-slate-500">{isPublic ? "Sua opinião — 100% anônima" : (meusDados?.razaoSocial ?? localStorage.getItem("portal_nome") ?? "")}</p>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={logout} className="gap-1.5">
-            <LogOut className="w-4 h-4" /> Sair
-          </Button>
+          {!isPublic && (
+            <Button variant="outline" size="sm" onClick={logout} className="gap-1.5">
+              <LogOut className="w-4 h-4" /> Sair
+            </Button>
+          )}
         </div>
-        <div className="max-w-6xl mx-auto px-4">
+        <div className="max-w-6xl mx-auto px-4" style={isPublic ? { display: "none" } : undefined}>
           <div className="flex gap-1 -mb-px">
             {(focoAvaliacao
               ? [{ k: "avaliacao", label: "Avaliação Anônima", icon: Star }]

@@ -86,6 +86,19 @@ export default function ClientesPortalAdmin() {
     },
     onError: (e) => toast.error(e.message),
   });
+  // Rev. 2890 — Gerar link público de avaliação (NPS) p/ enviar ao cliente.
+  const [linkAvaliacao, setLinkAvaliacao] = useState<string>("");
+  const gerarLinkAvalMut = trpc.portalExterno.admin.gerarLinkAvaliacao.useMutation({
+    onSuccess: (r) => {
+      const url = `${window.location.origin}/portal/avaliacao/${r.token}`;
+      setLinkAvaliacao(url);
+      navigator.clipboard?.writeText(url).then(
+        () => toast.success("Link gerado e copiado para a área de transferência!"),
+        () => toast.success("Link de avaliação gerado!"),
+      );
+    },
+    onError: (e) => toast.error(e.message),
+  });
   // Rev. 1569 — cancelar avaliação (Admin Master)
   const cancelarAvalMut = trpc.portalExterno.admin.cancelarAvaliacaoCliente.useMutation({
     onSuccess: () => {
@@ -541,6 +554,49 @@ export default function ClientesPortalAdmin() {
                   })}
                 </div>
               </div>
+            </div>
+
+            {/* Rev. 2890 — Link público de avaliação p/ enviar direto ao cliente (sem login) */}
+            <div className="bg-white border rounded-xl p-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Send className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-medium text-slate-700">Link de avaliação (sem login)</span>
+                </div>
+                <span className="text-xs text-slate-400">
+                  Gere um link público p/ enviar ao cliente responder a pesquisa de satisfação direto, sem precisar de acesso ao portal. Validade de 180 dias.
+                </span>
+                <Button
+                  onClick={() => companyId && gerarLinkAvalMut.mutate({ companyId })}
+                  disabled={gerarLinkAvalMut.isPending || !companyId}
+                  size="sm"
+                  className="ml-auto gap-1.5 bg-blue-600 hover:bg-blue-700"
+                >
+                  {gerarLinkAvalMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+                  Gerar link
+                </Button>
+              </div>
+              {linkAvaliacao && (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Input readOnly value={linkAvaliacao} onFocus={(e) => e.currentTarget.select()} className="flex-1 min-w-[260px] text-xs font-mono" />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => navigator.clipboard?.writeText(linkAvaliacao).then(
+                      () => toast.success("Link copiado!"),
+                      () => toast.error("Não foi possível copiar"),
+                    )}
+                  >
+                    <Copy className="w-4 h-4" /> Copiar
+                  </Button>
+                  <a href={linkAvaliacao} target="_blank" rel="noopener noreferrer">
+                    <Button variant="outline" size="sm" className="gap-1.5">
+                      <ExternalLink className="w-4 h-4" /> Abrir
+                    </Button>
+                  </a>
+                </div>
+              )}
             </div>
 
             {loadingAval ? <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div> : !dashAval || dashAval.total === 0 ? (

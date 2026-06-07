@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2890 — **PORTAL DO CLIENTE — LINK PÚBLICO DE AVALIAÇÃO (NPS) PARA ENVIAR
+ * DIRETO AO CLIENTE, SEM PRECISAR DE LOGIN/ACESSO AO PORTAL.**
+ *
+ * PEDIDO (usuário): "Além do portal quero ter a opção de gerar link para enviar
+ * ao cliente fazer a avaliação." Hoje a pesquisa de satisfação (NPS) só era
+ * respondível por quem tinha credencial de acesso ao Portal do Cliente; o usuário
+ * quer um link aberto para mandar (WhatsApp/e-mail) ao contato do cliente
+ * responder a avaliação direto.
+ *
+ * SOLUÇÃO — reaproveita 100% o formulário e os endpoints públicos já existentes:
+ * (1) BACKEND `server/routers/portalExterno.ts` — nova mutation
+ * `admin.gerarLinkAvaliacao` (protected, admin/admin_master) que assina um JWT
+ * "link aberto" `{ tipo: "cliente", companyId, linkAberto: true }` SEM `portalId`
+ * (validade 180d, STATELESS — ZERO schema). Como `criarAvaliacao` e
+ * `podeAvaliarEsteMes` só aplicam o limite por período quando há `credId`
+ * (`decoded.portalId`), um token sem credencial pula o limite — anônimo e
+ * reutilizável para vários contatos do cliente. As procedures públicas
+ * `criarAvaliacao` / `podeAvaliarEsteMes` / `listarPerguntasExtras` /
+ * `listarLabelsCore` já exigem só `tipo === "cliente"` + `companyId`, então
+ * funcionam com o link aberto sem alteração.
+ * (2) FRONTEND `client/src/pages/portal/PortalDashboardCliente.tsx` — ganha prop
+ * opcional `publicToken` (modo LINK PÚBLICO): lê o token da URL em vez do
+ * localStorage, pula o guard de login/`verificarToken`, desabilita as queries que
+ * dependem de credencial (`meusDados`/`minhasObras`/`listarComentarios`), força
+ * `focoAvaliacao` (só a aba de avaliação), oculta o botão "Sair" e a barra de
+ * abas, e ajusta o cabeçalho ("Pesquisa de Satisfação"). Reaproveita TODO o
+ * formulário (notas core, perguntas extras, recomendaria, comentários, tela de
+ * "Obrigado").
+ * (3) NOVA PÁGINA `client/src/pages/portal/AvaliacaoPublica.tsx` + rota pública
+ * `/portal/avaliacao/:token` em `client/src/App.tsx` (fora do guard de auth) —
+ * thin wrapper que renderiza `<PortalDashboardCliente publicToken={token} />`.
+ * (4) ADMIN `client/src/pages/ClientesPortalAdmin.tsx` (aba Avaliações) — botão
+ * "Gerar link" que chama `gerarLinkAvaliacao`, monta a URL
+ * `${origin}/portal/avaliacao/<token>`, copia p/ a área de transferência e mostra
+ * input read-only + botões Copiar/Abrir.
+ *
+ * RESSALVA: o link público é uma avaliação GERAL da empresa (obraId null) — o
+ * seletor de obra do formulário depende de `minhasObras`, que exige credencial e
+ * fica desabilitado no modo público. Sem limite por período (link aberto permite
+ * múltiplos envios), por design.
+ *
+ * ZERO schema; ZERO ALTER/DROP/DELETE (token JWT autocontido). Arquivos:
+ * `server/routers/portalExterno.ts`, `client/src/pages/portal/PortalDashboardCliente.tsx`,
+ * `client/src/pages/portal/AvaliacaoPublica.tsx`, `client/src/App.tsx`,
+ * `client/src/pages/ClientesPortalAdmin.tsx`.
+ *
  * Rev. 2889 — **PORTAL DO CLIENTE — NOVO ATALHO "PESQUISA DE SATISFAÇÃO (NPS)"
  * NA BARRA LATERAL, ABRINDO DIRETO A ABA DE AVALIAÇÕES.**
  *

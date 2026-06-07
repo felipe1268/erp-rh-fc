@@ -1374,6 +1374,31 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       return { success: true };
     }),
 
+    // Rev. 2890 — Gera um LINK PÚBLICO de avaliação (NPS) para o admin enviar
+    // diretamente ao cliente, sem precisar de credencial/login no portal.
+    // O token é um JWT "link aberto" (tipo: "cliente" + companyId, SEM portalId):
+    // como não há credId, criarAvaliacao/podeAvaliarEsteMes pulam o limite por
+    // período (anônimo, reutilizável para envio a vários contatos do cliente).
+    // ZERO schema: token autocontido (stateless), validade 180 dias.
+    gerarLinkAvaliacao: protectedProcedure.input(z.object({
+      companyId: z.number(),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master" && ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Acesso restrito a administradores." });
+      }
+      // Rev. 2890 — guard cross-tenant: admin (não master) só gera link da PRÓPRIA empresa.
+      if (ctx.user.role !== "admin_master" && ctx.user.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      const token = jwt.sign({
+        tipo: "cliente",
+        companyId: input.companyId,
+        linkAberto: true,
+      }, secret, { expiresIn: "180d" });
+      return { token };
+    }),
+
     // Approve/reject funcionario from portal
     aprovarFuncionario: protectedProcedure.input(z.object({
       id: z.number(),
