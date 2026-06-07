@@ -789,6 +789,15 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2851: coluna obras_liberadas garantida em portal_credentials (acesso por obra no Portal do Cliente).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA obras_liberadas:`, e?.message || e); }
 
+        // Rev. 2854 — Tamanhos de EPI/uniforme no cadastro do colaborador.
+        // Colunas camelCase (quoted) — espelham drizzle/schema.ts (employees).
+        try {
+          await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS "tamanhoCalcado" VARCHAR(10)`);
+          await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS "tamanhoCamisa" VARCHAR(10)`);
+          await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS "tamanhoCalca" VARCHAR(10)`);
+          console.log(`[SyncSchema+] Rev. 2854: colunas tamanhoCalcado/tamanhoCamisa/tamanhoCalca garantidas em employees (mapeamento de EPI).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA tamanhos EPI:`, e?.message || e); }
+
         // Rev. 2560 — BACKSTOP DE BANCO: 1 só alocação ATIVA por funcionário.
         // Índice único parcial fecha de vez "mesmo funcionário em 2 obras ao
         // mesmo tempo": qualquer write futuro que tente ativar uma 2ª alocação

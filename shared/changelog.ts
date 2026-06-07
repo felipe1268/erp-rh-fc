@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2854 — **CADASTRO DO COLABORADOR — TAMANHOS DE EPI/UNIFORME (CALÇADO,
+ * CAMISA E CALÇA) + GRADE DE TAMANHOS PARA MAPEAR COMPRA E ESTOQUE.**
+ *
+ * PEDIDO: "Quero poder inserir no cadastro do usuário, o tamanho dos calçados e
+ * número de camisa, e calça para mapear o que devemos comprar de EPI, e sempre
+ * garantir o estoque correto." (print iPad — IMG_1676, tela Editar Colaborador.)
+ *
+ * CONTEXTO: o cadastro do colaborador (`employees`) não tinha onde registrar os
+ * tamanhos de EPI/uniforme. Sem isso, não dava pra mapear a compra nem dimensionar
+ * o estoque por tamanho.
+ *
+ * O QUE FOI FEITO:
+ *  - SCHEMA (`drizzle/schema.ts`, tabela `employees`): NOVAS colunas
+ *    `tamanhoCalcado` / `tamanhoCamisa` / `tamanhoCalca` (varchar 10, nullable —
+ *    backward-compat, registros antigos ficam NULL). Colunas camelCase quoted
+ *    (espelham o padrão das demais colunas da tabela; confirmado no banco que
+ *    `codigoContabil`/`dataDesligamentoEfetiva` etc. são camelCase).
+ *  - SELF-HEAL (`server/_core/index.ts`, bloco `[SyncSchema+]`): guard
+ *    `ALTER TABLE employees ADD COLUMN IF NOT EXISTS "tamanhoCalcado"/"tamanhoCamisa"/
+ *    "tamanhoCalca" VARCHAR(10)` — garante as colunas no Neon no startup (o auto-create
+ *    genérico do `syncSchema.ts` está morto nesta versão do drizzle). Idempotente.
+ *  - PERSISTÊNCIA (`server/db.ts`, `updateEmployee`): os 3 campos adicionados ao
+ *    whitelist `validFields` (sem isso o update os descartaria silenciosamente). O
+ *    `createEmployee` é passthrough (`...data`) e as colunas agora existem no schema,
+ *    então o insert as persiste automaticamente.
+ *  - FORM (`client/src/pages/Colaboradores.tsx`, aba "Profissional"): NOVA subseção
+ *    "🦺 Uniforme / EPI" com 3 inputs (Calçado nº / Camisa / Calça — camisa e calça
+ *    em uppercase). Os 3 campos também entraram no bloco de exibição/impressão da
+ *    ficha (grupo Profissional).
+ *  - GRADE DE TAMANHOS (mesma página): NOVO botão "Grade de Tamanhos" na command bar
+ *    + `Dialog` que agrega (useMemo `gradeTamanhos`) os tamanhos dos colaboradores
+ *    ATIVOS (exclui Desligado/Lista_Negra/Inativo) em 3 tabelas (Calçado/Camisa/Calça)
+ *    com contagem por tamanho (ordenação numérica quando aplicável, senão alfabética)
+ *    + contador "sem informação". Entrega direta do "mapear o que comprar / estoque".
+ *
+ * ESCOPO/SEGURANÇA: ZERO ALTER destrutivo/DROP/DELETE (só ADD COLUMN IF NOT EXISTS);
+ * mudança de schema ADITIVA e backward-compat; agregação read-only no frontend.
+ *
  * Rev. 2853 — **RAIO-X DO FUNCIONÁRIO — NOVOS INDICADORES DE DESEMPENHO: ATRASOS,
  * OBRAS GERIDAS (SE GESTOR), AVALIAÇÃO INTERNA E AVALIAÇÃO DO CLIENTE.**
  *

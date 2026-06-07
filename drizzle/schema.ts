@@ -1081,6 +1081,10 @@ export const employees = pgTable("employees", {
         dataListaNegra: date({ mode: 'string' }),
         codigoContabil: varchar({ length: 20 }),
         codigoInterno: varchar({ length: 10 }),
+        // Rev. 2854 — Tamanhos de EPI/uniforme (mapeamento de compra + estoque)
+        tamanhoCalcado: varchar({ length: 10 }),
+        tamanhoCamisa: varchar({ length: 10 }),
+        tamanhoCalca: varchar({ length: 10 }),
         recebeComplemento: smallint().default(0).notNull(),
         valorComplemento: varchar({ length: 20 }),
         descricaoComplemento: varchar({ length: 255 }),

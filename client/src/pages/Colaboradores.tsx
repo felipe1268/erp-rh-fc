@@ -202,6 +202,7 @@ export default function Colaboradores() {
   const selectedCompany = selectedCompanyId;
   const [search, setSearch] = useState("");
   const [skillFilter, setSkillFilter] = useState<string>("all");
+  const [gradeOpen, setGradeOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get("status") || "Todos";
@@ -310,6 +311,37 @@ export default function Colaboradores() {
     const set = new Set<string>();
     (employees ?? []).forEach(e => { const f = (e as any).funcao; if (f) set.add(f); });
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [employees]);
+
+  // Rev. 2854 — Grade de Tamanhos (EPI): agrega calçado/camisa/calça dos
+  // colaboradores ATIVOS (exclui desligados/blacklist) para mapear compra e estoque.
+  const gradeTamanhos = useMemo(() => {
+    const ativos = (employees ?? []).filter((e: any) =>
+      e.status !== "Desligado" && e.status !== "Lista_Negra" && e.status !== "Inativo"
+      && e.listaNegra !== 1 && e.listaNegra !== true);
+    const ordenar = (a: string, b: string) => {
+      const na = parseFloat(a.replace(",", ".")); const nb = parseFloat(b.replace(",", "."));
+      if (!isNaN(na) && !isNaN(nb)) return na - nb;
+      return a.localeCompare(b, "pt-BR");
+    };
+    const contar = (campo: string) => {
+      const map = new Map<string, number>();
+      let semInfo = 0;
+      ativos.forEach((e: any) => {
+        const raw = (e[campo] ?? "").toString().trim().toUpperCase();
+        if (!raw) { semInfo++; return; }
+        map.set(raw, (map.get(raw) || 0) + 1);
+      });
+      const itens = Array.from(map.entries()).map(([tamanho, qtd]) => ({ tamanho, qtd }))
+        .sort((x, y) => ordenar(x.tamanho, y.tamanho));
+      return { itens, semInfo };
+    };
+    return {
+      total: ativos.length,
+      calcado: contar("tamanhoCalcado"),
+      camisa: contar("tamanhoCamisa"),
+      calca: contar("tamanhoCalca"),
+    };
   }, [employees]);
 
   // Apply skill filter to employees
@@ -974,6 +1006,9 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
         ["Salário Base", viewingEmployee.salarioBase ? formatMoeda(viewingEmployee.salarioBase) : "-"],
         ["Valor da Hora", viewingEmployee.valorHora ? formatMoeda(viewingEmployee.valorHora) : "-"],
         ["Horas/Mês", safeDisplay(viewingEmployee.horasMensais)],
+        ["Calçado (EPI)", safeDisplay((viewingEmployee as any).tamanhoCalcado)],
+        ["Camisa (EPI)", safeDisplay((viewingEmployee as any).tamanhoCamisa)],
+        ["Calça (EPI)", safeDisplay((viewingEmployee as any).tamanhoCalca)],
         ["Complemento Salarial", viewingEmployee.recebeComplemento ? `Sim — R$ ${viewingEmployee.valorComplemento || "0"}` : "Não"],
         ["Acordo HE", viewingEmployee.acordoHoraExtra ? `Sim — ${viewingEmployee.heNormal50 ?? globalHE.heDiasUteis}% / ${viewingEmployee.he100 ?? globalHE.heDomingosFeriados}% / ${viewingEmployee.heNoturna ?? globalHE.heAdicionalNoturno}%` : `Padrão Empresa (${globalHE.heDiasUteis}/${globalHE.heDomingosFeriados}/${globalHE.heAdicionalNoturno}%)`],
         ["Isenção Art. 62 CLT", viewingEmployee.cargoConfianca ? `Sim — Art. 62${(viewingEmployee as any).cargoConfiancaInciso ? `, ${(viewingEmployee as any).cargoConfiancaInciso}` : ' (inciso não informado)'} CLT${viewingEmployee.cargoConfiancaGratificacao ? ` (grat. ${viewingEmployee.cargoConfiancaGratificacao}%)` : ''}${(viewingEmployee as any).cargoConfiancaObservacao ? ` — ${(viewingEmployee as any).cargoConfiancaObservacao}` : ''}` : "Não"],
@@ -1074,6 +1109,7 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
           <DraggableCommandBar barId="colaboradores" items={[
             { id: "print", node: <PrintActions title="Colaboradores" /> },
             { id: "importar", node: <Button variant="outline" onClick={() => setImportDialogOpen(true)} disabled={!hasValidSelection} className="gap-2"><Upload className="h-4 w-4" /> Importar Excel</Button> },
+            { id: "gradeEpi", node: <Button variant="outline" onClick={() => setGradeOpen(true)} disabled={!hasValidSelection} className="gap-2 text-sky-700 border-sky-300 hover:bg-sky-50"><HardHat className="h-4 w-4" /> Grade de Tamanhos</Button> },
             ...(user?.role === "admin" || user?.role === "admin_master" ? [{ id: "normalizarCidades", node: <Button variant="outline" onClick={() => { if (confirm("Corrigir caixa e acentos de todas as cidades cadastradas? Esta ação atualiza o banco de dados.")) normalizarCidadesMut.mutate({ companyId: companyId!, companyIds: queryCompanyIds }); }} disabled={normalizarCidadesMut.isPending || !hasValidSelection} className="gap-2 text-amber-700 border-amber-300 hover:bg-amber-50"><Wrench className="h-4 w-4" /> {normalizarCidadesMut.isPending ? "Corrigindo..." : "Padronizar Cidades"}</Button> }] : []),
             { id: "novo", node: <Button onClick={openNew} disabled={!hasValidSelection} className="gap-2"><Plus className="h-4 w-4" /> Novo</Button> },
           ]} />
@@ -1424,6 +1460,59 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ============================================================ */}
+      {/* Rev. 2854 — GRADE DE TAMANHOS (EPI) — mapeamento de compra */}
+      {/* ============================================================ */}
+      <Dialog open={gradeOpen} onOpenChange={setGradeOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><HardHat className="h-5 w-5 text-sky-600" /> Grade de Tamanhos (EPI)</DialogTitle>
+            <DialogDescription>
+              Resumo dos tamanhos de calçado, camisa e calça dos {gradeTamanhos.total} colaborador(es) ativo(s) — use para mapear a compra de EPI/uniforme e garantir o estoque.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {([
+              { titulo: "Calçado", dados: gradeTamanhos.calcado },
+              { titulo: "Camisa", dados: gradeTamanhos.camisa },
+              { titulo: "Calça", dados: gradeTamanhos.calca },
+            ] as const).map(({ titulo, dados }) => (
+              <div key={titulo} className="rounded-lg border border-border bg-card">
+                <div className="px-3 py-2 border-b border-border bg-muted/50 text-sm font-bold text-primary">{titulo}</div>
+                <div className="p-3">
+                  {dados.itens.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">Nenhum tamanho informado.</p>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-xs text-muted-foreground">
+                          <th className="text-left font-medium pb-1">Tamanho</th>
+                          <th className="text-right font-medium pb-1">Qtd</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dados.itens.map((it) => (
+                          <tr key={it.tamanho} className="border-t border-border/50">
+                            <td className="py-1 font-mono">{it.tamanho}</td>
+                            <td className="py-1 text-right font-semibold">{it.qtd}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                  {dados.semInfo > 0 && (
+                    <p className="text-[10px] text-amber-600 mt-2">{dados.semInfo} sem informação</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGradeOpen(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ============================================================ */}
       {/* FORM DIALOG - CADASTRO / EDIÇÃO */}
@@ -2087,6 +2176,30 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
                     Horista: remuneração por hora trabalhada. Mensalista: salário mensal fixo.
                   </span>
                 </div>
+              </div>
+
+              {/* Rev. 2854 — Uniforme / EPI: tamanhos p/ mapear compra e estoque */}
+              <div className="mt-4 p-4 rounded-lg border-2 border-sky-200 bg-sky-50/50 dark:bg-sky-950/20 dark:border-sky-800">
+                <h4 className="text-sm font-bold text-sky-700 dark:text-sky-400 mb-3 flex items-center gap-2">
+                  <span className="text-lg">🦺</span> Uniforme / EPI
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <Label className="text-xs font-medium text-muted-foreground">Calçado (nº)</Label>
+                    <Input value={(form as any).tamanhoCalcado ?? ""} onChange={e => set("tamanhoCalcado" as any, e.target.value)} placeholder="Ex.: 42" className="bg-input mt-1" />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium text-muted-foreground">Camisa</Label>
+                    <Input value={(form as any).tamanhoCamisa ?? ""} onChange={e => set("tamanhoCamisa" as any, e.target.value.toUpperCase())} placeholder="Ex.: M, G, GG" className="bg-input mt-1" />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium text-muted-foreground">Calça</Label>
+                    <Input value={(form as any).tamanhoCalca ?? ""} onChange={e => set("tamanhoCalca" as any, e.target.value.toUpperCase())} placeholder="Ex.: 42, M, G" className="bg-input mt-1" />
+                  </div>
+                </div>
+                <span className="text-[10px] text-muted-foreground mt-2 block">
+                  Usado para mapear a compra de EPI/uniforme e garantir o estoque por tamanho.
+                </span>
               </div>
 
               {/* Contrato de Experiência CLT */}

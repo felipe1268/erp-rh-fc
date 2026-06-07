@@ -847,6 +847,8 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
     "cargo", "funcao", "setor", "codigoInterno", "codigoContabil",
     "dataAdmissao", "dataDemissao", "tipoContrato", "jornadaTrabalho",
     "salarioBase", "valorHora", "horasMensais", "tipoRemuneracao",
+    // EPI / uniforme (Rev. 2854)
+    "tamanhoCalcado", "tamanhoCamisa", "tamanhoCalca",
     // Desligamento
     "motivoDesligamento", "categoriaDesligamento", "dataDesligamentoEfetiva",
     "desligadoPor", "desligadoUserId",
