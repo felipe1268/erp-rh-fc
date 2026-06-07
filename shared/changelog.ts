@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2886 — **DASHBOARD FINANCEIRO — KPIs/LISTAS AGORA EM VALOR CHEIO EM REAIS
+ * (R$ 1.400.000,00) NO LUGAR DA FORMA ABREVIADA (R$ 1.4M / R$ 123.9K).**
+ *
+ * PEDIDO (usuário, print do Dashboard Financeiro): os cards do mês (Receita,
+ * Despesa, Resultado, A Receber, A Pagar) mostravam valores abreviados tipo
+ * "R$ 1.4M", "R$ 25.2M", "R$ 123.9K". O usuário quer o valor cheio em reais com
+ * separador de milhar (ponto) e centavos (vírgula).
+ *
+ * CAUSA: `client/src/pages/financeiro/FinanceiroDashboard.tsx` tinha um helper
+ * `formatCompact()` que dividia por 1.000.000 / 1.000 e anexava "M"/"K". Era usado
+ * nos 6 cards de KPI, na lista "Evolução dos Últimos 30 Dias" e no "Resultado por
+ * Obra".
+ *
+ * FIX: `formatCompact` REMOVIDO; todas as chamadas trocadas para o `formatBRL`
+ * (que usa `Intl.NumberFormat("pt-BR", currency BRL)` → "R$ 1.400.000,00"). Ajustes
+ * de layout p/ o valor cheio caber: cards com fonte responsiva (`text-sm
+ * lg:text-base`) + `tabular-nums` + `break-words`; colunas de Entradas/Saídas da
+ * lista de 30 dias alargadas (`w-16`→`w-24`) + `tabular-nums`.
+ *
+ * ZERO schema; ZERO backend; ZERO ALTER/DROP/DELETE. Só front (formatação +
+ * largura/fonte). Arquivo: `client/src/pages/financeiro/FinanceiroDashboard.tsx`.
+ *
  * Rev. 2885 — **CLIENTES — BOTÕES "EDITAR"/"EXCLUIR" DOS CARDS AGORA SEMPRE
  * VISÍVEIS (ANTES DEPENDIAM DE HOVER → INVISÍVEIS EM IPAD/TOUCH).**
  *
