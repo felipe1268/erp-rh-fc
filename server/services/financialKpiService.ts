@@ -16,6 +16,14 @@ import { getDb } from "../db";
 function r(v: any): any[] { return (v as any)?.rows ?? (v as any) ?? []; }
 function n(v: any): number { return parseFloat(v ?? "0") || 0; }
 
+// IMPORTANTE: o `.execute(stringSQL, [params])` do drizzle node-postgres IGNORA o
+// array de parâmetros posicionais — os placeholders $1/$2/$3 chegam ao Postgres sem
+// bind e a query falha ("there is no parameter $1"). Para queries com parâmetros
+// posicionais usamos o pool pg subjacente (`$client.query`), que faz o bind correto.
+async function q(db: any, text: string, params: any[] = []): Promise<{ rows: any[] }> {
+  return await db.$client.query(text, params);
+}
+
 function mesComp(d: Date = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
@@ -373,7 +381,7 @@ export async function calcularDRE(
   const ORIGEM_OBRA = "('cronograma_atividade','compras','compra_oc','almoxarifado_saida')";
   const ORIGEM_FIN = "('despesa_financeira','juros','tarifa_bancaria','iof')";
 
-  const res = await db!.execute(
+  const res = await q(db!,
     `WITH e AS (
        SELECT tipo, natureza,
               LOWER(COALESCE(origem_modulo,'')) AS origem,
@@ -410,7 +418,7 @@ export async function calcularDRE(
   const agg = r(res)[0] ?? {};
 
   // Tributos sobre o resultado (obrigações) no intervalo
-  const tributosRes = await db!.execute(
+  const tributosRes = await q(db!,
     `SELECT COALESCE(SUM(valor_total),0) AS total
      FROM financial_tax_obligations
      WHERE company_id=$1 AND mes_competencia BETWEEN $2 AND $3`,
@@ -468,7 +476,7 @@ export async function calcularDRE(
 export async function dreDisponibilidade(companyId: number, ano: string) {
   const db = await getDb();
   const yyyy = (ano || "").slice(0, 4);
-  const res = await db!.execute(
+  const res = await q(db!,
     `SELECT TO_CHAR(data_competencia,'MM') AS mes,
             COUNT(*) AS n,
             COUNT(*) FILTER (WHERE status='pago' OR valor_realizado IS NOT NULL) AS n_realizado

@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2838 — **FINANCEIRO · DRE — CORRIGE "SEM QUALQUER VALOR": QUERIES NÃO LIGAVAM OS PARÂMETROS POSICIONAIS.**
+ *
+ * PEDIDO (usuário, print do iPad da tela DRE): "Ainda sem qualquer valor." Mesmo com um mês selecionado (ex.: Janeiro),
+ * a tela mostrava o placeholder "Selecione um período para visualizar o DRE." — ou seja, `getDRE` retornava vazio.
+ *
+ * CAUSA-RAIZ: as funções `calcularDRE()` e `dreDisponibilidade()` (e, de fato, TODO o `financialKpiService.ts`)
+ * chamavam `db.execute(stringSQL, [params])`. O `.execute()` do drizzle node-postgres aceita SÓ UM argumento — o
+ * array de parâmetros é IGNORADO. Assim os placeholders `$1/$2/$3` chegavam ao Postgres SEM bind e a query falhava
+ * com `there is no parameter $1` (logado como `[tRPC Error] financial.getDRE: DB error: Failed query: WITH e AS (…`).
+ * Como o erro era lançado, `dre` ficava `undefined` no front e caía no placeholder. A validação anterior (Rev. 2835)
+ * rodou a SQL direto no Neon via `pg` (que liga os params), por isso o bug do CAMINHO DA APP passou despercebido.
+ *
+ * O QUE FOI FEITO (`server/services/financialKpiService.ts`, só backend):
+ *  - NOVO helper `q(db, text, params)` que usa o pool pg subjacente (`db.$client.query(text, params)`), o qual liga
+ *    corretamente os parâmetros posicionais.
+ *  - `calcularDRE()` (query agregada do DRE + query de tributos em `financial_tax_obligations`) e `dreDisponibilidade()`
+ *    (disponibilidade por mês) passaram a usar `q(db!, …)` em vez de `db!.execute(…, […])`. As strings SQL e os
+ *    `$1/$2/$3` ficaram INTACTOS — mudou só o mecanismo de execução/bind.
+ *
+ * VALIDAÇÃO (Neon real, company 60002): mensal Jan/2026 → receita bruta R$ 1.534.361,90 / lucro líq. R$ 215.180,13;
+ * trimestral (2º Tri, Abr-Jun), semestral (2º Sem, Jul-Dez) e anual (Jan-Dez) retornando números; disponibilidade
+ * por mês OK (jan n=600/realizado=372).
+ *
+ * RESSALVA: o MESMO bug de bind existe nas demais funções do `financialKpiService.ts` (ex.: `calcularKpis` — confirmado
+ * falhando com `there is no parameter $1`). NÃO foram tocadas nesta revisão (fora do escopo do pedido, que era o DRE);
+ * ficam como follow-up — todas as queries com params posicionais do arquivo devem migrar para o helper `q()`.
+ * ZERO ALTER/DROP/DELETE; ZERO schema.
+ *
+ * ARQUIVOS: `server/services/financialKpiService.ts`.
+ *
+ * ---
+ *
  * Rev. 2837 — **FINANCEIRO · DRE — SELETOR GANHA TRIMESTRE E SEMESTRE (ALÉM DE MÊS E ANO INTEIRO).**
  *
  * PEDIDO (usuário, print do iPad da tela DRE com chips de meses + "Ano inteiro"): "Faltou o trimestre e o semestre."
