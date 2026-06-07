@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2845 — **FINANCEIRO · PAINEL FINANCEIRO — SELETOR DE PERÍODO PADRONIZADO (MÊS/TRIMESTRE/SEMESTRE/ANO)
+ * IGUAL AO DRE.**
+ *
+ * PEDIDO (usuário, com 2 prints do iPad — IMG_1657/IMG_1658): padronizar o seletor de período do "Painel
+ * Financeiro" (`FinanceiroDashboard.tsx`), que tinha apenas um `<Select>` simples de mês ("Jan 2026"), para o
+ * MESMO seletor padronizado já existente no DRE: navegação de ano (`< 2026 >`) + 12 chips de mês com pontinhos
+ * de status (legenda azul=Com lançamento / verde=Consolidado / cinza=Sem dados) + chips de Trimestre (T1-T4) +
+ * Semestre (S1-S2) + "Ano inteiro". O painel deve passar a suportar agregação por mês, trimestre, semestre e ano.
+ *
+ * O QUE FOI FEITO (FRONTEND — `client/src/pages/financeiro/FinanceiroDashboard.tsx`):
+ *  - Removido o `<Select>` antigo (e os imports `Select*`/`Calendar`/helpers `getMesAtual`/`formatMesLabel` e o
+ *    `useMemo` `meses`, agora órfãos).
+ *  - Replicado o padrão do DRE: tipo discriminado `Sel` (mensal|trimestral|semestral|anual), estado `ano` + `sel`,
+ *    derivação `tipoPeriodo`/`periodo` (âncora `YYYY-MM`, ou `YYYY` no anual)/`tituloPeriodo`, helper `chipCls`,
+ *    e o Card "Seletor de período" com os chips e a legenda de pontinhos.
+ *  - REUSO do endpoint `financial.getDREDisponibilidade` (mesmo do DRE) para montar `mesesStatus` (pontinhos).
+ *  - A query `financial.getDashboardExecutivo` passou a enviar `{ mesCompetencia: periodo, tipoPeriodo }`.
+ *  - O título "Resultado por Obra (...)" passou a usar `tituloPeriodo` no lugar de `formatMesLabel(mes)`.
+ *
+ * O QUE FOI FEITO (BACKEND — `server/routers/financial.ts`, endpoint `getDashboardExecutivo`):
+ *  - NOVO input opcional `tipoPeriodo` (enum mensal|trimestral|semestral|anual, default "mensal").
+ *  - Helpers locais `_rangeFor` (calcula `[iniYM, fimYM]` no padrão de `dreRange`) e `_prevAnchor` (âncora do
+ *    período ANTERIOR comparável de mesmo tamanho — mês/trimestre/semestre/ano anterior, cruzando ano quando
+ *    necessário).
+ *  - As 6 queries PERIOD-BOUND trocaram o match exato `TO_CHAR(data_competencia,'YYYY-MM')=$1` por
+ *    `BETWEEN $1 AND $2`: receita/despesa do período (range atual), receita/despesa do período anterior
+ *    (`varReceita`/`varDespesa` agora comparam períodos de MESMO tamanho), `topDespesas` e `resultadoPorObra`.
+ *  - As queries POINT-IN-TIME (a receber / a pagar / vencidos / evolução diária 30d / próximos vencimentos /
+ *    saldos bancários) NÃO mudaram — continuam refletindo o estado atual, independente do período.
+ *  - `dbExecute` binda por aparecimento do placeholder (não por número), então cada array `[iniYM, fimYM]` /
+ *    `[antIniYM, antFimYM]` segue a ordem textual `$1` depois `$2`.
+ *
+ * ZERO ALTER/DROP/DELETE; ZERO schema; read-only (sem novas tabelas/colunas). Validação: HMR do Vite compilou
+ * limpo (sem erros no workflow); painel atrás de login, então a validação visual foi via review de código.
+ *
  * Rev. 2844 — **FINANCEIRO · DRE — PAINEL "ANÁLISE INTELIGENTE" (IA) MOVIDO PARA ABAIXO DO DRE.**
  *
  * PEDIDO (usuário, com 2 prints do iPad): "Quero que a análise e IA fique abaixo do DRE". O painel

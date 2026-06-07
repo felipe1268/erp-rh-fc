@@ -4,13 +4,12 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   TrendingUp, TrendingDown, DollarSign, AlertTriangle, CreditCard,
-  ArrowUpRight, ArrowDownRight, RefreshCw, Calendar, BarChart2,
+  ArrowUpRight, ArrowDownRight, RefreshCw, BarChart2,
   Wallet, Building2, Landmark, PiggyBank, ShieldAlert,
-  ArrowRight, Clock, CheckCircle, XCircle, Eye, ChevronRight,
-  Activity, Target, Banknote, CircleDollarSign
+  ArrowRight, Clock, CheckCircle, XCircle, Eye, ChevronRight, ChevronLeft,
+  Activity, Target, Banknote, CircleDollarSign, CalendarDays
 } from "lucide-react";
 import { useCompany } from "@/hooks/useCompany";
 import { Link } from "wouter";
@@ -25,16 +24,16 @@ function formatCompact(value: number): string {
   return formatBRL(value);
 }
 
-function getMesAtual() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
+const MESES_ABREV = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+const MESES_PT_FULL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
-function formatMesLabel(m: string) {
-  const [y, mo] = m.split("-");
-  const meses = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-  return `${meses[parseInt(mo) - 1]} ${y}`;
-}
+type Sel =
+  | { tipo: "mensal"; mes: number }
+  | { tipo: "trimestral"; tri: number }
+  | { tipo: "semestral"; sem: number }
+  | { tipo: "anual" };
+
+type MesStatus = "consolidado" | "lancamento" | "sem_dados";
 
 function VariacaoTag({ valor }: { valor: number }) {
   if (valor === 0) return null;
@@ -60,17 +59,45 @@ function MiniBar({ value, max, color }: { value: number; max: number; color: str
 
 export default function FinanceiroDashboard() {
   const { companyId } = useCompany();
-  const [mes, setMes] = useState(getMesAtual());
+  const hoje = new Date();
+  const [ano, setAno] = useState(hoje.getFullYear());
+  const [sel, setSel] = useState<Sel>({ tipo: "mensal", mes: hoje.getMonth() + 1 });
 
-  const meses = useMemo(() =>
-    Array.from({ length: 12 }, (_, i) => {
-      const d = new Date();
-      d.setMonth(d.getMonth() - i);
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    }), []);
+  const tipoPeriodo: "mensal" | "trimestral" | "semestral" | "anual" = sel.tipo;
+  const periodo =
+    sel.tipo === "anual" ? `${ano}` :
+    sel.tipo === "mensal" ? `${ano}-${String(sel.mes).padStart(2, "0")}` :
+    sel.tipo === "trimestral" ? `${ano}-${String((sel.tri - 1) * 3 + 1).padStart(2, "0")}` :
+    `${ano}-${sel.sem === 1 ? "01" : "07"}`;
+
+  const tituloPeriodo =
+    sel.tipo === "anual" ? `${ano}` :
+    sel.tipo === "mensal" ? `${MESES_PT_FULL[sel.mes - 1]} ${ano}` :
+    sel.tipo === "trimestral" ? `${sel.tri}º Trimestre ${ano}` :
+    `${sel.sem}º Semestre ${ano}`;
+
+  const chipCls = (active: boolean) =>
+    `flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+      active
+        ? "border-orange-500 bg-orange-50 text-orange-700 shadow-sm"
+        : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+    }`;
+
+  const { data: disp } = (trpc as any).financial.getDREDisponibilidade.useQuery(
+    { companyId, ano: `${ano}` },
+    { enabled: !!companyId }
+  );
+
+  const mesesStatus: Record<number, MesStatus> = {};
+  for (let m = 1; m <= 12; m++) {
+    const info = disp?.meses?.[m] ?? disp?.meses?.[String(m)];
+    const total = Number(info?.n ?? 0);
+    const realizado = Number(info?.nRealizado ?? 0);
+    mesesStatus[m] = total === 0 ? "sem_dados" : (realizado >= total ? "consolidado" : "lancamento");
+  }
 
   const { data, isLoading, refetch } = (trpc as any).financial.getDashboardExecutivo.useQuery(
-    { companyId, mesCompetencia: mes },
+    { companyId, mesCompetencia: periodo, tipoPeriodo },
     { enabled: !!companyId, refetchInterval: 60000 }
   );
 
@@ -100,17 +127,6 @@ export default function FinanceiroDashboard() {
             <p className="text-sm text-gray-500 mt-0.5">Visão executiva em tempo real</p>
           </div>
           <div className="flex items-center gap-2">
-            <Select value={mes} onValueChange={setMes}>
-              <SelectTrigger className="w-36 h-9 text-sm">
-                <Calendar className="w-3.5 h-3.5 mr-1.5 text-gray-400" />
-                <SelectValue>{formatMesLabel(mes)}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {meses.map(m => (
-                  <SelectItem key={m} value={m}>{formatMesLabel(m)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             <Link href="/financeiro/analise-cfo">
               <Button variant="outline" size="sm" className="h-9 border-indigo-300 text-indigo-700 hover:bg-indigo-50">
                 <Activity className="w-3.5 h-3.5 mr-1.5" />Análise CFO
@@ -126,6 +142,70 @@ export default function FinanceiroDashboard() {
             </Button>
           </div>
         </div>
+
+        {/* Seletor de período — padronizado (mês/trimestre/semestre/ano) */}
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <button onClick={() => setAno(a => a - 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-base font-bold text-gray-800 min-w-[3.5rem] text-center">{ano}</span>
+                <button onClick={() => setAno(a => a + 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="flex items-center gap-4 text-xs text-gray-500">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Com lançamento</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Consolidado</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Sem dados</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+              {MESES_ABREV.map((m, i) => {
+                const num = i + 1;
+                const status = mesesStatus[num];
+                const isSelected = sel.tipo === "mensal" && sel.mes === num;
+                return (
+                  <button
+                    key={m}
+                    onClick={() => setSel({ tipo: "mensal", mes: num })}
+                    className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
+                      ${isSelected
+                        ? "border-orange-500 bg-orange-50 text-orange-700 shadow-sm"
+                        : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"
+                      }`}
+                  >
+                    <span>{m}</span>
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      status === "consolidado" ? "bg-green-500" :
+                      status === "lancamento" ? "bg-blue-500" :
+                      "bg-gray-300"
+                    }`} />
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide mr-0.5">Trimestre</span>
+              {[1, 2, 3, 4].map((t) => (
+                <button key={`t${t}`} onClick={() => setSel({ tipo: "trimestral", tri: t })} className={chipCls(sel.tipo === "trimestral" && sel.tri === t)}>
+                  {t}º Tri
+                </button>
+              ))}
+              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide ml-2 mr-0.5">Semestre</span>
+              {[1, 2].map((s) => (
+                <button key={`s${s}`} onClick={() => setSel({ tipo: "semestral", sem: s })} className={chipCls(sel.tipo === "semestral" && sel.sem === s)}>
+                  {s}º Sem
+                </button>
+              ))}
+              <button onClick={() => setSel({ tipo: "anual" })} className={`${chipCls(sel.tipo === "anual")} ml-auto`}>
+                <CalendarDays className="w-3.5 h-3.5" /> Ano inteiro ({ano})
+              </button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* SEÇÃO 1: POSIÇÃO DE CAIXA */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -353,7 +433,7 @@ export default function FinanceiroDashboard() {
           <Card className="border-0 shadow-sm">
             <CardHeader className="pb-2 pt-4 px-5 flex flex-row items-center justify-between">
               <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2">
-                <Building2 className="w-4 h-4" /> Resultado por Obra ({formatMesLabel(mes)})
+                <Building2 className="w-4 h-4" /> Resultado por Obra ({tituloPeriodo})
               </CardTitle>
             </CardHeader>
             <CardContent className="px-5 pb-4">

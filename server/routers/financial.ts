@@ -2970,14 +2970,34 @@ export const financialRouter = router({
     companyId: z.number(),
     companyIds: z.array(z.number()).optional(),
     mesCompetencia: z.string().optional(),
+    tipoPeriodo: z.enum(["mensal", "trimestral", "semestral", "anual"]).optional(),
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const ids = resolveCompanyIds(input);
-    const mes = input.mesCompetencia ?? new Date().toISOString().slice(0, 7);
+    const tipoPeriodo = input.tipoPeriodo ?? "mensal";
+    const anchor = input.mesCompetencia ?? new Date().toISOString().slice(0, 7);
     const today = new Date().toISOString().split("T")[0];
-    const [year, month] = mes.split("-").map(Number);
-    const mesAnterior = month === 1 ? `${year - 1}-12` : `${year}-${String(month - 1).padStart(2, "0")}`;
+    // Range [iniYM, fimYM] do período selecionado (mês/trimestre/semestre/ano) + período anterior comparável.
+    const _rangeFor = (tipo: string, a: string): [string, string] => {
+      const yy = parseInt(a.slice(0, 4), 10);
+      const mm = parseInt(a.slice(5, 7) || "1", 10) || 1;
+      if (tipo === "anual") return [`${yy}-01`, `${yy}-12`];
+      if (tipo === "trimestral") { const ini = Math.floor((mm - 1) / 3) * 3 + 1; return [`${yy}-${String(ini).padStart(2, "0")}`, `${yy}-${String(ini + 2).padStart(2, "0")}`]; }
+      if (tipo === "semestral") { const ini = mm <= 6 ? 1 : 7; return [`${yy}-${String(ini).padStart(2, "0")}`, `${yy}-${String(ini + 5).padStart(2, "0")}`]; }
+      const m = String(mm).padStart(2, "0"); return [`${yy}-${m}`, `${yy}-${m}`];
+    };
+    const _prevAnchor = (tipo: string, a: string): string => {
+      const yy = parseInt(a.slice(0, 4), 10);
+      const mm = parseInt(a.slice(5, 7) || "1", 10) || 1;
+      if (tipo === "anual") return `${yy - 1}`;
+      const len = tipo === "trimestral" ? 3 : tipo === "semestral" ? 6 : 1;
+      const ini = tipo === "trimestral" ? Math.floor((mm - 1) / 3) * 3 + 1 : tipo === "semestral" ? (mm <= 6 ? 1 : 7) : mm;
+      const total = (yy * 12 + (ini - 1)) - len;
+      return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`;
+    };
+    const [iniYM, fimYM] = _rangeFor(tipoPeriodo, anchor);
+    const [antIniYM, antFimYM] = _rangeFor(tipoPeriodo, _prevAnchor(tipoPeriodo, anchor));
 
     const [
       receitaMesRes, despesaMesRes,
@@ -2990,10 +3010,10 @@ export const financialRouter = router({
       proxVencimentosRes,
       receitaPorObraRes,
     ] = await Promise.all([
-      dbExecute(db, `SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='receita' AND status IN ('recebido','pago') AND TO_CHAR(data_competencia,'YYYY-MM')=$1`, [mes]),
-      dbExecute(db, `SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='despesa' AND status IN ('pago','recebido') AND TO_CHAR(data_competencia,'YYYY-MM')=$1`, [mes]),
-      dbExecute(db, `SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='receita' AND status IN ('recebido','pago') AND TO_CHAR(data_competencia,'YYYY-MM')=$1`, [mesAnterior]),
-      dbExecute(db, `SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='despesa' AND status IN ('pago','recebido') AND TO_CHAR(data_competencia,'YYYY-MM')=$1`, [mesAnterior]),
+      dbExecute(db, `SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='receita' AND status IN ('recebido','pago') AND TO_CHAR(data_competencia,'YYYY-MM') BETWEEN $1 AND $2`, [iniYM, fimYM]),
+      dbExecute(db, `SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='despesa' AND status IN ('pago','recebido') AND TO_CHAR(data_competencia,'YYYY-MM') BETWEEN $1 AND $2`, [iniYM, fimYM]),
+      dbExecute(db, `SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='receita' AND status IN ('recebido','pago') AND TO_CHAR(data_competencia,'YYYY-MM') BETWEEN $1 AND $2`, [antIniYM, antFimYM]),
+      dbExecute(db, `SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='despesa' AND status IN ('pago','recebido') AND TO_CHAR(data_competencia,'YYYY-MM') BETWEEN $1 AND $2`, [antIniYM, antFimYM]),
       dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='receita' AND status IN ('a_receber','recebido_parcial')`, []),
       dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='despesa' AND status='a_pagar'`, []),
       dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='receita' AND status IN ('a_receber','recebido_parcial') AND data_vencimento < $1`, [today]),
@@ -3010,8 +3030,8 @@ export const financialRouter = router({
       dbExecute(db, `
         SELECT conta_nome AS "categoria", SUM(COALESCE(valor_realizado, valor_previsto)) AS total
         FROM financial_entries
-        WHERE company_id IN (${inlineIds(ids)}) AND tipo='despesa' AND status IN ('pago','recebido') AND TO_CHAR(data_competencia,'YYYY-MM')=$1
-                GROUP BY conta_nome ORDER BY total DESC LIMIT 8`, [mes]),
+        WHERE company_id IN (${inlineIds(ids)}) AND tipo='despesa' AND status IN ('pago','recebido') AND TO_CHAR(data_competencia,'YYYY-MM') BETWEEN $1 AND $2
+                GROUP BY conta_nome ORDER BY total DESC LIMIT 8`, [iniYM, fimYM]),
       dbExecute(db, `
         SELECT id, descricao, obra_nome AS "obraNome", valor_previsto AS "valor", data_vencimento AS "vencimento", tipo,
                CASE WHEN data_vencimento < CURRENT_DATE THEN CURRENT_DATE - data_vencimento ELSE 0 END AS "diasAtraso"
@@ -3023,8 +3043,8 @@ export const financialRouter = router({
                SUM(CASE WHEN tipo='receita' AND status IN ('recebido','pago') THEN COALESCE(valor_realizado, valor_previsto) ELSE 0 END) AS receita,
                SUM(CASE WHEN tipo='despesa' AND status IN ('pago','recebido') THEN COALESCE(valor_realizado, valor_previsto) ELSE 0 END) AS despesa
         FROM financial_entries
-        WHERE company_id IN (${inlineIds(ids)}) AND obra_id IS NOT NULL AND TO_CHAR(data_competencia,'YYYY-MM')=$1
-                GROUP BY obra_nome, obra_id ORDER BY receita DESC LIMIT 10`, [mes]),
+        WHERE company_id IN (${inlineIds(ids)}) AND obra_id IS NOT NULL AND TO_CHAR(data_competencia,'YYYY-MM') BETWEEN $1 AND $2
+                GROUP BY obra_nome, obra_id ORDER BY receita DESC LIMIT 10`, [iniYM, fimYM]),
     ]);
 
     const rec = Number(rows(receitaMesRes)[0]?.total ?? 0);
