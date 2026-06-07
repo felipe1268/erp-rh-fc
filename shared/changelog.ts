@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2821 — **COMPRAS · RESERVAS PREVENTIVAS — Nº DA COTAÇÃO CORRETO + CLICAR PRA ABRIR A COTAÇÃO.**
+ *
+ * PEDIDO (usuário, sobre a tela "Realocação de Verba → Reservas Preventivas em Andamento"): "Quero poder clicar e
+ * ver a cotação, e o número da cotação deve ser o correto, arrume isso." Na tabela de Reservas em Andamento a coluna
+ * "Cotação" exibia o ID INTERNO do registro (`#249`, `#253`...) e NÃO era clicável — o comprador não conseguia abrir
+ * a cotação pra resolvê-la e o número não batia com o Nº VISÍVEL (COT-AAAA-NNNN) usado no resto do módulo.
+ *
+ * O QUE FOI FEITO (só leitura/UI — ZERO ALTER/DROP/DELETE; ZERO schema novo; ZERO mutation):
+ *  (1) BACKEND `listarReservasAtivas` (server/routers/compras.ts): resolve o Nº VISÍVEL da cotação em LOTE —
+ *      `inArray` sobre `comprasCotacoes` filtrando por `companyId` + ids das reservas, monta `Map<id,numeroCotacao>`
+ *      e devolve o novo campo `numeroCotacao` (null quando a cotação não existe mais). Mantém `cotacaoId` pra navegar.
+ *  (2) FRONTEND (client/src/pages/compras/Realocacao.tsx): a célula "Cotação" da tabela de Reservas em Andamento agora
+ *      mostra `formatNumeroCotacaoDisplay(numeroCotacao)` (fallback `#<cotacaoId>` se faltar), ficou clicável
+ *      (cursor-pointer + hover underline + `title="Abrir cotação"`) e navega via wouter `useLocation` pra
+ *      `/compras/cotacoes?destaque=<cotacaoId>` — reaproveitando o mecanismo JÁ EXISTENTE da tela de Cotações que lê
+ *      `?destaque=<id>` no mount e abre o modal de detalhe (`setShowDetalhe`). O modal "Estender" também passou a
+ *      exibir o Nº correto (estado `estenderModal` ganhou `numeroCotacao`).
+ *
+ * RESSALVA: só UI/navegação + 1 batch-read no backend; nenhuma mudança de regra de negócio das reservas. Validação:
+ * esbuild OK em compras.ts.
+ *
+ * ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 2820 — **COMPRAS · REALOCAÇÃO/RESERVAS PREVENTIVAS — BAIXA AUTOMÁTICA DA RESERVA QUANDO A COTAÇÃO JÁ TEM OC GERADA.**
  *
  * PEDIDO/DÚVIDA (usuário, confuso com a tela de Realocação de Verba / Reservas Preventivas): "Tem MUITA reserva

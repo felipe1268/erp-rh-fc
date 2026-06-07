@@ -14201,6 +14201,16 @@ Responda APENAS com JSON válido, sem markdown, no formato:
       const rows = await db.select().from(comprasReservasSaldo)
         .where(and(...conds))
         .orderBy(asc(comprasReservasSaldo.prazoLimite));
+      // Rev. 2821: resolve o Nº VISÍVEL da cotação (COT-AAAA-NNNN) em LOTE, pra
+      // exibir/clicar o número correto em vez do id interno.
+      const cotIds = [...new Set(rows.map(r => r.cotacaoId).filter((x): x is number => x != null))];
+      const numeroPorCotacao = new Map<number, string>();
+      if (cotIds.length > 0) {
+        const cots = await db.select({ id: comprasCotacoes.id, numeroCotacao: comprasCotacoes.numeroCotacao })
+          .from(comprasCotacoes)
+          .where(and(eq(comprasCotacoes.companyId, input.companyId), inArray(comprasCotacoes.id, cotIds)));
+        for (const c of cots) if (c.numeroCotacao) numeroPorCotacao.set(c.id, c.numeroCotacao);
+      }
       const agora = new Date();
       return rows.map(r => {
         const prazo = new Date(r.prazoLimite);
@@ -14211,6 +14221,7 @@ Responda APENAS com JSON válido, sem markdown, no formato:
           companyId: r.companyId,
           obraId: r.obraId,
           cotacaoId: r.cotacaoId,
+          numeroCotacao: r.cotacaoId != null ? (numeroPorCotacao.get(r.cotacaoId) ?? null) : null,
           ordemId: r.ordemId,
           responsavelId: r.responsavelOriginalId,
           responsavelNome: r.responsavelOriginalNome,

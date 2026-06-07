@@ -1,5 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -26,6 +27,7 @@ const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", curren
 export default function ComprasRealocacao() {
   const { selectedCompany } = useCompany();
   const { user } = useAuth();
+  const [, navigate] = useLocation();
   const companyId = selectedCompany?.id ?? 0;
 
   // ── ÚNICO seletor de obra — controla TODA a página ──
@@ -88,7 +90,7 @@ export default function ComprasRealocacao() {
     );
   const reservas = reservasData ?? [];
 
-  const [estenderModal, setEstenderModal] = useState<{ id: number; cotacaoId: number } | null>(null);
+  const [estenderModal, setEstenderModal] = useState<{ id: number; cotacaoId: number; numeroCotacao: string | null } | null>(null);
   const [diasEstender, setDiasEstender] = useState("3");
   const [motivoEstender, setMotivoEstender] = useState("");
   const estenderMut = trpc.compras.estenderPrazoReserva.useMutation({
@@ -682,7 +684,13 @@ export default function ComprasRealocacao() {
                     <TableBody>
                       {reservas.map((r: any) => (
                         <TableRow key={r.id} className={r.vencida ? "bg-red-50" : r.diasRestantes <= 2 ? "bg-amber-50" : undefined}>
-                          <TableCell className="font-mono text-blue-700">#{r.cotacaoId}</TableCell>
+                          <TableCell
+                            className="font-mono text-blue-700 cursor-pointer hover:underline hover:text-blue-900"
+                            title="Abrir cotação"
+                            onClick={() => r.cotacaoId != null && navigate(`/compras/cotacoes?destaque=${r.cotacaoId}`)}
+                          >
+                            {r.numeroCotacao ? formatNumeroCotacaoDisplay(r.numeroCotacao) : `#${r.cotacaoId}`}
+                          </TableCell>
                           <TableCell className="text-xs text-gray-700">{r.responsavelNome ?? "—"}</TableCell>
                           <TableCell className="text-right text-blue-700 font-medium">{fmt(Number(r.valorDi08))}</TableCell>
                           <TableCell className="text-right text-teal-700 font-medium">{fmt(Number(r.valorEconomia))}</TableCell>
@@ -707,7 +715,7 @@ export default function ComprasRealocacao() {
                             {["admin_master", "diretor", "gerente_compras"].includes((user as any)?.role) ? (
                               <Button
                                 size="sm" variant="ghost"
-                                onClick={() => setEstenderModal({ id: r.id, cotacaoId: r.cotacaoId })}
+                                onClick={() => setEstenderModal({ id: r.id, cotacaoId: r.cotacaoId, numeroCotacao: r.numeroCotacao ?? null })}
                                 className="h-7 text-xs text-amber-700 hover:bg-amber-50 gap-1"
                               >
                                 <UserCog className="h-3 w-3" /> Estender
@@ -737,7 +745,7 @@ export default function ComprasRealocacao() {
             {estenderModal && (
               <div className="space-y-4">
                 <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
-                  <p>Reserva da cotação <strong>#{estenderModal.cotacaoId}</strong></p>
+                  <p>Reserva da cotação <strong>{estenderModal.numeroCotacao ? formatNumeroCotacaoDisplay(estenderModal.numeroCotacao) : `#${estenderModal.cotacaoId}`}</strong></p>
                   <p className="mt-1 text-xs">
                     Limite por perfil — admin_master: 60d • diretor: 7d • gerente_compras: 3d
                   </p>
