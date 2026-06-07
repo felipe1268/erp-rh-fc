@@ -41,11 +41,16 @@
  * `uppercase` que FORÇAVA a exibição da razão social em caixa alta (mascarava o valor
  * real salvo) — agora mostra o nome padronizado de verdade.
  *
- * ESCOPO / RESSALVA: a normalização vale para CADASTROS NOVOS e EDIÇÕES daqui pra
- * frente. Os ~1198 registros JÁ existentes NÃO foram reescritos em massa nesta
- * revisão (backfill é UPDATE em massa no Neon, far-reaching e não coberto pelos
- * checkpoints do Replit) — fica como decisão/pergunta ao usuário. ZERO schema; ZERO
- * ALTER/DROP/DELETE. Validado: typecheck limpo nos arquivos tocados.
+ * BACKFILL (com aprovação explícita do usuário): rodado o script
+ * `scripts/backfill_titlecase_empresas.ts` (UPDATE em massa no Neon, em chunks de 300
+ * via `VALUES`, só toca linhas que de fato mudam) nas tabelas `fornecedores` (1202) e
+ * `empresas_terceiras` (23). RESULTADO: 0 linhas alteradas — os dados JÁ estavam em
+ * Title Case (0 registros TODOS-MAIÚSCULOS nas duas tabelas / nos dois campos). A
+ * aparência "TODA MAIÚSCULA" que o usuário via era a classe CSS `uppercase` em
+ * `EmpresasTerceiras.tsx` (removida nesta revisão), NÃO o valor salvo. A normalização
+ * server-side passa a garantir que cadastros/edições futuros permaneçam consistentes.
+ * ZERO schema; ZERO ALTER/DROP/DELETE (apenas UPDATE). Validado: typecheck limpo nos
+ * arquivos tocados + app sobe sem erros.
  *
  * Rev. 2880 — **DATABOOK (FICHAS TÉCNICAS) — EXCLUSÃO DEFINITIVA EM MASSA +
  * CANCELAR APROVAÇÃO (FICHA APROVADA VOLTA PARA "REVISADO"), EM LOTE E POR LINHA.**
