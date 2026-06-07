@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -182,6 +182,46 @@ export default function FinanceiroDRE() {
     analiseMut.mutate({ companyId, periodo, tipoPeriodo }, {
       onSuccess: () => { refetchSalva(); },
     });
+
+  // Rev. 2863 — barra de progresso 0→100% da Análise IA. O backend não faz
+  // streaming, então animamos uma curva que sobe e desacelera perto de ~95%
+  // enquanto a IA processa, completando para 100% ao concluir.
+  const [iaProgresso, setIaProgresso] = useState(0);
+  const IA_FASES = [
+    { ate: 30, label: "Lendo os números do DRE" },
+    { ate: 60, label: "Comparando com benchmarks do setor" },
+    { ate: 85, label: "Calculando a nota de saúde financeira" },
+    { ate: 101, label: "Redigindo o diagnóstico" },
+  ];
+  const iaFase = IA_FASES.find(f => iaProgresso < f.ate) ?? IA_FASES[IA_FASES.length - 1];
+
+  // Sobe enquanto a IA está processando, desacelerando perto do teto (95%).
+  useEffect(() => {
+    if (!analiseMut.isPending) return;
+    setIaProgresso(p => (p > 0 && p < 90 ? p : 5));
+    const id = setInterval(() => {
+      setIaProgresso(prev => {
+        if (prev >= 95) return 95;
+        const passo = prev < 50 ? 3.4 : prev < 80 ? 1.6 : 0.6;
+        return Math.min(95, prev + passo);
+      });
+    }, 220);
+    return () => clearInterval(id);
+  }, [analiseMut.isPending]);
+
+  // Ao concluir, completa para 100% e segura a barra cheia por um instante
+  // antes de revelar o resultado.
+  useEffect(() => {
+    if (analiseMut.isSuccess && !analiseMut.isPending) {
+      setIaProgresso(100);
+      const t = setTimeout(() => setIaProgresso(0), 1100);
+      return () => clearTimeout(t);
+    }
+  }, [analiseMut.isSuccess, analiseMut.isPending]);
+
+  useEffect(() => {
+    if (analiseMut.isError) setIaProgresso(0);
+  }, [analiseMut.isError]);
 
   const rows: DRERow[] = dre ? [
     { label: "1. RECEITA BRUTA", value: dre.receitaBruta, highlight: "green", info: "Total faturado no período (vendas e serviços), antes de qualquer dedução." },
@@ -450,20 +490,69 @@ export default function FinanceiroDRE() {
                 className="bg-orange-500 hover:bg-orange-600 text-white"
               >
                 <Sparkles className="w-4 h-4 mr-1.5" />
-                {analiseMut.isPending ? "Analisando..." : analise ? "Refazer análise" : "Analisar com IA"}
+                {analiseMut.isPending ? `Analisando… ${Math.round(iaProgresso)}%` : analise ? "Refazer análise" : "Analisar com IA"}
               </Button>
             </div>
           </div>
 
           <CardContent className="p-5">
-            {analiseMut.isPending ? (
-              <div className="space-y-3">
-                <Skeleton className="h-4 w-3/4" />
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-2/3" />
-                <div className="grid sm:grid-cols-2 gap-3 pt-2">
-                  <Skeleton className="h-20 w-full rounded-xl" />
-                  <Skeleton className="h-20 w-full rounded-xl" />
+            {analiseMut.isPending || iaProgresso > 0 ? (
+              <div className="space-y-5">
+                <div className="rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50/80 to-amber-50/40 p-5">
+                  <div className="flex items-end justify-between gap-3 mb-2">
+                    <div className="flex items-center gap-2.5">
+                      <span className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-orange-100">
+                        <Sparkles className="w-5 h-5 text-orange-500" />
+                        {iaProgresso < 100 && (
+                          <span className="absolute inset-0 rounded-xl ring-2 ring-orange-300/60 animate-ping" />
+                        )}
+                      </span>
+                      <div>
+                        <p className="text-sm font-bold text-gray-900">
+                          {iaProgresso >= 100 ? "Análise concluída" : "Analisando com IA…"}
+                        </p>
+                        <p className="text-xs text-orange-700/80 font-medium">{iaProgresso >= 100 ? "Pronto!" : iaFase.label}</p>
+                      </div>
+                    </div>
+                    <span className="text-2xl font-extrabold tabular-nums text-orange-600 leading-none">
+                      {Math.round(iaProgresso)}%
+                    </span>
+                  </div>
+                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-orange-100">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-orange-400 to-orange-600 transition-all duration-300 ease-out"
+                      style={{ width: `${iaProgresso}%` }}
+                    />
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+                    {IA_FASES.map((f, i) => {
+                      const ini = i === 0 ? 0 : IA_FASES[i - 1].ate;
+                      const feito = iaProgresso >= f.ate || iaProgresso >= 100;
+                      const ativo = !feito && iaProgresso >= ini;
+                      return (
+                        <span
+                          key={f.label}
+                          className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${
+                            feito ? "text-emerald-600" : ativo ? "text-orange-600" : "text-gray-400"
+                          }`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${
+                            feito ? "bg-emerald-500" : ativo ? "bg-orange-500 animate-pulse" : "bg-gray-300"
+                          }`} />
+                          {f.label}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-2/3" />
+                  <div className="grid sm:grid-cols-2 gap-3 pt-2">
+                    <Skeleton className="h-20 w-full rounded-xl" />
+                    <Skeleton className="h-20 w-full rounded-xl" />
+                  </div>
                 </div>
               </div>
             ) : analiseMut.isError ? (

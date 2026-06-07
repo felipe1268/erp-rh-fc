@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2863 — **DRE (`/financeiro/dre`) — "ANÁLISE INTELIGENTE" GANHA BARRA DE
+ * PROGRESSO 0→100% (EVOLUÇÃO VISÍVEL DA IA), NO LUGAR DO "ANALISANDO..." PARADO.**
+ *
+ * PEDIDO: "Quero ver a evolução da ia de 0 a 100%." (anexo IMG_1680 = card
+ * "Análise Inteligente" do DRE com o botão "Analisando..." travado e só
+ * skeletons, sem qualquer indicação de andamento).
+ *
+ * CONTEXTO: `financial.analiseDRE` é uma chamada ÚNICA ao modelo (sem
+ * streaming), então não existe progresso real do servidor. A solução é uma
+ * barra ANIMADA no cliente que sobe e desacelera perto de ~95% enquanto a
+ * mutation está `isPending` e COMPLETA para 100% ao concluir, antes de revelar
+ * o resultado. ZERO mudança de backend/lógica de negócio — só UX de loading.
+ *
+ * FEITO (`client/src/pages/financeiro/FinanceiroDRE.tsx`, SÓ frontend):
+ *  - NOVO estado `iaProgresso` (0–100) + 4 FASES (`IA_FASES`: "Lendo os números
+ *    do DRE" → "Comparando com benchmarks do setor" → "Calculando a nota de
+ *    saúde financeira" → "Redigindo o diagnóstico").
+ *  - `useEffect` em `analiseMut.isPending`: ao iniciar, sobe via `setInterval`
+ *    (220ms) com passo decrescente (3.4 → 1.6 → 0.6) e TETO em 95%; limpa o
+ *    intervalo no cleanup.
+ *  - `useEffect` em `isSuccess`: completa para 100%, segura a barra cheia ~1.1s
+ *    (`setTimeout`) e zera — assim o usuário VÊ os 100% antes do resultado.
+ *  - `useEffect` em `isError`: zera o progresso.
+ *  - UI: bloco de loading trocado por card laranja com ícone `Sparkles` (ring
+ *    `animate-ping`), título dinâmico, fase atual, % grande (`tabular-nums`),
+ *    barra `bg-gradient-to-r from-orange-400 to-orange-600` (`width` = %,
+ *    `transition-all`) e checklist das 4 fases (feito=emerald / ativo=laranja
+ *    pulsando / pendente=cinza); skeletons mantidos abaixo. Botão passa a
+ *    exibir "Analisando… NN%". Condição do bloco: `isPending || iaProgresso>0`.
+ *
+ * ZERO ALTER/DROP/DELETE; ZERO schema; ZERO backend. Arquivo único:
+ * `client/src/pages/financeiro/FinanceiroDRE.tsx`.
+ *
  * Rev. 2862 — **DATABOOK DE OBRA (`/compras/databook`) — REPAGINADA VISUAL:
  * MODERNO, INTUITIVO E FÁCIL DE VISUALIZAR (SÓ UI, ZERO MUDANÇA DE LÓGICA).**
  *
