@@ -18,12 +18,6 @@ function formatBRL(value: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
 
-function formatCompact(value: number): string {
-  if (Math.abs(value) >= 1_000_000) return `R$ ${(value / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(value) >= 1_000) return `R$ ${(value / 1_000).toFixed(1)}K`;
-  return formatBRL(value);
-}
-
 const MESES_ABREV = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const MESES_PT_FULL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
@@ -315,8 +309,8 @@ export default function FinanceiroDashboard() {
                     )}
                   </div>
                   <p className="text-[11px] text-gray-500 font-medium">{card.label}</p>
-                  <p className={`text-base font-bold ${card.color} mt-0.5`}>
-                    {isLoading ? "..." : card.isPercent ? `${card.value.toFixed(1)}%` : formatCompact(card.value)}
+                  <p className={`text-sm lg:text-base font-bold ${card.color} mt-0.5 tabular-nums leading-tight break-words`}>
+                    {isLoading ? "..." : card.isPercent ? `${card.value.toFixed(1)}%` : formatBRL(card.value)}
                   </p>
                 </CardContent>
               </Card>
@@ -389,8 +383,8 @@ export default function FinanceiroDashboard() {
                             <div className="h-3 bg-green-500 rounded-sm" style={{ width: `${(e.entradas / maxEvolucao) * 100}%`, minWidth: e.entradas > 0 ? "2px" : "0" }} />
                             <div className="h-3 bg-red-400 rounded-sm" style={{ width: `${(e.saidas / maxEvolucao) * 100}%`, minWidth: e.saidas > 0 ? "2px" : "0" }} />
                           </div>
-                          <span className="w-16 text-right text-green-600 font-medium">{formatCompact(e.entradas)}</span>
-                          <span className="w-16 text-right text-red-500 font-medium">{formatCompact(e.saidas)}</span>
+                          <span className="w-24 text-right text-green-600 font-medium tabular-nums">{formatBRL(e.entradas)}</span>
+                          <span className="w-24 text-right text-red-500 font-medium tabular-nums">{formatBRL(e.saidas)}</span>
                         </div>
                       </div>
                     ))}
@@ -450,8 +444,8 @@ export default function FinanceiroDashboard() {
                         </span>
                       </div>
                       <div className="flex gap-4 text-[11px] text-gray-500">
-                        <span>Receita: <b className="text-green-600">{formatCompact(o.receita)}</b></span>
-                        <span>Despesa: <b className="text-red-500">{formatCompact(o.despesa)}</b></span>
+                        <span>Receita: <b className="text-green-600">{formatBRL(o.receita)}</b></span>
+                        <span>Despesa: <b className="text-red-500">{formatBRL(o.despesa)}</b></span>
                         {o.receita > 0 && (
                           <span>Margem: <b className={o.margem >= 0 ? "text-blue-600" : "text-red-600"}>
                             {((o.margem / o.receita) * 100).toFixed(1)}%
