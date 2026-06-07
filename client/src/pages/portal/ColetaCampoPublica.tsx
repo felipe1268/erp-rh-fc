@@ -65,12 +65,24 @@ export default function ColetaCampoPublica() {
     reader.readAsDataURL(file);
   };
 
+  const todosFuncionarios = useMemo<any[]>(() => {
+    return (sessaoQ.data && "funcionarios" in sessaoQ.data ? sessaoQ.data.funcionarios : []) || [];
+  }, [sessaoQ.data]);
+
+  // Rev. 2867 — "coletado" = já enviado (pendente de revisão OU aprovado).
+  // Esses SAEM da lista; ficam só os que faltam (sem envio ou rejeitados/refazer).
+  const jaColetado = (f: any) => f.jaEnviado === "pendente" || f.jaEnviado === "aprovada";
+
+  // Métricas GLOBAIS da sessão (independentes da busca).
+  const pendentesSessao = useMemo(() => todosFuncionarios.filter((f: any) => !jaColetado(f)), [todosFuncionarios]);
+  const totalColetados = todosFuncionarios.length - pendentesSessao.length;
+  const totalPendentes = pendentesSessao.length;
+
   const funcionariosFiltrados = useMemo(() => {
-    const list = (sessaoQ.data && "funcionarios" in sessaoQ.data ? sessaoQ.data.funcionarios : []) || [];
     const q = busca.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter((f: any) => (f.nome || "").toLowerCase().includes(q));
-  }, [sessaoQ.data, busca]);
+    if (!q) return pendentesSessao;
+    return pendentesSessao.filter((f: any) => (f.nome || "").toLowerCase().includes(q));
+  }, [pendentesSessao, busca]);
 
   // Rev. 2865 — grupos habilitados nesta sessão (ausente = todos, compat).
   const grupos = useMemo<Set<GrupoColetaKey>>(() => {
@@ -107,11 +119,23 @@ export default function ColetaCampoPublica() {
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
               placeholder="Buscar funcionário…"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm mb-3 bg-white"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm mb-2 bg-white"
             />
+            {totalColetados > 0 && (
+              <p className="text-xs text-slate-500 mb-3">
+                <span className="font-semibold text-emerald-700">{totalColetados}</span> já coletado(s) · faltam{" "}
+                <span className="font-semibold text-slate-700">{totalPendentes}</span>
+              </p>
+            )}
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {funcionariosFiltrados.length === 0 && (
-                <p className="col-span-full text-center text-sm text-slate-500 py-8">Nenhum funcionário alocado nesta obra.</p>
+                <p className="col-span-full text-center text-sm text-slate-500 py-8">
+                  {todosFuncionarios.length === 0
+                    ? "Nenhum funcionário alocado nesta obra."
+                    : totalPendentes === 0
+                      ? "✅ Todos os funcionários já foram coletados."
+                      : "Nenhum funcionário encontrado."}
+                </p>
               )}
               {funcionariosFiltrados.map((f: any) => (
                 <button
@@ -126,9 +150,9 @@ export default function ColetaCampoPublica() {
                     <div className="font-medium text-slate-800 truncate">{f.nome}</div>
                     <div className="text-xs text-slate-500 truncate">{f.funcao || "—"}</div>
                   </div>
-                  {f.jaEnviado && (
-                    <span className={`text-[10px] px-2 py-1 rounded-full ${f.jaEnviado === "aprovada" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-                      {f.jaEnviado === "aprovada" ? "✓ enviado" : "⏳ pendente"}
+                  {f.jaEnviado === "rejeitada" && (
+                    <span className="text-[10px] px-2 py-1 rounded-full bg-rose-100 text-rose-700 shrink-0">
+                      ↺ refazer
                     </span>
                   )}
                 </button>

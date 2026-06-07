@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2867 — **COLETA DE CAMPO (RH) — NA PÁGINA PÚBLICA, QUEM JÁ FOI COLETADO
+ * SAI DA LISTA; FICAM SÓ OS QUE FALTAM FAZER.**
+ *
+ * PEDIDO: "Quando coletar precisa sair da lista, ficando pendente somente os que
+ * falta fazer ok" (print IMG_1685 = lista pública com TODOS os funcionários, sem
+ * distinção do que já foi feito).
+ *
+ * CONTEXTO: a lista pública (`ColetaCampoPublica.tsx`) mostrava TODOS os
+ * funcionários alocados — inclusive os já enviados (apenas com um badge "✓
+ * enviado"/"⏳ pendente"). O auxiliar de campo não tinha visão clara do que ainda
+ * faltava coletar e podia reenviar o mesmo funcionário sem querer.
+ *
+ * FEITO (SÓ frontend, ZERO backend/schema/lógica):
+ *  - "Coletado" = funcionário com resposta `pendente` (na fila do RH) OU
+ *    `aprovada`. Esses SAEM da lista. Continuam aparecendo só os que FALTAM:
+ *    sem nenhum envio OU com resposta `rejeitada` (que precisa ser refeita).
+ *  - O backend `dadosSessao` JÁ devolve `jaEnviado` por funcionário (pendente/
+ *    aprovada/rejeitada/null) — o filtro é 100% client-side sobre esse campo.
+ *  - Após enviar, o `sessaoQ.refetch()` (já existente no onSuccess) atualiza o
+ *    `jaEnviado` → o funcionário desaparece da lista automaticamente.
+ *  - NOVO contador de progresso ("N já coletado(s) · faltam M") acima da grade.
+ *  - Badge do card simplificado: some o "✓ enviado/⏳ pendente"; rejeitados
+ *    ganham um badge rosa "↺ refazer".
+ *  - Empty-state contextual: "Nenhum funcionário alocado" (obra vazia) /
+ *    "✅ Todos os funcionários já foram coletados" (tudo feito) / "Nenhum
+ *    funcionário encontrado" (busca sem resultado).
+ *
+ * ZERO ALTER/DROP/DELETE; ZERO schema; ZERO backend. Só CSS/JSX (Tailwind).
+ *
  * Rev. 2866 — **COLETA DE CAMPO (RH) — LAYOUT RESPONSIVO (CELULAR / TABLET / PC)
  * NAS DUAS TELAS: LINK PÚBLICO E TELA INTERNA DO RH.**
  *
