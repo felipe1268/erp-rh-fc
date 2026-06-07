@@ -647,7 +647,7 @@ export const coletaRhRouter = router({
       const db = (await getDb())!;
       const companyIds = resolveCompanyIds(input);
       await assertColetaCompanyAccess(ctx.user, companyIds);
-      assertColetaAdmin(ctx.user);
+      assertColetaAdminMaster(ctx.user);
 
       const [resp] = await db
         .select()
@@ -691,7 +691,7 @@ export const coletaRhRouter = router({
       const db = (await getDb())!;
       const companyIds = resolveCompanyIds(input);
       await assertColetaCompanyAccess(ctx.user, companyIds);
-      assertColetaAdmin(ctx.user);
+      assertColetaAdminMaster(ctx.user);
 
       const [resp] = await db
         .select({ id: coletaRhRespostas.id })

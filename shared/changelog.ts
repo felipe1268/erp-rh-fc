@@ -16,9 +16,12 @@
  *    Mescla os campos editados (whitelist `CAMPOS_COLETA`, texto trim; vazio =
  *    remove o campo) sobre o `dadosJson` existente e regrava. NÃO toca na ficha
  *    do employee nem no `status`; só corrige o registro coletado. Vale p/
- *    qualquer status. Guard `assertColetaCompanyAccess` + `assertColetaAdmin`.
- *  - NOVO `excluirResposta` (admin) — SOFT-DELETE (`deleted_at`); some de
+ *    qualquer status. Guard `assertColetaCompanyAccess` + `assertColetaAdminMaster`.
+ *  - NOVO `excluirResposta` (admin master) — SOFT-DELETE (`deleted_at`); some de
  *    `listarRespostas`. Mesmos guards. R-001/R-007/R-010: zero DELETE físico.
+ *  - PRIVILÉGIO ESTRITO: NOVO `assertColetaAdminMaster` (só `admin_master`, NÃO
+ *    reaproveita `assertColetaAdmin` que liberava `admin`), espelhando a UI cujos
+ *    botões aparecem só p/ `isAdminMaster` — fecha gap de privilégio no backend.
  *  - `listarRespostas` passa a filtrar `isNull(deletedAt)`.
  *
  * SCHEMA: NOVA coluna `coleta_rh_respostas.deleted_at` (`drizzle/schema.ts`) +
