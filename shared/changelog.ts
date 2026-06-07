@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2827 — **COMPRAS · ORDENS — BOTÃO "FECHAR" SEMPRE VISÍVEL NO MODAL DE DETALHE DA OC (FIX TABLET).**
+ *
+ * PEDIDO (usuário, com prints do iPad): no modal de detalhe da OC (tela Ordens), ao rolar o conteúdo o botão "X"
+ * de fechar DESAPARECIA — no tablet ficava impossível fechar a tela sem tecla ESC.
+ *
+ * CAUSA-RAIZ: o modal de detalhe usa `DialogContent` em tela cheia (`w-screen h-screen ... overflow-y-auto`). O X
+ * padrão do shadcn (`DialogContent`) é `position: absolute; top-4 right-4` RELATIVO ao conteúdo rolável — então ele
+ * rola junto e some assim que o usuário desce a página.
+ *
+ * O QUE FOI FEITO (`client/src/pages/compras/Ordens.tsx` — só UI; ZERO backend; ZERO ALTER/DROP/DELETE):
+ *  - O `DialogContent` do detalhe agora usa `showCloseButton={false}` (desliga o X absoluto do shadcn) + `p-0`.
+ *  - O `DialogHeader` virou uma BARRA STICKY (`sticky top-0 z-30 bg-white border-b`) com o título à esquerda e um
+ *    botão `DialogClose` explícito à direita (ícone X + rótulo "Fechar" em telas ≥sm), sempre visível enquanto rola.
+ *  - Como o `DialogContent` perdeu o padding (`p-0`), o corpo do modal recebeu `px-4 sm:px-6 pt-4 pb-6` próprio para
+ *    manter o respiro visual anterior.
+ *
+ * RESSALVA: mudança isolada ao modal de detalhe da OC; os demais diálogos da tela seguem com o X padrão do shadcn.
+ * VALIDAÇÃO: dev server sobe e compila o client sem erro.
+ *
  * Rev. 2826 — **COMPRAS · COTAÇÕES — NOVO FILTRO "A ENTREGAR" (OC APROVADA/GERADA MAS AINDA NÃO ENTREGUE).**
  *
  * PEDIDO (usuário, na tela Cotações): quer um filtro para ISOLAR as cotações cuja OC já foi aprovada/gerada

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -1801,30 +1801,41 @@ export default function Ordens() {
 
       {/* Dialog Detalhe OC */}
       <Dialog open={showDetalhe !== null} onOpenChange={v => !v && setShowDetalhe(null)}>
-        <DialogContent className="border-gray-200 w-screen h-screen max-w-none max-h-none rounded-none overflow-y-auto" style={{ background: '#ffffff', color: '#111827' }}>
-          <DialogHeader>
-            <DialogTitle className="text-gray-900">
-              {detalhe?.numeroOc} — {((detalhe as any)?.tipo === "servico" || (detalhe as any)?.tipo === "pacote") ? "Ordem de Serviço" : "Ordem de Compra"}
-              {(detalhe as any)?.tipo && (detalhe as any)?.tipo !== "compra" && (
-                <span className={`ml-2 px-2 py-0.5 text-[10px] font-semibold rounded ${
-                  (detalhe as any).tipo === "servico" ? "bg-purple-100 text-purple-700"
-                  : (detalhe as any).tipo === "pacote" ? "bg-indigo-100 text-indigo-700"
-                  : (detalhe as any).tipo === "equipamento" ? "bg-cyan-100 text-cyan-700"
-                  : "bg-blue-100 text-blue-700"
-                }`}>
-                  {(detalhe as any).tipo === "servico" ? "MDO" : (detalhe as any).tipo === "pacote" ? "MAT+MDO" : (detalhe as any).tipo === "equipamento" ? "EQUIP" : (detalhe as any).tipo?.toUpperCase()}
-                </span>
-              )}
-            </DialogTitle>
+        <DialogContent showCloseButton={false} className="border-gray-200 w-screen h-screen max-w-none max-h-none rounded-none overflow-y-auto p-0" style={{ background: '#ffffff', color: '#111827' }}>
+          {/* Rev. 2827 — cabeçalho STICKY com botão de fechar sempre visível.
+              Antes o X (absolute) rolava junto com o conteúdo e sumia no tablet. */}
+          <DialogHeader className="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 py-3 space-y-0">
+            <div className="flex items-center justify-between gap-3">
+              <DialogTitle className="text-gray-900 text-base sm:text-lg">
+                {detalhe?.numeroOc} — {((detalhe as any)?.tipo === "servico" || (detalhe as any)?.tipo === "pacote") ? "Ordem de Serviço" : "Ordem de Compra"}
+                {(detalhe as any)?.tipo && (detalhe as any)?.tipo !== "compra" && (
+                  <span className={`ml-2 px-2 py-0.5 text-[10px] font-semibold rounded ${
+                    (detalhe as any).tipo === "servico" ? "bg-purple-100 text-purple-700"
+                    : (detalhe as any).tipo === "pacote" ? "bg-indigo-100 text-indigo-700"
+                    : (detalhe as any).tipo === "equipamento" ? "bg-cyan-100 text-cyan-700"
+                    : "bg-blue-100 text-blue-700"
+                  }`}>
+                    {(detalhe as any).tipo === "servico" ? "MDO" : (detalhe as any).tipo === "pacote" ? "MAT+MDO" : (detalhe as any).tipo === "equipamento" ? "EQUIP" : (detalhe as any).tipo?.toUpperCase()}
+                  </span>
+                )}
+              </DialogTitle>
+              <DialogClose
+                aria-label="Fechar"
+                className="shrink-0 inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-300"
+              >
+                <X className="h-4 w-4" />
+                <span className="hidden sm:inline">Fechar</span>
+              </DialogClose>
+            </div>
           </DialogHeader>
           {detalheQ.isLoading ? (
-            <div className="py-10 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+            <div className="py-10 px-4 sm:px-6 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
           ) : detalhe ? (() => {
             const st = STATUS_LABELS[detalhe.status] ?? STATUS_LABELS.pendente;
             const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
             const semaforoDetalhe = calcularSemaforo(detalhe.dataEntregaPrevista, detalhe.dataEntregaReal, detalhe.status, detalhe.proximaEntregaProgramada);
             return (
-              <div className="space-y-5 pt-2">
+              <div className="space-y-5 pt-4 px-4 sm:px-6 pb-6">
                 {detalhe.status === "rascunho" && (
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 rounded-lg border-2 border-yellow-300 bg-yellow-50 p-4">
                     <div className="flex items-center gap-2 flex-1">
