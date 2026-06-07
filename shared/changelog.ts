@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2874 — **MENU LATERAL — "EMPRESAS TERCEIRAS" VIRA "FORNECEDORES" (LOGO
+ * ABAIXO DE GERENCIADORAS) + ORDEM DO MENU AGORA É GLOBAL, ARRASTÁVEL SÓ PELO
+ * ADMIN MASTER E VALENDO PARA TODOS OS USUÁRIOS.**
+ *
+ * PEDIDO: (1) "Renomeie 'Empresas Terceiras' para 'Fornecedores' e coloque logo
+ * abaixo de 'Gerenciadoras'"; (2) "Quero poder arrastar e organizar a ordem do
+ * menu lateral". USUÁRIO CONFIRMOU (user_query): a ordem deve ser ÚNICA, definida
+ * pelo ADMIN e válida para TODOS os usuários (não por navegador/usuário).
+ *
+ * CONTEXTO: já existia um drag-and-drop no sidebar, mas persistia em localStorage
+ * (`fc-section-order-*` / `fc-menu-items-*`) — ou seja, por NAVEGADOR e para
+ * qualquer usuário. Não havia ordem compartilhada. (NÃO confundir com `/terceiros/
+ * empresas`, que é outro módulo e ficou intacto.)
+ *
+ * FEITO:
+ *  - RENAME + REORDER (firme): `client/src/components/DashboardLayout.tsx`
+ *    (`menuSectionsCadastro`: item movido p/ logo após "Gerenciadoras", label
+ *    "Fornecedores"; `menuSectionsCompras`: label "Fornecedores") e
+ *    `shared/modules.ts` (features `cadastro-fornecedores` e `compras-fornecedores`
+ *    label "Fornecedores"). O path `/compras/fornecedores` NÃO mudou.
+ *  - ORDEM GLOBAL (novo): tabela `menu_layout_global` (linha única id=1, JSON
+ *    `{ sectionOrders:{[moduleId]:string[]}, itemOrders:{[moduleId]:{[secTitle]:
+ *    string[]}} }`) + `drizzle/schema.ts` (`menuLayoutGlobal`) + self-heal aditivo
+ *    `[SyncSchema+]` (CREATE TABLE IF NOT EXISTS) em `server/_core/index.ts`.
+ *  - NOVO router `server/routers/menuLayout.ts` (registrado em `server/routers.ts`):
+ *    `getGlobal` (qualquer usuário autenticado LÊ a ordem) e `saveGlobal`/`resetGlobal`
+ *    EXCLUSIVOS do `admin_master` (gate por `ctx.user.role`). `resetGlobal` regrava
+ *    `{}` — NÃO faz DELETE físico.
+ *  - FRONTEND (`DashboardLayout.tsx`): `menuLayout.getGlobal` alimenta os effects de
+ *    `sectionOrder`/`itemOrder` (preferem a ordem global; fallback localStorage). O
+ *    drag agora SÓ aparece/funciona para o `admin_master` (draggable, alça GripVertical,
+ *    cursor e guards em `handleSectionDragStart`/`handleSidebarDragStart` gated por
+ *    `isMasterUser`); ao soltar, `persistGlobalLayout` grava a nova ordem via `saveGlobal`
+ *    e refaz o fetch. Usuários comuns NÃO arrastam — apenas herdam a ordem do admin.
+ *
+ * ZERO ALTER/DROP/DELETE físico (schema só aditivo; reset = UPDATE p/ `{}`).
+ * R-001/R-007/R-010 respeitados. Validado: typecheck sem erros novos nos arquivos
+ * tocados (baseline pré-existente mantido).
+ *
  * Rev. 2873 — **DATABOOK (FICHA PDF) — TODAS AS 4 SEÇÕES GANHAM MOLDURA (CAIXA),
  * REPLICANDO O MODELO LOTUS.**
  *

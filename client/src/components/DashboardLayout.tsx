@@ -396,7 +396,7 @@ const menuSectionsCompras: MenuSection[] = [
   {
     title: "Cadastros",
     items: [
-      { icon: Users,           label: "Empresas Terceiras",   path: "/compras/fornecedores"     },
+      { icon: Users,           label: "Fornecedores",         path: "/compras/fornecedores"     },
     ],
   },
   {
@@ -657,6 +657,7 @@ const menuSectionsCadastro: MenuSection[] = [
       { icon: Users,         label: "Colaboradores",       path: "/colaboradores"        },
       { icon: UserCheck,     label: "Clientes",            path: "/clientes"             },
       { icon: Network,       label: "Gerenciadoras",       path: "/gerenciadoras"        },
+      { icon: Truck,         label: "Fornecedores",        path: "/compras/fornecedores" },
       { icon: Landmark,      label: "Obras",               path: "/obras"                },
       { icon: HardHat,       label: "Efetivo por Obra",    path: "/obras/efetivo"        },
       { icon: Layers,        label: "Setores",             path: "/setores"              },
@@ -665,7 +666,6 @@ const menuSectionsCadastro: MenuSection[] = [
       { icon: Scale,         label: "Convenções Coletivas",path: "/convencoes-coletivas" },
       { icon: Wrench,        label: "Habilidades",         path: "/habilidades"          },
       { icon: ClipboardList, label: "Contas Bancárias",    path: "/contas-bancarias"     },
-      { icon: Truck,         label: "Empresas Terceiras",  path: "/compras/fornecedores" },
     ],
   },
   {
@@ -1022,6 +1022,20 @@ function DashboardLayoutContent({
   }, []);
   const isCollapsed = state === "collapsed";
 
+  // ── Ordem GLOBAL do menu (Rev. 2874) — definida pelo Admin Master, vale p/
+  //    TODOS os usuários. Guarda só a ORDEM (por path/título). Leitura liberada;
+  //    gravação só p/ admin_master (gate no backend + no drag abaixo).
+  const menuLayoutQuery = trpc.menuLayout.getGlobal.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+  const globalLayout = menuLayoutQuery.data as {
+    sectionOrders?: Record<string, string[]>;
+    itemOrders?: Record<string, Record<string, string[]>>;
+  } | null | undefined;
+  const saveMenuLayout = trpc.menuLayout.saveGlobal.useMutation();
+  const isMasterUser = user?.role === 'admin_master';
+
   // ── Drag-and-drop de SEÇÕES inteiras ──────────────────────────────────────
   const SECTION_ORDER_KEY = `fc-section-order-${activeModule}`;
   const PINNED_LAST = "Ajuda"; // sempre fica por último
@@ -1029,8 +1043,13 @@ function DashboardLayoutContent({
     try { return JSON.parse(localStorage.getItem(`fc-section-order-${activeModule}`) || "[]"); } catch { return []; }
   });
   useEffect(() => {
+    const fromGlobal = globalLayout?.sectionOrders?.[activeModule];
+    if (fromGlobal && fromGlobal.length) { setSectionOrder(fromGlobal); return; }
+    // Sem ordem global p/ este módulo: só o admin herda a cópia local (working copy);
+    // usuários comuns voltam à ordem-padrão do código (sem ler localStorage).
+    if (!isMasterUser) { setSectionOrder([]); return; }
     try { setSectionOrder(JSON.parse(localStorage.getItem(`fc-section-order-${activeModule}`) || "[]")); } catch { setSectionOrder([]); }
-  }, [activeModule]);
+  }, [activeModule, globalLayout, isMasterUser]);
   const draggingSection = useRef<string | null>(null);
   const dragOverSection = useRef<string | null>(null);
   const [dragActiveSection, setDragActiveSection] = useState<string | null>(null);
@@ -1038,6 +1057,7 @@ function DashboardLayoutContent({
   const sectionDidDrag = useRef(false);
 
   function handleSectionDragStart(title: string) {
+    if (!isMasterUser) return; // só o Admin Master reordena (ordem global)
     if (title === PINNED_LAST) return;
     draggingSection.current = title;
     sectionDidDrag.current = false;
@@ -1062,6 +1082,7 @@ function DashboardLayoutContent({
     newOrder.splice(toIdx, 0, draggingSection.current);
     setSectionOrder(newOrder);
     localStorage.setItem(SECTION_ORDER_KEY, JSON.stringify(newOrder));
+    persistGlobalLayout(newOrder, undefined);
     handleSectionDragEnd();
   }
   function handleSectionDragEnd() {
@@ -1078,8 +1099,11 @@ function DashboardLayoutContent({
     try { return JSON.parse(localStorage.getItem(`fc-menu-items-${activeModule}`) || "{}"); } catch { return {}; }
   });
   useEffect(() => {
+    const fromGlobal = globalLayout?.itemOrders?.[activeModule];
+    if (fromGlobal && Object.keys(fromGlobal).length) { setItemOrder(fromGlobal); return; }
+    if (!isMasterUser) { setItemOrder({}); return; }
     try { setItemOrder(JSON.parse(localStorage.getItem(`fc-menu-items-${activeModule}`) || "{}")); } catch { setItemOrder({}); }
-  }, [activeModule]);
+  }, [activeModule, globalLayout, isMasterUser]);
   const draggingItem = useRef<{ sectionTitle: string; path: string } | null>(null);
   const dragOverItem = useRef<{ sectionTitle: string; path: string } | null>(null);
   const [dragActiveItem, setDragActiveItem] = useState<string | null>(null);
@@ -1112,6 +1136,7 @@ function DashboardLayoutContent({
   const itemDidDrag = useRef(false);
 
   function handleSidebarDragStart(sectionTitle: string, path: string) {
+    if (!isMasterUser) return; // só o Admin Master reordena (ordem global)
     draggingItem.current = { sectionTitle, path };
     itemDidDrag.current = false;
     setDragActiveItem(path);
@@ -1146,6 +1171,7 @@ function DashboardLayoutContent({
     const newItemOrder = { ...itemOrder, [sectionTitle]: newOrder };
     setItemOrder(newItemOrder);
     localStorage.setItem(`fc-menu-items-${activeModule}`, JSON.stringify(newItemOrder));
+    persistGlobalLayout(undefined, newItemOrder);
     handleSidebarDragEnd();
   }
 
@@ -1155,6 +1181,21 @@ function DashboardLayoutContent({
     setDragActiveItem(null);
     setDragTargetItem(null);
     setTimeout(() => { itemDidDrag.current = false; }, 0);
+  }
+
+  // Grava a NOVA ordem (seções e/ou itens do módulo ativo) como ordem GLOBAL,
+  // válida p/ todos. Só o Admin Master persiste (backend também valida).
+  function persistGlobalLayout(nextSectionOrder?: string[], nextItemOrder?: Record<string, string[]>) {
+    if (!isMasterUser) return;
+    const base = (globalLayout && typeof globalLayout === "object") ? globalLayout : {};
+    const sectionOrders: Record<string, string[]> = { ...(base.sectionOrders || {}) };
+    const itemOrders: Record<string, Record<string, string[]>> = { ...(base.itemOrders || {}) };
+    if (nextSectionOrder) sectionOrders[activeModule] = nextSectionOrder;
+    if (nextItemOrder) itemOrders[activeModule] = nextItemOrder;
+    saveMenuLayout.mutate(
+      { config: { sectionOrders, itemOrders } },
+      { onSuccess: () => { menuLayoutQuery.refetch(); } },
+    );
   }
   const [expandedMenuItems, setExpandedMenuItems] = useState<Record<string, boolean>>({});
   const toggleMenuItem = (path: string) => setExpandedMenuItems(prev => ({ ...prev, [path]: !prev[path] }));
@@ -1198,7 +1239,6 @@ function DashboardLayoutContent({
   }, []);
 
   const isAdminUser = user?.role === 'admin' || user?.role === 'admin_master';
-  const isMasterUser = user?.role === 'admin_master';
   const { isAdminMaster: permIsAdminMaster, canAccessFeature, canAccessModule, accessibleModules, hasGroup, groupCanAccessRoute, canViewPage } = usePermissions();
 
   // Paths restritos por nível de acesso
@@ -1738,7 +1778,7 @@ function DashboardLayoutContent({
               <div
                 key={section.title}
                 className={`mb-1 transition-all ${isSectionDragging ? "opacity-40" : ""} ${isSectionTarget ? "ring-1 ring-[#D4A843]/60 rounded-lg bg-sidebar-accent/20" : ""}`}
-                draggable={!isCollapsed && !isPinned}
+                draggable={!isCollapsed && !isPinned && isMasterUser}
                 onDragStart={() => handleSectionDragStart(section.title)}
                 onDragOver={(e) => handleSectionDragOver(e, section.title)}
                 onDrop={() => handleSectionDrop(filteredSections)}
@@ -1746,10 +1786,10 @@ function DashboardLayoutContent({
               >
                 {!isCollapsed ? (
                   <div className="flex items-center w-full group/sec">
-                    {!isPinned && (
+                    {!isPinned && isMasterUser && (
                       <span
                         className="pl-2 pr-1 py-2 cursor-grab opacity-0 group-hover/sec:opacity-60 hover:!opacity-100 transition-opacity text-sidebar-foreground/40"
-                        title="Arrastar para reorganizar"
+                        title="Arrastar para reorganizar (ordem vale para todos)"
                       >
                         <GripVertical className="h-3.5 w-3.5" />
                       </span>
@@ -1806,13 +1846,13 @@ function DashboardLayoutContent({
                         return (
                           <div
                             key={item.path}
-                            draggable={!isCollapsed}
+                            draggable={!isCollapsed && isMasterUser}
                             onDragStart={() => handleSidebarDragStart(section.title, item.path)}
                             onDragOver={(e: React.DragEvent) => handleSidebarDragOver(e, section.title, item.path)}
                             onDrop={() => handleSidebarDrop(section.title)}
                             onDragEnd={handleSidebarDragEnd}
                             onClickCapture={(e: React.MouseEvent) => { if (itemDidDrag.current) { e.stopPropagation(); e.preventDefault(); } }}
-                            style={{ cursor: isCollapsed ? undefined : "grab", opacity: isDragging ? 0.4 : 1 }}
+                            style={{ cursor: (isCollapsed || !isMasterUser) ? undefined : "grab", opacity: isDragging ? 0.4 : 1 }}
                             className={`transition-all ${isDropTarget && !isDragging ? "ring-1 ring-[#D4A843]/60 rounded-lg bg-sidebar-accent/30" : ""}`}
                           >
                             <SidebarMenuItem>
@@ -1854,13 +1894,13 @@ function DashboardLayoutContent({
                       return (
                         <SidebarMenuItem
                           key={item.path}
-                          draggable={!isCollapsed}
+                          draggable={!isCollapsed && isMasterUser}
                           onDragStart={() => handleSidebarDragStart(section.title, item.path)}
                           onDragOver={(e: React.DragEvent) => handleSidebarDragOver(e, section.title, item.path)}
                           onDrop={() => handleSidebarDrop(section.title)}
                           onDragEnd={handleSidebarDragEnd}
                           onClickCapture={(e: React.MouseEvent) => { if (itemDidDrag.current) { e.stopPropagation(); e.preventDefault(); } }}
-                          style={{ cursor: isCollapsed ? undefined : "grab", opacity: isDragging ? 0.4 : 1 }}
+                          style={{ cursor: (isCollapsed || !isMasterUser) ? undefined : "grab", opacity: isDragging ? 0.4 : 1 }}
                           className={`transition-all ${isDropTarget && !isDragging ? "ring-1 ring-[#D4A843]/60 rounded-lg bg-sidebar-accent/30" : ""}`}
                         >
                           <SidebarMenuButton

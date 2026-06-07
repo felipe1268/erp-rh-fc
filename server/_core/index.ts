@@ -734,6 +734,19 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2805: tabela ai_module_config garantida (liga/desliga IA por módulo).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA ai_module_config:`, e?.message || e); }
 
+        // Rev. 2874 — Ordem GLOBAL do menu lateral (definida pelo Admin Master, vale p/ todos).
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS menu_layout_global (
+              id INTEGER PRIMARY KEY,
+              layout_json TEXT NOT NULL,
+              updated_by INTEGER,
+              updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          console.log(`[SyncSchema+] Rev. 2874: tabela menu_layout_global garantida (ordem global do menu definida pelo Admin).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA menu_layout_global:`, e?.message || e); }
+
         // Rev. 2429 — Aprovadores delegados de Auditoria do Almoxarifado por obra.
         try {
           await db.execute(sql`

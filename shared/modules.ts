@@ -429,7 +429,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "cadastro-habilidades",        label: "Habilidades",               route: "/habilidades",             icon: "Star" },
       { key: "cadastro-habilidades-import", label: "Importação de Habilidades", route: "/habilidades/importacao",  icon: "Upload" },
       { key: "cadastro-contas-bancarias",   label: "Contas Bancárias",          route: "/contas-bancarias",        icon: "Landmark" },
-      { key: "cadastro-fornecedores",       label: "Empresas Terceiras",        route: "/compras/fornecedores",    icon: "Truck" },
+      { key: "cadastro-fornecedores",       label: "Fornecedores",              route: "/compras/fornecedores",    icon: "Truck" },
       { key: "cadastro-usuarios",           label: "Usuários e Permissões",     route: "/usuarios",                icon: "UserCog" },
       { key: "cadastro-configuracoes",      label: "Configurações",             route: "/configuracoes",           icon: "Settings" },
       { key: "cadastro-auditoria",          label: "Auditoria do Sistema",      route: "/auditoria",               icon: "Eye" },
@@ -481,7 +481,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     icon: "ShoppingCart",
     features: [
       { key: "compras-painel",         label: "Painel",              route: "/compras/painel",         icon: "LayoutDashboard" },
-      { key: "compras-fornecedores",   label: "Empresas Terceiras",  route: "/compras/fornecedores",   icon: "Truck" },
+      { key: "compras-fornecedores",   label: "Fornecedores",  route: "/compras/fornecedores",   icon: "Truck" },
       { key: "compras-solicitacoes",   label: "Solicitações (SC)",   route: "/compras/solicitacoes",   icon: "ClipboardList" },
       { key: "compras-cotacoes",       label: "Cotações",            route: "/compras/cotacoes",       icon: "FileSearch" },
       { key: "compras-ordens",         label: "Ordens de Compra",    route: "/compras/ordens",         icon: "ShoppingBag" },

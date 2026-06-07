@@ -2148,6 +2148,13 @@ export const menuConfig = pgTable("menu_config", {
         index("mc_user").on(table.userId),
 ]);
 
+export const menuLayoutGlobal = pgTable("menu_layout_global", {
+        id: integer().notNull(),
+        layoutJson: text("layout_json").notNull(),
+        updatedBy: integer("updated_by"),
+        updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
+});
+
 export const menuLabels = pgTable("menu_labels", {
         id: serial().notNull(),
         companyId: integer().notNull(),

@@ -65,6 +65,7 @@ import { homeDataRouter } from "./routers/homeData";
 import { episRouter } from "./routers/epis";
 import { faceRecognitionRouter } from "./routers/faceRecognition";
 import { menuConfigRouter } from "./routers/menuConfig";
+import { menuLayoutRouter } from "./routers/menuLayout";
 import { goldenRulesRouter } from "./routers/goldenRules";
 import { visaoPanoramicaRouter } from "./routers/visaoPanoramica";
 import { datajudAutoCheckRouter, startAutoCheckJob } from "./routers/datajudAutoCheck";
@@ -168,6 +169,7 @@ export const appRouter = router({
   faceRecognition: faceRecognitionRouter,
   insurance: insuranceRouter,
   menuConfig: menuConfigRouter,
+  menuLayout: menuLayoutRouter,
   goldenRules: goldenRulesRouter,
   notifications: notificationsRouter,
   recontratacao: recontratacaoRouter,
