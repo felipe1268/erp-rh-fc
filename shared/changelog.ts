@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2869 — **COLETA DE CAMPO (RH) — CABEÇALHO GANHA BOTÕES "VOLTAR" E
+ * "FECHAR" (BARRA LATERAL MANTIDA INTACTA).**
+ *
+ * PEDIDO: "Mantenha a barra de comando lateral e quero um botão de voltar e
+ * fechar a tela" (print IMG_1687 = tela interna "Coleta de Campo — RH" sem
+ * navegação própria no topo).
+ *
+ * FEITO (SÓ frontend `client/src/pages/ColetaCampo.tsx`): no cabeçalho navy FC,
+ * o bloco de título virou `flex items-start` com a área de texto em `flex-1` e
+ * um grupo de ações à direita (`shrink-0`) com 2 botões translúcidos
+ * (`bg-white/15 hover:bg-white/25`):
+ *  - "Voltar" (ícone `ArrowLeft`): `window.history.back()` quando há histórico,
+ *    senão cai pra "/" (dashboard).
+ *  - "Fechar" (ícone `X`): navega pra "/" (dashboard) via `useLocation` do wouter.
+ *  Labels somem no mobile (`hidden sm:inline`, só ícone) e aparecem ≥sm.
+ *
+ * A BARRA LATERAL (DashboardLayout) é preservada — a página continua renderizada
+ * dentro do layout padrão; nada na navegação global foi tocado.
+ *
+ * ZERO ALTER/DROP/DELETE; ZERO schema; ZERO backend.
+ *
  * Rev. 2868 — **COLETA DE CAMPO (RH) — O ADM MASTER PODE EDITAR OU EXCLUIR UM
  * LINK DE COLETA (ALÉM DE COPIAR / QR / DESATIVAR).**
  *

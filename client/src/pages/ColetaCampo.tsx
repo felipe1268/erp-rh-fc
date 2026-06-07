@@ -3,6 +3,7 @@
 // de campo coletar dados dos funcionários alocados pelo celular, e revisa a fila
 // (aprova → grava na ficha do employee; rejeita).
 import { useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { usePermissions } from "@/contexts/PermissionsContext";
@@ -22,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   ClipboardList, Link2, QrCode, Copy, Check, X, Power, Eye, Loader2,
   CheckCircle2, XCircle, Clock, ArrowRight, ImageIcon, Pencil, Trash2, AlertTriangle,
+  ArrowLeft,
 } from "lucide-react";
 import { GRUPOS_COLETA, GRUPOS_COLETA_KEYS, type GrupoColetaKey } from "@shared/coletaCampos";
 
@@ -51,6 +53,7 @@ export default function ColetaCampo() {
   const { selectedCompanyId, companies, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const { isAdminMaster } = usePermissions();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
 
   const companyId = selectedCompanyId && !isConstrutoras ? parseInt(selectedCompanyId) : undefined;
@@ -241,13 +244,29 @@ export default function ColetaCampo() {
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-5">
       {/* Cabeçalho */}
       <div className="rounded-xl p-5 text-white shadow-sm" style={{ background: `linear-gradient(120deg, ${FC_NAVY}, #2c4470)` }}>
-        <div className="flex items-center gap-3">
-          <div className="rounded-lg bg-white/15 p-2"><ClipboardList className="h-6 w-6" /></div>
-          <div>
+        <div className="flex items-start gap-3">
+          <div className="rounded-lg bg-white/15 p-2 shrink-0"><ClipboardList className="h-6 w-6" /></div>
+          <div className="flex-1 min-w-0">
             <h1 className="text-xl font-bold tracking-wide">Coleta de Campo — RH</h1>
             <p className="text-sm text-white/80">
               Gere um link por obra para o auxiliar coletar dados pelo celular. Tudo passa pela fila de revisão antes de gravar na ficha.
             </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => { if (window.history.length > 1) window.history.back(); else setLocation("/"); }}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-white/15 hover:bg-white/25 px-3 py-1.5 text-sm font-medium transition"
+              title="Voltar"
+            >
+              <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">Voltar</span>
+            </button>
+            <button
+              onClick={() => setLocation("/")}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-white/15 hover:bg-white/25 px-3 py-1.5 text-sm font-medium transition"
+              title="Fechar"
+            >
+              <X className="h-4 w-4" /> <span className="hidden sm:inline">Fechar</span>
+            </button>
           </div>
         </div>
       </div>
