@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2888 — **CONTROLE DE REVISÕES — CARD "TOTAL" PASSA A MOSTRAR O NÚMERO DA
+ * REVISÃO ATUAL (2888) EM VEZ DA CONTAGEM DE REGISTROS DISTINTOS (2503).**
+ *
+ * SINTOMA (usuário, print do iPad): na tela "Controle de Revisões" o card
+ * "Total" mostrava 2503; o usuário aponta que "o correto é 2888" — ou seja, o
+ * Total deve refletir o NÚMERO da revisão atual (o contador de revisões do
+ * sistema), não a contagem de linhas distintas registradas no banco.
+ *
+ * CAUSA: o card usava `revisions.length` (= versões DISTINTAS em `system_revisions`).
+ * O banco tem só 2503 versões distintas porque a numeração tem 383 GAPS reais
+ * (números nunca registrados, herdados do array `CHANGELOG` legado ≤1878) — então
+ * `length` (2503) ≠ número da revisão atual (2888). O contador de revisões do
+ * sistema é a versão atual de `shared/version.ts`, não a contagem de registros.
+ *
+ * FIX (só frontend `client/src/pages/Revisoes.tsx`): o card "Total" passa a
+ * exibir `APP_VERSION_NUMBER` (de `@shared/version`) — a fonte única do número da
+ * revisão atual (2888), que acompanha automaticamente cada bump futuro. Os 5
+ * cards de categoria continuam contando os registros classificados (inalterados).
+ *
+ * ZERO schema; ZERO backend; ZERO ALTER/DROP/DELETE. Só front. Arquivo:
+ * `client/src/pages/Revisoes.tsx`.
+ *
  * Rev. 2887 — **COLETA DE CAMPO (RH) — ITENS EXTRAS POR LINK, DEFINIDOS NA HORA,
  * CADA UM MAPEANDO PARA UM CAMPO DA FICHA → GRAVA AUTOMÁTICO NA APROVAÇÃO.**
  *

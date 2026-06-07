@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { GitBranch, Bug, Sparkles, Shield, Zap, Wrench, Calendar, User, Tag, Printer, ArrowLeft, ListFilter } from "lucide-react";
 import { useLocation } from "wouter";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
+import { APP_VERSION_NUMBER } from "@shared/version";
 
 const TIPO_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode; cardBorder: string }> = {
   feature: { label: "Nova Funcionalidade", color: "bg-blue-100 text-blue-800 border-blue-200", icon: <Sparkles className="h-3.5 w-3.5" />, cardBorder: "ring-blue-500" },
@@ -83,7 +84,7 @@ export default function Revisoes() {
             activeFilter === null ? "ring-2 ring-primary shadow-md" : "hover:border-primary/50"
           }`}
         >
-          <p className={`text-xl font-bold ${activeFilter === null ? "text-primary" : ""}`}>{revisions.length}</p>
+          <p className={`text-xl font-bold ${activeFilter === null ? "text-primary" : ""}`}>{APP_VERSION_NUMBER}</p>
           <p className="text-[10px] leading-tight text-muted-foreground flex items-center justify-center gap-0.5">
             <ListFilter className="h-3 w-3" /> <span>Total</span>
           </p>
