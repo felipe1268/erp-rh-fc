@@ -109,6 +109,32 @@ function hashDescricao(desc: string): string {
   return createHash("md5").update(clean).digest("hex");
 }
 
+// Rev. 2857 — eap_codigo é varchar(100): ao consolidar produtos repetidos a lista
+// de códigos era unida com ", " e estourava 100 chars → INSERT falhava inteiro.
+// Junta o MÁXIMO de códigos inteiros que cabem em 100 chars (sufixo " +N" p/ o resto).
+const EAP_CODIGO_MAXLEN = 100;
+function joinEapCodigos(list: string[]): string | null {
+  const codes = Array.from(new Set((list || []).filter(Boolean).map((c) => String(c).trim()))).filter(Boolean);
+  if (codes.length === 0) return null;
+  let out = "";
+  let i = 0;
+  for (; i < codes.length; i++) {
+    const candidate = out ? `${out}, ${codes[i]}` : codes[i];
+    if (candidate.length > EAP_CODIGO_MAXLEN) break;
+    out = candidate;
+  }
+  if (i >= codes.length) return out; // todos couberam
+  // sobraram códigos: reservar espaço p/ sufixo " +N", recalculando N a cada corte
+  const incluidos = () => (out ? out.split(", ").filter(Boolean).length : 0);
+  let sufixo = ` +${codes.length - incluidos()}`;
+  while (out && (out.length + sufixo.length) > EAP_CODIGO_MAXLEN) {
+    const idx = out.lastIndexOf(", ");
+    out = idx >= 0 ? out.slice(0, idx) : "";
+    sufixo = ` +${codes.length - incluidos()}`;
+  }
+  return out ? `${out}${sufixo}` : codes[0].slice(0, EAP_CODIGO_MAXLEN);
+}
+
 const SERVICO_KEYWORDS = [
   "ajudante", "pedreiro", "gesseiro", "eletricista", "encanador", "pintor",
   "carpinteiro", "servente", "mestre de obra", "encarregado", "almoxarife",
@@ -305,7 +331,7 @@ export const databookRouter = router({
           if (item.eap_codigo && !eapList.includes(item.eap_codigo)) {
             eapList.push(item.eap_codigo);
             existing.eap_codigos_list = eapList;
-            existing.eap_codigo = eapList.join(", ");
+            existing.eap_codigo = joinEapCodigos(eapList);
           }
           duplicadas++;
           continue;
@@ -334,14 +360,17 @@ export const databookRouter = router({
       }
 
       for (const ficha of dedup.values()) {
+        // Rev. 2857 — salvaguarda final: eap_codigo/insumo_codigo são varchar(100).
+        const eapSafe = joinEapCodigos(ficha.eap_codigos_list?.length ? ficha.eap_codigos_list : (ficha.eap_codigo ? [ficha.eap_codigo] : []));
+        const insumoSafe = ficha.insumo_codigo ? String(ficha.insumo_codigo).slice(0, EAP_CODIGO_MAXLEN) : null;
         await db.execute(sql`
           INSERT INTO databook_fichas (company_id, obra_id, numero_sequencial, origem, ordem_id, ordem_item_id,
             fornecedor_id, fornecedor_nome, contrato_numero, descricao, disciplina, eap_codigo, insumo_codigo,
             hash_produto, fornecedores_consolidados, status, gerado_por, gerado_em)
           VALUES (${ficha.company_id}, ${ficha.obra_id}, ${ficha.numero_sequencial}, ${ficha.origem},
             ${ficha.ordem_id}, ${ficha.ordem_item_id}, ${ficha.fornecedor_id}, ${ficha.fornecedor_nome},
-            ${ficha.contrato_numero}, ${ficha.descricao}, ${ficha.disciplina}, ${ficha.eap_codigo},
-            ${ficha.insumo_codigo}, ${ficha.hash_produto}, ${ficha.fornecedores_consolidados},
+            ${ficha.contrato_numero}, ${ficha.descricao}, ${ficha.disciplina}, ${eapSafe},
+            ${insumoSafe}, ${ficha.hash_produto}, ${ficha.fornecedores_consolidados},
             ${ficha.status}, ${ficha.gerado_por}, ${ficha.gerado_em})
         `);
         criadas++;

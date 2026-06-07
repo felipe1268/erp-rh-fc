@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2857 — **DATABOOK DE OBRA — "GERAR DATABOOK COMPLETO" / "FASE 1 DE 3:
+ * IMPORTAR MATERIAIS DE OCs" FALHAVA COM ERRO DE INSERT (eap_codigo
+ * ESTOURANDO varchar(100) AO CONSOLIDAR PRODUTOS REPETIDOS).**
+ *
+ * SINTOMA (print iPad — image_1780843904157.png, obra "QIU 2 - FASE 4",
+ * usuário Felipe Costa Alves): a Fase 1 abortava com
+ * `Failed query: INSERT INTO databook_fichas (...) VALUES (...)`. Nos params,
+ * o valor de `eap_codigo` ($12) aparecia como uma lista GIGANTE de códigos
+ * unidos por ", " (ex.: "15.05.01.02, 11.05.03.02, 11.05.03.01, 15.04.01.04,
+ * 11.01.03.02, ..." dezenas de códigos), claramente acima dos 100 chars.
+ *
+ * CAUSA-RAIZ (`server/routers/databook.ts`, mutation que importa materiais de
+ * OCs): a tela CONSOLIDA produtos repetidos por hash da descrição. Quando o
+ * mesmo produto (ex.: "Bancada Marmore Pinta Verde") aparece em vários itens de
+ * OC com EAPs diferentes, o dedup acumulava TODOS os códigos e gravava
+ * `existing.eap_codigo = eapList.join(", ")`. A coluna `databook_fichas.eap_codigo`
+ * é `varchar(100)` (drizzle/schema.ts L8141) → o Postgres rejeitava o INSERT
+ * inteiro com "value too long for type character varying(100)" e a fase morria.
+ *
+ * O QUE FOI FEITO (`server/routers/databook.ts`, SÓ código — ZERO schema):
+ *  - NOVO helper module-level `joinEapCodigos(list)`: junta o MÁXIMO de códigos
+ *    INTEIROS que cabem em 100 chars (dedup + trim), e, se sobrarem códigos,
+ *    acrescenta um sufixo " +N" mantendo o resultado SEMPRE ≤ 100 chars. Nunca
+ *    devolve código pela metade.
+ *  - O dedup de merge passou a usar `joinEapCodigos(eapList)` em vez do
+ *    `join(", ")` cru.
+ *  - SALVAGUARDA FINAL no loop de INSERT: `eap_codigo` é recomputado via
+ *    `joinEapCodigos(...)` e `insumo_codigo` (também varchar(100)) é truncado a
+ *    100 chars defensivamente antes de gravar.
+ *
+ * POR QUE NÃO ALTER TABLE: a regra de ouro FC proíbe ALTER/DROP/DELETE; a
+ * correção é 100% em código (clamp do valor ao tamanho da coluna existente),
+ * sem tocar no schema nem nos dados.
+ *
+ * ESCOPO/SEGURANÇA: ZERO ALTER/DROP/DELETE; ZERO schema; só backend.
+ *
  * Rev. 2856 — **CADASTRO DO COLABORADOR — ABA "UNIFORME / EPI" GANHA LAYOUT
  * MODERNO, COLORIDO E INTERATIVO (CARTELAS COM CHIPS TOCÁVEIS), MANTENDO O
  * PADRÃO INSTITUCIONAL FC (REGRA DE OURO).**
