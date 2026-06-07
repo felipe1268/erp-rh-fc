@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2828 — **TERCEIROS · FCSIGN (INTEGRASIGN) — OPÇÃO DE COPIAR O LINK DE ASSINATURA PARA ENVIAR AO TERCEIRO (WHATSAPP).**
+ *
+ * PEDIDO (usuário, "vamos por parte"): primeiro, ter a OPÇÃO de ENVIAR O LINK para o terceiro assinar o contrato —
+ * sem depender do e-mail (convite automático). Hoje, ao criar o envelope FcSign do contrato e clicar "Enviar para
+ * Assinatura", o sistema só DISPARA e-mail (`enviarConviteAssinatura`) para o primeiro signatário obrigatório + as
+ * testemunhas. Não havia como o gestor pegar o link público e mandar manualmente (ex.: WhatsApp).
+ *
+ * CONTEXTO TÉCNICO: cada signatário já nasce no `criarEnvelope` com um `token` único (rota pública
+ * `/integrasign/assinar/:token`) e prazo de 7 dias. O `getEnvelope` já devolve os signatários com o `token` (via
+ * spread `...s`). A página pública `getDocumentoPublico`/`assinarDocumento` aceita assinatura de signatário cujo
+ * status seja `notificado`/`pendente`/`visualizado`, respeitando a ordem sequencial (signatários anteriores precisam
+ * ter assinado). Ou seja: o link já EXISTIA; faltava só uma forma de COPIÁ-LO na UI.
+ *
+ * O QUE FOI FEITO (`client/src/pages/IntegraSignDashboard.tsx` — SÓ FRONTEND; ZERO backend; ZERO schema; ZERO
+ * mutation nova; ZERO ALTER/DROP/DELETE):
+ *  - NOVO botão "Copiar link" por signatário, no card de detalhe do envelope, ao lado do badge de status e do botão
+ *    "Reenviar". Copia `${window.location.origin}/integrasign/assinar/${sig.token}` para a área de transferência via
+ *    `navigator.clipboard.writeText` + toast de confirmação ("Envie ao signatário (ex.: WhatsApp)"). Feedback visual
+ *    de "Copiado" (ícone Check verde por ~2s) via state `copiedSigId`.
+ *  - GATING: o botão só aparece quando `sig.token` existe, o signatário NÃO está `assinado`/`recusado`, E o envelope
+ *    está `enviado` OU `em_andamento`. Exigir o envelope já ENVIADO (não "rascunho") preserva a integridade do fluxo:
+ *    o `enviarParaAssinatura` é quem calcula o hash do documento, marca o contrato terceiro como
+ *    `aguardando_assinaturas` e habilita as transições `em_andamento`. Assim o gestor clica "Enviar para Assinatura"
+ *    uma vez (e-mail é best-effort, pode falhar em silêncio) e então usa o link como canal confiável.
+ *  - Imports novos: ícones `Link2` e `Check` (lucide-react).
+ *
+ * RESSALVA: o botão aparece para TODOS os signatários do envelope ativo (não só o fornecedor); a página pública
+ * continua impondo a ORDEM (quem não é o próximo a assinar vê "aguarde sua vez"). Esta é a PARTE 1 do pedido maior de
+ * padronização de assinatura; a unificação dos demais documentos (Central ISO/RH) virá em revisão própria.
+ * VALIDAÇÃO: dev server sobe e compila o client sem erro (HMR sem erros nos logs).
+ *
  * Rev. 2827 — **COMPRAS · ORDENS — BOTÃO "FECHAR" SEMPRE VISÍVEL NO MODAL DE DETALHE DA OC (FIX TABLET).**
  *
  * PEDIDO (usuário, com prints do iPad): no modal de detalhe da OC (tela Ordens), ao rolar o conteúdo o botão "X"

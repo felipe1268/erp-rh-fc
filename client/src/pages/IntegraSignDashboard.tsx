@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, PenLine, Eye, Send, XCircle, RefreshCw, FileText, Clock, CheckCircle2, AlertTriangle, Shield, ChevronRight, RotateCcw, Trash2 } from "lucide-react";
+import { Loader2, PenLine, Eye, Send, XCircle, RefreshCw, FileText, Clock, CheckCircle2, AlertTriangle, Shield, ChevronRight, RotateCcw, Trash2, Link2, Check } from "lucide-react";
 import { toast } from "sonner";
 
 function papelLabel(p: string) {
@@ -84,6 +84,22 @@ export default function IntegraSignDashboard() {
   const reenviarMut = trpc.integrasign.reenviarNotificacao.useMutation();
   const novaVersaoMut = trpc.integrasign.criarNovaVersao.useMutation();
   const [deleteDialog, setDeleteDialog] = useState<number | null>(null);
+  const [copiedSigId, setCopiedSigId] = useState<number | null>(null);
+
+  // Rev. 2828: copiar o link público de assinatura (/integrasign/assinar/:token)
+  // p/ enviar manualmente ao signatário (ex.: WhatsApp), sem depender do e-mail.
+  function handleCopiarLink(sig: any) {
+    if (!sig?.token) {
+      toast.error("Este signatário ainda não possui link de assinatura.");
+      return;
+    }
+    const url = `${window.location.origin}/integrasign/assinar/${sig.token}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedSigId(sig.id);
+      toast.success("Link de assinatura copiado! Envie ao signatário (ex.: WhatsApp).");
+      setTimeout(() => setCopiedSigId((c) => (c === sig.id ? null : c)), 2000);
+    }).catch(() => toast.error("Não foi possível copiar o link."));
+  }
 
   async function handleEnviar(envelopeId: number) {
     try {
@@ -326,6 +342,18 @@ export default function IntegraSignDashboard() {
                           </div>
                           <div className="flex items-center gap-2">
                             {sigStatusBadge(sig.status)}
+                            {sig.token && !["assinado", "recusado"].includes(sig.status) && ["enviado", "em_andamento"].includes(env.status) && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => handleCopiarLink(sig)}
+                                title="Copiar link de assinatura para enviar ao signatário"
+                              >
+                                {copiedSigId === sig.id ? <Check className="h-3 w-3 mr-1 text-green-600" /> : <Link2 className="h-3 w-3 mr-1" />}
+                                {copiedSigId === sig.id ? "Copiado" : "Copiar link"}
+                              </Button>
+                            )}
                             {["notificado", "visualizado", "pendente"].includes(sig.status) && env.status !== "cancelado" && (
                               <Button
                                 variant="ghost"
