@@ -3928,7 +3928,8 @@ export const financialRouter = router({
   getEFDReinf: protectedProcedure.input(z.object({
     companyId: z.number(),
     mesRef: z.string(),
-  })).query(async ({ input }) => {
+  })).query(async ({ ctx, input }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
     try {
       const efd = await gerarEFDReinf(input.companyId, input.mesRef);
       return efd;

@@ -557,55 +557,62 @@ export async function projetarFluxoCaixa90Dias(companyId: number) {
 export async function gerarEFDReinf(companyId: number, mesRef: string) {
   const db = await getDb();
 
-  // Buscar serviços PJ com retenção
-  const pjRes = await q(db!,
-    `SELECT pjp.id, pjp.valor, pjp.data_pagamento,
-            pjc.nome_fantasia, pjc.cnpj,
-            pjc.natureza_servico, pjm.valor_bruto
-     FROM pj_payments pjp
-     JOIN pj_contracts pjc ON pjc.id = pjp.contract_id
-     LEFT JOIN pj_medicoes pjm ON pjm.id = pjp.medicao_id
-     WHERE pjc.company_id=$1
-       AND TO_CHAR(pjp.data_pagamento,'YYYY-MM')=$2`,
-    [companyId, mesRef]
-  );
-  const pjs = r(pjRes);
-
-  // Buscar terceiros com INSS retido
+  // EFD-Reinf · R-2010 — Retenção de Contribuição Previdenciária (INSS) sobre SERVIÇOS TOMADOS
+  // mediante cessão de mão de obra/empreitada. A fonte de verdade são as MEDIÇÕES de terceiros
+  // (empresas com CNPJ), que já carregam os valores de retenção REALMENTE calculados/configurados
+  // por contrato (`retencao_inss` etc.) — nada é recalculado aqui (evita fabricar retenção).
+  // Agregado POR PRESTADOR (CNPJ), como o EFD-Reinf espera (1 R-2010 por estabelecimento prestador).
   const tercRes = await q(db!,
-    `SELECT tm.id, tm.valor_medido, tm.periodo,
-            tc.nome_empresa, tc.cnpj, tc.retencao_inss
+    `SELECT et.cnpj                                   AS cnpj,
+            et.razao_social                           AS razao_social,
+            et.nome_fantasia                          AS nome_fantasia,
+            COUNT(tm.id)                              AS qtd_medicoes,
+            COALESCE(SUM(tm.valor_medido), 0)         AS valor_bruto,
+            COALESCE(SUM(tm.retencao_inss), 0)        AS retencao_inss,
+            COALESCE(SUM(tm.retencao_iss), 0)         AS retencao_iss,
+            COALESCE(SUM(tm.retencao_irrf), 0)        AS retencao_irrf,
+            COALESCE(SUM(tm.outras_retencoes), 0)     AS outras_retencoes
      FROM terceiro_medicoes tm
-     JOIN terceiro_contratos tc ON tc.id = tm.contrato_id
-     WHERE tm.company_id=$1 AND tm.periodo=$2
-       AND tm.status IN ('aprovada','faturada','paga')`,
+     JOIN terceiro_contratos tc ON tc.id = tm.contrato_id AND tc.company_id = tm.company_id
+     JOIN empresas_terceiras et ON et.id = tm.empresa_terceira_id AND et."companyId" = tm.company_id
+     WHERE tm.company_id = $1
+       AND tm.periodo = $2
+       AND tm.status IN ('aprovada','faturada','paga')
+       AND tm.retencao_inss > 0
+     GROUP BY et.cnpj, et.razao_social, et.nome_fantasia
+     ORDER BY COALESCE(SUM(tm.retencao_inss), 0) DESC`,
     [companyId, mesRef]
   );
   const tercs = r(tercRes);
 
-  const totalRetencaoPJ = pjs.reduce((s: number, p: any) => s + (n(p.valor_bruto) * 0.11), 0);
-  const totalRetencaoTerc = tercs.reduce((s: number, t: any) => s + n(t.retencao_inss), 0);
+  const prestadores = tercs.map((t: any) => ({
+    cnpj: t.cnpj,
+    razaoSocial: t.razao_social,
+    nomeFantasia: t.nome_fantasia ?? null,
+    qtdMedicoes: Number(t.qtd_medicoes) || 0,
+    valorBruto: n(t.valor_bruto),
+    retencaoINSS: n(t.retencao_inss),
+    retencaoISS: n(t.retencao_iss),
+    retencaoIRRF: n(t.retencao_irrf),
+    outrasRetencoes: n(t.outras_retencoes),
+  }));
+
+  const soma = (campo: keyof (typeof prestadores)[number]) =>
+    prestadores.reduce((s: number, p: any) => s + (Number(p[campo]) || 0), 0);
 
   return {
     periodo: mesRef,
     tipoRegistro: "R-2010",
-    totalPrestadores: pjs.length + tercs.length,
-    totalRetencaoINSS: totalRetencaoPJ + totalRetencaoTerc,
-    totalRetencaoPJ,
-    totalRetencaoTerceiros: totalRetencaoTerc,
-    prestadoresPJ: pjs.map((p: any) => ({
-      cnpj: p.cnpj,
-      nomeFantasia: p.nome_fantasia,
-      valorBruto: n(p.valor_bruto ?? p.valor),
-      retencaoINSS: n(p.valor_bruto ?? p.valor) * 0.11,
-    })),
-    prestadoresTerceiros: tercs.map((t: any) => ({
-      cnpj: t.cnpj,
-      nomeEmpresa: t.nome_empresa,
-      valorMedido: n(t.valor_medido),
-      retencaoINSS: n(t.retencao_inss),
-    })),
+    fundamentacao:
+      "EFD-Reinf · R-2010 — Retenção de Contribuição Previdenciária (INSS) sobre serviços tomados " +
+      "mediante cessão de mão de obra/empreitada (IN RFB 2.043/2021).",
+    totalPrestadores: prestadores.length,
+    totalValorBruto: soma("valorBruto"),
+    totalRetencaoINSS: soma("retencaoINSS"),
+    totalRetencaoISS: soma("retencaoISS"),
+    totalRetencaoIRRF: soma("retencaoIRRF"),
+    totalOutrasRetencoes: soma("outrasRetencoes"),
+    prestadores,
     geradoEm: new Date().toISOString(),
-    fundamentacao: "IN RFB 2.043/2021 — R-2010 Retenções na fonte — Serviços tomados",
   };
 }

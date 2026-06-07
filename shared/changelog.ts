@@ -1,6 +1,50 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2843 — **FINANCEIRO · EFD-REINF (R-2010) RECONSTRUÍDO CONTRA O SCHEMA REAL — RETENÇÃO DE INSS SOBRE
+ * SERVIÇOS TOMADOS (TERCEIROS), SEM FABRICAR VALOR.**
+ *
+ * CONTEXTO/FOLLOW-UP da Rev. 2841: a função `gerarEFDReinf` (`server/services/financialKpiService.ts`) teve o
+ * bind de parâmetros corrigido na Rev. 2841, mas o SQL continuava QUEBRADO — referenciava tabelas/colunas que
+ * nunca existiram no schema (`pj_contracts.nome_fantasia/cnpj/natureza_servico`, `pj_payments.medicao_id`,
+ * `terceiro_contratos.nome_empresa/cnpj/retencao_inss`). Qualquer chamada de `financial.getEFDReinf` estourava em
+ * runtime. O usuário optou por reconstruir o relatório fiscal AGORA (com cuidado na matemática de retenção).
+ *
+ * O QUE FOI FEITO (`server/services/financialKpiService.ts`, função `gerarEFDReinf` reescrita):
+ *  - O R-2010 (Retenção de Contribuição Previdenciária — INSS sobre serviços tomados mediante cessão de mão de
+ *    obra/empreitada) passa a ser montado a partir das MEDIÇÕES DE TERCEIROS (empresas com CNPJ), que são a
+ *    fonte correta desse evento. UMA query: `terceiro_medicoes tm JOIN terceiro_contratos tc ON tc.id =
+ *    tm.contrato_id JOIN empresas_terceiras et ON et.id = tm.empresa_terceira_id` filtrando
+ *    `tm.company_id=$1 AND tm.periodo=$2 AND tm.status IN ('aprovada','faturada','paga') AND
+ *    tm.retencao_inss > 0`, AGREGANDO por prestador (CNPJ) — `et.cnpj/razao_social/nome_fantasia`,
+ *    `SUM(valor_medido)`, `SUM(retencao_inss/iss/irrf/outras_retencoes)`, `COUNT(medições)`.
+ *  - STATUS (pós-review): `faturada` foi INCLUÍDA no filtro — embora o comentário do schema só liste
+ *    rascunho|aguardando_aprovacao|aprovada|paga|rejeitada, o `financialIntegrationBridge.ts` trata
+ *    `('aprovada','faturada','paga')` como medições financeiras ativas; excluir `faturada` subreportaria
+ *    o R-2010.
+ *  - TENANCY EM PROFUNDIDADE (pós-review): os JOINs ganharam predicates de company
+ *    (`tc.company_id = tm.company_id` e `et."companyId" = tm.company_id`) contra dado cross-tenant
+ *    inconsistente. Obs.: `empresas_terceiras` usa a coluna `companyId` (camelCase, quoted), as demais
+ *    `company_id`.
+ *  - DECISÃO ANTI-FABRICAÇÃO (atende o "cuidado com a matemática de retenção"): usa-se o valor de retenção JÁ
+ *    CALCULADO/configurado por contrato e gravado na medição (`retencao_inss` etc.) — NADA é recalculado com um
+ *    11% chutado. Onde a retenção é 0 (contrato sem `perc_inss`), o prestador simplesmente não entra no R-2010.
+ *  - PRESTADORES PJ (pessoas físicas com contrato PJ) foram REMOVIDOS deste relatório: o schema de PJ
+ *    (`pj_contracts`/`pj_medicoes`/`pj_payments`) NÃO modela retenção de INSS, então a versão antiga inventava
+ *    `valor_bruto × 0.11` — isso era exatamente o erro de matemática fiscal a evitar.
+ *  - Novo SHAPE de retorno (endpoint ainda sem UI): `periodo`, `tipoRegistro:"R-2010"`, `fundamentacao` (IN RFB
+ *    2.043/2021), `totalPrestadores`, `totalValorBruto`, `totalRetencaoINSS/ISS/IRRF/OutrasRetencoes` e a lista
+ *    `prestadores[]` (cnpj, razaoSocial, nomeFantasia, qtdMedicoes, valorBruto, retenções).
+ *  - SEGURANÇA: o endpoint `financial.getEFDReinf` (`server/routers/financial.ts`) ganhou o guard de tenancy
+ *    `_assertFinanceiroCompanyAccess(ctx.user, input.companyId)` (mesmo padrão de `getDRE`), fechando IDOR.
+ *
+ * VALIDAÇÃO (Neon, company 60002): a função roda LIMPA (sem erro de SQL) em vários meses. Retorna 0 porque a
+ * company REALMENTE não tem medições de terceiros (0 registros) nem contratos com INSS (6 contratos, nenhum com
+ * `perc_inss > 0`) — ou seja, o zero é o dado verdadeiro, não falha. RESSALVA: paridade numérica com retenção
+ * efetiva não foi cravada empiricamente por falta de dados; a query está alinhada ao schema e às retenções reais.
+ *
+ * ZERO ALTER/DROP/DELETE; ZERO schema; read-only.
+ *
  * Rev. 2842 — **FINANCEIRO · DRE — REDESIGN MODERNO + ANÁLISE INTELIGENTE (IA) COM INDICADORES DO SETOR DE
  * CONSTRUÇÃO E FONTES CLICÁVEIS.**
  *

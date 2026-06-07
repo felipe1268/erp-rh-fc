@@ -23,7 +23,7 @@ O bug só aparece pelo CAMINHO DA APP (`getDb()` → `db.execute`). Para reprodu
 o bug real, rode a FUNÇÃO da app (ex.: `tsx` importando `calcularDRE`), não a SQL
 crua. Confirme a causa olhando `e.cause?.message` (= `there is no parameter $1`).
 
-**Bug ainda latente (follow-up):** corrigido em `calcularDRE` e
-`dreDisponibilidade` (Rev. 2838), mas o MESMO padrão errado existe em outras
-funções de `financialKpiService.ts` (ex.: `calcularKpis` — confirmado falhando).
-Qualquer query raw com placeholders nesse arquivo deve migrar para `q()`.
+**Regra durável:** qualquer query raw com placeholders `$N` em
+`financialKpiService.ts` DEVE passar pelo helper `q()` (pool pg) — `db.execute`
+com array de params nunca liga os binds nesse arquivo. Ao tocar/auditar uma função
+do arquivo, confirme que ela usa `q()` e não `db!.execute(sql, [params])`.
