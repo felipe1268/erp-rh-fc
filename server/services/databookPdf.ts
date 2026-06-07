@@ -122,6 +122,8 @@ export async function gerarDatabookFichaPdf(
     // página ANTES de desenhar o título (evita título/régua órfãos). ~20px = bloco título.
     const TITLE_BLOCK = 20;
     const bottomY = pageH - 40;
+    // Rev. 2878 — espaçamento entre seções enxuto p/ caber tudo em UMA página.
+    const GAP = 10;
     const ensureSpace = (contentH: number) => {
       if (y + TITLE_BLOCK + contentH > bottomY) { doc.addPage(); y = 40; }
     };
@@ -148,7 +150,7 @@ export async function gerarDatabookFichaPdf(
       doc.text(tRows[i][0], ml + 4, ry + 4, { width: c1w - 8 });
       doc.text(tRows[i][1], ml + c1w + 4, ry + 4, { width: c2w - 8 });
     }
-    y += tRows.length * rowH + 18;
+    y += tRows.length * rowH + GAP;
 
     // ===== DESCRIÇÃO DO PRODUTO / SERVIÇO — caixa única =====
     {
@@ -162,7 +164,7 @@ export async function gerarDatabookFichaPdf(
       doc.font("Helvetica").fontSize(9).fillColor("black");
       doc.lineWidth(0.5).strokeColor("black").rect(ml, y, cw, boxH).stroke();
       doc.text(txt, ml + pad, y + pad, { width: cw - 2 * pad });
-      y += boxH + 18;
+      y += boxH + GAP;
     }
 
     // ===== ESPECIFICAÇÕES — caixa em volta da lista de itens =====
@@ -193,14 +195,30 @@ export async function gerarDatabookFichaPdf(
         doc.text("o    " + lines[i], ml + indent, ly, { width: lineW });
         ly += lineHs[i] + 3;
       }
-      y = boxY + contentH + 18;
+      y = boxY + contentH + GAP;
     }
 
     // ===== OUTRAS INFORMAÇÕES / FOTO — caixa SÓ com a foto centralizada =====
     {
       const pad = 8;
       const maxW = cw * 0.6;
-      const maxH = 250;
+
+      // Rev. 2878 — a foto é a seção que mais empurra o conteúdo p/ a 2ª página.
+      // Em vez de um teto fixo (250px), calculamos o espaço REALMENTE disponível
+      // entre o ponto atual e o rodapé, RESERVANDO o bloco de OBSERVAÇÕES (que vem
+      // logo abaixo) — assim a foto encolhe só o necessário e tudo cabe em UMA
+      // página. Clamp [90, 250] preserva legibilidade quando há folga de sobra.
+      const obsPad = 6;
+      const obsTxt = s(ficha.observacoes);
+      // Pré-medição com a MESMA tipografia da seção OBSERVAÇÕES (Helvetica 9),
+      // senão herdaríamos a fonte das ESPECIFICAÇÕES (8.5) e subestimaríamos a
+      // reserva, voltando a empurrar OBSERVAÇÕES p/ a 2ª página em casos limítrofes.
+      doc.font("Helvetica").fontSize(9);
+      const obsTh = obsTxt ? doc.heightOfString(obsTxt, { width: cw - 2 * obsPad }) : 0;
+      const obsBoxH = Math.max(40, obsTh + 2 * obsPad);
+      const obsReserve = TITLE_BLOCK + obsBoxH + GAP;
+      const availPhotoH = bottomY - y - TITLE_BLOCK - 2 * pad - obsReserve;
+      const maxH = Math.max(90, Math.min(250, availPhotoH));
 
       let imgObj: any = null;
       let photoW = 0;
@@ -212,7 +230,7 @@ export async function gerarDatabookFichaPdf(
           photoW = imgObj.width * scale;
           photoH = imgObj.height * scale;
         } catch { imgObj = null; }
-        if (!imgObj) { photoW = maxW; photoH = 170; } // fallback sem openImage
+        if (!imgObj) { photoW = maxW; photoH = Math.min(170, maxH); } // fallback sem openImage
       }
 
       const boxH = Math.max(40, pad + photoH + pad);
@@ -228,7 +246,7 @@ export async function gerarDatabookFichaPdf(
           else doc.image(photoBuf, px, py, { fit: [photoW, photoH], align: "center" });
         } catch {}
       }
-      y = boxY + boxH + 18;
+      y = boxY + boxH + GAP;
     }
 
     // ===== OBSERVAÇÕES — SEÇÃO SEPARADA com caixa própria (modelo LOTUS) =====

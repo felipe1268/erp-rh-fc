@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2878 — **DATABOOK (FICHA PDF) — TUDO EM UMA ÚNICA PÁGINA (FOTO ADAPTATIVA +
+ * ESPAÇAMENTO ENXUTO), EVITANDO QUE OBSERVAÇÕES CAIA NA 2ª PÁGINA.**
+ *
+ * PEDIDO (usuário, com print IMG_1703 do PDF "EST-010_Corrente_6mm" mostrando
+ * "1 de 2"): "Veja se é possível organizar tudo em apenas uma página, seria o
+ * ideal." A ficha vinha estourando para uma 2ª página — a seção OBSERVAÇÕES (e às
+ * vezes parte da foto) caía sozinha na página seguinte.
+ *
+ * CAUSA-RAIZ: em `server/services/databookPdf.ts` (`gerarDatabookFichaPdf`) a foto
+ * de "OUTRAS INFORMAÇÕES / FOTO" usava um teto FIXO de 250px de altura e cada
+ * seção tinha 18px de espaçamento. Com a tabela de DADOS CONTRATUAIS (5 linhas) +
+ * DESCRIÇÃO + ~11 ESPECIFICAÇÕES + foto 250px + OBSERVAÇÕES, o total ultrapassava
+ * a área útil da A4 e o `ensureSpace` empurrava OBSERVAÇÕES p/ a página 2.
+ *
+ * FEITO (SÓ backend `server/services/databookPdf.ts`):
+ *  - Espaçamento entre seções: const `GAP = 10` (era 18 fixo em 4 pontos).
+ *  - FOTO ADAPTATIVA: em vez do teto fixo 250px, calcula o espaço REALMENTE
+ *    disponível entre o ponto atual e o rodapé (`bottomY`), RESERVANDO o bloco de
+ *    OBSERVAÇÕES que vem logo abaixo (pré-mede `heightOfString` das observações +
+ *    título + GAP). A altura máxima da foto vira `clamp(availPhotoH, 90, 250)` —
+ *    encolhe só o necessário p/ caber tudo, sem perder legibilidade quando há
+ *    folga. Fallback sem `openImage` também respeita o teto dinâmico.
+ *
+ * RESULTADO: ficha cabe em UMA página mesmo com foto grande + 11 especificações
+ * (validado com smoke test gerando o PDF e contando páginas via pdfinfo = 1).
+ * ZERO schema; ZERO frontend; ZERO ALTER/DROP/DELETE. R-001/R-007/R-010 ok.
+ *
  * Rev. 2877 — **DATABOOK — DOWNLOAD EM MASSA DE TODAS AS FICHAS EM UM ZIP, COM
  * PASTAS POR DISCIPLINA E CADA ARQUIVO NOMEADO PELO NÚMERO DO DATABOOK.**
  *
