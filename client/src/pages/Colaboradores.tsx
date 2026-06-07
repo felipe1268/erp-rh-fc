@@ -16,7 +16,7 @@ import { trpc } from "@/lib/trpc";
 import { buildFcDocument } from "@/lib/fcDocumentTemplate";
 import { renderTemplate } from "@shared/documentTemplates";
 import { formatBRL, valorPorExtenso } from "@/lib/numeroExtenso";
-import { Users, UsersRound, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Shield, ShieldX, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon, Wrench, Star, Award, CalendarDays, UserCheck, UserX, Palmtree, HeartPulse, Clock, Save, ChevronsUpDown, Check, RefreshCw } from "lucide-react";
+import { Users, UsersRound, Plus, Search, Pencil, Trash2, Eye, Ban, GraduationCap, ShieldCheck, Shield, ShieldX, Scale, FileText, Building2, AlertTriangle, Upload, HardHat, Download, Printer, ArrowLeft, Hash, Lock, Camera, X as XIcon, Wrench, Star, Award, CalendarDays, UserCheck, UserX, Palmtree, HeartPulse, Clock, Save, ChevronsUpDown, Check, RefreshCw, Footprints, Shirt, Ruler } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
@@ -41,7 +41,52 @@ import FCSignContratoExperienciaPanel from "@/components/FCSignContratoExperienc
 const TAMANHOS_CALCADO = ["33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48"];
 const TAMANHOS_CAMISA = ["PP", "P", "M", "G", "GG", "XG", "XGG", "EXG"];
 const TAMANHOS_CALCA = ["36", "38", "40", "42", "44", "46", "48", "50", "52", "54", "56", "58"];
-const TAMANHO_NONE = "__none__";
+
+// Rev. 2856 — config das cartelas interativas de tamanho (EPI/Uniforme)
+const EPI_CARDS = [
+  {
+    key: "tamanhoCalcado",
+    label: "Calçado",
+    sub: "Número do pé",
+    emoji: "👟",
+    Icon: Footprints,
+    opts: TAMANHOS_CALCADO,
+    ring: "border-sky-200 dark:border-sky-800",
+    headBg: "bg-gradient-to-br from-sky-500 to-sky-700",
+    softBg: "bg-sky-50/60 dark:bg-sky-950/20",
+    accentText: "text-sky-700 dark:text-sky-300",
+    chipOn: "bg-sky-600 border-sky-600 text-white shadow-md scale-105",
+    chipOff: "bg-white dark:bg-zinc-900 border-sky-200 dark:border-sky-800 text-sky-700 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-900/40 hover:border-sky-400",
+  },
+  {
+    key: "tamanhoCamisa",
+    label: "Camisa",
+    sub: "Parte de cima",
+    emoji: "👕",
+    Icon: Shirt,
+    opts: TAMANHOS_CAMISA,
+    ring: "border-emerald-200 dark:border-emerald-800",
+    headBg: "bg-gradient-to-br from-emerald-500 to-emerald-700",
+    softBg: "bg-emerald-50/60 dark:bg-emerald-950/20",
+    accentText: "text-emerald-700 dark:text-emerald-300",
+    chipOn: "bg-emerald-600 border-emerald-600 text-white shadow-md scale-105",
+    chipOff: "bg-white dark:bg-zinc-900 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 hover:border-emerald-400",
+  },
+  {
+    key: "tamanhoCalca",
+    label: "Calça",
+    sub: "Parte de baixo",
+    emoji: "👖",
+    Icon: Ruler,
+    opts: TAMANHOS_CALCA,
+    ring: "border-amber-200 dark:border-amber-800",
+    headBg: "bg-gradient-to-br from-amber-500 to-amber-700",
+    softBg: "bg-amber-50/60 dark:bg-amber-950/20",
+    accentText: "text-amber-700 dark:text-amber-300",
+    chipOn: "bg-amber-600 border-amber-600 text-white shadow-md scale-105",
+    chipOff: "bg-white dark:bg-zinc-900 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 hover:border-amber-400",
+  },
+] as const;
 
 const statusColors: Record<string, string> = {
   Ativo: "bg-green-400/10 text-green-400",
@@ -3207,56 +3252,112 @@ ${(() => {
               </div>
             </TabsContent>
 
-            {/* ===== ABA UNIFORME / EPI (Rev. 2855) — listas prontas, só selecionar ===== */}
+            {/* ===== ABA UNIFORME / EPI (Rev. 2856) — cartelas interativas, toque pra selecionar ===== */}
             <TabsContent value="uniforme" className="pt-4">
               <div className="space-y-5">
-                <div className="p-4 rounded-lg border-2 border-sky-200 bg-sky-50/50 dark:bg-sky-950/20 dark:border-sky-800">
-                  <h4 className="text-sm font-bold text-sky-700 dark:text-sky-400 mb-1 flex items-center gap-2">
-                    <span className="text-lg">🦺</span> Tamanhos de Uniforme / EPI
-                  </h4>
-                  <p className="text-xs text-muted-foreground mb-4">
-                    Selecione os tamanhos nas listas abaixo. Usado para mapear a compra de EPI/uniforme e garantir o estoque por tamanho.
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* Faixa institucional FC (regra de ouro) */}
+                <div
+                  className="rounded-xl overflow-hidden border-2 shadow-sm"
+                  style={{ borderColor: "#1B2A4A" }}
+                >
+                  <div
+                    className="px-5 py-4 flex items-center gap-3"
+                    style={{ background: "linear-gradient(135deg, #1B2A4A 0%, #2c4470 100%)", printColorAdjust: "exact" as any }}
+                  >
+                    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/15 text-2xl">🦺</span>
                     <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Calçado (nº)</Label>
-                      <Select
-                        value={(form as any).tamanhoCalcado || TAMANHO_NONE}
-                        onValueChange={(v) => set("tamanhoCalcado" as any, v === TAMANHO_NONE ? "" : v)}
-                      >
-                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={TAMANHO_NONE}>— Não informado —</SelectItem>
-                          {TAMANHOS_CALCADO.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      <h4 className="text-white font-bold text-base tracking-wide uppercase" style={{ letterSpacing: "1.5px" }}>
+                        Tamanhos de Uniforme / EPI
+                      </h4>
+                      <p className="text-white/70 text-xs">
+                        Toque no tamanho desejado — sem digitar. Usado para mapear a compra e garantir o estoque por tamanho.
+                      </p>
                     </div>
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Camisa</Label>
-                      <Select
-                        value={(form as any).tamanhoCamisa || TAMANHO_NONE}
-                        onValueChange={(v) => set("tamanhoCamisa" as any, v === TAMANHO_NONE ? "" : v)}
-                      >
-                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={TAMANHO_NONE}>— Não informado —</SelectItem>
-                          {TAMANHOS_CAMISA.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-xs font-medium text-muted-foreground">Calça</Label>
-                      <Select
-                        value={(form as any).tamanhoCalca || TAMANHO_NONE}
-                        onValueChange={(v) => set("tamanhoCalca" as any, v === TAMANHO_NONE ? "" : v)}
-                      >
-                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={TAMANHO_NONE}>— Não informado —</SelectItem>
-                          {TAMANHOS_CALCA.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  </div>
+
+                  {/* Cartelas interativas */}
+                  <div className="p-4 bg-muted/30 grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {EPI_CARDS.map((card) => {
+                      const Icon = card.Icon;
+                      const selected = ((form as any)[card.key] || "").toString();
+                      return (
+                        <div
+                          key={card.key}
+                          className={`rounded-xl border-2 ${card.ring} ${card.softBg} overflow-hidden transition-shadow hover:shadow-md`}
+                        >
+                          {/* Cabeçalho da cartela */}
+                          <div className={`${card.headBg} px-4 py-3 flex items-center justify-between`} style={{ printColorAdjust: "exact" as any }}>
+                            <div className="flex items-center gap-2.5">
+                              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/20">
+                                <Icon className="h-5 w-5 text-white" />
+                              </span>
+                              <div className="leading-tight">
+                                <div className="text-white font-bold text-sm flex items-center gap-1.5">
+                                  <span>{card.emoji}</span> {card.label}
+                                </div>
+                                <div className="text-white/70 text-[11px]">{card.sub}</div>
+                              </div>
+                            </div>
+                            {/* Selo do valor atual */}
+                            <div className="text-right">
+                              {selected ? (
+                                <span className="inline-flex items-center justify-center min-w-[44px] h-9 px-2 rounded-lg bg-white text-base font-extrabold shadow-sm" style={{ color: "#1B2A4A" }}>
+                                  {selected}
+                                </span>
+                              ) : (
+                                <span className="text-white/60 text-[11px] italic">a definir</span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Grade de chips */}
+                          <div className="p-3">
+                            <div className="flex flex-wrap gap-2">
+                              {card.opts.map((t) => {
+                                const isOn = selected.toUpperCase() === t.toUpperCase();
+                                return (
+                                  <button
+                                    key={t}
+                                    type="button"
+                                    aria-pressed={isOn}
+                                    onClick={() => set(card.key as any, isOn ? "" : t)}
+                                    className={`min-w-[42px] h-9 px-2.5 rounded-lg border-2 text-sm font-semibold transition-all duration-150 ${isOn ? card.chipOn : card.chipOff}`}
+                                  >
+                                    {t}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            {/* Limpar */}
+                            <button
+                              type="button"
+                              onClick={() => set(card.key as any, "")}
+                              disabled={!selected}
+                              className={`mt-3 inline-flex items-center gap-1 text-[11px] font-medium transition-colors ${selected ? `${card.accentText} hover:underline` : "text-muted-foreground/40 cursor-not-allowed"}`}
+                            >
+                              <XIcon className="h-3 w-3" /> Limpar / Não informado
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Resumo da seleção */}
+                  <div className="px-4 py-3 bg-background border-t flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-semibold text-muted-foreground mr-1">Resumo:</span>
+                    {EPI_CARDS.map((card) => {
+                      const v = ((form as any)[card.key] || "").toString();
+                      return (
+                        <span
+                          key={card.key}
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${v ? card.ring + " " + card.accentText : "border-dashed border-muted-foreground/30 text-muted-foreground/60"}`}
+                        >
+                          <span>{card.emoji}</span>
+                          {card.label}: <strong>{v || "—"}</strong>
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
               </div>

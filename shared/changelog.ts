@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2856 — **CADASTRO DO COLABORADOR — ABA "UNIFORME / EPI" GANHA LAYOUT
+ * MODERNO, COLORIDO E INTERATIVO (CARTELAS COM CHIPS TOCÁVEIS), MANTENDO O
+ * PADRÃO INSTITUCIONAL FC (REGRA DE OURO).**
+ *
+ * PEDIDO (print iPad — image_1780843821310.png): "quero um layout moderno, com
+ * cores, com um visual interativo e prático para facilitar o preenchimento...
+ * quero que mantenha o padrão que definimos na regra de ouro."
+ *
+ * CONTEXTO: a Rev. 2855 entregou a aba com 3 `Select` (dropdown) — funcional,
+ * mas pouco prático no iPad (abrir dropdown, rolar, selecionar). O usuário quer
+ * preenchimento por TOQUE direto e visual moderno/colorido, sem abandonar a
+ * identidade FC (faixa azul-marinho #1B2A4A da regra de ouro).
+ *
+ * O QUE FOI FEITO (`client/src/pages/Colaboradores.tsx`, SÓ frontend):
+ *  - NOVA config module-level `EPI_CARDS` (3 cartelas: Calçado/Camisa/Calça),
+ *    cada uma com ícone (Footprints/Shirt/Ruler — lucide), emoji, cor de acento
+ *    (sky/emerald/amber) e classes Tailwind LITERAIS (chipOn/chipOff/etc — sem
+ *    concatenação dinâmica que o purge do Tailwind descartaria).
+ *  - A aba foi REDESENHADA: faixa institucional FC no topo (gradiente
+ *    #1B2A4A→#2c4470, título caixa-alta letter-spacing, `printColorAdjust:exact`
+ *    — regra de ouro); 3 CARTELAS com cabeçalho colorido + selo do valor atual;
+ *    grade de CHIPS tocáveis (`<button>`) que destacam o selecionado (fill da cor
+ *    de acento + scale-105) e ALTERNAM (tocar de novo limpa); botão "Limpar / Não
+ *    informado" por cartela; e um RESUMO em pills no rodapé.
+ *  - Os `Select`/dropdowns da Rev. 2855 e o sentinel `TAMANHO_NONE` foram
+ *    REMOVIDOS da aba (não eram mais usados); as constantes `TAMANHOS_*` seguem.
+ *  - Persistência inalterada: o chip grava direto via `set(card.key, valor|"")`,
+ *    mesmo contrato da Rev. 2854/2855 (colunas + whitelist `updateEmployee`).
+ *    Match do chip ativo usa `.toUpperCase()`, casando valores legados.
+ *
+ * ESCOPO/SEGURANÇA: ZERO ALTER/DROP/DELETE; ZERO schema; ZERO backend; só UI.
+ *
  * Rev. 2855 — **CADASTRO DO COLABORADOR — TAMANHOS DE EPI/UNIFORME VIRAM ABA
  * PRÓPRIA COM LISTAS PRONTAS (DROPDOWN), SEM DIGITAÇÃO LIVRE.**
  *
