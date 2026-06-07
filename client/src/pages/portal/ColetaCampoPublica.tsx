@@ -93,14 +93,14 @@ export default function ColetaCampoPublica() {
     <div className="min-h-screen bg-slate-100">
       {/* Header FC */}
       <header className="px-4 py-5 text-white" style={{ background: `linear-gradient(120deg, ${FC_NAVY}, #2c4470)` }}>
-        <div className="max-w-md mx-auto">
+        <div className="max-w-md sm:max-w-2xl lg:max-w-4xl mx-auto">
           <p className="text-[11px] uppercase tracking-[2px] text-white/70">FC Engenharia · Coleta de Campo</p>
           <h1 className="text-lg font-bold leading-tight mt-0.5">{sessaoQ.data.titulo || "Coleta de dados"}</h1>
           {obra && <p className="text-sm text-white/80">{obra.nome}{obra.cidade ? ` — ${obra.cidade}` : ""}</p>}
         </div>
       </header>
 
-      <main className="max-w-md mx-auto p-4 pb-24">
+      <main className="max-w-md sm:max-w-2xl lg:max-w-4xl mx-auto p-4 pb-24">
         {!selFunc ? (
           <>
             <input
@@ -109,9 +109,9 @@ export default function ColetaCampoPublica() {
               placeholder="Buscar funcionário…"
               className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm mb-3 bg-white"
             />
-            <div className="space-y-2">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {funcionariosFiltrados.length === 0 && (
-                <p className="text-center text-sm text-slate-500 py-8">Nenhum funcionário alocado nesta obra.</p>
+                <p className="col-span-full text-center text-sm text-slate-500 py-8">Nenhum funcionário alocado nesta obra.</p>
               )}
               {funcionariosFiltrados.map((f: any) => (
                 <button
@@ -155,7 +155,7 @@ export default function ColetaCampoPublica() {
       {/* Barra de envio fixa */}
       {selFunc && (
         <div className="fixed bottom-0 inset-x-0 bg-white border-t p-3">
-          <div className="max-w-md mx-auto flex gap-2">
+          <div className="max-w-md sm:max-w-2xl lg:max-w-4xl mx-auto flex gap-2">
             <button
               onClick={() => setSelFunc(null)}
               className="px-4 py-3 rounded-lg border border-slate-300 text-slate-700 text-sm font-medium"
@@ -178,7 +178,7 @@ export default function ColetaCampoPublica() {
               {enviarM.isPending ? "Enviando…" : "Enviar para o RH"}
             </button>
           </div>
-          {enviarM.isError && <p className="max-w-md mx-auto text-xs text-red-600 mt-2">{enviarM.error.message}</p>}
+          {enviarM.isError && <p className="max-w-md sm:max-w-2xl lg:max-w-4xl mx-auto text-xs text-red-600 mt-2">{enviarM.error.message}</p>}
         </div>
       )}
 
@@ -212,6 +212,7 @@ function FormColeta({ func, grupos, dados, set, toggleTam, fotoPreview, onFoto, 
         <button onClick={voltar} className="text-xs text-slate-500 underline">trocar</button>
       </div>
 
+      <div className="grid gap-4 lg:grid-cols-2 items-start">
       {/* Foto */}
       {tem("foto") && (
         <Secao titulo="Foto">
@@ -295,6 +296,7 @@ function FormColeta({ func, grupos, dados, set, toggleTam, fotoPreview, onFoto, 
           <Campo label="CEP" value={dados.cep || ""} onChange={(v) => set("cep", v)} />
         </Secao>
       )}
+      </div>
 
       {/* Quem coletou */}
       <Secao titulo="Quem está preenchendo">

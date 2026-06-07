@@ -214,16 +214,16 @@ export default function ColetaCampo() {
       </div>
 
       {/* Abas */}
-      <div className="flex gap-2 border-b">
+      <div className="flex gap-2 border-b overflow-x-auto">
         <button
           onClick={() => setTab("links")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition ${tab === "links" ? "border-[#1B2A4A] text-[#1B2A4A]" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          className={`shrink-0 whitespace-nowrap px-4 py-2 text-sm font-medium border-b-2 -mb-px transition ${tab === "links" ? "border-[#1B2A4A] text-[#1B2A4A]" : "border-transparent text-muted-foreground hover:text-foreground"}`}
         >
           <Link2 className="inline h-4 w-4 mr-1" /> Links por Obra
         </button>
         <button
           onClick={() => setTab("fila")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition ${tab === "fila" ? "border-[#1B2A4A] text-[#1B2A4A]" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          className={`shrink-0 whitespace-nowrap px-4 py-2 text-sm font-medium border-b-2 -mb-px transition ${tab === "fila" ? "border-[#1B2A4A] text-[#1B2A4A]" : "border-transparent text-muted-foreground hover:text-foreground"}`}
         >
           <Clock className="inline h-4 w-4 mr-1" /> Fila de Revisão
         </button>
@@ -239,8 +239,9 @@ export default function ColetaCampo() {
                 Cria um link para cada obra ativa de uma vez{obrasQ.data ? ` (${obrasQ.data.length} ativa(s))` : ""}. Obras que já têm link ativo são reaproveitadas. Depois é só copiar e enviar para cada responsável.
               </p>
             </div>
-            <div className="flex gap-2 shrink-0">
+            <div className="flex gap-2 shrink-0 w-full sm:w-auto">
               <Button
+                className="flex-1 sm:flex-none"
                 disabled={criarTodasM.isPending || (obrasQ.data || []).length === 0 || !algumGrupo}
                 onClick={() => criarTodasM.mutate({ ...baseInput, grupos: gruposArray })}
                 style={{ background: FC_NAVY }}
@@ -248,7 +249,7 @@ export default function ColetaCampo() {
                 {criarTodasM.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Link2 className="h-4 w-4 mr-1" />}
                 Gerar todos
               </Button>
-              <Button variant="outline" onClick={copiarTodos}>
+              <Button variant="outline" className="flex-1 sm:flex-none" onClick={copiarTodos}>
                 {copiouTodos ? <Check className="h-4 w-4 mr-1" /> : <Copy className="h-4 w-4 mr-1" />}
                 Copiar todos
               </Button>
@@ -365,7 +366,7 @@ export default function ColetaCampo() {
                     </div>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap shrink-0">
                   <Button size="sm" variant="outline" onClick={() => copiar(s)}>
                     {copiado === s.id ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     <span className="ml-1 hidden sm:inline">Copiar link</span>
@@ -390,7 +391,7 @@ export default function ColetaCampo() {
 
       {tab === "fila" && (
         <div className="space-y-4">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {(["pendente", "aprovada", "rejeitada"] as const).map((st) => (
               <button
                 key={st}

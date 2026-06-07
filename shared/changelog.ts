@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2866 — **COLETA DE CAMPO (RH) — LAYOUT RESPONSIVO (CELULAR / TABLET / PC)
+ * NAS DUAS TELAS: LINK PÚBLICO E TELA INTERNA DO RH.**
+ *
+ * PEDIDO: "Quero um layout para celular, tablet e pc... quero tudo ajustado"
+ * (escopo escolhido pelo usuário = SÓ a Coleta de Campo: link público + tela
+ * interna do RH).
+ *
+ * CONTEXTO: a página pública (`ColetaCampoPublica.tsx`) era mobile-first travada
+ * em `max-w-md` (≈448px) — boa no celular, mas estreita/desperdiçando espaço em
+ * tablet e PC. A tela interna (`ColetaCampo.tsx`) já era parcialmente responsiva,
+ * mas alguns blocos apertavam no celular (abas, botões "Gerar/Copiar todos",
+ * chips da fila e ações da lista).
+ *
+ * FEITO (SÓ frontend, ZERO lógica/back/schema):
+ *  - PÚBLICA: container escala `max-w-md sm:max-w-2xl lg:max-w-4xl` (header, main,
+ *    barra de envio fixa e mensagem de erro alinhados à MESMA largura). A LISTA de
+ *    funcionários virou GRADE responsiva (`grid sm:grid-cols-2 lg:grid-cols-3`,
+ *    empty-state `col-span-full`). O FORMULÁRIO do funcionário passou a usar
+ *    `grid gap-4 lg:grid-cols-2 items-start` nas seções (Foto/EPI/Contato/
+ *    Emergência/Endereço) — 1 coluna no celular, 2 no desktop; "Funcionário
+ *    selecionado" e "Quem está preenchendo" permanecem full-width.
+ *  - INTERNA: abas com `overflow-x-auto` + botões `shrink-0 whitespace-nowrap`;
+ *    botões "Gerar todos"/"Copiar todos" `w-full sm:w-auto` + `flex-1 sm:flex-none`
+ *    (ocupam a largura no celular); chips de status da fila `flex-wrap`; ações da
+ *    lista de links `flex-wrap shrink-0`.
+ *
+ * ZERO ALTER/DROP/DELETE; ZERO schema; ZERO backend. Só CSS/JSX (Tailwind).
+ *
  * Rev. 2865 — **COLETA DE CAMPO (RH) — ESCOLHER, ANTES DE GERAR O LINK, QUAIS
  * INFORMAÇÕES SERÃO COLETADAS NO FORMULÁRIO DO AUXILIAR DE CAMPO.**
  *
