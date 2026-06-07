@@ -12,7 +12,7 @@
 // ZERO ALTER/DROP/DELETE. employees JÁ tem todas as colunas-alvo.
 import crypto from "crypto";
 import { z } from "zod";
-import { and, eq, desc, inArray } from "drizzle-orm";
+import { and, eq, desc, inArray, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
 import { getDb, updateEmployee, getUserCompanyLinks } from "../db";
@@ -112,7 +112,12 @@ export const coletaRhRouter = router({
       const rows = await db
         .select({ id: obras.id, nome: obras.nome, codigo: obras.codigo, cidade: obras.cidade })
         .from(obras)
-        .where(and(inArray(obras.companyId, companyIds), eq(obras.isActive, 1)))
+        .where(and(
+          inArray(obras.companyId, companyIds),
+          eq(obras.isActive, 1),
+          isNull(obras.deletedAt),
+          eq(obras.status, "Em_Andamento"),
+        ))
         .orderBy(obras.nome);
       return rows;
     }),

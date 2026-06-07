@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2859 — **COLETA DE CAMPO (RH) — O SELETOR DE OBRA DO "NOVO LINK DE COLETA"
+ * AGORA LISTA SOMENTE OBRAS ATIVAS (EM ANDAMENTO).**
+ *
+ * PEDIDO (print iPad — image_1780847241968.png, tela `/coleta-campo`): no dropdown
+ * "Obra" do "Novo link de coleta" apareciam obras que não estão ativas (concluídas,
+ * paralisadas, em planejamento etc.). O RH só deve gerar link para obras ATIVAS.
+ *
+ * CAUSA-RAIZ (`server/routers/coletaRh.ts`, endpoint `obrasDisponiveis`): o filtro
+ * era apenas `isActive = 1` (flag "não-arquivada"), que NÃO é a definição de "obra
+ * ativa" usada no resto do ERP — esta inclui também o `status` da obra.
+ *
+ * FEITO (SÓ backend): `obrasDisponiveis` passa a espelhar EXATAMENTE o filtro
+ * canônico de `getObrasByCompanyActive` (server/db.ts, fonte de `obras.listActive`):
+ * `isActive = 1` AND `deletedAt IS NULL` AND `status = 'Em_Andamento'`. Import
+ * `isNull` adicionado. Nenhuma mudança de schema, UI ou contrato.
+ *
+ * ZERO ALTER/DROP/DELETE; ZERO schema; só backend (1 query).
+ *
  * Rev. 2858 — **NOVO MÓDULO "COLETA DE CAMPO" (RH) — LINK EXTERNO POR OBRA
  * (TOKEN + QR, SEM LOGIN) PARA UM AUXILIAR DE CAMPO COLETAR/ATUALIZAR DADOS DOS
  * FUNCIONÁRIOS ALOCADOS PELO CELULAR, COM FILA DE REVISÃO (RH APROVA ANTES DE
