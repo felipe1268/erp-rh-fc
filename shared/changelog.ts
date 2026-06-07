@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2846 — **COMPRAS · PAINEL FD — ITENS SOMENTE-LEITURA (EDIÇÃO SÓ ADMIN MASTER), VERDE PARA COMPRADOS
+ * E FILTROS FATURADO/PENDENTE NAS DUAS ABAS.**
+ *
+ * PEDIDO (usuário, com 2 prints do iPad — IMG_1659/IMG_1660, aba "Itens do FD"): (1) o usuário comum NÃO pode
+ * alterar o valor dos itens considerados no FD — só pode visualizar; (2) os itens já COMPRADOS devem ficar VERDES;
+ * (3) deve haver FILTROS para saber o que já foi FATURADO e o que ainda está PENDENTE. Em pergunta de
+ * desambiguação o usuário escolheu aplicar verde+filtros nas DUAS abas (Itens do FD + Lançamentos FD) e, numa
+ * 2ª mensagem, ajustou a regra de permissão: "Somente o adm master pode ter opção de editar, apagar, inserir"
+ * (em vez de remover os botões para todos).
+ *
+ * O QUE FOI FEITO (BACKEND — `server/routers/compras.ts`, endpoint `getSaldoFd`):
+ *  - NOVO cruzamento APROXIMADO item↔compra: uma query (`compras_ordens_itens` INNER JOIN `compras_ordens`)
+ *    pega os ITENS das OCs FD da obra (modalidade IN fd_cliente/fd_terceiro/fd_fc, status != cancelada) e os
+ *    indexa por DOIS eixos INDEPENDENTES — código de insumo E descrição normalizada (helpers `_comprado`/
+ *    `_faturado`): um item do `bdi_fd` casa se o CÓDIGO bater OU a DESCRIÇÃO bater (cobre o caso misto em que um
+ *    lado tem código e o outro só descrição — evita falso "Pendente", apontado no review). Cada item ganha
+ *    `comprado` (existe item de OC FD correspondente) e `faturado` (a OC correspondente está com
+ *    `fd_status='aprovado'`). Read-only, sem coluna nova; o cruzamento é heurístico (aceito pelo usuário).
+ *
+ * O QUE FOI FEITO (FRONTEND — `client/src/pages/compras/PainelFd.tsx`):
+ *  - NOVO `usePermissions()` → `isAdminMaster`. Na aba "Itens do FD", os botões "Adicionar Item" / "Ajustar" /
+ *    "Remover" e a coluna "Ações" só renderizam quando `isAdminMaster`; demais usuários têm a tabela SOMENTE-LEITURA.
+ *    Os diálogos/mutations de edição (ainda usados pelo admin) permanecem intactos.
+ *  - NOVA coluna "Status" na aba Itens (Faturado=verde / Comprado=âmbar / Pendente=cinza) e LINHA pintada de
+ *    verde (`bg-emerald-50/60`) quando o item está comprado.
+ *  - NOVO componente `FiltroFatChips` (Todos / Faturado / Pendente) nas DUAS abas; estados `fItens`/`fLanc` +
+ *    derivações `itensFiltrados`/`ocsObraFiltradas` (helper `matchFat`). Na aba Lançamentos a LINHA fica verde
+ *    quando `fdStatus==='aprovado'`, o rótulo de status passou de "Aprovado" para "Faturado", e o `tfoot`
+ *    "Total utilizado" só aparece no filtro "Todos" (evita somar um subconjunto).
+ *
+ * ESCOPO: aplicado à visão por OBRA (que tem as duas abas); a visão "Todas as obras" não foi alterada.
+ * ZERO ALTER/DROP/DELETE; ZERO schema; read-only. Validação: HMR do Vite compilou limpo; painel atrás de login,
+ * então a validação foi via review de código.
+ *
  * Rev. 2845 — **FINANCEIRO · PAINEL FINANCEIRO — SELETOR DE PERÍODO PADRONIZADO (MÊS/TRIMESTRE/SEMESTRE/ANO)
  * IGUAL AO DRE.**
  *

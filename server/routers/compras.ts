@@ -13028,6 +13028,48 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       const itensFd = await db.select().from(bdiFd).where(and(eq(bdiFd.orcamentoId, orcamentoId), eq(bdiFd.companyId, input.companyId)));
       const totalFdOrcado = itensFd.reduce((s, i) => s + n(i.total), 0);
 
+      // Rev. 2846 — marca cada item do FD como comprado/faturado cruzando (de forma
+      // APROXIMADA — por código de insumo ou descrição normalizada) com os ITENS das
+      // OCs FD desta obra. comprado = existe item de OC FD correspondente; faturado =
+      // a OC correspondente está com fd_status='aprovado'. Read-only, sem coluna nova.
+      const fdOcItens = await db.select({
+          insumoCodigo: comprasOrdensItens.insumoCodigo,
+          descricao: comprasOrdensItens.descricao,
+          fdStatus: comprasOrdens.fdStatus,
+        })
+        .from(comprasOrdensItens)
+        .innerJoin(comprasOrdens, eq(comprasOrdensItens.ordemId, comprasOrdens.id))
+        .where(and(
+          eq(comprasOrdens.companyId, input.companyId),
+          eq(comprasOrdens.obraId, input.obraId),
+          sql`${comprasOrdens.modalidadeFd} IN ('fd_cliente', 'fd_terceiro', 'fd_fc')`,
+          sql`${comprasOrdens.status} != 'cancelada'`,
+        ));
+      // Cruzamento por DOIS eixos independentes (código OU descrição): um item casa
+      // se o CÓDIGO bater OU se a DESCRIÇÃO normalizada bater — cobre o caso misto em
+      // que um lado tem código e o outro só descrição (evita falso "Pendente").
+      const _normCod = (cod?: string | null) => (cod ?? "").trim().toLowerCase();
+      const _normDesc = (desc?: string | null) => (desc ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+      const compradoCod = new Set<string>();
+      const compradoDesc = new Set<string>();
+      const faturadoCod = new Set<string>();
+      const faturadoDesc = new Set<string>();
+      for (const r of fdOcItens) {
+        const c = _normCod(r.insumoCodigo);
+        const d = _normDesc(r.descricao);
+        const aprovado = (r as any).fdStatus === "aprovado";
+        if (c) { compradoCod.add(c); if (aprovado) faturadoCod.add(c); }
+        if (d) { compradoDesc.add(d); if (aprovado) faturadoDesc.add(d); }
+      }
+      const _comprado = (cod?: string | null, desc?: string | null) => {
+        const c = _normCod(cod), d = _normDesc(desc);
+        return (!!c && compradoCod.has(c)) || (!!d && compradoDesc.has(d));
+      };
+      const _faturado = (cod?: string | null, desc?: string | null) => {
+        const c = _normCod(cod), d = _normDesc(desc);
+        return (!!c && faturadoCod.has(c)) || (!!d && faturadoDesc.has(d));
+      };
+
       return {
         totalFdOrcado,
         totalFdComprometido,
@@ -13040,6 +13082,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           qtdOrcada: n(i.qtdOrcada),
           precoUnit: n(i.precoUnit),
           total: n(i.total),
+          comprado: _comprado(i.codigoInsumo, i.descricao),
+          faturado: _faturado(i.codigoInsumo, i.descricao),
         })),
         ocsComFd: ocsComFdNumerado,
       };

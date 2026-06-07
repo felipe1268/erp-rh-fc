@@ -3,6 +3,7 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
+import { usePermissions } from "@/contexts/PermissionsContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -77,8 +78,24 @@ function KpiRow({ orcado, utilizado, saldo }: { orcado: number; utilizado: numbe
 
 const tabTriggerCls = "data-[state=active]:bg-indigo-600 data-[state=active]:text-white text-gray-600 gap-1.5 text-xs";
 
+type FatFiltro = "todos" | "faturado" | "pendente";
+function FiltroFatChips({ value, onChange }: { value: FatFiltro; onChange: (v: FatFiltro) => void }) {
+  const opts: [FatFiltro, string][] = [["todos", "Todos"], ["faturado", "Faturado"], ["pendente", "Pendente"]];
+  return (
+    <div className="flex gap-1">
+      {opts.map(([v, l]) => (
+        <button key={v} type="button" onClick={() => onChange(v)}
+          className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors ${value === v ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}>
+          {l}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function PainelFd() {
   const { selectedCompanyId } = useCompany();
+  const { isAdminMaster } = usePermissions();
   const [, navigate] = useLocation();
   const abrirOc = (id: number) => {
     if (!Number.isFinite(Number(id)) || Number(id) <= 0) return;
@@ -92,6 +109,8 @@ export default function PainelFd() {
   const [addForm, setAddForm] = useState({ codigoInsumo: "", descricao: "", unidade: "un", qtdOrcada: "", precoUnit: "", fornecedor: "", justificativa: "", adminEmail: "", adminSenha: "" });
   const [showRemoveItem, setShowRemoveItem] = useState<any>(null);
   const [removeForm, setRemoveForm] = useState({ justificativa: "", adminEmail: "", adminSenha: "" });
+  const [fItens, setFItens] = useState<FatFiltro>("todos");
+  const [fLanc, setFLanc] = useState<FatFiltro>("todos");
 
   const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: companyId > 0 });
   const obras = (obrasQ.data ?? []) as any[];
@@ -148,6 +167,10 @@ export default function PainelFd() {
   const saldo = saldoQ.data;
   const historico = historicoQ.data ?? [];
   const ocsObra = (saldo?.ocsComFd ?? []) as any[];
+  const itensFd = (saldo?.itensFd ?? []) as any[];
+  const matchFat = (faturado: boolean, f: FatFiltro) => f === "todos" ? true : f === "faturado" ? faturado : !faturado;
+  const itensFiltrados = itensFd.filter((i: any) => matchFat(!!i.faturado, fItens));
+  const ocsObraFiltradas = ocsObra.filter((oc: any) => matchFat(oc.fdStatus === "aprovado", fLanc));
 
   return (
     <DashboardLayout>
@@ -310,16 +333,22 @@ export default function PainelFd() {
               {/* --- Itens considerados no FD (BDI FD) --- */}
               <TabsContent value="itens" className="mt-4">
                 <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
                     <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
                       <DollarSign className="h-4 w-4 text-indigo-500" /> Itens considerados no FD
                     </h3>
-                    <Button size="sm" className="h-7 text-xs bg-indigo-600 hover:bg-indigo-500 text-white gap-1"
-                      onClick={() => setShowAddItem(true)}>
-                      <Plus className="h-3 w-3" /> Adicionar Item
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <FiltroFatChips value={fItens} onChange={setFItens} />
+                      {isAdminMaster && (
+                        <Button size="sm" className="h-7 text-xs bg-indigo-600 hover:bg-indigo-500 text-white gap-1"
+                          onClick={() => setShowAddItem(true)}>
+                          <Plus className="h-3 w-3" /> Adicionar Item
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                  {saldo.itensFd.length > 0 ? (
+                  {itensFd.length > 0 ? (
+                    itensFiltrados.length > 0 ? (
                     <Table>
                       <TableHeader>
                         <TableRow className="border-gray-200">
@@ -328,33 +357,48 @@ export default function PainelFd() {
                           <TableHead className="text-xs text-gray-500 text-right">Qtd</TableHead>
                           <TableHead className="text-xs text-gray-500 text-right">Preço Unit</TableHead>
                           <TableHead className="text-xs text-gray-500 text-right">Total</TableHead>
-                          <TableHead className="text-xs text-gray-500 w-32">Ações</TableHead>
+                          <TableHead className="text-xs text-gray-500 text-center">Status</TableHead>
+                          {isAdminMaster && <TableHead className="text-xs text-gray-500 w-32">Ações</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {saldo.itensFd.map((item: any) => (
-                          <TableRow key={item.id} className="border-gray-100">
+                        {itensFiltrados.map((item: any) => (
+                          <TableRow key={item.id} className={`border-gray-100 ${item.comprado ? "bg-emerald-50/60" : ""}`}>
                             <TableCell className="text-xs font-mono text-gray-700">{item.codigoInsumo || "—"}</TableCell>
                             <TableCell className="text-xs text-gray-900">{item.descricao}</TableCell>
                             <TableCell className="text-xs text-right">{item.qtdOrcada}</TableCell>
                             <TableCell className="text-xs text-right">{fmt(item.precoUnit)}</TableCell>
                             <TableCell className="text-xs text-right font-semibold">{fmt(item.total)}</TableCell>
-                            <TableCell>
-                              <div className="flex gap-1">
-                                <Button size="sm" variant="ghost" className="h-6 text-[10px] text-indigo-600 hover:text-indigo-800 gap-1"
-                                  onClick={() => { setShowAjuste(item); setAjusteForm({ novoValor: String(item.total), justificativa: "", adminEmail: "", adminSenha: "" }); }}>
-                                  <Shield className="h-3 w-3" /> Ajustar
-                                </Button>
-                                <Button size="sm" variant="ghost" className="h-6 text-[10px] text-red-600 hover:text-red-800 gap-1"
-                                  onClick={() => { setShowRemoveItem(item); setRemoveForm({ justificativa: "", adminEmail: "", adminSenha: "" }); }}>
-                                  <Trash2 className="h-3 w-3" /> Remover
-                                </Button>
-                              </div>
+                            <TableCell className="text-center">
+                              {item.faturado ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-700"><CheckCircle className="h-3 w-3" /> Faturado</span>
+                              ) : item.comprado ? (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700">Comprado</span>
+                              ) : (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-500">Pendente</span>
+                              )}
                             </TableCell>
+                            {isAdminMaster && (
+                              <TableCell>
+                                <div className="flex gap-1">
+                                  <Button size="sm" variant="ghost" className="h-6 text-[10px] text-indigo-600 hover:text-indigo-800 gap-1"
+                                    onClick={() => { setShowAjuste(item); setAjusteForm({ novoValor: String(item.total), justificativa: "", adminEmail: "", adminSenha: "" }); }}>
+                                    <Shield className="h-3 w-3" /> Ajustar
+                                  </Button>
+                                  <Button size="sm" variant="ghost" className="h-6 text-[10px] text-red-600 hover:text-red-800 gap-1"
+                                    onClick={() => { setShowRemoveItem(item); setRemoveForm({ justificativa: "", adminEmail: "", adminSenha: "" }); }}>
+                                    <Trash2 className="h-3 w-3" /> Remover
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            )}
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
+                    ) : (
+                      <p className="text-xs text-gray-400 text-center py-6">Nenhum item {fItens === "faturado" ? "faturado" : "pendente"} neste orçamento.</p>
+                    )
                   ) : (
                     <p className="text-xs text-gray-400 text-center py-6">Nenhum item FD cadastrado neste orçamento.</p>
                   )}
@@ -364,10 +408,14 @@ export default function PainelFd() {
               {/* --- Lançamentos FD (OCs com numeração) --- */}
               <TabsContent value="lancamentos" className="mt-4">
                 <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
-                  <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-                    <Receipt className="h-4 w-4 text-indigo-500" /> Lançamentos de FD (OCs)
-                  </h3>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                      <Receipt className="h-4 w-4 text-indigo-500" /> Lançamentos de FD (OCs)
+                    </h3>
+                    <FiltroFatChips value={fLanc} onChange={setFLanc} />
+                  </div>
                   {ocsObra.length > 0 ? (
+                    ocsObraFiltradas.length > 0 ? (
                     <Table>
                       <TableHeader>
                         <TableRow className="border-gray-200">
@@ -381,8 +429,8 @@ export default function PainelFd() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {ocsObra.map((oc: any) => (
-                          <TableRow key={oc.id} className="border-gray-100 cursor-pointer hover:bg-indigo-50/50" onClick={() => abrirOc(oc.id)} title="Abrir OC">
+                        {ocsObraFiltradas.map((oc: any) => (
+                          <TableRow key={oc.id} className={`border-gray-100 cursor-pointer ${oc.fdStatus === "aprovado" ? "bg-emerald-50/60 hover:bg-emerald-100/60" : "hover:bg-indigo-50/50"}`} onClick={() => abrirOc(oc.id)} title="Abrir OC">
                             <TableCell className="text-xs font-mono text-indigo-600 hover:underline">
                               <span className="font-semibold">{oc.numeroFd || "—"}</span>
                               <span className="text-gray-400"> · {oc.numeroOc || `#${oc.id}`}</span>
@@ -393,7 +441,7 @@ export default function PainelFd() {
                               <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${fdBadgeClass(oc.modalidadeFd)}`}>{fdBadgeLabel(oc.modalidadeFd)}</span>
                             </TableCell>
                             <TableCell className="text-xs">
-                              <span className={`font-medium ${oc.fdStatus === "aprovado" ? "text-emerald-600" : "text-amber-600"}`}>{oc.fdStatus === "aprovado" ? "Aprovado" : "Pendente"}</span>
+                              <span className={`font-medium ${oc.fdStatus === "aprovado" ? "text-emerald-600" : "text-amber-600"}`}>{oc.fdStatus === "aprovado" ? "Faturado" : "Pendente"}</span>
                             </TableCell>
                             <TableCell className="text-xs text-right font-semibold text-gray-900">{fmt(Number(oc.valorEfetivo ?? 0))}</TableCell>
                             <TableCell>
@@ -407,6 +455,7 @@ export default function PainelFd() {
                           </TableRow>
                         ))}
                       </TableBody>
+                      {fLanc === "todos" && (
                       <tfoot>
                         <tr className="border-t border-gray-200">
                           <td colSpan={5} className="text-xs text-gray-500 font-medium pt-2 pr-3 text-right">Total utilizado</td>
@@ -414,7 +463,11 @@ export default function PainelFd() {
                           <td></td>
                         </tr>
                       </tfoot>
+                      )}
                     </Table>
+                    ) : (
+                      <p className="text-xs text-gray-400 text-center py-6">Nenhum lançamento {fLanc === "faturado" ? "faturado" : "pendente"} para esta obra.</p>
+                    )
                   ) : (
                     <p className="text-xs text-gray-400 text-center py-6">Nenhum lançamento de FD para esta obra.</p>
                   )}
