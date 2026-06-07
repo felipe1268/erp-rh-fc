@@ -734,6 +734,12 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2805: tabela ai_module_config garantida (liga/desliga IA por módulo).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA ai_module_config:`, e?.message || e); }
 
+        // Rev. 2887 — itens EXTRAS (custom) por link de coleta de campo.
+        try {
+          await db.execute(sql`ALTER TABLE coleta_rh_sessoes ADD COLUMN IF NOT EXISTS itens_custom_json TEXT`);
+          console.log(`[SyncSchema+] Rev. 2887: coluna itens_custom_json garantida em coleta_rh_sessoes.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA coleta_rh_sessoes.itens_custom_json:`, e?.message || e); }
+
         // Rev. 2874 — Ordem GLOBAL do menu lateral (definida pelo Admin Master, vale p/ todos).
         try {
           await db.execute(sql`

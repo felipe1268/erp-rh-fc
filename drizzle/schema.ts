@@ -2297,6 +2297,10 @@ export const coletaRhSessoes = pgTable("coleta_rh_sessoes", {
         // Rev. 2865 — JSON array de chaves de grupo a coletar (foto/epi/contato/
         // emergencia/endereco). NULL = todos (backward compat). Ver shared/coletaCampos.ts.
         camposJson: text("campos_json"),
+        // Rev. 2887 — itens EXTRAS por link: JSON array de {campo,label} apontando
+        // p/ campos de employees (catálogo em shared/coletaCampos.ts). NULL = sem
+        // itens extras. Gravado AUTOMÁTICO na ficha na aprovação.
+        itensCustomJson: text("itens_custom_json"),
         criadoPor: varchar("criado_por", { length: 255 }),
         criadoPorId: integer("criado_por_id"),
         expiraEm: timestamp("expira_em", { mode: 'string' }),

@@ -29,6 +29,10 @@ import {
   resolverGruposColeta,
   serializeGruposColeta,
   camposHabilitados,
+  serializeItensCustom,
+  parseItensCustom,
+  sanitizeItensCustom,
+  CAMPOS_CUSTOM_KEYS,
 } from "../../shared/coletaCampos";
 
 /**
@@ -115,6 +119,15 @@ const dadosColetaSchema = z.object({
   tamanhoCalca: z.string().optional(),
 }).strip();
 
+// Rev. 2887 — itens EXTRAS por link: cada item aponta p/ um campo de employees
+// (catálogo em shared/coletaCampos.ts). label é o rótulo que o auxiliar vê.
+const itensCustomInputSchema = z
+  .array(z.object({ campo: z.string(), label: z.string().optional() }))
+  .optional();
+
+// Valores dos campos custom enviados pelo auxiliar (chave = campo de employees).
+const dadosCustomSchema = z.record(z.string()).optional();
+
 function gerarToken(): string {
   return crypto.randomBytes(24).toString("hex"); // 48 chars hex
 }
@@ -161,6 +174,8 @@ export const coletaRhRouter = router({
       // Rev. 2865 — grupos a coletar (foto/epi/contato/emergencia/endereco).
       // Ausente/todos = null (= todos). Ver shared/coletaCampos.ts.
       grupos: z.array(z.string()).optional(),
+      // Rev. 2887 — itens EXTRAS por link (campo de employees + label).
+      itensCustom: itensCustomInputSchema,
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
@@ -185,6 +200,7 @@ export const coletaRhRouter = router({
           titulo: input.titulo?.trim() || `Coleta — ${obra.nome}`,
           ativo: 1,
           camposJson: serializeGruposColeta(input.grupos),
+          itensCustomJson: serializeItensCustom(input.itensCustom),
           criadoPor: ctx.user?.name ?? null,
           criadoPorId: ctx.user?.id ?? null,
           expiraEm: input.expiraEm || null,
@@ -202,12 +218,15 @@ export const coletaRhRouter = router({
       expiraEm: z.string().optional(),
       // Rev. 2865 — grupos a coletar aplicados a TODOS os links gerados.
       grupos: z.array(z.string()).optional(),
+      // Rev. 2887 — itens EXTRAS aplicados a TODOS os links gerados.
+      itensCustom: itensCustomInputSchema,
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const companyIds = resolveCompanyIds(input);
       await assertColetaCompanyAccess(ctx.user, companyIds);
       const camposJson = serializeGruposColeta(input.grupos);
+      const itensCustomJson = serializeItensCustom(input.itensCustom);
 
       // Obras ativas (mesmo filtro canônico de obrasDisponiveis).
       const obrasAtivas = await db
@@ -243,7 +262,7 @@ export const coletaRhRouter = router({
           // Reaproveita o link ativo, mas alinha os grupos coletados à seleção atual.
           await db
             .update(coletaRhSessoes)
-            .set({ camposJson })
+            .set({ camposJson, itensCustomJson })
             .where(eq(coletaRhSessoes.id, existente.id));
           reaproveitadas++;
           continue;
@@ -258,6 +277,7 @@ export const coletaRhRouter = router({
             titulo: `Coleta — ${obra.nome}`,
             ativo: 1,
             camposJson,
+            itensCustomJson,
             criadoPor: ctx.user?.name ?? null,
             criadoPorId: ctx.user?.id ?? null,
             expiraEm: input.expiraEm || null,
@@ -283,6 +303,7 @@ export const coletaRhRouter = router({
           titulo: coletaRhSessoes.titulo,
           ativo: coletaRhSessoes.ativo,
           camposJson: coletaRhSessoes.camposJson,
+          itensCustomJson: coletaRhSessoes.itensCustomJson,
           criadoPor: coletaRhSessoes.criadoPor,
           expiraEm: coletaRhSessoes.expiraEm,
           createdAt: coletaRhSessoes.createdAt,
@@ -308,10 +329,11 @@ export const coletaRhRouter = router({
       }
 
       return sessoes.map((s) => {
-        const { camposJson, ...rest } = s;
+        const { camposJson, itensCustomJson, ...rest } = s;
         return {
           ...rest,
           grupos: resolverGruposColeta(camposJson),
+          itensCustom: parseItensCustom(itensCustomJson),
           expirada: sessaoExpirada(s.expiraEm),
           totalRespostas: totalPorSessao.get(s.id) ?? 0,
           pendentes: pendPorSessao.get(s.id) ?? 0,
@@ -346,6 +368,7 @@ export const coletaRhRouter = router({
       id: z.number(),
       titulo: z.string().optional(),
       grupos: z.array(z.string()).optional(),
+      itensCustom: itensCustomInputSchema,
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
@@ -371,6 +394,9 @@ export const coletaRhRouter = router({
       }
       if (input.grupos !== undefined) {
         patch.camposJson = serializeGruposColeta(input.grupos);
+      }
+      if (input.itensCustom !== undefined) {
+        patch.itensCustomJson = serializeItensCustom(input.itensCustom);
       }
       if (Object.keys(patch).length === 0) return { ok: true };
 
@@ -450,14 +476,18 @@ export const coletaRhRouter = router({
           revisadoPor: coletaRhRespostas.revisadoPor,
           revisadoEm: coletaRhRespostas.revisadoEm,
           motivoRejeicao: coletaRhRespostas.motivoRejeicao,
+          // Rev. 2887 — itens custom definidos no link (p/ rótulos na fila).
+          sessaoItensCustomJson: coletaRhSessoes.itensCustomJson,
         })
         .from(coletaRhRespostas)
         .leftJoin(employees, eq(coletaRhRespostas.employeeId, employees.id))
         .leftJoin(obras, eq(coletaRhRespostas.obraId, obras.id))
+        .leftJoin(coletaRhSessoes, eq(coletaRhRespostas.sessaoId, coletaRhSessoes.id))
         .where(and(...conds))
         .orderBy(desc(coletaRhRespostas.createdAt));
 
       // Buscar valores ATUAIS dos campos coletados, por funcionário, para o diff.
+      // Rev. 2887 — inclui os campos do catálogo custom (qualquer item extra).
       const empIds = Array.from(new Set(respostas.map((r) => r.employeeId)));
       const atuaisMap = new Map<number, Record<string, any>>();
       if (empIds.length > 0) {
@@ -468,14 +498,21 @@ export const coletaRhRouter = router({
         for (const e of atuais) {
           const rec: Record<string, any> = {};
           for (const c of CAMPOS_COLETA) rec[c] = (e as any)[c] ?? null;
+          for (const c of CAMPOS_CUSTOM_KEYS) rec[c] = (e as any)[c] ?? null;
           atuaisMap.set(e.id, rec);
         }
       }
 
       return respostas.map((r) => {
+        const { sessaoItensCustomJson, ...rest } = r;
         let dados: Record<string, any> = {};
         try { dados = JSON.parse(r.dadosJson || "{}"); } catch { dados = {}; }
-        return { ...r, dados, atual: atuaisMap.get(r.employeeId) ?? {} };
+        return {
+          ...rest,
+          dados,
+          atual: atuaisMap.get(r.employeeId) ?? {},
+          itensCustom: parseItensCustom(sessaoItensCustomJson),
+        };
       });
     }),
 
@@ -508,7 +545,8 @@ export const coletaRhRouter = router({
       // Monta o payload só com campos whitelisted e não-vazios.
       const aceitos = input.camposAceitos;
       const payload: Record<string, any> = {};
-      for (const c of CAMPOS_COLETA) {
+      // Rev. 2887 — grava campos dos 5 grupos + itens EXTRAS (catálogo custom).
+      for (const c of [...CAMPOS_COLETA, ...CAMPOS_CUSTOM_KEYS]) {
         if (aceitos && !aceitos.includes(c)) continue;
         const v = dados[c];
         if (v === undefined || v === null) continue;
@@ -571,7 +609,8 @@ export const coletaRhRouter = router({
         try { dados = JSON.parse(resp.dadosJson || "{}"); } catch { dados = {}; }
 
         const payload: Record<string, any> = {};
-        for (const c of CAMPOS_COLETA) {
+        // Rev. 2887 — grava campos dos 5 grupos + itens EXTRAS (catálogo custom).
+        for (const c of [...CAMPOS_COLETA, ...CAMPOS_CUSTOM_KEYS]) {
           const v = dados[c];
           if (v === undefined || v === null) continue;
           if (typeof v === "string" && v.trim() === "") continue;
@@ -642,6 +681,8 @@ export const coletaRhRouter = router({
       companyIds: z.array(z.number()).optional(),
       id: z.number(),
       dados: dadosColetaSchema,
+      // Rev. 2887 — correção dos itens EXTRAS (chave = campo de employees).
+      dadosCustom: dadosCustomSchema,
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
@@ -670,6 +711,16 @@ export const coletaRhRouter = router({
         const t = typeof v === "string" ? v.trim() : v;
         if (t === "" || t === null) delete dados[c];
         else dados[c] = t;
+      }
+      // Rev. 2887 — mesma lógica para os itens EXTRAS (só campos do catálogo).
+      if (input.dadosCustom) {
+        for (const c of CAMPOS_CUSTOM_KEYS) {
+          const v = (input.dadosCustom as Record<string, any>)[c];
+          if (v === undefined) continue;
+          const t = typeof v === "string" ? v.trim() : v;
+          if (t === "" || t === null) delete dados[c];
+          else dados[c] = t;
+        }
       }
 
       await db
@@ -769,6 +820,7 @@ export const coletaRhRouter = router({
         valido: true as const,
         titulo: sessao.titulo,
         grupos: resolverGruposColeta(sessao.camposJson),
+        itensCustom: parseItensCustom(sessao.itensCustomJson),
         obra: obra ? { nome: obra.nome, cidade: obra.cidade, codigo: obra.codigo } : null,
         funcionarios: alocados.map((a) => ({
           id: a.id,
@@ -787,6 +839,8 @@ export const coletaRhRouter = router({
       employeeId: z.number(),
       enviadoPor: z.string().optional(),
       dados: dadosColetaSchema,
+      // Rev. 2887 — valores dos itens EXTRAS (chave = campo de employees).
+      dadosCustom: dadosCustomSchema,
       fotoBase64: z.string().optional(),
       fotoContentType: z.string().optional(),
     }))
@@ -824,6 +878,18 @@ export const coletaRhRouter = router({
         if (!permitidos.has(c)) continue;
         const v = (input.dados as any)[c];
         if (typeof v === "string" && v.trim() !== "") dados[c] = v.trim();
+      }
+
+      // Rev. 2887 — itens EXTRAS: só aceita campos definidos NESTA sessão (e do
+      // catálogo). Chave = campo de employees, gravado direto em dados_json.
+      const itensCustom = parseItensCustom(sessao.itensCustomJson);
+      const camposCustomPermitidos = new Set(itensCustom.map((it) => it.campo));
+      if (input.dadosCustom) {
+        for (const c of Object.keys(input.dadosCustom)) {
+          if (!camposCustomPermitidos.has(c)) continue;
+          const v = (input.dadosCustom as any)[c];
+          if (typeof v === "string" && v.trim() !== "") dados[c] = v.trim();
+        }
       }
 
       // Upload da foto (se houver E o grupo "foto" estiver habilitado).

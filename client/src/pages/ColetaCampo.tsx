@@ -25,7 +25,10 @@ import {
   CheckCircle2, XCircle, Clock, ArrowRight, ImageIcon, Pencil, Trash2, AlertTriangle,
   ArrowLeft, CheckSquare, Square,
 } from "lucide-react";
-import { GRUPOS_COLETA, GRUPOS_COLETA_KEYS, type GrupoColetaKey } from "@shared/coletaCampos";
+import {
+  GRUPOS_COLETA, GRUPOS_COLETA_KEYS, type GrupoColetaKey,
+  CAMPOS_CUSTOM_CATALOGO, getCampoCustomMeta, type ItemCustomColeta,
+} from "@shared/coletaCampos";
 
 const FC_NAVY = "#1B2A4A";
 
@@ -89,6 +92,7 @@ export default function ColetaCampo() {
       ? (s.grupos as GrupoColetaKey[])
       : [...GRUPOS_COLETA_KEYS];
     setEditGrupos(new Set(atuais));
+    setEditItensCustom(Array.isArray(s.itensCustom) ? s.itensCustom : []);
   };
   const toggleEditGrupo = (k: GrupoColetaKey) =>
     setEditGrupos((prev) => {
@@ -108,6 +112,11 @@ export default function ColetaCampo() {
     });
   const gruposArray = useMemo(() => GRUPOS_COLETA_KEYS.filter((k) => gruposSel.has(k)), [gruposSel]);
   const algumGrupo = gruposArray.length > 0;
+
+  // Rev. 2887 — itens EXTRAS definidos na hora (campo do funcionário + rótulo).
+  // Valem para "Gerar link" e "Gerar todos"; persistem entre criações.
+  const [itensCustom, setItensCustom] = useState<ItemCustomColeta[]>([]);
+  const [editItensCustom, setEditItensCustom] = useState<ItemCustomColeta[]>([]);
 
   const criarM = trpc.coletaRh.criarSessao.useMutation({
     onSuccess: () => {
@@ -267,6 +276,11 @@ export default function ColetaCampo() {
       const v = r.dados?.[k];
       d[k] = v == null ? "" : String(v);
     }
+    // Rev. 2887 — também carrega os itens extras desta sessão.
+    for (const it of (r.itensCustom || [])) {
+      const v = r.dados?.[it.campo];
+      d[it.campo] = v == null ? "" : String(v);
+    }
     setEditRespDados(d);
     setEditResp(r);
   };
@@ -368,7 +382,7 @@ export default function ColetaCampo() {
               <Button
                 className="flex-1 sm:flex-none"
                 disabled={criarTodasM.isPending || (obrasQ.data || []).length === 0 || !algumGrupo}
-                onClick={() => criarTodasM.mutate({ ...baseInput, grupos: gruposArray })}
+                onClick={() => criarTodasM.mutate({ ...baseInput, grupos: gruposArray, itensCustom })}
                 style={{ background: FC_NAVY }}
               >
                 {criarTodasM.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Link2 className="h-4 w-4 mr-1" />}
@@ -404,7 +418,7 @@ export default function ColetaCampo() {
               </div>
               <Button
                 disabled={!novaObraId || criarM.isPending || !algumGrupo}
-                onClick={() => criarM.mutate({ ...baseInput, obraId: parseInt(novaObraId), titulo: novoTitulo || undefined, grupos: gruposArray })}
+                onClick={() => criarM.mutate({ ...baseInput, obraId: parseInt(novaObraId), titulo: novoTitulo || undefined, grupos: gruposArray, itensCustom })}
                 style={{ background: FC_NAVY }}
               >
                 {criarM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4 mr-1" />}
@@ -459,6 +473,15 @@ export default function ColetaCampo() {
               {!algumGrupo && (
                 <p className="text-[11px] text-amber-600 mt-2">Selecione ao menos um grupo para gerar o link.</p>
               )}
+
+              {/* Rev. 2887 — itens extras definidos na hora */}
+              <div className="mt-4 border-t pt-3">
+                <Label className="text-xs font-medium">Itens extras (opcional)</Label>
+                <p className="text-[11px] text-muted-foreground mb-2">
+                  Peça outros dados ao auxiliar. Cada item grava automaticamente no campo da ficha ao aprovar.
+                </p>
+                <ItensCustomEditor itens={itensCustom} setItens={setItensCustom} />
+              </div>
             </div>
           </div>
 
@@ -711,6 +734,15 @@ export default function ColetaCampo() {
                   <p className="text-[11px] text-amber-600 mt-2">Selecione ao menos um grupo.</p>
                 )}
               </div>
+
+              {/* Rev. 2887 — itens extras deste link */}
+              <div className="border-t pt-3">
+                <Label className="text-xs font-medium">Itens extras (opcional)</Label>
+                <p className="text-[11px] text-muted-foreground mb-2">
+                  Cada item grava automaticamente no campo da ficha ao aprovar.
+                </p>
+                <ItensCustomEditor itens={editItensCustom} setItens={setEditItensCustom} />
+              </div>
             </div>
           )}
           <DialogFooter>
@@ -722,6 +754,7 @@ export default function ColetaCampo() {
                 id: editSessao.id,
                 titulo: editTitulo.trim() || undefined,
                 grupos: editGruposArray,
+                itensCustom: editItensCustom,
               })}
               style={{ background: FC_NAVY }}
             >
@@ -808,6 +841,28 @@ export default function ColetaCampo() {
                     </div>
                   );
                 })}
+                {/* Rev. 2887 — itens extras coletados neste link */}
+                {(revisar.itensCustom || []).map((it: any) => {
+                  const k = it.campo;
+                  const novo = revisar.dados?.[k];
+                  const atual = revisar.atual?.[k];
+                  const temNovo = typeof novo === "string" ? novo.trim() !== "" : novo != null;
+                  if (!temNovo) return null;
+                  const mudou = String(atual ?? "") !== String(novo ?? "");
+                  return (
+                    <div key={`custom-${k}`} className="grid grid-cols-[24px_1fr_1fr] gap-2 px-3 py-2 items-center text-sm">
+                      <input type="checkbox" checked={camposAceitos.has(k)} onChange={() => toggleCampo(k)} />
+                      <div className="min-w-0">
+                        <div className="text-[10px] uppercase text-muted-foreground">{it.label}</div>
+                        <div className="truncate text-muted-foreground">{atual ?? "—"}</div>
+                      </div>
+                      <div className={`min-w-0 flex items-center gap-1 ${mudou ? "font-medium" : ""}`}>
+                        {mudou && <ArrowRight className="h-3 w-3 text-emerald-600 shrink-0" />}
+                        <span className="truncate">{novo}</span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               <div>
@@ -857,13 +912,35 @@ export default function ColetaCampo() {
                   />
                 </div>
               ))}
+              {/* Rev. 2887 — itens extras deste link */}
+              {(editResp.itensCustom || []).map((it: any) => (
+                <div key={`custom-${it.campo}`}>
+                  <Label className="text-xs">{it.label}</Label>
+                  <Input
+                    value={editRespDados[it.campo] ?? ""}
+                    onChange={(e) => setEditRespDados((prev) => ({ ...prev, [it.campo]: e.target.value }))}
+                  />
+                </div>
+              ))}
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => { setEditResp(null); setEditRespDados({}); }}>Cancelar</Button>
             <Button
               disabled={editarRespM.isPending}
-              onClick={() => editResp && editarRespM.mutate({ ...baseInput, id: editResp.id, dados: editRespDados })}
+              onClick={() => {
+                if (!editResp) return;
+                const dadosCustom: Record<string, string> = {};
+                for (const it of (editResp.itensCustom || [])) {
+                  dadosCustom[it.campo] = editRespDados[it.campo] ?? "";
+                }
+                editarRespM.mutate({
+                  ...baseInput,
+                  id: editResp.id,
+                  dados: editRespDados,
+                  dadosCustom: Object.keys(dadosCustom).length > 0 ? dadosCustom : undefined,
+                });
+              }}
               style={{ background: FC_NAVY }}
             >
               {editarRespM.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
@@ -898,6 +975,71 @@ export default function ColetaCampo() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// Rev. 2887 — Editor de ITENS EXTRAS: cada item mapeia um campo do funcionário
+// (escolhido do catálogo) para um rótulo que o auxiliar vê no celular. Na
+// aprovação, o valor coletado grava AUTOMÁTICO no campo correspondente da ficha.
+function ItensCustomEditor({
+  itens,
+  setItens,
+}: {
+  itens: ItemCustomColeta[];
+  setItens: (v: ItemCustomColeta[]) => void;
+}) {
+  const usados = new Set(itens.map((i) => i.campo));
+  const disponiveis = CAMPOS_CUSTOM_CATALOGO.filter((c) => !usados.has(c.campo));
+  const add = (campo: string) => {
+    const meta = getCampoCustomMeta(campo);
+    if (!meta) return;
+    setItens([...itens, { campo, label: meta.label }]);
+  };
+  const remove = (campo: string) => setItens(itens.filter((i) => i.campo !== campo));
+  const setLabel = (campo: string, label: string) =>
+    setItens(itens.map((i) => (i.campo === campo ? { ...i, label } : i)));
+  return (
+    <div className="space-y-2">
+      {itens.length > 0 && (
+        <div className="space-y-2">
+          {itens.map((it) => (
+            <div key={it.campo} className="flex items-center gap-2">
+              <Input
+                value={it.label}
+                onChange={(e) => setLabel(it.campo, e.target.value)}
+                placeholder={getCampoCustomMeta(it.campo)?.label}
+                className="flex-1 h-9"
+              />
+              <Badge variant="secondary" className="shrink-0 whitespace-nowrap">
+                grava em: {getCampoCustomMeta(it.campo)?.label || it.campo}
+              </Badge>
+              <button
+                type="button"
+                onClick={() => remove(it.campo)}
+                className="text-muted-foreground hover:text-red-600 shrink-0"
+                title="Remover item"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {disponiveis.length > 0 ? (
+        <Select value="" onValueChange={(v) => add(v)}>
+          <SelectTrigger className="h-9">
+            <SelectValue placeholder="+ Adicionar item extra…" />
+          </SelectTrigger>
+          <SelectContent>
+            {disponiveis.map((c) => (
+              <SelectItem key={c.campo} value={c.campo}>{c.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : (
+        <p className="text-[11px] text-muted-foreground">Todos os campos extras disponíveis já foram adicionados.</p>
+      )}
     </div>
   );
 }

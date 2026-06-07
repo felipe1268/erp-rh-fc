@@ -90,6 +90,11 @@ export default function ColetaCampoPublica() {
     return new Set<GrupoColetaKey>(Array.isArray(g) && g.length > 0 ? g : GRUPOS_COLETA_KEYS);
   }, [sessaoQ.data]);
 
+  // Rev. 2887 — itens EXTRAS definidos no link (campo de employees + label).
+  const itensCustom = useMemo<any[]>(() => {
+    return (sessaoQ.data && "itensCustom" in sessaoQ.data ? (sessaoQ.data as any).itensCustom : []) || [];
+  }, [sessaoQ.data]);
+
   const podeEnviar = Object.values(dados).some((v) => v && v.trim() !== "") || !!fotoBase64;
 
   // ── Estados de carregamento / inválido ────────────────────────────────────
@@ -163,6 +168,7 @@ export default function ColetaCampoPublica() {
           <FormColeta
             func={selFunc}
             grupos={grupos}
+            itensCustom={itensCustom}
             dados={dados}
             set={set}
             toggleTam={toggleTam}
@@ -188,14 +194,22 @@ export default function ColetaCampoPublica() {
             </button>
             <button
               disabled={!podeEnviar || enviarM.isPending}
-              onClick={() => enviarM.mutate({
-                token,
-                employeeId: selFunc.id,
-                enviadoPor: enviadoPor || undefined,
-                dados,
-                fotoBase64: fotoBase64 || undefined,
-                fotoContentType: "image/jpeg",
-              })}
+              onClick={() => {
+                const dadosCustom: Record<string, string> = {};
+                for (const it of itensCustom) {
+                  const v = dados[it.campo];
+                  if (typeof v === "string" && v.trim() !== "") dadosCustom[it.campo] = v;
+                }
+                enviarM.mutate({
+                  token,
+                  employeeId: selFunc.id,
+                  enviadoPor: enviadoPor || undefined,
+                  dados,
+                  dadosCustom: Object.keys(dadosCustom).length > 0 ? dadosCustom : undefined,
+                  fotoBase64: fotoBase64 || undefined,
+                  fotoContentType: "image/jpeg",
+                });
+              }}
               className="flex-1 py-3 rounded-lg text-white text-sm font-semibold disabled:opacity-50"
               style={{ background: FC_NAVY }}
             >
@@ -220,7 +234,7 @@ export default function ColetaCampoPublica() {
   );
 }
 
-function FormColeta({ func, grupos, dados, set, toggleTam, fotoPreview, onFoto, removerFoto, enviadoPor, setEnviadoPor, voltar }: any) {
+function FormColeta({ func, grupos, itensCustom, dados, set, toggleTam, fotoPreview, onFoto, removerFoto, enviadoPor, setEnviadoPor, voltar }: any) {
   const tem = (k: GrupoColetaKey) => !grupos || grupos.has(k);
   return (
     <div className="space-y-4">
@@ -318,6 +332,20 @@ function FormColeta({ func, grupos, dados, set, toggleTam, fotoPreview, onFoto, 
             <Campo label="UF" value={dados.estado || ""} onChange={(v) => set("estado", v.toUpperCase().slice(0, 2))} />
           </div>
           <Campo label="CEP" value={dados.cep || ""} onChange={(v) => set("cep", v)} />
+        </Secao>
+      )}
+
+      {/* Rev. 2887 — Itens extras definidos no link */}
+      {Array.isArray(itensCustom) && itensCustom.length > 0 && (
+        <Secao titulo="Outros dados">
+          {itensCustom.map((it: any) => (
+            <Campo
+              key={it.campo}
+              label={it.label}
+              value={dados[it.campo] || ""}
+              onChange={(v) => set(it.campo, v)}
+            />
+          ))}
         </Secao>
       )}
       </div>

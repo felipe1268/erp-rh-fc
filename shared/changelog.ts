@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2887 — **COLETA DE CAMPO (RH) — ITENS EXTRAS POR LINK, DEFINIDOS NA HORA,
+ * CADA UM MAPEANDO PARA UM CAMPO DA FICHA → GRAVA AUTOMÁTICO NA APROVAÇÃO.**
+ *
+ * PEDIDO (usuário): além dos 5 grupos fixos (contato, emergência, endereço, EPI,
+ * foto), o RH queria poder acrescentar, na hora de gerar o link, OUTROS dados a
+ * pedir ao auxiliar de campo (ex.: CPF, RG, PIS, CNH, banco/agência/conta, chave
+ * PIX, e-mail…), cada um amarrado a um campo do cadastro do funcionário, de modo
+ * que ao APROVAR a coleta o valor já caia direto na ficha — sem digitação manual.
+ *
+ * O QUE FOI FEITO:
+ *  - CATÁLOGO SEGURO (`shared/coletaCampos.ts`): novo `CAMPOS_CUSTOM_CATALOGO` com
+ *    26 campos do funcionário (subconjunto do whitelist do `updateEmployee`, SEM os
+ *    campos dos 5 grupos e SEM campos sensíveis/salariais). Tipos `ItemCustomColeta`
+ *    + helpers `parseItensCustom`/`serializeItensCustom`/`sanitizeItensCustom` +
+ *    `CAMPOS_CUSTOM_KEYS` + `getCampoCustomMeta`.
+ *  - SCHEMA ADITIVO: `coletaRhSessoes.itensCustomJson` (TEXT nullable) em
+ *    `drizzle/schema.ts` + self-heal `[SyncSchema+]` (`ALTER TABLE ... ADD COLUMN IF
+ *    NOT EXISTS itens_custom_json TEXT`) em `server/_core/index.ts`.
+ *  - BACKEND (`server/routers/coletaRh.ts`): `criarSessao`/`criarSessoesTodas`/
+ *    `editarSessao` aceitam e gravam `itensCustom`; `listarSessoes`/`dadosSessao`/
+ *    `listarRespostas` retornam os itens; `enviarResposta` aceita `dadosCustom` e só
+ *    aceita campos definidos NAQUELA sessão (∩ catálogo), gravando no `dados_json`;
+ *    `aprovarResposta`/`aprovarVarias` gravam `[...CAMPOS_COLETA, ...CAMPOS_CUSTOM_KEYS]`
+ *    na ficha; `editarResposta` aceita `dadosCustom` p/ correção.
+ *  - FRONTEND: `client/src/pages/ColetaCampo.tsx` (novo `ItensCustomEditor` no "Novo
+ *    link" e no dialog de editar link; linhas extras nas telas de aprovar e editar
+ *    dados) e `client/src/pages/portal/ColetaCampoPublica.tsx` (seção "Outros dados"
+ *    no formulário do celular + envio do `dadosCustom`).
+ *
+ * ZERO ALTER/DROP/DELETE destrutivo (só ADD COLUMN aditivo). Arquivos:
+ * `shared/coletaCampos.ts`, `drizzle/schema.ts`, `server/_core/index.ts`,
+ * `server/routers/coletaRh.ts`, `client/src/pages/ColetaCampo.tsx`,
+ * `client/src/pages/portal/ColetaCampoPublica.tsx`.
+ *
  * Rev. 2886 — **DASHBOARD FINANCEIRO — KPIs/LISTAS AGORA EM VALOR CHEIO EM REAIS
  * (R$ 1.400.000,00) NO LUGAR DA FORMA ABREVIADA (R$ 1.4M / R$ 123.9K).**
  *

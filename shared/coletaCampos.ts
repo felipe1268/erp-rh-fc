@@ -64,3 +64,98 @@ export function camposHabilitados(grupos: GrupoColetaKey[]): Set<string> {
   for (const g of GRUPOS_COLETA) if (grupos.includes(g.key)) for (const c of g.campos) s.add(c);
   return s;
 }
+
+// ---------------------------------------------------------------------------
+// Rev. 2887 — ITENS EXTRAS (custom) por link.
+// Além dos 5 grupos fixos, o RH pode adicionar itens avulsos NA HORA de gerar o
+// link. Cada item aponta para UM campo de `employees` (escolhido pelo RH) e o
+// valor coletado é gravado AUTOMÁTICO nesse campo na aprovação. O catálogo abaixo
+// é a WHITELIST de campos mapeáveis — subconjunto SEGURO do whitelist de
+// updateEmployee (server/db.ts), SEM os campos já cobertos pelos 5 grupos e SEM
+// campos sensíveis (salário, status, lista negra, etc.). Persistido em
+// coleta_rh_sessoes.itens_custom_json (JSON array de {campo,label}).
+
+export interface CampoCustomCatalogo {
+  campo: string;
+  label: string;
+  type?: "text" | "date" | "email" | "tel";
+}
+
+export interface ItemCustomColeta {
+  campo: string;
+  label: string;
+}
+
+export const CAMPOS_CUSTOM_CATALOGO: CampoCustomCatalogo[] = [
+  // Documentos / dados pessoais
+  { campo: "cpf", label: "CPF" },
+  { campo: "rg", label: "RG" },
+  { campo: "orgaoEmissor", label: "Órgão emissor (RG)" },
+  { campo: "dataNascimento", label: "Data de nascimento", type: "date" },
+  { campo: "sexo", label: "Sexo" },
+  { campo: "estadoCivil", label: "Estado civil" },
+  { campo: "nacionalidade", label: "Nacionalidade" },
+  { campo: "naturalidade", label: "Naturalidade" },
+  { campo: "nomeMae", label: "Nome da mãe" },
+  { campo: "nomePai", label: "Nome do pai" },
+  { campo: "ctps", label: "CTPS" },
+  { campo: "serieCtps", label: "Série da CTPS" },
+  { campo: "pis", label: "PIS / PASEP" },
+  { campo: "tituloEleitor", label: "Título de eleitor" },
+  { campo: "certificadoReservista", label: "Certificado de reservista" },
+  { campo: "cnh", label: "CNH" },
+  { campo: "categoriaCnh", label: "Categoria da CNH" },
+  { campo: "validadeCnh", label: "Validade da CNH", type: "date" },
+  { campo: "email", label: "E-mail", type: "email" },
+  // Dados bancários
+  { campo: "banco", label: "Banco (código)" },
+  { campo: "bancoNome", label: "Banco (nome)" },
+  { campo: "agencia", label: "Agência" },
+  { campo: "conta", label: "Conta" },
+  { campo: "tipoConta", label: "Tipo de conta" },
+  { campo: "tipoChavePix", label: "Tipo de chave PIX" },
+  { campo: "chavePix", label: "Chave PIX" },
+];
+
+export const CAMPOS_CUSTOM_KEYS: string[] = CAMPOS_CUSTOM_CATALOGO.map((c) => c.campo);
+
+const CAMPO_CUSTOM_BY_KEY = new Map(CAMPOS_CUSTOM_CATALOGO.map((c) => [c.campo, c]));
+
+/** Metadados (label/type) de um campo custom do catálogo (ou undefined). */
+export function getCampoCustomMeta(campo: string): CampoCustomCatalogo | undefined {
+  return CAMPO_CUSTOM_BY_KEY.get(campo);
+}
+
+/** Sanitiza uma lista de itens custom: só campos do catálogo, label não-vazia
+ *  (cai pro label do catálogo se vier vazia), dedupe por campo (mantém o 1º). */
+export function sanitizeItensCustom(itens: any): ItemCustomColeta[] {
+  if (!Array.isArray(itens)) return [];
+  const seen = new Set<string>();
+  const out: ItemCustomColeta[] = [];
+  for (const it of itens) {
+    const campo = it?.campo;
+    if (typeof campo !== "string") continue;
+    const meta = CAMPO_CUSTOM_BY_KEY.get(campo);
+    if (!meta || seen.has(campo)) continue;
+    const rawLabel = typeof it?.label === "string" ? it.label.trim() : "";
+    out.push({ campo, label: rawLabel || meta.label });
+    seen.add(campo);
+  }
+  return out;
+}
+
+/** Parse do JSON gravado em `coleta_rh_sessoes.itens_custom_json`. */
+export function parseItensCustom(raw: string | null | undefined): ItemCustomColeta[] {
+  if (!raw) return [];
+  try {
+    return sanitizeItensCustom(JSON.parse(raw));
+  } catch {
+    return [];
+  }
+}
+
+/** Serializa os itens custom para gravar. Vazio → null. */
+export function serializeItensCustom(itens: any): string | null {
+  const clean = sanitizeItensCustom(itens);
+  return clean.length > 0 ? JSON.stringify(clean) : null;
+}
