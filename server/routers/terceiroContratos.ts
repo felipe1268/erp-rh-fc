@@ -2497,13 +2497,41 @@ export const terceiroContratosRouter = router({
         return weeks;
       }
 
-      // Resolve atividades from the LATEST revision of each projeto
-      // Each contrato has planejamentoProjetoId → find latest revision → get atividades with dates
-      const projetoIds = [...new Set(contratos.map(c => c.planejamentoProjetoId).filter(Boolean))] as number[];
+      // Resolve atividades from the LATEST revision of each projeto.
+      // Cada contrato aponta para um projeto via planejamentoProjetoId OU, na ausência dele,
+      // via obra → planejamento_projetos.obra_id (Rev. 2848). Da última revisão aprovada de
+      // cada projeto montamos DOIS índices: por ID de atividade (atividadesMap) e por código
+      // EAP (eapMapPorRev[revId][eap]) — este último é o FALLBACK quando o planejamentoAtividadeId
+      // do item está órfão (cronograma reimportado) ou o contrato não tem projeto vinculado.
+      const obraIds = [...new Set(contratos.map(c => c.obraId).filter(Boolean))] as number[];
+      const projetoPorObra: Record<number, number> = {};
+      if (obraIds.length > 0) {
+        const projsObra = await db.select({ id: planejamentoProjetos.id, obraId: planejamentoProjetos.obraId })
+          .from(planejamentoProjetos)
+          .where(and(
+            eq(planejamentoProjetos.companyId, input.companyId),
+            inArray(planejamentoProjetos.obraId, obraIds),
+          ))
+          .orderBy(desc(planejamentoProjetos.id));
+        for (const p of projsObra) {
+          if (p.obraId != null && projetoPorObra[p.obraId] == null) projetoPorObra[p.obraId] = p.id;
+        }
+      }
+
+      // Projeto efetivo de cada contrato: link direto OU via obra
+      const projetoDoContrato: Record<number, number | null> = {};
+      for (const c of contratos) {
+        projetoDoContrato[c.id] = (c.planejamentoProjetoId as number | null)
+          ?? (c.obraId != null ? (projetoPorObra[c.obraId] ?? null) : null);
+      }
+
+      const projetoIds = [...new Set(Object.values(projetoDoContrato).filter((v): v is number => typeof v === "number"))];
       let atividadesMap: Record<number, { dataInicio: string; dataFim: string }> = {};
+      const eapMapPorRev: Record<number, Record<string, { dataInicio: string; dataFim: string }>> = {};
+      const latestRevPerProject: Record<number, number> = {};
 
       if (projetoIds.length > 0) {
-        // Get latest approved revision per project
+        // Última revisão aprovada por projeto
         const allRevs = await db.select({ id: planejamentoRevisoes.id, projetoId: planejamentoRevisoes.projetoId, numero: planejamentoRevisoes.numero })
           .from(planejamentoRevisoes)
           .where(and(
@@ -2512,7 +2540,6 @@ export const terceiroContratosRouter = router({
           ))
           .orderBy(desc(planejamentoRevisoes.numero));
 
-        const latestRevPerProject: Record<number, number> = {};
         for (const rev of allRevs) {
           if (!latestRevPerProject[rev.projetoId]) latestRevPerProject[rev.projetoId] = rev.id;
         }
@@ -2531,11 +2558,20 @@ export const terceiroContratosRouter = router({
             .where(and(
               inArray(planejamentoAtividades.revisaoId, revIds),
               eq(planejamentoAtividades.disabled, false),
-            ));
+            ))
+            // ordenação determinística: "primeira folha com data ganha" no eapMap precisa ser estável
+            .orderBy(asc(planejamentoAtividades.ordem), asc(planejamentoAtividades.id));
 
           for (const a of atividades) {
             if (a.dataInicio && a.dataFim && !a.isGrupo) {
               atividadesMap[a.id] = { dataInicio: a.dataInicio, dataFim: a.dataFim };
+              if (a.eapCodigo && a.revisaoId != null) {
+                if (!eapMapPorRev[a.revisaoId]) eapMapPorRev[a.revisaoId] = {};
+                // primeira atividade-folha com data ganha (EAP costuma ser único por revisão)
+                if (!eapMapPorRev[a.revisaoId][a.eapCodigo]) {
+                  eapMapPorRev[a.revisaoId][a.eapCodigo] = { dataInicio: a.dataInicio, dataFim: a.dataFim };
+                }
+              }
             }
           }
         }
@@ -2556,6 +2592,22 @@ export const terceiroContratosRouter = router({
             atividadesMap[a.id] = { dataInicio: a.dataInicio, dataFim: a.dataFim };
           }
         }
+      }
+
+      // Resolve a janela de datas de um item: 1) ID direto da atividade; 2) FALLBACK por EAP
+      // (obra/projeto → última revisão aprovada → casa eap_codigo). Cobre itens órfãos ou
+      // contratos sem projeto vinculado sem precisar revincular item a item (Rev. 2848).
+      function resolverAtividadeItem(item: typeof todosItens[number]): { dataInicio: string; dataFim: string } | null {
+        if (item.planejamentoAtividadeId && atividadesMap[item.planejamentoAtividadeId]) {
+          return atividadesMap[item.planejamentoAtividadeId];
+        }
+        const projId = projetoDoContrato[item.contratoId];
+        if (projId == null) return null;
+        const revId = latestRevPerProject[projId];
+        if (!revId) return null;
+        const eap = (item.eapCodigo as string | null) || null;
+        if (eap && eapMapPorRev[revId]?.[eap]) return eapMapPorRev[revId][eap];
+        return null;
       }
 
       // Helper: generate all month keys (YYYY-MM) between two dates, inclusive
@@ -2588,8 +2640,7 @@ export const terceiroContratosRouter = router({
       // previstoDetalhe[mes][contratoId] = { contratoDescricao, empresaNome, valor }
       const previstoDetalhe: Record<string, Record<number, { contratoDescricao: string; empresaNome: string; valor: number }>> = {};
       for (const item of todosItens) {
-        if (!item.planejamentoAtividadeId) continue;
-        const ativ = atividadesMap[item.planejamentoAtividadeId];
+        const ativ = resolverAtividadeItem(item);
         if (!ativ) continue;
 
         const inicio = new Date(ativ.dataInicio + "T12:00:00");

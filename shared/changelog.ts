@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2848 — **TERCEIROS · PREVISÃO DE CAIXA — FALLBACK POR CÓDIGO EAP: PREVISTO RECUPERA AUTOMATICAMENTE
+ * MESMO COM VÍNCULO DE ATIVIDADE ÓRFÃO OU CONTRATO SEM PROJETO DE PLANEJAMENTO.**
+ *
+ * PEDIDO/CONTEXTO (usuário, print iPad — IMG_1664, tela "Previsão de Caixa" zerada em "Todas as obras"/2026 da
+ * FC ENGENHARIA / company 60002): "Pq tá zerado, não temos os dados?". DIAGNÓSTICO no Neon (read-only): a empresa
+ * tem 6 contratos de terceiros ATIVOS (R$ 540.663,15) e 194 itens (R$ 540.666,27), porém (a) os 6 contratos estão
+ * com `planejamento_projeto_id` NULO (não apontam para um projeto de planejamento) e (b) os `planejamento_atividade_id`
+ * dos itens estão ÓRFÃOS — 86 IDs distintos, 0 existem hoje em `planejamento_atividades` (o cronograma foi
+ * reimportado/substituído e os IDs antigos morreram). Como o motor só distribuía o PREVISTO quando achava a atividade
+ * por ID (com data), tudo caía fora → previsto R$ 0,00. O REALIZADO também é R$ 0,00 porque NÃO há nenhuma medição
+ * lançada (comportamento correto, não é bug). Conferência por `eap_codigo`: 100% dos itens casam com o cronograma
+ * ATUAL e essas atividades têm data (QIU 2: 8/8; Hotel do Papa: 186/186). Usuário aprovou implementar o fallback.
+ *
+ * O QUE FOI FEITO (BACKEND — `server/routers/terceiroContratos.ts`, endpoint `previsaoCaixa`):
+ *  - NOVO `projetoPorObra`: quando o contrato não tem `planejamentoProjetoId`, resolve o projeto via
+ *    `obra_id → planejamento_projetos.obra_id` (filtrado por company; pega o de maior id). `projetoDoContrato[contratoId]`
+ *    = link direto ?? via obra.
+ *  - `projetoIds` agora deriva de `projetoDoContrato` (link direto + via obra), não só do link direto.
+ *  - Ao carregar as atividades da última revisão APROVADA de cada projeto, além de `atividadesMap[id]` montamos
+ *    `eapMapPorRev[revisaoId][eapCodigo] = { dataInicio, dataFim }` (primeira atividade-folha com data ganha; EAP é
+ *    único por revisão).
+ *  - NOVO `resolverAtividadeItem(item)`: (1) tenta pelo ID direto da atividade; (2) FALLBACK por EAP — pega o projeto
+ *    do contrato → última revisão aprovada (`latestRevPerProject`) → casa `item.eapCodigo` em `eapMapPorRev[rev]`.
+ *    Retorna `null` se nada resolver (mantém o "—"/empty-state honesto, JAMAIS fabrica data).
+ *  - O loop do PREVISTO trocou `if(!item.planejamentoAtividadeId) continue; atividadesMap[...]` por
+ *    `resolverAtividadeItem(item)`, passando a cobrir TAMBÉM itens sem vínculo direto mas com `eap_codigo` válido.
+ *  - Simulação no Neon confirmou: 194/194 itens resolvem pelo fallback, R$ 540.666,27, todos em 2026 (fev–out).
+ *  - Tenancy preservada (Rev. 2847): `_assertCompanyAccess` no topo; a busca de projeto por obra filtra por company.
+ *  - ZERO ALTER/DROP/DELETE; ZERO schema; read-only.
+ *
+ * RESSALVA: o REALIZADO continua R$ 0,00 até existirem medições lançadas — isso é correto e não foi tocado. O fallback
+ * só reidrata o PREVISTO (curva do cronograma). Itens sem `eap_codigo` OU cuja obra não tenha projeto/revisão aprovada
+ * seguem em "—" (sem fabricação).
+ *
+ * PÓS-REVIEW (architect): a query de atividades que alimenta `eapMapPorRev` ganhou `orderBy(asc(ordem), asc(id))` —
+ * a regra "primeira atividade-folha com data ganha" para EAP duplicado dentro da mesma revisão precisava ser
+ * DETERMINÍSTICA (sem ordenação, o Postgres poderia devolver a folha em ordem variável e alocar o valor em mês/semana
+ * diferente entre execuções; o total financeiro do item não mudava, mas a janela temporal poderia oscilar).
+ *
  * Rev. 2847 — **TERCEIROS · PREVISÃO DE CAIXA — CONTROLE MÊS A MÊS / ANO A ANO, TABELA COMPARATIVA ANUAL
  * COM VARIAÇÃO (AUMENTO/REDUÇÃO) E DRILL-DOWN CLICÁVEL DO HISTÓRICO.**
  *
