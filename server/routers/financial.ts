@@ -3653,9 +3653,10 @@ export const financialRouter = router({
   getDRE: protectedProcedure.input(z.object({
     companyId: z.number(),
     periodo: z.string(),
+    tipoPeriodo: z.enum(["mensal", "trimestral", "anual"]).default("mensal"),
   })).query(async ({ input }) => {
     try {
-      const dre = await calcularDRE(input.companyId, input.periodo);
+      const dre = await calcularDRE(input.companyId, input.periodo, input.tipoPeriodo);
       return dre;
     } catch (e: any) {
       throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: e?.message ?? "Erro ao calcular DRE" });

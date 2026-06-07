@@ -101,7 +101,16 @@ export default function FinanceiroDRE() {
             <p className="text-sm text-gray-500 mt-1">Demonstrativo do Exercício conforme CPC</p>
           </div>
           <div className="flex items-center gap-2">
-            <Select value={tipoPeriodo} onValueChange={v => setTipoPeriodo(v as any)}>
+            <Select
+              value={tipoPeriodo}
+              onValueChange={v => {
+                const novo = v as "mensal" | "trimestral" | "anual";
+                setTipoPeriodo(novo);
+                // Ao trocar o tipo, o período precisa ser válido para a nova lista
+                // (anual lista anos "AAAA"; mensal/trimestral listam meses "AAAA-MM").
+                setPeriodo(novo === "anual" ? anos[0] : getMesAtual());
+              }}
+            >
               <SelectTrigger className="w-32">
                 <SelectValue />
               </SelectTrigger>

@@ -326,51 +326,127 @@ export async function calcularKpis(
 }
 
 // DRE Automático (Lei 6.404/76 art. 187 + NBC TG 26)
-export async function calcularDRE(companyId: number, periodo: string) {
+// Resolve o intervalo [mesIni, mesFim] (formato 'YYYY-MM') a partir do período + tipo.
+// mensal: o próprio mês. trimestral: o trimestre que contém o mês. anual: ano inteiro.
+function dreRange(periodo: string, tipoPeriodo: "mensal" | "trimestral" | "anual"): [string, string] {
+  if (tipoPeriodo === "anual") {
+    const ano = (periodo || "").slice(0, 4);
+    return [`${ano}-01`, `${ano}-12`];
+  }
+  const [ano, mesStr] = (periodo || "").split("-");
+  const mes = parseInt(mesStr || "1", 10) || 1;
+  if (tipoPeriodo === "trimestral") {
+    const ini = Math.floor((mes - 1) / 3) * 3 + 1;
+    const fim = ini + 2;
+    return [`${ano}-${String(ini).padStart(2, "0")}`, `${ano}-${String(fim).padStart(2, "0")}`];
+  }
+  const mm = String(mes).padStart(2, "0");
+  return [`${ano}-${mm}`, `${ano}-${mm}`];
+}
+
+// DRE no padrão CPC (gerencial) calculada a partir dos lançamentos financeiros.
+// Classificação dos lançamentos (financial_entries, status != cancelado, tipo != transferencia):
+//  - Receita Bruta: tipo='receita' (exceto receitas financeiras).
+//  - Custos Diretos das Obras: despesa com origem de obra (cronograma_atividade/compras/compra_oc/almoxarifado_saida).
+//  - Despesas Fixas: demais despesas com `natureza='fixo'` (exceto obra/impostos/financeiras).
+//  - Despesas Variáveis: TODAS as demais despesas operacionais (natureza 'variavel', nula ou inesperada) —
+//    bucket RESIDUAL p/ não dropar silenciosamente lançamentos sem `natureza` (exceto obra/impostos/financeiras).
+//  - Receitas/Despesas Financeiras: marcadas por origem/conta (juros, tarifa, IOF, rendimento).
+//  - Impostos sobre o resultado: lançamentos `guia_tributaria` + obrigações em financial_tax_obligations.
+export async function calcularDRE(
+  companyId: number,
+  periodo: string,
+  tipoPeriodo: "mensal" | "trimestral" | "anual" = "mensal",
+) {
   const db = await getDb();
+  const [mesIni, mesFim] = dreRange(periodo, tipoPeriodo);
+
+  const ORIGEM_OBRA = "('cronograma_atividade','compras','compra_oc','almoxarifado_saida')";
+  const ORIGEM_FIN = "('despesa_financeira','juros','tarifa_bancaria','iof')";
 
   const res = await db!.execute(
-    `SELECT conta_nome, tipo, natureza,
-            COALESCE(SUM(valor_previsto), 0) AS previsto,
-            COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)), 0) AS realizado
-     FROM financial_entries
-     WHERE company_id=$1
-       AND TO_CHAR(data_competencia,'YYYY-MM')=$2
-       AND status NOT IN ('cancelado')
-     GROUP BY conta_nome, tipo, natureza
-     ORDER BY tipo, conta_nome`,
-    [companyId, periodo]
+    `WITH e AS (
+       SELECT tipo, natureza,
+              LOWER(COALESCE(origem_modulo,'')) AS origem,
+              LOWER(COALESCE(conta_nome,'')) AS conta,
+              COALESCE(valor_realizado, valor_previsto, 0)::numeric AS v
+       FROM financial_entries
+       WHERE company_id=$1
+         AND status NOT IN ('cancelado')
+         AND tipo <> 'transferencia'
+         AND data_competencia IS NOT NULL
+         AND TO_CHAR(data_competencia,'YYYY-MM') BETWEEN $2 AND $3
+     )
+     SELECT
+       COALESCE(SUM(v) FILTER (WHERE tipo='receita'
+         AND origem NOT IN ('aplicacao_financeira','rendimento_financeiro')
+         AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%rendiment%'),0) AS receita_bruta,
+       COALESCE(SUM(v) FILTER (WHERE tipo='receita'
+         AND (origem IN ('aplicacao_financeira','rendimento_financeiro')
+              OR conta LIKE '%juros%' OR conta LIKE '%rendiment%')),0) AS receitas_financeiras,
+       COALESCE(SUM(v) FILTER (WHERE tipo='despesa' AND origem IN ${ORIGEM_OBRA}),0) AS custos_obra,
+       COALESCE(SUM(v) FILTER (WHERE tipo='despesa' AND origem='guia_tributaria'),0) AS impostos_lanc,
+       COALESCE(SUM(v) FILTER (WHERE tipo='despesa'
+         AND (origem IN ${ORIGEM_FIN}
+              OR conta LIKE '%juros%' OR conta LIKE '%tarifa banc%' OR conta LIKE '%iof%')),0) AS despesas_financeiras,
+       COALESCE(SUM(v) FILTER (WHERE tipo='despesa' AND natureza='fixo'
+         AND origem NOT IN ${ORIGEM_OBRA} AND origem NOT IN ${ORIGEM_FIN} AND origem <> 'guia_tributaria'
+         AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%tarifa banc%' AND conta NOT LIKE '%iof%'),0) AS despesas_fixas,
+       COALESCE(SUM(v) FILTER (WHERE tipo='despesa' AND COALESCE(natureza,'') <> 'fixo'
+         AND origem NOT IN ${ORIGEM_OBRA} AND origem NOT IN ${ORIGEM_FIN} AND origem <> 'guia_tributaria'
+         AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%tarifa banc%' AND conta NOT LIKE '%iof%'),0) AS despesas_variaveis
+     FROM e`,
+    [companyId, mesIni, mesFim]
   );
-  const linhas = r(res);
+  const agg = r(res)[0] ?? {};
 
-  const receitas = linhas.filter((l: any) => l.tipo === "receita");
-  const despesas = linhas.filter((l: any) => l.tipo === "despesa");
-
-  const totalReceita = receitas.reduce((s: number, l: any) => s + n(l.previsto), 0);
-  const totalDespesa = despesas.reduce((s: number, l: any) => s + n(l.previsto), 0);
-  const lucroLiquido = totalReceita - totalDespesa;
-
-  // Buscar tributos
+  // Tributos sobre o resultado (obrigações) no intervalo
   const tributosRes = await db!.execute(
-    `SELECT tipo, valor_total FROM financial_tax_obligations WHERE company_id=$1 AND mes_competencia=$2`,
-    [companyId, periodo]
+    `SELECT COALESCE(SUM(valor_total),0) AS total
+     FROM financial_tax_obligations
+     WHERE company_id=$1 AND mes_competencia BETWEEN $2 AND $3`,
+    [companyId, mesIni, mesFim]
   );
-  const tributos = r(tributosRes);
-  const totalTributos = tributos.reduce((s: number, t: any) => s + n(t.valor_total), 0);
+  const totalTributos = n(r(tributosRes)[0]?.total);
 
-  const lucroLiquidoAposTributos = lucroLiquido - totalTributos;
+  const receitaBruta = n(agg.receita_bruta);
+  const deducoes = 0;
+  const receitaLiquida = receitaBruta - deducoes;
+  const custosObra = n(agg.custos_obra);
+  const lucroBruto = receitaLiquida - custosObra;
+  const despesasFixas = n(agg.despesas_fixas);
+  const despesasVariaveis = n(agg.despesas_variaveis);
+  const ebitda = lucroBruto - despesasFixas - despesasVariaveis;
+  const receitasFinanceiras = n(agg.receitas_financeiras);
+  const despesasFinanceiras = n(agg.despesas_financeiras);
+  const resultadoFinanceiro = receitasFinanceiras - despesasFinanceiras;
+  const lair = ebitda + resultadoFinanceiro;
+  const impostos = n(agg.impostos_lanc) + totalTributos;
+  const lucroLiquido = lair - impostos;
+  const pct = (parte: number) => (receitaLiquida > 0 ? (parte / receitaLiquida) * 100 : 0);
 
   return {
     periodo,
-    receitas,
-    despesas,
-    tributos,
-    totalReceita,
-    totalDespesa,
-    totalTributos,
+    tipoPeriodo,
+    mesIni,
+    mesFim,
+    receitaBruta,
+    deducoes,
+    receitaLiquida,
+    custosObra,
+    lucroBruto,
+    margemBruta: pct(lucroBruto),
+    despesasFixas,
+    despesasVariaveis,
+    ebitda,
+    margemEbitda: pct(ebitda),
+    receitasFinanceiras,
+    despesasFinanceiras,
+    resultadoFinanceiro,
+    lair,
+    impostos,
     lucroLiquido,
-    lucroLiquidoAposTributos,
-    margemLiquida: totalReceita > 0 ? (lucroLiquidoAposTributos / totalReceita) * 100 : 0,
+    margemLiquida: pct(lucroLiquido),
     calculadoEm: new Date().toISOString(),
   };
 }

@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2833 — **FINANCEIRO · DRE — O DEMONSTRATIVO PASSA A FUNCIONAR (CALCULA E EXIBE NÚMEROS REAIS DOS LANÇAMENTOS) + MENSAL/TRIMESTRAL/ANUAL.**
+ *
+ * PEDIDO (usuário, com print do iPad): "E já temos dados para fazer o DRE funcionar" — a tela do DRE mostrava
+ * sempre "Selecione um período para visualizar o DRE", nunca renderizava números.
+ *
+ * CAUSA-RAIZ: incompatibilidade TOTAL de shape entre frontend e backend. O `FinanceiroDRE.tsx` lê um objeto CHATO
+ * no padrão CPC (`dre.receitaBruta`, `dre.deducoes`, `dre.custosObra`, `dre.lucroBruto`, `dre.ebitda`, `dre.lair`,
+ * `dre.impostos`, `dre.lucroLiquido`, margens…), mas `calcularDRE` (server/services/financialKpiService.ts) devolvia
+ * uma estrutura diferente (`receitas[]`/`despesas[]`/`totalReceita`/`lucroLiquidoAposTributos`). Nenhum campo lido pela
+ * UI existia → a query nunca produzia o objeto esperado e o componente caía no estado vazio. Além disso o backend
+ * `getDRE` IGNORAVA `tipoPeriodo` (só aceitava `companyId`+`periodo`), e o seletor de período do front não resetava o
+ * valor ao trocar Mensal↔Anual (ano "AAAA" vs mês "AAAA-MM") → dropdown vazio.
+ *
+ * O QUE FOI FEITO:
+ *  - BACKEND (`server/services/financialKpiService.ts`): `calcularDRE(companyId, periodo, tipoPeriodo)` REESCRITO para
+ *    devolver o shape CHATO CPC que a UI consome, calculado por UMA query agregada em `financial_entries`
+ *    (status != cancelado, tipo != transferencia). Classificação: Receita Bruta = receitas (exceto financeiras);
+ *    Custos Diretos das Obras = despesas de origem de obra (cronograma_atividade/compras/compra_oc/almoxarifado_saida);
+ *    Despesas Fixas = `natureza='fixo'`; Despesas Variáveis = bucket RESIDUAL (variavel/nula/inesperada) p/ não
+ *    dropar lançamentos sem `natureza`, tudo excluindo obra/impostos/financeiras;
+ *    Receitas/Despesas Financeiras = marcadas por origem/conta (juros/tarifa/IOF/rendimento); Impostos sobre o
+ *    resultado = lançamentos `guia_tributaria` + obrigações em `financial_tax_obligations`. NOVO helper `dreRange`
+ *    resolve o intervalo de meses por tipo (mensal=1 mês; trimestral=trimestre do mês; anual=ano inteiro).
+ *  - BACKEND (`server/routers/financial.ts`): `getDRE` passa a aceitar `tipoPeriodo` (enum mensal/trimestral/anual,
+ *    default mensal) e repassa a `calcularDRE`.
+ *  - FRONTEND (`client/src/pages/financeiro/FinanceiroDRE.tsx`): ao trocar `tipoPeriodo`, reseta `periodo` para um
+ *    valor válido da nova lista (anual→ano corrente; mensal/trimestral→mês corrente), eliminando o dropdown vazio.
+ *
+ * VALIDAÇÃO: query agregada testada direto no Neon real (company 60002) p/ 2026-06 mensal, 2026 anual e Q2/2026
+ * trimestral — retorna números coerentes com os lançamentos (receita mensal esparsa → DRE negativo é reflexo do dado,
+ * não bug). Server reinicia/compila limpo. RESSALVA: é uma DRE GERENCIAL derivada dos lançamentos; "Deduções" fica 0
+ * (sem fonte de dedução nos lançamentos) e Receitas/Despesas Financeiras dependem de origem/conta marcada.
+ * ZERO ALTER/DROP/DELETE; ZERO schema novo. Detalhe: `shared/changelog.ts`.
+ *
  * Rev. 2832 — **FINANCEIRO · DRE — MESES NO PADRÃO BRASILEIRO (NOME DO MÊS) NO SELETOR DE PERÍODO E NO TÍTULO.**
  *
  * PEDIDO (usuário, com print do iPad): "Quero os meses com nome e no padrão brasileiro" — o seletor de período do DRE
