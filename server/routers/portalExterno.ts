@@ -43,6 +43,28 @@ function generateTempPassword(): string {
   return pwd;
 }
 
+// Rev. 2851 — Whitelist de OBRAS por credencial do Portal do Cliente.
+// Lê portal_credentials.obras_liberadas da credencial do token (portalId/credId).
+// Retorna null = SEM restrição (todas as obras do cliente — backward compat);
+// array = somente esses IDs ([] = nenhuma).
+async function _obrasLiberadasDaCredencial(db: any, decoded: any): Promise<number[] | null> {
+  const credId = decoded?.portalId ?? decoded?.credId;
+  if (!credId) return null; // token antigo sem credId → não restringe (compat)
+  const { parseObrasLiberadas } = await import("../../shared/portalClienteAbas");
+  const [cred] = await db.select().from(portalCredentials).where(eq(portalCredentials.id, credId));
+  if (!cred) return null;
+  return parseObrasLiberadas((cred as any).obrasLiberadas);
+}
+
+// Lança FORBIDDEN se a obra não estiver liberada para a credencial do token.
+async function _assertObraPermitida(db: any, decoded: any, obraId: number): Promise<void> {
+  const wl = await _obrasLiberadasDaCredencial(db, decoded);
+  if (wl === null) return; // todas liberadas
+  if (!wl.includes(obraId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Obra não liberada para este usuário." });
+  }
+}
+
 export const portalExternoRouter = router({
   // ========== AUTH ==========
   auth: router({
@@ -600,6 +622,56 @@ export const portalExternoRouter = router({
         eq(portalCredentials.tipo, "cliente"),
       ));
       return { success: true, abas: JSON.parse(json) };
+    }),
+
+    // Rev. 2851 — Define QUAIS OBRAS esta credencial pode ver no Portal do Cliente.
+    // obraIds = null  => TODAS as obras do cliente (grava NULL na coluna).
+    // obraIds = []    => NENHUMA obra. obraIds = [ids] => somente essas.
+    setObrasLiberadasCliente: protectedProcedure.input(z.object({
+      id: z.number(), companyId: z.number(),
+      obraIds: z.array(z.number()).nullable(),
+    })).mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const { serializeObrasLiberadas } = await import("../../shared/portalClienteAbas");
+      const json = serializeObrasLiberadas(input.obraIds);
+      const res: any = await db.update(portalCredentials).set({
+        obrasLiberadas: json,
+        updatedAt: new Date().toISOString(),
+      }).where(and(
+        eq(portalCredentials.id, input.id),
+        eq(portalCredentials.companyId, input.companyId),
+        eq(portalCredentials.tipo, "cliente"),
+      ));
+      // Rev. 2851 — falha explícita se a credencial não casar (evita falso sucesso silencioso).
+      if (typeof res?.rowCount === "number" && res.rowCount === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Credencial de cliente não encontrada." });
+      }
+      return { success: true, obras: json === null ? null : JSON.parse(json) };
+    }),
+
+    // Rev. 2851 — Lista as obras de um cliente (mesma regra por NOME usada no
+    // Portal) para popular o seletor de "obras liberadas" por usuário no admin.
+    obrasDoClienteAdmin: protectedProcedure.input(z.object({
+      companyId: z.number(), clienteId: z.number(),
+    })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const [c] = await db.select().from(clientes).where(and(
+        eq(clientes.id, input.clienteId),
+        eq(clientes.companyId, input.companyId),
+      ));
+      if (!c) return [];
+      const nomes = [c.razaoSocial, c.nomeFantasia].filter(Boolean) as string[];
+      if (nomes.length === 0) return [];
+      const orConds = nomes.map((n) => ilike(obras.cliente, n));
+      const list = await db.select({
+        id: obras.id, nome: obras.nome, codigo: obras.codigo,
+        cidade: obras.cidade, estado: obras.estado, status: obras.status,
+      }).from(obras).where(and(
+        eq(obras.companyId, input.companyId),
+        isNull(obras.deletedAt),
+        or(...orConds)!,
+      )).orderBy(desc(obras.createdAt));
+      return list;
     }),
 
     reativarAcessoCliente: protectedProcedure.input(z.object({
@@ -1591,7 +1663,10 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       const conds: any[] = [eq(obras.companyId, decoded.companyId), isNull(obras.deletedAt)];
       if (nomes.length === 0) return [];
       const orConds = nomes.map((n) => ilike(obras.cliente, n));
-      const list = await db.select().from(obras).where(and(...conds, or(...orConds)!)).orderBy(desc(obras.createdAt));
+      let list = await db.select().from(obras).where(and(...conds, or(...orConds)!)).orderBy(desc(obras.createdAt));
+      // Rev. 2851 — restringe às obras liberadas para ESTA credencial (null = todas).
+      const wlObras = await _obrasLiberadasDaCredencial(db, decoded);
+      if (wlObras !== null) list = list.filter((o: any) => wlObras.includes(o.id));
       const [emp] = await db.select().from(companies).where(eq(companies.id, decoded.companyId));
       const empresaLogoUrl = emp?.logoUrl || null;
       const empresaNome = emp?.nomeFantasia || emp?.razaoSocial || null;
@@ -1614,7 +1689,17 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         eq(clienteComentarios.companyId, decoded.companyId),
         eq(clienteComentarios.clienteId, decoded.clienteId),
       ];
-      if (input.obraId) conds.push(eq(clienteComentarios.obraId, input.obraId));
+      // Rev. 2851 — enforcement por obra. Com obraId: assert direto. Sem obraId:
+      // whitelist parcial mostra só obras liberadas (+ comentários globais obraId NULL).
+      if (input.obraId) {
+        await _assertObraPermitida(db, decoded, input.obraId);
+        conds.push(eq(clienteComentarios.obraId, input.obraId));
+      } else {
+        const wl = await _obrasLiberadasDaCredencial(db, decoded);
+        if (wl !== null) {
+          conds.push(wl.length ? or(isNull(clienteComentarios.obraId), inArray(clienteComentarios.obraId, wl)) : isNull(clienteComentarios.obraId));
+        }
+      }
       const rows = await db.select().from(clienteComentarios).where(and(...conds)).orderBy(desc(clienteComentarios.criadoEm));
       return rows;
     }),
@@ -1631,7 +1716,16 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         eq(clienteComentarios.autorTipo, "fc"),
         isNull(clienteComentarios.lidoEm),
       ];
-      if (input.obraId) conds.push(eq(clienteComentarios.obraId, input.obraId));
+      // Rev. 2851 — mesmo enforcement do listarComentarios (não marca lido fora da whitelist).
+      if (input.obraId) {
+        await _assertObraPermitida(db, decoded, input.obraId);
+        conds.push(eq(clienteComentarios.obraId, input.obraId));
+      } else {
+        const wl = await _obrasLiberadasDaCredencial(db, decoded);
+        if (wl !== null) {
+          conds.push(wl.length ? or(isNull(clienteComentarios.obraId), inArray(clienteComentarios.obraId, wl)) : isNull(clienteComentarios.obraId));
+        }
+      }
       await db.update(clienteComentarios).set({ lidoEm: new Date().toISOString().slice(0, 19).replace("T", " ") }).where(and(...conds));
       return { success: true };
     }),
@@ -1646,6 +1740,7 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       let decoded: any;
       try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
       if (decoded.tipo !== "cliente") throw new TRPCError({ code: "FORBIDDEN" });
+      if (input.obraId) await _assertObraPermitida(db, decoded, input.obraId); // Rev. 2851
       const [c] = await db.select().from(clientes).where(eq(clientes.id, decoded.clienteId));
       // Rev. 1550 — usar nome da PESSOA (responsavel do acesso) e não
       // mais o nome da empresa cliente. Se por algum motivo o token
@@ -1708,6 +1803,7 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       let decoded: any;
       try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
       if (decoded.tipo !== "cliente") throw new TRPCError({ code: "FORBIDDEN" });
+      if (input.obraId) await _assertObraPermitida(db, decoded, input.obraId); // Rev. 2851
       // ANÔNIMA: NÃO armazena clienteId, credId, IP nem user-agent.
       let obraNome: string | null = null;
       if (input.obraId) {
@@ -1851,6 +1947,7 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         or(...orConds)!,
       ));
       if (!obra) throw new TRPCError({ code: "FORBIDDEN", message: "Obra não vinculada a este cliente" });
+      await _assertObraPermitida(db, decoded, input.obraId); // Rev. 2851
 
       const equipe = await getEquipeObra(input.obraId, decoded.companyId);
 
@@ -1956,6 +2053,7 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         or(...orConds)!,
       ));
       if (!obra) throw new TRPCError({ code: "FORBIDDEN", message: "Obra não vinculada a este cliente" });
+      await _assertObraPermitida(db, decoded, input.obraId); // Rev. 2851
 
       // Empresa operadora (FC) — para logo no cabeçalho de impressão
       const [emp] = await db.select().from(companies).where(eq(companies.id, decoded.companyId));
@@ -2566,6 +2664,7 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         or(...orConds)!,
       ));
       if (!obra) throw new TRPCError({ code: "FORBIDDEN", message: "Obra não vinculada" });
+      await _assertObraPermitida(db, decoded, input.obraId); // Rev. 2851
 
       // Funcionários CLT alocados nesta obra (somente ativos)
       const equipe = await getEquipeObra(input.obraId, decoded.companyId);
@@ -2722,6 +2821,7 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         or(...orConds)!,
       ));
       if (!obra) throw new TRPCError({ code: "FORBIDDEN", message: "Obra não vinculada" });
+      await _assertObraPermitida(db, decoded, input.obraId); // Rev. 2851
 
       const docs = await db.select({
         id: gdDocumentos.id,
@@ -2827,7 +2927,11 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         or(...orConds)!,
       ));
       if (obrasCliente.length === 0) throw new TRPCError({ code: "FORBIDDEN" });
-      const obraIds = obrasCliente.map((o) => o.id);
+      let obraIds = obrasCliente.map((o) => o.id);
+      // Rev. 2851 — intersecta com as obras liberadas para ESTA credencial.
+      const wlRev = await _obrasLiberadasDaCredencial(db, decoded);
+      if (wlRev !== null) obraIds = obraIds.filter((id) => wlRev.includes(id));
+      if (obraIds.length === 0) throw new TRPCError({ code: "FORBIDDEN", message: "Nenhuma obra liberada para este usuário." });
 
       // Confirma que o documento é de uma obra do cliente
       const [doc] = await db.select({

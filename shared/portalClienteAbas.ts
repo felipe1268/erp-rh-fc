@@ -140,6 +140,48 @@ export function parseModulosLiberados(raw: string | null | undefined): PortalCli
  * Serializa abas + módulos no mesmo JSON (compatível com a coluna existente).
  * Aceita um array misto de chaves; valida cada uma e garante as obrigatórias.
  */
+// ===================== OBRAS LIBERADAS (por credencial) =====================
+// Rev. 2851 — Controle granular de QUAIS OBRAS cada usuário do cliente pode ver.
+// Gravado na coluna SEPARADA portal_credentials.obras_liberadas (JSON array de
+// IDs de obra). Semântica:
+//   - NULL / ausente / inválido  => TODAS as obras do cliente (backward compat).
+//   - []                          => NENHUMA obra (acesso bloqueado).
+//   - [12, 34, ...]               => somente essas obras.
+// "Todas as obras" é representado por NULL (assim obras novas do cliente ficam
+// automaticamente visíveis); a seleção custom congela na lista escolhida.
+
+/** Parse da whitelist de obras. Retorna null = "todas" (sem restrição). */
+export function parseObrasLiberadas(raw: string | null | undefined): number[] | null {
+  if (raw === null || raw === undefined || raw === "") return null;
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return null;
+    const ids = arr
+      .map((x) => Number(x))
+      .filter((n) => Number.isFinite(n) && Number.isInteger(n) && n > 0);
+    // Array vazio é intencional (nenhuma obra) — preserva [].
+    return Array.from(new Set(ids));
+  } catch {
+    return null;
+  }
+}
+
+/** Serializa a whitelist. null/undefined => null (= todas). Array => JSON limpo. */
+export function serializeObrasLiberadas(ids: number[] | null | undefined): string | null {
+  if (ids === null || ids === undefined) return null;
+  const clean = Array.from(new Set(
+    ids.map((x) => Number(x)).filter((n) => Number.isFinite(n) && Number.isInteger(n) && n > 0),
+  ));
+  return JSON.stringify(clean);
+}
+
+/** true se a credencial pode acessar a obra. whitelist null => sempre true. */
+export function obraPermitida(raw: string | null | undefined, obraId: number): boolean {
+  const wl = parseObrasLiberadas(raw);
+  if (wl === null) return true;
+  return wl.includes(obraId);
+}
+
 export function serializeAbasLiberadas(itens: Array<PortalClienteAbaKey | PortalClienteModuloKey | string>): string {
   const validAbas = new Set<string>(TODAS_AS_ABAS);
   const validMods = new Set<string>(TODOS_OS_MODULOS);

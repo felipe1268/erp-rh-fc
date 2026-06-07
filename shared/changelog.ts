@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2851 — **PORTAL DO CLIENTE — CONTROLE GRANULAR DE QUAIS OBRAS CADA USUÁRIO (CREDENCIAL) DO
+ * CLIENTE PODE VER. 100% GERENCIÁVEL PELO ADMIN.**
+ *
+ * PEDIDO (usuário, print iPad — IMG_1668, tela de gestão de acessos do Portal do Cliente): hoje TODO
+ * usuário de um cliente enxerga TODAS as obras daquele cliente. O pedido é poder escolher, por usuário,
+ * EXATAMENTE quais obras cada credencial pode ver — tudo gerenciável na tela de admin do Portal.
+ *
+ * MODELO DE DADOS (whitelist por CREDENCIAL):
+ *  - NOVA coluna `portal_credentials.obras_liberadas` (TEXT, JSON array de IDs de obra).
+ *  - NULL/ausente = TODAS as obras do cliente (backward compat — preserva o comportamento atual de quem
+ *    já tinha acesso; nada quebra). `[]` = NENHUMA obra. `[ids]` = SÓ essas obras (whitelist explícita).
+ *  - Obras NOVAS do cliente ficam ocultas para usuários em modo "custom" até o admin liberar; o toggle
+ *    "Todas as obras" volta a coluna pra NULL (modo automático — vê tudo, inclusive futuras).
+ *
+ * O QUE FOI FEITO:
+ *  - SCHEMA (`drizzle/schema.ts`): coluna `obrasLiberadas: text("obras_liberadas")` em `portalCredentials`.
+ *    Self-heal `[SyncSchema+]` em `server/_core/index.ts` (`ALTER TABLE portal_credentials ADD COLUMN IF
+ *    NOT EXISTS obras_liberadas TEXT`) — confirmado no log de startup da Rev. 2851.
+ *  - HELPER COMPARTILHADO (`shared/portalClienteAbas.ts`): `parseObrasLiberadas(raw): number[] | null`
+ *    (NULL/inválido/"" → null = todas; array JSON → lista de IDs sanitizada), `serializeObrasLiberadas(ids
+ *    | null): string | null` e `obraPermitida(whitelist, obraId)` (null → libera; array → checa inclusão).
+ *  - BACKEND (`server/routers/portalExterno.ts`): helpers de módulo `_obrasLiberadasDaCredencial(credId)`
+ *    e `_assertObraPermitida(credId, obraId)` (lê a whitelist da credencial e bloqueia com FORBIDDEN quando
+ *    a obra não está liberada). ENFORCEMENT aplicado em TODOS os 7 pontos com escopo de obra (não só na
+ *    listagem): `minhasObras` FILTRA pela whitelist; `efetivoObra`, `planejamentoObra`, `documentosRhObra`
+ *    e `projDocObra` fazem assert antes de devolver dados; `projDocRevisoes` faz INTERSECT; comentários e
+ *    avaliação fazem guard quando recebem `obraId`. NOVOS endpoints admin: `setObrasLiberadasCliente`
+ *    ({ id, companyId, obraIds: number[] | null }) faz UPSERT da whitelist (null = todas) e
+ *    `obrasDoClienteAdmin` ({ companyId, clienteId }) lista as obras do cliente (vínculo por NOME —
+ *    `obras.cliente` ILIKE `razaoSocial`|`nomeFantasia`, não FK).
+ *  - FRONTEND (`client/src/pages/ClientesPortalAdmin.tsx`): NOVO botão "Obras" (ícone HardHat) por usuário
+ *    na linha de ações (só quando ativo) + NOVO modal espelhando o de abas: toggle "Todas as obras" (auto,
+ *    grava NULL) vs "Selecionar obras" (custom) com checkboxes das obras do cliente (nome, código, cidade/UF,
+ *    status), atalhos "Marcar todas"/"Limpar", aviso quando 0 marcadas, e botão "Salvar obras".
+ *  - ZERO ALTER destrutivo / ZERO DROP / ZERO DELETE (apenas ADD COLUMN IF NOT EXISTS + UPDATE da coluna
+ *    própria). Read-only nos demais endpoints.
+ *
  * Rev. 2850 — **FINANCEIRO · DRE — ANÁLISE INTELIGENTE (IA) AGORA TEM NOTA DE 0 A 100 E FICA SALVA
  * (PERSISTIDA) ATÉ O USUÁRIO MANDAR REFAZER.**
  *

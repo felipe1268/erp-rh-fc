@@ -4215,6 +4215,10 @@ export const portalCredentials = pgTable("portal_credentials", {
   // JSON array de chaves de abas liberadas (Portal do Cliente — tela de planejamento por obra).
   // NULL = default (apenas visao_geral). Ver shared/portalClienteAbas.ts.
   abasLiberadas: text("abas_liberadas"),
+  // Rev. 2851 — JSON array de IDs de OBRA que ESTA credencial pode ver.
+  // NULL/ausente = TODAS as obras do cliente (backward compat). [] = nenhuma.
+  // Whitelist por usuário — controle granular do acesso às obras do cliente.
+  obrasLiberadas: text("obras_liberadas"),
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 }, (table) => [

@@ -782,6 +782,13 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2850: tabela dre_analises_ia garantida (análise IA do DRE salva + nota 0-100).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA dre_analises_ia:`, e?.message || e); }
 
+        // Rev. 2851 — Whitelist de obras por credencial do Portal do Cliente.
+        // NULL = todas as obras do cliente (compat). JSON array de IDs = só essas.
+        try {
+          await db.execute(sql`ALTER TABLE portal_credentials ADD COLUMN IF NOT EXISTS obras_liberadas TEXT`);
+          console.log(`[SyncSchema+] Rev. 2851: coluna obras_liberadas garantida em portal_credentials (acesso por obra no Portal do Cliente).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA obras_liberadas:`, e?.message || e); }
+
         // Rev. 2560 — BACKSTOP DE BANCO: 1 só alocação ATIVA por funcionário.
         // Índice único parcial fecha de vez "mesmo funcionário em 2 obras ao
         // mesmo tempo": qualquer write futuro que tente ativar uma 2ª alocação
