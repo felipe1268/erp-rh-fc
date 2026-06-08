@@ -1,6 +1,58 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2905 — **INSTALAR NO CELULAR (PWA) — AGORA DÁ PRA LIGAR/DESLIGAR O BANNER "INSTALAR" NAS
+ * CONFIGURAÇÕES GERAIS DO SISTEMA (POR EMPRESA). O SISTEMA CONTINUA ABRINDO EM QUALQUER NAVEGADOR;
+ * A INSTALAÇÃO SERVE SÓ PARA O LEVANTAMENTO DE CAMPO OFFLINE — LÓGICA OFFLINE INTOCADA.**
+ *
+ * PEDIDO (usuário): "Quero poder habilitar e desabilitar esta função [banner de instalação] nas
+ * configurações gerais do sistema. Quero continuar abrindo o sistema em qualquer navegador; a
+ * questão de baixar é somente para quando estiver offline, para cadastro de levantamento de campo
+ * via Medição. Não mude esta lógica."
+ *
+ * SOLUÇÃO (ADITIVA — ZERO ALTER/DROP/DELETE destrutivo; só ADD COLUMN IF NOT EXISTS):
+ * - SCHEMA `drizzle/schema.ts`: nova coluna `pwa_install_banner_ativo SMALLINT DEFAULT 1` em
+ *   `companies` (1 = banner aparece, preserva Rev. 2904; 0 = some). Self-heal `[SyncSchema+]` em
+ *   `server/_core/index.ts` garante a coluna via `ADD COLUMN IF NOT EXISTS`.
+ * - BACKEND `server/routers.ts` (router `companies`): `getPwaBannerConfig` (guard de tenant via
+ *   `getCompaniesForUser` → FORBIDDEN fora da empresa; default `ativo:true` quando sem companyId) e
+ *   `setPwaBannerConfig` (guard de tenant + admin/admin_master; grava 0/1; registra audit log
+ *   "Banner de instalação (PWA) ATIVADO/DESATIVADO"). Sem o guard havia IDOR cross-tenant.
+ * - CONFIG UI `client/src/pages/Configuracoes.tsx` (aba "Critérios do Sistema", abaixo da Numeração
+ *   Interna): novo card "Instalação no Celular (PWA)" com Switch (desabilitado p/ não-admin e durante
+ *   load), texto explicando que o sistema abre em qualquer navegador e a instalação serve só ao
+ *   Levantamento de Campo offline + aviso âmbar quando desligado.
+ * - BANNER `client/src/components/PwaInstallBanner.tsx`: lê `getPwaBannerConfig` pela empresa
+ *   selecionada (`useCompany`) e retorna `null` quando desligado (`bannerAtivo`); default ativo
+ *   enquanto carrega (preserva Rev. 2904). TAMBÉM (ajuste de review): restringe as instruções
+ *   "Compartilhar → Adicionar à Tela de Início" ao iOS **Safari** (`isIOSSafari`, excluindo
+ *   CriOS/FxiOS/EdgiOS/OPiOS/GSA) e, em navegadores iOS não-Safari, orienta a abrir no Safari.
+ * RESSALVA: NÃO toca a lógica offline do Levantamento de Campo (Rev. 2895); o toggle só controla a
+ * VISIBILIDADE do convite. Service Worker segue registrado só em produção. ZERO ALTER/DROP/DELETE.
+ * Detalhe: este arquivo.
+ *
+ * Rev. 2904 — **INSTALAR NO CELULAR (PWA) — O BANNER "INSTALAR" AGORA APARECE NO iPad/iPhone
+ * (SAFARI), NÃO SÓ NO PC. ANTES SÓ APARECIA ONDE EXISTE `beforeinstallprompt` (CHROME/ANDROID).**
+ *
+ * PEDIDO (usuário): "Não está aparecendo para baixar no celular... só aparece no PC, por quê?
+ * Nem no tablet." DIAGNÓSTICO: o banner `PwaInstallBanner` dependia 100% do evento
+ * `beforeinstallprompt`, que é EXCLUSIVO de Chromium (Chrome/Edge/Android). O Safari do
+ * iPad/iPhone NUNCA dispara esse evento — então o banner jamais aparecia em iOS/iPadOS (o
+ * grosso dos usuários FC usa iPad). No iOS a instalação é MANUAL: Compartilhar → "Adicionar à
+ * Tela de Início".
+ *
+ * SOLUÇÃO (SÓ CLIENT, ZERO schema/ALTER/DROP/DELETE) — `client/src/components/PwaInstallBanner.tsx`:
+ * - Detecta iOS/iPadOS (UA `iPad|iPhone|iPod` + caso iPadOS 13+ que se identifica como
+ *   `MacIntel` com `maxTouchPoints > 1`) e, quando o `beforeinstallprompt` não existe, mostra um
+ *   banner com as INSTRUÇÕES manuais (ícones Share + Plus: "Toque em Compartilhar → Adicionar à
+ *   Tela de Início").
+ * - Mantém o fluxo automático do Android/Chrome (botão "Instalar" via `prompt.prompt()`).
+ * - Não aparece quando o app já está instalado (`display-mode: standalone` ou
+ *   `navigator.standalone`); "Fechar" persiste em `sessionStorage` pra não repetir na sessão.
+ * RESSALVA: no iOS o navegador NÃO permite instalar via botão (limitação da Apple) — por isso a
+ * instrução manual; e o registro do Service Worker continua só em produção (sem efeito no iOS A2HS,
+ * que não exige SW). SÓ CLIENT; ZERO ALTER/DROP/DELETE. Detalhe: este arquivo.
+ *
  * Rev. 2903 — **COLETA DE CAMPO (RH) — O FORMULÁRIO PÚBLICO SÓ DEIXA ENVIAR QUANDO TODOS OS
  * DADOS SOLICITADOS ESTÃO PREENCHIDOS (CHEGA DE COLETA PELA METADE).**
  *

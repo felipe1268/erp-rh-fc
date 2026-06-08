@@ -1085,6 +1085,13 @@ Regras:
           console.log(`[SyncSchema+] Colunas almoxarifado_exige_senha/justificativa/aprovacao garantidas em companies.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA companies almoxarifado_exige_*:`, e?.message || e); }
 
+        // Rev. 2905 — Toggle global do banner "Instalar no celular" (PWA).
+        // Default 1 preserva comportamento da Rev. 2904 (banner aparece).
+        try {
+          await db.execute(sql`ALTER TABLE companies ADD COLUMN IF NOT EXISTS pwa_install_banner_ativo SMALLINT NOT NULL DEFAULT 1`);
+          console.log(`[SyncSchema+] Coluna pwa_install_banner_ativo garantida em companies.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA companies pwa_install_banner_ativo:`, e?.message || e); }
+
         // Rev. 2404 — Vinculo de item de almoxarifado com Controle de Equipamentos.
         try {
           await db.execute(sql`ALTER TABLE almoxarifado_itens ADD COLUMN IF NOT EXISTS equipamento_vinculado_tipo VARCHAR(10)`);

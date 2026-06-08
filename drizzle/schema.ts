@@ -519,6 +519,11 @@ export const companies = pgTable("companies", {
         // `validado` (não vira pendência). Default 1 = aprovação exigida
         // (preserva comportamento das Revs. 2388–2461).
         almoxarifadoExigeAprovacao: smallint("almoxarifado_exige_aprovacao").default(1).notNull(),
+        // Rev. 2905 — Toggle global do banner "Instalar no celular" (PWA).
+        // Default 1 preserva comportamento da Rev. 2904 (banner aparece).
+        // 0 = esconde o banner em todos os dispositivos. NÃO afeta o uso
+        // offline do Levantamento de Campo (que independe da instalação).
+        pwaInstallBannerAtivo: smallint("pwa_install_banner_ativo").default(1).notNull(),
 },
 (table) => [
         index("companies_cnpj_unique").on(table.cnpj),
