@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2910 — **PWA "ABRIR NO APP" / "INSTALAR" — O NAVEGADOR NÃO OFERECE MAIS INSTALAR/ABRIR
+ * O ERP COMO APP. REMOVIDOS O `<link rel="manifest">` E AS META TAGS `*-web-app-capable` DO
+ * `client/index.html`. O SERVICE WORKER (/sw.js) CONTINUA REGISTRADO — O OFFLINE DO
+ * LEVANTAMENTO DE CAMPO (Rev. 2895) PERMANECE INTOCADO.**
+ *
+ * PEDIDO (usuário): "já tinha pedido para eliminar este controle, não quero esta função mais"
+ * (print do botão "Abrir no app" na barra do Chrome). A Rev. 2908 já tinha removido o BANNER
+ * interno "Instalar no celular", mas o navegador continuava oferecendo instalar/abrir como app
+ * porque o site ainda era um PWA instalável (manifest com `display:standalone` + ícones + SW
+ * com fetch handler). O "Abrir no app" é UI NATIVA do navegador, exibida só quando o site é
+ * instalável/instalado — NÃO é um componente do ERP.
+ *
+ * SOLUÇÃO (FRONTEND — ZERO ALTER/DROP/DELETE): em `client/index.html` removidos o
+ * `<link rel="manifest" href="/manifest.json" />` e as meta tags que habilitam o modo app
+ * standalone (`mobile-web-app-capable`, `apple-mobile-web-app-capable`,
+ * `apple-mobile-web-app-status-bar-style`, `apple-mobile-web-app-title`). Sem manifest, o
+ * navegador não considera mais o site instalável → some o "Instalar" e o "Abrir no app".
+ * MANTIDOS de propósito: o registro do Service Worker `/sw.js` em `client/src/main.tsx` (só em
+ * produção) e o arquivo `client/public/manifest.json` (agora órfão/não-referenciado, como a
+ * coluna inerte da Rev. 2908) — porque o offline-first do Levantamento de Campo (Rev. 2895)
+ * depende do SW + IndexedDB + fila de sync, NÃO do manifest nem do display standalone.
+ *
+ * RESSALVA: para quem JÁ instalou o ERP como app no navegador/tablet, o atalho instalado
+ * persiste até o usuário desinstalá-lo manualmente (nenhum código pode forçar a desinstalação
+ * de um PWA já instalado). A partir desta revisão ninguém mais consegue INSTALAR de novo e o
+ * navegador para de oferecer. ZERO ALTER/DROP/DELETE.
+ *
  * Rev. 2909 — **CANCELAMENTO EM CASCATA (ADMIN MASTER) — O SÓCIO PODE CANCELAR UMA OC/OS COM
  * SENHA + MOTIVO, E O CANCELAMENTO ESCORRE PARA O CONTRATO EM ANDAMENTO (VIRA "CANCELADO",
  * PRESERVANDO TODO O HISTÓRICO) E PARA O FINANCEIRO NÃO PAGO. A EXCLUSÃO DEFINITIVA DO
