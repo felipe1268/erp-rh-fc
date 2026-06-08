@@ -1,5 +1,4 @@
 import { Toaster } from "@/components/ui/sonner";
-import { PwaInstallBanner } from "@/components/PwaInstallBanner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -648,7 +647,6 @@ function App() {
               <PermissionsProvider>
                 <ModuleProvider>
                   <Router />
-                  <PwaInstallBanner />
                 </ModuleProvider>
               </PermissionsProvider>
             </ModuleConfigProvider>

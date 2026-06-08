@@ -165,20 +165,6 @@ export default function Configuracoes() {
     onError: (err: any) => toast.error(err.message),
   });
 
-  // Rev. 2905 — Toggle global do banner "Instalar no celular" (PWA).
-  const pwaBannerQuery = trpc.companies.getPwaBannerConfig.useQuery(
-    { companyId },
-    { enabled: companyId > 0 }
-  );
-  const setPwaBannerMutation = trpc.companies.setPwaBannerConfig.useMutation({
-    onSuccess: () => {
-      pwaBannerQuery.refetch();
-      toast.success("Configuração do banner de instalação atualizada.");
-    },
-    onError: (err: any) => toast.error(err.message),
-  });
-  const pwaBannerAtivo = pwaBannerQuery.data ? pwaBannerQuery.data.ativo : true;
-
   useEffect(() => {
     if (numberingQuery.data) {
       setNumPrefixo(numberingQuery.data.prefixoCodigo);
@@ -643,39 +629,6 @@ export default function Configuracoes() {
                   </div>
                 </div>
               )}
-            </div>
-
-            {/* ========== INSTALAÇÃO NO CELULAR (PWA) ========== */}
-            <div className="border rounded-lg overflow-hidden border-blue-200">
-              <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border-b border-blue-200">
-                <Download className="w-5 h-5 text-blue-600" />
-                <span className="font-semibold text-gray-800">Instalação no Celular (PWA)</span>
-              </div>
-              <div className="bg-white p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-800">Mostrar banner "Instalar no celular"</p>
-                    <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                      Quando ligado, aparece um aviso convidando a instalar o sistema no celular/tablet
-                      (Android via botão; iPhone/iPad via Compartilhar → "Adicionar à Tela de Início").
-                      O sistema continua abrindo normalmente em qualquer navegador — a instalação serve
-                      apenas para usar o <strong>Levantamento de Campo offline</strong>. Desligar aqui
-                      só esconde o convite; não muda o funcionamento offline.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={pwaBannerAtivo}
-                    onCheckedChange={(v) => setPwaBannerMutation.mutate({ companyId, ativo: !!v })}
-                    disabled={!isAdmin || setPwaBannerMutation.isPending || pwaBannerQuery.isLoading}
-                  />
-                </div>
-                {!pwaBannerAtivo && (
-                  <div className="mt-3 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] rounded-md px-2.5 py-1.5">
-                    ⚠ Banner desativado: ninguém verá o convite de instalação. Para usar o Levantamento de Campo
-                    offline, a instalação ainda pode ser feita manualmente pelo navegador.
-                  </div>
-                )}
-              </div>
             </div>
 
             {/* Dialog de Reset */}

@@ -342,30 +342,6 @@ export const appRouter = router({
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "configuracoes", entityType: "company", entityId: input.companyId, details: `Numeração interna RESETADA para 1` });
       return { success: true };
     }),
-    // Rev. 2905 — Toggle global do banner "Instalar no celular" (PWA).
-    // GET exige acesso à empresa (guard de tenant); SET exige acesso + admin/admin_master.
-    // NÃO afeta o uso offline do Levantamento de Campo.
-    getPwaBannerConfig: protectedProcedure.input(z.object({ companyId: z.number() })).query(async ({ input, ctx }) => {
-      if (!input.companyId) return { ativo: true };
-      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
-      if (!(allowed as any[]).map(c => c.id).includes(input.companyId)) {
-        throw new TRPCError({ code: "FORBIDDEN" });
-      }
-      const company = await getCompanyById(input.companyId);
-      return { ativo: company ? Number((company as any).pwaInstallBannerAtivo ?? 1) === 1 : true };
-    }),
-    setPwaBannerConfig: protectedProcedure.input(z.object({ companyId: z.number(), ativo: z.boolean() })).mutation(async ({ input, ctx }) => {
-      if (!["admin", "admin_master"].includes(ctx.user.role)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores podem alterar este controle." });
-      }
-      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
-      if (!(allowed as any[]).map(c => c.id).includes(input.companyId)) {
-        throw new TRPCError({ code: "FORBIDDEN" });
-      }
-      await updateCompany(input.companyId, { pwaInstallBannerAtivo: input.ativo ? 1 : 0 } as any);
-      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "configuracoes", entityType: "company", entityId: input.companyId, details: `Banner de instalação (PWA) ${input.ativo ? "ATIVADO" : "DESATIVADO"}` });
-      return { success: true };
-    }),
     getGestoresContrato: protectedProcedure.input(z.object({ companyId: z.number() })).query(async ({ input }) => {
       const db = (await getDb())!;
       const [company] = await db.select({

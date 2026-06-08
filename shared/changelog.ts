@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2908 — **INSTALAR NO CELULAR (PWA) — O BANNER "INSTALAR NO CELULAR" FOI REMOVIDO COMPLETAMENTE
+ * DO ERP (UI + CONFIGURAÇÃO + ENDPOINTS). A INFRA OFFLINE DO LEVANTAMENTO DE CAMPO (Rev. 2895)
+ * PERMANECE INTOCADA.**
+ *
+ * PEDIDO (usuário): "Apague esta função, não quero ela no ERP, tire completamente." (anexou print do
+ * banner "Instalar no celular / Acesse mais rápido pela tela inicial" — o convite de instalação PWA
+ * introduzido nas Rev. 2904/2905).
+ *
+ * SOLUÇÃO (REMOÇÃO — ZERO ALTER/DROP/DELETE):
+ * - CLIENTE: removido o render `<PwaInstallBanner />` e o import em `client/src/App.tsx`; ARQUIVO
+ *   `client/src/components/PwaInstallBanner.tsx` DELETADO; no `client/src/pages/Configuracoes.tsx`
+ *   removidos o card "Instalação no Celular (PWA)" (aba Critérios do Sistema) e os hooks
+ *   `getPwaBannerConfig`/`setPwaBannerConfig` (query+mutation+estado). Import do ícone `Download`
+ *   mantido (ainda usado por Backup/Baixar).
+ * - BACKEND: removidos os endpoints `companies.getPwaBannerConfig` e `companies.setPwaBannerConfig`
+ *   em `server/routers.ts`.
+ * - BANCO (NÃO-DESTRUTIVO): a coluna `companies.pwa_install_banner_ativo` e o self-heal
+ *   `[SyncSchema+]` em `server/_core/index.ts` foram MANTIDOS de propósito — R-001/R-007/R-010 proíbem
+ *   DROP, e removê-la do `drizzle/schema.ts` quebraria os `db.select()` da tabela `companies`. A coluna
+ *   passa a ser um artefato inofensivo e não-referenciado.
+ *
+ * RESSALVA: a infraestrutura PWA que o LEVANTAMENTO DE CAMPO OFFLINE usa (Rev. 2895 — `manifest.json`,
+ * `client/public/sw.js`, IndexedDB, fila de sync) NÃO foi tocada; o que saiu foi apenas o CONVITE de
+ * instalação. A instalação manual via navegador (Android/iOS) continua possível para quem quiser usar
+ * o offline. ZERO ALTER/DROP/DELETE.
+ *
  * Rev. 2907 — **RECONTRATAÇÃO · SUPLENTES DE APROVAÇÃO — A TELA AGORA MOSTRA OS DEMAIS SÓCIOS
  * (ADMIN MASTER) COMO APROVADORES TITULARES, PARA QUE OUTRO SÓCIO POSSA LIBERAR/RECUSAR QUANDO
  * EU NÃO PUDER.**
