@@ -349,6 +349,10 @@ export const coletaRhRouter = router({
       // coletar). Conclusão = todos eles já têm resposta pendente/aprovada.
       const obraIds = Array.from(new Set(sessoes.map((s) => s.obraId)));
       const totalAlocadosPorObra = new Map<number, number>();
+      // Rev. 2902 — conjunto de funcionários ATIVOS alocados por obra. Serve tanto
+      // para o total (universo a coletar) quanto para INTERSECTAR com os coletados:
+      // resposta de quem não está mais ativo-alocado NÃO conta p/ a conclusão.
+      const alocadosPorObra = new Map<number, Set<number>>();
       if (obraIds.length > 0) {
         const alocs = await db
           .select({ obraId: obraFuncionarios.obraId, employeeId: obraFuncionarios.employeeId })
@@ -359,18 +363,23 @@ export const coletaRhRouter = router({
             eq(obraFuncionarios.isActive, 1),
             eq(employees.status, "Ativo"),
           ));
-        const setPorObra = new Map<number, Set<number>>();
         for (const a of alocs) {
-          if (!setPorObra.has(a.obraId)) setPorObra.set(a.obraId, new Set());
-          setPorObra.get(a.obraId)!.add(a.employeeId);
+          if (!alocadosPorObra.has(a.obraId)) alocadosPorObra.set(a.obraId, new Set());
+          alocadosPorObra.get(a.obraId)!.add(a.employeeId);
         }
-        for (const [obraId, set] of setPorObra) totalAlocadosPorObra.set(obraId, set.size);
+        for (const [obraId, set] of alocadosPorObra) totalAlocadosPorObra.set(obraId, set.size);
       }
 
       return sessoes.map((s) => {
         const { camposJson, itensCustomJson, ...rest } = s;
         const totalAlocados = totalAlocadosPorObra.get(s.obraId) ?? 0;
-        const coletados = coletadosPorSessao.get(s.id)?.size ?? 0;
+        // Rev. 2902 — coletados = funcionários DISTINTOS com resposta pendente/aprovada
+        // QUE TAMBÉM estão no conjunto de ativos-alocados (interseção).
+        const alocadosSet = alocadosPorObra.get(s.obraId);
+        const coletadosSet = coletadosPorSessao.get(s.id);
+        const coletados = (coletadosSet && alocadosSet)
+          ? Array.from(coletadosSet).filter((id) => alocadosSet.has(id)).length
+          : 0;
         return {
           ...rest,
           grupos: resolverGruposColeta(camposJson),
@@ -854,7 +863,10 @@ export const coletaRhRouter = router({
       const respostas = await db
         .select({ employeeId: coletaRhRespostas.employeeId, status: coletaRhRespostas.status })
         .from(coletaRhRespostas)
-        .where(eq(coletaRhRespostas.sessaoId, sessao.id));
+        .where(and(
+          eq(coletaRhRespostas.sessaoId, sessao.id),
+          isNull(coletaRhRespostas.deletedAt),
+        ));
       const statusPorEmp = new Map<number, string>();
       for (const r of respostas) {
         // pendente/aprovada têm prioridade sobre rejeitada
@@ -901,14 +913,18 @@ export const coletaRhRouter = router({
         throw new Error("Link de coleta inválido ou expirado.");
       }
 
-      // Confere que o funcionário está realmente alocado na obra da sessão.
+      // Confere que o funcionário está realmente alocado na obra da sessão E ainda
+      // ATIVO (Rev. 2902 — alinha o write com a lista pública de `dadosSessao`, que
+      // só mostra `employees.status='Ativo'`; impede registrar resposta de desligado).
       const [aloc] = await db
         .select({ id: obraFuncionarios.id })
         .from(obraFuncionarios)
+        .innerJoin(employees, eq(obraFuncionarios.employeeId, employees.id))
         .where(and(
           eq(obraFuncionarios.obraId, sessao.obraId),
           eq(obraFuncionarios.employeeId, input.employeeId),
           eq(obraFuncionarios.isActive, 1),
+          eq(employees.status, "Ativo"),
         ))
         .limit(1);
       if (!aloc) throw new Error("Funcionário não está alocado nesta obra.");
@@ -982,7 +998,8 @@ export const coletaRhRouter = router({
             eq(obraFuncionarios.isActive, 1),
             eq(employees.status, "Ativo"),
           ));
-        const totalAlocados = new Set(alocados.map((a) => a.employeeId)).size;
+        const alocadosSet = new Set(alocados.map((a) => a.employeeId));
+        const totalAlocados = alocadosSet.size;
         if (totalAlocados > 0) {
           const respColetadas = await db
             .select({ employeeId: coletaRhRespostas.employeeId })
@@ -992,7 +1009,13 @@ export const coletaRhRouter = router({
               isNull(coletaRhRespostas.deletedAt),
               inArray(coletaRhRespostas.status, ["pendente", "aprovada"]),
             ));
-          const coletados = new Set(respColetadas.map((r) => r.employeeId)).size;
+          // Rev. 2902 — só conta coletados que AINDA são ativos-alocados (interseção);
+          // resposta de quem saiu da obra/foi desligado não fecha o link sozinho.
+          const coletadosSet = new Set<number>();
+          for (const r of respColetadas) {
+            if (alocadosSet.has(r.employeeId)) coletadosSet.add(r.employeeId);
+          }
+          const coletados = coletadosSet.size;
           if (coletados >= totalAlocados) {
             await db
               .update(coletaRhSessoes)
