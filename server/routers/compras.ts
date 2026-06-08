@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
-import { getDb, getCompaniesForUser, getEffectiveAllowedObraIds, getUserCompanyLinks } from "../db";
+import { getDb, getCompaniesForUser, getEffectiveAllowedObraIds, getUserCompanyLinks, createAuditLog } from "../db";
 import { assertAiModuleEnabled, isAiModuleEnabled } from "../_core/aiConfig";
 import { triggerFinancialSync } from "../services/financialEventTrigger";
 import { criarParcelasFinanceiras } from "../services/purchaseFinancialBridge";
@@ -14089,6 +14089,88 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
     disciplinas.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
     return { disciplinas, status: "ok" as const };
   }),
+
+  // Rev. 2909 — CANCELAMENTO da OC/OS pelo admin master (senha + motivo). Soft-cancel
+  // que preserva histórico: a OC vira "cancelada" (+ quem/quando/motivo) e os
+  // financeiros NÃO pagos dela (status != pago|recebido|cancelado) viram "cancelado".
+  // Se a OC tiver contrato vinculado, CASCATEIA pro contrato (status "cancelado" +
+  // medições não pagas + demais OCs do contrato + financeiros não pagos). Pagos ficam
+  // intactos. NÃO toca a cotação de origem (upstream/compartilhada). Só admin_master.
+  cancelarOrdemMaster: protectedProcedure
+    .input(z.object({
+      ordemId: z.number(),
+      companyId: z.number(),
+      password: z.string().optional(),
+      motivo: z.string().min(5, "Informe o motivo (mín. 5 caracteres)."),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if ((ctx.user as any).role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o admin master pode cancelar OC/OS." });
+      }
+      await verificarSenhaSeLocal(ctx, input.password, true);
+      const db = await getDb();
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const [oc] = await db.select().from(comprasOrdens)
+        .where(and(eq(comprasOrdens.id, input.ordemId), eq(comprasOrdens.companyId, input.companyId)));
+      if (!oc) throw new TRPCError({ code: "NOT_FOUND", message: "OC/OS não encontrada." });
+      if ((oc as any).status === "cancelada") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Esta OC/OS já está cancelada." });
+      }
+      const motivo = input.motivo.trim();
+      const usuarioNome = (ctx.user as any).name || "Admin Master";
+      const agora = new Date().toISOString();
+
+      let resumo = { contratoCancelado: false, medicoesCanceladas: 0, ocsCanceladas: 0, financeirosCancelados: 0 };
+
+      if ((oc as any).contratoId) {
+        // Cascata pelo contrato (cancela ESTA OC + demais OCs + medições + financeiros).
+        const { cancelarContratoCascade } = await import("./terceiroContratos");
+        resumo = await cancelarContratoCascade(db, {
+          contratoId: (oc as any).contratoId,
+          companyId: input.companyId,
+          motivo,
+          usuarioNome,
+          usuarioId: ctx.user.id,
+        });
+      } else {
+        // Sem contrato: cancela só a OC + seus financeiros não pagos (transação única).
+        await db.transaction(async (tx: any) => {
+          await tx.update(comprasOrdens).set({
+            status: "cancelada",
+            canceladoPor: usuarioNome,
+            canceladoEm: agora,
+            motivoCancelamento: motivo,
+            atualizadoEm: agora,
+          } as any).where(and(eq(comprasOrdens.id, input.ordemId), eq(comprasOrdens.companyId, input.companyId)));
+          resumo.ocsCanceladas = 1;
+          const feRes = await tx.update(financialEntries).set({
+            status: "cancelado",
+            motivoCancelamento: motivo,
+            updatedAt: agora,
+          } as any).where(and(
+            eq(financialEntries.companyId, input.companyId),
+            eq(financialEntries.origemModulo, "compras"),
+            eq(financialEntries.origemId, input.ordemId),
+            sql`${financialEntries.status} NOT IN ('pago','recebido','cancelado')`,
+          )).returning({ id: financialEntries.id });
+          resumo.financeirosCancelados = feRes.length;
+        });
+      }
+
+      await createAuditLog({
+        userId: ctx.user.id,
+        userName: usuarioNome,
+        companyId: input.companyId,
+        action: "cancelar",
+        module: "compras",
+        entityType: "ordem",
+        entityId: input.ordemId,
+        details: `Cancelamento da OC/OS "${(oc as any).numeroOc || input.ordemId}" — motivo: ${motivo} — contrato cancelado: ${resumo.contratoCancelado ? "sim" : "não"}, medições: ${resumo.medicoesCanceladas}, OCs: ${resumo.ocsCanceladas}, financeiros: ${resumo.financeirosCancelados}`,
+        ipAddress: getClientIp(ctx),
+      });
+
+      return { ok: true, ...resumo };
+    }),
 
   classificarDisciplinas: protectedProcedure.input(z.object({
     orcamentoId: z.number(),

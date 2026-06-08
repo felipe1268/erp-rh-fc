@@ -14,10 +14,13 @@ import {
   ChevronRight, ChevronDown, Building2, Calendar, DollarSign, FileText,
   Zap, ClipboardCheck, X, TrendingUp, TrendingDown, Minus,
   FileEdit, Save, Clock, RefreshCw, History, ExternalLink, Trash2, Pencil, FolderOpen,
-  Eye, EyeOff, BarChart3, Loader2, FileDown, Settings, Undo2, Send, MapPin, Truck
+  Eye, EyeOff, BarChart3, Loader2, FileDown, Settings, Undo2, Send, MapPin, Truck, Ban
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatNumeroOcDisplay } from "@shared/numeroOc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 const BRL = (v: any) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(v) || 0);
 const fmtDate = (d: string | null | undefined) => {
@@ -92,6 +95,13 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   const [editingDocDate, setEditingDocDate] = useState<"inicio" | "termino" | null>(null);
   const [editDocDateValue, setEditDocDateValue] = useState("");
 
+  const { user } = useAuth();
+  const isMaster = user?.role === "admin_master";
+  const [showCancelContrato, setShowCancelContrato] = useState(false);
+  const [showExcluirContrato, setShowExcluirContrato] = useState(false);
+  const [contratoMotivo, setContratoMotivo] = useState("");
+  const [contratoSenha, setContratoSenha] = useState("");
+
   const utils = trpc.useUtils();
   const { data: contrato, isLoading } = trpc.terceiroContratos.getContrato.useQuery({ id }, { enabled: id > 0 });
 
@@ -107,6 +117,28 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
 
   const excluirMedicaoMut = trpc.terceiroContratos.excluirMedicao.useMutation({
     onSuccess: () => { toast.success("Medição excluída"); utils.terceiroContratos.getContrato.invalidate({ id }); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const cancelarContratoMut = trpc.terceiroContratos.cancelarContratoMaster.useMutation({
+    onSuccess: (res: any) => {
+      const partes: string[] = [];
+      if (res?.medicoesCanceladas) partes.push(`${res.medicoesCanceladas} medição(ões)`);
+      if (res?.ocsCanceladas) partes.push(`${res.ocsCanceladas} OC(s)`);
+      if (res?.financeirosCancelados) partes.push(`${res.financeirosCancelados} lançamento(s) não pago(s)`);
+      toast.success(`Contrato cancelado${partes.length ? " — também: " + partes.join(", ") : ""}.`);
+      utils.terceiroContratos.getContrato.invalidate({ id });
+      setShowCancelContrato(false); setContratoMotivo(""); setContratoSenha("");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const excluirContratoMut = trpc.terceiroContratos.excluirContrato.useMutation({
+    onSuccess: () => {
+      toast.success("Contrato excluído definitivamente.");
+      setShowExcluirContrato(false); setContratoMotivo(""); setContratoSenha("");
+      navigate("/terceiros/contratos");
+    },
     onError: (e) => toast.error(e.message),
   });
 
@@ -298,6 +330,33 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
             </div>
           )}
         </div>
+
+        {/* Ações de Admin Master — cancelamento (soft) e exclusão definitiva (hard) */}
+        {isMaster && (
+          <div className="flex items-center gap-2 flex-wrap rounded-xl border border-red-200 bg-red-50/40 px-3 py-2">
+            <span className="text-[10px] uppercase font-semibold tracking-wide text-red-600 flex items-center gap-1 mr-1">
+              <Ban className="w-3.5 h-3.5" /> Admin Master
+            </span>
+            {contrato.status !== "cancelado" && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs gap-1.5 border-red-300 text-red-700 hover:bg-red-100"
+                onClick={() => { setContratoMotivo(""); setContratoSenha(""); setShowCancelContrato(true); }}
+              >
+                <Ban className="w-3.5 h-3.5" /> Cancelar contrato
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs gap-1.5 border-red-400 text-red-800 hover:bg-red-100"
+              onClick={() => { setContratoMotivo(""); setContratoSenha(""); setShowExcluirContrato(true); }}
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Excluir definitivamente
+            </Button>
+          </div>
+        )}
 
         {/* Objeto do Contrato — escopo resumido e legível */}
         {contrato.descricao && (
@@ -1616,6 +1675,82 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
             </div>
           </div>
         )}
+
+        {/* Diálogo — Cancelar contrato (Admin Master, soft cascade) */}
+        <Dialog open={showCancelContrato} onOpenChange={v => { if (!v) setShowCancelContrato(false); }}>
+          <DialogContent className="border-red-200 max-w-md" style={{ background: '#ffffff', color: '#111827' }}>
+            <DialogHeader>
+              <DialogTitle className="text-red-700 flex items-center gap-2">
+                <Ban className="h-5 w-5" /> Cancelar contrato (Admin Master)
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 pt-1">
+              <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-800 space-y-1">
+                <p className="font-semibold">Esta ação irá (preservando o histórico):</p>
+                <ul className="list-disc pl-4 space-y-0.5">
+                  <li>Marcar o contrato como <strong>Cancelado</strong></li>
+                  <li>Cancelar as <strong>medições não pagas</strong> e as <strong>OCs vinculadas</strong> não recebidas</li>
+                  <li>Cancelar os <strong>lançamentos financeiros NÃO pagos</strong> (pagos ficam intactos)</li>
+                </ul>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium text-gray-700">Motivo do cancelamento <span className="text-red-500">*</span></Label>
+                <Textarea placeholder="Descreva o motivo (mín. 5 caracteres)" value={contratoMotivo} onChange={e => setContratoMotivo(e.target.value)} rows={3} className="text-sm resize-none" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium text-gray-700">Senha do master <span className="text-red-500">*</span></Label>
+                <Input type="password" placeholder="Confirme sua senha" value={contratoSenha} onChange={e => setContratoSenha(e.target.value)} className="text-sm" />
+              </div>
+            </div>
+            <DialogFooter className="pt-2">
+              <Button variant="outline" onClick={() => setShowCancelContrato(false)} disabled={cancelarContratoMut.isPending}>Voltar</Button>
+              <Button
+                className="bg-red-600 hover:bg-red-500 text-white gap-1.5"
+                disabled={contratoMotivo.trim().length < 5 || !contratoSenha || cancelarContratoMut.isPending}
+                onClick={() => cancelarContratoMut.mutate({ id, companyId: contrato.companyId, motivo: contratoMotivo.trim(), password: contratoSenha })}
+              >
+                {cancelarContratoMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
+                Confirmar Cancelamento
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Diálogo — Excluir contrato definitivamente (Admin Master, hard delete) */}
+        <Dialog open={showExcluirContrato} onOpenChange={v => { if (!v) setShowExcluirContrato(false); }}>
+          <DialogContent className="border-red-300 max-w-md" style={{ background: '#ffffff', color: '#111827' }}>
+            <DialogHeader>
+              <DialogTitle className="text-red-800 flex items-center gap-2">
+                <Trash2 className="h-5 w-5" /> Excluir contrato definitivamente
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 pt-1">
+              <div className="rounded-lg bg-red-100 border border-red-300 p-3 text-xs text-red-900 space-y-1">
+                <p className="font-semibold">ATENÇÃO — ação irreversível.</p>
+                <p>O contrato, suas medições, itens e documentos serão <strong>apagados permanentemente</strong>. Esta operação não pode ser desfeita. Para apenas encerrar preservando o histórico, use "Cancelar contrato".</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium text-gray-700">Motivo da exclusão <span className="text-red-500">*</span></Label>
+                <Textarea placeholder="Descreva o motivo (mín. 5 caracteres)" value={contratoMotivo} onChange={e => setContratoMotivo(e.target.value)} rows={3} className="text-sm resize-none" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium text-gray-700">Senha do master <span className="text-red-500">*</span></Label>
+                <Input type="password" placeholder="Confirme sua senha" value={contratoSenha} onChange={e => setContratoSenha(e.target.value)} className="text-sm" />
+              </div>
+            </div>
+            <DialogFooter className="pt-2">
+              <Button variant="outline" onClick={() => setShowExcluirContrato(false)} disabled={excluirContratoMut.isPending}>Voltar</Button>
+              <Button
+                className="bg-red-700 hover:bg-red-600 text-white gap-1.5"
+                disabled={contratoMotivo.trim().length < 5 || !contratoSenha || excluirContratoMut.isPending}
+                onClick={() => excluirContratoMut.mutate({ id, companyId: contrato.companyId, motivo: contratoMotivo.trim(), password: contratoSenha })}
+              >
+                {excluirContratoMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                Excluir Definitivamente
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

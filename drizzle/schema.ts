@@ -4001,6 +4001,10 @@ export const terceiroContratos = pgTable("terceiro_contratos", {
   fluxogramaEtapas:  text("fluxograma_etapas"),
   prazoEmissaoNf:    integer("prazo_emissao_nf").default(3),
   prazoLiberacaoOp:  integer("prazo_liberacao_op").default(5),
+  // === Cancelamento por admin master (Rev. 2909) ===
+  canceladoPor:      varchar("cancelado_por", { length: 255 }),
+  canceladoEm:       timestamp("cancelado_em", { mode: "string" }),
+  motivoCancelamento: text("motivo_cancelamento"),
 });
 
 export const terceiroContratoItens = pgTable("terceiro_contrato_itens", {
@@ -6484,6 +6488,10 @@ export const comprasOrdens = pgTable("compras_ordens", {
   locacaoRenovavel:      boolean("locacao_renovavel").default(false),
   locacaoOcAnteriorId:   integer("locacao_oc_anterior_id"),
   locacaoSolicitacaoId:  integer("locacao_solicitacao_id"),
+  // === Cancelamento por admin master (Rev. 2909) ===
+  canceladoPor:          varchar("cancelado_por", { length: 255 }),
+  canceladoEm:           timestamp("cancelado_em", { mode: "string" }),
+  motivoCancelamento:    text("motivo_cancelamento"),
 });
 
 export const comprasOrdensItens = pgTable("compras_ordens_itens", {

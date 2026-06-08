@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2909 — **CANCELAMENTO EM CASCATA (ADMIN MASTER) — O SÓCIO PODE CANCELAR UMA OC/OS COM
+ * SENHA + MOTIVO, E O CANCELAMENTO ESCORRE PARA O CONTRATO EM ANDAMENTO (VIRA "CANCELADO",
+ * PRESERVANDO TODO O HISTÓRICO) E PARA O FINANCEIRO NÃO PAGO. A EXCLUSÃO DEFINITIVA DO
+ * CONTRATO PASSA A EXIGIR SENHA DO MASTER + MOTIVO. SÓ ADMIN_MASTER.**
+ *
+ * PEDIDO (usuário): poder cancelar (soft) uma OC/OS de forma que o contrato em andamento
+ * vinculado também seja cancelado preservando o histórico, e que o financeiro NÃO pago seja
+ * cancelado junto (pagos ficam intactos). A exclusão definitiva do contrato deveria ficar
+ * protegida por senha do sócio + motivo. Tudo restrito ao admin master.
+ *
+ * SOLUÇÃO (SOFT-CANCEL — ZERO ALTER/DROP/DELETE em dados; só ADD COLUMN IF NOT EXISTS):
+ * - SCHEMA: novas colunas de rastro `cancelado_por VARCHAR(255)`, `cancelado_em TIMESTAMP`,
+ *   `motivo_cancelamento TEXT` em `comprasOrdens` e `terceiroContratos` (`drizzle/schema.ts`),
+ *   com self-heal `ADD COLUMN IF NOT EXISTS` em `server/_core/index.ts` (`[SyncSchema+]`).
+ * - BACKEND: helper exportado `cancelarContratoCascade(db,{contratoId,companyId,motivo,
+ *   usuarioNome,usuarioId})` em `server/routers/terceiroContratos.ts` — self-contained (não
+ *   importa `compras.ts`): cancela contrato + medições NOT (paga|cancelada) + OCs vinculadas
+ *   não-canceladas/recebidas + `financialEntries` da OC com status NOT (pago|recebido). Helper
+ *   `_assertMasterComSenha(ctxUser,password)` (role `admin_master` + bcrypt; OAuth sem senha
+ *   local libera). Nova mutation `compras.cancelarOrdemMaster({ordemId,companyId,password,
+ *   motivo})` — se a OC tem `contratoId` chama o cascade (import dinâmico), senão cancela a OC
+ *   + financeiros inline; audit "cancelar". Nova `terceiroContratos.cancelarContratoMaster`
+ *   ({id,companyId,password,motivo}) → cascade + audit. `terceiroContratos.excluirContrato`
+ *   passou a exigir `password` + `motivo` (min 5) + `_assertMasterComSenha` + audit "excluir"
+ *   ANTES do hard delete (preserva o rastro).
+ * - FRONTEND: `client/src/pages/compras/Ordens.tsx` — no detalhe da OC/OS, seção
+ *   "Cancelamento (Admin Master)" (só `role==="admin_master"` e status ≠ cancelada) com diálogo
+ *   senha+motivo → `cancelarOrdemMaster`; removido o "Cancelar" simples do bloco "Atualizar
+ *   Status" (passava status sem cascata). `client/src/pages/terceiros/contratos/
+ *   ContratoDetalhe.tsx` — barra "Admin Master" no cabeçalho com "Cancelar contrato" (soft) e
+ *   "Excluir definitivamente" (hard), cada um com diálogo senha+motivo.
+ *
+ * RESSALVA: lançamentos/medições PAGOS nunca são tocados; cotação (upstream) não é alterada; a
+ * exclusão definitiva continua sendo hard delete (irreversível), agora gated. ZERO ALTER/DROP/
+ * DELETE em dados de produção (só ADD COLUMN IF NOT EXISTS no self-heal).
+ *
  * Rev. 2908 — **INSTALAR NO CELULAR (PWA) — O BANNER "INSTALAR NO CELULAR" FOI REMOVIDO COMPLETAMENTE
  * DO ERP (UI + CONFIGURAÇÃO + ENDPOINTS). A INFRA OFFLINE DO LEVANTAMENTO DE CAMPO (Rev. 2895)
  * PERMANECE INTOCADA.**

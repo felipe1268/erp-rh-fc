@@ -1365,6 +1365,18 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2302: colunas locação (7 cols) garantidas em compras_ordens.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2302 locação compras_ordens:`, e?.message || e); }
 
+        // Rev. 2909 — Cancelamento por admin master (OC/OS + contrato). Soft-cancel
+        // que preserva histórico: registra quem/quando/por quê. Aditivo e idempotente.
+        try {
+          await db.execute(sql`ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS cancelado_por VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS cancelado_em TIMESTAMP`);
+          await db.execute(sql`ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS motivo_cancelamento TEXT`);
+          await db.execute(sql`ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS cancelado_por VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS cancelado_em TIMESTAMP`);
+          await db.execute(sql`ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS motivo_cancelamento TEXT`);
+          console.log(`[SyncSchema+] Rev. 2909: colunas de cancelamento (cancelado_por/em + motivo) garantidas em compras_ordens e terceiro_contratos.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2909 cancelamento:`, e?.message || e); }
+
         // Rev. 2305 — Estorno auditável de movimentações do almoxarifado.
         // Soft-delete: marca a mov como estornada (preserva histórico),
         // devolve quantidade ao estoque. 4 colunas ADDED em

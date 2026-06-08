@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
-import { getDb, getUserCompanyLinks } from "../db";
+import { getDb, getUserCompanyLinks, createAuditLog } from "../db";
 import { upperCaseEmpresa } from "../../shared/normalizeNomeEmpresa";
 import { triggerFinancialSync, triggerFinancialSyncAwaited } from "../services/financialEventTrigger";
 import { eq, and, or, desc, inArray, sql, asc, isNull } from "drizzle-orm";
@@ -32,6 +32,8 @@ import {
   orcamentos,
   orcamentoItens,
   portalCredentials,
+  financialEntries,
+  users,
 } from "../../drizzle/schema";
 
 const n = (v: any) => parseFloat(String(v ?? 0)) || 0;
@@ -122,6 +124,110 @@ async function _fdMaterialDoContrato(db: any, contrato: any): Promise<{
 // ══════════════════════════════════════════════════════════════
 // CONTRATOS
 // ══════════════════════════════════════════════════════════════
+
+// Rev. 2909 — Verificação de senha do admin master para operações destrutivas
+// (cancelamento em cascata e exclusão definitiva de contrato). Só admin_master pode.
+// Mesma semântica do verificarSenhaSeLocal de compras.ts: usuário OAuth (sem senha
+// local) é liberado pela própria credencial de sessão + justificativa obrigatória.
+async function _assertMasterComSenha(ctxUser: any, password: string | undefined) {
+  if (!ctxUser?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
+  if (ctxUser.role !== "admin_master") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o admin master pode executar esta operação." });
+  }
+  const db = await getDb();
+  const [user] = await db.select().from(users).where(eq(users.id, ctxUser.id));
+  if (!user) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário não encontrado." });
+  if (!user.password) return; // OAuth sem senha local
+  if (!password) throw new TRPCError({ code: "BAD_REQUEST", message: "Senha do master é obrigatória." });
+  const bcrypt = await import("bcryptjs");
+  if (!bcrypt.compareSync(password, user.password)) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha incorreta. Operação cancelada." });
+  }
+}
+
+// Rev. 2909 — Cancelamento EM CASCATA do contrato (soft, preserva histórico):
+//   1) contrato → status "cancelado" (+ quem/quando/motivo + nota em observações);
+//   2) medições NÃO pagas (status != paga|cancelada) → "cancelada";
+//   3) OCs vinculadas (status != cancelada) → "cancelada" (+ metadados);
+//   4) financialEntries das OCs NÃO pagos (status != pago|recebido|cancelado) → "cancelado".
+// Pagos ficam intactos. NÃO toca a cotação de origem (upstream/compartilhada). Self-contained
+// (não importa compras.ts pra evitar dependência circular).
+export async function cancelarContratoCascade(
+  db: any,
+  opts: { contratoId: number; companyId: number; motivo: string; usuarioNome: string; usuarioId: number },
+): Promise<{ contratoCancelado: boolean; medicoesCanceladas: number; ocsCanceladas: number; financeirosCancelados: number }> {
+  const { contratoId, companyId, motivo, usuarioNome } = opts;
+  const agora = new Date().toISOString();
+  const nota = `\n[CANCELADO ${agora}] por ${usuarioNome}: ${motivo}`;
+
+  const [contrato] = await db.select().from(terceiroContratos)
+    .where(and(eq(terceiroContratos.id, contratoId), eq(terceiroContratos.companyId, companyId)));
+  if (!contrato) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado." });
+
+  // OCs que NÃO devem ser canceladas em cascata: já canceladas OU já recebidas
+  // (entregue / entregue_parcial). Material recebido permanece — a obrigação por ele não é
+  // desfeita só porque o contrato foi cancelado; e seus financeiros (mesmo não pagos) ficam.
+  const STATUS_OC_PRESERVAR = ["cancelada", "entregue", "entregue_parcial"];
+
+  // Tudo numa transação única: ou cancela contrato + medições + OCs + financeiros, ou nada.
+  return await db.transaction(async (tx: any) => {
+    // 1) Contrato → cancelado
+    let contratoCancelado = false;
+    if (contrato.status !== "cancelado") {
+      await tx.update(terceiroContratos).set({
+        status: "cancelado",
+        canceladoPor: usuarioNome,
+        canceladoEm: agora,
+        motivoCancelamento: motivo,
+        observacoes: `${contrato.observacoes || ""}${nota}`,
+        atualizadoEm: agora,
+      } as any).where(and(eq(terceiroContratos.id, contratoId), eq(terceiroContratos.companyId, companyId)));
+      contratoCancelado = true;
+    }
+
+    // 2) Medições não pagas → cancelada
+    const medRes = await tx.update(terceiroMedicoes).set({
+      status: "cancelada",
+      atualizadoEm: agora,
+    } as any).where(and(
+      eq(terceiroMedicoes.contratoId, contratoId),
+      eq(terceiroMedicoes.companyId, companyId),
+      sql`${terceiroMedicoes.status} NOT IN ('paga','cancelada')`,
+    )).returning({ id: terceiroMedicoes.id });
+    const medicoesCanceladas = medRes.length;
+
+    // 3 + 4) OCs vinculadas ainda não recebidas + seus financeiros não pagos
+    const ocs = await tx.select({ id: comprasOrdens.id, status: comprasOrdens.status })
+      .from(comprasOrdens)
+      .where(and(eq(comprasOrdens.contratoId, contratoId), eq(comprasOrdens.companyId, companyId)));
+    let ocsCanceladas = 0;
+    let financeirosCancelados = 0;
+    for (const oc of ocs) {
+      if (STATUS_OC_PRESERVAR.includes(oc.status)) continue; // preserva recebidas/canceladas e seus financeiros
+      await tx.update(comprasOrdens).set({
+        status: "cancelada",
+        canceladoPor: usuarioNome,
+        canceladoEm: agora,
+        motivoCancelamento: motivo,
+        atualizadoEm: agora,
+      } as any).where(and(eq(comprasOrdens.id, oc.id), eq(comprasOrdens.companyId, companyId)));
+      ocsCanceladas++;
+      const feRes = await tx.update(financialEntries).set({
+        status: "cancelado",
+        motivoCancelamento: motivo,
+        updatedAt: agora,
+      } as any).where(and(
+        eq(financialEntries.companyId, companyId),
+        eq(financialEntries.origemModulo, "compras"),
+        eq(financialEntries.origemId, oc.id),
+        sql`${financialEntries.status} NOT IN ('pago','recebido','cancelado')`,
+      )).returning({ id: financialEntries.id });
+      financeirosCancelados += feRes.length;
+    }
+
+    return { contratoCancelado, medicoesCanceladas, ocsCanceladas, financeirosCancelados };
+  });
+}
 
 export const terceiroContratosRouter = router({
 
@@ -579,14 +685,33 @@ export const terceiroContratosRouter = router({
       return c;
     }),
 
+  // Rev. 2909 — EXCLUSÃO DEFINITIVA (hard delete) agora exige senha do admin master
+  // + motivo. Só admin_master pode. Registra auditoria ANTES de apagar (preserva o
+  // rastro mesmo com a remoção física das linhas).
   excluirContrato: protectedProcedure
-    .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      password: z.string().optional(),
+      motivo: z.string().min(5, "Informe o motivo (mín. 5 caracteres)."),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertMasterComSenha(ctx.user, input.password);
       const db = await getDb();
       const [contrato] = await db.select().from(terceiroContratos).where(
         and(eq(terceiroContratos.id, input.id), eq(terceiroContratos.companyId, input.companyId))
       );
       if (!contrato) throw new Error("Contrato não encontrado");
+      await createAuditLog({
+        userId: ctx.user.id,
+        userName: (ctx.user as any).name || null,
+        companyId: input.companyId,
+        action: "excluir",
+        module: "terceiros",
+        entityType: "contrato",
+        entityId: input.id,
+        details: `Exclusão definitiva do contrato "${(contrato as any).numeroContrato || input.id}" — motivo: ${input.motivo.trim()}`,
+      });
       const medicoes = await db.select({ id: terceiroMedicoes.id }).from(terceiroMedicoes).where(eq(terceiroMedicoes.contratoId, input.id));
       for (const m of medicoes) {
         await db.delete(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, m.id));
@@ -596,6 +721,46 @@ export const terceiroContratosRouter = router({
       await db.delete(terceiroContratoItens).where(eq(terceiroContratoItens.contratoId, input.id));
       await db.delete(terceiroContratos).where(eq(terceiroContratos.id, input.id));
       return { ok: true };
+    }),
+
+  // Rev. 2909 — CANCELAMENTO em cascata do contrato (soft, preserva histórico). Só
+  // admin_master + senha + motivo. Cancela contrato + medições não pagas + OCs
+  // vinculadas + financeiros não pagos das OCs. Pagos ficam intactos.
+  cancelarContratoMaster: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      password: z.string().optional(),
+      motivo: z.string().min(5, "Informe o motivo (mín. 5 caracteres)."),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertMasterComSenha(ctx.user, input.password);
+      const db = await getDb();
+      const [contrato] = await db.select().from(terceiroContratos).where(
+        and(eq(terceiroContratos.id, input.id), eq(terceiroContratos.companyId, input.companyId))
+      );
+      if (!contrato) throw new Error("Contrato não encontrado");
+      if ((contrato as any).status === "cancelado") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Este contrato já está cancelado." });
+      }
+      const res = await cancelarContratoCascade(db, {
+        contratoId: input.id,
+        companyId: input.companyId,
+        motivo: input.motivo.trim(),
+        usuarioNome: (ctx.user as any).name || "Admin Master",
+        usuarioId: ctx.user.id,
+      });
+      await createAuditLog({
+        userId: ctx.user.id,
+        userName: (ctx.user as any).name || null,
+        companyId: input.companyId,
+        action: "cancelar",
+        module: "terceiros",
+        entityType: "contrato",
+        entityId: input.id,
+        details: `Cancelamento em cascata do contrato "${(contrato as any).numeroContrato || input.id}" — motivo: ${input.motivo.trim()} — medições canceladas: ${res.medicoesCanceladas}, OCs canceladas: ${res.ocsCanceladas}, financeiros cancelados: ${res.financeirosCancelados}`,
+      });
+      return { ok: true, ...res };
     }),
 
   excluirContratosLote: protectedProcedure

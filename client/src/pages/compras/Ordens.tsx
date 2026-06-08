@@ -20,7 +20,7 @@ import { normalizarTexto } from "@shared/textNormalization";
 import { formatNumeroCotacaoDisplay } from "@shared/numeroCotacao";
 import { formatNumeroOcDisplay } from "@shared/numeroOc";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Check, Paperclip, Upload, X, FileText, Save, Edit3, ClipboardCheck, Calendar, RotateCcw } from "lucide-react";
+import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Check, Paperclip, Upload, X, FileText, Save, Edit3, ClipboardCheck, Calendar, RotateCcw, Ban } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { calcularSemaforo, semaforoCor, semaforoTooltip, type SemaforoResult } from "@/lib/semaforoEntrega";
 import { PurchaseTimeline } from "@/components/compras/PurchaseTimeline";
@@ -327,6 +327,9 @@ export default function Ordens() {
   const [showFdDialog, setShowFdDialog] = useState<any>(null);
   const [fdForm, setFdForm] = useState({ modalidade: "fd_cliente" as "fd_cliente" | "fd_terceiro", valor: "", bdiItemId: 0, contractId: 0 });
   const [showEstornoDialog, setShowEstornoDialog] = useState(false);
+  const [showCancelarMaster, setShowCancelarMaster] = useState(false);
+  const [cancelMasterMotivo, setCancelMasterMotivo] = useState("");
+  const [cancelMasterSenha, setCancelMasterSenha] = useState("");
   const [estornoMotivo, setEstornoMotivo] = useState("");
 
   const [autoSwitchedForCompany, setAutoSwitchedForCompany] = useState<number | null>(null);
@@ -454,6 +457,18 @@ export default function Ordens() {
   });
   const excluir = trpc.compras.excluirOrdem.useMutation({
     onSuccess: () => { toast.success("OC excluída!"); q.refetch(); setShowDetalhe(null); },
+    onError: (e) => toast.error(e.message),
+  });
+  const cancelarMaster = trpc.compras.cancelarOrdemMaster.useMutation({
+    onSuccess: (res: any) => {
+      const partes: string[] = [];
+      if (res?.contratoCancelado) partes.push("contrato cancelado");
+      if (res?.medicoesCanceladas) partes.push(`${res.medicoesCanceladas} medição(ões)`);
+      if (res?.financeirosCancelados) partes.push(`${res.financeirosCancelados} lançamento(s) não pago(s)`);
+      toast.success(`OC/OS cancelada${partes.length ? " — também: " + partes.join(", ") : ""}.`);
+      q.refetch(); detalheQ.refetch();
+      setShowCancelarMaster(false); setCancelMasterMotivo(""); setCancelMasterSenha("");
+    },
     onError: (e) => toast.error(e.message),
   });
   const excluirLote = trpc.compras.excluirOrdensEmLote.useMutation({
@@ -2267,7 +2282,6 @@ export default function Ordens() {
                         { s: "aprovada",         label: "Aprovar",           icon: CheckCircle,  cls: "bg-blue-600 hover:bg-blue-500 text-white" },
                         { s: "entregue_parcial", label: "Entrega Parcial",   icon: Truck,        cls: "bg-orange-500 hover:bg-orange-400 text-white" },
                         { s: "entregue",         label: "Marcar Entregue",   icon: PackageCheck, cls: "bg-emerald-600 hover:bg-emerald-500 text-white" },
-                        { s: "cancelada",        label: "Cancelar",          icon: Trash2,       cls: "border border-red-200 text-red-600 hover:bg-red-50 bg-transparent" },
                       ].filter(a => a.s !== detalhe.status).filter(a => !(detalhe.status === "aguardando_aprovacao_extra" && a.s === "aprovada")).map(a => (
                         <Button key={a.s} size="sm" onClick={() => atualizarStatus.mutate({ id: detalhe.id, status: a.s })}
                           disabled={atualizarStatus.isPending}
@@ -2276,6 +2290,24 @@ export default function Ordens() {
                         </Button>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {/* Cancelamento (Admin Master) — soft-cancel em cascata, preserva histórico */}
+                {user?.role === "admin_master" && detalhe.status !== "cancelada" && (
+                  <div className="space-y-2 border-t border-gray-200 pt-4">
+                    <Label className="text-gray-700 text-sm font-semibold flex items-center gap-1">
+                      <Ban className="h-3.5 w-3.5 text-red-500" /> Cancelamento (Admin Master)
+                    </Label>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs gap-1.5 border-red-300 text-red-700 hover:bg-red-50"
+                      onClick={() => { setCancelMasterMotivo(""); setCancelMasterSenha(""); setShowCancelarMaster(true); }}
+                    >
+                      <Ban className="h-3.5 w-3.5" /> Cancelar OC/OS
+                    </Button>
+                    <p className="text-[10px] text-gray-400">Marca a OC/OS como cancelada, cascateia para o contrato em andamento e cancela o financeiro NÃO pago (pagos ficam intactos). Exige senha do master + motivo.</p>
                   </div>
                 )}
 
@@ -2422,6 +2454,60 @@ export default function Ordens() {
             >
               {estornarRecebimento.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
               Confirmar Estorno
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showCancelarMaster} onOpenChange={v => { if (!v) setShowCancelarMaster(false); }}>
+        <DialogContent className="border-red-200 max-w-md" style={{ background: '#ffffff', color: '#111827' }}>
+          <DialogHeader>
+            <DialogTitle className="text-red-700 flex items-center gap-2">
+              <Ban className="h-5 w-5" /> Cancelar OC/OS (Admin Master)
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-800 space-y-1">
+              <p className="font-semibold">Esta ação irá (preservando o histórico):</p>
+              <ul className="list-disc pl-4 space-y-0.5">
+                <li>Marcar esta OC/OS como <strong>Cancelada</strong></li>
+                <li>Cancelar o <strong>contrato em andamento</strong> vinculado (se houver) e suas medições não pagas</li>
+                <li>Cancelar os <strong>lançamentos financeiros NÃO pagos</strong> (pagos ficam intactos)</li>
+              </ul>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-gray-700">Motivo do cancelamento <span className="text-red-500">*</span></Label>
+              <Textarea
+                placeholder="Descreva o motivo do cancelamento (mín. 5 caracteres)"
+                value={cancelMasterMotivo}
+                onChange={e => setCancelMasterMotivo(e.target.value)}
+                rows={3}
+                className="text-sm resize-none"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-gray-700">Senha do master <span className="text-red-500">*</span></Label>
+              <Input
+                type="password"
+                placeholder="Confirme sua senha"
+                value={cancelMasterSenha}
+                onChange={e => setCancelMasterSenha(e.target.value)}
+                className="text-sm"
+              />
+            </div>
+          </div>
+          <DialogFooter className="pt-2">
+            <Button variant="outline" onClick={() => setShowCancelarMaster(false)} disabled={cancelarMaster.isPending}>Voltar</Button>
+            <Button
+              className="bg-red-600 hover:bg-red-500 text-white gap-1.5"
+              disabled={cancelMasterMotivo.trim().length < 5 || !cancelMasterSenha || cancelarMaster.isPending}
+              onClick={() => {
+                if (!showDetalhe) return;
+                cancelarMaster.mutate({ ordemId: showDetalhe, companyId, motivo: cancelMasterMotivo.trim(), password: cancelMasterSenha });
+              }}
+            >
+              {cancelarMaster.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
+              Confirmar Cancelamento
             </Button>
           </DialogFooter>
         </DialogContent>
