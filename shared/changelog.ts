@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2900 — **ASSINATURA ELETRÔNICA (INTEGRASIGN/FcSign) — FIX DE LAYOUT: O BOTÃO "REENVIAR"
+ * (E "COPIAR LINK") DA LINHA DE SIGNATÁRIO NÃO VAZA MAIS PARA FORA DO CARD DE DETALHES NO iPad.**
+ *
+ * PEDIDO (print iPad da tela IntegraSign): "Ajuste o layout, o botão Reenviar não tá dentro da
+ * página." No painel "Detalhes do Envelope", cada linha de signatário era um
+ * `flex items-center justify-between` com o nome à esquerda e um grupo de ações à direita
+ * (badge de status + "Copiar link" + "Reenviar"). Esse grupo não encolhia nem quebrava, então
+ * num painel estreito (iPad em 2 colunas) as ações transbordavam para fora da borda direita do
+ * card — o "Reenviar" aparecia cortado/fora da página.
+ *
+ * SOLUÇÃO (SÓ CLIENT, ADITIVA — ZERO schema/server/ALTER/DROP/DELETE):
+ * `client/src/pages/IntegraSignDashboard.tsx` — a linha de signatário vira responsiva:
+ * `flex flex-col gap-2 ... sm:flex-row sm:items-center sm:justify-between` (empilha nome + ações
+ * em telas estreitas, lado-a-lado no desktop). O bloco do nome ganha `min-w-0` + `break-words`
+ * (trunca/quebra nome longo sem empurrar as ações); o grupo de ações ganha `flex-wrap shrink-0`
+ * (quebra para a 2ª linha dentro do card em vez de vazar). Nenhuma mudança de lógica/botões.
+ * ZERO ALTER/DROP/DELETE. Detalhe: este arquivo.
+ *
  * Rev. 2899 — **ASSINATURA ELETRÔNICA (INTEGRASIGN/FcSign) — BOTÕES "EDITAR" E "EXCLUIR"
  * AGORA APARECEM DIRETO EM CADA CARD DA LISTA DE ENVELOPES (ANTES SÓ NO PAINEL DE DETALHES).**
  *

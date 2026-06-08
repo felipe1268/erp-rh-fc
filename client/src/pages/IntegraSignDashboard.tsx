@@ -383,9 +383,9 @@ export default function IntegraSignDashboard() {
                     <h4 className="font-medium text-sm mb-2">Signatários</h4>
                     <div className="space-y-2">
                       {env.signatarios.map((sig: any) => (
-                        <div key={sig.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                          <div>
-                            <span className="text-sm font-medium">{sig.nome}</span>
+                        <div key={sig.id} className="flex flex-col gap-2 p-2 bg-gray-50 rounded sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0">
+                            <span className="text-sm font-medium break-words">{sig.nome}</span>
                             <span className="text-xs text-gray-500 ml-1">({papelLabel(sig.papel)})</span>
                             {sig.dataAssinatura && (
                               <span className="text-xs text-gray-400 ml-2">
@@ -393,7 +393,7 @@ export default function IntegraSignDashboard() {
                               </span>
                             )}
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap shrink-0">
                             {sigStatusBadge(sig.status)}
                             {sig.token && !["assinado", "recusado"].includes(sig.status) && ["enviado", "em_andamento"].includes(env.status) && (
                               <Button
