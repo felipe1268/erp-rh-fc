@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2896 — **ASSINATURA ELETRÔNICA (INTEGRASIGN) — ABRIR O LINK DE ASSINATURA NO
+ * iPad/SAFARI NÃO MOSTRA MAIS O ERRO CRÍPTICO "The string did not match the expected
+ * pattern."; AGORA EXIBE UMA MENSAGEM CLARA E ACIONÁVEL E AS DATAS RENDERIZAM DE FORMA
+ * iOS-SAFE.**
+ *
+ * PEDIDO (usuário, print iPad): ao abrir o link de assinatura no tablet (Safari/iOS),
+ * a tela mostrava um card "Erro" (XCircle vermelho) com a mensagem nativa do WebKit
+ * "The string did not match the expected pattern." — sem qualquer texto útil sobre o
+ * que fazer.
+ *
+ * DIAGNÓSTICO: o card que aparece no print bate EXATO com o branch `doc.error` de
+ * `client/src/pages/IntegraSignAssinar.tsx` (`/integrasign/assinar/:token`), que
+ * renderiza `doc.error.message` cru. A mensagem "did not match the expected pattern."
+ * é uma DOMException NATIVA do iOS/JSC (mesmo diagnóstico já cravado na Rev. 2584): NÃO
+ * é erro do servidor (o Node/V8 não produz essa string; o caminho de `getDocumentoPublico`
+ * está limpo) — é uma falha de TRANSPORTE/RUNTIME do WebKit (conexão cai/aborta no
+ * iPad), exibida CRUA no banner. ADICIONALMENTE, a mesma tela tinha um vetor de crash
+ * SECUNDÁRIO no iOS: vários `new Date(s.dataAssinatura).toLocaleString/toLocaleDateString
+ * ("pt-BR")` em tempo de RENDER sobre as strings do banco em formato "YYYY-MM-DD HH:MM:SS"
+ * (colunas `mode:"string"`, SEM o "T"/"Z") — formato que o `Date()` do Safari/iOS REJEITA,
+ * lançando a MESMA DOMException.
+ *
+ * SOLUÇÃO (SÓ CLIENT, ADITIVO — ZERO SCHEMA, ZERO SERVER, ZERO ALTER/DROP/DELETE; espelha
+ * a Rev. 2584): em `client/src/pages/IntegraSignAssinar.tsx`: (1) novo helper
+ * `msgErroLink(err)` que detecta as mensagens crípticas de transporte/runtime do iOS
+ * ("did not match the expected pattern", "load failed", "failed to fetch", "networkerror",
+ * "network connection", "the operation couldn't be completed", "aborted", "timed out",
+ * "tempo limite" e string vazia) e as troca por um texto claro e acionável ("Não foi
+ * possível abrir o documento — a conexão caiu ou demorou demais, comum no iPad/Safari.
+ * Verifique a internet e recarregue a página..."); erros reais do servidor continuam
+ * intactos (fallback p/ `err.message`). Aplicado no card `doc.error`. (2) TODOS os
+ * `new Date(...).toLocaleString/toLocaleDateString("pt-BR")` de RENDER sobre strings do
+ * servidor (`dataAssinatura`) foram trocados pelos helpers iOS-safe JÁ EXISTENTES
+ * `formatDateTime`/`formatDate` de `client/src/lib/dateUtils.ts` (fazem `str.replace(" ","T")+"Z"`,
+ * `try/catch`→"—", fuso America/Sao_Paulo) — 5 pontos (texto de download ×2, banner de
+ * sucesso, lista de signatários ×2). Os `new Date()` SEM argumento (timestamp de download)
+ * são seguros e ficaram intactos. ZERO ALTER/DROP/DELETE. Detalhe: este arquivo.
+ *
+ * ----------------------------------------------------------------------------------------------------
+ *
  * Rev. 2895 — **MEDIÇÃO DE CONTRATOS — LEVANTAMENTO DE CAMPO AGORA É OFFLINE-FIRST
  * NO TABLET (PWA): MEDIR/CONTORNAR/CALIBRAR/FOTOGRAFAR SEM INTERNET E SINCRONIZAR
  * SOZINHO AO RECONECTAR, SEM PERDA E SEM DUPLICAR.**

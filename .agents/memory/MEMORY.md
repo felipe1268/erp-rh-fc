@@ -40,5 +40,6 @@
 - [Numeração de FD (Painel FD)](fd-numbering.md) — FD-001… é DERIVADO (não persistido): por obra, data/criadoEm asc + id; mesma regra nas 2 rotas; cancelar reindexar.
 - [Coleta de Campo — grupos](coleta-campo-grupos.md) — link público coleta por GRUPO (campos_json; NULL=todos); "Gerar todos" deve atualizar campos_json no reaproveitamento; whitelist server-side.
 - [Fornecedor write paths](fornecedor-write-paths.md) — tela "Fornecedores" salva em fornecedores via compras.criarFornecedor/atualizar (NAO terceiros.empresas); empresas_terceiras tem writes indiretos (ensureFromFornecedor, contrato/OS).
+- [iOS Safari new Date() crash](ios-date-string-crash.md) — `mode:"string"` timestamps SELECT back as space-format "YYYY-MM-DD HH:MM:SS"; iOS rejects `new Date()` of it → cryptic DOMException. Use dateUtils helpers + map cryptic msgs in error cards.
 - [Batch-sync contract BOLA](batch-sync-contract-bola.md) — sync-queue endpoints must validate the CONTRATO of each id/uuid-targeted row (not just companyId); client must chunk ops below the server's lote cap.
 - [Levantamento de Campo em PDF — IDOR](medicao-levantamento-campo.md) — procedures novas precisam de companyId em TODAS as subconsultas (pdfs/contornos/fotos) + validar contrato pertence à empresa E ao campo no gerarBoletim; pontos client em [0..1] convertidos via pageDims do react-pdf.

@@ -9,6 +9,37 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, CheckCircle2, XCircle, FileText, PenLine, AlertTriangle, Shield, Download } from "lucide-react";
+import { formatDateTime, formatDate } from "@/lib/dateUtils";
+
+/**
+ * Rev. 2896 — iOS/Safari (iPad) renderiza erros de transporte/runtime do WebKit
+ * como a DOMException críptica "The string did not match the expected pattern."
+ * (mesmo diagnóstico da Rev. 2584). Quando o link de assinatura é aberto no
+ * tablet e a requisição cai/aborta, essa mensagem aparecia CRUA no card "Erro".
+ * Aqui detectamos essas mensagens crípticas e mostramos um texto claro e
+ * acionável; erros reais do servidor continuam intactos.
+ */
+function msgErroLink(err: any): string {
+  const raw = String(err?.message ?? "").trim();
+  const low = raw.toLowerCase();
+  const ehTransporteIos =
+    raw === "" ||
+    low.includes("did not match the expected pattern") ||
+    low.includes("load failed") ||
+    low.includes("failed to fetch") ||
+    low.includes("networkerror") ||
+    low.includes("network connection") ||
+    low.includes("the operation couldn't be completed") ||
+    low.includes("the operation couldn’t be completed") ||
+    low.includes("the operation was aborted") ||
+    low.includes("aborted") ||
+    low.includes("timed out") ||
+    low.includes("tempo limite");
+  if (ehTransporteIos) {
+    return "Não foi possível abrir o documento — a conexão caiu ou demorou demais, comum no iPad/Safari. Verifique a internet e recarregue a página. Se persistir, abra o link em um navegador atualizado ou no computador.";
+  }
+  return raw || "Não foi possível abrir o documento. Recarregue a página e tente novamente.";
+}
 
 function papelLabel(p: string) {
   const m: Record<string, string> = {
@@ -231,9 +262,9 @@ export default function IntegraSignAssinar() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Card className="max-w-md"><CardContent className="p-8 text-center">
-          <XCircle className="mx-auto h-12 w-12 text-red-500 mb-4" />
+          <XCircle className="mx-auto h-12 w-12 text-red-500 mb-4" data-testid="icon-erro-link" />
           <h2 className="text-xl font-bold mb-2">Erro</h2>
-          <p className="text-gray-600">{doc.error.message}</p>
+          <p className="text-gray-600" data-testid="text-erro-link">{msgErroLink(doc.error)}</p>
         </CardContent></Card>
       </div>
     );
@@ -246,7 +277,7 @@ export default function IntegraSignAssinar() {
       const titulo = d.envelope.titulo || "Contrato";
       const hash = d.envelope.hashDocumento || "";
       const signatarios = (d.todosSignatarios || []).map((s: any) =>
-        `${s.nome} (${papelLabel(s.papel)}) — ${s.status === "assinado" ? `Assinado em ${new Date(s.dataAssinatura).toLocaleString("pt-BR")}` : s.status}`
+        `${s.nome} (${papelLabel(s.papel)}) — ${s.status === "assinado" ? `Assinado em ${formatDateTime(s.dataAssinatura)}` : s.status}`
       ).join("\n");
 
       const conteudo = [
@@ -295,7 +326,7 @@ export default function IntegraSignAssinar() {
               </h2>
               <p className="text-gray-600 mb-1">
                 {d.signatario.status === "assinado"
-                  ? <>{d.signatario.nome}, sua assinatura foi registrada com sucesso{d.signatario.dataAssinatura ? ` em ${new Date(d.signatario.dataAssinatura).toLocaleString("pt-BR")}` : ""}.</>
+                  ? <>{d.signatario.nome}, sua assinatura foi registrada com sucesso{d.signatario.dataAssinatura ? ` em ${formatDateTime(d.signatario.dataAssinatura)}` : ""}.</>
                   : <>Todas as assinaturas obrigatórias foram coletadas. Este contrato está concluído.</>
                 }
               </p>
@@ -324,7 +355,7 @@ export default function IntegraSignAssinar() {
                     <div className="flex items-center gap-2">
                       {s.dataAssinatura && (
                         <span className="text-xs text-gray-400">
-                          {new Date(s.dataAssinatura).toLocaleString("pt-BR")}
+                          {formatDateTime(s.dataAssinatura)}
                         </span>
                       )}
                       {statusBadge(s.status)}
@@ -354,7 +385,7 @@ export default function IntegraSignAssinar() {
       const titulo = d.envelope?.titulo || "Contrato";
       const hash = d.envelope?.hashDocumento || "";
       const sigs = (d.todosSignatarios || []).map((s: any) =>
-        `${s.nome} (${papelLabel(s.papel)}) — ${s.status === "assinado" ? `Assinado em ${new Date(s.dataAssinatura).toLocaleString("pt-BR")}` : s.status}`
+        `${s.nome} (${papelLabel(s.papel)}) — ${s.status === "assinado" ? `Assinado em ${formatDateTime(s.dataAssinatura)}` : s.status}`
       ).join("\n");
 
       const conteudo = [
@@ -448,7 +479,7 @@ export default function IntegraSignAssinar() {
                   <div className="flex items-center gap-2">
                     {s.dataAssinatura && (
                       <span className="text-xs text-gray-400">
-                        {new Date(s.dataAssinatura).toLocaleDateString("pt-BR")}
+                        {formatDate(s.dataAssinatura)}
                       </span>
                     )}
                     {statusBadge(s.status)}
