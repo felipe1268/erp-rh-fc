@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, CheckCircle2, XCircle, FileText, PenLine, AlertTriangle, Shield, Download } from "lucide-react";
 import { formatDateTime, formatDate } from "@/lib/dateUtils";
+import { gerarContratoAssinadoPdf } from "@/lib/contratoAssinadoPdf";
 
 /**
  * Rev. 2896 — iOS/Safari (iPad) renderiza erros de transporte/runtime do WebKit
@@ -273,38 +274,17 @@ export default function IntegraSignAssinar() {
   if (doc.data && (doc.data as any).jaAssinado) {
     const d = doc.data as any;
     const handleDownload = () => {
-      const textoContrato = d.envelope.textoContrato || "";
-      const titulo = d.envelope.titulo || "Contrato";
-      const hash = d.envelope.hashDocumento || "";
-      const signatarios = (d.todosSignatarios || []).map((s: any) =>
-        `${s.nome} (${papelLabel(s.papel)}) — ${s.status === "assinado" ? `Assinado em ${formatDateTime(s.dataAssinatura)}` : s.status}`
-      ).join("\n");
-
-      const conteudo = [
-        `═══════════════════════════════════════`,
-        `  ${titulo}`,
-        `═══════════════════════════════════════`,
-        ``,
-        textoContrato,
-        ``,
-        `───────────────────────────────────────`,
-        `  REGISTRO DE ASSINATURAS ELETRÔNICAS`,
-        `───────────────────────────────────────`,
-        ``,
-        signatarios,
-        ``,
-        `Hash SHA-256: ${hash}`,
-        `Documento gerado via FcSign — FC Engenharia`,
-        `Data de download: ${new Date().toLocaleString("pt-BR")}`,
-      ].join("\n");
-
-      const blob = new Blob([conteudo], { type: "text/plain;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${titulo.replace(/[^a-zA-Z0-9À-ú ]/g, "").trim()}_assinado.txt`;
-      a.click();
-      URL.revokeObjectURL(url);
+      gerarContratoAssinadoPdf({
+        titulo: d.envelope.titulo || "Contrato",
+        textoContrato: d.envelope.textoContrato || "",
+        hash: d.envelope.hashDocumento || "",
+        signatarios: (d.todosSignatarios || []).map((s: any) => ({
+          nome: s.nome,
+          papelLabel: papelLabel(s.papel),
+          status: s.status,
+          dataAssinatura: s.dataAssinatura,
+        })),
+      });
     };
 
     return (
@@ -369,7 +349,7 @@ export default function IntegraSignAssinar() {
           <div className="flex justify-center">
             <Button onClick={handleDownload} className="gap-2 bg-blue-600 hover:bg-blue-700 px-6 py-3 text-base">
               <Download className="w-5 h-5" />
-              Baixar Contrato Assinado
+              Baixar Contrato Assinado (PDF)
             </Button>
           </div>
         </div>
@@ -381,38 +361,17 @@ export default function IntegraSignAssinar() {
     const handleSuccessDownload = () => {
       const d = doc.data as any;
       if (!d) return;
-      const textoContrato = d.envelope?.textoContrato || "";
-      const titulo = d.envelope?.titulo || "Contrato";
-      const hash = d.envelope?.hashDocumento || "";
-      const sigs = (d.todosSignatarios || []).map((s: any) =>
-        `${s.nome} (${papelLabel(s.papel)}) — ${s.status === "assinado" ? `Assinado em ${formatDateTime(s.dataAssinatura)}` : s.status}`
-      ).join("\n");
-
-      const conteudo = [
-        `═══════════════════════════════════════`,
-        `  ${titulo}`,
-        `═══════════════════════════════════════`,
-        ``,
-        textoContrato,
-        ``,
-        `───────────────────────────────────────`,
-        `  REGISTRO DE ASSINATURAS ELETRÔNICAS`,
-        `───────────────────────────────────────`,
-        ``,
-        sigs,
-        ``,
-        `Hash SHA-256: ${hash}`,
-        `Documento gerado via FcSign — FC Engenharia`,
-        `Data de download: ${new Date().toLocaleString("pt-BR")}`,
-      ].join("\n");
-
-      const blob = new Blob([conteudo], { type: "text/plain;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${titulo.replace(/[^a-zA-Z0-9À-ú ]/g, "").trim()}_assinado.txt`;
-      a.click();
-      URL.revokeObjectURL(url);
+      gerarContratoAssinadoPdf({
+        titulo: d.envelope?.titulo || "Contrato",
+        textoContrato: d.envelope?.textoContrato || "",
+        hash: d.envelope?.hashDocumento || "",
+        signatarios: (d.todosSignatarios || []).map((s: any) => ({
+          nome: s.nome,
+          papelLabel: papelLabel(s.papel),
+          status: s.status,
+          dataAssinatura: s.dataAssinatura,
+        })),
+      });
     };
 
     return (
@@ -428,7 +387,7 @@ export default function IntegraSignAssinar() {
           {doc.data && (
             <Button onClick={handleSuccessDownload} className="mt-6 gap-2 bg-blue-600 hover:bg-blue-700">
               <Download className="w-4 h-4" />
-              Baixar Contrato Assinado
+              Baixar Contrato Assinado (PDF)
             </Button>
           )}
         </CardContent></Card>

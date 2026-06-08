@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2897 — **ASSINATURA ELETRÔNICA (INTEGRASIGN/FcSign) — "BAIXAR CONTRATO ASSINADO"
+ * AGORA GERA UM PDF PROFISSIONAL (LOGO DA CONSTRUTORA + FAIXA AZUL INSTITUCIONAL + CORPO
+ * DO CONTRATO COM A TABELA EAP PRESERVADA + REGISTRO DE ASSINATURAS + HASH), NO LUGAR DO
+ * ANTIGO ARQUIVO `.txt` PLANO.**
+ *
+ * PEDIDO (usuário, com anexo do `.txt` baixado do contrato CT-2026-0013 — RF Gesso): "O
+ * contrato precisa ser baixado em PDF com todas as assinaturas, logo/marca da construtora
+ * e todos os dados conforme a visualização." O botão "Baixar Contrato Assinado" da tela
+ * pública `/integrasign/assinar/:token` gerava um `Blob text/plain` → arquivo `.txt` sem
+ * logo, sem formatação e sem identidade visual da FC.
+ *
+ * SOLUÇÃO (SÓ CLIENT, ADITIVO — ZERO SCHEMA, ZERO SERVER, ZERO ALTER/DROP/DELETE):
+ * (1) NOVO helper `client/src/lib/contratoAssinadoPdf.ts` → `gerarContratoAssinadoPdf(...)`
+ * usa o `jspdf` (já dependência; mesmo padrão de `epiReceiptPdf.ts`) p/ montar um PDF A4:
+ *   - LOGO da construtora carregado de `${origin}/logo-fc.jpg` via `fetch`→`FileReader`
+ *     (dataURL), com FALLBACK SILENCIOSO (se a imagem falhar, o PDF sai sem logo — nunca
+ *     quebra o download);
+ *   - FAIXA AZUL institucional `#1B2A4A` com o TÍTULO do contrato (caixa alta, branco);
+ *   - CORPO do contrato em fonte MONOESPAÇADA (Courier 7pt) p/ PRESERVAR o alinhamento da
+ *     tabela EAP (separadores `|`/`-`, que vêm em texto pré-formatado em `textoContrato`),
+ *     com quebra de página automática;
+ *   - REGISTRO DE ASSINATURAS ELETRÔNICAS (nome + papel + "Assinado em <data>"/status p/
+ *     cada signatário), HASH SHA-256, rodapé "Documento gerado via FcSign — FC Engenharia"
+ *     + data de download + nota de conformidade (MP 2.200-2/2001 e Lei 14.063/2020), e
+ *     numeração "Página X de Y";
+ *   - DATAS via `formatDateTime` (iOS-safe, Rev. 2896) — evita o crash do Safari/iPad com
+ *     strings "YYYY-MM-DD HH:MM:SS" (`mode:"string"`);
+ *   - download via `pdf.save("<titulo>_assinado.pdf")` (PDF de verdade, 1 toque — ideal no
+ *     iPad, sem popup/print).
+ * (2) `client/src/pages/IntegraSignAssinar.tsx` — os DOIS handlers de download (`handleDownload`
+ * do branch `jaAssinado` e `handleSuccessDownload` do branch `sucesso`) trocam a montagem do
+ * `.txt`/`Blob` pela chamada a `gerarContratoAssinadoPdf({ titulo, textoContrato, hash,
+ * signatarios })`; rótulos dos botões viram "Baixar Contrato Assinado (PDF)". Conteúdo
+ * idêntico ao da visualização da tela. ZERO ALTER/DROP/DELETE. Detalhe: este arquivo.
+ *
  * Rev. 2896 — **ASSINATURA ELETRÔNICA (INTEGRASIGN) — ABRIR O LINK DE ASSINATURA NO
  * iPad/SAFARI NÃO MOSTRA MAIS O ERRO CRÍPTICO "The string did not match the expected
  * pattern."; AGORA EXIBE UMA MENSAGEM CLARA E ACIONÁVEL E AS DATAS RENDERIZAM DE FORMA
