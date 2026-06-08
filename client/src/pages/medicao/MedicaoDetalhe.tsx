@@ -23,6 +23,7 @@ import {
   ArrowLeft, Plus, Loader2, FileText, ChevronRight, ChevronDown, CheckCircle2,
   Clock, Send, AlertCircle, DollarSign, Percent, Settings,
   Edit, Trash2, Eye, TrendingUp, Package, Search, ListTree, Hammer, HardHat, Receipt,
+  Ruler, Image as ImageIcon,
 } from "lucide-react";
 
 const n = (v: unknown) => parseFloat(String(v || "0")) || 0;
@@ -114,6 +115,21 @@ export default function MedicaoDetalhe() {
   );
   const [filtroPlanilha, setFiltroPlanilha] = useState("");
   const [collapsedEap, setCollapsedEap] = useState<Set<string>>(new Set());
+
+  // Rev. 2893 — Levantamento de Campo (medição sobre PDF)
+  const { data: campos = [], isLoading: loadingCampos } = trpc.medicao.listarCampos.useQuery(
+    { companyId, contratoId },
+    { enabled: contratoId > 0 && companyId > 0 }
+  );
+  const criarCampoMutation = trpc.medicao.criarCampo.useMutation({
+    onSuccess: (row: any) => {
+      utils.medicao.listarCampos.invalidate({ companyId, contratoId });
+      if (row?.id) setLocation(`/medicao/${contratoId}/levantamento/${row.id}`);
+    },
+  });
+  const excluirCampoMutation = trpc.medicao.excluirCampo.useMutation({
+    onSuccess: () => utils.medicao.listarCampos.invalidate({ companyId, contratoId }),
+  });
 
   const ultimoBoletimDataFim = useMemo(() => {
     const sorted = [...(boletins as any[])].sort((a: any, b: any) => (b.numero ?? 0) - (a.numero ?? 0));
@@ -327,6 +343,7 @@ export default function MedicaoDetalhe() {
             <TabsTrigger value="planilha" className="gap-1.5"><ListTree className="h-3.5 w-3.5" />Planilha de Medição</TabsTrigger>
             <TabsTrigger value="boletins">Boletins de Medição</TabsTrigger>
             <TabsTrigger value="fd">Faturamento Direto (FD)</TabsTrigger>
+            <TabsTrigger value="levantamento" className="gap-1.5"><Ruler className="h-3.5 w-3.5" />Levantamento de Campo</TabsTrigger>
           </TabsList>
 
           <TabsContent value="planilha" className="mt-4">
@@ -773,6 +790,74 @@ export default function MedicaoDetalhe() {
                   </span>
                 </div>
               </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="levantamento" className="space-y-4 mt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">
+                  Levantamento de campo sobre PDF: marque áreas, volumes, perímetros e contagens
+                  diretamente na planta (tablet) e gere a planilha de medição em R$.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                className="gap-2"
+                disabled={criarCampoMutation.isPending}
+                onClick={() => criarCampoMutation.mutate({ companyId, contratoId })}
+              >
+                {criarCampoMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                Nova Medição
+              </Button>
+            </div>
+
+            {loadingCampos ? (
+              <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+            ) : (campos as any[]).length === 0 ? (
+              <div className="text-center py-12 text-gray-400">
+                <Ruler className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="font-medium">Nenhum levantamento de campo</p>
+                <p className="text-sm mt-1">Clique em "Nova Medição" para enviar a planta e começar a medir</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-16">Nº</TableHead>
+                    <TableHead>Título</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-center">Plantas</TableHead>
+                    <TableHead className="text-center">Contornos</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(campos as any[]).map((c: any) => (
+                    <TableRow key={c.id} className="cursor-pointer" onClick={() => setLocation(`/medicao/${contratoId}/levantamento/${c.id}`)}>
+                      <TableCell className="font-mono">{String(c.numero).padStart(3, "0")}</TableCell>
+                      <TableCell className="font-medium">{c.titulo || `Levantamento ${c.numero}`}</TableCell>
+                      <TableCell><StatusBadge status={c.status} /></TableCell>
+                      <TableCell className="text-center"><span className="inline-flex items-center gap-1 text-gray-600"><FileText className="h-3.5 w-3.5" />{c.qtdPdfs ?? 0}</span></TableCell>
+                      <TableCell className="text-center"><span className="inline-flex items-center gap-1 text-gray-600"><Ruler className="h-3.5 w-3.5" />{c.qtdContornos ?? 0}</span></TableCell>
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => setLocation(`/medicao/${contratoId}/levantamento/${c.id}`)} title="Abrir">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm" variant="ghost" className="h-8 px-2 text-red-600"
+                            onClick={() => { if (confirm(`Excluir o levantamento ${String(c.numero).padStart(3, "0")}?`)) excluirCampoMutation.mutate({ id: c.id, companyId }); }}
+                            title="Excluir"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             )}
           </TabsContent>
         </Tabs>

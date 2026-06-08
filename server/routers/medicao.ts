@@ -6,6 +6,10 @@ import {
   medicaoBoletins,
   medicaoBoletimItens,
   medicaoFdRegistros,
+  medicaoCampo,
+  medicaoCampoPdfs,
+  medicaoCampoContornos,
+  medicaoCampoFotos,
   planejamentoProjetos,
   planejamentoAtividades,
   planejamentoAvancos,
@@ -15,6 +19,8 @@ import {
   obras,
 } from "../../drizzle/schema";
 import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
+import { storagePut } from "../storage";
+import { TRPCError } from "@trpc/server";
 
 export const medicaoRouter = router({
 
@@ -666,5 +672,511 @@ export const medicaoRouter = router({
       }
 
       return { avancosCronograma, acumuladoMedido };
+    }),
+
+  // ============================================================
+  // Rev. 2893 — MEDIÇÃO COM LEVANTAMENTO EM PDF (levantamento de campo)
+  // ============================================================
+
+  // --- Medições de campo (numeradas por contrato) ---
+  listarCampos: protectedProcedure
+    .input(z.object({ companyId: z.number(), contratoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const campos = await db
+        .select()
+        .from(medicaoCampo)
+        .where(and(
+          eq(medicaoCampo.companyId, input.companyId),
+          eq(medicaoCampo.contratoId, input.contratoId),
+          isNull(medicaoCampo.deletedAt),
+        ))
+        .orderBy(desc(medicaoCampo.numero));
+      if (campos.length === 0) return [];
+      const ids = campos.map((c) => c.id);
+      const pdfCounts = await db
+        .select({ medicaoCampoId: medicaoCampoPdfs.medicaoCampoId, n: sql<number>`count(*)::int` })
+        .from(medicaoCampoPdfs)
+        .where(and(inArray(medicaoCampoPdfs.medicaoCampoId, ids), isNull(medicaoCampoPdfs.deletedAt)))
+        .groupBy(medicaoCampoPdfs.medicaoCampoId);
+      const contCounts = await db
+        .select({ medicaoCampoId: medicaoCampoContornos.medicaoCampoId, n: sql<number>`count(*)::int` })
+        .from(medicaoCampoContornos)
+        .where(and(inArray(medicaoCampoContornos.medicaoCampoId, ids), isNull(medicaoCampoContornos.deletedAt)))
+        .groupBy(medicaoCampoContornos.medicaoCampoId);
+      const pmap = new Map(pdfCounts.map((r) => [r.medicaoCampoId, r.n]));
+      const cmap = new Map(contCounts.map((r) => [r.medicaoCampoId, r.n]));
+      return campos.map((c) => ({ ...c, qtdPdfs: pmap.get(c.id) ?? 0, qtdContornos: cmap.get(c.id) ?? 0 }));
+    }),
+
+  getCampo: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const [campo] = await db
+        .select()
+        .from(medicaoCampo)
+        .where(and(eq(medicaoCampo.id, input.id), eq(medicaoCampo.companyId, input.companyId)))
+        .limit(1);
+      if (!campo) return null;
+      const pdfs = await db
+        .select()
+        .from(medicaoCampoPdfs)
+        .where(and(eq(medicaoCampoPdfs.medicaoCampoId, campo.id), eq(medicaoCampoPdfs.companyId, input.companyId), isNull(medicaoCampoPdfs.deletedAt)))
+        .orderBy(medicaoCampoPdfs.ordem, medicaoCampoPdfs.id);
+      const contornos = await db
+        .select()
+        .from(medicaoCampoContornos)
+        .where(and(eq(medicaoCampoContornos.medicaoCampoId, campo.id), eq(medicaoCampoContornos.companyId, input.companyId), isNull(medicaoCampoContornos.deletedAt)))
+        .orderBy(medicaoCampoContornos.id);
+      const fotos = await db
+        .select()
+        .from(medicaoCampoFotos)
+        .where(and(eq(medicaoCampoFotos.medicaoCampoId, campo.id), eq(medicaoCampoFotos.companyId, input.companyId), isNull(medicaoCampoFotos.deletedAt)))
+        .orderBy(medicaoCampoFotos.id);
+      return { ...campo, pdfs, contornos, fotos };
+    }),
+
+  criarCampo: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      contratoId: z.number(),
+      titulo: z.string().nullable().optional(),
+      descricao: z.string().nullable().optional(),
+      uuid: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      // Guard de tenant: o contrato precisa pertencer à empresa.
+      const [contrato] = await db
+        .select({ id: medicaoContratos.id })
+        .from(medicaoContratos)
+        .where(and(eq(medicaoContratos.id, input.contratoId), eq(medicaoContratos.companyId, input.companyId)))
+        .limit(1);
+      if (!contrato) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado ou sem permissão." });
+      const [ultimo] = await db
+        .select({ numero: medicaoCampo.numero })
+        .from(medicaoCampo)
+        .where(eq(medicaoCampo.contratoId, input.contratoId))
+        .orderBy(desc(medicaoCampo.numero))
+        .limit(1);
+      const numero = (ultimo?.numero ?? 0) + 1;
+      const [row] = await db.insert(medicaoCampo).values({
+        companyId: input.companyId,
+        contratoId: input.contratoId,
+        uuid: input.uuid,
+        numero,
+        titulo: input.titulo ?? `Levantamento ${numero}`,
+        descricao: input.descricao,
+        criadoPorId: ctx.user.id,
+        criadoPorNome: ctx.user.name || "",
+      }).returning();
+      return row;
+    }),
+
+  atualizarCampo: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      titulo: z.string().nullable().optional(),
+      descricao: z.string().nullable().optional(),
+      status: z.enum(["rascunho", "finalizado"]).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const { id, companyId, ...data } = input;
+      await db.update(medicaoCampo)
+        .set({ ...data, atualizadoEm: new Date() })
+        .where(and(eq(medicaoCampo.id, id), eq(medicaoCampo.companyId, companyId)));
+      return { success: true };
+    }),
+
+  excluirCampo: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.update(medicaoCampo)
+        .set({ deletedAt: new Date() })
+        .where(and(eq(medicaoCampo.id, input.id), eq(medicaoCampo.companyId, input.companyId)));
+      return { success: true };
+    }),
+
+  // --- PDFs (plantas) por medição ---
+  uploadPdf: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      medicaoCampoId: z.number(),
+      nome: z.string(),
+      tipo: z.enum(["pavimento", "setor", "outro"]).default("pavimento"),
+      base64: z.string().max(40_000_000),
+      contentType: z.string().default("application/pdf"),
+      arquivoNome: z.string().optional(),
+      numPaginas: z.number().optional(),
+      uuid: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [campo] = await db
+        .select({ id: medicaoCampo.id })
+        .from(medicaoCampo)
+        .where(and(eq(medicaoCampo.id, input.medicaoCampoId), eq(medicaoCampo.companyId, input.companyId)))
+        .limit(1);
+      if (!campo) throw new TRPCError({ code: "NOT_FOUND", message: "Medição não encontrada ou sem permissão." });
+      const buf = Buffer.from(input.base64, "base64");
+      const key = `medicao-campo/${input.companyId}/${input.medicaoCampoId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.pdf`;
+      const { url } = await storagePut(key, buf, input.contentType || "application/pdf");
+      const [ordemRow] = await db
+        .select({ max: sql<number>`COALESCE(MAX(ordem),0)::int` })
+        .from(medicaoCampoPdfs)
+        .where(eq(medicaoCampoPdfs.medicaoCampoId, input.medicaoCampoId));
+      const [row] = await db.insert(medicaoCampoPdfs).values({
+        companyId: input.companyId,
+        medicaoCampoId: input.medicaoCampoId,
+        uuid: input.uuid,
+        nome: input.nome,
+        tipo: input.tipo,
+        arquivoUrl: url,
+        arquivoKey: key,
+        arquivoNome: input.arquivoNome ?? input.nome,
+        numPaginas: input.numPaginas ?? 1,
+        ordem: (ordemRow?.max ?? 0) + 1,
+      }).returning();
+      return row;
+    }),
+
+  atualizarPdf: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      nome: z.string().optional(),
+      tipo: z.enum(["pavimento", "setor", "outro"]).optional(),
+      calibracaoJson: z.string().nullable().optional(),
+      numPaginas: z.number().optional(),
+      ordem: z.number().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const { id, companyId, ...data } = input;
+      await db.update(medicaoCampoPdfs)
+        .set({ ...data, atualizadoEm: new Date() })
+        .where(and(eq(medicaoCampoPdfs.id, id), eq(medicaoCampoPdfs.companyId, companyId)));
+      return { success: true };
+    }),
+
+  excluirPdf: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.update(medicaoCampoPdfs)
+        .set({ deletedAt: new Date() })
+        .where(and(eq(medicaoCampoPdfs.id, input.id), eq(medicaoCampoPdfs.companyId, input.companyId)));
+      // contornos órfãos do PDF também saem da consolidação
+      await db.update(medicaoCampoContornos)
+        .set({ deletedAt: new Date() })
+        .where(and(eq(medicaoCampoContornos.pdfId, input.id), eq(medicaoCampoContornos.companyId, input.companyId)));
+      return { success: true };
+    }),
+
+  // --- Contornos (área/volume/perímetro/contagem). Cálculos vêm do client. ---
+  salvarContorno: protectedProcedure
+    .input(z.object({
+      id: z.number().optional(),
+      companyId: z.number(),
+      medicaoCampoId: z.number(),
+      pdfId: z.number(),
+      uuid: z.string().optional(),
+      pagina: z.number().default(1),
+      tipo: z.enum(["area", "volume", "perimetro", "contagem"]),
+      rotulo: z.string().nullable().optional(),
+      cor: z.string().nullable().optional(),
+      geometriaJson: z.string(),
+      espessura: z.string().nullable().optional(),
+      metrosPorUnidade: z.string().nullable().optional(),
+      area: z.string().nullable().optional(),
+      perimetro: z.string().nullable().optional(),
+      volume: z.string().nullable().optional(),
+      contagem: z.number().nullable().optional(),
+      quantidade: z.string().nullable().optional(),
+      unidade: z.string().nullable().optional(),
+      orcamentoItemId: z.number().nullable().optional(),
+      itemEapCodigo: z.string().nullable().optional(),
+      itemDescricao: z.string().nullable().optional(),
+      observacoes: z.string().nullable().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [campo] = await db
+        .select({ id: medicaoCampo.id })
+        .from(medicaoCampo)
+        .where(and(eq(medicaoCampo.id, input.medicaoCampoId), eq(medicaoCampo.companyId, input.companyId)))
+        .limit(1);
+      if (!campo) throw new TRPCError({ code: "NOT_FOUND", message: "Medição não encontrada ou sem permissão." });
+      const { id, companyId, ...rest } = input;
+      if (id) {
+        await db.update(medicaoCampoContornos)
+          .set({ ...rest, atualizadoEm: new Date() })
+          .where(and(eq(medicaoCampoContornos.id, id), eq(medicaoCampoContornos.companyId, companyId)));
+        return { id };
+      }
+      const [maxRow] = await db
+        .select({ max: sql<number>`COALESCE(MAX(numero),0)::int` })
+        .from(medicaoCampoContornos)
+        .where(eq(medicaoCampoContornos.medicaoCampoId, input.medicaoCampoId));
+      const [row] = await db.insert(medicaoCampoContornos).values({
+        companyId,
+        ...rest,
+        numero: (maxRow?.max ?? 0) + 1,
+      }).returning();
+      return row;
+    }),
+
+  excluirContorno: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.update(medicaoCampoContornos)
+        .set({ deletedAt: new Date() })
+        .where(and(eq(medicaoCampoContornos.id, input.id), eq(medicaoCampoContornos.companyId, input.companyId)));
+      return { success: true };
+    }),
+
+  // --- Fotos (ilimitadas, opcionalmente fixadas a um contorno/pin) ---
+  uploadFoto: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      medicaoCampoId: z.number(),
+      pdfId: z.number().nullable().optional(),
+      contornoId: z.number().nullable().optional(),
+      base64: z.string().max(20_000_000),
+      contentType: z.string().default("image/jpeg"),
+      legenda: z.string().nullable().optional(),
+      pagina: z.number().nullable().optional(),
+      pinX: z.string().nullable().optional(),
+      pinY: z.string().nullable().optional(),
+      uuid: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [campo] = await db
+        .select({ id: medicaoCampo.id })
+        .from(medicaoCampo)
+        .where(and(eq(medicaoCampo.id, input.medicaoCampoId), eq(medicaoCampo.companyId, input.companyId)))
+        .limit(1);
+      if (!campo) throw new TRPCError({ code: "NOT_FOUND", message: "Medição não encontrada ou sem permissão." });
+      const buf = Buffer.from(input.base64, "base64");
+      const ext = (input.contentType || "").includes("png") ? "png" : "jpg";
+      const key = `medicao-campo/${input.companyId}/${input.medicaoCampoId}/fotos/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { url } = await storagePut(key, buf, input.contentType || "image/jpeg");
+      const [row] = await db.insert(medicaoCampoFotos).values({
+        companyId: input.companyId,
+        medicaoCampoId: input.medicaoCampoId,
+        pdfId: input.pdfId ?? null,
+        contornoId: input.contornoId ?? null,
+        uuid: input.uuid,
+        arquivoUrl: url,
+        arquivoKey: key,
+        legenda: input.legenda,
+        pagina: input.pagina ?? null,
+        pinX: input.pinX ?? null,
+        pinY: input.pinY ?? null,
+      }).returning();
+      return row;
+    }),
+
+  excluirFoto: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.update(medicaoCampoFotos)
+        .set({ deletedAt: new Date() })
+        .where(and(eq(medicaoCampoFotos.id, input.id), eq(medicaoCampoFotos.companyId, input.companyId)));
+      return { success: true };
+    }),
+
+  // --- Consolidação por item do orçamento/contrato → R$ ---
+  getConsolidadoCampo: protectedProcedure
+    .input(z.object({ medicaoCampoId: z.number(), companyId: z.number(), orcamentoId: z.number().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const [campo] = await db
+        .select({ id: medicaoCampo.id })
+        .from(medicaoCampo)
+        .where(and(eq(medicaoCampo.id, input.medicaoCampoId), eq(medicaoCampo.companyId, input.companyId)))
+        .limit(1);
+      if (!campo) throw new TRPCError({ code: "NOT_FOUND", message: "Medição não encontrada ou sem permissão." });
+      const contornos = await db
+        .select()
+        .from(medicaoCampoContornos)
+        .where(and(eq(medicaoCampoContornos.medicaoCampoId, input.medicaoCampoId), eq(medicaoCampoContornos.companyId, input.companyId), isNull(medicaoCampoContornos.deletedAt)));
+
+      // Itens do orçamento (preço unitário de venda) p/ converter quantidade → R$.
+      const itensOrc = input.orcamentoId
+        ? await db
+            .select({
+              id: orcamentoItens.id,
+              eapCodigo: orcamentoItens.eapCodigo,
+              descricao: orcamentoItens.descricao,
+              unidade: orcamentoItens.unidade,
+              quantidade: orcamentoItens.quantidade,
+              vendaUnitTotal: orcamentoItens.vendaUnitTotal,
+            })
+            .from(orcamentoItens)
+            .where(eq(orcamentoItens.orcamentoId, input.orcamentoId))
+        : [];
+      const orcMap = new Map(itensOrc.map((i) => [i.id, i]));
+
+      type Linha = {
+        orcamentoItemId: number | null;
+        eapCodigo: string | null;
+        descricao: string;
+        unidade: string | null;
+        precoUnitario: number;
+        quantidade: number;
+        valorTotal: number;
+        contornos: number;
+      };
+      const grupos = new Map<string, Linha>();
+      for (const c of contornos) {
+        const chave = c.orcamentoItemId != null ? `oi:${c.orcamentoItemId}` : `na:${c.tipo}:${c.unidade ?? ""}`;
+        const orc = c.orcamentoItemId != null ? orcMap.get(c.orcamentoItemId) : undefined;
+        const preco = orc ? parseFloat(String(orc.vendaUnitTotal ?? "0")) || 0 : 0;
+        const qtd = parseFloat(String(c.quantidade ?? "0")) || 0;
+        let g = grupos.get(chave);
+        if (!g) {
+          g = {
+            orcamentoItemId: c.orcamentoItemId ?? null,
+            eapCodigo: c.itemEapCodigo ?? orc?.eapCodigo ?? null,
+            descricao: c.itemDescricao ?? orc?.descricao ?? (c.rotulo || "Sem item vinculado"),
+            unidade: c.unidade ?? orc?.unidade ?? null,
+            precoUnitario: preco,
+            quantidade: 0,
+            valorTotal: 0,
+            contornos: 0,
+          };
+          grupos.set(chave, g);
+        }
+        g.quantidade += qtd;
+        g.valorTotal += qtd * preco;
+        g.contornos += 1;
+      }
+      const linhas = Array.from(grupos.values()).sort((a, b) =>
+        String(a.eapCodigo ?? "zzz").localeCompare(String(b.eapCodigo ?? "zzz")));
+      const totalGeral = linhas.reduce((s, l) => s + l.valorTotal, 0);
+      return { linhas, totalGeral };
+    }),
+
+  // --- Gera um boletim de medição a partir do levantamento consolidado ---
+  gerarBoletimDoCampo: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      medicaoCampoId: z.number(),
+      contratoId: z.number(),
+      orcamentoId: z.number().optional(),
+      periodoReferencia: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [campo] = await db
+        .select()
+        .from(medicaoCampo)
+        .where(and(eq(medicaoCampo.id, input.medicaoCampoId), eq(medicaoCampo.companyId, input.companyId)))
+        .limit(1);
+      if (!campo) throw new TRPCError({ code: "NOT_FOUND", message: "Medição não encontrada ou sem permissão." });
+
+      // Guard relacional: o contrato precisa pertencer à empresa E ser o MESMO contrato do campo (anti-IDOR).
+      const [contrato] = await db
+        .select({ id: medicaoContratos.id })
+        .from(medicaoContratos)
+        .where(and(eq(medicaoContratos.id, input.contratoId), eq(medicaoContratos.companyId, input.companyId)))
+        .limit(1);
+      if (!contrato) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado ou sem permissão." });
+      if (campo.contratoId !== input.contratoId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "A medição não pertence a este contrato." });
+      }
+
+      const contornos = await db
+        .select()
+        .from(medicaoCampoContornos)
+        .where(and(eq(medicaoCampoContornos.medicaoCampoId, input.medicaoCampoId), eq(medicaoCampoContornos.companyId, input.companyId), isNull(medicaoCampoContornos.deletedAt)));
+
+      const itensOrc = input.orcamentoId
+        ? await db
+            .select({
+              id: orcamentoItens.id,
+              eapCodigo: orcamentoItens.eapCodigo,
+              descricao: orcamentoItens.descricao,
+              vendaUnitTotal: orcamentoItens.vendaUnitTotal,
+              vendaTotal: orcamentoItens.vendaTotal,
+            })
+            .from(orcamentoItens)
+            .where(eq(orcamentoItens.orcamentoId, input.orcamentoId))
+        : [];
+      const orcMap = new Map(itensOrc.map((i) => [i.id, i]));
+
+      type Agg = { eapCodigo: string | null; descricao: string; valorContratual: number; valorPeriodo: number };
+      const grupos = new Map<string, Agg>();
+      for (const c of contornos) {
+        const chave = c.orcamentoItemId != null ? `oi:${c.orcamentoItemId}` : `na:${c.id}`;
+        const orc = c.orcamentoItemId != null ? orcMap.get(c.orcamentoItemId) : undefined;
+        const preco = orc ? parseFloat(String(orc.vendaUnitTotal ?? "0")) || 0 : 0;
+        const qtd = parseFloat(String(c.quantidade ?? "0")) || 0;
+        let g = grupos.get(chave);
+        if (!g) {
+          g = {
+            eapCodigo: c.itemEapCodigo ?? orc?.eapCodigo ?? null,
+            descricao: c.itemDescricao ?? orc?.descricao ?? (c.rotulo || "Levantamento de campo"),
+            valorContratual: orc ? parseFloat(String(orc.vendaTotal ?? "0")) || 0 : 0,
+            valorPeriodo: 0,
+          };
+          grupos.set(chave, g);
+        }
+        g.valorPeriodo += qtd * preco;
+      }
+      const linhas = Array.from(grupos.values()).filter((l) => l.valorPeriodo > 0);
+      if (linhas.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum contorno com valor para gerar boletim. Vincule contornos a itens do orçamento." });
+
+      const [ultimo] = await db
+        .select({ numero: medicaoBoletins.numero })
+        .from(medicaoBoletins)
+        .where(eq(medicaoBoletins.contratoId, input.contratoId))
+        .orderBy(desc(medicaoBoletins.numero))
+        .limit(1);
+      const numero = (ultimo?.numero ?? 0) + 1;
+      const [boletim] = await db.insert(medicaoBoletins).values({
+        companyId: input.companyId,
+        contratoId: input.contratoId,
+        numero,
+        periodoReferencia: input.periodoReferencia,
+        observacoes: `Gerado do Levantamento de Campo nº ${campo.numero}${campo.titulo ? ` — ${campo.titulo}` : ""}`,
+      }).returning();
+
+      await db.insert(medicaoBoletimItens).values(
+        linhas.map((l) => {
+          const pct = l.valorContratual > 0 ? (l.valorPeriodo / l.valorContratual) * 100 : 0;
+          return {
+            boletimId: boletim.id,
+            eapCodigo: l.eapCodigo,
+            descricao: l.descricao,
+            valorContratual: l.valorContratual.toFixed(2),
+            percentualAcumuladoAnterior: "0",
+            percentualPeriodo: pct.toFixed(4),
+            percentualAcumuladoAtual: pct.toFixed(4),
+            valorPeriodo: l.valorPeriodo.toFixed(2),
+            tipoAvanco: "fisico" as const,
+            isFd: false,
+          };
+        })
+      );
+
+      const valorBruto = linhas.reduce((s, l) => s + l.valorPeriodo, 0);
+      await db.update(medicaoBoletins)
+        .set({ valorBruto: valorBruto.toFixed(2), valorLiquido: valorBruto.toFixed(2), atualizadoEm: new Date() })
+        .where(eq(medicaoBoletins.id, boletim.id));
+
+      await db.update(medicaoCampo)
+        .set({ boletimId: boletim.id, status: "finalizado", atualizadoEm: new Date() })
+        .where(eq(medicaoCampo.id, input.medicaoCampoId));
+
+      return { boletimId: boletim.id, numero, itens: linhas.length, valorBruto };
     }),
 });

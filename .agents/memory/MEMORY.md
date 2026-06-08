@@ -40,3 +40,4 @@
 - [Numeração de FD (Painel FD)](fd-numbering.md) — FD-001… é DERIVADO (não persistido): por obra, data/criadoEm asc + id; mesma regra nas 2 rotas; cancelar reindexar.
 - [Coleta de Campo — grupos](coleta-campo-grupos.md) — link público coleta por GRUPO (campos_json; NULL=todos); "Gerar todos" deve atualizar campos_json no reaproveitamento; whitelist server-side.
 - [Fornecedor write paths](fornecedor-write-paths.md) — tela "Fornecedores" salva em fornecedores via compras.criarFornecedor/atualizar (NAO terceiros.empresas); empresas_terceiras tem writes indiretos (ensureFromFornecedor, contrato/OS).
+- [Levantamento de Campo em PDF — IDOR](medicao-levantamento-campo.md) — procedures novas precisam de companyId em TODAS as subconsultas (pdfs/contornos/fotos) + validar contrato pertence à empresa E ao campo no gerarBoletim; pontos client em [0..1] convertidos via pageDims do react-pdf.

@@ -1,6 +1,51 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2893 — **MEDIÇÃO DE CONTRATOS — NOVO MÓDULO "LEVANTAMENTO DE CAMPO EM PDF":
+ * MEDIR ÁREA / VOLUME / PERÍMETRO / CONTAGEM SOBRE A PLANTA (PDF) NO TABLET E
+ * CONSOLIDAR POR ITEM DO ORÇAMENTO → R$ → GERAR BOLETIM.**
+ *
+ * PEDIDO (Task #66): permitir o levantamento de campo direto sobre o PDF da planta
+ * (tablet/online): medições numeradas, múltiplos PDFs por pavimento/setor, contornos
+ * de área/volume/perímetro/contagem com calibração de escala, fotos ilimitadas,
+ * consolidação por item do contrato em R$ e memória de cálculo.
+ *
+ * SOLUÇÃO (aditiva, ZERO destrutivo):
+ * (1) SCHEMA `drizzle/schema.ts` — 4 tabelas novas: `medicao_campo` (medição
+ * numerada por contrato, status rascunho/finalizado, vínculo opcional a boletim),
+ * `medicao_campo_pdfs` (plantas; `calibracao_json` por página: 2 pontos + metros →
+ * metros/ponto), `medicao_campo_contornos` (tipo + `geometria_json` normalizado
+ * [0..1] + área/perímetro/volume/contagem/quantidade/unidade + vínculo a
+ * `orcamento_item_id`), `medicao_campo_fotos` (ilimitadas, com pin opcional). Cada
+ * linha tem `uuid` client-stable (preparo p/ PWA offline — Task #67) e `deleted_at`
+ * (soft-delete). Self-heal `[SyncSchema+]` Rev. 2893 (`CREATE TABLE IF NOT EXISTS`
+ * + índices) em `server/_core/index.ts`.
+ * (2) GEOMETRIA `shared/levantamentoGeo.ts` — utilitário puro: shoelace (área),
+ * comprimento de linha (perímetro/linear), volume = área × espessura, contagem;
+ * `fatorCalibracao` (m/ponto) e `calcularContorno` (converte pts de PDF → métricas
+ * reais). Unidade por tipo: m² / m³ / m / un.
+ * (3) BACKEND `server/routers/medicao.ts` — 14 procedures (todas com guard de tenant
+ * via `companyId`): `listarCampos`/`getCampo`/`criarCampo` (numera por contrato)/
+ * `atualizarCampo`/`excluirCampo`; `uploadPdf` (object storage via `storagePut`)/
+ * `atualizarPdf` (calibração)/`excluirPdf` (cascateia soft-delete dos contornos);
+ * `salvarContorno`/`excluirContorno`; `uploadFoto`/`excluirFoto`;
+ * `getConsolidadoCampo` (agrupa contornos por item do orçamento × `vendaUnitTotal`
+ * → R$) e `gerarBoletimDoCampo` (cria boletim numerado + itens a partir do
+ * consolidado e marca a medição como finalizada).
+ * (4) FRONTEND — nova aba "Levantamento de Campo" em
+ * `client/src/pages/medicao/MedicaoDetalhe.tsx` (lista + "Nova Medição") e página
+ * dedicada `client/src/pages/medicao/MedicaoLevantamento.tsx` (canvas PDF via
+ * react-pdf + overlay SVG normalizado [0..1] que respeita aspect ratio; ferramentas
+ * Selecionar/Calibrar/Área/Volume/Perímetro/Contagem; zoom; calibração por 2 pontos;
+ * lista de contornos com vínculo a item do orçamento; planilha consolidada em R$;
+ * fotos com `capture="environment"`; memória de cálculo em HTML/print com cabeçalho
+ * FC). Rota `/medicao/:contratoId/levantamento/:campoId` em `client/src/App.tsx`.
+ *
+ * ZERO ALTER/DROP/DELETE destrutivo (só CREATE TABLE/ADD aditivo + soft-delete).
+ * Arquivos: `drizzle/schema.ts`, `server/_core/index.ts`, `shared/levantamentoGeo.ts`,
+ * `server/routers/medicao.ts`, `client/src/pages/medicao/MedicaoDetalhe.tsx`,
+ * `client/src/pages/medicao/MedicaoLevantamento.tsx`, `client/src/App.tsx`.
+ *
  * Rev. 2892 — **PORTAL DO CLIENTE — LINK PÚBLICO DE AVALIAÇÃO (NPS) AGORA PODE SER
  * SEPARADO POR OBRA, EVITANDO AVALIAÇÃO ATRIBUÍDA À OBRA ERRADA.**
  *

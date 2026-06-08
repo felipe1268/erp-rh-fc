@@ -740,6 +740,105 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2887: coluna itens_custom_json garantida em coleta_rh_sessoes.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA coleta_rh_sessoes.itens_custom_json:`, e?.message || e); }
 
+        // Rev. 2893 — Medição com Levantamento em PDF (levantamento de campo sobre planta).
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS medicao_campo (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              contrato_id INTEGER NOT NULL,
+              uuid VARCHAR(64),
+              numero INTEGER NOT NULL,
+              titulo VARCHAR(255),
+              descricao TEXT,
+              status VARCHAR(20) NOT NULL DEFAULT 'rascunho',
+              boletim_id INTEGER,
+              criado_por_id INTEGER,
+              criado_por_nome VARCHAR(255),
+              criado_em TIMESTAMP DEFAULT NOW(),
+              atualizado_em TIMESTAMP DEFAULT NOW(),
+              deleted_at TIMESTAMP
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_mcamp_contrato ON medicao_campo(contrato_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_mcamp_company ON medicao_campo(company_id)`);
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS medicao_campo_pdfs (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              medicao_campo_id INTEGER NOT NULL,
+              uuid VARCHAR(64),
+              nome VARCHAR(255) NOT NULL,
+              tipo VARCHAR(20) NOT NULL DEFAULT 'pavimento',
+              arquivo_url TEXT NOT NULL,
+              arquivo_key TEXT,
+              arquivo_nome VARCHAR(500),
+              num_paginas INTEGER DEFAULT 1,
+              calibracao_json TEXT,
+              ordem INTEGER DEFAULT 0,
+              criado_em TIMESTAMP DEFAULT NOW(),
+              atualizado_em TIMESTAMP DEFAULT NOW(),
+              deleted_at TIMESTAMP
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_mcpdf_campo ON medicao_campo_pdfs(medicao_campo_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_mcpdf_company ON medicao_campo_pdfs(company_id)`);
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS medicao_campo_contornos (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              medicao_campo_id INTEGER NOT NULL,
+              pdf_id INTEGER NOT NULL,
+              uuid VARCHAR(64),
+              pagina INTEGER DEFAULT 1,
+              numero INTEGER,
+              tipo VARCHAR(20) NOT NULL,
+              rotulo VARCHAR(255),
+              cor VARCHAR(20),
+              geometria_json TEXT NOT NULL,
+              espessura NUMERIC(12,4),
+              metros_por_unidade NUMERIC(18,10),
+              area NUMERIC(18,4),
+              perimetro NUMERIC(18,4),
+              volume NUMERIC(18,4),
+              contagem INTEGER,
+              quantidade NUMERIC(18,4),
+              unidade VARCHAR(10),
+              orcamento_item_id INTEGER,
+              item_eap_codigo VARCHAR(50),
+              item_descricao VARCHAR(500),
+              observacoes TEXT,
+              criado_em TIMESTAMP DEFAULT NOW(),
+              atualizado_em TIMESTAMP DEFAULT NOW(),
+              deleted_at TIMESTAMP
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_mccont_campo ON medicao_campo_contornos(medicao_campo_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_mccont_pdf ON medicao_campo_contornos(pdf_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_mccont_company ON medicao_campo_contornos(company_id)`);
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS medicao_campo_fotos (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              medicao_campo_id INTEGER NOT NULL,
+              pdf_id INTEGER,
+              contorno_id INTEGER,
+              uuid VARCHAR(64),
+              arquivo_url TEXT NOT NULL,
+              arquivo_key TEXT,
+              legenda VARCHAR(500),
+              pagina INTEGER,
+              pin_x NUMERIC(10,6),
+              pin_y NUMERIC(10,6),
+              criado_em TIMESTAMP DEFAULT NOW(),
+              deleted_at TIMESTAMP
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_mcfoto_campo ON medicao_campo_fotos(medicao_campo_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_mcfoto_company ON medicao_campo_fotos(company_id)`);
+          console.log(`[SyncSchema+] Rev. 2893: tabelas medicao_campo/_pdfs/_contornos/_fotos garantidas (Levantamento em PDF).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA medicao_campo*:`, e?.message || e); }
+
         // Rev. 2874 — Ordem GLOBAL do menu lateral (definida pelo Admin Master, vale p/ todos).
         try {
           await db.execute(sql`

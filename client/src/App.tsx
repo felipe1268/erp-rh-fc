@@ -252,6 +252,7 @@ const GestaoDocumentos = lazy(() => import("./pages/gestaodocumentos/index"));
 // Medição de Contratos
 const MedicaoContratos = lazy(() => import("./pages/medicao/MedicaoContratos"));
 const MedicaoDetalhe   = lazy(() => import("./pages/medicao/MedicaoDetalhe"));
+const MedicaoLevantamento = lazy(() => import("./pages/medicao/MedicaoLevantamento"));
 
 // Compras
 const PainelCompras = lazy(() => import("./pages/compras/Painel"));
@@ -529,6 +530,7 @@ function Router() {
         <Route path="/gestao-documentos"           component={() => <RouteGuard component={GestaoDocumentos} route="/gestao-documentos" />} />
         <Route path="/medicao"                   component={() => <RouteGuard component={MedicaoContratos} route="/medicao" />} />
         <Route path="/medicao/:id"               component={() => <RouteGuard component={MedicaoDetalhe} route="/medicao" />} />
+        <Route path="/medicao/:contratoId/levantamento/:campoId" component={() => <RouteGuard component={MedicaoLevantamento} route="/medicao" />} />
         {/* Compras */}
         <Route path="/almoxarifado/categorias"     component={() => <RouteGuard component={AlmoxarifadoCategorias} route="/almoxarifado" />} />
         <Route path="/almoxarifado/movimentacoes" component={() => <RouteGuard component={AlmoxarifadoMovimentacoes} route="/almoxarifado/movimentacoes" />} />

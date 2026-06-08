@@ -7787,6 +7787,96 @@ export const medicaoFdRegistros = pgTable("medicao_fd_registros", {
   atualizadoEm:         timestamp("atualizado_em").defaultNow(),
 }, (t) => [index("idx_mfd_contrato").on(t.contratoId), index("idx_mfd_company").on(t.companyId)]);
 
+// Rev. 2893 — MEDIÇÃO COM LEVANTAMENTO EM PDF (levantamento de campo sobre planta).
+// Medição numerada por contrato → PDFs (pavimento/setor) → contornos (área/volume/
+// perímetro/contagem) com calibração de escala → fotos. Modelo nasce offline-ready
+// (uuid client-stable em cada linha) p/ a Task #67 (PWA), sem implementar PWA agora.
+
+export const medicaoCampo = pgTable("medicao_campo", {
+  id:               serial().primaryKey(),
+  companyId:        integer("company_id").notNull(),
+  contratoId:       integer("contrato_id").notNull(),
+  uuid:             varchar({ length: 64 }),
+  numero:           integer().notNull(),
+  titulo:           varchar({ length: 255 }),
+  descricao:        text(),
+  status:           varchar({ length: 20 }).notNull().default("rascunho"),
+  boletimId:        integer("boletim_id"),
+  criadoPorId:      integer("criado_por_id"),
+  criadoPorNome:    varchar("criado_por_nome", { length: 255 }),
+  criadoEm:         timestamp("criado_em").defaultNow(),
+  atualizadoEm:     timestamp("atualizado_em").defaultNow(),
+  deletedAt:        timestamp("deleted_at"),
+}, (t) => [index("idx_mcamp_contrato").on(t.contratoId), index("idx_mcamp_company").on(t.companyId)]);
+
+export const medicaoCampoPdfs = pgTable("medicao_campo_pdfs", {
+  id:               serial().primaryKey(),
+  companyId:        integer("company_id").notNull(),
+  medicaoCampoId:   integer("medicao_campo_id").notNull(),
+  uuid:             varchar({ length: 64 }),
+  nome:             varchar({ length: 255 }).notNull(),
+  tipo:             varchar({ length: 20 }).notNull().default("pavimento"),
+  arquivoUrl:       text("arquivo_url").notNull(),
+  arquivoKey:       text("arquivo_key"),
+  arquivoNome:      varchar("arquivo_nome", { length: 500 }),
+  numPaginas:       integer("num_paginas").default(1),
+  calibracaoJson:   text("calibracao_json"),
+  ordem:            integer().default(0),
+  criadoEm:         timestamp("criado_em").defaultNow(),
+  atualizadoEm:     timestamp("atualizado_em").defaultNow(),
+  deletedAt:        timestamp("deleted_at"),
+}, (t) => [index("idx_mcpdf_campo").on(t.medicaoCampoId), index("idx_mcpdf_company").on(t.companyId)]);
+
+export const medicaoCampoContornos = pgTable("medicao_campo_contornos", {
+  id:               serial().primaryKey(),
+  companyId:        integer("company_id").notNull(),
+  medicaoCampoId:   integer("medicao_campo_id").notNull(),
+  pdfId:            integer("pdf_id").notNull(),
+  uuid:             varchar({ length: 64 }),
+  pagina:           integer().default(1),
+  numero:           integer(),
+  tipo:             varchar({ length: 20 }).notNull(),
+  rotulo:           varchar({ length: 255 }),
+  cor:              varchar({ length: 20 }),
+  geometriaJson:    text("geometria_json").notNull(),
+  espessura:        numeric({ precision: 12, scale: 4 }),
+  metrosPorUnidade: numeric("metros_por_unidade", { precision: 18, scale: 10 }),
+  area:             numeric({ precision: 18, scale: 4 }),
+  perimetro:        numeric({ precision: 18, scale: 4 }),
+  volume:           numeric({ precision: 18, scale: 4 }),
+  contagem:         integer(),
+  quantidade:       numeric({ precision: 18, scale: 4 }),
+  unidade:          varchar({ length: 10 }),
+  orcamentoItemId:  integer("orcamento_item_id"),
+  itemEapCodigo:    varchar("item_eap_codigo", { length: 50 }),
+  itemDescricao:    varchar("item_descricao", { length: 500 }),
+  observacoes:      text(),
+  criadoEm:         timestamp("criado_em").defaultNow(),
+  atualizadoEm:     timestamp("atualizado_em").defaultNow(),
+  deletedAt:        timestamp("deleted_at"),
+}, (t) => [
+  index("idx_mccont_campo").on(t.medicaoCampoId),
+  index("idx_mccont_pdf").on(t.pdfId),
+  index("idx_mccont_company").on(t.companyId),
+]);
+
+export const medicaoCampoFotos = pgTable("medicao_campo_fotos", {
+  id:               serial().primaryKey(),
+  companyId:        integer("company_id").notNull(),
+  medicaoCampoId:   integer("medicao_campo_id").notNull(),
+  pdfId:            integer("pdf_id"),
+  contornoId:       integer("contorno_id"),
+  uuid:             varchar({ length: 64 }),
+  arquivoUrl:       text("arquivo_url").notNull(),
+  arquivoKey:       text("arquivo_key"),
+  legenda:          varchar({ length: 500 }),
+  pagina:           integer(),
+  pinX:             numeric("pin_x", { precision: 10, scale: 6 }),
+  pinY:             numeric("pin_y", { precision: 10, scale: 6 }),
+  criadoEm:         timestamp("criado_em").defaultNow(),
+  deletedAt:        timestamp("deleted_at"),
+}, (t) => [index("idx_mcfoto_campo").on(t.medicaoCampoId), index("idx_mcfoto_company").on(t.companyId)]);
+
 export const employeeFaceDescriptors = pgTable("employee_face_descriptors", {
   id:             serial("id").primaryKey(),
   companyId:      integer("company_id").notNull(),
