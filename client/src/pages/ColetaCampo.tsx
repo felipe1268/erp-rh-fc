@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   ClipboardList, Link2, QrCode, Copy, Check, X, Power, Eye, Loader2,
   CheckCircle2, XCircle, Clock, ArrowRight, ImageIcon, Pencil, Trash2, AlertTriangle,
-  ArrowLeft, CheckSquare, Square,
+  ArrowLeft, CheckSquare, Square, RotateCcw,
 } from "lucide-react";
 import {
   GRUPOS_COLETA, GRUPOS_COLETA_KEYS, type GrupoColetaKey,
@@ -212,9 +212,12 @@ export default function ColetaCampo() {
   // Reconcilia a seleção com os itens PENDENTES ainda visíveis (remove IDs
   // "fantasma" de respostas já aprovadas/rejeitadas individualmente).
   useEffect(() => {
+    // Seleção múltipla vale para PENDENTES (aprovar em lote) e, p/ Adm Master,
+    // para APROVADAS (cancelar aprovação em lote). Reconcilia com o status da aba.
+    const selStatus = statusFila === "aprovada" ? "aprovada" : "pendente";
     const visiveis = new Set(
       (respostasQ.data || [])
-        .filter((r: any) => r.status === "pendente")
+        .filter((r: any) => r.status === selStatus)
         .map((r: any) => r.id),
     );
     setSelecionados((prev) => {
@@ -223,7 +226,7 @@ export default function ColetaCampo() {
       prev.forEach((id) => { if (visiveis.has(id)) n.add(id); else mudou = true; });
       return mudou ? n : prev;
     });
-  }, [respostasQ.data]);
+  }, [respostasQ.data, statusFila]);
 
   const aprovarM = trpc.coletaRh.aprovarResposta.useMutation({
     onSuccess: (r) => {
@@ -254,6 +257,21 @@ export default function ColetaCampo() {
       utils.coletaRh.listarSessoes.invalidate();
     },
     onError: (e) => toast({ title: "Erro ao aprovar em lote", description: e.message, variant: "destructive" }),
+  });
+  // Rev. 2906 — Adm Master cancela a aprovação de VÁRIAS respostas (volta p/ Pendentes).
+  const [cancelarLoteOpen, setCancelarLoteOpen] = useState(false);
+  const cancelarAprovacaoVariasM = trpc.coletaRh.cancelarAprovacaoVarias.useMutation({
+    onSuccess: (r) => {
+      toast({
+        title: "Aprovação cancelada",
+        description: `${r.canceladas} voltou(aram) para Pendentes${r.ignoradas ? ` · ${r.ignoradas} ignorado(s)` : ""}.`,
+      });
+      setSelecionados(new Set());
+      setCancelarLoteOpen(false);
+      utils.coletaRh.listarRespostas.invalidate();
+      utils.coletaRh.listarSessoes.invalidate();
+    },
+    onError: (e) => toast({ title: "Erro ao cancelar aprovação", description: e.message, variant: "destructive" }),
   });
   const editarRespM = trpc.coletaRh.editarResposta.useMutation({
     onSuccess: () => {
@@ -585,14 +603,22 @@ export default function ColetaCampo() {
 
           {(() => {
             const lista = respostasQ.data || [];
-            const pendentes = statusFila === "pendente" ? lista.filter((r: any) => r.status === "pendente") : [];
-            const todosSel = pendentes.length > 0 && pendentes.every((r: any) => selecionados.has(r.id));
+            // Rev. 2906 — multi-seleção: PENDENTES (aprovar em lote, qualquer revisor)
+            // e APROVADAS (cancelar aprovação em lote, SÓ Adm Master).
+            const modoCancelar = statusFila === "aprovada" && isAdminMaster;
+            const selecionaveisLista = statusFila === "pendente"
+              ? lista.filter((r: any) => r.status === "pendente")
+              : modoCancelar
+                ? lista.filter((r: any) => r.status === "aprovada")
+                : [];
+            const podeSelecionar = selecionaveisLista.length > 0;
+            const todosSel = podeSelecionar && selecionaveisLista.every((r: any) => selecionados.has(r.id));
             const toggleTodos = () => {
-              setSelecionados(todosSel ? new Set() : new Set(pendentes.map((r: any) => r.id)));
+              setSelecionados(todosSel ? new Set() : new Set(selecionaveisLista.map((r: any) => r.id)));
             };
             return (
               <>
-                {statusFila === "pendente" && pendentes.length > 0 && (
+                {podeSelecionar && (
                   <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-muted/40 px-4 py-2.5">
                     <button onClick={toggleTodos} className="flex items-center gap-2 text-sm font-medium">
                       {todosSel ? <CheckSquare className="h-4 w-4 text-[#1B2A4A]" /> : <Square className="h-4 w-4 text-muted-foreground" />}
@@ -600,15 +626,27 @@ export default function ColetaCampo() {
                     </button>
                     <div className="flex items-center gap-3">
                       <span className="text-xs text-muted-foreground">{selecionados.size} selecionado(s)</span>
-                      <Button
-                        size="sm"
-                        className="bg-emerald-600 hover:bg-emerald-700"
-                        disabled={selecionados.size === 0 || aprovarVariasM.isPending}
-                        onClick={() => aprovarVariasM.mutate({ ...baseInput, ids: Array.from(selecionados) })}
-                      >
-                        {aprovarVariasM.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
-                        Aprovar selecionados
-                      </Button>
+                      {modoCancelar ? (
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          disabled={selecionados.size === 0 || cancelarAprovacaoVariasM.isPending}
+                          onClick={() => setCancelarLoteOpen(true)}
+                        >
+                          {cancelarAprovacaoVariasM.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RotateCcw className="h-4 w-4 mr-1" />}
+                          Cancelar aprovação
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          className="bg-emerald-600 hover:bg-emerald-700"
+                          disabled={selecionados.size === 0 || aprovarVariasM.isPending}
+                          onClick={() => aprovarVariasM.mutate({ ...baseInput, ids: Array.from(selecionados) })}
+                        >
+                          {aprovarVariasM.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
+                          Aprovar selecionados
+                        </Button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -621,7 +659,8 @@ export default function ColetaCampo() {
                   {lista.map((r: any) => {
                     const nEnviados = Object.keys(r.dados || {}).length;
                     const fotoExibir = r.fotoUrl || r.empFotoAtual;
-                    const selecionavel = statusFila === "pendente" && r.status === "pendente";
+                    const selecionavel = (statusFila === "pendente" && r.status === "pendente")
+                      || (modoCancelar && r.status === "aprovada");
                     const sel = selecionados.has(r.id);
                     return (
                       <div key={r.id} className={`p-4 flex items-center gap-3 ${sel ? "bg-emerald-50/60" : ""}`}>
@@ -988,6 +1027,33 @@ export default function ColetaCampo() {
             >
               {excluirRespM.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
               Excluir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rev. 2906 — Confirmação: Adm Master cancela aprovação em lote (volta p/ Pendentes). */}
+      <Dialog open={cancelarLoteOpen} onOpenChange={(o) => !o && setCancelarLoteOpen(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <RotateCcw className="h-5 w-5" /> Cancelar aprovação
+            </DialogTitle>
+            <DialogDescription>
+              <span className="font-medium">{selecionados.size}</span> resposta(s) aprovada(s) voltarão para a aba
+              {" "}<span className="font-medium">Pendentes</span> para nova revisão. Os dados já gravados na ficha do
+              {" "}funcionário NÃO são desfeitos.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelarLoteOpen(false)}>Voltar</Button>
+            <Button
+              variant="destructive"
+              disabled={selecionados.size === 0 || cancelarAprovacaoVariasM.isPending}
+              onClick={() => cancelarAprovacaoVariasM.mutate({ ...baseInput, ids: Array.from(selecionados) })}
+            >
+              {cancelarAprovacaoVariasM.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RotateCcw className="h-4 w-4 mr-1" />}
+              Cancelar aprovação
             </Button>
           </DialogFooter>
         </DialogContent>

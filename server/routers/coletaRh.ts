@@ -696,6 +696,52 @@ export const coletaRhRouter = router({
       return { ok: true, aprovadas, ignoradas };
     }),
 
+  // Rev. 2906 — Adm Master CANCELA a aprovação de VÁRIAS respostas de uma vez:
+  // volta o status de "aprovada" → "pendente" (a resposta retorna à fila de
+  // revisão para nova conferência). NÃO desfaz os dados já gravados na ficha do
+  // funcionário — operação não-destrutiva (só UPDATE de status). Idempotente por
+  // item (pula respostas que não estão "aprovada").
+  cancelarAprovacaoVarias: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      ids: z.array(z.number()).min(1),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      assertColetaAdminMaster(ctx.user);
+      const db = (await getDb())!;
+      const companyIds = resolveCompanyIds(input);
+      await assertColetaCompanyAccess(ctx.user, companyIds);
+
+      const respostas = await db
+        .select({ id: coletaRhRespostas.id, status: coletaRhRespostas.status })
+        .from(coletaRhRespostas)
+        .where(and(
+          inArray(coletaRhRespostas.id, input.ids),
+          inArray(coletaRhRespostas.companyId, companyIds),
+        ));
+
+      let canceladas = 0;
+      for (const resp of respostas) {
+        if (resp.status !== "aprovada") continue;
+        await db
+          .update(coletaRhRespostas)
+          .set({
+            status: "pendente",
+            revisadoPor: null,
+            revisadoPorId: null,
+            revisadoEm: null,
+            motivoRejeicao: null,
+          })
+          .where(eq(coletaRhRespostas.id, resp.id));
+        canceladas++;
+      }
+      // `ignoradas` cobre TUDO que foi pedido mas não cancelado: status ≠ aprovada,
+      // IDs inexistentes ou fora da empresa (deduplica os ids de entrada).
+      const ignoradas = new Set(input.ids).size - canceladas;
+      return { ok: true, canceladas, ignoradas };
+    }),
+
   rejeitarResposta: protectedProcedure
     .input(z.object({
       companyId: z.number(),

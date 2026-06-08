@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2906 — **COLETA DE CAMPO (RH) — FILA DE REVISÃO AGORA TEM SELEÇÃO MÚLTIPLA NA ABA "APROVADAS"
+ * E O ADMINISTRADOR MASTER PODE CANCELAR A APROVAÇÃO DE VÁRIAS PESSOAS DE UMA VEZ (VOLTA P/ PENDENTES).**
+ *
+ * PEDIDO (usuário): "Preciso de múltipla seleção aqui também e, como adm master, poder cancelar as
+ * aprovações de múltiplas pessoas — isso vale para esta tela também." (tela = aba "Aprovadas" da Fila
+ * de Revisão da Coleta de Campo — RH; a seleção múltipla já existia só na aba "Pendentes" p/ aprovar
+ * em lote desde a Rev. 2871).
+ *
+ * SOLUÇÃO (ZERO ALTER/DROP/DELETE — só UPDATE de status, operação app-padrão):
+ * - BACKEND `server/routers/coletaRh.ts`: nova mutation `cancelarAprovacaoVarias` (gate
+ *   `assertColetaAdminMaster` — SÓ `admin_master`; tenant guard `assertColetaCompanyAccess`). Para
+ *   cada id selecionado que está `aprovada`, volta o status p/ `pendente` e limpa
+ *   `revisadoPor/revisadoPorId/revisadoEm/motivoRejeicao`; idempotente (pula o que não está aprovada),
+ *   retorna `{ canceladas, ignoradas }`. NÃO desfaz os dados já gravados na ficha do funcionário
+ *   (não-destrutivo) — a resposta apenas RETORNA à fila para nova conferência.
+ * - FRONTEND `client/src/pages/ColetaCampo.tsx`: a multi-seleção da fila passa a valer também na aba
+ *   "Aprovadas" QUANDO o usuário é Adm Master (`modoCancelar = statusFila==="aprovada" && isAdminMaster`).
+ *   A barra de ação troca "Aprovar selecionados" (verde, aba Pendentes) por "Cancelar aprovação"
+ *   (vermelho/`destructive`, aba Aprovadas), com diálogo de confirmação que avisa que os dados da ficha
+ *   não são desfeitos. O `useEffect` de reconciliação da seleção passa a considerar o status da aba ativa
+ *   (pendente×aprovada) e cada linha aprovada vira selecionável p/ o Adm Master. Hook
+ *   `cancelarAprovacaoVariasM` invalida `listarRespostas`+`listarSessoes`.
+ *
+ * RESSALVA: cancelar a aprovação NÃO reverte os campos já aplicados na ficha do funcionário (isso seria
+ * destrutivo e não foi pedido); apenas devolve a resposta à aba "Pendentes" para re-revisão. ZERO
+ * ALTER/DROP/DELETE.
+ *
  * Rev. 2905 — **INSTALAR NO CELULAR (PWA) — AGORA DÁ PRA LIGAR/DESLIGAR O BANNER "INSTALAR" NAS
  * CONFIGURAÇÕES GERAIS DO SISTEMA (POR EMPRESA). O SISTEMA CONTINUA ABRINDO EM QUALQUER NAVEGADOR;
  * A INSTALAÇÃO SERVE SÓ PARA O LEVANTAMENTO DE CAMPO OFFLINE — LÓGICA OFFLINE INTOCADA.**
