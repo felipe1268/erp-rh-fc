@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2899 — **ASSINATURA ELETRÔNICA (INTEGRASIGN/FcSign) — BOTÕES "EDITAR" E "EXCLUIR"
+ * AGORA APARECEM DIRETO EM CADA CARD DA LISTA DE ENVELOPES (ANTES SÓ NO PAINEL DE DETALHES).**
+ *
+ * PEDIDO (print iPad da tela IntegraSign — usuário reabriu o tema): "Quero poder editar e
+ * apagar os envelopes." A Rev. 2898 já tinha entregue as ações Editar/Excluir, mas elas só
+ * existiam no PAINEL DE DETALHES (lado direito), que só abre depois de CLICAR num envelope —
+ * no print o usuário estava na lista, com "Selecione um envelope" à direita, e não via os
+ * botões. Logo: ação existia, mas estava pouco descoberta.
+ *
+ * SOLUÇÃO (SÓ CLIENT, ADITIVA — ZERO schema/server/ALTER/DROP/DELETE):
+ * `client/src/pages/IntegraSignDashboard.tsx` — cada card da lista de envelopes ganha dois
+ * botões-ícone (Pencil "Editar" / Trash2 "Excluir") ao lado do chevron. Ambos usam
+ * `e.stopPropagation()` p/ NÃO disparar a seleção do card: "Editar" chama o mesmo
+ * `abrirEdicao(env)` (dialog título/descrição sempre; corpo só rascunho) e "Excluir" abre o
+ * mesmo dialog de soft-delete (`setDeleteDialog(env.id)`) já existentes da Rev. 2898. Nenhuma
+ * procedure nova; reaproveita backend `editarEnvelope`/`excluirEnvelope` (soft-delete coerente).
+ * ZERO ALTER/DROP/DELETE destrutivo. Detalhe: este arquivo.
+ *
  * Rev. 2898 — **ASSINATURA ELETRÔNICA (INTEGRASIGN/FcSign) — DASHBOARD DE CONTRATOS AGORA
  * PERMITE EDITAR E EXCLUIR OS ENVELOPES.**
  *
