@@ -154,3 +154,13 @@ createRoot(document.getElementById("root")!).render(
     </QueryClientProvider>
   </trpc.Provider>
 );
+
+// PWA — Service Worker (Rev. 2895): registra SÓ em produção para não interferir
+// no HMR do dev nem servir assets velhos durante o desenvolvimento.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((err) => {
+      console.warn("[SW] Falha ao registrar service worker:", err);
+    });
+  });
+}

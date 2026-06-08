@@ -1,6 +1,58 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2895 — **MEDIÇÃO DE CONTRATOS — LEVANTAMENTO DE CAMPO AGORA É OFFLINE-FIRST
+ * NO TABLET (PWA): MEDIR/CONTORNAR/CALIBRAR/FOTOGRAFAR SEM INTERNET E SINCRONIZAR
+ * SOZINHO AO RECONECTAR, SEM PERDA E SEM DUPLICAR.**
+ *
+ * PEDIDO (Task #67, continuação da Rev. 2893): a tela de Levantamento de Campo
+ * (medir área/volume/perímetro/contagem sobre o PDF da planta no tablet) precisa
+ * funcionar EM CAMPO, onde a obra quase nunca tem internet. Requisitos: (1) app
+ * instalável (PWA) sem quebrar o boot nem servir assets velhos; (2) cache local
+ * dos PDFs/contornos/fotos com pré-download e controle de espaço; (3) fila de
+ * sincronização automática ao reconectar, com status por item; (4) resolução de
+ * conflito por identificador estável do cliente + timestamps (sem perda
+ * silenciosa); (5) endpoints de sync idempotentes (upsert por uuid + guard de
+ * tenant). ESCOPO restrito ao módulo de Levantamento de Campo.
+ *
+ * SOLUÇÃO (ADITIVA, ZERO destrutivo — nenhum ALTER/DROP/DELETE; reaproveita o
+ * schema da Rev. 2893, que já tem `uuid` client-stable + `atualizado_em` +
+ * `deleted_at` nas 4 tabelas `medicao_campo*`):
+ * (1) SHARED `shared/levantamentoConsolidado.ts` — função PURA `consolidarContornos`
+ * (contornos → R$ por item do orçamento) extraída de `getConsolidadoCampo`; agora
+ * é a MESMA fonte usada no servidor E no cliente (consolidação offline idêntica).
+ * (2) BACKEND `server/routers/medicao.ts` — NOVO `medicao.sincronizarLote`: recebe
+ * uma fila de ≤500 operações (contorno/foto upsert+delete, pdf calibrar) e aplica
+ * IDEMPOTENTE — upsert por `uuid` client-stable OU por `id` quando conhecido —
+ * com guard de tenant em CADA op (valida contrato + cada `medicaoCampoId` por
+ * empresa/contrato). Conflito = LAST-WRITE-WINS por `atualizadoEm`: o servidor
+ * NUNCA sobrescreve silenciosamente uma versão mais nova; devolve status por op
+ * (`ok`/`conflito`/`erro`) para o cliente registrar/avisar. `getConsolidadoCampo`
+ * refatorado p/ chamar a função shared.
+ * (3) CLIENTE — armazenamento local sem dependências: `client/src/lib/offlineDb.ts`
+ * (IndexedDB: stores `campoSnapshots` / `blobs` / `syncQueue`; CRUD + estimate de
+ * espaço + blobToBase64). `client/src/lib/levantamentoSync.ts` (fila + pub/sub de
+ * status, dreno automático ao voltar a conexão via listeners online/offline,
+ * pré-download de PDFs/fotos para uso offline, client tRPC vanilla cookie-based).
+ * Hook `client/src/hooks/useLevantamentoOffline.ts` une dados do servidor +
+ * snapshot local + overlay OTIMISTA das ops pendentes (todas as edições passam
+ * pela fila: online drena na hora, offline fica pendente). Resolve blob URLs p/
+ * exibir PDF/foto offline.
+ * (4) FRONT `client/src/pages/medicao/MedicaoLevantamento.tsx` — troca queries/
+ * mutations diretas pelo hook; NOVA barra de status (online/offline, pendentes,
+ * sincronizando, conflitos/erros, "Sincronizar agora", "Baixar p/ offline" com
+ * progresso, uso de espaço); PDF e fotos lidos do cache local quando disponível;
+ * fotos pendentes ganham selo "pendente".
+ * (5) PWA SHELL — `client/public/manifest.json` ganha `icons` 192/512 (gerados a
+ * partir do logo); NOVO `client/public/sw.js` (network-first navegação + app
+ * shell offline, cache-first `/assets` versionados, bypass total de `/api`, limpa
+ * caches antigos no activate); registro do SW em `client/src/main.tsx` SÓ em
+ * produção (não interfere no HMR do dev).
+ *
+ * O QUE **NÃO** MUDA: envio/exclusão de PDF e geração de boletim seguem ONLINE
+ * (PDFs são pré-baixados para medir offline; criar planta/boletim em campo está
+ * fora do escopo). Schema imutável (Rev. 2893). ZERO ALTER/DROP/DELETE.
+ *
  * Rev. 2894 — **COMPRAS — NUMERAÇÃO DE EXIBIÇÃO DAS OC/OS AGORA É "NÚMERO PRIMEIRO,
  * ANO DEPOIS" (OC-2026-389 → OC-389-2026), IGUAL AO PADRÃO JÁ APLICADO EM
  * SOLICITAÇÕES (SC) E COTAÇÕES (COT).**

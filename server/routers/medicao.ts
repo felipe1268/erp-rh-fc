@@ -21,6 +21,7 @@ import {
 import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { TRPCError } from "@trpc/server";
+import { consolidarContornos } from "../../shared/levantamentoConsolidado";
 
 export const medicaoRouter = router({
 
@@ -1023,46 +1024,8 @@ export const medicaoRouter = router({
             .from(orcamentoItens)
             .where(eq(orcamentoItens.orcamentoId, input.orcamentoId))
         : [];
-      const orcMap = new Map(itensOrc.map((i) => [i.id, i]));
-
-      type Linha = {
-        orcamentoItemId: number | null;
-        eapCodigo: string | null;
-        descricao: string;
-        unidade: string | null;
-        precoUnitario: number;
-        quantidade: number;
-        valorTotal: number;
-        contornos: number;
-      };
-      const grupos = new Map<string, Linha>();
-      for (const c of contornos) {
-        const chave = c.orcamentoItemId != null ? `oi:${c.orcamentoItemId}` : `na:${c.tipo}:${c.unidade ?? ""}`;
-        const orc = c.orcamentoItemId != null ? orcMap.get(c.orcamentoItemId) : undefined;
-        const preco = orc ? parseFloat(String(orc.vendaUnitTotal ?? "0")) || 0 : 0;
-        const qtd = parseFloat(String(c.quantidade ?? "0")) || 0;
-        let g = grupos.get(chave);
-        if (!g) {
-          g = {
-            orcamentoItemId: c.orcamentoItemId ?? null,
-            eapCodigo: c.itemEapCodigo ?? orc?.eapCodigo ?? null,
-            descricao: c.itemDescricao ?? orc?.descricao ?? (c.rotulo || "Sem item vinculado"),
-            unidade: c.unidade ?? orc?.unidade ?? null,
-            precoUnitario: preco,
-            quantidade: 0,
-            valorTotal: 0,
-            contornos: 0,
-          };
-          grupos.set(chave, g);
-        }
-        g.quantidade += qtd;
-        g.valorTotal += qtd * preco;
-        g.contornos += 1;
-      }
-      const linhas = Array.from(grupos.values()).sort((a, b) =>
-        String(a.eapCodigo ?? "zzz").localeCompare(String(b.eapCodigo ?? "zzz")));
-      const totalGeral = linhas.reduce((s, l) => s + l.valorTotal, 0);
-      return { linhas, totalGeral };
+      // Consolidação via função PURA compartilhada (mesma usada no MODO OFFLINE do cliente).
+      return consolidarContornos(contornos as any, itensOrc as any);
     }),
 
   // --- Gera um boletim de medição a partir do levantamento consolidado ---
@@ -1178,5 +1141,272 @@ export const medicaoRouter = router({
         .where(eq(medicaoCampo.id, input.medicaoCampoId));
 
       return { boletimId: boletim.id, numero, itens: linhas.length, valorBruto };
+    }),
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Rev. 2895 — SYNC EM LOTE (offline-first / PWA do Levantamento de Campo).
+  // Recebe uma fila de operações geradas OFFLINE no tablet e aplica de forma
+  // IDEMPOTENTE (upsert por uuid client-stable OU por id quando conhecido) com
+  // guard de tenant em CADA operação. Conflito = last-write-wins por
+  // `atualizadoEm` (o servidor NUNCA sobrescreve silenciosamente uma versão mais
+  // nova; devolve status "conflito" para o cliente registrar/avisar).
+  // ───────────────────────────────────────────────────────────────────────────
+  sincronizarLote: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      contratoId: z.number(),
+      operations: z.array(z.object({
+        clientOpId: z.string(),
+        entity: z.enum(["contorno", "foto", "pdf"]),
+        action: z.enum(["upsert", "delete", "calibrar"]),
+        uuid: z.string().optional(),
+        id: z.number().optional(),
+        medicaoCampoId: z.number().optional(),
+        atualizadoEm: z.string().optional(),
+        data: z.any().optional(),
+        base64: z.string().max(20_000_000).optional(),
+        contentType: z.string().optional(),
+      })).max(500),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const { companyId, contratoId } = input;
+
+      // Guard de tenant raiz: o contrato precisa ser desta empresa.
+      const [contrato] = await db
+        .select({ id: medicaoContratos.id })
+        .from(medicaoContratos)
+        .where(and(eq(medicaoContratos.id, contratoId), eq(medicaoContratos.companyId, companyId)))
+        .limit(1);
+      if (!contrato) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado ou sem permissão." });
+
+      // cache de campos validados (medicaoCampoId → pertence à empresa+contrato)
+      const camposOk = new Map<number, boolean>();
+      async function campoValido(campoId: number): Promise<boolean> {
+        if (camposOk.has(campoId)) return camposOk.get(campoId)!;
+        const [c] = await db
+          .select({ id: medicaoCampo.id })
+          .from(medicaoCampo)
+          .where(and(
+            eq(medicaoCampo.id, campoId),
+            eq(medicaoCampo.companyId, companyId),
+            eq(medicaoCampo.contratoId, contratoId),
+          ))
+          .limit(1);
+        const ok = !!c;
+        camposOk.set(campoId, ok);
+        return ok;
+      }
+
+      const tsIn = (s?: string): Date => {
+        const d = s ? new Date(s) : new Date();
+        return isNaN(d.getTime()) ? new Date() : d;
+      };
+      const isNewer = (existing: Date | null, incoming: Date): boolean =>
+        !!existing && existing.getTime() > incoming.getTime();
+
+      type OpResult = {
+        clientOpId: string;
+        uuid?: string;
+        status: "ok" | "conflito" | "erro";
+        serverId?: number;
+        mensagem?: string;
+      };
+      const resultados: OpResult[] = [];
+
+      for (const op of input.operations) {
+        const incoming = tsIn(op.atualizadoEm);
+        try {
+          // ───────── CONTORNO ─────────
+          if (op.entity === "contorno") {
+            if (op.action === "delete") {
+              let alvo: any = null;
+              if (op.id && op.id > 0) {
+                [alvo] = await db.select({ id: medicaoCampoContornos.id, medicaoCampoId: medicaoCampoContornos.medicaoCampoId })
+                  .from(medicaoCampoContornos)
+                  .where(and(eq(medicaoCampoContornos.id, op.id), eq(medicaoCampoContornos.companyId, companyId))).limit(1);
+              } else if (op.uuid) {
+                [alvo] = await db.select({ id: medicaoCampoContornos.id, medicaoCampoId: medicaoCampoContornos.medicaoCampoId })
+                  .from(medicaoCampoContornos)
+                  .where(and(eq(medicaoCampoContornos.uuid, op.uuid), eq(medicaoCampoContornos.companyId, companyId))).limit(1);
+              }
+              // Só apaga se a linha pertence a um campo deste contrato (guard cross-contrato).
+              // Não-encontrada = idempotente (já apagada / nunca existiu aqui) → "ok".
+              if (alvo && (await campoValido(alvo.medicaoCampoId))) {
+                await db.update(medicaoCampoContornos).set({ deletedAt: new Date() }).where(eq(medicaoCampoContornos.id, alvo.id));
+              }
+              resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, status: "ok" });
+              continue;
+            }
+            // upsert
+            const d = op.data || {};
+            const campoId = op.medicaoCampoId ?? d.medicaoCampoId;
+            if (!campoId || !(await campoValido(campoId))) {
+              resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, status: "erro", mensagem: "Medição não encontrada ou sem permissão." });
+              continue;
+            }
+            const fields = {
+              pdfId: d.pdfId,
+              pagina: d.pagina ?? 1,
+              tipo: d.tipo,
+              rotulo: d.rotulo ?? null,
+              cor: d.cor ?? null,
+              geometriaJson: d.geometriaJson ?? "[]",
+              espessura: d.espessura ?? null,
+              metrosPorUnidade: d.metrosPorUnidade ?? null,
+              area: d.area ?? null,
+              perimetro: d.perimetro ?? null,
+              volume: d.volume ?? null,
+              contagem: d.contagem ?? null,
+              quantidade: d.quantidade ?? null,
+              unidade: d.unidade ?? null,
+              orcamentoItemId: d.orcamentoItemId ?? null,
+              itemEapCodigo: d.itemEapCodigo ?? null,
+              itemDescricao: d.itemDescricao ?? null,
+              observacoes: d.observacoes ?? null,
+            };
+            // localizar existente por id (conhecido) OU por uuid
+            let existing: any = null;
+            if (op.id && op.id > 0) {
+              [existing] = await db.select().from(medicaoCampoContornos)
+                .where(and(eq(medicaoCampoContornos.id, op.id), eq(medicaoCampoContornos.companyId, companyId))).limit(1);
+            } else if (op.uuid) {
+              [existing] = await db.select().from(medicaoCampoContornos)
+                .where(and(eq(medicaoCampoContornos.uuid, op.uuid), eq(medicaoCampoContornos.companyId, companyId))).limit(1);
+            }
+            if (existing) {
+              // Guard cross-contrato: a linha existente precisa pertencer a um campo deste contrato.
+              if (!(await campoValido(existing.medicaoCampoId))) {
+                resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, status: "erro", mensagem: "Contorno pertence a outro contrato." });
+                continue;
+              }
+              if (isNewer(existing.atualizadoEm, incoming)) {
+                resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, serverId: existing.id, status: "conflito", mensagem: "Versão no servidor é mais recente." });
+                continue;
+              }
+              await db.update(medicaoCampoContornos)
+                .set({ ...fields, atualizadoEm: incoming })
+                .where(and(eq(medicaoCampoContornos.id, existing.id), eq(medicaoCampoContornos.companyId, companyId)));
+              resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, serverId: existing.id, status: "ok" });
+              continue;
+            }
+            const [maxRow] = await db
+              .select({ max: sql<number>`COALESCE(MAX(numero),0)::int` })
+              .from(medicaoCampoContornos)
+              .where(eq(medicaoCampoContornos.medicaoCampoId, campoId));
+            const [row] = await db.insert(medicaoCampoContornos).values({
+              companyId,
+              medicaoCampoId: campoId,
+              uuid: op.uuid,
+              numero: (maxRow?.max ?? 0) + 1,
+              atualizadoEm: incoming,
+              ...fields,
+            }).returning();
+            resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, serverId: row.id, status: "ok" });
+            continue;
+          }
+
+          // ───────── FOTO ─────────
+          if (op.entity === "foto") {
+            if (op.action === "delete") {
+              let alvo: any = null;
+              if (op.id && op.id > 0) {
+                [alvo] = await db.select({ id: medicaoCampoFotos.id, medicaoCampoId: medicaoCampoFotos.medicaoCampoId })
+                  .from(medicaoCampoFotos)
+                  .where(and(eq(medicaoCampoFotos.id, op.id), eq(medicaoCampoFotos.companyId, companyId))).limit(1);
+              } else if (op.uuid) {
+                [alvo] = await db.select({ id: medicaoCampoFotos.id, medicaoCampoId: medicaoCampoFotos.medicaoCampoId })
+                  .from(medicaoCampoFotos)
+                  .where(and(eq(medicaoCampoFotos.uuid, op.uuid), eq(medicaoCampoFotos.companyId, companyId))).limit(1);
+              }
+              // Guard cross-contrato; não-encontrada = idempotente → "ok".
+              if (alvo && (await campoValido(alvo.medicaoCampoId))) {
+                await db.update(medicaoCampoFotos).set({ deletedAt: new Date() }).where(eq(medicaoCampoFotos.id, alvo.id));
+              }
+              resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, status: "ok" });
+              continue;
+            }
+            // upsert (create) — idempotente por uuid
+            const d = op.data || {};
+            const campoId = op.medicaoCampoId ?? d.medicaoCampoId;
+            if (!campoId || !(await campoValido(campoId))) {
+              resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, status: "erro", mensagem: "Medição não encontrada ou sem permissão." });
+              continue;
+            }
+            if (op.uuid) {
+              // Dedup escopado ao campo já validado (evita casar uuid de outro contrato).
+              const [existing] = await db.select({ id: medicaoCampoFotos.id }).from(medicaoCampoFotos)
+                .where(and(
+                  eq(medicaoCampoFotos.uuid, op.uuid),
+                  eq(medicaoCampoFotos.companyId, companyId),
+                  eq(medicaoCampoFotos.medicaoCampoId, campoId),
+                )).limit(1);
+              if (existing) {
+                resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, serverId: existing.id, status: "ok" });
+                continue;
+              }
+            }
+            if (!op.base64) {
+              resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, status: "erro", mensagem: "Foto sem conteúdo." });
+              continue;
+            }
+            const buf = Buffer.from(op.base64, "base64");
+            const ext = (op.contentType || "").includes("png") ? "png" : "jpg";
+            const key = `medicao-campo/${companyId}/${campoId}/fotos/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+            const { url } = await storagePut(key, buf, op.contentType || "image/jpeg");
+            const [row] = await db.insert(medicaoCampoFotos).values({
+              companyId,
+              medicaoCampoId: campoId,
+              pdfId: d.pdfId ?? null,
+              contornoId: d.contornoId ?? null,
+              uuid: op.uuid,
+              arquivoUrl: url,
+              arquivoKey: key,
+              legenda: d.legenda ?? null,
+              pagina: d.pagina ?? null,
+              pinX: d.pinX ?? null,
+              pinY: d.pinY ?? null,
+            }).returning();
+            resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, serverId: row.id, status: "ok" });
+            continue;
+          }
+
+          // ───────── PDF (apenas calibração offline) ─────────
+          if (op.entity === "pdf") {
+            const d = op.data || {};
+            if (!op.id || op.id <= 0) {
+              resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, status: "erro", mensagem: "PDF sem id (calibração exige planta já existente)." });
+              continue;
+            }
+            const [existing] = await db.select().from(medicaoCampoPdfs)
+              .where(and(eq(medicaoCampoPdfs.id, op.id), eq(medicaoCampoPdfs.companyId, companyId))).limit(1);
+            if (!existing) {
+              resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, status: "erro", mensagem: "Planta não encontrada ou sem permissão." });
+              continue;
+            }
+            // Guard cross-contrato: a planta precisa pertencer a um campo deste contrato.
+            if (!(await campoValido(existing.medicaoCampoId))) {
+              resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, status: "erro", mensagem: "Planta pertence a outro contrato." });
+              continue;
+            }
+            if (isNewer(existing.atualizadoEm, incoming)) {
+              resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, serverId: existing.id, status: "conflito", mensagem: "Calibração no servidor é mais recente." });
+              continue;
+            }
+            await db.update(medicaoCampoPdfs)
+              .set({ calibracaoJson: d.calibracaoJson ?? null, atualizadoEm: incoming })
+              .where(and(eq(medicaoCampoPdfs.id, op.id), eq(medicaoCampoPdfs.companyId, companyId)));
+            resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, serverId: existing.id, status: "ok" });
+            continue;
+          }
+        } catch (e: any) {
+          resultados.push({ clientOpId: op.clientOpId, uuid: op.uuid, status: "erro", mensagem: e?.message || "Falha ao sincronizar." });
+        }
+      }
+
+      const okCount = resultados.filter((r) => r.status === "ok").length;
+      const conflitos = resultados.filter((r) => r.status === "conflito").length;
+      const erros = resultados.filter((r) => r.status === "erro").length;
+      return { resultados, okCount, conflitos, erros };
     }),
 });

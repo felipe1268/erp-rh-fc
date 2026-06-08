@@ -17,11 +17,13 @@ import {
   ArrowLeft, Plus, Loader2, FileText, Trash2, Ruler, Square, Box, Spline,
   Hash, MousePointer2, Crosshair, ZoomIn, ZoomOut, Check, Camera, Image as ImageIcon,
   Calculator, FileSpreadsheet, ChevronLeft, ChevronRight, X,
+  Wifi, WifiOff, RefreshCw, Download, HardDrive, AlertTriangle, CheckCircle2, CloudOff,
 } from "lucide-react";
 import {
   type GeoPonto, type TipoContorno, UNIDADE_POR_TIPO, LABEL_TIPO,
   calcularContorno, distancia, fatorCalibracao,
 } from "@shared/levantamentoGeo";
+import { useLevantamentoOffline } from "@/hooks/useLevantamentoOffline";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
 
@@ -70,32 +72,22 @@ export default function MedicaoLevantamento() {
   // --- dados ---
   const { data: contrato } = trpc.medicao.getContrato.useQuery({ id: contratoId }, { enabled: contratoId > 0 });
   const orcamentoId = contrato?.orcamentoId ?? 0;
-  const { data: campo, isLoading: loadingCampo } = trpc.medicao.getCampo.useQuery(
-    { id: campoId, companyId },
-    { enabled: campoId > 0 && companyId > 0 },
-  );
-  const { data: itensOrcamento = [] } = trpc.medicao.getItensOrcamento.useQuery(
-    { orcamentoId },
-    { enabled: orcamentoId > 0 },
-  );
-  const { data: consolidado } = trpc.medicao.getConsolidadoCampo.useQuery(
-    { medicaoCampoId: campoId, companyId, orcamentoId },
-    { enabled: campoId > 0 && companyId > 0 },
-  );
+
+  // Camada offline-first (Rev. 2895): une servidor + snapshot local + fila otimista.
+  const off = useLevantamentoOffline({ campoId, companyId, contratoId, orcamentoId });
+  const campo = off.campo;
+  const loadingCampo = off.loading;
+  const itensOrcamento = off.itensOrcamento;
+  const consolidado = off.consolidado;
 
   const invalidate = () => {
     utils.medicao.getCampo.invalidate({ id: campoId, companyId });
-    utils.medicao.getConsolidadoCampo.invalidate({ medicaoCampoId: campoId, companyId, orcamentoId });
   };
 
-  // --- mutations ---
+  // --- mutations ONLINE-only (envio/exclusão de PDF e geração de boletim
+  //     ficam FORA do escopo offline; PDFs são pré-baixados para medir offline) ---
   const uploadPdfM = trpc.medicao.uploadPdf.useMutation({ onSuccess: invalidate });
   const excluirPdfM = trpc.medicao.excluirPdf.useMutation({ onSuccess: invalidate });
-  const atualizarPdfM = trpc.medicao.atualizarPdf.useMutation({ onSuccess: invalidate });
-  const salvarContornoM = trpc.medicao.salvarContorno.useMutation({ onSuccess: invalidate });
-  const excluirContornoM = trpc.medicao.excluirContorno.useMutation({ onSuccess: invalidate });
-  const uploadFotoM = trpc.medicao.uploadFoto.useMutation({ onSuccess: invalidate });
-  const excluirFotoM = trpc.medicao.excluirFoto.useMutation({ onSuccess: invalidate });
   const gerarBoletimM = trpc.medicao.gerarBoletimDoCampo.useMutation({
     onSuccess: (r: any) => {
       invalidate();
@@ -196,7 +188,7 @@ export default function MedicaoLevantamento() {
     if (!(metros > 0)) return;
     const mpu = fatorCalibracao(distPt, metros);
     const novo: Record<string, Calibracao> = { ...calibracaoMap, [String(pagina)]: { p1, p2, metros, metrosPorUnidade: mpu } };
-    atualizarPdfM.mutate({ id: pdfSel.id, companyId, calibracaoJson: JSON.stringify(novo) });
+    off.calibrarPdf(pdfSel, JSON.stringify(novo));
     setTool("select");
   }
 
@@ -208,9 +200,7 @@ export default function MedicaoLevantamento() {
     }
     const ptsPt = ptsNorm.map(normToPt);
     const r = calcularContorno(tipo, ptsPt, calibAtual.metrosPorUnidade, espessura, contagem);
-    salvarContornoM.mutate({
-      companyId,
-      medicaoCampoId: campoId,
+    off.saveContorno({
       pdfId: pdfSel.id,
       pagina,
       tipo,
@@ -268,11 +258,7 @@ export default function MedicaoLevantamento() {
     const files = Array.from(e.target.files || []);
     e.target.value = "";
     for (const file of files) {
-      const base64 = await fileToBase64(file);
-      await uploadFotoM.mutateAsync({
-        companyId, medicaoCampoId: campoId, pdfId: pdfSelId ?? null, pagina,
-        base64, contentType: file.type || "image/jpeg",
-      });
+      await off.saveFoto(file, { pdfId: pdfSelId ?? null, pagina });
     }
   }
 
@@ -280,11 +266,21 @@ export default function MedicaoLevantamento() {
     const it = (itensOrcamento as any[]).find((i) => String(i.id) === orcamentoItemId);
     const c = contornosPagina.find((x) => x.id === contornoId);
     if (!c) return;
-    salvarContornoM.mutate({
-      companyId, medicaoCampoId: campoId, pdfId: pdfSelId!, id: contornoId,
+    off.saveContorno({
+      id: c.id, uuid: c.uuid, pdfId: pdfSelId!,
       pagina: c.pagina ?? pagina,
       tipo: c.tipo as TipoContorno,
+      cor: c.cor ?? COR_TIPO[c.tipo as TipoContorno],
       geometriaJson: c.geometriaJson ?? "[]",
+      espessura: c.espessura ?? null,
+      metrosPorUnidade: c.metrosPorUnidade ?? null,
+      area: c.area ?? null,
+      perimetro: c.perimetro ?? null,
+      volume: c.volume ?? null,
+      contagem: c.contagem ?? null,
+      quantidade: c.quantidade ?? null,
+      unidade: c.unidade ?? null,
+      numero: c.numero,
       orcamentoItemId: it ? it.id : null,
       itemEapCodigo: it?.eapCodigo ?? null,
       itemDescricao: it?.descricao ?? null,
@@ -400,6 +396,41 @@ export default function MedicaoLevantamento() {
           </div>
         </div>
 
+        {/* Barra de status offline / sincronização (PWA — Rev. 2895) */}
+        <div className="flex items-center gap-2 flex-wrap text-xs bg-white border rounded-lg px-3 py-2">
+          {off.online ? (
+            <span className="flex items-center gap-1 text-emerald-700"><Wifi className="h-3.5 w-3.5" />Online</span>
+          ) : (
+            <span className="flex items-center gap-1 text-amber-700"><WifiOff className="h-3.5 w-3.5" />Offline — edições salvas no aparelho</span>
+          )}
+          <span className="h-3 w-px bg-border" />
+          {off.sync.syncing ? (
+            <span className="flex items-center gap-1 text-blue-700"><Loader2 className="h-3.5 w-3.5 animate-spin" />Sincronizando…</span>
+          ) : off.sync.pending > 0 ? (
+            <span className="flex items-center gap-1 text-amber-700"><CloudOff className="h-3.5 w-3.5" />{off.sync.pending} pendente(s)</span>
+          ) : (
+            <span className="flex items-center gap-1 text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" />Tudo sincronizado</span>
+          )}
+          {(off.sync.errors > 0 || off.sync.conflicts > 0) && (
+            <span className="flex items-center gap-1 text-red-600">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              {off.sync.conflicts > 0 ? `${off.sync.conflicts} conflito(s)` : ""}
+              {off.sync.errors > 0 ? `${off.sync.conflicts > 0 ? " · " : ""}${off.sync.errors} erro(s)` : ""}
+            </span>
+          )}
+          {off.cached && <span className="text-gray-400">· disponível offline</span>}
+          <Button size="sm" variant="ghost" className="h-7 gap-1 ml-auto" disabled={!off.online || off.sync.syncing || off.sync.pending === 0} onClick={() => off.processNow()}>
+            <RefreshCw className="h-3.5 w-3.5" />Sincronizar agora
+          </Button>
+          <Button size="sm" variant="outline" className="h-7 gap-1" disabled={!off.online || off.prefetching} onClick={() => off.prefetch()}>
+            {off.prefetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            {off.prefetching && off.prefetchProgress ? `Baixando ${off.prefetchProgress.done}/${off.prefetchProgress.total}` : "Baixar p/ offline"}
+          </Button>
+          {off.storage && (
+            <span className="flex items-center gap-1 text-gray-500"><HardDrive className="h-3.5 w-3.5" />{(off.storage.blobsBytes / 1048576).toFixed(1)} MB · {off.storage.blobsCount} arq.</span>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4">
           {/* Coluna do PDF */}
           <div className="space-y-2">
@@ -479,7 +510,7 @@ export default function MedicaoLevantamento() {
                 {/* canvas */}
                 <div ref={canvasWrapRef} className="border rounded-lg bg-slate-200 overflow-auto" style={{ maxHeight: "72vh" }}>
                   <Document
-                    file={pdfSel.arquivoUrl}
+                    file={off.pdfFileFor(pdfSel)}
                     onLoadSuccess={(d) => setNumPaginas(d.numPages)}
                     loading={<div className="py-16 text-center text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>}
                     error={<div className="py-16 text-center text-red-500">Erro ao carregar PDF</div>}
@@ -553,7 +584,7 @@ export default function MedicaoLevantamento() {
                         <span className="font-medium flex items-center gap-1" style={{ color: c.cor }}>
                           {ICON_TIPO[c.tipo as TipoContorno]} {LABEL_TIPO[c.tipo as TipoContorno]} #{String(c.numero ?? "").padStart(3, "0")}
                         </span>
-                        <button className="text-red-600" onClick={() => { if (confirm("Excluir contorno?")) excluirContornoM.mutate({ id: c.id, companyId }); }}>
+                        <button className="text-red-600" onClick={() => { if (confirm("Excluir contorno?")) off.excluirContorno(c); }}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
@@ -604,8 +635,8 @@ export default function MedicaoLevantamento() {
             <div className="border rounded-lg p-3">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold flex items-center gap-1.5"><ImageIcon className="h-4 w-4" />Fotos ({fotos.length})</h3>
-                <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" disabled={uploadFotoM.isPending} onClick={() => fotoInputRef.current?.click()}>
-                  {uploadFotoM.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}Adicionar
+                <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => fotoInputRef.current?.click()}>
+                  <Camera className="h-3.5 w-3.5" />Adicionar
                 </Button>
                 <input ref={fotoInputRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={onFotoSelected} />
               </div>
@@ -615,10 +646,11 @@ export default function MedicaoLevantamento() {
                 <div className="grid grid-cols-3 gap-2">
                   {fotos.map((f) => (
                     <div key={f.id} className="relative group">
-                      <a href={f.arquivoUrl} target="_blank" rel="noopener noreferrer">
-                        <img src={f.arquivoUrl} alt={f.legenda || "foto"} className="w-full h-20 object-cover rounded-md border" />
+                      <a href={off.fotoSrcFor(f)} target="_blank" rel="noopener noreferrer">
+                        <img src={off.fotoSrcFor(f)} alt={f.legenda || "foto"} className="w-full h-20 object-cover rounded-md border" />
                       </a>
-                      <button className="absolute top-1 right-1 bg-white/90 rounded-full p-0.5 text-red-600 opacity-0 group-hover:opacity-100" onClick={() => { if (confirm("Excluir foto?")) excluirFotoM.mutate({ id: f.id, companyId }); }}>
+                      {f.__pending && <span className="absolute bottom-1 left-1 bg-amber-500/90 text-white text-[9px] px-1 rounded">pendente</span>}
+                      <button className="absolute top-1 right-1 bg-white/90 rounded-full p-0.5 text-red-600 opacity-0 group-hover:opacity-100" onClick={() => { if (confirm("Excluir foto?")) off.excluirFoto(f); }}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
