@@ -318,20 +318,59 @@ export const coletaRhRouter = router({
         ))
         .orderBy(desc(coletaRhSessoes.createdAt));
 
-      // Contagem de pendentes por sessão.
+      // Contagem de pendentes por sessão (ignora respostas soft-deletadas).
       const respostas = await db
-        .select({ sessaoId: coletaRhRespostas.sessaoId, status: coletaRhRespostas.status })
+        .select({
+          sessaoId: coletaRhRespostas.sessaoId,
+          employeeId: coletaRhRespostas.employeeId,
+          status: coletaRhRespostas.status,
+        })
         .from(coletaRhRespostas)
-        .where(inArray(coletaRhRespostas.companyId, companyIds));
+        .where(and(
+          inArray(coletaRhRespostas.companyId, companyIds),
+          isNull(coletaRhRespostas.deletedAt),
+        ));
       const pendPorSessao = new Map<number, number>();
       const totalPorSessao = new Map<number, number>();
+      // Rev. 2902 — funcionários DISTINTOS já coletados por sessão (pendente OU
+      // aprovada; rejeitada não conta, pois precisa recoletar). Espelha o
+      // `jaEnviado` de dadosSessao.
+      const coletadosPorSessao = new Map<number, Set<number>>();
       for (const r of respostas) {
         totalPorSessao.set(r.sessaoId, (totalPorSessao.get(r.sessaoId) ?? 0) + 1);
         if (r.status === "pendente") pendPorSessao.set(r.sessaoId, (pendPorSessao.get(r.sessaoId) ?? 0) + 1);
+        if (r.status === "pendente" || r.status === "aprovada") {
+          if (!coletadosPorSessao.has(r.sessaoId)) coletadosPorSessao.set(r.sessaoId, new Set());
+          coletadosPorSessao.get(r.sessaoId)!.add(r.employeeId);
+        }
+      }
+
+      // Rev. 2902 — total de funcionários ATIVOS alocados por obra (universo a
+      // coletar). Conclusão = todos eles já têm resposta pendente/aprovada.
+      const obraIds = Array.from(new Set(sessoes.map((s) => s.obraId)));
+      const totalAlocadosPorObra = new Map<number, number>();
+      if (obraIds.length > 0) {
+        const alocs = await db
+          .select({ obraId: obraFuncionarios.obraId, employeeId: obraFuncionarios.employeeId })
+          .from(obraFuncionarios)
+          .innerJoin(employees, eq(obraFuncionarios.employeeId, employees.id))
+          .where(and(
+            inArray(obraFuncionarios.obraId, obraIds),
+            eq(obraFuncionarios.isActive, 1),
+            eq(employees.status, "Ativo"),
+          ));
+        const setPorObra = new Map<number, Set<number>>();
+        for (const a of alocs) {
+          if (!setPorObra.has(a.obraId)) setPorObra.set(a.obraId, new Set());
+          setPorObra.get(a.obraId)!.add(a.employeeId);
+        }
+        for (const [obraId, set] of setPorObra) totalAlocadosPorObra.set(obraId, set.size);
       }
 
       return sessoes.map((s) => {
         const { camposJson, itensCustomJson, ...rest } = s;
+        const totalAlocados = totalAlocadosPorObra.get(s.obraId) ?? 0;
+        const coletados = coletadosPorSessao.get(s.id)?.size ?? 0;
         return {
           ...rest,
           grupos: resolverGruposColeta(camposJson),
@@ -339,6 +378,10 @@ export const coletaRhRouter = router({
           expirada: sessaoExpirada(s.expiraEm),
           totalRespostas: totalPorSessao.get(s.id) ?? 0,
           pendentes: pendPorSessao.get(s.id) ?? 0,
+          // Rev. 2902 — progresso + conclusão da coleta.
+          totalAlocados,
+          coletados,
+          concluida: totalAlocados > 0 && coletados >= totalAlocados,
         };
       });
     }),
@@ -925,6 +968,41 @@ export const coletaRhRouter = router({
         fotoUrl,
         enviadoPor: input.enviadoPor?.trim() || null,
       });
+
+      // Rev. 2902 — FECHA a coleta automaticamente quando TODOS os funcionários
+      // ATIVOS alocados na obra já têm resposta (pendente/aprovada). Best-effort:
+      // qualquer falha de contagem NÃO bloqueia o envio que acabou de gravar.
+      try {
+        const alocados = await db
+          .select({ employeeId: obraFuncionarios.employeeId })
+          .from(obraFuncionarios)
+          .innerJoin(employees, eq(obraFuncionarios.employeeId, employees.id))
+          .where(and(
+            eq(obraFuncionarios.obraId, sessao.obraId),
+            eq(obraFuncionarios.isActive, 1),
+            eq(employees.status, "Ativo"),
+          ));
+        const totalAlocados = new Set(alocados.map((a) => a.employeeId)).size;
+        if (totalAlocados > 0) {
+          const respColetadas = await db
+            .select({ employeeId: coletaRhRespostas.employeeId })
+            .from(coletaRhRespostas)
+            .where(and(
+              eq(coletaRhRespostas.sessaoId, sessao.id),
+              isNull(coletaRhRespostas.deletedAt),
+              inArray(coletaRhRespostas.status, ["pendente", "aprovada"]),
+            ));
+          const coletados = new Set(respColetadas.map((r) => r.employeeId)).size;
+          if (coletados >= totalAlocados) {
+            await db
+              .update(coletaRhSessoes)
+              .set({ ativo: 0 })
+              .where(eq(coletaRhSessoes.id, sessao.id));
+          }
+        }
+      } catch (e: any) {
+        console.error("[coletaRh.enviarResposta] auto-conclusão falhou:", e?.message || e);
+      }
 
       return { ok: true };
     }),

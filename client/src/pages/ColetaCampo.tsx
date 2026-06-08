@@ -507,13 +507,19 @@ export default function ColetaCampo() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium truncate">{s.titulo}</span>
-                    {s.ativo === 1 && !s.expirada
-                      ? <Badge className="bg-emerald-600">Ativo</Badge>
-                      : <Badge variant="secondary">{s.expirada ? "Expirado" : "Inativo"}</Badge>}
+                    {/* Rev. 2902 — "Concluído" (todos os alocados coletados) tem prioridade sobre o estado do link. */}
+                    {s.concluida
+                      ? <Badge className="bg-blue-600">Concluído</Badge>
+                      : s.ativo === 1 && !s.expirada
+                        ? <Badge className="bg-emerald-600">Ativo</Badge>
+                        : <Badge variant="secondary">{s.expirada ? "Expirado" : "Inativo"}</Badge>}
                     {s.pendentes > 0 && <Badge className="bg-amber-500">{s.pendentes} pendente(s)</Badge>}
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5 truncate">
-                    {s.obraNome} · {s.totalRespostas} envio(s) · criado por {s.criadoPor || "—"}
+                    {s.obraNome} · {s.totalRespostas} envio(s)
+                    {typeof s.totalAlocados === "number" && s.totalAlocados > 0
+                      ? ` · ${s.coletados}/${s.totalAlocados} coletado(s)`
+                      : ""} · criado por {s.criadoPor || "—"}
                   </div>
                   {Array.isArray(s.grupos) && s.grupos.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1">

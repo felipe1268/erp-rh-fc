@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2902 — **COLETA DE CAMPO (RH) — O LINK AGORA FECHA SOZINHO E APARECE COMO "CONCLUÍDO"
+ * ASSIM QUE TODOS OS FUNCIONÁRIOS ALOCADOS NA OBRA JÁ FORAM COLETADOS.**
+ *
+ * PEDIDO (usuário, print da tela "Links por Obra"): "Precisa fechar a coleta assim que todos
+ * dados forem coletados e aparecer como concluídos." Antes o link ficava "Ativo" para sempre,
+ * mesmo depois que TODOS os funcionários alocados já tinham sido coletados — o Adm tinha que
+ * lembrar de Desativar manualmente, e não havia indicação visual de que a obra estava completa.
+ *
+ * REGRA DE CONCLUSÃO: a coleta é "concluída" quando o conjunto de funcionários DISTINTOS já
+ * coletados (resposta `pendente` OU `aprovada`; `rejeitada` NÃO conta, pois precisa recoletar)
+ * cobre 100% dos funcionários ATIVOS alocados na obra (`obra_funcionarios.is_active=1` ∩
+ * `employees.status='Ativo'`). Espelha o `jaEnviado` que o auxiliar já vê em `dadosSessao`.
+ * Obra sem ninguém alocado (total=0) NUNCA fica concluída.
+ *
+ * SOLUÇÃO (ADITIVA — ZERO schema/ALTER/DROP/DELETE; só UPDATE de `ativo`, já existente):
+ * - BACKEND `server/routers/coletaRh.ts` `listarSessoes`: passa a contar funcionários DISTINTOS
+ *   coletados por sessão (pendente/aprovada) e o total de alocados ativos por obra; expõe
+ *   `totalAlocados`, `coletados` e `concluida` em cada linha. A query de respostas agora também
+ *   filtra `deleted_at IS NULL` (não conta respostas excluídas no progresso/pendentes).
+ * - BACKEND `enviarResposta` (link público): após gravar a resposta, recomputa o progresso e,
+ *   se todos os alocados ativos já estão coletados, FECHA o link (`coletaRhSessoes.ativo = 0`).
+ *   Best-effort em try/catch — falha de contagem nunca bloqueia o envio que acabou de gravar.
+ * - FRONT `client/src/pages/ColetaCampo.tsx`: badge "Concluído" (azul) tem prioridade sobre
+ *   Ativo/Inativo/Expirado quando `s.concluida`; a linha de info mostra `coletados/totalAlocados
+ *   coletado(s)`. O Adm ainda pode reativar manualmente (Ativar) se precisar recoletar alguém.
+ * ZERO ALTER/DROP/DELETE. Detalhe: este arquivo.
+ *
  * Rev. 2901 — **COLETA DE CAMPO (RH) — GERAR / EDITAR / EXCLUIR / DESATIVAR LINKS AGORA É
  * EXCLUSIVO DO ADMINISTRADOR (role `admin`) E DO ADMINISTRADOR MASTER.**
  *
