@@ -66,6 +66,77 @@ export function camposHabilitados(grupos: GrupoColetaKey[]): Set<string> {
 }
 
 // ---------------------------------------------------------------------------
+// Rev. 2903 — COLETA SÓ SALVA QUANDO TODOS OS DADOS SOLICITADOS ESTÃO PREENCHIDOS.
+// Fonte ÚNICA da regra de OBRIGATORIEDADE, compartilhada entre o formulário
+// público (botão "Enviar") e o backend (`enviarResposta`), pra não divergirem.
+
+/** Campos de TEXTO que continuam OPCIONAIS mesmo com o grupo habilitado.
+ *  "complemento" de endereço pode legitimamente não existir — exigi-lo
+ *  bloquearia coletas válidas. */
+export const CAMPOS_COLETA_OPCIONAIS = new Set<string>(["complemento"]);
+
+/** Rótulos amigáveis dos campos fixos (pra mensagem "Faltam: …"). */
+export const LABEL_CAMPO_COLETA: Record<string, string> = {
+  foto: "Foto",
+  tamanhoCalcado: "Tamanho do calçado",
+  tamanhoCamisa: "Tamanho da camisa",
+  tamanhoCalca: "Tamanho da calça",
+  telefone: "Telefone",
+  celular: "Celular / WhatsApp",
+  contatoEmergencia: "Nome do contato de emergência",
+  telefoneEmergencia: "Telefone de emergência",
+  parentescoEmergencia: "Parentesco (emergência)",
+  logradouro: "Logradouro",
+  numero: "Número",
+  complemento: "Complemento",
+  bairro: "Bairro",
+  cidade: "Cidade",
+  estado: "UF",
+  cep: "CEP",
+};
+
+/** Campos de TEXTO OBRIGATÓRIOS dos grupos dados (habilitados − opcionais). */
+export function camposObrigatorios(grupos: GrupoColetaKey[]): string[] {
+  const out: string[] = [];
+  for (const g of GRUPOS_COLETA) {
+    if (!grupos.includes(g.key)) continue;
+    for (const c of g.campos) if (!CAMPOS_COLETA_OPCIONAIS.has(c)) out.push(c);
+  }
+  return out;
+}
+
+/** Lista as chaves AINDA NÃO preenchidas: campos obrigatórios dos grupos + TODOS
+ *  os itens custom + a foto (chave especial "foto") quando o grupo está ativo.
+ *  Vazia = coleta completa. */
+export function camposFaltantesColeta(args: {
+  grupos: GrupoColetaKey[];
+  itensCustom: ItemCustomColeta[];
+  dados: Record<string, any>;
+  temFoto: boolean;
+}): string[] {
+  const { grupos, itensCustom, dados, temFoto } = args;
+  const preenchido = (k: string) => {
+    const v = dados[k];
+    return typeof v === "string" && v.trim() !== "";
+  };
+  const falt: string[] = [];
+  if (grupos.includes("foto") && !temFoto) falt.push("foto");
+  for (const c of camposObrigatorios(grupos)) if (!preenchido(c)) falt.push(c);
+  for (const it of itensCustom || []) if (!preenchido(it.campo)) falt.push(it.campo);
+  return falt;
+}
+
+/** Atalho booleano: a coleta tem TODOS os dados solicitados preenchidos? */
+export function coletaCompleta(args: {
+  grupos: GrupoColetaKey[];
+  itensCustom: ItemCustomColeta[];
+  dados: Record<string, any>;
+  temFoto: boolean;
+}): boolean {
+  return camposFaltantesColeta(args).length === 0;
+}
+
+// ---------------------------------------------------------------------------
 // Rev. 2887 — ITENS EXTRAS (custom) por link.
 // Além dos 5 grupos fixos, o RH pode adicionar itens avulsos NA HORA de gerar o
 // link. Cada item aponta para UM campo de `employees` (escolhido pelo RH) e o

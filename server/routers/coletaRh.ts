@@ -29,6 +29,7 @@ import {
   resolverGruposColeta,
   serializeGruposColeta,
   camposHabilitados,
+  camposFaltantesColeta,
   serializeItensCustom,
   parseItensCustom,
   sanitizeItensCustom,
@@ -970,8 +971,17 @@ export const coletaRhRouter = router({
         }
       }
 
-      if (Object.keys(dados).length === 0 && !fotoUrl) {
-        throw new Error("Preencha ao menos um campo ou envie uma foto.");
+      // Rev. 2903 — só aceita a coleta quando TODOS os dados solicitados estão
+      // preenchidos (mesma regra do botão "Enviar" do front; fonte única em
+      // shared/coletaCampos.ts). `dados` já tem os campos fixos + custom mesclados.
+      const faltando = camposFaltantesColeta({
+        grupos,
+        itensCustom,
+        dados,
+        temFoto: !!fotoUrl,
+      });
+      if (faltando.length > 0) {
+        throw new Error("Preencha TODOS os dados solicitados antes de enviar.");
       }
 
       await db.insert(coletaRhRespostas).values({

@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2903 — **COLETA DE CAMPO (RH) — O FORMULÁRIO PÚBLICO SÓ DEIXA ENVIAR QUANDO TODOS OS
+ * DADOS SOLICITADOS ESTÃO PREENCHIDOS (CHEGA DE COLETA PELA METADE).**
+ *
+ * PEDIDO (usuário): "Só pode deixar salvar a coleta quando o usuário preencher todos os dados
+ * solicitados, se não tiver preenchido não pode deixar salvar." Antes o botão "Enviar para o RH"
+ * liberava com QUALQUER campo preenchido (ou só a foto) — `podeEnviar = algum campo || foto` no
+ * front e `Object.keys(dados).length === 0 && !foto` no backend —, então chegavam coletas
+ * incompletas na fila de revisão.
+ *
+ * REGRA DE OBRIGATORIEDADE: a coleta só envia quando TODOS os campos dos grupos habilitados no
+ * link + TODOS os itens extras (custom) + a foto (quando o grupo "foto" está ativo) estão
+ * preenchidos. ÚNICA exceção: `complemento` do endereço continua opcional (pode legitimamente
+ * não existir; exigi-lo bloquearia coletas válidas). O nome do auxiliar ("quem está preenchendo")
+ * segue opcional (é metadado, não dado do funcionário).
+ *
+ * SOLUÇÃO (ADITIVA — ZERO schema/ALTER/DROP/DELETE):
+ * - SHARED `shared/coletaCampos.ts` — fonte ÚNICA da regra: `CAMPOS_COLETA_OPCIONAIS`
+ *   (`complemento`), `LABEL_CAMPO_COLETA` (rótulos amigáveis), `camposObrigatorios(grupos)`,
+ *   `camposFaltantesColeta({grupos,itensCustom,dados,temFoto})` (lista as chaves faltantes;
+ *   "foto" entra como chave especial) e o atalho `coletaCompleta(...)`.
+ * - FRONT `client/src/pages/portal/ColetaCampoPublica.tsx` — `podeEnviar` passa a exigir
+ *   `camposFaltantesColeta(...).length === 0`; barra de envio mostra um aviso âmbar listando o
+ *   que ainda falta ("Faltam: Telefone, CEP, …") enquanto o botão fica desabilitado.
+ * - BACKEND `enviarResposta` (link público) — troca o check "ao menos 1 campo ou foto" pela MESMA
+ *   `camposFaltantesColeta(...)`; rejeita com "Preencha TODOS os dados solicitados antes de
+ *   enviar." (defesa server-side, não confia só na UI).
+ * ZERO ALTER/DROP/DELETE. Detalhe: este arquivo.
+ *
  * Rev. 2902 — **COLETA DE CAMPO (RH) — O LINK AGORA FECHA SOZINHO E APARECE COMO "CONCLUÍDO"
  * ASSIM QUE TODOS OS FUNCIONÁRIOS ALOCADOS NA OBRA JÁ FORAM COLETADOS.**
  *

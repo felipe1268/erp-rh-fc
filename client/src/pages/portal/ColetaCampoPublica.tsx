@@ -6,7 +6,12 @@
 import { useMemo, useState } from "react";
 import { useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { GRUPOS_COLETA_KEYS, type GrupoColetaKey } from "@shared/coletaCampos";
+import {
+  GRUPOS_COLETA_KEYS,
+  type GrupoColetaKey,
+  camposFaltantesColeta,
+  LABEL_CAMPO_COLETA,
+} from "@shared/coletaCampos";
 
 const FC_NAVY = "#1B2A4A";
 
@@ -95,7 +100,17 @@ export default function ColetaCampoPublica() {
     return (sessaoQ.data && "itensCustom" in sessaoQ.data ? (sessaoQ.data as any).itensCustom : []) || [];
   }, [sessaoQ.data]);
 
-  const podeEnviar = Object.values(dados).some((v) => v && v.trim() !== "") || !!fotoBase64;
+  // Rev. 2903 — só pode enviar quando TODOS os dados solicitados estão preenchidos.
+  // Mesma regra do backend (fonte única em shared/coletaCampos.ts).
+  const faltando = useMemo(() => camposFaltantesColeta({
+    grupos: [...grupos],
+    itensCustom,
+    dados,
+    temFoto: !!fotoBase64,
+  }), [grupos, itensCustom, dados, fotoBase64]);
+  const labelFaltante = (k: string) =>
+    LABEL_CAMPO_COLETA[k] || itensCustom.find((it: any) => it.campo === k)?.label || k;
+  const podeEnviar = faltando.length === 0;
 
   // ── Estados de carregamento / inválido ────────────────────────────────────
   if (!token) return <Aviso titulo="Link inválido" texto="O link de coleta está incompleto." />;
@@ -185,6 +200,13 @@ export default function ColetaCampoPublica() {
       {/* Barra de envio fixa */}
       {selFunc && (
         <div className="fixed bottom-0 inset-x-0 bg-white border-t p-3">
+          {/* Rev. 2903 — só salva com TODOS os dados preenchidos; mostra o que falta. */}
+          {faltando.length > 0 && (
+            <p className="max-w-md sm:max-w-2xl lg:max-w-4xl mx-auto text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">
+              Preencha todos os dados para enviar. Faltam:{" "}
+              <span className="font-semibold">{faltando.map(labelFaltante).join(", ")}</span>.
+            </p>
+          )}
           <div className="max-w-md sm:max-w-2xl lg:max-w-4xl mx-auto flex gap-2">
             <button
               onClick={() => setSelFunc(null)}
