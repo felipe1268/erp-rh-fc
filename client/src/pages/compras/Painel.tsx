@@ -5,6 +5,7 @@ import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { formatNumeroScDisplay } from "@shared/numeroSc";
 import { formatNumeroCotacaoDisplay } from "@shared/numeroCotacao";
+import { formatNumeroOcDisplay } from "@shared/numeroOc";
 import {
   ClipboardList, FileText, ShoppingCart, AlertTriangle,
   CheckCircle, Clock, TrendingUp, ArrowRight, RefreshCw, Building2,
@@ -442,7 +443,7 @@ export default function PainelCompras() {
                         <tr key={oc.id}
                           className="border-b border-gray-50 hover:bg-indigo-50 transition-colors cursor-pointer"
                           onClick={() => navigate("/compras/ordens")}>
-                          <td className="py-2 pr-3 font-mono text-gray-700">{oc.numeroOc}</td>
+                          <td className="py-2 pr-3 font-mono text-gray-700">{formatNumeroOcDisplay(oc.numeroOc)}</td>
                           <td className="py-2 pr-3 max-w-[140px]">
                             <div className="text-gray-800 truncate">{fornMap[oc.fornecedorId] || "—"}</div>
                             {oc.obraNome && <div className="text-[10px] text-blue-600 truncate">{oc.obraNome}</div>}
@@ -481,7 +482,7 @@ export default function PainelCompras() {
                     <button key={oc.id} onClick={() => navigate("/compras/ordens")}
                       className={`w-full rounded-lg border px-3 py-2 text-left hover:opacity-80 transition-opacity ${oc.atrasado ? "border-red-200 bg-red-50" : "border-orange-200 bg-orange-50"}`}>
                       <div className="flex items-center justify-between gap-1">
-                        <span className="font-mono text-xs font-semibold text-gray-700">{oc.numeroOc}</span>
+                        <span className="font-mono text-xs font-semibold text-gray-700">{formatNumeroOcDisplay(oc.numeroOc)}</span>
                         <span className={`text-[10px] font-bold ${oc.atrasado ? "text-red-600" : "text-orange-600"}`}>
                           {oc.atrasado ? "ATRASADA" : "HOJE"}
                         </span>
@@ -639,7 +640,7 @@ export default function PainelCompras() {
                         <button key={oc.id} onClick={() => navigate("/compras/ordens")}
                           className="flex items-center justify-between px-3 py-2 rounded-lg bg-red-50 border border-red-100 text-xs w-full hover:bg-red-100 transition-colors">
                           <div className="text-left min-w-0">
-                            <span className="font-mono font-semibold text-gray-800">{oc.numeroOc}</span>
+                            <span className="font-mono font-semibold text-gray-800">{formatNumeroOcDisplay(oc.numeroOc)}</span>
                             {oc.fornecedorNome && <span className="text-gray-500 ml-2 truncate">{oc.fornecedorNome}</span>}
                             {oc.obraNome && <span className="text-gray-400 ml-1 truncate hidden sm:inline">· {oc.obraNome}</span>}
                           </div>

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { formatNumeroOcDisplay } from "@shared/numeroOc";
 // Rev. 1626 — single source of truth para origens financeiras
 import {
   ORIGEM_LABELS, ORIGEM_ICONS, ORIGEM_COLORS,
@@ -1565,7 +1566,7 @@ export default function FinanceiroContasAPagar() {
                       <div className="flex-1 min-w-0">
                         <div className="text-xs font-semibold uppercase tracking-wide mb-1 text-slate-600">
                           {ORIGEM_LABELS[e.origemModulo] ?? e.origemModulo ?? "Lançamento Manual"}
-                          {d.ordem?.numeroOc && <span className="ml-2 font-mono text-slate-700">· {d.ordem.numeroOc}</span>}
+                          {d.ordem?.numeroOc && <span className="ml-2 font-mono text-slate-700">· {formatNumeroOcDisplay(d.ordem.numeroOc)}</span>}
                         </div>
                         <h3 className="text-base font-bold text-slate-900 leading-tight">
                           {e.descricao || e.origemDescricao || e.contaNome || "—"}
@@ -1683,7 +1684,7 @@ export default function FinanceiroContasAPagar() {
                       {d.ordem && (
                         <div>
                           <h4 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1">
-                            <ShoppingCart className="w-4 h-4 text-blue-600" />Ordem de Compra {d.ordem.numeroOc}
+                            <ShoppingCart className="w-4 h-4 text-blue-600" />Ordem de Compra {formatNumeroOcDisplay(d.ordem.numeroOc)}
                           </h4>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <KV label="Status OC">{d.ordem.status} · {d.ordem.aprovacaoStatus}</KV>

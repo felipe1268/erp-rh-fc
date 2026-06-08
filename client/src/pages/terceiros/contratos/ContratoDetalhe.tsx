@@ -17,6 +17,7 @@ import {
   Eye, EyeOff, BarChart3, Loader2, FileDown, Settings, Undo2, Send, MapPin, Truck
 } from "lucide-react";
 import { toast } from "sonner";
+import { formatNumeroOcDisplay } from "@shared/numeroOc";
 
 const BRL = (v: any) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(v) || 0);
 const fmtDate = (d: string | null | undefined) => {
@@ -2010,7 +2011,7 @@ function FdTab({ contrato }: { contrato: any }) {
             <tbody className="divide-y divide-gray-100">
               {registros.map((r) => (
                 <tr key={r.id} className="hover:bg-gray-50">
-                  <td className="px-3 py-2 font-mono text-xs">{r.numeroOc || `#${r.id}`}</td>
+                  <td className="px-3 py-2 font-mono text-xs">{r.numeroOc ? formatNumeroOcDisplay(r.numeroOc) : `#${r.id}`}</td>
                   <td className="px-3 py-2">{r.fornecedorNome || "—"}</td>
                   <td className="px-3 py-2 text-xs">{modalidadeLabel[r.modalidadeFd || "normal"] || r.modalidadeFd || "—"}</td>
                   <td className="px-3 py-2 text-xs">

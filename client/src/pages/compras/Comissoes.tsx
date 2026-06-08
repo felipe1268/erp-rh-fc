@@ -5,6 +5,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatNumeroOcDisplay } from "@shared/numeroOc";
 import { TrendingDown, Loader2, DollarSign, Award, BarChart3, ShoppingCart, AlertTriangle, Building2, Filter } from "lucide-react";
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
@@ -291,7 +292,7 @@ export default function ComprasComissoes() {
                     const obraPositiva = saldoObra > 0;
                     return (
                       <TableRow key={oc.id}>
-                        <TableCell className="font-mono text-xs font-medium">{oc.numeroOc}</TableCell>
+                        <TableCell className="font-mono text-xs font-medium">{formatNumeroOcDisplay(oc.numeroOc)}</TableCell>
                         <TableCell>{oc.fornecedorNome || "—"}</TableCell>
                         <TableCell>{obraMap[obraKey] || "Obra " + oc.obraId}</TableCell>
                         <TableCell className="text-right">

@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { formatNumeroOcDisplay } from "@shared/numeroOc";
 import { Receipt, DollarSign, AlertTriangle, CheckCircle, Loader2, Shield, History, Plus, Trash2, FileDown, Wallet, TrendingUp, Building2, Layers, ListChecks } from "lucide-react";
 
 const fmt = (v: number) => (Number.isFinite(v) ? v : 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -284,7 +285,7 @@ export default function PainelFd() {
                           <TableRow key={oc.id} className="border-gray-100 cursor-pointer hover:bg-indigo-50/50" onClick={() => abrirOc(oc.id)} title="Abrir OC">
                             <TableCell className="text-xs font-mono text-indigo-600 hover:underline">
                               <span className="font-semibold">{oc.numeroFd || "—"}</span>
-                              <span className="text-gray-400"> · {oc.numeroOc || `#${oc.id}`}</span>
+                              <span className="text-gray-400"> · {oc.numeroOc ? formatNumeroOcDisplay(oc.numeroOc) : `#${oc.id}`}</span>
                             </TableCell>
                             <TableCell className="text-xs text-gray-500">{fmtData(oc.data)}</TableCell>
                             <TableCell className="text-xs text-gray-700">{oc.obraNome}</TableCell>
@@ -433,7 +434,7 @@ export default function PainelFd() {
                           <TableRow key={oc.id} className={`border-gray-100 cursor-pointer ${oc.fdStatus === "aprovado" ? "bg-emerald-50/60 hover:bg-emerald-100/60" : "hover:bg-indigo-50/50"}`} onClick={() => abrirOc(oc.id)} title="Abrir OC">
                             <TableCell className="text-xs font-mono text-indigo-600 hover:underline">
                               <span className="font-semibold">{oc.numeroFd || "—"}</span>
-                              <span className="text-gray-400"> · {oc.numeroOc || `#${oc.id}`}</span>
+                              <span className="text-gray-400"> · {oc.numeroOc ? formatNumeroOcDisplay(oc.numeroOc) : `#${oc.id}`}</span>
                             </TableCell>
                             <TableCell className="text-xs text-gray-500">{fmtData(oc.data)}</TableCell>
                             <TableCell className="text-xs text-gray-900 max-w-[260px] truncate">{oc.descricao || "—"}</TableCell>

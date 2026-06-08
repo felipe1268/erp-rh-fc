@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
 import { formatNumeroScDisplay } from "@shared/numeroSc";
 import { formatNumeroCotacaoDisplay } from "@shared/numeroCotacao";
+import { formatNumeroOcDisplay } from "@shared/numeroOc";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, TrendingUp, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart, RotateCcw, Pin, GitBranch, Zap, PenTool, CreditCard, Banknote, Calendar, Truck, Target, BarChart2, Clock, Wallet, Layers, ArrowLeftRight, Warehouse, HardHat, Info, Printer, type LucideIcon } from "lucide-react";
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
@@ -557,7 +558,7 @@ function HistoricoPrecoPopover({ companyId, descricao }: { companyId: number; de
                 <div key={i} className="px-3 py-1.5 flex items-center justify-between text-xs">
                   <div className="min-w-0">
                     <div className="text-gray-700 truncate">{h.fornecedor || "—"}</div>
-                    <div className="text-[10px] text-gray-400">{h.data ? new Date(h.data).toLocaleDateString("pt-BR") : "—"} · {formatNumeroCotacaoDisplay(h.numeroCotacao) || h.numeroOc || "—"}</div>
+                    <div className="text-[10px] text-gray-400">{h.data ? new Date(h.data).toLocaleDateString("pt-BR") : "—"} · {formatNumeroCotacaoDisplay(h.numeroCotacao) || formatNumeroOcDisplay(h.numeroOc) || "—"}</div>
                   </div>
                   <div className="font-semibold text-gray-900 shrink-0 ml-2">
                     {parseFloat(h.precoUnitario || "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
@@ -7599,7 +7600,7 @@ export default function Cotacoes() {
                         </p>
                         {it.historico.map((h, j) => (
                           <p key={j} className="text-[10px] text-gray-600">
-                            R$ {h.precoUnitario.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} — {h.fornecedorNome} ({h.numeroOc}, {new Date(h.data).toLocaleDateString("pt-BR")})
+                            R$ {h.precoUnitario.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} — {h.fornecedorNome} ({formatNumeroOcDisplay(h.numeroOc)}, {new Date(h.data).toLocaleDateString("pt-BR")})
                           </p>
                         ))}
                       </div>

@@ -18,6 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
 import { formatNumeroCotacaoDisplay } from "@shared/numeroCotacao";
+import { formatNumeroOcDisplay } from "@shared/numeroOc";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Check, Paperclip, Upload, X, FileText, Save, Edit3, ClipboardCheck, Calendar, RotateCcw } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -420,7 +421,7 @@ export default function Ordens() {
   });
   const confirmarRascunhoMut = trpc.compras.confirmarRascunhoOrdem.useMutation({
     onSuccess: (res) => {
-      toast.success(`OC ${res.numeroOc} criada com sucesso!`);
+      toast.success(`OC ${formatNumeroOcDisplay(res.numeroOc)} criada com sucesso!`);
       setShowNova(false);
       setShowDetalhe(null);
       resetForm();
@@ -1182,7 +1183,7 @@ export default function Ordens() {
                   </TableCell>
                   <TableCell className={`font-mono font-semibold text-sm ${oc.status === "entregue" ? "text-emerald-700" : oc.status === "cancelada" ? "text-gray-400 line-through" : "text-gray-900"}`}>
                     <div className="flex items-center gap-1.5">
-                      {oc.numeroOc}
+                      {formatNumeroOcDisplay(oc.numeroOc)}
                       {(oc as any).tipo && (oc as any).tipo !== "compra" && (
                         <span className={`px-1.5 py-0.5 text-[9px] font-sans font-semibold rounded ${
                           (oc as any).tipo === "servico" ? "bg-purple-100 text-purple-700"
@@ -1807,7 +1808,7 @@ export default function Ordens() {
           <DialogHeader className="sticky top-0 z-30 bg-white border-b border-gray-200 px-4 sm:px-6 py-3 space-y-0">
             <div className="flex items-center justify-between gap-3">
               <DialogTitle className="text-gray-900 text-base sm:text-lg">
-                {detalhe?.numeroOc} — {((detalhe as any)?.tipo === "servico" || (detalhe as any)?.tipo === "pacote") ? "Ordem de Serviço" : "Ordem de Compra"}
+                {formatNumeroOcDisplay(detalhe?.numeroOc)} — {((detalhe as any)?.tipo === "servico" || (detalhe as any)?.tipo === "pacote") ? "Ordem de Serviço" : "Ordem de Compra"}
                 {(detalhe as any)?.tipo && (detalhe as any)?.tipo !== "compra" && (
                   <span className={`ml-2 px-2 py-0.5 text-[10px] font-semibold rounded ${
                     (detalhe as any).tipo === "servico" ? "bg-purple-100 text-purple-700"

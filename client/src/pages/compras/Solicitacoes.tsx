@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { normalizarTexto, stripAccents } from "@shared/textNormalization";
 import { formatNumeroScDisplay } from "@shared/numeroSc";
 import { formatNumeroCotacaoDisplay } from "@shared/numeroCotacao";
+import { formatNumeroOcDisplay } from "@shared/numeroOc";
 import {
   Plus, Search, Trash2, ClipboardList, ChevronRight, ChevronDown, Loader2,
   CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays, ShoppingCart, AlertTriangle, Zap, FileText, Package,
@@ -241,7 +242,7 @@ function UltimaCompraCard({ companyId, descricao, insumoCodigo }: { companyId: n
         <div className="text-blue-400 text-[10px] mt-0.5">
           {h.dataOc ? new Date(h.dataOc).toLocaleDateString("pt-BR") : "—"}
           <span className="mx-1">·</span>
-          OC {h.numeroOc}
+          OC {formatNumeroOcDisplay(h.numeroOc)}
         </div>
       </div>
     </div>
@@ -5116,7 +5117,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                 {([
                   { key: "detalhes" as const, label: "Detalhes", icon: <ClipboardList className="h-4 w-4" /> },
                   ...(scCotacaoId ? [{ key: "cotacao" as const, label: `Cotação ${formatNumeroCotacaoDisplay((detalhe.rastreio?.cotacoes as any[])?.[0]?.numeroCotacao)}`, icon: <FileSearch className="h-4 w-4" /> }] : []),
-                  ...(scOcId ? [{ key: "oc" as const, label: `OC ${(detalhe.rastreio?.ordens as any[])?.[0]?.numeroOc ?? ""}`, icon: <ShoppingCart className="h-4 w-4" /> }] : []),
+                  ...(scOcId ? [{ key: "oc" as const, label: `OC ${formatNumeroOcDisplay((detalhe.rastreio?.ordens as any[])?.[0]?.numeroOc ?? "")}`, icon: <ShoppingCart className="h-4 w-4" /> }] : []),
                 ] as { key: "detalhes" | "cotacao" | "oc"; label: string; icon: React.ReactNode }[]).map(tab => (
                   <button key={tab.key} type="button" onClick={() => setAbaScDetalhe(tab.key)}
                     className={`flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg transition-all flex-1 justify-center ${
@@ -5349,7 +5350,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="text-xs font-semibold text-gray-900">
-                              OC {oc.numeroOc}
+                              OC {formatNumeroOcDisplay(oc.numeroOc)}
                               <span className={`ml-2 text-[9px] px-1.5 py-0.5 rounded border ${oc.status === "entregue" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : oc.status === "cancelada" ? "bg-red-50 text-red-600 border-red-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
                                 {oc.status === "entregue" ? "Entregue" : oc.status === "cancelada" ? "Cancelada" : oc.status === "parcial" ? "Entrega parcial" : oc.status === "aprovada" ? "Aprovada" : oc.status}
                               </span>
@@ -5764,7 +5765,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                             <div key={oc.id} className="border border-gray-200 rounded-lg p-4 space-y-3">
                               <div className="flex items-center justify-between">
                                 <div>
-                                  <h3 className="text-sm font-bold text-gray-900">OC {oc.numeroOc}</h3>
+                                  <h3 className="text-sm font-bold text-gray-900">OC {formatNumeroOcDisplay(oc.numeroOc)}</h3>
                                   <p className="text-xs text-gray-500">{new Date(oc.criadoEm).toLocaleString("pt-BR")}</p>
                                 </div>
                                 <div className="flex items-center gap-2">

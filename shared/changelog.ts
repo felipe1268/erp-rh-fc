@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2894 — **COMPRAS — NUMERAÇÃO DE EXIBIÇÃO DAS OC/OS AGORA É "NÚMERO PRIMEIRO,
+ * ANO DEPOIS" (OC-2026-389 → OC-389-2026), IGUAL AO PADRÃO JÁ APLICADO EM
+ * SOLICITAÇÕES (SC) E COTAÇÕES (COT).**
+ *
+ * PEDIDO (usuário): a numeração de OC/OS aparecia como `OC-AAAA-NNN`
+ * (ex.: `OC-2026-389`), mas o padrão de leitura adotado no ERP — já feito em
+ * Solicitações (Rev. SC) e Cotações (Rev. 2808) — é mostrar o número sequencial
+ * primeiro e o ano depois (`OC-389-2026`). Faltava aplicar a mesma inversão de
+ * exibição às Ordens de Compra e Ordens de Serviço.
+ *
+ * SOLUÇÃO (SÓ exibição — ZERO mudança no valor canônico, ZERO schema, ZERO backend):
+ * (1) NOVO helper `shared/numeroOc.ts` — `formatNumeroOcDisplay(numero)`: regex
+ * `^(OC|OS)-(\d{4})-(\d+)$` → devolve `${prefixo}-${seq}-${ano}`. Valores
+ * não-canônicos (ex.: "RASCUNHO-...", null/undefined) retornam intactos. Espelha
+ * `shared/numeroCotacao.ts` / `shared/numeroSc.ts`.
+ * (2) FRONTEND — wrap de TODOS os pontos de EXIBIÇÃO de `numeroOc` com o helper:
+ * `Ordens.tsx` (toast de criação, lista, título do detalhe), `Comissoes.tsx`,
+ * `Solicitacoes.tsx` (aba OC + cards de rastreio), `Painel.tsx`, `PainelFd.tsx`,
+ * `Realocacao.tsx`, `Recebimentos.tsx`, `Cotacoes.tsx` (histórico de preço),
+ * `SmartEntry.tsx` (almoxarifado), `FinanceiroContasAPagar.tsx`,
+ * `ContratoDetalhe.tsx` (terceiros), `Locados.tsx` (equipamentos).
+ *
+ * O QUE **NÃO** MUDA (proposital, espelha o precedente das cotações):
+ * - O valor CANÔNICO gravado (`OC-AAAA-NNN` / `OS-AAAA-NNN`) permanece intocado —
+ *   geração (`gerarProximoNumeroOC`), busca, ordenação e filtros continuam casando
+ *   o canônico.
+ * - A BUSCA por número segue casando o canônico (igual `Cotacoes.tsx`).
+ * - O PDF/comprovante gerado no SERVIDOR (`server/services/purchaseOrderPdf.ts`,
+ *   `fdApprovalPdf.ts`, `equipmentReceiptPdf.ts`) e o nome do arquivo de download
+ *   permanecem canônicos — documentos formais não invertem (precedente: cotações
+ *   também não tocou o PDF server-side).
+ * - Notas persistidas (ex.: `observacoes` de recebimento em `Locados.tsx`) ficam
+ *   canônicas.
+ *
+ * ZERO ALTER/DROP/DELETE. Arquivos: `shared/numeroOc.ts` (novo), `shared/version.ts`,
+ * + os 12 arquivos de front acima.
+ *
  * Rev. 2893 — **MEDIÇÃO DE CONTRATOS — NOVO MÓDULO "LEVANTAMENTO DE CAMPO EM PDF":
  * MEDIR ÁREA / VOLUME / PERÍMETRO / CONTAGEM SOBRE A PLANTA (PDF) NO TABLET E
  * CONSOLIDAR POR ITEM DO ORÇAMENTO → R$ → GERAR BOLETIM.**

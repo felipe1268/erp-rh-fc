@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
+import { formatNumeroOcDisplay } from "@shared/numeroOc";
 import { Plus, Search, X, Truck, CheckCircle2, RotateCcw, ClipboardCheck, Eye, FileText, Upload, Sparkles, Trash2, Activity, Clock, AlertTriangle, DollarSign, Calendar, Hash, Building2, User as UserIcon, MapPin, Camera, StickyNote, ChevronDown, Tag, Loader2, Layers, Boxes, ImagePlus, Library, Check, Globe, RefreshCw, ZoomIn, Undo2, Pencil, type LucideIcon } from "lucide-react";
 import { ModalConfirmacaoAuditoria } from "@/components/almoxarifado/ModalConfirmacaoAuditoria";
 import type { ReactNode } from "react";
@@ -2704,7 +2705,7 @@ export default function EquipamentosLocados() {
                   <div className="rounded-lg border-2 border-emerald-400 bg-emerald-50/60 p-3 flex items-start gap-3">
                     <div className="rounded-full bg-emerald-500 text-white p-1.5 flex-shrink-0"><Check className="h-3.5 w-3.5" /></div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-bold text-emerald-900">Recebendo OC <span className="font-mono">{ocSelecionada.numeroOc}</span></div>
+                      <div className="text-xs font-bold text-emerald-900">Recebendo OC <span className="font-mono">{formatNumeroOcDisplay(ocSelecionada.numeroOc)}</span></div>
                       <div className="text-[11px] text-emerald-700 mt-0.5">Os campos abaixo foram pré-preenchidos a partir da OC. Confira, anexe a(s) foto(s) e confirme.</div>
                     </div>
                     <button
@@ -2731,7 +2732,7 @@ export default function EquipamentosLocados() {
                             <div className="flex items-start justify-between gap-2 mb-1">
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 text-[10px] font-bold uppercase tracking-wider">
-                                  <FileText className="h-2.5 w-2.5" /> OC {oc.numeroOc}
+                                  <FileText className="h-2.5 w-2.5" /> OC {formatNumeroOcDisplay(oc.numeroOc)}
                                 </span>
                                 <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700">
                                   {oc.status}
@@ -2819,7 +2820,7 @@ export default function EquipamentosLocados() {
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-2 mb-3 flex items-center gap-2">
                   <FileText className="h-3.5 w-3.5 text-emerald-700 shrink-0" />
                   <p className="text-[11px] text-emerald-800">
-                    Esta locação está vinculada à OC <span className="font-mono font-bold">{ocSelecionada.numeroOc}</span> — o número aparecerá no comprovante PDF.
+                    Esta locação está vinculada à OC <span className="font-mono font-bold">{formatNumeroOcDisplay(ocSelecionada.numeroOc)}</span> — o número aparecerá no comprovante PDF.
                   </p>
                 </div>
               )}

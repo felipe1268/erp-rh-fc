@@ -9,6 +9,7 @@ import {
   Search, CalendarClock, Truck, ClipboardList, Clock, Building2,
 } from "lucide-react";
 import { inferirCategoria, CATEGORIA_KEYWORDS } from "./categoriaUtils";
+import { formatNumeroOcDisplay } from "@shared/numeroOc";
 
 type SmartEntryProps = {
   companyId: number;
@@ -620,7 +621,7 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <p className="font-bold text-slate-900 text-base leading-tight">{oc.numeroOc}</p>
+                              <p className="font-bold text-slate-900 text-base leading-tight">{formatNumeroOcDisplay(oc.numeroOc)}</p>
                               {isSelected && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
                             </div>
                             <div className="flex items-center gap-1.5 mt-1 text-sm text-slate-600 min-w-0">

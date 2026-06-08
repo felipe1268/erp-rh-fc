@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatNumeroCotacaoDisplay } from "@shared/numeroCotacao";
+import { formatNumeroOcDisplay } from "@shared/numeroOc";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -602,7 +603,7 @@ export default function ComprasRealocacao() {
                             <TableCell className="font-mono text-xs">
                               <span className="font-semibold text-blue-700 inline-flex items-center gap-1">
                                 <FileText className="h-3 w-3" />
-                                {e.numeroOc || `#${e.id}`}
+                                {e.numeroOc ? formatNumeroOcDisplay(e.numeroOc) : `#${e.id}`}
                               </span>
                             </TableCell>
                             <TableCell className="max-w-[200px] truncate">{e.obraNome || "—"}</TableCell>

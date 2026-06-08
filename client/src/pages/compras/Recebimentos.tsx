@@ -14,6 +14,7 @@ import { PackageCheck, Plus, Loader2, CheckCircle2, Clock, AlertCircle, Truck, T
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { formatNumeroOcDisplay } from "@shared/numeroOc";
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
   total:   { label: "Recebimento Total",   cls: "bg-green-100 text-green-700" },
@@ -187,7 +188,7 @@ export default function ComprasRecebimentos() {
                         </TableCell>
                         <TableCell className="font-mono">#{r.id}</TableCell>
                         <TableCell>
-                          <span className="font-mono">{r.numeroOc ? r.numeroOc : `OC #${r.ordemId}`}</span>
+                          <span className="font-mono">{r.numeroOc ? formatNumeroOcDisplay(r.numeroOc) : `OC #${r.ordemId}`}</span>
                           {r.fornecedorNome && <p className="text-xs text-gray-400 mt-0.5">{r.fornecedorNome}</p>}
                         </TableCell>
                         <TableCell>
