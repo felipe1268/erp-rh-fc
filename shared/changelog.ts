@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2898 — **ASSINATURA ELETRÔNICA (INTEGRASIGN/FcSign) — DASHBOARD DE CONTRATOS AGORA
+ * PERMITE EDITAR E EXCLUIR OS ENVELOPES.**
+ *
+ * PEDIDO (print iPad da tela IntegraSign): "Preciso poder editar, ou excluir os contratos."
+ * Na tela só havia ações de Enviar/Cancelar/Nova Versão/Reenviar/Copiar link: (1) NÃO existia
+ * botão "Editar" na UI (mesmo havendo `atualizarTextoContrato` no backend, só p/ rascunho);
+ * (2) "Excluir" só aparecia p/ status `rascunho`/`cancelado` — logo os contratos do print
+ * (enviado/em_andamento/concluído) não tinham como ser editados nem excluídos direto.
+ *
+ * AGRAVANTE (R-001/R-007/R-010): o `excluirEnvelope` antigo fazia HARD DELETE
+ * (`db.delete()` × 3 — envelope + signatários + audit log), o que viola a regra de ouro de
+ * JAMAIS executar DELETE em produção e destruía registro legal/assinaturas.
+ *
+ * SOLUÇÃO (aditiva — ZERO ALTER/DROP/DELETE destrutivo):
+ * (1) SCHEMA `drizzle/schema.ts` — nova coluna `excluidoEm` (`timestamp`, nullable) em
+ *     `integrasign_envelopes`; self-heal `[SyncSchema+]` Rev. 2898 em `server/_core/index.ts`
+ *     (`ADD COLUMN IF NOT EXISTS excluido_em`).
+ * (2) BACKEND `server/routers/integrasign.ts`:
+ *     - `excluirEnvelope` reescrito como SOFT-DELETE: marca `excluido_em = now` em QUALQUER
+ *       status (não só rascunho/cancelado), grava audit `envelope_excluido`, e PRESERVA todo
+ *       o registro/assinaturas no banco. `listarEnvelopes` ganha `isNull(excluidoEm)` p/ sumir
+ *       da lista.
+ *     - NOVA procedure `editarEnvelope`: título/descrição editáveis em qualquer status
+ *       (metadado, não afeta o hash); o CORPO (`textoContrato`) só em rascunho (senão
+ *       BAD_REQUEST orientando a usar Cancelar → Nova Versão). Guard de tenant por `companyId`;
+ *       audit `envelope_editado`.
+ * (3) FRONT `client/src/pages/IntegraSignDashboard.tsx`: botão "Editar" (Pencil) p/ todos os
+ *     status + dialog (título/descrição sempre; corpo só em rascunho, com aviso nos demais);
+ *     botão "Excluir" agora aparece em TODOS os status; texto do dialog de exclusão ajustado
+ *     p/ refletir o soft-delete (registro preservado p/ auditoria).
+ * (4) COERÊNCIA DO SOFT-DELETE (pós code review): o filtro `isNull(excluidoEm)` foi propagado
+ *     p/ TODOS os caminhos que carregam o envelope, p/ que um contrato excluído não continue
+ *     acessível/mutável/assinável por ID ou link público conhecido: `getEnvelope`,
+ *     `editarEnvelope`, `atualizarTextoContrato`, `enviarParaAssinatura`, `cancelarEnvelope`,
+ *     `criarNovaVersao` (guard no `and(...)`); e checagem explícita de `excluidoEm` nas rotas
+ *     públicas por token `getDocumentoPublico`/`assinarDocumento`/`recusarDocumento` (erro claro
+ *     "documento não está mais disponível" / NOT_FOUND).
+ * ZERO ALTER/DROP/DELETE destrutivo. Detalhe: este arquivo.
+ *
  * Rev. 2897 — **ASSINATURA ELETRÔNICA (INTEGRASIGN/FcSign) — "BAIXAR CONTRATO ASSINADO"
  * AGORA GERA UM PDF PROFISSIONAL (LOGO DA CONSTRUTORA + FAIXA AZUL INSTITUCIONAL + CORPO
  * DO CONTRATO COM A TABELA EAP PRESERVADA + REGISTRO DE ASSINATURAS + HASH), NO LUGAR DO

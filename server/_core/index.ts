@@ -629,6 +629,13 @@ Regras:
         await db.execute(sql`ALTER TABLE curriculos ADD COLUMN IF NOT EXISTS historico_status_json TEXT`);
         console.log(`[SyncSchema+] Coluna historico_status_json garantida na tabela curriculos.`);
 
+        // Rev. 2898 — soft-delete de envelopes IntegraSign ("excluir" sem destruir registro
+        // legal/assinaturas; substitui o hard DELETE). ADD COLUMN IF NOT EXISTS (R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`ALTER TABLE integrasign_envelopes ADD COLUMN IF NOT EXISTS excluido_em TIMESTAMP`);
+          console.log(`[SyncSchema+] Rev. 2898: coluna excluido_em garantida em integrasign_envelopes (soft-delete).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA integrasign_envelopes.excluido_em:`, e?.message || e); }
+
         // Rev. 2767 — "% Previsto" LITERAL por semana (Texto10 capturado em cada
         // upload da aba Avanço). Coluna JSON; ADD COLUMN IF NOT EXISTS (R-001/R-007/R-010 OK).
         try {

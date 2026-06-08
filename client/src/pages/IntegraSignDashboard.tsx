@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, PenLine, Eye, Send, XCircle, RefreshCw, FileText, Clock, CheckCircle2, AlertTriangle, Shield, ChevronRight, RotateCcw, Trash2, Link2, Check } from "lucide-react";
+import { Loader2, PenLine, Eye, Send, XCircle, RefreshCw, FileText, Clock, CheckCircle2, AlertTriangle, Shield, ChevronRight, RotateCcw, Trash2, Link2, Check, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 function papelLabel(p: string) {
@@ -81,10 +81,43 @@ export default function IntegraSignDashboard() {
   const enviarMut = trpc.integrasign.enviarParaAssinatura.useMutation();
   const cancelarMut = trpc.integrasign.cancelarEnvelope.useMutation();
   const excluirMut = trpc.integrasign.excluirEnvelope.useMutation();
+  const editarMut = trpc.integrasign.editarEnvelope.useMutation();
   const reenviarMut = trpc.integrasign.reenviarNotificacao.useMutation();
   const novaVersaoMut = trpc.integrasign.criarNovaVersao.useMutation();
   const [deleteDialog, setDeleteDialog] = useState<number | null>(null);
   const [copiedSigId, setCopiedSigId] = useState<number | null>(null);
+  // Rev. 2898 — edição do envelope (título/descrição sempre; corpo só em rascunho).
+  const [editDialog, setEditDialog] = useState<any | null>(null);
+  const [editTitulo, setEditTitulo] = useState("");
+  const [editDescricao, setEditDescricao] = useState("");
+  const [editTexto, setEditTexto] = useState("");
+
+  function abrirEdicao(env: any) {
+    setEditDialog(env);
+    setEditTitulo(env.titulo || "");
+    setEditDescricao(env.descricao || "");
+    setEditTexto(env.textoContrato || "");
+  }
+
+  async function handleEditar() {
+    if (!editDialog) return;
+    const isRascunho = editDialog.status === "rascunho";
+    try {
+      await editarMut.mutateAsync({
+        companyId,
+        envelopeId: editDialog.id,
+        titulo: editTitulo.trim(),
+        descricao: editDescricao,
+        ...(isRascunho ? { textoContrato: editTexto } : {}),
+      });
+      toast.success("Contrato atualizado");
+      setEditDialog(null);
+      envelopes.refetch();
+      if (selectedEnvelope === editDialog.id) envelopeDetail.refetch();
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao salvar");
+    }
+  }
 
   // Rev. 2828: copiar o link público de assinatura (/integrasign/assinar/:token)
   // p/ enviar manualmente ao signatário (ex.: WhatsApp), sem depender do e-mail.
@@ -379,6 +412,10 @@ export default function IntegraSignDashboard() {
                         Enviar para Assinatura
                       </Button>
                     )}
+                    <Button variant="outline" size="sm" onClick={() => abrirEdicao(env)}>
+                      <Pencil className="h-4 w-4 mr-1" />
+                      Editar
+                    </Button>
                     {!["concluido", "cancelado"].includes(env.status) && (
                       <Button variant="outline" size="sm" className="text-red-600" onClick={() => setCancelDialog(env.id)}>
                         <XCircle className="h-4 w-4 mr-1" />
@@ -391,12 +428,10 @@ export default function IntegraSignDashboard() {
                         Nova Versão
                       </Button>
                     )}
-                    {["rascunho", "cancelado"].includes(env.status) && (
-                      <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => setDeleteDialog(env.id)}>
-                        <Trash2 className="h-4 w-4 mr-1" />
-                        Excluir
-                      </Button>
-                    )}
+                    <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => setDeleteDialog(env.id)}>
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      Excluir
+                    </Button>
                   </div>
 
                   {env.auditLog && env.auditLog.length > 0 && (
@@ -454,10 +489,11 @@ export default function IntegraSignDashboard() {
       <Dialog open={!!deleteDialog} onOpenChange={() => setDeleteDialog(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Excluir Envelope</DialogTitle>
+            <DialogTitle>Excluir Contrato</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-gray-600">
-            Tem certeza que deseja excluir este envelope permanentemente? Esta ação não pode ser desfeita.
+            O contrato será removido da lista do IntegraSign. O registro e as assinaturas
+            já coletadas continuam preservados no sistema para fins de auditoria.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialog(null)}>
@@ -466,6 +502,60 @@ export default function IntegraSignDashboard() {
             <Button variant="destructive" onClick={handleExcluir} disabled={excluirMut.isPending}>
               {excluirMut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Confirmar Exclusão
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editDialog} onOpenChange={() => setEditDialog(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Editar Contrato</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Título *</Label>
+              <Input
+                value={editTitulo}
+                onChange={(e) => setEditTitulo(e.target.value)}
+                placeholder="Título do contrato"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Descrição</Label>
+              <Textarea
+                value={editDescricao}
+                onChange={(e) => setEditDescricao(e.target.value)}
+                placeholder="Descrição (opcional)"
+                rows={2}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Texto do contrato</Label>
+              {editDialog?.status === "rascunho" ? (
+                <Textarea
+                  value={editTexto}
+                  onChange={(e) => setEditTexto(e.target.value)}
+                  placeholder="Corpo do contrato"
+                  rows={10}
+                  className="font-mono text-xs"
+                />
+              ) : (
+                <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded p-2">
+                  O corpo do contrato só pode ser editado enquanto está em rascunho. Para alterar
+                  o conteúdo de um contrato já enviado, use "Cancelar" e depois "Nova Versão" — assim
+                  as assinaturas já coletadas ficam preservadas.
+                </p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialog(null)}>
+              Voltar
+            </Button>
+            <Button onClick={handleEditar} disabled={!editTitulo.trim() || editarMut.isPending}>
+              {editarMut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Salvar
             </Button>
           </DialogFooter>
         </DialogContent>

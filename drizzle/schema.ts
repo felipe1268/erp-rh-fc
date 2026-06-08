@@ -8204,6 +8204,7 @@ export const integrasignEnvelopes = pgTable("integrasign_envelopes", {
   dataCancelamento: timestamp("data_cancelamento", { mode: "string" }),
   criadoEm: timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
   atualizadoEm: timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
+  excluidoEm: timestamp("excluido_em", { mode: "string" }),
 }, (t) => [
   index("idx_isenv_company").on(t.companyId),
   index("idx_isenv_contrato").on(t.contratoTerceiroId),

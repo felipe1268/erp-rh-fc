@@ -7,7 +7,7 @@ import {
   integrasignAuditLog,
   terceiroContratos,
 } from "../../drizzle/schema";
-import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
+import { eq, and, desc, asc, sql, inArray, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import crypto from "crypto";
 import {
@@ -64,7 +64,10 @@ export const integrasignRouter = router({
     }))
     .query(async ({ input }) => {
       const db = await getDb();
-      const conditions: any[] = [eq(integrasignEnvelopes.companyId, input.companyId)];
+      const conditions: any[] = [
+        eq(integrasignEnvelopes.companyId, input.companyId),
+        isNull(integrasignEnvelopes.excluidoEm),
+      ];
       if (input.status) conditions.push(eq(integrasignEnvelopes.status, input.status));
       if (input.obraId) conditions.push(eq(integrasignEnvelopes.obraId, input.obraId));
 
@@ -109,6 +112,7 @@ export const integrasignRouter = router({
         .where(and(
           eq(integrasignEnvelopes.id, input.id),
           eq(integrasignEnvelopes.companyId, input.companyId),
+          isNull(integrasignEnvelopes.excluidoEm),
         ));
       if (!envelope) throw new TRPCError({ code: "NOT_FOUND", message: "Envelope não encontrado" });
 
@@ -221,6 +225,7 @@ export const integrasignRouter = router({
         .where(and(
           eq(integrasignEnvelopes.id, input.envelopeId),
           eq(integrasignEnvelopes.companyId, input.companyId),
+          isNull(integrasignEnvelopes.excluidoEm),
         ));
       if (!envelope) throw new TRPCError({ code: "NOT_FOUND" });
       if (envelope.status !== "rascunho") {
@@ -243,6 +248,60 @@ export const integrasignRouter = router({
       return { success: true };
     }),
 
+  // Rev. 2898 — edição do envelope pelo dashboard. Título/descrição podem ser
+  // ajustados em qualquer status (metadado, não afeta o hash do documento). O CORPO
+  // do contrato só pode ser editado em rascunho — depois de enviado, a alteração de
+  // conteúdo deve passar por "Nova Versão" para preservar a integridade das assinaturas.
+  editarEnvelope: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      envelopeId: z.number(),
+      titulo: z.string().min(1).optional(),
+      descricao: z.string().optional(),
+      textoContrato: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const userId = (ctx as any).session?.userId;
+      const userName = (ctx as any).session?.name || "Sistema";
+
+      const [envelope] = await db.select().from(integrasignEnvelopes)
+        .where(and(
+          eq(integrasignEnvelopes.id, input.envelopeId),
+          eq(integrasignEnvelopes.companyId, input.companyId),
+          isNull(integrasignEnvelopes.excluidoEm),
+        ));
+      if (!envelope) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const patch: any = { atualizadoEm: new Date().toISOString() };
+      if (input.titulo !== undefined) patch.titulo = input.titulo;
+      if (input.descricao !== undefined) patch.descricao = input.descricao;
+      if (input.textoContrato !== undefined) {
+        if (envelope.status !== "rascunho") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "O corpo do contrato só pode ser editado em rascunho. Para alterar um contrato já enviado, cancele e crie uma Nova Versão.",
+          });
+        }
+        patch.textoContrato = input.textoContrato;
+      }
+
+      await db.update(integrasignEnvelopes)
+        .set(patch)
+        .where(eq(integrasignEnvelopes.id, input.envelopeId));
+
+      await logAudit(db, {
+        companyId: input.companyId,
+        envelopeId: input.envelopeId,
+        acao: "envelope_editado",
+        detalhes: `Envelope editado por ${userName}`,
+        userId,
+        userName,
+      });
+
+      return { success: true };
+    }),
+
   enviarParaAssinatura: protectedProcedure
     .input(z.object({
       companyId: z.number(),
@@ -257,6 +316,7 @@ export const integrasignRouter = router({
         .where(and(
           eq(integrasignEnvelopes.id, input.envelopeId),
           eq(integrasignEnvelopes.companyId, input.companyId),
+          isNull(integrasignEnvelopes.excluidoEm),
         ));
       if (!envelope) throw new TRPCError({ code: "NOT_FOUND" });
       if (envelope.status !== "rascunho") {
@@ -352,7 +412,10 @@ export const integrasignRouter = router({
       const [envelope] = await db.select().from(integrasignEnvelopes)
         .where(eq(integrasignEnvelopes.id, signatario.envelopeId));
 
-      if (!envelope || ["cancelado", "expirado", "recusado"].includes(envelope.status)) {
+      if (!envelope || envelope.excluidoEm) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Este documento não está mais disponível." });
+      }
+      if (["cancelado", "expirado", "recusado"].includes(envelope.status)) {
         const msgs: Record<string, string> = {
           cancelado: "Este envelope foi cancelado.",
           expirado: "Este envelope expirou.",
@@ -490,7 +553,7 @@ export const integrasignRouter = router({
       const [envelope] = await db.select().from(integrasignEnvelopes)
         .where(eq(integrasignEnvelopes.id, signatario.envelopeId));
 
-      if (!envelope || ["cancelado", "expirado", "recusado", "concluido"].includes(envelope.status)) {
+      if (!envelope || envelope.excluidoEm || ["cancelado", "expirado", "recusado", "concluido"].includes(envelope.status)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Este envelope não aceita mais assinaturas" });
       }
 
@@ -647,7 +710,7 @@ export const integrasignRouter = router({
 
       const [envelope] = await db.select().from(integrasignEnvelopes)
         .where(eq(integrasignEnvelopes.id, signatario.envelopeId));
-      if (!envelope) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!envelope || envelope.excluidoEm) throw new TRPCError({ code: "NOT_FOUND" });
       if (["cancelado", "expirado", "recusado", "concluido"].includes(envelope.status)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Envelope indisponível para ações" });
       }
@@ -770,6 +833,7 @@ export const integrasignRouter = router({
         .where(and(
           eq(integrasignEnvelopes.id, input.envelopeId),
           eq(integrasignEnvelopes.companyId, input.companyId),
+          isNull(integrasignEnvelopes.excluidoEm),
         ));
 
       if (!envelope) throw new TRPCError({ code: "NOT_FOUND" });
@@ -812,15 +876,27 @@ export const integrasignRouter = router({
         ));
 
       if (!envelope) throw new TRPCError({ code: "NOT_FOUND" });
-      if (!["rascunho", "cancelado"].includes(envelope.status)) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Só é possível excluir envelopes em rascunho ou cancelados." });
+      if (envelope.excluidoEm) {
+        return { success: true };
       }
 
-      await db.delete(integrasignAuditLog).where(eq(integrasignAuditLog.envelopeId, input.envelopeId));
-      await db.delete(integrasignSignatarios).where(eq(integrasignSignatarios.envelopeId, input.envelopeId));
-      await db.delete(integrasignEnvelopes).where(eq(integrasignEnvelopes.id, input.envelopeId));
+      // Soft-delete (R-001/R-007/R-010 — JAMAIS DELETE em produção): marca excluido_em e
+      // some da lista, mas preserva o registro legal/assinaturas/auditoria no banco.
+      const userId = (ctx as any).session?.userId;
+      await db.update(integrasignEnvelopes)
+        .set({ excluidoEm: new Date().toISOString(), atualizadoEm: new Date().toISOString() })
+        .where(eq(integrasignEnvelopes.id, input.envelopeId));
 
-      console.log(`[IntegraSign] Envelope #${input.envelopeId} excluído por ${userName}`);
+      await logAudit(db, {
+        companyId: input.companyId,
+        envelopeId: input.envelopeId,
+        acao: "envelope_excluido",
+        detalhes: `Envelope removido da lista por ${userName} (soft-delete; registro preservado para auditoria)`,
+        userId,
+        userName,
+      });
+
+      console.log(`[IntegraSign] Envelope #${input.envelopeId} excluído (soft) por ${userName}`);
       return { success: true };
     }),
 
@@ -839,6 +915,7 @@ export const integrasignRouter = router({
         .where(and(
           eq(integrasignEnvelopes.id, input.envelopeIdAnterior),
           eq(integrasignEnvelopes.companyId, input.companyId),
+          isNull(integrasignEnvelopes.excluidoEm),
         ));
 
       if (!anterior) throw new TRPCError({ code: "NOT_FOUND" });
