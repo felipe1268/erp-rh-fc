@@ -31,6 +31,8 @@ interface GroupPermissions {
 
 interface PermissionsContextType {
   isAdminMaster: boolean;
+  // Rev. 2901 — role === 'admin' (NÃO master). Pra gates que liberam admin+master.
+  isAdmin: boolean;
   isLoading: boolean;
   // ── Acesso por obra (data-row level) ──
   // null  => sem restrição (Admin Master)
@@ -69,6 +71,7 @@ interface PermissionsContextType {
 
 const PermissionsContext = createContext<PermissionsContextType>({
   isAdminMaster: false,
+  isAdmin: false,
   isLoading: true,
   allowedObraIds: null,
   canAccessObra: () => false,
@@ -103,6 +106,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   });
 
   const isAdminMaster = data?.isAdminMaster ?? false;
+  const isAdmin = (data as any)?.isAdmin ?? false;
   const permissions = data?.permissions ?? [];
   const groupPermissions = (data?.groupPermissions as GroupPermissions | null | undefined) ?? null;
   const rawModuleAccess = (data?.moduleAccess ?? {}) as Record<string, unknown>;
@@ -523,6 +527,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     <PermissionsContext.Provider
       value={{
         isAdminMaster,
+        isAdmin,
         isLoading,
         allowedObraIds,
         canAccessObra,

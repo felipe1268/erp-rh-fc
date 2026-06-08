@@ -54,7 +54,9 @@ const CAMPO_ORDER = Object.keys(CAMPO_LABELS);
 
 export default function ColetaCampo() {
   const { selectedCompanyId, companies, isConstrutoras, getCompanyIdsForQuery } = useCompany();
-  const { isAdminMaster } = usePermissions();
+  const { isAdminMaster, isAdmin } = usePermissions();
+  // Rev. 2901 — só Adm e Adm Master podem gerar/editar/excluir/desativar links.
+  const canManage = isAdmin || isAdminMaster;
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
@@ -370,7 +372,13 @@ export default function ColetaCampo() {
 
       {tab === "links" && (
         <div className="space-y-4">
+          {!canManage && (
+            <div className="rounded-xl border bg-muted/40 p-4 text-sm text-muted-foreground">
+              Apenas o Administrador (ou Administrador Master) pode gerar, editar ou excluir links de coleta. Você pode copiar e enviar os links já existentes.
+            </div>
+          )}
           {/* Gerar para todas as obras ativas de uma vez */}
+          {canManage && (
           <div className="rounded-xl border bg-card p-4 flex flex-col sm:flex-row sm:items-center gap-3">
             <div className="flex-1">
               <h2 className="font-semibold">Gerar para todas as obras ativas</h2>
@@ -394,8 +402,10 @@ export default function ColetaCampo() {
               </Button>
             </div>
           </div>
+          )}
 
           {/* Criar */}
+          {canManage && (
           <div className="rounded-xl border bg-card p-4">
             <h2 className="font-semibold mb-3">Novo link de coleta</h2>
             <div className="flex flex-col md:flex-row gap-3 md:items-end">
@@ -484,6 +494,7 @@ export default function ColetaCampo() {
               </div>
             </div>
           </div>
+          )}
 
           {/* Lista */}
           <div className="rounded-xl border bg-card divide-y">
@@ -522,16 +533,16 @@ export default function ColetaCampo() {
                   <Button size="sm" variant="outline" onClick={() => setQrSessao(s)}>
                     <QrCode className="h-4 w-4" /><span className="ml-1 hidden sm:inline">QR</span>
                   </Button>
-                  <Button
-                    size="sm"
-                    variant={s.ativo === 1 ? "outline" : "default"}
-                    onClick={() => toggleM.mutate({ ...baseInput, id: s.id, ativo: s.ativo === 1 ? 0 : 1 })}
-                    style={s.ativo === 1 ? undefined : { background: FC_NAVY }}
-                  >
-                    <Power className="h-4 w-4" /><span className="ml-1 hidden sm:inline">{s.ativo === 1 ? "Desativar" : "Ativar"}</span>
-                  </Button>
-                  {isAdminMaster && (
+                  {canManage && (
                     <>
+                      <Button
+                        size="sm"
+                        variant={s.ativo === 1 ? "outline" : "default"}
+                        onClick={() => toggleM.mutate({ ...baseInput, id: s.id, ativo: s.ativo === 1 ? 0 : 1 })}
+                        style={s.ativo === 1 ? undefined : { background: FC_NAVY }}
+                      >
+                        <Power className="h-4 w-4" /><span className="ml-1 hidden sm:inline">{s.ativo === 1 ? "Desativar" : "Ativar"}</span>
+                      </Button>
                       <Button size="sm" variant="outline" onClick={() => abrirEdicao(s)}>
                         <Pencil className="h-4 w-4" /><span className="ml-1 hidden sm:inline">Editar</span>
                       </Button>

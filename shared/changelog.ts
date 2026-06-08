@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2901 — **COLETA DE CAMPO (RH) — GERAR / EDITAR / EXCLUIR / DESATIVAR LINKS AGORA É
+ * EXCLUSIVO DO ADMINISTRADOR (role `admin`) E DO ADMINISTRADOR MASTER.**
+ *
+ * PEDIDO (usuário): "Somente o Adm e Adm master poder gerar, ou apagar editar a coleta em
+ * campo." Antes, qualquer usuário com acesso à empresa conseguia GERAR link, GERAR todos e
+ * DESATIVAR/ATIVAR links (as procedures só chamavam `assertColetaCompanyAccess`). Editar/excluir
+ * já exigiam `assertColetaAdmin` (admin/admin_master) no backend, mas no FRONT os botões
+ * Editar/Excluir estavam escondidos atrás de `isAdminMaster` (excluíam o `admin` comum, contra
+ * o pedido).
+ *
+ * SOLUÇÃO (ADITIVA — ZERO schema/ALTER/DROP/DELETE):
+ * - BACKEND `server/routers/coletaRh.ts`: adiciona `assertColetaAdmin(ctx.user)` (libera admin
+ *   E admin_master) em `criarSessao`, `criarSessoesTodas` e `desativarSessao` — antes só
+ *   `assertColetaCompanyAccess`. `editarSessao`/`excluirSessao` já tinham o guard. A fila de
+ *   revisão (aprovar/rejeitar respostas) permanece liberada aos demais usuários.
+ * - BACKEND `server/routers.ts` (`getMyPermissions`): passa a expor `isAdmin` (`role === 'admin'`)
+ *   nos dois ramos de retorno, pra o front distinguir admin comum de usuário.
+ * - CONTEXT `client/src/contexts/PermissionsContext.tsx`: novo campo `isAdmin` no tipo, default e
+ *   no provider (lê `data.isAdmin`).
+ * - FRONT `client/src/pages/ColetaCampo.tsx`: `const canManage = isAdmin || isAdminMaster;`
+ *   esconde os cards "Gerar para todas as obras ativas" e "Novo link de coleta", e os botões
+ *   por-link Desativar/Ativar, Editar e Excluir para quem não é admin (exibe aviso explicativo);
+ *   mantém Copiar link / QR disponíveis para todos. Editar/Excluir migram de `isAdminMaster` p/
+ *   `canManage` (passam a incluir o admin comum, conforme o pedido).
+ * ZERO ALTER/DROP/DELETE. Detalhe: este arquivo.
+ *
  * Rev. 2900 — **ASSINATURA ELETRÔNICA (INTEGRASIGN/FcSign) — FIX DE LAYOUT: O BOTÃO "REENVIAR"
  * (E "COPIAR LINK") DA LINHA DE SIGNATÁRIO NÃO VAZA MAIS PARA FORA DO CARD DE DETALHES NO iPad.**
  *

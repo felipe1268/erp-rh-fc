@@ -181,6 +181,7 @@ export const coletaRhRouter = router({
       const db = (await getDb())!;
       const companyIds = resolveCompanyIds(input);
       await assertColetaCompanyAccess(ctx.user, companyIds);
+      assertColetaAdmin(ctx.user);
 
       // Confere que a obra pertence à(s) empresa(s) do usuário.
       const [obra] = await db
@@ -225,6 +226,7 @@ export const coletaRhRouter = router({
       const db = (await getDb())!;
       const companyIds = resolveCompanyIds(input);
       await assertColetaCompanyAccess(ctx.user, companyIds);
+      assertColetaAdmin(ctx.user);
       const camposJson = serializeGruposColeta(input.grupos);
       const itensCustomJson = serializeItensCustom(input.itensCustom);
 
@@ -347,6 +349,7 @@ export const coletaRhRouter = router({
       const db = (await getDb())!;
       const companyIds = resolveCompanyIds(input);
       await assertColetaCompanyAccess(ctx.user, companyIds);
+      assertColetaAdmin(ctx.user);
       await db
         .update(coletaRhSessoes)
         .set({ ativo: input.ativo === 1 ? 1 : 0 })

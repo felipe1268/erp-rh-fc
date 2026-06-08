@@ -2337,7 +2337,7 @@ export const appRouter = router({
     getMyPermissions: protectedProcedure.query(async ({ ctx }) => {
       // Admin Master tem acesso total (allowedObraIds = null => sem restrição)
       if (ctx.user.role === 'admin_master') {
-        return { isAdminMaster: true, permissions: [], groupPermissions: null, moduleAccess: {} as Record<string, string>, allowedObraIds: null as number[] | null };
+        return { isAdminMaster: true, isAdmin: false, permissions: [], groupPermissions: null, moduleAccess: {} as Record<string, string>, allowedObraIds: null as number[] | null };
       }
       const perms = await getUserPermissions(ctx.user.id);
       // Obras liberadas (helper centralizado): null => sem restrição (role=admin); array => obras permitidas (vazio = nenhuma).
@@ -2380,6 +2380,7 @@ export const appRouter = router({
       } catch {}
       return {
         isAdminMaster: false,
+        isAdmin: ctx.user.role === 'admin',
         moduleAccess,
         allowedObraIds,
         permissions: perms.map((p: any) => ({ moduleId: p.moduleId, featureKey: p.featureKey, canAccess: !!p.canAccess })),
