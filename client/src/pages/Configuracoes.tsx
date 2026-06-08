@@ -3217,6 +3217,12 @@ function RecontratacaoAprovadoresSection({ companyId, isMaster }: { companyId: n
   });
 
   const usuarios = (suplentesQuery.data?.usuarios || []) as any[];
+  // Os demais sócios (Admin Master) são SEMPRE aprovadores titulares — aparecem
+  // numa lista só-leitura no topo (não precisam ser selecionados como suplentes).
+  const titulares = useMemo(
+    () => usuarios.filter((u: any) => u.role === "admin_master"),
+    [usuarios],
+  );
   const usuariosFiltrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
     const base = usuarios.filter((u: any) => u.role !== "admin_master");
@@ -3239,8 +3245,9 @@ function RecontratacaoAprovadoresSection({ companyId, isMaster }: { companyId: n
           Recontratação · Suplentes de Aprovação
         </CardTitle>
         <CardDescription>
-          O sócio (Admin Master) é sempre o aprovador titular das recontratações. Selecione abaixo os usuários
-          autorizados a liberar ou recusar na ausência dele. {isMaster ? "" : "Apenas o Admin Master pode alterar esta lista."}
+          Os sócios (Admin Master) são sempre aprovadores titulares das recontratações e podem liberar ou recusar
+          a qualquer momento — inclusive um na ausência do outro. Selecione abaixo os usuários autorizados a
+          liberar ou recusar como suplentes. {isMaster ? "" : "Apenas o Admin Master pode alterar esta lista."}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -3248,6 +3255,33 @@ function RecontratacaoAprovadoresSection({ companyId, isMaster }: { companyId: n
           <div className="text-center py-6 text-gray-400">Carregando usuários...</div>
         ) : (
           <div className="space-y-3">
+            {titulares.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span className="text-sm font-semibold text-amber-800">
+                    Aprovadores titulares (sócios)
+                  </span>
+                </div>
+                <p className="text-xs text-amber-700 mb-2.5 leading-relaxed">
+                  Estes sócios podem liberar ou recusar recontratações a qualquer momento — inclusive um
+                  na ausência do outro. São aprovadores automáticos e não precisam ser selecionados abaixo.
+                </p>
+                <div className="space-y-1.5">
+                  {titulares.map((u: any) => (
+                    <div key={u.id} className="flex items-center gap-2 min-w-0">
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-semibold shrink-0">
+                        TITULAR
+                      </span>
+                      <span className="text-sm font-medium truncate">
+                        {u.name || u.username || `Usuário #${u.id}`}
+                      </span>
+                      <span className="text-xs text-gray-500 truncate">{u.email || u.username}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <Input
               placeholder="Buscar usuário por nome, e-mail ou login..."
               value={busca}

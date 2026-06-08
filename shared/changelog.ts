@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2907 — **RECONTRATAÇÃO · SUPLENTES DE APROVAÇÃO — A TELA AGORA MOSTRA OS DEMAIS SÓCIOS
+ * (ADMIN MASTER) COMO APROVADORES TITULARES, PARA QUE OUTRO SÓCIO POSSA LIBERAR/RECUSAR QUANDO
+ * EU NÃO PUDER.**
+ *
+ * PEDIDO (usuário): "Precisa aparecer os demais sócios também, para aprovação, caso eu não possa
+ * fazer a liberação." (tela = Configurações → Critérios do Sistema → card "Recontratação · Suplentes
+ * de Aprovação").
+ *
+ * CONTEXTO: o backend `server/routers/recontratacao.ts` JÁ permite que QUALQUER `admin_master` (sócio)
+ * libere/recuse recontratações (`assertPodeAprovar` → `role === "admin_master"` retorna true), e
+ * `getSuplentes` JÁ retorna TODOS os usuários não-deletados (inclusive admin_masters) no array `usuarios`.
+ * O problema era SÓ de visibilidade na UI: o card filtrava os admin_masters para fora da lista
+ * (`usuarios.filter(u => u.role !== "admin_master")`), então os demais sócios não apareciam em lugar
+ * nenhum — passava a impressão de que só havia 1 aprovador titular.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY — ZERO BACKEND, ZERO ALTER/DROP/DELETE): `client/src/pages/Configuracoes.tsx`
+ * (`RecontratacaoAprovadoresSection`) deriva `titulares = usuarios.filter(u => u.role === "admin_master")`
+ * e renderiza, ACIMA do campo de busca, um bloco só-leitura âmbar "Aprovadores titulares (sócios)" com
+ * badge "TITULAR" por sócio (nome + e-mail), explicando que eles aprovam a qualquer momento — inclusive
+ * um na ausência do outro — e não precisam ser selecionados como suplentes. A lista de suplentes
+ * selecionáveis abaixo continua igual (segue excluindo admin_masters, que já são titulares). Texto do
+ * `CardDescription` atualizado de "O sócio (Admin Master) é sempre o aprovador titular" (singular) para
+ * "Os sócios (Admin Master) são sempre aprovadores titulares... inclusive um na ausência do outro".
+ *
+ * RESSALVA: nenhuma mudança de permissão — os demais sócios JÁ podiam aprovar; esta revisão só os TORNA
+ * VISÍVEIS na tela de configuração. Sem backend, sem schema, sem dados. ZERO ALTER/DROP/DELETE.
+ *
  * Rev. 2906 — **COLETA DE CAMPO (RH) — FILA DE REVISÃO AGORA TEM SELEÇÃO MÚLTIPLA NA ABA "APROVADAS"
  * E O ADMINISTRADOR MASTER PODE CANCELAR A APROVAÇÃO DE VÁRIAS PESSOAS DE UMA VEZ (VOLTA P/ PENDENTES).**
  *
