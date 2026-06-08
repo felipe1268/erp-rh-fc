@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2911 — **CONTROLE DE EPIs · ABA "ENTREGAS" — A BUSCA AGORA É SERVER-SIDE E VARRE TODAS
+ * AS PÁGINAS. ANTES, BUSCAR POR NOME (EX.: "JAMES") SÓ FILTRAVA A PÁGINA DE 50 ENTREGAS JÁ
+ * CARREGADA NA TELA — QUEM TINHA ENTREGA FORA DO TOP-50 MAIS RECENTE SUMIA DA BUSCA, MESMO
+ * TENDO FICHA/ENTREGAS REGISTRADAS.**
+ *
+ * PEDIDO (usuário, admin_master): "o funcionário JAMES não aparece na lista de EPI pra mim,
+ * mas aparece pro Leonardo" + print da aba Entregas com "Nenhuma entrega registrada" ao buscar
+ * "james". DIAGNÓSTICO (via Neon, app lê NEON_DATABASE_URL): JAMES (id 31, empresa 60002,
+ * Ativo) TEM 4 entregas ativas (12 a 25/05/2026). Os endpoints de EPI filtram SÓ por empresa
+ * (nem obra nem usuário) — a alocação do James na obra 90004 (que está no `allowed_obra_ids` do
+ * Leonardo) é PISTA FALSA, pois `listDeliveries`/`getEmployees` ignoram obra. A causa real: a
+ * aba Entregas pagina de 50 em 50 (ordem `dataEntrega DESC`) e a busca era CLIENT-SIDE só sobre
+ * a página carregada (`filteredDeliveries`). As entregas do James caem nas posições 63/64/94/127
+ * → fora da página 1. Buscando na página 1 → "Nenhuma entrega registrada"; na página 2 (print
+ * "Página 2 de 8") ele aparece. Afetava 51 dos 83 funcionários da 60002.
+ *
+ * SOLUÇÃO (ZERO ALTER/DROP/DELETE — só leitura):
+ *  - `server/routers/epis.ts` `listDeliveries`: novo input opcional `search`; quando preenchido,
+ *    adiciona `OR(ilike nomeCompleto, ilike funcao, ilike epis.nome, ilike epis.ca)` ao WHERE.
+ *    Os `leftJoin(epis)`/`leftJoin(employees)` foram replicados na query de COUNT (antes só na de
+ *    linhas) pra o total/paginação refletir o filtro. Imports `ilike, or` adicionados.
+ *  - `client/src/pages/Epis.tsx`: `deliveriesQ` passa `search: debouncedSearch`; o debounce reseta
+ *    `deliveriesPage` p/ 0 (além do `episPage`); `filteredDeliveries` deixou de re-filtrar por
+ *    `search` no cliente (mantém só o filtro de assinatura) pra não esconder resultados do servidor
+ *    por diferença de acento; import órfão `removeAccents` removido.
+ *
+ * RESSALVA: o filtro de "Assinatura" (assinadas/não) e os contadores continuam client-side sobre
+ * a página carregada (limitação pré-existente, fora do escopo). ZERO ALTER/DROP/DELETE.
+ *
  * Rev. 2910 — **PWA "ABRIR NO APP" / "INSTALAR" — O NAVEGADOR NÃO OFERECE MAIS INSTALAR/ABRIR
  * O ERP COMO APP. REMOVIDOS O `<link rel="manifest">` E AS META TAGS `*-web-app-capable` DO
  * `client/index.html`. O SERVICE WORKER (/sw.js) CONTINUA REGISTRADO — O OFFLINE DO

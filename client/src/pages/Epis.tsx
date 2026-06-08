@@ -11,7 +11,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { trpc } from "@/lib/trpc";
 import { handleCurrencyInput, floatToCurrency, parseCurrencyToFloat } from "@/lib/currency";
-import { removeAccents } from "@/lib/searchUtils";
 import {
   Plus, Minus, Search, Pencil, Trash2, HardHat, Package, AlertTriangle,
   ShieldCheck, Calendar, ArrowRight, ChevronLeft, User, ClipboardList,
@@ -204,14 +203,14 @@ export default function Epis() {
 
   const [debouncedSearch, setDebouncedSearch] = useState("");
   useEffect(() => {
-    const t = setTimeout(() => { setDebouncedSearch(search); setEpisPage(0); }, 350);
+    const t = setTimeout(() => { setDebouncedSearch(search); setEpisPage(0); setDeliveriesPage(0); }, 350);
     return () => clearTimeout(t);
   }, [search]);
   useEffect(() => { setEpisPage(0); }, [filterCategoria, filterCondicao, filterTamanho, filterEstoque]);
 
   const episQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: PAGE_SIZE, offset: episPage * PAGE_SIZE, search: debouncedSearch || undefined, categoria: filterCategoria !== "Todos" ? filterCategoria : undefined, condicao: filterCondicao !== "Todos" ? filterCondicao : undefined, tamanho: filterTamanho !== "Todos" ? filterTamanho : undefined, filtroEstoque: filterEstoque !== "todos" ? filterEstoque : undefined }, { enabled: hasValidCompany });
   const episAllQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: 1000, offset: 0 }, { enabled: hasValidCompany && (viewMode === "nova_entrega" || viewMode === "ficha_epi" || viewMode === "estoque_obra" || viewMode === "transferencias") });
-  const deliveriesQ = trpc.epis.listDeliveries.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: PAGE_SIZE, offset: deliveriesPage * PAGE_SIZE }, { enabled: hasValidCompany && (viewMode === "entregas" || viewMode === "nova_entrega" || viewMode === "ficha_epi") });
+  const deliveriesQ = trpc.epis.listDeliveries.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, search: debouncedSearch || undefined, limit: PAGE_SIZE, offset: deliveriesPage * PAGE_SIZE }, { enabled: hasValidCompany && (viewMode === "entregas" || viewMode === "nova_entrega" || viewMode === "ficha_epi") });
   const statsQ = trpc.epis.stats.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
   const employeesQ = trpc.employees.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, excludeTerminated: true }, { enabled: hasValidCompany && (viewMode === "nova_entrega" || viewMode === "ficha_epi") });
   const bdiQ = trpc.epis.getBdi.useQuery({ companyId: queryCompanyId }, { enabled: hasValidCompany && (viewMode === "nova_entrega" || viewMode === "ficha_epi" || viewMode === "config") });
@@ -600,13 +599,10 @@ export default function Epis() {
     } else if (filterAssinatura === "nao_assinadas") {
       arr = arr.filter((d: any) => !d.assinaturaUrl);
     }
-    if (!search) return arr;
-    const s = removeAccents(search);
-    return arr.filter((d: any) =>
-      (d.nomeEpi || "").toLowerCase().includes(s) ||
-      (d.nomeFunc || "").toLowerCase().includes(s)
-    );
-  }, [deliveriesList, search, filterAssinatura]);
+    // Rev. 2911 — a busca por texto agora é SERVER-SIDE (varre todas as páginas).
+    // Não re-filtramos por `search` aqui pra não esconder resultados do servidor.
+    return arr;
+  }, [deliveriesList, filterAssinatura]);
 
   const formatCurrency = (val: any) => {
     if (!val) return "—";

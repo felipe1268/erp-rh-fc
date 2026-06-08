@@ -2,7 +2,7 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { epis, epiDeliveries, employees, systemCriteria, caepiDatabase, epiDiscountAlerts, obras, fornecedoresEpi, epiEstoqueObra, epiTransferencias, obraFuncionarios, companies, comprasSolicitacoes, comprasSolicitacoesItens, epiEstoqueMinimo } from "../../drizzle/schema";
-import { eq, and, desc, sql, isNull, gte, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, isNull, gte, inArray, ilike, or } from "drizzle-orm";
 import { getConstrutorasIds } from "../db";
 import { storagePut } from "../storage";
 import { invokeLLM } from "../_core/llm";
@@ -254,6 +254,7 @@ export const episRouter = router({
       companyIds: z.array(z.number()).optional(),
       employeeId: z.number().optional(),
       epiId: z.number().optional(),
+      search: z.string().optional(),
       limit: z.number().min(1).max(200).default(50),
       offset: z.number().min(0).default(0),
     }))
@@ -263,6 +264,20 @@ export const episRouter = router({
       const conds: any[] = [inArray(epiDeliveries.companyId, ids), isNull(epiDeliveries.deletedAt)];
       if (input.employeeId) conds.push(eq(epiDeliveries.employeeId, input.employeeId));
       if (input.epiId) conds.push(eq(epiDeliveries.epiId, input.epiId));
+      // Rev. 2911 — busca SERVER-SIDE (varre TODAS as páginas, não só a carregada).
+      // Antes a busca era client-side sobre a página de 50 → funcionário fora do top-50
+      // (ex.: JAMES, pos 63) ficava "invisível". Agora filtra por nome/função/EPI/CA no banco.
+      const searchTerm = (input.search || "").trim();
+      if (searchTerm) {
+        const like = `%${searchTerm}%`;
+        const searchCond = or(
+          ilike(employees.nomeCompleto, like),
+          ilike(employees.funcao, like),
+          ilike(epis.nome, like),
+          ilike(epis.ca, like),
+        );
+        if (searchCond) conds.push(searchCond);
+      }
 
       const whereClause = and(...conds);
 
@@ -303,6 +318,8 @@ export const episRouter = router({
           .offset(input.offset),
         db.select({ total: sql<number>`COUNT(*)` })
           .from(epiDeliveries)
+          .leftJoin(epis, eq(epiDeliveries.epiId, epis.id))
+          .leftJoin(employees, eq(epiDeliveries.employeeId, employees.id))
           .where(whereClause),
       ]);
 
