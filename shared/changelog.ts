@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2933 — **EQUIPE DA OBRA (DRILL-DOWN) — A COLUNA "INTEGRAÇÕES" AGORA MOSTRA EM QUAIS
+ * CLIENTES/LOCAIS O FUNCIONÁRIO ESTÁ INTEGRADO (EX.: "SANTUÁRIO NACIONAL", "GERAL"), COM
+ * COR (VÁLIDA/VENCIDA), DATA DE VALIDADE E AS NRs (MÓDULOS) COBERTAS — MAIS UMA LEGENDA DE
+ * CORES NO TOPO DO MODAL.**
+ *
+ * PEDIDO (usuário, gestor SST): na coluna "Integrações" da tela "Equipe — {obra}", destacar
+ * EM QUAIS CLIENTES cada funcionário está integrado (o usuário citou "Santuário Nacional", que
+ * é um CLIENTE que exige integração própria), com uma LEGENDA de cores e, para cada integração,
+ * QUAIS NRs ela cobre COM data de validade. (A palavra "santuário" no áudio era o nome do
+ * cliente, não um local genérico.)
+ *
+ * SOLUÇÃO (BACK + FRONT, READ-ONLY — ZERO ALTER/DROP/DELETE):
+ *
+ * BACKEND (`server/db.ts`, `getObraFuncionarios`): a leitura de integrações SST (introduzida na
+ * Rev. 2932) foi ENRIQUECIDA, mantendo o isolamento por `companyIdsArr` (tenant-safe, sem IDOR):
+ *   - Cada `sstIntegracaoRegistros` (status `aprovado`/`vencido`, `deletedAt IS NULL`) passou a
+ *     trazer `obraId`/`obraNome` e um leftJoin em `obras` para resolver o CLIENTE
+ *     (`obras.cliente`). O rótulo do bloco vira `cliente da obra → nome da obra → "Geral"`
+ *     (integração sem obra = "Geral").
+ *   - As NRs são os MÓDULOS da config (`sstIntegracaoModulos.titulo`, ex.: "NR-35"), lidos numa
+ *     única consulta agregada por `configId` (ordenada por `ordem`, dedup case-insensitive) e
+ *     anexados a cada integração.
+ *   - Dedup por CLIENTE/local (antes era por título), mantendo a realização mais recente
+ *     (ordenado `desc` por `dataRealizacao`). Nova forma de cada item:
+ *     `{cliente, obraNome, titulo, dataValidade, vencida, nrs[]}`.
+ *
+ * FRONTEND (`client/src/pages/ObraEfetivo.tsx`): a célula "Integrações" agora renderiza um BLOCO
+ * por cliente/local (em vez de um chip simples), com: bolinha de cor (verde = válida, vermelha =
+ * vencida) + nome do CLIENTE + linha de validade ("Válida até DD/MM" ou "Venceu: DD/MM") + os
+ * chips das NRs cobertas. "Sem integração" ganha bolinha cinza. Foi adicionada uma LEGENDA de
+ * cores logo abaixo dos badges de status do modal (verde/vermelho/cinza), explicando o
+ * significado. Datas via helper `YYYY-MM-DD` + `T12:00:00` (anti-crash Safari iOS); blocos com
+ * `print-color-adjust: exact` para sair coloridos no PDF.
+ *
  * Rev. 2932 — **EQUIPE DA OBRA (DRILL-DOWN) — A COLUNA "INFO STATUS" FOI ENRIQUECIDA E GANHOU
  * UMA NOVA COLUNA "INTEGRAÇÕES" PARA FACILITAR A ANÁLISE DO FUNCIONÁRIO: AGORA MOSTRA AS
  * INTEGRAÇÕES DE SEGURANÇA (SST), QUANDO VAI SAIR DE FÉRIAS, SE ESTÁ EM AVISO PRÉVIO E SE ESTÁ

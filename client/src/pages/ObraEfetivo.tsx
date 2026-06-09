@@ -1633,6 +1633,23 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                   )}
                 </div>
 
+                {/* Rev. 2933 — Legenda de cores da coluna "Integrações" (por cliente/local) */}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border bg-slate-50/70 px-3 py-2 text-[11px] text-slate-600">
+                  <span className="inline-flex items-center gap-1.5 font-semibold text-slate-700">
+                    <ShieldCheck className="h-3.5 w-3.5" /> Integrações por cliente:
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" /> Integração válida
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500" /> Vencida
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-block h-2.5 w-2.5 rounded-full bg-gray-300" /> Sem integração
+                  </span>
+                  <span className="text-slate-400">— cada bloco mostra o cliente, a validade e as NRs cobertas.</span>
+                </div>
+
                 {/* Employee list grouped by status */}
                 {funcObraQ.isLoading ? (
                   <div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>
@@ -1680,7 +1697,7 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                                 const emExperiencia = f.employee?.experienciaStatus === 'em_experiencia' && !!expFim && String(expFim).slice(0, 10) >= todayStr;
                                 const feriasAgendada: string | null = f.feriasAgendadaInicio || null;
                                 const temStatusBadge = (empStatus === 'AvisoDispensado' && f.avisoDataFim) || (empStatus === 'Aviso' && f.avisoDataFim) || (empStatus === 'Ferias' && f.feriasDataFim) || empStatus === 'Afastado' || empStatus === 'Licenca';
-                                const integ: Array<{ titulo: string; dataValidade: string | null; vencida: boolean }> = Array.isArray(f.integracoes) ? f.integracoes : [];
+                                const integ: Array<{ cliente: string; obraNome: string | null; titulo: string; dataValidade: string | null; vencida: boolean; nrs: string[] }> = Array.isArray(f.integracoes) ? f.integracoes : [];
                                 return (
                                 <tr key={f.id} className={`hover:bg-slate-50/50 ${rowBg}`} style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
                                   <td className="px-4 py-2.5">
@@ -1753,20 +1770,45 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                                   </td>
                                   <td className="px-4 py-2.5 text-sm hidden md:table-cell">
                                     {integ.length > 0 ? (
-                                      <div className="flex flex-wrap gap-1 max-w-[280px]">
+                                      <div className="flex flex-col gap-1.5 max-w-[320px]">
                                         {integ.map((ig, i) => (
-                                          <span
+                                          <div
                                             key={i}
-                                            title={ig.dataValidade ? `Validade: ${fmtDataBR(ig.dataValidade)}` : undefined}
-                                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${ig.vencida ? 'bg-red-100 text-red-800 border-red-300' : 'bg-emerald-100 text-emerald-800 border-emerald-300'}`}
+                                            className={`rounded-lg border px-2 py-1 ${ig.vencida ? 'bg-red-50 border-red-300' : 'bg-emerald-50 border-emerald-300'}`}
                                             style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}
                                           >
-                                            <ShieldCheck className="h-3 w-3" /> {ig.titulo}{ig.vencida ? ' (vencida)' : ''}
-                                          </span>
+                                            {/* Cliente/local + status de cor + validade */}
+                                            <div className="flex items-center gap-1.5">
+                                              <span className={`inline-block h-2.5 w-2.5 rounded-full ${ig.vencida ? 'bg-red-500' : 'bg-emerald-500'}`} style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }} />
+                                              <ShieldCheck className={`h-3 w-3 ${ig.vencida ? 'text-red-700' : 'text-emerald-700'}`} />
+                                              <span className={`text-[11px] font-semibold ${ig.vencida ? 'text-red-800' : 'text-emerald-800'}`}>{ig.cliente}</span>
+                                            </div>
+                                            <div className={`text-[10px] mt-0.5 ${ig.vencida ? 'text-red-700' : 'text-emerald-700'}`}>
+                                              {ig.dataValidade ? `${ig.vencida ? 'Venceu' : 'Válida até'}: ${fmtDataBR(ig.dataValidade)}` : (ig.vencida ? 'Vencida' : 'Sem validade definida')}
+                                            </div>
+                                            {/* NRs (módulos) cobertas pela integração */}
+                                            {ig.nrs && ig.nrs.length > 0 && (
+                                              <div className="flex flex-wrap gap-1 mt-1">
+                                                {ig.nrs.map((nr, j) => (
+                                                  <span
+                                                    key={j}
+                                                    title={ig.dataValidade ? `Validade: ${fmtDataBR(ig.dataValidade)}` : undefined}
+                                                    className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium border bg-white ${ig.vencida ? 'text-red-700 border-red-200' : 'text-emerald-700 border-emerald-200'}`}
+                                                    style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}
+                                                  >
+                                                    {nr}
+                                                  </span>
+                                                ))}
+                                              </div>
+                                            )}
+                                          </div>
                                         ))}
                                       </div>
                                     ) : (
-                                      <span className="text-xs text-muted-foreground">Sem integração</span>
+                                      <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                                        <span className="inline-block h-2.5 w-2.5 rounded-full bg-gray-300" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }} />
+                                        Sem integração
+                                      </span>
                                     )}
                                   </td>
                                   <td className="px-4 py-2.5 print:hidden">

@@ -13,7 +13,7 @@ import {
   trainingDocuments, payrollUploads, dixiDevices,
   obras, obraFuncionarios, obraHorasRateio, obraSns, employeeSiteHistory, obraPontoInconsistencies,
   terminationNotices, vacationPeriods,
-  sstIntegracaoRegistros, sstIntegracaoConfig,
+  sstIntegracaoRegistros, sstIntegracaoConfig, sstIntegracaoModulos,
   sectors, jobFunctions,
   systemRevisions,
   userCompanies,
@@ -2126,22 +2126,32 @@ export async function getObraFuncionarios(obraId: number, obraIds?: number[]) {
     if (!feriasFuturasMap.has(r.employeeId)) feriasFuturasMap.set(r.employeeId, { dataInicio: r.dataInicio, dataFim: r.dataFim });
   }
 
-  // Rev. 2932 — INTEGRAÇÕES de segurança (SST) por funcionário: lista de títulos
-  // das integrações já realizadas (status aprovado/vencido), com validade. Cruza
-  // pelo employeeId, restrito às empresas das alocações (tenant-safe). Para o
-  // gestor saber "quem está integrado e em quê" direto no painel da equipe.
-  const integracoesMap = new Map<number, Array<{ titulo: string; dataValidade: string | null; vencida: boolean }>>();
+  // Rev. 2933 — INTEGRAÇÕES de segurança (SST) por funcionário, agrupadas por
+  // CLIENTE/LOCAL: o gestor SST quer ver EM QUAIS CLIENTES cada funcionário está
+  // integrado (ex.: "Santuário Nacional", "Geral"), com a validade e QUAIS NRs
+  // (módulos da integração) ele cobre. Cada registro liga-se a uma obra
+  // (`obraId`) → `obras.cliente`; integração sem obra = "Geral". Restrito às
+  // empresas das alocações (tenant-safe). Read-only.
+  const integracoesMap = new Map<number, Array<{ cliente: string; obraNome: string | null; titulo: string; dataValidade: string | null; vencida: boolean; nrs: string[] }>>();
   {
     const integRows = await db.select({
       employeeId: sstIntegracaoRegistros.employeeId,
+      configId: sstIntegracaoRegistros.configId,
+      obraId: sstIntegracaoRegistros.obraId,
+      obraNome: sstIntegracaoRegistros.obraNome,
       status: sstIntegracaoRegistros.status,
       dataValidade: sstIntegracaoRegistros.dataValidade,
       dataRealizacao: sstIntegracaoRegistros.dataRealizacao,
       configTitulo: sstIntegracaoConfig.titulo,
+      clienteObra: obras.cliente,
     }).from(sstIntegracaoRegistros)
       .leftJoin(sstIntegracaoConfig, and(
         eq(sstIntegracaoConfig.id, sstIntegracaoRegistros.configId),
         eq(sstIntegracaoConfig.companyId, sstIntegracaoRegistros.companyId),
+      ))
+      .leftJoin(obras, and(
+        eq(obras.id, sstIntegracaoRegistros.obraId),
+        eq(obras.companyId, sstIntegracaoRegistros.companyId),
       ))
       .where(and(
         inArray(sstIntegracaoRegistros.companyId, companyIdsArr),
@@ -2150,15 +2160,43 @@ export async function getObraFuncionarios(obraId: number, obraIds?: number[]) {
         sql`${sstIntegracaoRegistros.employeeId} IN (${sql.raw(empIds.join(","))})`,
       ))
       .orderBy(desc(sstIntegracaoRegistros.dataRealizacao));
+
+    // NRs = módulos de cada config envolvida (uma leitura agregada, tenant-safe).
+    const configIdsSet = new Set<number>();
+    for (const r of integRows) if (r.configId != null) configIdsSet.add(r.configId);
+    const nrsPorConfig = new Map<number, string[]>();
+    if (configIdsSet.size > 0) {
+      const modRows = await db.select({
+        configId: sstIntegracaoModulos.configId,
+        titulo: sstIntegracaoModulos.titulo,
+      }).from(sstIntegracaoModulos)
+        .where(and(
+          inArray(sstIntegracaoModulos.companyId, companyIdsArr),
+          inArray(sstIntegracaoModulos.configId, Array.from(configIdsSet)),
+          isNull(sstIntegracaoModulos.deletedAt),
+        ))
+        .orderBy(asc(sstIntegracaoModulos.ordem));
+      for (const m of modRows) {
+        const t = (m.titulo || '').trim();
+        if (!t) continue;
+        const arr = nrsPorConfig.get(m.configId) || [];
+        if (!arr.some(x => x.toLowerCase() === t.toLowerCase())) arr.push(t);
+        nrsPorConfig.set(m.configId, arr);
+      }
+    }
+
     const nowMs = Date.now();
     for (const r of integRows) {
       const titulo = (r.configTitulo || 'Integração').trim();
+      // Cliente/local: nome do cliente da obra → nome da obra → "Geral" (sem obra).
+      const cliente = ((r.clienteObra || r.obraNome || (r.obraId ? titulo : 'Geral')) || 'Geral').trim();
       const validadeMs = r.dataValidade ? new Date(r.dataValidade).getTime() : null;
       const vencida = r.status === 'vencido' || (validadeMs != null && !Number.isNaN(validadeMs) && validadeMs < nowMs);
+      const nrs = r.configId != null ? (nrsPorConfig.get(r.configId) || []) : [];
       const arr = integracoesMap.get(r.employeeId) || [];
-      // dedup por título (mantém o mais recente, já ordenado desc por realização)
-      if (!arr.some(x => x.titulo.toLowerCase() === titulo.toLowerCase())) {
-        arr.push({ titulo, dataValidade: r.dataValidade, vencida });
+      // dedup por cliente/local (mantém o mais recente, já ordenado desc por realização)
+      if (!arr.some(x => x.cliente.toLowerCase() === cliente.toLowerCase())) {
+        arr.push({ cliente, obraNome: r.obraNome, titulo, dataValidade: r.dataValidade, vencida, nrs });
         integracoesMap.set(r.employeeId, arr);
       }
     }
