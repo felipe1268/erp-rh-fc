@@ -1100,6 +1100,38 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2914: colunas epi_nec_camisa/calca/calcado garantidas em companies.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA companies epi_nec_*:`, e?.message || e); }
 
+        // Rev. 2915 — Conversão de tamanho de CALÇA de LETRA (PP/P/M/G/GG/XG/XGG/EXG/XXGG/XXXGG) para
+        // NÚMERO, para casar com o tamanho numérico cadastrado nos funcionários (a aba "Necessidade" só
+        // cruza calça por número). Critério: tabela de calça brim profissional (valor nominal/inferior da
+        // faixa de cada letra) — não existe norma 1:1 letra→número, então cada letra vira UM número.
+        // ZERO ALTER/DROP/DELETE — só UPDATE de dado. Idempotente: após converter, `tamanho` fica numérico
+        // e não volta a casar com a lista de letras. Escopo restrito a categoria 'Uniforme' cujo nome
+        // contém "calça"/"calca" (NÃO toca camisas, que também são 'Uniforme' + letra).
+        try {
+          const rConv: any = await db.execute(sql`
+            UPDATE epis
+            SET tamanho = CASE upper(btrim(tamanho))
+                WHEN 'PP'    THEN '34'
+                WHEN 'P'     THEN '36'
+                WHEN 'M'     THEN '38'
+                WHEN 'G'     THEN '42'
+                WHEN 'GG'    THEN '46'
+                WHEN 'XG'    THEN '48'
+                WHEN 'XGG'   THEN '50'
+                WHEN 'EXG'   THEN '50'
+                WHEN 'XXGG'  THEN '52'
+                WHEN 'XXXGG' THEN '54'
+                ELSE tamanho END,
+                alterado_por = 'Sistema (Rev. 2915 — conversão calça letra→número)'
+            WHERE categoria = 'Uniforme'
+              AND (nome ILIKE '%calç%' OR nome ILIKE '%calca%')
+              AND upper(btrim(tamanho)) IN ('PP','P','M','G','GG','XG','XGG','EXG','XXGG','XXXGG')
+            RETURNING id
+          `);
+          const nConv = Array.isArray(rConv) ? rConv.length : (rConv?.rows?.length ?? rConv?.rowCount ?? 0);
+          console.log(`[SyncSchema+] Rev. 2915: ${nConv} calça(s) convertida(s) de letra→número.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA conversão calça letra→número:`, e?.message || e); }
+
         // Rev. 2404 — Vinculo de item de almoxarifado com Controle de Equipamentos.
         try {
           await db.execute(sql`ALTER TABLE almoxarifado_itens ADD COLUMN IF NOT EXISTS equipamento_vinculado_tipo VARCHAR(10)`);

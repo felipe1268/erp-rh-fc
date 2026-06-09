@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2915 — **CONTROLE DE EPIs · NECESSIDADE — CONVERSÃO DEFINITIVA DO TAMANHO DAS CALÇAS DE LETRA
+ * (P/M/G/GG...) PARA NÚMERO, PARA CASAR COM O TAMANHO NUMÉRICO CADASTRADO NOS FUNCIONÁRIOS.**
+ *
+ * PROBLEMA (usuário, com prints): as calças no catálogo de EPIs estavam cadastradas com tamanho em
+ * LETRA (P/M/G/GG/XGG/XXGG/XXXGG), mas os funcionários têm `tamanhoCalca` em NÚMERO (36..58). Como a
+ * aba "Necessidade" (Rev. 2914) classifica `calça = Uniforme + tamanho numérico` e `camisa = Uniforme +
+ * tamanho letra`, as calças-letra (1) caíam no balde CAMISA (inflavam o estoque de camisa) e (2) na
+ * seção CALÇA o estoque aparecia ZERADO em todos os números (não havia como casar letra com número).
+ *
+ * PESQUISA / CRITÉRIO (pedido do usuário: "tem critério na literatura mundial?"): NÃO existe norma 1:1
+ * letra→número. ABNT NBR 16060 (masculino) e EN 13402 tratam letra e número como sistemas PARALELOS
+ * baseados em medidas do corpo; cada letra cobre uma FAIXA de ~2 números. A referência mais próxima do
+ * caso (são "Calça Brim profissional") é a tabela dos fabricantes de uniforme, onde PP≈34-36, P≈36-38,
+ * M≈38-40, G≈42-44, GG≈46-48, EXG≈50-52. O usuário escolheu o caminho A (converter o cadastro, cada
+ * letra vira UM número) e delegou a escolha do número à tabela mostrada.
+ *
+ * DECISÃO: mapa NOMINAL (valor inferior da faixa de cada letra, que a literatura chama de "equivale ao
+ * número X"), estendido de forma monotônica para os tamanhos sem norma (XG/XGG/EXG/XXGG/XXXGG):
+ * PP→34, P→36, M→38, G→42, GG→46, XG→48, XGG→50, EXG→50, XXGG→52, XXXGG→54. RESSALVA assumida com o
+ * usuário: como cada letra coloca o estoque em UM único número, os números intermediários da faixa
+ * (ex.: 40, 44, 48) NÃO ficam cobertos por estoque-letra e, se necessário, devem ser cadastrados por
+ * número. A conversão é reversível por mapa inverso (os tamanhos reais convertidos são distintos).
+ *
+ * SOLUÇÃO (ZERO ALTER/DROP/DELETE — só UPDATE de dado; SEM botão, ajuste interno automático): bloco de
+ * backfill no startup `server/_core/index.ts` (`[SyncSchema+]` Rev. 2915) com um único UPDATE em `epis`
+ * usando `CASE upper(btrim(tamanho))` para regravar `tamanho` e `alterado_por`. Escopo RESTRITO a
+ * `categoria='Uniforme'` cujo `nome ILIKE '%calç%'/'%calca%'` E `tamanho` ∈ lista de letras — NÃO toca
+ * camisas (também 'Uniforme'+letra) nem qualquer outro EPI. IDEMPOTENTE: após converter, `tamanho` fica
+ * numérico e não volta a casar com a lista de letras (re-rodar = 0 linhas). Estoque (`epi_estoque_obra`),
+ * entregas (`epi_deliveries`) e estoque central permanecem intactos pois ligam ao item por `epiId`, não
+ * pelo texto do tamanho. Loga `Rev. 2915: N calça(s) convertida(s)`. Nenhuma mudança de schema/front:
+ * `necessidadeVsEstoque` já classifica `tamanho` numérico como calça via `/^[0-9]+$/`.
+ *
  * Rev. 2914 — **CONTROLE DE EPIs · NOVA ABA "NECESSIDADE" — CRUZA OS TAMANHOS CADASTRADOS DE CADA
  * FUNCIONÁRIO ATIVO (CAMISA/CALÇA/CALÇADO) COM O ESTOQUE TOTAL (CENTRAL + OBRAS), DESCONTA O QUE JÁ
  * FOI ENTREGUE E MOSTRA QUANTO FALTA COMPRAR POR TAMANHO.**
