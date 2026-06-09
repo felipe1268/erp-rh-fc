@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2913 — **COLETA DE CAMPO (RH) · LISTA DE LINKS — AGORA DÁ PRA CLICAR EM "FALTAM N DE TOTAL"
+ * E VER NOMINALMENTE QUEM AINDA FALTA COLETAR EM CADA OBRA (NÃO SÓ O NÚMERO).**
+ *
+ * PEDIDO (usuário): "Preciso poder clicar e ver quem está faltando em cada obra" (print da tela
+ * "Coleta de Campo" com badges "Faltam 3 de 41", "Faltam 5 de 24" etc. — a Rev. 2912 mostrava o
+ * NÚMERO, mas não QUEM). O RH precisava abrir a ficha/alocação de cada funcionário pra descobrir
+ * quem ainda não foi coletado.
+ *
+ * SOLUÇÃO (ZERO ALTER/DROP/DELETE — só leitura):
+ * - BACKEND `server/routers/coletaRh.ts`: nova query `listarFaltantesSessao` ({companyId, companyIds?,
+ *   sessaoId}) — valida a sessão + tenant (`assertColetaCompanyAccess` + companyIds), resolve a obra,
+ *   lista os funcionários ATIVOS alocados (`obra_funcionarios.isActive=1` ∩ `employees.status="Ativo"`,
+ *   guard `obra_funcionarios.companyId`), cruza com as respostas pendente/aprovada da sessão (mesma
+ *   regra de `listarSessoes`), deduplica por employeeId e retorna `{obraNome,total,coletados,faltantes,
+ *   funcionarios:[{employeeId,nome,funcao,coletado}]}` ordenado faltantes-primeiro + nome (pt-BR).
+ * - FRONTEND `client/src/pages/ColetaCampo.tsx`: o badge laranja "Faltam N de TOTAL" virou um botão
+ *   (ícone Users) que abre um Dialog com duas seções — "Faltam coletar (N)" (laranja) e "Já coletados
+ *   (N)" (verde, recolhível visualmente) — com nome + função de cada um; estados loading/erro/vazio.
+ *
+ * Nenhuma mudança de schema. Mesma régua de contagem da Rev. 2902/2912.
+ *
  * Rev. 2912 — **COLETA DE CAMPO (RH) · LISTA DE LINKS — AGORA FICA EXPLÍCITO QUANTOS FUNCIONÁRIOS
  * AINDA FALTAM COLETAR EM CADA OBRA, NÃO SÓ "X/Y COLETADO(S)".**
  *

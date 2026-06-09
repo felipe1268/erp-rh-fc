@@ -396,6 +396,97 @@ export const coletaRhRouter = router({
       });
     }),
 
+  // Rev. 2913 — funcionários ATIVOS alocados na obra da sessão, marcando quem JÁ
+  // foi coletado (resposta pendente/aprovada) e quem AINDA FALTA. Espelha a mesma
+  // regra de `listarSessoes` (universo = ativos-alocados; coletado = pendente OU
+  // aprovada). Permite ao RH clicar numa obra e ver NOMINALMENTE quem falta.
+  listarFaltantesSessao: protectedProcedure
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), sessaoId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const companyIds = resolveCompanyIds(input);
+      await assertColetaCompanyAccess(ctx.user, companyIds);
+
+      // Valida a sessão e o tenant; resolve a obra-alvo.
+      const [sessao] = await db
+        .select({
+          id: coletaRhSessoes.id,
+          obraId: coletaRhSessoes.obraId,
+          obraNome: obras.nome,
+        })
+        .from(coletaRhSessoes)
+        .leftJoin(obras, eq(coletaRhSessoes.obraId, obras.id))
+        .where(and(
+          eq(coletaRhSessoes.id, input.sessaoId),
+          inArray(coletaRhSessoes.companyId, companyIds),
+          isNull(coletaRhSessoes.deletedAt),
+        ))
+        .limit(1);
+      if (!sessao) throw new TRPCError({ code: "NOT_FOUND", message: "Sessão não encontrada." });
+
+      // Funcionários ATIVOS alocados na obra (universo a coletar).
+      const alocados = await db
+        .select({
+          employeeId: obraFuncionarios.employeeId,
+          nome: employees.nomeCompleto,
+          funcao: employees.funcao,
+          funcaoNaObra: obraFuncionarios.funcaoNaObra,
+        })
+        .from(obraFuncionarios)
+        .innerJoin(employees, eq(obraFuncionarios.employeeId, employees.id))
+        .where(and(
+          eq(obraFuncionarios.obraId, sessao.obraId),
+          inArray(obraFuncionarios.companyId, companyIds),
+          eq(obraFuncionarios.isActive, 1),
+          eq(employees.status, "Ativo"),
+        ));
+
+      // Coletados (pendente OU aprovada) nesta sessão.
+      const respostas = await db
+        .select({
+          employeeId: coletaRhRespostas.employeeId,
+          status: coletaRhRespostas.status,
+        })
+        .from(coletaRhRespostas)
+        .where(and(
+          eq(coletaRhRespostas.sessaoId, input.sessaoId),
+          inArray(coletaRhRespostas.companyId, companyIds),
+          isNull(coletaRhRespostas.deletedAt),
+        ));
+      const coletadosSet = new Set<number>();
+      for (const r of respostas) {
+        if (r.status === "pendente" || r.status === "aprovada") coletadosSet.add(r.employeeId);
+      }
+
+      // Dedup por employeeId (um funcionário pode ter +1 vínculo na mesma obra).
+      const vistos = new Set<number>();
+      const funcionarios: Array<{ employeeId: number; nome: string; funcao: string | null; coletado: boolean }> = [];
+      for (const a of alocados) {
+        if (vistos.has(a.employeeId)) continue;
+        vistos.add(a.employeeId);
+        funcionarios.push({
+          employeeId: a.employeeId,
+          nome: a.nome,
+          funcao: a.funcaoNaObra || a.funcao || null,
+          coletado: coletadosSet.has(a.employeeId),
+        });
+      }
+      // Faltantes primeiro, depois por nome.
+      funcionarios.sort((x, y) => {
+        if (x.coletado !== y.coletado) return x.coletado ? 1 : -1;
+        return (x.nome || "").localeCompare(y.nome || "", "pt-BR");
+      });
+
+      const coletados = funcionarios.filter((f) => f.coletado).length;
+      return {
+        obraNome: sessao.obraNome ?? null,
+        total: funcionarios.length,
+        coletados,
+        faltantes: funcionarios.length - coletados,
+        funcionarios,
+      };
+    }),
+
   desativarSessao: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), id: z.number(), ativo: z.number().optional() }))
     .mutation(async ({ input, ctx }) => {

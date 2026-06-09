@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   ClipboardList, Link2, QrCode, Copy, Check, X, Power, Eye, Loader2,
   CheckCircle2, XCircle, Clock, ArrowRight, ImageIcon, Pencil, Trash2, AlertTriangle,
-  ArrowLeft, CheckSquare, Square, RotateCcw,
+  ArrowLeft, CheckSquare, Square, RotateCcw, Users,
 } from "lucide-react";
 import {
   GRUPOS_COLETA, GRUPOS_COLETA_KEYS, type GrupoColetaKey,
@@ -75,6 +75,13 @@ export default function ColetaCampo() {
   // ── Links ────────────────────────────────────────────────────────────────
   const obrasQ = trpc.coletaRh.obrasDisponiveis.useQuery(baseInput, { enabled: hasValidSelection });
   const sessoesQ = trpc.coletaRh.listarSessoes.useQuery(baseInput, { enabled: hasValidSelection });
+  // Rev. 2913 — sessão selecionada p/ ver NOMINALMENTE quem ainda falta coletar.
+  const [faltantesSessao, setFaltantesSessao] = useState<any | null>(null);
+  // Rev. 2913 — quem ainda falta coletar na obra da sessão selecionada (lista nominal).
+  const faltantesQ = trpc.coletaRh.listarFaltantesSessao.useQuery(
+    { ...baseInput, sessaoId: faltantesSessao?.id },
+    { enabled: hasValidSelection && !!faltantesSessao?.id },
+  );
 
   const [novaObraId, setNovaObraId] = useState<string>("");
   const [novoTitulo, setNovoTitulo] = useState<string>("");
@@ -533,8 +540,14 @@ export default function ColetaCampo() {
                         : <Badge variant="secondary">{s.expirada ? "Expirado" : "Inativo"}</Badge>}
                     {s.pendentes > 0 && <Badge className="bg-amber-500">{s.pendentes} pendente(s)</Badge>}
                     {/* Rev. 2912 — destaca QUANTOS FALTAM coletar na obra (não só "X/Y coletado(s)"). */}
+                    {/* Rev. 2913 — clicável: abre a lista NOMINAL de quem ainda falta coletar. */}
                     {!s.concluida && typeof s.totalAlocados === "number" && s.totalAlocados > 0 && (s.totalAlocados - s.coletados) > 0 && (
-                      <Badge className="bg-orange-600">Faltam {s.totalAlocados - s.coletados} de {s.totalAlocados}</Badge>
+                      <button type="button" onClick={() => setFaltantesSessao(s)} title="Ver quem está faltando">
+                        <Badge className="bg-orange-600 hover:bg-orange-700 cursor-pointer gap-1">
+                          <Users className="h-3 w-3" />
+                          Faltam {s.totalAlocados - s.coletados} de {s.totalAlocados}
+                        </Badge>
+                      </button>
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5 truncate">
@@ -728,6 +741,90 @@ export default function ColetaCampo() {
               </Button>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Rev. 2913 — Dialog: quem ainda falta coletar na obra (lista nominal). */}
+      <Dialog open={!!faltantesSessao} onOpenChange={(o) => !o && setFaltantesSessao(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" style={{ color: FC_NAVY }} />
+              Quem está faltando coletar
+            </DialogTitle>
+            <DialogDescription>
+              {faltantesSessao?.obraNome || faltantesSessao?.titulo}
+              {faltantesQ.data
+                ? ` · ${faltantesQ.data.faltantes} de ${faltantesQ.data.total} pendente(s)`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {faltantesQ.isLoading && (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              <Loader2 className="inline h-4 w-4 animate-spin mr-2" />Carregando…
+            </div>
+          )}
+          {faltantesQ.isError && (
+            <div className="py-6 text-center text-sm text-red-600">
+              Não foi possível carregar a lista. Tente novamente.
+            </div>
+          )}
+          {!faltantesQ.isLoading && !faltantesQ.isError && faltantesQ.data && (
+            (() => {
+              const pendentes = faltantesQ.data.funcionarios.filter((f: any) => !f.coletado);
+              const feitos = faltantesQ.data.funcionarios.filter((f: any) => f.coletado);
+              if (faltantesQ.data.total === 0) {
+                return (
+                  <div className="py-6 text-center text-sm text-muted-foreground">
+                    Nenhum funcionário ativo alocado nesta obra.
+                  </div>
+                );
+              }
+              return (
+                <div className="max-h-[60vh] overflow-y-auto -mx-1 px-1 space-y-4">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-orange-700 mb-1.5">
+                      Faltam coletar ({pendentes.length})
+                    </div>
+                    {pendentes.length === 0 ? (
+                      <div className="text-sm text-emerald-700 flex items-center gap-1.5">
+                        <CheckCircle2 className="h-4 w-4" /> Todos já foram coletados.
+                      </div>
+                    ) : (
+                      <ul className="divide-y rounded-md border">
+                        {pendentes.map((f: any) => (
+                          <li key={f.employeeId} className="flex items-center gap-2 px-3 py-2 text-sm">
+                            <XCircle className="h-4 w-4 text-orange-500 shrink-0" />
+                            <span className="font-medium truncate">{f.nome}</span>
+                            {f.funcao && <span className="text-xs text-muted-foreground truncate">· {f.funcao}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  {feitos.length > 0 && (
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700 mb-1.5">
+                        Já coletados ({feitos.length})
+                      </div>
+                      <ul className="divide-y rounded-md border">
+                        {feitos.map((f: any) => (
+                          <li key={f.employeeId} className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                            <span className="truncate">{f.nome}</span>
+                            {f.funcao && <span className="text-xs truncate">· {f.funcao}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              );
+            })()
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFaltantesSessao(null)}>Fechar</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
