@@ -538,7 +538,48 @@ Regras:
     }
   });
 
-  app.use("/uploads", express.static(path.join(process.cwd(), "server/uploads")));
+  // Rev. 2917 — Serve /uploads com CAP de chunk pra não estourar o teto de
+  // ~32MB de resposta do proxy de deploy (Cloud Run/Google Frontend). Sintoma:
+  // o <video> abre mandando `Range: bytes=0-` (aberto) → express.static devolvia
+  // o arquivo INTEIRO (Content-Length de ~140MB) → o proxy respondia 500 → vídeo
+  // preto travado em 0:00. Empiricamente: range <=25MB passa, >=32MB dá 500.
+  // Solução: limitar cada resposta a UPLOADS_MAX_CHUNK reescrevendo o header Range
+  // ANTES do express.static (que segue cuidando de content-type/etag/206/Content-Range).
+  // HEAD e arquivos pequenos sem Range passam intactos (200 normal).
+  const UPLOADS_DIR = path.join(process.cwd(), "server/uploads");
+  const UPLOADS_MAX_CHUNK = 8 * 1024 * 1024; // 8MB — folga confortável sob o teto ~32MB
+  app.use("/uploads", (req: any, _res: any, next: any) => {
+    try {
+      if (req.method !== "GET") return next(); // HEAD/etc: sem corpo grande
+      const key = decodeURIComponent(req.path.replace(/^\/+/, ""));
+      const filePath = path.join(UPLOADS_DIR, key);
+      if (!filePath.startsWith(UPLOADS_DIR + path.sep)) return next(); // path traversal → deixa cair no fallback
+      let stat: any;
+      try { stat = fsMod.statSync(filePath); } catch { return next(); } // não existe local → fallback DB
+      if (!stat.isFile()) return next();
+      const total = stat.size;
+      const range = req.headers.range as string | undefined;
+      let start = 0;
+      let end = total - 1;
+      if (range) {
+        const m = /^bytes=(\d*)-(\d*)/.exec(range);
+        if (m) {
+          if (m[1]) { start = parseInt(m[1], 10); end = m[2] ? parseInt(m[2], 10) : total - 1; }
+          else if (m[2]) { start = Math.max(0, total - parseInt(m[2], 10)); end = total - 1; } // suffix bytes=-N
+        }
+      }
+      if (!Number.isFinite(start) || start < 0) start = 0;
+      if (!Number.isFinite(end) || end > total - 1) end = total - 1;
+      if (start > end) return next(); // range inválido → express.static responde 416
+      const needCap = (end - start + 1) > UPLOADS_MAX_CHUNK;
+      if (!range && total <= UPLOADS_MAX_CHUNK) return next(); // pequeno sem range → 200 normal
+      if (range && !needCap) return next(); // range já cabe no teto → segue normal
+      if (needCap) end = start + UPLOADS_MAX_CHUNK - 1;
+      req.headers.range = `bytes=${start}-${end}`; // força 206 limitado, sob o teto do proxy
+      return next();
+    } catch { return next(); }
+  });
+  app.use("/uploads", express.static(UPLOADS_DIR));
 
   app.use("/uploads", async (req: any, res: any) => {
     try {
@@ -552,7 +593,38 @@ Regras:
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(localPath, result.buffer);
         res.setHeader("Content-Type", result.contentType);
-        res.send(result.buffer);
+        // Rev. 2917 — em PROD (Cloud Run) o disco é efêmero e na 1ª requisição o
+        // arquivo vem do DB por aqui; enviar o buffer INTEIRO de um arquivo grande
+        // estoura o teto ~32MB do proxy → 500. Aplica o MESMO cap de chunk/Range
+        // do middleware de disco, agora sobre o buffer em memória.
+        res.setHeader("Accept-Ranges", "bytes");
+        const total = result.buffer.length;
+        const range = req.headers.range as string | undefined;
+        let start = 0;
+        let end = total - 1;
+        if (range) {
+          const m = /^bytes=(\d*)-(\d*)/.exec(range);
+          if (m) {
+            if (m[1]) { start = parseInt(m[1], 10); end = m[2] ? parseInt(m[2], 10) : total - 1; }
+            else if (m[2]) { start = Math.max(0, total - parseInt(m[2], 10)); end = total - 1; } // suffix bytes=-N
+          }
+        }
+        if (!Number.isFinite(start) || start < 0) start = 0;
+        if (!Number.isFinite(end) || end > total - 1) end = total - 1;
+        if (start > end) {
+          res.status(416).setHeader("Content-Range", `bytes */${total}`);
+          res.end();
+          return;
+        }
+        if ((end - start + 1) > UPLOADS_MAX_CHUNK) end = start + UPLOADS_MAX_CHUNK - 1;
+        const partial = !!range || (end - start + 1) < total;
+        if (partial) {
+          res.status(206);
+          res.setHeader("Content-Range", `bytes ${start}-${end}/${total}`);
+        }
+        res.setHeader("Content-Length", String(end - start + 1));
+        if (req.method === "HEAD") { res.end(); return; }
+        res.end(result.buffer.subarray(start, end + 1));
         return;
       }
     } catch (e: any) {

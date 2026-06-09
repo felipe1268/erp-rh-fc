@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2917 — **INTEGRAÇÃO DE SEGURANÇA (SST) · PORTAL PÚBLICO — VÍDEO DE TREINAMENTO VOLTOU A TOCAR:
+ * CORREÇÃO DO 500 AO SERVIR ARQUIVOS GRANDES DE /uploads ATRÁS DO PROXY DO DEPLOY.**
+ *
+ * PROBLEMA (usuário, com print): no portal público `/integracao/:token`, o módulo "Integração FC
+ * ENGENHARIA" mostrava o player de vídeo PRETO travado em 0:00 e não dava play — bloqueando o
+ * questionário ("Assista todos os vídeos para liberar o questionário"). No iPhone aparecia
+ * "The operation is not supported".
+ *
+ * DIAGNÓSTICO (produção): o vídeo (`/uploads/sst/integracao/videos/60002-...MP4`, 140MB, video_tipo
+ * "upload") EXISTE no servidor e o codec é compatível (H.264 Main + AAC, faststart com moov no início).
+ * O `HEAD` retornava 200 e ranges PEQUENOS retornavam 206 normalmente, MAS:
+ *   - `GET` sem Range → HTTP 500
+ *   - `GET` com `Range: bytes=0-` (aberto — exatamente o que o `<video>` manda ao abrir) → HTTP 500
+ *   - `Range: bytes=0-(25MB-1)` → 206 OK | `Range: bytes=0-(32MB-1)` → 500
+ * CAUSA-RAIZ: o proxy de deploy (Cloud Run / Google Frontend) REJEITA com 500 qualquer resposta cujo
+ * corpo/Content-Length passe de ~32MB. O `express.static` respondia ao range aberto com o arquivo
+ * INTEIRO (Content-Length ~140MB) → o proxy cortava com 500 ANTES de transmitir → o player nunca
+ * recebia os primeiros bytes → tela preta em 0:00.
+ *
+ * SOLUÇÃO (backend, ZERO ALTER/DROP/DELETE — só serving): novo middleware em `server/_core/index.ts`
+ * ANTES do `express.static("/uploads")` que LIMITA cada resposta a `UPLOADS_MAX_CHUNK = 8MB`,
+ * reescrevendo o header `Range` da requisição para um intervalo limitado (`bytes=start-(start+8MB-1)`)
+ * antes de delegar ao `express.static` — que continua cuidando de Content-Type, ETag, Last-Modified,
+ * `Accept-Ranges`, status 206 e `Content-Range`. Regras: HEAD e arquivos pequenos sem Range passam
+ * intactos (200 normal); ranges que já cabem no teto seguem sem alteração; range aberto/ausente em
+ * arquivo grande é capado e vira 206 limitado. Trata também sufixo `bytes=-N`, range inválido (deixa
+ * o 416 pro static) e path traversal (cai no fallback). Como o browser pede o vídeo em pedaços, ele
+ * agora recebe cada chunk sob o teto do proxy e o player toca/permite seek normalmente. Vale para
+ * TODOS os uploads grandes (vídeos, PDFs pesados etc.), não só este vídeo. Efeito só em produção após
+ * republicar (o proxy do deploy é quem impõe o teto; em dev o serving direto já funcionava).
+ *
  * Rev. 2916 — **CONTROLE DE EPIs · NECESSIDADE — CORREÇÃO DO INPUT DE CONFIG QUE TRAVAVA EM ZERO:
  * AGORA DÁ PRA APAGAR O CAMPO "CAMISAS/CALÇAS/CALÇADOS POR PESSOA" E DIGITAR OUTRO NÚMERO.**
  *
