@@ -1,6 +1,48 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2927 — **REGISTRAR ENTREGA DE EPI — CONSERTADA A LISTA QUE NÃO MOSTRAVA OS EPIs
+ * ("NENHUM EPI ENCONTRADO"), O ESTOQUE EXIBIDO PASSA A BATER COM A ORIGEM (CENTRAL × OBRA), E AO
+ * SELECIONAR O FUNCIONÁRIO O ERP JÁ MOSTRA OS TAMANHOS DE CAMISA/CALÇA/CALÇADO.**
+ *
+ * PEDIDO (usuário, com 2 prints da tela "Registrar Entrega de EPI"): (1) os EPIs corretos não
+ * apareciam — ao abrir o seletor "Buscar EPI..." dava "Nenhum EPI encontrado"; (2) as quantidades
+ * de estoque "não batiam"; (3) precisava aparecer de forma clara TODOS os insumos; e (4) que o ERP
+ * já fizesse o "link" dos tamanhos das botas/calçado, camisa e calça ao selecionar o funcionário,
+ * para facilitar a entrega.
+ *
+ * CAUSA-RAIZ (1 e 3 — lista vazia): o seletor de EPI da tela de entrega é alimentado pela query
+ * `episAllQ` (`client/src/pages/Epis.tsx`), que pede `limit: 1000` para carregar o catálogo INTEIRO
+ * e permitir busca local. Mas o input do `epis.list` (`server/routers/epis.ts`) validava
+ * `limit: z.number().min(1).max(200)` — ou seja, 1000 > 200 fazia o tRPC REJEITAR a query (erro de
+ * validação), `episAllQ.data` ficava `undefined`, e o picker caía no fallback `episList` (a lista
+ * PAGINADA de 50 itens) ou em lista vazia → "Nenhum EPI encontrado" / EPIs faltando na busca.
+ *
+ * SOLUÇÃO (1 e 3): elevado o teto do `epis.list` para `.max(2000)` (zod — ZERO ALTER/DROP/DELETE,
+ * só validação) e `episAllQ` passou a pedir `limit: 2000`, voltando a carregar o catálogo completo
+ * no seletor. A paginação da tabela (PAGE_SIZE=50) e o `listDeliveries` (max 200) ficam intactos.
+ *
+ * CAUSA-RAIZ (2 — estoque não bate): o subtítulo de cada EPI no picker mostrava SEMPRE
+ * `Estoque: ${e.quantidadeEstoque}` — que é o estoque do ALMOXARIFADO CENTRAL — mesmo quando a
+ * origem da entrega era "Obra". Logo, entregando do canteiro, o número exibido era o do central
+ * (parecia "não bater"). SOLUÇÃO: a query `estoqueObraList` passou a ser habilitada também na tela
+ * de entrega (`nova_entrega`), e um novo memo `estoqueObraMap` (epiId→qtd da OBRA de origem
+ * selecionada) alimenta o subtítulo: agora mostra "Estoque na obra: N" quando origem=obra e
+ * "Estoque central: N" quando origem=central. A lógica de baixa de estoque no backend não mudou.
+ *
+ * MELHORIA (4 — auto-link de tamanhos): no card do funcionário (que aparece logo após selecioná-lo)
+ * o ERP agora exibe chips com Camisa, Calça e Calçado lidos de `employees.tamanhoCamisa`,
+ * `tamanhoCalca` e `tamanhoCalcado` (já vinham na query `employees.list`). A calça usa
+ * `labelTamanhoCalca` para mostrar os dois formatos ("42 (G)"), espelhando a Rev. 2926. Quando o
+ * funcionário não tem tamanhos cadastrados, mostra um aviso âmbar orientando preencher no cadastro.
+ * Os rótulos de EPI no picker e na lista de itens da entrega também passaram a usar `labelTamanhoEpi`
+ * (calça com letra+número), deixando todos os insumos claros e consistentes com a lista geral.
+ *
+ * Arquivos: `server/routers/epis.ts` (teto do `epis.list` 200→2000), `client/src/pages/Epis.tsx`
+ * (`episAllQ` limit 2000; `estoqueObraQ` habilitada em `nova_entrega`; memo `estoqueObraMap`;
+ * subtítulo de estoque por origem; chips de tamanho no card do funcionário; `labelTamanhoEpi` no
+ * picker e na lista de itens). FRONT+validação apenas — ZERO ALTER/DROP/DELETE.
+ *
  * Rev. 2926 — **CONTROLE DE EPIs · LISTA — AS CALÇAS VOLTARAM A MOSTRAR O TAMANHO EM LETRA
  * (P/M/G…) JUNTO COM O NÚMERO ("38 (M)"), PARA NÃO TER ERRO NA HORA DE ENTREGAR.**
  *

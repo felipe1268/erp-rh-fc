@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { trpc } from "@/lib/trpc";
 import { handleCurrencyInput, floatToCurrency, parseCurrencyToFloat } from "@/lib/currency";
-import { labelTamanhoEpi } from "@/lib/epiTamanho";
+import { labelTamanhoEpi, labelTamanhoCalca } from "@/lib/epiTamanho";
 import {
   Plus, Minus, Search, Pencil, Trash2, HardHat, Package, AlertTriangle,
   ShieldCheck, Calendar, ArrowRight, ChevronLeft, User, ClipboardList,
@@ -211,7 +211,7 @@ export default function Epis() {
   useEffect(() => { setEpisPage(0); }, [filterCategoria, filterCondicao, filterTamanho, filterEstoque]);
 
   const episQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: PAGE_SIZE, offset: episPage * PAGE_SIZE, search: debouncedSearch || undefined, categoria: filterCategoria !== "Todos" ? filterCategoria : undefined, condicao: filterCondicao !== "Todos" ? filterCondicao : undefined, tamanho: filterTamanho !== "Todos" ? filterTamanho : undefined, filtroEstoque: filterEstoque !== "todos" ? filterEstoque : undefined }, { enabled: hasValidCompany });
-  const episAllQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: 1000, offset: 0 }, { enabled: hasValidCompany && (viewMode === "nova_entrega" || viewMode === "ficha_epi" || viewMode === "estoque_obra" || viewMode === "transferencias") });
+  const episAllQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: 2000, offset: 0 }, { enabled: hasValidCompany && (viewMode === "nova_entrega" || viewMode === "ficha_epi" || viewMode === "estoque_obra" || viewMode === "transferencias") });
   const deliveriesQ = trpc.epis.listDeliveries.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, search: debouncedSearch || undefined, limit: PAGE_SIZE, offset: deliveriesPage * PAGE_SIZE }, { enabled: hasValidCompany && (viewMode === "entregas" || viewMode === "nova_entrega" || viewMode === "ficha_epi") });
   const statsQ = trpc.epis.stats.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
   const employeesQ = trpc.employees.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, excludeTerminated: true }, { enabled: hasValidCompany && (viewMode === "nova_entrega" || viewMode === "ficha_epi") });
@@ -226,7 +226,7 @@ export default function Epis() {
     { enabled: hasValidCompany && viewMode === "capacidade" }
   );
 
-  const estoqueObraQ = trpc.epis.estoqueObraList.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany && viewMode === "estoque_obra" });
+  const estoqueObraQ = trpc.epis.estoqueObraList.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany && (viewMode === "estoque_obra" || viewMode === "nova_entrega") });
   const estoqueObraResumoQ = trpc.epis.estoqueObraResumo.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany && viewMode === "estoque_obra" });
   const transferenciasQ = trpc.epis.listarTransferencias.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany && viewMode === "transferencias" });
   const estoqueCentralQ = trpc.epis.estoqueCentralResumo.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany && viewMode === "estoque_obra" });
@@ -333,6 +333,18 @@ export default function Epis() {
   });
   const [entregaItens, setEntregaItens] = useState<Array<{ epiId: string; quantidade: number; motivoTroca: string }>>([]);
   const [entregaSaving, setEntregaSaving] = useState(false);
+
+  // Rev. 2927 — estoque da OBRA de origem (mapa epiId→qtd) p/ o picker de entrega mostrar
+  // o estoque CERTO quando a origem é "obra" (antes mostrava sempre o central → "qtd não bate").
+  const estoqueObraMap = useMemo(() => {
+    const m: Record<string, number> = {};
+    if (entregaForm.origemEntrega === "obra" && entregaForm.origemObraId) {
+      for (const r of (estoqueObraList2 as any[])) {
+        if (String(r.obraId) === entregaForm.origemObraId) m[String(r.epiId)] = Number(r.quantidade || 0);
+      }
+    }
+    return m;
+  }, [estoqueObraList2, entregaForm.origemEntrega, entregaForm.origemObraId]);
 
   // Transferência form state (multi-EPI)
   const [transForm, setTransForm] = useState({
@@ -1410,6 +1422,21 @@ export default function Epis() {
                         <p className="font-semibold text-sm text-gray-900 truncate">{empSel.nomeCompleto}</p>
                         <p className="text-xs text-gray-500 truncate">{empSel.funcao || empSel.cargo || "Sem função"}</p>
                         {empSel.obraAtualNome && <p className="text-xs text-blue-600 mt-0.5 truncate">📍 {empSel.obraAtualNome}</p>}
+                        {(() => {
+                          const tCamisa = empSel.tamanhoCamisa ? String(empSel.tamanhoCamisa).trim() : "";
+                          const tCalca = empSel.tamanhoCalca ? String(empSel.tamanhoCalca).trim() : "";
+                          const tCalcado = empSel.tamanhoCalcado ? String(empSel.tamanhoCalcado).trim() : "";
+                          const temAlgum = tCamisa || tCalca || tCalcado;
+                          const chip = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-gray-200 text-[11px] font-medium text-gray-600";
+                          return (
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                              {tCamisa && <span className={chip}>Camisa: <strong className="text-[#1B2A4A]">{tCamisa}</strong></span>}
+                              {tCalca && <span className={chip}>Calça: <strong className="text-[#1B2A4A]">{labelTamanhoCalca(tCalca)}</strong></span>}
+                              {tCalcado && <span className={chip}>Calçado: <strong className="text-[#1B2A4A]">{tCalcado}</strong></span>}
+                              {!temAlgum && <span className="text-[11px] text-amber-600 font-medium">Tamanhos não cadastrados — preencha no cadastro do funcionário</span>}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   );
@@ -1497,13 +1524,16 @@ export default function Epis() {
                   <div>
                     <Label className="text-xs">EPI</Label>
                     <SearchableSelect
-                      options={episAllList.filter((e: any) => !entregaItens.some(i => i.epiId === String(e.id))).map((e: any) => ({
-                        value: String(e.id),
-                        label: `${e.nome}${e.tamanho ? ` (${e.tamanho})` : ""} ${e.ca ? `CA: ${e.ca}` : ""}`,
-                        subtitle: `Estoque: ${e.quantidadeEstoque ?? 0}`,
-                        searchExtra: `${e.ca || ""} ${e.nome || ""} ${e.tamanho || ""}`,
-                        imageUrl: e.fotoUrl || undefined,
-                      }))}
+                      options={episAllList.filter((e: any) => !entregaItens.some(i => i.epiId === String(e.id))).map((e: any) => {
+                        const estoqueDisp = entregaForm.origemEntrega === "obra" ? (estoqueObraMap[String(e.id)] ?? 0) : (e.quantidadeEstoque ?? 0);
+                        return {
+                          value: String(e.id),
+                          label: `${e.nome}${e.tamanho ? ` (${labelTamanhoEpi(e)})` : ""} ${e.ca ? `CA: ${e.ca}` : ""}`,
+                          subtitle: `${entregaForm.origemEntrega === "obra" ? "Estoque na obra" : "Estoque central"}: ${estoqueDisp}`,
+                          searchExtra: `${e.ca || ""} ${e.nome || ""} ${e.tamanho || ""}`,
+                          imageUrl: e.fotoUrl || undefined,
+                        };
+                      })}
                       value={entregaForm.epiId || undefined}
                       onValueChange={v => setEntregaForm(f => ({ ...f, epiId: v }))}
                       placeholder="Selecione..."
@@ -1552,7 +1582,7 @@ export default function Epis() {
                             <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center border flex-shrink-0"><HardHat className="h-4 w-4 text-gray-400" /></div>
                           )}
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{epi.nome}{epi.tamanho ? ` (${epi.tamanho})` : ""}</p>
+                            <p className="text-sm font-medium truncate">{epi.nome}{epi.tamanho ? ` (${labelTamanhoEpi(epi)})` : ""}</p>
                             <div className="flex items-center gap-2 text-xs text-gray-500">
                               {epi.ca && <span>CA: {epi.ca}</span>}
                               {isCharge && <span className="text-red-600 font-medium">Desconto</span>}

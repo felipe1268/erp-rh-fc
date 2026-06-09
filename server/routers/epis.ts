@@ -208,7 +208,7 @@ export const episRouter = router({
     .input(z.object({
       companyId: z.number(),
       companyIds: z.array(z.number()).optional(),
-      limit: z.number().min(1).max(200).default(50),
+      limit: z.number().min(1).max(2000).default(50),
       offset: z.number().min(0).default(0),
       search: z.string().optional(),
       categoria: z.string().optional(),
