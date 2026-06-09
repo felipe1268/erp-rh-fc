@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2919 — **USUÁRIOS E PERMISSÕES · GRUPOS — SALVAR PERMISSÕES DE MÓDULOS FICOU À PROVA DE FALHA:
+ * INDICADOR DE "ALTERAÇÕES NÃO SALVAS" + ERRO LOUD + CONFIRMAÇÃO DO QUE FOI PERSISTIDO (FIM DO "REVERTEU").**
+ *
+ * PROBLEMA (usuário, com print): ao abrir um grupo (ex.: "TST"), clicar em "Todos admin" pra liberar
+ * TODOS os módulos e salvar, a tela voltava a mostrar só os módulos antigos (RH/DP, SST, Terceiros…) —
+ * dando a impressão de que o save "reverteu" / não persistia todos os módulos.
+ *
+ * INVESTIGAÇÃO: a cadeia de save/load de `module_access` de grupo foi auditada de ponta a ponta
+ * (front `ModulePermsEditor.setAll` → `handleSaveGroup` → tRPC `setGroupModuleAccess` zod `z.record` →
+ * `JSON.stringify` → coluna `text` no Neon → `userGroups.list` → `normalizeModulePerm`) e PROVADA correta,
+ * inclusive com round-trip real no banco (17 módulos gravados e lidos de volta OK). Os headers de cache
+ * também estão certos (`index.html` = `no-cache`, assets hasheados = `immutable`), então não era cache
+ * stale nem deploy gap. A causa real e mais provável: o estado da tela só persistia com o clique
+ * EXPLÍCITO em "Salvar Grupo" (sem nenhum aviso de que havia alterações pendentes), e qualquer falha de
+ * rede no save retornava silenciosa, além de o redisplay depender de um refetch que podia chegar fora de
+ * ordem e reexibir o estado ANTIGO.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE): `client/src/pages/Usuarios.tsx`. (1) Novo helper
+ * `serializeGroupState` + snapshot `gBaseline` (gravado no `openGroup` e após cada save bem-sucedido) →
+ * computa `gDirty` = "há alterações não salvas". (2) Quando `gDirty`, o botão vira âmbar/pulsante, troca
+ * o rótulo pra "Salvar alterações" e aparece um aviso "Alterações não salvas — clique em 'Salvar
+ * alterações' para aplicar." (3) `handleSaveGroup` foi blindado: `try/catch` com toast de ERRO explícito
+ * em qualquer falha (antes era silencioso), captura o `groupId` no início, e APÓS o sucesso atualiza o
+ * `gBaseline` e o `selectedGroup.moduleAccess` localmente — confirmando na própria UI o que foi
+ * persistido, sem depender do refetch (que podia reexibir o estado antigo). Toast de sucesso agora informa
+ * QUANTOS módulos foram liberados. Sem mudança de backend/schema.
+ *
  * Rev. 2918 — **INTEGRAÇÃO DE SEGURANÇA (SST) · DASHBOARD — CLICAR NUM CARD DE KPI AGORA FILTRA:
  * LEVA DIRETO PRA ABA CORRESPONDENTE (APROVADOS/PENDENTES/REPROVADOS), MELHORANDO A USABILIDADE.**
  *

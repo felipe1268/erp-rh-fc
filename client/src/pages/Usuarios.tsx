@@ -49,6 +49,20 @@ const GROUP_COLORS = [
   "#8b5cf6","#ec4899","#06b6d4","#84cc16","#f97316",
 ];
 
+// Rev. 2919 — serializa o estado salvável de um grupo (nome/descrição/cor + módulos
+// não-nulos, na MESMA forma que vai pro backend) p/ detectar "alterações não salvas"
+// e confirmar o que foi persistido sem depender de refetch fora de ordem.
+function serializeGroupState(
+  nome: string,
+  descricao: string,
+  cor: string,
+  moduleAccess: Record<string, ModulePerm | null>,
+): string {
+  const clean: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(moduleAccess)) { if (v != null) clean[k] = v; }
+  return JSON.stringify({ nome: nome || "", descricao: descricao || "", cor: cor || "#6b7280", moduleAccess: clean });
+}
+
 const ROLE_LABELS: Record<string, string> = { admin_master: "Admin Master", admin: "Admin", user: "Usuário" };
 const ROLE_BADGE: Record<string, string> = {
   admin_master: "bg-purple-100 text-purple-700 border-purple-200",
@@ -429,6 +443,7 @@ export default function Usuarios() {
   const [gDesc, setGDesc]     = useState("");
   const [gColor, setGColor]   = useState("#6b7280");
   const [gModuleAccess, setGModuleAccess] = useState<Record<string, ModulePerm | null>>({});
+  const [gBaseline, setGBaseline] = useState<string>(""); // Rev. 2919 — snapshot do estado salvo (detecta alterações não salvas)
   const [gMembers, setGMembers] = useState<number[]>([]);
   const [addMemberUserId, setAddMemberUserId] = useState<string>("");
 
@@ -442,18 +457,14 @@ export default function Usuarios() {
     },
     onError: e => toast.error(e.message),
   });
-  const updateGroupMut = trpc.userGroups.update.useMutation({
-    onSuccess: () => { toast.success("Grupo atualizado"); utils.userGroups.list.invalidate(); },
-    onError:   e => toast.error(e.message),
-  });
+  // Rev. 2919 — sem toasts próprios: o feedback (sucesso/erro) é centralizado em handleSaveGroup
+  // (único chamador) p/ não emitir mensagens conflitantes em falha parcial.
+  const updateGroupMut = trpc.userGroups.update.useMutation();
   const deleteGroupMut = trpc.userGroups.delete.useMutation({
     onSuccess: () => { toast.success("Grupo excluído"); setSelectedGroup(null); setGPanel("list"); utils.userGroups.list.invalidate(); },
     onError:   e => toast.error(e.message),
   });
-  const setGroupModAccessMut = trpc.userGroups.setGroupModuleAccess.useMutation({
-    onSuccess: () => utils.userGroups.list.invalidate(),
-    onError:   e => toast.error(e.message),
-  });
+  const setGroupModAccessMut = trpc.userGroups.setGroupModuleAccess.useMutation(); // Rev. 2919 — feedback centralizado em handleSaveGroup
   const addMemberMut = trpc.userGroups.addMember.useMutation({
     onSuccess: () => {
       utils.userGroups.list.invalidate();
@@ -490,18 +501,37 @@ export default function Usuarios() {
       }
     }
     setGModuleAccess(ma);
+    setGBaseline(serializeGroupState(g.nome || "", g.descricao || "", g.cor || "#6b7280", ma)); // Rev. 2919
     setGPanel("detail");
   };
 
   const handleSaveGroup = async () => {
-    if (!selectedGroup) return;
-    await updateGroupMut.mutateAsync({ id: selectedGroup.id, nome: gName, descricao: gDesc, cor: gColor });
-    const clean: Record<string, unknown> = {};
+    if (!selectedGroup) { toast.error("Nenhum grupo selecionado — reabra o grupo e tente novamente."); return; }
+    const groupId = selectedGroup.id;
+    const clean: Record<string, ModulePerm> = {};
     for (const [k, v] of Object.entries(gModuleAccess)) { if (v != null) clean[k] = v; }
-    await setGroupModAccessMut.mutateAsync({ groupId: selectedGroup.id, moduleAccess: clean });
-    toast.success("Grupo salvo com sucesso!");
-    utils.userGroups.list.invalidate();
+    try {
+      // Rev. 2919 — módulos PRIMEIRO (o que mais importa), depois metadados; try/catch p/ falha LOUD.
+      await setGroupModAccessMut.mutateAsync({ groupId, moduleAccess: clean });
+      await updateGroupMut.mutateAsync({ id: groupId, nome: gName, descricao: gDesc, cor: gColor });
+      // Confirma o estado persistido na própria UI (não depende de refetch fora de ordem que poderia
+      // reexibir o estado ANTIGO e dar a impressão de "reverteu").
+      const saved = serializeGroupState(gName, gDesc, gColor, gModuleAccess);
+      setGBaseline(saved);
+      setSelectedGroup((prev: any) => (prev && prev.id === groupId ? { ...prev, nome: gName, descricao: gDesc, cor: gColor, moduleAccess: clean } : prev));
+      toast.success(`Grupo salvo — ${Object.keys(clean).length} módulo(s) liberado(s).`);
+      utils.userGroups.list.invalidate();
+    } catch (e: any) {
+      utils.userGroups.list.invalidate(); // recarrega do servidor p/ refletir o que (eventualmente) foi gravado
+      toast.error(e?.message || "Falha ao salvar o grupo. Verifique e tente novamente.");
+    }
   };
+
+  // Rev. 2919 — "alterações não salvas": compara o estado salvável atual com o snapshot do último save/open.
+  const gDirty = useMemo(
+    () => gPanel === "detail" && !!selectedGroup && serializeGroupState(gName, gDesc, gColor, gModuleAccess) !== gBaseline,
+    [gPanel, selectedGroup, gName, gDesc, gColor, gModuleAccess, gBaseline],
+  );
 
   const handleCreateGroup = () => {
     if (!gName.trim()) { toast.error("Informe o nome do grupo"); return; }
@@ -1105,10 +1135,17 @@ export default function Usuarios() {
                         <ModulePermsEditor moduleAccess={gModuleAccess} onChange={setGModuleAccess} />
                       </div>
 
-                      <div className="flex gap-3 pt-2 border-t">
-                        <Button onClick={handleSaveGroup} disabled={updateGroupMut.isPending||setGroupModAccessMut.isPending} className="gap-1.5 bg-blue-600 hover:bg-blue-700">
-                          <Save className="h-4 w-4"/>{(updateGroupMut.isPending||setGroupModAccessMut.isPending)?"Salvando...":"Salvar Grupo"}
+                      <div className="flex flex-wrap items-center gap-3 pt-2 border-t">
+                        <Button onClick={handleSaveGroup} disabled={updateGroupMut.isPending||setGroupModAccessMut.isPending}
+                          className={`gap-1.5 ${gDirty ? "bg-amber-600 hover:bg-amber-700 ring-2 ring-amber-300 animate-pulse" : "bg-blue-600 hover:bg-blue-700"}`}>
+                          <Save className="h-4 w-4"/>{(updateGroupMut.isPending||setGroupModAccessMut.isPending)?"Salvando...":(gDirty?"Salvar alterações":"Salvar Grupo")}
                         </Button>
+                        {gDirty && (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700">
+                            <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"/>
+                            Alterações não salvas — clique em "Salvar alterações" para aplicar.
+                          </span>
+                        )}
                         <Button variant="outline" onClick={()=>setGPanel("list")} className="lg:hidden">Voltar</Button>
                       </div>
                     </div>
