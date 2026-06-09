@@ -1892,7 +1892,8 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                             <span className={`font-semibold text-sm ${cfg.color}`}>{cfg.label}</span>
                             <span className={`text-xs ${cfg.color} ml-1`}>({items.length})</span>
                           </div>
-                          <div className="overflow-x-auto">
+                          {/* Tabela completa — só em telas grandes (lg+); abaixo disso vira cards (sem corte horizontal) */}
+                          <div className="hidden lg:block overflow-x-auto">
                           <table className="w-full">
                             <thead>
                               <tr className="bg-slate-50/50 border-b">
@@ -2086,6 +2087,116 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                               })}
                             </tbody>
                           </table>
+                          </div>
+
+                          {/* Cards empilhados — telas < lg (tablet/celular): auto-ajustável, sem corte horizontal */}
+                          <div className="lg:hidden divide-y">
+                            {items.map((f: any) => {
+                              const fmtDataBR = (v: any) => { if (!v) return ""; const d = new Date(String(v).slice(0, 10) + "T12:00:00"); return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("pt-BR"); };
+                              const todayStr = new Date().toISOString().slice(0, 10);
+                              const empStatus = f.employee?.status || st;
+                              const rowBg = empStatus === 'Aviso' ? 'bg-red-50/60' : empStatus === 'AvisoDispensado' ? 'bg-orange-50/60' : empStatus === 'Ferias' ? 'bg-amber-50/60' : empStatus === 'Afastado' ? 'bg-purple-50/60' : empStatus === 'Licenca' ? 'bg-cyan-50/60' : empStatus === 'Recluso' ? 'bg-gray-50/60' : '';
+                              const expFim: string | null = f.employee?.experienciaFim2 || f.employee?.experienciaFim1 || null;
+                              const emExperiencia = f.employee?.experienciaStatus === 'em_experiencia' && !!expFim && String(expFim).slice(0, 10) >= todayStr;
+                              const feriasAgendada: string | null = f.feriasAgendadaInicio || null;
+                              const temStatusBadge = (empStatus === 'AvisoDispensado' && f.avisoDataFim) || (empStatus === 'Aviso' && f.avisoDataFim) || (empStatus === 'Ferias' && f.feriasDataFim) || empStatus === 'Afastado' || empStatus === 'Licenca';
+                              const integ: Array<{ cliente: string; tipo: string; dataValidade: string | null; vencida: boolean; semVencimento: boolean }> = Array.isArray(f.integracoes) ? f.integracoes : [];
+                              const nrs: Array<{ norma: string; nome: string; dataValidade: string | null; vencida: boolean }> = Array.isArray(f.nrs) ? f.nrs : [];
+                              const funcaoText = f.employee?.cargo || f.employee?.funcao || f.funcaoNaObra || "—";
+                              const desdeText = f.dataInicio ? new Date(f.dataInicio + "T12:00:00").toLocaleDateString("pt-BR") : "—";
+                              return (
+                                <div key={f.id} className={`p-3.5 space-y-3 ${rowBg}`}>
+                                  {/* Nome + CIPA */}
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <PersonPhoto src={f.employee?.fotoUrl} alt={f.employee?.nomeCompleto || "—"} size="sm" caption={funcaoText} />
+                                    <div className="min-w-0">
+                                      <p className="font-medium text-sm text-blue-700 cursor-pointer hover:underline inline-flex items-center gap-1.5 flex-wrap" onClick={() => setRaioXEmployeeId(f.employeeId)}>
+                                        <span className="truncate">{f.employee?.nomeCompleto || "—"}</span>
+                                        <CipaBadge ativo={f.cipaAtivo ?? f.employee?.cipaAtivo} estabilidade={f.cipaEstabilidade ?? f.employee?.cipaEstabilidade} fim={f.cipaFimEstabilidade ?? f.employee?.cipaFimEstabilidade} cargo={f.cipaCargo ?? f.employee?.cipaCargo} />
+                                      </p>
+                                    </div>
+                                  </div>
+                                  {/* Função / Desde */}
+                                  <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                                    <div className="min-w-0"><span className="text-muted-foreground">Função: </span><span className="font-medium break-words">{funcaoText}</span></div>
+                                    <div className="min-w-0"><span className="text-muted-foreground">Desde: </span><span className="font-medium">{desdeText}</span></div>
+                                  </div>
+                                  {/* Info Status */}
+                                  <div>
+                                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Info Status</p>
+                                    <div className="flex flex-wrap items-start gap-1">
+                                      {empStatus === 'AvisoDispensado' && f.avisoDataFim ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-100 text-orange-800 border border-orange-300">Dispensado - Fim: {fmtDataBR(f.avisoDataFim)}</span>
+                                      ) : empStatus === 'Aviso' && f.avisoDataFim ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300">Aviso prévio - Fim: {fmtDataBR(f.avisoDataFim)}</span>
+                                      ) : empStatus === 'Ferias' && f.feriasDataFim ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-800 border border-blue-300">Férias - Retorno: {fmtDataBR(f.feriasDataFim)}</span>
+                                      ) : empStatus === 'Afastado' ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-800 border border-purple-300">Afastado</span>
+                                      ) : empStatus === 'Licenca' ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-100 text-cyan-800 border border-cyan-300">Em Licença</span>
+                                      ) : null}
+                                      {emExperiencia && (<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-100 text-indigo-800 border border-indigo-300"><GraduationCap className="h-3 w-3" /> Experiência{expFim ? ` até ${fmtDataBR(expFim)}` : ''}</span>)}
+                                      {feriasAgendada && (<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-teal-100 text-teal-800 border border-teal-300"><Plane className="h-3 w-3" /> Sai de férias: {fmtDataBR(feriasAgendada)}</span>)}
+                                      {!temStatusBadge && !emExperiencia && !feriasAgendada && (<span className="text-xs text-muted-foreground">—</span>)}
+                                    </div>
+                                  </div>
+                                  {/* Integrações / NRs */}
+                                  <div>
+                                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Integrações / NRs</p>
+                                    <div className="flex flex-col gap-1.5">
+                                      {integ.length > 0 ? (
+                                        integ.map((ig, i) => (
+                                          <div key={i} className={`rounded-lg border px-2 py-1 ${ig.vencida ? 'bg-red-50 border-red-300' : 'bg-emerald-50 border-emerald-300'}`}>
+                                            <div className="flex items-center gap-1.5">
+                                              <span className={`inline-block h-2.5 w-2.5 rounded-full ${ig.vencida ? 'bg-red-500' : 'bg-emerald-500'}`} />
+                                              <ShieldCheck className={`h-3 w-3 ${ig.vencida ? 'text-red-700' : 'text-emerald-700'}`} />
+                                              <span className={`text-[11px] font-semibold ${ig.vencida ? 'text-red-800' : 'text-emerald-800'}`}>{ig.cliente}</span>
+                                            </div>
+                                            <div className={`text-[10px] mt-0.5 ${ig.vencida ? 'text-red-700' : 'text-emerald-700'}`}>{ig.dataValidade ? `${ig.vencida ? 'Venceu' : 'Válida até'}: ${fmtDataBR(ig.dataValidade)}` : (ig.vencida ? 'Vencida' : 'Sem vencimento')}</div>
+                                          </div>
+                                        ))
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"><span className="inline-block h-2.5 w-2.5 rounded-full bg-gray-300" /> Sem integração</span>
+                                      )}
+                                      {nrs.length > 0 && (
+                                        <div className="flex flex-wrap gap-1 pt-0.5">
+                                          {nrs.map((nr, j) => {
+                                            const nrKey = normalizeNrKey(nr.norma);
+                                            const resumo = NR_RESUMOS[nrKey] || "Norma Regulamentadora (resumo não cadastrado).";
+                                            return (
+                                              <Popover key={j}>
+                                                <PopoverTrigger asChild>
+                                                  <button type="button" aria-label={`${nrKey} — ver resumo da norma`} className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border cursor-pointer hover:brightness-95 transition ${nr.vencida ? 'bg-red-50 text-red-700 border-red-300' : 'bg-emerald-50 text-emerald-700 border-emerald-300'}`}><GraduationCap className="h-2.5 w-2.5" />{nr.norma}</button>
+                                                </PopoverTrigger>
+                                                <PopoverContent align="start" className="w-72 p-3 text-left">
+                                                  <div className="flex items-center gap-2 mb-1.5">
+                                                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border ${nr.vencida ? 'bg-red-50 text-red-700 border-red-300' : 'bg-emerald-50 text-emerald-700 border-emerald-300'}`}><GraduationCap className="h-3 w-3" />{nrKey}</span>
+                                                    <span className={`text-[10px] font-semibold ${nr.vencida ? 'text-red-600' : 'text-emerald-600'}`}>{nr.dataValidade ? `${nr.vencida ? 'Venceu' : 'Válido até'}: ${fmtDataBR(nr.dataValidade)}` : (nr.vencida ? 'Vencido' : 'Sem vencimento')}</span>
+                                                  </div>
+                                                  <p className="text-xs font-semibold text-slate-800 leading-snug">{nr.nome || nrKey}</p>
+                                                  <p className="text-xs text-slate-600 leading-snug mt-1">{resumo}</p>
+                                                </PopoverContent>
+                                              </Popover>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {/* Ações */}
+                                  <div className="flex flex-wrap gap-1.5 pt-2 border-t print:hidden">
+                                    {(f.insalubridadeOverride && f.insalubridadeOverride !== 'herda') || (f.periculosidadeOverride && f.periculosidadeOverride !== 'herda') || (f.adicionalEscolhido && f.adicionalEscolhido !== 'auto') ? (
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300 shrink-0">Override</span>
+                                    ) : null}
+                                    <Button variant="outline" size="sm" className="h-8 px-2.5 text-xs text-[#1B2A4A]" onClick={() => { setCondicoesDialogItem(f); setCondicoesForm({ insalubridadeOverride: f.insalubridadeOverride ?? 'herda', periculosidadeOverride: f.periculosidadeOverride ?? 'herda', adicionalEscolhido: f.adicionalEscolhido ?? 'auto' }); setCondicoesDialogOpen(true); }}><Settings2 className="h-3.5 w-3.5 mr-1" /> Condições</Button>
+                                    <Button variant="outline" size="sm" className="h-8 px-2.5 text-xs" onClick={() => openHistory(f.employeeId)}><History className="h-3.5 w-3.5 mr-1" /> Histórico</Button>
+                                    <Button variant="outline" size="sm" className="h-8 px-2.5 text-xs" onClick={() => { setSelectedEmployees([f.employeeId]); setAllocForm({ obraId: 0, dataInicio: new Date().toISOString().split("T")[0], motivo: "Transferência" }); setAllocDialogOpen(true); }}><ArrowRightLeft className="h-3.5 w-3.5 mr-1" /> Transferir</Button>
+                                    <Button variant="outline" size="sm" className="h-8 px-2.5 text-xs text-red-600 hover:text-red-700 border-red-200" onClick={() => handleRemove(f.employeeId, f.employee?.nomeCompleto || "")}><UserMinus className="h-3.5 w-3.5 mr-1" /> Remover</Button>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       );

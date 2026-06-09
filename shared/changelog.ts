@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2939 — **EFETIVO POR OBRA — O DRILL-DOWN "EQUIPE — {OBRA}" AGORA É AUTO-AJUSTÁVEL: EM
+ * TELAS GRANDES (lg+) CONTINUA A TABELA COMPLETA; EM TABLET/CELULAR (< lg) CADA FUNCIONÁRIO VIRA
+ * UM CARD EMPILHADO COM TODAS AS INFORMAÇÕES — ACABA O CORTE DA COLUNA "AÇÕES" NO iPad (~768px).**
+ *
+ * CONTEXTO: no iPad em retrato (~768px = breakpoint `md`) a tabela do modal "Equipe — {obra}"
+ * revelava as 6 colunas (Funcionário, Função, Desde, Info Status, Integrações, Ações), mas a
+ * largura total estourava o container e a coluna "Ações" (à direita) ficava CORTADA — os 4 botões
+ * empilhavam e sumiam parcialmente fora da tela. O `overflow-x-auto` não resolvia no toque.
+ *
+ * SOLUÇÃO (FRONT-only, `client/src/pages/ObraEfetivo.tsx`, ZERO ALTER/DROP/DELETE):
+ *   - A tabela existente passou de `<div overflow-x-auto>` para `<div className="hidden lg:block
+ *     overflow-x-auto">` → renderiza SÓ em telas grandes (lg+, ≥1024px), onde cabe sem corte.
+ *   - Abaixo de `lg` (tablet/celular, inclui o iPad de 768px) um novo bloco `<div className=
+ *     "lg:hidden divide-y">` renderiza CADA funcionário como um CARD empilhado de largura total:
+ *     foto + nome (clicável p/ Raio-X) + CIPA, grid Função/Desde, bloco "Info Status" (badges de
+ *     aviso/dispensa/férias/afastado/licença/experiência/férias agendada), bloco "Integrações /
+ *     NRs" (chips por cliente + NRs clicáveis com `Popover`/`NR_RESUMOS`) e a barra de Ações
+ *     (Override + Condições/Histórico/Transferir/Remover) SEMPRE com rótulo, sem nada cortado.
+ *   - A lógica por funcionário (status efetivo, cor de fundo, experiência, férias agendada,
+ *     integrações/NRs, datas seguras p/ iOS via `fmtDataBR`) é a MESMA da tabela, replicada no
+ *     card; a tabela do drill-down (lg+) ficou intacta (só o wrapper virou `hidden lg:block`).
+ *
+ * IMPACTO: no iPad/celular o gestor vê TODA a informação da equipe (incl. ações) sem corte e sem
+ * rolagem horizontal; no desktop nada muda. Sem mudança de schema/dados/endpoints.
+ */
+
+/**
  * Rev. 2938 — **EFETIVO POR OBRA — AS ABAS "TODOS" E "SEM OBRA" AGORA MOSTRAM AS COLUNAS DE
  * INTEGRAÇÕES (POR CLIENTE) E NRs (TREINAMENTOS) — ANTES SÓ NO DRILL-DOWN "EQUIPE — {OBRA}" —
  * MAIS DOIS FILTROS COMBINÁVEIS (AND): FILTRAR POR INTEGRAÇÃO (CLIENTE) E POR NR (NORMA).**
