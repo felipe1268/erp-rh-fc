@@ -1677,6 +1677,7 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                             <span className={`font-semibold text-sm ${cfg.color}`}>{cfg.label}</span>
                             <span className={`text-xs ${cfg.color} ml-1`}>({items.length})</span>
                           </div>
+                          <div className="overflow-x-auto">
                           <table className="w-full">
                             <thead>
                               <tr className="bg-slate-50/50 border-b">
@@ -1822,7 +1823,7 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                                       {(f.insalubridadeOverride && f.insalubridadeOverride !== 'herda') || (f.periculosidadeOverride && f.periculosidadeOverride !== 'herda') || (f.adicionalEscolhido && f.adicionalEscolhido !== 'auto') ? (
                                         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300 shrink-0">Override</span>
                                       ) : null}
-                                      <Button variant="ghost" size="sm" className="h-7 text-xs text-[#1B2A4A] hover:text-[#1B2A4A]" onClick={() => {
+                                      <Button variant="ghost" size="sm" title="Condições" aria-label="Condições" className="h-7 px-2 text-xs text-[#1B2A4A] hover:text-[#1B2A4A]" onClick={() => {
                                         setCondicoesDialogItem(f);
                                         setCondicoesForm({
                                           insalubridadeOverride: f.insalubridadeOverride ?? 'herda',
@@ -1831,16 +1832,16 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                                         });
                                         setCondicoesDialogOpen(true);
                                       }}>
-                                        <Settings2 className="h-3.5 w-3.5 mr-1" /> Condições
+                                        <Settings2 className="h-3.5 w-3.5 lg:mr-1" /> <span className="hidden lg:inline">Condições</span>
                                       </Button>
-                                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => openHistory(f.employeeId)}>
-                                        <History className="h-3.5 w-3.5 mr-1" /> Histórico
+                                      <Button variant="ghost" size="sm" title="Histórico" aria-label="Histórico" className="h-7 px-2 text-xs" onClick={() => openHistory(f.employeeId)}>
+                                        <History className="h-3.5 w-3.5 lg:mr-1" /> <span className="hidden lg:inline">Histórico</span>
                                       </Button>
-                                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setSelectedEmployees([f.employeeId]); setAllocForm({ obraId: 0, dataInicio: new Date().toISOString().split("T")[0], motivo: "Transferência" }); setAllocDialogOpen(true); }}>
-                                        <ArrowRightLeft className="h-3.5 w-3.5 mr-1" /> Transferir
+                                      <Button variant="ghost" size="sm" title="Transferir" aria-label="Transferir" className="h-7 px-2 text-xs" onClick={() => { setSelectedEmployees([f.employeeId]); setAllocForm({ obraId: 0, dataInicio: new Date().toISOString().split("T")[0], motivo: "Transferência" }); setAllocDialogOpen(true); }}>
+                                        <ArrowRightLeft className="h-3.5 w-3.5 lg:mr-1" /> <span className="hidden lg:inline">Transferir</span>
                                       </Button>
-                                      <Button variant="ghost" size="sm" className="h-7 text-xs text-red-600 hover:text-red-700" onClick={() => handleRemove(f.employeeId, f.employee?.nomeCompleto || "")}>
-                                        <UserMinus className="h-3.5 w-3.5 mr-1" /> Remover
+                                      <Button variant="ghost" size="sm" title="Remover" aria-label="Remover" className="h-7 px-2 text-xs text-red-600 hover:text-red-700" onClick={() => handleRemove(f.employeeId, f.employee?.nomeCompleto || "")}>
+                                        <UserMinus className="h-3.5 w-3.5 lg:mr-1" /> <span className="hidden lg:inline">Remover</span>
                                       </Button>
                                     </div>
                                   </td>
@@ -1849,6 +1850,7 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                               })}
                             </tbody>
                           </table>
+                          </div>
                         </div>
                       );
                     })}

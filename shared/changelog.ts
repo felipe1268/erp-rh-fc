@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2935 — **EQUIPE DA OBRA (DRILL-DOWN) — A TABELA AGORA CABE NO TABLET E NO CELULAR SEM
+ * CORTAR A COLUNA DE AÇÕES: OS BOTÕES VIRAM SÓ-ÍCONE EM TELAS MENORES E A TABELA GANHOU ROLAGEM
+ * HORIZONTAL DE SEGURANÇA (NADA MAIS FICA ESCONDIDO ATRÁS DA BORDA).**
+ *
+ * CONTEXTO: o usuário (no iPad, ~768px) mostrou que na tela "Equipe — {obra}" a coluna "Ações"
+ * (Condições / Histórico / Transferir / Remover — 4 botões COM TEXTO) estourava a largura e ficava
+ * CORTADA na borda direita do card, porque o card é `overflow-hidden` (recorta em vez de rolar).
+ *
+ * SOLUÇÃO (FRONT-only, `client/src/pages/ObraEfetivo.tsx`, ZERO ALTER/DROP/DELETE):
+ *   - A `<table>` da lista por status foi envolvida num `<div className="overflow-x-auto">`, então o
+ *     conteúdo que exceder a largura ROLA em vez de ser recortado pelo `overflow-hidden` do card.
+ *   - Os 4 botões da coluna "Ações" viraram COMPACTOS: ícone-only até `lg` (texto aparece só em
+ *     `lg+`), com `title=` p/ acessibilidade/tooltip e `px-2` p/ manter a área de toque. Isso encolhe
+ *     muito a coluna "Ações" e faz as 6 colunas caberem no tablet sem precisar rolar.
+ *
+ * EFEITO: no tablet a equipe inteira (Funcionário, Função, Desde, Info Status, Integrações e Ações)
+ * cabe na tela; no desktop os rótulos dos botões voltam; em qualquer largura a rolagem horizontal
+ * impede recorte. A exibição das integrações por cliente no CELULAR é tratada separadamente.
+ * ZERO ALTER/DROP/DELETE.
+ *
  * Rev. 2934 — **EQUIPE DA OBRA (DRILL-DOWN) — COLUNA "INTEGRAÇÕES" CORRIGIDA PARA AS FONTES REAIS:
  * INTEGRAÇÃO POR CLIENTE/REFERÊNCIA VEM DA ABA "INTEGRAÇÕES" DO CONTROLE DE DOCUMENTOS
  * (`employee_integrations`, EX.: "SANTUARIO NACIONAL…") E AS NRs VÊM DOS DOCUMENTOS DE TREINAMENTO
