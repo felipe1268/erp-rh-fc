@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2921 — **INTEGRAÇÃO DE SEGURANÇA (SST) · MÓDULO INTERNO — USUÁRIOS DO GRUPO SST VOLTARAM A
+ * VER OS DADOS: FIM DO "ACESSO NEGADO A ESTA EMPRESA" QUE ZERAVA TODAS AS TELAS (DASHBOARD,
+ * PENDENTES, APROVADOS, REPROVADOS, VÍDEOS, CONFIGURAÇÕES).**
+ *
+ * PROBLEMA (usuário, com prints): logando com um usuário do grupo SST, TODAS as telas do módulo
+ * Integração de Segurança vinham vazias — o Dashboard mostrava TOTAL/APROVADOS/PENDENTES/REPROVADOS
+ * todos em 0 e a aba "Aprovados" exibia o card vermelho "Falha ao carregar aprovados — Acesso negado a
+ * esta empresa". Mesmo sintoma em Pendentes, Reprovados, Vídeos e Configurações.
+ *
+ * CAUSA-RAIZ: o helper `assertCompanyAccess` em `server/routers/integracaoSST.ts` checava
+ * `ctx.user.companyIds` — um campo que NÃO EXISTE no objeto `ctx.user` (que é a linha da tabela
+ * `users`, sem essa propriedade). Resultado: `const ids = ctx.user?.companyIds ?? []` era SEMPRE `[]`,
+ * então `ids.includes(companyId)` dava SEMPRE `false` e, como o usuário não era `admin_master`, o guard
+ * lançava `FORBIDDEN "Acesso negado a esta empresa"` em TODOS os ~26 endpoints do módulo. Ou seja:
+ * qualquer usuário que não fosse `admin_master` (todo o grupo SST, e até `admin` comum) era bloqueado em
+ * 100% das telas. Confirmado nos logs: `[tRPC Error] integracaoSST.getBadgeCounts/dashboardKpis/alertas/
+ * listarRegistros/listarPendentesAuto/listarConfigs: Acesso negado a esta empresa`.
+ *
+ * SOLUÇÃO (BACKEND-only, ZERO ALTER/DROP/DELETE) — `server/routers/integracaoSST.ts`: substituído o
+ * helper quebrado pelo GUARD CANÔNICO de acesso por empresa, idêntico ao usado em
+ * `ferramentasTerceiros`/`terceiros` (e `iaCronograma`): (1) sessão inválida → `UNAUTHORIZED`;
+ * (2) `admin` ou `admin_master` → libera (papéis globais); (3) usuário COM vínculos em `user_companies`
+ * (via `getUserCompanyLinks`) → exige pertencer à empresa; (4) usuário SEM vínculos → LIBERA (o acesso é
+ * governado por GRUPO/MÓDULO — "Grupos de Acesso" / Usuários e Permissões —, não pela "empresa-casa").
+ * O helper passou a ser `async` (consulta `user_companies`), então os ~26 call sites ganharam `await`.
+ * Para usuários `admin_master` o comportamento é idêntico ao de antes; para o grupo SST (e demais
+ * usuários legítimos) o módulo volta a carregar normalmente. Mantido o filtro anti-IDOR por
+ * `companyId` em CADA query (o guard libera o acesso; a query continua escopada à empresa selecionada).
+ *
+ * POR QUE "DE VEZ": o padrão `ctx.user.companyIds` era o ÚNICO ponto que divergia do guard canônico do
+ * resto do ERP; varredura confirmou que nenhum outro router carrega essa regra quebrada. Os routers do
+ * portal público (`portalDocumentos`, `portalExterno`) usam acesso por TOKEN (modelo diferente) e não
+ * são afetados.
+ *
+ * ARQUIVOS: `server/routers/integracaoSST.ts` (helper + `await` nos call sites). Sem mudança de
+ * schema/front. Typecheck (`tsc`) limpo em `integracaoSST.ts`.
+ *
+ * ---
+ *
  * Rev. 2920 — **INTEGRAÇÃO DE SEGURANÇA (SST) · PORTAL PÚBLICO — VÍDEO DE TREINAMENTO AGORA APARECE
  * CENTRALIZADO, NA PROPORÇÃO CERTA E COM CARREGAMENTO/ERRO TRATADOS (FIM DO "BURACO PRETO" E DO
  * "NÃO CARREGA").**

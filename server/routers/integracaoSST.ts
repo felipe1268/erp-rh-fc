@@ -1,6 +1,6 @@
 import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import { z } from "zod";
-import { getDb } from "../db";
+import { getDb, getUserCompanyLinks } from "../db";
 import {
   sstIntegracaoConfig, sstIntegracaoModulos, sstIntegracaoPerguntas,
   sstIntegracaoAlternativas, sstIntegracaoRegistros, sstIntegracaoRespostas,
@@ -10,9 +10,21 @@ import { eq, and, sql, desc, asc, isNull, inArray, lte, gte } from "drizzle-orm"
 import { TRPCError } from "@trpc/server";
 import crypto from "crypto";
 
-function assertCompanyAccess(ctx: any, companyId: number) {
-  const ids = ctx.user?.companyIds ?? [];
-  if (!ids.includes(companyId) && ctx.user?.role !== "admin_master")
+// Rev. 2921 — Guard canônico de acesso por empresa (espelha
+// `assertCompanyAccess` de ferramentasTerceiros/terceiros). O check ANTERIOR
+// lia `ctx.user.companyIds`, campo que NÃO existe no objeto user (linha da
+// tabela `users`) → `ids` sempre `[]` → TODO usuário não-`admin_master` (ex.:
+// grupo SST) era BLOQUEADO em TODA tela do módulo Integração ("Acesso negado a
+// esta empresa"). Regra correta: admin/admin_master → libera; usuário COM
+// vínculos em `user_companies` → exige pertencer; usuário SEM vínculos → libera
+// (acesso é governado por grupo/módulo, não pela empresa-casa).
+async function assertCompanyAccess(ctx: any, companyId: number) {
+  if (!ctx.user?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
+  if (ctx.user.role === "admin" || ctx.user.role === "admin_master") return;
+  const links = await getUserCompanyLinks(ctx.user.id);
+  const allowedIds = (links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === "number");
+  if (allowedIds.length === 0) return; // sem vínculos = acesso global por grupo/módulo
+  if (!new Set<number>(allowedIds).has(companyId))
     throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado a esta empresa" });
 }
 
@@ -316,7 +328,7 @@ export const integracaoSSTRouter = router({
   getBadgeCounts: protectedProcedure
     .input(z.object({ companyIds: z.array(z.number().int().positive()).min(1) }))
     .query(async ({ input, ctx }) => {
-      for (const cid of input.companyIds) assertCompanyAccess(ctx, cid);
+      for (const cid of input.companyIds) await assertCompanyAccess(ctx, cid);
       const db = (await getDb())!;
       // Rev. 2064 — Bug crítico Rev. 2058: `ANY(${ids})` no template Drizzle
       // não serializa array JS como PG array literal — query falhava com
@@ -384,7 +396,7 @@ export const integracaoSSTRouter = router({
   listarConfigs: protectedProcedure
     .input(z.object({ companyId: z.number().int().positive() }))
     .query(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       return db.select().from(sstIntegracaoConfig)
         .where(and(eq(sstIntegracaoConfig.companyId, input.companyId), isNull(sstIntegracaoConfig.deletedAt)))
@@ -402,7 +414,7 @@ export const integracaoSSTRouter = router({
       validadeMeses: z.number().int().min(1).max(60).default(12),
     }))
     .mutation(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       const [row] = await db.insert(sstIntegracaoConfig).values({
         companyId: input.companyId,
@@ -429,7 +441,7 @@ export const integracaoSSTRouter = router({
       ativo: z.boolean().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       const updates: any = { updatedAt: sql`NOW()` };
       if (input.titulo !== undefined) updates.titulo = input.titulo.trim();
@@ -445,7 +457,7 @@ export const integracaoSSTRouter = router({
   excluirConfig: protectedProcedure
     .input(z.object({ id: z.number().int().positive(), companyId: z.number().int().positive() }))
     .mutation(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       await db.update(sstIntegracaoConfig).set({ deletedAt: sql`NOW()` })
         .where(and(eq(sstIntegracaoConfig.id, input.id), eq(sstIntegracaoConfig.companyId, input.companyId)));
@@ -455,7 +467,7 @@ export const integracaoSSTRouter = router({
   listarTodosModulos: protectedProcedure
     .input(z.object({ companyId: z.number().int().positive() }))
     .query(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       const modulos = await db.select({
         id: sstIntegracaoModulos.id,
@@ -493,7 +505,7 @@ export const integracaoSSTRouter = router({
   listarModulos: protectedProcedure
     .input(z.object({ configId: z.number().int().positive(), companyId: z.number().int().positive() }))
     .query(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       const modulos = await db.select().from(sstIntegracaoModulos)
         .where(and(eq(sstIntegracaoModulos.configId, input.configId), eq(sstIntegracaoModulos.companyId, input.companyId), isNull(sstIntegracaoModulos.deletedAt)))
@@ -543,7 +555,7 @@ export const integracaoSSTRouter = router({
       duracaoMinutos: z.number().int().positive().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       const [row] = await db.insert(sstIntegracaoModulos).values({
         configId: input.configId,
@@ -574,7 +586,7 @@ export const integracaoSSTRouter = router({
       duracaoMinutos: z.number().int().positive().nullable().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       const updates: any = { updatedAt: sql`NOW()` };
       if (input.titulo !== undefined) updates.titulo = input.titulo.trim();
@@ -593,7 +605,7 @@ export const integracaoSSTRouter = router({
   excluirModulo: protectedProcedure
     .input(z.object({ id: z.number().int().positive(), companyId: z.number().int().positive() }))
     .mutation(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       await db.update(sstIntegracaoModulos).set({ deletedAt: sql`NOW()` })
         .where(and(eq(sstIntegracaoModulos.id, input.id), eq(sstIntegracaoModulos.companyId, input.companyId)));
@@ -617,7 +629,7 @@ export const integracaoSSTRouter = router({
       })),
     }))
     .mutation(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
 
       const existingPerguntas = await db.select({ id: sstIntegracaoPerguntas.id })
@@ -673,7 +685,7 @@ export const integracaoSSTRouter = router({
       substituir: z.boolean().optional().default(false),
     }))
     .mutation(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       try {
         // Confirma que o módulo pertence à company (defesa cross-tenant)
@@ -741,7 +753,7 @@ export const integracaoSSTRouter = router({
       obraId: z.number().int().positive().optional(),
     }))
     .query(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       const conds: any[] = [eq(sstIntegracaoRegistros.companyId, input.companyId), isNull(sstIntegracaoRegistros.deletedAt)];
       if (input.status && input.status !== "todos") {
@@ -786,7 +798,7 @@ export const integracaoSSTRouter = router({
       ids: z.array(z.number().int().positive()).min(1).max(500),
     }))
     .mutation(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       try {
         const result = await db.update(sstIntegracaoRegistros)
@@ -815,7 +827,7 @@ export const integracaoSSTRouter = router({
       nomeTst: z.string().trim().min(2).max(255),
     }))
     .mutation(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       if (!input.assinaturaBase64.startsWith("data:image/png;base64,")) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Assinatura inválida (deve ser PNG base64)" });
       }
@@ -863,7 +875,7 @@ export const integracaoSSTRouter = router({
       registroId: z.number().int().positive(),
     }))
     .mutation(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       try {
         const result = await db.update(sstIntegracaoRegistros)
@@ -898,7 +910,7 @@ export const integracaoSSTRouter = router({
       obraId: z.number().int().positive().nullable(),
     }))
     .mutation(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       try {
         let obraNome: string | null = null;
@@ -935,7 +947,7 @@ export const integracaoSSTRouter = router({
   listarPendentesAuto: protectedProcedure
     .input(z.object({ companyId: z.number().int().positive() }))
     .query(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
 
       // 1) Última integração aprovada por employeeId.
@@ -1139,7 +1151,7 @@ export const integracaoSSTRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       try {
-        assertCompanyAccess(ctx, input.companyId);
+        await assertCompanyAccess(ctx, input.companyId);
         const db = (await getDb())!;
 
         const [emp] = await db.select({
@@ -1196,7 +1208,7 @@ export const integracaoSSTRouter = router({
       origem: z.enum(["manual", "smo", "reciclagem", "advertencia", "transferencia"]).default("manual"),
     }))
     .mutation(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
 
       const emps = await db.select({
@@ -1236,7 +1248,7 @@ export const integracaoSSTRouter = router({
       observacoes: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       const [row] = await db.insert(sstIntegracaoSessoes).values({
         companyId: input.companyId,
@@ -1255,7 +1267,7 @@ export const integracaoSSTRouter = router({
   listarSessoes: protectedProcedure
     .input(z.object({ companyId: z.number().int().positive() }))
     .query(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       const sessoes = await db.select().from(sstIntegracaoSessoes)
         .where(eq(sstIntegracaoSessoes.companyId, input.companyId))
@@ -1283,7 +1295,7 @@ export const integracaoSSTRouter = router({
   dashboardKpis: protectedProcedure
     .input(z.object({ companyId: z.number().int().positive(), obraId: z.number().int().positive().optional() }))
     .query(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       const conds: any[] = [eq(sstIntegracaoRegistros.companyId, input.companyId), isNull(sstIntegracaoRegistros.deletedAt)];
       if (input.obraId) conds.push(eq(sstIntegracaoRegistros.obraId, input.obraId));
@@ -1404,7 +1416,7 @@ export const integracaoSSTRouter = router({
   alertas: protectedProcedure
     .input(z.object({ companyId: z.number().int().positive() }))
     .query(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       const alertas: { tipo: string; mensagem: string; registroId?: number; employeeNome?: string; obraNome?: string; count?: number }[] = [];
 
@@ -1497,7 +1509,7 @@ export const integracaoSSTRouter = router({
       obraNome: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
 
       const [emp] = await db.select({
@@ -1784,7 +1796,7 @@ export const integracaoSSTRouter = router({
   historicoColaborador: protectedProcedure
     .input(z.object({ companyId: z.number().int().positive(), employeeId: z.number().int().positive() }))
     .query(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
+      await assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       // Rev. 2035: enriquece com nome da configuração pro card SST do Raio-X.
       const rows = await db.select({

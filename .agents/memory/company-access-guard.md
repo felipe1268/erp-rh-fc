@@ -84,3 +84,17 @@ manual list.
 — e.g. guarding by `solicitacaoId` then mutating by `itemId` still lets a valid parent +
 foreign child through. Assert the child belongs to the parent (`item.solicitacaoId ===
 input.solicitacaoId`) before mutating.
+
+## ctx.user has NO `companyIds` field — guards reading it silently block everyone
+`ctx.user` is the `users` table row (`InferSelectModel<typeof users>` from `sdk.ln`/
+`authenticateRequest`). It does NOT carry a `companyIds` array. Any guard shaped like
+`const ids = ctx.user?.companyIds ?? []; if (!ids.includes(companyId) && role!=="admin_master") throw`
+is therefore ALWAYS `ids = []` → throws `FORBIDDEN` for EVERY non-`admin_master` user on
+EVERY endpoint (silent total lockout of a whole module — e.g. the SST "Integração"
+module blocked the entire SST group with "Acesso negado a esta empresa").
+**Why:** the per-request company is passed as `input.companyId` (the UI's selected
+company); a user's company membership lives in `user_companies`, fetched via
+`getUserCompanyLinks(userId)` — never on the session user object.
+**How to apply:** never read `ctx.user.companyIds`. Use the canonical async guard
+(`getUserCompanyLinks` + admin allow + no-links allow). When you make a sync guard async,
+audit EVERY call site for `await` (a forgotten `await` = silent auth bypass).
