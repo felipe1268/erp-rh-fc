@@ -2028,8 +2028,12 @@ export async function importAtividadesCronogramaToFinancial(
       if (atividades.length === 0) continue;
 
       // Pré-busca todas as entradas existentes deste projeto (1 query em vez de N queries)
+      // Rev. 2923 — `data_competencia` é coluna DATE; o driver pg a devolve como
+      // objeto Date → `String(date)` = "Sun Jun 01 2026…" (NÃO "2026-06-01"), então a
+      // chave de dedup `origem_id|data` NUNCA casava com a esperada e TODA reimportação
+      // reinseria tudo (duplicação até 18×). Forçamos a data como texto YYYY-MM-DD no SQL.
       const { rows: existentes } = await dbExecute(db,
-        `SELECT origem_id::integer, data_competencia, valor_previsto FROM financial_entries
+        `SELECT origem_id::integer, TO_CHAR(data_competencia,'YYYY-MM-DD') AS data_competencia, valor_previsto FROM financial_entries
          WHERE company_id=$1 AND origem_modulo='cronograma_atividade' AND obra_id=$2`,
         [companyId, proj.obra_id]
       );

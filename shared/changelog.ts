@@ -1,6 +1,49 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2923 — **DASHBOARD FINANCEIRO · CARDS "A PAGAR"/"A RECEBER" — FIM DOS VALORES INFLADOS
+ * (R$ 25 MILHÕES "A PAGAR" QUE NÃO EXISTIAM): CARDS PASSAM A SOMAR SÓ CONTAS REAIS + CORREÇÃO DO
+ * BUG QUE DUPLICAVA AS PROJEÇÕES DO CRONOGRAMA A CADA REIMPORTAÇÃO DO MS PROJECT.**
+ *
+ * PROBLEMA (usuário, com print do Dashboard Financeiro): o card "A Pagar" mostrava R$ 25,2 milhões e o
+ * "A Receber" estava desalinhado — "não temos 25 milhões para pagar, não tem nem obra para isso". A
+ * auditoria no banco real (Neon) confirmou DOIS problemas somados na empresa do print (id 60002):
+ *
+ * (1) CONCEITUAL — o card "A Pagar" estava somando, junto com as contas reais, as PROJEÇÕES de custo do
+ *     cronograma (origem `cronograma_atividade`: o custo planejado do MS Project distribuído mês a mês),
+ *     e o "A Receber" somava o FATURAMENTO PREVISTO (origem `revenue`). Projeção de custo/receita futura
+ *     NÃO é conta comprometida; inflava o card. Decisão do usuário (via pergunta): cards devem mostrar
+ *     SÓ contas reais comprometidas.
+ *
+ * (2) DUPLICAÇÃO POR BUG — as entradas `cronograma_atividade` estavam repetidas até 18× a mesma
+ *     atividade/mês (4011 linhas-lixo). CAUSA-RAIZ em `server/services/financialIntegrationBridge.ts`
+ *     (`importAtividadesCronogramaToFinancial`): a dedup em memória monta a chave `origem_id|data` lendo
+ *     o existente com `String(e.data_competencia).substring(0,10)`. Como `data_competencia` é coluna
+ *     `date`, o driver pg devolve um OBJETO Date → `String(Date)` vira `"Sun Jun 01 2026…"` (NÃO
+ *     `"2026-06-01"`) → a chave NUNCA casava com a esperada (`mes-01`) → TODA reimportação reinseria
+ *     tudo. O `ON CONFLICT DO NOTHING` não protegia porque NÃO existe índice UNIQUE em
+ *     `financial_entries`.
+ *
+ * SOLUÇÃO (BACKEND + LIMPEZA DE DADOS POR UPDATE, ZERO ALTER/DROP/DELETE):
+ * - CARDS — `server/routers/financial.ts` (`getDashboardExecutivo`, a proc que alimenta
+ *   `client/src/pages/financeiro/FinanceiroDashboard.tsx`): novos fragmentos SQL `exclProjPagar`
+ *   (`AND COALESCE(origem_modulo,'') <> 'cronograma_atividade'`) e `exclProjReceber`
+ *   (`<> 'revenue'`) aplicados de forma CONSISTENTE em TODAS as agregações de pendências: A Receber,
+ *   A Pagar, vencidos a receber, vencidos a pagar E na lista "próximos vencimentos" (esta com guard por
+ *   tipo: exclui despesa-cronograma e receita-revenue). As séries realizadas (pago/recebido,
+ *   evolução, top despesas, receita por obra) NÃO mudam.
+ * - GERADOR — mesmo arquivo do bridge: a pré-busca de existentes agora retorna
+ *   `TO_CHAR(data_competencia,'YYYY-MM-DD') AS data_competencia` (string garantida) → a chave de dedup
+ *   volta a casar → reimportações do XML param de duplicar (idempotente).
+ * - LIMPEZA — UPDATE pontual no Neon (NUNCA DELETE): `cronograma_atividade` + `status='a_pagar'`,
+ *   partição por (company_id, origem_id, data_competencia), mantém o MENOR id e marca o resto como
+ *   `status='cancelado'` (some dos cards/listas, mas o registro é preservado). 2450 linhas neutralizadas.
+ *
+ * EFEITO (empresa 60002): card "A Pagar" R$ 25,2M → R$ 5,44M (1605 contas reais); "A Receber" R$ 4,19M
+ * → R$ 555,8 mil (17 contas reais). Empresa 3 não tinha duplicação (import rodou 1×). As projeções do
+ * cronograma seguem disponíveis nas telas próprias (Cronograma Financeiro / Fluxo de Caixa), agora sem
+ * duplicatas; só não contam mais como "conta a pagar" no Dashboard.
+ *
  * Rev. 2922 — **INTEGRAÇÃO DE SEGURANÇA (SST) · APROVADOS — ASSINATURA DO TST EM LOTE: SELECIONAR
  * TODOS E ASSINAR DE UMA VEZ (GANHO DE TEMPO; UMA ASSINATURA → VÁRIOS CERTIFICADOS).**
  *

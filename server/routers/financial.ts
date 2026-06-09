@@ -2999,6 +2999,13 @@ export const financialRouter = router({
     const [iniYM, fimYM] = _rangeFor(tipoPeriodo, anchor);
     const [antIniYM, antFimYM] = _rangeFor(tipoPeriodo, _prevAnchor(tipoPeriodo, anchor));
 
+    // Rev. 2923 — Os cards "A Pagar"/"A Receber" passam a refletir SÓ contas REAIS
+    // comprometidas: excluímos as projeções do cronograma (origem 'cronograma_atividade'
+    // no lado a_pagar) e o faturamento previsto (origem 'revenue' no lado a_receber).
+    // Sem isso, o dashboard somava o custo planejado do MS Project como se fosse conta a pagar.
+    const exclProjPagar = `AND COALESCE(origem_modulo,'') <> 'cronograma_atividade'`;
+    const exclProjReceber = `AND COALESCE(origem_modulo,'') <> 'revenue'`;
+
     const [
       receitaMesRes, despesaMesRes,
       receitaMesAntRes, despesaMesAntRes,
@@ -3014,10 +3021,10 @@ export const financialRouter = router({
       dbExecute(db, `SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='despesa' AND status IN ('pago','recebido') AND TO_CHAR(data_competencia,'YYYY-MM') BETWEEN $1 AND $2`, [iniYM, fimYM]),
       dbExecute(db, `SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='receita' AND status IN ('recebido','pago') AND TO_CHAR(data_competencia,'YYYY-MM') BETWEEN $1 AND $2`, [antIniYM, antFimYM]),
       dbExecute(db, `SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='despesa' AND status IN ('pago','recebido') AND TO_CHAR(data_competencia,'YYYY-MM') BETWEEN $1 AND $2`, [antIniYM, antFimYM]),
-      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='receita' AND status IN ('a_receber','recebido_parcial')`, []),
-      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='despesa' AND status='a_pagar'`, []),
-      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='receita' AND status IN ('a_receber','recebido_parcial') AND data_vencimento < $1`, [today]),
-      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='despesa' AND status='a_pagar' AND data_vencimento < $1`, [today]),
+      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='receita' AND status IN ('a_receber','recebido_parcial') ${exclProjReceber}`, []),
+      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='despesa' AND status='a_pagar' ${exclProjPagar}`, []),
+      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='receita' AND status IN ('a_receber','recebido_parcial') AND data_vencimento < $1 ${exclProjReceber}`, [today]),
+      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='despesa' AND status='a_pagar' AND data_vencimento < $1 ${exclProjPagar}`, [today]),
       dbExecute(db, `SELECT id, banco, agencia, conta, "tipoConta" AS tipo, apelido AS descricao FROM company_bank_accounts WHERE "companyId" IN (${inlineIds(ids)}) AND ativo=1 ORDER BY banco ASC`, []),
       dbExecute(db, `
         SELECT TO_CHAR(data_competencia, 'YYYY-MM-DD') AS dia,
@@ -3037,6 +3044,8 @@ export const financialRouter = router({
                CASE WHEN data_vencimento < CURRENT_DATE THEN CURRENT_DATE - data_vencimento ELSE 0 END AS "diasAtraso"
         FROM financial_entries
         WHERE company_id IN (${inlineIds(ids)}) AND status IN ('a_pagar','a_receber','recebido_parcial')
+                AND NOT (tipo='despesa' AND COALESCE(origem_modulo,'')='cronograma_atividade')
+                AND NOT (tipo='receita' AND COALESCE(origem_modulo,'')='revenue')
                 ORDER BY data_vencimento ASC LIMIT 15`, []),
       dbExecute(db, `
         SELECT obra_nome AS "obraNome", obra_id AS "obraId",
