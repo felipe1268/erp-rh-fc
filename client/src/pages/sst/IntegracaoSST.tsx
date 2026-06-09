@@ -128,7 +128,7 @@ export default function IntegracaoSST() {
       {/* Conteúdo */}
       <div className="p-3 sm:p-5">
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsContent value="dashboard" className="mt-0"><DashboardTab companyId={companyId} /></TabsContent>
+          <TabsContent value="dashboard" className="mt-0"><DashboardTab companyId={companyId} onNavigate={setTab} /></TabsContent>
           <TabsContent value="videos" className="mt-0"><VideosTab companyId={companyId} /></TabsContent>
           <TabsContent value="config" className="mt-0"><ConfigTab companyId={companyId} /></TabsContent>
           <TabsContent value="pendentes" className="mt-0"><PendentesTab companyId={companyId} /></TabsContent>
@@ -143,7 +143,7 @@ export default function IntegracaoSST() {
   );
 }
 
-function DashboardTab({ companyId }: { companyId: number }) {
+function DashboardTab({ companyId, onNavigate }: { companyId: number; onNavigate: (tab: string) => void }) {
   const kpis = trpc.integracaoSST.dashboardKpis.useQuery({ companyId }, { enabled: companyId > 0 });
   const alertas = trpc.integracaoSST.alertas.useQuery({ companyId }, { enabled: companyId > 0 });
 
@@ -164,10 +164,10 @@ function DashboardTab({ companyId }: { companyId: number }) {
       {/* KPIs principais — cards coloridos com chip de ícone */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
         <KpiCard label="Total"          value={k?.total ?? 0}            icon={BarChart3}     accent="blue" />
-        <KpiCard label="Aprovados"      value={k?.aprovados ?? 0}        icon={CheckCircle}   accent="emerald" />
-        <KpiCard label="Pendentes"      value={k?.pendentes ?? 0}        icon={Clock}         accent="amber" />
-        <KpiCard label="Reprovados"     value={k?.reprovados ?? 0}       icon={XCircle}       accent="red" />
-        <KpiCard label="Vencendo (30d)" value={k?.vencendoEm30Dias ?? 0} icon={AlertTriangle} accent="orange" />
+        <KpiCard label="Aprovados"      value={k?.aprovados ?? 0}        icon={CheckCircle}   accent="emerald" onClick={() => onNavigate("aprovados")} />
+        <KpiCard label="Pendentes"      value={k?.pendentes ?? 0}        icon={Clock}         accent="amber"   onClick={() => onNavigate("pendentes")} />
+        <KpiCard label="Reprovados"     value={k?.reprovados ?? 0}       icon={XCircle}       accent="red"     onClick={() => onNavigate("reprovados")} />
+        <KpiCard label="Vencendo (30d)" value={k?.vencendoEm30Dias ?? 0} icon={AlertTriangle} accent="orange"  onClick={() => onNavigate("pendentes")} />
       </div>
 
       <div className="grid md:grid-cols-2 gap-3 sm:gap-4">
@@ -248,7 +248,7 @@ function DashboardTab({ companyId }: { companyId: number }) {
   );
 }
 
-function KpiCard({ label, value, icon: Icon, accent }: { label: string; value: number; icon: any; accent: "blue" | "emerald" | "amber" | "red" | "orange" }) {
+function KpiCard({ label, value, icon: Icon, accent, onClick }: { label: string; value: number; icon: any; accent: "blue" | "emerald" | "amber" | "red" | "orange"; onClick?: () => void }) {
   const accents: Record<string, { bg: string; chip: string; ring: string; icon: string; num: string; bar: string }> = {
     blue:    { bg: "bg-blue-50/40",    chip: "bg-blue-100",    ring: "ring-blue-200",    icon: "text-blue-600",    num: "text-blue-900",    bar: "bg-blue-500" },
     emerald: { bg: "bg-emerald-50/40", chip: "bg-emerald-100", ring: "ring-emerald-200", icon: "text-emerald-600", num: "text-emerald-900", bar: "bg-emerald-500" },
@@ -257,8 +257,16 @@ function KpiCard({ label, value, icon: Icon, accent }: { label: string; value: n
     orange:  { bg: "bg-orange-50/40",  chip: "bg-orange-100",  ring: "ring-orange-200",  icon: "text-orange-600",  num: "text-orange-900",  bar: "bg-orange-500" },
   };
   const a = accents[accent];
+  const clickable = !!onClick;
   return (
-    <div className={`relative rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition-shadow`}>
+    <div
+      className={`relative rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition-shadow ${clickable ? "cursor-pointer hover:border-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400" : ""}`}
+      onClick={onClick}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(); } } : undefined}
+      title={clickable ? `Ver ${label}` : undefined}
+    >
       <div className={`absolute inset-x-0 top-0 h-1 ${a.bar}`} />
       <div className={`${a.bg} px-3 pt-3.5 pb-3`}>
         <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -268,6 +276,11 @@ function KpiCard({ label, value, icon: Icon, accent }: { label: string; value: n
           </span>
         </div>
         <p className={`text-2xl sm:text-3xl font-extrabold tabular-nums ${a.num}`}>{value}</p>
+        {clickable && (
+          <span className={`mt-1 inline-flex items-center gap-0.5 text-[10px] font-semibold ${a.icon}`}>
+            Ver lista <ChevronRight className="h-3 w-3" />
+          </span>
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2918 — **INTEGRAÇÃO DE SEGURANÇA (SST) · DASHBOARD — CLICAR NUM CARD DE KPI AGORA FILTRA:
+ * LEVA DIRETO PRA ABA CORRESPONDENTE (APROVADOS/PENDENTES/REPROVADOS), MELHORANDO A USABILIDADE.**
+ *
+ * PEDIDO (usuário, com print do dashboard): "quando clicar no card precisa filtrar tbm.. para
+ * facilitar a usabilidade". Os 5 cards de KPI do dashboard (Total, Aprovados, Pendentes, Reprovados,
+ * Vencendo (30d)) eram puramente informativos (`<div>` estático), então o usuário via o número mas
+ * tinha que ir manualmente até a aba pra ver a lista.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE): `client/src/pages/sst/IntegracaoSST.tsx`. O `KpiCard`
+ * ganhou prop opcional `onClick`; quando presente o card vira clicável (cursor-pointer, hover de borda,
+ * `role="button"`, `tabIndex=0`, ativação por Enter/Espaço, `title="Ver <label>"` e um rótulo discreto
+ * "Ver lista ›" com ChevronRight). O `DashboardTab` passou a receber `onNavigate: (tab) => void` (o
+ * `setTab` do componente-pai) e liga cada card à aba correspondente: Aprovados → aba "aprovados",
+ * Pendentes → "pendentes", Reprovados → "reprovados", Vencendo (30d) → "pendentes" (onde aparecem os
+ * itens "vence(m) em ≤Nd"). O card "Total" permanece informativo (não há aba "todos"). Sem mudança de
+ * backend/schema.
+ *
  * Rev. 2917 — **INTEGRAÇÃO DE SEGURANÇA (SST) · PORTAL PÚBLICO — VÍDEO DE TREINAMENTO VOLTOU A TOCAR:
  * CORREÇÃO DO 500 AO SERVIR ARQUIVOS GRANDES DE /uploads ATRÁS DO PROXY DO DEPLOY.**
  *
