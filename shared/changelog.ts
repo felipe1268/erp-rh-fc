@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2928 — **CONTROLE DE EPIs · ESTOQUE POR OBRA — AGORA A CAIXA DA OBRA É INDEPENDENTE DO
+ * ALMOXARIFADO CENTRAL: EDITAR A QUANTIDADE NUMA OBRA NÃO MEXE MAIS NO CENTRAL, E A TRANSFERÊNCIA
+ * (CENTRAL↔OBRA / OBRA↔OBRA / OBRA→CENTRAL) FICOU ATÔMICA E À PROVA DE SALDO CORROMPIDO.**
+ *
+ * PEDIDO (usuário): (1) ao editar a quantidade de um EPI na aba "Estoque por Obra", o valor do
+ * Almoxarifado Central mudava junto — as duas caixas precisam ser INDEPENDENTES; (2) a
+ * transferência (central→obra e devolução obra→central) "ficava bugada".
+ *
+ * CAUSA-RAIZ (1 — obra mexia no central): na tabela "Estoque por Obra" tanto o CLIQUE na linha
+ * quanto o lápis ("Editar EPI") abriam o editor do CATÁLOGO CENTRAL (`viewMode='editar_epi'` →
+ * `epis.update`), cujo "Salvar" grava `epis.quantidadeEstoque` (saldo central). Não existia NENHUMA
+ * mutation para ajustar o estoque DA OBRA (`epi_estoque_obra.quantidade`). Ou seja, "corrigir a
+ * obra" sempre acabava corrigindo o central.
+ *
+ * SOLUÇÃO (1): nova mutation READ/WRITE isolada `epis.ajustarEstoqueObra` ({id, quantidade,
+ * observacao?}) que atualiza SOMENTE `epi_estoque_obra.quantidade` (clamp >= 0) + `alterado_por`,
+ * e JAMAIS toca `epis.quantidadeEstoque`. Guard de tenant/IDOR derivando a empresa do PRÓPRIO
+ * registro de estoque (`getCompaniesForUser`). No front (`client/src/pages/Epis.tsx`), o clique na
+ * linha e o lápis (re-rotulado "Ajustar estoque na obra") abrem um novo diálogo de ajuste (mostra
+ * obra, EPI+tamanho, estoque atual, aviso "não afeta o central" e input da nova quantidade); foi
+ * ADICIONADO um ícone separado (Package) "Editar cadastro do EPI (catálogo central)" para quem
+ * realmente quer mexer no catálogo. onSuccess refaz `estoqueObraList`/`estoqueObraResumo`/`stats`.
+ *
+ * CAUSA-RAIZ (2 — transferência bugada): (a) o picker de EPI vazio já foi resolvido na Rev. 2927
+ * (teto de `epis.list` elevado p/ carregar o catálogo inteiro); (b) `epis.transferir` NÃO rodava
+ * em transação — uma falha no meio (ex.: insert do histórico) descontava de um lado sem creditar o
+ * outro, deixando saldo corrompido; e o histórico gravava `destinoObraId: null` na devolução
+ * obra→central, podendo violar o `NOT NULL` da coluna `epi_transferencias.destinoObraId`.
+ *
+ * SOLUÇÃO (2): `epis.transferir` agora envolve origem + destino + histórico num único
+ * `db.transaction` (tudo confirma ou tudo reverte). Destino=central no histórico passa a usar a
+ * sentinela `0` (a UI já trata `destinoObraId` falsy como "Almoxarifado Central"), satisfazendo o
+ * `NOT NULL` e consertando a devolução obra→central. Acrescentado guard de tenant/IDOR (deriva a
+ * empresa do próprio EPI via `getCompaniesForUser`) e os inserts de estoque/histórico passam a usar
+ * a empresa-dona do EPI.
+ *
+ * ARQUIVOS: `server/routers/epis.ts` (nova `ajustarEstoqueObra`; `transferir` atômico + guard +
+ * sentinela), `client/src/pages/Epis.tsx` (estado/mutation/diálogo de ajuste + ações da tabela),
+ * `shared/version.ts` (→2928). ZERO ALTER/DROP/DELETE — só UPDATE de dado e INSERT.
+ *
  * Rev. 2927 — **REGISTRAR ENTREGA DE EPI — CONSERTADA A LISTA QUE NÃO MOSTRAVA OS EPIs
  * ("NENHUM EPI ENCONTRADO"), O ESTOQUE EXIBIDO PASSA A BATER COM A ORIGEM (CENTRAL × OBRA), E AO
  * SELECIONAR O FUNCIONÁRIO O ERP JÁ MOSTRA OS TAMANHOS DE CAMISA/CALÇA/CALÇADO.**

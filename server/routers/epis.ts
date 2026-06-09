@@ -1900,6 +1900,27 @@ Exemplos de referência:
       return rows[0] ?? { totalItens: 0, totalUnidades: 0, valorTotal: 0 };
     }),
 
+  // Rev. 2928 — Ajuste DIRETO do estoque de UMA obra (caixa independente).
+  // Edita SOMENTE `epi_estoque_obra.quantidade`; NUNCA toca `epis.quantidadeEstoque`
+  // (o saldo do Almoxarifado Central). Antes, a tela "Estoque por Obra" abria o
+  // editor do CATÁLOGO central, então "corrigir a obra" mexia no central (bug).
+  ajustarEstoqueObra: protectedProcedure
+    .input(z.object({ id: z.number(), quantidade: z.number().int().min(0), observacao: z.string().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const [row] = await db.select().from(epiEstoqueObra).where(eq(epiEstoqueObra.id, input.id));
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Registro de estoque da obra não encontrado." });
+      // Guard de tenant/IDOR — deriva a empresa do PRÓPRIO registro.
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowed.some((c) => c.id === row.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este estoque." });
+      }
+      await db.update(epiEstoqueObra)
+        .set({ quantidade: input.quantidade, alteradoPor: ctx.user?.name || 'Sistema', updatedAt: new Date().toISOString() } as any)
+        .where(eq(epiEstoqueObra.id, input.id));
+      return { success: true };
+    }),
+
   // ============================================================
   // TRANSFERÊNCIAS DE ESTOQUE
   // ============================================================
@@ -1923,69 +1944,106 @@ Exemplos de referência:
         throw new Error('Não é possível transferir do central para o central');
       }
 
-      // Validar estoque na origem
-      if (input.tipoOrigem === 'central') {
-        const [epi] = await db.select({ quantidadeEstoque: epis.quantidadeEstoque }).from(epis).where(eq(epis.id, input.epiId));
-        if (!epi || (epi.quantidadeEstoque || 0) < input.quantidade) {
-          throw new Error(`Estoque central insuficiente. Disponível: ${epi?.quantidadeEstoque || 0}`);
+      // Guard de tenant/IDOR — deriva a empresa do PRÓPRIO EPI e exige acesso.
+      const epiCo = await db.select({ companyId: epis.companyId }).from(epis).where(eq(epis.id, input.epiId));
+      if (!epiCo[0]) throw new TRPCError({ code: "NOT_FOUND", message: "EPI não encontrado." });
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowed.some((c) => c.id === epiCo[0].companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este EPI." });
+      }
+      // Empresa-dona do EPI (vale p/ novos registros de estoque/obra — alinha o tenant).
+      const epiCompanyId = epiCo[0].companyId;
+
+      // Rev. 2928 — Guard de tenant/IDOR nas OBRAS: origem/destino DEVEM pertencer à
+      // empresa-dona do EPI (senão dá pra poluir estoque de outra empresa via API direta).
+      const obraIdsToCheck = [
+        input.tipoOrigem === 'obra' ? input.origemObraId : undefined,
+        input.tipoDestino === 'obra' ? input.destinoObraId : undefined,
+      ].filter((x): x is number => typeof x === 'number' && x > 0);
+      if (obraIdsToCheck.length) {
+        const uniqueObraIds = Array.from(new Set(obraIdsToCheck));
+        const obrasOk = await db.select({ id: obras.id }).from(obras)
+          .where(and(inArray(obras.id, uniqueObraIds), eq(obras.companyId, epiCompanyId)));
+        if (obrasOk.length !== uniqueObraIds.length) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Obra de origem/destino inválida para esta empresa." });
         }
-        // Descontar do estoque central
-        await db.update(epis)
-          .set({ quantidadeEstoque: sql`${epis.quantidadeEstoque} - ${input.quantidade}` })
-          .where(eq(epis.id, input.epiId));
-      } else {
-        // Origem é outra obra
-        if (!input.origemObraId) throw new Error('Obra de origem é obrigatória para transferência entre obras');
-        const [estoqueOrigem] = await db.select().from(epiEstoqueObra)
-          .where(and(eq(epiEstoqueObra.epiId, input.epiId), eq(epiEstoqueObra.obraId, input.origemObraId)));
-        if (!estoqueOrigem || estoqueOrigem.quantidade < input.quantidade) {
-          throw new Error(`Estoque da obra insuficiente. Disponível: ${estoqueOrigem?.quantidade || 0}`);
-        }
-        // Descontar da obra de origem
-        await db.update(epiEstoqueObra)
-          .set({ quantidade: sql`${epiEstoqueObra.quantidade} - ${input.quantidade}` })
-          .where(eq(epiEstoqueObra.id, estoqueOrigem.id));
       }
 
-      // Adicionar ao destino
-      if (input.tipoDestino === 'central') {
-        // Devolver ao estoque central (catálogo)
-        await db.update(epis)
-          .set({ quantidadeEstoque: sql`${epis.quantidadeEstoque} + ${input.quantidade}` })
-          .where(eq(epis.id, input.epiId));
-      } else {
-        // Adicionar ao estoque da obra destino
-        if (!input.destinoObraId) throw new Error('Obra de destino é obrigatória');
-        const [existente] = await db.select().from(epiEstoqueObra)
-          .where(and(eq(epiEstoqueObra.epiId, input.epiId), eq(epiEstoqueObra.obraId, input.destinoObraId)));
-        if (existente) {
-          await db.update(epiEstoqueObra)
-            .set({ quantidade: sql`${epiEstoqueObra.quantidade} + ${input.quantidade}` })
-            .where(eq(epiEstoqueObra.id, existente.id));
+      // Rev. 2928 — TUDO numa transação: origem, destino e histórico ou TODOS revertem.
+      // Antes, sem transação, uma falha no meio (ex.: insert do histórico) deixava o
+      // saldo corrompido (descontou de um lado e não creditou o outro).
+      await db.transaction(async (tx: any) => {
+        // ---- Descontar da ORIGEM ----
+        if (input.tipoOrigem === 'central') {
+          // Rev. 2928 — débito ATÔMICO (concorrência-safe): só desconta se ainda há
+          // saldo (`>= quantidade`) na MESMA query; sem janela entre SELECT e UPDATE.
+          const debitado = await tx.update(epis)
+            .set({ quantidadeEstoque: sql`${epis.quantidadeEstoque} - ${input.quantidade}` })
+            .where(and(eq(epis.id, input.epiId), gte(epis.quantidadeEstoque, input.quantidade)))
+            .returning({ id: epis.id });
+          if (debitado.length === 0) {
+            const [epi] = await tx.select({ quantidadeEstoque: epis.quantidadeEstoque }).from(epis).where(eq(epis.id, input.epiId));
+            throw new Error(`Estoque central insuficiente. Disponível: ${epi?.quantidadeEstoque || 0}`);
+          }
         } else {
-          await db.insert(epiEstoqueObra).values({
-            companyId: input.companyId,
-            epiId: input.epiId,
-            obraId: input.destinoObraId,
-            quantidade: input.quantidade,
-            criadoPor: ctx.user?.name || 'Sistema',
-          });
+          if (!input.origemObraId) throw new Error('Obra de origem é obrigatória para transferência entre obras');
+          // Rev. 2928 — débito ATÔMICO da obra de origem (mesma proteção do central).
+          const debitado = await tx.update(epiEstoqueObra)
+            .set({ quantidade: sql`${epiEstoqueObra.quantidade} - ${input.quantidade}` })
+            .where(and(
+              eq(epiEstoqueObra.epiId, input.epiId),
+              eq(epiEstoqueObra.obraId, input.origemObraId),
+              gte(epiEstoqueObra.quantidade, input.quantidade),
+            ))
+            .returning({ id: epiEstoqueObra.id });
+          if (debitado.length === 0) {
+            const [estoqueOrigem] = await tx.select().from(epiEstoqueObra)
+              .where(and(eq(epiEstoqueObra.epiId, input.epiId), eq(epiEstoqueObra.obraId, input.origemObraId)));
+            throw new Error(`Estoque da obra insuficiente. Disponível: ${estoqueOrigem?.quantidade || 0}`);
+          }
         }
-      }
 
-      // Registrar transferência
-      await db.insert(epiTransferencias).values({
-        companyId: input.companyId,
-        epiId: input.epiId,
-        quantidade: input.quantidade,
-        tipoOrigem: input.tipoOrigem,
-        origemObraId: input.origemObraId || null,
-        destinoObraId: input.destinoObraId || null,
-        data: input.data,
-        observacoes: input.observacoes || null,
-        criadoPor: ctx.user.name ?? 'Sistema',
-        criadoPorUserId: ctx.user.id,
-      } as any);
+        // ---- Creditar no DESTINO ----
+        if (input.tipoDestino === 'central') {
+          await tx.update(epis)
+            .set({ quantidadeEstoque: sql`${epis.quantidadeEstoque} + ${input.quantidade}` })
+            .where(eq(epis.id, input.epiId));
+        } else {
+          if (!input.destinoObraId) throw new Error('Obra de destino é obrigatória');
+          const [existente] = await tx.select().from(epiEstoqueObra)
+            .where(and(eq(epiEstoqueObra.epiId, input.epiId), eq(epiEstoqueObra.obraId, input.destinoObraId)));
+          if (existente) {
+            await tx.update(epiEstoqueObra)
+              .set({ quantidade: sql`${epiEstoqueObra.quantidade} + ${input.quantidade}` })
+              .where(eq(epiEstoqueObra.id, existente.id));
+          } else {
+            await tx.insert(epiEstoqueObra).values({
+              companyId: epiCompanyId,
+              epiId: input.epiId,
+              obraId: input.destinoObraId,
+              quantidade: input.quantidade,
+              criadoPor: ctx.user?.name || 'Sistema',
+            });
+          }
+        }
+
+        // ---- Histórico ----
+        // `destinoObraId` é NOT NULL no schema; destino=central usa sentinela 0
+        // (a UI trata 0 como falsy → exibe "Almoxarifado Central"). Isso conserta a
+        // transferência obra→central, que antes gravava null e podia violar NOT NULL.
+        await tx.insert(epiTransferencias).values({
+          companyId: epiCompanyId,
+          epiId: input.epiId,
+          quantidade: input.quantidade,
+          tipoOrigem: input.tipoOrigem,
+          origemObraId: input.tipoOrigem === 'obra' ? (input.origemObraId ?? null) : null,
+          destinoObraId: input.tipoDestino === 'central' ? 0 : input.destinoObraId,
+          data: input.data,
+          observacoes: input.observacoes || null,
+          criadoPor: ctx.user.name ?? 'Sistema',
+          criadoPorUserId: ctx.user.id,
+        } as any);
+      });
 
       return { success: true };
     }),

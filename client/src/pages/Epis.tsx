@@ -361,6 +361,8 @@ export default function Epis() {
   const [showObraConfirm, setShowObraConfirm] = useState(false);
   const [showEntradaDiretaDialog, setShowEntradaDiretaDialog] = useState(false);
   const [entradaDiretaForm, setEntradaDiretaForm] = useState({ epiId: "", obraId: "", quantidade: "", observacao: "" });
+  const [ajusteObraRow, setAjusteObraRow] = useState<any>(null);
+  const [ajusteObraQtd, setAjusteObraQtd] = useState<string>("");
 
   // BDI config
   const [bdiValue, setBdiValue] = useState("");
@@ -453,6 +455,14 @@ export default function Epis() {
       setShowEntradaDiretaDialog(false);
       setEntradaDiretaForm({ epiId: "", obraId: "", quantidade: "", observacao: "" });
       toast.success("Entrada direta registrada com sucesso!");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  const ajustarEstoqueObraMut = trpc.epis.ajustarEstoqueObra.useMutation({
+    onSuccess: () => {
+      estoqueObraQ.refetch(); estoqueObraResumoQ.refetch(); statsQ.refetch();
+      setAjusteObraRow(null); setAjusteObraQtd("");
+      toast.success("Estoque da obra ajustado!");
     },
     onError: (err) => toast.error(err.message),
   });
@@ -2998,8 +3008,7 @@ export default function Epis() {
                         {tabelaEstoqueList
                           .map((e: any) => (
                           <tr key={e.id} className="border-b last:border-0 hover:bg-muted/30 cursor-pointer" onClick={() => {
-                            const epi = episAllList.find((ep: any) => ep.id === e.epiId);
-                            if (epi) { setEditingEpi(epi); loadEpiForEdit(epi); setViewMode('editar_epi'); }
+                            setAjusteObraRow(e); setAjusteObraQtd(String(e.quantidade ?? 0));
                           }}>
                             <td className="p-3">
                               <div className="flex items-center gap-2">
@@ -3042,11 +3051,16 @@ export default function Epis() {
                             </td>
                             <td className="p-3 text-center" onClick={(ev) => ev.stopPropagation()}>
                               <div className="flex items-center justify-center gap-1">
-                                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Editar EPI" onClick={() => {
+                                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Ajustar estoque na obra" onClick={() => {
+                                  setAjusteObraRow(e); setAjusteObraQtd(String(e.quantidade ?? 0));
+                                }}>
+                                  <Pencil className="h-3.5 w-3.5 text-blue-600" />
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Editar cadastro do EPI (catálogo central)" onClick={() => {
                                   const epi = episAllList.find((ep: any) => ep.id === e.epiId);
                                   if (epi) { setEditingEpi(epi); loadEpiForEdit(epi); setViewMode('editar_epi'); }
                                 }}>
-                                  <Pencil className="h-3.5 w-3.5 text-blue-600" />
+                                  <Package className="h-3.5 w-3.5 text-gray-600" />
                                 </Button>
                                 <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Ver Entregas" onClick={() => setViewMode('entregas')}>
                                   <Eye className="h-3.5 w-3.5 text-gray-500" />
@@ -3442,6 +3456,47 @@ export default function Epis() {
                   {entradaDiretaObraMut.isPending ? 'Registrando...' : 'Confirmar Entrada'}
                 </Button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dialog de Ajuste de Estoque na Obra (Rev. 2928) — caixa da obra independente do central */}
+      {ajusteObraRow && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+            <h3 className="text-lg font-bold text-[#1B3A5C] mb-1 flex items-center gap-2">
+              <Warehouse className="h-5 w-5 text-[#1B2A4A]" /> Ajustar Estoque na Obra
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4">Corrige a quantidade física deste EPI <strong>nesta obra</strong>.</p>
+            <div className="rounded-lg bg-muted/40 p-3 text-sm space-y-1 mb-3">
+              <p><span className="text-muted-foreground">Obra:</span> <span className="font-medium">{ajusteObraRow.nomeObra || 'Obra #' + ajusteObraRow.obraId}</span></p>
+              <p>
+                <span className="text-muted-foreground">EPI:</span>{' '}
+                <span className="font-medium">
+                  {ajusteObraRow.nomeEpi || 'EPI #' + ajusteObraRow.epiId}
+                  {ajusteObraRow.tamanhoEpi ? (ajusteObraRow.categoriaEpi === 'Calcado' ? ` (Nº ${ajusteObraRow.tamanhoEpi})` : ` (Tam. ${ajusteObraRow.tamanhoEpi})`) : ''}
+                </span>
+              </p>
+              <p className="text-xs text-muted-foreground">Estoque atual nesta obra: <span className="font-semibold text-foreground">{ajusteObraRow.quantidade ?? 0}</span></p>
+            </div>
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 mb-3">
+              Este ajuste altera <strong>somente o estoque desta obra</strong>. O Almoxarifado Central <strong>não</strong> é afetado.
+            </div>
+            <div>
+              <Label>Nova quantidade *</Label>
+              <Input type="number" min="0" value={ajusteObraQtd} autoFocus
+                onChange={e => setAjusteObraQtd(e.target.value)} placeholder="Ex: 12" />
+            </div>
+            <div className="flex gap-3 pt-4">
+              <Button variant="outline" className="flex-1" onClick={() => { setAjusteObraRow(null); setAjusteObraQtd(""); }}>
+                Cancelar
+              </Button>
+              <Button className="flex-1 bg-[#1B2A4A] hover:bg-[#243660]"
+                disabled={ajustarEstoqueObraMut.isPending || ajusteObraQtd === "" || isNaN(parseInt(ajusteObraQtd)) || parseInt(ajusteObraQtd) < 0}
+                onClick={() => ajustarEstoqueObraMut.mutate({ id: ajusteObraRow.id, quantidade: parseInt(ajusteObraQtd) })}>
+                {ajustarEstoqueObraMut.isPending ? 'Salvando...' : 'Salvar Ajuste'}
+              </Button>
             </div>
           </div>
         </div>
