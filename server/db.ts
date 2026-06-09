@@ -2038,6 +2038,125 @@ export async function getObrasByCompanyActive(companyId: number, companyIds?: nu
 }
 
 // Funcionários alocados na obra
+/**
+ * Rev. 2938 — Helper REUSÁVEL: monta os mapas de INTEGRAÇÕES (por cliente,
+ * `employee_integrations`) e de NRs (treinamentos, `trainings.norma`) por
+ * funcionário. Extraído de `getObraFuncionarios` para ser reaproveitado pelo
+ * endpoint company-wide `getIntegracoesNrsPorFuncionario` (abas "Todos"/"Sem Obra").
+ * Tenant-safe (restrito a companyIdsArr) e 100% read-only.
+ */
+type IntegracaoChip = { cliente: string; tipo: string; dataValidade: string | null; vencida: boolean; semVencimento: boolean };
+type NrChip = { norma: string; nome: string; dataValidade: string | null; vencida: boolean };
+async function buildIntegracoesNrsMaps(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  companyIdsArr: number[],
+  empIds: number[],
+): Promise<{ integracoesMap: Map<number, IntegracaoChip[]>; nrsMap: Map<number, NrChip[]> }> {
+  const integracoesMap = new Map<number, IntegracaoChip[]>();
+  const nrsMap = new Map<number, NrChip[]>();
+  if (empIds.length === 0 || companyIdsArr.length === 0) return { integracoesMap, nrsMap };
+
+  // INTEGRAÇÕES por funcionário, agrupadas por CLIENTE/REFERÊNCIA (employee_integrations).
+  {
+    const integRows = await db.select({
+      employeeId: employeeIntegrations.employeeId,
+      tipo: employeeIntegrations.tipo,
+      clienteNome: employeeIntegrations.clienteNome,
+      clienteRazao: clientes.razaoSocial,
+      dataVencimento: employeeIntegrations.dataVencimento,
+      dataRealizacao: employeeIntegrations.dataRealizacao,
+    }).from(employeeIntegrations)
+      .leftJoin(clientes, and(
+        eq(clientes.id, employeeIntegrations.clienteId),
+        eq(clientes.companyId, employeeIntegrations.companyId),
+      ))
+      .where(and(
+        inArray(employeeIntegrations.companyId, companyIdsArr),
+        sql`${employeeIntegrations.employeeId} IN (${sql.raw(empIds.join(","))})`,
+      ))
+      .orderBy(desc(employeeIntegrations.dataRealizacao));
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const hojeMs = hoje.getTime();
+    for (const r of integRows) {
+      const cliente = ((r.clienteNome || r.clienteRazao || (r.tipo === 'interna' ? 'FC Engenharia (Interna)' : 'Sem cliente')) || 'Sem cliente').trim();
+      const venc = r.dataVencimento;
+      const semVencimento = !venc;
+      let vencida = false;
+      if (venc) {
+        const vMs = new Date(venc + 'T00:00:00').getTime();
+        vencida = !Number.isNaN(vMs) && vMs < hojeMs;
+      }
+      const arr = integracoesMap.get(r.employeeId) || [];
+      if (!arr.some(x => x.cliente.toLowerCase() === cliente.toLowerCase())) {
+        arr.push({ cliente, tipo: r.tipo, dataValidade: venc ?? null, vencida, semVencimento });
+        integracoesMap.set(r.employeeId, arr);
+      }
+    }
+  }
+
+  // NRs do funcionário a partir dos DOCUMENTOS DE TREINAMENTO (trainings.norma).
+  {
+    const hojeNr = new Date();
+    hojeNr.setHours(0, 0, 0, 0);
+    const hojeNrMs = hojeNr.getTime();
+    const trRows = await db.select({
+      employeeId: trainings.employeeId,
+      norma: trainings.norma,
+      nome: trainings.nome,
+      dataValidade: trainings.dataValidade,
+    }).from(trainings)
+      .where(and(
+        inArray(trainings.companyId, companyIdsArr),
+        isNull(trainings.deletedAt),
+        sql`${trainings.employeeId} IN (${sql.raw(empIds.join(","))})`,
+      ))
+      .orderBy(desc(trainings.dataRealizacao));
+    for (const r of trRows) {
+      const norma = (r.norma || '').trim();
+      if (!norma) continue;
+      const dv = r.dataValidade ? String(r.dataValidade).slice(0, 10) : null;
+      let vencida = false;
+      if (dv) {
+        const vMs = new Date(dv + 'T00:00:00').getTime();
+        vencida = !Number.isNaN(vMs) && vMs < hojeNrMs;
+      }
+      const arr = nrsMap.get(r.employeeId) || [];
+      if (!arr.some(x => x.norma.toLowerCase() === norma.toLowerCase())) {
+        arr.push({ norma, nome: r.nome, dataValidade: r.dataValidade ?? null, vencida });
+        nrsMap.set(r.employeeId, arr);
+      }
+    }
+  }
+
+  return { integracoesMap, nrsMap };
+}
+
+/**
+ * Rev. 2938 — Integrações + NRs por funcionário em ESCOPO DE EMPRESA (todos os
+ * funcionários ativos), para enriquecer as abas "Todos" e "Sem Obra" do Efetivo
+ * por Obra (que não passam por `getObraFuncionarios`). Read-only, tenant-safe.
+ */
+export async function getIntegracoesNrsPorFuncionario(companyId: number, companyIds?: number[]) {
+  const db = await getDb();
+  if (!db) return [];
+  const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
+  const emps = await db.select({ id: employees.id }).from(employees).where(and(
+    inArray(employees.companyId, ids),
+    isNull(employees.deletedAt),
+    sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
+  ));
+  const empIds = emps.map(e => e.id);
+  if (empIds.length === 0) return [];
+  const { integracoesMap, nrsMap } = await buildIntegracoesNrsMaps(db, ids, empIds);
+  return empIds.map(employeeId => ({
+    employeeId,
+    integracoes: integracoesMap.get(employeeId) || [],
+    nrs: nrsMap.get(employeeId) || [],
+  }));
+}
+
 export async function getObraFuncionarios(obraId: number, obraIds?: number[]) {
   const db = await getDb();
   if (!db) return [];
@@ -2126,96 +2245,11 @@ export async function getObraFuncionarios(obraId: number, obraIds?: number[]) {
     if (!feriasFuturasMap.has(r.employeeId)) feriasFuturasMap.set(r.employeeId, { dataInicio: r.dataInicio, dataFim: r.dataFim });
   }
 
-  // Rev. 2934 — INTEGRAÇÕES por funcionário, agrupadas por CLIENTE/REFERÊNCIA.
-  // FONTE CORRETA = `employee_integrations` (a MESMA tabela da aba "Integrações"
-  // do Controle de Documentos; router `integracoes.ts`). NÃO usar mais o módulo
-  // SST (`sstIntegracaoRegistros`) — aquela era a tabela errada. Aqui o gestor vê
-  // EM QUAIS CLIENTES cada funcionário está integrado (ex.: "SANTUARIO NACIONAL…",
-  // "FC Engenharia (Interna)"), com a DATA DE VALIDADE e a COR (válida/vencida).
-  // Esta fonte NÃO possui NRs/módulos, então não há chips de NR. Restrito às
-  // empresas das alocações (tenant-safe). Read-only.
-  const integracoesMap = new Map<number, Array<{ cliente: string; tipo: string; dataValidade: string | null; vencida: boolean; semVencimento: boolean }>>();
-  {
-    const integRows = await db.select({
-      employeeId: employeeIntegrations.employeeId,
-      tipo: employeeIntegrations.tipo,
-      clienteNome: employeeIntegrations.clienteNome,
-      clienteRazao: clientes.razaoSocial,
-      dataVencimento: employeeIntegrations.dataVencimento,
-      dataRealizacao: employeeIntegrations.dataRealizacao,
-    }).from(employeeIntegrations)
-      .leftJoin(clientes, and(
-        eq(clientes.id, employeeIntegrations.clienteId),
-        eq(clientes.companyId, employeeIntegrations.companyId),
-      ))
-      .where(and(
-        inArray(employeeIntegrations.companyId, companyIdsArr),
-        sql`${employeeIntegrations.employeeId} IN (${sql.raw(empIds.join(","))})`,
-      ))
-      .orderBy(desc(employeeIntegrations.dataRealizacao));
-
-    // Hoje à meia-noite p/ espelhar `calcularStatus` de integracoes.ts (date-only).
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    const hojeMs = hoje.getTime();
-    for (const r of integRows) {
-      // Cliente/referência: nome livre → razão social do cadastro → rótulo interno.
-      const cliente = ((r.clienteNome || r.clienteRazao || (r.tipo === 'interna' ? 'FC Engenharia (Interna)' : 'Sem cliente')) || 'Sem cliente').trim();
-      const venc = r.dataVencimento;
-      const semVencimento = !venc;
-      let vencida = false;
-      if (venc) {
-        const vMs = new Date(venc + 'T00:00:00').getTime();
-        vencida = !Number.isNaN(vMs) && vMs < hojeMs;
-      }
-      const arr = integracoesMap.get(r.employeeId) || [];
-      // dedup por cliente (mantém o mais recente, já ordenado desc por realização)
-      if (!arr.some(x => x.cliente.toLowerCase() === cliente.toLowerCase())) {
-        arr.push({ cliente, tipo: r.tipo, dataValidade: venc ?? null, vencida, semVencimento });
-        integracoesMap.set(r.employeeId, arr);
-      }
-    }
-  }
-
-  // Rev. 2934 — NRs do funcionário a partir dos DOCUMENTOS DE TREINAMENTO
-  // (aba "Treinamentos" do Controle de Documentos): a coluna "Norma" (NR-XX) com
-  // sua validade/cor. As NRs NÃO vêm das integrações (employee_integrations não as
-  // modela) — vêm de `trainings.norma`. Por funcionário, dedup por norma (mantém o
-  // mais recente). Restrito às empresas das alocações (tenant-safe). Read-only.
-  const nrsMap = new Map<number, Array<{ norma: string; nome: string; dataValidade: string | null; vencida: boolean }>>();
-  {
-    // Hoje à meia-noite LOCAL p/ espelhar o mesmo critério date-only do bloco de integrações.
-    const hojeNr = new Date();
-    hojeNr.setHours(0, 0, 0, 0);
-    const hojeNrMs = hojeNr.getTime();
-    const trRows = await db.select({
-      employeeId: trainings.employeeId,
-      norma: trainings.norma,
-      nome: trainings.nome,
-      dataValidade: trainings.dataValidade,
-    }).from(trainings)
-      .where(and(
-        inArray(trainings.companyId, companyIdsArr),
-        isNull(trainings.deletedAt),
-        sql`${trainings.employeeId} IN (${sql.raw(empIds.join(","))})`,
-      ))
-      .orderBy(desc(trainings.dataRealizacao));
-    for (const r of trRows) {
-      const norma = (r.norma || '').trim();
-      if (!norma) continue; // só treinamentos com NR (Norma) preenchida
-      const dv = r.dataValidade ? String(r.dataValidade).slice(0, 10) : null;
-      let vencida = false;
-      if (dv) {
-        const vMs = new Date(dv + 'T00:00:00').getTime();
-        vencida = !Number.isNaN(vMs) && vMs < hojeNrMs;
-      }
-      const arr = nrsMap.get(r.employeeId) || [];
-      if (!arr.some(x => x.norma.toLowerCase() === norma.toLowerCase())) {
-        arr.push({ norma, nome: r.nome, dataValidade: r.dataValidade ?? null, vencida });
-        nrsMap.set(r.employeeId, arr);
-      }
-    }
-  }
+  // Rev. 2934/2938 — INTEGRAÇÕES (por cliente, `employee_integrations`) + NRs
+  // (treinamentos, `trainings.norma`) por funcionário. Lógica extraída p/ o helper
+  // `buildIntegracoesNrsMaps` (reusado pelo endpoint company-wide das abas
+  // "Todos"/"Sem Obra"). Tenant-safe (companyIdsArr) e read-only.
+  const { integracoesMap, nrsMap } = await buildIntegracoesNrsMaps(db, companyIdsArr, empIds);
 
   // Rev. 2479 — enrich com status CIPA (ativo/estabilidade).
   const cipaMap = await getCipaStatusByEmployeeIds(db, companyIdsArr, empIds);

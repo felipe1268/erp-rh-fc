@@ -26,7 +26,7 @@ import {
   createObra, getObras, getObraById, updateObra, deleteObra, restoreObra, getObrasByCompanyActive,
   getObraFuncionarios, allocateEmployeeToObra, removeEmployeeFromObra, getObraHorasRateio, checkEmployeeAllocations,
   getEquipeObra, getEfetivoDashboardMensal,
-  getEmployeeSiteHistory, getEfetivoPorObra, getEfetivoHistorico, getFuncionariosSemObra, transferirFuncionariosEmLote,
+  getEmployeeSiteHistory, getEfetivoPorObra, getEfetivoHistorico, getFuncionariosSemObra, getIntegracoesNrsPorFuncionario, transferirFuncionariosEmLote,
   detectarInconsistenciaPonto, getInconsistenciasPendentes, resolverInconsistenciaEsporadico, resolverInconsistenciaTransferir, countInconsistenciasPendentes, getOndeTrabalhouNoMes,
   getObraSns, getObraSnsByCompany, getActiveSnsByCompany, getAvailableSns, checkSnAvailability, addSnToObra, updateSnObra, removeSnFromObra, releaseObraSns, findObraBySn,
   // Setores e Funções
@@ -2069,6 +2069,24 @@ export const appRouter = router({
     efetivoHistorico: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), meses: z.number().optional() })).query(({ input }) => getEfetivoHistorico(input.companyId, input.meses, input.companyIds)),
     // Funcionários sem obra
     semObra: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getFuncionariosSemObra(input.companyId, input.companyIds)),
+    // Rev. 2938 — Integrações + NRs por funcionário em escopo de empresa (abas "Todos"/"Sem Obra"). Read-only.
+    // ACL espelha terceiros._assertCompanyAccess (canônico): admin/admin_master bypass; vínculos REAIS de
+    // user_companies (sem o fallback LIMIT 1 do getCompaniesForUser); SEM vínculo → acesso global (grupo/módulo).
+    // Nunca confia no companyId/companyIds do cliente sem checar (evita IDOR cross-tenant).
+    integracoesNrs: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(async ({ input, ctx }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'admin_master') {
+        const links = await getUserCompanyLinks(ctx.user.id);
+        const allowedIds = (links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === 'number') as number[];
+        if (allowedIds.length > 0) {
+          const allowedSet = new Set<number>(allowedIds);
+          const requested = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
+          for (const cid of requested) {
+            if (!allowedSet.has(cid)) throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem acesso a esta empresa.' });
+          }
+        }
+      }
+      return getIntegracoesNrsPorFuncionario(input.companyId, input.companyIds);
+    }),
     equipeObra: protectedProcedure.input(z.object({ obraId: z.number(), companyId: z.number(), obraIds: z.array(z.number()).optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getEquipeObra(input.obraId, input.companyId, input.obraIds, input.companyIds)),
     // Rev. 1558 — Documentos SST (ASO + Treinamentos) por lote de funcionários,
     // usado na aba Efetivo do Planejamento. Devolve, por employeeId:

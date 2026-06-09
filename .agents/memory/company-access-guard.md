@@ -98,3 +98,12 @@ company); a user's company membership lives in `user_companies`, fetched via
 **How to apply:** never read `ctx.user.companyIds`. Use the canonical async guard
 (`getUserCompanyLinks` + admin allow + no-links allow). When you make a sync guard async,
 audit EVERY call site for `await` (a forgotten `await` = silent auth bypass).
+
+## getCompaniesForUser is NOT a safe guard source (no-links fallback)
+For NON-admin users WITHOUT `user_companies` links, `getCompaniesForUser` returns
+`LIMIT 1` (an arbitrary single company) — NOT empty and NOT "all". Building an
+access guard by intersecting requested ids against `getCompaniesForUser(...)` will
+WRONGLY FORBIDDEN a legitimate no-link user viewing any company other than that
+arbitrary first one. For ACL, use `getUserCompanyLinks` (real links, no fallback):
+admin/admin_master bypass → links.length>0 enforce membership → no links allow
+(group/module controls access). This is what `terceiros._assertCompanyAccess` does.

@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2938 — **EFETIVO POR OBRA — AS ABAS "TODOS" E "SEM OBRA" AGORA MOSTRAM AS COLUNAS DE
+ * INTEGRAÇÕES (POR CLIENTE) E NRs (TREINAMENTOS) — ANTES SÓ NO DRILL-DOWN "EQUIPE — {OBRA}" —
+ * MAIS DOIS FILTROS COMBINÁVEIS (AND): FILTRAR POR INTEGRAÇÃO (CLIENTE) E POR NR (NORMA).**
+ *
+ * CONTEXTO: as colunas de Integrações (em quais clientes o funcionário está integrado) e de NRs
+ * (treinamentos com Norma) só existiam no drill-down "Equipe — {obra}". Nas listas gerais
+ * ("Todos (125)" e "Sem Obra (6)") o gestor não conseguia ver nem filtrar por isso. Pedido:
+ * mostrar essas colunas nas duas abas + permitir filtrar por integração E por NR ao mesmo tempo.
+ *
+ * SOLUÇÃO (BACK + FRONT, read-only, tenant-safe, ZERO ALTER/DROP/DELETE):
+ *   BACKEND (`server/db.ts`):
+ *     - Extraída a lógica que monta os mapas de Integrações (`employee_integrations`, dedup por
+ *       cliente) e de NRs (`trainings.norma`, dedup por norma) de dentro de `getObraFuncionarios`
+ *       para um helper REUSÁVEL `buildIntegracoesNrsMaps(db, companyIdsArr, empIds)` (tipos
+ *       `IntegracaoChip`/`NrChip`). `getObraFuncionarios` agora só chama o helper (sem duplicação).
+ *     - Nova função exportada `getIntegracoesNrsPorFuncionario(companyId, companyIds?)`: resolve
+ *       os funcionários ativos (status NOT IN Desligado/Lista_Negra) das empresas e devolve
+ *       `[{ employeeId, integracoes[], nrs[] }]`. 100% leitura, restrito às empresas (tenant-safe).
+ *   ENDPOINT (`server/routers.ts`): novo `obras.integracoesNrs` (protectedProcedure, input
+ *     `{companyId, companyIds?}`) → `getIntegracoesNrsPorFuncionario`.
+ *   FRONTEND (`client/src/pages/ObraEfetivo.tsx`):
+ *     - Query do novo endpoint → `integNrsMap: Map<employeeId, {integracoes, nrs}>`; listas de
+ *       opções `integOptions`/`nrOptions` (NRs normalizadas via `normalizeNrKey`).
+ *     - Componente reusável de módulo `IntegNrsCell` (chips de integração + chips de NR clicáveis
+ *       com `Popover`/`NR_RESUMOS`), espelhando o visual do drill-down. Date helper próprio
+ *       `fmtDataBRm` (o `fmtDataBR` do drill-down é escopo de componente).
+ *     - Nova coluna "Integrações / NRs" nas tabelas das abas "Todos" e "Sem Obra".
+ *     - Dois `Select` combináveis ("Integração" e "NR") em ambas as abas + botão "Limpar";
+ *       matcher `matchIntegNr` (AND) aplicado em `filteredTodos` e `filteredSemObra`.
+ *
+ * IMPACTO: o gestor vê integrações e NRs direto nas listas gerais e cruza, por exemplo, "quem
+ * está integrado no cliente X E tem NR-35" sem abrir cada obra. Sem mudança de schema/dados.
+ */
+
+/**
  * Rev. 2937 — **EFETIVO POR OBRA — CADA CARD AGORA MOSTRA, ALÉM DO EFETIVO TOTAL, O EFETIVO
  * OPERACIONAL (100% DISPONÍVEL / "QUEM DÁ PRA CONTAR NA OBRA HOJE"), DESCONTANDO QUEM ESTÁ
  * INDISPONÍVEL (FÉRIAS, AFASTADO, ATESTADO/LICENÇA, DISPENSADO NO AVISO E RECLUSO).**

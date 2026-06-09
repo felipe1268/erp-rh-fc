@@ -65,6 +65,75 @@ function normalizeNrKey(raw: string): string {
   return `NR-${m[1].padStart(2, "0")}`;
 }
 
+// Rev. 2938 — formatador de data (date-only → pt-BR) p/ a célula reusável de chips.
+function fmtDataBRm(v: any): string {
+  if (!v) return "";
+  const d = new Date(String(v).slice(0, 10) + "T12:00:00");
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("pt-BR");
+}
+
+// Rev. 2938 — Célula reusável de Integrações (por cliente) + NRs (treinamentos),
+// espelhando o visual do drill-down "Equipe — {obra}". Usada nas abas "Todos" e
+// "Sem Obra". Compacta: integrações em chips, NRs em chips clicáveis (Popover).
+function IntegNrsCell({ integracoes, nrs }: { integracoes: any[]; nrs: any[] }) {
+  const integ = integracoes || [];
+  const nrList = nrs || [];
+  if (integ.length === 0 && nrList.length === 0) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      {integ.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {integ.map((ig: any, i: number) => (
+            <span
+              key={i}
+              title={ig.dataValidade ? `${ig.vencida ? 'Venceu' : 'Válida até'}: ${fmtDataBRm(ig.dataValidade)}` : (ig.vencida ? 'Vencida' : 'Sem vencimento')}
+              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border ${ig.vencida ? 'bg-red-50 text-red-700 border-red-300' : 'bg-emerald-50 text-emerald-700 border-emerald-300'}`}
+            >
+              <ShieldCheck className="h-2.5 w-2.5" />{ig.cliente}
+            </span>
+          ))}
+        </div>
+      )}
+      {nrList.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {nrList.map((nr: any, j: number) => {
+            const nrKey = normalizeNrKey(nr.norma);
+            const resumo = NR_RESUMOS[nrKey] || "Norma Regulamentadora (resumo não cadastrado).";
+            return (
+              <Popover key={j}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={`${nrKey} — ver resumo da norma`}
+                    title={`${nr.nome || nrKey}${nr.dataValidade ? ` — ${nr.vencida ? 'Venceu' : 'Válido até'}: ${fmtDataBRm(nr.dataValidade)}` : ''}`}
+                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border cursor-pointer hover:brightness-95 transition ${nr.vencida ? 'bg-red-50 text-red-700 border-red-300' : 'bg-emerald-50 text-emerald-700 border-emerald-300'}`}
+                  >
+                    <GraduationCap className="h-2.5 w-2.5" />{nr.norma}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-72 p-3 text-left">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border ${nr.vencida ? 'bg-red-50 text-red-700 border-red-300' : 'bg-emerald-50 text-emerald-700 border-emerald-300'}`}>
+                      <GraduationCap className="h-3 w-3" />{nrKey}
+                    </span>
+                    <span className={`text-[10px] font-semibold ${nr.vencida ? 'text-red-600' : 'text-emerald-600'}`}>
+                      {nr.dataValidade ? `${nr.vencida ? 'Venceu' : 'Válido até'}: ${fmtDataBRm(nr.dataValidade)}` : (nr.vencida ? 'Vencido' : 'Sem vencimento')}
+                    </span>
+                  </div>
+                  <p className="text-xs font-semibold text-slate-800 leading-snug">{nr.nome || nrKey}</p>
+                  <p className="text-xs text-slate-600 leading-snug mt-1">{resumo}</p>
+                </PopoverContent>
+              </Popover>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Rev. 2562 — defesa em profundidade no toast de remoção. O erro
 // "Failed to execute 'json' on 'Response': Unexpected end of JSON input"
 // (corpo de resposta VAZIO) acontece quando o worker do dev server reinicia
@@ -134,6 +203,30 @@ export default function ObraEfetivo() {
   // All employees for multi-select (sem filtro de status — mostra todos os não-deletados)
   const allEmpsQ = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: !!companyId });
   const allEmps = allEmpsQ.data ?? [];
+
+  // Rev. 2938 — Integrações + NRs por funcionário (escopo empresa) p/ enriquecer as
+  // abas "Todos" e "Sem Obra" com as MESMAS colunas do drill-down "Equipe — {obra}".
+  const integNrsQ = trpc.obras.integracoesNrs.useQuery({ companyId, companyIds }, { enabled: !!companyId });
+  const integNrsMap = useMemo(() => {
+    const m = new Map<number, { integracoes: any[]; nrs: any[] }>();
+    for (const r of (integNrsQ.data ?? []) as any[]) {
+      m.set(r.employeeId, { integracoes: r.integracoes || [], nrs: r.nrs || [] });
+    }
+    return m;
+  }, [integNrsQ.data]);
+  // Listas de opções (cliente de integração + NR) para os filtros combináveis.
+  const integOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const v of integNrsMap.values()) for (const ig of v.integracoes) if (ig.cliente) s.add(ig.cliente);
+    return Array.from(s).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [integNrsMap]);
+  const nrOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const v of integNrsMap.values()) for (const nr of v.nrs) if (nr.norma) s.add(normalizeNrKey(nr.norma));
+    return Array.from(s).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [integNrsMap]);
+  const [integFilter, setIntegFilter] = useState<string>("todos");
+  const [nrFilter, setNrFilter] = useState<string>("todos");
 
   // IDs de todas as obras para drill-down de status
   const allObraIds = useMemo(() => (efetivo as any[]).flatMap((e: any) => e.obraIds || [e.obraId]).filter(Boolean), [efetivo]);
@@ -267,12 +360,32 @@ export default function ObraEfetivo() {
     return list;
   }, [efetivo, search, statusFilter]);
 
+  // Rev. 2938 — matcher dos 2 filtros combináveis (integração + NR), AND entre eles.
+  const matchIntegNr = useMemo(() => {
+    return (empId: number) => {
+      if (integFilter === "todos" && nrFilter === "todos") return true;
+      const info = integNrsMap.get(empId);
+      if (integFilter !== "todos") {
+        const ok = !!info && info.integracoes.some((ig: any) => ig.cliente === integFilter);
+        if (!ok) return false;
+      }
+      if (nrFilter !== "todos") {
+        const ok = !!info && info.nrs.some((nr: any) => normalizeNrKey(nr.norma) === nrFilter);
+        if (!ok) return false;
+      }
+      return true;
+    };
+  }, [integFilter, nrFilter, integNrsMap]);
+
   const filteredSemObra = useMemo(() => {
-    const base = semObra as any[];
-    if (!search) return base;
-    const s = removeAccents(search);
-    return base.filter((e: any) => removeAccents(e.nomeCompleto || '').includes(s) || removeAccents(e.funcao || '').includes(s));
-  }, [semObra, search]);
+    let base = semObra as any[];
+    if (search) {
+      const s = removeAccents(search);
+      base = base.filter((e: any) => removeAccents(e.nomeCompleto || '').includes(s) || removeAccents(e.funcao || '').includes(s));
+    }
+    if (integFilter !== "todos" || nrFilter !== "todos") base = base.filter((e: any) => matchIntegNr(e.id));
+    return base;
+  }, [semObra, search, integFilter, nrFilter, matchIntegNr]);
 
   // Rev. 1358 — aba "Todos os Funcionários" para facilitar transferência entre obras
   const [todosObraFilter, setTodosObraFilter] = useState<string>("todos");
@@ -296,9 +409,10 @@ export default function ObraEfetivo() {
       const oid = parseInt(todosObraFilter, 10);
       if (!Number.isNaN(oid)) list = list.filter((e: any) => e.obraAtualId === oid);
     }
+    if (integFilter !== "todos" || nrFilter !== "todos") list = list.filter((e: any) => matchIntegNr(e.id));
     list.sort((a: any, b: any) => (a.nomeCompleto || '').localeCompare(b.nomeCompleto || '', 'pt-BR'));
     return list;
-  }, [allEmps, search, todosObraFilter]);
+  }, [allEmps, search, todosObraFilter, integFilter, nrFilter, matchIntegNr]);
 
   // Filtered employees for search in dialog
   const filteredAllEmps = useMemo(() => {
@@ -765,6 +879,24 @@ export default function ObraEfetivo() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {/* Rev. 2938 — filtros combináveis: Integração (cliente) + NR */}
+                    <Select value={integFilter} onValueChange={setIntegFilter}>
+                      <SelectTrigger className="w-[200px] h-9"><SelectValue placeholder="Integração" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todas integrações</SelectItem>
+                        {integOptions.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={nrFilter} onValueChange={setNrFilter}>
+                      <SelectTrigger className="w-[140px] h-9"><SelectValue placeholder="NR" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todas as NRs</SelectItem>
+                        {nrOptions.map((n) => (<SelectItem key={n} value={n}>{n}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                    {(integFilter !== "todos" || nrFilter !== "todos") && (
+                      <Button size="sm" variant="ghost" className="h-9 px-2 text-xs" onClick={() => { setIntegFilter("todos"); setNrFilter("todos"); }}>Limpar</Button>
+                    )}
                     {selectedEmployees.length > 0 && (
                       <Button
                         size="sm"
@@ -806,6 +938,7 @@ export default function ObraEfetivo() {
                           <th className="text-left p-2 font-medium">Função</th>
                           <th className="text-left p-2 font-medium">Setor</th>
                           <th className="text-left p-2 font-medium">Obra Atual</th>
+                          <th className="text-left p-2 font-medium">Integrações / NRs</th>
                           <th className="text-left p-2 font-medium">Status</th>
                           <th className="text-right p-2 font-medium">Ações</th>
                         </tr>
@@ -839,6 +972,9 @@ export default function ObraEfetivo() {
                                     {emp.obraAtualNome || `#${emp.obraAtualId}`}
                                   </Badge>
                                 )}
+                              </td>
+                              <td className="p-2 align-top">
+                                <IntegNrsCell integracoes={integNrsMap.get(emp.id)?.integracoes || []} nrs={integNrsMap.get(emp.id)?.nrs || []} />
                               </td>
                               <td className="p-2">
                                 {(() => {
@@ -884,6 +1020,26 @@ export default function ObraEfetivo() {
 
           {/* Tab: Sem Obra */}
           <TabsContent value="sem-obra" className="space-y-4 mt-4">
+            {/* Rev. 2938 — filtros combináveis: Integração (cliente) + NR */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={integFilter} onValueChange={setIntegFilter}>
+                <SelectTrigger className="w-[200px] h-9"><SelectValue placeholder="Integração" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todas integrações</SelectItem>
+                  {integOptions.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+                </SelectContent>
+              </Select>
+              <Select value={nrFilter} onValueChange={setNrFilter}>
+                <SelectTrigger className="w-[140px] h-9"><SelectValue placeholder="NR" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todas as NRs</SelectItem>
+                  {nrOptions.map((n) => (<SelectItem key={n} value={n}>{n}</SelectItem>))}
+                </SelectContent>
+              </Select>
+              {(integFilter !== "todos" || nrFilter !== "todos") && (
+                <Button size="sm" variant="ghost" className="h-9 px-2 text-xs" onClick={() => { setIntegFilter("todos"); setNrFilter("todos"); }}>Limpar</Button>
+              )}
+            </div>
             {filteredSemObra.length === 0 ? (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-16">
@@ -902,6 +1058,7 @@ export default function ObraEfetivo() {
                           <th className="text-left p-3 font-medium">Funcionário</th>
                           <th className="text-left p-3 font-medium">Função / Cargo</th>
                           <th className="text-left p-3 font-medium">Setor</th>
+                          <th className="text-left p-3 font-medium">Integrações / NRs</th>
                           <th className="text-left p-3 font-medium">Status</th>
                           <th className="text-left p-3 font-medium">Admissão</th>
                           <th className="text-right p-3 font-medium">Ações</th>
@@ -913,6 +1070,9 @@ export default function ObraEfetivo() {
                             <td className="p-3 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(emp.id)}>{emp.nomeCompleto}</td>
                             <td className="p-3 text-muted-foreground">{emp.funcao || emp.cargo || "—"}</td>
                             <td className="p-3 text-muted-foreground">{emp.setor || "—"}</td>
+                            <td className="p-3 align-top">
+                              <IntegNrsCell integracoes={integNrsMap.get(emp.id)?.integracoes || []} nrs={integNrsMap.get(emp.id)?.nrs || []} />
+                            </td>
                             <td className="p-3">
                               {(() => {
                                 const st = emp.status || 'Ativo';
