@@ -27,6 +27,43 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { fmtNum } from "@/lib/formatters";
 import { PersonPhoto } from "@/components/PersonPhoto";
 import { CipaBadge } from "@/components/CipaBadge";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+
+// Rev. 2936 — Resumo curto de cada NR (Norma Regulamentadora) p/ exibir ao CLICAR
+// no chip na "Equipe — {obra}" e facilitar a análise do gestor. Texto enxuto,
+// foco no que a norma trata. Chave normalizada p/ "NR-NN".
+const NR_RESUMOS: Record<string, string> = {
+  "NR-01": "Disposições gerais e gerenciamento de riscos ocupacionais (GRO/PGR).",
+  "NR-04": "SESMT — Serviços Especializados em Segurança e Medicina do Trabalho.",
+  "NR-05": "CIPA — Comissão Interna de Prevenção de Acidentes.",
+  "NR-06": "EPI — Equipamento de Proteção Individual (fornecimento e uso).",
+  "NR-07": "PCMSO — Programa de Controle Médico de Saúde Ocupacional (exames).",
+  "NR-08": "Edificações — condições de segurança das estruturas e locais de trabalho.",
+  "NR-09": "Avaliação e controle de agentes físicos, químicos e biológicos.",
+  "NR-10": "Segurança em instalações e serviços com eletricidade.",
+  "NR-11": "Transporte, movimentação, armazenagem e manuseio de materiais.",
+  "NR-12": "Segurança no trabalho em máquinas e equipamentos.",
+  "NR-13": "Caldeiras, vasos de pressão, tubulações e tanques metálicos.",
+  "NR-15": "Atividades e operações insalubres (limites de exposição).",
+  "NR-16": "Atividades e operações perigosas (periculosidade).",
+  "NR-17": "Ergonomia — adaptação do trabalho às condições do trabalhador.",
+  "NR-18": "Segurança e saúde no trabalho na indústria da construção.",
+  "NR-19": "Explosivos — manuseio, armazenagem e transporte.",
+  "NR-20": "Segurança com inflamáveis e combustíveis.",
+  "NR-21": "Trabalho a céu aberto.",
+  "NR-23": "Proteção contra incêndios (saídas, equipamentos e treinamento).",
+  "NR-26": "Sinalização de segurança (cores e rótulos).",
+  "NR-33": "Segurança e saúde em espaços confinados.",
+  "NR-34": "Condições de segurança na indústria naval (construção e reparação).",
+  "NR-35": "Trabalho em altura (acima de 2 m com risco de queda).",
+};
+
+// Normaliza "NR 18", "nr-18", "18" → "NR-18" para casar com NR_RESUMOS.
+function normalizeNrKey(raw: string): string {
+  const m = String(raw || "").match(/(\d{1,2})/);
+  if (!m) return String(raw || "").trim().toUpperCase();
+  return `NR-${m[1].padStart(2, "0")}`;
+}
 
 // Rev. 2562 — defesa em profundidade no toast de remoção. O erro
 // "Failed to execute 'json' on 'Response': Unexpected end of JSON input"
@@ -1803,16 +1840,37 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                                       {/* NRs (treinamentos) — coluna "Norma" do Controle de Documentos */}
                                       {nrs.length > 0 && (
                                         <div className="flex flex-wrap gap-1 pt-0.5">
-                                          {nrs.map((nr, j) => (
-                                            <span
-                                              key={j}
-                                              title={`${nr.nome}${nr.dataValidade ? ` — ${nr.vencida ? 'Venceu' : 'Válido até'}: ${fmtDataBR(nr.dataValidade)}` : ''}`}
-                                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${nr.vencida ? 'bg-red-50 text-red-700 border-red-300' : 'bg-emerald-50 text-emerald-700 border-emerald-300'}`}
-                                              style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}
-                                            >
-                                              <GraduationCap className="h-2.5 w-2.5" />{nr.norma}
-                                            </span>
-                                          ))}
+                                          {nrs.map((nr, j) => {
+                                            const nrKey = normalizeNrKey(nr.norma);
+                                            const resumo = NR_RESUMOS[nrKey] || "Norma Regulamentadora (resumo não cadastrado).";
+                                            return (
+                                            <Popover key={j}>
+                                              <PopoverTrigger asChild>
+                                                <button
+                                                  type="button"
+                                                  aria-label={`${nrKey} — ver resumo da norma`}
+                                                  title={`${nr.nome}${nr.dataValidade ? ` — ${nr.vencida ? 'Venceu' : 'Válido até'}: ${fmtDataBR(nr.dataValidade)}` : ''}`}
+                                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border cursor-pointer hover:brightness-95 transition ${nr.vencida ? 'bg-red-50 text-red-700 border-red-300' : 'bg-emerald-50 text-emerald-700 border-emerald-300'}`}
+                                                  style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}
+                                                >
+                                                  <GraduationCap className="h-2.5 w-2.5" />{nr.norma}
+                                                </button>
+                                              </PopoverTrigger>
+                                              <PopoverContent align="start" className="w-72 p-3 text-left">
+                                                <div className="flex items-center gap-2 mb-1.5">
+                                                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border ${nr.vencida ? 'bg-red-50 text-red-700 border-red-300' : 'bg-emerald-50 text-emerald-700 border-emerald-300'}`}>
+                                                    <GraduationCap className="h-3 w-3" />{nrKey}
+                                                  </span>
+                                                  <span className={`text-[10px] font-semibold ${nr.vencida ? 'text-red-600' : 'text-emerald-600'}`}>
+                                                    {nr.dataValidade ? `${nr.vencida ? 'Venceu' : 'Válido até'}: ${fmtDataBR(nr.dataValidade)}` : (nr.vencida ? 'Vencido' : 'Sem vencimento')}
+                                                  </span>
+                                                </div>
+                                                <p className="text-xs font-semibold text-slate-800 leading-snug">{nr.nome || nrKey}</p>
+                                                <p className="text-xs text-slate-600 leading-snug mt-1">{resumo}</p>
+                                              </PopoverContent>
+                                            </Popover>
+                                            );
+                                          })}
                                         </div>
                                       )}
                                     </div>

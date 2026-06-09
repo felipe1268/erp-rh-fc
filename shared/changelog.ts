@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2936 — **EQUIPE DA OBRA (DRILL-DOWN) — CLICAR NUM CHIP DE NR AGORA ABRE UM POPOVER COM
+ * O RESUMO DO QUE A NORMA TRATA (+ NOME DO TREINAMENTO E VALIDADE), FACILITANDO A ANÁLISE DO
+ * GESTOR — INCLUSIVE NO TABLET/CELULAR, ONDE O TOOLTIP DE HOVER (`title`) NÃO FUNCIONA AO TOQUE.**
+ *
+ * CONTEXTO: na coluna "Integrações" da "Equipe — {obra}", as NRs apareciam como chips (NR-18,
+ * NR-01, NR-35…) só com `title` (tooltip de mouse). Em tablet/celular (toque) o gestor não
+ * conseguia ver o que cada NR significa. Pedido: ao CLICAR no chip, mostrar de forma resumida
+ * o que é cada norma.
+ *
+ * SOLUÇÃO (FRONT-only, `client/src/pages/ObraEfetivo.tsx`, ZERO ALTER/DROP/DELETE):
+ *   - Novo dicionário `NR_RESUMOS` (escopo de módulo) com descrição curta das NRs mais comuns na
+ *     construção (NR-01, 06, 10, 11, 12, 15, 16, 17, 18, 33, 35, etc.) + helper `normalizeNrKey`
+ *     que converte "NR 18"/"nr-18"/"18" → "NR-18".
+ *   - Cada chip de NR virou um `<button>` dentro de `<Popover>`/`<PopoverTrigger asChild>`; ao
+ *     clicar, o `<PopoverContent>` mostra: badge NR-NN + validade (verde/vermelho), nome do
+ *     treinamento (`nr.nome`) e o resumo da norma. Mantido o `title` p/ hover no desktop.
+ *   - NR sem resumo cadastrado cai num texto genérico ("resumo não cadastrado").
+ *
+ * ZERO ALTER/DROP/DELETE.
+ *
  * Rev. 2935 — **EQUIPE DA OBRA (DRILL-DOWN) — A TABELA AGORA CABE NO TABLET E NO CELULAR SEM
  * CORTAR A COLUNA DE AÇÕES: OS BOTÕES VIRAM SÓ-ÍCONE EM TELAS MENORES E A TABELA GANHOU ROLAGEM
  * HORIZONTAL DE SEGURANÇA (NADA MAIS FICA ESCONDIDO ATRÁS DA BORDA).**
