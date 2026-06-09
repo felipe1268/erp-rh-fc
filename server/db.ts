@@ -13,6 +13,7 @@ import {
   trainingDocuments, payrollUploads, dixiDevices,
   obras, obraFuncionarios, obraHorasRateio, obraSns, employeeSiteHistory, obraPontoInconsistencies,
   terminationNotices, vacationPeriods,
+  sstIntegracaoRegistros, sstIntegracaoConfig, sstIntegracaoModulos,
   employeeIntegrations, clientes,
   sectors, jobFunctions,
   systemRevisions,
