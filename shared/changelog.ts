@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2929 — **CONTROLE DE EPIs · ESTOQUE POR OBRA — CLICAR NUMA LINHA DO ALMOXARIFADO CENTRAL
+ * (FILTRO "CENTRAL") NÃO ABRE MAIS O AJUSTE DE OBRA: VAI DIRETO AO CATÁLOGO CENTRAL.**
+ *
+ * CONTEXTO (code review da Rev. 2928): a tabela "Estoque por Obra" reaproveita o mesmo grid para
+ * mostrar as linhas do Almoxarifado Central (filtro "central"), que são linhas SINTÉTICAS com
+ * `id: "central-<epiId>"` (string) e `obraId: "central"`. Na Rev. 2928 o clique na linha e o lápis
+ * "Ajustar estoque na obra" passaram a chamar `epis.ajustarEstoqueObra`, cujo input é `id:
+ * z.number()`. Numa linha central o `id` é a string "central-N" → o tRPC rejeitaria a mutation
+ * (erro de validação) e o diálogo "Ajustar estoque na obra" não fazia sentido ali.
+ *
+ * SOLUÇÃO (FRONT-only, `client/src/pages/Epis.tsx`): no clique da linha, se `e.obraId === "central"`
+ * o ERP abre o CATÁLOGO CENTRAL (`viewMode='editar_epi'`) em vez do ajuste de obra; e o lápis
+ * "Ajustar estoque na obra" só é renderizado quando a linha NÃO é central (`e.obraId !== "central"`).
+ * O botão Package "Editar cadastro do EPI (catálogo central)" continua disponível em ambas. Sem
+ * mudança de backend/schema. ZERO ALTER/DROP/DELETE.
+ *
  * Rev. 2928 — **CONTROLE DE EPIs · ESTOQUE POR OBRA — AGORA A CAIXA DA OBRA É INDEPENDENTE DO
  * ALMOXARIFADO CENTRAL: EDITAR A QUANTIDADE NUMA OBRA NÃO MEXE MAIS NO CENTRAL, E A TRANSFERÊNCIA
  * (CENTRAL↔OBRA / OBRA↔OBRA / OBRA→CENTRAL) FICOU ATÔMICA E À PROVA DE SALDO CORROMPIDO.**

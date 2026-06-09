@@ -3008,6 +3008,13 @@ export default function Epis() {
                         {tabelaEstoqueList
                           .map((e: any) => (
                           <tr key={e.id} className="border-b last:border-0 hover:bg-muted/30 cursor-pointer" onClick={() => {
+                            // Rev. 2928 — linha do Almoxarifado Central NÃO usa o ajuste de obra
+                            // (id sintético "central-*" / obraId "central"): vai ao catálogo central.
+                            if (e.obraId === "central") {
+                              const epi = episAllList.find((ep: any) => ep.id === e.epiId);
+                              if (epi) { setEditingEpi(epi); loadEpiForEdit(epi); setViewMode('editar_epi'); }
+                              return;
+                            }
                             setAjusteObraRow(e); setAjusteObraQtd(String(e.quantidade ?? 0));
                           }}>
                             <td className="p-3">
@@ -3051,11 +3058,13 @@ export default function Epis() {
                             </td>
                             <td className="p-3 text-center" onClick={(ev) => ev.stopPropagation()}>
                               <div className="flex items-center justify-center gap-1">
-                                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Ajustar estoque na obra" onClick={() => {
-                                  setAjusteObraRow(e); setAjusteObraQtd(String(e.quantidade ?? 0));
-                                }}>
-                                  <Pencil className="h-3.5 w-3.5 text-blue-600" />
-                                </Button>
+                                {e.obraId !== "central" && (
+                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Ajustar estoque na obra" onClick={() => {
+                                    setAjusteObraRow(e); setAjusteObraQtd(String(e.quantidade ?? 0));
+                                  }}>
+                                    <Pencil className="h-3.5 w-3.5 text-blue-600" />
+                                  </Button>
+                                )}
                                 <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Editar cadastro do EPI (catálogo central)" onClick={() => {
                                   const epi = episAllList.find((ep: any) => ep.id === e.epiId);
                                   if (epi) { setEditingEpi(epi); loadEpiForEdit(epi); setViewMode('editar_epi'); }
