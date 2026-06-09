@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Shirt, Footprints, ShoppingCart, AlertTriangle, Save, Loader2, Users, PackageCheck } from "lucide-react";
+import { labelTamanhoCalca } from "@/lib/epiTamanho";
 
 interface Props {
   companyId: number;
@@ -210,7 +211,7 @@ function BucketTable({ bucketKey, bucket }: { bucketKey: keyof typeof BUCKET_MET
               <tbody>
                 {bucket.rows.map((r) => (
                   <tr key={r.tamanho} className={`border-b last:border-0 ${r.deficit > 0 ? "bg-red-50/40" : ""}`}>
-                    <td className="py-1.5 px-2 font-medium">{r.tamanho}</td>
+                    <td className="py-1.5 px-2 font-medium">{bucketKey === "calca" ? labelTamanhoCalca(r.tamanho) : r.tamanho}</td>
                     <td className="text-right px-2">{r.funcionarios}</td>
                     <td className="text-right px-2">{r.necessidade}</td>
                     <td className="text-right px-2 text-muted-foreground">{r.jaEntregue}</td>

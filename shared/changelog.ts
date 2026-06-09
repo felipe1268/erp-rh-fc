@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2926 — **CONTROLE DE EPIs · LISTA — AS CALÇAS VOLTARAM A MOSTRAR O TAMANHO EM LETRA
+ * (P/M/G…) JUNTO COM O NÚMERO ("38 (M)"), PARA NÃO TER ERRO NA HORA DE ENTREGAR.**
+ *
+ * PEDIDO (usuário, com print da tela "Controle de EPIs"): as "Calça Brim" apareciam SÓ com número
+ * (38, 42, 46, 50, 52, 54…) desde a Rev. 2915 — que converteu o tamanho das calças de LETRA para
+ * NÚMERO no banco (para casar com o `tamanhoCalca` numérico do funcionário na aba "Necessidade").
+ * Com isso, a letra que o almoxarife usava no dia a dia "sumiu" da tela. Pedido: mostrar a letra
+ * P/M/G… JUNTAMENTE com o número, fazendo a correspondência ("analogia") dos dois formatos, para
+ * não haver erro ao separar/entregar.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE — não toca o dado convertido no banco): novo helper
+ * `client/src/lib/epiTamanho.ts` que ESPELHA o mapa da Rev. 2915 (server/_core/index.ts) e DERIVA a
+ * letra a partir do número (e vice-versa), exibindo os dois formatos juntos:
+ * - Mapa número→letra: 34→PP, 36→P, 38→M, 42→G, 46→GG, 48→XG, 50→XGG, 52→XXGG, 54→XXXGG (a colisão
+ *   XGG/EXG→50 da conversão original resolve, na volta, para o canônico XGG). Mapa letra→número
+ *   também disponível, para o caso de algum cadastro ainda estar em letra (projeto dormente sem
+ *   re-sync) — aí mostra "M (38)".
+ * - `labelTamanhoEpi(epi)`: aplica a dupla exibição SÓ em calça (categoria 'Uniforme' + nome contém
+ *   "calça"/"calca"); para os demais EPIs/camisas/calçados devolve o tamanho cru, sem mexer.
+ * - `labelTamanhoCalca(tamanho)`: idem, direto pelo tamanho (usado onde já se sabe que é calça).
+ * - Números fora do mapa (ex.: 40, 44) ficam só com o número (não há letra equivalente).
+ *
+ * APLICADO EM:
+ * - `client/src/pages/Epis.tsx` — coluna "Tamanho" da lista "Controle de EPIs" (`labelTamanhoEpi`).
+ * - `client/src/pages/EpiNecessidade.tsx` — coluna "Tamanho" do bucket "Calça" (`labelTamanhoCalca`),
+ *   para o cruzamento mostrar o mesmo formato duplo. Camisa/Calçado intactos.
+ *
+ * Por ser derivação em tela, é não destrutivo e idempotente: o banco segue com o número da Rev. 2915
+ * (verdade para o cruzamento numérico), e a tela só ACRESCENTA a letra correspondente entre parênteses.
+ *
  * Rev. 2925 — **INTEGRAÇÃO DE SEGURANÇA (SST) · APROVADOS — DIÁLOGO "ASSINATURA EM LOTE" GANHOU
  * LAYOUT NOVO (2 COLUNAS) QUE CABE NA TELA DO TABLET SEM BARRA DE ROLAGEM.**
  *

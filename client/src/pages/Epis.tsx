@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { trpc } from "@/lib/trpc";
 import { handleCurrencyInput, floatToCurrency, parseCurrencyToFloat } from "@/lib/currency";
+import { labelTamanhoEpi } from "@/lib/epiTamanho";
 import {
   Plus, Minus, Search, Pencil, Trash2, HardHat, Package, AlertTriangle,
   ShieldCheck, Calendar, ArrowRight, ChevronLeft, User, ClipboardList,
@@ -2332,7 +2333,7 @@ export default function Epis() {
                               </Badge>
                             </td>
                             <td className="p-3 text-center text-xs font-medium">
-                              {epi.tamanho || '—'}
+                              {labelTamanhoEpi(epi)}
                             </td>
                             <td className="p-3 text-center">
                               {epi.ca ? <Badge variant="outline">{epi.ca}</Badge> : "—"}

@@ -44,4 +44,5 @@
 - [iOS Safari new Date() crash](ios-date-string-crash.md) — `mode:"string"` timestamps SELECT back as space-format "YYYY-MM-DD HH:MM:SS"; iOS rejects `new Date()` of it → cryptic DOMException. Use dateUtils helpers + map cryptic msgs in error cards.
 - [Batch-sync contract BOLA](batch-sync-contract-bola.md) — sync-queue endpoints must validate the CONTRATO of each id/uuid-targeted row (not just companyId); client must chunk ops below the server's lote cap.
 - [Levantamento de Campo em PDF — IDOR](medicao-levantamento-campo.md) — procedures novas precisam de companyId em TODAS as subconsultas (pdfs/contornos/fotos) + validar contrato pertence à empresa E ao campo no gerarBoletim; pontos client em [0..1] convertidos via pageDims do react-pdf.
+- [EPI calça letra é derivada](epi-calca-size-letter-derived.md) — conversão letra→número das calças é destrutiva (letra não fica salva); derive a letra do número na tela via `epiTamanho.ts` (colisão XGG/EXG→50 volta XGG).
 - [db.execute UPDATE rowCount](dbexecute-update-rowcount.md) — UPDATE sem RETURNING loga rowCount 0 mesmo alterando linhas; use RETURNING id + conte, confira efeito real no Neon.
