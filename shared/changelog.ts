@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2924 — **INTEGRAÇÃO DE SEGURANÇA (SST) · ABA "VÍDEOS" (ADMIN) — O VÍDEO DE TREINAMENTO
+ * VOLTOU A APARECER NO CARD, CENTRALIZADO E COM FALLBACK QUANDO NÃO CARREGA (FIM DO "BURACO PRETO"
+ * SEM FEEDBACK NEM ALTERNATIVA).**
+ *
+ * PROBLEMA (usuário, com print da aba "Vídeos da Integração"): o card do vídeo de upload mostrava só
+ * uma caixa preta com os controles em "0:00" — o vídeo "não carregava" e "não estava centralizado".
+ * O player do card (`isFileVideo`) era um `<video preload="metadata">` cru, sem nenhum estado de
+ * carregamento/erro: se a metadata não chegasse (arquivo grande, `moov` atom no fim do mp4, ou o cap
+ * de 8MB/chunk do proxy do deploy — Rev. 2917, que só vale em PROD republicado), ficava o buraco preto
+ * eterno, sem spinner e sem caminho alternativo pra assistir.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE): novo componente `VideoCardPlayer`
+ * (`client/src/pages/sst/IntegracaoSST.tsx`), espelhando o player do portal público (Rev. 2920):
+ * - CENTRALIZAÇÃO — o `<video>` mantém `w-full h-full object-contain bg-black` dentro da caixa
+ *   `aspect-video`, garantindo o quadro sempre centralizado, sem corte nem distorção (qualquer
+ *   proporção). `playsInline` + `key={url}` (reset ao trocar de vídeo).
+ * - CARREGANDO — overlay com spinner (`Loader2`) enquanto a metadata não chega; some no
+ *   `onLoadedMetadata`/`onCanPlay`.
+ * - ERRO — `onError` troca o player por um aviso "Não foi possível exibir o vídeo aqui." + link
+ *   "Abrir em nova aba".
+ * - FALLBACK TEMPORAL — se em 12s ainda não carregou (sem disparar `onError`), some o spinner e
+ *   aparece o atalho "Demorando? Abrir em nova aba" (anti-overlay-eterno). Os links usam
+ *   `stopPropagation` pra não acionar o clique do card.
+ *
+ * O bloco inline antigo (`isFileVideo ? <video .../>`) foi substituído por `<VideoCardPlayer url=.../>`.
+ * Caminho do YouTube/thumb e o estado "Sem vídeo/Vídeo externo" seguem iguais. Mudança só de UI; o
+ * backend de serving (chunk 8MB da Rev. 2917) e o schema não foram tocados.
+ *
  * Rev. 2923 — **DASHBOARD FINANCEIRO · CARDS "A PAGAR"/"A RECEBER" — FIM DOS VALORES INFLADOS
  * (R$ 25 MILHÕES "A PAGAR" QUE NÃO EXISTIAM): CARDS PASSAM A SOMAR SÓ CONTAS REAIS + CORREÇÃO DO
  * BUG QUE DUPLICAVA AS PROJEÇÕES DO CRONOGRAMA A CADA REIMPORTAÇÃO DO MS PROJECT.**

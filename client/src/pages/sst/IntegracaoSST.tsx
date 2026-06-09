@@ -626,19 +626,9 @@ function VideosTab({ companyId }: { companyId: number }) {
                       </>
                     )
                   ) : isFileVideo ? (
-                    // Rev. 2023 — player HTML5 nativo: controles, fullscreen, sem download.
-                    // preload="metadata" pra não baixar o vídeo inteiro só por listar o card.
-                    // controlsList="nodownload" + onContextMenu desabilitam o menu "Salvar como".
-                    <video
-                      src={mod.videoUrl!}
-                      controls
-                      preload="metadata"
-                      controlsList="nodownload"
-                      onContextMenu={(e) => e.preventDefault()}
-                      className="w-full h-full object-contain bg-black"
-                    >
-                      Seu navegador não suporta a tag de vídeo HTML5.
-                    </video>
+                    // Rev. 2924 — player de arquivo robusto: centralizado (object-contain),
+                    // com loading/erro e fallback "abrir em nova aba" (fim do buraco preto).
+                    <VideoCardPlayer url={mod.videoUrl!} />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <div className="text-center">
