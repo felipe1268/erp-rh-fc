@@ -13,6 +13,7 @@ import {
   trainingDocuments, payrollUploads, dixiDevices,
   obras, obraFuncionarios, obraHorasRateio, obraSns, employeeSiteHistory, obraPontoInconsistencies,
   terminationNotices, vacationPeriods,
+  sstIntegracaoRegistros, sstIntegracaoConfig,
   sectors, jobFunctions,
   systemRevisions,
   userCompanies,
@@ -2104,6 +2105,65 @@ export async function getObraFuncionarios(obraId: number, obraIds?: number[]) {
   const feriasMap = new Map<number, { dataInicio: string | null; dataFim: string | null }>();
   for (const r of feriasRows) feriasMap.set(r.employeeId, { dataInicio: r.dataInicio, dataFim: r.dataFim });
 
+  // Rev. 2932 — PRÓXIMA férias AGENDADA (futura) por funcionário, para mostrar
+  // "quando vai sair de férias" no painel da equipe. Distinto da férias em gozo
+  // acima (dataInicio <= hoje): aqui pegamos a agendada com início > hoje, a mais
+  // próxima. Read-only.
+  const feriasFuturasRows = await db.select({
+    employeeId: vacationPeriods.employeeId,
+    dataInicio: vacationPeriods.dataInicio,
+    dataFim: vacationPeriods.dataFim,
+  }).from(vacationPeriods).where(and(
+    inArray(vacationPeriods.companyId, companyIdsArr),
+    eq(vacationPeriods.status, 'agendada'),
+    sql`${vacationPeriods.dataInicio} IS NOT NULL`,
+    sql`${vacationPeriods.dataInicio} > ${today}`,
+    sql`${vacationPeriods.employeeId} IN (${sql.raw(empIds.join(","))})`
+  )).orderBy(asc(vacationPeriods.dataInicio));
+  const feriasFuturasMap = new Map<number, { dataInicio: string | null; dataFim: string | null }>();
+  for (const r of feriasFuturasRows) {
+    // a primeira (asc) para cada funcionário é a mais próxima
+    if (!feriasFuturasMap.has(r.employeeId)) feriasFuturasMap.set(r.employeeId, { dataInicio: r.dataInicio, dataFim: r.dataFim });
+  }
+
+  // Rev. 2932 — INTEGRAÇÕES de segurança (SST) por funcionário: lista de títulos
+  // das integrações já realizadas (status aprovado/vencido), com validade. Cruza
+  // pelo employeeId, restrito às empresas das alocações (tenant-safe). Para o
+  // gestor saber "quem está integrado e em quê" direto no painel da equipe.
+  const integracoesMap = new Map<number, Array<{ titulo: string; dataValidade: string | null; vencida: boolean }>>();
+  {
+    const integRows = await db.select({
+      employeeId: sstIntegracaoRegistros.employeeId,
+      status: sstIntegracaoRegistros.status,
+      dataValidade: sstIntegracaoRegistros.dataValidade,
+      dataRealizacao: sstIntegracaoRegistros.dataRealizacao,
+      configTitulo: sstIntegracaoConfig.titulo,
+    }).from(sstIntegracaoRegistros)
+      .leftJoin(sstIntegracaoConfig, and(
+        eq(sstIntegracaoConfig.id, sstIntegracaoRegistros.configId),
+        eq(sstIntegracaoConfig.companyId, sstIntegracaoRegistros.companyId),
+      ))
+      .where(and(
+        inArray(sstIntegracaoRegistros.companyId, companyIdsArr),
+        inArray(sstIntegracaoRegistros.status, ['aprovado', 'vencido']),
+        isNull(sstIntegracaoRegistros.deletedAt),
+        sql`${sstIntegracaoRegistros.employeeId} IN (${sql.raw(empIds.join(","))})`,
+      ))
+      .orderBy(desc(sstIntegracaoRegistros.dataRealizacao));
+    const nowMs = Date.now();
+    for (const r of integRows) {
+      const titulo = (r.configTitulo || 'Integração').trim();
+      const validadeMs = r.dataValidade ? new Date(r.dataValidade).getTime() : null;
+      const vencida = r.status === 'vencido' || (validadeMs != null && !Number.isNaN(validadeMs) && validadeMs < nowMs);
+      const arr = integracoesMap.get(r.employeeId) || [];
+      // dedup por título (mantém o mais recente, já ordenado desc por realização)
+      if (!arr.some(x => x.titulo.toLowerCase() === titulo.toLowerCase())) {
+        arr.push({ titulo, dataValidade: r.dataValidade, vencida });
+        integracoesMap.set(r.employeeId, arr);
+      }
+    }
+  }
+
   // Rev. 2479 — enrich com status CIPA (ativo/estabilidade).
   const cipaMap = await getCipaStatusByEmployeeIds(db, companyIdsArr, empIds);
 
@@ -2126,6 +2186,10 @@ export async function getObraFuncionarios(obraId: number, obraIds?: number[]) {
         avisoDispensado: avisoInfo?.dispensado || false,
         feriasDataInicio: feriasInfo?.dataInicio || null,
         feriasDataFim: feriasInfo?.dataFim || null,
+        // Rev. 2932 — próxima férias agendada (futura) + integrações SST
+        feriasAgendadaInicio: feriasFuturasMap.get(a.employeeId)?.dataInicio || null,
+        feriasAgendadaFim: feriasFuturasMap.get(a.employeeId)?.dataFim || null,
+        integracoes: integracoesMap.get(a.employeeId) || [],
         ...cipa,
       };
     });

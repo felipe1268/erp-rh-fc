@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2932 — **EQUIPE DA OBRA (DRILL-DOWN) — A COLUNA "INFO STATUS" FOI ENRIQUECIDA E GANHOU
+ * UMA NOVA COLUNA "INTEGRAÇÕES" PARA FACILITAR A ANÁLISE DO FUNCIONÁRIO: AGORA MOSTRA AS
+ * INTEGRAÇÕES DE SEGURANÇA (SST), QUANDO VAI SAIR DE FÉRIAS, SE ESTÁ EM AVISO PRÉVIO E SE ESTÁ
+ * EM EXPERIÊNCIA.**
+ *
+ * PEDIDO (usuário): na tela "Equipe — {obra}" (modal de drill-down ao clicar numa obra),
+ * enriquecer a coluna "Info Status" para o gestor analisar o funcionário num olhar só, exibindo:
+ * (1) as INTEGRAÇÕES de segurança que ele já fez — TODAS elas; (2) QUANDO ele vai sair de férias
+ * (próxima férias agendada futura); (3) se está em AVISO prévio (já existia); (4) se está em
+ * período de EXPERIÊNCIA.
+ *
+ * SOLUÇÃO (BACK + FRONT, READ-ONLY — ZERO ALTER/DROP/DELETE):
+ *
+ * BACKEND (`server/db.ts`, `getObraFuncionarios`): além das consultas que já existiam (aviso
+ * prévio em andamento, férias em gozo, CIPA), foram acrescentadas 2 leituras, todas restritas às
+ * empresas das alocações (`companyIdsArr` → tenant-safe, sem IDOR):
+ *   - PRÓXIMA FÉRIAS AGENDADA (futura): `vacationPeriods` com `status='agendada'` e
+ *     `dataInicio > hoje`, ordenado asc; a primeira por funcionário vira `feriasAgendadaInicio`/
+ *     `feriasAgendadaFim`. É distinta da "férias em gozo" (que já existia, `dataInicio <= hoje`).
+ *   - INTEGRAÇÕES SST: `sstIntegracaoRegistros` (status `aprovado`/`vencido`, `deletedAt IS NULL`)
+ *     leftJoin `sstIntegracaoConfig` para pegar o `titulo`; agrupa por funcionário numa lista
+ *     `{titulo, dataValidade, vencida}` (vencida = status `vencido` OU `dataValidade < agora`),
+ *     dedup por título mantendo a realização mais recente.
+ *   Novos campos no retorno: `feriasAgendadaInicio`, `feriasAgendadaFim`, `integracoes`. Os campos
+ *   de experiência (`experienciaStatus`, `experienciaFim1/2`) já vinham via `...emp`.
+ *
+ * FRONTEND (`client/src/pages/ObraEfetivo.tsx`, tabela do modal "Equipe"): a célula "Info Status"
+ * passou a empilhar badges (status atual + EXPERIÊNCIA + PRÓXIMA FÉRIAS). A experiência só é
+ * sinalizada quando `experienciaStatus==='em_experiencia'` E há um fim futuro (`experienciaFim2`
+ * ou `experienciaFim1` >= hoje) — guard contra o default `'em_experiencia'` do schema, que senão
+ * marcaria todo mundo. Nova coluna "Integrações" exibe chips de TODAS as integrações (verde =
+ * válida, vermelho + "(vencida)" = expirada), com a validade no tooltip; "Sem integração" quando
+ * vazio. Todas as datas usam um helper que corta para `YYYY-MM-DD` + `T12:00:00` (evita o crash de
+ * `new Date()` no Safari iOS com timestamps em formato com espaço). Colunas novas/enriquecidas são
+ * `hidden md:table-cell` e visíveis no print/PDF (não `print:hidden`), úteis para a análise.
+ *
  * Rev. 2931 — **PLANEJAMENTO · CRONOGRAMA — A COLUNA "DUR." (DIAS) AGORA BATE COM AS DATAS DE
  * INÍCIO/FIM EXIBIDAS: PASSA A CONTAR DIAS ÚTEIS (ProjDateDiff DO MSP), EM VEZ DO <Duration>
  * DO XML DIVIDIDO POR 8h FIXO.**

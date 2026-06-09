@@ -19,6 +19,7 @@ import {
   Building2, CheckCircle, XCircle, Clock, MapPin, ChevronRight,
   Loader2, UserMinus, History, BarChart3, X, ArrowRight, Shield,
   Printer, FileDown, Settings2, Zap, Thermometer, Moon,
+  ShieldCheck, Plane, GraduationCap,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
@@ -1663,6 +1664,7 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                                 <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500 hidden md:table-cell">Função na Obra</th>
                                 <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500 hidden md:table-cell">Desde</th>
                                 <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500 hidden md:table-cell">Info Status</th>
+                                <th className="text-left px-4 py-2 text-xs font-semibold text-gray-500 hidden md:table-cell">Integrações</th>
                                 <th className="text-right px-4 py-2 text-xs font-semibold text-gray-500 print:hidden">Ações</th>
                               </tr>
                             </thead>
@@ -1670,6 +1672,15 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                               {items.map((f: any) => {
                                 const empStatus = f.employee?.status || st;
                                 const rowBg = empStatus === 'Aviso' ? 'bg-red-50/60' : empStatus === 'AvisoDispensado' ? 'bg-orange-50/60' : empStatus === 'Ferias' ? 'bg-amber-50/60' : empStatus === 'Afastado' ? 'bg-purple-50/60' : empStatus === 'Licenca' ? 'bg-cyan-50/60' : empStatus === 'Recluso' ? 'bg-gray-50/60' : '';
+                                // Rev. 2932 — datas em formato seguro p/ iOS Safari (corta p/ YYYY-MM-DD e fixa meio-dia)
+                                const fmtDataBR = (v: any) => { if (!v) return ""; const d = new Date(String(v).slice(0, 10) + "T12:00:00"); return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("pt-BR"); };
+                                const todayStr = new Date().toISOString().slice(0, 10);
+                                const expFim: string | null = f.employee?.experienciaFim2 || f.employee?.experienciaFim1 || null;
+                                // só sinaliza experiência se houver fim futuro (evita falso-positivo do default 'em_experiencia')
+                                const emExperiencia = f.employee?.experienciaStatus === 'em_experiencia' && !!expFim && String(expFim).slice(0, 10) >= todayStr;
+                                const feriasAgendada: string | null = f.feriasAgendadaInicio || null;
+                                const temStatusBadge = (empStatus === 'AvisoDispensado' && f.avisoDataFim) || (empStatus === 'Aviso' && f.avisoDataFim) || (empStatus === 'Ferias' && f.feriasDataFim) || empStatus === 'Afastado' || empStatus === 'Licenca';
+                                const integ: Array<{ titulo: string; dataValidade: string | null; vencida: boolean }> = Array.isArray(f.integracoes) ? f.integracoes : [];
                                 return (
                                 <tr key={f.id} className={`hover:bg-slate-50/50 ${rowBg}`} style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
                                   <td className="px-4 py-2.5">
@@ -1703,28 +1714,59 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                                     {f.dataInicio ? new Date(f.dataInicio + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
                                   </td>
                                   <td className="px-4 py-2.5 text-sm hidden md:table-cell">
-                                    {empStatus === 'AvisoDispensado' && f.avisoDataFim ? (
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-100 text-orange-800 border border-orange-300" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
-                                        Dispensado - Fim: {new Date(f.avisoDataFim + 'T12:00:00').toLocaleDateString('pt-BR')}
-                                      </span>
-                                    ) : empStatus === 'Aviso' && f.avisoDataFim ? (
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
-                                        Fim: {new Date(f.avisoDataFim + 'T12:00:00').toLocaleDateString('pt-BR')}
-                                      </span>
-                                    ) : empStatus === 'Ferias' && f.feriasDataFim ? (
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-800 border border-blue-300" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
-                                        Retorno: {new Date(f.feriasDataFim + 'T12:00:00').toLocaleDateString('pt-BR')}
-                                      </span>
-                                    ) : empStatus === 'Afastado' ? (
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-800 border border-purple-300" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
-                                        Afastado
-                                      </span>
-                                    ) : empStatus === 'Licenca' ? (
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-100 text-cyan-800 border border-cyan-300" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
-                                        Em Licença
-                                      </span>
+                                    <div className="flex flex-col items-start gap-1">
+                                      {empStatus === 'AvisoDispensado' && f.avisoDataFim ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-100 text-orange-800 border border-orange-300" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
+                                          Dispensado - Fim: {fmtDataBR(f.avisoDataFim)}
+                                        </span>
+                                      ) : empStatus === 'Aviso' && f.avisoDataFim ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
+                                          Aviso prévio - Fim: {fmtDataBR(f.avisoDataFim)}
+                                        </span>
+                                      ) : empStatus === 'Ferias' && f.feriasDataFim ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-800 border border-blue-300" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
+                                          Férias - Retorno: {fmtDataBR(f.feriasDataFim)}
+                                        </span>
+                                      ) : empStatus === 'Afastado' ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-800 border border-purple-300" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
+                                          Afastado
+                                        </span>
+                                      ) : empStatus === 'Licenca' ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-100 text-cyan-800 border border-cyan-300" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
+                                          Em Licença
+                                        </span>
+                                      ) : null}
+                                      {emExperiencia && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-100 text-indigo-800 border border-indigo-300" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
+                                          <GraduationCap className="h-3 w-3" /> Experiência{expFim ? ` até ${fmtDataBR(expFim)}` : ''}
+                                        </span>
+                                      )}
+                                      {feriasAgendada && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-teal-100 text-teal-800 border border-teal-300" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
+                                          <Plane className="h-3 w-3" /> Sai de férias: {fmtDataBR(feriasAgendada)}
+                                        </span>
+                                      )}
+                                      {!temStatusBadge && !emExperiencia && !feriasAgendada && (
+                                        <span className="text-xs text-muted-foreground">—</span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-2.5 text-sm hidden md:table-cell">
+                                    {integ.length > 0 ? (
+                                      <div className="flex flex-wrap gap-1 max-w-[280px]">
+                                        {integ.map((ig, i) => (
+                                          <span
+                                            key={i}
+                                            title={ig.dataValidade ? `Validade: ${fmtDataBR(ig.dataValidade)}` : undefined}
+                                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${ig.vencida ? 'bg-red-100 text-red-800 border-red-300' : 'bg-emerald-100 text-emerald-800 border-emerald-300'}`}
+                                            style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}
+                                          >
+                                            <ShieldCheck className="h-3 w-3" /> {ig.titulo}{ig.vencida ? ' (vencida)' : ''}
+                                          </span>
+                                        ))}
+                                      </div>
                                     ) : (
-                                      <span className="text-xs text-muted-foreground">—</span>
+                                      <span className="text-xs text-muted-foreground">Sem integração</span>
                                     )}
                                   </td>
                                   <td className="px-4 py-2.5 print:hidden">
