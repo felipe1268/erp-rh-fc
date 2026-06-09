@@ -291,6 +291,86 @@ function getYoutubeId(url: string): string | null {
   return match?.[1] || null;
 }
 
+// Rev. 2924 — player de vídeo de ARQUIVO para o card admin "Vídeos da Integração".
+// Espelha a Rev. 2920 (portal público): vídeo SEMPRE centralizado (object-contain) dentro
+// da caixa 16:9, com spinner de "carregando", estado de ERRO e fallback "abrir em nova aba"
+// quando o player inline não consegue carregar (arquivo grande / metadata no fim do mp4 /
+// proxy do deploy). Antes ficava só o "buraco preto" sem feedback nem alternativa.
+function VideoCardPlayer({ url }: { url: string }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [slow, setSlow] = useState(false);
+  const slowRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    setError(false);
+    setSlow(false);
+    // se em 12s não carregou (e sem onError), some o spinner e oferece "abrir em nova aba".
+    slowRef.current = setTimeout(() => { setLoading(false); setSlow(true); }, 12000);
+    return () => { if (slowRef.current) clearTimeout(slowRef.current); };
+  }, [url]);
+
+  const clearSlow = () => { if (slowRef.current) clearTimeout(slowRef.current); };
+
+  if (error) {
+    return (
+      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black text-center px-3">
+        <Video className="h-8 w-8 text-gray-500 mb-2" />
+        <p className="text-xs text-gray-300 mb-2">Não foi possível exibir o vídeo aqui.</p>
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-1 text-xs underline text-blue-300 hover:text-blue-200"
+        >
+          <ExternalLink className="h-3 w-3" /> Abrir em nova aba
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-10 pointer-events-none">
+          <Loader2 className="h-6 w-6 text-white animate-spin" />
+        </div>
+      )}
+      {/* w-full h-full + object-contain garante o vídeo CENTRALIZADO na caixa, sem corte e sem distorção. */}
+      <video
+        key={url}
+        src={url}
+        controls
+        playsInline
+        preload="metadata"
+        controlsList="nodownload"
+        onContextMenu={(e) => e.preventDefault()}
+        onLoadedMetadata={() => { clearSlow(); setLoading(false); setSlow(false); }}
+        onCanPlay={() => { clearSlow(); setLoading(false); setSlow(false); }}
+        onError={() => { clearSlow(); setLoading(false); setError(true); }}
+        className="w-full h-full object-contain bg-black"
+      >
+        Seu navegador não suporta a tag de vídeo HTML5.
+      </video>
+      {slow && (
+        <div className="absolute bottom-2 left-2 right-2 flex justify-center z-10">
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1 text-[11px] bg-black/80 text-blue-200 px-2 py-1 rounded underline hover:text-blue-100"
+          >
+            <ExternalLink className="h-3 w-3" /> Demorando? Abrir em nova aba
+          </a>
+        </div>
+      )}
+    </>
+  );
+}
+
 function VideosTab({ companyId }: { companyId: number }) {
   const modulos = trpc.integracaoSST.listarTodosModulos.useQuery({ companyId }, { enabled: companyId > 0 });
   const configs = trpc.integracaoSST.listarConfigs.useQuery({ companyId }, { enabled: companyId > 0 });
