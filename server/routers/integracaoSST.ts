@@ -868,6 +868,48 @@ export const integracaoSSTRouter = router({
       }
     }),
 
+  // Rev. 2922 — Assinatura do TST EM LOTE: aplica a MESMA assinatura/nome a
+  // vários registros aprovados de uma vez (pedido do usuário: "selecionar
+  // todos e assinar de uma vez pra ganhar tempo"). Só toca registros desta
+  // empresa, APROVADOS, não deletados e AINDA SEM assinatura (não sobrescreve
+  // quem já estava assinado). Um único UPDATE com inArray + guardas.
+  assinarComoTstEmLote: protectedProcedure
+    .input(z.object({
+      companyId: z.number().int().positive(),
+      registroIds: z.array(z.number().int().positive()).min(1).max(500),
+      assinaturaBase64: z.string().min(100).max(3_000_000),
+      nomeTst: z.string().trim().min(2).max(255),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await assertCompanyAccess(ctx, input.companyId);
+      if (!input.assinaturaBase64.startsWith("data:image/png;base64,")) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Assinatura inválida (deve ser PNG base64)" });
+      }
+      const db = (await getDb())!;
+      try {
+        const result = await db.update(sstIntegracaoRegistros)
+          .set({
+            assinaturaTstBase64: input.assinaturaBase64,
+            assinaturaTstNome: input.nomeTst,
+            assinaturaTstAssinadaEm: sql`NOW()`,
+            updatedAt: sql`NOW()`,
+          })
+          .where(and(
+            inArray(sstIntegracaoRegistros.id, input.registroIds),
+            eq(sstIntegracaoRegistros.companyId, input.companyId),
+            eq(sstIntegracaoRegistros.status, "aprovado"),
+            isNull(sstIntegracaoRegistros.deletedAt),
+            isNull(sstIntegracaoRegistros.assinaturaTstBase64),
+          ))
+          .returning({ id: sstIntegracaoRegistros.id });
+        return { success: true, count: result.length };
+      } catch (err: any) {
+        if (err instanceof TRPCError) throw err;
+        console.error("[assinarComoTstEmLote] FAIL", { companyId: input.companyId, qtd: input.registroIds.length, nomeTst: input.nomeTst, userId: ctx.user?.id, err: err?.message });
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Falha ao salvar assinaturas em lote" });
+      }
+    }),
+
   // Rev. 2052 — Remove a assinatura do TST (caso TST errou, queira reassinar).
   removerAssinaturaTst: protectedProcedure
     .input(z.object({

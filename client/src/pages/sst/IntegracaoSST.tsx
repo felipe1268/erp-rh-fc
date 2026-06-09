@@ -1760,6 +1760,8 @@ function AprovadosTab({ companyId }: { companyId: number }) {
   const [searchTerm, setSearchTerm] = useState("");
   // Rev. 2052 — modal de assinatura digital do TST (FCSign canvas)
   const [assinandoReg, setAssinandoReg] = useState<any | null>(null);
+  // Rev. 2922 — assinatura em lote (lista de registros a assinar de uma vez).
+  const [assinandoLote, setAssinandoLote] = useState<any[] | null>(null);
   const [confirmRemoverAss, setConfirmRemoverAss] = useState<any | null>(null);
   const removerAssMut = trpc.integracaoSST.removerAssinaturaTst.useMutation({
     onSuccess: () => {
@@ -1845,6 +1847,8 @@ function AprovadosTab({ companyId }: { companyId: number }) {
   const total = (registros.data || []).length;
   const allSelected = filtered.length > 0 && filtered.every((r: any) => selecionados.has(r.id));
   const someSelected = filtered.some((r: any) => selecionados.has(r.id));
+  // Rev. 2922 — selecionados que AINDA não têm assinatura do TST (alvos do lote).
+  const naoAssinadosSel = filtered.filter((r: any) => selecionados.has(r.id) && !r.assinaturaTstBase64);
   const toggleAll = () => {
     if (allSelected) setSelecionados(new Set());
     else setSelecionados(new Set(filtered.map((r: any) => r.id)));
@@ -1888,6 +1892,18 @@ function AprovadosTab({ companyId }: { companyId: number }) {
       <div className="flex justify-between items-center flex-wrap gap-2">
         <h3 className="font-semibold">Aprovados {total > 0 && <span className="text-muted-foreground font-normal">· {total}</span>}</h3>
         <div className="flex gap-2 flex-wrap items-center">
+          {/* Rev. 2922 — Assinatura em lote: aparece quando há selecionados
+              SEM assinatura. Assina todos de uma vez (uma assinatura só). */}
+          {naoAssinadosSel.length > 0 && (
+            <Button
+              size="sm"
+              className="bg-blue-600 hover:bg-blue-700"
+              onClick={() => setAssinandoLote(naoAssinadosSel)}
+            >
+              <PenLine className="h-4 w-4 mr-1" />
+              Assinar {naoAssinadosSel.length} selecionado{naoAssinadosSel.length > 1 ? "s" : ""}
+            </Button>
+          )}
           {selecionados.size > 0 && (
             <Button
               size="sm"
@@ -2091,6 +2107,16 @@ function AprovadosTab({ companyId }: { companyId: number }) {
           companyId={companyId}
           onClose={() => setAssinandoReg(null)}
           onSigned={() => { setAssinandoReg(null); registros.refetch(); }}
+        />
+      )}
+
+      {/* Rev. 2922 — Modal de assinatura em LOTE (uma assinatura → vários certificados) */}
+      {assinandoLote && assinandoLote.length > 0 && (
+        <AssinarTstLoteDialog
+          registros={assinandoLote}
+          companyId={companyId}
+          onClose={() => setAssinandoLote(null)}
+          onSigned={() => { setAssinandoLote(null); setSelecionados(new Set()); registros.refetch(); }}
         />
       )}
 
@@ -2520,6 +2546,178 @@ function AssinarTstDialog({ registro, companyId, onClose, onSigned }: {
             className="bg-blue-600 hover:bg-blue-700"
           >
             {assinarMut.isPending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Salvando...</> : <><CheckCircle2 className="h-4 w-4 mr-1" /> Confirmar Assinatura</>}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Rev. 2922 — Modal de assinatura do TST EM LOTE. Reusa o mesmo canvas-pad
+// do AssinarTstDialog, mas a MESMA assinatura/nome é aplicada a TODOS os
+// registros selecionados de uma vez (pedido do usuário: "selecionar todos e
+// assinar de uma vez pra ganhar tempo"). Chama assinarComoTstEmLote.
+function AssinarTstLoteDialog({ registros, companyId, onClose, onSigned }: {
+  registros: any[]; companyId: number; onClose: () => void; onSigned: () => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [hasSignature, setHasSignature] = useState(false);
+  const [nomeTst, setNomeTst] = useState("");
+
+  const assinarMut = trpc.integracaoSST.assinarComoTstEmLote.useMutation({
+    onSuccess: (data) => {
+      if (data.count === 0) {
+        toast.info("Nenhum certificado elegível (os selecionados já estavam assinados).");
+      } else {
+        toast.success(`${data.count} certificado(s) assinado(s) de uma vez!`);
+      }
+      onSigned();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * 2;
+    canvas.height = rect.height * 2;
+    ctx.scale(2, 2);
+    ctx.strokeStyle = "#1a1a2e";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+  }, []);
+
+  const getPos = (e: React.TouchEvent | React.MouseEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    if ("touches" in e) {
+      return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+    }
+    return { x: (e as React.MouseEvent).clientX - rect.left, y: (e as React.MouseEvent).clientY - rect.top };
+  };
+  const startDraw = (e: React.TouchEvent | React.MouseEvent) => {
+    e.preventDefault();
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    setIsDrawing(true);
+    const pos = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+  };
+  const draw = (e: React.TouchEvent | React.MouseEvent) => {
+    e.preventDefault();
+    if (!isDrawing) return;
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    const pos = getPos(e);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    setHasSignature(true);
+  };
+  const stopDraw = () => setIsDrawing(false);
+  const clearCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setHasSignature(false);
+  };
+
+  const handleSave = () => {
+    const canvas = canvasRef.current;
+    if (!canvas || !hasSignature) return toast.error("Assine antes de confirmar");
+    if (nomeTst.trim().length < 2) return toast.error("Informe o nome do TST");
+    const dataUrl = canvas.toDataURL("image/png");
+    assinarMut.mutate({
+      companyId,
+      registroIds: registros.map(r => r.id),
+      assinaturaBase64: dataUrl,
+      nomeTst: nomeTst.trim(),
+    });
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && !assinarMut.isPending && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <PenLine className="h-5 w-5 text-blue-600" />
+            Assinatura em Lote — {registros.length} colaborador{registros.length > 1 ? "es" : ""}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-3 text-sm">
+            <p className="font-semibold text-blue-900">
+              Sua assinatura será aplicada de uma vez a {registros.length} certificado{registros.length > 1 ? "s" : ""}:
+            </p>
+            <div className="mt-2 max-h-32 overflow-y-auto rounded border border-blue-100 bg-white/70 p-2 text-xs text-blue-800/90 space-y-0.5">
+              {registros.map(r => (
+                <div key={r.id} className="flex justify-between gap-2">
+                  <span className="truncate">{r.employeeNome || "—"}</span>
+                  <span className="text-blue-700/70 shrink-0">{r.employeeCpf || ""}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-blue-800/80 text-xs mt-2">
+              Cada certificado recebe a MESMA assinatura e o MESMO nome de TST. Colaboradores já assinados não são alterados.
+            </p>
+          </div>
+
+          <div>
+            <Label htmlFor="nomeTstLote">Nome do Técnico de Segurança do Trabalho *</Label>
+            <Input
+              id="nomeTstLote"
+              value={nomeTst}
+              onChange={(e) => setNomeTst(e.target.value)}
+              placeholder="Ex: João da Silva — TST 12345"
+              maxLength={255}
+              disabled={assinarMut.isPending}
+              className="mt-1"
+            />
+          </div>
+
+          <div>
+            <Label>Assinatura *</Label>
+            <div className="mt-1 border-2 border-dashed border-slate-300 rounded-lg bg-white">
+              <canvas
+                ref={canvasRef}
+                className="w-full h-48 touch-none rounded-lg cursor-crosshair"
+                onMouseDown={startDraw}
+                onMouseMove={draw}
+                onMouseUp={stopDraw}
+                onMouseLeave={stopDraw}
+                onTouchStart={startDraw}
+                onTouchMove={draw}
+                onTouchEnd={stopDraw}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Desenhe sua assinatura com o mouse ou dedo (iPad/celular).
+            </p>
+          </div>
+        </div>
+
+        <DialogFooter className="flex-col sm:flex-row gap-2">
+          <Button variant="outline" onClick={clearCanvas} disabled={assinarMut.isPending} className="sm:mr-auto">
+            <RefreshCw className="h-4 w-4 mr-1" /> Limpar
+          </Button>
+          <Button variant="outline" onClick={onClose} disabled={assinarMut.isPending}>
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={assinarMut.isPending || !hasSignature || nomeTst.trim().length < 2}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            {assinarMut.isPending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Assinando...</> : <><CheckCircle2 className="h-4 w-4 mr-1" /> Assinar {registros.length} certificado{registros.length > 1 ? "s" : ""}</>}
           </Button>
         </DialogFooter>
       </DialogContent>

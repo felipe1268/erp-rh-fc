@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2922 — **INTEGRAÇÃO DE SEGURANÇA (SST) · APROVADOS — ASSINATURA DO TST EM LOTE: SELECIONAR
+ * TODOS E ASSINAR DE UMA VEZ (GANHO DE TEMPO; UMA ASSINATURA → VÁRIOS CERTIFICADOS).**
+ *
+ * PEDIDO (usuário, com print da aba "Aprovados"): cada colaborador aprovado tinha um botão "Assinar"
+ * individual na coluna "Assinatura TST" — assinar 5, 10, 30 certificados um a um era lento. O usuário
+ * pediu uma lógica para "selecionar todos e fazer a assinatura do TST de todos de uma vez, para ganhar
+ * tempo".
+ *
+ * SOLUÇÃO (BACKEND + FRONT, ZERO ALTER/DROP/DELETE — só um UPDATE de dados):
+ * - BACKEND `server/routers/integracaoSST.ts`: nova mutation `assinarComoTstEmLote` ({companyId,
+ *   registroIds[], assinaturaBase64, nomeTst}). Mesmo guard de tenant (`assertCompanyAccess`) e mesma
+ *   validação PNG base64 do `assinarComoTst`. Um único `UPDATE ... WHERE inArray(id, ids) AND
+ *   companyId = X AND status='aprovado' AND deletedAt IS NULL AND assinaturaTstBase64 IS NULL` —
+ *   aplica a MESMA assinatura/nome a todos os selecionados de uma vez, SEM sobrescrever quem já estava
+ *   assinado (guard `IS NULL` na assinatura). Retorna `{success, count}` com quantos foram efetivamente
+ *   assinados. Limite de 500 ids por chamada (zod). Anti-IDOR mantido por companyId.
+ * - FRONT `client/src/pages/sst/IntegracaoSST.tsx` (AprovadosTab): reaproveita a multisseleção que já
+ *   existia (checkbox por linha + "selecionar todos" no cabeçalho, herdados do bulk-delete). Novo
+ *   botão azul "Assinar N selecionado(s)" que aparece SÓ quando há selecionados ainda SEM assinatura
+ *   (`naoAssinadosSel`). Abre o `AssinarTstLoteDialog` — mesmo canvas-pad (mouse/touch/iPad) do dialog
+ *   individual, com a lista dos colaboradores que serão assinados, 1 campo de nome do TST e 1 canvas;
+ *   ao confirmar, dispara o lote, mostra toast "N certificado(s) assinado(s) de uma vez!", limpa a
+ *   seleção e refaz o fetch. O botão individual "Assinar" por linha continua existindo.
+ *
+ * EFEITO: o TST desenha a assinatura UMA vez e ela é gravada em todos os certificados selecionados;
+ * cada um continua embutindo a imagem + nome + data no PDF e no Raio-X do colaborador, exatamente como
+ * na assinatura individual.
+ *
  * Rev. 2921 — **INTEGRAÇÃO DE SEGURANÇA (SST) · MÓDULO INTERNO — USUÁRIOS DO GRUPO SST VOLTARAM A
  * VER OS DADOS: FIM DO "ACESSO NEGADO A ESTA EMPRESA" QUE ZERAVA TODAS AS TELAS (DASHBOARD,
  * PENDENTES, APROVADOS, REPROVADOS, VÍDEOS, CONFIGURAÇÕES).**
