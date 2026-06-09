@@ -449,7 +449,11 @@ export default function IntegracaoPublica() {
 
 function VideoPlayer({ url, onComplete }: { url: string; onComplete: () => void }) {
   const [completed, setCompleted] = useState(false);
+  const [videoError, setVideoError] = useState(false);
+  const [videoLoading, setVideoLoading] = useState(true);
+  const [videoSlow, setVideoSlow] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const slowRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const getYoutubeId = (u: string) => {
     const match = u.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]+)/);
@@ -459,11 +463,20 @@ function VideoPlayer({ url, onComplete }: { url: string; onComplete: () => void 
   const ytId = getYoutubeId(url);
 
   useEffect(() => {
+    setVideoError(false);
+    setVideoLoading(true);
+    setVideoSlow(false);
     timerRef.current = setTimeout(() => {
       setCompleted(true);
       onComplete();
     }, 30000);
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+    // Rev. 2920 — fallback temporal: se em 12s ainda não carregou (sem onError),
+    // some o overlay "Carregando…" e oferece "Abrir em nova aba" (anti-overlay-eterno).
+    slowRef.current = setTimeout(() => { setVideoLoading(false); setVideoSlow(true); }, 12000);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      if (slowRef.current) clearTimeout(slowRef.current);
+    };
   }, [url]);
 
   const handleManualComplete = useCallback(() => {
@@ -475,10 +488,10 @@ function VideoPlayer({ url, onComplete }: { url: string; onComplete: () => void 
   if (ytId) {
     return (
       <div>
-        <div className="aspect-video rounded-lg overflow-hidden bg-black">
-          <iframe src={`https://www.youtube.com/embed/${ytId}?rel=0`} className="w-full h-full" allowFullScreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" />
+        <div className="aspect-video w-full max-w-3xl mx-auto rounded-lg overflow-hidden bg-black">
+          <iframe src={`https://www.youtube.com/embed/${ytId}?rel=0`} className="w-full h-full block" allowFullScreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" />
         </div>
-        <div className="flex items-center justify-between mt-2">
+        <div className="flex items-center justify-center mt-2">
           {completed ? (
             <Badge className="bg-emerald-600"><CheckCircle className="h-3 w-3 mr-1" />Vídeo assistido</Badge>
           ) : (
@@ -491,11 +504,55 @@ function VideoPlayer({ url, onComplete }: { url: string; onComplete: () => void 
 
   return (
     <div>
-      <div className="aspect-video rounded-lg overflow-hidden bg-black">
-        <video src={url} controls className="w-full h-full" onEnded={handleManualComplete} />
+      {/* Rev. 2920 — vídeo SEM aspect-video rígido: usa proporção natural, sempre CENTRALIZADO
+          (flex center) e com altura limitada; sem mais "buraco preto" por descasamento de proporção.
+          Estados de carregando/erro garantem que, se o player inline falhar, o vídeo continua acessível. */}
+      <div className="w-full max-w-3xl mx-auto rounded-lg overflow-hidden bg-black flex items-center justify-center relative" style={{ minHeight: 240 }}>
+        {videoError ? (
+          <div className="text-center text-white/90 px-6 py-10 text-sm">
+            <p className="mb-1 font-medium">Não foi possível exibir o vídeo aqui.</p>
+            <p className="mb-3 text-white/60">A conexão pode estar instável ou o arquivo é grande.</p>
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 underline text-blue-300 hover:text-blue-200"
+            >
+              <Video className="h-4 w-4" /> Abrir o vídeo em nova aba
+            </a>
+          </div>
+        ) : (
+          <>
+            {videoLoading && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center text-white/70 text-sm pointer-events-none">
+                Carregando vídeo…
+              </div>
+            )}
+            <video
+              key={url}
+              src={url}
+              controls
+              playsInline
+              preload="metadata"
+              className="w-full max-h-[70vh] object-contain bg-black"
+              onLoadedMetadata={() => { if (slowRef.current) clearTimeout(slowRef.current); setVideoLoading(false); setVideoSlow(false); }}
+              onCanPlay={() => { if (slowRef.current) clearTimeout(slowRef.current); setVideoLoading(false); setVideoSlow(false); }}
+              onEnded={handleManualComplete}
+              onError={() => { if (slowRef.current) clearTimeout(slowRef.current); setVideoLoading(false); setVideoError(true); }}
+            />
+          </>
+        )}
       </div>
-      {!completed && <Button size="sm" variant="outline" className="mt-2" onClick={handleManualComplete}>Marcar como assistido</Button>}
-      {completed && <Badge className="bg-emerald-600 mt-2"><CheckCircle className="h-3 w-3 mr-1" />Vídeo assistido</Badge>}
+      {videoSlow && !videoError && (
+        <p className="text-xs text-muted-foreground text-center mt-1">
+          Está demorando para carregar?{" "}
+          <a href={url} target="_blank" rel="noreferrer" className="underline text-blue-600 hover:text-blue-700">Abrir o vídeo em nova aba</a>
+        </p>
+      )}
+      <div className="flex items-center justify-center mt-2">
+        {!completed && <Button size="sm" variant="outline" onClick={handleManualComplete}>Marcar como assistido</Button>}
+        {completed && <Badge className="bg-emerald-600"><CheckCircle className="h-3 w-3 mr-1" />Vídeo assistido</Badge>}
+      </div>
     </div>
   );
 }

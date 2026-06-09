@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2920 — **INTEGRAÇÃO DE SEGURANÇA (SST) · PORTAL PÚBLICO — VÍDEO DE TREINAMENTO AGORA APARECE
+ * CENTRALIZADO, NA PROPORÇÃO CERTA E COM CARREGAMENTO/ERRO TRATADOS (FIM DO "BURACO PRETO" E DO
+ * "NÃO CARREGA").**
+ *
+ * PROBLEMA (usuário, com print): no portal público de integração (etapa "Módulos de Treinamento"),
+ * o vídeo aparecia desalinhado — um grande "buraco preto" embaixo do player — e parecia não carregar
+ * (controles em 0:00 e sem duração).
+ *
+ * CAUSA: o componente `VideoPlayer` (em `client/src/pages/sst/IntegracaoPublica.tsx`) forçava o
+ * `<video>` dentro de uma caixa rígida `aspect-video` (16:9) com `w-full h-full`. Quando o vídeo tem
+ * proporção diferente de 16:9 OU quando o metadata ainda não carregou, o elemento renderiza no tamanho
+ * intrínseco padrão (~300×150) preso ao topo da caixa preta, deixando a área preta sobrando embaixo —
+ * exatamente o "buraco preto" do print. Não havia preload otimizado nem tratamento de erro/loading, então
+ * em arquivos grandes (o vídeo de integração tem ~140MB) a tela podia ficar "vazia" sem nenhum feedback.
+ *
+ * INVESTIGAÇÃO DO BACKEND: a entrega do arquivo foi PROVADA correta — `Range: bytes=0-` no `/uploads`
+ * devolve `206` com `Content-Range: bytes 0-8388607/146488466` (chunk de 8MB do middleware da Rev. 2917).
+ * Ou seja, o servidor serve o vídeo via range normalmente; o problema era de LAYOUT + falta de resiliência
+ * no front, não de backend.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE) — `client/src/pages/sst/IntegracaoPublica.tsx`:
+ * - O player de upload NÃO usa mais `aspect-video` rígido. O `<video>` usa proporção NATURAL
+ *   (`w-full max-h-[70vh] object-contain`) dentro de um container `flex items-center justify-center`
+ *   com `max-w-3xl mx-auto` → SEMPRE centralizado, sem esticar e sem buraco preto.
+ * - Adicionados estados `videoLoading`/`videoError`: overlay "Carregando vídeo…" enquanto busca metadata
+ *   (`onLoadedMetadata`/`onCanPlay` desligam) e, em caso de `onError`, mostra fallback com link
+ *   "Abrir o vídeo em nova aba" (garante acesso ao treinamento mesmo se o player inline falhar).
+ * - `preload="metadata"` (não baixa os 140MB só pra renderizar) + `playsInline` (iOS) + `key={url}`
+ *   (re-monta ao trocar de módulo) + reset dos estados no `useEffect([url])`.
+ * - O branch do YouTube também ganhou centralização (`max-w-3xl mx-auto`) e os botões/badge agora ficam
+ *   centralizados (`justify-center`).
+ *
+ * Sem mudança de backend/schema. Detalhe acima.
+ *
  * Rev. 2919 — **USUÁRIOS E PERMISSÕES · GRUPOS — SALVAR PERMISSÕES DE MÓDULOS FICOU À PROVA DE FALHA:
  * INDICADOR DE "ALTERAÇÕES NÃO SALVAS" + ERRO LOUD + CONFIRMAÇÃO DO QUE FOI PERSISTIDO (FIM DO "REVERTEU").**
  *
