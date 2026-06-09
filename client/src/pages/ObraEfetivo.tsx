@@ -19,7 +19,7 @@ import {
   Building2, CheckCircle, XCircle, Clock, MapPin, ChevronRight,
   Loader2, UserMinus, History, BarChart3, X, ArrowRight, Shield,
   Printer, FileDown, Settings2, Zap, Thermometer, Moon,
-  ShieldCheck, Plane, GraduationCap,
+  ShieldCheck, Plane, GraduationCap, UserCheck,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
@@ -654,7 +654,13 @@ export default function ObraEfetivo() {
               </Card>
             ) : (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {filteredEfetivo.map((item: any) => (
+                {filteredEfetivo.map((item: any) => {
+                  // Rev. 2937 — Efetivo OPERACIONAL (quem dá pra contar na obra hoje):
+                  // total menos quem está indisponível (férias, afastado, licença/atestado,
+                  // dispensado no aviso e recluso). Aviso prévio AINDA trabalha → conta.
+                  const indisponiveis = ((item as any).qtdFerias || 0) + ((item as any).qtdAfastado || 0) + ((item as any).qtdLicenca || 0) + ((item as any).qtdAvisoDispensado || 0) + ((item as any).qtdRecluso || 0);
+                  const operacional = Math.max(0, ((item as any).efetivo || 0) - indisponiveis);
+                  return (
                   <Card
                     key={item.obraId}
                     className="cursor-pointer hover:shadow-md transition-shadow hover:ring-2 hover:ring-[#1B2A4A]/50"
@@ -689,6 +695,18 @@ export default function ObraEfetivo() {
                         </div>
                         <ChevronRight className="h-5 w-5 text-muted-foreground" />
                       </div>
+                      {/* Rev. 2937 — Efetivo operacional (100% disponível, quem dá pra contar na obra) */}
+                      <div
+                        className="mt-2 flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1.5"
+                        title={`Efetivo operacional = total menos indisponíveis (férias, afastado, atestado/licença, dispensado e recluso). ${indisponiveis} indisponível(is) descontado(s).`}
+                      >
+                        <UserCheck className="h-4 w-4 text-emerald-700 shrink-0" />
+                        <span className="text-xl font-bold text-emerald-700 leading-none">{fmtNum(operacional)}</span>
+                        <span className="text-xs font-medium text-emerald-700">operacional</span>
+                        {indisponiveis > 0 && (
+                          <span className="ml-auto text-[10px] text-muted-foreground whitespace-nowrap">{fmtNum(indisponiveis)} indisponível{indisponiveis > 1 ? 'is' : ''}</span>
+                        )}
+                      </div>
                       {/* Status breakdown badges */}
                       {((item as any).qtdAviso > 0 || (item as any).qtdAvisoDispensado > 0 || (item as any).qtdFerias > 0 || (item as any).qtdAfastado > 0) && (
                         <div className="flex flex-wrap gap-1.5 mt-2">
@@ -716,7 +734,7 @@ export default function ObraEfetivo() {
                       )}
                     </CardContent>
                   </Card>
-                ))}
+                ); })}
               </div>
             )}
 

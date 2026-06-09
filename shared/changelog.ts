@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2937 — **EFETIVO POR OBRA — CADA CARD AGORA MOSTRA, ALÉM DO EFETIVO TOTAL, O EFETIVO
+ * OPERACIONAL (100% DISPONÍVEL / "QUEM DÁ PRA CONTAR NA OBRA HOJE"), DESCONTANDO QUEM ESTÁ
+ * INDISPONÍVEL (FÉRIAS, AFASTADO, ATESTADO/LICENÇA, DISPENSADO NO AVISO E RECLUSO).**
+ *
+ * CONTEXTO: na tela "Efetivo por Obra" cada card mostrava só o efetivo TOTAL (ex.: "41
+ * funcionários") + badges dos status (Férias/Afastado/Aviso/Dispensado). O gestor pediu pra
+ * saber, num olhar só, quantos REALMENTE pode contar na obra — descontando quem está fora
+ * (férias, afastado, de atestado).
+ *
+ * SOLUÇÃO (FRONT-only, `client/src/pages/ObraEfetivo.tsx`, ZERO ALTER/DROP/DELETE):
+ *   - No `.map` dos cards de obra, calcula `indisponiveis = qtdFerias + qtdAfastado + qtdLicenca
+ *     + qtdAvisoDispensado + qtdRecluso` e `operacional = max(0, efetivo - indisponiveis)`.
+ *     IMPORTANTE: AVISO PRÉVIO (qtdAviso) AINDA TRABALHA → CONTA como operacional.
+ *   - Abaixo do total, novo bloco verde (esmeralda) com ícone `UserCheck`: número grande do
+ *     efetivo operacional + rótulo "operacional"; à direita, contagem de "N indisponível(is)"
+ *     quando houver. `title=` explica a fórmula (acessível no hover desktop).
+ *   - Dados já vinham do backend por obra (`qtdFerias/qtdAfastado/qtdLicenca/qtdAvisoDispensado/
+ *     qtdRecluso/efetivo`); NENHUMA mudança no backend, 100% leitura.
+ *   - `UserCheck` adicionado ao import de `lucide-react`.
+ *
+ * IMPACTO: o gestor vê na hora o efetivo real disponível por obra sem precisar abrir o
+ * drill-down nem somar badges de cabeça. Total continua visível.
+ */
+
+/**
  * Rev. 2936 — **EQUIPE DA OBRA (DRILL-DOWN) — CLICAR NUM CHIP DE NR AGORA ABRE UM POPOVER COM
  * O RESUMO DO QUE A NORMA TRATA (+ NOME DO TREINAMENTO E VALIDADE), FACILITANDO A ANÁLISE DO
  * GESTOR — INCLUSIVE NO TABLET/CELULAR, ONDE O TOOLTIP DE HOVER (`title`) NÃO FUNCIONA AO TOQUE.**
