@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2925 — **INTEGRAÇÃO DE SEGURANÇA (SST) · APROVADOS — DIÁLOGO "ASSINATURA EM LOTE" GANHOU
+ * LAYOUT NOVO (2 COLUNAS) QUE CABE NA TELA DO TABLET SEM BARRA DE ROLAGEM.**
+ *
+ * PEDIDO (usuário, com print do diálogo): a janela "Assinatura em Lote — N colaboradores" estava
+ * alta demais (lista de colaboradores + nome do TST + canvas de assinatura empilhados em coluna
+ * única) e aparecia barra de rolagem (no print, uma barra horizontal no rodapé). Pediu "novo layout
+ * pra facilidade de uso, sem precisar de barra de rolagem".
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE): redesenho do `AssinarTstLoteDialog`
+ * (`client/src/pages/sst/IntegracaoSST.tsx`):
+ * - GRID 2 COLUNAS (`md:grid-cols-2`): ESQUERDA = campo "Nome do TST" + resumo dos certificados;
+ *   DIREITA = área de assinatura (canvas). Reduz drasticamente a ALTURA → some a rolagem vertical.
+ * - RESUMO COLAPSÁVEL: a lista de colaboradores virou um cabeçalho clicável ("N certificados
+ *   receberão esta assinatura" + chevron); expande sob demanda (`max-h-40` com scroll próprio),
+ *   em vez de ocupar altura fixa sempre.
+ * - SEM OVERFLOW-X: `DialogContent` com `w-[calc(100vw-1.5rem)] max-h-[92vh] overflow-hidden
+ *   flex flex-col`; corpo com `overflow-y-auto overflow-x-hidden`; colunas com `min-w-0` (evita
+ *   blowout do `truncate`). Header e footer `shrink-0` com borda — botão "Assinar" sempre visível.
+ * - "LIMPAR" movido pra um botão ghost no cabeçalho da assinatura; footer enxuto (Cancelar + Assinar).
+ * - Canvas `h-44 md:h-56` (antes `h-48`). Toda a lógica de desenho/mutation (`assinarComoTstEmLote`)
+ *   e validações ficam idênticas; mudança 100% de UI, sem tocar backend/schema.
+ * - ROBUSTEZ DO CANVAS (tablet): a área de assinatura agora RE-MEDE a largura no novo grid 2-col
+ *   e em resize/rotação (`ResizeObserver` + `orientationchange`), não só no mount — preservando o
+ *   traço já desenhado (snapshot `toDataURL` → `drawImage` após o resize). Evita clipping/coordenada
+ *   imprecisa quando o layout muda de orientação no meio da assinatura.
+ * - A11Y: o cabeçalho colapsável do resumo ganhou `aria-expanded`/`aria-controls` ligados ao painel
+ *   (`id`), melhorando leitores de tela.
+ *
  * Rev. 2924 — **INTEGRAÇÃO DE SEGURANÇA (SST) · ABA "VÍDEOS" (ADMIN) — O VÍDEO DE TREINAMENTO
  * VOLTOU A APARECER NO CARD, CENTRALIZADO E COM FALLBACK QUANDO NÃO CARREGA (FIM DO "BURACO PRETO"
  * SEM FEEDBACK NEM ALTERNATIVA).**

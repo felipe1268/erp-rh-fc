@@ -2634,6 +2634,7 @@ function AssinarTstLoteDialog({ registros, companyId, onClose, onSigned }: {
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
   const [nomeTst, setNomeTst] = useState("");
+  const [showList, setShowList] = useState(false);
 
   const assinarMut = trpc.integracaoSST.assinarComoTstEmLote.useMutation({
     onSuccess: (data) => {
@@ -2647,19 +2648,46 @@ function AssinarTstLoteDialog({ registros, companyId, onClose, onSigned }: {
     onError: (e) => toast.error(e.message),
   });
 
+  // Rev. 2925 — canvas re-mede no novo grid 2-col e em resize/rotação do tablet
+  // (não só no mount), preservando o traço já desenhado.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * 2;
-    canvas.height = rect.height * 2;
-    ctx.scale(2, 2);
-    ctx.strokeStyle = "#1a1a2e";
-    ctx.lineWidth = 2;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
+    let lastW = 0;
+    let lastH = 0;
+    const setup = () => {
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      if (Math.abs(rect.width - lastW) < 1 && Math.abs(rect.height - lastH) < 1) return;
+      let prev: string | null = null;
+      if (lastW > 0) {
+        try { prev = canvas.toDataURL("image/png"); } catch { prev = null; }
+      }
+      lastW = rect.width;
+      lastH = rect.height;
+      canvas.width = rect.width * 2;
+      canvas.height = rect.height * 2;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.scale(2, 2);
+      ctx.strokeStyle = "#1a1a2e";
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      if (prev) {
+        const img = new Image();
+        img.onload = () => ctx.drawImage(img, 0, 0, rect.width, rect.height);
+        img.src = prev;
+      }
+    };
+    setup();
+    const ro = new ResizeObserver(() => setup());
+    ro.observe(canvas);
+    window.addEventListener("orientationchange", setup);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("orientationchange", setup);
+    };
   }, []);
 
   const getPos = (e: React.TouchEvent | React.MouseEvent) => {
@@ -2715,70 +2743,101 @@ function AssinarTstLoteDialog({ registros, companyId, onClose, onSigned }: {
 
   return (
     <Dialog open onOpenChange={(o) => !o && !assinarMut.isPending && onClose()}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
+      {/* Rev. 2925 — layout 2 colunas, altura limitada e sem overflow-x:
+          cabe na tela do tablet sem barra de rolagem; resumo de colaboradores colapsável. */}
+      <DialogContent className="sm:max-w-3xl w-[calc(100vw-1.5rem)] max-h-[92vh] overflow-hidden flex flex-col gap-0 p-0">
+        <DialogHeader className="shrink-0 border-b px-5 pt-5 pb-3">
           <DialogTitle className="flex items-center gap-2">
             <PenLine className="h-5 w-5 text-blue-600" />
             Assinatura em Lote — {registros.length} colaborador{registros.length > 1 ? "es" : ""}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-3 text-sm">
-            <p className="font-semibold text-blue-900">
-              Sua assinatura será aplicada de uma vez a {registros.length} certificado{registros.length > 1 ? "s" : ""}:
-            </p>
-            <div className="mt-2 max-h-32 overflow-y-auto rounded border border-blue-100 bg-white/70 p-2 text-xs text-blue-800/90 space-y-0.5">
-              {registros.map(r => (
-                <div key={r.id} className="flex justify-between gap-2">
-                  <span className="truncate">{r.employeeNome || "—"}</span>
-                  <span className="text-blue-700/70 shrink-0">{r.employeeCpf || ""}</span>
-                </div>
-              ))}
-            </div>
-            <p className="text-blue-800/80 text-xs mt-2">
-              Cada certificado recebe a MESMA assinatura e o MESMO nome de TST. Colaboradores já assinados não são alterados.
-            </p>
-          </div>
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4">
+          <div className="grid gap-5 md:grid-cols-2">
+            {/* Coluna esquerda — nome do TST + resumo colapsável */}
+            <div className="min-w-0 space-y-4">
+              <div>
+                <Label htmlFor="nomeTstLote">Nome do Técnico de Segurança do Trabalho *</Label>
+                <Input
+                  id="nomeTstLote"
+                  value={nomeTst}
+                  onChange={(e) => setNomeTst(e.target.value)}
+                  placeholder="Ex: João da Silva — TST 12345"
+                  maxLength={255}
+                  disabled={assinarMut.isPending}
+                  className="mt-1.5"
+                />
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  Esse nome e a assinatura ao lado vão para todos os {registros.length} certificado{registros.length > 1 ? "s" : ""}.
+                </p>
+              </div>
 
-          <div>
-            <Label htmlFor="nomeTstLote">Nome do Técnico de Segurança do Trabalho *</Label>
-            <Input
-              id="nomeTstLote"
-              value={nomeTst}
-              onChange={(e) => setNomeTst(e.target.value)}
-              placeholder="Ex: João da Silva — TST 12345"
-              maxLength={255}
-              disabled={assinarMut.isPending}
-              className="mt-1"
-            />
-          </div>
-
-          <div>
-            <Label>Assinatura *</Label>
-            <div className="mt-1 border-2 border-dashed border-slate-300 rounded-lg bg-white">
-              <canvas
-                ref={canvasRef}
-                className="w-full h-48 touch-none rounded-lg cursor-crosshair"
-                onMouseDown={startDraw}
-                onMouseMove={draw}
-                onMouseUp={stopDraw}
-                onMouseLeave={stopDraw}
-                onTouchStart={startDraw}
-                onTouchMove={draw}
-                onTouchEnd={stopDraw}
-              />
+              <div className="rounded-lg border border-blue-200 bg-blue-50/60">
+                <button
+                  type="button"
+                  onClick={() => setShowList((v) => !v)}
+                  aria-expanded={showList}
+                  aria-controls="assinar-lote-colab-list"
+                  className="flex w-full items-center justify-between gap-2 p-3 text-left text-sm"
+                >
+                  <span className="font-semibold text-blue-900">
+                    {registros.length} certificado{registros.length > 1 ? "s receberão" : " receberá"} esta assinatura
+                  </span>
+                  {showList ? <ChevronUp className="h-4 w-4 shrink-0 text-blue-700" /> : <ChevronDown className="h-4 w-4 shrink-0 text-blue-700" />}
+                </button>
+                {showList && (
+                  <div id="assinar-lote-colab-list" className="max-h-40 space-y-1 overflow-y-auto border-t border-blue-100 px-3 py-2 text-xs text-blue-800/90">
+                    {registros.map((r) => (
+                      <div key={r.id} className="flex justify-between gap-2">
+                        <span className="truncate">{r.employeeNome || "—"}</span>
+                        <span className="shrink-0 text-blue-700/70">{r.employeeCpf || ""}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="px-3 pb-3 pt-1 text-[11px] text-blue-800/70">
+                  Colaboradores já assinados não são alterados.
+                </p>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Desenhe sua assinatura com o mouse ou dedo (iPad/celular).
-            </p>
+
+            {/* Coluna direita — área de assinatura */}
+            <div className="min-w-0">
+              <div className="flex items-center justify-between">
+                <Label>Assinatura *</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearCanvas}
+                  disabled={assinarMut.isPending}
+                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <RefreshCw className="h-3.5 w-3.5 mr-1" /> Limpar
+                </Button>
+              </div>
+              <div className="mt-1.5 rounded-lg border-2 border-dashed border-slate-300 bg-white">
+                <canvas
+                  ref={canvasRef}
+                  className="block w-full h-44 md:h-56 touch-none rounded-lg cursor-crosshair"
+                  onMouseDown={startDraw}
+                  onMouseMove={draw}
+                  onMouseUp={stopDraw}
+                  onMouseLeave={stopDraw}
+                  onTouchStart={startDraw}
+                  onTouchMove={draw}
+                  onTouchEnd={stopDraw}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Desenhe sua assinatura com o mouse ou o dedo (iPad/celular).
+              </p>
+            </div>
           </div>
         </div>
 
-        <DialogFooter className="flex-col sm:flex-row gap-2">
-          <Button variant="outline" onClick={clearCanvas} disabled={assinarMut.isPending} className="sm:mr-auto">
-            <RefreshCw className="h-4 w-4 mr-1" /> Limpar
-          </Button>
+        <DialogFooter className="shrink-0 gap-2 border-t px-5 py-3">
           <Button variant="outline" onClick={onClose} disabled={assinarMut.isPending}>
             Cancelar
           </Button>
