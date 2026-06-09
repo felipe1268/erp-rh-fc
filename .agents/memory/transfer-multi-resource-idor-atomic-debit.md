@@ -11,8 +11,8 @@ central↔obra / obra→obra / obra→central) have two recurring traps:
    (the EPI's company). Otherwise a direct API call can pollute another company's
    stock by passing a foreign obra id. Validate ALL resource ids the request touches.
 
-**Why:** the `transferir` rewrite initially guarded only the EPI's company; architect
-review flagged that obra ids were unchecked → cross-tenant stock pollution via API.
+**Why:** guarding only the EPI's company while leaving obra ids unchecked allows
+cross-tenant stock pollution via a direct API call passing a foreign obra id.
 
 2. **Atomic debit.** A `SELECT qty` then `UPDATE qty = qty - X` has a window where two
    concurrent transfers both pass the check and drive the balance negative. Debit in a

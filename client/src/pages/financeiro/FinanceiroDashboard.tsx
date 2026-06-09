@@ -318,6 +318,59 @@ export default function FinanceiroDashboard() {
           })}
         </div>
 
+        {/* TOTAL EM ATRASO (ACUMULADO) */}
+        {(() => {
+          const vencPag = kpis?.vencidosPagar ?? 0;
+          const vencRec = kpis?.vencidosReceber ?? 0;
+          const qtdPag = kpis?.qtdVencidosPagar ?? 0;
+          const qtdRec = kpis?.qtdVencidosReceber ?? 0;
+          const totalAtraso = vencPag + vencRec;
+          const qtdTotal = qtdPag + qtdRec;
+          const temAtraso = totalAtraso > 0;
+          return (
+            <Card className={`border-0 shadow-sm ${temAtraso ? "bg-gradient-to-r from-red-50 to-orange-50" : "bg-gradient-to-r from-emerald-50 to-green-50"}`}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${temAtraso ? "bg-red-100" : "bg-emerald-100"}`}>
+                      {temAtraso
+                        ? <CircleDollarSign className="w-6 h-6 text-red-600" />
+                        : <CheckCircle className="w-6 h-6 text-emerald-600" />}
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">Total em Atraso (acumulado)</p>
+                      <p className={`text-2xl font-bold tabular-nums leading-tight ${temAtraso ? "text-red-700" : "text-emerald-700"}`}>
+                        {isLoading ? "..." : formatBRL(totalAtraso)}
+                      </p>
+                      <p className="text-[11px] text-gray-500 mt-0.5">
+                        {isLoading ? "—" : temAtraso ? `${qtdTotal} título(s) vencido(s) no total` : "Nenhuma conta em atraso"}
+                      </p>
+                    </div>
+                  </div>
+                  {!isLoading && temAtraso && (
+                    <div className="flex items-center gap-2">
+                      <Link href="/financeiro/contas-a-pagar">
+                        <div className="px-3 py-2 rounded-lg bg-white/70 border border-orange-200 cursor-pointer hover:bg-white transition-colors">
+                          <p className="text-[10px] text-gray-500">A pagar vencido</p>
+                          <p className="text-sm font-bold text-orange-700 tabular-nums">{formatBRL(vencPag)}</p>
+                          <p className="text-[10px] text-gray-400">{qtdPag} título(s)</p>
+                        </div>
+                      </Link>
+                      <Link href="/financeiro/contas-a-receber">
+                        <div className="px-3 py-2 rounded-lg bg-white/70 border border-red-200 cursor-pointer hover:bg-white transition-colors">
+                          <p className="text-[10px] text-gray-500">A receber vencido</p>
+                          <p className="text-sm font-bold text-red-700 tabular-nums">{formatBRL(vencRec)}</p>
+                          <p className="text-[10px] text-gray-400">{qtdRec} título(s)</p>
+                        </div>
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })()}
+
         {/* ALERTAS VENCIDOS */}
         {((kpis?.vencidosReceber ?? 0) > 0 || (kpis?.vencidosPagar ?? 0) > 0) && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

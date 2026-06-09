@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2930 — **DASHBOARD FINANCEIRO — NOVO CARD "TOTAL EM ATRASO (ACUMULADO)" SOMANDO TUDO QUE
+ * ESTÁ VENCIDO (A PAGAR + A RECEBER) NUM ÚNICO VALOR, COM O DETALHAMENTO DAS DUAS PONTAS.**
+ *
+ * PEDIDO (usuário): no financeiro, ter o "acumulado de contas em atraso" — um card/KPI com o VALOR
+ * TOTAL acumulado de tudo que está vencido (somatório atual). Até então o dashboard só exibia dois
+ * alertas separados (vencidos a receber × vencidos a pagar), sem um número único consolidado.
+ *
+ * SOLUÇÃO (FRONT-only, `client/src/pages/financeiro/FinanceiroDashboard.tsx`): novo card destacado
+ * "Total em Atraso (acumulado)" inserido entre o grid de KPIs e os alertas existentes. O valor
+ * principal é `vencidosPagar + vencidosReceber` (soma dos títulos vencidos das duas pontas) e a
+ * contagem é `qtdVencidosPagar + qtdVencidosReceber`. Ao lado, dois mini-blocos clicáveis ("A pagar
+ * vencido" → /financeiro/contas-a-pagar; "A receber vencido" → /financeiro/contas-a-receber) com o
+ * valor e a quantidade de cada ponta. TODOS os dados já vinham de `getDashboardExecutivo`
+ * (`vencidosReceber`/`vencidosPagar`/`qtdVencidos*`) — nenhuma mudança de backend/schema/query.
+ * ZERO ALTER/DROP/DELETE.
+ *
  * Rev. 2929 — **CONTROLE DE EPIs · ESTOQUE POR OBRA — CLICAR NUMA LINHA DO ALMOXARIFADO CENTRAL
  * (FILTRO "CENTRAL") NÃO ABRE MAIS O AJUSTE DE OBRA: VAI DIRETO AO CATÁLOGO CENTRAL.**
  *
