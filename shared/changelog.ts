@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2912 — **COLETA DE CAMPO (RH) · LISTA DE LINKS — AGORA FICA EXPLÍCITO QUANTOS FUNCIONÁRIOS
+ * AINDA FALTAM COLETAR EM CADA OBRA, NÃO SÓ "X/Y COLETADO(S)".**
+ *
+ * PEDIDO (usuário): "PRECISA FICAR CLARO QUANTOS FALTAM PARA COLETAR OS DADOS EM CADA OBRA"
+ * (print da tela "Coleta de Campo" mostrando linhas como "QIU 2 - FASE 4 · 38/41 coletado(s)").
+ * Os dados de progresso JÁ existiam no backend (`listarSessoes` expõe `coletados`/`totalAlocados`
+ * desde a Rev. 2902), mas o usuário tinha que fazer a conta de cabeça (41 − 38 = 3). A informação
+ * de "quanto falta" não estava destacada.
+ *
+ * SOLUÇÃO (FRONTEND — ZERO ALTER/DROP/DELETE): em `client/src/pages/ColetaCampo.tsx`, na lista de
+ * links de coleta, adicionado um Badge laranja "Faltam N de TOTAL" (só quando a sessão NÃO está
+ * concluída, há alocados, e restam pendentes) ao lado dos badges de status/pendentes; e a linha de
+ * texto-resumo passou a acrescentar "· faltam N" (ou "· completo" quando zerado) após o
+ * "X/Y coletado(s)". `faltam = totalAlocados − coletados`. Nenhuma mudança de backend/schema.
+ *
  * Rev. 2911 — **CONTROLE DE EPIs · ABA "ENTREGAS" — A BUSCA AGORA É SERVER-SIDE E VARRE TODAS
  * AS PÁGINAS. ANTES, BUSCAR POR NOME (EX.: "JAMES") SÓ FILTRAVA A PÁGINA DE 50 ENTREGAS JÁ
  * CARREGADA NA TELA — QUEM TINHA ENTREGA FORA DO TOP-50 MAIS RECENTE SUMIA DA BUSCA, MESMO

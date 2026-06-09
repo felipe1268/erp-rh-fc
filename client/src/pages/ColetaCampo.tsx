@@ -532,11 +532,15 @@ export default function ColetaCampo() {
                         ? <Badge className="bg-emerald-600">Ativo</Badge>
                         : <Badge variant="secondary">{s.expirada ? "Expirado" : "Inativo"}</Badge>}
                     {s.pendentes > 0 && <Badge className="bg-amber-500">{s.pendentes} pendente(s)</Badge>}
+                    {/* Rev. 2912 — destaca QUANTOS FALTAM coletar na obra (não só "X/Y coletado(s)"). */}
+                    {!s.concluida && typeof s.totalAlocados === "number" && s.totalAlocados > 0 && (s.totalAlocados - s.coletados) > 0 && (
+                      <Badge className="bg-orange-600">Faltam {s.totalAlocados - s.coletados} de {s.totalAlocados}</Badge>
+                    )}
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5 truncate">
                     {s.obraNome} · {s.totalRespostas} envio(s)
                     {typeof s.totalAlocados === "number" && s.totalAlocados > 0
-                      ? ` · ${s.coletados}/${s.totalAlocados} coletado(s)`
+                      ? ` · ${s.coletados}/${s.totalAlocados} coletado(s)${(s.totalAlocados - s.coletados) > 0 ? ` · faltam ${s.totalAlocados - s.coletados}` : " · completo"}`
                       : ""} · criado por {s.criadoPor || "—"}
                   </div>
                   {Array.isArray(s.grupos) && s.grupos.length > 0 && (
