@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2931 — **PLANEJAMENTO · CRONOGRAMA — A COLUNA "DUR." (DIAS) AGORA BATE COM AS DATAS DE
+ * INÍCIO/FIM EXIBIDAS: PASSA A CONTAR DIAS ÚTEIS (ProjDateDiff DO MSP), EM VEZ DO <Duration>
+ * DO XML DIVIDIDO POR 8h FIXO.**
+ *
+ * PEDIDO (usuário): "tem dias de duração que não estão batendo". Exemplo dado: a atividade
+ * 01.02.01 "Tapume autoportante" com Início 04/05/2026 (segunda) e Fim 07/05/2026 (quinta)
+ * exibia "5d", quando deveria ser 4 dias (seg, ter, qua, qui).
+ *
+ * CAUSA-RAIZ: a coluna "Dur." renderizava `a.duracaoDias`, valor importado do `<Duration>` do
+ * XML do MS Project via `parseDuration` (em `ImportarCronograma.tsx`), que converte o tempo de
+ * trabalho dividindo por 8h fixo (`days + ceil(hours/8)`). Esse número é a DURAÇÃO DE TRABALHO
+ * (work) do MSP — que NÃO equivale, em geral, ao número de dias úteis no vão Início→Fim das
+ * datas exibidas (jornada variável por dia, feriados, finish inclusivo/exclusivo). Verificado
+ * nos dados reais (projeto da tela, 208 folhas): 65 atividades tinham `duracao_dias` divergindo
+ * dos dias úteis entre as datas (a maioria +1..+5; algumas −1) — exatamente a inconsistência que
+ * o usuário enxergava entre as colunas.
+ *
+ * SOLUÇÃO (FRONT-only, `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`): a célula da
+ * coluna "Dur." passa a calcular `diasUteisEntre(dataInicio, dataFim, calendarioMSP)` (helper de
+ * `shared/diasUteis.ts`, que ESPELHA o `ProjDateDiff(start,end,calendar)` do MS Project —
+ * contagem INCLUSIVA de dias úteis respeitando fins de semana, feriados e exceções do calendário
+ * do XML). Reusa o memo `_calMSPInner` já existente (calendário parseado do `calendarioJson`).
+ * Marcos continuam exibindo "—"; datas inválidas caem no fallback de `a.duracaoDias`. NENHUMA
+ * mudança no dado persistido (`duracao_dias` segue intacto — ponderações/snapshots de
+ * %previsto/%realizado inalterados, pois aquela régua usa baseline_*_ts + snapshots, não esta
+ * coluna descritiva). ZERO ALTER/DROP/DELETE — mudança puramente de exibição.
+ *
  * Rev. 2930 — **DASHBOARD FINANCEIRO — NOVO CARD "TOTAL EM ATRASO (ACUMULADO)" SOMANDO TUDO QUE
  * ESTÁ VENCIDO (A PAGAR + A RECEBER) NUM ÚNICO VALOR, COM O DETALHAMENTO DAS DUAS PONTAS.**
  *

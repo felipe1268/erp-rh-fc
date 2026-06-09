@@ -12,7 +12,7 @@ import PrintActions from "@/components/PrintActions";
 import ImportarCronograma, { parseMSProjectXML, parseMSProjectXLSX, parseMSProjectFull, TarefaImportada } from "./ImportarCronograma";
 import AnaliseEfetivoIA from "./AnaliseEfetivoIA";
 import DiagnosticoEapOrcCron from "@/components/planejamento/DiagnosticoEapOrcCron";
-import { parseCalendarioJson, fracaoDecorridaMs, pvPonderadoPorAtividade, pctRaizMSP } from "../../../../shared/diasUteis";
+import { parseCalendarioJson, fracaoDecorridaMs, pvPonderadoPorAtividade, pctRaizMSP, diasUteisEntre } from "../../../../shared/diasUteis";
 import { ProgramacaoSemanal } from "./ProgramacaoSemanal";
 import { DiagramaRede } from "./DiagramaRede";
 import { CipaBadge } from "@/components/CipaBadge";
@@ -5168,9 +5168,18 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                       <td className="py-1.5 px-2 text-slate-600 text-[11px] tabular-nums whitespace-nowrap">{fmtBR(a.dataInicio)}</td>
                       {/* Fim */}
                       <td className="py-1.5 px-2 text-slate-600 text-[11px] tabular-nums whitespace-nowrap">{fmtBR(a.dataFim)}</td>
-                      {/* Duração */}
+                      {/* Duração — dias ÚTEIS entre Início e Fim (ProjDateDiff MSP, inclusivo,
+                          respeita feriados/exceções do calendário). Espelha o que o usuário vê
+                          nas colunas de data; substitui o <Duration> do XML (work/8h) que divergia. */}
                       <td className="py-1.5 px-2 text-right text-slate-500 text-[11px] tabular-nums">
-                        {a.duracaoDias ? `${a.duracaoDias}d` : <span className="text-slate-300">—</span>}
+                        {(() => {
+                          if (a.isMarco) return <span className="text-slate-300">—</span>;
+                          const ini = (a.dataInicio ?? "").toString().slice(0, 10);
+                          const fim = (a.dataFim ?? "").toString().slice(0, 10);
+                          const ok = /^\d{4}-\d{2}-\d{2}$/.test(ini) && /^\d{4}-\d{2}-\d{2}$/.test(fim) && ini <= fim;
+                          const dur = ok ? diasUteisEntre(ini, fim, _calMSPInner) : (a.duracaoDias ?? 0);
+                          return dur > 0 ? `${dur}d` : <span className="text-slate-300">—</span>;
+                        })()}
                       </td>
                       {/* Predecessoras — chip clicável com popover (lista completa) */}
                       <td className="py-1.5 px-2 text-center align-middle">
