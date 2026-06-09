@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2916 — **CONTROLE DE EPIs · NECESSIDADE — CORREÇÃO DO INPUT DE CONFIG QUE TRAVAVA EM ZERO:
+ * AGORA DÁ PRA APAGAR O CAMPO "CAMISAS/CALÇAS/CALÇADOS POR PESSOA" E DIGITAR OUTRO NÚMERO.**
+ *
+ * PROBLEMA (usuário, com print): nos três inputs de "Necessidade por funcionário" não dava pra apagar
+ * o número — ao limpar o campo ele voltava travado em `0`. CAUSA: input controlado numérico cujo
+ * `onChange` fazia `parseInt(e.target.value) || 0` e gravava NÚMERO no estado; ao apagar tudo,
+ * `parseInt("")` = `NaN` → `|| 0` forçava `0` e o `value={cfg[b]}` reexibia `0`, impossibilitando o
+ * estado vazio intermediário necessário para o usuário digitar.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE): `client/src/pages/EpiNecessidade.tsx` passa a guardar a
+ * config como STRING (`{camisa,calca,calcado}: string`), permitindo o campo vazio durante a edição.
+ * `onChange` aceita só `""` ou 1-2 dígitos (`/^\d{1,2}$/`); `onBlur` normaliza (vazio continua vazio,
+ * senão clampa 0..99 via `clampNum`); o botão Salvar converte para número com `clampNum` antes do
+ * `setNecessidadeConfig`. `useEffect` que carrega a config do servidor agora faz `String(...)`. Sem
+ * mudança de backend/schema — a mutation continua recebendo números clampados 0..99.
+ *
  * Rev. 2915 — **CONTROLE DE EPIs · NECESSIDADE — CONVERSÃO DEFINITIVA DO TAMANHO DAS CALÇAS DE LETRA
  * (P/M/G/GG...) PARA NÚMERO, PARA CASAR COM O TAMANHO NUMÉRICO CADASTRADO NOS FUNCIONÁRIOS.**
  *

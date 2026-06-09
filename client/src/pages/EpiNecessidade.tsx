@@ -43,10 +43,13 @@ export default function EpiNecessidade({ companyId, companyIds, readOnly = false
     { enabled: !!hasCompany },
   );
 
-  const [cfg, setCfg] = useState({ camisa: 1, calca: 1, calcado: 1 });
+  const [cfg, setCfg] = useState<{ camisa: string; calca: string; calcado: string }>({ camisa: "1", calca: "1", calcado: "1" });
   useEffect(() => {
-    if (dataQ.data?.config) setCfg(dataQ.data.config);
+    const c = dataQ.data?.config;
+    if (c) setCfg({ camisa: String(c.camisa ?? 1), calca: String(c.calca ?? 1), calcado: String(c.calcado ?? 1) });
   }, [dataQ.data?.config]);
+
+  const clampNum = (v: string) => Math.max(0, Math.min(99, parseInt(v, 10) || 0));
 
   const saveMut = trpc.epis.setNecessidadeConfig.useMutation({
     onSuccess: () => {
@@ -90,18 +93,26 @@ export default function EpiNecessidade({ companyId, companyIds, readOnly = false
                 </label>
                 <Input
                   type="number"
+                  inputMode="numeric"
                   min={0}
                   max={99}
                   value={cfg[b]}
                   disabled={editLocked}
-                  onChange={(e) => setCfg((c) => ({ ...c, [b]: Math.max(0, Math.min(99, parseInt(e.target.value) || 0)) }))}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "" || /^\d{1,2}$/.test(v)) setCfg((c) => ({ ...c, [b]: v }));
+                  }}
+                  onBlur={(e) => {
+                    const v = e.target.value;
+                    setCfg((c) => ({ ...c, [b]: v === "" ? "" : String(clampNum(v)) }));
+                  }}
                   className="h-9"
                 />
               </div>
             ))}
             {!editLocked && (
               <Button
-                onClick={() => saveMut.mutate({ companyId, ...cfg })}
+                onClick={() => saveMut.mutate({ companyId, camisa: clampNum(cfg.camisa), calca: clampNum(cfg.calca), calcado: clampNum(cfg.calcado) })}
                 disabled={saveMut.isPending}
                 className="h-9 gap-1 bg-[#1B2A4A] hover:bg-[#243660]"
               >
