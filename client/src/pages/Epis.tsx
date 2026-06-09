@@ -49,8 +49,9 @@ import EpiAssinatura from "./EpiAssinatura";
 import { generateFichaEpiPdf } from "@/lib/epiReceiptPdf";
 import EpiCapacidade from "./EpiCapacidade";
 import EpiDescontos from "./EpiDescontos";
+import EpiNecessidade from "./EpiNecessidade";
 
-type ViewMode = "catalogo" | "entregas" | "novo_epi" | "editar_epi" | "nova_entrega" | "ficha_epi" | "estoque_obra" | "transferencias" | "config" | "checklist" | "validade" | "custos" | "minimo" | "ia" | "capacidade" | "descontos";
+type ViewMode = "catalogo" | "entregas" | "novo_epi" | "editar_epi" | "nova_entrega" | "ficha_epi" | "estoque_obra" | "transferencias" | "config" | "checklist" | "validade" | "custos" | "minimo" | "ia" | "capacidade" | "descontos" | "necessidade";
 
 // Mapeamento de ícones dinâmicos por tipo de EPI
 function getEpiIcon(nome: string, className: string = "h-4 w-4") {
@@ -148,7 +149,7 @@ export default function Epis() {
   const readOnly = !isAdminMaster && hasGroup && isSomenteVisualizacao;
 
   // Suporte a ?tab= para links diretos da sidebar
-  const validTabs: ViewMode[] = useMemo(() => ["catalogo", "entregas", "estoque_obra", "transferencias", "config", "checklist", "validade", "custos", "minimo", "ia", "capacidade", "descontos"], []);
+  const validTabs: ViewMode[] = useMemo(() => ["catalogo", "entregas", "estoque_obra", "transferencias", "config", "checklist", "validade", "custos", "minimo", "ia", "capacidade", "necessidade", "descontos"], []);
   const initialTab = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get('tab');
@@ -2153,6 +2154,7 @@ export default function Epis() {
             { mode: "custos",        icon: <BarChart3 className="h-3.5 w-3.5" />,      label: "Custos" },
             { mode: "ia",            icon: <Brain className="h-3.5 w-3.5" />,          label: "IA" },
             { mode: "capacidade",    icon: <Users className="h-3.5 w-3.5" />,          label: "Capacidade" },
+            { mode: "necessidade",   icon: <ShoppingCart className="h-3.5 w-3.5" />,   label: "Necessidade" },
             { mode: "descontos",     icon: <Ban className="h-3.5 w-3.5" />,            label: "Descontos" },
             { mode: "config",        icon: <Settings2 className="h-3.5 w-3.5" />,      label: "Config" },
           ]) as { mode: typeof viewMode; icon: React.ReactNode; label: string }[]).map(({ mode, icon, label }) => (
@@ -2167,7 +2169,7 @@ export default function Epis() {
         </div>
 
         {/* Search + Filters - ocultar nas novas abas que têm seus próprios filtros */}
-        {!["config", "checklist", "validade", "custos", "minimo", "ia", "capacidade"].includes(viewMode) && (
+        {!["config", "checklist", "validade", "custos", "minimo", "ia", "capacidade", "necessidade", "descontos"].includes(viewMode) && (
         <div className="space-y-3">
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -3490,6 +3492,7 @@ export default function Epis() {
       {viewMode === "minimo" && <EpiEstoqueMinimo />}
       {viewMode === "ia" && <EpiIA />}
       {viewMode === "capacidade" && <EpiCapacidade companyId={queryCompanyId} />}
+      {viewMode === "necessidade" && <EpiNecessidade companyId={queryCompanyId} companyIds={isConstrutoras ? companyIds : undefined} readOnly={readOnly} aggregate={isConstrutoras} />}
       {viewMode === "descontos" && <EpiDescontos companyId={queryCompanyId} />}
 
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />

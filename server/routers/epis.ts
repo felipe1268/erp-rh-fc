@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
-import { getDb } from "../db";
+import { getDb, getCompaniesForUser } from "../db";
 import { epis, epiDeliveries, employees, systemCriteria, caepiDatabase, epiDiscountAlerts, obras, fornecedoresEpi, epiEstoqueObra, epiTransferencias, obraFuncionarios, companies, comprasSolicitacoes, comprasSolicitacoesItens, epiEstoqueMinimo } from "../../drizzle/schema";
 import { eq, and, desc, sql, isNull, gte, inArray, ilike, or } from "drizzle-orm";
 import { getConstrutorasIds } from "../db";
@@ -11,6 +12,195 @@ import { generateEpiFichaPdf } from "../utils/generateEpiFichaPdf";
 import { lockEGerarNumeroSc } from "./compras";
 
 export const episRouter = router({
+  // ============================================================
+  // Rev. 2914 — NECESSIDADE x ESTOQUE (camisa/calça/calçado)
+  // Cruza os tamanhos cadastrados dos funcionários ATIVOS com o estoque
+  // (central + obras), descontando o que já foi entregue, p/ mostrar o
+  // déficit por tamanho e facilitar a compra.
+  // ============================================================
+  getNecessidadeConfig: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const [c] = await db
+        .select({ camisa: companies.epiNecCamisa, calca: companies.epiNecCalca, calcado: companies.epiNecCalcado })
+        .from(companies)
+        .where(eq(companies.id, input.companyId));
+      return {
+        camisa: c?.camisa ?? 1,
+        calca: c?.calca ?? 1,
+        calcado: c?.calcado ?? 1,
+      };
+    }),
+
+  setNecessidadeConfig: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      camisa: z.number().int().min(0).max(99),
+      calca: z.number().int().min(0).max(99),
+      calcado: z.number().int().min(0).max(99),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      // Guard de tenant: escrita em `companies` é cross-tenant sensível — valida
+      // que o usuário tem acesso à empresa-alvo (admin/admin_master = global).
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowed.some((c) => c.id === input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      await db
+        .update(companies)
+        .set({ epiNecCamisa: input.camisa, epiNecCalca: input.calca, epiNecCalcado: input.calcado })
+        .where(eq(companies.id, input.companyId));
+      return { ok: true };
+    }),
+
+  necessidadeVsEstoque: protectedProcedure
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const ids = input.companyIds && input.companyIds.length > 0 ? input.companyIds : [input.companyId];
+
+      // Classificação em "buckets": calçado / calça / camisa.
+      // - calçado = categoria 'Calcado'
+      // - calça   = categoria 'Uniforme' + tamanho numérico (36..58)
+      // - camisa  = categoria 'Uniforme' + tamanho com letra (PP..EXG)
+      const normSize = (s: any) => String(s ?? "").trim().toUpperCase();
+      const bucketOf = (categoria: any, tamanho: any): "camisa" | "calca" | "calcado" | null => {
+        const cat = String(categoria ?? "").trim().toLowerCase();
+        const tam = normSize(tamanho);
+        if (!tam) return null;
+        if (cat === "calcado") return "calcado";
+        if (cat === "uniforme") return /^[0-9]+$/.test(tam) ? "calca" : "camisa";
+        return null;
+      };
+
+      const [emps, deliveries, central, obra, confs] = await Promise.all([
+        db.select({
+          id: employees.id,
+          companyId: employees.companyId,
+          camisa: employees.tamanhoCamisa,
+          calca: employees.tamanhoCalca,
+          calcado: employees.tamanhoCalcado,
+        }).from(employees).where(and(inArray(employees.companyId, ids), eq(employees.status, "Ativo"))),
+        db.select({
+          employeeId: epiDeliveries.employeeId,
+          categoria: epis.categoria,
+          tamanho: epis.tamanho,
+          quantidade: epiDeliveries.quantidade,
+        }).from(epiDeliveries)
+          .innerJoin(epis, eq(epiDeliveries.epiId, epis.id))
+          .where(and(inArray(epiDeliveries.companyId, ids), isNull(epiDeliveries.deletedAt))),
+        db.select({ categoria: epis.categoria, tamanho: epis.tamanho, q: epis.quantidadeEstoque })
+          .from(epis).where(inArray(epis.companyId, ids)),
+        db.select({ categoria: epis.categoria, tamanho: epis.tamanho, q: epiEstoqueObra.quantidade })
+          .from(epiEstoqueObra)
+          .innerJoin(epis, eq(epiEstoqueObra.epiId, epis.id))
+          .where(inArray(epiEstoqueObra.companyId, ids)),
+        db.select({ id: companies.id, camisa: companies.epiNecCamisa, calca: companies.epiNecCalca, calcado: companies.epiNecCalcado })
+          .from(companies).where(inArray(companies.id, ids)),
+      ]);
+
+      // Config POR EMPRESA — em modo grupo (companyIds) cada funcionário usa a
+      // necessidade da SUA empresa, evitando aplicar uma config única ao agregado.
+      type Cfg = { camisa: number; calca: number; calcado: number };
+      const configByCompany = new Map<number, Cfg>();
+      for (const c of confs) {
+        configByCompany.set(c.id, { camisa: c.camisa ?? 1, calca: c.calca ?? 1, calcado: c.calcado ?? 1 });
+      }
+      // Config "principal" devolvida ao editor = a da empresa de entrada.
+      const config: Cfg = configByCompany.get(input.companyId) ?? { camisa: 1, calca: 1, calcado: 1 };
+
+      // Entregas já feitas, por funcionário+bucket (somando quantidade).
+      const deliveredByEmpBucket = new Map<string, number>();
+      for (const d of deliveries) {
+        const b = bucketOf(d.categoria, d.tamanho);
+        if (!b) continue;
+        const k = `${d.employeeId}|${b}`;
+        deliveredByEmpBucket.set(k, (deliveredByEmpBucket.get(k) || 0) + (Number(d.quantidade) || 0));
+      }
+
+      // Estoque total (central + obras) por bucket+tamanho.
+      const stock: Record<"camisa" | "calca" | "calcado", Map<string, number>> = {
+        camisa: new Map(), calca: new Map(), calcado: new Map(),
+      };
+      const addStock = (categoria: any, tamanho: any, q: any) => {
+        const b = bucketOf(categoria, tamanho);
+        if (!b) return;
+        const s = normSize(tamanho);
+        stock[b].set(s, (stock[b].get(s) || 0) + (Number(q) || 0));
+      };
+      for (const r of central) addStock(r.categoria, r.tamanho, r.q);
+      for (const r of obra) addStock(r.categoria, r.tamanho, r.q);
+
+      // Demanda por bucket+tamanho a partir dos funcionários ativos.
+      type Acc = { funcionarios: number; necessidade: number; jaEntregue: number; liquida: number };
+      const demand: Record<"camisa" | "calca" | "calcado", Map<string, Acc>> = {
+        camisa: new Map(), calca: new Map(), calcado: new Map(),
+      };
+      const semTamanho = { camisa: 0, calca: 0, calcado: 0 };
+      const BUCKETS = ["camisa", "calca", "calcado"] as const;
+      for (const e of emps) {
+        const empCfg = configByCompany.get(e.companyId) ?? config;
+        for (const b of BUCKETS) {
+          const need = empCfg[b];
+          const size = normSize((e as any)[b]);
+          if (!size) { if (need > 0) semTamanho[b]++; continue; }
+          const delivered = deliveredByEmpBucket.get(`${e.id}|${b}`) || 0;
+          const atendido = Math.min(delivered, need);
+          const remaining = Math.max(0, need - delivered);
+          const row = demand[b].get(size) || { funcionarios: 0, necessidade: 0, jaEntregue: 0, liquida: 0 };
+          row.funcionarios += 1;
+          row.necessidade += need;
+          row.jaEntregue += atendido;
+          row.liquida += remaining;
+          demand[b].set(size, row);
+        }
+      }
+
+      const CAMISA_ORDER = ["PP", "P", "M", "G", "GG", "XG", "XGG", "EXG"];
+      const sortSize = (a: { tamanho: string }, b: { tamanho: string }) => {
+        const aNum = /^[0-9]+$/.test(a.tamanho), bNum = /^[0-9]+$/.test(b.tamanho);
+        if (aNum && bNum) return parseFloat(a.tamanho) - parseFloat(b.tamanho);
+        if (!aNum && !bNum) {
+          const ia = CAMISA_ORDER.indexOf(a.tamanho), ib = CAMISA_ORDER.indexOf(b.tamanho);
+          if (ia >= 0 && ib >= 0) return ia - ib;
+          return a.tamanho.localeCompare(b.tamanho);
+        }
+        return aNum ? 1 : -1; // letras antes de números (não deve misturar no mesmo bucket)
+      };
+
+      const buildBucket = (b: "camisa" | "calca" | "calcado") => {
+        const sizes = new Set<string>([...demand[b].keys(), ...stock[b].keys()]);
+        const rows = [...sizes].map((size) => {
+          const d = demand[b].get(size) || { funcionarios: 0, necessidade: 0, jaEntregue: 0, liquida: 0 };
+          const estoque = stock[b].get(size) || 0;
+          const deficit = Math.max(0, d.liquida - estoque);
+          const sobra = Math.max(0, estoque - d.liquida);
+          return { tamanho: size, funcionarios: d.funcionarios, necessidade: d.necessidade, jaEntregue: d.jaEntregue, liquida: d.liquida, estoque, deficit, sobra };
+        });
+        rows.sort(sortSize);
+        const totais = rows.reduce((a, r) => ({
+          funcionarios: a.funcionarios + r.funcionarios,
+          necessidade: a.necessidade + r.necessidade,
+          jaEntregue: a.jaEntregue + r.jaEntregue,
+          liquida: a.liquida + r.liquida,
+          estoque: a.estoque + r.estoque,
+          deficit: a.deficit + r.deficit,
+          sobra: a.sobra + r.sobra,
+        }), { funcionarios: 0, necessidade: 0, jaEntregue: 0, liquida: 0, estoque: 0, deficit: 0, sobra: 0 });
+        return { rows, totais, semTamanho: semTamanho[b] };
+      };
+
+      return {
+        config,
+        totalFuncionariosAtivos: emps.length,
+        camisa: buildBucket("camisa"),
+        calca: buildBucket("calca"),
+        calcado: buildBucket("calcado"),
+      };
+    }),
+
   // ============================================================
   // CATÁLOGO DE EPIs
   // ============================================================

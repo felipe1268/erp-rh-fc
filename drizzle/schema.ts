@@ -524,6 +524,12 @@ export const companies = pgTable("companies", {
         // 0 = esconde o banner em todos os dispositivos. NÃO afeta o uso
         // offline do Levantamento de Campo (que independe da instalação).
         pwaInstallBannerAtivo: smallint("pwa_install_banner_ativo").default(1).notNull(),
+        // Rev. 2914 — Necessidade de EPI/Uniforme por funcionário (configurável por tipo).
+        // Quantidade que CADA funcionário ativo precisa de cada item; usada no
+        // cruzamento "Necessidade x Estoque". Default 1 (1 camisa, 1 calça, 1 calçado).
+        epiNecCamisa: smallint("epi_nec_camisa").default(1).notNull(),
+        epiNecCalca: smallint("epi_nec_calca").default(1).notNull(),
+        epiNecCalcado: smallint("epi_nec_calcado").default(1).notNull(),
 },
 (table) => [
         index("companies_cnpj_unique").on(table.cnpj),

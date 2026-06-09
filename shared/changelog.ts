@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2914 — **CONTROLE DE EPIs · NOVA ABA "NECESSIDADE" — CRUZA OS TAMANHOS CADASTRADOS DE CADA
+ * FUNCIONÁRIO ATIVO (CAMISA/CALÇA/CALÇADO) COM O ESTOQUE TOTAL (CENTRAL + OBRAS), DESCONTA O QUE JÁ
+ * FOI ENTREGUE E MOSTRA QUANTO FALTA COMPRAR POR TAMANHO.**
+ *
+ * PEDIDO (usuário): saber, por TAMANHO, quanto comprar de camisa/calça/calçado para vestir todo o
+ * efetivo ativo, sem comprar a mais para quem já recebeu. Antes o RH/Compras tinha que cruzar à mão
+ * a planilha de tamanhos dos funcionários com o estoque e as entregas.
+ *
+ * DECISÕES CONFIRMADAS (usuário):
+ * - Necessidade = quantidade CONFIGURÁVEL por tipo (camisa/calça/calçado), default 1 por funcionário.
+ * - Comparar com ESTOQUE TOTAL = central (`epis.quantidadeEstoque`) + todas as obras
+ *   (`epi_estoque_obra.quantidade`).
+ * - DESCONTAR quem já recebeu (entregas `epi_deliveries` não deletadas), por tipo/funcionário.
+ *
+ * MODELO / BUCKETS: a partir do funcionário ATIVO (`employees.status='Ativo'`) lê `tamanhoCamisa`
+ * (letras PP..EXG), `tamanhoCalca` (núm 36..58) e `tamanhoCalcado` (núm 33..48). Do catálogo `epis`:
+ * calçado = categoria 'Calcado'; calça = categoria 'Uniforme' + tamanho numérico; camisa = categoria
+ * 'Uniforme' + tamanho com letra. EPIs comuns NÃO entram. Por funcionário, `liquida = max(0,
+ * necessidade − jaEntregue)` atribuída ao SEU tamanho; agrega por (bucket,tamanho):
+ * funcionarios/necessidade/jaEntregue/liquida/estoque/deficit(=max(0,liquida−estoque))/sobra.
+ * Funcionário ativo sem o tamanho cadastrado entra em `semTamanho` (não distorce a conta).
+ *
+ * SOLUÇÃO (ZERO ALTER/DROP/DELETE — só ADD COLUMN IF NOT EXISTS + leitura):
+ * - SCHEMA `drizzle/schema.ts` (companies): `epiNecCamisa`/`epiNecCalca`/`epiNecCalcado` SMALLINT NOT
+ *   NULL DEFAULT 1; self-heal `server/_core/index.ts` (`[SyncSchema+]`) com 3x ADD COLUMN IF NOT EXISTS
+ *   (espelha o bloco pwa).
+ * - BACKEND `server/routers/epis.ts`: `getNecessidadeConfig`/`setNecessidadeConfig` (clamp 0..99 na
+ *   companies primary) + `necessidadeVsEstoque` ({companyId, companyIds?}; ids = companyIds||[companyId];
+ *   read-only) que devolve `{config, totalFuncionariosAtivos, camisa/calca/calcado:{rows[],totais,
+ *   semTamanho}}` com linhas ordenadas (letras PP..EXG; números crescentes).
+ * - FRONTEND `client/src/pages/EpiNecessidade.tsx` (novo): editor de necessidade (3 inputs + Salvar,
+ *   só quando !readOnly), cards-resumo (ativos / total a comprar) e 3 tabelas (Camisa/Uniforme, Calça,
+ *   Calçado) com colunas Tamanho · Funcionários · Necessidade · Já entregue · Falta · Estoque · A
+ *   comprar, destaque vermelho no déficit e alerta âmbar "N sem tamanho cadastrado". Wire em
+ *   `client/src/pages/Epis.tsx` (ViewMode + aba ShoppingCart "Necessidade" + render; entra na lista
+ *   de abas que escondem os filtros padrão).
+ *
  * Rev. 2913 — **COLETA DE CAMPO (RH) · LISTA DE LINKS — AGORA DÁ PRA CLICAR EM "FALTAM N DE TOTAL"
  * E VER NOMINALMENTE QUEM AINDA FALTA COLETAR EM CADA OBRA (NÃO SÓ O NÚMERO).**
  *

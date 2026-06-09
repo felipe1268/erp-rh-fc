@@ -1092,6 +1092,14 @@ Regras:
           console.log(`[SyncSchema+] Coluna pwa_install_banner_ativo garantida em companies.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA companies pwa_install_banner_ativo:`, e?.message || e); }
 
+        // Rev. 2914 — Necessidade de EPI/Uniforme por funcionário (configurável por tipo).
+        try {
+          await db.execute(sql`ALTER TABLE companies ADD COLUMN IF NOT EXISTS epi_nec_camisa SMALLINT NOT NULL DEFAULT 1`);
+          await db.execute(sql`ALTER TABLE companies ADD COLUMN IF NOT EXISTS epi_nec_calca SMALLINT NOT NULL DEFAULT 1`);
+          await db.execute(sql`ALTER TABLE companies ADD COLUMN IF NOT EXISTS epi_nec_calcado SMALLINT NOT NULL DEFAULT 1`);
+          console.log(`[SyncSchema+] Rev. 2914: colunas epi_nec_camisa/calca/calcado garantidas em companies.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA companies epi_nec_*:`, e?.message || e); }
+
         // Rev. 2404 — Vinculo de item de almoxarifado com Controle de Equipamentos.
         try {
           await db.execute(sql`ALTER TABLE almoxarifado_itens ADD COLUMN IF NOT EXISTS equipamento_vinculado_tipo VARCHAR(10)`);
