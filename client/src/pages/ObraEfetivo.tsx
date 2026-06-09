@@ -1647,7 +1647,10 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                   <span className="inline-flex items-center gap-1.5">
                     <span className="inline-block h-2.5 w-2.5 rounded-full bg-gray-300" /> Sem integração
                   </span>
-                  <span className="text-slate-400">— cada bloco mostra o cliente, a validade e as NRs cobertas.</span>
+                  <span className="inline-flex items-center gap-1.5 border-l pl-3 ml-1">
+                    <GraduationCap className="h-3 w-3" /> Chips = NRs (treinamentos): verde = válido, vermelho = vencido
+                  </span>
+                  <span className="text-slate-400">— blocos = integração por cliente/referência (validade); chips = NRs do treinamento.</span>
                 </div>
 
                 {/* Employee list grouped by status */}
@@ -1697,7 +1700,8 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                                 const emExperiencia = f.employee?.experienciaStatus === 'em_experiencia' && !!expFim && String(expFim).slice(0, 10) >= todayStr;
                                 const feriasAgendada: string | null = f.feriasAgendadaInicio || null;
                                 const temStatusBadge = (empStatus === 'AvisoDispensado' && f.avisoDataFim) || (empStatus === 'Aviso' && f.avisoDataFim) || (empStatus === 'Ferias' && f.feriasDataFim) || empStatus === 'Afastado' || empStatus === 'Licenca';
-                                const integ: Array<{ cliente: string; obraNome: string | null; titulo: string; dataValidade: string | null; vencida: boolean; nrs: string[] }> = Array.isArray(f.integracoes) ? f.integracoes : [];
+                                const integ: Array<{ cliente: string; tipo: string; dataValidade: string | null; vencida: boolean; semVencimento: boolean }> = Array.isArray(f.integracoes) ? f.integracoes : [];
+                                const nrs: Array<{ norma: string; nome: string; dataValidade: string | null; vencida: boolean }> = Array.isArray(f.nrs) ? f.nrs : [];
                                 return (
                                 <tr key={f.id} className={`hover:bg-slate-50/50 ${rowBg}`} style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}>
                                   <td className="px-4 py-2.5">
@@ -1769,47 +1773,48 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                                     </div>
                                   </td>
                                   <td className="px-4 py-2.5 text-sm hidden md:table-cell">
-                                    {integ.length > 0 ? (
-                                      <div className="flex flex-col gap-1.5 max-w-[320px]">
-                                        {integ.map((ig, i) => (
+                                    <div className="flex flex-col gap-1.5 max-w-[320px]">
+                                      {/* Integrações por CLIENTE (employee_integrations) */}
+                                      {integ.length > 0 ? (
+                                        integ.map((ig, i) => (
                                           <div
                                             key={i}
                                             className={`rounded-lg border px-2 py-1 ${ig.vencida ? 'bg-red-50 border-red-300' : 'bg-emerald-50 border-emerald-300'}`}
                                             style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}
                                           >
-                                            {/* Cliente/local + status de cor + validade */}
+                                            {/* Cliente/referência + status de cor + validade */}
                                             <div className="flex items-center gap-1.5">
                                               <span className={`inline-block h-2.5 w-2.5 rounded-full ${ig.vencida ? 'bg-red-500' : 'bg-emerald-500'}`} style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }} />
                                               <ShieldCheck className={`h-3 w-3 ${ig.vencida ? 'text-red-700' : 'text-emerald-700'}`} />
                                               <span className={`text-[11px] font-semibold ${ig.vencida ? 'text-red-800' : 'text-emerald-800'}`}>{ig.cliente}</span>
                                             </div>
                                             <div className={`text-[10px] mt-0.5 ${ig.vencida ? 'text-red-700' : 'text-emerald-700'}`}>
-                                              {ig.dataValidade ? `${ig.vencida ? 'Venceu' : 'Válida até'}: ${fmtDataBR(ig.dataValidade)}` : (ig.vencida ? 'Vencida' : 'Sem validade definida')}
+                                              {ig.dataValidade ? `${ig.vencida ? 'Venceu' : 'Válida até'}: ${fmtDataBR(ig.dataValidade)}` : (ig.vencida ? 'Vencida' : 'Sem vencimento')}
                                             </div>
-                                            {/* NRs (módulos) cobertas pela integração */}
-                                            {ig.nrs && ig.nrs.length > 0 && (
-                                              <div className="flex flex-wrap gap-1 mt-1">
-                                                {ig.nrs.map((nr, j) => (
-                                                  <span
-                                                    key={j}
-                                                    title={ig.dataValidade ? `Validade: ${fmtDataBR(ig.dataValidade)}` : undefined}
-                                                    className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium border bg-white ${ig.vencida ? 'text-red-700 border-red-200' : 'text-emerald-700 border-emerald-200'}`}
-                                                    style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}
-                                                  >
-                                                    {nr}
-                                                  </span>
-                                                ))}
-                                              </div>
-                                            )}
                                           </div>
-                                        ))}
-                                      </div>
-                                    ) : (
-                                      <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                                        <span className="inline-block h-2.5 w-2.5 rounded-full bg-gray-300" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }} />
-                                        Sem integração
-                                      </span>
-                                    )}
+                                        ))
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                                          <span className="inline-block h-2.5 w-2.5 rounded-full bg-gray-300" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }} />
+                                          Sem integração
+                                        </span>
+                                      )}
+                                      {/* NRs (treinamentos) — coluna "Norma" do Controle de Documentos */}
+                                      {nrs.length > 0 && (
+                                        <div className="flex flex-wrap gap-1 pt-0.5">
+                                          {nrs.map((nr, j) => (
+                                            <span
+                                              key={j}
+                                              title={`${nr.nome}${nr.dataValidade ? ` — ${nr.vencida ? 'Venceu' : 'Válido até'}: ${fmtDataBR(nr.dataValidade)}` : ''}`}
+                                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${nr.vencida ? 'bg-red-50 text-red-700 border-red-300' : 'bg-emerald-50 text-emerald-700 border-emerald-300'}`}
+                                              style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' as any }}
+                                            >
+                                              <GraduationCap className="h-2.5 w-2.5" />{nr.norma}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
                                   </td>
                                   <td className="px-4 py-2.5 print:hidden">
                                     <div className="flex items-center justify-end gap-1 flex-wrap">

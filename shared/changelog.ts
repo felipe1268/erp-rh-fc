@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2934 — **EQUIPE DA OBRA (DRILL-DOWN) — COLUNA "INTEGRAÇÕES" CORRIGIDA PARA AS FONTES REAIS:
+ * INTEGRAÇÃO POR CLIENTE/REFERÊNCIA VEM DA ABA "INTEGRAÇÕES" DO CONTROLE DE DOCUMENTOS
+ * (`employee_integrations`, EX.: "SANTUARIO NACIONAL…") E AS NRs VÊM DOS DOCUMENTOS DE TREINAMENTO
+ * (`trainings.norma`, EX.: NR-18/NR-33/NR-35), CADA UM COM SUA VALIDADE E COR (VÁLIDO/VENCIDO).**
+ *
+ * CONTEXTO: nas Rev. 2932/2933 a coluna foi montada a partir do MÓDULO SST (`sstIntegracaoRegistros`
+ * + `sstIntegracaoModulos`) — fonte ERRADA. O usuário enviou os prints das telas reais de cadastro:
+ * (1) "Controle de Documentos → Integrações" tem o dado oficial de integração por CLIENTE (tipo
+ * Externa/PJ, Realização/Validade/Status) em `employee_integrations` (router `integracoes.ts`); e
+ * (2) "Controle de Documentos → Treinamentos" tem as NRs na coluna "Norma" (`trainings.norma`),
+ * com Carga Horária/Realização/Validade/Status. Ou seja, integração e NR são fontes DISTINTAS.
+ *
+ * SOLUÇÃO (BACK + FRONT, READ-ONLY — ZERO ALTER/DROP/DELETE):
+ *
+ * BACKEND (`server/db.ts`, `getObraFuncionarios`), tudo tenant-safe por `companyIdsArr` (sem IDOR):
+ *   - INTEGRAÇÕES re-apontadas de `sstIntegracaoRegistros` → `employee_integrations`. Cliente =
+ *     `clienteNome` (texto já gravado com a razão social) com fallback `clientes.razaoSocial`
+ *     (leftJoin por id + companyId) e, em integração interna, "FC Engenharia (Interna)". Validade =
+ *     `dataVencimento`; `vencida` DATE-ONLY (hoje meia-noite vs `dataVencimento + T00:00:00`,
+ *     espelhando `calcularStatus` de `integracoes.ts`); `semVencimento` p/ sem data; dedup por
+ *     CLIENTE (mantém o mais recente por `dataRealizacao`). Item:
+ *     `{cliente, tipo, dataValidade, vencida, semVencimento}`.
+ *   - NRs novas a partir de `trainings` (deletedAt null): por funcionário, lê `norma`/`nome`/
+ *     `dataValidade`, ignora treinamentos sem `norma`, dedup por norma (mais recente), `vencida` =
+ *     `dataValidade < hoje` (compara string `YYYY-MM-DD`). Exposto no novo campo `nrs[]` do
+ *     funcionário: `{norma, nome, dataValidade, vencida}`.
+ *   - Imports SST não usados removidos; `employeeIntegrations`/`clientes` adicionados.
+ *
+ * FRONTEND (`client/src/pages/ObraEfetivo.tsx`): a célula "Integrações" mostra 1 bloco por cliente
+ * (bolinha verde/vermelha + cliente + "Válida até/Venceu: DD/MM" ou "Sem vencimento"; "Sem integração"
+ * = bolinha cinza) e, abaixo, os CHIPS DE NRs (ícone diploma + código da NR; verde=válido / vermelho=
+ * vencido; tooltip = nome do treinamento + validade). Legenda atualizada (integração por cliente +
+ * NRs do treinamento). Datas via `fmtDataBR` (`YYYY-MM-DD` + `T12:00:00`, anti-crash iOS);
+ * `print-color-adjust:exact`.
+ *
+ * EFEITO: a coluna passa a refletir EXATAMENTE o que o gestor cadastra no Controle de Documentos —
+ * o cliente da integração ("Santuário Nacional" etc.) E as NRs do funcionário (treinamentos), cada
+ * um com cor/validade fiéis. ZERO ALTER/DROP/DELETE.
+ *
  * Rev. 2933 — **EQUIPE DA OBRA (DRILL-DOWN) — A COLUNA "INTEGRAÇÕES" AGORA MOSTRA EM QUAIS
  * CLIENTES/LOCAIS O FUNCIONÁRIO ESTÁ INTEGRADO (EX.: "SANTUÁRIO NACIONAL", "GERAL"), COM
  * COR (VÁLIDA/VENCIDA), DATA DE VALIDADE E AS NRs (MÓDULOS) COBERTAS — MAIS UMA LEGENDA DE
