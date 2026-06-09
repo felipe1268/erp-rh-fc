@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2940 — **EFETIVO POR OBRA — AS LISTAS GERAIS "TODOS" E "SEM OBRA" AGORA MOSTRAM A FOTO DO
+ * FUNCIONÁRIO NA COLUNA "FUNCIONÁRIO" (ANTES SÓ NOME + CPF) — IGUAL AO DRILL-DOWN "EQUIPE —
+ * {OBRA}".**
+ *
+ * CONTEXTO: o usuário pediu (2 prints do iPad) pra colocar a foto também nas abas "Todos (125)" e
+ * "Sem Obra (4)", que listavam só nome + CPF/função enquanto o drill-down "Equipe — {obra}" já
+ * exibia a miniatura via `PersonPhoto`.
+ *
+ * SOLUÇÃO (FRONT + 1 ajuste read-only de BACK, ZERO ALTER/DROP/DELETE):
+ *   - `client/src/pages/ObraEfetivo.tsx`: a célula "Funcionário" das abas "Todos" e "Sem Obra"
+ *     passou a renderizar `<PersonPhoto size="sm" src={emp.fotoUrl} caption={função}>` ao lado do
+ *     nome (clicável p/ Raio-X) + CPF, no mesmo padrão visual do drill-down. `PersonPhoto`
+ *     degrada p/ iniciais quando não há foto.
+ *   - `server/db.ts` (`getFuncionariosSemObra`): o `select` ganhou `fotoUrl: employees.fotoUrl`
+ *     (a aba "Todos" já vinha de `employees.list`, que traz `fotoUrl`; a "Sem Obra" não trazia).
+ *     Apenas inclusão de coluna no SELECT — nenhuma mudança de schema/dados.
+ *
+ * NOTA: a aba "Inconsistências" usa outra forma de dado (registro de ponto, sem `fotoUrl` nem
+ * employeeId p/ Raio-X), então NÃO recebeu foto.
+ */
+
+/**
  * Rev. 2939 — **EFETIVO POR OBRA — O DRILL-DOWN "EQUIPE — {OBRA}" AGORA É AUTO-AJUSTÁVEL: EM
  * TELAS GRANDES (lg+) CONTINUA A TABELA COMPLETA; EM TABLET/CELULAR (< lg) CADA FUNCIONÁRIO VIRA
  * UM CARD EMPILHADO COM TODAS AS INFORMAÇÕES — ACABA O CORTE DA COLUNA "AÇÕES" NO iPad (~768px).**

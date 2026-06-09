@@ -956,9 +956,21 @@ export default function ObraEfetivo() {
                                   onChange={() => toggleEmployee(emp.id)}
                                 />
                               </td>
-                              <td className="p-2 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(emp.id)}>
-                                {emp.nomeCompleto}
-                                {emp.cpf && <p className="text-[10px] font-normal text-muted-foreground font-mono">{emp.cpf}</p>}
+                              <td className="p-2">
+                                <div className="flex items-center gap-3">
+                                  <PersonPhoto
+                                    src={emp.fotoUrl}
+                                    alt={emp.nomeCompleto || "—"}
+                                    size="sm"
+                                    caption={emp.funcao || emp.cargo || undefined}
+                                  />
+                                  <div className="min-w-0">
+                                    <p className="font-medium text-sm text-blue-700 cursor-pointer hover:underline truncate" onClick={() => setRaioXEmployeeId(emp.id)}>
+                                      {emp.nomeCompleto}
+                                    </p>
+                                    {emp.cpf && <p className="text-[10px] font-normal text-muted-foreground font-mono">{emp.cpf}</p>}
+                                  </div>
+                                </div>
                               </td>
                               <td className="p-2 text-muted-foreground">{emp.funcao || emp.cargo || "—"}</td>
                               <td className="p-2 text-muted-foreground">{emp.setor || "—"}</td>
@@ -1067,7 +1079,17 @@ export default function ObraEfetivo() {
                       <tbody>
                         {filteredSemObra.map((emp: any) => (
                           <tr key={emp.id} className="border-b hover:bg-slate-50">
-                            <td className="p-3 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(emp.id)}>{emp.nomeCompleto}</td>
+                            <td className="p-3">
+                              <div className="flex items-center gap-3">
+                                <PersonPhoto
+                                  src={emp.fotoUrl}
+                                  alt={emp.nomeCompleto || "—"}
+                                  size="sm"
+                                  caption={emp.funcao || emp.cargo || undefined}
+                                />
+                                <p className="font-medium text-sm text-blue-700 cursor-pointer hover:underline truncate" onClick={() => setRaioXEmployeeId(emp.id)}>{emp.nomeCompleto}</p>
+                              </div>
+                            </td>
                             <td className="p-3 text-muted-foreground">{emp.funcao || emp.cargo || "—"}</td>
                             <td className="p-3 text-muted-foreground">{emp.setor || "—"}</td>
                             <td className="p-3 align-top">

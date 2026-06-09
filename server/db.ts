@@ -3036,6 +3036,7 @@ export async function getFuncionariosSemObra(companyId: number, companyIds?: num
     setor: employees.setor,
     status: employees.status,
     dataAdmissao: employees.dataAdmissao,
+    fotoUrl: employees.fotoUrl,
   }).from(employees)
     .where(and(
       inArray(employees.companyId, ids),
