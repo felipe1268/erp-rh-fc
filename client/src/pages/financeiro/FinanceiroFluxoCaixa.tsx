@@ -200,6 +200,23 @@ export default function FinanceiroFluxoCaixa() {
   const lucrAnual  = totalRec > 0 ? (totalRes / totalRec) * 100 : 0;
   const semDados   = totalRec === 0 && totalDesp === 0;
 
+  // Rev. 2945 — Split Efetivo × Projeção INDEPENDENTE do escopo selecionado, para
+  // os KPIs deixarem explícito quanto do total é forecast (Projeção do cronograma/
+  // folha) vs. real (Efetivo). É a visão "Todos" (R$ totais) decomposta.
+  const recEfetTotal = sum(recEfet);
+  const recProjTotal = sum(recProj);
+  const despSplit = useMemo(() => {
+    const rowsP: any[] = pagarQ.data ?? [];
+    let efet = 0, proj = 0;
+    for (const c of rowsP) {
+      const key = String(c.dataVencimento ?? "").slice(0, 7);
+      if (meses12.indexOf(key) < 0) continue;
+      const v = Number(c.valorPrevisto ?? 0) || 0;
+      if (isProjecaoDespesa(c.origemModulo)) proj += v; else efet += v;
+    }
+    return { efet, proj };
+  }, [pagarQ.data, meses12]);
+
   // ── Helpers ─────────────────────────────────────────────────────────────────
   function isAtual(colIdx: number) {
     return colIdx + 1 === mesAtual && ano === hoje.getFullYear();
@@ -459,11 +476,13 @@ export default function FinanceiroFluxoCaixa() {
               label: "Receitas", v: totalRec,
               color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200",
               icon: <TrendingUp className="w-4 h-4 text-emerald-500" />,
+              split: natureza === "todos" ? { efet: recEfetTotal, proj: recProjTotal } : null,
             },
             {
               label: "Despesas", v: totalDesp,
               color: "text-rose-700", bg: "bg-rose-50 border-rose-200",
               icon: <TrendingDown className="w-4 h-4 text-rose-500" />,
+              split: natureza === "todos" ? { efet: despSplit.efet, proj: despSplit.proj } : null,
             },
             {
               label: "Resultado", v: totalRes,
@@ -472,14 +491,16 @@ export default function FinanceiroFluxoCaixa() {
               icon: totalRes >= 0
                 ? <Wallet className="w-4 h-4 text-emerald-500" />
                 : <TrendingDown className="w-4 h-4 text-rose-500" />,
+              split: null,
             },
             {
               label: "Margem Líquida", v: null, pct: lucrAnual,
               color: lucrAnual >= 0 ? "text-emerald-700" : "text-rose-600",
               bg: "bg-slate-50 border-slate-200",
               icon: <Minus className="w-4 h-4 text-slate-400" />,
+              split: null,
             },
-          ].map(({ label, v, pct, color, bg, icon }) => (
+          ].map(({ label, v, pct, color, bg, icon, split }) => (
             <div key={label} className={`rounded-xl border p-4 ${bg}`}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs text-slate-500 font-medium">{label}</span>
@@ -488,6 +509,21 @@ export default function FinanceiroFluxoCaixa() {
               <p className={`text-lg font-bold ${color}`}>
                 {pct !== undefined ? PCT(pct ?? 0) : BRL(v ?? 0)}
               </p>
+              {/* Rev. 2945 — split Efetivo × Projeção (só no escopo "Todos"): deixa
+                  explícito quanto do total é forecast (Projeção, violeta) vs. real
+                  (Efetivo, sólido). Resolve o "R$ X inflado por projeção". */}
+              {split && (
+                <div className="grid grid-cols-2 gap-1.5 mt-2">
+                  <span className="inline-flex items-center gap-1 rounded-md bg-white/70 border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600 whitespace-nowrap">
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500 flex-shrink-0" />
+                    Efetivo <span className="font-semibold ml-auto">{BRL(split.efet)}</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-md bg-violet-50 border border-violet-200 px-1.5 py-0.5 text-[10px] text-violet-700 whitespace-nowrap">
+                    <span className="w-1.5 h-1.5 rounded-full bg-violet-500 flex-shrink-0" />
+                    Projeção <span className="font-semibold ml-auto">{BRL(split.proj)}</span>
+                  </span>
+                </div>
+              )}
               {label === "Despesas" && (
                 <div className="flex gap-3 mt-1.5">
                   <span className="text-[10px] text-slate-500">Fixas: <span className="font-semibold">{BRL(totalFixas)}</span></span>

@@ -1,6 +1,59 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2945 — **DUPLICATAS DE CONTAS A PAGAR LIMPAS (R$ 1,02 mi de linhas idênticas removidas),
+ * RAIZ DAS RECORRENTES CORRIGIDA E KPIs DO FLUXO DE CAIXA AGORA SEPARAM PROJEÇÃO × EFETIVO.**
+ *
+ * CONTEXTO (usuário, print do iPad — Fluxo de Caixa / Contas a Pagar mostrando ~R$ 25 mi "em
+ * aberto"): o total parecia inflado. Diagnóstico via Neon (empresa 60002 FC Engenharia Projeto,
+ * 2026): (a) 74% do total é PROJEÇÃO (R$ 19,5 mi — cronograma do MS Project, folha/encargos/PJ/
+ * 13º/férias projetados), só 26% é Efetivo (R$ 7,0 mi) — NÃO era bug, mas a tela não deixava a
+ * composição explícita; (b) havia DUPLICATAS REAIS no banco — linhas 100% idênticas (mesma
+ * descrição, valor, vencimento, origem, status, conta, obra) geradas por geração automática. O
+ * usuário AUTORIZOU EXPLICITAMENTE (exceção pontual às regras R-001/R-007/R-010) apagar as
+ * duplicatas existentes e pediu para separar Projeção × Efetivo de forma mais clara nos KPIs.
+ *
+ * SOLUÇÃO — 3 frentes:
+ *   1) LIMPEZA (DELETE pontual autorizado, via script Neon `.local/*.cjs` apagado após uso, em
+ *      TRANSAÇÃO com verificação pós-delete = 0 grupos restantes antes do COMMIT): removidas 85
+ *      linhas excedentes (R$ 1.021.272,69, escopo global todos-anos/empresas) das 3 origens de
+ *      SISTEMA com `origem_id IS NOT NULL` — recorrente (42 linhas, R$ 949k), pj_projetado (8,
+ *      R$ 64k) e frota_abastecimento (35, R$ 8k). Critério: agrupar por identidade COMPLETA
+ *      (company_id, descricao, valor_previsto, data_vencimento, origem_modulo, origem_id, status,
+ *      conta_id, obra_id) HAVING count>1, manter MIN(id), apagar o resto. SEGURANÇA: ids
+ *      referenciados por qualquer coluna `financial_entry_id` (compras_ordens, purchase_orders,
+ *      purchase_accounts_payable, buyer_commissions, medicao_boletins, fleet_consolidations) foram
+ *      EXCLUÍDOS do delete (0 atingidos). As duplicatas MANUAIS (origem_id NULL, R$ 30,7k — ex.:
+ *      PRO LABORE 3×, SALÁRIO 2×) NÃO foram tocadas (podem ser pessoas/sócios distintos) — ficam
+ *      para o usuário decidir caso a caso.
+ *   2) RAIZ DAS RECORRENTES (`server/routers/financial.ts`, `materializeRecorrentes`): a função
+ *      fazia SELECT-then-INSERT em DUAS idas-e-voltas (checa se já existe → insere). Sob chamadas
+ *      CONCORRENTES de `getContasAPagarByYear` — agora também disparado pelo Fluxo de Caixa
+ *      (Rev. 2944), o que AMPLIFICOU a corrida — ambas passavam pela checagem (nada existe) e
+ *      inseriam, gerando 2 linhas no mesmo minuto (confirmado: VALE ALIMENTAÇÃO oid=11, ids
+ *      282801/282802). CORREÇÃO: virou `INSERT ... SELECT ... WHERE NOT EXISTS` num ÚNICO statement
+ *      atômico (RETURNING id; conta só o que inseriu), eliminando a janela das 2 round-trips. SEM
+ *      DDL (a regra proíbe ALTER/índice). NB técnico: o helper `dbExecute` liga parâmetros por
+ *      ORDEM DE APARIÇÃO do placeholder (o número do `$N` é ignorado — ele faz `query.split(/\$\d+/g)`)
+ *      → os placeholders foram numerados sequencialmente ($1..$18) na ordem em que aparecem.
+ *   3) KPIs FLUXO DE CAIXA (`client/src/pages/financeiro/FinanceiroFluxoCaixa.tsx`, FRONT-only):
+ *      novos `recEfetTotal`/`recProjTotal` (soma das séries Efetivo/Projeção já existentes) e
+ *      `despSplit` (useMemo que percorre `pagarQ.data` e soma por `isProjecaoDespesa`, INDEPENDENTE
+ *      do escopo). No escopo "Todos", os cards Receitas e Despesas ganham 2 chips — "Efetivo"
+ *      (sólido/slate) e "Projeção" (violeta, mesma cor do controle de escopo = forecast) — deixando
+ *      explícito quanto do R$ total é cronograma/folha vs. real. Nos escopos Efetivo/Projeção os
+ *      chips somem (o headline já É a dimensão única). Card Despesas mantém a linha Fixas/Variáveis.
+ *
+ * NOTA / FOLLOW-UP: pj_projetado e frota_abastecimento compartilham a mesma classe de bug
+ * (check-then-insert sem índice único; o writer de pj_projetado já tem `ON CONFLICT DO NOTHING`
+ * que NÃO atua sem um índice). A correção verdadeiramente race-proof dessas duas exigiria um índice
+ * único parcial (DDL) — fora do escopo desta revisão (regra proíbe ALTER/índice sem autorização).
+ * As duplicatas existentes delas já foram limpas; novas só reapareceriam sob concorrência alta.
+ *
+ * IMPACTO: Contas a Pagar e Fluxo de Caixa caem ~R$ 1,02 mi de duplicatas; a recorrência não
+ * duplica mais no caminho normal; o usuário enxerga de imediato quanto do total é projeção.
+ * ZERO ALTER/DROP — DELETE pontual de duplicatas idênticas explicitamente autorizado.
+ *
  * Rev. 2944 — **FLUXO DE CAIXA — REVISÃO COMPLETA: LAYOUT MAIS CLEAN (CORES PADRÃO) E OS VALORES
  * AGORA BATEM 1:1 COM CONTAS A RECEBER E CONTAS A PAGAR.**
  *

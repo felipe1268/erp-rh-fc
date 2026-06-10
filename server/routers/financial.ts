@@ -152,26 +152,35 @@ async function materializeRecorrentes(
     while (venc <= horizonte && iter < 200) {
       iter++;
       const vencStr = venc.toISOString().split("T")[0];
-      const existingQuery = dedupePorData
-        ? `SELECT id FROM financial_entries WHERE company_id=$1 AND origem_modulo='recorrente' AND origem_id=$2 AND data_vencimento=$3 LIMIT 1`
-        : `SELECT id FROM financial_entries WHERE company_id=$1 AND origem_modulo='recorrente' AND origem_id=$2 AND TO_CHAR(data_vencimento,'YYYY-MM')=$3 LIMIT 1`;
-      const existingParam = dedupePorData ? vencStr : vencStr.slice(0, 7);
-      const existing = await dbExecute(db, existingQuery, [companyId, rec.id, existingParam]);
-      if (rows(existing).length === 0) {
-        await dbExecute(db,
-          `INSERT INTO financial_entries
-            (company_id, obra_id, obra_nome, conta_id, conta_nome, tipo, natureza,
-             valor_previsto, data_competencia, data_vencimento, status,
-             origem_modulo, origem_id, origem_descricao, descricao, fornecedor_nome)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'recorrente',$12,$13,$14,$15)`,
-          [companyId, rec.obra_id, rec.obra_nome, rec.conta_id, rec.conta_nome,
-           rec.tipo, rec.natureza ?? "fixo", rec.valor, vencStr, vencStr,
-           rec.tipo === "receita" ? "a_receber" : "a_pagar",
-           rec.id, `Recorrência: ${rec.descricao}`, rec.descricao,
-           rec.fornecedor_nome ?? null]
-        );
-        count++;
-      }
+      // Rev. 2945 — ATÔMICO: INSERT ... SELECT ... WHERE NOT EXISTS num único
+      // statement (antes era SELECT-then-INSERT em 2 idas-e-voltas, que sob
+      // chamadas CONCORRENTES de getContasAPagarByYear — agora também disparado
+      // pelo Fluxo de Caixa — passava pela checagem em ambas e inseria 2x,
+      // gerando as duplicatas de "recorrente"). Sem DDL. NB: dbExecute liga
+      // parâmetros por ORDEM DE APARIÇÃO ($N é ignorado) → numerar sequencial.
+      const dedupeCond = dedupePorData
+        ? `data_vencimento=$18`
+        : `TO_CHAR(data_vencimento,'YYYY-MM')=$18`;
+      const dedupeParam = dedupePorData ? vencStr : vencStr.slice(0, 7);
+      const ins = await dbExecute(db,
+        `INSERT INTO financial_entries
+          (company_id, obra_id, obra_nome, conta_id, conta_nome, tipo, natureza,
+           valor_previsto, data_competencia, data_vencimento, status,
+           origem_modulo, origem_id, origem_descricao, descricao, fornecedor_nome)
+         SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'recorrente',$12,$13,$14,$15
+         WHERE NOT EXISTS (
+           SELECT 1 FROM financial_entries
+           WHERE company_id=$16 AND origem_modulo='recorrente' AND origem_id=$17 AND ${dedupeCond}
+         )
+         RETURNING id`,
+        [companyId, rec.obra_id, rec.obra_nome, rec.conta_id, rec.conta_nome,
+         rec.tipo, rec.natureza ?? "fixo", rec.valor, vencStr, vencStr,
+         rec.tipo === "receita" ? "a_receber" : "a_pagar",
+         rec.id, `Recorrência: ${rec.descricao}`, rec.descricao,
+         rec.fornecedor_nome ?? null,
+         companyId, rec.id, dedupeParam]
+      );
+      if (rows(ins).length > 0) count++;
       lastMaterialized = venc;
       const nextVenc = new Date(venc);
       if (rec.frequencia === "mensal") nextVenc.setMonth(nextVenc.getMonth() + 1);
