@@ -6,6 +6,7 @@ import PrintActions from "@/components/PrintActions";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import PrintHeader from "@/components/PrintHeader";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
+import { PersonPhoto } from "@/components/PersonPhoto";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -442,13 +443,20 @@ export default function DashControleDocumentos() {
                         title="Clique para ver quais documentos estão vencidos"
                       >
                         <td className="p-2">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setRaioXEmployeeId(f.employeeId); }}
-                            className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-left"
-                          >
-                            {f.funcionarioNome}
-                          </button>
-                          <p className="text-[10px] text-gray-400">{f.cpf}</p>
+                          <div className="flex items-center gap-2">
+                            <span onClick={(e) => e.stopPropagation()}>
+                              <PersonPhoto src={f.fotoUrl} alt={f.funcionarioNome || "—"} size="sm" caption={f.funcao || undefined} />
+                            </span>
+                            <div className="min-w-0">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setRaioXEmployeeId(f.employeeId); }}
+                                className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-left"
+                              >
+                                {f.funcionarioNome}
+                              </button>
+                              <p className="text-[10px] text-gray-400">{f.cpf}</p>
+                            </div>
+                          </div>
                         </td>
                         <td className="p-2 hidden md:table-cell text-gray-600 text-xs">{f.funcao || '—'}</td>
                         <td className="p-2 hidden lg:table-cell text-gray-600 text-xs">{f.obraNome}</td>

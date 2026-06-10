@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2951 — **CONTROLE DE DOCUMENTOS (DASHBOARD) — A TABELA "DOCUMENTAÇÃO INCOMPLETA" AGORA
+ * MOSTRA A FOTO DO FUNCIONÁRIO NA COLUNA "FUNCIONÁRIO", AO LADO DO NOME (CLICÁVEL P/ RAIO-X)
+ * E DO CPF.**
+ *
+ * CONTEXTO (usuário, print do iPad): na aba "Documentação Incompleta" do Controle de Documentos
+ * o usuário pediu "quero a foto dos funcionários aparecendo aqui também" — a tabela listava só
+ * nome + CPF, sem o avatar que outras telas (ex.: Atestados & Acidentes) já exibem.
+ *
+ * SOLUÇÃO (BACK read-only + FRONT, ZERO ALTER/DROP/DELETE):
+ * 1) `server/routers/dashboards.ts` (`getDashControleDocumentos`): o SELECT de `ativosRows` passou
+ *    a trazer `employees.fotoUrl`; o tipo `FuncIncompleto` e o `funcIncompletos.push(...)` ganharam
+ *    `fotoUrl: emp.fotoUrl ?? null`. Nenhuma query nova — só uma coluna a mais na que já roda.
+ * 2) `client/src/pages/dashboards/DashControleDocumentos.tsx`: a célula "Funcionário" da tabela de
+ *    incompletos virou um flex com `<PersonPhoto src={f.fotoUrl} size="sm">` (lightbox + fallback
+ *    de iniciais) ao lado do bloco nome (botão Raio-X) + CPF. O clique na foto/no nome usa
+ *    `stopPropagation` p/ não disparar o `setDetalhe(f)` da linha (que abre o drill-down de
+ *    pendências). A aba "Alertas de Vencimento" ficou inalterada (fora do pedido).
+ *
  * Rev. 2950 — **CATÁLOGO DE EPIs — ESTOQUE AGORA SEPARADO POR OBRA (IGUAL JÁ FUNCIONA EM
  * ENTREGAS): NO TOPO DO CATÁLOGO HÁ UM SELETOR DE LOCAL (ALMOXARIFADO CENTRAL + OBRAS QUE O
  * USUÁRIO GERENCIA) E O CADASTRO DE EPI GANHOU O CAMPO "LOCAL DO ESTOQUE" PRA DAR ENTRADA

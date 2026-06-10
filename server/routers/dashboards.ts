@@ -3881,7 +3881,7 @@ async function getDashControleDocumentos(companyId: number, companyIds?: number[
 
   // Todas as queries em paralelo
   const [ativosRows, allAsos, allTreinCtrl, allDocsCtrl, obrasCtrlRows, alocacoesCtrl] = await Promise.all([
-    db.select({ id: employees.id, nomeCompleto: employees.nomeCompleto, cpf: employees.cpf, funcao: employees.funcao, setor: employees.setor, status: employees.status, validadeCnh: employees.validadeCnh })
+    db.select({ id: employees.id, nomeCompleto: employees.nomeCompleto, cpf: employees.cpf, funcao: employees.funcao, setor: employees.setor, status: employees.status, validadeCnh: employees.validadeCnh, fotoUrl: employees.fotoUrl })
       .from(employees).where(and(companyWhere(employees, companyId, companyIds), isNull(employees.deletedAt), sql`${employees.status} NOT IN ('Desligado','Lista_Negra')`)),
     db.select({ id: asos.id, employeeId: asos.employeeId, tipo: asos.tipo, dataExame: asos.dataExame, dataValidade: asos.dataValidade, resultado: asos.resultado, medico: asos.medico })
       .from(asos).where(and(companyWhere(asos, companyId, companyIds), isNull(asos.deletedAt))),
@@ -4069,7 +4069,7 @@ async function getDashControleDocumentos(companyId: number, companyIds?: number[
     motivo: 'sem' | 'vencido';
   };
   type FuncIncompleto = {
-    employeeId: number; funcionarioNome: string; cpf: string;
+    employeeId: number; funcionarioNome: string; cpf: string; fotoUrl: string | null;
     funcao: string; setor: string; obraNome: string;
     semAso: boolean; asoVencido: boolean;
     treinVencidos: number; docsVencidos: number; cnhVencida: boolean;
@@ -4099,7 +4099,7 @@ async function getDashControleDocumentos(companyId: number, companyIds?: number[
       // Mais críticos primeiro: "não cadastrado" no topo, depois maior atraso
       pendencias.sort((a, b) => (b.diasAtraso ?? Number.MAX_SAFE_INTEGER) - (a.diasAtraso ?? Number.MAX_SAFE_INTEGER));
       funcIncompletos.push({
-        employeeId: emp.id, funcionarioNome: emp.nomeCompleto, cpf: emp.cpf || '',
+        employeeId: emp.id, funcionarioNome: emp.nomeCompleto, cpf: emp.cpf || '', fotoUrl: emp.fotoUrl ?? null,
         funcao: emp.funcao || '', setor: emp.setor || '', obraNome: getObraNome(emp.id),
         semAso, asoVencido: asoVenc, treinVencidos: treinVenc, docsVencidos: docsVenc,
         cnhVencida: cnhVenc, totalPendencias: totalPend, pendencias,
