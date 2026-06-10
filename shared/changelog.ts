@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2943 — **CONTAS A PAGAR — NOVO CARD "EM ABERTO (ACUMULADO)" MOSTRA O TOTAL DE TUDO QUE
+ * AINDA ESTÁ POR PAGAR NO ANO INTEIRO (TODOS OS MESES), E NÃO SÓ DO MÊS SELECIONADO.**
+ *
+ * CONTEXTO (usuário, print do iPad): a tela "Contas a Pagar" tem os KPIs do MÊS (Total {mês},
+ * A Pagar, Vencidas, Pago) — todos limitados ao mês escolhido (ex.: Jul). Faltava um número que
+ * some o saldo EM ABERTO ACUMULADO, ou seja, todas as parcelas não-pagas de todos os meses, pra
+ * o financeiro enxergar a obrigação total de uma vez. Pedido: "Vc não colocou o acumulado em
+ * aberto aqui? Resolva isso".
+ *
+ * SOLUÇÃO (FRONT-only, `client/src/pages/financeiro/FinanceiroContasAPagar.tsx`, ZERO ALTER/DROP/
+ * DELETE):
+ *   - Novo `useMemo acumuladoAberto` que percorre `allContas` (o ano todo já carregado), filtra os
+ *     títulos com `status !== "pago"` e soma `valorPrevisto`. Respeita o escopo Efetivo/Projeção/
+ *     Todos (`naturezaFilter`) igual aos demais KPIs (Rev. 1629), pra não misturar projeção com
+ *     efetivo. Também calcula a parcela JÁ VENCIDA do acumulado (`dataVencimento < hoje`).
+ *   - Novo card (5º) na grade de KPIs — grade passou de `md:grid-cols-4` p/ `md:grid-cols-5` —
+ *     com ícone `Wallet` indigo: valor total em aberto + "{n} título(s) · todos os meses" e, se
+ *     houver, "{R$} vencido" em vermelho. No mobile a grade segue 2 colunas (quebra natural).
+ *
+ * IMPACTO: puramente de leitura/visualização sobre dados já buscados — sem novo endpoint, query
+ * ou schema. Vale para todas as empresas/obras. Os KPIs mensais existentes seguem intactos.
+ *
  * Rev. 2942 — **ATESTADOS & ACIDENTES (SST) — O BOTÃO "VISUALIZAR DOCUMENTO" AGORA MOSTRA O
  * ANEXO NA PRÓPRIA TELA (IMAGEM/PDF), EM VEZ DE FORÇAR O DOWNLOAD DO ARQUIVO NO iPad/CELULAR.**
  *

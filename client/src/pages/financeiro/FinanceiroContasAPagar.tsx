@@ -568,6 +568,24 @@ export default function FinanceiroContasAPagar() {
   const totalVencido = vencidos.reduce((s: number, c: any) => s + Number(c.valorPrevisto ?? 0), 0);
   const projecoesOcultas = naturezaFilter === "efetivo" ? mesData.filter(isProjecao).length : 0;
 
+  // Rev. 2943 — "Em Aberto (Acumulado)": soma de TODOS os títulos não-pagos do ano
+  // (todos os meses), não só do mês selecionado. Respeita o escopo Efetivo/Projeção/Todos
+  // (Rev. 1629) para casar com os demais KPIs. "Vencido" = parcela do acumulado já em atraso.
+  const acumuladoAberto = useMemo(() => {
+    if (!allContas) return { total: 0, count: 0, vencido: 0 };
+    let list = (allContas as any[]).filter((c: any) => c.status !== "pago");
+    if (naturezaFilter === "efetivo") list = list.filter((c: any) => !isProjecao(c));
+    else if (naturezaFilter === "projecao") list = list.filter((c: any) => isProjecao(c));
+    let total = 0;
+    let vencido = 0;
+    for (const c of list) {
+      const v = Number(c.valorPrevisto ?? 0);
+      total += v;
+      if (c.dataVencimento && c.dataVencimento.slice(0, 10) < hojeStr) vencido += v;
+    }
+    return { total, count: list.length, vencido };
+  }, [allContas, naturezaFilter, hojeStr]);
+
   const origensDisponiveis = useMemo(() => {
     if (!mesData.length) return [];
     const s = new Set(mesData.map((c: any) => c.origemModulo).filter(Boolean));
@@ -781,12 +799,24 @@ export default function FinanceiroContasAPagar() {
         </Card>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <Card className="border-0 shadow-sm border-l-4 border-l-gray-400">
             <CardContent className="p-4">
               <p className="text-xs text-gray-500 mb-1 flex items-center gap-1"><Banknote className="w-3 h-3" />Total {MESES[mesSel-1]}</p>
               <p className="text-lg font-bold text-gray-800">{formatBRL(totalMes)}</p>
               <p className="text-xs text-gray-400">{mesData.length} conta(s)</p>
+            </CardContent>
+          </Card>
+          <Card className="border-0 shadow-sm border-l-4 border-l-indigo-500">
+            <CardContent className="p-4">
+              <p className="text-xs text-gray-500 mb-1 flex items-center gap-1"><Wallet className="w-3 h-3 text-indigo-500" />Em Aberto (Acum.)</p>
+              <p className="text-lg font-bold text-indigo-700">{formatBRL(acumuladoAberto.total)}</p>
+              <p className="text-xs text-gray-400">
+                {acumuladoAberto.count} título(s) · todos os meses
+                {acumuladoAberto.vencido > 0 && (
+                  <span className="text-red-500"> · {formatBRL(acumuladoAberto.vencido)} vencido</span>
+                )}
+              </p>
             </CardContent>
           </Card>
           <Card className="border-0 shadow-sm border-l-4 border-l-orange-500">
