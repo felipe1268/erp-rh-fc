@@ -1,6 +1,50 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2956 — **COMPRAS → SOLICITAÇÃO DE COMPRA — CORREÇÃO DO FALSO AVISO "FORA DO ORÇAMENTO —
+ * N ITEM(NS) AVULSO(S) SEM VÍNCULO ORÇAMENTÁRIO. NECESSITA VERBA REALOCADA NA COTAÇÃO PARA
+ * LIBERAÇÃO" EM ITENS QUE ESTÃO CORRETAMENTE VINCULADOS À EAP (CASO SC-2026-0310).**
+ *
+ * SINTOMA (usuário, company 60002 "FC ENGENHARIA PROJETOS E OBRAS"): na SC-2026-0310 (SC id 606,
+ * obra_id 12) o detalhe da solicitação exibia a tarja laranja "FORA DO ORÇAMENTO — 1 item(ns)
+ * avulso(s) sem vínculo orçamentário", mas ao abrir a solicitação os itens ESTAVAM corretamente
+ * vinculados à etapa do orçamento (EAP 03.02.10). Aviso falso/contraditório.
+ *
+ * CAUSA-RAIZ (confirmada no Neon): a SC tem 3 itens, todos com `orcamento_item_id = 59586` e
+ * `eap_codigo = '03.02.10'`. O item id 7384 ("Pontalete 5Cmx5cm Eucalipto 4,00M", qtd 30) tinha
+ * `sem_verba = true` e `motivo_sem_verba = 'avulso'` PERSISTIDOS no banco, AO MESMO TEMPO em que
+ * possuía `orcamento_item_id` setado — uma CONTRADIÇÃO de dados: "avulso" significa, por definição,
+ * item SEM vínculo orçamentário; um item com `orcamentoItemId` JAMAIS é avulso. O flag ficou
+ * estagnado (stale): o item foi criado avulso (no modo manual o front força
+ * `{ semVerba:true, motivoSemVerba:'avulso' }` quando NÃO há `orcamentoItemId` — `Solicitacoes.tsx`)
+ * e DEPOIS foi vinculado a uma EAP. O `editarSolicitacao` (`server/routers/compras.ts`), no caso de
+ * SC COM cotação vinculada, só atualiza `descricao/unidade/quantidade/observacoes` — NÃO limpa nem
+ * recomputa `sem_verba`/`motivo_sem_verba`/`orcamento_item_id`. Resultado: o vínculo novo e o flag
+ * antigo "avulso" coexistiram. As telas (detalhe da SC, cotação e OC) computam a tarja exatamente como
+ * `it.semVerba && it.motivoSemVerba === "avulso"` → falso positivo. (O GATE de geração da OC NÃO é
+ * afetado: `gerarOrdemCompra` RECOMPUTA o estouro orçamentário a partir do orçamento real, não lê o
+ * flag persistido — então o problema era PURAMENTE de exibição.)
+ *
+ * SOLUÇÃO (BACK read-only + FRONT, ZERO ALTER/DROP/DELETE — sem mutar o banco, respeitando
+ * R-001/R-007/R-010): sanitização do flag estagnado NA LEITURA, nos 3 pontos que devolvem itens com
+ * `semVerba`/`motivoSemVerba` ao client (`server/routers/compras.ts`): (1) `getSolicitacao` (detalhe
+ * da SC — queixa direta), (2) o builder de itens do `getCotacao` (badge da cotação), (3) o builder de
+ * itens do `getOrdem` (badge da OC — neste foi preciso trazer `orcamentoItemId` no `scSemVerbaMap`).
+ * Regra única: quando `motivoSemVerba === 'avulso'` E o item tem vínculo orçamentário
+ * (`orcamentoItemId != null`, ou `orcId != null` no contexto da cotação), devolve `semVerba=false` e
+ * `motivoSemVerba=null`. Como todas as telas derivam a tarja de `semVerba && motivoSemVerba==='avulso'`,
+ * a correção AUTO-CURA a exibição de TODAS as SCs/cotações/OCs nessa condição, sem tocar nos dados.
+ * COMPLEMENTO (anti-recorrência, FRONT `client/src/pages/compras/Solicitacoes.tsx` `handleSalvar`): ao
+ * salvar/editar, qualquer item com `orcamentoItemId` setado e `motivoSemVerba === 'avulso'` tem o flag
+ * limpo (`semVerba=false`, `motivoSemVerba=undefined`) antes de persistir, evitando re-gravar a
+ * contradição. Itens de estouro (motivo ≠ 'avulso', acima do orçado) e itens genuinamente avulsos
+ * (SEM `orcamentoItemId`) seguem inalterados.
+ *
+ * VALIDAÇÃO (Neon, company 60002, SC 606): os 3 itens têm `orcamento_item_id = 59586`; após a
+ * sanitização de leitura o item 7384 deixa de ser reportado como avulso → a tarja "FORA DO ORÇAMENTO"
+ * some no detalhe da SC, na cotação e na OC. Nenhuma alteração em valores financeiros nem no gate de
+ * autorização de OC (que recomputa estouro do orçamento real).
+ *
  * Rev. 2955 — **DASHBOARD AVISO PRÉVIO → CUSTO DE DEMISSÃO EM MASSA — CORREÇÃO DO ERRO "DEU
  * ERRO E NÃO ESTÁ APARECENDO OS VALORES E FUNCIONÁRIOS" (TELA CAÍA EM "SELECIONE UMA EMPRESA"):
  * A QUERY `custoDemissaoMassa` LIA UMA COLUNA INEXISTENTE NO BANCO (`employees.valeAlimentacao`).**

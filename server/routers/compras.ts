@@ -3490,8 +3490,16 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         const parentById = i.orcamentoItemId ? orcItensMap[i.orcamentoItemId] : null;
         const parentByCodigo = !parentById && i.eapCodigo ? eapByCodigoMap[i.eapCodigo] : null;
         const parent = parentById || parentByCodigo;
+        // Rev. 2956 — um item VINCULADO a uma linha de orçamento (orcamentoItemId) NUNCA é
+        // "avulso" (que, por definição, é item SEM vínculo orçamentário). Sanitiza o flag
+        // estagnado motivoSemVerba='avulso' que sobra quando um item criado avulso é DEPOIS
+        // vinculado a uma EAP (o editarSolicitacao com cotação ativa não limpava o flag).
+        // Read-only: não muta o banco; só corrige a leitura (R-001/R-007/R-010).
+        const avulsoStale = i.motivoSemVerba === "avulso" && i.orcamentoItemId != null;
         return {
           ...i,
+          semVerba: avulsoStale ? false : i.semVerba,
+          motivoSemVerba: avulsoStale ? null : i.motivoSemVerba,
           parentEapDescricao: parent?.descricao || null,
           parentEapCodigo: parent?.eapCodigo || i.eapCodigo || null,
         };
@@ -5521,7 +5529,10 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         const compInfo = compCode ? svcCodeToCompInfo[compCode] : undefined;
         const parentEapDescricao = orcId ? (orcItemToDescricao[orcId] ?? "") : "";
         const parentEapCodigo = orcId ? (orcItemToEapCodigo[orcId] ?? trace?.eapCodigo ?? "") : (trace?.eapCodigo ?? "");
-        return { ...it, metaUnitario, metaUnitarioTotal, metaUnitarioMat, metaUnitarioMdo, metaUnitarioEquip, metaQtd, eapPath, parentEapDescricao, parentEapCodigo, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: insCode, qtdOrcada, qtdTotalSolicitada, qtdComprada, qtdEstaSC, qtdSaldo, fonteVinculo, semVerba: (it as any).semVerba ?? false, incluirAjudante: incluirAjud, metaMdoProfissional: metaMdoProf, metaMdoAjudante: metaMdoAjud, composicaoInsumos: composicaoInsumosList, composicaoCodigo: compCode, composicaoDescricao: compInfo?.descricao ?? "", composicaoUnidade: compInfo?.unidade ?? "", composicaoQtdOrcada: compInfo?.qtdOrcada ?? 0, composicaoMetaTotal: compInfo?.metaTotal ?? 0, composicaoEapCodigo: compInfo?.eapCodigo ?? "" };
+        // Rev. 2956 — item vinculado a uma linha de orçamento (orcId) NUNCA é "avulso";
+        // sanitiza flag estagnado motivoSemVerba='avulso' (read-only).
+        const avulsoStaleCot = (it as any).motivoSemVerba === "avulso" && orcId != null;
+        return { ...it, metaUnitario, metaUnitarioTotal, metaUnitarioMat, metaUnitarioMdo, metaUnitarioEquip, metaQtd, eapPath, parentEapDescricao, parentEapCodigo, scNumero, eapCodigo: trace?.eapCodigo ?? "", origemEap: trace?.origemEap ?? false, insumoCodigo: insCode, qtdOrcada, qtdTotalSolicitada, qtdComprada, qtdEstaSC, qtdSaldo, fonteVinculo, semVerba: avulsoStaleCot ? false : ((it as any).semVerba ?? false), motivoSemVerba: avulsoStaleCot ? null : ((it as any).motivoSemVerba ?? null), incluirAjudante: incluirAjud, metaMdoProfissional: metaMdoProf, metaMdoAjudante: metaMdoAjud, composicaoInsumos: composicaoInsumosList, composicaoCodigo: compCode, composicaoDescricao: compInfo?.descricao ?? "", composicaoUnidade: compInfo?.unidade ?? "", composicaoQtdOrcada: compInfo?.qtdOrcada ?? 0, composicaoMetaTotal: compInfo?.metaTotal ?? 0, composicaoEapCodigo: compInfo?.eapCodigo ?? "" };
       });
 
       const respostaMap: Record<string, { precoUnitario: string; descontoPct: string; total: string; quantidade: string }> = {};
@@ -7373,15 +7384,16 @@ Retorne APENAS um JSON válido neste formato:
       await _assertCompanyAccess(ctx.user, oc.companyId);
       const itensRaw = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
       const scItemIdsForEnrich = itensRaw.map(i => i.solicitacaoItemId).filter(Boolean) as number[];
-      let scSemVerbaMap: Record<number, { semVerba: boolean; motivoSemVerba: string | null; eapCodigo: string | null }> = {};
+      let scSemVerbaMap: Record<number, { semVerba: boolean; motivoSemVerba: string | null; eapCodigo: string | null; orcamentoItemId: number | null }> = {};
       if (scItemIdsForEnrich.length > 0) {
         const scFlags = await db.select({
           id: comprasSolicitacoesItens.id,
           semVerba: comprasSolicitacoesItens.semVerba,
           motivoSemVerba: comprasSolicitacoesItens.motivoSemVerba,
           eapCodigo: comprasSolicitacoesItens.eapCodigo,
+          orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
         }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIdsForEnrich));
-        for (const f of scFlags) scSemVerbaMap[f.id] = { semVerba: f.semVerba ?? false, motivoSemVerba: f.motivoSemVerba ?? null, eapCodigo: f.eapCodigo ?? null };
+        for (const f of scFlags) scSemVerbaMap[f.id] = { semVerba: f.semVerba ?? false, motivoSemVerba: f.motivoSemVerba ?? null, eapCodigo: f.eapCodigo ?? null, orcamentoItemId: f.orcamentoItemId ?? null };
       }
       const itens = itensRaw.map(it => {
         const scFlags = it.solicitacaoItemId ? scSemVerbaMap[it.solicitacaoItemId] : null;
@@ -7391,7 +7403,10 @@ Retorne APENAS um JSON válido neste formato:
         // `eapCodigo` do item da SC de origem (read-only; não grava no banco). Persiste no
         // primeiro save da edição (confirmarRascunhoOrdem grava `insumoCodigo = eapCodigo`).
         const insumoCodigo = (it as any).insumoCodigo || scFlags?.eapCodigo || null;
-        return { ...it, insumoCodigo, semVerba: scFlags?.semVerba ?? false, motivoSemVerba: scFlags?.motivoSemVerba ?? null };
+        // Rev. 2956 — item vinculado a orçamento (orcamentoItemId) NUNCA é "avulso";
+        // sanitiza flag estagnado motivoSemVerba='avulso' (read-only).
+        const avulsoStaleOc = scFlags?.motivoSemVerba === "avulso" && scFlags?.orcamentoItemId != null;
+        return { ...it, insumoCodigo, semVerba: avulsoStaleOc ? false : (scFlags?.semVerba ?? false), motivoSemVerba: avulsoStaleOc ? null : (scFlags?.motivoSemVerba ?? null) };
       });
       let fornecedor = null;
       if (oc.fornecedorId) {

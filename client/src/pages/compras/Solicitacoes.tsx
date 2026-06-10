@@ -2029,6 +2029,11 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
       if (modoSC === "manual" && !i.orcamentoItemId && !i.origemEap) {
         return { ...i, semVerba: true, motivoSemVerba: "avulso" };
       }
+      // Rev. 2956 — item VINCULADO a uma linha de orçamento (orcamentoItemId) nunca é
+      // "avulso"; limpa flag estagnado p/ não re-persistir a contradição no save/edição.
+      if (i.orcamentoItemId && (i as any).motivoSemVerba === "avulso") {
+        return { ...i, semVerba: false, motivoSemVerba: undefined };
+      }
       return i;
     });
     if (validos.length === 0) return toast.error("Adicione pelo menos um item.");
