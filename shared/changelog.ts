@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2947 — **ATESTADOS & ACIDENTES (SST) — A TABELA "DIAS SEM ACIDENTE — POR OBRA" AGORA LISTA
+ * SOMENTE OBRAS ATIVAS / EM ANDAMENTO (DEIXA DE MOSTRAR CONCLUÍDAS, PARALISADAS E CANCELADAS).**
+ *
+ * CONTEXTO (usuário, print do iPad da aba "Atestados & Acidentes"): "Só quero que apareça as obras
+ * em status ativo ou em andamento". A tabela "Dias sem Acidente — por Obra" listava TODAS as obras
+ * não-deletadas da empresa (a query interna chamada `obrasAtivas` na verdade NÃO filtrava status),
+ * então obras já encerradas/internas (ex.: ESCRITÓRIO CENTRAL, DEPÓSITO ITAGUAÇU, obras concluídas)
+ * apareciam e poluíam a leitura.
+ *
+ * SOLUÇÃO (BACK read-only, `server/routers/sstAnalytics.ts`, ZERO ALTER/DROP/DELETE): a query passou
+ * a trazer também `obras.status`; novo helper `obraStatusAtiva()` normaliza o status (lowercase +
+ * remove acento via NFD + colapsa underscore/espaço) e EXCLUI o conjunto terminal
+ * {concluida, paralisada, cancelada} — alinhado ao padrão canônico de "obra ativa" já usado no
+ * `server/db.ts` (status NOT IN concluída/paralisada/cancelada). Tudo que não for terminal
+ * (Planejamento, Em Andamento — incl. as variantes "Em Andamento"/"Em_Andamento") continua aparecendo.
+ * O set `obraAtivaIds` filtra a montagem de `obrasParaListagem` (fonte do `diasSemAcidente`), tanto
+ * o laço das obras cadastradas quanto a adição defensiva via `acRows` (obra concluída com acidente
+ * antigo também não reaparece). Nenhuma outra tabela/seção foi alterada.
+ *
+ * IMPACTO: só a tabela "Dias sem Acidente — por Obra". Read-only, vale para todas as empresas.
+ *
  * Rev. 2946 — **ATESTADOS & ACIDENTES (SST) — A TABELA "FUNCIONÁRIOS COM ATESTADOS RECORRENTES
  * (3+)" AGORA MOSTRA A FOTO DO FUNCIONÁRIO NA COLUNA "FUNCIONÁRIO" (ANTES SÓ NOME + #CÓDIGO).**
  *

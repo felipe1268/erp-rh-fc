@@ -271,9 +271,24 @@ export const sstAnalyticsRouter = router({
 
       // Dias sem acidente — incluir TODAS as obras ativas (mesmo sem registro)
       const obrasAtivas = await db
-        .select({ id: obras.id, nome: obras.nome, dataInicio: obras.dataInicio, createdAt: obras.createdAt })
+        .select({ id: obras.id, nome: obras.nome, status: obras.status, dataInicio: obras.dataInicio, createdAt: obras.createdAt })
         .from(obras)
         .where(and(companyFilter(obras.companyId, input), isNull(obras.deletedAt)));
+      // Rev. 2947 — "Dias sem Acidente — por Obra" só lista obras ativas/em andamento.
+      // Exclui as terminais (concluída/paralisada/cancelada), tolerante a acento,
+      // underscore/espaço e caixa (alinhado ao padrão canônico de obra ativa do db.ts).
+      const STATUS_OBRA_TERMINAL = new Set(["concluida", "paralisada", "cancelada"]);
+      const obraStatusAtiva = (s: string | null | undefined): boolean => {
+        const norm = (s ?? "")
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[_\s]+/g, " ")
+          .trim();
+        return !STATUS_OBRA_TERMINAL.has(norm);
+      };
+      const obraAtivaIds = new Set<number>();
+      for (const o of obrasAtivas) if (obraStatusAtiva(o.status)) obraAtivaIds.add(o.id);
       const obraNomeById = new Map<number, string>();
       const obraInicioById = new Map<number, string | null>();
       for (const o of obrasAtivas) {
@@ -374,9 +389,9 @@ export const sstAnalyticsRouter = router({
       // mas que não estão na lista de obras ativas (defensivo, evita
       // inconsistência com o "Ranking de Obras com Mais Acidentes" abaixo).
       const obrasParaListagem = new Map<number, string>();
-      for (const o of obrasAtivas) obrasParaListagem.set(o.id, o.nome);
+      for (const o of obrasAtivas) if (obraAtivaIds.has(o.id)) obrasParaListagem.set(o.id, o.nome);
       for (const r of acRows) {
-        if (r.obraId != null && !obrasParaListagem.has(r.obraId)) {
+        if (r.obraId != null && obraAtivaIds.has(r.obraId) && !obrasParaListagem.has(r.obraId)) {
           obrasParaListagem.set(r.obraId, r.obraNome || `Obra #${r.obraId}`);
         }
       }
