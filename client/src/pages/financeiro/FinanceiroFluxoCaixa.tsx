@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
-  RefreshCw, TrendingUp, TrendingDown, Minus, AlertCircle
+  RefreshCw, TrendingUp, TrendingDown, Minus, AlertCircle, Wallet
 } from "lucide-react";
 
 // ─── Formatadores ─────────────────────────────────────────────────────────────
@@ -13,20 +13,78 @@ import {
 const MESES_ABR = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
 function BRL(v: number): string {
-  if (v === 0) return "—";
+  if (!v) return "—";
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
 
 function PCT(v: number): string {
-  if (v === 0) return "—";
+  if (!v) return "—";
   return (v > 0 ? "+" : "") + v.toFixed(1).replace(".", ",") + "%";
 }
 
+// ─── Rev. 2944 — Efetivo × Projeção (espelha FinanceiroContasAPagar / Rev. 1629) ──
+// Projeção = forecast vindo de Planejamento/Folha (sem fato gerador). Resto = Efetivo.
+const PROJECAO_ORIGENS = new Set<string>([
+  "cronograma_atividade", "planejamento_compra",
+  "folha_projetada", "encargos_projetado",
+  "beneficio_vr_projetado", "beneficio_va_projetado",
+  "decimo_terceiro_projetado", "pj_projetado",
+  "ferias_projetada", "rescisao_projetada",
+]);
+function isProjecaoDespesa(origem?: string | null): boolean {
+  return PROJECAO_ORIGENS.has(origem ?? "");
+}
+
+// ─── Rev. 2944 — Categorização de despesa por origem_modulo (dados reais Neon) ──
+type DespBucket =
+  | "folha" | "beneficios" | "tributos" | "recorrente"
+  | "compras" | "frota" | "obras" | "terceiros" | "outros";
+
+const BUCKET_MAP: Record<string, DespBucket> = {
+  // Folha & encargos (CLT real + projeções RH)
+  folha_rh: "folha", folha_clt: "folha", folha: "folha",
+  payroll_agregado: "folha", fechamento_ponto: "folha",
+  folha_projetada: "folha", encargos_projetado: "folha",
+  decimo_terceiro_projetado: "folha", ferias_projetada: "folha",
+  rescisao_projetada: "folha",
+  pj: "folha", pagamento_pj: "folha", pj_projetado: "folha",
+  pro_labore: "folha", medicao_pj: "folha",
+  // Benefícios
+  beneficio_vr: "beneficios", beneficio_va: "beneficios",
+  beneficio_vr_projetado: "beneficios", beneficio_va_projetado: "beneficios",
+  seguro_vida: "beneficios", vale_transporte: "beneficios",
+  // Tributos / guias
+  guia_tributaria: "tributos",
+  // Serviços recorrentes
+  recorrente: "recorrente",
+  // Compras / materiais
+  compras: "compras", compra_oc: "compras", ordem_compra: "compras",
+  almoxarifado_saida: "compras", planejamento_compra: "compras",
+  // Frota
+  frota: "frota", frotas: "frota",
+  frota_manutencao: "frota", frota_abastecimento: "frota",
+  // Obras / subcontratados (cronograma)
+  cronograma_atividade: "obras", medicao_obra: "obras",
+  // Terceiros / parceiros
+  terceiro_medicao: "terceiros", parceiro_lancamento: "terceiros",
+  pagamento_terceiro: "terceiros", contrato_terceiro: "terceiros",
+  os_terceiro: "terceiros",
+};
+function bucketDespesa(origem?: string | null): DespBucket {
+  if (!origem) return "outros";
+  return BUCKET_MAP[origem] ?? "outros";
+}
+const FIXAS: DespBucket[]     = ["folha", "beneficios", "tributos", "recorrente"];
+const VARIAVEIS: DespBucket[] = ["compras", "frota", "obras", "terceiros", "outros"];
+const ALL_BUCKETS: DespBucket[] = [...FIXAS, ...VARIAVEIS];
+
 // ─── Layout ───────────────────────────────────────────────────────────────────
 
-const LABEL_W = 210;  // px — coluna de rótulo
-const COL_W   = 130;  // px — coluna de mês (precisa caber R$ 1.730.000,00)
-const TOT_W   = 140;  // px — coluna Total
+const LABEL_W = 230;  // px — coluna de rótulo
+const COL_W   = 128;  // px — coluna de mês (precisa caber R$ 1.730.000,00)
+const TOT_W   = 142;  // px — coluna Total
+
+type Natureza = "todos" | "efetivo" | "projecao";
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
 
@@ -35,225 +93,262 @@ export default function FinanceiroFluxoCaixa() {
   const hoje = new Date();
   const mesAtual = hoje.getMonth() + 1;
 
-  const [ano, setAno]         = useState(hoje.getFullYear());
+  const [ano, setAno]           = useState(hoje.getFullYear());
+  const [natureza, setNatureza] = useState<Natureza>("todos");
   const [exReceit, setExReceit] = useState(true);
-  const [exDesp, setExDesp]   = useState(true);
-  const [exFixas, setExFixas] = useState(false);
-  const [exVar, setExVar]     = useState(false);
+  const [exDesp, setExDesp]     = useState(true);
+  const [exFixas, setExFixas]   = useState(true);
+  const [exVar, setExVar]       = useState(true);
 
-  const { data, isLoading, refetch, isFetching } =
-    (trpc as any).financial.getCashFlowMatrix.useQuery(
-      { companyId, ano }, { enabled: !!companyId }
-    );
+  // Rev. 2944 — Compõe os 2 endpoints já confiáveis dos módulos irmãos, garantindo
+  // que os valores BATAM 1:1 com Contas a Receber e Contas a Pagar (por construção).
+  const receberQ = (trpc as any).financial.getContasReceberMatrix.useQuery(
+    { companyId, ano }, { enabled: !!companyId }
+  );
+  const pagarQ = (trpc as any).financial.getContasAPagarByYear.useQuery(
+    { companyId, ano }, { enabled: !!companyId }
+  );
 
-  const meses: any[] = data?.meses ?? [];
+  const isLoading  = receberQ.isLoading || pagarQ.isLoading;
+  const isFetching = receberQ.isFetching || pagarQ.isFetching;
+  // Rev. 2944 — basta UM lado falhar p/ entrar em erro: renderizar só metade dos
+  // dados (o outro lado zerado) quebraria a promessa de paridade 1:1 e induziria
+  // a leitura financeira errada.
+  const isError    = receberQ.isError || pagarQ.isError;
+  const refetch = () => { receberQ.refetch(); pagarQ.refetch(); };
 
-  // Totais anuais
-  const totalRec   = meses.reduce((s: number, m: any) => s + m.totalReceitas, 0);
-  const totalDesp  = meses.reduce((s: number, m: any) => s + m.totalDespesas, 0);
+  const meses12 = useMemo(
+    () => Array.from({ length: 12 }, (_, i) => `${ano}-${String(i + 1).padStart(2, "0")}`),
+    [ano]
+  );
+
+  // ── RECEITAS — espelha a matriz de Contas a Receber ─────────────────────────
+  const { recTodos, recEfet, recProj, recReal } = useMemo(() => {
+    const totaisMes: Record<string, number> = receberQ.data?.totaisMes ?? {};
+    const projetos: any[] = receberQ.data?.projetos ?? [];
+    const efet = Array(12).fill(0);
+    const proj = Array(12).fill(0);
+    const real = Array(12).fill(0);
+    for (const p of projetos) {
+      for (let i = 0; i < 12; i++) {
+        const cell = p.meses?.[meses12[i]];
+        if (!cell) continue;
+        const st: string | null = cell.status;
+        // Efetivo = há medição/faturamento (status não-previsto); Projeção = cronograma puro
+        const isMed = !!st && st !== "previsto" && st !== "previsao_faturamento";
+        if (isMed) {
+          efet[i] += Number(cell.valorMedido || cell.valorPrevisto || 0) || 0;
+          if (st === "recebido_parcial" || st === "recebido_total") {
+            real[i] += Number(cell.valorRecebido || 0) || 0;
+          }
+        } else {
+          proj[i] += Number(cell.valorPrevisto || 0) || 0;
+        }
+      }
+    }
+    // "Todos" usa o total oficial da matriz (idêntico ao headline de Contas a Receber)
+    const todos = meses12.map((k, i) => {
+      const oficial = totaisMes[k];
+      return oficial != null ? Number(oficial) || 0 : (efet[i] + proj[i]);
+    });
+    return { recTodos: todos, recEfet: efet, recProj: proj, recReal: real };
+  }, [receberQ.data, meses12]);
+
+  const recVals = useMemo(
+    () => natureza === "efetivo" ? recEfet : natureza === "projecao" ? recProj : recTodos,
+    [natureza, recEfet, recProj, recTodos]
+  );
+
+  // ── DESPESAS — espelha Contas a Pagar (mesmo endpoint, mesmo escopo) ─────────
+  const despBuckets = useMemo(() => {
+    const rows: any[] = pagarQ.data ?? [];
+    const buckets = Object.fromEntries(
+      ALL_BUCKETS.map(b => [b, Array(12).fill(0)])
+    ) as Record<DespBucket, number[]>;
+    for (const c of rows) {
+      const proj = isProjecaoDespesa(c.origemModulo);
+      if (natureza === "efetivo" && proj) continue;
+      if (natureza === "projecao" && !proj) continue;
+      // Mês = dataVencimento (idêntico ao agrupamento do Contas a Pagar, que usa
+      // só o vencimento e joga linhas sem data em "sem_data"). Manter assim
+      // preserva a paridade 1:1; usar um fallback (competência/criação) divergiria.
+      const key = String(c.dataVencimento ?? "").slice(0, 7);
+      const i = meses12.indexOf(key);
+      if (i < 0) continue;
+      const v = Number(c.valorPrevisto ?? 0) || 0;
+      buckets[bucketDespesa(c.origemModulo)][i] += v;
+    }
+    return buckets;
+  }, [pagarQ.data, natureza, meses12]);
+
+  const fixasVals = meses12.map((_, i) => FIXAS.reduce((s, b) => s + despBuckets[b][i], 0));
+  const varVals   = meses12.map((_, i) => VARIAVEIS.reduce((s, b) => s + despBuckets[b][i], 0));
+  const despVals  = meses12.map((_, i) => fixasVals[i] + varVals[i]);
+
+  // ── RESULTADO / ACUMULADO / MARGEM ──────────────────────────────────────────
+  const resVals = meses12.map((_, i) => recVals[i] - despVals[i]);
+  let acc = 0;
+  const acumVals = resVals.map(r => { acc += r; return acc; });
+  const lucrVals = meses12.map((_, i) => recVals[i] > 0 ? (resVals[i] / recVals[i]) * 100 : 0);
+
+  const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
+  const totalRec   = sum(recVals);
+  const totalDesp  = sum(despVals);
   const totalRes   = totalRec - totalDesp;
+  const totalFixas = sum(fixasVals);
+  const totalVar   = sum(varVals);
   const lucrAnual  = totalRec > 0 ? (totalRes / totalRec) * 100 : 0;
+  const semDados   = totalRec === 0 && totalDesp === 0;
 
-  // Fixas = folha + recorrente
-  const totalFixas = meses.reduce((s: number, m: any) =>
-    s + (m.detalhe.folha.realizado + m.detalhe.folha.previsto)
-      + (m.detalhe.recorrente.realizado + m.detalhe.recorrente.previsto), 0);
-  // Variáveis = compras + frota + obras + terceiros + outros
-  const totalVar = meses.reduce((s: number, m: any) =>
-    s + (m.detalhe.compras.realizado + m.detalhe.compras.previsto)
-      + (m.detalhe.frota.realizado + m.detalhe.frota.previsto)
-      + (m.detalhe.obras.realizado + m.detalhe.obras.previsto)
-      + (m.detalhe.terceiros.realizado + m.detalhe.terceiros.previsto)
-      + (m.detalhe.outros.realizado + m.detalhe.outros.previsto), 0);
-
-  // ── Helpers ────────────────────────────────────────────────────────────────
-
+  // ── Helpers ─────────────────────────────────────────────────────────────────
   function isAtual(colIdx: number) {
     return colIdx + 1 === mesAtual && ano === hoje.getFullYear();
   }
 
-  // ── Renderização de células ────────────────────────────────────────────────
-
-  type CellVariant = "receita" | "despesa" | "resultado" | "acumulado" | "pct" | "sub" | "subtotal";
+  // ── Estilo de células de detalhe ────────────────────────────────────────────
+  type CellVariant = "receita" | "despesa" | "resultado" | "acumulado" | "pct" | "sub";
 
   function cellStyle(v: number, variant: CellVariant, atualCol: boolean): string {
-    const base = "text-right tabular-nums text-xs px-3 py-0 border-l border-gray-200 whitespace-nowrap";
-    const bg   = atualCol ? "bg-blue-50/60" : "";
-
-    if (variant === "receita") {
-      const clr = v !== 0 ? "text-blue-800 font-semibold" : "text-gray-300";
-      return `${base} ${bg} ${clr}`;
-    }
-    if (variant === "despesa") {
-      const clr = v !== 0 ? "text-red-700 font-semibold" : "text-gray-300";
-      return `${base} ${bg} ${clr}`;
-    }
-    if (variant === "resultado") {
-      const clr = v > 0 ? "bg-green-50 text-green-800 font-bold" : v < 0 ? "bg-red-50 text-red-800 font-bold" : "text-gray-300";
-      return `${base} ${clr} ${atualCol ? "ring-2 ring-inset ring-blue-400" : ""}`;
-    }
-    if (variant === "acumulado") {
-      const clr = v > 0 ? "text-green-700 font-semibold" : v < 0 ? "text-red-600 font-semibold" : "text-gray-300";
-      return `${base} ${bg} ${clr}`;
-    }
-    if (variant === "pct") {
-      const clr = v > 0 ? "text-green-700 font-semibold" : v < 0 ? "text-red-600 font-semibold" : "text-gray-300";
-      return `${base} ${bg} ${clr}`;
-    }
-    if (variant === "subtotal") {
-      const clr = v !== 0 ? "text-slate-700 font-bold" : "text-gray-200";
-      return `${base} ${bg} ${clr}`;
-    }
-    // sub
-    const clr = v !== 0 ? "text-gray-700" : "text-gray-200";
-    return `${base} ${bg} ${clr}`;
+    const base = "text-right tabular-nums text-xs px-3 py-0 border-l border-slate-100 whitespace-nowrap";
+    const bg   = atualCol ? "bg-blue-50/70" : "";
+    if (variant === "receita")  return `${base} ${bg} ${v ? "text-emerald-700 font-medium" : "text-slate-300"}`;
+    if (variant === "despesa")  return `${base} ${bg} ${v ? "text-rose-700 font-medium" : "text-slate-300"}`;
+    if (variant === "resultado")
+      return `${base} ${v > 0 ? "bg-emerald-50 text-emerald-800 font-bold" : v < 0 ? "bg-rose-50 text-rose-800 font-bold" : "text-slate-300"} ${atualCol ? "ring-1 ring-inset ring-blue-400" : ""}`;
+    if (variant === "acumulado")return `${base} ${bg} ${v > 0 ? "text-emerald-700 font-semibold" : v < 0 ? "text-rose-600 font-semibold" : "text-slate-300"}`;
+    if (variant === "pct")      return `${base} ${bg} ${v > 0 ? "text-emerald-700 font-semibold" : v < 0 ? "text-rose-600 font-semibold" : "text-slate-300"}`;
+    return `${base} ${bg} ${v ? "text-slate-600" : "text-slate-300"}`;
   }
 
-  // ── Componentes de linha ───────────────────────────────────────────────────
-
+  // ── Componentes de linha ─────────────────────────────────────────────────────
   function HeaderRow() {
     return (
-      <tr className="h-10 bg-[#1e2d40]">
+      <tr className="h-10 bg-slate-100 border-b border-slate-200">
         <th style={{ width: LABEL_W, minWidth: LABEL_W }}
-          className="sticky left-0 z-20 bg-[#1e2d40] px-4 text-left text-xs font-bold text-gray-300 border-r border-slate-600">
+          className="sticky left-0 z-20 bg-slate-100 px-4 text-left text-xs font-semibold text-slate-500 border-r border-slate-200">
           Categoria
         </th>
         {MESES_ABR.map((m, i) => (
           <th key={m} style={{ width: COL_W, minWidth: COL_W }}
-            className={`text-center text-xs font-bold border-l border-slate-600 whitespace-nowrap
-              ${isAtual(i) ? "bg-blue-600 text-white" : "text-gray-300"}`}>
+            className={`text-center text-xs font-semibold border-l border-slate-200 whitespace-nowrap
+              ${isAtual(i) ? "bg-blue-600 text-white" : "text-slate-500"}`}>
             <div>{m}</div>
-            {isAtual(i) && <div className="text-[9px] font-normal text-blue-200">atual</div>}
+            {isAtual(i) && <div className="text-[9px] font-normal text-blue-100">atual</div>}
           </th>
         ))}
         <th style={{ width: TOT_W, minWidth: TOT_W }}
-          className="text-center text-xs font-bold text-white border-l-2 border-slate-500 bg-[#151d28]">
+          className="text-center text-xs font-bold text-slate-600 border-l-2 border-slate-300 bg-slate-200">
           Total Anual
         </th>
       </tr>
     );
   }
 
-  // Linha de grupo (RECEITAS / DESPESAS)
-  function GroupRow({
-    label, vals, total, variant, open, onToggle
-  }: {
+  function GroupRow({ label, vals, total, variant, open, onToggle }: {
     label: string; vals: number[]; total: number;
-    variant: "receita" | "despesa";
-    open: boolean; onToggle: () => void;
+    variant: "receita" | "despesa"; open: boolean; onToggle: () => void;
   }) {
-    const bg  = variant === "receita" ? "bg-[#1a6b4a] text-white" : "bg-[#7a1c2a] text-white";
-    const totBg = variant === "receita" ? "bg-[#155c3f] text-white font-bold" : "bg-[#661524] text-white font-bold";
+    const isRec = variant === "receita";
+    const bg    = isRec ? "bg-emerald-50 text-emerald-900" : "bg-rose-50 text-rose-900";
+    const cellC = isRec ? "text-emerald-800" : "text-rose-800";
+    const totBg = isRec ? "bg-emerald-100 text-emerald-900" : "bg-rose-100 text-rose-900";
+    const brd   = isRec ? "border-emerald-100" : "border-rose-100";
     return (
-      <tr className={`h-10 border-b border-opacity-30 ${variant === "receita" ? "border-green-800" : "border-red-900"}`}>
+      <tr className={`h-10 border-b ${brd}`}>
         <td style={{ width: LABEL_W, minWidth: LABEL_W }}
-          className={`sticky left-0 z-10 px-4 text-xs font-bold border-r border-opacity-30 whitespace-nowrap ${bg}`}>
+          className={`sticky left-0 z-10 px-4 text-xs font-bold border-r ${brd} whitespace-nowrap ${bg}`}>
           <button onClick={onToggle} className="flex items-center gap-2 w-full">
-            {open ? <ChevronUp className="w-3.5 h-3.5 opacity-70" /> : <ChevronDown className="w-3.5 h-3.5 opacity-70" />}
+            {open ? <ChevronUp className="w-3.5 h-3.5 opacity-60" /> : <ChevronDown className="w-3.5 h-3.5 opacity-60" />}
             {label}
           </button>
         </td>
         {vals.map((v, i) => (
           <td key={i} style={{ width: COL_W, minWidth: COL_W }}
-            className={`text-right tabular-nums text-xs px-3 py-0 border-l border-opacity-20 font-bold whitespace-nowrap
-              ${variant === "receita" ? "bg-[#1a6b4a] text-green-100 border-green-700" : "bg-[#7a1c2a] text-red-100 border-red-900"}
-              ${isAtual(i) ? "ring-2 ring-inset ring-blue-400" : ""}`}>
+            className={`text-right tabular-nums text-xs px-3 py-0 border-l ${brd} font-semibold whitespace-nowrap ${bg} ${cellC}
+              ${isAtual(i) ? "ring-1 ring-inset ring-blue-400" : ""}`}>
             {BRL(v)}
           </td>
         ))}
         <td style={{ width: TOT_W, minWidth: TOT_W }}
-          className={`text-right tabular-nums text-xs px-3 font-bold border-l-2 border-opacity-30 whitespace-nowrap ${totBg}`}>
+          className={`text-right tabular-nums text-xs px-3 font-bold border-l-2 border-slate-300 whitespace-nowrap ${totBg}`}>
           {BRL(total)}
         </td>
       </tr>
     );
   }
 
-  // Linha de subgrupo (Despesas Fixas / Variáveis)
-  function SubGroupRow({
-    label, vals, total, open, onToggle
-  }: {
-    label: string; vals: number[]; total: number;
-    open: boolean; onToggle: () => void;
+  function SubGroupRow({ label, vals, total, open, onToggle }: {
+    label: string; vals: number[]; total: number; open: boolean; onToggle: () => void;
   }) {
     return (
-      <tr className="h-9 bg-slate-700 border-b border-slate-600">
+      <tr className="h-9 bg-slate-50 border-b border-slate-200">
         <td style={{ width: LABEL_W, minWidth: LABEL_W }}
-          className="sticky left-0 z-10 px-4 text-xs font-bold text-slate-200 border-r border-slate-500 whitespace-nowrap bg-slate-700 pl-6">
+          className="sticky left-0 z-10 px-4 pl-6 text-xs font-semibold text-slate-600 border-r border-slate-200 whitespace-nowrap bg-slate-50">
           <button onClick={onToggle} className="flex items-center gap-2 w-full">
-            {open ? <ChevronUp className="w-3 h-3 opacity-60" /> : <ChevronDown className="w-3 h-3 opacity-60" />}
+            {open ? <ChevronUp className="w-3 h-3 opacity-50" /> : <ChevronDown className="w-3 h-3 opacity-50" />}
             {label}
           </button>
         </td>
         {vals.map((v, i) => (
           <td key={i} style={{ width: COL_W, minWidth: COL_W }}
-            className={`text-right tabular-nums text-xs px-3 font-bold text-slate-100 border-l border-slate-600 whitespace-nowrap bg-slate-700
-              ${isAtual(i) ? "ring-2 ring-inset ring-blue-400" : ""}`}>
+            className={`text-right tabular-nums text-xs px-3 font-semibold text-slate-600 border-l border-slate-200 whitespace-nowrap bg-slate-50
+              ${isAtual(i) ? "ring-1 ring-inset ring-blue-400" : ""}`}>
             {BRL(v)}
           </td>
         ))}
         <td style={{ width: TOT_W, minWidth: TOT_W }}
-          className="text-right tabular-nums text-xs px-3 font-bold text-slate-100 border-l-2 border-slate-500 whitespace-nowrap bg-slate-800">
+          className="text-right tabular-nums text-xs px-3 font-bold text-slate-700 border-l-2 border-slate-300 whitespace-nowrap bg-slate-100">
           {BRL(total)}
         </td>
       </tr>
     );
   }
 
-  // Linha de detalhe (sub-item)
-  function DetailRow({
-    label, vals, total, variant = "sub"
-  }: {
-    label: string; vals: number[]; total: number; variant?: CellVariant;
+  function DetailRow({ label, vals, total, variant = "sub", muted = false }: {
+    label: string; vals: number[]; total: number; variant?: CellVariant; muted?: boolean;
   }) {
     return (
-      <tr className="h-9 bg-white border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
+      <tr className="h-9 bg-white border-b border-slate-100 hover:bg-slate-50/60 transition-colors">
         <td style={{ width: LABEL_W, minWidth: LABEL_W }}
-          className="sticky left-0 z-10 px-4 pl-8 text-xs text-gray-600 border-r border-gray-200 whitespace-nowrap bg-white hover:bg-gray-50/50">
+          className={`sticky left-0 z-10 px-4 pl-9 text-xs border-r border-slate-200 whitespace-nowrap bg-white hover:bg-slate-50/60 ${muted ? "text-slate-400 italic" : "text-slate-600"}`}>
           {label}
         </td>
         {vals.map((v, i) => (
-          <td key={i} style={{ width: COL_W, minWidth: COL_W }}
-            className={cellStyle(v, variant, isAtual(i))}>
+          <td key={i} style={{ width: COL_W, minWidth: COL_W }} className={cellStyle(v, variant, isAtual(i))}>
             {BRL(v)}
           </td>
         ))}
         <td style={{ width: TOT_W, minWidth: TOT_W }}
-          className={`text-right tabular-nums text-xs px-3 border-l-2 border-gray-300 whitespace-nowrap bg-gray-50
-            ${total !== 0 ? "text-gray-700 font-semibold" : "text-gray-200"}`}>
+          className={`text-right tabular-nums text-xs px-3 border-l-2 border-slate-200 whitespace-nowrap bg-slate-50
+            ${total ? "text-slate-700 font-semibold" : "text-slate-300"}`}>
           {BRL(total)}
         </td>
       </tr>
     );
   }
 
-  // Linha de resultado / acumulado / margem
-  function ResultRow({
-    label, vals, total, variant
-  }: {
+  function ResultRow({ label, vals, total, variant }: {
     label: string; vals: number[]; total: number; variant: CellVariant;
   }) {
     const isPct = variant === "pct";
-    const lblBg = "bg-[#1e2d40] text-gray-200";
     return (
-      <tr className="h-10 border-b border-gray-300">
+      <tr className="h-10 border-b border-slate-300">
         <td style={{ width: LABEL_W, minWidth: LABEL_W }}
-          className={`sticky left-0 z-10 px-4 text-xs font-bold border-r border-gray-400 whitespace-nowrap ${lblBg}`}>
+          className="sticky left-0 z-10 px-4 text-xs font-bold border-r border-slate-600 whitespace-nowrap bg-slate-800 text-slate-100">
           {label}
         </td>
         {vals.map((v, i) => (
-          <td key={i} style={{ width: COL_W, minWidth: COL_W }}
-            className={cellStyle(v, variant, isAtual(i))}>
+          <td key={i} style={{ width: COL_W, minWidth: COL_W }} className={cellStyle(v, variant, isAtual(i))}>
             {isPct ? PCT(v) : BRL(v)}
           </td>
         ))}
         <td style={{ width: TOT_W, minWidth: TOT_W }}
-          className={`text-right tabular-nums text-xs px-3 font-bold border-l-2 border-gray-400 whitespace-nowrap
+          className={`text-right tabular-nums text-xs px-3 font-bold border-l-2 border-slate-400 whitespace-nowrap
             ${variant === "resultado"
-              ? total >= 0 ? "bg-green-100 text-green-900" : "bg-red-100 text-red-900"
+              ? total >= 0 ? "bg-emerald-100 text-emerald-900" : "bg-rose-100 text-rose-900"
               : variant === "pct"
-              ? total >= 0 ? "bg-gray-100 text-green-700" : "bg-gray-100 text-red-600"
-              : "bg-gray-100 text-gray-500"}`}>
+              ? total >= 0 ? "bg-slate-100 text-emerald-700" : "bg-slate-100 text-rose-600"
+              : "bg-slate-100 text-slate-600"}`}>
           {isPct ? PCT(total) : BRL(total)}
         </td>
       </tr>
@@ -261,76 +356,96 @@ export default function FinanceiroFluxoCaixa() {
   }
 
   function Separator() {
-    return <tr className="h-1.5"><td colSpan={15} className="bg-slate-200 p-0" /></tr>;
+    return <tr className="h-1.5"><td colSpan={14} className="bg-slate-100 p-0" /></tr>;
   }
 
-  // ── Cálculo de valores por linha ───────────────────────────────────────────
+  // ── Detalhe de receita conforme o escopo selecionado ─────────────────────────
+  const receitaRows: { label: string; vals: number[]; muted?: boolean }[] =
+    natureza === "todos"
+      ? [
+          { label: "Faturado / Recebido (Efetivo)", vals: recEfet },
+          { label: "Previsto / Cronograma (Projeção)", vals: recProj },
+        ]
+      : natureza === "efetivo"
+      ? [
+          { label: "Faturado / Recebido", vals: recEfet },
+          { label: "— dos quais já recebido em caixa", vals: recReal, muted: true },
+        ]
+      : [
+          { label: "Previsto / Cronograma", vals: recProj },
+        ];
 
-  const recVals    = meses.map((m: any) => m.totalReceitas);
-  const despVals   = meses.map((m: any) => m.totalDespesas);
-  const resVals    = meses.map((m: any) => m.resultado);
-  const acumVals   = meses.map((m: any) => m.saldoAcumulado);
-  const lucrVals   = meses.map((m: any) => m.lucratividade);
+  const NAT_OPTS: { v: Natureza; label: string }[] = [
+    { v: "todos", label: "Todos" },
+    { v: "efetivo", label: "Efetivo" },
+    { v: "projecao", label: "Projeção" },
+  ];
 
-  // Sublinhas receita
-  const fatVals    = meses.map((m: any) => m.detalhe.faturamento.realizado + m.detalhe.faturamento.previsto);
-  const medVals    = meses.map((m: any) =>
-    m.detalhe.medicao_prevista.realizado + m.detalhe.medicao_prevista.previsto +
-    m.detalhe.cronograma_receita.realizado + m.detalhe.cronograma_receita.previsto);
-  const outRecVals = meses.map((m: any) => m.detalhe.receita_outros.realizado + m.detalhe.receita_outros.previsto);
-
-  // Sublinhas despesas fixas
-  const folhaVals  = meses.map((m: any) => m.detalhe.folha.realizado + m.detalhe.folha.previsto);
-  const recorrVals = meses.map((m: any) => m.detalhe.recorrente.realizado + m.detalhe.recorrente.previsto);
-  const fixasVals  = meses.map((_: any, i: number) => folhaVals[i] + recorrVals[i]);
-
-  // Sublinhas despesas variáveis
-  const comprasVals    = meses.map((m: any) => m.detalhe.compras.realizado + m.detalhe.compras.previsto);
-  const frotaVals      = meses.map((m: any) => m.detalhe.frota.realizado + m.detalhe.frota.previsto);
-  const obrasVals      = meses.map((m: any) => m.detalhe.obras.realizado + m.detalhe.obras.previsto);
-  const terceirosVals  = meses.map((m: any) => m.detalhe.terceiros.realizado + m.detalhe.terceiros.previsto);
-  const outrosVals     = meses.map((m: any) => m.detalhe.outros.realizado + m.detalhe.outros.previsto);
-  const varVals        = meses.map((_: any, i: number) =>
-    comprasVals[i] + frotaVals[i] + obrasVals[i] + terceirosVals[i] + outrosVals[i]);
-
-  function sum(arr: number[]) { return arr.reduce((a, b) => a + b, 0); }
-
-  // ── Render ─────────────────────────────────────────────────────────────────
-
+  // ── Render ────────────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64 gap-3">
           <RefreshCw className="w-6 h-6 text-blue-400 animate-spin" />
-          <span className="text-gray-500 text-sm">Carregando fluxo de caixa...</span>
+          <span className="text-slate-500 text-sm">Carregando fluxo de caixa...</span>
         </div>
       </DashboardLayout>
     );
   }
 
-  const semDados = totalRec === 0 && totalDesp === 0;
+  if (isError) {
+    return (
+      <DashboardLayout>
+        <div className="p-6 max-w-2xl mx-auto">
+          <div className="flex items-start gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-4 text-sm text-rose-800">
+            <AlertCircle className="w-5 h-5 text-rose-500 flex-shrink-0 mt-0.5" />
+            <div className="space-y-2">
+              <p className="font-semibold">Não foi possível carregar o fluxo de caixa.</p>
+              <p className="text-rose-700/80">Falha ao consultar Contas a Receber e/ou Contas a Pagar.</p>
+              <Button variant="outline" size="sm" onClick={refetch} className="h-8 text-xs">
+                <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Tentar novamente
+              </Button>
+            </div>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
       <div className="p-6 space-y-5 max-w-[1800px] mx-auto">
 
         {/* ── Cabeçalho ── */}
-        <div className="flex items-start justify-between">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Fluxo de Caixa</h1>
-            <p className="text-xs text-gray-400 mt-0.5">Realizado + Previsto · {ano}</p>
+            <h1 className="text-xl font-bold text-slate-900">Fluxo de Caixa</h1>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Espelha Contas a Receber + Contas a Pagar · {ano}
+            </p>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5">
-              <button onClick={() => setAno(a => a - 1)} className="text-gray-400 hover:text-gray-700 p-0.5">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Escopo Efetivo × Projeção (mesma régua do Contas a Pagar) */}
+            <div className="flex rounded-lg border border-violet-200 overflow-hidden"
+              title="Efetivo = dívida/receita real. Projeção = forecast do cronograma e folha.">
+              {NAT_OPTS.map(({ v, label }) => (
+                <button key={v} onClick={() => setNatureza(v)}
+                  className={`px-3 py-1.5 text-xs font-medium transition-colors
+                    ${natureza === v ? "bg-violet-600 text-white" : "bg-white text-violet-700 hover:bg-violet-50"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
+              <button onClick={() => setAno(a => a - 1)} className="text-slate-400 hover:text-slate-700 p-0.5">
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <span className="text-sm font-bold text-gray-800 w-10 text-center">{ano}</span>
-              <button onClick={() => setAno(a => a + 1)} className="text-gray-400 hover:text-gray-700 p-0.5">
+              <span className="text-sm font-bold text-slate-800 w-10 text-center">{ano}</span>
+              <button onClick={() => setAno(a => a + 1)} className="text-slate-400 hover:text-slate-700 p-0.5">
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
-            <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching} className="h-8 text-xs">
+            <Button variant="outline" size="sm" onClick={refetch} disabled={isFetching} className="h-8 text-xs">
               <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isFetching ? "animate-spin" : ""}`} />
               Atualizar
             </Button>
@@ -338,37 +453,36 @@ export default function FinanceiroFluxoCaixa() {
         </div>
 
         {/* ── KPIs ── */}
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
             {
               label: "Receitas", v: totalRec,
-              color: "text-blue-800", bg: "bg-blue-50 border-blue-200",
-              icon: <TrendingUp className="w-4 h-4 text-blue-500" />
+              color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200",
+              icon: <TrendingUp className="w-4 h-4 text-emerald-500" />,
             },
             {
               label: "Despesas", v: totalDesp,
-              color: "text-red-700", bg: "bg-red-50 border-red-200",
-              icon: <TrendingDown className="w-4 h-4 text-red-500" />
+              color: "text-rose-700", bg: "bg-rose-50 border-rose-200",
+              icon: <TrendingDown className="w-4 h-4 text-rose-500" />,
             },
             {
-              label: "Resultado",
-              v: totalRes,
-              color: totalRes >= 0 ? "text-green-800" : "text-red-700",
-              bg: totalRes >= 0 ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200",
+              label: "Resultado", v: totalRes,
+              color: totalRes >= 0 ? "text-emerald-700" : "text-rose-700",
+              bg: totalRes >= 0 ? "bg-emerald-50 border-emerald-200" : "bg-rose-50 border-rose-200",
               icon: totalRes >= 0
-                ? <TrendingUp className="w-4 h-4 text-green-500" />
-                : <TrendingDown className="w-4 h-4 text-red-500" />
+                ? <Wallet className="w-4 h-4 text-emerald-500" />
+                : <TrendingDown className="w-4 h-4 text-rose-500" />,
             },
             {
               label: "Margem Líquida", v: null, pct: lucrAnual,
-              color: lucrAnual >= 0 ? "text-green-700" : "text-red-600",
-              bg: "bg-gray-50 border-gray-200",
-              icon: <Minus className="w-4 h-4 text-gray-400" />
+              color: lucrAnual >= 0 ? "text-emerald-700" : "text-rose-600",
+              bg: "bg-slate-50 border-slate-200",
+              icon: <Minus className="w-4 h-4 text-slate-400" />,
             },
           ].map(({ label, v, pct, color, bg, icon }) => (
             <div key={label} className={`rounded-xl border p-4 ${bg}`}>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-gray-500 font-medium">{label}</span>
+                <span className="text-xs text-slate-500 font-medium">{label}</span>
                 {icon}
               </div>
               <p className={`text-lg font-bold ${color}`}>
@@ -389,31 +503,29 @@ export default function FinanceiroFluxoCaixa() {
           <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
             <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />
             <span>
-              Nenhum lançamento encontrado para {ano}. Acesse <strong>Configurações → Financeiro</strong> e clique em
-              &ldquo;Importar dados&rdquo; para sincronizar os módulos.
+              Nenhum lançamento encontrado para {ano}
+              {natureza !== "todos" && <> no escopo <strong>{natureza === "efetivo" ? "Efetivo" : "Projeção"}</strong></>}.
+              {natureza !== "todos" && <> Tente o escopo <button onClick={() => setNatureza("todos")} className="underline font-medium">Todos</button>.</>}
             </span>
           </div>
         )}
 
         {/* ── Legenda ── */}
-        <div className="flex items-center gap-5 text-[11px] text-gray-400 select-none">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[11px] text-slate-400 select-none">
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-sm bg-blue-100 border border-blue-300" />
             mês atual destacado
           </span>
-          <span>Realizados = status Pago / Recebido</span>
-          <span>Previstos = A Pagar / A Receber / A Faturar</span>
+          <span>Receitas = matriz de Contas a Receber</span>
+          <span>Despesas = lançamentos de Contas a Pagar</span>
+          <span><strong>Efetivo</strong> = real · <strong>Projeção</strong> = forecast (cronograma/folha)</span>
         </div>
 
         {/* ── Matriz ── */}
-        <div className="overflow-x-auto rounded-xl border border-gray-300 shadow-sm">
-          <table className="border-collapse text-xs"
+        <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+          <table className="border-collapse text-xs bg-white"
             style={{ minWidth: LABEL_W + COL_W * 12 + TOT_W }}>
-
-            <thead>
-              <HeaderRow />
-            </thead>
-
+            <thead><HeaderRow /></thead>
             <tbody>
 
               {/* ══ ENTRADAS (RECEITAS) ══ */}
@@ -423,17 +535,10 @@ export default function FinanceiroFluxoCaixa() {
                 variant="receita" open={exReceit}
                 onToggle={() => setExReceit(v => !v)}
               />
-
-              {exReceit && (
-                <>
-                  <DetailRow label="Faturamento de Obras"
-                    vals={fatVals} total={sum(fatVals)} variant="receita" />
-                  <DetailRow label="Medições / Cronograma Financeiro"
-                    vals={medVals} total={sum(medVals)} variant="receita" />
-                  <DetailRow label="Outros Créditos"
-                    vals={outRecVals} total={sum(outRecVals)} variant="receita" />
-                </>
-              )}
+              {exReceit && receitaRows.map((r) => (
+                <DetailRow key={r.label} label={r.label} vals={r.vals}
+                  total={sum(r.vals)} variant="receita" muted={r.muted} />
+              ))}
 
               <Separator />
 
@@ -444,42 +549,40 @@ export default function FinanceiroFluxoCaixa() {
                 variant="despesa" open={exDesp}
                 onToggle={() => setExDesp(v => !v)}
               />
-
               {exDesp && (
                 <>
                   {/* Fixas */}
-                  <SubGroupRow
-                    label="Despesas Fixas"
+                  <SubGroupRow label="Despesas Fixas"
                     vals={fixasVals} total={sum(fixasVals)}
-                    open={exFixas} onToggle={() => setExFixas(v => !v)}
-                  />
+                    open={exFixas} onToggle={() => setExFixas(v => !v)} />
                   {exFixas && (
                     <>
-                      <DetailRow label="Folha de Pagamento (CLT + RPA)"
-                        vals={folhaVals} total={sum(folhaVals)} variant="despesa" />
+                      <DetailRow label="Folha, Encargos, 13º, Férias & PJ"
+                        vals={despBuckets.folha} total={sum(despBuckets.folha)} variant="despesa" />
+                      <DetailRow label="Benefícios (VR / VA / Seguro)"
+                        vals={despBuckets.beneficios} total={sum(despBuckets.beneficios)} variant="despesa" />
+                      <DetailRow label="Tributos & Guias"
+                        vals={despBuckets.tributos} total={sum(despBuckets.tributos)} variant="despesa" />
                       <DetailRow label="Serviços Recorrentes"
-                        vals={recorrVals} total={sum(recorrVals)} variant="despesa" />
+                        vals={despBuckets.recorrente} total={sum(despBuckets.recorrente)} variant="despesa" />
                     </>
                   )}
-
                   {/* Variáveis */}
-                  <SubGroupRow
-                    label="Despesas Variáveis"
+                  <SubGroupRow label="Despesas Variáveis"
                     vals={varVals} total={sum(varVals)}
-                    open={exVar} onToggle={() => setExVar(v => !v)}
-                  />
+                    open={exVar} onToggle={() => setExVar(v => !v)} />
                   {exVar && (
                     <>
                       <DetailRow label="Compras / Materiais"
-                        vals={comprasVals} total={sum(comprasVals)} variant="despesa" />
-                      <DetailRow label="Frota (Veículos + Manutenção)"
-                        vals={frotaVals} total={sum(frotaVals)} variant="despesa" />
-                      <DetailRow label="Obras / Subcontratados"
-                        vals={obrasVals} total={sum(obrasVals)} variant="despesa" />
+                        vals={despBuckets.compras} total={sum(despBuckets.compras)} variant="despesa" />
+                      <DetailRow label="Frota (Abastecimento + Manutenção)"
+                        vals={despBuckets.frota} total={sum(despBuckets.frota)} variant="despesa" />
+                      <DetailRow label="Obras / Cronograma"
+                        vals={despBuckets.obras} total={sum(despBuckets.obras)} variant="despesa" />
                       <DetailRow label="Terceiros / Parceiros"
-                        vals={terceirosVals} total={sum(terceirosVals)} variant="despesa" />
+                        vals={despBuckets.terceiros} total={sum(despBuckets.terceiros)} variant="despesa" />
                       <DetailRow label="Outros"
-                        vals={outrosVals} total={sum(outrosVals)} variant="despesa" />
+                        vals={despBuckets.outros} total={sum(despBuckets.outros)} variant="despesa" />
                     </>
                   )}
                 </>
@@ -487,15 +590,11 @@ export default function FinanceiroFluxoCaixa() {
 
               <Separator />
 
-              {/* ══ RESULTADO ══ */}
+              {/* ══ RESULTADO / SALDO / MARGEM ══ */}
               <ResultRow label="Resultado do Período"
                 vals={resVals} total={totalRes} variant="resultado" />
-
-              {/* ══ SALDO ACUMULADO ══ */}
               <ResultRow label="Saldo Acumulado"
                 vals={acumVals} total={acumVals[11] ?? 0} variant="acumulado" />
-
-              {/* ══ MARGEM ══ */}
               <ResultRow label="Margem Líquida %"
                 vals={lucrVals} total={lucrAnual} variant="pct" />
 

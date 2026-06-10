@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2944 — **FLUXO DE CAIXA — REVISÃO COMPLETA: LAYOUT MAIS CLEAN (CORES PADRÃO) E OS VALORES
+ * AGORA BATEM 1:1 COM CONTAS A RECEBER E CONTAS A PAGAR.**
+ *
+ * CONTEXTO (usuário): "Revise completamente o fluxo de caixa". A tela antiga tinha 2 problemas:
+ * (1) os números NÃO batiam com os módulos irmãos (Contas a Receber / Contas a Pagar) porque
+ * consumia um endpoint próprio (`getCashFlowMatrix`) com regra de agregação/categorização
+ * divergente; e (2) o layout usava hexes escuros customizados (#1e2d40 / #7a1c2a) fora da paleta
+ * padrão do ERP, e as "Despesas Fixas" apareciam ZERADAS (a categorização legada procurava
+ * origens que não existem mais no Neon — ex.: `folha_clt` — jogando tudo em "outros"/variáveis).
+ *
+ * SOLUÇÃO (FRONT-only, `client/src/pages/financeiro/FinanceiroFluxoCaixa.tsx`, ZERO ALTER/DROP/
+ * DELETE):
+ *   - PARIDADE POR CONSTRUÇÃO: a tela agora COMPÕE os 2 endpoints já confiáveis dos módulos
+ *     irmãos, então bate 1:1 com eles automaticamente. Receitas = `financial.getContasReceberMatrix`
+ *     ({companyId, ano}) — usa `totaisMes` como total oficial (idêntico ao headline de Contas a
+ *     Receber) e deriva o split Efetivo (cells com medição/faturamento) × Projeção (cronograma)
+ *     dos `projetos[].meses[key]`. Despesas = `financial.getContasAPagarByYear` ({companyId, ano})
+ *     — MESMO endpoint do Contas a Pagar (inclui `materializeRecorrentes`), agrupando por mês de
+ *     `dataVencimento` (`.slice(0,7)`) e somando `valorPrevisto`. Abandonou `getCashFlowMatrix`.
+ *   - CATEGORIZAÇÃO NOVA (`BUCKET_MAP`) com as origens REAIS do Neon: Fixas = {folha (folha_rh/
+ *     folha_projetada/encargos_projetado/13º/férias/rescisão/PJ), benefícios (VR/VA/seguro),
+ *     tributos (guia_tributaria), recorrente}; Variáveis = {compras, frota, obras/cronograma,
+ *     terceiros, outros}. Mapear `folha_projetada`/`encargos_projetado`/etc → bucket "folha"
+ *     corrige o bug das "Fixas zeradas".
+ *   - ESCOPO EFETIVO × PROJEÇÃO × TODOS (segmented control violeta, default "Todos") espelhando
+ *     a régua `isProjecao`/`PROJECAO_ORIGENS` da Rev. 1629 do Contas a Pagar, aplicado aos DOIS
+ *     lados: Efetivo = real (faturado/recebido + dívida real), Projeção = forecast (cronograma/
+ *     folha), Todos = combinado. Permite o usuário casar com o escopo de qualquer um dos módulos.
+ *   - LAYOUT mais clean: paleta padrão (emerald p/ receitas, rose p/ despesas, slate p/ estrutura,
+ *     blue p/ destaque do mês atual) substituindo os hexes escuros; KPIs no topo (Receitas,
+ *     Despesas com quebra Fixas/Variáveis, Resultado, Margem), matriz 12 meses com grupos
+ *     colapsáveis, linhas de Resultado/Saldo Acumulado/Margem %, estados de loading/erro/sem-dados.
+ *   - BACK: `getCashFlowMatrix` marcado como SUPERSEDED (mantido por compat, sem callers ativos).
+ *
+ * IMPACTO: puramente de leitura sobre dados já existentes — sem novo endpoint, query ou schema.
+ * Vale para todas as empresas/obras. Garante consistência financeira entre os 3 painéis.
+ *
  * Rev. 2943 — **CONTAS A PAGAR — NOVO CARD "EM ABERTO (ACUMULADO)" MOSTRA O TOTAL DE TUDO QUE
  * AINDA ESTÁ POR PAGAR NO ANO INTEIRO (TODOS OS MESES), E NÃO SÓ DO MÊS SELECIONADO.**
  *

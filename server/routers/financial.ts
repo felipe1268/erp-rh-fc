@@ -3898,6 +3898,9 @@ export const financialRouter = router({
     return { periodos: result, totais };
   }),
 
+  // Rev. 2944 — SUPERSEDED: o Fluxo de Caixa agora compõe getContasReceberMatrix
+  // (receitas) + getContasAPagarByYear (despesas) no front, garantindo paridade 1:1
+  // com os módulos irmãos. Procedure mantido por compatibilidade (sem callers ativos).
   getCashFlowMatrix: protectedProcedure.input(z.object({
     companyId: z.number(),
     ano: z.number(),
