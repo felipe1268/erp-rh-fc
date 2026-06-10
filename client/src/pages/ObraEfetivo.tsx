@@ -174,6 +174,8 @@ export default function ObraEfetivo() {
   const [equipeSearch, setEquipeSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [equipeStatusFilter, setEquipeStatusFilter] = useState<string | null>(null);
+  // Task #75 — filtro por situação de integração (SST) no drill-down "Equipe — {obra}"
+  const [equipeIntegFilter, setEquipeIntegFilter] = useState<"todos" | "vencida" | "sem">("todos");
   const [condicoesDialogOpen, setCondicoesDialogOpen] = useState(false);
   const [condicoesDialogItem, setCondicoesDialogItem] = useState<any>(null);
   const [condicoesForm, setCondicoesForm] = useState({ insalubridadeOverride: 'herda', periculosidadeOverride: 'herda', adicionalEscolhido: 'auto' });
@@ -778,7 +780,7 @@ export default function ObraEfetivo() {
                   <Card
                     key={item.obraId}
                     className="cursor-pointer hover:shadow-md transition-shadow hover:ring-2 hover:ring-[#1B2A4A]/50"
-                    onClick={() => { setSelectedObraId(item.obraId); setSelectedObraIds(item.obraIds || [item.obraId]); setEquipeDialogOpen(true); setEquipeSearch(""); setEquipeStatusFilter(null); }}
+                    onClick={() => { setSelectedObraId(item.obraId); setSelectedObraIds(item.obraIds || [item.obraId]); setEquipeDialogOpen(true); setEquipeSearch(""); setEquipeStatusFilter(null); setEquipeIntegFilter("todos"); }}
                   >
                     <CardContent className="p-5">
                       <div className="flex items-start justify-between mb-2">
@@ -1826,6 +1828,12 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                 const st = f.employee?.status || 'Ativo';
                 if (st !== equipeStatusFilter) return false;
               }
+              // Task #75 — filtro por situação de integração (SST)
+              if (equipeIntegFilter !== "todos") {
+                const integs: any[] = Array.isArray(f.integracoes) ? f.integracoes : [];
+                if (equipeIntegFilter === "sem" && integs.length > 0) return false;
+                if (equipeIntegFilter === "vencida" && !integs.some((ig: any) => ig.vencida)) return false;
+              }
               if (!equipeSearch) return true;
               const s = equipeSearch.toLowerCase();
               return (f.employee?.nomeCompleto || "").toLowerCase().includes(s) ||
@@ -1869,6 +1877,54 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                     </button>
                   )}
                 </div>
+
+                {/* Task #75 — filtro por situação de integração (SST) */}
+                {(() => {
+                  // base = mesma equipe após filtro de status + busca, mas SEM o filtro de integração,
+                  // para que as contagens dos botões reflitam o universo navegável.
+                  const baseInteg = funcObra.filter((f: any) => {
+                    if (equipeStatusFilter) {
+                      const st = f.employee?.status || 'Ativo';
+                      if (st !== equipeStatusFilter) return false;
+                    }
+                    if (!equipeSearch) return true;
+                    const s = equipeSearch.toLowerCase();
+                    return (f.employee?.nomeCompleto || "").toLowerCase().includes(s) ||
+                      (f.funcaoNaObra || "").toLowerCase().includes(s) ||
+                      (f.employee?.funcao || "").toLowerCase().includes(s);
+                  });
+                  const cntTodos = baseInteg.length;
+                  const cntVencida = baseInteg.filter((f: any) => (Array.isArray(f.integracoes) ? f.integracoes : []).some((ig: any) => ig.vencida)).length;
+                  const cntSem = baseInteg.filter((f: any) => (Array.isArray(f.integracoes) ? f.integracoes : []).length === 0).length;
+                  const opts: Array<{ key: "todos" | "vencida" | "sem"; label: string; count: number; activeCls: string }> = [
+                    { key: "todos", label: "Todos", count: cntTodos, activeCls: "bg-slate-800 text-white border-slate-800" },
+                    { key: "vencida", label: "Integração vencida", count: cntVencida, activeCls: "bg-red-600 text-white border-red-600" },
+                    { key: "sem", label: "Sem integração", count: cntSem, activeCls: "bg-gray-600 text-white border-gray-600" },
+                  ];
+                  return (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+                        <ShieldCheck className="h-3.5 w-3.5" /> Situação de integração:
+                      </span>
+                      <div className="inline-flex flex-wrap items-center gap-1 rounded-lg border bg-slate-50 p-1">
+                        {opts.map(o => (
+                          <button
+                            key={o.key}
+                            onClick={() => setEquipeIntegFilter(o.key)}
+                            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium border transition-all ${
+                              equipeIntegFilter === o.key ? o.activeCls + ' shadow-sm' : 'bg-white text-slate-600 border-transparent hover:bg-slate-100'
+                            }`}
+                          >
+                            {o.label}
+                            <span className={`inline-flex items-center justify-center min-w-[1.25rem] px-1 rounded-full text-[10px] font-bold ${
+                              equipeIntegFilter === o.key ? 'bg-white/25 text-white' : 'bg-slate-200 text-slate-700'
+                            }`}>{o.count}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Rev. 2933 — Legenda de cores da coluna "Integrações" (por cliente/local) */}
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border bg-slate-50/70 px-3 py-2 text-[11px] text-slate-600">

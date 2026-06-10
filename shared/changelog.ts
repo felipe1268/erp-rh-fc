@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2941 — **EFETIVO POR OBRA — O DRILL-DOWN "EQUIPE — {OBRA}" GANHOU UM FILTRO RÁPIDO POR
+ * SITUAÇÃO DE INTEGRAÇÃO (SST): "TODOS", "INTEGRAÇÃO VENCIDA" E "SEM INTEGRAÇÃO" — A VARREDURA
+ * DE RISCO FICOU INSTANTÂNEA, INCLUSIVE NO TABLET/CELULAR EM CAMPO.**
+ *
+ * CONTEXTO: a tela "Equipe — {obra}" já mostra as integrações por cliente (verde = válida /
+ * vermelho = vencida) tanto no desktop quanto nos cards de mobile. Em obras grandes, o gestor de
+ * SST precisava rolar a lista inteira pra achar quem está com pendência. Pedido (Task #75): um
+ * segmented control pra filtrar a equipe por situação de integração, agilizando a varredura.
+ *
+ * SOLUÇÃO (FRONT-only, `client/src/pages/ObraEfetivo.tsx`, ZERO ALTER/DROP/DELETE):
+ *   - Novo estado `equipeIntegFilter: "todos" | "vencida" | "sem"` (reset p/ "todos" ao abrir o
+ *     modal, junto dos resets de busca/status já existentes).
+ *   - O filtro entra no MESMO `filteredFuncObra` que alimenta a tabela (lg+) E os cards (< lg),
+ *     então vale para desktop e mobile de uma vez. "vencida" = tem ≥1 integração com `vencida`;
+ *     "sem" = array `integracoes` vazio (nenhuma integração). A contagem da equipe (badges de
+ *     status + Total) reflete o filtro porque deriva de `filteredFuncObra`.
+ *   - UI: segmented control com 3 botões, cada um com a contagem do universo navegável (base com
+ *     filtro de status + busca aplicados, mas SEM o filtro de integração) pra o gestor saber
+ *     quantos cairão em cada opção antes de clicar. Ativo "vencida" = vermelho, "sem" = cinza.
+ *
+ * IMPACTO: o gestor isola na hora quem está com integração vencida ou sem integração, sem rolar a
+ * lista. Sem mudança de schema/dados/endpoints — usa o `f.integracoes` que já vinha do backend.
+ */
+
+/**
  * Rev. 2940 — **EFETIVO POR OBRA — AS LISTAS GERAIS "TODOS" E "SEM OBRA" AGORA MOSTRAM A FOTO DO
  * FUNCIONÁRIO NA COLUNA "FUNCIONÁRIO" (ANTES SÓ NOME + CPF) — IGUAL AO DRILL-DOWN "EQUIPE —
  * {OBRA}".**
