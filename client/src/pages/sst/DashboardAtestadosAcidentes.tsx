@@ -23,6 +23,7 @@ import {
 import { ChartCard } from "@/components/sst/ChartCard";
 import { cidDescricao } from "@shared/cid10";
 import { EmployeeDetailDialog } from "@/components/sst/EmployeeDetailDialog";
+import { PersonPhoto } from "@/components/PersonPhoto";
 
 function truncate(s: string, n = 22) {
   if (!s) return "";
@@ -1245,15 +1246,20 @@ export default function DashboardAtestadosAcidentes() {
                         {(d.atestadosRecorrentes ?? []).map((f: any) => (
                           <tr key={f.employeeId} className="hover:bg-gray-50">
                             <td className="px-3 py-2 font-medium">
-                              <button
-                                type="button"
-                                className="text-left text-blue-700 hover:underline hover:text-blue-900"
-                                onClick={() => setSelectedEmployeeId(f.employeeId)}
-                                title="Ver todos os atestados deste funcionário"
-                              >
-                                {f.nome}
-                              </button>
-                              {f.codigoInterno ? <span className="text-xs text-gray-400 ml-1">#{f.codigoInterno}</span> : (f.matricula ? <span className="text-xs text-gray-400 ml-1">#{f.matricula}</span> : null)}
+                              <div className="flex items-center gap-2">
+                                <PersonPhoto src={f.fotoUrl} alt={f.nome || "—"} size="sm" caption={f.funcao || undefined} />
+                                <div className="min-w-0">
+                                  <button
+                                    type="button"
+                                    className="text-left text-blue-700 hover:underline hover:text-blue-900"
+                                    onClick={() => setSelectedEmployeeId(f.employeeId)}
+                                    title="Ver todos os atestados deste funcionário"
+                                  >
+                                    {f.nome}
+                                  </button>
+                                  {f.codigoInterno ? <span className="text-xs text-gray-400 ml-1">#{f.codigoInterno}</span> : (f.matricula ? <span className="text-xs text-gray-400 ml-1">#{f.matricula}</span> : null)}
+                                </div>
+                              </div>
                             </td>
                             <td className="px-3 py-2 text-gray-600">{f.funcao || "—"}</td>
                             <td className="px-3 py-2 text-right font-semibold text-purple-700">{f.quantidade}</td>

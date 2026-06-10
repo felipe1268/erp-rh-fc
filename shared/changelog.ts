@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2946 — **ATESTADOS & ACIDENTES (SST) — A TABELA "FUNCIONÁRIOS COM ATESTADOS RECORRENTES
+ * (3+)" AGORA MOSTRA A FOTO DO FUNCIONÁRIO NA COLUNA "FUNCIONÁRIO" (ANTES SÓ NOME + #CÓDIGO).**
+ *
+ * CONTEXTO (usuário, print do iPad da aba "Atestados & Acidentes"): "Coloca a foto do funcionário
+ * aqui tbm" — mesma melhoria de identificação visual já aplicada às listas de Efetivo por Obra
+ * (Rev. 2940). A coluna "Funcionário" da tabela de recorrentes mostrava só o nome (link) + o
+ * código interno; faltava a foto pra reconhecer quem é quem num olhar.
+ *
+ * SOLUÇÃO (FRONT-only, `client/src/pages/sst/DashboardAtestadosAcidentes.tsx`, ZERO ALTER/DROP/
+ * DELETE, ZERO backend): o endpoint `sstAnalytics` que alimenta `d.atestadosRecorrentes` JÁ
+ * trazia `fotoUrl` (o `funcMap` lê `employees.fotoUrl` e o array é `Array.from(funcMap.values())`),
+ * então bastou consumir no cliente. A célula da coluna "Funcionário" virou um flex com o
+ * componente reutilizável `<PersonPhoto src={f.fotoUrl} alt={f.nome} size="sm" caption={f.funcao}>`
+ * (lightbox com zoom ao clicar, fallback de iniciais quando sem foto) ao lado do bloco nome+#código
+ * já existente. Nenhuma mudança de query, schema ou layout das demais colunas.
+ *
+ * IMPACTO: puramente visual/leitura. Vale para todas as empresas. Reconhecimento mais rápido dos
+ * funcionários com atestados recorrentes, consistente com as demais telas que já mostram foto.
+ *
  * Rev. 2945 — **DUPLICATAS DE CONTAS A PAGAR LIMPAS (R$ 1,02 mi de linhas idênticas removidas),
  * RAIZ DAS RECORRENTES CORRIGIDA E KPIs DO FLUXO DE CAIXA AGORA SEPARAM PROJEÇÃO × EFETIVO.**
  *
