@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2955 — **DASHBOARD AVISO PRÉVIO → CUSTO DE DEMISSÃO EM MASSA — CORREÇÃO DO ERRO "DEU
+ * ERRO E NÃO ESTÁ APARECENDO OS VALORES E FUNCIONÁRIOS" (TELA CAÍA EM "SELECIONE UMA EMPRESA"):
+ * A QUERY `custoDemissaoMassa` LIA UMA COLUNA INEXISTENTE NO BANCO (`employees.valeAlimentacao`).**
+ *
+ * SINTOMA (usuário, iPad, company 60002 "FC ENGENHARIA PROJETOS E OBRAS"): em `/dashboards/aviso-previo`
+ * o card "Custo de Demissão em Massa — Provisão de Caixa" não mostrava NENHUM valor nem a lista de
+ * funcionários — exibia o placeholder "Selecione uma empresa." mesmo com a empresa já selecionada
+ * (os cards do topo — 59 avisos, etc. — carregavam normalmente).
+ *
+ * CAUSA-RAIZ: na Rev. 2953 (Combo de Demissões) o SELECT de `getDashCustoDemissaoMassa`
+ * (`server/routers/dashboards.ts`) passou a ler DUAS colunas do cadastro do funcionário —
+ * `employees.seguroVida` E `employees.valeAlimentacao`. A coluna `seguroVida` EXISTE no Neon, mas
+ * `valeAlimentacao` NÃO existe na tabela `employees` (apesar de declarada no `drizzle/schema.ts`,
+ * nunca foi materializada via self-heal). Resultado: o `db.select()` inteiro estourava
+ * `column "valeAlimentacao" does not exist` → a procedure `custoDemissaoMassa` retornava erro →
+ * `cdm` ficava `undefined` no client → a tela renderizava o ramo `!cdm` ("Selecione uma empresa.").
+ * Confirmado via `information_schema.columns`: só `seguroVida` retorna; `valeAlimentacao` ausente.
+ *
+ * SOLUÇÃO (BACK read-only, ZERO ALTER/DROP/DELETE — sem criar a coluna, respeitando R-001/R-007/R-010,
+ * `server/routers/dashboards.ts`): (1) removido `valeAlimentacao: employees.valeAlimentacao` do SELECT
+ * (mantido `seguroVida`, que existe); (2) `valeAlimentacaoMensal` por funcionário agora deriva da MESMA
+ * fonte já usada para o VR proporcional da rescisão — `meal_benefit_configs` (config por obra do
+ * funcionário → fallback default da empresa), via os mapas `vrDiarioByObra`/`vrDiarioDefaultByCompany`
+ * já calculados no início da função: `valeAlimentacaoMensal = vrDia × 30` (vrDia = (café×diasÚteis +
+ * lanche×diasÚteis + valeAlimentacaoMes) ÷ 30). Isso restaura a query E mantém a projeção de "sobra de
+ * caixa" do Combo coerente com o cálculo de VR da própria rescisão (fonte única de VA/VR).
+ *
+ * VALIDAÇÃO (Neon, company 60002): a SELECT corrigida roda OK (319 funcionários ativos); existe config
+ * `meal_benefit_configs` default da empresa (valeAlimentacaoMes ~R$22 + café/lanche, 22 dias úteis) →
+ * `valeAlimentacaoMensal` passa a popular. `seguroVida` segue do cadastro (vazio → R$0). Nenhuma mudança
+ * em verbas rescisórias (saldo/aviso/13º/férias/FGTS) — só o benefício recorrente do rodapé do Combo.
+ *
  * Rev. 2954 — **FINANCEIRO → FLUXO DE CAIXA — CORREÇÃO DO ERRO "NÃO FOI POSSÍVEL CARREGAR O
  * FLUXO DE CAIXA / FALHA AO CONSULTAR CONTAS A RECEBER E/OU CONTAS A PAGAR": OTIMIZAÇÃO DE
  * PERFORMANCE DO `getContasReceberMatrix` (DE ~20s P/ ~4s) — RESULTADO NUMÉRICO IDÊNTICO.**
