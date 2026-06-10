@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2957 — **DASHBOARD AVISO PRÉVIO → COMBO DE DEMISSÕES → "RELATÓRIO DE DEMISSÕES — ANÁLISE DE
+ * FLUXO DE CAIXA" (PDF P/ DIRETORIA) — A COLUNA "FUNCIONÁRIO" DA TABELA "FUNCIONÁRIOS SELECIONADOS"
+ * AGORA EXIBE A FOTO DO FUNCIONÁRIO AO LADO DO NOME.**
+ *
+ * PEDIDO (usuário, iPad, print do relatório aberto em nova aba): "Quero q fique a foto do funcionário
+ * aqui tbm" — referindo-se à tabela "FUNCIONÁRIOS SELECIONADOS" do PDF gerado pelo botão "Gerar PDF
+ * p/ Diretoria" (Rev. 2953). O modal na tela JÁ mostrava a foto (Rev. 2953), mas o relatório
+ * impresso/PDF só trazia o nome em texto.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, `client/src/pages/dashboards/DashAvisoPrevio.tsx`,
+ * função `gerarRelatorioCombo`): a fonte `linhasSelecionadas` JÁ carrega `l.fotoUrl` (o mesmo campo
+ * usado no modal). Novo helper `avatarHtml(l)` monta um avatar circular de 26px inline: se há
+ * `fotoUrl` → `<img>` (border-radius 50%, object-fit cover, object-position top); senão → `<span>`
+ * com a inicial do nome sobre fundo `#1B2A4A`. A célula "Funcionário" do `rowsHtml` virou um
+ * `inline-flex` (gap 7px) com o avatar + nome. Estilos 100% INLINE (janela de print não usa CSS
+ * externo) e `print-color-adjust:exact` no avatar/fallback p/ garantir cor no PDF. Nenhuma mudança
+ * de cálculo, layout das demais colunas, totais ou backend.
+ *
  * Rev. 2956 — **COMPRAS → SOLICITAÇÃO DE COMPRA — CORREÇÃO DO FALSO AVISO "FORA DO ORÇAMENTO —
  * N ITEM(NS) AVULSO(S) SEM VÍNCULO ORÇAMENTÁRIO. NECESSITA VERBA REALOCADA NA COTAÇÃO PARA
  * LIBERAÇÃO" EM ITENS QUE ESTÃO CORRETAMENTE VINCULADOS À EAP (CASO SC-2026-0310).**

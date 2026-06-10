@@ -375,10 +375,16 @@ export default function DashAvisoPrevio() {
     const reducaoMensal = ag.salarioBaseSoma + ag.seguroVidaSoma + ag.valeAlimentacaoSoma;
     const logo = `${window.location.origin}/logo-fc.jpg`;
     const linhasOrdenadas = [...linhasSelecionadas].sort((a: any, b: any) => (b.total || 0) - (a.total || 0));
+    const avatarHtml = (l: any) => {
+      const inicial = String(l.nomeCompleto || '?').trim().charAt(0).toUpperCase() || '?';
+      return l.fotoUrl
+        ? `<img src="${esc(l.fotoUrl)}" alt="" style="width:26px;height:26px;border-radius:50%;object-fit:cover;object-position:top;border:1px solid #cbd5e1;flex:0 0 auto;-webkit-print-color-adjust:exact;print-color-adjust:exact" />`
+        : `<span style="display:inline-flex;width:26px;height:26px;border-radius:50%;background:#1B2A4A;color:#fff;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex:0 0 auto;-webkit-print-color-adjust:exact;print-color-adjust:exact">${esc(inicial)}</span>`;
+    };
     const rowsHtml = linhasOrdenadas.map((l: any, i: number) => `
       <tr>
         <td style="text-align:center;color:#64748b">${i + 1}</td>
-        <td style="font-weight:600">${esc(l.nomeCompleto)}</td>
+        <td style="font-weight:600"><span style="display:inline-flex;align-items:center;gap:7px">${avatarHtml(l)}<span>${esc(l.nomeCompleto)}</span></span></td>
         <td>${esc(l.funcao || l.cargo || '—')}</td>
         <td>${esc(l.obra || '—')}</td>
         <td style="text-align:center;white-space:nowrap">${l.dataAdmissao ? new Date(l.dataAdmissao + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
