@@ -1,6 +1,49 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2954 — **FINANCEIRO → FLUXO DE CAIXA — CORREÇÃO DO ERRO "NÃO FOI POSSÍVEL CARREGAR O
+ * FLUXO DE CAIXA / FALHA AO CONSULTAR CONTAS A RECEBER E/OU CONTAS A PAGAR": OTIMIZAÇÃO DE
+ * PERFORMANCE DO `getContasReceberMatrix` (DE ~20s P/ ~4s) — RESULTADO NUMÉRICO IDÊNTICO.**
+ *
+ * CONTEXTO (usuário, iPad, company 60002 "FC ENGENHARIA PROJETOS E OBRAS", Admin Master): a tela
+ * `/financeiro/fluxo-caixa` exibia o card de erro "Não foi possível carregar o fluxo de caixa.
+ * Falha ao consultar Contas a Receber e/ou Contas a Pagar." A tela dispara duas queries tRPC
+ * (`getContasReceberMatrix` + `getContasAPagarByYear`). Reproduzido via `createCaller` real: as
+ * DUAS resolviam OK, mas `getContasReceberMatrix` levava ~20s (Pagar ~1,4s). Pelo proxy/iPad a
+ * requisição tRPC estoura o timeout antes da resposta chegar → `isError` → card de erro. Ou seja,
+ * NÃO era falha de query nem de permissão: era LENTIDÃO.
+ *
+ * CAUSA-RAIZ (EXPLAIN ANALYZE no Neon): `getContasReceberMatrix` roda em paralelo duas queries de
+ * distribuição mensal de venda bruta (cruzamento atividades×orçamento) — `prevRes` (revisão
+ * aprovada mais recente, `numero DESC`) e `prevBaselineRes` (primeira revisão, `numero ASC`) —
+ * ~15s CADA. O gargalo é a CTE `match_contains`: o `NOT EXISTS (SELECT 1 FROM match_exact ...)`
+ * era correlacionado contra a CTE materializada `match_exact`, que EXPLODE p/ ~48k linhas (nomes
+ * normalizados duplicados dentro do projeto). O planner gerava um **Nested Loop Anti Join** que
+ * removia ~280 MILHÕES de linhas (~30s sob EXPLAIN) — porque rescaneava `match_exact` p/ cada uma
+ * das ~48k linhas do cross-join LIKE. O LIKE bidirecional em si custa só ~1,5s. As DUAS queries
+ * têm a CTE idêntica. No projeto 46 (1512 atividades) o problema é máximo.
+ *
+ * SOLUÇÃO (BACK read-only / SQL only, ZERO ALTER/DROP/DELETE — `server/routers/financial.ts`,
+ * aplicado nas DUAS queries idênticas: dist `numero DESC` e baseline `numero ASC`):
+ * 1) Nova CTE `match_exact_items AS MATERIALIZED (SELECT DISTINCT item_id FROM match_exact)` —
+ *    deduplica os item_ids que tiveram match exato (existência é booleana, então DISTINCT não muda
+ *    o resultado do NOT EXISTS).
+ * 2) Nova CTE `unmatched_items AS MATERIALIZED (SELECT n.* FROM norm_name n WHERE LENGTH>=5 AND
+ *    NOT EXISTS (... match_exact_items ...))` — calcula ANTES (fence) os itens sem match exato.
+ * 3) `match_contains` passou a partir de `unmatched_items` (em vez de `norm_name` + NOT EXISTS no
+ *    WHERE), mantendo só `LENGTH(a.nome_norm) >= 5` na atividade.
+ *    O `MATERIALIZED` é ESSENCIAL: sem o fence o planner inlina as CTEs e reconstrói o mesmo
+ *    Nested Loop Anti Join O(n²); com o fence o conjunto sem-match já entra REDUZIDO no cross-join
+ *    LIKE (e fica VAZIO quando todo item casou exato, como na company 60002 → LIKE instantâneo).
+ *
+ * EQUIVALÊNCIA PROVADA (script de validação no Neon, company 60002): resultado byte-a-byte
+ * IDÊNTICO nas DUAS revisões (66 linhas; projeto_id|competencia|valor_previsto_raw|soma_venda|
+ * frac_fallback com 6–9 casas) — `IDENTICAL=true`. Tempo: ~15-16s → ~1,1s por query. Verificado
+ * via `createCaller` real (mesmo caminho do tRPC): `getContasReceberMatrix` caiu de **~20,3s p/
+ * ~4,2s**; `getContasAPagarByYear` intacto (~1,4s). A semântica de `match_exact` (que alimenta
+ * `all_pairs`/`proj_sums` e a fração de venda `venda_frac`) NÃO foi tocada — só o caminho de
+ * existência do `match_contains`. ZERO mudança em valores financeiros exibidos.
+ *
  * Rev. 2953 — **COMBO DE DEMISSÕES (DASHBOARD AVISO PRÉVIO) — MODAL MAIOR + BOTÃO "GERAR PDF
  * P/ DIRETORIA" (RELATÓRIO COMPLETO COM TODOS OS NOMES + TEMPO DE CASA) + NOVA SEÇÃO "REDUÇÃO
  * MENSAL RECORRENTE DA FOLHA (SOBRA DE CAIXA)" COM SALÁRIOS + SEGURO DE VIDA + VALE

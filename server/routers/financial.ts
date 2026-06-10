@@ -4608,13 +4608,25 @@ export const financialRouter = router({
         SELECT i.id AS item_id, a.ativ_id, i.projeto_id
         FROM norm_name i JOIN norm_ativ a ON a.nome_norm = i.nome_norm AND a.projeto_id = i.projeto_id
       ),
+      -- Itens SEM match exato (dedup via match_exact_items). Fence MATERIALIZED p/
+      -- filtrar os itens ANTES do cross-join LIKE: sem o fence, o planner inlina as
+      -- CTEs e degenera num Nested Loop Anti Join O(n²) (~280M linhas/30s no proj 46).
+      -- Com o fence o conjunto sem-match (vazio quando todo item casou exato) já entra
+      -- reduzido no LIKE → ~15s caem p/ ~1s. Semântica idêntica (existência é booleana).
+      match_exact_items AS MATERIALIZED (
+        SELECT DISTINCT item_id FROM match_exact
+      ),
+      unmatched_items AS MATERIALIZED (
+        SELECT n.* FROM norm_name n
+        WHERE LENGTH(n.nome_norm) >= 5
+          AND NOT EXISTS (SELECT 1 FROM match_exact_items me WHERE me.item_id = n.id)
+      ),
       match_contains AS (
         SELECT i.id AS item_id, a.ativ_id, i.projeto_id
-        FROM norm_name i JOIN norm_ativ a
+        FROM unmatched_items i JOIN norm_ativ a
           ON (a.nome_norm LIKE '%' || i.nome_norm || '%' OR i.nome_norm LIKE '%' || a.nome_norm || '%')
           AND a.projeto_id = i.projeto_id
-        WHERE NOT EXISTS (SELECT 1 FROM match_exact m WHERE m.item_id = i.id)
-          AND LENGTH(i.nome_norm) >= 5 AND LENGTH(a.nome_norm) >= 5
+        WHERE LENGTH(a.nome_norm) >= 5
       ),
       all_pairs AS (
         SELECT i.projeto_id, i.id AS item_id,
@@ -4860,13 +4872,25 @@ export const financialRouter = router({
         SELECT i.id AS item_id, a.ativ_id, i.projeto_id
         FROM norm_name i JOIN norm_ativ a ON a.nome_norm = i.nome_norm AND a.projeto_id = i.projeto_id
       ),
+      -- Itens SEM match exato (dedup via match_exact_items). Fence MATERIALIZED p/
+      -- filtrar os itens ANTES do cross-join LIKE: sem o fence, o planner inlina as
+      -- CTEs e degenera num Nested Loop Anti Join O(n²) (~280M linhas/30s no proj 46).
+      -- Com o fence o conjunto sem-match (vazio quando todo item casou exato) já entra
+      -- reduzido no LIKE → ~15s caem p/ ~1s. Semântica idêntica (existência é booleana).
+      match_exact_items AS MATERIALIZED (
+        SELECT DISTINCT item_id FROM match_exact
+      ),
+      unmatched_items AS MATERIALIZED (
+        SELECT n.* FROM norm_name n
+        WHERE LENGTH(n.nome_norm) >= 5
+          AND NOT EXISTS (SELECT 1 FROM match_exact_items me WHERE me.item_id = n.id)
+      ),
       match_contains AS (
         SELECT i.id AS item_id, a.ativ_id, i.projeto_id
-        FROM norm_name i JOIN norm_ativ a
+        FROM unmatched_items i JOIN norm_ativ a
           ON (a.nome_norm LIKE '%' || i.nome_norm || '%' OR i.nome_norm LIKE '%' || a.nome_norm || '%')
           AND a.projeto_id = i.projeto_id
-        WHERE NOT EXISTS (SELECT 1 FROM match_exact m WHERE m.item_id = i.id)
-          AND LENGTH(i.nome_norm) >= 5 AND LENGTH(a.nome_norm) >= 5
+        WHERE LENGTH(a.nome_norm) >= 5
       ),
       all_pairs AS (
         SELECT i.projeto_id, i.id AS item_id,
