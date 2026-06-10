@@ -1690,14 +1690,15 @@ export default function DashAvisoPrevio() {
           acontecer". */}
       {comboOpen && (
         <Dialog open={comboOpen} onOpenChange={setComboOpen}>
-          <DialogContent className="max-w-6xl w-[95vw] max-h-[92vh] overflow-y-auto">
-            <DialogHeader>
+          <DialogContent className="!top-0 !left-0 !translate-x-0 !translate-y-0 !w-screen !h-[100dvh] !max-w-none !max-h-none !rounded-none !border-0 !p-0 !gap-0 !flex !flex-col !overflow-hidden">
+            <DialogHeader className="shrink-0 px-4 sm:px-6 py-3 border-b bg-white space-y-0">
               <DialogTitle className="flex items-center gap-2 text-base">
                 <Calculator className="h-5 w-5 text-blue-600" />
                 Combo de Demissões — Fluxo de Caixa Consolidado
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 text-sm">
+            <div className="flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 py-4">
+            <div className="space-y-4 text-sm max-w-5xl mx-auto">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="rounded-lg border-2 border-blue-200 bg-blue-50 p-3 text-center">
                   <p className="text-2xl font-bold text-blue-700 tabular-nums">{comboAgregado.qtd}</p>
@@ -1818,12 +1819,13 @@ export default function DashAvisoPrevio() {
                 </p>
               </div>
 
-              <div className="flex justify-between items-center gap-2 pt-2 border-t">
-                <Button size="sm" variant="outline" onClick={gerarRelatorioCombo} disabled={comboAgregado.qtd === 0} className="gap-1.5">
-                  <FileText className="h-4 w-4" /> Gerar PDF p/ diretoria
-                </Button>
-                <Button size="sm" variant="default" onClick={() => setComboOpen(false)}>Fechar</Button>
-              </div>
+            </div>
+            </div>
+            <div className="shrink-0 flex justify-between items-center gap-2 px-4 sm:px-6 py-3 border-t bg-white">
+              <Button size="sm" variant="outline" onClick={gerarRelatorioCombo} disabled={comboAgregado.qtd === 0} className="gap-1.5">
+                <FileText className="h-4 w-4" /> Gerar PDF p/ diretoria
+              </Button>
+              <Button size="sm" variant="default" onClick={() => setComboOpen(false)}>Fechar</Button>
             </div>
           </DialogContent>
         </Dialog>

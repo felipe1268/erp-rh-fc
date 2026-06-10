@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2958 — **DASHBOARD AVISO PRÉVIO → MODAL "COMBO DE DEMISSÕES — FLUXO DE CAIXA CONSOLIDADO"
+ * AGORA ABRE EM TELA CHEIA (FULL SCREEN), SEM INFORMAÇÃO COMPRIMIDA OU SOBREPOSTA.**
+ *
+ * PEDIDO (usuário, iPad, print do modal): "Quero isso em full screen de forma que não fique nenhuma
+ * informação comprimida ou sobreposta." No iPad o modal era `max-w-6xl w-[95vw] max-h-[92vh]`, então
+ * os 4 cards do topo (Funcionários / Folha mensal / Bruto oficial / Custo total) e os 5 cards de
+ * "Redução Mensal Recorrente" saíam com os valores cortados/espremidos.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, `client/src/pages/dashboards/DashAvisoPrevio.tsx`):
+ * o `<DialogContent>` do combo adotou o MESMO padrão full-screen já usado no modal de detalhe de
+ * cálculo deste arquivo — `!top-0 !left-0 !translate-x-0 !translate-y-0 !w-screen !h-[100dvh]
+ * !max-w-none !max-h-none !rounded-none !border-0 !p-0 !gap-0 !flex !flex-col !overflow-hidden`.
+ * Estrutura em 3 faixas: (1) `<DialogHeader>` fixo (`shrink-0`, padding + border-b); (2) corpo
+ * rolável `flex-1 overflow-y-auto overscroll-contain` com `max-w-5xl mx-auto` p/ legibilidade em
+ * telas largas; (3) rodapé fixo (`shrink-0`, border-t) com os botões "Gerar PDF p/ diretoria" e
+ * "Fechar" — antes embutidos no fim do conteúdo rolável, agora sempre visíveis. Com a largura total
+ * disponível, os grids responsivos (`sm:grid-cols-4` / `lg:grid-cols-5`) respiram e nenhum valor é
+ * mais cortado. Nenhuma mudança de cálculo, dados ou backend.
+ *
  * Rev. 2957 — **DASHBOARD AVISO PRÉVIO → COMBO DE DEMISSÕES → "RELATÓRIO DE DEMISSÕES — ANÁLISE DE
  * FLUXO DE CAIXA" (PDF P/ DIRETORIA) — A COLUNA "FUNCIONÁRIO" DA TABELA "FUNCIONÁRIOS SELECIONADOS"
  * AGORA EXIBE A FOTO DO FUNCIONÁRIO AO LADO DO NOME.**
