@@ -1,15 +1,33 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
-import { getDb, getCompaniesForUser } from "../db";
+import { getDb, getCompaniesForUser, userCanAccessObra, getEffectiveAllowedObraIds } from "../db";
 import { epis, epiDeliveries, employees, systemCriteria, caepiDatabase, epiDiscountAlerts, obras, fornecedoresEpi, epiEstoqueObra, epiTransferencias, obraFuncionarios, companies, comprasSolicitacoes, comprasSolicitacoesItens, epiEstoqueMinimo } from "../../drizzle/schema";
-import { eq, and, desc, sql, isNull, gte, inArray, ilike, or } from "drizzle-orm";
+import { eq, and, desc, sql, isNull, gte, inArray, ilike, or, getTableColumns } from "drizzle-orm";
 import { getConstrutorasIds } from "../db";
 import { storagePut } from "../storage";
 import { invokeLLM } from "../_core/llm";
 import { buscarFotoParaItem } from "../_core/autoFoto";
 import { generateEpiFichaPdf } from "../utils/generateEpiFichaPdf";
 import { lockEGerarNumeroSc } from "./compras";
+
+// Rev. 2950 — Guards de escrita de estoque por OBRA (permissão por obra do usuário).
+// `assertObraWrite`: hard-guard anti-IDOR — só escreve no estoque de uma obra que o
+// usuário tem acesso (admin/admin_master = global via userCanAccessObra → null).
+async function assertObraWrite(ctx: any, obraId: number | null | undefined) {
+  const ok = await userCanAccessObra(ctx.user.id, ctx.user.role, obraId);
+  if (!ok) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem permissão para ajustar o estoque desta obra." });
+  }
+}
+// `assertCentralWrite`: usuário RESTRITO (allowed_obra_ids != null) NÃO escreve no
+// Almoxarifado Central — só cadastra/ajusta nas obras que tem acesso. Admin = global.
+async function assertCentralWrite(ctx: any) {
+  const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+  if (allowed !== null) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem permissão para cadastrar/ajustar no Almoxarifado Central. Selecione uma obra que você gerencia." });
+  }
+}
 
 export const episRouter = router({
   // ============================================================
@@ -215,6 +233,9 @@ export const episRouter = router({
       condicao: z.string().optional(),
       tamanho: z.string().optional(),
       filtroEstoque: z.enum(['todos','zerado','critico','baixo']).optional(),
+      // Rev. 2950 — escopo do estoque exibido: ausente/0 = Almoxarifado Central;
+      // com obraId, a coluna "Estoque" reflete o saldo DAQUELA obra (epi_estoque_obra).
+      obraId: z.number().optional(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
