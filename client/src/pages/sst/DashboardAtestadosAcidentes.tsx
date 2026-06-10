@@ -622,9 +622,9 @@ export default function DashboardAtestadosAcidentes() {
                         <button key={a.id} type="button" onClick={() => (a as any).employeeId && setSelectedEmployeeId((a as any).employeeId)}
                           className="w-full text-left p-3 hover:bg-emerald-50/50 transition-colors flex items-start gap-3 cursor-pointer"
                           title="Clique para abrir o detalhe do colaborador">
-                          <div className="bg-emerald-100 text-emerald-700 rounded-full h-8 w-8 flex items-center justify-center flex-shrink-0">
-                            <Stethoscope className="h-4 w-4" />
-                          </div>
+                          <span className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                            <PersonPhoto src={(a as any).fotoUrl} alt={a.nome || "—"} size="sm" caption={a.funcao || undefined} />
+                          </span>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate text-blue-700 hover:underline">{a.nome}</p>
                             <p className="text-xs text-gray-500 truncate">{a.funcao || "—"} · {a.tipo}{a.cid ? ` · CID ${a.cid}` : ""}</p>
@@ -648,9 +648,9 @@ export default function DashboardAtestadosAcidentes() {
                         <button key={a.id} type="button" onClick={() => (a as any).employeeId && setSelectedEmployeeId((a as any).employeeId)}
                           className="w-full text-left p-3 hover:bg-red-50/50 transition-colors flex items-start gap-3 cursor-pointer"
                           title="Clique para abrir o detalhe do colaborador">
-                          <div className="bg-red-100 text-red-700 rounded-full h-8 w-8 flex items-center justify-center flex-shrink-0">
-                            <AlertTriangle className="h-4 w-4" />
-                          </div>
+                          <span className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                            <PersonPhoto src={(a as any).fotoUrl} alt={a.nome || "—"} size="sm" caption={a.funcao || undefined} />
+                          </span>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate text-blue-700 hover:underline">{a.nome}</p>
                             <p className="text-xs text-gray-500 truncate">

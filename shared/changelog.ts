@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2952 — **ATESTADOS & ACIDENTES (SST) — AS LISTAS "ÚLTIMOS ATESTADOS" E "ÚLTIMOS
+ * ACIDENTES" (ABA VISÃO GERAL) AGORA MOSTRAM A FOTO DO FUNCIONÁRIO NO LUGAR DO ÍCONE
+ * GENÉRICO (ESTETOSCÓPIO / TRIÂNGULO DE ALERTA).**
+ *
+ * CONTEXTO (usuário, print do iPad): "quero as fotos dos funcionários aqui também" nas duas
+ * listas de últimos eventos do dashboard Atestados & Acidentes — cada linha mostrava só um
+ * ícone redondo de categoria (verde p/ atestado, vermelho p/ acidente), nome + função/detalhe.
+ *
+ * SOLUÇÃO (BACK read-only + FRONT, ZERO ALTER/DROP/DELETE):
+ * 1) `server/routers/sstAnalytics.ts`: as queries `atRows`/`acRows` JÁ traziam
+ *    `employeeFotoUrl: employees.fotoUrl`; bastou repassar `fotoUrl: r.employeeFotoUrl || null`
+ *    nos `.map()` que montam `ultimosAtestados` e `ultimosAcidentes`. Nenhuma query nova.
+ * 2) `client/src/pages/sst/DashboardAtestadosAcidentes.tsx`: nas duas listas, o `<div>` do ícone
+ *    redondo foi trocado por `<PersonPhoto src={a.fotoUrl} size="sm" caption={a.funcao}>`
+ *    (lightbox + fallback de iniciais) envolto num `<span>` com `stopPropagation` p/ não disparar
+ *    o clique da linha (que abre o Raio-X via `setSelectedEmployeeId`). `PersonPhoto` já estava
+ *    importado nessa tela.
+ *
  * Rev. 2951 — **CONTROLE DE DOCUMENTOS (DASHBOARD) — A TABELA "DOCUMENTAÇÃO INCOMPLETA" AGORA
  * MOSTRA A FOTO DO FUNCIONÁRIO NA COLUNA "FUNCIONÁRIO", AO LADO DO NOME (CLICÁVEL P/ RAIO-X)
  * E DO CPF.**
