@@ -1321,6 +1321,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             avancos={avancos}
             utils={utils}
             orcamentoId={proj?.orcamentoId ?? null}
+            proj={proj}
           />
         )}
         {canViewTab(aba) && aba === "efetivo-ia" && (
@@ -3674,7 +3675,7 @@ function LobLinhaBalancosTab({ projetoId, nomeProjeto }: { projetoId: number; no
 }
 
 // ── Cronograma ────────────────────────────────────────────────────────────────
-function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos, utils, orcamentoId }: any) {
+function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos, utils, orcamentoId, proj }: any) {
   const [editando, setEditando] = useState(false);
   const [linhas, setLinhas] = useState<any[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -3686,6 +3687,11 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
   const [buscaCrono, setBuscaCrono] = useState("");
   const [selectedAtiv,  setSelectedAtiv]  = useState<Set<number>>(new Set());
   const [modoSelecao,   setModoSelecao]   = useState(false);
+  // Calendário MSP (feriados/exceções) p/ a coluna "Duração" em dias úteis.
+  // Definido localmente neste componente — o `_calMSPInner` da Rev. anterior
+  // morava em PlanejamentoDetalheInner (outro escopo) e quebrava o Cronograma
+  // com "ReferenceError: _calMSPInner is not defined".
+  const _calMSPInner = useMemo(() => parseCalendarioJson((proj as any)?.calendarioJson), [proj]);
 
   const toggleAtivDisabledMut = trpc.planejamento.toggleAtividadesDisabled.useMutation({
     onSuccess: () => {

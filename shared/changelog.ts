@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2962 — **PLANEJAMENTO → DETALHE DO PROJETO → ABA CRONOGRAMA — CORREÇÃO DO CRASH
+ * "OCORREU UM ERRO INESPERADO / ReferenceError: _calMSPInner is not defined" QUE DERRUBAVA
+ * A TELA INTEIRA AO ABRIR O CRONOGRAMA (ex.: /planejamento/46).**
+ *
+ * REPORTADO (usuário, iPad, print): "eu acesso o cronograma e cai" — a aba Cronograma do
+ * detalhe do projeto exibia o card de erro genérico com `ReferenceError: _calMSPInner is
+ * not defined` (stack em `PlanejamentoDetalheInner`/`Cronograma`).
+ *
+ * CAUSA-RAIZ: a coluna "Duração" da tabela do Cronograma calcula dias úteis via
+ * `diasUteisEntre(ini, fim, _calMSPInner)` (`client/src/pages/planejamento/
+ * PlanejamentoDetalhe.tsx` ~L5180). Porém `_calMSPInner` (memo do calendário MSP parseado
+ * do `calendarioJson`) só estava definido no escopo do componente `PlanejamentoDetalheInner`
+ * (~L907) — o `Cronograma` é um COMPONENTE IRMÃO/SEPARADO (function `Cronograma(...)` ~L3677)
+ * que NÃO recebia `proj` nem tinha esse memo. Em runtime, qualquer render da aba Cronograma
+ * disparava `ReferenceError: _calMSPInner is not defined`, derrubando a página toda (não só a
+ * célula de duração). Mesma classe do bug histórico da Rev. 1713/1715 (`pvMacro` fora de
+ * escopo).
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE): o `<Cronograma>` passou a receber a prop
+ * `proj={proj}` (já disponível no escopo do `PlanejamentoDetalheInner` que o renderiza) e
+ * define LOCALMENTE `const _calMSPInner = useMemo(() => parseCalendarioJson(proj?.calendarioJson), [proj])`
+ * logo após os hooks de estado (antes de qualquer early return, respeitando as regras de
+ * hooks). `parseCalendarioJson` tolera `null`/`undefined` e `diasUteisEntre` aceita
+ * `cal: CalendarioMSProject | null`, então mesmo sem calendário a coluna cai no fallback
+ * (`a.duracaoDias`) em vez de quebrar. Nenhuma mudança de cálculo, dados ou backend.
+ *
  * Rev. 2961 — **DASHBOARD AVISO PRÉVIO → COMBO DE DEMISSÕES — AGORA PODE SER SALVO POR NOME
  * (SIMULAÇÃO PERSISTENTE: LISTAR / REABRIR / EDITAR / EXCLUIR) E TEM O BOTÃO "GERAR AVISOS DE
  * TODOS" QUE CRIA, EM 1 CLIQUE, O AVISO PRÉVIO DE CADA FUNCIONÁRIO SELECIONADO — PULANDO QUEM JÁ
