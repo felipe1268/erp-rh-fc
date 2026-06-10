@@ -254,16 +254,26 @@ export const episRouter = router({
       if (input.tamanho && input.tamanho !== 'Todos') {
         conditions.push(eq(epis.tamanho, input.tamanho));
       }
+      // Rev. 2950 — quando há obraId, todo o filtro/exibição de "Estoque" passa a
+      // refletir o saldo DAQUELA obra (subquery em epi_estoque_obra), não o central.
+      const stockExpr = input.obraId
+        ? sql<number>`COALESCE((SELECT ${epiEstoqueObra.quantidade} FROM ${epiEstoqueObra} WHERE ${epiEstoqueObra.epiId} = ${epis.id} AND ${epiEstoqueObra.obraId} = ${input.obraId}), 0)`
+        : sql<number>`COALESCE(${epis.quantidadeEstoque}, 0)`;
       if (input.filtroEstoque === 'zerado') {
-        conditions.push(sql`COALESCE(${epis.quantidadeEstoque}, 0) = 0`);
+        conditions.push(sql`${stockExpr} = 0`);
       } else if (input.filtroEstoque === 'critico') {
-        conditions.push(sql`COALESCE(${epis.quantidadeEstoque}, 0) >= 1 AND COALESCE(${epis.quantidadeEstoque}, 0) <= 3`);
+        conditions.push(sql`${stockExpr} >= 1 AND ${stockExpr} <= 3`);
       } else if (input.filtroEstoque === 'baixo') {
-        conditions.push(sql`COALESCE(${epis.quantidadeEstoque}, 0) >= 4 AND COALESCE(${epis.quantidadeEstoque}, 0) <= 10`);
+        conditions.push(sql`${stockExpr} >= 4 AND ${stockExpr} <= 10`);
       }
       const cond = and(...conditions);
+      // Com obraId: mantém TODAS as colunas do catálogo, troca `quantidadeEstoque`
+      // pelo saldo da obra e expõe `estoqueCentral` (saldo do Almoxarifado Central).
+      const selectObj: any = input.obraId
+        ? { ...getTableColumns(epis), estoqueCentral: epis.quantidadeEstoque, quantidadeEstoque: stockExpr }
+        : undefined;
       const [rows, countResult] = await Promise.all([
-        db.select().from(epis).where(cond!).orderBy(epis.nome).limit(input.limit).offset(input.offset),
+        (selectObj ? db.select(selectObj) : db.select()).from(epis).where(cond!).orderBy(epis.nome).limit(input.limit).offset(input.offset),
         db.select({ total: sql<number>`COUNT(*)` }).from(epis).where(cond!),
       ]);
       return { items: rows, total: Number(countResult[0]?.total ?? 0) };
@@ -284,16 +294,30 @@ export const episRouter = router({
       fornecedorEndereco: z.string().optional(),
       categoria: z.enum(['EPI','Uniforme','Calcado']).default('EPI'),
       tamanho: z.string().optional(),
-      quantidadeEstoque: z.number().default(0),
+      quantidadeEstoque: z.number().min(0).default(0),
       valorProduto: z.number().optional(),
       tempoMinimoTroca: z.number().optional(),
       corCapacete: z.string().nullable().optional(),
       condicao: z.enum(['Novo','Reutilizado']).default('Novo'),
       criadoPor: z.string().optional(),
+      // Rev. 2950 — local do estoque inicial: ausente = Almoxarifado Central;
+      // com obraLocalId, a quantidade inicial entra no estoque DAQUELA obra.
+      obraLocalId: z.number().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const userName = ctx.user?.name || input.criadoPor || 'Sistema';
+      // Rev. 2950 — guard de permissão por obra:
+      //  • com obraLocalId → exige acesso à obra (assertObraWrite, anti-IDOR);
+      //  • sem obraLocalId (estoque inicial vai p/ o Central) → exige permissão de
+      //    Central (usuário restrito a obras é bloqueado de poluir o Almoxarifado).
+      if (input.obraLocalId) {
+        await assertObraWrite(ctx, input.obraLocalId);
+      } else if ((input.quantidadeEstoque ?? 0) !== 0) {
+        await assertCentralWrite(ctx);
+      }
+      const usaObra = !!input.obraLocalId;
+      const qtdInicial = input.quantidadeEstoque ?? 0;
       const [inserted] = await db.insert(epis).values({
         companyId: input.companyId,
         nome: input.nome,
@@ -308,13 +332,39 @@ export const episRouter = router({
         fornecedorEndereco: input.fornecedorEndereco || null,
         categoria: input.categoria,
         tamanho: input.tamanho || null,
-        quantidadeEstoque: input.quantidadeEstoque,
+        // Quando o estoque inicial é de uma obra, o Central nasce ZERADO (a qtd vai
+        // pra epi_estoque_obra logo abaixo) — caixas independentes não se misturam.
+        quantidadeEstoque: usaObra ? 0 : qtdInicial,
         valorProduto: input.valorProduto != null ? String(input.valorProduto) : null,
         tempoMinimoTroca: input.tempoMinimoTroca || null,
         corCapacete: input.corCapacete || null,
         condicao: input.condicao,
         criadoPor: userName,
       } as any).returning({ id: epis.id });
+      // Rev. 2950 — entrada inicial no estoque da OBRA (caixa independente) +
+      // histórico (rastreabilidade: quem cadastrou e onde) — espelha entradaDiretaObra.
+      if (usaObra && qtdInicial > 0) {
+        await db.insert(epiEstoqueObra).values({
+          companyId: input.companyId,
+          epiId: inserted.id,
+          obraId: input.obraLocalId!,
+          quantidade: qtdInicial,
+          criadoPor: userName,
+        } as any);
+        const today = new Date().toISOString().split('T')[0];
+        await db.insert(epiTransferencias).values({
+          companyId: input.companyId,
+          epiId: inserted.id,
+          tipoOrigem: 'entrada_direta',
+          origemObraId: null,
+          destinoObraId: input.obraLocalId!,
+          quantidade: qtdInicial,
+          data: today,
+          observacoes: 'Cadastro de EPI direto no estoque da obra',
+          criadoPor: userName,
+          criadoPorUserId: ctx.user?.id || null,
+        } as any);
+      }
       return { id: inserted.id };
     }),
 
@@ -344,6 +394,19 @@ export const episRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const { id, ...data } = input;
+      // Rev. 2950 — guard de tenant + permissão de Central. Carrega a linha p/
+      // derivar a empresa (anti-IDOR) e o saldo atual do Central.
+      const [epiRow] = await db.select({ companyId: epis.companyId, quantidadeEstoque: epis.quantidadeEstoque }).from(epis).where(eq(epis.id, id));
+      if (!epiRow) throw new TRPCError({ code: "NOT_FOUND", message: "EPI não encontrado." });
+      const allowedCos = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCos.some((c) => c.id === epiRow.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este EPI." });
+      }
+      // Só bloqueia se a edição REALMENTE altera o saldo do Almoxarifado Central
+      // (mexer em nome/CA/foto etc. continua livre p/ quem gerencia o catálogo).
+      if (data.quantidadeEstoque !== undefined && data.quantidadeEstoque !== (epiRow.quantidadeEstoque ?? 0)) {
+        await assertCentralWrite(ctx);
+      }
       const updateData: any = {};
       updateData.alteradoPor = ctx.user?.name || data.alteradoPor || 'Sistema';
       if (data.nome !== undefined) updateData.nome = data.nome;
@@ -1936,6 +1999,9 @@ Exemplos de referência:
       if (!allowed.some((c) => c.id === row.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este estoque." });
       }
+      // Rev. 2950 — guard de permissão por OBRA: só ajusta o estoque de obras que o
+      // usuário gerencia (admin = global). Evita "bagunça" entre obras (anti-IDOR).
+      await assertObraWrite(ctx, row.obraId);
       await db.update(epiEstoqueObra)
         .set({ quantidade: input.quantidade, alteradoPor: ctx.user?.name || 'Sistema', updatedAt: new Date().toISOString() } as any)
         .where(eq(epiEstoqueObra.id, input.id));
@@ -1988,6 +2054,18 @@ Exemplos de referência:
         if (obrasOk.length !== uniqueObraIds.length) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Obra de origem/destino inválida para esta empresa." });
         }
+        // Rev. 2950 — permissão por OBRA: o usuário só transfere de/para obras que
+        // gerencia (admin = global). Cada obra envolvida é validada (anti-IDOR).
+        for (const oid of uniqueObraIds) {
+          await assertObraWrite(ctx, oid);
+        }
+      }
+
+      // Rev. 2950 — permissão de CENTRAL: usuário RESTRITO (allowedObraIds != null) NÃO
+      // pode escrever no Almoxarifado Central, NEM via transferência (origem central =
+      // débito do central; destino central = crédito no central). admin/full-access ok.
+      if (input.tipoOrigem === 'central' || input.tipoDestino === 'central') {
+        await assertCentralWrite(ctx);
       }
 
       // Rev. 2928 — TUDO numa transação: origem, destino e histórico ou TODOS revertem.
@@ -2130,8 +2208,17 @@ Exemplos de referência:
       epiId: z.number(),
       quantidade: z.number().min(1),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      // Rev. 2950 — guard de tenant/IDOR (empresa derivada do PRÓPRIO EPI) + permissão de
+      // CENTRAL: esta rota credita o Almoxarifado Central, então usuário RESTRITO é bloqueado.
+      const epiCo = await db.select({ companyId: epis.companyId }).from(epis).where(eq(epis.id, input.epiId));
+      if (!epiCo[0]) throw new TRPCError({ code: "NOT_FOUND", message: "EPI não encontrado." });
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowed.some((c) => c.id === epiCo[0].companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este EPI." });
+      }
+      await assertCentralWrite(ctx);
       await db.update(epis)
         .set({ quantidadeEstoque: sql`${epis.quantidadeEstoque} + ${input.quantidade}` })
         .where(eq(epis.id, input.epiId));
@@ -2149,6 +2236,14 @@ Exemplos de referência:
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      // Rev. 2950 — guard de tenant (empresa do EPI) + permissão por OBRA (anti-IDOR).
+      const [epiCo] = await db.select({ companyId: epis.companyId }).from(epis).where(eq(epis.id, input.epiId));
+      if (!epiCo) throw new TRPCError({ code: "NOT_FOUND", message: "EPI não encontrado." });
+      const allowedCos = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCos.some((c) => c.id === epiCo.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este EPI." });
+      }
+      await assertObraWrite(ctx, input.obraId);
       // Verificar se já existe registro de estoque para este EPI nesta obra
       const [existing] = await db.select().from(epiEstoqueObra)
         .where(and(eq(epiEstoqueObra.epiId, input.epiId), eq(epiEstoqueObra.obraId, input.obraId)));

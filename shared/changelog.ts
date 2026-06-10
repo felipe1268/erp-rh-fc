@@ -1,6 +1,71 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2950 — **CATÁLOGO DE EPIs — ESTOQUE AGORA SEPARADO POR OBRA (IGUAL JÁ FUNCIONA EM
+ * ENTREGAS): NO TOPO DO CATÁLOGO HÁ UM SELETOR DE LOCAL (ALMOXARIFADO CENTRAL + OBRAS QUE O
+ * USUÁRIO GERENCIA) E O CADASTRO DE EPI GANHOU O CAMPO "LOCAL DO ESTOQUE" PRA DAR ENTRADA
+ * DIRETO NO ESTOQUE DE UMA OBRA. CONTROLE DE PERMISSÃO POR OBRA (`users.allowedObraIds`) NO
+ * BACK E NO FRONT + RASTREABILIDADE PRESERVADA.**
+ *
+ * CONTEXTO (usuário): o Catálogo de EPIs só mostrava/operava o estoque do Almoxarifado Central,
+ * enquanto o módulo de Entregas já sabia separar estoque por obra (`epi_estoque_obra`). Faltava
+ * poder VER o estoque de uma obra específica no Catálogo e CADASTRAR/dar entrada de EPI direto
+ * na obra — respeitando que cada usuário só pode mexer nas obras que tem acesso, sem "bagunçar"
+ * o estoque de obras alheias nem o Central.
+ *
+ * DECISÕES (usuário): (a) seletor de OBRA no topo do Catálogo (Central visível a TODOS + obras
+ * permitidas); a coluna "Estoque" passa a refletir o local selecionado. (b) no Cadastro/Editar
+ * EPI, campo "Local do estoque" define onde a quantidade inicial entra. (c) usuário RESTRITO
+ * (allowedObraIds != null) NÃO escreve no Central — só cadastra/ajusta nas obras que tem acesso;
+ * admin/acesso-total faz tudo. (d) TODA escrita em obra valida `userCanAccessObra` (hard-guard
+ * anti-IDOR) e grava o autor.
+ *
+ * SOLUÇÃO — BACKEND (`server/routers/epis.ts`, ZERO ALTER/DROP/DELETE):
+ * 1) Helpers de módulo: `assertObraWrite(ctx, obraId)` (usa `userCanAccessObra` → FORBIDDEN se
+ *    não tiver acesso; admin/admin_master = global) e `assertCentralWrite(ctx)` (FORBIDDEN se
+ *    `getEffectiveAllowedObraIds` != null, i.e. usuário restrito a obras).
+ * 2) `list`: novo input `obraId?`; quando setado, `stockExpr` vira uma subquery COALESCE sobre
+ *    `epi_estoque_obra` (epiId+obraId) e o `select` passa a usar `getTableColumns(epis)` +
+ *    `estoqueCentral` (saldo central preservado) + `quantidadeEstoque = stockExpr` (saldo da
+ *    obra). O `filtroEstoque` (zerado/baixo/médio) passa a operar sobre o saldo da obra.
+ * 3) `create`: novo input `obraLocalId?`. Com obra → `assertObraWrite`, cria o EPI com
+ *    central = 0 e insere `epi_estoque_obra` + histórico em `epiTransferencias` (autor gravado),
+ *    espelhando `entradaDiretaObra`. Sem obra (estoque inicial vai p/ Central) → `assertCentralWrite`
+ *    (bloqueia usuário restrito).
+ * 4) `update`: carrega a linha p/ guard de tenant (empresa do EPI via `getCompaniesForUser`) e só
+ *    chama `assertCentralWrite` quando a edição REALMENTE altera o saldo do Central (mexer em
+ *    nome/CA/foto continua livre p/ quem gerencia o catálogo).
+ * 5) Hardening de IDOR / permissão de Central: `ajustarEstoqueObra` e `entradaDiretaObra` (esta
+ *    antes SEM guard nenhum) ganharam tenant-check + `assertObraWrite`; `transferir` valida
+ *    `assertObraWrite` em CADA obra de origem/destino E TAMBÉM `assertCentralWrite` quando a
+ *    origem OU o destino é o Central (origem central = débito do Central; destino central =
+ *    crédito), fechando o bypass em que um usuário restrito mexeria no Central via transferência.
+ *    `entradaEstoque` (rota que credita o Central) ganhou tenant-check + `assertCentralWrite`. No
+ *    `create`, o input `quantidadeEstoque` virou `z.number().min(0)` e o guard de Central passou a
+ *    disparar p/ qualquer quantidade != 0 (não só > 0), bloqueando escrita no Central via valor
+ *    negativo. RESSALVA: os fluxos de ENTREGA (`createDelivery`/`updateDelivery`/`deleteDelivery`),
+ *    que também debitam/creditam estoque, são pré-existentes e ficaram FORA do escopo desta
+ *    revisão — hardening deles é follow-up.
+ *
+ * SOLUÇÃO — FRONTEND (`client/src/pages/Epis.tsx`; `PermissionsContext` já expunha o necessário):
+ * 6) Consome `allowedObraIds`/`canAccessObra`/`isAdmin` do contexto; deriva `canWriteCentral`
+ *    (admin/master ou allowedObraIds === null) e `obrasPermitidas` (obras que o usuário pode
+ *    escrever). Header do Catálogo: `<Select>` de local (Central + `obrasPermitidas`) com state
+ *    `catalogoObraId` que é passado como `obraId` no `episQ`; o cabeçalho da coluna "Estoque"
+ *    rotula o local ("Estoque (Central)" / "Estoque (Nome da Obra)").
+ * 7) Form Novo EPI: campo "Local do estoque" (Central só p/ `canWriteCentral` + `obrasPermitidas`),
+ *    default = obra ativa no Catálogo (ou 1ª obra permitida p/ restrito), envia `obraLocalId` no
+ *    create + guards de UX antes do submit. Form Editar: o input de estoque Central fica
+ *    desabilitado p/ usuário restrito (com dica p/ usar "Estoque por Obra").
+ * 8) Dialogs de escrita (Entrada Direta, Transferência origem/destino) passam a listar apenas
+ *    `obrasPermitidas`.
+ *
+ * RESULTADO: ao escolher uma obra no Catálogo, a coluna Estoque mostra o estoque DAQUELA obra e o
+ * cadastro/entrada cai nela; o Central continua visível a todos. Usuário só consegue cadastrar/
+ * ajustar/transferir nas obras que tem permissão (garantido no FRONT por UX e no BACK por
+ * hard-guard anti-IDOR). Rastreabilidade preservada (autor + histórico em `epiTransferencias`).
+ * ZERO ALTER/DROP/DELETE. Arquivos: `server/routers/epis.ts`, `client/src/pages/Epis.tsx`.
+ *
  * Rev. 2949 — **CONTROLE DE DOCUMENTOS (DASHBOARD) — A TABELA "DOCUMENTAÇÃO INCOMPLETA" FICOU
  * CLICÁVEL: AO CLICAR NUMA LINHA (OU NA COLUNA "PENDÊNCIAS") ABRE UM DIÁLOGO LISTANDO EXATAMENTE
  * QUAIS DOCUMENTOS DAQUELE FUNCIONÁRIO ESTÃO VENCIDOS OU NÃO CADASTRADOS.**

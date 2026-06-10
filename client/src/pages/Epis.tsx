@@ -145,9 +145,12 @@ export default function Epis() {
   const hasValidCompany = isConstrutoras ? companyIds.length > 0 : !!companyId;
   const { user } = useAuth();
   const isMaster = user?.role === "admin_master";
-  const { hasGroup, groupOcultarValores, isAdminMaster, isSomenteVisualizacao } = usePermissions();
+  const { hasGroup, groupOcultarValores, isAdminMaster, isAdmin, isSomenteVisualizacao, allowedObraIds, canAccessObra } = usePermissions();
   const hideEpiValues = !isAdminMaster && hasGroup && groupOcultarValores('/epis');
   const readOnly = !isAdminMaster && hasGroup && isSomenteVisualizacao;
+  // Rev. 2950 — escrita no Almoxarifado Central só p/ acesso TOTAL (admin/master ou
+  // sem restrição de obra); usuários restritos só cadastram/ajustam nas suas obras.
+  const canWriteCentral = isAdminMaster || isAdmin || allowedObraIds === null;
 
   // Suporte a ?tab= para links diretos da sidebar
   const validTabs: ViewMode[] = useMemo(() => ["catalogo", "entregas", "estoque_obra", "transferencias", "config", "checklist", "validade", "custos", "minimo", "ia", "capacidade", "necessidade", "descontos"], []);
@@ -210,7 +213,13 @@ export default function Epis() {
   }, [search]);
   useEffect(() => { setEpisPage(0); }, [filterCategoria, filterCondicao, filterTamanho, filterEstoque]);
 
-  const episQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: PAGE_SIZE, offset: episPage * PAGE_SIZE, search: debouncedSearch || undefined, categoria: filterCategoria !== "Todos" ? filterCategoria : undefined, condicao: filterCondicao !== "Todos" ? filterCondicao : undefined, tamanho: filterTamanho !== "Todos" ? filterTamanho : undefined, filtroEstoque: filterEstoque !== "todos" ? filterEstoque : undefined }, { enabled: hasValidCompany });
+  // Rev. 2950 — local de estoque ativo no Catálogo ("central" = Almoxarifado Central;
+  // senão o id da obra). Declarado ANTES de episQ p/ evitar TDZ.
+  const [catalogoObraId, setCatalogoObraId] = useState<string>("central");
+  const [estoqueLocalId, setEstoqueLocalId] = useState<string>("central");
+  useEffect(() => { setEpisPage(0); }, [catalogoObraId]);
+
+  const episQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: PAGE_SIZE, offset: episPage * PAGE_SIZE, search: debouncedSearch || undefined, categoria: filterCategoria !== "Todos" ? filterCategoria : undefined, condicao: filterCondicao !== "Todos" ? filterCondicao : undefined, tamanho: filterTamanho !== "Todos" ? filterTamanho : undefined, filtroEstoque: filterEstoque !== "todos" ? filterEstoque : undefined, obraId: catalogoObraId !== "central" ? parseInt(catalogoObraId) : undefined }, { enabled: hasValidCompany });
   const episAllQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, limit: 2000, offset: 0 }, { enabled: hasValidCompany && (viewMode === "nova_entrega" || viewMode === "ficha_epi" || viewMode === "estoque_obra" || viewMode === "transferencias") });
   const deliveriesQ = trpc.epis.listDeliveries.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, search: debouncedSearch || undefined, limit: PAGE_SIZE, offset: deliveriesPage * PAGE_SIZE }, { enabled: hasValidCompany && (viewMode === "entregas" || viewMode === "nova_entrega" || viewMode === "ficha_epi") });
   const statsQ = trpc.epis.stats.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
@@ -220,6 +229,9 @@ export default function Epis() {
   const fornecedoresQ = trpc.epis.fornecedoresList.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany && (viewMode === "novo_epi" || viewMode === "editar_epi" || viewMode === "config") });
   const obrasQ = trpc.obras.listActive.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
   const obrasList = obrasQ.data ?? [];
+  // Rev. 2950 — obras nas quais o usuário pode ESCREVER (cadastrar/ajustar/transferir).
+  // Admin/full-access (canAccessObra sempre true) vê todas; restrito vê só as suas.
+  const obrasPermitidas = useMemo(() => (obrasList as any[]).filter((o: any) => canAccessObra(o.id)), [obrasList, allowedObraIds]);
 
   const capacidadeQ = trpc.epiAvancado.capacidadeContratacao.useQuery(
     { companyId: queryCompanyId },
@@ -348,7 +360,7 @@ export default function Epis() {
 
   // Transferência form state (multi-EPI)
   const [transForm, setTransForm] = useState({
-    epiId: "", quantidade: 1, tipoOrigem: "central" as "central" | "obra",
+    epiId: "", quantidade: 1, tipoOrigem: (canWriteCentral ? "central" : "obra") as "central" | "obra",
     origemObraId: "", tipoDestino: "obra" as "central" | "obra", destinoObraId: "", data: new Date().toISOString().split("T")[0], observacoes: "",
   });
   const [transItens, setTransItens] = useState<Array<{ epiId: string; quantidade: number }>>([]);
@@ -513,7 +525,7 @@ export default function Epis() {
     setFotoEstado({ file: null, preview: "" });
   }
   function resetTransForm() {
-    setTransForm({ epiId: "", quantidade: 1, tipoOrigem: "central", origemObraId: "", tipoDestino: "obra", destinoObraId: "", data: new Date().toISOString().split("T")[0], observacoes: "" });
+    setTransForm({ epiId: "", quantidade: 1, tipoOrigem: canWriteCentral ? "central" : "obra", origemObraId: "", tipoDestino: "obra", destinoObraId: "", data: new Date().toISOString().split("T")[0], observacoes: "" });
     setTransItens([]);
   }
 
@@ -928,9 +940,12 @@ export default function Epis() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div>
-                  <Label>Quantidade em Estoque</Label>
-                  <Input type="number" min={0} value={epiForm.quantidadeEstoque}
+                  <Label>Estoque (Almoxarifado Central)</Label>
+                  <Input type="number" min={0} value={epiForm.quantidadeEstoque} disabled={!canWriteCentral}
                     onChange={e => setEpiForm(f => ({ ...f, quantidadeEstoque: parseInt(e.target.value) || 0 }))} />
+                  {!canWriteCentral && (
+                    <p className="text-[11px] text-muted-foreground mt-1">Você não pode alterar o estoque Central. Ajuste o estoque nas suas obras em "Estoque por Obra".</p>
+                  )}
                 </div>
                 <div>
                   <Label className="flex items-center gap-1">
@@ -1196,11 +1211,31 @@ export default function Epis() {
                   )}
                 </div>
               </div>
+              {/* Rev. 2950 — Local do estoque: define ONDE a quantidade inicial entra.
+                  Central só p/ acesso total; restrito escolhe entre suas obras. */}
+              <div>
+                <Label className="flex items-center gap-1">
+                  <Warehouse className="h-3.5 w-3.5 text-[#1B2A4A]" /> Local do estoque
+                </Label>
+                <Select value={estoqueLocalId} onValueChange={setEstoqueLocalId}>
+                  <SelectTrigger><SelectValue placeholder="Selecione o local..." /></SelectTrigger>
+                  <SelectContent>
+                    {canWriteCentral && <SelectItem value="central">🏢 Almoxarifado Central</SelectItem>}
+                    {obrasPermitidas.map((o: any) => <SelectItem key={o.id} value={String(o.id)}>🏗️ {o.nome}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  A quantidade informada acima entra no local selecionado.
+                  {!canWriteCentral && " Você só pode cadastrar nas obras que gerencia."}
+                </p>
+              </div>
               <div className="flex justify-end gap-3 pt-4">
                 <Button variant="outline" onClick={() => { setViewMode("catalogo"); resetEpiForm(); }}>Cancelar</Button>
                 <Button onClick={() => {
                   if (!epiForm.nome.trim()) return toast.error("Nome do EPI é obrigatório");
                   if (!epiForm.tempoMinimoTroca || parseInt(epiForm.tempoMinimoTroca) <= 0) return toast.error("Vida Útil (dias) é obrigatório para análise de durabilidade");
+                  if (estoqueLocalId === "central" && !canWriteCentral) return toast.error("Você não tem permissão para cadastrar no Almoxarifado Central. Selecione uma obra.");
+                  if (estoqueLocalId !== "central" && !canAccessObra(parseInt(estoqueLocalId))) return toast.error("Você não tem permissão para cadastrar nesta obra.");
                   createEpiMut.mutate({
                     companyId: queryCompanyId, nome: epiForm.nome,
                     ca: epiForm.ca || undefined, validadeCa: epiForm.validadeCa || undefined,
@@ -1213,6 +1248,7 @@ export default function Epis() {
                     categoria: epiForm.categoria,
                     tamanho: epiForm.tamanho || undefined,
                     quantidadeEstoque: epiForm.quantidadeEstoque,
+                    obraLocalId: estoqueLocalId !== "central" ? parseInt(estoqueLocalId) : undefined,
                     valorProduto: epiForm.valorProduto ? parseCurrencyToFloat(epiForm.valorProduto) : undefined,
                     tempoMinimoTroca: epiForm.tempoMinimoTroca ? parseInt(epiForm.tempoMinimoTroca) : undefined,
                     corCapacete: isCapacete(epiForm.nome) ? (epiForm.corCapacete || null) : null,
@@ -2042,6 +2078,17 @@ export default function Epis() {
           <div className="flex gap-2 flex-wrap">
             {viewMode === "catalogo" && (
               <>
+                {/* Rev. 2950 — local de estoque do Catálogo: Central (todos veem) + obras permitidas */}
+                <Select value={catalogoObraId} onValueChange={setCatalogoObraId}>
+                  <SelectTrigger className="h-9 w-[210px]">
+                    <Warehouse className="h-4 w-4 mr-1 text-[#1B2A4A]" />
+                    <SelectValue placeholder="Local do estoque" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="central">🏢 Almoxarifado Central</SelectItem>
+                    {obrasPermitidas.map((o: any) => <SelectItem key={o.id} value={String(o.id)}>🏗️ {o.nome}</SelectItem>)}
+                  </SelectContent>
+                </Select>
                 {selectedEpis.size > 0 && (
                   <Button variant="destructive" size="sm" onClick={() => setShowBatchDeleteDialog(true)}>
                     <Trash2 className="h-4 w-4 mr-1" /> Excluir {selectedEpis.size}
@@ -2080,7 +2127,7 @@ export default function Epis() {
                     )}
                   </Button>
                 )}
-                {!readOnly && <Button size="sm" onClick={() => setViewMode("novo_epi")} className="bg-[#1B2A4A] hover:bg-[#243660]">
+                {!readOnly && <Button size="sm" onClick={() => { setEstoqueLocalId(catalogoObraId !== "central" ? catalogoObraId : (canWriteCentral ? "central" : (obrasPermitidas[0] ? String(obrasPermitidas[0].id) : "central"))); setViewMode("novo_epi"); }} className="bg-[#1B2A4A] hover:bg-[#243660]">
                   <Plus className="h-4 w-4 mr-1" /> Novo EPI
                 </Button>}
               </>
@@ -2294,7 +2341,7 @@ export default function Epis() {
                 <HardHat className="h-12 w-12 text-muted-foreground/50 mb-4" />
                 <h3 className="font-semibold text-lg">Nenhum EPI cadastrado</h3>
                 <p className="text-muted-foreground text-sm mt-1">Cadastre os EPIs disponíveis para controle.</p>
-                <Button onClick={() => setViewMode("novo_epi")} className="mt-4 bg-[#1B2A4A] hover:bg-[#243660]">
+                <Button onClick={() => { setEstoqueLocalId(catalogoObraId !== "central" ? catalogoObraId : (canWriteCentral ? "central" : (obrasPermitidas[0] ? String(obrasPermitidas[0].id) : "central"))); setViewMode("novo_epi"); }} className="mt-4 bg-[#1B2A4A] hover:bg-[#243660]">
                   <Plus className="h-4 w-4 mr-2" /> Cadastrar EPI
                 </Button>
               </CardContent>
@@ -2316,7 +2363,7 @@ export default function Epis() {
                         <th className="p-3 text-center font-medium">Tam.</th>
                         <th className="p-3 text-center font-medium">CA</th>
                         <th className="p-3 text-center font-medium">Validade CA</th>
-                        <th className="p-3 text-center font-medium">Estoque</th>
+                        <th className="p-3 text-center font-medium">{catalogoObraId === "central" ? "Estoque (Central)" : `Estoque (${(obrasList as any[]).find((o: any) => String(o.id) === catalogoObraId)?.nome || "Obra"})`}</th>
                         {!hideEpiValues && <th className="p-3 text-center font-medium">Valor (R$)</th>}
                         <th className="p-3 text-center font-medium">Vida Útil</th>
                         <th className="p-3 text-left font-medium">Cadastrado por</th>
@@ -3243,13 +3290,15 @@ export default function Epis() {
               <div>
                 <Label>Origem *</Label>
                 <div className="flex gap-2 mt-1">
-                  <button type="button" onClick={() => setTransForm(f => ({ ...f, tipoOrigem: 'central', origemObraId: '' }))}
-                    className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all ${transForm.tipoOrigem === 'central' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'}`}>
-                    🏢 Almoxarifado Central
-                  </button>
+                  {canWriteCentral && (
+                    <button type="button" onClick={() => setTransForm(f => ({ ...f, tipoOrigem: 'central', origemObraId: '' }))}
+                      className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all ${transForm.tipoOrigem === 'central' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'}`}>
+                      🏢 Almoxarifado Central
+                    </button>
+                  )}
                   <button type="button" onClick={() => setTransForm(f => ({ ...f, tipoOrigem: 'obra' }))}
                     className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all ${transForm.tipoOrigem === 'obra' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'}`}>
-                    🏗️ Outra Obra
+                    🏗️ {canWriteCentral ? 'Outra Obra' : 'Obra'}
                   </button>
                 </div>
               </div>
@@ -3260,7 +3309,7 @@ export default function Epis() {
                   <Select value={transForm.origemObraId || undefined} onValueChange={v => setTransForm(f => ({ ...f, origemObraId: v }))}>
                     <SelectTrigger><SelectValue placeholder="Selecione a obra de origem..." /></SelectTrigger>
                     <SelectContent>
-                      {obrasList.map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
+                      {obrasPermitidas.map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -3273,7 +3322,7 @@ export default function Epis() {
                     className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all ${transForm.tipoDestino === 'obra' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'}`}>
                     🏗️ Obra
                   </button>
-                  {transForm.tipoOrigem === 'obra' && (
+                  {transForm.tipoOrigem === 'obra' && canWriteCentral && (
                     <button type="button" onClick={() => setTransForm(f => ({ ...f, tipoDestino: 'central', destinoObraId: '' }))}
                       className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all ${transForm.tipoDestino === 'central' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'}`}>
                       🏢 Almoxarifado Central
@@ -3288,7 +3337,7 @@ export default function Epis() {
                   <Select value={transForm.destinoObraId || undefined} onValueChange={v => setTransForm(f => ({ ...f, destinoObraId: v }))}>
                     <SelectTrigger><SelectValue placeholder="Selecione a obra de destino..." /></SelectTrigger>
                     <SelectContent>
-                      {obrasList.filter((o: any) => String(o.id) !== transForm.origemObraId).map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
+                      {obrasPermitidas.filter((o: any) => String(o.id) !== transForm.origemObraId).map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -3432,7 +3481,7 @@ export default function Epis() {
                 <Select value={entradaDiretaForm.obraId} onValueChange={v => setEntradaDiretaForm(f => ({ ...f, obraId: v }))}>
                   <SelectTrigger className="w-full"><SelectValue placeholder="Selecione a obra..." /></SelectTrigger>
                   <SelectContent>
-                    {obrasList.map((o: any) => (
+                    {obrasPermitidas.map((o: any) => (
                       <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
                     ))}
                   </SelectContent>

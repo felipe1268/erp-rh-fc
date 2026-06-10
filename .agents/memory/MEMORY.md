@@ -47,4 +47,5 @@
 - [Levantamento de Campo em PDF — IDOR](medicao-levantamento-campo.md) — procedures novas precisam de companyId em TODAS as subconsultas (pdfs/contornos/fotos) + validar contrato pertence à empresa E ao campo no gerarBoletim; pontos client em [0..1] convertidos via pageDims do react-pdf.
 - [EPI calça letra é derivada](epi-calca-size-letter-derived.md) — conversão letra→número das calças é destrutiva (letra não fica salva); derive a letra do número na tela via `epiTamanho.ts` (colisão XGG/EXG→50 volta XGG).
 - [db.execute UPDATE rowCount](dbexecute-update-rowcount.md) — UPDATE sem RETURNING loga rowCount 0 mesmo alterando linhas; use RETURNING id + conte, confira efeito real no Neon.
+- [EPI "restrito não escreve no Central"](epi-central-write-rule.md) — ao impor regra de permissão sobre um recurso, inventarie TODAS as rotas que escrevem nele (transferir 2 sentidos, entradaEstoque, create qtd!=0); Entregas é gap conhecido.
 - [iOS iframe image download](ios-iframe-image-download.md) — image/attachment url inside <iframe> downloads on iOS instead of rendering; use <img> / DocumentPreviewDialog.
