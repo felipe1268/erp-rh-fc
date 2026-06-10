@@ -1,7 +1,7 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb, createAuditLog, encerrarContratosPjDoFuncionario, userCanSeeAvisoStatus } from "../db";
-import { terminationNotices, vacationPeriods, employees, companies, obras, obraFuncionarios, hePeriods, hePeriodEmployees, pontoDescontosResumo, employeeTerminationChecklist } from "../../drizzle/schema";
+import { terminationNotices, vacationPeriods, employees, companies, obras, obraFuncionarios, hePeriods, hePeriodEmployees, pontoDescontosResumo, employeeTerminationChecklist, comboDemissaoSimulacoes } from "../../drizzle/schema";
 import { eq, and, sql, isNull, lte, gte, desc, asc, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
@@ -278,6 +278,155 @@ function buildPrevisaoComplementar(emp: any, params: {
   const valorComplemento = parseBRL(emp.valorComplemento);
   if (!valorComplemento || valorComplemento <= 0) return null;
   return calcularRescisaoComplementar({ valorComplemento, ...params });
+}
+
+/**
+ * Rev. 2960 — Núcleo REUTILIZÁVEL de criação de aviso prévio. Extraído da
+ * mutation `avisoPrevio.create` SEM nenhuma mudança de comportamento (mesmo
+ * cálculo, mesma checklist de 8 itens, mesma mudança de status p/ 'Aviso',
+ * mesma correção de ponto fire-and-forget). Usado tanto pela criação
+ * individual quanto pela geração EM LOTE do "Combo de Demissões".
+ *
+ * Lança TRPCError CONFLICT quando o colaborador já tem aviso 'em_andamento' —
+ * o caller em lote intercepta esse código p/ PULAR o funcionário (não aborta o
+ * lote inteiro).
+ */
+export async function criarAvisoPrevioInterno(
+  db: any,
+  emp: any,
+  params: {
+    companyId: number;
+    companyIds?: number[];
+    tipo: 'empregador_trabalhado' | 'empregador_indenizado' | 'empregado_trabalhado' | 'empregado_indenizado';
+    dataInicio: string;
+    dataDesligamento?: string;
+    reducaoJornada?: '2h_dia' | '7_dias_corridos' | 'nenhuma';
+    observacoes?: string;
+    vrDiario?: number;
+    diasTrabalhados?: number;
+    descontarAvisoNaoCumprido?: boolean;
+  },
+  user: { id?: number | null; name?: string | null },
+) {
+  // Bloquear duplicidade: já existe aviso em andamento para este colaborador?
+  const [existente] = await db.select({ id: terminationNotices.id })
+    .from(terminationNotices)
+    .where(and(
+      companyFilter(terminationNotices.companyId, { companyId: params.companyId, companyIds: params.companyIds }),
+      eq(terminationNotices.employeeId, emp.id),
+      eq(terminationNotices.status, 'em_andamento'),
+      isNull(terminationNotices.deletedAt),
+    ))
+    .limit(1);
+  if (existente) {
+    throw new TRPCError({ code: "CONFLICT", message: "Este colaborador já possui um aviso prévio em andamento. Conclua ou cancele o aviso existente antes de criar um novo." });
+  }
+
+  const dataAdmissao = emp.dataAdmissao || new Date().toISOString().split("T")[0];
+  const dataDesligamento = params.dataDesligamento || params.dataInicio;
+  const isEmpregadoInd = params.tipo === 'empregado_indenizado';
+  const dataInicioAviso = isEmpregadoInd ? dataDesligamento : calcularDataInicioAviso(params.dataInicio);
+  const anosServico = calcularAnosServico(dataAdmissao, dataDesligamento);
+  const diasAviso = isEmpregadoInd ? 0 : calcularDiasAviso(anosServico, params.tipo);
+  const salarioBase = parseBRL(emp.salarioBase);
+  const dataFim = isEmpregadoInd ? dataDesligamento : calcularDataFim(dataInicioAviso, diasAviso);
+
+  const dtFimAviso = new Date(dataFim + 'T00:00:00');
+  const diasFeriasMesSaidaCreate = await diasFeriasNoMesDaSaida(db, emp.id, dataFim);
+  const diasTrabalhadosMes = params.diasTrabalhados ?? Math.max(0, dtFimAviso.getDate() - diasFeriasMesSaidaCreate);
+
+  // Contagem real de férias vencidas do banco
+  let periodosVencidosRealCreate: number | undefined;
+  try {
+    const vpCr = ((await db.execute(sql`
+      SELECT COUNT(*)::int AS total FROM vacation_periods
+      WHERE "employeeId" = ${emp.id}
+        AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
+        AND "periodoAquisitivoFim" IS NOT NULL
+        AND "periodoAquisitivoFim" < ${dataFim}
+        AND ("dataPagamento" IS NULL OR "dataPagamento" > ${dataFim})
+        AND "deletedAt" IS NULL
+    `)) as any).rows || [];
+    periodosVencidosRealCreate = Number(vpCr[0]?.total ?? 0);
+  } catch { /* fallback */ }
+
+  const previsao = calcularRescisaoCompleta({
+    salarioBase,
+    dataAdmissao,
+    dataDesligamento,
+    dataFimAviso: dataFim, // TÉRMINO do aviso para férias, 13º, FGTS
+    tipo: params.tipo,
+    vrDiario: params.vrDiario ?? 0,
+    diasTrabalhadosMes,
+    periodosVencidosOverride: periodosVencidosRealCreate,
+    descontarAvisoNaoCumprido: params.descontarAvisoNaoCumprido,
+  });
+
+  // Rescisão complementar (uso interno) — só para quem tem complemento.
+  const previsaoComplementarCreate = buildPrevisaoComplementar(emp, {
+    dataAdmissao,
+    dataDesligamento,
+    dataFimAviso: dataFim,
+    tipo: params.tipo,
+    diasTrabalhadosMes,
+    periodosVencidosOverride: periodosVencidosRealCreate,
+  });
+
+  const [result] = await db.insert(terminationNotices).values({
+    descontarAvisoNaoCumprido: params.descontarAvisoNaoCumprido ? 1 : 0,
+    companyId: params.companyId,
+    employeeId: emp.id,
+    tipo: params.tipo,
+    dataInicio: dataInicioAviso,
+    dataFim,
+    diasAviso,
+    anosServico,
+    reducaoJornada: params.reducaoJornada ?? 'nenhuma',
+    salarioBase: salarioBase.toFixed(2),
+    previsaoRescisao: JSON.stringify(previsao),
+    previsaoRescisaoComplementar: previsaoComplementarCreate ? JSON.stringify(previsaoComplementarCreate) : null,
+    valorEstimadoTotal: previsao.total,
+    status: 'em_andamento',
+    observacoes: params.observacoes || null,
+    criadoPor: user.name ?? 'Sistema',
+    criadoPorUserId: user.id ?? null,
+  }).returning();
+
+  // Auto-iniciar checklist de desligamento + status Aviso
+  try {
+    const existingChecklist = await db.select({ id: employeeTerminationChecklist.id })
+      .from(employeeTerminationChecklist)
+      .where(and(eq(employeeTerminationChecklist.companyId, params.companyId), eq(employeeTerminationChecklist.employeeId, emp.id)))
+      .limit(1);
+    if (existingChecklist.length === 0) {
+      const defaultItems = [
+        { item: "exame_demissional", label: "Exame Demissional", obrigatorio: 1 },
+        { item: "devolucao_epis", label: "Devolução de EPIs", obrigatorio: 1 },
+        { item: "devolucao_ferramentas", label: "Devolução de Ferramentas / Patrimônio", obrigatorio: 0 },
+        { item: "acerto_ponto", label: "Acerto de Ponto / Banco de Horas", obrigatorio: 1 },
+        { item: "trct", label: "Termo de Rescisão (TRCT)", obrigatorio: 1 },
+        { item: "entrega_chaves_cracha", label: "Entrega de Chaves / Crachá", obrigatorio: 0 },
+        { item: "quitacao_debitos", label: "Quitação de Débitos / Cobranças Pendentes", obrigatorio: 0 },
+        { item: "documentacao_seguro", label: "Documentação do Seguro", obrigatorio: 0 },
+      ];
+      for (const it of defaultItems) {
+        await db.insert(employeeTerminationChecklist).values({
+          companyId: params.companyId,
+          employeeId: emp.id,
+          item: it.item,
+          label: it.label,
+          obrigatorio: it.obrigatorio,
+          concluido: 0,
+        });
+      }
+    }
+    await db.update(employees).set({ status: 'Aviso' } as any)
+      .where(eq(employees.id, emp.id));
+  } catch (e) { console.error('[AvisoPrevio] Erro ao criar checklist:', e); }
+
+  // Corrige automaticamente registros de ponto já lançados no período
+  corrigirPontoFuncionario(params.companyId, emp.id).catch(() => {});
+  return { success: true, id: result.id, diasAviso, dataFim, previsao };
 }
 
 export const avisoPrevioFeriasRouter = router({
@@ -1187,126 +1336,8 @@ export const avisoPrevioFeriasRouter = router({
         const db = (await getDb())!;
         const [emp] = await db.select().from(employees).where(eq(employees.id, input.employeeId));
         if (!emp) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado" });
-
-        // Bloquear duplicidade: verificar se já existe aviso em andamento para este colaborador
-        const [existente] = await db.select({ id: terminationNotices.id })
-          .from(terminationNotices)
-          .where(and(
-            companyFilter(terminationNotices.companyId, input),
-            eq(terminationNotices.employeeId, input.employeeId),
-            eq(terminationNotices.status, 'em_andamento'),
-            isNull(terminationNotices.deletedAt),
-          ))
-          .limit(1);
-        if (existente) {
-          throw new TRPCError({ code: "CONFLICT", message: "Este colaborador já possui um aviso prévio em andamento. Conclua ou cancele o aviso existente antes de criar um novo." });
-        }
-        
-        const dataAdmissao = emp.dataAdmissao || new Date().toISOString().split("T")[0];
-        const dataDesligamento = input.dataDesligamento || input.dataInicio;
-        const isEmpregadoInd = input.tipo === 'empregado_indenizado';
-        const dataInicioAviso = isEmpregadoInd ? dataDesligamento : calcularDataInicioAviso(input.dataInicio);
-        const anosServico = calcularAnosServico(dataAdmissao, dataDesligamento);
-        const diasAviso = isEmpregadoInd ? 0 : calcularDiasAviso(anosServico, input.tipo);
-        const salarioBase = parseBRL(emp.salarioBase);
-        const dataFim = isEmpregadoInd ? dataDesligamento : calcularDataFim(dataInicioAviso, diasAviso);
-        
-        const dtFimAviso = new Date(dataFim + 'T00:00:00');
-        const diasFeriasMesSaidaCreate = await diasFeriasNoMesDaSaida(db, input.employeeId, dataFim);
-        const diasTrabalhadosMes = input.diasTrabalhados ?? Math.max(0, dtFimAviso.getDate() - diasFeriasMesSaidaCreate);
-
-        // Contagem real de férias vencidas do banco
-        let periodosVencidosRealCreate: number | undefined;
-        try {
-          const vpCr = ((await db.execute(sql`
-            SELECT COUNT(*)::int AS total FROM vacation_periods
-            WHERE "employeeId" = ${input.employeeId}
-              AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
-              AND "periodoAquisitivoFim" IS NOT NULL
-              AND "periodoAquisitivoFim" < ${dataFim}
-              AND ("dataPagamento" IS NULL OR "dataPagamento" > ${dataFim})
-              AND "deletedAt" IS NULL
-          `)) as any).rows || [];
-          periodosVencidosRealCreate = Number(vpCr[0]?.total ?? 0);
-        } catch { /* fallback */ }
-        
-        const previsao = calcularRescisaoCompleta({
-          salarioBase,
-          dataAdmissao,
-          dataDesligamento,
-          dataFimAviso: dataFim, // TÉRMINO do aviso para férias, 13º, FGTS
-          tipo: input.tipo,
-          vrDiario: input.vrDiario ?? 0,
-          diasTrabalhadosMes,
-          periodosVencidosOverride: periodosVencidosRealCreate,
-          descontarAvisoNaoCumprido: input.descontarAvisoNaoCumprido,
-        });
-
-        // Rescisão complementar (uso interno) — só para quem tem complemento.
-        const previsaoComplementarCreate = buildPrevisaoComplementar(emp, {
-          dataAdmissao,
-          dataDesligamento,
-          dataFimAviso: dataFim,
-          tipo: input.tipo,
-          diasTrabalhadosMes,
-          periodosVencidosOverride: periodosVencidosRealCreate,
-        });
-
-        const [result] = await db.insert(terminationNotices).values({
-          descontarAvisoNaoCumprido: input.descontarAvisoNaoCumprido ? 1 : 0,
-          companyId: input.companyId,
-          employeeId: input.employeeId,
-          tipo: input.tipo,
-          dataInicio: dataInicioAviso,
-          dataFim,
-          diasAviso,
-          anosServico,
-          reducaoJornada: input.reducaoJornada,
-          salarioBase: salarioBase.toFixed(2),
-          previsaoRescisao: JSON.stringify(previsao),
-          previsaoRescisaoComplementar: previsaoComplementarCreate ? JSON.stringify(previsaoComplementarCreate) : null,
-          valorEstimadoTotal: previsao.total,
-          status: 'em_andamento',
-          observacoes: input.observacoes || null,
-          criadoPor: ctx.user.name ?? 'Sistema',
-          criadoPorUserId: ctx.user.id,
-        }).returning();
-        
-        // Auto-iniciar checklist de desligamento + status Aviso
-        try {
-          const existingChecklist = await db.select({ id: employeeTerminationChecklist.id })
-            .from(employeeTerminationChecklist)
-            .where(and(eq(employeeTerminationChecklist.companyId, input.companyId), eq(employeeTerminationChecklist.employeeId, input.employeeId)))
-            .limit(1);
-          if (existingChecklist.length === 0) {
-            const defaultItems = [
-              { item: "exame_demissional", label: "Exame Demissional", obrigatorio: 1 },
-              { item: "devolucao_epis", label: "Devolução de EPIs", obrigatorio: 1 },
-              { item: "devolucao_ferramentas", label: "Devolução de Ferramentas / Patrimônio", obrigatorio: 0 },
-              { item: "acerto_ponto", label: "Acerto de Ponto / Banco de Horas", obrigatorio: 1 },
-              { item: "trct", label: "Termo de Rescisão (TRCT)", obrigatorio: 1 },
-              { item: "entrega_chaves_cracha", label: "Entrega de Chaves / Crachá", obrigatorio: 0 },
-              { item: "quitacao_debitos", label: "Quitação de Débitos / Cobranças Pendentes", obrigatorio: 0 },
-              { item: "documentacao_seguro", label: "Documentação do Seguro", obrigatorio: 0 },
-            ];
-            for (const it of defaultItems) {
-              await db.insert(employeeTerminationChecklist).values({
-                companyId: input.companyId,
-                employeeId: input.employeeId,
-                item: it.item,
-                label: it.label,
-                obrigatorio: it.obrigatorio,
-                concluido: 0,
-              });
-            }
-          }
-          await db.update(employees).set({ status: 'Aviso' } as any)
-            .where(eq(employees.id, input.employeeId));
-        } catch (e) { console.error('[AvisoPrevio] Erro ao criar checklist:', e); }
-
-        // Corrige automaticamente registros de ponto já lançados no período
-        corrigirPontoFuncionario(input.companyId, input.employeeId).catch(() => {});
-        return { success: true, id: result.id, diasAviso, dataFim, previsao };
+        // Rev. 2960 — corpo extraído p/ `criarAvisoPrevioInterno` (reuso no lote).
+        return criarAvisoPrevioInterno(db, emp, input, { id: ctx.user.id, name: ctx.user.name });
       }),
 
     update: protectedProcedure
@@ -2332,6 +2363,197 @@ export const avisoPrevioFeriasRouter = router({
         }).sort((a, b) => a.diasRestantes - b.diasRestantes);
 
         return result;
+      }),
+  }),
+
+  // ============================================================
+  // COMBO DE DEMISSÕES — SIMULAÇÕES SALVAS (Rev. 2960)
+  // ============================================================
+  // O "Combo de Demissões" do Dashboard Aviso Prévio era volátil. Aqui ele
+  // vira persistente: salvar por NOME, listar, reabrir, editar (tipo + data +
+  // funcionários) e excluir (soft-delete). Botão "Gerar avisos de todos" cria
+  // os avisos prévios em lote reusando `criarAvisoPrevioInterno` (mesma lógica
+  // individual), PULANDO quem já tem aviso em andamento, sem abortar o lote.
+  combo: router({
+    salvar: protectedProcedure
+      .input(z.object({
+        companyId: z.number(),
+        companyIds: z.array(z.number()).optional(),
+        nome: z.string().min(1).max(255),
+        tipo: z.enum(['empregador_trabalhado','empregador_indenizado','empregado_trabalhado','empregado_indenizado']),
+        dataReferencia: z.string(),
+        employeeIds: z.array(z.number()),
+        snapshot: z.any().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const nome = input.nome.trim();
+        if (!nome) throw new TRPCError({ code: "BAD_REQUEST", message: "Informe um nome para a simulação." });
+        const [row] = await db.insert(comboDemissaoSimulacoes).values({
+          companyId: input.companyId,
+          companyIds: input.companyIds && input.companyIds.length > 0 ? JSON.stringify(input.companyIds) : null,
+          nome,
+          tipo: input.tipo,
+          dataReferencia: input.dataReferencia,
+          employeeIds: JSON.stringify(input.employeeIds || []),
+          snapshotJson: input.snapshot !== undefined ? JSON.stringify(input.snapshot) : null,
+          criadoPorId: ctx.user.id ?? null,
+          criadoPorNome: ctx.user.name ?? ctx.user.email ?? "Sistema",
+        }).returning();
+        return { success: true, id: row.id };
+      }),
+
+    listar: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const rows = await db.select({
+          id: comboDemissaoSimulacoes.id,
+          nome: comboDemissaoSimulacoes.nome,
+          tipo: comboDemissaoSimulacoes.tipo,
+          dataReferencia: comboDemissaoSimulacoes.dataReferencia,
+          employeeIds: comboDemissaoSimulacoes.employeeIds,
+          criadoPorNome: comboDemissaoSimulacoes.criadoPorNome,
+          createdAt: comboDemissaoSimulacoes.createdAt,
+          updatedAt: comboDemissaoSimulacoes.updatedAt,
+        }).from(comboDemissaoSimulacoes)
+          .where(and(
+            companyFilter(comboDemissaoSimulacoes.companyId, input),
+            isNull(comboDemissaoSimulacoes.deletedAt),
+          ))
+          .orderBy(desc(comboDemissaoSimulacoes.updatedAt));
+        return rows.map((r: any) => {
+          let ids: number[] = [];
+          try { ids = JSON.parse(r.employeeIds || "[]"); } catch {}
+          return { ...r, employeeIds: ids, qtd: ids.length };
+        });
+      }),
+
+    abrir: protectedProcedure
+      .input(z.object({ id: z.number(), companyId: z.number(), companyIds: z.array(z.number()).optional() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const [row] = await db.select().from(comboDemissaoSimulacoes)
+          .where(and(
+            eq(comboDemissaoSimulacoes.id, input.id),
+            companyFilter(comboDemissaoSimulacoes.companyId, input), // tenant guard (anti-IDOR)
+            isNull(comboDemissaoSimulacoes.deletedAt),
+          ));
+        if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Simulação não encontrada." });
+        let ids: number[] = [];
+        try { ids = JSON.parse(row.employeeIds || "[]"); } catch {}
+        let snapshot: any = null;
+        try { snapshot = row.snapshotJson ? JSON.parse(row.snapshotJson) : null; } catch {}
+        return {
+          id: row.id, nome: row.nome, tipo: row.tipo, dataReferencia: row.dataReferencia,
+          employeeIds: ids, snapshot, criadoPorNome: row.criadoPorNome,
+          createdAt: row.createdAt, updatedAt: row.updatedAt,
+        };
+      }),
+
+    atualizar: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        companyId: z.number(),
+        companyIds: z.array(z.number()).optional(),
+        nome: z.string().min(1).max(255).optional(),
+        tipo: z.enum(['empregador_trabalhado','empregador_indenizado','empregado_trabalhado','empregado_indenizado']).optional(),
+        dataReferencia: z.string().optional(),
+        employeeIds: z.array(z.number()).optional(),
+        snapshot: z.any().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        // tenant guard (anti-IDOR): a simulação tem que pertencer à(s) empresa(s) do usuário
+        const [existe] = await db.select({ id: comboDemissaoSimulacoes.id }).from(comboDemissaoSimulacoes)
+          .where(and(
+            eq(comboDemissaoSimulacoes.id, input.id),
+            companyFilter(comboDemissaoSimulacoes.companyId, input),
+            isNull(comboDemissaoSimulacoes.deletedAt),
+          )).limit(1);
+        if (!existe) throw new TRPCError({ code: "NOT_FOUND", message: "Simulação não encontrada." });
+        const upd: any = { updatedAt: new Date().toISOString() };
+        if (input.nome !== undefined) {
+          const nome = input.nome.trim();
+          if (!nome) throw new TRPCError({ code: "BAD_REQUEST", message: "Informe um nome para a simulação." });
+          upd.nome = nome;
+        }
+        if (input.tipo !== undefined) upd.tipo = input.tipo;
+        if (input.dataReferencia !== undefined) upd.dataReferencia = input.dataReferencia;
+        if (input.employeeIds !== undefined) upd.employeeIds = JSON.stringify(input.employeeIds);
+        if (input.snapshot !== undefined) upd.snapshotJson = JSON.stringify(input.snapshot);
+        await db.update(comboDemissaoSimulacoes).set(upd)
+          .where(eq(comboDemissaoSimulacoes.id, input.id));
+        return { success: true };
+      }),
+
+    excluir: protectedProcedure
+      .input(z.object({ id: z.number(), companyId: z.number(), companyIds: z.array(z.number()).optional() }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        // tenant guard (anti-IDOR) + soft-delete (R-001/R-007/R-010 — nunca DELETE)
+        const [existe] = await db.select({ id: comboDemissaoSimulacoes.id }).from(comboDemissaoSimulacoes)
+          .where(and(
+            eq(comboDemissaoSimulacoes.id, input.id),
+            companyFilter(comboDemissaoSimulacoes.companyId, input),
+            isNull(comboDemissaoSimulacoes.deletedAt),
+          )).limit(1);
+        if (!existe) throw new TRPCError({ code: "NOT_FOUND", message: "Simulação não encontrada." });
+        await db.update(comboDemissaoSimulacoes).set({ deletedAt: new Date().toISOString() } as any)
+          .where(eq(comboDemissaoSimulacoes.id, input.id));
+        return { success: true };
+      }),
+
+    // "Gerar avisos de todos" — cria os avisos prévios em LOTE reusando a lógica
+    // individual (`criarAvisoPrevioInterno`). PULA quem já tem aviso em andamento
+    // (CONFLICT) e segue adiante mesmo se um falhar; retorna {criados, pulados, erros[]}.
+    gerarEmLote: protectedProcedure
+      .input(z.object({
+        companyId: z.number(),
+        companyIds: z.array(z.number()).optional(),
+        tipo: z.enum(['empregador_trabalhado','empregador_indenizado','empregado_trabalhado','empregado_indenizado']),
+        dataReferencia: z.string(),
+        employeeIds: z.array(z.number()).min(1),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const companiesPermitidas = resolveCompanyIds(input);
+        const criados: { employeeId: number; avisoId: number }[] = [];
+        const pulados: { employeeId: number; nome?: string; motivo: string }[] = [];
+        const erros: { employeeId: number; nome?: string; erro: string }[] = [];
+
+        for (const employeeId of input.employeeIds) {
+          try {
+            const [emp] = await db.select().from(employees).where(eq(employees.id, employeeId));
+            if (!emp) { erros.push({ employeeId, erro: "Funcionário não encontrado." }); continue; }
+            // tenant guard (anti-IDOR): o funcionário tem que ser da(s) empresa(s) do escopo
+            if (!companiesPermitidas.includes(Number(emp.companyId))) {
+              erros.push({ employeeId, nome: emp.nomeCompleto, erro: "Funcionário fora da empresa selecionada." });
+              continue;
+            }
+            const res = await criarAvisoPrevioInterno(db, emp, {
+              companyId: Number(emp.companyId),
+              companyIds: input.companyIds,
+              tipo: input.tipo,
+              dataInicio: input.dataReferencia,
+            }, { id: ctx.user.id, name: ctx.user.name });
+            criados.push({ employeeId, avisoId: res.id });
+          } catch (e: any) {
+            if (e instanceof TRPCError && e.code === "CONFLICT") {
+              pulados.push({ employeeId, motivo: "Já possui aviso prévio em andamento." });
+            } else {
+              erros.push({ employeeId, erro: e?.message || "Erro ao gerar aviso." });
+            }
+          }
+        }
+        return {
+          criados: criados.length,
+          pulados: pulados.length,
+          erros: erros.length,
+          detalheCriados: criados,
+          detalhePulados: pulados,
+          detalheErros: erros,
+        };
       }),
   }),
 

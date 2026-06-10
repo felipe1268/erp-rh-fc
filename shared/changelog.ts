@@ -1,6 +1,48 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2961 — **DASHBOARD AVISO PRÉVIO → COMBO DE DEMISSÕES — AGORA PODE SER SALVO POR NOME
+ * (SIMULAÇÃO PERSISTENTE: LISTAR / REABRIR / EDITAR / EXCLUIR) E TEM O BOTÃO "GERAR AVISOS DE
+ * TODOS" QUE CRIA, EM 1 CLIQUE, O AVISO PRÉVIO DE CADA FUNCIONÁRIO SELECIONADO — PULANDO QUEM JÁ
+ * TEM AVISO EM ANDAMENTO.**
+ *
+ * PEDIDO (usuário): o "Combo de Demissões" (Dashboard → Aviso Prévio) era uma SIMULAÇÃO VOLÁTIL —
+ * ao fechar o modal a seleção se perdia. Faltava (1) SALVAR o combo por nome (persistente, listável,
+ * reabrível); (2) EDITAR/EXCLUIR/INCLUIR nomes na simulação salva (trocar tipo de aviso + data de
+ * referência + adicionar/remover funcionários); (3) um botão "Gerar avisos de todos" que cria em
+ * LOTE o aviso prévio de cada um, reusando EXATAMENTE a lógica de criação individual, PULANDO quem
+ * já tem aviso "em_andamento", devolvendo {criados, pulados, erros[]} sem abortar tudo se um falhar.
+ *
+ * SOLUÇÃO — BACKEND (`server/routers/avisoPrevioFerias.ts`, ZERO ALTER/DROP/DELETE — R-001/R-007/
+ * R-010):
+ *  - Extraído helper EXPORTADO `criarAvisoPrevioInterno(db, emp, params, user)` a partir do corpo
+ *    VERBATIM da mutation `avisoPrevio.create` (duplicate-check que lança CONFLICT + cálculo +
+ *    insert + checklist de 8 itens + status 'Aviso' + corrigirPontoFuncionario). A `create` agora só
+ *    busca o emp e chama o helper — ZERO mudança de comportamento individual.
+ *  - Novo sub-router `combo` com: `salvar` (insere a simulação), `listar`, `abrir`, `atualizar`
+ *    (nome/tipo/data/funcionários), `excluir` (SOFT-DELETE via `deleted_at`, nunca DELETE) e
+ *    `gerarEmLote`. Todas as procedures têm TENANT GUARD (anti-IDOR): CRUD via `companyFilter` na
+ *    `company_id` e, no lote, cada `employeeId` é validado contra `resolveCompanyIds(input)` antes de
+ *    criar o aviso. O `gerarEmLote` percorre os funcionários em try/catch — CONFLICT → `pulados++`;
+ *    outros erros → `erros.push({employeeId, erro})`; sucesso → `criados++` — e devolve os contadores
+ *    + detalhes, sem abortar o lote inteiro por uma falha. NENHUMA mudança no cálculo de rescisão e
+ *    NENHUM PDF em lote (gatilho 100% manual).
+ *
+ * SOLUÇÃO — SCHEMA (self-heal, sem migration destrutiva): nova tabela espelho
+ * `comboDemissaoSimulacoes` ("combo_demissao_simulacoes") em `drizzle/schema.ts` (colunas snake_case
+ * nomeadas explicitamente: company_id, company_ids JSON, nome, tipo, data_referencia, employee_ids
+ * JSON, snapshot_json, criado_por_*, created_at/updated_at/deleted_at) + bloco `[SyncSchema+] Rev.
+ * 2960` em `server/_core/index.ts` com `CREATE TABLE IF NOT EXISTS` + índice `idx_combo_demissao_
+ * company`. Confirmado: tabela criada no Neon com as 13 colunas.
+ *
+ * SOLUÇÃO — FRONTEND (`client/src/pages/dashboards/DashAvisoPrevio.tsx`): rodapé do modal Combo
+ * ganhou "Salvar simulação" / "Salvar alterações" (abre dialog com campo de nome — salvar novo ou
+ * atualizar/salvar-como-nova quando há simulação carregada), "Simulações salvas" (lista com
+ * abrir/editar e excluir com confirmação) e "Gerar avisos de todos (N)" (dialog de confirmação →
+ * `gerarEmLote` → dialog de resultado com cards Criados/Pulados/Erros + lista de erros). Reabrir uma
+ * simulação restaura `cdmData`, `cdmTipo` e `selecionados`. Após gerar, invalida a query
+ * `custoDemissaoMassa` (quem virou "Aviso" sai da lista). Toasts via `sonner`.
+ *
  * Rev. 2960 — **COMPRAS → ORDEM DE COMPRA → ANEXOS — AGORA ACEITA IMAGENS (JPG/JPEG,
  * HEIC DO IPAD, PNG, WEBP, GIF, BMP) ALÉM DE PDF/DOC/DOCX/XLS/XLSX/PPT/PPTX/TXT/CSV —
  * ANTES SÓ ACEITAVA PNG/PDF/DOCX/XLSX E BARRAVA .JPEG (E QUALQUER FOTO).**

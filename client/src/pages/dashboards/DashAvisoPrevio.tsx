@@ -5,6 +5,7 @@ import DashChart, { DashKpi, ChartClickInfo } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import TabelaComparativaAnual, { type LinhaInd } from "@/components/TabelaComparativaAnual";
 import { UserMinus, Clock as ClockIcon, DollarSign as DollarIcon } from "lucide-react";
@@ -36,7 +37,8 @@ import {
   CheckCircle2, XCircle, ArrowRight, Loader2, X, Ban,
   Wallet, Receipt, BarChart3, ArrowLeft, Flame, UserMinus2,
   ArrowUp, ArrowDown, ArrowUpDown, Info, Printer,
-  Calculator, Stethoscope, ListChecks, Search, X as XIcon, FileText, TrendingDown } from "lucide-react";
+  Calculator, Stethoscope, ListChecks, Search, X as XIcon, FileText, TrendingDown,
+  Save, FolderOpen, Trash2, Pencil, Zap } from "lucide-react";
 import { Link } from "wouter";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PersonPhoto } from "@/components/PersonPhoto";
@@ -150,6 +152,28 @@ export default function DashAvisoPrevio() {
   // de caixa que vai acontecer".
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
   const [comboOpen, setComboOpen] = useState(false);
+
+  // ===== Rev. 2960 — COMBO DE DEMISSÕES SALVO (simulação persistente) =====
+  // O Combo era volátil; agora pode ser salvo por nome, listado, reaberto,
+  // editado e excluído, além de "Gerar avisos de todos" em lote.
+  const utils = trpc.useUtils();
+  const comboCompanyArgs = { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) };
+  const [loadedSimId, setLoadedSimId] = useState<number | null>(null);
+  const [loadedSimNome, setLoadedSimNome] = useState<string>("");
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [nomeSimulacao, setNomeSimulacao] = useState<string>("");
+  const [savedListOpen, setSavedListOpen] = useState(false);
+  const [batchResult, setBatchResult] = useState<any | null>(null);
+  const [confirmGerarOpen, setConfirmGerarOpen] = useState(false);
+
+  const savedListQuery = trpc.avisoPrevioFerias.combo.listar.useQuery(
+    comboCompanyArgs,
+    { enabled: savedListOpen && (isConstrutoras ? companyIds.length > 0 : companyId > 0) }
+  );
+  const salvarMut = trpc.avisoPrevioFerias.combo.salvar.useMutation();
+  const atualizarMut = trpc.avisoPrevioFerias.combo.atualizar.useMutation();
+  const excluirMut = trpc.avisoPrevioFerias.combo.excluir.useMutation();
+  const gerarLoteMut = trpc.avisoPrevioFerias.combo.gerarEmLote.useMutation();
   // Rev. 1937 — Larguras redimensionáveis das colunas de TEXTO da tabela CDM
   // (Funcionário, Função, Obra) — persistidas em localStorage. User 16/05/2026:
   // "quero pode clicar e aumentar a largura da tabela para ajustar o texto..".
@@ -576,6 +600,93 @@ export default function DashAvisoPrevio() {
     const fim = new Date(dataFim + 'T00:00:00');
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
     return Math.round((fim.getTime() - hoje.getTime()) / (24 * 60 * 60 * 1000));
+  };
+
+  // ===== Rev. 2960 — Handlers do Combo SALVO =====
+  const snapshotCombo = () => ({
+    qtd: comboAgregado.qtd,
+    total: comboAgregado.total,
+    totalOficialBruto: comboAgregado.totalOficialBruto,
+    salarioBaseSoma: comboAgregado.salarioBaseSoma,
+    seguroVidaSoma: comboAgregado.seguroVidaSoma,
+    valeAlimentacaoSoma: comboAgregado.valeAlimentacaoSoma,
+  });
+
+  const abrirSaveDialog = () => {
+    setNomeSimulacao(loadedSimNome || "");
+    setSaveDialogOpen(true);
+  };
+
+  const handleSalvarSimulacao = async (comoNova: boolean) => {
+    const nome = nomeSimulacao.trim();
+    if (!nome) { toast.error("Informe um nome para a simulação."); return; }
+    const employeeIds = Array.from(selecionados);
+    if (employeeIds.length === 0) { toast.error("Selecione ao menos um funcionário."); return; }
+    try {
+      if (loadedSimId && !comoNova) {
+        await atualizarMut.mutateAsync({
+          ...comboCompanyArgs, id: loadedSimId, nome, tipo: cdmTipo,
+          dataReferencia: cdmData, employeeIds, snapshot: snapshotCombo(),
+        });
+        toast.success("Simulação atualizada.");
+      } else {
+        const res = await salvarMut.mutateAsync({
+          ...comboCompanyArgs, nome, tipo: cdmTipo,
+          dataReferencia: cdmData, employeeIds, snapshot: snapshotCombo(),
+        });
+        setLoadedSimId(res.id);
+        toast.success("Simulação salva.");
+      }
+      setLoadedSimNome(nome);
+      setSaveDialogOpen(false);
+      utils.avisoPrevioFerias.combo.listar.invalidate();
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao salvar a simulação.");
+    }
+  };
+
+  const aplicarSimulacao = (sim: any) => {
+    setCdmData(sim.dataReferencia);
+    if (sim.tipo === 'empregador_indenizado' || sim.tipo === 'empregador_trabalhado') {
+      setCdmTipo(sim.tipo);
+    }
+    setSelecionados(new Set<number>(sim.employeeIds || []));
+    setLoadedSimId(sim.id);
+    setLoadedSimNome(sim.nome);
+    setSavedListOpen(false);
+    setComboOpen(true);
+  };
+
+  const handleExcluirSimulacao = async (id: number, nome: string) => {
+    if (!window.confirm(`Excluir a simulação "${nome}"? Esta ação não pode ser desfeita.`)) return;
+    try {
+      await excluirMut.mutateAsync({ ...comboCompanyArgs, id });
+      toast.success("Simulação excluída.");
+      if (loadedSimId === id) { setLoadedSimId(null); setLoadedSimNome(""); }
+      utils.avisoPrevioFerias.combo.listar.invalidate();
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao excluir a simulação.");
+    }
+  };
+
+  const handleGerarTodos = async () => {
+    const employeeIds = Array.from(selecionados);
+    if (employeeIds.length === 0) { toast.error("Nenhum funcionário selecionado."); return; }
+    setConfirmGerarOpen(false);
+    try {
+      const res = await gerarLoteMut.mutateAsync({
+        ...comboCompanyArgs, tipo: cdmTipo, dataReferencia: cdmData, employeeIds,
+      });
+      setBatchResult(res);
+      const partes: string[] = [`${res.criados} aviso(s) criado(s)`];
+      if (res.pulados > 0) partes.push(`${res.pulados} pulado(s)`);
+      if (res.erros > 0) partes.push(`${res.erros} com erro`);
+      if (res.erros > 0) toast.warning(partes.join(" · "));
+      else toast.success(partes.join(" · "));
+      utils.dashboards.custoDemissaoMassa.invalidate();
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao gerar os avisos em lote.");
+    }
   };
 
   if (isLoading) return (
@@ -1821,15 +1932,168 @@ export default function DashAvisoPrevio() {
 
             </div>
             </div>
-            <div className="shrink-0 flex justify-between items-center gap-2 px-4 sm:px-6 py-3 border-t bg-white">
-              <Button size="sm" variant="outline" onClick={gerarRelatorioCombo} disabled={comboAgregado.qtd === 0} className="gap-1.5">
-                <FileText className="h-4 w-4" /> Gerar PDF p/ diretoria
-              </Button>
-              <Button size="sm" variant="default" onClick={() => setComboOpen(false)}>Fechar</Button>
+            <div className="shrink-0 flex flex-wrap justify-between items-center gap-2 px-4 sm:px-6 py-3 border-t bg-white">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button size="sm" variant="outline" onClick={gerarRelatorioCombo} disabled={comboAgregado.qtd === 0} className="gap-1.5">
+                  <FileText className="h-4 w-4" /> Gerar PDF p/ diretoria
+                </Button>
+                <Button size="sm" variant="outline" onClick={abrirSaveDialog} disabled={selecionados.size === 0} className="gap-1.5">
+                  <Save className="h-4 w-4" /> {loadedSimId ? "Salvar alterações" : "Salvar simulação"}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setSavedListOpen(true)} className="gap-1.5">
+                  <FolderOpen className="h-4 w-4" /> Simulações salvas
+                </Button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button size="sm" variant="default" onClick={() => setConfirmGerarOpen(true)} disabled={selecionados.size === 0 || gerarLoteMut.isPending} className="gap-1.5 bg-red-600 hover:bg-red-700">
+                  {gerarLoteMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                  Gerar avisos de todos ({selecionados.size})
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setComboOpen(false)}>Fechar</Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
       )}
+
+      {/* ===== Rev. 2960 — Dialog: Salvar simulação ===== */}
+      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Save className="h-5 w-5 text-blue-600" /> Salvar simulação do Combo</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Nome da simulação</label>
+              <Input
+                value={nomeSimulacao}
+                onChange={(e) => setNomeSimulacao(e.target.value)}
+                placeholder="Ex.: Demissões Obra X — Junho/2026"
+                autoFocus
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSalvarSimulacao(!loadedSimId); }}
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              {selecionados.size} funcionário(s) · {cdmTipo === 'empregador_indenizado' ? 'Aviso INDENIZADO' : 'Aviso TRABALHADO'} · ref. {new Date(cdmData + 'T00:00:00').toLocaleDateString('pt-BR')}
+            </p>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button size="sm" variant="ghost" onClick={() => setSaveDialogOpen(false)}>Cancelar</Button>
+            {loadedSimId && (
+              <Button size="sm" variant="outline" disabled={salvarMut.isPending} onClick={() => handleSalvarSimulacao(true)} className="gap-1.5">
+                {salvarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar como nova
+              </Button>
+            )}
+            <Button size="sm" variant="default" disabled={salvarMut.isPending || atualizarMut.isPending} onClick={() => handleSalvarSimulacao(!loadedSimId)} className="gap-1.5">
+              {(salvarMut.isPending || atualizarMut.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              {loadedSimId ? "Atualizar" : "Salvar"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== Rev. 2960 — Dialog: Simulações salvas ===== */}
+      <Dialog open={savedListOpen} onOpenChange={setSavedListOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><FolderOpen className="h-5 w-5 text-blue-600" /> Simulações salvas</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto -mx-2 px-2">
+            {savedListQuery.isLoading ? (
+              <div className="flex items-center justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+            ) : (savedListQuery.data || []).length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-10">Nenhuma simulação salva ainda. Selecione funcionários e clique em "Salvar simulação".</p>
+            ) : (
+              <div className="space-y-2">
+                {(savedListQuery.data || []).map((sim: any) => (
+                  <div key={sim.id} className="flex items-center justify-between gap-3 rounded-lg border p-3 hover:border-blue-300 hover:bg-blue-50/30 transition-colors">
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{sim.nome}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {sim.qtd} funcionário(s) · {sim.tipo === 'empregador_indenizado' ? 'INDENIZADO' : 'TRABALHADO'} · ref. {new Date(sim.dataReferencia + 'T00:00:00').toLocaleDateString('pt-BR')}
+                        {sim.criadoPorNome ? ` · ${sim.criadoPorNome}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Button size="sm" variant="outline" onClick={() => aplicarSimulacao(sim)} className="gap-1.5">
+                        <Pencil className="h-3.5 w-3.5" /> Abrir / editar
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => handleExcluirSimulacao(sim.id, sim.nome)} disabled={excluirMut.isPending} className="text-red-600 hover:text-red-700 hover:bg-red-50">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end pt-2 border-t">
+            <Button size="sm" variant="default" onClick={() => setSavedListOpen(false)}>Fechar</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== Rev. 2960 — Dialog: Confirmar geração em lote ===== */}
+      <Dialog open={confirmGerarOpen} onOpenChange={setConfirmGerarOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Zap className="h-5 w-5 text-red-600" /> Gerar avisos de todos</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 py-1 text-sm">
+            <p>Será criado um <strong>aviso prévio</strong> para cada um dos <strong>{selecionados.size}</strong> funcionário(s) selecionado(s), usando o tipo <strong>{cdmTipo === 'empregador_indenizado' ? 'INDENIZADO' : 'TRABALHADO'}</strong> e a data de referência <strong>{new Date(cdmData + 'T00:00:00').toLocaleDateString('pt-BR')}</strong>.</p>
+            <p className="text-[12px] text-muted-foreground">Funcionários que já possuem um aviso prévio em andamento serão <strong>pulados</strong> automaticamente. Nenhum cálculo de rescisão é alterado.</p>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button size="sm" variant="ghost" onClick={() => setConfirmGerarOpen(false)}>Cancelar</Button>
+            <Button size="sm" variant="default" onClick={handleGerarTodos} disabled={gerarLoteMut.isPending} className="gap-1.5 bg-red-600 hover:bg-red-700">
+              {gerarLoteMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />} Confirmar e gerar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== Rev. 2960 — Dialog: Resultado da geração em lote ===== */}
+      <Dialog open={!!batchResult} onOpenChange={(o) => !o && setBatchResult(null)}>
+        <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-green-600" /> Resultado da geração</DialogTitle>
+          </DialogHeader>
+          {batchResult && (
+            <div className="flex-1 overflow-y-auto space-y-3">
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-lg border-2 border-green-200 bg-green-50/50 p-3">
+                  <p className="text-2xl font-bold text-green-700 tabular-nums">{batchResult.criados}</p>
+                  <p className="text-[11px] text-green-600 font-medium">Criados</p>
+                </div>
+                <div className="rounded-lg border-2 border-amber-200 bg-amber-50/50 p-3">
+                  <p className="text-2xl font-bold text-amber-700 tabular-nums">{batchResult.pulados}</p>
+                  <p className="text-[11px] text-amber-600 font-medium">Pulados</p>
+                </div>
+                <div className="rounded-lg border-2 border-red-200 bg-red-50/50 p-3">
+                  <p className="text-2xl font-bold text-red-700 tabular-nums">{batchResult.erros}</p>
+                  <p className="text-[11px] text-red-600 font-medium">Erros</p>
+                </div>
+              </div>
+              {batchResult.pulados > 0 && (
+                <p className="text-[12px] text-muted-foreground">Os pulados já possuíam um aviso prévio em andamento.</p>
+              )}
+              {Array.isArray(batchResult.detalheErros) && batchResult.detalheErros.length > 0 && (
+                <div className="rounded-lg border border-red-200 bg-red-50/30 p-3">
+                  <p className="text-xs font-semibold text-red-700 mb-1.5">Erros</p>
+                  <ul className="space-y-1 text-[11px] text-red-700">
+                    {batchResult.detalheErros.map((e: any, i: number) => (
+                      <li key={i}>• {e.nome ? `${e.nome}: ` : `#${e.employeeId}: `}{e.erro}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="flex justify-end pt-2 border-t">
+            <Button size="sm" variant="default" onClick={() => setBatchResult(null)}>Fechar</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Rev. 1935 — Modal Raio-X do funcionário (abre via ícone Stethoscope ao lado do nome). */}
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />

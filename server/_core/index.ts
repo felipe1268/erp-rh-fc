@@ -2976,6 +2976,29 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2694: colunas foto_devolucao_url/equipamento_proprio_id/equipamento_locado_id (warehouse_loans) garantidas.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2694 warehouse_loans rastreio:`, e?.message || e); }
 
+        // ── Rev. 2960 — "Combo de Demissões" SALVO (simulação persistente do Dashboard Aviso Prévio) ──
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS combo_demissao_simulacoes (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              company_ids TEXT,
+              nome VARCHAR(255) NOT NULL,
+              tipo VARCHAR(40) NOT NULL DEFAULT 'empregador_trabalhado',
+              data_referencia VARCHAR(10) NOT NULL,
+              employee_ids TEXT NOT NULL,
+              snapshot_json TEXT,
+              criado_por_id INTEGER,
+              criado_por_nome VARCHAR(255),
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+              updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+              deleted_at TIMESTAMP
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_combo_demissao_company ON combo_demissao_simulacoes (company_id)`);
+          console.log(`[SyncSchema+] Rev. 2960: tabela combo_demissao_simulacoes garantida (Combo de Demissões salvo).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2960 combo_demissao_simulacoes:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

@@ -9357,3 +9357,26 @@ export const dreAnalisesIa = pgTable("dre_analises_ia", {
 }, (table) => [
   uniqueIndex("uniq_dre_analise_chave").on(table.companyId, table.periodo, table.tipoPeriodo),
 ]);
+
+// Rev. 2960 — "Combo de Demissões" SALVO (simulação persistente). O Combo do
+// Dashboard Aviso Prévio era volátil; agora pode ser salvo por NOME, listado,
+// reaberto, editado (tipo de aviso + data de referência + adicionar/remover
+// funcionários) e excluído (soft-delete). Tabela criada via self-heal
+// CREATE TABLE IF NOT EXISTS (R-001/R-007/R-010 — sem ALTER/DROP/DELETE em prod).
+export const comboDemissaoSimulacoes = pgTable("combo_demissao_simulacoes", {
+  id:             serial().primaryKey(),
+  companyId:      integer("company_id").notNull(),
+  companyIds:     text("company_ids"), // JSON array (modo CONSTRUTORAS multi-empresa)
+  nome:           varchar({ length: 255 }).notNull(),
+  tipo:           varchar({ length: 40 }).notNull().default("empregador_trabalhado"),
+  dataReferencia: varchar("data_referencia", { length: 10 }).notNull(),
+  employeeIds:    text("employee_ids").notNull(), // JSON array de IDs de funcionários
+  snapshotJson:   text("snapshot_json"), // totais/observações no momento do salvamento (opcional)
+  criadoPorId:    integer("criado_por_id"),
+  criadoPorNome:  varchar("criado_por_nome", { length: 255 }),
+  createdAt:      timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt:      timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  deletedAt:      timestamp("deleted_at", { mode: "string" }),
+}, (table) => [
+  index("idx_combo_demissao_company").on(table.companyId),
+]);
