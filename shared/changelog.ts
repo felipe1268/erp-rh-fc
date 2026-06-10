@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2949 — **CONTROLE DE DOCUMENTOS (DASHBOARD) — A TABELA "DOCUMENTAÇÃO INCOMPLETA" FICOU
+ * CLICÁVEL: AO CLICAR NUMA LINHA (OU NA COLUNA "PENDÊNCIAS") ABRE UM DIÁLOGO LISTANDO EXATAMENTE
+ * QUAIS DOCUMENTOS DAQUELE FUNCIONÁRIO ESTÃO VENCIDOS OU NÃO CADASTRADOS.**
+ *
+ * CONTEXTO (usuário, print do iPad da tela "Controle de Documentos" → aba "Documentação
+ * Incompleta"): "Quero poder clicar e ver qual documento está vencido, precisamos ajustar isso
+ * de forma clara e objetiva... não podemos ter documentos vencidos na empresa, todos devem
+ * estar aptos ao trabalho". A tabela mostrava apenas CONTAGENS por funcionário (badges 4/3/2 em
+ * "Trein. Venc."/"Docs Venc."/"Pendências" e ícones X em "Sem ASO"/"ASO Venc."/"CNH Venc."),
+ * sem nenhuma forma de descobrir QUAIS documentos especificamente estavam vencidos.
+ *
+ * SOLUÇÃO (BACK read-only + FRONT, ZERO ALTER/DROP/DELETE):
+ * 1) BACK — `server/routers/dashboards.ts` (`getDashControleDocumentos`): o loop que monta
+ *    `funcIncompletos` agora também constrói, para cada funcionário, um array `pendencias[]`
+ *    usando A MESMA fonte que gera as contagens exibidas (último ASO `lastAsoMap`, lista de
+ *    treinamentos vencidos `treinVencList`, docs pessoais vencidos `docsVencList`, CNH do
+ *    employee) → garantia de paridade 1:1 com os números da tabela. Cada item tem `categoria`
+ *    ('ASO'|'Treinamento'|'Doc. Pessoal'|'CNH'), `tipo` (norma/nome do treino, tipo do doc em
+ *    caixa-alta, "ASO"/"CNH" ou "ASO não cadastrado"), `dataValidade` (string ISO ou null),
+ *    `diasAtraso` (|dias| desde o vencimento, via `calcDias`) e `motivo` ('sem' p/ ASO inexistente,
+ *    'vencido' p/ os demais). Ordenação: "não cadastrado" no topo (diasAtraso null tratado como
+ *    MAX_SAFE_INTEGER), depois maior atraso primeiro. NENHUMA query nova; nada de ALTER/DROP/DELETE.
+ * 2) FRONT — `client/src/pages/dashboards/DashControleDocumentos.tsx`: a `<tr>` da tabela
+ *    "Documentação Incompleta" virou clicável (`cursor-pointer`, hover vermelho suave,
+ *    `onClick={() => setDetalhe(f)}`); o botão do nome usa `e.stopPropagation()` p/ continuar
+ *    abrindo o Raio-X sem disparar o diálogo. A coluna "Pendências" ganhou um ícone `Eye` como
+ *    dica de que é clicável. Novo `<Dialog>` (estado `detalhe`) exibe o cabeçalho (nome · função ·
+ *    obra) e renderiza cada `pendencia` num cartão vermelho com ícone por categoria
+ *    (`CATEGORIA_ICONS`), badge "Vencido há Nd" ou "Não cadastrado", o `tipo` do documento e a
+ *    validade formatada; um rodapé âmbar reforça "Funcionário NÃO está apto ao trabalho enquanto
+ *    houver documento vencido ou não cadastrado" e um botão "Ver Raio-X completo" encadeia p/ o
+ *    `RaioXFuncionario` (fecha o diálogo e abre o Raio-X do mesmo funcionário).
+ *
+ * RESULTADO: o gestor identifica de forma clara e objetiva, com um clique, exatamente quais
+ * documentos faltam/venceram de cada colaborador — sem precisar cruzar com a aba "Alertas de
+ * Vencimento". A aba "Alertas de Vencimento" (que já era uma lista por-documento) permanece
+ * intacta. Arquivos: `server/routers/dashboards.ts`, `client/src/pages/dashboards/DashControleDocumentos.tsx`.
+ *
  * Rev. 2948 — **ATESTADOS & ACIDENTES (SST) — NOVA TABELA "ATESTADOS POR OBRA — RANKING" NA ABA
  * "OBRAS / AÇÕES": LISTA AS OBRAS ORDENADAS POR QUANTIDADE DE ATESTADOS (MAIS → MENOS) PRA
  * IDENTIFICAR RAPIDAMENTE QUAL OBRA TEM MAIS ATESTADOS.**

@@ -4063,28 +4063,46 @@ async function getDashControleDocumentos(companyId: number, companyIds?: number[
   alertas.sort((a, b) => a.diasParaVencer - b.diasParaVencer);
 
   // ── FUNCIONÁRIOS COM DOCUMENTAÇÃO INCOMPLETA ──
+  type PendenciaDoc = {
+    categoria: string; tipo: string;
+    dataValidade: string | null; diasAtraso: number | null;
+    motivo: 'sem' | 'vencido';
+  };
   type FuncIncompleto = {
     employeeId: number; funcionarioNome: string; cpf: string;
     funcao: string; setor: string; obraNome: string;
     semAso: boolean; asoVencido: boolean;
     treinVencidos: number; docsVencidos: number; cnhVencida: boolean;
     totalPendencias: number;
+    pendencias: PendenciaDoc[];
   };
+  const diasAtrasoDe = (dv: string) => Math.abs(calcDias(dv));
   const funcIncompletos: FuncIncompleto[] = [];
   for (const emp of ativosRows) {
     const lastAso = lastAsoMap.get(emp.id);
     const semAso = !lastAso;
     const asoVenc = lastAso ? (lastAso.dataValidade ? lastAso.dataValidade < today : false) : false;
-    const treinVenc = allTreinCtrl.filter(t => t.employeeId === emp.id && t.dataValidade && t.dataValidade < today).length;
-    const docsVenc = docComValidade.filter(d => d.employeeId === emp.id && d.dataValidade! < today).length;
+    const treinVencList = allTreinCtrl.filter(t => t.employeeId === emp.id && t.dataValidade && t.dataValidade < today);
+    const docsVencList = docComValidade.filter(d => d.employeeId === emp.id && d.dataValidade! < today);
     const cnhVenc = emp.validadeCnh ? emp.validadeCnh < today : false;
+    const treinVenc = treinVencList.length;
+    const docsVenc = docsVencList.length;
     const totalPend = (semAso ? 1 : 0) + (asoVenc ? 1 : 0) + treinVenc + docsVenc + (cnhVenc ? 1 : 0);
     if (totalPend > 0) {
+      // Lista EXATA dos documentos pendentes (1:1 com as contagens acima) para drill-down na tela
+      const pendencias: PendenciaDoc[] = [];
+      if (semAso) pendencias.push({ categoria: 'ASO', tipo: 'ASO não cadastrado', dataValidade: null, diasAtraso: null, motivo: 'sem' });
+      if (asoVenc && lastAso?.dataValidade) pendencias.push({ categoria: 'ASO', tipo: lastAso.tipo || 'ASO', dataValidade: lastAso.dataValidade, diasAtraso: diasAtrasoDe(lastAso.dataValidade), motivo: 'vencido' });
+      for (const t of treinVencList) pendencias.push({ categoria: 'Treinamento', tipo: t.norma || t.nome, dataValidade: t.dataValidade!, diasAtraso: diasAtrasoDe(t.dataValidade!), motivo: 'vencido' });
+      for (const d of docsVencList) pendencias.push({ categoria: 'Doc. Pessoal', tipo: d.tipo.toUpperCase(), dataValidade: d.dataValidade!, diasAtraso: diasAtrasoDe(d.dataValidade!), motivo: 'vencido' });
+      if (cnhVenc && emp.validadeCnh) pendencias.push({ categoria: 'CNH', tipo: 'CNH', dataValidade: emp.validadeCnh, diasAtraso: diasAtrasoDe(emp.validadeCnh), motivo: 'vencido' });
+      // Mais críticos primeiro: "não cadastrado" no topo, depois maior atraso
+      pendencias.sort((a, b) => (b.diasAtraso ?? Number.MAX_SAFE_INTEGER) - (a.diasAtraso ?? Number.MAX_SAFE_INTEGER));
       funcIncompletos.push({
         employeeId: emp.id, funcionarioNome: emp.nomeCompleto, cpf: emp.cpf || '',
         funcao: emp.funcao || '', setor: emp.setor || '', obraNome: getObraNome(emp.id),
         semAso, asoVencido: asoVenc, treinVencidos: treinVenc, docsVencidos: docsVenc,
-        cnhVencida: cnhVenc, totalPendencias: totalPend,
+        cnhVencida: cnhVenc, totalPendencias: totalPend, pendencias,
       });
     }
   }

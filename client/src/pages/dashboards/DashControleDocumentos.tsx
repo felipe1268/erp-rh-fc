@@ -9,6 +9,9 @@ import RaioXFuncionario from "@/components/RaioXFuncionario";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,6 +62,7 @@ export default function DashControleDocumentos() {
   const [filtroStatus, setFiltroStatus] = useState<string>('todos');
   const [busca, setBusca] = useState('');
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
+  const [detalhe, setDetalhe] = useState<any | null>(null);
 
   // Filtered alertas
   const alertasFiltrados = useMemo(() => {
@@ -431,10 +435,15 @@ export default function DashControleDocumentos() {
                     {incompletosFiltrados.length === 0 ? (
                       <tr><td colSpan={9} className="text-center py-8 text-gray-400">Nenhum funcionário com documentação incompleta</td></tr>
                     ) : incompletosFiltrados.slice(0, 100).map((f: any) => (
-                      <tr key={f.employeeId} className="border-b hover:bg-gray-50/50 transition-colors">
+                      <tr
+                        key={f.employeeId}
+                        className="border-b hover:bg-red-50/40 transition-colors cursor-pointer"
+                        onClick={() => setDetalhe(f)}
+                        title="Clique para ver quais documentos estão vencidos"
+                      >
                         <td className="p-2">
                           <button
-                            onClick={() => setRaioXEmployeeId(f.employeeId)}
+                            onClick={(e) => { e.stopPropagation(); setRaioXEmployeeId(f.employeeId); }}
                             className="text-blue-600 hover:text-blue-800 hover:underline font-medium text-left"
                           >
                             {f.funcionarioNome}
@@ -463,9 +472,12 @@ export default function DashControleDocumentos() {
                           {f.cnhVencida ? <XCircle className="h-4 w-4 text-red-500 mx-auto" /> : <CheckCircle2 className="h-4 w-4 text-green-500 mx-auto" />}
                         </td>
                         <td className="p-2 text-center">
-                          <Badge variant="outline" className={`text-[10px] font-bold ${f.totalPendencias >= 3 ? 'bg-red-100 text-red-700 border-red-300' : f.totalPendencias >= 2 ? 'bg-orange-100 text-orange-700 border-orange-300' : 'bg-yellow-100 text-yellow-700 border-yellow-300'}`}>
-                            {f.totalPendencias}
-                          </Badge>
+                          <span className="inline-flex items-center gap-1">
+                            <Badge variant="outline" className={`text-[10px] font-bold ${f.totalPendencias >= 3 ? 'bg-red-100 text-red-700 border-red-300' : f.totalPendencias >= 2 ? 'bg-orange-100 text-orange-700 border-orange-300' : 'bg-yellow-100 text-yellow-700 border-yellow-300'}`}>
+                              {f.totalPendencias}
+                            </Badge>
+                            <Eye className="h-3.5 w-3.5 text-gray-400" />
+                          </span>
                         </td>
                       </tr>
                     ))}
@@ -490,6 +502,62 @@ export default function DashControleDocumentos() {
 
         <PrintFooterLGPD />
       </div>
+
+      {/* Detalhe — quais documentos estão vencidos/faltando */}
+      <Dialog open={!!detalhe} onOpenChange={(o) => { if (!o) setDetalhe(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              Documentos pendentes
+            </DialogTitle>
+            <DialogDescription>
+              {detalhe?.funcionarioNome} · {detalhe?.funcao || '—'} · {detalhe?.obraNome || '—'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[55vh] overflow-y-auto">
+            {(detalhe?.pendencias || []).length === 0 ? (
+              <p className="text-center text-sm text-gray-400 py-6">Sem documentos pendentes.</p>
+            ) : (detalhe?.pendencias || []).map((p: any, idx: number) => {
+              const Icon = CATEGORIA_ICONS[p.categoria] || FileText;
+              return (
+                <div key={idx} className="flex items-start gap-3 rounded-md border border-red-200 bg-red-50/60 p-3">
+                  <Icon className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-gray-700">{p.categoria}</span>
+                      {p.motivo === 'sem' ? (
+                        <Badge variant="outline" className="bg-red-100 text-red-700 border-red-300 text-[10px]">Não cadastrado</Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-red-100 text-red-700 border-red-300 text-[10px]">
+                          Vencido há {p.diasAtraso}d
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-900 font-medium truncate">{p.tipo}</p>
+                    {p.motivo === 'vencido' && (
+                      <p className="text-[11px] text-gray-500">Validade: {fmtDate(p.dataValidade)}</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="rounded-md bg-amber-50 border border-amber-200 p-2.5 text-xs text-amber-800 flex items-center gap-2">
+            <ShieldAlert className="h-4 w-4 shrink-0" />
+            Funcionário NÃO está apto ao trabalho enquanto houver documento vencido ou não cadastrado.
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { const id = detalhe?.employeeId; setDetalhe(null); setRaioXEmployeeId(id); }}
+            >
+              <Eye className="h-3.5 w-3.5 mr-1" /> Ver Raio-X completo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Raio-X Dialog */}
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
