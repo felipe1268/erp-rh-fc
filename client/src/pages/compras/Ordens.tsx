@@ -508,14 +508,15 @@ export default function Ordens() {
     onError: (e) => toast.error(e.message),
   });
 
-  const ALLOWED_EXTS = ["png", "pdf", "docx", "xlsx"];
+  const ALLOWED_EXTS = ["png", "jpg", "jpeg", "webp", "gif", "heic", "bmp", "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv"];
+  const ACCEPT_ATTR = ALLOWED_EXTS.map(e => `.${e}`).join(",") + ",image/*";
 
   const processFiles = useCallback(async (files: FileList | File[], targetOrdemId?: number) => {
     const arr = Array.from(files);
     if (arr.length === 0) return;
     for (const file of arr) {
       const ext = file.name.split(".").pop()?.toLowerCase() || "";
-      if (!ALLOWED_EXTS.includes(ext)) { toast.error(`Formato não suportado: ${file.name}. Aceitos: PNG, PDF, DOCX, XLSX.`); continue; }
+      if (!ALLOWED_EXTS.includes(ext)) { toast.error(`Formato não suportado: ${file.name}. Aceitos: imagens (JPG, PNG, etc.), PDF, DOC, XLS e outros.`); continue; }
       if (file.size > 20 * 1024 * 1024) { toast.error(`Arquivo muito grande: ${file.name} (máx. 20 MB).`); continue; }
       setUploadingAnexo(true);
       try {
@@ -1715,7 +1716,7 @@ export default function Ordens() {
                 ref={fileInputRef}
                 type="file"
                 multiple
-                accept=".png,.pdf,.docx,.xlsx"
+                accept={ACCEPT_ATTR}
                 className="hidden"
                 onChange={e => { if (e.target.files) processFiles(e.target.files); e.target.value = ""; }}
               />
@@ -1733,7 +1734,7 @@ export default function Ordens() {
                 <p className="text-sm text-gray-500">
                   {uploadingAnexo ? "Enviando arquivo..." : "Arraste arquivos aqui ou clique para selecionar"}
                 </p>
-                <p className="text-xs text-gray-400">PNG, PDF, DOCX, XLSX — até 20 MB cada</p>
+                <p className="text-xs text-gray-400">Imagens (JPG, PNG…), PDF, DOC, XLS e outros — até 20 MB cada</p>
               </div>
               {anexosForm.length > 0 && (
                 <div className="space-y-1">
@@ -2192,7 +2193,7 @@ export default function Ordens() {
                           ref={detalheFileInputRef}
                           type="file"
                           multiple
-                          accept=".png,.pdf,.docx,.xlsx"
+                          accept={ACCEPT_ATTR}
                           className="hidden"
                           onChange={e => { if (e.target.files) processFiles(e.target.files, detalhe.id); e.target.value = ""; }}
                         />
@@ -2226,7 +2227,7 @@ export default function Ordens() {
                             : <Upload className="h-5 w-5 text-gray-400" />
                           }
                           <p className="text-xs text-gray-500">{uploadingAnexo ? "Enviando..." : "Arraste ou clique para adicionar anexos"}</p>
-                          <p className="text-[10px] text-gray-400">PNG, PDF, DOCX, XLSX — até 20 MB</p>
+                          <p className="text-[10px] text-gray-400">Imagens (JPG, PNG…), PDF, DOC, XLS e outros — até 20 MB</p>
                         </div>
                       </div>
                     </div>

@@ -3967,9 +3967,10 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
     .mutation(async ({ input, ctx }) => {
       await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
-      const allowedExts = new Set(["png", "pdf", "docx", "xlsx"]);
+      const imageExts = new Set(["png", "jpg", "jpeg", "webp", "gif", "heic", "bmp"]);
+      const allowedExts = new Set([...imageExts, "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv"]);
       const ext = input.fileName.split(".").pop()?.toLowerCase() || "";
-      if (!allowedExts.has(ext)) throw new TRPCError({ code: "BAD_REQUEST", message: "Formato não suportado. Aceitos: PNG, PDF, DOCX, XLSX." });
+      if (!allowedExts.has(ext)) throw new TRPCError({ code: "BAD_REQUEST", message: "Formato não suportado. Aceitos: imagens (JPG, PNG, etc.), PDF, DOC, XLS e outros." });
       const buffer = Buffer.from(input.fileBase64, "base64");
       const maxSize = 20 * 1024 * 1024;
       if (buffer.length > maxSize) throw new TRPCError({ code: "BAD_REQUEST", message: "Arquivo muito grande (máx. 20 MB)." });
@@ -3977,13 +3978,25 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       const key = `compras/oc-anexos/${input.companyId}-${input.ordemId || "new"}-${ts}.${ext}`;
       const mimeMap: Record<string, string> = {
         png: "image/png",
+        jpg: "image/jpeg",
+        jpeg: "image/jpeg",
+        webp: "image/webp",
+        gif: "image/gif",
+        heic: "image/heic",
+        bmp: "image/bmp",
         pdf: "application/pdf",
+        doc: "application/msword",
         docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        xls: "application/vnd.ms-excel",
         xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ppt: "application/vnd.ms-powerpoint",
+        pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        txt: "text/plain",
+        csv: "text/csv",
       };
       const contentType = mimeMap[ext] || "application/octet-stream";
       const { url } = await storagePut(key, buffer, contentType);
-      const tipo = ext === "png" ? "imagem" : ext === "pdf" ? "pdf" : "documento";
+      const tipo = imageExts.has(ext) ? "imagem" : ext === "pdf" ? "pdf" : "documento";
       const novoAnexo = { url, nome: input.fileName, tipo, ts };
       if (input.ordemId) {
         const [oc] = await db.select({ id: comprasOrdens.id, anexos: comprasOrdens.anexos }).from(comprasOrdens)

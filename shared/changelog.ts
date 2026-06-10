@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2960 — **COMPRAS → ORDEM DE COMPRA → ANEXOS — AGORA ACEITA IMAGENS (JPG/JPEG,
+ * HEIC DO IPAD, PNG, WEBP, GIF, BMP) ALÉM DE PDF/DOC/DOCX/XLS/XLSX/PPT/PPTX/TXT/CSV —
+ * ANTES SÓ ACEITAVA PNG/PDF/DOCX/XLSX E BARRAVA .JPEG (E QUALQUER FOTO).**
+ *
+ * PEDIDO (usuário, iPad, print da OC-431-2026 → seção ANEXOS): "verificar dos anexos
+ * na ordem de compra, não está aceitando arquivos .jpeg ou qualquer arquivo." A área de
+ * anexos da OC anunciava "PNG, PDF, DOCX, XLSX — até 20 MB" e rejeitava fotos .jpeg/.jpg
+ * (formato mais comum de foto/print no iPad) tanto no seletor de arquivos quanto no
+ * drag-and-drop, e o backend também derrubava com "Formato não suportado".
+ *
+ * CAUSA-RAIZ: a whitelist de extensões estava restrita a `["png","pdf","docx","xlsx"]`
+ * em DOIS lugares espelhados — no front (`ALLOWED_EXTS` + atributo `accept` dos dois
+ * inputs de arquivo + textos de ajuda, em `client/src/pages/compras/Ordens.tsx`) e no
+ * back (`allowedExts`/`mimeMap`/`tipo` da mutation `uploadAnexoOrdem` em
+ * `server/routers/compras.ts`). O `accept=".png,.pdf,.docx,.xlsx"` impedia até escolher
+ * a foto no seletor do iPad; quem arrastava recebia o toast de formato não suportado.
+ *
+ * SOLUÇÃO (FRONT + BACK, ZERO ALTER/DROP/DELETE): a whitelist passou a incluir imagens
+ * (`png,jpg,jpeg,webp,gif,heic,bmp`) + documentos (`pdf,doc,docx,xls,xlsx,ppt,pptx,txt,
+ * csv`). No front, `ALLOWED_EXTS` foi ampliada e os inputs usam um `ACCEPT_ATTR`
+ * derivado dela (`.ext,...,image/*`, este último ajuda o iPad a oferecer a biblioteca de
+ * Fotos); textos de ajuda atualizados para "Imagens (JPG, PNG…), PDF, DOC, XLS e
+ * outros — até 20 MB". No back, `uploadAnexoOrdem` ganhou o `Set imageExts` (para marcar
+ * `tipo:"imagem"`), a whitelist ampliada e o `mimeMap` com os novos content-types
+ * (fallback `application/octet-stream` para o resto). Limite de 20 MB e o tenant guard
+ * (`_assertCompanyAccess`) inalterados.
+ *
  * Rev. 2959 — **DASHBOARD AVISO PRÉVIO → COMBO DE DEMISSÕES — A COLUNA "SEGURO VIDA/MÊS"
  * (E A SEÇÃO "REDUÇÃO MENSAL RECORRENTE") AGORA TRAZEM O CUSTO REAL DO SEGURO DE VIDA POR
  * FUNCIONÁRIO, VINDO DO MÓDULO SEGURO DE VIDA — ANTES SAÍA R$ 0,00 MESMO COM COBERTURA ATIVA.**
