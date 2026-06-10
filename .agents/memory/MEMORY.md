@@ -47,3 +47,4 @@
 - [Levantamento de Campo em PDF — IDOR](medicao-levantamento-campo.md) — procedures novas precisam de companyId em TODAS as subconsultas (pdfs/contornos/fotos) + validar contrato pertence à empresa E ao campo no gerarBoletim; pontos client em [0..1] convertidos via pageDims do react-pdf.
 - [EPI calça letra é derivada](epi-calca-size-letter-derived.md) — conversão letra→número das calças é destrutiva (letra não fica salva); derive a letra do número na tela via `epiTamanho.ts` (colisão XGG/EXG→50 volta XGG).
 - [db.execute UPDATE rowCount](dbexecute-update-rowcount.md) — UPDATE sem RETURNING loga rowCount 0 mesmo alterando linhas; use RETURNING id + conte, confira efeito real no Neon.
+- [iOS iframe image download](ios-iframe-image-download.md) — image/attachment url inside <iframe> downloads on iOS instead of rendering; use <img> / DocumentPreviewDialog.

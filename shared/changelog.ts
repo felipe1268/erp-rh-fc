@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2942 — **ATESTADOS & ACIDENTES (SST) — O BOTÃO "VISUALIZAR DOCUMENTO" AGORA MOSTRA O
+ * ANEXO NA PRÓPRIA TELA (IMAGEM/PDF), EM VEZ DE FORÇAR O DOWNLOAD DO ARQUIVO NO iPad/CELULAR.**
+ *
+ * CONTEXTO (usuário, print do iPad): ao abrir o detalhe de um funcionário em "Atestados &
+ * Acidentes" e clicar em "Documento" (atestado/CAT/foto do acidente), a modal "Visualizar
+ * documento" aparecia com a área CINZA EM BRANCO e o iOS Safari disparava o prompt de download
+ * do `.jpeg` ("156-....jpeg (90 KB) — Salvar..."). O usuário pediu: "não quero precisar fazer
+ * download, quero ver na tela mesmo, como uma visualização".
+ *
+ * CAUSA-RAIZ: o `EmployeeDetailDialog` (SST) renderizava o anexo dentro de um `<iframe src=...>`
+ * para QUALQUER tipo de arquivo. No iOS Safari, uma URL de IMAGEM (ou servida com header
+ * `Content-Disposition: attachment`) dentro de um iframe NÃO renderiza inline — o navegador
+ * trata como navegação de topo e oferece salvar/baixar. Resultado: área em branco + download.
+ *
+ * SOLUÇÃO (FRONT-only, `client/src/components/sst/EmployeeDetailDialog.tsx`, ZERO ALTER/DROP/
+ * DELETE): a modal de visualização caseira (Dialog + iframe) foi SUBSTITUÍDA pelo componente
+ * já existente e robusto `DocumentPreviewDialog` (`client/src/components/DocumentPreviewDialog.tsx`),
+ * que detecta o tipo pelo nome/URL e renderiza IMAGEM via `<img>` (com zoom/girar/arrastar) e PDF
+ * via iframe, além de oferecer "Baixar" e "Abrir em nova aba". Como `<img>` renderiza inline em
+ * todo navegador (inclusive iOS) independentemente do `Content-Disposition`, o anexo aparece na
+ * tela como o usuário pediu. Helper novo `fileNameFromUrl()` deriva o nome do arquivo a partir da
+ * URL (o `DocumentPreviewDialog` exige `fileName` p/ inferir o tipo e habilitar o preview).
+ * Imports não usados (`X`, `ExternalLink`) removidos; o restante do diálogo de detalhe segue igual.
+ *
+ * IMPACTO: vale para todas as empresas/obras — é só camada de visualização, sem mudança de dados,
+ * endpoint ou schema. Outras telas (ex.: Raio-X) já abriam o documento via link "nova aba" e não
+ * tinham o bug; não foram tocadas.
+ *
  * Rev. 2941 — **EFETIVO POR OBRA — O DRILL-DOWN "EQUIPE — {OBRA}" GANHOU UM FILTRO RÁPIDO POR
  * SITUAÇÃO DE INTEGRAÇÃO (SST): "TODOS", "INTEGRAÇÃO VENCIDA" E "SEM INTEGRAÇÃO" — A VARREDURA
  * DE RISCO FICOU INSTANTÂNEA, INCLUSIVE NO TABLET/CELULAR EM CAMPO.**

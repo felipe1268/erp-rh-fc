@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useState } from "react";
+import DocumentPreviewDialog from "@/components/DocumentPreviewDialog";
 import {
   User, Stethoscope, AlertTriangle, FileText, Calendar, Clock,
-  MapPin, FileWarning, Briefcase, Loader2, ExternalLink, Eye, X,
+  MapPin, FileWarning, Briefcase, Loader2, Eye,
 } from "lucide-react";
 
 type Props = {
@@ -24,6 +25,18 @@ function fmtDate(d?: string | null) {
   const [y, m, dd] = d.split("T")[0].split("-");
   if (!y || !m || !dd) return d;
   return `${dd}/${m}/${y}`;
+}
+
+function fileNameFromUrl(url?: string | null): string {
+  if (!url) return "documento";
+  try {
+    const path = new URL(url, window.location.origin).pathname;
+    const last = path.split("/").filter(Boolean).pop();
+    return last ? decodeURIComponent(last) : "documento";
+  } catch {
+    const last = url.split("?")[0].split("#")[0].split("/").filter(Boolean).pop();
+    return last ? decodeURIComponent(last) : "documento";
+  }
 }
 
 const GRAV_BADGE: Record<string, string> = {
@@ -277,37 +290,13 @@ export function EmployeeDetailDialog({ open, onOpenChange, employeeId, dataInici
         </div>
       </DialogContent>
 
-      <Dialog open={!!viewerUrl} onOpenChange={(v) => !v && setViewerUrl(null)}>
-        <DialogContent
-          resizable={false}
-          className="max-w-none w-screen h-screen sm:w-[98vw] sm:h-[96vh] p-0 overflow-hidden flex flex-col bg-white sm:rounded-xl border-0 sm:border"
-        >
-          <DialogHeader className="px-4 py-2 border-b flex-row items-center justify-between space-y-0">
-            <DialogTitle className="text-sm font-medium flex items-center gap-2">
-              <FileText className="h-4 w-4 text-blue-600" /> Visualizar documento
-            </DialogTitle>
-            <div className="flex items-center gap-2">
-              {viewerUrl && (
-                <Button asChild variant="outline" size="sm" className="h-7 text-xs">
-                  <a href={viewerUrl} target="_blank" rel="noreferrer">
-                    <ExternalLink className="h-3 w-3 mr-1" /> Abrir em nova aba
-                  </a>
-                </Button>
-              )}
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewerUrl(null)}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </DialogHeader>
-          {viewerUrl && (
-            <iframe
-              src={viewerUrl}
-              title="Documento"
-              className="flex-1 w-full border-0 bg-gray-100"
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      <DocumentPreviewDialog
+        open={!!viewerUrl}
+        onOpenChange={(v) => !v && setViewerUrl(null)}
+        fileUrl={viewerUrl}
+        fileName={fileNameFromUrl(viewerUrl)}
+        title="Visualizar documento"
+      />
     </Dialog>
   );
 }
