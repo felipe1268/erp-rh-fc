@@ -2597,6 +2597,38 @@ async function getDashCustoDemissaoMassa(
     console.error('[getDashCustoDemissaoMassa] falha meal_benefit_configs (assumindo VR=0):', (e as any)?.message ?? e);
   }
 
+  // Rev. 2959 — Seguro de vida mensal REAL por funcionário, vindo do MÓDULO
+  // Seguro de Vida (`seguro_vida_coberturas.premio_vg + premio_apc`), NÃO da
+  // coluna `employees.seguroVida` (que vinha vazia → R$ 0,00 no Combo, mesmo
+  // com cobertura ativa custando ~R$ 21,45/mês). Mesma fonte/parsing do
+  // `getResumo` (seguroVida.ts L644-657): coberturas com status `ativo` ou
+  // `pendente_inclusao`, prêmio em formato BR (texto) → numeric. Keyed por
+  // employee_id. Read-only, ZERO ALTER/DROP/DELETE.
+  const seguroVidaByEmp = new Map<number, number>();
+  if (empIds.length > 0) {
+    try {
+      const svRows = ((await db.execute(sql`
+        SELECT employee_id,
+          COALESCE(SUM(
+            (CASE WHEN premio_vg ~ '^[0-9.,]+$'
+              THEN CAST(REPLACE(REPLACE(premio_vg, '.', ''), ',', '.') AS NUMERIC) ELSE 0 END)
+            +
+            (CASE WHEN premio_apc ~ '^[0-9.,]+$'
+              THEN CAST(REPLACE(REPLACE(premio_apc, '.', ''), ',', '.') AS NUMERIC) ELSE 0 END)
+          ), 0) AS premio_mensal
+        FROM seguro_vida_coberturas
+        WHERE employee_id IN (${sql.join(empIds.map(id => sql`${id}`), sql`, `)})
+          AND status IN ('ativo','pendente_inclusao')
+        GROUP BY employee_id
+      `)) as any).rows || [];
+      for (const r of svRows) {
+        if (r.employee_id != null) seguroVidaByEmp.set(Number(r.employee_id), Number(r.premio_mensal) || 0);
+      }
+    } catch (e) {
+      console.error('[getDashCustoDemissaoMassa] falha seguro_vida_coberturas (assumindo 0):', (e as any)?.message ?? e);
+    }
+  }
+
   // Rev. 1936 — Batch: membros ATIVOS da CIPA com estabilidade ainda VIGENTE
   // na dataRef. Marcador visual apenas (NÃO exclui da lista — user explicitou:
   // "so demarca para saber quem é"). Estabilidade CIPA: CF Art. 10 II 'a' ADCT
@@ -2870,13 +2902,17 @@ async function getDashCustoDemissaoMassa(
         // resolvido agora..".
         fotoUrl: r.fotoUrl ?? null,
         salarioBase: salario,
-        // Rev. 2953/2955 — benefícios mensais recorrentes (sobra de caixa
-        // pós-demissão). Seguro de vida = coluna do cadastro (existe em Neon).
+        // Rev. 2953/2955/2959 — benefícios mensais recorrentes (sobra de caixa
+        // pós-demissão). Seguro de vida = prêmio REAL do módulo Seguro de Vida
+        // (seguro_vida_coberturas.premio_vg+premio_apc, batch acima); fallback
+        // p/ a coluna do cadastro (employees.seguroVida) quando o funcionário
+        // não tem cobertura registrada. Antes (Rev. 2953) lia SÓ a coluna do
+        // cadastro, que vinha vazia → R$ 0,00 mesmo com cobertura ativa.
         // Vale alimentação = MESMA fonte do VR proporcional da rescisão
         // (meal_benefit_configs por obra → default da empresa): vrDia × 30.
         // NÃO usa employees.valeAlimentacao (coluna inexistente no banco, que
         // quebrava a query inteira → tela "Selecione uma empresa").
-        seguroVidaMensal: parseBRL(r.seguroVida),
+        seguroVidaMensal: seguroVidaByEmp.get(r.id) ?? parseBRL(r.seguroVida),
         valeAlimentacaoMensal: ((obraIdByEmp.has(r.id) && vrDiarioByObra.has(obraIdByEmp.get(r.id)!))
           ? vrDiarioByObra.get(obraIdByEmp.get(r.id)!)!
           : (vrDiarioDefaultByCompany.get(r.companyId) ?? 0)) * 30,

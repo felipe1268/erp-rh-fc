@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2959 — **DASHBOARD AVISO PRÉVIO → COMBO DE DEMISSÕES — A COLUNA "SEGURO VIDA/MÊS"
+ * (E A SEÇÃO "REDUÇÃO MENSAL RECORRENTE") AGORA TRAZEM O CUSTO REAL DO SEGURO DE VIDA POR
+ * FUNCIONÁRIO, VINDO DO MÓDULO SEGURO DE VIDA — ANTES SAÍA R$ 0,00 MESMO COM COBERTURA ATIVA.**
+ *
+ * PEDIDO (usuário, iPad, prints do "Relatório de Demissões" + módulo "Seguro de Vida"): "Precisa
+ * linkar o custo do seguro de vida tbm... está aqui é preciso considerar corretamente em cada um."
+ * No relatório/combo a coluna "SEGURO VIDA/MÊS" mostrava R$ 0,00 em todos os 8 selecionados (e
+ * TOTAIS R$ 0,00), enquanto o módulo Seguro de Vida tem o custo real — prêmio mensal ~R$ 21,45 por
+ * funcionário CLT (V.G. 12,37176 + A.P.C. 9,07801) e "Custo Mensal Total R$ 3.219,16".
+ *
+ * CAUSA-RAIZ: `getDashCustoDemissaoMassa` (server/routers/dashboards.ts) derivava
+ * `seguroVidaMensal` de `parseBRL(employees.seguroVida)` — coluna varchar do CADASTRO do
+ * funcionário, que está vazia (o custo real vive no módulo Seguro de Vida, tabela
+ * `seguro_vida_coberturas`, colunas `premio_vg`/`premio_apc`). Logo o combo zerava o benefício.
+ *
+ * SOLUÇÃO (BACK read-only + ZERO ALTER/DROP/DELETE, `server/routers/dashboards.ts`): novo batch
+ * `seguroVidaByEmp` lê `seguro_vida_coberturas` (status `ativo`/`pendente_inclusao`) somando
+ * `premio_vg + premio_apc` por `employee_id`, com a MESMA fonte e o MESMO parsing BR→numeric do
+ * `getResumo` do módulo (seguroVida.ts L644-657) — garantindo paridade com o "Custo Mensal Total"
+ * que o usuário vê na tela. `seguroVidaMensal` passou a ser `seguroVidaByEmp.get(r.id) ??
+ * parseBRL(r.seguroVida)` (fallback p/ a coluna do cadastro quando não há cobertura). O frontend
+ * já consumia `seguroVidaMensal` na coluna da tabela, no modal e no PDF — nenhuma mudança de front
+ * necessária. Nenhuma mudança de cálculo da rescisão ou de outros campos.
+ *
  * Rev. 2958 — **DASHBOARD AVISO PRÉVIO → MODAL "COMBO DE DEMISSÕES — FLUXO DE CAIXA CONSOLIDADO"
  * AGORA ABRE EM TELA CHEIA (FULL SCREEN), SEM INFORMAÇÃO COMPRIMIDA OU SOBREPOSTA.**
  *
