@@ -2497,6 +2497,12 @@ async function getDashCustoDemissaoMassa(
     pensaoPercentual: employees.pensaoPercentual,
     pensaoBase: employees.pensaoBase,
     contribuicaoSindical: employees.contribuicaoSindical,
+    // Rev. 2953 — benefícios mensais RECORRENTES (read-only) p/ projeção de
+    // redução de caixa no Combo de Demissões. User: "incluir previsão de
+    // redução MENSAL da folha + seguro de vida + vale alimentação (sobra de
+    // caixa)". Colunas varchar do cadastro do funcionário; vazias → 0.
+    seguroVida: employees.seguroVida,
+    valeAlimentacao: employees.valeAlimentacao,
   }).from(employees).where(activeWhere);
 
   // Rev. 1921 — Datas espelham EXATAMENTE o módulo Aviso Prévio oficial
@@ -2865,6 +2871,9 @@ async function getDashCustoDemissaoMassa(
         // resolvido agora..".
         fotoUrl: r.fotoUrl ?? null,
         salarioBase: salario,
+        // Rev. 2953 — benefícios mensais recorrentes (sobra de caixa pós-demissão).
+        seguroVidaMensal: parseBRL(r.seguroVida),
+        valeAlimentacaoMensal: parseBRL(r.valeAlimentacao),
         anosServico: previsao.anosServico,
         tempoAnos,
         tempoMeses,

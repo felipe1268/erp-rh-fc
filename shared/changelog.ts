@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2953 — **COMBO DE DEMISSÕES (DASHBOARD AVISO PRÉVIO) — MODAL MAIOR + BOTÃO "GERAR PDF
+ * P/ DIRETORIA" (RELATÓRIO COMPLETO COM TODOS OS NOMES + TEMPO DE CASA) + NOVA SEÇÃO "REDUÇÃO
+ * MENSAL RECORRENTE DA FOLHA (SOBRA DE CAIXA)" COM SALÁRIOS + SEGURO DE VIDA + VALE
+ * ALIMENTAÇÃO.**
+ *
+ * CONTEXTO (usuário): no modal "Combo de Demissões — Fluxo de Caixa Consolidado" (página
+ * `/dashboards/aviso-previo`) o usuário pediu três coisas: (1) a tela maior; (2) poder gerar um
+ * PDF de demissão dos funcionários selecionados "para análise junto à diretoria", com um arquivo
+ * completo contendo os nomes de TODOS os funcionários selecionados e o tempo de casa; (3) incluir
+ * a previsão de redução MENSAL da folha de pagamento + seguro de vida + vale alimentação, para
+ * ter a visão da "sobra de caixa" mensal/anual após as demissões.
+ *
+ * SOLUÇÃO (BACK read-only + FRONT, ZERO ALTER/DROP/DELETE):
+ * 1) `server/routers/dashboards.ts` (`getDashCustoDemissaoMassa`): o SELECT de employees passou a
+ *    trazer (read-only) `employees.seguroVida` e `employees.valeAlimentacao` (colunas varchar já
+ *    existentes no cadastro); cada linha agora devolve `seguroVidaMensal`/`valeAlimentacaoMensal`
+ *    via `parseBRL` (vazio → 0). Nenhuma query nova, só duas colunas a mais na que já roda.
+ * 2) `client/src/pages/dashboards/DashAvisoPrevio.tsx`:
+ *    - `comboAgregado` agora soma `seguroVidaSoma` e `valeAlimentacaoSoma` das linhas selecionadas.
+ *    - O `<DialogContent>` foi de `max-w-4xl` para `max-w-6xl w-[95vw] max-h-[92vh]` (tela maior).
+ *    - Nova seção "Redução Mensal Recorrente da Folha (sobra de caixa)" com 5 cards: Salários/mês,
+ *      Seguro de vida/mês, Vale alimentação/mês, Redução mensal total e Redução anual (×12).
+ *    - Novo botão "Gerar PDF p/ diretoria" (`gerarRelatorioCombo`) abre uma janela com HTML
+ *      auto-contido (cabeçalho FC + logo com fallback `${origin}/logo-fc.jpg`, faixa azul, tabela
+ *      de TODOS os funcionários selecionados com nº/nome/função/obra/admissão/tempo de casa/salário/
+ *      seguro vida/vale alim./custo rescisão + totais, resumo do custo rescisório único e o bloco
+ *      de redução mensal/anual) e dispara `window.print()` (usuário escolhe "Salvar como PDF").
+ *      Escape de HTML (`esc`) em todos os campos de texto; trata bloqueio de pop-up com alerta.
+ *    RESSALVA: seguro de vida e vale alimentação vêm do cadastro de cada funcionário; quando não
+ *    preenchidos contam como R$ 0,00. A redução anual é projeção linear (12 meses), sem reajustes
+ *    de convenção/dissídio (deixado explícito em nota tanto na tela quanto no PDF).
+ *
  * Rev. 2952 — **ATESTADOS & ACIDENTES (SST) — AS LISTAS "ÚLTIMOS ATESTADOS" E "ÚLTIMOS
  * ACIDENTES" (ABA VISÃO GERAL) AGORA MOSTRAM A FOTO DO FUNCIONÁRIO NO LUGAR DO ÍCONE
  * GENÉRICO (ESTETOSCÓPIO / TRIÂNGULO DE ALERTA).**

@@ -36,7 +36,7 @@ import {
   CheckCircle2, XCircle, ArrowRight, Loader2, X, Ban,
   Wallet, Receipt, BarChart3, ArrowLeft, Flame, UserMinus2,
   ArrowUp, ArrowDown, ArrowUpDown, Info, Printer,
-  Calculator, Stethoscope, ListChecks, Search, X as XIcon } from "lucide-react";
+  Calculator, Stethoscope, ListChecks, Search, X as XIcon, FileText, TrendingDown } from "lucide-react";
 import { Link } from "wouter";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PersonPhoto } from "@/components/PersonPhoto";
@@ -310,6 +310,8 @@ export default function DashAvisoPrevio() {
       avisoOficial: 0, avisoComplementar: 0, multaFGTS: 0, fgtsEstimado: 0,
       totalOficialBruto: 0, totalDescontos: 0, totalOficialLiquido: 0,
       totalComplementar: 0, total: 0, salarioBaseSoma: 0,
+      // Rev. 2953 — benefícios mensais recorrentes (sobra de caixa pós-demissão).
+      seguroVidaSoma: 0, valeAlimentacaoSoma: 0,
     };
     for (const l of linhasSelecionadas as any[]) {
       base.saldoSalario += Number(l.saldoSalario) || 0;
@@ -326,6 +328,8 @@ export default function DashAvisoPrevio() {
       base.totalComplementar += Number(l.totalComplementar) || 0;
       base.total += Number(l.total) || 0;
       base.salarioBaseSoma += Number(l.salarioBase) || 0;
+      base.seguroVidaSoma += Number(l.seguroVidaMensal) || 0;
+      base.valeAlimentacaoSoma += Number(l.valeAlimentacaoMensal) || 0;
     }
     return base;
   }, [linhasSelecionadas]);
@@ -343,6 +347,142 @@ export default function DashAvisoPrevio() {
     }
     return Array.from(grupos.values()).sort((a, b) => a.data.getTime() - b.data.getTime());
   }, [linhasSelecionadas, cdmData, cdmTipo]);
+
+  // Rev. 2953 — Gera o RELATÓRIO DE DEMISSÕES (PDF p/ análise com a diretoria).
+  // User: "preciso poder gerar um pdf para demissão destes funcionários para
+  // análise junto à diretoria.. arquivo completo com nomes de TODOS os
+  // funcionários selecionados + tempo de casa + previsão de redução MENSAL da
+  // folha + seguro de vida + vale alimentação (visão da sobra de caixa)".
+  // Abre uma janela nova com HTML auto-contido e dispara window.print()
+  // (usuário escolhe "Salvar como PDF") — mesmo padrão das demais exportações.
+  const gerarRelatorioCombo = () => {
+    if (linhasSelecionadas.length === 0) return;
+    const esc = (s: any) => String(s ?? '').replace(/[&<>"']/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string
+    ));
+    const tempoCasa = (l: any) => {
+      const a = l.tempoAnos ?? 0, m = l.tempoMeses ?? 0, d = l.tempoDias ?? 0;
+      const parts: string[] = [];
+      if (a > 0) parts.push(`${a}a`);
+      if (a > 0 || m > 0) parts.push(`${m}m`);
+      parts.push(`${d}d`);
+      return parts.join(' ');
+    };
+    const tipoLabel = cdmTipo === 'empregador_indenizado' ? 'Aviso prévio INDENIZADO' : 'Aviso prévio TRABALHADO';
+    const dataRefBR = new Date(cdmData + 'T00:00:00').toLocaleDateString('pt-BR');
+    const emissaoBR = new Date().toLocaleDateString('pt-BR');
+    const ag = comboAgregado;
+    const reducaoMensal = ag.salarioBaseSoma + ag.seguroVidaSoma + ag.valeAlimentacaoSoma;
+    const logo = `${window.location.origin}/logo-fc.jpg`;
+    const linhasOrdenadas = [...linhasSelecionadas].sort((a: any, b: any) => (b.total || 0) - (a.total || 0));
+    const rowsHtml = linhasOrdenadas.map((l: any, i: number) => `
+      <tr>
+        <td style="text-align:center;color:#64748b">${i + 1}</td>
+        <td style="font-weight:600">${esc(l.nomeCompleto)}</td>
+        <td>${esc(l.funcao || l.cargo || '—')}</td>
+        <td>${esc(l.obra || '—')}</td>
+        <td style="text-align:center;white-space:nowrap">${l.dataAdmissao ? new Date(l.dataAdmissao + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+        <td style="text-align:center;white-space:nowrap">${tempoCasa(l)}</td>
+        <td style="text-align:right;white-space:nowrap">${fmtBRL(Number(l.salarioBase) || 0)}</td>
+        <td style="text-align:right;white-space:nowrap">${fmtBRL(Number(l.seguroVidaMensal) || 0)}</td>
+        <td style="text-align:right;white-space:nowrap">${fmtBRL(Number(l.valeAlimentacaoMensal) || 0)}</td>
+        <td style="text-align:right;white-space:nowrap;font-weight:600;color:#b91c1c">${fmtBRL(Number(l.total) || 0)}</td>
+      </tr>`).join('');
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8" />
+      <title>Relatório de Demissões — FC Engenharia</title>
+      <style>
+        * { box-sizing: border-box; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #1e293b; margin: 24px; font-size: 12px; }
+        .hdr { text-align:center; margin-bottom: 8px; }
+        .hdr img { height: 72px; object-fit: contain; }
+        .hdr h1 { font-size: 16px; margin: 6px 0 2px; letter-spacing: .5px; }
+        .hdr .sub { font-size: 10px; color:#64748b; }
+        .faixa { background:#1B2A4A; color:#fff; padding:10px 14px; margin:14px 0 10px; border-radius:4px;
+                 font-size:13px; font-weight:700; letter-spacing:2px; text-transform:uppercase; text-align:center;
+                 -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .meta { display:flex; justify-content:space-between; font-size:11px; color:#475569; margin-bottom:10px; }
+        table { width:100%; border-collapse: collapse; margin-bottom: 14px; }
+        th, td { border:1px solid #cbd5e1; padding:5px 7px; }
+        thead th { background:#1B2A4A; color:#fff; font-size:10px; text-transform:uppercase; letter-spacing:.3px;
+                   -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        tbody tr:nth-child(even) td { background:#f8fafc; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        tfoot td { font-weight:700; background:#e2e8f0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .cards { display:flex; gap:10px; margin: 6px 0 16px; }
+        .card { flex:1; border:1px solid #cbd5e1; border-radius:6px; padding:10px; text-align:center; }
+        .card .v { font-size:16px; font-weight:700; }
+        .card .l { font-size:9px; color:#64748b; text-transform:uppercase; letter-spacing:.3px; margin-top:2px; }
+        .green { color:#15803d; }
+        .red { color:#b91c1c; }
+        .sec-title { font-size:12px; font-weight:700; color:#1B2A4A; margin: 8px 0 6px; text-transform:uppercase; letter-spacing:.5px; }
+        .nota { font-size:9px; color:#64748b; font-style: italic; margin-top:4px; }
+        @media print { body { margin: 12mm; } }
+      </style></head>
+      <body>
+        <div class="hdr">
+          <img src="${logo}" alt="FC Engenharia" />
+          <h1>FC ENGENHARIA</h1>
+          <div class="sub">Relatório gerado para análise interna da diretoria</div>
+        </div>
+        <div class="faixa">Relatório de Demissões — Análise de Fluxo de Caixa</div>
+        <div class="meta">
+          <span><strong>Cenário:</strong> ${esc(tipoLabel)} &nbsp;·&nbsp; <strong>Data-base:</strong> ${dataRefBR}</span>
+          <span><strong>Funcionários:</strong> ${ag.qtd} &nbsp;·&nbsp; <strong>Emissão:</strong> ${emissaoBR}</span>
+        </div>
+
+        <div class="sec-title">Funcionários Selecionados</div>
+        <table>
+          <thead><tr>
+            <th>#</th><th>Funcionário</th><th>Função</th><th>Obra</th>
+            <th>Admissão</th><th>Tempo de casa</th><th>Salário</th>
+            <th>Seguro vida/mês</th><th>Vale alim./mês</th><th>Custo rescisão</th>
+          </tr></thead>
+          <tbody>${rowsHtml}</tbody>
+          <tfoot><tr>
+            <td colspan="6" style="text-align:right">TOTAIS</td>
+            <td style="text-align:right">${fmtBRL(ag.salarioBaseSoma)}</td>
+            <td style="text-align:right">${fmtBRL(ag.seguroVidaSoma)}</td>
+            <td style="text-align:right">${fmtBRL(ag.valeAlimentacaoSoma)}</td>
+            <td style="text-align:right;color:#b91c1c">${fmtBRL(ag.total)}</td>
+          </tr></tfoot>
+        </table>
+
+        <div class="sec-title">Custo Rescisório (desembolso único)</div>
+        <table>
+          <tbody>
+            <tr><td>Saldo de salário</td><td style="text-align:right">${fmtBRL(ag.saldoSalario)}</td></tr>
+            <tr><td>Aviso prévio indenizado${ag.avisoComplementar > 0 ? ' (+ complementar)' : ''}</td><td style="text-align:right">${fmtBRL(ag.avisoOficial + ag.avisoComplementar)}</td></tr>
+            <tr><td>13º proporcional</td><td style="text-align:right">${fmtBRL(ag.decimoTerceiro)}</td></tr>
+            <tr><td>Férias proporcionais + 1/3</td><td style="text-align:right">${fmtBRL(ag.feriasProporcional)}</td></tr>
+            ${ag.feriasVencidas > 0 ? `<tr><td>Férias vencidas + 1/3</td><td style="text-align:right">${fmtBRL(ag.feriasVencidas)}</td></tr>` : ''}
+            <tr><td>Multa 40% FGTS</td><td style="text-align:right">${fmtBRL(ag.multaFGTS)}</td></tr>
+            <tr><td>(−) Descontos legais (INSS + IRRF + pensão + sindical)</td><td style="text-align:right;color:#b91c1c">− ${fmtBRL(ag.totalDescontos)}</td></tr>
+            ${ag.totalComplementar > 0 ? `<tr><td>(+) Complementar</td><td style="text-align:right">${fmtBRL(ag.totalComplementar)}</td></tr>` : ''}
+            <tr style="font-weight:700"><td>CUSTO TOTAL A DESEMBOLSAR</td><td style="text-align:right;color:#b91c1c">${fmtBRL(ag.total)}</td></tr>
+          </tbody>
+        </table>
+        <p class="nota">FGTS estimado (depositado mensalmente, fora das verbas rescisórias): ${fmtBRL(ag.fgtsEstimado)}.</p>
+
+        <div class="sec-title">Redução Mensal Recorrente da Folha (sobra de caixa)</div>
+        <div class="cards">
+          <div class="card"><div class="v">${fmtBRL(ag.salarioBaseSoma)}</div><div class="l">Salários/mês</div></div>
+          <div class="card"><div class="v">${fmtBRL(ag.seguroVidaSoma)}</div><div class="l">Seguro de vida/mês</div></div>
+          <div class="card"><div class="v">${fmtBRL(ag.valeAlimentacaoSoma)}</div><div class="l">Vale alimentação/mês</div></div>
+          <div class="card"><div class="v green">${fmtBRL(reducaoMensal)}</div><div class="l">Redução mensal total</div></div>
+          <div class="card"><div class="v green">${fmtBRL(reducaoMensal * 12)}</div><div class="l">Redução anual (×12)</div></div>
+        </div>
+        <p class="nota">Seguro de vida e vale alimentação vêm do cadastro de cada funcionário; quando não preenchidos contam como R$ 0,00. A redução anual é uma projeção linear (12 meses) e não considera reajustes de convenção/dissídio.</p>
+      </body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) {
+      alert('Não foi possível abrir a janela do relatório. Habilite pop-ups para este site e tente novamente.');
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { try { w.print(); } catch { /* usuário pode imprimir manualmente */ } }, 300);
+  };
 
   // Filtra avisos pelo drill-down selecionado
   const drillDownAvisos = useMemo(() => {
@@ -1544,7 +1684,7 @@ export default function DashAvisoPrevio() {
           acontecer". */}
       {comboOpen && (
         <Dialog open={comboOpen} onOpenChange={setComboOpen}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-6xl w-[95vw] max-h-[92vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-base">
                 <Calculator className="h-5 w-5 text-blue-600" />
@@ -1600,6 +1740,38 @@ export default function DashAvisoPrevio() {
                 <p className="text-[10px] text-muted-foreground px-3 py-1.5 italic bg-slate-50/50 border-t">FGTS estimado (depositado mensalmente, separado das verbas rescisórias): {fmtBRL(comboAgregado.fgtsEstimado)}.</p>
               </div>
 
+              {/* Rev. 2953 — Redução MENSAL recorrente da folha (sobra de caixa).
+                  User: "incluir previsão de redução MENSAL da folha + seguro de
+                  vida + vale alimentação (visão da sobra de caixa)". */}
+              <div className="border-2 border-emerald-200 rounded-md overflow-hidden">
+                <div className="px-3 py-2 bg-emerald-50 border-b font-semibold text-emerald-900 text-xs uppercase tracking-wide flex items-center gap-2">
+                  <TrendingDown className="h-3.5 w-3.5" /> Redução Mensal Recorrente da Folha (sobra de caixa)
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 p-3">
+                  <div className="rounded-lg border bg-white p-2.5 text-center">
+                    <p className="text-base font-bold text-slate-800 tabular-nums">{fmtBRL(comboAgregado.salarioBaseSoma)}</p>
+                    <p className="text-[10px] text-muted-foreground font-medium">Salários / mês</p>
+                  </div>
+                  <div className="rounded-lg border bg-white p-2.5 text-center">
+                    <p className="text-base font-bold text-slate-800 tabular-nums">{fmtBRL(comboAgregado.seguroVidaSoma)}</p>
+                    <p className="text-[10px] text-muted-foreground font-medium">Seguro de vida / mês</p>
+                  </div>
+                  <div className="rounded-lg border bg-white p-2.5 text-center">
+                    <p className="text-base font-bold text-slate-800 tabular-nums">{fmtBRL(comboAgregado.valeAlimentacaoSoma)}</p>
+                    <p className="text-[10px] text-muted-foreground font-medium">Vale alimentação / mês</p>
+                  </div>
+                  <div className="rounded-lg border-2 border-emerald-300 bg-emerald-50 p-2.5 text-center">
+                    <p className="text-base font-bold text-emerald-700 tabular-nums">{fmtBRL(comboAgregado.salarioBaseSoma + comboAgregado.seguroVidaSoma + comboAgregado.valeAlimentacaoSoma)}</p>
+                    <p className="text-[10px] text-emerald-700 font-semibold">Redução mensal total</p>
+                  </div>
+                  <div className="rounded-lg border-2 border-emerald-300 bg-emerald-50 p-2.5 text-center">
+                    <p className="text-base font-bold text-emerald-700 tabular-nums">{fmtBRL((comboAgregado.salarioBaseSoma + comboAgregado.seguroVidaSoma + comboAgregado.valeAlimentacaoSoma) * 12)}</p>
+                    <p className="text-[10px] text-emerald-700 font-semibold">Redução anual (×12)</p>
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground px-3 py-1.5 italic bg-emerald-50/40 border-t">Seguro de vida e vale alimentação vêm do cadastro de cada funcionário; quando não preenchidos contam como R$ 0,00. A redução anual é projeção linear (12 meses), sem reajustes de convenção/dissídio.</p>
+              </div>
+
               <div className="border rounded-md overflow-hidden">
                 <div className="px-3 py-2 bg-blue-50 border-b font-semibold text-blue-900 text-xs uppercase tracking-wide flex items-center gap-2">
                   <CalendarDays className="h-3.5 w-3.5" /> Cronograma de Pagamentos (fluxo de caixa)
@@ -1640,7 +1812,10 @@ export default function DashAvisoPrevio() {
                 </p>
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t">
+              <div className="flex justify-between items-center gap-2 pt-2 border-t">
+                <Button size="sm" variant="outline" onClick={gerarRelatorioCombo} disabled={comboAgregado.qtd === 0} className="gap-1.5">
+                  <FileText className="h-4 w-4" /> Gerar PDF p/ diretoria
+                </Button>
                 <Button size="sm" variant="default" onClick={() => setComboOpen(false)}>Fechar</Button>
               </div>
             </div>
