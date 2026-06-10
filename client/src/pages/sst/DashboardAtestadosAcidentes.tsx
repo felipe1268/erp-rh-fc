@@ -1323,6 +1323,70 @@ export default function DashboardAtestadosAcidentes() {
                 )}
               />
 
+              {/* Atestados por Obra — Ranking (Rev. 2948) */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Stethoscope className="h-4 w-4 text-blue-600" /> Atestados por Obra — Ranking
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 text-gray-600">
+                        <tr>
+                          <th className="px-3 py-2 text-left w-12">#</th>
+                          <th className="px-3 py-2 text-left">Obra</th>
+                          <th className="px-3 py-2 text-right">Atestados</th>
+                          <th className="px-3 py-2 text-right">Dias Afast.</th>
+                          <th className="px-3 py-2 text-right">Colab. Afetados</th>
+                          <th className="px-3 py-2 text-right">INSS (≥15d)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {(() => {
+                          const rank = (d.atestadosPorObra ?? [])
+                            .filter((o: any) => (o.qtdAtestados ?? 0) > 0)
+                            .slice()
+                            .sort((a: any, b: any) => (b.qtdAtestados - a.qtdAtestados) || (b.diasAfastamento - a.diasAfastamento));
+                          if (rank.length === 0) {
+                            return (<tr><td colSpan={6} className="p-4 text-center text-gray-500">Sem atestados vinculados a obras no período.</td></tr>);
+                          }
+                          const totAt = rank.reduce((s: number, o: any) => s + (o.qtdAtestados || 0), 0);
+                          const totDias = rank.reduce((s: number, o: any) => s + (o.diasAfastamento || 0), 0);
+                          const totColab = rank.reduce((s: number, o: any) => s + (o.colaboradoresAfetados || 0), 0);
+                          const totInss = rank.reduce((s: number, o: any) => s + (o.afastamentosINSS || 0), 0);
+                          return (
+                            <>
+                              {rank.map((o: any, i: number) => (
+                                <tr key={o.obraId ?? `semobra-${i}`} className={`hover:bg-gray-50 ${i === 0 ? "bg-blue-50/40" : ""}`}>
+                                  <td className="px-3 py-2 font-semibold text-gray-500">{i + 1}º</td>
+                                  <td className="px-3 py-2 font-medium">{o.obraNome}</td>
+                                  <td className="px-3 py-2 text-right">
+                                    <span className={`font-bold text-lg ${i === 0 ? "text-blue-700" : "text-blue-600"}`}>{fmtNum(o.qtdAtestados)}</span>
+                                  </td>
+                                  <td className="px-3 py-2 text-right text-gray-700">{fmtNum(o.diasAfastamento)}</td>
+                                  <td className="px-3 py-2 text-right text-gray-700">{fmtNum(o.colaboradoresAfetados)}</td>
+                                  <td className="px-3 py-2 text-right text-gray-700">{fmtNum(o.afastamentosINSS)}</td>
+                                </tr>
+                              ))}
+                              <tr className="bg-gray-50 font-semibold text-gray-700">
+                                <td className="px-3 py-2" />
+                                <td className="px-3 py-2 text-right">Total ({rank.length} obra{rank.length > 1 ? "s" : ""})</td>
+                                <td className="px-3 py-2 text-right text-blue-700">{fmtNum(totAt)}</td>
+                                <td className="px-3 py-2 text-right">{fmtNum(totDias)}</td>
+                                <td className="px-3 py-2 text-right">{fmtNum(totColab)}</td>
+                                <td className="px-3 py-2 text-right">{fmtNum(totInss)}</td>
+                              </tr>
+                            </>
+                          );
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* Dias sem acidente */}
               <Card>
                 <CardHeader><CardTitle className="text-base flex items-center gap-2"><MapPin className="h-4 w-4 text-emerald-600" /> Dias sem Acidente — por Obra</CardTitle></CardHeader>

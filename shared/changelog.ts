@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2948 — **ATESTADOS & ACIDENTES (SST) — NOVA TABELA "ATESTADOS POR OBRA — RANKING" NA ABA
+ * "OBRAS / AÇÕES": LISTA AS OBRAS ORDENADAS POR QUANTIDADE DE ATESTADOS (MAIS → MENOS) PRA
+ * IDENTIFICAR RAPIDAMENTE QUAL OBRA TEM MAIS ATESTADOS.**
+ *
+ * CONTEXTO (usuário, print do iPad da aba "Atestados & Acidentes"): pediu "uma tabela desta
+ * [igual à 'Dias sem Acidente — por Obra'], considerando quantos atestados por obra... para
+ * análise de qual obra tem mais atestados". Já existia o gráfico "Atestados & Afastamentos — por
+ * Obra" (ordenado por DIAS de afastamento), mas faltava uma TABELA-ranking enxuta focada na
+ * CONTAGEM de atestados.
+ *
+ * SOLUÇÃO (FRONT-only, `client/src/pages/sst/DashboardAtestadosAcidentes.tsx`, ZERO backend/
+ * ALTER/DROP/DELETE): a tela JÁ recebia `d.atestadosPorObra` (obraId, obraNome, qtdAtestados,
+ * diasAfastamento, colaboradoresAfetados, afastamentosINSS) — então bastou consumir. Novo
+ * <Card> "Atestados por Obra — Ranking" (ícone Stethoscope) logo abaixo do gráfico e acima de
+ * "Dias sem Acidente — por Obra"; tabela com colunas #, Obra, Atestados, Dias Afast., Colab.
+ * Afetados e INSS (≥15d). Mantém a MESMA fonte e o MESMO critério do gráfico logo acima
+ * (`atestadosPorObra` + filtro `qtdAtestados > 0`), apenas REORDENANDO por `qtdAtestados` desc
+ * (desempate por `diasAfastamento` desc) — então qualquer obra com atestados aparece (inclusive
+ * já encerrada, p/ análise histórica), consistente com o gráfico. 1ª linha destacada (azul) +
+ * linha de Total no rodapé (atestados, dias, colab., INSS e nº de obras).
+ *
+ * IMPACTO: só adiciona uma tabela na aba "Obras / Ações" do dashboard SST. Read-only.
+ *
  * Rev. 2947 — **ATESTADOS & ACIDENTES (SST) — A TABELA "DIAS SEM ACIDENTE — POR OBRA" AGORA LISTA
  * SOMENTE OBRAS ATIVAS / EM ANDAMENTO (DEIXA DE MOSTRAR CONCLUÍDAS, PARALISADAS E CANCELADAS).**
  *
