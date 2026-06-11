@@ -49,4 +49,5 @@
 - [db.execute UPDATE rowCount](dbexecute-update-rowcount.md) — UPDATE sem RETURNING loga rowCount 0 mesmo alterando linhas; use RETURNING id + conte, confira efeito real no Neon.
 - [EPI "restrito não escreve no Central"](epi-central-write-rule.md) — ao impor regra de permissão sobre um recurso, inventarie TODAS as rotas que escrevem nele (transferir 2 sentidos, entradaEstoque, create qtd!=0); Entregas é gap conhecido.
 - [iOS iframe image download](ios-iframe-image-download.md) — image/attachment url inside <iframe> downloads on iOS instead of rendering; use <img> / DocumentPreviewDialog.
+- [tsc incremental stale-clean](tsc-incremental-stale.md) — `tsc --noEmit` here is incremental; right after a client edit it can report CLEAN despite a real error (e.g. dup const). Verify via fresh tsc (rm tsbuildinfo) or esbuild parse.
 - [SyncSchema+ log is capped](syncschema-log-cap.md) — `[SyncSchema+]` is ONE long sequential block; captured log file caps ~49 lines, so a missing `Rev. N` line ≠ failure. Verify new tables by connecting to NEON_DATABASE_URL directly (pg), not executeSql.

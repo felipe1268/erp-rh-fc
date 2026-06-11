@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2963 — **CONTROLE DE EPIs → NOVA TRANSFERÊNCIA — TELA UNIFICADA PARA TODOS OS USUÁRIOS
+ * (FIM DAS "DUAS TELAS DIFERENTES") + INDICADOR DE ESTOQUE DISPONÍVEL NA ORIGEM PARA A
+ * TRANSFERÊNCIA "FUNCIONAR DE VERDADE".**
+ *
+ * REPORTADO (usuário, 2 prints — iPad admin x desktop usuário Wesley): (1) "Não pode ter duas
+ * telas diferentes para os usuários"; (2) "a transferência não tá funcionando, precisa garantir
+ * que essa função está funcionando".
+ *
+ * CAUSA-RAIZ (as DUAS reclamações vêm da MESMA regra, Rev. 2950):
+ *  • DUAS TELAS: o modal "Nova Transferência" (`client/src/pages/Epis.tsx`) ESCONDIA o botão
+ *    "🏢 Almoxarifado Central" quando `canWriteCentral === false` (usuário restrito a obras),
+ *    trocando o layout por um botão único "Obra" + dropdown. Admin via toggle [Central|Obra];
+ *    restrito via dropdown-only → telas estruturalmente diferentes.
+ *  • "NÃO FUNCIONA": existe uma OBRA chamada literalmente "ESCRITÓRIO CENTRAL" (id 90005/270005)
+ *    com ZERO estoque em `epi_estoque_obra` — separada do Almoxarifado Central real (cujo estoque
+ *    vive em `epis.quantidadeEstoque`). O usuário restrito escolhia essa obra como origem (achando
+ *    ser o "central") e o backend, corretamente, respondia "Estoque da obra insuficiente.
+ *    Disponível: 0". Não havia bug de transação — era estoque ausente + UI confusa. Confirmado no
+ *    Neon: obras 90001=642, 90004=203… têm estoque; "ESCRITÓRIO CENTRAL" = 0.
+ *
+ * DECISÃO DO USUÁRIO (user_query): MANTER a regra de permissão da Rev. 2950 — só admin/full-access
+ * mexe no Almoxarifado Central; usuário restrito só transfere ENTRE as obras que gerencia.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, `client/src/pages/Epis.tsx`):
+ *  1. TELA ÚNICA: Origem e Destino agora SEMPRE renderizam os DOIS botões [🏢 Almoxarifado Central |
+ *     🏗️ Obra] para todos. Para usuário restrito (`!canWriteCentral`) o botão Central fica
+ *     DESABILITADO (opacity-50 + 🔒 + `title`/toast explicativo) — mesmo layout pra todos,
+ *     respeitando a permissão (a regra do backend `assertCentralWrite` segue intacta). Botão
+ *     Central de DESTINO também desabilita quando a origem é central (evita central→central).
+ *     Nota curta abaixo da Origem explica a restrição ao usuário restrito.
+ *  2. "FUNCIONA DE VERDADE": novo helper `dispOrigem(epiId)` calcula o estoque disponível NA ORIGEM
+ *     escolhida (central = `epis.quantidadeEstoque`; obra = mapa `estoqueObraMap` de
+ *     `epi_estoque_obra` por `epiId|obraId`). O picker de EPI mostra "Disponível: N" (vermelho se 0)
+ *     conforme a origem selecionada (antes mostrava só o estoque do Central, enganoso); abaixo do
+ *     "Adicionar EPI" há aviso "Disponível na origem: N" e alerta quando a qtd pedida excede.
+ *     `estoqueObraQ` passou a carregar também no viewMode "transferencias".
+ *  Sem mudança de backend, cálculo de estoque ou regra de permissão. A transferência obra→obra
+ *  (e admin central↔obra) sempre funcionou quando há estoque; o que faltava era o usuário ENXERGAR
+ *  onde há estoque e ter uma tela consistente.
+ *
  * Rev. 2962 — **PLANEJAMENTO → DETALHE DO PROJETO → ABA CRONOGRAMA — CORREÇÃO DO CRASH
  * "OCORREU UM ERRO INESPERADO / ReferenceError: _calMSPInner is not defined" QUE DERRUBAVA
  * A TELA INTEIRA AO ABRIR O CRONOGRAMA (ex.: /planejamento/46).**

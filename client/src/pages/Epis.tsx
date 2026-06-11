@@ -19,7 +19,7 @@ import {
   Glasses, Hand, Footprints, Ear, Shirt, Wind, Shield, Flame, Droplets, Wrench, Zap, HeartPulse, Umbrella, RefreshCw,
   Building2, ArrowLeftRight, Warehouse, TrendingUp, ShoppingCart, Loader2,
   Brain, Sparkles, GraduationCap, Bell, BarChart3, PenTool, Users, Ban,
-  ImagePlus, Camera, Link, X as XIcon
+  ImagePlus, Camera, Link, Lock, X as XIcon
 } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import FornecedorDialog from "@/components/FornecedorDialog";
@@ -238,7 +238,7 @@ export default function Epis() {
     { enabled: hasValidCompany && viewMode === "capacidade" }
   );
 
-  const estoqueObraQ = trpc.epis.estoqueObraList.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany && (viewMode === "estoque_obra" || viewMode === "nova_entrega") });
+  const estoqueObraQ = trpc.epis.estoqueObraList.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany && (viewMode === "estoque_obra" || viewMode === "nova_entrega" || viewMode === "transferencias") });
   const estoqueObraResumoQ = trpc.epis.estoqueObraResumo.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany && viewMode === "estoque_obra" });
   const transferenciasQ = trpc.epis.listarTransferencias.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany && viewMode === "transferencias" });
   const estoqueCentralQ = trpc.epis.estoqueCentralResumo.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany && viewMode === "estoque_obra" });
@@ -250,6 +250,14 @@ export default function Epis() {
   const episList = episQ.data?.items ?? [];
   const episTotal = episQ.data?.total ?? 0;
   const episAllList = episAllQ.data?.items ?? episList;
+
+  // Rev. 2963 — mapa de estoque por (epiId|obraId) p/ exibir disponibilidade real
+  // da ORIGEM na tela de Transferência (evita escolher uma obra sem estoque).
+  const estoqueObraTransferMap = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of (estoqueObraList2 as any[])) m.set(`${r.epiId}|${r.obraId}`, Number(r.quantidade || 0));
+    return m;
+  }, [estoqueObraList2]);
 
   // Rev. 2773 — declarado aqui (antes dos memos abaixo) pra evitar TDZ.
   const [filterObraEstoque, setFilterObraEstoque] = useState<string>("todas");
@@ -3245,6 +3253,17 @@ export default function Epis() {
           setTransItens(prev => [...prev, { epiId: transForm.epiId, quantidade: transForm.quantidade }]);
           setTransForm(f => ({ ...f, epiId: '', quantidade: 1 }));
         };
+        // Rev. 2963 — disponibilidade da ORIGEM escolhida (central = estoque do catálogo;
+        // obra = epi_estoque_obra). null = origem ainda não definida.
+        const dispOrigem = (epiId: string): number | null => {
+          if (!epiId) return null;
+          if (transForm.tipoOrigem === 'central') {
+            const e = episAllList.find((x: any) => String(x.id) === epiId);
+            return Number(e?.quantidadeEstoque || 0);
+          }
+          if (!transForm.origemObraId) return null;
+          return estoqueObraTransferMap.get(`${epiId}|${transForm.origemObraId}`) ?? 0;
+        };
         const handleSubmitTransfer = async () => {
           const allItens = transForm.epiId
             ? [...transItens, { epiId: transForm.epiId, quantidade: transForm.quantidade }]
@@ -3290,17 +3309,20 @@ export default function Epis() {
               <div>
                 <Label>Origem *</Label>
                 <div className="flex gap-2 mt-1">
-                  {canWriteCentral && (
-                    <button type="button" onClick={() => setTransForm(f => ({ ...f, tipoOrigem: 'central', origemObraId: '' }))}
-                      className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all ${transForm.tipoOrigem === 'central' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'}`}>
-                      🏢 Almoxarifado Central
-                    </button>
-                  )}
+                  <button type="button" disabled={!canWriteCentral}
+                    onClick={() => { if (!canWriteCentral) return toast.error('Almoxarifado Central disponível apenas para administradores.'); setTransForm(f => ({ ...f, tipoOrigem: 'central', origemObraId: '', ...(f.tipoDestino === 'central' ? { tipoDestino: 'obra' as const, destinoObraId: '' } : {}) })); }}
+                    title={!canWriteCentral ? 'Apenas administradores podem usar o Almoxarifado Central' : undefined}
+                    className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all flex items-center justify-center gap-1 ${transForm.tipoOrigem === 'central' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'} ${!canWriteCentral ? 'opacity-50 cursor-not-allowed bg-gray-50' : ''}`}>
+                    {!canWriteCentral && <Lock className="h-3 w-3" />} 🏢 Almoxarifado Central
+                  </button>
                   <button type="button" onClick={() => setTransForm(f => ({ ...f, tipoOrigem: 'obra' }))}
                     className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all ${transForm.tipoOrigem === 'obra' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'}`}>
-                    🏗️ {canWriteCentral ? 'Outra Obra' : 'Obra'}
+                    🏗️ Obra
                   </button>
                 </div>
+                {!canWriteCentral && (
+                  <p className="text-[11px] text-gray-500 mt-1 flex items-center gap-1"><Lock className="h-3 w-3" /> Almoxarifado Central é exclusivo de administradores. Você transfere entre as obras que gerencia.</p>
+                )}
               </div>
 
               {transForm.tipoOrigem === 'obra' && (
@@ -3322,12 +3344,21 @@ export default function Epis() {
                     className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all ${transForm.tipoDestino === 'obra' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'}`}>
                     🏗️ Obra
                   </button>
-                  {transForm.tipoOrigem === 'obra' && canWriteCentral && (
-                    <button type="button" onClick={() => setTransForm(f => ({ ...f, tipoDestino: 'central', destinoObraId: '' }))}
-                      className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all ${transForm.tipoDestino === 'central' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'}`}>
-                      🏢 Almoxarifado Central
-                    </button>
-                  )}
+                  {(() => {
+                    const centralDestDisabled = !canWriteCentral || transForm.tipoOrigem === 'central';
+                    return (
+                      <button type="button" disabled={centralDestDisabled}
+                        onClick={() => {
+                          if (!canWriteCentral) return toast.error('Almoxarifado Central disponível apenas para administradores.');
+                          if (transForm.tipoOrigem === 'central') return toast.error('Não é possível transferir do Central para o Central.');
+                          setTransForm(f => ({ ...f, tipoDestino: 'central', destinoObraId: '' }));
+                        }}
+                        title={!canWriteCentral ? 'Apenas administradores podem usar o Almoxarifado Central' : (transForm.tipoOrigem === 'central' ? 'Origem e destino não podem ser o Central' : undefined)}
+                        className={`flex-1 p-2 rounded-lg border-2 text-center text-sm transition-all flex items-center justify-center gap-1 ${transForm.tipoDestino === 'central' ? 'border-[#1B2A4A] bg-[#1B2A4A]/5' : 'border-gray-200'} ${centralDestDisabled ? 'opacity-50 cursor-not-allowed bg-gray-50' : ''}`}>
+                        {!canWriteCentral && <Lock className="h-3 w-3" />} 🏢 Almoxarifado Central
+                      </button>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -3425,7 +3456,12 @@ export default function Epis() {
                                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
                                     {e.tamanho && <span className="text-xs text-blue-700 font-semibold">Tam: {e.tamanho}</span>}
                                     {e.ca && <span className="text-xs text-muted-foreground">CA: {e.ca}</span>}
-                                    <span className={`text-xs font-medium ${(e.quantidadeEstoque ?? 0) === 0 ? "text-red-600" : "text-green-700"}`}>Estoque: {e.quantidadeEstoque ?? 0}</span>
+                                    {(() => {
+                                      const d = dispOrigem(String(e.id));
+                                      const v = d == null ? Number(e.quantidadeEstoque ?? 0) : d;
+                                      const lbl = d == null ? 'Central' : 'Disponível';
+                                      return <span className={`text-xs font-medium ${v === 0 ? "text-red-600" : "text-green-700"}`}>{lbl}: {v}</span>;
+                                    })()}
                                   </div>
                                 </div>
                               </button>
@@ -3441,6 +3477,12 @@ export default function Epis() {
                     <Plus className="h-4 w-4" />
                   </Button>
                 </div>
+                {transForm.epiId && (() => {
+                  const d = dispOrigem(transForm.epiId);
+                  if (d == null) return <p className="text-[11px] text-amber-600">Selecione a obra de origem para ver o estoque disponível.</p>;
+                  const falta = d < transForm.quantidade;
+                  return <p className={`text-[11px] ${falta ? 'text-red-600 font-medium' : 'text-gray-500'}`}>Disponível na origem: {d}{falta ? ` — maior que a quantidade pedida (${transForm.quantidade})` : ''}</p>;
+                })()}
               </div>
 
               <div className="flex gap-2 pt-2">
