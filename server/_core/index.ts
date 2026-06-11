@@ -2999,6 +2999,24 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2960: tabela combo_demissao_simulacoes garantida (Combo de Demissões salvo).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2960 combo_demissao_simulacoes:`, e?.message || e); }
 
+        // ── Rev. 2965 — Detalhamento granular da avaliação (NPS) do Portal do Cliente ──
+        // Critérios por pessoa/tema (gestor, encarregado, equipe direta, escritório) num JSONB.
+        // Tabela NOVA, ZERO ALTER em cliente_avaliacoes (colunas-resumo preservadas).
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS cliente_avaliacao_detalhes (
+              id SERIAL PRIMARY KEY,
+              avaliacao_id INTEGER NOT NULL,
+              company_id INTEGER NOT NULL,
+              dados JSONB,
+              criado_em TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS cad_aval ON cliente_avaliacao_detalhes (avaliacao_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS cad_company ON cliente_avaliacao_detalhes (company_id)`);
+          console.log(`[SyncSchema+] Rev. 2965: tabela cliente_avaliacao_detalhes garantida (critérios granulares da avaliação NPS).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2965 cliente_avaliacao_detalhes:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

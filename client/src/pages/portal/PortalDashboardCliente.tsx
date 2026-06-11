@@ -56,6 +56,60 @@ function NotaSelector({ value, onChange, label }: { value: number | null; onChan
   );
 }
 
+// Rev. 2965 — linha de critério COMPACTA (rótulo + 0–10 inline) p/ preenchimento
+// rápido das avaliações detalhadas (gestor, encarregado, equipe, escritório).
+function CriterioRow({ label, value, onChange }: { label: string; value: number | null | undefined; onChange: (n: number | null) => void }) {
+  const v = value ?? null;
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 py-1.5 border-b border-dashed border-slate-100 last:border-0">
+      <span className="text-sm text-slate-700 sm:w-60 shrink-0 leading-snug">{label}</span>
+      <div className="flex flex-wrap gap-1">
+        {Array.from({ length: 11 }).map((_, n) => {
+          const sel = v === n;
+          const cor = n <= 6 ? "bg-rose-500" : n <= 8 ? "bg-amber-500" : "bg-emerald-500";
+          return (
+            <button
+              type="button"
+              key={n}
+              onClick={() => onChange(sel ? null : n)}
+              className={`w-7 h-7 rounded-md text-xs font-bold transition-all ${sel ? `${cor} text-white shadow scale-110` : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+            >
+              {n}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Critérios de avaliação POR PESSOA (gestor e encarregado usam os mesmos 6).
+const CRIT_PESSOA: { key: string; label: string }[] = [
+  { key: "postura", label: "Postura e reforço positivo" },
+  { key: "documentos", label: "Entrega de documentos periódicos" },
+  { key: "prontoAtendimento", label: "Pronto atendimento" },
+  { key: "disponibilidade", label: "Disponibilidade" },
+  { key: "conhecimentoTecnico", label: "Conhecimento técnico" },
+  { key: "educacao", label: "Educação e cordialidade" },
+];
+// Critérios básicos da EQUIPE DIRETA (operacional na obra).
+const CRIT_EQUIPE: { key: string; label: string }[] = [
+  { key: "tecnica", label: "Qualidade técnica do serviço" },
+  { key: "organizacao", label: "Organização e limpeza" },
+  { key: "seguranca", label: "Segurança (EPI / procedimentos)" },
+  { key: "pontualidade", label: "Pontualidade e assiduidade" },
+  { key: "educacao", label: "Educação e postura" },
+  { key: "comunicacao", label: "Comunicação e atendimento" },
+];
+// Critérios do ESCRITÓRIO CENTRAL / Backoffice (mais perguntas).
+const CRIT_ESCRITORIO: { key: string; label: string }[] = [
+  { key: "atendimento", label: "Atendimento administrativo" },
+  { key: "documentacao", label: "Documentação e contratos" },
+  { key: "faturamento", label: "Faturamento e financeiro" },
+  { key: "agilidade", label: "Agilidade nas respostas" },
+  { key: "comunicacao", label: "Comunicação e transparência" },
+];
+
 // Rev. 2890 — `publicToken` ativa o MODO LINK PÚBLICO: a página é aberta por um
 // link aberto enviado ao cliente (sem login/credencial), focando só a avaliação.
 export default function PortalDashboardCliente({ publicToken }: { publicToken?: string } = {}) {
@@ -78,7 +132,7 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
 
   // Rev. 2892 — link público POR OBRA: lê obraId/obraNome embutidos no payload
   // (público) do JWT p/ travar a obra da avaliação e exibi-la ao cliente.
-  const linkObra = useMemo<{ id: number; nome: string | null } | null>(() => {
+  const linkObra = useMemo<{ id: number; nome: string | null; gestor: string | null } | null>(() => {
     if (!isPublic || !publicToken) return null;
     try {
       const part = publicToken.split(".")[1];
@@ -86,7 +140,8 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
       let b64 = part.replace(/-/g, "+").replace(/_/g, "/");
       while (b64.length % 4 !== 0) b64 += "="; // normaliza padding base64url
       const json = JSON.parse(decodeURIComponent(escape(atob(b64))));
-      if (json?.obraId) return { id: Number(json.obraId), nome: json.obraNome ?? null };
+      // Rev. 2965 — gestorNome embutido no token p/ pré-preencher o gestor automaticamente.
+      if (json?.obraId) return { id: Number(json.obraId), nome: json.obraNome ?? null, gestor: json.gestorNome ?? null };
     } catch { /* token malformado → avaliação geral */ }
     return null;
   }, [isPublic, publicToken]);
@@ -114,6 +169,18 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
   useEffect(() => {
     if (linkObra) setAval((prev) => ({ ...prev, obraId: linkObra.id }));
   }, [linkObra]);
+
+  // Rev. 2965 — GESTOR auto-preenchido a partir do responsável da obra:
+  // - link público por obra → vem no token (linkObra.gestor);
+  // - seletor logado → responsável da obra selecionada (minhasObras).
+  const obraSel = useMemo(() => (minhasObras as any[]).find((o) => o.id === aval.obraId) || null, [minhasObras, aval.obraId]);
+  const gestorAuto = useMemo<string | null>(
+    () => (linkObra?.gestor || (obraSel?.responsavel ?? null) || null),
+    [linkObra, obraSel]
+  );
+  useEffect(() => {
+    if (gestorAuto) setAval((prev) => ({ ...prev, gestorNome: gestorAuto }));
+  }, [gestorAuto]);
 
   // ===== Comentários =====
   const [obraFiltro, setObraFiltro] = useState<number | null>(null);
@@ -161,6 +228,13 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
     gestorNome: "",
     recomendaria: null,
   });
+  // Rev. 2965 — critérios detalhados (0–10) por pessoa/tema. Cada mapa usa as
+  // chaves de CRIT_* acima; valor null = não respondido. Vão p/ `detalhes`.
+  const [detGestor, setDetGestor] = useState<Record<string, number | null>>({});
+  const [detEncarregado, setDetEncarregado] = useState<Record<string, number | null>>({});
+  const [encarregadoNome, setEncarregadoNome] = useState("");
+  const [detEquipe, setDetEquipe] = useState<Record<string, number | null>>({});
+  const [detEscritorio, setDetEscritorio] = useState<Record<string, number | null>>({});
   const [avaliado, setAvaliado] = useState(false);
   // Rev. 1595 — Perguntas extras (personalizadas) configuradas pelo admin.
   // Rev. 1597 — Rótulos personalizados (override) das 8 perguntas core, definidos pelo Admin Master.
@@ -244,19 +318,38 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
         return { perguntaId: p.id as number, valorTexto: t };
       })
       .filter(Boolean) as any[];
+    // Rev. 2965 — monta o detalhamento granular (só inclui critérios respondidos).
+    const collect = (state: Record<string, number | null>, crits: { key: string }[]) => {
+      const o: Record<string, number> = {};
+      for (const c of crits) { const v = state[c.key]; if (typeof v === "number") o[c.key] = v; }
+      return o;
+    };
+    const gObj = collect(detGestor, CRIT_PESSOA);
+    const enObj = collect(detEncarregado, CRIT_PESSOA);
+    const eqObj = collect(detEquipe, CRIT_EQUIPE);
+    const escObj = collect(detEscritorio, CRIT_ESCRITORIO);
+    const temCriterios =
+      Object.keys(gObj).length + Object.keys(enObj).length +
+      Object.keys(eqObj).length + Object.keys(escObj).length > 0;
+    const detalhes = (temCriterios || encarregadoNome.trim())
+      ? {
+          gestor: { ...gObj, ...(aval.gestorNome.trim() ? { nome: aval.gestorNome.trim() } : {}) },
+          encarregado: { ...enObj, ...(encarregadoNome.trim() ? { nome: encarregadoNome.trim() } : {}) },
+          equipe: eqObj,
+          escritorio: escObj,
+        }
+      : undefined;
     enviarAvalMut.mutate({
       token,
       obraId: aval.obraId,
-      notaEquipe: aval.notaEquipe ?? undefined,
+      // notaEquipe / notaGestor / notaEscritorio / notaFaturamento são DERIVADOS no
+      // backend pela média dos critérios detalhados — não enviados aqui.
       notaObra: aval.notaObra ?? undefined,
-      notaAtendimento: aval.notaAtendimento ?? undefined,
+      // "Atendimento e comunicação" da equipe direta alimenta a coluna notaAtendimento.
+      notaAtendimento: (detEquipe.comunicacao ?? aval.notaAtendimento) ?? undefined,
       notaPrazo: aval.notaPrazo ?? undefined,
       notaQualidade: aval.notaQualidade ?? undefined,
       notaEmpresa: aval.notaEmpresa ?? undefined,
-      notaGestor: aval.notaGestor ?? undefined,
-      // Rev. 1592 — Escritório Central
-      notaEscritorio: aval.notaEscritorio ?? undefined,
-      notaFaturamento: aval.notaFaturamento ?? undefined,
       comentarioEscritorio: aval.comentarioEscritorio || undefined,
       notaGeral: aval.notaGeral,
       comentarioPositivo: aval.comentarioPositivo || undefined,
@@ -267,6 +360,7 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
       gestorNome: aval.gestorNome || undefined,
       recomendaria: aval.recomendaria ?? undefined,
       respostasExtras: respostasExtrasArr.length ? respostasExtrasArr : undefined,
+      detalhes,
     });
   };
   // Rev. 1569 — periodicidade configurável (mensal/anual)
@@ -498,7 +592,7 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                 <CheckCircle2 className="w-20 h-20 text-emerald-500 mx-auto mb-4" />
                 <h2 className="text-2xl font-bold text-slate-800 mb-2">Obrigado pela avaliação!</h2>
                 <p className="text-slate-600 mb-6">Suas respostas foram registradas <b>de forma totalmente anônima</b> e ajudarão a FC Engenharia a melhorar continuamente.</p>
-                <Button onClick={() => { setAvaliado(false); setAval({ ...aval, notaGeral: null, notaEquipe: null, notaObra: null, notaAtendimento: null, notaPrazo: null, notaQualidade: null, notaEmpresa: null, notaGestor: null, notaEscritorio: null, notaFaturamento: null, comentarioEscritorio: "", comentarioPositivo: "", comentarioMelhoria: "", comentarioEquipe: "", comentarioEmpresa: "", comentarioGestor: "", gestorNome: "", recomendaria: null, obraId: null }); }} variant="outline">
+                <Button onClick={() => { setAvaliado(false); setDetGestor({}); setDetEncarregado({}); setDetEquipe({}); setDetEscritorio({}); setEncarregadoNome(""); setAval({ ...aval, notaGeral: null, notaEquipe: null, notaObra: null, notaAtendimento: null, notaPrazo: null, notaQualidade: null, notaEmpresa: null, notaGestor: null, notaEscritorio: null, notaFaturamento: null, comentarioEscritorio: "", comentarioPositivo: "", comentarioMelhoria: "", comentarioEquipe: "", comentarioEmpresa: "", comentarioGestor: "", gestorNome: gestorAuto || "", recomendaria: null, obraId: linkObra ? linkObra.id : null }); }} variant="outline">
                   Enviar nova avaliação
                 </Button>
               </div>
@@ -540,43 +634,78 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                   <NotaSelector label={lbl("notaGeral", "Nota geral (0 = péssimo · 10 = excelente) ★")} value={aval.notaGeral} onChange={(n) => setAval({ ...aval, notaGeral: n })} />
                 </div>
 
-                {/* Bloco EQUIPE FC */}
-                <div className="border rounded-xl p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4 text-blue-600" />
-                    <h3 className="font-semibold text-slate-800 text-sm">Equipe FC na obra</h3>
-                  </div>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <NotaSelector label={lbl("notaEquipe", "Equipe FC (técnica e relacionamento)")} value={aval.notaEquipe} onChange={(n) => setAval({ ...aval, notaEquipe: n })} />
-                    <NotaSelector label="Atendimento e comunicação" value={aval.notaAtendimento} onChange={(n) => setAval({ ...aval, notaAtendimento: n })} />
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">Comentário sobre a equipe <span className="text-slate-400 text-xs">(opcional)</span></Label>
-                    <textarea value={aval.comentarioEquipe} onChange={(e) => setAval({ ...aval, comentarioEquipe: e.target.value })}
-                      rows={2} className="mt-1 w-full border rounded-md px-3 py-2 text-sm resize-none"
-                      placeholder="Postura, técnica, segurança, organização, pontualidade..." />
-                  </div>
-                </div>
-
-                {/* Bloco GESTOR / RESPONSÁVEL */}
+                {/* Bloco GESTOR / RESPONSÁVEL — Rev. 2965 (nome auto + 6 critérios) */}
                 <div className="border rounded-xl p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <Star className="w-4 h-4 text-amber-600" />
                     <h3 className="font-semibold text-slate-800 text-sm">Gestor / Responsável FC pela obra</h3>
                   </div>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <NotaSelector label={lbl("notaGestor", "Gestor responsável (liderança, decisões, proatividade)")} value={aval.notaGestor} onChange={(n) => setAval({ ...aval, notaGestor: n })} />
-                    <div>
-                      <Label className="text-sm font-medium">Nome do gestor <span className="text-slate-400 text-xs">(opcional)</span></Label>
+                  <div>
+                    <Label className="text-sm font-medium">Gestor responsável</Label>
+                    {gestorAuto ? (
+                      <div className="mt-1 w-full border rounded-md px-3 py-2 text-sm bg-slate-50 text-slate-700 font-medium flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        {aval.gestorNome || gestorAuto}
+                        <span className="text-[11px] text-slate-400 ml-auto">preenchido automaticamente</span>
+                      </div>
+                    ) : (
                       <Input value={aval.gestorNome} onChange={(e) => setAval({ ...aval, gestorNome: e.target.value })}
                         placeholder="Ex.: Eng. João da Silva" className="mt-1" />
-                    </div>
+                    )}
+                  </div>
+                  <div className="pt-1">
+                    <p className="text-xs text-slate-500 mb-1.5">Avalie de 0 a 10 cada item:</p>
+                    {CRIT_PESSOA.map((c) => (
+                      <CriterioRow key={c.key} label={c.label} value={detGestor[c.key]}
+                        onChange={(n) => setDetGestor((prev) => ({ ...prev, [c.key]: n }))} />
+                    ))}
                   </div>
                   <div>
                     <Label className="text-sm font-medium">Como o gestor pode evoluir? <span className="text-slate-400 text-xs">(opcional)</span></Label>
                     <textarea value={aval.comentarioGestor} onChange={(e) => setAval({ ...aval, comentarioGestor: e.target.value })}
                       rows={2} className="mt-1 w-full border rounded-md px-3 py-2 text-sm resize-none"
                       placeholder="Clareza, proatividade, presença em obra, decisões técnicas..." />
+                  </div>
+                </div>
+
+                {/* Bloco ENCARREGADO — Rev. 2965 (nome + 6 critérios) */}
+                <div className="border rounded-xl p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-orange-600" />
+                    <h3 className="font-semibold text-slate-800 text-sm">Encarregado FC na obra</h3>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Nome do encarregado <span className="text-slate-400 text-xs">(opcional)</span></Label>
+                    <Input value={encarregadoNome} onChange={(e) => setEncarregadoNome(e.target.value)}
+                      placeholder="Ex.: Sr. José Carlos" className="mt-1" />
+                  </div>
+                  <div className="pt-1">
+                    <p className="text-xs text-slate-500 mb-1.5">Avalie de 0 a 10 cada item:</p>
+                    {CRIT_PESSOA.map((c) => (
+                      <CriterioRow key={c.key} label={c.label} value={detEncarregado[c.key]}
+                        onChange={(n) => setDetEncarregado((prev) => ({ ...prev, [c.key]: n }))} />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Bloco EQUIPE DIRETA — Rev. 2965 (perguntas básicas) */}
+                <div className="border rounded-xl p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-blue-600" />
+                    <h3 className="font-semibold text-slate-800 text-sm">Equipe direta FC na obra</h3>
+                  </div>
+                  <div className="pt-1">
+                    <p className="text-xs text-slate-500 mb-1.5">Avalie de 0 a 10 cada item:</p>
+                    {CRIT_EQUIPE.map((c) => (
+                      <CriterioRow key={c.key} label={c.label} value={detEquipe[c.key]}
+                        onChange={(n) => setDetEquipe((prev) => ({ ...prev, [c.key]: n }))} />
+                    ))}
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Comentário sobre a equipe <span className="text-slate-400 text-xs">(opcional)</span></Label>
+                    <textarea value={aval.comentarioEquipe} onChange={(e) => setAval({ ...aval, comentarioEquipe: e.target.value })}
+                      rows={2} className="mt-1 w-full border rounded-md px-3 py-2 text-sm resize-none"
+                      placeholder="Postura, técnica, segurança, organização, pontualidade..." />
                   </div>
                 </div>
 
@@ -597,15 +726,18 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                   </div>
                 </div>
 
-                {/* Bloco ESCRITÓRIO CENTRAL — Rev. 1592 */}
+                {/* Bloco ESCRITÓRIO CENTRAL — Rev. 2965 (mais perguntas) */}
                 <div className="border rounded-xl p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <Building2 className="w-4 h-4 text-purple-600" />
                     <h3 className="font-semibold text-slate-800 text-sm">Escritório Central / Backoffice</h3>
                   </div>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <NotaSelector label={lbl("notaEscritorio", "Atendimento administrativo (suporte, retorno de e-mails, agilidade)")} value={aval.notaEscritorio} onChange={(n) => setAval({ ...aval, notaEscritorio: n })} />
-                    <NotaSelector label="Faturamento, contratos e financeiro" value={aval.notaFaturamento} onChange={(n) => setAval({ ...aval, notaFaturamento: n })} />
+                  <div className="pt-1">
+                    <p className="text-xs text-slate-500 mb-1.5">Avalie de 0 a 10 cada item:</p>
+                    {CRIT_ESCRITORIO.map((c) => (
+                      <CriterioRow key={c.key} label={c.label} value={detEscritorio[c.key]}
+                        onChange={(n) => setDetEscritorio((prev) => ({ ...prev, [c.key]: n }))} />
+                    ))}
                   </div>
                   <div>
                     <Label className="text-sm font-medium">Comentário sobre o Escritório Central <span className="text-slate-400 text-xs">(opcional)</span></Label>

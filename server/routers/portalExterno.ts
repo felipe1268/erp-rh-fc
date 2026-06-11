@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { getDb, getEquipeObra } from "../db";
-import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalClienteConfig, clientePerguntasExtras, clienteRespostasExtras, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo, planejamentoMedicoes, asos, atestados, trainings, warnings, obraFuncionarios, gdDocumentos, gdRevisoes, gdTiposDocumento, gdDisciplinas, jobFunctions, orcamentos, sstIntegracaoRegistros, employeeIntegrations } from "../../drizzle/schema";
+import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, clienteAvaliacaoDetalhes, portalClienteConfig, clientePerguntasExtras, clienteRespostasExtras, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo, planejamentoMedicoes, asos, atestados, trainings, warnings, obraFuncionarios, gdDocumentos, gdRevisoes, gdTiposDocumento, gdDisciplinas, jobFunctions, orcamentos, sstIntegracaoRegistros, employeeIntegrations } from "../../drizzle/schema";
 import { eq, and, or, inArray, desc, sql, isNull, ilike } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
@@ -1398,8 +1398,11 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       // o nome p/ exibir no link público sem nova chamada (payload do JWT é público).
       let obraId: number | null = null;
       let obraNome: string | null = null;
+      let gestorNome: string | null = null;
       if (input.obraId) {
-        const [o] = await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(and(
+        // Rev. 2965 — captura o responsável (gestor) da obra p/ pré-preencher o
+        // nome do gestor na avaliação automaticamente (sem o cliente digitar).
+        const [o] = await db.select({ id: obras.id, nome: obras.nome, responsavel: obras.responsavel }).from(obras).where(and(
           eq(obras.id, input.obraId),
           eq(obras.companyId, input.companyId),
           isNull(obras.deletedAt),
@@ -1407,15 +1410,16 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         if (!o) throw new TRPCError({ code: "NOT_FOUND", message: "Obra não encontrada nesta empresa." });
         obraId = o.id;
         obraNome = o.nome ?? null;
+        gestorNome = (o.responsavel || "").trim() || null;
       }
       const secret = process.env.JWT_SECRET || "portal-secret";
       const token = jwt.sign({
         tipo: "cliente",
         companyId: input.companyId,
         linkAberto: true,
-        ...(obraId ? { obraId, obraNome } : {}),
+        ...(obraId ? { obraId, obraNome, ...(gestorNome ? { gestorNome } : {}) } : {}),
       }, secret, { expiresIn: "180d" });
-      return { token, obraId, obraNome };
+      return { token, obraId, obraNome, gestorNome };
     }),
 
     // Rev. 2892 — lista todas as obras da empresa p/ o seletor do "link por obra".
@@ -1739,6 +1743,8 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         status: o.status, dataInicio: o.dataInicio, dataPrevisaoFim: o.dataPrevisaoFim,
         clienteLogoUrl: o.clienteLogoUrl, gerenciadoraNome: o.gerenciadoraNome, gerenciadoraLogoUrl: o.gerenciadoraLogoUrl,
         cliente: o.cliente,
+        // Rev. 2965 — responsável (gestor) p/ pré-preencher o nome do gestor na avaliação.
+        responsavel: (o.responsavel || "").trim() || null,
         empresaLogoUrl, empresaNome,
       }));
     }),
@@ -1861,6 +1867,44 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         valorNumero: z.number().int().nullable().optional(),
         valorTexto: z.string().optional(),
       })).optional(),
+      // Rev. 2965 — Avaliação detalhada por critério (gestor, encarregado, equipe
+      // direta, escritório central). Vai p/ a tabela cliente_avaliacao_detalhes (JSONB);
+      // as colunas-resumo de cliente_avaliacoes são derivadas da MÉDIA destes critérios.
+      detalhes: z.object({
+        gestor: z.object({
+          nome: z.string().optional(),
+          postura: z.number().int().min(0).max(10).nullable().optional(),
+          documentos: z.number().int().min(0).max(10).nullable().optional(),
+          prontoAtendimento: z.number().int().min(0).max(10).nullable().optional(),
+          disponibilidade: z.number().int().min(0).max(10).nullable().optional(),
+          conhecimentoTecnico: z.number().int().min(0).max(10).nullable().optional(),
+          educacao: z.number().int().min(0).max(10).nullable().optional(),
+        }).optional(),
+        encarregado: z.object({
+          nome: z.string().optional(),
+          postura: z.number().int().min(0).max(10).nullable().optional(),
+          documentos: z.number().int().min(0).max(10).nullable().optional(),
+          prontoAtendimento: z.number().int().min(0).max(10).nullable().optional(),
+          disponibilidade: z.number().int().min(0).max(10).nullable().optional(),
+          conhecimentoTecnico: z.number().int().min(0).max(10).nullable().optional(),
+          educacao: z.number().int().min(0).max(10).nullable().optional(),
+        }).optional(),
+        equipe: z.object({
+          tecnica: z.number().int().min(0).max(10).nullable().optional(),
+          organizacao: z.number().int().min(0).max(10).nullable().optional(),
+          seguranca: z.number().int().min(0).max(10).nullable().optional(),
+          pontualidade: z.number().int().min(0).max(10).nullable().optional(),
+          educacao: z.number().int().min(0).max(10).nullable().optional(),
+          comunicacao: z.number().int().min(0).max(10).nullable().optional(),
+        }).optional(),
+        escritorio: z.object({
+          atendimento: z.number().int().min(0).max(10).nullable().optional(),
+          faturamento: z.number().int().min(0).max(10).nullable().optional(),
+          documentacao: z.number().int().min(0).max(10).nullable().optional(),
+          agilidade: z.number().int().min(0).max(10).nullable().optional(),
+          comunicacao: z.number().int().min(0).max(10).nullable().optional(),
+        }).optional(),
+      }).optional(),
     })).mutation(async ({ input }) => {
       const db = (await getDb())!;
       const secret = process.env.JWT_SECRET || "portal-secret";
@@ -1908,20 +1952,38 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
           throw new TRPCError({ code: "FORBIDDEN", message: `Você já enviou a avaliação deste ${labelPer}. Volte no próximo ${labelPer}.` });
         }
       }
+      // Rev. 2965 — colunas-resumo derivadas da MÉDIA dos critérios detalhados.
+      // Mantém compat: se o cliente enviar a nota-resumo direta (form antigo), ela vence;
+      // senão calcula a média (arredondada) dos critérios preenchidos.
+      const det = input.detalhes;
+      const mediaNotas = (...vals: Array<number | null | undefined>): number | null => {
+        const nums = vals.filter((v): v is number => typeof v === "number" && !Number.isNaN(v));
+        if (nums.length === 0) return null;
+        return Math.round(nums.reduce((a, b) => a + b, 0) / nums.length);
+      };
+      const g = det?.gestor;
+      const e = det?.equipe;
+      const esc = det?.escritorio;
+      const notaGestorFinal = input.notaGestor ?? (g ? mediaNotas(g.postura, g.documentos, g.prontoAtendimento, g.disponibilidade, g.conhecimentoTecnico, g.educacao) : null);
+      const notaEquipeFinal = input.notaEquipe ?? (e ? mediaNotas(e.tecnica, e.organizacao, e.seguranca, e.pontualidade, e.educacao, e.comunicacao) : null);
+      const notaEscritorioFinal = input.notaEscritorio ?? (esc ? mediaNotas(esc.atendimento, esc.documentacao, esc.agilidade, esc.comunicacao) : null);
+      const notaFaturamentoFinal = input.notaFaturamento ?? (esc?.faturamento ?? null);
+      const gestorNomeFinal = (input.gestorNome || g?.nome || "").trim() || null;
+
       const [novaAval] = await db.insert(clienteAvaliacoes).values({
         companyId: decoded.companyId,
         obraId: obraIdEfetivo,
         obraNome,
-        notaEquipe: input.notaEquipe ?? null,
+        notaEquipe: notaEquipeFinal,
         notaObra: input.notaObra ?? null,
         notaAtendimento: input.notaAtendimento ?? null,
         notaPrazo: input.notaPrazo ?? null,
         notaQualidade: input.notaQualidade ?? null,
         notaEmpresa: input.notaEmpresa ?? null,
-        notaGestor: input.notaGestor ?? null,
+        notaGestor: notaGestorFinal,
         // Rev. 1592 — Escritório Central
-        notaEscritorio: input.notaEscritorio ?? null,
-        notaFaturamento: input.notaFaturamento ?? null,
+        notaEscritorio: notaEscritorioFinal,
+        notaFaturamento: notaFaturamentoFinal,
         notaGeral: input.notaGeral,
         comentarioPositivo: input.comentarioPositivo || null,
         comentarioMelhoria: input.comentarioMelhoria || null,
@@ -1929,10 +1991,24 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         comentarioEmpresa: input.comentarioEmpresa || null,
         comentarioGestor: input.comentarioGestor || null,
         comentarioEscritorio: input.comentarioEscritorio || null,
-        gestorNome: input.gestorNome || null,
+        gestorNome: gestorNomeFinal,
         recomendaria: input.recomendaria ?? null,
         anoPeriodo,
       }).returning({ id: clienteAvaliacoes.id });
+
+      // Rev. 2965 — persiste o detalhamento granular (1 linha por avaliação) quando enviado.
+      if (det && novaAval?.id) {
+        try {
+          await db.insert(clienteAvaliacaoDetalhes).values({
+            avaliacaoId: novaAval.id,
+            companyId: decoded.companyId,
+            dados: det,
+          });
+        } catch (errDet: any) {
+          // Não derruba a avaliação se o detalhamento falhar (self-heal pode estar em curso).
+          console.error("[criarAvaliacao] falha ao gravar detalhes:", errDet?.message || errDet);
+        }
+      }
 
       // Rev. 1595 — Persiste respostas das perguntas extras vinculadas a esta avaliação.
       // Valida que cada perguntaId pertence à mesma empresa antes de inserir.

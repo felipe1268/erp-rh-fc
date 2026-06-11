@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2965 — **PORTAL DO CLIENTE → PESQUISA DE SATISFAÇÃO (NPS) — FORMULÁRIO PÚBLICO
+ * REFORMULADO: GESTOR AUTO-PREENCHIDO PELO RESPONSÁVEL DA OBRA; AVALIAÇÃO GRANULAR DE GESTOR,
+ * ENCARREGADO, EQUIPE DIRETA E ESCRITÓRIO CENTRAL POR CRITÉRIOS (0-10), TELA RÁPIDA/INTERATIVA.**
+ *
+ * PEDIDO (usuário): reformular o formulário público de Pesquisa de Satisfação para (a)
+ * auto-preencher o GESTOR a partir de `obras.responsavel`; (b) avaliar GESTOR e ENCARREGADO
+ * (com nome) por 6 critérios — postura/reforço positivo, entrega de documentos periódicos,
+ * pronto atendimento, disponibilidade, conhecimento técnico, educação; (c) perguntas básicas
+ * da EQUIPE DIRETA; (d) mais perguntas no ESCRITÓRIO CENTRAL; mantendo PONTOS FORTES / DE
+ * MELHORIA e deixando a tela interativa e rápida de responder.
+ *
+ * SOLUÇÃO (BACK + FRONT, ZERO ALTER/DROP/DELETE):
+ *  • SCHEMA: nova tabela espelho `cliente_avaliacao_detalhes` (`clienteAvaliacaoDetalhes` em
+ *    `drizzle/schema.ts`) — `id`, `avaliacaoId` (FK → `cliente_avaliacoes`, ON DELETE CASCADE),
+ *    `dados` jsonb (o detalhamento granular por seção), `criadoEm`. Self-heal
+ *    `CREATE TABLE IF NOT EXISTS` em `server/_core/index.ts` (`[SyncSchema+]`, padrão idêntico
+ *    aos blocos anteriores) — sem ALTER/DROP.
+ *  • BACKEND (`server/routers/portalExterno.ts`):
+ *     - `gerarLinkAvaliacao` embute `gestorNome` (= `obras.responsavel`) no JWT e o retorna;
+ *       `cliente.minhasObras` passa a devolver `responsavel` por obra.
+ *     - `criarAvaliacao` ganhou input `detalhes` (zod: `gestor`/`encarregado` com `nome` + 6
+ *       critérios; `equipe` e `escritorio` com seus critérios; todas as notas 0-10 nullable).
+ *       As HEADLINES legadas (`notaGestor`/`notaEquipe`/`notaEscritorio`/`notaFaturamento`/
+ *       `gestorNome`) passam a ser DERIVADAS por média arredondada dos critérios quando não
+ *       enviadas (compat: `notaEscritorio` = média de atendimento/documentação/agilidade/
+ *       comunicação; `notaFaturamento` = critério `faturamento`). Grava 1 linha em
+ *       `cliente_avaliacao_detalhes` (try/catch NÃO-fatal — a avaliação principal nunca falha
+ *       por causa do detalhamento).
+ *  • FRONTEND (`client/src/pages/portal/PortalDashboardCliente.tsx`):
+ *     - Componente `CriterioRow` (linha compacta 0-10) + consts `CRIT_PESSOA` / `CRIT_EQUIPE` /
+ *       `CRIT_ESCRITORIO`; states `detGestor`/`detEncarregado`/`detEquipe`/`detEscritorio` +
+ *       `encarregadoNome`.
+ *     - GESTOR auto-preenchido: `gestorAuto` lê `linkObra.gestor` (token do link público) ou
+ *       `obraSel.responsavel` (seletor logado) e trava o nome como read-only; o submit deriva
+ *       `detalhes` via helper `collect()` (só envia critérios respondidos) e mapeia
+ *       `notaAtendimento` = critério `comunicacao` da equipe; PARA de enviar as headlines
+ *       derivadas. Reset ("Enviar nova avaliação") limpa os novos states preservando o
+ *       gestor auto e a obra do link.
+ *
  * Rev. 2964 — **PORTAL DO CLIENTE → ADMINISTRAÇÃO → AVALIAÇÕES (NPS) → "LINK DE AVALIAÇÃO (SEM
  * LOGIN)" — O COMBO DE OBRA AGORA LISTA APENAS AS OBRAS EM ANDAMENTO (ANTES MOSTRAVA TODAS,
  * INCLUSIVE CONCLUÍDAS — EX.: "PÓS OBRA", "REFORMA ESCRITÓRIO", "ESCRITÓRIO CENTRAL").**

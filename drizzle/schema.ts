@@ -4383,6 +4383,23 @@ export const clienteAvaliacoes = pgTable("cliente_avaliacoes", {
   index("ca_data").on(t.criadoEm),
 ]);
 
+// Rev. 2965 — Detalhamento granular da avaliação (NPS) do Portal do Cliente.
+// As colunas-resumo (notaGestor/notaEquipe/notaEscritorio/notaFaturamento) seguem
+// fixas em cliente_avaliacoes p/ NÃO quebrar a analytics histórica; este registro
+// guarda os critérios POR PESSOA/TEMA num único JSONB (gestor, encarregado, equipe
+// direta, escritório central) — 1 linha por avaliação. Tabela NOVA (CREATE TABLE
+// IF NOT EXISTS no self-heal), ZERO ALTER em cliente_avaliacoes.
+export const clienteAvaliacaoDetalhes = pgTable("cliente_avaliacao_detalhes", {
+  id: serial().primaryKey(),
+  avaliacaoId: integer("avaliacao_id").notNull().references(() => clienteAvaliacoes.id, { onDelete: "cascade" }),
+  companyId: integer("company_id").notNull(),
+  dados: jsonb("dados"),
+  criadoEm: timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("cad_aval").on(t.avaliacaoId),
+  index("cad_company").on(t.companyId),
+]);
+
 // Rev. 1569 — Configuração do Portal do Cliente por empresa
 // (periodicidade da avaliação anônima: mensal | anual)
 export const portalClienteConfig = pgTable("portal_cliente_config", {
