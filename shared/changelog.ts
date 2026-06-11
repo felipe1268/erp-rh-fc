@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2964 — **PORTAL DO CLIENTE → ADMINISTRAÇÃO → AVALIAÇÕES (NPS) → "LINK DE AVALIAÇÃO (SEM
+ * LOGIN)" — O COMBO DE OBRA AGORA LISTA APENAS AS OBRAS EM ANDAMENTO (ANTES MOSTRAVA TODAS,
+ * INCLUSIVE CONCLUÍDAS — EX.: "PÓS OBRA", "REFORMA ESCRITÓRIO", "ESCRITÓRIO CENTRAL").**
+ *
+ * REPORTADO (usuário, print da tela `/clientes/portal` → aba Avaliações (NPS)): o dropdown
+ * "Avaliação geral (sem obra)" usado para travar o link público de NPS numa obra específica
+ * trazia a lista COMPLETA de obras da empresa, misturando obras já concluídas e itens internos
+ * com as obras realmente em andamento. Pedido: "aqui só deve aparecer as obras que estão em
+ * andamento, arruma isso de vez".
+ *
+ * CAUSA-RAIZ: o `<select>` em `client/src/pages/ClientesPortalAdmin.tsx` (~L585) mapeava
+ * `obrasEmpresa.data` (`portalExterno.admin.obrasDaEmpresaAdmin`) SEM filtrar por status. A
+ * procedure já devolve `status` por obra; no Neon os valores são `Em_Andamento` (19) e
+ * `Concluida` (10).
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE): o `.map` do select ganhou um `.filter` que só
+ * mantém obras cujo `status` normaliza para `em_andamento` (`trim().toLowerCase().replace(/[\s_-]+/g,'_')`
+ * — tolerante a variações de caixa/separador). A opção "Avaliação geral (sem obra)" e o resto
+ * do fluxo (gerar link, vincular à obra) seguem intactos. Filtro aplicado SÓ neste combo (único
+ * consumidor da procedure), sem mexer no backend nem em outras telas.
+ *
  * Rev. 2963 — **CONTROLE DE EPIs → NOVA TRANSFERÊNCIA — TELA UNIFICADA PARA TODOS OS USUÁRIOS
  * (FIM DAS "DUAS TELAS DIFERENTES") + INDICADOR DE ESTOQUE DISPONÍVEL NA ORIGEM PARA A
  * TRANSFERÊNCIA "FUNCIONAR DE VERDADE".**

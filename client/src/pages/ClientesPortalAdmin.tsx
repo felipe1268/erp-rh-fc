@@ -582,9 +582,11 @@ export default function ClientesPortalAdmin() {
                   title="Obra à qual o link será vinculado"
                 >
                   <option value="">Avaliação geral (sem obra)</option>
-                  {(obrasEmpresa.data ?? []).map((o: any) => (
-                    <option key={o.id} value={o.id}>{o.nome}</option>
-                  ))}
+                  {(obrasEmpresa.data ?? [])
+                    .filter((o: any) => String(o.status ?? "").trim().toLowerCase().replace(/[\s_-]+/g, "_") === "em_andamento")
+                    .map((o: any) => (
+                      <option key={o.id} value={o.id}>{o.nome}</option>
+                    ))}
                 </select>
                 <Button
                   onClick={() => companyId && gerarLinkAvalMut.mutate({ companyId, obraId: linkObraId === "" ? null : linkObraId })}
