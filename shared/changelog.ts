@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2966 — **AVISO PRÉVIO TRABALHADO (DO EMPREGADOR) — O DOCUMENTO VOLTA A SAIR COM A
+ * SEÇÃO DE OPÇÃO DE REDUÇÃO DO ART. 488 CLT (2 HORAS DIÁRIAS OU 7 DIAS CORRIDOS), QUE TINHA
+ * SUMIDO QUANDO A EMPRESA PASSOU A USAR TEMPLATE VIGENTE DA CENTRAL DE DOCUMENTOS.**
+ *
+ * REPORTADO (usuário, print do "AVISO PRÉVIO TRABALHADO — ERIC GUSTAVO DE SOUZA"): o
+ * documento gerado não traz mais o bloco onde o colaborador escolhe a forma de cumprimento
+ * — "[ ] Redução de 2 horas diárias" ou "[ ] Falta de 7 dias corridos".
+ *
+ * CAUSA-RAIZ: `gerarDocumentoCore` em `client/src/pages/AvisoPrevio.tsx` tem DOIS caminhos.
+ * Quando NÃO há template aprovado, cai no HTML hard-coded (que SEMPRE teve a seção
+ * `.opcoes` com as 2 opções de redução em branco). Quando HÁ um template Vigente (Central
+ * de Documentos ISO → "aviso_previo"), o documento é montado via `renderTemplate(...) +
+ * buildFcDocument(...)` e renderiza APENAS o corpo do template — e o template institucional
+ * não contém a seção de redução. Como a empresa adotou o template Vigente (cabeçalho FC,
+ * "ASSUNTO:", assinatura "Ciente — Empregado(a)"), a seção de opção de redução parou de sair.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE): no caminho do template Vigente, quando o
+ * aviso é TRABALHADO do empregador (`isTrabalhado && !isPedidoDemissao`), montamos
+ * `reducaoOpcoesHtml` — bloco com as DUAS opções EM BRANCO (escolha do colaborador, conforme
+ * regra de 14/05/2026: "preciso ter a opção de apenas gerar o documento, sem preencher se
+ * será com redução de 2hs ou de 7 dias"), com as datas já calculadas (`dt2hOpcao` /
+ * `dt7DiasUltimoTrab`) — e ANEXAMOS ao `corpoHtml` (`renderTemplate(...) + reducaoOpcoesHtml`).
+ * Inline styles em TODOS os elementos (REGRA DE OURO — `buildFcDocument`/DOMPurify podem
+ * descartar `<style>`/classes externas). Indenizado e PEDIDO DE DEMISSÃO continuam SEM a
+ * seção (Art. 488 é exclusivo da dispensa pelo empregador). O fallback hard-coded fica intacto.
+ *
+ * ARQUIVOS: `client/src/pages/AvisoPrevio.tsx` (`gerarDocumentoCore`, caminho Vigente ~L603-635).
+ *
  * Rev. 2965 — **PORTAL DO CLIENTE → PESQUISA DE SATISFAÇÃO (NPS) — FORMULÁRIO PÚBLICO
  * REFORMULADO: GESTOR AUTO-PREENCHIDO PELO RESPONSÁVEL DA OBRA; AVALIAÇÃO GRANULAR DE GESTOR,
  * ENCARREGADO, EQUIPE DIRETA E ESCRITÓRIO CENTRAL POR CRITÉRIOS (0-10), TELA RÁPIDA/INTERATIVA.**

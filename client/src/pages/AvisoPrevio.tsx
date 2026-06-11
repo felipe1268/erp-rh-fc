@@ -598,6 +598,21 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
     if (avisoVigenteHtml) {
       const escV = (s: any) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" } as any)[c]);
       const modalidade = isIndenizado ? "INDENIZADO" : "TRABALHADO";
+      // Rev. 2966 — Aviso Prévio TRABALHADO do empregador (não pedido de demissão):
+      // o template Vigente (Central de Documentos) NÃO carrega a seção de opção de
+      // redução do Art. 488 CLT (2h/dia OU 7 dias corridos), então o documento saía
+      // sem o bloco de escolha. Anexamos ao corpoHtml (ambas as opções EM BRANCO —
+      // escolha do colaborador, conforme regra de 14/05/2026), espelhando o fallback
+      // hard-coded. Inline styles (REGRA DE OURO: DOMPurify/buildFcDocument). Indenizado
+      // e pedido de demissão não têm redução (Art. 488 é exclusivo da dispensa pelo empregador).
+      const reducaoOpcoesHtml = (isTrabalhado && !isPedidoDemissao)
+        ? `<div style="border-top:1px solid #6b7280;margin:28px 0 16px 0"></div>
+<p style="margin:0 0 8px 0">Declaro-me ciente, exercendo a opção por:</p>
+<p style="margin:8px 0"><span style="display:inline-block;width:13px;height:13px;border:1px solid #1a1a1a;vertical-align:middle;margin-right:8px"></span>Redução de 2 (duas) horas diárias, (${fmtBR(dt2hOpcao)}).</p>
+<p style="margin:8px 0"><span style="display:inline-block;width:13px;height:13px;border:1px solid #1a1a1a;vertical-align:middle;margin-right:8px"></span>Falta de 7 (sete) dias corridos, (${fmtBR(dt7DiasUltimoTrab)}).</p>
+<p style="margin:8px 0">Em ambas as opções, não haverá redução do meu salário.</p>
+<p style="margin:8px 0">Declaro ter recebido da empresa uma das vias deste aviso.</p>`
+        : "";
       const dados: Record<string, string> = {
         empNome: escV(empNome), empCpf: escV(formatCPF(empCpf)),
         empCtps: escV(empCtps + (empSerie ? ` / ${empSerie}` : "")),
@@ -614,7 +629,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
         numero: "—",
         dataEmissao: fmtBR(dtAviso),
         assunto: { label: "ASSUNTO:", valor: `Aviso Prévio ${modalidade} — ${empNome}` },
-        corpoHtml: renderTemplate(avisoVigenteHtml, dados),
+        corpoHtml: renderTemplate(avisoVigenteHtml, dados) + reducaoOpcoesHtml,
         assinaturas: {
           partes: [
             { nome: empresaNome, subtitulo: empresaCnpj ? `CNPJ: ${empresaCnpj}` : undefined },
