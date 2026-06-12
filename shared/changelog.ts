@@ -25,14 +25,16 @@
  * documento único; nada fica congelado. A lógica de filtro por card (clique
  * destaca o card e filtra `tabelaEstoqueList`, Rev. 2780) permanece intacta.
  *
- * NOTA (diagnóstico paralelo, NÃO alterado nesta revisão): os DOIS cards
- * "QIU 2 - FASE 4" observados no print têm causa de DADOS — a empresa 60002 tem
- * a obra real `90001` (641 un/29 tipos) e ainda 2 linhas de `epi_estoque_obra`
+ * NOTA (correção de DADOS aplicada após confirmação do usuário — NÃO é mudança
+ * de código): os DOIS cards "QIU 2 - FASE 4" do print tinham causa de DADOS — a
+ * empresa 60002 tinha a obra real `90001` e ainda 2 linhas de `epi_estoque_obra`
  * (10 un "Capa de Chuva" + 0 "Óculos") gravadas apontando para a obra `270001`,
- * que pertence a OUTRA empresa (60005). Isso é estoque cross-company mal
- * atribuído; a correção (mover as unidades para a QIU correta) envolve mexer em
- * dado de produção e foi deixada para confirmação do usuário.
- * ARQUIVO: `client/src/pages/Epis.tsx`.
+ * que pertence a OUTRA empresa (60005) = estoque cross-company mal atribuído. Com
+ * o "sim" do usuário, essas 2 linhas (ids 60001 e 90002) foram REATRIBUÍDAS via
+ * `UPDATE epi_estoque_obra SET "obraId"=90001 WHERE "companyId"=60002 AND
+ * "obraId"=270001` (transação no Neon; SEM DELETE/DROP/ALTER); 0 órfãos restantes
+ * em 270001 e as 10 unidades passaram a somar na QIU correta. O card fantasma
+ * deixa de existir. ARQUIVO: `client/src/pages/Epis.tsx`.
  *
  * Rev. 2992 — **LIBERAÇÕES DO PORTAL → SELEÇÃO DE "OBRAS LIBERADAS" AGORA VIVE
  * DENTRO DA TELA "LIBERAÇÕES DO PORTAL — MÓDULOS E ABAS".**
