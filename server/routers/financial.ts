@@ -618,6 +618,9 @@ export const financialRouter = router({
     chequeDataEmissao: z.string().optional(),
     chequeDataBomPara: z.string().optional(),
     fornecedorNome: z.string().optional(),
+    // Rev. 3002 — cliente do título (usado no Contas a Receber).
+    clienteId: z.number().optional(),
+    clienteNome: z.string().optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -701,8 +704,8 @@ export const financialRouter = router({
         parcela_numero, parcela_total, parcela_grupo_id,
         cheque_numero, cheque_banco, cheque_agencia, cheque_conta, cheque_titular,
         cheque_data_emissao, cheque_data_bom_para,
-        criado_por_id, criado_por_nome, fornecedor_nome, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,NOW(),NOW())
+        criado_por_id, criado_por_nome, fornecedor_nome, cliente_id, cliente_nome, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,NOW(),NOW())
        RETURNING id`,
       [
         input.companyId, input.obraId ?? null, input.obraNome ?? null,
@@ -717,6 +720,7 @@ export const financialRouter = router({
         input.chequeDataEmissao ?? null, input.chequeDataBomPara ?? null,
         ctx.user?.id ?? null, ctx.user?.name ?? null,
         input.fornecedorNome?.trim() || null,
+        input.clienteId ?? null, input.clienteNome?.trim() || null,
       ]
     );
     const id = rows(res)[0]?.id;
@@ -1973,10 +1977,10 @@ export const financialRouter = router({
         `INSERT INTO financial_entries
          (company_id, obra_id, obra_nome, conta_nome, tipo, natureza,
           valor_previsto, data_competencia, data_vencimento, status,
-          origem_modulo, origem_id, origem_descricao, descricao, created_at, updated_at)
+          origem_modulo, origem_id, origem_descricao, descricao, cliente_nome, created_at, updated_at)
          VALUES ($1,$2,$3,'Faturamento de Obras','receita','variavel',
                  $4, $5::date, $6::date, 'a_receber',
-                 'revenue', $7, $8, $9, NOW(), NOW())`,
+                 'revenue', $7, $8, $9, $10, NOW(), NOW())`,
         [
           input.companyId, input.obraId, obraInfo,
           vlq > 0 ? vlq : input.valorMedicao,
@@ -1985,6 +1989,7 @@ export const financialRouter = router({
           id,
           `Medição${medicaoInfo} — ${obraInfo}${clienteInfo}`,
           `Faturamento${medicaoInfo}: ${obraInfo}`,
+          input.clienteNome?.trim() || null,
         ]
       );
     }
@@ -3388,6 +3393,225 @@ export const financialRouter = router({
       vals
     );
     return rows(res);
+  }),
+
+  // ════════════════════════════════════════════════════════════════════════
+  // Rev. 3002 — CONTAS A RECEBER "DE VERDADE" (espelho do Contas a Pagar)
+  // Títulos tipo='receita' em financial_entries: auto das medições (origem
+  // 'revenue') + manuais avulsos, com parcelas, baixa total/parcial por cliente.
+  // ════════════════════════════════════════════════════════════════════════
+
+  // Lista TODOS os títulos a receber do ano (espelha getContasAPagarByYear).
+  getContasAReceberByYear: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    companyIds: z.array(z.number()).optional(),
+    ano: z.number(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const ids = resolveCompanyIds(input);
+    for (const cid of ids) await _assertFinanceiroCompanyAccess(ctx.user, cid);
+    const res = await dbExecute(db,
+      `SELECT id, obra_id AS "obraId", obra_nome AS "obraNome", descricao,
+              conta_id AS "contaId", conta_nome AS "contaNome",
+              cliente_id AS "clienteId", cliente_nome AS "clienteNome",
+              valor_previsto AS "valorPrevisto",
+              valor_realizado AS "valorRealizado", status,
+              data_vencimento AS "dataVencimento", data_pagamento AS "dataPagamento",
+              data_competencia AS "dataCompetencia",
+              forma_pagamento AS "formaPagamento",
+              origem_modulo AS "origemModulo", origem_id AS "origemId",
+              origem_descricao AS "origemDescricao",
+              parcela_numero AS "parcelaNumero", parcela_total AS "parcelaTotal",
+              parcela_grupo_id AS "parcelaGrupoId",
+              anexo_url AS "anexoUrl", anexo_nome AS "anexoNome",
+              comprovante_url AS "comprovanteUrl",
+              conta_bancaria_id AS "contaBancariaId",
+              observacoes, tipo,
+              CASE WHEN data_vencimento < CURRENT_DATE AND status NOT IN ('recebido','cancelado') THEN CURRENT_DATE - data_vencimento ELSE 0 END AS "diasAtraso"
+       FROM financial_entries
+       WHERE company_id IN (${inlineIds(ids)})
+         AND tipo = 'receita'
+         AND status != 'cancelado'
+         AND EXTRACT(year FROM COALESCE(data_vencimento::date, created_at::date)) = $1
+       ORDER BY data_vencimento ASC NULLS LAST`,
+      [input.ano]
+    );
+    return rows(res);
+  }),
+
+  // Cria título manual a receber. Com `parcelas` > 1 gera N linhas ligadas por
+  // parcela_grupo_id, vencimentos mensais, valor distribuído (resto na última).
+  criarTituloReceber: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    obraId: z.number().nullable().optional(),
+    obraNome: z.string().optional(),
+    contaId: z.number().nullable().optional(),
+    contaNome: z.string().optional(),
+    clienteId: z.number().nullable().optional(),
+    clienteNome: z.string().optional(),
+    descricao: z.string().min(1, "Informe a descrição do título."),
+    valorPrevisto: z.number().positive("Valor deve ser maior que zero."),
+    dataCompetencia: z.string().optional(),
+    dataVencimento: z.string().optional(),
+    parcelas: z.number().int().min(1).max(120).default(1),
+    natureza: z.string().default("variavel"),
+    observacoes: z.string().optional(),
+    anexoUrl: z.string().optional(),
+    anexoNome: z.string().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const n = Math.max(1, input.parcelas ?? 1);
+    const totalCents = Math.round(input.valorPrevisto * 100);
+    const baseCents = Math.floor(totalCents / n);
+    const restoCents = totalCents - baseCents * (n - 1); // a última parcela leva o resto
+    const grupoId = n > 1
+      ? `REC-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      : null;
+
+    // Base de vencimento/competência (default: hoje).
+    const hojeStr = new Date().toISOString().slice(0, 10);
+    const vencBase = (input.dataVencimento || hojeStr).slice(0, 10);
+    const compBase = (input.dataCompetencia || vencBase).slice(0, 10);
+    const addMonths = (iso: string, k: number): string => {
+      const [y, m, d] = iso.split("-").map(Number);
+      const base = new Date(Date.UTC(y, (m - 1) + k, 1));
+      const lastDay = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 0)).getUTCDate();
+      const day = Math.min(d, lastDay);
+      const mm = String(base.getUTCMonth() + 1).padStart(2, "0");
+      const dd = String(day).padStart(2, "0");
+      return `${base.getUTCFullYear()}-${mm}-${dd}`;
+    };
+
+    const insertedIds: number[] = [];
+    await db.transaction(async (tx: any) => {
+      for (let k = 0; k < n; k++) {
+        const cents = k === n - 1 ? restoCents : baseCents;
+        const valor = cents / 100;
+        const venc = addMonths(vencBase, k);
+        const comp = addMonths(compBase, k);
+        const sufixo = n > 1 ? ` (${k + 1}/${n})` : "";
+        // dbExecute liga params por ORDEM DE APARIÇÃO — array segue a ordem do texto.
+        const r = await dbExecute(tx,
+          `INSERT INTO financial_entries
+            (company_id, obra_id, obra_nome, conta_id, conta_nome, tipo, natureza,
+             valor_previsto, data_competencia, data_vencimento, status,
+             cliente_id, cliente_nome, descricao, observacoes,
+             parcela_numero, parcela_total, parcela_grupo_id,
+             anexo_url, anexo_nome, origem_modulo,
+             criado_por_id, criado_por_nome, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, 'receita', $6,
+             $7, $8::date, $9::date, 'a_receber',
+             $10, $11, $12, $13,
+             $14, $15, $16,
+             $17, $18, 'manual_receber',
+             $19, $20, NOW(), NOW())
+           RETURNING id`,
+          [
+            input.companyId, input.obraId ?? null, input.obraNome?.trim() || null,
+            input.contaId ?? null, input.contaNome?.trim() || null, input.natureza || "variavel",
+            valor, comp, venc,
+            input.clienteId ?? null, input.clienteNome?.trim() || null,
+            (input.descricao || "").trim() + sufixo, input.observacoes?.trim() || null,
+            n > 1 ? k + 1 : null, n > 1 ? n : null, grupoId,
+            k === 0 ? (input.anexoUrl || null) : null, k === 0 ? (input.anexoNome || null) : null,
+            ctx.user?.id ?? null, ctx.user?.name ?? null,
+          ]
+        );
+        const id = rows(r)[0]?.id;
+        if (id) insertedIds.push(Number(id));
+      }
+    });
+    await createAuditLog({
+      action: "financial_receivable_created",
+      userId: ctx.user?.id, companyId: input.companyId,
+      details: `Título a receber R$${input.valorPrevisto} em ${n}x — "${input.descricao}"${input.clienteNome ? " — " + input.clienteNome : ""}`,
+    });
+    return { ok: true, ids: insertedIds };
+  }),
+
+  // Baixa (recebimento) total ou parcial de um título. Acumula valor_realizado;
+  // se >= valor_previsto → 'recebido' (+data_pagamento), senão 'recebido_parcial'.
+  darBaixaReceber: protectedProcedure.input(z.object({
+    id: z.number(),
+    companyId: z.number(),
+    valorRecebido: z.number().positive("Informe o valor recebido."),
+    dataRecebimento: z.string().optional(),
+    contaBancariaId: z.number().nullable().optional(),
+    formaPagamento: z.string().optional(),
+    comprovanteUrl: z.string().optional(),
+    observacoes: z.string().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const [entry]: any = await dbExecute(db,
+      `SELECT id, valor_previsto, valor_realizado, status
+       FROM financial_entries WHERE id=$1 AND company_id=$2 AND tipo='receita'`,
+      [input.id, input.companyId]
+    ).then((r: any) => (Array.isArray(r) ? r : r?.rows ?? []));
+    if (!entry) throw new TRPCError({ code: "NOT_FOUND", message: "Título a receber não encontrado." });
+    if (entry.status === "recebido") {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Título já recebido integralmente — estorne antes de nova baixa." });
+    }
+    const previsto = Number(entry.valor_previsto ?? 0);
+    const jaRecebido = Number(entry.valor_realizado ?? 0);
+    const acumulado = Math.round((jaRecebido + input.valorRecebido) * 100) / 100;
+    const quitado = acumulado + 0.005 >= previsto;
+    const dataRec = (input.dataRecebimento || new Date().toISOString().slice(0, 10)).slice(0, 10);
+    // dbExecute liga params por ORDEM DE APARIÇÃO — array segue a ordem do texto.
+    await dbExecute(db,
+      `UPDATE financial_entries
+       SET valor_realizado=$1,
+           status=$2,
+           data_pagamento=$3,
+           conta_bancaria_id=COALESCE($4, conta_bancaria_id),
+           forma_pagamento=COALESCE($5, forma_pagamento),
+           comprovante_url=COALESCE($6, comprovante_url),
+           observacoes=COALESCE($7, observacoes),
+           updated_at=NOW()
+       WHERE id=$8 AND company_id=$9 AND tipo='receita'`,
+      [acumulado, quitado ? "recebido" : "recebido_parcial", quitado ? dataRec : null,
+       input.contaBancariaId ?? null, input.formaPagamento ?? null,
+       input.comprovanteUrl ?? null, input.observacoes ?? null,
+       input.id, input.companyId]
+    );
+    await createAuditLog({
+      action: "financial_receivable_paid",
+      userId: ctx.user?.id, companyId: input.companyId,
+      details: `Baixa ${quitado ? "TOTAL" : "PARCIAL"} título ${input.id}: +R$${input.valorRecebido} (acum. R$${acumulado}/${previsto})`,
+    });
+    return { ok: true, quitado, acumulado, saldo: Math.max(0, Math.round((previsto - acumulado) * 100) / 100) };
+  }),
+
+  // Estorna a baixa: volta para 'a_receber', zera valor_realizado e data_pagamento.
+  estornarReceber: protectedProcedure.input(z.object({
+    id: z.number(),
+    companyId: z.number(),
+    motivo: z.string().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const [entry]: any = await dbExecute(db,
+      `SELECT id, status FROM financial_entries WHERE id=$1 AND company_id=$2 AND tipo='receita'`,
+      [input.id, input.companyId]
+    ).then((r: any) => (Array.isArray(r) ? r : r?.rows ?? []));
+    if (!entry) throw new TRPCError({ code: "NOT_FOUND", message: "Título a receber não encontrado." });
+    await dbExecute(db,
+      `UPDATE financial_entries
+       SET status='a_receber', valor_realizado=NULL, data_pagamento=NULL, updated_at=NOW()
+       WHERE id=$1 AND company_id=$2 AND tipo='receita'`,
+      [input.id, input.companyId]
+    );
+    await createAuditLog({
+      action: "financial_receivable_reversed",
+      userId: ctx.user?.id, companyId: input.companyId,
+      details: `Estorno recebimento título ${input.id}${input.motivo ? " — motivo: " + input.motivo : ""}`,
+    });
+    return { ok: true };
   }),
 
   getContasAPagar: protectedProcedure.input(z.object({

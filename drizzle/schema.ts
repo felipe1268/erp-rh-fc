@@ -6890,6 +6890,9 @@ export const financialEntries = pgTable("financial_entries", {
   aprovadoPorNome: varchar("aprovado_por_nome", { length: 255 }),
   vehicleId: integer("vehicle_id"),
   fornecedorNome: varchar("fornecedor_nome", { length: 255 }),
+  // Rev. 3002 — Contas a Receber "de verdade": cliente do título (manual ou herdado da obra/medição).
+  clienteId: integer("cliente_id"),
+  clienteNome: varchar("cliente_nome", { length: 255 }),
   anexoUrl: text("anexo_url"),
   anexoNome: varchar("anexo_nome", { length: 255 }),
   editadoPorId: integer("editado_por_id"),

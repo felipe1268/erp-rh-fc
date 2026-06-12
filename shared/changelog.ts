@@ -1,6 +1,59 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3002 — **FINANCEIRO → "CONTAS A RECEBER DE VERDADE" (NOS MOLDES DO CONTAS A
+ * PAGAR): NOVA TELA DEDICADA COM TÍTULOS A RECEBER POR CLIENTE, ORIGEM AUTOMÁTICA
+ * (MEDIÇÕES) + LANÇAMENTO MANUAL, PARCELAS E BAIXA TOTAL/PARCIAL.**
+ *
+ * PEDIDO (usuário): o "Contas a Receber" antigo só mostrava a PREVISÃO de
+ * faturamento das medições (renomeado p/ "Previsão de Faturamento" na Rev. 2997).
+ * Faltava o Contas a Receber DE VERDADE — espelho do Contas a Pagar — com títulos,
+ * baixa (recebimento) total/parcial, parcelas e visão por CLIENTE. Confirmado pelo
+ * usuário: AMBAS as origens (auto das medições + manual avulso), SIM parcelas/baixa
+ * parcial, SIM agrupamento por cliente, tudo numa REVISÃO ÚNICA.
+ *
+ * SOLUÇÃO (full-stack ADITIVO — ZERO ALTER destrutivo/DROP/DELETE; mantém intacta a
+ * tela "Previsão de Faturamento" em `/financeiro/contas-a-receber`):
+ *
+ * 1) SCHEMA (aditivo): 2 colunas novas em `financial_entries` —
+ *    `cliente_id INTEGER` + `cliente_nome VARCHAR(255)` (nullable). Adicionadas no
+ *    drizzle (`drizzle/schema.ts`, tabela `financialEntries`) E com guard explícito
+ *    `[SyncSchema+]` Rev. 3002 em `server/_core/index.ts` (`ADD COLUMN IF NOT
+ *    EXISTS`), padrão consolidado do projeto p/ colunas de `financial_entries` (o
+ *    auto-derive do syncSchema não cobriu sozinho — confirmado no Neon que as
+ *    colunas só apareceram após o guard explícito).
+ *
+ * 2) BACKEND (`server/routers/financial.ts`): herança de cliente no automático —
+ *    `createRevenue` agora grava `cliente_nome` no espelho `financial_entries` da
+ *    medição. 4 procedures NOVAS (todas com tenant guard + `dbExecute` ligando
+ *    params por ORDEM DE APARIÇÃO):
+ *    • `getContasAReceberByYear` — lista todos os títulos `tipo='receita'` do ano
+ *      (exceto cancelados), com cliente/parcelas/dias de atraso;
+ *    • `criarTituloReceber` — título manual; com `parcelas`>1 gera N linhas dentro
+ *      de `db.transaction`, ligadas por `parcela_grupo_id`, vencimentos mensais
+ *      (helper `addMonths` com clamp de fim-de-mês), valor distribuído em centavos
+ *      (resto na última), `origem_modulo='manual_receber'`;
+ *    • `darBaixaReceber` — recebimento total/parcial: acumula `valor_realizado`;
+ *      se acumulado ≥ previsto → status `'recebido'` (+`data_pagamento`), senão
+ *      `'recebido_parcial'` (saldo em aberto); grava conta bancária/forma/comprovante;
+ *    • `estornarReceber` — volta p/ `'a_receber'`, zera `valor_realizado`/`data_pagamento`.
+ *
+ * 3) FRONTEND: nova página `client/src/pages/financeiro/FinanceiroContasAReceberTitulos.tsx`
+ *    (espelha o Contas a Pagar) — KPIs (a receber/recebido/parcial/vencidos),
+ *    navegação por ano, filtro por cliente/status/busca, lista AGRUPADA POR CLIENTE
+ *    (colapsável), modal de baixa parcial (com upload de comprovante via
+ *    `uploadComprovante`), modal de novo título com parcelas, modal de anexo
+ *    (`anexarDocumento`), estorno e exclusão (manual + `a_receber`, via `deleteEntry`).
+ *    REGISTRO: nova feature `financeiro-contas-receber-titulos` →
+ *    `/financeiro/contas-a-receber-titulos` em `shared/modules.ts`, lazy import +
+ *    `<Route>` em `client/src/App.tsx`, item "Contas a Receber" (ícone HandCoins) na
+ *    sidebar `DashboardLayout.tsx` (bloco Movimentações).
+ *
+ * ARQUIVOS: `drizzle/schema.ts`, `server/_core/index.ts`,
+ * `server/routers/financial.ts`, `client/src/pages/financeiro/FinanceiroContasAReceberTitulos.tsx`,
+ * `shared/modules.ts`, `client/src/App.tsx`, `client/src/components/DashboardLayout.tsx`.
+ * Requer REPUBLICAR.
+ *
  * Rev. 3001 — **PESQUISA DE SATISFAÇÃO (NPS) → ENVIAR AVALIAÇÃO PELO LINK PÚBLICO
  * DAVA "THE STRING DID NOT MATCH THE EXPECTED PATTERN" NO iPad/iPhone (SAFARI) E A
  * AVALIAÇÃO NÃO ERA REGISTRADA. CAUSA-RAIZ: iOS/WebKit DERRUBA A REQUISIÇÃO NO

@@ -39,7 +39,7 @@ import {
   Home, Tag, GripVertical, Network, ScanFace, PackageCheck, PenLine, ChevronLeft,
   Camera, Blocks, CheckSquare, FileCheck2, Milestone, Fuel,
   UserMinus, Search, X, GraduationCap, Sparkles, HeartPulse, Award,
-  RefreshCw,
+  RefreshCw, HandCoins,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -484,6 +484,7 @@ const menuSectionsFinanceiro: MenuSection[] = [
     items: [
       { icon: DollarSign,    label: "Lançamentos",       path: "/financeiro/lancamentos" },
       { icon: TrendingUp,    label: "Previsão de Faturamento",   path: "/financeiro/contas-a-receber" },
+      { icon: HandCoins,     label: "Contas a Receber",   path: "/financeiro/contas-a-receber-titulos" },
       { icon: CheckCircle,   label: "Contas a Pagar",     path: "/financeiro/contas-a-pagar" },
     ],
   },
