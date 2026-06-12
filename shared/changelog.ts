@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2976 — **PORTAL DO CLIENTE → PESQUISA DE SATISFAÇÃO (NPS) PÚBLICA/INTERNA — TODAS AS
+ * PERGUNTAS DE NOTA (0–10) + A RECOMENDAÇÃO PASSAM A SER OBRIGATÓRIAS ANTES DE ENVIAR A
+ * AVALIAÇÃO.**
+ *
+ * PEDIDO (usuário): "precisa garantir que todas perguntas [es]tão preenchidas antes de enviar
+ * a avaliação". Antes, o único gate era `notaGeralAuto !== null` (bastava responder ALGUNS
+ * itens p/ a nota geral ser calculável) — o cliente podia enviar com blocos inteiros em branco.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, `client/src/pages/portal/PortalDashboardCliente.tsx`):
+ * no `enviarAvaliacao`, antes do `mutate`, valida bloco a bloco e aponta o PRIMEIRO pendente via
+ * `toast.error`:
+ * - Gestor / Responsável FC (6 critérios `CRIT_PESSOA` em `detGestor`).
+ * - Encarregado FC na obra (6 critérios `CRIT_PESSOA` em `detEncarregado`).
+ * - Equipe direta FC (6 critérios `CRIT_EQUIPE` em `detEquipe`).
+ * - FC Engenharia / Empresa (`aval.notaEmpresa`).
+ * - Escritório Central / Backoffice (5 critérios `CRIT_ESCRITORIO` em `detEscritorio`).
+ * - Obra / Execução (`aval.notaObra` + `notaPrazo` + `notaQualidade`).
+ * - "Você recomendaria a FC?" (`aval.recomendaria`).
+ * Helper `faltaNoBloco(state, crits)` = `crits.some(c => typeof state[c.key] !== "number")` (pega
+ * tanto `undefined` quanto `null`). COMENTÁRIOS e os NOMES do gestor/encarregado seguem OPCIONAIS.
+ * UX: os 4 blocos de critérios agora rotulam o hint como "Avalie de 0 a 10 cada item (todos
+ * obrigatórios):". Vale p/ link público E portal logado (mesmo handler).
+ *
+ * ARQUIVOS: `client/src/pages/portal/PortalDashboardCliente.tsx`, `shared/version.ts`,
+ * `shared/changelog.ts`, `replit.md`.
+ *
  * Rev. 2975 — **PORTAL DO CLIENTE → ADMINISTRAÇÃO → AVALIAÇÕES (NPS) → "LINK DE AVALIAÇÃO
  * (SEM LOGIN)" → CAMPO "QTD. DE LINKS" — AGORA DÁ PRA APAGAR O CAMPO E DIGITAR OUTRO NÚMERO
  * (ANTES O "1" VOLTAVA SOZINHO NA HORA, IMPEDINDO A EDIÇÃO).**

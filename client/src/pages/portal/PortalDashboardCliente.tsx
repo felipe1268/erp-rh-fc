@@ -345,6 +345,18 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
     },
   });
   const enviarAvaliacao = () => {
+    // Rev. 2976 — TODAS as perguntas de NOTA (0–10) + a recomendação passam a ser
+    // OBRIGATÓRIAS antes de enviar. Comentários e os nomes do gestor/encarregado
+    // seguem opcionais. Valida bloco a bloco e aponta o primeiro pendente.
+    const faltaNoBloco = (state: Record<string, number | null>, crits: { key: string }[]) =>
+      crits.some((c) => typeof state[c.key] !== "number");
+    if (faltaNoBloco(detGestor, CRIT_PESSOA)) { toast.error('Avalie todos os itens do bloco "Gestor / Responsável FC pela obra" (0 a 10).'); return; }
+    if (faltaNoBloco(detEncarregado, CRIT_PESSOA)) { toast.error('Avalie todos os itens do bloco "Encarregado FC na obra" (0 a 10).'); return; }
+    if (faltaNoBloco(detEquipe, CRIT_EQUIPE)) { toast.error('Avalie todos os itens do bloco "Equipe direta FC na obra" (0 a 10).'); return; }
+    if (typeof aval.notaEmpresa !== "number") { toast.error('Avalie a "FC Engenharia (Empresa)" (0 a 10).'); return; }
+    if (faltaNoBloco(detEscritorio, CRIT_ESCRITORIO)) { toast.error('Avalie todos os itens do bloco "Escritório Central / Backoffice" (0 a 10).'); return; }
+    if (typeof aval.notaObra !== "number" || typeof aval.notaPrazo !== "number" || typeof aval.notaQualidade !== "number") { toast.error('Avalie todos os itens do bloco "Obra / Execução" (0 a 10).'); return; }
+    if (typeof aval.recomendaria !== "number") { toast.error('Responda "Você recomendaria a FC para outras empresas?".'); return; }
     if (notaGeralAuto === null) { toast.error("Responda pelo menos alguns itens para calcular a nota geral"); return; }
     // Rev. 1595 — valida obrigatórias das perguntas extras
     for (const p of perguntasExtras) {
@@ -726,7 +738,7 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                     )}
                   </div>
                   <div className="pt-1">
-                    <p className="text-xs text-slate-500 mb-1.5">Avalie de 0 a 10 cada item:</p>
+                    <p className="text-xs text-slate-500 mb-1.5">Avalie de 0 a 10 cada item (todos obrigatórios):</p>
                     {CRIT_PESSOA.map((c) => (
                       <CriterioRow key={c.key} label={c.label} value={detGestor[c.key]}
                         onChange={(n) => setDetGestor((prev) => ({ ...prev, [c.key]: n }))} />
@@ -760,7 +772,7 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                     )}
                   </div>
                   <div className="pt-1">
-                    <p className="text-xs text-slate-500 mb-1.5">Avalie de 0 a 10 cada item:</p>
+                    <p className="text-xs text-slate-500 mb-1.5">Avalie de 0 a 10 cada item (todos obrigatórios):</p>
                     {CRIT_PESSOA.map((c) => (
                       <CriterioRow key={c.key} label={c.label} value={detEncarregado[c.key]}
                         onChange={(n) => setDetEncarregado((prev) => ({ ...prev, [c.key]: n }))} />
@@ -775,7 +787,7 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                     <h3 className="font-semibold text-slate-800 text-sm">Equipe direta FC na obra</h3>
                   </div>
                   <div className="pt-1">
-                    <p className="text-xs text-slate-500 mb-1.5">Avalie de 0 a 10 cada item:</p>
+                    <p className="text-xs text-slate-500 mb-1.5">Avalie de 0 a 10 cada item (todos obrigatórios):</p>
                     {CRIT_EQUIPE.map((c) => (
                       <CriterioRow key={c.key} label={c.label} value={detEquipe[c.key]}
                         onChange={(n) => setDetEquipe((prev) => ({ ...prev, [c.key]: n }))} />
@@ -813,7 +825,7 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                     <h3 className="font-semibold text-slate-800 text-sm">Escritório Central / Backoffice</h3>
                   </div>
                   <div className="pt-1">
-                    <p className="text-xs text-slate-500 mb-1.5">Avalie de 0 a 10 cada item:</p>
+                    <p className="text-xs text-slate-500 mb-1.5">Avalie de 0 a 10 cada item (todos obrigatórios):</p>
                     {CRIT_ESCRITORIO.map((c) => (
                       <CriterioRow key={c.key} label={c.label} value={detEscritorio[c.key]}
                         onChange={(n) => setDetEscritorio((prev) => ({ ...prev, [c.key]: n }))} />
