@@ -562,7 +562,7 @@ export default function FinanceiroDashboard() {
             { href: "/financeiro/dre", label: "DRE", icon: BarChart2, color: "text-indigo-600", bg: "bg-indigo-50" },
             { href: "/financeiro/fluxo-de-caixa", label: "Fluxo de Caixa", icon: TrendingUp, color: "text-green-600", bg: "bg-green-50" },
             { href: "/financeiro/contas-a-pagar", label: "Contas a Pagar", icon: Wallet, color: "text-orange-600", bg: "bg-orange-50" },
-            { href: "/financeiro/contas-a-receber", label: "Contas a Receber", icon: Banknote, color: "text-emerald-600", bg: "bg-emerald-50" },
+            { href: "/financeiro/contas-a-receber", label: "Previsão de Faturamento", icon: Banknote, color: "text-emerald-600", bg: "bg-emerald-50" },
             { href: "/financeiro/conciliacao", label: "Conciliação", icon: CheckCircle, color: "text-teal-600", bg: "bg-teal-50" },
           ].map((item) => {
             const Icon = item.icon;

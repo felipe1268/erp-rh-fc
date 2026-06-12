@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2997 — **FINANCEIRO: ABA "CONTAS A RECEBER" RENOMEADA PARA "PREVISÃO DE
+ * FATURAMENTO" (A TELA ATUAL SÓ MOSTRA A PREVISÃO DAS MEDIÇÕES; O "CONTAS A RECEBER"
+ * DE VERDADE — NOS MOLDES DO "CONTAS A PAGAR" — VIRÁ NA PRÓXIMA REVISÃO).**
+ *
+ * PEDIDO (usuário): "Preciso que mude o nome da aba Contas a Receber e chame de
+ * Previsão de Faturamento, pq nesta aba só temos a previsão das medições. O Contas a
+ * Receber deve ser parecido com o Contas a Pagar, que iremos criar na próxima revisão."
+ * A tela hoje em `/financeiro/contas-a-receber` exibe a matriz mensal de previsão de
+ * recebimento por avanço físico/medições — ou seja, é uma PREVISÃO DE FATURAMENTO, não
+ * um contas-a-receber operacional (com baixa/recebimento real como o Contas a Pagar).
+ * O rótulo "Contas a Receber" induzia o usuário ao erro.
+ *
+ * SOLUÇÃO (FRONT/label-only, ZERO ALTER/DROP/DELETE, ZERO backend/schema, ROTA E
+ * CHAVES DE PERMISSÃO INALTERADAS): renomeado APENAS o texto exibido ("Contas a
+ * Receber" → "Previsão de Faturamento") em 4 pontos visíveis: (1) submenu do módulo em
+ * `shared/modules.ts` (feature `financeiro-contas-receber` — `key` e `route`
+ * preservados para não quebrar as liberações/permissões já gravadas); (2) sidebar em
+ * `client/src/components/DashboardLayout.tsx` (grupo "Movimentações"); (3) atalho rápido
+ * do `client/src/pages/financeiro/FinanceiroDashboard.tsx`; (4) `<h1>` da página
+ * `client/src/pages/financeiro/FinanceiroContasAReceber.tsx`. Mantida a rota
+ * `/financeiro/contas-a-receber`, o componente e toda a lógica (matriz/contrato×
+ * cronograma) intactos. Requer REPUBLICAR. ARQUIVOS: `shared/modules.ts`,
+ * `client/src/components/DashboardLayout.tsx`, `client/src/pages/financeiro/FinanceiroDashboard.tsx`,
+ * `client/src/pages/financeiro/FinanceiroContasAReceber.tsx`. FOLLOW-UP: criar o
+ * verdadeiro "Contas a Receber" (com recebimento/baixa), espelhando o "Contas a Pagar".
+ *
  * Rev. 2996 — **FROTAS → VEÍCULOS: NOVO CAMPO "CATEGORIA" (FINALIDADE DE USO) PARA
  * SEPARAR OS CARROS EM GRUPOS — "CARRO DOS SÓCIOS", "OPERAÇÃO", "LOCAÇÃO" — COM
  * FILTRO PRÓPRIO NA TELA, INDEPENDENTE DO "TIPO" (CARRO/CAMINHÃO/MOTO).**

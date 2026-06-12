@@ -313,7 +313,7 @@ export default function FinanceiroContasAReceber() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Contas a Receber</h1>
+            <h1 className="text-xl font-bold text-gray-900">Previsão de Faturamento</h1>
             <p className="text-xs text-gray-400 mt-0.5">
               {viewMode === "contrato" ? "Previsto original do contrato (baseline)" : "Cronograma atualizado conforme avanço"}
               {" · "}atualizado automaticamente

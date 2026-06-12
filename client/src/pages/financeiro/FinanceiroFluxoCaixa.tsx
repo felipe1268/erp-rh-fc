@@ -429,7 +429,7 @@ export default function FinanceiroFluxoCaixa() {
             <AlertCircle className="w-5 h-5 text-rose-500 flex-shrink-0 mt-0.5" />
             <div className="space-y-2">
               <p className="font-semibold">Não foi possível carregar o fluxo de caixa.</p>
-              <p className="text-rose-700/80">Falha ao consultar Contas a Receber e/ou Contas a Pagar.</p>
+              <p className="text-rose-700/80">Falha ao consultar Previsão de Faturamento e/ou Contas a Pagar.</p>
               <Button variant="outline" size="sm" onClick={refetch} className="h-8 text-xs">
                 <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Tentar novamente
               </Button>
@@ -449,7 +449,7 @@ export default function FinanceiroFluxoCaixa() {
           <div>
             <h1 className="text-xl font-bold text-slate-900">Fluxo de Caixa</h1>
             <p className="text-xs text-slate-400 mt-0.5">
-              Espelha Contas a Receber + Contas a Pagar · {ano}
+              Espelha Previsão de Faturamento + Contas a Pagar · {ano}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -563,7 +563,7 @@ export default function FinanceiroFluxoCaixa() {
             <span className="w-2.5 h-2.5 rounded-sm bg-blue-100 border border-blue-300" />
             mês atual destacado
           </span>
-          <span>Receitas = matriz de Contas a Receber</span>
+          <span>Receitas = matriz de Previsão de Faturamento</span>
           <span>Despesas = lançamentos de Contas a Pagar</span>
           <span><strong>Efetivo</strong> = real · <strong>Projeção</strong> = forecast (cronograma/folha)</span>
         </div>

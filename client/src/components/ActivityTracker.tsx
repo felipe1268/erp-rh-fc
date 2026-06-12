@@ -43,7 +43,7 @@ const PAGE_LABELS: Record<string, string> = {
   "/financeiro/lancamentos": "Financeiro Lançamentos",
   "/financeiro/receitas": "Financeiro Receitas",
   "/financeiro/contas-a-pagar": "Financeiro Contas a Pagar",
-  "/financeiro/contas-a-receber": "Financeiro Contas a Receber",
+  "/financeiro/contas-a-receber": "Financeiro Previsão de Faturamento",
   "/financeiro/dre": "Financeiro DRE",
   "/financeiro/fluxo-de-caixa": "Financeiro Fluxo de Caixa",
   "/financeiro/obrigacoes-fiscais": "Financeiro Obrigações Fiscais",

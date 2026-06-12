@@ -483,7 +483,7 @@ const menuSectionsFinanceiro: MenuSection[] = [
     title: "Movimentações",
     items: [
       { icon: DollarSign,    label: "Lançamentos",       path: "/financeiro/lancamentos" },
-      { icon: TrendingUp,    label: "Contas a Receber",   path: "/financeiro/contas-a-receber" },
+      { icon: TrendingUp,    label: "Previsão de Faturamento",   path: "/financeiro/contas-a-receber" },
       { icon: CheckCircle,   label: "Contas a Pagar",     path: "/financeiro/contas-a-pagar" },
     ],
   },

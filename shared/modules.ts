@@ -447,7 +447,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "financeiro-painel",            label: "Painel",               route: "/financeiro",                        icon: "LayoutDashboard" },
       { key: "financeiro-lancamentos",       label: "Lançamentos",          route: "/financeiro/lancamentos",            icon: "Receipt" },
       { key: "financeiro-contas-pagar",      label: "Contas a Pagar",       route: "/financeiro/contas-a-pagar",         icon: "ArrowDownCircle" },
-      { key: "financeiro-contas-receber",    label: "Contas a Receber",     route: "/financeiro/contas-a-receber",       icon: "ArrowUpCircle" },
+      { key: "financeiro-contas-receber",    label: "Previsão de Faturamento", route: "/financeiro/contas-a-receber",       icon: "ArrowUpCircle" },
       { key: "financeiro-dre",               label: "DRE",                  route: "/financeiro/dre",                    icon: "BarChart3" },
       { key: "financeiro-fluxo",             label: "Fluxo de Caixa",       route: "/financeiro/fluxo-de-caixa",         icon: "TrendingUp" },
       { key: "financeiro-plano-contas",      label: "Plano de Contas",      route: "/financeiro/plano-de-contas",        icon: "ListTree" },

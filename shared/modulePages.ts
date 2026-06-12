@@ -353,7 +353,7 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
       { id: "lancamentos",       label: "Lançamentos Financeiros (Dashboard)",   actions: ["view","create","edit","delete"] },
       { id: "receitas",          label: "Receitas de Obras",                     actions: ["view","create","edit","delete"] },
       { id: "contas_pagar",      label: "Contas a Pagar",                        actions: ["view","create","edit","delete"] },
-      { id: "contas_receber",    label: "Contas a Receber",                      actions: ["view","create","edit","delete"] },
+      { id: "contas_receber",    label: "Previsão de Faturamento",               actions: ["view","create","edit","delete"] },
       { id: "cronograma",        label: "Cronograma Financeiro",                 actions: ["view","create","edit","delete"] },
       { id: "fluxo_caixa",       label: "Fluxo de Caixa",                        actions: ["view"] },
       { id: "dre",               label: "DRE (Demonstração de Resultado)",       actions: ["view"] },
