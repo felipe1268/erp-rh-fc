@@ -1,6 +1,56 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2998 — **CONTROLE DE EPIs → "ESTOQUE POR OBRA": AJUSTAR A QUANTIDADE DE UM EPI
+ * "GRUDAVA" O VALOR EM OUTRO (EX.: LUVA NITRÍLICA × LUVA MISTA VINHAM SEMPRE IGUAIS).
+ * CAUSA-RAIZ: A TABELA `epi_estoque_obra` ESTAVA SEM PRIMARY KEY E TINHA ids
+ * DUPLICADOS. CORRIGIDO (DADOS + CÓDIGO + GUARD DE UNICIDADE).**
+ *
+ * PEDIDO (usuário): "Estou tentando arrumar o estoque de EPI, mas alguns itens estão
+ * vinculados a outros — quando arrumo a quantidade da Luva Nitrílica ou da Luva Mista,
+ * o valor fica sempre o mesmo para as duas. Não consigo colocar a quantidade individual
+ * de cada uma; não são todos, mas boa parte. Por quê?"
+ *
+ * CAUSA-RAIZ (dados, não lógica): a tabela `epi_estoque_obra` foi criada SEM PRIMARY
+ * KEY (no `drizzle/schema.ts` o id era `serial()` sem `.primaryKey()`, e em produção
+ * NÃO havia constraint nenhuma — `information_schema.table_constraints` = vazio). Em
+ * algum restore/migração a SEQUENCE `epi_estoque_obra_id_seq` foi reabastecida do zero
+ * e gerou os ids 1..16 NOVAMENTE, colidindo com linhas antigas que já tinham esses ids.
+ * Resultado: 13 grupos de id duplicado (104 linhas, só 91 ids distintos). Ex.: `id=2`
+ * apontava p/ DOIS EPIs diferentes (Luva Mista Vaqueta e Raspa, epiId 690021; e Luva
+ * Nitrílica, epiId 690038), ambos na obra QIU 2 - FASE 4. Como o ajuste de estoque faz
+ * `UPDATE epi_estoque_obra SET quantidade=X WHERE id=2`, o UPDATE batia nas DUAS linhas
+ * → ajustar uma luva mudava a outra junto. "Boa parte" = exatamente os EPIs cujos ids
+ * caíram nos 13 grupos colididos.
+ *
+ * SOLUÇÃO (3 frentes, ZERO ALTER destrutivo/DROP/DELETE — só UPDATE + setval + CREATE
+ * INDEX aditivo):
+ *  1) DADOS (one-time, transacional via pg, REGRA DE OURO respeitada): reatribuídos
+ *     ids ÚNICOS às 13 linhas colididas (mantendo TODAS — são EPIs distintos legítimos,
+ *     nenhum dado perdido), usando `ctid` p/ mirar cada linha física; sequence avançada
+ *     via `setval('epi_estoque_obra_id_seq', max(id))`. Verificado: 104 linhas, 104 ids
+ *     distintos, 0 duplicatas. Nenhuma FK referencia `epi_estoque_obra.id` (é tabela
+ *     folha de estoque), então reatribuir id é seguro.
+ *  2) CÓDIGO (defesa-em-profundidade): `ajustarEstoqueObra` (server/routers/epis.ts)
+ *     agora recebe também `epiId`/`obraId` (o front os envia da própria linha) e SELECT/
+ *     UPDATE miram a CHAVE NATURAL COMPOSTA (id + epiId + obraId + companyId), exigindo
+ *     linha ÚNICA antes de escrever (erro CONFLICT se ambíguo). Front
+ *     `client/src/pages/Epis.tsx` passa `epiId`/`obraId` no `mutate`.
+ *  3) PREVENÇÃO: `drizzle/schema.ts` marca `id: serial().primaryKey()`; e bootstrap em
+ *     `server/db.ts` cria `CREATE UNIQUE INDEX IF NOT EXISTS uq_eeo_id ON
+ *     epi_estoque_obra(id)` (aditivo, idempotente, `.catch` p/ nunca quebrar o boot) —
+ *     impede recorrência da duplicação de id.
+ *
+ * BÔNUS (pedido secundário do usuário, mesma tela): o painel de CARDS de locais em
+ * "Estoque por Obra" ocupava muita altura. Agora vem RECOLHIDO por padrão (mostra só os
+ * 1ºs locais — Central + 2 obras) com botão "Ver todos os N locais"/"Recolher"; o filtro
+ * completo segue no dropdown do topo. Estado `estoqueCardsOpen` em `Epis.tsx`.
+ *
+ * Requer REPUBLICAR (mudança de backend + front). ARQUIVOS: `server/routers/epis.ts`
+ * (`ajustarEstoqueObra`), `client/src/pages/Epis.tsx` (mutate + cards recolhíveis +
+ * import ChevronDown/Up), `server/db.ts` (índice único no bootstrap), `drizzle/schema.ts`
+ * (`.primaryKey()`). Dados de produção já corrigidos nesta revisão.
+ *
  * Rev. 2997 — **FINANCEIRO: ABA "CONTAS A RECEBER" RENOMEADA PARA "PREVISÃO DE
  * FATURAMENTO" (A TELA ATUAL SÓ MOSTRA A PREVISÃO DAS MEDIÇÕES; O "CONTAS A RECEBER"
  * DE VERDADE — NOS MOLDES DO "CONTAS A PAGAR" — VIRÁ NA PRÓXIMA REVISÃO).**

@@ -1989,11 +1989,21 @@ Exemplos de referência:
   // (o saldo do Almoxarifado Central). Antes, a tela "Estoque por Obra" abria o
   // editor do CATÁLOGO central, então "corrigir a obra" mexia no central (bug).
   ajustarEstoqueObra: protectedProcedure
-    .input(z.object({ id: z.number(), quantidade: z.number().int().min(0), observacao: z.string().optional() }))
+    .input(z.object({ id: z.number(), quantidade: z.number().int().min(0), epiId: z.number().optional(), obraId: z.number().optional(), observacao: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
-      const [row] = await db.select().from(epiEstoqueObra).where(eq(epiEstoqueObra.id, input.id));
-      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Registro de estoque da obra não encontrado." });
+      // Rev. 2998 — Alvo por CHAVE NATURAL COMPOSTA (id + epiId + obraId), não só
+      // pelo id. A tabela epi_estoque_obra foi criada SEM PRIMARY KEY e um restore
+      // reabasteceu a sequence → ids duplicados (ex.: "id=2" em 2 EPIs distintos).
+      // Com WHERE id=X, ajustar uma luva "grudava" o valor na outra. O front envia
+      // epiId/obraId da própria linha; aqui exigimos linha ÚNICA antes de escrever.
+      const sel: any[] = [eq(epiEstoqueObra.id, input.id)];
+      if (typeof input.epiId === "number") sel.push(eq(epiEstoqueObra.epiId, input.epiId));
+      if (typeof input.obraId === "number") sel.push(eq(epiEstoqueObra.obraId, input.obraId));
+      const found = await db.select().from(epiEstoqueObra).where(and(...sel));
+      if (found.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Registro de estoque da obra não encontrado." });
+      if (found.length > 1) throw new TRPCError({ code: "CONFLICT", message: "Registro de estoque ambíguo (id duplicado). Recarregue a tela e tente novamente." });
+      const row = found[0];
       // Guard de tenant/IDOR — deriva a empresa do PRÓPRIO registro.
       const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
       if (!allowed.some((c) => c.id === row.companyId)) {
@@ -2002,9 +2012,16 @@ Exemplos de referência:
       // Rev. 2950 — guard de permissão por OBRA: só ajusta o estoque de obras que o
       // usuário gerencia (admin = global). Evita "bagunça" entre obras (anti-IDOR).
       await assertObraWrite(ctx, row.obraId);
+      // UPDATE também pela chave natural completa (defesa-em-profundidade): mesmo
+      // que um id duplicado escape no futuro, só a linha (id,epiId,obraId,company) muda.
       await db.update(epiEstoqueObra)
         .set({ quantidade: input.quantidade, alteradoPor: ctx.user?.name || 'Sistema', updatedAt: new Date().toISOString() } as any)
-        .where(eq(epiEstoqueObra.id, input.id));
+        .where(and(
+          eq(epiEstoqueObra.id, row.id),
+          eq(epiEstoqueObra.epiId, row.epiId),
+          eq(epiEstoqueObra.obraId, row.obraId),
+          eq(epiEstoqueObra.companyId, row.companyId),
+        ));
       return { success: true };
     }),
 

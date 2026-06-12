@@ -102,6 +102,19 @@ export async function getDb() {
         CREATE INDEX IF NOT EXISTS idx_alm_aud_obra ON almoxarifado_auditoria(obra_id);
       `).catch(err => console.warn("[Database] bootstrap almoxarifado_auditoria:", err.message));
 
+      // Rev. 2998 — Guard de UNICIDADE do id em epi_estoque_obra. A tabela foi
+      // criada SEM PRIMARY KEY (drizzle: `serial()` sem `.primaryKey()`), e um
+      // restore reabasteceu a sequence do zero → gerou ids 1..16 REPETIDOS,
+      // colidindo com linhas antigas. Como o ajuste de estoque faz UPDATE ...
+      // WHERE id=X, um "id=2" duplicado batia em 2 EPIs distintos (ex.: Luva
+      // Mista e Luva Nitrílica) e ajustar uma "grudava" o valor na outra.
+      // Os dados já foram desduplicados (cada linha tem id único) e a sequence
+      // avançada; este índice ÚNICO impede recorrência. CREATE (aditivo, IF NOT
+      // EXISTS, com .catch) — não fere a REGRA DE OURO (sem ALTER/DROP/DELETE).
+      _pool.query(
+        `CREATE UNIQUE INDEX IF NOT EXISTS uq_eeo_id ON epi_estoque_obra(id);`
+      ).catch(err => console.warn("[Database] bootstrap uq_eeo_id:", err.message));
+
       // Keep-alive: ping a cada 4 min para impedir o Neon de hibernar
       // O Neon entra em sleep após ~5 min de inatividade — o ping mantém vivo
       // Rev. 2774 — limpa o interval anterior antes de criar um novo: a cada

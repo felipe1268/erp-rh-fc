@@ -14,7 +14,7 @@ import { handleCurrencyInput, floatToCurrency, parseCurrencyToFloat } from "@/li
 import { labelTamanhoEpi, labelTamanhoCalca } from "@/lib/epiTamanho";
 import {
   Plus, Minus, Search, Pencil, Trash2, HardHat, Package, AlertTriangle,
-  ShieldCheck, Calendar, ArrowRight, ChevronLeft, User, ClipboardList,
+  ShieldCheck, Calendar, ArrowRight, ChevronLeft, ChevronDown, ChevronUp, User, ClipboardList,
   DollarSign, Clock, Settings2, Printer, Upload, Eye, FileText, FileDown, Save,
   Glasses, Hand, Footprints, Ear, Shirt, Wind, Shield, Flame, Droplets, Wrench, Zap, HeartPulse, Umbrella, RefreshCw,
   Building2, ArrowLeftRight, Warehouse, TrendingUp, ShoppingCart, Loader2,
@@ -383,6 +383,10 @@ export default function Epis() {
   const [entradaDiretaForm, setEntradaDiretaForm] = useState({ epiId: "", obraId: "", quantidade: "", observacao: "" });
   const [ajusteObraRow, setAjusteObraRow] = useState<any>(null);
   const [ajusteObraQtd, setAjusteObraQtd] = useState<string>("");
+  // Rev. 2998 — "Estoque por Obra": o painel de cards de locais ocupava muito
+  // espaço vertical. Por padrão recolhido (mostra só os 1ºs locais); botão expande
+  // p/ ver todos. O filtro segue disponível no dropdown do topo.
+  const [estoqueCardsOpen, setEstoqueCardsOpen] = useState<boolean>(false);
 
   // BDI config
   const [bdiValue, setBdiValue] = useState("");
@@ -3001,7 +3005,7 @@ export default function Epis() {
                     </CardContent>
                   </Card>
                 )}
-                {filteredObras.map((r: any) => (
+                {(estoqueCardsOpen ? filteredObras : filteredObras.slice(0, showCentral ? 2 : 3)).map((r: any) => (
                   <Card
                     key={r.obraId}
                     onClick={() => setFilterObraEstoque(filterObraEstoque === String(r.obraId) ? "todas" : String(r.obraId))}
@@ -3022,6 +3026,16 @@ export default function Epis() {
                   </Card>
                 ))}
               </div>
+              {filteredObras.length > (showCentral ? 2 : 3) && (
+                <div className="flex justify-center">
+                  <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => setEstoqueCardsOpen(v => !v)}>
+                    {estoqueCardsOpen
+                      ? <><ChevronUp className="h-3.5 w-3.5 mr-1" /> Recolher locais</>
+                      : <><ChevronDown className="h-3.5 w-3.5 mr-1" /> Ver todos os {totalLocais} locais</>}
+                  </Button>
+                </div>
+              )}
               </div>
               </>
               );
@@ -3595,7 +3609,7 @@ export default function Epis() {
               </Button>
               <Button className="flex-1 bg-[#1B2A4A] hover:bg-[#243660]"
                 disabled={ajustarEstoqueObraMut.isPending || ajusteObraQtd === "" || isNaN(parseInt(ajusteObraQtd)) || parseInt(ajusteObraQtd) < 0}
-                onClick={() => ajustarEstoqueObraMut.mutate({ id: ajusteObraRow.id, quantidade: parseInt(ajusteObraQtd) })}>
+                onClick={() => ajustarEstoqueObraMut.mutate({ id: ajusteObraRow.id, quantidade: parseInt(ajusteObraQtd), epiId: ajusteObraRow.epiId, obraId: ajusteObraRow.obraId })}>
                 {ajustarEstoqueObraMut.isPending ? 'Salvando...' : 'Salvar Ajuste'}
               </Button>
             </div>

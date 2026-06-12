@@ -1320,7 +1320,7 @@ export const epis = pgTable("epis", {
 
 // Estoque de EPI por Obra
 export const epiEstoqueObra = pgTable("epi_estoque_obra", {
-        id: serial().notNull(),
+        id: serial().primaryKey().notNull(),
         companyId: integer().notNull(),
         epiId: integer().notNull(),
         obraId: integer().notNull(),
