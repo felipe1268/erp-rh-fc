@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2972 — **PORTAL DO CLIENTE → ADMINISTRAÇÃO → AVALIAÇÕES (NPS) → "LINK DE AVALIAÇÃO
+ * (SEM LOGIN)" → BOTÃO "WHATSAPP" — MENSAGEM CORDIAL REESCRITA, MAIS CALOROSA E
+ * AGRADECIDA, COM SAUDAÇÃO/EMOJIS, AGRADECIMENTO PELA CONFIANÇA E TOM DE PARCERIA.**
+ *
+ * PEDIDO (usuário): "melhore a mensagem que vai para o WhatsApp na avaliação, quero algo
+ * mais cordial".
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, `client/src/pages/ClientesPortalAdmin.tsx`):
+ * reescrita do template de mensagem montado no `onClick` do botão "WhatsApp" (Rev. 2969).
+ * A nova mensagem abre com saudação acolhedora ("Olá! Tudo bem? 😊"), agradece a confiança
+ * e personaliza "…na obra {linkObraNome}" quando o link é vinculado a uma obra, explica que
+ * a avaliação é rápida/anônima/ajuda na melhoria contínua, convida sem pressionar ("Quando
+ * puder…") e fecha com tom de parceria ("…pela parceria! Conte sempre conosco. 🤝"). Usa
+ * `*FC Engenharia*` (negrito do WhatsApp). Sem mudança de fluxo: continua abrindo
+ * `https://wa.me/?text=<encoded>` com o `linkAvaliacao` já gerado; sem backend/schema.
+ *
+ * ARQUIVOS: `client/src/pages/ClientesPortalAdmin.tsx`.
+ *
  * Rev. 2971 — **PORTAL DO CLIENTE → PESQUISA DE SATISFAÇÃO (NPS) PÚBLICA → BLOCO
  * "ENCARREGADO FC NA OBRA" — O PRÉ-PREENCHIMENTO AUTOMÁTICO DO "NOME DO ENCARREGADO"
  * (REV. 2970) PASSA A FUNCIONAR TAMBÉM EM LINKS ANTIGOS (GERADOS ANTES DA REV. 2970)

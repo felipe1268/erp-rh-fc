@@ -627,12 +627,12 @@ export default function ClientesPortalAdmin() {
                     className="gap-1.5 text-green-700 border-green-300 hover:bg-green-50"
                     onClick={() => {
                       const msg =
-                        `Olá! Tudo bem? Aqui é da FC Engenharia.\n\n` +
-                        `Estamos sempre buscando melhorar e a sua opinião é muito importante para nós. ` +
-                        `Você poderia reservar alguns minutinhos para avaliar a nossa equipe${linkObraNome ? ` na obra ${linkObraNome}` : ""}? ` +
-                        `A avaliação é rápida, anônima e nos ajuda na melhoria contínua dos nossos serviços.\n\n` +
-                        `É só acessar o link abaixo:\n${linkAvaliacao}\n\n` +
-                        `Desde já, muito obrigado pela sua colaboração!`;
+                        `Olá! Tudo bem? 😊\n\n` +
+                        `Aqui é da *FC Engenharia*. Antes de tudo, queremos agradecer muito pela confiança em nosso trabalho${linkObraNome ? ` na obra ${linkObraNome}` : ""} — é um prazer ter você como nosso cliente.\n\n` +
+                        `A sua opinião é o que nos move a melhorar a cada dia. Por isso, gostaríamos de convidá-lo(a) a compartilhar como tem sido a sua experiência com a nossa equipe.\n\n` +
+                        `A avaliação é bem rapidinha (leva só alguns minutos), totalmente anônima e nos ajuda demais a evoluir e a oferecer um serviço cada vez melhor para você.\n\n` +
+                        `Quando puder, é só acessar por aqui:\n${linkAvaliacao}\n\n` +
+                        `Muito obrigado pelo seu tempo e pela parceria! Conte sempre conosco. 🤝`;
                       window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer");
                     }}
                   >
