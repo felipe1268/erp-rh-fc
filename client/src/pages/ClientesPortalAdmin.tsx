@@ -93,7 +93,7 @@ export default function ClientesPortalAdmin() {
   const [linkObraNome, setLinkObraNome] = useState<string | null>(null);
   const [linkObraId, setLinkObraId] = useState<number | "">("");
   // Rev. 2973 — quantos links DE USO ÚNICO gerar de uma vez (cada link = 1 avaliação).
-  const [linkQtd, setLinkQtd] = useState<number>(1);
+  const [linkQtd, setLinkQtd] = useState<number | "">(1);
   const obrasEmpresa = trpc.portalExterno.admin.obrasDaEmpresaAdmin.useQuery(
     { companyId: companyId ?? 0 },
     { enabled: !!companyId },
@@ -608,21 +608,28 @@ export default function ClientesPortalAdmin() {
                     max={50}
                     value={linkQtd}
                     onChange={(e) => {
-                      const n = Math.floor(Number(e.target.value));
-                      setLinkQtd(Number.isFinite(n) ? Math.min(50, Math.max(1, n)) : 1);
+                      // Rev. 2975 — permite APAGAR o campo (string vazia) enquanto digita;
+                      // o clamp 1–50 só acontece no blur/submit (antes voltava p/ 1 na hora).
+                      const raw = e.target.value;
+                      if (raw === "") { setLinkQtd(""); return; }
+                      const n = Math.floor(Number(raw));
+                      setLinkQtd(Number.isFinite(n) ? Math.min(50, Math.max(1, n)) : "");
+                    }}
+                    onBlur={() => {
+                      setLinkQtd((q) => (typeof q === "number" && q >= 1 ? Math.min(50, q) : 1));
                     }}
                     className="w-16 text-sm"
                     title="Cada link permite apenas UMA avaliação"
                   />
                 </div>
                 <Button
-                  onClick={() => companyId && gerarLinkAvalMut.mutate({ companyId, obraId: linkObraId === "" ? null : linkObraId, quantidade: linkQtd })}
+                  onClick={() => companyId && gerarLinkAvalMut.mutate({ companyId, obraId: linkObraId === "" ? null : linkObraId, quantidade: typeof linkQtd === "number" && linkQtd >= 1 ? Math.min(50, linkQtd) : 1 })}
                   disabled={gerarLinkAvalMut.isPending || !companyId}
                   size="sm"
                   className="ml-auto gap-1.5 bg-blue-600 hover:bg-blue-700"
                 >
                   {gerarLinkAvalMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
-                  {linkQtd > 1 ? `Gerar ${linkQtd} links` : "Gerar link"}
+                  {typeof linkQtd === "number" && linkQtd > 1 ? `Gerar ${linkQtd} links` : "Gerar link"}
                 </Button>
               </div>
               {linkAvaliacao && (

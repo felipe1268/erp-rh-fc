@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2975 — **PORTAL DO CLIENTE → ADMINISTRAÇÃO → AVALIAÇÕES (NPS) → "LINK DE AVALIAÇÃO
+ * (SEM LOGIN)" → CAMPO "QTD. DE LINKS" — AGORA DÁ PRA APAGAR O CAMPO E DIGITAR OUTRO NÚMERO
+ * (ANTES O "1" VOLTAVA SOZINHO NA HORA, IMPEDINDO A EDIÇÃO).**
+ *
+ * SINTOMA (usuário, screenshot): "Não to conseguindo apagar o número 1" — ao tentar limpar o
+ * input numérico "Qtd. de links" (Rev. 2973), o valor voltava IMEDIATAMENTE para 1, então no
+ * mobile era impossível apagar o 1 p/ digitar, p.ex., 3.
+ *
+ * CAUSA-RAIZ: o `onChange` fazia `Math.min(50, Math.max(1, n))` e, quando o campo ficava vazio
+ * (`Number("")===0` → `Math.max(1,0)===1`, ou `NaN` → fallback 1), gravava 1 no estado A CADA
+ * tecla — o React re-renderizava o input de volta p/ "1" antes do usuário conseguir digitar.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, `client/src/pages/ClientesPortalAdmin.tsx`):
+ * - `linkQtd` passa de `number` para `number | ""` (permite o estado "vazio" enquanto digita).
+ * - `onChange`: se `raw === ""` grava `""` (não força 1); senão clampa 1–50 normalmente.
+ * - `onBlur`: normaliza p/ inteiro válido (vazio/<1 → 1, senão `min(50, q)`).
+ * - `onClick` do "Gerar link" e o rótulo do botão resolvem o valor final
+ *   (`typeof linkQtd === "number" && linkQtd >= 1 ? min(50, linkQtd) : 1`), garantindo que um
+ *   campo vazio no submit vire 1 link.
+ *
+ * ARQUIVOS: `client/src/pages/ClientesPortalAdmin.tsx`, `shared/version.ts`,
+ * `shared/changelog.ts`, `replit.md`.
+ *
  * Rev. 2974 — **PORTAL DO CLIENTE → ADMINISTRAÇÃO → AVALIAÇÕES (NPS) → BOTÃO "CANCELAR"
  * (ADMIN MASTER) — CORREÇÃO DO ERRO "Failed query: DELETE FROM cliente_avaliacao_marcacoes
  * ... column company_id does not exist" + TROCA DO DELETE POR SOFT-RELEASE (HONRA A REGRA
