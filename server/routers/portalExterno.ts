@@ -1587,6 +1587,30 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       return { success: true };
     }),
 
+    // Rev. 2987 — exclusão EM LOTE (soft-delete) de vários links de uma vez —
+    // APENAS Admin Master. Uma única requisição (melhor p/ iPad/iOS que derruba
+    // requisições no transporte). IDEMPOTENTE: links já excluídos só não entram
+    // na contagem. ZERO DELETE físico (R-001/007/010).
+    excluirLinksAvaliacao: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      codigos: z.array(z.string().min(1)).min(1).max(500),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o Admin Master pode excluir links de avaliação." });
+      }
+      const db = (await getDb())!;
+      const r = await db.execute(sql`
+        UPDATE cliente_avaliacao_shortlink
+        SET deletado_em = NOW()
+        WHERE company_id = ${input.companyId}
+          AND deletado_em IS NULL
+          AND codigo = ANY(${input.codigos}::text[])
+        RETURNING codigo
+      `);
+      const rows = (((r as any).rows ?? r ?? []) as any[]);
+      return { success: true, excluidos: rows.length };
+    }),
+
     // Rev. 2892 — lista todas as obras da empresa p/ o seletor do "link por obra".
     obrasDaEmpresaAdmin: protectedProcedure.input(z.object({
       companyId: z.number(),

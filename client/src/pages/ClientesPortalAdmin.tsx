@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { AVALIACAO_LANGS, normalizeAvaliacaoLang, type AvaliacaoLang } from "../../../shared/portalAvaliacaoI18n";
 import {
@@ -184,6 +185,47 @@ export default function ClientesPortalAdmin() {
     if (!companyId) return;
     if (!window.confirm("Excluir este link de avaliação?\n\nEle deixará de funcionar para quem o receber. Esta ação não pode ser desfeita.")) return;
     excluirLinkMut.mutate({ companyId, codigo });
+  };
+
+  // Rev. 2987 — SELEÇÃO MÚLTIPLA p/ excluir vários links de uma vez (só master).
+  // Uma única requisição em lote (mais confiável no iPad/iOS) + mesmo tratamento
+  // de erro de transporte da exclusão individual.
+  const [selLinks, setSelLinks] = useState<Set<string>>(() => new Set());
+  const toggleSelLink = (codigo: string) =>
+    setSelLinks((prev) => {
+      const next = new Set(prev);
+      next.has(codigo) ? next.delete(codigo) : next.add(codigo);
+      return next;
+    });
+  const setSelMany = (codigos: string[], on: boolean) =>
+    setSelLinks((prev) => {
+      const next = new Set(prev);
+      for (const c of codigos) on ? next.add(c) : next.delete(c);
+      return next;
+    });
+  const limparSelLinks = () => setSelLinks(new Set());
+  const excluirLinksMut = trpc.portalExterno.admin.excluirLinksAvaliacao.useMutation({
+    retry: (n, e: any) => ehErroTransporteIos(e?.message) && n < 2,
+    retryDelay: 800,
+    onSuccess: (r: any) => {
+      toast.success(`${r?.excluidos ?? 0} link(s) excluído(s).`);
+      limparSelLinks();
+    },
+    onError: (e: any) => {
+      toast.error(ehErroTransporteIos(e?.message)
+        ? "A conexão falhou ao excluir (comum no iPad/Safari). Confira a lista — se os links continuarem aí, tente de novo."
+        : (e?.message ?? "Não foi possível excluir os links."));
+    },
+    onSettled: () => {
+      utils.portalExterno.admin.listarLinksAvaliacao.invalidate();
+    },
+  });
+  const excluirSelecionados = () => {
+    if (!companyId) return;
+    const codigos = Array.from(selLinks);
+    if (codigos.length === 0) return;
+    if (!window.confirm(`Excluir ${codigos.length} link(s) de avaliação selecionado(s)?\n\nEles deixarão de funcionar para quem os receber. Esta ação não pode ser desfeita.`)) return;
+    excluirLinksMut.mutate({ companyId, codigos });
   };
 
   // Rev. 1569 — cancelar avaliação (Admin Master)
@@ -783,10 +825,38 @@ export default function ClientesPortalAdmin() {
             {/* Rev. 2985 — Links de avaliação gerados (persistidos), agrupados por OBRA
                 e ordenados por DATA desc. Só o Admin Master pode excluir (soft-delete). */}
             <div className="bg-white border rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex flex-wrap items-center gap-2 mb-3">
                 <Layers className="w-4 h-4 text-blue-600" />
                 <span className="text-sm font-medium text-slate-700">Links de avaliação gerados</span>
                 {linksAvalQ.isFetching && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />}
+                {/* Rev. 2987 — barra de seleção múltipla (só Admin Master) */}
+                {isMaster && (linksAvalQ.data ?? []).length > 0 && (
+                  <div className="ml-auto flex items-center gap-2">
+                    {selLinks.size > 0 && (
+                      <>
+                        <span className="text-xs text-slate-500">{selLinks.size} selecionado(s)</span>
+                        <Button variant="ghost" size="sm" className="h-8 text-slate-500"
+                          onClick={limparSelLinks}>
+                          Limpar
+                        </Button>
+                        <Button variant="outline" size="sm" className="gap-1.5 h-8 text-rose-600 border-rose-300 hover:bg-rose-50"
+                          disabled={excluirLinksMut.isPending}
+                          onClick={excluirSelecionados}>
+                          {excluirLinksMut.isPending
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <Trash2 className="w-3.5 h-3.5" />}
+                          Excluir selecionados ({selLinks.size})
+                        </Button>
+                      </>
+                    )}
+                    {selLinks.size === 0 && (
+                      <Button variant="outline" size="sm" className="h-8 gap-1.5"
+                        onClick={() => setSelMany((linksAvalQ.data ?? []).map((l: any) => l.codigo), true)}>
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Selecionar todos
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
               {(linksAvalQ.data ?? []).length === 0 ? (
                 <p className="text-xs text-slate-400 py-2">Nenhum link gerado ainda. Gere um link acima para enviar ao cliente.</p>
@@ -801,6 +871,14 @@ export default function ClientesPortalAdmin() {
                   ).map(([obraNome, lista]: any) => (
                     <div key={obraNome}>
                       <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 mb-1.5">
+                        {isMaster && (
+                          <Checkbox
+                            className="mr-0.5"
+                            checked={lista.every((l: any) => selLinks.has(l.codigo))}
+                            onCheckedChange={(v) => setSelMany(lista.map((l: any) => l.codigo), v === true)}
+                            aria-label={`Selecionar todos de ${obraNome}`}
+                          />
+                        )}
                         <Building2 className="w-3.5 h-3.5 text-slate-400" /> {obraNome}
                         <span className="text-slate-400 font-normal">({lista.length})</span>
                       </div>
@@ -809,7 +887,15 @@ export default function ClientesPortalAdmin() {
                           const url = `${window.location.origin}/a/${l.codigo}`;
                           const flag = AVALIACAO_LANGS.find((x) => x.value === normalizeAvaliacaoLang(l.lang))?.flag ?? "🇧🇷";
                           return (
-                            <div key={l.codigo} className="flex flex-wrap items-center gap-2 border rounded-lg px-2.5 py-2 bg-slate-50/60">
+                            <div key={l.codigo} className={`flex flex-wrap items-center gap-2 border rounded-lg px-2.5 py-2 ${selLinks.has(l.codigo) ? "bg-rose-50/70 border-rose-200" : "bg-slate-50/60"}`}>
+                              {isMaster && (
+                                <Checkbox
+                                  className="shrink-0"
+                                  checked={selLinks.has(l.codigo)}
+                                  onCheckedChange={() => toggleSelLink(l.codigo)}
+                                  aria-label="Selecionar link"
+                                />
+                              )}
                               <Badge variant="outline" className="gap-1 shrink-0">{flag} {l.lang?.toUpperCase() ?? "PT"}</Badge>
                               <span className="text-xs text-slate-500 shrink-0">{l.criadoEm ?? "—"}</span>
                               {l.usado ? (

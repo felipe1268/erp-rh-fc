@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2987 — **PORTAL DO CLIENTE → NPS → "LINKS DE AVALIAÇÃO GERADOS" — SELEÇÃO
+ * MÚLTIPLA PARA EXCLUIR VÁRIOS LINKS DE UMA VEZ (PEDIDO DO ADMIN MASTER).**
+ *
+ * PEDIDO (usuário, Admin Master): poder selecionar vários links de avaliação e
+ * apagá-los de uma só vez (antes só dava p/ excluir um por um).
+ *
+ * SOLUÇÃO (BACK+FRONT, ZERO ALTER/DROP/DELETE — exclusão por SOFT-DELETE):
+ *   • `server/routers/portalExterno.ts`: novo endpoint `excluirLinksAvaliacao`
+ *     (protectedProcedure, **admin_master only**) que recebe `companyId` + array
+ *     `codigos` (1..500) e faz UM ÚNICO UPDATE `deletado_em = NOW()` com
+ *     `codigo = ANY(${codigos}::text[]) AND company_id = ... AND deletado_em IS NULL`,
+ *     retornando `{success, excluidos}` (contagem real). Uma única requisição é mais
+ *     confiável no iPad/iOS (que derruba requisições no transporte) do que N chamadas
+ *     paralelas. IDEMPOTENTE: links já apagados simplesmente não entram na contagem.
+ *   • `client/src/pages/ClientesPortalAdmin.tsx`: estado `selLinks` (Set de códigos)
+ *     com `toggleSelLink`/`setSelMany`/`limparSelLinks`; checkbox por linha + checkbox
+ *     "selecionar tudo da obra" no cabeçalho de cada grupo + botões "Selecionar todos",
+ *     "Limpar" e "Excluir selecionados (N)" na barra do topo da seção (tudo só p/ master).
+ *     A mutation `excluirLinksMut` reusa o mesmo tratamento de erro de transporte iOS
+ *     da exclusão individual (`retry` em erro de transporte, mensagem amigável PT,
+ *     `onSettled` invalida a lista) e limpa a seleção ao concluir. Linha selecionada
+ *     ganha destaque visual (fundo rosé).
+ *
+ * RESSALVA: SOFT-DELETE (UPDATE `deletado_em`); R-001/007/010 mantidos. Usuários não
+ * master não veem os checkboxes nem a barra de seleção.
+ *
  * Rev. 2986 — **PORTAL DO CLIENTE → NPS → "LINKS DE AVALIAÇÃO GERADOS" — POLIMENTOS
  * PEDIDOS PELO ADMIN MASTER + CORREÇÃO DO ERRO "THE STRING DID NOT MATCH THE EXPECTED
  * PATTERN" AO EXCLUIR UM LINK NO iPad/iOS.**
