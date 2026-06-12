@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2977 — **PORTAL DO CLIENTE → NPS PÚBLICA → "OBRA AVALIADA" — A TRAVA DA OBRA (E O
+ * PRÉ-PREENCHIMENTO DE GESTOR/ENCARREGADO) PASSA A SER RESOLVIDA TAMBÉM PELO TOKEN
+ * VERIFICADO NO BACKEND, NÃO SÓ PELO PARSE base64 DO JWT NO NAVEGADOR.**
+ *
+ * SINTOMA (usuário, screenshots): gerou link "Link de avaliação (sem login)" VINCULADO à obra
+ * REVTE-CIVIL (admin confirma "Link vinculado à obra: REVTE-CIVIL"), mas ao abrir o link a
+ * pesquisa mostrava o seletor editável "Avaliação geral / não específica" e os campos de
+ * gestor/encarregado vazios — como se a obra não tivesse vindo no link.
+ *
+ * DIAGNÓSTICO: a TRAVA da obra na tela pública dependia 100% do `linkObra`, um `useMemo` que faz
+ * o parse base64url do payload do JWT NO CLIENTE (`PortalDashboardCliente.tsx`). Se esse parse
+ * resultar `null` (ou o token aberto não tiver `obraId`), a tela cai no seletor "geral". Como o
+ * gestor/encarregado já tinham fallback no backend (Rev. 2971) mas a OBRA não tinha, faltava uma
+ * fonte AUTORITATIVA server-side p/ a trava. (Ressalva: link gerado SEM obra continua "geral" —
+ * isso é correto; só links com obra embutida travam.)
+ *
+ * SOLUÇÃO (BACK+FRONT, ZERO ALTER/DROP/DELETE):
+ * 1) BACK `portalExterno.cliente.podeAvaliarEsteMes` (`server/routers/portalExterno.ts`): além de
+ *    `gestorNome`/`encarregadoNome`, passa a DEVOLVER `obraId`/`obraNome` resolvidos a partir do
+ *    token VERIFICADO (`jwt.verify`) — lê `obras.nome` junto do `responsavel`. Devolvido em TODAS
+ *    as rotas de retorno (uso único, sem credId, com credId).
+ * 2) FRONT (`client/src/pages/portal/PortalDashboardCliente.tsx`): novo `useMemo obraTravada` =
+ *    `linkObra` (parse client-side) ?? (no modo público, `{id,nome,gestor,encarregado}` vindos de
+ *    `podeAvaliarEsteMes`). O `useEffect` que trava `aval.obraId`, o card read-only "Obra avaliada"
+ *    e o reset de "Enviar nova avaliação" passam a usar `obraTravada` no lugar de `linkObra`.
+ *    `gestorAuto`/`encarregadoAuto` já priorizavam o backend (Rev. 2971), mantidos.
+ *
+ * RESULTADO: ao abrir um link vinculado a uma obra, a tela trava na obra correta e mostra "Obra
+ * avaliada: <nome>" mesmo que o parse base64 client-side falhe por qualquer motivo (encoding/
+ * navegador), porque a obra agora vem também do token verificado no servidor.
+ *
+ * ARQUIVOS: `server/routers/portalExterno.ts`, `client/src/pages/portal/PortalDashboardCliente.tsx`,
+ * `shared/version.ts`, `shared/changelog.ts`, `replit.md`.
+ *
  * Rev. 2976 — **PORTAL DO CLIENTE → PESQUISA DE SATISFAÇÃO (NPS) PÚBLICA/INTERNA — TODAS AS
  * PERGUNTAS DE NOTA (0–10) + A RECOMENDAÇÃO PASSAM A SER OBRIGATÓRIAS ANTES DE ENVIAR A
  * AVALIAÇÃO.**

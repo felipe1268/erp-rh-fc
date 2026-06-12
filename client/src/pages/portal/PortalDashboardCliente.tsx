@@ -196,11 +196,6 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
     recomendaria: null,
   });
 
-  // Rev. 2892 — trava a obra do link público no estado da avaliação.
-  useEffect(() => {
-    if (linkObra) setAval((prev) => ({ ...prev, obraId: linkObra.id }));
-  }, [linkObra]);
-
   // Rev. 2965 — GESTOR auto-preenchido a partir do responsável da obra:
   // - link público por obra → vem no token (linkObra.gestor);
   // - seletor logado → responsável da obra selecionada (minhasObras).
@@ -214,6 +209,23 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
     { token },
     { enabled: !!token && tipo === "cliente" }
   );
+  // Rev. 2977 — OBRA TRAVADA do link público resolvida de forma AUTORITATIVA:
+  // 1º o parse client-side do token (`linkObra`); se faltar, cai no obraId/obraNome
+  // devolvidos pelo backend a partir do token VERIFICADO (`podeAvaliarEsteMes`).
+  // Assim a obra trava mesmo se o parse base64 client-side falhar por qualquer
+  // motivo (encoding/navegador) — desde que o token de fato tenha obra embutida.
+  const obraTravada = useMemo<{ id: number; nome: string | null; gestor: string | null; encarregado: string | null } | null>(() => {
+    if (linkObra) return linkObra;
+    const d = podeAvaliarQ.data as any;
+    if (isPublic && d?.obraId) {
+      return { id: Number(d.obraId), nome: d.obraNome ?? null, gestor: d.gestorNome ?? null, encarregado: d.encarregadoNome ?? null };
+    }
+    return null;
+  }, [linkObra, podeAvaliarQ.data, isPublic]);
+  // Rev. 2892/2977 — trava a obra do link público no estado da avaliação.
+  useEffect(() => {
+    if (obraTravada) setAval((prev) => (prev.obraId === obraTravada.id ? prev : { ...prev, obraId: obraTravada.id }));
+  }, [obraTravada]);
   const gestorAuto = useMemo<string | null>(
     // Rev. 2971 — valor resolvido AO VIVO pelo backend tem PRECEDÊNCIA p/
     // refletir trocas no efetivo; token/obraSel só como fallback inicial
@@ -656,7 +668,7 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                 <CheckCircle2 className="w-20 h-20 text-emerald-500 mx-auto mb-4" />
                 <h2 className="text-2xl font-bold text-slate-800 mb-2">Obrigado pela avaliação!</h2>
                 <p className="text-slate-600 mb-6">Suas respostas foram registradas <b>de forma totalmente anônima</b> e ajudarão a FC Engenharia a melhorar continuamente.</p>
-                <Button onClick={() => { setAvaliado(false); setDetGestor({}); setDetEncarregado({}); setDetEquipe({}); setDetEscritorio({}); setEncarregadoNome(""); setAval({ ...aval, notaGeral: null, notaEquipe: null, notaObra: null, notaAtendimento: null, notaPrazo: null, notaQualidade: null, notaEmpresa: null, notaGestor: null, notaEscritorio: null, notaFaturamento: null, comentarioEscritorio: "", comentarioPositivo: "", comentarioMelhoria: "", comentarioEquipe: "", comentarioEmpresa: "", comentarioGestor: "", gestorNome: gestorAuto || "", recomendaria: null, obraId: linkObra ? linkObra.id : null }); }} variant="outline">
+                <Button onClick={() => { setAvaliado(false); setDetGestor({}); setDetEncarregado({}); setDetEquipe({}); setDetEscritorio({}); setEncarregadoNome(""); setAval({ ...aval, notaGeral: null, notaEquipe: null, notaObra: null, notaAtendimento: null, notaPrazo: null, notaQualidade: null, notaEmpresa: null, notaGestor: null, notaEscritorio: null, notaFaturamento: null, comentarioEscritorio: "", comentarioPositivo: "", comentarioMelhoria: "", comentarioEquipe: "", comentarioEmpresa: "", comentarioGestor: "", gestorNome: gestorAuto || "", recomendaria: null, obraId: obraTravada ? obraTravada.id : null }); }} variant="outline">
                   Enviar nova avaliação
                 </Button>
               </div>
@@ -672,12 +684,12 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                   </div>
                 </div>
 
-                {linkObra ? (
-                  // Rev. 2892 — link público POR OBRA: obra travada, exibida só p/ leitura.
+                {obraTravada ? (
+                  // Rev. 2892/2977 — link público POR OBRA: obra travada, exibida só p/ leitura.
                   <div>
                     <Label className="text-sm font-medium">Obra avaliada</Label>
                     <div className="mt-1 w-full border rounded-md px-3 py-2 text-sm bg-slate-50 text-slate-700 font-medium">
-                      {linkObra.nome ?? `Obra #${linkObra.id}`}
+                      {obraTravada.nome ?? `Obra #${obraTravada.id}`}
                     </div>
                   </div>
                 ) : (

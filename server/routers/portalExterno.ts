@@ -2139,13 +2139,19 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       // reflita trocas no efetivo. Defensivo: qualquer falha mantém null (manual).
       let gestorNome: string | null = null;
       let encarregadoNome: string | null = null;
+      // Rev. 2977 — devolve TAMBÉM obraId/obraNome resolvidos a partir do token
+      // VERIFICADO (jwt.verify) p/ o front travar a obra de forma AUTORITATIVA,
+      // sem depender só do parse base64 client-side do JWT (defense-in-depth).
+      let obraIdTok: number | null = decoded.obraId ? Number(decoded.obraId) : null;
+      let obraNomeTok: string | null = (decoded.obraNome ?? null) || null;
       if (decoded.obraId) {
         try {
-          const [o] = await db.select({ responsavel: obras.responsavel }).from(obras).where(and(
+          const [o] = await db.select({ nome: obras.nome, responsavel: obras.responsavel }).from(obras).where(and(
             eq(obras.id, Number(decoded.obraId)),
             eq(obras.companyId, decoded.companyId),
             isNull(obras.deletedAt),
           ));
+          obraNomeTok = (o?.nome || "").trim() || obraNomeTok;
           gestorNome = (o?.responsavel || "").trim() || null;
           const equipe = await getEquipeObra(Number(decoded.obraId), decoded.companyId);
           const enc = equipe.find((e: any) =>
@@ -2161,12 +2167,12 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         const usado = await db.execute(sql`SELECT 1 FROM cliente_avaliacao_link_uso WHERE link_id = ${String(decoded.linkId)} LIMIT 1`);
         const usadoRows = ((usado as any).rows ?? usado ?? []) as any[];
         const jaUsado = usadoRows.length > 0;
-        return { podeAvaliar: !jaUsado, jaAvaliou: jaUsado, anoMes, periodicidade, gestorNome, encarregadoNome };
+        return { podeAvaliar: !jaUsado, jaAvaliou: jaUsado, anoMes, periodicidade, gestorNome, encarregadoNome, obraId: obraIdTok, obraNome: obraNomeTok };
       }
-      if (!credId) return { podeAvaliar: true, jaAvaliou: false, anoMes, periodicidade, gestorNome, encarregadoNome };
+      if (!credId) return { podeAvaliar: true, jaAvaliou: false, anoMes, periodicidade, gestorNome, encarregadoNome, obraId: obraIdTok, obraNome: obraNomeTok };
       const ja = await db.execute(sql`SELECT 1 FROM cliente_avaliacao_marcacoes WHERE cred_id = ${credId} AND ano_mes = ${anoMes} AND liberada_em IS NULL LIMIT 1`);
       const rows = ((ja as any).rows ?? ja ?? []) as any[];
-      return { podeAvaliar: rows.length === 0, jaAvaliou: rows.length > 0, anoMes, periodicidade, gestorNome, encarregadoNome };
+      return { podeAvaliar: rows.length === 0, jaAvaliou: rows.length > 0, anoMes, periodicidade, gestorNome, encarregadoNome, obraId: obraIdTok, obraNome: obraNomeTok };
     }),
 
     efetivoObra: publicProcedure.input(z.object({
