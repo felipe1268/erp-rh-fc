@@ -1,13 +1,13 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { getDb } from "../db";
+import { getDb, getCompaniesForUser } from "../db";
 import { triggerFinancialSync } from "../services/financialEventTrigger";
 import {
   folhaLancamentos, folhaItens, employees, payrollUploads,
   timeRecords, pontoConsolidacao, obras, manualObraAssignments, companyBankAccounts, systemCriteria,
   pontoDescontos, pontoDescontosResumo, heSolicitacoes, heSolicitacaoFuncionarios,
-  auditLogs, payrollPeriods,
+  auditLogs, payrollPeriods, financialOpeningBalances,
 } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
@@ -43,6 +43,49 @@ function formatBRL(val: number): string {
 
 function normalizeNome(nome: string): string {
   return nome.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, " ");
+}
+
+// Tenant guard p/ contas bancárias: confirma que o CHAMADOR tem acesso à empresa do
+// recurso antes de qualquer write por id (anti-IDOR). Admin/admin_master → acesso global.
+async function assertContaCompanyAccess(ctx: any, companyId: number): Promise<void> {
+  const empresas = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+  const ok = empresas.some((c: any) => c.id === companyId);
+  if (!ok) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+  }
+}
+
+// Saldo inicial (de abertura) da conta bancária — gravado em financial_opening_balances,
+// a MESMA tabela que o fluxo de caixa / conciliação já consomem. Upsert SEM DELETE
+// (R-001/R-007/R-010): atualiza a linha existente da conta ou insere a 1ª. 1 linha por conta.
+async function upsertSaldoInicialConta(db: any, p: {
+  companyId: number; contaBancariaId: number; contaNome: string | null;
+  dataAbertura: string; valor: number; userId: number; userName: string | null;
+}): Promise<void> {
+  const existente = await db.select().from(financialOpeningBalances)
+    .where(and(
+      eq(financialOpeningBalances.companyId, p.companyId),
+      eq(financialOpeningBalances.contaBancariaId, p.contaBancariaId),
+    )).limit(1);
+  if (existente.length > 0) {
+    await db.update(financialOpeningBalances).set({
+      valor: String(p.valor),
+      dataAbertura: p.dataAbertura,
+      contaNome: p.contaNome,
+      confirmedByUserId: p.userId,
+      confirmedByName: p.userName,
+    }).where(eq(financialOpeningBalances.id, existente[0].id));
+  } else {
+    await db.insert(financialOpeningBalances).values({
+      companyId: p.companyId,
+      contaBancariaId: p.contaBancariaId,
+      contaNome: p.contaNome,
+      dataAbertura: p.dataAbertura,
+      valor: String(p.valor),
+      confirmedByUserId: p.userId,
+      confirmedByName: p.userName,
+    });
+  }
 }
 
 async function extractTextFromPDF(buffer: Buffer): Promise<string> {
@@ -2398,8 +2441,21 @@ export const folhaPagamentoRouter = router({
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      return db.select().from(companyBankAccounts)
+      const contas = await db.select().from(companyBankAccounts)
         .where(companyFilter(companyBankAccounts.companyId, input));
+      // Saldo inicial (de abertura) por conta — vive em financial_opening_balances
+      // (mesma tabela usada pelo fluxo de caixa/conciliação). 1 linha por conta.
+      const saldos = await db.select().from(financialOpeningBalances)
+        .where(companyFilter(financialOpeningBalances.companyId, input));
+      const saldoMap = new Map<number, { valor: number; data: string | null }>();
+      for (const s of saldos) {
+        if (s.contaBancariaId == null) continue;
+        saldoMap.set(s.contaBancariaId, { valor: Number(s.valor ?? 0), data: s.dataAbertura ?? null });
+      }
+      return contas.map((c: any) => {
+        const s = saldoMap.get(c.id);
+        return { ...c, saldoInicial: s ? s.valor : null, saldoInicialData: s ? s.data : null };
+      });
     }),
 
   criarContaBancaria: protectedProcedure
@@ -2410,11 +2466,23 @@ export const folhaPagamentoRouter = router({
       tipoConta: z.enum(['corrente', 'poupanca']).default('corrente'),
       apelido: z.string().optional(),
       cnpjTitular: z.string().optional(),
+      saldoInicial: z.number().optional(),
+      saldoInicialData: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      const { companyIds, saldoInicial, saldoInicialData, ...accountData } = input;
+      await assertContaCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
-      const result = await db.insert(companyBankAccounts).values(input).returning();
-      return { id: result[0].id };
+      const result = await db.insert(companyBankAccounts).values(accountData).returning();
+      const newId = result[0].id;
+      if (saldoInicialData) {
+        await upsertSaldoInicialConta(db, {
+          companyId: input.companyId, contaBancariaId: newId, contaNome: input.banco,
+          dataAbertura: saldoInicialData, valor: saldoInicial ?? 0,
+          userId: ctx.user.id, userName: ctx.user.name ?? null,
+        });
+      }
+      return { id: newId };
     }),
 
   atualizarContaBancaria: protectedProcedure
@@ -2428,11 +2496,26 @@ export const folhaPagamentoRouter = router({
       apelido: z.string().optional(),
       cnpjTitular: z.string().optional(),
       ativo: z.number().optional(),
+      saldoInicial: z.number().optional(),
+      saldoInicialData: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     }))
-    .mutation(async ({ input }) => {
-      const { id, ...data } = input;
+    .mutation(async ({ input, ctx }) => {
+      const { id, saldoInicial, saldoInicialData, ...data } = input;
       const db = (await getDb())!;
+      // Anti-IDOR: resolve a empresa da conta e confirma acesso ANTES de qualquer write.
+      const acc = await db.select().from(companyBankAccounts)
+        .where(eq(companyBankAccounts.id, id)).limit(1);
+      if (!acc[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Conta bancária não encontrada." });
+      await assertContaCompanyAccess(ctx, acc[0].companyId);
       await db.update(companyBankAccounts).set(data).where(eq(companyBankAccounts.id, id));
+      // Só grava saldo inicial quando vier uma data (saldo "no dia X"); sem data, mantém o existente.
+      if (saldoInicialData) {
+        await upsertSaldoInicialConta(db, {
+          companyId: acc[0].companyId, contaBancariaId: id, contaNome: acc[0].banco ?? null,
+          dataAbertura: saldoInicialData, valor: saldoInicial ?? 0,
+          userId: ctx.user.id, userName: ctx.user.name ?? null,
+        });
+      }
       return { success: true };
     }),
 
@@ -2440,6 +2523,11 @@ export const folhaPagamentoRouter = router({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      // Anti-IDOR: confirma acesso à empresa da conta antes do soft-delete.
+      const acc = await db.select().from(companyBankAccounts)
+        .where(eq(companyBankAccounts.id, input.id)).limit(1);
+      if (!acc[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Conta bancária não encontrada." });
+      await assertContaCompanyAccess(ctx, acc[0].companyId);
       // Soft delete
       await db.update(companyBankAccounts).set({
         deletedAt: sql`NOW()`,

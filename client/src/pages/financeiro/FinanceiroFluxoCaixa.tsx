@@ -108,6 +108,15 @@ export default function FinanceiroFluxoCaixa() {
   const pagarQ = (trpc as any).financial.getContasAPagarByYear.useQuery(
     { companyId, ano }, { enabled: !!companyId }
   );
+  // Saldo inicial (de abertura) das contas bancárias — ancora o Saldo Acumulado no
+  // saldo real informado no cadastro da conta, p/ o caixa bater com o extrato (conciliação).
+  const contasQ = (trpc as any).folha.listarContasBancarias.useQuery(
+    { companyId }, { enabled: !!companyId }
+  );
+  const saldoInicialTotal = useMemo(() => {
+    const contas: any[] = contasQ.data ?? [];
+    return contas.reduce((s, c) => s + (Number(c.saldoInicial) || 0), 0);
+  }, [contasQ.data]);
 
   const isLoading  = receberQ.isLoading || pagarQ.isLoading;
   const isFetching = receberQ.isFetching || pagarQ.isFetching;
@@ -187,7 +196,9 @@ export default function FinanceiroFluxoCaixa() {
 
   // ── RESULTADO / ACUMULADO / MARGEM ──────────────────────────────────────────
   const resVals = meses12.map((_, i) => recVals[i] - despVals[i]);
-  let acc = 0;
+  // Saldo Acumulado parte do saldo inicial real das contas (cadastro), não de zero,
+  // p/ o caixa bater com o extrato bancário na conciliação.
+  let acc = saldoInicialTotal;
   const acumVals = resVals.map(r => { acc += r; return acc; });
   const lucrVals = meses12.map((_, i) => recVals[i] > 0 ? (resVals[i] / recVals[i]) * 100 : 0);
 
@@ -637,6 +648,14 @@ export default function FinanceiroFluxoCaixa() {
             </tbody>
           </table>
         </div>
+
+        {saldoInicialTotal !== 0 && (
+          <p className="text-xs text-muted-foreground mt-2">
+            O Saldo Acumulado parte do saldo inicial das contas bancárias
+            (R$ {saldoInicialTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}),
+            informado no cadastro de Contas Bancárias, para conciliar com o extrato real.
+          </p>
+        )}
 
       </div>
     </DashboardLayout>

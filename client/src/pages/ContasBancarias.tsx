@@ -8,8 +8,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MoneyInput } from "@/components/ui/money-input";
 import { trpc } from "@/lib/trpc";
-import { Plus, Search, Pencil, Trash2, Landmark, CreditCard, Building2, CheckCircle2, XCircle } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Landmark, CreditCard, Building2, CheckCircle2, XCircle, Wallet } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
@@ -24,6 +25,8 @@ type ContaForm = {
   agencia: string;
   conta: string;
   tipoConta: "corrente" | "poupanca";
+  saldoInicial: string;
+  saldoInicialData: string;
 };
 
 const emptyForm: ContaForm = {
@@ -32,7 +35,15 @@ const emptyForm: ContaForm = {
   agencia: "",
   conta: "",
   tipoConta: "corrente",
+  saldoInicial: "",
+  saldoInicialData: "",
 };
+
+function fmtDataBR(iso?: string | null): string {
+  if (!iso) return "";
+  const [a, m, d] = String(iso).slice(0, 10).split("-");
+  return d && m && a ? `${d}/${m}/${a}` : String(iso);
+}
 
 const BANCOS_COMUNS = [
   { codigo: "001", nome: "Banco do Brasil" },
@@ -102,7 +113,8 @@ export default function ContasBancarias() {
       agencia: conta.agencia || "",
       conta: conta.conta || "",
       tipoConta: conta.tipoConta || "corrente",
-
+      saldoInicial: conta.saldoInicial != null ? String(conta.saldoInicial) : "",
+      saldoInicialData: conta.saldoInicialData ? String(conta.saldoInicialData).slice(0, 10) : "",
     });
     setDialogOpen(true);
   };
@@ -119,6 +131,15 @@ export default function ContasBancarias() {
     if (!form.agencia.trim()) { toast.error("Agência é obrigatória"); return; }
     if (!form.conta.trim()) { toast.error("Conta é obrigatória"); return; }
 
+    if (form.saldoInicial && !form.saldoInicialData) {
+      toast.error("Informe a data do saldo inicial");
+      return;
+    }
+
+    const saldoFields = form.saldoInicialData
+      ? { saldoInicial: parseFloat(form.saldoInicial) || 0, saldoInicialData: form.saldoInicialData }
+      : {};
+
     if (editingId) {
       updateMut.mutate({
         id: editingId,
@@ -127,7 +148,7 @@ export default function ContasBancarias() {
         agencia: form.agencia,
         conta: form.conta,
         tipoConta: form.tipoConta,
-
+        ...saldoFields,
       });
     } else {
       createMut.mutate({ companyId, companyIds, banco: form.banco,
@@ -135,7 +156,7 @@ export default function ContasBancarias() {
         agencia: form.agencia,
         conta: form.conta,
         tipoConta: form.tipoConta,
-
+        ...saldoFields,
       });
     }
   };
@@ -293,6 +314,15 @@ export default function ContasBancarias() {
                       <span className="text-muted-foreground">Tipo:</span>
                       <span className="capitalize">{conta.tipoConta === "poupanca" ? "Poupança" : "Corrente"}</span>
                     </div>
+                    {conta.saldoInicialData != null && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">Saldo inicial:</span>
+                        <span className="font-medium">
+                          R$ {fmtNum(Number(conta.saldoInicial ?? 0))}
+                          <span className="text-muted-foreground font-normal"> em {fmtDataBR(conta.saldoInicialData)}</span>
+                        </span>
+                      </div>
+                    )}
 
                   </div>
 
@@ -410,6 +440,34 @@ export default function ContasBancarias() {
               </div>
             </div>
 
+            <div className="border-t pt-4 mt-1">
+              <div className="flex items-center gap-2 mb-1">
+                <Wallet className="h-4 w-4 text-[#1B2A4A]" />
+                <h3 className="text-sm font-semibold text-[#1B2A4A]">Saldo Inicial</h3>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">
+                Saldo real da conta no dia em que você começou a registrar os lançamentos.
+                Ele é usado como ponto de partida do Fluxo de Caixa para bater com o extrato do banco na conciliação.
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Saldo Inicial (R$)</Label>
+                  <MoneyInput
+                    value={form.saldoInicial}
+                    onChange={(v) => setForm(f => ({ ...f, saldoInicial: v }))}
+                    placeholder="0,00"
+                  />
+                </div>
+                <div>
+                  <Label>Data do Saldo Inicial</Label>
+                  <Input
+                    type="date"
+                    value={form.saldoInicialData}
+                    onChange={e => setForm(f => ({ ...f, saldoInicialData: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </div>
 
           </div>
 

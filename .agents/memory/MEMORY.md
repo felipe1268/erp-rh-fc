@@ -54,3 +54,5 @@
 - [NPS open link had no per-use limit](nps-open-link-no-limit.md) — public NPS link (no credId) accepts unlimited submissions; enforce 1-per-link via embedded linkId + atomic claim row.
 - [Master-only field must gate at backend](master-only-field-backend-gate.md) — dashboardAvaliacoesCliente does `select()` of all columns; a "só Admin Master" field must be stripped from the payload by role server-side, not just hidden in the UI.
 - [NPS fill-time clock](nps-fill-time-clock.md) — tempoRespostaSegundos = useRef(Date.now()) restarted on entering tab "avaliacao" (not mount), sent as round((now-start)/1000) min 1; logged users start on "obras" so mount-time inflates it.
+
+- [Saldo inicial conta bancária](saldo-inicial-conta-bancaria.md) — saldo de abertura vive em `financial_opening_balances` (1 linha/conta), NÃO em coluna; Fluxo de Caixa soma p/ semear o Acumulado; mutações de conta precisam de tenant guard.

@@ -1,6 +1,51 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2983 — **CADASTRO DE CONTAS BANCÁRIAS — NOVOS CAMPOS "SALDO INICIAL" + "DATA";
+ * SALDO INICIAL CONSIDERADO NO FLUXO DE CAIXA PARA CONCILIAR COM O EXTRATO REAL.**
+ *
+ * PEDIDO (usuário, 2 mensagens): (1) "No cadastro de contas bancárias, adicionar campos
+ * de saldo inicial e a data (o saldo da conta no dia X em que começaram os lançamentos)";
+ * (2) "Esse saldo deve ser considerado no Fluxo de Caixa para que a conciliação bancária
+ * bata com o extrato real".
+ *
+ * CONTEXTO: o Fluxo de Caixa começava o "Saldo Acumulado" do zero, então o caixa nunca
+ * batia com o extrato bancário real (que tem um saldo de abertura). Precisava de um ponto
+ * de partida = o saldo real da conta no dia em que os lançamentos começaram a ser
+ * registrados no ERP.
+ *
+ * SOLUÇÃO (BACK+FRONT, ZERO ALTER/DROP/DELETE — REUTILIZA tabela EXISTENTE
+ * `financial_opening_balances`, sem coluna/tabela nova, sem self-heal):
+ *   DECISÃO DE MODELAGEM: NÃO criar colunas em `company_bank_accounts`. O ERP já tem a
+ *   tabela `financial_opening_balances` (id, companyId, contaBancariaId, contaNome,
+ *   dataAbertura, valor, confirmedBy*) — JÁ consumida pelos KPIs financeiros e pelo KPI
+ *   service. O saldo inicial passa a viver lá (1 linha por conta), single-source-of-truth.
+ *   (1) BACKEND (`server/routers/folhaPagamento.ts`):
+ *       - helper `upsertSaldoInicialConta` — UPSERT SEM DELETE (R-001/R-007/R-010):
+ *         UPDATE da linha existente da conta (match companyId+contaBancariaId) ou INSERT
+ *         da 1ª; grava autor (confirmedByUserId/Name) p/ rastreabilidade.
+ *       - `listarContasBancarias`: além das contas, lê `financial_opening_balances` da
+ *         empresa e faz merge JS por `contaBancariaId`, devolvendo `saldoInicial` (number
+ *         ou null) e `saldoInicialData` (ISO ou null) em cada conta.
+ *       - `criarContaBancaria`: novos inputs opcionais `saldoInicial`/`saldoInicialData` +
+ *         `ctx`; insere a conta e, se veio `saldoInicialData`, grava o opening balance.
+ *       - `atualizarContaBancaria`: mesmos inputs + `ctx`; após o update, se veio
+ *         `saldoInicialData`, faz upsert do opening balance (resolve companyId pela conta).
+ *   (2) FRONT — CADASTRO (`client/src/pages/ContasBancarias.tsx`): seção "Saldo Inicial"
+ *       no form (campo `MoneyInput` R$ + `Input type=date`), com texto explicando o uso;
+ *       `ContaForm`/`emptyForm`/`openEdit`/`handleSave` carregam e enviam os campos
+ *       (gate: saldo sem data → toast de erro; só envia quando há data). Card da conta
+ *       mostra "Saldo inicial: R$ X em DD/MM/AAAA" quando houver.
+ *   (3) FRONT — FLUXO DE CAIXA (`client/src/pages/financeiro/FinanceiroFluxoCaixa.tsx`):
+ *       query `folha.listarContasBancarias`, soma `saldoInicialTotal` e o "Saldo
+ *       Acumulado" passa a partir desse total (antes `let acc = 0` → `let acc =
+ *       saldoInicialTotal`). Footnote explica a origem do saldo de partida.
+ *
+ * RESSALVA: a página de Fluxo de Caixa é anual (sem carry cross-ano); o saldo inicial
+ * ancora o acumulado dentro do ano, melhoria honesta vs. partir de zero. A Conciliação
+ * item-a-item (matching) não tem running balance e não foi alterada; o saldo inicial já
+ * fluía para os KPIs via `financial_opening_balances`.
+ *
  * Rev. 2982 — **PORTAL DO CLIENTE → NPS — MARCAÇÃO INTERNA DO TEMPO QUE CADA AVALIAÇÃO
  * LEVOU PARA SER PREENCHIDA (ABERTURA DO FORMULÁRIO → ENVIO), VISÍVEL SÓ PARA O ADMIN
  * MASTER.**
