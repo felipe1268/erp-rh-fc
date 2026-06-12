@@ -11,7 +11,7 @@ export type AvaliacaoLang = "pt" | "en" | "zh";
 
 export const AVALIACAO_LANGS: { value: AvaliacaoLang; label: string; flag: string }[] = [
   { value: "pt", label: "Português", flag: "🇧🇷" },
-  { value: "en", label: "English", flag: "🇬🇧" },
+  { value: "en", label: "English", flag: "🇺🇸" },
   { value: "zh", label: "中文", flag: "🇨🇳" },
 ];
 
