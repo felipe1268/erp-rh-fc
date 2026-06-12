@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2967 — **PORTAL DO CLIENTE → PESQUISA DE SATISFAÇÃO (NPS) PÚBLICA — CORREÇÃO DO CRASH
+ * "ReferenceError: Cannot access 'aval' before initialization" QUE DERRUBAVA A PÁGINA INTEIRA
+ * (TELA "OCORREU UM ERRO INESPERADO") AO ABRIR O LINK PÚBLICO DE AVALIAÇÃO.**
+ *
+ * REPORTADO (usuário, print iPad Safari, link público `/portal/...` → AvaliacaoPublica): a
+ * página de avaliação não abria — exibia "Ocorreu um erro inesperado" com
+ * "ReferenceError: Cannot access 'aval' before initialization", componente que falhou
+ * `PortalDashboardCliente@PortalDashboardCliente.tsx:146`.
+ *
+ * CAUSA-RAIZ: regressão introduzida na Rev. 2965. Ao adicionar os blocos `obraSel` /
+ * `gestorAuto` (e mantendo o effect "trava-obra" da Rev. 2892), o componente passou a
+ * referenciar `aval` e `setAval` em effects/memos (`useEffect` da trava-obra, `useMemo` do
+ * `obraSel`, `useEffect` do `gestorAuto`) que ficavam ACIMA da declaração
+ * `const [aval, setAval] = useState({...})`. Como `const`/`let` têm Temporal Dead Zone, o
+ * acesso a `aval` antes da linha de declaração lança o `ReferenceError` no primeiro render —
+ * e como é durante a renderização, o ErrorBoundary captura e troca a tela toda pelo fallback
+ * de erro. (Só não estourava antes da 2965 porque nada acima da declaração tocava em `aval`.)
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE): MOVER a declaração
+ * `const [aval, setAval] = useState<{...}>({...})` para ANTES dos effects/memos que a usam —
+ * logo após a query `minhasObras` e antes do effect da Rev. 2892. Removida a declaração
+ * duplicada que ficava mais abaixo (junto dos states `det*`) e o comentário de seção
+ * redundante. Nenhuma mudança de lógica/estado inicial: apenas reordenação para respeitar a
+ * ordem de declaração-antes-do-uso exigida pela TDZ. Hooks continuam na MESMA ordem relativa
+ * de execução (a contagem/ordem de hooks não muda — apenas a posição textual da declaração).
+ *
+ * ARQUIVOS: `client/src/pages/portal/PortalDashboardCliente.tsx` (declaração de `aval`/`setAval`
+ * movida para ~L171, antes do effect "trava-obra" da Rev. 2892 e do `obraSel`/`gestorAuto` da
+ * Rev. 2965; removido o bloco `useState` duplicado e o `// ===== Avaliação =====` redundante).
+ *
+ * IMPACTO: o link público de NPS volta a abrir normalmente; portal logado idem. Sem efeito
+ * em backend, schema ou em qualquer outro módulo.
+ *
  * Rev. 2966 — **AVISO PRÉVIO TRABALHADO (DO EMPREGADOR) — O DOCUMENTO VOLTA A SAIR COM A
  * SEÇÃO DE OPÇÃO DE REDUÇÃO DO ART. 488 CLT (2 HORAS DIÁRIAS OU 7 DIAS CORRIDOS), QUE TINHA
  * SUMIDO QUANDO A EMPRESA PASSOU A USAR TEMPLATE VIGENTE DA CENTRAL DE DOCUMENTOS.**

@@ -165,6 +165,36 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
   const { data: meusDados } = trpc.portalExterno.cliente.meusDados.useQuery({ token }, { enabled: !!token && tipo === "cliente" && !isPublic });
   const { data: minhasObras = [] } = trpc.portalExterno.cliente.minhasObras.useQuery({ token }, { enabled: !!token && tipo === "cliente" && !isPublic });
 
+  // ===== Avaliação =====
+  // Rev. 2967 — declarado ANTES dos effects/memos que usam `aval`/`setAval`
+  // (Rev. 2892 trava-obra + Rev. 2965 gestorAuto), senão dá TDZ
+  // "Cannot access 'aval' before initialization" e a tela quebra.
+  const [aval, setAval] = useState<{
+    obraId: number | null;
+    notaEquipe: number | null; notaObra: number | null; notaAtendimento: number | null;
+    notaPrazo: number | null; notaQualidade: number | null;
+    // Rev. 1592 — Escritório Central
+    notaEscritorio: number | null; notaFaturamento: number | null;
+    comentarioEscritorio: string;
+    notaEmpresa: number | null; notaGestor: number | null;
+    notaGeral: number | null;
+    comentarioPositivo: string; comentarioMelhoria: string;
+    comentarioEquipe: string; comentarioEmpresa: string; comentarioGestor: string;
+    gestorNome: string;
+    recomendaria: number | null;
+  }>({
+    obraId: null, notaEquipe: null, notaObra: null, notaAtendimento: null,
+    notaPrazo: null, notaQualidade: null,
+    notaEscritorio: null, notaFaturamento: null,
+    comentarioEscritorio: "",
+    notaEmpresa: null, notaGestor: null,
+    notaGeral: null,
+    comentarioPositivo: "", comentarioMelhoria: "",
+    comentarioEquipe: "", comentarioEmpresa: "", comentarioGestor: "",
+    gestorNome: "",
+    recomendaria: null,
+  });
+
   // Rev. 2892 — trava a obra do link público no estado da avaliação.
   useEffect(() => {
     if (linkObra) setAval((prev) => ({ ...prev, obraId: linkObra.id }));
@@ -202,32 +232,6 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
     onError: (e) => toast.error(e.message),
   });
 
-  // ===== Avaliação =====
-  const [aval, setAval] = useState<{
-    obraId: number | null;
-    notaEquipe: number | null; notaObra: number | null; notaAtendimento: number | null;
-    notaPrazo: number | null; notaQualidade: number | null;
-    // Rev. 1592 — Escritório Central
-    notaEscritorio: number | null; notaFaturamento: number | null;
-    comentarioEscritorio: string;
-    notaEmpresa: number | null; notaGestor: number | null;
-    notaGeral: number | null;
-    comentarioPositivo: string; comentarioMelhoria: string;
-    comentarioEquipe: string; comentarioEmpresa: string; comentarioGestor: string;
-    gestorNome: string;
-    recomendaria: number | null;
-  }>({
-    obraId: null, notaEquipe: null, notaObra: null, notaAtendimento: null,
-    notaPrazo: null, notaQualidade: null,
-    notaEscritorio: null, notaFaturamento: null,
-    comentarioEscritorio: "",
-    notaEmpresa: null, notaGestor: null,
-    notaGeral: null,
-    comentarioPositivo: "", comentarioMelhoria: "",
-    comentarioEquipe: "", comentarioEmpresa: "", comentarioGestor: "",
-    gestorNome: "",
-    recomendaria: null,
-  });
   // Rev. 2965 — critérios detalhados (0–10) por pessoa/tema. Cada mapa usa as
   // chaves de CRIT_* acima; valor null = não respondido. Vão p/ `detalhes`.
   const [detGestor, setDetGestor] = useState<Record<string, number | null>>({});
