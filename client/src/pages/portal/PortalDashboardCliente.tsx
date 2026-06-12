@@ -676,10 +676,7 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
               <div className="bg-white border rounded-2xl p-12 text-center">
                 <CheckCircle2 className="w-20 h-20 text-emerald-500 mx-auto mb-4" />
                 <h2 className="text-2xl font-bold text-slate-800 mb-2">Obrigado pela avaliação!</h2>
-                <p className="text-slate-600 mb-6">Suas respostas foram registradas <b>de forma totalmente anônima</b> e ajudarão a FC Engenharia a melhorar continuamente.</p>
-                <Button onClick={() => { setAvaliado(false); setDetGestor({}); setDetEncarregado({}); setDetEquipe({}); setDetEscritorio({}); setEncarregadoNome(""); setAval({ ...aval, notaGeral: null, notaEquipe: null, notaObra: null, notaAtendimento: null, notaPrazo: null, notaQualidade: null, notaEmpresa: null, notaGestor: null, notaEscritorio: null, notaFaturamento: null, comentarioEscritorio: "", comentarioPositivo: "", comentarioMelhoria: "", comentarioEquipe: "", comentarioEmpresa: "", comentarioGestor: "", gestorNome: gestorAuto || "", recomendaria: null, obraId: obraTravada ? obraTravada.id : null }); }} variant="outline">
-                  Enviar nova avaliação
-                </Button>
+                <p className="text-slate-600">Suas respostas foram registradas <b>de forma totalmente anônima</b> e ajudarão a FC Engenharia a melhorar continuamente.</p>
               </div>
             ) : (
               <div className="bg-white border rounded-2xl p-6 space-y-5">

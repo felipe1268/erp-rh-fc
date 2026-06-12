@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2981 — **PORTAL DO CLIENTE → NPS → TELA "OBRIGADO PELA AVALIAÇÃO!" — REMOVIDO O
+ * BOTÃO "ENVIAR NOVA AVALIAÇÃO".**
+ *
+ * PEDIDO (usuário, screenshot iOS da tela de confirmação "Obrigado pela avaliação!"):
+ * "Tire o botão enviar nova avaliação".
+ *
+ * CONTEXTO: depois que o cliente enviava a avaliação (NPS), a tela de agradecimento
+ * mostrava um botão "Enviar nova avaliação" que resetava o formulário (limpava notas/
+ * comentários/detalhes e voltava `avaliado=false`). Como cada link é de USO ÚNICO por
+ * período (Rev. 2973) e a regra é UMA avaliação por período, esse botão não fazia
+ * sentido e podia confundir o cliente.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, `PortalDashboardCliente.tsx`): removido
+ * o `<Button>` "Enviar nova avaliação" (e seu handler de reset inline) do card de
+ * confirmação; ajustado o espaçamento (o parágrafo perdeu o `mb-6`, que existia só para
+ * separar do botão). Nada mais muda — o gate de uso único e o claim atômico do backend
+ * seguem intactos. O componente `Button` continua importado (usado em outros pontos).
+ *
  * Rev. 2980 — **PORTAL DO CLIENTE → NPS → "LINK DE AVALIAÇÃO (SEM LOGIN)" — SOLUÇÃO
  * DEFINITIVA PARA O LINK QUE CHEGAVA TRUNCADO PELO WHATSAPP ("este link não está
  * vinculado a uma obra"): O LINK AGORA É UM SHORT-LINK CURTÍSSIMO (/a/<codigo>) EM VEZ
