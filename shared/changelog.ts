@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2992 — **LIBERAÇÕES DO PORTAL → SELEÇÃO DE "OBRAS LIBERADAS" AGORA VIVE
+ * DENTRO DA TELA "LIBERAÇÕES DO PORTAL — MÓDULOS E ABAS".**
+ *
+ * PEDIDO (usuário, Admin Master): "Coloca nesta tela a opção das obras que este
+ * cliente tem, que ele poderá ter acesso." Na tela "Liberações do Portal —
+ * Módulos e Abas" (acessada por usuário/credencial em `ClientesPortalAdmin.tsx`)
+ * havia só os blocos "1. Módulos do Portal" e "2. Abas do módulo Planejamento";
+ * a escolha de QUAIS OBRAS o usuário podia acessar (whitelist por credencial,
+ * Rev. 2851) ficava num modal SEPARADO ("Obras liberadas para o usuário"),
+ * fácil de esquecer.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, ZERO mudança de backend/schema —
+ * REUTILIZA a infra da Rev. 2851): adicionada a seção "3. Obras liberadas para
+ * este usuário" DENTRO do mesmo modal de Liberações, com o mesmo toggle
+ * "Todas as obras" × "Selecionar obras" e a mesma lista de checkboxes do modal
+ * dedicado. Detalhes da implementação:
+ *   - `abrirAbas(a)` agora também inicializa o estado de obras a partir da
+ *     credencial (`parseObrasLiberadas(a.obrasLiberadas)`: NULL = todas; [] =
+ *     nenhuma; [ids] = custom) — mesma régua de `abrirObras`.
+ *   - a query `obrasDoClienteAdmin` passa a derivar o `clienteId` de
+ *     `obrasTarget?.clienteId ?? abasTarget?.clienteId`, servindo os DOIS modais.
+ *   - o botão "Salvar liberações" passa a chamar `salvarLiberacoesCompletas`,
+ *     que dispara `setObrasLiberadasCliente` (obraIds = null no modo "todas" ou
+ *     `obrasSel` no "custom") E `setAbasLiberadasCliente` (módulos + abas) de uma
+ *     vez só. Badge de contagem de obras adicionado ao cabeçalho do modal.
+ *   - o modal dedicado "Obras liberadas para o usuário" (Rev. 2851) e seu botão
+ *     de atalho seguem intactos (mesmos estados/mutations compartilhados).
+ * Backend (`setObrasLiberadasCliente`/`obrasDoClienteAdmin`/`_assertObraPermitida`
+ * — Rev. 2851) e coluna `portal_credentials.obras_liberadas` INALTERADOS. NÃO
+ * requer migração; o efeito aparece imediatamente após republicar o front.
+ * ARQUIVO: `client/src/pages/ClientesPortalAdmin.tsx`.
+ *
  * Rev. 2991 — **PORTAL DO CLIENTE → PLANEJAMENTO → REFIS DIVERGIA DA BARRA
  * "AVANÇO FÍSICO" DO TOPO (CORRIGIDO — PARIDADE TOTAL PORTAL × ERP).**
  *

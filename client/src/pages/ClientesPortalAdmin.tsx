@@ -404,15 +404,24 @@ export default function ClientesPortalAdmin() {
     setAbasTarget(a);
     setAbasSel(parseAbasLiberadas(a.abasLiberadas));
     setModSel(parseModulosLiberados(a.abasLiberadas));
+    // Rev. 2992 — a seleção de OBRAS liberadas agora vive DENTRO desta mesma
+    // tela ("Liberações do Portal — Módulos e Abas"). Inicializa o estado de
+    // obras a partir da credencial (null = todas; [] = nenhuma; [ids] = custom).
+    const wl = parseObrasLiberadas(a.obrasLiberadas);
+    setObrasModo(wl === null ? "todas" : "custom");
+    setObrasSel(wl === null ? [] : wl);
   };
 
   // ===== Modal: obras liberadas por usuário (Rev. 2851) =====
   const [obrasTarget, setObrasTarget] = useState<any | null>(null);
   const [obrasModo, setObrasModo] = useState<"todas" | "custom">("todas");
   const [obrasSel, setObrasSel] = useState<number[]>([]);
+  // Rev. 2992 — a query serve TANTO o modal dedicado (obrasTarget) quanto a
+  // seção "3. Obras liberadas" embutida na tela de Liberações (abasTarget).
+  const obrasClienteId = obrasTarget?.clienteId ?? abasTarget?.clienteId ?? 0;
   const obrasDoCliente = trpc.portalExterno.admin.obrasDoClienteAdmin.useQuery(
-    { companyId, clienteId: obrasTarget?.clienteId ?? 0 },
-    { enabled: !!companyId && !!obrasTarget?.clienteId },
+    { companyId, clienteId: obrasClienteId },
+    { enabled: !!companyId && !!obrasClienteId },
   );
   const setObrasMut = trpc.portalExterno.admin.setObrasLiberadasCliente.useMutation({
     onSuccess: () => { toast.success("Obras liberadas atualizadas"); utils.portalExterno.admin.listarAcessosCliente.invalidate(); setObrasTarget(null); },
@@ -431,6 +440,14 @@ export default function ClientesPortalAdmin() {
     if (!obrasTarget) return;
     const obraIds = obrasModo === "todas" ? null : obrasSel;
     setObrasMut.mutate({ id: obrasTarget.id, companyId, obraIds });
+  };
+  // Rev. 2992 — botão "Salvar liberações" da tela de Liberações grava TUDO de
+  // uma vez: módulos + abas (setAbasMut) E obras liberadas (setObrasMut).
+  const salvarLiberacoesCompletas = () => {
+    if (!abasTarget) return;
+    const obraIds = obrasModo === "todas" ? null : obrasSel;
+    setObrasMut.mutate({ id: abasTarget.id, companyId, obraIds });
+    setAbasMut.mutate({ id: abasTarget.id, companyId, abas: [...Array.from(modSel), ...Array.from(abasSel)] });
   };
   const toggleAba = (k: PortalClienteAbaKey) => {
     if (k === ABA_OBRIGATORIA) return;
@@ -1793,6 +1810,7 @@ export default function ClientesPortalAdmin() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <Badge variant="outline" className="text-xs">{modSel.length} de {PORTAL_CLIENTE_MODULOS.length} módulos</Badge>
                     <Badge variant="outline" className="text-xs">{abasSel.length} de {PORTAL_CLIENTE_ABAS.length} abas</Badge>
+                    <Badge variant="outline" className="text-xs">{obrasModo === "todas" ? "Todas as obras" : `${obrasSel.length} obra(s)`}</Badge>
                   </div>
                 </div>
 
@@ -1950,6 +1968,87 @@ export default function ClientesPortalAdmin() {
                     </p>
                   </section>
 
+                  {/* ───── 3) OBRAS LIBERADAS (Rev. 2992 — integrado nesta tela) ───── */}
+                  <section>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                          <HardHat className="w-4 h-4 text-indigo-600" /> 3. Obras liberadas para este usuário
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Quais obras deste cliente este usuário pode acessar no Portal. <b>Todas</b> inclui as obras criadas no futuro; <b>Selecionar</b> restringe às marcadas.
+                        </p>
+                      </div>
+                    </div>
+                    {/* Toggle: Todas vs Selecionar */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                      <button type="button" onClick={() => setObrasModo("todas")}
+                        className={`flex items-start gap-2 border-2 rounded-lg p-3 text-left text-sm transition ${obrasModo === "todas" ? "border-indigo-400 bg-indigo-50" : "border-slate-200 bg-white hover:bg-slate-50"}`}>
+                        <Globe2 className={`w-5 h-5 shrink-0 ${obrasModo === "todas" ? "text-indigo-600" : "text-slate-400"}`} />
+                        <div>
+                          <div className="font-semibold text-slate-800">Todas as obras</div>
+                          <div className="text-[11px] text-slate-500 mt-0.5">Vê todas as obras do cliente — inclusive as criadas no futuro.</div>
+                        </div>
+                      </button>
+                      <button type="button" onClick={() => setObrasModo("custom")}
+                        className={`flex items-start gap-2 border-2 rounded-lg p-3 text-left text-sm transition ${obrasModo === "custom" ? "border-indigo-400 bg-indigo-50" : "border-slate-200 bg-white hover:bg-slate-50"}`}>
+                        <SlidersHorizontal className={`w-5 h-5 shrink-0 ${obrasModo === "custom" ? "text-indigo-600" : "text-slate-400"}`} />
+                        <div>
+                          <div className="font-semibold text-slate-800">Selecionar obras</div>
+                          <div className="text-[11px] text-slate-500 mt-0.5">Escolha exatamente quais obras este usuário pode ver.</div>
+                        </div>
+                      </button>
+                    </div>
+                    {/* Lista de obras (modo custom) */}
+                    <div className={obrasModo === "custom" ? "" : "opacity-50 pointer-events-none"}>
+                      {obrasDoCliente.isLoading ? (
+                        <div className="flex items-center justify-center py-6 text-slate-400 text-sm gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" /> Carregando obras…
+                        </div>
+                      ) : (obrasDoCliente.data || []).length === 0 ? (
+                        <div className="border border-dashed border-slate-200 rounded-xl p-6 text-center bg-slate-50/50">
+                          <Building2 className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                          <p className="text-sm text-slate-500">Nenhuma obra vinculada a este cliente.</p>
+                          <p className="text-[11px] text-slate-400 mt-1">A obra é vinculada pelo nome do cliente no cadastro da obra.</p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-[11px] text-slate-500">{(obrasDoCliente.data || []).length} obra(s) do cliente</p>
+                            <div className="flex gap-1.5">
+                              <Button variant="outline" size="sm" onClick={() => setObrasSel((obrasDoCliente.data || []).map((o: any) => o.id))}>Marcar todas</Button>
+                              <Button variant="outline" size="sm" onClick={() => setObrasSel([])}>Limpar</Button>
+                            </div>
+                          </div>
+                          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                            {(obrasDoCliente.data || []).map((o: any) => {
+                              const sel = obrasSel.includes(o.id);
+                              return (
+                                <label key={o.id}
+                                  className={`flex items-start gap-2 border rounded-lg p-3 cursor-pointer text-sm transition ${sel ? "border-indigo-300 bg-indigo-50" : "bg-white hover:bg-slate-50"}`}>
+                                  <input type="checkbox" className="mt-0.5" checked={sel} onChange={() => toggleObra(o.id)} />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-medium text-slate-800 truncate">{o.nome}</div>
+                                    <div className="text-[11px] text-slate-500 flex items-center gap-2 flex-wrap mt-0.5">
+                                      {o.codigo && <span className="inline-flex items-center gap-1"><Building2 className="w-3 h-3" />{o.codigo}</span>}
+                                      {(o.cidade || o.estado) && <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3" />{[o.cidade, o.estado].filter(Boolean).join("/")}</span>}
+                                      {o.status && <Badge variant="outline" className="text-[9px]">{o.status}</Badge>}
+                                    </div>
+                                  </div>
+                                </label>
+                              );
+                            })}
+                          </div>
+                          {obrasModo === "custom" && obrasSel.length === 0 && (
+                            <p className="text-[11px] text-amber-600 mt-3 flex items-center gap-1.5">
+                              <AlertCircle className="w-3.5 h-3.5" /> Nenhuma obra marcada — este usuário não verá nenhuma obra.
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </section>
+
                   {/* RH&Docs / Proj./Doc. / Avaliação não têm abas internas configuráveis hoje. */}
                   <section className="border border-dashed border-slate-200 rounded-lg p-3 bg-slate-50/50">
                     <p className="text-[11px] text-slate-500">
@@ -1964,9 +2063,9 @@ export default function ClientesPortalAdmin() {
               className="gap-2 px-6 py-4 border-t bg-slate-50 shrink-0 flex-row flex-wrap"
               style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}>
               <Button variant="outline" onClick={() => setAbasTarget(null)}>Cancelar</Button>
-              <Button onClick={() => abasTarget && setAbasMut.mutate({ id: abasTarget.id, companyId, abas: [...Array.from(modSel), ...Array.from(abasSel)] })}
-                disabled={setAbasMut.isPending || !abasTarget} className="bg-indigo-600 hover:bg-indigo-700 gap-2">
-                {setAbasMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              <Button onClick={salvarLiberacoesCompletas}
+                disabled={setAbasMut.isPending || setObrasMut.isPending || !abasTarget} className="bg-indigo-600 hover:bg-indigo-700 gap-2">
+                {(setAbasMut.isPending || setObrasMut.isPending) ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                 Salvar liberações
               </Button>
             </DialogFooter>
