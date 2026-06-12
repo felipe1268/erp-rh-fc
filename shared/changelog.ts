@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2990 — **PORTAL DO CLIENTE (LOGADO) → NPS → CAMPO "NOME DO ENCARREGADO"
+ * NÃO VINHA PRÉ-PREENCHIDO COMO NO LINK PÚBLICO (CORRIGIDO — PARIDADE TOTAL).**
+ *
+ * PEDIDO (usuário, Admin Master): ao avaliar pelo PORTAL DO CLIENTE LOGADO
+ * (`/portal/cliente/...`, selecionando a obra no dropdown "Sobre qual obra?"), a
+ * tela precisa ficar 100% igual à do LINK público — o NOME DO GESTOR E o NOME DO
+ * ENCARREGADO aparecendo preenchidos automaticamente, sem diferença. No print
+ * (obra REVTE-CIVIL), o GESTOR aparecia auto-preenchido ("CAIO AUGUSTO DA SILVA
+ * GARUFE — preenchido automaticamente") mas o ENCARREGADO ficava como campo de
+ * texto VAZIO ("Ex.: Sr. José Carlos").
+ *
+ * CAUSA-RAIZ: o componente `PortalDashboardCliente` resolve ambos os nomes pelos
+ * mesmos memos (`gestorAuto`/`encarregadoAuto`) e renderiza o MESMO selo "preenchido
+ * automaticamente" quando o valor existe. A diferença estava na FONTE de dados no
+ * modo PORTAL LOGADO: o backend `podeAvaliarEsteMes` deriva gestor+encarregado AO
+ * VIVO (Rev. 2971), mas a partir do `obraId` embutido NO TOKEN — que existe no link
+ * público, e NÃO na sessão do portal logado (lá a obra vem do dropdown). Por isso,
+ * no portal, `gestorAuto` ainda preenchia via fallback `obraSel.responsavel` (que
+ * `cliente.minhasObras` JÁ retornava desde a Rev. 2965), mas `encarregadoAuto` ficava
+ * `null` porque `cliente.minhasObras` NÃO retornava `encarregadoNome` — e o token
+ * logado não tem obra para o backend derivar.
+ *
+ * SOLUÇÃO (BACKEND-only, ZERO ALTER/DROP/DELETE): em
+ * `server/routers/portalExterno.ts`, o endpoint `cliente.minhasObras` agora deriva e
+ * retorna `encarregadoNome` POR OBRA, usando EXATAMENTE a mesma régua do link público
+ * (Rev. 2970) e do `podeAvaliarEsteMes` (Rev. 2971): `getEquipeObra(obraId, companyId)`
+ * → indireto do efetivo cuja `funcao`/`cargo` (uppercase) contém "ENCARREGAD" →
+ * `nomeCompleto`. O `.map()` virou `await Promise.all(list.map(async ...))` (derivação
+ * em paralelo por obra) e cada obra é DEFENSIVA (try/catch → `null` em falha, campo
+ * volta a ser manual; nunca derruba a lista). No cliente, `encarregadoAuto` já tinha
+ * o fallback `(obraSel as any)?.encarregadoNome` (Rev. 2971) — agora ele resolve e a
+ * tela do portal logado fica idêntica à do link. NENHUMA mudança de schema, de JSX ou
+ * de contrato do token; só a obra do dropdown passa a carregar o encarregado.
+ *
+ * RESSALVA: a derivação respeita tenant (companyId do token) e a whitelist de obras
+ * por credencial (Rev. 2851) já aplicada antes do map. Requer REPUBLICAR para o
+ * cliente ver o efeito em produção.
+ *
  * Rev. 2989 — **PORTAL DO CLIENTE → NPS → LINK PÚBLICO CURTO `/a/<codigo>`
  * REDIRECIONAVA O CLIENTE PARA `/login` EM PRODUÇÃO (CORRIGIDO).**
  *

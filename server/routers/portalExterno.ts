@@ -1927,14 +1927,34 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       const [emp] = await db.select().from(companies).where(eq(companies.id, decoded.companyId));
       const empresaLogoUrl = emp?.logoUrl || null;
       const empresaNome = emp?.nomeFantasia || emp?.razaoSocial || null;
-      return list.map((o: any) => ({
-        id: o.id, nome: o.nome, codigo: o.codigo, cidade: o.cidade, estado: o.estado,
-        status: o.status, dataInicio: o.dataInicio, dataPrevisaoFim: o.dataPrevisaoFim,
-        clienteLogoUrl: o.clienteLogoUrl, gerenciadoraNome: o.gerenciadoraNome, gerenciadoraLogoUrl: o.gerenciadoraLogoUrl,
-        cliente: o.cliente,
-        // Rev. 2965 — responsável (gestor) p/ pré-preencher o nome do gestor na avaliação.
-        responsavel: (o.responsavel || "").trim() || null,
-        empresaLogoUrl, empresaNome,
+      // Rev. 2990 — ENCARREGADO (efetivo da obra) p/ pré-preencher o NOME DO
+      // ENCARREGADO na avaliação do PORTAL LOGADO, EXATAMENTE como já acontece no
+      // link público (Rev. 2970). Sem isso o gestor preenchia (via `responsavel`)
+      // mas o encarregado ficava como campo vazio — diferença que o usuário pediu
+      // para eliminar. Mesma régua do link/podeAvaliarEsteMes: indireto do efetivo
+      // cuja função/cargo contém "ENCARREGAD". Defensivo: falha por obra → null
+      // (campo volta a ser manual, nunca derruba a lista).
+      return await Promise.all(list.map(async (o: any) => {
+        let encarregadoNome: string | null = null;
+        try {
+          const equipe = await getEquipeObra(o.id, decoded.companyId);
+          const enc = equipe.find((e: any) =>
+            e.categoria === "Indireto" &&
+            /ENCARREGAD/.test(`${e.funcao || ""} ${e.cargo || ""}`.toUpperCase())
+          );
+          encarregadoNome = (enc?.nomeCompleto || "").trim() || null;
+        } catch { encarregadoNome = null; }
+        return {
+          id: o.id, nome: o.nome, codigo: o.codigo, cidade: o.cidade, estado: o.estado,
+          status: o.status, dataInicio: o.dataInicio, dataPrevisaoFim: o.dataPrevisaoFim,
+          clienteLogoUrl: o.clienteLogoUrl, gerenciadoraNome: o.gerenciadoraNome, gerenciadoraLogoUrl: o.gerenciadoraLogoUrl,
+          cliente: o.cliente,
+          // Rev. 2965 — responsável (gestor) p/ pré-preencher o nome do gestor na avaliação.
+          responsavel: (o.responsavel || "").trim() || null,
+          // Rev. 2990 — encarregado derivado do efetivo (paridade com o link público).
+          encarregadoNome,
+          empresaLogoUrl, empresaNome,
+        };
       }));
     }),
 
