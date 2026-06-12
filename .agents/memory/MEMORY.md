@@ -51,3 +51,4 @@
 - [iOS iframe image download](ios-iframe-image-download.md) — image/attachment url inside <iframe> downloads on iOS instead of rendering; use <img> / DocumentPreviewDialog.
 - [tsc incremental stale-clean](tsc-incremental-stale.md) — `tsc --noEmit` here is incremental; right after a client edit it can report CLEAN despite a real error (e.g. dup const). Verify via fresh tsc (rm tsbuildinfo) or esbuild parse.
 - [SyncSchema+ log is capped](syncschema-log-cap.md) — `[SyncSchema+]` is ONE long sequential block; captured log file caps ~49 lines, so a missing `Rev. N` line ≠ failure. Verify new tables by connecting to NEON_DATABASE_URL directly (pg), not executeSql.
+- [NPS open link had no per-use limit](nps-open-link-no-limit.md) — public NPS link (no credId) accepts unlimited submissions; enforce 1-per-link via embedded linkId + atomic claim row.

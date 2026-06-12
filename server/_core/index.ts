@@ -3017,6 +3017,22 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2965: tabela cliente_avaliacao_detalhes garantida (critérios granulares da avaliação NPS).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2965 cliente_avaliacao_detalhes:`, e?.message || e); }
 
+        // ── Rev. 2973 — Links de avaliação (NPS) de USO ÚNICO (one-shot) ──
+        // Cada link público gerado com `linkId` (nonce) só permite UMA avaliação.
+        // O claim é atômico via PRIMARY KEY + ON CONFLICT DO NOTHING. Tabela NOVA;
+        // links antigos (sem linkId) seguem com o comportamento anterior.
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS cliente_avaliacao_link_uso (
+              link_id TEXT PRIMARY KEY,
+              company_id INTEGER,
+              obra_id INTEGER,
+              usado_em TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          console.log(`[SyncSchema+] Rev. 2973: tabela cliente_avaliacao_link_uso garantida (links NPS de uso único).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2973 cliente_avaliacao_link_uso:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

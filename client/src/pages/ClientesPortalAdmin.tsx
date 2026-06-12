@@ -89,21 +89,30 @@ export default function ClientesPortalAdmin() {
   // Rev. 2890 — Gerar link público de avaliação (NPS) p/ enviar ao cliente.
   // Rev. 2892 — link SEPARADO POR OBRA: seletor opcional de obra embutida no token.
   const [linkAvaliacao, setLinkAvaliacao] = useState<string>("");
+  const [linksAvaliacao, setLinksAvaliacao] = useState<string[]>([]);
   const [linkObraNome, setLinkObraNome] = useState<string | null>(null);
   const [linkObraId, setLinkObraId] = useState<number | "">("");
+  // Rev. 2973 — quantos links DE USO ÚNICO gerar de uma vez (cada link = 1 avaliação).
+  const [linkQtd, setLinkQtd] = useState<number>(1);
   const obrasEmpresa = trpc.portalExterno.admin.obrasDaEmpresaAdmin.useQuery(
     { companyId: companyId ?? 0 },
     { enabled: !!companyId },
   );
   const gerarLinkAvalMut = trpc.portalExterno.admin.gerarLinkAvaliacao.useMutation({
     onSuccess: (r) => {
-      const url = `${window.location.origin}/portal/avaliacao/${r.token}`;
-      setLinkAvaliacao(url);
+      const tokens = (r as any).tokens?.length ? (r as any).tokens as string[] : [r.token];
+      const urls = tokens.map((t) => `${window.location.origin}/portal/avaliacao/${t}`);
+      setLinksAvaliacao(urls);
+      setLinkAvaliacao(urls[0]);
       setLinkObraNome(r.obraNome ?? null);
-      navigator.clipboard?.writeText(url).then(
-        () => toast.success("Link gerado e copiado para a área de transferência!"),
-        () => toast.success("Link de avaliação gerado!"),
-      );
+      if (urls.length === 1) {
+        navigator.clipboard?.writeText(urls[0]).then(
+          () => toast.success("Link gerado e copiado para a área de transferência!"),
+          () => toast.success("Link de avaliação gerado!"),
+        );
+      } else {
+        toast.success(`${urls.length} links de uso único gerados!`);
+      }
     },
     onError: (e) => toast.error(e.message),
   });
@@ -588,14 +597,32 @@ export default function ClientesPortalAdmin() {
                       <option key={o.id} value={o.id}>{o.nome}</option>
                     ))}
                 </select>
+                {/* Rev. 2973 — quantos links DE USO ÚNICO gerar (cada link = 1 avaliação) */}
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs text-slate-500 whitespace-nowrap" title="Cada link permite apenas UMA avaliação. Gere vários para enviar a avaliadores diferentes da mesma obra.">
+                    Qtd. de links
+                  </label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={linkQtd}
+                    onChange={(e) => {
+                      const n = Math.floor(Number(e.target.value));
+                      setLinkQtd(Number.isFinite(n) ? Math.min(50, Math.max(1, n)) : 1);
+                    }}
+                    className="w-16 text-sm"
+                    title="Cada link permite apenas UMA avaliação"
+                  />
+                </div>
                 <Button
-                  onClick={() => companyId && gerarLinkAvalMut.mutate({ companyId, obraId: linkObraId === "" ? null : linkObraId })}
+                  onClick={() => companyId && gerarLinkAvalMut.mutate({ companyId, obraId: linkObraId === "" ? null : linkObraId, quantidade: linkQtd })}
                   disabled={gerarLinkAvalMut.isPending || !companyId}
                   size="sm"
                   className="ml-auto gap-1.5 bg-blue-600 hover:bg-blue-700"
                 >
                   {gerarLinkAvalMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
-                  Gerar link
+                  {linkQtd > 1 ? `Gerar ${linkQtd} links` : "Gerar link"}
                 </Button>
               </div>
               {linkAvaliacao && (
@@ -603,41 +630,56 @@ export default function ClientesPortalAdmin() {
                   <span className="text-xs font-medium text-slate-600 w-full">
                     {linkObraNome ? <>Link vinculado à obra: <b className="text-slate-800">{linkObraNome}</b></> : "Link de avaliação geral (sem obra específica)"}
                   </span>
-                  <Input readOnly value={linkAvaliacao} onFocus={(e) => e.currentTarget.select()} className="flex-1 min-w-[260px] text-xs font-mono" />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5"
-                    onClick={() => navigator.clipboard?.writeText(linkAvaliacao).then(
-                      () => toast.success("Link copiado!"),
-                      () => toast.error("Não foi possível copiar"),
-                    )}
-                  >
-                    <Copy className="w-4 h-4" /> Copiar
-                  </Button>
-                  <a href={linkAvaliacao} target="_blank" rel="noopener noreferrer">
-                    <Button variant="outline" size="sm" className="gap-1.5">
-                      <ExternalLink className="w-4 h-4" /> Abrir
-                    </Button>
-                  </a>
-                  {/* Rev. 2969 — compartilhar via WhatsApp com mensagem cordial pronta */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5 text-green-700 border-green-300 hover:bg-green-50"
-                    onClick={() => {
-                      const msg =
-                        `Olá! Tudo bem? 😊\n\n` +
-                        `Aqui é da *FC Engenharia*. Antes de tudo, queremos agradecer muito pela confiança em nosso trabalho${linkObraNome ? ` na obra ${linkObraNome}` : ""} — é um prazer ter você como nosso cliente.\n\n` +
-                        `A sua opinião é o que nos move a melhorar a cada dia. Por isso, gostaríamos de convidá-lo(a) a compartilhar como tem sido a sua experiência com a nossa equipe.\n\n` +
-                        `A avaliação é bem rapidinha (leva só alguns minutos), totalmente anônima e nos ajuda demais a evoluir e a oferecer um serviço cada vez melhor para você.\n\n` +
-                        `Quando puder, é só acessar por aqui:\n${linkAvaliacao}\n\n` +
-                        `Muito obrigado pelo seu tempo e pela parceria! Conte sempre conosco. 🤝`;
-                      window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer");
-                    }}
-                  >
-                    <MessageSquare className="w-4 h-4" /> WhatsApp
-                  </Button>
+                  {/* Rev. 2973 — cada link é DE USO ÚNICO (1 avaliação) */}
+                  <span className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-0.5 w-full">
+                    {(linksAvaliacao.length || 1) > 1
+                      ? `${linksAvaliacao.length} links gerados — cada um permite apenas UMA avaliação. Envie um para cada avaliador.`
+                      : "Este link permite apenas UMA avaliação."}
+                  </span>
+                  <div className="flex flex-col gap-2 w-full">
+                    {(linksAvaliacao.length ? linksAvaliacao : [linkAvaliacao]).map((url, idx) => (
+                      <div key={url} className="flex flex-wrap items-center gap-2">
+                        {(linksAvaliacao.length || 1) > 1 && (
+                          <span className="text-xs font-semibold text-slate-500 w-6 text-right">{idx + 1}.</span>
+                        )}
+                        <Input readOnly value={url} onFocus={(e) => e.currentTarget.select()} className="flex-1 min-w-[260px] text-xs font-mono" />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={() => navigator.clipboard?.writeText(url).then(
+                            () => toast.success("Link copiado!"),
+                            () => toast.error("Não foi possível copiar"),
+                          )}
+                        >
+                          <Copy className="w-4 h-4" /> Copiar
+                        </Button>
+                        <a href={url} target="_blank" rel="noopener noreferrer">
+                          <Button variant="outline" size="sm" className="gap-1.5">
+                            <ExternalLink className="w-4 h-4" /> Abrir
+                          </Button>
+                        </a>
+                        {/* Rev. 2969 — compartilhar via WhatsApp com mensagem cordial pronta */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5 text-green-700 border-green-300 hover:bg-green-50"
+                          onClick={() => {
+                            const msg =
+                              `Olá! Tudo bem? 😊\n\n` +
+                              `Aqui é da *FC Engenharia*. Antes de tudo, queremos agradecer muito pela confiança em nosso trabalho${linkObraNome ? ` na obra ${linkObraNome}` : ""} — é um prazer ter você como nosso cliente.\n\n` +
+                              `A sua opinião é o que nos move a melhorar a cada dia. Por isso, gostaríamos de convidá-lo(a) a compartilhar como tem sido a sua experiência com a nossa equipe.\n\n` +
+                              `A avaliação é bem rapidinha (leva só alguns minutos), totalmente anônima e nos ajuda demais a evoluir e a oferecer um serviço cada vez melhor para você.\n\n` +
+                              `Quando puder, é só acessar por aqui:\n${url}\n\n` +
+                              `Muito obrigado pelo seu tempo e pela parceria! Conte sempre conosco. 🤝`;
+                            window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer");
+                          }}
+                        >
+                          <MessageSquare className="w-4 h-4" /> WhatsApp
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

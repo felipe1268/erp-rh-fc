@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2973 — **PORTAL DO CLIENTE → ADMINISTRAÇÃO → AVALIAÇÕES (NPS) → "LINK DE AVALIAÇÃO
+ * (SEM LOGIN)" — AGORA É POSSÍVEL ESCOLHER QUANTOS LINKS GERAR DE UMA VEZ (EX.: 3
+ * AVALIADORES NA MESMA OBRA), E CADA LINK PASSA A SER DE USO ÚNICO (PERMITE APENAS UMA
+ * AVALIAÇÃO).**
+ *
+ * PEDIDO (usuário): ao gerar o link de avaliação, perguntar QUANTOS links criar — pois
+ * pode haver vários avaliadores na mesma obra — partindo da premissa de que "cada link só
+ * permite UMA avaliação".
+ *
+ * CAUSA-RAIZ / DESCOBERTA: o link ABERTO/público (sem `credId`/`portalId`) NÃO tinha limite
+ * algum — `criarAvaliacao` só gravava em `cliente_avaliacao_marcacoes` quando havia `credId`,
+ * e `podeAvaliarEsteMes` com `!credId` sempre retornava `podeAvaliar:true, jaAvaliou:false`.
+ * Ou seja, na prática 1 link = avaliações ILIMITADAS. Para honrar a premissa do usuário foi
+ * preciso introduzir um controle de uso POR LINK.
+ *
+ * SOLUÇÃO (BACK+FRONT, ZERO ALTER/DROP/DELETE):
+ * - SELF-HEAL (`server/_core/index.ts`, bloco `[SyncSchema+]`): nova tabela
+ *   `cliente_avaliacao_link_uso (link_id TEXT PRIMARY KEY, company_id INT, obra_id INT,
+ *   usado_em TIMESTAMP DEFAULT NOW())` — registro de "link consumido". `CREATE TABLE IF NOT
+ *   EXISTS` (tabela NOVA, sem ALTER/DROP em tabelas existentes).
+ * - BACKEND (`server/routers/portalExterno.ts`):
+ *   • `gerarLinkAvaliacao` ganha input `quantidade` (int 1–50, default 1). Gera N tokens, cada
+ *     um com um `linkId = crypto.randomUUID()` (nonce) + `unico:true`. Retorna `tokens: string[]`
+ *     além de `token` (= tokens[0], p/ COMPAT com consumidores antigos).
+ *   • `criarAvaliacao`: se o token traz `linkId`, faz CLAIM ATÔMICO
+ *     `INSERT INTO cliente_avaliacao_link_uso ... ON CONFLICT (link_id) DO NOTHING RETURNING` —
+ *     0 linhas = link já usado → `FORBIDDEN` ("Este link já foi utilizado..."). Sem `linkId`
+ *     (links antigos) → comportamento anterior (sem limite), backward-compat.
+ *   • `podeAvaliarEsteMes`: se o token traz `linkId`, o "já avaliou" passa a ser POR LINK
+ *     (consulta `cliente_avaliacao_link_uso`), independente de credId.
+ * - FRONTEND (`client/src/pages/ClientesPortalAdmin.tsx`): novo input numérico "Qtd. de links"
+ *   (1–50) ao lado do "Gerar link"; ao gerar, renderiza a LISTA de links, cada um com seus
+ *   botões Copiar/Abrir/WhatsApp (mensagem cordial da Rev. 2972, agora por link), e um aviso de
+ *   que "cada link permite apenas UMA avaliação".
+ *
+ * ARQUIVOS: `server/_core/index.ts`, `server/routers/portalExterno.ts`,
+ * `client/src/pages/ClientesPortalAdmin.tsx`.
+ *
  * Rev. 2972 — **PORTAL DO CLIENTE → ADMINISTRAÇÃO → AVALIAÇÕES (NPS) → "LINK DE AVALIAÇÃO
  * (SEM LOGIN)" → BOTÃO "WHATSAPP" — MENSAGEM CORDIAL REESCRITA, MAIS CALOROSA E
  * AGRADECIDA, COM SAUDAÇÃO/EMOJIS, AGRADECIMENTO PELA CONFIANÇA E TOM DE PARCERIA.**

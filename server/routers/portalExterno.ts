@@ -1385,6 +1385,10 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       // Rev. 2892 — link público SEPARADO POR OBRA: quando informado, a obra
       // fica embutida (e travada) no token, evitando avaliação na obra errada.
       obraId: z.number().nullable().optional(),
+      // Rev. 2973 — quantidade de links DE USO ÚNICO a gerar de uma vez. Cada
+      // link só permite UMA avaliação (one-shot via `linkId`); útil quando há
+      // vários avaliadores na mesma obra. Default 1; teto defensivo de 50.
+      quantidade: z.number().int().min(1).max(50).optional(),
     })).mutation(async ({ input, ctx }) => {
       if (ctx.user.role !== "admin_master" && ctx.user.role !== "admin") {
         throw new TRPCError({ code: "FORBIDDEN", message: "Acesso restrito a administradores." });
@@ -1425,13 +1429,25 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         } catch { encarregadoNome = null; }
       }
       const secret = process.env.JWT_SECRET || "portal-secret";
-      const token = jwt.sign({
-        tipo: "cliente",
-        companyId: input.companyId,
-        linkAberto: true,
-        ...(obraId ? { obraId, obraNome, ...(gestorNome ? { gestorNome } : {}), ...(encarregadoNome ? { encarregadoNome } : {}) } : {}),
-      }, secret, { expiresIn: "180d" });
-      return { token, obraId, obraNome, gestorNome, encarregadoNome };
+      // Rev. 2973 — gera N tokens DE USO ÚNICO de uma vez. Cada token carrega um
+      // `linkId` (nonce) que, no envio da avaliação, é "consumido" atomicamente em
+      // cliente_avaliacao_link_uso — então cada link só vale UMA avaliação.
+      const qtd = Math.min(50, Math.max(1, input.quantidade ?? 1));
+      const tokens: string[] = [];
+      for (let i = 0; i < qtd; i++) {
+        const linkId = crypto.randomUUID();
+        tokens.push(jwt.sign({
+          tipo: "cliente",
+          companyId: input.companyId,
+          linkAberto: true,
+          linkId,
+          unico: true,
+          ...(obraId ? { obraId, obraNome, ...(gestorNome ? { gestorNome } : {}), ...(encarregadoNome ? { encarregadoNome } : {}) } : {}),
+        }, secret, { expiresIn: "180d" }));
+      }
+      // Compat: `token` = primeiro link (consumidores antigos seguem funcionando);
+      // `tokens` = lista completa p/ o front renderizar todos os links.
+      return { token: tokens[0], tokens, obraId, obraNome, gestorNome, encarregadoNome };
     }),
 
     // Rev. 2892 — lista todas as obras da empresa p/ o seletor do "link por obra".
@@ -1982,31 +1998,51 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       const notaFaturamentoFinal = input.notaFaturamento ?? (esc?.faturamento ?? null);
       const gestorNomeFinal = (input.gestorNome || g?.nome || "").trim() || null;
 
-      const [novaAval] = await db.insert(clienteAvaliacoes).values({
-        companyId: decoded.companyId,
-        obraId: obraIdEfetivo,
-        obraNome,
-        notaEquipe: notaEquipeFinal,
-        notaObra: input.notaObra ?? null,
-        notaAtendimento: input.notaAtendimento ?? null,
-        notaPrazo: input.notaPrazo ?? null,
-        notaQualidade: input.notaQualidade ?? null,
-        notaEmpresa: input.notaEmpresa ?? null,
-        notaGestor: notaGestorFinal,
-        // Rev. 1592 — Escritório Central
-        notaEscritorio: notaEscritorioFinal,
-        notaFaturamento: notaFaturamentoFinal,
-        notaGeral: input.notaGeral,
-        comentarioPositivo: input.comentarioPositivo || null,
-        comentarioMelhoria: input.comentarioMelhoria || null,
-        comentarioEquipe: input.comentarioEquipe || null,
-        comentarioEmpresa: input.comentarioEmpresa || null,
-        comentarioGestor: input.comentarioGestor || null,
-        comentarioEscritorio: input.comentarioEscritorio || null,
-        gestorNome: gestorNomeFinal,
-        recomendaria: input.recomendaria ?? null,
-        anoPeriodo,
-      }).returning({ id: clienteAvaliacoes.id });
+      // Rev. 2973 — CLAIM do LINK DE USO ÚNICO + insert da avaliação na MESMA
+      // transação: se o token traz `linkId`, "consome" o link atomicamente
+      // (PK + ON CONFLICT DO NOTHING). Se o insert da avaliação falhar, a
+      // transação faz ROLLBACK e o link NÃO fica gasto (sem persistência).
+      // Links antigos (sem `linkId`) seguem o comportamento anterior.
+      const novaAval = await db.transaction(async (tx: any) => {
+        if (decoded.linkId) {
+          const claimLink = await tx.execute(sql`
+            INSERT INTO cliente_avaliacao_link_uso (link_id, company_id, obra_id)
+            VALUES (${String(decoded.linkId)}, ${decoded.companyId ?? null}, ${obraIdEfetivo})
+            ON CONFLICT (link_id) DO NOTHING
+            RETURNING link_id
+          `);
+          const linkRows = ((claimLink as any).rows ?? claimLink ?? []) as any[];
+          if (linkRows.length === 0) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Este link de avaliação já foi utilizado. Cada link permite apenas uma avaliação." });
+          }
+        }
+        const [row] = await tx.insert(clienteAvaliacoes).values({
+          companyId: decoded.companyId,
+          obraId: obraIdEfetivo,
+          obraNome,
+          notaEquipe: notaEquipeFinal,
+          notaObra: input.notaObra ?? null,
+          notaAtendimento: input.notaAtendimento ?? null,
+          notaPrazo: input.notaPrazo ?? null,
+          notaQualidade: input.notaQualidade ?? null,
+          notaEmpresa: input.notaEmpresa ?? null,
+          notaGestor: notaGestorFinal,
+          // Rev. 1592 — Escritório Central
+          notaEscritorio: notaEscritorioFinal,
+          notaFaturamento: notaFaturamentoFinal,
+          notaGeral: input.notaGeral,
+          comentarioPositivo: input.comentarioPositivo || null,
+          comentarioMelhoria: input.comentarioMelhoria || null,
+          comentarioEquipe: input.comentarioEquipe || null,
+          comentarioEmpresa: input.comentarioEmpresa || null,
+          comentarioGestor: input.comentarioGestor || null,
+          comentarioEscritorio: input.comentarioEscritorio || null,
+          gestorNome: gestorNomeFinal,
+          recomendaria: input.recomendaria ?? null,
+          anoPeriodo,
+        }).returning({ id: clienteAvaliacoes.id });
+        return row;
+      });
 
       // Rev. 2965 — persiste o detalhamento granular (1 linha por avaliação) quando enviado.
       if (det && novaAval?.id) {
@@ -2102,6 +2138,14 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
           );
           encarregadoNome = (enc?.nomeCompleto || "").trim() || null;
         } catch { encarregadoNome = null; }
+      }
+      // Rev. 2973 — LINK DE USO ÚNICO: se o token tem `linkId`, o "já avaliou" é
+      // por LINK (consumido em cliente_avaliacao_link_uso), independente de credId.
+      if (decoded.linkId) {
+        const usado = await db.execute(sql`SELECT 1 FROM cliente_avaliacao_link_uso WHERE link_id = ${String(decoded.linkId)} LIMIT 1`);
+        const usadoRows = ((usado as any).rows ?? usado ?? []) as any[];
+        const jaUsado = usadoRows.length > 0;
+        return { podeAvaliar: !jaUsado, jaAvaliou: jaUsado, anoMes, periodicidade, gestorNome, encarregadoNome };
       }
       if (!credId) return { podeAvaliar: true, jaAvaliou: false, anoMes, periodicidade, gestorNome, encarregadoNome };
       const ja = await db.execute(sql`SELECT 1 FROM cliente_avaliacao_marcacoes WHERE cred_id = ${credId} AND ano_mes = ${anoMes} LIMIT 1`);
