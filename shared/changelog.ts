@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2974 — **PORTAL DO CLIENTE → ADMINISTRAÇÃO → AVALIAÇÕES (NPS) → BOTÃO "CANCELAR"
+ * (ADMIN MASTER) — CORREÇÃO DO ERRO "Failed query: DELETE FROM cliente_avaliacao_marcacoes
+ * ... column company_id does not exist" + TROCA DO DELETE POR SOFT-RELEASE (HONRA A REGRA
+ * DE OURO ZERO DELETE).**
+ *
+ * SINTOMA (usuário, screenshot): ao clicar "Cancelar" numa avaliação recebida, toast
+ * vermelho: `Failed query: DELETE FROM cliente_avaliacao_marcacoes WHERE ano_mes = $1 AND
+ * cred_id IN ( SELECT id FROM portal_credentials WHERE company_id = $2 AND tipo = 'cliente')
+ * params: 2026-06,60002`.
+ *
+ * CAUSA-RAIZ (reproduzida no Neon, BEGIN/ROLLBACK): erro Postgres `42703 column "company_id"
+ * does not exist`. A tabela `portal_credentials` é gerenciada pelo Drizzle e usa coluna
+ * CAMELCASE `"companyId"` (com aspas), NÃO `company_id` (snake_case). As demais tabelas do
+ * portal (`cliente_perguntas_*`, `portal_cliente_config`, `cliente_avaliacao_link_uso`,
+ * `cliente_avaliacoes`) são self-heal e usam snake_case `company_id` — por isso só ESTE
+ * subselect contra `portal_credentials` quebrava. (Ver memória drizzle-selfheal-column-casing.)
+ *
+ * SOLUÇÃO (BACK-only, ZERO DROP/DELETE; ALTER apenas ADD COLUMN IF NOT EXISTS via self-heal):
+ * - SELF-HEAL (`server/_core/index.ts`, ambos os blocos `[SyncSchema+]`): nova coluna
+ *   `cliente_avaliacao_marcacoes.liberada_em TIMESTAMP` via `ADD COLUMN IF NOT EXISTS`
+ *   (aditivo/idempotente). Marcações existentes ficam `liberada_em = NULL` (= ativas).
+ * - BACKEND (`server/routers/portalExterno.ts`):
+ *   • `cancelarAvaliacaoCliente`: o cleanup das marcações deixa de ser `DELETE` e passa a
+ *     `UPDATE ... SET liberada_em = NOW()` (soft-release) — E corrige `company_id` → `"companyId"`.
+ *   • `liberarAvaliacaoCredAtual`: idem, `DELETE` → `UPDATE SET liberada_em = NOW()` (mantém
+ *     `jaEstavaLiberado` via contagem do RETURNING, filtrando `liberada_em IS NULL`).
+ *   • `criarAvaliacao` (claim por credencial): `ON CONFLICT DO NOTHING` vira
+ *     `ON CONFLICT (cred_id, ano_mes) DO UPDATE SET liberada_em = NULL WHERE ... liberada_em
+ *     IS NOT NULL RETURNING cred_id` — revive a marcação liberada (permite reavaliar) e
+ *     mantém o bloqueio quando ainda ativa (0 linhas).
+ *   • `podeAvaliarEsteMes`: o SELECT do "já avaliou" passa a filtrar `AND liberada_em IS NULL`.
+ * - COMPAT: links de USO ÚNICO (Rev. 2973, `cliente_avaliacao_link_uso`) não mudam; o cancelar
+ *   só afeta avaliações por credencial (logado). Avaliações canceladas seguem com soft-delete
+ *   `cancelada_em` (auditoria preservada).
+ *
+ * ARQUIVOS: `server/routers/portalExterno.ts`, `server/_core/index.ts`,
+ * `shared/version.ts`, `shared/changelog.ts`, `replit.md`.
+ *
  * Rev. 2973 — **PORTAL DO CLIENTE → ADMINISTRAÇÃO → AVALIAÇÕES (NPS) → "LINK DE AVALIAÇÃO
  * (SEM LOGIN)" — AGORA É POSSÍVEL ESCOLHER QUANTOS LINKS GERAR DE UMA VEZ (EX.: 3
  * AVALIADORES NA MESMA OBRA), E CADA LINK PASSA A SER DE USO ÚNICO (PERMITE APENAS UMA

@@ -1293,9 +1293,14 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       const fmt = periodicidade === "anual" ? "YYYY" : "YYYY-MM";
       const periodoRow = await db.execute(sql`SELECT to_char(now() AT TIME ZONE 'America/Sao_Paulo', ${fmt}) AS periodo`);
       const anoPeriodo = (((periodoRow as any).rows ?? periodoRow ?? [])[0] as any)?.periodo ?? "";
+      // Rev. 2974 — SOFT-RELEASE (ZERO DELETE): marca `liberada_em` em vez de
+      // apagar a linha. A marcação permanece (PK cred_id+ano_mes) mas deixa de
+      // contar como "já avaliou"; o próximo envio a revive (liberada_em=NULL).
       const del = await db.execute(sql`
-        DELETE FROM cliente_avaliacao_marcacoes
+        UPDATE cliente_avaliacao_marcacoes
+        SET liberada_em = NOW()
         WHERE cred_id = ${input.credId} AND ano_mes = ${anoPeriodo}
+          AND liberada_em IS NULL
         RETURNING cred_id
       `);
       const removidos = (((del as any).rows ?? del ?? []) as any[]).length;
@@ -1332,12 +1337,18 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       // avaliação cancelada (texto YYYY-MM ou YYYY).
       const periodoLimpo = (aval.anoPeriodo || "").trim();
       if (periodoLimpo) {
+        // Rev. 2974 — SOFT-RELEASE (ZERO DELETE) + correção de casing: a coluna
+        // de empresa em `portal_credentials` é camelCase ("companyId"), não
+        // `company_id` (causa do erro 42703 "column company_id does not exist").
+        // Em vez de apagar a marcação, marca `liberada_em` (libera p/ reavaliar).
         await db.execute(sql`
-          DELETE FROM cliente_avaliacao_marcacoes
+          UPDATE cliente_avaliacao_marcacoes
+          SET liberada_em = NOW()
           WHERE ano_mes = ${periodoLimpo}
+            AND liberada_em IS NULL
             AND cred_id IN (
               SELECT id FROM portal_credentials
-              WHERE company_id = ${aval.companyId} AND tipo = 'cliente'
+              WHERE "companyId" = ${aval.companyId} AND tipo = 'cliente'
             )
         `);
       }
@@ -1969,10 +1980,15 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       // Rev. 1551 — Limite anônimo por credencial. ATÔMICO via ON CONFLICT.
       const credId = decoded.portalId as number | undefined;
       if (credId) {
+        // Rev. 2974 — claim atômico que TAMBÉM revive marcações liberadas
+        // (soft-release): se a linha existe mas está `liberada_em IS NOT NULL`,
+        // o DO UPDATE a reativa (liberada_em=NULL) e RETURNING devolve → permite.
+        // Se está ativa (liberada_em IS NULL), o WHERE falha → 0 linhas → bloqueia.
         const claim = await db.execute(sql`
           INSERT INTO cliente_avaliacao_marcacoes (cred_id, ano_mes)
           VALUES (${credId}, ${anoPeriodo})
-          ON CONFLICT (cred_id, ano_mes) DO NOTHING
+          ON CONFLICT (cred_id, ano_mes) DO UPDATE SET liberada_em = NULL
+            WHERE cliente_avaliacao_marcacoes.liberada_em IS NOT NULL
           RETURNING cred_id
         `);
         const claimRows = ((claim as any).rows ?? claim ?? []) as any[];
@@ -2148,7 +2164,7 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         return { podeAvaliar: !jaUsado, jaAvaliou: jaUsado, anoMes, periodicidade, gestorNome, encarregadoNome };
       }
       if (!credId) return { podeAvaliar: true, jaAvaliou: false, anoMes, periodicidade, gestorNome, encarregadoNome };
-      const ja = await db.execute(sql`SELECT 1 FROM cliente_avaliacao_marcacoes WHERE cred_id = ${credId} AND ano_mes = ${anoMes} LIMIT 1`);
+      const ja = await db.execute(sql`SELECT 1 FROM cliente_avaliacao_marcacoes WHERE cred_id = ${credId} AND ano_mes = ${anoMes} AND liberada_em IS NULL LIMIT 1`);
       const rows = ((ja as any).rows ?? ja ?? []) as any[];
       return { podeAvaliar: rows.length === 0, jaAvaliou: rows.length > 0, anoMes, periodicidade, gestorNome, encarregadoNome };
     }),

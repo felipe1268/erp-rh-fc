@@ -2038,6 +2038,8 @@ Regras:
             PRIMARY KEY (cred_id, ano_mes)
           )`);
           await db.execute(sql`ALTER TABLE cliente_avaliacao_marcacoes DROP COLUMN IF EXISTS marcado_em`).catch(() => {});
+          // Rev. 2974 — soft-release: liberar/cancelar marca em vez de DELETE.
+          await db.execute(sql`ALTER TABLE cliente_avaliacao_marcacoes ADD COLUMN IF NOT EXISTS liberada_em TIMESTAMP`).catch(() => {});
           await db.execute(sql`CREATE INDEX IF NOT EXISTS cam_anomes ON cliente_avaliacao_marcacoes (ano_mes)`);
           // Rev. 1569 — novas perguntas (Empresa / Gestor), comentários por bloco,
           // período da avaliação (YYYY-MM ou YYYY) e cancelamento pelo Admin Master.
@@ -3262,6 +3264,7 @@ Regras:
               PRIMARY KEY (cred_id, ano_mes)
             );
             ALTER TABLE cliente_avaliacao_marcacoes DROP COLUMN IF EXISTS marcado_em;
+            ALTER TABLE cliente_avaliacao_marcacoes ADD COLUMN IF NOT EXISTS liberada_em TIMESTAMP;
             CREATE INDEX IF NOT EXISTS cam_anomes ON cliente_avaliacao_marcacoes (ano_mes);
             CREATE TABLE IF NOT EXISTS notification_views (
               user_id INTEGER NOT NULL,
