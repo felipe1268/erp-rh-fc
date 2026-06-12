@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { AVALIACAO_LANGS, normalizeAvaliacaoLang, type AvaliacaoLang } from "../../../shared/portalAvaliacaoI18n";
 import {
   Mail, KeyRound, Send, Search, MessageSquare, Star,
   Loader2, ShieldCheck, CheckCircle2, AlertCircle, Copy, Reply,
@@ -106,6 +107,8 @@ export default function ClientesPortalAdmin() {
   const [linkObraId, setLinkObraId] = useState<number | "">("");
   // Rev. 2973 — quantos links DE USO ÚNICO gerar de uma vez (cada link = 1 avaliação).
   const [linkQtd, setLinkQtd] = useState<number | "">(1);
+  // Rev. 2985 — idioma das perguntas escolhido ao gerar o link (pt|en|zh).
+  const [linkLang, setLinkLang] = useState<AvaliacaoLang>("pt");
   const obrasEmpresa = trpc.portalExterno.admin.obrasDaEmpresaAdmin.useQuery(
     { companyId: companyId ?? 0 },
     { enabled: !!companyId },
@@ -125,6 +128,7 @@ export default function ClientesPortalAdmin() {
       setLinksAvaliacao(urls);
       setLinkAvaliacao(urls[0]);
       setLinkObraNome(r.obraNome ?? null);
+      utils.portalExterno.admin.listarLinksAvaliacao.invalidate();
       if (urls.length === 1) {
         navigator.clipboard?.writeText(urls[0]).then(
           () => toast.success("Link gerado e copiado para a área de transferência!"),
@@ -136,6 +140,26 @@ export default function ClientesPortalAdmin() {
     },
     onError: (e) => toast.error(e.message),
   });
+  // Rev. 2985 — lista PERSISTIDA dos links de avaliação gerados (não somem ao
+  // recarregar), agrupada por obra e ordenada por data desc no backend.
+  const linksAvalQ = trpc.portalExterno.admin.listarLinksAvaliacao.useQuery(
+    { companyId: companyId ?? 0 },
+    { enabled: !!companyId },
+  );
+  // Rev. 2985 — exclusão (soft-delete) de link — APENAS Admin Master.
+  const excluirLinkMut = trpc.portalExterno.admin.excluirLinkAvaliacao.useMutation({
+    onSuccess: () => {
+      toast.success("Link excluído.");
+      utils.portalExterno.admin.listarLinksAvaliacao.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const excluirLink = (codigo: string) => {
+    if (!companyId) return;
+    if (!window.confirm("Excluir este link de avaliação?\n\nEle deixará de funcionar para quem o receber. Esta ação não pode ser desfeita.")) return;
+    excluirLinkMut.mutate({ companyId, codigo });
+  };
+
   // Rev. 1569 — cancelar avaliação (Admin Master)
   const cancelarAvalMut = trpc.portalExterno.admin.cancelarAvaliacaoCliente.useMutation({
     onSuccess: () => {
@@ -642,8 +666,22 @@ export default function ClientesPortalAdmin() {
                     title="Cada link permite apenas UMA avaliação"
                   />
                 </div>
+                {/* Rev. 2985 — idioma das perguntas do link (pt/en/zh) */}
+                <div className="flex items-center gap-1.5">
+                  <Globe2 className="w-4 h-4 text-slate-500 shrink-0" />
+                  <select
+                    value={linkLang}
+                    onChange={(e) => setLinkLang(normalizeAvaliacaoLang(e.target.value))}
+                    className="border rounded-md px-2 py-1.5 text-sm bg-white"
+                    title="Idioma das perguntas da avaliação"
+                  >
+                    {AVALIACAO_LANGS.map((l) => (
+                      <option key={l.value} value={l.value}>{l.flag} {l.label}</option>
+                    ))}
+                  </select>
+                </div>
                 <Button
-                  onClick={() => companyId && linkObraId !== "" && gerarLinkAvalMut.mutate({ companyId, obraId: linkObraId, quantidade: typeof linkQtd === "number" && linkQtd >= 1 ? Math.min(50, linkQtd) : 1 })}
+                  onClick={() => companyId && linkObraId !== "" && gerarLinkAvalMut.mutate({ companyId, obraId: linkObraId, quantidade: typeof linkQtd === "number" && linkQtd >= 1 ? Math.min(50, linkQtd) : 1, lang: linkLang })}
                   disabled={gerarLinkAvalMut.isPending || !companyId || linkObraId === ""}
                   size="sm"
                   className="ml-auto gap-1.5 bg-blue-600 hover:bg-blue-700"
@@ -712,6 +750,87 @@ export default function ClientesPortalAdmin() {
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+            </div>
+
+            {/* Rev. 2985 — Links de avaliação gerados (persistidos), agrupados por OBRA
+                e ordenados por DATA desc. Só o Admin Master pode excluir (soft-delete). */}
+            <div className="bg-white border rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Layers className="w-4 h-4 text-blue-600" />
+                <span className="text-sm font-medium text-slate-700">Links de avaliação gerados</span>
+                {linksAvalQ.isFetching && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />}
+              </div>
+              {(linksAvalQ.data ?? []).length === 0 ? (
+                <p className="text-xs text-slate-400 py-2">Nenhum link gerado ainda. Gere um link acima para enviar ao cliente.</p>
+              ) : (
+                <div className="space-y-4">
+                  {Object.entries(
+                    (linksAvalQ.data ?? []).reduce((acc: Record<string, typeof linksAvalQ.data>, l) => {
+                      const k = l.obraNome ?? `Obra #${l.obraId ?? "—"}`;
+                      (acc[k] ||= [] as any).push(l);
+                      return acc;
+                    }, {} as Record<string, any>),
+                  ).map(([obraNome, lista]: any) => (
+                    <div key={obraNome}>
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 mb-1.5">
+                        <Building2 className="w-3.5 h-3.5 text-slate-400" /> {obraNome}
+                        <span className="text-slate-400 font-normal">({lista.length})</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {lista.map((l: any) => {
+                          const url = `${window.location.origin}/a/${l.codigo}`;
+                          const flag = AVALIACAO_LANGS.find((x) => x.value === normalizeAvaliacaoLang(l.lang))?.flag ?? "🇧🇷";
+                          return (
+                            <div key={l.codigo} className="flex flex-wrap items-center gap-2 border rounded-lg px-2.5 py-2 bg-slate-50/60">
+                              <Badge variant="outline" className="gap-1 shrink-0">{flag} {l.lang?.toUpperCase() ?? "PT"}</Badge>
+                              <span className="text-xs text-slate-500 shrink-0">{l.criadoEm ?? "—"}</span>
+                              {l.usado ? (
+                                <Badge className="bg-slate-200 text-slate-600 shrink-0">Usado</Badge>
+                              ) : (
+                                <Badge className="bg-emerald-100 text-emerald-700 shrink-0">Disponível</Badge>
+                              )}
+                              {l.criadoPorNome && <span className="text-[11px] text-slate-400 shrink-0">por {l.criadoPorNome}</span>}
+                              <Input readOnly value={url} onFocus={(e) => e.currentTarget.select()} className="flex-1 min-w-[200px] text-xs font-mono h-8" />
+                              <Button variant="outline" size="sm" className="gap-1.5 h-8"
+                                onClick={() => navigator.clipboard?.writeText(url).then(
+                                  () => toast.success("Link copiado!"),
+                                  () => toast.error("Não foi possível copiar"),
+                                )}>
+                                <Copy className="w-3.5 h-3.5" /> Copiar
+                              </Button>
+                              <a href={url} target="_blank" rel="noopener noreferrer">
+                                <Button variant="outline" size="sm" className="gap-1.5 h-8">
+                                  <ExternalLink className="w-3.5 h-3.5" /> Abrir
+                                </Button>
+                              </a>
+                              <Button variant="outline" size="sm" className="gap-1.5 h-8 text-green-700 border-green-300 hover:bg-green-50"
+                                onClick={() => {
+                                  const msg =
+                                    `Olá! Tudo bem?\n\n` +
+                                    `Aqui é da FC Engenharia. Antes de tudo, queremos agradecer muito pela confiança em nosso trabalho${obraNome ? ` na obra ${obraNome}` : ""} — é um prazer ter você como nosso cliente.\n\n` +
+                                    `A sua opinião é o que nos move a melhorar a cada dia. Por isso, gostaríamos de convidá-lo(a) a compartilhar como tem sido a sua experiência com a nossa equipe.\n\n` +
+                                    `A avaliação é bem rapidinha (leva só alguns minutos), totalmente anônima e nos ajuda demais a evoluir e a oferecer um serviço cada vez melhor para você.\n\n` +
+                                    `Muito obrigado pelo seu tempo e pela parceria! Conte sempre conosco.\n\n` +
+                                    `Acesse a avaliação por aqui:\n${url}`;
+                                  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer");
+                                }}>
+                                <MessageSquare className="w-3.5 h-3.5" /> WhatsApp
+                              </Button>
+                              {isMaster && (
+                                <Button variant="outline" size="sm" className="gap-1.5 h-8 text-rose-600 border-rose-300 hover:bg-rose-50"
+                                  disabled={excluirLinkMut.isPending}
+                                  onClick={() => excluirLink(l.codigo)}>
+                                  <Trash2 className="w-3.5 h-3.5" /> Excluir
+                                </Button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

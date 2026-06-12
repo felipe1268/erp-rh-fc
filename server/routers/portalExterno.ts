@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { getDb, getEquipeObra } from "../db";
-import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, clienteAvaliacaoDetalhes, portalClienteConfig, clientePerguntasExtras, clienteRespostasExtras, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo, planejamentoMedicoes, asos, atestados, trainings, warnings, obraFuncionarios, gdDocumentos, gdRevisoes, gdTiposDocumento, gdDisciplinas, jobFunctions, orcamentos, sstIntegracaoRegistros, employeeIntegrations } from "../../drizzle/schema";
+import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, clienteAvaliacaoDetalhes, portalClienteConfig, clientePerguntasExtras, clienteRespostasExtras, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo, planejamentoMedicoes, asos, atestados, trainings, warnings, obraFuncionarios, gdDocumentos, gdRevisoes, gdTiposDocumento, gdDisciplinas, jobFunctions, orcamentos, sstIntegracaoRegistros, employeeIntegrations, users, userCompanies } from "../../drizzle/schema";
 import { eq, and, or, inArray, desc, sql, isNull, ilike } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
@@ -1408,6 +1408,9 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       // link só permite UMA avaliação (one-shot via `linkId`); útil quando há
       // vários avaliadores na mesma obra. Default 1; teto defensivo de 50.
       quantidade: z.number().int().min(1).max(50).optional(),
+      // Rev. 2985 — idioma das perguntas da avaliação (pt|en|zh). Embutido no JWT
+      // e gravado no short-link p/ a página pública renderizar no idioma certo.
+      lang: z.enum(["pt", "en", "zh"]).optional(),
     })).mutation(async ({ input, ctx }) => {
       if (ctx.user.role !== "admin_master" && ctx.user.role !== "admin") {
         throw new TRPCError({ code: "FORBIDDEN", message: "Acesso restrito a administradores." });
@@ -1457,6 +1460,9 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       // `linkId` (nonce) que, no envio da avaliação, é "consumido" atomicamente em
       // cliente_avaliacao_link_uso — então cada link só vale UMA avaliação.
       const qtd = Math.min(50, Math.max(1, input.quantidade ?? 1));
+      const lang = input.lang ?? "pt";
+      const criadoPorId = (ctx.user as any)?.id ?? null;
+      const criadoPorNome = ctx.user?.name ?? null;
       const tokens: string[] = [];
       const codigos: string[] = [];
       for (let i = 0; i < qtd; i++) {
@@ -1467,6 +1473,8 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
           linkAberto: true,
           linkId,
           unico: true,
+          // Rev. 2985 — idioma embutido p/ a página pública abrir já no idioma certo.
+          lang,
           ...(obraId ? { obraId, obraNome, ...(gestorNome ? { gestorNome } : {}), ...(encarregadoNome ? { encarregadoNome } : {}) } : {}),
         }, secret, { expiresIn: "180d" });
         tokens.push(token);
@@ -1480,8 +1488,8 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
           const cand = crypto.randomBytes(8).toString("hex");
           try {
             const ins = await db.execute(sql`
-              INSERT INTO cliente_avaliacao_shortlink (codigo, token, company_id, obra_id)
-              VALUES (${cand}, ${token}, ${input.companyId}, ${obraId})
+              INSERT INTO cliente_avaliacao_shortlink (codigo, token, company_id, obra_id, obra_nome, link_id, lang, criado_por_id, criado_por_nome)
+              VALUES (${cand}, ${token}, ${input.companyId}, ${obraId}, ${obraNome}, ${linkId}, ${lang}, ${criadoPorId}, ${criadoPorNome})
               ON CONFLICT (codigo) DO NOTHING
               RETURNING codigo
             `);
@@ -1492,7 +1500,75 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       }
       // Compat: `token`/`tokens` = JWT(s) completos (consumidores antigos seguem ok);
       // `codigo`/`codigos` = códigos curtos do short-link (URL /a/<codigo>).
-      return { token: tokens[0], tokens, codigo: codigos[0], codigos, obraId, obraNome, gestorNome, encarregadoNome };
+      return { token: tokens[0], tokens, codigo: codigos[0], codigos, obraId, obraNome, gestorNome, encarregadoNome, lang };
+    }),
+
+    // Rev. 2985 — LISTA os links de avaliação (NPS) gerados e ainda ativos (não
+    // soft-deletados) da empresa, organizados por OBRA e DATA. Cada item informa
+    // o idioma, quem criou e se o link JÁ FOI USADO (join cliente_avaliacao_link_uso
+    // por link_id). Links antigos (sem link_id) aparecem como "disponível".
+    listarLinksAvaliacao: protectedProcedure.input(z.object({
+      companyId: z.number(),
+    })).query(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master" && ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Acesso restrito a administradores." });
+      }
+      if (ctx.user.role !== "admin_master" && ctx.user.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+      const db = (await getDb())!;
+      try {
+        const r = await db.execute(sql`
+          SELECT s.codigo,
+                 s.obra_id,
+                 s.obra_nome,
+                 s.lang,
+                 to_char(s.criado_em, 'YYYY-MM-DD HH24:MI:SS') AS criado_em,
+                 s.criado_por_nome,
+                 (u.link_id IS NOT NULL) AS usado
+          FROM cliente_avaliacao_shortlink s
+          LEFT JOIN cliente_avaliacao_link_uso u ON u.link_id = s.link_id
+          WHERE s.company_id = ${input.companyId}
+            AND s.deletado_em IS NULL
+          ORDER BY s.obra_nome ASC NULLS LAST, s.criado_em DESC
+        `);
+        const rows = (((r as any).rows ?? r ?? []) as any[]);
+        return rows.map((x) => ({
+          codigo: x.codigo as string,
+          obraId: x.obra_id ?? null,
+          obraNome: (x.obra_nome ?? null) as string | null,
+          lang: (x.lang ?? "pt") as string,
+          criadoEm: (x.criado_em ?? null) as string | null,
+          criadoPorNome: (x.criado_por_nome ?? null) as string | null,
+          usado: x.usado === true || x.usado === "t" || x.usado === 1,
+        }));
+      } catch (e: any) {
+        console.error("[listarLinksAvaliacao] erro:", e?.message || e);
+        return [] as Array<{ codigo: string; obraId: number | null; obraNome: string | null; lang: string; criadoEm: string | null; criadoPorNome: string | null; usado: boolean }>;
+      }
+    }),
+
+    // Rev. 2985 — EXCLUI (soft-delete) um link de avaliação. APENAS o admin_master
+    // pode apagar. ZERO DELETE físico: marca deletado_em via UPDATE (R-001/007/010).
+    excluirLinkAvaliacao: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      codigo: z.string().min(1),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o Admin Master pode excluir links de avaliação." });
+      }
+      const db = (await getDb())!;
+      const r = await db.execute(sql`
+        UPDATE cliente_avaliacao_shortlink
+        SET deletado_em = NOW()
+        WHERE codigo = ${input.codigo}
+          AND company_id = ${input.companyId}
+          AND deletado_em IS NULL
+        RETURNING codigo
+      `);
+      const rows = (((r as any).rows ?? r ?? []) as any[]);
+      if (rows.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Link não encontrado ou já excluído." });
+      return { success: true };
     }),
 
     // Rev. 2892 — lista todas as obras da empresa p/ o seletor do "link por obra".
@@ -2159,6 +2235,50 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
           await db.insert(clienteRespostasExtras).values(insertVals);
         }
       }
+      // Rev. 2985 — ALERTA por e-mail aos admins quando o cliente PREENCHE a
+      // avaliação. Fire-and-forget (não derruba o envio se o SMTP falhar) e
+      // ANÔNIMO: e-mail traz só obra + nota geral + recomendação, NUNCA identidade.
+      // TENANT GUARD: notifica APENAS os admins (admin_master/admin) VINCULADOS à
+      // empresa da avaliação via `user_companies` — nunca admins de outra empresa.
+      (async () => {
+        try {
+          const dests = await db.select({ name: users.name, email: users.email })
+            .from(users)
+            .innerJoin(userCompanies, eq(userCompanies.userId, users.id))
+            .where(and(
+              eq(userCompanies.companyId, decoded.companyId),
+              inArray(users.role, ["admin_master", "admin"]),
+              isNull(users.deletedAt),
+            ));
+          const emails = Array.from(new Set(
+            (dests as any[]).map((u) => u.email).filter((e: any) => !!e) as string[],
+          ));
+          if (emails.length === 0) return;
+          const recMap: Record<number, string> = { 0: "Não", 1: "Talvez", 2: "Sim, com certeza" };
+          const recTxt = (input.recomendaria === 0 || input.recomendaria === 1 || input.recomendaria === 2)
+            ? recMap[input.recomendaria] : "—";
+          const obraTxt = obraNome || (obraIdEfetivo ? `Obra #${obraIdEfetivo}` : "—");
+          const assunto = `Nova avaliação NPS — ${obraTxt}`;
+          const html = `
+            <div style="font-family:Arial,Helvetica,sans-serif;color:#1f2937">
+              <h2 style="color:#1B2A4A;margin:0 0 8px">Nova avaliação NPS recebida</h2>
+              <p style="margin:0 0 12px;color:#475569">Um cliente acabou de enviar uma avaliação (100% anônima) pelo Portal do Cliente.</p>
+              <table style="border-collapse:collapse;font-size:14px">
+                <tr><td style="padding:4px 12px 4px 0;color:#64748b">Obra</td><td style="padding:4px 0;font-weight:600">${obraTxt}</td></tr>
+                <tr><td style="padding:4px 12px 4px 0;color:#64748b">Nota geral</td><td style="padding:4px 0;font-weight:600">${input.notaGeral}/10</td></tr>
+                <tr><td style="padding:4px 12px 4px 0;color:#64748b">Recomendaria a FC?</td><td style="padding:4px 0;font-weight:600">${recTxt}</td></tr>
+              </table>
+              <p style="margin:14px 0 0;color:#94a3b8;font-size:12px">Esta avaliação é anônima — não registramos identidade, CNPJ nem IP do respondente.</p>
+            </div>`;
+          await sendEmail({
+            to: emails.join(", "),
+            subject: assunto,
+            html,
+          });
+        } catch (errMail: any) {
+          console.error("[criarAvaliacao] falha ao enviar alerta de e-mail:", errMail?.message || errMail);
+        }
+      })();
       return { success: true };
     }),
 

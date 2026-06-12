@@ -1,6 +1,66 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2985 — **PORTAL DO CLIENTE → NPS — 3 MELHORIAS PEDIDAS PELO ADMIN MASTER:
+ * (1) LINKS GERADOS (SEM LOGIN) AGORA PERSISTEM E FICAM LISTADOS — ORGANIZADOS POR
+ * OBRA E POR DATA DE CRIAÇÃO; SÓ O ADMIN MASTER PODE APAGAR (SOFT-DELETE). (2) ALERTA
+ * POR E-MAIL AOS ADMINS QUANDO O CLIENTE PREENCHE UMA AVALIAÇÃO. (3) ESCOLHA DO IDIOMA
+ * DAS PERGUNTAS (PT-BR / INGLÊS / MANDARIM) AO GERAR O LINK, COM SELETOR NA PÁGINA
+ * PÚBLICA PARA O CLIENTE TROCAR.**
+ *
+ * PEDIDO (usuário): "No Portal do Cliente, na parte de avaliação (NPS): os links que eu
+ * gero somem quando recarrego a página — quero que fiquem salvos e listados, separados
+ * por obra e por data, e só eu (Admin Master) possa apagar. Quero receber um e-mail
+ * quando o cliente preencher. E quero poder escolher o idioma das perguntas (português,
+ * inglês e mandarim) na hora de gerar o link, porque tenho clientes estrangeiros."
+ *
+ * CONTEXTO: o link de avaliação (short-link `/a/<codigo>` da Rev. 2980) já era gravado
+ * na tabela `cliente_avaliacao_shortlink`, mas a UI do admin só exibia os links recém
+ * gerados na sessão atual (estado React) — ao recarregar a página, sumiam. Não havia
+ * alerta de preenchimento nem suporte a idioma.
+ *
+ * SOLUÇÃO (BACK+FRONT, ZERO ALTER/DROP/DELETE — colunas novas via self-heal
+ * `ADD COLUMN IF NOT EXISTS`, exclusão por SOFT-DELETE via UPDATE):
+ *
+ * (T001) SELF-HEAL — `server/_core/index.ts` (bloco Rev. 2985 com version guard):
+ * `ALTER TABLE cliente_avaliacao_shortlink ADD COLUMN IF NOT EXISTS` para
+ * `obra_nome TEXT`, `link_id TEXT`, `lang TEXT`, `criado_por_id INTEGER`,
+ * `criado_por_nome TEXT`, `deletado_em TIMESTAMP`. Nenhum DROP/DELETE.
+ *
+ * (T002) BACKEND — `server/routers/portalExterno.ts`:
+ *   • `gerarLinkAvaliacao` ganha input `lang` (enum `pt|en|zh`, default `pt`), embute o
+ *     `lang` no JWT do link e grava `obra_nome/link_id/lang/criado_por_id/criado_por_nome`
+ *     no INSERT do shortlink; retorna `lang`.
+ *   • `listarLinksAvaliacao` (NOVA, admin-gated + tenant por `companyId`): lista os
+ *     shortlinks da empresa com `deletado_em IS NULL`, ordenados por data desc, trazendo
+ *     `codigo/obraId/obraNome/lang/criadoEm/criadoPorNome` e o flag `usado` (LEFT JOIN em
+ *     `cliente_avaliacao_link_uso` por `link_id`). Try/catch defensivo retorna [] em erro.
+ *   • `excluirLinkAvaliacao` (NOVA, **APENAS `role === "admin_master"`**): SOFT-DELETE
+ *     `UPDATE ... SET deletado_em = NOW() WHERE codigo + company_id AND deletado_em IS NULL`.
+ *   • `criarAvaliacao`: após persistir a avaliação, dispara e-mail fire-and-forget aos
+ *     admins ("Nova avaliação NPS — obra X"), anônimo (sem expor o respondente).
+ *
+ * (T003) FRONT ADMIN — `client/src/pages/ClientesPortalAdmin.tsx`: seletor de idioma
+ * (`AVALIACAO_LANGS` com bandeira) no form de gerar link, passando `lang` no mutate;
+ * nova seção "Links de avaliação gerados" via `listarLinksAvaliacao`, agrupada por OBRA
+ * (e por data desc do backend), com badge de idioma, data, selo Usado/Disponível, autor,
+ * URL `/a/<codigo>` e botões Copiar/Abrir/WhatsApp; botão **Excluir só para `isMaster`**
+ * (confirm + `excluirLinkAvaliacao` + invalidate). Gerar link invalida a lista.
+ *
+ * (T004) FRONT PÚBLICO — `client/src/pages/portal/PortalDashboardCliente.tsx`: lê o
+ * `lang` do token (`parseLangFromToken`), estado `lang` + dicionário `AVALIACAO_I18N`
+ * (`shared/portalAvaliacaoI18n.ts`, pt/en/zh) cobrindo TODAS as strings da avaliação
+ * pública (títulos, critérios CRIT_*, labels do NotaSelector, recomendaria, comentários,
+ * botão enviar, tela "obrigado" e toasts de validação) + seletor de idioma no header
+ * (visível só no acesso público).
+ *
+ * ARQUIVOS NOVOS: `shared/portalAvaliacaoI18n.ts` (dicionário + `AVALIACAO_LANGS` +
+ * `normalizeAvaliacaoLang`).
+ *
+ * RESSALVA: a página pública padrão segue o idioma do link; o cliente pode trocar
+ * manualmente pelo seletor. O e-mail de alerta depende de `SMTP_PASSWORD` configurado;
+ * sem SMTP, a avaliação ainda é salva (o envio é fire-and-forget e não bloqueia).
+ *
  * Rev. 2984 — **PLANEJAMENTO — USUÁRIO RESTRITO POR OBRA (ex.: engenheiro de campo
  * "Mateus") NÃO VIA AS ATIVIDADES/DADOS DO PROJETO ("Nenhuma atividade cadastrada",
  * "0 atividades") MESMO TENDO O PROJETO LISTADO. CORRIGIDO PARA TODOS OS USUÁRIOS

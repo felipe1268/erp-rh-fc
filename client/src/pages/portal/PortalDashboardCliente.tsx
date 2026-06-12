@@ -8,10 +8,25 @@ import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { proximaJanelaAvaliacao } from "../../../../shared/portalAvaliacao";
 import { PERGUNTAS_CORE_DEFAULT_LABEL } from "../../../../shared/portalPerguntasCore";
+import { AVALIACAO_I18N, AVALIACAO_LANGS, normalizeAvaliacaoLang, type AvaliacaoLang } from "../../../../shared/portalAvaliacaoI18n";
 import {
   Building2, LogOut, MessageSquare, Star, Send, MapPin,
-  CheckCircle2, ShieldCheck, Smile, Meh, Frown, Sparkles, Users,
+  CheckCircle2, ShieldCheck, Smile, Meh, Frown, Sparkles, Users, Globe2,
 } from "lucide-react";
+
+// Rev. 2985 — extrai o idioma (pt|en|zh) embutido no payload público do JWT do
+// link de avaliação. Defensivo: token ausente/malformado → "pt".
+function parseLangFromToken(token?: string): AvaliacaoLang {
+  if (!token) return "pt";
+  try {
+    const part = token.split(".")[1];
+    if (!part) return "pt";
+    let b64 = part.replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4 !== 0) b64 += "=";
+    const json = JSON.parse(decodeURIComponent(escape(atob(b64))));
+    return normalizeAvaliacaoLang(json?.lang);
+  } catch { return "pt"; }
+}
 
 // Rev. 1550 — fmtBR robusto: aceita "YYYY-MM-DD", "YYYY-MM-DDTHH:mm:ss"
 // e "YYYY-MM-DD HH:mm:ss[.ffffff]" (formato cru do Postgres). Antes
@@ -146,6 +161,11 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
     } catch { /* token malformado → avaliação geral */ }
     return null;
   }, [isPublic, publicToken]);
+
+  // Rev. 2985 — idioma da avaliação pública. Inicia pelo idioma embutido no link
+  // (escolhido pelo admin ao gerar) e o cliente pode trocar pelo seletor no topo.
+  const [lang, setLang] = useState<AvaliacaoLang>(() => parseLangFromToken(publicToken));
+  const T = AVALIACAO_I18N[lang];
 
   // Guard (não se aplica ao link público, que é acessível sem login)
   useEffect(() => {
@@ -318,10 +338,16 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
   // fallback final, ignorando o `padrao` passado in-line caso ele divirja da
   // fonte única. Assim, admin (defaults) e portal (fallback) ficam sempre
   // sincronizados e o reset-to-default funciona em todas as 8 perguntas.
-  const lbl = (chave: string, _padrao: string) =>
-    ((labelsCoreOverride as Record<string, string>)[chave]
+  // Rev. 2985 — i18n: em pt mantém o override do Admin Master + default centralizado.
+  // Em en/zh usa a tradução do dicionário (o override é pt-only, não se aplica).
+  const lbl = (chave: string, _padrao: string) => {
+    if (lang !== "pt") {
+      return (T.core as Record<string, string>)[chave] || _padrao;
+    }
+    return ((labelsCoreOverride as Record<string, string>)[chave]
       || (PERGUNTAS_CORE_DEFAULT_LABEL as Record<string, string>)[chave]
       || _padrao);
+  };
 
   const perguntasExtrasQ = trpc.portalExterno.cliente.listarPerguntasExtras.useQuery(
     { token }, { enabled: !!token && tipo === "cliente" }
@@ -361,7 +387,7 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
   const enviarAvalMut = trpc.portalExterno.cliente.criarAvaliacao.useMutation({
     onSuccess: () => {
       setAvaliado(true);
-      toast.success("Obrigado! Sua avaliação foi enviada.");
+      toast.success(T.toastEnviado);
       podeAvaliarQ.refetch();
     },
     onError: (e) => {
@@ -376,8 +402,8 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
     if (!aval.obraId) {
       toast.error(
         isPublic && obrasOptions.length === 0
-          ? "Este link não está vinculado a uma obra. Solicite um novo link de avaliação ao FC."
-          : "Selecione a obra avaliada antes de enviar."
+          ? T.valLinkSemObra
+          : T.valObraSel
       );
       return;
     }
@@ -386,14 +412,14 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
     // seguem opcionais. Valida bloco a bloco e aponta o primeiro pendente.
     const faltaNoBloco = (state: Record<string, number | null>, crits: { key: string }[]) =>
       crits.some((c) => typeof state[c.key] !== "number");
-    if (faltaNoBloco(detGestor, CRIT_PESSOA)) { toast.error('Avalie todos os itens do bloco "Gestor / Responsável FC pela obra" (0 a 10).'); return; }
-    if (faltaNoBloco(detEncarregado, CRIT_PESSOA)) { toast.error('Avalie todos os itens do bloco "Encarregado FC na obra" (0 a 10).'); return; }
-    if (faltaNoBloco(detEquipe, CRIT_EQUIPE)) { toast.error('Avalie todos os itens do bloco "Equipe direta FC na obra" (0 a 10).'); return; }
-    if (typeof aval.notaEmpresa !== "number") { toast.error('Avalie a "FC Engenharia (Empresa)" (0 a 10).'); return; }
-    if (faltaNoBloco(detEscritorio, CRIT_ESCRITORIO)) { toast.error('Avalie todos os itens do bloco "Escritório Central / Backoffice" (0 a 10).'); return; }
-    if (typeof aval.notaObra !== "number" || typeof aval.notaPrazo !== "number" || typeof aval.notaQualidade !== "number") { toast.error('Avalie todos os itens do bloco "Obra / Execução" (0 a 10).'); return; }
-    if (typeof aval.recomendaria !== "number") { toast.error('Responda "Você recomendaria a FC para outras empresas?".'); return; }
-    if (notaGeralAuto === null) { toast.error("Responda pelo menos alguns itens para calcular a nota geral"); return; }
+    if (faltaNoBloco(detGestor, CRIT_PESSOA)) { toast.error(T.valGestor); return; }
+    if (faltaNoBloco(detEncarregado, CRIT_PESSOA)) { toast.error(T.valEncarregado); return; }
+    if (faltaNoBloco(detEquipe, CRIT_EQUIPE)) { toast.error(T.valEquipe); return; }
+    if (typeof aval.notaEmpresa !== "number") { toast.error(T.valEmpresa); return; }
+    if (faltaNoBloco(detEscritorio, CRIT_ESCRITORIO)) { toast.error(T.valEscritorio); return; }
+    if (typeof aval.notaObra !== "number" || typeof aval.notaPrazo !== "number" || typeof aval.notaQualidade !== "number") { toast.error(T.valObra); return; }
+    if (typeof aval.recomendaria !== "number") { toast.error(T.valRecomenda); return; }
+    if (notaGeralAuto === null) { toast.error(T.valNotaGeral); return; }
     // Rev. 1595 — valida obrigatórias das perguntas extras
     for (const p of perguntasExtras) {
       if (!p.obrigatoria) continue;
@@ -493,11 +519,27 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
               <Building2 className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="font-bold text-slate-800 text-base leading-tight">{isPublic ? "Pesquisa de Satisfação" : "Portal do Cliente"}</h1>
-              <p className="text-xs text-slate-500">{isPublic ? "Sua opinião — 100% anônima" : (meusDados?.razaoSocial ?? localStorage.getItem("portal_nome") ?? "")}</p>
+              <h1 className="font-bold text-slate-800 text-base leading-tight">{isPublic ? T.headerTitle : "Portal do Cliente"}</h1>
+              <p className="text-xs text-slate-500">{isPublic ? T.headerSubtitle : (meusDados?.razaoSocial ?? localStorage.getItem("portal_nome") ?? "")}</p>
             </div>
           </div>
-          {!isPublic && (
+          {isPublic ? (
+            // Rev. 2985 — seletor de idioma da pesquisa pública (pt/en/zh). Inicia
+            // pelo idioma embutido no link; o cliente pode trocar livremente.
+            <div className="flex items-center gap-1.5">
+              <Globe2 className="w-4 h-4 text-slate-500 shrink-0" />
+              <select
+                value={lang}
+                onChange={(e) => setLang(normalizeAvaliacaoLang(e.target.value))}
+                aria-label={T.langLabel}
+                className="border rounded-md px-2 py-1.5 text-sm bg-white"
+              >
+                {AVALIACAO_LANGS.map((l) => (
+                  <option key={l.value} value={l.value}>{l.flag} {l.label}</option>
+                ))}
+              </select>
+            </div>
+          ) : (
             <Button variant="outline" size="sm" onClick={logout} className="gap-1.5">
               <LogOut className="w-4 h-4" /> Sair
             </Button>
@@ -696,17 +738,17 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
             ) : avaliado ? (
               <div className="bg-white border rounded-2xl p-12 text-center">
                 <CheckCircle2 className="w-20 h-20 text-emerald-500 mx-auto mb-4" />
-                <h2 className="text-2xl font-bold text-slate-800 mb-2">Obrigado pela avaliação!</h2>
-                <p className="text-slate-600">Suas respostas foram registradas <b>de forma totalmente anônima</b> e ajudarão a FC Engenharia a melhorar continuamente.</p>
+                <h2 className="text-2xl font-bold text-slate-800 mb-2">{T.obrigadoTitulo}</h2>
+                <p className="text-slate-600">{T.obrigadoTexto}</p>
               </div>
             ) : (
               <div className="bg-white border rounded-2xl p-6 space-y-5">
                 <div className="flex items-start gap-3 pb-3 border-b">
                   <ShieldCheck className="w-7 h-7 text-emerald-600 shrink-0 mt-0.5" />
                   <div>
-                    <h2 className="font-bold text-slate-800">Avaliação 100% anônima</h2>
+                    <h2 className="font-bold text-slate-800">{T.anonTitle}</h2>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Não armazenamos sua identidade, nem CNPJ, nem IP. Sinta-se à vontade para ser sincero — suas respostas ajudam a equipe FC a evoluir.
+                      {T.anonSubtitle}
                     </p>
                   </div>
                 </div>
@@ -714,7 +756,7 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                 {obraTravada ? (
                   // Rev. 2892/2977 — link público POR OBRA: obra travada, exibida só p/ leitura.
                   <div>
-                    <Label className="text-sm font-medium">Obra avaliada</Label>
+                    <Label className="text-sm font-medium">{T.obraAvaliada}</Label>
                     <div className="mt-1 w-full border rounded-md px-3 py-2 text-sm bg-slate-50 text-slate-700 font-medium">
                       {obraTravada.nome ?? `Obra #${obraTravada.id}`}
                     </div>
@@ -723,13 +765,13 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                   // Rev. 2978 — obra passa a ser OBRIGATÓRIA (sem opção "geral"): o cliente
                   // logado precisa escolher a obra avaliada antes de enviar.
                   <div>
-                    <Label className="text-sm font-medium">Sobre qual obra? <span className="text-rose-500">*</span></Label>
+                    <Label className="text-sm font-medium">{T.sobreQualObra} <span className="text-rose-500">*</span></Label>
                     <select
                       value={aval.obraId ?? ""}
                       onChange={(e) => setAval({ ...aval, obraId: e.target.value ? Number(e.target.value) : null })}
                       className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
                     >
-                      <option value="" disabled>Selecione a obra…</option>
+                      <option value="" disabled>{T.selecioneObra}</option>
                       {obrasOptions.map((o) => <option key={o.id} value={o.id}>{o.nome}</option>)}
                     </select>
                   </div>
@@ -737,7 +779,7 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                   // Rev. 2978 — link público SEM obra vinculada (links antigos "geral"):
                   // não há como avaliar sem obra; orienta a pedir um novo link.
                   <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2.5 text-sm text-rose-700">
-                    Este link não está vinculado a uma obra. Solicite um novo link de avaliação ao FC para continuar.
+                    {T.linkSemObra}
                   </div>
                 )}
 
@@ -747,10 +789,10 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
-                        <Star className="w-4 h-4 text-amber-600" /> Nota geral
+                        <Star className="w-4 h-4 text-amber-600" /> {T.notaGeral}
                       </p>
                       <p className="text-[11px] text-slate-500 mt-0.5">
-                        Calculada automaticamente a partir das suas respostas (0 = péssimo · 10 = excelente)
+                        {T.notaGeralSub}
                       </p>
                     </div>
                     <div className="text-right shrink-0">
@@ -769,33 +811,33 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                 <div className="border rounded-xl p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <Star className="w-4 h-4 text-amber-600" />
-                    <h3 className="font-semibold text-slate-800 text-sm">Gestor / Responsável FC pela obra</h3>
+                    <h3 className="font-semibold text-slate-800 text-sm">{T.blocoGestor}</h3>
                   </div>
                   <div>
-                    <Label className="text-sm font-medium">Gestor responsável</Label>
+                    <Label className="text-sm font-medium">{T.gestorResponsavel}</Label>
                     {gestorAuto ? (
                       <div className="mt-1 w-full border rounded-md px-3 py-2 text-sm bg-slate-50 text-slate-700 font-medium flex items-center gap-2">
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                         {aval.gestorNome || gestorAuto}
-                        <span className="text-[11px] text-slate-400 ml-auto">preenchido automaticamente</span>
+                        <span className="text-[11px] text-slate-400 ml-auto">{T.preenchidoAuto}</span>
                       </div>
                     ) : (
                       <Input value={aval.gestorNome} onChange={(e) => setAval({ ...aval, gestorNome: e.target.value })}
-                        placeholder="Ex.: Eng. João da Silva" className="mt-1" />
+                        placeholder={T.phGestor} className="mt-1" />
                     )}
                   </div>
                   <div className="pt-1">
-                    <p className="text-xs text-slate-500 mb-1.5">Avalie de 0 a 10 cada item (todos obrigatórios):</p>
-                    {CRIT_PESSOA.map((c) => (
+                    <p className="text-xs text-slate-500 mb-1.5">{T.avalie0a10}</p>
+                    {T.critPessoa.map((c) => (
                       <CriterioRow key={c.key} label={c.label} value={detGestor[c.key]}
                         onChange={(n) => setDetGestor((prev) => ({ ...prev, [c.key]: n }))} />
                     ))}
                   </div>
                   <div>
-                    <Label className="text-sm font-medium">Como o gestor pode evoluir? <span className="text-slate-400 text-xs">(opcional)</span></Label>
+                    <Label className="text-sm font-medium">{T.comoGestorEvolui} <span className="text-slate-400 text-xs">{T.opcional}</span></Label>
                     <textarea value={aval.comentarioGestor} onChange={(e) => setAval({ ...aval, comentarioGestor: e.target.value })}
                       rows={2} className="mt-1 w-full border rounded-md px-3 py-2 text-sm resize-none"
-                      placeholder="Clareza, proatividade, presença em obra, decisões técnicas..." />
+                      placeholder={T.phComentarioGestor} />
                   </div>
                 </div>
 
@@ -803,24 +845,24 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                 <div className="border rounded-xl p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-orange-600" />
-                    <h3 className="font-semibold text-slate-800 text-sm">Encarregado FC na obra</h3>
+                    <h3 className="font-semibold text-slate-800 text-sm">{T.blocoEncarregado}</h3>
                   </div>
                   <div>
-                    <Label className="text-sm font-medium">Nome do encarregado <span className="text-slate-400 text-xs">(opcional)</span></Label>
+                    <Label className="text-sm font-medium">{T.nomeEncarregado} <span className="text-slate-400 text-xs">{T.opcional}</span></Label>
                     {encarregadoAuto ? (
                       <div className="mt-1 w-full border rounded-md px-3 py-2 text-sm bg-slate-50 text-slate-700 font-medium flex items-center gap-2">
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                         {encarregadoNome || encarregadoAuto}
-                        <span className="text-[11px] text-slate-400 ml-auto">preenchido automaticamente</span>
+                        <span className="text-[11px] text-slate-400 ml-auto">{T.preenchidoAuto}</span>
                       </div>
                     ) : (
                       <Input value={encarregadoNome} onChange={(e) => setEncarregadoNome(e.target.value)}
-                        placeholder="Ex.: Sr. José Carlos" className="mt-1" />
+                        placeholder={T.phEncarregado} className="mt-1" />
                     )}
                   </div>
                   <div className="pt-1">
-                    <p className="text-xs text-slate-500 mb-1.5">Avalie de 0 a 10 cada item (todos obrigatórios):</p>
-                    {CRIT_PESSOA.map((c) => (
+                    <p className="text-xs text-slate-500 mb-1.5">{T.avalie0a10}</p>
+                    {T.critPessoa.map((c) => (
                       <CriterioRow key={c.key} label={c.label} value={detEncarregado[c.key]}
                         onChange={(n) => setDetEncarregado((prev) => ({ ...prev, [c.key]: n }))} />
                     ))}
@@ -831,20 +873,20 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                 <div className="border rounded-xl p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <Users className="w-4 h-4 text-blue-600" />
-                    <h3 className="font-semibold text-slate-800 text-sm">Equipe direta FC na obra</h3>
+                    <h3 className="font-semibold text-slate-800 text-sm">{T.blocoEquipe}</h3>
                   </div>
                   <div className="pt-1">
-                    <p className="text-xs text-slate-500 mb-1.5">Avalie de 0 a 10 cada item (todos obrigatórios):</p>
-                    {CRIT_EQUIPE.map((c) => (
+                    <p className="text-xs text-slate-500 mb-1.5">{T.avalie0a10}</p>
+                    {T.critEquipe.map((c) => (
                       <CriterioRow key={c.key} label={c.label} value={detEquipe[c.key]}
                         onChange={(n) => setDetEquipe((prev) => ({ ...prev, [c.key]: n }))} />
                     ))}
                   </div>
                   <div>
-                    <Label className="text-sm font-medium">Comentário sobre a equipe <span className="text-slate-400 text-xs">(opcional)</span></Label>
+                    <Label className="text-sm font-medium">{T.comentarioEquipe} <span className="text-slate-400 text-xs">{T.opcional}</span></Label>
                     <textarea value={aval.comentarioEquipe} onChange={(e) => setAval({ ...aval, comentarioEquipe: e.target.value })}
                       rows={2} className="mt-1 w-full border rounded-md px-3 py-2 text-sm resize-none"
-                      placeholder="Postura, técnica, segurança, organização, pontualidade..." />
+                      placeholder={T.phComentarioEquipe} />
                   </div>
                 </div>
 
@@ -852,16 +894,16 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                 <div className="border rounded-xl p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                    <h3 className="font-semibold text-slate-800 text-sm">FC Engenharia (Empresa)</h3>
+                    <h3 className="font-semibold text-slate-800 text-sm">{T.blocoEmpresa}</h3>
                   </div>
                   <div className="grid md:grid-cols-2 gap-4">
                     <NotaSelector label={lbl("notaEmpresa", "Empresa FC (reputação, transparência, comunicação institucional)")} value={aval.notaEmpresa} onChange={(n) => setAval({ ...aval, notaEmpresa: n })} />
                   </div>
                   <div>
-                    <Label className="text-sm font-medium">Comentário sobre a Empresa <span className="text-slate-400 text-xs">(opcional)</span></Label>
+                    <Label className="text-sm font-medium">{T.comentarioEmpresa} <span className="text-slate-400 text-xs">{T.opcional}</span></Label>
                     <textarea value={aval.comentarioEmpresa} onChange={(e) => setAval({ ...aval, comentarioEmpresa: e.target.value })}
                       rows={2} className="mt-1 w-full border rounded-md px-3 py-2 text-sm resize-none"
-                      placeholder="Imagem da empresa, postura institucional, processos administrativos..." />
+                      placeholder={T.phComentarioEmpresa} />
                   </div>
                 </div>
 
@@ -869,20 +911,20 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                 <div className="border rounded-xl p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <Building2 className="w-4 h-4 text-purple-600" />
-                    <h3 className="font-semibold text-slate-800 text-sm">Escritório Central / Backoffice</h3>
+                    <h3 className="font-semibold text-slate-800 text-sm">{T.blocoEscritorio}</h3>
                   </div>
                   <div className="pt-1">
-                    <p className="text-xs text-slate-500 mb-1.5">Avalie de 0 a 10 cada item (todos obrigatórios):</p>
-                    {CRIT_ESCRITORIO.map((c) => (
+                    <p className="text-xs text-slate-500 mb-1.5">{T.avalie0a10}</p>
+                    {T.critEscritorio.map((c) => (
                       <CriterioRow key={c.key} label={c.label} value={detEscritorio[c.key]}
                         onChange={(n) => setDetEscritorio((prev) => ({ ...prev, [c.key]: n }))} />
                     ))}
                   </div>
                   <div>
-                    <Label className="text-sm font-medium">Comentário sobre o Escritório Central <span className="text-slate-400 text-xs">(opcional)</span></Label>
+                    <Label className="text-sm font-medium">{T.comentarioEscritorio} <span className="text-slate-400 text-xs">{T.opcional}</span></Label>
                     <textarea value={aval.comentarioEscritorio} onChange={(e) => setAval({ ...aval, comentarioEscritorio: e.target.value })}
                       rows={2} className="mt-1 w-full border rounded-md px-3 py-2 text-sm resize-none"
-                      placeholder="Suporte administrativo, contratos, faturamento, agilidade nas respostas..." />
+                      placeholder={T.phComentarioEscritorio} />
                   </div>
                 </div>
 
@@ -890,7 +932,7 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                 <div className="border rounded-xl p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <Building2 className="w-4 h-4 text-indigo-600" />
-                    <h3 className="font-semibold text-slate-800 text-sm">Obra / Execução</h3>
+                    <h3 className="font-semibold text-slate-800 text-sm">{T.blocoObra}</h3>
                   </div>
                   <div className="grid md:grid-cols-3 gap-4">
                     <NotaSelector label={lbl("notaObra", "Andamento da obra")} value={aval.notaObra} onChange={(n) => setAval({ ...aval, notaObra: n })} />
@@ -900,12 +942,12 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                 </div>
 
                 <div>
-                  <Label className="text-sm font-medium">Você recomendaria a FC para outras empresas?</Label>
+                  <Label className="text-sm font-medium">{T.recomendaria}</Label>
                   <div className="flex gap-2 mt-2">
                     {[
-                      { v: 2, label: "Sim, com certeza", icon: Smile, cor: "bg-emerald-500" },
-                      { v: 1, label: "Talvez", icon: Meh, cor: "bg-amber-500" },
-                      { v: 0, label: "Não", icon: Frown, cor: "bg-rose-500" },
+                      { v: 2, label: T.recSim, icon: Smile, cor: "bg-emerald-500" },
+                      { v: 1, label: T.recTalvez, icon: Meh, cor: "bg-amber-500" },
+                      { v: 0, label: T.recNao, icon: Frown, cor: "bg-rose-500" },
                     ].map((opt) => {
                       const Icon = opt.icon as any;
                       const sel = aval.recomendaria === opt.v;
@@ -928,20 +970,20 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                 <div>
                   <Label className="text-sm font-medium flex items-center gap-1.5">
                     <Smile className="w-4 h-4 text-emerald-600" />
-                    Pontos fortes — o que mais te impressionou positivamente? <span className="text-slate-400 text-xs">(opcional)</span>
+                    {T.pontosFortes} <span className="text-slate-400 text-xs">{T.opcional}</span>
                   </Label>
                   <textarea value={aval.comentarioPositivo} onChange={(e) => setAval({ ...aval, comentarioPositivo: e.target.value })}
                     rows={3} className="mt-1 w-full border rounded-md px-3 py-2 text-sm resize-none"
-                    placeholder="O que está funcionando bem na obra, equipe, gestão ou no escritório central..." />
+                    placeholder={T.phPontosFortes} />
                 </div>
                 <div>
                   <Label className="text-sm font-medium flex items-center gap-1.5">
                     <Frown className="w-4 h-4 text-rose-600" />
-                    Pontos fracos — o que precisa melhorar? <span className="text-slate-400 text-xs">(opcional)</span>
+                    {T.pontosFracos} <span className="text-slate-400 text-xs">{T.opcional}</span>
                   </Label>
                   <textarea value={aval.comentarioMelhoria} onChange={(e) => setAval({ ...aval, comentarioMelhoria: e.target.value })}
                     rows={3} className="mt-1 w-full border rounded-md px-3 py-2 text-sm resize-none"
-                    placeholder="Sugestões, oportunidades de melhoria, gargalos identificados..." />
+                    placeholder={T.phPontosFracos} />
                 </div>
 
                 {/* Rev. 1595 — Perguntas extras (personalizadas) configuradas pelo admin */}
@@ -1031,7 +1073,7 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                 <div className="flex justify-end pt-3 border-t">
                   <Button onClick={enviarAvaliacao} disabled={enviarAvalMut.isPending || notaGeralAuto === null}
                     className="bg-emerald-600 hover:bg-emerald-700 gap-2">
-                    <Sparkles className="w-4 h-4" /> {enviarAvalMut.isPending ? "Enviando..." : "Enviar avaliação anônima"}
+                    <Sparkles className="w-4 h-4" /> {enviarAvalMut.isPending ? T.enviando : T.enviar}
                   </Button>
                 </div>
               </div>

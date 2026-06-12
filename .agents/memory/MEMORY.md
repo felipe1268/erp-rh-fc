@@ -56,3 +56,4 @@
 - [NPS fill-time clock](nps-fill-time-clock.md) — tempoRespostaSegundos = useRef(Date.now()) restarted on entering tab "avaliacao" (not mount), sent as round((now-start)/1000) min 1; logged users start on "obras" so mount-time inflates it.
 
 - [Saldo inicial conta bancária](saldo-inicial-conta-bancaria.md) — saldo de abertura vive em `financial_opening_balances` (1 linha/conta), NÃO em coluna; Fluxo de Caixa soma p/ semear o Acumulado; mutações de conta precisam de tenant guard.
+- [Notification recipient tenancy](notification-recipient-tenancy.md) — notify queries must join `user_companies` (users has NO companyId; admin roles are global in getCompaniesForUser) or you leak across tenants.

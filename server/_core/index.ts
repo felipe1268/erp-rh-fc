@@ -3058,6 +3058,23 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2980: tabela cliente_avaliacao_shortlink garantida (short-link NPS p/ WhatsApp).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2980 cliente_avaliacao_shortlink:`, e?.message || e); }
 
+        // ── Rev. 2985 — PERSISTÊNCIA dos links de avaliação (NPS) ──
+        // Os links gerados passam a ser LISTADOS no admin (não somem mais). Para
+        // isso o short-link guarda: obra_nome (exibir sem decodificar o JWT),
+        // link_id (correlaciona com cliente_avaliacao_link_uso p/ saber se já foi
+        // usado), lang (idioma das perguntas: pt|en|zh), criado_por_* (autor) e
+        // deletado_em (SOFT-DELETE — só admin_master apaga; ZERO DELETE físico).
+        // ADD COLUMN IF NOT EXISTS é idempotente e não-destrutivo (R-001/007/010).
+        try {
+          await db.execute(sql`ALTER TABLE cliente_avaliacao_shortlink ADD COLUMN IF NOT EXISTS obra_nome TEXT`);
+          await db.execute(sql`ALTER TABLE cliente_avaliacao_shortlink ADD COLUMN IF NOT EXISTS link_id TEXT`);
+          await db.execute(sql`ALTER TABLE cliente_avaliacao_shortlink ADD COLUMN IF NOT EXISTS lang TEXT`);
+          await db.execute(sql`ALTER TABLE cliente_avaliacao_shortlink ADD COLUMN IF NOT EXISTS criado_por_id INTEGER`);
+          await db.execute(sql`ALTER TABLE cliente_avaliacao_shortlink ADD COLUMN IF NOT EXISTS criado_por_nome TEXT`);
+          await db.execute(sql`ALTER TABLE cliente_avaliacao_shortlink ADD COLUMN IF NOT EXISTS deletado_em TIMESTAMP`);
+          console.log(`[SyncSchema+] Rev. 2985: colunas extras do cliente_avaliacao_shortlink garantidas (persistência/idioma/soft-delete).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2985 cliente_avaliacao_shortlink cols:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
