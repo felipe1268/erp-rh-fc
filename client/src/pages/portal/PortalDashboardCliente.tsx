@@ -357,6 +357,15 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
     },
   });
   const enviarAvaliacao = () => {
+    // Rev. 2978 — GARANTIA: nenhuma avaliação sem obra vinculada. Gate antes de tudo.
+    if (!aval.obraId) {
+      toast.error(
+        isPublic && obrasOptions.length === 0
+          ? "Este link não está vinculado a uma obra. Solicite um novo link de avaliação ao FC."
+          : "Selecione a obra avaliada antes de enviar."
+      );
+      return;
+    }
     // Rev. 2976 — TODAS as perguntas de NOTA (0–10) + a recomendação passam a ser
     // OBRIGATÓRIAS antes de enviar. Comentários e os nomes do gestor/encarregado
     // seguem opcionais. Valida bloco a bloco e aponta o primeiro pendente.
@@ -692,17 +701,25 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                       {obraTravada.nome ?? `Obra #${obraTravada.id}`}
                     </div>
                   </div>
-                ) : (
+                ) : obrasOptions.length > 0 ? (
+                  // Rev. 2978 — obra passa a ser OBRIGATÓRIA (sem opção "geral"): o cliente
+                  // logado precisa escolher a obra avaliada antes de enviar.
                   <div>
-                    <Label className="text-sm font-medium">Sobre qual obra? <span className="text-slate-400 text-xs">(opcional)</span></Label>
+                    <Label className="text-sm font-medium">Sobre qual obra? <span className="text-rose-500">*</span></Label>
                     <select
                       value={aval.obraId ?? ""}
                       onChange={(e) => setAval({ ...aval, obraId: e.target.value ? Number(e.target.value) : null })}
                       className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
                     >
-                      <option value="">Avaliação geral / não específica</option>
+                      <option value="" disabled>Selecione a obra…</option>
                       {obrasOptions.map((o) => <option key={o.id} value={o.id}>{o.nome}</option>)}
                     </select>
+                  </div>
+                ) : (
+                  // Rev. 2978 — link público SEM obra vinculada (links antigos "geral"):
+                  // não há como avaliar sem obra; orienta a pedir um novo link.
+                  <div className="border border-rose-200 bg-rose-50 rounded-md px-3 py-2.5 text-sm text-rose-700">
+                    Este link não está vinculado a uma obra. Solicite um novo link de avaliação ao FC para continuar.
                   </div>
                 )}
 

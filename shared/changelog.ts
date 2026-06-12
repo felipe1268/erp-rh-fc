@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2978 — **PORTAL DO CLIENTE → NPS — GARANTIA DEFINITIVA: NUNCA EXISTE UMA AVALIAÇÃO
+ * SEM OBRA VINCULADA. OBRA VIRA OBRIGATÓRIA NA GERAÇÃO DO LINK, NO ENVIO (BACKEND) E NA UI.**
+ *
+ * PEDIDO (usuário, após a Rev. 2977 não resolver): "Não deu certo, garanta que nunca terá uma
+ * avaliação sem obra linkada". A screenshot mostrava um link público abrindo no seletor editável
+ * "Avaliação geral / não específica" — ou seja, o link foi gerado SEM obra (opção "Avaliação
+ * geral (sem obra)") ou era um link ANTIGO "geral". A Rev. 2977 só travava a obra QUANDO ela
+ * existia no token; não impedia a EXISTÊNCIA de links/avaliações sem obra.
+ *
+ * DIAGNÓSTICO: um link público anônimo não tem lista de obras p/ o cliente escolher (a lista
+ * `minhasObras`/`obrasOptions` só existe no portal LOGADO). Logo, link público sem obra embutida
+ * = impossível avaliar corretamente. A única forma de GARANTIR é tornar a obra obrigatória em
+ * TODAS as pontas (geração, envio e UI), não só "travar quando existe".
+ *
+ * SOLUÇÃO (BACK+FRONT, ZERO ALTER/DROP/DELETE) — defense-in-depth em 4 camadas:
+ * 1) BACK `criarAvaliacao` (`server/routers/portalExterno.ts`): após resolver `obraIdEfetivo`
+ *    (token MANDA, senão input), se ficar `null` → `BAD_REQUEST` ("precisa estar vinculada a uma
+ *    obra"). É a TRAVA FINAL: bloqueia o envio inclusive de links ANTIGOS "geral".
+ * 2) BACK `gerarLinkAvaliacao`: `obraId` passa a ser OBRIGATÓRIO — sem ele, `BAD_REQUEST`
+ *    ("Selecione a obra para gerar o link"). Acabou o "link geral sem obra".
+ * 3) FRONT admin (`client/src/pages/ClientesPortalAdmin.tsx`): a opção "Avaliação geral (sem
+ *    obra)" do seletor vira placeholder DESABILITADO "Selecione a obra…"; o botão "Gerar link"
+ *    fica DESABILITADO enquanto nenhuma obra estiver selecionada.
+ * 4) FRONT público (`client/src/pages/portal/PortalDashboardCliente.tsx`): removida a opção
+ *    "Avaliação geral / não específica"; com `obrasOptions` (portal logado) o seletor passa a ser
+ *    obrigatório (placeholder "Selecione a obra…", label com `*`); sem obras (link público sem
+ *    obra) mostra um aviso vermelho orientando a pedir um novo link. `enviarAvaliacao` ganha um
+ *    GATE no topo: sem `aval.obraId` → `toast.error` e aborta.
+ *
+ * RESULTADO: é impossível gerar link sem obra, impossível enviar avaliação sem obra (validado no
+ * servidor) e a UI deixa o requisito explícito. Links antigos "geral" param de produzir avaliações
+ * órfãs — o cliente é orientado a solicitar um novo link vinculado à obra.
+ *
+ * ARQUIVOS: `server/routers/portalExterno.ts`, `client/src/pages/ClientesPortalAdmin.tsx`,
+ * `client/src/pages/portal/PortalDashboardCliente.tsx`, `shared/version.ts`, `shared/changelog.ts`,
+ * `replit.md`.
+ *
  * Rev. 2977 — **PORTAL DO CLIENTE → NPS PÚBLICA → "OBRA AVALIADA" — A TRAVA DA OBRA (E O
  * PRÉ-PREENCHIMENTO DE GESTOR/ENCARREGADO) PASSA A SER RESOLVIDA TAMBÉM PELO TOKEN
  * VERIFICADO NO BACKEND, NÃO SÓ PELO PARSE base64 DO JWT NO NAVEGADOR.**

@@ -590,7 +590,7 @@ export default function ClientesPortalAdmin() {
                   className="border rounded-md px-2 py-1.5 text-sm bg-white max-w-[220px]"
                   title="Obra à qual o link será vinculado"
                 >
-                  <option value="">Avaliação geral (sem obra)</option>
+                  <option value="" disabled>Selecione a obra…</option>
                   {(obrasEmpresa.data ?? [])
                     .filter((o: any) => String(o.status ?? "").trim().toLowerCase().replace(/[\s_-]+/g, "_") === "em_andamento")
                     .map((o: any) => (
@@ -623,8 +623,8 @@ export default function ClientesPortalAdmin() {
                   />
                 </div>
                 <Button
-                  onClick={() => companyId && gerarLinkAvalMut.mutate({ companyId, obraId: linkObraId === "" ? null : linkObraId, quantidade: typeof linkQtd === "number" && linkQtd >= 1 ? Math.min(50, linkQtd) : 1 })}
-                  disabled={gerarLinkAvalMut.isPending || !companyId}
+                  onClick={() => companyId && linkObraId !== "" && gerarLinkAvalMut.mutate({ companyId, obraId: linkObraId, quantidade: typeof linkQtd === "number" && linkQtd >= 1 ? Math.min(50, linkQtd) : 1 })}
+                  disabled={gerarLinkAvalMut.isPending || !companyId || linkObraId === ""}
                   size="sm"
                   className="ml-auto gap-1.5 bg-blue-600 hover:bg-blue-700"
                 >
@@ -635,7 +635,7 @@ export default function ClientesPortalAdmin() {
               {linkAvaliacao && (
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <span className="text-xs font-medium text-slate-600 w-full">
-                    {linkObraNome ? <>Link vinculado à obra: <b className="text-slate-800">{linkObraNome}</b></> : "Link de avaliação geral (sem obra específica)"}
+                    {linkObraNome ? <>Link vinculado à obra: <b className="text-slate-800">{linkObraNome}</b></> : "Link de avaliação gerado"}
                   </span>
                   {/* Rev. 2973 — cada link é DE USO ÚNICO (1 avaliação) */}
                   <span className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-0.5 w-full">

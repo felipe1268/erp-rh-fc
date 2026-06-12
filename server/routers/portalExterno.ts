@@ -1408,6 +1408,11 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       if (ctx.user.role !== "admin_master" && ctx.user.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
       }
+      // Rev. 2978 — GARANTIA: todo link de avaliação DEVE estar vinculado a uma obra
+      // (não há mais "link geral sem obra"). Sem obraId → recusa gerar o link.
+      if (!input.obraId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Selecione a obra para gerar o link de avaliação." });
+      }
       const db = (await getDb())!;
       // Rev. 2892 — valida que a obra pertence à empresa (tenant guard) e captura
       // o nome p/ exibir no link público sem nova chamada (payload do JWT é público).
@@ -1953,6 +1958,11 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       // Rev. 2892 — se o link foi gerado POR OBRA, a obra do token MANDA (trava):
       // ignora qualquer obraId vindo do cliente p/ evitar avaliação na obra errada.
       const obraIdEfetivo: number | null = (decoded.obraId ? Number(decoded.obraId) : null) ?? (input.obraId ?? null);
+      // Rev. 2978 — GARANTIA: NUNCA existe avaliação sem obra vinculada. Bloqueia o
+      // envio (inclusive de links ANTIGOS "geral" sem obraId no token) na origem.
+      if (!obraIdEfetivo) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Esta avaliação precisa estar vinculada a uma obra. Solicite um novo link de avaliação ao FC." });
+      }
       // ANÔNIMA: NÃO armazena clienteId, credId, IP nem user-agent.
       let obraNome: string | null = null;
       if (obraIdEfetivo) {
