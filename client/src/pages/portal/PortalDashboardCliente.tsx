@@ -28,6 +28,27 @@ function parseLangFromToken(token?: string): AvaliacaoLang {
   } catch { return "pt"; }
 }
 
+// Rev. 3001 — detecta erro de TRANSPORTE do iOS/Safari (WebKit derruba/aborta a
+// requisição HTTP). A DOMException chega como "The string did not match the
+// expected pattern" e variantes ("load failed"/"failed to fetch"/aborted/timeout/
+// vazio). Usado p/ (1) reenviar a avaliação SÓ nesses casos e (2) trocar a
+// mensagem críptica por uma acionável. Mensagens de regra do servidor passam.
+function isTransportErr(msg?: string | null): boolean {
+  const m = (msg || "").toLowerCase().trim();
+  if (!m) return true;
+  return (
+    m.includes("did not match the expected pattern") ||
+    m.includes("load failed") ||
+    m.includes("failed to fetch") ||
+    m.includes("networkerror") ||
+    m.includes("network connection") ||
+    m.includes("the operation couldn't be completed") ||
+    m.includes("aborted") ||
+    m.includes("timed out") ||
+    m.includes("tempo limite")
+  );
+}
+
 // Rev. 1550 — fmtBR robusto: aceita "YYYY-MM-DD", "YYYY-MM-DDTHH:mm:ss"
 // e "YYYY-MM-DD HH:mm:ss[.ffffff]" (formato cru do Postgres). Antes
 // só dividia em "T", então timestamps separados por espaço viravam
@@ -385,13 +406,25 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
     }
   }, [tab, avaliado]);
   const enviarAvalMut = trpc.portalExterno.cliente.criarAvaliacao.useMutation({
+    // Rev. 3001 — iOS/Safari às vezes DERRUBA a requisição no transporte e o
+    // erro chega como "The string did not match the expected pattern" (ou
+    // "load failed"/"failed to fetch"/aborted/vazio). Com o retry global = false,
+    // a única tentativa falha e nada é enviado. Reenvia até 2x SÓ para esses
+    // erros de transporte; o backend é idempotente (claim atômico do link de uso
+    // único + limite por período), então um reenvio após sucesso é rejeitado com
+    // "link já utilizado" — nunca duplica. Erros de regra (FORBIDDEN/BAD_REQUEST)
+    // têm mensagem real e NÃO são reenviados.
+    retry: (failureCount, err: any) => isTransportErr(err?.message) && failureCount < 2,
+    retryDelay: (attempt) => Math.min(1500, 400 * (attempt + 1)),
     onSuccess: () => {
       setAvaliado(true);
       toast.success(T.toastEnviado);
       podeAvaliarQ.refetch();
     },
     onError: (e) => {
-      toast.error(e.message);
+      // Mapeia o erro críptico do iOS p/ uma mensagem acionável (no idioma do
+      // link); erros de regra do servidor passam intactos.
+      toast.error(isTransportErr(e.message) ? T.toastErroConexao : e.message);
       // Se a rejeição foi por duplicidade/concorrência, sincroniza
       // a UI com o estado real (mostra a tela "já registrada").
       podeAvaliarQ.refetch();

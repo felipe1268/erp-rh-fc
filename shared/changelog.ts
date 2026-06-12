@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3001 — **PESQUISA DE SATISFAÇÃO (NPS) → ENVIAR AVALIAÇÃO PELO LINK PÚBLICO
+ * DAVA "THE STRING DID NOT MATCH THE EXPECTED PATTERN" NO iPad/iPhone (SAFARI) E A
+ * AVALIAÇÃO NÃO ERA REGISTRADA. CAUSA-RAIZ: iOS/WebKit DERRUBA A REQUISIÇÃO NO
+ * TRANSPORTE + RETRY GLOBAL = false (TENTATIVA ÚNICA FALHA SILENCIOSAMENTE).**
+ *
+ * PEDIDO (usuário, print do iPad): toast "The string did not match the expected
+ * pattern." ao tocar em "Enviar avaliação anônima" no formulário público de NPS
+ * (`/portal/avaliacao/:token`).
+ *
+ * CAUSA-RAIZ (cliente/transporte, NÃO backend): a DOMException do WebKit em
+ * iPad/iPhone Safari "The string did not match the expected pattern" (e variantes
+ * "load failed"/"failed to fetch"/aborted/timeout) é o navegador ABORTANDO a própria
+ * requisição HTTP no transporte — não é bug do nosso pipeline (server/superjson/
+ * zod estão ok). Como o `QueryClient` global define `mutations: { retry: false }`,
+ * a PRIMEIRA tentativa derrubada falha e NADA é enviado (uma query se auto-curaria no
+ * refetch; uma mutation one-shot não). O usuário via só o toast críptico e a avaliação
+ * não entrava. (Não é o crash de `new Date(string)` — o envio só usa `Date.now()`.)
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, ZERO schema/backend): em
+ * `client/src/pages/portal/PortalDashboardCliente.tsx` (mutation `criarAvaliacao`):
+ * (1) helper `isTransportErr` que reconhece as mensagens de transporte do iOS;
+ * (2) `retry` ciente de transporte — reenvia até 2x SÓ nesses erros (regras do
+ * servidor — FORBIDDEN/BAD_REQUEST — NÃO são reenviadas), com `retryDelay`
+ * progressivo. O backend já é idempotente (claim ATÔMICO do link de uso único +
+ * limite por período), então um reenvio após sucesso é rejeitado com "link já
+ * utilizado" e a UI sincroniza via `refetch` — NÃO duplica avaliação nos links
+ * atuais (TODO link gerado via `gerarLinkAvaliacao` carrega `linkId` de uso único;
+ * fluxos com `credId` têm claim por período). RESSALVA: tokens LEGADOS pré-uso-único
+ * (sem `linkId` e sem `credId`) seguem o comportamento antigo e, num reenvio, ainda
+ * poderiam registrar 2x — mesma exposição "ilimitada" que esses links já tinham;
+ * (3) `onError` troca a mensagem críptica pela amigável/acionável `toastErroConexao`
+ * (novo i18n pt/en/zh em `shared/portalAvaliacaoI18n.ts`), preservando intactas as
+ * mensagens reais de regra do servidor. ARQUIVOS:
+ * `client/src/pages/portal/PortalDashboardCliente.tsx`,
+ * `shared/portalAvaliacaoI18n.ts`. Requer REPUBLICAR.
+ *
  * Rev. 3000 — **RAIO-X DO FUNCIONÁRIO → "OBRAS GERIDAS" MOSTRAVA 0 / "NÃO É GESTOR"
  * MESMO QUANDO O COLABORADOR ERA O ENGENHEIRO/RESPONSÁVEL DA OBRA (EX.: MATEUS NA
  * "QIU 2 - FASE 4"). CAUSA-RAIZ: A OBRA TINHA SÓ O NOME-TEXTO DO RESPONSÁVEL

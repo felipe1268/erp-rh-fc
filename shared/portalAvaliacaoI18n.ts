@@ -67,6 +67,9 @@ export interface AvaliacaoStrings {
   obrigadoTitulo: string;
   obrigadoTexto: string;
   toastEnviado: string;
+  // Rev. 3001 — mensagem amigável quando o iOS/Safari derruba a requisição
+  // no transporte ("The string did not match the expected pattern").
+  toastErroConexao: string;
   // Validações (toasts)
   valGestor: string;
   valEncarregado: string;
@@ -133,6 +136,7 @@ export const AVALIACAO_I18N: Record<AvaliacaoLang, AvaliacaoStrings> = {
     obrigadoTitulo: "Obrigado pela avaliação!",
     obrigadoTexto: "Suas respostas foram registradas de forma totalmente anônima e ajudarão a FC Engenharia a melhorar continuamente.",
     toastEnviado: "Obrigado! Sua avaliação foi enviada.",
+    toastErroConexao: "Não foi possível enviar pela conexão atual. Verifique a internet e toque em \"Enviar\" novamente.",
     valGestor: 'Avalie todos os itens do bloco "Gestor / Responsável FC pela obra" (0 a 10).',
     valEncarregado: 'Avalie todos os itens do bloco "Encarregado FC na obra" (0 a 10).',
     valEquipe: 'Avalie todos os itens do bloco "Equipe direta FC na obra" (0 a 10).',
@@ -219,6 +223,7 @@ export const AVALIACAO_I18N: Record<AvaliacaoLang, AvaliacaoStrings> = {
     obrigadoTitulo: "Thank you for your feedback!",
     obrigadoTexto: "Your answers were recorded completely anonymously and will help FC Engenharia improve continuously.",
     toastEnviado: "Thank you! Your survey has been submitted.",
+    toastErroConexao: "We couldn't submit over the current connection. Check your internet and tap \"Submit\" again.",
     valGestor: 'Please rate all items in the "FC Manager / Project lead" section (0 to 10).',
     valEncarregado: 'Please rate all items in the "FC Site foreman" section (0 to 10).',
     valEquipe: 'Please rate all items in the "FC field team on site" section (0 to 10).',
@@ -305,6 +310,7 @@ export const AVALIACAO_I18N: Record<AvaliacaoLang, AvaliacaoStrings> = {
     obrigadoTitulo: "感谢您的评价！",
     obrigadoTexto: "您的回答已完全匿名记录，将帮助 FC Engenharia 持续改进。",
     toastEnviado: "谢谢！您的评价已提交。",
+    toastErroConexao: '当前网络无法提交。请检查网络后再次点击“提交”。',
     valGestor: '请为"FC 工程经理/负责人"部分的所有项目打分（0 到 10）。',
     valEncarregado: '请为"FC 现场工长"部分的所有项目打分（0 到 10）。',
     valEquipe: '请为"FC 现场施工团队"部分的所有项目打分（0 到 10）。',
