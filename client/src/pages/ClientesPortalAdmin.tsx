@@ -147,12 +147,38 @@ export default function ClientesPortalAdmin() {
     { enabled: !!companyId },
   );
   // Rev. 2985 — exclusão (soft-delete) de link — APENAS Admin Master.
+  // O WebKit do iPad/iOS às vezes derruba a requisição e expõe a DOMException
+  // crua "The string did not match the expected pattern" (erro de TRANSPORTE,
+  // não do nosso pipeline). Tratamos: (1) backend idempotente; (2) retry no
+  // transporte; (3) mensagem amigável; (4) refetch SEMPRE (onSettled) p/ a
+  // lista refletir a verdade mesmo se o cliente recebeu erro transitório.
+  const ehErroTransporteIos = (m?: string) => {
+    const low = (m ?? "").toLowerCase();
+    return low === "" ||
+      low.includes("did not match the expected pattern") ||
+      low.includes("load failed") ||
+      low.includes("failed to fetch") ||
+      low.includes("networkerror") ||
+      low.includes("network connection") ||
+      low.includes("the operation was aborted") ||
+      low.includes("aborted") ||
+      low.includes("timed out") ||
+      low.includes("tempo limite");
+  };
   const excluirLinkMut = trpc.portalExterno.admin.excluirLinkAvaliacao.useMutation({
+    retry: (n, e: any) => ehErroTransporteIos(e?.message) && n < 2,
+    retryDelay: 800,
     onSuccess: () => {
       toast.success("Link excluído.");
+    },
+    onError: (e: any) => {
+      toast.error(ehErroTransporteIos(e?.message)
+        ? "A conexão falhou ao excluir (comum no iPad/Safari). Confira a lista — se o link continuar aí, tente de novo."
+        : (e?.message ?? "Não foi possível excluir o link."));
+    },
+    onSettled: () => {
       utils.portalExterno.admin.listarLinksAvaliacao.invalidate();
     },
-    onError: (e) => toast.error(e.message),
   });
   const excluirLink = (codigo: string) => {
     if (!companyId) return;

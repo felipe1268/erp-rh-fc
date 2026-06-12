@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2986 — **PORTAL DO CLIENTE → NPS → "LINKS DE AVALIAÇÃO GERADOS" — POLIMENTOS
+ * PEDIDOS PELO ADMIN MASTER + CORREÇÃO DO ERRO "THE STRING DID NOT MATCH THE EXPECTED
+ * PATTERN" AO EXCLUIR UM LINK NO iPad/iOS.**
+ *
+ * PEDIDOS (usuário, Admin Master): (a) a lista de links gerados deve mostrar o NOME da
+ * obra (links antigos apareciam sem nome); (b) data/hora dos links no fuso de Brasília
+ * em formato BR; (c) a bandeira do inglês deveria ser a dos EUA; (d) ao clicar EXCLUIR
+ * um link, aparecia o toast vermelho "The string did not match the expected pattern" e
+ * o link NÃO era apagado.
+ *
+ * CAUSA-RAIZ DA EXCLUSÃO QUE FALHAVA: a mensagem "The string did not match the expected
+ * pattern" é a DOMException crua que o WebKit do iPad/iOS dispara quando ele DERRUBA a
+ * própria requisição no transporte (não há bug no nosso pipeline — backend/superjson
+ * auditados). Como as mutations têm `retry: false` global, a 1ª tentativa caía e nada
+ * acontecia (confirmado: nenhuma exclusão chegava ao Neon).
+ *
+ * SOLUÇÃO (BACK+FRONT, ZERO ALTER/DROP/DELETE):
+ *   • `server/routers/portalExterno.ts` `excluirLinkAvaliacao` agora é IDEMPOTENTE: se o
+ *     UPDATE não afeta linhas (link já estava com `deletado_em`), confere se o código
+ *     existe na empresa e — existindo — retorna `{success:true}` em vez de NOT_FOUND. Isso
+ *     torna o retry seguro (uma tentativa anterior pode ter chegado ao servidor).
+ *   • `client/src/pages/ClientesPortalAdmin.tsx`: a mutation de exclusão ganha (1) `retry`
+ *     que re-tenta SÓ em erros de transporte iOS (helper `ehErroTransporteIos`), (2)
+ *     mensagem amigável em PT no `onError` no lugar da DOMException crua, e (3)
+ *     `onSettled` que SEMPRE invalida/refetch a lista — assim a UI reflete a verdade
+ *     mesmo se o cliente recebeu um erro transitório.
+ *   • `listarLinksAvaliacao`: resolve o nome da obra ao vivo via LEFT JOIN em `obras`
+ *     (`COALESCE(NULLIF(obra_nome,''), o.nome)`) e formata `criado_em` em fuso Brasília
+ *     `DD/MM/YYYY HH24:MI` (a coluna é `timestamp without time zone` em UTC).
+ *   • `shared/portalAvaliacaoI18n.ts`: bandeira do inglês → 🇺🇸 (EUA).
+ *
+ * RESSALVA: a exclusão é SOFT-DELETE (UPDATE `deletado_em`); R-001/007/010 mantidos.
+ *
  * Rev. 2985 — **PORTAL DO CLIENTE → NPS — 3 MELHORIAS PEDIDAS PELO ADMIN MASTER:
  * (1) LINKS GERADOS (SEM LOGIN) AGORA PERSISTEM E FICAM LISTADOS — ORGANIZADOS POR
  * OBRA E POR DATA DE CRIAÇÃO; SÓ O ADMIN MASTER PODE APAGAR (SOFT-DELETE). (2) ALERTA

@@ -1571,7 +1571,19 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         RETURNING codigo
       `);
       const rows = (((r as any).rows ?? r ?? []) as any[]);
-      if (rows.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Link não encontrado ou já excluído." });
+      if (rows.length === 0) {
+        // IDEMPOTENTE (Rev. 2985): o WebKit do iPad/iOS às vezes derruba a 1ª
+        // requisição e o cliente re-tenta; se o link já foi excluído antes (ou
+        // numa tentativa anterior que chegou ao servidor), NÃO falhar — só erra
+        // se o código de fato não existir nesta empresa.
+        const chk = await db.execute(sql`
+          SELECT codigo FROM cliente_avaliacao_shortlink
+          WHERE codigo = ${input.codigo} AND company_id = ${input.companyId}
+          LIMIT 1
+        `);
+        const existe = (((chk as any).rows ?? chk ?? []) as any[]).length > 0;
+        if (!existe) throw new TRPCError({ code: "NOT_FOUND", message: "Link não encontrado." });
+      }
       return { success: true };
     }),
 
