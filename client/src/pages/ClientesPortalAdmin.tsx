@@ -620,6 +620,24 @@ export default function ClientesPortalAdmin() {
                       <ExternalLink className="w-4 h-4" /> Abrir
                     </Button>
                   </a>
+                  {/* Rev. 2969 — compartilhar via WhatsApp com mensagem cordial pronta */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-green-700 border-green-300 hover:bg-green-50"
+                    onClick={() => {
+                      const msg =
+                        `Olá! Tudo bem? Aqui é da FC Engenharia.\n\n` +
+                        `Estamos sempre buscando melhorar e a sua opinião é muito importante para nós. ` +
+                        `Você poderia reservar alguns minutinhos para avaliar a nossa equipe${linkObraNome ? ` na obra ${linkObraNome}` : ""}? ` +
+                        `A avaliação é rápida, anônima e nos ajuda na melhoria contínua dos nossos serviços.\n\n` +
+                        `É só acessar o link abaixo:\n${linkAvaliacao}\n\n` +
+                        `Desde já, muito obrigado pela sua colaboração!`;
+                      window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer");
+                    }}
+                  >
+                    <MessageSquare className="w-4 h-4" /> WhatsApp
+                  </Button>
                 </div>
               )}
             </div>

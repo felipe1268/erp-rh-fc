@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2969 — **PORTAL DO CLIENTE → ADMINISTRAÇÃO → AVALIAÇÕES (NPS) → "LINK DE AVALIAÇÃO
+ * (SEM LOGIN)" — NOVO BOTÃO "WHATSAPP" QUE ABRE O WHATSAPP COM UMA MENSAGEM CORDIAL JÁ
+ * PRONTA, CONVIDANDO O CLIENTE A RESERVAR ALGUNS MINUTOS PARA AVALIAR A EQUIPE (MELHORIA
+ * CONTÍNUA), COM O LINK EMBUTIDO.**
+ *
+ * PEDIDO (usuário): ao clicar no link para enviar via WhatsApp, deveria aparecer uma
+ * mensagem cordial pedindo ao cliente um tempo para avaliar a equipe, visando a melhoria
+ * contínua.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE): ao lado dos botões "Copiar" e "Abrir" do
+ * link de avaliação gerado (`client/src/pages/ClientesPortalAdmin.tsx`), novo botão
+ * "WhatsApp" (ícone `MessageSquare`, estilo verde) que monta uma mensagem cordial em pt-BR
+ * ("Olá! Tudo bem? Aqui é da FC Engenharia…", convite a reservar alguns minutos para avaliar
+ * a equipe, ressaltando que é rápida/anônima e ajuda na melhoria contínua) com o
+ * `linkAvaliacao` embutido — e, quando o link está vinculado a uma obra, personaliza com
+ * "…avaliar a nossa equipe na obra {linkObraNome}". Abre `https://wa.me/?text=<encoded>` em
+ * nova aba (mesmo padrão já usado em Locados/IntegracaoSST). Sem backend/schema: usa o link
+ * já gerado pelo fluxo existente.
+ *
+ * ARQUIVOS: `client/src/pages/ClientesPortalAdmin.tsx` (botão WhatsApp + mensagem no bloco
+ * `linkAvaliacao`).
+ *
  * Rev. 2968 — **PORTAL DO CLIENTE → PESQUISA DE SATISFAÇÃO (NPS) PÚBLICA — A "NOTA GERAL" DEIXA
  * DE SER DIGITADA/SELECIONADA MANUALMENTE E PASSA A SER CALCULADA AUTOMATICAMENTE, AO VIVO,
  * COMO MÉDIA PONDERADA DAS RESPOSTAS DO FORMULÁRIO.**
