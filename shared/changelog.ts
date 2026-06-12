@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2999 — **AVISO PRÉVIO → "NOVO AVISO PRÉVIO": O SELETOR DE COLABORADOR AGORA
+ * MOSTRA A FOTO DE CADA FUNCIONÁRIO (NA LISTA SUSPENSA E NO COLABORADOR JÁ
+ * SELECIONADO), EM VEZ DE SÓ A INICIAL DO NOME.**
+ *
+ * PEDIDO (usuário): "Precisa aparecer as fotos de todos os funcionários aqui também"
+ * (print da tela "Novo Aviso Prévio" → campo "Colaborador", onde o dropdown de busca
+ * exibia apenas um círculo com a 1ª letra do nome). As fotos já aparecem em outras
+ * telas (EPIs, Terceiros, lista de avisos) — faltava no SELETOR de colaborador.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, ZERO backend/schema): em
+ * `client/src/pages/AvisoPrevio.tsx`, os 2 avatares de inicial do seletor (item da
+ * lista suspensa + colaborador já selecionado no botão do popover) passaram a usar o
+ * componente reutilizável `PersonPhoto` (`src={e.fotoUrl}` / `selectedEmp.fotoUrl`,
+ * `clickable={false}`), que renderiza a FOTO quando há `fotoUrl` e cai no fallback de
+ * INICIAIS quando não há (ou se a imagem falhar). O campo `fotoUrl` já vem de
+ * `trpc.employees.list` (mesma fonte usada na tela de EPIs), então nenhum endpoint
+ * mudou. Requer REPUBLICAR. ARQUIVOS: `client/src/pages/AvisoPrevio.tsx` (import de
+ * `PersonPhoto` + 2 avatares).
+ *
  * Rev. 2998 — **CONTROLE DE EPIs → "ESTOQUE POR OBRA": AJUSTAR A QUANTIDADE DE UM EPI
  * "GRUDAVA" O VALOR EM OUTRO (EX.: LUVA NITRÍLICA × LUVA MISTA VINHAM SEMPRE IGUAIS).
  * CAUSA-RAIZ: A TABELA `epi_estoque_obra` ESTAVA SEM PRIMARY KEY E TINHA ids

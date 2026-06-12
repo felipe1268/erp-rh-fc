@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { PersonPhoto } from "@/components/PersonPhoto";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
@@ -2498,9 +2499,7 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                           <Search className="h-5 w-5 text-amber-500 shrink-0" />
                           {selectedEmp ? (
                             <div className="flex items-center gap-2 min-w-0">
-                              <div className="w-7 h-7 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-xs shrink-0">
-                                {(selectedEmp.nomeCompleto || '').charAt(0)}
-                              </div>
+                              <PersonPhoto src={selectedEmp.fotoUrl} alt={selectedEmp.nomeCompleto || ''} size="xs" clickable={false} className="h-7 w-7 text-xs shrink-0" />
                               <span className="font-semibold text-gray-900 truncate">{selectedEmp.nomeCompleto}</span>
                               <span className="text-xs text-gray-400 font-mono shrink-0">CPF: {formatCPF(selectedEmp.cpf)}</span>
                             </div>
@@ -2563,9 +2562,7 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                                 className="flex items-center justify-between py-2.5 cursor-pointer"
                               >
                                 <div className="flex items-center gap-3">
-                                  <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-xs shrink-0">
-                                    {(e.nomeCompleto || '').charAt(0)}
-                                  </div>
+                                  <PersonPhoto src={e.fotoUrl} alt={e.nomeCompleto || ''} size="sm" clickable={false} className="h-8 w-8 text-xs shrink-0" />
                                   <div>
                                     <span className="font-semibold text-gray-800 block text-sm">{e.nomeCompleto}</span>
                                     <span className="text-xs text-gray-500">{e.funcao || 'Sem função'} {e.setor ? `• ${e.setor}` : ''}</span>
