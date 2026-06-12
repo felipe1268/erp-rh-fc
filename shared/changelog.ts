@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2993 — **CONTROLE DE EPIs → "ESTOQUE POR OBRA" → ROLAGEM DA TELA INTEIRA
+ * (REMOVIDO O "CONGELAMENTO" DOS CARDS DE OBRA NO TOPO).**
+ *
+ * PEDIDO (usuário, Admin Master): "Quero um layout mais fácil de organizar —
+ * quando rolar a barra de rolagem deve subir a tela inteira, não congelar as
+ * obras e subir só os itens." Na tela "Controle de EPIs" → aba "Estoque por
+ * Obra", o painel de resumo + os cards das obras estavam FIXOS no topo (sticky,
+ * Rev. 2779) e o grid de cards ainda tinha um scroll PRÓPRIO (`max-h-[42vh]
+ * overflow-y-auto`). Resultado no iPad: ao rolar, as obras ficavam congeladas no
+ * alto e só a tabela de itens deslizava por baixo — comportamento que o usuário
+ * achou confuso ("parece bug no filtro").
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, ZERO backend/schema): em
+ * `client/src/pages/Epis.tsx` (view `estoque_obra`):
+ *   - removido `sticky top-0 z-20 bg-background` do wrapper do resumo+cards;
+ *     vira um bloco normal (`pt-1 pb-3 space-y-3 border-b mb-1`), de modo que ele
+ *     rola JUNTO com o resto da página.
+ *   - removido `max-h-[42vh] overflow-y-auto pr-1` do grid de cards de obra, que
+ *     criava um segundo scroll aninhado; agora todos os cards fluem na rolagem
+ *     natural da página.
+ * Efeito: a tela inteira (resumo → cards de obra → tabela de itens) rola como um
+ * documento único; nada fica congelado. A lógica de filtro por card (clique
+ * destaca o card e filtra `tabelaEstoqueList`, Rev. 2780) permanece intacta.
+ *
+ * NOTA (diagnóstico paralelo, NÃO alterado nesta revisão): os DOIS cards
+ * "QIU 2 - FASE 4" observados no print têm causa de DADOS — a empresa 60002 tem
+ * a obra real `90001` (641 un/29 tipos) e ainda 2 linhas de `epi_estoque_obra`
+ * (10 un "Capa de Chuva" + 0 "Óculos") gravadas apontando para a obra `270001`,
+ * que pertence a OUTRA empresa (60005). Isso é estoque cross-company mal
+ * atribuído; a correção (mover as unidades para a QIU correta) envolve mexer em
+ * dado de produção e foi deixada para confirmação do usuário.
+ * ARQUIVO: `client/src/pages/Epis.tsx`.
+ *
  * Rev. 2992 — **LIBERAÇÕES DO PORTAL → SELEÇÃO DE "OBRAS LIBERADAS" AGORA VIVE
  * DENTRO DA TELA "LIBERAÇÕES DO PORTAL — MÓDULOS E ABAS".**
  *

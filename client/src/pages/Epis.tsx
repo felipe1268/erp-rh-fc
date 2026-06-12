@@ -2957,8 +2957,9 @@ export default function Epis() {
               const totalLocais = filteredObras.length + (showCentral ? 1 : 0);
               return (
               <>
-              {/* Rev. 2779 — cards fixos (sticky) no topo; só a tabela de insumos abaixo rola */}
-              <div className="sticky top-0 z-20 bg-background pt-1 pb-3 space-y-3 border-b mb-1">
+              {/* Rev. 2993 — SEM sticky: a tela inteira rola junto (resumo + cards + tabela),
+                  não congela as obras no topo deixando só os itens rolarem por baixo. */}
+              <div className="pt-1 pb-3 space-y-3 border-b mb-1">
               <Card className="border-emerald-200 bg-emerald-50/50">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
@@ -2978,7 +2979,7 @@ export default function Epis() {
                   </div>
                 </CardContent>
               </Card>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[42vh] overflow-y-auto pr-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {showCentral && (
                   <Card
                     onClick={() => setFilterObraEstoque(filterObraEstoque === "central" ? "todas" : "central")}
