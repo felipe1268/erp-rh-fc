@@ -1526,7 +1526,7 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
                  s.obra_id,
                  COALESCE(NULLIF(s.obra_nome, ''), o.nome) AS obra_nome,
                  s.lang,
-                 to_char(s.criado_em, 'YYYY-MM-DD HH24:MI:SS') AS criado_em,
+                 to_char((s.criado_em AT TIME ZONE 'UTC') AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI') AS criado_em,
                  s.criado_por_nome,
                  (u.link_id IS NOT NULL) AS usado
           FROM cliente_avaliacao_shortlink s
