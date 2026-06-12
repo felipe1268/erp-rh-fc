@@ -1,6 +1,57 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2984 — **PLANEJAMENTO — USUÁRIO RESTRITO POR OBRA (ex.: engenheiro de campo
+ * "Mateus") NÃO VIA AS ATIVIDADES/DADOS DO PROJETO ("Nenhuma atividade cadastrada",
+ * "0 atividades") MESMO TENDO O PROJETO LISTADO. CORRIGIDO PARA TODOS OS USUÁRIOS
+ * RESTRITOS VEREM O QUE TÊM PERMISSÃO.**
+ *
+ * PEDIDO (usuário): "O usuário Mateus não está vendo nada no Planejamento — a tela de
+ * detalhe mostra o projeto e o avanço (Previsto 36% / Realizado 34%), mas diz '0
+ * atividades' / 'Nenhuma atividade cadastrada'. Arrume para TODOS os usuários restritos
+ * verem as informações que têm permissão."
+ *
+ * CAUSA-RAIZ: o Catálogo de projetos (`listarProjetos`) e o `dashboardGeral` resolvem a
+ * permissão por OBRA (lê `users.allowed_obra_ids`; se vazio, deriva via e-mail →
+ * `employees` → `obra_funcionarios`), então o PROJETO aparece na lista. PORÉM as queries
+ * de LEITURA que alimentam a tela de detalhe (`listarAtividades`, `getDataCorte`,
+ * `kpiResponsavelPorProjeto`, `diagnosticoEapOrcVsCron`) usavam um compare ESTRITO
+ * `projeto.companyId === ctx.user.companyId`. Um usuário multi-empresa (cuja empresa-default
+ * difere da empresa do projeto da obra à qual ele tem acesso) PASSAVA no filtro de obra do
+ * Catálogo mas era BLOQUEADO pela checagem por companyId nas queries de detalhe → as
+ * atividades vinham vazias (e os demais painéis daquelas queries idem). Mesmo padrão da
+ * memória `company-access-guard` (não usar o compare estrito legacy de `ctx.user.companyId`).
+ *
+ * SOLUÇÃO (BACKEND-only, ZERO ALTER/DROP/DELETE, sem coluna/tabela nova):
+ *   (1) Helper ÚNICO `resolvePlanAllowedObraIds(db, userId, role, email, companyId)` em
+ *       `server/routers/planejamento.ts` — replica EXATAMENTE a régua já usada por
+ *       `listarProjetos`/`dashboardGeral`: admin/admin_master → `null` (sem restrição);
+ *       senão `allowed_obra_ids` (se não-vazio) OU derivação por e-mail→employee→
+ *       obra_funcionarios (restrita à empresa); `[]` = nenhuma obra. As DUAS procedures
+ *       de catálogo foram refatoradas para CHAMAR o helper (puro refactor, zero mudança
+ *       de comportamento — elimina a duplicação que causou a divergência).
+ *   (2) `listarAtividades`: além de `companyId`, lê o `obraId` do projeto e troca o compare
+ *       estrito por: não-admin → resolve allowedObraIds via helper; se restrito, a obra do
+ *       projeto PRECISA estar nas obras permitidas (senão FORBIDDEN). Mantém o fail-closed
+ *       quando o companyId do projeto não pôde ser resolvido (revisão órfã).
+ *   (3) `getDataCorte`, `kpiResponsavelPorProjeto`, `diagnosticoEapOrcVsCron`: MESMA troca
+ *       (lê `obraId`, valida via helper). No `diagnosticoEapOrcVsCron` (exibido na tela de
+ *       detalhe SEM gate de admin) a defesa-em-profundidade do orçamento passa a comparar
+ *       `orc.companyId === proj.companyId` (empresa já autorizada por obra) em vez de
+ *       `ctx.user.companyId` — que negava multi-empresa.
+ *
+ * ESCOPO / RESSALVA DELIBERADA: a tarefa é de VISUALIZAÇÃO ("ver as infos que têm
+ * permissão"). As MUTATIONS do módulo (salvarAtividades, importarComModo, fecharSemana,
+ * setRealDates, salvarMetadadosMSProject, consolidarCutoff, set/deletar* etc.) MANTÊM o
+ * guard estrito por `ctx.user.companyId` — NÃO foram afrouxadas, para não ampliar acesso
+ * de ESCRITA de usuário restrito sem pedido explícito. As queries não usadas pelo cliente
+ * (`pvEvOficialAt`, `getCurvaSFinanceiraOrcamento`) ficaram inalteradas. As demais queries
+ * de detalhe (`listarAvancos`, `getCurvaS`, `getCurvaMedicoes`, `obterCruzamento...`, etc.)
+ * já NÃO tinham o compare estrito — funcionavam para o usuário restrito.
+ *
+ * ARQUIVOS: `server/routers/planejamento.ts` (helper novo + 4 queries corrigidas + 2
+ * catálogos refatorados), `shared/version.ts` (2983→2984).
+ *
  * Rev. 2983 — **CADASTRO DE CONTAS BANCÁRIAS — NOVOS CAMPOS "SALDO INICIAL" + "DATA";
  * SALDO INICIAL CONSIDERADO NO FLUXO DE CAIXA PARA CONCILIAR COM O EXTRATO REAL.**
  *

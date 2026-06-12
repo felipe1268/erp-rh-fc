@@ -532,6 +532,43 @@ async function assertProjetoRevisaoScope(db: any, ctx: any, projetoId: number, r
   }
 }
 
+// Rev. 2984 — Resolução ÚNICA das obras que um usuário pode VER no Planejamento.
+// Antes a mesma lógica estava DUPLICADA em `listarProjetos` e `dashboardGeral`, e
+// `listarAtividades` usava um compare ESTRITO de `ctx.user.companyId` — o que QUEBRAVA
+// o engenheiro de campo cuja empresa-default difere da empresa do projeto: o projeto
+// aparecia na lista (listarProjetos casa por obra) mas as atividades vinham vazias
+// ("Nenhuma atividade cadastrada"). Agora as 3 procedures compartilham esta fonte.
+// Retorna: null = sem restrição (admin/admin_master, vê tudo da empresa); [] = restrito
+// sem nenhuma obra (não vê nada); [ids] = restrito a essas obras.
+async function resolvePlanAllowedObraIds(
+  db: any,
+  userId: number,
+  role: string | null | undefined,
+  email: string | null | undefined,
+  companyId: number,
+): Promise<number[] | null> {
+  if (role === "admin" || role === "admin_master") return null;
+  const userResult = await db.execute(sql`SELECT allowed_obra_ids FROM users WHERE id = ${userId}`);
+  const userRows: any[] = userResult?.rows ?? userResult ?? [];
+  const raw = userRows[0]?.allowed_obra_ids;
+  let parsed: number[] = [];
+  try { if (raw) parsed = JSON.parse(raw); } catch {}
+  if (parsed.length > 0) return parsed;
+  const userEmail = email ?? "";
+  if (!userEmail) return [];
+  const empResult = await db.execute(sql`SELECT id FROM employees WHERE "companyId" = ${companyId} AND email = ${userEmail} AND "deletedAt" IS NULL LIMIT 1`);
+  const empRows: any[] = empResult?.rows ?? empResult ?? [];
+  if (!empRows.length) return [];
+  const employeeId = empRows[0].id;
+  const obrasResult = await db.execute(sql`
+    SELECT DISTINCT of2."obraId" FROM obra_funcionarios of2
+    INNER JOIN obras o ON o.id = of2."obraId" AND o."companyId" = ${companyId} AND o."deletedAt" IS NULL
+    WHERE of2."employeeId" = ${employeeId} AND of2."isActive" = 1
+  `);
+  const obrasRows: any[] = obrasResult?.rows ?? obrasResult ?? [];
+  return obrasRows.map((r: any) => r.obraId);
+}
+
 export const planejamentoRouter = router({
 
   // ── Projetos ──────────────────────────────────────────────────────────────
@@ -539,34 +576,9 @@ export const planejamentoRouter = router({
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
-      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
-
-      let allowedObraIds: number[] | null = null;
-      if (!isAdmin) {
-        const userResult = await db.execute(sql`SELECT allowed_obra_ids FROM users WHERE id = ${ctx.user.id}`);
-        const userRows: any[] = userResult?.rows ?? userResult ?? [];
-        const raw = userRows[0]?.allowed_obra_ids;
-        let parsed: number[] = [];
-        try { if (raw) parsed = JSON.parse(raw); } catch {}
-        if (parsed.length > 0) {
-          allowedObraIds = parsed;
-        } else {
-          const userEmail = ctx.user.email ?? "";
-          if (!userEmail) return [];
-          const empResult = await db.execute(sql`SELECT id FROM employees WHERE "companyId" = ${input.companyId} AND email = ${userEmail} AND "deletedAt" IS NULL LIMIT 1`);
-          const empRows: any[] = empResult?.rows ?? empResult ?? [];
-          if (!empRows.length) return [];
-          const employeeId = empRows[0].id;
-          const obrasResult = await db.execute(sql`
-            SELECT DISTINCT of2."obraId" FROM obra_funcionarios of2
-            INNER JOIN obras o ON o.id = of2."obraId" AND o."companyId" = ${input.companyId} AND o."deletedAt" IS NULL
-            WHERE of2."employeeId" = ${employeeId} AND of2."isActive" = 1
-          `);
-          const obrasRows: any[] = obrasResult?.rows ?? obrasResult ?? [];
-          allowedObraIds = obrasRows.map((r: any) => r.obraId);
-          if (allowedObraIds.length === 0) return [];
-        }
-      }
+      const allowedObraIds = await resolvePlanAllowedObraIds(
+        db, ctx.user.id, ctx.user.role, ctx.user.email, input.companyId,
+      );
 
       const rows = await db.select({
         id:                    planejamentoProjetos.id,
@@ -1407,6 +1419,7 @@ export const planejamentoRouter = router({
       // cronograma (responsavelLotus). Buscar companyId via planejamento_projetos.
       let cutoffISO: string | null = null;
       let projetoCompanyId: number | null = null;
+      let projetoObraId: number | null = null;
       let projetoIdAtual: number | null = null;
       if (rows.length > 0) {
         const [rev] = await db.select({ projetoId: planejamentoRevisoes.projetoId })
@@ -1418,30 +1431,39 @@ export const planejamentoRouter = router({
           const [proj] = await db.select({
             dataCorteAtual: planejamentoProjetos.dataCorteAtual,
             companyId:      planejamentoProjetos.companyId,
+            obraId:         planejamentoProjetos.obraId,
           })
             .from(planejamentoProjetos)
             .where(eq(planejamentoProjetos.id, rev.projetoId))
             .limit(1);
           if (proj?.dataCorteAtual) cutoffISO = toDateStr(proj.dataCorteAtual as any);
           if (proj?.companyId != null) projetoCompanyId = Number(proj.companyId);
+          if (proj?.obraId != null) projetoObraId = Number(proj.obraId);
         }
 
-        // Rev. 1818/1891 — Hardening multi-tenant (bloqueia IDOR via enumeração
-        // de revisaoId). admin/admin_master atravessa. Rev. 1891: FAIL-CLOSED
-        // — se projetoCompanyId não pôde ser resolvido (dado inconsistente,
-        // revisão órfã), bloqueia não-admin em vez de liberar (caveat
-        // apontado pelo architect).
-        const userCompany = (ctx.user as any).companyId;
+        // Rev. 1818/1891/2984 — Hardening multi-tenant (bloqueia IDOR via enumeração
+        // de revisaoId). admin/admin_master atravessa. FAIL-CLOSED se projetoCompanyId
+        // não pôde ser resolvido (dado inconsistente, revisão órfã) → bloqueia não-admin.
+        // Rev. 2984 — BUG FIX: o compare ESTRITO `projetoCompanyId !== ctx.user.companyId`
+        // quebrava o engenheiro de campo cuja empresa-default difere da empresa do projeto
+        // (projeto aparecia na lista, mas "Nenhuma atividade cadastrada"). Agora usa a MESMA
+        // resolução por OBRA de `listarProjetos`/`dashboardGeral` (`resolvePlanAllowedObraIds`):
+        // se o usuário é restrito, a obra do projeto precisa estar nas suas obras permitidas.
         const role = (ctx.user as any).role;
         const isAdmin = role === "admin" || role === "admin_master";
         if (!isAdmin) {
           if (projetoCompanyId == null) {
-            console.warn(`[listarAtividades] FORBIDDEN (fail-closed) revisaoId=${input.revisaoId} projCompany=null userCompany=${userCompany} role=${role}`);
+            console.warn(`[listarAtividades] FORBIDDEN (fail-closed) revisaoId=${input.revisaoId} projCompany=null role=${role}`);
             throw new Error("Sem permissão para esta revisão.");
           }
-          if (String(projetoCompanyId) !== String(userCompany)) {
-            console.warn(`[listarAtividades] FORBIDDEN revisaoId=${input.revisaoId} projCompany=${projetoCompanyId} userCompany=${userCompany} role=${role}`);
-            throw new Error("Sem permissão para esta revisão.");
+          const allowedObraIds = await resolvePlanAllowedObraIds(
+            db, ctx.user.id, role, ctx.user.email, projetoCompanyId,
+          );
+          if (allowedObraIds !== null) {
+            if (projetoObraId == null || !allowedObraIds.includes(Number(projetoObraId))) {
+              console.warn(`[listarAtividades] FORBIDDEN revisaoId=${input.revisaoId} projObra=${projetoObraId} allowed=[${allowedObraIds.join(",")}] role=${role}`);
+              throw new Error("Sem permissão para esta revisão.");
+            }
           }
         }
       }
@@ -1579,21 +1601,26 @@ export const planejamentoRouter = router({
       // Buscar via planejamento_projetos (mesma correção da listarAtividades).
       // Sem isso, o guard multi-tenant abaixo sempre bloqueava não-admins e o
       // resolverResponsaveisBatch recebia companyId=undefined → respMap vazio.
-      const [projInfo] = await db.select({ companyId: planejamentoProjetos.companyId })
+      const [projInfo] = await db.select({ companyId: planejamentoProjetos.companyId, obraId: planejamentoProjetos.obraId })
         .from(planejamentoProjetos)
         .where(eq(planejamentoProjetos.id, projetoId))
         .limit(1);
       const companyId = projInfo?.companyId != null ? Number(projInfo.companyId) : null;
-      // Rev. 1817 — Hardening multi-tenant (segue padrão das demais
-      // procedures do router: getDataCorte/setRealDates/etc): exige que
-      // o companyId da revisão pertença ao usuário autenticado.
-      // admin/admin_master pode atravessar (suporte/diagnóstico).
-      const userCompany = (ctx.user as any).companyId;
+      const projObraId = projInfo?.obraId != null ? Number(projInfo.obraId) : null;
+      // Rev. 1817/2984 — Hardening multi-tenant por OBRA (leitura). admin/admin_master
+      // atravessa. Rev. 2984 — antes usava compare ESTRITO de `ctx.user.companyId`, que
+      // negava esta KPI ao engenheiro de campo cuja empresa-default difere da empresa do
+      // projeto. Agora alinha com `resolvePlanAllowedObraIds` (mesma régua do Catálogo).
       const role = (ctx.user as any).role;
       const isAdmin = role === "admin" || role === "admin_master";
-      if (!isAdmin && companyId != null && String(companyId) !== String(userCompany)) {
-        console.warn(`[kpiResponsavelPorProjeto] FORBIDDEN revisaoId=${input.revisaoId} projCompany=${companyId} userCompany=${userCompany} role=${role}`);
-        throw new Error("Sem permissão para esta revisão.");
+      if (!isAdmin && companyId != null) {
+        const allowedObraIds = await resolvePlanAllowedObraIds(
+          db, ctx.user.id, role, ctx.user.email, companyId,
+        );
+        if (allowedObraIds !== null && (projObraId == null || !allowedObraIds.includes(projObraId))) {
+          console.warn(`[kpiResponsavelPorProjeto] FORBIDDEN revisaoId=${input.revisaoId} projObra=${projObraId} allowed=[${allowedObraIds.join(",")}] role=${role}`);
+          throw new Error("Sem permissão para esta revisão.");
+        }
       }
       if (companyId == null) {
         console.warn(`[kpiResponsavelPorProjeto] companyId não encontrado p/ projetoId=${projetoId} (revisaoId=${input.revisaoId})`);
@@ -2891,6 +2918,7 @@ export const planejamentoRouter = router({
       const db = await getDb();
       const [proj] = await db.select({
         companyId: planejamentoProjetos.companyId,
+        obraId: planejamentoProjetos.obraId,
         dataCorteAtual: planejamentoProjetos.dataCorteAtual,
         dataCorteAtualizadaEm: planejamentoProjetos.dataCorteAtualizadaEm,
         dataCorteAtualizadaPor: planejamentoProjetos.dataCorteAtualizadaPor,
@@ -2900,12 +2928,20 @@ export const planejamentoRouter = router({
         cutoffConsolidadoPor: planejamentoProjetos.cutoffConsolidadoPor,
       }).from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId));
       if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
-      // Tenant isolation: admin/admin_master bypass (consolidação multi-empresa).
-      // Para usuários comuns, exige mesma company. Padrão herdado de `reativarRevisao`.
+      // Rev. 2984 — Tenant isolation por OBRA (leitura). admin/admin_master bypass.
+      // Antes usava compare ESTRITO `proj.companyId !== ctx.user.companyId`, que negava
+      // a Data de Corte ao engenheiro de campo cuja empresa-default difere da empresa do
+      // projeto. Agora alinha com `resolvePlanAllowedObraIds` (mesma régua do Catálogo de
+      // projetos): restrito → obra do projeto precisa estar nas suas obras permitidas.
       const isAdminGet = ctx.user.role === "admin" || ctx.user.role === "admin_master";
-      if (!isAdminGet && String(proj.companyId) !== String(ctx.user.companyId)) {
-        console.warn(`[getDataCorte] FORBIDDEN projetoId=${input.projetoId} projCompany=${proj.companyId} userCompany=${ctx.user.companyId} role=${ctx.user.role}`);
-        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
+      if (!isAdminGet) {
+        const allowedObraIds = await resolvePlanAllowedObraIds(
+          db, ctx.user.id, ctx.user.role, ctx.user.email, Number(proj.companyId),
+        );
+        if (allowedObraIds !== null && (proj.obraId == null || !allowedObraIds.includes(Number(proj.obraId)))) {
+          console.warn(`[getDataCorte] FORBIDDEN projetoId=${input.projetoId} projObra=${proj.obraId} allowed=[${allowedObraIds.join(",")}] role=${ctx.user.role}`);
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
+        }
       }
       const { ultimoDiaSemanaAte, proximoDiaSemana, cutoffEfetivo, todayBR, nomeDiaSemana, DIA_CORTE_DEFAULT } = await import("../../shared/dataCorte");
       const hoje = todayBR();
@@ -4894,14 +4930,23 @@ export const planejamentoRouter = router({
       const [proj] = await db.select({
         id: planejamentoProjetos.id,
         companyId: planejamentoProjetos.companyId,
+        obraId: planejamentoProjetos.obraId,
         orcamentoId: planejamentoProjetos.orcamentoId,
       }).from(planejamentoProjetos)
         .where(eq(planejamentoProjetos.id, input.projetoId)).limit(1);
 
       if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
+      // Rev. 2984 — Tenant isolation por OBRA (leitura; este diagnóstico é exibido na
+      // tela de detalhe sem gate de admin). admin/admin_master atravessa. Antes negava
+      // o engenheiro de campo cuja empresa-default difere da empresa do projeto.
       const isAdminDg = ctx.user.role === "admin" || ctx.user.role === "admin_master";
-      if (!isAdminDg && String(proj.companyId) !== String(ctx.user.companyId)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
+      if (!isAdminDg) {
+        const allowedObraIds = await resolvePlanAllowedObraIds(
+          db, ctx.user.id, ctx.user.role, ctx.user.email, Number(proj.companyId),
+        );
+        if (allowedObraIds !== null && (proj.obraId == null || !allowedObraIds.includes(Number(proj.obraId)))) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
+        }
       }
 
       // R-013 / segurança — valida que a revisão pertence ao projeto informado
@@ -4930,7 +4975,11 @@ export const planejamentoRouter = router({
       const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
         .from(orcamentos).where(eq(orcamentos.id, proj.orcamentoId)).limit(1);
       if (!orc) throw new TRPCError({ code: "NOT_FOUND", message: "Orçamento vinculado não encontrado." });
-      if (!isAdminDg && String(orc.companyId) !== String(ctx.user.companyId)) {
+      // Rev. 2984 — defesa em profundidade: o orçamento tem de pertencer à MESMA empresa
+      // do projeto já autorizado (antes comparava com ctx.user.companyId, o que negava
+      // multi-empresa). Como o acesso ao projeto já foi validado por obra acima, basta
+      // garantir orc.companyId === proj.companyId.
+      if (!isAdminDg && String(orc.companyId) !== String(proj.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para o orçamento vinculado." });
       }
 
@@ -6912,34 +6961,9 @@ REGRAS TÉCNICAS:
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
-      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
-
-      let allowedObraIds: number[] | null = null;
-      if (!isAdmin) {
-        const userResult = await db.execute(sql`SELECT allowed_obra_ids FROM users WHERE id = ${ctx.user.id}`);
-        const userRows: any[] = userResult?.rows ?? userResult ?? [];
-        const raw = userRows[0]?.allowed_obra_ids;
-        let parsed: number[] = [];
-        try { if (raw) parsed = JSON.parse(raw); } catch {}
-        if (parsed.length > 0) {
-          allowedObraIds = parsed;
-        } else {
-          const userEmail = ctx.user.email ?? "";
-          if (!userEmail) return { projetos: [], refisData: [], atividadesResumo: [] };
-          const empResult = await db.execute(sql`SELECT id FROM employees WHERE "companyId" = ${input.companyId} AND email = ${userEmail} AND "deletedAt" IS NULL LIMIT 1`);
-          const empRows: any[] = empResult?.rows ?? empResult ?? [];
-          if (!empRows.length) return { projetos: [], refisData: [], atividadesResumo: [] };
-          const employeeId = empRows[0].id;
-          const obrasResult = await db.execute(sql`
-            SELECT DISTINCT of2."obraId" FROM obra_funcionarios of2
-            INNER JOIN obras o ON o.id = of2."obraId" AND o."companyId" = ${input.companyId} AND o."deletedAt" IS NULL
-            WHERE of2."employeeId" = ${employeeId} AND of2."isActive" = 1
-          `);
-          const obrasRows: any[] = obrasResult?.rows ?? obrasResult ?? [];
-          allowedObraIds = obrasRows.map((r: any) => r.obraId);
-          if (allowedObraIds.length === 0) return { projetos: [], refisData: [], atividadesResumo: [] };
-        }
-      }
+      const allowedObraIds = await resolvePlanAllowedObraIds(
+        db, ctx.user.id, ctx.user.role, ctx.user.email, input.companyId,
+      );
 
       const projRows = await db.select({
         id:                    planejamentoProjetos.id,
