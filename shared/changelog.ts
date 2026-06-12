@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2979 — **PORTAL DO CLIENTE → NPS → "LINK DE AVALIAÇÃO (SEM LOGIN)" → BOTÃO
+ * "WHATSAPP" — O LINK QUE CHEGAVA PELO WHATSAPP NÃO ERA IGUAL AO LINK COPIÁVEL E ABRIA
+ * EM "ESTE LINK NÃO ESTÁ VINCULADO A UMA OBRA"; CORRIGIDO REMOVENDO EMOJI/MARKDOWN DA
+ * MENSAGEM E COLOCANDO O URL COMO A ÚLTIMA LINHA.**
+ *
+ * SINTOMA (usuário): "o link que vai no WhatsApp não está igual ao link que posso copiar
+ * e colocar… ele diz que não tá vinculado, arrume isso". A screenshot mostrava a pesquisa
+ * pública aberta com o aviso vermelho "Este link não está vinculado a uma obra. Solicite
+ * um novo link de avaliação ao FC para continuar." — mesmo o admin tendo gerado o link
+ * já vinculado a uma obra (Rev. 2978 garante que TODO link tem obra).
+ *
+ * DIAGNÓSTICO: o botão "Copiar" e o botão "WhatsApp" usam EXATAMENTE a mesma string
+ * (`url`, dentro do mesmo `.map((url) => …)`), então no código os dois links são
+ * idênticos. A diferença está em como o WhatsApp TRANSMITE/DETECTA o link dentro do
+ * texto da mensagem (`https://wa.me/?text=<msg>`):
+ *  - A mensagem cordial (Rev. 2972) trazia EMOJI (😊 e 🤝) e markdown `*FC Engenharia*`
+ *    ANTES/ao redor do URL. Emoji são caracteres do plano astral (U+1F600+), ou seja
+ *    PARES SURROGADOS em UTF-16 (2 code units cada).
+ *  - O detector de links do WhatsApp (especialmente no iOS) calcula offsets de início/fim
+ *    do URL e, quando há pares surrogados ANTES do link, esse cálculo se desalinha →
+ *    o app captura um SUBSTRING DESLOCADO/TRUNCADO do token JWT.
+ *  - Um token JWT truncado falha no `jwt.verify` do backend (`podeAvaliarEsteMes`) E no
+ *    parse base64 client-side (`linkObra`), então NENHUMA das duas fontes (Rev. 2977)
+ *    acha o `obraId` → a tela cai em "link não vinculado". O link COPIADO é a string
+ *    exata (sem passar pelo detector do WhatsApp), por isso funciona.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, `client/src/pages/ClientesPortalAdmin.tsx`):
+ * a mensagem do WhatsApp foi reescrita em TEXTO PLANO — SEM emoji (removidos 😊 e 🤝) e
+ * SEM markdown `*` — e o URL passou a ser a ÚLTIMA LINHA da mensagem (nada depois dele).
+ * Com isso:
+ *  1) sem pares surrogados antes do URL, o detector de links não desalinha o offset;
+ *  2) com o URL na última linha, não há texto após o link p/ confundir o limite final.
+ * Acentos (á, é, ç) e o travessão "—" são caracteres BMP (1 code unit), então foram
+ * mantidos sem risco. O texto cordial pt-BR e a personalização "…na obra {linkObraNome}"
+ * foram preservados. Resultado: o link compartilhado pelo WhatsApp fica IDÊNTICO ao
+ * copiável e abre a avaliação já vinculada à obra.
+ *
+ * RESSALVA: links já ENVIADOS antes desta correção (com a mensagem antiga) seguem
+ * potencialmente truncados no histórico do WhatsApp; basta reenviar pelo botão.
+ *
  * Rev. 2978 — **PORTAL DO CLIENTE → NPS — GARANTIA DEFINITIVA: NUNCA EXISTE UMA AVALIAÇÃO
  * SEM OBRA VINCULADA. OBRA VIRA OBRIGATÓRIA NA GERAÇÃO DO LINK, NO ENVIO (BACKEND) E NA UI.**
  *

@@ -672,13 +672,18 @@ export default function ClientesPortalAdmin() {
                           size="sm"
                           className="gap-1.5 text-green-700 border-green-300 hover:bg-green-50"
                           onClick={() => {
+                            // Rev. 2979 — mensagem SEM emoji/markdown e com o LINK como ÚLTIMA
+                            // linha. Emoji (pares surrogados) antes do URL faziam o detector de
+                            // links do WhatsApp calcular o offset errado e capturar um token
+                            // TRUNCADO/deslocado → "link não vinculado". Texto plano + URL no
+                            // fim garante que o link compartilhado seja idêntico ao copiável.
                             const msg =
-                              `Olá! Tudo bem? 😊\n\n` +
-                              `Aqui é da *FC Engenharia*. Antes de tudo, queremos agradecer muito pela confiança em nosso trabalho${linkObraNome ? ` na obra ${linkObraNome}` : ""} — é um prazer ter você como nosso cliente.\n\n` +
+                              `Olá! Tudo bem?\n\n` +
+                              `Aqui é da FC Engenharia. Antes de tudo, queremos agradecer muito pela confiança em nosso trabalho${linkObraNome ? ` na obra ${linkObraNome}` : ""} — é um prazer ter você como nosso cliente.\n\n` +
                               `A sua opinião é o que nos move a melhorar a cada dia. Por isso, gostaríamos de convidá-lo(a) a compartilhar como tem sido a sua experiência com a nossa equipe.\n\n` +
                               `A avaliação é bem rapidinha (leva só alguns minutos), totalmente anônima e nos ajuda demais a evoluir e a oferecer um serviço cada vez melhor para você.\n\n` +
-                              `Quando puder, é só acessar por aqui:\n${url}\n\n` +
-                              `Muito obrigado pelo seu tempo e pela parceria! Conte sempre conosco. 🤝`;
+                              `Muito obrigado pelo seu tempo e pela parceria! Conte sempre conosco.\n\n` +
+                              `Acesse a avaliação por aqui:\n${url}`;
                             window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer");
                           }}
                         >
