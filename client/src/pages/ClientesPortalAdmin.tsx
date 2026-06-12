@@ -281,25 +281,41 @@ export default function ClientesPortalAdmin() {
     });
   };
 
-  const [linkObraTab, setLinkObraTab] = useState<string>("todas");
+  // Rev. 2995 — filtro por OBRA UNIFICADO para TODA a aba "Avaliações (NPS)": uma
+  // ÚNICA barra no topo governa "Links de avaliação gerados", o dashboard (cards/
+  // médias/recomendação/perguntas extras/por período) E a lista "Avaliações
+  // recebidas". Antes havia DUAS barras independentes (links × dashboard) com listas
+  // de obras DIFERENTES — clicar numa obra que só tinha LINKS gerados (sem avaliação
+  // recebida, ex.: REVTE) não mexia no dashboard, que continuava em outra obra. Agora
+  // a lista de obras é a UNIÃO (obras com links ∪ obras com avaliações) e o estado é
+  // único (`avalObraTab`). Default abre na 1ª obra (menos poluição); "Todas" é opt-in.
+  // Os agregados são recomputados PELO BACKEND via `obraId` (param da Rev. 1593), pois
+  // o payload `avaliacoes` vem capado em 100 — recomputar no client erraria com >100.
+  const [avalObraTab, setAvalObraTab] = useState<string>("");
   const linksData = (linksAvalQ.data ?? []) as any[];
   const linkObraGroups = useMemo(() => agruparPorObra(linksData, (x) => x.obraId, (x) => x.obraNome), [linksData, obraAtivaMap]);
-  const linksVisiveis = linkObraTab === "todas" ? linksData : (linkObraGroups.find((g) => g.key === linkObraTab)?.items ?? []);
-
-  // Rev. 2994 — filtro por OBRA do dashboard de avaliações. Default abre na 1ª obra
-  // (menos poluição na tela); "Todas" é opt-in. Os agregados (cards/médias/
-  // recomendação/perguntas extras/por período) são recomputados PELO BACKEND via
-  // `obraId` (param já existente desde a Rev. 1593), pois o payload `avaliacoes`
-  // vem capado em 100 — recomputar no client erraria com >100 respostas.
-  const [avalObraTab, setAvalObraTab] = useState<string>("");
   const avaliacoesData = (dashAval?.avaliacoes as any[]) ?? [];
   const avalObraGroups = useMemo(() => agruparPorObra(avaliacoesData, (x) => x.obraId, (x) => x.obraNome), [avaliacoesData, obraAtivaMap]);
+  // União das obras (links ∪ avaliações), com contagem de links e de avaliações
+  // recebidas por obra; ativas-first.
+  const obraTabGroups = useMemo(() => {
+    const map = new Map<string, { key: string; obraId: number | null; obraNome: string; ativa: boolean; linkCount: number; avalCount: number }>();
+    for (const g of linkObraGroups) map.set(g.key, { key: g.key, obraId: g.obraId, obraNome: g.obraNome, ativa: g.ativa, linkCount: g.items.length, avalCount: 0 });
+    for (const g of avalObraGroups) {
+      const ex = map.get(g.key);
+      if (ex) ex.avalCount = g.items.length;
+      else map.set(g.key, { key: g.key, obraId: g.obraId, obraNome: g.obraNome, ativa: g.ativa, linkCount: 0, avalCount: g.items.length });
+    }
+    return Array.from(map.values()).sort((a, b) => (Number(b.ativa) - Number(a.ativa)) || a.obraNome.localeCompare(b.obraNome, "pt-BR"));
+  }, [linkObraGroups, avalObraGroups]);
   // Aba efetiva: enquanto o usuário não escolher (ou se a escolha velha não existir
   // mais — ex.: trocou de empresa), abre na 1ª obra (ou "todas" se não há obras).
-  const avalTabValida = avalObraTab === "todas" || avalObraGroups.some((g) => g.key === avalObraTab);
-  const effObraTab = avalTabValida ? avalObraTab : (avalObraGroups[0]?.key ?? "todas");
-  const obraSel = avalObraGroups.find((g) => g.key === effObraTab) ?? null;
+  const avalTabValida = avalObraTab === "todas" || obraTabGroups.some((g) => g.key === avalObraTab);
+  const effObraTab = avalTabValida ? avalObraTab : (obraTabGroups[0]?.key ?? "todas");
+  const obraSel = obraTabGroups.find((g) => g.key === effObraTab) ?? null;
   const obraSelId = effObraTab === "todas" ? null : (obraSel?.obraId ?? null);
+  // Links visíveis seguem o MESMO filtro único do topo.
+  const linksVisiveis = effObraTab === "todas" ? linksData : (linkObraGroups.find((g) => g.key === effObraTab)?.items ?? []);
   // 2ª query: dashboard recomputado pelo servidor SÓ da obra selecionada.
   const { data: dashObra, isFetching: fetchingObra } = trpc.portalExterno.admin.dashboardAvaliacoesCliente.useQuery(
     { companyId, agruparPor, obraId: obraSelId ?? undefined },
@@ -921,6 +937,31 @@ export default function ClientesPortalAdmin() {
               )}
             </div>
 
+            {/* Rev. 2995 — barra ÚNICA de filtro por OBRA: governa Links + dashboard +
+                lista de avaliações de uma só vez (lista de obras = união links ∪ aval). */}
+            {obraTabGroups.length > 0 && (
+              <div className="bg-white border rounded-xl p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Building2 className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-medium text-slate-700">Filtrar por obra</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <button onClick={() => { setAvalObraTab("todas"); limparSelLinks(); }}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition ${effObraTab === "todas" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>
+                    Todas as obras
+                  </button>
+                  {obraTabGroups.map((g) => (
+                    <button key={g.key} onClick={() => { setAvalObraTab(g.key); limparSelLinks(); }}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition ${effObraTab === g.key ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>
+                      <Building2 className="w-3.5 h-3.5" /> {g.obraNome}
+                      {g.ativa && <span className={`text-[9px] uppercase font-bold px-1 rounded ${effObraTab === g.key ? "bg-white/25 text-white" : "bg-emerald-100 text-emerald-700"}`}>ativa</span>}
+                      <span className="opacity-60">{g.avalCount} aval · {g.linkCount} link{g.linkCount === 1 ? "" : "s"}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Rev. 2985 — Links de avaliação gerados (persistidos), agrupados por OBRA
                 e ordenados por DATA desc. Só o Admin Master pode excluir (soft-delete). */}
             <div className="bg-white border rounded-xl p-4">
@@ -961,21 +1002,6 @@ export default function ClientesPortalAdmin() {
                 <p className="text-xs text-slate-400 py-2">Nenhum link gerado ainda. Gere um link acima para enviar ao cliente.</p>
               ) : (
                 <>
-                  {/* Rev. 2988 — abas por OBRA (ativas em destaque) */}
-                  <div className="flex flex-wrap gap-1.5 mb-3">
-                    <button onClick={() => { setLinkObraTab("todas"); limparSelLinks(); }}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition ${linkObraTab === "todas" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>
-                      Todas <span className="opacity-60">({linksData.length})</span>
-                    </button>
-                    {linkObraGroups.map((g) => (
-                      <button key={g.key} onClick={() => { setLinkObraTab(g.key); limparSelLinks(); }}
-                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition ${linkObraTab === g.key ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>
-                        <Building2 className="w-3.5 h-3.5" /> {g.obraNome}
-                        {g.ativa && <span className={`text-[9px] uppercase font-bold px-1 rounded ${linkObraTab === g.key ? "bg-white/25 text-white" : "bg-emerald-100 text-emerald-700"}`}>ativa</span>}
-                        <span className="opacity-60">({g.items.length})</span>
-                      </button>
-                    ))}
-                  </div>
                   {linksVisiveis.length === 0 ? (
                     <p className="text-xs text-slate-400 py-2">Nenhum link para esta obra.</p>
                   ) : (
@@ -1009,7 +1035,7 @@ export default function ClientesPortalAdmin() {
                                       aria-label="Selecionar link"
                                     />
                                   )}
-                                  {linkObraTab === "todas" && obraNomeL && (
+                                  {effObraTab === "todas" && obraNomeL && (
                                     <Badge variant="outline" className="gap-1 shrink-0 text-slate-600"><Building2 className="w-3 h-3" /> {obraNomeL}</Badge>
                                   )}
                                   <Badge variant="outline" className="gap-1 shrink-0">{flag} {l.lang?.toUpperCase() ?? "PT"}</Badge>
@@ -1072,23 +1098,8 @@ export default function ClientesPortalAdmin() {
               </div>
             ) : (
               <div className="space-y-5">
-                {/* Rev. 2994 — filtro por OBRA do dashboard (default: 1ª obra; "Todas" opt-in). */}
-                {avalObraGroups.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    <button onClick={() => setAvalObraTab("todas")}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition ${effObraTab === "todas" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>
-                      Todas <span className="opacity-60">({dashAval.total})</span>
-                    </button>
-                    {avalObraGroups.map((g) => (
-                      <button key={g.key} onClick={() => setAvalObraTab(g.key)}
-                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition ${effObraTab === g.key ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>
-                        <Building2 className="w-3.5 h-3.5" /> {g.obraNome}
-                        {g.ativa && <span className={`text-[9px] uppercase font-bold px-1 rounded ${effObraTab === g.key ? "bg-white/25 text-white" : "bg-emerald-100 text-emerald-700"}`}>ativa</span>}
-                        <span className="opacity-60">({g.items.length})</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                {/* Rev. 2995 — o filtro por obra agora é a barra ÚNICA do topo (acima
+                    de "Links de avaliação gerados"); aqui só o conteúdo do dashboard. */}
                 {carregandoObra ? (
                   <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>
                 ) : (

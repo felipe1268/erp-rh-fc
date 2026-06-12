@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2995 — **PESQUISA DE SATISFAÇÃO (NPS) → FILTRO POR OBRA UNIFICADO: UMA ÚNICA
+ * BARRA NO TOPO GOVERNA "LINKS DE AVALIAÇÃO GERADOS" + DASHBOARD + LISTA "AVALIAÇÕES
+ * RECEBIDAS" (CORRIGE: CLICAR NUMA OBRA NÃO FILTRAVA O DASHBOARD).**
+ *
+ * PEDIDO (usuário, Admin Master): "Tô clicando na obra do REVTE, mas ainda tá
+ * aparecendo a avaliação da obra do QIU 2." CAUSA-RAIZ: a Rev. 2994 colocou um filtro
+ * por obra NO DASHBOARD, mas existia OUTRA barra de abas por obra, independente, dentro
+ * de "Links de avaliação gerados" (Rev. 2988). As duas barras tinham ESTADOS separados
+ * (`linkObraTab` × `avalObraTab`) e LISTAS DE OBRAS diferentes: a dos links vinha de
+ * `linksData` (obras com link gerado, ex.: REVTE-CIVIL), a do dashboard vinha de
+ * `avaliacoesData` (só obras com avaliação RECEBIDA, ex.: QIU 2). Ao clicar REVTE na
+ * barra dos links, o dashboard — que tinha estado próprio e nem listava REVTE —
+ * continuava em QIU 2. Resultado: duas barras visualmente quase idênticas e
+ * dessincronizadas.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, ZERO backend/schema): em
+ * `client/src/pages/ClientesPortalAdmin.tsx` as duas barras viraram UMA SÓ no TOPO da
+ * aba ("Filtrar por obra"), com ESTADO ÚNICO (`avalObraTab`) e lista de obras = UNIÃO
+ * (obras com links ∪ obras com avaliações) via novo memo `obraTabGroups` (mescla
+ * `linkObraGroups` + `avalObraGroups` por `obraId`, ativas-first, com contagem "N aval
+ * · N links" por obra). `effObraTab` resolve contra os grupos UNIFICADOS (default 1ª
+ * obra; "Todas" opt-in; valida valor velho ao trocar de empresa). `linksVisiveis`, a
+ * 2ª query `dashObra` ({obraId}) e `dashView` passam todos a seguir esse filtro único —
+ * inclusive obras só-com-links resolvem `obraSelId` e mostram dashboard zerado quando
+ * sem respostas. Removidas a barra interna dos links (Rev. 2988) e a barra do dashboard
+ * (Rev. 2994); trocar de obra também limpa a seleção múltipla de links. Backend/schema
+ * INALTERADOS. Requer REPUBLICAR. ARQUIVO: `client/src/pages/ClientesPortalAdmin.tsx`.
+ *
  * Rev. 2994 — **PESQUISA DE SATISFAÇÃO (NPS) → ABA "AVALIAÇÕES" AGORA FILTRA TODO
  * O DASHBOARD POR OBRA (DEFAULT ABRE NUMA OBRA; "TODAS" É OPT-IN).**
  *
