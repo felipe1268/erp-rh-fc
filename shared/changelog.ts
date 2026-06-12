@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3003 — **FINANCEIRO → CONTAS A RECEBER (TÍTULOS): NAVEGAÇÃO MÊS-A-MÊS NOS
+ * MOLDES DO CONTAS A PAGAR — BARRA DE MESES JAN…DEZ COM LEGENDA/STATUS POR MÊS,
+ * KPIs DO MÊS + ACUMULADO DO ANO.**
+ *
+ * PEDIDO (usuário): a tela "Contas a Receber" (Títulos, criada na Rev. 3002) só
+ * navegava por ANO; o usuário quer a mesma navegação MÊS-A-MÊS do Contas a Pagar —
+ * barra de meses (Jan…Dez) do ano com bolinha de status por mês ("Com lançamento"
+ * azul / "Consolidado" verde / "Sem dados" cinza) e título "...por mês".
+ *
+ * SOLUÇÃO (FRONT-only — ZERO ALTER/DROP/DELETE, ZERO backend/schema; reusa a
+ * procedure existente `getContasAReceberByYear` e fatia no cliente por mês):
+ * em `client/src/pages/financeiro/FinanceiroContasAReceberTitulos.tsx`:
+ *
+ * 1) Helper `getMesFromDate` (fatia "YYYY-MM-DD" antes de `new Date` p/ não quebrar
+ *    no iOS Safari) + const `MESES` + type `MesStatus`.
+ * 2) Novo estado `mesSel` (mês corrente). Memo `mesesStatus` deriva a bolinha por
+ *    mês a partir do `dataVencimento`: verde=consolidado (todos os títulos do mês
+ *    recebidos), azul=lançamento (há título em aberto), cinza=sem dados — mesma
+ *    lógica do Contas a Pagar (isRecebido no lugar de isPago).
+ * 3) Memo `mesData` filtra os títulos do ano pelo mês selecionado; `filtradas`
+ *    passou a partir de `mesData` (mantém os filtros cliente/status/busca).
+ * 4) KPIs reescritos: 2 cards do MÊS ("A receber em <mês>" com saldo aberto +
+ *    parcial; "Recebido em <mês>") e 2 cards ACUMULADOS do ano ("Em aberto (ano)"
+ *    com vencido; "Títulos vencidos (ano)").
+ * 5) UI: novo Card com a barra de meses (grid 6/12, seleção verde p/ casar com a
+ *    identidade do Receber), legenda das 3 bolinhas e navegação de ano movida p/
+ *    dentro dessa barra (removido o seletor de ano duplicado do header). Texto de
+ *    estado vazio agora cita o mês/ano selecionado.
+ *
+ * Requer REPUBLICAR (apenas front). Sem migração.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 3002 — **FINANCEIRO → "CONTAS A RECEBER DE VERDADE" (NOS MOLDES DO CONTAS A
  * PAGAR): NOVA TELA DEDICADA COM TÍTULOS A RECEBER POR CLIENTE, ORIGEM AUTOMÁTICA
  * (MEDIÇÕES) + LANÇAMENTO MANUAL, PARCELAS E BAIXA TOTAL/PARCIAL.**

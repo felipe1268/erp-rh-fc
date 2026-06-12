@@ -31,6 +31,21 @@ function num(v: any): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+// Rev. 3003 — sempre fatiar para "YYYY-MM-DD" antes de parsear: timestamps PG
+// quebram new Date() no iOS Safari ("The string did not match the expected pattern").
+function getMesFromDate(dateStr: string | null | undefined): number | null {
+  if (!dateStr) return null;
+  const s = String(dateStr).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const d = new Date(s + "T00:00:00");
+  if (isNaN(d.getTime())) return null;
+  return d.getMonth() + 1;
+}
+
+type MesStatus = "sem_dados" | "lancamento" | "consolidado";
+
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   a_receber:        { label: "A receber",  cls: "bg-amber-100 text-amber-800 border-amber-300" },
   recebido_parcial: { label: "Parcial",    cls: "bg-blue-100 text-blue-800 border-blue-300" },
@@ -56,6 +71,7 @@ export default function FinanceiroContasAReceberTitulos() {
   const { companyId } = useCompany();
   const { toast } = useToast();
   const [ano, setAno] = useState(new Date().getFullYear());
+  const [mesSel, setMesSel] = useState(new Date().getMonth() + 1);
   const [busca, setBusca] = useState("");
   const [statusFiltro, setStatusFiltro] = useState<string>("todos");
   const [clienteFiltro, setClienteFiltro] = useState<string>("todos");
@@ -91,9 +107,30 @@ export default function FinanceiroContasAReceberTitulos() {
     return Array.from(s).sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [linhas]);
 
+  // Rev. 3003 — status por mês (bolinha): verde=consolidado (tudo recebido),
+  // azul=lançamento (há título em aberto), cinza=sem dados. Vencimento manda no mês.
+  const mesesStatus: Record<number, MesStatus> = useMemo(() => {
+    const map: Record<number, MesStatus> = {};
+    for (let m = 1; m <= 12; m++) map[m] = "sem_dados";
+    for (const t of linhas) {
+      const m = getMesFromDate(t.dataVencimento);
+      if (!m) continue;
+      const cur = map[m];
+      const isRecebido = t.status === "recebido";
+      if (cur === "sem_dados") map[m] = isRecebido ? "consolidado" : "lancamento";
+      else if (cur === "consolidado" && !isRecebido) map[m] = "lancamento";
+    }
+    return map;
+  }, [linhas]);
+
+  const mesData = useMemo(
+    () => linhas.filter((t) => getMesFromDate(t.dataVencimento) === mesSel),
+    [linhas, mesSel],
+  );
+
   const filtradas = useMemo(() => {
     const q = busca.trim().toLowerCase();
-    return linhas.filter((t) => {
+    return mesData.filter((t) => {
       if (statusFiltro !== "todos" && t.status !== statusFiltro) return false;
       const cli = (t.clienteNome || "Sem cliente").trim();
       if (clienteFiltro !== "todos" && cli !== clienteFiltro) return false;
@@ -103,21 +140,33 @@ export default function FinanceiroContasAReceberTitulos() {
       }
       return true;
     });
-  }, [linhas, busca, statusFiltro, clienteFiltro]);
+  }, [mesData, busca, statusFiltro, clienteFiltro]);
 
+  // KPIs do MÊS selecionado (respeita os filtros aplicados)
   const kpis = useMemo(() => {
-    let aberto = 0, vencido = 0, recebido = 0, parcial = 0, qtdVenc = 0;
+    let abertoMes = 0, recebidoMes = 0, parcialMes = 0;
     for (const t of filtradas) {
       const prev = num(t.valorPrevisto);
       const real = num(t.valorRealizado);
-      if (t.status === "recebido") { recebido += real || prev; continue; }
+      if (t.status === "recebido") { recebidoMes += real || prev; continue; }
+      abertoMes += Math.max(0, prev - real);
+      if (t.status === "recebido_parcial") parcialMes += real;
+    }
+    return { abertoMes, recebidoMes, parcialMes };
+  }, [filtradas]);
+
+  // Acumulado do ANO (todos os meses) — saldo em aberto e vencidos
+  const acum = useMemo(() => {
+    let aberto = 0, vencido = 0, qtdVenc = 0;
+    for (const t of linhas) {
+      if (t.status === "recebido") continue;
+      const prev = num(t.valorPrevisto), real = num(t.valorRealizado);
       const saldo = Math.max(0, prev - real);
       aberto += saldo;
-      if (t.status === "recebido_parcial") parcial += real;
       if (num(t.diasAtraso) > 0) { vencido += saldo; qtdVenc++; }
     }
-    return { aberto, vencido, recebido, parcial, qtdVenc };
-  }, [filtradas]);
+    return { aberto, vencido, qtdVenc };
+  }, [linhas]);
 
   // Agrupa por cliente
   const grupos = useMemo(() => {
@@ -178,23 +227,65 @@ export default function FinanceiroContasAReceberTitulos() {
             </h1>
             <p className="text-sm text-slate-500">Títulos a receber por cliente — medições (automático) e lançamentos manuais.</p>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 rounded-lg border bg-white px-1">
-              <Button variant="ghost" size="icon" onClick={() => setAno((a) => a - 1)}><ChevronLeft className="h-4 w-4" /></Button>
-              <span className="font-bold text-slate-700 w-12 text-center">{ano}</span>
-              <Button variant="ghost" size="icon" onClick={() => setAno((a) => a + 1)}><ChevronRight className="h-4 w-4" /></Button>
-            </div>
-            <Button onClick={() => setShowNovo(true)} className="gap-1"><Plus className="h-4 w-4" /> Novo título</Button>
-          </div>
+          <Button onClick={() => setShowNovo(true)} className="gap-1"><Plus className="h-4 w-4" /> Novo título</Button>
         </div>
+
+        {/* Navegação mês a mês */}
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-slate-500 mb-3">Títulos a receber por mês</p>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <button onClick={() => setAno((a) => a - 1)} className="p-1 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-800">
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-base font-bold text-slate-800 min-w-[3.5rem] text-center">{ano}</span>
+                <button onClick={() => setAno((a) => a + 1)} className="p-1 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-800">
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="flex items-center gap-4 text-xs text-slate-500">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Com lançamento</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Consolidado</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Sem dados</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+              {MESES.map((m, i) => {
+                const numMes = i + 1;
+                const status = mesesStatus[numMes];
+                const isSelected = mesSel === numMes;
+                return (
+                  <button
+                    key={m}
+                    onClick={() => setMesSel(numMes)}
+                    className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
+                      ${isSelected
+                        ? "border-green-500 bg-green-50 text-green-700 shadow-sm"
+                        : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50"
+                      }`}
+                  >
+                    <span>{m}</span>
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      status === "consolidado" ? "bg-green-500" :
+                      status === "lancamento" ? "bg-blue-500" :
+                      "bg-gray-300"
+                    }`} />
+                  </button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KCard label="A receber (aberto)" value={formatBRL(kpis.aberto)} icon={<Clock className="h-5 w-5 text-amber-700" />} color="bg-amber-100"
-            sub={kpis.qtdVenc > 0 ? <span className="text-red-600 font-medium">{formatBRL(kpis.vencido)} vencido</span> : "em dia"} />
-          <KCard label="Recebido no ano" value={formatBRL(kpis.recebido)} icon={<CheckCircle className="h-5 w-5 text-green-700" />} color="bg-green-100" />
-          <KCard label="Parcial recebido" value={formatBRL(kpis.parcial)} icon={<TrendingUp className="h-5 w-5 text-blue-700" />} color="bg-blue-100" />
-          <KCard label="Títulos vencidos" value={String(kpis.qtdVenc)} icon={<AlertTriangle className="h-5 w-5 text-red-700" />} color="bg-red-100" />
+          <KCard label={`A receber em ${MESES[mesSel - 1]}`} value={formatBRL(kpis.abertoMes)} icon={<Clock className="h-5 w-5 text-amber-700" />} color="bg-amber-100"
+            sub={kpis.parcialMes > 0 ? <span className="text-blue-600">parcial {formatBRL(kpis.parcialMes)}</span> : undefined} />
+          <KCard label={`Recebido em ${MESES[mesSel - 1]}`} value={formatBRL(kpis.recebidoMes)} icon={<CheckCircle className="h-5 w-5 text-green-700" />} color="bg-green-100" />
+          <KCard label="Em aberto (ano)" value={formatBRL(acum.aberto)} icon={<TrendingUp className="h-5 w-5 text-indigo-700" />} color="bg-indigo-100"
+            sub={acum.vencido > 0 ? <span className="text-red-600 font-medium">{formatBRL(acum.vencido)} vencido</span> : "em dia"} />
+          <KCard label="Títulos vencidos (ano)" value={String(acum.qtdVenc)} icon={<AlertTriangle className="h-5 w-5 text-red-700" />} color="bg-red-100" />
         </div>
 
         {/* Filtros */}
@@ -227,7 +318,7 @@ export default function FinanceiroContasAReceberTitulos() {
         {isLoading ? (
           <div className="flex items-center justify-center py-16 text-slate-400"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Carregando...</div>
         ) : grupos.length === 0 ? (
-          <Card><CardContent className="py-16 text-center text-slate-400">Nenhum título a receber para os filtros selecionados.</CardContent></Card>
+          <Card><CardContent className="py-16 text-center text-slate-400">Nenhum título a receber em {MESES[mesSel - 1]} de {ano} para os filtros selecionados.</CardContent></Card>
         ) : (
           <div className="space-y-2">
             {grupos.map((g) => {
