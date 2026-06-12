@@ -26,6 +26,25 @@ import {
 } from "@shared/portalClienteAbas";
 
 const fmtBR = (s?: string | null) => (s ? s.split(/[T ]/)[0].split("-").reverse().join("/") : "—");
+// Rev. 2988 — abas por OBRA (ativas) + separação por MÊS/ANO nas listas de NPS.
+const normObraStatus = (s?: string | null) => String(s ?? "").trim().toLowerCase().replace(/[\s_-]+/g, "_");
+const MESES_PT = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+// Aceita "DD/MM/YYYY HH:MM" (links) ou "YYYY-MM-DD..." (avaliações) → chave "YYYY-MM".
+const mesAnoKey = (s?: string | null): string => {
+  if (!s) return "";
+  const str = String(s).trim();
+  const br = str.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (br) return `${br[3]}-${br[2]}`;
+  const iso = str.match(/^(\d{4})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}`;
+  return "";
+};
+const mesAnoLabel = (key: string): string => {
+  const m = key && key !== "sem" ? key.match(/^(\d{4})-(\d{2})$/) : null;
+  if (!m) return "Sem data";
+  const idx = parseInt(m[2], 10) - 1;
+  return `${MESES_PT[idx] ?? "—"} de ${m[1]}`;
+};
 // Rev. 2982 — formata o tempo de preenchimento da avaliação (segundos → "Xmin Ys" / "Xs" / "Xh Ymin").
 const fmtDuracao = (seg?: number | null) => {
   if (seg == null || !Number.isFinite(seg) || seg <= 0) return null;
@@ -227,6 +246,50 @@ export default function ClientesPortalAdmin() {
     if (!window.confirm(`Excluir ${codigos.length} link(s) de avaliação selecionado(s)?\n\nEles deixarão de funcionar para quem os receber. Esta ação não pode ser desfeita.`)) return;
     excluirLinksMut.mutate({ companyId, codigos });
   };
+
+  // Rev. 2988 — Abas por OBRA (ativas em destaque) + separação por MÊS/ANO, tanto
+  // na lista de "Links de avaliação gerados" quanto nas "Avaliações recebidas".
+  const obraAtivaMap = useMemo(() => {
+    const m = new Map<number, boolean>();
+    for (const o of (obrasEmpresa.data ?? []) as any[]) {
+      m.set(o.id, normObraStatus(o.status) === "em_andamento");
+    }
+    return m;
+  }, [obrasEmpresa.data]);
+  const agruparPorObra = <T,>(items: T[], getId: (x: T) => number | null | undefined, getNome: (x: T) => string | null | undefined) => {
+    const groups = new Map<string, { key: string; obraId: number | null; obraNome: string; ativa: boolean; items: T[] }>();
+    for (const it of items) {
+      const oid = getId(it) ?? null;
+      const onome = (getNome(it) ?? (oid != null ? `Obra #${oid}` : "Sem obra")) || "Sem obra";
+      const key = oid != null ? `o${oid}` : `n_${onome}`;
+      let g = groups.get(key);
+      if (!g) { g = { key, obraId: oid, obraNome: onome, ativa: oid != null ? !!obraAtivaMap.get(oid) : false, items: [] }; groups.set(key, g); }
+      g.items.push(it);
+    }
+    return Array.from(groups.values()).sort((a, b) => (Number(b.ativa) - Number(a.ativa)) || a.obraNome.localeCompare(b.obraNome, "pt-BR"));
+  };
+  const agruparPorMesAno = <T,>(items: T[], getData: (x: T) => string | null | undefined) => {
+    const m = new Map<string, T[]>();
+    for (const it of items) {
+      const k = mesAnoKey(getData(it)) || "sem";
+      (m.get(k) ?? m.set(k, []).get(k)!).push(it);
+    }
+    return Array.from(m.entries()).sort((a, b) => {
+      if (a[0] === "sem") return 1;
+      if (b[0] === "sem") return -1;
+      return b[0].localeCompare(a[0]);
+    });
+  };
+
+  const [linkObraTab, setLinkObraTab] = useState<string>("todas");
+  const linksData = (linksAvalQ.data ?? []) as any[];
+  const linkObraGroups = useMemo(() => agruparPorObra(linksData, (x) => x.obraId, (x) => x.obraNome), [linksData, obraAtivaMap]);
+  const linksVisiveis = linkObraTab === "todas" ? linksData : (linkObraGroups.find((g) => g.key === linkObraTab)?.items ?? []);
+
+  const [avalObraTab, setAvalObraTab] = useState<string>("todas");
+  const avaliacoesData = (dashAval?.avaliacoes as any[]) ?? [];
+  const avalObraGroups = useMemo(() => agruparPorObra(avaliacoesData, (x) => x.obraId, (x) => x.obraNome), [avaliacoesData, obraAtivaMap]);
+  const avaliacoesVisiveis = avalObraTab === "todas" ? avaliacoesData : (avalObraGroups.find((g) => g.key === avalObraTab)?.items ?? []);
 
   // Rev. 1569 — cancelar avaliação (Admin Master)
   const cancelarAvalMut = trpc.portalExterno.admin.cancelarAvaliacaoCliente.useMutation({
@@ -851,99 +914,118 @@ export default function ClientesPortalAdmin() {
                     )}
                     {selLinks.size === 0 && (
                       <Button variant="outline" size="sm" className="h-8 gap-1.5"
-                        onClick={() => setSelMany((linksAvalQ.data ?? []).map((l: any) => l.codigo), true)}>
+                        onClick={() => setSelMany(linksVisiveis.map((l: any) => l.codigo), true)}>
                         <CheckCircle2 className="w-3.5 h-3.5" /> Selecionar todos
                       </Button>
                     )}
                   </div>
                 )}
               </div>
-              {(linksAvalQ.data ?? []).length === 0 ? (
+              {linksData.length === 0 ? (
                 <p className="text-xs text-slate-400 py-2">Nenhum link gerado ainda. Gere um link acima para enviar ao cliente.</p>
               ) : (
-                <div className="space-y-4">
-                  {Object.entries(
-                    (linksAvalQ.data ?? []).reduce((acc: Record<string, typeof linksAvalQ.data>, l) => {
-                      const k = l.obraNome ?? `Obra #${l.obraId ?? "—"}`;
-                      (acc[k] ||= [] as any).push(l);
-                      return acc;
-                    }, {} as Record<string, any>),
-                  ).map(([obraNome, lista]: any) => (
-                    <div key={obraNome}>
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 mb-1.5">
-                        {isMaster && (
-                          <Checkbox
-                            className="mr-0.5"
-                            checked={lista.every((l: any) => selLinks.has(l.codigo))}
-                            onCheckedChange={(v) => setSelMany(lista.map((l: any) => l.codigo), v === true)}
-                            aria-label={`Selecionar todos de ${obraNome}`}
-                          />
-                        )}
-                        <Building2 className="w-3.5 h-3.5 text-slate-400" /> {obraNome}
-                        <span className="text-slate-400 font-normal">({lista.length})</span>
-                      </div>
-                      <div className="space-y-1.5">
-                        {lista.map((l: any) => {
-                          const url = `${window.location.origin}/a/${l.codigo}`;
-                          const flag = AVALIACAO_LANGS.find((x) => x.value === normalizeAvaliacaoLang(l.lang))?.flag ?? "🇧🇷";
-                          return (
-                            <div key={l.codigo} className={`flex flex-wrap items-center gap-2 border rounded-lg px-2.5 py-2 ${selLinks.has(l.codigo) ? "bg-rose-50/70 border-rose-200" : "bg-slate-50/60"}`}>
-                              {isMaster && (
-                                <Checkbox
-                                  className="shrink-0"
-                                  checked={selLinks.has(l.codigo)}
-                                  onCheckedChange={() => toggleSelLink(l.codigo)}
-                                  aria-label="Selecionar link"
-                                />
-                              )}
-                              <Badge variant="outline" className="gap-1 shrink-0">{flag} {l.lang?.toUpperCase() ?? "PT"}</Badge>
-                              <span className="text-xs text-slate-500 shrink-0">{l.criadoEm ?? "—"}</span>
-                              {l.usado ? (
-                                <Badge className="bg-slate-200 text-slate-600 shrink-0">Usado</Badge>
-                              ) : (
-                                <Badge className="bg-emerald-100 text-emerald-700 shrink-0">Disponível</Badge>
-                              )}
-                              {l.criadoPorNome && <span className="text-[11px] text-slate-400 shrink-0">por {l.criadoPorNome}</span>}
-                              <Input readOnly value={url} onFocus={(e) => e.currentTarget.select()} className="flex-1 min-w-[200px] text-xs font-mono h-8" />
-                              <Button variant="outline" size="sm" className="gap-1.5 h-8"
-                                onClick={() => navigator.clipboard?.writeText(url).then(
-                                  () => toast.success("Link copiado!"),
-                                  () => toast.error("Não foi possível copiar"),
-                                )}>
-                                <Copy className="w-3.5 h-3.5" /> Copiar
-                              </Button>
-                              <a href={url} target="_blank" rel="noopener noreferrer">
-                                <Button variant="outline" size="sm" className="gap-1.5 h-8">
-                                  <ExternalLink className="w-3.5 h-3.5" /> Abrir
-                                </Button>
-                              </a>
-                              <Button variant="outline" size="sm" className="gap-1.5 h-8 text-green-700 border-green-300 hover:bg-green-50"
-                                onClick={() => {
-                                  const msg =
-                                    `Olá! Tudo bem?\n\n` +
-                                    `Aqui é da FC Engenharia. Antes de tudo, queremos agradecer muito pela confiança em nosso trabalho${obraNome ? ` na obra ${obraNome}` : ""} — é um prazer ter você como nosso cliente.\n\n` +
-                                    `A sua opinião é o que nos move a melhorar a cada dia. Por isso, gostaríamos de convidá-lo(a) a compartilhar como tem sido a sua experiência com a nossa equipe.\n\n` +
-                                    `A avaliação é bem rapidinha (leva só alguns minutos), totalmente anônima e nos ajuda demais a evoluir e a oferecer um serviço cada vez melhor para você.\n\n` +
-                                    `Muito obrigado pelo seu tempo e pela parceria! Conte sempre conosco.\n\n` +
-                                    `Acesse a avaliação por aqui:\n${url}`;
-                                  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer");
-                                }}>
-                                <MessageSquare className="w-3.5 h-3.5" /> WhatsApp
-                              </Button>
-                              {isMaster && (
-                                <Button variant="outline" size="sm" className="gap-1.5 h-8 text-rose-600 border-rose-300 hover:bg-rose-50"
-                                  disabled={excluirLinkMut.isPending}
-                                  onClick={() => excluirLink(l.codigo)}>
-                                  <Trash2 className="w-3.5 h-3.5" /> Excluir
-                                </Button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
+                <>
+                  {/* Rev. 2988 — abas por OBRA (ativas em destaque) */}
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    <button onClick={() => { setLinkObraTab("todas"); limparSelLinks(); }}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition ${linkObraTab === "todas" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>
+                      Todas <span className="opacity-60">({linksData.length})</span>
+                    </button>
+                    {linkObraGroups.map((g) => (
+                      <button key={g.key} onClick={() => { setLinkObraTab(g.key); limparSelLinks(); }}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition ${linkObraTab === g.key ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>
+                        <Building2 className="w-3.5 h-3.5" /> {g.obraNome}
+                        {g.ativa && <span className={`text-[9px] uppercase font-bold px-1 rounded ${linkObraTab === g.key ? "bg-white/25 text-white" : "bg-emerald-100 text-emerald-700"}`}>ativa</span>}
+                        <span className="opacity-60">({g.items.length})</span>
+                      </button>
+                    ))}
+                  </div>
+                  {linksVisiveis.length === 0 ? (
+                    <p className="text-xs text-slate-400 py-2">Nenhum link para esta obra.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {agruparPorMesAno(linksVisiveis, (l: any) => l.criadoEm).map(([mesKey, lista]) => (
+                        <div key={mesKey}>
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 mb-1.5">
+                            {isMaster && (
+                              <Checkbox
+                                className="mr-0.5"
+                                checked={lista.every((l: any) => selLinks.has(l.codigo))}
+                                onCheckedChange={(v) => setSelMany(lista.map((l: any) => l.codigo), v === true)}
+                                aria-label={`Selecionar todos de ${mesAnoLabel(mesKey)}`}
+                              />
+                            )}
+                            <CalendarDays className="w-3.5 h-3.5 text-slate-400" /> {mesAnoLabel(mesKey)}
+                            <span className="text-slate-400 font-normal">({lista.length})</span>
+                          </div>
+                          <div className="space-y-1.5">
+                            {lista.map((l: any) => {
+                              const url = `${window.location.origin}/a/${l.codigo}`;
+                              const flag = AVALIACAO_LANGS.find((x) => x.value === normalizeAvaliacaoLang(l.lang))?.flag ?? "🇧🇷";
+                              const obraNomeL = l.obraNome ?? null;
+                              return (
+                                <div key={l.codigo} className={`flex flex-wrap items-center gap-2 border rounded-lg px-2.5 py-2 ${selLinks.has(l.codigo) ? "bg-rose-50/70 border-rose-200" : "bg-slate-50/60"}`}>
+                                  {isMaster && (
+                                    <Checkbox
+                                      className="shrink-0"
+                                      checked={selLinks.has(l.codigo)}
+                                      onCheckedChange={() => toggleSelLink(l.codigo)}
+                                      aria-label="Selecionar link"
+                                    />
+                                  )}
+                                  {linkObraTab === "todas" && obraNomeL && (
+                                    <Badge variant="outline" className="gap-1 shrink-0 text-slate-600"><Building2 className="w-3 h-3" /> {obraNomeL}</Badge>
+                                  )}
+                                  <Badge variant="outline" className="gap-1 shrink-0">{flag} {l.lang?.toUpperCase() ?? "PT"}</Badge>
+                                  <span className="text-xs text-slate-500 shrink-0">{l.criadoEm ?? "—"}</span>
+                                  {l.usado ? (
+                                    <Badge className="bg-slate-200 text-slate-600 shrink-0">Usado</Badge>
+                                  ) : (
+                                    <Badge className="bg-emerald-100 text-emerald-700 shrink-0">Disponível</Badge>
+                                  )}
+                                  {l.criadoPorNome && <span className="text-[11px] text-slate-400 shrink-0">por {l.criadoPorNome}</span>}
+                                  <Input readOnly value={url} onFocus={(e) => e.currentTarget.select()} className="flex-1 min-w-[200px] text-xs font-mono h-8" />
+                                  <Button variant="outline" size="sm" className="gap-1.5 h-8"
+                                    onClick={() => navigator.clipboard?.writeText(url).then(
+                                      () => toast.success("Link copiado!"),
+                                      () => toast.error("Não foi possível copiar"),
+                                    )}>
+                                    <Copy className="w-3.5 h-3.5" /> Copiar
+                                  </Button>
+                                  <a href={url} target="_blank" rel="noopener noreferrer">
+                                    <Button variant="outline" size="sm" className="gap-1.5 h-8">
+                                      <ExternalLink className="w-3.5 h-3.5" /> Abrir
+                                    </Button>
+                                  </a>
+                                  <Button variant="outline" size="sm" className="gap-1.5 h-8 text-green-700 border-green-300 hover:bg-green-50"
+                                    onClick={() => {
+                                      const msg =
+                                        `Olá! Tudo bem?\n\n` +
+                                        `Aqui é da FC Engenharia. Antes de tudo, queremos agradecer muito pela confiança em nosso trabalho${obraNomeL ? ` na obra ${obraNomeL}` : ""} — é um prazer ter você como nosso cliente.\n\n` +
+                                        `A sua opinião é o que nos move a melhorar a cada dia. Por isso, gostaríamos de convidá-lo(a) a compartilhar como tem sido a sua experiência com a nossa equipe.\n\n` +
+                                        `A avaliação é bem rapidinha (leva só alguns minutos), totalmente anônima e nos ajuda demais a evoluir e a oferecer um serviço cada vez melhor para você.\n\n` +
+                                        `Muito obrigado pelo seu tempo e pela parceria! Conte sempre conosco.\n\n` +
+                                        `Acesse a avaliação por aqui:\n${url}`;
+                                      window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer");
+                                    }}>
+                                    <MessageSquare className="w-3.5 h-3.5" /> WhatsApp
+                                  </Button>
+                                  {isMaster && (
+                                    <Button variant="outline" size="sm" className="gap-1.5 h-8 text-rose-600 border-rose-300 hover:bg-rose-50"
+                                      disabled={excluirLinkMut.isPending}
+                                      onClick={() => excluirLink(l.codigo)}>
+                                      <Trash2 className="w-3.5 h-3.5" /> Excluir
+                                    </Button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  )}
+                </>
               )}
             </div>
 
@@ -1129,8 +1211,37 @@ export default function ClientesPortalAdmin() {
                     Apenas o <b>Admin Master</b> pode cancelar uma avaliação. Cancelar libera o usuário-cliente para enviar uma nova avaliação no mesmo período.
                     {!isMaster && " Você não tem este perfil — o botão de cancelar está oculto."}
                   </p>
-                  <div className="space-y-2">
-                    {(dashAval.avaliacoes as any[]).slice(0, 50).map((a: any) => (
+                  {/* Rev. 2988 — abas por OBRA (ativas em destaque) */}
+                  {avaliacoesData.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                      <button onClick={() => setAvalObraTab("todas")}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition ${avalObraTab === "todas" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>
+                        Todas <span className="opacity-60">({avaliacoesData.length})</span>
+                      </button>
+                      {avalObraGroups.map((g) => (
+                        <button key={g.key} onClick={() => setAvalObraTab(g.key)}
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition ${avalObraTab === g.key ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>
+                          <Building2 className="w-3.5 h-3.5" /> {g.obraNome}
+                          {g.ativa && <span className={`text-[9px] uppercase font-bold px-1 rounded ${avalObraTab === g.key ? "bg-white/25 text-white" : "bg-emerald-100 text-emerald-700"}`}>ativa</span>}
+                          <span className="opacity-60">({g.items.length})</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {avaliacoesData.length === 0 ? (
+                    <p className="text-sm text-slate-400 text-center py-4">Nenhuma avaliação registrada ainda.</p>
+                  ) : avaliacoesVisiveis.length === 0 ? (
+                    <p className="text-sm text-slate-400 text-center py-4">Nenhuma avaliação para esta obra.</p>
+                  ) : (
+                    <div className="space-y-5">
+                      {agruparPorMesAno(avaliacoesVisiveis, (a: any) => a.criadoEm).map(([mesKey, lista]) => (
+                        <div key={mesKey}>
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 mb-1.5">
+                            <CalendarDays className="w-3.5 h-3.5 text-slate-400" /> {mesAnoLabel(mesKey)}
+                            <span className="text-slate-400 font-normal">({lista.length})</span>
+                          </div>
+                          <div className="space-y-2">
+                    {(lista as any[]).map((a: any) => (
                       <div key={a.id} className="border rounded-lg p-3">
                         <div className="flex items-start justify-between gap-2">
                           <div className="text-xs text-slate-500 mb-1 flex items-center gap-2 flex-wrap">
@@ -1186,10 +1297,11 @@ export default function ClientesPortalAdmin() {
                         {a.comentarioEscritorio && <p className="text-sm text-purple-700 mt-1"><Building2 className="inline w-4 h-4 mr-1" /><b>Escritório:</b> {a.comentarioEscritorio}</p>}
                       </div>
                     ))}
-                    {(dashAval.avaliacoes as any[]).length === 0 && (
-                      <p className="text-sm text-slate-400 text-center py-4">Nenhuma avaliação registrada ainda.</p>
-                    )}
-                  </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

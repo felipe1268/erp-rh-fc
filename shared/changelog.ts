@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2988 — **PORTAL DO CLIENTE → NPS → ABAS POR OBRA (ATIVAS EM DESTAQUE) +
+ * SEPARAÇÃO POR MÊS/ANO, TANTO EM "LINKS DE AVALIAÇÃO GERADOS" QUANTO EM
+ * "AVALIAÇÕES RECEBIDAS" (PEDIDO DO ADMIN MASTER).**
+ *
+ * PEDIDO (usuário, Admin Master): na tela "Acessos do Portal" → aba "Avaliações
+ * (NPS)", organizar as listas em ABAS por OBRA (com as obras ATIVAS, status
+ * `em_andamento`, em destaque) e, dentro de cada obra, separar os itens por
+ * MÊS/ANO. Aplicar nas DUAS áreas: "Links de avaliação gerados" E "Avaliações
+ * recebidas".
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE — só reorganização de render):
+ *   • `client/src/pages/ClientesPortalAdmin.tsx`:
+ *     - Helpers module-level: `normObraStatus` (normaliza status p/ comparar
+ *       `em_andamento`), `MESES_PT`, `mesAnoKey` (aceita "DD/MM/YYYY HH:MM" dos
+ *       links E "YYYY-MM-DD..." das avaliações → chave "YYYY-MM") e `mesAnoLabel`
+ *       ("Junho de 2026").
+ *     - `obraAtivaMap` (useMemo sobre `obrasDaEmpresaAdmin`): id da obra → ativa?
+ *     - `agruparPorObra<T>`: agrupa por obra e ordena ATIVAS-primeiro depois nome
+ *       (localeCompare pt-BR); `agruparPorMesAno<T>`: agrupa por mês/ano DESC
+ *       ("sem data" por último).
+ *     - Estados `linkObraTab`/`avalObraTab` ("todas" default) + memos
+ *       `linkObraGroups`/`linksVisiveis` e `avalObraGroups`/`avaliacoesVisiveis`.
+ *     - "Links de avaliação gerados": barra de ABAS por obra (pill; badge verde
+ *       "ativa" + contagem) → dentro, subgrupos por mês/ano (ícone CalendarDays).
+ *       Quando a aba é "Todas", cada linha mostra um badge com o nome da obra. A
+ *       seleção múltipla (Rev. 2987) foi preservada: "Selecionar todos" agora age
+ *       sobre `linksVisiveis` (respeita a aba) e o checkbox de cabeçalho passou a
+ *       ser por MÊS/ANO. WhatsApp usa o nome da obra da própria linha.
+ *     - "Avaliações recebidas": mesma barra de ABAS por obra + subgrupos por
+ *       mês/ano, preservando TODO o render de cada avaliação (notas por critério,
+ *       comentários, selo de tempo de resposta só p/ master — Rev. 2982, e o
+ *       botão Cancelar do Admin Master).
+ *
+ * RESSALVA: mudança 100% de apresentação (nenhum endpoint novo, nenhuma coluna,
+ * nenhuma migração). As obras vêm de `obrasDaEmpresaAdmin`; itens sem obra
+ * resolvida caem no grupo "Sem obra" e itens sem data no subgrupo "Sem data".
+ *
  * Rev. 2987 — **PORTAL DO CLIENTE → NPS → "LINKS DE AVALIAÇÃO GERADOS" — SELEÇÃO
  * MÚLTIPLA PARA EXCLUIR VÁRIOS LINKS DE UMA VEZ (PEDIDO DO ADMIN MASTER).**
  *
