@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2991 — **PORTAL DO CLIENTE → PLANEJAMENTO → REFIS DIVERGIA DA BARRA
+ * "AVANÇO FÍSICO" DO TOPO (CORRIGIDO — PARIDADE TOTAL PORTAL × ERP).**
+ *
+ * PEDIDO (usuário, Admin Master): "Todas as informações do módulo Planejamento
+ * da obra precisam estar IGUAIS no painel do cliente — não pode ter uma
+ * informação no REFIS e outra na barra de avanço no topo." Nos prints (obra
+ * REVTE-CIVIL): o ERP Planejamento e a barra "Avanço Físico" do topo do Portal
+ * mostravam Previsto 8,00% / Realizado 19,62% / +11,62% adiantado, MAS o REFIS
+ * Nº 006 (semana 08/06/2026) do Portal mostrava Previsto Acum. 9,00% / Realizado
+ * Acum. 9,00% / SPI 1,00 / Desvio +0,00%.
+ *
+ * CAUSA-RAIZ: a barra do topo do Portal lê `kpis.previsto`/`kpis.realizado` do
+ * endpoint `portalExterno.cliente.planejamentoObra` (= snapshot MSP da raiz
+ * UID=0: `pctTotalPrevisto` = `previstoMspSnapshot`/fração de tempo útil;
+ * `pctTotalRealizado` = ponderação das folhas). Já o componente `AbaRefis`
+ * (em `client/src/pages/portal/PortalPlanejamentoCliente.tsx`), no modo padrão
+ * "Só Diretas" (`incluirIndiretas` OFF), lia os valores SALVOS no registro do
+ * REFIS (`refisAtual.avancoPrevisto`/`avancoRealizado`/`spi`), congelados na
+ * EMISSÃO por uma fórmula legada (ponderação financeira folha-a-folha) que
+ * diverge do snapshot. O módulo Planejamento do ERP (`PlanejamentoDetalhe.tsx`)
+ * já tinha resolvido isso nas Rev. 2272/2273, fazendo o REFIS ESPELHAR a barra
+ * do topo (`rReal = avancoAtual`, `rPrev = avancoPrevisto`); o Portal ficou
+ * para trás.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE): no `AbaRefis`, em "Só Diretas"
+ * o acumulado passa a ESPELHAR a barra do topo via as props `topPrevisto`/
+ * `topRealizado` (já calculadas no componente pai — em OFF = `kpis`, em ON =
+ * recálculo idêntico ao do próprio REFIS), em vez de `refisAtual.avancoPrevisto/
+ * avancoRealizado`. O SPI passa a ser SEMPRE recalculado do acumulado exibido
+ * (`avancoRealAtual / avancoPrevisto`), nunca o `refisAtual.spi` salvo; o desvio
+ * físico já deriva dos dois → auto-corrige (+11,62%). O modo "Global (c/
+ * Indiretas)" mantém o recálculo proprietário (`previstoRecalc`/`realizadoRecalc`),
+ * idêntico a `topPrevisto`/`topRealizado` nesse modo (mesma fórmula, mesmo
+ * universo de folhas) → sem regressão. O detalhamento por grupo/etapa e o
+ * semanal seguem como exportação interna (permitido pela regra de ouro) e não
+ * aparecem na barra do topo. ARQUIVOS: `client/src/pages/portal/
+ * PortalPlanejamentoCliente.tsx` (assinatura + call-site de `AbaRefis`;
+ * `avancoPrevisto`/`avancoRealAtual`; `spi`). Requer REPUBLICAR para o cliente
+ * ver o efeito em produção.
+ *
  * Rev. 2990 — **PORTAL DO CLIENTE (LOGADO) → NPS → CAMPO "NOME DO ENCARREGADO"
  * NÃO VINHA PRÉ-PREENCHIDO COMO NO LINK PÚBLICO (CORRIGIDO — PARIDADE TOTAL).**
  *

@@ -1051,7 +1051,7 @@ export default function PortalPlanejamentoCliente() {
           );
           if (aba === "curva_s") return <AbaCurvaS curvaData={curvaData} kpis={kpis} projeto={projeto} curvaMedicoes={curvaMedicoes} />;
           if (aba === "gantt") return <AbaGantt atividades={atividadesTodas} />;
-          if (aba === "refis") return <AbaRefis refisLista={refisLista} atividades={atividadesTodas} curvaData={curvaData} curvaMedicoes={curvaMedicoes} obra={obra} projeto={projeto} incluirIndiretas={incluirIndiretas} setIncluirIndiretas={setIncluirIndiretas} />;
+          if (aba === "refis") return <AbaRefis refisLista={refisLista} atividades={atividadesTodas} curvaData={curvaData} curvaMedicoes={curvaMedicoes} obra={obra} projeto={projeto} incluirIndiretas={incluirIndiretas} setIncluirIndiretas={setIncluirIndiretas} topPrevisto={topPrevisto} topRealizado={topRealizado} />;
           if (aba === "caminho_critico") return <AbaCaminhoCritico atividades={atividadesTodas} projeto={projeto} />;
           if (aba === "efetivo") return <AbaEfetivo token={token} obraId={obraId} />;
           // Rev. 1535 — Mesma regra da aba Curva S Financeira: prefere o
@@ -2907,7 +2907,7 @@ function AbaGantt({ atividades }: { atividades: any[] }) {
 // ─────────────────────── ABA: REFIS ─────────────────────────────────────
 // Réplica visual da tela interna (PlanejamentoDetalhe.tsx → função Refis)
 // Read-only: sem toolbar, sem edição, sem IA, sem observações.
-function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, projeto, incluirIndiretas, setIncluirIndiretas }: {
+function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, projeto, incluirIndiretas, setIncluirIndiretas, topPrevisto, topRealizado }: {
   refisLista: any[];
   atividades: any[];
   curvaData: null | {
@@ -2921,6 +2921,8 @@ function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, proj
   projeto: any;
   incluirIndiretas: boolean;
   setIncluirIndiretas: (v: boolean) => void;
+  topPrevisto: number;
+  topRealizado: number;
 }) {
   if (!refisLista || refisLista.length === 0) {
     return <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400 text-sm">Nenhum REFIS emitido ainda.</div>;
@@ -3078,8 +3080,20 @@ function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, proj
         : (Number(a.percentRealizado) || 0);
       return s + (val * peso) / denomFolhas;
     }, 0);
-  const avancoPrevisto  = incluirIndiretas ? previstoRecalc  : Number(refisAtual.avancoPrevisto ?? 0);
-  const avancoRealAtual = incluirIndiretas ? realizadoRecalc : Number(refisAtual.avancoRealizado ?? 0);
+  // Rev. 2991 — REGRA DE OURO Portal × ERP: em "Só Diretas" (incluirIndiretas
+  // OFF, padrão) o REFIS deve ESPELHAR a barra "Avanço Físico" do topo da
+  // página (`topPrevisto`/`topRealizado` = `kpis.previsto`/`kpis.realizado` =
+  // snapshot MSP da raiz UID=0), EXATAMENTE como o módulo Planejamento do ERP
+  // faz (PlanejamentoDetalhe.tsx, Rev. 2272/2273: `rReal = avancoAtual`,
+  // `rPrev = avancoPrevisto`). Antes o Portal lia os valores SALVOS no registro
+  // do REFIS (`refisAtual.avancoPrevisto/avancoRealizado`), congelados na
+  // emissão por uma fórmula legada (ponderação folha-a-folha) → divergia do
+  // topo (ex.: topo 8,00%/19,62% vs REFIS 9,00%/9,00%, SPI 1,00, desvio 0,00%).
+  // No modo "Global (c/ Indiretas)" mantém o recálculo proprietário
+  // (`previstoRecalc`/`realizadoRecalc`) — idêntico ao `topPrevisto/topRealizado`
+  // do pai nesse modo, pois usam a MESMA fórmula sobre o MESMO universo.
+  const avancoPrevisto  = incluirIndiretas ? previstoRecalc  : Number(topPrevisto ?? 0);
+  const avancoRealAtual = incluirIndiretas ? realizadoRecalc : Number(topRealizado ?? 0);
 
   // Rev. 1583 — Quando "Global (c/ Indiretas)" ligado, o semanal TAMBÉM
   // precisa ser recalculado, senão fica divergente (cabeçalho mostra
@@ -3133,9 +3147,11 @@ function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, proj
     return Math.max(0, realizadoRecalc - realAntes);
   }, [incluirIndiretas, refisAtual, refisAnterior, avancoRealAtual, realizadoRecalc, folhasComDatas, semPesoFolhas, denomFolhas]);
   const desvioFisico    = avancoRealAtual - avancoPrevisto;
-  const spi = incluirIndiretas
-    ? (avancoPrevisto > 0 ? avancoRealAtual / avancoPrevisto : 0)
-    : Number(refisAtual.spi ?? (avancoPrevisto > 0 ? avancoRealAtual / avancoPrevisto : 0));
+  // Rev. 2991 — SPI SEMPRE recalculado a partir do acumulado exibido (que agora
+  // espelha o topo), nunca o `refisAtual.spi` salvo (congelado na emissão pela
+  // fórmula legada) — senão SPI/desvio contradiziam o acumulado (SPI 1,00 ao
+  // lado de 8,00%/19,62%). Mesma régua do ERP (`rSpi = rReal/rPrev`).
+  const spi = avancoPrevisto > 0 ? avancoRealAtual / avancoPrevisto : 0;
 
   // ── Curva S Física: usa curvaData do backend, recortando até o último ponto realizado/projetado
   const curvaFiltrada = (() => {
