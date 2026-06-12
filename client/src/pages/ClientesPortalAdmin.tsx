@@ -15,7 +15,7 @@ import {
   Smile, Frown, Meh, TrendingUp, Users, Plus, Trash2, RefreshCw, UserPlus,
   Lock, UnlockKeyhole, SlidersHorizontal, ExternalLink, Layers,
   Building2, ThumbsUp, X, CalendarDays, Pencil, ChevronUp, ChevronDown, ChevronRight, ListOrdered,
-  HardHat, MapPin, Globe2,
+  HardHat, MapPin, Globe2, Clock,
 } from "lucide-react";
 import {
   PORTAL_CLIENTE_ABAS, parseAbasLiberadas, ABA_OBRIGATORIA, type PortalClienteAbaKey,
@@ -24,6 +24,18 @@ import {
 } from "@shared/portalClienteAbas";
 
 const fmtBR = (s?: string | null) => (s ? s.split(/[T ]/)[0].split("-").reverse().join("/") : "—");
+// Rev. 2982 — formata o tempo de preenchimento da avaliação (segundos → "Xmin Ys" / "Xs" / "Xh Ymin").
+const fmtDuracao = (seg?: number | null) => {
+  if (seg == null || !Number.isFinite(seg) || seg <= 0) return null;
+  const s = Math.round(seg);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const rs = s % 60;
+  if (m < 60) return rs ? `${m}min ${rs}s` : `${m}min`;
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  return rm ? `${h}h ${rm}min` : `${h}h`;
+};
 const fmtCNPJ = (v?: string) => {
   if (!v) return "";
   const d = v.replace(/\D/g, "");
@@ -900,6 +912,15 @@ export default function ClientesPortalAdmin() {
                               </Badge>
                             )}
                             {a.gestorNome && <span className="text-slate-600">· Gestor: <b>{a.gestorNome}</b></span>}
+                            {/* Rev. 2982 — tempo de preenchimento (interno, só Admin Master) */}
+                            {isMaster && fmtDuracao(a.tempoRespostaSegundos) && (
+                              <span
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 border text-slate-600"
+                                title="Tempo que o cliente levou para preencher esta avaliação (da abertura até o envio) — uso interno"
+                              >
+                                <Clock className="w-3 h-3" /> {fmtDuracao(a.tempoRespostaSegundos)}
+                              </span>
+                            )}
                           </div>
                           {isMaster && (
                             <button

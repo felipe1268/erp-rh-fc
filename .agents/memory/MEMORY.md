@@ -52,3 +52,5 @@
 - [tsc incremental stale-clean](tsc-incremental-stale.md) — `tsc --noEmit` here is incremental; right after a client edit it can report CLEAN despite a real error (e.g. dup const). Verify via fresh tsc (rm tsbuildinfo) or esbuild parse.
 - [SyncSchema+ log is capped](syncschema-log-cap.md) — `[SyncSchema+]` is ONE long sequential block; captured log file caps ~49 lines, so a missing `Rev. N` line ≠ failure. Verify new tables by connecting to NEON_DATABASE_URL directly (pg), not executeSql.
 - [NPS open link had no per-use limit](nps-open-link-no-limit.md) — public NPS link (no credId) accepts unlimited submissions; enforce 1-per-link via embedded linkId + atomic claim row.
+- [Master-only field must gate at backend](master-only-field-backend-gate.md) — dashboardAvaliacoesCliente does `select()` of all columns; a "só Admin Master" field must be stripped from the payload by role server-side, not just hidden in the UI.
+- [NPS fill-time clock](nps-fill-time-clock.md) — tempoRespostaSegundos = useRef(Date.now()) restarted on entering tab "avaliacao" (not mount), sent as round((now-start)/1000) min 1; logged users start on "obras" so mount-time inflates it.

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -279,6 +279,12 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
   const [detEquipe, setDetEquipe] = useState<Record<string, number | null>>({});
   const [detEscritorio, setDetEscritorio] = useState<Record<string, number | null>>({});
   const [avaliado, setAvaliado] = useState(false);
+  // Rev. 2982 — marca o instante em que o cliente ENTRA no formulário de avaliação
+  // p/ medir, internamente, quanto tempo ele levou até enviar. Uso do Admin Master.
+  // Inicia no mount (cobre o link público, que já abre no formulário) e REINICIA
+  // quando o usuário logado troca para a aba "avaliacao" — assim o tempo gasto em
+  // "Obras"/"Comentários" antes de começar a responder NÃO entra na conta.
+  const inicioAvaliacaoRef = useRef<number>(Date.now());
   // Rev. 2968 — NOTA GERAL (NPS) calculada AUTOMATICAMENTE a partir das respostas,
   // por média ponderada dos blocos (não é mais digitada). Cada bloco vale só se tiver
   // pelo menos 1 item respondido; os pesos são renormalizados sobre os blocos ativos,
@@ -343,6 +349,15 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
       setLembreteAberto(true);
     }
   }, [podeAvaliarQ.data, lembreteDispensado, tab]);
+  // Rev. 2982 — reinicia o cronômetro de preenchimento quando o cliente entra na aba
+  // "avaliacao" (e ainda não enviou). No link público a aba já é "avaliacao", então
+  // o efeito apenas confirma o instante de abertura; no portal logado isso descarta
+  // o tempo gasto navegando em "Obras"/"Comentários" antes de começar a responder.
+  useEffect(() => {
+    if (tab === "avaliacao" && !avaliado) {
+      inicioAvaliacaoRef.current = Date.now();
+    }
+  }, [tab, avaliado]);
   const enviarAvalMut = trpc.portalExterno.cliente.criarAvaliacao.useMutation({
     onSuccess: () => {
       setAvaliado(true);
@@ -446,6 +461,12 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
       recomendaria: aval.recomendaria ?? undefined,
       respostasExtras: respostasExtrasArr.length ? respostasExtrasArr : undefined,
       detalhes,
+      // Rev. 2982 — tempo de preenchimento (abertura → envio), em segundos.
+      // Clampa 0..86400 e garante ≥1s p/ não registrar 0 em envios instantâneos.
+      tempoRespostaSegundos: Math.min(
+        86400,
+        Math.max(1, Math.round((Date.now() - inicioAvaliacaoRef.current) / 1000)),
+      ),
     });
   };
   // Rev. 1569 — periodicidade configurável (mensal/anual)

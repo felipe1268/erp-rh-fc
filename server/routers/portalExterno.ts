@@ -763,7 +763,7 @@ export const portalExternoRouter = router({
       // Rev. 1593 — filtro opcional por obra (usado pela aba "Avaliação do Cliente"
       // dentro de PlanejamentoDetalhe, para mostrar só as avaliações daquela obra).
       obraId: z.number().optional(),
-    })).query(async ({ input }) => {
+    })).query(async ({ input, ctx }) => {
       const db = (await getDb())!;
       // Rev. 1569 — Avaliações canceladas pelo Master ficam fora dos cálculos
       // (mas continuam no banco para auditoria).
@@ -886,7 +886,15 @@ export const portalExternoRouter = router({
         },
         porObra: obrasList,
         porPeriodo: periodos,
-        avaliacoes: rows.slice(0, 100),
+        // Rev. 2982 — o tempo de preenchimento é dado INTERNO, exclusivo do Admin
+        // Master. Para qualquer outro perfil ele é REMOVIDO do payload (não basta
+        // esconder no front: o dado não pode sair do backend).
+        avaliacoes: (ctx.user.role === "admin_master"
+          ? rows.slice(0, 100)
+          : rows.slice(0, 100).map((r: any) => {
+              const { tempoRespostaSegundos, ...rest } = r;
+              return rest;
+            })),
         // Rev. 1595 — Perguntas personalizadas
         perguntasExtras,
       };
@@ -1926,6 +1934,10 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       comentarioEscritorio: z.string().optional(),
       gestorNome: z.string().optional(),
       recomendaria: z.number().int().min(0).max(2).nullable().optional(),
+      // Rev. 2982 — tempo (segundos) que o cliente levou para preencher a avaliação
+      // (abertura do formulário → envio). Uso interno (Admin Master). Clampado p/
+      // evitar lixo (máx. 24h). Opcional p/ compat com clientes antigos.
+      tempoRespostaSegundos: z.number().int().min(0).max(86400).nullable().optional(),
       // Rev. 1595 — Respostas das perguntas extras (personalizadas) cadastradas pelo admin.
       respostasExtras: z.array(z.object({
         perguntaId: z.number(),
@@ -2087,6 +2099,8 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
           gestorNome: gestorNomeFinal,
           recomendaria: input.recomendaria ?? null,
           anoPeriodo,
+          // Rev. 2982 — tempo de preenchimento (interno, p/ Admin Master).
+          tempoRespostaSegundos: input.tempoRespostaSegundos ?? null,
         }).returning({ id: clienteAvaliacoes.id });
         return row;
       });

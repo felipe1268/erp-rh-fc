@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2982 — **PORTAL DO CLIENTE → NPS — MARCAÇÃO INTERNA DO TEMPO QUE CADA AVALIAÇÃO
+ * LEVOU PARA SER PREENCHIDA (ABERTURA DO FORMULÁRIO → ENVIO), VISÍVEL SÓ PARA O ADMIN
+ * MASTER.**
+ *
+ * PEDIDO (usuário): "Marque internamente para o Adm master ver, o tempo que cada
+ * avaliação demorou para ser feita".
+ *
+ * CONTEXTO: o gestor quer um indicador interno de engajamento/qualidade — quanto tempo
+ * o cliente de fato gastou respondendo a pesquisa NPS. Avaliações respondidas em poucos
+ * segundos sugerem preenchimento apressado; tempos coerentes indicam atenção real. É um
+ * dado de auditoria interna, NÃO deve aparecer para o cliente.
+ *
+ * SOLUÇÃO (BACK+FRONT, ZERO ALTER/DROP/DELETE destrutivo — coluna nova via self-heal
+ * `ADD COLUMN IF NOT EXISTS`):
+ *   (1) SCHEMA (`drizzle/schema.ts`): nova coluna `tempoRespostaSegundos`
+ *       (`tempo_resposta_segundos INTEGER`, nullable) em `cliente_avaliacoes`, antes de
+ *       `criadoEm`. Nullable p/ compat com o histórico (avaliações antigas ficam sem o
+ *       dado e a UI simplesmente não mostra o selo).
+ *   (2) SELF-HEAL (`server/_core/index.ts`, bloco `[SyncSchema+]` de `cliente_avaliacoes`):
+ *       `ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS tempo_resposta_segundos
+ *       INTEGER` — idempotente, sem perda de dados.
+ *   (3) BACKEND (`server/routers/portalExterno.ts`, `criarAvaliacao`): novo input
+ *       opcional `tempoRespostaSegundos` (`z.number().int().min(0).max(86400)`, clampado
+ *       p/ no máx. 24h evitando lixo) gravado no insert da avaliação (`?? null`). Como
+ *       `getDashboardCliente` faz `db.select().from(clienteAvaliacoes)` (todas as
+ *       colunas), o campo flui automaticamente p/ a lista do admin — sem mexer no select.
+ *   (4) FRONT — CAPTURA (`client/src/pages/portal/PortalDashboardCliente.tsx`, usado
+ *       tanto no portal logado quanto no link público): `inicioAvaliacaoRef =
+ *       useRef(Date.now())` marca a abertura do formulário; em `enviarAvaliacao` o tempo
+ *       enviado = `min(86400, max(1, round((Date.now()-inicio)/1000)))` (≥1s p/ nunca
+ *       gravar 0 em envios instantâneos).
+ *   (5) FRONT — EXIBIÇÃO (`client/src/pages/ClientesPortalAdmin.tsx`): helper `fmtDuracao`
+ *       (segundos → "Xs" / "Xmin Ys" / "Xh Ymin") e um selo com ícone `Clock` na linha de
+ *       cada avaliação recebida, renderizado SÓ quando `isMaster` (Admin Master) e houver
+ *       tempo registrado. Tooltip explica que é o tempo de preenchimento (uso interno).
+ *
  * Rev. 2981 — **PORTAL DO CLIENTE → NPS → TELA "OBRIGADO PELA AVALIAÇÃO!" — REMOVIDO O
  * BOTÃO "ENVIAR NOVA AVALIAÇÃO".**
  *

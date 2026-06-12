@@ -4376,6 +4376,9 @@ export const clienteAvaliacoes = pgTable("cliente_avaliacoes", {
   anoPeriodo: varchar("ano_periodo", { length: 7 }),
   canceladaEm: timestamp("cancelada_em", { mode: "string" }),
   canceladaPor: varchar("cancelada_por", { length: 255 }),
+  // Rev. 2982 — tempo (em segundos) que o cliente levou para preencher a avaliação
+  // (da abertura do formulário até o envio). Uso INTERNO p/ o Admin Master.
+  tempoRespostaSegundos: integer("tempo_resposta_segundos"),
   criadoEm: timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
 }, (t) => [
   index("ca_company").on(t.companyId),

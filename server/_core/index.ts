@@ -1536,6 +1536,11 @@ Regras:
           await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS comentario_escritorio TEXT`);
           console.log(`[SyncSchema+] Colunas Escritório Central garantidas em cliente_avaliacoes.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA cliente_avaliacoes escritório:`, e?.message || e); }
+        try {
+          // Rev. 2982 — tempo de preenchimento (segundos) p/ o Admin Master ver.
+          await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS tempo_resposta_segundos INTEGER`);
+          console.log(`[SyncSchema+] Rev. 2982: coluna tempo_resposta_segundos garantida em cliente_avaliacoes.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA cliente_avaliacoes tempo_resposta:`, e?.message || e); }
 
         // Rastreio de quem cadastrou/atualizou itens do almoxarifado
         try {
