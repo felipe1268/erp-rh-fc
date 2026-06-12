@@ -3429,6 +3429,7 @@ export const vehicles = pgTable("vehicles", {
         seguroUrl: text("seguro_url"),
         seguroVencimento: date("seguro_vencimento", { mode: 'string' }),
         documentos: jsonb("documentos").default([]),
+        categoriaUso: text("categoria_uso"),
         observacoes: text(),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),

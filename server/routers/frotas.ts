@@ -47,6 +47,7 @@ async function ensureFleetTables() {
       ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS cadastro_consolidado_por VARCHAR(255);
       ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS motorista_padrao VARCHAR(255);
       ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS motorista_padrao_inicio DATE;
+      ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS categoria_uso TEXT;
     EXCEPTION WHEN OTHERS THEN NULL;
     END $$;
   `);
@@ -668,6 +669,7 @@ export const frotasRouter = router({
       crlvVencimento: z.string().nullable().optional(),
       seguroUrl: z.string().nullable().optional(),
       seguroVencimento: z.string().nullable().optional(),
+      categoriaUso: z.string().nullable().optional(),
       observacoes: z.string().nullable().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -722,6 +724,7 @@ export const frotasRouter = router({
         crlvVencimento: input.crlvVencimento || null,
         seguroUrl: input.seguroUrl || null,
         seguroVencimento: input.seguroVencimento || null,
+        categoriaUso: input.categoriaUso || null,
         observacoes: input.observacoes || null,
       } as any).returning();
       return v;
@@ -762,6 +765,7 @@ export const frotasRouter = router({
       crlvVencimento: z.string().nullable().optional(),
       seguroUrl: z.string().nullable().optional(),
       seguroVencimento: z.string().nullable().optional(),
+      categoriaUso: z.string().nullable().optional(),
       observacoes: z.string().nullable().optional(),
     }))
     .mutation(async ({ input, ctx }) => {

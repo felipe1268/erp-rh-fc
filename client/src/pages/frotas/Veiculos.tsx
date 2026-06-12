@@ -17,6 +17,8 @@ import { MoneyInput } from "@/components/ui/money-input";
 
 const TIPOS = ["Carro", "SUV", "Caminhonete", "Caminhão", "Utilitário", "Van", "Moto", "Ônibus", "Máquina", "Outros"];
 const STATUS = ["Ativo", "Em Manutenção", "Inativo", "Vendido"];
+const CATEGORIAS = ["Carro dos Sócios", "Operação", "Locação"];
+const SEM_CATEGORIA = "Sem categoria";
 
 const STATUS_STYLES: Record<string, { label: string; card: string; cardActive: string; badge: string; border: string; dot: string }> = {
   Ativo: {
@@ -67,6 +69,7 @@ export default function Veiculos() {
   const cId = parseInt(selectedCompanyId || "0");
   const [search, setSearch] = useState("");
   const [filterTipo, setFilterTipo] = useState("all");
+  const [filterCategoria, setFilterCategoria] = useState("all");
   const [filterStatus, setFilterStatus] = useState("Ativo");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
@@ -241,6 +244,7 @@ export default function Veiculos() {
       fipeCodigoMarca: v.fipe_codigo_marca, fipeCodigoModelo: v.fipe_codigo_modelo,
       fipeCodigoAno: v.fipe_codigo_ano, depreciacaoAnos: v.depreciacao_anos || 5,
       crlvVencimento: v.crlv_vencimento, seguroVencimento: v.seguro_vencimento,
+      categoriaUso: v.categoria_uso,
       observacoes: v.observacoes, fotoUrl: v.foto_url, documentos: v.documentos || [],
     });
     setDialogOpen(true);
@@ -276,9 +280,14 @@ export default function Veiculos() {
       (v.responsavel || "").toLowerCase().includes(s)
     );
   });
-  const list = filterStatus === "all"
+  const byStatus = filterStatus === "all"
     ? scoped
     : scoped.filter((v: any) => (v.statusVeiculo || "") === filterStatus);
+  const list = filterCategoria === "all"
+    ? byStatus
+    : byStatus.filter((v: any) => filterCategoria === "__none__"
+      ? !(v.categoria_uso || "").trim()
+      : (v.categoria_uso || "") === filterCategoria);
   const statusCounts: Record<string, number> = STATUS.reduce((acc, s) => {
     acc[s] = scoped.filter((v: any) => (v.statusVeiculo || "") === s).length;
     return acc;
@@ -374,6 +383,14 @@ export default function Veiculos() {
             <SelectContent>
               <SelectItem value="all">Todos os tipos</SelectItem>
               {TIPOS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterCategoria} onValueChange={setFilterCategoria}>
+            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Categoria" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as categorias</SelectItem>
+              {CATEGORIAS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              <SelectItem value="__none__">{SEM_CATEGORIA}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -521,9 +538,12 @@ export default function Veiculos() {
                         <span className="text-[10px] text-amber-600 font-medium">Cadastro incompleto — {(pendingMap.get(v.id) || []).join(", ")}</span>
                       </div>
                     )}
-                    <div className="mt-1.5 flex items-center gap-2">
+                    <div className="mt-1.5 flex items-center flex-wrap gap-2">
                       <span className="font-mono text-sm font-bold bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">{v.placa || "S/P"}</span>
                       <span className="text-xs text-muted-foreground">{v.tipoVeiculo}</span>
+                      {(v.categoria_uso || "").trim() && (
+                        <span className="text-[10px] font-medium rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 px-2 py-0.5">{v.categoria_uso}</span>
+                      )}
                       {v.valor_fipe && parseFloat(v.valor_fipe) > 0 && (
                         <span className="text-xs font-semibold text-green-600">{fmt(v.valor_fipe)}</span>
                       )}
@@ -675,6 +695,16 @@ export default function Veiculos() {
                     <div>
                       <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">Cor</Label>
                       <Input className="h-10" placeholder="Ex.: Amarela" value={form.cor || ""} onChange={e => setForm({ ...form, cor: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">Categoria</Label>
+                      <Select value={form.categoriaUso || "__none__"} onValueChange={v => setForm({ ...form, categoriaUso: v === "__none__" ? null : v })}>
+                        <SelectTrigger className="h-10"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">{SEM_CATEGORIA}</SelectItem>
+                          {CATEGORIAS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="sm:col-span-2">
                       <Label className="text-xs font-medium text-foreground/80 mb-1.5 block">Status</Label>

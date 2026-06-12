@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2996 — **FROTAS → VEÍCULOS: NOVO CAMPO "CATEGORIA" (FINALIDADE DE USO) PARA
+ * SEPARAR OS CARROS EM GRUPOS — "CARRO DOS SÓCIOS", "OPERAÇÃO", "LOCAÇÃO" — COM
+ * FILTRO PRÓPRIO NA TELA, INDEPENDENTE DO "TIPO" (CARRO/CAMINHÃO/MOTO).**
+ *
+ * PEDIDO (usuário): "Quero outra categoria também, para separar os carros, tipo:
+ * Carro dos Sócios, Operação, Locação." A tela "Frotas → Veículos" já filtrava por
+ * STATUS (Ativos/Em Manutenção/Inativos/Vendidos) e por TIPO ("Todos os tipos" =
+ * Carro/SUV/Caminhão/Moto…), mas NÃO havia como classificar o veículo pela sua
+ * FINALIDADE DE USO. Faltava um campo de categoria por veículo + filtro na UI.
+ *
+ * SOLUÇÃO (full-stack, ADITIVO — ZERO ALTER destrutivo/DROP/DELETE): nova coluna
+ * `categoria_uso TEXT` em `vehicles` (nullable; default null = "Sem categoria"),
+ * declarada em `drizzle/schema.ts` (`categoriaUso`) e auto-curada via self-heal
+ * `ADD COLUMN IF NOT EXISTS categoria_uso TEXT` em `ensureFleetTables` (padrão
+ * `[SyncSchema+]` já existente para as demais colunas de frota). Backend
+ * (`server/routers/frotas.ts`): `createVehicle` e `updateVehicle` ganharam o input
+ * `categoriaUso` (opcional/nullable); o create grava `categoriaUso: input.categoriaUso
+ * || null` e o update propaga via `...data` (drizzle mapeia → coluna `categoria_uso`).
+ * `listVehicles` já faz `SELECT v.*` → a coluna volta automaticamente como
+ * `categoria_uso`, sem mexer na assinatura. Frontend
+ * (`client/src/pages/frotas/Veiculos.tsx`): const fixa `CATEGORIAS = ["Carro dos
+ * Sócios", "Operação", "Locação"]` (lista extensível — basta adicionar itens),
+ * sentinela "Sem categoria"; novo `<Select>` "Categoria" no formulário de Novo/Editar
+ * veículo (grava null quando "Sem categoria"); novo dropdown de filtro "Todas as
+ * categorias / … / Sem categoria" ao lado do filtro de tipo, aplicado client-side
+ * (estado `filterCategoria`, combinado com o filtro de status); badge índigo com a
+ * categoria no card do veículo (quando preenchida); `openEdit` mapeia
+ * `categoriaUso: v.categoria_uso`. Requer REPUBLICAR. ARQUIVOS: `drizzle/schema.ts`,
+ * `server/routers/frotas.ts`, `client/src/pages/frotas/Veiculos.tsx`.
+ *
  * Rev. 2995 — **PESQUISA DE SATISFAÇÃO (NPS) → FILTRO POR OBRA UNIFICADO: UMA ÚNICA
  * BARRA NO TOPO GOVERNA "LINKS DE AVALIAÇÃO GERADOS" + DASHBOARD + LISTA "AVALIAÇÕES
  * RECEBIDAS" (CORRIGE: CLICAR NUMA OBRA NÃO FILTRAVA O DASHBOARD).**
