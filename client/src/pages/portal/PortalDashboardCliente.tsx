@@ -205,9 +205,21 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
   // - link público por obra → vem no token (linkObra.gestor);
   // - seletor logado → responsável da obra selecionada (minhasObras).
   const obraSel = useMemo(() => (minhasObras as any[]).find((o) => o.id === aval.obraId) || null, [minhasObras, aval.obraId]);
+  // Rev. 2971 — declarado AQUI (antes dos memos gestorAuto/encarregadoAuto) p/
+  // que estes leiam o gestor/encarregado resolvidos AO VIVO pelo backend
+  // (`podeAvaliarEsteMes`) — assim o pré-preenchimento funciona mesmo em links
+  // ANTIGOS (sem esses nomes no token) e reflete trocas no efetivo. Mover p/ cá
+  // evita TDZ (memos rodam síncronos no render).
+  const podeAvaliarQ = trpc.portalExterno.cliente.podeAvaliarEsteMes.useQuery(
+    { token },
+    { enabled: !!token && tipo === "cliente" }
+  );
   const gestorAuto = useMemo<string | null>(
-    () => (linkObra?.gestor || (obraSel?.responsavel ?? null) || null),
-    [linkObra, obraSel]
+    // Rev. 2971 — valor resolvido AO VIVO pelo backend tem PRECEDÊNCIA p/
+    // refletir trocas no efetivo; token/obraSel só como fallback inicial
+    // (antes da query retornar) ou quando o backend devolve null.
+    () => ((podeAvaliarQ.data?.gestorNome ?? null) || (obraSel?.responsavel ?? null) || (linkObra?.gestor ?? null) || null),
+    [linkObra, obraSel, podeAvaliarQ.data]
   );
   useEffect(() => {
     if (gestorAuto) setAval((prev) => ({ ...prev, gestorNome: gestorAuto }));
@@ -216,9 +228,12 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
   // Rev. 2970 — ENCARREGADO auto-preenchido a partir do efetivo da obra:
   // o link público por obra traz `encarregadoNome` no token (indireto cuja
   // função contém "ENCARREGADO"). Pré-preenche o campo sem o cliente digitar.
+  // Rev. 2971 — fallback no valor resolvido AO VIVO p/ links antigos.
   const encarregadoAuto = useMemo<string | null>(
-    () => (linkObra?.encarregado || (obraSel as any)?.encarregadoNome || null),
-    [linkObra, obraSel]
+    // Rev. 2971 — valor AO VIVO tem PRECEDÊNCIA p/ refletir trocas no efetivo;
+    // token/obraSel só como fallback inicial ou quando o backend devolve null.
+    () => ((podeAvaliarQ.data?.encarregadoNome ?? null) || (obraSel as any)?.encarregadoNome || (linkObra?.encarregado ?? null) || null),
+    [linkObra, obraSel, podeAvaliarQ.data]
   );
   useEffect(() => {
     if (encarregadoAuto) setEncarregadoNome(encarregadoAuto);
@@ -301,11 +316,8 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
   // credencial deste mês já tem marcação (ano_mes), sem ligar ao
   // conteúdo da avaliação. Mostramos um modal de boas-vindas que abre
   // automaticamente assim que o portal carrega para quem ainda não
-  // avaliou no mês corrente.
-  const podeAvaliarQ = trpc.portalExterno.cliente.podeAvaliarEsteMes.useQuery(
-    { token },
-    { enabled: !!token && tipo === "cliente" }
-  );
+  // avaliou no mês corrente. (Rev. 2971 — `podeAvaliarQ` agora é declarado
+  // mais acima, junto dos memos gestorAuto/encarregadoAuto.)
   const jaAvaliouEsteMes = !!podeAvaliarQ.data?.jaAvaliou;
   const [lembreteAberto, setLembreteAberto] = useState(false);
   const [lembreteDispensado, setLembreteDispensado] = useState(false);

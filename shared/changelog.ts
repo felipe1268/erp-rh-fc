@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2971 — **PORTAL DO CLIENTE → PESQUISA DE SATISFAÇÃO (NPS) PÚBLICA → BLOCO
+ * "ENCARREGADO FC NA OBRA" — O PRÉ-PREENCHIMENTO AUTOMÁTICO DO "NOME DO ENCARREGADO"
+ * (REV. 2970) PASSA A FUNCIONAR TAMBÉM EM LINKS ANTIGOS (GERADOS ANTES DA REV. 2970)
+ * E A REFLETIR TROCAS NO EFETIVO, RESOLVENDO O NOME AO VIVO NO BACKEND EM VEZ DE
+ * DEPENDER SÓ DO QUE FOI EMBUTIDO NO TOKEN.**
+ *
+ * PEDIDO/SINTOMA (usuário): mesmo após a Rev. 2970, no formulário público o campo "Nome
+ * do encarregado" continuava aparecendo como campo digitável ("não precisa digitar o nome
+ * do encarregado"). O gestor já vinha preenchido porque o token (gerado entre a Rev. 2965 e
+ * a 2970) contém `gestorNome`, mas NÃO contém `encarregadoNome` — links emitidos antes da
+ * Rev. 2970 nunca teriam o encarregado embutido.
+ *
+ * CAUSA-RAIZ: no MODO LINK PÚBLICO o `obraSel` (de `minhasObras`) fica desabilitado, então
+ * os memos `gestorAuto`/`encarregadoAuto` dependiam EXCLUSIVAMENTE do que estava no token.
+ * Tokens antigos têm `gestorNome` (Rev. 2965) mas não `encarregadoNome` (Rev. 2970) → o
+ * gestor preenchia e o encarregado não. Não havia fonte de fallback ao vivo.
+ *
+ * SOLUÇÃO (BACK+FRONT, ZERO ALTER/DROP/DELETE):
+ * - BACKEND (`server/routers/portalExterno.ts`, `cliente.podeAvaliarEsteMes` — já chamado
+ *   no modo público): quando o token carrega `obraId`, o backend resolve AO VIVO o
+ *   `gestorNome` (de `obras.responsavel`) e o `encarregadoNome` (via `getEquipeObra` +
+ *   indireto cuja `funcao`/`cargo` casa `/ENCARREGAD/`) e devolve ambos no retorno da query.
+ *   Tenant guard pelo `companyId` do token; em try/catch defensivo (falha → null = manual).
+ * - FRONTEND (`client/src/pages/portal/PortalDashboardCliente.tsx`): `podeAvaliarQ` foi
+ *   movido para ANTES dos memos `gestorAuto`/`encarregadoAuto` (evita TDZ, pois memos rodam
+ *   síncronos no render). O valor resolvido AO VIVO pelo backend
+ *   (`podeAvaliarQ.data?.gestorNome` / `?.encarregadoNome`) passa a ter PRECEDÊNCIA nos
+ *   memos; o token (`linkObra`) e o `obraSel` ficam só como fallback inicial (antes da
+ *   query retornar) ou quando o backend devolve null. Assim o card read-only "preenchido
+ *   automaticamente" aparece mesmo em links antigos E reflete trocas de gestor/encarregado
+ *   no efetivo (em vez de congelar no que foi embutido no token na geração do link).
+ *
+ * ARQUIVOS: `server/routers/portalExterno.ts`, `client/src/pages/portal/PortalDashboardCliente.tsx`.
+ *
  * Rev. 2970 — **PORTAL DO CLIENTE → PESQUISA DE SATISFAÇÃO (NPS) PÚBLICA → BLOCO
  * "ENCARREGADO FC NA OBRA" — O CAMPO "NOME DO ENCARREGADO" PASSA A SER PRÉ-PREENCHIDO
  * AUTOMATICAMENTE A PARTIR DO EFETIVO DA OBRA (O INDIRETO CUJA FUNÇÃO É "ENCARREGADO"),

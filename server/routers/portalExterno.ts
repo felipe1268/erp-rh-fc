@@ -2081,10 +2081,32 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       const credId = decoded.portalId as number | undefined;
       const periodoRow = await db.execute(sql`SELECT to_char(now() AT TIME ZONE 'America/Sao_Paulo', ${fmt}) AS periodo`);
       const anoMes = (((periodoRow as any).rows ?? periodoRow ?? [])[0] as any)?.periodo ?? "";
-      if (!credId) return { podeAvaliar: true, jaAvaliou: false, anoMes, periodicidade };
+      // Rev. 2971 — resolve gestor + encarregado AO VIVO do efetivo da obra
+      // embutida no token, p/ que o pré-preenchimento funcione mesmo em links
+      // ANTIGOS (gerados antes da Rev. 2965/2970, sem esses nomes no JWT) e
+      // reflita trocas no efetivo. Defensivo: qualquer falha mantém null (manual).
+      let gestorNome: string | null = null;
+      let encarregadoNome: string | null = null;
+      if (decoded.obraId) {
+        try {
+          const [o] = await db.select({ responsavel: obras.responsavel }).from(obras).where(and(
+            eq(obras.id, Number(decoded.obraId)),
+            eq(obras.companyId, decoded.companyId),
+            isNull(obras.deletedAt),
+          ));
+          gestorNome = (o?.responsavel || "").trim() || null;
+          const equipe = await getEquipeObra(Number(decoded.obraId), decoded.companyId);
+          const enc = equipe.find((e: any) =>
+            e.categoria === "Indireto" &&
+            /ENCARREGAD/.test(`${e.funcao || ""} ${e.cargo || ""}`.toUpperCase())
+          );
+          encarregadoNome = (enc?.nomeCompleto || "").trim() || null;
+        } catch { encarregadoNome = null; }
+      }
+      if (!credId) return { podeAvaliar: true, jaAvaliou: false, anoMes, periodicidade, gestorNome, encarregadoNome };
       const ja = await db.execute(sql`SELECT 1 FROM cliente_avaliacao_marcacoes WHERE cred_id = ${credId} AND ano_mes = ${anoMes} LIMIT 1`);
       const rows = ((ja as any).rows ?? ja ?? []) as any[];
-      return { podeAvaliar: rows.length === 0, jaAvaliou: rows.length > 0, anoMes, periodicidade };
+      return { podeAvaliar: rows.length === 0, jaAvaliou: rows.length > 0, anoMes, periodicidade, gestorNome, encarregadoNome };
     }),
 
     efetivoObra: publicProcedure.input(z.object({
