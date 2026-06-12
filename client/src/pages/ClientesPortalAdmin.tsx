@@ -286,10 +286,29 @@ export default function ClientesPortalAdmin() {
   const linkObraGroups = useMemo(() => agruparPorObra(linksData, (x) => x.obraId, (x) => x.obraNome), [linksData, obraAtivaMap]);
   const linksVisiveis = linkObraTab === "todas" ? linksData : (linkObraGroups.find((g) => g.key === linkObraTab)?.items ?? []);
 
-  const [avalObraTab, setAvalObraTab] = useState<string>("todas");
+  // Rev. 2994 — filtro por OBRA do dashboard de avaliações. Default abre na 1ª obra
+  // (menos poluição na tela); "Todas" é opt-in. Os agregados (cards/médias/
+  // recomendação/perguntas extras/por período) são recomputados PELO BACKEND via
+  // `obraId` (param já existente desde a Rev. 1593), pois o payload `avaliacoes`
+  // vem capado em 100 — recomputar no client erraria com >100 respostas.
+  const [avalObraTab, setAvalObraTab] = useState<string>("");
   const avaliacoesData = (dashAval?.avaliacoes as any[]) ?? [];
   const avalObraGroups = useMemo(() => agruparPorObra(avaliacoesData, (x) => x.obraId, (x) => x.obraNome), [avaliacoesData, obraAtivaMap]);
-  const avaliacoesVisiveis = avalObraTab === "todas" ? avaliacoesData : (avalObraGroups.find((g) => g.key === avalObraTab)?.items ?? []);
+  // Aba efetiva: enquanto o usuário não escolher (ou se a escolha velha não existir
+  // mais — ex.: trocou de empresa), abre na 1ª obra (ou "todas" se não há obras).
+  const avalTabValida = avalObraTab === "todas" || avalObraGroups.some((g) => g.key === avalObraTab);
+  const effObraTab = avalTabValida ? avalObraTab : (avalObraGroups[0]?.key ?? "todas");
+  const obraSel = avalObraGroups.find((g) => g.key === effObraTab) ?? null;
+  const obraSelId = effObraTab === "todas" ? null : (obraSel?.obraId ?? null);
+  // 2ª query: dashboard recomputado pelo servidor SÓ da obra selecionada.
+  const { data: dashObra, isFetching: fetchingObra } = trpc.portalExterno.admin.dashboardAvaliacoesCliente.useQuery(
+    { companyId, agruparPor, obraId: obraSelId ?? undefined },
+    { enabled: !!companyId && tab === "avaliacoes" && effObraTab !== "todas" && obraSelId != null },
+  );
+  // Visão ativa: "todas" → agregado geral; obra → agregado da obra (fallback p/ geral).
+  const dashView: any = effObraTab === "todas" ? dashAval : (obraSelId != null ? (dashObra ?? dashAval) : dashAval);
+  const carregandoObra = effObraTab !== "todas" && obraSelId != null && fetchingObra && !dashObra;
+  const avaliacoesVisiveis = (dashView?.avaliacoes as any[]) ?? [];
 
   // Rev. 1569 — cancelar avaliação (Admin Master)
   const cancelarAvalMut = trpc.portalExterno.admin.cancelarAvaliacaoCliente.useMutation({
@@ -1053,50 +1072,71 @@ export default function ClientesPortalAdmin() {
               </div>
             ) : (
               <div className="space-y-5">
+                {/* Rev. 2994 — filtro por OBRA do dashboard (default: 1ª obra; "Todas" opt-in). */}
+                {avalObraGroups.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    <button onClick={() => setAvalObraTab("todas")}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition ${effObraTab === "todas" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>
+                      Todas <span className="opacity-60">({dashAval.total})</span>
+                    </button>
+                    {avalObraGroups.map((g) => (
+                      <button key={g.key} onClick={() => setAvalObraTab(g.key)}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition ${effObraTab === g.key ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>
+                        <Building2 className="w-3.5 h-3.5" /> {g.obraNome}
+                        {g.ativa && <span className={`text-[9px] uppercase font-bold px-1 rounded ${effObraTab === g.key ? "bg-white/25 text-white" : "bg-emerald-100 text-emerald-700"}`}>ativa</span>}
+                        <span className="opacity-60">({g.items.length})</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {carregandoObra ? (
+                  <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>
+                ) : (
+                <>
                 <div className="grid md:grid-cols-4 gap-3">
                   <div className="bg-white border rounded-xl p-4">
                     <div className="text-xs text-slate-500">Respostas</div>
-                    <div className="text-3xl font-bold text-slate-800 mt-1">{dashAval.total}</div>
+                    <div className="text-3xl font-bold text-slate-800 mt-1">{dashView.total}</div>
                     <Users className="w-5 h-5 text-blue-500 mt-1" />
                   </div>
-                  <div className={`rounded-xl p-4 text-white ${dashAval.nps == null ? "bg-slate-400" : dashAval.nps >= 50 ? "bg-emerald-600" : dashAval.nps >= 0 ? "bg-amber-500" : "bg-rose-600"}`}>
+                  <div className={`rounded-xl p-4 text-white ${dashView.nps == null ? "bg-slate-400" : dashView.nps >= 50 ? "bg-emerald-600" : dashView.nps >= 0 ? "bg-amber-500" : "bg-rose-600"}`}>
                     <div className="text-xs opacity-90">NPS</div>
-                    <div className="text-3xl font-bold mt-1">{dashAval.nps ?? "—"}</div>
+                    <div className="text-3xl font-bold mt-1">{dashView.nps ?? "—"}</div>
                     <TrendingUp className="w-5 h-5 mt-1 opacity-80" />
                   </div>
                   <div className="bg-white border rounded-xl p-4">
                     <div className="text-xs text-slate-500">Média geral</div>
-                    <div className="text-3xl font-bold text-slate-800 mt-1">{dashAval.medias.geral ?? "—"}</div>
+                    <div className="text-3xl font-bold text-slate-800 mt-1">{dashView.medias.geral ?? "—"}</div>
                     <Star className="w-5 h-5 text-amber-500 mt-1" />
                   </div>
                   <div className="bg-white border rounded-xl p-4">
                     <div className="text-xs text-slate-500">Promotores · Neutros · Detratores</div>
                     <div className="text-lg font-bold text-slate-800 mt-1 flex gap-2">
-                      <span className="text-emerald-600">{dashAval.promotores}</span>·
-                      <span className="text-amber-600">{dashAval.neutros}</span>·
-                      <span className="text-rose-600">{dashAval.detratores}</span>
+                      <span className="text-emerald-600">{dashView.promotores}</span>·
+                      <span className="text-amber-600">{dashView.neutros}</span>·
+                      <span className="text-rose-600">{dashView.detratores}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Recomendação (clássica NPS: Sim · Talvez · Não) */}
-                {dashAval.recomendacao && dashAval.recomendacao.total > 0 && (
+                {dashView.recomendacao && dashView.recomendacao.total > 0 && (
                   <div className="bg-white border rounded-xl p-4">
                     <h3 className="font-semibold text-slate-800 mb-3">Recomendaria a FC para outras empresas?</h3>
                     <div className="grid grid-cols-3 gap-3 text-sm">
                       <div className="rounded-lg border-2 border-emerald-200 bg-emerald-50 p-3 text-center">
                         <Smile className="w-5 h-5 text-emerald-600 mx-auto mb-1" />
-                        <div className="text-2xl font-bold text-emerald-700">{dashAval.recomendacao.sim}</div>
+                        <div className="text-2xl font-bold text-emerald-700">{dashView.recomendacao.sim}</div>
                         <div className="text-[11px] uppercase tracking-wide text-emerald-700">Sim</div>
                       </div>
                       <div className="rounded-lg border-2 border-amber-200 bg-amber-50 p-3 text-center">
                         <Meh className="w-5 h-5 text-amber-600 mx-auto mb-1" />
-                        <div className="text-2xl font-bold text-amber-700">{dashAval.recomendacao.talvez}</div>
+                        <div className="text-2xl font-bold text-amber-700">{dashView.recomendacao.talvez}</div>
                         <div className="text-[11px] uppercase tracking-wide text-amber-700">Talvez</div>
                       </div>
                       <div className="rounded-lg border-2 border-rose-200 bg-rose-50 p-3 text-center">
                         <Frown className="w-5 h-5 text-rose-600 mx-auto mb-1" />
-                        <div className="text-2xl font-bold text-rose-700">{dashAval.recomendacao.nao}</div>
+                        <div className="text-2xl font-bold text-rose-700">{dashView.recomendacao.nao}</div>
                         <div className="text-[11px] uppercase tracking-wide text-rose-700">Não</div>
                       </div>
                     </div>
@@ -1118,7 +1158,7 @@ export default function ClientesPortalAdmin() {
                       { k: "escritorio", label: "Escritório Central" },
                       { k: "faturamento", label: "Faturamento / Contratos" },
                     ].map((c) => {
-                      const v = (dashAval.medias as any)[c.k];
+                      const v = (dashView.medias as any)[c.k];
                       const cor = v == null ? "bg-slate-200" : v >= 8 ? "bg-emerald-500" : v >= 6 ? "bg-amber-500" : "bg-rose-500";
                       return (
                         <div key={c.k}>
@@ -1132,6 +1172,7 @@ export default function ClientesPortalAdmin() {
                   </div>
                 </div>
 
+                {effObraTab === "todas" && (
                 <div className="bg-white border rounded-xl p-4">
                   <h3 className="font-semibold text-slate-800 mb-3">Por obra</h3>
                   <table className="w-full text-sm">
@@ -1139,7 +1180,7 @@ export default function ClientesPortalAdmin() {
                       <tr><th className="py-2">Obra</th><th>Respostas</th><th>Média geral</th><th>NPS</th></tr>
                     </thead>
                     <tbody className="divide-y">
-                      {dashAval.porObra.map((o, i) => (
+                      {dashView.porObra.map((o, i) => (
                         <tr key={i}>
                           <td className="py-2 font-medium">{o.obraNome}</td>
                           <td>{o.respostas}</td>
@@ -1150,17 +1191,18 @@ export default function ClientesPortalAdmin() {
                     </tbody>
                   </table>
                 </div>
+                )}
 
                 {/* Rev. 1595 — Perguntas personalizadas (extras) */}
-                {(dashAval as any).perguntasExtras && (dashAval as any).perguntasExtras.length > 0 && (
+                {(dashView as any).perguntasExtras && (dashView as any).perguntasExtras.length > 0 && (
                   <div className="bg-white border rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-3">
                       <SlidersHorizontal className="w-4 h-4 text-indigo-600" />
                       <h3 className="font-semibold text-slate-800">Perguntas personalizadas</h3>
-                      <Badge variant="outline" className="ml-1 text-[10px]">{(dashAval as any).perguntasExtras.length}</Badge>
+                      <Badge variant="outline" className="ml-1 text-[10px]">{(dashView as any).perguntasExtras.length}</Badge>
                     </div>
                     <div className="grid md:grid-cols-2 gap-3">
-                      {(dashAval as any).perguntasExtras.map((p: any) => {
+                      {(dashView as any).perguntasExtras.map((p: any) => {
                         const isNumero = p.tipo === "nota_0_10" || p.tipo === "sim_nao_talvez";
                         return (
                           <div key={p.id} className="border rounded-lg p-3">
@@ -1196,7 +1238,7 @@ export default function ClientesPortalAdmin() {
                 )}
 
                 {/* Rev. 1569 — Visão por período (mês/ano) */}
-                {dashAval.porPeriodo && dashAval.porPeriodo.length > 0 && (
+                {dashView.porPeriodo && dashView.porPeriodo.length > 0 && (
                   <div className="bg-white border rounded-xl p-4">
                     <h3 className="font-semibold text-slate-800 mb-3">Por {agruparPor === "ano" ? "ano" : "mês"}</h3>
                     <table className="w-full text-sm">
@@ -1204,7 +1246,7 @@ export default function ClientesPortalAdmin() {
                         <tr><th className="py-2">{agruparPor === "ano" ? "Ano" : "Mês"}</th><th>Respostas</th><th>Média geral</th><th>NPS</th></tr>
                       </thead>
                       <tbody className="divide-y">
-                        {dashAval.porPeriodo.map((p: any, i: number) => {
+                        {dashView.porPeriodo.map((p: any, i: number) => {
                           const label = agruparPor === "ano"
                             ? p.periodo
                             : (p.periodo && p.periodo.length === 7 ? p.periodo.split("-").reverse().join("/") : p.periodo);
@@ -1228,23 +1270,6 @@ export default function ClientesPortalAdmin() {
                     Apenas o <b>Admin Master</b> pode cancelar uma avaliação. Cancelar libera o usuário-cliente para enviar uma nova avaliação no mesmo período.
                     {!isMaster && " Você não tem este perfil — o botão de cancelar está oculto."}
                   </p>
-                  {/* Rev. 2988 — abas por OBRA (ativas em destaque) */}
-                  {avaliacoesData.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mb-3">
-                      <button onClick={() => setAvalObraTab("todas")}
-                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition ${avalObraTab === "todas" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>
-                        Todas <span className="opacity-60">({avaliacoesData.length})</span>
-                      </button>
-                      {avalObraGroups.map((g) => (
-                        <button key={g.key} onClick={() => setAvalObraTab(g.key)}
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition ${avalObraTab === g.key ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>
-                          <Building2 className="w-3.5 h-3.5" /> {g.obraNome}
-                          {g.ativa && <span className={`text-[9px] uppercase font-bold px-1 rounded ${avalObraTab === g.key ? "bg-white/25 text-white" : "bg-emerald-100 text-emerald-700"}`}>ativa</span>}
-                          <span className="opacity-60">({g.items.length})</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
                   {avaliacoesData.length === 0 ? (
                     <p className="text-sm text-slate-400 text-center py-4">Nenhuma avaliação registrada ainda.</p>
                   ) : avaliacoesVisiveis.length === 0 ? (
@@ -1320,6 +1345,8 @@ export default function ClientesPortalAdmin() {
                     </div>
                   )}
                 </div>
+                </>
+                )}
               </div>
             )}
           </div>

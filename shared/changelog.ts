@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2994 — **PESQUISA DE SATISFAÇÃO (NPS) → ABA "AVALIAÇÕES" AGORA FILTRA TODO
+ * O DASHBOARD POR OBRA (DEFAULT ABRE NUMA OBRA; "TODAS" É OPT-IN).**
+ *
+ * PEDIDO (usuário, Admin Master): "Quero que cada avaliação seja filtrada por
+ * obra, para evitar poluição na tela. Somente quando o usuário mandar ver todas
+ * as obras é que aparece tudo." A aba "Avaliações (NPS)" de `ClientesPortalAdmin`
+ * mostrava TODOS os agregados de TODAS as obras de uma vez (cards Respostas/NPS/
+ * Média/Promotores, "Recomendaria", "Médias por critério", "Por obra", perguntas
+ * extras, "Por período" e a lista "Avaliações recebidas"). A única segmentação por
+ * obra existente (Rev. 2988) filtrava SÓ a lista "Avaliações recebidas" — os cards
+ * e médias continuavam globais e poluídos.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, ZERO mudança de backend/schema —
+ * REUTILIZA o param `obraId` que `dashboardAvaliacoesCliente` já aceita desde a
+ * Rev. 1593): em `client/src/pages/ClientesPortalAdmin.tsx`:
+ *   - barra de abas por OBRA promovida para o TOPO do dashboard (governando o
+ *     bloco inteiro), com as obras ATIVAS em destaque + botão "Todas".
+ *   - `avalObraTab` inicia "" e `effObraTab = avalObraTab || (1ª obra ?? "todas")`
+ *     → a tela ABRE filtrada na 1ª obra; "Todas" passa a ser uma escolha explícita.
+ *   - 2ª query `dashObra` = `dashboardAvaliacoesCliente({ obraId })` habilitada só
+ *     quando há obra numérica selecionada; o SERVIDOR recomputa TUDO (cards, NPS,
+ *     médias, recomendação, perguntas extras e por período) só daquela obra. Isso
+ *     é necessário porque o payload `avaliacoes` vem capado em 100 — recomputar no
+ *     client erraria com empresas que têm >100 respostas.
+ *   - `dashView` = `effObraTab==="todas" ? dashAval : (dashObra ?? dashAval)`; TODA
+ *     a render (cards/recomendação/médias/perguntas extras/por período/lista) lê
+ *     `dashView`. Spinner `carregandoObra` na 1ª carga de cada obra.
+ *   - "Por obra" só aparece em "Todas" (redundante quando 1 obra está selecionada).
+ *   - removida a barra de abas DUPLICADA que vivia dentro de "Avaliações recebidas"
+ *     (Rev. 2988); a lista agora segue o filtro único do topo.
+ * O backend e o schema permanecem INALTERADOS. Requer REPUBLICAR.
+ * ARQUIVO: `client/src/pages/ClientesPortalAdmin.tsx`.
+ *
  * Rev. 2993 — **CONTROLE DE EPIs → "ESTOQUE POR OBRA" → ROLAGEM DA TELA INTEIRA
  * (REMOVIDO O "CONGELAMENTO" DOS CARDS DE OBRA NO TOPO).**
  *
