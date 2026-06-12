@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2989 — **PORTAL DO CLIENTE → NPS → LINK PÚBLICO CURTO `/a/<codigo>`
+ * REDIRECIONAVA O CLIENTE PARA `/login` EM PRODUÇÃO (CORRIGIDO).**
+ *
+ * PEDIDO (usuário, Admin Master): o link público de avaliação NPS
+ * `https://erp-gestao-integrada.replit.app/a/<codigo>` estava abrindo e em
+ * seguida JOGANDO o cliente para a tela de `/login`. O cliente NÃO deve precisar
+ * logar — a avaliação é uma tela independente, sem autenticação.
+ *
+ * CAUSA-RAIZ: em `client/src/main.tsx` há um interceptor GLOBAL no
+ * `queryClient` (subscribers de query e mutation cache) que, ao receber um erro
+ * `UNAUTHORIZED` (`UNAUTHED_ERR_MSG`), redireciona para `/login` — EXCETO quando
+ * o `window.location.pathname` casa com a whitelist `publicPaths`. Essa whitelist
+ * (criada na Rev. 1601) listava `/login`, `/portal/`, `/pesquisa-publica/`,
+ * `/verificar/`, `/integrasign/assinar/` e `/integracao/`, mas NUNCA foi
+ * atualizada quando a rota de short-link `/a/<codigo>` foi introduzida (Rev.
+ * 2980). A página pública renderiza `PortalDashboardCliente` em modo público; se
+ * qualquer query dispara e volta `UNAUTHORIZED`, o subscriber não encontrava
+ * `/a/` na whitelist e forçava `window.location.href = "/login"`.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE): adicionar `"/a/"` às DUAS cópias
+ * do array `publicPaths` em `client/src/main.tsx` — em `redirectToLoginIfUnauthorized`
+ * (que decide o redirect) e em `isAuthErrorOnLoginPage` (que silencia o log/redirect
+ * nas páginas públicas). Agora o short-link de avaliação é tratado como rota
+ * pública igual às demais do portal externo, e o cliente permanece na tela de
+ * avaliação mesmo que alguma query autenticada residual retorne `UNAUTHORIZED`.
+ *
+ * BÔNUS (mesma classe de bug, achado no code review): a rota PÚBLICA de assinatura
+ * FCSign `/assinar/:token` (`AssinarDocumento`) também estava declarada pública no
+ * `<Switch>` mas FORA da whitelist `publicPaths` — sujeita ao mesmo redirect
+ * indevido. Adicionado `"/assinar/"` às mesmas DUAS cópias do array (cuidado:
+ * `path.startsWith("/assinar/")` NÃO colide com `/integrasign/assinar/`, que começa
+ * com `/integrasign/`).
+ *
+ * RESSALVA: correção 100% de front (nenhum endpoint, coluna ou migração). A rota
+ * `/a/:codigo` já era pública no `<Switch>` (sem `RouteGuard`) e o endpoint
+ * `portalExterno.cliente.resolverLinkAvaliacao` já era `publicProcedure`; o bug
+ * estava SOMENTE no interceptor global de erro de auth. Requer REPUBLICAR para
+ * surtir efeito em produção.
+ *
  * Rev. 2988 — **PORTAL DO CLIENTE → NPS → ABAS POR OBRA (ATIVAS EM DESTAQUE) +
  * SEPARAÇÃO POR MÊS/ANO, TANTO EM "LINKS DE AVALIAÇÃO GERADOS" QUANTO EM
  * "AVALIAÇÕES RECEBIDAS" (PEDIDO DO ADMIN MASTER).**
