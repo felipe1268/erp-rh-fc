@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2968 — **PORTAL DO CLIENTE → PESQUISA DE SATISFAÇÃO (NPS) PÚBLICA — A "NOTA GERAL" DEIXA
+ * DE SER DIGITADA/SELECIONADA MANUALMENTE E PASSA A SER CALCULADA AUTOMATICAMENTE, AO VIVO,
+ * COMO MÉDIA PONDERADA DAS RESPOSTAS DO FORMULÁRIO.**
+ *
+ * PEDIDO (usuário): no formulário público de avaliação/NPS, a "Nota geral" não deveria mais
+ * ser preenchida à mão pelo cliente — ela deve ser calculada automaticamente ao final do
+ * preenchimento, considerando um peso proporcional de cada pergunta, com a ponderação
+ * definida de forma enxuta (sem ficar extenso).
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE): novo `useMemo notaGeralAuto` em
+ * `PortalDashboardCliente.tsx` que calcula a nota geral por MÉDIA PONDERADA DE BLOCOS. Cada
+ * bloco contribui com sua MÉDIA (apenas itens respondidos) e um peso fixo:
+ *   - Gestor/Responsável (CRIT_PESSOA, 6 itens) ............ 25%
+ *   - Equipe direta na obra (CRIT_EQUIPE, 6 itens) ......... 25%
+ *   - Obra/Execução (andamento + prazo + qualidade) ....... 25%
+ *   - Encarregado (CRIT_PESSOA, 6 itens) .................. 10%
+ *   - Escritório Central (CRIT_ESCRITORIO, 5 itens) ....... 10%
+ *   - Empresa FC (notaEmpresa) ............................  5%
+ * Um bloco só entra na conta se tiver pelo menos 1 item respondido; os pesos são
+ * RENORMALIZADOS sobre os blocos ativos (preenchimento parcial continua gerando nota
+ * coerente). O resultado é arredondado e clampeado p/ inteiro 0–10, pois o backend
+ * `criarAvaliacao` exige `notaGeral: z.number().int().min(0).max(10)`.
+ *
+ * UI: o card âmbar do topo deixou de exibir o `<NotaSelector>` (entrada manual) e passou a
+ * mostrar a nota calculada (read-only, badge "Calculada automaticamente a partir das suas
+ * respostas"), com "—" enquanto nada foi respondido e o número grande `N/10` quando há dados;
+ * atualiza ao vivo conforme o cliente avalia os itens dos blocos. A validação de envio e o
+ * `disabled` do botão passaram a exigir `notaGeralAuto !== null` (em vez da nota manual), e o
+ * `mutate` envia `notaGeral: notaGeralAuto`. Backend, schema e demais módulos inalterados.
+ *
+ * ARQUIVOS: `client/src/pages/portal/PortalDashboardCliente.tsx` (novo `notaGeralAuto`;
+ * card do topo read-only; validação/`disabled`/submit usando `notaGeralAuto`).
+ *
  * Rev. 2967 — **PORTAL DO CLIENTE → PESQUISA DE SATISFAÇÃO (NPS) PÚBLICA — CORREÇÃO DO CRASH
  * "ReferenceError: Cannot access 'aval' before initialization" QUE DERRUBAVA A PÁGINA INTEIRA
  * (TELA "OCORREU UM ERRO INESPERADO") AO ABRIR O LINK PÚBLICO DE AVALIAÇÃO.**

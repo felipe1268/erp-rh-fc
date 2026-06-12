@@ -240,6 +240,30 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
   const [detEquipe, setDetEquipe] = useState<Record<string, number | null>>({});
   const [detEscritorio, setDetEscritorio] = useState<Record<string, number | null>>({});
   const [avaliado, setAvaliado] = useState(false);
+  // Rev. 2968 — NOTA GERAL (NPS) calculada AUTOMATICAMENTE a partir das respostas,
+  // por média ponderada dos blocos (não é mais digitada). Cada bloco vale só se tiver
+  // pelo menos 1 item respondido; os pesos são renormalizados sobre os blocos ativos,
+  // então preenchimentos parciais continuam gerando uma nota coerente. Resultado
+  // arredondado p/ inteiro 0–10 (o backend exige `notaGeral` int).
+  const notaGeralAuto = useMemo<number | null>(() => {
+    const avg = (vals: (number | null | undefined)[]): number | null => {
+      const ns = vals.filter((v): v is number => typeof v === "number");
+      return ns.length ? ns.reduce((a, b) => a + b, 0) / ns.length : null;
+    };
+    const blocos: { peso: number; nota: number | null }[] = [
+      { peso: 0.25, nota: avg(CRIT_PESSOA.map((c) => detGestor[c.key])) },              // Gestor
+      { peso: 0.25, nota: avg(CRIT_EQUIPE.map((c) => detEquipe[c.key])) },              // Equipe direta
+      { peso: 0.25, nota: avg([aval.notaObra, aval.notaPrazo, aval.notaQualidade]) },   // Obra / Execução
+      { peso: 0.10, nota: avg(CRIT_PESSOA.map((c) => detEncarregado[c.key])) },         // Encarregado
+      { peso: 0.10, nota: avg(CRIT_ESCRITORIO.map((c) => detEscritorio[c.key])) },      // Escritório Central
+      { peso: 0.05, nota: avg([aval.notaEmpresa]) },                                    // Empresa FC
+    ];
+    const ativos = blocos.filter((b) => b.nota !== null);
+    if (!ativos.length) return null;
+    const somaPesos = ativos.reduce((s, b) => s + b.peso, 0);
+    const media = ativos.reduce((s, b) => s + (b.nota as number) * b.peso, 0) / somaPesos;
+    return Math.max(0, Math.min(10, Math.round(media)));
+  }, [detGestor, detEncarregado, detEquipe, detEscritorio, aval.notaObra, aval.notaPrazo, aval.notaQualidade, aval.notaEmpresa]);
   // Rev. 1595 — Perguntas extras (personalizadas) configuradas pelo admin.
   // Rev. 1597 — Rótulos personalizados (override) das 8 perguntas core, definidos pelo Admin Master.
   const { data: labelsCoreOverride = {} } = trpc.portalExterno.cliente.listarLabelsCore.useQuery(
@@ -297,7 +321,7 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
     },
   });
   const enviarAvaliacao = () => {
-    if (aval.notaGeral === null) { toast.error("Informe pelo menos a nota geral (NPS)"); return; }
+    if (notaGeralAuto === null) { toast.error("Responda pelo menos alguns itens para calcular a nota geral"); return; }
     // Rev. 1595 — valida obrigatórias das perguntas extras
     for (const p of perguntasExtras) {
       if (!p.obrigatoria) continue;
@@ -355,7 +379,7 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
       notaQualidade: aval.notaQualidade ?? undefined,
       notaEmpresa: aval.notaEmpresa ?? undefined,
       comentarioEscritorio: aval.comentarioEscritorio || undefined,
-      notaGeral: aval.notaGeral,
+      notaGeral: notaGeralAuto,
       comentarioPositivo: aval.comentarioPositivo || undefined,
       comentarioMelhoria: aval.comentarioMelhoria || undefined,
       comentarioEquipe: aval.comentarioEquipe || undefined,
@@ -634,8 +658,28 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                   </div>
                 )}
 
+                {/* Rev. 2968 — Nota geral NÃO é mais digitada: é calculada automaticamente
+                    (média ponderada dos blocos) e atualiza ao vivo conforme o preenchimento. */}
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                  <NotaSelector label={lbl("notaGeral", "Nota geral (0 = péssimo · 10 = excelente) ★")} value={aval.notaGeral} onChange={(n) => setAval({ ...aval, notaGeral: n })} />
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
+                        <Star className="w-4 h-4 text-amber-600" /> Nota geral
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Calculada automaticamente a partir das suas respostas (0 = péssimo · 10 = excelente)
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      {notaGeralAuto === null ? (
+                        <span className="text-2xl font-bold text-slate-300" title="Responda os itens abaixo para calcular">—</span>
+                      ) : (
+                        <span className="text-3xl font-extrabold text-amber-600 tabular-nums">
+                          {notaGeralAuto}<span className="text-base font-semibold text-slate-400">/10</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Bloco GESTOR / RESPONSÁVEL — Rev. 2965 (nome auto + 6 critérios) */}
@@ -894,7 +938,7 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                 })()}
 
                 <div className="flex justify-end pt-3 border-t">
-                  <Button onClick={enviarAvaliacao} disabled={enviarAvalMut.isPending || aval.notaGeral === null}
+                  <Button onClick={enviarAvaliacao} disabled={enviarAvalMut.isPending || notaGeralAuto === null}
                     className="bg-emerald-600 hover:bg-emerald-700 gap-2">
                     <Sparkles className="w-4 h-4" /> {enviarAvalMut.isPending ? "Enviando..." : "Enviar avaliação anônima"}
                   </Button>
