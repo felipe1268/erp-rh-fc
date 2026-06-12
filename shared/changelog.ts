@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2970 — **PORTAL DO CLIENTE → PESQUISA DE SATISFAÇÃO (NPS) PÚBLICA → BLOCO
+ * "ENCARREGADO FC NA OBRA" — O CAMPO "NOME DO ENCARREGADO" PASSA A SER PRÉ-PREENCHIDO
+ * AUTOMATICAMENTE A PARTIR DO EFETIVO DA OBRA (O INDIRETO CUJA FUNÇÃO É "ENCARREGADO"),
+ * SEM O CLIENTE PRECISAR DIGITAR.**
+ *
+ * PEDIDO (usuário): se a obra já tem o encarregado no efetivo (indireto), o nome dele
+ * deveria aparecer automaticamente no formulário de avaliação (igual já ocorre com o
+ * gestor desde a Rev. 2965).
+ *
+ * SOLUÇÃO (BACK+FRONT, ZERO ALTER/DROP/DELETE):
+ * - BACKEND (`server/routers/portalExterno.ts`, `gerarLinkAvaliacao`): quando o link é
+ *   gerado POR OBRA, além do `gestorNome` (responsável da obra), o backend agora consulta
+ *   o efetivo via `getEquipeObra(obraId, companyId)` e procura o membro INDIRETO cuja
+ *   `funcao`/`cargo` (uppercase) contém "ENCARREGAD" (regex `/ENCARREGAD/`), embutindo o
+ *   `encarregadoNome` derivado no payload (público) do JWT. Sem nova tabela/coluna; em
+ *   try/catch defensivo (falha → null, mantém o campo manual).
+ * - FRONTEND (`client/src/pages/portal/PortalDashboardCliente.tsx`): o memo `linkObra`
+ *   passa a extrair `encarregado` do token; novo memo `encarregadoAuto` (link → token, com
+ *   fallback a `obraSel.encarregadoNome` no caminho logado) + `useEffect` que faz
+ *   `setEncarregadoNome(...)`. A UI do campo espelha o gestor: quando auto-preenchido vira
+ *   um card read-only ("preenchido automaticamente" + ✓), senão segue editável.
+ *
+ * ARQUIVOS: `server/routers/portalExterno.ts`, `client/src/pages/portal/PortalDashboardCliente.tsx`.
+ *
  * Rev. 2969 — **PORTAL DO CLIENTE → ADMINISTRAÇÃO → AVALIAÇÕES (NPS) → "LINK DE AVALIAÇÃO
  * (SEM LOGIN)" — NOVO BOTÃO "WHATSAPP" QUE ABRE O WHATSAPP COM UMA MENSAGEM CORDIAL JÁ
  * PRONTA, CONVIDANDO O CLIENTE A RESERVAR ALGUNS MINUTOS PARA AVALIAR A EQUIPE (MELHORIA

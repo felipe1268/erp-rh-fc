@@ -1399,6 +1399,7 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       let obraId: number | null = null;
       let obraNome: string | null = null;
       let gestorNome: string | null = null;
+      let encarregadoNome: string | null = null;
       if (input.obraId) {
         // Rev. 2965 — captura o responsável (gestor) da obra p/ pré-preencher o
         // nome do gestor na avaliação automaticamente (sem o cliente digitar).
@@ -1411,15 +1412,26 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         obraId = o.id;
         obraNome = o.nome ?? null;
         gestorNome = (o.responsavel || "").trim() || null;
+        // Rev. 2970 — pré-preenche o NOME DO ENCARREGADO a partir do efetivo da
+        // obra: procura no quadro (getEquipeObra) o indireto cuja função/cargo
+        // contém "ENCARREGADO" e embute no token p/ a avaliação já vir preenchida.
+        try {
+          const equipe = await getEquipeObra(input.obraId, input.companyId);
+          const enc = equipe.find((e: any) =>
+            e.categoria === "Indireto" &&
+            /ENCARREGAD/.test(`${e.funcao || ""} ${e.cargo || ""}`.toUpperCase())
+          );
+          encarregadoNome = (enc?.nomeCompleto || "").trim() || null;
+        } catch { encarregadoNome = null; }
       }
       const secret = process.env.JWT_SECRET || "portal-secret";
       const token = jwt.sign({
         tipo: "cliente",
         companyId: input.companyId,
         linkAberto: true,
-        ...(obraId ? { obraId, obraNome, ...(gestorNome ? { gestorNome } : {}) } : {}),
+        ...(obraId ? { obraId, obraNome, ...(gestorNome ? { gestorNome } : {}), ...(encarregadoNome ? { encarregadoNome } : {}) } : {}),
       }, secret, { expiresIn: "180d" });
-      return { token, obraId, obraNome, gestorNome };
+      return { token, obraId, obraNome, gestorNome, encarregadoNome };
     }),
 
     // Rev. 2892 — lista todas as obras da empresa p/ o seletor do "link por obra".

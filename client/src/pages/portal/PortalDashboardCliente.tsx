@@ -132,7 +132,7 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
 
   // Rev. 2892 — link público POR OBRA: lê obraId/obraNome embutidos no payload
   // (público) do JWT p/ travar a obra da avaliação e exibi-la ao cliente.
-  const linkObra = useMemo<{ id: number; nome: string | null; gestor: string | null } | null>(() => {
+  const linkObra = useMemo<{ id: number; nome: string | null; gestor: string | null; encarregado: string | null } | null>(() => {
     if (!isPublic || !publicToken) return null;
     try {
       const part = publicToken.split(".")[1];
@@ -141,7 +141,8 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
       while (b64.length % 4 !== 0) b64 += "="; // normaliza padding base64url
       const json = JSON.parse(decodeURIComponent(escape(atob(b64))));
       // Rev. 2965 — gestorNome embutido no token p/ pré-preencher o gestor automaticamente.
-      if (json?.obraId) return { id: Number(json.obraId), nome: json.obraNome ?? null, gestor: json.gestorNome ?? null };
+      // Rev. 2970 — encarregadoNome (derivado do efetivo da obra) também embutido.
+      if (json?.obraId) return { id: Number(json.obraId), nome: json.obraNome ?? null, gestor: json.gestorNome ?? null, encarregado: json.encarregadoNome ?? null };
     } catch { /* token malformado → avaliação geral */ }
     return null;
   }, [isPublic, publicToken]);
@@ -211,6 +212,17 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
   useEffect(() => {
     if (gestorAuto) setAval((prev) => ({ ...prev, gestorNome: gestorAuto }));
   }, [gestorAuto]);
+
+  // Rev. 2970 — ENCARREGADO auto-preenchido a partir do efetivo da obra:
+  // o link público por obra traz `encarregadoNome` no token (indireto cuja
+  // função contém "ENCARREGADO"). Pré-preenche o campo sem o cliente digitar.
+  const encarregadoAuto = useMemo<string | null>(
+    () => (linkObra?.encarregado || (obraSel as any)?.encarregadoNome || null),
+    [linkObra, obraSel]
+  );
+  useEffect(() => {
+    if (encarregadoAuto) setEncarregadoNome(encarregadoAuto);
+  }, [encarregadoAuto]);
 
   // ===== Comentários =====
   const [obraFiltro, setObraFiltro] = useState<number | null>(null);
@@ -724,8 +736,16 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
                   </div>
                   <div>
                     <Label className="text-sm font-medium">Nome do encarregado <span className="text-slate-400 text-xs">(opcional)</span></Label>
-                    <Input value={encarregadoNome} onChange={(e) => setEncarregadoNome(e.target.value)}
-                      placeholder="Ex.: Sr. José Carlos" className="mt-1" />
+                    {encarregadoAuto ? (
+                      <div className="mt-1 w-full border rounded-md px-3 py-2 text-sm bg-slate-50 text-slate-700 font-medium flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        {encarregadoNome || encarregadoAuto}
+                        <span className="text-[11px] text-slate-400 ml-auto">preenchido automaticamente</span>
+                      </div>
+                    ) : (
+                      <Input value={encarregadoNome} onChange={(e) => setEncarregadoNome(e.target.value)}
+                        placeholder="Ex.: Sr. José Carlos" className="mt-1" />
+                    )}
                   </div>
                   <div className="pt-1">
                     <p className="text-xs text-slate-500 mb-1.5">Avalie de 0 a 10 cada item:</p>
