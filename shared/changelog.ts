@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3000 — **RAIO-X DO FUNCIONÁRIO → "OBRAS GERIDAS" MOSTRAVA 0 / "NÃO É GESTOR"
+ * MESMO QUANDO O COLABORADOR ERA O ENGENHEIRO/RESPONSÁVEL DA OBRA (EX.: MATEUS NA
+ * "QIU 2 - FASE 4"). CAUSA-RAIZ: A OBRA TINHA SÓ O NOME-TEXTO DO RESPONSÁVEL
+ * (`obras.responsavel`), COM `responsavel_id` NULL.**
+ *
+ * PEDIDO (usuário): "Pq não tá mostrando que o Mateus é gestor da obra QIU2 no raio-x
+ * dele?" (print do Raio-X com card "Obras Geridas: 0 — Não é gestor", enquanto a tela
+ * "Editar Obra" da QIU 2 - FASE 4 traz "Engenheiro / Responsável = MATEUS OLIVEIRA
+ * BRITO PIRES").
+ *
+ * CAUSA-RAIZ (dados, não lógica de save): no formulário de Obra o campo "Engenheiro /
+ * Responsável" só grava `responsavelId` quando o usuário CLICA num item da lista de
+ * sugestões; se o nome é digitado direto, `responsavel_id` fica NULL e só a coluna-texto
+ * `responsavel` guarda o nome. A obra ativa QIU 2 - FASE 4 (id 90001, empresa 60002)
+ * estava exatamente assim (`responsavel`="MATEUS OLIVEIRA BRITO PIRES", `responsavel_id`
+ * NULL). O proc `docs.raioX` montava "Obras Geridas" cruzando SÓ por
+ * `obras.responsavelId == employeeId` → 0 resultados → "Não é gestor". (A "Avaliação do
+ * Cliente" no mesmo Raio-X já aparecia porque ESSE cruzamento já tinha fallback por nome
+ * via `gestorNome` — por isso a inconsistência: aval. cliente OK, obras geridas zerado.)
+ *
+ * SOLUÇÃO (BACKEND-only, ZERO ALTER/DROP/DELETE, ZERO schema): em
+ * `server/routers/controleDocumentos.ts` o filtro de `obrasGeridas` passou a cruzar por
+ * `responsavelId == employeeId` **OU** `ilike(obras.responsavel, emp.nomeCompleto)` —
+ * exatamente o mesmo padrão de fallback por nome já usado logo abaixo na avaliação do
+ * cliente. `ilike` é igualdade case-insensitive SEM wildcard (não agrega homônimos por
+ * match parcial). Resultado: o Raio-X do Mateus passa a listar a QIU 2 - FASE 4 e marca
+ * "É gestor", sem depender de backfill de `responsavel_id` e resiliente a TODAS as obras
+ * salvas só com o nome digitado. Requer REPUBLICAR. ARQUIVOS:
+ * `server/routers/controleDocumentos.ts`.
+ *
  * Rev. 2999 — **AVISO PRÉVIO → "NOVO AVISO PRÉVIO": O SELETOR DE COLABORADOR AGORA
  * MOSTRA A FOTO DE CADA FUNCIONÁRIO (NA LISTA SUSPENSA E NO COLABORADOR JÁ
  * SELECIONADO), EM VEZ DE SÓ A INICIAL DO NOME.**

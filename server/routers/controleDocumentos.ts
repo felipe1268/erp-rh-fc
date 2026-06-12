@@ -2338,11 +2338,19 @@ export const controleDocumentosRouter = router({
       }, 0);
 
       // 2) OBRAS GERIDAS — obras em que este colaborador é o responsável (gestor).
+      // Cruza por responsavelId OU pelo NOME (coluna texto `responsavel`): muitas obras
+      // foram salvas com o nome digitado direto (sem clicar no item do dropdown), então
+      // `responsavel_id` ficou NULL embora `responsavel` traga o nome do engenheiro.
+      // Mesmo fallback por nome já usado logo abaixo na avaliação do cliente (gestorNome).
+      const filtrosGeridas: any[] = [eq(obras.responsavelId, input.employeeId)];
+      if (emp.nomeCompleto && emp.nomeCompleto.trim() !== "") {
+        filtrosGeridas.push(ilike(obras.responsavel, emp.nomeCompleto.trim()));
+      }
       const obrasGeridas = await db.select({
         id: obras.id, nome: obras.nome, codigo: obras.codigo,
         cidade: obras.cidade, status: obras.status, cliente: obras.cliente,
       }).from(obras)
-        .where(and(eq(obras.responsavelId, input.employeeId), eq(obras.companyId, emp.companyId), isNull(obras.deletedAt)))
+        .where(and(or(...filtrosGeridas), eq(obras.companyId, emp.companyId), isNull(obras.deletedAt)))
         .orderBy(desc(obras.id));
       const obrasGeridasIds = obrasGeridas.map(o => o.id);
 
