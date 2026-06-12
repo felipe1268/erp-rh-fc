@@ -3035,6 +3035,24 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2973: tabela cliente_avaliacao_link_uso garantida (links NPS de uso único).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2973 cliente_avaliacao_link_uso:`, e?.message || e); }
 
+        // ── Rev. 2980 — SHORT-LINK de avaliação (NPS) p/ WhatsApp ──
+        // O token JWT completo (com obraNome/gestorNome/encarregadoNome) é longo e
+        // o detector de links do WhatsApp truncava a URL /portal/avaliacao/<JWT> →
+        // "link não vinculado a uma obra". Guardamos o token sob um CÓDIGO CURTO;
+        // a URL enviada vira /a/<codigo> (curtíssima, não truncável). Tabela NOVA.
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS cliente_avaliacao_shortlink (
+              codigo TEXT PRIMARY KEY,
+              token TEXT NOT NULL,
+              company_id INTEGER,
+              obra_id INTEGER,
+              criado_em TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          console.log(`[SyncSchema+] Rev. 2980: tabela cliente_avaliacao_shortlink garantida (short-link NPS p/ WhatsApp).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2980 cliente_avaliacao_shortlink:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

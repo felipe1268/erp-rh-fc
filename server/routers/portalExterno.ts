@@ -1450,20 +1450,41 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       // cliente_avaliacao_link_uso — então cada link só vale UMA avaliação.
       const qtd = Math.min(50, Math.max(1, input.quantidade ?? 1));
       const tokens: string[] = [];
+      const codigos: string[] = [];
       for (let i = 0; i < qtd; i++) {
         const linkId = crypto.randomUUID();
-        tokens.push(jwt.sign({
+        const token = jwt.sign({
           tipo: "cliente",
           companyId: input.companyId,
           linkAberto: true,
           linkId,
           unico: true,
           ...(obraId ? { obraId, obraNome, ...(gestorNome ? { gestorNome } : {}), ...(encarregadoNome ? { encarregadoNome } : {}) } : {}),
-        }, secret, { expiresIn: "180d" }));
+        }, secret, { expiresIn: "180d" });
+        tokens.push(token);
+        // Rev. 2980 — SHORT-LINK: guarda o token completo sob um CÓDIGO CURTO. A URL
+        // enviada vira /a/<codigo> (curtíssima), em vez de /portal/avaliacao/<JWT longo>.
+        // O JWT longo (com obraNome/gestor/encarregado) era TRUNCADO pelo detector de
+        // links do WhatsApp → "link não vinculado". Código curto (16 hex) não é truncável.
+        // 5 tentativas anti-colisão; falha total → codigo "" → front cai no link longo.
+        let codigo = "";
+        for (let tryN = 0; tryN < 5; tryN++) {
+          const cand = crypto.randomBytes(8).toString("hex");
+          try {
+            const ins = await db.execute(sql`
+              INSERT INTO cliente_avaliacao_shortlink (codigo, token, company_id, obra_id)
+              VALUES (${cand}, ${token}, ${input.companyId}, ${obraId})
+              ON CONFLICT (codigo) DO NOTHING
+              RETURNING codigo
+            `);
+            if ((((ins as any).rows ?? ins ?? []) as any[]).length > 0) { codigo = cand; break; }
+          } catch { break; /* tabela ausente/erro → fallback p/ link longo */ }
+        }
+        codigos.push(codigo);
       }
-      // Compat: `token` = primeiro link (consumidores antigos seguem funcionando);
-      // `tokens` = lista completa p/ o front renderizar todos os links.
-      return { token: tokens[0], tokens, obraId, obraNome, gestorNome, encarregadoNome };
+      // Compat: `token`/`tokens` = JWT(s) completos (consumidores antigos seguem ok);
+      // `codigo`/`codigos` = códigos curtos do short-link (URL /a/<codigo>).
+      return { token: tokens[0], tokens, codigo: codigos[0], codigos, obraId, obraNome, gestorNome, encarregadoNome };
     }),
 
     // Rev. 2892 — lista todas as obras da empresa p/ o seletor do "link por obra".
@@ -2183,6 +2204,20 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       const ja = await db.execute(sql`SELECT 1 FROM cliente_avaliacao_marcacoes WHERE cred_id = ${credId} AND ano_mes = ${anoMes} AND liberada_em IS NULL LIMIT 1`);
       const rows = ((ja as any).rows ?? ja ?? []) as any[];
       return { podeAvaliar: rows.length === 0, jaAvaliou: rows.length > 0, anoMes, periodicidade, gestorNome, encarregadoNome, obraId: obraIdTok, obraNome: obraNomeTok };
+    }),
+
+    // Rev. 2980 — SHORT-LINK: resolve o CÓDIGO CURTO (/a/<codigo>) → token JWT
+    // completo. Público (sem login). Código inexistente → token null (a UI mostra
+    // "link inválido"). Resolve o problema do WhatsApp truncar o JWT longo na URL.
+    resolverLinkAvaliacao: publicProcedure.input(z.object({
+      codigo: z.string().min(1).max(64),
+    })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      try {
+        const r = await db.execute(sql`SELECT token FROM cliente_avaliacao_shortlink WHERE codigo = ${input.codigo} LIMIT 1`);
+        const row = (((r as any).rows ?? r ?? []) as any[])[0];
+        return { token: (row?.token as string) || null };
+      } catch { return { token: null }; }
     }),
 
     efetivoObra: publicProcedure.input(z.object({

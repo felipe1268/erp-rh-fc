@@ -1,6 +1,49 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 2980 — **PORTAL DO CLIENTE → NPS → "LINK DE AVALIAÇÃO (SEM LOGIN)" — SOLUÇÃO
+ * DEFINITIVA PARA O LINK QUE CHEGAVA TRUNCADO PELO WHATSAPP ("este link não está
+ * vinculado a uma obra"): O LINK AGORA É UM SHORT-LINK CURTÍSSIMO (/a/<codigo>) EM VEZ
+ * DO JWT LONGO NA URL.**
+ *
+ * SINTOMA (usuário, após a Rev. 2979 não resolver de vez): "Erro persistente, resolva
+ * de vez, ache uma solução definitivamente". A screenshot mostrava a pesquisa pública
+ * aberta com o aviso vermelho "Este link não está vinculado a uma obra" — mesmo com a
+ * mensagem do WhatsApp já em texto plano (Rev. 2979).
+ *
+ * DIAGNÓSTICO (causa-raiz mais profunda): a URL enviada era
+ * `${origin}/portal/avaliacao/<JWT>`, e o JWT embute `obraId`/`obraNome`/`gestorNome`/
+ * `encarregadoNome` (Rev. 2892/2965/2970), o que o torna LONGO (facilmente 400-600
+ * caracteres) e cheio de `.`/`-`/`_`. O detector de links do WhatsApp (sobretudo no
+ * iOS) trunca/desalinha URLs muito longas → o app abre com um token CORTADO →
+ * `jwt.verify` (backend) e o parse base64 (client) falham → não acham `obraId` →
+ * "link não vinculado". Remover emoji/markdown (Rev. 2979) reduziu o risco mas NÃO
+ * eliminou o vetor de COMPRIMENTO da URL. Conforme recomendação da revisão de
+ * arquitetura, a correção definitiva é encurtar a URL em si.
+ *
+ * SOLUÇÃO (BACK+FRONT, ZERO ALTER/DROP/DELETE — tabela NOVA via self-heal):
+ *  1) NOVA tabela `cliente_avaliacao_shortlink (codigo TEXT PK, token TEXT, company_id,
+ *     obra_id, criado_em)` garantida no `[SyncSchema+]` (CREATE TABLE IF NOT EXISTS).
+ *  2) `gerarLinkAvaliacao` (admin): para cada token JWT gerado, cria um CÓDIGO CURTO
+ *     (`crypto.randomBytes(8).toString("hex")` = 16 hex, anti-colisão via
+ *     `ON CONFLICT (codigo) DO NOTHING RETURNING` com 5 tentativas) e grava o token
+ *     completo sob esse código. Retorna `codigo`/`codigos` além de `token`/`tokens`
+ *     (compat). Falha de gravação → `codigo=""` → o front cai no link longo legado.
+ *  3) NOVO endpoint público `cliente.resolverLinkAvaliacao({ codigo })` que devolve o
+ *     `token` completo a partir do código (sem login).
+ *  4) NOVA rota `/a/:codigo` → componente `AvaliacaoPublicaCurta.tsx` que resolve o
+ *     código (loading/erro) e então renderiza `PortalDashboardCliente` em modo público
+ *     com o `publicToken` resolvido. A rota antiga `/portal/avaliacao/:token` segue
+ *     funcionando (links já enviados não quebram).
+ *  5) `ClientesPortalAdmin.tsx` passa a montar a URL como `${origin}/a/<codigo>` (com
+ *     fallback para o link longo quando não houver código). Copiar/Abrir/WhatsApp usam
+ *     a MESMA URL curta — agora impossível de truncar de forma silenciosa.
+ *
+ * RESULTADO: o link compartilhado pelo WhatsApp é curtíssimo (`/a/<16 hex>`), não há
+ * mais como o detector cortá-lo a ponto de perder a obra; no pior caso (código
+ * inexistente) a tela mostra "link inválido" explícito, nunca um silencioso
+ * "não vinculado". Links antigos longos continuam válidos.
+ *
  * Rev. 2979 — **PORTAL DO CLIENTE → NPS → "LINK DE AVALIAÇÃO (SEM LOGIN)" → BOTÃO
  * "WHATSAPP" — O LINK QUE CHEGAVA PELO WHATSAPP NÃO ERA IGUAL AO LINK COPIÁVEL E ABRIA
  * EM "ESTE LINK NÃO ESTÁ VINCULADO A UMA OBRA"; CORRIGIDO REMOVENDO EMOJI/MARKDOWN DA

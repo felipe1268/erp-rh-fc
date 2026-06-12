@@ -101,7 +101,15 @@ export default function ClientesPortalAdmin() {
   const gerarLinkAvalMut = trpc.portalExterno.admin.gerarLinkAvaliacao.useMutation({
     onSuccess: (r) => {
       const tokens = (r as any).tokens?.length ? (r as any).tokens as string[] : [r.token];
-      const urls = tokens.map((t) => `${window.location.origin}/portal/avaliacao/${t}`);
+      // Rev. 2980 — SHORT-LINK: usa a URL curta /a/<codigo> quando o backend devolve
+      // o código; senão cai no link longo legado /portal/avaliacao/<token>. O link
+      // curto não é truncável pelo detector de links do WhatsApp (causa do "não vinculado").
+      const codigos = (r as any).codigos?.length ? (r as any).codigos as string[] : [(r as any).codigo].filter(Boolean) as string[];
+      const urls = tokens.map((t, i) =>
+        codigos[i]
+          ? `${window.location.origin}/a/${codigos[i]}`
+          : `${window.location.origin}/portal/avaliacao/${t}`,
+      );
       setLinksAvaliacao(urls);
       setLinkAvaliacao(urls[0]);
       setLinkObraNome(r.obraNome ?? null);
