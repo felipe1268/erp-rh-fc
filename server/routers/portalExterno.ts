@@ -1518,19 +1518,23 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       }
       const db = (await getDb())!;
       try {
+        // Rev. 2985 — resolve o NOME da obra AO VIVO (COALESCE com `obras.nome`)
+        // para que links ANTIGOS (criados antes desta revisão, sem `obra_nome`
+        // gravado) também apareçam com o nome da obra em vez do número.
         const r = await db.execute(sql`
           SELECT s.codigo,
                  s.obra_id,
-                 s.obra_nome,
+                 COALESCE(NULLIF(s.obra_nome, ''), o.nome) AS obra_nome,
                  s.lang,
                  to_char(s.criado_em, 'YYYY-MM-DD HH24:MI:SS') AS criado_em,
                  s.criado_por_nome,
                  (u.link_id IS NOT NULL) AS usado
           FROM cliente_avaliacao_shortlink s
           LEFT JOIN cliente_avaliacao_link_uso u ON u.link_id = s.link_id
+          LEFT JOIN obras o ON o.id = s.obra_id AND o."companyId" = s.company_id
           WHERE s.company_id = ${input.companyId}
             AND s.deletado_em IS NULL
-          ORDER BY s.obra_nome ASC NULLS LAST, s.criado_em DESC
+          ORDER BY COALESCE(NULLIF(s.obra_nome, ''), o.nome) ASC NULLS LAST, s.criado_em DESC
         `);
         const rows = (((r as any).rows ?? r ?? []) as any[]);
         return rows.map((x) => ({
