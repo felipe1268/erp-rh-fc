@@ -37,7 +37,10 @@ interface SignatarioPdf {
   cargo?: string | null;
   /** PNG base64 (data URL) da assinatura desenhada pelo signatário no FcSign. */
   assinaturaImagem?: string | null;
+  /** PNG base64 (data URL) da rúbrica desenhada pelo signatário no FcSign. */
+  rubricaImagem?: string | null;
   hashAssinatura?: string | null;
+  hashRubrica?: string | null;
   ipAddress?: string | null;
   latitude?: string | number | null;
   longitude?: string | number | null;
@@ -109,7 +112,7 @@ export async function gerarContratoAssinadoPdf(params: ContratoPdfParams): Promi
   const H = 297;
   const MARGIN = 14;
   const contentW = W - MARGIN * 2;
-  const bottom = H - MARGIN - 6;
+  const bottom = H - MARGIN - 16;
   let y = MARGIN;
 
   const novaPaginaSe = (alturaNecessaria: number) => {
@@ -726,11 +729,85 @@ export async function gerarContratoAssinadoPdf(params: ContratoPdfParams): Promi
   );
 
   // ─────────────────────────────────────────────────────────────
-  // Numeração de páginas
+  // Rúbrica dos signatários em TODAS as páginas
+  // (integridade do documento — garante que nenhuma página foi
+  //  trocada/inserida após a assinatura)
+  // ─────────────────────────────────────────────────────────────
+  const rubricantes = signatarios.filter((s) => s.status === "assinado");
+  const rubInfo = rubricantes.map((s) => {
+    let ratio = 3;
+    let fmt: "PNG" | "JPEG" = "PNG";
+    let temImagem = false;
+    if (s.rubricaImagem && /^data:image\//i.test(s.rubricaImagem)) {
+      try {
+        const props = pdf.getImageProperties(s.rubricaImagem);
+        if (props.width && props.height) ratio = props.width / props.height;
+        fmt = /^data:image\/jpe?g/i.test(s.rubricaImagem) ? "JPEG" : "PNG";
+        temImagem = true;
+      } catch {
+        temImagem = false;
+      }
+    }
+    const partes = (s.nome || "").split(/\s+/).filter(Boolean);
+    const primeiroNome = partes[0] || s.nome || "—";
+    const iniciais = partes.slice(0, 3).map((w) => w[0]?.toUpperCase() || "").join("");
+    return { sig: s, ratio, fmt, temImagem, primeiroNome, iniciais };
+  });
+
+  const desenharRubricas = () => {
+    if (rubInfo.length === 0) return;
+    const yLine = H - 18;
+    pdf.setDrawColor(205, 205, 205);
+    pdf.setLineWidth(0.2);
+    pdf.line(MARGIN, yLine, W - MARGIN, yLine);
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(5);
+    pdf.setTextColor(150, 150, 150);
+    pdf.text("RUBRICAS DOS SIGNATÁRIOS", MARGIN, yLine - 1.3);
+
+    const usableW = contentW - 34; // reserva ~34mm à direita p/ o nº da página
+    const maxShow = Math.min(rubInfo.length, 4);
+    const slotW = usableW / maxShow;
+    for (let i = 0; i < maxShow; i++) {
+      const info = rubInfo[i];
+      const cx = MARGIN + i * slotW + slotW / 2;
+      let desenhou = false;
+      if (info.temImagem && info.sig.rubricaImagem) {
+        const maxW = slotW - 6;
+        const maxH = 5.5;
+        let w = maxW;
+        let h = w / info.ratio;
+        if (h > maxH) {
+          h = maxH;
+          w = h * info.ratio;
+        }
+        try {
+          pdf.addImage(info.sig.rubricaImagem, info.fmt, cx - w / 2, yLine + 2.5, w, h, undefined, "FAST");
+          desenhou = true;
+        } catch {
+          desenhou = false;
+        }
+      }
+      if (!desenhou) {
+        pdf.setFont("times", "italic");
+        pdf.setFontSize(8);
+        pdf.setTextColor(70, 90, 140);
+        pdf.text(info.iniciais || info.primeiroNome, cx, yLine + 6, { align: "center" });
+      }
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(4.6);
+      pdf.setTextColor(150, 150, 150);
+      pdf.text(info.primeiroNome, cx, yLine + 11, { align: "center", maxWidth: slotW - 2 });
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // Numeração de páginas + rúbrica em cada página
   // ─────────────────────────────────────────────────────────────
   const totalPaginas = pdf.getNumberOfPages();
   for (let p = 1; p <= totalPaginas; p++) {
     pdf.setPage(p);
+    desenharRubricas();
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(7);
     pdf.setTextColor(150, 150, 150);

@@ -1,6 +1,47 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3056 — **INTEGRASIGN (FCSIGN) · PDF DO CONTRATO GANHA RÚBRICA DOS SIGNATÁRIOS EM
+ * TODAS AS PÁGINAS (INTEGRIDADE ANTI-TROCA DE PÁGINA) E PASSA A RENDERIZAR A ASSINATURA DO
+ * SÓCIO ADMINISTRADOR (ÚLTIMO SIGNATÁRIO) QUANDO ELE JÁ ASSINOU.**
+ *
+ * PEDIDO (sequência da Rev. 3055, mesmo contrato CT-2026-0006): "Tá faltando a assinatura do
+ * sócio, e também precisa ter rúbrica em TODAS as páginas para garantir."
+ *
+ * DIAGNÓSTICO (consultado direto no Neon — verdade do app):
+ *  (a) ASSINATURA DO SÓCIO: NÃO era bug. O envelope CT-2026-0006 (id=9) tem os 3 signatários
+ *      `assinado` — CELSO (fornecedor, ordem 1), DARCY (gestor_projeto, ordem 2) e FELIPE
+ *      COSTA ALVES (diretor/Sócio Administrador, ordem 3) — todos com `assinatura_imagem` E
+ *      `rubrica_imagem` gravadas, envelope `concluido`. O PDF anexado pelo usuário fora baixado
+ *      ANTES do sócio assinar (mostrava "Aguardando assinatura"). Rebaixando agora, o bloco de
+ *      assinatura da Rev. 3055 já desenha a assinatura real do sócio. Nenhuma mudança de dado
+ *      foi necessária para isso.
+ *  (b) RÚBRICA EM TODAS AS PÁGINAS: o FcSign JÁ CAPTURA a rúbrica desenhada por cada signatário
+ *      (`assinarDocumento` recebe `rubricaImagem` e grava `rubrica_imagem`/`hash_rubrica` em
+ *      `integrasign_signatarios` — colunas já existentes; o front `IntegraSignAssinar.tsx`
+ *      desenha 2 canvas, assinatura + rúbrica). PORÉM o endpoint público `getDocumentoPublico`
+ *      NÃO selecionava `rubrica_imagem`, então o gerador de PDF não tinha a imagem para carimbar.
+ *
+ * SOLUÇÃO (ZERO ALTER/DROP/DELETE — só leitura + render):
+ *  (1) BACKEND `server/routers/integrasign.ts` (`getDocumentoPublico`, ramo concluído E ramo
+ *      pendente/visualizado): o SELECT de `todosSignatarios` passou a trazer `rubricaImagem` e
+ *      `hashRubrica` (leitura pura, token-gated — mesma exposição segura da Rev. 3055).
+ *  (2) FRONT `client/src/pages/IntegraSignAssinar.tsx`: os 2 call sites de
+ *      `gerarContratoAssinadoPdf` repassam `rubricaImagem: s.rubricaImagem`.
+ *  (3) FRONT `client/src/lib/contratoAssinadoPdf.ts`: interface `SignatarioPdf` ganha
+ *      `rubricaImagem`/`hashRubrica`; NOVA função `desenharRubricas()` carimba, no rodapé de
+ *      CADA página (loop de numeração via `getNumberOfPages`/`setPage`), uma faixa "RUBRICAS DOS
+ *      SIGNATÁRIOS" com a IMAGEM REAL da rúbrica de cada signatário assinado (escala preservando
+ *      o aspect ratio via `getImageProperties`, máx. 4 lado a lado, com o primeiro nome embaixo;
+ *      fallback p/ iniciais em itálico quando a rúbrica não for imagem — envelopes antigos). Para
+ *      abrir espaço, o `bottom` da área de conteúdo recuou de `H-MARGIN-6` para `H-MARGIN-16`
+ *      (reserva ~10mm no rodapé), e a faixa reserva ~34mm à direita para não colidir com o nº da
+ *      página.
+ *
+ * RESSALVA: rúbricas/assinaturas antigas sem imagem (envelopes pré-FcSign-canvas) caem no
+ * fallback de iniciais em itálico; nada quebra o PDF. A assinatura do sócio só aparece depois
+ * que ele de fato assina pelo link (trava sequencial: sócio é sempre o último).
+ *
  * Rev. 3055 — **INTEGRASIGN (FCSIGN) · PDF DO CONTRATO PASSA A MOSTRAR A ASSINATURA REAL
  * DESENHADA PELO SIGNATÁRIO (IMAGEM) E GANHA O "CONTROLE DE ASSINATURAS — TRILHA DE
  * AUDITORIA" NO PADRÃO DE CONTROLE DO FCSIGN.**
