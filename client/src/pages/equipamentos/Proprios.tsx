@@ -328,6 +328,38 @@ export default function EquipamentosProprios() {
     onSuccess: () => { utils.equipamentos.propriosListar.invalidate(); setModal(false); toast.success("Equipamento excluído."); },
     onError: (e) => toast.error(errMsg(e)),
   });
+
+  // Rev. 3015 — "Gerar preços com IA": estima o valor de aquisição de TODOS os
+  // equipamentos sem valor (ou de todos, com sobrescrever) numa tacada só.
+  const gerarPrecos = trpc.equipamentos.propriosGerarPrecosComIA.useMutation({
+    onSuccess: (r) => {
+      utils.equipamentos.propriosListar.invalidate();
+      if (r.itensAtualizados === 0) {
+        toast.info(r.combosAnalisados === 0
+          ? "Todos os equipamentos já têm valor. Nada a estimar."
+          : "A IA não conseguiu estimar valores desta vez. Tente novamente.");
+      } else {
+        toast.success(
+          `${r.itensAtualizados} equipamento${r.itensAtualizados !== 1 ? "s" : ""} com valor estimado pela IA.` +
+          (r.haMaisLotes ? " Há mais itens — rode novamente para concluir." : "")
+        );
+      }
+    },
+    onError: (e) => toast.error(errMsg(e)),
+  });
+  const handleGerarPrecos = () => {
+    if (companyId <= 0) { toast.error("Selecione uma empresa antes."); return; }
+    if (gerarPrecos.isPending) return;
+    // Usa a lista TOTAL (sem filtros de busca/status) — usar `data` filtrada
+    // poderia mandar sobrescrever=true só porque a fatia visível está toda
+    // precificada, reestimando o parque inteiro sem querer.
+    const semValor = (totalList as any[]).filter(p => !p.valorAquisicao || Number(p.valorAquisicao) === 0).length;
+    const msg = semValor > 0
+      ? `Estimar com IA o valor de aquisição dos ${semValor} equipamento(s) SEM valor? (os que já têm valor não são alterados)`
+      : "Todos já têm valor. Deseja REESTIMAR o valor de TODOS com a IA (sobrescreve os atuais)?";
+    if (!window.confirm(msg)) return;
+    gerarPrecos.mutate({ companyId, sobrescrever: semValor === 0 });
+  };
   function confirmarExcluir() {
     if (!editingId) return;
     const ok = window.confirm(
@@ -424,12 +456,24 @@ export default function EquipamentosProprios() {
               </p>
             </div>
           </div>
-          <button
-            onClick={abrirNovo}
-            className="inline-flex items-center gap-2 bg-white text-[#1B2A4A] hover:bg-blue-50 active:scale-[0.98] px-4 py-2.5 rounded-lg font-semibold shadow-md transition shrink-0"
-          >
-            <Plus className="h-5 w-5" /> <span className="hidden sm:inline">Cadastrar</span><span className="sm:hidden">Novo</span>
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleGerarPrecos}
+              disabled={gerarPrecos.isPending}
+              title="Estimar com IA o valor de aquisição dos equipamentos sem valor"
+              className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white ring-1 ring-white/30 active:scale-[0.98] px-4 py-2.5 rounded-lg font-semibold shadow-md transition disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <Sparkles className={`h-5 w-5 ${gerarPrecos.isPending ? "animate-pulse" : ""}`} />
+              <span className="hidden sm:inline">{gerarPrecos.isPending ? "Gerando preços…" : "Gerar preços"}</span>
+              <span className="sm:hidden">{gerarPrecos.isPending ? "…" : "Preços"}</span>
+            </button>
+            <button
+              onClick={abrirNovo}
+              className="inline-flex items-center gap-2 bg-white text-[#1B2A4A] hover:bg-blue-50 active:scale-[0.98] px-4 py-2.5 rounded-lg font-semibold shadow-md transition"
+            >
+              <Plus className="h-5 w-5" /> <span className="hidden sm:inline">Cadastrar</span><span className="sm:hidden">Novo</span>
+            </button>
+          </div>
         </div>
       </div>
 

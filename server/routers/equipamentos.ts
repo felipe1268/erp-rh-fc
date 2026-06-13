@@ -559,6 +559,140 @@ export const equipamentosRouter = router({
       return { id: r[0].id };
     }),
 
+  // Rev. 3015 — "Gerar preços com IA": estima o valor de aquisição (BRL) de
+  // TODOS os equipamentos próprios da empresa de uma vez, via LLM, a partir de
+  // descrição/marca/modelo/categoria. Por padrão só preenche os SEM valor
+  // (valor_aquisicao NULL ou 0); com `sobrescrever=true` reestima todos.
+  // ZERO ALTER/DROP/DELETE — apenas UPDATE da coluna valor_aquisicao.
+  // Mesmo padrão de tenant guard / parse defensivo de `locadosCategorizarComIA`.
+  propriosGerarPrecosComIA: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      sobrescrever: z.boolean().optional().default(false),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Tenant isolation — confirma que a empresa pertence ao usuário.
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = (allowedCompanies as any[]).map(c => c.id);
+      if (!allowedIds.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+
+      // 1. Combinações distintas (descricao+marca+modelo+categoria) pendentes de preço.
+      const condPreco = input.sobrescrever
+        ? sql`TRUE`
+        : sql`(valor_aquisicao IS NULL OR valor_aquisicao = 0)`;
+      // Agrupa pela TRÍADE descricao+marca+modelo — a MESMA granularidade da
+      // chave de reconciliação e do UPDATE abaixo (categoria é só contexto p/ a
+      // IA, então vem agregada via MAX p/ não pulverizar combos).
+      const rowsResult: any = await db.execute(sql`
+        SELECT descricao,
+               COALESCE(marca, '')          AS marca,
+               COALESCE(modelo, '')         AS modelo,
+               MAX(COALESCE(categoria, '')) AS categoria,
+               COUNT(*)::int                AS qtd
+        FROM equipamentos_proprios
+        WHERE company_id = ${input.companyId}
+          AND ativo = true
+          AND descricao IS NOT NULL
+          AND descricao <> ''
+          AND ${condPreco}
+        GROUP BY descricao, COALESCE(marca, ''), COALESCE(modelo, '')
+        ORDER BY qtd DESC, descricao ASC
+      `);
+      const combos: { descricao: string; marca: string; modelo: string; categoria: string; qtd: number }[] =
+        (rowsResult.rows || rowsResult) as any[];
+      if (combos.length === 0) {
+        return { ok: true as const, itensAtualizados: 0, combosAnalisados: 0, haMaisLotes: false };
+      }
+
+      // 2. Chama IA. Limite defensivo: 400 combinações por call.
+      const MAX_COMBOS = 400;
+      const lote = combos.slice(0, MAX_COMBOS);
+      const { invokeLLM } = await import("../_core/llm");
+      const systemPrompt = `Você é um avaliador de patrimônio de uma construtora brasileira (FC Engenharia). Recebe uma lista de equipamentos PRÓPRIOS (ar-condicionado, eletrodomésticos, ferramentas, mobiliário, eletrônicos de escritório etc.) e deve estimar o VALOR DE AQUISIÇÃO de mercado de CADA item, em REAIS (BRL).
+
+Regras OBRIGATÓRIAS:
+1. Estime um valor realista de mercado para um item NOVO ou seminovo equivalente, em reais (BRL), considerando descrição, marca, modelo e categoria fornecidos.
+2. O valor é um NÚMERO puro em reais (ex.: 2500.00). SEM "R$", SEM separador de milhar, use ponto decimal. Nunca retorne 0; se não souber, faça a melhor estimativa plausível para o tipo de item.
+3. Retorne APENAS JSON válido — sem markdown, sem preâmbulo:
+   {
+     "precos": [ {"descricao": "TEXTO EXATO", "marca": "TEXTO EXATO", "modelo": "TEXTO EXATO", "valor": 2500.00 }, ... ]
+   }
+4. Os campos "descricao", "marca" e "modelo" devem ser IGUAIS (caractere a caractere) aos recebidos. Não omita nenhum item da lista.`;
+
+      const userPrompt = `Estime o valor de aquisição (BRL) de cada um dos ${lote.length} equipamentos abaixo (qtd = unidades no acervo, apenas contexto):
+
+${lote.map(c => `- descricao="${c.descricao}" | marca="${c.marca}" | modelo="${c.modelo}" | categoria="${c.categoria}"  (qtd ${c.qtd})`).join("\n")}
+
+Gere o JSON conforme o esquema. Não omita nenhum item.`;
+
+      let parsed: any;
+      try {
+        const resp = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          maxTokens: 16000,
+          response_format: { type: "json_object" },
+        });
+        const content = resp.choices?.[0]?.message?.content;
+        let raw = (typeof content === "string" ? content : Array.isArray(content) ? content.map((c: any) => c?.text ?? "").join("") : "").trim();
+        const m = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+        if (m) raw = m[1].trim();
+        const fi = raw.indexOf("{"); const li = raw.lastIndexOf("}");
+        if (fi >= 0 && li > fi) raw = raw.slice(fi, li + 1);
+        parsed = JSON.parse(raw);
+      } catch (err: any) {
+        const msg = err?.message || String(err);
+        if (msg.includes("Nenhuma chave de IA")) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Nenhuma IA configurada (ANTHROPIC_API_KEY ou GOOGLE_API_KEY ausente)." });
+        }
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Falha na IA: ${msg.slice(0, 200)}` });
+      }
+
+      // 3. Indexa os combos enviados p/ casar a resposta (chave normalizada).
+      const norm = (s: any) => String(s ?? "").trim().toUpperCase();
+      const chave = (d: any, ma: any, mo: any) => `${norm(d)}|||${norm(ma)}|||${norm(mo)}`;
+      const enviados = new Map<string, { descricao: string; marca: string; modelo: string }>();
+      for (const c of lote) enviados.set(chave(c.descricao, c.marca, c.modelo), { descricao: c.descricao, marca: c.marca, modelo: c.modelo });
+
+      const precos: any[] = Array.isArray(parsed.precos) ? parsed.precos : [];
+      let itensAtualizados = 0;
+      for (const p of precos) {
+        const valor = Number(p?.valor);
+        if (!isFinite(valor) || valor <= 0) continue;
+        const k = chave(p?.descricao, p?.marca, p?.modelo);
+        const combo = enviados.get(k);
+        if (!combo) continue;
+        // UPDATE só nos itens daquela combinação que ainda batem o filtro (idempotente).
+        const condSobre = input.sobrescrever
+          ? sql`TRUE`
+          : sql`(valor_aquisicao IS NULL OR valor_aquisicao = 0)`;
+        const res: any = await db.execute(sql`
+          UPDATE equipamentos_proprios
+             SET valor_aquisicao = ${String(valor.toFixed(2))}, updated_at = NOW()
+           WHERE company_id = ${input.companyId}
+             AND ativo = true
+             AND descricao = ${combo.descricao}
+             AND COALESCE(marca, '')  = ${combo.marca}
+             AND COALESCE(modelo, '') = ${combo.modelo}
+             AND ${condSobre}
+        `);
+        itensAtualizados += Number(res.rowCount ?? res.rows?.length ?? 0);
+      }
+
+      return {
+        ok: true as const,
+        itensAtualizados,
+        combosAnalisados: lote.length,
+        haMaisLotes: combos.length > MAX_COMBOS,
+      };
+    }),
+
   // ── EQUIPAMENTOS LOCADOS ──────────────────────────────────────────────────
 
   locadosListar: protectedProcedure

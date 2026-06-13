@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3015 — **EQUIPAMENTOS PRÓPRIOS (`/equipamentos/ln`): BOTÃO "GERAR PREÇOS"
+ * — ESTIMA COM IA O VALOR DE AQUISIÇÃO (BRL) DE TODOS OS EQUIPAMENTOS SEM VALOR
+ * NUMA TACADA SÓ, PARA QUE TODO O PARQUE TENHA VALOR.**
+ *
+ * PEDIDO (usuário): "Quero q todos equipamentos nossos tenham valores... coloca
+ * um botão para gerar preços de tudo que temos." (tela EQUIPAMENTOS PRÓPRIOS).
+ *
+ * SOLUÇÃO (ZERO ALTER/DROP/DELETE — apenas UPDATE da coluna `valor_aquisicao`):
+ * 1) NOVA PROCEDURE `equipamentos.propriosGerarPrecosComIA` em
+ *    `server/routers/equipamentos.ts` (espelha o padrão de `locadosCategorizarComIA`):
+ *    - Tenant guard via `getCompaniesForUser` (bloqueia companyId alheio).
+ *    - SELECT das combinações DISTINTAS (descricao+marca+modelo+categoria) da
+ *      empresa que estão SEM preço (`valor_aquisicao IS NULL OR = 0`); com
+ *      `sobrescrever=true` pega TODAS (reestima). Dedupe por combinação reduz o
+ *      nº de itens enviados à IA.
+ *    - `invokeLLM` (Anthropic) com systemPrompt de "avaliador de patrimônio FC",
+ *      pedindo valor de mercado em REAIS por item; `response_format json_object`,
+ *      parse defensivo (strip ```json, fatia `{`…`}`), trata "Nenhuma chave de IA".
+ *    - UPDATE por combinação, casando descricao/marca/modelo (chave normalizada
+ *      UPPER/trim), gravando `valor_aquisicao` como String `toFixed(2)`; o WHERE
+ *      mantém o filtro de pendência → IDEMPOTENTE (não mexe em quem já tem valor,
+ *      salvo sobrescrever). Limite 400 combinações/call (`haMaisLotes` sinaliza
+ *      rodar de novo). Retorna `itensAtualizados`/`combosAnalisados`.
+ * 2) FRONT `client/src/pages/equipamentos/Proprios.tsx`: botão "Gerar preços"
+ *    (ícone `Sparkles`, ao lado de "Cadastrar" no header azul), com `window.confirm`
+ *    contextual (X sem valor → só preenche faltantes; todos com valor → pergunta se
+ *    reestima todos com `sobrescrever`), estados loading/disabled, toast de
+ *    resultado e invalidate de `propriosListar`. Exibição de moeda permanece BRL
+ *    (`fmtMoney`).
+ *
+ * Requer REPUBLICAR. Detalhe: este arquivo.
+ *
+ * ----------------------------------------------------------------------------
+ *
  * Rev. 3014 — **FINANCEIRO → NOVA ABA NA COLUNA LATERAL "ANÁLISE DE CUSTOS":
  * DASHBOARD DEDICADO DE CUSTOS (KPIs + BARRAS + PIZZA POR CATEGORIA + PARETO
  * 80/20 + RANKING DE FORNECEDORES) PRA ENXERGAR ONDE CORTAR CUSTOS.**
