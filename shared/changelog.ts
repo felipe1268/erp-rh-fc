@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3048 — **INTEGRASIGN (FCSIGN) · "DETALHES DO ENVELOPE → SIGNATÁRIOS": NOME DO
+ * SIGNATÁRIO PARA DE QUEBRAR UMA LETRA POR LINHA (TEXTO VOLTA A SER HORIZONTAL).**
+ *
+ * PEDIDO (prints iPad da aba "Detalhes do Envelope → Signatários"): o nome do
+ * signatário (ex.: "CELSO ANTONIO BITTENCOURT SALES JUNIOR") aparecia escrito na
+ * VERTICAL, uma letra por linha — ilegível. "Ajuste o texto para o formato paisagem".
+ *
+ * CAUSA-RAIZ (FRONT/CSS): a linha de cada signatário usava
+ * `flex flex-col gap-2 ... sm:flex-row sm:items-center sm:justify-between`. No painel
+ * de detalhes (estreito mesmo em iPad), o breakpoint `sm:` já vira `flex-row`, pondo
+ * NOME e BOTÕES lado a lado. O bloco de botões tem `shrink-0` (não encolhe) e o bloco
+ * do nome tem `min-w-0` (pode encolher abaixo do conteúdo) — resultado: a coluna do
+ * nome colapsa para ~1 caractere de largura e o `break-words` quebra letra a letra.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE) em
+ * `client/src/pages/IntegraSignDashboard.tsx`: remove `sm:flex-row sm:items-center
+ * sm:justify-between` da linha do signatário, deixando `flex flex-col gap-2`. Agora o
+ * NOME ocupa a largura inteira (lê na horizontal) e os botões (Copiar link / WhatsApp
+ * / Reenviar, que já têm `flex-wrap`) ficam na linha de baixo. Nenhuma lógica/handler
+ * alterado.
+ *
  * Rev. 3047 — **INTEGRASIGN (FCSIGN) · PÁGINA PÚBLICA DE ASSINATURA PRÉ-PREENCHE
  * AUTOMATICAMENTE "NOME COMPLETO" E "CPF / CNPJ" CONFORME O CADASTRO DO SIGNATÁRIO.**
  *

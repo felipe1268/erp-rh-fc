@@ -399,7 +399,7 @@ export default function IntegraSignDashboard() {
                     <h4 className="font-medium text-sm mb-2">Signatários</h4>
                     <div className="space-y-2">
                       {env.signatarios.map((sig: any) => (
-                        <div key={sig.id} className="flex flex-col gap-2 p-2 bg-gray-50 rounded sm:flex-row sm:items-center sm:justify-between">
+                        <div key={sig.id} className="flex flex-col gap-2 p-2 bg-gray-50 rounded">
                           <div className="min-w-0">
                             <span className="text-sm font-medium break-words">{sig.nome}</span>
                             <span className="text-xs text-gray-500 ml-1">({papelLabel(sig.papel)})</span>
