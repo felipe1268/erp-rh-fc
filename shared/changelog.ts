@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3043 — **FROTA → PEDÁGIOS · TABELA DE LANÇAMENTOS: DIA DA SEMANA + FERIADO
+ * ABAIXO DA DATA, E MODELO DO CARRO ABAIXO DA PLACA.**
+ *
+ * PEDIDO (print Pedágios, FC ENGENHARIA): "abaixo da data coloca o nome do dia da
+ * semana para saber que dia da semana foi, se foi feriado ou não… e abaixo da placa
+ * do carro coloca o modelo de cada carro".
+ *
+ * CONTEXTO: a query de listagem (`frotas`/`fleet_toll_records` join `vehicles`) JÁ
+ * retorna `placa`, `modelo` e `marca`; faltava só exibir. Não havia nenhuma base de
+ * feriados no projeto (`shared/diasUteis.ts` tem motor de tempo útil mas SEM lista
+ * de feriados nacionais).
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE — sem mudança de schema/backend):
+ *
+ *  1) NOVO `shared/feriados.ts` — helpers puros (sem API): `nomeDiaSemana(raw)` e
+ *     `nomeDiaSemanaCurto(raw)` (pt-BR), `ehFimDeSemana(raw)` e `feriadoNacional(raw)`
+ *     que devolve o nome do feriado NACIONAL ou `null`. Cobre fixos (Confraternização,
+ *     Tiradentes, Dia do Trabalho, Independência, N. Sra. Aparecida, Finados,
+ *     Proclamação, Consciência Negra, Natal) + MÓVEIS derivados da Páscoa via
+ *     Computus/Gauss (Carnaval, Sexta-feira Santa, Corpus Christi). Parsing por
+ *     regex `^YYYY-MM-DD` + datas em UTC p/ não sofrer com fuso (não usa o `new Date`
+ *     ingênuo que desloca o dia). NÃO cobre feriados estaduais/municipais.
+ *
+ *  2) FRONT `client/src/pages/frotas/Pedagios.tsx` (tabela de lançamentos):
+ *      - Célula "Data": além da data dd/mm/aaaa, mostra o dia da semana em cinza e,
+ *        se for feriado nacional, uma linha vermelha "Feriado · {nome}".
+ *      - Célula "Veículo": placa em destaque + `marca modelo` em cinza abaixo
+ *        (só quando há placa e marca/modelo). Células com `align-top`.
+ *
  * Rev. 3042 — **INTEGRASIGN (FCSIGN) · ENVIO DO LINK DE ASSINATURA POR WHATSAPP +
  * ESCOLHA "E-MAIL × SOMENTE LINKS" AO ENVIAR O ENVELOPE.**
  *

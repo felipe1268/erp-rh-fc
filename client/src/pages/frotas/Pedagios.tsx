@@ -19,6 +19,7 @@ import {
   FileSpreadsheet, Upload, CheckCheck, AlertCircle, Lock,
   Lightbulb, MapPin, FileText, Wand2,
 } from "lucide-react";
+import { nomeDiaSemana, feriadoNacional, dataBR } from "@shared/feriados";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 
@@ -580,8 +581,26 @@ export default function Pedagios() {
                 <tr><td colSpan={7} className="text-center text-muted-foreground py-8">Nenhum lançamento neste mês</td></tr>
               ) : list.map((r: any) => (
                 <tr key={r.id} className="border-b hover:bg-muted/20 transition-colors">
-                  <td className="p-3">{new Date(r.data).toLocaleDateString("pt-BR")}</td>
-                  <td className="p-3 font-medium">{r.placa || r.modelo}</td>
+                  <td className="p-3 align-top">
+                    {(() => {
+                      const feriado = feriadoNacional(r.data);
+                      return (
+                        <>
+                          <div>{dataBR(r.data)}</div>
+                          <div className="text-xs text-muted-foreground capitalize">{nomeDiaSemana(r.data)}</div>
+                          {feriado && (
+                            <div className="text-[11px] font-medium text-red-600">Feriado · {feriado}</div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </td>
+                  <td className="p-3 align-top">
+                    <div className="font-medium">{r.placa || r.modelo}</div>
+                    {r.placa && (r.marca || r.modelo) && (
+                      <div className="text-xs text-muted-foreground">{[r.marca, r.modelo].filter(Boolean).join(" ")}</div>
+                    )}
+                  </td>
                   <td className="p-3">
                     <Badge className={CATEGORIAS[r.categoria]?.color || "bg-gray-100 text-gray-700"}>
                       {CATEGORIAS[r.categoria]?.label || r.categoria}
