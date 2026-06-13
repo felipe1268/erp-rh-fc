@@ -20,11 +20,6 @@ import {
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 }
-function formatCompactBRL(v: number) {
-  if (!v) return "—";
-  if (Math.abs(v) < 1000) return formatBRL(v);
-  return "R$ " + new Intl.NumberFormat("pt-BR", { notation: "compact", maximumFractionDigits: 1 }).format(v);
-}
 function fmtDateBR(dateStr: string | null | undefined): string {
   if (!dateStr) return "—";
   const s = String(dateStr).slice(0, 10);
@@ -85,16 +80,13 @@ const STATUS_META: Record<string, { label: string; cls: string; dot: string }> =
   recebido:         { label: "Recebido",   cls: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
 };
 
-function KCard({ label, value, sub, icon, ring }: { label: string; value: string; sub?: ReactNode; icon: ReactNode; ring: string }) {
+function KCard({ label, value, sub, icon, accent, valueColor }: { label: string; value: string; sub?: ReactNode; icon: ReactNode; accent: string; valueColor: string }) {
   return (
-    <Card className="border-slate-200/80 shadow-sm">
-      <CardContent className="p-4 flex items-center gap-3">
-        <div className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${ring}`}>{icon}</div>
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide leading-tight">{label}</p>
-          <p className="text-xl font-bold text-slate-800 leading-tight tabular-nums">{value}</p>
-          {sub && <p className="text-[11px] text-slate-500 leading-tight mt-0.5">{sub}</p>}
-        </div>
+    <Card className={`border-0 shadow-sm border-l-4 ${accent}`}>
+      <CardContent className="p-4">
+        <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">{icon}{label}</p>
+        <p className={`text-lg font-bold ${valueColor}`}>{value}</p>
+        {sub && <p className="text-xs text-gray-400">{sub}</p>}
       </CardContent>
     </Card>
   );
@@ -154,31 +146,6 @@ export default function FinanceiroContasAReceberTitulos() {
       else if (cur === "consolidado" && !isRecebido) map[m] = "lancamento";
     }
     return map;
-  }, [linhas]);
-
-  // Rev. 3004 — valor em aberto por mês (compacto no pill da barra de meses)
-  const mesesValor: Record<number, number> = useMemo(() => {
-    const map: Record<number, number> = {};
-    for (let m = 1; m <= 12; m++) map[m] = 0;
-    for (const t of linhas) {
-      const m = getMesFromDate(t.dataVencimento);
-      if (!m || t.status === "recebido") continue;
-      map[m] += Math.max(0, num(t.valorPrevisto) - num(t.valorRealizado));
-    }
-    return map;
-  }, [linhas]);
-
-  // Rev. 3004 — resumo do ANO p/ o hero (total, recebido, aberto, % progresso)
-  const anoResumo = useMemo(() => {
-    let total = 0, recebido = 0, aberto = 0;
-    for (const t of linhas) {
-      const prev = num(t.valorPrevisto), real = num(t.valorRealizado);
-      total += prev;
-      recebido += t.status === "recebido" ? (real || prev) : real;
-      aberto += t.status === "recebido" ? 0 : Math.max(0, prev - real);
-    }
-    const pct = total > 0 ? Math.min(100, Math.round((recebido / total) * 100)) : 0;
-    return { total, recebido, aberto, pct };
   }, [linhas]);
 
   const mesData = useMemo(
@@ -279,93 +246,57 @@ export default function FinanceiroContasAReceberTitulos() {
     <DashboardLayout>
       <div className="p-4 md:p-6 space-y-4 max-w-[1400px] mx-auto">
 
-        {/* ───────────── HERO ───────────── */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-600 via-emerald-600 to-teal-700 text-white shadow-lg">
-          <div className="pointer-events-none absolute -right-10 -top-16 h-56 w-56 rounded-full bg-white/10 blur-2xl" />
-          <div className="pointer-events-none absolute -right-20 top-10 h-40 w-40 rounded-full bg-emerald-300/20 blur-2xl" />
-          <div className="relative p-5 md:p-6">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider backdrop-blur">
-                  <HandCoins className="h-3 w-3" /> Financeiro
-                </span>
-                <h1 className="mt-2 text-2xl md:text-3xl font-bold tracking-tight">Contas a Receber</h1>
-                <p className="text-sm text-emerald-50/90">Títulos por cliente — medições <span className="font-medium">(automático)</span> e lançamentos manuais.</p>
-              </div>
-              <Button
-                onClick={() => setShowNovo(true)}
-                className="gap-1.5 bg-white text-emerald-700 hover:bg-emerald-50 shadow-sm font-semibold"
-              >
-                <Plus className="h-4 w-4" /> Novo título
-              </Button>
-            </div>
-
-            {/* Faixa de resumo do ano */}
-            <div className="mt-5 flex flex-col gap-3 rounded-xl bg-white/10 p-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
-                <button onClick={() => setAno((a) => a - 1)} className="rounded-lg bg-white/10 p-1.5 hover:bg-white/20 transition" aria-label="Ano anterior">
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <div className="flex items-center gap-1.5">
-                  <CalendarDays className="h-4 w-4 text-emerald-100" />
-                  <span className="text-lg font-bold tabular-nums">{ano}</span>
-                </div>
-                <button onClick={() => setAno((a) => a + 1)} className="rounded-lg bg-white/10 p-1.5 hover:bg-white/20 transition" aria-label="Próximo ano">
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="flex flex-1 flex-col gap-1.5 sm:max-w-md">
-                <div className="flex items-center justify-between text-xs text-emerald-50/90">
-                  <span>Recebido no ano <b className="text-white">{formatBRL(anoResumo.recebido)}</b></span>
-                  <span>Total <b className="text-white">{formatBRL(anoResumo.total)}</b></span>
-                </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-white/20">
-                  <div className="h-full rounded-full bg-white transition-all" style={{ width: `${anoResumo.pct}%` }} />
-                </div>
-                <div className="text-[11px] text-emerald-50/80">{anoResumo.pct}% recebido · {formatBRL(anoResumo.aberto)} em aberto</div>
-              </div>
-            </div>
+        {/* ───────────── HEADER (padrão Contas a Pagar) ───────────── */}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-gray-900">Contas a Receber</h1>
+            <p className="text-sm text-gray-500 mt-1">Títulos por cliente — medições (automático) e lançamentos manuais.</p>
           </div>
+          <Button onClick={() => setShowNovo(true)} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
+            <Plus className="h-4 w-4" /> Novo título
+          </Button>
         </div>
 
-        {/* ───────────── BARRA DE MESES ───────────── */}
-        <Card className="border-slate-200/80 shadow-sm">
+        {/* ───────────── NAVEGAÇÃO ANO + MESES (padrão Contas a Pagar) ───────────── */}
+        <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-              <p className="text-sm font-semibold text-slate-600">Selecione o mês</p>
-              <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
-                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-blue-500 inline-block" />Com lançamento</span>
-                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500 inline-block" />Consolidado</span>
-                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-slate-300 inline-block" />Sem dados</span>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <button onClick={() => setAno((a) => a - 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-base font-bold text-gray-800 min-w-[3.5rem] text-center">{ano}</span>
+                <button onClick={() => setAno((a) => a + 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Com lançamento</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Consolidado</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Sem dados</span>
               </div>
             </div>
-            <div className="grid grid-cols-3 sm:grid-cols-6 lg:grid-cols-12 gap-1.5">
+            <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
               {MESES.map((m, i) => {
                 const numMes = i + 1;
                 const status = mesesStatus[numMes];
                 const isSelected = mesSel === numMes;
-                const valor = mesesValor[numMes];
                 return (
                   <button
                     key={m}
                     onClick={() => setMesSel(numMes)}
-                    className={`relative flex flex-col items-center gap-1 rounded-xl border py-2 text-xs font-semibold transition-all
+                    className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
                       ${isSelected
-                        ? "border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm ring-1 ring-emerald-500/30"
-                        : "border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:bg-emerald-50/40"
+                        ? "border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm"
+                        : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"
                       }`}
                   >
-                    <span className="flex items-center gap-1">
-                      {m}
-                      <span className={`h-1.5 w-1.5 rounded-full ${
-                        status === "consolidado" ? "bg-emerald-500" :
-                        status === "lancamento" ? "bg-blue-500" :
-                        "bg-slate-300"
-                      }`} />
-                    </span>
-                    <span className={`text-[10px] font-medium tabular-nums ${isSelected ? "text-emerald-600" : "text-slate-400"}`}>
-                      {valor > 0 ? formatCompactBRL(valor) : "—"}
-                    </span>
+                    <span>{m}</span>
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      status === "consolidado" ? "bg-green-500" :
+                      status === "lancamento" ? "bg-blue-500" :
+                      "bg-gray-300"
+                    }`} />
                   </button>
                 );
               })}
@@ -373,14 +304,14 @@ export default function FinanceiroContasAReceberTitulos() {
           </CardContent>
         </Card>
 
-        {/* ───────────── KPIs ───────────── */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KCard label={`A receber em ${MESES[mesSel - 1]}`} value={formatBRL(kpis.abertoMes)} icon={<Clock className="h-5 w-5 text-amber-600" />} ring="bg-amber-100"
+        {/* ───────────── KPIs (padrão Contas a Pagar) ───────────── */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <KCard label={`A receber em ${MESES[mesSel - 1]}`} value={formatBRL(kpis.abertoMes)} icon={<Clock className="w-3 h-3 text-amber-500" />} accent="border-l-amber-500" valueColor="text-amber-600"
             sub={kpis.parcialMes > 0 ? <span className="text-blue-600">parcial {formatBRL(kpis.parcialMes)}</span> : undefined} />
-          <KCard label={`Recebido em ${MESES[mesSel - 1]}`} value={formatBRL(kpis.recebidoMes)} icon={<CheckCircle className="h-5 w-5 text-emerald-600" />} ring="bg-emerald-100" />
-          <KCard label="Em aberto (ano)" value={formatBRL(acum.aberto)} icon={<TrendingUp className="h-5 w-5 text-indigo-600" />} ring="bg-indigo-100"
+          <KCard label={`Recebido em ${MESES[mesSel - 1]}`} value={formatBRL(kpis.recebidoMes)} icon={<CheckCircle className="w-3 h-3 text-emerald-500" />} accent="border-l-emerald-500" valueColor="text-emerald-700" />
+          <KCard label="Em aberto (ano)" value={formatBRL(acum.aberto)} icon={<TrendingUp className="w-3 h-3 text-indigo-500" />} accent="border-l-indigo-500" valueColor="text-indigo-700"
             sub={acum.vencido > 0 ? <span className="text-red-600 font-medium">{formatBRL(acum.vencido)} vencido</span> : "em dia"} />
-          <KCard label="Títulos vencidos (ano)" value={String(acum.qtdVenc)} icon={<AlertTriangle className="h-5 w-5 text-red-600" />} ring="bg-red-100" />
+          <KCard label="Títulos vencidos (ano)" value={String(acum.qtdVenc)} icon={<AlertTriangle className="w-3 h-3 text-red-500" />} accent="border-l-red-500" valueColor="text-red-600" />
         </div>
 
         {/* ───────────── FILTROS ───────────── */}

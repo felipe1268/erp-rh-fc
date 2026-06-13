@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3006 — **FINANCEIRO → CONTAS A RECEBER (TÍTULOS): LAYOUT DA TELA ALINHADO
+ * AO PADRÃO DA "CONTAS A PAGAR" — FORA O HERO EM GRADIENTE, ENTRA HEADER LIMPO +
+ * NAVEGAÇÃO DE ANO NO CARD DE MESES + KPIs `border-l-4`.**
+ *
+ * PEDIDO (usuário, via screenshot do iPad): "Layout tá diferente do contas a pagar
+ * mantenha o padrão". A tela de Contas a Receber (redesenhada nas Rev. 3002-3004)
+ * tinha um HERO colorido em gradiente emerald→teal + faixa de progresso do ano +
+ * pills de meses com valor, destoando completamente da Contas a Pagar (header
+ * branco simples, navegação de ano dentro do card de meses, KPIs com barra
+ * lateral colorida).
+ *
+ * SOLUÇÃO (FRONT-only — ZERO ALTER/DROP/DELETE, ZERO backend/schema; nenhuma
+ * mudança de dados/procedure), em
+ * `client/src/pages/financeiro/FinanceiroContasAReceberTitulos.tsx`:
+ *
+ * 1) HEADER: removido o bloco HERO em gradiente (com badge "Financeiro", título
+ *    grande branco, botão branco e faixa de "resumo do ano" com barra de
+ *    progresso). Entra o header-padrão da Contas a Pagar:
+ *    `<h1 className="text-2xl font-bold text-gray-900">Contas a Receber</h1>` +
+ *    subtítulo cinza + botão "Novo título" emerald à direita.
+ * 2) NAVEGAÇÃO DE ANO: movida do hero para DENTRO do card de meses (mesmo layout
+ *    do CAP: setas ◀ {ano} ▶ à esquerda + legenda de status à direita). O memo
+ *    `anoResumo` (usado só na faixa do hero) foi removido.
+ * 3) BARRA DE MESES: grid `grid-cols-6 sm:grid-cols-12`, botões `rounded-lg`
+ *    cinza com nome em cima + bolinha de status embaixo (idêntico ao CAP). O pill
+ *    de "valor em aberto por mês" (Rev. 3004) saiu — removidos o memo `mesesValor`
+ *    e o helper `formatCompactBRL`, que ficaram órfãos.
+ * 4) KPIs: o componente `KCard` deixou de usar chip de ícone arredondado e passou
+ *    a usar o cartão `border-0 shadow-sm border-l-4` (barra lateral colorida) do
+ *    CAP — label com ícone 3×3 inline, valor `text-lg` na cor do tema, subtítulo
+ *    cinza. Cores por KPI: a receber=amber, recebido=emerald, em aberto=indigo,
+ *    vencidos=red.
+ *
+ * Mantida a paleta EMERALD nos acentos (semântica de "receber/entrada"), os
+ * grupos por cliente, os filtros e TODO o modal "Novo título" (Rev. 3005). NENHUMA
+ * mudança de rota/permissão/contrato/backend. Requer REPUBLICAR (só front).
+ * Detalhe: este arquivo.
+ *
  * Rev. 3005 — **FINANCEIRO → CONTAS A RECEBER (TÍTULOS): MODAL "NOVO TÍTULO A
  * RECEBER" REDESENHADO (HEADER EM GRADIENTE) + MÁXIMO DE AUTOMAÇÃO — MÁSCARA DE
  * MOEDA AO DIGITAR, DESCRIÇÃO AUTO-SUGERIDA, PRESETS DE PARCELAS E CRONOGRAMA
