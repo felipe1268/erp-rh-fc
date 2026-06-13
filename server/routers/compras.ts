@@ -521,6 +521,26 @@ async function gerarContratoTerceiroDeOS(params: {
   }
 }
 
+// Rev. 3049 — resolve o SÓCIO ADMINISTRADOR atual da empresa (definido em
+// Configurações → Sócios; persistido em system_criteria). Retorna nome + CPF/CNPJ
+// para ser o signatário "diretor" dos contratos gerados via OC. Fallback robusto
+// p/ "Diretor" genérico (qualquer falha NÃO quebra a criação do envelope).
+async function resolveSocioAdministradorSigner(db: any, companyId: number): Promise<{ nome: string; cpfCnpj: string | null }> {
+  try {
+    const cr: any = await db.execute(sql`SELECT valor FROM system_criteria WHERE "companyId"=${companyId} AND chave='socio_administrador_employee_id' LIMIT 1`);
+    const valor = (cr?.rows ?? cr)?.[0]?.valor;
+    const empId = valor ? Number(valor) : null;
+    if (empId && !Number.isNaN(empId)) {
+      const er: any = await db.execute(sql`SELECT "nomeCompleto" AS nome, cpf FROM employees WHERE id=${empId} AND "companyId"=${companyId} AND "tipoContrato"='Socio' LIMIT 1`);
+      const e = (er?.rows ?? er)?.[0];
+      if (e?.nome) return { nome: e.nome, cpfCnpj: e.cpf ?? null };
+    }
+  } catch (err: any) {
+    console.error("[IntegraSign] resolveSocioAdministradorSigner erro:", err?.message);
+  }
+  return { nome: "Diretor", cpfCnpj: null };
+}
+
 async function criarEnvelopeIntegraSign(params: {
   companyId: number;
   ocId: number;
@@ -566,11 +586,16 @@ async function criarEnvelopeIntegraSign(params: {
       criadoPorNome: params.userName,
     }).returning();
 
+    // Rev. 3049 — o signatário "diretor" passa a ser o SÓCIO ADMINISTRADOR atual
+    // definido em Configurações → Sócios (system_criteria). Fallback p/ "Diretor"
+    // genérico quando nenhum sócio administrador estiver configurado.
+    const socioAdmin = await resolveSocioAdministradorSigner(db, params.companyId);
+
     const signatarios = [
       { papel: "fornecedor", ordem: 1, nome: params.fornecedorNome, email: params.fornecedorEmail, cpfCnpj: params.fornecedorCnpj, cargo: "Representante Legal", empresaNome: params.fornecedorNome },
       { papel: "gestor_projeto", ordem: 2, nome: params.userName, email: "", cpfCnpj: null, cargo: "Gestor do Projeto", empresaNome: "FC Engenharia" },
       { papel: "financeiro", ordem: 3, nome: "Financeiro", email: "", cpfCnpj: null, cargo: "Departamento Financeiro", empresaNome: "FC Engenharia" },
-      { papel: "diretor", ordem: 4, nome: "Diretor", email: "", cpfCnpj: null, cargo: "Diretor", empresaNome: "FC Engenharia" },
+      { papel: "diretor", ordem: 4, nome: socioAdmin.nome, email: "", cpfCnpj: socioAdmin.cpfCnpj, cargo: "Sócio Administrador", empresaNome: "FC Engenharia" },
     ];
 
     for (const sig of signatarios) {

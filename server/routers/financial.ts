@@ -2786,13 +2786,14 @@ export const financialRouter = router({
   // chave natural (R-001/R-007).
   listSociosFromEmployees: protectedProcedure.input(z.object({
     companyId: z.number(),
-  })).query(async ({ input }) => {
+  })).query(async ({ input, ctx }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const res = await dbExecute(db, 
       `SELECT
-         e.id, e.nome_completo AS "nomeCompleto", e.cpf, e.cargo,
-         e.tipo_contrato AS "tipoContrato",
+         e.id, e."nomeCompleto" AS "nomeCompleto", e.cpf, e.cargo,
+         e."tipoContrato" AS "tipoContrato",
          (
            SELECT 1 FROM company_partners cp
            WHERE cp.company_id = $1
@@ -2803,12 +2804,83 @@ export const financialRouter = router({
            LIMIT 1
          ) IS NOT NULL AS "jaCadastrado"
        FROM employees e
-       WHERE e.company_id = $1
-         AND e.tipo_contrato = 'Socio'
-       ORDER BY e.nome_completo ASC`,
+       WHERE e."companyId" = $1
+         AND e."tipoContrato" = 'Socio'
+       ORDER BY e."nomeCompleto" ASC`,
       [input.companyId]
     );
     return rows(res);
+  }),
+
+  // ─────────────────── SÓCIO ADMINISTRADOR (assina contratos/docs online) ───────────────────
+  // Rev. 3049 — Critério exclusivo de sócios: define qual sócio é o "administrador
+  // atual", responsável por assinar todos os contratos/documentos online
+  // (IntegraSign/FCSign). Persiste em system_criteria (categoria 'societario',
+  // chave 'socio_administrador_employee_id', valor = employee.id). ZERO ALTER/DROP/DELETE.
+
+  getSocioAdministrador: protectedProcedure.input(z.object({
+    companyId: z.number(),
+  })).query(async ({ input, ctx }) => {
+    if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores podem consultar o sócio administrador." });
+    }
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const cr = await dbExecute(db,
+      `SELECT valor FROM system_criteria WHERE "companyId"=$1 AND chave='socio_administrador_employee_id' LIMIT 1`,
+      [input.companyId]
+    );
+    const valor = rows(cr)[0]?.valor;
+    const empId = valor ? Number(valor) : null;
+    if (!empId || Number.isNaN(empId)) return { employeeId: null, nome: null, cpf: null, cargo: null };
+    const er = await dbExecute(db,
+      `SELECT id, "nomeCompleto" AS nome, cpf, cargo FROM employees WHERE id=$1 AND "companyId"=$2 AND "tipoContrato"='Socio' LIMIT 1`,
+      [empId, input.companyId]
+    );
+    const e = rows(er)[0];
+    if (!e) return { employeeId: null, nome: null, cpf: null, cargo: null };
+    return { employeeId: e.id, nome: e.nome, cpf: e.cpf, cargo: e.cargo };
+  }),
+
+  setSocioAdministrador: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    employeeId: z.number().nullable(),
+  })).mutation(async ({ input, ctx }) => {
+    if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores podem definir o sócio administrador." });
+    }
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    if (input.employeeId != null) {
+      const chk = await dbExecute(db,
+        `SELECT id FROM employees WHERE id=$1 AND "companyId"=$2 AND "tipoContrato"='Socio' LIMIT 1`,
+        [input.employeeId, input.companyId]
+      );
+      if (!rows(chk).length) throw new TRPCError({ code: "BAD_REQUEST", message: "Funcionário não é sócio desta empresa." });
+    }
+    const valor = input.employeeId != null ? String(input.employeeId) : "";
+    const quem = ctx.user?.name ?? "Sistema";
+    const ex = await dbExecute(db,
+      `SELECT id FROM system_criteria WHERE "companyId"=$1 AND chave='socio_administrador_employee_id' LIMIT 1`,
+      [input.companyId]
+    );
+    const existing = rows(ex)[0];
+    if (existing) {
+      await dbExecute(db,
+        `UPDATE system_criteria SET valor=$1, "atualizadoPor"=$2, "updatedAt"=NOW() WHERE id=$3`,
+        [valor, quem, existing.id]
+      );
+    } else {
+      await dbExecute(db,
+        `INSERT INTO system_criteria ("companyId", categoria, chave, valor, descricao, unidade, "atualizadoPor")
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [input.companyId, "societario", "socio_administrador_employee_id", valor,
+         "Sócio administrador responsável por assinar contratos e documentos online (IntegraSign/FCSign).", "id", quem]
+      );
+    }
+    return { ok: true };
   }),
 
   createPartner: protectedProcedure.input(z.object({

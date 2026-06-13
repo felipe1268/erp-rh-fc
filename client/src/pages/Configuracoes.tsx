@@ -19,6 +19,7 @@ import EmployeeCombobox from "@/components/EmployeeCombobox";
 import BeneficiosAlimentacaoTab from "@/components/BeneficiosAlimentacaoTab";
 import { ComprasConfigSection } from "@/pages/configuracoes/ComprasConfigSection";
 import { FinanceiroConfigSection } from "@/pages/configuracoes/FinanceiroConfigSection";
+import { SociosAdministradorSection } from "@/pages/configuracoes/SociosAdministradorSection";
 import { AlmoxarifadoConfigSection } from "@/pages/configuracoes/AlmoxarifadoConfigSection";
 import { PlanejamentoConfigSection } from "@/pages/configuracoes/PlanejamentoConfigSection";
 import { IAConfigSection } from "@/pages/configuracoes/IAConfigSection";
@@ -88,7 +89,7 @@ const CATEGORIAS = [
   { key: "notificacoes_sistema", label: "Notificações do Sistema", icon: Bell, color: "text-pink-600", bgColor: "bg-pink-50", borderColor: "border-pink-200" },
 ];
 
-type TabKey = "criterios" | "senha" | "limpeza" | "regras" | "notificacoes" | "contrato_pj" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup" | "terceiros" | "portal_cliente" | "templates_docs";
+type TabKey = "criterios" | "senha" | "limpeza" | "regras" | "notificacoes" | "contrato_pj" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup" | "terceiros" | "portal_cliente" | "templates_docs" | "socios";
 
 // Rev. 2403: mapa estático de cores das abas. CRÍTICO: Tailwind JIT só vê
 // classes LITERAIS no source — interpolação tipo `bg-${c}-500` não gera CSS.
@@ -329,6 +330,7 @@ export default function Configuracoes() {
     { key: "modulos" as TabKey, label: "Módulos do Sistema", icon: ToggleRight, minRole: "admin", color: "indigo" },
     { key: "regras" as TabKey, label: "Regras de Ouro", icon: Shield, minRole: "admin", color: "amber" },
     { key: "criterios" as TabKey, label: "Critérios do Sistema", icon: Scale, minRole: "admin", color: "blue" },
+    { key: "socios" as TabKey, label: "Sócios / Administrador", icon: Handshake, minRole: "admin", color: "emerald" },
     { key: "templates_docs" as TabKey, label: "Templates de Documentos", icon: FileText, minRole: "admin", color: "sky" },
     { key: "senha" as TabKey, label: "Minha Senha", icon: Key, minRole: "user", color: "emerald" },
     { key: "notificacoes" as TabKey, label: "Notificações E-mail", icon: Bell, minRole: "admin", color: "violet" },
@@ -791,6 +793,15 @@ export default function Configuracoes() {
           </div>
         )}
 
+
+        {/* TAB: Sócios / Administrador (Rev. 3049) */}
+        {activeTab === "socios" && (
+          <Card>
+            <CardContent className="pt-6">
+              <SociosAdministradorSection companyId={companyId} isAdmin={isAdmin} />
+            </CardContent>
+          </Card>
+        )}
 
         {/* TAB: Minha Senha */}
         {activeTab === "senha" && (

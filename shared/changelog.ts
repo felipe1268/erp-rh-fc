@@ -1,6 +1,53 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3049 — **CONFIGURAÇÕES · CRITÉRIO EXCLUSIVO DE SÓCIOS: DEFINIR O "SÓCIO
+ * ADMINISTRADOR ATUAL" QUE ASSINA TODOS OS CONTRATOS/DOCUMENTOS ONLINE (FCSIGN).
+ * FELIPE COSTA ALVES DEIXADO COMO SÓCIO ADMINISTRADOR.**
+ *
+ * PEDIDO: criar em Configurações um critério exclusivo para sócios que LISTE todos
+ * os sócios cadastrados no ERP e permita DEFINIR qual deles é o "sócio administrador
+ * atual" — esse sócio passa a ser o responsável por assinar todos os contratos e
+ * documentos online (IntegraSign/FCSign). E deixar "Felipe Costa Alves" como sócio
+ * administrador.
+ *
+ * DADOS (Neon, banco real do app via NEON_DATABASE_URL): os sócios são employees com
+ * `tipoContrato='Socio'` (tabela `company_partners` está VAZIA). Na company 60002 há 3:
+ * CAMILA MARIANA DE OLIVEIRA ARAUJO, FELIPE COSTA ALVES (id 6) e JULIO CESAR FERRAZ
+ * DE ARAUJO. IMPORTANTE: a tabela `employees` é camelCase (`nomeCompleto`,
+ * `tipoContrato`, `companyId`) — o endpoint `listSociosFromEmployees` usava colunas
+ * snake_case inexistentes (`e.nome_completo`, `e.tipo_contrato`, `e.company_id`) e
+ * estava QUEBRADO (erro "column e.nome_completo does not exist"); foi CORRIGIDO.
+ *
+ * SOLUÇÃO (ZERO ALTER/DROP/DELETE — só INSERT/UPDATE e leitura):
+ *  1) BACKEND `server/routers/financial.ts`:
+ *     - CORRIGE `listSociosFromEmployees` para colunas camelCase reais de `employees`
+ *       (`e."nomeCompleto"`, `e."tipoContrato"`, `e."companyId"`); a subquery em
+ *       `company_partners` (snake_case) segue intacta.
+ *     - NOVO `getSocioAdministrador({companyId})`: lê o critério e resolve o sócio
+ *       (nome/cpf/cargo) via `employees`. Guard `_assertFinanceiroCompanyAccess`.
+ *     - NOVO `setSocioAdministrador({companyId, employeeId|null})`: admin/admin_master
+ *       only; valida que o employee é `tipoContrato='Socio'` da empresa; faz UPSERT em
+ *       `system_criteria` (categoria 'societario', chave 'socio_administrador_employee_id',
+ *       valor = employee.id). `employeeId=null` limpa (valor='').
+ *  2) BACKEND `server/routers/compras.ts`: NOVO helper `resolveSocioAdministradorSigner`
+ *     (lê o critério + `employees`) e o signatário "diretor" do envelope automático de
+ *     contrato (gerado na aprovação da OC) passa a usar o NOME e CPF/CNPJ do sócio
+ *     administrador, cargo "Sócio Administrador". Fallback robusto p/ "Diretor" genérico
+ *     se nenhum sócio estiver definido (qualquer falha NÃO quebra a criação do envelope).
+ *  3) FRONT `client/src/pages/configuracoes/SociosAdministradorSection.tsx` (NOVO) +
+ *     `client/src/pages/Configuracoes.tsx`: nova aba "Sócios / Administrador" (ícone
+ *     Handshake, cor emerald, minRole admin) que lista os sócios com seleção por rádio,
+ *     mostra o administrador atual e salva via `setSocioAdministrador` (onError/toast,
+ *     CPF em pt-BR). Botões/ações desabilitados p/ não-admin.
+ *  4) SEED (Neon): inserido o critério da company 60002 com valor='6' →
+ *     FELIPE COSTA ALVES definido como sócio administrador.
+ *
+ * RESSALVA: o critério é por empresa; companies sem sócio administrador definido seguem
+ * com o signatário "Diretor" genérico nos contratos automáticos. Outros fluxos de
+ * envelope cujos signatários vêm da UI (ex.: `integrasign.criarEnvelope`) não são
+ * afetados (a escolha do signatário já é manual).
+ *
  * Rev. 3048 — **INTEGRASIGN (FCSIGN) · "DETALHES DO ENVELOPE → SIGNATÁRIOS": NOME DO
  * SIGNATÁRIO PARA DE QUEBRAR UMA LETRA POR LINHA (TEXTO VOLTA A SER HORIZONTAL).**
  *
