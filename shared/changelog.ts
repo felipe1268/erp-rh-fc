@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3045 — **CIPA · ABA "REUNIÕES" GANHA SELEÇÃO MÚLTIPLA COM EXCLUSÃO EM MASSA
+ * E PASSA A ORDENAR AS REUNIÕES EM ORDEM CRESCENTE POR DATA.**
+ *
+ * PEDIDO (print aba Reuniões CIPA, iPad): "quero múltipla seleção para poder apagar
+ * todas de uma vez, e quero ela organizadas em ordem crescente por data" — a tabela
+ * vinha na ordem do backend (decrescente) e só dava pra excluir uma reunião por vez
+ * pelo ícone de lixeira.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE — usa a mutation `cipa.reunioes.delete`
+ * já existente) em `client/src/pages/CipaCompleta.tsx`:
+ *
+ *  1) ORDENAÇÃO: novo memo `reunioesOrdenadas` ordena `reunioes` CRESCENTE por
+ *     `dataReuniao` (compare lexicográfico de string ISO, estável e sem fuso). A
+ *     tabela e o `colSpan` do empty-state passam a usar essa lista.
+ *  2) SELEÇÃO MÚLTIPLA: estado `selReunioes` (Set<number>); nova COLUNA de checkbox
+ *     no header (selecionar/limpar todas) e por linha (`toggleSelReuniao`); linha
+ *     selecionada ganha realce `bg-blue-50/60`.
+ *  3) EXCLUSÃO EM MASSA: botão destrutivo "Excluir N selecionada(s)" (aparece só com
+ *     seleção) → `handleBulkDeleteReunioes` confirma e roda `deleteReuniaoSilent`
+ *     (instância SEM toast por item, p/ não spammar) em loop sequencial via
+ *     `mutateAsync`, conta sucessos, faz UM refetch no fim e toast de resumo (trata
+ *     falha parcial informando quantas saíram).
+ *
  * Rev. 3044 — **CIPA · INSCREVER CANDIDATO E LISTAS DE COLABORADOR PASSAM A MOSTRAR
  * A FOTO DO FUNCIONÁRIO (NÃO MAIS A INICIAL GENÉRICA "A").**
  *

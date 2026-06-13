@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import FullScreenDialog from "@/components/FullScreenDialog";
@@ -125,6 +126,8 @@ export default function CipaCompleta() {
   const [eleicaoForm, setEleicaoForm] = useState<any>({});
   const [membroForm, setMembroForm] = useState<any>({});
   const [reuniaoForm, setReuniaoForm] = useState<any>({});
+  const [selReunioes, setSelReunioes] = useState<Set<number>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
   const [editMembroId, setEditMembroId] = useState<number | null>(null);
   const [editMembroForm, setEditMembroForm] = useState<any>({});
@@ -178,6 +181,7 @@ export default function CipaCompleta() {
   const deleteReuniao = trpc.cipa.reunioes.delete.useMutation({
     onSuccess: () => { refetchReunioes(); toast.success("Reunião excluída!"); },
   });
+  const deleteReuniaoSilent = trpc.cipa.reunioes.delete.useMutation();
   const gerarCalendario = trpc.cipa.reunioes.gerarCalendario.useMutation({
     onSuccess: (data: any) => { refetchReunioes(); toast.success(`${data.reunioesCriadas} reuniões geradas!`); },
     onError: (e: any) => toast.error(e.message),
@@ -196,6 +200,41 @@ export default function CipaCompleta() {
   const [showEfetivarDialog, setShowEfetivarDialog] = useState(false);
   const [efetivarForm, setEfetivarForm] = useState<any>({});
   const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+
+  const reunioesOrdenadas = useMemo(
+    () => [...(reunioes as any[])].sort((a: any, b: any) => String(a?.dataReuniao || "").localeCompare(String(b?.dataReuniao || ""))),
+    [reunioes],
+  );
+  const toggleSelReuniao = (id: number) => setSelReunioes(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleSelAllReunioes = () => setSelReunioes(prev => prev.size === reunioesOrdenadas.length && reunioesOrdenadas.length > 0 ? new Set() : new Set(reunioesOrdenadas.map((r: any) => r.id)));
+  const handleBulkDeleteReunioes = async () => {
+    const ids = Array.from(selReunioes);
+    if (ids.length === 0) return;
+    if (!confirm(`Excluir ${ids.length} reunião(ões) selecionada(s)? Esta ação não pode ser desfeita.`)) return;
+    setBulkDeleting(true);
+    let ok = 0;
+    const falhas: number[] = [];
+    for (const id of ids) {
+      try { await deleteReuniaoSilent.mutateAsync({ id }); ok++; }
+      catch { falhas.push(id); }
+    }
+    setBulkDeleting(false);
+    setSelReunioes(falhas.length ? new Set(falhas) : new Set());
+    refetchReunioes();
+    if (falhas.length === 0) toast.success(`${ok} reunião(ões) excluída(s)!`);
+    else if (ok === 0) toast.error(`Falha ao excluir ${falhas.length} reunião(ões).`);
+    else toast.warning(`${ok} excluída(s), ${falhas.length} falhou(aram) — as que falharam seguem selecionadas.`);
+  };
+
+  useEffect(() => { setSelReunioes(new Set()); }, [selectedEleicaoId]);
+  useEffect(() => {
+    setSelReunioes(prev => {
+      if (prev.size === 0) return prev;
+      const validos = new Set(reunioesOrdenadas.map((r: any) => r.id));
+      const next = new Set(Array.from(prev).filter(id => validos.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [reunioesOrdenadas]);
 
   const enabledMandato = { enabled: !!selectedEleicaoId } as const;
   const { data: candidatos = [], refetch: refetchCandidatos } = trpc.cipa.candidatos.list.useQuery(
@@ -680,9 +719,16 @@ export default function CipaCompleta() {
                   </Button>
                 )}
               </div>
-              <Button onClick={() => { setReuniaoForm({}); setShowReuniaoDialog(true); }} disabled={!selectedEleicaoId}>
-                <Plus className="h-4 w-4 mr-2" /> Nova Reunião
-              </Button>
+              <div className="flex items-center gap-2">
+                {selectedEleicaoId && selReunioes.size > 0 && (
+                  <Button variant="destructive" size="sm" onClick={handleBulkDeleteReunioes} disabled={bulkDeleting}>
+                    <Trash2 className={`h-4 w-4 mr-2 ${bulkDeleting ? "animate-pulse" : ""}`} /> Excluir {selReunioes.size} selecionada(s)
+                  </Button>
+                )}
+                <Button onClick={() => { setReuniaoForm({}); setShowReuniaoDialog(true); }} disabled={!selectedEleicaoId}>
+                  <Plus className="h-4 w-4 mr-2" /> Nova Reunião
+                </Button>
+              </div>
             </div>
 
             {!selectedEleicaoId ? (
@@ -697,6 +743,13 @@ export default function CipaCompleta() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b bg-muted/30">
+                          <th className="p-3 text-center font-medium w-10">
+                            <Checkbox
+                              checked={reunioesOrdenadas.length > 0 && selReunioes.size === reunioesOrdenadas.length}
+                              onCheckedChange={toggleSelAllReunioes}
+                              aria-label="Selecionar todas"
+                            />
+                          </th>
                           <th className="p-3 text-left font-medium">Data</th>
                           <th className="p-3 text-left font-medium">Tipo</th>
                           <th className="p-3 text-left font-medium">Horário</th>
@@ -707,10 +760,17 @@ export default function CipaCompleta() {
                         </tr>
                       </thead>
                       <tbody>
-                        {(reunioes as any[]).length === 0 ? (
-                          <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">Nenhuma reunião agendada</td></tr>
-                        ) : (reunioes as any[]).map((r: any) => (
-                          <tr key={r.id} className="border-b last:border-0 hover:bg-muted/20">
+                        {reunioesOrdenadas.length === 0 ? (
+                          <tr><td colSpan={8} className="py-12 text-center text-muted-foreground">Nenhuma reunião agendada</td></tr>
+                        ) : reunioesOrdenadas.map((r: any) => (
+                          <tr key={r.id} className={`border-b last:border-0 hover:bg-muted/20 ${selReunioes.has(r.id) ? "bg-blue-50/60" : ""}`}>
+                            <td className="p-3 text-center">
+                              <Checkbox
+                                checked={selReunioes.has(r.id)}
+                                onCheckedChange={() => toggleSelReuniao(r.id)}
+                                aria-label="Selecionar reunião"
+                              />
+                            </td>
                             <td className="p-3 font-medium">{formatDate(r.dataReuniao)}</td>
                             <td className="p-3">
                               <Badge variant={r.tipo === "extraordinaria" ? "destructive" : "outline"}>
