@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3040 — **CONTRATOS DE TERCEIROS · NOME DO CONTRATO HERDA O TÍTULO DA
+ * SOLICITAÇÃO (SC) + OBJETO EDITÁVEL NA TELA DE DETALHE PARA PADRONIZAÇÃO.**
+ *
+ * PEDIDO (prints): contrato CT-2026-0006 estava com o "OBJETO DO CONTRATO" =
+ * "Prestação de serviços — OS 503: Forro em painéis de gesso acartonado # 12,5 mm,
+ * s/ tabica — 87.86 m²; Tabica pintada para forro de gesso acartonado — 234.22 m"
+ * (auto-gerado pela concat dos itens da OS), enquanto a Solicitação que o originou
+ * (SC-0365-2026) tinha o nome limpo "Forro de Gesso". Usuário: "QUERO que mantenha
+ * o nome do contrato que foi definido na solicitação… e no contrato quero poder
+ * editar para criar uma padronização".
+ *
+ * SOLUÇÃO (ZERO ALTER/DROP/DELETE — só novo SELECT de leitura + UPDATE já existente):
+ *  1) BACKEND — `server/routers/compras.ts` (`gerarContratoTerceiroDeOS`, usado nos
+ *     2 call sites de geração de contrato a partir de OC/OS): antes do INSERT em
+ *     `terceiro_contratos`, busca o `titulo` da SC percorrendo a cadeia
+ *     OC→cotação→SC (`compras_ordens.cotacaoId` → `compras_cotacoes.solicitacaoId`
+ *     → `compras_solicitacoes.titulo`) via innerJoin Drizzle. Se houver título, ele
+ *     vira a `descricao` do contrato (nome/objeto); se a SC não tiver título ou a
+ *     cadeia estiver incompleta (cotação/SC nulas), FALLBACK para o concat antigo
+ *     "Prestação de serviços — OS N: ...". Tudo dentro da transação existente,
+ *     com try/catch que não derruba a criação do contrato.
+ *  2) FRONTEND — `client/src/pages/terceiros/contratos/ContratoDetalhe.tsx`: o card
+ *     "OBJETO DO CONTRATO" ganha botão "Editar" (lápis) que abre um `Textarea`
+ *     (máx. 500, contador N/500) com Salvar/Cancelar. Salvar chama a mutation já
+ *     existente `terceiroContratos.atualizarContrato` ({ id, companyId, descricao }),
+ *     que faz UPDATE da coluna `descricao`. O card passa a renderizar sempre (mesmo
+ *     vazio, com CTA "clique em Editar para padronizar"); leitura mantém "Ver mais".
+ *  3) SEGURANÇA — `server/routers/terceiroContratos.ts` (`atualizarContrato`): como
+ *     a edição do objeto agora é exposta na tela, fechou-se um IDOR cross-tenant —
+ *     a mutation passou a carregar a linha real do contrato e validar o `companyId`
+ *     do CHAMADOR via `_assertCompanyAccess(ctx.user, alvo.companyId)` ANTES do
+ *     UPDATE, em vez de confiar no `companyId` enviado pelo client.
+ *
+ * IMPACTO: contratos NOVOS nascem com o nome definido na solicitação (ex.: "Forro
+ * de Gesso"); qualquer contrato (novo ou antigo) pode ter o objeto editado na tela
+ * de detalhe para padronizar a nomenclatura. Contratos JÁ criados não mudam
+ * retroativamente (só via edição manual). REPUBLICAR (front + back).
+ *
  * Rev. 3039 — **FINANCEIRO → "ANÁLISE DE CUSTOS" · TELA DE DETALHE · GRÁFICO
  * "DISTRIBUIÇÃO POR MÊS": ACABA COM OS RÓTULOS DE VALOR SOBREPOSTOS NO TOPO DAS
  * BARRAS — TROCA O VALOR CHEIO ("R$ 228.072,91", QUE EM 12 BARRAS ESTREITAS

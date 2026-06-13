@@ -84,6 +84,8 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   const [editMedicao, setEditMedicao] = useState<{ id: number; periodo: string; dataReferencia: string; observacoes: string; status: string } | null>(null);
   const [descExpanded, setDescExpanded] = useState(false);
   const [editingNatureza, setEditingNatureza] = useState(false);
+  const [editingObjeto, setEditingObjeto] = useState(false);
+  const [editObjetoValue, setEditObjetoValue] = useState("");
 
   // Documento tab state
   const [textoEditado, setTextoEditado] = useState<string | null>(null);
@@ -111,7 +113,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   });
 
   const atualizarContratoMut = trpc.terceiroContratos.atualizarContrato.useMutation({
-    onSuccess: () => { toast.success("Contrato atualizado!"); utils.terceiroContratos.getContrato.invalidate({ id }); setEditingDates(false); setEditingCriterios(false); setEditingDocDate(null); setEditingNatureza(false); },
+    onSuccess: () => { toast.success("Contrato atualizado!"); utils.terceiroContratos.getContrato.invalidate({ id }); setEditingDates(false); setEditingCriterios(false); setEditingDocDate(null); setEditingNatureza(false); setEditingObjeto(false); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -358,23 +360,62 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
           </div>
         )}
 
-        {/* Objeto do Contrato — escopo resumido e legível */}
-        {contrato.descricao && (
-          <div className="rounded-xl border border-gray-200 bg-white p-4">
-            <p className="text-[10px] text-gray-500 uppercase font-semibold tracking-wide mb-1.5">Objeto do Contrato</p>
-            <p className={`text-sm text-gray-700 leading-relaxed whitespace-pre-line ${descExpanded ? "" : "line-clamp-2"}`}>
-              {contrato.descricao}
-            </p>
-            {(contrato.descricao.length > 130) && (
+        {/* Objeto do Contrato — escopo resumido e legível, editável p/ padronização */}
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-[10px] text-gray-500 uppercase font-semibold tracking-wide">Objeto do Contrato</p>
+            {!editingObjeto && (
               <button
-                onClick={() => setDescExpanded(v => !v)}
-                className="mt-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline"
+                onClick={() => { setEditObjetoValue(contrato.descricao || ""); setEditingObjeto(true); }}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline"
               >
-                {descExpanded ? "Ver menos" : "Ver mais"}
+                <Pencil className="w-3 h-3" /> Editar
               </button>
             )}
           </div>
-        )}
+          {editingObjeto ? (
+            <div className="space-y-2">
+              <Textarea
+                value={editObjetoValue}
+                onChange={(e) => setEditObjetoValue(e.target.value.slice(0, 500))}
+                rows={3}
+                maxLength={500}
+                placeholder="Descreva o objeto do contrato (ex.: Forro de Gesso)…"
+                className="text-sm"
+              />
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-gray-400">{editObjetoValue.length}/500</span>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => setEditingObjeto(false)}>Cancelar</Button>
+                  <Button
+                    size="sm"
+                    className="bg-blue-600 hover:bg-blue-700"
+                    disabled={atualizarContratoMut.isPending || !editObjetoValue.trim()}
+                    onClick={() => atualizarContratoMut.mutate({ id, companyId: contrato.companyId, descricao: editObjetoValue.trim() })}
+                  >
+                    <Save className="w-3.5 h-3.5 mr-1" /> Salvar
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : contrato.descricao ? (
+            <>
+              <p className={`text-sm text-gray-700 leading-relaxed whitespace-pre-line ${descExpanded ? "" : "line-clamp-2"}`}>
+                {contrato.descricao}
+              </p>
+              {(contrato.descricao.length > 130) && (
+                <button
+                  onClick={() => setDescExpanded(v => !v)}
+                  className="mt-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  {descExpanded ? "Ver menos" : "Ver mais"}
+                </button>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-gray-400 italic">Sem objeto definido. Clique em "Editar" para padronizar.</p>
+          )}
+        </div>
 
         {/* Vigência do Contrato — destaque */}
         {(() => {

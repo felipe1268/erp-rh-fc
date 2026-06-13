@@ -447,13 +447,34 @@ async function gerarContratoTerceiroDeOS(params: {
       };
       const tipoContratoTC = tipoContratoMap[params.moduloMedicao ?? ""] ?? "empreitada_global";
 
+      // Rev. 3040 — nome do contrato HERDA o título da Solicitação (SC) que originou
+      // a OC (cadeia OC→cotação→SC). Mantém a padronização definida pelo solicitante
+      // (ex.: "Forro de Gesso") em vez do auto-gerado "Prestação de serviços — OS N: ...".
+      // Fallback p/ o concat antigo quando a SC não tem título ou a cadeia está incompleta.
+      let scTitulo = "";
+      try {
+        const scRows = await tx
+          .select({ titulo: comprasSolicitacoes.titulo })
+          .from(comprasOrdens)
+          .innerJoin(comprasCotacoes, eq(comprasCotacoes.id, comprasOrdens.cotacaoId))
+          .innerJoin(comprasSolicitacoes, eq(comprasSolicitacoes.id, comprasCotacoes.solicitacaoId))
+          .where(eq(comprasOrdens.id, params.ocId))
+          .limit(1);
+        scTitulo = (scRows?.[0]?.titulo ?? "").trim();
+      } catch (e: any) {
+        console.error(`[gerarContratoTerceiroDeOS] Erro ao buscar título da SC:`, e?.message);
+      }
+      const descricaoContrato = (scTitulo
+        ? scTitulo
+        : `Prestação de serviços — OS ${params.ocId}: ${itensDescr}`).slice(0, 500);
+
       const [tcInner] = await tx.insert(terceiroContratos).values({
         companyId: params.companyId,
         empresaTerceiraId: empTerceiraId,
         obraId: params.obraId,
         obraNome: obraNome,
         numeroContrato: numContrato,
-        descricao: `Prestação de serviços — OS ${params.ocId}: ${itensDescr}`.slice(0, 500),
+        descricao: descricaoContrato,
         tipoContrato: tipoContratoTC,
         valorTotal: String(params.total.toFixed(2)),
         dataInicio: hoje,

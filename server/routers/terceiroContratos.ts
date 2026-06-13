@@ -659,9 +659,15 @@ export const terceiroContratosRouter = router({
       prazoLiberacaoOp: z.number().min(1).max(60).optional(),
       textoContrato: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       const { id, companyId, ...rest } = input;
+      // Rev. 2830/3040 — guarda de tenancy contra IDOR: carrega o contrato real e
+      // valida o companyId do CHAMADOR contra a linha (não confia no companyId do client).
+      const [alvo] = await db.select({ companyId: terceiroContratos.companyId })
+        .from(terceiroContratos).where(eq(terceiroContratos.id, id));
+      if (!alvo) throw new Error("Contrato não encontrado");
+      await _assertCompanyAccess(ctx.user, (alvo as any).companyId);
       const upd: any = { atualizadoEm: new Date().toISOString() };
       if (rest.descricao !== undefined) upd.descricao = rest.descricao;
       if (rest.numeroContrato !== undefined) upd.numeroContrato = rest.numeroContrato;
