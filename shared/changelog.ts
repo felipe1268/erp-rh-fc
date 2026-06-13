@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3042 — **INTEGRASIGN (FCSIGN) · ENVIO DO LINK DE ASSINATURA POR WHATSAPP +
+ * ESCOLHA "E-MAIL × SOMENTE LINKS" AO ENVIAR O ENVELOPE.**
+ *
+ * PEDIDO (print IntegraSign — envelope CT-2026-0006, 2 signatários "Pendente"):
+ * "coloca uma forma de enviar o link da assinatura por WhatsApp… ajuda para quem
+ * não tem e-mail… poderia ter a opção de escolher e-mail ou por link, agiliza muito".
+ *
+ * CONTEXTO: cada signatário JÁ nasce com `token` único na criação do envelope
+ * (`criarEnvelope` → `generateToken()`), e o link público `/integrasign/assinar/:token`
+ * já existe. Desde a Rev. 2828 havia o botão "Copiar link" por signatário. Faltava:
+ * (a) um disparo DIRETO p/ WhatsApp e (b) poder ENVIAR o envelope SEM forçar e-mail.
+ *
+ * SOLUÇÃO (ZERO ALTER/DROP/DELETE — só lógica + UI):
+ *
+ *  1) BACKEND — `server/routers/integrasign.ts` (`enviarParaAssinatura`): novo input
+ *     opcional `enviarEmail: boolean` (default true, backward-compat). O fluxo de
+ *     marcar o envelope como "enviado", expirar tokens e mudar status dos signatários
+ *     p/ "notificado" é IDÊNTICO; a ÚNICA diferença é que o `enviarConviteAssinatura`
+ *     (e-mail) agora roda dentro de `if (input.enviarEmail !== false)`. Assim, com
+ *     `enviarEmail:false` os LINKS ficam ativos sem disparar nenhum e-mail — o usuário
+ *     envia manualmente (WhatsApp/Copiar link). Log de auditoria distingue os 2 modos
+ *     ("por e-mail" × "somente links — sem e-mail") e o retorno inclui `enviarEmail`.
+ *     O gate público (`getDocumentoPublico`) só bloqueia cancelado/expirado/recusado,
+ *     então o link aberto via "somente links" funciona normalmente.
+ *
+ *  2) FRONT — `client/src/pages/IntegraSignDashboard.tsx`:
+ *      - NOVO `handleWhatsApp(sig, titulo)`: abre `https://wa.me/?text=…` com a
+ *        mensagem "Olá {nome}, segue o link para assinatura… {url}" já codificada
+ *        (sem número → o usuário escolhe o contato no WhatsApp). Botão "WhatsApp"
+ *        (ícone `MessageCircle`, verde) por signatário, com o MESMO gate do "Copiar
+ *        link" (token presente, status ≠ assinado/recusado, envelope enviado/em_andamento).
+ *      - `handleEnviar(envelopeId, enviarEmail=true)` agora propaga `enviarEmail` à
+ *        mutation e mostra toast específico p/ cada modo.
+ *      - Bloco de rascunho ganha DOIS botões: "Enviar por e-mail" (Send) e "Gerar
+ *        links (WhatsApp)" (MessageCircle, outline) → `handleEnviar(env.id, false)`.
+ *     Sem mudança de schema; nada quebra p/ quem continua usando e-mail. REPUBLICAR
+ *     (front + back).
+ *
  * Rev. 3041 — **MÓDULO CIPA (NR-5) · COMPLETADO: ELEIÇÃO DIGITAL (CANDIDATOS +
  * VOTAÇÃO POR LINK COM VOTO ANÔNIMO + APURAÇÃO AO VIVO), ATAS ONLINE +
  * ASSINATURA (FCSign/IMPRESSÃO), PLANOS DE AÇÃO E CALENDÁRIO MENSAL.**

@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, PenLine, Eye, Send, XCircle, RefreshCw, FileText, Clock, CheckCircle2, AlertTriangle, Shield, ChevronRight, RotateCcw, Trash2, Link2, Check, Pencil } from "lucide-react";
+import { Loader2, PenLine, Eye, Send, XCircle, RefreshCw, FileText, Clock, CheckCircle2, AlertTriangle, Shield, ChevronRight, RotateCcw, Trash2, Link2, Check, Pencil, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 
 function papelLabel(p: string) {
@@ -134,10 +134,26 @@ export default function IntegraSignDashboard() {
     }).catch(() => toast.error("Não foi possível copiar o link."));
   }
 
-  async function handleEnviar(envelopeId: number) {
+  // Rev. 3042: abre o WhatsApp com a mensagem + link de assinatura prontos,
+  // p/ enviar a quem não tem e-mail. wa.me sem número deixa escolher o contato.
+  function handleWhatsApp(sig: any, titulo: string) {
+    if (!sig?.token) {
+      toast.error("Este signatário ainda não possui link de assinatura.");
+      return;
+    }
+    const url = `${window.location.origin}/integrasign/assinar/${sig.token}`;
+    const msg = `Olá ${sig.nome}, segue o link para assinatura eletrônica do documento "${titulo}":\n${url}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+  }
+
+  async function handleEnviar(envelopeId: number, enviarEmail = true) {
     try {
-      const result = await enviarMut.mutateAsync({ companyId, envelopeId });
-      toast.success(`Envelope enviado! ${result.notificados} signatário(s) notificado(s)`);
+      const result = await enviarMut.mutateAsync({ companyId, envelopeId, enviarEmail });
+      toast.success(
+        enviarEmail
+          ? `Envelope enviado! ${result.notificados} signatário(s) notificado(s) por e-mail`
+          : "Links gerados! Use os botões WhatsApp / Copiar link de cada signatário para enviar.",
+      );
       envelopes.refetch();
       if (selectedEnvelope === envelopeId) envelopeDetail.refetch();
     } catch (err: any) {
@@ -407,6 +423,18 @@ export default function IntegraSignDashboard() {
                                 {copiedSigId === sig.id ? "Copiado" : "Copiar link"}
                               </Button>
                             )}
+                            {sig.token && !["assinado", "recusado"].includes(sig.status) && ["enviado", "em_andamento"].includes(env.status) && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs text-green-700 hover:text-green-800"
+                                onClick={() => handleWhatsApp(sig, env.titulo)}
+                                title="Enviar link de assinatura por WhatsApp"
+                              >
+                                <MessageCircle className="h-3 w-3 mr-1" />
+                                WhatsApp
+                              </Button>
+                            )}
                             {["notificado", "visualizado", "pendente"].includes(sig.status) && env.status !== "cancelado" && (
                               <Button
                                 variant="ghost"
@@ -427,10 +455,16 @@ export default function IntegraSignDashboard() {
 
                   <div className="flex gap-2 flex-wrap pt-2">
                     {env.status === "rascunho" && (
-                      <Button size="sm" onClick={() => handleEnviar(env.id)} disabled={enviarMut.isPending}>
-                        <Send className="h-4 w-4 mr-1" />
-                        Enviar para Assinatura
-                      </Button>
+                      <>
+                        <Button size="sm" onClick={() => handleEnviar(env.id, true)} disabled={enviarMut.isPending}>
+                          <Send className="h-4 w-4 mr-1" />
+                          Enviar por e-mail
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleEnviar(env.id, false)} disabled={enviarMut.isPending} title="Gera os links sem disparar e-mail — envie por WhatsApp/link">
+                          <MessageCircle className="h-4 w-4 mr-1" />
+                          Gerar links (WhatsApp)
+                        </Button>
+                      </>
                     )}
                     <Button variant="outline" size="sm" onClick={() => abrirEdicao(env)}>
                       <Pencil className="h-4 w-4 mr-1" />

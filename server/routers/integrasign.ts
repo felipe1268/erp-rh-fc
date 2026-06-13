@@ -306,6 +306,9 @@ export const integrasignRouter = router({
     .input(z.object({
       companyId: z.number(),
       envelopeId: z.number(),
+      // Rev. 3042: permite escolher entre disparar e-mail (padrão) ou apenas
+      // gerar/ativar os links de assinatura p/ envio manual (ex.: WhatsApp).
+      enviarEmail: z.boolean().optional().default(true),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -356,14 +359,16 @@ export const integrasignRouter = router({
           tokenExpiraEm: expiresAt.toISOString(),
         }).where(eq(integrasignSignatarios.id, sig.id));
 
-        enviarConviteAssinatura({
-          email: sig.email,
-          nome: sig.nome,
-          papel: sig.papel,
-          titulo: envelope.titulo,
-          token: sig.token,
-          remetente: userName,
-        }).catch(err => console.error(`[IntegraSign] Erro ao enviar convite para ${sig.email}:`, err?.message));
+        if (input.enviarEmail !== false) {
+          enviarConviteAssinatura({
+            email: sig.email,
+            nome: sig.nome,
+            papel: sig.papel,
+            titulo: envelope.titulo,
+            token: sig.token,
+            remetente: userName,
+          }).catch(err => console.error(`[IntegraSign] Erro ao enviar convite para ${sig.email}:`, err?.message));
+        }
       }
 
       if (envelope.contratoTerceiroId) {
@@ -379,12 +384,12 @@ export const integrasignRouter = router({
         companyId: input.companyId,
         envelopeId: input.envelopeId,
         acao: "envelope_enviado",
-        detalhes: `Enviado para assinatura. Primeiro: ${primeiroObrigatorio?.nome || "N/A"}. Hash: ${hashDoc || "N/A"}`,
+        detalhes: `Enviado para assinatura${input.enviarEmail === false ? " (somente links — sem e-mail)" : " por e-mail"}. Primeiro: ${primeiroObrigatorio?.nome || "N/A"}. Hash: ${hashDoc || "N/A"}`,
         userId,
         userName,
       });
 
-      return { success: true, notificados: toNotify.length };
+      return { success: true, notificados: toNotify.length, enviarEmail: input.enviarEmail !== false };
     }),
 
   // ---- ROTAS PÚBLICAS (token-based) ----
