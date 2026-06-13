@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3034 — **FINANCEIRO → "ANÁLISE DE CUSTOS" · TABELA "COMPARATIVO MÊS A MÊS POR
+ * CATEGORIA": VOLTA A SER UMA TABELA MATRICIAL DE VERDADE (CATEGORIA × MESES), AGORA
+ * MODERNA E LEGÍVEL — REVERTE O REDESENHO "SÓ SPARKLINE" DA Rev. 3032 QUE O USUÁRIO
+ * REJEITOU.**
+ *
+ * PEDIDO (usuário, prints IMG_1926/IMG_1927): "Está péssimo isso.. quero uma tabela
+ * comparativa mês a mês.... assim tá ruim não gostei". A Rev. 3032 tinha trocado as
+ * colunas mensais por um sparkline por linha (Tendência no ano), mas o usuário quer
+ * VER os números mês a mês, lado a lado, pra comparar.
+ *
+ * DIAGNÓSTICO (por que a tabela ORIGINAL — pré-3032 — era ruim): 12 colunas de meses
+ * com `formatBRL` por extenso estouravam a largura (colunas truncadas no mobile) e
+ * misturavam formatos. A Rev. 3032 resolveu pelo lado errado (removeu os meses). Esta
+ * revisão traz os meses de volta, mas resolve a largura/legibilidade com design.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, ZERO backend/schema) em
+ * `client/src/pages/financeiro/FinanceiroAnaliseCustos.tsx`:
+ *  - REMOVIDO o componente `Sparkline` (e seus 2 usos na tabela/rodapé).
+ *  - Tabela vira MATRIZ: coluna "Categoria" FIXA (`sticky left-0`, segue ao rolar) +
+ *    uma coluna por MÊS-COM-DADOS (`tabelaMensal.meses`) + "Total" + "Variação".
+ *    A faixa de meses rola horizontalmente sem espremer/truncar (`overflow-x-auto`).
+ *  - HEATMAP por linha: cada célula mensal recebe um fundo índigo cuja opacidade é
+ *    proporcional ao valor da célula sobre o `rowMax` da categoria
+ *    (`rgba(99,102,241, 0.05 + intensidade*0.33)`) — o mês mais "pesado" de cada
+ *    categoria salta aos olhos. Célula zero fica "—" cinza.
+ *  - Valores das células em formato COMPACTO consistente (`BRLk` → "R$ 290 mil"); o
+ *    valor EXATO (`formatBRL`) fica no `title` (hover) e na coluna "Total".
+ *  - Mantém a coluna "Variação" (selo ▲/▼ % colorido, último mês × anterior — vermelho
+ *    sobe / verde cai) e a micro-barra "% do total" sob o nome da categoria.
+ *  - Rodapé "Total geral" agora soma POR MÊS (alinhado às colunas) + total do ano.
+ *  - Clique na linha continua abrindo o detalhe via `irParaDetalhe("grupo", nome)`.
+ * O memo `tabelaMensal` (matriz grupo×12, `meses`, `totaisMes`, `totalGeral`) e o
+ * classificador `classificarGrupoCusto` ficam INTOCADOS. REPUBLICAR (só front).
+ *
  * Rev. 3033 — **EQUIPAMENTOS PRÓPRIOS → KPIs DO TOPO: NOVO CARD "VALOR TOTAL" COM A
  * SOMA DO `valorAquisicao` DO PARQUE INTEIRO (EM BRL pt-BR), COM DESTAQUE DE COR
  * (ÍNDIGO) MAS SEM AUMENTAR A FONTE COMO OS CONTADORES NUMÉRICOS (text-3xl) —

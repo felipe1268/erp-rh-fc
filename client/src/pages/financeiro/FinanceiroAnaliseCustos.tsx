@@ -40,33 +40,6 @@ function pct(part: number, total: number): number {
   return total > 0 ? (part / total) * 100 : 0;
 }
 
-// Mini-gráfico de tendência (sparkline) em SVG puro — sem dependência por linha.
-// Cor verde = custo caindo (bom) · vermelho = subindo (atenção).
-function Sparkline({ values, color }: { values: number[]; color: string }) {
-  const w = 130, h = 34, pad = 4;
-  if (!values || values.length === 0) return <span className="text-gray-300 text-xs">—</span>;
-  const max = Math.max(...values);
-  const min = Math.min(...values);
-  const span = max - min || 1;
-  const n = values.length;
-  const stepX = n > 1 ? (w - pad * 2) / (n - 1) : 0;
-  const pts = values.map((v, i) => {
-    const x = n > 1 ? pad + i * stepX : w / 2;
-    const y = pad + (h - pad * 2) * (1 - (v - min) / span);
-    return [x, y] as const;
-  });
-  const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
-  const area = `${line} L${pts[pts.length - 1][0].toFixed(1)},${h - pad} L${pts[0][0].toFixed(1)},${h - pad} Z`;
-  const lastPt = pts[pts.length - 1];
-  return (
-    <svg width={w} height={h} className="block">
-      {n > 1 && <path d={area} fill={color} opacity={0.08} />}
-      {n > 1 && <path d={line} fill="none" stroke={color} strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" />}
-      <circle cx={lastPt[0]} cy={lastPt[1]} r={2.75} fill={color} />
-    </svg>
-  );
-}
-
 const MESES_ABREV = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const MESES_FULL = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
@@ -625,25 +598,30 @@ export default function FinanceiroAnaliseCustos() {
                 ) : (
                   <>
                     <p className="text-xs text-gray-500 mb-4">
-                      Tendência de custo por categoria ao longo de {ano}. A linha
-                      {" "}<span className="text-rose-600 font-medium">sobe</span> quando o gasto cresce e
-                      {" "}<span className="text-emerald-600 font-medium">cai</span> quando diminui.
-                      {tabelaMensal.prevIdx >= 0 && <> A variação compara {MESES_ABREV[tabelaMensal.prevIdx]} → {MESES_ABREV[tabelaMensal.lastIdx]}.</>}
-                      {" "}Clique numa categoria para ver os lançamentos.
+                      Custo por categoria mês a mês ao longo de {ano}. O tom de cor mais
+                      forte marca os meses de maior gasto em cada linha; a coluna
+                      {" "}<span className="font-medium text-gray-600">Variação</span> compara
+                      {tabelaMensal.prevIdx >= 0
+                        ? <> {MESES_ABREV[tabelaMensal.prevIdx]} → {MESES_ABREV[tabelaMensal.lastIdx]}</>
+                        : <> os dois últimos meses com dados</>}
+                      {" "}(<span className="text-rose-600 font-medium">▲ subiu</span> ·
+                      {" "}<span className="text-emerald-600 font-medium">▼ caiu</span>).
+                      {" "}Passe o mouse para ver o valor exato; clique numa categoria para ver os lançamentos.
                     </p>
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto -mx-1 px-1">
                       <table className="w-full text-sm border-collapse">
                         <thead>
                           <tr className="text-gray-400 text-xs border-b border-gray-200">
-                            <th className="text-left font-medium py-2 pr-3">Categoria</th>
-                            <th className="text-center font-medium py-2 px-3 whitespace-nowrap">Tendência no ano</th>
-                            <th className="text-right font-medium py-2 px-3 whitespace-nowrap">Total no ano</th>
+                            <th className="text-left font-medium py-2 pr-3 sticky left-0 bg-white z-10">Categoria</th>
+                            {tabelaMensal.meses.map((mi) => (
+                              <th key={mi} className="text-right font-medium py-2 px-2 whitespace-nowrap">{MESES_ABREV[mi]}</th>
+                            ))}
+                            <th className="text-right font-medium py-2 px-2 whitespace-nowrap">Total</th>
                             <th className="text-right font-medium py-2 pl-3 whitespace-nowrap">Variação</th>
                           </tr>
                         </thead>
                         <tbody>
                           {tabelaMensal.linhas.map((l) => {
-                            const serie = tabelaMensal.meses.map((mi) => l.arr[mi]);
                             const temComp = tabelaMensal.prevIdx >= 0;
                             const prev = temComp ? l.arr[tabelaMensal.prevIdx] : 0;
                             const last = tabelaMensal.lastIdx >= 0 ? l.arr[tabelaMensal.lastIdx] : 0;
@@ -651,33 +629,42 @@ export default function FinanceiroAnaliseCustos() {
                             const deltaPct = prev > 0 ? (delta / prev) * 100 : (last > 0 ? 100 : 0);
                             const subiu = temComp && delta > 0.005;
                             const caiu = temComp && delta < -0.005;
-                            const trendColor = subiu ? "#e11d48" : caiu ? "#059669" : "#9ca3af";
+                            const rowMax = Math.max(0, ...tabelaMensal.meses.map((mi) => l.arr[mi]));
                             const share = pct(l.total, tabelaMensal.totalGeral);
                             return (
                               <tr
                                 key={l.name}
                                 onClick={() => irParaDetalhe("grupo", l.name)}
                                 title={`Ver lançamentos · ${l.name}`}
-                                className="border-b border-gray-50 cursor-pointer hover:bg-indigo-50/50 transition-colors"
+                                className="group border-b border-gray-50 cursor-pointer transition-colors"
                               >
-                                <td className="py-3 pr-3 align-middle">
+                                <td className="py-2.5 pr-3 align-middle sticky left-0 bg-white group-hover:bg-indigo-50/60 z-10">
                                   <div className="font-medium text-gray-700 whitespace-nowrap">{l.name}</div>
                                   <div className="mt-1 flex items-center gap-1.5">
-                                    <div className="h-1 w-16 rounded-full bg-gray-100 overflow-hidden">
+                                    <div className="h-1 w-14 rounded-full bg-gray-100 overflow-hidden">
                                       <div className="h-full rounded-full bg-indigo-400" style={{ width: `${Math.min(100, share)}%` }} />
                                     </div>
-                                    <span className="text-[10px] text-gray-400 tabular-nums">{share.toFixed(0)}% do total</span>
+                                    <span className="text-[10px] text-gray-400 tabular-nums">{share.toFixed(0)}%</span>
                                   </div>
                                 </td>
-                                <td className="py-3 px-3 align-middle">
-                                  <div className="flex justify-center">
-                                    <Sparkline values={serie} color={trendColor} />
-                                  </div>
-                                </td>
-                                <td className="py-3 px-3 text-right tabular-nums font-semibold text-gray-800 whitespace-nowrap align-middle">
+                                {tabelaMensal.meses.map((mi) => {
+                                  const v = l.arr[mi];
+                                  const intensidade = rowMax > 0 ? v / rowMax : 0;
+                                  return (
+                                    <td
+                                      key={mi}
+                                      title={`${l.name} · ${MESES_ABREV[mi]}: ${formatBRL(v)}`}
+                                      className="py-2.5 px-2 text-right tabular-nums whitespace-nowrap align-middle text-gray-700 group-hover:brightness-95"
+                                      style={{ backgroundColor: v > 0 ? `rgba(99,102,241,${(0.05 + intensidade * 0.33).toFixed(3)})` : undefined }}
+                                    >
+                                      {v > 0 ? BRLk(v) : <span className="text-gray-300">—</span>}
+                                    </td>
+                                  );
+                                })}
+                                <td className="py-2.5 px-2 text-right tabular-nums font-semibold text-gray-800 whitespace-nowrap align-middle group-hover:bg-indigo-50/60">
                                   {formatBRL(l.total)}
                                 </td>
-                                <td className="py-3 pl-3 text-right align-middle whitespace-nowrap">
+                                <td className="py-2.5 pl-3 text-right align-middle whitespace-nowrap group-hover:bg-indigo-50/60">
                                   <span
                                     title={
                                       !temComp || delta === 0
@@ -698,14 +685,12 @@ export default function FinanceiroAnaliseCustos() {
                         </tbody>
                         <tfoot>
                           <tr className="border-t-2 border-gray-200 font-semibold text-gray-700">
-                            <td className="py-3 pr-3">Total geral</td>
-                            <td className="py-3 px-3">
-                              <div className="flex justify-center">
-                                <Sparkline values={tabelaMensal.totaisMes} color="#6366f1" />
-                              </div>
-                            </td>
-                            <td className="py-3 px-3 text-right tabular-nums whitespace-nowrap">{formatBRL(tabelaMensal.totalGeral)}</td>
-                            <td className="py-3 pl-3" />
+                            <td className="py-2.5 pr-3 sticky left-0 bg-white z-10">Total geral</td>
+                            {tabelaMensal.totaisMes.map((t, i) => (
+                              <td key={i} className="py-2.5 px-2 text-right tabular-nums whitespace-nowrap">{t > 0 ? BRLk(t) : "—"}</td>
+                            ))}
+                            <td className="py-2.5 px-2 text-right tabular-nums whitespace-nowrap">{formatBRL(tabelaMensal.totalGeral)}</td>
+                            <td className="py-2.5 pl-3" />
                           </tr>
                         </tfoot>
                       </table>
