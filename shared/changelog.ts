@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3030 — **FINANCEIRO → "ANÁLISE DE CUSTOS" · TELA DE DETALHE · MODAL "EDITAR
+ * LANÇAMENTO": LAYOUT MAIS LIMPO E AUTOMÁTICO — (1) A DESCRIÇÃO JÁ ABRE LIMPA (SEM
+ * O "OC #OS-2026-013 — FORNECEDOR" CRU; SÓ O TEXTO LIVRE, EX.: "PREVISÃO MEDIÇÃO");
+ * (2) O DOCUMENTO DE ORIGEM VIRA UM BADGE CLICÁVEL NO TOPO DO MODAL QUE ABRE A
+ * OC/OS; (3) O FORNECEDOR CONTINUA AUTO-PREENCHIDO (Rev. 3029); (4) O VALOR EM BRL
+ * pt-BR (R$ 234.998,90 — PONTO P/ MILHAR, VÍRGULA P/ CENTAVOS) VIA `MoneyInput`.**
+ *
+ * PEDIDO (usuário, print IMG_1917): "melhora este layout pra garantir que tinha um
+ * lançamento simples e o mais automático possível; quero os valores em reais com
+ * separação com ponto e vírgula".
+ *
+ * CAUSA-RAIZ / DIAGNÓSTICO: o modal "Editar lançamento" pré-preenchia a Descrição
+ * com o texto CRU (`r.descricao`), que vinha poluído ("PREVISÃO MEDIÇÃO OC
+ * #OS-2026-013 — THIAGO MATERIAIS PA…") — o mesmo lixo que a Rev. 3029 já limpava na
+ * LISTAGEM, mas que voltava a aparecer ao abrir a edição. Faltava também o contexto
+ * do documento de origem dentro do modal (só existia na tabela). O valor já usava
+ * `MoneyInput` (BRL), então a parte de moeda só precisava ser confirmada/mantida.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, ZERO backend/schema) em
+ * `client/src/pages/financeiro/FinanceiroAnaliseCustosDetalhe.tsx`:
+ *  - `abrirEdicao(r)`: a Descrição passa a ser pré-preenchida com `parseLanc(r).livre`
+ *    (texto limpo, sem nº/"#"/"*"/fornecedor), com fallback p/ `r.descricao` quando
+ *    `livre` ficar vazio. Fornecedor segue `r.fornecedorNome || parseLanc(r).fornecedorDesc`.
+ *  - NOVO bloco no topo do `<Dialog>` de edição: "Documento de origem:" + badge índigo
+ *    com o `docNumero` (`parseLanc`); se houver `linkDeOrigem(editRow)` (compras/compra_oc),
+ *    o badge é um `<button>` que navega via `setLocation` p/ `/compras/ordens?destaque=<id>`
+ *    (mesma rota da listagem); senão, badge cinza estático. Some quando não há `docNumero`.
+ *  - Valor: mantido o `MoneyInput` (máscara BRL pt-BR `234.998,90`), conforme a regra
+ *    de moeda do projeto.
+ *
+ * `keyOf.fornecedor` / gráfico "Por Fornecedor" / `salvarEdicao` (que persiste a
+ * descrição limpa + fornecedor via `updateEntry`) INTOCADOS na lógica. REPUBLICAR
+ * (só front). FRONT-only.
+ *
  * Rev. 3029 — **FINANCEIRO → "ANÁLISE DE CUSTOS" · TELA DE DETALHE ("LANÇAMENTOS
  * DETALHADOS"): (1) A COLUNA "FORNECEDOR" PASSA A MOSTRAR O NOME (ANTES "—" EM
  * TUDO); (2) A DESCRIÇÃO GANHA UM BADGE LIMPO COM O Nº DO DOCUMENTO (OC-2026-0029,

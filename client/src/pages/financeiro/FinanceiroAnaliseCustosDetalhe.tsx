@@ -349,10 +349,11 @@ export default function FinanceiroAnaliseCustosDetalhe() {
     const catMatch = categoriaOpcoes.find((c) => c.nome.toLowerCase() === cur.toLowerCase());
     const obraCur = String(r.obraNome ?? "").trim();
     const obraMatch = obraOpcoes.find((o) => o.nome.toLowerCase() === obraCur.toLowerCase());
+    const p = parseLanc(r);
     setEditRow(r);
     setEf({
-      descricao: r.descricao || r.origemDescricao || "",
-      fornecedorNome: r.fornecedorNome || parseLanc(r).fornecedorDesc || "",
+      descricao: p.livre || r.descricao || r.origemDescricao || "",
+      fornecedorNome: r.fornecedorNome || p.fornecedorDesc || "",
       contaSel: catMatch ? String(catMatch.id) : (cur ? "-1" : CLEAR),
       obraSel: obraMatch ? String(obraMatch.id) : (obraCur ? "-1" : CLEAR),
       dataCompetencia: (r.dataCompetencia || "").slice(0, 10),
@@ -813,6 +814,29 @@ export default function FinanceiroAnaliseCustosDetalhe() {
           </DialogHeader>
           {ef && editRow && (
             <div className="space-y-3">
+              {(() => {
+                const p = parseLanc(editRow);
+                if (!p.docNumero) return null;
+                const link = linkDeOrigem(editRow);
+                return (
+                  <div className="flex items-center gap-2 rounded-lg bg-indigo-50/70 border border-indigo-100 px-3 py-2">
+                    <span className="text-[11px] text-gray-500">Documento de origem:</span>
+                    {link ? (
+                      <button
+                        type="button"
+                        onClick={() => setLocation(link)}
+                        className="inline-flex items-center gap-1 rounded-md bg-indigo-100 text-indigo-700 hover:bg-indigo-200 px-2 py-0.5 text-xs font-semibold tabular-nums"
+                        title={`Abrir ${p.docNumero}`}
+                      >
+                        {p.docNumero}
+                        <ExternalLink className="w-3 h-3" />
+                      </button>
+                    ) : (
+                      <span className="inline-flex items-center rounded-md bg-gray-100 text-gray-600 px-2 py-0.5 text-xs font-semibold tabular-nums">{p.docNumero}</span>
+                    )}
+                  </div>
+                );
+              })()}
               {rowLocked(editRow) && (
                 <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
                   <Lock className="w-3.5 h-3.5 mt-0.5 shrink-0" />
