@@ -397,7 +397,7 @@ export default function FinanceiroAnaliseCustos() {
                           <BarChart
                             data={barCategoria}
                             layout="vertical"
-                            margin={{ top: 4, right: 78, left: 8, bottom: 0 }}
+                            margin={{ top: 4, right: 118, left: 8, bottom: 0 }}
                             barCategoryGap="22%"
                             onClick={(st: any) => {
                               const nome = st?.activePayload?.[0]?.payload?.name;
@@ -420,7 +420,7 @@ export default function FinanceiroAnaliseCustos() {
                               {barCategoria.map((_c, i) => (
                                 <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                               ))}
-                              <LabelList dataKey="value" position="right" formatter={BRLk} style={{ fontSize: 10, fill: "#475569" }} />
+                              <LabelList dataKey="value" position="right" formatter={formatBRL} style={{ fontSize: 10, fill: "#475569" }} />
                             </Bar>
                           </BarChart>
                         </ResponsiveContainer>
@@ -449,7 +449,7 @@ export default function FinanceiroAnaliseCustos() {
                           <BarChart
                             data={porCentroCusto}
                             layout="vertical"
-                            margin={{ top: 4, right: 78, left: 8, bottom: 0 }}
+                            margin={{ top: 4, right: 118, left: 8, bottom: 0 }}
                             barCategoryGap="22%"
                             onClick={(st: any) => {
                               const nome = st?.activePayload?.[0]?.payload?.name;
@@ -469,7 +469,7 @@ export default function FinanceiroAnaliseCustos() {
                             />
                             <RechTooltip content={<CustomTooltip totalRef={kpis.custoTotal} />} cursor={{ fill: "#f8fafc" }} />
                             <Bar dataKey="value" name="Custo" fill="#6366f1" radius={[0, 4, 4, 0]} className="cursor-pointer" maxBarSize={26}>
-                              <LabelList dataKey="value" position="right" formatter={BRLk} style={{ fontSize: 10, fill: "#475569" }} />
+                              <LabelList dataKey="value" position="right" formatter={formatBRL} style={{ fontSize: 10, fill: "#475569" }} />
                             </Bar>
                           </BarChart>
                         </ResponsiveContainer>

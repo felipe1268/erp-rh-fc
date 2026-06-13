@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3021 — **FINANCEIRO → "ANÁLISE DE CUSTOS": OS RÓTULOS DAS BARRAS
+ * ("CUSTO POR CATEGORIA" E "CUSTO POR CENTRO DE CUSTO") DEIXAM DE USAR O
+ * FORMATO COMPACTO (`R$ 2,0 mi` / `R$ 770 mil`) E PASSAM A MOSTRAR O VALOR
+ * EM REAIS POR EXTENSO (`R$ 2.000.000,00`).**
+ *
+ * PEDIDO (usuário, com print): "Só quero valores em reais." Nas barras os valores
+ * apareciam compactos via `BRLk` (ex.: `R$ 2,0 mi`, `R$ 770 mil`) — o usuário quer
+ * o número completo pt-BR, igual ao que já foi feito nos KPIs (Rev. 3018).
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, ZERO backend/schema, ZERO mudança
+ * de dado; 100% client-side — só a formatação dos rótulos muda) em
+ * `client/src/pages/financeiro/FinanceiroAnaliseCustos.tsx`:
+ *  - Os dois `<LabelList>` dos gráficos de barras (Categoria + Centro de Custo)
+ *    passam de `formatter={BRLk}` p/ `formatter={formatBRL}` (número completo
+ *    pt-BR `R$ x.xxx.xxx,xx`).
+ *  - Pra o valor por extenso caber à direita da barra sem cortar, a `margin.right`
+ *    dos dois `<BarChart>` subiu de 78 p/ 118 px.
+ *  - Os EIXOS X (`XAxis tickFormatter`) seguem em `BRLk` DE PROPÓSITO — número
+ *    completo no eixo poluiria as marcações (mesma decisão da Rev. 3018).
+ *
+ * IMPACTO: nenhum cálculo/dado mudou — só a apresentação dos rótulos. Drill-down,
+ * cores, ordenação e demais gráficos intactos. REPUBLICAR (só front).
+ *
  * Rev. 3020 — **FINANCEIRO → "ANÁLISE DE CUSTOS": O GRÁFICO "CUSTO POR
  * CATEGORIA" DEIXA DE SER PIZZA/ROSCA E VIRA BARRAS HORIZONTAIS COM O VALOR
  * (R$) INDICADO EM CADA BARRA — MAIS FÁCIL DE LER E COMPARAR.**
