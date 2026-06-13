@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3005 — **FINANCEIRO → CONTAS A RECEBER (TÍTULOS): MODAL "NOVO TÍTULO A
+ * RECEBER" REDESENHADO (HEADER EM GRADIENTE) + MÁXIMO DE AUTOMAÇÃO — MÁSCARA DE
+ * MOEDA AO DIGITAR, DESCRIÇÃO AUTO-SUGERIDA, PRESETS DE PARCELAS E CRONOGRAMA
+ * COMPLETO DE RECEBIMENTO (DATAS + VALORES) EM TEMPO REAL.**
+ *
+ * PEDIDO (usuário, via screenshot do iPad): "Melhore o layout, e crie o máximo de
+ * automação" — o modal "Novo título a receber" estava com inputs simples e pouca
+ * inteligência (Rev. 3004 tinha só um preview de 1 linha).
+ *
+ * SOLUÇÃO (FRONT-only — ZERO ALTER/DROP/DELETE, ZERO backend/schema; mesma
+ * procedure `criarTituloReceber` e mesmo payload), em
+ * `client/src/pages/financeiro/FinanceiroContasAReceberTitulos.tsx`:
+ *
+ * 1) LAYOUT: header em gradiente emerald→teal com chip de ícone + subtítulo;
+ *    `DialogContent` em coluna com corpo rolável (`max-h-[92vh]`); campos
+ *    agrupados (cliente/descrição, bloco destacado de valor+datas, parcelas,
+ *    cronograma, observações); footer fixo com faixa clara.
+ * 2) AUTOMAÇÃO — MÁSCARA DE MOEDA: novos helpers `maskBRL`/`parseMaskBRL`; o
+ *    campo "Valor total" formata BRL ao digitar (centavos → "1.234,56") com
+ *    prefixo "R$"; `valorNum` deriva da máscara (fim do `parseFloat`/vírgula).
+ * 3) AUTOMAÇÃO — DESCRIÇÃO AUTO-SUGERIDA: `useEffect` preenche
+ *    "Faturamento — <obra|cliente>" enquanto o usuário não digitar (flag
+ *    `descTouched`); reage à seleção de cliente e ao nome da obra.
+ * 4) AUTOMAÇÃO — PRESETS DE PARCELAS: pills 1x/2x/3x/4x/6x/12x + input numérico
+ *    livre, com destaque na seleção ativa.
+ * 5) AUTOMAÇÃO — CRONOGRAMA COMPLETO: memo `schedule` + helper `addMonthsISO`
+ *    (soma de meses iOS-safe, clampando o dia ao último do mês) gera a LISTA de
+ *    todas as parcelas (nº, data, valor) espelhando o backend (base truncada em
+ *    centavos, resto na última); render em card rolável com total no topo.
+ * 6) Mantida a automação da Rev. 3004 (1º vencimento acompanha a competência até
+ *    edição manual) com dica visual quando ainda automático.
+ *
+ * NENHUMA mudança de rota/permissão/contrato/backend. Requer REPUBLICAR (só
+ * front). Detalhe: este arquivo.
+ *
  * Rev. 3004 — **FINANCEIRO → CONTAS A RECEBER (TÍTULOS): REDESIGN MODERNO + MAIS
  * AUTOMÁTICO — HERO COM GRADIENTE E PROGRESSO DO ANO, BARRA DE MESES COM VALOR
  * EM ABERTO POR MÊS, GRUPOS DE CLIENTE COM BARRA DE % RECEBIDO, MODAIS POLIDOS,

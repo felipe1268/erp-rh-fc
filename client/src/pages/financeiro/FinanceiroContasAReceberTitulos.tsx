@@ -36,6 +36,33 @@ function num(v: any): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+// Rev. 3005 — máscara de moeda BRL automática (digita centavos → "1.234,56").
+function maskBRL(raw: string): string {
+  const digits = String(raw).replace(/\D/g, "");
+  if (!digits) return "";
+  const n = parseInt(digits, 10) / 100;
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function parseMaskBRL(masked: string): number {
+  const digits = String(masked).replace(/\D/g, "");
+  return digits ? parseInt(digits, 10) / 100 : 0;
+}
+// Rev. 3005 — soma de meses iOS-safe (construtor numérico, clampando o dia ao
+// último dia do mês-alvo). Espelha o cálculo de vencimentos do backend.
+function addMonthsISO(iso: string, months: number): string {
+  const s = String(iso).slice(0, 10);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return s;
+  let y = +m[1];
+  let mo = +m[2] - 1 + months;
+  const d = +m[3];
+  y += Math.floor(mo / 12);
+  mo = ((mo % 12) + 12) % 12;
+  const last = new Date(y, mo + 1, 0).getDate();
+  const day = Math.min(d, last);
+  return `${y}-${String(mo + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const MESES_LONGO = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
@@ -615,10 +642,13 @@ function BaixaDialog({ titulo, companyId, contasBancarias, onClose, onSubmit, pe
 }
 
 // ─────────────────────────── NOVO TÍTULO MANUAL ───────────────────────────
+const PARCELA_PRESETS = [1, 2, 3, 4, 6, 12];
+
 function NovoTituloDialog({ companyId, clientesOpts, onClose, onSubmit, pending }: any) {
   const { toast } = useToast();
   const [clienteId, setClienteId] = useState<string>("");
   const [descricao, setDescricao] = useState("");
+  const [descTouched, setDescTouched] = useState(false);
   const [obraNome, setObraNome] = useState("");
   const [contaNome, setContaNome] = useState("Faturamento de Obras");
   const [valor, setValor] = useState("");
@@ -634,24 +664,49 @@ function NovoTituloDialog({ companyId, clientesOpts, onClose, onSubmit, pending 
     if (!vencTouched && comp) setVenc(comp);
   }, [comp, vencTouched]);
 
-  const valorNum = parseFloat(String(valor).replace(",", ".")) || 0;
+  // Rev. 3005 — automático: sugere a descrição a partir da obra/cliente enquanto
+  // o usuário não digitar manualmente o campo.
+  const cliSel = useMemo(
+    () => clientesOpts.find((c: any) => String(c.id) === clienteId),
+    [clientesOpts, clienteId],
+  );
+  useEffect(() => {
+    if (descTouched) return;
+    const alvo = obraNome.trim() || (cliSel ? cliSel.nome : "");
+    setDescricao(alvo ? `Faturamento — ${alvo}` : "");
+  }, [obraNome, cliSel, descTouched]);
+
+  const valorNum = parseMaskBRL(valor);
   const np = Math.max(1, parseInt(parcelas, 10) || 1);
-  const valorParcela = np > 0 ? valorNum / np : 0;
+
+  // Rev. 3005 — cronograma completo das parcelas (datas + valores), espelhando o
+  // backend: base truncada em centavos e o resto consolidado na última parcela.
+  const schedule = useMemo(() => {
+    if (valorNum <= 0 || !venc) return [] as { n: number; date: string; value: number }[];
+    const base = Math.floor((valorNum / np) * 100) / 100;
+    const arr: { n: number; date: string; value: number }[] = [];
+    let acc = 0;
+    for (let i = 0; i < np; i++) {
+      const isLast = i === np - 1;
+      const value = isLast ? Math.round((valorNum - acc) * 100) / 100 : base;
+      acc += base;
+      arr.push({ n: i + 1, date: addMonthsISO(venc, i), value });
+    }
+    return arr;
+  }, [valorNum, np, venc]);
 
   function submit() {
-    const v = parseFloat(valor.replace(",", "."));
     if (!descricao.trim()) { toast({ title: "Informe a descrição", variant: "destructive" }); return; }
-    if (!Number.isFinite(v) || v <= 0) { toast({ title: "Valor inválido", variant: "destructive" }); return; }
-    const cli = clientesOpts.find((c: any) => String(c.id) === clienteId);
+    if (valorNum <= 0) { toast({ title: "Valor inválido", variant: "destructive" }); return; }
     onSubmit({
       companyId,
       descricao: descricao.trim(),
-      valorPrevisto: v,
+      valorPrevisto: valorNum,
       dataCompetencia: comp || undefined,
       dataVencimento: venc || undefined,
       parcelas: np,
-      clienteId: cli ? cli.id : undefined,
-      clienteNome: cli ? cli.nome : undefined,
+      clienteId: cliSel ? cliSel.id : undefined,
+      clienteNome: cliSel ? cliSel.nome : undefined,
       obraNome: obraNome.trim() || undefined,
       contaNome: contaNome.trim() || undefined,
       observacoes: obs.trim() || undefined,
@@ -660,45 +715,120 @@ function NovoTituloDialog({ companyId, clientesOpts, onClose, onSubmit, pending 
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Plus className="h-5 w-5 text-emerald-600" /> Novo título a receber</DialogTitle>
+      <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden max-h-[92vh] flex flex-col">
+        {/* ───── header em gradiente ───── */}
+        <DialogHeader className="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-5 text-left space-y-1">
+          <DialogTitle className="flex items-center gap-3 text-white">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/20 ring-1 ring-white/30">
+              <Plus className="h-5 w-5" />
+            </span>
+            <span className="text-lg font-semibold">Novo título a receber</span>
+          </DialogTitle>
+          <p className="text-[13px] text-emerald-50/90 pl-12">Lance um título manual — com parcelas e vencimentos automáticos.</p>
         </DialogHeader>
-        <div className="space-y-3">
+
+        <div className="overflow-y-auto px-6 py-4 space-y-4">
+          {/* Cliente + descrição */}
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5"><Users className="h-3.5 w-3.5 text-emerald-600" /> Cliente</Label>
+              <Select value={clienteId} onValueChange={setClienteId}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
+                <SelectContent>
+                  {clientesOpts.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs font-medium text-slate-600">Descrição</Label>
+              <Input className="mt-1" value={descricao} onChange={(e) => { setDescricao(e.target.value); setDescTouched(true); }} placeholder="Ex.: Medição 03 — Obra X" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5 text-emerald-600" /> Obra <span className="text-slate-400 font-normal">(opcional)</span></Label>
+                <Input className="mt-1" value={obraNome} onChange={(e) => setObraNome(e.target.value)} placeholder="Nome da obra" />
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-slate-600">Categoria <span className="text-slate-400 font-normal">(opcional)</span></Label>
+                <Input className="mt-1" value={contaNome} onChange={(e) => setContaNome(e.target.value)} placeholder="Faturamento de Obras" />
+              </div>
+            </div>
+          </div>
+
+          {/* Valor com destaque + datas */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 space-y-3">
+            <div>
+              <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5"><Wallet className="h-3.5 w-3.5 text-emerald-600" /> Valor total</Label>
+              <div className="relative mt-1">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400">R$</span>
+                <Input
+                  value={valor}
+                  onChange={(e) => setValor(maskBRL(e.target.value))}
+                  inputMode="numeric"
+                  placeholder="0,00"
+                  className="pl-9 text-lg font-bold tabular-nums text-emerald-700"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 text-emerald-600" /> Competência</Label>
+                <Input className="mt-1" type="date" value={comp} onChange={(e) => setComp(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-slate-600">1º Vencimento</Label>
+                <Input className="mt-1" type="date" value={venc} onChange={(e) => { setVenc(e.target.value); setVencTouched(true); }} />
+                {!vencTouched && <p className="mt-0.5 text-[10px] text-emerald-600">Acompanha a competência automaticamente.</p>}
+              </div>
+            </div>
+          </div>
+
+          {/* Parcelas com presets */}
           <div>
-            <Label className="text-xs">Cliente</Label>
-            <Select value={clienteId} onValueChange={setClienteId}>
-              <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
-              <SelectContent>
-                {clientesOpts.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Label className="text-xs font-medium text-slate-600">Parcelas</Label>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              {PARCELA_PRESETS.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setParcelas(String(p))}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${np === p ? "bg-emerald-600 text-white shadow-sm" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                >
+                  {p}x
+                </button>
+              ))}
+              <Input type="number" min={1} max={120} value={parcelas} onChange={(e) => setParcelas(e.target.value)} className="h-8 w-16 text-center" />
+            </div>
           </div>
-          <div><Label className="text-xs">Descrição</Label><Input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Ex.: Medição 03 — Obra X" /></div>
-          <div className="grid grid-cols-2 gap-2">
-            <div><Label className="text-xs">Obra (opcional)</Label><Input value={obraNome} onChange={(e) => setObraNome(e.target.value)} /></div>
-            <div><Label className="text-xs">Categoria (opcional)</Label><Input value={contaNome} onChange={(e) => setContaNome(e.target.value)} placeholder="Faturamento de Obras" /></div>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div><Label className="text-xs">Valor total</Label><Input value={valor} onChange={(e) => setValor(e.target.value)} inputMode="decimal" placeholder="0,00" /></div>
-            <div><Label className="text-xs">Competência</Label><Input type="date" value={comp} onChange={(e) => setComp(e.target.value)} /></div>
-            <div><Label className="text-xs">1º Vencimento</Label><Input type="date" value={venc} onChange={(e) => { setVenc(e.target.value); setVencTouched(true); }} /></div>
-          </div>
-          <div>
-            <Label className="text-xs">Parcelas</Label>
-            <Input type="number" min={1} max={120} value={parcelas} onChange={(e) => setParcelas(e.target.value)} className="w-24" />
-          </div>
-          {/* Rev. 3004 — preview automático das parcelas */}
-          {valorNum > 0 && (
-            <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-800">
-              {np > 1
-                ? <span><b>{np}x</b> de <b>{formatBRL(valorParcela)}</b> · vencimentos mensais a partir de <b>{fmtDateBR(venc)}</b> (resto na última).</span>
-                : <span>Parcela única de <b>{formatBRL(valorNum)}</b> com vencimento em <b>{fmtDateBR(venc)}</b>.</span>}
+
+          {/* Rev. 3005 — cronograma automático completo das parcelas */}
+          {schedule.length > 0 && (
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-emerald-100 bg-emerald-50">
+                <span className="text-[11px] font-semibold text-emerald-800 flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" /> Cronograma de recebimento</span>
+                <span className="text-[11px] font-semibold text-emerald-700">{np}x · {formatBRL(valorNum)}</span>
+              </div>
+              <div className="max-h-40 overflow-y-auto divide-y divide-emerald-100/70">
+                {schedule.map((s) => (
+                  <div key={s.n} className="flex items-center justify-between px-3 py-1.5 text-xs">
+                    <span className="flex items-center gap-2 text-slate-600">
+                      <span className="grid h-5 w-5 place-items-center rounded-full bg-white text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200">{s.n}</span>
+                      {fmtDateBR(s.date)}
+                    </span>
+                    <span className="font-semibold tabular-nums text-emerald-700">{formatBRL(s.value)}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
-          <div><Label className="text-xs">Observações</Label><Textarea value={obs} onChange={(e) => setObs(e.target.value)} rows={2} /></div>
+
+          <div>
+            <Label className="text-xs font-medium text-slate-600">Observações</Label>
+            <Textarea className="mt-1" value={obs} onChange={(e) => setObs(e.target.value)} rows={2} placeholder="Detalhes adicionais (opcional)" />
+          </div>
         </div>
-        <DialogFooter>
+
+        <DialogFooter className="border-t border-slate-100 px-6 py-3 bg-slate-50/50">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button onClick={submit} disabled={pending} className="bg-emerald-600 hover:bg-emerald-700">{pending && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Criar título</Button>
         </DialogFooter>
