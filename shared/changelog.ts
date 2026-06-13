@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3038 — **FINANCEIRO → "ANÁLISE DE CUSTOS" · TELA DE DETALHE · TABELA
+ * "LANÇAMENTOS DETALHADOS": REDESENHO QUE ACABA COM A POLUIÇÃO/TRUNCAMENTO — DE 10
+ * COLUNAS ESTREITAS (QUE CORTAVAM "ENCARGOS SOCIAIS - FG…", "MINISTÉRIO DO TRABALHO…")
+ * E EXIGIAM SCROLL HORIZONTAL NO iPad, PASSA A 7 COLUNAS EM LINHAS DE 2 NÍVEIS QUE
+ * MOSTRAM CADA LANÇAMENTO POR INTEIRO.**
+ *
+ * PEDIDO (print IMG_1936): "Melhore a real, isso tá muito bagunçado, quero ver os
+ * lançamentos corretamente". O print mostra a lista de lançamentos da tela de detalhe
+ * com colunas espremidas (Descrição/Fornecedor/Categoria/Centro/Competência/Vencimento/
+ * Status/Valor), tudo truncado com "…" e exigindo rolagem lateral.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, ZERO backend/schema) em
+ * `client/src/pages/financeiro/FinanceiroAnaliseCustosDetalhe.tsx` (tabela
+ * "Lançamentos detalhados"):
+ *  - Colunas reduzidas de 10 → 7: [✓] · "Lançamento" · "Classificação" · "Datas" ·
+ *    "Status" · "Valor" · "Editar". `min-w` cai de 940px → 680px (cabe no iPad).
+ *  - "Lançamento" (2 linhas): linha 1 = badge nº doc (OC/OS/FD, clicável p/ origem) +
+ *    descrição livre; linha 2 = fornecedor com ícone `Building2`. `break-words` (sem
+ *    `truncate`) → nome completo visível, com `title` de apoio.
+ *  - "Classificação" (2 linhas): categoria como chip cinza com ícone `Tag` (texto
+ *    completo, `break-words`) + centro de custo com ícone `Layers` embaixo.
+ *  - "Datas" (2 linhas): "Comp." e "Venc." rotuladas e empilhadas; vencimento fica
+ *    vermelho/negrito quando `isVencido(r)`.
+ *  - Linhas mais altas (`py-3`, `align-top`), `border-gray-100`, hover suave. Rodapé
+ *    "Total do recorte" ganha contagem "{N} lanç." ao lado do total (colSpan ajustado).
+ *  - Funcionalidades INTOCADAS: seleção (checkbox/all), ações em massa, clique-pra-editar,
+ *    deep-link da origem, `valorEfetivo`, status theme, total do recorte.
+ *
+ * IMPACTO: a lista fica legível ("ver os lançamentos corretamente"), sem cortes nem
+ * scroll lateral no iPad; nada de dados/backend muda. REPUBLICAR (só front).
+ *
  * Rev. 3037 — **FINANCEIRO → "ANÁLISE DE CUSTOS" · TABELA "COMPARATIVO MÊS A MÊS POR
  * CATEGORIA": REDESENHO LIMPO QUE PASSA A MOSTRAR SÓ VALORES REAIS (PAGO + A PAGAR),
  * EXCLUINDO AS PROJEÇÕES (status 'previsto': folha_projetada, encargos_projetado,

@@ -695,10 +695,10 @@ export default function FinanceiroAnaliseCustosDetalhe() {
               </CardHeader>
               <CardContent className="px-2 sm:px-5 pb-4">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs min-w-[940px]">
+                  <table className="w-full text-xs min-w-[680px]">
                     <thead>
-                      <tr className="text-gray-400 border-b border-gray-100">
-                        <th className="py-2 pl-1 pr-2 w-8">
+                      <tr className="text-gray-400 border-b border-gray-200">
+                        <th className="py-2.5 pl-1 pr-2 w-8">
                           <Checkbox
                             checked={allSelected}
                             onCheckedChange={toggleAll}
@@ -706,15 +706,12 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                             disabled={selecionaveis.length === 0}
                           />
                         </th>
-                        <th className="text-left font-medium py-2 pr-2">Descrição</th>
-                        <th className="text-left font-medium py-2 px-2">Fornecedor</th>
-                        <th className="text-left font-medium py-2 px-2">Categoria</th>
-                        <th className="text-left font-medium py-2 px-2">Centro de Custo</th>
-                        <th className="text-left font-medium py-2 px-2">Competência</th>
-                        <th className="text-left font-medium py-2 px-2">Vencimento</th>
-                        <th className="text-center font-medium py-2 px-2">Status</th>
-                        <th className="text-right font-medium py-2 pl-2">Valor</th>
-                        <th className="text-center font-medium py-2 px-2 w-10">Editar</th>
+                        <th className="text-left font-medium py-2.5 pr-3">Lançamento</th>
+                        <th className="text-left font-medium py-2.5 px-2">Classificação</th>
+                        <th className="text-left font-medium py-2.5 px-2 whitespace-nowrap">Datas</th>
+                        <th className="text-center font-medium py-2.5 px-2">Status</th>
+                        <th className="text-right font-medium py-2.5 pl-2">Valor</th>
+                        <th className="text-center font-medium py-2.5 px-2 w-10">Editar</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -723,58 +720,86 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                         const temId = typeof r.id === "number";
                         const cancelado = r.status === "cancelado";
                         const sel = temId && selected.has(r.id);
+                        const p = parseLanc(r);
+                        const link = linkDeOrigem(r);
+                        const forn = fornecedorDe(r);
                         return (
                           <tr
                             key={r.id ?? i}
-                            className={`border-b border-gray-50 cursor-pointer ${sel ? "bg-indigo-50/60" : "hover:bg-gray-50"}`}
+                            className={`border-b border-gray-100 cursor-pointer transition-colors ${sel ? "bg-indigo-50/70" : "hover:bg-gray-50"}`}
                             onClick={() => temId && abrirEdicao(r)}
                           >
-                            <td className="py-2 pl-1 pr-2" onClick={(e) => e.stopPropagation()}>
+                            <td className="py-3 pl-1 pr-2 align-top" onClick={(e) => e.stopPropagation()}>
                               <Checkbox
                                 checked={!!sel}
                                 onCheckedChange={() => temId && toggleId(r.id)}
                                 disabled={!temId || cancelado}
                                 aria-label="Selecionar lançamento"
+                                className="mt-0.5"
                               />
                             </td>
-                            <td className="py-2 pr-2 text-gray-700 max-w-[280px]">
-                              {(() => {
-                                const p = parseLanc(r);
-                                const link = linkDeOrigem(r);
-                                return (
-                                  <div className="flex items-center gap-1.5 min-w-0">
-                                    {p.docNumero ? (
-                                      link ? (
-                                        <button
-                                          type="button"
-                                          onClick={(e) => { e.stopPropagation(); setLocation(link); }}
-                                          className="shrink-0 inline-flex items-center gap-1 rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums"
-                                          title={`Abrir ${p.docNumero}`}
-                                        >
-                                          {p.docNumero}
-                                          <ExternalLink className="w-3 h-3" />
-                                        </button>
-                                      ) : (
-                                        <span className="shrink-0 inline-flex items-center rounded-md bg-gray-100 text-gray-600 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums">{p.docNumero}</span>
-                                      )
-                                    ) : null}
-                                    {p.livre ? (
-                                      <span className="truncate" title={p.livre}>{p.livre}</span>
-                                    ) : (!p.docNumero ? <span className="text-gray-400">—</span> : null)}
+                            {/* Lançamento: nº doc + descrição (linha 1) · fornecedor (linha 2) */}
+                            <td className="py-3 pr-3 align-top max-w-[320px]">
+                              <div className="min-w-0">
+                                <div className="flex items-start gap-1.5 min-w-0">
+                                  {p.docNumero ? (
+                                    link ? (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); setLocation(link); }}
+                                        className="shrink-0 inline-flex items-center gap-1 rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums"
+                                        title={`Abrir ${p.docNumero}`}
+                                      >
+                                        {p.docNumero}
+                                        <ExternalLink className="w-3 h-3" />
+                                      </button>
+                                    ) : (
+                                      <span className="shrink-0 inline-flex items-center rounded-md bg-gray-100 text-gray-600 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums">{p.docNumero}</span>
+                                    )
+                                  ) : null}
+                                  <span className="font-medium text-gray-800 leading-snug break-words" title={p.livre || forn || ""}>
+                                    {p.livre || (p.docNumero ? "" : <span className="text-gray-400 font-normal">—</span>)}
+                                  </span>
+                                </div>
+                                {forn ? (
+                                  <div className="flex items-center gap-1 text-[11px] text-gray-500 mt-1 min-w-0">
+                                    <Building2 className="w-3 h-3 shrink-0 text-gray-400" />
+                                    <span className="break-words leading-snug" title={forn}>{forn}</span>
                                   </div>
-                                );
-                              })()}
+                                ) : null}
+                              </div>
                             </td>
-                            <td className="py-2 px-2 text-gray-600 max-w-[160px] truncate" title={fornecedorDe(r)}>{fornecedorDe(r) || "—"}</td>
-                            <td className="py-2 px-2 text-gray-600 max-w-[160px] truncate" title={r.contaNome || ""}>{r.contaNome || "Sem categoria"}</td>
-                            <td className="py-2 px-2 text-gray-600 max-w-[160px] truncate" title={r.obraNome || ""}>{r.obraNome || "Sem centro de custo"}</td>
-                            <td className="py-2 px-2 text-gray-500 tabular-nums whitespace-nowrap">{fmtData(r.dataCompetencia)}</td>
-                            <td className="py-2 px-2 text-gray-500 tabular-nums whitespace-nowrap">{fmtData(r.dataVencimento)}</td>
-                            <td className="py-2 px-2 text-center">
+                            {/* Classificação: categoria (chip) + centro de custo */}
+                            <td className="py-3 px-2 align-top max-w-[220px]">
+                              <div className="min-w-0">
+                                <span className="inline-flex items-start gap-1 rounded-md bg-gray-100 text-gray-700 px-1.5 py-0.5 text-[11px] font-medium max-w-full">
+                                  <Tag className="w-3 h-3 shrink-0 text-gray-400 mt-px" />
+                                  <span className="break-words leading-snug" title={r.contaNome || ""}>{r.contaNome || "Sem categoria"}</span>
+                                </span>
+                                <div className="flex items-center gap-1 text-[11px] text-gray-500 mt-1 min-w-0">
+                                  <Layers className="w-3 h-3 shrink-0 text-gray-400" />
+                                  <span className="break-words leading-snug" title={r.obraNome || ""}>{r.obraNome || "Sem centro de custo"}</span>
+                                </div>
+                              </div>
+                            </td>
+                            {/* Datas: competência + vencimento empilhadas e rotuladas */}
+                            <td className="py-3 px-2 align-top whitespace-nowrap">
+                              <div className="text-[11px] tabular-nums leading-snug">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-gray-400 w-9 shrink-0">Comp.</span>
+                                  <span className="text-gray-600">{fmtData(r.dataCompetencia)}</span>
+                                </div>
+                                <div className="flex items-center gap-1 mt-1">
+                                  <span className="text-gray-400 w-9 shrink-0">Venc.</span>
+                                  <span className={isVencido(r) ? "text-red-600 font-semibold" : "text-gray-600"}>{fmtData(r.dataVencimento)}</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3 px-2 text-center align-top">
                               <span className={`inline-block text-[10px] font-semibold rounded-full px-2 py-0.5 ${st.cls}`}>{st.label}</span>
                             </td>
-                            <td className="py-2 pl-2 text-right tabular-nums font-semibold text-gray-800 whitespace-nowrap">{formatBRL(valorEfetivo(r))}</td>
-                            <td className="py-2 px-2 text-center" onClick={(e) => e.stopPropagation()}>
+                            <td className="py-3 pl-2 text-right align-top tabular-nums font-bold text-gray-800 whitespace-nowrap">{formatBRL(valorEfetivo(r))}</td>
+                            <td className="py-3 px-2 text-center align-top" onClick={(e) => e.stopPropagation()}>
                               <Button
                                 variant="ghost" size="icon"
                                 className="h-7 w-7 text-gray-400 hover:text-indigo-600"
@@ -791,7 +816,8 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                     </tbody>
                     <tfoot>
                       <tr className="border-t-2 border-gray-200">
-                        <td colSpan={8} className="py-2.5 pr-2 text-right font-semibold text-gray-600">Total do recorte</td>
+                        <td colSpan={4} className="py-2.5 pr-2 text-right font-semibold text-gray-600">Total do recorte</td>
+                        <td className="py-2.5 px-2 text-center text-[11px] text-gray-400 font-medium whitespace-nowrap">{lancamentos.length} lanç.</td>
                         <td className="py-2.5 pl-2 text-right tabular-nums font-bold text-rose-600 whitespace-nowrap">{formatBRL(kpis.total)}</td>
                         <td />
                       </tr>
