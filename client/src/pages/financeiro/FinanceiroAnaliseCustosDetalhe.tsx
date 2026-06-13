@@ -98,7 +98,15 @@ export default function FinanceiroAnaliseCustosDetalhe() {
     { companyId, ano },
     { enabled: !!companyId }
   );
-  const rowsAll: any[] = Array.isArray(data) ? data : [];
+  // Rev. 3019 — Espelha a tela-mãe: SÓ CUSTOS REAIS. Exclui a projeção do
+  // cronograma (origem 'cronograma_atividade' = valor de contrato distribuído
+  // mês a mês), que duplicaria as despesas reais e inflava os totais.
+  const rowsAll: any[] = useMemo(
+    () => (Array.isArray(data) ? data : []).filter(
+      (r) => String(r?.origemModulo ?? "") !== "cronograma_atividade"
+    ),
+    [data]
+  );
 
   // Recorte: aplica o filtro de mês herdado da tela-mãe + o filtro do clique.
   const rows = useMemo(() => {

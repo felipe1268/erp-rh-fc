@@ -103,7 +103,18 @@ export default function FinanceiroAnaliseCustos() {
     { enabled: !!companyId }
   );
 
-  const rowsAll: any[] = Array.isArray(data) ? data : [];
+  // Rev. 3019 — A Análise de Custos mostra SÓ CUSTOS REAIS (folha, compras,
+  // benefícios, encargos, recorrentes…). Exclui a projeção do cronograma
+  // (origem 'cronograma_atividade'), que é o VALOR DE CONTRATO das obras
+  // (orçamento totalVenda) distribuído mês a mês como "a pagar" — somá-la com
+  // as despesas reais conta cada obra DUAS vezes e inflava o total (R$ 26,7 mi
+  // → ~R$ 11 mi). É a mesma exclusão já feita em "contas a pagar comprometidas".
+  const rowsAll: any[] = useMemo(
+    () => (Array.isArray(data) ? data : []).filter(
+      (r) => String(r?.origemModulo ?? "") !== "cronograma_atividade"
+    ),
+    [data]
+  );
 
   // Aplica o filtro de mês (0 = ano inteiro).
   const rowsFiltradas = useMemo(() => {

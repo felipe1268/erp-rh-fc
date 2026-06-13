@@ -1,6 +1,50 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3019 — **FINANCEIRO → "ANÁLISE DE CUSTOS": O CUSTO TOTAL DEIXA DE
+ * SOMAR A PROJEÇÃO DO CRONOGRAMA (VALOR DE CONTRATO DAS OBRAS) — PASSA A
+ * MOSTRAR SÓ OS CUSTOS REAIS. TOTAL CAI DE ~R$ 26,7 MI PARA ~R$ 11 MI.**
+ *
+ * PEDIDO (usuário): "Não pode ter 25 milhões, tem coisa errada... meus contratos
+ * não têm este valor total... deve ter vários valores duplicados, que devem ser
+ * corrigidos."
+ *
+ * INVESTIGAÇÃO (Neon, company 60002 FC ENGENHARIA, ano 2026): o Custo Total
+ * (R$ 26.710.859,82 / 7.549 lançamentos) misturava DUAS naturezas diferentes:
+ *  - R$ 15.744.596,64 (4.866 lançamentos) de `origem_modulo='cronograma_atividade'`
+ *    = a PROJEÇÃO do cronograma das obras. NÃO é despesa real: é o VALOR DE
+ *    CONTRATO de cada obra (orçamento `totalVenda`) ponderado por
+ *    `peso_financeiro` (que soma EXATAMENTE 100% por revisão) e DISTRIBUÍDO mês a
+ *    mês entre `data_inicio`→`data_fim` (`valorMensal = valorTotalAt/meses`). Por
+ *    isso cada obra aparece "x12" (uma fração por mês — NÃO é duplicata) e o total
+ *    do cronograma por obra ≈ o valor do contrato (ex.: obra 90001 QIU 2 →
+ *    R$ 9,5 mi de cronograma = R$ 9,5 mi de orçamento).
+ *  - ~R$ 11 mi de despesas REAIS (folha, compras, benefícios, encargos,
+ *    recorrentes…).
+ *  Somar as duas conta CADA OBRA DUAS VEZES (uma como projeção do contrato, outra
+ *  como o custo real de executá-lo) — é a "duplicação" que o usuário percebeu.
+ *  Confirmado ainda 1 órfão: obra 90004 (HOTEL DO PAPA, R$ 1,73 mi) cujo projeto
+ *  de planejamento foi apagado mas deixou os lançamentos do cronograma — some
+ *  automaticamente com a exclusão abaixo.
+ *
+ * DECISÃO (confirmada com o usuário via pergunta — 3 opções; escolheu "mostrar SÓ
+ * os custos reais"): a Análise de Custos passa a EXCLUIR a projeção do cronograma,
+ * exatamente como o ERP já faz no card "contas a pagar comprometidas"
+ * (`financial.ts` usa `AND COALESCE(origem_modulo,'') <> 'cronograma_atividade'`).
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, ZERO backend/schema, ZERO mudança
+ * de dado em produção; 100% client-side sobre o endpoint compartilhado
+ * `financial.getContasAPagarByYear`, que NÃO foi tocado pra não afetar Contas a
+ * Pagar / Fluxo de Caixa / Lançamentos):
+ *  - `client/src/pages/financeiro/FinanceiroAnaliseCustos.tsx` e
+ *    `client/src/pages/financeiro/FinanceiroAnaliseCustosDetalhe.tsx`: `rowsAll`
+ *    passa a ser um `useMemo([data])` que filtra
+ *    `r.origemModulo !== 'cronograma_atividade'`. Como TODOS os agregados (KPIs,
+ *    barras por mês, pizza por categoria, Pareto, ranking de fornecedores, centro
+ *    de custo, drill-down) derivam de `rowsAll`, a exclusão se propaga sozinha.
+ *
+ * Requer REPUBLICAR (só front).
+ *
  * Rev. 3018 — **FINANCEIRO → "ANÁLISE DE CUSTOS" + TELA DE DETALHE: KPIs PASSAM A
  * EXIBIR O VALOR EM REAIS NO FORMATO DE NÚMERO COMPLETO (`R$ 26.710.859,82`) EM
  * VEZ DO COMPACTO (`R$ 26,7 mi`).**
