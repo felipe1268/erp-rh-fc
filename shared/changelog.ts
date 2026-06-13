@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3009 — **FINANCEIRO → CONTAS A RECEBER (TÍTULOS) → MODAL "NOVO TÍTULO":
+ * MODAL ALARGADO (`max-w-lg`→`max-w-2xl`) + CAMPOS DE DATA ("COMPETÊNCIA" / "1º
+ * VENCIMENTO") DEIXAM DE SE SOBREPOR.**
+ *
+ * PEDIDO (usuário, via screenshot do iPad): "Aumenta mais a tela, as datas estás
+ * sobrepostas". No modal "Novo título a receber" os 2 inputs `type="date"` lado a
+ * lado ("Competência" e "1º Vencimento") apareciam espremidos/sobrepostos: o input
+ * de data nativo tem largura MÍNIMA grande (renderiza "13 de jun. de 2026") e, num
+ * grid de 2 colunas dentro de um `DialogContent` estreito (`max-w-lg`), os dois
+ * campos não cabiam.
+ *
+ * SOLUÇÃO (FRONT-only — ZERO ALTER/DROP/DELETE, ZERO backend/schema; nenhuma
+ * mudança de dados/procedure), em
+ * `client/src/pages/financeiro/FinanceiroContasAReceberTitulos.tsx`
+ * (`NovoTituloDialog`):
+ * 1) `DialogContent` passou de `max-w-lg` para `max-w-2xl` (mais respiro p/ os
+ *    pares de campos lado a lado).
+ * 2) o grid das datas virou `grid-cols-1 sm:grid-cols-2` (empilha em telas
+ *    estreitas) e cada coluna ganhou `min-w-0` + os inputs `w-full`, permitindo
+ *    que o input de data ENCOLHA dentro da coluna em vez de estourar/sobrepor.
+ *
+ * NENHUMA mudança de rota/permissão/contrato/backend. Requer REPUBLICAR (só front).
+ *
+ * ──────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 3008 — **FINANCEIRO → CONTAS A RECEBER (TÍTULOS): FIM DOS DROPDOWNS NATIVOS
  * CORTADOS/SOBREPOSTOS DENTRO DOS MODAIS — "CONTA BANCÁRIA", "FORMA" (MODAL
  * "REGISTRAR RECEBIMENTO") E "CATEGORIA" (MODAL "NOVO TÍTULO") MIGRARAM PRO

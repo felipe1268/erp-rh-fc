@@ -772,7 +772,7 @@ function NovoTituloDialog({ companyId, clientesOpts, onClose, onSubmit, pending 
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden max-h-[92vh] flex flex-col">
+      <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden max-h-[92vh] flex flex-col">
         {/* ───── header em gradiente ───── */}
         <DialogHeader className="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-5 text-left space-y-1">
           <DialogTitle className="flex items-center gap-3 text-white">
@@ -844,14 +844,14 @@ function NovoTituloDialog({ companyId, clientesOpts, onClose, onSubmit, pending 
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="min-w-0">
                 <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 text-emerald-600" /> Competência</Label>
-                <Input className="mt-1" type="date" value={comp} onChange={(e) => setComp(e.target.value)} />
+                <Input className="mt-1 w-full" type="date" value={comp} onChange={(e) => setComp(e.target.value)} />
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label className="text-xs font-medium text-slate-600">1º Vencimento</Label>
-                <Input className="mt-1" type="date" value={venc} onChange={(e) => { setVenc(e.target.value); setVencTouched(true); }} />
+                <Input className="mt-1 w-full" type="date" value={venc} onChange={(e) => { setVenc(e.target.value); setVencTouched(true); }} />
                 {!vencTouched && <p className="mt-0.5 text-[10px] text-emerald-600">Acompanha a competência automaticamente.</p>}
               </div>
             </div>
