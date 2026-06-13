@@ -844,14 +844,14 @@ function NovoTituloDialog({ companyId, clientesOpts, onClose, onSubmit, pending 
                 />
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3">
               <div className="min-w-0">
                 <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 text-emerald-600" /> Competência</Label>
-                <Input className="mt-1 w-full" type="date" value={comp} onChange={(e) => setComp(e.target.value)} />
+                <Input className="mt-1 block w-full min-w-0" type="date" value={comp} onChange={(e) => setComp(e.target.value)} />
               </div>
               <div className="min-w-0">
                 <Label className="text-xs font-medium text-slate-600">1º Vencimento</Label>
-                <Input className="mt-1 w-full" type="date" value={venc} onChange={(e) => { setVenc(e.target.value); setVencTouched(true); }} />
+                <Input className="mt-1 block w-full min-w-0" type="date" value={venc} onChange={(e) => { setVenc(e.target.value); setVencTouched(true); }} />
                 {!vencTouched && <p className="mt-0.5 text-[10px] text-emerald-600">Acompanha a competência automaticamente.</p>}
               </div>
             </div>

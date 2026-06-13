@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3010 — **FINANCEIRO → CONTAS A RECEBER (TÍTULOS) → MODAL "NOVO TÍTULO":
+ * CAMPOS DE DATA "COMPETÊNCIA" E "1º VENCIMENTO" PASSAM A FICAR EMPILHADOS (UM POR
+ * LINHA) — FIM DEFINITIVO DA SOBREPOSIÇÃO NO iPad.**
+ *
+ * PEDIDO (usuário, novo screenshot do iPad): "Ainda continua campos sobrepostos".
+ * A Rev. 3009 alargou o modal (`max-w-2xl`) e tentou deixar os 2 inputs `type="date"`
+ * lado a lado encolherem (`min-w-0`/`w-full` no WRAPPER), mas no iOS/WebKit o
+ * `<input type="date">` nativo tem largura MÍNIMA própria (renderiza o valor por
+ * extenso "13 de jun. de 2026") e NÃO encolhe abaixo dela quando o `min-w-0` está
+ * só no wrapper — então em 2 colunas o input estoura e sobrepõe o vizinho.
+ *
+ * SOLUÇÃO (FRONT-only — ZERO ALTER/DROP/DELETE, ZERO backend/schema; nenhuma
+ * mudança de dados/procedure), em
+ * `client/src/pages/financeiro/FinanceiroContasAReceberTitulos.tsx`
+ * (`NovoTituloDialog`):
+ * 1) o grid das datas deixou de ser responsivo 2-colunas (`grid-cols-1
+ *    sm:grid-cols-2`) e passou a `grid-cols-1` FIXO — cada campo de data ocupa uma
+ *    LINHA inteira, com largura total, eliminando qualquer chance de sobreposição
+ *    independentemente da largura da viewport.
+ * 2) os próprios inputs ganharam `block w-full min-w-0` (não só o wrapper), para
+ *    que ocupem 100% da linha e nunca imponham largura mínima maior que o container.
+ *
+ * NENHUMA mudança de rota/permissão/contrato/backend. Requer REPUBLICAR (só front).
+ *
+ * ──────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 3009 — **FINANCEIRO → CONTAS A RECEBER (TÍTULOS) → MODAL "NOVO TÍTULO":
  * MODAL ALARGADO (`max-w-lg`→`max-w-2xl`) + CAMPOS DE DATA ("COMPETÊNCIA" / "1º
  * VENCIMENTO") DEIXAM DE SE SOBREPOR.**
