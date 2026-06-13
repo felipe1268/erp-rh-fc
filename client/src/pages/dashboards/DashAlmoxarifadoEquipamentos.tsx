@@ -22,6 +22,20 @@ import { toast } from "sonner";
 
 const fmtBRL = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const fmtNum = (v: number) => (v || 0).toLocaleString("pt-BR");
+
+// Rev. 3016 — tema visual por status p/ os badges da lista de equip. próprios
+// (cores intuitivas em vez do cinza único).
+function statusProprioTheme(status?: string | null): { label: string; cls: string } {
+  const s = String(status || "").trim().toLowerCase();
+  const map: Record<string, { label: string; cls: string }> = {
+    em_obra:     { label: "Em obra",     cls: "bg-blue-100 text-blue-700 ring-1 ring-blue-200" },
+    disponivel:  { label: "Disponível",  cls: "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200" },
+    manutencao:  { label: "Manutenção",  cls: "bg-amber-100 text-amber-700 ring-1 ring-amber-200" },
+    inativo:     { label: "Inativo",     cls: "bg-slate-200 text-slate-600 ring-1 ring-slate-300" },
+    baixado:     { label: "Baixado",     cls: "bg-rose-100 text-rose-700 ring-1 ring-rose-200" },
+  };
+  return map[s] || { label: status ? String(status) : "—", cls: "bg-slate-100 text-slate-700 ring-1 ring-slate-200" };
+}
 const fmtDate = (d: any) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
 // Rev. 2360 — converte "YYYY-MM-DD" → "DD/MM" (padrão BR) pros eixos X dos charts.
 const fmtDayBR = (iso: string) => {
@@ -1120,30 +1134,72 @@ export default function DashAlmoxarifadoEquipamentos() {
               labels={proprAgg.porStatus.map(([s]) => s)}
               datasets={[{ data: proprAgg.porStatus.map(([, c]) => c) }]}
             />
-            <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-100 font-semibold text-slate-800 flex items-center justify-between">
-                <span>Lista (20 mais recentes)</span>
-                <Link href="/equipamentos/proprios"><a className="text-xs text-blue-600 hover:underline">Ver todos →</a></Link>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gradient-to-b from-slate-50 to-slate-50/40 text-[11px] text-slate-500 uppercase tracking-wide">
-                    <tr><th className="text-left p-2">Descrição</th><th className="text-left p-2">Patrimônio</th><th className="text-left p-2">Status</th><th className="text-right p-2">Valor aquisição</th></tr>
-                  </thead>
-                  <tbody>
-                    {((propriosQ.data || []) as any[]).slice(0, 20).map((p: any) => (
-                      <tr key={p.id} className="border-t border-slate-100 hover:bg-slate-50">
-                        <td className="p-2 text-slate-800">{p.descricao}</td>
-                        <td className="p-2 text-slate-700">{p.codigoPatrimonio || p.codigoInterno || "—"}</td>
-                        <td className="p-2"><span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700">{p.status || "—"}</span></td>
-                        <td className="p-2 text-right">{fmtBRL(Number(p.valorAquisicao || 0))}</td>
-                      </tr>
-                    ))}
-                    {((propriosQ.data || []) as any[]).length === 0 && <tr><td colSpan={4} className="p-6 text-center text-slate-500">Nenhum equipamento próprio cadastrado.</td></tr>}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            {(() => {
+              const todos = (propriosQ.data || []) as any[];
+              const lista = todos.slice(0, 20);
+              const semValor = todos.filter((p: any) => !(Number(p.valorAquisicao) > 0)).length;
+              return (
+                <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+                  <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="h-8 w-8 rounded-lg bg-indigo-100 ring-1 ring-indigo-200 flex items-center justify-center shrink-0">
+                        <HardHat className="h-4 w-4 text-indigo-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-semibold text-slate-800 leading-tight">Equipamentos cadastrados</div>
+                        <div className="text-[11px] text-slate-500">Exibindo {lista.length} de {fmtNum(todos.length)} — mais recentes primeiro</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {semValor > 0 && (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-200 rounded-full px-2 py-0.5">
+                          <AlertTriangle className="h-3 w-3" /> {fmtNum(semValor)} sem valor
+                        </span>
+                      )}
+                      <Link href="/equipamentos/proprios"><a className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700">Ver todos <ArrowUp className="h-3 w-3 rotate-45" /></a></Link>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gradient-to-b from-slate-50 to-slate-50/40 text-[11px] text-slate-500 uppercase tracking-wide">
+                        <tr>
+                          <th className="text-left px-4 py-2.5 font-medium">Descrição</th>
+                          <th className="text-left px-4 py-2.5 font-medium">Patrimônio</th>
+                          <th className="text-left px-4 py-2.5 font-medium">Status</th>
+                          <th className="text-right px-4 py-2.5 font-medium">Valor aquisição</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lista.map((p: any) => {
+                          const st = statusProprioTheme(p.status);
+                          const valor = Number(p.valorAquisicao || 0);
+                          const temValor = valor > 0;
+                          return (
+                            <tr key={p.id} className="border-t border-slate-100 hover:bg-indigo-50/40 transition-colors">
+                              <td className="px-4 py-2.5 font-medium text-slate-800">{p.descricao}</td>
+                              <td className="px-4 py-2.5">
+                                {(p.codigoPatrimonio || p.codigoInterno)
+                                  ? <span className="font-mono text-[11px] text-slate-600 bg-slate-100 rounded px-1.5 py-0.5">{p.codigoPatrimonio || p.codigoInterno}</span>
+                                  : <span className="text-slate-400">—</span>}
+                              </td>
+                              <td className="px-4 py-2.5">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${st.cls}`}>{st.label}</span>
+                              </td>
+                              <td className="px-4 py-2.5 text-right tabular-nums">
+                                {temValor
+                                  ? <span className="font-semibold text-slate-800">{fmtBRL(valor)}</span>
+                                  : <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600"><AlertTriangle className="h-3 w-3" /> Sem valor</span>}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {todos.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-slate-500">Nenhum equipamento próprio cadastrado.</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Rev. 2327 — Aquisições mês a mês */}
             <div className="bg-white border border-slate-200/70 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">

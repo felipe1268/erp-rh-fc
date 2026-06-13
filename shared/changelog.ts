@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3016 — **DASHBOARD ALMOXARIFADO/EQUIPAMENTOS → ABA "EQUIP. PRÓPRIOS":
+ * LISTA "20 MAIS RECENTES" REDESENHADA PARA FICAR MAIS INTUITIVA — STATUS
+ * COLORIDO, PATRIMÔNIO EM CHIP MONOSPACE E SINALIZAÇÃO CLARA DE ITENS "SEM
+ * VALOR".**
+ *
+ * PEDIDO (usuário): "Melhore o layout quero mais intuitivo" (print da lista de
+ * equipamentos próprios no dashboard — todas as linhas com `R$ 0,00` e status
+ * em cinza único, pouco legível).
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, ZERO backend/schema; 100%
+ * client-side sobre o endpoint EXISTENTE `equipamentos.propriosListar`):
+ * 1) NOVO helper `statusProprioTheme(status)` em
+ *    `client/src/pages/dashboards/DashAlmoxarifadoEquipamentos.tsx`: mapeia
+ *    cada status para rótulo amigável + cor (em_obra=azul, disponível=verde,
+ *    manutenção=âmbar, inativo=cinza, baixado=rosa), com fallback neutro p/
+ *    status desconhecido. Acaba o badge cinza genérico `{p.status}` cru.
+ * 2) CABEÇALHO da lista repaginado: ícone `HardHat` em selo indigo, título
+ *    "Equipamentos cadastrados" + subtítulo "Exibindo X de N — mais recentes
+ *    primeiro", badge âmbar "N sem valor" (conta itens com `valorAquisicao<=0`
+ *    em TODA a base, não só na fatia exibida) e CTA "Ver todos" com seta.
+ * 3) LINHAS da tabela: padding maior (`px-4 py-2.5`), hover indigo, descrição
+ *    em peso médio, patrimônio em chip `font-mono` cinza, status via badge
+ *    colorido do helper, e a coluna de valor mostra `R$` em negrito quando há
+ *    valor OU um aviso âmbar "⚠ Sem valor" quando `valorAquisicao<=0` (ligando
+ *    visualmente com o botão "Gerar preços" da Rev. 3015). `tabular-nums` p/
+ *    alinhar os números.
+ *
+ * Sem mudança de dados/contrato: continua lendo `propriosListar` e fatiando os
+ * 20 primeiros. Requer apenas REPUBLICAR (só front). Idioma pt-BR, moeda BRL.
+ *
  * Rev. 3015 — **EQUIPAMENTOS PRÓPRIOS (`/equipamentos/ln`): BOTÃO "GERAR PREÇOS"
  * — ESTIMA COM IA O VALOR DE AQUISIÇÃO (BRL) DE TODOS OS EQUIPAMENTOS SEM VALOR
  * NUMA TACADA SÓ, PARA QUE TODO O PARQUE TENHA VALOR.**
