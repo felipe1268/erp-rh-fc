@@ -17,12 +17,13 @@ import { useCompany } from "@/hooks/useCompany";
 import {
   RefreshCw, ChevronLeft, ChevronRight, TrendingDown, CircleDollarSign,
   Layers, Tag, AlertTriangle, CheckCircle2, Receipt, Building2,
-  BarChart2, Scissors, Calendar,
+  BarChart2, Scissors, Calendar, Table2, ArrowUp, ArrowDown, Minus,
 } from "lucide-react";
 import {
-  ResponsiveContainer, Cell, BarChart, Bar,
+  ResponsiveContainer, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip as RechTooltip, Legend, LabelList,
 } from "recharts";
+import { classificarGrupoCusto } from "@shared/custosCategorias";
 
 function formatBRL(value: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
@@ -42,16 +43,19 @@ function pct(part: number, total: number): number {
 const MESES_ABREV = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const MESES_FULL = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
-const PIE_COLORS = [
-  "#6366f1", "#06b6d4", "#f59e0b", "#ef4444", "#10b981", "#8b5cf6",
-  "#ec4899", "#14b8a6", "#f97316", "#84cc16", "#64748b",
-];
-
 // Valor efetivo do custo: realizado quando há (pago), senão o previsto.
 function valorEfetivo(r: any): number {
   const real = Number(r.valorRealizado ?? 0);
   if (real > 0) return real;
   return Number(r.valorPrevisto ?? 0);
+}
+// Rev. 3027 — separa a parcela JÁ PAGA da que é apenas PREVISÃO (a pagar/em
+// aberto), espelhando exatamente a lógica do gráfico "Custo por Mês".
+function pagoDe(r: any): number {
+  return r.status === "pago" ? (Number(r.valorRealizado ?? 0) || valorEfetivo(r)) : 0;
+}
+function previsaoDe(r: any): number {
+  return r.status !== "pago" ? (Number(r.valorPrevisto ?? 0) || valorEfetivo(r)) : 0;
 }
 function mesNumDe(r: any): number {
   const s: string = (r.dataCompetencia || r.dataVencimento || "") as string;
@@ -154,31 +158,42 @@ export default function FinanceiroAnaliseCustos() {
     return arr;
   }, [rowsAll]);
 
-  // ─── Custo por categoria ────────────────────────────────────────────────
+  // ─── Custo por categoria (GRUPO PADRONIZADO) ────────────────────────────
+  // Rev. 3027 — agrega pela taxonomia canônica (`classificarGrupoCusto`), que
+  // deduplica variantes de nome ("ENCARGOS SOCIAIS…" + "Encargos sobre Folha…"
+  // = Encargos) e garante os buckets da literatura (férias, rescisões, seguro
+  // de vida, tributos, ações trabalhistas…). Separa pago × previsão.
   const porCategoria = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, { pago: number; previsao: number; value: number }>();
     for (const r of rowsFiltradas) {
-      const nome = (r.contaNome || "Sem categoria") as string;
-      map.set(nome, (map.get(nome) ?? 0) + valorEfetivo(r));
+      const nome = classificarGrupoCusto(r.contaNome, r.origemModulo);
+      const cur = map.get(nome) ?? { pago: 0, previsao: 0, value: 0 };
+      cur.pago += pagoDe(r);
+      cur.previsao += previsaoDe(r);
+      cur.value += valorEfetivo(r);
+      map.set(nome, cur);
     }
     return Array.from(map.entries())
-      .map(([name, value]) => ({ name, value }))
+      .map(([name, v]) => ({ name, ...v }))
       .sort((a, b) => b.value - a.value);
   }, [rowsFiltradas]);
 
-  // Top 12 categorias para o gráfico de barras (sem o agrupador "Outros" —
-  // barras horizontais comportam mais itens legíveis que uma pizza).
-  const barCategoria = useMemo(() => porCategoria.slice(0, 12), [porCategoria]);
+  // Grupos padronizados são ≤17 — exibe todos no gráfico de barras.
+  const barCategoria = useMemo(() => porCategoria, [porCategoria]);
 
   // ─── Custo por centro de custo (obra) ───────────────────────────────────
   const porCentroCusto = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, { pago: number; previsao: number; value: number }>();
     for (const r of rowsFiltradas) {
       const nome = (r.obraNome || "Sem centro de custo") as string;
-      map.set(nome, (map.get(nome) ?? 0) + valorEfetivo(r));
+      const cur = map.get(nome) ?? { pago: 0, previsao: 0, value: 0 };
+      cur.pago += pagoDe(r);
+      cur.previsao += previsaoDe(r);
+      cur.value += valorEfetivo(r);
+      map.set(nome, cur);
     }
     return Array.from(map.entries())
-      .map(([name, value]) => ({ name, value }))
+      .map(([name, v]) => ({ name, ...v }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 12);
   }, [rowsFiltradas]);
@@ -220,6 +235,33 @@ export default function FinanceiroAnaliseCustos() {
       .sort((a, b) => b.value - a.value)
       .slice(0, 10);
   }, [rowsFiltradas]);
+
+  // ─── Tabela comparativa mês a mês por GRUPO (análise analítica) ──────────
+  // Rev. 3027 — matriz grupo × 12 meses com Δ (último mês com dados × o
+  // anterior) pra ver o que SUBIU/DESCEU. Sempre sobre o ANO inteiro (rowsAll),
+  // independente do filtro de mês — é uma visão de tendência.
+  const tabelaMensal = useMemo(() => {
+    const map = new Map<string, number[]>();
+    const mesTemDados = new Array(12).fill(false);
+    for (const r of rowsAll) {
+      const mn = mesNumDe(r);
+      if (mn < 1 || mn > 12) continue;
+      const g = classificarGrupoCusto(r.contaNome, r.origemModulo);
+      const arr = map.get(g) ?? new Array(12).fill(0);
+      arr[mn - 1] += valorEfetivo(r);
+      map.set(g, arr);
+      mesTemDados[mn - 1] = true;
+    }
+    const meses: number[] = mesTemDados.map((h, i) => (h ? i : -1)).filter((i) => i >= 0);
+    const linhas = Array.from(map.entries())
+      .map(([name, arr]) => ({ name, arr, total: arr.reduce((s, x) => s + x, 0) }))
+      .filter((l) => l.total > 0)
+      .sort((a, b) => b.total - a.total);
+    const lastIdx = meses.length ? meses[meses.length - 1] : -1;
+    const prevIdx = meses.length > 1 ? meses[meses.length - 2] : -1;
+    const totaisMes = meses.map((mi) => linhas.reduce((s, l) => s + l.arr[mi], 0));
+    return { linhas, meses, lastIdx, prevIdx, totaisMes };
+  }, [rowsAll]);
 
   const tituloPeriodo = mesSel === 0 ? `Ano de ${ano}` : `${MESES_FULL[mesSel - 1]} ${ano}`;
   const semDados = !isLoading && rowsFiltradas.length === 0;
@@ -376,12 +418,13 @@ export default function FinanceiroAnaliseCustos() {
               </CardContent>
             </Card>
 
-            {/* Pizza categoria + Barras centro de custo */}
+            {/* Categoria padronizada + Barras centro de custo */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <Card className="border-0 shadow-sm">
                 <CardHeader className="pb-2 pt-4 px-5">
                   <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2">
                     <BarChart2 className="w-4 h-4" /> Custo por Categoria
+                    <span className="text-[10px] font-normal text-gray-400">(padronizada · pago × previsão)</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="px-3 pb-4">
@@ -389,19 +432,21 @@ export default function FinanceiroAnaliseCustos() {
                     <p className="text-center text-sm text-gray-400 py-12">Sem categorias no período</p>
                   ) : (
                     <>
-                      <p className="text-[11px] text-gray-400 px-2 mb-1">Clique numa barra para ver os lançamentos da categoria.</p>
+                      <p className="text-[11px] text-gray-400 px-2 mb-1">
+                        Categorias agrupadas (sem duplicatas). <span className="text-emerald-600 font-medium">Verde</span> = já pago · <span className="text-amber-600 font-medium">âmbar</span> = previsão. Clique numa barra para ver os lançamentos.
+                      </p>
                       {/* Altura dinâmica (~46px por barra) — barras horizontais
-                          com rótulo de valor à direita (mais claro que a pizza). */}
+                          empilhadas (pago + previsão) com rótulo do TOTAL à direita. */}
                       <div style={{ width: "100%", height: Math.max(220, barCategoria.length * 46 + 24) }}>
                         <ResponsiveContainer>
                           <BarChart
                             data={barCategoria}
                             layout="vertical"
-                            margin={{ top: 4, right: 118, left: 8, bottom: 0 }}
+                            margin={{ top: 4, right: 124, left: 8, bottom: 0 }}
                             barCategoryGap="22%"
                             onClick={(st: any) => {
                               const nome = st?.activePayload?.[0]?.payload?.name;
-                              if (nome) irParaDetalhe("categoria", nome);
+                              if (nome) irParaDetalhe("grupo", nome);
                             }}
                           >
                             <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#eef2f7" />
@@ -416,10 +461,8 @@ export default function FinanceiroAnaliseCustos() {
                               tickLine={false}
                             />
                             <RechTooltip content={<CustomTooltip totalRef={kpis.custoTotal} />} cursor={{ fill: "#f8fafc" }} />
-                            <Bar dataKey="value" name="Custo" radius={[0, 4, 4, 0]} className="cursor-pointer" maxBarSize={26}>
-                              {barCategoria.map((_c, i) => (
-                                <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                              ))}
+                            <Bar dataKey="pago" name="Pago" stackId="c" fill="#10b981" className="cursor-pointer" maxBarSize={26} />
+                            <Bar dataKey="previsao" name="Previsão" stackId="c" radius={[0, 4, 4, 0]} fill="#f59e0b" className="cursor-pointer" maxBarSize={26}>
                               <LabelList dataKey="value" position="right" formatter={formatBRL} style={{ fontSize: 10, fill: "#475569" }} />
                             </Bar>
                           </BarChart>
@@ -434,6 +477,7 @@ export default function FinanceiroAnaliseCustos() {
                 <CardHeader className="pb-2 pt-4 px-5">
                   <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2">
                     <Layers className="w-4 h-4" /> Custo por Centro de Custo
+                    <span className="text-[10px] font-normal text-gray-400">(pago × previsão)</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="px-3 pb-4">
@@ -441,7 +485,9 @@ export default function FinanceiroAnaliseCustos() {
                     <p className="text-center text-sm text-gray-400 py-12">Sem centro de custo no período</p>
                   ) : (
                     <>
-                      <p className="text-[11px] text-gray-400 px-2 mb-1">Clique numa barra para ver os lançamentos do centro de custo.</p>
+                      <p className="text-[11px] text-gray-400 px-2 mb-1">
+                        <span className="text-emerald-600 font-medium">Verde</span> = já pago · <span className="text-amber-600 font-medium">âmbar</span> = previsão. Clique numa barra para ver os lançamentos.
+                      </p>
                       {/* Altura dinâmica (~46px por barra) elimina a sobreposição
                           dos rótulos de valor que ocorria com altura fixa. */}
                       <div style={{ width: "100%", height: Math.max(220, porCentroCusto.length * 46 + 24) }}>
@@ -449,7 +495,7 @@ export default function FinanceiroAnaliseCustos() {
                           <BarChart
                             data={porCentroCusto}
                             layout="vertical"
-                            margin={{ top: 4, right: 118, left: 8, bottom: 0 }}
+                            margin={{ top: 4, right: 124, left: 8, bottom: 0 }}
                             barCategoryGap="22%"
                             onClick={(st: any) => {
                               const nome = st?.activePayload?.[0]?.payload?.name;
@@ -468,7 +514,8 @@ export default function FinanceiroAnaliseCustos() {
                               tickLine={false}
                             />
                             <RechTooltip content={<CustomTooltip totalRef={kpis.custoTotal} />} cursor={{ fill: "#f8fafc" }} />
-                            <Bar dataKey="value" name="Custo" fill="#6366f1" radius={[0, 4, 4, 0]} className="cursor-pointer" maxBarSize={26}>
+                            <Bar dataKey="pago" name="Pago" stackId="cc" fill="#10b981" className="cursor-pointer" maxBarSize={26} />
+                            <Bar dataKey="previsao" name="Previsão" stackId="cc" radius={[0, 4, 4, 0]} fill="#f59e0b" className="cursor-pointer" maxBarSize={26}>
                               <LabelList dataKey="value" position="right" formatter={formatBRL} style={{ fontSize: 10, fill: "#475569" }} />
                             </Bar>
                           </BarChart>
@@ -489,7 +536,7 @@ export default function FinanceiroAnaliseCustos() {
               </CardHeader>
               <CardContent className="px-5 pb-4">
                 <p className="text-xs text-gray-500 mb-3">
-                  <span className="font-semibold text-rose-700">{corteAlvo.length}</span> categoria(s) concentram ~80% do custo total.
+                  <span className="font-semibold text-rose-700">{corteAlvo.length}</span> categoria(s) padronizada(s) concentram ~80% do custo total.
                   Foque o corte aqui pra o maior impacto.
                 </p>
                 <div className="overflow-x-auto">
@@ -509,7 +556,7 @@ export default function FinanceiroAnaliseCustos() {
                         return (
                           <tr
                             key={p.name}
-                            onClick={() => irParaDetalhe("categoria", p.name)}
+                            onClick={() => irParaDetalhe("grupo", p.name)}
                             title={`Ver lançamentos · ${p.name}`}
                             className={`border-b border-gray-50 cursor-pointer hover:bg-rose-50 transition-colors ${noAlvo ? "bg-rose-50/40" : ""}`}
                           >
@@ -534,6 +581,100 @@ export default function FinanceiroAnaliseCustos() {
                     </tbody>
                   </table>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Tabela comparativa mês a mês por grupo (análise analítica) */}
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-2 pt-4 px-5">
+                <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2">
+                  <Table2 className="w-4 h-4 text-indigo-600" /> Comparativo Mês a Mês por Categoria — {ano}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-5 pb-4">
+                {tabelaMensal.linhas.length === 0 || tabelaMensal.meses.length === 0 ? (
+                  <p className="text-center text-sm text-gray-400 py-8">Sem dados mensais para o ano selecionado.</p>
+                ) : (
+                  <>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Custo por categoria padronizada em cada mês.
+                      {tabelaMensal.prevIdx >= 0 && (
+                        <> A coluna <span className="font-medium text-gray-700">Δ</span> compara {MESES_ABREV[tabelaMensal.prevIdx]} → {MESES_ABREV[tabelaMensal.lastIdx]}:
+                          {" "}<span className="text-rose-600 font-medium">▲ subiu</span> · <span className="text-emerald-600 font-medium">▼ caiu</span>. Clique numa linha para ver os lançamentos.</>
+                      )}
+                    </p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs border-collapse">
+                        <thead>
+                          <tr className="text-gray-400 border-b border-gray-200">
+                            <th className="text-left font-medium py-2 pr-3 sticky left-0 bg-white z-10">Categoria</th>
+                            {tabelaMensal.meses.map((mi) => (
+                              <th key={mi} className="text-right font-medium py-2 px-2 whitespace-nowrap">{MESES_ABREV[mi]}</th>
+                            ))}
+                            <th className="text-right font-medium py-2 pl-3 whitespace-nowrap">Total</th>
+                            {tabelaMensal.prevIdx >= 0 && (
+                              <th className="text-right font-medium py-2 pl-3 whitespace-nowrap">Δ {MESES_ABREV[tabelaMensal.prevIdx]}→{MESES_ABREV[tabelaMensal.lastIdx]}</th>
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {tabelaMensal.linhas.map((l) => {
+                            const prev = tabelaMensal.prevIdx >= 0 ? l.arr[tabelaMensal.prevIdx] : 0;
+                            const last = tabelaMensal.lastIdx >= 0 ? l.arr[tabelaMensal.lastIdx] : 0;
+                            const delta = last - prev;
+                            const deltaPct = prev > 0 ? (delta / prev) * 100 : (last > 0 ? 100 : 0);
+                            const subiu = delta > 0.005;
+                            const caiu = delta < -0.005;
+                            return (
+                              <tr
+                                key={l.name}
+                                onClick={() => irParaDetalhe("grupo", l.name)}
+                                title={`Ver lançamentos · ${l.name}`}
+                                className="border-b border-gray-50 cursor-pointer hover:bg-indigo-50/50 transition-colors"
+                              >
+                                <td className="py-2 pr-3 text-gray-700 font-medium whitespace-nowrap sticky left-0 bg-white">{l.name}</td>
+                                {tabelaMensal.meses.map((mi, idx) => {
+                                  const v = l.arr[mi];
+                                  // Tendência vs o mês exibido imediatamente anterior.
+                                  const prevShown = idx > 0 ? l.arr[tabelaMensal.meses[idx - 1]] : null;
+                                  const up = prevShown != null && v - prevShown > 0.005;
+                                  const down = prevShown != null && v - prevShown < -0.005;
+                                  return (
+                                    <td
+                                      key={mi}
+                                      className={`py-2 px-2 text-right tabular-nums whitespace-nowrap ${v === 0 ? "text-gray-300" : up ? "text-rose-600" : down ? "text-emerald-600" : "text-gray-600"}`}
+                                    >
+                                      {v === 0 ? "—" : BRLk(v)}
+                                      {up && <ArrowUp className="inline w-3 h-3 ml-0.5 align-text-top" />}
+                                      {down && <ArrowDown className="inline w-3 h-3 ml-0.5 align-text-top" />}
+                                    </td>
+                                  );
+                                })}
+                                <td className="py-2 pl-3 text-right tabular-nums font-semibold text-gray-800 whitespace-nowrap">{formatBRL(l.total)}</td>
+                                {tabelaMensal.prevIdx >= 0 && (
+                                  <td className={`py-2 pl-3 text-right tabular-nums font-medium whitespace-nowrap ${subiu ? "text-rose-600" : caiu ? "text-emerald-600" : "text-gray-400"}`}>
+                                    {subiu ? <ArrowUp className="inline w-3 h-3 mr-0.5 align-text-top" /> : caiu ? <ArrowDown className="inline w-3 h-3 mr-0.5 align-text-top" /> : <Minus className="inline w-3 h-3 mr-0.5 align-text-top" />}
+                                    {delta === 0 ? "—" : `${BRLk(Math.abs(delta))} (${Math.abs(deltaPct).toFixed(0)}%)`}
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t-2 border-gray-200 font-semibold text-gray-700">
+                            <td className="py-2 pr-3 sticky left-0 bg-white">Total geral</td>
+                            {tabelaMensal.totaisMes.map((t, idx) => (
+                              <td key={idx} className="py-2 px-2 text-right tabular-nums whitespace-nowrap">{t === 0 ? "—" : BRLk(t)}</td>
+                            ))}
+                            <td className="py-2 pl-3 text-right tabular-nums whitespace-nowrap">{formatBRL(tabelaMensal.totaisMes.reduce((s, x) => s + x, 0))}</td>
+                            {tabelaMensal.prevIdx >= 0 && <td className="py-2 pl-3" />}
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
 

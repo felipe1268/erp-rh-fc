@@ -1,6 +1,64 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3027 — **FINANCEIRO → "ANÁLISE DE CUSTOS": (1) OS GRÁFICOS "CUSTO POR
+ * CATEGORIA" E "CUSTO POR CENTRO DE CUSTO" GANHAM VISUAL DE PAGO (VERDE) ×
+ * PREVISÃO (ÂMBAR) EMPILHADOS; (2) NOVA TABELA NO FIM, COMPARATIVA MÊS A MÊS POR
+ * CATEGORIA, COM Δ (SUBIU/CAIU) ENTRE OS DOIS ÚLTIMOS MESES; (3) AS CATEGORIAS
+ * SÃO PADRONIZADAS NUMA TAXONOMIA CANÔNICA — ACABAM OS DUPLICADOS (VÁRIAS
+ * VARIANTES DE "ENCARGOS" VIRAM 1) — E OS BUCKETS QUE A LITERATURA DE CUSTOS
+ * MANDA PASSAM A EXISTIR EXPLÍCITOS: FÉRIAS, 13º, RESCISÕES/DEMISSÕES, SEGURO DE
+ * VIDA, IMPOSTOS/TRIBUTOS, AÇÕES & ACORDOS TRABALHISTAS, PRÓ-LABORE, BENEFÍCIOS,
+ * TERCEIROS/PJ, FROTA, MATERIAL, ALUGUÉIS, DESPESAS FINANCEIRAS/ADMINISTRATIVAS.**
+ *
+ * PEDIDO (usuário, print IMG_1913, tela `/financeiro/analise-custos`): "deixa os
+ * gráficos mostrando pago vs previsão; põe uma tabela no fim comparando mês a mês
+ * as categorias (o que subiu, o que desceu); garante que férias e demissões
+ * apareçam; tira os duplicados de nome; e mapeia tudo que a literatura manda —
+ * seguro de vida, impostos, acordos trabalhistas — pra eu saber onde cortar".
+ *
+ * SOLUÇÃO (FRONT-only + 1 módulo shared puro; ZERO ALTER/DROP/DELETE, ZERO
+ * backend/schema; 100% client-side sobre `financial.getContasAPagarByYear`):
+ *
+ * NOVO `shared/custosCategorias.ts` (determinístico, sem dado inventado):
+ *  - `GRUPOS_CUSTO_ORDEM` = 17 grupos canônicos na ordem da literatura de custos.
+ *  - `classificarGrupoCusto(contaNome, origemModulo)` mapeia cada lançamento num
+ *    grupo: ORIGEM tem precedência (projeções/integrações são autoritativas via
+ *    `ORIGEM_GRUPO`), senão keywords por PRECEDÊNCIA (mais específico primeiro —
+ *    "SEGURO DE VIDA" antes de "VIDA", "RESCIS/DEMISS" antes de "FERIAS", etc.).
+ *    `norm()` tira acento/caixa pra casar "Férias"/"FERIAS". Mapeado contra os
+ *    `conta_nome`/`origem_modulo` REAIS do Neon — confirmados os duplicados de
+ *    encargos e a existência de férias/rescisões/seguro vida/tributos/ações.
+ *  - Um grupo só aparece se houver lançamento real que caia nele (sem placeholder).
+ *
+ * FRONT `client/src/pages/financeiro/FinanceiroAnaliseCustos.tsx`:
+ *  - Helpers `valorEfetivo` (realizado>0 ? realizado : previsto), `pagoDe`
+ *    (status==='pago'), `previsaoDe` (≠pago), `mesNumDe`.
+ *  - `porCategoria` reescrito: agrupa por `classificarGrupoCusto` em
+ *    {name,pago,previsao,value}; `barCategoria` = top 16; `porCentroCusto` ganha
+ *    pago/previsao. Ambos os cards viram `<Bar stackId>` verde(pago)+âmbar(previsão)
+ *    com `<LabelList dataKey="value">` (TOTAL) à direita; clique → drill `grupo`.
+ *  - Pareto 80/20 passa a operar sobre os GRUPOS e dá drill `grupo`.
+ *  - NOVO memo `tabelaMensal` (grupo × 12 meses sobre `rowsAll`; meses-com-dados,
+ *    `lastIdx`/`prevIdx`, `totaisMes`) e NOVO card-tabela: linha por grupo, célula
+ *    por mês (BRLk; seta ▲ vermelha quando subiu vs o mês exibido anterior, ▼
+ *    verde quando caiu), coluna Total (formatBRL) e coluna Δ (penúltimo→último mês
+ *    com %), tfoot "Total geral", linha clicável → drill `grupo`. Removidos imports
+ *    órfãos `Cell`/`PIE_COLORS`.
+ *
+ * FRONT `client/src/pages/financeiro/FinanceiroAnaliseCustosDetalhe.tsx`:
+ *  - `keyOf.grupo = classificarGrupoCusto(r.contaNome, r.origemModulo)`,
+ *    `DIM_META.grupo`, `rotuloDim.grupo`, `case "grupo"` no cabeçalho e no
+ *    `primarioLbl` — o drill-down `grupo` filtra os lançamentos pelo grupo canônico
+ *    (incl. a quebra secundária e o breadcrumb). Reaproveita TODO o motor de drill
+ *    da Rev. 3024 (param `extra`).
+ *
+ * IMPACTO: visão pago×previsão imediata, zero duplicata de categoria, tabela
+ * analítica de tendência mês a mês, e os grupos da literatura prontos pra decisão
+ * de corte. REPUBLICAR (só front — backend/schema intactos).
+ *
+ * ---
+ *
  * Rev. 3026 — **EQUIPAMENTOS PRÓPRIOS → BOTÃO "GERAR PREÇOS" (IA): A GERAÇÃO
  * PASSA A MOSTRAR UMA EVOLUÇÃO DE 0 A 100% FASE A FASE (BARRA DE PROGRESSO +
  * LISTA DE FASES + CONTAGEM VIVA DE EQUIPAMENTOS), EM VEZ DO ANTIGO "GERANDO

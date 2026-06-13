@@ -27,6 +27,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip as RechTooltip, LabelList,
 } from "recharts";
+import { classificarGrupoCusto } from "@shared/custosCategorias";
 
 function formatBRL(value: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
@@ -73,6 +74,8 @@ const keyOf: Record<string, (r: any) => string> = {
   fornecedor: (r) => ((r.fornecedorNome || "").trim()) || "Sem fornecedor",
   centro: (r) => (r.obraNome || "Sem centro de custo"),
   categoria: (r) => (r.contaNome || "Sem categoria"),
+  // Rev. 3027 — categoria PADRONIZADA (grupo canônico sem duplicatas).
+  grupo: (r) => classificarGrupoCusto(r.contaNome, r.origemModulo),
 };
 function aplicaFiltro(base: any[], t: string, v: string): any[] {
   if (t === "status") {
@@ -101,6 +104,7 @@ const DIM_META: Record<string, { titulo: string; icon: any }> = {
   fornecedor: { titulo: "Por Fornecedor", icon: Building2 },
   centro: { titulo: "Por Centro de Custo", icon: Layers },
   categoria: { titulo: "Por Categoria", icon: Tag },
+  grupo: { titulo: "Por Categoria (padronizada)", icon: Tag },
 };
 
 function statusTheme(r: any): { label: string; cls: string } {
@@ -406,7 +410,7 @@ export default function FinanceiroAnaliseCustosDetalhe() {
 
   // Rótulo legível de cada dimensão (pro título e pro breadcrumb dos drills).
   const rotuloDim: Record<string, string> = {
-    fornecedor: "Fornecedor", centro: "Centro de custo", categoria: "Categoria", mes: "Mês",
+    fornecedor: "Fornecedor", centro: "Centro de custo", categoria: "Categoria", grupo: "Categoria", mes: "Mês",
   };
   // Rótulo legível de um passo de drill (mês vira nome do mês; demais usam o próprio valor).
   const rotuloStep = (f: DrillStep) =>
@@ -419,7 +423,7 @@ export default function FinanceiroAnaliseCustosDetalhe() {
     if (extra.length) {
       const ultimo = extra[extra.length - 1];
       const primarioLbl =
-        tipo === "categoria" || tipo === "centro" || tipo === "fornecedor" ? valor
+        tipo === "categoria" || tipo === "centro" || tipo === "fornecedor" || tipo === "grupo" ? valor
         : tipo === "mes" ? (MESES_FULL[parseInt(valor, 10) - 1] || `Mês ${valor}`)
         : (valor === "pago" ? "Pago" : valor === "aberto" ? "Em aberto" : valor === "vencido" ? "Vencido" : "Custo total");
       const trilha = [primarioLbl, ...extra.map(rotuloStep)].join(" › ");
@@ -433,6 +437,8 @@ export default function FinanceiroAnaliseCustosDetalhe() {
       }
       case "categoria":
         return { titulo: valor, subtitulo: `Categoria · ${periodo}`, Icon: Tag };
+      case "grupo":
+        return { titulo: valor, subtitulo: `Categoria padronizada · ${periodo}`, Icon: Tag };
       case "centro":
         return { titulo: valor, subtitulo: `Centro de custo · ${periodo}`, Icon: Layers };
       case "fornecedor":
