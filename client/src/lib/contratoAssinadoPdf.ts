@@ -35,6 +35,18 @@ interface SignatarioPdf {
   dataAssinatura?: string | null;
   cpfCnpj?: string | null;
   cargo?: string | null;
+  /** PNG base64 (data URL) da assinatura desenhada pelo signatário no FcSign. */
+  assinaturaImagem?: string | null;
+  hashAssinatura?: string | null;
+  ipAddress?: string | null;
+  latitude?: string | number | null;
+  longitude?: string | number | null;
+  geoAccuracy?: string | number | null;
+  dispositivoInfo?: string | null;
+  nomeConfirmado?: string | null;
+  cpfCnpjConfirmado?: string | null;
+  termoAceito?: boolean | null;
+  dataVisualizacao?: string | null;
 }
 
 interface ContratoPdfParams {
@@ -486,13 +498,36 @@ export async function gerarContratoAssinadoPdf(params: ContratoPdfParams): Promi
       const x = MARGIN + c * (blockW + blockGap);
       const assinado = sig.status === "assinado";
 
-      // faux-assinatura (nome em itálico) acima da linha
+      // Assinatura desenhada (imagem real) acima da linha; fallback p/ nome em itálico
       const lineY = rowY + 13;
       if (assinado) {
-        pdf.setFont("times", "italic");
-        pdf.setFontSize(13);
-        pdf.setTextColor(40, 60, 110);
-        pdf.text(sig.nome, x + blockW / 2, lineY - 2, { align: "center", maxWidth: blockW - 6 });
+        let imagemDesenhada = false;
+        if (sig.assinaturaImagem && /^data:image\//i.test(sig.assinaturaImagem)) {
+          try {
+            const props = pdf.getImageProperties(sig.assinaturaImagem);
+            const ratio = props.width && props.height ? props.width / props.height : 3;
+            const maxW = blockW - 14;
+            const maxH = 11;
+            let w = maxW;
+            let h = w / ratio;
+            if (h > maxH) {
+              h = maxH;
+              w = h * ratio;
+            }
+            const ix = x + (blockW - w) / 2;
+            const fmt = /^data:image\/jpe?g/i.test(sig.assinaturaImagem) ? "JPEG" : "PNG";
+            pdf.addImage(sig.assinaturaImagem, fmt, ix, lineY - h - 0.5, w, h, undefined, "FAST");
+            imagemDesenhada = true;
+          } catch {
+            imagemDesenhada = false;
+          }
+        }
+        if (!imagemDesenhada) {
+          pdf.setFont("times", "italic");
+          pdf.setFontSize(13);
+          pdf.setTextColor(40, 60, 110);
+          pdf.text(sig.nome, x + blockW / 2, lineY - 2, { align: "center", maxWidth: blockW - 6 });
+        }
       }
       // linha de assinatura
       pdf.setDrawColor(120, 120, 120);
@@ -541,6 +576,117 @@ export async function gerarContratoAssinadoPdf(params: ContratoPdfParams): Promi
       }
     }
     y = rowY + blockH;
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Trilha de auditoria / Controle de assinaturas (padrão FcSign)
+  // ─────────────────────────────────────────────────────────────
+  const assinados = signatarios.filter((s) => s.status === "assinado");
+  const fmtGeo = (sig: SignatarioPdf) => {
+    const lat = sig.latitude != null && sig.latitude !== "" ? Number(sig.latitude) : null;
+    const lon = sig.longitude != null && sig.longitude !== "" ? Number(sig.longitude) : null;
+    if (lat == null || lon == null || Number.isNaN(lat) || Number.isNaN(lon)) return null;
+    const acc = sig.geoAccuracy != null && sig.geoAccuracy !== "" ? Number(sig.geoAccuracy) : null;
+    const accTxt = acc != null && !Number.isNaN(acc) ? ` (±${Math.round(acc)}m)` : "";
+    return `${lat.toFixed(6)}, ${lon.toFixed(6)}${accTxt}`;
+  };
+  const parseDispositivo = (info?: string | null) => {
+    if (!info) return null;
+    try {
+      const o = JSON.parse(info);
+      const partes = [o.platform, o.screen, o.timezone, o.language].filter(Boolean);
+      return partes.length ? partes.join(" · ") : null;
+    } catch {
+      return info.length > 80 ? `${info.slice(0, 80)}…` : info;
+    }
+  };
+
+  if (assinados.length) {
+    y += 6;
+    novaPaginaSe(24);
+    pdf.setDrawColor(AZUL[0], AZUL[1], AZUL[2]);
+    pdf.setLineWidth(0.4);
+    pdf.line(MARGIN, y, W - MARGIN, y);
+    y += 5;
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(10);
+    pdf.setTextColor(AZUL[0], AZUL[1], AZUL[2]);
+    pdf.text("CONTROLE DE ASSINATURAS — TRILHA DE AUDITORIA", W / 2, y, { align: "center" });
+    y += 4;
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(7);
+    pdf.setTextColor(120, 120, 120);
+    pdf.text(
+      "Confirmação de identidade e integridade de cada assinatura eletrônica (MP 2.200-2/2001 · Lei 14.063/2020).",
+      W / 2,
+      y,
+      { align: "center", maxWidth: contentW },
+    );
+    y += 5;
+
+    assinados.forEach((sig, idx) => {
+      const linhaLabel = (label: string, valor: string) => {
+        novaPaginaSe(4);
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(7);
+        pdf.setTextColor(90, 90, 90);
+        pdf.text(label, MARGIN + 3, y);
+        const lblW = pdf.getTextWidth(label) + 2;
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(60, 60, 60);
+        const vLines = pdf.splitTextToSize(valor, contentW - 6 - lblW);
+        vLines.forEach((vl: string, li: number) => {
+          if (li > 0) novaPaginaSe(3.4);
+          pdf.text(vl, MARGIN + 3 + lblW, y);
+          if (li < vLines.length - 1) y += 3.4;
+        });
+        y += 4;
+      };
+
+      novaPaginaSe(10);
+      // Cabeçalho do card do signatário
+      pdf.setFillColor(238, 241, 247);
+      pdf.rect(MARGIN, y - 3, contentW, 6, "F");
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(8);
+      pdf.setTextColor(AZUL[0], AZUL[1], AZUL[2]);
+      const cargoTxt = sig.cargo?.trim() || sig.papelLabel;
+      pdf.text(`${idx + 1}. ${sig.nome}  —  ${cargoTxt}`, MARGIN + 3, y + 1.2, { maxWidth: contentW - 6 });
+      y += 6;
+
+      const nomeConf = sig.nomeConfirmado?.trim() || sig.nome;
+      const cpfConf = sig.cpfCnpjConfirmado?.trim() || sig.cpfCnpj?.trim();
+      linhaLabel("Confirmado por:", `${nomeConf}${cpfConf ? `  ·  CPF/CNPJ: ${cpfConf}` : ""}`);
+      linhaLabel("Data/hora da assinatura:", formatDateTime(sig.dataAssinatura) || "—");
+      if (sig.dataVisualizacao) linhaLabel("Visualizado em:", formatDateTime(sig.dataVisualizacao) || "—");
+      linhaLabel("Endereço IP:", sig.ipAddress?.trim() || "Não capturado");
+      const geo = fmtGeo(sig);
+      if (geo) linhaLabel("Geolocalização:", geo);
+      const disp = parseDispositivo(sig.dispositivoInfo);
+      if (disp) linhaLabel("Dispositivo:", disp);
+      linhaLabel(
+        "Termo de aceite:",
+        sig.termoAceito ? "Aceito (li e concordo com os termos do documento)" : "Não registrado",
+      );
+      if (sig.hashAssinatura) {
+        novaPaginaSe(4);
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(7);
+        pdf.setTextColor(90, 90, 90);
+        pdf.text("Hash SHA-256 da assinatura:", MARGIN + 3, y);
+        y += 3.4;
+        pdf.setFont("courier", "normal");
+        pdf.setFontSize(6.2);
+        pdf.setTextColor(110, 110, 110);
+        const hLines = pdf.splitTextToSize(sig.hashAssinatura, contentW - 6);
+        hLines.forEach((hl: string) => {
+          novaPaginaSe(3);
+          pdf.text(hl, MARGIN + 3, y);
+          y += 3;
+        });
+      }
+      y += 3;
+    });
   }
 
   // ─────────────────────────────────────────────────────────────

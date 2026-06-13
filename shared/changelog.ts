@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3055 — **INTEGRASIGN (FCSIGN) · PDF DO CONTRATO PASSA A MOSTRAR A ASSINATURA REAL
+ * DESENHADA PELO SIGNATÁRIO (IMAGEM) E GANHA O "CONTROLE DE ASSINATURAS — TRILHA DE
+ * AUDITORIA" NO PADRÃO DE CONTROLE DO FCSIGN.**
+ *
+ * PEDIDO (sequência da Rev. 3054, mesmo print iPad CT-2026-0006): "Precisa ficar a
+ * assinatura que o usuário fizer, e precisa ter o processo de confirmação de assinatura
+ * conforme nosso padrão de controle do FCSign." Na Rev. 3054 o bloco de assinatura mostrava
+ * apenas o NOME EM ITÁLICO (faux-assinatura) e o PDF não trazia a trilha de auditoria.
+ *
+ * CAUSA-RAIZ (render/exposição de dados, sem bug de backend): o FcSign já CAPTURA e ARMAZENA
+ * a assinatura desenhada (`assinatura_imagem`, PNG base64) + auditoria completa
+ * (`hash_assinatura`, `ip_address`, `latitude`/`longitude`/`geo_accuracy`, `dispositivo_info`,
+ * `nome_confirmado`/`cpf_cnpj_confirmado`, `termo_aceito`, `data_visualizacao`,
+ * `data_assinatura`) em `integrasign_signatarios`. Porém o endpoint público
+ * `getDocumentoPublico` (ambos os ramos) NÃO selecionava esses campos, então o gerador de PDF
+ * não tinha como desenhar a assinatura real nem montar o comprovante de controle.
+ *
+ * SOLUÇÃO (ZERO ALTER/DROP/DELETE — só leitura + render): (1) BACKEND
+ * `server/routers/integrasign.ts` (`getDocumentoPublico`, ramo concluído e ramo
+ * pendente/visualizado): o SELECT de `todosSignatarios` passou a trazer `assinaturaImagem`,
+ * `hashAssinatura`, `ipAddress`, `latitude`, `longitude`, `geoAccuracy`, `dispositivoInfo`,
+ * `nomeConfirmado`, `cpfCnpjConfirmado`, `termoAceito` e `dataVisualizacao` (leitura pura,
+ * token-gated; o link de assinatura já dá acesso ao envelope inteiro). (2) FRONT
+ * `client/src/lib/contratoAssinadoPdf.ts`: o BLOCO DE ASSINATURA agora desenha a IMAGEM REAL
+ * da assinatura (`pdf.addImage` ajustando à caixa preservando o aspect ratio via
+ * `getImageProperties`) acima da linha; se não houver imagem, cai no fallback do nome em
+ * itálico (compat. com envelopes antigos). NOVA seção "CONTROLE DE ASSINATURAS — TRILHA DE
+ * AUDITORIA": um card por signatário ASSINADO com "Confirmado por" (nome + CPF/CNPJ
+ * confirmados no ato), data/hora da assinatura, visualizado em, endereço IP, geolocalização
+ * (lat/long + precisão), dispositivo (parse do JSON `dispositivoInfo` → plataforma · tela ·
+ * fuso · idioma), termo de aceite e o hash SHA-256 individual daquela assinatura. (3)
+ * `client/src/pages/IntegraSignAssinar.tsx`: os 2 call sites de `gerarContratoAssinadoPdf`
+ * repassam os novos campos.
+ *
+ * RESSALVA: envelopes/assinaturas antigos sem `assinatura_imagem` continuam usando o
+ * fallback itálico; campos de auditoria ausentes aparecem como "Não capturado"/são omitidos
+ * (nunca quebram o PDF). A imagem é renderizada como PNG (ou JPEG, se for o caso). Detalhe:
+ * este arquivo.
+ *
  * Rev. 3054 — **INTEGRASIGN (FCSIGN) · PDF DO CONTRATO ASSINADO 100% FORMATADO NO PADRÃO
  * INSTITUCIONAL FC (FONTE SERIF, TABELA EAP REAL, FLUXO DE MEDIÇÃO DESENHADO E ASSINATURAS
  * NO LOCAL DE ASSINATURA) — FIM DO CORPO MONOESPAÇADO CRU E DO MARCADOR VAZADO.**

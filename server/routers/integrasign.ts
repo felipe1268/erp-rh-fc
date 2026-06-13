@@ -581,6 +581,17 @@ export const integrasignRouter = router({
           status: integrasignSignatarios.status,
           ordemAssinatura: integrasignSignatarios.ordemAssinatura,
           dataAssinatura: integrasignSignatarios.dataAssinatura,
+          assinaturaImagem: integrasignSignatarios.assinaturaImagem,
+          hashAssinatura: integrasignSignatarios.hashAssinatura,
+          ipAddress: integrasignSignatarios.ipAddress,
+          latitude: integrasignSignatarios.latitude,
+          longitude: integrasignSignatarios.longitude,
+          geoAccuracy: integrasignSignatarios.geoAccuracy,
+          dispositivoInfo: integrasignSignatarios.dispositivoInfo,
+          nomeConfirmado: integrasignSignatarios.nomeConfirmado,
+          cpfCnpjConfirmado: integrasignSignatarios.cpfCnpjConfirmado,
+          termoAceito: integrasignSignatarios.termoAceito,
+          dataVisualizacao: integrasignSignatarios.dataVisualizacao,
         }).from(integrasignSignatarios)
           .where(eq(integrasignSignatarios.envelopeId, envelope.id))
           .orderBy(asc(integrasignSignatarios.ordemAssinatura));
@@ -632,6 +643,17 @@ export const integrasignRouter = router({
         status: integrasignSignatarios.status,
         ordemAssinatura: integrasignSignatarios.ordemAssinatura,
         dataAssinatura: integrasignSignatarios.dataAssinatura,
+        assinaturaImagem: integrasignSignatarios.assinaturaImagem,
+        hashAssinatura: integrasignSignatarios.hashAssinatura,
+        ipAddress: integrasignSignatarios.ipAddress,
+        latitude: integrasignSignatarios.latitude,
+        longitude: integrasignSignatarios.longitude,
+        geoAccuracy: integrasignSignatarios.geoAccuracy,
+        dispositivoInfo: integrasignSignatarios.dispositivoInfo,
+        nomeConfirmado: integrasignSignatarios.nomeConfirmado,
+        cpfCnpjConfirmado: integrasignSignatarios.cpfCnpjConfirmado,
+        termoAceito: integrasignSignatarios.termoAceito,
+        dataVisualizacao: integrasignSignatarios.dataVisualizacao,
       }).from(integrasignSignatarios)
         .where(eq(integrasignSignatarios.envelopeId, envelope.id))
         .orderBy(asc(integrasignSignatarios.ordemAssinatura));
