@@ -445,6 +445,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     icon: "DollarSign",
     features: [
       { key: "financeiro-painel",            label: "Painel",               route: "/financeiro",                        icon: "LayoutDashboard" },
+      { key: "financeiro-analise-custos",    label: "Análise de Custos",    route: "/financeiro/analise-custos",         icon: "Scissors" },
       { key: "financeiro-lancamentos",       label: "Lançamentos",          route: "/financeiro/lancamentos",            icon: "Receipt" },
       { key: "financeiro-contas-pagar",      label: "Contas a Pagar",       route: "/financeiro/contas-a-pagar",         icon: "ArrowDownCircle" },
       { key: "financeiro-contas-receber",    label: "Previsão de Faturamento", route: "/financeiro/contas-a-receber",       icon: "ArrowUpCircle" },

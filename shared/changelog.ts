@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3014 — **FINANCEIRO → NOVA ABA NA COLUNA LATERAL "ANÁLISE DE CUSTOS":
+ * DASHBOARD DEDICADO DE CUSTOS (KPIs + BARRAS + PIZZA POR CATEGORIA + PARETO
+ * 80/20 + RANKING DE FORNECEDORES) PRA ENXERGAR ONDE CORTAR CUSTOS.**
+ *
+ * PEDIDO (usuário): "criar uma aba dedicada para dash, onde teremos todos os KPIs,
+ * gráficos de barras, pizza por categorias para analisar os custos de cada coisa,
+ * e ver onde podemos cortar custos". Esclarecimento: "uma nova aba na coluna
+ * lateral só de dash... não no painel inicial".
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, ZERO backend/schema — 100%
+ * client-side sobre o endpoint EXISTENTE `financial.getContasAPagarByYear`, que já
+ * retorna todas as despesas do ano com `contaNome` (categoria), `obraNome` (centro
+ * de custo), `valorPrevisto`/`valorRealizado`, `status`, datas e `fornecedorNome`):
+ * 1) NOVA PÁGINA `client/src/pages/financeiro/FinanceiroAnaliseCustos.tsx`:
+ *    - Seletor de período (ano + chips "Ano"/Jan…Dez).
+ *    - 6 KPIs: Custo Total, Pago, Em Aberto, Vencido (c/ contagem), Lançamentos,
+ *      Ticket Médio. Valor de custo = `valorEfetivo` (realizado quando pago, senão
+ *      previsto).
+ *    - GRÁFICO DE BARRAS empilhadas "Custo por Mês" (12 meses, Pago × Em aberto).
+ *    - GRÁFICO DE PIZZA "Custo por Categoria" (donut, top 8 + "Outros", % no tooltip).
+ *    - BARRAS HORIZONTAIS "Custo por Centro de Custo" (obra, top 12).
+ *    - TABELA PARETO 80/20 de categorias (% individual + % acumulado, destaca as
+ *      que somam ~80% = alvo de corte) — "onde cortar".
+ *    - RANKING Top 10 Fornecedores por custo (barras de proporção).
+ *    - Estados de loading e "sem dados" tratados; moeda SEMPRE em BRL pt-BR;
+ *      iOS-safe (mês via slice de string ISO, sem `new Date()`).
+ * 2) ROTA `/financeiro/analise-custos` em `client/src/App.tsx` (lazy + `RouteGuard`).
+ * 3) ITEM DE MENU NA COLUNA LATERAL em `client/src/components/DashboardLayout.tsx`
+ *    (`menuSectionsFinanceiro`, seção "Análise", ícone `Scissors`) E em
+ *    `shared/modules.ts` (feature `financeiro-analise-custos`). NÃO adicionado ao
+ *    painel inicial, conforme pedido.
+ * Requer REPUBLICAR (só front).
+ *
  * Rev. 3013 — **FINANCEIRO → CONTAS A RECEBER: FIM DA DUPLICAÇÃO DE MEDIÇÕES +
  * LIMPEZA DE LANÇAMENTOS ÓRFÃOS (PHANTOM R$ 1,5 MI DO "HOTEL DO PAPA") — SEM
  * APAGAR NADA (UPDATE status='cancelado').**

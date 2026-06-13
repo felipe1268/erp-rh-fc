@@ -39,7 +39,7 @@ import {
   Home, Tag, GripVertical, Network, ScanFace, PackageCheck, PenLine, ChevronLeft,
   Camera, Blocks, CheckSquare, FileCheck2, Milestone, Fuel,
   UserMinus, Search, X, GraduationCap, Sparkles, HeartPulse, Award,
-  RefreshCw, HandCoins,
+  RefreshCw, HandCoins, Scissors,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -491,6 +491,7 @@ const menuSectionsFinanceiro: MenuSection[] = [
   {
     title: "Análise",
     items: [
+      { icon: Scissors,      label: "Análise de Custos", path: "/financeiro/analise-custos" },
       { icon: TrendingUp,    label: "Cronograma Financeiro", path: "/financeiro/cronograma" },
       { icon: BarChart3,     label: "DRE",               path: "/financeiro/dre" },
       { icon: FileSpreadsheet, label: "Fluxo de Caixa",  path: "/financeiro/fluxo-de-caixa" },
