@@ -222,9 +222,12 @@ export default function Configuracoes() {
   // Auto-inicializar critérios quando empresa selecionada
   useEffect(() => {
     if (companyId > 0 && criteriaQuery.data) {
-      // Auto-initialize if no criteria or if EPI category is missing
+      // Auto-initialize if no criteria, if EPI category is missing, or se faltar
+      // o critério liga/desliga da multa 40% FGTS (Rev. 3036 — garante que a chave
+      // nova apareça p/ empresas que já tinham critérios seedados).
       const hasEpi = criteriaQuery.data.some((c: any) => c.categoria === 'epi');
-      if (criteriaQuery.data.length === 0 || !hasEpi) {
+      const hasMultaToggle = criteriaQuery.data.some((c: any) => c.chave === 'rescisao_aplicar_multa_fgts');
+      if (criteriaQuery.data.length === 0 || !hasEpi || !hasMultaToggle) {
         initDefaultsMutation.mutate({ companyId });
       }
     }

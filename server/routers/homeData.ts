@@ -6,6 +6,7 @@ import { eq, and, sql, gte, lte, desc, inArray, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { getCipaStatusByEmployeeIds, projectCipaFields } from "../_core/cipaStatus";
 import { calcularRescisaoCompleta, parseBRL } from "../utils/rescisaoCalc";
+import { carregarMultaFgtsPorEmpresa } from "../utils/rescisaoMultaCfg";
 import { diasFeriasNoMesDaSaida } from "./avisoPrevioFerias";
 
 // O driver pg retorna colunas date como objetos Date (não strings).
@@ -636,6 +637,7 @@ export const homeDataRouter = router({
           }
         } catch { /* fallback — usa valor armazenado */ }
 
+        const multaMapHome = await carregarMultaFgtsPorEmpresa(db, avisosAtivos.map((a: any) => a.companyId));
         for (const a of avisosAtivos) {
           try {
             const emp = allEmps.find(e => e.id === a.employeeId);
@@ -657,6 +659,7 @@ export const homeDataRouter = router({
                 diasTrabalhadosMes,
                 periodosVencidosOverride: periodosVencidos,
                 descontarAvisoNaoCumprido: !!(a as any).descontarAvisoNaoCumprido,
+                incluirMultaFgts: multaMapHome.get(Number(a.companyId)) ?? true,
               });
               recomputedTotalMap.set(a.id, parseFloat(previsao.total));
             }

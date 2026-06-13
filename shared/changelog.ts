@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3036 — **CRITÉRIOS GERAIS → RESCISÃO · NOVO LIGA/DESLIGA "APLICAR A MULTA DE
+ * 40% DO FGTS NA RESCISÃO": PERMITE EXCLUIR A MULTA 40% DA RESCISÃO OFICIAL POR
+ * EMPRESA (CASO MARIANA / EMPRESAS QUE NÃO PAGAM A MULTA), AFETANDO TODOS OS PONTOS
+ * QUE CALCULAM A PREVISÃO (FICHA DO AVISO, PAINEL RH, HOME, DASHBOARDS CDM E AVISO
+ * PRÉVIO).**
+ *
+ * PEDIDO (usuário, prints IMG_1929/IMG_1930, ex. Mariana): "não pagamos multa de 40%
+ * do FGTS... coloca um critério que liga e desliga". ESCLARECIMENTO FINAL: o
+ * liga/desliga afeta SÓ a rescisão OFICIAL — o COMPLEMENTO ("por fora") continua SEM
+ * multa, como sempre foi ("falei errado, mantenha como está hoje").
+ *
+ * SOLUÇÃO (ZERO ALTER/DROP/DELETE — usa a tabela `system_criteria` já existente):
+ *  - NOVO critério seedado `rescisao_aplicar_multa_fgts` (categoria "rescisao",
+ *    valor "1" = ligado por padrão = comportamento CLT) em `server/routers.ts`. A
+ *    tela `Configuracoes.tsx` faz AUTO-SEED quando a chave falta (empresas que já
+ *    tinham critérios), então o toggle aparece sozinho ao abrir "Critérios Gerais".
+ *  - `server/utils/rescisaoCalc.ts`: `calcularRescisaoCompleta` ganha o param opcional
+ *    `incluirMultaFgts` (default `true`); quando `false`, a multa 40% é ZERADA. O
+ *    `calcularRescisaoComplementar` ("por fora") NÃO foi tocado (continua sem multa
+ *    por design).
+ *  - NOVO `server/utils/rescisaoMultaCfg.ts`: helpers `getIncluirMultaFgts` (one-shot)
+ *    e `carregarMultaFgtsPorEmpresa` (lote → `Map<companyId,bool>` p/ `.map` síncronos
+ *    dos dashboards). Lê `system_criteria` por empresa; AUSÊNCIA = `true` (legado).
+ *  - Threading em TODOS os pontos que recalculam a previsão ao vivo:
+ *    `avisoPrevioFerias.ts` (create/list/getById [+ gate do bloco `fgtsReal`]/gerar/
+ *    comparativo/update/recontratar), `homeData.ts` (card da home),
+ *    `dashboards.ts` (CDM `getDashCustoDemissaoMassa` + `getDashAvisoPrevio`, este com
+ *    `companyId` adicionado ao select `allNotices` e gate da função local
+ *    `calcularRescisaoCompletaDash`).
+ *  - `PainelRH.tsx` NÃO precisou de mudança: é 100% derivado do output do cálculo (a
+ *    multa só soma quando `>0`), então ao zerar a multa a UI responde sozinha.
+ *
+ * REPUBLICAR (backend + front).
+ *
  * Rev. 3035 — **COMPRAS → COTAÇÕES · MODAL "DEFINIR FATURAMENTO DIRETO": O CAMPO
  * "VALOR DO FD (R$)" PASSA A FORMATAR EM DINHEIRO BRL pt-BR ENQUANTO O USUÁRIO DIGITA
  * (MÁSCARA via `MoneyInput`), EM VEZ DO INPUT CRU QUE ACEITAVA "3900" SEM MÁSCARA.**

@@ -343,6 +343,10 @@ export function calcularRescisaoCompleta(params: {
    * empregador pode descontar do acerto o valor de até 30 dias de salário.
    * Se true, aplica o desconto. Default: false (empresa abre mão do desconto). */
   descontarAvisoNaoCumprido?: boolean;
+  /** Rev. 3036 — Liga/desliga a Multa de 40% do FGTS (critério por empresa
+   * "rescisao_aplicar_multa_fgts"). Default true = comportamento CLT padrão.
+   * Quando false, a multa 40% é ZERADA (empresas que não pagam a multa). */
+  incluirMultaFgts?: boolean;
 }) {
   const { salarioBase, dataAdmissao, dataDesligamento, tipo, vrDiario, diasTrabalhadosMes } = params;
   const descontarAvisoNaoCumprido = !!params.descontarAvisoNaoCumprido;
@@ -433,8 +437,10 @@ export function calcularRescisaoCompleta(params: {
   const mesesTotais = calcularMesesServico(dataAdmissao, dataProjecao);
   const fgtsEstimado = salarioBase * 0.08 * mesesTotais;
 
-  // 8. Multa 40% FGTS
-  const multaFGTS = tipo.includes('empregador') ? fgtsEstimado * 0.4 : 0;
+  // 8. Multa 40% FGTS (Rev. 3036 — gated pelo critério "rescisao_aplicar_multa_fgts",
+  // default ON. Quando o critério está desligado p/ a empresa, a multa é zerada.)
+  const incluirMultaFgts = params.incluirMultaFgts !== false;
+  const multaFGTS = (incluirMultaFgts && tipo.includes('empregador')) ? fgtsEstimado * 0.4 : 0;
 
   // 9. Desconto Art. 487 §2º CLT — empregado pediu demissão e não cumpriu o aviso.
   // Empregador pode descontar do acerto o valor do aviso não cumprido (1 salário cheio).

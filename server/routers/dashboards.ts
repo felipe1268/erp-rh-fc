@@ -15,6 +15,7 @@ import {
 import { eq, and, sql, gte, lte, desc, count, asc, isNull, inArray } from "drizzle-orm";
 import { parseBRL } from "../utils/parseBRL";
 import { calcularRescisaoCompleta, calcularRescisaoComplementar, calcularDiasAvisoTotal, calcularDiasAviso, calcularDescontosRescisao, type DescontosRescisaoContext } from "../utils/rescisaoCalc";
+import { carregarMultaFgtsPorEmpresa } from "../utils/rescisaoMultaCfg";
 import { invokeLLM } from "../_core/llm";
 
 const DESLIGADO_STATUSES = ['Desligado', 'Lista_Negra'];
@@ -2731,6 +2732,7 @@ async function getDashCustoDemissaoMassa(
     }
   }
 
+  const multaMapCdm = await carregarMultaFgtsPorEmpresa(db, cfgCompanyIds);
   const linhas = rows
     .filter(r => !!r.dataAdmissao && parseBRL(r.salarioBase) > 0 && r.dataAdmissao! <= dataRef)
     .map(r => {
@@ -2783,6 +2785,7 @@ async function getDashCustoDemissaoMassa(
         vrDiario: vrDiarioReal,
         diasTrabalhadosMes: diasTrabMesReal,
         periodosVencidosOverride: periodosVencidosReal,
+        incluirMultaFgts: multaMapCdm.get(Number(r.companyId)) ?? true,
       });
       // Rev. 1919 — Rescisão COMPLEMENTAR ("por fora" / uso interno).
       // O módulo oficial Aviso Prévio mostra TOTAL GERAL = Oficial + Complementar
@@ -2998,6 +3001,7 @@ async function getDashAvisoPrevio(companyId: number, ano?: number, companyIds?: 
   const allNotices = await db.select({
     id: terminationNotices.id,
     employeeId: terminationNotices.employeeId,
+    companyId: terminationNotices.companyId,
     tipo: terminationNotices.tipo,
     dataInicio: terminationNotices.dataInicio,
     dataFim: terminationNotices.dataFim,
@@ -3084,8 +3088,9 @@ async function getDashAvisoPrevio(companyId: number, ano?: number, companyIds?: 
       const ref = new Date(refStr + 'T00:00:00');
       return Math.max(0, (ref.getFullYear() - adm.getFullYear()) * 12 + ref.getMonth() - adm.getMonth());
     }
-    function calcularRescisaoCompletaDash(p: { salarioBase: number; dataAdmissao: string; dataInicio: string; dataFim: string; tipo: string }) {
+    function calcularRescisaoCompletaDash(p: { salarioBase: number; dataAdmissao: string; dataInicio: string; dataFim: string; tipo: string; incluirMultaFgts?: boolean }) {
       const { salarioBase, dataAdmissao, dataInicio, dataFim, tipo } = p;
+      const incluirMultaFgts = p.incluirMultaFgts !== false;
       const DIVISOR = 30;
       const salarioDia = salarioBase / DIVISOR;
       const dtFim = new Date(dataFim + 'T00:00:00');
@@ -3109,7 +3114,7 @@ async function getDashAvisoPrevio(companyId: number, ano?: number, companyIds?: 
       else if (tipo === 'empregador_trabalhado') avisoInd = salarioDia * diasExtras;
       const mServ = calcMesesServico(dataAdmissao, dataProj);
       const fgts = salarioBase * 0.08 * mServ;
-      const multa = tipo.includes('empregador') ? fgts * 0.4 : 0;
+      const multa = (incluirMultaFgts && tipo.includes('empregador')) ? fgts * 0.4 : 0;
       const total = saldoSalario + totalFerias + dec13 + avisoInd + multa;
       return { total, saldoSalario, totalFerias, dec13, fgts, multa, avisoInd };
     }
@@ -3117,12 +3122,13 @@ async function getDashAvisoPrevio(companyId: number, ano?: number, companyIds?: 
   })();
 
   // Recalcular valor de cada aviso em tempo real
+  const multaMapDash = await carregarMultaFgtsPorEmpresa(db, filteredNotices.map((n: any) => n.companyId));
   const recalculated = filteredNotices.map(n => {
     try {
       const salBase = parseBRL(n.empSalarioBase || n.salarioBase || '0');
       const admissao = n.dataAdmissao || new Date().toISOString().split('T')[0];
       if (salBase > 0 && n.dataInicio && n.dataFim && n.tipo) {
-        const r = calcularRescisaoCompletaDash({ salarioBase: salBase, dataAdmissao: admissao, dataInicio: n.dataInicio, dataFim: n.dataFim, tipo: n.tipo });
+        const r = calcularRescisaoCompletaDash({ salarioBase: salBase, dataAdmissao: admissao, dataInicio: n.dataInicio, dataFim: n.dataFim, tipo: n.tipo, incluirMultaFgts: multaMapDash.get(Number(n.companyId)) ?? true });
         return { ...n, valorRecalculado: r.total, rescisao: r };
       }
     } catch {}

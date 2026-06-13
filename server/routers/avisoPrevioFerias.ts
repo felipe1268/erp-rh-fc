@@ -24,6 +24,7 @@ import {
   type DescontosRescisaoContext,
   type DescontosRescisaoResult,
 } from "../utils/rescisaoCalc";
+import { getIncluirMultaFgts, carregarMultaFgtsPorEmpresa } from "../utils/rescisaoMultaCfg";
 import { corrigirPontoFuncionario } from "../utils/pontoCorrecaoAuto";
 import { storagePut } from "../storage";
 
@@ -350,6 +351,7 @@ export async function criarAvisoPrevioInterno(
     periodosVencidosRealCreate = Number(vpCr[0]?.total ?? 0);
   } catch { /* fallback */ }
 
+  const incluirMultaFgtsCreate = await getIncluirMultaFgts(db, params.companyId);
   const previsao = calcularRescisaoCompleta({
     salarioBase,
     dataAdmissao,
@@ -360,6 +362,7 @@ export async function criarAvisoPrevioInterno(
     diasTrabalhadosMes,
     periodosVencidosOverride: periodosVencidosRealCreate,
     descontarAvisoNaoCumprido: params.descontarAvisoNaoCumprido,
+    incluirMultaFgts: incluirMultaFgtsCreate,
   });
 
   // Rescisão complementar (uso interno) — só para quem tem complemento.
@@ -558,6 +561,7 @@ export const avisoPrevioFeriasRouter = router({
           } catch { /* fallback — uses stored value */ }
         }
 
+        const multaMapList = await carregarMultaFgtsPorEmpresa(db, [...empMap.values()].map((e: any) => e.companyId));
         const results = [];
         for (const r of rows) {
           let valorRecalculado = r.valorEstimadoTotal;
@@ -582,6 +586,7 @@ export const avisoPrevioFeriasRouter = router({
                 diasTrabalhadosMes,
                 periodosVencidosOverride: periodosVencidosRealList,
                 descontarAvisoNaoCumprido: !!(r as any).descontarAvisoNaoCumprido,
+                incluirMultaFgts: multaMapList.get(Number(emp.companyId)) ?? true,
               });
               valorRecalculado = previsao.total;
             }
@@ -662,6 +667,7 @@ export const avisoPrevioFeriasRouter = router({
               periodosVencidosRealById = Number(vpById[0]?.total ?? 0);
             } catch { /* fallback */ }
 
+            const incluirMultaFgtsById = await getIncluirMultaFgts(db, emp.companyId);
             const previsao = calcularRescisaoCompleta({
               salarioBase,
               dataAdmissao,
@@ -674,6 +680,7 @@ export const avisoPrevioFeriasRouter = router({
               mediaInsalubridade: parseFloat(String((row as any).mediaInsalubridade || '0').replace(',', '.')) || 0,
               mediaHorasExtras: parseFloat(String((row as any).mediaHorasExtras || '0').replace(',', '.')) || 0,
               descontarAvisoNaoCumprido: !!(row as any).descontarAvisoNaoCumprido,
+              incluirMultaFgts: incluirMultaFgtsById,
             });
 
             // Súmula 276: zerar aviso prévio indenizado e recalcular data limite
@@ -693,7 +700,7 @@ export const avisoPrevioFeriasRouter = router({
             let fgtsRealValor: number | null = null;
             if (row.fgtsReal) {
               fgtsRealValor = parseFloat(row.fgtsReal.replace(',', '.'));
-              if (!isNaN(fgtsRealValor) && row.tipo.includes('empregador')) {
+              if (incluirMultaFgtsById && !isNaN(fgtsRealValor) && row.tipo.includes('empregador')) {
                 const multaReal = fgtsRealValor * 0.4;
                 const multaAntiga = parseFloat(previsao.multaFGTS);
                 previsao.multaFGTS = multaReal.toFixed(2);
@@ -938,6 +945,7 @@ export const avisoPrevioFeriasRouter = router({
         // ============================================================
         // CÁLCULO DAS VERBAS RESCISÓRIAS
         // ============================================================
+        const incluirMultaFgtsGerar = await getIncluirMultaFgts(db, emp.companyId);
         const previsao = calcularRescisaoCompleta({
           salarioBase,
           dataAdmissao,
@@ -948,6 +956,7 @@ export const avisoPrevioFeriasRouter = router({
           diasTrabalhadosMes,
           periodosVencidosOverride: periodosVencidosReal,
           descontarAvisoNaoCumprido: input.descontarAvisoNaoCumprido,
+          incluirMultaFgts: incluirMultaFgtsGerar,
         });
 
         // Descontos legais e da folha (INSS, IRRF, pensão, sindical, faltas, convênios, EPIs, vales, outros)
@@ -1110,11 +1119,13 @@ export const avisoPrevioFeriasRouter = router({
         const diasFeriasMesTrab = await diasFeriasNoMesDaSaida(db, input.employeeId, dataFimTrab);
         const diasTrabMesTrab = Math.max(0, dtFimTrab.getDate() - diasFeriasMesTrab);
 
+        const incluirMultaFgtsComp = await getIncluirMultaFgts(db, emp.companyId);
         const prevTrab = calcularRescisaoCompleta({
           salarioBase, dataAdmissao, dataDesligamento: input.dataDesligamento,
           dataFimAviso: dataFimTrab, tipo: 'empregador_trabalhado',
           vrDiario, diasTrabalhadosMes: diasTrabMesTrab,
           periodosVencidosOverride: periodosVencidosRealComp,
+          incluirMultaFgts: incluirMultaFgtsComp,
         });
         const totalBrutoTrab = parseFloat(prevTrab.total);
         const totalLiquidoTrab = totalBrutoTrab - totalDescontos;
@@ -1145,6 +1156,7 @@ export const avisoPrevioFeriasRouter = router({
           dataFimAviso: dataFimInd, tipo: 'empregador_indenizado',
           vrDiario, diasTrabalhadosMes: diasTrabMesInd,
           periodosVencidosOverride: periodosVencidosRealComp,
+          incluirMultaFgts: incluirMultaFgtsComp,
         });
         const totalBrutoInd = parseFloat(prevInd.total);
         const totalLiquidoInd = totalBrutoInd - totalDescontos;
@@ -1436,6 +1448,7 @@ export const avisoPrevioFeriasRouter = router({
           const descontarAvisoFlag = input.descontarAvisoNaoCumprido !== undefined
             ? input.descontarAvisoNaoCumprido
             : !!aviso.descontarAvisoNaoCumprido;
+          const incluirMultaFgtsUpd = await getIncluirMultaFgts(db, emp.companyId);
           const previsao = calcularRescisaoCompleta({
             salarioBase,
             dataAdmissao,
@@ -1446,6 +1459,7 @@ export const avisoPrevioFeriasRouter = router({
             diasTrabalhadosMes,
             periodosVencidosOverride: periodosVencidosRealUpd,
             descontarAvisoNaoCumprido: descontarAvisoFlag,
+            incluirMultaFgts: incluirMultaFgtsUpd,
           });
 
           // Rescisão complementar (uso interno) — só para quem tem complemento.
@@ -1525,6 +1539,7 @@ export const avisoPrevioFeriasRouter = router({
 
         let recalculados = 0;
         let erros = 0;
+        const multaMapRec = await carregarMultaFgtsPorEmpresa(db, avisos.map(a => a.companyId));
         for (const aviso of avisos) {
           try {
             const [emp] = await db.select().from(employees).where(eq(employees.id, aviso.employeeId));
@@ -1569,6 +1584,7 @@ export const avisoPrevioFeriasRouter = router({
               diasTrabalhadosMes,
               periodosVencidosOverride: periodosVencidosRealRec,
               descontarAvisoNaoCumprido: !!(aviso as any).descontarAvisoNaoCumprido,
+              incluirMultaFgts: multaMapRec.get(Number(aviso.companyId)) ?? true,
             });
 
             // Rescisão complementar (uso interno) — só para quem tem complemento.

@@ -2887,6 +2887,7 @@ export const appRouter = router({
         { categoria: "rescisao", chave: "rescisao_aviso_previo_dias", valor: "30", descricao: "Dias de aviso prévio base", valorPadraoClt: "30", unidade: "dias" },
         { categoria: "rescisao", chave: "rescisao_aviso_adicional_ano", valor: "3", descricao: "Dias adicionais por ano trabalhado", valorPadraoClt: "3", unidade: "dias" },
         { categoria: "rescisao", chave: "rescisao_multa_fgts", valor: "40", descricao: "Multa sobre FGTS na demissão sem justa causa", valorPadraoClt: "40", unidade: "%" },
+        { categoria: "rescisao", chave: "rescisao_aplicar_multa_fgts", valor: "1", descricao: "Aplicar a multa de 40% do FGTS na rescisão (demissão sem justa causa). Desligue para empresas que não pagam a multa.", valorPadraoClt: "1", unidade: "bool" },
         // FOLHA - Controles adicionais
         { categoria: "folha", chave: "folha_bloquear_consolidacao_inconsistencias", valor: "1", descricao: "Bloquear consolidação com inconsistências pendentes (0=Não, 1=Sim)", valorPadraoClt: "1", unidade: "bool" },
         // ATESTADOS
