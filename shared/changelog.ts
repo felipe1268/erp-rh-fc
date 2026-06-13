@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3032 — **FINANCEIRO → "ANÁLISE DE CUSTOS" · TABELA "COMPARATIVO MÊS A MÊS POR
+ * CATEGORIA": REDESENHO MODERNO E ENXUTO — SAEM AS 12 COLUNAS DE MESES (QUE
+ * ESTOURAVAM HORIZONTALMENTE, TRUNCAVAM VALORES E PARECIAM "DUPLICADOS" POR REPETIR
+ * O MESMO NÚMERO DE PROJEÇÃO MÊS APÓS MÊS) E ENTRA UM MINI-GRÁFICO DE TENDÊNCIA
+ * (SPARKLINE) POR CATEGORIA + SELO DE VARIAÇÃO ▲/▼ COLORIDO.**
+ *
+ * PEDIDO (usuário, print IMG_1924): "Melhore esta tabela, quero moderna com gráficos
+ * indicativos se subiu ou desceu e evite informações. Corrija as duplicadas".
+ *
+ * DIAGNÓSTICO: a tabela renderizava 1 coluna por mês (Jan…Dez) + Total + Δ, o que
+ * (1) estourava a largura no mobile (colunas da direita truncadas, ex.: "R$ 13…"),
+ * (2) repetia o MESMO valor de projeção em vários meses (ex.: "R$ 290 mil" de Mai a
+ * Nov em Salários), dando a impressão de dados "duplicados", e (3) misturava
+ * formatos ("R$ 210 mil" × "R$ 210,00"). A deduplicação por GRUPO canônico já era
+ * garantida pelo `Map` da Rev. 3027 (uma linha por grupo — nunca houve duplicata de
+ * CATEGORIA de fato); a sensação de duplicidade vinha da repetição das colunas.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, ZERO backend/schema) em
+ * `client/src/pages/financeiro/FinanceiroAnaliseCustos.tsx`:
+ *  - NOVO componente `Sparkline` (SVG puro, sem dependência por linha): plota a série
+ *    de meses-com-dados da categoria; cor VERDE (#059669) quando o custo cai (bom),
+ *    VERMELHA (#e11d48) quando sobe (atenção), CINZA quando estável; dot no último
+ *    ponto. Lida com série de 1 ponto (só dot).
+ *  - Tabela reduzida a 4 colunas: Categoria (com micro-barra de "% do total"),
+ *    Tendência no ano (sparkline), Total no ano (`formatBRL`) e Variação (selo
+ *    pill ▲/▼ com % colorido + tooltip com o delta absoluto em BRL e o intervalo de
+ *    meses comparado). Tooltip/`title` por linha mantém o "Ver lançamentos".
+ *  - `tabelaMensal` agora também devolve `totalGeral` (soma dos totais) p/ o "% do
+ *    total" e o rodapé "Total geral" (com sparkline do total mensal índigo).
+ *  - Clique na linha continua abrindo o detalhe via `irParaDetalhe("grupo", nome)`.
+ * O motor de classificação (`classificarGrupoCusto` / `shared/custosCategorias.ts`),
+ * a agregação e o drill-down ficam INTOCADOS. REPUBLICAR (só front).
+ *
  * Rev. 3031 — **EQUIPAMENTOS PRÓPRIOS → BOTÃO "GERAR PREÇOS" (IA): CORRIGE O ERRO
  * "FALHA NA IA: EXPECTED ',' OR '}' AFTER PROPERTY VALUE IN JSON AT POSITION 190"
  * QUE ABORTAVA TODA A GERAÇÃO DE PREÇOS QUANDO O MODELO DEVOLVIA O VALOR EM FORMATO
