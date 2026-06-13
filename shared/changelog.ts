@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3044 — **CIPA · INSCREVER CANDIDATO E LISTAS DE COLABORADOR PASSAM A MOSTRAR
+ * A FOTO DO FUNCIONÁRIO (NÃO MAIS A INICIAL GENÉRICA "A").**
+ *
+ * PEDIDO (print "Inscrever Candidato à CIPA", iPad): "precisa colocar as fotos dos
+ * funcionários aqui" — na busca de colaborador cada item aparecia com um avatar
+ * cinza só com a 1ª letra do nome.
+ *
+ * CONTEXTO: o payload `employees.list` (via `getEmployees`, `db.select()` de todas as
+ * colunas) JÁ traz `fotoUrl`; e `cipa.candidatos.list` já devolvia `employeeFoto`.
+ * Faltava só renderizar a imagem.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE) em `client/src/pages/CipaCompleta.tsx`:
+ *
+ *  1) NOVO componente `EmpAvatar({ emp, size })` — renderiza `<img src={emp.fotoUrl}>`
+ *     (redondo, `object-cover object-top`) quando há foto, com FALLBACK na inicial do
+ *     nome (mantendo o visual antigo) e `onError` que esconde a imagem quebrada.
+ *  2) Aplicado nos 3 pontos da tela: a lista de busca `EmployeeList` (dropdown
+ *     "108 colaboradores encontrados"), o card do colaborador selecionado no diálogo
+ *     "Inscrever Candidato" e o card do diálogo de Membro.
+ *  3) A lista de candidatos JÁ inscritos passa a exibir `c.employeeFoto` (mesmo
+ *     fallback número/inicial quando não há foto).
+ *
  * Rev. 3043 — **FROTA → PEDÁGIOS · TABELA DE LANÇAMENTOS: DIA DA SEMANA + FERIADO
  * ABAIXO DA DATA, E MODELO DO CARRO ABAIXO DA PLACA.**
  *

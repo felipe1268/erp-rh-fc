@@ -41,6 +41,45 @@ const STATUS_ELEICAO: Record<string, { label: string; color: string; bg: string 
   "Concluída": { label: "Concluída", color: "text-green-700", bg: "bg-green-100" },
 };
 
+function EmpAvatar({ emp, size = 8 }: { emp: any; size?: 8 | 10 }) {
+  const dim = size === 10 ? "w-10 h-10" : "w-8 h-8";
+  const txt = size === 10 ? "text-sm" : "text-xs";
+  const inicial = (emp?.nomeCompleto || "?")[0];
+  const [imgOk, setImgOk] = useState(true);
+  if (emp?.fotoUrl && imgOk) {
+    return (
+      <img
+        src={emp.fotoUrl}
+        alt={emp?.nomeCompleto || "Foto"}
+        className={`${dim} rounded-full object-cover object-top shrink-0 border border-slate-200`}
+        onError={() => setImgOk(false)}
+      />
+    );
+  }
+  return (
+    <div className={`${dim} rounded-full bg-slate-100 flex items-center justify-center shrink-0`}>
+      <span className={`${txt} font-bold text-slate-500`}>{inicial}</span>
+    </div>
+  );
+}
+
+function CandidatoAvatar({ c }: { c: any }) {
+  const [imgOk, setImgOk] = useState(true);
+  if (c?.employeeFoto && imgOk) {
+    return (
+      <img
+        src={c.employeeFoto}
+        alt={c.employeeName || "Foto"}
+        className="w-9 h-9 rounded-full object-cover object-top shrink-0 border border-slate-200"
+        onError={() => setImgOk(false)}
+      />
+    );
+  }
+  return (
+    <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0 text-xs font-bold text-slate-500">{c?.numero ?? (c?.employeeName || "?")[0]}</div>
+  );
+}
+
 function EmployeeList({ employees, onSelect }: { employees: any[]; onSelect: (id: number) => void }) {
   return (
     <div className="mt-2 border rounded-lg max-h-56 overflow-y-auto bg-white">
@@ -55,9 +94,7 @@ function EmployeeList({ employees, onSelect }: { employees: any[]; onSelect: (id
         </div>
       ) : employees.slice(0, 50).map((e: any) => (
         <div key={e.id} className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm flex items-center gap-3 border-b border-slate-50 last:border-0 transition-colors" onClick={() => onSelect(e.id)}>
-          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-            <span className="text-xs font-bold text-slate-500">{(e.nomeCompleto || "?")[0]}</span>
-          </div>
+          <EmpAvatar emp={e} size={8} />
           <div className="flex-1 min-w-0">
             <p className="font-medium text-slate-800 truncate">{e.nomeCompleto}</p>
             <p className="text-[11px] text-slate-400">{e.cargo || "Sem cargo"} · {formatCPF(e.cpf)}</p>
@@ -766,7 +803,7 @@ export default function CipaCompleta() {
                         <div className="divide-y">
                           {(candidatos as any[]).map((c: any) => (
                             <div key={c.id} className="flex items-center gap-3 p-3">
-                              <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0 text-xs font-bold text-slate-500">{c.numero ?? (c.employeeName || "?")[0]}</div>
+                              <CandidatoAvatar c={c} />
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium truncate">{c.employeeName}</p>
                                 <p className="text-[11px] text-muted-foreground">{c.employeeCargo || "—"}{c.numero ? ` · Nº ${c.numero}` : ""}</p>
@@ -1032,9 +1069,7 @@ export default function CipaCompleta() {
                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Colaborador *</label>
                 {selectedEmp ? (
                   <div className="bg-slate-50 rounded-lg p-3 flex items-center gap-3 border border-slate-200">
-                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                      <span className="text-sm font-bold text-blue-600">{(selectedEmp.nomeCompleto || "?")[0]}</span>
-                    </div>
+                    <EmpAvatar emp={selectedEmp} size={10} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-slate-800">{selectedEmp.nomeCompleto}</p>
                       <p className="text-xs text-slate-500">{selectedEmp.cargo || "Sem cargo"} · CPF: {formatCPF(selectedEmp.cpf)}</p>
@@ -1187,7 +1222,7 @@ export default function CipaCompleta() {
                 const emp = activeEmployees.find((e: any) => e.id === candidatoForm.employeeId);
                 return (
                   <div className="bg-slate-50 rounded-lg p-3 flex items-center gap-3 border border-slate-200">
-                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0"><span className="text-sm font-bold text-blue-600">{(emp?.nomeCompleto || "?")[0]}</span></div>
+                    <EmpAvatar emp={emp} size={10} />
                     <div className="flex-1 min-w-0"><p className="text-sm font-semibold">{emp?.nomeCompleto}</p><p className="text-xs text-slate-500">{emp?.cargo || "Sem cargo"} · {formatCPF(emp?.cpf)}</p></div>
                     <button type="button" className="text-slate-400 hover:text-red-500 p-1" onClick={() => setCandidatoForm({ ...candidatoForm, employeeId: undefined })}><X className="h-4 w-4" /></button>
                   </div>
