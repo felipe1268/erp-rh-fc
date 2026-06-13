@@ -371,66 +371,77 @@ export const integrasignRouter = router({
       const userId = (ctx as any).user?.id ?? (ctx as any).session?.userId;
       const userName = (ctx as any).user?.name || (ctx as any).session?.name || "Sistema";
 
-      const [envelope] = await db.select().from(integrasignEnvelopes)
-        .where(and(
-          eq(integrasignEnvelopes.id, input.envelopeId),
-          eq(integrasignEnvelopes.companyId, input.companyId),
-          isNull(integrasignEnvelopes.excluidoEm),
-        ));
-      if (!envelope) throw new TRPCError({ code: "NOT_FOUND", message: "Envelope não encontrado" });
-      if (!envelope.contratoTerceiroId) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Só contratos têm o sócio administrador como signatário." });
-      }
-      if (["cancelado", "expirado", "recusado", "concluido"].includes(envelope.status)) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: `Envelope ${envelope.status} — não é possível adicionar signatário.` });
-      }
-
-      const sigs = await db.select().from(integrasignSignatarios)
-        .where(eq(integrasignSignatarios.envelopeId, input.envelopeId));
-      if (sigs.some((s: any) => s.papel === "diretor")) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "O sócio administrador já é signatário deste contrato." });
-      }
-
+      // Resolve o sócio ANTES da transação (leitura pura, não precisa do lock).
       const socio = await resolveSocioAdministradorSigner(db, input.companyId);
-      const maxOrdem = sigs.reduce((m: number, s: any) => Math.max(m, s.ordemAssinatura || 0), 0);
 
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
+      // Tudo que muda estado roda numa transação com LOCK da linha do envelope
+      // (SELECT ... FOR UPDATE): dois cliques/abas concorrentes serializam aqui,
+      // a recheck do "diretor" acontece sob o lock → garante idempotência real
+      // (não dá pra inserir 2 sócios).
+      const nome = await db.transaction(async (tx: any) => {
+        const [envelope] = await tx.select().from(integrasignEnvelopes)
+          .where(and(
+            eq(integrasignEnvelopes.id, input.envelopeId),
+            eq(integrasignEnvelopes.companyId, input.companyId),
+            isNull(integrasignEnvelopes.excluidoEm),
+          ))
+          .for("update");
+        if (!envelope) throw new TRPCError({ code: "NOT_FOUND", message: "Envelope não encontrado" });
+        if (!envelope.contratoTerceiroId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Só contratos têm o sócio administrador como signatário." });
+        }
+        if (["cancelado", "expirado", "recusado", "concluido"].includes(envelope.status)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Envelope ${envelope.status} — não é possível adicionar signatário.` });
+        }
 
-      // Sócio assina por ÚLTIMO (autoridade final). status "pendente" com token
-      // válido → link já fica copiável no dashboard; a ordem sequencial garante
-      // que ele só fecha depois dos anteriores.
-      await db.insert(integrasignSignatarios).values({
-        companyId: input.companyId,
-        envelopeId: input.envelopeId,
-        papel: "diretor",
-        ordemAssinatura: maxOrdem + 1,
-        nome: socio.nome,
-        email: "",
-        cpfCnpj: socio.cpfCnpj ?? null,
-        cargo: "Sócio Administrador",
-        empresaNome: "FC Engenharia",
-        token: generateToken(),
-        tokenExpiraEm: expiresAt.toISOString(),
-        status: "pendente",
+        const sigs = await tx.select().from(integrasignSignatarios)
+          .where(eq(integrasignSignatarios.envelopeId, input.envelopeId));
+        if (sigs.some((s: any) => s.papel === "diretor")) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "O sócio administrador já é signatário deste contrato." });
+        }
+
+        const maxOrdem = sigs.reduce((m: number, s: any) => Math.max(m, s.ordemAssinatura || 0), 0);
+
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 7);
+
+        // Sócio assina por ÚLTIMO (autoridade final). status "pendente" com token
+        // válido → link já fica copiável no dashboard; a ordem sequencial garante
+        // que ele só fecha depois dos anteriores.
+        await tx.insert(integrasignSignatarios).values({
+          companyId: input.companyId,
+          envelopeId: input.envelopeId,
+          papel: "diretor",
+          ordemAssinatura: maxOrdem + 1,
+          nome: socio.nome,
+          email: "",
+          cpfCnpj: socio.cpfCnpj ?? null,
+          cargo: "Sócio Administrador",
+          empresaNome: "FC Engenharia",
+          token: generateToken(),
+          tokenExpiraEm: expiresAt.toISOString(),
+          status: "pendente",
+        });
+
+        const novoTotalObrig = sigs.filter((s: any) => s.papel !== "testemunha").length + 1;
+        await tx.update(integrasignEnvelopes).set({
+          totalSignatariosObrigatorios: novoTotalObrig,
+          atualizadoEm: new Date().toISOString(),
+        }).where(eq(integrasignEnvelopes.id, input.envelopeId));
+
+        await logAudit(tx, {
+          companyId: input.companyId,
+          envelopeId: input.envelopeId,
+          acao: "signatario_adicionado",
+          detalhes: `Sócio administrador (${socio.nome}) adicionado como signatário final do contrato`,
+          userId,
+          userName,
+        });
+
+        return socio.nome;
       });
 
-      const novoTotalObrig = sigs.filter((s: any) => s.papel !== "testemunha").length + 1;
-      await db.update(integrasignEnvelopes).set({
-        totalSignatariosObrigatorios: novoTotalObrig,
-        atualizadoEm: new Date().toISOString(),
-      }).where(eq(integrasignEnvelopes.id, input.envelopeId));
-
-      await logAudit(db, {
-        companyId: input.companyId,
-        envelopeId: input.envelopeId,
-        acao: "signatario_adicionado",
-        detalhes: `Sócio administrador (${socio.nome}) adicionado como signatário final do contrato`,
-        userId,
-        userName,
-      });
-
-      return { success: true, nome: socio.nome };
+      return { success: true, nome };
     }),
 
   enviarParaAssinatura: protectedProcedure
