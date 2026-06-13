@@ -1,6 +1,48 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3028 — **COMPRAS → FLUXO SC → COTAÇÃO: AO EDITAR UMA SOLICITAÇÃO E TROCAR
+ * O TIPO (EX.: DE "MATERIAL" P/ "PACOTE"), A MUDANÇA AGORA SE PROPAGA
+ * DEFINITIVAMENTE PARA A COTAÇÃO JÁ VINCULADA — A LEGENDA DA COTAÇÃO DEIXA DE
+ * FICAR DIVERGENTE DA SOLICITAÇÃO (ANTES: SC=MAT+MDO × COT=MDO).**
+ *
+ * PEDIDO (usuário, prints IMG_1914/IMG_1915): "criei errado uma solicitação de
+ * material, na cotação vi o erro, voltei e editei a SC pra PACOTE; na solicitação
+ * a legenda virou pacote, mas a cotação não acompanhou. Garante que TODA alteração
+ * feita na solicitação se propague pras demais fases do fluxo, de forma definitiva".
+ *
+ * CAUSA-RAIZ: a procedure `compras.editarSolicitacao` (server/routers/compras.ts)
+ * atualizava o `tipo` da SC (tabela `compras_solicitacoes`) e propagava o TÍTULO
+ * pra `compras_cotacoes.descricao`, MAS nunca tocava em `compras_cotacoes.tipo` —
+ * a coluna de onde sai a legenda (material=MAT / servico=MDO / pacote=MAT+MDO /
+ * equipamento=EQUIP) da cotação. Resultado: o `tipo` da cotação ficava CONGELADO
+ * no valor de criação; a SC trocava a legenda mas a COT vinculada seguia no tipo
+ * antigo. (Os itens já eram reconciliados; só o tipo-cabeçalho da cotação faltava.)
+ *
+ * SOLUÇÃO (BACKEND, ZERO ALTER/DROP/DELETE — só UPDATE idempotente): no
+ * `editarSolicitacao`, logo após o UPDATE da SC, o bloco que antes só descia o
+ * título agora também RECONCILIA o `tipo`: `tipoPropagar = input.tipo ?? sc.tipo`
+ * e `db.update(comprasCotacoes).set({ tipo: tipoPropagar, ...(input.titulo ?
+ * { descricao } : {}) })` no MESMO `WHERE solicitacao_id = id AND status NOT IN
+ * ('cancelada','recusada')`. Como é idempotente, re-editar não causa efeito
+ * colateral; cotações canceladas/recusadas ficam intactas (histórico). A trava
+ * pré-existente que impede editar SC com OC em andamento continua valendo, então
+ * OCs já emitidas não são afetadas. A cotação_itens NÃO tem coluna `tipo` (o tipo
+ * por item é derivado na geração da OC via ratioMat), então nada a propagar lá.
+ *
+ * REFORÇO NA CRIAÇÃO (mesma revisão): `aprovarSolicitacoesEmLote` criava a
+ * cotação automática SEM setar `tipo` — caía no default "material" mesmo quando a
+ * SC era servico/pacote/equipamento, reintroduzindo a divergência por outro
+ * caminho. Agora o insert nasce com `tipo: sc.tipo ?? "material"`. (A aprovação
+ * unitária já fazia isso.) Assim a consistência SC×COT fica garantida tanto na
+ * CRIAÇÃO da cotação quanto em qualquer EDIÇÃO posterior da SC.
+ *
+ * IMPACTO: a legenda da cotação passa a refletir SEMPRE o tipo atual da SC; o
+ * motor de geração de OC (que já lê `cot.tipo` com fallback p/ `sc.tipo`) fica
+ * consistente. REPUBLICAR (só backend). FRONT inalterado.
+ *
+ * ---
+ *
  * Rev. 3027 — **FINANCEIRO → "ANÁLISE DE CUSTOS": (1) OS GRÁFICOS "CUSTO POR
  * CATEGORIA" E "CUSTO POR CENTRO DE CUSTO" GANHAM VISUAL DE PAGO (VERDE) ×
  * PREVISÃO (ÂMBAR) EMPILHADOS; (2) NOVA TABELA NO FIM, COMPARATIVA MÊS A MÊS POR

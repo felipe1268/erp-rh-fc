@@ -12454,11 +12454,19 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         atualizadoEm: new Date().toISOString(),
       }).where(eq(comprasSolicitacoes.id, input.id));
 
-      if (input.titulo) {
-        await db.update(comprasCotacoes).set({
-          descricao: normalizarTexto(input.titulo),
-        }).where(and(eq(comprasCotacoes.solicitacaoId, input.id), sql`${comprasCotacoes.status} NOT IN ('cancelada', 'recusada')`));
-      }
+      // Rev. 3028 — PROPAGAÇÃO DEFINITIVA SC → COTAÇÃO VINCULADA.
+      // Antes só o TÍTULO descia (→ descricao). O `tipo` (material/servico/pacote/
+      // equipamento/pecas_veiculo) ficava CONGELADO na cotação no valor de criação:
+      // ao editar a SC de "material" p/ "pacote", a SC trocava a legenda mas a COT
+      // seguia no tipo antigo (ex.: SC=MAT+MDO × COT=MDO). Agora toda edição
+      // RECONCILIA as cotações ativas com o tipo atual da SC (idempotente), e o
+      // título continua descendo pra `descricao` quando enviado. Cotações
+      // canceladas/recusadas ficam intactas (histórico).
+      const tipoPropagar = input.tipo ?? sc.tipo;
+      await db.update(comprasCotacoes).set({
+        tipo: tipoPropagar,
+        ...(input.titulo ? { descricao: normalizarTexto(input.titulo) } : {}),
+      }).where(and(eq(comprasCotacoes.solicitacaoId, input.id), sql`${comprasCotacoes.status} NOT IN ('cancelada', 'recusada')`));
 
       if (input.itens) {
         const hasLinkedCot = await db.select({ id: comprasCotacoes.id }).from(comprasCotacoes)
@@ -12577,6 +12585,11 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
                 prioridade: sc.prioridade ?? "normal",
                 obraId: sc.obraId ?? null,
                 solicitacaoId: sc.id,
+                // Rev. 3028 — a cotação automática nasce com o MESMO tipo da SC
+                // (antes caía no default "material" → legenda divergente quando a
+                // SC era servico/pacote/equipamento). Junto com a propagação no
+                // editarSolicitacao, garante SC×COT sempre consistentes.
+                tipo: sc.tipo ?? "material",
                 total: "0",
                 status: "pendente",
                 criadoPorId: input.aprovadorId ?? null,
