@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3053 — **INTEGRASIGN (FCSIGN) · "ADICIONAR SÓCIO ADMINISTRADOR" EM CONTRATOS JÁ
+ * ENVIADOS QUE FICARAM SÓ COM FORNECEDOR + GESTOR (SEM O LINK DO SÓCIO PARA ASSINAR).**
+ *
+ * PEDIDO (print do iPad): no dashboard FCSign, abrindo o envelope "CT-2026-0006 — CELSO
+ * ANTONIO BITTENCOURT SALES JUNIOR" só apareciam 2 signatários (Fornecedor + Gestor). O
+ * usuário perguntou: "Cadê o link para o sócio administrador assinar?"
+ *
+ * CAUSA-RAIZ (dados, não regressão de código): a injeção automática do sócio como 3º
+ * signatário ("diretor", por último) só passou a valer da Rev. 3050 em diante e SÓ atua na
+ * CRIAÇÃO do envelope (`criarEnvelope`, gated por `contratoTerceiroId`). Os envelopes
+ * `CT-2026-0006` (id=9, criado 13/06) e `CT-2026-005` (id=7, criado 08/06) já existiam/foram
+ * criados sem essa injeção ativa → ficaram congelados com 2 signatários e sem o link do
+ * sócio. O sócio administrador está corretamente configurado (FELIPE COSTA ALVES, id=6,
+ * `tipoContrato='Socio'`, com CPF, em `system_criteria`), confirmado direto no Neon.
+ *
+ * SOLUÇÃO (ZERO ALTER/DROP/DELETE — só INSERT de signatário + UPDATE de contador): NOVO
+ * endpoint `integrasign.adicionarSocioAdministrador({ companyId, envelopeId })` em
+ * `server/routers/integrasign.ts`. Ele: (a) valida acesso à empresa via NOVA guarda
+ * `assertIntegraSignCompanyAccess` (anti-IDOR — admin libera, vínculos enforçam, sem
+ * vínculos libera; mesma regra do `_assertFinanceiroCompanyAccess`), fechando o gap
+ * conhecido de que o router confiava no `companyId` do input; (b) exige `contratoTerceiroId`
+ * (só contrato tem sócio) e status ativo (recusa cancelado/expirado/recusado/concluído);
+ * (c) é IDEMPOTENTE — se já houver um signatário "diretor", recusa; (d) resolve o sócio via
+ * `resolveSocioAdministradorSigner` (mesma fonte da Rev. 3050) e INSERE um signatário
+ * `papel:"diretor"`, `ordemAssinatura = max+1` (assina por ÚLTIMO), cargo "Sócio
+ * Administrador", com `token`/`tokenExpiraEm` (link copiável na hora) e status "pendente";
+ * (e) bumpa `totalSignatariosObrigatorios`; (f) registra auditoria `signatario_adicionado`.
+ *
+ * FRONT `client/src/pages/IntegraSignDashboard.tsx`: no painel de detalhes do envelope,
+ * NOVO botão verde "Adicionar sócio administrador" (ícone Crown) que aparece SOMENTE quando
+ * o envelope é contrato (`contratoTerceiroId`), ainda NÃO tem signatário "diretor" e está em
+ * status ativo. Ao clicar, chama o endpoint, dá toast com o nome do sócio e refaz
+ * `getEnvelope`/`listarEnvelopes` → o novo signatário aparece na lista com "Copiar link" /
+ * WhatsApp / Reenviar habilitados.
+ *
+ * RESSALVA: contratos NOVOS continuam recebendo o sócio automaticamente (Rev. 3050) — este
+ * botão é o reparo retroativo para os envelopes antigos. Detalhe: este arquivo.
+ *
  * Rev. 3052 — **CONFIGURAÇÕES · "SÓCIOS": INDICAR O SÓCIO ADMINISTRADOR FICA ÓBVIO —
  * BOTÃO "DEFINIR COMO ADMINISTRADOR" DIRETO EM CADA CARD DE SÓCIO (SUBSTITUI O RÁDIO +
  * BOTÃO INFERIOR QUE FICAVA CINZA/DESABILITADO).**

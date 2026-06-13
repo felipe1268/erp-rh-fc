@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
-import { getDb } from "../db";
+import { getDb, getUserCompanyLinks } from "../db";
 import {
   integrasignEnvelopes,
   integrasignSignatarios,
@@ -52,6 +52,20 @@ async function logAudit(
     userId: params.userId ?? null,
     userName: params.userName ?? null,
   });
+}
+
+// Rev. 3053 — guarda de acesso por empresa (anti-IDOR). admin/admin_master liberam;
+// usuário COM vínculos em user_companies enforça membership; SEM vínculos libera
+// (config global por grupo). Mesma regra do _assertFinanceiroCompanyAccess.
+async function assertIntegraSignCompanyAccess(ctxUser: any, companyId: number) {
+  if (!ctxUser?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
+  if (ctxUser.role === "admin" || ctxUser.role === "admin_master") return;
+  const links = await getUserCompanyLinks(ctxUser.id);
+  const allowedIds = (links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === "number");
+  if (allowedIds.length === 0) return;
+  if (!allowedIds.includes(companyId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+  }
 }
 
 export const integrasignRouter = router({
@@ -343,6 +357,80 @@ export const integrasignRouter = router({
       });
 
       return { success: true };
+    }),
+
+  // Rev. 3053 — adiciona o SÓCIO ADMINISTRADOR como signatário FINAL (papel
+  // "diretor", por ÚLTIMO) em um contrato JÁ EXISTENTE criado ANTES da injeção
+  // automática (Rev. 3050) e que ficou só com fornecedor + gestor. Gera o
+  // token/link na hora. Idempotente: se já houver um "diretor", recusa.
+  adicionarSocioAdministrador: protectedProcedure
+    .input(z.object({ companyId: z.number(), envelopeId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      await assertIntegraSignCompanyAccess((ctx as any).user, input.companyId);
+      const userId = (ctx as any).user?.id ?? (ctx as any).session?.userId;
+      const userName = (ctx as any).user?.name || (ctx as any).session?.name || "Sistema";
+
+      const [envelope] = await db.select().from(integrasignEnvelopes)
+        .where(and(
+          eq(integrasignEnvelopes.id, input.envelopeId),
+          eq(integrasignEnvelopes.companyId, input.companyId),
+          isNull(integrasignEnvelopes.excluidoEm),
+        ));
+      if (!envelope) throw new TRPCError({ code: "NOT_FOUND", message: "Envelope não encontrado" });
+      if (!envelope.contratoTerceiroId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Só contratos têm o sócio administrador como signatário." });
+      }
+      if (["cancelado", "expirado", "recusado", "concluido"].includes(envelope.status)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Envelope ${envelope.status} — não é possível adicionar signatário.` });
+      }
+
+      const sigs = await db.select().from(integrasignSignatarios)
+        .where(eq(integrasignSignatarios.envelopeId, input.envelopeId));
+      if (sigs.some((s: any) => s.papel === "diretor")) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "O sócio administrador já é signatário deste contrato." });
+      }
+
+      const socio = await resolveSocioAdministradorSigner(db, input.companyId);
+      const maxOrdem = sigs.reduce((m: number, s: any) => Math.max(m, s.ordemAssinatura || 0), 0);
+
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+
+      // Sócio assina por ÚLTIMO (autoridade final). status "pendente" com token
+      // válido → link já fica copiável no dashboard; a ordem sequencial garante
+      // que ele só fecha depois dos anteriores.
+      await db.insert(integrasignSignatarios).values({
+        companyId: input.companyId,
+        envelopeId: input.envelopeId,
+        papel: "diretor",
+        ordemAssinatura: maxOrdem + 1,
+        nome: socio.nome,
+        email: "",
+        cpfCnpj: socio.cpfCnpj ?? null,
+        cargo: "Sócio Administrador",
+        empresaNome: "FC Engenharia",
+        token: generateToken(),
+        tokenExpiraEm: expiresAt.toISOString(),
+        status: "pendente",
+      });
+
+      const novoTotalObrig = sigs.filter((s: any) => s.papel !== "testemunha").length + 1;
+      await db.update(integrasignEnvelopes).set({
+        totalSignatariosObrigatorios: novoTotalObrig,
+        atualizadoEm: new Date().toISOString(),
+      }).where(eq(integrasignEnvelopes.id, input.envelopeId));
+
+      await logAudit(db, {
+        companyId: input.companyId,
+        envelopeId: input.envelopeId,
+        acao: "signatario_adicionado",
+        detalhes: `Sócio administrador (${socio.nome}) adicionado como signatário final do contrato`,
+        userId,
+        userName,
+      });
+
+      return { success: true, nome: socio.nome };
     }),
 
   enviarParaAssinatura: protectedProcedure

@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, PenLine, Eye, Send, XCircle, RefreshCw, FileText, Clock, CheckCircle2, AlertTriangle, Shield, ChevronRight, RotateCcw, Trash2, Link2, Check, Pencil, MessageCircle } from "lucide-react";
+import { Loader2, PenLine, Eye, Send, XCircle, RefreshCw, FileText, Clock, CheckCircle2, AlertTriangle, Shield, ChevronRight, RotateCcw, Trash2, Link2, Check, Pencil, MessageCircle, Crown } from "lucide-react";
 import { toast } from "sonner";
 
 function papelLabel(p: string) {
@@ -84,6 +84,7 @@ export default function IntegraSignDashboard() {
   const editarMut = trpc.integrasign.editarEnvelope.useMutation();
   const reenviarMut = trpc.integrasign.reenviarNotificacao.useMutation();
   const novaVersaoMut = trpc.integrasign.criarNovaVersao.useMutation();
+  const adicionarSocioMut = trpc.integrasign.adicionarSocioAdministrador.useMutation();
   const [deleteDialog, setDeleteDialog] = useState<number | null>(null);
   const [copiedSigId, setCopiedSigId] = useState<number | null>(null);
   // Rev. 2898 — edição do envelope (título/descrição sempre; corpo só em rascunho).
@@ -185,6 +186,19 @@ export default function IntegraSignDashboard() {
       envelopes.refetch();
     } catch (err: any) {
       toast.error(err.message || "Erro ao excluir");
+    }
+  }
+
+  // Rev. 3053 — adiciona o sócio administrador (signatário final) a um contrato
+  // criado antes da injeção automática, gerando o link de assinatura dele.
+  async function handleAdicionarSocio(envelopeId: number) {
+    try {
+      const r = await adicionarSocioMut.mutateAsync({ companyId, envelopeId });
+      toast.success(`Sócio administrador (${r?.nome || "definido em Configurações"}) adicionado como signatário final. O link de assinatura já está disponível.`);
+      envelopes.refetch();
+      if (selectedEnvelope === envelopeId) envelopeDetail.refetch();
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao adicionar sócio administrador");
     }
   }
 
@@ -465,6 +479,18 @@ export default function IntegraSignDashboard() {
                           Gerar links (WhatsApp)
                         </Button>
                       </>
+                    )}
+                    {env.contratoTerceiroId && !env.signatarios.some((s: any) => s.papel === "diretor") && !["cancelado", "concluido", "expirado", "recusado"].includes(env.status) && (
+                      <Button
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700"
+                        onClick={() => handleAdicionarSocio(env.id)}
+                        disabled={adicionarSocioMut.isPending}
+                        title="Adiciona o sócio administrador (definido em Configurações → Sócios) como assinante final e gera o link de assinatura"
+                      >
+                        {adicionarSocioMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Crown className="h-4 w-4 mr-1" />}
+                        Adicionar sócio administrador
+                      </Button>
                     )}
                     <Button variant="outline" size="sm" onClick={() => abrirEdicao(env)}>
                       <Pencil className="h-4 w-4 mr-1" />
