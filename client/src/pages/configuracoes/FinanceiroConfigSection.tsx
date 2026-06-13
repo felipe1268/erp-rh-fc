@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Save, ChevronRight, Banknote, FileText, Users, Plus, RefreshCw } from "lucide-react";
+import { Save, ChevronRight, Banknote, FileText, Users, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 function fmtBRL(v: number) {
@@ -24,16 +24,12 @@ const TAX_FIELDS = [
   { label: "RAT (%)", key: "aliquotaRAT" },
 ];
 
-const EMPTY_PARTNER = { nome: "", cpf: "", cargo: "", percentualSociedade: "", valorProLabore: "", diaVencimento: "5", pixChave: "" };
-
-export function FinanceiroConfigSection() {
+export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: () => void }) {
   const { selectedCompanyId } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
 
   const [expanded, setExpanded] = useState<"tributario" | "socios" | null>(null);
   const [taxForm, setTaxForm] = useState<any>({});
-  const [showNewPartner, setShowNewPartner] = useState(false);
-  const [partnerForm, setPartnerForm] = useState(EMPTY_PARTNER);
   const [showAutoImport, setShowAutoImport] = useState(false);
   const [importMes, setImportMes] = useState(() => {
     const d = new Date();
@@ -43,7 +39,7 @@ export function FinanceiroConfigSection() {
   const { data: taxConfig, refetch: refetchTax } = (trpc as any).financial.getTaxConfig.useQuery(
     { companyId }, { enabled: !!companyId }
   );
-  const { data: partners, refetch: refetchPartners } = (trpc as any).financial.getPartners.useQuery(
+  const { data: partners } = (trpc as any).financial.getPartners.useQuery(
     { companyId }, { enabled: !!companyId }
   );
 
@@ -52,16 +48,6 @@ export function FinanceiroConfigSection() {
   const updateTaxMut = (trpc as any).financial.updateTaxConfig.useMutation({
     onSuccess: () => { toast.success("Configuração tributária salva!"); refetchTax(); },
     onError: (e: any) => toast.error(e.message || "Erro ao salvar"),
-  });
-
-  const createPartnerMut = (trpc as any).financial.createPartner.useMutation({
-    onSuccess: () => {
-      toast.success("Sócio cadastrado!");
-      setShowNewPartner(false);
-      setPartnerForm(EMPTY_PARTNER);
-      refetchPartners();
-    },
-    onError: (e: any) => toast.error(e.message || "Erro ao cadastrar sócio"),
   });
 
   const importMut = (trpc as any).financial.runAutoImport.useMutation({
@@ -208,18 +194,16 @@ export function FinanceiroConfigSection() {
         </button>
 
         {expanded === "socios" && (
-          <div className="px-4 pb-4 bg-white">
-            <div className="flex justify-end mb-3">
-              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setShowNewPartner(true)}>
-                <Plus className="w-3.5 h-3.5 mr-1" />Novo Sócio
-              </Button>
+          <div className="px-4 pb-4 bg-white space-y-3">
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-3 text-sm text-emerald-900 flex items-start gap-2">
+              <Users className="w-4 h-4 mt-0.5 flex-shrink-0 text-emerald-600" />
+              <p>
+                O cadastro dos sócios e o pró-labore agora ficam em um <strong>único local</strong>:{" "}
+                <strong>Configurações → Sócios</strong>. Lá os sócios vêm direto do módulo Colaboradores
+                (tipo "Sócio") e você define o administrador, a participação, o pró-labore e a chave PIX.
+              </p>
             </div>
-            {!partners || partners.length === 0 ? (
-              <div className="text-center py-6 text-gray-400 text-sm">
-                <Users className="h-8 w-8 mx-auto mb-2 text-gray-300" />
-                Nenhum sócio cadastrado.
-              </div>
-            ) : (
+            {partners && partners.length > 0 && (
               <div className="space-y-2">
                 {partners.map((p: any) => (
                   <div key={p.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
@@ -239,71 +223,18 @@ export function FinanceiroConfigSection() {
                 ))}
               </div>
             )}
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                onClick={() => onManageSocios?.()}
+              >
+                <Users className="w-3.5 h-3.5 mr-1" /> Gerenciar sócios em Configurações → Sócios
+              </Button>
+            </div>
           </div>
         )}
       </div>
-
-      {/* Modal: Novo Sócio */}
-      <Dialog open={showNewPartner} onOpenChange={setShowNewPartner}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Novo Sócio</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label className="text-sm">Nome Completo *</Label>
-              <Input className="mt-1" value={partnerForm.nome} onChange={e => setPartnerForm(f => ({ ...f, nome: e.target.value }))} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-sm">CPF</Label>
-                <Input className="mt-1" value={partnerForm.cpf} onChange={e => setPartnerForm(f => ({ ...f, cpf: e.target.value }))} placeholder="000.000.000-00" />
-              </div>
-              <div>
-                <Label className="text-sm">Cargo</Label>
-                <Input className="mt-1" value={partnerForm.cargo} onChange={e => setPartnerForm(f => ({ ...f, cargo: e.target.value }))} placeholder="Diretor, Sócio..." />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-sm">% Sociedade</Label>
-                <Input className="mt-1" type="number" step="0.01" value={partnerForm.percentualSociedade} onChange={e => setPartnerForm(f => ({ ...f, percentualSociedade: e.target.value }))} />
-              </div>
-              <div>
-                <Label className="text-sm">Pró-labore (R$)</Label>
-                <Input className="mt-1" type="number" step="0.01" value={partnerForm.valorProLabore} onChange={e => setPartnerForm(f => ({ ...f, valorProLabore: e.target.value }))} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-sm">Dia Vencimento</Label>
-                <Input className="mt-1" type="number" min="1" max="28" value={partnerForm.diaVencimento} onChange={e => setPartnerForm(f => ({ ...f, diaVencimento: e.target.value }))} />
-              </div>
-              <div>
-                <Label className="text-sm">Chave PIX</Label>
-                <Input className="mt-1" value={partnerForm.pixChave} onChange={e => setPartnerForm(f => ({ ...f, pixChave: e.target.value }))} placeholder="CPF, e-mail, tel..." />
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNewPartner(false)}>Cancelar</Button>
-            <Button
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
-              disabled={createPartnerMut.isPending || !partnerForm.nome}
-              onClick={() => createPartnerMut.mutate({
-                companyId,
-                nome: partnerForm.nome,
-                cpf: partnerForm.cpf || undefined,
-                cargo: partnerForm.cargo || undefined,
-                percentualSociedade: parseFloat(partnerForm.percentualSociedade) || undefined,
-                valorProLabore: parseFloat(partnerForm.valorProLabore) || undefined,
-                diaVencimento: parseInt(partnerForm.diaVencimento) || 5,
-                pixChave: partnerForm.pixChave || undefined,
-              })}
-            >
-              {createPartnerMut.isPending ? "Salvando..." : "Cadastrar"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Modal: Auto-Importar */}
       <Dialog open={showAutoImport} onOpenChange={setShowAutoImport}>

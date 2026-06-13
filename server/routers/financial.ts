@@ -2892,7 +2892,11 @@ export const financialRouter = router({
     valorProLabore: z.number().optional(),
     diaVencimento: z.number().default(5),
     pixChave: z.string().optional(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ input, ctx }) => {
+    if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores podem cadastrar sócios." });
+    }
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const res = await dbExecute(db, 
@@ -2916,7 +2920,11 @@ export const financialRouter = router({
     diaVencimento: z.number().optional(),
     pixChave: z.string().optional(),
     ativo: z.boolean().optional(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ input, ctx }) => {
+    if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores podem editar sócios." });
+    }
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const parts: string[] = [];
@@ -2935,6 +2943,117 @@ export const financialRouter = router({
     vals.push(input.id, input.companyId);
     await dbExecute(db, `UPDATE company_partners SET ${parts.join(",")}, updated_at=NOW() WHERE id=$${i++} AND company_id=$${i}`, vals);
     return { ok: true };
+  }),
+
+  // ─────────────────── SÓCIOS UNIFICADOS (Rev. 3051) ───────────────────
+  // Fonte única do painel "Configurações → Sócios": o CADASTRO vem dos colaboradores
+  // (employees tipoContrato='Socio') e os dados FINANCEIROS (pró-labore/%/PIX/venc.)
+  // ficam em company_partners VINCULADOS por employee_id (fallback CPF normalizado).
+  // Lista cada sócio do RH já mesclado com seu registro financeiro (se houver).
+  listSociosUnificado: protectedProcedure.input(z.object({
+    companyId: z.number(),
+  })).query(async ({ input, ctx }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const res = await dbExecute(db,
+      `SELECT
+         e.id AS "employeeId", e."nomeCompleto" AS "nomeCompleto", e.cpf, e.cargo,
+         cp.id AS "partnerId",
+         cp.percentual_sociedade AS "percentualSociedade",
+         cp.valor_pro_labore AS "valorProLabore",
+         cp.dia_vencimento AS "diaVencimento",
+         cp.pix_chave AS "pixChave"
+       FROM employees e
+       LEFT JOIN LATERAL (
+         SELECT * FROM company_partners c
+         WHERE c.company_id = $1 AND c.ativo = 1
+           AND (
+             c.employee_id = e.id
+             OR (
+               c.employee_id IS NULL
+               AND regexp_replace(COALESCE(c.cpf,''), '[^0-9]', '', 'g')
+                 = regexp_replace(COALESCE(e.cpf,''),  '[^0-9]', '', 'g')
+               AND regexp_replace(COALESCE(e.cpf,''),  '[^0-9]', '', 'g') <> ''
+             )
+           )
+         ORDER BY (c.employee_id = e.id) DESC, c.id ASC
+         LIMIT 1
+       ) cp ON TRUE
+       WHERE e."companyId" = $2
+         AND e."tipoContrato" = 'Socio'
+       ORDER BY e."nomeCompleto" ASC`,
+      [input.companyId, input.companyId]
+    );
+    return rows(res);
+  }),
+
+  // Upsert dos dados financeiros de um sócio, ancorado no colaborador (employee_id).
+  // Reaproveita um registro company_partners existente (por employee_id ou CPF) e o
+  // re-vincula; senão cria um novo já com employee_id + nome/cpf/cargo do RH.
+  // ZERO ALTER/DROP/DELETE — só INSERT/UPDATE. Tenant guard + valida que o employee
+  // é sócio desta empresa (evita IDOR).
+  upsertPartnerByEmployee: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    employeeId: z.number(),
+    percentualSociedade: z.number().nullable().optional(),
+    valorProLabore: z.number().nullable().optional(),
+    diaVencimento: z.number().nullable().optional(),
+    pixChave: z.string().nullable().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores podem editar os dados financeiros dos sócios." });
+    }
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const empR = await dbExecute(db,
+      `SELECT id, "nomeCompleto" AS nome, cpf, cargo FROM employees
+       WHERE id=$1 AND "companyId"=$2 AND "tipoContrato"='Socio' LIMIT 1`,
+      [input.employeeId, input.companyId]
+    );
+    const emp = rows(empR)[0];
+    if (!emp) throw new TRPCError({ code: "BAD_REQUEST", message: "Colaborador não é sócio desta empresa." });
+
+    const perc = input.percentualSociedade ?? null;
+    const prol = input.valorProLabore ?? null;
+    const venc = input.diaVencimento ?? 5;
+    const pix = (input.pixChave ?? "").trim() || null;
+    const cpfLimpo = String(emp.cpf ?? "").replace(/[^0-9]/g, "");
+
+    // Procura registro existente: 1º por employee_id; 2º por CPF (legado sem vínculo).
+    const findR = await dbExecute(db,
+      `SELECT id FROM company_partners
+       WHERE company_id=$1 AND ativo=1
+         AND (
+           employee_id=$2
+           OR (employee_id IS NULL AND $3 <> ''
+               AND regexp_replace(COALESCE(cpf,''),'[^0-9]','','g')=$4)
+         )
+       ORDER BY (employee_id=$5) DESC, id ASC LIMIT 1`,
+      [input.companyId, input.employeeId, cpfLimpo, cpfLimpo, input.employeeId]
+    );
+    const existing = rows(findR)[0];
+    if (existing) {
+      await dbExecute(db,
+        `UPDATE company_partners SET
+           employee_id=$1, nome=$2, cpf=$3, cargo=$4,
+           percentual_sociedade=$5, valor_pro_labore=$6, dia_vencimento=$7, pix_chave=$8,
+           updated_at=NOW()
+         WHERE id=$9 AND company_id=$10`,
+        [input.employeeId, emp.nome, emp.cpf ?? null, emp.cargo ?? null,
+         perc, prol, venc, pix, existing.id, input.companyId]
+      );
+      return { id: existing.id, created: false };
+    }
+    const insR = await dbExecute(db,
+      `INSERT INTO company_partners
+         (company_id, employee_id, nome, cpf, cargo, percentual_sociedade, valor_pro_labore, dia_vencimento, pix_chave, ativo)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,1) RETURNING id`,
+      [input.companyId, input.employeeId, emp.nome, emp.cpf ?? null, emp.cargo ?? null,
+       perc, prol, venc, pix]
+    );
+    return { id: rows(insR)[0]?.id, created: true };
   }),
 
   // ─────────────────── ORÇAMENTO ANUAL ───────────────────

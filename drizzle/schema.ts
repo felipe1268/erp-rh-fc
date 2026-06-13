@@ -7206,6 +7206,7 @@ export const financialOpeningBalances = pgTable("financial_opening_balances", {
 export const companyPartners = pgTable("company_partners", {
   id: serial().notNull(),
   companyId: integer().notNull(),
+  employeeId: integer("employee_id"),
   nome: varchar({ length: 255 }).notNull(),
   cpf: varchar({ length: 14 }),
   cargo: varchar({ length: 100 }),

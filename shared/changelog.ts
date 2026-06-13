@@ -1,6 +1,68 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3051 — **CONFIGURAÇÕES · "SÓCIOS": UNIFICAÇÃO DE TODAS AS INFORMAÇÕES DOS
+ * SÓCIOS EM UM ÚNICO LOCAL — CADASTRO (DOS COLABORADORES) + ADMINISTRADOR + DADOS
+ * FINANCEIROS (PRÓ-LABORE, % SOCIEDADE, PIX, VENCIMENTO).**
+ *
+ * PEDIDO: "Unifique todas as informações dos sócios em um só local." Hoje os dados
+ * estavam ESPALHADOS e DESENCONTRADOS: a aba Configurações → "Sócios / Administrador"
+ * lia os sócios dos COLABORADORES (employees `tipoContrato='Socio'`) e definia o sócio
+ * administrador, enquanto o painel Financeiro (Configurações → seção Financeiro →
+ * "Sócios e Pró-labore") tinha um CRUD PRÓPRIO gravando em `company_partners` — duas
+ * fontes que não conversavam. O usuário ESCOLHEU: a aba "Sócios" vira o painel COMPLETO
+ * e o Financeiro só APONTA para lá.
+ *
+ * CAUSA-RAIZ: `company_partners` (fonte do Financeiro) estava VAZIA para a FC
+ * (company 60002), enquanto os 3 sócios reais (#6 FELIPE, #24 CAMILA, #23 JULIO) viviam
+ * em `employees`. Não havia VÍNCULO entre as duas tabelas — `company_partners` só tinha
+ * nome/cpf soltos —, então o pró-labore cadastrado no Financeiro nunca aparecia ao lado
+ * do sócio do RH e vice-versa.
+ *
+ * SOLUÇÃO (ZERO ALTER/DROP/DELETE — só ADD COLUMN IF NOT EXISTS / INSERT / UPDATE):
+ *  1) SCHEMA `drizzle/schema.ts`: `company_partners` ganha `employee_id` (FK lógica p/
+ *     employees) — o elo que faltava entre cadastro do RH e dados financeiros.
+ *  2) SELF-HEAL `server/_core/index.ts` (`[SyncSchema+]` Rev. 3051): `ADD COLUMN IF NOT
+ *     EXISTS employee_id` + índice `idx_cp_employee` + ÍNDICE ÚNICO PARCIAL
+ *     `idx_cp_employee_uniq` (1 registro financeiro por sócio na empresa, só p/
+ *     employee_id NOT NULL — não afeta legados sem vínculo; try/catch isolado p/ não
+ *     bloquear boot se houver duplicata pré-existente). Verificado no Neon (pg direto):
+ *     coluna + os 2 índices presentes.
+ *  3) BACKEND `server/routers/financial.ts`:
+ *     - NOVO `listSociosUnificado({companyId})`: LISTA cada sócio do RH (employees
+ *       `tipoContrato='Socio'`) já MESCLADO (LEFT JOIN LATERAL) com seu registro
+ *       financeiro de `company_partners` — casa 1º por `employee_id`, fallback por CPF
+ *       normalizado (`regexp_replace`). Tenant guard `_assertFinanceiroCompanyAccess`.
+ *     - NOVO `upsertPartnerByEmployee({companyId,employeeId,...})`: salva os dados
+ *       financeiros ANCORADO no colaborador — reaproveita um `company_partners` existente
+ *       (por employee_id ou CPF) e o RE-VINCULA (grava employee_id + nome/cpf/cargo do
+ *       RH), senão INSERE novo já vinculado. Valida que o employee é sócio DESTA empresa
+ *       (anti-IDOR) e EXIGE papel admin/admin_master (escrita de dado financeiro de sócio
+ *       é sensível). ZERO ALTER/DROP/DELETE.
+ *     - HARDENING (code review): os endpoints LEGADOS `createPartner`/`updatePartner`
+ *       (ainda alcançáveis pela tela `financeiro/FinanceiroConfiguracoes.tsx`) ganharam
+ *       o MESMO guard — tenant `_assertFinanceiroCompanyAccess` (fecha IDOR cross-tenant)
+ *       + admin/admin_master —, eliminando elevação de privilégio e IDOR no caminho antigo.
+ *     - dbExecute (que liga params por ORDEM DE APARIÇÃO, ignorando o número $N) teve as
+ *       queries com placeholders repetidos ordenadas conforme a aparição.
+ *  4) FRONT `client/src/pages/configuracoes/SociosAdministradorSection.tsx`: reescrito
+ *     como PAINEL COMPLETO — cabeçalho explicando a fonte única, banner do administrador
+ *     atual, e um card POR SÓCIO com: seleção de administrador (rádio), % sociedade,
+ *     pró-labore (máscara BRL local — digita-se em centavos → "2.500,00"), dia de
+ *     vencimento, chave PIX e "Salvar dados financeiros" (via `upsertPartnerByEmployee`).
+ *     Botão "Definir como sócio administrador" (via `setSocioAdministrador`).
+ *  5) FRONT `client/src/pages/configuracoes/FinanceiroConfigSection.tsx`: a seção "Sócios
+ *     e Pró-labore" deixa de ter CRUD próprio (removidos botão "Novo Sócio" + modal +
+ *     `createPartner`); vira PONTEIRO — banner + resumo read-only + botão "Gerenciar
+ *     sócios em Configurações → Sócios" (prop `onManageSocios` → `setActiveTab("socios")`).
+ *  6) FRONT `client/src/pages/Configuracoes.tsx`: aba renomeada "Sócios / Administrador"
+ *     → "Sócios"; passa `onManageSocios` ao `FinanceiroConfigSection`.
+ *
+ * RESSALVA: o cadastro do sócio em si (nome/CPF/cargo) continua vindo do módulo
+ * Colaboradores (tipo "Sócio") — a aba "Sócios" não cria colaborador, só gerencia
+ * administrador + dados financeiros. Os endpoints legados `createPartner`/`updatePartner`
+ * permanecem (compat com importação automática), mas não há mais UI que os chame.
+ *
  * Rev. 3050 — **INTEGRASIGN (FCSIGN) · TODO CONTRATO ONLINE É ASSINADO POR 3
  * SIGNATÁRIOS NA ORDEM FORNECEDOR → GESTOR DA OBRA → SÓCIO ADMINISTRADOR (ESTE
  * POR ÚLTIMO), CADA UM COM SEUS RESPECTIVOS DADOS.**

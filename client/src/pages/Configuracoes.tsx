@@ -330,7 +330,7 @@ export default function Configuracoes() {
     { key: "modulos" as TabKey, label: "Módulos do Sistema", icon: ToggleRight, minRole: "admin", color: "indigo" },
     { key: "regras" as TabKey, label: "Regras de Ouro", icon: Shield, minRole: "admin", color: "amber" },
     { key: "criterios" as TabKey, label: "Critérios do Sistema", icon: Scale, minRole: "admin", color: "blue" },
-    { key: "socios" as TabKey, label: "Sócios / Administrador", icon: Handshake, minRole: "admin", color: "emerald" },
+    { key: "socios" as TabKey, label: "Sócios", icon: Handshake, minRole: "admin", color: "emerald" },
     { key: "templates_docs" as TabKey, label: "Templates de Documentos", icon: FileText, minRole: "admin", color: "sky" },
     { key: "senha" as TabKey, label: "Minha Senha", icon: Key, minRole: "user", color: "emerald" },
     { key: "notificacoes" as TabKey, label: "Notificações E-mail", icon: Bell, minRole: "admin", color: "violet" },
@@ -688,7 +688,7 @@ export default function Configuracoes() {
                 <IAConfigSection />
                 <ComprasConfigSection />
                 <AlmoxarifadoConfigSection />
-                <FinanceiroConfigSection />
+                <FinanceiroConfigSection onManageSocios={() => setActiveTab("socios")} />
                 <PlanejamentoConfigSection />
               </div>
             </div>

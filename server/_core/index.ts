@@ -791,6 +791,24 @@ Regras:
           console.log(`[SyncSchema+] Tabela dds_participacoes_terceiros garantida.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA dds_participacoes_terceiros:`, e?.message || e); }
 
+        // Rev. 3051 — Unificação dos sócios: company_partners ganha employee_id para
+        // vincular o registro financeiro (pró-labore/%/PIX) ao colaborador sócio
+        // (employees tipoContrato='Socio'), tornando o painel "Configurações → Sócios"
+        // fonte única. ADD COLUMN IF NOT EXISTS (R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`ALTER TABLE company_partners ADD COLUMN IF NOT EXISTS employee_id INTEGER`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_cp_employee ON company_partners(company_id, employee_id) WHERE employee_id IS NOT NULL`);
+          console.log(`[SyncSchema+] Rev. 3051: coluna employee_id garantida em company_partners (unificação de sócios).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA company_partners.employee_id:`, e?.message || e); }
+        // Rev. 3051 — unicidade do vínculo sócio↔financeiro (1 registro financeiro por
+        // employee dentro da empresa). Índice parcial (só employee_id NOT NULL) — não
+        // afeta registros legados sem vínculo. Try/catch isolado: se houver duplicata
+        // pré-existente, não bloqueia o boot (CREATE UNIQUE INDEX IF NOT EXISTS).
+        try {
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_cp_employee_uniq ON company_partners(company_id, employee_id) WHERE employee_id IS NOT NULL`);
+          console.log(`[SyncSchema+] Rev. 3051: índice único idx_cp_employee_uniq garantido (1 financeiro por sócio).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA idx_cp_employee_uniq (provável duplicata pré-existente):`, e?.message || e); }
+
         // Rev. 2551 — Convenção Coletiva com IA: análises + itens de auditoria.
         try {
           await db.execute(sql`
