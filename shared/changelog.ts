@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3023 — **EQUIPAMENTOS PRÓPRIOS → BOTÃO "GERAR PREÇOS" (ESTIMATIVA DE
+ * VALOR COM IA): A CONFIRMAÇÃO DEIXA DE USAR O `window.confirm()` NATIVO (FEIO,
+ * QUE MOSTRAVA A URL `*.picard.replit.dev DIZ`) E PASSA A USAR UM MODAL
+ * ESTILIZADO (shadcn `AlertDialog`).**
+ *
+ * PEDIDO (usuário, com print): "Melhore o layout" — o print mostrava o popup
+ * nativo do navegador (iOS) com o domínio replit.dev no topo, visualmente pobre
+ * e sem identidade com o app.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, ZERO backend/schema, ZERO mudança
+ * de comportamento/dado — só a UI da confirmação muda) em
+ * `client/src/pages/equipamentos/Proprios.tsx`:
+ *  - Novo estado `confirmPrecos: { semValor: number } | null`. `handleGerarPrecos`
+ *    não chama mais `window.confirm`; só calcula `semValor` (itens com valor 0/nulo
+ *    sobre a lista TOTAL, mantendo a lógica anti-sobrescrita da Rev. 3015) e abre o
+ *    modal via `setConfirmPrecos`.
+ *  - NOVO `<AlertDialog>` (import de `@/components/ui/alert-dialog`) com ícone
+ *    `Sparkles` em gradiente violeta→índigo, título "Estimar valores com IA" e
+ *    duas variantes de texto: (a) quando há itens sem valor — destaca a contagem e
+ *    um aviso verde "os que já têm valor não são alterados"; (b) quando todos têm
+ *    valor — aviso âmbar de que vai SOBRESCREVER. Botão de ação dispara
+ *    `gerarPrecos.mutate({ companyId, sobrescrever })` (sobrescrever = semValor===0,
+ *    idêntico ao fluxo antigo).
+ *  - O `confirm()` nativo de EXCLUIR equipamento foi mantido (fora do escopo do
+ *    pedido).
+ *
+ * REPUBLICAR (só front). Detalhe: este arquivo.
+ *
  * Rev. 3022 — **PAINEL RH → "CONTRATOS DE EXPERIÊNCIA": NOVO CHECKBOX
  * "NÃO RENOVAR" QUE PRÉ-MARCA ANTECIPADAMENTE QUE O CONTRATO DE EXPERIÊNCIA
  * NÃO SERÁ RENOVADO (AVISO DE NÃO RENOVAÇÃO) — FLAG PERSISTIDO NO BANCO,

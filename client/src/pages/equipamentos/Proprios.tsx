@@ -9,6 +9,10 @@ import {
   Building2, User as UserIcon,
 } from "lucide-react";
 import { FotosUploader, FotoItem, compressImage, fmtMoney, fmtDate, Spinner } from "./_shared";
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
+  AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
 
 // Rev. 2561 — sanitiza mensagem de erro pro toast. Se vier o dump cru do
 // Drizzle ("Failed query… params:" com base64 das fotos) ou algo gigantesco,
@@ -100,6 +104,7 @@ export default function EquipamentosProprios() {
     );
 
   const [modal, setModal] = useState(false);
+  const [confirmPrecos, setConfirmPrecos] = useState<{ semValor: number } | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   // Rev. 2515 — lightbox: foto clicada amplia em overlay full-screen.
@@ -354,11 +359,7 @@ export default function EquipamentosProprios() {
     // poderia mandar sobrescrever=true só porque a fatia visível está toda
     // precificada, reestimando o parque inteiro sem querer.
     const semValor = (totalList as any[]).filter(p => !p.valorAquisicao || Number(p.valorAquisicao) === 0).length;
-    const msg = semValor > 0
-      ? `Estimar com IA o valor de aquisição dos ${semValor} equipamento(s) SEM valor? (os que já têm valor não são alterados)`
-      : "Todos já têm valor. Deseja REESTIMAR o valor de TODOS com a IA (sobrescreve os atuais)?";
-    if (!window.confirm(msg)) return;
-    gerarPrecos.mutate({ companyId, sobrescrever: semValor === 0 });
+    setConfirmPrecos({ semValor });
   };
   function confirmarExcluir() {
     if (!editingId) return;
@@ -476,6 +477,65 @@ export default function EquipamentosProprios() {
           </div>
         </div>
       </div>
+
+      {/* Modal estilizado de confirmação da estimativa por IA (substitui o confirm() nativo) */}
+      <AlertDialog open={!!confirmPrecos} onOpenChange={(o) => { if (!o) setConfirmPrecos(null); }}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-md">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <AlertDialogTitle className="text-lg leading-tight">
+                Estimar valores com IA
+              </AlertDialogTitle>
+            </div>
+            <AlertDialogDescription asChild>
+              <div className="pt-1 text-sm text-slate-600 space-y-3">
+                {confirmPrecos && confirmPrecos.semValor > 0 ? (
+                  <>
+                    <p>
+                      A IA vai estimar o valor de aquisição de{" "}
+                      <span className="font-semibold text-slate-900">
+                        {confirmPrecos.semValor} equipamento{confirmPrecos.semValor !== 1 ? "s" : ""}
+                      </span>{" "}
+                      que ainda estão <span className="font-semibold text-slate-900">sem valor</span>.
+                    </p>
+                    <p className="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-700 ring-1 ring-emerald-100">
+                      Os equipamentos que já têm valor <span className="font-semibold">não são alterados</span>.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p>
+                      Todos os equipamentos já têm valor. Deseja{" "}
+                      <span className="font-semibold text-slate-900">reestimar o valor de todos</span> com a IA?
+                    </p>
+                    <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-700 ring-1 ring-amber-100">
+                      Atenção: isto <span className="font-semibold">sobrescreve os valores atuais</span>.
+                    </p>
+                  </>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={gerarPrecos.isPending}
+              onClick={() => {
+                const sobrescrever = (confirmPrecos?.semValor ?? 0) === 0;
+                setConfirmPrecos(null);
+                gerarPrecos.mutate({ companyId, sobrescrever });
+              }}
+              className="bg-gradient-to-br from-violet-500 to-indigo-600 hover:from-violet-600 hover:to-indigo-700 text-white gap-2"
+            >
+              <Sparkles className="h-4 w-4" />
+              {confirmPrecos && confirmPrecos.semValor > 0 ? "Estimar valores" : "Reestimar todos"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <div className="max-w-7xl mx-auto px-4 py-5 space-y-5">
         {/* KPIs com ícones coloridos */}
