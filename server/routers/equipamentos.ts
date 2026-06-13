@@ -569,6 +569,11 @@ export const equipamentosRouter = router({
     .input(z.object({
       companyId: z.number(),
       sobrescrever: z.boolean().optional().default(false),
+      // Rev. 3026 — processamento POR LOTE p/ exibir evolução 0→100% no front.
+      // `offset` só avança no modo sobrescrever (no modo "só sem valor" os itens
+      // processados saem do filtro, então o lote seguinte vem sempre do topo).
+      offset: z.number().int().min(0).optional().default(0),
+      loteMax: z.number().int().min(1).max(400).optional().default(30),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -604,13 +609,21 @@ export const equipamentosRouter = router({
       `);
       const combos: { descricao: string; marca: string; modelo: string; categoria: string; qtd: number }[] =
         (rowsResult.rows || rowsResult) as any[];
-      if (combos.length === 0) {
-        return { ok: true as const, itensAtualizados: 0, combosAnalisados: 0, haMaisLotes: false };
+      const totalCombos = combos.length;
+      if (totalCombos === 0) {
+        return { ok: true as const, itensAtualizados: 0, combosAnalisados: 0, totalCombos: 0, haMaisLotes: false, proximoOffset: 0 };
       }
 
-      // 2. Chama IA. Limite defensivo: 400 combinações por call.
+      // 2. Recorta o LOTE deste passo. No modo sobrescrever o offset avança a cada
+      // chamada; no modo "só sem valor" os já precificados saem do filtro, então o
+      // próximo lote vem sempre do topo (offset ignorado). Limite duro: 400/call.
       const MAX_COMBOS = 400;
-      const lote = combos.slice(0, MAX_COMBOS);
+      const LOTE = Math.min(input.loteMax, MAX_COMBOS);
+      const inicio = input.sobrescrever ? Math.min(input.offset, totalCombos) : 0;
+      const lote = combos.slice(inicio, inicio + LOTE);
+      if (lote.length === 0) {
+        return { ok: true as const, itensAtualizados: 0, combosAnalisados: 0, totalCombos, haMaisLotes: false, proximoOffset: inicio };
+      }
       const { invokeLLM } = await import("../_core/llm");
       const systemPrompt = `Você é um avaliador de patrimônio de uma construtora brasileira (FC Engenharia). Recebe uma lista de equipamentos PRÓPRIOS (ar-condicionado, eletrodomésticos, ferramentas, mobiliário, eletrônicos de escritório etc.) e deve estimar o VALOR DE AQUISIÇÃO de mercado de CADA item, em REAIS (BRL).
 
@@ -685,11 +698,19 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
         itensAtualizados += Number(res.rowCount ?? res.rows?.length ?? 0);
       }
 
+      // Há mais lotes? sobrescrever: enquanto o offset não cobrir tudo.
+      // Só sem valor: enquanto sobrar combinação pendente além deste lote (elas
+      // saem do filtro a cada UPDATE, então o total encolhe nas próximas chamadas).
+      const haMaisLotes = input.sobrescrever
+        ? (inicio + LOTE) < totalCombos
+        : totalCombos > lote.length;
       return {
         ok: true as const,
         itensAtualizados,
         combosAnalisados: lote.length,
-        haMaisLotes: combos.length > MAX_COMBOS,
+        totalCombos,
+        haMaisLotes,
+        proximoOffset: inicio + LOTE,
       };
     }),
 

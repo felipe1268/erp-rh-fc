@@ -1,6 +1,59 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3026 — **EQUIPAMENTOS PRÓPRIOS → BOTÃO "GERAR PREÇOS" (IA): A GERAÇÃO
+ * PASSA A MOSTRAR UMA EVOLUÇÃO DE 0 A 100% FASE A FASE (BARRA DE PROGRESSO +
+ * LISTA DE FASES + CONTAGEM VIVA DE EQUIPAMENTOS), EM VEZ DO ANTIGO "GERANDO
+ * PREÇOS…" ESTÁTICO SEM FEEDBACK.**
+ *
+ * PEDIDO (usuário, com prints IMG_1910/IMG_1911): "no botão de gerar preços com
+ * IA dos equipamentos próprios, quero ver a evolução de 0 a 100% fase a fase
+ * enquanto gera, porque hoje só aparece 'Gerando preços…' parado."
+ *
+ * CAUSA-RAIZ: a estimativa rodava numa ÚNICA chamada tRPC que fazia tudo (SELECT
+ * dos combos pendentes → 1 `invokeLLM` grande de até 400 combos → loop de UPDATE)
+ * e só retornava no fim — não havia como o front mostrar progresso intermediário.
+ *
+ * SOLUÇÃO — PROCESSAMENTO POR LOTE (client-driven batching, 100% stateless: sem
+ * job em memória, sem tabela nova, robusto multi-instância; ZERO ALTER/DROP/DELETE):
+ *
+ * BACKEND (`server/routers/equipamentos.ts` · `propriosGerarPrecosComIA`):
+ *  - Input ganha `offset` (default 0) e `loteMax` (default 30, cap 400). Cada
+ *    chamada processa só UM lote de combos (LLM menor/mais rápido por call).
+ *  - Retorna `totalCombos` (denominador), `combosAnalisados` (lote), `proximoOffset`
+ *    e `haMaisLotes`.
+ *  - PAGINAÇÃO assimétrica por modo: no `sobrescrever=true` o `offset` AVANÇA
+ *    (condPreco=TRUE nunca encolhe → senão loop infinito); no modo "só sem valor"
+ *    o offset fica em 0 e o lote vem sempre do TOPO (os já precificados saem do
+ *    filtro a cada UPDATE, então o conjunto encolhe sozinho). `haMaisLotes` =
+ *    `sobrescrever ? (inicio+LOTE) < totalCombos : totalCombos > lote.length`.
+ *  - Mantidos tenant guard (`getCompaniesForUser`), parse defensivo do JSON da IA
+ *    e o UPDATE idempotente por tríade descricao+marca+modelo com `condSobre`.
+ *
+ * FRONT (`client/src/pages/equipamentos/Proprios.tsx`):
+ *  - NOVO estado `precoRun` (fase: levantando|estimando|gravando|concluido|erro +
+ *    total/processados/itens/lote/sobrescrever). Driver `rodarGerarPrecos` faz o
+ *    LOOP de `mutateAsync` (LOTE=30), captura `totalCombos` da 1ª resposta como
+ *    denominador, acumula `combosAnalisados`/`itensAtualizados`, atualiza o estado
+ *    entre lotes (React re-renderiza → barra anda) e para em `!haMaisLotes` ou
+ *    `combosAnalisados===0`; guard `MAX_ITER=500` evita loop infinito.
+ *  - GUARD DE ESTAGNAÇÃO (modo "só sem valor", offset fixo em 0): se um lote CHEIO
+ *    gravar ZERO (`itensAtualizados===0`) com `haMaisLotes` ainda true, a próxima
+ *    iteração re-buscaria os MESMOS combos do topo (loop até MAX_ITER + 100% falso).
+ *    O driver detecta isso, encerra cedo com `aviso` e toast `warning` (parte ficou
+ *    sem valor → "tente novamente"). No modo sobrescrever o offset avança, então não
+ *    há esse risco. O `<h2>` do Dialog virou `DialogTitle` (a11y Radix).
+ *  - NOVO `Dialog` de progresso (shadcn) com: barra `<Progress>` 0→100% (pct =
+ *    round(processados/total*100)), % grande, "X de Y combinações", "Lote N",
+ *    LISTA das 3 fases (ícones ListChecks/Sparkles/Database, check ao concluir
+ *    cada), rodapé com contagem viva de equipamentos e estados concluído/erro
+ *    com botão "Fechar". Modal trava fechamento enquanto roda (sem botão X, sem
+ *    ESC/click-fora). Botão do header troca Sparkles→Loader2 girando + disabled.
+ *  - O `gerarPrecos.mutate` único (com onSuccess/onError) virou `mutateAsync`
+ *    dirigido pelo loop; toasts de sucesso/info/erro agora saem do driver.
+ *
+ * REPUBLICAR: front + backend.
+ *
  * Rev. 3025 — **FINANCEIRO → "ANÁLISE DE CUSTOS" · TELA DE DETALHE ("LANÇAMENTOS
  * DETALHADOS"): AGORA DÁ PRA CLICAR EM CADA LINHA E EDITAR QUALQUER INFORMAÇÃO
  * DIRETO, E SELECIONAR VÁRIOS LANÇAMENTOS DE UMA VEZ PRA DEFINIR CATEGORIA +

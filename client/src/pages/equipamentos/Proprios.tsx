@@ -6,13 +6,15 @@ import { toast } from "sonner";
 import {
   Plus, Search, Pencil, X, HardHat, Camera, ChevronDown, ChevronUp,
   Sparkles, Trash2, Boxes, Wrench, CheckCircle2, Layers, Hash,
-  Building2, User as UserIcon,
+  Building2, User as UserIcon, Loader2, ListChecks, Database,
 } from "lucide-react";
 import { FotosUploader, FotoItem, compressImage, fmtMoney, fmtDate, Spinner } from "./_shared";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
   AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 
 // Rev. 2561 — sanitiza mensagem de erro pro toast. Se vier o dump cru do
 // Drizzle ("Failed query… params:" com base64 das fotos) ou algo gigantesco,
@@ -105,6 +107,18 @@ export default function EquipamentosProprios() {
 
   const [modal, setModal] = useState(false);
   const [confirmPrecos, setConfirmPrecos] = useState<{ semValor: number } | null>(null);
+  // Rev. 3026 — progresso fase a fase do "Gerar preços com IA". A geração roda
+  // em lotes (loop client-driven) e esta UI mostra a evolução 0→100%.
+  const [precoRun, setPrecoRun] = useState<{
+    fase: "levantando" | "estimando" | "gravando" | "concluido" | "erro";
+    total: number;          // denominador (combinações a precificar)
+    processados: number;    // combinações já processadas
+    itens: number;          // equipamentos efetivamente atualizados
+    lote: number;           // nº do lote atual
+    sobrescrever: boolean;
+    erro?: string;
+    aviso?: string;         // concluiu, mas parte ficou sem estimar (estagnação)
+  } | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   // Rev. 2515 — lightbox: foto clicada amplia em overlay full-screen.
@@ -336,31 +350,68 @@ export default function EquipamentosProprios() {
 
   // Rev. 3015 — "Gerar preços com IA": estima o valor de aquisição de TODOS os
   // equipamentos sem valor (ou de todos, com sobrescrever) numa tacada só.
-  const gerarPrecos = trpc.equipamentos.propriosGerarPrecosComIA.useMutation({
-    onSuccess: (r) => {
-      utils.equipamentos.propriosListar.invalidate();
-      if (r.itensAtualizados === 0) {
-        toast.info(r.combosAnalisados === 0
-          ? "Todos os equipamentos já têm valor. Nada a estimar."
-          : "A IA não conseguiu estimar valores desta vez. Tente novamente.");
-      } else {
-        toast.success(
-          `${r.itensAtualizados} equipamento${r.itensAtualizados !== 1 ? "s" : ""} com valor estimado pela IA.` +
-          (r.haMaisLotes ? " Há mais itens — rode novamente para concluir." : "")
-        );
-      }
-    },
-    onError: (e) => toast.error(errMsg(e)),
-  });
+  const gerarPrecos = trpc.equipamentos.propriosGerarPrecosComIA.useMutation();
+  const rodandoPrecos = !!precoRun && (precoRun.fase === "levantando" || precoRun.fase === "estimando" || precoRun.fase === "gravando");
   const handleGerarPrecos = () => {
     if (companyId <= 0) { toast.error("Selecione uma empresa antes."); return; }
-    if (gerarPrecos.isPending) return;
+    if (rodandoPrecos) return;
     // Usa a lista TOTAL (sem filtros de busca/status) — usar `data` filtrada
     // poderia mandar sobrescrever=true só porque a fatia visível está toda
     // precificada, reestimando o parque inteiro sem querer.
     const semValor = (totalList as any[]).filter(p => !p.valorAquisicao || Number(p.valorAquisicao) === 0).length;
     setConfirmPrecos({ semValor });
   };
+
+  // Rev. 3026 — driver do loop POR LOTE. Chama a mutation em sequência, atualiza
+  // a barra de progresso entre os lotes e invalida a lista no fim. Guard de
+  // iterações p/ não rodar infinito caso a IA não consiga precificar algum combo.
+  async function rodarGerarPrecos(sobrescrever: boolean) {
+    const LOTE = 30;
+    setPrecoRun({ fase: "levantando", total: 0, processados: 0, itens: 0, lote: 0, sobrescrever });
+    let total = 0;
+    let processados = 0;
+    let itens = 0;
+    let offset = 0;
+    let nLote = 0;
+    let estagnou = false;
+    const MAX_ITER = 500;
+    try {
+      while (nLote < MAX_ITER) {
+        nLote++;
+        setPrecoRun(prev => prev ? { ...prev, fase: "estimando", lote: nLote } : prev);
+        const r = await gerarPrecos.mutateAsync({ companyId, sobrescrever, offset, loteMax: LOTE });
+        if (total === 0) total = r.totalCombos;
+        processados += r.combosAnalisados;
+        itens += r.itensAtualizados;
+        offset = r.proximoOffset;
+        setPrecoRun(prev => prev ? { ...prev, fase: "gravando", total, processados, itens } : prev);
+        if (!r.haMaisLotes || r.combosAnalisados === 0) break;
+        // Guard de ESTAGNAÇÃO (modo "só sem valor"): aqui o offset fica em 0, então
+        // o conjunto só encolhe quando a IA precifica. Se um lote CHEIO gravou ZERO
+        // e ainda "há mais lotes", a próxima iteração re-busca os MESMOS combos do
+        // topo → loop até MAX_ITER + 100% falso. Encerra cedo com aviso.
+        if (!sobrescrever && r.itensAtualizados === 0) { estagnou = true; break; }
+      }
+      const aviso = estagnou
+        ? "A IA não conseguiu estimar parte dos equipamentos. Os demais foram processados; tente novamente para os restantes."
+        : undefined;
+      setPrecoRun({ fase: "concluido", total: total || processados, processados, itens, lote: nLote, sobrescrever, aviso });
+      utils.equipamentos.propriosListar.invalidate();
+      if (itens === 0) {
+        toast.info(total === 0
+          ? "Todos os equipamentos já têm valor. Nada a estimar."
+          : "A IA não conseguiu estimar valores desta vez. Tente novamente.");
+      } else if (estagnou) {
+        toast.warning(`${itens} equipamento${itens !== 1 ? "s" : ""} estimado${itens !== 1 ? "s" : ""}, mas parte ficou sem valor. Tente novamente.`);
+      } else {
+        toast.success(`${itens} equipamento${itens !== 1 ? "s" : ""} com valor estimado pela IA.`);
+      }
+    } catch (e) {
+      setPrecoRun(prev => prev ? { ...prev, fase: "erro", erro: errMsg(e) } : { fase: "erro", total, processados, itens, lote: nLote, sobrescrever, erro: errMsg(e) });
+      utils.equipamentos.propriosListar.invalidate();
+      toast.error(errMsg(e));
+    }
+  }
   function confirmarExcluir() {
     if (!editingId) return;
     const ok = window.confirm(
@@ -460,13 +511,15 @@ export default function EquipamentosProprios() {
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={handleGerarPrecos}
-              disabled={gerarPrecos.isPending}
+              disabled={rodandoPrecos}
               title="Estimar com IA o valor de aquisição dos equipamentos sem valor"
               className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white ring-1 ring-white/30 active:scale-[0.98] px-4 py-2.5 rounded-lg font-semibold shadow-md transition disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <Sparkles className={`h-5 w-5 ${gerarPrecos.isPending ? "animate-pulse" : ""}`} />
-              <span className="hidden sm:inline">{gerarPrecos.isPending ? "Gerando preços…" : "Gerar preços"}</span>
-              <span className="sm:hidden">{gerarPrecos.isPending ? "…" : "Preços"}</span>
+              {rodandoPrecos
+                ? <Loader2 className="h-5 w-5 animate-spin" />
+                : <Sparkles className="h-5 w-5" />}
+              <span className="hidden sm:inline">{rodandoPrecos ? "Gerando preços…" : "Gerar preços"}</span>
+              <span className="sm:hidden">{rodandoPrecos ? "…" : "Preços"}</span>
             </button>
             <button
               onClick={abrirNovo}
@@ -522,11 +575,11 @@ export default function EquipamentosProprios() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              disabled={gerarPrecos.isPending}
+              disabled={rodandoPrecos}
               onClick={() => {
                 const sobrescrever = (confirmPrecos?.semValor ?? 0) === 0;
                 setConfirmPrecos(null);
-                gerarPrecos.mutate({ companyId, sobrescrever });
+                void rodarGerarPrecos(sobrescrever);
               }}
               className="bg-gradient-to-br from-violet-500 to-indigo-600 hover:from-violet-600 hover:to-indigo-700 text-white gap-2"
             >
@@ -536,6 +589,133 @@ export default function EquipamentosProprios() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Rev. 3026 — Modal de PROGRESSO fase a fase do "Gerar preços com IA" */}
+      <Dialog
+        open={!!precoRun}
+        onOpenChange={(o) => { if (!o && !rodandoPrecos) setPrecoRun(null); }}
+      >
+        <DialogContent
+          className="max-w-md"
+          onPointerDownOutside={(e) => { if (rodandoPrecos) e.preventDefault(); }}
+          onEscapeKeyDown={(e) => { if (rodandoPrecos) e.preventDefault(); }}
+          showCloseButton={!rodandoPrecos}
+        >
+          {precoRun && (() => {
+            const pct = precoRun.total > 0
+              ? Math.min(100, Math.round((precoRun.processados / precoRun.total) * 100))
+              : (precoRun.fase === "concluido" ? 100 : 0);
+            const fases = [
+              { id: "levantando", label: "Levantando equipamentos sem preço", icon: ListChecks },
+              { id: "estimando",  label: "Estimando valores com IA",          icon: Sparkles },
+              { id: "gravando",   label: "Gravando valores no sistema",        icon: Database },
+            ] as const;
+            const ordem: Record<string, number> = { levantando: 0, estimando: 1, gravando: 2, concluido: 3, erro: 1 };
+            const atual = ordem[precoRun.fase] ?? 0;
+            const erro = precoRun.fase === "erro";
+            const done = precoRun.fase === "concluido";
+            return (
+              <div className="space-y-5">
+                <div className="flex items-center gap-3">
+                  <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white shadow-md ${
+                    erro ? "bg-gradient-to-br from-rose-500 to-red-600"
+                    : done ? "bg-gradient-to-br from-emerald-500 to-green-600"
+                    : "bg-gradient-to-br from-violet-500 to-indigo-600"
+                  }`}>
+                    {erro ? <X className="h-5 w-5" />
+                      : done ? <CheckCircle2 className="h-5 w-5" />
+                      : <Loader2 className="h-5 w-5 animate-spin" />}
+                  </div>
+                  <div className="min-w-0">
+                    <DialogTitle className="text-lg font-bold leading-tight text-slate-900">
+                      {erro ? "Não foi possível concluir"
+                        : done ? "Estimativa concluída"
+                        : "Estimando valores com IA"}
+                    </DialogTitle>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {precoRun.sobrescrever ? "Reestimando todos os equipamentos" : "Apenas equipamentos sem valor"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Barra de progresso 0→100% */}
+                <div className="space-y-2">
+                  <div className="flex items-end justify-between">
+                    <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Progresso</span>
+                    <span className={`text-2xl font-extrabold tabular-nums ${erro ? "text-rose-600" : done ? "text-emerald-600" : "text-indigo-600"}`}>
+                      {pct}%
+                    </span>
+                  </div>
+                  <Progress value={pct} className="h-2.5" />
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>
+                      {precoRun.total > 0
+                        ? `${Math.min(precoRun.processados, precoRun.total)} de ${precoRun.total} combinações`
+                        : "Preparando…"}
+                    </span>
+                    {precoRun.lote > 0 && !done && !erro && <span>Lote {precoRun.lote}</span>}
+                  </div>
+                </div>
+
+                {/* Lista de fases */}
+                <ol className="space-y-2">
+                  {fases.map((f) => {
+                    const idx = ordem[f.id];
+                    const isDone = atual > idx || done;
+                    const isActive = !erro && !done && atual === idx;
+                    const Icon = f.icon;
+                    return (
+                      <li key={f.id} className="flex items-center gap-3">
+                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
+                          isDone ? "bg-emerald-100 text-emerald-600"
+                          : isActive ? "bg-indigo-100 text-indigo-600"
+                          : "bg-slate-100 text-slate-400"
+                        }`}>
+                          {isDone ? <CheckCircle2 className="h-4 w-4" />
+                            : isActive ? <Loader2 className="h-4 w-4 animate-spin" />
+                            : <Icon className="h-4 w-4" />}
+                        </span>
+                        <span className={`text-sm ${isActive ? "font-semibold text-slate-900" : isDone ? "text-slate-600" : "text-slate-400"}`}>
+                          {f.label}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+
+                {/* Rodapé: contagem viva / erro / botão fechar */}
+                <div className="rounded-lg bg-slate-50 px-3 py-2.5 text-sm ring-1 ring-slate-100">
+                  {erro ? (
+                    <p className="text-rose-700">{precoRun.erro || "Falha na estimativa."}</p>
+                  ) : (
+                    <p className="text-slate-600">
+                      <span className="font-bold text-slate-900 tabular-nums">{precoRun.itens}</span>{" "}
+                      equipamento{precoRun.itens !== 1 ? "s" : ""} com valor {done ? "estimado" : "sendo estimado"} pela IA.
+                    </p>
+                  )}
+                </div>
+
+                {done && precoRun.aviso && (
+                  <div className="rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-800 ring-1 ring-amber-200">
+                    {precoRun.aviso}
+                  </div>
+                )}
+
+                {(done || erro) && (
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => setPrecoRun(null)}
+                      className="inline-flex items-center gap-2 bg-gradient-to-br from-violet-500 to-indigo-600 hover:from-violet-600 hover:to-indigo-700 text-white px-4 py-2 rounded-lg font-semibold shadow-md transition active:scale-[0.98]"
+                    >
+                      <CheckCircle2 className="h-4 w-4" /> Fechar
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
 
       <div className="max-w-7xl mx-auto px-4 py-5 space-y-5">
         {/* KPIs com ícones coloridos */}
