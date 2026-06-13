@@ -1,6 +1,54 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3029 — **FINANCEIRO → "ANÁLISE DE CUSTOS" · TELA DE DETALHE ("LANÇAMENTOS
+ * DETALHADOS"): (1) A COLUNA "FORNECEDOR" PASSA A MOSTRAR O NOME (ANTES "—" EM
+ * TUDO); (2) A DESCRIÇÃO GANHA UM BADGE LIMPO COM O Nº DO DOCUMENTO (OC-2026-0029,
+ * SEM O "OC #OC" REDUNDANTE) QUE É CLICÁVEL E ABRE A ORDEM DE COMPRA DE ORIGEM;
+ * (3) A DESCRIÇÃO FICA SEM POLUIÇÃO (REMOVE O Nº DUPLICADO, O FORNECEDOR — QUE
+ * AGORA VIVE NA SUA COLUNA — E OS "*" DE PREVISÃO).**
+ *
+ * PEDIDO (usuário, prints IMG_1918/1919/1920): "quero que apareça o nome do
+ * fornecedor, e na descrição quero poder clicar e abrir ordem de compra, serviço
+ * ou qualquer descrição que seja; deixa o número mais limpo sem poluição de
+ * informação; quero tudo organizado".
+ *
+ * CAUSA-RAIZ / DIAGNÓSTICO (dados REAIS do Neon): as linhas de OC têm
+ * `origem_modulo='compras'` (ou `compra_oc`), `origem_id` = id da OC e
+ * `fornecedor_nome` SEMPRE NULL — o fornecedor está embutido na própria descrição
+ * depois do travessão "—" (ex.: "OC OC-2026-0105 — Ferragens Santa Rita",
+ * "OC #OC-2026-0029 — PORMADE - PORT..."). Como a tela só lia `fornecedorNome`
+ * (null), a coluna ficava "—"; e a descrição vinha crua com "OC #OC-..." +
+ * fornecedor repetido + "*PREVISÃO*".
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, ZERO backend/schema; 100%
+ * client-side sobre `financial.getContasAPagarByYear` / alias `financial.ln`) em
+ * `client/src/pages/financeiro/FinanceiroAnaliseCustosDetalhe.tsx`:
+ *  - NOVO helper `parseLanc(r)`: extrai `docNumero` via regex `(OC|OS|FD)-\d{4}-\d+`
+ *    (→ "OC-2026-0029" canônico, sem o "OC #OC" duplicado), `docTipo`, o
+ *    `fornecedorDesc` (texto após o "—", limpo de "*" e espaços duplos) e o `livre`
+ *    (texto restante sem o nº, sem "#", sem "*" e sem travessões nas pontas).
+ *  - NOVO helper `fornecedorDe(r)`: coluna persistida `fornecedorNome` OU, se vazia,
+ *    o `fornecedorDesc` parseado. Usado na coluna "Fornecedor" (com `title`).
+ *  - NOVO helper `linkDeOrigem(r)`: pra `origem_modulo` ∈ {compras, compra_oc} com
+ *    `origem_id` numérico → `/compras/ordens?destaque=<origem_id>` (a tela de Ordens
+ *    já abre o detalhe da OC via o param `destaque`, Rev. existente). Outros módulos
+ *    sem deep-link confiável ficam com badge NÃO-clicável (cinza).
+ *  - TABELA: célula "Descrição" reescrita — badge índigo clicável (com ícone
+ *    `ExternalLink`, `stopPropagation` pra não disparar a edição da linha) quando há
+ *    link; badge cinza quando só há nº; + o texto `livre` truncado ao lado; "—"
+ *    quando não há nada. Coluna "Fornecedor" passa a usar `fornecedorDe(r)`.
+ *  - EDIÇÃO: `abrirEdicao` pré-preenche o campo "Fornecedor / Pagador" com
+ *    `fornecedorNome || parseLanc(r).fornecedorDesc`, então abrir+salvar PERSISTE o
+ *    fornecedor extraído no banco (via `financial.updateEntry`, já existente).
+ *  - INTOCADO de propósito (anti-risco de drill): `keyOf.fornecedor` / o gráfico
+ *    "Por Fornecedor" seguem lendo `fornecedorNome` cru, pra manter a paridade do
+ *    drill com a tela-mãe (que usa a mesma chave). A melhoria é só de EXIBIÇÃO na
+ *    tabela + persistência opcional via edição.
+ *  - Import novo: `ExternalLink` de lucide-react.
+ *
+ * REPUBLICAR (só front). Sem migração. Detalhe acima.
+ *
  * Rev. 3028 — **COMPRAS → FLUXO SC → COTAÇÃO: AO EDITAR UMA SOLICITAÇÃO E TROCAR
  * O TIPO (EX.: DE "MATERIAL" P/ "PACOTE"), A MUDANÇA AGORA SE PROPAGA
  * DEFINITIVAMENTE PARA A COTAÇÃO JÁ VINCULADA — A LEGENDA DA COTAÇÃO DEIXA DE

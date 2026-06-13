@@ -21,7 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/hooks/useCompany";
 import {
   ChevronLeft, CircleDollarSign, CheckCircle2, Receipt, AlertTriangle,
-  BarChart2, Layers, Tag, Building2, Calendar, ListChecks, Pencil, X, Loader2, Lock,
+  BarChart2, Layers, Tag, Building2, Calendar, ListChecks, Pencil, X, Loader2, Lock, ExternalLink,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -65,6 +65,39 @@ function fmtData(s?: string): string {
   if (!s || s.length < 10) return "—";
   const [y, m, d] = s.slice(0, 10).split("-");
   return `${d}/${m}/${y}`;
+}
+
+// Rev. 3029 — Lançamentos detalhados: parse do texto pra (1) número de documento
+// limpo (OC/OS/FD-AAAA-NNN), (2) fornecedor embutido após o "—" e (3) texto livre
+// sem poluição (sem "OC #OC", sem "*", sem espaços duplos).
+function parseLanc(r: any): { docTipo: string; docNumero: string; fornecedorDesc: string; livre: string } {
+  const raw = String(r?.descricao || r?.origemDescricao || "").trim();
+  const numMatch = raw.match(/(OC|OS|FD)-\d{4}-\d+/i);
+  const docNumero = numMatch ? numMatch[0].toUpperCase() : "";
+  const docTipo = numMatch ? numMatch[1].toUpperCase() : "";
+  const dashIdx = raw.indexOf("—");
+  const fornecedorDesc = (dashIdx >= 0 ? raw.slice(dashIdx + 1) : "")
+    .replace(/\*/g, "").replace(/\s{2,}/g, " ").trim();
+  let livre = dashIdx >= 0 ? raw.slice(0, dashIdx) : raw;
+  if (docNumero) {
+    livre = livre.replace(new RegExp(`(OC|OS|FD)?\\s*#?\\s*${docNumero.replace(/-/g, "\\-")}`, "i"), "");
+  }
+  livre = livre.replace(/#/g, "").replace(/\*/g, " ")
+    .replace(/\s{2,}/g, " ").replace(/^[\s—–-]+|[\s—–-]+$/g, "").trim();
+  return { docTipo, docNumero, fornecedorDesc, livre };
+}
+// Fornecedor "de verdade": coluna persistida OU o nome embutido na descrição.
+function fornecedorDe(r: any): string {
+  const direto = String(r?.fornecedorNome || "").trim();
+  return direto || parseLanc(r).fornecedorDesc;
+}
+// Deep-link pra origem do lançamento (hoje: OC de compras → tela de Ordens).
+function linkDeOrigem(r: any): string | null {
+  const mod = String(r?.origemModulo || "").toLowerCase();
+  const id = Number(r?.origemId);
+  if (!Number.isFinite(id) || !id) return null;
+  if (mod === "compras" || mod === "compra_oc") return `/compras/ordens?destaque=${id}`;
+  return null;
 }
 
 // Rev. 3024 — chaves canônicas de cada dimensão (espelham os rótulos das barras,
@@ -319,7 +352,7 @@ export default function FinanceiroAnaliseCustosDetalhe() {
     setEditRow(r);
     setEf({
       descricao: r.descricao || r.origemDescricao || "",
-      fornecedorNome: r.fornecedorNome || "",
+      fornecedorNome: r.fornecedorNome || parseLanc(r).fornecedorDesc || "",
       contaSel: catMatch ? String(catMatch.id) : (cur ? "-1" : CLEAR),
       obraSel: obraMatch ? String(obraMatch.id) : (obraCur ? "-1" : CLEAR),
       dataCompetencia: (r.dataCompetencia || "").slice(0, 10),
@@ -703,10 +736,35 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                                 aria-label="Selecionar lançamento"
                               />
                             </td>
-                            <td className="py-2 pr-2 text-gray-700 max-w-[240px] truncate" title={r.descricao || r.origemDescricao || ""}>
-                              {r.descricao || r.origemDescricao || "—"}
+                            <td className="py-2 pr-2 text-gray-700 max-w-[280px]">
+                              {(() => {
+                                const p = parseLanc(r);
+                                const link = linkDeOrigem(r);
+                                return (
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    {p.docNumero ? (
+                                      link ? (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => { e.stopPropagation(); setLocation(link); }}
+                                          className="shrink-0 inline-flex items-center gap-1 rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums"
+                                          title={`Abrir ${p.docNumero}`}
+                                        >
+                                          {p.docNumero}
+                                          <ExternalLink className="w-3 h-3" />
+                                        </button>
+                                      ) : (
+                                        <span className="shrink-0 inline-flex items-center rounded-md bg-gray-100 text-gray-600 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums">{p.docNumero}</span>
+                                      )
+                                    ) : null}
+                                    {p.livre ? (
+                                      <span className="truncate" title={p.livre}>{p.livre}</span>
+                                    ) : (!p.docNumero ? <span className="text-gray-400">—</span> : null)}
+                                  </div>
+                                );
+                              })()}
                             </td>
-                            <td className="py-2 px-2 text-gray-600 max-w-[160px] truncate" title={r.fornecedorNome || ""}>{r.fornecedorNome || "—"}</td>
+                            <td className="py-2 px-2 text-gray-600 max-w-[160px] truncate" title={fornecedorDe(r)}>{fornecedorDe(r) || "—"}</td>
                             <td className="py-2 px-2 text-gray-600 max-w-[160px] truncate" title={r.contaNome || ""}>{r.contaNome || "Sem categoria"}</td>
                             <td className="py-2 px-2 text-gray-600 max-w-[160px] truncate" title={r.obraNome || ""}>{r.obraNome || "Sem centro de custo"}</td>
                             <td className="py-2 px-2 text-gray-500 tabular-nums whitespace-nowrap">{fmtData(r.dataCompetencia)}</td>
