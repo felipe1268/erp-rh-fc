@@ -17,10 +17,10 @@ import { useCompany } from "@/hooks/useCompany";
 import {
   RefreshCw, ChevronLeft, ChevronRight, TrendingDown, CircleDollarSign,
   Layers, Tag, AlertTriangle, CheckCircle2, Receipt, Building2,
-  PieChart as PieIcon, BarChart2, Scissors, Calendar,
+  BarChart2, Scissors, Calendar,
 } from "lucide-react";
 import {
-  ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar,
+  ResponsiveContainer, Cell, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip as RechTooltip, Legend, LabelList,
 } from "recharts";
 
@@ -166,13 +166,9 @@ export default function FinanceiroAnaliseCustos() {
       .sort((a, b) => b.value - a.value);
   }, [rowsFiltradas]);
 
-  const pizzaCategoria = useMemo(() => {
-    const TOP = 8;
-    if (porCategoria.length <= TOP) return porCategoria;
-    const top = porCategoria.slice(0, TOP);
-    const outros = porCategoria.slice(TOP).reduce((s, c) => s + c.value, 0);
-    return outros > 0 ? [...top, { name: "Outros", value: outros }] : top;
-  }, [porCategoria]);
+  // Top 12 categorias para o gráfico de barras (sem o agrupador "Outros" —
+  // barras horizontais comportam mais itens legíveis que uma pizza).
+  const barCategoria = useMemo(() => porCategoria.slice(0, 12), [porCategoria]);
 
   // ─── Custo por centro de custo (obra) ───────────────────────────────────
   const porCentroCusto = useMemo(() => {
@@ -385,37 +381,52 @@ export default function FinanceiroAnaliseCustos() {
               <Card className="border-0 shadow-sm">
                 <CardHeader className="pb-2 pt-4 px-5">
                   <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2">
-                    <PieIcon className="w-4 h-4" /> Custo por Categoria
+                    <BarChart2 className="w-4 h-4" /> Custo por Categoria
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="px-3 pb-4">
-                  <p className="text-[11px] text-gray-400 px-2 mb-1">Clique numa fatia para ver os lançamentos da categoria.</p>
-                  <div style={{ width: "100%", height: 300 }}>
-                    <ResponsiveContainer>
-                      <PieChart>
-                        <Pie
-                          data={pizzaCategoria}
-                          dataKey="value"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={100}
-                          innerRadius={55}
-                          paddingAngle={1}
-                          onClick={(d: any) => {
-                            const nome = d?.name ?? d?.payload?.name;
-                            if (nome && nome !== "Outros") irParaDetalhe("categoria", nome);
-                          }}
-                        >
-                          {pizzaCategoria.map((c, i) => (
-                            <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} className={c.name === "Outros" ? "" : "cursor-pointer"} />
-                          ))}
-                        </Pie>
-                        <RechTooltip content={<CustomTooltip totalRef={kpis.custoTotal} />} />
-                        <Legend wrapperStyle={{ fontSize: 11 }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
+                  {barCategoria.length === 0 ? (
+                    <p className="text-center text-sm text-gray-400 py-12">Sem categorias no período</p>
+                  ) : (
+                    <>
+                      <p className="text-[11px] text-gray-400 px-2 mb-1">Clique numa barra para ver os lançamentos da categoria.</p>
+                      {/* Altura dinâmica (~46px por barra) — barras horizontais
+                          com rótulo de valor à direita (mais claro que a pizza). */}
+                      <div style={{ width: "100%", height: Math.max(220, barCategoria.length * 46 + 24) }}>
+                        <ResponsiveContainer>
+                          <BarChart
+                            data={barCategoria}
+                            layout="vertical"
+                            margin={{ top: 4, right: 78, left: 8, bottom: 0 }}
+                            barCategoryGap="22%"
+                            onClick={(st: any) => {
+                              const nome = st?.activePayload?.[0]?.payload?.name;
+                              if (nome) irParaDetalhe("categoria", nome);
+                            }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#eef2f7" />
+                            <XAxis type="number" tickFormatter={BRLk} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                            <YAxis
+                              type="category"
+                              dataKey="name"
+                              width={150}
+                              tick={{ fontSize: 11, fill: "#64748b" }}
+                              tickFormatter={(v: string) => (v && v.length > 22 ? v.slice(0, 21) + "…" : v)}
+                              axisLine={false}
+                              tickLine={false}
+                            />
+                            <RechTooltip content={<CustomTooltip totalRef={kpis.custoTotal} />} cursor={{ fill: "#f8fafc" }} />
+                            <Bar dataKey="value" name="Custo" radius={[0, 4, 4, 0]} className="cursor-pointer" maxBarSize={26}>
+                              {barCategoria.map((_c, i) => (
+                                <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                              ))}
+                              <LabelList dataKey="value" position="right" formatter={BRLk} style={{ fontSize: 10, fill: "#475569" }} />
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </>
+                  )}
                 </CardContent>
               </Card>
 

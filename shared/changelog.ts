@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3020 — **FINANCEIRO → "ANÁLISE DE CUSTOS": O GRÁFICO "CUSTO POR
+ * CATEGORIA" DEIXA DE SER PIZZA/ROSCA E VIRA BARRAS HORIZONTAIS COM O VALOR
+ * (R$) INDICADO EM CADA BARRA — MAIS FÁCIL DE LER E COMPARAR.**
+ *
+ * PEDIDO (usuário, com print da rosca): "Mude o gráfico para outro modelo, está
+ * confuso, acho que o barras seria melhor com indicadores." A rosca (donut) com
+ * 9 fatias + legenda embaixo dificultava comparar categorias e não mostrava o
+ * valor de cada uma direto no gráfico.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, ZERO backend/schema, ZERO mudança
+ * de dado; 100% client-side; só a renderização do gráfico muda) em
+ * `client/src/pages/financeiro/FinanceiroAnaliseCustos.tsx`:
+ *  - O `useMemo` `pizzaCategoria` (top 8 + agrupador "Outros") foi substituído por
+ *    `barCategoria` = `porCategoria.slice(0, 12)` — barras horizontais comportam
+ *    mais itens legíveis e dispensam o balde "Outros".
+ *  - O `<PieChart>/<Pie>` foi trocado por um `<BarChart layout="vertical">` no
+ *    MESMO padrão visual do gráfico "Custo por Centro de Custo" ao lado: altura
+ *    dinâmica (~46px/barra), `XAxis`/eixo em `BRLk`, `YAxis` com nomes truncados
+ *    em 22 chars, `CartesianGrid` vertical, cor por categoria via `<Cell>` +
+ *    `PIE_COLORS`, e `<LabelList position="right" formatter={BRLk}>` exibindo o
+ *    VALOR (indicador) à direita de cada barra.
+ *  - Clique mantido: cada barra chama `irParaDetalhe("categoria", nome)` (drill-down
+ *    inalterado). Estado vazio "Sem categorias no período".
+ *  - Título passou de ícone `PieIcon` p/ `BarChart2`; imports `PieChart/Pie/PieIcon`
+ *    removidos (não usados mais; `Legend`/`Cell` seguem em uso noutros gráficos).
+ *
+ * IMPACTO: nenhum cálculo/dado mudou — só a forma de visualizar o mesmo
+ * `porCategoria`. Demais gráficos (Centro de Custo, Pareto, Custo Mensal) e o
+ * filtro de projeção do cronograma (Rev. 3019) intactos. REPUBLICAR (só front).
+ *
  * Rev. 3019 — **FINANCEIRO → "ANÁLISE DE CUSTOS": O CUSTO TOTAL DEIXA DE
  * SOMAR A PROJEÇÃO DO CRONOGRAMA (VALOR DE CONTRATO DAS OBRAS) — PASSA A
  * MOSTRAR SÓ OS CUSTOS REAIS. TOTAL CAI DE ~R$ 26,7 MI PARA ~R$ 11 MI.**
