@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3033 — **EQUIPAMENTOS PRÓPRIOS → KPIs DO TOPO: NOVO CARD "VALOR TOTAL" COM A
+ * SOMA DO `valorAquisicao` DO PARQUE INTEIRO (EM BRL pt-BR), COM DESTAQUE DE COR
+ * (ÍNDIGO) MAS SEM AUMENTAR A FONTE COMO OS CONTADORES NUMÉRICOS (text-3xl) —
+ * MANTÉM LEITURA COMPACTA.**
+ *
+ * PEDIDO (usuário, print IMG_1925): "Não precisa aumentar o tamanho do valor só de um
+ * destaque com cor, e no topo da tela quero o valor total do inventário".
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, ZERO backend/schema) em
+ * `client/src/pages/equipamentos/Proprios.tsx`:
+ *  - NOVO memo `valorTotalInventario`: soma `Number(p.valorAquisicao)||0` sobre
+ *    `totalList` (a query SEM filtros de busca/status — Rev. 2364), garantindo que o
+ *    valor reflita o PARQUE INTEIRO e não a fatia filtrada/buscada na tela.
+ *  - NOVO 5º `KpiCard` "Valor total" (ícone `DollarSign`, cor `indigo`) na fileira de
+ *    KPIs; grid passa a `grid-cols-2 md:grid-cols-3 xl:grid-cols-5`.
+ *  - `KpiCard` ganha prop opcional `moneyText` (BRL via `fmtMoney`): quando presente,
+ *    renderiza em `text-lg sm:text-xl` (DESTAQUE DE COR, fonte compacta) em vez do
+ *    `text-3xl` dos contadores numéricos — exatamente o pedido "só destaque com cor".
+ *    Adicionada a paleta `indigo` ao `KPI_COLOR`.
+ * Cálculos de status (`stats`), lista, filtros e geração de preços ficam INTOCADOS.
+ * REPUBLICAR (só front).
+ *
  * Rev. 3032 — **FINANCEIRO → "ANÁLISE DE CUSTOS" · TABELA "COMPARATIVO MÊS A MÊS POR
  * CATEGORIA": REDESENHO MODERNO E ENXUTO — SAEM AS 12 COLUNAS DE MESES (QUE
  * ESTOURAVAM HORIZONTALMENTE, TRUNCAVAM VALORES E PARECIAM "DUPLICADOS" POR REPETIR

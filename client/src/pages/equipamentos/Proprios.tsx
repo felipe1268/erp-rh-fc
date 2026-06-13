@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import {
   Plus, Search, Pencil, X, HardHat, Camera, ChevronDown, ChevronUp,
   Sparkles, Trash2, Boxes, Wrench, CheckCircle2, Layers, Hash,
-  Building2, User as UserIcon, Loader2, ListChecks, Database,
+  Building2, User as UserIcon, Loader2, ListChecks, Database, DollarSign,
 } from "lucide-react";
 import { FotosUploader, FotoItem, compressImage, fmtMoney, fmtDate, Spinner } from "./_shared";
 import {
@@ -484,6 +484,14 @@ export default function EquipamentosProprios() {
     return s;
   }, [data]);
 
+  // Rev. 3033 — valor total do inventário (parque inteiro, SEM filtros de busca/status):
+  // soma de `valorAquisicao` sobre a lista total. Exibido em destaque no topo.
+  const valorTotalInventario = useMemo(() => {
+    let soma = 0;
+    for (const p of (totalList || []) as any[]) soma += Number(p.valorAquisicao) || 0;
+    return soma;
+  }, [totalList]);
+
   return (
     <DashboardLayout>
       {/* Rev. 2510 — Header com identidade FC (faixa azul #1B2A4A, regra de ouro) */}
@@ -719,11 +727,12 @@ export default function EquipamentosProprios() {
 
       <div className="max-w-7xl mx-auto px-4 py-5 space-y-5">
         {/* KPIs com ícones coloridos */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
           <KpiCard icon={<Layers className="h-4 w-4" />}        label="Total"        value={stats.total}      color="slate"   />
           <KpiCard icon={<HardHat className="h-4 w-4" />}       label="Em obra"      value={stats.em_obra}    color="blue"    />
           <KpiCard icon={<CheckCircle2 className="h-4 w-4" />}  label="Disponíveis"  value={stats.disponivel} color="emerald" />
           <KpiCard icon={<Wrench className="h-4 w-4" />}        label="Manutenção"   value={stats.manutencao} color="amber"   />
+          <KpiCard icon={<DollarSign className="h-4 w-4" />}    label="Valor total"  moneyText={fmtMoney(valorTotalInventario)} color="indigo" />
         </div>
 
         {/* Filtros sticky no topo da lista */}
@@ -1380,9 +1389,12 @@ const KPI_COLOR: Record<string, { bg: string; ring: string; text: string; icon: 
   blue:    { bg: "bg-blue-50",    ring: "ring-blue-200",    text: "text-blue-700",    icon: "bg-blue-500"    },
   emerald: { bg: "bg-emerald-50", ring: "ring-emerald-200", text: "text-emerald-700", icon: "bg-emerald-500" },
   amber:   { bg: "bg-amber-50",   ring: "ring-amber-200",   text: "text-amber-700",   icon: "bg-amber-500"   },
+  indigo:  { bg: "bg-indigo-50",  ring: "ring-indigo-200",  text: "text-indigo-700",  icon: "bg-indigo-500"  },
 };
-function KpiCard({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: number; color: keyof typeof KPI_COLOR }) {
+function KpiCard({ icon, label, value, moneyText, color }: { icon: React.ReactNode; label: string; value?: number; moneyText?: string; color: keyof typeof KPI_COLOR }) {
   const c = KPI_COLOR[color];
+  // Rev. 3033 — `moneyText` (valor BRL) ganha só DESTAQUE DE COR, sem aumentar a
+  // fonte como os contadores numéricos (text-3xl). Mantém leitura compacta.
   return (
     <div className={`relative overflow-hidden rounded-xl ring-1 ${c.ring} ${c.bg} p-3`}>
       <div className="flex items-center gap-2 mb-1.5">
@@ -1391,7 +1403,11 @@ function KpiCard({ icon, label, value, color }: { icon: React.ReactNode; label: 
         </div>
         <p className="text-[10px] font-bold uppercase tracking-widest text-slate-600 truncate">{label}</p>
       </div>
-      <p className={`text-3xl font-extrabold tabular-nums ${c.text}`}>{value}</p>
+      {moneyText !== undefined ? (
+        <p className={`text-lg sm:text-xl font-extrabold tabular-nums ${c.text} truncate`} title={moneyText}>{moneyText}</p>
+      ) : (
+        <p className={`text-3xl font-extrabold tabular-nums ${c.text}`}>{value}</p>
+      )}
     </div>
   );
 }
