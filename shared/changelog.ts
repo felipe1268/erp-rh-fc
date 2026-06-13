@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3013 — **FINANCEIRO → CONTAS A RECEBER: FIM DA DUPLICAÇÃO DE MEDIÇÕES +
+ * LIMPEZA DE LANÇAMENTOS ÓRFÃOS (PHANTOM R$ 1,5 MI DO "HOTEL DO PAPA") — SEM
+ * APAGAR NADA (UPDATE status='cancelado').**
+ *
+ * PEDIDO (usuário, via screenshot do Contas a Receber): a tela estava com tudo
+ * em DOBRO e tinha um título fantasma de R$ 1.500.000 do "HOTEL DO PAPA" que não
+ * corresponde a nenhuma medição real. Pediu p/ "ajudar melhor isso aí" e corrigir
+ * em todos os casos. Empresa afetada: company_id=60002.
+ *
+ * CAUSA-RAIZ (duas, somadas):
+ * 1) DUPLICAÇÃO ESTRUTURAL: `importPlanejamentoMedicoesToFinancial` (3.4) grava o
+ *    lançamento em `financial_entries` (origem='planejamento_medicao') E TAMBÉM em
+ *    `financial_revenue` (com `medicao_id`). Em seguida `importFinancialRevenueToEntries`
+ *    (3.5) lê esse mesmo `financial_revenue` e cria uma SEGUNDA `financial_entries`
+ *    (origem='revenue', "Faturamento de Obras"). Resultado: cada medição aparecia 2x
+ *    no Contas a Receber (`getContasAReceberByYear` lê `financial_entries`).
+ * 2) ÓRFÃOS: o usuário recriou os projetos do planejamento várias vezes; medições de
+ *    projetos APAGADOS (proj 29/33/34/38/46) deixaram `financial_entries` órfãos. O
+ *    "HOTEL DO PAPA" (proj34+proj38, ambos apagados) carregava o phantom de R$ 1,5 mi.
+ *
+ * SOLUÇÃO — CÓDIGO (going forward, ZERO ALTER/DROP/DELETE):
+ * - `server/services/financialIntegrationBridge.ts` 3.5 `importFinancialRevenueToEntries`:
+ *   novo guard `NOT EXISTS (planejamento_medicao p/ fr.medicao_id ativo)` no SELECT.
+ *   Se a medição JÁ tem lançamento pelo lado canônico 'planejamento_medicao', NÃO cria
+ *   o "Faturamento de Obras" duplicado. Receita MANUAL (`medicao_id` NULL) e medições
+ *   SEM par continuam fluindo normalmente (sem risco de sumiço). `entryExists` ignora
+ *   status → o cancelado bloqueia recriação.
+ * - 3.4: descrição limpa — acabou o "Medição 0 — X (0.0%)"; vira "Medição — X" (só mostra
+ *   número quando >0 e % quando >0).
+ *
+ * SOLUÇÃO — DADOS (one-time, via script `pg` na Neon, transação; UPDATE status='cancelado',
+ * NUNCA toca recebido/recebido_parcial):
+ * - Rule A: cancela 16 `financial_entries` origem='revenue' duplicados (medição com par
+ *   'planejamento_medicao' OU projeto apagado).
+ * - Rule B: cancela 12 `financial_entries` origem='planejamento_medicao' órfãos (medição/
+ *   projeto inexistente).
+ * - Rule C: cancela 1 `financial_entries` origem='medicao_obra' órfão.
+ * - Rule D: cancela 12 `financial_revenue` órfãos (medição de projeto apagado) p/ manter
+ *   as duas tabelas consistentes.
+ * - Limpa a descrição dos 4 lançamentos canônicos sobreviventes.
+ * RESULTADO (60002): a_receber R$ 4.589.760,76 → R$ 555.760,76; previsto R$ 3.934.000 →
+ * R$ 400.000; recebido R$ 1.474.763,63 INTACTO. Phantom R$ 1,5 mi do HOTEL DO PAPA some
+ * (sobra só R$ 1 mi REALMENTE recebido). Canônicos vivos: QIU 2 (med#24), LUCIANA (med#31/32/33).
+ *
+ * Requer REPUBLICAR (backend + front). Limpeza de dados já aplicada na base.
+ *
  * Rev. 3012 — **MIGRAÇÃO DE DADOS → "EXPORTAR ZIP COMPLETO": REESCRITA TOTAL —
  * FIM DO "FETCH IS ABORTED" + DOWNLOAD DE 100% (BANCO + ARQUIVOS + CÓDIGO-FONTE)
  * VIA STREAMING DIRETO.**

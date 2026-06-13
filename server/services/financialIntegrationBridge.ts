@@ -1479,7 +1479,7 @@ export async function importPlanejamentoMedicoesToFinancial(companyId: number, m
           origemModulo: "planejamento_medicao",
           origemId: r.id,
           origemDescricao: `Medição #${r.numero} — ${r.projeto_nome}${r.cliente ? " (" + r.cliente + ")" : ""}`,
-          descricao: `Medição ${r.numero} — ${r.projeto_nome} (${(pct * 100).toFixed(1)}%)`,
+          descricao: `Medição${r.numero && Number(r.numero) > 0 ? ` ${r.numero}` : ""} — ${r.projeto_nome}${pct > 0 ? ` (${(pct * 100).toFixed(1)}%)` : ""}`,
         });
         imported++;
       }
@@ -1554,6 +1554,17 @@ export async function importFinancialRevenueToEntries(companyId: number, mesRef?
            WHERE fe.origem_modulo = 'revenue'
              AND fe.origem_id = fr.id
              AND fe.company_id = $2
+         )
+         -- Rev. 3013 — NÃO duplicar: se a medição já tem lançamento pelo lado
+         -- 'planejamento_medicao' (livro/Contas a Receber), o "Faturamento de
+         -- Obras" via financial_revenue seria a SEGUNDA cópia. Pula nesse caso.
+         -- (medicao_id NULL = receita manual → segue normalmente, sem par.)
+         AND NOT EXISTS (
+           SELECT 1 FROM financial_entries fe2
+           WHERE fe2.company_id = fr.company_id
+             AND fe2.origem_modulo = 'planejamento_medicao'
+             AND fe2.origem_id = fr.medicao_id
+             AND COALESCE(fe2.status, '') <> 'cancelado'
          )
        ORDER BY fr.created_at DESC
        LIMIT 500`,

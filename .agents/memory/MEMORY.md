@@ -61,3 +61,4 @@
 - [Notification recipient tenancy](notification-recipient-tenancy.md) — notify queries must join `user_companies` (users has NO companyId; admin roles are global in getCompaniesForUser) or you leak across tenants.
 - [resolveCompanyIds trusts input](resolvecompanyids-no-intersect.md) — resolveCompanyIds/companyFilter don't intersect with user's allowed companies; per-company endpoints must call assert guard explicitly (loop every id for lists).
 - [Migração export/import](migration-export-streaming.md) — export grande = rota GET streaming (archiver.pipe+ctid), NÃO buffer+upload+window.open ("Fetch is aborted"); import precisa whitelist de identificadores (information_schema).
+- [Medição duplicada no Contas a Receber](medicao-receita-dupla-escrita.md) — medição é escrita 2x (planejamento_medicao + revenue→entries); dedup contra o par canônico, NUNCA por medicao_id IS NULL.
