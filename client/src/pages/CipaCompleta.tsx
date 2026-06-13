@@ -17,7 +17,8 @@ import { normalizarTexto } from "@shared/textNormalization";
 import {
   Shield, Plus, Search, Calendar, Users, Trash2, Pencil, Eye, X,
   AlertTriangle, CheckCircle2, Clock, CalendarDays, UserCheck,
-  FileText, RefreshCw, Vote,
+  FileText, RefreshCw, Vote, Award, ClipboardList, Link2, Copy, Send,
+  Loader2, Trophy, BarChart3, ListChecks, Printer, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 
@@ -33,8 +34,11 @@ const STATUS_ELEICAO: Record<string, { label: string; color: string; bg: string 
   Inscricoes: { label: "Inscrições", color: "text-blue-700", bg: "bg-blue-100" },
   Campanha: { label: "Campanha", color: "text-purple-700", bg: "bg-purple-100" },
   Votacao: { label: "Votação", color: "text-amber-700", bg: "bg-amber-100" },
+  "Votação Aberta": { label: "Votação Aberta", color: "text-amber-800", bg: "bg-amber-100" },
   Apuracao: { label: "Apuração", color: "text-orange-700", bg: "bg-orange-100" },
+  Apurada: { label: "Apurada", color: "text-orange-700", bg: "bg-orange-100" },
   Concluida: { label: "Concluída", color: "text-green-700", bg: "bg-green-100" },
+  "Concluída": { label: "Concluída", color: "text-green-700", bg: "bg-green-100" },
 };
 
 function EmployeeList({ employees, onSelect }: { employees: any[]; onSelect: (id: number) => void }) {
@@ -142,6 +146,147 @@ export default function CipaCompleta() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  // ── Eleição digital / Candidatos / Planos / Ata (Rev. 3041) ──────────────
+  const [showCandidatoDialog, setShowCandidatoDialog] = useState(false);
+  const [candidatoForm, setCandidatoForm] = useState<any>({});
+  const [candEmpSearch, setCandEmpSearch] = useState("");
+  const [showPlanoDialog, setShowPlanoDialog] = useState(false);
+  const [planoForm, setPlanoForm] = useState<any>({});
+  const [editPlanoId, setEditPlanoId] = useState<number | null>(null);
+  const [showAtaDialog, setShowAtaDialog] = useState(false);
+  const [ataReuniao, setAtaReuniao] = useState<any>(null);
+  const [ataForm, setAtaForm] = useState<any>({});
+  const [showEfetivarDialog, setShowEfetivarDialog] = useState(false);
+  const [efetivarForm, setEfetivarForm] = useState<any>({});
+  const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+
+  const enabledMandato = { enabled: !!selectedEleicaoId } as const;
+  const { data: candidatos = [], refetch: refetchCandidatos } = trpc.cipa.candidatos.list.useQuery(
+    { companyId, companyIds, electionId: selectedEleicaoId || 0 }, enabledMandato,
+  );
+  const { data: statusVotacao } = trpc.cipa.eleicaoDigital.statusVotacao.useQuery(
+    { companyId, companyIds, electionId: selectedEleicaoId || 0 }, { ...enabledMandato, refetchInterval: tab === "eleicao" ? 8000 : false },
+  );
+  const { data: resultado } = trpc.cipa.eleicaoDigital.resultado.useQuery(
+    { companyId, companyIds, electionId: selectedEleicaoId || 0 }, { ...enabledMandato, refetchInterval: tab === "eleicao" ? 8000 : false },
+  );
+  const { data: eleitores = [], refetch: refetchEleitores } = trpc.cipa.eleicaoDigital.listEleitores.useQuery(
+    { companyId, companyIds, electionId: selectedEleicaoId || 0 }, enabledMandato,
+  );
+  const { data: planos = [], refetch: refetchPlanos } = trpc.cipa.planosAcao.list.useQuery(
+    { companyId, companyIds, mandateId: selectedEleicaoId || 0 }, enabledMandato,
+  );
+
+  const createCandidato = trpc.cipa.candidatos.create.useMutation({
+    onSuccess: () => { refetchCandidatos(); toast.success("Candidato inscrito!"); setShowCandidatoDialog(false); setCandidatoForm({}); setCandEmpSearch(""); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const updateCandidato = trpc.cipa.candidatos.update.useMutation({
+    onSuccess: () => { refetchCandidatos(); }, onError: (e: any) => toast.error(e.message),
+  });
+  const deleteCandidato = trpc.cipa.candidatos.delete.useMutation({
+    onSuccess: () => { refetchCandidatos(); toast.success("Candidato removido!"); }, onError: (e: any) => toast.error(e.message),
+  });
+  const abrirVotacao = trpc.cipa.eleicaoDigital.abrirVotacao.useMutation({
+    onSuccess: (d: any) => { refetchEleicoes(); refetchEleitores(); toast.success(`Votação aberta! ${d.eleitoresGerados} novos links gerados (${d.totalEleitores} eleitores).`); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const encerrarVotacao = trpc.cipa.eleicaoDigital.encerrar.useMutation({
+    onSuccess: () => { refetchEleicoes(); refetchCandidatos(); toast.success("Votação encerrada e apurada!"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const efetivarEleitos = trpc.cipa.eleicaoDigital.efetivarEleitos.useMutation({
+    onSuccess: (d: any) => { refetchEleicoes(); refetchMembros(); toast.success(`${d.efetivados} membros efetivados!`); setShowEfetivarDialog(false); setTab("membros"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const createPlano = trpc.cipa.planosAcao.create.useMutation({
+    onSuccess: () => { refetchPlanos(); toast.success("Ação registrada!"); setShowPlanoDialog(false); setPlanoForm({}); setEditPlanoId(null); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const updatePlano = trpc.cipa.planosAcao.update.useMutation({
+    onSuccess: () => { refetchPlanos(); toast.success("Ação atualizada!"); setShowPlanoDialog(false); setPlanoForm({}); setEditPlanoId(null); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const deletePlano = trpc.cipa.planosAcao.delete.useMutation({
+    onSuccess: () => { refetchPlanos(); toast.success("Ação removida!"); }, onError: (e: any) => toast.error(e.message),
+  });
+  const updateReuniaoAta = trpc.cipa.reunioes.update.useMutation({
+    onSuccess: () => { refetchReunioes(); toast.success("Ata salva!"); }, onError: (e: any) => toast.error(e.message),
+  });
+  const enviarAta = trpc.signatures.create.useMutation({
+    onSuccess: () => { toast.success("Ata enviada para assinatura digital (FCSign)!"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const votacaoUrl = (token: string) => `${window.location.origin}/cipa/votar/${token}`;
+  function copyLink(token: string) {
+    const url = votacaoUrl(token);
+    navigator.clipboard?.writeText(url).then(
+      () => toast.success("Link copiado!"),
+      () => { window.prompt("Copie o link de votação:", url); },
+    );
+  }
+
+  const membrosAtivos = useMemo(() => (membros as any[]).filter((m: any) => m.statusMembro === "Ativo"), [membros]);
+
+  function buildAtaHtml(r: any): string {
+    const dataStr = formatDate(r.dataReuniao);
+    const presentes = membrosAtivos.map((m: any) => `<li>${m.employeeName} — ${CARGO_CIPA[m.cargoCipa] || m.cargoCipa} (${m.representacao})</li>`).join("");
+    const corpo = (r.ataTexto || ataForm.ataTexto || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
+    const assinaturas = membrosAtivos.slice(0, 6).map((m: any) =>
+      `<div style="margin-top:42px;text-align:center;display:inline-block;width:46%;"><div style="border-top:1px solid #333;margin:0 12px;padding-top:4px;font-size:10pt;">${m.employeeName}<br/><span style="color:#666;font-size:9pt;">${CARGO_CIPA[m.cargoCipa] || m.cargoCipa}</span></div></div>`,
+    ).join("");
+    return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"/></head><body style="font-family:'Times New Roman',serif;color:#111;max-width:780px;margin:0 auto;padding:24px;">
+      <style>@media print{.no-print{display:none}} body{line-height:1.5}</style>
+      <div style="text-align:center;margin-bottom:8px;"><img src="${window.location.origin}/logo-fc.jpg" alt="FC" style="height:84px;object-fit:contain;"/></div>
+      <div style="background:#1B2A4A;border:2px solid #fff;padding:14px;text-align:center;margin:10px 0 16px;print-color-adjust:exact;-webkit-print-color-adjust:exact;">
+        <span style="color:#fff;font-size:13pt;letter-spacing:3px;text-transform:uppercase;font-weight:bold;">ATA DE REUNIÃO — CIPA</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10pt;color:#333;margin-bottom:14px;">
+        <span><strong>Reunião ${r.tipo === "extraordinaria" ? "Extraordinária" : "Ordinária"}</strong></span>
+        <span>Data: ${dataStr}${r.horaInicio ? ` — ${r.horaInicio}${r.horaFim ? ` às ${r.horaFim}` : ""}` : ""}</span>
+      </div>
+      ${r.local ? `<p style="font-size:10pt;color:#333;"><strong>Local:</strong> ${r.local}</p>` : ""}
+      ${r.pauta ? `<p style="font-size:11pt;text-align:justify;"><strong>Pauta:</strong> ${String(r.pauta).replace(/</g, "&lt;")}</p>` : ""}
+      <p style="font-size:11pt;"><strong>Membros presentes:</strong></p>
+      <ul style="font-size:10.5pt;">${presentes || "<li>—</li>"}</ul>
+      <p style="font-size:11pt;"><strong>Deliberações / Registro da Ata:</strong></p>
+      <div style="font-size:11.5pt;text-align:justify;hyphens:auto;">${corpo || "—"}</div>
+      <div style="margin-top:40px;text-align:center;">${assinaturas}</div>
+    </body></html>`;
+  }
+
+  function imprimirAta(r: any) {
+    const w = window.open("", "_blank");
+    if (!w) { toast.error("Permita pop-ups para imprimir a ata."); return; }
+    w.document.write(buildAtaHtml(r));
+    w.document.close();
+    setTimeout(() => { try { w.print(); } catch {} }, 350);
+  }
+
+  function enviarAtaAssinatura(r: any) {
+    if (membrosAtivos.length === 0) { toast.error("Cadastre membros ativos antes de enviar a ata."); return; }
+    const roles: any[] = ["empregador", "testemunha_1", "testemunha_2", "empregado"];
+    const signers = membrosAtivos.slice(0, 4).map((m: any, i: number) => ({
+      role: roles[i] || "empregado",
+      nome: m.employeeName,
+      cpf: (m.employeeCpf || "").replace(/\D/g, "") || null,
+    }));
+    enviarAta.mutate({
+      companyId,
+      employeeId: membrosAtivos[0].employeeId,
+      tipo: "ata_cipa",
+      documentTitle: `Ata CIPA — ${formatDate(r.dataReuniao)}`,
+      documentHtml: buildAtaHtml(r),
+      signers,
+      observacoes: `ata_cipa:${r.id}`,
+    });
+  }
+
+  const candidatosDeferidos = useMemo(() => (candidatos as any[]).filter((c: any) => c.status === "deferido"), [candidatos]);
+  const totalEfetivos = necessidade?.efetivos || 0;
+  const totalSuplentes = necessidade?.suplentes || 0;
+
   // Employee search for membro form
   const [empSearch, setEmpSearch] = useState("");
   const [empDropdownOpen, setEmpDropdownOpen] = useState(false);
@@ -242,8 +387,11 @@ export default function CipaCompleta() {
           <TabsList>
             <TabsTrigger value="visao"><Shield className="h-4 w-4 mr-1" /> Visão Geral</TabsTrigger>
             <TabsTrigger value="mandatos"><Vote className="h-4 w-4 mr-1" /> Mandatos/Eleições</TabsTrigger>
+            <TabsTrigger value="eleicao"><Award className="h-4 w-4 mr-1" /> Eleição Digital</TabsTrigger>
             <TabsTrigger value="membros"><Users className="h-4 w-4 mr-1" /> Membros</TabsTrigger>
             <TabsTrigger value="reunioes"><CalendarDays className="h-4 w-4 mr-1" /> Reuniões</TabsTrigger>
+            <TabsTrigger value="planos"><ListChecks className="h-4 w-4 mr-1" /> Planos de Ação</TabsTrigger>
+            <TabsTrigger value="calendario"><Calendar className="h-4 w-4 mr-1" /> Calendário</TabsTrigger>
           </TabsList>
 
           {/* Visão Geral */}
@@ -541,9 +689,14 @@ export default function CipaCompleta() {
                               </Badge>
                             </td>
                             <td className="p-3">
-                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Excluir" onClick={() => { if (confirm("Excluir reunião?")) deleteReuniao.mutate({ id: r.id }); }}>
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
+                              <div className="flex items-center justify-center gap-1">
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" title="Ata da reunião" onClick={() => { setAtaReuniao(r); setAtaForm({ ataTexto: r.ataTexto || "", status: r.status || "agendada" }); setShowAtaDialog(true); }}>
+                                  <FileText className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Excluir" onClick={() => { if (confirm("Excluir reunião?")) deleteReuniao.mutate({ id: r.id }); }}>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -553,6 +706,258 @@ export default function CipaCompleta() {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+
+          {/* Eleição Digital */}
+          <TabsContent value="eleicao">
+            {!selectedEleicaoId ? (
+              <div className="py-12 text-center text-muted-foreground">
+                <Award className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                <p>Selecione um mandato na aba "Mandatos/Eleições" para gerir a eleição</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Barra de ações */}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="text-sm text-muted-foreground">
+                    Mandato: <strong>{selectedEleicao ? `${formatDate(selectedEleicao.mandatoInicio)} — ${formatDate(selectedEleicao.mandatoFim)}` : ""}</strong>
+                    {selectedEleicao && (() => { const st = STATUS_ELEICAO[selectedEleicao.statusEleicao] || STATUS_ELEICAO.Planejamento; return <span className={`ml-2 text-xs px-2 py-1 rounded-full font-medium ${st.bg} ${st.color}`}>{st.label}</span>; })()}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => { setCandidatoForm({}); setCandEmpSearch(""); setShowCandidatoDialog(true); }}>
+                      <Plus className="h-4 w-4 mr-1" /> Inscrever Candidato
+                    </Button>
+                    {selectedEleicao?.statusEleicao !== "Votação Aberta" && (
+                      <Button size="sm" onClick={() => { if (confirm("Abrir a votação digital? Serão gerados links para todos os funcionários ativos.")) abrirVotacao.mutate({ companyId, companyIds, electionId: selectedEleicaoId }); }} disabled={abrirVotacao.isPending || candidatosDeferidos.length < 1}>
+                        {abrirVotacao.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Vote className="h-4 w-4 mr-1" />} Abrir Votação
+                      </Button>
+                    )}
+                    {selectedEleicao?.statusEleicao === "Votação Aberta" && (
+                      <Button size="sm" variant="destructive" onClick={() => { if (confirm("Encerrar a votação e apurar os votos? Após encerrar, novos votos não serão aceitos.")) encerrarVotacao.mutate({ companyId, companyIds, electionId: selectedEleicaoId }); }} disabled={encerrarVotacao.isPending}>
+                        {encerrarVotacao.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1" />} Encerrar e Apurar
+                      </Button>
+                    )}
+                    {(selectedEleicao?.statusEleicao === "Apurada" || selectedEleicao?.statusEleicao === "Concluída") && (
+                      <Button size="sm" className="bg-emerald-600 hover:bg-emerald-500" onClick={() => { setEfetivarForm({ numTitulares: totalEfetivos || 1, numSuplentes: totalSuplentes || 0 }); setShowEfetivarDialog(true); }} disabled={efetivarEleitos.isPending}>
+                        <Trophy className="h-4 w-4 mr-1" /> Efetivar Eleitos
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Painel de votação */}
+                {statusVotacao && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Eleitores</p><p className="text-2xl font-bold">{fmtNum(statusVotacao.totalEleitores)}</p></CardContent></Card>
+                    <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Votaram</p><p className="text-2xl font-bold text-emerald-600">{fmtNum(statusVotacao.votaram)}</p></CardContent></Card>
+                    <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Abstenções</p><p className="text-2xl font-bold text-amber-600">{fmtNum(statusVotacao.abstencoes)}</p></CardContent></Card>
+                    <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Participação</p><p className="text-2xl font-bold">{statusVotacao.percentual}%</p></CardContent></Card>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Candidatos */}
+                  <Card>
+                    <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><Users className="h-4 w-4 text-blue-600" /> Candidatos ({(candidatos as any[]).length})</CardTitle></CardHeader>
+                    <CardContent className="p-0">
+                      {(candidatos as any[]).length === 0 ? (
+                        <p className="py-8 text-center text-sm text-muted-foreground">Nenhum candidato inscrito</p>
+                      ) : (
+                        <div className="divide-y">
+                          {(candidatos as any[]).map((c: any) => (
+                            <div key={c.id} className="flex items-center gap-3 p-3">
+                              <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0 text-xs font-bold text-slate-500">{c.numero ?? (c.employeeName || "?")[0]}</div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{c.employeeName}</p>
+                                <p className="text-[11px] text-muted-foreground">{c.employeeCargo || "—"}{c.numero ? ` · Nº ${c.numero}` : ""}</p>
+                              </div>
+                              <Badge variant={c.status === "deferido" ? "default" : c.status === "indeferido" ? "destructive" : "secondary"}>{c.status === "deferido" ? "Deferido" : c.status === "indeferido" ? "Indeferido" : "Inscrito"}</Badge>
+                              {selectedEleicao?.statusEleicao !== "Votação Aberta" && (
+                                <div className="flex items-center gap-1">
+                                  {c.status !== "deferido" && <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-600" title="Deferir" onClick={() => updateCandidato.mutate({ id: c.id, companyId, companyIds, status: "deferido" })}><CheckCircle2 className="h-4 w-4" /></Button>}
+                                  {c.status !== "indeferido" && <Button size="icon" variant="ghost" className="h-7 w-7 text-amber-600" title="Indeferir" onClick={() => updateCandidato.mutate({ id: c.id, companyId, companyIds, status: "indeferido" })}><X className="h-4 w-4" /></Button>}
+                                  <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Remover" onClick={() => { if (confirm("Remover candidato?")) deleteCandidato.mutate({ id: c.id, companyId, companyIds }); }}><Trash2 className="h-3.5 w-3.5" /></Button>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Apuração */}
+                  <Card>
+                    <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><BarChart3 className="h-4 w-4 text-orange-600" /> Apuração ao vivo</CardTitle></CardHeader>
+                    <CardContent>
+                      {!resultado || resultado.ranking.length === 0 ? (
+                        <p className="py-8 text-center text-sm text-muted-foreground">Sem votos ainda</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {resultado.ranking.map((c: any, i: number) => {
+                            const pct = resultado.totalVotos > 0 ? Math.round((c.votos / resultado.totalVotos) * 100) : 0;
+                            return (
+                              <div key={c.id}>
+                                <div className="flex justify-between text-sm mb-0.5">
+                                  <span className="font-medium flex items-center gap-1">{i === 0 && c.votos > 0 && <Trophy className="h-3.5 w-3.5 text-amber-500" />}{c.employeeName}</span>
+                                  <span className="text-muted-foreground">{fmtNum(c.votos)} ({pct}%)</span>
+                                </div>
+                                <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-blue-500 rounded-full" style={{ width: `${pct}%` }} /></div>
+                              </div>
+                            );
+                          })}
+                          <div className="flex justify-between text-xs text-muted-foreground pt-2 border-t mt-2">
+                            <span>Votos em branco: {fmtNum(resultado.brancos)}</span>
+                            <span>Total: {fmtNum(resultado.totalVotos)}</span>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Links de votação */}
+                {(eleitores as any[]).length > 0 && (
+                  <Card>
+                    <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><Link2 className="h-4 w-4 text-purple-600" /> Links de votação ({(eleitores as any[]).length})</CardTitle></CardHeader>
+                    <CardContent className="p-0">
+                      <div className="max-h-72 overflow-y-auto divide-y">
+                        {(eleitores as any[]).map((v: any) => (
+                          <div key={v.id} className="flex items-center gap-3 p-2.5 text-sm">
+                            <div className="flex-1 min-w-0"><p className="font-medium truncate">{v.employeeName}</p><p className="text-[11px] text-muted-foreground truncate">{votacaoUrl(v.token)}</p></div>
+                            {v.jaVotou === 1 ? <Badge variant="default" className="bg-emerald-600"><CheckCircle2 className="h-3 w-3 mr-1" /> Votou</Badge> : <Badge variant="secondary">Pendente</Badge>}
+                            <Button size="icon" variant="ghost" className="h-7 w-7" title="Copiar link" onClick={() => copyLink(v.token)}><Copy className="h-3.5 w-3.5" /></Button>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Planos de Ação */}
+          <TabsContent value="planos">
+            {!selectedEleicaoId ? (
+              <div className="py-12 text-center text-muted-foreground">
+                <ListChecks className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                <p>Selecione um mandato para gerir os planos de ação</p>
+              </div>
+            ) : (
+              <>
+                <div className="flex justify-end mb-4">
+                  <Button onClick={() => { setPlanoForm({ prioridade: "media" }); setEditPlanoId(null); setShowPlanoDialog(true); }}>
+                    <Plus className="h-4 w-4 mr-2" /> Nova Ação
+                  </Button>
+                </div>
+                <Card>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/30">
+                            <th className="p-3 text-left font-medium">Ação</th>
+                            <th className="p-3 text-left font-medium">Responsável</th>
+                            <th className="p-3 text-left font-medium">Prazo</th>
+                            <th className="p-3 text-center font-medium">Prioridade</th>
+                            <th className="p-3 text-center font-medium">Status</th>
+                            <th className="p-3 text-center font-medium">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(planos as any[]).length === 0 ? (
+                            <tr><td colSpan={6} className="py-12 text-center text-muted-foreground">Nenhuma ação registrada</td></tr>
+                          ) : (planos as any[]).map((p: any) => {
+                            const venc = p.prazo && p.status !== "concluido" && new Date(p.prazo) < new Date(new Date().toDateString());
+                            return (
+                              <tr key={p.id} className={`border-b last:border-0 hover:bg-muted/20 ${p.status === "concluido" ? "opacity-60" : ""}`}>
+                                <td className="p-3 max-w-[320px]"><p className="break-words">{p.descricao}</p></td>
+                                <td className="p-3 text-xs">{p.responsavel || "—"}</td>
+                                <td className={`p-3 text-xs ${venc ? "text-red-600 font-semibold" : ""}`}>{formatDate(p.prazo)}</td>
+                                <td className="p-3 text-center"><Badge variant={p.prioridade === "alta" ? "destructive" : p.prioridade === "baixa" ? "secondary" : "outline"}>{p.prioridade === "alta" ? "Alta" : p.prioridade === "baixa" ? "Baixa" : "Média"}</Badge></td>
+                                <td className="p-3 text-center">
+                                  <Select value={p.status} onValueChange={(v) => updatePlano.mutate({ id: p.id, companyId, companyIds, status: v as any })}>
+                                    <SelectTrigger className="h-8 text-xs w-36 mx-auto"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="pendente">Pendente</SelectItem>
+                                      <SelectItem value="em_andamento">Em andamento</SelectItem>
+                                      <SelectItem value="concluido">Concluído</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </td>
+                                <td className="p-3">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-500" title="Editar" onClick={() => { setEditPlanoId(p.id); setPlanoForm({ descricao: p.descricao, responsavel: p.responsavel || "", prazo: p.prazo || "", prioridade: p.prioridade, meetingId: p.meetingId || undefined }); setShowPlanoDialog(true); }}><Pencil className="h-3.5 w-3.5" /></Button>
+                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" title="Excluir" onClick={() => { if (confirm("Excluir ação?")) deletePlano.mutate({ id: p.id, companyId, companyIds }); }}><Trash2 className="h-3.5 w-3.5" /></Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </TabsContent>
+
+          {/* Calendário */}
+          <TabsContent value="calendario">
+            {(() => {
+              const ano = calMonth.getFullYear(); const mes = calMonth.getMonth();
+              const primeiro = new Date(ano, mes, 1);
+              const inicioGrid = new Date(primeiro); inicioGrid.setDate(1 - primeiro.getDay());
+              const dias: Date[] = []; for (let i = 0; i < 42; i++) { const d = new Date(inicioGrid); d.setDate(inicioGrid.getDate() + i); dias.push(d); }
+              const toKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+              const eventos: Record<string, { label: string; cor: string }[]> = {};
+              const addEv = (data: string | null, label: string, cor: string) => { if (!data) return; const k = data.slice(0, 10); (eventos[k] ||= []).push({ label, cor }); };
+              (reunioes as any[]).forEach((r: any) => addEv(r.dataReuniao, `Reunião ${r.tipo === "extraordinaria" ? "Extraord." : "Ordin."}`, "bg-blue-500"));
+              if (selectedEleicao) {
+                addEv(selectedEleicao.dataEdital, "Edital", "bg-gray-500");
+                addEv(selectedEleicao.dataInscricaoInicio, "Início inscrições", "bg-purple-500");
+                addEv(selectedEleicao.dataInscricaoFim, "Fim inscrições", "bg-purple-500");
+                addEv(selectedEleicao.dataEleicao, "Eleição", "bg-amber-500");
+                addEv(selectedEleicao.dataPosse, "Posse", "bg-emerald-500");
+              }
+              const hojeKey = toKey(new Date());
+              const nomesMes = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+              return (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base">{nomesMes[mes]} {ano}</CardTitle>
+                      <div className="flex gap-1">
+                        <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setCalMonth(new Date(ano, mes - 1, 1))}><ChevronLeft className="h-4 w-4" /></Button>
+                        <Button size="sm" variant="outline" className="h-8" onClick={() => { const d = new Date(); setCalMonth(new Date(d.getFullYear(), d.getMonth(), 1)); }}>Hoje</Button>
+                        <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setCalMonth(new Date(ano, mes + 1, 1))}><ChevronRight className="h-4 w-4" /></Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-muted-foreground mb-1">
+                      {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((d) => <div key={d} className="py-1">{d}</div>)}
+                    </div>
+                    <div className="grid grid-cols-7 gap-1">
+                      {dias.map((d, i) => {
+                        const k = toKey(d); const evs = eventos[k] || []; const isMes = d.getMonth() === mes; const isHoje = k === hojeKey;
+                        return (
+                          <div key={i} className={`min-h-[72px] border rounded-md p-1 text-left ${isMes ? "bg-white" : "bg-slate-50 text-slate-300"} ${isHoje ? "ring-2 ring-blue-400" : ""}`}>
+                            <div className={`text-xs font-medium ${isHoje ? "text-blue-600" : ""}`}>{d.getDate()}</div>
+                            <div className="space-y-0.5 mt-0.5">
+                              {evs.slice(0, 3).map((e, j) => <div key={j} className={`text-[9px] text-white rounded px-1 py-0.5 truncate ${e.cor}`} title={e.label}>{e.label}</div>)}
+                              {evs.length > 3 && <div className="text-[9px] text-muted-foreground">+{evs.length - 3}</div>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
           </TabsContent>
         </Tabs>
 
@@ -768,6 +1173,181 @@ export default function CipaCompleta() {
                 createReuniao.mutate({ mandateId: selectedEleicaoId!, companyId, ...reuniaoForm });
               }} disabled={createReuniao.isPending}>
                 {createReuniao.isPending ? "Salvando..." : "Agendar Reunião"}
+              </Button>
+            </div>
+          </div>
+        </FullScreenDialog>
+
+        {/* Dialog: Inscrever Candidato */}
+        <FullScreenDialog open={showCandidatoDialog} onClose={() => { setShowCandidatoDialog(false); setCandidatoForm({}); setCandEmpSearch(""); }} title="Inscrever Candidato à CIPA" icon={<Award className="h-5 w-5 text-white" />}>
+          <div className="w-full max-w-2xl mx-auto space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Colaborador *</label>
+              {candidatoForm.employeeId ? (() => {
+                const emp = activeEmployees.find((e: any) => e.id === candidatoForm.employeeId);
+                return (
+                  <div className="bg-slate-50 rounded-lg p-3 flex items-center gap-3 border border-slate-200">
+                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0"><span className="text-sm font-bold text-blue-600">{(emp?.nomeCompleto || "?")[0]}</span></div>
+                    <div className="flex-1 min-w-0"><p className="text-sm font-semibold">{emp?.nomeCompleto}</p><p className="text-xs text-slate-500">{emp?.cargo || "Sem cargo"} · {formatCPF(emp?.cpf)}</p></div>
+                    <button type="button" className="text-slate-400 hover:text-red-500 p-1" onClick={() => setCandidatoForm({ ...candidatoForm, employeeId: undefined })}><X className="h-4 w-4" /></button>
+                  </div>
+                );
+              })() : (
+                <>
+                  <div className="flex items-center border rounded-lg px-3 py-2.5 bg-white focus-within:border-blue-400">
+                    <Search className="h-4 w-4 text-slate-400 mr-2 shrink-0" />
+                    <input className="flex-1 bg-transparent outline-none text-sm" placeholder="Buscar por nome ou CPF..." value={candEmpSearch} onChange={(e) => setCandEmpSearch(e.target.value)} />
+                  </div>
+                  <EmployeeList
+                    employees={(() => {
+                      const jaCand = new Set((candidatos as any[]).map((c: any) => c.employeeId));
+                      const q = candEmpSearch.trim().toLowerCase(); const qd = q.replace(/\D/g, "");
+                      return activeEmployees.filter((e: any) => !jaCand.has(e.id)).filter((e: any) => !q || (e.nomeCompleto || "").toLowerCase().includes(q) || (qd && (e.cpf || "").replace(/\D/g, "").includes(qd)));
+                    })()}
+                    onSelect={(id: number) => { setCandidatoForm({ ...candidatoForm, employeeId: id }); setCandEmpSearch(""); }}
+                  />
+                </>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Número (opcional)</label>
+                <Input type="number" value={candidatoForm.numero ?? ""} onChange={(e) => setCandidatoForm({ ...candidatoForm, numero: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })} placeholder="Ex: 10" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Proposta / Plataforma (opcional)</label>
+              <Textarea value={candidatoForm.proposta || ""} onChange={(e) => setCandidatoForm({ ...candidatoForm, proposta: e.target.value })} rows={3} placeholder="Resumo das propostas do candidato..." />
+            </div>
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <Button variant="outline" onClick={() => { setShowCandidatoDialog(false); setCandidatoForm({}); setCandEmpSearch(""); }}>Cancelar</Button>
+              <Button onClick={() => {
+                if (!candidatoForm.employeeId) { toast.error("Selecione o colaborador"); return; }
+                createCandidato.mutate({ companyId, electionId: selectedEleicaoId!, employeeId: candidatoForm.employeeId, numero: candidatoForm.numero, proposta: candidatoForm.proposta });
+              }} disabled={createCandidato.isPending || !candidatoForm.employeeId}>
+                {createCandidato.isPending ? "Salvando..." : "Inscrever"}
+              </Button>
+            </div>
+          </div>
+        </FullScreenDialog>
+
+        {/* Dialog: Efetivar Eleitos */}
+        <FullScreenDialog open={showEfetivarDialog} onClose={() => setShowEfetivarDialog(false)} title="Efetivar Membros Eleitos" icon={<Trophy className="h-5 w-5 text-white" />}>
+          <div className="w-full max-w-lg mx-auto space-y-4">
+            <p className="text-sm text-muted-foreground">Os candidatos mais votados serão registrados como membros da CIPA, com estabilidade calculada automaticamente (até 1 ano após o fim do mandato).</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">Titulares (efetivos) *</label>
+                <Input type="number" min={1} value={efetivarForm.numTitulares ?? 1} onChange={(e) => setEfetivarForm({ ...efetivarForm, numTitulares: parseInt(e.target.value, 10) || 1 })} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Suplentes</label>
+                <Input type="number" min={0} value={efetivarForm.numSuplentes ?? 0} onChange={(e) => setEfetivarForm({ ...efetivarForm, numSuplentes: parseInt(e.target.value, 10) || 0 })} />
+              </div>
+            </div>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">Recomendado pela NR-5 para esta empresa: <strong>{totalEfetivos} efetivos</strong> e <strong>{totalSuplentes} suplentes</strong>.</div>
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <Button variant="outline" onClick={() => setShowEfetivarDialog(false)}>Cancelar</Button>
+              <Button className="bg-emerald-600 hover:bg-emerald-500" onClick={() => efetivarEleitos.mutate({ companyId, companyIds, electionId: selectedEleicaoId!, numTitulares: efetivarForm.numTitulares || 1, numSuplentes: efetivarForm.numSuplentes || 0 })} disabled={efetivarEleitos.isPending}>
+                {efetivarEleitos.isPending ? "Processando..." : "Efetivar"}
+              </Button>
+            </div>
+          </div>
+        </FullScreenDialog>
+
+        {/* Dialog: Plano de Ação */}
+        <FullScreenDialog open={showPlanoDialog} onClose={() => { setShowPlanoDialog(false); setPlanoForm({}); setEditPlanoId(null); }} title={editPlanoId ? "Editar Ação" : "Nova Ação"} icon={<ListChecks className="h-5 w-5 text-white" />}>
+          <div className="w-full max-w-2xl mx-auto space-y-4">
+            <div>
+              <label className="text-sm font-medium">Descrição da ação *</label>
+              <Textarea value={planoForm.descricao || ""} onChange={(e) => setPlanoForm({ ...planoForm, descricao: e.target.value })} rows={3} placeholder="O que será feito..." />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">Responsável</label>
+                <Input value={planoForm.responsavel || ""} onChange={(e) => setPlanoForm({ ...planoForm, responsavel: e.target.value })} placeholder="Quem é responsável" />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Prazo</label>
+                <Input type="date" value={planoForm.prazo || ""} onChange={(e) => setPlanoForm({ ...planoForm, prazo: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Prioridade</label>
+                <Select value={planoForm.prioridade || "media"} onValueChange={(v) => setPlanoForm({ ...planoForm, prioridade: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="baixa">Baixa</SelectItem>
+                    <SelectItem value="media">Média</SelectItem>
+                    <SelectItem value="alta">Alta</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Reunião (opcional)</label>
+                <Select value={planoForm.meetingId ? String(planoForm.meetingId) : "none"} onValueChange={(v) => setPlanoForm({ ...planoForm, meetingId: v === "none" ? undefined : parseInt(v, 10) })}>
+                  <SelectTrigger><SelectValue placeholder="Vincular a reunião" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhuma</SelectItem>
+                    {(reunioes as any[]).map((r: any) => <SelectItem key={r.id} value={String(r.id)}>{formatDate(r.dataReuniao)} — {r.tipo === "extraordinaria" ? "Extraord." : "Ordin."}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <Button variant="outline" onClick={() => { setShowPlanoDialog(false); setPlanoForm({}); setEditPlanoId(null); }}>Cancelar</Button>
+              <Button onClick={() => {
+                if (!planoForm.descricao?.trim()) { toast.error("Informe a descrição da ação"); return; }
+                if (editPlanoId) {
+                  updatePlano.mutate({ id: editPlanoId, companyId, companyIds, descricao: planoForm.descricao, responsavel: planoForm.responsavel, prazo: planoForm.prazo || undefined, prioridade: planoForm.prioridade });
+                } else {
+                  createPlano.mutate({ companyId, mandateId: selectedEleicaoId!, meetingId: planoForm.meetingId, descricao: planoForm.descricao, responsavel: planoForm.responsavel, prazo: planoForm.prazo || undefined, prioridade: planoForm.prioridade });
+                }
+              }} disabled={createPlano.isPending || updatePlano.isPending}>
+                {(createPlano.isPending || updatePlano.isPending) ? "Salvando..." : (editPlanoId ? "Salvar" : "Criar Ação")}
+              </Button>
+            </div>
+          </div>
+        </FullScreenDialog>
+
+        {/* Dialog: Ata da Reunião */}
+        <FullScreenDialog open={showAtaDialog} onClose={() => { setShowAtaDialog(false); setAtaReuniao(null); setAtaForm({}); }} title="Ata da Reunião CIPA" icon={<FileText className="h-5 w-5 text-white" />}>
+          <div className="w-full max-w-3xl mx-auto space-y-4">
+            {ataReuniao && (
+              <div className="bg-slate-50 rounded-lg p-3 text-sm flex flex-wrap gap-x-6 gap-y-1 border">
+                <span><strong>Data:</strong> {formatDate(ataReuniao.dataReuniao)}</span>
+                <span><strong>Tipo:</strong> {ataReuniao.tipo === "extraordinaria" ? "Extraordinária" : "Ordinária"}</span>
+                {ataReuniao.local && <span><strong>Local:</strong> {ataReuniao.local}</span>}
+              </div>
+            )}
+            <div>
+              <label className="text-sm font-medium">Status da reunião</label>
+              <Select value={ataForm.status || "agendada"} onValueChange={(v) => setAtaForm({ ...ataForm, status: v })}>
+                <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="agendada">Agendada</SelectItem>
+                  <SelectItem value="realizada">Realizada</SelectItem>
+                  <SelectItem value="cancelada">Cancelada</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Texto da Ata</label>
+              <Textarea value={ataForm.ataTexto || ""} onChange={(e) => setAtaForm({ ...ataForm, ataTexto: e.target.value })} rows={10} placeholder="Registre as deliberações, discussões e encaminhamentos da reunião..." />
+            </div>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
+              <strong>Membros presentes (assinantes):</strong> {membrosAtivos.length === 0 ? "nenhum membro ativo cadastrado" : membrosAtivos.map((m: any) => m.employeeName).join(", ")}
+            </div>
+            <div className="flex flex-wrap justify-end gap-3 pt-4 border-t">
+              <Button variant="outline" onClick={() => imprimirAta({ ...ataReuniao, ...ataForm })}><Printer className="h-4 w-4 mr-2" /> Imprimir</Button>
+              <Button variant="outline" onClick={() => enviarAtaAssinatura({ ...ataReuniao, ...ataForm })} disabled={enviarAta.isPending}>
+                {enviarAta.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />} Enviar p/ Assinatura
+              </Button>
+              <Button onClick={() => {
+                if (!ataReuniao) return;
+                updateReuniaoAta.mutate({ id: ataReuniao.id, ataTexto: ataForm.ataTexto, status: ataForm.status });
+                setShowAtaDialog(false);
+              }} disabled={updateReuniaoAta.isPending}>
+                {updateReuniaoAta.isPending ? "Salvando..." : "Salvar Ata"}
               </Button>
             </div>
           </div>

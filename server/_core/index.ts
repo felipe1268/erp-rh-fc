@@ -855,6 +855,78 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2805: tabela ai_module_config garantida (liga/desliga IA por módulo).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA ai_module_config:`, e?.message || e); }
 
+        // Rev. 3041 — CIPA: eleição digital (candidatos, eleitores c/ link, votos anônimos) + planos de ação.
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS cipa_candidates (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              election_id INTEGER NOT NULL,
+              employee_id INTEGER NOT NULL,
+              numero INTEGER,
+              proposta TEXT,
+              foto_url TEXT,
+              status TEXT NOT NULL DEFAULT 'inscrito',
+              votos_cache INTEGER NOT NULL DEFAULT 0,
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+              updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS ccand_election ON cipa_candidates(election_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS ccand_company ON cipa_candidates(company_id)`);
+
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS cipa_voters (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              election_id INTEGER NOT NULL,
+              employee_id INTEGER NOT NULL,
+              token VARCHAR(64) NOT NULL,
+              ja_votou SMALLINT NOT NULL DEFAULT 0,
+              votou_em TIMESTAMP,
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS cvoter_token ON cipa_voters(token)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS cvoter_election ON cipa_voters(election_id)`);
+          // Rev. 3041.1 — 1 eleitor por eleição (fecha race de abrirVotacao concorrente).
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS cvoter_election_employee ON cipa_voters(election_id, employee_id)`);
+
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS cipa_votes (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              election_id INTEGER NOT NULL,
+              candidate_id INTEGER NOT NULL,
+              votado_em TIMESTAMP DEFAULT NOW() NOT NULL,
+              ip VARCHAR(60)
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS cvote_election ON cipa_votes(election_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS cvote_candidate ON cipa_votes(candidate_id)`);
+
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS cipa_action_items (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              mandate_id INTEGER NOT NULL,
+              meeting_id INTEGER,
+              descricao TEXT NOT NULL,
+              responsavel VARCHAR(255),
+              prazo DATE,
+              prioridade TEXT NOT NULL DEFAULT 'media',
+              status TEXT NOT NULL DEFAULT 'pendente',
+              data_conclusao DATE,
+              evidencia TEXT,
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+              updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS cai_mandate ON cipa_action_items(mandate_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS cai_company ON cipa_action_items(company_id)`);
+          console.log(`[SyncSchema+] Rev. 3041: tabelas CIPA (cipa_candidates, cipa_voters, cipa_votes, cipa_action_items) garantidas.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA tabelas CIPA Rev.3041:`, e?.message || e); }
+
         // Rev. 2887 — itens EXTRAS (custom) por link de coleta de campo.
         try {
           await db.execute(sql`ALTER TABLE coleta_rh_sessoes ADD COLUMN IF NOT EXISTS itens_custom_json TEXT`);

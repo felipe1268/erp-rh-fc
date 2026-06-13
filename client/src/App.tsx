@@ -117,6 +117,7 @@ const PedidoDemissao = lazy(() => import("./pages/PedidoDemissao"));
 const Ferias = lazy(() => import("./pages/Ferias"));
 const SeguroVida = lazy(() => import("./pages/SeguroVida"));
 const CipaCompleta = lazy(() => import("./pages/CipaCompleta"));
+const CipaVotacao = lazy(() => import("./pages/CipaVotacao"));
 const ModuloPJ = lazy(() => import("./pages/ModuloPJ"));
 const ContratoPJView = lazy(() => import("./pages/ContratoPJView"));
 const AditivoPJView = lazy(() => import("./pages/AditivoPJView"));
@@ -361,6 +362,8 @@ function Router() {
         <Route path={"/login"} component={Login} />
         {/* FCSign — rota PÚBLICA (sem auth) p/ signatários externos */}
         <Route path={"/assinar/:token"} component={AssinarDocumento} />
+        {/* CIPA — cédula PÚBLICA de votação por link/token */}
+        <Route path={"/cipa/votar/:token"} component={CipaVotacao} />
         {/* Hub de Módulos - Tela Inicial */}
         <Route path={"/"} component={ModuleHub} />
         {/* Painéis por Módulo (possuem checagem interna de permissão por widget) */}

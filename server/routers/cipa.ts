@@ -1,10 +1,11 @@
-import { protectedProcedure, router } from "../_core/trpc";
+import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
-import { cipaElections, cipaMembers, cipaMeetings, employees, companies } from "../../drizzle/schema";
+import { cipaElections, cipaMembers, cipaMeetings, cipaCandidates, cipaVoters, cipaVotes, cipaActionItems, employees, companies } from "../../drizzle/schema";
 import { eq, and, sql, isNull, desc, asc, count, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
+import { randomBytes } from "crypto";
 
 // ============================================================
 // DIMENSIONAMENTO CIPA - NR-5 (Quadro I)
@@ -457,4 +458,459 @@ export const cipaRouter = router({
         })),
       };
     }),
+
+  // ============================================================
+  // CANDIDATOS (inscrição p/ a eleição)
+  // ============================================================
+  candidatos: router({
+    list: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), electionId: z.number() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        return await db.select({
+          id: cipaCandidates.id,
+          electionId: cipaCandidates.electionId,
+          employeeId: cipaCandidates.employeeId,
+          numero: cipaCandidates.numero,
+          proposta: cipaCandidates.proposta,
+          fotoUrl: cipaCandidates.fotoUrl,
+          status: cipaCandidates.status,
+          votosCache: cipaCandidates.votosCache,
+          employeeName: employees.nomeCompleto,
+          employeeCargo: employees.cargo,
+          employeeMatricula: employees.matricula,
+          employeeFoto: employees.fotoUrl,
+        })
+        .from(cipaCandidates)
+        .innerJoin(employees, eq(cipaCandidates.employeeId, employees.id))
+        .where(and(
+          companyFilter(cipaCandidates.companyId, input),
+          eq(cipaCandidates.electionId, input.electionId),
+        ))
+        .orderBy(desc(cipaCandidates.votosCache), asc(cipaCandidates.numero));
+      }),
+
+    create: protectedProcedure
+      .input(z.object({
+        companyId: z.number(),
+        electionId: z.number(),
+        employeeId: z.number(),
+        numero: z.number().optional(),
+        proposta: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        // tenant guard: eleição e funcionário precisam pertencer à empresa acessível
+        const [eleicao] = await db.select({ id: cipaElections.id })
+          .from(cipaElections)
+          .where(and(eq(cipaElections.id, input.electionId), companyFilter(cipaElections.companyId, input))).limit(1);
+        if (!eleicao) throw new TRPCError({ code: "NOT_FOUND", message: "Eleição não encontrada." });
+        const [func] = await db.select({ id: employees.id })
+          .from(employees)
+          .where(and(eq(employees.id, input.employeeId), companyFilter(employees.companyId, input))).limit(1);
+        if (!func) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado." });
+        // impede candidato duplicado na mesma eleição
+        const [existe] = await db.select({ id: cipaCandidates.id })
+          .from(cipaCandidates)
+          .where(and(eq(cipaCandidates.electionId, input.electionId), eq(cipaCandidates.employeeId, input.employeeId)))
+          .limit(1);
+        if (existe) throw new TRPCError({ code: "CONFLICT", message: "Funcionário já inscrito como candidato nesta eleição." });
+        await db.insert(cipaCandidates).values({
+          companyId: input.companyId,
+          electionId: input.electionId,
+          employeeId: input.employeeId,
+          numero: input.numero ?? null,
+          proposta: input.proposta || null,
+          status: 'inscrito',
+        });
+        return { success: true };
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        companyId: z.number(),
+        companyIds: z.array(z.number()).optional(),
+        numero: z.number().optional(),
+        proposta: z.string().optional(),
+        status: z.enum(['inscrito', 'deferido', 'indeferido']).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        // tenant guard: candidato precisa pertencer à empresa acessível
+        const [cand] = await db.select({ id: cipaCandidates.id })
+          .from(cipaCandidates)
+          .where(and(eq(cipaCandidates.id, input.id), companyFilter(cipaCandidates.companyId, input))).limit(1);
+        if (!cand) throw new TRPCError({ code: "NOT_FOUND" });
+        const { id, companyId, companyIds, ...rest } = input;
+        const data: any = { updatedAt: new Date().toISOString() };
+        Object.entries(rest).forEach(([k, v]) => { if (v !== undefined) data[k] = v; });
+        await db.update(cipaCandidates).set(data).where(eq(cipaCandidates.id, id));
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number(), companyId: z.number(), companyIds: z.array(z.number()).optional() }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        // tenant guard: candidato precisa pertencer à empresa acessível
+        const [cand] = await db.select({ id: cipaCandidates.id })
+          .from(cipaCandidates)
+          .where(and(eq(cipaCandidates.id, input.id), companyFilter(cipaCandidates.companyId, input))).limit(1);
+        if (!cand) throw new TRPCError({ code: "NOT_FOUND" });
+        await db.delete(cipaCandidates).where(eq(cipaCandidates.id, input.id));
+        return { success: true };
+      }),
+  }),
+
+  // ============================================================
+  // ELEIÇÃO DIGITAL (votação por link + apuração)
+  // ============================================================
+  eleicaoDigital: router({
+    /** Abre a votação: gera 1 link/token por empregado ativo (sem duplicar) e marca status. */
+    abrirVotacao: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), electionId: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        const [eleicao] = await db.select().from(cipaElections)
+          .where(and(companyFilter(cipaElections.companyId, input), eq(cipaElections.id, input.electionId)));
+        if (!eleicao) throw new TRPCError({ code: "NOT_FOUND", message: "Eleição não encontrada." });
+
+        // candidatos deferidos são obrigatórios p/ abrir
+        const [{ total: nCand } = { total: 0 }] = await db.select({ total: count() })
+          .from(cipaCandidates)
+          .where(and(eq(cipaCandidates.electionId, input.electionId), eq(cipaCandidates.status, 'deferido')));
+        if ((nCand || 0) < 1) throw new TRPCError({ code: "BAD_REQUEST", message: "Defira ao menos 1 candidato antes de abrir a votação." });
+
+        const elegiveis = await db.select({ id: employees.id })
+          .from(employees)
+          .where(and(companyFilter(employees.companyId, input), eq(employees.status, 'Ativo'), isNull(employees.deletedAt)));
+
+        const jaTem = await db.select({ employeeId: cipaVoters.employeeId })
+          .from(cipaVoters).where(eq(cipaVoters.electionId, input.electionId));
+        const jaSet = new Set(jaTem.map(v => v.employeeId));
+
+        const novos = elegiveis.filter(e => !jaSet.has(e.id)).map(e => ({
+          companyId: input.companyId,
+          electionId: input.electionId,
+          employeeId: e.id,
+          token: randomBytes(24).toString('hex'),
+          jaVotou: 0,
+        }));
+        if (novos.length > 0) {
+          // insere em lotes p/ evitar payload gigante; onConflictDoNothing no índice
+          // único (election_id, employee_id) torna a operação à prova de corrida
+          // (chamadas concorrentes não duplicam o eleitor/token).
+          for (let i = 0; i < novos.length; i += 200) {
+            await db.insert(cipaVoters).values(novos.slice(i, i + 200))
+              .onConflictDoNothing({ target: [cipaVoters.electionId, cipaVoters.employeeId] });
+          }
+        }
+        await db.update(cipaElections)
+          .set({ statusEleicao: 'Votação Aberta', updatedAt: new Date().toISOString() })
+          .where(eq(cipaElections.id, input.electionId));
+        return { success: true, eleitoresGerados: novos.length, totalEleitores: elegiveis.length };
+      }),
+
+    /** Lista os eleitores + token (para gerar/copiar os links). */
+    listEleitores: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), electionId: z.number() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        return await db.select({
+          id: cipaVoters.id,
+          employeeId: cipaVoters.employeeId,
+          token: cipaVoters.token,
+          jaVotou: cipaVoters.jaVotou,
+          votouEm: cipaVoters.votouEm,
+          employeeName: employees.nomeCompleto,
+          employeeMatricula: employees.matricula,
+        })
+        .from(cipaVoters)
+        .innerJoin(employees, eq(cipaVoters.employeeId, employees.id))
+        .where(and(companyFilter(cipaVoters.companyId, input), eq(cipaVoters.electionId, input.electionId)))
+        .orderBy(asc(employees.nomeCompleto));
+      }),
+
+    statusVotacao: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), electionId: z.number() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const [tot] = await db.select({ total: count() }).from(cipaVoters)
+          .where(and(companyFilter(cipaVoters.companyId, input), eq(cipaVoters.electionId, input.electionId)));
+        const [vot] = await db.select({ total: count() }).from(cipaVoters)
+          .where(and(companyFilter(cipaVoters.companyId, input), eq(cipaVoters.electionId, input.electionId), eq(cipaVoters.jaVotou, 1)));
+        const totalEleitores = tot?.total || 0;
+        const votaram = vot?.total || 0;
+        return {
+          totalEleitores,
+          votaram,
+          abstencoes: totalEleitores - votaram,
+          percentual: totalEleitores > 0 ? Math.round((votaram / totalEleitores) * 1000) / 10 : 0,
+        };
+      }),
+
+    /** Apuração ao vivo (tally) — leitura, agrupa votos por candidato. */
+    resultado: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), electionId: z.number() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const tally = await db.select({ candidateId: cipaVotes.candidateId, votos: count() })
+          .from(cipaVotes)
+          .where(and(companyFilter(cipaVotes.companyId, input), eq(cipaVotes.electionId, input.electionId)))
+          .groupBy(cipaVotes.candidateId);
+        const map = new Map<number, number>();
+        let brancos = 0;
+        for (const t of tally) {
+          if (t.candidateId === 0) { brancos = Number(t.votos); continue; }
+          map.set(t.candidateId, Number(t.votos));
+        }
+        const cands = await db.select({
+          id: cipaCandidates.id,
+          employeeId: cipaCandidates.employeeId,
+          numero: cipaCandidates.numero,
+          status: cipaCandidates.status,
+          employeeName: employees.nomeCompleto,
+          employeeCargo: employees.cargo,
+        })
+        .from(cipaCandidates)
+        .innerJoin(employees, eq(cipaCandidates.employeeId, employees.id))
+        .where(and(eq(cipaCandidates.electionId, input.electionId), eq(cipaCandidates.status, 'deferido')));
+
+        const ranking = cands.map(c => ({ ...c, votos: map.get(c.id) || 0 }))
+          .sort((a, b) => b.votos - a.votos);
+        const totalVotos = ranking.reduce((s, c) => s + c.votos, 0) + brancos;
+        return { ranking, brancos, totalVotos };
+      }),
+
+    /** Encerra a votação, congela votosCache por candidato e marca status 'Apurada'. */
+    encerrar: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), electionId: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        const [eleicao] = await db.select().from(cipaElections)
+          .where(and(companyFilter(cipaElections.companyId, input), eq(cipaElections.id, input.electionId)));
+        if (!eleicao) throw new TRPCError({ code: "NOT_FOUND" });
+        const tally = await db.select({ candidateId: cipaVotes.candidateId, votos: count() })
+          .from(cipaVotes)
+          .where(and(eq(cipaVotes.companyId, eleicao.companyId), eq(cipaVotes.electionId, input.electionId)))
+          .groupBy(cipaVotes.candidateId);
+        for (const t of tally) {
+          if (t.candidateId === 0) continue;
+          await db.update(cipaCandidates).set({ votosCache: Number(t.votos), updatedAt: new Date().toISOString() })
+            .where(eq(cipaCandidates.id, t.candidateId));
+        }
+        await db.update(cipaElections).set({ statusEleicao: 'Apurada', updatedAt: new Date().toISOString() })
+          .where(eq(cipaElections.id, input.electionId));
+        return { success: true };
+      }),
+
+    /** Efetiva os mais votados como membros (Titular/Suplente) com estabilidade. */
+    efetivarEleitos: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), electionId: z.number(), numTitulares: z.number().min(1), numSuplentes: z.number().min(0) }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        const [eleicao] = await db.select().from(cipaElections)
+          .where(and(companyFilter(cipaElections.companyId, input), eq(cipaElections.id, input.electionId)));
+        if (!eleicao) throw new TRPCError({ code: "NOT_FOUND" });
+
+        const ranking = await db.select({ employeeId: cipaCandidates.employeeId, votosCache: cipaCandidates.votosCache })
+          .from(cipaCandidates)
+          .where(and(eq(cipaCandidates.electionId, input.electionId), eq(cipaCandidates.status, 'deferido')))
+          .orderBy(desc(cipaCandidates.votosCache));
+
+        // estabilidade: do início do mandato até 1 ano após o fim (NR-5 / art. 165 CLT)
+        const fim = new Date(eleicao.mandatoFim);
+        const fimEstab = new Date(fim.getFullYear() + 1, fim.getMonth(), fim.getDate());
+        const fimEstabStr = fimEstab.toISOString().split("T")[0];
+
+        const jaMembros = await db.select({ employeeId: cipaMembers.employeeId })
+          .from(cipaMembers).where(eq(cipaMembers.electionId, input.electionId));
+        const jaSet = new Set(jaMembros.map(m => m.employeeId));
+
+        let efetivados = 0;
+        for (let i = 0; i < ranking.length && i < (input.numTitulares + input.numSuplentes); i++) {
+          const r = ranking[i];
+          if (jaSet.has(r.employeeId)) continue;
+          const cargo = i < input.numTitulares ? 'Titular' : 'Suplente';
+          await db.insert(cipaMembers).values({
+            companyId: eleicao.companyId,
+            electionId: input.electionId,
+            employeeId: r.employeeId,
+            cargoCipa: cargo,
+            representacao: 'Empregados',
+            inicioEstabilidade: eleicao.mandatoInicio,
+            fimEstabilidade: fimEstabStr,
+            statusMembro: 'Ativo',
+          });
+          efetivados++;
+        }
+        await db.update(cipaElections).set({ statusEleicao: 'Concluída', updatedAt: new Date().toISOString() })
+          .where(eq(cipaElections.id, input.electionId));
+        return { success: true, efetivados };
+      }),
+
+    // ── PÚBLICO (votação por link, sem login) ──────────────────────────────
+    /** Retorna a cédula (eleição + candidatos deferidos) a partir do token. */
+    getCedula: publicProcedure
+      .input(z.object({ token: z.string().min(10) }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const [voter] = await db.select().from(cipaVoters).where(eq(cipaVoters.token, input.token)).limit(1);
+        if (!voter) throw new TRPCError({ code: "NOT_FOUND", message: "Link de votação inválido." });
+        const [eleicao] = await db.select().from(cipaElections).where(eq(cipaElections.id, voter.electionId)).limit(1);
+        if (!eleicao) throw new TRPCError({ code: "NOT_FOUND", message: "Eleição não encontrada." });
+        const [empresa] = await db.select({ razaoSocial: companies.razaoSocial, nomeFantasia: companies.nomeFantasia, logoUrl: companies.logoUrl })
+          .from(companies).where(eq(companies.id, voter.companyId)).limit(1);
+        const [eleitor] = await db.select({ nome: employees.nomeCompleto }).from(employees).where(eq(employees.id, voter.employeeId)).limit(1);
+        const candidatos = await db.select({
+          id: cipaCandidates.id,
+          numero: cipaCandidates.numero,
+          proposta: cipaCandidates.proposta,
+          fotoUrl: cipaCandidates.fotoUrl,
+          employeeName: employees.nomeCompleto,
+          employeeCargo: employees.cargo,
+          employeeFoto: employees.fotoUrl,
+        })
+        .from(cipaCandidates)
+        .innerJoin(employees, eq(cipaCandidates.employeeId, employees.id))
+        .where(and(eq(cipaCandidates.electionId, voter.electionId), eq(cipaCandidates.status, 'deferido')))
+        .orderBy(asc(cipaCandidates.numero));
+        return {
+          jaVotou: voter.jaVotou === 1,
+          aberta: eleicao.statusEleicao === 'Votação Aberta',
+          eleitorNome: eleitor?.nome || null,
+          empresa: empresa || null,
+          eleicao: { mandatoInicio: eleicao.mandatoInicio, mandatoFim: eleicao.mandatoFim, statusEleicao: eleicao.statusEleicao },
+          candidatos,
+        };
+      }),
+
+    /** Registra UM voto (secreto). Atômico: claim do eleitor antes de gravar o voto. */
+    registrarVoto: publicProcedure
+      .input(z.object({ token: z.string().min(10), candidateId: z.number().nullable() }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const [voter] = await db.select().from(cipaVoters).where(eq(cipaVoters.token, input.token)).limit(1);
+        if (!voter) throw new TRPCError({ code: "NOT_FOUND", message: "Link de votação inválido." });
+        const [eleicao] = await db.select().from(cipaElections).where(eq(cipaElections.id, voter.electionId)).limit(1);
+        if (!eleicao || eleicao.statusEleicao !== 'Votação Aberta') throw new TRPCError({ code: "BAD_REQUEST", message: "A votação não está aberta." });
+
+        // valida candidato (0/null = branco)
+        let candId = 0;
+        if (input.candidateId && input.candidateId > 0) {
+          const [c] = await db.select({ id: cipaCandidates.id }).from(cipaCandidates)
+            .where(and(eq(cipaCandidates.id, input.candidateId), eq(cipaCandidates.electionId, voter.electionId), eq(cipaCandidates.status, 'deferido'))).limit(1);
+          if (!c) throw new TRPCError({ code: "BAD_REQUEST", message: "Candidato inválido." });
+          candId = c.id;
+        }
+
+        // claim atômico: só prossegue se ainda não votou (evita corrida/duplo voto)
+        const claim: any = await db.update(cipaVoters)
+          .set({ jaVotou: 1, votouEm: new Date().toISOString() })
+          .where(and(eq(cipaVoters.id, voter.id), eq(cipaVoters.jaVotou, 0)))
+          .returning({ id: cipaVoters.id });
+        const claimed = Array.isArray(claim) ? claim.length : (claim?.rowCount ?? 0);
+        if (!claimed) throw new TRPCError({ code: "CONFLICT", message: "Este link já foi utilizado para votar." });
+
+        const ip = (ctx as any)?.req?.headers?.["x-forwarded-for"]?.toString().split(",")[0]?.trim()
+          || (ctx as any)?.req?.socket?.remoteAddress || null;
+        await db.insert(cipaVotes).values({
+          companyId: voter.companyId,
+          electionId: voter.electionId,
+          candidateId: candId,
+          ip: ip ? String(ip).slice(0, 60) : null,
+        });
+        return { success: true };
+      }),
+  }),
+
+  // ============================================================
+  // PLANOS DE AÇÃO (deliberações / pendências das reuniões)
+  // ============================================================
+  planosAcao: router({
+    list: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mandateId: z.number().optional(), meetingId: z.number().optional() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const conds = [companyFilter(cipaActionItems.companyId, input)];
+        if (input.mandateId) conds.push(eq(cipaActionItems.mandateId, input.mandateId));
+        if (input.meetingId) conds.push(eq(cipaActionItems.meetingId, input.meetingId));
+        return await db.select().from(cipaActionItems)
+          .where(and(...conds))
+          .orderBy(asc(cipaActionItems.status), asc(cipaActionItems.prazo));
+      }),
+
+    create: protectedProcedure
+      .input(z.object({
+        companyId: z.number(),
+        mandateId: z.number(),
+        meetingId: z.number().optional(),
+        descricao: z.string().min(1),
+        responsavel: z.string().optional(),
+        prazo: z.string().optional(),
+        prioridade: z.enum(['baixa', 'media', 'alta']).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        // tenant guard: o mandato (eleição) precisa pertencer à empresa acessível
+        const [mandato] = await db.select({ id: cipaElections.id })
+          .from(cipaElections)
+          .where(and(eq(cipaElections.id, input.mandateId), companyFilter(cipaElections.companyId, input))).limit(1);
+        if (!mandato) throw new TRPCError({ code: "NOT_FOUND", message: "Mandato não encontrado." });
+        await db.insert(cipaActionItems).values({
+          companyId: input.companyId,
+          mandateId: input.mandateId,
+          meetingId: input.meetingId ?? null,
+          descricao: input.descricao,
+          responsavel: input.responsavel || null,
+          prazo: input.prazo || null,
+          prioridade: input.prioridade || 'media',
+          status: 'pendente',
+        });
+        return { success: true };
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        companyId: z.number(),
+        companyIds: z.array(z.number()).optional(),
+        descricao: z.string().optional(),
+        responsavel: z.string().optional(),
+        prazo: z.string().optional(),
+        prioridade: z.enum(['baixa', 'media', 'alta']).optional(),
+        status: z.enum(['pendente', 'em_andamento', 'concluido']).optional(),
+        evidencia: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        // tenant guard: confirma que o item pertence à empresa acessível
+        const [item] = await db.select({ id: cipaActionItems.id })
+          .from(cipaActionItems)
+          .where(and(eq(cipaActionItems.id, input.id), companyFilter(cipaActionItems.companyId, input))).limit(1);
+        if (!item) throw new TRPCError({ code: "NOT_FOUND" });
+        const { id, companyId, companyIds, status, ...rest } = input;
+        const data: any = { updatedAt: new Date().toISOString() };
+        Object.entries(rest).forEach(([k, v]) => { if (v !== undefined) data[k] = v; });
+        if (status !== undefined) {
+          data.status = status;
+          data.dataConclusao = status === 'concluido' ? new Date().toISOString().split("T")[0] : null;
+        }
+        await db.update(cipaActionItems).set(data).where(eq(cipaActionItems.id, id));
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number(), companyId: z.number(), companyIds: z.array(z.number()).optional() }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        const [item] = await db.select({ id: cipaActionItems.id })
+          .from(cipaActionItems)
+          .where(and(eq(cipaActionItems.id, input.id), companyFilter(cipaActionItems.companyId, input))).limit(1);
+        if (!item) throw new TRPCError({ code: "NOT_FOUND" });
+        await db.delete(cipaActionItems).where(eq(cipaActionItems.id, input.id));
+        return { success: true };
+      }),
+  }),
 });

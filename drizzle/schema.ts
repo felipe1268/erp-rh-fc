@@ -475,6 +475,75 @@ export const cipaMembers = pgTable("cipa_members", {
         updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
 });
 
+// ── CIPA · Eleição digital + Planos de ação (Rev. 3041) ───────────────────
+// Colunas snake_case EXPLÍCITAS para casar com o self-heal CREATE TABLE.
+export const cipaCandidates = pgTable("cipa_candidates", {
+        id: serial().notNull(),
+        companyId: integer("company_id").notNull(),
+        electionId: integer("election_id").notNull(),
+        employeeId: integer("employee_id").notNull(),
+        numero: integer(),
+        proposta: text(),
+        fotoUrl: text("foto_url"),
+        status: text().default('inscrito').notNull(), // inscrito | deferido | indeferido
+        votosCache: integer("votos_cache").default(0).notNull(),
+        createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+        updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
+},
+(table) => [
+        index("ccand_election").on(table.electionId),
+        index("ccand_company").on(table.companyId),
+]);
+
+export const cipaVoters = pgTable("cipa_voters", {
+        id: serial().notNull(),
+        companyId: integer("company_id").notNull(),
+        electionId: integer("election_id").notNull(),
+        employeeId: integer("employee_id").notNull(),
+        token: varchar({ length: 64 }).notNull(),
+        jaVotou: smallint("ja_votou").default(0).notNull(),
+        votouEm: timestamp("votou_em", { mode: 'string' }),
+        createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+},
+(table) => [
+        uniqueIndex("cvoter_token").on(table.token),
+        index("cvoter_election").on(table.electionId),
+]);
+
+// Voto ANÔNIMO — NÃO referencia o eleitor (sigilo do voto).
+export const cipaVotes = pgTable("cipa_votes", {
+        id: serial().notNull(),
+        companyId: integer("company_id").notNull(),
+        electionId: integer("election_id").notNull(),
+        candidateId: integer("candidate_id").notNull(),
+        votadoEm: timestamp("votado_em", { mode: 'string' }).defaultNow().notNull(),
+        ip: varchar({ length: 60 }),
+},
+(table) => [
+        index("cvote_election").on(table.electionId),
+        index("cvote_candidate").on(table.candidateId),
+]);
+
+export const cipaActionItems = pgTable("cipa_action_items", {
+        id: serial().notNull(),
+        companyId: integer("company_id").notNull(),
+        mandateId: integer("mandate_id").notNull(),
+        meetingId: integer("meeting_id"),
+        descricao: text().notNull(),
+        responsavel: varchar({ length: 255 }),
+        prazo: date({ mode: 'string' }),
+        prioridade: text().default('media').notNull(), // baixa | media | alta
+        status: text().default('pendente').notNull(), // pendente | em_andamento | concluido
+        dataConclusao: date("data_conclusao", { mode: 'string' }),
+        evidencia: text(),
+        createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+        updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
+},
+(table) => [
+        index("cai_mandate").on(table.mandateId),
+        index("cai_company").on(table.companyId),
+]);
+
 export const companies = pgTable("companies", {
         id: serial().notNull(),
         cnpj: varchar({ length: 18 }).notNull(),

@@ -1,6 +1,62 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3041 — **MÓDULO CIPA (NR-5) · COMPLETADO: ELEIÇÃO DIGITAL (CANDIDATOS +
+ * VOTAÇÃO POR LINK COM VOTO ANÔNIMO + APURAÇÃO AO VIVO), ATAS ONLINE +
+ * ASSINATURA (FCSign/IMPRESSÃO), PLANOS DE AÇÃO E CALENDÁRIO MENSAL.**
+ *
+ * CONTEXTO: o módulo CIPA já tinha a base (mandatos/eleições, membros, reuniões,
+ * menu/permissão/rota). Faltavam os pilares operacionais da NR-5: a eleição em si
+ * (candidatura → votação secreta → apuração → posse), o registro formal das atas,
+ * o acompanhamento de planos de ação (SST) e uma visão de calendário dos marcos.
+ *
+ * SOLUÇÃO (ZERO ALTER/DROP/DELETE — só CREATE TABLE IF NOT EXISTS + ADD/UPDATE):
+ *
+ *  1) SCHEMA — `drizzle/schema.ts` (4 tabelas novas, colunas snake_case EXPLÍCITAS
+ *     p/ casar com o self-heal): `cipa_candidates` (candidatura por eleição: numero,
+ *     proposta, fotoUrl, status inscrito|deferido|indeferido), `cipa_voters` (1 linha
+ *     por eleitor: token único de votação, jaVotou 0/1, votouEm), `cipa_votes`
+ *     (VOTO ANÔNIMO — guarda só company/election/candidateId(0=branco)/ip/createdAt,
+ *     SEM vínculo ao eleitor) e `cipa_action_items` (planos de ação por mandato/reunião:
+ *     descricao, responsavel, prazo, prioridade, status pendente|em_andamento|concluido).
+ *     Self-heal em `server/_core/index.ts` (`[SyncSchema+]` Rev. 3041): CREATE TABLE
+ *     IF NOT EXISTS das 4 + índices (verificado direto no Neon via pg).
+ *
+ *  2) BACKEND — `server/routers/cipa.ts` (sub-routers novos, tenant guard via
+ *     companyFilter/resolveCompanyIds + `_assert`/derivação por token):
+ *      - `candidatos`: list / create / update (deferir/indeferir/numero/proposta) / delete.
+ *      - `eleicaoDigital`: `abrirVotacao` (gera `cipa_voters` p/ TODOS os empregados
+ *        ativos da empresa, com token via `randomBytes`, idempotente — só cria quem
+ *        falta; marca eleição "Votação Aberta"), `listEleitores`, `statusVotacao`
+ *        (total/votaram/abstenções/%), `resultado` (tally + ranking + brancos),
+ *        `encerrar` (fecha + apura → "Apurada"), `efetivarEleitos` (top N titulares +
+ *        N suplentes → `cipa_members` com estabilidade até 1 ano após fim do mandato).
+ *      - PÚBLICO (`publicProcedure`, sem auth): `getCedula({token})` (retorna empresa,
+ *        eleitor, candidatos deferidos e estado) e `registrarVoto({token,candidateId})`
+ *        — ATÔMICO: claim do eleitor (`UPDATE … WHERE jaVotou=0 RETURNING`) ANTES de
+ *        inserir o voto, garantindo 1 voto/link e impedindo corrida/duplo voto;
+ *        voto secreto (não liga candidato ao eleitor). Valida o companyId pelo token.
+ *      - `planosAcao`: list / create / update / delete (por mandato/reunião).
+ *
+ *  3) FRONTEND — `client/src/pages/CipaCompleta.tsx`: 4 abas novas —
+ *      - "Eleição Digital": inscrever candidato (busca colaborador), deferir/indeferir,
+ *        abrir votação, painel (eleitores/votaram/abstenções/participação), apuração
+ *        ao vivo (barras + troféu no líder + brancos), lista de links com "copiar" e
+ *        selo Votou/Pendente, "Encerrar e Apurar" e "Efetivar Eleitos" (dialog N tit/supl).
+ *      - "Planos de Ação": CRUD em tabela (responsável/prazo/prioridade/status inline),
+ *        vínculo opcional a reunião, prazo vencido em vermelho.
+ *      - "Calendário": grade mensal (prev/hoje/próximo) com reuniões + marcos da
+ *        eleição (edital/inscrições/eleição/posse) coloridos.
+ *      - Reuniões: botão "Ata" → editor (`ataTexto` + status), "Imprimir" (cabeçalho
+ *        institucional FC, assinatura física) e "Enviar p/ Assinatura" (FCSign,
+ *        tipo `ata_cipa`, signatários = membros ativos). Salva via `reunioes.update`.
+ *      - `client/src/pages/CipaVotacao.tsx` (NOVO): cédula PÚBLICA por token, voto
+ *        secreto, confirmação em 2 passos, tela de "voto registrado"/"já votou"/
+ *        "votação indisponível"; rota `/cipa/votar/:token` em `App.tsx` + `/cipa/votar/`
+ *        nos 2 `publicPaths` de `main.tsx` (escapa o interceptor global de UNAUTHORIZED).
+ *
+ * REPUBLICAR (front + back; o self-heal cria as tabelas no startup).
+ *
  * Rev. 3040 — **CONTRATOS DE TERCEIROS · NOME DO CONTRATO HERDA O TÍTULO DA
  * SOLICITAÇÃO (SC) + OBJETO EDITÁVEL NA TELA DE DETALHE PARA PADRONIZAÇÃO.**
  *
