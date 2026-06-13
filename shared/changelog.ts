@@ -1,6 +1,56 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3024 — **FINANCEIRO → "ANÁLISE DE CUSTOS" · TELA DE DETALHE (DRILL-DOWN):
+ * OS GRÁFICOS ("DISTRIBUIÇÃO POR MÊS" E A QUEBRA "POR FORNECEDOR"/"POR CENTRO DE
+ * CUSTO"/"POR CATEGORIA") FICAM CLICÁVEIS — CADA BARRA ABRE UM RECORTE AINDA MAIS
+ * DETALHADO NA MESMA TELA (INCLUSIVE O BUCKET "SEM FORNECEDOR") — E TODOS OS
+ * RÓTULOS DE VALOR PASSAM A APARECER EM R$ POR EXTENSO (`R$ 9.000,00`) EM VEZ DO
+ * COMPACTO (`R$ 9 mil`).**
+ *
+ * PEDIDO (usuário, com print da tela PRO LABORE): "Quero poder clicar nos
+ * gráficos e abrir as informações em outra tela detalhadamente... principalmente
+ * as informações que estão em sem fornecedor... e todos os valores quero em reais
+ * com número ponto e vírgula."
+ *
+ * NOTA SOBRE "SEM FORNECEDOR": a coluna "Por Fornecedor" do print era CACHE antigo
+ * do navegador — a correção de dados anterior (preenchimento do fornecedor dos 3
+ * sócios em PRO LABORE) já está AO VIVO no Neon (PRO LABORE Jan/2026 = Julio
+ * R$ 15.467,52 · Felipe R$ 12.702,35 · Camila R$ 3.000,00, ZERO "sem fornecedor").
+ * Ainda assim o drill-down trata o bucket "Sem fornecedor" corretamente quando ele
+ * aparecer em outras categorias.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, ZERO backend/schema, 100%
+ * client-side sobre o já existente `financial.getContasAPagarByYear`) em
+ * `client/src/pages/financeiro/FinanceiroAnaliseCustosDetalhe.tsx`:
+ *  - DRILL-DOWN ENCADEADO: novo param de URL `extra` = JSON `[{t,v}]` com a cadeia
+ *    de filtros aplicados pelos cliques NESTA tela (a tela-mãe segue passando só
+ *    `tipo`/`valor`). O `rows` aplica mês herdado + filtro primário + cada passo de
+ *    `extra` via novo helper `aplicaFiltro` (que usa as `keyOf` canônicas de cada
+ *    dimensão — fornecedor/centro/categoria — espelhando os rótulos das barras,
+ *    inclusive os sentinelas "Sem ..."). ISSO CORRIGE de quebra o filtro de
+ *    fornecedor que antes comparava `(fornecedorNome||"").trim() === valor` e nunca
+ *    casava o "Sem fornecedor".
+ *  - A quebra (`breakdown`) agora escolhe a 1ª dimensão AINDA NÃO filtrada na ordem
+ *    fornecedor → centro → categoria (considerando `tipo` + todos os `extra.t`),
+ *    expondo `dim` p/ o clique saber qual filtro empilhar.
+ *  - BARRAS CLICÁVEIS: `<Bar onClick>` na quebra empilha `{t: dim, v: nome}` em
+ *    `extra`; `<Bar onClick>` na "Distribuição por Mês" empilha `{t:"mes", v}` na
+ *    MESMA cadeia (drill de mês também REVERSÍVEL pelo "Voltar" — preserva o
+ *    contexto anterior, ex.: categoria/ano; o gráfico de mês some quando já há mês
+ *    fixo herdado/primário/drillado). Ambas com `cursor="pointer"` + dica "Toque
+ *    numa barra...". O botão "Voltar" sobe UM nível (pop do `extra`) quando há
+ *    drills, senão volta à tela-mãe. Título passa a ser o último drill (mês vira
+ *    nome do mês via `rotuloStep`) e o subtítulo monta a trilha (breadcrumb
+ *    `A › B › C`).
+ *  - VALORES EM R$ POR EXTENSO: os `<LabelList>` das barras trocam `formatter`
+ *    de `BRLk` p/ `formatBRL` (mês ganha um LabelList novo no topo, só p/ value>0);
+ *    `margin.right` da quebra subiu 78→132 px p/ caber o número cheio. EIXOS X/Y
+ *    seguem em `BRLk` DE PROPÓSITO (precedente Rev. 3018/3021 — número cheio no
+ *    eixo polui). KPIs e tabela já estavam em `formatBRL`.
+ *
+ * REPUBLICAR (só front). Detalhe: este arquivo.
+ *
  * Rev. 3023 — **EQUIPAMENTOS PRÓPRIOS → BOTÃO "GERAR PREÇOS" (ESTIMATIVA DE
  * VALOR COM IA): A CONFIRMAÇÃO DEIXA DE USAR O `window.confirm()` NATIVO (FEIO,
  * QUE MOSTRAVA A URL `*.picard.replit.dev DIZ`) E PASSA A USAR UM MODAL

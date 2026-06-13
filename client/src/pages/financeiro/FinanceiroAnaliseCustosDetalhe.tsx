@@ -59,6 +59,43 @@ function fmtData(s?: string): string {
   return `${d}/${m}/${y}`;
 }
 
+// Rev. 3024 — chaves canônicas de cada dimensão (espelham os rótulos das barras,
+// inclusive os sentinelas "Sem ..."), pra o clique numa barra filtrar exatamente
+// o que ela representa (inclusive "Sem fornecedor").
+const keyOf: Record<string, (r: any) => string> = {
+  fornecedor: (r) => ((r.fornecedorNome || "").trim()) || "Sem fornecedor",
+  centro: (r) => (r.obraNome || "Sem centro de custo"),
+  categoria: (r) => (r.contaNome || "Sem categoria"),
+};
+function aplicaFiltro(base: any[], t: string, v: string): any[] {
+  if (t === "status") {
+    if (v === "pago") return base.filter((r) => r.status === "pago");
+    if (v === "aberto") return base.filter((r) => r.status !== "pago");
+    if (v === "vencido") return base.filter((r) => isVencido(r));
+    return base;
+  }
+  if (t === "mes") {
+    const mn = parseInt(v, 10);
+    return base.filter((r) => mesNumDe(r) === mn);
+  }
+  const kf = keyOf[t];
+  if (!kf) return base;
+  return base.filter((r) => kf(r) === v);
+}
+type DrillStep = { t: string; v: string };
+function parseExtra(raw: string | null): DrillStep[] {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(decodeURIComponent(raw));
+    return Array.isArray(arr) ? arr.filter((x) => x && x.t && typeof x.v === "string") : [];
+  } catch { return []; }
+}
+const DIM_META: Record<string, { titulo: string; icon: any }> = {
+  fornecedor: { titulo: "Por Fornecedor", icon: Building2 },
+  centro: { titulo: "Por Centro de Custo", icon: Layers },
+  categoria: { titulo: "Por Categoria", icon: Tag },
+};
+
 function statusTheme(r: any): { label: string; cls: string } {
   if (isVencido(r)) return { label: "Vencido", cls: "bg-red-100 text-red-700" };
   if (r.status === "pago") return { label: "Pago", cls: "bg-emerald-100 text-emerald-700" };
@@ -85,7 +122,7 @@ function DetTooltip({ active, payload, label, totalRef }: any) {
 
 export default function FinanceiroAnaliseCustosDetalhe() {
   const { companyId } = useCompany();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const search = useSearch();
 
   const params = useMemo(() => new URLSearchParams(search), [search]);
@@ -93,6 +130,28 @@ export default function FinanceiroAnaliseCustosDetalhe() {
   const mes = parseInt(params.get("mes") || "0", 10); // 0 = ano inteiro
   const tipo = params.get("tipo") || "status"; // status | mes | categoria | centro | fornecedor
   const valor = params.get("valor") || "total";
+  // Rev. 3024 — cadeia de drills FEITOS NESTA tela (clique numa barra). A tela-mãe
+  // passa só tipo/valor; cada clique aqui empilha um filtro em `extra`.
+  const extra = useMemo(() => parseExtra(params.get("extra")), [params]);
+
+  // Navega aplicando uma nova cadeia de drills (preserva ano/mes/tipo/valor).
+  const irPara = (proxExtra: DrillStep[]) => {
+    const sp = new URLSearchParams(search);
+    if (proxExtra.length) sp.set("extra", encodeURIComponent(JSON.stringify(proxExtra)));
+    else sp.delete("extra");
+    setLocation(`${location}?${sp.toString()}`);
+  };
+  // Clique numa barra da quebra → empilha o filtro daquela dimensão/valor.
+  const drillBarra = (dim: string, nome: string) => {
+    if (!dim || !nome) return;
+    irPara([...extra, { t: dim, v: nome }]);
+  };
+  // Clique numa barra de mês → empilha o mês na cadeia de drills (reversível pelo
+  // "Voltar", igual aos demais drills — preserva o contexto anterior, ex.: categoria).
+  const drillMes = (mn: number) => {
+    if (!mn) return;
+    irPara([...extra, { t: "mes", v: String(mn) }]);
+  };
 
   const { data, isLoading } = (trpc as any).financial.getContasAPagarByYear.useQuery(
     { companyId, ano },
@@ -108,32 +167,20 @@ export default function FinanceiroAnaliseCustosDetalhe() {
     [data]
   );
 
-  // Recorte: aplica o filtro de mês herdado da tela-mãe + o filtro do clique.
+  // Recorte: filtro de mês herdado da tela-mãe + filtro primário (tipo/valor)
+  // + cadeia de drills feitos nesta tela (extra).
   const rows = useMemo(() => {
     let base = rowsAll;
     // tipo=mes define o próprio mês; senão respeita o filtro herdado.
     if (tipo === "mes") {
-      const mn = parseInt(valor, 10);
-      base = base.filter((r) => mesNumDe(r) === mn);
+      base = base.filter((r) => mesNumDe(r) === parseInt(valor, 10));
     } else if (mes > 0) {
       base = base.filter((r) => mesNumDe(r) === mes);
     }
-    switch (tipo) {
-      case "status":
-        if (valor === "pago") return base.filter((r) => r.status === "pago");
-        if (valor === "aberto") return base.filter((r) => r.status !== "pago");
-        if (valor === "vencido") return base.filter((r) => isVencido(r));
-        return base; // total
-      case "categoria":
-        return base.filter((r) => (r.contaNome || "Sem categoria") === valor);
-      case "centro":
-        return base.filter((r) => (r.obraNome || "Sem centro de custo") === valor);
-      case "fornecedor":
-        return base.filter((r) => (r.fornecedorNome || "").trim() === valor);
-      default:
-        return base; // mes (já filtrado)
-    }
-  }, [rowsAll, tipo, valor, mes]);
+    base = aplicaFiltro(base, tipo, valor);
+    for (const f of extra) base = aplicaFiltro(base, f.t, f.v);
+    return base;
+  }, [rowsAll, tipo, valor, mes, extra]);
 
   const kpis = useMemo(() => {
     let total = 0, pago = 0, aberto = 0, vencido = 0, qtdVencido = 0;
@@ -158,40 +205,53 @@ export default function FinanceiroAnaliseCustosDetalhe() {
     return arr;
   }, [rows]);
 
-  // Quebra secundária pertinente: se já filtramos por categoria/fornecedor,
-  // quebramos pela OUTRA dimensão; senão por categoria.
+  // Quebra secundária pertinente: escolhe a 1ª dimensão AINDA NÃO filtrada
+  // (fornecedor → centro → categoria), considerando o filtro primário e os drills.
   const breakdown = useMemo(() => {
-    const porChave = (fn: (r: any) => string) => {
-      const map = new Map<string, number>();
-      for (const r of rows) {
-        const k = fn(r);
-        map.set(k, (map.get(k) ?? 0) + valorEfetivo(r));
-      }
-      return Array.from(map.entries())
-        .map(([name, value]) => ({ name, value }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 12);
-    };
-    if (tipo === "categoria") {
-      return { titulo: "Por Fornecedor", icon: Building2, data: porChave((r) => (r.fornecedorNome || "Sem fornecedor").trim() || "Sem fornecedor") };
+    const usados = new Set<string>([tipo, ...extra.map((f) => f.t)]);
+    const dim = ["fornecedor", "centro", "categoria"].find((d) => !usados.has(d)) || null;
+    if (!dim) return { titulo: null as string | null, icon: Tag, dim: null as string | null, data: [] as { name: string; value: number }[] };
+    const kf = keyOf[dim];
+    const map = new Map<string, number>();
+    for (const r of rows) {
+      const k = kf(r);
+      map.set(k, (map.get(k) ?? 0) + valorEfetivo(r));
     }
-    if (tipo === "fornecedor") {
-      return { titulo: "Por Categoria", icon: Tag, data: porChave((r) => (r.contaNome || "Sem categoria")) };
-    }
-    if (tipo === "centro") {
-      return { titulo: "Por Categoria", icon: Tag, data: porChave((r) => (r.contaNome || "Sem categoria")) };
-    }
-    return { titulo: "Por Centro de Custo", icon: Layers, data: porChave((r) => (r.obraNome || "Sem centro de custo")) };
-  }, [rows, tipo]);
+    const data = Array.from(map.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 12);
+    const meta = DIM_META[dim];
+    return { titulo: meta.titulo, icon: meta.icon, dim, data };
+  }, [rows, tipo, extra]);
 
   // Lançamentos detalhados (ordenados por valor desc).
   const lancamentos = useMemo(() => {
     return [...rows].sort((a, b) => valorEfetivo(b) - valorEfetivo(a));
   }, [rows]);
 
+  // Rótulo legível de cada dimensão (pro título e pro breadcrumb dos drills).
+  const rotuloDim: Record<string, string> = {
+    fornecedor: "Fornecedor", centro: "Centro de custo", categoria: "Categoria", mes: "Mês",
+  };
+  // Rótulo legível de um passo de drill (mês vira nome do mês; demais usam o próprio valor).
+  const rotuloStep = (f: DrillStep) =>
+    f.t === "mes" ? (MESES_FULL[parseInt(f.v, 10) - 1] || `Mês ${f.v}`) : f.v;
+
   // Cabeçalho descritivo do recorte.
   const { titulo, subtitulo, Icon } = useMemo(() => {
     const periodo = mes > 0 && tipo !== "mes" ? `${MESES_FULL[mes - 1]} de ${ano}` : `Ano de ${ano}`;
+    // Se há drills, o título passa a ser o ÚLTIMO drill e o subtítulo monta a trilha.
+    if (extra.length) {
+      const ultimo = extra[extra.length - 1];
+      const primarioLbl =
+        tipo === "categoria" || tipo === "centro" || tipo === "fornecedor" ? valor
+        : tipo === "mes" ? (MESES_FULL[parseInt(valor, 10) - 1] || `Mês ${valor}`)
+        : (valor === "pago" ? "Pago" : valor === "aberto" ? "Em aberto" : valor === "vencido" ? "Vencido" : "Custo total");
+      const trilha = [primarioLbl, ...extra.map(rotuloStep)].join(" › ");
+      const ic = ultimo.t === "fornecedor" ? Building2 : ultimo.t === "centro" ? Layers : ultimo.t === "mes" ? Calendar : Tag;
+      return { titulo: rotuloStep(ultimo), subtitulo: `${rotuloDim[ultimo.t] || "Recorte"} · ${trilha} · ${periodo}`, Icon: ic };
+    }
     switch (tipo) {
       case "mes": {
         const mn = parseInt(valor, 10);
@@ -208,10 +268,14 @@ export default function FinanceiroAnaliseCustosDetalhe() {
         return { titulo: lbl, subtitulo: `Visão geral · ${periodo}`, Icon: CircleDollarSign };
       }
     }
-  }, [tipo, valor, mes, ano]);
+  }, [tipo, valor, mes, ano, extra]);
 
   const semDados = !isLoading && rows.length === 0;
-  const voltar = () => setLocation("/financeiro/analise-custos");
+  // Voltar: se há drills, sobe UM nível; senão volta à tela-mãe.
+  const voltar = () => {
+    if (extra.length) irPara(extra.slice(0, -1));
+    else setLocation("/financeiro/analise-custos");
+  };
 
   return (
     <DashboardLayout>
@@ -279,8 +343,8 @@ export default function FinanceiroAnaliseCustosDetalhe() {
           <>
             {/* Gráficos pertinentes */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Distribuição por mês — só faz sentido quando NÃO é um mês único */}
-              {tipo !== "mes" && (
+              {/* Distribuição por mês — só faz sentido quando NÃO há mês fixo (herdado, primário ou drillado) */}
+              {tipo !== "mes" && mes <= 0 && !extra.some((f) => f.t === "mes") && (
                 <Card className="border-0 shadow-sm">
                   <CardHeader className="pb-2 pt-4 px-5">
                     <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2">
@@ -288,14 +352,29 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="px-3 pb-4">
-                    <div style={{ width: "100%", height: 280 }}>
+                    <p className="text-[11px] text-gray-400 px-2 -mt-1 mb-1">Toque numa barra para ver só aquele mês</p>
+                    <div style={{ width: "100%", height: 300 }}>
                       <ResponsiveContainer>
-                        <BarChart data={porMes} margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
+                        <BarChart data={porMes} margin={{ top: 22, right: 16, left: 8, bottom: 0 }}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef2f7" />
                           <XAxis dataKey="mes" tick={{ fontSize: 12, fill: "#64748b" }} axisLine={false} tickLine={false} />
                           <YAxis tickFormatter={BRLk} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={56} />
                           <RechTooltip content={<DetTooltip />} cursor={{ fill: "#f8fafc" }} />
-                          <Bar dataKey="value" name="Custo" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                          <Bar
+                            dataKey="value"
+                            name="Custo"
+                            fill="#6366f1"
+                            radius={[4, 4, 0, 0]}
+                            cursor="pointer"
+                            onClick={(_d: any, idx: number) => drillMes(idx + 1)}
+                          >
+                            <LabelList
+                              dataKey="value"
+                              position="top"
+                              formatter={(v: number) => (v > 0 ? formatBRL(v) : "")}
+                              style={{ fontSize: 10, fill: "#475569" }}
+                            />
+                          </Bar>
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -314,27 +393,38 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                   {breakdown.data.length === 0 ? (
                     <p className="text-center text-sm text-gray-400 py-12">Sem dados para esta quebra</p>
                   ) : (
-                    <div style={{ width: "100%", height: Math.max(220, breakdown.data.length * 46 + 24) }}>
-                      <ResponsiveContainer>
-                        <BarChart data={breakdown.data} layout="vertical" margin={{ top: 4, right: 78, left: 8, bottom: 0 }} barCategoryGap="22%">
-                          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#eef2f7" />
-                          <XAxis type="number" tickFormatter={BRLk} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                          <YAxis
-                            type="category"
-                            dataKey="name"
-                            width={150}
-                            tick={{ fontSize: 11, fill: "#64748b" }}
-                            tickFormatter={(v: string) => (v && v.length > 22 ? v.slice(0, 21) + "…" : v)}
-                            axisLine={false}
-                            tickLine={false}
-                          />
-                          <RechTooltip content={<DetTooltip totalRef={kpis.total} />} cursor={{ fill: "#f8fafc" }} />
-                          <Bar dataKey="value" name="Custo" fill="#06b6d4" radius={[0, 4, 4, 0]} maxBarSize={26}>
-                            <LabelList dataKey="value" position="right" formatter={BRLk} style={{ fontSize: 10, fill: "#475569" }} />
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
+                    <>
+                      <p className="text-[11px] text-gray-400 px-2 mb-1">Toque numa barra para abrir só aquele recorte</p>
+                      <div style={{ width: "100%", height: Math.max(220, breakdown.data.length * 46 + 24) }}>
+                        <ResponsiveContainer>
+                          <BarChart data={breakdown.data} layout="vertical" margin={{ top: 4, right: 132, left: 8, bottom: 0 }} barCategoryGap="22%">
+                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#eef2f7" />
+                            <XAxis type="number" tickFormatter={BRLk} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                            <YAxis
+                              type="category"
+                              dataKey="name"
+                              width={150}
+                              tick={{ fontSize: 11, fill: "#64748b" }}
+                              tickFormatter={(v: string) => (v && v.length > 22 ? v.slice(0, 21) + "…" : v)}
+                              axisLine={false}
+                              tickLine={false}
+                            />
+                            <RechTooltip content={<DetTooltip totalRef={kpis.total} />} cursor={{ fill: "#f8fafc" }} />
+                            <Bar
+                              dataKey="value"
+                              name="Custo"
+                              fill="#06b6d4"
+                              radius={[0, 4, 4, 0]}
+                              maxBarSize={26}
+                              cursor="pointer"
+                              onClick={(d: any) => breakdown.dim && drillBarra(breakdown.dim, d?.name ?? d?.payload?.name)}
+                            >
+                              <LabelList dataKey="value" position="right" formatter={formatBRL} style={{ fontSize: 10, fill: "#475569" }} />
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </>
                   )}
                 </CardContent>
               </Card>
