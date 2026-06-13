@@ -570,21 +570,24 @@ function BaixaDialog({ titulo, companyId, contasBancarias, onClose, onSubmit, pe
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="text-xs">Conta bancária</Label>
-              <Select value={contaId} onValueChange={setContaId}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  {contas.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.descricao || c.banco} {c.conta ? `· ${c.conta}` : ""}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Combobox
+                value={contaId}
+                onChange={setContaId}
+                options={contas.map((c) => ({ value: String(c.id), label: `${c.descricao || c.banco}${c.conta ? ` · ${c.conta}` : ""}` }))}
+                placeholder="Selecione"
+                searchPlaceholder="Buscar conta..."
+                emptyText="Nenhuma conta."
+              />
             </div>
             <div>
               <Label className="text-xs">Forma</Label>
-              <Select value={forma} onValueChange={setForma}>
-                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                <SelectContent>
-                  {["PIX","Transferência","Boleto","Dinheiro","Cheque","Cartão"].map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Combobox
+                value={forma}
+                onChange={setForma}
+                options={["PIX","Transferência","Boleto","Dinheiro","Cheque","Cartão"].map((f) => ({ value: f, label: f }))}
+                placeholder="—"
+                searchPlaceholder="Buscar forma..."
+              />
             </div>
           </div>
           <div>
@@ -815,12 +818,13 @@ function NovoTituloDialog({ companyId, clientesOpts, onClose, onSubmit, pending 
               </div>
               <div>
                 <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5"><Tag className="h-3.5 w-3.5 text-emerald-600" /> Categoria</Label>
-                <Select value={contaNome} onValueChange={setContaNome}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a categoria" /></SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIAS_RECEBER.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Combobox
+                  value={contaNome}
+                  onChange={setContaNome}
+                  options={CATEGORIAS_RECEBER.map((c) => ({ value: c, label: c }))}
+                  placeholder="Selecione a categoria"
+                  searchPlaceholder="Buscar categoria..."
+                />
               </div>
             </div>
           </div>

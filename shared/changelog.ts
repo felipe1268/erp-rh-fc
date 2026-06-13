@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3008 — **FINANCEIRO → CONTAS A RECEBER (TÍTULOS): FIM DOS DROPDOWNS NATIVOS
+ * CORTADOS/SOBREPOSTOS DENTRO DOS MODAIS — "CONTA BANCÁRIA", "FORMA" (MODAL
+ * "REGISTRAR RECEBIMENTO") E "CATEGORIA" (MODAL "NOVO TÍTULO") MIGRARAM PRO
+ * `Combobox` PESQUISÁVEL.**
+ *
+ * PEDIDO (usuário, via screenshot do iPad): "Da uma refisada geral no módulo para
+ * evitar estes nomes sobrepostos escondidos que não dá pra ler". O screenshot
+ * mostra o modal "Registrar recebimento" com o `Select` nativo de "Conta bancária"
+ * ABERTO renderizando os nomes das contas CORTADOS na borda esquerda
+ * ("...der - 130026093" em vez de "Santander - …") e sobrepostos aos campos do
+ * formulário atrás — exatamente o mesmo sintoma do `Select` de Cliente corrigido
+ * na Rev. 3007.
+ *
+ * CONTEXTO: o `Select` nativo (shadcn/Radix) dentro do `DialogContent`, com itens
+ * de texto longo (descrição da conta + nº), abria com colisão de posicionamento e
+ * deixava o texto ilegível. Os mesmos componentes existiam em 3 pontos DENTRO de
+ * modais: "Conta bancária" e "Forma" (modal "Registrar recebimento" =
+ * `BaixaDialog`) e "Categoria" (modal "Novo título" = `NovoTituloDialog`).
+ *
+ * SOLUÇÃO (FRONT-only — ZERO ALTER/DROP/DELETE, ZERO backend/schema; nenhum campo
+ * de submissão muda — `contaBancariaId`/`formaPagamento`/`contaNome` seguem
+ * idênticos), em `client/src/pages/financeiro/FinanceiroContasAReceberTitulos.tsx`:
+ * os 3 `Select` nativos acima foram trocados pelo componente `Combobox` local
+ * (Rev. 3007 — `Popover` + `Command`, `PopoverContent` em portal com largura
+ * `--radix-popover-trigger-width`), que NÃO é cortado/sobreposto dentro do modal e
+ * ainda ganha BUSCA por digitação (útil p/ a lista de contas bancárias). Cada um
+ * recebe `options={[{value,label}]}` derivadas das mesmas fontes de antes
+ * (`contas` p/ Conta bancária, lista fixa p/ Forma, `CATEGORIAS_RECEBER` p/
+ * Categoria) + `searchPlaceholder` próprio.
+ *
+ * ESCOPO: os `Select` dos FILTROS no corpo da página (Cliente/Status, FORA de
+ * modal) foram MANTIDOS — renderizam abertos sobre a página sem colisão, não
+ * apresentam o defeito relatado.
+ *
+ * NENHUMA mudança de rota/permissão/contrato/backend. Requer REPUBLICAR (só front).
+ *
+ * ──────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 3007 — **FINANCEIRO → CONTAS A RECEBER (TÍTULOS) → MODAL "NOVO TÍTULO":
  * SELETOR DE CLIENTE PESQUISÁVEL (CORRIGE NOMES CORTADOS/SOBREPOSTOS), CAMPO OBRA
  * VIRA LISTA DAS OBRAS ATIVAS DO CLIENTE, E CATEGORIA VIRA SELECT COM CATEGORIAS
