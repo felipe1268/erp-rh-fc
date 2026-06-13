@@ -1,6 +1,57 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3017 — **FINANCEIRO → "ANÁLISE DE CUSTOS" (`/financeiro/analise-custos`):
+ * LAYOUT REPAGINADO SEM SOBREPOSIÇÃO DE TEXTO + DRILL-DOWN — TODO KPI, BARRA,
+ * FATIA DE PIZZA E LINHA DE TABELA AGORA É CLICÁVEL E ABRE UMA TELA DE DETALHE
+ * COM OS LANÇAMENTOS PERTINENTES.**
+ *
+ * PEDIDO (usuário, com prints): "Está péssimo... texto sobreposto, quero
+ * detalhado e todos gráficos e informações que eu clicar quero ver em outra
+ * tela as informações pertinentes." Prints mostravam: (a) valores dos KPIs
+ * quebrando no meio do número (ex.: "R$ 26.710.85" / "9,82"); (b) gráfico
+ * "Custo por Centro de Custo" com rótulos de valor sobrepostos uns nos outros
+ * e nomes de obra cortados.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, ZERO backend/schema; 100%
+ * client-side sobre o endpoint EXISTENTE `financial.getContasAPagarByYear`):
+ *
+ * A) FIM DA SOBREPOSIÇÃO em `client/src/pages/financeiro/FinanceiroAnaliseCustos.tsx`:
+ *    1) KPIs — valor em destaque passou a usar o formato COMPACTO `BRLk`
+ *       (`R$ 26,7 mi`) com `whitespace-nowrap` (nunca quebra) + uma 2ª linha
+ *       pequena cinza com o valor EXATO `formatBRL` e `title` no hover. Removido
+ *       o `break-words` que partia o número no meio.
+ *    2) Gráfico "Custo por Centro de Custo" — altura agora é DINÂMICA
+ *       (`max(220, n*46+24)`) em vez de fixa 300, o que separa as barras e
+ *       elimina a colisão dos rótulos de valor; `YAxis width` 120→150 com
+ *       `tickFormatter` truncando nomes longos (…); `maxBarSize`, `barCategoryGap`
+ *       e `margin.right` 48→78 dão respiro pro `LabelList`.
+ *
+ * B) DRILL-DOWN ("ver em outra tela as informações pertinentes"):
+ *    1) NOVA helper `irParaDetalhe(tipo, valor)` na tela-mãe que navega (wouter
+ *       `useLocation`) para `/financeiro/analise-custos/detalhe?ano&mes&tipo&valor`.
+ *    2) Ficaram CLICÁVEIS: os 6 KPIs (tipo=status: total/pago/aberto/vencido),
+ *       as barras de "Custo por Mês" (tipo=mes via `activeLabel`→nº do mês), as
+ *       fatias da pizza "Custo por Categoria" (tipo=categoria; "Outros" não
+ *       clica), as barras de "Centro de Custo" (tipo=centro via
+ *       `activePayload[0].payload.name`), as linhas do Pareto 80/20
+ *       (tipo=categoria) e as linhas do ranking "Top 10 Fornecedores"
+ *       (tipo=fornecedor). Cada alvo ganhou `cursor-pointer` + hover + dica.
+ *    3) NOVA TELA `client/src/pages/financeiro/FinanceiroAnaliseCustosDetalhe.tsx`
+ *       (lazy + `RouteGuard route="/financeiro/analise-custos"` — mesma
+ *       permissão da tela-mãe; rota registrada ANTES da rota base em
+ *       `client/src/App.tsx`). Lê os params via `useSearch`, re-busca o MESMO
+ *       endpoint do ano, recorta as linhas pelo `tipo`/`valor` (+ filtro de mês
+ *       herdado) e mostra: botão "Voltar", cabeçalho descritivo do recorte,
+ *       5 KPIs do recorte (total/pago/aberto/vencido/lançamentos), gráfico
+ *       "Distribuição por Mês" (oculto quando o recorte já é um mês único),
+ *       uma quebra secundária pertinente (categoria↔fornecedor↔centro) e a
+ *       TABELA DETALHADA completa (descrição, fornecedor, categoria, centro de
+ *       custo, competência, vencimento, status colorido, valor) com total no
+ *       rodapé. Moeda sempre BRL pt-BR (`formatBRL`/`BRLk`).
+ *
+ * REQUER REPUBLICAR (mudança 100% front).
+ *
  * Rev. 3016 — **DASHBOARD ALMOXARIFADO/EQUIPAMENTOS → ABA "EQUIP. PRÓPRIOS":
  * LISTA "20 MAIS RECENTES" REDESENHADA PARA FICAR MAIS INTUITIVA — STATUS
  * COLORIDO, PATRIMÔNIO EM CHIP MONOSPACE E SINALIZAÇÃO CLARA DE ITENS "SEM

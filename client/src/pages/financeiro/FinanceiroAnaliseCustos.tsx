@@ -1,10 +1,14 @@
 // Rev. 3014 — Análise de Custos (aba dedicada)
+// Rev. 3017 — Layout repaginado SEM sobreposição + DRILL-DOWN: cada KPI, barra,
+// fatia da pizza e linha de tabela é CLICÁVEL e abre a tela de detalhe
+// (`/financeiro/analise-custos/detalhe`) com os lançamentos pertinentes.
 // Dashboard focado em CUSTOS (despesas): KPIs, custo por mês (barras),
 // custo por categoria (pizza), custo por centro de custo (barras horizontais),
 // Pareto 80/20 de categorias e ranking de fornecedores — pra enxergar
 // rapidamente ONDE cortar custos. 100% client-side sobre
 // `financial.getContasAPagarByYear` (despesas do ano). Sem novo backend.
 import { useState, useMemo } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -78,9 +82,21 @@ function CustomTooltip({ active, payload, label, totalRef }: any) {
 
 export default function FinanceiroAnaliseCustos() {
   const { companyId } = useCompany();
+  const [, setLocation] = useLocation();
   const hoje = new Date();
   const [ano, setAno] = useState(hoje.getFullYear());
   const [mesSel, setMesSel] = useState<number>(0); // 0 = ano inteiro
+
+  // Drill-down: abre a tela de detalhe com os lançamentos do item clicado.
+  function irParaDetalhe(tipo: string, valor: string | number) {
+    const qs = new URLSearchParams({
+      ano: String(ano),
+      mes: String(mesSel),
+      tipo,
+      valor: String(valor),
+    });
+    setLocation(`/financeiro/analise-custos/detalhe?${qs.toString()}`);
+  }
 
   const { data, isLoading, refetch, isFetching } = (trpc as any).financial.getContasAPagarByYear.useQuery(
     { companyId, ano },
@@ -268,19 +284,26 @@ export default function FinanceiroAnaliseCustos() {
           </CardContent>
         </Card>
 
-        {/* KPIs */}
+        {/* KPIs — valor compacto (sem quebra) em destaque + valor exato abaixo.
+            Cada card é CLICÁVEL → abre a tela de detalhe com os lançamentos. */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {[
-            { label: "Custo Total", value: kpis.custoTotal, icon: CircleDollarSign, color: "text-rose-600", bg: "bg-rose-50", fmt: "brl" },
-            { label: "Pago", value: kpis.pago, icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-50", fmt: "brl" },
-            { label: "Em Aberto", value: kpis.aberto, icon: Receipt, color: "text-amber-600", bg: "bg-amber-50", fmt: "brl" },
-            { label: "Vencido", value: kpis.vencido, icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50", fmt: "brl", badge: kpis.qtdVencido },
-            { label: "Lançamentos", value: kpis.qtd, icon: BarChart2, color: "text-indigo-600", bg: "bg-indigo-50", fmt: "int" },
-            { label: "Ticket Médio", value: kpis.ticket, icon: TrendingDown, color: "text-cyan-600", bg: "bg-cyan-50", fmt: "brl" },
+            { label: "Custo Total", value: kpis.custoTotal, icon: CircleDollarSign, color: "text-rose-600", bg: "bg-rose-50", ring: "hover:border-rose-300", fmt: "brl", tipo: "status", chave: "total" },
+            { label: "Pago", value: kpis.pago, icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-50", ring: "hover:border-emerald-300", fmt: "brl", tipo: "status", chave: "pago" },
+            { label: "Em Aberto", value: kpis.aberto, icon: Receipt, color: "text-amber-600", bg: "bg-amber-50", ring: "hover:border-amber-300", fmt: "brl", tipo: "status", chave: "aberto" },
+            { label: "Vencido", value: kpis.vencido, icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50", ring: "hover:border-red-300", fmt: "brl", badge: kpis.qtdVencido, tipo: "status", chave: "vencido" },
+            { label: "Lançamentos", value: kpis.qtd, icon: BarChart2, color: "text-indigo-600", bg: "bg-indigo-50", ring: "hover:border-indigo-300", fmt: "int", tipo: "status", chave: "total" },
+            { label: "Ticket Médio", value: kpis.ticket, icon: TrendingDown, color: "text-cyan-600", bg: "bg-cyan-50", ring: "hover:border-cyan-300", fmt: "brl", tipo: "status", chave: "total" },
           ].map((c) => {
             const Icon = c.icon;
+            const isInt = c.fmt === "int";
             return (
-              <Card key={c.label} className="border-0 shadow-sm">
+              <Card
+                key={c.label}
+                onClick={() => !isLoading && irParaDetalhe(c.tipo, c.chave)}
+                title={`Ver lançamentos · ${c.label}`}
+                className={`border border-transparent shadow-sm cursor-pointer transition-all hover:shadow-md ${c.ring}`}
+              >
                 <CardContent className="p-3.5">
                   <div className="flex items-center justify-between mb-2">
                     <div className={`w-8 h-8 rounded-lg ${c.bg} flex items-center justify-center`}>
@@ -291,9 +314,17 @@ export default function FinanceiroAnaliseCustos() {
                     )}
                   </div>
                   <p className="text-[11px] text-gray-500 font-medium">{c.label}</p>
-                  <p className={`text-sm lg:text-base font-bold ${c.color} mt-0.5 tabular-nums leading-tight break-words`}>
-                    {isLoading ? "..." : c.fmt === "int" ? c.value.toLocaleString("pt-BR") : formatBRL(c.value)}
+                  <p
+                    className={`text-base lg:text-lg font-bold ${c.color} mt-0.5 tabular-nums leading-tight whitespace-nowrap`}
+                    title={isLoading ? undefined : isInt ? undefined : formatBRL(c.value)}
+                  >
+                    {isLoading ? "..." : isInt ? c.value.toLocaleString("pt-BR") : BRLk(c.value)}
                   </p>
+                  {!isLoading && !isInt && c.value > 0 && (
+                    <p className="text-[10px] text-gray-400 tabular-nums leading-tight whitespace-nowrap overflow-hidden text-ellipsis">
+                      {formatBRL(c.value)}
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             );
@@ -318,16 +349,25 @@ export default function FinanceiroAnaliseCustos() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="px-3 pb-4">
+                <p className="text-[11px] text-gray-400 px-2 mb-1">Clique em um mês para ver os lançamentos.</p>
                 <div style={{ width: "100%", height: 280 }}>
                   <ResponsiveContainer>
-                    <BarChart data={porMes} margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
+                    <BarChart
+                      data={porMes}
+                      margin={{ top: 8, right: 16, left: 8, bottom: 0 }}
+                      onClick={(st: any) => {
+                        const lbl = st?.activeLabel;
+                        const idx = MESES_ABREV.indexOf(lbl);
+                        if (idx >= 0) irParaDetalhe("mes", idx + 1);
+                      }}
+                    >
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef2f7" />
                       <XAxis dataKey="mes" tick={{ fontSize: 12, fill: "#64748b" }} axisLine={false} tickLine={false} />
                       <YAxis tickFormatter={BRLk} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={56} />
                       <RechTooltip content={<CustomTooltip />} cursor={{ fill: "#f8fafc" }} />
                       <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Bar dataKey="Pago" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
-                      <Bar dataKey="Em aberto" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="Pago" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} className="cursor-pointer" />
+                      <Bar dataKey="Em aberto" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} className="cursor-pointer" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -343,6 +383,7 @@ export default function FinanceiroAnaliseCustos() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="px-3 pb-4">
+                  <p className="text-[11px] text-gray-400 px-2 mb-1">Clique numa fatia para ver os lançamentos da categoria.</p>
                   <div style={{ width: "100%", height: 300 }}>
                     <ResponsiveContainer>
                       <PieChart>
@@ -355,9 +396,13 @@ export default function FinanceiroAnaliseCustos() {
                           outerRadius={100}
                           innerRadius={55}
                           paddingAngle={1}
+                          onClick={(d: any) => {
+                            const nome = d?.name ?? d?.payload?.name;
+                            if (nome && nome !== "Outros") irParaDetalhe("categoria", nome);
+                          }}
                         >
-                          {pizzaCategoria.map((_, i) => (
-                            <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                          {pizzaCategoria.map((c, i) => (
+                            <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} className={c.name === "Outros" ? "" : "cursor-pointer"} />
                           ))}
                         </Pie>
                         <RechTooltip content={<CustomTooltip totalRef={kpis.custoTotal} />} />
@@ -378,19 +423,41 @@ export default function FinanceiroAnaliseCustos() {
                   {porCentroCusto.length === 0 ? (
                     <p className="text-center text-sm text-gray-400 py-12">Sem centro de custo no período</p>
                   ) : (
-                    <div style={{ width: "100%", height: 300 }}>
-                      <ResponsiveContainer>
-                        <BarChart data={porCentroCusto} layout="vertical" margin={{ top: 4, right: 48, left: 8, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#eef2f7" />
-                          <XAxis type="number" tickFormatter={BRLk} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                          <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
-                          <RechTooltip content={<CustomTooltip totalRef={kpis.custoTotal} />} cursor={{ fill: "#f8fafc" }} />
-                          <Bar dataKey="value" name="Custo" fill="#6366f1" radius={[0, 4, 4, 0]}>
-                            <LabelList dataKey="value" position="right" formatter={BRLk} style={{ fontSize: 10, fill: "#475569" }} />
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
+                    <>
+                      <p className="text-[11px] text-gray-400 px-2 mb-1">Clique numa barra para ver os lançamentos do centro de custo.</p>
+                      {/* Altura dinâmica (~46px por barra) elimina a sobreposição
+                          dos rótulos de valor que ocorria com altura fixa. */}
+                      <div style={{ width: "100%", height: Math.max(220, porCentroCusto.length * 46 + 24) }}>
+                        <ResponsiveContainer>
+                          <BarChart
+                            data={porCentroCusto}
+                            layout="vertical"
+                            margin={{ top: 4, right: 78, left: 8, bottom: 0 }}
+                            barCategoryGap="22%"
+                            onClick={(st: any) => {
+                              const nome = st?.activePayload?.[0]?.payload?.name;
+                              if (nome) irParaDetalhe("centro", nome);
+                            }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#eef2f7" />
+                            <XAxis type="number" tickFormatter={BRLk} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                            <YAxis
+                              type="category"
+                              dataKey="name"
+                              width={150}
+                              tick={{ fontSize: 11, fill: "#64748b" }}
+                              tickFormatter={(v: string) => (v && v.length > 22 ? v.slice(0, 21) + "…" : v)}
+                              axisLine={false}
+                              tickLine={false}
+                            />
+                            <RechTooltip content={<CustomTooltip totalRef={kpis.custoTotal} />} cursor={{ fill: "#f8fafc" }} />
+                            <Bar dataKey="value" name="Custo" fill="#6366f1" radius={[0, 4, 4, 0]} className="cursor-pointer" maxBarSize={26}>
+                              <LabelList dataKey="value" position="right" formatter={BRLk} style={{ fontSize: 10, fill: "#475569" }} />
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </>
                   )}
                 </CardContent>
               </Card>
@@ -423,7 +490,12 @@ export default function FinanceiroAnaliseCustos() {
                       {pareto.slice(0, 15).map((p, i) => {
                         const noAlvo = corteAlvoNomes.has(p.name);
                         return (
-                          <tr key={p.name} className={`border-b border-gray-50 ${noAlvo ? "bg-rose-50/40" : ""}`}>
+                          <tr
+                            key={p.name}
+                            onClick={() => irParaDetalhe("categoria", p.name)}
+                            title={`Ver lançamentos · ${p.name}`}
+                            className={`border-b border-gray-50 cursor-pointer hover:bg-rose-50 transition-colors ${noAlvo ? "bg-rose-50/40" : ""}`}
+                          >
                             <td className="py-2 pr-2 text-gray-400 tabular-nums">{i + 1}</td>
                             <td className="py-2 pr-2 text-gray-700 font-medium truncate max-w-[220px]">
                               {noAlvo && <span className="inline-block w-1.5 h-1.5 rounded-full bg-rose-500 mr-1.5 align-middle" />}
@@ -461,7 +533,12 @@ export default function FinanceiroAnaliseCustos() {
                 ) : (
                   <div className="space-y-2.5">
                     {porFornecedor.map((f, i) => (
-                      <div key={f.name}>
+                      <div
+                        key={f.name}
+                        onClick={() => irParaDetalhe("fornecedor", f.name)}
+                        title={`Ver lançamentos · ${f.name}`}
+                        className="cursor-pointer rounded-lg -mx-2 px-2 py-1 hover:bg-cyan-50 transition-colors"
+                      >
                         <div className="flex justify-between items-center text-xs mb-1">
                           <span className="text-gray-700 font-medium truncate max-w-[60%] flex items-center gap-1.5">
                             <span className="text-gray-400 tabular-nums w-4">{i + 1}.</span>{f.name}

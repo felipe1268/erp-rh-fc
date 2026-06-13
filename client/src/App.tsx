@@ -141,6 +141,7 @@ const FinanceiroRecorrentes  = lazy(() => import("./pages/financeiro/FinanceiroR
 const FinanceiroCronograma   = lazy(() => import("./pages/financeiro/FinanceiroCronograma"));
 const FinanceiroAnaliseCFO    = lazy(() => import("./pages/financeiro/FinanceiroAnaliseCFO"));
 const FinanceiroAnaliseCustos = lazy(() => import("./pages/financeiro/FinanceiroAnaliseCustos"));
+const FinanceiroAnaliseCustosDetalhe = lazy(() => import("./pages/financeiro/FinanceiroAnaliseCustosDetalhe"));
 const FinanceiroCFOSuite      = lazy(() => import("./pages/financeiro/FinanceiroCFOSuite"));
 const ApontamentosCampo = lazy(() => import("./pages/ApontamentosCampo"));
 const Feriados = lazy(() => import("./pages/Feriados"));
@@ -436,6 +437,7 @@ function Router() {
         <Route path="/financeiro/configuracoes" component={() => <RouteGuard component={FinanceiroConfiguracoes} route="/financeiro/lancamentos" />} />
         <Route path="/financeiro/conciliacao" component={() => <RouteGuard component={FinanceiroConciliacao} route="/financeiro/conciliacao" />} />
         <Route path="/financeiro/analise-cfo" component={() => <RouteGuard component={FinanceiroAnaliseCFO} route="/financeiro/analise-cfo" />} />
+        <Route path="/financeiro/analise-custos/detalhe" component={() => <RouteGuard component={FinanceiroAnaliseCustosDetalhe} route="/financeiro/analise-custos" />} />
         <Route path="/financeiro/analise-custos" component={() => <RouteGuard component={FinanceiroAnaliseCustos} route="/financeiro/analise-custos" />} />
         <Route path="/financeiro/cfo-suite" component={() => <RouteGuard component={FinanceiroCFOSuite} route="/financeiro/cfo-suite" />} />
         <Route path="/financeiro/recorrentes" component={() => <RouteGuard component={FinanceiroRecorrentes} route="/financeiro/recorrentes" />} />
