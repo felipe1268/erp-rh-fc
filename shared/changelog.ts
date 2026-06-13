@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3004 — **FINANCEIRO → CONTAS A RECEBER (TÍTULOS): REDESIGN MODERNO + MAIS
+ * AUTOMÁTICO — HERO COM GRADIENTE E PROGRESSO DO ANO, BARRA DE MESES COM VALOR
+ * EM ABERTO POR MÊS, GRUPOS DE CLIENTE COM BARRA DE % RECEBIDO, MODAIS POLIDOS,
+ * VENCIMENTO AUTO-PREENCHIDO E PREVIEW DE PARCELAS EM TEMPO REAL.**
+ *
+ * PEDIDO (usuário, via screenshots do iPad): "Melhore o layout, quero moderno e
+ * automático ao máximo possível" — a tela de Contas a Receber (Títulos) estava
+ * funcional porém visualmente simples e os modais "Novo título"/"Receber" pediam
+ * mais inteligência.
+ *
+ * SOLUÇÃO (FRONT-only — ZERO ALTER/DROP/DELETE, ZERO backend/schema; mesmas
+ * procedures `getContasAReceberByYear`, `clientes.list`, `getBankAccounts`,
+ * `darBaixaReceber`, `criarTituloReceber`, `estornarReceber`, `deleteEntry`,
+ * `anexarDocumento`, `uploadComprovante`), em
+ * `client/src/pages/financeiro/FinanceiroContasAReceberTitulos.tsx`:
+ *
+ * 1) HERO com gradiente emerald→teal: badge "Financeiro", título grande, botão
+ *    "Novo título" branco, e faixa de RESUMO DO ANO com navegação de ano + barra
+ *    de progresso (% recebido) e totais recebido/total/aberto (memo `anoResumo`).
+ * 2) BARRA DE MESES modernizada (grid 3/6/12 responsivo, pills arredondados, ring
+ *    na seleção) agora mostra o VALOR EM ABERTO compacto por mês (memo `mesesValor`
+ *    + `formatCompactBRL` notação compacta pt-BR) sob a bolinha de status.
+ * 3) KPIs com chips de ícone arredondados (mantida a semântica: 2 do mês + 2
+ *    acumulados do ano).
+ * 4) GRUPOS POR CLIENTE com chip de ícone, coluna Total/Em aberto e BARRA DE
+ *    PROGRESSO de "% recebido" por cliente (memo de grupos agora acumula
+ *    `recebido`); chevron com rotação suave; estado vazio ilustrado.
+ * 5) AUTOMAÇÕES no modal "Novo título": `useEffect` faz o 1º VENCIMENTO acompanhar
+ *    a COMPETÊNCIA enquanto o usuário não editar o campo (flag `vencTouched`);
+ *    PREVIEW de parcelas em tempo real ("Nx de R$ Y · vencimentos mensais a partir
+ *    de DD/MM"); categoria default "Faturamento de Obras".
+ * 6) AUTOMAÇÕES no modal "Receber": atalhos "Saldo total" / "50%", aviso dinâmico
+ *    parcial×quitação integral, cabeçalho do título em card com gradiente.
+ * 7) Paleta unificada em EMERALD (receber = entrada), badges de status com bolinha,
+ *    `tabular-nums` nos valores. NENHUMA mudança de rota/permissão/contrato.
+ *
+ * REQUER REPUBLICAR (só front). Detalhe: este arquivo.
+ *
  * Rev. 3003 — **FINANCEIRO → CONTAS A RECEBER (TÍTULOS): NAVEGAÇÃO MÊS-A-MÊS NOS
  * MOLDES DO CONTAS A PAGAR — BARRA DE MESES JAN…DEZ COM LEGENDA/STATUS POR MÊS,
  * KPIs DO MÊS + ACUMULADO DO ANO.**

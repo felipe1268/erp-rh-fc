@@ -1,4 +1,4 @@
-import { useState, useMemo, type ReactNode } from "react";
+import { useState, useMemo, useEffect, type ReactNode } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,11 +14,16 @@ import { useToast } from "@/hooks/use-toast";
 import {
   ChevronLeft, ChevronRight, Search, Building2, CheckCircle, Clock,
   AlertTriangle, TrendingUp, Plus, Paperclip, Trash2, RotateCcw, Loader2,
-  HandCoins, Users,
+  HandCoins, Users, Wallet, CalendarDays,
 } from "lucide-react";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
+}
+function formatCompactBRL(v: number) {
+  if (!v) return "—";
+  if (Math.abs(v) < 1000) return formatBRL(v);
+  return "R$ " + new Intl.NumberFormat("pt-BR", { notation: "compact", maximumFractionDigits: 1 }).format(v);
 }
 function fmtDateBR(dateStr: string | null | undefined): string {
   if (!dateStr) return "—";
@@ -32,6 +37,7 @@ function num(v: any): number {
 }
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+const MESES_LONGO = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
 // Rev. 3003 — sempre fatiar para "YYYY-MM-DD" antes de parsear: timestamps PG
 // quebram new Date() no iOS Safari ("The string did not match the expected pattern").
@@ -46,21 +52,21 @@ function getMesFromDate(dateStr: string | null | undefined): number | null {
 
 type MesStatus = "sem_dados" | "lancamento" | "consolidado";
 
-const STATUS_META: Record<string, { label: string; cls: string }> = {
-  a_receber:        { label: "A receber",  cls: "bg-amber-100 text-amber-800 border-amber-300" },
-  recebido_parcial: { label: "Parcial",    cls: "bg-blue-100 text-blue-800 border-blue-300" },
-  recebido:         { label: "Recebido",   cls: "bg-green-100 text-green-800 border-green-300" },
+const STATUS_META: Record<string, { label: string; cls: string; dot: string }> = {
+  a_receber:        { label: "A receber",  cls: "bg-amber-50 text-amber-700 border-amber-200", dot: "bg-amber-500" },
+  recebido_parcial: { label: "Parcial",    cls: "bg-blue-50 text-blue-700 border-blue-200",   dot: "bg-blue-500" },
+  recebido:         { label: "Recebido",   cls: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
 };
 
-function KCard({ label, value, sub, icon, color }: { label: string; value: string; sub?: ReactNode; icon: ReactNode; color: string }) {
+function KCard({ label, value, sub, icon, ring }: { label: string; value: string; sub?: ReactNode; icon: ReactNode; ring: string }) {
   return (
-    <Card>
+    <Card className="border-slate-200/80 shadow-sm">
       <CardContent className="p-4 flex items-center gap-3">
-        <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${color}`}>{icon}</div>
+        <div className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${ring}`}>{icon}</div>
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide leading-tight">{label}</p>
-          <p className="text-lg font-bold text-slate-800 leading-tight">{value}</p>
-          {sub && <p className="text-[11px] text-slate-500 leading-tight">{sub}</p>}
+          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide leading-tight">{label}</p>
+          <p className="text-xl font-bold text-slate-800 leading-tight tabular-nums">{value}</p>
+          {sub && <p className="text-[11px] text-slate-500 leading-tight mt-0.5">{sub}</p>}
         </div>
       </CardContent>
     </Card>
@@ -123,6 +129,31 @@ export default function FinanceiroContasAReceberTitulos() {
     return map;
   }, [linhas]);
 
+  // Rev. 3004 — valor em aberto por mês (compacto no pill da barra de meses)
+  const mesesValor: Record<number, number> = useMemo(() => {
+    const map: Record<number, number> = {};
+    for (let m = 1; m <= 12; m++) map[m] = 0;
+    for (const t of linhas) {
+      const m = getMesFromDate(t.dataVencimento);
+      if (!m || t.status === "recebido") continue;
+      map[m] += Math.max(0, num(t.valorPrevisto) - num(t.valorRealizado));
+    }
+    return map;
+  }, [linhas]);
+
+  // Rev. 3004 — resumo do ANO p/ o hero (total, recebido, aberto, % progresso)
+  const anoResumo = useMemo(() => {
+    let total = 0, recebido = 0, aberto = 0;
+    for (const t of linhas) {
+      const prev = num(t.valorPrevisto), real = num(t.valorRealizado);
+      total += prev;
+      recebido += t.status === "recebido" ? (real || prev) : real;
+      aberto += t.status === "recebido" ? 0 : Math.max(0, prev - real);
+    }
+    const pct = total > 0 ? Math.min(100, Math.round((recebido / total) * 100)) : 0;
+    return { total, recebido, aberto, pct };
+  }, [linhas]);
+
   const mesData = useMemo(
     () => linhas.filter((t) => getMesFromDate(t.dataVencimento) === mesSel),
     [linhas, mesSel],
@@ -170,15 +201,16 @@ export default function FinanceiroContasAReceberTitulos() {
 
   // Agrupa por cliente
   const grupos = useMemo(() => {
-    const map = new Map<string, { cliente: string; itens: any[]; total: number; aberto: number }>();
+    const map = new Map<string, { cliente: string; itens: any[]; total: number; aberto: number; recebido: number }>();
     for (const t of filtradas) {
       const cli = (t.clienteNome || "Sem cliente").trim();
-      if (!map.has(cli)) map.set(cli, { cliente: cli, itens: [], total: 0, aberto: 0 });
+      if (!map.has(cli)) map.set(cli, { cliente: cli, itens: [], total: 0, aberto: 0, recebido: 0 });
       const g = map.get(cli)!;
       g.itens.push(t);
       const prev = num(t.valorPrevisto), real = num(t.valorRealizado);
       g.total += prev;
-      g.aberto += t.status === "recebido" ? 0 : Math.max(0, prev - real);
+      if (t.status === "recebido") { g.recebido += real || prev; }
+      else { g.aberto += Math.max(0, prev - real); g.recebido += real; }
     }
     return Array.from(map.values()).sort((a, b) => b.aberto - a.aberto || a.cliente.localeCompare(b.cliente, "pt-BR"));
   }, [filtradas]);
@@ -219,58 +251,94 @@ export default function FinanceiroContasAReceberTitulos() {
   return (
     <DashboardLayout>
       <div className="p-4 md:p-6 space-y-4 max-w-[1400px] mx-auto">
-        {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-              <HandCoins className="h-6 w-6 text-green-600" /> Contas a Receber
-            </h1>
-            <p className="text-sm text-slate-500">Títulos a receber por cliente — medições (automático) e lançamentos manuais.</p>
-          </div>
-          <Button onClick={() => setShowNovo(true)} className="gap-1"><Plus className="h-4 w-4" /> Novo título</Button>
-        </div>
 
-        {/* Navegação mês a mês */}
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-slate-500 mb-3">Títulos a receber por mês</p>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <button onClick={() => setAno((a) => a - 1)} className="p-1 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-800">
-                  <ChevronLeft className="w-4 h-4" />
+        {/* ───────────── HERO ───────────── */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-600 via-emerald-600 to-teal-700 text-white shadow-lg">
+          <div className="pointer-events-none absolute -right-10 -top-16 h-56 w-56 rounded-full bg-white/10 blur-2xl" />
+          <div className="pointer-events-none absolute -right-20 top-10 h-40 w-40 rounded-full bg-emerald-300/20 blur-2xl" />
+          <div className="relative p-5 md:p-6">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider backdrop-blur">
+                  <HandCoins className="h-3 w-3" /> Financeiro
+                </span>
+                <h1 className="mt-2 text-2xl md:text-3xl font-bold tracking-tight">Contas a Receber</h1>
+                <p className="text-sm text-emerald-50/90">Títulos por cliente — medições <span className="font-medium">(automático)</span> e lançamentos manuais.</p>
+              </div>
+              <Button
+                onClick={() => setShowNovo(true)}
+                className="gap-1.5 bg-white text-emerald-700 hover:bg-emerald-50 shadow-sm font-semibold"
+              >
+                <Plus className="h-4 w-4" /> Novo título
+              </Button>
+            </div>
+
+            {/* Faixa de resumo do ano */}
+            <div className="mt-5 flex flex-col gap-3 rounded-xl bg-white/10 p-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <button onClick={() => setAno((a) => a - 1)} className="rounded-lg bg-white/10 p-1.5 hover:bg-white/20 transition" aria-label="Ano anterior">
+                  <ChevronLeft className="h-4 w-4" />
                 </button>
-                <span className="text-base font-bold text-slate-800 min-w-[3.5rem] text-center">{ano}</span>
-                <button onClick={() => setAno((a) => a + 1)} className="p-1 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-800">
-                  <ChevronRight className="w-4 h-4" />
+                <div className="flex items-center gap-1.5">
+                  <CalendarDays className="h-4 w-4 text-emerald-100" />
+                  <span className="text-lg font-bold tabular-nums">{ano}</span>
+                </div>
+                <button onClick={() => setAno((a) => a + 1)} className="rounded-lg bg-white/10 p-1.5 hover:bg-white/20 transition" aria-label="Próximo ano">
+                  <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
-              <div className="flex items-center gap-4 text-xs text-slate-500">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Com lançamento</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Consolidado</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Sem dados</span>
+              <div className="flex flex-1 flex-col gap-1.5 sm:max-w-md">
+                <div className="flex items-center justify-between text-xs text-emerald-50/90">
+                  <span>Recebido no ano <b className="text-white">{formatBRL(anoResumo.recebido)}</b></span>
+                  <span>Total <b className="text-white">{formatBRL(anoResumo.total)}</b></span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-white/20">
+                  <div className="h-full rounded-full bg-white transition-all" style={{ width: `${anoResumo.pct}%` }} />
+                </div>
+                <div className="text-[11px] text-emerald-50/80">{anoResumo.pct}% recebido · {formatBRL(anoResumo.aberto)} em aberto</div>
               </div>
             </div>
-            <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+          </div>
+        </div>
+
+        {/* ───────────── BARRA DE MESES ───────────── */}
+        <Card className="border-slate-200/80 shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <p className="text-sm font-semibold text-slate-600">Selecione o mês</p>
+              <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-blue-500 inline-block" />Com lançamento</span>
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500 inline-block" />Consolidado</span>
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-slate-300 inline-block" />Sem dados</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 sm:grid-cols-6 lg:grid-cols-12 gap-1.5">
               {MESES.map((m, i) => {
                 const numMes = i + 1;
                 const status = mesesStatus[numMes];
                 const isSelected = mesSel === numMes;
+                const valor = mesesValor[numMes];
                 return (
                   <button
                     key={m}
                     onClick={() => setMesSel(numMes)}
-                    className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
+                    className={`relative flex flex-col items-center gap-1 rounded-xl border py-2 text-xs font-semibold transition-all
                       ${isSelected
-                        ? "border-green-500 bg-green-50 text-green-700 shadow-sm"
-                        : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50"
+                        ? "border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm ring-1 ring-emerald-500/30"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:bg-emerald-50/40"
                       }`}
                   >
-                    <span>{m}</span>
-                    <span className={`w-1.5 h-1.5 rounded-full ${
-                      status === "consolidado" ? "bg-green-500" :
-                      status === "lancamento" ? "bg-blue-500" :
-                      "bg-gray-300"
-                    }`} />
+                    <span className="flex items-center gap-1">
+                      {m}
+                      <span className={`h-1.5 w-1.5 rounded-full ${
+                        status === "consolidado" ? "bg-emerald-500" :
+                        status === "lancamento" ? "bg-blue-500" :
+                        "bg-slate-300"
+                      }`} />
+                    </span>
+                    <span className={`text-[10px] font-medium tabular-nums ${isSelected ? "text-emerald-600" : "text-slate-400"}`}>
+                      {valor > 0 ? formatCompactBRL(valor) : "—"}
+                    </span>
                   </button>
                 );
               })}
@@ -278,18 +346,18 @@ export default function FinanceiroContasAReceberTitulos() {
           </CardContent>
         </Card>
 
-        {/* KPIs */}
+        {/* ───────────── KPIs ───────────── */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KCard label={`A receber em ${MESES[mesSel - 1]}`} value={formatBRL(kpis.abertoMes)} icon={<Clock className="h-5 w-5 text-amber-700" />} color="bg-amber-100"
+          <KCard label={`A receber em ${MESES[mesSel - 1]}`} value={formatBRL(kpis.abertoMes)} icon={<Clock className="h-5 w-5 text-amber-600" />} ring="bg-amber-100"
             sub={kpis.parcialMes > 0 ? <span className="text-blue-600">parcial {formatBRL(kpis.parcialMes)}</span> : undefined} />
-          <KCard label={`Recebido em ${MESES[mesSel - 1]}`} value={formatBRL(kpis.recebidoMes)} icon={<CheckCircle className="h-5 w-5 text-green-700" />} color="bg-green-100" />
-          <KCard label="Em aberto (ano)" value={formatBRL(acum.aberto)} icon={<TrendingUp className="h-5 w-5 text-indigo-700" />} color="bg-indigo-100"
+          <KCard label={`Recebido em ${MESES[mesSel - 1]}`} value={formatBRL(kpis.recebidoMes)} icon={<CheckCircle className="h-5 w-5 text-emerald-600" />} ring="bg-emerald-100" />
+          <KCard label="Em aberto (ano)" value={formatBRL(acum.aberto)} icon={<TrendingUp className="h-5 w-5 text-indigo-600" />} ring="bg-indigo-100"
             sub={acum.vencido > 0 ? <span className="text-red-600 font-medium">{formatBRL(acum.vencido)} vencido</span> : "em dia"} />
-          <KCard label="Títulos vencidos (ano)" value={String(acum.qtdVenc)} icon={<AlertTriangle className="h-5 w-5 text-red-700" />} color="bg-red-100" />
+          <KCard label="Títulos vencidos (ano)" value={String(acum.qtdVenc)} icon={<AlertTriangle className="h-5 w-5 text-red-600" />} ring="bg-red-100" />
         </div>
 
-        {/* Filtros */}
-        <Card>
+        {/* ───────────── FILTROS ───────────── */}
+        <Card className="border-slate-200/80 shadow-sm">
           <CardContent className="p-3 flex flex-wrap items-center gap-2">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
@@ -314,27 +382,50 @@ export default function FinanceiroContasAReceberTitulos() {
           </CardContent>
         </Card>
 
-        {/* Lista agrupada por cliente */}
+        {/* ───────────── LISTA POR CLIENTE ───────────── */}
         {isLoading ? (
           <div className="flex items-center justify-center py-16 text-slate-400"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Carregando...</div>
         ) : grupos.length === 0 ? (
-          <Card><CardContent className="py-16 text-center text-slate-400">Nenhum título a receber em {MESES[mesSel - 1]} de {ano} para os filtros selecionados.</CardContent></Card>
+          <Card className="border-slate-200/80 border-dashed">
+            <CardContent className="py-16 text-center">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
+                <Wallet className="h-6 w-6 text-slate-400" />
+              </div>
+              <p className="text-sm font-medium text-slate-500">Nenhum título a receber em {MESES_LONGO[mesSel - 1]} de {ano}</p>
+              <p className="text-xs text-slate-400">para os filtros selecionados.</p>
+            </CardContent>
+          </Card>
         ) : (
           <div className="space-y-2">
             {grupos.map((g) => {
               const open = expanded.has(g.cliente);
+              const baseRec = g.total > 0 ? Math.min(100, Math.round((g.recebido / g.total) * 100)) : 0;
               return (
-                <Card key={g.cliente} className="overflow-hidden">
+                <Card key={g.cliente} className="overflow-hidden border-slate-200/80 shadow-sm">
                   <button onClick={() => toggle(g.cliente)} className="w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50 transition">
-                    <div className="flex items-center gap-2 min-w-0">
-                      {open ? <ChevronRight className="h-4 w-4 rotate-90 transition text-slate-400" /> : <ChevronRight className="h-4 w-4 transition text-slate-400" />}
-                      <Building2 className="h-4 w-4 text-slate-400 shrink-0" />
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <ChevronRight className={`h-4 w-4 text-slate-400 transition-transform ${open ? "rotate-90" : ""}`} />
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 shrink-0">
+                        <Building2 className="h-4 w-4 text-emerald-600" />
+                      </div>
                       <span className="font-semibold text-slate-800 truncate">{g.cliente}</span>
-                      <Badge variant="outline" className="text-[10px]">{g.itens.length}</Badge>
+                      <Badge variant="outline" className="text-[10px] shrink-0">{g.itens.length}</Badge>
                     </div>
                     <div className="flex items-center gap-4 shrink-0">
-                      <span className="text-xs text-slate-500">Total {formatBRL(g.total)}</span>
-                      <span className="text-sm font-bold text-amber-700 tabular-nums">{formatBRL(g.aberto)} <span className="text-[10px] font-normal text-slate-400">aberto</span></span>
+                      <div className="hidden sm:flex flex-col items-end">
+                        <span className="text-[10px] uppercase tracking-wide text-slate-400">Total</span>
+                        <span className="text-xs font-medium text-slate-600 tabular-nums">{formatBRL(g.total)}</span>
+                      </div>
+                      <div className="flex flex-col items-end">
+                        <span className="text-[10px] uppercase tracking-wide text-slate-400">Em aberto</span>
+                        <span className="text-sm font-bold text-amber-600 tabular-nums">{formatBRL(g.aberto)}</span>
+                      </div>
+                      <div className="hidden md:flex w-24 flex-col gap-1">
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                          <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${baseRec}%` }} />
+                        </div>
+                        <span className="text-[10px] text-slate-400 text-right">{baseRec}% recebido</span>
+                      </div>
                     </div>
                   </button>
                   {open && (
@@ -342,16 +433,16 @@ export default function FinanceiroContasAReceberTitulos() {
                       {g.itens.map((t) => {
                         const prev = num(t.valorPrevisto), real = num(t.valorRealizado);
                         const saldo = Math.max(0, prev - real);
-                        const meta = STATUS_META[t.status] ?? { label: t.status, cls: "bg-slate-100 text-slate-700 border-slate-300" };
+                        const meta = STATUS_META[t.status] ?? { label: t.status, cls: "bg-slate-50 text-slate-700 border-slate-200", dot: "bg-slate-400" };
                         const vencido = num(t.diasAtraso) > 0;
                         const isManual = t.origemModulo === "manual_receber" || !t.origemModulo;
                         return (
-                          <div key={t.id} className="px-4 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 hover:bg-slate-50">
+                          <div key={t.id} className="px-4 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 hover:bg-slate-50/70">
                             <div className="flex-1 min-w-[200px]">
-                              <div className="text-sm font-medium text-slate-800 flex items-center gap-2">
+                              <div className="text-sm font-medium text-slate-800 flex items-center gap-2 flex-wrap">
                                 {t.descricao || t.origemDescricao || "Título"}
                                 {t.parcelaTotal > 1 && <Badge variant="outline" className="text-[10px]">{t.parcelaNumero}/{t.parcelaTotal}</Badge>}
-                                {t.origemModulo === "revenue" && <Badge variant="outline" className="text-[10px] text-indigo-600 border-indigo-200">Medição</Badge>}
+                                {t.origemModulo === "revenue" && <Badge variant="outline" className="text-[10px] text-indigo-600 border-indigo-200 bg-indigo-50">Medição</Badge>}
                               </div>
                               <div className="text-[11px] text-slate-500">{t.obraNome ?? "—"}{t.contaNome ? ` · ${t.contaNome}` : ""}</div>
                             </div>
@@ -364,10 +455,10 @@ export default function FinanceiroContasAReceberTitulos() {
                               <div className="text-sm font-bold text-slate-800 tabular-nums">{formatBRL(prev)}</div>
                               {real > 0 && t.status !== "recebido" && <div className="text-[10px] text-blue-600">recebido {formatBRL(real)} · saldo {formatBRL(saldo)}</div>}
                             </div>
-                            <Badge variant="outline" className={`text-[10px] ${meta.cls}`}>{meta.label}</Badge>
+                            <Badge variant="outline" className={`text-[10px] gap-1 ${meta.cls}`}><span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />{meta.label}</Badge>
                             <div className="flex items-center gap-1">
                               {t.status !== "recebido" && (
-                                <Button size="sm" variant="default" className="h-7 gap-1 bg-green-600 hover:bg-green-700" onClick={() => setShowBaixa(t)}>
+                                <Button size="sm" variant="default" className="h-7 gap-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowBaixa(t)}>
                                   <HandCoins className="h-3.5 w-3.5" /> Receber
                                 </Button>
                               )}
@@ -377,7 +468,7 @@ export default function FinanceiroContasAReceberTitulos() {
                                 </Button>
                               )}
                               <Button size="icon" variant="ghost" className="h-7 w-7" title="Anexar documento" onClick={() => setShowAnexo(t)}>
-                                <Paperclip className={`h-3.5 w-3.5 ${t.anexoUrl ? "text-green-600" : "text-slate-400"}`} />
+                                <Paperclip className={`h-3.5 w-3.5 ${t.anexoUrl ? "text-emerald-600" : "text-slate-400"}`} />
                               </Button>
                               {isManual && t.status === "a_receber" && (
                                 <Button size="icon" variant="ghost" className="h-7 w-7" title="Excluir" onClick={() => onExcluir(t)} disabled={deleteMut.isPending}>
@@ -418,6 +509,9 @@ function BaixaDialog({ titulo, companyId, contasBancarias, onClose, onSubmit, pe
   const [uploading, setUploading] = useState(false);
   const contas: any[] = Array.isArray(contasBancarias) ? contasBancarias : [];
 
+  const valorNum = parseFloat(String(valor).replace(",", ".")) || 0;
+  const parcial = valorNum > 0 && valorNum < saldo;
+
   const uploadMut = (trpc as any).financial.uploadComprovante.useMutation();
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -454,20 +548,33 @@ function BaixaDialog({ titulo, companyId, contasBancarias, onClose, onSubmit, pe
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>Registrar recebimento</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><HandCoins className="h-5 w-5 text-emerald-600" /> Registrar recebimento</DialogTitle>
+        </DialogHeader>
         <div className="space-y-3">
-          <div className="rounded-md bg-slate-50 border p-3 text-sm">
-            <div className="font-medium text-slate-800">{titulo.descricao}</div>
+          <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 p-3 text-sm">
+            <div className="font-semibold text-slate-800">{titulo.descricao}</div>
             <div className="text-xs text-slate-500">{titulo.clienteNome || "Sem cliente"} · venc. {fmtDateBR(titulo.dataVencimento)}</div>
-            <div className="mt-1 flex justify-between text-xs"><span>Valor do título</span><span className="font-bold">{formatBRL(prev)}</span></div>
-            {real > 0 && <div className="flex justify-between text-xs text-blue-600"><span>Já recebido</span><span>{formatBRL(real)}</span></div>}
-            <div className="flex justify-between text-xs font-bold text-amber-700"><span>Saldo em aberto</span><span>{formatBRL(saldo)}</span></div>
+            <div className="mt-2 space-y-0.5">
+              <div className="flex justify-between text-xs"><span className="text-slate-500">Valor do título</span><span className="font-bold tabular-nums">{formatBRL(prev)}</span></div>
+              {real > 0 && <div className="flex justify-between text-xs text-blue-600"><span>Já recebido</span><span className="tabular-nums">{formatBRL(real)}</span></div>}
+              <div className="flex justify-between text-xs font-bold text-amber-700"><span>Saldo em aberto</span><span className="tabular-nums">{formatBRL(saldo)}</span></div>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div><Label className="text-xs">Valor recebido</Label><Input value={valor} onChange={(e) => setValor(e.target.value)} inputMode="decimal" /></div>
             <div><Label className="text-xs">Data</Label><Input type="date" value={data} onChange={(e) => setData(e.target.value)} /></div>
           </div>
-          <p className="text-[11px] text-slate-500">Valor menor que o saldo registra <b>baixa parcial</b> (título fica "Parcial" com o restante em aberto).</p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] text-slate-400">Atalhos:</span>
+            <button type="button" onClick={() => setValor(saldo.toFixed(2))} className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100">Saldo total</button>
+            <button type="button" onClick={() => setValor((saldo / 2).toFixed(2))} className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-50">50%</button>
+          </div>
+          {valorNum <= 0
+            ? <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-100 rounded-md px-2 py-1">Informe o valor recebido (ou use um atalho acima).</p>
+            : parcial
+              ? <p className="text-[11px] text-blue-600 bg-blue-50 border border-blue-100 rounded-md px-2 py-1">Baixa <b>parcial</b>: título fica "Parcial" com {formatBRL(saldo - valorNum)} em aberto.</p>
+              : <p className="text-[11px] text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-md px-2 py-1">Quita o título integralmente.</p>}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="text-xs">Conta bancária</Label>
@@ -492,13 +599,13 @@ function BaixaDialog({ titulo, companyId, contasBancarias, onClose, onSubmit, pe
             <Label className="text-xs">Comprovante (opcional)</Label>
             <Input type="file" accept="application/pdf,image/*,.doc,.docx" onChange={handleFile} disabled={uploading} />
             {uploading && <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-1"><Loader2 className="h-3 w-3 animate-spin" /> enviando...</span>}
-            {comprovanteUrl && <span className="text-[11px] text-green-600 flex items-center gap-1 mt-1"><CheckCircle className="h-3 w-3" /> comprovante anexado</span>}
+            {comprovanteUrl && <span className="text-[11px] text-emerald-600 flex items-center gap-1 mt-1"><CheckCircle className="h-3 w-3" /> comprovante anexado</span>}
           </div>
           <div><Label className="text-xs">Observações</Label><Textarea value={obs} onChange={(e) => setObs(e.target.value)} rows={2} /></div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={submit} disabled={pending || uploading} className="bg-green-600 hover:bg-green-700">
+          <Button onClick={submit} disabled={pending || uploading} className="bg-emerald-600 hover:bg-emerald-700">
             {pending && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Confirmar recebimento
           </Button>
         </DialogFooter>
@@ -513,18 +620,28 @@ function NovoTituloDialog({ companyId, clientesOpts, onClose, onSubmit, pending 
   const [clienteId, setClienteId] = useState<string>("");
   const [descricao, setDescricao] = useState("");
   const [obraNome, setObraNome] = useState("");
-  const [contaNome, setContaNome] = useState("");
+  const [contaNome, setContaNome] = useState("Faturamento de Obras");
   const [valor, setValor] = useState("");
   const [comp, setComp] = useState(new Date().toISOString().slice(0, 10));
   const [venc, setVenc] = useState(new Date().toISOString().slice(0, 10));
+  const [vencTouched, setVencTouched] = useState(false);
   const [parcelas, setParcelas] = useState("1");
   const [obs, setObs] = useState("");
+
+  // Rev. 3004 — automático: o 1º vencimento acompanha a competência enquanto o
+  // usuário não editar manualmente o campo de vencimento.
+  useEffect(() => {
+    if (!vencTouched && comp) setVenc(comp);
+  }, [comp, vencTouched]);
+
+  const valorNum = parseFloat(String(valor).replace(",", ".")) || 0;
+  const np = Math.max(1, parseInt(parcelas, 10) || 1);
+  const valorParcela = np > 0 ? valorNum / np : 0;
 
   function submit() {
     const v = parseFloat(valor.replace(",", "."));
     if (!descricao.trim()) { toast({ title: "Informe a descrição", variant: "destructive" }); return; }
     if (!Number.isFinite(v) || v <= 0) { toast({ title: "Valor inválido", variant: "destructive" }); return; }
-    const np = Math.max(1, parseInt(parcelas, 10) || 1);
     const cli = clientesOpts.find((c: any) => String(c.id) === clienteId);
     onSubmit({
       companyId,
@@ -544,7 +661,9 @@ function NovoTituloDialog({ companyId, clientesOpts, onClose, onSubmit, pending 
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>Novo título a receber</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Plus className="h-5 w-5 text-emerald-600" /> Novo título a receber</DialogTitle>
+        </DialogHeader>
         <div className="space-y-3">
           <div>
             <Label className="text-xs">Cliente</Label>
@@ -563,18 +682,25 @@ function NovoTituloDialog({ companyId, clientesOpts, onClose, onSubmit, pending 
           <div className="grid grid-cols-3 gap-2">
             <div><Label className="text-xs">Valor total</Label><Input value={valor} onChange={(e) => setValor(e.target.value)} inputMode="decimal" placeholder="0,00" /></div>
             <div><Label className="text-xs">Competência</Label><Input type="date" value={comp} onChange={(e) => setComp(e.target.value)} /></div>
-            <div><Label className="text-xs">1º Vencimento</Label><Input type="date" value={venc} onChange={(e) => setVenc(e.target.value)} /></div>
+            <div><Label className="text-xs">1º Vencimento</Label><Input type="date" value={venc} onChange={(e) => { setVenc(e.target.value); setVencTouched(true); }} /></div>
           </div>
           <div>
             <Label className="text-xs">Parcelas</Label>
             <Input type="number" min={1} max={120} value={parcelas} onChange={(e) => setParcelas(e.target.value)} className="w-24" />
-            <p className="text-[11px] text-slate-500 mt-1">Mais de 1 parcela gera vencimentos mensais a partir do 1º vencimento; o valor é dividido (resto na última).</p>
           </div>
+          {/* Rev. 3004 — preview automático das parcelas */}
+          {valorNum > 0 && (
+            <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-800">
+              {np > 1
+                ? <span><b>{np}x</b> de <b>{formatBRL(valorParcela)}</b> · vencimentos mensais a partir de <b>{fmtDateBR(venc)}</b> (resto na última).</span>
+                : <span>Parcela única de <b>{formatBRL(valorNum)}</b> com vencimento em <b>{fmtDateBR(venc)}</b>.</span>}
+            </div>
+          )}
           <div><Label className="text-xs">Observações</Label><Textarea value={obs} onChange={(e) => setObs(e.target.value)} rows={2} /></div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={submit} disabled={pending}>{pending && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Criar título</Button>
+          <Button onClick={submit} disabled={pending} className="bg-emerald-600 hover:bg-emerald-700">{pending && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Criar título</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -612,12 +738,14 @@ function AnexoDialog({ titulo, companyId, onClose, onSubmit, pending }: any) {
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>Anexar documento</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Paperclip className="h-5 w-5 text-emerald-600" /> Anexar documento</DialogTitle>
+        </DialogHeader>
         <div className="space-y-3">
           <div className="text-sm text-slate-600">{titulo.descricao}</div>
           {titulo.anexoUrl && (
             <div className="text-xs text-slate-500 flex items-center gap-2">
-              <Paperclip className="h-3.5 w-3.5 text-green-600" /> Já existe um anexo
+              <Paperclip className="h-3.5 w-3.5 text-emerald-600" /> Já existe um anexo
               <a href={titulo.anexoUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline">abrir</a>
             </div>
           )}
@@ -625,12 +753,12 @@ function AnexoDialog({ titulo, companyId, onClose, onSubmit, pending }: any) {
             <Label className="text-xs">Arquivo (PDF, Word ou imagem)</Label>
             <Input type="file" accept="application/pdf,image/*,.doc,.docx" onChange={handleFile} disabled={uploading} />
             {uploading && <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-1"><Loader2 className="h-3 w-3 animate-spin" /> enviando...</span>}
-            {url && <span className="text-[11px] text-green-600 flex items-center gap-1 mt-1"><CheckCircle className="h-3 w-3" /> {nome}</span>}
+            {url && <span className="text-[11px] text-emerald-600 flex items-center gap-1 mt-1"><CheckCircle className="h-3 w-3" /> {nome}</span>}
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={() => { if (!url) { toast({ title: "Selecione um arquivo", variant: "destructive" }); return; } onSubmit({ id: titulo.id, companyId, anexoUrl: url, anexoNome: nome || undefined }); }} disabled={pending || uploading}>
+          <Button onClick={() => { if (!url) { toast({ title: "Selecione um arquivo", variant: "destructive" }); return; } onSubmit({ id: titulo.id, companyId, anexoUrl: url, anexoNome: nome || undefined }); }} disabled={pending || uploading} className="bg-emerald-600 hover:bg-emerald-700">
             {pending && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Anexar
           </Button>
         </DialogFooter>
