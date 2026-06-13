@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3007 — **FINANCEIRO → CONTAS A RECEBER (TÍTULOS) → MODAL "NOVO TÍTULO":
+ * SELETOR DE CLIENTE PESQUISÁVEL (CORRIGE NOMES CORTADOS/SOBREPOSTOS), CAMPO OBRA
+ * VIRA LISTA DAS OBRAS ATIVAS DO CLIENTE, E CATEGORIA VIRA SELECT COM CATEGORIAS
+ * DEFINIDAS (MEDIÇÃO, SEC — SERVIÇOS EXTRAS CONTRATUAIS, ETC.).**
+ *
+ * PEDIDO (usuário, via screenshots do iPad): "Precisa arrumar a linha clientes,
+ * está ficando escondida da tela, o nome fica sobreposto; quando clicar no cliente
+ * [no] campo nome da obra precisa aparecer as obras ativas dele; e precisamos
+ * definir as categorias — medição, SEC (serviços extras contratuais) e mais
+ * categorias que a literatura indique".
+ *
+ * CONTEXTO: no modal "Novo título a receber", o dropdown nativo de Cliente
+ * (shadcn `Select`) renderizava a lista de nomes cortada na borda esquerda dentro
+ * do `DialogContent` (1ª letra de cada cliente sumindo), o campo Obra era texto
+ * livre (sem relação com o cliente) e a Categoria era um `Input` de texto livre
+ * com default "Faturamento de Obras".
+ *
+ * SOLUÇÃO (FRONT-only — ZERO ALTER/DROP/DELETE, ZERO backend/schema; a procedure
+ * `criarTituloReceber` segue recebendo os MESMOS campos: `clienteId`/`clienteNome`
+ * /`obraNome` texto + `contaNome` texto), em
+ * `client/src/pages/financeiro/FinanceiroContasAReceberTitulos.tsx`:
+ *
+ * 1) COMBOBOX PESQUISÁVEL (novo componente `Combobox` local, baseado em
+ *    `Popover` + `Command`): substitui o `Select` nativo do Cliente. Como o
+ *    `PopoverContent` usa portal e largura = `--radix-popover-trigger-width`, o
+ *    dropdown deixa de ser cortado/sobreposto dentro do modal e ganha busca por
+ *    digitação (útil na lista grande de clientes). Suporta `allowCustom` (item
+ *    "Usar '<texto>'") e `disabled`.
+ * 2) OBRA = OBRAS ATIVAS DO CLIENTE: o campo Obra virou `Combobox` populado por
+ *    `trpc.obras.listActive` ({ companyId }), filtrando as obras cujo
+ *    `obras.cliente` (texto) casa com a razão social/nome fantasia do cliente
+ *    selecionado (o vínculo obra↔cliente é por TEXTO, não FK — ver `matchNames`
+ *    montado em `clientesOpts`). Fica DESABILITADO até escolher o cliente, é
+ *    RESETADO ao trocar de cliente, e mantém `allowCustom` para títulos manuais
+ *    sem obra cadastrada.
+ * 3) CATEGORIA = SELECT COM CATEGORIAS DEFINIDAS: o `Input` livre virou `Select`
+ *    alimentado pela const `CATEGORIAS_RECEBER` (literatura de gestão de contratos
+ *    de engenharia/construção): "Medição", "SEC — Serviços Extras Contratuais",
+ *    "Aditivo Contratual", "Mobilização / Adiantamento", "Reajuste / Reequilíbrio",
+ *    "Liberação de Retenção (Caução)", "Reembolso de Despesas", "Outros". Default
+ *    passou de "Faturamento de Obras" para "Medição".
+ *
+ * NENHUMA mudança de rota/permissão/contrato/backend. Requer REPUBLICAR (só front).
+ *
+ * ──────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 3006 — **FINANCEIRO → CONTAS A RECEBER (TÍTULOS): LAYOUT DA TELA ALINHADO
  * AO PADRÃO DA "CONTAS A PAGAR" — FORA O HERO EM GRADIENTE, ENTRA HEADER LIMPO +
  * NAVEGAÇÃO DE ANO NO CARD DE MESES + KPIs `border-l-4`.**

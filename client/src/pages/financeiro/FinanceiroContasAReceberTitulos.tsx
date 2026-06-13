@@ -8,14 +8,29 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
 import {
   ChevronLeft, ChevronRight, Search, Building2, CheckCircle, Clock,
   AlertTriangle, TrendingUp, Plus, Paperclip, Trash2, RotateCcw, Loader2,
-  HandCoins, Users, Wallet, CalendarDays,
+  HandCoins, Users, Wallet, CalendarDays, ChevronsUpDown, Check, Tag,
 } from "lucide-react";
+
+// Rev. 3007 — categorias de Contas a Receber (literatura de gestão de contratos
+// de engenharia/construção civil): faturamento por medição + serviços extras etc.
+const CATEGORIAS_RECEBER = [
+  "Medição",
+  "SEC — Serviços Extras Contratuais",
+  "Aditivo Contratual",
+  "Mobilização / Adiantamento",
+  "Reajuste / Reequilíbrio",
+  "Liberação de Retenção (Caução)",
+  "Reembolso de Despesas",
+  "Outros",
+];
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
@@ -29,6 +44,18 @@ function fmtDateBR(dateStr: string | null | undefined): string {
 function num(v: any): number {
   const n = parseFloat(String(v ?? 0));
   return Number.isFinite(n) ? n : 0;
+}
+
+// Rev. 3007 — normaliza nome p/ casar `obras.cliente` (texto) com a razão social /
+// nome fantasia do cliente: minúsculas, SEM acentos e espaços colapsados (dados
+// cadastrais costumam divergir em acentuação/espaçamento).
+function normName(s: any): string {
+  return String(s ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 // Rev. 3005 — máscara de moeda BRL automática (digita centavos → "1.234,56").
@@ -119,9 +146,16 @@ export default function FinanceiroContasAReceberTitulos() {
     { enabled: !!companyId }
   );
 
-  const clientesOpts: { id: number; nome: string }[] = useMemo(() => {
+  const clientesOpts: { id: number; nome: string; matchNames: string[] }[] = useMemo(() => {
     const list: any[] = Array.isArray(clientesList) ? clientesList : [];
-    return list.map((c) => ({ id: c.id, nome: (c.nomeFantasia || c.razaoSocial || `Cliente ${c.id}`).trim() }));
+    return list.map((c) => ({
+      id: c.id,
+      nome: (c.nomeFantasia || c.razaoSocial || `Cliente ${c.id}`).trim(),
+      // nomes possíveis usados em `obras.cliente` (vínculo é por texto, não FK)
+      matchNames: [c.razaoSocial, c.nomeFantasia]
+        .filter(Boolean)
+        .map((n: any) => normName(n)),
+    }));
   }, [clientesList]);
 
   const linhas: any[] = useMemo(() => (Array.isArray(titulos) ? titulos : []), [titulos]);
@@ -575,13 +609,84 @@ function BaixaDialog({ titulo, companyId, contasBancarias, onClose, onSubmit, pe
 // ─────────────────────────── NOVO TÍTULO MANUAL ───────────────────────────
 const PARCELA_PRESETS = [1, 2, 3, 4, 6, 12];
 
+// Rev. 3007 — combobox pesquisável (corrige o dropdown de cliente que ficava
+// cortado/sobreposto dentro do modal e melhora a busca em listas grandes).
+function Combobox({
+  value, onChange, options, placeholder, searchPlaceholder, emptyText,
+  disabled, allowCustom, icon,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  placeholder: string;
+  searchPlaceholder?: string;
+  emptyText?: string;
+  disabled?: boolean;
+  allowCustom?: boolean;
+  icon?: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const selected = options.find((o) => o.value === value);
+  const label = selected ? selected.label : (allowCustom && value ? value : "");
+  return (
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setQ(""); }}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          disabled={disabled}
+          className="mt-1 flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <span className={`flex items-center gap-1.5 truncate ${label ? "" : "text-muted-foreground"}`}>
+            {icon}
+            <span className="truncate">{label || placeholder}</span>
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <Command>
+          <CommandInput placeholder={searchPlaceholder || "Buscar..."} value={q} onValueChange={setQ} />
+          <CommandList>
+            <CommandEmpty>
+              {allowCustom && q.trim() ? (
+                <button
+                  type="button"
+                  onClick={() => { onChange(q.trim()); setOpen(false); setQ(""); }}
+                  className="w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+                >
+                  Usar "{q.trim()}"
+                </button>
+              ) : (
+                <span className="block px-2 py-3 text-center text-sm text-muted-foreground">{emptyText || "Nada encontrado."}</span>
+              )}
+            </CommandEmpty>
+            <CommandGroup>
+              {options.map((o) => (
+                <CommandItem
+                  key={o.value}
+                  value={o.label}
+                  onSelect={() => { onChange(o.value); setOpen(false); setQ(""); }}
+                >
+                  <Check className={`mr-2 h-4 w-4 ${value === o.value ? "opacity-100" : "opacity-0"}`} />
+                  <span className="truncate">{o.label}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function NovoTituloDialog({ companyId, clientesOpts, onClose, onSubmit, pending }: any) {
   const { toast } = useToast();
   const [clienteId, setClienteId] = useState<string>("");
   const [descricao, setDescricao] = useState("");
   const [descTouched, setDescTouched] = useState(false);
   const [obraNome, setObraNome] = useState("");
-  const [contaNome, setContaNome] = useState("Faturamento de Obras");
+  const [contaNome, setContaNome] = useState("Medição");
   const [valor, setValor] = useState("");
   const [comp, setComp] = useState(new Date().toISOString().slice(0, 10));
   const [venc, setVenc] = useState(new Date().toISOString().slice(0, 10));
@@ -606,6 +711,24 @@ function NovoTituloDialog({ companyId, clientesOpts, onClose, onSubmit, pending 
     const alvo = obraNome.trim() || (cliSel ? cliSel.nome : "");
     setDescricao(alvo ? `Faturamento — ${alvo}` : "");
   }, [obraNome, cliSel, descTouched]);
+
+  // Rev. 3007 — obras ATIVAS do cliente selecionado (vínculo por texto:
+  // `obras.cliente` == razão social/nome fantasia do cliente).
+  const { data: obrasList } = (trpc as any).obras.listActive.useQuery(
+    { companyId },
+    { enabled: !!companyId },
+  );
+  const obrasDoCliente = useMemo(() => {
+    const list: any[] = Array.isArray(obrasList) ? obrasList : [];
+    if (!cliSel) return [] as { value: string; label: string }[];
+    const names = new Set<string>(cliSel.matchNames || []);
+    return list
+      .filter((o) => o.cliente && names.has(normName(o.cliente)))
+      .map((o) => ({ value: String(o.nome), label: String(o.nome) }));
+  }, [obrasList, cliSel]);
+
+  // ao trocar de cliente, limpa a obra (as obras pertencem ao cliente anterior)
+  useEffect(() => { setObraNome(""); }, [clienteId]);
 
   const valorNum = parseMaskBRL(valor);
   const np = Math.max(1, parseInt(parcelas, 10) || 1);
@@ -663,12 +786,14 @@ function NovoTituloDialog({ companyId, clientesOpts, onClose, onSubmit, pending 
           <div className="space-y-3">
             <div>
               <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5"><Users className="h-3.5 w-3.5 text-emerald-600" /> Cliente</Label>
-              <Select value={clienteId} onValueChange={setClienteId}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
-                <SelectContent>
-                  {clientesOpts.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Combobox
+                value={clienteId}
+                onChange={setClienteId}
+                options={clientesOpts.map((c: any) => ({ value: String(c.id), label: c.nome }))}
+                placeholder="Selecione o cliente"
+                searchPlaceholder="Buscar cliente..."
+                emptyText="Nenhum cliente encontrado."
+              />
             </div>
             <div>
               <Label className="text-xs font-medium text-slate-600">Descrição</Label>
@@ -677,11 +802,25 @@ function NovoTituloDialog({ companyId, clientesOpts, onClose, onSubmit, pending 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5 text-emerald-600" /> Obra <span className="text-slate-400 font-normal">(opcional)</span></Label>
-                <Input className="mt-1" value={obraNome} onChange={(e) => setObraNome(e.target.value)} placeholder="Nome da obra" />
+                <Combobox
+                  value={obraNome}
+                  onChange={setObraNome}
+                  options={obrasDoCliente}
+                  placeholder={clienteId ? "Selecione a obra" : "Selecione o cliente primeiro"}
+                  searchPlaceholder="Buscar obra..."
+                  emptyText={clienteId ? "Nenhuma obra ativa para este cliente." : "Selecione o cliente primeiro."}
+                  disabled={!clienteId}
+                  allowCustom
+                />
               </div>
               <div>
-                <Label className="text-xs font-medium text-slate-600">Categoria <span className="text-slate-400 font-normal">(opcional)</span></Label>
-                <Input className="mt-1" value={contaNome} onChange={(e) => setContaNome(e.target.value)} placeholder="Faturamento de Obras" />
+                <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5"><Tag className="h-3.5 w-3.5 text-emerald-600" /> Categoria</Label>
+                <Select value={contaNome} onValueChange={setContaNome}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a categoria" /></SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIAS_RECEBER.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>
