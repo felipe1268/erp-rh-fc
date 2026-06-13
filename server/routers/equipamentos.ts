@@ -642,6 +642,47 @@ ${lote.map(c => `- descricao="${c.descricao}" | marca="${c.marca}" | modelo="${c
 
 Gere o JSON conforme o esquema. Não omita nenhum item.`;
 
+      // Normaliza um token numérico que a IA pode devolver em formato BR
+      // (ex.: "2.500,00", "2.500.00", "2500,00") para Number JS válido.
+      const parseValorBR = (s: any): number => {
+        let t = String(s ?? "").trim().replace(/[^0-9.,]/g, "");
+        if (!t) return NaN;
+        const hasComma = t.includes(",");
+        const hasDot = t.includes(".");
+        if (hasComma && hasDot) {
+          // O último separador é o decimal; o outro é milhar.
+          if (t.lastIndexOf(",") > t.lastIndexOf(".")) t = t.replace(/\./g, "").replace(",", ".");
+          else t = t.replace(/,/g, "");
+        } else if (hasComma) {
+          const parts = t.split(",");
+          const dec = parts[parts.length - 1];
+          if (dec.length <= 2) t = parts.slice(0, -1).join("") + "." + dec; // 2500,00 -> 2500.00
+          else t = t.replace(/,/g, ""); // vírgula de milhar
+        } else if (hasDot) {
+          const parts = t.split(".");
+          const dec = parts[parts.length - 1];
+          if (parts.length > 2) t = parts.slice(0, -1).join("") + "." + dec; // 2.500.00 -> 2500.00
+          else if (dec.length === 3) t = t.replace(/\./g, ""); // 2.500 -> 2500 (milhar)
+          // senão: 2500.00 / 2500.5 -> mantém como decimal
+        }
+        return Number(t);
+      };
+      // Recupera os itens de preço mesmo quando o JSON vem malformado
+      // (números BR, vírgulas sobrando) — extrai cada objeto via regex tolerante.
+      const extrairPrecosResiliente = (txt: string): any[] => {
+        const out: any[] = [];
+        const blocks = txt.match(/\{[^{}]*?"valor"[^{}]*?\}/gi) || [];
+        for (const b of blocks) {
+          const d = b.match(/"descricao"\s*:\s*"((?:[^"\\]|\\.)*)"/i)?.[1];
+          const ma = b.match(/"marca"\s*:\s*"((?:[^"\\]|\\.)*)"/i)?.[1];
+          const mo = b.match(/"modelo"\s*:\s*"((?:[^"\\]|\\.)*)"/i)?.[1];
+          const vRaw = b.match(/"valor"\s*:\s*"?\s*R?\$?\s*([0-9][\d.,\s]*)/i)?.[1];
+          if (d == null || vRaw == null) continue;
+          out.push({ descricao: d, marca: ma ?? "", modelo: mo ?? "", valor: parseValorBR(vRaw) });
+        }
+        return out;
+      };
+
       let parsed: any;
       try {
         const resp = await invokeLLM({
@@ -658,7 +699,14 @@ Gere o JSON conforme o esquema. Não omita nenhum item.`;
         if (m) raw = m[1].trim();
         const fi = raw.indexOf("{"); const li = raw.lastIndexOf("}");
         if (fi >= 0 && li > fi) raw = raw.slice(fi, li + 1);
-        parsed = JSON.parse(raw);
+        try {
+          parsed = JSON.parse(raw);
+        } catch {
+          // Fallback resiliente: extrai os preços via regex tolerante a formato BR.
+          const precos = extrairPrecosResiliente(raw);
+          if (!precos.length) throw new Error("JSON da IA inválido e sem itens recuperáveis");
+          parsed = { precos };
+        }
       } catch (err: any) {
         const msg = err?.message || String(err);
         if (msg.includes("Nenhuma chave de IA")) {

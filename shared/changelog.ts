@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3031 — **EQUIPAMENTOS PRÓPRIOS → BOTÃO "GERAR PREÇOS" (IA): CORRIGE O ERRO
+ * "FALHA NA IA: EXPECTED ',' OR '}' AFTER PROPERTY VALUE IN JSON AT POSITION 190"
+ * QUE ABORTAVA TODA A GERAÇÃO DE PREÇOS QUANDO O MODELO DEVOLVIA O VALOR EM FORMATO
+ * BR (EX.: 2.500,00 / 2.500.00) — UM JSON INVÁLIDO PARA O `JSON.parse` ESTRITO.**
+ *
+ * PEDIDO (usuário, print IMG_1923): "está com erro" — o modal de progresso do
+ * "Gerar preços" parava em 0% com a mensagem de falha na fase "Estimando valores
+ * com IA".
+ *
+ * CAUSA-RAIZ / DIAGNÓSTICO: em `propriosGerarPrecosComIA`
+ * (`server/routers/equipamentos.ts`) a resposta da IA era lida com `JSON.parse(raw)`
+ * ESTRITO. Apesar do system prompt pedir número puro com ponto decimal, o modelo às
+ * vezes emite o valor com separador de milhar/decimal brasileiro (`"valor": 2.500,00`
+ * ou `2.500.00`). Isso produz um JSON sintaticamente inválido — o parser lê `2.500`
+ * e em seguida encontra `.00`/`,00`, disparando "Expected ',' or '}' after property
+ * value in JSON". Como o parse era a ÚNICA via, UM número malformado abortava o lote
+ * inteiro e nenhum preço era gravado.
+ *
+ * SOLUÇÃO (BACKEND-only, ZERO ALTER/DROP/DELETE, ZERO schema) em
+ * `propriosGerarPrecosComIA`:
+ *  - NOVO `parseValorBR(s)`: normaliza tokens numéricos em formato BR para `Number`
+ *    JS válido. Regras: ambos `.` e `,` → o ÚLTIMO separador é decimal (o outro é
+ *    milhar); só `,` → decimal se ≤2 dígitos finais, senão milhar; só `.` → trata
+ *    `2.500.00` como `2500.00`, `2.500` (3 dígitos finais) como milhar `2500`, e
+ *    mantém `2500.00`/`2500.5` como decimal.
+ *  - NOVO `extrairPrecosResiliente(txt)`: salvage por regex que recupera cada objeto
+ *    `{descricao, marca, modelo, valor}` mesmo com o JSON malformado (extrai os
+ *    campos string e o token de `valor`, passando-o por `parseValorBR`).
+ *  - O parse passa a ser `try { JSON.parse(raw) } catch { precos = extrairPrecosResiliente(raw) }`;
+ *    só lança erro real quando NADA é recuperável.
+ *
+ * Idempotência, paginação por lote (Rev. 3026) e o filtro anti-sobrescrita
+ * (`valor_aquisicao IS NULL OR = 0`, Rev. 3015) seguem INTOCADOS — o salvage só
+ * alimenta o mesmo loop de UPDATE já existente. FRONT inalterado. REPUBLICAR (só
+ * backend).
+ *
  * Rev. 3030 — **FINANCEIRO → "ANÁLISE DE CUSTOS" · TELA DE DETALHE · MODAL "EDITAR
  * LANÇAMENTO": LAYOUT MAIS LIMPO E AUTOMÁTICO — (1) A DESCRIÇÃO JÁ ABRE LIMPA (SEM
  * O "OC #OS-2026-013 — FORNECEDOR" CRU; SÓ O TEXTO LIVRE, EX.: "PREVISÃO MEDIÇÃO");

@@ -62,6 +62,7 @@
 - [resolveCompanyIds trusts input](resolvecompanyids-no-intersect.md) — resolveCompanyIds/companyFilter don't intersect with user's allowed companies; per-company endpoints must call assert guard explicitly (loop every id for lists).
 - [Migração export/import](migration-export-streaming.md) — export grande = rota GET streaming (archiver.pipe+ctid), NÃO buffer+upload+window.open ("Fetch is aborted"); import precisa whitelist de identificadores (information_schema).
 - [Medição duplicada no Contas a Receber](medicao-receita-dupla-escrita.md) — medição é escrita 2x (planejamento_medicao + revenue→entries); dedup contra o par canônico, NUNCA por medicao_id IS NULL.
+- [AI JSON quebra com número BR](ai-json-br-number-salvage.md) — LLM emite `2.500,00`/`2.500.00` → JSON.parse estrito aborta o lote inteiro; precisa try-parse→catch-salvage por regex + parser BR-aware.
 - [SC → cotação tipo propagation](sc-cotacao-tipo-propagation.md) — editar SC deve reconciliar `tipo` nas cotações vinculadas ativas; TODO caminho de criação de cotação deve semear `tipo: sc.tipo ?? "material"` (legenda + split da OC).
 - [cronograma_atividade = projeção, não custo real](cronograma-atividade-projecao-custos.md) — é o valor de contrato da obra distribuído mês a mês; telas de custo REAL devem excluí-lo (senão duplica com folha/compras).
 - [updateEmployee validFields whitelist](updateEmployee-validfields-whitelist.md) — new employees column must be added to validFields (and booleanFields/intFields) or updateEmployee silently drops it and returns success without writing.
