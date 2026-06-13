@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3022 — **PAINEL RH → "CONTRATOS DE EXPERIÊNCIA": NOVO CHECKBOX
+ * "NÃO RENOVAR" QUE PRÉ-MARCA ANTECIPADAMENTE QUE O CONTRATO DE EXPERIÊNCIA
+ * NÃO SERÁ RENOVADO (AVISO DE NÃO RENOVAÇÃO) — FLAG PERSISTIDO NO BANCO,
+ * REVERSÍVEL, QUE NÃO EXECUTA O DESLIGAMENTO.**
+ *
+ * PEDIDO (usuário): um "checkbox" no painel de Contratos de Experiência para
+ * "já demarcar previamente que não vai ser renovado o aviso" — ou seja, o RH
+ * sinaliza com antecedência quais contratos não terão continuidade. Precisava
+ * PERSISTIR (não bastava marcação só visual em memória).
+ *
+ * SOLUÇÃO (ZERO DROP/DELETE, ZERO ALTER destrutivo — só ADD COLUMN IF NOT EXISTS
+ * via self-heal `[SyncSchema+]` + UPDATE do flag):
+ *  - SCHEMA (`drizzle/schema.ts`, tabela `employees`): 3 colunas novas, implícitas
+ *    (camelCase, p/ casar com `experienciaStatus`/`experienciaObs`) —
+ *    `experienciaNaoRenovar` (SMALLINT default 0), `experienciaNaoRenovarEm`
+ *    (DATE) e `experienciaNaoRenovarPor` (VARCHAR 255, auditoria).
+ *  - SELF-HEAL (`server/_core/index.ts`): `ALTER TABLE employees ADD COLUMN IF NOT
+ *    EXISTS "experienciaNaoRenovar"/"...Em"/"...Por"` (nomes entre aspas =
+ *    camelCase, confirmado no Neon que as colunas de experiência são camelCase).
+ *  - BACKEND (`server/routers.ts`): NOVA procedure `employees.marcarNaoRenovarExperiencia`
+ *    (employeeId, companyId, naoRenovar:boolean) — `getEmployeeById` (tenant guard) +
+ *    `updateEmployee` do flag/auditoria + `createAuditLog` + `createEmployeeHistory`.
+ *    NÃO toca `experienciaStatus` nem dispara desligamento (ação real segue no
+ *    botão "Desligar"). Toggle idempotente: desmarcar limpa Em/Por.
+ *  - HOME DATA (`server/routers/homeData.ts`): o map `experiencias` passa a expor
+ *    `naoRenovar`/`naoRenovarEm`/`naoRenovarPor`.
+ *  - FRONT (`client/src/pages/PainelRH.tsx`): checkbox "Não renovar" em cada card
+ *    (gated por `canEditExperiencia`) que chama a mutation + invalida `home.getData`;
+ *    badge rosa "Não renovar" ao lado do nome (visível a todos, com `title`
+ *    mostrando data/autor). Usa `@/components/ui/checkbox`.
+ *
+ * IMPACTO: nenhuma régua de cálculo/cronograma mudou; é só um marcador de intenção.
+ * REPUBLICAR (front + back; self-heal cria as colunas no boot).
+ *
  * Rev. 3021 — **FINANCEIRO → "ANÁLISE DE CUSTOS": OS RÓTULOS DAS BARRAS
  * ("CUSTO POR CATEGORIA" E "CUSTO POR CENTRO DE CUSTO") DEIXAM DE USAR O
  * FORMATO COMPACTO (`R$ 2,0 mi` / `R$ 770 mil`) E PASSAM A MOSTRAR O VALOR

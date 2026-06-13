@@ -885,6 +885,8 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
     "experienciaStatus", "experienciaObs",
     "experienciaProrrogadoEm", "experienciaProrrogadoPor",
     "experienciaEfetivadoEm", "experienciaEfetivadoPor",
+    // Rev. 3022 — pré-marcação "não renovar"
+    "experienciaNaoRenovar", "experienciaNaoRenovarEm", "experienciaNaoRenovarPor",
     // Conta bancária empresa
     "contaBancariaEmpresaId",
     // Benefícios
@@ -908,7 +910,7 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
     "cargoConfiancaInciso", "cargoConfiancaObservacao",
   ]);
   // Campos booleanos armazenados como smallint (0/1) no banco
-  const booleanFields = new Set(["listaNegra", "recebeComplemento", "acordoHoraExtra", "pensaoAlimenticia", "licencaMaternidade", "ddsParticipacao", "cargoConfianca"]);
+  const booleanFields = new Set(["listaNegra", "recebeComplemento", "acordoHoraExtra", "pensaoAlimenticia", "licencaMaternidade", "ddsParticipacao", "cargoConfianca", "experienciaNaoRenovar"]);
   // Campos inteiros
   const intFields = new Set(["contaBancariaEmpresaId", "desligadoUserId", "listaNegraUserId", "dependentesIR"]);
   // Campos string de HE (são varchar no banco, não int)

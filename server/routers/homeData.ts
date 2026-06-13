@@ -579,6 +579,10 @@ export const homeDataRouter = router({
             urgencia,
             prorrogadoEm: exp.experienciaProrrogadoEm ? toDateStr(exp.experienciaProrrogadoEm) : null,
             obs: exp.experienciaObs,
+            // Rev. 3022 — pré-marcação "não renovar" (flag de intenção)
+            naoRenovar: !!exp.experienciaNaoRenovar,
+            naoRenovarEm: exp.experienciaNaoRenovarEm ? toDateStr(exp.experienciaNaoRenovarEm) : null,
+            naoRenovarPor: exp.experienciaNaoRenovarPor || null,
           };
         })
         .filter(Boolean)

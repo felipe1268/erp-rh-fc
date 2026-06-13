@@ -63,3 +63,4 @@
 - [Migração export/import](migration-export-streaming.md) — export grande = rota GET streaming (archiver.pipe+ctid), NÃO buffer+upload+window.open ("Fetch is aborted"); import precisa whitelist de identificadores (information_schema).
 - [Medição duplicada no Contas a Receber](medicao-receita-dupla-escrita.md) — medição é escrita 2x (planejamento_medicao + revenue→entries); dedup contra o par canônico, NUNCA por medicao_id IS NULL.
 - [cronograma_atividade = projeção, não custo real](cronograma-atividade-projecao-custos.md) — é o valor de contrato da obra distribuído mês a mês; telas de custo REAL devem excluí-lo (senão duplica com folha/compras).
+- [updateEmployee validFields whitelist](updateEmployee-validfields-whitelist.md) — new employees column must be added to validFields (and booleanFields/intFields) or updateEmployee silently drops it and returns success without writing.

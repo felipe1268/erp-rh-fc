@@ -2415,6 +2415,11 @@ Regras:
         try {
           await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS numero_contrato_experiencia INTEGER`);
           await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS numero_contrato_experiencia_ano INTEGER`);
+          // Rev. 3022 — pré-marcação "não renovar" do contrato de experiência.
+          // Colunas implícitas (camelCase) p/ casar com experienciaStatus/Obs.
+          await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS "experienciaNaoRenovar" SMALLINT DEFAULT 0`);
+          await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS "experienciaNaoRenovarEm" DATE`);
+          await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS "experienciaNaoRenovarPor" VARCHAR(255)`);
           await db.execute(sql`
             CREATE TABLE IF NOT EXISTS contract_counters (
               company_id INTEGER NOT NULL,

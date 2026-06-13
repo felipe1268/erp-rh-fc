@@ -1134,6 +1134,12 @@ export const employees = pgTable("employees", {
         experienciaEfetivadoEm: date({ mode: 'string' }),
         experienciaEfetivadoPor: varchar({ length: 255 }),
         experienciaObs: text(),
+        // Rev. 3022 — pré-marcação "NÃO RENOVAR": RH demarca antecipadamente que
+        // o contrato de experiência NÃO será prorrogado/efetivado (haverá aviso de
+        // não renovação). É só um flag de intenção (reversível) — não muda status.
+        experienciaNaoRenovar: smallint().default(0),
+        experienciaNaoRenovarEm: date({ mode: 'string' }),
+        experienciaNaoRenovarPor: varchar({ length: 255 }),
         // Rev. 2125 — número do Contrato de Experiência alocado uma única vez
         // e persistido (formato exibido NNN/AAAA). Counter atômico em
         // `contract_counters(company_id, ano, tipo='contrato_experiencia')`.

@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import {
@@ -72,6 +73,11 @@ export default function PainelRH() {
   const desligarMut = trpc.employees.desligarExperiencia.useMutation({
     onSuccess: () => { utils.home.getData.invalidate(); setExpAction(null); setExpMotivo(''); setExpObs(''); toast.success('Colaborador desligado durante a experiência.'); },
     onError: (e) => toast.error(e.message || 'Não foi possível desligar o colaborador.'),
+  });
+  // Rev. 3022 — pré-marcação "não renovar" (flag de intenção, reversível)
+  const naoRenovarMut = trpc.employees.marcarNaoRenovarExperiencia.useMutation({
+    onSuccess: (_d, vars) => { utils.home.getData.invalidate(); toast.success(vars.naoRenovar ? 'Contrato pré-marcado como "não renovar".' : 'Pré-marcação "não renovar" removida.'); },
+    onError: (e) => toast.error(e.message || 'Não foi possível atualizar a marcação.'),
   });
 
   const { data: homeData, isLoading } = trpc.home.getData.useQuery(
@@ -306,6 +312,11 @@ export default function PainelRH() {
                                 <Badge className={`text-[10px] ${exp.status === 'prorrogado' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
                                   {exp.status === 'prorrogado' ? '2º período' : '1º período'}
                                 </Badge>
+                                {exp.naoRenovar ? (
+                                  <Badge className="text-[10px] bg-rose-100 text-rose-700 border border-rose-300 gap-1" title={exp.naoRenovarEm ? `Marcado em ${new Date(exp.naoRenovarEm + 'T12:00:00').toLocaleDateString('pt-BR')}${exp.naoRenovarPor ? ` por ${exp.naoRenovarPor}` : ''}` : undefined}>
+                                    <Ban className="h-2.5 w-2.5" /> Não renovar
+                                  </Badge>
+                                ) : null}
                               </div>
                               <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1 flex-wrap">
                                 <span>{exp.tipo === '30_30' ? '30+30' : '45+45'} dias · Início: {new Date(exp.inicio + 'T12:00:00').toLocaleDateString('pt-BR')} ·</span>
@@ -323,6 +334,10 @@ export default function PainelRH() {
                                 <FileBarChart className="h-3 w-3" /> Análise
                               </Button>
                               {canEditExperiencia && (<>
+                              <label className={`flex items-center gap-1.5 h-7 px-2 rounded-md border cursor-pointer text-xs select-none ${exp.naoRenovar ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-gray-200 text-muted-foreground hover:bg-gray-50'} ${naoRenovarMut.isPending ? 'opacity-60 pointer-events-none' : ''}`} title="Pré-marcar que este contrato NÃO será renovado (aviso de não renovação). Não executa o desligamento.">
+                                <Checkbox checked={!!exp.naoRenovar} onCheckedChange={(v) => naoRenovarMut.mutate({ employeeId: exp.id, companyId: (exp.companyId ?? companyId)!, naoRenovar: v === true })} className="h-3.5 w-3.5" />
+                                Não renovar
+                              </label>
                               {exp.status === 'em_experiencia' ? (
                                 <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-blue-300 text-blue-700 hover:bg-blue-50" onClick={() => { setExpAction({ type: 'prorrogar', emp: exp }); setExpObs(''); }}>
                                   <RefreshCw className="h-3 w-3" /> Prorrogar

@@ -975,6 +975,37 @@ export const appRouter = router({
       return { success: true };
     }),
 
+    // === PRÉ-MARCAÇÃO "NÃO RENOVAR" (Rev. 3022) ===
+    // RH demarca ANTECIPADAMENTE que o contrato de experiência NÃO será
+    // renovado (prorrogado/efetivado) — haverá aviso de não renovação. É só
+    // um FLAG DE INTENÇÃO, reversível: NÃO altera experienciaStatus nem
+    // executa o desligamento (a ação real continua pelo botão "Desligar").
+    // ZERO ALTER/DROP/DELETE (R-001/R-007/R-010) — só UPDATE do flag.
+    marcarNaoRenovarExperiencia: protectedProcedure.input(z.object({
+      employeeId: z.number(),
+      companyId: z.number(),
+      naoRenovar: z.boolean(),
+    })).mutation(async ({ input, ctx }) => {
+      // ACL explícita: o user logado precisa ter acesso à empresa alvo (evita IDOR
+      // por injeção de companyId). Mesmo padrão dos endpoints hardened (Rev. 2137).
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = allowed.map((c: any) => (typeof c === 'number' ? c : c?.id)).filter((v: any) => typeof v === 'number') as number[];
+      if (!allowedIds.includes(input.companyId)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem acesso a esta empresa.' });
+      }
+      const emp = await getEmployeeById(input.employeeId, input.companyId);
+      if (!emp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Colaborador não encontrado' });
+      const hoje = new Date().toISOString().split('T')[0];
+      await updateEmployee(input.employeeId, input.companyId, {
+        experienciaNaoRenovar: input.naoRenovar ? 1 : 0,
+        experienciaNaoRenovarEm: input.naoRenovar ? hoje : null,
+        experienciaNaoRenovarPor: input.naoRenovar ? (ctx.user.name ?? 'Sistema') : null,
+      } as any);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'colaboradores', entityType: 'employee', entityId: input.employeeId, details: input.naoRenovar ? 'Contrato de experiência PRÉ-MARCADO como "não renovar" (aviso de não renovação).' : 'Pré-marcação "não renovar" do contrato de experiência REMOVIDA.' });
+      await createEmployeeHistory({ employeeId: input.employeeId, companyId: input.companyId, tipo: 'Outros' as any, descricao: input.naoRenovar ? `Contrato de experiência pré-marcado como "não renovar" por ${ctx.user.name}.` : `Pré-marcação "não renovar" removida por ${ctx.user.name}.`, data: hoje, registradoPor: ctx.user.name ?? 'Sistema' } as any);
+      return { success: true };
+    }),
+
     // === ANÁLISE DE EXPERIÊNCIA (Rev. 2622) ===
     // Cruza TODAS as ocorrências do colaborador DENTRO da janela do contrato de
     // experiência (início → hoje) — assiduidade/faltas, atrasos, advertências,
