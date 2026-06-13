@@ -17,7 +17,7 @@ import { useCompany } from "@/hooks/useCompany";
 import {
   RefreshCw, ChevronLeft, ChevronRight, TrendingDown, CircleDollarSign,
   Layers, Tag, AlertTriangle, CheckCircle2, Receipt, Building2,
-  BarChart2, Scissors, Calendar, Table2, ArrowUp, ArrowDown, Minus,
+  BarChart2, Scissors, Calendar, Table2, ArrowUp, ArrowDown,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar,
@@ -236,32 +236,50 @@ export default function FinanceiroAnaliseCustos() {
       .slice(0, 10);
   }, [rowsFiltradas]);
 
-  // ─── Tabela comparativa mês a mês por GRUPO (análise analítica) ──────────
-  // Rev. 3027 — matriz grupo × 12 meses com Δ (último mês com dados × o
-  // anterior) pra ver o que SUBIU/DESCEU. Sempre sobre o ANO inteiro (rowsAll),
-  // independente do filtro de mês — é uma visão de tendência.
+  // ─── Comparativo mês a mês — SÓ VALORES REAIS ───────────────────────────
+  // Rev. 3037 — a tabela mostra APENAS o que é REAL: o que já foi PAGO +
+  // o que vamos PAGAR (status 'a_pagar'). EXCLUI as PROJEÇÕES (status
+  // 'previsto': folha_projetada, encargos_projetado, 13º/férias/rescisão/PJ
+  // projetados, compras previstas…), que eram o que inflava a folha.
+  // Cada célula carrega o split pago × a pagar (tooltip) e a seta compara
+  // com o MÊS ANTERIOR exibido (▲ subiu · ▼ caiu).
   const tabelaMensal = useMemo(() => {
-    const map = new Map<string, number[]>();
+    type Cel = { total: number; pago: number; aPagar: number };
+    const novaCel = (): Cel => ({ total: 0, pago: 0, aPagar: 0 });
+    const map = new Map<string, Cel[]>();
     const mesTemDados = new Array(12).fill(false);
     for (const r of rowsAll) {
+      const st = String(r?.status ?? "");
+      if (st !== "pago" && st !== "a_pagar") continue; // ignora projeções (previsto)
       const mn = mesNumDe(r);
       if (mn < 1 || mn > 12) continue;
       const g = classificarGrupoCusto(r.contaNome, r.origemModulo);
-      const arr = map.get(g) ?? new Array(12).fill(0);
-      arr[mn - 1] += valorEfetivo(r);
+      const arr = map.get(g) ?? Array.from({ length: 12 }, novaCel);
+      const cel = arr[mn - 1];
+      const pg = pagoDe(r);
+      const ap = st === "a_pagar" ? (Number(r.valorPrevisto ?? 0) || valorEfetivo(r)) : 0;
+      cel.pago += pg;
+      cel.aPagar += ap;
+      cel.total += pg + ap;
       map.set(g, arr);
-      mesTemDados[mn - 1] = true;
+      if (pg + ap !== 0) mesTemDados[mn - 1] = true;
     }
     const meses: number[] = mesTemDados.map((h, i) => (h ? i : -1)).filter((i) => i >= 0);
     const linhas = Array.from(map.entries())
-      .map(([name, arr]) => ({ name, arr, total: arr.reduce((s, x) => s + x, 0) }))
+      .map(([name, arr]) => ({
+        name,
+        arr,
+        total: arr.reduce((s, c) => s + c.total, 0),
+        pago: arr.reduce((s, c) => s + c.pago, 0),
+        aPagar: arr.reduce((s, c) => s + c.aPagar, 0),
+      }))
       .filter((l) => l.total > 0)
       .sort((a, b) => b.total - a.total);
-    const lastIdx = meses.length ? meses[meses.length - 1] : -1;
-    const prevIdx = meses.length > 1 ? meses[meses.length - 2] : -1;
-    const totaisMes = meses.map((mi) => linhas.reduce((s, l) => s + l.arr[mi], 0));
+    const totaisMes = meses.map((mi) => linhas.reduce((s, l) => s + l.arr[mi].total, 0));
     const totalGeral = linhas.reduce((s, l) => s + l.total, 0);
-    return { linhas, meses, lastIdx, prevIdx, totaisMes, totalGeral };
+    const totalPago = linhas.reduce((s, l) => s + l.pago, 0);
+    const totalAPagar = linhas.reduce((s, l) => s + l.aPagar, 0);
+    return { linhas, meses, totaisMes, totalGeral, totalPago, totalAPagar };
   }, [rowsAll]);
 
   const tituloPeriodo = mesSel === 0 ? `Ano de ${ano}` : `${MESES_FULL[mesSel - 1]} ${ano}`;
@@ -585,28 +603,29 @@ export default function FinanceiroAnaliseCustos() {
               </CardContent>
             </Card>
 
-            {/* Tabela comparativa mês a mês por grupo (análise analítica) */}
+            {/* Tabela comparativa mês a mês por grupo — SÓ VALORES REAIS (Rev. 3037) */}
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2 pt-4 px-5">
                 <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2">
                   <Table2 className="w-4 h-4 text-indigo-600" /> Comparativo Mês a Mês por Categoria — {ano}
+                  <span className="text-[10px] font-normal text-gray-400">(valores reais · sem projeções)</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="px-5 pb-4">
                 {tabelaMensal.linhas.length === 0 || tabelaMensal.meses.length === 0 ? (
-                  <p className="text-center text-sm text-gray-400 py-8">Sem dados mensais para o ano selecionado.</p>
+                  <p className="text-center text-sm text-gray-400 py-8">Sem valores reais para o ano selecionado.</p>
                 ) : (
                   <>
                     <p className="text-xs text-gray-500 mb-4">
-                      Custo por categoria mês a mês ao longo de {ano}. O tom de cor mais
-                      forte marca os meses de maior gasto em cada linha; a coluna
-                      {" "}<span className="font-medium text-gray-600">Variação</span> compara
-                      {tabelaMensal.prevIdx >= 0
-                        ? <> {MESES_ABREV[tabelaMensal.prevIdx]} → {MESES_ABREV[tabelaMensal.lastIdx]}</>
-                        : <> os dois últimos meses com dados</>}
+                      Só <span className="font-medium text-gray-600">valores reais</span> de {ano}:
+                      {" "}<span className="text-emerald-600 font-medium">o que foi pago</span> +
+                      {" "}<span className="text-amber-600 font-medium">o que vamos pagar</span>
+                      {" "}(em aberto). <span className="font-medium text-gray-600">Não inclui projeções</span>
+                      {" "}(folha/encargos/13º/férias estimados). A seta em cada mês compara com o
+                      {" "}<span className="font-medium text-gray-600">mês anterior</span>
                       {" "}(<span className="text-rose-600 font-medium">▲ subiu</span> ·
                       {" "}<span className="text-emerald-600 font-medium">▼ caiu</span>).
-                      {" "}Passe o mouse para ver o valor exato; clique numa categoria para ver os lançamentos.
+                      {" "}Passe o mouse para o detalhe; clique numa categoria para ver os lançamentos.
                     </p>
                     <div className="overflow-x-auto -mx-1 px-1">
                       <table className="w-full text-sm border-collapse">
@@ -614,70 +633,72 @@ export default function FinanceiroAnaliseCustos() {
                           <tr className="text-gray-400 text-xs border-b border-gray-200">
                             <th className="text-left font-medium py-2 pr-3 sticky left-0 bg-white z-10">Categoria</th>
                             {tabelaMensal.meses.map((mi) => (
-                              <th key={mi} className="text-right font-medium py-2 px-2 whitespace-nowrap">{MESES_ABREV[mi]}</th>
+                              <th key={mi} className="text-right font-medium py-2 px-2.5 whitespace-nowrap">{MESES_ABREV[mi]}</th>
                             ))}
-                            <th className="text-right font-medium py-2 px-2 whitespace-nowrap">Total</th>
-                            <th className="text-right font-medium py-2 pl-3 whitespace-nowrap">Variação</th>
+                            <th className="text-right font-medium py-2 pl-3 whitespace-nowrap">Total</th>
                           </tr>
                         </thead>
                         <tbody>
                           {tabelaMensal.linhas.map((l) => {
-                            const temComp = tabelaMensal.prevIdx >= 0;
-                            const prev = temComp ? l.arr[tabelaMensal.prevIdx] : 0;
-                            const last = tabelaMensal.lastIdx >= 0 ? l.arr[tabelaMensal.lastIdx] : 0;
-                            const delta = last - prev;
-                            const deltaPct = prev > 0 ? (delta / prev) * 100 : (last > 0 ? 100 : 0);
-                            const subiu = temComp && delta > 0.005;
-                            const caiu = temComp && delta < -0.005;
-                            const rowMax = Math.max(0, ...tabelaMensal.meses.map((mi) => l.arr[mi]));
                             const share = pct(l.total, tabelaMensal.totalGeral);
                             return (
                               <tr
                                 key={l.name}
                                 onClick={() => irParaDetalhe("grupo", l.name)}
                                 title={`Ver lançamentos · ${l.name}`}
-                                className="group border-b border-gray-50 cursor-pointer transition-colors"
+                                className="group border-b border-gray-50 cursor-pointer hover:bg-indigo-50/40 transition-colors"
                               >
                                 <td className="py-2.5 pr-3 align-middle sticky left-0 bg-white group-hover:bg-indigo-50/60 z-10">
                                   <div className="font-medium text-gray-700 whitespace-nowrap">{l.name}</div>
-                                  <div className="mt-1 flex items-center gap-1.5">
-                                    <div className="h-1 w-14 rounded-full bg-gray-100 overflow-hidden">
-                                      <div className="h-full rounded-full bg-indigo-400" style={{ width: `${Math.min(100, share)}%` }} />
-                                    </div>
-                                    <span className="text-[10px] text-gray-400 tabular-nums">{share.toFixed(0)}%</span>
-                                  </div>
+                                  <div className="text-[10px] text-gray-400 tabular-nums mt-0.5">{share.toFixed(0)}% do total</div>
                                 </td>
-                                {tabelaMensal.meses.map((mi) => {
-                                  const v = l.arr[mi];
-                                  const intensidade = rowMax > 0 ? v / rowMax : 0;
+                                {tabelaMensal.meses.map((mi, k) => {
+                                  const v = l.arr[mi].total;
+                                  const prevV = k > 0 ? l.arr[tabelaMensal.meses[k - 1]].total : null;
+                                  const delta = prevV == null ? 0 : v - prevV;
+                                  const subiu = prevV != null && delta > 0.005;
+                                  const caiu = prevV != null && delta < -0.005;
+                                  const pctMoM = prevV && prevV > 0
+                                    ? (delta / prevV) * 100
+                                    : (v > 0 && prevV === 0 ? 100 : 0);
+                                  const c = l.arr[mi];
+                                  const tip = v > 0
+                                    ? `${l.name} · ${MESES_ABREV[mi]}: ${formatBRL(v)}\n`
+                                      + `Pago ${formatBRL(c.pago)} · A pagar ${formatBRL(c.aPagar)}`
+                                      + (prevV != null
+                                        ? `\nvs ${MESES_ABREV[tabelaMensal.meses[k - 1]]}: `
+                                          + `${subiu ? "+" : caiu ? "−" : ""}${formatBRL(Math.abs(delta))}`
+                                          + ` (${Math.abs(pctMoM).toFixed(0)}%)`
+                                        : "")
+                                    : `${l.name} · ${MESES_ABREV[mi]}: sem custo real`;
                                   return (
                                     <td
                                       key={mi}
-                                      title={`${l.name} · ${MESES_ABREV[mi]}: ${formatBRL(v)}`}
-                                      className="py-2.5 px-2 text-right tabular-nums whitespace-nowrap align-middle text-gray-700 group-hover:brightness-95"
-                                      style={{ backgroundColor: v > 0 ? `rgba(99,102,241,${(0.05 + intensidade * 0.33).toFixed(3)})` : undefined }}
+                                      title={tip}
+                                      className="py-2.5 px-2.5 text-right tabular-nums whitespace-nowrap align-middle"
                                     >
-                                      {v > 0 ? BRLk(v) : <span className="text-gray-300">—</span>}
+                                      {v > 0 ? (
+                                        <span className="inline-flex items-center justify-end gap-1">
+                                          <span className="text-gray-700">{BRLk(v)}</span>
+                                          {subiu ? (
+                                            <ArrowUp className="w-3 h-3 text-rose-500 shrink-0" />
+                                          ) : caiu ? (
+                                            <ArrowDown className="w-3 h-3 text-emerald-500 shrink-0" />
+                                          ) : null}
+                                        </span>
+                                      ) : (
+                                        <span className="text-gray-300">—</span>
+                                      )}
                                     </td>
                                   );
                                 })}
-                                <td className="py-2.5 px-2 text-right tabular-nums font-semibold text-gray-800 whitespace-nowrap align-middle group-hover:bg-indigo-50/60">
-                                  {formatBRL(l.total)}
-                                </td>
-                                <td className="py-2.5 pl-3 text-right align-middle whitespace-nowrap group-hover:bg-indigo-50/60">
-                                  <span
-                                    title={
-                                      !temComp || delta === 0
-                                        ? "Sem variação no período"
-                                        : `${subiu ? "+" : "−"}${formatBRL(Math.abs(delta))} de ${MESES_ABREV[tabelaMensal.prevIdx]} para ${MESES_ABREV[tabelaMensal.lastIdx]}`
-                                    }
-                                    className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium ${
-                                      subiu ? "bg-rose-50 text-rose-700" : caiu ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-500"
-                                    }`}
-                                  >
-                                    {subiu ? <ArrowUp className="w-3 h-3" /> : caiu ? <ArrowDown className="w-3 h-3" /> : <Minus className="w-3 h-3" />}
-                                    {!temComp || delta === 0 ? "—" : `${Math.abs(deltaPct).toFixed(0)}%`}
-                                  </span>
+                                <td className="py-2.5 pl-3 text-right whitespace-nowrap align-middle group-hover:bg-indigo-50/60">
+                                  <div className="font-semibold text-gray-800 tabular-nums">{formatBRL(l.total)}</div>
+                                  <div className="text-[10px] tabular-nums mt-0.5">
+                                    <span className="text-emerald-600">{BRLk(l.pago)} pago</span>
+                                    {" · "}
+                                    <span className="text-amber-600">{BRLk(l.aPagar)} a pagar</span>
+                                  </div>
                                 </td>
                               </tr>
                             );
@@ -687,10 +708,16 @@ export default function FinanceiroAnaliseCustos() {
                           <tr className="border-t-2 border-gray-200 font-semibold text-gray-700">
                             <td className="py-2.5 pr-3 sticky left-0 bg-white z-10">Total geral</td>
                             {tabelaMensal.totaisMes.map((t, i) => (
-                              <td key={i} className="py-2.5 px-2 text-right tabular-nums whitespace-nowrap">{t > 0 ? BRLk(t) : "—"}</td>
+                              <td key={i} className="py-2.5 px-2.5 text-right tabular-nums whitespace-nowrap">{t > 0 ? BRLk(t) : "—"}</td>
                             ))}
-                            <td className="py-2.5 px-2 text-right tabular-nums whitespace-nowrap">{formatBRL(tabelaMensal.totalGeral)}</td>
-                            <td className="py-2.5 pl-3" />
+                            <td className="py-2.5 pl-3 text-right whitespace-nowrap">
+                              <div className="tabular-nums">{formatBRL(tabelaMensal.totalGeral)}</div>
+                              <div className="text-[10px] font-medium tabular-nums mt-0.5">
+                                <span className="text-emerald-600">{BRLk(tabelaMensal.totalPago)} pago</span>
+                                {" · "}
+                                <span className="text-amber-600">{BRLk(tabelaMensal.totalAPagar)} a pagar</span>
+                              </div>
+                            </td>
                           </tr>
                         </tfoot>
                       </table>

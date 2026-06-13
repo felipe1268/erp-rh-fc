@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3037 — **FINANCEIRO → "ANÁLISE DE CUSTOS" · TABELA "COMPARATIVO MÊS A MÊS POR
+ * CATEGORIA": REDESENHO LIMPO QUE PASSA A MOSTRAR SÓ VALORES REAIS (PAGO + A PAGAR),
+ * EXCLUINDO AS PROJEÇÕES (status 'previsto': folha_projetada, encargos_projetado,
+ * 13º/férias/rescisão/PJ/benefícios projetados, compras previstas) QUE INFLAVAM A
+ * FOLHA; SETA DE COMPARAÇÃO POR CÉLULA vs O MÊS ANTERIOR (▲ subiu/▼ caiu) E SPLIT
+ * PAGO×A PAGAR NO TOTAL.**
+ *
+ * PEDIDO (usuário, prints IMG_1933/IMG_1934): "Quero uma tabela mais limpa, clean,
+ * mês a mês, com seta de comparação se subiu ou caiu do mês anterior. Não quero
+ * projeções, quero os valores reais que vamos pagar e o que foi pago. Tô achando o
+ * CLT da folha muito caro, tá certo isso?". DIAGNÓSTICO (query Neon, ano 2026,
+ * excluindo `cronograma_atividade`): a folha "cara" era em grande parte PROJEÇÃO —
+ * `folha_projetada` (R$ 2,13 mi, status 'previsto') + `encargos_projetado` (R$ 824 mil,
+ * 33,8% fixo) + 13º/férias/PJ/rescisão projetados ≈ R$ 4,6 mi de projeção, contra
+ * ≈ R$ 6,5 mi de valores REAIS (pago + a_pagar). Ou seja: a estimativa de quadro ×
+ * 33,8% inflava o número; não era custo efetivamente pago.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, ZERO backend/schema) em
+ * `client/src/pages/financeiro/FinanceiroAnaliseCustos.tsx`:
+ *  - `tabelaMensal` reescrito: FILTRA `rowsAll` para SÓ `status ∈ {pago, a_pagar}`
+ *    (ignora 'previsto' = projeções). Cada célula agora é um objeto
+ *    `{ total, pago, aPagar }` por categoria×mês; `pagoDe(r)` alimenta `pago`,
+ *    `valorPrevisto` dos `a_pagar` alimenta `aPagar`. Memo expõe `totalPago` e
+ *    `totalAPagar` agregados. Removidos `lastIdx`/`prevIdx` (a Variação Nov→Dez saiu).
+ *  - Tabela redesenhada CLEAN: REMOVIDO o heatmap por célula e a mini-barra de % na
+ *    coluna Categoria (só "N% do total"); REMOVIDA a coluna "Variação" fixa. A SETA
+ *    agora é POR CÉLULA, comparando com o MÊS ANTERIOR exibido (`meses[k-1]`):
+ *    `ArrowUp` rose se subiu, `ArrowDown` emerald se caiu, nada se igual/1º mês.
+ *    Tooltip de cada célula: valor + "Pago X · A pagar Y" + delta/% vs mês anterior.
+ *  - Coluna Total e linha "Total geral" ganham split `pago` (emerald) × `a pagar`
+ *    (amber) embaixo do valor. Subtítulo explica que a tabela = SÓ valores reais
+ *    (não inclui projeções), diferindo dos KPIs/gráficos acima (que mantêm pago×previsão).
+ *  - Import `Minus` removido (não há mais badge de "sem variação").
+ *
+ * IMPACTO: a folha mostrada na tabela cai para o custo CLT REAL (pago + contas reais
+ * a pagar), respondendo à dúvida do usuário — o valor "caro" anterior era projeção.
+ * KPIs e gráficos da página NÃO mudaram (escopo restrito à tabela). REPUBLICAR (só front).
+ *
  * Rev. 3036 — **CRITÉRIOS GERAIS → RESCISÃO · NOVO LIGA/DESLIGA "APLICAR A MULTA DE
  * 40% DO FGTS NA RESCISÃO": PERMITE EXCLUIR A MULTA 40% DA RESCISÃO OFICIAL POR
  * EMPRESA (CASO MARIANA / EMPRESAS QUE NÃO PAGAM A MULTA), AFETANDO TODOS OS PONTOS
