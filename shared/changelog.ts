@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3052 — **CONFIGURAÇÕES · "SÓCIOS": INDICAR O SÓCIO ADMINISTRADOR FICA ÓBVIO —
+ * BOTÃO "DEFINIR COMO ADMINISTRADOR" DIRETO EM CADA CARD DE SÓCIO (SUBSTITUI O RÁDIO +
+ * BOTÃO INFERIOR QUE FICAVA CINZA/DESABILITADO).**
+ *
+ * PEDIDO (print do iPad): "Preciso ter a opção de indicar o sócio administrador, quero
+ * esta opção." A opção JÁ EXISTIA (rádio por sócio + botão inferior "Definir como sócio
+ * administrador"), mas na tela o botão aparecia CINZA/DESABILITADO e o usuário entendeu
+ * que NÃO TINHA a opção.
+ *
+ * CAUSA-RAIZ (FRONT/UX, não havia bug de backend): o botão inferior tinha
+ * `disabled={!dirty || setMut.isPending}`, com `dirty = selected !== currentId`. Como o
+ * sócio administrador atual (FELIPE) já vinha SELECIONADO por padrão (useEffect semeava
+ * `selected` com `adminQ.data.employeeId`), `dirty` nascia FALSE → botão DESABILITADO até
+ * o usuário clicar no rádio de OUTRO sócio. Esse pré-requisito (selecionar um sócio
+ * diferente para só então habilitar o botão) não era nada óbvio, ainda mais no toque do
+ * iPad.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE — reusa o endpoint `setSocioAdministrador`
+ * já existente da Rev. 3049/3051) em `client/src/pages/configuracoes/SociosAdministradorSection.tsx`:
+ *  1) APOSENTADO o padrão "rádio de seleção + botão único embaixo + estado `selected`/
+ *     `dirty`/Cancelar". Removidos o estado `selected`/`setSelected`, o `useEffect` que o
+ *     semeava, a derivada `dirty` e o bloco de ações inferior inteiro.
+ *  2) CADA CARD de sócio agora traz, no rodapé (ao lado de "Salvar dados financeiros"),
+ *     UM dos dois: se já é o administrador → selo "Sócio administrador atual" (ícone
+ *     ShieldCheck); se NÃO é → botão verde "Definir como administrador" (ícone Crown) que
+ *     chama `setMut.mutate({ companyId, employeeId: s.employeeId })` na hora — sempre
+ *     habilitado (exceto enquanto outra definição está em curso) e com spinner "Definindo…"
+ *     no card-alvo (`settingThis`).
+ *  3) O indicador-rádio do cabeçalho deixou de ser de SELEÇÃO e passou a ser puramente
+ *     VISUAL do administrador atual (círculo preenchido + Crown branca quando
+ *     `isAdminCurrent`); o cabeçalho deixou de ser `<button>` clicável.
+ *  4) Borda/realce do card agora seguem `isAdminCurrent` (e não mais a seleção).
+ *
+ * Tudo gated por `isAdmin` (admin/admin_master) como antes; o backend `setSocioAdministrador`
+ * mantém o tenant guard + admin. Após definir, `adminQ.refetch()` move o selo e atualiza o
+ * box "Sócio administrador atual" no topo. RESSALVA: nada muda no schema nem no backend —
+ * é puramente clareza de UX da indicação do administrador.
+ *
  * Rev. 3051 — **CONFIGURAÇÕES · "SÓCIOS": UNIFICAÇÃO DE TODAS AS INFORMAÇÕES DOS
  * SÓCIOS EM UM ÚNICO LOCAL — CADASTRO (DOS COLABORADORES) + ADMINISTRADOR + DADOS
  * FINANCEIROS (PRÓ-LABORE, % SOCIEDADE, PIX, VENCIMENTO).**

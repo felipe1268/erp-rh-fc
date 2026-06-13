@@ -34,7 +34,6 @@ function valorToMask(v: any): string {
 type FinForm = { percentual: string; proLabore: string; dia: string; pix: string };
 
 export function SociosAdministradorSection({ companyId, isAdmin }: { companyId: number; isAdmin: boolean }) {
-  const [selected, setSelected] = useState<number | null>(null);
   const [forms, setForms] = useState<Record<number, FinForm>>({});
 
   const sociosQ = (trpc as any).financial.listSociosUnificado.useQuery(
@@ -45,10 +44,6 @@ export function SociosAdministradorSection({ companyId, isAdmin }: { companyId: 
   );
 
   const socios: any[] = sociosQ.data ?? [];
-
-  useEffect(() => {
-    if (adminQ.data?.employeeId != null) setSelected(adminQ.data.employeeId);
-  }, [adminQ.data?.employeeId]);
 
   // Semeia os formulários financeiros a partir dos dados carregados (não sobrescreve digitação).
   useEffect(() => {
@@ -86,7 +81,6 @@ export function SociosAdministradorSection({ companyId, isAdmin }: { companyId: 
   });
 
   const currentId = adminQ.data?.employeeId ?? null;
-  const dirty = selected !== currentId;
 
   const setField = (empId: number, key: keyof FinForm, value: string) =>
     setForms((f) => ({ ...f, [empId]: { ...(f[empId] ?? { percentual: "", proLabore: "", dia: "5", pix: "" }), [key]: value } }));
@@ -161,31 +155,24 @@ export function SociosAdministradorSection({ companyId, isAdmin }: { companyId: 
 
         <div className="space-y-3">
           {socios.map((s) => {
-            const isSel = selected === s.employeeId;
             const isAdminCurrent = currentId === s.employeeId;
             const f = forms[s.employeeId] ?? { percentual: "", proLabore: "", dia: "5", pix: "" };
+            const settingThis = setMut.isPending && setMut.variables?.employeeId === s.employeeId;
             return (
               <div
                 key={s.employeeId}
                 className={`rounded-xl border transition-all ${
-                  isSel ? "border-emerald-500 ring-2 ring-emerald-200" : "border-gray-200"
+                  isAdminCurrent ? "border-emerald-500 ring-2 ring-emerald-200" : "border-gray-200"
                 } bg-white overflow-hidden`}
               >
-                {/* Cabeçalho do sócio + seleção de administrador */}
-                <button
-                  type="button"
-                  disabled={!isAdmin}
-                  onClick={() => setSelected(s.employeeId)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
-                    isSel ? "bg-emerald-50" : "hover:bg-emerald-50/40"
-                  } ${!isAdmin ? "cursor-not-allowed" : ""}`}
-                >
+                {/* Cabeçalho do sócio */}
+                <div className="w-full flex items-center gap-3 px-4 py-3">
                   <span
                     className={`flex-shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full border-2 ${
-                      isSel ? "border-emerald-600 bg-emerald-600" : "border-gray-300 bg-white"
+                      isAdminCurrent ? "border-emerald-600 bg-emerald-600" : "border-gray-300 bg-white"
                     }`}
                   >
-                    {isSel && <span className="w-2 h-2 rounded-full bg-white" />}
+                    {isAdminCurrent && <Crown className="w-3 h-3 text-white" />}
                   </span>
                   <span className="flex-shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full bg-emerald-100 text-emerald-700">
                     <UserCheck className="w-4 h-4" />
@@ -204,7 +191,7 @@ export function SociosAdministradorSection({ companyId, isAdmin }: { companyId: 
                       {s.cargo ? ` · ${s.cargo}` : ""}
                     </div>
                   </div>
-                </button>
+                </div>
 
                 {/* Dados financeiros */}
                 <div className="border-t border-gray-100 px-4 py-3 bg-gray-50/60">
@@ -268,7 +255,25 @@ export function SociosAdministradorSection({ companyId, isAdmin }: { companyId: 
                     </div>
                   </div>
                   {isAdmin && (
-                    <div className="flex justify-end mt-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
+                      {isAdminCurrent ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+                          <ShieldCheck className="w-3.5 h-3.5" /> Sócio administrador atual
+                        </span>
+                      ) : (
+                        <Button
+                          size="sm"
+                          className="h-8 bg-emerald-600 hover:bg-emerald-700"
+                          disabled={setMut.isPending || adminQ.isLoading}
+                          onClick={() => setMut.mutate({ companyId, employeeId: s.employeeId })}
+                        >
+                          {settingThis ? (
+                            <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Definindo…</>
+                          ) : (
+                            <><Crown className="w-3.5 h-3.5 mr-1.5" /> Definir como administrador</>
+                          )}
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="outline"
@@ -290,28 +295,6 @@ export function SociosAdministradorSection({ companyId, isAdmin }: { companyId: 
           })}
         </div>
       </div>
-
-      {/* Ações — definir administrador */}
-      {isAdmin && socios.length > 0 && (
-        <div className="flex items-center justify-end gap-2 pt-1">
-          {dirty && (
-            <Button variant="ghost" onClick={() => setSelected(currentId)} disabled={setMut.isPending}>
-              Cancelar
-            </Button>
-          )}
-          <Button
-            onClick={() => setMut.mutate({ companyId, employeeId: selected })}
-            disabled={!dirty || setMut.isPending}
-            className="bg-emerald-600 hover:bg-emerald-700"
-          >
-            {setMut.isPending ? (
-              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando…</>
-            ) : (
-              <><Crown className="w-4 h-4 mr-2" /> Definir como sócio administrador</>
-            )}
-          </Button>
-        </div>
-      )}
     </div>
   );
 }
