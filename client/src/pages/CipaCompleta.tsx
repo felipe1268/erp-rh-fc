@@ -1352,45 +1352,82 @@ export default function CipaCompleta() {
 
         {/* Dialog: Plano de Ação */}
         <FullScreenDialog open={showPlanoDialog} onClose={() => { setShowPlanoDialog(false); setPlanoForm({}); setEditPlanoId(null); }} title={editPlanoId ? "Editar Ação" : "Nova Ação"} icon={<ListChecks className="h-5 w-5 text-white" />}>
-          <div className="w-full max-w-2xl mx-auto space-y-4">
-            <div>
-              <label className="text-sm font-medium">Descrição da ação *</label>
-              <Textarea value={planoForm.descricao || ""} onChange={(e) => setPlanoForm({ ...planoForm, descricao: e.target.value })} rows={3} placeholder="O que será feito..." />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium">Responsável</label>
-                <Input value={planoForm.responsavel || ""} onChange={(e) => setPlanoForm({ ...planoForm, responsavel: e.target.value })} placeholder="Quem é responsável" />
+          <div className="w-full max-w-2xl mx-auto">
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <div className="bg-gradient-to-r from-[#1B2A4A] to-[#2c4373] px-6 py-5 text-white">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-white/15 flex items-center justify-center">
+                    <ListChecks className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold leading-tight">{editPlanoId ? "Editar ação" : "Nova ação"}</h3>
+                    <p className="text-xs text-white/70">Plano de ação da CIPA · acompanhamento de responsáveis e prazos</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="text-sm font-medium">Prazo</label>
-                <Input type="date" value={planoForm.prazo || ""} onChange={(e) => setPlanoForm({ ...planoForm, prazo: e.target.value })} />
+
+              <div className="p-6 space-y-5">
+                <div className="space-y-1.5">
+                  <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-700"><ClipboardList className="h-4 w-4 text-slate-400" /> Descrição da ação <span className="text-red-500">*</span></label>
+                  <Textarea value={planoForm.descricao || ""} onChange={(e) => setPlanoForm({ ...planoForm, descricao: e.target.value })} rows={3} placeholder="O que será feito..." className="resize-none" />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-700"><UserCheck className="h-4 w-4 text-slate-400" /> Responsável</label>
+                    <Select value={planoForm.responsavel || "none"} onValueChange={(v) => setPlanoForm({ ...planoForm, responsavel: v === "none" ? "" : v })}>
+                      <SelectTrigger><SelectValue placeholder="Selecione um cipeiro" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">— Sem responsável</SelectItem>
+                        {membrosAtivos.map((m: any) => (
+                          <SelectItem key={m.id} value={m.employeeName}>{m.employeeName} · {CARGO_CIPA[m.cargoCipa] || m.cargoCipa}</SelectItem>
+                        ))}
+                        {planoForm.responsavel && !membrosAtivos.some((m: any) => m.employeeName === planoForm.responsavel) && (
+                          <SelectItem value={planoForm.responsavel}>{planoForm.responsavel} (externo)</SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    {membrosAtivos.length === 0 && (
+                      <p className="text-xs text-amber-600">Nenhum cipeiro ativo neste mandato. Cadastre membros na aba "Membros".</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-700"><CalendarDays className="h-4 w-4 text-slate-400" /> Prazo</label>
+                    <div className="relative">
+                      <Input type="date" value={planoForm.prazo || ""} onChange={(e) => setPlanoForm({ ...planoForm, prazo: e.target.value })} className="pr-10" />
+                      <CalendarDays className="h-4 w-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-700"><AlertTriangle className="h-4 w-4 text-slate-400" /> Prioridade</label>
+                    <Select value={planoForm.prioridade || "media"} onValueChange={(v) => setPlanoForm({ ...planoForm, prioridade: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="baixa">Baixa</SelectItem>
+                        <SelectItem value="media">Média</SelectItem>
+                        <SelectItem value="alta">Alta</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-700"><Link2 className="h-4 w-4 text-slate-400" /> Reunião <span className="font-normal text-slate-400">(opcional)</span></label>
+                    <Select value={planoForm.meetingId ? String(planoForm.meetingId) : "none"} onValueChange={(v) => setPlanoForm({ ...planoForm, meetingId: v === "none" ? undefined : parseInt(v, 10) })}>
+                      <SelectTrigger><SelectValue placeholder="Vincular a reunião" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Nenhuma</SelectItem>
+                        {(reunioes as any[]).map((r: any) => <SelectItem key={r.id} value={String(r.id)}>{formatDate(r.dataReuniao)} — {r.tipo === "extraordinaria" ? "Extraord." : "Ordin."}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="text-sm font-medium">Prioridade</label>
-                <Select value={planoForm.prioridade || "media"} onValueChange={(v) => setPlanoForm({ ...planoForm, prioridade: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="baixa">Baixa</SelectItem>
-                    <SelectItem value="media">Média</SelectItem>
-                    <SelectItem value="alta">Alta</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Reunião (opcional)</label>
-                <Select value={planoForm.meetingId ? String(planoForm.meetingId) : "none"} onValueChange={(v) => setPlanoForm({ ...planoForm, meetingId: v === "none" ? undefined : parseInt(v, 10) })}>
-                  <SelectTrigger><SelectValue placeholder="Vincular a reunião" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nenhuma</SelectItem>
-                    {(reunioes as any[]).map((r: any) => <SelectItem key={r.id} value={String(r.id)}>{formatDate(r.dataReuniao)} — {r.tipo === "extraordinaria" ? "Extraord." : "Ordin."}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 pt-4 border-t">
-              <Button variant="outline" onClick={() => { setShowPlanoDialog(false); setPlanoForm({}); setEditPlanoId(null); }}>Cancelar</Button>
-              <Button onClick={() => {
+
+              <div className="flex justify-end gap-3 px-6 py-4 bg-slate-50 border-t border-slate-200">
+                <Button variant="outline" onClick={() => { setShowPlanoDialog(false); setPlanoForm({}); setEditPlanoId(null); }}>Cancelar</Button>
+                <Button onClick={() => {
                 if (!planoForm.descricao?.trim()) { toast.error("Informe a descrição da ação"); return; }
                 if (editPlanoId) {
                   updatePlano.mutate({ id: editPlanoId, companyId, companyIds, descricao: planoForm.descricao, responsavel: planoForm.responsavel, prazo: planoForm.prazo || undefined, prioridade: planoForm.prioridade });
@@ -1399,7 +1436,8 @@ export default function CipaCompleta() {
                 }
               }} disabled={createPlano.isPending || updatePlano.isPending}>
                 {(createPlano.isPending || updatePlano.isPending) ? "Salvando..." : (editPlanoId ? "Salvar" : "Criar Ação")}
-              </Button>
+                </Button>
+              </div>
             </div>
           </div>
         </FullScreenDialog>

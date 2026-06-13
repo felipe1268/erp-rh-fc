@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3046 — **CIPA · DIÁLOGO "NOVA AÇÃO" (PLANOS DE AÇÃO) GANHA LAYOUT MODERNO,
+ * O "RESPONSÁVEL" VIRA SELETOR DE CIPEIROS E O "PRAZO" GANHA CALENDÁRIO COM ÍCONE.**
+ *
+ * PEDIDO (print "Nova Ação" da CIPA, iPad): "Melhore o layout.. quero moderno e o
+ * responsável deve ser um dos cipeiros... e a data da reunião precisa ser digitada,
+ * coloca o calendário de datas". O diálogo era plano (labels simples), o Responsável
+ * era um <Input> de TEXTO LIVRE e o Prazo, apesar de já ser type=date, não deixava
+ * óbvio que abria calendário.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE — usa mutations `cipa.planosAcao`
+ * create/update já existentes; backend INTOCADO, `responsavel` segue TEXT) em
+ * `client/src/pages/CipaCompleta.tsx`, diálogo `showPlanoDialog`:
+ *
+ *  1) LAYOUT MODERNO: card `rounded-2xl` com cabeçalho em gradiente FC
+ *     (#1B2A4A→#2c4373) + ícone, corpo com labels em negrito + ícones por campo
+ *     (ClipboardList/UserCheck/CalendarDays/AlertTriangle/Link2), grid responsivo
+ *     (1 col no mobile, 2 no >=sm) e rodapé `bg-slate-50` com os botões.
+ *  2) RESPONSÁVEL = SELETOR DE CIPEIROS: troca o <Input> por <Select> alimentado por
+ *     `membrosAtivos` (membros com `statusMembro==="Ativo"`), exibindo
+ *     "Nome · Cargo CIPA". `value` = `employeeName` (round-trip limpo com o TEXT
+ *     salvo). Opção "— Sem responsável" (grava ""). Se o plano editado tiver um
+ *     responsável que NÃO está na lista atual (texto antigo/externo), uma opção
+ *     extra "(externo)" preserva o valor. Aviso âmbar quando não há cipeiro ativo.
+ *  3) PRAZO COM CALENDÁRIO: mantém `type=date` (calendário nativo) e adiciona ícone
+ *     `CalendarDays` à direita (pointer-events-none) deixando claro que é seletor.
+ *
  * Rev. 3045 — **CIPA · ABA "REUNIÕES" GANHA SELEÇÃO MÚLTIPLA COM EXCLUSÃO EM MASSA
  * E PASSA A ORDENAR AS REUNIÕES EM ORDEM CRESCENTE POR DATA.**
  *
