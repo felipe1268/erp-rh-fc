@@ -466,7 +466,7 @@ export default function Epis() {
     onError: (err) => toast.error(err.message),
   });
   const transferirMut = trpc.epis.transferir.useMutation({
-    onSuccess: () => { estoqueObraQ.refetch(); estoqueObraResumoQ.refetch(); transferenciasQ.refetch(); episQ.refetch(); statsQ.refetch(); setShowTransferDialog(false); resetTransForm(); toast.success("Transferência realizada com sucesso!"); },
+    onSuccess: () => { estoqueObraQ.refetch(); estoqueObraResumoQ.refetch(); estoqueCentralQ.refetch(); episAllQ.refetch(); transferenciasQ.refetch(); episQ.refetch(); statsQ.refetch(); setShowTransferDialog(false); resetTransForm(); toast.success("Transferência realizada com sucesso!"); },
     onError: (err) => toast.error(err.message),
   });
   const entradaEstoqueMut = trpc.epis.entradaEstoque.useMutation({
@@ -3302,7 +3302,7 @@ export default function Epis() {
             } catch (err: any) { lastErr = err?.message || "Erro"; }
           }
           setTransSaving(false);
-          estoqueObraQ.refetch(); estoqueObraResumoQ.refetch(); transferenciasQ.refetch(); episQ.refetch(); statsQ.refetch();
+          estoqueObraQ.refetch(); estoqueObraResumoQ.refetch(); estoqueCentralQ.refetch(); episAllQ.refetch(); transferenciasQ.refetch(); episQ.refetch(); statsQ.refetch();
           if (ok === allItens.length) {
             toast.success(`${ok} EPI(s) transferido(s) com sucesso!`);
             setShowTransferDialog(false); resetTransForm();
