@@ -14,7 +14,7 @@ import {
   ChevronRight, ChevronDown, Building2, Calendar, DollarSign, FileText,
   Zap, ClipboardCheck, X, TrendingUp, TrendingDown, Minus,
   FileEdit, Save, Clock, RefreshCw, History, ExternalLink, Trash2, Pencil, FolderOpen,
-  Eye, EyeOff, BarChart3, Loader2, FileDown, Settings, Undo2, Send, MapPin, Truck, Ban
+  Eye, EyeOff, BarChart3, Loader2, FileDown, Settings, Undo2, Send, MapPin, Truck, Ban, Info
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatNumeroOcDisplay } from "@shared/numeroOc";
@@ -1514,10 +1514,14 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                 <Send className="w-5 h-5 text-indigo-600" />
                 Enviar para FcSign
               </h2>
-              <p className="text-sm text-gray-500 mb-4">
+              <p className="text-sm text-gray-500 mb-3">
                 O contrato <span className="font-semibold text-gray-700">{contrato.numeroContrato}</span> será enviado para assinatura eletrônica.
                 Configure os signatários abaixo.
               </p>
+              <div className="mb-4 text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 flex items-start gap-2">
+                <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                <span>O <span className="font-semibold">Sócio Administrador</span> definido em Configurações → Sócios é adicionado automaticamente como signatário do contrato.</span>
+              </div>
 
               <div className="space-y-4 max-h-[50vh] overflow-y-auto">
                 {fcSignSignatarios.map((sig, idx) => (

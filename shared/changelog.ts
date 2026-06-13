@@ -1,6 +1,51 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3050 — **INTEGRASIGN (FCSIGN) · TODO CONTRATO ONLINE É ASSINADO POR 3
+ * SIGNATÁRIOS NA ORDEM FORNECEDOR → GESTOR DA OBRA → SÓCIO ADMINISTRADOR (ESTE
+ * POR ÚLTIMO), CADA UM COM SEUS RESPECTIVOS DADOS.**
+ *
+ * PEDIDO: todo contrato deve ser assinado por 3 signatários — FORNECEDOR + GESTOR
+ * DA OBRA + SÓCIO ADMINISTRADOR — cada um com seus respectivos dados (nome +
+ * CPF/CNPJ). Ordem de assinatura: primeiro o fornecedor, depois o gestor e POR
+ * ÚLTIMO o sócio administrador (autoridade final que fecha o contrato).
+ *
+ * CAUSA-RAIZ: os contratos de terceiros (CT-AAAA-NNNN) eram enviados ao FCSign pelo
+ * front (`ContratoDetalhe.tsx`) montando apenas 2 signatários (fornecedor + gestor)
+ * via `integrasign.criarEnvelope`, que insere exatamente o que o cliente manda — daí
+ * os envelopes "0/2 assinado(s)" SEM o sócio administrador. Já o envelope automático
+ * via OC (`compras.ts` `criarEnvelopeIntegraSign`, Rev. 3049) tinha 4 signatários,
+ * incluindo um "financeiro" genérico e um "gestor" = quem gerou a OC (não o gestor
+ * REAL da obra) — fora do padrão pedido.
+ *
+ * SOLUÇÃO (ZERO ALTER/DROP/DELETE — só lógica de montagem de signatários):
+ *  1) NOVO `server/services/signatariosContrato.ts` (helpers compartilhados):
+ *     - `resolveSocioAdministradorSigner(db, companyId)` (movido de `compras.ts`):
+ *       lê `system_criteria` chave `socio_administrador_employee_id` → resolve o
+ *       employee `tipoContrato='Socio'` (nome + cpf). Fallback "Diretor".
+ *     - NOVO `resolveGestorObraSigner(db, companyId, obraId)`: lê `obras.responsavel`
+ *       (a obra não guarda CPF do responsável → cpfCnpj null). Sem obra → nome vazio.
+ *     - Qualquer falha é capturada e NÃO quebra a criação do envelope.
+ *  2) BACKEND `server/routers/integrasign.ts` (`criarEnvelope`): quando o envelope é
+ *     um contrato (`contratoTerceiroId` presente) e ainda NÃO há signatário "diretor",
+ *     injeta automaticamente o SÓCIO ADMINISTRADOR como "diretor" e REORDENA para
+ *     FORNECEDOR/GESTOR (obrigatórios) → testemunhas → SÓCIO por ÚLTIMO; recalcula
+ *     `ordemAssinatura` (1..N) e `totalSignatariosObrigatorios`. Idempotente (não
+ *     duplica se já houver "diretor"). O sócio assina por LINK (e-mail vazio), igual
+ *     ao fluxo automático. NÃO afeta advertências (não passam `contratoTerceiroId`).
+ *  3) BACKEND `server/routers/compras.ts` (`criarEnvelopeIntegraSign`): padroniza para
+ *     os MESMOS 3 signatários — remove o "financeiro" genérico, o gestor passa a ser
+ *     o RESPONSÁVEL DA OBRA (`resolveGestorObraSigner`, fallback = quem gerou a OC) e
+ *     o sócio administrador fica em 3º (último). `totalSignatariosObrigatorios` 4→3.
+ *     Remove o helper local (agora importa do serviço compartilhado).
+ *  4) FRONT `client/src/pages/terceiros/contratos/ContratoDetalhe.tsx`: nota no modal
+ *     "Enviar para FcSign" avisando que o Sócio Administrador é adicionado
+ *     automaticamente (transparência; o back é a fonte da verdade). Ícone `Info`.
+ *
+ * RESSALVA: o gestor da obra assina com nome (de `obras.responsavel`) mas SEM CPF,
+ * pois a obra não persiste o CPF do responsável. Envelopes JÁ criados não mudam
+ * retroativamente — a regra vale para os novos.
+ *
  * Rev. 3049 — **CONFIGURAÇÕES · CRITÉRIO EXCLUSIVO DE SÓCIOS: DEFINIR O "SÓCIO
  * ADMINISTRADOR ATUAL" QUE ASSINA TODOS OS CONTRATOS/DOCUMENTOS ONLINE (FCSIGN).
  * FELIPE COSTA ALVES DEIXADO COMO SÓCIO ADMINISTRADOR.**

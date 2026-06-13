@@ -17,6 +17,7 @@ import {
   enviarNotificacaoConclusao,
   enviarNotificacaoRecusa,
 } from "../services/integrasignEmail";
+import { resolveSocioAdministradorSigner } from "../services/signatariosContrato";
 
 function generateToken(): string {
   return crypto.randomBytes(48).toString("hex");
@@ -164,6 +165,48 @@ export const integrasignRouter = router({
       const userId = (ctx as any).session?.userId;
       const userName = (ctx as any).session?.name || "Sistema";
 
+      // Rev. 3050 — TODO contrato deve ser assinado por 3 signatários: FORNECEDOR
+      // + GESTOR DA OBRA + SÓCIO ADMINISTRADOR (este por ÚLTIMO, autoridade final).
+      // O front envia fornecedor + gestor (com seus dados); aqui NORMALIZAMOS de forma
+      // DETERMINÍSTICA e IDEMPOTENTE sempre que o envelope for um contrato
+      // (contratoTerceiroId): descartamos qualquer "diretor"/"financeiro" que o cliente
+      // tenha mandado e injetamos o SÓCIO ADMINISTRADOR resolvido server-side como o
+      // ÚNICO "diretor", por último. Assina por link (e-mail vazio), igual ao fluxo da OC.
+      const signatariosFinais: Array<{
+        papel: "fornecedor" | "gestor_projeto" | "financeiro" | "diretor" | "testemunha";
+        ordemAssinatura: number;
+        nome: string;
+        email: string;
+        cpfCnpj?: string;
+        cargo?: string;
+        empresaNome?: string;
+      }> = [...input.signatarios];
+
+      if (input.contratoTerceiroId) {
+        const socioAdmin = await resolveSocioAdministradorSigner(db, input.companyId);
+        // Mantém só os papéis obrigatórios do contrato (fornecedor + gestor da obra);
+        // remove qualquer "diretor"/"financeiro" recebido para garantir EXATAMENTE 1
+        // sócio (re-rodar sobre uma lista já normalizada produz o mesmo resultado).
+        const obrigatorios = signatariosFinais.filter(
+          s => s.papel === "fornecedor" || s.papel === "gestor_projeto",
+        );
+        const testemunhas = signatariosFinais.filter(s => s.papel === "testemunha");
+        const diretor = {
+          papel: "diretor" as const,
+          ordemAssinatura: 0,
+          nome: socioAdmin.nome,
+          email: "",
+          cpfCnpj: socioAdmin.cpfCnpj ?? undefined,
+          cargo: "Sócio Administrador",
+          empresaNome: "FC Engenharia",
+        };
+        // Ordem de assinatura: FORNECEDOR → GESTOR (obrigatórios) → testemunhas →
+        // SÓCIO ADMINISTRADOR por ÚLTIMO (autoridade final que fecha o contrato).
+        const reordenados = [...obrigatorios, ...testemunhas, diretor];
+        signatariosFinais.length = 0;
+        signatariosFinais.push(...reordenados.map((s, i) => ({ ...s, ordemAssinatura: i + 1 })));
+      }
+
       const [envelope] = await db.insert(integrasignEnvelopes).values({
         companyId: input.companyId,
         contratoTerceiroId: input.contratoTerceiroId ?? null,
@@ -173,7 +216,7 @@ export const integrasignRouter = router({
         descricao: input.descricao ?? null,
         textoContrato: input.textoContrato ?? null,
         status: "rascunho",
-        totalSignatariosObrigatorios: input.signatarios.filter(s => s.papel !== "testemunha").length,
+        totalSignatariosObrigatorios: signatariosFinais.filter(s => s.papel !== "testemunha").length,
         criadoPorId: userId,
         criadoPorNome: userName,
       }).returning();
@@ -181,7 +224,7 @@ export const integrasignRouter = router({
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 7);
 
-      for (const sig of input.signatarios) {
+      for (const sig of signatariosFinais) {
         await db.insert(integrasignSignatarios).values({
           companyId: input.companyId,
           envelopeId: envelope.id,
@@ -202,7 +245,7 @@ export const integrasignRouter = router({
         companyId: input.companyId,
         envelopeId: envelope.id,
         acao: "envelope_criado",
-        detalhes: `Envelope "${input.titulo}" criado com ${input.signatarios.length} signatário(s)`,
+        detalhes: `Envelope "${input.titulo}" criado com ${signatariosFinais.length} signatário(s)`,
         userId,
         userName,
       });
