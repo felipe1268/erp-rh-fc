@@ -248,16 +248,11 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                   </div>
                   <p className="text-[11px] text-gray-500 font-medium">{c.label}</p>
                   <p
-                    className={`text-base lg:text-lg font-bold ${c.color} mt-0.5 tabular-nums leading-tight whitespace-nowrap`}
-                    title={isLoading ? undefined : isInt ? undefined : formatBRL(c.value)}
+                    className={`text-sm lg:text-base font-bold ${c.color} mt-0.5 tabular-nums leading-tight whitespace-nowrap overflow-hidden text-ellipsis`}
+                    title={isLoading ? undefined : isInt ? c.value.toLocaleString("pt-BR") : formatBRL(c.value)}
                   >
-                    {isLoading ? "..." : isInt ? c.value.toLocaleString("pt-BR") : BRLk(c.value)}
+                    {isLoading ? "..." : isInt ? c.value.toLocaleString("pt-BR") : formatBRL(c.value)}
                   </p>
-                  {!isLoading && !isInt && c.value > 0 && (
-                    <p className="text-[10px] text-gray-400 tabular-nums leading-tight whitespace-nowrap overflow-hidden text-ellipsis">
-                      {formatBRL(c.value)}
-                    </p>
-                  )}
                 </CardContent>
               </Card>
             );

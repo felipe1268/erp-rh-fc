@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3018 — **FINANCEIRO → "ANÁLISE DE CUSTOS" + TELA DE DETALHE: KPIs PASSAM A
+ * EXIBIR O VALOR EM REAIS NO FORMATO DE NÚMERO COMPLETO (`R$ 26.710.859,82`) EM
+ * VEZ DO COMPACTO (`R$ 26,7 mi`).**
+ *
+ * PEDIDO (usuário, com print da Análise de Custos): "Quero o valor em reais com
+ * formato de número completo." Na Rev. 3017 os KPIs tinham passado a usar o
+ * formato compacto `BRLk` (`R$ 26,7 mi`) em destaque + uma 2ª linha pequena com o
+ * valor exato — o usuário prefere ver o valor inteiro direto no destaque.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, ZERO backend/schema; 100%
+ * client-side; nada além da formatação dos KPIs muda):
+ *  - `client/src/pages/financeiro/FinanceiroAnaliseCustos.tsx` e
+ *    `client/src/pages/financeiro/FinanceiroAnaliseCustosDetalhe.tsx`: o valor em
+ *    destaque dos KPIs monetários passa de `BRLk(c.value)` para `formatBRL(c.value)`
+ *    (número completo pt-BR). Removida a 2ª linha pequena (agora redundante).
+ *  - Pra caber numa linha só sem voltar a quebrar no meio do número (problema da
+ *    Rev. 3017), a fonte do valor caiu de `text-base lg:text-lg` para
+ *    `text-sm lg:text-base`, mantendo `tabular-nums whitespace-nowrap` e ganhando
+ *    `overflow-hidden text-ellipsis` (+ `title` com o valor exato no hover) como
+ *    salvaguarda. KPIs inteiros (Lançamentos) seguem `toLocaleString("pt-BR")`.
+ *  - Gráficos/eixos/`LabelList` continuam usando `BRLk` (compacto) de propósito,
+ *    pra não poluir os eixos — a mudança é só nos cartões de KPI.
+ *
+ * Requer REPUBLICAR (só front).
+ *
  * Rev. 3017 — **FINANCEIRO → "ANÁLISE DE CUSTOS" (`/financeiro/analise-custos`):
  * LAYOUT REPAGINADO SEM SOBREPOSIÇÃO DE TEXTO + DRILL-DOWN — TODO KPI, BARRA,
  * FATIA DE PIZZA E LINHA DE TABELA AGORA É CLICÁVEL E ABRE UMA TELA DE DETALHE
