@@ -5,16 +5,23 @@
 // PERTINENTES ao item clicado: KPIs do recorte, distribuição por mês,
 // quebra por uma dimensão secundária e a tabela detalhada completa.
 // 100% client-side (ZERO novo backend).
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { MoneyInput } from "@/components/ui/money-input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/hooks/useCompany";
 import {
   ChevronLeft, CircleDollarSign, CheckCircle2, Receipt, AlertTriangle,
-  BarChart2, Layers, Tag, Building2, Calendar, ListChecks,
+  BarChart2, Layers, Tag, Building2, Calendar, ListChecks, Pencil, X, Loader2, Lock,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -230,6 +237,173 @@ export default function FinanceiroAnaliseCustosDetalhe() {
     return [...rows].sort((a, b) => valorEfetivo(b) - valorEfetivo(a));
   }, [rows]);
 
+  // ───────── Rev. 3025 — Edição inline + reclassificação em massa ─────────
+  const { toast } = useToast();
+  const utils = (trpc as any).useUtils();
+  const KEEP = "__keep__";
+  const CLEAR = "__clear__";
+
+  // Opções dos seletores: Categoria = Plano de Contas (financial_accounts);
+  // Centro de Custo = OBRA (segue o que a coluna desta tela exibe).
+  const { data: accountsData } = (trpc as any).financial.getAccounts.useQuery(
+    { companyId, ativo: true },
+    { enabled: !!companyId }
+  );
+  const { data: obrasData } = (trpc as any).obras.getObras.useQuery(
+    { companyId },
+    { enabled: !!companyId }
+  );
+  const categoriaOpcoes: { id: number; nome: string }[] = useMemo(() => {
+    const list: any[] = Array.isArray(accountsData) ? accountsData : [];
+    const seen = new Set<string>();
+    const out: { id: number; nome: string }[] = [];
+    for (const a of list) {
+      const nome = String(a?.nome ?? "").trim();
+      if (!nome) continue;
+      const k = nome.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push({ id: a.id, nome });
+    }
+    return out.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  }, [accountsData]);
+  const obraOpcoes: { id: number; nome: string }[] = useMemo(() => {
+    const list: any[] = Array.isArray(obrasData) ? obrasData : [];
+    return list
+      .map((o: any) => ({ id: o.id as number, nome: String(o?.nome ?? "").trim() }))
+      .filter((o) => o.nome)
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  }, [obrasData]);
+
+  // Seleção múltipla (cancelados não são selecionáveis).
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const selecionaveis = useMemo(
+    () => lancamentos.filter((r) => typeof r.id === "number" && r.status !== "cancelado"),
+    [lancamentos]
+  );
+  const allSelected = selecionaveis.length > 0 && selecionaveis.every((r) => selected.has(r.id));
+  const toggleId = (id: number) =>
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  const toggleAll = () =>
+    setSelected((prev) =>
+      selecionaveis.length > 0 && selecionaveis.every((r) => prev.has(r.id))
+        ? new Set()
+        : new Set(selecionaveis.map((r) => r.id))
+    );
+  const limparSelecao = () => setSelected(new Set());
+
+  // Barra de ações em massa.
+  const [bulkCat, setBulkCat] = useState<string>(KEEP);
+  const [bulkObra, setBulkObra] = useState<string>(KEEP);
+
+  // Dialog de edição de UMA linha.
+  const [editRow, setEditRow] = useState<any | null>(null);
+  const [ef, setEf] = useState<{
+    descricao: string; fornecedorNome: string; contaSel: string; obraSel: string;
+    dataCompetencia: string; dataVencimento: string; valor: string;
+  } | null>(null);
+  const rowLocked = (r: any) => r?.status === "pago" || r?.status === "recebido";
+  const abrirEdicao = (r: any) => {
+    const cur = String(r.contaNome ?? "").trim();
+    const catMatch = categoriaOpcoes.find((c) => c.nome.toLowerCase() === cur.toLowerCase());
+    const obraCur = String(r.obraNome ?? "").trim();
+    const obraMatch = obraOpcoes.find((o) => o.nome.toLowerCase() === obraCur.toLowerCase());
+    setEditRow(r);
+    setEf({
+      descricao: r.descricao || r.origemDescricao || "",
+      fornecedorNome: r.fornecedorNome || "",
+      contaSel: catMatch ? String(catMatch.id) : (cur ? "-1" : CLEAR),
+      obraSel: obraMatch ? String(obraMatch.id) : (obraCur ? "-1" : CLEAR),
+      dataCompetencia: (r.dataCompetencia || "").slice(0, 10),
+      dataVencimento: (r.dataVencimento || "").slice(0, 10),
+      valor: String(Number(r.valorPrevisto ?? valorEfetivo(r)) || 0),
+    });
+  };
+  const fecharEdicao = () => { setEditRow(null); setEf(null); };
+
+  // Opções do dialog incluem o valor ATUAL (id=-1) se ele não casar com a lista.
+  const catOpcoesDialog = useMemo(() => {
+    const cur = String(editRow?.contaNome ?? "").trim();
+    const has = cur && categoriaOpcoes.some((c) => c.nome.toLowerCase() === cur.toLowerCase());
+    return cur && !has ? [{ id: -1, nome: cur }, ...categoriaOpcoes] : categoriaOpcoes;
+  }, [editRow, categoriaOpcoes]);
+  const obraOpcoesDialog = useMemo(() => {
+    const cur = String(editRow?.obraNome ?? "").trim();
+    const has = cur && obraOpcoes.some((o) => o.nome.toLowerCase() === cur.toLowerCase());
+    return cur && !has ? [{ id: -1, nome: cur }, ...obraOpcoes] : obraOpcoes;
+  }, [editRow, obraOpcoes]);
+
+  const updateEntryMut = (trpc as any).financial.updateEntry.useMutation({
+    onSuccess: () => {
+      toast({ title: "Lançamento atualizado!" });
+      fecharEdicao();
+      utils.financial.getContasAPagarByYear.invalidate();
+    },
+    onError: (e: any) => toast({ title: "Erro ao salvar", description: e?.message, variant: "destructive" }),
+  });
+  const bulkMut = (trpc as any).financial.bulkReclassificar.useMutation({
+    onSuccess: (res: any) => {
+      toast({ title: `Reclassificado(s) ${res?.changed ?? 0} lançamento(s)` });
+      fecharEdicao();
+      limparSelecao();
+      setBulkCat(KEEP); setBulkObra(KEEP);
+      utils.financial.getContasAPagarByYear.invalidate();
+    },
+    onError: (e: any) => toast({ title: "Erro ao aplicar", description: e?.message, variant: "destructive" }),
+  });
+  const salvando = updateEntryMut.isPending || bulkMut.isPending;
+
+  // Resolve um Select de categoria/obra → { nome, id } a gravar.
+  const resolveCat = (sel: string, fallback?: any): { contaNome: string; contaId: number | null } => {
+    if (sel === CLEAR) return { contaNome: "", contaId: null };
+    if (sel === "-1") return { contaNome: fallback?.contaNome || "", contaId: fallback?.contaId ?? null };
+    const o = categoriaOpcoes.find((c) => String(c.id) === sel);
+    return { contaNome: o?.nome ?? "", contaId: o?.id ?? null };
+  };
+  const resolveObra = (sel: string, fallback?: any): { obraNome: string; obraId: number | null } => {
+    if (sel === CLEAR) return { obraNome: "", obraId: null };
+    if (sel === "-1") return { obraNome: fallback?.obraNome || "", obraId: fallback?.obraId ?? null };
+    const o = obraOpcoes.find((x) => String(x.id) === sel);
+    return { obraNome: o?.nome ?? "", obraId: o?.id ?? null };
+  };
+
+  const salvarEdicao = () => {
+    if (!editRow || !ef) return;
+    const cat = resolveCat(ef.contaSel, editRow);
+    const obra = resolveObra(ef.obraSel, editRow);
+    if (rowLocked(editRow)) {
+      // Pago/recebido: só reclassifica categoria/centro (não toca valor/datas).
+      bulkMut.mutate({ companyId, ids: [editRow.id], ...cat, ...obra });
+    } else {
+      updateEntryMut.mutate({
+        id: editRow.id, companyId,
+        descricao: ef.descricao,
+        fornecedorNome: ef.fornecedorNome,
+        ...cat, ...obra,
+        dataCompetencia: ef.dataCompetencia || undefined,
+        dataVencimento: ef.dataVencimento || undefined,
+        valorPrevisto: parseFloat(ef.valor) || 0,
+      });
+    }
+  };
+
+  const aplicarBulk = () => {
+    if (selected.size === 0) return;
+    const payload: any = { companyId, ids: Array.from(selected) };
+    let temAlgo = false;
+    if (bulkCat !== KEEP) { temAlgo = true; Object.assign(payload, resolveCat(bulkCat)); }
+    if (bulkObra !== KEEP) { temAlgo = true; Object.assign(payload, resolveObra(bulkObra)); }
+    if (!temAlgo) {
+      toast({ title: "Escolha categoria e/ou centro de custo", variant: "destructive" });
+      return;
+    }
+    bulkMut.mutate(payload);
+  };
+
   // Rótulo legível de cada dimensão (pro título e pro breadcrumb dos drills).
   const rotuloDim: Record<string, string> = {
     fornecedor: "Fornecedor", centro: "Centro de custo", categoria: "Categoria", mes: "Mês",
@@ -430,6 +604,47 @@ export default function FinanceiroAnaliseCustosDetalhe() {
               </Card>
             </div>
 
+            {/* Barra de ações em massa — aparece com ≥1 selecionado */}
+            {selected.size > 0 && (
+              <div className="sticky top-2 z-20 rounded-xl border border-indigo-200 bg-indigo-50/95 backdrop-blur shadow-sm px-3 py-2.5 flex flex-col lg:flex-row lg:items-center gap-2.5">
+                <div className="flex items-center gap-2 text-sm font-semibold text-indigo-800 shrink-0">
+                  <ListChecks className="w-4 h-4" />
+                  {selected.size} selecionado{selected.size > 1 ? "s" : ""}
+                </div>
+                <div className="flex flex-1 flex-col sm:flex-row gap-2">
+                  <div className="flex-1 min-w-[160px]">
+                    <Select value={bulkCat} onValueChange={setBulkCat}>
+                      <SelectTrigger className="h-9 bg-white text-xs"><SelectValue placeholder="Categoria…" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={KEEP}>Categoria — manter</SelectItem>
+                        <SelectItem value={CLEAR}>Sem categoria</SelectItem>
+                        {categoriaOpcoes.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex-1 min-w-[160px]">
+                    <Select value={bulkObra} onValueChange={setBulkObra}>
+                      <SelectTrigger className="h-9 bg-white text-xs"><SelectValue placeholder="Centro de custo…" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={KEEP}>Centro de custo — manter</SelectItem>
+                        <SelectItem value={CLEAR}>Sem centro de custo</SelectItem>
+                        {obraOpcoes.map((o) => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button size="sm" className="h-9" onClick={aplicarBulk} disabled={salvando || (bulkCat === KEEP && bulkObra === KEEP)}>
+                    {salvando ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-1.5" />}
+                    Aplicar
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-9" onClick={limparSelecao} disabled={salvando}>
+                    <X className="w-4 h-4 mr-1" /> Limpar
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* Tabela detalhada */}
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2 pt-4 px-5">
@@ -440,9 +655,17 @@ export default function FinanceiroAnaliseCustosDetalhe() {
               </CardHeader>
               <CardContent className="px-2 sm:px-5 pb-4">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs min-w-[820px]">
+                  <table className="w-full text-xs min-w-[940px]">
                     <thead>
                       <tr className="text-gray-400 border-b border-gray-100">
+                        <th className="py-2 pl-1 pr-2 w-8">
+                          <Checkbox
+                            checked={allSelected}
+                            onCheckedChange={toggleAll}
+                            aria-label="Selecionar todos"
+                            disabled={selecionaveis.length === 0}
+                          />
+                        </th>
                         <th className="text-left font-medium py-2 pr-2">Descrição</th>
                         <th className="text-left font-medium py-2 px-2">Fornecedor</th>
                         <th className="text-left font-medium py-2 px-2">Categoria</th>
@@ -451,13 +674,29 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                         <th className="text-left font-medium py-2 px-2">Vencimento</th>
                         <th className="text-center font-medium py-2 px-2">Status</th>
                         <th className="text-right font-medium py-2 pl-2">Valor</th>
+                        <th className="text-center font-medium py-2 px-2 w-10">Editar</th>
                       </tr>
                     </thead>
                     <tbody>
                       {lancamentos.map((r, i) => {
                         const st = statusTheme(r);
+                        const temId = typeof r.id === "number";
+                        const cancelado = r.status === "cancelado";
+                        const sel = temId && selected.has(r.id);
                         return (
-                          <tr key={r.id ?? i} className="border-b border-gray-50 hover:bg-gray-50">
+                          <tr
+                            key={r.id ?? i}
+                            className={`border-b border-gray-50 cursor-pointer ${sel ? "bg-indigo-50/60" : "hover:bg-gray-50"}`}
+                            onClick={() => temId && abrirEdicao(r)}
+                          >
+                            <td className="py-2 pl-1 pr-2" onClick={(e) => e.stopPropagation()}>
+                              <Checkbox
+                                checked={!!sel}
+                                onCheckedChange={() => temId && toggleId(r.id)}
+                                disabled={!temId || cancelado}
+                                aria-label="Selecionar lançamento"
+                              />
+                            </td>
                             <td className="py-2 pr-2 text-gray-700 max-w-[240px] truncate" title={r.descricao || r.origemDescricao || ""}>
                               {r.descricao || r.origemDescricao || "—"}
                             </td>
@@ -470,14 +709,26 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                               <span className={`inline-block text-[10px] font-semibold rounded-full px-2 py-0.5 ${st.cls}`}>{st.label}</span>
                             </td>
                             <td className="py-2 pl-2 text-right tabular-nums font-semibold text-gray-800 whitespace-nowrap">{formatBRL(valorEfetivo(r))}</td>
+                            <td className="py-2 px-2 text-center" onClick={(e) => e.stopPropagation()}>
+                              <Button
+                                variant="ghost" size="icon"
+                                className="h-7 w-7 text-gray-400 hover:text-indigo-600"
+                                disabled={!temId}
+                                onClick={() => temId && abrirEdicao(r)}
+                                title="Editar lançamento"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </Button>
+                            </td>
                           </tr>
                         );
                       })}
                     </tbody>
                     <tfoot>
                       <tr className="border-t-2 border-gray-200">
-                        <td colSpan={7} className="py-2.5 pr-2 text-right font-semibold text-gray-600">Total do recorte</td>
+                        <td colSpan={8} className="py-2.5 pr-2 text-right font-semibold text-gray-600">Total do recorte</td>
                         <td className="py-2.5 pl-2 text-right tabular-nums font-bold text-rose-600 whitespace-nowrap">{formatBRL(kpis.total)}</td>
+                        <td />
                       </tr>
                     </tfoot>
                   </table>
@@ -487,6 +738,109 @@ export default function FinanceiroAnaliseCustosDetalhe() {
           </>
         )}
       </div>
+
+      {/* Dialog de edição de UMA linha */}
+      <Dialog open={!!editRow} onOpenChange={(o) => { if (!o) fecharEdicao(); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="w-4 h-4 text-indigo-600" /> Editar lançamento
+            </DialogTitle>
+          </DialogHeader>
+          {ef && editRow && (
+            <div className="space-y-3">
+              {rowLocked(editRow) && (
+                <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+                  <Lock className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  <span>Lançamento já {editRow.status === "recebido" ? "recebido" : "pago"} — só é possível corrigir <b>categoria</b> e <b>centro de custo</b>. Para alterar valor/datas, estorne antes.</span>
+                </div>
+              )}
+              <div>
+                <Label className="text-xs">Descrição</Label>
+                <Input
+                  value={ef.descricao}
+                  onChange={(e) => setEf({ ...ef, descricao: e.target.value })}
+                  disabled={rowLocked(editRow)}
+                  className="h-9 mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Fornecedor / Pagador</Label>
+                <Input
+                  value={ef.fornecedorNome}
+                  onChange={(e) => setEf({ ...ef, fornecedorNome: e.target.value })}
+                  disabled={rowLocked(editRow)}
+                  className="h-9 mt-1"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Categoria</Label>
+                  <Select value={ef.contaSel} onValueChange={(v) => setEf({ ...ef, contaSel: v })}>
+                    <SelectTrigger className="h-9 mt-1 text-xs"><SelectValue placeholder="Categoria…" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={CLEAR}>Sem categoria</SelectItem>
+                      {catOpcoesDialog.map((c) => (
+                        <SelectItem key={c.id} value={String(c.id)}>{c.id === -1 ? `${c.nome} (atual)` : c.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Centro de Custo (obra)</Label>
+                  <Select value={ef.obraSel} onValueChange={(v) => setEf({ ...ef, obraSel: v })}>
+                    <SelectTrigger className="h-9 mt-1 text-xs"><SelectValue placeholder="Centro de custo…" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={CLEAR}>Sem centro de custo</SelectItem>
+                      {obraOpcoesDialog.map((o) => (
+                        <SelectItem key={o.id} value={String(o.id)}>{o.id === -1 ? `${o.nome} (atual)` : o.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Competência</Label>
+                  <Input
+                    type="date"
+                    value={ef.dataCompetencia}
+                    onChange={(e) => setEf({ ...ef, dataCompetencia: e.target.value })}
+                    disabled={rowLocked(editRow)}
+                    className="h-9 mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Vencimento</Label>
+                  <Input
+                    type="date"
+                    value={ef.dataVencimento}
+                    onChange={(e) => setEf({ ...ef, dataVencimento: e.target.value })}
+                    disabled={rowLocked(editRow)}
+                    className="h-9 mt-1"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">Valor (R$)</Label>
+                <MoneyInput
+                  value={ef.valor}
+                  onChange={(v) => setEf({ ...ef, valor: v })}
+                  className="h-9 mt-1"
+                />
+                {rowLocked(editRow) && <p className="text-[11px] text-gray-400 mt-1">Valor bloqueado (lançamento {editRow.status}).</p>}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={fecharEdicao} disabled={salvando}>Cancelar</Button>
+            <Button onClick={salvarEdicao} disabled={salvando}>
+              {salvando ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : null}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

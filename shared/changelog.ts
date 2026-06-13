@@ -1,6 +1,55 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3025 — **FINANCEIRO → "ANÁLISE DE CUSTOS" · TELA DE DETALHE ("LANÇAMENTOS
+ * DETALHADOS"): AGORA DÁ PRA CLICAR EM CADA LINHA E EDITAR QUALQUER INFORMAÇÃO
+ * DIRETO, E SELECIONAR VÁRIOS LANÇAMENTOS DE UMA VEZ PRA DEFINIR CATEGORIA +
+ * CENTRO DE CUSTO EM MASSA — TUDO PERSISTE NO BANCO E PROPAGA PRO RESTO DO ERP.**
+ *
+ * PEDIDO (usuário, com print IMG_1908): "Na tela de lançamentos detalhados quero
+ * poder clicar em cada um e editar a informação direto, e também marcar vários pra
+ * jogar a categoria e o centro de custo de uma vez, e que salve pro resto do
+ * sistema."
+ *
+ * SEMÂNTICA ADOTADA: nesta tela a coluna "Categoria" = `conta_nome`/`conta_id`
+ * (Plano de Contas — `financial_accounts`) e "Centro de Custo" = `obra_nome`/
+ * `obra_id` (OBRA — exatamente o que a coluna já exibia desde a Rev. 3017). Os
+ * seletores puxam `financial.getAccounts` (categorias) e `obras.getObras` (obras).
+ *
+ * BACKEND (`server/routers/financial.ts`):
+ *  - `updateEntry` ganha 2 campos OPCIONAIS no input: `contaId` e `obraId`
+ *    (`z.number().nullable().optional()`), gravados no SET builder ao lado de
+ *    `conta_nome`/`obra_nome` — antes só os NOMES eram persistidos, agora o VÍNCULO
+ *    por id também, pra os filtros/agrupamentos por id em outras telas baterem.
+ *    Mantidos TODOS os guards existentes (bloqueia pago/recebido/cancelado, write-
+ *    back atômico p/ OC de origem em Compras).
+ *  - NOVA mutation `bulkReclassificar({ companyId, ids[], contaNome?, contaId?,
+ *    obraNome?, obraId? })`: reclassifica em massa SÓ os metadados categoria/centro
+ *    (NÃO toca valor/datas/status), por isso é permitida inclusive em títulos já
+ *    pagos/recebidos (correção contábil) — pula apenas `status='cancelado'`. Tenant-
+ *    guard anti-IDOR via `_assertFinanceiroCompanyAccess` + `WHERE company_id`; ids
+ *    validados como inteiros positivos (Zod) e INLINADOS no `IN (...)` (o `dbExecute`
+ *    interpola params por ordem de aparição e não liga array — inlinar nº validado é
+ *    seguro). `RETURNING id` conta quantos mudaram; `createAuditLog` registra quem/o
+ *    quê. ZERO ALTER/DROP/DELETE — só UPDATE de classificação.
+ *
+ * FRONT (`client/src/pages/financeiro/FinanceiroAnaliseCustosDetalhe.tsx`):
+ *  - CHECKBOX por linha + "selecionar todos" no cabeçalho (cancelados não
+ *    selecionáveis); linha clicável e botão lápis abrem o DIALOG de edição.
+ *  - DIALOG de edição de 1 linha: Descrição, Fornecedor, Categoria (Select),
+ *    Centro de Custo/obra (Select), Competência, Vencimento e Valor (`MoneyInput`
+ *    BRL). Se o valor atual de categoria/obra não casar com a lista, entra como
+ *    opção "(atual)" pra não se perder. Linha PAGA/RECEBIDA: campos de valor/datas
+ *    BLOQUEADOS com aviso âmbar — salva só categoria/centro via `bulkReclassificar`;
+ *    linha em aberto salva tudo via `updateEntry`.
+ *  - BARRA DE AÇÕES EM MASSA (sticky, aparece com ≥1 selecionado): Select de
+ *    Categoria + Select de Centro de Custo (cada um com "— manter —" e "Sem ...") +
+ *    "Aplicar" → `bulkReclassificar`. Pós-sucesso: `utils.financial
+ *    .getContasAPagarByYear.invalidate()` (propaga p/ esta tela E a tela-mãe), toast
+ *    e limpa seleção.
+ *
+ * REPUBLICAR (front + backend). ZERO ALTER/DROP/DELETE.
+ *
  * Rev. 3024 — **FINANCEIRO → "ANÁLISE DE CUSTOS" · TELA DE DETALHE (DRILL-DOWN):
  * OS GRÁFICOS ("DISTRIBUIÇÃO POR MÊS" E A QUEBRA "POR FORNECEDOR"/"POR CENTRO DE
  * CUSTO"/"POR CATEGORIA") FICAM CLICÁVEIS — CADA BARRA ABRE UM RECORTE AINDA MAIS

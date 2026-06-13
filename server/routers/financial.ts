@@ -1650,13 +1650,16 @@ export const financialRouter = router({
     dataCompetencia: z.string().optional(),
     dataVencimento: z.string().optional(),
     contaNome: z.string().optional(),
+    contaId: z.number().nullable().optional(),
     obraNome: z.string().optional(),
+    obraId: z.number().nullable().optional(),
     formaPagamento: z.string().optional(),
     fornecedorNome: z.string().optional(),
     observacoes: z.string().optional(),
     natureza: z.string().optional(),
     tipo: z.string().optional(),
   })).mutation(async ({ input, ctx }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const r: any = await dbExecute(db,
@@ -1690,7 +1693,9 @@ export const financialRouter = router({
     if (input.dataCompetencia !== undefined) push("data_competencia", input.dataCompetencia);
     if (input.dataVencimento !== undefined) push("data_vencimento", input.dataVencimento || null);
     if (input.contaNome !== undefined) push("conta_nome", input.contaNome || null);
+    if (input.contaId !== undefined) push("conta_id", input.contaId ?? null);
     if (input.obraNome !== undefined) push("obra_nome", input.obraNome || null);
+    if (input.obraId !== undefined) push("obra_id", input.obraId ?? null);
     if (input.formaPagamento !== undefined) push("forma_pagamento", input.formaPagamento || null);
     if (input.fornecedorNome !== undefined) push("fornecedor_nome", input.fornecedorNome?.trim() || null);
     if (input.observacoes !== undefined) push("observacoes", input.observacoes || null);
@@ -1757,6 +1762,63 @@ export const financialRouter = router({
       details: `Entry ${input.id} EDITADO por ${ctx.user?.name ?? "?"} (id=${ctx.user?.id ?? "?"})${origemTxt} — snapshot antes: ${snap}${origemSync}`,
     });
     return { ok: true, changed: true };
+  }),
+
+  // Rev. 3025 — RECLASSIFICAÇÃO EM MASSA (categoria=conta_nome/conta_id +
+  // centro de custo=obra_nome/obra_id) de VÁRIOS títulos de uma vez, a partir da
+  // tela "Lançamentos detalhados" (Análise de Custos → drill-down).
+  // Só mexe em METADADO de classificação — NÃO toca valor/datas/status — então é
+  // permitido inclusive em títulos já pagos/recebidos (correção contábil). Pula
+  // somente os cancelados. Tenant-guard anti-IDOR via _assertFinanceiroCompanyAccess
+  // + WHERE company_id. IDs validados como números → inlinados com segurança.
+  bulkReclassificar: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    ids: z.array(z.number().int().positive()).min(1).max(1000),
+    contaNome: z.string().nullable().optional(),
+    contaId: z.number().nullable().optional(),
+    obraNome: z.string().nullable().optional(),
+    obraId: z.number().nullable().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const setCategoria = input.contaNome !== undefined || input.contaId !== undefined;
+    const setCentro = input.obraNome !== undefined || input.obraId !== undefined;
+    if (!setCategoria && !setCentro) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Informe categoria e/ou centro de custo para aplicar." });
+    }
+    const sets: string[] = [];
+    const vals: any[] = [];
+    const push = (col: string, v: any) => { sets.push(`${col} = $${vals.length + 1}`); vals.push(v); };
+    if (input.contaNome !== undefined) push("conta_nome", input.contaNome || null);
+    if (input.contaId !== undefined) push("conta_id", input.contaId ?? null);
+    if (input.obraNome !== undefined) push("obra_nome", input.obraNome || null);
+    if (input.obraId !== undefined) push("obra_id", input.obraId ?? null);
+    push("editado_por_id", ctx.user?.id ?? null);
+    push("editado_por_nome", ctx.user?.name ?? null);
+    sets.push(`editado_em = NOW()`);
+    sets.push(`updated_at = NOW()`);
+    // IDs já validados como inteiros positivos pelo Zod → seguro inlinar (evita o
+    // bind de array do dbExecute, que interpola params por ordem de aparição).
+    const idList = Array.from(new Set(input.ids)).join(",");
+    vals.push(input.companyId);
+    const res: any = await dbExecute(db,
+      `UPDATE financial_entries SET ${sets.join(", ")}
+       WHERE company_id = $${vals.length} AND id IN (${idList}) AND status <> 'cancelado'
+       RETURNING id`,
+      vals
+    );
+    const changed = rows(res).length;
+    const partes: string[] = [];
+    if (setCategoria) partes.push(`categoria="${input.contaNome ?? ""}"`);
+    if (setCentro) partes.push(`centroCusto/obra="${input.obraNome ?? ""}"`);
+    await createAuditLog({
+      action: "financial_entry_bulk_reclassify",
+      userId: ctx.user?.id,
+      companyId: input.companyId,
+      details: `Reclassificação em massa de ${changed}/${input.ids.length} título(s) por ${ctx.user?.name ?? "?"} (id=${ctx.user?.id ?? "?"}) — ${partes.join(" ")}`,
+    });
+    return { ok: true, changed };
   }),
 
   // Rev. 2657 — ANEXAR documento (boleto/NF/foto) a um título do Contas a Pagar.
