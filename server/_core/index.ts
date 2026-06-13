@@ -642,6 +642,48 @@ Regras:
     `);
   });
 
+  // Rev. 3012 — Download COMPLETO da migração via STREAMING direto pro browser.
+  // Substitui o caminho frágil (build do ZIP em memória + upload pro storage +
+  // window.open), que estourava com "Fetch is aborted" em volumes grandes. Auth
+  // pelo cookie de sessão (mesma origem → browser envia automático). Inclui banco
+  // + bytes dos arquivos (uploaded_files) + código-fonte. ZIP é "application/zip"
+  // (não compressível) → middleware de compression pula; chunked → sem teto de
+  // resposta do proxy.
+  app.get("/api/migration/export-completo.zip", async (req: any, res: any) => {
+    let user: any = null;
+    try {
+      user = await sdk.authenticateRequest(req);
+    } catch {
+      user = null;
+    }
+    if (!user) {
+      res.status(401).json({ error: "Não autenticado" });
+      return;
+    }
+    if (user.role !== "admin" && user.role !== "admin_master") {
+      res.status(403).json({ error: "Acesso restrito a administradores" });
+      return;
+    }
+
+    const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="erp-fc-export-completo-${ts}.zip"`);
+    res.setHeader("Cache-Control", "no-store");
+    console.log(`[Migration] Download streaming completo iniciado por ${user.name}`);
+
+    try {
+      const { streamFullExportZip } = await import("../services/migrationService");
+      await streamFullExportZip(res);
+    } catch (e: any) {
+      console.error(`[Migration] Falha no streaming do export: ${e?.message || e}`);
+      if (!res.headersSent) {
+        res.status(500).json({ error: e?.message || "Erro ao gerar export" });
+      } else {
+        try { res.destroy(); } catch { /* noop */ }
+      }
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",

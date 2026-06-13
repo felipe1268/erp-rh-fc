@@ -32,7 +32,6 @@ export default function Migration() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // tRPC mutations
-  const exportZipMutation = trpc.migration.exportarZip.useMutation();
   const exportJsonMutation = trpc.migration.exportar.useMutation();
   const exportFilesMutation = trpc.migration.exportarArquivos.useMutation();
   const importMutation = trpc.migration.importar.useMutation();
@@ -45,23 +44,21 @@ export default function Migration() {
   // ============================================================
   // EXPORTAR ZIP (principal)
   // ============================================================
-  const handleExportZip = useCallback(async () => {
-    setExportPhase("exporting");
+  const handleExportZip = useCallback(() => {
+    // Rev. 3012 — Download via STREAMING direto (rota Express). O browser baixa o
+    // ZIP como arquivo; nada é montado em memória do lado do cliente nem aberto em
+    // aba — acaba o "Fetch is aborted". O cookie de sessão vai junto (mesma origem).
     setExportResult(null);
-    try {
-      const result = await exportZipMutation.mutateAsync();
-      setExportResult({ ...result, format: "zip" });
-      setExportPhase("done");
-      toast.success("Exportação ZIP concluída com sucesso!");
-      // Auto-download
-      if (result.downloadUrl) {
-        window.open(result.downloadUrl, "_blank");
-      }
-    } catch (e: any) {
-      setExportPhase("error");
-      toast.error(`Erro na exportação: ${e.message}`);
-    }
-  }, [exportZipMutation]);
+    setExportPhase("done");
+    toast.success("Download iniciado! O arquivo aparecerá em 'Downloads' do navegador. Pode levar alguns minutos.");
+    const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const a = document.createElement("a");
+    a.href = "/api/migration/export-completo.zip";
+    a.download = `erp-fc-export-completo-${ts}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }, []);
 
   // Exportar só JSON (alternativo)
   const handleExportJson = useCallback(async () => {
@@ -249,13 +246,15 @@ export default function Migration() {
               <div className="flex gap-3">
                 <Info className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
                 <div className="text-sm text-amber-800 dark:text-amber-200">
-                  <p className="font-semibold mb-1">O que o ZIP contém:</p>
+                  <p className="font-semibold mb-1">O que o ZIP completo contém (100% — independência total):</p>
                   <ul className="list-disc list-inside space-y-1">
                     <li><strong>/banco/</strong> - Cada tabela em um arquivo JSON separado</li>
-                    <li><strong>banco-completo.json</strong> - Todas as tabelas em um único arquivo (para importação)</li>
-                    <li><strong>arquivos-manifesto.json</strong> - Lista de todos os documentos com URLs de download</li>
-                    <li><strong>README-MIGRACAO.md</strong> - Guia passo a passo para migrar para Railway</li>
+                    <li><strong>banco-completo.json</strong> - Todas as tabelas + os <strong>arquivos/documentos</strong> (bytes em base64) em um único arquivo para importação</li>
+                    <li><strong>/codigo-fonte/</strong> - Código-fonte completo do projeto (sem node_modules)</li>
+                    <li><strong>arquivos-manifesto.json</strong> - Lista de documentos com URLs originais (referência)</li>
+                    <li><strong>README-MIGRACAO.md</strong> - Guia passo a passo de migração (PostgreSQL)</li>
                   </ul>
+                  <p className="mt-2 text-xs opacity-80">O download começa direto no navegador (streaming) e pode levar alguns minutos conforme o volume. Não feche a aba.</p>
                 </div>
               </div>
             </div>
@@ -275,7 +274,7 @@ export default function Migration() {
                     <PackageOpen className="h-7 w-7" />
                   )}
                   <span className="font-bold text-base">Exportar ZIP Completo</span>
-                  <span className="text-xs opacity-80">Banco + Manifesto + README</span>
+                  <span className="text-xs opacity-80">Banco + Arquivos + Código-fonte</span>
                 </div>
               </Button>
 

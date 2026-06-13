@@ -1,6 +1,49 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3012 — **MIGRAÇÃO DE DADOS → "EXPORTAR ZIP COMPLETO": REESCRITA TOTAL —
+ * FIM DO "FETCH IS ABORTED" + DOWNLOAD DE 100% (BANCO + ARQUIVOS + CÓDIGO-FONTE)
+ * VIA STREAMING DIRETO.**
+ *
+ * PEDIDO (usuário): o botão "Exportar ZIP Completo" dava erro ("Fetch is aborted").
+ * Ele quer baixar 100% de TUDO — cada código, cada tabela, cada arquivo — para ter
+ * independência total de plataforma, de forma automática.
+ *
+ * CAUSA-RAIZ: `server/services/migrationService.ts` estava 100% em sintaxe MySQL
+ * (crases ` em identificadores, `rows[0]`, `ON DUPLICATE KEY UPDATE`, lista FIXA de
+ * tabelas) num app que roda em PostgreSQL/Neon. TODA query falhava → a exportação
+ * não lia nada e o caminho frágil (montar o ZIP INTEIRO em memória → upload pro
+ * storage → `window.open` da URL) estourava timeout/limite ("Fetch is aborted").
+ *
+ * SOLUÇÃO (ZERO ALTER/DROP/DELETE; só LEITURA do banco + nova rota GET de download):
+ * 1) `migrationService.ts` REESCRITO p/ PostgreSQL: auto-descoberta de TODAS as
+ *    tabelas via `pg_tables` (inclui tabelas futuras automaticamente), aspas duplas
+ *    nos identificadores, `result.rows`, `db.$client` (Pool node-postgres) p/
+ *    INSERT parametrizado no import (`ON CONFLICT (id) DO UPDATE/NOTHING`).
+ * 2) NOVA função `streamFullExportZip(res)` — STREAMING direto pro browser via
+ *    `archiver` + `Readable.from(asyncGenerator)`, sem buffer em memória: inclui
+ *    `/banco/<tabela>.json`, `banco-completo.json` (com a tabela `uploaded_files`
+ *    — os BYTES base64 dos documentos — paginada via `ctid` LIMIT/OFFSET, página de
+ *    20 p/ não estourar RAM), `arquivos-manifesto.json`, `README-MIGRACAO.md` e
+ *    `codigo-fonte/**` (via `archive.glob` ignorando node_modules/.git/dist/.local/
+ *    uploads/etc). `HEAVY_TABLES={uploaded_files}` nunca é carregada inteira em RAM.
+ * 3) NOVA rota Express `GET /api/migration/export-completo.zip` em
+ *    `server/_core/index.ts` (antes do mount tRPC): auth pelo cookie de sessão
+ *    (`sdk.authenticateRequest`) + gate admin/admin_master, headers
+ *    `application/zip` + `Content-Disposition: attachment` + `Cache-Control:
+ *    no-store`. ZIP é incompressível → middleware `compression` pula; chunked → sem
+ *    teto de resposta do proxy.
+ * 4) `client/src/pages/Migration.tsx`: `handleExportZip` agora dispara um
+ *    `<a download>` apontando pra rota de streaming (browser baixa como arquivo,
+ *    cookie vai junto, nada montado no cliente) em vez da mutation `exportarZip` +
+ *    `window.open`. Caixa de info atualizada (arquivos + código-fonte).
+ *
+ * VALIDAÇÃO: SQL-chave testada contra o Neon real (462 tabelas; `uploaded_files`
+ * com 2955 documentos base64; paginação `ctid` ok). Rota responde 401 sem cookie
+ * (gate ok). Requer REPUBLICAR (backend + front).
+ *
+ * ──────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 3011 — **FINANCEIRO → CONTAS A RECEBER (TÍTULOS) → MODAL "REGISTRAR
  * RECEBIMENTO": CAMPO "VALOR RECEBIDO" PASSA A USAR MÁSCARA BRL (`100.000,00`) EM
  * VEZ DO FORMATO CRU `100000.00`.**

@@ -60,3 +60,4 @@
 - [Saldo inicial conta bancária](saldo-inicial-conta-bancaria.md) — saldo de abertura vive em `financial_opening_balances` (1 linha/conta), NÃO em coluna; Fluxo de Caixa soma p/ semear o Acumulado; mutações de conta precisam de tenant guard.
 - [Notification recipient tenancy](notification-recipient-tenancy.md) — notify queries must join `user_companies` (users has NO companyId; admin roles are global in getCompaniesForUser) or you leak across tenants.
 - [resolveCompanyIds trusts input](resolvecompanyids-no-intersect.md) — resolveCompanyIds/companyFilter don't intersect with user's allowed companies; per-company endpoints must call assert guard explicitly (loop every id for lists).
+- [Migração export/import](migration-export-streaming.md) — export grande = rota GET streaming (archiver.pipe+ctid), NÃO buffer+upload+window.open ("Fetch is aborted"); import precisa whitelist de identificadores (information_schema).

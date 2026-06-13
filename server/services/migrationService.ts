@@ -1,14 +1,22 @@
 /**
  * Serviço de Migração Completa do ERP
- * 
- * Exporta: banco de dados completo (JSON) + todos os arquivos/documentos (S3)
- * Importa: restaura banco + faz upload dos arquivos
- * 
- * Formato do pacote ZIP:
- *   /banco/              - Cada tabela em um arquivo JSON separado
- *   /banco/_meta.json    - Metadados (versão, data, estatísticas)
- *   /arquivos-manifesto.json - Mapeamento de todos os arquivos/documentos
- *   /README-MIGRACAO.md  - Instruções para migrar para Railway
+ *
+ * Exporta: banco de dados completo (JSON) + bytes reais dos arquivos (uploaded_files)
+ *          + código-fonte do projeto → 100% de independência de plataforma.
+ * Importa: restaura todas as tabelas no banco de destino.
+ *
+ * IMPORTANTE: este app roda em PostgreSQL (Neon) via drizzle-orm/node-postgres.
+ * Identificadores usam aspas duplas ("tabela") e o resultado de db.execute vem em
+ * `result.rows`. (A versão anterior estava em sintaxe MySQL — crases e rows[0] —
+ * por isso TODA query falhava e a exportação não lia nada → "Fetch is aborted".)
+ *
+ * Formato do pacote ZIP (rota de streaming /api/migration/export-completo.zip):
+ *   /banco/<tabela>.json     - Cada tabela em um arquivo JSON separado (exceto blobs)
+ *   /banco/_meta.json        - Metadados (versão, data, estatísticas)
+ *   /banco-completo.json     - TODAS as tabelas (inclui uploaded_files) p/ importação
+ *   /arquivos-manifesto.json - Mapeamento de documentos com URLs originais
+ *   /codigo-fonte/**         - Código-fonte completo do projeto (sem node_modules)
+ *   /README-MIGRACAO.md      - Instruções de migração
  */
 import { getDb } from "../db";
 import { sql } from "drizzle-orm";
@@ -17,50 +25,12 @@ import archiver from "archiver";
 import { Readable } from "stream";
 
 // ============================================================
-// LISTA DE TABELAS
+// TABELAS PESADAS (blobs base64) — não carregadas em memória;
+// só entram no export via streaming paginado.
 // ============================================================
-const ALL_TABLES = [
-  "accidents", "action_plans", "advances", "alertas_terceiros", "asos", "atestados",
-  "audit_logs", "audits", "avaliacao_avaliadores", "avaliacao_ciclos", "avaliacao_config",
-  "avaliacao_perguntas", "avaliacao_questionarios", "avaliacao_respostas", "avaliacoes",
-  "backups", "blacklist_reactivation_requests", "caepi_database", "chemicals", "cipa_elections",
-  "cipa_meetings", "cipa_members", "clinicas", "companies", "company_bank_accounts",
-  "company_documents", "contract_templates", "convencao_coletiva", "custom_exams", "datajud_alerts",
-  "datajud_auto_check_config", "dds", "deviations", "dissidio_funcionarios", "dissidios",
-  "dixi_afd_importacoes", "dixi_afd_marcacoes", "dixi_devices", "dixi_name_mappings",
-  "document_templates", "email_templates", "employee_aptidao", "employee_contracts",
-  "employee_documents", "employee_history", "employee_site_history", "employees",
-  "empresas_terceiras", "epi_ai_analises", "epi_alerta_capacidade", "epi_alerta_capacidade_log",
-  "epi_assinaturas", "epi_checklist_items", "epi_checklists", "epi_cores_capacete",
-  "epi_deliveries", "epi_discount_alerts", "epi_estoque_minimo", "epi_estoque_obra",
-  "epi_kit_items", "epi_kits", "epi_transferencias", "epi_treinamentos_vinculados",
-  "epi_vida_util", "epis", "equipment", "eval_audit_log", "eval_avaliacoes", "eval_avaliadores",
-  "eval_climate_answers", "eval_climate_external_tokens", "eval_climate_questions",
-  "eval_climate_responses", "eval_climate_surveys", "eval_criteria", "eval_criteria_revisions",
-  "eval_external_participants", "eval_pillars", "eval_scores", "eval_survey_answers",
-  "eval_survey_evaluators", "eval_survey_questions", "eval_survey_responses", "eval_surveys",
-  "extinguishers", "extra_payments", "feriados", "field_notes", "financial_events",
-  "folha_itens", "folha_lancamentos", "fornecedores_epi", "funcionarios_terceiros",
-  "golden_rules", "he_solicitacao_funcionarios", "he_solicitacoes", "hydrants",
-  "insurance_alert_config", "insurance_alert_recipients", "insurance_alerts_log",
-  "job_functions", "lancamentos_parceiros", "manual_obra_assignments", "meal_benefit_configs",
-  "medicos", "menu_config", "menu_labels", "module_config", "monthly_payroll_summary",
-  "notification_logs", "notification_recipients", "obra_funcionarios", "obra_horas_rateio",
-  "obra_ponto_inconsistencies", "obra_sns", "obras", "obrigacoes_mensais_terceiros",
-  "pagamentos_parceiros", "parceiros_conveniados", "payroll", "payroll_adjustments",
-  "payroll_advances", "payroll_alerts", "payroll_payments", "payroll_periods",
-  "payroll_uploads", "permissions", "pj_contracts", "pj_medicoes", "pj_payments",
-  "ponto_consolidacao", "ponto_descontos", "ponto_descontos_resumo", "portal_credentials",
-  "processo_analises", "processo_aprendizado", "processo_documentos", "processos_andamentos",
-  "processos_trabalhistas", "risks", "sectors", "system_criteria", "system_revisions",
-  "termination_notices", "time_inconsistencies", "time_records", "timecard_daily",
-  "training_documents", "trainings", "unmatched_dixi_records", "user_companies",
-  "user_group_members", "user_group_permissions", "user_groups", "user_permissions",
-  "user_profiles", "users", "vacation_periods", "vehicles", "vr_benefits",
-  "warning_templates", "warnings",
-];
+const HEAVY_TABLES = new Set<string>(["uploaded_files"]);
 
-// Campos que contêm URLs de arquivos no S3
+// Campos que contêm URLs de arquivos (para o manifesto de documentos)
 const FILE_URL_FIELDS: Record<string, string[]> = {
   accidents: ["documentoUrl"],
   asos: ["documentoUrl"],
@@ -131,61 +101,99 @@ export interface ImportResult {
 }
 
 // ============================================================
-// EXPORTAÇÃO COMPLETA
+// HELPERS DE BANCO (PostgreSQL)
+// ============================================================
+
+function rowsOf(result: any): any[] {
+  return (result && Array.isArray(result.rows)) ? result.rows : (Array.isArray(result) ? result : []);
+}
+
+/**
+ * Descobre TODAS as tabelas do schema public dinamicamente.
+ * Inclui automaticamente tabelas futuras e a tabela `uploaded_files`
+ * (que guarda os bytes reais dos documentos em base64).
+ */
+async function getAllTableNames(db: any): Promise<string[]> {
+  const result = await db.execute(sql.raw(
+    `SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename`
+  ));
+  return rowsOf(result).map((r: any) => r.tablename).filter(Boolean);
+}
+
+async function countTable(db: any, tableName: string): Promise<number> {
+  try {
+    const result = await db.execute(sql.raw(`SELECT COUNT(*)::int AS n FROM "${tableName}"`));
+    return rowsOf(result)[0]?.n ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+// ============================================================
+// EXPORTAÇÃO (carregamento em memória — exclui blobs pesados)
 // ============================================================
 
 /**
- * Exporta todo o banco de dados em formato JSON organizado.
- * Retorna um objeto com todas as tabelas e seus dados.
+ * Exporta o banco em memória (tabelas estruturadas), EXCETO as tabelas pesadas
+ * de blobs (uploaded_files), que são tratadas via streaming. Coleta também o
+ * manifesto de URLs de arquivos. Usado por stats / exports legados / streaming.
  */
 export async function exportDatabase(
   onProgress?: (p: ExportProgress) => void
-): Promise<{ tables: Record<string, any[]>; meta: any; fileUrls: Array<{ table: string; field: string; rowId: any; url: string }> }> {
+): Promise<{
+  tables: Record<string, any[]>;
+  meta: any;
+  fileUrls: Array<{ table: string; field: string; rowId: any; url: string }>;
+  allTables: string[];
+  heavyCounts: Record<string, number>;
+}> {
   const db = await getDb();
+  const allTables = await getAllTableNames(db);
   const tables: Record<string, any[]> = {};
+  const heavyCounts: Record<string, number> = {};
   const fileUrls: Array<{ table: string; field: string; rowId: any; url: string }> = [];
   let totalRecords = 0;
 
-  for (let i = 0; i < ALL_TABLES.length; i++) {
-    const tableName = ALL_TABLES[i];
+  for (let i = 0; i < allTables.length; i++) {
+    const tableName = allTables[i];
     onProgress?.({
       phase: "database",
       currentTable: tableName,
       tablesProcessed: i,
-      totalTables: ALL_TABLES.length,
+      totalTables: allTables.length,
       filesProcessed: 0,
       totalFiles: 0,
       message: `Exportando tabela: ${tableName}`,
     });
 
-    try {
-      const rows = await db.execute(sql.raw(`SELECT * FROM \`${tableName}\``));
-      // mysql2 retorna [rows, fields] - pegar primeiro elemento
-      const data = (rows[0] as unknown[]) || [];
-      tables[tableName] = Array.isArray(data) ? data : [];
-      totalRecords += tables[tableName].length;
+    // Tabelas pesadas: só conta (não carrega bytes em memória)
+    if (HEAVY_TABLES.has(tableName)) {
+      const n = await countTable(db, tableName);
+      heavyCounts[tableName] = n;
+      totalRecords += n;
+      tables[tableName] = [];
+      continue;
+    }
 
-      // Coletar URLs de arquivos
+    try {
+      const result = await db.execute(sql.raw(`SELECT * FROM "${tableName}"`));
+      const data = rowsOf(result);
+      tables[tableName] = data;
+      totalRecords += data.length;
+
+      // Coletar URLs de arquivos para o manifesto
       const urlFields = FILE_URL_FIELDS[tableName];
-      if (urlFields && tables[tableName].length > 0) {
-        for (const row of tables[tableName]) {
+      if (urlFields && data.length > 0) {
+        for (const row of data) {
           for (const field of urlFields) {
-            const camelField = field;
             const snakeField = field.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);
-            const value = row[camelField] || row[snakeField];
+            const value = row[field] ?? row[snakeField];
             if (value && typeof value === "string" && value.startsWith("http")) {
-              fileUrls.push({
-                table: tableName,
-                field: camelField,
-                rowId: row.id || row.ID,
-                url: value,
-              });
-            }
-            // Para campos JSON (como fotosUrls)
-            if (value && typeof value === "object" && Array.isArray(value)) {
+              fileUrls.push({ table: tableName, field, rowId: row.id ?? row.ID, url: value });
+            } else if (Array.isArray(value)) {
               for (const url of value) {
                 if (typeof url === "string" && url.startsWith("http")) {
-                  fileUrls.push({ table: tableName, field: camelField, rowId: row.id, url });
+                  fileUrls.push({ table: tableName, field, rowId: row.id, url });
                 }
               }
             }
@@ -198,98 +206,237 @@ export async function exportDatabase(
     }
   }
 
+  const tableStats = [
+    ...Object.entries(tables)
+      .filter(([name]) => !HEAVY_TABLES.has(name))
+      .map(([name, rows]) => ({ table: name, records: rows.length })),
+    ...Object.entries(heavyCounts).map(([name, n]) => ({ table: name, records: n })),
+  ].filter((t) => t.records > 0).sort((a, b) => b.records - a.records);
+
   const meta = {
-    version: "1.0.0",
+    version: "2.0.0",
     exportedAt: new Date().toISOString(),
-    platform: "Manus ERP - FC Engenharia",
-    totalTables: Object.keys(tables).length,
+    platform: "ERP FC Engenharia (PostgreSQL/Neon)",
+    totalTables: allTables.length,
     totalRecords,
     totalFiles: fileUrls.length,
-    tableStats: Object.entries(tables).map(([name, rows]) => ({
-      table: name,
-      records: rows.length,
-    })).filter(t => t.records > 0),
+    tableStats,
   };
 
-  return { tables, meta, fileUrls };
+  return { tables, meta, fileUrls, allTables, heavyCounts };
 }
 
 // ============================================================
 // README DE MIGRAÇÃO
 // ============================================================
-const MIGRATION_README = `# Guia de Migração - ERP FC Engenharia
+const MIGRATION_README = `# Guia de Migração — ERP FC Engenharia
+
+Este pacote contém **100% dos dados, arquivos e código** do ERP para você rodar
+em qualquer plataforma (Railway, Render, Fly.io, VPS própria, etc.) com total
+independência. O banco é **PostgreSQL**.
 
 ## Conteúdo do Pacote ZIP
 
 \`\`\`
-/banco/                    - Dados de cada tabela em JSON separado
-/banco/_meta.json          - Metadados da exportação (data, estatísticas)
-/arquivos-manifesto.json   - Lista de todos os documentos/arquivos com URLs
-/README-MIGRACAO.md        - Este arquivo
+/banco/<tabela>.json      - Dados de cada tabela em JSON separado (para conferência)
+/banco/_meta.json         - Metadados da exportação (data, estatísticas)
+/banco-completo.json      - TODAS as tabelas em um único arquivo (use na importação)
+                            Inclui a tabela "uploaded_files" com os BYTES dos
+                            documentos (base64) — restaurar o banco restaura os arquivos.
+/arquivos-manifesto.json  - Lista de documentos com URLs originais (referência)
+/codigo-fonte/            - Código-fonte completo do projeto (sem node_modules)
+/README-MIGRACAO.md       - Este arquivo
 \`\`\`
 
-## Passo a Passo para Migrar para Railway
+## Passo a Passo (PostgreSQL)
 
-### 1. Criar Banco de Dados MySQL
-- Acesse [railway.app](https://railway.app) e crie um novo projeto
-- Adicione um serviço MySQL
-- Copie a connection string (DATABASE_URL)
+### 1. Criar um banco PostgreSQL
+Crie um Postgres em qualquer provedor (Railway, Neon, Supabase, RDS...) e copie a
+connection string (\`DATABASE_URL\` ou \`NEON_DATABASE_URL\`).
 
-### 2. Clonar o Repositório
+### 2. Subir o código
 \`\`\`bash
-git clone https://github.com/felipe1268/erp-rh-fc.git
-cd erp-rh-fc
+# a partir da pasta codigo-fonte/
 pnpm install
 \`\`\`
 
-### 3. Configurar Variáveis de Ambiente
-Crie um arquivo \`.env\` na raiz:
+### 3. Configurar variáveis de ambiente
+Crie um \`.env\` na raiz (veja a lista completa no replit.md):
 \`\`\`env
-DATABASE_URL=mysql://user:pass@host:port/dbname
-JWT_SECRET=seu-segredo-jwt-aqui
+NEON_DATABASE_URL=postgres://user:pass@host:5432/dbname
+JWT_SECRET=<48 hex aleatórios>
+NODE_ENV=production
 \`\`\`
 
-### 4. Criar as Tabelas
+### 4. Criar as tabelas
 \`\`\`bash
 pnpm db:push
 \`\`\`
 
-### 5. Importar os Dados
-Use o script de importação incluído ou importe manualmente:
+### 5. Importar os dados
+Use a própria tela **Migração de Dados → Importar** do ERP rodando no destino, e
+selecione o arquivo \`banco-completo.json\`. Como ele já inclui a tabela
+\`uploaded_files\`, os documentos voltam junto — não é preciso baixar arquivo por arquivo.
+
+### 6. Subir o app
 \`\`\`bash
-node scripts/import-data.mjs ./banco/
+pnpm build && node dist/index.js
 \`\`\`
 
-### 6. Baixar os Arquivos/Documentos
-Use o manifesto de arquivos para baixar todos os documentos:
-\`\`\`bash
-node scripts/download-files.mjs ./arquivos-manifesto.json ./uploads/
-\`\`\`
-
-### 7. Deploy no Railway
-\`\`\`bash
-railway link
-railway up
-\`\`\`
-
-## Estrutura dos Dados
-
-Cada arquivo JSON na pasta \`/banco/\` contém um array de registros da tabela correspondente.
-O arquivo \`_meta.json\` contém estatísticas e a data da exportação.
-
-## Arquivos/Documentos
-
-O \`arquivos-manifesto.json\` lista todos os documentos anexados (ASOs, certificados, fotos, etc.)
-com suas URLs originais. Use o script de download para baixá-los em lote.
+## Observações
+- Os bytes dos arquivos vivem na tabela \`uploaded_files\` (base64). Restaurar o
+  banco completo restaura os documentos automaticamente.
+- O \`arquivos-manifesto.json\` é apenas referência das URLs originais.
 `;
 
 // ============================================================
-// EXPORTAÇÃO EM ZIP
+// STREAMING DO ZIP COMPLETO (rota Express, download direto)
+// ============================================================
+
+/** Gera os pedaços JSON de uma tabela pesada (uploaded_files) paginando o DB. */
+async function* heavyTableJsonChunks(db: any, tableName: string): AsyncGenerator<string> {
+  yield "[";
+  let offset = 0;
+  const pageSize = 20; // blobs base64 podem ser grandes — página pequena
+  let first = true;
+  // ctid: coluna de sistema do Postgres presente em toda tabela — ordenação estável
+  for (;;) {
+    const result = await db.execute(sql.raw(
+      `SELECT * FROM "${tableName}" ORDER BY ctid LIMIT ${pageSize} OFFSET ${offset}`
+    ));
+    const rows = rowsOf(result);
+    if (rows.length === 0) break;
+    for (const row of rows) {
+      yield (first ? "" : ",") + JSON.stringify(row);
+      first = false;
+    }
+    offset += rows.length;
+    if (rows.length < pageSize) break;
+  }
+  yield "]";
+}
+
+/**
+ * Gera o `banco-completo.json` em streaming: tabelas em memória + tabelas pesadas
+ * paginadas (sem carregar blobs inteiros na RAM).
+ */
+async function* fullDbJsonChunks(
+  db: any,
+  tables: Record<string, any[]>,
+  allTables: string[],
+  meta: any
+): AsyncGenerator<string> {
+  yield `{"_meta":${JSON.stringify(meta)}`;
+  // Tabelas estruturadas (em memória)
+  for (const [name, data] of Object.entries(tables)) {
+    if (HEAVY_TABLES.has(name)) continue;
+    yield `,${JSON.stringify(name)}:${JSON.stringify(data)}`;
+  }
+  // Tabelas pesadas (streaming paginado)
+  for (const name of allTables) {
+    if (!HEAVY_TABLES.has(name)) continue;
+    yield `,${JSON.stringify(name)}:`;
+    for await (const chunk of heavyTableJsonChunks(db, name)) yield chunk;
+  }
+  yield "}";
+}
+
+/**
+ * Monta o ZIP completo e envia DIRETO para a resposta HTTP (streaming).
+ * Evita buffer em memória + upload intermediário (causa do "Fetch is aborted").
+ */
+export async function streamFullExportZip(res: any): Promise<void> {
+  const db = await getDb();
+  const archive = archiver("zip", { zlib: { level: 6 } });
+
+  archive.on("warning", (err: any) => {
+    if (err?.code !== "ENOENT") console.warn(`[Migration] archive warning: ${err?.message || err}`);
+  });
+  archive.on("error", (err: any) => {
+    console.error(`[Migration] archive error: ${err?.message || err}`);
+    try { res.destroy(err); } catch { /* noop */ }
+  });
+
+  archive.pipe(res);
+
+  // 1. Banco estruturado em memória + manifesto
+  const { tables, meta, fileUrls, allTables } = await exportDatabase();
+
+  // 2. _meta.json
+  archive.append(JSON.stringify(meta, null, 2), { name: "banco/_meta.json" });
+
+  // 3. Cada tabela estruturada em JSON separado (não inclui blobs pesados)
+  for (const [tableName, data] of Object.entries(tables)) {
+    if (HEAVY_TABLES.has(tableName)) continue;
+    if (data.length > 0) {
+      archive.append(JSON.stringify(data, null, 2), { name: `banco/${tableName}.json` });
+    }
+  }
+
+  // 4. banco-completo.json (streaming: inclui uploaded_files com os bytes)
+  archive.append(Readable.from(fullDbJsonChunks(db, tables, allTables, meta)), {
+    name: "banco-completo.json",
+  });
+
+  // 5. Manifesto de arquivos
+  const fileManifest = {
+    _meta: {
+      totalFiles: fileUrls.length,
+      exportedAt: meta.exportedAt,
+      instrucoes:
+        "Referência das URLs originais. Os BYTES reais dos arquivos já estão em " +
+        "banco-completo.json (tabela uploaded_files, base64). Restaurar o banco restaura os arquivos.",
+    },
+    files: fileUrls.map((f, idx) => ({
+      id: idx + 1,
+      table: f.table,
+      field: f.field,
+      rowId: f.rowId,
+      originalUrl: f.url,
+      localPath: `arquivos/${f.table}/${f.rowId}_${f.field}${getExtFromUrl(f.url)}`,
+    })),
+  };
+  archive.append(JSON.stringify(fileManifest, null, 2), { name: "arquivos-manifesto.json" });
+
+  // 6. README
+  archive.append(MIGRATION_README, { name: "README-MIGRACAO.md" });
+
+  // 7. Código-fonte completo (sem node_modules e afins)
+  archive.glob(
+    "**/*",
+    {
+      cwd: process.cwd(),
+      dot: true,
+      ignore: [
+        "node_modules/**",
+        "**/node_modules/**",
+        ".git/**",
+        "dist/**",
+        "build/**",
+        ".cache/**",
+        ".local/**",
+        ".upm/**",
+        ".config/**",
+        ".pnpm-store/**",
+        "server/uploads/**",
+        "tmp/**",
+        "**/*.log",
+      ],
+    },
+    { prefix: "codigo-fonte" }
+  );
+
+  await archive.finalize();
+}
+
+// ============================================================
+// EXPORTAÇÃO EM ZIP (legado — buffer em memória, sem blobs/código)
 // ============================================================
 
 /**
- * Gera o pacote ZIP completo de exportação.
- * Contém: /banco/*.json + /arquivos-manifesto.json + /README-MIGRACAO.md
+ * Gera o pacote ZIP em memória e faz upload para o storage (retorna URL).
+ * Mantido para compatibilidade; o caminho recomendado é o streaming
+ * (/api/migration/export-completo.zip), que inclui arquivos e código-fonte.
  */
 export async function generateExportZip(
   onProgress?: (p: ExportProgress) => void
@@ -297,49 +444,44 @@ export async function generateExportZip(
   const startTime = Date.now();
 
   try {
-    // 1. Exportar banco de dados
     const { tables, meta, fileUrls } = await exportDatabase(onProgress);
 
     onProgress?.({
       phase: "packaging",
-      tablesProcessed: ALL_TABLES.length,
-      totalTables: ALL_TABLES.length,
+      tablesProcessed: meta.totalTables,
+      totalTables: meta.totalTables,
       filesProcessed: 0,
       totalFiles: fileUrls.length,
       message: "Gerando arquivo ZIP...",
     });
 
-    // 2. Criar ZIP em memória
     const archive = archiver("zip", { zlib: { level: 6 } });
     const chunks: Buffer[] = [];
-
-    // Coletar chunks do stream
     const streamPromise = new Promise<Buffer>((resolve, reject) => {
       archive.on("data", (chunk: Buffer) => chunks.push(chunk));
       archive.on("end", () => resolve(Buffer.concat(chunks)));
       archive.on("error", reject);
     });
 
-    // 3. Adicionar _meta.json
     archive.append(JSON.stringify(meta, null, 2), { name: "banco/_meta.json" });
-
-    // 4. Adicionar cada tabela com dados como arquivo JSON separado
     for (const [tableName, data] of Object.entries(tables)) {
+      if (HEAVY_TABLES.has(tableName)) continue;
       if (data.length > 0) {
         archive.append(JSON.stringify(data, null, 2), { name: `banco/${tableName}.json` });
       }
     }
-
-    // 5. Adicionar banco completo (um JSON com tudo para importação fácil)
-    const fullDbExport = { _meta: meta, ...tables };
+    const fullDbExport: Record<string, any> = { _meta: meta };
+    for (const [name, data] of Object.entries(tables)) {
+      if (HEAVY_TABLES.has(name)) continue;
+      fullDbExport[name] = data;
+    }
     archive.append(JSON.stringify(fullDbExport), { name: "banco-completo.json" });
 
-    // 6. Adicionar manifesto de arquivos
     const fileManifest = {
       _meta: {
         totalFiles: fileUrls.length,
         exportedAt: meta.exportedAt,
-        instrucoes: "Use as URLs originais para baixar cada arquivo. O campo 'localPath' sugere onde salvar localmente.",
+        instrucoes: "Use as URLs originais para baixar cada arquivo.",
       },
       files: fileUrls.map((f, idx) => ({
         id: idx + 1,
@@ -351,25 +493,20 @@ export async function generateExportZip(
       })),
     };
     archive.append(JSON.stringify(fileManifest, null, 2), { name: "arquivos-manifesto.json" });
-
-    // 7. Adicionar README de migração
     archive.append(MIGRATION_README, { name: "README-MIGRACAO.md" });
 
-    // 8. Finalizar ZIP
     await archive.finalize();
     const zipBuffer = await streamPromise;
 
-    // 9. Upload do ZIP para S3
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
     const zipKey = `migration-exports/erp-export-completo-${timestamp}.zip`;
     const { url: zipUrl } = await storagePut(zipKey, zipBuffer, "application/zip");
 
     const duration = Date.now() - startTime;
-
     onProgress?.({
       phase: "done",
-      tablesProcessed: ALL_TABLES.length,
-      totalTables: ALL_TABLES.length,
+      tablesProcessed: meta.totalTables,
+      totalTables: meta.totalTables,
       filesProcessed: fileUrls.length,
       totalFiles: fileUrls.length,
       message: "Exportação concluída!",
@@ -379,7 +516,7 @@ export async function generateExportZip(
       success: true,
       downloadUrl: zipUrl,
       stats: {
-        tablesExported: Object.keys(tables).filter(t => tables[t].length > 0).length,
+        tablesExported: Object.values(tables).filter((d) => d.length > 0).length,
         totalRecords: meta.totalRecords,
         filesExported: fileUrls.length,
         totalSizeBytes: zipBuffer.length,
@@ -392,7 +529,7 @@ export async function generateExportZip(
     onProgress?.({
       phase: "error",
       tablesProcessed: 0,
-      totalTables: ALL_TABLES.length,
+      totalTables: 0,
       filesProcessed: 0,
       totalFiles: 0,
       message: `Erro: ${e.message}`,
@@ -406,7 +543,7 @@ export async function generateExportZip(
 }
 
 /**
- * Gera exportação JSON simples (sem ZIP) - mantido para compatibilidade
+ * Gera exportação JSON simples (sem ZIP) — mantido para compatibilidade.
  */
 export async function generateExportPackage(
   onProgress?: (p: ExportProgress) => void
@@ -418,24 +555,28 @@ export async function generateExportPackage(
 
     onProgress?.({
       phase: "packaging",
-      tablesProcessed: ALL_TABLES.length,
-      totalTables: ALL_TABLES.length,
+      tablesProcessed: meta.totalTables,
+      totalTables: meta.totalTables,
       filesProcessed: 0,
       totalFiles: fileUrls.length,
       message: "Empacotando dados...",
     });
 
-    const dbPackage = JSON.stringify({ _meta: meta, ...tables });
+    const fullDbExport: Record<string, any> = { _meta: meta };
+    for (const [name, data] of Object.entries(tables)) {
+      if (HEAVY_TABLES.has(name)) continue;
+      fullDbExport[name] = data;
+    }
+    const dbPackage = JSON.stringify(fullDbExport);
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const dbKey = `migration-exports/erp-export-${timestamp}-db.json`;
     const { url: dbUrl } = await storagePut(dbKey, dbPackage, "application/json");
 
     const duration = Date.now() - startTime;
-
     onProgress?.({
       phase: "done",
-      tablesProcessed: ALL_TABLES.length,
-      totalTables: ALL_TABLES.length,
+      tablesProcessed: meta.totalTables,
+      totalTables: meta.totalTables,
       filesProcessed: fileUrls.length,
       totalFiles: fileUrls.length,
       message: "Exportação concluída!",
@@ -445,7 +586,7 @@ export async function generateExportPackage(
       success: true,
       downloadUrl: dbUrl,
       stats: {
-        tablesExported: Object.keys(tables).filter(t => tables[t].length > 0).length,
+        tablesExported: Object.values(tables).filter((d) => d.length > 0).length,
         totalRecords: meta.totalRecords,
         filesExported: fileUrls.length,
         totalSizeBytes: Buffer.byteLength(dbPackage, "utf-8"),
@@ -463,12 +604,12 @@ export async function generateExportPackage(
 }
 
 // ============================================================
-// IMPORTAÇÃO COMPLETA
+// IMPORTAÇÃO COMPLETA (PostgreSQL)
 // ============================================================
 
 /**
- * Importa dados de um pacote de exportação.
- * Recebe o JSON do banco e restaura todas as tabelas.
+ * Importa dados de um pacote de exportação para o banco PostgreSQL de destino.
+ * Usa INSERT parametrizado (pg) para coerção correta de tipos e segurança.
  */
 export async function importDatabase(
   data: Record<string, any>,
@@ -476,20 +617,39 @@ export async function importDatabase(
   onProgress?: (p: ExportProgress) => void
 ): Promise<ImportResult> {
   const db = await getDb();
+  const client = (db as any).$client; // Pool do node-postgres
   const startTime = Date.now();
   const errors: string[] = [];
   let tablesImported = 0;
   let totalRecords = 0;
 
-  // Extrair meta e tabelas
-  const meta = data._meta;
-  const tableNames = Object.keys(data).filter(k => k !== "_meta");
+  // BLINDAGEM CONTRA INJEÇÃO DE IDENTIFICADOR (Rev. 3012): nomes de tabela/coluna
+  // vêm de um JSON que pode ser malicioso. Parâmetros do pg protegem VALORES, não
+  // IDENTIFICADORES. Então só aceitamos tabelas/colunas que EXISTAM de fato no
+  // schema (whitelist via information_schema) + validação de formato.
+  const schema = await client.query(
+    `SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = 'public'`
+  );
+  const allowed = new Map<string, Set<string>>();
+  for (const r of schema.rows) {
+    if (!allowed.has(r.table_name)) allowed.set(r.table_name, new Set());
+    allowed.get(r.table_name)!.add(r.column_name);
+  }
+  const SAFE_IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+  const tableNames = Object.keys(data).filter((k) => k !== "_meta");
 
   for (let i = 0; i < tableNames.length; i++) {
     const tableName = tableNames[i];
     const rows = data[tableName];
-
     if (!Array.isArray(rows) || rows.length === 0) continue;
+
+    // Tabela precisa existir e ter nome válido
+    if (!SAFE_IDENT.test(tableName) || !allowed.has(tableName)) {
+      errors.push(`Tabela ignorada (desconhecida/ inválida): ${tableName}`);
+      continue;
+    }
+    const allowedCols = allowed.get(tableName)!;
 
     onProgress?.({
       phase: "database",
@@ -503,45 +663,44 @@ export async function importDatabase(
 
     try {
       if (mode === "replace") {
-        await db.execute(sql.raw(`DELETE FROM \`${tableName}\``));
+        await client.query(`DELETE FROM "${tableName}"`);
       }
 
-      // Inserir em lotes
-      const batchSize = 100;
-      for (let j = 0; j < rows.length; j += batchSize) {
-        const batch = rows.slice(j, j + batchSize);
-        const columns = Object.keys(batch[0]);
-        const escapedCols = columns.map(c => `\`${c}\``).join(", ");
+      for (const row of rows) {
+        // Só colunas que EXISTEM na tabela e têm nome válido (anti-injeção)
+        const columns = Object.keys(row).filter(
+          (c) => SAFE_IDENT.test(c) && allowedCols.has(c)
+        );
+        if (columns.length === 0) continue;
+        const colList = columns.map((c) => `"${c}"`).join(", ");
+        const placeholders = columns.map((_, idx) => `$${idx + 1}`).join(", ");
+        const values = columns.map((col) => {
+          const val = row[col];
+          // node-postgres precisa de string para colunas json/array/objeto
+          if (val !== null && typeof val === "object") return JSON.stringify(val);
+          return val;
+        });
 
-        for (const row of batch) {
-          const values = columns.map(col => {
-            const val = row[col];
-            if (val === null || val === undefined) return "NULL";
-            if (typeof val === "number") return String(val);
-            if (typeof val === "boolean") return val ? "1" : "0";
-            if (typeof val === "object") return `'${JSON.stringify(val).replace(/'/g, "''")}'`;
-            return `'${String(val).replace(/'/g, "''")}'`;
-          }).join(", ");
+        let queryText: string;
+        if (mode === "merge") {
+          const updateCols = columns
+            .filter((c) => c !== "id")
+            .map((c) => `"${c}" = EXCLUDED."${c}"`)
+            .join(", ");
+          queryText = updateCols
+            ? `INSERT INTO "${tableName}" (${colList}) VALUES (${placeholders}) ON CONFLICT (id) DO UPDATE SET ${updateCols}`
+            : `INSERT INTO "${tableName}" (${colList}) VALUES (${placeholders}) ON CONFLICT (id) DO NOTHING`;
+        } else {
+          queryText = `INSERT INTO "${tableName}" (${colList}) VALUES (${placeholders})`;
+        }
 
-          try {
-            if (mode === "merge") {
-              const updateCols = columns
-                .filter(c => c !== "id")
-                .map(c => `\`${c}\` = VALUES(\`${c}\`)`)
-                .join(", ");
-              await db.execute(sql.raw(
-                `INSERT INTO \`${tableName}\` (${escapedCols}) VALUES (${values}) ON DUPLICATE KEY UPDATE ${updateCols}`
-              ));
-            } else {
-              await db.execute(sql.raw(
-                `INSERT INTO \`${tableName}\` (${escapedCols}) VALUES (${values})`
-              ));
-            }
-            totalRecords++;
-          } catch (rowErr: any) {
-            if (!rowErr.message.includes("Duplicate entry")) {
-              errors.push(`${tableName} row ${row.id || j}: ${rowErr.message}`);
-            }
+        try {
+          await client.query(queryText, values);
+          totalRecords++;
+        } catch (rowErr: any) {
+          const msg = String(rowErr?.message || rowErr);
+          if (!/duplicate key|já existe|already exists/i.test(msg)) {
+            errors.push(`${tableName} row ${row.id ?? "?"}: ${msg}`);
           }
         }
       }
@@ -553,7 +712,6 @@ export async function importDatabase(
   }
 
   const duration = Date.now() - startTime;
-
   onProgress?.({
     phase: "done",
     tablesProcessed: tableNames.length,
@@ -565,12 +723,7 @@ export async function importDatabase(
 
   return {
     success: errors.length === 0,
-    stats: {
-      tablesImported,
-      totalRecords,
-      filesImported: 0,
-      duration,
-    },
+    stats: { tablesImported, totalRecords, filesImported: 0, duration },
     errors,
   };
 }
