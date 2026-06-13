@@ -585,8 +585,8 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                             <LabelList
                               dataKey="value"
                               position="top"
-                              formatter={(v: number) => (v > 0 ? formatBRL(v) : "")}
-                              style={{ fontSize: 10, fill: "#475569" }}
+                              formatter={(v: number) => (v > 0 ? BRLk(v) : "")}
+                              style={{ fontSize: 10, fontWeight: 600, fill: "#475569" }}
                             />
                           </Bar>
                         </BarChart>

@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3039 — **FINANCEIRO → "ANÁLISE DE CUSTOS" · TELA DE DETALHE · GRÁFICO
+ * "DISTRIBUIÇÃO POR MÊS": ACABA COM OS RÓTULOS DE VALOR SOBREPOSTOS NO TOPO DAS
+ * BARRAS — TROCA O VALOR CHEIO ("R$ 228.072,91", QUE EM 12 BARRAS ESTREITAS
+ * COLIDIA VIRANDO "R$ 228.0R$ 228.0…") PELO FORMATO COMPACTO ("R$ 228 mil").**
+ *
+ * PEDIDO (print IMG_1944): "Gráfico com informação sobreposta, arrume isso de vez,
+ * não quero este tipo de informação sobreposta". No print, os meses Jun–Out (todos
+ * ~R$ 228 mil) tinham os rótulos cheios colados uns nos outros, ilegíveis.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, ZERO backend) em
+ * `client/src/pages/financeiro/FinanceiroAnaliseCustosDetalhe.tsx` (gráfico
+ * "Distribuição por Mês"): o `LabelList` do `<Bar>` passa a usar o helper `BRLk`
+ * (compacto: "R$ 228 mil" / "R$ 1,3 mi" / abaixo de mil = valor cheio) em vez de
+ * `formatBRL`; rótulo ganha `fontWeight: 600` p/ leitura. O valor EXATO continua
+ * disponível ao tocar a barra (tooltip `DetTooltip` INTOCADO). Eixo Y já usava
+ * `BRLk`, então a escala fica coerente. O gráfico de quebra por dimensão (barras
+ * horizontais, rótulo à direita) NÃO foi tocado — lá não há sobreposição.
+ *
+ * IMPACTO: rótulos curtos cabem em cada barra sem colidir; nada de dados/backend
+ * muda. REPUBLICAR (só front).
+ *
  * Rev. 3038 — **FINANCEIRO → "ANÁLISE DE CUSTOS" · TELA DE DETALHE · TABELA
  * "LANÇAMENTOS DETALHADOS": REDESENHO QUE ACABA COM A POLUIÇÃO/TRUNCAMENTO — DE 10
  * COLUNAS ESTREITAS (QUE CORTAVAM "ENCARGOS SOCIAIS - FG…", "MINISTÉRIO DO TRABALHO…")
