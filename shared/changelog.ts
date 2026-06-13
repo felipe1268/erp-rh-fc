@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3011 — **FINANCEIRO → CONTAS A RECEBER (TÍTULOS) → MODAL "REGISTRAR
+ * RECEBIMENTO": CAMPO "VALOR RECEBIDO" PASSA A USAR MÁSCARA BRL (`100.000,00`) EM
+ * VEZ DO FORMATO CRU `100000.00`.**
+ *
+ * PEDIDO (usuário, via screenshot do iPad): "O que for dinheiro quero sempre com
+ * ponto e vírgula". No modal "Registrar recebimento" (`BaixaDialog`) o input
+ * "Valor recebido" exibia o número CRU `100000.00` (ponto decimal anglo, sem
+ * separador de milhar) — fora do padrão BRL usado no resto do sistema.
+ *
+ * SOLUÇÃO (FRONT-only — ZERO ALTER/DROP/DELETE, ZERO backend/schema; o valor
+ * enviado ao backend continua NUMÉRICO via `valorRecebido`), em
+ * `client/src/pages/financeiro/FinanceiroContasAReceberTitulos.tsx` (`BaixaDialog`),
+ * reaproveitando as helpers `maskBRL`/`parseMaskBRL` já existentes (Rev. 3005):
+ * 1) estado inicial do `valor` agora nasce mascarado (`maskBRL` do saldo em
+ *    centavos) em vez de `saldo.toFixed(2)`.
+ * 2) o input ganhou prefixo "R$" + `onChange={(e)=>setValor(maskBRL(e.target.value))}`
+ *    (digitação direita-pra-esquerda em centavos).
+ * 3) `valorNum` passou a derivar de `parseMaskBRL(valor)` e o `submit()` envia
+ *    `parseMaskBRL(valor)` (antes fazia `parseFloat(valor.replace(",","."))`, que
+ *    com a máscara "100.000,00" daria 100 — corrigido).
+ * 4) atalhos "Saldo total" / "50%" gravam o valor já mascarado.
+ *
+ * NENHUMA mudança de rota/permissão/contrato/backend. Requer REPUBLICAR (só front).
+ *
+ * ──────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 3010 — **FINANCEIRO → CONTAS A RECEBER (TÍTULOS) → MODAL "NOVO TÍTULO":
  * CAMPOS DE DATA "COMPETÊNCIA" E "1º VENCIMENTO" PASSAM A FICAR EMPILHADOS (UM POR
  * LINHA) — FIM DEFINITIVO DA SOBREPOSIÇÃO NO iPad.**

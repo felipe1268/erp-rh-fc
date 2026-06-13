@@ -492,7 +492,7 @@ function BaixaDialog({ titulo, companyId, contasBancarias, onClose, onSubmit, pe
   const { toast } = useToast();
   const prev = num(titulo.valorPrevisto), real = num(titulo.valorRealizado);
   const saldo = Math.max(0, prev - real);
-  const [valor, setValor] = useState(String(saldo.toFixed(2)));
+  const [valor, setValor] = useState(maskBRL(String(Math.round(saldo * 100))));
   const [data, setData] = useState(new Date().toISOString().slice(0, 10));
   const [contaId, setContaId] = useState<string>("");
   const [forma, setForma] = useState<string>("");
@@ -501,7 +501,7 @@ function BaixaDialog({ titulo, companyId, contasBancarias, onClose, onSubmit, pe
   const [uploading, setUploading] = useState(false);
   const contas: any[] = Array.isArray(contasBancarias) ? contasBancarias : [];
 
-  const valorNum = parseFloat(String(valor).replace(",", ".")) || 0;
+  const valorNum = parseMaskBRL(valor);
   const parcial = valorNum > 0 && valorNum < saldo;
 
   const uploadMut = (trpc as any).financial.uploadComprovante.useMutation();
@@ -526,7 +526,7 @@ function BaixaDialog({ titulo, companyId, contasBancarias, onClose, onSubmit, pe
   }
 
   function submit() {
-    const v = parseFloat(valor.replace(",", "."));
+    const v = parseMaskBRL(valor);
     if (!Number.isFinite(v) || v <= 0) { toast({ title: "Valor inválido", variant: "destructive" }); return; }
     onSubmit({
       id: titulo.id, companyId, valorRecebido: v, dataRecebimento: data,
@@ -554,13 +554,13 @@ function BaixaDialog({ titulo, companyId, contasBancarias, onClose, onSubmit, pe
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <div><Label className="text-xs">Valor recebido</Label><Input value={valor} onChange={(e) => setValor(e.target.value)} inputMode="decimal" /></div>
+            <div><Label className="text-xs">Valor recebido</Label><div className="relative"><span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400">R$</span><Input className="pl-8 tabular-nums" value={valor} onChange={(e) => setValor(maskBRL(e.target.value))} inputMode="decimal" /></div></div>
             <div><Label className="text-xs">Data</Label><Input type="date" value={data} onChange={(e) => setData(e.target.value)} /></div>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-[11px] text-slate-400">Atalhos:</span>
-            <button type="button" onClick={() => setValor(saldo.toFixed(2))} className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100">Saldo total</button>
-            <button type="button" onClick={() => setValor((saldo / 2).toFixed(2))} className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-50">50%</button>
+            <button type="button" onClick={() => setValor(maskBRL(String(Math.round(saldo * 100))))} className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100">Saldo total</button>
+            <button type="button" onClick={() => setValor(maskBRL(String(Math.round((saldo / 2) * 100))))} className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-50">50%</button>
           </div>
           {valorNum <= 0
             ? <p className="text-[11px] text-slate-500 bg-slate-50 border border-slate-100 rounded-md px-2 py-1">Informe o valor recebido (ou use um atalho acima).</p>
