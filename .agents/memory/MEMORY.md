@@ -67,3 +67,4 @@
 - [cronograma_atividade = projeção, não custo real](cronograma-atividade-projecao-custos.md) — é o valor de contrato da obra distribuído mês a mês; telas de custo REAL devem excluí-lo (senão duplica com folha/compras).
 - [updateEmployee validFields whitelist](updateEmployee-validfields-whitelist.md) — new employees column must be added to validFields (and booleanFields/intFields) or updateEmployee silently drops it and returns success without writing.
 - [Client-driven AI batching](client-driven-ai-batching.md) — loops de LLM por lote com cursor que só avança por efeito colateral (modo "só sem valor", offset 0) precisam de guard de estagnação, senão rodam até MAX_ITER com 100% falso.
+- [ASO sem olho (documentoUrl vazio)](aso-documento-vazio.md) — olho da aba ASO só renderiza com `asos.documentoUrl`; sumir = sem anexo, não bug; PDF costuma estar mal-arquivado em employee_documents tipo "outros".
