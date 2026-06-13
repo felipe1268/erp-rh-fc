@@ -511,6 +511,7 @@ export const integrasignRouter = router({
           id: signatario.id,
           nome: signatario.nome,
           email: signatario.email,
+          cpfCnpj: signatario.cpfCnpj ?? null,
           papel: signatario.papel,
           status: signatario.status,
           podeAssinar,

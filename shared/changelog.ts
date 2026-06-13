@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3047 — **INTEGRASIGN (FCSIGN) · PÁGINA PÚBLICA DE ASSINATURA PRÉ-PREENCHE
+ * AUTOMATICAMENTE "NOME COMPLETO" E "CPF / CNPJ" CONFORME O CADASTRO DO SIGNATÁRIO.**
+ *
+ * PEDIDO (print da página pública de assinatura, signatário Fornecedor/Contratada,
+ * iPad): "Nome e o CNPJ desse ser preenchido automaticamente conforme cadastro" — os
+ * dois campos vinham VAZIOS, obrigando o fornecedor a redigitar nome e CNPJ que o ERP
+ * JÁ tinha no cadastro (a coluna `integrasign_signatarios.cpfCnpj` é gravada na criação
+ * do envelope a partir do `cnpj` do fornecedor — `compras.ts criarEnvelopeIntegraSign`
+ * usa `fornecedorCnpj`; advertências usam `emp.cnpj`).
+ *
+ * SOLUÇÃO (ZERO ALTER/DROP/DELETE — só leitura/exibição):
+ *  1) BACKEND `server/routers/integrasign.ts` (`getDocumentoPublico`): o objeto
+ *     `signatario` retornado passa a incluir `cpfCnpj: signatario.cpfCnpj ?? null`
+ *     (o `nome` já vinha). O SELECT é `db.select()` (todas as colunas), então o dado
+ *     já estava disponível — faltava só EXPOR no payload público.
+ *  2) FRONT `client/src/pages/IntegraSignAssinar.tsx`: novo `useEffect([doc.data])`
+ *     semeia `nomeConfirmado`/`cpfCnpjConfirmado` a partir de `signatario.nome` e
+ *     `signatario.cpfCnpj`, mas SEMPRE com guarda `prev => prev || valor` para NÃO
+ *     sobrescrever o que o usuário já tiver digitado. Campos seguem editáveis.
+ *
+ * RESSALVA: envelopes antigos criados sem `cpfCnpj` no signatário continuam com o
+ * campo CNPJ vazio (nada a regenerar — sem ALTER/UPDATE retroativo); novos envelopes
+ * e os que já têm o dado passam a pré-preencher.
+ *
  * Rev. 3046 — **CIPA · DIÁLOGO "NOVA AÇÃO" (PLANOS DE AÇÃO) GANHA LAYOUT MODERNO,
  * O "RESPONSÁVEL" VIRA SELETOR DE CIPEIROS E O "PRAZO" GANHA CALENDÁRIO COM ÍCONE.**
  *

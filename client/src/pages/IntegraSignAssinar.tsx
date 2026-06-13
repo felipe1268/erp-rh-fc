@@ -103,6 +103,13 @@ export default function IntegraSignAssinar() {
     }
   }, []);
 
+  useEffect(() => {
+    const sig = (doc.data as any)?.signatario;
+    if (!sig) return;
+    if (sig.nome) setNomeConfirmado((prev) => prev || sig.nome);
+    if (sig.cpfCnpj) setCpfCnpjConfirmado((prev) => prev || sig.cpfCnpj);
+  }, [doc.data]);
+
   const initCanvas = useCallback((canvas: HTMLCanvasElement | null, type: "sig" | "rub") => {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
