@@ -2,27 +2,39 @@ import jsPDF from "jspdf";
 import { formatDateTime } from "@/lib/dateUtils";
 
 /**
- * Rev. 2897 — Download do contrato assinado (IntegraSign/FcSign) agora gera um
- * PDF profissional (logo da construtora + faixa azul institucional + corpo do
- * contrato preservando a tabela EAP + registro de assinaturas + hash), no lugar
- * do antigo `.txt` plano. Conteúdo idêntico ao da visualização da tela pública.
+ * Rev. 3054 — Reescrita COMPLETA do PDF do contrato assinado (IntegraSign/FcSign).
  *
- * Observações de robustez:
- * - Logo carregado de `${origin}/logo-fc.jpg` com fallback silencioso (PDF sai
- *   sem logo se a imagem falhar — nunca quebra o download).
- * - Corpo em fonte monoespaçada (Courier) p/ manter o alinhamento da tabela EAP
- *   (separadores `|` / `-`), que vem em texto pré-formatado.
- * - Datas via `formatDateTime` (iOS-safe) — evita o crash do Safari/iPad com
- *   strings "YYYY-MM-DD HH:MM:SS" (mode:"string").
+ * O antigo gerador despejava o `textoContrato` cru em fonte monoespaçada (Courier 7)
+ * preservando a tabela EAP em ASCII (pipes/dashes) e ainda vazava o marcador
+ * `{{FLUXOGRAMA_PAGAMENTO}}` literal — visual "péssimo" (print iPad CT-2026-0006).
+ *
+ * Agora o documento é 100% formatado no padrão institucional FC (REGRA DE OURO):
+ * - Cabeçalho: logo centralizado + RAZÃO SOCIAL + CNPJ + ENDEREÇO (parseados do
+ *   bloco CONTRATANTE do próprio texto) + faixa azul #1B2A4A com o título.
+ * - Corpo em fonte SERIF (Times) com parágrafos JUSTIFICADOS, cláusulas em negrito,
+ *   alíneas/subitens indentados — espelha a visualização da tela (ContratoDetalhe).
+ * - Escopo EAP renderizado como TABELA real (bordas + cabeçalho azul), não ASCII.
+ * - Fluxo de medição/pagamento (6 etapas) desenhado como diagrama, no lugar do
+ *   marcador `{{FLUXOGRAMA_PAGAMENTO}}`.
+ * - Assinaturas no LOCAL DE ASSINATURA: blocos eletrônicos (nome + cargo + CPF/CNPJ
+ *   + "Assinado eletronicamente em…") substituem as linhas estáticas `____`.
+ *
+ * Robustez:
+ * - Logo `${origin}/logo-fc.jpg` com fallback silencioso (nunca quebra o download).
+ * - Datas via `formatDateTime` (iOS-safe).
+ * - Fonte Times (WinAnsi) cobre acentuação pt-BR.
  */
 
 const AZUL: [number, number, number] = [27, 42, 74]; // #1B2A4A
+const CINZA_TXT: [number, number, number] = [33, 33, 33];
 
 interface SignatarioPdf {
   nome: string;
   papelLabel: string;
   status: string;
   dataAssinatura?: string | null;
+  cpfCnpj?: string | null;
+  cargo?: string | null;
 }
 
 interface ContratoPdfParams {
@@ -48,6 +60,35 @@ async function urlToDataUrl(url: string): Promise<string | null> {
   }
 }
 
+const FLUX_STEPS: { title: string; color: [number, number, number] }[] = [
+  { title: "Medição Física", color: [27, 42, 74] },
+  { title: "Aprovação", color: [37, 99, 235] },
+  { title: "Documentação", color: [124, 58, 237] },
+  { title: "Emissão NF", color: [8, 145, 178] },
+  { title: "Liberação OP", color: [5, 150, 105] },
+  { title: "Pagamento", color: [217, 119, 6] },
+];
+
+function parseFluxValores(texto: string) {
+  const grab = (re: RegExp, def: number) => {
+    const m = texto.match(re);
+    return m ? Number(m[1]) : def;
+  };
+  const dm = grab(/MEDIÇÃO FÍSICA\s*\(Dia\s*(\d+)/i, 25);
+  const pa = grab(/APROVAÇÃO DA MEDIÇÃO\s*\(Até\s*(\d+)/i, 5);
+  const pnf = grab(/EMISSÃO DA NOTA FISCAL\s*\(Até\s*(\d+)/i, 3);
+  const plop = grab(/LIBERAÇÃO DA ORDEM DE PAGAMENTO\s*\(Até\s*(\d+)/i, 5);
+  const dp = grab(/[fF]\)\s*PAGAMENTO\s*\(Dia\s*(\d+)/i, 10);
+  return [
+    `Dia ${dm} de cada mês`,
+    `Até ${pa} dias úteis`,
+    "NF + Certidões",
+    `Até ${pnf} dias úteis`,
+    `Até ${plop} dias úteis`,
+    `Dia ${dp} mês seguinte`,
+  ];
+}
+
 export async function gerarContratoAssinadoPdf(params: ContratoPdfParams): Promise<void> {
   const { titulo, textoContrato, hash, signatarios } = params;
 
@@ -56,7 +97,7 @@ export async function gerarContratoAssinadoPdf(params: ContratoPdfParams): Promi
   const H = 297;
   const MARGIN = 14;
   const contentW = W - MARGIN * 2;
-  const bottom = H - MARGIN;
+  const bottom = H - MARGIN - 6;
   let y = MARGIN;
 
   const novaPaginaSe = (alturaNecessaria: number) => {
@@ -68,47 +109,358 @@ export async function gerarContratoAssinadoPdf(params: ContratoPdfParams): Promi
     return false;
   };
 
-  // ── Logo (centralizado) ──
+  // ─────────────────────────────────────────────────────────────
+  // Cabeçalho institucional FC (REGRA DE OURO)
+  // ─────────────────────────────────────────────────────────────
   const logo = await urlToDataUrl(`${window.location.origin}/logo-fc.jpg`);
   if (logo) {
-    const logoH = 20;
-    const logoW = 20;
+    const logoW = 22;
+    const logoH = 22;
     try {
       pdf.addImage(logo, "JPEG", (W - logoW) / 2, y, logoW, logoH, undefined, "FAST");
-      y += logoH + 4;
+      y += logoH + 2.5;
     } catch {
       /* logo opcional */
     }
   }
 
-  // ── Faixa azul com o título do contrato ──
+  // Razão social / CNPJ / endereço do CONTRATANTE (parseados do texto)
+  const mCont = textoContrato.match(
+    /CONTRATANTE:\s*(.+?),\s*inscrita no CNPJ sob o n[ºo]?\s*([\d.\/-]+),\s*com sede (?:em|à|na)\s*(.+?),\s*neste ato/i,
+  );
+  const razao = mCont?.[1]?.trim();
+  const cnpj = mCont?.[2]?.trim();
+  const endereco = mCont?.[3]?.trim();
+
+  if (razao) {
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(13);
+    pdf.setTextColor(AZUL[0], AZUL[1], AZUL[2]);
+    pdf.text(razao.toUpperCase(), W / 2, y + 3, { align: "center", maxWidth: contentW });
+    y += 6;
+  }
+  if (cnpj) {
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9);
+    pdf.setTextColor(110, 110, 110);
+    pdf.text(`CNPJ: ${cnpj}`, W / 2, y, { align: "center" });
+    y += 4;
+  }
+  if (endereco) {
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    pdf.setTextColor(140, 140, 140);
+    const eLinhas = pdf.splitTextToSize(endereco.toUpperCase(), contentW - 10);
+    for (const el of eLinhas) {
+      pdf.text(el, W / 2, y, { align: "center" });
+      y += 3.4;
+    }
+  }
+  y += 3;
+
+  // Faixa azul com o título do contrato
   const faixaH = 11;
   pdf.setFillColor(AZUL[0], AZUL[1], AZUL[2]);
   pdf.rect(MARGIN, y, contentW, faixaH, "F");
   pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(12);
+  pdf.setFontSize(11.5);
   pdf.setTextColor(255, 255, 255);
-  pdf.text((titulo || "Contrato").toUpperCase(), W / 2, y + faixaH / 2 + 1.6, {
+  pdf.text((titulo || "Contrato").toUpperCase(), W / 2, y + faixaH / 2 + 1.4, {
     align: "center",
     maxWidth: contentW - 8,
   });
-  y += faixaH + 8;
+  y += faixaH + 7;
 
-  // ── Corpo do contrato (monoespaçado p/ preservar a tabela EAP) ──
-  pdf.setTextColor(20, 20, 20);
-  pdf.setFont("courier", "normal");
-  pdf.setFontSize(7);
-  const lineH = 3.2;
-  const linhas = pdf.splitTextToSize(textoContrato || "", contentW);
-  for (const ln of linhas) {
-    novaPaginaSe(lineH);
-    pdf.text(ln, MARGIN, y);
-    y += lineH;
+  // ─────────────────────────────────────────────────────────────
+  // Helpers de texto (Times serif, justificado)
+  // ─────────────────────────────────────────────────────────────
+  const addParagraph = (
+    text: string,
+    opts: {
+      size?: number;
+      style?: "normal" | "bold" | "italic";
+      indentL?: number;
+      justify?: boolean;
+      align?: "left" | "center";
+      color?: [number, number, number];
+      gapAfter?: number;
+      gapBefore?: number;
+    } = {},
+  ) => {
+    const {
+      size = 10.5,
+      style = "normal",
+      indentL = 0,
+      justify = true,
+      align = "left",
+      color = CINZA_TXT,
+      gapAfter = 1.8,
+      gapBefore = 0,
+    } = opts;
+    if (gapBefore) y += gapBefore;
+    pdf.setFont("times", style);
+    pdf.setFontSize(size);
+    pdf.setTextColor(color[0], color[1], color[2]);
+    const lineH = size * 0.47;
+    const availW = contentW - indentL;
+    const x0 = MARGIN + indentL;
+    const spaceW = pdf.getTextWidth(" ");
+    const words = (text || "").split(/\s+/).filter(Boolean);
+    let line: string[] = [];
+    let lineW = 0;
+
+    const flush = (isLast: boolean) => {
+      novaPaginaSe(lineH + 1);
+      if (align === "center") {
+        pdf.text(line.join(" "), W / 2, y, { align: "center" });
+      } else if (justify && !isLast && line.length > 1) {
+        const wordsW = line.reduce((s, w) => s + pdf.getTextWidth(w), 0);
+        const gap = (availW - wordsW) / (line.length - 1);
+        let x = x0;
+        for (const w of line) {
+          pdf.text(w, x, y);
+          x += pdf.getTextWidth(w) + gap;
+        }
+      } else {
+        pdf.text(line.join(" "), x0, y);
+      }
+      y += lineH;
+    };
+
+    for (const w of words) {
+      const wW = pdf.getTextWidth(w);
+      const add = line.length ? spaceW + wW : wW;
+      if (lineW + add > availW && line.length) {
+        flush(false);
+        line = [w];
+        lineW = wW;
+      } else {
+        line.push(w);
+        lineW += add;
+      }
+    }
+    if (line.length) flush(true);
+    y += gapAfter;
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // Tabela EAP real (bordas + cabeçalho azul)
+  // ─────────────────────────────────────────────────────────────
+  const renderTabelaEAP = (rows: string[][]) => {
+    const cols = [
+      { w: 20, align: "left" as const },
+      { w: 76, align: "left" as const },
+      { w: 12, align: "center" as const },
+      { w: 20, align: "right" as const },
+      { w: 27, align: "right" as const },
+      { w: 27, align: "right" as const },
+    ];
+    const headerLabels = ["EAP", "Descrição", "Un", "Qtd", "Vlr Unit.", "Total"];
+    const fs = 7.8;
+    const padX = 1.4;
+    const lineH = fs * 0.46;
+    const padY = 1.4;
+
+    const colX = (idx: number) => MARGIN + cols.slice(0, idx).reduce((s, c) => s + c.w, 0);
+
+    const drawHeader = () => {
+      novaPaginaSe(8);
+      const rowH = lineH + padY * 2;
+      pdf.setFillColor(AZUL[0], AZUL[1], AZUL[2]);
+      pdf.rect(MARGIN, y, contentW, rowH, "F");
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(fs);
+      pdf.setTextColor(255, 255, 255);
+      headerLabels.forEach((lbl, i) => {
+        const x = colX(i);
+        const tx = cols[i].align === "right" ? x + cols[i].w - padX : cols[i].align === "center" ? x + cols[i].w / 2 : x + padX;
+        pdf.text(lbl, tx, y + padY + lineH - 0.6, { align: cols[i].align });
+      });
+      y += rowH;
+    };
+
+    drawHeader();
+    pdf.setDrawColor(210, 210, 210);
+    pdf.setLineWidth(0.15);
+
+    rows.forEach((cells, ri) => {
+      const isTotal = cells.some((c) => /TOTAL/i.test(c));
+      pdf.setFont("times", isTotal ? "bold" : "normal");
+      pdf.setFontSize(fs);
+      pdf.setTextColor(CINZA_TXT[0], CINZA_TXT[1], CINZA_TXT[2]);
+      // descrição (col 1) pode quebrar em várias linhas
+      const descLines = pdf.splitTextToSize(cells[1] || "", cols[1].w - padX * 2);
+      const nLines = Math.max(1, descLines.length);
+      const rowH = nLines * lineH + padY * 2;
+      if (novaPaginaSe(rowH + 2)) drawHeader();
+
+      if (isTotal) {
+        pdf.setFillColor(238, 241, 247);
+        pdf.rect(MARGIN, y, contentW, rowH, "F");
+      } else if (ri % 2 === 1) {
+        pdf.setFillColor(248, 249, 251);
+        pdf.rect(MARGIN, y, contentW, rowH, "F");
+      }
+
+      cells.forEach((cell, i) => {
+        if (i >= cols.length) return;
+        const x = colX(i);
+        const baseY = y + padY + lineH - 0.6;
+        if (i === 1) {
+          descLines.forEach((dl: string, li: number) => {
+            pdf.text(dl, x + padX, baseY + li * lineH);
+          });
+        } else {
+          const tx = cols[i].align === "right" ? x + cols[i].w - padX : cols[i].align === "center" ? x + cols[i].w / 2 : x + padX;
+          pdf.text(cell || "", tx, baseY, { align: cols[i].align });
+        }
+      });
+
+      // bordas
+      pdf.setDrawColor(220, 220, 220);
+      pdf.line(MARGIN, y + rowH, MARGIN + contentW, y + rowH);
+      y += rowH;
+    });
+    // moldura externa lateral
+    y += 1;
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // Fluxograma de medição/pagamento (6 etapas)
+  // ─────────────────────────────────────────────────────────────
+  const renderFluxograma = () => {
+    const descs = parseFluxValores(textoContrato);
+    const boxH = 16;
+    novaPaginaSe(boxH + 10);
+    y += 2;
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(8);
+    pdf.setTextColor(120, 120, 120);
+    pdf.text("FLUXOGRAMA DO PROCESSO DE MEDIÇÃO E PAGAMENTO", W / 2, y, { align: "center" });
+    y += 4;
+
+    const n = FLUX_STEPS.length;
+    const gap = 1.5;
+    const boxW = (contentW - gap * (n - 1)) / n;
+    FLUX_STEPS.forEach((step, i) => {
+      const x = MARGIN + i * (boxW + gap);
+      pdf.setFillColor(step.color[0], step.color[1], step.color[2]);
+      pdf.roundedRect(x, y, boxW, boxH, 1.2, 1.2, "F");
+      // número
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(8);
+      pdf.text(String(i + 1), x + boxW / 2, y + 4.4, { align: "center" });
+      // título
+      pdf.setFontSize(6.4);
+      const tLines = pdf.splitTextToSize(step.title.toUpperCase(), boxW - 2);
+      let ty = y + 8;
+      tLines.forEach((tl: string) => {
+        pdf.text(tl, x + boxW / 2, ty, { align: "center" });
+        ty += 2.5;
+      });
+      // descrição
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(5.6);
+      const dLines = pdf.splitTextToSize(descs[i], boxW - 1.5);
+      let dy = y + boxH - 3.2;
+      dLines.slice(0, 2).forEach((dl: string, idx: number, arr: string[]) => {
+        pdf.text(dl, x + boxW / 2, dy - (arr.length - 1 - idx) * 2.2, { align: "center" });
+      });
+    });
+    y += boxH + 4;
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // Classificação de linhas (espelha ContratoDetalhe.tsx)
+  // ─────────────────────────────────────────────────────────────
+  const lines = (textoContrato || "").split("\n");
+  let i = 0;
+  let signatureMode = false;
+
+  const isSep = (t: string) => /^[-\s|]+$/.test(t) && /[-|]/.test(t);
+  const isTableRow = (t: string) => t.includes("|") && !isSep(t);
+
+  while (i < lines.length) {
+    if (signatureMode) break;
+    const raw = lines[i];
+    const trimmed = raw.trim();
+
+    if (!trimmed) {
+      y += 1.4;
+      i++;
+      continue;
+    }
+
+    // Início do bloco de assinaturas estático (___) → renderiza blocos eletrônicos
+    if (/^_{4,}/.test(trimmed) || /^TESTEMUNHAS:/i.test(trimmed)) {
+      signatureMode = true;
+      break;
+    }
+
+    // Fluxograma
+    if (/^\{\{FLUXOGRAMA_PAGAMENTO\}\}$/.test(trimmed)) {
+      renderFluxograma();
+      i++;
+      continue;
+    }
+
+    // Tabela EAP (coleta linhas contíguas com "|")
+    if (isTableRow(trimmed)) {
+      const dataRows: string[][] = [];
+      while (i < lines.length && (isTableRow(lines[i].trim()) || isSep(lines[i].trim()))) {
+        const lt = lines[i].trim();
+        if (isSep(lt)) {
+          i++;
+          continue;
+        }
+        const cells = lt.split("|").map((c) => c.trim());
+        const isHeader = /^(EAP|Item|Código)$/i.test(cells[0] || "");
+        if (!isHeader) dataRows.push(cells);
+        i++;
+      }
+      if (dataRows.length) renderTabelaEAP(dataRows);
+      continue;
+    }
+
+    const isTitulo = /^CONTRATO\s+DE\s+/i.test(trimmed);
+    const isClausula = /^CL[ÁA]USULA\s/i.test(trimmed);
+    const isSectionHeader = /^(ESCOPO DETALHADO|QUADRO|TABELA|RESUMO DOS PRAZOS)/i.test(trimmed);
+    const isAlinea = /^[a-z]\)\s/.test(trimmed);
+    const isSubClausulaTitle =
+      /^\d+\.\d+\s+[A-ZÁÉÍÓÚÂÊÔÃÕÇ]/.test(trimmed) &&
+      /[A-ZÁÉÍÓÚÂÊÔÃÕÇ]{3,}/.test(trimmed.split(/\s+/)[1] || "");
+    const isSubItem = /^\d+\.\d+[\s.]/.test(trimmed) && !isSubClausulaTitle;
+    const isNumericItem = /^\d+\.\s/.test(trimmed);
+    const isBullet = /^[•●▪▸►-]\s/.test(trimmed);
+
+    if (isTitulo) {
+      addParagraph(trimmed.toUpperCase(), { size: 12, style: "bold", align: "center", justify: false, color: [20, 20, 20], gapAfter: 4, gapBefore: 1 });
+    } else if (isClausula) {
+      addParagraph(trimmed.toUpperCase(), { size: 11, style: "bold", justify: false, color: AZUL, gapBefore: 4, gapAfter: 2 });
+    } else if (isSectionHeader) {
+      addParagraph(trimmed.toUpperCase(), { size: 9.5, style: "bold", justify: false, color: [70, 70, 70], gapBefore: 3, gapAfter: 1.5 });
+    } else if (isSubClausulaTitle) {
+      addParagraph(trimmed, { size: 10.5, style: "bold", indentL: 3, justify: true, gapBefore: 2, gapAfter: 1.5 });
+    } else if (isAlinea) {
+      addParagraph(trimmed, { size: 10, indentL: 10, justify: true, gapAfter: 1.5 });
+    } else if (isBullet) {
+      addParagraph(trimmed, { size: 10, indentL: 12, justify: false, gapAfter: 0.8 });
+    } else if (isSubItem) {
+      addParagraph(trimmed, { size: 10.5, indentL: 6, justify: true, gapAfter: 1.2 });
+    } else if (isNumericItem) {
+      addParagraph(trimmed, { size: 10.5, indentL: 3, justify: true, gapAfter: 1.5 });
+    } else {
+      addParagraph(trimmed, { size: 10.5, justify: true, gapAfter: 2 });
+    }
+    i++;
   }
 
-  // ── Registro de Assinaturas Eletrônicas ──
-  y += 6;
-  novaPaginaSe(28);
+  // ─────────────────────────────────────────────────────────────
+  // Blocos de assinatura eletrônica (no local de assinatura)
+  // ─────────────────────────────────────────────────────────────
+  y += 4;
+  novaPaginaSe(20);
   pdf.setDrawColor(AZUL[0], AZUL[1], AZUL[2]);
   pdf.setLineWidth(0.4);
   pdf.line(MARGIN, y, W - MARGIN, y);
@@ -116,50 +468,102 @@ export async function gerarContratoAssinadoPdf(params: ContratoPdfParams): Promi
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(10);
   pdf.setTextColor(AZUL[0], AZUL[1], AZUL[2]);
-  pdf.text("REGISTRO DE ASSINATURAS ELETRÔNICAS", W / 2, y, { align: "center" });
-  y += 3;
-  pdf.line(MARGIN, y, W - MARGIN, y);
-  y += 7;
+  pdf.text("ASSINATURAS ELETRÔNICAS", W / 2, y, { align: "center" });
+  y += 6;
 
-  pdf.setTextColor(30, 30, 30);
-  for (const s of signatarios) {
-    novaPaginaSe(7);
-    const dataTxt =
-      s.status === "assinado"
-        ? `Assinado em ${formatDateTime(s.dataAssinatura)}`
-        : s.status;
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(9);
-    pdf.text(`${s.nome}`, MARGIN, y);
-    pdf.setFont("helvetica", "normal");
-    pdf.setTextColor(110, 110, 110);
-    pdf.setFontSize(8);
-    pdf.text(`(${s.papelLabel})`, MARGIN + pdf.getTextWidth(`${s.nome} `) + 1, y);
-    pdf.setTextColor(30, 30, 30);
-    pdf.text(dataTxt, W - MARGIN, y, { align: "right" });
-    pdf.setTextColor(30, 30, 30);
-    y += 6;
+  const blockGap = 10;
+  const blockW = (contentW - blockGap) / 2;
+  const blockH = 30;
+
+  for (let s = 0; s < signatarios.length; s += 2) {
+    if (novaPaginaSe(blockH + 4)) {
+      // re-render nada (cabeçalho de seção não precisa repetir)
+    }
+    const rowY = y;
+    for (let c = 0; c < 2; c++) {
+      const sig = signatarios[s + c];
+      if (!sig) continue;
+      const x = MARGIN + c * (blockW + blockGap);
+      const assinado = sig.status === "assinado";
+
+      // faux-assinatura (nome em itálico) acima da linha
+      const lineY = rowY + 13;
+      if (assinado) {
+        pdf.setFont("times", "italic");
+        pdf.setFontSize(13);
+        pdf.setTextColor(40, 60, 110);
+        pdf.text(sig.nome, x + blockW / 2, lineY - 2, { align: "center", maxWidth: blockW - 6 });
+      }
+      // linha de assinatura
+      pdf.setDrawColor(120, 120, 120);
+      pdf.setLineWidth(0.3);
+      pdf.line(x + 4, lineY, x + blockW - 4, lineY);
+
+      // nome
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(9);
+      pdf.setTextColor(CINZA_TXT[0], CINZA_TXT[1], CINZA_TXT[2]);
+      pdf.text(sig.nome, x + blockW / 2, lineY + 4, { align: "center", maxWidth: blockW - 4 });
+
+      // cargo / papel
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(110, 110, 110);
+      const cargoTxt = sig.cargo?.trim() || sig.papelLabel;
+      pdf.text(cargoTxt, x + blockW / 2, lineY + 8, { align: "center", maxWidth: blockW - 4 });
+      if (sig.cargo?.trim() && sig.papelLabel && sig.cargo.trim().toLowerCase() !== sig.papelLabel.toLowerCase()) {
+        pdf.setFontSize(6.8);
+        pdf.setTextColor(150, 150, 150);
+        pdf.text(`(${sig.papelLabel})`, x + blockW / 2, lineY + 11, { align: "center", maxWidth: blockW - 4 });
+      }
+
+      // CPF/CNPJ
+      let infoY = lineY + 14.5;
+      if (sig.cpfCnpj) {
+        pdf.setFontSize(7);
+        pdf.setTextColor(130, 130, 130);
+        pdf.text(`CPF/CNPJ: ${sig.cpfCnpj}`, x + blockW / 2, infoY, { align: "center" });
+        infoY += 3.5;
+      }
+
+      // status
+      pdf.setFont("helvetica", assinado ? "bold" : "normal");
+      pdf.setFontSize(7);
+      if (assinado) {
+        pdf.setTextColor(5, 150, 105);
+        pdf.text(`Assinado em ${formatDateTime(sig.dataAssinatura)}`, x + blockW / 2, infoY, {
+          align: "center",
+          maxWidth: blockW - 4,
+        });
+      } else {
+        pdf.setTextColor(160, 160, 160);
+        pdf.text("Aguardando assinatura", x + blockW / 2, infoY, { align: "center" });
+      }
+    }
+    y = rowY + blockH;
   }
 
-  // ── Rodapé institucional (hash + autoria) ──
-  y += 4;
-  novaPaginaSe(18);
+  // ─────────────────────────────────────────────────────────────
+  // Rodapé institucional (hash + conformidade legal)
+  // ─────────────────────────────────────────────────────────────
+  y += 2;
+  novaPaginaSe(20);
   pdf.setDrawColor(220, 220, 220);
   pdf.setLineWidth(0.2);
   pdf.line(MARGIN, y, W - MARGIN, y);
   y += 5;
-  pdf.setFont("courier", "normal");
-  pdf.setFontSize(6.5);
-  pdf.setTextColor(90, 90, 90);
   if (hash) {
+    pdf.setFont("courier", "normal");
+    pdf.setFontSize(6.5);
+    pdf.setTextColor(90, 90, 90);
     const hashLinhas = pdf.splitTextToSize(`Hash SHA-256: ${hash}`, contentW);
     for (const hl of hashLinhas) {
       novaPaginaSe(3);
       pdf.text(hl, MARGIN, y);
       y += 3;
     }
+    y += 1;
   }
-  y += 1;
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(7);
   pdf.setTextColor(110, 110, 110);
@@ -170,12 +574,14 @@ export async function gerarContratoAssinadoPdf(params: ContratoPdfParams): Promi
   pdf.setFontSize(6.5);
   pdf.setTextColor(140, 140, 140);
   pdf.text(
-    "Assinatura eletrônica em conformidade com MP 2.200-2/2001 e Lei 14.063/2020",
+    "Assinatura eletrônica em conformidade com a MP 2.200-2/2001 e a Lei 14.063/2020.",
     MARGIN,
     y,
   );
 
-  // ── Numeração de páginas ──
+  // ─────────────────────────────────────────────────────────────
+  // Numeração de páginas
+  // ─────────────────────────────────────────────────────────────
   const totalPaginas = pdf.getNumberOfPages();
   for (let p = 1; p <= totalPaginas; p++) {
     pdf.setPage(p);

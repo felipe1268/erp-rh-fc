@@ -290,6 +290,8 @@ export default function IntegraSignAssinar() {
           papelLabel: papelLabel(s.papel),
           status: s.status,
           dataAssinatura: s.dataAssinatura,
+          cpfCnpj: s.cpfCnpj,
+          cargo: s.cargo,
         })),
       });
     };
@@ -377,6 +379,8 @@ export default function IntegraSignAssinar() {
           papelLabel: papelLabel(s.papel),
           status: s.status,
           dataAssinatura: s.dataAssinatura,
+          cpfCnpj: s.cpfCnpj,
+          cargo: s.cargo,
         })),
       });
     };

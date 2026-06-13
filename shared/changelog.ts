@@ -1,6 +1,56 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3054 — **INTEGRASIGN (FCSIGN) · PDF DO CONTRATO ASSINADO 100% FORMATADO NO PADRÃO
+ * INSTITUCIONAL FC (FONTE SERIF, TABELA EAP REAL, FLUXO DE MEDIÇÃO DESENHADO E ASSINATURAS
+ * NO LOCAL DE ASSINATURA) — FIM DO CORPO MONOESPAÇADO CRU E DO MARCADOR VAZADO.**
+ *
+ * PEDIDO (print iPad do PDF "CT-2026-0006 — CELSO ANTONIO BITTENCOURT SALES JUNIOR"):
+ * "Ficou péssimo o contrato, arrume para ficar formatado corretamente, com tipo e letra que
+ * usamos no ERP nos demais documentos; a assinatura deve ficar no local de assinatura
+ * corretamente… quero um arquivo 100% ajustado incluso o fluxo de medição que adotamos como
+ * critério."
+ *
+ * CAUSA-RAIZ (FRONT/render do PDF, sem bug de backend): `client/src/lib/contratoAssinadoPdf.ts`
+ * despejava o `textoContrato` cru em fonte MONOESPAÇADA (Courier size 7) para preservar a
+ * tabela EAP em ASCII (pipes `|` / dashes `-`), gerando um corpo apertado e feio; além disso
+ * o marcador `{{FLUXOGRAMA_PAGAMENTO}}` (que o front da tela renderiza como diagrama, mas o
+ * gerador de PDF tratava como texto comum) VAZAVA LITERAL no PDF; e as assinaturas só viravam
+ * uma lista "REGISTRO DE ASSINATURAS ELETRÔNICAS" anexada no fim — não havia blocos de
+ * assinatura no local de assinatura do documento.
+ *
+ * SOLUÇÃO (ZERO ALTER/DROP/DELETE — só render/leitura): REESCRITA COMPLETA de
+ * `client/src/lib/contratoAssinadoPdf.ts` para o padrão institucional FC (REGRA DE OURO):
+ * (a) CABEÇALHO — logo `${origin}/logo-fc.jpg` (fallback silencioso) + RAZÃO SOCIAL + CNPJ +
+ * ENDEREÇO parseados do bloco "CONTRATANTE: … inscrita no CNPJ … com sede em … neste ato" do
+ * próprio texto + faixa azul #1B2A4A com o título; (b) CORPO em fonte SERIF (jsPDF "times")
+ * com parágrafos JUSTIFICADOS via word-spacing manual (justify por linha, exceto a última),
+ * cláusulas em negrito/azul, alíneas/subitens/bullets indentados — espelha a classificação
+ * de linhas da visualização da tela (`ContratoDetalhe.tsx`); (c) ESCOPO EAP como TABELA real
+ * (cabeçalho azul, zebra, células com descrição quebrada em múltiplas linhas, colunas
+ * numéricas à direita, linha de TOTAL em negrito) — faz o parse das linhas pipe-delimitadas
+ * do `textoContrato` de volta para células; (d) FLUXO DE MEDIÇÃO/PAGAMENTO desenhado como 6
+ * caixas coloridas numeradas (Medição Física → Aprovação → Documentação → Emissão NF →
+ * Liberação OP → Pagamento) com os prazos parseados das alíneas a)–f), substituindo o
+ * marcador `{{FLUXOGRAMA_PAGAMENTO}}`; (e) ASSINATURAS NO LOCAL DE ASSINATURA — ao encontrar
+ * o início do bloco estático (`____`/"TESTEMUNHAS:") o gerador PARA o corpo e renderiza
+ * BLOCOS DE ASSINATURA ELETRÔNICA em grade 2 colunas (nome em itálico como faux-assinatura
+ * sobre a linha + nome em negrito + cargo/papel + CPF/CNPJ + "Assinado eletronicamente em
+ * DD/MM/AAAA HH:MM" em verde, ou "Aguardando assinatura" em cinza); (f) rodapé com hash
+ * SHA-256 + conformidade MP 2.200-2/2001 e Lei 14.063/2020 + numeração de páginas.
+ *
+ * Para alimentar os blocos com cargo e CPF/CNPJ, `server/routers/integrasign.ts`
+ * (`getDocumentoPublico`, ambos os ramos — concluído e pendente) passou a SELECIONAR também
+ * `cargo` e `cpfCnpj` em `todosSignatarios` (leitura pura, sem novas colunas); e os 2 call
+ * sites de `gerarContratoAssinadoPdf` em `client/src/pages/IntegraSignAssinar.tsx` repassam
+ * `cpfCnpj`/`cargo`. Datas via `formatDateTime` (iOS-safe); moeda já vem formatada BRL do
+ * texto.
+ *
+ * RESSALVA: a visualização HTML da tela (`ContratoDetalhe.tsx`/`IntegraSignAssinar.tsx`) já
+ * era razoável e não foi alterada — esta revisão corrige o ARQUIVO PDF baixado, que era a
+ * dor do print. O parse do cabeçalho depende do padrão do texto-fonte; se o bloco CONTRATANTE
+ * não casar, o cabeçalho cai para logo + faixa azul (nunca quebra). Detalhe: este arquivo.
+ *
  * Rev. 3053 — **INTEGRASIGN (FCSIGN) · "ADICIONAR SÓCIO ADMINISTRADOR" EM CONTRATOS JÁ
  * ENVIADOS QUE FICARAM SÓ COM FORNECEDOR + GESTOR (SEM O LINK DO SÓCIO PARA ASSINAR).**
  *
