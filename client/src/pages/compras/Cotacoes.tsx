@@ -8,6 +8,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -5940,14 +5941,9 @@ export default function Cotacoes() {
                         <label className="text-xs font-medium text-gray-700 mb-1 block">
                           Valor do FD (R$) <span className="text-blue-500 font-normal">— máximo MAT: {fmt(sp.totalMat)}</span>
                         </label>
-                        <Input
-                          type="text"
-                          inputMode="decimal"
+                        <MoneyInput
                           value={fdCotForm.valor}
-                          onChange={e => {
-                            let v = e.target.value.replace(/[^\d.,]/g, "");
-                            setFdCotForm(p => ({ ...p, valor: v }));
-                          }}
+                          onChange={(num) => setFdCotForm(p => ({ ...p, valor: num }))}
                           placeholder="0,00"
                           className={`bg-white border-gray-300 ${excedeMat ? "border-red-400 ring-1 ring-red-300" : ""}`}
                         />
@@ -7954,14 +7950,9 @@ export default function Cotacoes() {
                       <label className="text-xs font-medium text-gray-700 mb-1 block">
                         Valor do FD (R$) <span className="text-blue-500 font-normal">— máximo MAT: {fmt(sp.totalMat)}</span>
                       </label>
-                      <Input
-                        type="text"
-                        inputMode="decimal"
+                      <MoneyInput
                         value={fdCotForm.valor}
-                        onChange={e => {
-                          let v = e.target.value.replace(/[^\d.,]/g, "");
-                          setFdCotForm(p => ({ ...p, valor: v }));
-                        }}
+                        onChange={(num) => setFdCotForm(p => ({ ...p, valor: num }))}
                         placeholder="0,00"
                         className={`bg-white border-gray-300 ${excedeMat ? "border-red-400 ring-1 ring-red-300" : ""}`}
                       />

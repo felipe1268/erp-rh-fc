@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3035 — **COMPRAS → COTAÇÕES · MODAL "DEFINIR FATURAMENTO DIRETO": O CAMPO
+ * "VALOR DO FD (R$)" PASSA A FORMATAR EM DINHEIRO BRL pt-BR ENQUANTO O USUÁRIO DIGITA
+ * (MÁSCARA via `MoneyInput`), EM VEZ DO INPUT CRU QUE ACEITAVA "3900" SEM MÁSCARA.**
+ *
+ * PEDIDO (print IMG_1928): "Quero poder digitar e o número ficar em formato de
+ * dinheiro". O campo era um `<Input type="text">` cru que só limpava caracteres
+ * (`replace(/[^\d.,]/g,"")`) e mostrava a formatação só num preview verde ABAIXO do
+ * campo (`R$ 3.900,00`) — o valor DENTRO do input ficava "3900" sem máscara.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE, ZERO backend/schema) em
+ * `client/src/pages/compras/Cotacoes.tsx`: troca os DOIS `<Input>` idênticos do FD
+ * (modal aparece em 2 contextos do arquivo) pelo componente compartilhado
+ * `MoneyInput` (`@/components/ui/money-input`), que formata BRL pt-BR (milhar com
+ * ponto, centavos com vírgula) e entrega ao `onChange` a string numérica crua
+ * (`"3900"`), 100% compatível com `parseBRNumber(fdCotForm.valor)` que já alimenta
+ * `fdVal`/`excedeMat`/`marcarFd`. Estado `fdCotForm.valor`, validação de teto MAT e
+ * o submit ficam INTOCADOS. Alinha o campo à REGRA DE OURO de moeda do projeto
+ * (inputs de valor usam máscara). REPUBLICAR (só front).
+ *
  * Rev. 3034 — **FINANCEIRO → "ANÁLISE DE CUSTOS" · TABELA "COMPARATIVO MÊS A MÊS POR
  * CATEGORIA": VOLTA A SER UMA TABELA MATRICIAL DE VERDADE (CATEGORIA × MESES), AGORA
  * MODERNA E LEGÍVEL — REVERTE O REDESENHO "SÓ SPARKLINE" DA Rev. 3032 QUE O USUÁRIO
