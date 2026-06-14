@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3088 — **MEDIÇÃO DE TERCEIROS · A ABA "MEDIÇÕES" DO CONTRATO DEIXA DE SER CONFUSA QUANDO ABERTA PELO
+ * PRÓPRIO MÓDULO DE MEDIÇÕES: SOME A MENSAGEM CONTRADITÓRIA "ABRIR MÓDULO DE MEDIÇÕES" (O USUÁRIO JÁ ESTÁ
+ * NELE) E A EDIÇÃO JÁ VEM LIGADA.**
+ *
+ * PEDIDO (usuário, prints iPad): no módulo "Medição Terceiros", ao clicar "Medir" e cair na aba "Medições"
+ * do contrato, aparecia o banner "Espelho só-leitura. As medições de terceiros são geridas no módulo
+ * dedicado." + botão "Abrir módulo de Medições". Isso não faz sentido: o usuário JÁ está no módulo de
+ * medições. "Refaça a tela, de forma que fique intuitivo e mais fácil... arrume todo layout para não ser
+ * confuso."
+ *
+ * CAUSA-RAIZ: a aba "Medições" (`MedicoesTab` em `client/src/pages/terceiros/contratos/ContratoDetalhe.tsx`)
+ * foi desenhada na Rev. 3082 (T007) como ESPELHO SÓ-LEITURA pensando no acesso a partir do módulo "Terceiros"
+ * (gestão do contrato). Mas a MESMA tela/aba é o destino do botão "Medir" do módulo dedicado "Medição
+ * Terceiros" (Rev. 3084). Resultado: quem vem medir cai num modo só-leitura que manda "abrir o módulo de
+ * medições" — o módulo em que já está. O banner não tinha consciência do MÓDULO ATIVO.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE/SCHEMA/BACKEND): a tela passa a ler o módulo ativo via hook
+ * `ln()` (`@/contexts/ModuleContext`) e calcula `emModuloMedicoes = activeModule === "medicao-terceiros"`,
+ * propagando para `MedicoesTab`. Quando `emModuloMedicoes`:
+ *   (1) `modoEdicao` JÁ inicia LIGADO (a aba é o espaço oficial de trabalho — gera/edita aqui mesmo);
+ *   (2) o banner vira um cabeçalho LIMPO laranja ("Medições deste contrato. Gere, edite e acompanhe a
+ *       aprovação aqui mesmo.") — SEM a mensagem "espelho só-leitura", SEM o botão "Abrir módulo de
+ *       Medições" e SEM o toggle "Editar nesta aba" (que só confundiam estando já no módulo).
+ * Pelo módulo "Terceiros" (gestão do contrato) o comportamento ANTERIOR fica 100% intacto: espelho
+ * só-leitura, CTA "Abrir módulo de Medições" e toggle "Editar nesta aba"/`?edit=1`. Os botões "Gerar
+ * Medição" do corpo (estados vazio e não-vazio) já estavam gateados em `assinado && modoEdicao`, então passam
+ * a aparecer naturalmente no módulo de medições (sem duplicar — o banner é só informativo). A detecção
+ * confia no menu "sticky" da Rev. 3087 (`STICKY_AMBIGUOUS`), que mantém `activeModule="medicao-terceiros"` ao
+ * abrir o detalhe do contrato a partir do módulo de medições.
+ *
+ * ARQUIVOS: `client/src/pages/terceiros/contratos/ContratoDetalhe.tsx` (import `ln`; `emModuloMedicoes` em
+ * `ContratoDetalheInner`, propagado a `MedicoesTab`; `modoEdicao` default + banner condicionais; ícone
+ * `Ruler` no import lucide). RESULTADO: medir um contrato dentro do módulo de medições é direto e sem
+ * contradição; a gestão pelo módulo "Terceiros" segue como espelho só-leitura.
+ *
  * Rev. 3087 — **MEDIÇÃO DE TERCEIROS · O PAINEL/MENU FICA FIXO NO MÓDULO: AO CLICAR "MEDIR" (OU ABRIR O
  * DETALHE DO CONTRATO) DENTRO DO MÓDULO "MEDIÇÃO TERCEIROS", A BARRA LATERAL DEIXA DE TROCAR PARA O MÓDULO
  * "TERCEIROS".**

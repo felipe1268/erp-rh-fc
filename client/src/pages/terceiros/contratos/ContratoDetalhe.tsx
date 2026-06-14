@@ -14,12 +14,13 @@ import {
   ChevronRight, ChevronDown, Building2, Calendar, DollarSign, FileText,
   Zap, ClipboardCheck, X, TrendingUp, TrendingDown, Minus,
   FileEdit, Save, Clock, RefreshCw, History, ExternalLink, Trash2, Pencil, FolderOpen,
-  Eye, EyeOff, BarChart3, Loader2, FileDown, Settings, Undo2, Send, MapPin, Truck, Ban, Info, Lock, Download, ShieldCheck
+  Eye, EyeOff, BarChart3, Loader2, FileDown, Settings, Undo2, Send, MapPin, Truck, Ban, Info, Lock, Download, ShieldCheck, Ruler
 } from "lucide-react";
 import { gerarContratoAssinadoPdf } from "@/lib/contratoAssinadoPdf";
 import { toast } from "sonner";
 import { formatNumeroOcDisplay } from "@shared/numeroOc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { ln } from "@/contexts/ModuleContext";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
@@ -93,6 +94,8 @@ export default function ContratoDetalheWrapper() {
 
 function ContratoDetalheInner({ routeId }: { routeId: number }) {
   const [, navigate] = useLocation();
+  const { activeModule } = ln();
+  const emModuloMedicoes = activeModule === "medicao-terceiros";
   const id = routeId;
   const urlParams = new URLSearchParams(window.location.search);
   const medicaoIdFromUrl = urlParams.get("medicao") ? parseInt(urlParams.get("medicao")!) : null;
@@ -931,7 +934,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
 
         {/* Tab: Medições */}
         {tab === "medicoes" && (
-          <MedicoesTab contrato={contrato} id={id} aprovarMut={aprovarMut} rejeitarMut={rejeitarMut} cancelarAprovacaoMut={cancelarAprovacaoMut} recalcularMut={recalcularMut} excluirMedicaoMut={excluirMedicaoMut} editarMedicaoItemMut={editarMedicaoItemMut} removerMedicaoItemMut={removerMedicaoItemMut} setEditMedicao={setEditMedicao} initialMedicaoId={medicaoIdFromUrl} setShowGerarMedicao={setShowGerarMedicao} medCfg={medCfg} fdsTerceiro={fdsTerceiro} aprovarGestorMut={aprovarGestorMut} aprovarSocioMut={aprovarSocioMut} criarFdTerceiroMut={criarFdTerceiroMut} excluirFdTerceiroMut={excluirFdTerceiroMut} />
+          <MedicoesTab contrato={contrato} id={id} emModuloMedicoes={emModuloMedicoes} aprovarMut={aprovarMut} rejeitarMut={rejeitarMut} cancelarAprovacaoMut={cancelarAprovacaoMut} recalcularMut={recalcularMut} excluirMedicaoMut={excluirMedicaoMut} editarMedicaoItemMut={editarMedicaoItemMut} removerMedicaoItemMut={removerMedicaoItemMut} setEditMedicao={setEditMedicao} initialMedicaoId={medicaoIdFromUrl} setShowGerarMedicao={setShowGerarMedicao} medCfg={medCfg} fdsTerceiro={fdsTerceiro} aprovarGestorMut={aprovarGestorMut} aprovarSocioMut={aprovarSocioMut} criarFdTerceiroMut={criarFdTerceiroMut} excluirFdTerceiroMut={excluirFdTerceiroMut} />
         )}
 
         {/* Tab: Comparativo */}
@@ -1962,7 +1965,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   );
 }
 
-function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoMut, recalcularMut, excluirMedicaoMut, editarMedicaoItemMut, removerMedicaoItemMut, setEditMedicao, initialMedicaoId, setShowGerarMedicao, medCfg, fdsTerceiro, aprovarGestorMut, aprovarSocioMut, criarFdTerceiroMut, excluirFdTerceiroMut }: any) {
+function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, cancelarAprovacaoMut, recalcularMut, excluirMedicaoMut, editarMedicaoItemMut, removerMedicaoItemMut, setEditMedicao, initialMedicaoId, setShowGerarMedicao, medCfg, fdsTerceiro, aprovarGestorMut, aprovarSocioMut, criarFdTerceiroMut, excluirFdTerceiroMut }: any) {
   const assinado = (contrato as any).assinaturaStatus === "concluido";
   const tresNiveis = (medCfg?.aprovacaoTresNiveis ?? 1) === 1;
   const fdsAll: any[] = fdsTerceiro?.fds || [];
@@ -1982,11 +1985,21 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
   // Rev. 3082 (T007) — Esta aba é ESPELHO SÓ-LEITURA. As medições de terceiros são
   // geridas no módulo dedicado (/terceiros/medicoes). A edição inline fica desligada por
   // padrão; abre-se com "Editar nesta aba" (ou deep-link ?edit=1 vindo do módulo).
+  // Quando aberto DENTRO do módulo "Medição Terceiros" (botão "Medir"), a aba já é o
+  // espaço oficial de trabalho: edição ligada por padrão e SEM a contradição "abra o
+  // módulo de medições" (o usuário já está nele). Pelo módulo "Terceiros" continua
+  // sendo um espelho só-leitura (edição opcional via "Editar nesta aba" ou ?edit=1).
   const [modoEdicao, setModoEdicao] = useState(() => {
+    if (emModuloMedicoes) return true;
     try { return new URLSearchParams(window.location.search).get("edit") === "1"; } catch { return false; }
   });
 
-  const banner = (
+  const banner = emModuloMedicoes ? (
+    <div className="flex items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-800">
+      <Ruler className="w-3.5 h-3.5 flex-shrink-0" />
+      <span>Medições deste contrato. Gere, edite e acompanhe a aprovação aqui mesmo.</span>
+    </div>
+  ) : (
     <div className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs ${modoEdicao ? "bg-amber-50 border-amber-200 text-amber-800" : "bg-blue-50 border-blue-200 text-blue-800"}`}>
       <div className="flex items-center gap-1.5">
         {modoEdicao ? <Pencil className="w-3.5 h-3.5 flex-shrink-0" /> : <Eye className="w-3.5 h-3.5 flex-shrink-0" />}
