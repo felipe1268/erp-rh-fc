@@ -246,6 +246,33 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
     onError: (e) => toast.error(e.message),
   });
 
+  // Rev. 3079 — Medição de Terceiros: config (3 níveis) + FD do período + 3 níveis de aprovação.
+  const { data: medCfg } = trpc.medicaoConfig.getConfig.useQuery(
+    { companyId: (contrato as any)?.companyId ?? 0 },
+    { enabled: !!(contrato as any)?.companyId },
+  );
+  const { data: fdsTerceiro } = trpc.terceiroContratos.listarFdsTerceiro.useQuery(
+    { contratoId: id, companyId: (contrato as any)?.companyId ?? 0 },
+    { enabled: tab === "medicoes" && id > 0 && !!(contrato as any)?.companyId },
+  );
+  const invalidarMedicoes = () => { utils.terceiroContratos.getContrato.invalidate({ id }); utils.terceiroContratos.listarFdsTerceiro.invalidate({ contratoId: id, companyId: (contrato as any)?.companyId ?? 0 }); };
+  const aprovarGestorMut = trpc.terceiroContratos.aprovarNivelGestor.useMutation({
+    onSuccess: () => { toast.success("Aprovado pelo gestor da obra — aguardando sócio adm."); invalidarMedicoes(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const aprovarSocioMut = trpc.terceiroContratos.aprovarNivelSocio.useMutation({
+    onSuccess: () => { toast.success("Aprovado pelo sócio adm — financeiro a pagar liberado!"); invalidarMedicoes(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const criarFdTerceiroMut = trpc.terceiroContratos.criarFdTerceiro.useMutation({
+    onSuccess: () => { toast.success("FD lançado na medição."); invalidarMedicoes(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const excluirFdTerceiroMut = trpc.terceiroContratos.excluirFdTerceiro.useMutation({
+    onSuccess: () => { toast.success("FD removido."); invalidarMedicoes(); },
+    onError: (e) => toast.error(e.message),
+  });
+
   const editarMedicaoItemMut = trpc.terceiroContratos.editarMedicaoItem.useMutation({
     onSuccess: () => { utils.terceiroContratos.getContrato.invalidate({ id }); },
     onError: (e) => toast.error(e.message),
@@ -904,7 +931,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
 
         {/* Tab: Medições */}
         {tab === "medicoes" && (
-          <MedicoesTab contrato={contrato} id={id} aprovarMut={aprovarMut} rejeitarMut={rejeitarMut} cancelarAprovacaoMut={cancelarAprovacaoMut} recalcularMut={recalcularMut} excluirMedicaoMut={excluirMedicaoMut} editarMedicaoItemMut={editarMedicaoItemMut} removerMedicaoItemMut={removerMedicaoItemMut} setEditMedicao={setEditMedicao} initialMedicaoId={medicaoIdFromUrl} setShowGerarMedicao={setShowGerarMedicao} />
+          <MedicoesTab contrato={contrato} id={id} aprovarMut={aprovarMut} rejeitarMut={rejeitarMut} cancelarAprovacaoMut={cancelarAprovacaoMut} recalcularMut={recalcularMut} excluirMedicaoMut={excluirMedicaoMut} editarMedicaoItemMut={editarMedicaoItemMut} removerMedicaoItemMut={removerMedicaoItemMut} setEditMedicao={setEditMedicao} initialMedicaoId={medicaoIdFromUrl} setShowGerarMedicao={setShowGerarMedicao} medCfg={medCfg} fdsTerceiro={fdsTerceiro} aprovarGestorMut={aprovarGestorMut} aprovarSocioMut={aprovarSocioMut} criarFdTerceiroMut={criarFdTerceiroMut} excluirFdTerceiroMut={excluirFdTerceiroMut} />
         )}
 
         {/* Tab: Comparativo */}
@@ -1935,8 +1962,10 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   );
 }
 
-function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoMut, recalcularMut, excluirMedicaoMut, editarMedicaoItemMut, removerMedicaoItemMut, setEditMedicao, initialMedicaoId, setShowGerarMedicao }: any) {
+function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoMut, recalcularMut, excluirMedicaoMut, editarMedicaoItemMut, removerMedicaoItemMut, setEditMedicao, initialMedicaoId, setShowGerarMedicao, medCfg, fdsTerceiro, aprovarGestorMut, aprovarSocioMut, criarFdTerceiroMut, excluirFdTerceiroMut }: any) {
   const assinado = (contrato as any).assinaturaStatus === "concluido";
+  const tresNiveis = (medCfg?.aprovacaoTresNiveis ?? 1) === 1;
+  const fdsAll: any[] = fdsTerceiro?.fds || [];
   const [expandedMedicao, setExpandedMedicao] = useState<number | null>(initialMedicaoId ?? null);
   const medicaoRef = useRef<HTMLDivElement>(null);
 
@@ -2003,11 +2032,30 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
                   </div>
                 </div>
                 <div className="flex gap-2 flex-shrink-0">
-                  {m.status === "aguardando_aprovacao" && (
+                  {m.status === "aguardando_aprovacao" && !tresNiveis && (
                     <>
-                      <Button size="sm" className="gap-1 bg-green-600 hover:bg-green-700 text-xs" onClick={() => aprovarMut.mutate({ id: m.id, companyId, aprovadoPor: "Responsável" })}>
+                      <Button size="sm" className="gap-1 bg-green-600 hover:bg-green-700 text-xs" onClick={() => aprovarMut.mutate({ id: m.id, companyId: contrato.companyId, aprovadoPor: "Responsável" })}>
                         <CheckCircle className="w-3 h-3" /> Aprovar
                       </Button>
+                      <Button size="sm" variant="outline" className="gap-1 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                        onClick={() => { setRejeicaoModal({ id: m.id, numero: String(m.numero).padStart(2, "0") }); setMotivoRejeicao(""); }}>
+                        Rejeitar
+                      </Button>
+                    </>
+                  )}
+                  {m.status === "aguardando_aprovacao" && tresNiveis && (
+                    <>
+                      {(m.nivelAprovacao ?? 0) < 1 ? (
+                        <Button size="sm" className="gap-1 bg-blue-600 hover:bg-blue-700 text-xs" disabled={aprovarGestorMut.isPending}
+                          onClick={() => aprovarGestorMut.mutate({ id: m.id, companyId: contrato.companyId, aprovadoPor: "Gestor da Obra" })}>
+                          <CheckCircle className="w-3 h-3" /> Aprovar (Gestor)
+                        </Button>
+                      ) : (
+                        <Button size="sm" className="gap-1 bg-green-600 hover:bg-green-700 text-xs" disabled={aprovarSocioMut.isPending}
+                          onClick={() => { if (confirm(`Liberar pagamento da Medição ${String(m.numero).padStart(2, "0")}? Isso aprova em definitivo e gera o financeiro a pagar.`)) aprovarSocioMut.mutate({ id: m.id, companyId: contrato.companyId, aprovadoPor: "Sócio Adm" }); }}>
+                          <CheckCircle className="w-3 h-3" /> Liberar (Sócio Adm)
+                        </Button>
+                      )}
                       <Button size="sm" variant="outline" className="gap-1 text-xs text-red-600 border-red-200 hover:bg-red-50"
                         onClick={() => { setRejeicaoModal({ id: m.id, numero: String(m.numero).padStart(2, "0") }); setMotivoRejeicao(""); }}>
                         Rejeitar
@@ -2056,6 +2104,30 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
                   <p className="text-xs text-red-500 mt-0.5">{m.motivoRejeicao}</p>
                 </div>
               )}
+              {tresNiveis && m.status !== "rejeitada" && (
+                <div className="mt-2 ml-6 flex flex-wrap items-center gap-1.5 text-[11px]">
+                  {[
+                    { lab: "Medido", done: true, who: m.criadoPor, when: m.criadoEm },
+                    { lab: "Gestor da Obra", done: (m.nivelAprovacao ?? 0) >= 1 || m.status === "aprovada" || m.status === "paga", who: m.gestorAprovadoPor, when: m.gestorAprovadoEm },
+                    { lab: "Sócio Adm", done: (m.nivelAprovacao ?? 0) >= 2 || m.status === "aprovada" || m.status === "paga", who: m.socioAprovadoPor, when: m.socioAprovadoEm },
+                  ].map((s, i) => (
+                    <span key={i} className="inline-flex items-center gap-1">
+                      {i > 0 && <ChevronRight className="w-3 h-3 text-gray-300" />}
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${s.done ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-50 text-gray-400 border-gray-200"}`}>
+                        {s.done ? <CheckCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                        {s.lab}{s.done && s.who ? ` · ${s.who}` : ""}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <FdMedicaoPanel
+                medicao={m}
+                contrato={contrato}
+                fds={fdsAll.filter((f: any) => f.medicaoId === m.id)}
+                criarFdTerceiroMut={criarFdTerceiroMut}
+                excluirFdTerceiroMut={excluirFdTerceiroMut}
+              />
             </div>
 
             {isExpanded && itens.length > 0 && (<>
@@ -2921,6 +2993,98 @@ function ItemsTreeTable({ contrato, id, pct, removerItemMut }: { contrato: any; 
           </tr>
         </tfoot>
       </table>
+    </div>
+  );
+}
+
+// Rev. 3079 — Painel de FD do período da medição (Terceiros · a pagar).
+// FD manual lançado por medição; soma OBRIGATORIAMENTE abate o valor a pagar (líquido).
+function FdMedicaoPanel({ medicao, contrato, fds, criarFdTerceiroMut, excluirFdTerceiroMut }: any) {
+  const [open, setOpen] = useState(false);
+  const [desc, setDesc] = useState("");
+  const [valor, setValor] = useState("");
+  const [data, setData] = useState("");
+  const travado = medicao.status === "aprovada" || medicao.status === "paga";
+
+  const onlyDigits = (s: string) => s.replace(/\D/g, "");
+  const maskBRLInput = (s: string) => (parseInt(onlyDigits(s) || "0", 10) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const parseBRLInput = (s: string) => parseInt(onlyDigits(s) || "0", 10) / 100;
+
+  const totalFd = (fds || []).reduce((s: number, f: any) => s + (Number(f.valor) || 0), 0);
+  const liquido = (Number(medicao.valorMedido) || 0) - totalFd;
+
+  const submit = () => {
+    if (!desc.trim()) { toast.error("Informe a descrição do FD."); return; }
+    if (parseBRLInput(valor) <= 0) { toast.error("Informe um valor de FD maior que zero."); return; }
+    if (!data) { toast.error("Informe a data do FD."); return; }
+    criarFdTerceiroMut.mutate(
+      { companyId: contrato.companyId, contratoId: contrato.id, medicaoId: medicao.id, descricao: desc.trim(), valor: String(parseBRLInput(valor)), dataFd: data, criadoPor: "Responsável" },
+      { onSuccess: () => { setDesc(""); setValor(""); setData(""); setOpen(false); } },
+    );
+  };
+
+  return (
+    <div className="mt-3 ml-6 mr-1 rounded-lg border border-amber-200 bg-amber-50/40 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-xs font-semibold text-amber-800">
+          <Truck className="w-3.5 h-3.5" /> FD do Período <span className="text-amber-600 font-normal">(desconta do valor a pagar)</span>
+        </div>
+        {!travado && (
+          <Button size="sm" variant="outline" className="h-7 gap-1 text-[11px] text-amber-700 border-amber-300 hover:bg-amber-100" onClick={() => setOpen(o => !o)}>
+            <Plus className="w-3 h-3" /> Lançar FD
+          </Button>
+        )}
+      </div>
+
+      {open && !travado && (
+        <div className="mt-2 grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto] gap-2 items-end bg-white rounded-md border border-amber-200 p-2">
+          <div>
+            <Label className="text-[10px] text-gray-500">Descrição</Label>
+            <Input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Ex.: Material adiantado, retrabalho..." className="h-8 text-xs" />
+          </div>
+          <div>
+            <Label className="text-[10px] text-gray-500">Valor (R$)</Label>
+            <Input value={valor} onChange={(e) => setValor(maskBRLInput(e.target.value))} inputMode="numeric" placeholder="0,00" className="h-8 text-xs w-28 text-right" />
+          </div>
+          <div>
+            <Label className="text-[10px] text-gray-500">Data</Label>
+            <Input type="date" value={data} onChange={(e) => setData(e.target.value)} className="h-8 text-xs w-36" />
+          </div>
+          <Button size="sm" className="h-8 gap-1 text-xs bg-amber-600 hover:bg-amber-700" disabled={criarFdTerceiroMut.isPending} onClick={submit}>
+            <Save className="w-3 h-3" /> Salvar
+          </Button>
+        </div>
+      )}
+
+      {(fds || []).length > 0 ? (
+        <div className="mt-2 space-y-1">
+          {(fds || []).map((f: any) => (
+            <div key={f.id} className="flex items-center justify-between gap-2 text-xs bg-white rounded-md border border-amber-100 px-2 py-1.5">
+              <div className="min-w-0">
+                <span className="font-medium text-gray-800 truncate">{f.descricao}</span>
+                <span className="text-gray-400 ml-2">{fmtDate(f.dataFd)}</span>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span className="font-semibold text-amber-700">− {BRL(f.valor)}</span>
+                {!travado && (
+                  <button className="text-gray-300 hover:text-red-500" disabled={excluirFdTerceiroMut.isPending}
+                    onClick={() => { if (confirm("Remover este FD?")) excluirFdTerceiroMut.mutate({ id: f.id, companyId: contrato.companyId }); }}>
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 text-[11px] text-amber-600/80">Nenhum FD lançado neste período.</p>
+      )}
+
+      <div className="mt-2 flex flex-wrap items-center justify-end gap-x-4 gap-y-1 text-xs border-t border-amber-200 pt-2">
+        <span className="text-gray-500">Medido: <strong className="text-gray-800">{BRL(medicao.valorMedido)}</strong></span>
+        <span className="text-amber-700">Total FD: <strong>− {BRL(totalFd)}</strong></span>
+        <span className="text-blue-700">Líquido a pagar: <strong>{BRL(liquido)}</strong></span>
+      </div>
     </div>
   );
 }

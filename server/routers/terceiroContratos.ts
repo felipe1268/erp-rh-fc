@@ -10,6 +10,9 @@ import {
   terceiroContratoItens,
   terceiroMedicoes,
   terceiroMedicaoItens,
+  terceiroMedicaoFds,
+  medicaoConfig,
+  medicaoCampo,
   terceiroDocumentos,
   empresasTerceiras,
   planejamentoAtividades,
@@ -1674,6 +1677,233 @@ export const terceiroContratosRouter = router({
         } as any)
         .where(eq(terceiroMedicoes.id, input.id))
         .returning();
+      return medicao;
+    }),
+
+  // ============================================================================
+  // Rev. 3079 — MEDIÇÃO DE TERCEIROS · NÚCLEO FUNCIONAL
+  // (1) FD por período da medição (manual) — CRUD em terceiro_medicao_fds.
+  // (2) Vínculo do levantamento de campo + alerta de divergência.
+  // (3) Aprovação em 3 níveis: mede → gestor da obra → sócio adm (libera financeiro).
+  // Tudo aditivo; guarda de tenancy via _assertCompanyAccess. ZERO ALTER/DROP/DELETE.
+  // ============================================================================
+
+  // Total de FD (manual) lançado p/ uma medição — abate do valor a pagar.
+  listarFdsTerceiro: protectedProcedure
+    .input(z.object({ contratoId: z.number(), companyId: z.number(), medicaoId: z.number().optional() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const conds = [eq(terceiroMedicaoFds.companyId, input.companyId), eq(terceiroMedicaoFds.contratoId, input.contratoId)];
+      if (typeof input.medicaoId === "number") conds.push(eq(terceiroMedicaoFds.medicaoId, input.medicaoId));
+      const rows = await db.select().from(terceiroMedicaoFds)
+        .where(and(...conds))
+        .orderBy(desc(terceiroMedicaoFds.dataFd), desc(terceiroMedicaoFds.id));
+      const total = rows.reduce((s, r) => s + n(r.valor), 0);
+      return { fds: rows, total };
+    }),
+
+  criarFdTerceiro: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      contratoId: z.number(),
+      medicaoId: z.number().nullable().optional(),
+      descricao: z.string().min(1),
+      valor: z.string(),
+      dataFd: z.string(),
+      anexoUrl: z.string().nullable().optional(),
+      observacoes: z.string().nullable().optional(),
+      criadoPor: z.string().nullable().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      // Confere que o contrato pertence à empresa (anti-IDOR).
+      const [contrato] = await db.select({ id: terceiroContratos.id, companyId: terceiroContratos.companyId })
+        .from(terceiroContratos).where(eq(terceiroContratos.id, input.contratoId));
+      if (!contrato || contrato.companyId !== input.companyId) throw new Error("Contrato não encontrado para esta empresa.");
+      if (typeof input.medicaoId === "number") {
+        const [med] = await db.select({ id: terceiroMedicoes.id, companyId: terceiroMedicoes.companyId, contratoId: terceiroMedicoes.contratoId, status: terceiroMedicoes.status })
+          .from(terceiroMedicoes).where(eq(terceiroMedicoes.id, input.medicaoId));
+        if (!med || med.companyId !== input.companyId || med.contratoId !== input.contratoId) throw new Error("Medição não pertence a este contrato/empresa.");
+        if (med.status === "aprovada" || med.status === "paga") throw new Error("Medição já aprovada/paga — não é possível alterar os FDs.");
+      }
+      const [fd] = await db.insert(terceiroMedicaoFds).values({
+        companyId: input.companyId,
+        contratoId: input.contratoId,
+        medicaoId: input.medicaoId ?? null,
+        descricao: input.descricao.trim(),
+        valor: input.valor,
+        dataFd: input.dataFd,
+        anexoUrl: input.anexoUrl ?? null,
+        origem: "manual",
+        observacoes: input.observacoes ?? null,
+        criadoPor: input.criadoPor ?? null,
+      } as any).returning();
+      return fd;
+    }),
+
+  atualizarFdTerceiro: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      descricao: z.string().optional(),
+      valor: z.string().optional(),
+      dataFd: z.string().optional(),
+      anexoUrl: z.string().nullable().optional(),
+      observacoes: z.string().nullable().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const [fd] = await db.select().from(terceiroMedicaoFds).where(and(eq(terceiroMedicaoFds.id, input.id), eq(terceiroMedicaoFds.companyId, input.companyId)));
+      if (!fd) throw new Error("FD não encontrado.");
+      if (typeof fd.medicaoId === "number") {
+        const [med] = await db.select({ status: terceiroMedicoes.status }).from(terceiroMedicoes).where(eq(terceiroMedicoes.id, fd.medicaoId));
+        if (med && (med.status === "aprovada" || med.status === "paga")) throw new Error("Medição já aprovada/paga — FD travado.");
+      }
+      const patch: any = { atualizadoEm: new Date().toISOString() };
+      if (input.descricao !== undefined) patch.descricao = input.descricao.trim();
+      if (input.valor !== undefined) patch.valor = input.valor;
+      if (input.dataFd !== undefined) patch.dataFd = input.dataFd;
+      if (input.anexoUrl !== undefined) patch.anexoUrl = input.anexoUrl;
+      if (input.observacoes !== undefined) patch.observacoes = input.observacoes;
+      const [upd] = await db.update(terceiroMedicaoFds).set(patch)
+        .where(and(eq(terceiroMedicaoFds.id, input.id), eq(terceiroMedicaoFds.companyId, input.companyId))).returning();
+      return upd;
+    }),
+
+  excluirFdTerceiro: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const [fd] = await db.select().from(terceiroMedicaoFds).where(and(eq(terceiroMedicaoFds.id, input.id), eq(terceiroMedicaoFds.companyId, input.companyId)));
+      if (!fd) throw new Error("FD não encontrado.");
+      if (typeof fd.medicaoId === "number") {
+        const [med] = await db.select({ status: terceiroMedicoes.status }).from(terceiroMedicoes).where(eq(terceiroMedicoes.id, fd.medicaoId));
+        if (med && (med.status === "aprovada" || med.status === "paga")) throw new Error("Medição já aprovada/paga — FD travado.");
+      }
+      await db.delete(terceiroMedicaoFds).where(and(eq(terceiroMedicaoFds.id, input.id), eq(terceiroMedicaoFds.companyId, input.companyId)));
+      return { ok: true };
+    }),
+
+  // Vincula o levantamento de campo à medição + calcula o alerta de divergência
+  // (levantado × cronograma). Tolerância vem de medicao_config (default 5%).
+  vincularLevantamentoMedicao: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      levantamentoCampoId: z.number().nullable().optional(),
+      quantidadeLevantada: z.string().nullable().optional(),
+      unidadeLevantada: z.string().nullable().optional(),
+      quantidadeCronograma: z.string().nullable().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const [med] = await db.select().from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.id), eq(terceiroMedicoes.companyId, input.companyId)));
+      if (!med) throw new Error("Medição não encontrada.");
+      if (med.status === "aprovada" || med.status === "paga") throw new Error("Medição já aprovada/paga — levantamento travado.");
+
+      // Anti-IDOR: o levantamento de campo (medicao_campo) informado precisa pertencer
+      // à MESMA empresa, ao MESMO contrato e ter origem 'terceiro' (IDs colidem entre tabelas).
+      if (typeof input.levantamentoCampoId === "number") {
+        const [campo] = await db.select({ id: medicaoCampo.id, companyId: medicaoCampo.companyId, contratoId: medicaoCampo.contratoId, origem: medicaoCampo.origem })
+          .from(medicaoCampo).where(eq(medicaoCampo.id, input.levantamentoCampoId));
+        if (!campo || campo.companyId !== input.companyId || campo.contratoId !== med.contratoId || campo.origem !== "terceiro") {
+          throw new Error("Levantamento de campo inválido para esta medição/contrato.");
+        }
+      }
+
+      const [cfg] = await db.select({ tol: medicaoConfig.divergenciaToleranciaPct }).from(medicaoConfig).where(eq(medicaoConfig.companyId, input.companyId));
+      const tolerancia = cfg ? n(cfg.tol) : 5;
+
+      let percentualDivergencia: string | null = null;
+      let alertaDivergencia: string | null = null;
+      const qLev = input.quantidadeLevantada != null ? n(input.quantidadeLevantada) : null;
+      const qCron = input.quantidadeCronograma != null ? n(input.quantidadeCronograma) : null;
+      if (qLev != null && qCron != null && qCron > 0) {
+        const div = ((qLev - qCron) / qCron) * 100;
+        percentualDivergencia = String(div);
+        if (Math.abs(div) > tolerancia) {
+          alertaDivergencia = `Divergência de ${div.toFixed(2)}% entre levantado (${qLev}) e cronograma (${qCron}) — acima da tolerância de ${tolerancia}%.`;
+        }
+      }
+
+      const [upd] = await db.update(terceiroMedicoes).set({
+        levantamentoCampoId: input.levantamentoCampoId ?? med.levantamentoCampoId ?? null,
+        quantidadeLevantada: input.quantidadeLevantada ?? med.quantidadeLevantada ?? null,
+        unidadeLevantada: input.unidadeLevantada ?? med.unidadeLevantada ?? null,
+        percentualDivergencia,
+        alertaDivergencia,
+        atualizadoEm: new Date().toISOString(),
+      } as any).where(and(eq(terceiroMedicoes.id, input.id), eq(terceiroMedicoes.companyId, input.companyId))).returning();
+      return upd;
+    }),
+
+  // Nível 2 — Gestor da obra confirma a medição (não libera financeiro ainda).
+  aprovarNivelGestor: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number(), aprovadoPor: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const [existing] = await db.select().from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.id), eq(terceiroMedicoes.companyId, input.companyId)));
+      if (!existing) throw new Error("Medição não encontrada");
+      if (existing.status !== "aguardando_aprovacao") throw new Error(`Medição não está aguardando aprovação (status: ${existing.status})`);
+      if ((existing.nivelAprovacao ?? 0) >= 1) throw new Error("Medição já aprovada pelo gestor da obra.");
+      const [med] = await db.update(terceiroMedicoes).set({
+        nivelAprovacao: 1,
+        gestorAprovadoPor: input.aprovadoPor,
+        gestorAprovadoEm: new Date().toISOString(),
+        atualizadoEm: new Date().toISOString(),
+      } as any).where(eq(terceiroMedicoes.id, input.id)).returning();
+      return med;
+    }),
+
+  // Nível 3 — Sócio adm aprova (libera financeiro a pagar). Exige nível gestor.
+  // Replica a sincronização atômica de itens do contrato de aprovarMedicao e
+  // persiste o total de FD do período abatido (fd_total_abatido).
+  aprovarNivelSocio: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number(), aprovadoPor: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const fdRows = await db.select({ valor: terceiroMedicaoFds.valor }).from(terceiroMedicaoFds)
+        .where(and(eq(terceiroMedicaoFds.companyId, input.companyId), eq(terceiroMedicaoFds.medicaoId, input.id)));
+      const fdTotal = fdRows.reduce((s, r) => s + n(r.valor), 0);
+
+      const medicao = await db.transaction(async (tx: any) => {
+        const [existing] = await tx.select().from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.id), eq(terceiroMedicoes.companyId, input.companyId)));
+        if (!existing) throw new Error("Medição não encontrada");
+        if (existing.status !== "aguardando_aprovacao") throw new Error(`Medição não pode ser aprovada (status: ${existing.status})`);
+        if ((existing.nivelAprovacao ?? 0) < 1) throw new Error("Aprove primeiro no nível do gestor da obra.");
+        const [med] = await tx.update(terceiroMedicoes).set({
+          status: "aprovada",
+          nivelAprovacao: 2,
+          socioAprovadoPor: input.aprovadoPor,
+          socioAprovadoEm: new Date().toISOString(),
+          aprovadoPor: input.aprovadoPor,
+          aprovadoEm: new Date().toISOString(),
+          fdTotalAbatido: String(fdTotal),
+          atualizadoEm: new Date().toISOString(),
+        } as any).where(eq(terceiroMedicoes.id, input.id)).returning();
+
+        const itensMedicao = await tx.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.id));
+        for (const im of itensMedicao) {
+          await tx.update(terceiroContratoItens).set({
+            percentualMedidoAcumulado: im.percentualAvancoFisico,
+            valorMedidoAcumulado: im.valorAcumulado,
+          }).where(eq(terceiroContratoItens.id, im.contratoItemId));
+        }
+        return med;
+      });
+
+      try {
+        await triggerFinancialSyncAwaited(input.companyId);
+      } catch (syncErr: any) {
+        console.error(`[aprovarNivelSocio] FALHA no sync financeiro pós-aprovação da medição #${input.id} (companyId=${input.companyId}):`, syncErr?.message || syncErr);
+      }
       return medicao;
     }),
 

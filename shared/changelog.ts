@@ -1,6 +1,63 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3079 — **MEDIÇÃO DE TERCEIROS (A PAGAR) · BACKEND + UI DO FLUXO COMPLETO NA ABA "MEDIÇÕES" DO
+ * CONTRATO: APROVAÇÃO EM 3 NÍVEIS (MEDE → GESTOR DA OBRA → SÓCIO ADM LIBERA O FINANCEIRO), PAINEL DE
+ * "FD DO PERÍODO" (LANÇAMENTO MANUAL QUE ABATE OBRIGATORIAMENTE O VALOR A PAGAR, COM LÍQUIDO AO VIVO),
+ * VÍNCULO DO LEVANTAMENTO DE CAMPO + CÁLCULO DO ALERTA DE DIVERGÊNCIA (LEVANTADO × CRONOGRAMA) CONTRA A
+ * TOLERÂNCIA CONFIGURÁVEL DE `medicao_config`.**
+ *
+ * CONTEXTO: continuação direta da Rev. 3078 (que entregou a fundação: `medicao_config` + schema dos 3
+ * níveis/FD/levantamento/divergência). Esta revisão liga o COMPORTAMENTO ao schema já existente. Decisão
+ * de escopo: em vez de já criar telas/menu dedicados (que virão como módulos próprios), enriquecemos a
+ * aba "Medições" do contrato de Terceiros — entrega funcional e testável de ponta a ponta sem migração
+ * de UI. ZERO ALTER DESTRUTIVO/DROP/DELETE/SCHEMA — só código (as colunas/tabela já existem desde 3078).
+ *
+ * BACKEND (`server/routers/terceiroContratos.ts`, todas com `_assertCompanyAccess` + checagem de que o
+ * contrato/medição pertencem à empresa — anti-IDOR):
+ * (1) FD MANUAL POR MEDIÇÃO — `listarFdsTerceiro` (lista por contrato/medição + total), `criarFdTerceiro`
+ * (descrição/valor/data/anexo, `origem:"manual"`; bloqueia se a medição já estiver aprovada/paga),
+ * `atualizarFdTerceiro` e `excluirFdTerceiro` (mesmo gate de medição travada). O auto (OCs FD) continua
+ * vindo de `medicao_fd_registros`; o manual soma em `terceiro_medicao_fds`.
+ * (2) `vincularLevantamentoMedicao` — grava `levantamento_campo_id` + `quantidade_levantada`/
+ * `unidade_levantada` e CALCULA `percentual_divergencia` = `((levantado − cronograma)/cronograma)×100`;
+ * se `|div| > tolerância` (de `medicao_config.divergencia_tolerancia_pct`, default 5) grava
+ * `alerta_divergencia` legível. Bloqueia se aprovada/paga. ANTI-IDOR (code-review): o
+ * `levantamento_campo_id` informado é validado contra `medicao_campo` — precisa ser da MESMA
+ * empresa, do MESMO contrato e ter `origem='terceiro'` (IDs colidem entre tabelas), senão recusa.
+ * (3) APROVAÇÃO 3 NÍVEIS — `aprovarNivelGestor` (status `aguardando_aprovacao` + `nivel_aprovacao` 0→1,
+ * grava `gestor_aprovado_por/_em`; NÃO mexe no financeiro) e `aprovarNivelSocio` (exige `nivel ≥ 1`,
+ * dentro de `db.transaction` seta `status:"aprovada"`/`nivel:2`/`socio_aprovado_por/_em` + replica a
+ * sincronização atômica de `terceiro_contrato_itens` do `aprovarMedicao` original + persiste
+ * `fd_total_abatido` = soma dos FDs manuais da medição; pós-commit dispara
+ * `triggerFinancialSyncAwaited` para gerar o a-pagar). O fluxo de 1-clique (`aprovarMedicao`) segue
+ * intacto p/ empresas com `aprovacao_tres_niveis = 0`.
+ *
+ * FRONTEND (`client/src/pages/terceiros/contratos/ContratoDetalhe.tsx`):
+ * (a) novas queries `medCfg` (getConfig) e `fdsTerceiro` (listarFdsTerceiro) + mutations
+ * `aprovarGestorMut`/`aprovarSocioMut`/`criarFdTerceiroMut`/`excluirFdTerceiroMut` (helper
+ * `invalidarMedicoes` p/ refetch), todas propagadas ao `MedicoesTab`.
+ * (b) `tresNiveis = medCfg.aprovacaoTresNiveis === 1`. Quando ligado, o botão único "Aprovar" some e dá
+ * lugar a "Aprovar (Gestor)" (azul, nível 0→1) e depois "Liberar (Sócio Adm)" (verde, com confirm — só
+ * aparece quando `nivelAprovacao ≥ 1`); quando desligado, mantém o botão "Aprovar" clássico.
+ * Corrigido de passagem um bug latente: o `companyId` BARE do `aprovarMut` (não definido no escopo do
+ * `MedicoesTab`) passou a usar `contrato.companyId`.
+ * (c) STRIP VISUAL dos 3 níveis (Medido → Gestor da Obra → Sócio Adm) com pílulas verde/cinza +
+ * quem/quando, em toda medição não-rejeitada.
+ * (d) `FdMedicaoPanel` (novo componente no fim do arquivo) — por medição: lista os FDs do período,
+ * formulário inline (descrição + valor com MÁSCARA BRL pt-BR `R$ 0,00` + data) que só aparece se a
+ * medição não estiver aprovada/paga, e rodapé com "Medido / Total FD (−) / Líquido a pagar" ao vivo.
+ * BRL pt-BR em toda exibição/entrada; `toast` de validação; sem texto sobreposto.
+ *
+ * VALIDAÇÃO: `esbuild` parse OK no arquivo do frontend; app reinicia limpo (`Server running`, Neon
+ * conectado, `[SyncSchema] Todas as colunas OK`); como o schema já existia desde 3078, nenhum DDL novo.
+ *
+ * PRÓXIMAS REVISÕES (não nesta): engine de levantamento compartilhada de fato embutida no fluxo de
+ * terceiros (fotos por ambiente obrigatórias + memória de cálculo + UI do levantamento dentro da
+ * geração); módulos dedicados de Medição de Cliente (% auto + validação) e de Terceiros com menu/
+ * permissões/rotas próprios (`shared/modules.ts`/`App.tsx`/`main.tsx`); aba "Medições" virar espelho
+ * 100% só-leitura quando os módulos dedicados assumirem o fluxo.
+ *
  * Rev. 3078 — **MEDIÇÕES · FUNDAÇÃO DA REESTRUTURAÇÃO EM 2 MÓDULOS (MEDIÇÃO DE CLIENTE A RECEBER ×
  * MEDIÇÃO DE TERCEIROS A PAGAR): NOVO "PAINEL DE CONTROLE DAS MEDIÇÕES" EM CONFIGURAÇÕES (TUDO
  * CONFIGURÁVEL POR EMPRESA) + SCHEMA/SELF-HEAL DAS NOVAS REGRAS (3 NÍVEIS DE APROVAÇÃO, VÍNCULO COM O
