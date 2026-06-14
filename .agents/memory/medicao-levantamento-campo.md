@@ -45,3 +45,23 @@ p/ a tela injetar a fonte certa sem duplicar a engine offline.
 (consolidação usa essa chave) e `eapCodigo` (item de terceiro é folha → passa no
 `buildItensVinculaveis`). `contornos.orcamentoItemId` é integer SEM FK e guarda
 `itemEapCodigo`/`itemDescricao` denormalizados → salvar id de terceiro ali é seguro.
+
+## DXF (planta CAD) — render vetorial + auto-escala
+
+Levantamento aceita DXF além de PDF. DXF entra reusando 100% o motor de contorno/
+área/zoom/pan/osnap (coords normalizadas [0..1]) — só troca o "fundo": em vez de
+`<Document>/<Page>` (PDF), renderiza um SVG vetorial gerado de `parseDxfPlanta`
+(`dxfPlanta.ts`). `pageDims` = bbox do DXF (em unidades DXF), então `normToPt` dá
+distâncias em unidades DXF e a área sai em m² via a escala do `$INSUNITS`.
+
+**Why:** DXF carrega coordenadas reais → dá pra auto-calibrar a escala
+(`dxfAutoCalib` via $INSUNITS) e medir SEM o passo manual de "calibrar 2 pontos".
+Lib `dxf` (bjnortier) foi testada e DESCARTADA — devolvia 0 entidades; a que
+funciona é `dxf-parser` (gdsestimating). DWG é proprietário/pago → fora de escopo.
+
+**How to apply:** `calibAtualEff = calibAtual || dxfAutoCalib` no `finalizarContorno`
+(DXF unitless → $INSUNITS 0/desconhecido → cai no fluxo manual de calibrar). DXF é
+aproximação vetorial: TEXT/MTEXT/DIMENSION/HATCH não são desenhados e SPLINE é
+traçada pelos pontos de ajuste (não NURBS) — não afeta a medição, que vem do
+contorno desenhado + escala. Backend `uploadPdf` deriva a extensão da storage key
+de arquivoNome/contentType (.dxf vs .pdf); nenhum schema novo.

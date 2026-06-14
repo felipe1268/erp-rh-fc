@@ -23,6 +23,7 @@ import {
 } from "@shared/levantamentoGeo";
 import { useLevantamentoOffline } from "@/hooks/useLevantamentoOffline";
 import { VincularItemCombobox, buildItensVinculaveis } from "./VincularItemCombobox";
+import { parseDxfPlanta, type DxfPlanta } from "./dxfPlanta";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -250,6 +251,16 @@ export default function MedicaoLevantamento() {
     }
   }, [pdfs, pdfSelId]);
   const pdfSel = pdfs.find((p) => p.id === pdfSelId) || null;
+  // Rev. — DXF: detecta planta vetorial (.dxf) — render por SVG + escala automática.
+  const isDxf = useMemo(() => {
+    const n = (pdfSel?.arquivoNome || pdfSel?.nome || "").toLowerCase();
+    if (n.endsWith(".dxf")) return true;
+    const ct = (pdfSel?.contentType || "").toLowerCase();
+    if (ct.includes("dxf")) return true;
+    return (pdfSel?.arquivoUrl || "").toLowerCase().split("?")[0].endsWith(".dxf");
+  }, [pdfSel]);
+  const [dxfData, setDxfData] = useState<DxfPlanta | null>(null);
+  const [dxfLoading, setDxfLoading] = useState(false);
 
   const [pagina, setPagina] = useState(1);
   const [numPaginas, setNumPaginas] = useState(1);
@@ -307,6 +318,39 @@ export default function MedicaoLevantamento() {
     catch { return {}; }
   }, [pdfSel]);
   const calibAtual = calibracaoMap[String(pagina)] || null;
+
+  // Rev. — DXF: baixa o texto do arquivo (blob offline ou URL remota) e gera SVG + bbox + escala.
+  const dxfUrl = isDxf && pdfSel ? off.pdfFileFor(pdfSel) : undefined;
+  useEffect(() => {
+    let cancel = false;
+    if (!isDxf || !dxfUrl) { setDxfData(null); setDxfLoading(false); return; }
+    setDxfLoading(true); setDxfData(null);
+    (async () => {
+      try {
+        const resp = await fetch(dxfUrl);
+        const text = await resp.text();
+        const parsed = parseDxfPlanta(text);
+        if (!cancel) setDxfData(parsed);
+      } catch {
+        if (!cancel) setDxfData({ svg: "", w: 1, h: 1, metrosPorUnidade: null, ok: false, erro: "Falha ao carregar o DXF (sem conexão?)." });
+      } finally {
+        if (!cancel) setDxfLoading(false);
+      }
+    })();
+    return () => { cancel = true; };
+  }, [isDxf, dxfUrl]);
+
+  // DXF define o pageDims pela bounding box (em unidades do desenho) e tem 1 página.
+  useEffect(() => {
+    if (isDxf && dxfData?.ok) { setPageDims({ w: dxfData.w, h: dxfData.h }); setNumPaginas(1); }
+  }, [isDxf, dxfData]);
+
+  // Escala automática a partir do $INSUNITS do DXF — dispensa calibração manual.
+  const dxfAutoCalib = useMemo<Calibracao | null>(() => {
+    if (!isDxf || !dxfData?.ok || dxfData.metrosPorUnidade == null) return null;
+    return { p1: { x: 0, y: 0 }, p2: { x: 0, y: 0 }, metros: 0, metrosPorUnidade: dxfData.metrosPorUnidade };
+  }, [isDxf, dxfData]);
+  const calibAtualEff = calibAtual || dxfAutoCalib;
 
   const overlayRef = useRef<HTMLDivElement>(null);
 
@@ -627,12 +671,14 @@ export default function MedicaoLevantamento() {
 
   function finalizarContorno(tipo: TipoContorno, ptsNorm: GeoPonto[], espessura: number, contagem: number) {
     if (!pdfSel) return;
-    if (!calibAtual?.metrosPorUnidade) {
-      alert("Calibre a escala desta página antes de medir (ferramenta Calibrar).");
+    if (!calibAtualEff?.metrosPorUnidade) {
+      alert(isDxf
+        ? "Este DXF não tem unidade definida — use a ferramenta Calibrar e marque 2 pontos de medida conhecida."
+        : "Calibre a escala desta página antes de medir (ferramenta Calibrar).");
       return;
     }
     const ptsPt = ptsNorm.map(normToPt);
-    const r = calcularContorno(tipo, ptsPt, calibAtual.metrosPorUnidade, espessura, contagem);
+    const r = calcularContorno(tipo, ptsPt, calibAtualEff.metrosPorUnidade, espessura, contagem);
     off.saveContorno({
       pdfId: pdfSel.id,
       pagina,
@@ -640,7 +686,7 @@ export default function MedicaoLevantamento() {
       cor: COR_TIPO[tipo],
       geometriaJson: JSON.stringify(ptsNorm),
       espessura: espessura ? String(espessura) : null,
-      metrosPorUnidade: String(calibAtual.metrosPorUnidade),
+      metrosPorUnidade: String(calibAtualEff.metrosPorUnidade),
       area: r.area ? String(r.area) : null,
       perimetro: r.perimetro ? String(r.perimetro) : null,
       volume: r.volume ? String(r.volume) : null,
@@ -702,7 +748,16 @@ export default function MedicaoLevantamento() {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    const nome = window.prompt("Nome desta planta (ex.: Pavimento Térreo):", file.name.replace(/\.pdf$/i, "")) || file.name;
+    const nome = window.prompt("Nome desta planta (ex.: Pavimento Térreo):", file.name.replace(/\.(pdf|dxf)$/i, "")) || file.name;
+    // Rev. — DXF não passa pelo pdf.js; sobe direto como planta vetorial de 1 página.
+    if (/\.dxf$/i.test(file.name)) {
+      const base64 = await fileToBase64(file);
+      uploadPdfM.mutate({
+        companyId, medicaoCampoId: campoId, nome, tipo: "pavimento",
+        base64, contentType: "image/vnd.dxf", arquivoNome: file.name, numPaginas: 1,
+      });
+      return;
+    }
     let np = 1;
     try {
       const buf = await file.arrayBuffer();
@@ -975,9 +1030,9 @@ export default function MedicaoLevantamento() {
                 </button>
               ))}
               <Button size="sm" variant="outline" className="gap-1.5" disabled={uploadPdfM.isPending} onClick={() => pdfInputRef.current?.click()}>
-                {uploadPdfM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Planta (PDF)
+                {uploadPdfM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Planta (PDF/DXF)
               </Button>
-              <input ref={pdfInputRef} type="file" accept="application/pdf" className="hidden" onChange={onPdfSelected} />
+              <input ref={pdfInputRef} type="file" accept="application/pdf,.dxf" className="hidden" onChange={onPdfSelected} />
             </div>
 
             {!pdfSel ? (
@@ -1074,10 +1129,14 @@ export default function MedicaoLevantamento() {
                 </p>
 
                 {/* status calibração */}
-                <div className={`text-xs px-2 py-1 rounded ${calibAtual ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-                  {calibAtual
-                    ? `Escala calibrada: ${numFmt(calibAtual.metros, 2)} m de referência (${numFmt(calibAtual.metrosPorUnidade, 6)} m/ponto)`
-                    : "Página não calibrada — use a ferramenta Calibrar e marque 2 pontos de medida conhecida."}
+                <div className={`text-xs px-2 py-1 rounded ${calibAtualEff ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                  {isDxf && dxfAutoCalib
+                    ? `Escala automática do DXF: ${numFmt(dxfAutoCalib.metrosPorUnidade, 6)} m/unidade — não precisa calibrar.`
+                    : calibAtual
+                      ? `Escala calibrada: ${numFmt(calibAtual.metros, 2)} m de referência (${numFmt(calibAtual.metrosPorUnidade, 6)} m/ponto)`
+                      : isDxf
+                        ? "DXF sem unidade definida — use a ferramenta Calibrar e marque 2 pontos de medida conhecida."
+                        : "Página não calibrada — use a ferramenta Calibrar e marque 2 pontos de medida conhecida."}
                 </div>
 
                 {/* navegação de página */}
@@ -1091,24 +1150,39 @@ export default function MedicaoLevantamento() {
 
                 {/* canvas */}
                 <div ref={canvasWrapRef} className="border rounded-lg bg-slate-200 overflow-auto" style={{ maxHeight: "72vh" }}>
-                  <Document
-                    file={off.pdfFileFor(pdfSel)}
-                    onLoadSuccess={(d) => setNumPaginas(d.numPages)}
-                    loading={<div className="py-16 text-center text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>}
-                    error={<div className="py-16 text-center text-red-500">Erro ao carregar PDF</div>}
-                  >
-                    <div className="relative mx-auto w-fit" style={{ touchAction: "none" }}>
-                      {/* filtro P&B aplicado SÓ ao PDF, nunca ao overlay/SVG */}
-                      <div style={{ filter: pdfPB ? "grayscale(1) contrast(1.25) brightness(1.02)" : "none" }}>
-                        <Page
-                          pageNumber={pagina}
-                          width={pageWidth}
-                          renderTextLayer={false}
-                          renderAnnotationLayer={false}
-                          onLoadSuccess={(pg: any) => setPageDims({ w: pg.width, h: pg.height })}
+                  <div className="relative mx-auto w-fit" style={{ touchAction: "none" }}>
+                    {/* filtro P&B aplicado SÓ ao fundo (PDF/DXF), nunca ao overlay/SVG */}
+                    <div style={{ filter: pdfPB ? "grayscale(1) contrast(1.25) brightness(1.02)" : "none" }}>
+                      {isDxf ? (
+                        dxfLoading ? (
+                          <div className="py-16 text-center text-gray-400" style={{ width: pageWidth }}><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
+                        ) : dxfData?.ok ? (
+                          <div
+                            className="bg-white"
+                            style={{ width: pageWidth, height: pageWidth * (pageDims.w > 0 ? pageDims.h / pageDims.w : 1) }}
+                            dangerouslySetInnerHTML={{ __html: dxfData.svg }}
+                          />
+                        ) : (
+                          <div className="py-16 text-center text-red-500 px-4" style={{ width: pageWidth }}>{dxfData?.erro || "Erro ao carregar DXF"}</div>
+                        )
+                      ) : (
+                        <Document
+                          file={off.pdfFileFor(pdfSel)}
+                          onLoadSuccess={(d) => setNumPaginas(d.numPages)}
                           loading={<div className="py-16 text-center text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>}
-                        />
-                      </div>
+                          error={<div className="py-16 text-center text-red-500">Erro ao carregar PDF</div>}
+                        >
+                          <Page
+                            pageNumber={pagina}
+                            width={pageWidth}
+                            renderTextLayer={false}
+                            renderAnnotationLayer={false}
+                            onLoadSuccess={(pg: any) => setPageDims({ w: pg.width, h: pg.height })}
+                            loading={<div className="py-16 text-center text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>}
+                          />
+                        </Document>
+                      )}
+                    </div>
                       {/* overlay */}
                       <div
                         ref={overlayRef}
@@ -1201,8 +1275,7 @@ export default function MedicaoLevantamento() {
                         </svg>
                       </div>
                     </div>
-                  </Document>
-                </div>
+                  </div>
               </>
             )}
           </div>

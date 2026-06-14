@@ -1100,7 +1100,10 @@ export const medicaoRouter = router({
         ? campo.id
         : (await resolverBibliotecaPlantas(db, input.companyId, campo.contratoId, origemNorm)).id;
       const buf = Buffer.from(input.base64, "base64");
-      const key = `medicao-campo/${input.companyId}/${destinoCampoId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.pdf`;
+      // Rev. — extensão da chave derivada do nome/contentType (DXF além de PDF).
+      const extNome = (input.arquivoNome || input.nome || "").toLowerCase().match(/\.([a-z0-9]+)$/)?.[1];
+      const ext = extNome === "dxf" || (input.contentType || "").includes("dxf") ? "dxf" : "pdf";
+      const key = `medicao-campo/${input.companyId}/${destinoCampoId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
       const { url } = await storagePut(key, buf, input.contentType || "application/pdf");
       const [ordemRow] = await db
         .select({ max: sql<number>`COALESCE(MAX(ordem),0)::int` })

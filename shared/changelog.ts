@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3104 — **MEDIÇÃO / LEVANTAMENTO DE CAMPO · A TELA DE DESENHO SOBRE A PLANTA PASSA A ACEITAR ARQUIVOS
+ * DXF (CAD VETORIAL) ALÉM DE PDF — E, COMO O DXF CARREGA COORDENADAS REAIS, A ESCALA É CALIBRADA
+ * AUTOMATICAMENTE (SEM O PASSO MANUAL "CALIBRAR 2 PONTOS"). DWG (FORMATO PROPRIETÁRIO/PAGO) FICA PARA DEPOIS.**
+ *
+ * PEDIDO: "no levantamento de campo, aceita também arquivo de CAD". Decisão do usuário no diálogo: "faz os
+ * dois — aceita DXF e PDF agora; DWG pago depois."
+ *
+ * SOLUÇÃO (FRONTEND + BACKEND ADITIVO, ZERO ALTER/DROP/DELETE/SCHEMA): toda a engine de desenho/área/zoom/
+ * pan/osnap já opera em coordenadas NORMALIZADAS [0..1] sobre o container (a planta é só o fundo), então o
+ * DXF entra reusando 100% desse motor — só troca o "fundo" PDF por um SVG vetorial e injeta a escala.
+ *
+ * 1) NOVO UTIL `client/src/pages/medicao/dxfPlanta.ts` (`parseDxfPlanta(text)`): usa a lib `dxf-parser`
+ *    (pure-JS, browser-safe) p/ ler o DXF e converte as entidades (LINE, LWPOLYLINE/POLYLINE, CIRCLE, ARC,
+ *    ELLIPSE, SPLINE-aprox, SOLID/3DFACE) em polilinhas — TESSELANDO arcos/círculos/elipses — e EXPANDE
+ *    recursivamente os INSERT (referências de bloco, com translate+scale+rotate e basePoint, profundidade ≤6).
+ *    Calcula a bounding box (em unidades do DXF) e emite um `<svg>` com `viewBox=bbox`,
+ *    `preserveAspectRatio="none"` e `vector-effect="non-scaling-stroke"` (traço fino em qualquer zoom), com
+ *    o eixo Y invertido (DXF cresce p/ cima, SVG p/ baixo). Deriva `metrosPorUnidade` do `$INSUNITS` do
+ *    cabeçalho (polegada=0.0254, pé=0.3048, mm=0.001, cm=0.01, m=1, jarda=0.9144, dm=0.1; 0/desconhecido →
+ *    `null`). Retorna `{ svg, w, h, metrosPorUnidade, ok, erro }`.
+ *
+ * 2) `MedicaoLevantamento.tsx`: `isDxf` (nome `.dxf` ou url) decide o ramo. Quando DXF: `fetch()` do
+ *    `off.pdfFileFor(pdf)` (blob offline OU url remota) → texto → `parseDxfPlanta` → estado `dxfData`. Um
+ *    `useEffect` seta `pageDims = { w, h }` da bbox (e `numPaginas = 1`); como `normToPt` multiplica os
+ *    pontos [0..1] por `pageDims`, as distâncias saem em unidades do DXF e a ÁREA em m² via `calcularContorno`.
+ *    A escala automática vira um `dxfAutoCalib` (Calibracao sintética com `metrosPorUnidade` do $INSUNITS) e
+ *    `calibAtualEff = calibAtual || dxfAutoCalib` substitui o `calibAtual` em `finalizarContorno` (gate e
+ *    persistência) — então dá pra medir DXF SEM calibrar. Se o DXF vier unitless, cai no fluxo manual de
+ *    Calibrar. No render, dentro do mesmo wrapper/overlay (overlay 100% reusado), o fundo passa a ser
+ *    `<div dangerouslySetInnerHTML={svg}>` dimensionado a `pageWidth × (h/w)` no lugar do `<Document>/<Page>`;
+ *    o filtro P&B e o overlay [0..1] valem para os dois. Input `accept="application/pdf,.dxf"`, botão
+ *    "Planta (PDF/DXF)", `onPdfSelected` detecta `.dxf` (sobe direto, `contentType:"image/vnd.dxf"`,
+ *    `numPaginas:1`, sem pdf.js), e o status de calibração ganha texto próprio "Escala automática do DXF…".
+ *
+ * 3) BACKEND `medicao.uploadPdf`: a chave do object-storage deixa de fixar `.pdf` e passa a derivar a
+ *    extensão do `arquivoNome`/`contentType` (`.dxf` vs `.pdf`). `contentType` já era flexível; nenhuma
+ *    coluna/schema nova — o tipo é detectado pelo nome do arquivo. Guard `assertCompanyAccess` intacto.
+ *
+ * RESSALVA/DRIFT: (a) o caminho PDF é idêntico ao anterior (só saiu de dentro do `<Document>` que envolvia
+ * tudo — agora o `<Document>` envolve só o `<Page>`); offline-first preservado. (b) Renderização de DXF é
+ * uma aproximação vetorial: TEXT/MTEXT/DIMENSION/HATCH não são desenhados e SPLINE é traçada pelos pontos de
+ * ajuste/controle (não NURBS exato) — não afeta a medição, que vem do contorno desenhado pelo usuário + a
+ * escala do $INSUNITS. (c) Rotação de INSERT assumida em graus (padrão DXF). (d) DWG não é suportado (formato
+ * proprietário/pago) — fica como follow-up. Lib `dxf` (bjnortier) foi testada e DESCARTADA (parse vazio);
+ * adotada `dxf-parser` (gdsestimating).
+ *
  * Rev. 3103 — **MEDIÇÃO DE TERCEIROS · O CARD DA LISTA "MEDIÇÕES REGISTRADAS" GANHA NOME AMIGÁVEL "MED-01"
  * (EM VEZ DE "MEDIÇÃO #1") E EXIBE O PERÍODO EM FORMATO BRASILEIRO (MM/AAAA, EX.: 06/2026) EM VEZ DO CRU
  * "2026-06".**
