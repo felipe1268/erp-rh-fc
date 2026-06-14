@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3060 — **CONTRATOS DE TERCEIROS · REMOVIDO O BOTÃO "ADICIONAR ITEM" DA ABA "ITENS" — ITENS
+ * DO CONTRATO VÊM DEFINIDOS DO MÓDULO DE COMPRAS; ACRÉSCIMOS SERÃO TRATADOS COMO SEC (SERVIÇOS
+ * EXTRAS CONTRATUAIS), VINCULADOS AO CONTRATO MAS COM RASTREABILIDADE SEPARADA.**
+ *
+ * PEDIDO (print da aba "Itens" do detalhe de contrato de terceiros): "Não pode adicionar item ao
+ * contrato.. tire este botão. Se tiver acréscimo iremos tratar como SEC (serviços extras
+ * contratuais), mas no contrato não pode pq ele vem definido do módulo de Compras. A SEC também
+ * deve seguir o mesmo fluxo; o que eu posso fazer é vincular a este contrato, mas será tratado
+ * separado para manter a rastreabilidade."
+ *
+ * DIAGNÓSTICO: a aba "Itens" (`tab==="itens"`) de `client/src/pages/terceiros/contratos/ContratoDetalhe.tsx`
+ * exibia um botão "Adicionar Item" que abria um formulário inline (`showAddItem`) gravando via
+ * `trpc.terceiroContratos.adicionarItem`. Isso permitia inserir itens manualmente no contrato, o que
+ * conflita com a regra de negócio: os itens do contrato são originados do módulo de Compras (cotação/OC)
+ * e acréscimos devem ser registrados como SEC separadamente, não como item direto do contrato.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE, ZERO mudança de schema/backend):
+ *  - `ContratoDetalhe.tsx`: REMOVIDO o botão "Adicionar Item" e o formulário inline associado da aba
+ *    "Itens". REMOVIDOS os states agora-órfãos `showAddItem` e `newItem` e a mutation `adicionarItemMut`
+ *    (a procedure `terceiroContratos.adicionarItem` permanece no backend, apenas deixa de ter caller na
+ *    tela — sem remoção de rota para não quebrar outros usos). MANTIDO o botão "Vincular Item" (relink de
+ *    EAP), que apenas re-vincula itens existentes ao cronograma e NÃO cria itens novos.
+ *  - Empty-state da aba atualizado para refletir a regra: "os itens do contrato vêm definidos do módulo de
+ *    Compras; acréscimos devem ser tratados como SEC (Serviços Extras Contratuais), vinculados a este
+ *    contrato mas com rastreabilidade separada".
+ *
+ * RESSALVA: o fluxo de SEC (Serviços Extras Contratuais) como entidade separada vinculada ao contrato é um
+ * próximo passo de produto e NÃO faz parte desta revisão — aqui apenas se remove a entrada manual de itens.
+ *
  * Rev. 3059 — **CONTRATOS DE TERCEIROS · ABA "CONTRATO" FICA VIEW-ONLY QUANDO O CONTRATO JÁ
  * ESTÁ ASSINADO (FCSIGN CONCLUÍDO) — EM VEZ DO TOOLBAR DE EDIÇÃO + FOLHA A4 EDITÁVEL, MOSTRA
  * O ARQUIVO ASSINADO (COM TODAS AS AUTENTICAÇÕES) + BOTÃO DE OLHO (VISUALIZAR) E BOTÃO DE

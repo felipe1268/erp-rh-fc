@@ -76,7 +76,6 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
     : medicaoIdFromUrl ? "medicoes"
     : "documento"
   );
-  const [showAddItem, setShowAddItem] = useState(false);
   const [showGerarMedicao, setShowGerarMedicao] = useState(false);
   const [showAddDoc, setShowAddDoc] = useState(false);
   const [editingDates, setEditingDates] = useState(false);
@@ -91,7 +90,6 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   const [medicaoDataFim, setMedicaoDataFim] = useState(() => {
     const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
   });
-  const [newItem, setNewItem] = useState({ descricao: "", unidade: "m²", quantidade: "1", valorUnitario: "0", eapCodigo: "", planejamentoAtividadeId: "" });
   const [newDoc, setNewDoc] = useState({ tipo: "INSS", descricao: "", competencia: "", dataVencimento: "", bloqueiaPagemento: false });
   const [editMedicao, setEditMedicao] = useState<{ id: number; periodo: string; dataReferencia: string; observacoes: string; status: string } | null>(null);
   const [descExpanded, setDescExpanded] = useState(false);
@@ -158,11 +156,6 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
 
   const editarMedicaoMut = trpc.terceiroContratos.editarMedicao.useMutation({
     onSuccess: () => { toast.success("Medição atualizada"); setEditMedicao(null); utils.terceiroContratos.getContrato.invalidate({ id }); },
-    onError: (e) => toast.error(e.message),
-  });
-
-  const adicionarItemMut = trpc.terceiroContratos.adicionarItem.useMutation({
-    onSuccess: () => { toast.success("Item adicionado!"); setShowAddItem(false); setNewItem({ descricao: "", unidade: "m²", quantidade: "1", valorUnitario: "0", eapCodigo: "", planejamentoAtividadeId: "" }); utils.terceiroContratos.getContrato.invalidate({ id }); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -821,41 +814,13 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                   <RefreshCw className={`w-4 h-4 ${relinkEapMut.isPending ? "animate-spin" : ""}`} /> Vincular Item
                 </Button>
               )}
-              <Button variant="outline" size="sm" className="gap-2" onClick={() => setShowAddItem(!showAddItem)}>
-                <Plus className="w-4 h-4" /> Adicionar Item
-              </Button>
             </div>
-
-            {showAddItem && (
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
-                <p className="text-sm font-semibold text-blue-800">Novo Item do Contrato</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="col-span-2"><Label className="text-xs">Descrição *</Label><Input className="mt-1 text-sm" placeholder="Ex: Forro de gesso térreo" value={newItem.descricao} onChange={e => setNewItem(f => ({ ...f, descricao: e.target.value }))} /></div>
-                  <div><Label className="text-xs">Cód. Item (Planejamento)</Label><Input className="mt-1 text-sm font-mono" placeholder="Ex: 1.2.3" value={newItem.eapCodigo} onChange={e => setNewItem(f => ({ ...f, eapCodigo: e.target.value }))} /></div>
-                  <div><Label className="text-xs">Unidade</Label><Input className="mt-1 text-sm" value={newItem.unidade} onChange={e => setNewItem(f => ({ ...f, unidade: e.target.value }))} /></div>
-                  <div><Label className="text-xs">Quantidade</Label><Input type="number" className="mt-1 text-sm" value={newItem.quantidade} onChange={e => setNewItem(f => ({ ...f, quantidade: e.target.value }))} /></div>
-                  <div><Label className="text-xs">Valor Unitário (R$)</Label><Input type="number" className="mt-1 text-sm" value={newItem.valorUnitario} onChange={e => setNewItem(f => ({ ...f, valorUnitario: e.target.value }))} /></div>
-                </div>
-                <div className="flex gap-2 justify-end">
-                  <Button variant="outline" size="sm" onClick={() => setShowAddItem(false)}>Cancelar</Button>
-                  <Button size="sm" className="bg-blue-600 hover:bg-blue-700" disabled={adicionarItemMut.isPending}
-                    onClick={() => adicionarItemMut.mutate({
-                      contratoId: id, companyId: contrato.companyId,
-                      descricao: newItem.descricao, unidade: newItem.unidade,
-                      quantidade: parseFloat(newItem.quantidade) || 1,
-                      valorUnitario: parseFloat(newItem.valorUnitario) || 0,
-                      eapCodigo: newItem.eapCodigo || undefined,
-                    })}>
-                    Adicionar
-                  </Button>
-                </div>
-              </div>
-            )}
 
             {contrato.itens.length === 0 ? (
               <div className="py-10 text-center text-gray-400 text-sm">
                 <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                Nenhum item — adicione atividades vinculadas ao cronograma
+                Nenhum item — os itens do contrato vêm definidos do módulo de Compras.
+                <br />Acréscimos devem ser tratados como SEC (Serviços Extras Contratuais), vinculados a este contrato mas com rastreabilidade separada.
               </div>
             ) : (<ItemsTreeTable contrato={contrato} id={id} pct={pct} removerItemMut={removerItemMut} />)}
           </div>
