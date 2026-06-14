@@ -6,7 +6,7 @@ import { useCompany } from "@/hooks/useCompany";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle, XCircle, ClipboardCheck, Zap, ChevronRight } from "lucide-react";
+import { CheckCircle, XCircle, ClipboardCheck, Zap, ChevronRight, AlertTriangle, ShieldCheck, UserCheck, Crown } from "lucide-react";
 import { toast } from "sonner";
 
 const BRL = (v: any) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(v) || 0);
@@ -36,33 +36,58 @@ export default function Medicoes() {
     { companyId },
     { enabled: companyId > 0 }
   );
+  // Painel de Controle das Medições (Rev. 3078): liga/desliga o fluxo de 3 níveis por empresa.
+  const { data: medCfg } = trpc.medicaoConfig.getConfig.useQuery(
+    { companyId },
+    { enabled: companyId > 0 }
+  );
+  const tresNiveis = medCfg?.aprovacaoTresNiveis ?? true;
+
+  const invalidate = () => utils.terceiroContratos.listarMedicoes.invalidate();
 
   const aprovarMut = trpc.terceiroContratos.aprovarMedicao.useMutation({
-    onSuccess: () => { toast.success("Medição aprovada!"); utils.terceiroContratos.listarMedicoes.invalidate(); },
+    onSuccess: () => { toast.success("Medição aprovada!"); invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const aprovarGestorMut = trpc.terceiroContratos.aprovarNivelGestor.useMutation({
+    onSuccess: () => { toast.success("Aprovado pelo Gestor da Obra. Aguardando Sócio Adm."); invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const aprovarSocioMut = trpc.terceiroContratos.aprovarNivelSocio.useMutation({
+    onSuccess: () => { toast.success("Liberado pelo Sócio Adm — enviado ao financeiro (a pagar)."); invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const rejeitarMut = trpc.terceiroContratos.rejeitarMedicao.useMutation({
+    onSuccess: () => { toast.success("Medição rejeitada"); setRejeitandoId(null); setMotivoRejeicao(""); invalidate(); },
     onError: (e) => toast.error(e.message),
   });
 
-  const rejeitarMut = trpc.terceiroContratos.rejeitarMedicao.useMutation({
-    onSuccess: () => { toast.success("Medição rejeitada"); setRejeitandoId(null); setMotivoRejeicao(""); utils.terceiroContratos.listarMedicoes.invalidate(); },
-    onError: (e) => toast.error(e.message),
-  });
+  const anyPending = aprovarMut.isPending || aprovarGestorMut.isPending || aprovarSocioMut.isPending || rejeitarMut.isPending;
 
   const filtradas = filtroStatus === "todos" ? medicoes : medicoes.filter(m => m.status === filtroStatus);
   const aguardando = medicoes.filter(m => m.status === "aguardando_aprovacao").length;
+  const comDivergencia = medicoes.filter(m => m.alertaDivergencia && m.status === "aguardando_aprovacao").length;
 
   return (
     <DashboardLayout>
       <div className="p-5 space-y-5">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
             <h1 className="text-xl font-bold text-gray-900">Medições de Terceiros</h1>
-            <p className="text-sm text-gray-500">Controle e aprovação de medições por avanço físico</p>
+            <p className="text-sm text-gray-500">Controle e aprovação (a pagar) — levantamento de campo, FD do período e {tresNiveis ? "aprovação em 3 níveis" : "aprovação direta"}</p>
           </div>
-          {aguardando > 0 && (
-            <Badge className="bg-yellow-100 text-yellow-800 border border-yellow-300 text-sm px-3 py-1">
-              {aguardando} aguardando aprovação
-            </Badge>
-          )}
+          <div className="flex items-center gap-2">
+            {comDivergencia > 0 && (
+              <Badge className="bg-orange-100 text-orange-800 border border-orange-300 text-sm px-3 py-1">
+                <AlertTriangle className="w-3.5 h-3.5 mr-1" />{comDivergencia} com divergência
+              </Badge>
+            )}
+            {aguardando > 0 && (
+              <Badge className="bg-yellow-100 text-yellow-800 border border-yellow-300 text-sm px-3 py-1">
+                {aguardando} aguardando aprovação
+              </Badge>
+            )}
+          </div>
         </div>
 
         <div className="flex gap-3">
@@ -93,6 +118,10 @@ export default function Medicoes() {
           <div className="space-y-3">
             {filtradas.map(m => {
               const st = STATUS_MAP[m.status || "rascunho"] || STATUS_MAP.rascunho;
+              const nivel = Number(m.nivelAprovacao) || 0;
+              const fdAbatido = Number(m.fdTotalAbatido) || 0;
+              const liquido = (Number(m.valorMedido) || 0) - fdAbatido;
+              const aguardandoAprov = m.status === "aguardando_aprovacao";
               return (
                 <div key={m.id}
                   className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm cursor-pointer hover:border-blue-300 hover:shadow-md transition-all"
@@ -100,7 +129,7 @@ export default function Medicoes() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <span className="font-semibold text-gray-900">Medição #{m.numero}</span>
                         <Badge className={`text-xs border ${st.cls}`}>{st.label}</Badge>
                         {m.geradoAutomaticamente && (
@@ -108,15 +137,40 @@ export default function Medicoes() {
                             <Zap className="w-3 h-3 mr-1" />Auto
                           </Badge>
                         )}
+                        {m.alertaDivergencia && (
+                          <Badge className="text-xs border bg-orange-100 text-orange-800 border-orange-300">
+                            <AlertTriangle className="w-3 h-3 mr-1" />Divergência {m.percentualDivergencia != null ? `${Number(m.percentualDivergencia).toFixed(1)}%` : ""}
+                          </Badge>
+                        )}
                       </div>
                       <div className="text-sm text-gray-600">
                         Período: <strong>{m.periodo}</strong> • Ref: {fmtDate(m.dataReferencia)}
                       </div>
                       <div className="text-xs text-gray-400 mt-1">
-                        Valor medido: <strong className="text-gray-700">{BRL(m.valorMedido)}</strong> •
-                        Acumulado: <strong className="text-gray-700">{BRL(m.valorAcumulado)}</strong> •
-                        {Number(m.percentualGlobal).toFixed(1)}% global
+                        Medido: <strong className="text-gray-700">{BRL(m.valorMedido)}</strong>
+                        {fdAbatido > 0 && (
+                          <> • FD abatido: <strong className="text-orange-600">−{BRL(fdAbatido)}</strong> • Líquido a pagar: <strong className="text-gray-900">{BRL(liquido)}</strong></>
+                        )}
+                        {" "}• Acumulado: <strong className="text-gray-700">{BRL(m.valorAcumulado)}</strong> • {Number(m.percentualGlobal).toFixed(1)}% global
                       </div>
+
+                      {/* Strip visual dos 3 níveis (quando o fluxo de 3 níveis está ativo) */}
+                      {tresNiveis && (aguardandoAprov || m.status === "aprovada" || m.status === "paga") && (
+                        <div className="flex items-center gap-1.5 mt-2 text-[11px]">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border bg-blue-50 text-blue-700 border-blue-200">
+                            <ClipboardCheck className="w-3 h-3" /> Medido
+                          </span>
+                          <ChevronRight className="w-3 h-3 text-gray-300" />
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${nivel >= 1 ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-50 text-gray-400 border-gray-200"}`}>
+                            <UserCheck className="w-3 h-3" /> Gestor {nivel >= 1 ? "✓" : ""}
+                          </span>
+                          <ChevronRight className="w-3 h-3 text-gray-300" />
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${nivel >= 2 ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-50 text-gray-400 border-gray-200"}`}>
+                            <Crown className="w-3 h-3" /> Sócio Adm {nivel >= 2 ? "✓" : ""}
+                          </span>
+                        </div>
+                      )}
+
                       {m.motivoRejeicao && (
                         <p className="text-xs text-red-500 mt-1 bg-red-50 px-2 py-1 rounded">
                           Motivo rejeição: {m.motivoRejeicao}
@@ -126,13 +180,29 @@ export default function Medicoes() {
 
                     <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                       <ChevronRight className="w-4 h-4 text-gray-400" />
-                      {m.status === "aguardando_aprovacao" && (
+                      {aguardandoAprov && (
                         <>
-                          <Button size="sm" className="gap-1 bg-green-600 hover:bg-green-700 text-xs"
-                            onClick={() => aprovarMut.mutate({ id: m.id, companyId, aprovadoPor: "Responsável" })}
-                            disabled={aprovarMut.isPending}>
-                            <CheckCircle className="w-3 h-3" /> Aprovar
-                          </Button>
+                          {tresNiveis ? (
+                            nivel < 1 ? (
+                              <Button size="sm" className="gap-1 bg-emerald-600 hover:bg-emerald-700 text-xs"
+                                onClick={() => aprovarGestorMut.mutate({ id: m.id, companyId, aprovadoPor: "Gestor da Obra" })}
+                                disabled={anyPending}>
+                                <UserCheck className="w-3 h-3" /> Aprovar (Gestor)
+                              </Button>
+                            ) : (
+                              <Button size="sm" className="gap-1 bg-indigo-600 hover:bg-indigo-700 text-xs"
+                                onClick={() => aprovarSocioMut.mutate({ id: m.id, companyId, aprovadoPor: "Sócio Adm" })}
+                                disabled={anyPending}>
+                                <ShieldCheck className="w-3 h-3" /> Liberar (Sócio Adm)
+                              </Button>
+                            )
+                          ) : (
+                            <Button size="sm" className="gap-1 bg-green-600 hover:bg-green-700 text-xs"
+                              onClick={() => aprovarMut.mutate({ id: m.id, companyId, aprovadoPor: "Responsável" })}
+                              disabled={anyPending}>
+                              <CheckCircle className="w-3 h-3" /> Aprovar
+                            </Button>
+                          )}
                           <Button size="sm" variant="outline" className="gap-1 text-xs text-red-600 border-red-200 hover:bg-red-50"
                             onClick={() => setRejeitandoId(m.id)}>
                             <XCircle className="w-3 h-3" /> Rejeitar
@@ -144,7 +214,7 @@ export default function Medicoes() {
 
                   {/* Modal inline de rejeição */}
                   {rejeitandoId === m.id && (
-                    <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
+                    <div className="mt-3 pt-3 border-t border-gray-100 space-y-2" onClick={(e) => e.stopPropagation()}>
                       <textarea
                         className="w-full border border-gray-200 rounded-lg p-2 text-sm resize-none"
                         rows={2}

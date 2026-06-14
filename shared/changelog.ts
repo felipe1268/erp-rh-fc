@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3080 — **MEDIÇÃO DE TERCEIROS (A PAGAR) · MÓDULO DEDICADO `/terceiros/medicoes` ELEVADO AO FLUXO
+ * COMPLETO: APROVAÇÃO EM 3 NÍVEIS (MEDE → GESTOR DA OBRA → SÓCIO ADM LIBERA FINANCEIRO) COM FALLBACK
+ * 1-CLIQUE, BADGE DE ALERTA DE DIVERGÊNCIA, FD ABATIDO + LÍQUIDO A PAGAR E STRIP VISUAL DOS NÍVEIS — TUDO
+ * GOVERNADO PELO PAINEL DE CONTROLE `medicao_config` (POR EMPRESA).**
+ *
+ * CONTEXTO: continuação da Rev. 3079, que entregou o fluxo na ABA "Medições" do contrato. Esta revisão
+ * leva o MESMO comportamento à TELA DEDICADA já existente (`client/src/pages/terceiros/Medicoes.tsx`,
+ * rota `/terceiros/medicoes`, menu "Medições" de Terceiros), que até então só tinha aprovação 1-nível.
+ * Assim a lista cross-contrato passa a ser o HUB de aprovação do "a pagar". ZERO ALTER/DROP/DELETE/SCHEMA
+ * (FRONTEND-ONLY; backend e schema já existiam da Rev. 3078/3079).
+ *
+ * MAPA DO PLANO (reestruturação em 2 módulos): a infraestrutura já existia em grande parte — o módulo de
+ * Medição de CLIENTE (a receber, % automático do avanço semanal) já vive em `/medicao` (MedicaoContratos
+ * + MedicaoDetalhe, auto-fill via `getAvancosParaMedicao`), e as rotas/menu/permissões dos dois módulos
+ * já estavam registradas (`shared/modules.ts`, `App.tsx`, `DashboardLayout.tsx`). Logo T006 (Cliente) e
+ * T008 (menu/rotas/permissões) já estavam atendidos; esta revisão fecha T005 (frontend dedicado de
+ * Terceiros). DESVIOS conscientes p/ EVITAR REGRESSÃO: T007 (aba "Medições" do contrato → espelho 100%
+ * read-only) NÃO foi aplicado porque os editores de levantamento/FD/itens vivem na aba — torná-la
+ * read-only órfã o fluxo enquanto a tela dedicada não replica TODOS esses editores inline; a aba segue
+ * funcional e a tela dedicada serve de hub de aprovação. T003 (histórico "já medido" cinza acumulado por
+ * contrato) fica parcial — a engine de levantamento já é compartilhada via rota
+ * `/medicao/:contratoId/levantamento/:campoId`, mas o realce cinza acumulado é enhancement futuro.
+ *
+ * IMPLEMENTAÇÃO (`client/src/pages/terceiros/Medicoes.tsx`): (1) nova query `medicaoConfig.getConfig`
+ * → `tresNiveis = aprovacaoTresNiveis ?? true`. (2) mutations `aprovarNivelGestor` (nível 0→1) e
+ * `aprovarNivelSocio` (nível≥1 → libera financeiro) somadas ao `aprovarMedicao` 1-clique e ao
+ * `rejeitarMedicao`. (3) Botão de ação condicional: 3 níveis mostra "Aprovar (Gestor)" quando
+ * `nivelAprovacao<1` e "Liberar (Sócio Adm)" quando `≥1`; sem 3 níveis volta ao "Aprovar" 1-clique. (4)
+ * Badge laranja de divergência (lê `alertaDivergencia`/`percentualDivergencia`) + contador "N com
+ * divergência" no topo. (5) Bloco "FD abatido −R$ / Líquido a pagar" (de `fdTotalAbatido`, líquido =
+ * medido − FD), BRL pt-BR. (6) Strip visual Medido → Gestor → Sócio Adm com check por `nivelAprovacao`.
+ * `listarMedicoes` já retorna a linha completa (`select().from(terceiroMedicoes)`), então todos os campos
+ * novos já fluem sem tocar o backend.
+ *
+ * VERIFICAÇÃO: esbuild parse OK; app reinicia limpo (Server running, Neon conectado, [SyncSchema] Todas as
+ * colunas OK, Rev. 3080 registrada). mockup-sandbox FAILED (rollup/parseAst) é pré-existente e não
+ * relacionado.
+ */
+
+/**
  * Rev. 3079 — **MEDIÇÃO DE TERCEIROS (A PAGAR) · BACKEND + UI DO FLUXO COMPLETO NA ABA "MEDIÇÕES" DO
  * CONTRATO: APROVAÇÃO EM 3 NÍVEIS (MEDE → GESTOR DA OBRA → SÓCIO ADM LIBERA O FINANCEIRO), PAINEL DE
  * "FD DO PERÍODO" (LANÇAMENTO MANUAL QUE ABATE OBRIGATORIAMENTE O VALOR A PAGAR, COM LÍQUIDO AO VIVO),
