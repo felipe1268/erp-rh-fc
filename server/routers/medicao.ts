@@ -1163,7 +1163,7 @@ export const medicaoRouter = router({
       pdfId: z.number(),
       uuid: z.string().optional(),
       pagina: z.number().default(1),
-      tipo: z.enum(["area", "volume", "perimetro", "contagem"]),
+      tipo: z.enum(["area", "volume", "perimetro", "contagem", "parede"]),
       rotulo: z.string().nullable().optional(),
       cor: z.string().nullable().optional(),
       geometriaJson: z.string(),

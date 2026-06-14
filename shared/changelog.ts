@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3097 — **MEDIÇÃO / LEVANTAMENTO DE CAMPO · A TELA DE DESENHO SOBRE A PLANTA (PDF) VIRA TÁTIL E
+ * "FLUIDA" ESTILO AUTOCAD: PLANTA EM PRETO-E-BRANCO (ALTO CONTRASTE) POR PADRÃO, ZOOM POR PINÇA + PAN
+ * COM 1 DEDO, FERRAMENTAS NOVAS RETÂNGULO (ARRASTAR) E DESENHO LIVRE (TRAÇO), FERRAMENTA PAREDE
+ * (LINHA × ALTURA → m²), TOOLBAR FIXA QUE MANTÉM A FERRAMENTA ATIVA, DESFAZER ÚLTIMO PONTO E ENTRADA DE
+ * ALTURA/ESCALA POR CAMPO NO APP (FIM DO `window.prompt`).**
+ *
+ * PEDIDO (Task #89 "Desenho Fluido"): tornar o Levantamento de Campo usável em tablet — desenho direto
+ * sobre a planta sem precisar marcar ponto-a-ponto obrigatório, plantas mais legíveis (P&B), zoom/pan
+ * naturais por toque, e entrada de números (altura da parede / escala) sem o popup nativo do navegador.
+ *
+ * SOLUÇÃO:
+ *   (1) GEO/BACKEND (ADITIVO, ZERO ALTER/DROP/DELETE/SCHEMA): `shared/levantamentoGeo.ts` ganha o tipo
+ *       "parede" (`UNIDADE_POR_TIPO.parede = "m²"`, `LABEL_TIPO.parede = "Parede (L×A)"`; em
+ *       `calcularContorno`, área = comprimento da polilinha × altura informada) e o helper
+ *       `simplificarPontos` (Ramer–Douglas–Peucker) para afinar o traço do desenho livre. O enum
+ *       `tipo` da proc `salvarContorno` em `server/routers/medicao.ts` passa a aceitar "parede" (a
+ *       coluna `tipo` é `varchar(20)` livre, sem enum PG; o batch-sync já usava `tipo` livre).
+ *   (2) TELA `client/src/pages/medicao/MedicaoLevantamento.tsx`: PDF em filtro CSS
+ *       `grayscale(1) contrast(1.25)` aplicado SÓ ao `<Page>` (nunca ao overlay/SVG), default ON, com
+ *       botão "P&B/Cor". Gestos via Pointer Events num único overlay (`touchAction:"none"`): 2 ponteiros =
+ *       pinça-zoom focal (mantém o ponto sob os dedos via `useLayoutEffect` ajustando o scroll) + pan; 1
+ *       ponteiro = toque marca ponto / arrasto move (pan) nas ferramentas de toque, ou desenha
+ *       (retângulo/livre). Ferramenta RETÂNGULO arrasta 2 cantos → área; DESENHO LIVRE gera traço →
+ *       polígono simplificado (tipo "area"); ambas reutilizam o backend de "area" (zero mudança). A
+ *       ferramenta PERMANECE ativa após finalizar (não volta p/ "Selecionar"); botão "Desfazer" remove o
+ *       último ponto. `window.prompt` de escala (calibração) e de altura (volume/parede) substituído pelo
+ *       modal in-app `NumberPromptDialog` com input numérico pt-BR (aceita vírgula decimal).
+ *
+ * ENGINE COMPARTILHADA: vale para a Medição de CLIENTE e a de TERCEIROS (origem por query `?origem=`);
+ * o fluxo offline-first (`useLevantamentoOffline.saveContorno` → batch sync) é preservado e o
+ * consolidado agrupa "parede" em m² sem mudança de backend.
+ *
+ * RESSALVA/DRIFT: retângulo e desenho livre são persistidos como tipo "area" (não há tipo dedicado);
+ * o desenho livre é simplificado (RDP epsilon 0.004) — pode suavizar levemente o contorno bruto.
+ * FRONTEND + BACKEND ADITIVO, ZERO ALTER/DROP/DELETE/SCHEMA.
+ *
  * Rev. 3096 — **MEDIÇÃO DE TERCEIROS · NA "CONFIGURAÇÃO DE RETENÇÕES DO CONTRATO (%)" O USUÁRIO VOLTA A
  * CONSEGUIR APAGAR O "0" DOS CAMPOS (ISS/INSS/IRRF/OUTRAS/RET. TÉCNICA) PARA DIGITAR O PERCENTUAL —
  * ANTES O CAMPO RESSURGIA COM "0" A CADA TECLA.**

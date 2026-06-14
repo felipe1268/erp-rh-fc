@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { Document, Page, pdfjs } from "react-pdf";
 import workerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -15,30 +15,52 @@ import {
   Hash, MousePointer2, Crosshair, ZoomIn, ZoomOut, Check, Camera, Image as ImageIcon,
   Calculator, FileSpreadsheet, ChevronLeft, ChevronRight, X,
   Wifi, WifiOff, RefreshCw, Download, HardDrive, AlertTriangle, CheckCircle2, CloudOff, History,
+  RectangleHorizontal, PencilLine, BrickWall, Undo2, Contrast,
 } from "lucide-react";
 import {
   type GeoPonto, type TipoContorno, UNIDADE_POR_TIPO, LABEL_TIPO,
-  calcularContorno, distancia, fatorCalibracao,
+  calcularContorno, distancia, fatorCalibracao, simplificarPontos,
 } from "@shared/levantamentoGeo";
 import { useLevantamentoOffline } from "@/hooks/useLevantamentoOffline";
 import { VincularItemCombobox, buildItensVinculaveis } from "./VincularItemCombobox";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
 
-type Ferramenta = "select" | "calibrar" | TipoContorno;
+type Ferramenta = "select" | "calibrar" | "retangulo" | "livre" | TipoContorno;
 
 const COR_TIPO: Record<TipoContorno, string> = {
   area: "#2563eb",
   volume: "#7c3aed",
   perimetro: "#059669",
   contagem: "#ea580c",
+  parede: "#db2777",
 };
 const ICON_TIPO: Record<TipoContorno, JSX.Element> = {
   area: <Square className="h-4 w-4" />,
   volume: <Box className="h-4 w-4" />,
   perimetro: <Spline className="h-4 w-4" />,
   contagem: <Hash className="h-4 w-4" />,
+  parede: <BrickWall className="h-4 w-4" />,
 };
+
+// Rev. 3097 — Tipos que fecham o polígono (área preenchida) vs. linhas abertas.
+const FECHA_POLIGONO = (t: string) => t === "area" || t === "volume";
+
+// Ferramentas de desenho na ordem da barra. "retangulo" e "livre" são atalhos
+// que GERAM contornos tipo "area" (zero backend). "parede" é o tipo novo.
+type FerramentaDesenho = "retangulo" | "livre" | "area" | "parede" | "perimetro" | "volume" | "contagem";
+const FERRAMENTAS_DESENHO: { key: FerramentaDesenho; label: string; icon: JSX.Element; cor: string }[] = [
+  { key: "retangulo", label: "Retângulo", icon: <RectangleHorizontal className="h-4 w-4" />, cor: COR_TIPO.area },
+  { key: "livre", label: "Desenho livre", icon: <PencilLine className="h-4 w-4" />, cor: COR_TIPO.area },
+  { key: "area", label: "Área", icon: <Square className="h-4 w-4" />, cor: COR_TIPO.area },
+  { key: "parede", label: "Parede (L×A)", icon: <BrickWall className="h-4 w-4" />, cor: COR_TIPO.parede },
+  { key: "perimetro", label: "Perímetro / Linear", icon: <Spline className="h-4 w-4" />, cor: COR_TIPO.perimetro },
+  { key: "volume", label: "Volume", icon: <Box className="h-4 w-4" />, cor: COR_TIPO.volume },
+  { key: "contagem", label: "Contagem", icon: <Hash className="h-4 w-4" />, cor: COR_TIPO.contagem },
+];
+// Ferramentas que se desenham clicando ponto-a-ponto e finalizam num botão.
+const TOOLS_POLILINHA: FerramentaDesenho[] = ["area", "parede", "perimetro", "volume"];
+const MIN_PTS = (t: string) => (t === "perimetro" || t === "parede" ? 2 : 3);
 
 const brl = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const numFmt = (v: number, d = 2) =>
@@ -170,6 +192,39 @@ export default function MedicaoLevantamento() {
   const [draft, setDraft] = useState<GeoPonto[]>([]);
   const [calibDraft, setCalibDraft] = useState<GeoPonto[]>([]);
 
+  // Rev. 3097 — PDF em preto-e-branco/alto contraste por padrão (destaca as
+  // marcações coloridas por cima). Filtro VISUAL apenas (não altera o arquivo).
+  const [pdfPB, setPdfPB] = useState(true);
+
+  // Pré-visualização do arrasto (retângulo) e do traço livre.
+  const [dragRect, setDragRect] = useState<{ a: GeoPonto; b: GeoPonto } | null>(null);
+  const [freePts, setFreePts] = useState<GeoPonto[]>([]);
+
+  // Diálogo numérico no app (substitui window.prompt p/ altura/escala — máscara pt-BR).
+  const [numPrompt, setNumPrompt] = useState<
+    | { title: string; hint?: string; suffix?: string; initial?: string; resolve: (v: number | null) => void }
+    | null
+  >(null);
+  const askNumber = useCallback(
+    (opts: { title: string; hint?: string; suffix?: string; initial?: string }) =>
+      new Promise<number | null>((resolve) => setNumPrompt({ ...opts, resolve })),
+    [],
+  );
+
+  // Gesto de toque/caneta: pinça (2 ponteiros) = zoom+pan; 1 ponteiro = desenha/pan.
+  const ptrsRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchRef = useRef<{ startDist: number; startZoom: number; fracX: number; fracY: number } | null>(null);
+  const focusRef = useRef<{ fracX: number; fracY: number; cx: number; cy: number } | null>(null);
+  const gestRef = useRef<{
+    mode: "idle" | "pending" | "pan" | "rect" | "free";
+    pointerId: number;
+    startClient: { x: number; y: number };
+    startNorm: GeoPonto;
+    startScroll: { l: number; t: number };
+    moved: boolean;
+  } | null>(null);
+  const suppressRef = useRef(false); // após pinça, ignora o ponteiro remanescente até soltar tudo
+
   // calibração por (pdfId, pagina) lida do calibracaoJson
   const calibracaoMap: Record<string, Calibracao> = useMemo(() => {
     try { return pdfSel?.calibracaoJson ? JSON.parse(pdfSel.calibracaoJson) : {}; }
@@ -206,44 +261,147 @@ export default function MedicaoLevantamento() {
   // --- geometria → metros (PDF points) ---
   const normToPt = useCallback((p: GeoPonto): GeoPonto => ({ x: p.x * pageDims.w, y: p.y * pageDims.h }), [pageDims]);
 
-  // --- handlers de toque/click no overlay ---
-  const getPt = (e: React.PointerEvent): GeoPonto => {
+  // --- coordenada normalizada [0..1] a partir do ponto de tela ---
+  const getPtFromClient = (clientX: number, clientY: number): GeoPonto => {
     const rect = overlayRef.current!.getBoundingClientRect();
     return {
-      x: Math.min(1, Math.max(0, (e.clientX - rect.left) / Math.max(rect.width, 1))),
-      y: Math.min(1, Math.max(0, (e.clientY - rect.top) / Math.max(rect.height, 1))),
+      x: Math.min(1, Math.max(0, (clientX - rect.left) / Math.max(rect.width, 1))),
+      y: Math.min(1, Math.max(0, (clientY - rect.top) / Math.max(rect.height, 1))),
     };
   };
 
-  const onCanvasPointerDown = (e: React.PointerEvent) => {
-    if (tool === "select") return;
+  // Rev. 3097 — Zoom focal: ao mudar o zoom por pinça, mantém o ponto sob os
+  // dedos fixo, ajustando o scroll do container DEPOIS do re-layout.
+  useLayoutEffect(() => {
+    const f = focusRef.current;
+    const cont = canvasWrapRef.current;
+    if (!f || !cont) return;
+    const rect = cont.getBoundingClientRect();
+    const contentW = baseWidth * zoom;
+    const contentH = pageDims.w > 0 ? contentW * (pageDims.h / pageDims.w) : contentW;
+    cont.scrollLeft = f.fracX * contentW - (f.cx - rect.left);
+    cont.scrollTop = f.fracY * contentH - (f.cy - rect.top);
+    focusRef.current = null;
+  }, [zoom, baseWidth, pageDims]);
+
+  const PAN_THRESHOLD = 6; // px — abaixo disso, um toque é "tap" (ponto); acima, arrasta
+
+  function onPdfPointerDown(e: React.PointerEvent) {
+    ptrsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const size = ptrsRef.current.size;
+    if (size >= 2) {
+      // 2 dedos = pinça (zoom) + pan. Cancela qualquer desenho de 1 dedo em curso.
+      suppressRef.current = true;
+      gestRef.current = null;
+      setDragRect(null);
+      setFreePts([]);
+      const pts = [...ptrsRef.current.values()];
+      const a = pts[0], b = pts[1];
+      const startDist = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+      const cont = canvasWrapRef.current;
+      let fracX = 0.5, fracY = 0.5;
+      if (cont) {
+        const rect = cont.getBoundingClientRect();
+        const midX = (a.x + b.x) / 2, midY = (a.y + b.y) / 2;
+        const contentW = baseWidth * zoom;
+        const contentH = pageDims.w > 0 ? contentW * (pageDims.h / pageDims.w) : contentW;
+        fracX = (cont.scrollLeft + (midX - rect.left)) / Math.max(contentW, 1);
+        fracY = (cont.scrollTop + (midY - rect.top)) / Math.max(contentH, 1);
+      }
+      pinchRef.current = { startDist, startZoom: zoom, fracX, fracY };
+      return;
+    }
+    if (suppressRef.current) return; // ponteiro remanescente após pinça
     e.preventDefault();
-    const pt = getPt(e);
+    try { overlayRef.current?.setPointerCapture(e.pointerId); } catch { /* */ }
+    const startNorm = getPtFromClient(e.clientX, e.clientY);
+    const cont = canvasWrapRef.current;
+    let mode: "pending" | "rect" | "free" = "pending";
+    if (tool === "retangulo") mode = "rect";
+    else if (tool === "livre") mode = "free";
+    gestRef.current = {
+      mode, pointerId: e.pointerId, startClient: { x: e.clientX, y: e.clientY },
+      startNorm, startScroll: { l: cont?.scrollLeft ?? 0, t: cont?.scrollTop ?? 0 }, moved: false,
+    };
+    if (mode === "rect") setDragRect({ a: startNorm, b: startNorm });
+    if (mode === "free") setFreePts([startNorm]);
+  }
+
+  function onPdfPointerMove(e: React.PointerEvent) {
+    if (!ptrsRef.current.has(e.pointerId)) return;
+    ptrsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const size = ptrsRef.current.size;
+    if (size >= 2 && pinchRef.current) {
+      const pts = [...ptrsRef.current.values()];
+      const a = pts[0], b = pts[1];
+      const dist = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+      const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+      const ratio = dist / pinchRef.current.startDist;
+      const newZoom = Math.min(6, Math.max(0.5, pinchRef.current.startZoom * ratio));
+      focusRef.current = { fracX: pinchRef.current.fracX, fracY: pinchRef.current.fracY, cx, cy };
+      setZoom(newZoom);
+      return;
+    }
+    const g = gestRef.current;
+    if (size === 1 && g && g.pointerId === e.pointerId) {
+      const dx = e.clientX - g.startClient.x, dy = e.clientY - g.startClient.y;
+      if (!g.moved && Math.hypot(dx, dy) > PAN_THRESHOLD) {
+        g.moved = true;
+        if (g.mode === "pending") g.mode = "pan"; // arrastar em ferramenta de toque/select = pan
+      }
+      const cont = canvasWrapRef.current;
+      if (g.mode === "pan" && cont) {
+        cont.scrollLeft = g.startScroll.l - dx;
+        cont.scrollTop = g.startScroll.t - dy;
+      } else if (g.mode === "rect") {
+        setDragRect({ a: g.startNorm, b: getPtFromClient(e.clientX, e.clientY) });
+      } else if (g.mode === "free") {
+        const p = getPtFromClient(e.clientX, e.clientY);
+        setFreePts((prev) => {
+          const last = prev[prev.length - 1];
+          if (last && distancia(last, p) < 0.0025) return prev; // afina o traço
+          return [...prev, p];
+        });
+      }
+    }
+  }
+
+  function onPdfPointerUp(e: React.PointerEvent) {
+    const had = ptrsRef.current.delete(e.pointerId);
+    try { overlayRef.current?.releasePointerCapture(e.pointerId); } catch { /* */ }
+    const size = ptrsRef.current.size;
+    if (size < 2) pinchRef.current = null;
+    if (size === 0) suppressRef.current = false;
+    const g = gestRef.current;
+    if (!had || !g || g.pointerId !== e.pointerId) return;
+    gestRef.current = null;
+    if (suppressRef.current) return;
+    if (g.mode === "pan") return;          // só arrastou (pan)
+    if (g.mode === "rect") { finalizarRetangulo(); return; }
+    if (g.mode === "free") { finalizarLivre(); return; }
+    if (!g.moved) onTap(g.startNorm);      // toque limpo = adiciona ponto
+  }
+
+  function onTap(pt: GeoPonto) {
+    if (tool === "select") return;
     if (tool === "calibrar") {
       const next = [...calibDraft, pt];
-      if (next.length >= 2) {
-        finalizarCalibracao(next[0], next[1]);
-        setCalibDraft([]);
-      } else {
-        setCalibDraft(next);
-      }
+      if (next.length >= 2) { setCalibDraft([]); void finalizarCalibracao(next[0], next[1]); }
+      else setCalibDraft(next);
       return;
     }
-    if (tool === "contagem") {
-      // cada toque = +1 — salva contorno de contagem incremental
-      finalizarContorno("contagem", [pt], 0, 1);
-      return;
-    }
-    setDraft((d) => [...d, pt]);
-  };
+    if (tool === "contagem") { finalizarContorno("contagem", [pt], 0, 1); return; }
+    setDraft((d) => [...d, pt]); // area | parede | perimetro | volume (ponto-a-ponto)
+  }
 
-  function finalizarCalibracao(p1: GeoPonto, p2: GeoPonto) {
+  async function finalizarCalibracao(p1: GeoPonto, p2: GeoPonto) {
     if (!pdfSel) return;
     const distPt = distancia(normToPt(p1), normToPt(p2));
     if (!(distPt > 0)) { alert("Pontos muito próximos. Tente novamente."); return; }
-    const resp = window.prompt("Distância REAL entre os 2 pontos, em metros (ex.: 5.00):", "");
-    const metros = parseFloat(String(resp || "").replace(",", "."));
-    if (!(metros > 0)) return;
+    const metros = await askNumber({
+      title: "Calibrar escala", hint: "Distância REAL entre os 2 pontos marcados.", suffix: "m",
+    });
+    if (!(metros && metros > 0)) { setCalibDraft([]); return; }
     const mpu = fatorCalibracao(distPt, metros);
     const novo: Record<string, Calibracao> = { ...calibracaoMap, [String(pagina)]: { p1, p2, metros, metrosPorUnidade: mpu } };
     off.calibrarPdf(pdfSel, JSON.stringify(novo));
@@ -276,18 +434,49 @@ export default function MedicaoLevantamento() {
     setDraft([]);
   }
 
-  function finalizarDesenho() {
-    if (tool === "select" || tool === "calibrar" || tool === "contagem") return;
-    const minPts = tool === "perimetro" ? 2 : 3;
+  // Retângulo: 2 cantos arrastados → área retangular (tipo "area").
+  function finalizarRetangulo() {
+    const r = dragRect;
+    setDragRect(null);
+    if (!r) return;
+    const { a, b } = r;
+    if (Math.abs(a.x - b.x) < 0.003 || Math.abs(a.y - b.y) < 0.003) return; // muito pequeno
+    const corners: GeoPonto[] = [
+      { x: a.x, y: a.y }, { x: b.x, y: a.y }, { x: b.x, y: b.y }, { x: a.x, y: b.y },
+    ];
+    finalizarContorno("area", corners, 0, 0); // ferramenta permanece ativa
+  }
+
+  // Desenho livre: traço da caneta/dedo → polígono simplificado (tipo "area").
+  function finalizarLivre() {
+    const pts = freePts;
+    setFreePts([]);
+    if (pts.length < 3) return;
+    const simp = simplificarPontos(pts, 0.004);
+    if (simp.length < 3) return;
+    finalizarContorno("area", simp, 0, 0); // ferramenta permanece ativa
+  }
+
+  async function finalizarDesenho() {
+    if (!TOOLS_POLILINHA.includes(tool as FerramentaDesenho)) return;
+    const minPts = MIN_PTS(tool);
     if (draft.length < minPts) { alert(`Marque ao menos ${minPts} pontos.`); return; }
     let espessura = 0;
     if (tool === "volume") {
-      const resp = window.prompt("Espessura/altura em metros (ex.: 0.10):", "");
-      espessura = parseFloat(String(resp || "").replace(",", "."));
-      if (!(espessura > 0)) return;
+      const v = await askNumber({ title: "Volume", hint: "Espessura / altura da camada.", suffix: "m" });
+      if (!(v && v > 0)) return;
+      espessura = v;
+    } else if (tool === "parede") {
+      const v = await askNumber({ title: "Parede", hint: "Altura da parede — a área = comprimento × altura.", suffix: "m" });
+      if (!(v && v > 0)) return;
+      espessura = v;
     }
-    finalizarContorno(tool, draft, espessura, 0);
-    setTool("select");
+    finalizarContorno(tool as TipoContorno, draft, espessura, 0); // ferramenta permanece ativa
+  }
+
+  function desfazerPonto() {
+    if (tool === "calibrar") { setCalibDraft((d) => d.slice(0, -1)); return; }
+    setDraft((d) => d.slice(0, -1));
   }
 
   // --- upload PDF ---
@@ -540,36 +729,58 @@ export default function MedicaoLevantamento() {
               </div>
             ) : (
               <>
-                {/* toolbar de medição */}
+                {/* toolbar de medição (tátil, fixa no topo) */}
                 <div className="flex items-center gap-1 flex-wrap bg-white border rounded-lg p-1.5 sticky top-0 z-10">
-                  <Button size="sm" variant={tool === "select" ? "default" : "ghost"} className="h-8 gap-1" onClick={() => { setTool("select"); setDraft([]); setCalibDraft([]); }}>
+                  <Button size="sm" variant={tool === "select" ? "default" : "ghost"} className="h-9 gap-1" onClick={() => { setTool("select"); setDraft([]); setCalibDraft([]); setDragRect(null); setFreePts([]); }}>
                     <MousePointer2 className="h-4 w-4" />Selecionar
                   </Button>
-                  <Button size="sm" variant={tool === "calibrar" ? "default" : "ghost"} className="h-8 gap-1" onClick={() => { setTool("calibrar"); setDraft([]); setCalibDraft([]); }}>
+                  <Button size="sm" variant={tool === "calibrar" ? "default" : "ghost"} className="h-9 gap-1" onClick={() => { setTool("calibrar"); setDraft([]); setCalibDraft([]); setDragRect(null); setFreePts([]); }}>
                     <Crosshair className="h-4 w-4" />Calibrar
                   </Button>
                   <div className="h-6 w-px bg-border mx-1" />
-                  {(["area", "volume", "perimetro", "contagem"] as TipoContorno[]).map((t) => (
-                    <Button key={t} size="sm" variant={tool === t ? "default" : "ghost"} className="h-8 gap-1" onClick={() => { setTool(t); setDraft([]); setCalibDraft([]); }} style={tool === t ? { backgroundColor: COR_TIPO[t] } : {}}>
-                      {ICON_TIPO[t]}{LABEL_TIPO[t]}
+                  {FERRAMENTAS_DESENHO.map((f) => (
+                    <Button
+                      key={f.key}
+                      size="sm"
+                      variant={tool === f.key ? "default" : "ghost"}
+                      className="h-9 gap-1"
+                      onClick={() => { setTool(f.key); setDraft([]); setCalibDraft([]); setDragRect(null); setFreePts([]); }}
+                      style={tool === f.key ? { backgroundColor: f.cor } : {}}
+                      title={f.label}
+                    >
+                      {f.icon}{f.label}
                     </Button>
                   ))}
                   <div className="h-6 w-px bg-border mx-1" />
-                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}><ZoomOut className="h-4 w-4" /></Button>
+                  {/* PDF preto-e-branco (default ON) */}
+                  <Button size="sm" variant={pdfPB ? "default" : "ghost"} className="h-9 gap-1" onClick={() => setPdfPB((v) => !v)} title="Alterna a planta entre preto-e-branco (alto contraste) e cores originais">
+                    <Contrast className="h-4 w-4" />{pdfPB ? "P&B" : "Cor"}
+                  </Button>
+                  <div className="h-6 w-px bg-border mx-1" />
+                  <Button size="sm" variant="ghost" className="h-9 w-9 p-0" onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}><ZoomOut className="h-4 w-4" /></Button>
                   <span className="text-xs tabular-nums w-10 text-center">{Math.round(zoom * 100)}%</span>
-                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setZoom((z) => Math.min(4, z + 0.25))}><ZoomIn className="h-4 w-4" /></Button>
-                  {(tool === "area" || tool === "volume" || tool === "perimetro") && (
+                  <Button size="sm" variant="ghost" className="h-9 w-9 p-0" onClick={() => setZoom((z) => Math.min(6, z + 0.25))}><ZoomIn className="h-4 w-4" /></Button>
+                  {/* finalizar / desfazer para ferramentas ponto-a-ponto */}
+                  {TOOLS_POLILINHA.includes(tool as FerramentaDesenho) && (
                     <>
                       <div className="h-6 w-px bg-border mx-1" />
-                      <Button size="sm" className="h-8 gap-1" onClick={finalizarDesenho} disabled={draft.length < (tool === "perimetro" ? 2 : 3)}>
+                      <Button size="sm" className="h-9 gap-1" onClick={finalizarDesenho} disabled={draft.length < MIN_PTS(tool)}>
                         <Check className="h-4 w-4" />Finalizar ({draft.length})
                       </Button>
-                      {draft.length > 0 && (
-                        <Button size="sm" variant="ghost" className="h-8 text-red-600" onClick={() => setDraft([])}>Limpar</Button>
-                      )}
+                    </>
+                  )}
+                  {(draft.length > 0 || calibDraft.length > 0) && (
+                    <>
+                      <Button size="sm" variant="ghost" className="h-9 gap-1" onClick={desfazerPonto} title="Remove o último ponto marcado">
+                        <Undo2 className="h-4 w-4" />Desfazer
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-9 text-red-600" onClick={() => { setDraft([]); setCalibDraft([]); }}>Limpar</Button>
                     </>
                   )}
                 </div>
+                <p className="text-[11px] text-gray-400 px-1">
+                  Toque para marcar pontos · arraste com 1 dedo para mover (pan) · pinça com 2 dedos para zoom · a ferramenta permanece ativa após finalizar.
+                </p>
 
                 {/* status calibração */}
                 <div className={`text-xs px-2 py-1 rounded ${calibAtual ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
@@ -595,21 +806,27 @@ export default function MedicaoLevantamento() {
                     loading={<div className="py-16 text-center text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>}
                     error={<div className="py-16 text-center text-red-500">Erro ao carregar PDF</div>}
                   >
-                    <div className="relative mx-auto w-fit" style={{ touchAction: tool === "select" ? "auto" : "none" }}>
-                      <Page
-                        pageNumber={pagina}
-                        width={pageWidth}
-                        renderTextLayer={false}
-                        renderAnnotationLayer={false}
-                        onLoadSuccess={(pg: any) => setPageDims({ w: pg.width, h: pg.height })}
-                        loading={<div className="py-16 text-center text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>}
-                      />
+                    <div className="relative mx-auto w-fit" style={{ touchAction: "none" }}>
+                      {/* filtro P&B aplicado SÓ ao PDF, nunca ao overlay/SVG */}
+                      <div style={{ filter: pdfPB ? "grayscale(1) contrast(1.25) brightness(1.02)" : "none" }}>
+                        <Page
+                          pageNumber={pagina}
+                          width={pageWidth}
+                          renderTextLayer={false}
+                          renderAnnotationLayer={false}
+                          onLoadSuccess={(pg: any) => setPageDims({ w: pg.width, h: pg.height })}
+                          loading={<div className="py-16 text-center text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>}
+                        />
+                      </div>
                       {/* overlay */}
                       <div
                         ref={overlayRef}
                         className="absolute inset-0"
-                        style={{ cursor: tool === "select" ? "default" : "crosshair" }}
-                        onPointerDown={onCanvasPointerDown}
+                        style={{ cursor: tool === "select" ? "grab" : "crosshair", touchAction: "none" }}
+                        onPointerDown={onPdfPointerDown}
+                        onPointerMove={onPdfPointerMove}
+                        onPointerUp={onPdfPointerUp}
+                        onPointerCancel={onPdfPointerUp}
                       >
                         <svg className="absolute inset-0 w-full h-full" viewBox="0 0 1 1" preserveAspectRatio="none">
                           {/* Rev. 3093 — REFERÊNCIA (medições anteriores): traço claro
@@ -621,9 +838,10 @@ export default function MedicaoLevantamento() {
                             if (c.tipo === "contagem") {
                               return pts.map((p, i) => <circle key={`ref-${c.id}-${i}`} cx={p.x} cy={p.y} r={0.007} fill="none" stroke={cor} strokeWidth={0.0025} strokeOpacity={0.5} vectorEffect="non-scaling-stroke" />);
                             }
-                            const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ") + (c.tipo !== "perimetro" ? " Z" : "");
+                            const fecha = FECHA_POLIGONO(c.tipo);
+                            const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ") + (fecha ? " Z" : "");
                             return (
-                              <path key={`ref-${c.id}`} d={d} fill={c.tipo === "perimetro" ? "none" : cor} fillOpacity={c.tipo === "perimetro" ? 0 : 0.06} stroke={cor} strokeOpacity={0.5} strokeWidth={0.0025} strokeDasharray="0.012 0.008" vectorEffect="non-scaling-stroke" />
+                              <path key={`ref-${c.id}`} d={d} fill={fecha ? cor : "none"} fillOpacity={fecha ? 0.06 : 0} stroke={cor} strokeOpacity={0.5} strokeWidth={0.0025} strokeDasharray="0.012 0.008" vectorEffect="non-scaling-stroke" />
                             );
                           })}
                           {/* contornos salvos */}
@@ -634,9 +852,10 @@ export default function MedicaoLevantamento() {
                             if (c.tipo === "contagem") {
                               return pts.map((p, i) => <circle key={`${c.id}-${i}`} cx={p.x} cy={p.y} r={0.008} fill={cor} stroke="#fff" strokeWidth={0.002} />);
                             }
-                            const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ") + (c.tipo !== "perimetro" ? " Z" : "");
+                            const fecha = FECHA_POLIGONO(c.tipo);
+                            const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ") + (fecha ? " Z" : "");
                             return (
-                              <path key={c.id} d={d} fill={c.tipo === "perimetro" ? "none" : cor} fillOpacity={0.18} stroke={cor} strokeWidth={0.003} vectorEffect="non-scaling-stroke" />
+                              <path key={c.id} d={d} fill={fecha ? cor : "none"} fillOpacity={fecha ? 0.18 : 0} stroke={cor} strokeWidth={fecha ? 0.003 : 0.004} vectorEffect="non-scaling-stroke" />
                             );
                           })}
                           {/* draft */}
@@ -648,6 +867,23 @@ export default function MedicaoLevantamento() {
                               />
                               {draft.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={0.006} fill="#111827" />)}
                             </>
+                          )}
+                          {/* preview do retângulo (arrasto) */}
+                          {dragRect && (
+                            <rect
+                              x={Math.min(dragRect.a.x, dragRect.b.x)}
+                              y={Math.min(dragRect.a.y, dragRect.b.y)}
+                              width={Math.abs(dragRect.a.x - dragRect.b.x)}
+                              height={Math.abs(dragRect.a.y - dragRect.b.y)}
+                              fill={COR_TIPO.area} fillOpacity={0.15} stroke={COR_TIPO.area} strokeWidth={0.003} strokeDasharray="0.01 0.006" vectorEffect="non-scaling-stroke"
+                            />
+                          )}
+                          {/* preview do desenho livre */}
+                          {freePts.length > 1 && (
+                            <path
+                              d={freePts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ")}
+                              fill={COR_TIPO.area} fillOpacity={0.1} stroke={COR_TIPO.area} strokeWidth={0.003} vectorEffect="non-scaling-stroke"
+                            />
                           )}
                           {/* calibração draft */}
                           {calibDraft.map((p, i) => <circle key={`cal-${i}`} cx={p.x} cy={p.y} r={0.008} fill="#dc2626" />)}
@@ -774,6 +1010,59 @@ export default function MedicaoLevantamento() {
           </div>
         </div>
       </div>
+
+      {numPrompt && (
+        <NumberPromptDialog
+          data={numPrompt}
+          onResolve={(v) => { numPrompt.resolve(v); setNumPrompt(null); }}
+        />
+      )}
     </DashboardLayout>
+  );
+}
+
+// Rev. 3097 — Diálogo numérico no app (substitui window.prompt). Aceita vírgula
+// decimal pt-BR ("2,5" = 2.5) e remove separador de milhar.
+function NumberPromptDialog({
+  data,
+  onResolve,
+}: {
+  data: { title: string; hint?: string; suffix?: string; initial?: string };
+  onResolve: (v: number | null) => void;
+}) {
+  const [txt, setTxt] = useState(data.initial ?? "");
+  const parse = (s: string): number | null => {
+    const t = s.trim();
+    if (!t) return null;
+    const norm = t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t;
+    const n = parseFloat(norm);
+    return isNaN(n) ? null : n;
+  };
+  const val = parse(txt);
+  const confirmar = () => onResolve(val && val > 0 ? val : null);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => onResolve(null)}>
+      <div className="w-full max-w-xs rounded-xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-sm font-semibold">{data.title}</h3>
+        {data.hint && <p className="mt-1 text-xs text-gray-500">{data.hint}</p>}
+        <div className="mt-3 flex items-center gap-2">
+          <Input
+            autoFocus
+            type="text"
+            inputMode="decimal"
+            value={txt}
+            onChange={(e) => setTxt(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") confirmar(); if (e.key === "Escape") onResolve(null); }}
+            placeholder="0,00"
+            className="text-base"
+          />
+          {data.suffix && <span className="text-sm text-gray-500">{data.suffix}</span>}
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button size="sm" variant="ghost" onClick={() => onResolve(null)}>Cancelar</Button>
+          <Button size="sm" disabled={!(val && val > 0)} onClick={confirmar}>Confirmar</Button>
+        </div>
+      </div>
+    </div>
   );
 }
