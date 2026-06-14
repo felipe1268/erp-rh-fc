@@ -57,6 +57,13 @@ interface ContratoPdfParams {
   textoContrato: string;
   hash?: string | null;
   signatarios: SignatarioPdf[];
+  /**
+   * "download" (padrão) salva o arquivo; "abrir" exibe o PDF (visualização).
+   * Em iOS o `window.open` precisa ser disparado DENTRO do gesto do clique;
+   * por isso aceita uma `janela` já aberta de forma síncrona antes do await.
+   */
+  modo?: "download" | "abrir";
+  janela?: Window | null;
 }
 
 async function urlToDataUrl(url: string): Promise<string | null> {
@@ -106,6 +113,7 @@ function parseFluxValores(texto: string) {
 
 export async function gerarContratoAssinadoPdf(params: ContratoPdfParams): Promise<void> {
   const { titulo, textoContrato, hash, signatarios } = params;
+  const modo = params.modo ?? "download";
 
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const W = 210;
@@ -817,5 +825,20 @@ export async function gerarContratoAssinadoPdf(params: ContratoPdfParams): Promi
   const nomeArquivo = `${(titulo || "Contrato")
     .replace(/[^a-zA-Z0-9À-ú ._-]/g, "")
     .trim()}_assinado.pdf`;
+
+  if (modo === "abrir") {
+    try {
+      // Só visualiza se a janela foi aberta DENTRO do gesto do clique (iOS/popup-blocker).
+      // Sem janela válida (popup bloqueado), cai para download — evita clique sem efeito.
+      if (params.janela && !params.janela.closed) {
+        params.janela.location.href = pdf.output("bloburl") as unknown as string;
+        return;
+      }
+    } catch {
+      // fallback: se a visualização falhar, baixa o arquivo
+      try { params.janela?.close(); } catch { /* noop */ }
+    }
+  }
+
   pdf.save(nomeArquivo);
 }

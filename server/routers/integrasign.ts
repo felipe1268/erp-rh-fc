@@ -155,6 +155,73 @@ export const integrasignRouter = router({
       };
     }),
 
+  // Rev. 3059 — dados do contrato ASSINADO (concluído) p/ gerar o PDF autenticado
+  // direto na tela do contrato (visualizar/baixar), sem precisar do token público.
+  // Retorna a MESMA forma consumida por `gerarContratoAssinadoPdf` (envelope +
+  // todosSignatarios com imagem da assinatura/rúbrica + trilha de auditoria).
+  getContratoAssinadoPdfData: protectedProcedure
+    .input(z.object({ companyId: z.number(), contratoTerceiroId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await assertIntegraSignCompanyAccess((ctx as any).user, input.companyId);
+      const db = await getDb();
+
+      const [envelope] = await db
+        .select()
+        .from(integrasignEnvelopes)
+        .where(and(
+          eq(integrasignEnvelopes.contratoTerceiroId, input.contratoTerceiroId),
+          eq(integrasignEnvelopes.companyId, input.companyId),
+          eq(integrasignEnvelopes.status, "concluido"),
+          isNull(integrasignEnvelopes.excluidoEm),
+        ))
+        .orderBy(desc(integrasignEnvelopes.criadoEm))
+        .limit(1);
+
+      if (!envelope) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Nenhum contrato assinado (concluído) encontrado." });
+      }
+
+      const todosSignatarios = await db.select({
+        id: integrasignSignatarios.id,
+        papel: integrasignSignatarios.papel,
+        nome: integrasignSignatarios.nome,
+        cargo: integrasignSignatarios.cargo,
+        cpfCnpj: integrasignSignatarios.cpfCnpj,
+        status: integrasignSignatarios.status,
+        ordemAssinatura: integrasignSignatarios.ordemAssinatura,
+        dataAssinatura: integrasignSignatarios.dataAssinatura,
+        assinaturaImagem: integrasignSignatarios.assinaturaImagem,
+        rubricaImagem: integrasignSignatarios.rubricaImagem,
+        hashAssinatura: integrasignSignatarios.hashAssinatura,
+        hashRubrica: integrasignSignatarios.hashRubrica,
+        ipAddress: integrasignSignatarios.ipAddress,
+        latitude: integrasignSignatarios.latitude,
+        longitude: integrasignSignatarios.longitude,
+        geoAccuracy: integrasignSignatarios.geoAccuracy,
+        dispositivoInfo: integrasignSignatarios.dispositivoInfo,
+        nomeConfirmado: integrasignSignatarios.nomeConfirmado,
+        cpfCnpjConfirmado: integrasignSignatarios.cpfCnpjConfirmado,
+        termoAceito: integrasignSignatarios.termoAceito,
+        dataVisualizacao: integrasignSignatarios.dataVisualizacao,
+      }).from(integrasignSignatarios)
+        .where(eq(integrasignSignatarios.envelopeId, envelope.id))
+        .orderBy(asc(integrasignSignatarios.ordemAssinatura));
+
+      return {
+        envelope: {
+          id: envelope.id,
+          titulo: envelope.titulo,
+          descricao: envelope.descricao,
+          textoContrato: envelope.textoContrato,
+          hashDocumento: envelope.hashDocumento,
+          versao: envelope.versao,
+          status: envelope.status,
+          concluidoEm: envelope.atualizadoEm ?? null,
+        },
+        todosSignatarios,
+      };
+    }),
+
   criarEnvelope: protectedProcedure
     .input(z.object({
       companyId: z.number(),

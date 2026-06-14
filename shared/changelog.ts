@@ -1,6 +1,50 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3059 — **CONTRATOS DE TERCEIROS · ABA "CONTRATO" FICA VIEW-ONLY QUANDO O CONTRATO JÁ
+ * ESTÁ ASSINADO (FCSIGN CONCLUÍDO) — EM VEZ DO TOOLBAR DE EDIÇÃO + FOLHA A4 EDITÁVEL, MOSTRA
+ * O ARQUIVO ASSINADO (COM TODAS AS AUTENTICAÇÕES) + BOTÃO DE OLHO (VISUALIZAR) E BOTÃO DE
+ * BAIXAR O CONTRATO EM PDF.**
+ *
+ * PEDIDO: na aba "Contrato" do detalhe de um contrato de terceiros, quando o contrato JÁ ESTIVER
+ * ASSINADO por todas as partes via FcSign, travar a edição — em vez do toolbar (Regenerar / Editar
+ * texto / Salvar / Enviar p/ FcSign) e da folha A4 editável, exibir o arquivo assinado (com todas as
+ * autenticações) com um botão de OLHO (visualizar) e um botão de BAIXAR o contrato em PDF.
+ *
+ * DIAGNÓSTICO: a página `client/src/pages/terceiros/contratos/ContratoDetalhe.tsx` (aba `tab==="documento"`)
+ * sempre renderizava o toolbar editável + a folha A4 do `textoAtual`, independentemente do status de
+ * assinatura. O status do envelope já vinha em `getContrato` como `assinaturaStatus` (rascunho /
+ * em_andamento / concluido — derivado em `server/routers/terceiroContratos.ts` lendo o envelope mais
+ * recente de `integrasignEnvelopes` por `contratoTerceiroId`+`companyId`). O PDF final institucional já
+ * existia (`client/src/lib/contratoAssinadoPdf.ts` · `gerarContratoAssinadoPdf` — rúbrica em todas as
+ * páginas, imagem real da assinatura, trilha de auditoria), mas SÓ era chamado na rota PÚBLICA por token
+ * (`IntegraSignAssinar.tsx`) via `integrasign.getDocumentoPublico`. A procedure autenticada `getEnvelope`
+ * STRIPA `assinaturaImagem`/`rubricaImagem` (vira undefined), então não servia para gerar o PDF na tela
+ * interna do contrato.
+ *
+ * SOLUÇÃO (ZERO ALTER/DROP/DELETE):
+ *  - BACKEND `server/routers/integrasign.ts`: NOVA procedure AUTENTICADA `getContratoAssinadoPdfData
+ *    ({ companyId, contratoTerceiroId })` com tenant guard `assertIntegraSignCompanyAccess` (anti-IDOR,
+ *    file-wide). Busca o envelope `status="concluido"` mais recente (não excluído) por
+ *    `contratoTerceiroId`+`companyId` e retorna a MESMA forma consumida por `gerarContratoAssinadoPdf`
+ *    (`{ envelope, todosSignatarios[] }`) — INCLUINDO `assinaturaImagem`/`rubricaImagem` + trilha de
+ *    auditoria (IP, geo, dispositivo, hashes, termo, datas), espelhando o SELECT do `getDocumentoPublico`,
+ *    porém autenticado (sem token público).
+ *  - PDF `client/src/lib/contratoAssinadoPdf.ts`: `gerarContratoAssinadoPdf` ganha `modo?: "download" |
+ *    "abrir"` (default "download" = `pdf.save`) e `janela?: Window | null`. Em "abrir" usa
+ *    `pdf.output("bloburl")` e, se receber uma `janela` já aberta de forma SÍNCRONA (necessário no iOS
+ *    para preservar o gesto do clique antes do await), seta `janela.location.href`; senão `window.open`.
+ *    Fallback p/ download se a visualização falhar.
+ *  - FRONT `ContratoDetalhe.tsx`: NOVA query `integrasign.getContratoAssinadoPdfData` (enabled só quando
+ *    `assinaturaStatus==="concluido"` na aba documento). Quando assinado, a aba "Contrato" passa a
+ *    renderizar um CARD TRAVADO (cabeçalho verde "Contrato assinado — edição bloqueada", `ShieldCheck`+
+ *    `Lock`) com botão "Visualizar contrato" (olho → abre o PDF; abre a janela dentro do gesto do clique
+ *    p/ iOS) e botão "Baixar PDF" (download), o hash SHA-256 do documento e a lista de assinaturas
+ *    (nome+papel+CPF+data). O toolbar editável e a folha A4 só aparecem para contratos NÃO concluídos.
+ *
+ * RESSALVA: o travamento é por `assinaturaStatus==="concluido"` do envelope mais recente; envelopes em
+ * `rascunho`/`em_andamento` continuam editáveis normalmente. Detalhe completo aqui.
+ *
  * Rev. 3058 — **RECONTRATAÇÃO · "SÓCIOS TITULARES (APROVADORES)" AGORA SÃO CONFIGURÁVEIS —
  * O ADMIN MASTER ESCOLHE QUAIS USUÁRIOS SÃO OS SÓCIOS TITULARES (ADICIONAR/REMOVER), EM VEZ
  * DE A LISTA SER FIXA EM "TODOS OS ADMIN MASTER".**

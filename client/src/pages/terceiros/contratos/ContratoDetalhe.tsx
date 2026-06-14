@@ -14,8 +14,9 @@ import {
   ChevronRight, ChevronDown, Building2, Calendar, DollarSign, FileText,
   Zap, ClipboardCheck, X, TrendingUp, TrendingDown, Minus,
   FileEdit, Save, Clock, RefreshCw, History, ExternalLink, Trash2, Pencil, FolderOpen,
-  Eye, EyeOff, BarChart3, Loader2, FileDown, Settings, Undo2, Send, MapPin, Truck, Ban, Info
+  Eye, EyeOff, BarChart3, Loader2, FileDown, Settings, Undo2, Send, MapPin, Truck, Ban, Info, Lock, Download, ShieldCheck
 } from "lucide-react";
+import { gerarContratoAssinadoPdf } from "@/lib/contratoAssinadoPdf";
 import { toast } from "sonner";
 import { formatNumeroOcDisplay } from "@shared/numeroOc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -23,6 +24,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 const BRL = (v: any) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(v) || 0);
+
+function papelLabelContrato(p: string) {
+  const m: Record<string, string> = {
+    fornecedor: "Fornecedor / Contratada",
+    gestor_projeto: "Gestor do Projeto",
+    financeiro: "Financeiro",
+    diretor: "Diretor",
+    testemunha: "Testemunha",
+  };
+  return m[p] || p;
+}
 const fmtDate = (d: string | null | undefined) => {
   if (!d) return "—";
   const [y, m, day] = d.slice(0, 10).split("-");
@@ -244,6 +256,13 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
     { contratoId: id },
     { enabled: tab === "documento" && id > 0 }
   );
+
+  const contratoAssinado = (contrato as any)?.assinaturaStatus === "concluido";
+  const { data: pdfAssinadoData, isFetching: isFetchingPdfAssinado } =
+    trpc.integrasign.getContratoAssinadoPdfData.useQuery(
+      { companyId: (contrato as any)?.companyId, contratoTerceiroId: id },
+      { enabled: tab === "documento" && id > 0 && contratoAssinado && !!(contrato as any)?.companyId },
+    );
 
   const textoAtual = textoEditado ?? contrato?.textoContrato ?? null;
 
@@ -1100,6 +1119,140 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                 : part
             );
           };
+
+          if (contratoAssinado) {
+            const baixarOuAbrir = async (modo: "download" | "abrir") => {
+              if (isFetchingPdfAssinado) { toast.info("Carregando contrato assinado..."); return; }
+              const d: any = pdfAssinadoData;
+              if (!d?.envelope) { toast.error("Contrato assinado indisponível para gerar o PDF."); return; }
+              // iOS: abrir a janela DENTRO do gesto do clique, antes do await
+              const janela = modo === "abrir" ? window.open("", "_blank") : null;
+              try {
+                await gerarContratoAssinadoPdf({
+                  titulo: d.envelope.titulo || contrato.numeroContrato || "Contrato",
+                  textoContrato: d.envelope.textoContrato || textoAtual || "",
+                  hash: d.envelope.hashDocumento || "",
+                  modo,
+                  janela,
+                  signatarios: (d.todosSignatarios || []).map((s: any) => ({
+                    nome: s.nome,
+                    papelLabel: papelLabelContrato(s.papel),
+                    status: s.status,
+                    dataAssinatura: s.dataAssinatura,
+                    cpfCnpj: s.cpfCnpj,
+                    cargo: s.cargo,
+                    assinaturaImagem: s.assinaturaImagem,
+                    rubricaImagem: s.rubricaImagem,
+                    hashAssinatura: s.hashAssinatura,
+                    ipAddress: s.ipAddress,
+                    latitude: s.latitude,
+                    longitude: s.longitude,
+                    geoAccuracy: s.geoAccuracy,
+                    dispositivoInfo: s.dispositivoInfo,
+                    nomeConfirmado: s.nomeConfirmado,
+                    cpfCnpjConfirmado: s.cpfCnpjConfirmado,
+                    termoAceito: s.termoAceito,
+                    dataVisualizacao: s.dataVisualizacao,
+                  })),
+                });
+              } catch (e: any) {
+                try { janela?.close(); } catch { /* noop */ }
+                toast.error(e?.message || "Falha ao gerar o PDF do contrato assinado.");
+              }
+            };
+            const assinantes: any[] = (pdfAssinadoData as any)?.todosSignatarios || [];
+            return (
+              <div className="space-y-4">
+                <div className="bg-white border border-emerald-200 rounded-xl shadow-sm overflow-hidden">
+                  <div className="bg-emerald-50 border-b border-emerald-200 px-5 py-4 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                      <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-emerald-800 flex items-center gap-1.5">
+                        <Lock className="w-3.5 h-3.5" /> Contrato assinado — edição bloqueada
+                      </p>
+                      <p className="text-xs text-emerald-700/80">
+                        Este contrato foi assinado por todas as partes via FcSign. O documento final, com todas as
+                        autenticações, está disponível para visualização e download.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-5 space-y-4">
+                    <div className="flex flex-wrap gap-3">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-2 h-9 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                        disabled={isFetchingPdfAssinado || !pdfAssinadoData}
+                        onClick={() => baixarOuAbrir("abrir")}
+                      >
+                        {isFetchingPdfAssinado
+                          ? <Loader2 className="w-4 h-4 animate-spin" />
+                          : <Eye className="w-4 h-4" />}
+                        Visualizar contrato
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="gap-2 h-9 bg-emerald-600 hover:bg-emerald-700"
+                        disabled={isFetchingPdfAssinado || !pdfAssinadoData}
+                        onClick={() => baixarOuAbrir("download")}
+                      >
+                        {isFetchingPdfAssinado
+                          ? <Loader2 className="w-4 h-4 animate-spin" />
+                          : <Download className="w-4 h-4" />}
+                        Baixar PDF
+                      </Button>
+                    </div>
+
+                    {(pdfAssinadoData as any)?.envelope?.hashDocumento && (
+                      <p className="text-[11px] text-gray-400 font-mono break-all">
+                        SHA-256: {(pdfAssinadoData as any).envelope.hashDocumento}
+                      </p>
+                    )}
+
+                    {assinantes.length > 0 && (
+                      <div className="border border-gray-100 rounded-lg overflow-hidden">
+                        <div className="bg-gray-50 px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                          <FileCheck className="w-3.5 h-3.5" /> Assinaturas ({assinantes.length})
+                        </div>
+                        <div className="divide-y divide-gray-100">
+                          {assinantes.map((s) => (
+                            <div key={s.id} className="px-4 py-2.5 flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-gray-700 truncate">
+                                  {s.nome || "—"}
+                                  <span className="text-xs text-gray-400 ml-2">({papelLabelContrato(s.papel)})</span>
+                                </p>
+                                {s.cpfCnpj && <p className="text-[11px] text-gray-400 font-mono">{s.cpfCnpj}</p>}
+                              </div>
+                              <div className="text-right shrink-0">
+                                {s.status === "assinado" || s.dataAssinatura ? (
+                                  <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 font-medium">
+                                    <CheckCircle className="w-3.5 h-3.5" />
+                                    {s.dataAssinatura ? fmtDate(s.dataAssinatura) : "Assinado"}
+                                  </span>
+                                ) : (
+                                  <span className="text-[11px] text-gray-400">{s.status || "—"}</span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {isFetchingPdfAssinado && (
+                      <div className="flex items-center gap-2 text-xs text-gray-400">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Carregando documento assinado...
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          }
 
           return (
           <div className="space-y-4">
