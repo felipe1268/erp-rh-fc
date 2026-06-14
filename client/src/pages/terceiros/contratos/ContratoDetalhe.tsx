@@ -635,7 +635,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                   <ClipboardCheck className="h-5 w-5 text-green-600" />
                   <span className="text-sm font-bold text-gray-700 uppercase tracking-wide">Critérios de Medição e Pagamento</span>
                 </div>
-                {!editingCriterios && (
+                {!editingCriterios && !contratoAssinado && (
                   <button
                     onClick={() => {
                       setCritForm({ diaMedicao: dm, diaPagamento: dp, prazoAprovacaoDias: pa, prazoEmissaoNf: pnf, prazoLiberacaoOp: plop, documentacaoNecessaria: docNec });
@@ -645,6 +645,11 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                   >
                     <Settings className="w-3 h-3" /> Configurar
                   </button>
+                )}
+                {!editingCriterios && contratoAssinado && (
+                  <span className="flex items-center gap-1 text-xs text-gray-400">
+                    <Lock className="w-3 h-3" /> Travado após assinatura
+                  </span>
                 )}
               </div>
 
@@ -677,9 +682,15 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                     <textarea className="w-full mt-1 text-sm border rounded-lg p-2 min-h-[80px] resize-y" placeholder="Ex: Nota Fiscal, CND FGTS, CND INSS, Certidão Trabalhista, Boletim de Medição assinado..."
                       value={critForm.documentacaoNecessaria} onChange={e => setCritForm(f => ({ ...f, documentacaoNecessaria: e.target.value }))} />
                   </div>
+                  <div className="flex gap-2 p-3 bg-blue-50 rounded-lg">
+                    <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <p className="text-xs text-blue-900/80 leading-relaxed">
+                      O <span className="font-semibold">Dia da Medição</span> é a data de corte do período e pode variar por obra. Defina-o antes de enviar o contrato para assinatura — depois de assinado fica travado. Ao alterá-lo, o período das próximas medições se ajusta automaticamente.
+                    </p>
+                  </div>
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" size="sm" onClick={() => setEditingCriterios(false)}><X className="w-3 h-3 mr-1" /> Cancelar</Button>
-                    <Button size="sm" className="bg-green-600 hover:bg-green-700" disabled={atualizarContratoMut.isPending}
+                    <Button size="sm" className="bg-green-600 hover:bg-green-700" disabled={atualizarContratoMut.isPending || contratoAssinado}
                       onClick={() => atualizarContratoMut.mutate({
                         id, companyId: contrato.companyId,
                         diaMedicao: critForm.diaMedicao,

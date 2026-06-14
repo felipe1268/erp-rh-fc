@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3077 — **CONTRATOS DE TERCEIROS · A "DATA DE CORTE" (DIA DA MEDIÇÃO) PASSA A SER CONFIGURÁVEL
+ * SÓ ANTES DA ASSINATURA — DEPOIS DE ASSINADO O CARD "CRITÉRIOS DE MEDIÇÃO E PAGAMENTO" FICA TRAVADO;
+ * E FICA EXPLÍCITO QUE, AO MUDAR O CORTE, O PERÍODO DAS MEDIÇÕES SE AJUSTA SOZINHO E O VALOR VARIA
+ * POR OBRA.**
+ *
+ * PEDIDO (sequência dos prints de Medição/Critérios): "QUANDO A DATA DE CORTE MUDAR, PRECISAR
+ * AJUSTAR TBM.. ISSO ANTES DO CONTRATO SER ASSINADO OK..ISSO PODE MUDAR A CADA OBRA." Complementa as
+ * Rev. 3075/3076: o "Dia da Medição" (`diaMedicao`, default 25) é a data de corte e varia por obra;
+ * o usuário quer poder ajustá-lo ANTES da assinatura e que o período das medições reflita a mudança.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE, ZERO schema/backend — `atualizarContrato` já
+ * persiste `diaMedicao` e o modal de medição já lê `contrato.diaMedicao` ao vivo) em
+ * `client/src/pages/terceiros/contratos/ContratoDetalhe.tsx`: (1) o botão "Configurar" do card
+ * "Critérios de Medição e Pagamento" passa a ser exibido apenas quando `!contratoAssinado`
+ * (`assinaturaStatus !== "concluido"`); depois de assinado aparece um selo "🔒 Travado após
+ * assinatura" e o card fica somente-leitura — assim a data de corte só muda ANTES da assinatura.
+ * (2) Nota informativa (`bg-blue-50` + `Info`) dentro do editor de critérios explicando que o Dia da
+ * Medição é a data de corte, varia por obra, deve ser definido antes do envio p/ assinatura e que, ao
+ * alterá-lo, o período das próximas medições se ajusta automaticamente (já era verdade desde a Rev.
+ * 3076, pois `fimEfetivo = cutoffOnOrAfterISO(diaMed, inicio)` lê o `diaMedicao` vigente). Nenhuma
+ * mudança no cálculo/persistência — apenas gate de edição por assinatura + comunicação.
+ *
  * Rev. 3076 — **CONTRATOS DE TERCEIROS · "GERAR MEDIÇÃO AUTOMÁTICA" · A 1ª MEDIÇÃO PASSA A COMEÇAR
  * NA DATA DE INÍCIO DA OBRA/CONTRATO E O FIM DE TODA MEDIÇÃO É SEMPRE O "DIA DA MEDIÇÃO" DO CONTRATO
  * (CORTE — Ex.: DIA 25) — CRIANDO OS VÍNCULOS CORRETOS ENTRE O CALENDÁRIO DA MEDIÇÃO E O CONTRATO.**
