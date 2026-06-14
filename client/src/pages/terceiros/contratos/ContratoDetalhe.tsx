@@ -1978,31 +1978,63 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
   const [motivoRejeicao, setMotivoRejeicao] = useState("");
   const [editingItem, setEditingItem] = useState<{ id: number; valor: string } | null>(null);
   const [recalcResult, setRecalcResult] = useState<any>(null);
+  const [, navigate] = useLocation();
+  // Rev. 3082 (T007) — Esta aba é ESPELHO SÓ-LEITURA. As medições de terceiros são
+  // geridas no módulo dedicado (/terceiros/medicoes). A edição inline fica desligada por
+  // padrão; abre-se com "Editar nesta aba" (ou deep-link ?edit=1 vindo do módulo).
+  const [modoEdicao, setModoEdicao] = useState(() => {
+    try { return new URLSearchParams(window.location.search).get("edit") === "1"; } catch { return false; }
+  });
+
+  const banner = (
+    <div className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs ${modoEdicao ? "bg-amber-50 border-amber-200 text-amber-800" : "bg-blue-50 border-blue-200 text-blue-800"}`}>
+      <div className="flex items-center gap-1.5">
+        {modoEdicao ? <Pencil className="w-3.5 h-3.5 flex-shrink-0" /> : <Eye className="w-3.5 h-3.5 flex-shrink-0" />}
+        <span>
+          {modoEdicao
+            ? "Modo edição ativo. O fluxo oficial das medições de terceiros vive no módulo dedicado."
+            : "Espelho só-leitura. As medições de terceiros são geridas no módulo dedicado."}
+        </span>
+      </div>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <Button size="sm" variant="outline" className="h-7 gap-1 text-[11px]" onClick={() => navigate("/terceiros/medicoes")}>
+          <ExternalLink className="w-3 h-3" /> Abrir módulo de Medições
+        </Button>
+        <Button size="sm" variant={modoEdicao ? "default" : "outline"} className="h-7 gap-1 text-[11px]" onClick={() => setModoEdicao(v => !v)}>
+          {modoEdicao ? <><CheckCircle className="w-3 h-3" /> Concluir edição</> : <><Pencil className="w-3 h-3" /> Editar nesta aba</>}
+        </Button>
+      </div>
+    </div>
+  );
 
   if (contrato.medicoes.length === 0) {
     return (
-      <div className="py-10 text-center text-sm">
+      <div className="space-y-3">
+        {banner}
+        <div className="py-10 text-center text-sm">
         <ClipboardCheck className="w-8 h-8 mx-auto mb-2 opacity-30 text-gray-400" />
         <p className="text-gray-400 mb-4">Nenhuma medição gerada para este contrato.</p>
-        {assinado ? (
+        {assinado && modoEdicao ? (
           <Button onClick={() => setShowGerarMedicao(true)} className="gap-2 bg-blue-600 hover:bg-blue-700">
             <Zap className="w-4 h-4" /> Gerar Medição
           </Button>
-        ) : (
+        ) : !assinado ? (
           <span className="inline-flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
             <Clock className="w-3.5 h-3.5" />
             {(contrato as any).assinaturaStatus
               ? "Conclua a assinatura do contrato (FcSign) para gerar medições."
               : "Envie o contrato para assinatura antes de gerar medições."}
           </span>
-        )}
+        ) : null}
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
-      {assinado && (
+      {banner}
+      {assinado && modoEdicao && (
         <div className="flex justify-end">
           <Button onClick={() => setShowGerarMedicao(true)} size="sm" className="gap-2 bg-blue-600 hover:bg-blue-700">
             <Zap className="w-4 h-4" /> Gerar Medição
@@ -2014,6 +2046,8 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
         const isExpanded = expandedMedicao === m.id;
         const isEditable = m.status !== "paga";
         const isPreApproval = m.status === "aguardando_aprovacao" || m.status === "rascunho";
+        const editavel = isEditable && modoEdicao; // Rev. 3082 (T007) — gate de edição da aba-espelho
+        const mostrarRemover = isPreApproval && modoEdicao;
         const itens = m.itens || [];
 
         return (
@@ -2031,6 +2065,7 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
                     Ref: {fmtDate(m.dataReferencia)} • Medido: {BRL(m.valorMedido)} • Acumulado: {BRL(m.valorAcumulado)} • {Number(m.percentualGlobal).toFixed(1)}% global
                   </div>
                 </div>
+                {modoEdicao && (
                 <div className="flex gap-2 flex-shrink-0">
                   {m.status === "aguardando_aprovacao" && !tresNiveis && (
                     <>
@@ -2090,6 +2125,7 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
                     </Button>
                   )}
                 </div>
+                )}
               </div>
 
               {m.aprovadoPor && <p className="text-xs text-gray-400 mt-2 ml-6">Aprovado por <span className="font-medium">{m.aprovadoPor}</span> em {fmtDate(m.aprovadoEm)}</p>}
@@ -2127,6 +2163,7 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
                 fds={fdsAll.filter((f: any) => f.medicaoId === m.id)}
                 criarFdTerceiroMut={criarFdTerceiroMut}
                 excluirFdTerceiroMut={excluirFdTerceiroMut}
+                readOnly={!modoEdicao}
               />
             </div>
 
@@ -2146,7 +2183,7 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
                       <th className="px-2 py-2 text-center w-[55px]">Acum.%</th>
                       <th className="px-2 py-2 text-right w-[90px]">V.Período</th>
                       <th className="px-2 py-2 text-right w-[90px]">V.Acum.</th>
-                      {isPreApproval && <th className="px-2 py-2 text-center w-[35px]"></th>}
+                      {mostrarRemover && <th className="px-2 py-2 text-center w-[35px]"></th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -2209,7 +2246,7 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
                             <td className="px-2 py-2 text-right text-gray-700 font-medium">{BRL(item.valorTotalItem)}</td>
                             <td className="px-2 py-2 text-center text-gray-500 border-l border-gray-100">{percAnterior.toFixed(1)}%</td>
                             <td className="px-2 py-2 text-center">
-                              {isEditable && isEditingThis ? (
+                              {editavel && isEditingThis ? (
                                 <div className="flex items-center gap-1 justify-center">
                                   <input
                                     type="number" step="0.1" min="0" max={100 - percAnterior}
@@ -2228,8 +2265,8 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
                                 </div>
                               ) : (
                                 <span
-                                  className={`font-semibold ${percPeriodo > 0 ? "text-blue-700" : "text-gray-400"} ${isEditable ? "cursor-pointer hover:underline" : ""}`}
-                                  onClick={() => isEditable && setEditingItem({ id: item.id, valor: percPeriodo.toFixed(1) })}
+                                  className={`font-semibold ${percPeriodo > 0 ? "text-blue-700" : "text-gray-400"} ${editavel ? "cursor-pointer hover:underline" : ""}`}
+                                  onClick={() => editavel && setEditingItem({ id: item.id, valor: percPeriodo.toFixed(1) })}
                                   title={item.editadoManualmente ? `Avanço físico real: ${Number(item.percentualFisicoReal || 0).toFixed(1)}% — Editado manualmente` : undefined}
                                 >
                                   +{percPeriodo.toFixed(1)}%
@@ -2240,7 +2277,7 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
                             <td className="px-2 py-2 text-center font-semibold text-gray-700">{percAcumulado.toFixed(1)}%</td>
                             <td className="px-2 py-2 text-right text-gray-600">{BRL(item.valorMedidoPeriodo)}</td>
                             <td className="px-2 py-2 text-right font-semibold text-gray-900">{BRL(item.valorAcumulado)}</td>
-                            {isPreApproval && (
+                            {mostrarRemover && (
                               <td className="px-2 py-2 text-center">
                                 <button onClick={() => { if (confirm("Remover este item da medição?")) removerMedicaoItemMut.mutate({ medicaoItemId: item.id, medicaoId: m.id }); }}
                                   className="text-red-300 hover:text-red-500 p-0.5">
@@ -2259,12 +2296,12 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
                       <td className="px-3 py-2 text-right text-gray-600" colSpan={9}>Total Período</td>
                       <td className="px-2 py-2 text-right text-blue-700">{BRL(m.valorMedido)}</td>
                       <td className="px-2 py-2 text-right text-gray-900">{BRL(m.valorAcumulado)}</td>
-                      {isPreApproval && <td />}
+                      {mostrarRemover && <td />}
                     </tr>
                   </tfoot>
                 </table>
               </div>
-              <RetencoesSec m={m} contrato={contrato} isEditable={isEditable} />
+              <RetencoesSec m={m} contrato={contrato} isEditable={editavel} />
             </>)}
 
             {isExpanded && itens.length === 0 && (
@@ -2999,12 +3036,13 @@ function ItemsTreeTable({ contrato, id, pct, removerItemMut }: { contrato: any; 
 
 // Rev. 3079 — Painel de FD do período da medição (Terceiros · a pagar).
 // FD manual lançado por medição; soma OBRIGATORIAMENTE abate o valor a pagar (líquido).
-function FdMedicaoPanel({ medicao, contrato, fds, criarFdTerceiroMut, excluirFdTerceiroMut }: any) {
+function FdMedicaoPanel({ medicao, contrato, fds, criarFdTerceiroMut, excluirFdTerceiroMut, readOnly }: any) {
   const [open, setOpen] = useState(false);
   const [desc, setDesc] = useState("");
   const [valor, setValor] = useState("");
   const [data, setData] = useState("");
-  const travado = medicao.status === "aprovada" || medicao.status === "paga";
+  // Rev. 3082 (T007) — readOnly desliga o lançamento/exclusão de FD na aba-espelho.
+  const travado = readOnly || medicao.status === "aprovada" || medicao.status === "paga";
 
   const onlyDigits = (s: string) => s.replace(/\D/g, "");
   const maskBRLInput = (s: string) => (parseInt(onlyDigits(s) || "0", 10) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });

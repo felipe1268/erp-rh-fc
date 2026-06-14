@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
-import { getDb } from "../db";
+import { getDb, getUserCompanyLinks } from "../db";
 import {
   medicaoContratos,
   medicaoBoletins,
@@ -22,6 +22,20 @@ import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { TRPCError } from "@trpc/server";
 import { consolidarContornos } from "../../shared/levantamentoConsolidado";
+
+// Guard PERMISSIVO de empresa (mesmo padrão de medicaoConfig/aiConfig/compras):
+// admin libera; usuário SEM vínculo libera; só bloqueia usuário vinculado a
+// empresas tentando uma empresa fora dos seus vínculos (anti-IDOR de leitura).
+async function assertCompanyAccess(ctxUser: any, companyId: number) {
+  if (!ctxUser?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
+  if (ctxUser.role === "admin" || ctxUser.role === "admin_master") return;
+  const links = await getUserCompanyLinks(ctxUser.id);
+  const allowedIds = (links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === "number");
+  if (allowedIds.length === 0) return;
+  if (!allowedIds.includes(companyId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+  }
+}
 
 export const medicaoRouter = router({
 
@@ -736,6 +750,65 @@ export const medicaoRouter = router({
         .where(and(eq(medicaoCampoFotos.medicaoCampoId, campo.id), eq(medicaoCampoFotos.companyId, input.companyId), isNull(medicaoCampoFotos.deletedAt)))
         .orderBy(medicaoCampoFotos.id);
       return { ...campo, pdfs, contornos, fotos };
+    }),
+
+  // Rev. 3082 (T003) — Histórico "já medido" acumulado POR CONTRATO.
+  // Soma a quantidade de contornos vinculados a item do orçamento em TODOS os
+  // OUTROS campos (levantamentos) do mesmo contrato/empresa, p/ o engenheiro
+  // ver o que já foi medido antes e não remedir. Read-only, tenant-guard por companyId.
+  getHistoricoQuantidades: protectedProcedure
+    .input(z.object({ contratoId: z.number(), companyId: z.number(), excluirCampoId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      // ATENÇÃO: contratoId COLIDE entre módulos (medicao_contratos × terceiro_contratos),
+      // e a engine de levantamento (medicao_campo) é compartilhada com `origem` distinguindo
+      // 'terceiro' de cliente/legado (NULL). Para o histórico "já medido" não misturar dois
+      // contratos homônimos de módulos diferentes, escopamos pela origem do campo ATUAL.
+      // O campo de referência é OBRIGATÓRIO e precisa pertencer à (empresa, contrato) — se
+      // não resolver, abortamos (em vez de cair em consulta SEM filtro de origem = mistura).
+      const [atual] = await db
+        .select({ origem: medicaoCampo.origem })
+        .from(medicaoCampo)
+        .where(and(
+          eq(medicaoCampo.id, input.excluirCampoId),
+          eq(medicaoCampo.companyId, input.companyId),
+          eq(medicaoCampo.contratoId, input.contratoId),
+        ))
+        .limit(1);
+      if (!atual) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Levantamento de campo inválido para este contrato/empresa." });
+      }
+      const escopoTerceiro = atual.origem === "terceiro";
+      const campos = await db
+        .select({ id: medicaoCampo.id })
+        .from(medicaoCampo)
+        .where(and(
+          eq(medicaoCampo.companyId, input.companyId),
+          eq(medicaoCampo.contratoId, input.contratoId),
+          isNull(medicaoCampo.deletedAt),
+          escopoTerceiro
+            ? eq(medicaoCampo.origem, "terceiro")
+            : sql`(${medicaoCampo.origem} IS DISTINCT FROM 'terceiro')`,
+        ));
+      const ids = campos.map((c) => c.id).filter((id) => id !== input.excluirCampoId);
+      if (ids.length === 0) return [] as { orcamentoItemId: number; quantidade: number }[];
+      const rows = await db
+        .select({
+          orcamentoItemId: medicaoCampoContornos.orcamentoItemId,
+          quantidade: sql<string>`COALESCE(SUM(${medicaoCampoContornos.quantidade}), 0)`,
+        })
+        .from(medicaoCampoContornos)
+        .where(and(
+          inArray(medicaoCampoContornos.medicaoCampoId, ids),
+          eq(medicaoCampoContornos.companyId, input.companyId),
+          isNull(medicaoCampoContornos.deletedAt),
+          sql`${medicaoCampoContornos.orcamentoItemId} IS NOT NULL`,
+        ))
+        .groupBy(medicaoCampoContornos.orcamentoItemId);
+      return rows
+        .filter((r) => r.orcamentoItemId != null)
+        .map((r) => ({ orcamentoItemId: r.orcamentoItemId as number, quantidade: Number(r.quantidade) || 0 }));
     }),
 
   criarCampo: protectedProcedure

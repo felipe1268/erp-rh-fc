@@ -17,7 +17,7 @@ import {
   ArrowLeft, Plus, Loader2, FileText, Trash2, Ruler, Square, Box, Spline,
   Hash, MousePointer2, Crosshair, ZoomIn, ZoomOut, Check, Camera, Image as ImageIcon,
   Calculator, FileSpreadsheet, ChevronLeft, ChevronRight, X,
-  Wifi, WifiOff, RefreshCw, Download, HardDrive, AlertTriangle, CheckCircle2, CloudOff,
+  Wifi, WifiOff, RefreshCw, Download, HardDrive, AlertTriangle, CheckCircle2, CloudOff, History,
 } from "lucide-react";
 import {
   type GeoPonto, type TipoContorno, UNIDADE_POR_TIPO, LABEL_TIPO,
@@ -79,6 +79,27 @@ export default function MedicaoLevantamento() {
   const loadingCampo = off.loading;
   const itensOrcamento = off.itensOrcamento;
   const consolidado = off.consolidado;
+
+  // Rev. 3082 (T003) — Histórico "já medido" acumulado POR CONTRATO (medições
+  // anteriores), p/ o engenheiro não remedir o mesmo item. Apenas referência (cinza).
+  const { data: historicoQtd } = trpc.medicao.getHistoricoQuantidades.useQuery(
+    { contratoId, companyId, excluirCampoId: campoId },
+    { enabled: contratoId > 0 && campoId > 0 && companyId > 0 },
+  );
+  const jaMedidoMap = useMemo(() => {
+    const m = new Map<number, number>();
+    (historicoQtd ?? []).forEach((h: any) => m.set(h.orcamentoItemId, h.quantidade));
+    return m;
+  }, [historicoQtd]);
+  const jaMedidoLista = useMemo(() => {
+    const itensById = new Map<number, any>((itensOrcamento as any[]).map((i) => [i.id, i]));
+    const out: { id: number; eapCodigo: string; descricao: string; unidade: string; quantidade: number }[] = [];
+    jaMedidoMap.forEach((qtd, itemId) => {
+      const it = itensById.get(itemId);
+      out.push({ id: itemId, eapCodigo: it?.eapCodigo ?? "", descricao: it?.descricao ?? `Item #${itemId}`, unidade: it?.unidade ?? "", quantidade: qtd });
+    });
+    return out.sort((a, b) => (a.eapCodigo || "").localeCompare(b.eapCodigo || "", undefined, { numeric: true }));
+  }, [jaMedidoMap, itensOrcamento]);
 
   const invalidate = () => {
     utils.medicao.getCampo.invalidate({ id: campoId, companyId });
@@ -593,11 +614,15 @@ export default function MedicaoLevantamento() {
                         <Select value={c.orcamentoItemId ? String(c.orcamentoItemId) : ""} onValueChange={(v) => bindItem(c.id, v)}>
                           <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Vincular item do orçamento…" /></SelectTrigger>
                           <SelectContent>
-                            {(itensOrcamento as any[]).filter((i) => i.tipo !== "grupo" && i.nivel > 0).map((i) => (
-                              <SelectItem key={i.id} value={String(i.id)} className="text-xs">
-                                {i.eapCodigo} · {i.descricao} ({i.unidade})
-                              </SelectItem>
-                            ))}
+                            {(itensOrcamento as any[]).filter((i) => i.tipo !== "grupo" && i.nivel > 0).map((i) => {
+                              const ja = jaMedidoMap.get(i.id) ?? 0;
+                              return (
+                                <SelectItem key={i.id} value={String(i.id)} className="text-xs">
+                                  {i.eapCodigo} · {i.descricao} ({i.unidade})
+                                  {ja > 0 ? <span className="text-gray-400"> · já medido: {numFmt(ja, 2)} {i.unidade}</span> : null}
+                                </SelectItem>
+                              );
+                            })}
                           </SelectContent>
                         </Select>
                       </div>
@@ -606,6 +631,22 @@ export default function MedicaoLevantamento() {
                 </div>
               )}
             </div>
+
+            {/* já medido neste contrato (histórico acumulado — referência) */}
+            {jaMedidoLista.length > 0 && (
+              <div className="border rounded-lg p-3 bg-gray-50">
+                <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5 text-gray-500"><History className="h-4 w-4" />Já medido neste contrato</h3>
+                <p className="text-[11px] text-gray-400 mb-2">Acumulado de medições anteriores deste contrato — evite remedir o mesmo item.</p>
+                <div className="space-y-1">
+                  {jaMedidoLista.map((l) => (
+                    <div key={l.id} className="flex items-center justify-between text-xs text-gray-500 border-b border-gray-100 pb-1">
+                      <span className="truncate">{l.eapCodigo ? `${l.eapCodigo} · ` : ""}{l.descricao}</span>
+                      <span className="font-medium whitespace-nowrap pl-2">{numFmt(l.quantidade, 2)} {l.unidade}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* consolidado */}
             <div className="border rounded-lg p-3">

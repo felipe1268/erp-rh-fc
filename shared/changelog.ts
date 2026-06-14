@@ -1,6 +1,48 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3082 — **MEDIÇÕES · FECHAMENTO DO SESSION_PLAN (T003 + T007): (A) HISTÓRICO "JÁ MEDIDO" ACUMULADO
+ * POR CONTRATO NO LEVANTAMENTO DE CAMPO (CINZA, REFERÊNCIA P/ NÃO REMEDIR O MESMO ITEM) E (B) A ABA
+ * "MEDIÇÕES" DO CONTRATO DE TERCEIROS VIRA ESPELHO SÓ-LEITURA POR PADRÃO, COM TOGGLE "EDITAR NESTA ABA"
+ * E CTA P/ O MÓDULO DEDICADO `/terceiros/medicoes`.**
+ *
+ * CONTEXTO: as Rev. 3078-3081 entregaram a fundação (medicao_config), o schema (FDs + 3º nível), o
+ * backend/UI do fluxo de Terceiros (a pagar) na tela dedicada e o desdobramento no hub. Faltava fechar as
+ * duas tarefas conscientemente adiadas na Rev. 3080: T003 (realce "já medido" cinza) e T007 (aba do
+ * contrato → espelho read-only). Esta revisão fecha ambas. ZERO ALTER/DROP/DELETE/SCHEMA — T003 é só uma
+ * nova query READ-ONLY (sem DDL) e T007 é FRONTEND-ONLY.
+ *
+ * T003 — HISTÓRICO "JÁ MEDIDO" (READ-ONLY):
+ * - BACKEND `server/routers/medicao.ts`: nova query `getHistoricoQuantidades({contratoId, companyId,
+ *   excluirCampoId})` — soma `quantidade` dos contornos (`medicao_campo_contorno`) vinculados a item do
+ *   orçamento (`orcamento_item_id IS NOT NULL`) em TODOS os OUTROS campos de levantamento do MESMO contrato
+ *   (`excluirCampoId` remove o campo corrente), agrupada por `orcamento_item_id`. Tenant-guard por
+ *   `companyId` em todas as subconsultas (campo→contrato→empresa). Retorna `{orcamentoItemId, quantidade}[]`.
+ * - FRONTEND `client/src/pages/medicao/MedicaoLevantamento.tsx`: consome a query, monta `jaMedidoMap`
+ *   (Map por orcamentoItemId) e `jaMedidoLista` (ordenada por EAP). (1) Dropdown de vínculo de item agora
+ *   anexa " · já medido: <qtd> <un>" em cinza quando o item já foi medido em outro campo. (2) NOVO bloco
+ *   lateral "Já medido neste contrato" (cinza, com aviso "evite remedir o mesmo item") listando item +
+ *   quantidade acumulada. Decisão consciente: o OVERLAY VISUAL cinza na PLANTA foi DESCARTADO — cada campo
+ *   tem PDFs próprios (pdfId distinto), então a sobreposição geométrica entre plantas não é confiável;
+ *   o realce textual/lista cobre o objetivo (não remedir) sem falso-positivo geométrico.
+ *
+ * T007 — ABA "MEDIÇÕES" DO CONTRATO → ESPELHO SÓ-LEITURA (`ContratoDetalhe.tsx`, MedicoesTab):
+ * - State `modoEdicao` (default `false`; lê `?edit=1` da URL p/ deep-link de edição). Banner no topo
+ *   (ícone Eye/Pencil): em modo leitura mostra "Somente leitura — medições são feitas no módulo dedicado"
+ *   + botão "Abrir módulo de Medições" (navigate `/terceiros/medicoes`) + toggle "Editar nesta aba"; em
+ *   modo edição mostra aviso de que está editando direto na aba.
+ * - Gating de TODOS os controles de escrita por `modoEdicao`: botão "Gerar Medição" (topo e empty-state),
+ *   bloco de botões de aprovação/rejeição/excluir, edição inline do % por item (helper `editavel =
+ *   isEditable && modoEdicao`), coluna "remover item" (th/td/tfoot, helper `mostrarRemover = isPreApproval
+ *   && modoEdicao`), `RetencoesSec` (recebe `isEditable={editavel}`) e `FdMedicaoPanel` (nova prop
+ *   `readOnly={!modoEdicao}` que entra no `travado`). Em modo leitura a aba exibe TODOS os dados (medições,
+ *   itens, retenções, FDs, strip de níveis) sem nenhuma ação de escrita.
+ *
+ * VERIFICAÇÃO: esbuild parse OK nos 3 arquivos; `tsc --noEmit` limpo (filtrado nos arquivos tocados);
+ * app reinicia limpo.
+ */
+
+/**
  * Rev. 3081 — **HUB DE MÓDULOS (HOME) · O CARD ÚNICO "MEDIÇÃO" FOI DESDOBRADO NOS DOIS MÓDULOS DEDICADOS:
  * "MEDIÇÃO CLIENTE" (A RECEBER, % AUTO DO AVANÇO FÍSICO → `/medicao`) E "MEDIÇÃO TERCEIROS" (A PAGAR,
  * LEVANTAMENTO + DIVERGÊNCIA + FD + APROVAÇÃO 3 NÍVEIS → `/terceiros/medicoes`).**
