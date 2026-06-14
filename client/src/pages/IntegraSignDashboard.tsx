@@ -147,6 +147,20 @@ export default function IntegraSignDashboard() {
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   }
 
+  // Rev. 3068: 1 clique no "Enviar por e-mail" já dispara o e-mail E abre o WhatsApp
+  // do 1º signatário pendente (assinatura é sequencial — só o ordemAssinatura 1 é
+  // notificado no envio), sem precisar clicar no botão WhatsApp depois. O window.open
+  // do WhatsApp roda de forma SÍNCRONA no gesto do clique p/ não ser bloqueado no iPad/Safari.
+  function handleEnviarComWhatsApp(env: any) {
+    const primeiro =
+      (env.signatarios || []).find((s: any) => s.ordemAssinatura === 1 && s.token && !["assinado", "recusado"].includes(s.status))
+      || [...(env.signatarios || [])]
+          .filter((s: any) => s.token && !["assinado", "recusado"].includes(s.status))
+          .sort((a: any, b: any) => (a.ordemAssinatura || 0) - (b.ordemAssinatura || 0))[0];
+    if (primeiro?.token) handleWhatsApp(primeiro, env.titulo);
+    handleEnviar(env.id, true);
+  }
+
   async function handleEnviar(envelopeId: number, enviarEmail = true) {
     try {
       const result = await enviarMut.mutateAsync({ companyId, envelopeId, enviarEmail });
@@ -470,7 +484,7 @@ export default function IntegraSignDashboard() {
                   <div className="flex gap-2 flex-wrap pt-2">
                     {env.status === "rascunho" && (
                       <>
-                        <Button size="sm" onClick={() => handleEnviar(env.id, true)} disabled={enviarMut.isPending}>
+                        <Button size="sm" onClick={() => handleEnviarComWhatsApp(env)} disabled={enviarMut.isPending} title="Envia por e-mail e já abre o WhatsApp do 1º signatário com o link de assinatura">
                           <Send className="h-4 w-4 mr-1" />
                           Enviar por e-mail
                         </Button>

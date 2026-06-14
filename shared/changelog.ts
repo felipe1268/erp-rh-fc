@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3068 — **INTEGRASIGN · 1 CLIQUE NO "ENVIAR POR E-MAIL" JÁ ABRE O WHATSAPP DO 1º SIGNATÁRIO COM O
+ * LINK DE ASSINATURA PRONTO — SEM PRECISAR CLICAR DEPOIS NO BOTÃO "WHATSAPP" / "GERAR LINKS".**
+ *
+ * PEDIDO (print do iPad — IMG_1996, tela do IntegraSign · envelope CT-2026-0006 em Rascunho): "Quando
+ * clicar em enviar contrato, já considera o link para enviar pelo WhatsApp tbm sem precisar clicar no
+ * botão ok". Antes o usuário tinha de clicar em "Enviar por e-mail" e DEPOIS no botão "WhatsApp" de cada
+ * signatário (ou "Gerar links (WhatsApp)") — duas ações.
+ *
+ * CONTEXTO: a assinatura no IntegraSign é SEQUENCIAL — no envio, só o 1º signatário (ordemAssinatura === 1,
+ * + testemunhas) é notificado; os demais só assinam na vez deles. Logo, o link relevante "para agora" é o
+ * do 1º signatário pendente. Os tokens de assinatura JÁ existem desde a criação do envelope (rascunho), e a
+ * tela de Detalhes usa `getEnvelope` (select completo) — então `env.signatarios[].token`/`ordemAssinatura`
+ * estão disponíveis de forma SÍNCRONA no clique.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE, ZERO schema/backend) em `client/src/pages/IntegraSignDashboard.tsx`:
+ * nova fn `handleEnviarComWhatsApp(env)` ligada ao botão "Enviar por e-mail" — (1) acha o 1º signatário
+ * pendente (find `ordemAssinatura === 1` não assinado/recusado; fallback p/ menor `ordemAssinatura` pendente
+ * com token), (2) abre o WhatsApp dele via `handleWhatsApp(primeiro, env.titulo)` (wa.me sem número, msg +
+ * link prontos) e (3) dispara `handleEnviar(env.id, true)` (e-mail). CRÍTICO: o `window.open` do WhatsApp
+ * roda de forma SÍNCRONA no gesto do clique (ANTES do await da mutation) p/ NÃO ser bloqueado pelo
+ * popup-blocker do iPad/Safari. O botão "Gerar links (WhatsApp)" (envio sem e-mail) foi mantido intacto.
+ *
+ * RESSALVA: wa.me sem número apenas abre o WhatsApp com a mensagem pronta p/ o usuário escolher o contato —
+ * não dispara automaticamente. Se não houver 1º signatário pendente com token, só o e-mail é enviado.
+ *
  * Rev. 3067 — **PADRONIZAÇÃO GLOBAL DE MOEDA: VARREDURA EM TODO O ERP PARA ELIMINAR AS ABREVIAÇÕES DE
  * VALOR ("R$ X mil" / "R$ X,X mi" / "R$ XK" / "R$ XM" / "R$ Xk") — AGORA TUDO EXIBE O VALOR COMPLETO EM
  * BRL POR EXTENSO (R$ 51.929,02 — PONTO P/ MILHAR, VÍRGULA P/ CENTAVOS), EM TELAS, TABELAS, KPIs, RÓTULOS
