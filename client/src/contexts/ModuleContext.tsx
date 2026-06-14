@@ -233,6 +233,19 @@ export function ModuleProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    // Rev. 3087 — Rotas AMBÍGUAS (pertencem a mais de um módulo). A tela de detalhe do
+    // contrato de terceiros (`/terceiros/contratos/:id`) é alcançada tanto pelo módulo
+    // "Terceiros" quanto pelo "Medição Terceiros" (botão "Medir"). Quando o usuário JÁ
+    // está no módulo de medições, NÃO trocamos o menu pra "terceiros" — o painel fica
+    // fixo no módulo de origem.
+    const STICKY_AMBIGUOUS: { prefix: string; keepIf: ModuleId[] }[] = [
+      { prefix: "/terceiros/contratos", keepIf: ["medicao-terceiros"] },
+    ];
+    const sticky = STICKY_AMBIGUOUS.find(
+      s => (location === s.prefix || location.startsWith(s.prefix + "/")) && s.keepIf.includes(activeModule),
+    );
+    if (sticky) return;
+
     if (routeModule && routeModule !== activeModule) {
       setActiveModule(routeModule);
     }

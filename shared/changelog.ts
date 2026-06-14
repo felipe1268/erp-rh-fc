@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3087 — **MEDIÇÃO DE TERCEIROS · O PAINEL/MENU FICA FIXO NO MÓDULO: AO CLICAR "MEDIR" (OU ABRIR O
+ * DETALHE DO CONTRATO) DENTRO DO MÓDULO "MEDIÇÃO TERCEIROS", A BARRA LATERAL DEIXA DE TROCAR PARA O MÓDULO
+ * "TERCEIROS".**
+ *
+ * PEDIDO (usuário, prints iPad): estando no módulo "Medição Terceiros" (`/terceiros/medicoes`), clicar em
+ * "Medir" num contrato levava à tela de detalhe do contrato (`/terceiros/contratos/:id?tab=medicoes`) e o
+ * MENU LATERAL trocava para o módulo "Terceiros" (Contratos PJ, Empresas de Serviço, etc.). O usuário quer
+ * o painel FIXO no módulo de medições — "não deveria ficar mudando".
+ *
+ * CAUSA-RAIZ: `client/src/contexts/ModuleContext.tsx` resolve o módulo ativo SOMENTE pela rota
+ * (`ROUTE_MODULE_MAP` + match por prefixo mais longo). A rota `/terceiros/contratos` mapeia para "terceiros",
+ * então abrir o detalhe do contrato força a troca do módulo ativo — mesmo quando o usuário veio do módulo de
+ * medições. A tela de detalhe é AMBÍGUA: pertence aos dois módulos.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE/SCHEMA/BACKEND) no `useEffect` de resolução de módulo:
+ * NOVO conceito de rota AMBÍGUA "sticky" — `STICKY_AMBIGUOUS = [{ prefix: "/terceiros/contratos", keepIf:
+ * ["medicao-terceiros"] }]`. Se a rota atual casa um prefixo sticky E o `activeModule` atual está em `keepIf`,
+ * o efeito faz `return` ANTES de trocar o módulo, mantendo o menu de "Medição Terceiros". O fluxo normal
+ * (entrar no detalhe a partir do módulo "Terceiros") fica intacto, pois "terceiros" não está em `keepIf`.
+ *
+ * RESULTADO: dentro do módulo de medições, abrir/medir um contrato mantém a barra lateral de "Medição
+ * Terceiros"; pelo módulo "Terceiros" o comportamento permanece o de sempre.
+ *
  * Rev. 3086 — **CONTRATOS DE SERVIÇO (TERCEIROS) · TAG DE ASSINATURA NA LISTA: CADA CONTRATO PASSA A
  * EXIBIR UMA TAG "ASSINADO" (VERDE) × "FALTA ASSINATURA" (ÂMBAR), DERIVADA DA REGRA ADESIVA DO ENVELOPE
  * FCSIGN — NÃO DO CAMPO `status` BRUTO.**
