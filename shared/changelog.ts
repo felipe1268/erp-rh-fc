@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3069 — **FINANCEIRO · ANÁLISE DE CUSTOS (DETALHE) · GRÁFICO "DISTRIBUIÇÃO POR MÊS" PERDE OS
+ * RÓTULOS DE VALOR NO TOPO DAS BARRAS — ELES SE SOBREPUNHAM QUANDO VÁRIOS MESES TINHAM O MESMO VALOR,
+ * VIRANDO UM BORRÃO ILEGÍVEL. O VALOR CONTINUA DISPONÍVEL AO TOCAR NA BARRA (TOOLTIP).**
+ *
+ * PEDIDO (prints do iPad — IMG_1997/IMG_1998, "Sem fornecedor" › "Distribuição por Mês — 2026"): "Neste
+ * gráfico pode tirar os valores no topo do gráfico, vejo quando clicar, pq não posso ter informações
+ * sobrepostas". Jun–Dez tinham todos R$ 6.949,50 → os 7 rótulos `position="top"` empilhavam no mesmo X e
+ * saíam como "R$ 6.9R$6.94R$6.94...950,45" (vide print).
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE, ZERO schema/backend) em
+ * `client/src/pages/financeiro/FinanceiroAnaliseCustosDetalhe.tsx`: removido o `<LabelList position="top">`
+ * de dentro do `<Bar>` do BarChart "Distribuição por Mês" (o `<Bar>` virou self-closing). O tooltip
+ * `DetTooltip` (ao tocar/hover na barra) segue mostrando o valor completo em BRL, e o `onClick` que faz
+ * drill no mês foi preservado. O `import { LabelList }` foi MANTIDO porque o gráfico de quebra por
+ * dimensão (barras horizontais, `position="right"`) ainda usa rótulos — lá não há sobreposição.
+ *
  * Rev. 3068 — **INTEGRASIGN · 1 CLIQUE NO "ENVIAR POR E-MAIL" JÁ ABRE O WHATSAPP DO 1º SIGNATÁRIO COM O
  * LINK DE ASSINATURA PRONTO — SEM PRECISAR CLICAR DEPOIS NO BOTÃO "WHATSAPP" / "GERAR LINKS".**
  *

@@ -577,14 +577,10 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                             radius={[4, 4, 0, 0]}
                             cursor="pointer"
                             onClick={(_d: any, idx: number) => drillMes(idx + 1)}
-                          >
-                            <LabelList
-                              dataKey="value"
-                              position="top"
-                              formatter={(v: number) => (v > 0 ? BRLk(v) : "")}
-                              style={{ fontSize: 10, fontWeight: 600, fill: "#475569" }}
-                            />
-                          </Bar>
+                          />
+                          {/* Rev. 3069: rótulos de valor no topo das barras REMOVIDOS — em meses
+                              com valores iguais eles se sobrepunham e ficavam ilegíveis; o valor
+                              aparece ao tocar na barra (tooltip DetTooltip). */}
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
