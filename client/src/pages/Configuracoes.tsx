@@ -22,6 +22,7 @@ import { FinanceiroConfigSection } from "@/pages/configuracoes/FinanceiroConfigS
 import { SociosAdministradorSection } from "@/pages/configuracoes/SociosAdministradorSection";
 import { AlmoxarifadoConfigSection } from "@/pages/configuracoes/AlmoxarifadoConfigSection";
 import { PlanejamentoConfigSection } from "@/pages/configuracoes/PlanejamentoConfigSection";
+import { MedicaoConfigSection } from "@/pages/configuracoes/MedicaoConfigSection";
 import { IAConfigSection } from "@/pages/configuracoes/IAConfigSection";
 import TemplatesDocsTab from "@/pages/configuracoes/TemplatesDocsTab";
 import ContratoTemplate from "@/pages/terceiros/contratos/ContratoTemplate";
@@ -708,6 +709,7 @@ export default function Configuracoes() {
                 <AlmoxarifadoConfigSection />
                 <FinanceiroConfigSection onManageSocios={() => setActiveTab("socios")} />
                 <PlanejamentoConfigSection />
+                <MedicaoConfigSection />
               </div>
             </div>
 

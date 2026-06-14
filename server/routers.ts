@@ -114,6 +114,7 @@ import { bimRouter } from "./routers/bim";
 import { medicaoRouter } from "./routers/medicao";
 import { iaCronogramaRouter } from "./routers/iaCronograma";
 import { aiConfigRouter } from "./routers/aiConfig";
+import { medicaoConfigRouter } from "./routers/medicaoConfig";
 import { comprasRouter } from "./routers/compras";
 import { purchaseRouter } from "./routers/purchaseRouter";
 import { warehouseRouter } from "./routers/warehouse";
@@ -187,6 +188,7 @@ export const appRouter = router({
   medicao: medicaoRouter,
   iaCronograma: iaCronogramaRouter,
   aiConfig: aiConfigRouter,
+  medicaoConfig: medicaoConfigRouter,
   compras: comprasRouter,
   purchase: purchaseRouter,
   warehouse: warehouseRouter,

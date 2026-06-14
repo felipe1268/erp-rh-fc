@@ -4172,10 +4172,45 @@ export const terceiroMedicoes = pgTable("terceiro_medicoes", {
   retencaoTecnica:   numeric("retencao_tecnica", { precision: 18, scale: 2 }).default("0"),
   descontos:         numeric({ precision: 18, scale: 2 }).default("0"),
   observacoesRetencao: text("observacoes_retencao"),
+  // Rev. 3078 — Aprovação em 3 níveis (mede → gestor da obra → sócio adm).
+  nivelAprovacao:    integer("nivel_aprovacao").default(0).notNull(), // 0 medido, 1 gestor ok, 2 sócio ok (final)
+  gestorAprovadoPor: varchar("gestor_aprovado_por", { length: 255 }),
+  gestorAprovadoEm:  timestamp("gestor_aprovado_em", { mode: "string" }),
+  socioAprovadoPor:  varchar("socio_aprovado_por", { length: 255 }),
+  socioAprovadoEm:   timestamp("socio_aprovado_em", { mode: "string" }),
+  // Rev. 3078 — Vínculo com o levantamento de campo + snapshot p/ alerta de divergência.
+  levantamentoCampoId:   integer("levantamento_campo_id"),
+  quantidadeLevantada:   numeric("quantidade_levantada", { precision: 18, scale: 4 }),
+  unidadeLevantada:      varchar("unidade_levantada", { length: 20 }),
+  percentualDivergencia: numeric("percentual_divergencia", { precision: 8, scale: 4 }),
+  // Rev. 3078 — Total de FD (auto OCs + manual) abatido nesta medição.
+  fdTotalAbatido:    numeric("fd_total_abatido", { precision: 18, scale: 2 }).default("0").notNull(),
   criadoPor:         varchar("criado_por", { length: 255 }),
   criadoEm:          timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
   atualizadoEm:      timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
 });
+
+// Rev. 3078 — FD manual por medição de terceiro (o auto vem de medicao_fd_registros/OCs).
+// data_fd define em qual medição entra (período início→corte do Dia da Medição). Anexo opcional.
+export const terceiroMedicaoFds = pgTable("terceiro_medicao_fds", {
+  id:           serial().primaryKey(),
+  companyId:    integer("company_id").notNull(),
+  contratoId:   integer("contrato_id").notNull(),
+  medicaoId:    integer("medicao_id"),
+  descricao:    varchar({ length: 500 }).notNull(),
+  valor:        numeric({ precision: 18, scale: 2 }).notNull(),
+  dataFd:       date("data_fd").notNull(),
+  anexoUrl:     varchar("anexo_url", { length: 500 }),
+  origem:       varchar({ length: 20 }).default("manual").notNull(), // manual | auto
+  observacoes:  text(),
+  criadoPor:    varchar("criado_por", { length: 255 }),
+  criadoEm:     timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+  atualizadoEm: timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_tmfds_contrato").on(t.contratoId),
+  index("idx_tmfds_medicao").on(t.medicaoId),
+  index("idx_tmfds_company").on(t.companyId),
+]);
 
 export const terceiroMedicaoItens = pgTable("terceiro_medicao_itens", {
   id:                serial().primaryKey(),
@@ -5887,6 +5922,27 @@ export const planejamentoMedicaoConfig = pgTable("planejamento_medicao_config", 
   criadoEm:          timestamp("criado_em").defaultNow(),
   atualizadoEm:      timestamp("atualizado_em").defaultNow(),
 });
+
+// ========== MEDIÇÃO — PAINEL DE CONTROLE (por empresa) ==========
+// Rev. 3078 — Governa o COMPORTAMENTO dos módulos "Medição de Cliente" (a receber)
+// e "Medição de Terceiros" (a pagar). Ausência de linha = defaults permissivos.
+// Colunas snake_case explícitas p/ casar com o self-heal [SyncSchema+].
+export const medicaoConfig = pgTable("medicao_config", {
+  id:                       serial().primaryKey(),
+  companyId:                integer("company_id").notNull(),
+  terceirosAtivo:           smallint("terceiros_ativo").default(1).notNull(),
+  clienteAtivo:             smallint("cliente_ativo").default(1).notNull(),
+  levantamentoObrigatorio:  smallint("levantamento_obrigatorio").default(1).notNull(),
+  fotosObrigatorias:        smallint("fotos_obrigatorias").default(1).notNull(),
+  aprovacaoTresNiveis:      smallint("aprovacao_tres_niveis").default(1).notNull(),
+  divergenciaToleranciaPct: numeric("divergencia_tolerancia_pct", { precision: 6, scale: 2 }).default("5").notNull(),
+  diaMedicaoPadrao:         integer("dia_medicao_padrao").default(25).notNull(),
+  updatedBy:                varchar("updated_by", { length: 255 }),
+  updatedAt:                timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  createdAt:                timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uniq_medicao_config_company").on(table.companyId),
+]);
 
 export const planejamentoMedicoes = pgTable("planejamento_medicoes", {
   id:                   serial().primaryKey(),
@@ -7921,6 +7977,8 @@ export const medicaoCampo = pgTable("medicao_campo", {
   descricao:        text(),
   status:           varchar({ length: 20 }).notNull().default("rascunho"),
   boletimId:        integer("boletim_id"),
+  medicaoId:        integer("medicao_id"), // Rev. 3078 — vínculo ao terceiro_medicoes (levantamento da medição de terceiro)
+  origem:           varchar({ length: 20 }).default("cliente").notNull(), // Rev. 3078 — cliente | terceiro (IDs de contrato colidem entre tabelas)
   criadoPorId:      integer("criado_por_id"),
   criadoPorNome:    varchar("criado_por_nome", { length: 255 }),
   criadoEm:         timestamp("criado_em").defaultNow(),

@@ -1,6 +1,62 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3078 — **MEDIÇÕES · FUNDAÇÃO DA REESTRUTURAÇÃO EM 2 MÓDULOS (MEDIÇÃO DE CLIENTE A RECEBER ×
+ * MEDIÇÃO DE TERCEIROS A PAGAR): NOVO "PAINEL DE CONTROLE DAS MEDIÇÕES" EM CONFIGURAÇÕES (TUDO
+ * CONFIGURÁVEL POR EMPRESA) + SCHEMA/SELF-HEAL DAS NOVAS REGRAS (3 NÍVEIS DE APROVAÇÃO, VÍNCULO COM O
+ * LEVANTAMENTO DE CAMPO, DIVERGÊNCIA E FD MANUAL POR MEDIÇÃO).**
+ *
+ * CONTEXTO: o ERP terá DOIS módulos de medição dedicados. (a) Medição de Cliente (a receber): o "%"
+ * vem AUTOMÁTICO do avanço semanal/REFIS (`planejamento_avancos`); o usuário só VALIDA valores +
+ * confere FDs; SEM levantamento. (b) Medição de Terceiros (a pagar): levantamento em campo
+ * OBRIGATÓRIO (PDF + escala + contornos + fotos por ambiente + memória de cálculo), alerta de
+ * divergência (levantado × cronograma), FD por período (auto das OCs + manual) OBRIGATÓRIO abater, e
+ * aprovação em 3 níveis (mede → gestor da obra → sócio adm). Esta revisão entrega a FUNDAÇÃO
+ * (configuração + schema), sem ainda trocar os fluxos de tela — que virão nas próximas revisões.
+ *
+ * DESCOBERTA DE ARQUITETURA (registrada p/ as próximas revisões): o módulo "medicao" atual é o lado
+ * CLIENTE — `medicaoContratos` (`medicao_contratos`) ligado a `planejamentoProjetos`
+ * (nome/cliente/local/orçamento/obra), com `criterio`/sinal/retenção/FD; a engine de levantamento em
+ * PDF (`medicao_campo` + `_pdfs/_contornos/_fotos`, Rev. 2893) NASCEU acoplada a esse lado
+ * (`medicao_campo.contrato_id` → `medicaoContratos.id`). Os terceiros vivem em
+ * `terceiroContratos`/`terceiro_contratos` + `terceiroMedicoes`/`terceiro_medicoes`. Como os IDs de
+ * `medicao_contratos` e `terceiro_contratos` são sequências independentes que COLIDEM, a engine só
+ * pode ser compartilhada com um discriminador `origem` em `medicao_campo`.
+ *
+ * SOLUÇÃO (ZERO ALTER DESTRUTIVO/DROP/DELETE — só CREATE TABLE / ADD COLUMN IF NOT EXISTS):
+ * (1) TELA DE CONTROLE — tabela `medicao_config` (1 linha por empresa) com flags
+ * `terceiros_ativo`, `cliente_ativo`, `levantamento_obrigatorio`, `fotos_obrigatorias`,
+ * `aprovacao_tres_niveis`, `divergencia_tolerancia_pct` (default 5) e `dia_medicao_padrao`
+ * (default 25). Router `server/routers/medicaoConfig.ts` (`getConfig` com defaults permissivos quando
+ * não há linha + `salvar` upsert parcial; guard PERMISSIVO de empresa no padrão aiConfig/compras —
+ * admin libera, usuário sem vínculo libera, só bloqueia empresa fora dos vínculos). UI
+ * `client/src/pages/configuracoes/MedicaoConfigSection.tsx` (seção teal "Medições" com 5 Switches +
+ * 2 inputs numéricos, `toast` de sucesso/erro), registrada em `routers.ts` e renderizada em
+ * `Configuracoes.tsx` após `PlanejamentoConfigSection`. Nada hardcoded.
+ * (2) SCHEMA TERCEIROS (drizzle/schema.ts, snake_case explícito) — em `terceiroMedicoes`:
+ * `nivel_aprovacao` (0 medido, 1 gestor ok, 2 sócio ok), `gestor_aprovado_por/_em`,
+ * `socio_aprovado_por/_em`, `levantamento_campo_id` (vínculo ao levantamento), `quantidade_levantada`
+ * + `unidade_levantada` + `percentual_divergencia` (snapshot p/ o alerta), `fd_total_abatido`. Nova
+ * tabela `terceiroMedicaoFds`/`terceiro_medicao_fds` (FD MANUAL por medição: `descricao`, `valor`,
+ * `data_fd`, `anexo_url`, `origem` manual|auto — o auto continua vindo de `medicao_fd_registros`/OCs).
+ * Em `medicaoCampo`: `medicao_id` (liga o levantamento a uma medição de terceiro) e `origem`
+ * ('cliente'|'terceiro'; rows legadas defaultam 'cliente').
+ * (3) SELF-HEAL — todo o DDL foi colocado no bloco UNGATED `[SyncSchema+]` de `server/_core/index.ts`
+ * (roda em TODO boot, idempotente), e NÃO no bloco "ColFix tables" que fica atrás de
+ * `if (await colFixSkipPromise) return;` (só roda em revisão NOVA). Isso garante que a tabela/colunas
+ * se materializem mesmo sem coincidir com um bump específico. Verificado direto no NEON (script pg):
+ * `medicao_config` (12 cols + índice único `uniq_medicao_config_company`), as 10 colunas novas de
+ * `terceiro_medicoes`, `medicao_campo.medicao_id`/`origem` e `terceiro_medicao_fds` (13 cols + 3
+ * índices) existem; app sobe limpo, `tsc` sem erros (exceto o ruído pré-existente de changelog.ts).
+ *
+ * PRÓXIMAS REVISÕES (não nesta): engine de levantamento compartilhada (consumível por terceiros,
+ * mantendo o uso atual; histórico "já medido" por contrato em cinza); backend da Medição de Terceiros
+ * (gerar com levantamento obrigatório + FD do período abatido + divergência + 3 aprovações →
+ * financeiro a pagar, com tenant guard); frontend de Terceiros (lista/geração/levantamento embutido/
+ * fotos por ambiente/FD/divergência/fluxo dos 3 níveis); módulo Medição de Cliente (% auto +
+ * validação + FDs); aba "Medições" do contrato de terceiros → espelho só-leitura; menu/permissões/
+ * rotas em `shared/modules.ts`/`App.tsx`/`main.tsx`.
+ *
  * Rev. 3077 — **CONTRATOS DE TERCEIROS · A "DATA DE CORTE" (DIA DA MEDIÇÃO) PASSA A SER CONFIGURÁVEL
  * SÓ ANTES DA ASSINATURA — DEPOIS DE ASSINADO O CARD "CRITÉRIOS DE MEDIÇÃO E PAGAMENTO" FICA TRAVADO;
  * E FICA EXPLÍCITO QUE, AO MUDAR O CORTE, O PERÍODO DAS MEDIÇÕES SE AJUSTA SOZINHO E O VALOR VARIA

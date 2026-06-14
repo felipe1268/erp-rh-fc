@@ -873,6 +873,67 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2805: tabela ai_module_config garantida (liga/desliga IA por módulo).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA ai_module_config:`, e?.message || e); }
 
+        // Rev. 3078 — Painel de Controle das Medições (Configurações › Critérios do Sistema).
+        // Comportamento por empresa dos módulos Medição de Cliente/Terceiros. Ungated (todo boot).
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS medicao_config (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              terceiros_ativo SMALLINT NOT NULL DEFAULT 1,
+              cliente_ativo SMALLINT NOT NULL DEFAULT 1,
+              levantamento_obrigatorio SMALLINT NOT NULL DEFAULT 1,
+              fotos_obrigatorias SMALLINT NOT NULL DEFAULT 1,
+              aprovacao_tres_niveis SMALLINT NOT NULL DEFAULT 1,
+              divergencia_tolerancia_pct NUMERIC(6,2) NOT NULL DEFAULT 5,
+              dia_medicao_padrao INTEGER NOT NULL DEFAULT 25,
+              updated_by VARCHAR(255),
+              updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+              created_at TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uniq_medicao_config_company ON medicao_config(company_id)`);
+          console.log(`[SyncSchema+] Rev. 3078: tabela medicao_config garantida (painel de controle das Medições).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA medicao_config:`, e?.message || e); }
+
+        // Rev. 3078 — Medição de Terceiros: 3º nível de aprovação (mede → gestor → sócio),
+        // vínculo com o levantamento de campo, snapshot p/ divergência e FD manual por medição.
+        try {
+          await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS nivel_aprovacao INTEGER NOT NULL DEFAULT 0`);
+          await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS gestor_aprovado_por VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS gestor_aprovado_em TIMESTAMP`);
+          await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS socio_aprovado_por VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS socio_aprovado_em TIMESTAMP`);
+          await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS levantamento_campo_id INTEGER`);
+          await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS quantidade_levantada NUMERIC(18,4)`);
+          await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS unidade_levantada VARCHAR(20)`);
+          await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS percentual_divergencia NUMERIC(8,4)`);
+          await db.execute(sql`ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS fd_total_abatido NUMERIC(18,2) NOT NULL DEFAULT 0`);
+          await db.execute(sql`ALTER TABLE medicao_campo ADD COLUMN IF NOT EXISTS medicao_id INTEGER`);
+          await db.execute(sql`ALTER TABLE medicao_campo ADD COLUMN IF NOT EXISTS origem VARCHAR(20) NOT NULL DEFAULT 'cliente'`);
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS terceiro_medicao_fds (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              contrato_id INTEGER NOT NULL,
+              medicao_id INTEGER,
+              descricao VARCHAR(500) NOT NULL,
+              valor NUMERIC(18,2) NOT NULL,
+              data_fd DATE NOT NULL,
+              anexo_url VARCHAR(500),
+              origem VARCHAR(20) NOT NULL DEFAULT 'manual',
+              observacoes TEXT,
+              criado_por VARCHAR(255),
+              criado_em TIMESTAMP DEFAULT NOW() NOT NULL,
+              atualizado_em TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_tmfds_contrato ON terceiro_medicao_fds(contrato_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_tmfds_medicao ON terceiro_medicao_fds(medicao_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_tmfds_company ON terceiro_medicao_fds(company_id)`);
+          console.log(`[SyncSchema+] Rev. 3078: medição de terceiros — 3º nível + vínculo levantamento + terceiro_medicao_fds garantidos.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA medição terceiros (3 níveis/FD):`, e?.message || e); }
+
         // Rev. 3041 — CIPA: eleição digital (candidatos, eleitores c/ link, votos anônimos) + planos de ação.
         try {
           await db.execute(sql`
