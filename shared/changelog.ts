@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3090 — **MEDIÇÃO DE TERCEIROS · O LEVANTAMENTO DE CAMPO (PROJETO/PLANTAS EM PDF + ESCALA +
+ * CONTORNOS + FOTOS POR AMBIENTE + MEMÓRIA DE CÁLCULO) DEIXA DE SER UM BECO SEM SAÍDA: PASSA A SER
+ * CRIÁVEL E VINCULÁVEL DIRETO DE CADA MEDIÇÃO DE TERCEIROS, REAPROVEITANDO A MESMA ENGINE DA MEDIÇÃO
+ * DE CLIENTE.**
+ *
+ * PEDIDO (usuário, frustrado, prints iPad): "preciso de uma lógica em algum local para cadastrar os
+ * projetos (plantas/PDF) e fazer o levantamento — tá confuso, arrume isso de vez." O fluxo de Terceiros
+ * tinha aprovação 3-níveis, FD e o CAMPO `levantamento_campo_id` na medição (Rev. 3078/3079), e o
+ * `vincularLevantamentoMedicao` (Rev. 3079) já EXIGIA um `medicao_campo` com `origem='terceiro'` — mas
+ * NÃO HAVIA caminho para CRIAR esse campo de levantamento para um contrato de terceiro. O `criarCampo`
+ * (`medicao.ts`) só validava contra `medicaoContratos` (cliente) e nunca gravava `origem='terceiro'`, e a
+ * tela `MedicaoLevantamento` só sabia abrir contratos de cliente. Resultado: o levantamento de campo era
+ * inacessível ao "a pagar", apesar de toda a fundação de schema/backend já existir.
+ *
+ * CAUSA-RAIZ: a engine de levantamento foi desenhada 100% acoplada à Medição de Cliente
+ * (`medicaoContratos` + `getItensOrcamento` via `orcamentoId`). Como `terceiro_contratos` TAMBÉM tem
+ * `orcamentoId`, a engine é reaproveitável — faltava só (a) deixar `criarCampo` ciente da origem e gravá-la,
+ * e (b) a tela de levantamento e a aba "Medições" do contrato saberem operar no modo terceiro. IDs de
+ * contrato de cliente e de terceiro colidem (tabelas distintas), então a `origem` é a chave de desambiguação.
+ *
+ * SOLUÇÃO (BACKEND ADITIVO READ-PATH + FRONTEND, ZERO ALTER/DROP/DELETE/SCHEMA — as colunas
+ * `medicao_campo.origem`/`.medicao_id` e `terceiro_medicoes.levantamento_campo_id` já existem desde a
+ * Rev. 3078):
+ *   (1) `server/routers/medicao.ts` — `criarCampo` passa a aceitar `origem` (enum "cliente"|"terceiro",
+ *       default "cliente"); valida o contrato na TABELA CORRETA (`medicaoContratos` p/ cliente,
+ *       `terceiroContratos` p/ terceiro, ambos com tenant guard por companyId), NUMERA o campo escopado por
+ *       (contrato, origem) e GRAVA `origem`. `listarCampos` ganhou filtro opcional `origem`.
+ *   (2) `client/src/pages/medicao/MedicaoLevantamento.tsx` — fica ORIGEM-AWARE: lê `?origem=terceiro` da URL
+ *       (useMemo `origem`/`isTerceiro`), busca o contrato via `terceiroContratos.getContrato` quando terceiro,
+ *       ajusta `voltarHref` e o subtítulo (número/objeto/empresa terceira) e ESCONDE o botão "Gerar boletim"
+ *       (exclusivo do cliente). A engine (PDF/plantas + escala + contornos + fotos + memória de cálculo) e o
+ *       offline/PWA continuam idênticos; itens vêm do `orcamentoId` do contrato (cliente OU terceiro).
+ *   (3) `client/src/pages/terceiros/contratos/ContratoDetalhe.tsx` (aba "Medições") — cada medição ganha, após
+ *       o alerta de divergência, uma ação "Fazer levantamento de campo (projeto/plantas)" gateada em
+ *       `modoEdicao` + status ≠ aprovada/paga: cria o `medicao_campo` (origem terceiro) via `medicao.criarCampo`,
+ *       vincula via `terceiroContratos.vincularLevantamentoMedicao` e abre a tela; se já houver vínculo, mostra
+ *       badge "Levantamento de campo vinculado" + "Abrir levantamento". Pelo módulo "Terceiros" (gestão) e pela
+ *       Medição de Cliente, NADA muda — as adições são gateadas por origem/estado.
+ *
+ * RESSALVA: a rota `/medicao/:contratoId/levantamento/:campoId` está sob `RouteGuard route="/medicao"`. O
+ * Admin Master ignora o gate; usuários NÃO-master que operem só "Terceiros" podem precisar da permissão
+ * `/medicao` para abrir o levantamento — candidato a `sharedPaths` numa próxima revisão. Contratos de terceiro
+ * sem `orcamentoId` permitem o levantamento (PDF/escala/contornos/fotos) mas sem vínculo a itens de orçamento.
+ * Arquivos: `server/routers/medicao.ts`, `client/src/pages/medicao/MedicaoLevantamento.tsx`,
+ * `client/src/pages/terceiros/contratos/ContratoDetalhe.tsx`.
+ *
  * Rev. 3089 — **MEDIÇÃO DE TERCEIROS · REPAGINAÇÃO DA TELA DE DETALHE DO CONTRATO QUANDO ABERTA PELO
  * MÓDULO DEDICADO: O LAYOUT FICA ENXUTO E FOCADO NO PROCESSO DE MEDIÇÃO — SOME TODA A GESTÃO DO CONTRATO
  * QUE NÃO FAZ SENTIDO PARA QUEM ESTÁ MEDINDO.**

@@ -69,9 +69,21 @@ export default function MedicaoLevantamento() {
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : 0;
   const utils = trpc.useUtils();
 
+  // Rev. 3090 (T005) — a engine é COMPARTILHADA entre Medição de Cliente e de Terceiros.
+  // A origem chega por query string (?origem=terceiro). IDs de contrato colidem entre os
+  // módulos, então a origem decide DE ONDE buscar o contrato/orçamento e o destino do "Voltar".
+  const origem: "cliente" | "terceiro" = useMemo(() => {
+    try { return new URLSearchParams(window.location.search).get("origem") === "terceiro" ? "terceiro" : "cliente"; }
+    catch { return "cliente"; }
+  }, []);
+  const isTerceiro = origem === "terceiro";
+
   // --- dados ---
-  const { data: contrato } = trpc.medicao.getContrato.useQuery({ id: contratoId }, { enabled: contratoId > 0 });
-  const orcamentoId = contrato?.orcamentoId ?? 0;
+  const { data: contratoCliente } = trpc.medicao.getContrato.useQuery({ id: contratoId }, { enabled: !isTerceiro && contratoId > 0 });
+  const { data: contratoTerceiro } = trpc.terceiroContratos.getContrato.useQuery({ id: contratoId }, { enabled: isTerceiro && contratoId > 0 });
+  const contrato: any = isTerceiro ? contratoTerceiro : contratoCliente;
+  const orcamentoId = (contrato as any)?.orcamentoId ?? 0;
+  const voltarHref = isTerceiro ? `/terceiros/contratos/${contratoId}?tab=medicoes` : `/medicao/${contratoId}`;
 
   // Camada offline-first (Rev. 2895): une servidor + snapshot local + fila otimista.
   const off = useLevantamentoOffline({ campoId, companyId, contratoId, orcamentoId });
@@ -395,7 +407,7 @@ export default function MedicaoLevantamento() {
         {/* Cabeçalho */}
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setLocation(`/medicao/${contratoId}`)} className="gap-1">
+            <Button variant="ghost" size="sm" onClick={() => setLocation(voltarHref)} className="gap-1">
               <ArrowLeft className="h-4 w-4" />Voltar
             </Button>
             <div>
@@ -403,17 +415,25 @@ export default function MedicaoLevantamento() {
                 <Ruler className="h-5 w-5 text-blue-600" />
                 Levantamento {String(campo.numero).padStart(3, "0")}{campo.titulo ? ` — ${campo.titulo}` : ""}
               </h1>
-              <p className="text-xs text-gray-500">{contrato?.nomeProjeto} · {contrato?.cliente}</p>
+              <p className="text-xs text-gray-500">
+                {isTerceiro
+                  ? `${contrato?.numero ?? ""}${contrato?.objeto ? ` · ${contrato.objeto}` : ""}${contrato?.empresaTerceiraNome ? ` · ${contrato.empresaTerceiraNome}` : ""}`
+                  : `${contrato?.nomeProjeto ?? ""} · ${contrato?.cliente ?? ""}`}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" className="gap-1.5" onClick={gerarMemoriaCalculo}>
               <Calculator className="h-4 w-4" />Memória de cálculo
             </Button>
-            <Button size="sm" className="gap-1.5" disabled={gerarBoletimM.isPending} onClick={handleGerarBoletim}>
-              {gerarBoletimM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
-              Gerar boletim
-            </Button>
+            {/* "Gerar boletim" é exclusivo da Medição de Cliente. No fluxo de Terceiros o
+                levantamento é vinculado à medição na aba "Medições" do contrato. */}
+            {!isTerceiro && (
+              <Button size="sm" className="gap-1.5" disabled={gerarBoletimM.isPending} onClick={handleGerarBoletim}>
+                {gerarBoletimM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+                Gerar boletim
+              </Button>
+            )}
           </div>
         </div>
 

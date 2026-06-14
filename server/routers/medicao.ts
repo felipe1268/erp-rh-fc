@@ -10,6 +10,7 @@ import {
   medicaoCampoPdfs,
   medicaoCampoContornos,
   medicaoCampoFotos,
+  terceiroContratos,
   planejamentoProjetos,
   planejamentoAtividades,
   planejamentoAvancos,
@@ -695,8 +696,12 @@ export const medicaoRouter = router({
 
   // --- Medições de campo (numeradas por contrato) ---
   listarCampos: protectedProcedure
-    .input(z.object({ companyId: z.number(), contratoId: z.number() }))
-    .query(async ({ input }) => {
+    // `origem` é OPCIONAL p/ retrocompat. Como os IDs de contrato COLIDEM entre módulos
+    // (medicao_contratos × terceiro_contratos), o fluxo de terceiros DEVE passar
+    // origem:"terceiro" p/ não misturar levantamentos de um contrato-cliente homônimo.
+    .input(z.object({ companyId: z.number(), contratoId: z.number(), origem: z.enum(["cliente", "terceiro"]).optional() }))
+    .query(async ({ input, ctx }) => {
+      await assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const campos = await db
         .select()
@@ -705,6 +710,12 @@ export const medicaoRouter = router({
           eq(medicaoCampo.companyId, input.companyId),
           eq(medicaoCampo.contratoId, input.contratoId),
           isNull(medicaoCampo.deletedAt),
+          // Sem `origem` explícito = escopo CLIENTE (legado: origem NULL/'cliente').
+          // O fluxo de terceiros SEMPRE passa origem:"terceiro". JAMAIS cair em filtro
+          // aberto (`true`): contratos homônimos de módulos distintos se misturariam.
+          input.origem === "terceiro"
+            ? eq(medicaoCampo.origem, "terceiro")
+            : sql`(${medicaoCampo.origem} IS DISTINCT FROM 'terceiro')`,
         ))
         .orderBy(desc(medicaoCampo.numero));
       if (campos.length === 0) return [];
@@ -818,20 +829,39 @@ export const medicaoRouter = router({
       titulo: z.string().nullable().optional(),
       descricao: z.string().nullable().optional(),
       uuid: z.string().optional(),
+      // Rev. 3078+ — origem distingue contrato-cliente (medicao_contratos) de
+      // contrato-terceiro (terceiro_contratos); os IDs colidem entre as tabelas.
+      origem: z.enum(["cliente", "terceiro"]).default("cliente"),
     }))
     .mutation(async ({ input, ctx }) => {
+      await assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
-      // Guard de tenant: o contrato precisa pertencer à empresa.
-      const [contrato] = await db
-        .select({ id: medicaoContratos.id })
-        .from(medicaoContratos)
-        .where(and(eq(medicaoContratos.id, input.contratoId), eq(medicaoContratos.companyId, input.companyId)))
-        .limit(1);
-      if (!contrato) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado ou sem permissão." });
+      // Guard de tenant: o contrato precisa pertencer à empresa, na tabela CORRETA p/ a origem.
+      if (input.origem === "terceiro") {
+        const [contrato] = await db
+          .select({ id: terceiroContratos.id })
+          .from(terceiroContratos)
+          .where(and(eq(terceiroContratos.id, input.contratoId), eq(terceiroContratos.companyId, input.companyId)))
+          .limit(1);
+        if (!contrato) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato de terceiro não encontrado ou sem permissão." });
+      } else {
+        const [contrato] = await db
+          .select({ id: medicaoContratos.id })
+          .from(medicaoContratos)
+          .where(and(eq(medicaoContratos.id, input.contratoId), eq(medicaoContratos.companyId, input.companyId)))
+          .limit(1);
+        if (!contrato) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado ou sem permissão." });
+      }
+      // Numeração escopada por (contrato, origem) — IDs de contrato colidem entre módulos.
       const [ultimo] = await db
         .select({ numero: medicaoCampo.numero })
         .from(medicaoCampo)
-        .where(eq(medicaoCampo.contratoId, input.contratoId))
+        .where(and(
+          eq(medicaoCampo.contratoId, input.contratoId),
+          input.origem === "terceiro"
+            ? eq(medicaoCampo.origem, "terceiro")
+            : sql`(${medicaoCampo.origem} IS DISTINCT FROM 'terceiro')`,
+        ))
         .orderBy(desc(medicaoCampo.numero))
         .limit(1);
       const numero = (ultimo?.numero ?? 0) + 1;
@@ -842,6 +872,7 @@ export const medicaoRouter = router({
         numero,
         titulo: input.titulo ?? `Levantamento ${numero}`,
         descricao: input.descricao,
+        origem: input.origem,
         criadoPorId: ctx.user.id,
         criadoPorNome: ctx.user.name || "",
       }).returning();

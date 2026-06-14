@@ -2023,6 +2023,31 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
   const [editingItem, setEditingItem] = useState<{ id: number; valor: string } | null>(null);
   const [recalcResult, setRecalcResult] = useState<any>(null);
   const [, navigate] = useLocation();
+  // Rev. 3090 (T005) — Levantamento de campo OBRIGATÓRIO da medição de terceiros.
+  // A engine de levantamento (PDF/plantas + escala + contornos + fotos) é a MESMA do
+  // módulo de cliente, distinguida por origem="terceiro" (IDs de contrato colidem).
+  const utilsMed = trpc.useUtils();
+  const criarLevantamentoMut = trpc.medicao.criarCampo.useMutation();
+  const vincularLevantamentoMut = trpc.terceiroContratos.vincularLevantamentoMedicao.useMutation();
+  const abrirLevantamento = (campoId: number) => navigate(`/medicao/${contrato.id}/levantamento/${campoId}?origem=terceiro`);
+  const fazerLevantamento = (m: any) => {
+    criarLevantamentoMut.mutate(
+      { companyId: contrato.companyId, contratoId: contrato.id, origem: "terceiro", titulo: `Medição ${String(m.numero).padStart(2, "0")}` },
+      {
+        onSuccess: (campo: any) => {
+          vincularLevantamentoMut.mutate(
+            { id: m.id, companyId: contrato.companyId, levantamentoCampoId: campo.id },
+            {
+              onSuccess: () => { utilsMed.terceiroContratos.getContrato.invalidate({ id: contrato.id }); abrirLevantamento(campo.id); },
+              onError: (e: any) => toast.error(e?.message || "Erro ao vincular levantamento à medição."),
+            },
+          );
+        },
+        onError: (e: any) => toast.error(e?.message || "Erro ao criar levantamento de campo."),
+      },
+    );
+  };
+  const levantando = criarLevantamentoMut.isPending || vincularLevantamentoMut.isPending;
   // Rev. 3082 (T007) — Esta aba é ESPELHO SÓ-LEITURA. As medições de terceiros são
   // geridas no módulo dedicado (/terceiros/medicoes). A edição inline fica desligada por
   // padrão; abre-se com "Editar nesta aba" (ou deep-link ?edit=1 vindo do módulo).
@@ -2188,6 +2213,27 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                   <p className="text-xs text-orange-700 font-medium"><AlertTriangle className="w-3.5 h-3.5 inline mr-1.5 text-orange-500" />{m.alertaDivergencia}</p>
                 </div>
               )}
+              <div className="mt-2 ml-6 flex flex-wrap items-center gap-2">
+                {m.levantamentoCampoId ? (
+                  <>
+                    <Badge variant="outline" className="gap-1 text-xs text-blue-700 border-blue-200 bg-blue-50">
+                      <Ruler className="w-3 h-3" /> Levantamento de campo vinculado
+                    </Badge>
+                    <Button size="sm" variant="outline" className="h-7 gap-1 text-[11px]" onClick={() => abrirLevantamento(m.levantamentoCampoId)}>
+                      <ExternalLink className="w-3 h-3" /> Abrir levantamento
+                    </Button>
+                  </>
+                ) : (
+                  modoEdicao && m.status !== "aprovada" && m.status !== "paga" && (
+                    <Button size="sm" variant="outline" className="h-7 gap-1 text-[11px] text-blue-700 border-blue-200 hover:bg-blue-50"
+                      disabled={levantando}
+                      onClick={() => fazerLevantamento(m)}>
+                      {levantando ? <Loader2 className="w-3 h-3 animate-spin" /> : <Ruler className="w-3 h-3" />}
+                      Fazer levantamento de campo (projeto/plantas)
+                    </Button>
+                  )
+                )}
+              </div>
               {m.motivoRejeicao && (
                 <div className="mt-2 ml-6 p-2 bg-red-50 rounded-lg border border-red-100">
                   <p className="text-xs text-red-600"><AlertTriangle className="w-3 h-3 inline mr-1" />Rejeitada{(m as any).rejeitadoPor ? ` por ${(m as any).rejeitadoPor}` : ""}{(m as any).rejeitadoEm ? ` em ${fmtDate((m as any).rejeitadoEm)}` : ""}</p>
