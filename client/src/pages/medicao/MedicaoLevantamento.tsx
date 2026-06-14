@@ -13,9 +13,9 @@ import { Label } from "@/components/ui/label";
 import {
   ArrowLeft, Plus, Loader2, FileText, Trash2, Ruler, Square, Box, Spline,
   Hash, MousePointer2, Crosshair, ZoomIn, ZoomOut, Check, Camera, Image as ImageIcon,
-  Calculator, FileSpreadsheet, ChevronLeft, ChevronRight, X,
+  Calculator, FileSpreadsheet, ChevronLeft, ChevronRight, ChevronDown, X,
   Wifi, WifiOff, RefreshCw, Download, HardDrive, AlertTriangle, CheckCircle2, CloudOff, History,
-  RectangleHorizontal, PencilLine, BrickWall, Undo2, Contrast,
+  RectangleHorizontal, PencilLine, BrickWall, Undo2, Contrast, Magnet,
 } from "lucide-react";
 import {
   type GeoPonto, type TipoContorno, UNIDADE_POR_TIPO, LABEL_TIPO,
@@ -23,6 +23,8 @@ import {
 } from "@shared/levantamentoGeo";
 import { useLevantamentoOffline } from "@/hooks/useLevantamentoOffline";
 import { VincularItemCombobox, buildItensVinculaveis } from "./VincularItemCombobox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
 
@@ -61,6 +63,47 @@ const FERRAMENTAS_DESENHO: { key: FerramentaDesenho; label: string; icon: JSX.El
 // Ferramentas que se desenham clicando ponto-a-ponto e finalizam num botão.
 const TOOLS_POLILINHA: FerramentaDesenho[] = ["area", "parede", "perimetro", "volume"];
 const MIN_PTS = (t: string) => (t === "perimetro" || t === "parede" ? 2 : 3);
+
+// --- OSnap (Object Snap, estilo AutoCAD): "imã" que prende o ponto desenhado a
+// geometrias notáveis dos contornos já existentes, para conectar pontos certo. ---
+type SnapKind = "endpoint" | "midpoint" | "intersection" | "node" | "perpendicular" | "nearest";
+const OSNAP_DEFS: { key: SnapKind; label: string }[] = [
+  { key: "endpoint", label: "Extremidade" },
+  { key: "midpoint", label: "Ponto médio" },
+  { key: "intersection", label: "Interseção" },
+  { key: "node", label: "Nó / Centro" },
+  { key: "perpendicular", label: "Perpendicular" },
+  { key: "nearest", label: "Próximo (sobre a linha)" },
+];
+// Prioridade de desempate quando 2 candidatos caem dentro da tolerância.
+const SNAP_PRIO: Record<SnapKind, number> = {
+  endpoint: 0, intersection: 1, midpoint: 2, node: 3, perpendicular: 4, nearest: 5,
+};
+const OSNAP_TODOS: Record<SnapKind, boolean> = {
+  endpoint: true, midpoint: true, intersection: true, node: true, perpendicular: true, nearest: true,
+};
+// Ferramentas que aproveitam o OSnap (todas que marcam pontos exatos; "livre" é traço).
+const toolUsaSnap = (t: Ferramenta) => t !== "select" && t !== "livre";
+
+// Ponto mais próximo sobre o segmento a→b (com clamp nas pontas).
+function projetarNoSegmento(p: GeoPonto, a: GeoPonto, b: GeoPonto): { pt: GeoPonto; t: number } {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return { pt: { x: a.x, y: a.y }, t: 0 };
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return { pt: { x: a.x + t * dx, y: a.y + t * dy }, t };
+}
+// Interseção de 2 segmentos (null se paralelos ou fora do trecho).
+function interseccaoSegmentos(a: GeoPonto, b: GeoPonto, c: GeoPonto, d: GeoPonto): GeoPonto | null {
+  const r1 = b.x - a.x, r2 = b.y - a.y, s1 = d.x - c.x, s2 = d.y - c.y;
+  const den = r1 * s2 - r2 * s1;
+  if (Math.abs(den) < 1e-9) return null;
+  const t = ((c.x - a.x) * s2 - (c.y - a.y) * s1) / den;
+  const u = ((c.x - a.x) * r2 - (c.y - a.y) * r1) / den;
+  if (t < 0 || t > 1 || u < 0 || u > 1) return null;
+  return { x: a.x + t * r1, y: a.y + t * r2 };
+}
 
 const brl = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const numFmt = (v: number, d = 2) =>
@@ -313,6 +356,107 @@ export default function MedicaoLevantamento() {
     return () => cont.removeEventListener("wheel", onWheel);
   }, [pdfSel]);
 
+  // ===================== OSnap (Object Snap estilo AutoCAD) =====================
+  const [osnapOn, setOsnapOn] = useState(true);
+  const [osnapModes, setOsnapModes] = useState<Record<SnapKind, boolean>>(OSNAP_TODOS);
+  const [snapHit, setSnapHit] = useState<{ p: GeoPonto; kind: SnapKind } | null>(null);
+
+  // F3 alterna o OSnap (atalho AutoCAD).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "F3") { e.preventDefault(); setOsnapOn((v) => !v); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  // troca de ferramenta limpa o marcador de snap em curso.
+  useEffect(() => { setSnapHit(null); }, [tool]);
+
+  // Candidatos de snap (pontos notáveis + segmentos) dos contornos da página,
+  // da referência (medições anteriores) e do rascunho atual. Normalizados [0..1].
+  const snapData = useMemo(() => {
+    const points: { p: GeoPonto; kind: SnapKind }[] = [];
+    const segments: [GeoPonto, GeoPonto][] = [];
+    const pushPoly = (pts: GeoPonto[], closed: boolean, isCount: boolean) => {
+      if (!pts.length) return;
+      if (isCount) { for (const p of pts) points.push({ p, kind: "node" }); return; }
+      for (const p of pts) points.push({ p, kind: "endpoint" });
+      const n = pts.length;
+      const lim = closed ? n : n - 1;
+      for (let i = 0; i < lim; i++) {
+        const a = pts[i], b = pts[(i + 1) % n];
+        if (!a || !b) continue;
+        segments.push([a, b]);
+        points.push({ p: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, kind: "midpoint" });
+      }
+    };
+    const consume = (arr: any[]) => {
+      for (const c of arr) {
+        let pts: GeoPonto[] = [];
+        try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
+        pushPoly(pts, FECHA_POLIGONO(c.tipo), c.tipo === "contagem");
+      }
+    };
+    consume(contornosPagina);
+    consume(referenciaPagina);
+    if (draft.length) pushPoly(draft, false, false);
+    // interseções (custo O(n²) — limita p/ não travar com muitos segmentos).
+    if (segments.length <= 240) {
+      for (let i = 0; i < segments.length; i++)
+        for (let j = i + 1; j < segments.length; j++) {
+          const x = interseccaoSegmentos(segments[i][0], segments[i][1], segments[j][0], segments[j][1]);
+          if (x) points.push({ p: x, kind: "intersection" });
+        }
+    }
+    return { points, segments };
+  }, [contornosPagina, referenciaPagina, draft]);
+
+  // Acha o melhor snap p/ a posição normalizada `raw`. Tolerância em PIXELS de
+  // tela (some quando o ponto visual está perto) usando o retângulo do overlay.
+  const applySnap = useCallback((raw: GeoPonto, fromPt?: GeoPonto): { p: GeoPonto; kind: SnapKind } | null => {
+    if (!osnapOn) return null;
+    const rect = overlayRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const rw = Math.max(rect.width, 1), rh = Math.max(rect.height, 1);
+    const TOL = 14; // px
+    const cx = raw.x * rw, cy = raw.y * rh;
+    let best: { p: GeoPonto; kind: SnapKind; prio: number; d: number } | null = null;
+    const consider = (p: GeoPonto, kind: SnapKind) => {
+      if (!osnapModes[kind]) return;
+      const d = Math.hypot(p.x * rw - cx, p.y * rh - cy);
+      if (d > TOL) return;
+      const prio = SNAP_PRIO[kind];
+      if (!best || prio < best.prio || (prio === best.prio && d < best.d)) best = { p, kind, prio, d };
+    };
+    for (const c of snapData.points) consider(c.p, c.kind);
+    if (osnapModes.perpendicular && fromPt) {
+      for (const [a, b] of snapData.segments) {
+        const dx = b.x - a.x, dy = b.y - a.y, len2 = dx * dx + dy * dy;
+        if (!len2) continue;
+        const t = ((fromPt.x - a.x) * dx + (fromPt.y - a.y) * dy) / len2;
+        if (t < 0 || t > 1) continue;
+        consider({ x: a.x + t * dx, y: a.y + t * dy }, "perpendicular");
+      }
+    }
+    if (osnapModes.nearest) {
+      for (const [a, b] of snapData.segments) consider(projetarNoSegmento(raw, a, b).pt, "nearest");
+    }
+    return best ? { p: best.p, kind: best.kind } : null;
+  }, [osnapOn, osnapModes, snapData]);
+
+  // ponto de referência p/ perpendicular = último vértice do desenho em curso.
+  const snapFromPt = useCallback((): GeoPonto | undefined => {
+    if (TOOLS_POLILINHA.includes(tool as FerramentaDesenho) && draft.length) return draft[draft.length - 1];
+    if (tool === "calibrar" && calibDraft.length) return calibDraft[calibDraft.length - 1];
+    return undefined;
+  }, [tool, draft, calibDraft]);
+
+  const updateSnapHover = (clientX: number, clientY: number) => {
+    if (!osnapOn || !toolUsaSnap(tool)) { setSnapHit(null); return; }
+    setSnapHit(applySnap(getPtFromClient(clientX, clientY), snapFromPt()));
+  };
+  // ============================================================================
+
   const PAN_THRESHOLD = 6; // px — abaixo disso, um toque é "tap" (ponto); acima, arrasta
 
   function onPdfPointerDown(e: React.PointerEvent) {
@@ -343,7 +487,8 @@ export default function MedicaoLevantamento() {
     if (suppressRef.current) return; // ponteiro remanescente após pinça
     e.preventDefault();
     try { overlayRef.current?.setPointerCapture(e.pointerId); } catch { /* */ }
-    const startNorm = getPtFromClient(e.clientX, e.clientY);
+    let startNorm = getPtFromClient(e.clientX, e.clientY);
+    if (tool === "retangulo") { const h = applySnap(startNorm); if (h) { startNorm = h.p; setSnapHit(h); } } // OSnap no 1º canto
     const cont = canvasWrapRef.current;
     let mode: "pending" | "rect" | "free" = "pending";
     if (tool === "retangulo") mode = "rect";
@@ -357,7 +502,11 @@ export default function MedicaoLevantamento() {
   }
 
   function onPdfPointerMove(e: React.PointerEvent) {
-    if (!ptrsRef.current.has(e.pointerId)) return;
+    if (!ptrsRef.current.has(e.pointerId)) {
+      // mouse sem botão = hover → mostra o marcador de OSnap p/ o próximo ponto.
+      if (e.pointerType !== "touch") updateSnapHover(e.clientX, e.clientY);
+      return;
+    }
     ptrsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const size = ptrsRef.current.size;
     if (size >= 2 && pinchRef.current) {
@@ -383,7 +532,9 @@ export default function MedicaoLevantamento() {
         cont.scrollLeft = g.startScroll.l - dx;
         cont.scrollTop = g.startScroll.t - dy;
       } else if (g.mode === "rect") {
-        setDragRect({ a: g.startNorm, b: getPtFromClient(e.clientX, e.clientY) });
+        const raw = getPtFromClient(e.clientX, e.clientY);
+        const h = applySnap(raw); setSnapHit(h); // OSnap no canto oposto
+        setDragRect({ a: g.startNorm, b: h ? h.p : raw });
       } else if (g.mode === "free") {
         const p = getPtFromClient(e.clientX, e.clientY);
         setFreePts((prev) => {
@@ -411,8 +562,12 @@ export default function MedicaoLevantamento() {
     if (!g.moved) onTap(g.startNorm);      // toque limpo = adiciona ponto
   }
 
-  function onTap(pt: GeoPonto) {
+  function onTap(ptRaw: GeoPonto) {
     if (tool === "select") return;
+    // OSnap: prende o ponto à geometria notável mais próxima (se houver).
+    const hit = toolUsaSnap(tool) ? applySnap(ptRaw, snapFromPt()) : null;
+    const pt = hit ? hit.p : ptRaw;
+    setSnapHit(null);
     if (tool === "calibrar") {
       const next = [...calibDraft, pt];
       if (next.length >= 2) { setCalibDraft([]); void finalizarCalibracao(next[0], next[1]); }
@@ -785,6 +940,38 @@ export default function MedicaoLevantamento() {
                   <Button size="sm" variant={pdfPB ? "default" : "ghost"} className="h-9 gap-1" onClick={() => setPdfPB((v) => !v)} title="Alterna a planta entre preto-e-branco (alto contraste) e cores originais">
                     <Contrast className="h-4 w-4" />{pdfPB ? "P&B" : "Cor"}
                   </Button>
+                  {/* Rev. 3100 — OSnap (Object Snap estilo AutoCAD): prende os pontos
+                      a geometrias notáveis dos contornos existentes. F3 alterna. */}
+                  <Popover>
+                    <div className="flex items-center">
+                      <Button
+                        size="sm" variant={osnapOn ? "default" : "ghost"} className="h-9 gap-1"
+                        onClick={() => setOsnapOn((v) => !v)}
+                        title="OSnap (F3): pontos grudam em extremidade, ponto médio, interseção etc."
+                      >
+                        <Magnet className="h-4 w-4" />OSnap
+                      </Button>
+                      <PopoverTrigger asChild>
+                        <Button size="sm" variant="ghost" className="h-9 w-7 p-0" title="Configurar quais snaps estão ativos">
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                    </div>
+                    <PopoverContent className="w-56 p-2" align="start">
+                      <p className="text-xs font-medium px-1 pb-2 text-muted-foreground">Modos de OSnap</p>
+                      <div className="space-y-1">
+                        {OSNAP_DEFS.map(({ key, label }) => (
+                          <label key={key} className="flex items-center gap-2 px-1 py-1 rounded hover:bg-muted cursor-pointer text-sm">
+                            <Checkbox
+                              checked={osnapModes[key]}
+                              onCheckedChange={(v) => setOsnapModes((m) => ({ ...m, [key]: !!v }))}
+                            />
+                            {label}
+                          </label>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                   <div className="h-6 w-px bg-border mx-1" />
                   <Button size="sm" variant="ghost" className="h-9 w-9 p-0" onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}><ZoomOut className="h-4 w-4" /></Button>
                   <span className="text-xs tabular-nums w-10 text-center">{Math.round(zoom * 100)}%</span>
@@ -856,6 +1043,7 @@ export default function MedicaoLevantamento() {
                         onPointerMove={onPdfPointerMove}
                         onPointerUp={onPdfPointerUp}
                         onPointerCancel={onPdfPointerUp}
+                        onPointerLeave={() => setSnapHit(null)}
                       >
                         <svg className="absolute inset-0 w-full h-full" viewBox="0 0 1 1" preserveAspectRatio="none">
                           {/* Rev. 3093 — REFERÊNCIA (medições anteriores): traço claro
@@ -919,6 +1107,22 @@ export default function MedicaoLevantamento() {
                           {calibAtual && (
                             <line x1={calibAtual.p1.x} y1={calibAtual.p1.y} x2={calibAtual.p2.x} y2={calibAtual.p2.y} stroke="#dc2626" strokeWidth={0.003} strokeDasharray="0.012 0.006" vectorEffect="non-scaling-stroke" />
                           )}
+                          {/* Rev. 3100 — marcador de OSnap (geometria notável sob o cursor) */}
+                          {snapHit && (() => {
+                            const { p, kind } = snapHit; const r = 0.011; const sw = 2.2; const col = "#16a34a";
+                            const common = { fill: "none", stroke: col, strokeWidth: sw, vectorEffect: "non-scaling-stroke" as const };
+                            if (kind === "endpoint")
+                              return <rect x={p.x - r} y={p.y - r} width={r * 2} height={r * 2} {...common} />;
+                            if (kind === "midpoint")
+                              return <polygon points={`${p.x},${p.y - r} ${p.x + r},${p.y + r} ${p.x - r},${p.y + r}`} {...common} />;
+                            if (kind === "intersection")
+                              return <g {...common}><line x1={p.x - r} y1={p.y - r} x2={p.x + r} y2={p.y + r} /><line x1={p.x - r} y1={p.y + r} x2={p.x + r} y2={p.y - r} /></g>;
+                            if (kind === "perpendicular")
+                              return <g {...common}><line x1={p.x - r} y1={p.y + r} x2={p.x + r} y2={p.y + r} /><line x1={p.x - r} y1={p.y - r} x2={p.x - r} y2={p.y + r} /></g>;
+                            if (kind === "nearest")
+                              return <g {...common}><line x1={p.x - r} y1={p.y - r} x2={p.x + r} y2={p.y + r} /><line x1={p.x - r} y1={p.y + r} x2={p.x + r} y2={p.y - r} /><line x1={p.x - r} y1={p.y + r} x2={p.x + r} y2={p.y + r} /></g>;
+                            return <circle cx={p.x} cy={p.y} r={r} {...common} />; // node
+                          })()}
                         </svg>
                       </div>
                     </div>

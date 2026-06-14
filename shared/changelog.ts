@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3100 — **MEDIÇÃO / LEVANTAMENTO DE CAMPO · A ÁREA DE DESENHO SOBRE A PLANTA (PDF) GANHA "OSNAP"
+ * ESTILO AUTOCAD (OBJECT SNAP): AO MARCAR/CONECTAR PONTOS, ELES "GRUDAM" AUTOMATICAMENTE NAS GEOMETRIAS
+ * NOTÁVEIS DOS CONTORNOS JÁ DESENHADOS — EXTREMIDADE, PONTO MÉDIO, INTERSEÇÃO, NÓ/CENTRO, PERPENDICULAR E
+ * PRÓXIMO (SOBRE A LINHA) — PARA QUE LEVANTAMENTOS ENCAIXEM SEM ESCORREGAR.**
+ *
+ * PEDIDO: "criar funções de OSnap como no AutoCAD (Object Snap) para os pontos desenhados grudarem nas
+ * geometrias notáveis dos contornos existentes na hora de conectar os pontos".
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO BACKEND/ALTER/DROP/DELETE/SCHEMA): em
+ * `client/src/pages/medicao/MedicaoLevantamento.tsx` adiciona-se um motor de Object Snap. Helpers de
+ * nível-módulo: tipo `SnapKind` (endpoint/midpoint/intersection/node/perpendicular/nearest), `OSNAP_DEFS`
+ * (rótulos pt-BR), `SNAP_PRIO` (desempate por prioridade quando 2 candidatos caem na tolerância),
+ * `OSNAP_TODOS` (todos ON por padrão), `toolUsaSnap` (todas as ferramentas que marcam ponto exato; "livre"
+ * e "select" ficam de fora), `projetarNoSegmento` (projeção com clamp → modo Próximo/Perpendicular) e
+ * `interseccaoSegmentos` (interseção de 2 segmentos). Um `useMemo` (`snapData`) coleta candidatos dos
+ * contornos da página + da camada de referência (medições anteriores, Rev. 3093) + do rascunho em curso —
+ * vértices→Extremidade, pontos médios→Ponto médio, contagem→Nó, e interseções com cap (≤240 segmentos
+ * para não travar O(n²)). `applySnap(raw, fromPt?)` escolhe o melhor candidato dentro de uma tolerância de
+ * 14px de TELA (usando o rect do `overlayRef`, então o "imã" tem o mesmo "alcance" visual em qualquer
+ * zoom); Perpendicular usa o último vértice do desenho como pé; Próximo projeta sobre o segmento. O snap é
+ * aplicado no `onTap` (ponto-a-ponto e calibração), nos dois cantos do Retângulo (pointerdown + arrasto) e
+ * o hover do mouse (sem botão) mostra um marcador SVG colorido (#16a34a, `non-scaling-stroke`) com símbolo
+ * por tipo (quadrado/triângulo/X/círculo/⊥). UI: botão "OSnap" (ícone ímã) liga/desliga, com Popover +
+ * Checkbox para escolher quais modos; atalho de teclado **F3** alterna (igual AutoCAD). Os pontos
+ * continuam normalizados [0..1]; geometria/persistência/consolidado inalterados.
+ *
+ * RESSALVA/DRIFT: nenhuma — só a ENTRADA de pontos ganha o "imã"; nada muda no cálculo de área/volume nem
+ * no backend. Engine compartilhada Cliente/Terceiros, offline-first.
+ *
  * Rev. 3099 — **MEDIÇÃO / LEVANTAMENTO DE CAMPO · A ÁREA DE DESENHO SOBRE A PLANTA (PDF) GANHA ZOOM PELA
  * RODINHA DO MOUSE (ESTILO AUTOCAD, EM DIREÇÃO AO CURSOR) NO PC, MANTENDO A PINÇA DE 2 DEDOS NO
  * CELULAR/TABLET — E O ZOOM ACONTECE SÓ NA PLANTA, NUNCA NA PÁGINA INTEIRA.**
