@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3086 — **CONTRATOS DE SERVIÇO (TERCEIROS) · TAG DE ASSINATURA NA LISTA: CADA CONTRATO PASSA A
+ * EXIBIR UMA TAG "ASSINADO" (VERDE) × "FALTA ASSINATURA" (ÂMBAR), DERIVADA DA REGRA ADESIVA DO ENVELOPE
+ * FCSIGN — NÃO DO CAMPO `status` BRUTO.**
+ *
+ * PEDIDO (usuário, print iPad da tela `/terceiros/contratos`): "Coloca uma tag nos contratos informando
+ * o que falta assinatura e os que já foram assinados, para facilitar o visual do usuário". O badge "Ativo"
+ * que já aparecia é uma regra de EXIBIÇÃO e NÃO reflete o estado real de assinatura (ver Rev. 3085: o
+ * campo `terceiro_contratos.status` é inconsistente — um contrato assinado pode ficar como
+ * "aguardando_assinaturas" e um "ativo" pode nunca ter ido ao FcSign).
+ *
+ * SOLUÇÃO (BACKEND READ-ONLY + FRONTEND, ZERO ALTER/DROP/DELETE/SCHEMA):
+ *   - BACKEND `server/routers/terceiroContratos.ts`, query `listarContratos`: passa a calcular, em LOTE,
+ *     o status de assinatura por contrato lendo os `integrasign_envelopes` NÃO-excluídos
+ *     (`excluido_em IS NULL`) via `inArray(contratoTerceiroId, ids)`. Regra ADESIVA (mesma do getContrato,
+ *     Rev. 3064): se QUALQUER envelope do contrato está "concluido" → "concluido"; senão usa o status do
+ *     envelope mais recente (orderBy criadoEm desc); sem envelope → null. Novo campo `assinaturaStatus` no
+ *     retorno. Tenant guard preservado (já filtra por `companyId`). Try/catch defensivo (não derruba a
+ *     lista se a leitura de envelopes falhar).
+ *   - FRONTEND `client/src/pages/terceiros/contratos/ContratosList.tsx`: ao lado dos badges de status e
+ *     natureza, NOVA tag — `assinaturaStatus === "concluido"` → Badge verde "Assinado" (ícone CheckCircle2);
+ *     caso contrário → Badge âmbar "Falta assinatura" (ícone Clock). Ícones adicionados ao import lucide.
+ *
+ * RESULTADO: na lista de Contratos de Serviço o usuário distingue de relance os contratos já assinados dos
+ * que ainda aguardam assinatura, alinhado ao gate real de medição (Rev. 3085).
+ *
  * Rev. 3085 — **MEDIÇÃO DE TERCEIROS · CORREÇÃO DO GATE DA TELA "CONTRATOS ATIVOS PARA MEDIR": O
  * CONTRATO ASSINADO NÃO APARECIA PORQUE O FILTRO USAVA O CAMPO `status="ativo"` BRUTO, QUE É
  * INCONSISTENTE. AGORA O GATE É A ASSINATURA CONCLUÍDA (REGRA ADESIVA), EXCLUINDO SÓ CANCELADOS.**

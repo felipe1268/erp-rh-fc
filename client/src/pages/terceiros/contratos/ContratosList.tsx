@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, FileText, Search, Building2, Calendar, TrendingUp, TrendingDown, ChevronRight, Trash2, Pencil, X, CheckSquare, Square, Save, AlertTriangle } from "lucide-react";
+import { Plus, FileText, Search, Building2, Calendar, TrendingUp, TrendingDown, ChevronRight, Trash2, Pencil, X, CheckSquare, Square, Save, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
@@ -226,6 +226,13 @@ export default function ContratosList() {
                       {c.numeroContrato && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">{c.numeroContrato}</span>}
                       <Badge className={`text-xs border ${st.cls}`}>{st.label}</Badge>
                       {(() => { const nt = NATUREZA_CONTRATO[(c as any).naturezaContrato || "mao_de_obra"] || NATUREZA_CONTRATO.mao_de_obra; return <Badge className={`text-xs border ${nt.cls}`}>{nt.label}</Badge>; })()}
+                      {(() => {
+                        const ass = (c as any).assinaturaStatus as string | null | undefined;
+                        if (ass === "concluido") {
+                          return <Badge className="text-xs border bg-emerald-100 text-emerald-800 border-emerald-200 inline-flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />Assinado</Badge>;
+                        }
+                        return <Badge className="text-xs border bg-amber-100 text-amber-800 border-amber-200 inline-flex items-center gap-1"><Clock className="w-3 h-3" />Falta assinatura</Badge>;
+                      })()}
                       {valOrc > 0 && (
                         <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded border font-medium ${
                           variacao > 0 ? "bg-red-50 text-red-700 border-red-200" :

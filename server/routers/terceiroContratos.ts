@@ -242,7 +242,8 @@ export const terceiroContratosRouter = router({
       empresaTerceiraId: z.number().optional(),
       status: z.string().optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       let rows = await db.select().from(terceiroContratos)
         .where(eq(terceiroContratos.companyId, input.companyId))
@@ -256,11 +257,40 @@ export const terceiroContratosRouter = router({
       const empMap: Record<number, string> = {};
       empresas.forEach(e => { empMap[e.id] = e.nomeFantasia || e.razaoSocial; });
 
+      // Rev. 3085 — status de ASSINATURA por contrato (regra ADESIVA do getContrato — Rev. 3064),
+      // para a tela mostrar uma TAG "Assinado" × "Aguardando assinatura". Lê os envelopes FcSign
+      // NÃO-excluídos: se QUALQUER um está "concluido" → "concluido"; senão o status do mais recente.
+      const assinaturaPorContrato: Record<number, string | null> = {};
+      try {
+        const ids = rows.map(r => r.id);
+        if (ids.length > 0) {
+          const envs = await db.select({
+            contratoTerceiroId: integrasignEnvelopes.contratoTerceiroId,
+            status: integrasignEnvelopes.status,
+            criadoEm: integrasignEnvelopes.criadoEm,
+          })
+            .from(integrasignEnvelopes)
+            .where(and(
+              eq(integrasignEnvelopes.companyId, input.companyId),
+              inArray(integrasignEnvelopes.contratoTerceiroId, ids),
+              isNull(integrasignEnvelopes.excluidoEm),
+            ))
+            .orderBy(desc(integrasignEnvelopes.criadoEm));
+          for (const e of envs) {
+            const cid = e.contratoTerceiroId;
+            if (cid == null) continue;
+            if (e.status === "concluido") { assinaturaPorContrato[cid] = "concluido"; continue; }
+            if (assinaturaPorContrato[cid] === undefined) assinaturaPorContrato[cid] = e.status ?? null; // mais recente (já ordenado desc)
+          }
+        }
+      } catch {}
+
       return rows.map(r => ({
         ...r,
         empresaNome: empMap[r.empresaTerceiraId] || "—",
         saldoDisponivel: n(r.valorTotal) - n(r.valorPago),
         percentualPago: n(r.valorTotal) > 0 ? (n(r.valorPago) / n(r.valorTotal)) * 100 : 0,
+        assinaturaStatus: assinaturaPorContrato[r.id] ?? null,
       }));
     }),
 
