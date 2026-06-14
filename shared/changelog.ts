@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3099 — **MEDIÇÃO / LEVANTAMENTO DE CAMPO · A ÁREA DE DESENHO SOBRE A PLANTA (PDF) GANHA ZOOM PELA
+ * RODINHA DO MOUSE (ESTILO AUTOCAD, EM DIREÇÃO AO CURSOR) NO PC, MANTENDO A PINÇA DE 2 DEDOS NO
+ * CELULAR/TABLET — E O ZOOM ACONTECE SÓ NA PLANTA, NUNCA NA PÁGINA INTEIRA.**
+ *
+ * PEDIDO: "quero poder dar zoom rolando a bolinha do mouse, como no AutoCAD, quando estiver no PC; e com
+ * os dedos quando estiver no celular/tablet, sem precisar dar zoom na tela toda — somente na área de
+ * desenho".
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO BACKEND/ALTER/DROP/DELETE/SCHEMA): em
+ * `client/src/pages/medicao/MedicaoLevantamento.tsx` adiciona-se um listener NATIVO de `wheel` registrado
+ * com `{ passive: false }` no container do canvas (`canvasWrapRef`) — passive:false é obrigatório para
+ * `preventDefault()` funcionar e impedir que a rolagem do mouse role/zoome a página ou o container. O
+ * handler calcula a fração do conteúdo sob o cursor (mesma matemática do pinch) e reusa o `focusRef` +
+ * `useLayoutEffect` já existentes (Rev. 3097) para reposicionar o scroll DEPOIS do re-layout, mantendo o
+ * ponto sob o cursor fixo (zoom focal AutoCAD-like). Passo suave/exponencial (`exp(clamp(-deltaY*0.0015))`)
+ * clampado em 0.5..6× — o mesmo range dos botões +/− e da pinça. Para evitar closure stale entre ticks
+ * rápidos de roda, `zoom`/`baseWidth`/`pageDims` são lidos via refs atualizados a cada render. A pinça de
+ * 2 dedos e o pan continuam intactos; o pan no PC segue pelo arraste do mouse (ferramenta Selecionar).
+ *
+ * RESSALVA/DRIFT: nenhuma — só ENTRADA de zoom (roda) foi adicionada; geometria/persistência/consolidado
+ * inalterados. Engine compartilhada Cliente/Terceiros.
+ *
  * Rev. 3098 — **MEDIÇÃO DE TERCEIROS · NA "CONFIGURAÇÃO DE RETENÇÕES DO CONTRATO (%)" O USUÁRIO VOLTA A
  * CONSEGUIR APAGAR O "0" DOS CAMPOS (ISS/INSS/IRRF/OUTRAS/RET. TÉCNICA) NO TABLET (iPad/Safari) — O FIX
  * ANTERIOR (Rev. 3096) RESOLVEU O LADO DO ESTADO REACT, MAS O `<input type="number">` NO iOS CONTINUAVA

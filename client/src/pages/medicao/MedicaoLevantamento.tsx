@@ -284,6 +284,35 @@ export default function MedicaoLevantamento() {
     focusRef.current = null;
   }, [zoom, baseWidth, pageDims]);
 
+  // Rev. 3099 — Zoom pela rodinha do mouse (estilo AutoCAD): só na área de
+  // desenho, em direção ao cursor. Listener NATIVO {passive:false} para poder
+  // preventDefault (impede a página/container de rolar ou dar zoom-of-page).
+  const zoomRef = useRef(zoom); zoomRef.current = zoom;
+  const baseWidthRef = useRef(baseWidth); baseWidthRef.current = baseWidth;
+  const pageDimsRef = useRef(pageDims); pageDimsRef.current = pageDims;
+  useEffect(() => {
+    const cont = canvasWrapRef.current;
+    if (!cont) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && e.deltaY === 0) return;
+      e.preventDefault();
+      const z = zoomRef.current, bw = baseWidthRef.current, pd = pageDimsRef.current;
+      const rect = cont.getBoundingClientRect();
+      const contentW = bw * z;
+      const contentH = pd.w > 0 ? contentW * (pd.h / pd.w) : contentW;
+      const fracX = (cont.scrollLeft + (e.clientX - rect.left)) / Math.max(contentW, 1);
+      const fracY = (cont.scrollTop + (e.clientY - rect.top)) / Math.max(contentH, 1);
+      // deltaY<0 = rolar p/ cima = aproximar; passo suave e clampado
+      const step = Math.max(-0.4, Math.min(0.4, -e.deltaY * 0.0015));
+      const newZoom = Math.min(6, Math.max(0.5, z * Math.exp(step)));
+      if (newZoom === z) return;
+      focusRef.current = { fracX, fracY, cx: e.clientX, cy: e.clientY };
+      setZoom(newZoom);
+    };
+    cont.addEventListener("wheel", onWheel, { passive: false });
+    return () => cont.removeEventListener("wheel", onWheel);
+  }, [pdfSel]);
+
   const PAN_THRESHOLD = 6; // px — abaixo disso, um toque é "tap" (ponto); acima, arrasta
 
   function onPdfPointerDown(e: React.PointerEvent) {
