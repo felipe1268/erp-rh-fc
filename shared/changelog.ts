@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3106 — **FINANCEIRO / ANÁLISE DE CUSTOS · O MODAL "EDITAR LANÇAMENTO" (DRILL "POR CENTRO DE CUSTO")
+ * FOI REDESENHADO PARA SER MAIS MODERNO E FÁCIL DE PREENCHER — E, PRINCIPALMENTE, PARA NÃO CORTAR NEM
+ * SOBREPOR MAIS O TEXTO DO DROPDOWN DE CATEGORIA/CENTRO DE CUSTO (QUE APARECIA CLIPADO À ESQUERDA E SOBRE
+ * OS BOTÕES EM TELAS ~768px / iPad).**
+ *
+ * PEDIDO: "Melhore este layout, faça um moderno e de fácil entendimento e fácil lançamento... não pode ter
+ * textos cortados ou sobrepostos" (print IMG_2036: dropdown de Categoria com itens cortados — "ABALHISTA"
+ * por TRABALHISTA, "SGOTO" por ESGOTO — invadindo a área dos botões Cancelar/Salvar num iPad).
+ *
+ * CAUSA: os selects de Categoria e Centro de Custo viviam num `grid grid-cols-2`, ficando estreitos. O
+ * `SelectContent` do shadcn usa `align="center"` e `min-w-[8rem]` sem truncar/quebrar o texto dos itens →
+ * nomes longos de categoria estouravam a largura, o popper centralizava sobre o gatilho estreito e o
+ * conteúdo transbordava para a ESQUERDA (cortado pelo viewport) e por baixo, cobrindo o rodapé.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE/SCHEMA/BACKEND) em
+ * `client/src/pages/financeiro/FinanceiroAnaliseCustosDetalhe.tsx`:
+ *
+ * 1) LAYOUT: Categoria e Centro de Custo saem do `grid-cols-2` e passam a ocupar LARGURA TOTAL, empilhados
+ *    dentro de um cartão "Classificação" (`rounded-xl border bg-gray-50/60`). Gatilho largo = popper largo =
+ *    nomes longos cabem sem transbordar. Datas (Competência/Vencimento) seguem em 2 colunas; Descrição,
+ *    Fornecedor/Pagador e Valor em largura total. Seções separadas por `space-y-4`.
+ *
+ * 2) DROPDOWN À PROVA DE CORTE: `SelectContent` agora com `align="start"` (ancora na borda esquerda do
+ *    gatilho, nunca vaza p/ a esquerda), `max-w-[calc(100vw-2rem)]` e `max-h-72`; cada `SelectItem` ganha
+ *    `whitespace-normal leading-snug` → nomes longos QUEBRAM em 2 linhas em vez de serem cortados.
+ *
+ * 3) POLIMENTO MODERNO: alturas dos campos h-9→h-10 (toque mais confortável no tablet), labels
+ *    `font-medium text-gray-600`, placeholders de exemplo nos inputs, `DialogDescription` de apoio no
+ *    cabeçalho. O `DialogContent` já tinha `max-h-[92dvh] overflow-y-auto` (rola sem cobrir o rodapé).
+ *
+ * RESSALVA/DRIFT: mudança puramente de apresentação — NENHUMA alteração na lógica de gravação (`salvarEdicao`,
+ * estados `ef`, `catOpcoesDialog`/`obraOpcoesDialog`, `rowLocked`). O componente shadcn `ui/select.tsx` NÃO
+ * foi tocado (align/whitespace aplicados por instância, para não afetar outros selects do sistema).
+ *
  * Rev. 3105 — **MEDIÇÃO / LEVANTAMENTO DE CAMPO · O DESENHO DOS CONTORNOS GANHA ESCOLHA DE COR E DE OPACIDADE
  * DO PREENCHIMENTO — ANTES O PREENCHIMENTO ERA FIXO E "FRACO" (18%) E A COR ERA AUTOMÁTICA POR TIPO, SEM JEITO
  * DE TROCAR. AGORA HÁ UM POPOVER "ESTILO" NA BARRA DE FERRAMENTAS (PALETA + SLIDER) E RECOLORIR EM MASSA NA

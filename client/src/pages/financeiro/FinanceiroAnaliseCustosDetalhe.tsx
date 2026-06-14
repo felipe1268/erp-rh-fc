@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { MoneyInput } from "@/components/ui/money-input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useCompany } from "@/hooks/useCompany";
@@ -829,9 +829,12 @@ export default function FinanceiroAnaliseCustosDetalhe() {
             <DialogTitle className="flex items-center gap-2">
               <Pencil className="w-4 h-4 text-indigo-600" /> Editar lançamento
             </DialogTitle>
+            <DialogDescription className="text-xs">
+              Ajuste a descrição, classificação, datas e valor deste título.
+            </DialogDescription>
           </DialogHeader>
           {ef && editRow && (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {(() => {
                 const p = parseLanc(editRow);
                 if (!p.docNumero) return null;
@@ -861,80 +864,92 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                   <span>Lançamento já {editRow.status === "recebido" ? "recebido" : "pago"} — só é possível corrigir <b>categoria</b> e <b>centro de custo</b>. Para alterar valor/datas, estorne antes.</span>
                 </div>
               )}
-              <div>
-                <Label className="text-xs">Descrição</Label>
-                <Input
-                  value={ef.descricao}
-                  onChange={(e) => setEf({ ...ef, descricao: e.target.value })}
-                  disabled={rowLocked(editRow)}
-                  className="h-9 mt-1"
-                />
+              {/* Identificação */}
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-gray-600">Descrição</Label>
+                  <Input
+                    value={ef.descricao}
+                    onChange={(e) => setEf({ ...ef, descricao: e.target.value })}
+                    disabled={rowLocked(editRow)}
+                    placeholder="Ex.: Aluguel Escritório Central"
+                    className="h-10"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-gray-600">Fornecedor / Pagador</Label>
+                  <Input
+                    value={ef.fornecedorNome}
+                    onChange={(e) => setEf({ ...ef, fornecedorNome: e.target.value })}
+                    disabled={rowLocked(editRow)}
+                    placeholder="Nome do fornecedor ou pagador"
+                    className="h-10"
+                  />
+                </div>
               </div>
-              <div>
-                <Label className="text-xs">Fornecedor / Pagador</Label>
-                <Input
-                  value={ef.fornecedorNome}
-                  onChange={(e) => setEf({ ...ef, fornecedorNome: e.target.value })}
-                  disabled={rowLocked(editRow)}
-                  className="h-9 mt-1"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Categoria</Label>
+
+              {/* Classificação — full width p/ não cortar nomes longos */}
+              <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-3 space-y-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Classificação</p>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-gray-600">Categoria</Label>
                   <Select value={ef.contaSel} onValueChange={(v) => setEf({ ...ef, contaSel: v })}>
-                    <SelectTrigger className="h-9 mt-1 text-xs"><SelectValue placeholder="Categoria…" /></SelectTrigger>
-                    <SelectContent>
+                    <SelectTrigger className="h-10 bg-white"><SelectValue placeholder="Selecione a categoria…" /></SelectTrigger>
+                    <SelectContent align="start" className="max-h-72 max-w-[calc(100vw-2rem)]">
                       <SelectItem value={CLEAR}>Sem categoria</SelectItem>
                       {catOpcoesDialog.map((c) => (
-                        <SelectItem key={c.id} value={String(c.id)}>{c.id === -1 ? `${c.nome} (atual)` : c.nome}</SelectItem>
+                        <SelectItem key={c.id} value={String(c.id)} className="whitespace-normal leading-snug">{c.id === -1 ? `${c.nome} (atual)` : c.nome}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-                <div>
-                  <Label className="text-xs">Centro de Custo (obra)</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-gray-600">Centro de Custo (obra)</Label>
                   <Select value={ef.obraSel} onValueChange={(v) => setEf({ ...ef, obraSel: v })}>
-                    <SelectTrigger className="h-9 mt-1 text-xs"><SelectValue placeholder="Centro de custo…" /></SelectTrigger>
-                    <SelectContent>
+                    <SelectTrigger className="h-10 bg-white"><SelectValue placeholder="Selecione o centro de custo…" /></SelectTrigger>
+                    <SelectContent align="start" className="max-h-72 max-w-[calc(100vw-2rem)]">
                       <SelectItem value={CLEAR}>Sem centro de custo</SelectItem>
                       {obraOpcoesDialog.map((o) => (
-                        <SelectItem key={o.id} value={String(o.id)}>{o.id === -1 ? `${o.nome} (atual)` : o.nome}</SelectItem>
+                        <SelectItem key={o.id} value={String(o.id)} className="whitespace-normal leading-snug">{o.id === -1 ? `${o.nome} (atual)` : o.nome}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Competência</Label>
-                  <Input
-                    type="date"
-                    value={ef.dataCompetencia}
-                    onChange={(e) => setEf({ ...ef, dataCompetencia: e.target.value })}
-                    disabled={rowLocked(editRow)}
-                    className="h-9 mt-1"
-                  />
+
+              {/* Datas e valor */}
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-gray-600">Competência</Label>
+                    <Input
+                      type="date"
+                      value={ef.dataCompetencia}
+                      onChange={(e) => setEf({ ...ef, dataCompetencia: e.target.value })}
+                      disabled={rowLocked(editRow)}
+                      className="h-10"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-gray-600">Vencimento</Label>
+                    <Input
+                      type="date"
+                      value={ef.dataVencimento}
+                      onChange={(e) => setEf({ ...ef, dataVencimento: e.target.value })}
+                      disabled={rowLocked(editRow)}
+                      className="h-10"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label className="text-xs">Vencimento</Label>
-                  <Input
-                    type="date"
-                    value={ef.dataVencimento}
-                    onChange={(e) => setEf({ ...ef, dataVencimento: e.target.value })}
-                    disabled={rowLocked(editRow)}
-                    className="h-9 mt-1"
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-gray-600">Valor (R$)</Label>
+                  <MoneyInput
+                    value={ef.valor}
+                    onChange={(v) => setEf({ ...ef, valor: v })}
+                    className="h-10"
                   />
+                  {rowLocked(editRow) && <p className="text-[11px] text-gray-400">Valor bloqueado (lançamento {editRow.status}).</p>}
                 </div>
-              </div>
-              <div>
-                <Label className="text-xs">Valor (R$)</Label>
-                <MoneyInput
-                  value={ef.valor}
-                  onChange={(v) => setEf({ ...ef, valor: v })}
-                  className="h-9 mt-1"
-                />
-                {rowLocked(editRow) && <p className="text-[11px] text-gray-400 mt-1">Valor bloqueado (lançamento {editRow.status}).</p>}
               </div>
             </div>
           )}
