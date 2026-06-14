@@ -382,7 +382,21 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               {contrato.numeroContrato && <span className="text-xs bg-gray-100 px-2 py-0.5 rounded font-mono">{contrato.numeroContrato}</span>}
-              <Badge className={`text-xs border ${STATUS_MEDICAO[contrato.status || "ativo"]?.cls || ""}`}>{contrato.status}</Badge>
+              {(() => {
+                // A tag de assinatura segue a regra ADESIVA do envelope FCSign (assinaturaStatus),
+                // NÃO o `status` cru — que pode ficar congelado em "aguardando_assinaturas" mesmo
+                // após o contrato já ter sido assinado. Mostrar o cru aqui confunde o usuário.
+                const rawStatus = contrato.status as string | undefined;
+                const ass = (contrato as any).assinaturaStatus as string | null | undefined;
+                const ehEtapaAssinatura = rawStatus === "aguardando_assinaturas" || rawStatus === "em_assinatura" || rawStatus === "rascunho";
+                if (ass === "concluido") {
+                  return <Badge className="text-xs border bg-emerald-100 text-emerald-800 border-emerald-200 inline-flex items-center gap-1"><CheckCircle className="w-3 h-3" />Assinado</Badge>;
+                }
+                if (ehEtapaAssinatura) {
+                  return <Badge className="text-xs border bg-amber-100 text-amber-800 border-amber-200 inline-flex items-center gap-1"><Clock className="w-3 h-3" />Falta assinatura</Badge>;
+                }
+                return <Badge className={`text-xs border ${STATUS_MEDICAO[rawStatus || "ativo"]?.cls || ""}`}>{rawStatus}</Badge>;
+              })()}
               {editingNatureza ? (
                 <Select
                   value={(contrato as any).naturezaContrato || "mao_de_obra"}
