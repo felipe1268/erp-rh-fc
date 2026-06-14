@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3085 — **MEDIÇÃO DE TERCEIROS · CORREÇÃO DO GATE DA TELA "CONTRATOS ATIVOS PARA MEDIR": O
+ * CONTRATO ASSINADO NÃO APARECIA PORQUE O FILTRO USAVA O CAMPO `status="ativo"` BRUTO, QUE É
+ * INCONSISTENTE. AGORA O GATE É A ASSINATURA CONCLUÍDA (REGRA ADESIVA), EXCLUINDO SÓ CANCELADOS.**
+ *
+ * SINTOMA (usuário, print iPad): a tela `/terceiros/medicoes` mostrava "Nenhum contrato pronto para
+ * medição" (contador 0) mesmo havendo o contrato CT-2026-0006 ASSINADO e exibido como "Ativo" na lista
+ * de Contratos de Serviço.
+ *
+ * CAUSA-RAIZ (confirmada no Neon direto): o campo `terceiro_contratos.status` é INCONSISTENTE como sinal
+ * de "assinado/pronto pra medir":
+ *   - CT-2026-0006 (id=17): envelope FcSign não-excluído "concluido" (ASSINADO de fato), MAS `status`
+ *     bruto ainda = "aguardando_assinaturas" → o filtro `status="ativo"` da Rev. 3084 o excluía.
+ *   - Os 4 contratos com `status="ativo"` (ids 8/10/11/12) NÃO têm nenhum envelope FcSign (nunca foram
+ *     assinados no sistema) → não passam no gate de assinatura de qualquer forma.
+ *   A lista "Contratos de Serviço" exibe o badge "Ativo" por uma regra de exibição, não pelo campo bruto,
+ *   o que mascarava a divergência.
+ *
+ * CORREÇÃO (BACKEND, READ-ONLY, ZERO ALTER/DROP/DELETE/SCHEMA) — `server/routers/terceiroContratos.ts`,
+ * query `listarContratosParaMedicao`: o WHERE deixa de exigir `status="ativo"` e passa a EXCLUIR apenas os
+ * estados mortos (`notInArray(status, ["cancelado","cancelada","rascunho"])`). O gate efetivo de
+ * "assinaturas finalizadas" continua sendo o envelope FcSign não-excluído "concluido" (MESMA regra ADESIVA
+ * do getContrato — Rev. 3064), aplicado logo em seguida. Resultado: CT-2026-0006 passa a aparecer; os 4
+ * "ativos" sem assinatura permanecem fora (coerente com o pedido "só depois das assinaturas finalizadas").
+ * Import `notInArray` adicionado ao drizzle-orm. Guard de tenant `_assertCompanyAccess` preservado.
+ *
+ * VERIFICAÇÃO: dados conferidos no NEON direto via pg (não executeSql — esse aponta pro Postgres do Replit,
+ * não pro Neon do app). App reiniciado, sobe limpo (Server running + Neon).
+ *
  * Rev. 3084 — **MEDIÇÃO DE TERCEIROS · LIMPEZA DO MENU TERCEIROS: "MEDIÇÕES PJ" SAI DO MÓDULO TERCEIROS E
  * PASSA A VIVER NA BARRA DEDICADA "MEDIÇÃO TERCEIROS" (AGORA TODA FUNÇÃO DE MEDIÇÃO FICA EM UM SÓ LUGAR).**
  *

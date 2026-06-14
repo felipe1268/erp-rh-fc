@@ -4,7 +4,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, getUserCompanyLinks, createAuditLog } from "../db";
 import { upperCaseEmpresa } from "../../shared/normalizeNomeEmpresa";
 import { triggerFinancialSync, triggerFinancialSyncAwaited } from "../services/financialEventTrigger";
-import { eq, and, or, desc, inArray, sql, asc, isNull } from "drizzle-orm";
+import { eq, and, or, desc, inArray, notInArray, sql, asc, isNull } from "drizzle-orm";
 import {
   terceiroContratos,
   terceiroContratoItens,
@@ -264,10 +264,14 @@ export const terceiroContratosRouter = router({
       }));
     }),
 
-  // Rev. 3084 — Contratos prontos para medição mensal: ATIVOS e com ASSINATURA CONCLUÍDA.
-  // Alimenta a tela dedicada de Medições de Terceiros (substitui o item de menu "Contratos de Serviço").
-  // Um contrato só aparece aqui depois que pelo menos um envelope FcSign não-excluído está "concluido"
-  // (mesma regra ADESIVA do getContrato — Rev. 3064).
+  // Rev. 3085 — Contratos prontos para medição mensal = ASSINATURA CONCLUÍDA (regra ADESIVA),
+  // excluindo apenas contratos cancelados. Alimenta a tela dedicada de Medições de Terceiros.
+  //
+  // POR QUE NÃO FILTRAR POR status="ativo": o campo `status` bruto é INCONSISTENTE — um contrato
+  // já 100% assinado pode permanecer "aguardando_assinaturas" (ex.: CT-2026-0006), enquanto
+  // contratos "ativo" podem nunca ter ido ao FcSign. O sinal confiável de "assinaturas finalizadas"
+  // (pedido do usuário) é a existência de um envelope FcSign não-excluído "concluido" — a MESMA
+  // regra ADESIVA do getContrato (Rev. 3064). Cancelados ficam de fora.
   listarContratosParaMedicao: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input, ctx }) => {
@@ -276,14 +280,14 @@ export const terceiroContratosRouter = router({
       const rows = await db.select().from(terceiroContratos)
         .where(and(
           eq(terceiroContratos.companyId, input.companyId),
-          eq(terceiroContratos.status, "ativo"),
+          notInArray(terceiroContratos.status, ["cancelado", "cancelada", "rascunho"]),
         ))
         .orderBy(desc(terceiroContratos.criadoEm));
       if (rows.length === 0) return [];
 
       const contratoIds = rows.map(r => r.id);
 
-      // Envelopes não-excluídos dos contratos ativos → set dos que têm "concluido".
+      // Envelopes não-excluídos dos contratos não-cancelados → set dos que têm "concluido".
       const assinadosSet = new Set<number>();
       try {
         const envs = await db.select({
