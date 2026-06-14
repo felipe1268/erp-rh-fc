@@ -15,6 +15,9 @@ import { dispararNotificacao } from "../services/emailNotification";
 // ============================================================
 
 const CHAVE_SUPLENTES = "recontratacao_aprovadores_suplentes";
+// Rev. 3058 — sócios titulares (aprovadores automáticos) agora são CONFIGURÁVEIS.
+// Lista de IDs de usuários em systemCriteria; vazio/ausente => fallback p/ todos admin_master (compat).
+const CHAVE_SOCIOS_TITULARES = "recontratacao_socios_titulares";
 
 function normalizar(s?: string | null): string {
   return (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -37,10 +40,34 @@ async function getSuplenteIds(db: any, companyId: number): Promise<number[]> {
   } catch { return []; }
 }
 
+// Todos os usuários com papel admin_master (fallback de compatibilidade).
+async function getAdminMasterIds(db: any): Promise<number[]> {
+  try {
+    const rows = await db.select({ id: users.id }).from(users)
+      .where(and(eq(users.role, "admin_master"), isNull(users.deletedAt)));
+    return rows.map((r: any) => Number(r.id)).filter((n: number) => Number.isFinite(n));
+  } catch { return []; }
+}
+
+// IDs dos sócios titulares (aprovadores automáticos). Se a empresa configurou uma
+// lista NÃO-vazia, usa exatamente ela; senão cai no fallback = todos admin_master.
+async function getSociosTitularesIds(db: any, companyId: number): Promise<number[]> {
+  const raw = await getCriterioValor(db, companyId, CHAVE_SOCIOS_TITULARES, "");
+  let configured: number[] = [];
+  try {
+    const arr = raw ? JSON.parse(raw) : [];
+    configured = Array.isArray(arr) ? arr.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n)) : [];
+  } catch { configured = []; }
+  if (configured.length > 0) return configured;
+  return await getAdminMasterIds(db);
+}
+
 async function isAprovador(db: any, ctx: any, companyId: number): Promise<boolean> {
-  if (ctx?.user?.role === "admin_master") return true;
+  const uid = Number(ctx?.user?.id);
+  const titulares = await getSociosTitularesIds(db, companyId);
+  if (titulares.includes(uid)) return true;
   const suplentes = await getSuplenteIds(db, companyId);
-  return suplentes.includes(Number(ctx?.user?.id));
+  return suplentes.includes(uid);
 }
 
 // Rev. 2755 — Guard de tenancy: o servidor NUNCA confia no companyId/companyIds
@@ -74,9 +101,12 @@ async function empresasGrupoPermitidas(ctx: any, db: any, companyId: number): Pr
 async function getAprovadores(db: any, companyId: number): Promise<Array<{ id: number; name: string; email: string }>> {
   const out = new Map<number, { id: number; name: string; email: string }>();
   try {
-    const titulares = await db.select({ id: users.id, name: users.name, email: users.email, role: users.role })
-      .from(users).where(and(eq(users.role, "admin_master"), isNull(users.deletedAt)));
-    for (const u of titulares) if (u.email) out.set(u.id, { id: u.id, name: u.name || "Sócio", email: u.email });
+    const titularIds = await getSociosTitularesIds(db, companyId);
+    if (titularIds.length > 0) {
+      const titulares = await db.select({ id: users.id, name: users.name, email: users.email })
+        .from(users).where(and(inArray(users.id, titularIds), isNull(users.deletedAt)));
+      for (const u of titulares) if (u.email) out.set(u.id, { id: u.id, name: u.name || "Sócio", email: u.email });
+    }
   } catch { /* ignore */ }
   const suplentes = await getSuplenteIds(db, companyId);
   if (suplentes.length > 0) {
@@ -533,15 +563,24 @@ export const recontratacaoRouter = router({
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
-      if (!db) return { suplenteIds: [] as number[], usuarios: [] as any[] };
+      if (!db) return { suplenteIds: [] as number[], usuarios: [] as any[], socioTitularIds: [] as number[], socioTitulares: [] as any[] };
       await assertAcessoEmpresas(ctx, [input.companyId]);
       const suplenteIds = await getSuplenteIds(db, input.companyId);
+      const socioTitularIds = await getSociosTitularesIds(db, input.companyId);
+      // Resolução só-leitura dos titulares (visível a todos os usuários autorizados da empresa).
+      let socioTitulares: any[] = [];
+      if (socioTitularIds.length > 0) {
+        try {
+          socioTitulares = await db.select({ id: users.id, name: users.name, email: users.email })
+            .from(users).where(and(inArray(users.id, socioTitularIds), isNull(users.deletedAt))).orderBy(users.name);
+        } catch { /* ignore */ }
+      }
       if (ctx.user.role !== "admin_master") {
-        return { suplenteIds, usuarios: [] as any[] };
+        return { suplenteIds, usuarios: [] as any[], socioTitularIds, socioTitulares };
       }
       const usuarios = await db.select({ id: users.id, name: users.name, email: users.email, role: users.role, username: users.username })
         .from(users).where(isNull(users.deletedAt)).orderBy(users.name);
-      return { suplenteIds, usuarios };
+      return { suplenteIds, usuarios, socioTitularIds, socioTitulares };
     }),
 
   // Suplentes (configuração) — gravação (somente admin_master).
@@ -569,6 +608,36 @@ export const recontratacaoRouter = router({
       await createAuditLog({
         userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "recontratacao",
         entityType: "config_suplentes", entityId: 0, details: `Suplentes de recontratação atualizados: [${input.suplenteIds.join(", ")}]`,
+      });
+      return { ok: true };
+    }),
+
+  // Sócios titulares (configuração) — gravação (somente admin_master). Rev. 3058.
+  setSociosTitulares: protectedProcedure
+    .input(z.object({ companyId: z.number(), socioTitularIds: z.array(z.number()) }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o Admin Master pode definir os sócios titulares." });
+      }
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const ids = Array.from(new Set(input.socioTitularIds.map((n) => Number(n)).filter((n) => Number.isFinite(n))));
+      const valor = JSON.stringify(ids);
+      const [existing] = await db.select({ id: systemCriteria.id }).from(systemCriteria)
+        .where(and(eq(systemCriteria.companyId, input.companyId), eq(systemCriteria.chave, CHAVE_SOCIOS_TITULARES)));
+      if (existing) {
+        await db.update(systemCriteria).set({ valor, atualizadoPor: ctx.user.name ?? "Sistema", updatedAt: new Date().toISOString() })
+          .where(eq(systemCriteria.id, existing.id));
+      } else {
+        await db.insert(systemCriteria).values({
+          companyId: input.companyId, categoria: "recontratacao", chave: CHAVE_SOCIOS_TITULARES, valor,
+          descricao: "IDs dos usuários sócios titulares (aprovadores automáticos de recontratação)", valorPadraoClt: "[]",
+          unidade: "json", atualizadoPor: ctx.user.name ?? "Sistema",
+        } as any);
+      }
+      await createAuditLog({
+        userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "recontratacao",
+        entityType: "config_socios_titulares", entityId: 0, details: `Sócios titulares de recontratação atualizados: [${ids.join(", ")}]`,
       });
       return { ok: true };
     }),

@@ -3172,122 +3172,204 @@ function RecontratacaoAprovadoresSection({ companyId, isMaster }: { companyId: n
   const utils = trpc.useUtils();
   const suplentesQuery = trpc.recontratacao.getSuplentes.useQuery({ companyId }, { enabled: companyId > 0 });
   const [selecionados, setSelecionados] = useState<number[]>([]);
+  const [titularesSel, setTitularesSel] = useState<number[]>([]);
   const [busca, setBusca] = useState("");
+  const [buscaTit, setBuscaTit] = useState("");
 
   useEffect(() => {
-    if (suplentesQuery.data) setSelecionados(suplentesQuery.data.suplenteIds || []);
+    if (suplentesQuery.data) {
+      setSelecionados(suplentesQuery.data.suplenteIds || []);
+      setTitularesSel(suplentesQuery.data.socioTitularIds || []);
+    }
   }, [suplentesQuery.data]);
 
   const salvarMut = trpc.recontratacao.setSuplentes.useMutation({
     onSuccess: () => { toast.success("Suplentes atualizados com sucesso!"); utils.recontratacao.getSuplentes.invalidate(); },
     onError: (e: any) => toast.error("Erro: " + e.message),
   });
+  const salvarTitularesMut = trpc.recontratacao.setSociosTitulares.useMutation({
+    onSuccess: () => { toast.success("Sócios titulares atualizados com sucesso!"); utils.recontratacao.getSuplentes.invalidate(); },
+    onError: (e: any) => toast.error("Erro: " + e.message),
+  });
 
   const usuarios = (suplentesQuery.data?.usuarios || []) as any[];
-  // Os demais sócios (Admin Master) são SEMPRE aprovadores titulares — aparecem
-  // numa lista só-leitura no topo (não precisam ser selecionados como suplentes).
-  const titulares = useMemo(
-    () => usuarios.filter((u: any) => u.role === "admin_master"),
-    [usuarios],
-  );
+  // Lista resolvida (só-leitura) dos sócios titulares atuais — visível a todos.
+  const socioTitulares = (suplentesQuery.data?.socioTitulares || []) as any[];
+
+  // Picker dos sócios titulares: qualquer usuário pode ser indicado.
+  const usuariosTitFiltrados = useMemo(() => {
+    const q = buscaTit.trim().toLowerCase();
+    if (!q) return usuarios;
+    return usuarios.filter((u: any) => `${u.name || ""} ${u.email || ""} ${u.username || ""}`.toLowerCase().includes(q));
+  }, [usuarios, buscaTit]);
+
+  // Picker dos suplentes: exclui quem já é titular (não faz sentido ser os dois).
   const usuariosFiltrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
-    const base = usuarios.filter((u: any) => u.role !== "admin_master");
+    const base = usuarios.filter((u: any) => !titularesSel.includes(u.id));
     if (!q) return base;
     return base.filter((u: any) => `${u.name || ""} ${u.email || ""} ${u.username || ""}`.toLowerCase().includes(q));
-  }, [usuarios, busca]);
+  }, [usuarios, busca, titularesSel]);
 
   const toggle = (id: number) => setSelecionados(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const toggleTitular = (id: number) => setTitularesSel(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
   const dirty = useMemo(() => {
     const a = [...(suplentesQuery.data?.suplenteIds || [])].sort().join(",");
     const b = [...selecionados].sort().join(",");
     return a !== b;
   }, [suplentesQuery.data, selecionados]);
+  const dirtyTit = useMemo(() => {
+    const a = [...(suplentesQuery.data?.socioTitularIds || [])].sort().join(",");
+    const b = [...titularesSel].sort().join(",");
+    return a !== b;
+  }, [suplentesQuery.data, titularesSel]);
 
   return (
     <Card className="border-lime-200 mt-4">
       <CardHeader>
         <CardTitle className="text-lg flex items-center gap-2 text-lime-700">
           <UserCheck className="w-5 h-5" />
-          Recontratação · Suplentes de Aprovação
+          Recontratação · Aprovadores
         </CardTitle>
         <CardDescription>
-          Os sócios (Admin Master) são sempre aprovadores titulares das recontratações e podem liberar ou recusar
-          a qualquer momento — inclusive um na ausência do outro. Selecione abaixo os usuários autorizados a
-          liberar ou recusar como suplentes. {isMaster ? "" : "Apenas o Admin Master pode alterar esta lista."}
+          Defina os <strong>sócios titulares</strong> (aprovadores automáticos que podem liberar ou recusar a
+          qualquer momento, inclusive um na ausência do outro) e os <strong>suplentes</strong> autorizados a
+          liberar ou recusar. {isMaster ? "" : "Apenas o Admin Master pode alterar estas listas."}
         </CardDescription>
       </CardHeader>
       <CardContent>
         {suplentesQuery.isLoading ? (
           <div className="text-center py-6 text-gray-400">Carregando usuários...</div>
         ) : (
-          <div className="space-y-3">
-            {titulares.length > 0 && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span className="text-sm font-semibold text-amber-800">
-                    Aprovadores titulares (sócios)
-                  </span>
-                </div>
-                <p className="text-xs text-amber-700 mb-2.5 leading-relaxed">
-                  Estes sócios podem liberar ou recusar recontratações a qualquer momento — inclusive um
-                  na ausência do outro. São aprovadores automáticos e não precisam ser selecionados abaixo.
-                </p>
-                <div className="space-y-1.5">
-                  {titulares.map((u: any) => (
+          <div className="space-y-5">
+            {/* ===== Sócios titulares (editável) ===== */}
+            <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+              <div className="flex items-center gap-2 mb-1.5">
+                <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0" />
+                <span className="text-sm font-semibold text-amber-800">Sócios titulares (aprovadores)</span>
+              </div>
+              <p className="text-xs text-amber-700 mb-2.5 leading-relaxed">
+                Estes sócios podem liberar ou recusar recontratações a qualquer momento — inclusive um na
+                ausência do outro. São aprovadores automáticos.
+              </p>
+
+              {/* Lista atual (só-leitura, visível a todos) */}
+              {socioTitulares.length > 0 ? (
+                <div className="space-y-1.5 mb-3">
+                  {socioTitulares.map((u: any) => (
                     <div key={u.id} className="flex items-center gap-2 min-w-0">
                       <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-semibold shrink-0">
                         TITULAR
                       </span>
-                      <span className="text-sm font-medium truncate">
-                        {u.name || u.username || `Usuário #${u.id}`}
-                      </span>
-                      <span className="text-xs text-gray-500 truncate">{u.email || u.username}</span>
+                      <span className="text-sm font-medium truncate">{u.name || `Usuário #${u.id}`}</span>
+                      <span className="text-xs text-gray-500 truncate">{u.email}</span>
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-            <Input
-              placeholder="Buscar usuário por nome, e-mail ou login..."
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              className="max-w-md"
-            />
-            <div className="border rounded-lg divide-y max-h-72 overflow-y-auto">
-              {usuariosFiltrados.length === 0 ? (
-                <div className="px-4 py-6 text-center text-sm text-gray-400">Nenhum usuário encontrado.</div>
-              ) : usuariosFiltrados.map((u: any) => {
-                const checked = selecionados.includes(u.id);
-                return (
-                  <label key={u.id} className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer ${checked ? "bg-lime-50" : "hover:bg-gray-50"} ${!isMaster ? "opacity-70 cursor-not-allowed" : ""}`}>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      disabled={!isMaster}
-                      onChange={() => toggle(u.id)}
-                      className="accent-lime-600 w-4 h-4"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate">{u.name || u.username || `Usuário #${u.id}`}</div>
-                      <div className="text-xs text-gray-500 truncate">{u.email || u.username} · {u.role}</div>
-                    </div>
-                  </label>
-                );
-              })}
+              ) : (
+                <div className="text-xs text-amber-700/80 mb-3">Nenhum sócio titular definido.</div>
+              )}
+
+              {/* Editor (apenas Admin Master) */}
+              {isMaster && (
+                <div className="space-y-2 pt-2 border-t border-amber-200">
+                  <Input
+                    placeholder="Buscar usuário para marcar como sócio titular..."
+                    value={buscaTit}
+                    onChange={(e) => setBuscaTit(e.target.value)}
+                    className="max-w-md bg-white"
+                  />
+                  <div className="border border-amber-200 rounded-lg divide-y divide-amber-100 max-h-56 overflow-y-auto bg-white">
+                    {usuariosTitFiltrados.length === 0 ? (
+                      <div className="px-4 py-6 text-center text-sm text-gray-400">Nenhum usuário encontrado.</div>
+                    ) : usuariosTitFiltrados.map((u: any) => {
+                      const checked = titularesSel.includes(u.id);
+                      return (
+                        <label key={u.id} className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer ${checked ? "bg-amber-50" : "hover:bg-gray-50"}`}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleTitular(u.id)}
+                            className="accent-amber-600 w-4 h-4"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium truncate">{u.name || u.username || `Usuário #${u.id}`}</div>
+                            <div className="text-xs text-gray-500 truncate">{u.email || u.username} · {u.role}</div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-xs text-amber-700">{titularesSel.length} sócio(s) titular(es) selecionado(s)</span>
+                    <Button
+                      size="sm"
+                      onClick={() => salvarTitularesMut.mutate({ companyId, socioTitularIds: titularesSel })}
+                      disabled={!dirtyTit || salvarTitularesMut.isPending}
+                      className={dirtyTit ? "bg-amber-600 hover:bg-amber-700" : ""}
+                    >
+                      <Save className="w-3.5 h-3.5 mr-1" />
+                      {salvarTitularesMut.isPending ? "Salvando..." : "Salvar Sócios Titulares"}
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-amber-700/80 leading-relaxed">
+                    Se nenhum sócio titular for definido, o sistema usa automaticamente todos os usuários com
+                    papel <strong>Admin Master</strong> (comportamento padrão).
+                  </p>
+                </div>
+              )}
             </div>
-            <div className="flex items-center justify-between pt-1">
-              <span className="text-xs text-gray-500">{selecionados.length} suplente(s) selecionado(s)</span>
-              <Button
-                size="sm"
-                onClick={() => salvarMut.mutate({ companyId, suplenteIds: selecionados })}
-                disabled={!isMaster || !dirty || salvarMut.isPending}
-                className={dirty && isMaster ? "bg-lime-600 hover:bg-lime-700" : ""}
-              >
-                <Save className="w-3.5 h-3.5 mr-1" />
-                {salvarMut.isPending ? "Salvando..." : "Salvar Suplentes"}
-              </Button>
+
+            {/* ===== Suplentes ===== */}
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <UserCheck className="w-4 h-4 text-lime-600 shrink-0" />
+                <span className="text-sm font-semibold text-lime-700">Suplentes de aprovação</span>
+              </div>
+              <p className="text-xs text-gray-500 mb-2 leading-relaxed">
+                Usuários autorizados a liberar ou recusar recontratações como suplentes.
+              </p>
+              <Input
+                placeholder="Buscar usuário por nome, e-mail ou login..."
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                className="max-w-md"
+              />
+              <div className="border rounded-lg divide-y max-h-72 overflow-y-auto mt-2">
+                {usuariosFiltrados.length === 0 ? (
+                  <div className="px-4 py-6 text-center text-sm text-gray-400">Nenhum usuário encontrado.</div>
+                ) : usuariosFiltrados.map((u: any) => {
+                  const checked = selecionados.includes(u.id);
+                  return (
+                    <label key={u.id} className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer ${checked ? "bg-lime-50" : "hover:bg-gray-50"} ${!isMaster ? "opacity-70 cursor-not-allowed" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={!isMaster}
+                        onChange={() => toggle(u.id)}
+                        className="accent-lime-600 w-4 h-4"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">{u.name || u.username || `Usuário #${u.id}`}</div>
+                        <div className="text-xs text-gray-500 truncate">{u.email || u.username} · {u.role}</div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-xs text-gray-500">{selecionados.length} suplente(s) selecionado(s)</span>
+                <Button
+                  size="sm"
+                  onClick={() => salvarMut.mutate({ companyId, suplenteIds: selecionados })}
+                  disabled={!isMaster || !dirty || salvarMut.isPending}
+                  className={dirty && isMaster ? "bg-lime-600 hover:bg-lime-700" : ""}
+                >
+                  <Save className="w-3.5 h-3.5 mr-1" />
+                  {salvarMut.isPending ? "Salvando..." : "Salvar Suplentes"}
+                </Button>
+              </div>
             </div>
           </div>
         )}

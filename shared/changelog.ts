@@ -1,6 +1,47 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3058 — **RECONTRATAÇÃO · "SÓCIOS TITULARES (APROVADORES)" AGORA SÃO CONFIGURÁVEIS —
+ * O ADMIN MASTER ESCOLHE QUAIS USUÁRIOS SÃO OS SÓCIOS TITULARES (ADICIONAR/REMOVER), EM VEZ
+ * DE A LISTA SER FIXA EM "TODOS OS ADMIN MASTER".**
+ *
+ * PEDIDO: usuário mandou print da tela "Configurações › Recontratação · Suplentes de Aprovação"
+ * (bloco "Aprovadores titulares (sócios)" mostrando Ana Beatriz Silva Conceição, Camila Mariana
+ * de Araujo, Felipe Costa Alves e Mariana Castilho) dizendo "Estes nomes de sócios estão errados,
+ * quero poder editar e indicar os corretos". Em pergunta de esclarecimento, escolheu: "Tem gente
+ * ERRADA nessa lista — quero poder ESCOLHER quais usuários são os sócios titulares (adicionar/remover)".
+ *
+ * DIAGNÓSTICO (consulta read-only ao NEON — verdade do app): os 4 nomes são contas REAIS na tabela
+ * `users` com `role='admin_master'`. A lista de "aprovadores titulares" era DERIVADA e fixa = TODOS
+ * os usuários com papel admin_master, tanto no FRONT (`Configuracoes.tsx` filtrava `usuarios` por
+ * `role==="admin_master"`, só-leitura) quanto no BACKEND (`recontratacao.ts`: `getAprovadores` e
+ * `isAprovador` tratavam qualquer admin_master como aprovador automático). Não havia como remover
+ * alguém que não é sócio sem rebaixar o papel da conta inteira.
+ *
+ * SOLUÇÃO (ZERO ALTER/DROP/DELETE — só config key/value em `system_criteria` + leitura/render):
+ *  (1) BACKEND `server/routers/recontratacao.ts`:
+ *      - NOVA chave de config `CHAVE_SOCIOS_TITULARES="recontratacao_socios_titulares"` (lista de IDs
+ *        de usuários em `systemCriteria`, por empresa).
+ *      - NOVO `getSociosTitularesIds(db, companyId)`: se a empresa configurou uma lista NÃO-vazia, usa
+ *        EXATAMENTE ela; se vazia/ausente, FALLBACK = todos admin_master (compat — comportamento antigo
+ *        preservado até configurarem). NOVO helper `getAdminMasterIds`.
+ *      - `getAprovadores` (e-mails de alerta) e `isAprovador` (autorização real em liberar/recusar)
+ *        passaram a ler `getSociosTitularesIds` em vez do blanket `role==='admin_master'`. Assim, um
+ *        admin_master FORA da lista configurada deixa de ser aprovador automático (intenção do pedido);
+ *        a edição da CONFIG continua gated por `role==='admin_master'` (sem risco de auto-lockout).
+ *      - `getSuplentes` passou a retornar `socioTitularIds` (efetivos) + `socioTitulares` (resolvidos
+ *        id/name/email, só-leitura p/ todos os usuários autorizados).
+ *      - NOVA mutation `setSociosTitulares({companyId, socioTitularIds})` (admin_master only, dedup,
+ *        upsert em systemCriteria, auditoria).
+ *  (2) FRONT `client/src/pages/Configuracoes.tsx` (`RecontratacaoAprovadoresSection`): card renomeado
+ *      "Recontratação · Aprovadores" com DUAS seções — "Sócios titulares (aprovadores)" agora EDITÁVEL
+ *      (lista atual só-leitura no topo + picker com busca/checkbox de TODOS os usuários + botão "Salvar
+ *      Sócios Titulares", só p/ Admin Master) e "Suplentes de aprovação" (inalterada, mas o picker de
+ *      suplentes agora exclui quem já é titular). Nota explica o fallback p/ admin_master quando vazio.
+ *
+ * RESSALVA: enquanto a empresa não salvar uma lista de sócios titulares, segue valendo o padrão
+ * (todos os admin_master). Ao salvar uma lista não-vazia, ela passa a ser a verdade absoluta.
+ *
  * Rev. 3057 — **ESTABILIDADE GLOBAL · LAZY-LOAD RESILIENTE A "IMPORTING A MODULE SCRIPT FAILED"
  * / CHUNK ANTIGO SUMIDO APÓS DEPLOY (AUTO-RECUPERAÇÃO SEM TELA DE ERRO, ESPECIALMENTE NO IPAD/SAFARI).**
  *
