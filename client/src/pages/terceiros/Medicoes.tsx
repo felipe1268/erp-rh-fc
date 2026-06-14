@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
@@ -6,7 +6,7 @@ import { useCompany } from "@/hooks/useCompany";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle, XCircle, ClipboardCheck, Zap, ChevronRight, AlertTriangle, ShieldCheck, UserCheck, Crown, FileSignature, Building2, Ruler } from "lucide-react";
+import { CheckCircle, XCircle, ClipboardCheck, Zap, ChevronLeft, ChevronRight, AlertTriangle, ShieldCheck, UserCheck, Crown, FileSignature, Building2, Ruler } from "lucide-react";
 import { toast } from "sonner";
 
 const BRL = (v: any) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(v) || 0);
@@ -14,6 +14,25 @@ const fmtDate = (d: string | null | undefined) => {
   if (!d) return "—";
   const [y, m, day] = d.slice(0, 10).split("-");
   return `${day}/${m}/${y}`;
+};
+
+const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+const MESES_LONGO = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+// Extrai {ano, mes} de uma medição: usa `periodo` ("YYYY-MM") e, na falta, `dataReferencia`.
+const periodoDe = (m: any): { ano: number; mes: number } | null => {
+  const valido = (ano: number, mes: number) =>
+    Number.isFinite(ano) && ano > 1900 && Number.isFinite(mes) && mes >= 1 && mes <= 12
+      ? { ano, mes }
+      : null;
+  const p = String(m?.periodo ?? "").match(/(\d{4})-(\d{1,2})/);
+  if (p) {
+    const r = valido(parseInt(p[1], 10), parseInt(p[2], 10));
+    if (r) return r;
+  }
+  const ref = String(m?.dataReferencia ?? "").slice(0, 10).split("-");
+  if (ref.length >= 2 && ref[0] && ref[1]) return valido(parseInt(ref[0], 10), parseInt(ref[1], 10));
+  return null;
 };
 
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
@@ -27,6 +46,9 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
 export default function Medicoes() {
   const [, navigate] = useLocation();
   const { companyId } = useCompany();
+  const hoje = new Date();
+  const [ano, setAno] = useState(hoje.getFullYear());
+  const [mesSel, setMesSel] = useState(hoje.getMonth() + 1);
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [motivoRejeicao, setMotivoRejeicao] = useState("");
   const [rejeitandoId, setRejeitandoId] = useState<number | null>(null);
@@ -71,7 +93,30 @@ export default function Medicoes() {
 
   const anyPending = aprovarMut.isPending || aprovarGestorMut.isPending || aprovarSocioMut.isPending || rejeitarMut.isPending;
 
-  const filtradas = filtroStatus === "todos" ? medicoes : medicoes.filter(m => m.status === filtroStatus);
+  // Status de cada mês do ano selecionado (para os "dots" da legenda):
+  //  - "consolidado" (verde) = mês tem medição aprovada/paga
+  //  - "lancamento"  (azul)  = mês tem medição, mas nenhuma consolidada
+  //  - undefined     (cinza) = sem dados no mês
+  const mesesStatus = useMemo(() => {
+    const map: Record<number, "consolidado" | "lancamento"> = {};
+    for (const m of medicoes) {
+      const pp = periodoDe(m);
+      if (!pp || pp.ano !== ano) continue;
+      const consolidado = m.status === "aprovada" || m.status === "paga";
+      if (consolidado) map[pp.mes] = "consolidado";
+      else if (map[pp.mes] !== "consolidado") map[pp.mes] = "lancamento";
+    }
+    return map;
+  }, [medicoes, ano]);
+
+  // Lista filtrada pelo mês/ano selecionado + filtro de status.
+  const filtradas = useMemo(() => medicoes.filter(m => {
+    const pp = periodoDe(m);
+    if (!pp || pp.ano !== ano || pp.mes !== mesSel) return false;
+    if (filtroStatus !== "todos" && m.status !== filtroStatus) return false;
+    return true;
+  }), [medicoes, ano, mesSel, filtroStatus]);
+
   const aguardando = medicoes.filter(m => m.status === "aguardando_aprovacao").length;
   const comDivergencia = medicoes.filter(m => m.alertaDivergencia && m.status === "aguardando_aprovacao").length;
 
@@ -153,7 +198,52 @@ export default function Medicoes() {
           <h2 className="text-sm font-semibold text-gray-800">Medições registradas</h2>
         </div>
 
-        <div className="flex gap-3">
+        {/* Navegação Ano + Meses (organiza as medições por mês/ano) */}
+        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <button onClick={() => setAno(a => a - 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800" title="Ano anterior">
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-base font-bold text-gray-800 min-w-[3.5rem] text-center">{ano}</span>
+              <button onClick={() => setAno(a => a + 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800" title="Próximo ano">
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex items-center gap-4 text-xs text-gray-500">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Com lançamento</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Consolidado</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Sem dados</span>
+            </div>
+          </div>
+          <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+            {MESES.map((m, i) => {
+              const num = i + 1;
+              const status = mesesStatus[num];
+              const isSelected = mesSel === num;
+              return (
+                <button
+                  key={m}
+                  onClick={() => setMesSel(num)}
+                  className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
+                    ${isSelected
+                      ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
+                      : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"
+                    }`}
+                >
+                  <span>{m}</span>
+                  <span className={`w-1.5 h-1.5 rounded-full ${
+                    status === "consolidado" ? "bg-green-500" :
+                    status === "lancamento" ? "bg-blue-500" :
+                    "bg-gray-300"
+                  }`} />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 flex-wrap">
           <Select value={filtroStatus} onValueChange={setFiltroStatus}>
             <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -164,6 +254,9 @@ export default function Medicoes() {
               <SelectItem value="rejeitada">Rejeitadas</SelectItem>
             </SelectContent>
           </Select>
+          <span className="text-xs text-gray-500">
+            {MESES_LONGO[mesSel - 1]} {ano} — {filtradas.length} medição(ões)
+          </span>
         </div>
 
         {isLoading ? (
@@ -171,8 +264,8 @@ export default function Medicoes() {
         ) : filtradas.length === 0 ? (
           <div className="py-12 text-center text-gray-400">
             <ClipboardCheck className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <p className="font-medium">Nenhuma medição encontrada</p>
-            <p className="text-sm">As medições são geradas a partir dos contratos de terceiros</p>
+            <p className="font-medium">Nenhuma medição em {MESES_LONGO[mesSel - 1]} {ano}</p>
+            <p className="text-sm">Selecione outro mês/ano acima ou crie a medição a partir do contrato de terceiros</p>
             <Button variant="outline" className="mt-4" onClick={() => navigate("/terceiros/contratos")}>
               Ver Contratos
             </Button>

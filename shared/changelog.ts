@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3095 — **MEDIÇÃO DE TERCEIROS · A LISTA "MEDIÇÕES REGISTRADAS" PASSA A SER ORGANIZADA POR MÊS E
+ * ANO, COM NAVEGADOR DE ANO (`< 2026 >`) E 12 CHIPS (JAN–DEZ), CADA UM COM UM "DOT" DE STATUS
+ * (AZUL = COM LANÇAMENTO · VERDE = CONSOLIDADO · CINZA = SEM DADOS), IGUAL À LEGENDA DO CONTAS A PAGAR.**
+ *
+ * PEDIDO (usuário): na tela "Medições de Terceiros", as "Medições registradas" vinham como uma lista
+ * plana, sem noção de período. O usuário quer enxergar/filtrar as medições por MÊS e ANO, com a mesma
+ * legenda visual já usada no financeiro (navegador de ano + 12 chips de mês com dot de status:
+ * azul = Com lançamento, verde = Consolidado, cinza = Sem dados).
+ *
+ * CAUSA-RAIZ: `client/src/pages/terceiros/Medicoes.tsx` só tinha um `<Select>` de status + lista plana
+ * de cards (`filtradas = filtroStatus === "todos" ? medicoes : ...`). Cada medição já carrega
+ * `m.periodo` ("YYYY-MM") e `m.status`, mas nada agrupava/filtrava por período.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO BACKEND/ALTER/DROP/DELETE/SCHEMA):
+ *   (1) Helper `periodoDe(m)` extrai `{ano, mes}` de `m.periodo` ("YYYY-MM") e, na falta, de
+ *       `m.dataReferencia` (fallback) — robusto a medições sem período explícito.
+ *   (2) Estados `ano`/`mesSel` (default = mês/ano atuais); `mesesStatus` (useMemo) calcula o status de
+ *       cada mês do ano selecionado: "consolidado" (verde) = mês tem medição aprovada/paga;
+ *       "lancamento" (azul) = mês tem medição mas nenhuma consolidada; ausente (cinza) = sem dados.
+ *   (3) `filtradas` (useMemo) agora filtra pela seleção mês/ano E pelo filtro de status já existente.
+ *   (4) UI: card com navegador de ano (ChevronLeft/Right + `setAno`), legenda de 3 dots, e grid
+ *       `grid-cols-6 sm:grid-cols-12` de 12 chips (selecionado = border-blue-500 bg-blue-50). Espelha o
+ *       padrão inline de `FinanceiroContasAPagar.tsx` (não há componente compartilhado equivalente —
+ *       `MonthSelector.tsx` é só prev/next, sem a legenda). Empty-state e contador citam o mês/ano.
+ *
+ * RESSALVA/DRIFT: medições sem `periodo` nem `dataReferencia` válidos não aparecem em nenhum mês (não há
+ * bucket "sem período") — na prática toda medição tem período. Os contadores globais (aguardando /
+ * divergência) seguem somando TODAS as medições, independentemente do mês selecionado (visão de fila),
+ * por isso não foram escopados ao mês.
+ *
  * Rev. 3094 — **MEDIÇÃO/LEVANTAMENTO DE CAMPO · O VÍNCULO "CONTORNO → ITEM DA PLANILHA" GANHA BUSCA
  * QUE FILTRA CONFORME SE DIGITA (CÓDIGO/ATIVIDADE/PAVIMENTO) E AGRUPAMENTO POR PAVIMENTO/ETAPA, PARA
  * QUE A MESMA ATIVIDADE REPETIDA EM VÁRIOS PAVIMENTOS NÃO SEJA CONFUNDIDA NA MEDIÇÃO.**
