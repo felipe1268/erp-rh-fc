@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3092 — **MEDIÇÃO/LEVANTAMENTO DE CAMPO · O VISUALIZADOR DE PLANTAS (PDF) VOLTA A RENDERIZAR:
+ * O "ERRO AO CARREGAR PDF" ERA UM CONFLITO DE VERSÃO ENTRE O pdf.js DA API (react-pdf) E O DO WORKER.**
+ *
+ * PEDIDO/SINTOMA (print iPad, usuário): na tela de Levantamento de Campo (aberta pela Medição de Terceiros,
+ * mas vale igual p/ Medição de Cliente — engine compartilhada desde a Rev. 3090) a planta em PDF não abre:
+ * caixa cinza "Erro ao carregar PDF", mesmo ONLINE / "tudo sincronizado" e com o arquivo realmente presente.
+ *
+ * CAUSA-RAIZ: o pdf.js EXIGE que a VERSÃO da API e a do WORKER sejam IDÊNTICAS — qualquer divergência lança
+ * erro fatal ("The API version X does not match the Worker version Y") e o react-pdf cai no fallback `error`
+ * (= "Erro ao carregar PDF"). O `react-pdf@10.4.1` embute (e usa internamente em `getDocument`) o
+ * `pdfjs-dist@5.4.296`, mas o `package.json` declarava `pdfjs-dist@^5.7.284` como dependência DIRETA — e era
+ * dessa cópia hasteada (5.7.284) que `client/src/pages/medicao/MedicaoLevantamento.tsx` E
+ * `client/src/components/PdfViewer.tsx` importavam o worker (`pdfjs-dist/build/pdf.worker.min.mjs?url`).
+ * API 5.4.296 × Worker 5.7.284 = mismatch. O arquivo em si servia 100% normal (HTTP 200, application/pdf;
+ * bytes presentes TANTO no disco `server/uploads` QUANTO em `uploaded_files` no Neon) — o bug era só o render.
+ *
+ * SOLUÇÃO (AJUSTE DE DEPENDÊNCIA, ZERO CÓDIGO/ALTER/DROP/DELETE/SCHEMA): `package.json` passa a FIXAR
+ * `pdfjs-dist` em `5.4.296` (exatamente a versão que o react-pdf embute). O pnpm então DEDUPLICA para uma
+ * única cópia 5.4.296 e o worker importado pelos dois visualizadores volta a casar com a API. O worker segue
+ * BUNDLADO pelo Vite (não vira CDN) — preserva o modo offline ("Baixar p/ offline") do levantamento. Nenhum
+ * outro pacote dependia do 5.7.284 (só a nossa raiz), então a versão some por completo do node_modules.
+ *
+ * RESSALVA: como ambos os lados são pinos EXATOS, um upgrade futuro do react-pdf que troque a versão do
+ * pdfjs-dist embutido exige re-alinhar o pin do `package.json` na mesma revisão (senão o mismatch volta).
+ *
  * Rev. 3091 — **MEDIÇÃO DE TERCEIROS · A MEDIÇÃO PASSA A SER CRIADA MANUALMENTE (ZERADA, EM RASCUNHO) E
  * O VALOR MEDIDO DO PERÍODO É LANÇADO ITEM A ITEM EM R$ (BRL) DIRETO NA PLANILHA — O CRUZAMENTO
  * AUTOMÁTICO COM O AVANÇO FÍSICO DO PLANEJAMENTO DEIXA DE SER O CAMINHO PRINCIPAL.**
