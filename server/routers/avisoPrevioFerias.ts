@@ -1,7 +1,7 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
-import { getDb, createAuditLog, encerrarContratosPjDoFuncionario, userCanSeeAvisoStatus } from "../db";
-import { terminationNotices, vacationPeriods, employees, companies, obras, obraFuncionarios, hePeriods, hePeriodEmployees, pontoDescontosResumo, employeeTerminationChecklist, comboDemissaoSimulacoes } from "../../drizzle/schema";
+import { getDb, createAuditLog, encerrarContratosPjDoFuncionario, userCanSeeAvisoStatus, getCompaniesForUser } from "../db";
+import { terminationNotices, vacationPeriods, employees, companies, obras, obraFuncionarios, hePeriods, hePeriodEmployees, pontoDescontosResumo, employeeTerminationChecklist, comboDemissaoSimulacoes, cipaMembers, cipaElections } from "../../drizzle/schema";
 import { eq, and, sql, isNull, lte, gte, desc, asc, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
@@ -20,6 +20,7 @@ import {
   calcularFeriasVencidas,
   calcularRescisaoCompleta,
   calcularRescisaoComplementar,
+  calcularIndenizacaoEstabilidade,
   calcularDescontosRescisao,
   type DescontosRescisaoContext,
   type DescontosRescisaoResult,
@@ -776,10 +777,17 @@ export const avisoPrevioFeriasRouter = router({
         diasTrabalhadosOverride: z.number().optional(),
         descontarAvisoNaoCumprido: z.boolean().optional(),
       }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
         const db = (await getDb())!;
         const [emp] = await db.select().from(employees).where(eq(employees.id, input.employeeId));
         if (!emp) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado" });
+
+        // Guard de tenant: o usuário precisa ter acesso à empresa do funcionário
+        // (admin/admin_master = global). Evita leitura cross-tenant via employeeId.
+        const empresasUsuario = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+        if (emp.companyId != null && !empresasUsuario.some(c => c.id === emp.companyId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este funcionário" });
+        }
         
         const dataAdmissao = emp.dataAdmissao || new Date().toISOString().split("T")[0];
         const dataDesligamento = input.dataDesligamento;
@@ -979,6 +987,63 @@ export const avisoPrevioFeriasRouter = router({
           periodosVencidosOverride: periodosVencidosReal,
         });
 
+        // ============================================================
+        // INDENIZAÇÃO DE ESTABILIDADE — CIPEIRO (Súmula 396 TST)
+        // Quando o colaborador é membro da CIPA com estabilidade provisória e
+        // a dispensa é do EMPREGADOR (sem justa causa), calcula o custo da
+        // indenização do período de estabilidade restante (salários + 13º +
+        // férias+1/3 + FGTS) de forma SEPARADA, só para análise gerencial.
+        // ============================================================
+        let indenizacaoEstabilidade: any = null;
+        try {
+          const hoje = new Date().toISOString().split("T")[0];
+          const cipaRows = await db.select({
+            cargoCipa: cipaMembers.cargoCipa,
+            representacao: cipaMembers.representacao,
+            fimEstabilidade: cipaMembers.fimEstabilidade,
+            mandatoInicio: cipaElections.mandatoInicio,
+            mandatoFim: cipaElections.mandatoFim,
+          })
+            .from(cipaMembers)
+            .innerJoin(cipaElections, eq(cipaMembers.electionId, cipaElections.id))
+            .where(and(
+              eq(cipaMembers.employeeId, input.employeeId),
+              sql`${cipaMembers.statusMembro} != 'Encerrado'`,
+              sql`${cipaElections.statusEleicao} != 'Encerrado'`,
+            ));
+
+          // Mandatos ativos (estabilidade ainda vigente hoje).
+          const ativos = cipaRows
+            .map(r => ({ ...r, fimEfetivo: r.fimEstabilidade || r.mandatoFim || null }))
+            .filter(r => r.fimEfetivo && r.fimEfetivo >= hoje);
+
+          // Dispensa SEM justa causa pelo EMPREGADOR → gera indenização.
+          const dispensaEmpregador = input.tipo.includes('empregador');
+
+          if (ativos.length > 0 && dispensaEmpregador) {
+            // Pega a estabilidade que termina MAIS TARDE (cenário mais protetivo).
+            const fimMaisLongo = ativos.reduce((max, r) =>
+              (r.fimEfetivo! > max ? r.fimEfetivo! : max), ativos[0].fimEfetivo!);
+            const membroFim = ativos.find(r => r.fimEfetivo === fimMaisLongo) || ativos[0];
+
+            const calc = calcularIndenizacaoEstabilidade({
+              salarioBase,
+              dataDesligamento,
+              fimEstabilidade: fimMaisLongo,
+            });
+
+            if (calc.aplicavel) {
+              indenizacaoEstabilidade = {
+                ...calc,
+                cargoCipa: membroFim.cargoCipa,
+                representacao: membroFim.representacao,
+                mandatoInicio: membroFim.mandatoInicio,
+                mandatoFim: membroFim.mandatoFim,
+              };
+            }
+          }
+        } catch { indenizacaoEstabilidade = null; }
+
         return {
           anosServico,
           diasAviso: isEmpregadoIndenizado ? 0 : diasAviso,
@@ -1006,6 +1071,8 @@ export const avisoPrevioFeriasRouter = router({
           },
           // Rev. 2205 — datas dos períodos vencidos pra exibir no preview
           periodosVencidosDetalhes,
+          // Indenização de estabilidade (cipeiro — Súmula 396 TST); null quando não aplicável
+          indenizacaoEstabilidade,
         };
       }),
 

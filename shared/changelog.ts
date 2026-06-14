@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3062 — **AVISO PRÉVIO · QUANDO O COLABORADOR É CIPEIRO (MEMBRO DA CIPA COM ESTABILIDADE
+ * PROVISÓRIA), O FLUXO "NOVO AVISO PRÉVIO" PASSA A CALCULAR E EXIBIR A POSSÍVEL INDENIZAÇÃO DEVIDA
+ * POR LEI (SÚMULA 396 TST) NA DISPENSA SEM JUSTA CAUSA — COMPONENTE A COMPONENTE + TOTAL, SEPARADO
+ * DA RESCISÃO NORMAL.**
+ *
+ * PEDIDO: "Quando o colaborador é cipeiro e tem estabilidade, no novo aviso prévio o sistema deve
+ * calcular a possível indenização que teríamos que pagar por lei. Mostrar separado por componente
+ * pra eu analisar e depois o total."
+ *
+ * CONTEXTO: a tela já mostrava o card vermelho "CIPEIRO — Estabilidade Provisória" (alerta jurídico)
+ * quando `cipa.checkEstabilidade.temEstabilidade`, mas NÃO quantificava o custo. A dispensa sem justa
+ * causa de membro da CIPA com estabilidade (CLT Art. 165 / CF/88 Art. 10, II, "a" do ADCT), quando a
+ * reintegração não é viável, gera INDENIZAÇÃO do período de estabilidade restante (Súmula 396, I, TST):
+ * remuneração que o empregado receberia da data do aviso até o fim da estabilidade = salários do
+ * período + 13º proporcional + férias proporcionais + 1/3 + FGTS (8%) sobre os salários do período.
+ *
+ * SOLUÇÃO (ZERO ALTER/DROP/DELETE, ZERO schema):
+ *  - BACKEND `server/utils/rescisaoCalc.ts`: nova função pura `calcularIndenizacaoEstabilidade(
+ *    {salarioBase, dataDesligamento, fimEstabilidade})` → devolve `aplicavel`, `diasRestantes`,
+ *    `mesesRestantes` (fracionário dias÷30), `salariosPeriodo`, `decimoTerceiroProporcional`,
+ *    `feriasProporcional`, `tercoConstitucional`, `totalFerias`, `fgtsPeriodo` e `total` (todos
+ *    `toFixed(2)`). Estabilidade já vencida / datas inválidas → `aplicavel:false` com zeros.
+ *  - BACKEND `server/routers/avisoPrevioFerias.ts` (procedure `calcular`): após a previsão de
+ *    rescisão, consulta `cipa_members ⨝ cipa_elections` do funcionário (membro `statusMembro` E
+ *    eleição `statusEleicao` != 'Encerrado'), mantém só mandatos com estabilidade vigente hoje
+ *    (`fimEstabilidade || mandatoFim >= hoje`), e SÓ quando a dispensa é do EMPREGADOR
+ *    (`tipo.includes('empregador')`) calcula a indenização sobre a estabilidade que termina MAIS
+ *    TARDE (cenário mais protetivo). Retorna `indenizacaoEstabilidade` (ou `null`) no payload. Em
+ *    pedido de demissão / justa causa = null. HARDENING (code review): a `calcular` ganhou guard de
+ *    tenant explícito — valida `emp.companyId` contra `getCompaniesForUser(ctx.user)` (admin/admin_
+ *    master = global) e lança FORBIDDEN se o funcionário for de empresa fora do escopo do usuário,
+ *    fechando leitura cross-tenant por `employeeId` (que antes só fazia `eq(employees.id)`).
+ *  - FRONTEND `client/src/pages/AvisoPrevio.tsx`: novo card vermelho "Indenização do Período de
+ *    Estabilidade — Cipeiro" abaixo do "Total Líquido Rescisão", renderizado quando
+ *    `calculoPreview.indenizacaoEstabilidade.aplicavel`. Mostra estabilidade até / dias e meses
+ *    restantes / salário base, depois CADA componente (salários, 13º, férias, 1/3, FGTS) e o TOTAL,
+ *    deixando explícito que é verba SEPARADA e não somada no Total Líquido. Tudo em BRL via formatMoeda.
+ *
  * Rev. 3061 — **CONTRATOS DE TERCEIROS · ABA "MEDIÇÕES" GANHA O BOTÃO "GERAR MEDIÇÃO" NO PRÓPRIO
  * LUGAR — ANTES O BOTÃO SÓ EXISTIA NO CABEÇALHO DO TOPO DA PÁGINA (E SÓ QUANDO ASSINADO), ENTÃO O
  * EMPTY-STATE DA ABA MANDAVA "USE O BOTÃO GERAR MEDIÇÃO" SEM TER BOTÃO ALGUM À VISTA.**

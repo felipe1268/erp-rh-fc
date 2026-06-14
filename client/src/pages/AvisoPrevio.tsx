@@ -3246,6 +3246,70 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                     )}
                   </div>
 
+                  {/* Card CIPEIRO: Indenização do Período de Estabilidade (Súmula 396 TST) */}
+                  {calculoPreview.indenizacaoEstabilidade && calculoPreview.indenizacaoEstabilidade.aplicavel && (() => {
+                    const ie = calculoPreview.indenizacaoEstabilidade;
+                    return (
+                      <div className="rounded-xl border-2 border-red-300 bg-gradient-to-br from-red-50 to-rose-50 p-4 mt-4">
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div className="flex items-start gap-3">
+                            <div className="w-10 h-10 rounded-full bg-red-600 flex items-center justify-center shrink-0">
+                              <ShieldAlert className="h-5 w-5 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-bold uppercase text-red-700 tracking-wider">ALERTA — CUSTO ADICIONAL EVENTUAL</p>
+                              <h4 className="text-sm font-bold text-red-900 mt-0.5">Indenização do Período de Estabilidade — Cipeiro</h4>
+                              <p className="text-[11px] text-red-700 mt-0.5 leading-relaxed">
+                                Súmula 396 do TST. Dispensa SEM justa causa de membro da CIPA com estabilidade.
+                                Se a reintegração não for viável, o empregador indeniza o período de estabilidade restante.
+                                <strong> Esta verba é SEPARADA</strong> da rescisão acima e não está somada no Total Líquido.
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-xl font-extrabold text-red-700 whitespace-nowrap">{formatMoeda(ie.total)}</span>
+                        </div>
+
+                        <div className="bg-white/70 rounded border border-red-200 px-3 py-2 mb-3 text-[11px] text-red-800 flex flex-wrap gap-x-4 gap-y-1">
+                          <span>Estabilidade até: <strong>{formatDate(ie.fimEstabilidade)}</strong></span>
+                          <span>Período restante: <strong>{ie.diasRestantes} dias (~{ie.mesesRestantes} meses)</strong></span>
+                          <span>Base: salário de <strong>{formatMoeda(calculoPreview.previsaoRescisao?.salarioBase || calculoPreview.salarioBase)}</strong></span>
+                        </div>
+
+                        <div className="bg-white/60 rounded border border-red-200 divide-y divide-red-100 text-xs">
+                          <div className="flex justify-between px-3 py-1.5">
+                            <span className="text-red-900">Salários do período restante</span>
+                            <span className="font-semibold text-red-800">{formatMoeda(ie.salariosPeriodo)}</span>
+                          </div>
+                          <div className="flex justify-between px-3 py-1.5">
+                            <span className="text-red-900">13º salário proporcional</span>
+                            <span className="font-semibold text-red-800">{formatMoeda(ie.decimoTerceiroProporcional)}</span>
+                          </div>
+                          <div className="flex justify-between px-3 py-1.5">
+                            <span className="text-red-900">Férias proporcionais</span>
+                            <span className="font-semibold text-red-800">{formatMoeda(ie.feriasProporcional)}</span>
+                          </div>
+                          <div className="flex justify-between px-3 py-1.5">
+                            <span className="text-red-900">1/3 constitucional sobre férias</span>
+                            <span className="font-semibold text-red-800">{formatMoeda(ie.tercoConstitucional)}</span>
+                          </div>
+                          <div className="flex justify-between px-3 py-1.5">
+                            <span className="text-red-900">FGTS (8%) sobre os salários do período</span>
+                            <span className="font-semibold text-red-800">{formatMoeda(ie.fgtsPeriodo)}</span>
+                          </div>
+                          <div className="flex justify-between px-3 py-2 bg-red-100/60">
+                            <span className="font-bold text-red-800">TOTAL DA INDENIZAÇÃO DE ESTABILIDADE</span>
+                            <span className="font-extrabold text-red-700">{formatMoeda(ie.total)}</span>
+                          </div>
+                        </div>
+
+                        <p className="text-[10px] text-red-600 mt-2 italic">
+                          Estimativa gerencial p/ análise da decisão. A dispensa de cipeiro só é permitida por justa causa
+                          comprovada em inquérito judicial (Súmula 379 TST); prosseguir pode gerar reintegração + indenização.
+                        </p>
+                      </div>
+                    );
+                  })()}
+
                   {/* Card 2: Rescisão Complementar (uso interno) — abaixo do total líquido oficial */}
                   {calculoPreview.previsaoRescisaoComplementar && (() => {
                     const pc = calculoPreview.previsaoRescisaoComplementar;

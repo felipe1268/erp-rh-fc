@@ -593,3 +593,90 @@ export function calcularRescisaoComplementar(params: {
   };
 }
 
+/**
+ * INDENIZAÇÃO DO PERÍODO DE ESTABILIDADE — CIPEIRO (Súmula 396 do TST)
+ *
+ * Quando um empregado com ESTABILIDADE PROVISÓRIA (membro da CIPA eleito pelos
+ * empregados — CLT Art. 165 / CF/88 Art. 10, II, "a" do ADCT) é dispensado SEM
+ * JUSTA CAUSA e a reintegração não é viável (ex.: período de estabilidade já no
+ * fim), o empregador deve INDENIZAR o período de estabilidade restante.
+ *
+ * A indenização corresponde à REMUNERAÇÃO que o empregado receberia da data do
+ * desligamento até o fim da estabilidade (Súmula 396, I, TST), composta por:
+ *   • Salários do período restante
+ *   • 13º salário proporcional ao período
+ *   • Férias proporcionais + 1/3 constitucional ao período
+ *   • FGTS (8%) sobre os salários do período
+ *
+ * Calculada de forma SEPARADA das verbas rescisórias normais (é um custo ADICIONAL
+ * e eventual da dispensa de estável), apenas para análise gerencial antes da decisão.
+ *
+ * Observações:
+ *   - `mesesRestantes` é fracionário (dias ÷ 30) para refletir o período exato.
+ *   - Só faz sentido em dispensa do EMPREGADOR sem justa causa; em pedido de
+ *     demissão / justa causa NÃO há indenização (o chamador deve gatear isso).
+ */
+export function calcularIndenizacaoEstabilidade(params: {
+  salarioBase: number;
+  /** Data base (início da contagem) — normalmente a data do aviso / desligamento. */
+  dataDesligamento: string;
+  /** Data em que termina a estabilidade provisória. */
+  fimEstabilidade: string;
+}) {
+  const { salarioBase, dataDesligamento, fimEstabilidade } = params;
+  const dtBase = new Date(dataDesligamento + 'T00:00:00');
+  const dtFim = new Date(fimEstabilidade + 'T00:00:00');
+
+  // Estabilidade já vencida (ou datas inválidas) → nada a indenizar.
+  if (isNaN(dtBase.getTime()) || isNaN(dtFim.getTime()) || dtFim <= dtBase) {
+    return {
+      aplicavel: false,
+      diasRestantes: 0,
+      mesesRestantes: '0.00',
+      salariosPeriodo: '0.00',
+      decimoTerceiroProporcional: '0.00',
+      feriasProporcional: '0.00',
+      tercoConstitucional: '0.00',
+      totalFerias: '0.00',
+      fgtsPeriodo: '0.00',
+      total: '0.00',
+      dataBase: dataDesligamento,
+      fimEstabilidade,
+    };
+  }
+
+  const diasRestantes = Math.floor((dtFim.getTime() - dtBase.getTime()) / 86400000);
+  const mesesRestantes = diasRestantes / 30;
+
+  // 1. Salários do período restante
+  const salariosPeriodo = salarioBase * mesesRestantes;
+
+  // 2. 13º proporcional ao período
+  const decimoTerceiroProporcional = (salarioBase * mesesRestantes) / 12;
+
+  // 3. Férias proporcionais + 1/3 ao período
+  const feriasProporcional = (salarioBase * mesesRestantes) / 12;
+  const tercoConstitucional = feriasProporcional / 3;
+  const totalFerias = feriasProporcional + tercoConstitucional;
+
+  // 4. FGTS (8%) sobre os salários do período
+  const fgtsPeriodo = salariosPeriodo * 0.08;
+
+  const total = salariosPeriodo + decimoTerceiroProporcional + totalFerias + fgtsPeriodo;
+
+  return {
+    aplicavel: true,
+    diasRestantes,
+    mesesRestantes: mesesRestantes.toFixed(2),
+    salariosPeriodo: salariosPeriodo.toFixed(2),
+    decimoTerceiroProporcional: decimoTerceiroProporcional.toFixed(2),
+    feriasProporcional: feriasProporcional.toFixed(2),
+    tercoConstitucional: tercoConstitucional.toFixed(2),
+    totalFerias: totalFerias.toFixed(2),
+    fgtsPeriodo: fgtsPeriodo.toFixed(2),
+    total: total.toFixed(2),
+    dataBase: dataDesligamento,
+    fimEstabilidade,
+  };
+}
+
