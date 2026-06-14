@@ -114,9 +114,6 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   const [medicaoDataInicio, setMedicaoDataInicio] = useState(() => {
     const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
   });
-  const [medicaoDataFim, setMedicaoDataFim] = useState(() => {
-    const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
-  });
   const [newDoc, setNewDoc] = useState({ tipo: "INSS", descricao: "", competencia: "", dataVencimento: "", bloqueiaPagemento: false });
   const [editMedicao, setEditMedicao] = useState<{ id: number; periodo: string; dataReferencia: string; observacoes: string; status: string } | null>(null);
   const [descExpanded, setDescExpanded] = useState(false);
@@ -153,22 +150,16 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
     },
   );
 
-  // Ao abrir o modal da 1ª medição, semeia o período conforme os critérios do contrato
-  // (Dia da Medição): fim = corte do mês corrente; início = dia seguinte ao corte do mês anterior.
-  // Sem isso, o padrão caía em "1º → último dia do mês", divergindo do contrato. Editável.
+  // Ao abrir o modal da 1ª medição, semeia o INÍCIO com a data de início da obra/contrato
+  // (`contrato.dataInicio`). O FIM é sempre derivado do "Dia da Medição" do contrato (corte em/
+  // após o início), então não precisa ser semeado aqui. Início segue editável.
   useEffect(() => {
     if (!showGerarMedicao || !contrato) return;
     if ((contrato.medicoes?.length || 0) > 0) return; // medições seguintes são calculadas, não vêm do state
-    const diaMed = (contrato as any).diaMedicao ?? 25;
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = now.getMonth() + 1; // 1-based
-    const fim = cutoffMedicaoISO(diaMed, y, m);
-    const pm = m === 1 ? 12 : m - 1;
-    const py = m === 1 ? y - 1 : y;
-    const inicio = addDaysISO(cutoffMedicaoISO(diaMed, py, pm), 1);
-    setMedicaoDataInicio(inicio);
-    setMedicaoDataFim(fim);
+    const inicioObra = contrato.dataInicio
+      ? contrato.dataInicio.slice(0, 10)
+      : new Date().toISOString().slice(0, 10);
+    setMedicaoDataInicio(inicioObra);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showGerarMedicao]);
 
@@ -1714,10 +1705,10 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
               const autoInicio = ultimaMedicao?.dataFim
                 ? addDaysISO(ultimaMedicao.dataFim.slice(0, 10), 1)
                 : null;
+              // Início: 1ª medição = data de início da obra (editável); seguintes = dia seguinte ao fim anterior.
               const inicioEfetivo = isFirst ? medicaoDataInicio : (autoInicio || medicaoDataInicio);
-              // Fim = "Dia da Medição" do contrato (corte em/ após o início) — respeita o contrato.
-              const autoFim = cutoffOnOrAfterISO(diaMed, inicioEfetivo);
-              const fimEfetivo = isFirst ? medicaoDataFim : autoFim;
+              // Fim = SEMPRE o "Dia da Medição" do contrato (corte em/ após o início) — respeita o contrato.
+              const fimEfetivo = cutoffOnOrAfterISO(diaMed, inicioEfetivo);
               const periodoCalc = inicioEfetivo.slice(0, 7);
               return (
                 <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden">
@@ -1760,21 +1751,17 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                       </div>
                       <ChevronRight className="w-5 h-5 text-gray-300 flex-shrink-0 mb-3" />
                       <div className="flex-1 min-w-0">
-                        <Label htmlFor="medicao-data-fim" className="text-[11px] text-gray-400 mb-1 block font-normal">Fim</Label>
-                        {isFirst ? (
-                          <Input id="medicao-data-fim" className="h-11" type="date" value={medicaoDataFim} onChange={e => setMedicaoDataFim(e.target.value)} />
-                        ) : (
-                          <div id="medicao-data-fim" className="h-11 flex items-center gap-2 px-3 bg-gray-50 rounded-md text-sm font-medium text-gray-700 border">
-                            <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />{fimEfetivo.split("-").reverse().join("/")}
-                          </div>
-                        )}
+                        <Label htmlFor="medicao-data-fim" className="text-[11px] text-gray-400 mb-1 block font-normal">Fim (Dia da Medição)</Label>
+                        <div id="medicao-data-fim" className="h-11 flex items-center gap-2 px-3 bg-gray-50 rounded-md text-sm font-medium text-gray-700 border">
+                          <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />{fimEfetivo.split("-").reverse().join("/")}
+                        </div>
                       </div>
                     </div>
                     {!isFirst && (
                       <p className="text-xs text-gray-400 mt-2">Período calculado automaticamente: início no dia seguinte à medição anterior, fim no Dia da Medição definido no contrato (dia {diaMed}).</p>
                     )}
                     {isFirst && (
-                      <p className="text-xs text-gray-400 mt-2">Período sugerido conforme o Dia da Medição do contrato (dia {diaMed}). Ajuste se necessário.</p>
+                      <p className="text-xs text-gray-400 mt-2">Início na data de início da obra; fim no Dia da Medição definido no contrato (dia {diaMed}). Ajuste o início se necessário.</p>
                     )}
                     {contrato.docsComPendencia > 0 && (
                       <div className="flex items-start gap-2 p-3 bg-yellow-50 rounded-lg text-yellow-700 text-xs mt-4">

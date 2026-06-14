@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3076 — **CONTRATOS DE TERCEIROS · "GERAR MEDIÇÃO AUTOMÁTICA" · A 1ª MEDIÇÃO PASSA A COMEÇAR
+ * NA DATA DE INÍCIO DA OBRA/CONTRATO E O FIM DE TODA MEDIÇÃO É SEMPRE O "DIA DA MEDIÇÃO" DO CONTRATO
+ * (CORTE — Ex.: DIA 25) — CRIANDO OS VÍNCULOS CORRETOS ENTRE O CALENDÁRIO DA MEDIÇÃO E O CONTRATO.**
+ *
+ * PEDIDO (prints iPad — modal "Medição 01" mostrava 01/06/2026 → 30/06/2026; card "Critérios de
+ * Medição e Pagamento" mostra "Dia da Medição: Dia 25"): "O CALENDÁRIO DEVERIA SER MEDIDO DO DIA QUE
+ * INICIO A OBRA, E A DATA DE CORTE SERÁ DIA 25 DO MES, CONFORME INDICADO NO CONTRATO ISSO PODE VARIAR
+ * CONFORME INDICADO NO CONTRATO.. CONFIGURA ISSO PARA TER OS VINCULOS CORRETOS." Complementa a
+ * Rev. 3075: lá a 1ª medição ainda semeava o início como "dia seguinte ao corte do mês anterior";
+ * agora deve começar na DATA DE INÍCIO da obra.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE, ZERO schema/backend — `gerarMedicao` já recebe
+ * `dataInicio`/`dataFim`) em `client/src/pages/terceiros/contratos/ContratoDetalhe.tsx`: (1) o
+ * `useEffect([showGerarMedicao])` da 1ª medição passa a semear `medicaoDataInicio` =
+ * `contrato.dataInicio` (slice 0..10; fallback hoje) em vez do corte do mês anterior; INÍCIO segue
+ * EDITÁVEL. (2) `fimEfetivo` deixa de depender de `isFirst` e passa a ser SEMPRE
+ * `cutoffOnOrAfterISO(diaMed, inicioEfetivo)` — o 1º Dia da Medição (corte) em/ após o início, para
+ * 1ª e demais medições; assim, mudar o início recalcula o fim automaticamente. (3) O campo "Fim"
+ * vira read-only (chip "Fim (Dia da Medição)") também na 1ª medição (antes era `<input date>`),
+ * deixando claro que o corte vem do contrato. (4) Removido o state órfão `medicaoDataFim` (não é
+ * mais usado — o fim é sempre derivado). `diaMed = contrato.diaMedicao ?? 25` (varia por contrato).
+ *
  * Rev. 3075 — **CONTRATOS DE TERCEIROS · "GERAR MEDIÇÃO AUTOMÁTICA" PASSA A RESPEITAR O "DIA DA
  * MEDIÇÃO" DEFINIDO NOS CRITÉRIOS DO CONTRATO — O PERÍODO DEIXA DE CAIR EM "1º → ÚLTIMO DIA DO MÊS"
  * (DIVERGÊNCIA COM O CONTRATO) E PASSA A FECHAR NO DIA DA MEDIÇÃO.**
