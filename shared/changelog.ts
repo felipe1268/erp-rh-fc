@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3103 — **MEDIÇÃO DE TERCEIROS · O CARD DA LISTA "MEDIÇÕES REGISTRADAS" GANHA NOME AMIGÁVEL "MED-01"
+ * (EM VEZ DE "MEDIÇÃO #1") E EXIBE O PERÍODO EM FORMATO BRASILEIRO (MM/AAAA, EX.: 06/2026) EM VEZ DO CRU
+ * "2026-06".**
+ *
+ * PEDIDO: "melhore o texto que informa a medição, deixa o nome MED-01 e a data no formato brasileiro
+ * dia/mês/ano".
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO BACKEND/ALTER/DROP/DELETE/SCHEMA): em
+ * `client/src/pages/terceiros/Medicoes.tsx` adicionam-se dois helpers de módulo: `medLabel(numero)` →
+ * `MED-${String(numero).padStart(2,"0")}` (nome amigável com zero à esquerda) e `fmtPeriodo(m)` que reusa
+ * o `periodoDe(m)` existente (extrai `{ano,mes}` de `periodo`/`dataReferencia`) e retorna `MM/AAAA`, com
+ * fallback para o valor cru quando não der pra interpretar. O título do card passa de `Medição #{m.numero}`
+ * para `{medLabel(m.numero)}` e a linha de período de `<strong>{m.periodo}</strong>` para
+ * `<strong>{fmtPeriodo(m)}</strong>`. O "Ref:" (data completa) já vinha em DD/MM/AAAA via `fmtDate`.
+ *
+ * RESSALVA/DRIFT: nenhuma — mudança puramente de apresentação; o `periodo`/`numero` persistidos não mudam.
+ * `ContratoDetalhe.tsx` já exibia "Medição 01 — DD/MM/AAAA" (não tocado nesta revisão).
+ *
  * Rev. 3102 — **MEDIÇÃO / LEVANTAMENTO DE CAMPO ABERTO A PARTIR DE UMA MEDIÇÃO DE TERCEIROS · O COMBOBOX
  * DE VÍNCULO DE CONTORNOS VOLTA A LISTAR OS ITENS DO CONTRATO (BLOCO B/FORROS ETC.) EM VEZ DE EXIBIR
  * "ESTE CONTRATO NÃO TEM ORÇAMENTO VINCULADO" E FICAR VAZIO — MESMO O CONTRATO TENDO ITENS NA ABA "ITENS".**

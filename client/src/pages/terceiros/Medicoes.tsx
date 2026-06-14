@@ -16,6 +16,9 @@ const fmtDate = (d: string | null | undefined) => {
   return `${day}/${m}/${y}`;
 };
 
+// Rev. 3103 — nome amigável da medição ("MED-01") + período em formato BR (MM/AAAA).
+const medLabel = (numero: any) => `MED-${String(numero ?? 0).padStart(2, "0")}`;
+
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const MESES_LONGO = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
@@ -33,6 +36,14 @@ const periodoDe = (m: any): { ano: number; mes: number } | null => {
   const ref = String(m?.dataReferencia ?? "").slice(0, 10).split("-");
   if (ref.length >= 2 && ref[0] && ref[1]) return valido(parseInt(ref[0], 10), parseInt(ref[1], 10));
   return null;
+};
+
+// Período em formato BR (MM/AAAA); cai para o valor cru se não der pra interpretar.
+const fmtPeriodo = (m: any): string => {
+  const p = periodoDe(m);
+  if (p) return `${String(p.mes).padStart(2, "0")}/${p.ano}`;
+  const raw = String(m?.periodo ?? "").trim();
+  return raw || "—";
 };
 
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
@@ -286,7 +297,7 @@ export default function Medicoes() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <span className="font-semibold text-gray-900">Medição #{m.numero}</span>
+                        <span className="font-semibold text-gray-900">{medLabel(m.numero)}</span>
                         <Badge className={`text-xs border ${st.cls}`}>{st.label}</Badge>
                         {m.geradoAutomaticamente && (
                           <Badge className="text-xs border bg-purple-100 text-purple-700 border-purple-200">
@@ -300,7 +311,7 @@ export default function Medicoes() {
                         )}
                       </div>
                       <div className="text-sm text-gray-600">
-                        Período: <strong>{m.periodo}</strong> • Ref: {fmtDate(m.dataReferencia)}
+                        Período: <strong>{fmtPeriodo(m)}</strong> • Ref: {fmtDate(m.dataReferencia)}
                       </div>
                       <div className="text-xs text-gray-400 mt-1">
                         Medido: <strong className="text-gray-700">{BRL(m.valorMedido)}</strong>
