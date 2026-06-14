@@ -36,6 +36,7 @@ const ROBOT_IMG = "https://files.manuscdn.com/user_upload_by_module/session_file
 /* ─── Module definitions ─── */
 type Module = {
   id: string;
+  permId?: string;
   title: string;
   subtitle: string;
   description: string;
@@ -169,10 +170,16 @@ const MODULES: Module[] = [
     icon: Home, accentFrom: "#EC4899", accentTo: "#DB2777", accentGlow: "", iconBg: "", path: "", active: false, features: [],
   },
   {
-    id: "medicao", title: "Medição", subtitle: "Medição de Contratos",
-    description: "Boletins de medição por avanço físico, fundo de despesas e faturamento de contratos de obra.",
+    id: "medicao", title: "Medição Cliente", subtitle: "Medição de Contratos · A Receber",
+    description: "Medição de contratos de cliente: % automático do avanço físico semanal, fundo de despesas e faturamento (a receber). Você só valida.",
     icon: Ruler, accentFrom: "#14B8A6", accentTo: "#0D9488", accentGlow: "rgba(20,184,166,0.35)", iconBg: "rgba(20,184,166,0.12)", path: "/medicao", active: true,
-    features: ["Boletins de Medição", "Fundo de Despesas (FD)", "Avanço Físico", "Faturamento"],
+    features: ["Boletins de Medição", "Avanço Físico Automático", "Fundo de Despesas (FD)", "Faturamento a Receber"],
+  },
+  {
+    id: "medicao-terceiros", permId: "terceiros", title: "Medição Terceiros", subtitle: "Medição de Empresas Terceiras · A Pagar",
+    description: "Medição de contratos de terceiros: levantamento de campo, alerta de divergência, FD do período e aprovação em 3 níveis (mede → gestor → sócio adm).",
+    icon: Receipt, accentFrom: "#EA580C", accentTo: "#C2410C", accentGlow: "rgba(234,88,12,0.35)", iconBg: "rgba(234,88,12,0.12)", path: "/terceiros/medicoes", active: true,
+    features: ["Levantamento de Campo", "Alerta de Divergência", "FD do Período (a abater)", "Aprovação 3 Níveis", "Líquido a Pagar"],
   },
 
   {
@@ -407,11 +414,12 @@ export default function ModuleHub() {
     "rh-dp": "rh", "sst": "sst", "juridico": "juridico",
     "juridico-trabalhista": "juridico", "juridico-tributario": "juridico", "juridico-civil": "juridico",
     "avaliacao": "avaliacao", "terceiros": "terceiros", "parceiros": "parceiros",
-    "cadastro": "cadastro",
+    "cadastro": "cadastro", "medicao-terceiros": "terceiros",
   };
   // Filtrar módulos: habilitados no config E acessíveis pelo grupo do usuário
   const activeModules = MODULES.filter(m => {
     if (!m.active) return false;
+    const permId = m.permId ?? m.id;
     const configKey = hubToConfigKey[m.id] ?? m.id;
     const modEnabled = m.id === "juridico"
       ? (isModuleEnabled("juridico") || isModuleEnabled("juridico-trabalhista") || isModuleEnabled("juridico-tributario") || isModuleEnabled("juridico-civil"))
@@ -419,21 +427,21 @@ export default function ModuleHub() {
     if (!modEnabled) return false;
     // Se o usuário pertence a um grupo (e não é admin_master), filtrar por permissões do grupo
     if (hasGroup && !isAdminMaster) {
-      const modDef = MODULE_DEFINITIONS.find(md => md.id === m.id);
+      const modDef = MODULE_DEFINITIONS.find(md => md.id === permId);
       // Módulo sem definição = sem controle de acesso → bloquear para usuários de grupo
       if (!modDef) return false;
       // Verificar acesso ao módulo (novo sistema tem prioridade total via canAccessModule)
       // Para o módulo "juridico" unificado, aceitar acesso via qualquer sub-módulo
       const canAccess = m.id === "juridico"
         ? (canAccessModule("juridico") || canAccessModule("juridico-trabalhista") || canAccessModule("juridico-tributario") || canAccessModule("juridico-civil"))
-        : canAccessModule(m.id);
+        : canAccessModule(permId);
       if (!canAccess) return false;
       // Validação adicional via rota (sistema legado ou fallback)
       const hasAnyRoute = modDef.features.some(f => groupCanAccessRoute(f.route));
       if (!hasAnyRoute) return false;
     }
     // Verificar visibilidade no Painel de Controle do Menu
-    const modDef2 = MODULE_DEFINITIONS.find(md => md.id === m.id);
+    const modDef2 = MODULE_DEFINITIONS.find(md => md.id === permId);
     if (modDef2) {
       const hasAnyVisible = modDef2.features.some(f => isMenuItemVisible(f.route));
       if (!hasAnyVisible) return false;
@@ -748,7 +756,7 @@ export default function ModuleHub() {
                       onTouchStart={(e) => handleTouchStart(mod.id, e)}
                       onTouchEnd={handleTouchEnd}
                       onContextMenu={(e) => { if (touchDragging.current) e.preventDefault(); }}
-                      onClick={() => { if (!didDrag.current) { setActiveModule(mod.id as ModuleId); navigate(mod.path); } }}
+                      onClick={() => { if (!didDrag.current) { setActiveModule((mod.permId ?? mod.id) as ModuleId); navigate(mod.path); } }}
                       className={`group relative flex flex-col items-center justify-center text-center rounded-2xl p-3 cursor-pointer ${mounted ? 'hub-animate-up' : 'opacity-0'} transition-all duration-200 hover:scale-[1.04] select-none`}
                       style={{
                         animationDelay: `${0.3 + idx * 0.07}s`,

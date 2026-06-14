@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3081 — **HUB DE MÓDULOS (HOME) · O CARD ÚNICO "MEDIÇÃO" FOI DESDOBRADO NOS DOIS MÓDULOS DEDICADOS:
+ * "MEDIÇÃO CLIENTE" (A RECEBER, % AUTO DO AVANÇO FÍSICO → `/medicao`) E "MEDIÇÃO TERCEIROS" (A PAGAR,
+ * LEVANTAMENTO + DIVERGÊNCIA + FD + APROVAÇÃO 3 NÍVEIS → `/terceiros/medicoes`).**
+ *
+ * PEDIDO (print iPad, home "Gestão Integrada", usuário Admin Master): "Quero que apareça aqui os novos
+ * módulos de medições" → "Tem a medição para terceiros e medição do cliente". A home (`ModuleHub.tsx`)
+ * exibia só 1 card "Medição" apontando p/ `/medicao`; agora reflete a reestruturação das Rev. 3078-3080.
+ *
+ * IMPLEMENTAÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE/SCHEMA/BACKEND) em
+ * `client/src/pages/ModuleHub.tsx`: (1) card "medicao" renomeado p/ "Medição Cliente · A Receber"
+ * (ícone Ruler, teal), features atualizadas (Avanço Físico Automático, Faturamento a Receber). (2) NOVO
+ * card "medicao-terceiros" → rota `/terceiros/medicoes` (ícone Receipt, laranja como Terceiros), features
+ * (Levantamento de Campo, Alerta de Divergência, FD do Período, Aprovação 3 Níveis, Líquido a Pagar).
+ * (3) Novo campo opcional `permId?: string` no type `Module`: o id do card ("medicao-terceiros") difere do
+ * módulo de PERMISSÃO ("terceiros"), então o filtro de `activeModules` resolve `permId = m.permId ?? m.id`
+ * e usa-o em `MODULE_DEFINITIONS.find` (gate de grupo + visibilidade) e em `canAccessModule`; mapeado
+ * também `hubToConfigKey["medicao-terceiros"]="terceiros"` p/ o toggle de empresa. Assim a Medição
+ * Terceiros herda corretamente as permissões/visibilidade do módulo Terceiros (a rota
+ * `terceiros-medicoes` já é feature de Terceiros em `shared/modules.ts`). Admin Master vê ambos.
+ *
+ * VERIFICAÇÃO: esbuild parse OK; app reinicia limpo (Server running, Neon, SyncSchema OK).
+ */
+
+/**
  * Rev. 3080 — **MEDIÇÃO DE TERCEIROS (A PAGAR) · MÓDULO DEDICADO `/terceiros/medicoes` ELEVADO AO FLUXO
  * COMPLETO: APROVAÇÃO EM 3 NÍVEIS (MEDE → GESTOR DA OBRA → SÓCIO ADM LIBERA FINANCEIRO) COM FALLBACK
  * 1-CLIQUE, BADGE DE ALERTA DE DIVERGÊNCIA, FD ABATIDO + LÍQUIDO A PAGAR E STRIP VISUAL DOS NÍVEIS — TUDO
