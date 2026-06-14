@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3064 — **CONTRATOS DE TERCEIROS · CONTRATO 100% ASSINADO NO FCSIGN NÃO LIBERAVA AS MEDIÇÕES
+ * (NEM SAÍA DO MODO EDITÁVEL): O STATUS DE ASSINATURA AGORA É ROBUSTO A RASCUNHOS/CANCELADOS E
+ * ENVELOPES SOFT-DELETADOS, E A TELA RE-BUSCA SOZINHA QUANDO A JANELA VOLTA AO FOCO.**
+ *
+ * PEDIDO (prints da tela do Contrato CT-2026-0006 no iPad): "O contrato já foi assinado por todos e
+ * mesmo assim não liberou fazer as medições, por quê?" A aba "Medições (0)" mostrava o empty-state
+ * "Envie o contrato para assinatura antes de gerar medições." e a aba "Contrato" continuava no modo
+ * EDITÁVEL (toolbar Regenerar/Editar texto/Salvar + botão "Enviar p/ FcSign"), como se nada tivesse
+ * sido assinado.
+ *
+ * CAUSA-RAIZ (dois fatores). Todo o gate de Medições/edição depende de `contrato.assinaturaStatus
+ * === "concluido"`. Esse campo NÃO é coluna persistida — é DERIVADO em `terceiroContratos.getContrato`
+ * a partir do envelope FCSign do contrato. A derivação antiga pegava o ÚLTIMO envelope por `criado_em`
+ * (`orderBy desc + limit 1`) SEM excluir envelopes soft-deletados (`excluido_em`) e SEM tratar o
+ * "concluido" como estado terminal. Inspeção no Neon do contrato 17 (CT-2026-0006, company 60002):
+ * havia 2 envelopes — env 9 `concluido` (3/3 assinaturas, criado 19:37) e env 8 `rascunho`
+ * (4 signatários, nunca enviado, SOFT-DELETADO às 19:37). Como o env concluído era o mais recente, a
+ * derivação acabava OK no estado atual, MAS a lógica era frágil: (a) qualquer rascunho/cancelado
+ * criado DEPOIS (ex.: o dono clica de novo "Enviar p/ FcSign", visível na tela) viraria o "mais
+ * recente" e mascararia o "concluido", RE-FECHANDO o gate de um contrato já assinado; (b) envelopes
+ * soft-deletados entravam na seleção. (2) SINTOMA IMEDIATO = CACHE OBSOLETO: os signatários concluem
+ * por LINK PÚBLICO em outra sessão; com `refetchOnWindowFocus:false` global + `staleTime` de 2min, a
+ * aba aberta do dono NUNCA re-buscava após a conclusão → continuava exibindo o snapshot pré-assinatura
+ * até um hard-refresh manual.
+ *
+ * SOLUÇÃO (BACKEND + FRONTEND, ZERO ALTER/DROP/DELETE, ZERO schema):
+ * - `server/routers/terceiroContratos.ts` (`getContrato`): a derivação de `assinaturaStatus` passa a
+ *   (i) EXCLUIR envelopes com `excluido_em` (via `isNull`, já importado) e (ii) tornar o "concluido"
+ *   ADESIVO — se QUALQUER envelope não-excluído do contrato estiver "concluido", o contrato reporta
+ *   "concluido", independentemente de surgir um rascunho/cancelado mais recente. Caso contrário, usa o
+ *   status do envelope não-excluído mais recente (comportamento anterior). Tenant guard mantido
+ *   (`companyId`).
+ * - `client/src/pages/terceiros/contratos/ContratoDetalhe.tsx`: o `getContrato.useQuery` ganha
+ *   `refetchOnWindowFocus:true` (override do default global), pois o status muda fora-de-banda; assim,
+ *   ao o dono voltar à aba do ERP depois que os signatários assinaram, a tela re-busca e o gate de
+ *   Medições libera + a aba Contrato vira view-only SEM precisar de hard-refresh.
+ *
+ * EFEITO: o contrato CT-2026-0006 (e quaisquer contratos já 100% assinados) liberam as Medições e
+ * saem do modo editável; e o gate deixa de re-fechar por rascunhos/cancelamentos/exclusões posteriores.
+ *
  * Rev. 3063 — **FINANCEIRO · ANÁLISE DE CUSTOS · A TABELA MENSAL POR CATEGORIA PASSA A EXIBIR OS
  * VALORES EM BRL POR EXTENSO (R$ 232.000,00 — PONTO P/ MILHAR, VÍRGULA P/ CENTAVOS) EM VEZ DA
  * ABREVIAÇÃO "R$ X mil" / "R$ X,X mi".**

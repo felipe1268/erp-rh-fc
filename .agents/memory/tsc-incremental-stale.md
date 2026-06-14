@@ -22,3 +22,10 @@ reviewer reading the source (architect) WILL catch errors that the cached tsc mi
 
 Note: `client/src/**` IS in the tsconfig `include`, so client files DO get type-checked —
 the gap is staleness, not scope.
+
+**Server routers (`server/**`) can be a blind spot too:** a fresh `tsc --noEmit` did NOT flag a
+`Cannot find name`/missing-import in `server/routers/*.ts` (a schema symbol used without being
+added to the `from "../../drizzle/schema"` import block). Do NOT trust tsc to catch a missing
+import in a server router — after adding any new schema symbol, grep the import block to confirm
+it's listed, and boot the app (a ReferenceError there is often swallowed by a local `try/catch`,
+so the symptom is a silently-null derived field, not a crash).

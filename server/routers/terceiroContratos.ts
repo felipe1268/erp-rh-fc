@@ -34,6 +34,7 @@ import {
   portalCredentials,
   financialEntries,
   users,
+  integrasignEnvelopes,
 } from "../../drizzle/schema";
 
 const n = (v: any) => parseFloat(String(v ?? 0)) || 0;
@@ -507,15 +508,22 @@ export const terceiroContratosRouter = router({
 
       let assinaturaStatus: string | null = null;
       try {
-        const [envelope] = await db.select({ status: integrasignEnvelopes.status })
+        // Rev. 3064 — exclui envelopes soft-deletados (excluido_em) e torna o estado "concluido"
+        // ADESIVO: uma vez que QUALQUER envelope não-excluído do contrato esteja "concluido", o
+        // contrato reporta "concluido" mesmo que depois surja um rascunho/cancelado mais recente
+        // (ex.: o dono clica "Enviar p/ FcSign" de novo, criando um novo rascunho). Sem isso, o
+        // gate de Medições/edição re-fechava um contrato já 100% assinado.
+        const envelopes = await db.select({ status: integrasignEnvelopes.status })
           .from(integrasignEnvelopes)
           .where(and(
             eq(integrasignEnvelopes.contratoTerceiroId, input.id),
             eq(integrasignEnvelopes.companyId, contrato.companyId),
+            isNull(integrasignEnvelopes.excluidoEm),
           ))
-          .orderBy(desc(integrasignEnvelopes.criadoEm))
-          .limit(1);
-        assinaturaStatus = envelope?.status ?? null;
+          .orderBy(desc(integrasignEnvelopes.criadoEm));
+        assinaturaStatus = envelopes.some(e => e.status === "concluido")
+          ? "concluido"
+          : (envelopes[0]?.status ?? null);
       } catch {}
 
       let portalLogin: { cnpj: string; ativo: boolean; primeiroAcesso: boolean; ultimoLogin: string | null } | null = null;

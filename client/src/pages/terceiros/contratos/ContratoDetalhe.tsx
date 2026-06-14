@@ -115,7 +115,16 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   const [contratoSenha, setContratoSenha] = useState("");
 
   const utils = trpc.useUtils();
-  const { data: contrato, isLoading } = trpc.terceiroContratos.getContrato.useQuery({ id }, { enabled: id > 0 });
+  const { data: contrato, isLoading } = trpc.terceiroContratos.getContrato.useQuery(
+    { id },
+    {
+      enabled: id > 0,
+      // Rev. 3064 — o status de assinatura muda FORA-DE-BANDA (os signatários assinam por link
+      // público em outra sessão), então re-busca ao focar a janela p/ o dono ver a conclusão e o
+      // gate de Medições liberar SEM precisar de hard-refresh.
+      refetchOnWindowFocus: true,
+    },
+  );
 
   const recalcularDatasMut = trpc.terceiroContratos.recalcularDatasCronograma.useMutation({
     onSuccess: (r) => { toast.success(`Datas atualizadas do cronograma${r.usouEap ? " (via EAP)" : " (todas atividades)"}: ${fmtDate(r.dataInicio)} → ${fmtDate(r.dataTermino)}`); utils.terceiroContratos.getContrato.invalidate({ id }); },
