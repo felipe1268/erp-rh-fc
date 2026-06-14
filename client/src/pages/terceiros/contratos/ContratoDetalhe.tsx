@@ -223,13 +223,10 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
     onError: (e) => toast.error(e.message),
   });
 
-  const gerarMedicaoMut = trpc.terceiroContratos.gerarMedicao.useMutation({
-    onSuccess: (data) => {
-      if (data.itensNaoVinculados && data.itensNaoVinculados.length > 0) {
-        toast.warning(`Medição gerada, mas ${data.itensNaoVinculados.length} item(ns) sem vínculo ao cronograma (avanço = 0%): ${data.itensNaoVinculados.slice(0, 3).join(", ")}${data.itensNaoVinculados.length > 3 ? "..." : ""}`, { duration: 8000 });
-      } else {
-        toast.success("Medição gerada com base no avanço físico!");
-      }
+  // Task #86 — criação MANUAL da medição (sem cruzamento automático do planejamento).
+  const criarMedicaoManualMut = trpc.terceiroContratos.criarMedicaoManual.useMutation({
+    onSuccess: () => {
+      toast.success("Medição criada. Lance o medido do período por item na planilha.");
       setShowGerarMedicao(false); setTab("medicoes"); utils.terceiroContratos.getContrato.invalidate({ id });
     },
     onError: (e) => toast.error(e.message),
@@ -440,9 +437,11 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
             </div>
           </div>
           {(contrato as any).assinaturaStatus === "concluido" ? (
-            <Button onClick={() => setShowGerarMedicao(true)} className="gap-2 bg-blue-600 hover:bg-blue-700 shrink-0">
-              <Zap className="w-4 h-4" /> Gerar Medição
-            </Button>
+            !emModuloMedicoes ? (
+              <Button onClick={() => setShowGerarMedicao(true)} className="gap-2 bg-blue-600 hover:bg-blue-700 shrink-0">
+                <ClipboardCheck className="w-4 h-4" /> Nova Medição
+              </Button>
+            ) : null
           ) : (
             <div className="flex items-center gap-2 shrink-0">
               {(contrato as any).assinaturaStatus ? (
@@ -1797,7 +1796,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                   {/* Cabeçalho destacado */}
                   <div className="bg-gradient-to-br from-blue-600 to-blue-700 px-6 pt-5 pb-6 text-white">
                     <div className="flex items-center gap-1.5 text-blue-100 text-[11px] font-semibold uppercase tracking-wide mb-2">
-                      <Zap className="w-3.5 h-3.5" /> Gerar Medição Automática
+                      <ClipboardCheck className="w-3.5 h-3.5" /> Nova Medição
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <h2 className="text-3xl font-bold leading-none">Medição {numStr}</h2>
@@ -1814,7 +1813,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                     <div className="flex gap-2.5 p-3 bg-blue-50 rounded-xl mb-5">
                       <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
                       <p className="text-[13px] text-blue-900/80 leading-relaxed">
-                        O sistema busca o avanço físico atual de cada atividade no planejamento e calcula o valor a medir automaticamente.
+                        A medição é criada zerada (rascunho). Depois você lança o medido do período por item na planilha e, se quiser, faz o levantamento de campo (projeto/plantas).
                       </p>
                     </div>
 
@@ -1852,25 +1851,24 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                       </div>
                     )}
 
-                    {gerarMedicaoMut.isPending && (
+                    {criarMedicaoManualMut.isPending && (
                       <div className="mt-4 space-y-2">
                         <div className="flex items-center gap-2 text-sm text-blue-600">
                           <Loader2 className="w-4 h-4 animate-spin" />
-                          Gerando medição...
+                          Criando medição...
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
                           <div className="bg-blue-600 h-2.5 rounded-full" style={{ animation: "progress-indeterminate 1.5s ease-in-out infinite" }} />
                         </div>
-                        <p className="text-xs text-gray-400">Vinculando itens ao planejamento e calculando avanço físico...</p>
                         <style>{`@keyframes progress-indeterminate { 0% { width: 10%; margin-left: 0; } 50% { width: 60%; margin-left: 20%; } 100% { width: 10%; margin-left: 90%; } }`}</style>
                       </div>
                     )}
 
                     <div className="flex gap-3 mt-6">
-                      <Button variant="outline" className="flex-1 h-11" onClick={() => setShowGerarMedicao(false)} disabled={gerarMedicaoMut.isPending}>Cancelar</Button>
-                      <Button className="flex-1 h-11 bg-blue-600 hover:bg-blue-700" disabled={gerarMedicaoMut.isPending}
-                        onClick={() => gerarMedicaoMut.mutate({ contratoId: id, companyId: contrato.companyId, periodo: periodoCalc, dataInicio: inicioEfetivo, dataFim: fimEfetivo, criadoPor: "Responsável" })}>
-                        <Zap className="w-4 h-4 mr-2" />{gerarMedicaoMut.isPending ? "Gerando..." : "Gerar Medição"}
+                      <Button variant="outline" className="flex-1 h-11" onClick={() => setShowGerarMedicao(false)} disabled={criarMedicaoManualMut.isPending}>Cancelar</Button>
+                      <Button className="flex-1 h-11 bg-blue-600 hover:bg-blue-700" disabled={criarMedicaoManualMut.isPending}
+                        onClick={() => criarMedicaoManualMut.mutate({ contratoId: id, companyId: contrato.companyId, periodo: periodoCalc, dataInicio: inicioEfetivo, dataFim: fimEfetivo, criadoPor: "Responsável" })}>
+                        <ClipboardCheck className="w-4 h-4 mr-2" />{criarMedicaoManualMut.isPending ? "Criando..." : "Criar Medição"}
                       </Button>
                     </div>
                   </div>
@@ -2021,6 +2019,18 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
   const [rejeicaoModal, setRejeicaoModal] = useState<{ id: number; numero: number } | null>(null);
   const [motivoRejeicao, setMotivoRejeicao] = useState("");
   const [editingItem, setEditingItem] = useState<{ id: number; valor: string } | null>(null);
+  // Task #86 — lançamento manual do medido do período por item, em BRL pt-BR (V.Período).
+  const [editingValor, setEditingValor] = useState<{ id: number; valor: string } | null>(null);
+  const valorSubmitGuard = useRef(false);
+  const maskValorBRL = (s: string) => (parseInt((s || "").replace(/\D/g, "") || "0", 10) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const parseValorBRL = (s: string) => parseInt((s || "").replace(/\D/g, "") || "0", 10) / 100;
+  // Dedupe Enter+blur: o Enter dispara blur do input, evitando mutação dupla.
+  const submitValorPeriodo = (itemId: number, medicaoId: number, companyId: number, valorStr: string) => {
+    if (valorSubmitGuard.current) return;
+    valorSubmitGuard.current = true;
+    editarMedicaoItemMut.mutate({ medicaoItemId: itemId, medicaoId, companyId, valorMedidoPeriodo: parseValorBRL(valorStr) });
+    setEditingValor(null);
+  };
   const [recalcResult, setRecalcResult] = useState<any>(null);
   const [, navigate] = useLocation();
   // Rev. 3090 (T005) — Levantamento de campo OBRIGATÓRIO da medição de terceiros.
@@ -2095,7 +2105,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
         <p className="text-gray-400 mb-4">Nenhuma medição gerada para este contrato.</p>
         {assinado && modoEdicao ? (
           <Button onClick={() => setShowGerarMedicao(true)} className="gap-2 bg-blue-600 hover:bg-blue-700">
-            <Zap className="w-4 h-4" /> Gerar Medição
+            <ClipboardCheck className="w-4 h-4" /> Nova Medição
           </Button>
         ) : !assinado ? (
           <span className="inline-flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
@@ -2116,7 +2126,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
       {assinado && modoEdicao && (
         <div className="flex justify-end">
           <Button onClick={() => setShowGerarMedicao(true)} size="sm" className="gap-2 bg-blue-600 hover:bg-blue-700">
-            <Zap className="w-4 h-4" /> Gerar Medição
+            <ClipboardCheck className="w-4 h-4" /> Nova Medição
           </Button>
         </div>
       )}
@@ -2375,7 +2385,34 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                               )}
                             </td>
                             <td className="px-2 py-2 text-center font-semibold text-gray-700">{percAcumulado.toFixed(1)}%</td>
-                            <td className="px-2 py-2 text-right text-gray-600">{BRL(item.valorMedidoPeriodo)}</td>
+                            <td className="px-2 py-2 text-right text-gray-600">
+                              {editavel && editingValor?.id === item.id ? (
+                                <div className="flex items-center gap-1 justify-end">
+                                  <span className="text-gray-400 text-[10px]">R$</span>
+                                  <input
+                                    inputMode="numeric"
+                                    className="w-24 text-right border rounded px-1 py-0.5 text-xs"
+                                    value={editingValor.valor}
+                                    onChange={e => setEditingValor({ ...editingValor, valor: maskValorBRL(e.target.value) })}
+                                    onKeyDown={e => {
+                                      if (e.key === "Enter") {
+                                        submitValorPeriodo(item.id, m.id, contrato.companyId, editingValor.valor);
+                                      } else if (e.key === "Escape") setEditingValor(null);
+                                    }}
+                                    onBlur={() => submitValorPeriodo(item.id, m.id, contrato.companyId, editingValor.valor)}
+                                    autoFocus
+                                  />
+                                </div>
+                              ) : (
+                                <span
+                                  className={editavel ? "cursor-pointer hover:underline" : ""}
+                                  onClick={() => { if (editavel) { valorSubmitGuard.current = false; setEditingValor({ id: item.id, valor: maskValorBRL(String(Math.round(Number(item.valorMedidoPeriodo || 0) * 100))) }); } }}
+                                  title={editavel ? "Clique para lançar o valor medido do período (R$)" : undefined}
+                                >
+                                  {BRL(item.valorMedidoPeriodo)}
+                                </span>
+                              )}
+                            </td>
                             <td className="px-2 py-2 text-right font-semibold text-gray-900">{BRL(item.valorAcumulado)}</td>
                             {mostrarRemover && (
                               <td className="px-2 py-2 text-center">

@@ -1661,6 +1661,108 @@ export const terceiroContratosRouter = router({
       return { medicao, itens: itensMedicao.length, itensNaoVinculados };
     }),
 
+  // Rev. 3091 (Task #86) — CRIAÇÃO MANUAL da medição de terceiros, SEM cruzamento automático.
+  // Cria a medição numerada do período com itens ZERADOS (status "rascunho", geradoAutomaticamente=false).
+  // O usuário lança o medido por item manualmente (BRL) na planilha. Reusa numeração sequencial,
+  // validação de sobreposição de datas e o "Dia da Medição" (período vem do client). Tenant guard explícito.
+  criarMedicaoManual: protectedProcedure
+    .input(z.object({
+      contratoId: z.number(),
+      companyId: z.number(),
+      periodo: z.string(),
+      dataReferencia: z.string().optional(),
+      dataInicio: z.string().optional(),
+      dataFim: z.string().optional(),
+      criadoPor: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      await _assertCompanyAccess(ctx.user, input.companyId);
+
+      const [contrato] = await db.select().from(terceiroContratos)
+        .where(and(eq(terceiroContratos.id, input.contratoId), eq(terceiroContratos.companyId, input.companyId)));
+      if (!contrato) throw new Error("Contrato não encontrado");
+
+      // Validação de sobreposição de datas (mesma regra da geração automática).
+      if (input.dataInicio && input.dataFim) {
+        const todasMedicoes = await db.select({
+          numero: terceiroMedicoes.numero,
+          dataInicio: terceiroMedicoes.dataInicio,
+          dataFim: terceiroMedicoes.dataFim,
+          periodo: terceiroMedicoes.periodo,
+          status: terceiroMedicoes.status,
+        }).from(terceiroMedicoes).where(eq(terceiroMedicoes.contratoId, input.contratoId));
+        for (const m of todasMedicoes.filter(m => m.status !== "rejeitada")) {
+          if (m.dataInicio && m.dataFim && input.dataInicio <= m.dataFim && input.dataFim >= m.dataInicio) {
+            throw new Error(`As datas ${input.dataInicio} a ${input.dataFim} se sobrepõem à Medição ${String(m.numero).padStart(2, "0")} (${m.dataInicio} a ${m.dataFim}). Não é permitido criar medições com períodos sobrepostos.`);
+          }
+          if (m.periodo === input.periodo && !m.dataInicio) {
+            throw new Error(`Já existe uma medição para o período ${input.periodo}. Exclua ou rejeite a existente antes de criar uma nova.`);
+          }
+        }
+      }
+
+      const itens = await db.select().from(terceiroContratoItens)
+        .where(eq(terceiroContratoItens.contratoId, input.contratoId))
+        .orderBy(asc(terceiroContratoItens.ordem));
+      if (!itens.length) throw new Error("Contrato sem itens — adicione os serviços do contrato antes de criar a medição");
+
+      // Itens sem valor: distribui o total do contrato (igual ao automático) p/ a planilha ter base.
+      const allItemsZero = itens.every(ic => n(ic.valorTotal) === 0);
+      const contratoTotal = n(contrato.valorTotal);
+      if (allItemsZero && contratoTotal > 0 && itens.length > 0) {
+        const valorPorItem = contratoTotal / itens.length;
+        for (const ic of itens) {
+          (ic as any).valorTotal = String(valorPorItem);
+          await db.update(terceiroContratoItens).set({ valorTotal: String(valorPorItem), valorUnitario: String(valorPorItem) } as any)
+            .where(eq(terceiroContratoItens.id, ic.id));
+        }
+      }
+
+      const medicoesAnteriores = await db.select().from(terceiroMedicoes)
+        .where(eq(terceiroMedicoes.contratoId, input.contratoId));
+      const numero = medicoesAnteriores.length + 1;
+      const valorAcumuladoAnterior = medicoesAnteriores
+        .filter(m => m.status === "aprovada" || m.status === "paga")
+        .reduce((s, m) => s + n(m.valorMedido), 0);
+      const percentualGlobal = contratoTotal > 0 ? (valorAcumuladoAnterior / contratoTotal) * 100 : 0;
+
+      const [medicao] = await db.insert(terceiroMedicoes).values({
+        contratoId: input.contratoId,
+        companyId: input.companyId,
+        empresaTerceiraId: contrato.empresaTerceiraId,
+        obraId: contrato.obraId ?? null,
+        numero,
+        periodo: input.periodo,
+        dataReferencia: input.dataReferencia ?? null,
+        dataInicio: input.dataInicio ?? null,
+        dataFim: input.dataFim ?? null,
+        valorMedido: "0",
+        valorAcumulado: String(valorAcumuladoAnterior),
+        percentualGlobal: String(percentualGlobal),
+        status: "rascunho",
+        geradoAutomaticamente: false,
+        criadoPor: input.criadoPor ?? null,
+      } as any).returning();
+
+      for (const item of itens) {
+        const percentualAnterior = n(item.percentualMedidoAcumulado);
+        await db.insert(terceiroMedicaoItens).values({
+          medicaoId: medicao.id,
+          contratoItemId: item.id,
+          companyId: input.companyId,
+          descricao: item.descricao,
+          percentualAvancoFisico: String(percentualAnterior),
+          percentualAcumuladoAnterior: String(percentualAnterior),
+          percentualMedidoPeriodo: "0",
+          valorMedidoPeriodo: "0",
+          valorAcumulado: String((percentualAnterior / 100) * n(item.valorTotal)),
+        } as any);
+      }
+
+      return { medicao, itens: itens.length };
+    }),
+
   getMedicao: protectedProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {
@@ -2719,10 +2821,14 @@ export const terceiroContratosRouter = router({
       medicaoItemId: z.number(),
       medicaoId: z.number(),
       companyId: z.number(),
-      percentualMedidoPeriodo: z.number(),
+      // Lançamento manual (Task #86): aceita % do período OU o valor medido em BRL.
+      // Quando valorMedidoPeriodo é informado, o % é derivado do valorTotal do item.
+      percentualMedidoPeriodo: z.number().optional(),
+      valorMedidoPeriodo: z.number().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const db = await getDb();
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const [medicao] = await db.select().from(terceiroMedicoes).where(and(eq(terceiroMedicoes.id, input.medicaoId), eq(terceiroMedicoes.companyId, input.companyId)));
       if (!medicao) throw new Error("Medição não encontrada");
       if (medicao.status === "paga") throw new Error("Não é possível editar itens de uma medição já paga");
@@ -2734,7 +2840,12 @@ export const terceiroContratosRouter = router({
       if (!contratoItem) throw new Error("Item do contrato não encontrado");
 
       const percentualAnterior = n(item.percentualAcumuladoAnterior);
-      const novoPercentualPeriodo = Math.max(0, Math.min(100 - percentualAnterior, input.percentualMedidoPeriodo));
+      // Resolve o % do período: se veio valor em BRL, deriva do valorTotal do item; senão usa o % informado.
+      const valorTotalItemEdit = n(contratoItem.valorTotal);
+      const percentualInformado = input.valorMedidoPeriodo !== undefined
+        ? (valorTotalItemEdit > 0 ? (input.valorMedidoPeriodo / valorTotalItemEdit) * 100 : 0)
+        : (input.percentualMedidoPeriodo ?? 0);
+      const novoPercentualPeriodo = Math.max(0, Math.min(100 - percentualAnterior, percentualInformado));
       const novoPercentualFisico = percentualAnterior + novoPercentualPeriodo;
       const novoValorPeriodo = (novoPercentualPeriodo / 100) * n(contratoItem.valorTotal);
       const novoValorAcumulado = (novoPercentualFisico / 100) * n(contratoItem.valorTotal);

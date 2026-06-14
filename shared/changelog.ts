@@ -1,6 +1,51 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3091 — **MEDIÇÃO DE TERCEIROS · A MEDIÇÃO PASSA A SER CRIADA MANUALMENTE (ZERADA, EM RASCUNHO) E
+ * O VALOR MEDIDO DO PERÍODO É LANÇADO ITEM A ITEM EM R$ (BRL) DIRETO NA PLANILHA — O CRUZAMENTO
+ * AUTOMÁTICO COM O AVANÇO FÍSICO DO PLANEJAMENTO DEIXA DE SER O CAMINHO PRINCIPAL.**
+ *
+ * PEDIDO (usuário): o "Gerar Medição" automático buscava o avanço físico de cada atividade no
+ * planejamento e calculava o valor a medir sozinho — mas a medição de terceiros (a pagar) precisa ser
+ * LANÇADA À MÃO a partir do levantamento de campo/realidade da obra, não inferida de um cronograma que
+ * frequentemente não bate. O fluxo automático era um beco: ou aceitava o número do planejamento, ou
+ * editava só o % por item (sem digitar o valor em reais que o usuário tem em mãos).
+ *
+ * CAUSA-RAIZ: a única porta de criação de medição (`gerarMedicao`) era 100% acoplada ao cruzamento com
+ * `planejamento_avancos`/critério avanço físico; a edição por item (`editarMedicaoItem`) só aceitava
+ * `percentualMedidoPeriodo`. Não havia como (a) criar a medição vazia para preencher depois, nem (b)
+ * digitar o valor medido em R$ (o usuário pensa em reais, não em %).
+ *
+ * SOLUÇÃO (BACKEND ADITIVO + FRONTEND, ZERO ALTER/DROP/DELETE/SCHEMA — as tabelas
+ * `terceiro_medicoes`/`terceiro_medicao_itens` já existem):
+ *   (1) `server/routers/terceiroContratos.ts` — nova proc `criarMedicaoManual` (protectedProcedure com
+ *       `_assertCompanyAccess` + contrato WHERE id+companyId): cria a medição numerada (numero =
+ *       medições anteriores + 1) em status "rascunho", `geradoAutomaticamente=false`, `valorMedido=0`,
+ *       `valorAcumulado=Σ aprovadas/pagas`, e insere os itens ZERADOS (percentual = acumulado anterior,
+ *       período = 0). Reusa a validação de sobreposição de datas e a distribuição do total do contrato
+ *       quando os itens vêm sem valor (mesma base do automático). O `gerarMedicao` automático CONTINUA
+ *       existindo (não removido) — só deixa de ser o botão principal.
+ *   (2) `editarMedicaoItem` passa a aceitar `valorMedidoPeriodo` (R$, opcional) ALÉM do
+ *       `percentualMedidoPeriodo` (agora opcional): quando o valor BRL é informado, o % do período é
+ *       DERIVADO de `valor / valorTotalItem * 100` (clamp 0..100-anterior); o resto do cálculo
+ *       (valor do período, acumulado, físico) fica inalterado.
+ *   (3) `client/src/pages/terceiros/contratos/ContratoDetalhe.tsx` — mutation `gerarMedicaoMut` vira
+ *       `criarMedicaoManualMut` (aponta p/ `criarMedicaoManual`, onSuccess sem `itensNaoVinculados`); o
+ *       modal "Gerar Medição Automática" vira "Nova Medição" (explicação reescrita: cria zerada → lança
+ *       por item → levantamento opcional; progress/botão "Criar Medição"); todos os botões "Gerar Medição"
+ *       (header — gateado em `!emModuloMedicoes` p/ não duplicar no módulo dedicado —, empty-state e topo da
+ *       lista) viram "Nova Medição" com ícone ClipboardCheck; e a coluna "V.Período" da planilha fica
+ *       EDITÁVEL em BRL pt-BR (state `editingValor` + máscara `maskValorBRL`/`parseValorBRL` locais; clique →
+ *       input R$ → Enter/blur chama `editarMedicaoItemMut` com `valorMedidoPeriodo`). A edição por % no
+ *       cabeçalho "% Período" continua disponível.
+ *
+ * RESSALVA / DRIFT: o "levantamento de campo" da medição de terceiros continua acessível pelo botão por
+ * medição já existente (Rev. 3090), NÃO foi promovido a uma aba própria — considerado satisfeito como
+ * ação. O fluxo de Medição de Cliente e a gestão pelo módulo "Terceiros" ficam intactos.
+ *
+ * Arquivos: `server/routers/terceiroContratos.ts` (`criarMedicaoManual` nova + `editarMedicaoItem`
+ * estendido), `client/src/pages/terceiros/contratos/ContratoDetalhe.tsx`.
+ *
  * Rev. 3090 — **MEDIÇÃO DE TERCEIROS · O LEVANTAMENTO DE CAMPO (PROJETO/PLANTAS EM PDF + ESCALA +
  * CONTORNOS + FOTOS POR AMBIENTE + MEMÓRIA DE CÁLCULO) DEIXA DE SER UM BECO SEM SAÍDA: PASSA A SER
  * CRIÁVEL E VINCULÁVEL DIRETO DE CADA MEDIÇÃO DE TERCEIROS, REAPROVEITANDO A MESMA ENGINE DA MEDIÇÃO
