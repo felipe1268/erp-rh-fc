@@ -789,6 +789,8 @@
 
 # Histórico de revisões antigas — ERP RH & DP FC Engenharia
 
+- **Rev. 3050** — INTEGRASIGN (FCSIGN) · TODO CONTRATO ONLINE É ASSINADO POR 3 SIGNATÁRIOS NA ORDEM FORNECEDOR → GESTOR DA OBRA → SÓCIO ADMINISTRADOR (POR ÚLTIMO), CADA UM COM SEUS DADOS. NOVO `server/services/signatariosContrato.ts` (`resolveSocioAdministradorSigner` movido de `compras.ts` + NOVO `resolveGestorObraSigner` lê `obras.responsavel` sem CPF); `integrasign.ts` (`criarEnvelope`) injeta o sócio como "diretor" em contratos e reordena FORNECEDOR/GESTOR → testemunhas → SÓCIO por último; `compras.ts` (`criarEnvelopeIntegraSign`) padroniza os MESMOS 3 (remove "financeiro", 4→3); FRONT `ContratoDetalhe.tsx` avisa que o sócio entra automaticamente. RESSALVA: gestor sem CPF; envelopes já criados não mudam. Detalhe: `shared/changelog.ts`.
+
 > Este arquivo guarda os one-liners das revisões antigas para manter o `replit.md` enxuto.
 
 - **Rev. 2554** — ALMOXARIFADO · EQUIPAMENTOS PRÓPRIOS · INDICAR A OBRA DIRETO NO CADASTRO DO ITEM. No modal "Novo Equipamento" o seletor de obra (Rev. 2514) só aparecia com `status==="em_obra"` (nascido "Disponível") — escondido. FIX (client puro `Proprios.tsx`): picker passa a `form.status === "em_obra" || !editingId` (no cadastro aparece SEMPRE); `onChange` auto-ajusta status (obra⇒"em_obra"; limpar⇒"disponivel"); label dinâmico, opção "— Almoxarifado (sem obra) —" e hint. Server intocado. Zero schema. Zero ALTER/DROP/DELETE. Ver `shared/changelog.ts`.

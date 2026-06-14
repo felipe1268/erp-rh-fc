@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3057 — **ESTABILIDADE GLOBAL · LAZY-LOAD RESILIENTE A "IMPORTING A MODULE SCRIPT FAILED"
+ * / CHUNK ANTIGO SUMIDO APÓS DEPLOY (AUTO-RECUPERAÇÃO SEM TELA DE ERRO, ESPECIALMENTE NO IPAD/SAFARI).**
+ *
+ * PEDIDO: usuário reportou "Está com erro" com print do app PUBLICADO (erp-gestao-integrada.replit.app)
+ * mostrando "Ocorreu um erro inesperado — TypeError: Importing a module script failed" no boundary
+ * (Lazy/Suspense), ao abrir /painel/rh no iPad (iOS Safari 26).
+ *
+ * DIAGNÓSTICO (logs de produção via fetch_deployment_logs): `[CLIENT ERROR] kind=react-error-boundary
+ * url=.../painel/rh msg=Importing a module script failed` REPETIDO no MESMO bundle `index-BaxIB86A.js`
+ * por ~1,5h, sempre iPad. Causa = carregamento de CHUNK lazy que falha. Config do servidor já estava
+ * correta (`server/_core/vite.ts`: index.html `no-cache, no-store, must-revalidate`; `/assets` 1y immutable),
+ * e já existiam handlers de chunk-error em `client/src/main.tsx` (unhandledrejection) e
+ * `client/src/components/ErrorBoundary.tsx` (reload 1x/10s). O furo: quando um chunk some após um deploy
+ * novo (hash baked no bundle antigo de uma aba aberta), o erro estourava no boundary ANTES de uma
+ * recuperação confiável — e publicar uma nova revisão (ex.: a própria Rev. 3056) MUDA todos os hashes,
+ * quebrando TODA aba iOS aberta.
+ *
+ * SOLUÇÃO (FRONT-only, ZERO ALTER/DROP/DELETE — `client/src/App.tsx`): NOVO wrapper `lazyWithRetry()`
+ * que encapsula `React.lazy` e, ao detectar erro de chunk ("Failed to fetch dynamically imported module"
+ * / "Importing a module script failed" / "error loading dynamically imported module" / "Loading chunk" /
+ * name "ChunkLoadError"): (1) RETRY transitório do MESMO import 1x após 600ms (rede instável no iPad);
+ * (2) se persistir, RECARREGA a página UMA vez (guard `sessionStorage __erp_chunk_reload`, janela 10s,
+ * compartilhado com os handlers existentes) p/ buscar um index.html fresco com os novos hashes — durante
+ * o reload devolve uma PROMISE PENDENTE, então o Suspense mantém o `PageLoader` e o usuário NÃO vê a tela
+ * de erro; (3) só na exaustão deixa o erro subir p/ o ErrorBoundary. As 243 chamadas `lazy(() => import(...))`
+ * passaram a usar `lazyWithRetry(() => import(...))`. RESSALVA: o app PUBLICADO atual segue quebrado até
+ * o usuário RE-PUBLICAR — a correção só vale a partir do próximo deploy; a partir dele, abas iOS antigas
+ * se auto-curam no próximo carregamento de rota.
+ *
  * Rev. 3056 — **INTEGRASIGN (FCSIGN) · PDF DO CONTRATO GANHA RÚBRICA DOS SIGNATÁRIOS EM
  * TODAS AS PÁGINAS (INTEGRIDADE ANTI-TROCA DE PÁGINA) E PASSA A RENDERIZAR A ASSINATURA DO
  * SÓCIO ADMINISTRADOR (ÚLTIMO SIGNATÁRIO) QUANDO ELE JÁ ASSINOU.**
