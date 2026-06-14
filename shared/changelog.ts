@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3102 — **MEDIÇÃO / LEVANTAMENTO DE CAMPO ABERTO A PARTIR DE UMA MEDIÇÃO DE TERCEIROS · O COMBOBOX
+ * DE VÍNCULO DE CONTORNOS VOLTA A LISTAR OS ITENS DO CONTRATO (BLOCO B/FORROS ETC.) EM VEZ DE EXIBIR
+ * "ESTE CONTRATO NÃO TEM ORÇAMENTO VINCULADO" E FICAR VAZIO — MESMO O CONTRATO TENDO ITENS NA ABA "ITENS".**
+ *
+ * PEDIDO: usuário relatou que, na tela de Levantamento de Campo de uma medição de TERCEIROS, o campo de
+ * vínculo mostrava a mensagem "Este contrato não tem orçamento vinculado" e ficava vazio, embora a aba
+ * "Itens" do contrato listasse itens (ex.: BLOCO B / FORROS, R$ 9.327,46). Ele quer vincular os contornos
+ * desenhados a ESSES itens do contrato.
+ *
+ * CAUSA-RAIZ: o hook `useLevantamentoOffline` buscava os itens vinculáveis EXCLUSIVAMENTE via
+ * `medicao.getItensOrcamento({ orcamentoId })`, com `enabled: orcamentoId > 0`. Contratos de TERCEIRO não
+ * têm orçamento de obra (`orcamentoId` 0/null) → a query nunca rodava → lista vazia → a dica caía no ramo
+ * "sem orçamento vinculado". Os itens mensuráveis de terceiro vivem em `terceiro_contrato_itens`, não em
+ * `orcamento_itens`.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO BACKEND/ALTER/DROP/DELETE/SCHEMA): o hook `useLevantamentoOffline` ganha
+ * um arg opcional `itensOverride?: any[] | null` (`undefined` = caminho normal cliente/obra via query de
+ * orçamento; `null` = override carregando; array = itens já resolvidos). `itensResolved` passa a ser a
+ * fonte única (override > query) usada no snapshot offline, em `itensOrcamento` e na consolidação; a query
+ * de orçamento ganha `&& !overriding` no `enabled`. Em `MedicaoLevantamento.tsx`, quando `isTerceiro`,
+ * busca-se `terceiroContratos.listarItens({ contratoId })` e mapeiam-se os `items` para o formato
+ * consolidável (`vendaUnitTotal ← valorUnitario`, `vendaTotal ← valorTotal`, além de id/eapCodigo/descricao/
+ * unidade/quantidade), passando esse array como `itensOverride`. A `vincularEmptyHint` ganha um ramo
+ * `isTerceiro` com mensagens próprias ("Este contrato não tem itens cadastrados…" / "não são mensuráveis"),
+ * sem nunca falar de orçamento. Os itens de terceiro são folhas com `eapCodigo`, então `buildItensVinculaveis`
+ * os aceita normalmente. Como `medica*_contornos.orcamentoItemId` é integer SEM FK (e o contorno guarda
+ * `itemEapCodigo`/`itemDescricao` denormalizados), salvar o id de `terceiro_contrato_itens` ali é seguro e a
+ * consolidação em R$ funciona via o map de itens do override.
+ *
+ * RESSALVA/DRIFT: nenhuma — o caminho Cliente/obra é idêntico (override `undefined`); só a engine de
+ * Terceiros passa a ter fonte de itens. Geração de boletim de terceiro segue como antes (orcamentoId 0).
+ *
  * Rev. 3101 — **MEDIÇÃO / LEVANTAMENTO DE CAMPO · A LISTA "CONTORNOS DESTA PÁGINA" GANHA MULTI-SELEÇÃO:
  * O USUÁRIO MARCA VÁRIOS CONTORNOS COM CAIXINHAS (OU "SELECIONAR TODOS") E APAGA OU VINCULA UM ITEM DO
  * ORÇAMENTO A TODOS DE UMA VEZ — EM VEZ DE REPETIR A AÇÃO CONTORNO A CONTORNO.**

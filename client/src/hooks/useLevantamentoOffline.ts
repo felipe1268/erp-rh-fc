@@ -98,8 +98,15 @@ export type UseLevantamentoOffline = {
 
 export function useLevantamentoOffline(args: {
   campoId: number; companyId: number; contratoId: number; orcamentoId: number;
+  // Rev. 3102 — Medição de TERCEIROS não tem orçamento de obra: os itens vêm do
+  // próprio contrato (terceiro_contrato_itens). Quando fornecido, este override
+  // substitui a query de orçamento como fonte dos itens vinculáveis/consolidação.
+  // `undefined` = caminho normal (cliente/obra); `null` = override carregando;
+  // array = itens resolvidos (já no formato consolidável).
+  itensOverride?: any[] | null;
 }): UseLevantamentoOffline {
-  const { campoId, companyId, contratoId, orcamentoId } = args;
+  const { campoId, companyId, contratoId, orcamentoId, itensOverride } = args;
+  const overriding = itensOverride !== undefined;
   const utils = trpc.useUtils();
 
   const [snapshot, setSnapshot] = useState<CampoSnapshot | null>(null);
@@ -118,8 +125,13 @@ export function useLevantamentoOffline(args: {
   );
   const itensQ = trpc.medicao.getItensOrcamento.useQuery(
     { orcamentoId },
-    { enabled: orcamentoId > 0, retry: false },
+    { enabled: orcamentoId > 0 && !overriding, retry: false },
   );
+
+  // Itens resolvidos: override (terceiros) > query de orçamento (cliente/obra).
+  const itensResolved: any[] | undefined = overriding
+    ? (itensOverride ?? undefined)
+    : ((itensQ.data as any[]) ?? undefined);
 
   const reloadOps = useCallback(async () => {
     setOps(await listOpsForCampo(campoId).catch(() => []));
@@ -147,19 +159,19 @@ export function useLevantamentoOffline(args: {
 
   // persiste snapshot sempre que o servidor traz dados frescos (base p/ offline)
   useEffect(() => {
-    if (campoQ.data && itensQ.data) {
+    if (campoQ.data && itensResolved) {
       const snap: CampoSnapshot = {
         campoId, contratoId, orcamentoId, companyId,
-        campo: campoQ.data, itensOrcamento: itensQ.data as any[], savedAt: Date.now(),
+        campo: campoQ.data, itensOrcamento: itensResolved, savedAt: Date.now(),
       };
       setSnapshot(snap);
       saveSnapshot(snap).catch(() => {});
     }
-  }, [campoQ.data, itensQ.data, campoId, contratoId, orcamentoId, companyId]);
+  }, [campoQ.data, itensResolved, campoId, contratoId, orcamentoId, companyId]);
 
   // base: servidor (online + carregado) senão snapshot local
   const base = (campoQ.data as any) ?? snapshot?.campo ?? null;
-  const itensOrcamento = (itensQ.data as any[]) ?? snapshot?.itensOrcamento ?? [];
+  const itensOrcamento = itensResolved ?? snapshot?.itensOrcamento ?? [];
   const cached = !!snapshot;
 
   const campo = useMemo(() => applyOps(base, ops), [base, ops]);

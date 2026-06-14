@@ -28,3 +28,20 @@ No client (`MedicaoLevantamento.tsx`) converte-se para pontos-PDF via `pageDims`
 (do onLoadSuccess do react-pdf) ANTES de chamar `calcularContorno`. Calibração
 (2 pontos → m/ponto) é obrigatória antes de medir. `bindItem` NÃO pode resetar
 `pagina` (schema salvarContorno tem `.default(1)`): passar `pagina: c.pagina ?? pagina`.
+
+## Duas fontes de itens vinculáveis (Cliente/obra vs Terceiros)
+A MESMA tela de Levantamento (`MedicaoLevantamento.tsx`) abre em 2 origens. Os
+itens que alimentam o combobox de vínculo + a consolidação em R$ vêm de fontes
+DIFERENTES: Cliente/obra → `medicao.getItensOrcamento({orcamentoId})`; Terceiros →
+`terceiroContratos.listarItens({contratoId})` (itens em `terceiro_contrato_itens`),
+pois contrato de terceiro NÃO tem orçamento de obra (`orcamentoId` 0/null).
+
+**Why:** assumir só a fonte de orçamento deixava o combobox vazio com a dica errada
+"sem orçamento vinculado" em medições de terceiro. O hook `useLevantamentoOffline`
+aceita `itensOverride` (undefined=query orçamento; null=carregando; array=resolvido)
+p/ a tela injetar a fonte certa sem duplicar a engine offline.
+
+**How to apply:** qualquer item passado como override deve ter `vendaUnitTotal`
+(consolidação usa essa chave) e `eapCodigo` (item de terceiro é folha → passa no
+`buildItensVinculaveis`). `contornos.orcamentoItemId` é integer SEM FK e guarda
+`itemEapCodigo`/`itemDescricao` denormalizados → salvar id de terceiro ali é seguro.

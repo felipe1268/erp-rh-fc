@@ -148,8 +148,30 @@ export default function MedicaoLevantamento() {
   const orcamentoId = (contrato as any)?.orcamentoId ?? 0;
   const voltarHref = isTerceiro ? `/terceiros/contratos/${contratoId}?tab=medicoes` : `/medicao/${contratoId}`;
 
+  // Rev. 3102 — Medição de TERCEIROS não tem orçamento de obra: os itens
+  // mensuráveis vêm do PRÓPRIO contrato (terceiro_contrato_itens). Buscamos esses
+  // itens e os mapeamos para o formato consolidável (vendaUnitTotal ← valorUnitario)
+  // p/ alimentar o combobox de vínculo e a consolidação em R$.
+  const terceiroItensQ = trpc.terceiroContratos.listarItens.useQuery(
+    { contratoId },
+    { enabled: isTerceiro && contratoId > 0 },
+  );
+  const itensOverride = useMemo<any[] | null | undefined>(() => {
+    if (!isTerceiro) return undefined;            // caminho normal (cliente/obra)
+    if (!terceiroItensQ.data) return null;         // ainda carregando
+    return ((terceiroItensQ.data as any).items ?? []).map((it: any) => ({
+      id: it.id,
+      eapCodigo: it.eapCodigo,
+      descricao: it.descricao,
+      unidade: it.unidade,
+      quantidade: it.quantidade,
+      vendaUnitTotal: it.valorUnitario,
+      vendaTotal: it.valorTotal,
+    }));
+  }, [isTerceiro, terceiroItensQ.data]);
+
   // Camada offline-first (Rev. 2895): une servidor + snapshot local + fila otimista.
-  const off = useLevantamentoOffline({ campoId, companyId, contratoId, orcamentoId });
+  const off = useLevantamentoOffline({ campoId, companyId, contratoId, orcamentoId, itensOverride });
   const campo = off.campo;
   const loadingCampo = off.loading;
   const itensOrcamento = off.itensOrcamento;
@@ -170,11 +192,18 @@ export default function MedicaoLevantamento() {
   // caminho de pavimento/etapa, p/ o combobox de busca + agrupamento.
   const itensVinculaveis = useMemo(() => buildItensVinculaveis(itensOrcamento as any[]), [itensOrcamento]);
   const vincularEmptyHint = useMemo(() => {
+    if (isTerceiro) {
+      if (terceiroItensQ.error) return "Não foi possível carregar os itens do contrato. Verifique a conexão e tente novamente.";
+      if (!terceiroItensQ.data) return undefined; // ainda carregando — não assustar
+      if ((itensOrcamento as any[]).length === 0) return "Este contrato não tem itens cadastrados. Adicione itens na aba \"Itens\" do contrato para vinculá-los.";
+      if (itensVinculaveis.length === 0) return "Os itens deste contrato não são mensuráveis.";
+      return undefined;
+    }
     if (!orcamentoId || orcamentoId <= 0) return "Este contrato não tem orçamento vinculado. Vincule um orçamento à obra para liberar os itens da planilha.";
     if ((itensOrcamento as any[]).length === 0) return "O orçamento vinculado está sem itens.";
     if (itensVinculaveis.length === 0) return "O orçamento só tem grupos/etapas, sem itens mensuráveis.";
     return undefined;
-  }, [orcamentoId, itensOrcamento, itensVinculaveis]);
+  }, [isTerceiro, terceiroItensQ.data, terceiroItensQ.error, orcamentoId, itensOrcamento, itensVinculaveis]);
 
   const jaMedidoLista = useMemo(() => {
     const itensById = new Map<number, any>((itensOrcamento as any[]).map((i) => [i.id, i]));
