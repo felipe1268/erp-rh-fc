@@ -1672,65 +1672,87 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
               const fimEfetivo = isFirst ? medicaoDataFim : autoFim;
               const periodoCalc = inicioEfetivo.slice(0, 7);
               return (
-                <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
-                  <h2 className="text-lg font-bold mb-1">Gerar Medição Automática</h2>
-                  <div className="flex items-center gap-3 mb-4">
-                    <span className="text-2xl font-bold text-blue-600">Medição {numStr}</span>
-                    {!isFirst && ultimaMedicao?.dataFim && (
-                      <span className="text-xs text-gray-400">Continuação da Medição {String(ultimaMedicao.numero).padStart(2, "0")}</span>
-                    )}
+                <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden">
+                  {/* Cabeçalho destacado */}
+                  <div className="bg-gradient-to-br from-blue-600 to-blue-700 px-6 pt-5 pb-6 text-white">
+                    <div className="flex items-center gap-1.5 text-blue-100 text-[11px] font-semibold uppercase tracking-wide mb-2">
+                      <Zap className="w-3.5 h-3.5" /> Gerar Medição Automática
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-3xl font-bold leading-none">Medição {numStr}</h2>
+                      {!isFirst && ultimaMedicao?.dataFim && (
+                        <span className="text-[11px] bg-white/20 px-2 py-0.5 rounded-full whitespace-nowrap">
+                          Continuação da {String(ultimaMedicao.numero).padStart(2, "0")}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-sm text-gray-500 mb-4">
-                    O sistema vai buscar o avanço físico atual de cada atividade no planejamento e calcular o valor a medir automaticamente.
-                  </p>
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label className="text-sm">Data Início</Label>
+
+                  <div className="p-6">
+                    {/* Explicação */}
+                    <div className="flex gap-2.5 p-3 bg-blue-50 rounded-xl mb-5">
+                      <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <p className="text-[13px] text-blue-900/80 leading-relaxed">
+                        O sistema busca o avanço físico atual de cada atividade no planejamento e calcula o valor a medir automaticamente.
+                      </p>
+                    </div>
+
+                    {/* Período */}
+                    <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Período da Medição</span>
+                    <div className="mt-2 flex items-end gap-2">
+                      <div className="flex-1 min-w-0">
+                        <Label htmlFor="medicao-data-inicio" className="text-[11px] text-gray-400 mb-1 block font-normal">Início</Label>
                         {isFirst ? (
-                          <Input className="mt-1" type="date" value={medicaoDataInicio} onChange={e => setMedicaoDataInicio(e.target.value)} />
+                          <Input id="medicao-data-inicio" className="h-11" type="date" value={medicaoDataInicio} onChange={e => setMedicaoDataInicio(e.target.value)} />
                         ) : (
-                          <div className="mt-1 px-3 py-2 bg-gray-100 rounded-md text-sm text-gray-700 border">{inicioEfetivo.split("-").reverse().join("/")}</div>
+                          <div id="medicao-data-inicio" className="h-11 flex items-center gap-2 px-3 bg-gray-50 rounded-md text-sm font-medium text-gray-700 border">
+                            <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />{inicioEfetivo.split("-").reverse().join("/")}
+                          </div>
                         )}
                       </div>
-                      <div>
-                        <Label className="text-sm">Data Fim</Label>
+                      <ChevronRight className="w-5 h-5 text-gray-300 flex-shrink-0 mb-3" />
+                      <div className="flex-1 min-w-0">
+                        <Label htmlFor="medicao-data-fim" className="text-[11px] text-gray-400 mb-1 block font-normal">Fim</Label>
                         {isFirst ? (
-                          <Input className="mt-1" type="date" value={medicaoDataFim} onChange={e => setMedicaoDataFim(e.target.value)} />
+                          <Input id="medicao-data-fim" className="h-11" type="date" value={medicaoDataFim} onChange={e => setMedicaoDataFim(e.target.value)} />
                         ) : (
-                          <div className="mt-1 px-3 py-2 bg-gray-100 rounded-md text-sm text-gray-700 border">{fimEfetivo.split("-").reverse().join("/")}</div>
+                          <div id="medicao-data-fim" className="h-11 flex items-center gap-2 px-3 bg-gray-50 rounded-md text-sm font-medium text-gray-700 border">
+                            <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />{fimEfetivo.split("-").reverse().join("/")}
+                          </div>
                         )}
                       </div>
                     </div>
                     {!isFirst && (
-                      <p className="text-xs text-gray-400">Período calculado automaticamente: início no dia seguinte à medição anterior, fim na data de hoje.</p>
+                      <p className="text-xs text-gray-400 mt-2">Período calculado automaticamente: início no dia seguinte à medição anterior, fim na data de hoje.</p>
                     )}
                     {contrato.docsComPendencia > 0 && (
-                      <div className="flex items-center gap-2 p-3 bg-yellow-50 rounded-lg text-yellow-700 text-xs">
-                        <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                        Existem {contrato.docsComPendencia} documento(s) pendentes. A medição será gerada mas poderá ser bloqueada para pagamento.
+                      <div className="flex items-start gap-2 p-3 bg-yellow-50 rounded-lg text-yellow-700 text-xs mt-4">
+                        <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                        <span>Existem {contrato.docsComPendencia} documento(s) pendentes. A medição será gerada mas poderá ser bloqueada para pagamento.</span>
                       </div>
                     )}
-                  </div>
-                  {gerarMedicaoMut.isPending && (
-                    <div className="mt-4 space-y-2">
-                      <div className="flex items-center gap-2 text-sm text-blue-600">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Gerando medição...
+
+                    {gerarMedicaoMut.isPending && (
+                      <div className="mt-4 space-y-2">
+                        <div className="flex items-center gap-2 text-sm text-blue-600">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Gerando medição...
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                          <div className="bg-blue-600 h-2.5 rounded-full" style={{ animation: "progress-indeterminate 1.5s ease-in-out infinite" }} />
+                        </div>
+                        <p className="text-xs text-gray-400">Vinculando itens ao planejamento e calculando avanço físico...</p>
+                        <style>{`@keyframes progress-indeterminate { 0% { width: 10%; margin-left: 0; } 50% { width: 60%; margin-left: 20%; } 100% { width: 10%; margin-left: 90%; } }`}</style>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
-                        <div className="bg-blue-600 h-2.5 rounded-full" style={{ animation: "progress-indeterminate 1.5s ease-in-out infinite" }} />
-                      </div>
-                      <p className="text-xs text-gray-400">Vinculando itens ao planejamento e calculando avanço físico...</p>
-                      <style>{`@keyframes progress-indeterminate { 0% { width: 10%; margin-left: 0; } 50% { width: 60%; margin-left: 20%; } 100% { width: 10%; margin-left: 90%; } }`}</style>
+                    )}
+
+                    <div className="flex gap-3 mt-6">
+                      <Button variant="outline" className="flex-1 h-11" onClick={() => setShowGerarMedicao(false)} disabled={gerarMedicaoMut.isPending}>Cancelar</Button>
+                      <Button className="flex-1 h-11 bg-blue-600 hover:bg-blue-700" disabled={gerarMedicaoMut.isPending}
+                        onClick={() => gerarMedicaoMut.mutate({ contratoId: id, companyId: contrato.companyId, periodo: periodoCalc, dataInicio: inicioEfetivo, dataFim: fimEfetivo, criadoPor: "Responsável" })}>
+                        <Zap className="w-4 h-4 mr-2" />{gerarMedicaoMut.isPending ? "Gerando..." : "Gerar Medição"}
+                      </Button>
                     </div>
-                  )}
-                  <div className="flex gap-3 mt-5 justify-end">
-                    <Button variant="outline" onClick={() => setShowGerarMedicao(false)} disabled={gerarMedicaoMut.isPending}>Cancelar</Button>
-                    <Button className="bg-blue-600 hover:bg-blue-700" disabled={gerarMedicaoMut.isPending}
-                      onClick={() => gerarMedicaoMut.mutate({ contratoId: id, companyId: contrato.companyId, periodo: periodoCalc, dataInicio: inicioEfetivo, dataFim: fimEfetivo, criadoPor: "Responsável" })}>
-                      <Zap className="w-4 h-4 mr-2" />{gerarMedicaoMut.isPending ? "Gerando..." : "Gerar Medição"}
-                    </Button>
                   </div>
                 </div>
               );

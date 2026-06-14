@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3070 — **CONTRATOS DE TERCEIROS · MODAL "GERAR MEDIÇÃO AUTOMÁTICA" REDESENHADO PARA NAVEGAÇÃO
+ * MAIS FÁCIL E OBJETIVA — CABEÇALHO AZUL DESTACADO, EXPLICAÇÃO EM CARD, PERÍODO "INÍCIO → FIM" CLARO E
+ * BOTÕES DE LARGURA IGUAL.**
+ *
+ * PEDIDO (print do iPad — IMG_2001, modal "Gerar Medição Automática · Medição 01" na aba Medições do
+ * Contrato de Terceiros): "Melhore este layout, precisa ser fácil e objetivo a navegabilidade". O modal
+ * antigo era um bloco branco plano: título pequeno, "Medição NN" solto, parágrafo cinza corrido e dois
+ * inputs de data lado a lado sem separação visual — pouca hierarquia.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE, ZERO schema/backend, ZERO mudança de lógica) em
+ * `client/src/pages/terceiros/contratos/ContratoDetalhe.tsx`: o card do modal virou `overflow-hidden`
+ * com (1) CABEÇALHO em gradiente azul (`from-blue-600 to-blue-700`) com o selo "GERAR MEDIÇÃO AUTOMÁTICA"
+ * + "Medição NN" grande (e badge "Continuação da NN" quando não é a 1ª); (2) a explicação foi pra um
+ * CARD `bg-blue-50` com ícone `Info`; (3) o período virou um bloco "Início → Fim" com label "PERÍODO DA
+ * MEDIÇÃO", os dois campos `flex-1 min-w-0` separados por um `ChevronRight`, inputs de data `h-11` (1ª
+ * medição = editáveis; continuação = chips read-only com ícone `Calendar`); (4) os botões "Cancelar" e
+ * "Gerar Medição" ficaram `flex-1 h-11` (largura igual). Preservados INTEGRALMENTE: cálculo de
+ * `proximoNumero`/`isFirst`/`autoInicio`/`autoFim`/`periodoCalc`, o aviso de docs pendentes, a barra de
+ * progresso indeterminada durante o `gerarMedicaoMut.isPending` e o payload do `gerarMedicaoMut.mutate`.
+ *
  * Rev. 3069 — **FINANCEIRO · ANÁLISE DE CUSTOS (DETALHE) · GRÁFICO "DISTRIBUIÇÃO POR MÊS" PERDE OS
  * RÓTULOS DE VALOR NO TOPO DAS BARRAS — ELES SE SOBREPUNHAM QUANDO VÁRIOS MESES TINHAM O MESMO VALOR,
  * VIRANDO UM BORRÃO ILEGÍVEL. O VALOR CONTINUA DISPONÍVEL AO TOCAR NA BARRA (TOOLTIP).**
