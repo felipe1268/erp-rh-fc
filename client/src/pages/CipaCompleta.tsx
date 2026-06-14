@@ -20,6 +20,7 @@ import {
   AlertTriangle, CheckCircle2, Clock, CalendarDays, UserCheck,
   FileText, RefreshCw, Vote, Award, ClipboardList, Link2, Copy, Send,
   Loader2, Trophy, BarChart3, ListChecks, Printer, ChevronLeft, ChevronRight,
+  History,
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 
@@ -388,6 +389,7 @@ export default function CipaCompleta() {
   }
 
   const selectedEleicao = (eleicoes as any[]).find((e: any) => e.id === selectedEleicaoId);
+  const isHistorico = eleicaoForm.tipoLancamento === "historico";
 
   useEffect(() => {
     if (!selectedEleicaoId && (eleicoes as any[]).length > 0) {
@@ -1069,6 +1071,35 @@ export default function CipaCompleta() {
         {/* Dialog: Novo Mandato */}
         <FullScreenDialog open={showEleicaoDialog} onClose={() => { setShowEleicaoDialog(false); setEleicaoForm({}); }} title="Novo Mandato / Eleição CIPA" icon={<Vote className="h-5 w-5 text-white" />}>
           <div className="w-full max-w-2xl mx-auto">
+            <div className="mb-5">
+              <label className="text-sm font-medium">Tipo de lançamento</label>
+              <div className="grid grid-cols-2 gap-2 mt-1.5">
+                <button
+                  type="button"
+                  onClick={() => setEleicaoForm({ ...eleicaoForm, tipoLancamento: "eleicao", statusEleicao: eleicaoForm.statusEleicao === "Concluida" ? "Planejamento" : eleicaoForm.statusEleicao })}
+                  className={`rounded-lg border p-3 text-left transition ${!isHistorico ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600" : "border-input hover:bg-muted/40"}`}
+                >
+                  <div className="font-medium text-sm flex items-center gap-2"><Vote className="h-4 w-4" /> Nova eleição</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">Planejar e conduzir uma eleição CIPA.</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEleicaoForm({ ...eleicaoForm, tipoLancamento: "historico", statusEleicao: "Concluida" })}
+                  className={`rounded-lg border p-3 text-left transition ${isHistorico ? "border-emerald-600 bg-emerald-50 ring-1 ring-emerald-600" : "border-input hover:bg-muted/40"}`}
+                >
+                  <div className="font-medium text-sm flex items-center gap-2"><History className="h-4 w-4" /> Mandato anterior</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">Registrar um mandato já concluído (histórico).</div>
+                </button>
+              </div>
+            </div>
+
+            {isHistorico && (
+              <div className="mb-4 flex items-start gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800">
+                <History className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>Lançamento de mandato anterior: informe o período (e a posse/eleição, se tiver). Ele entra como <strong>Concluído</strong> e você poderá cadastrar os membros pela aba "Membros".</span>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium">Início do Mandato *</label>
@@ -1078,32 +1109,40 @@ export default function CipaCompleta() {
                 <label className="text-sm font-medium">Fim do Mandato *</label>
                 <Input type="date" value={eleicaoForm.mandatoFim || ""} onChange={e => setEleicaoForm({ ...eleicaoForm, mandatoFim: e.target.value })} />
               </div>
-              <div>
-                <label className="text-sm font-medium">Status da Eleição</label>
-                <Select value={eleicaoForm.statusEleicao || "Planejamento"} onValueChange={v => setEleicaoForm({ ...eleicaoForm, statusEleicao: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Planejamento">Planejamento</SelectItem>
-                    <SelectItem value="Inscricoes">Inscrições</SelectItem>
-                    <SelectItem value="Campanha">Campanha</SelectItem>
-                    <SelectItem value="Votacao">Votação</SelectItem>
-                    <SelectItem value="Apuracao">Apuração</SelectItem>
-                    <SelectItem value="Concluida">Concluída</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Data do Edital</label>
-                <Input type="date" value={eleicaoForm.dataEdital || ""} onChange={e => setEleicaoForm({ ...eleicaoForm, dataEdital: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Inscrições Início</label>
-                <Input type="date" value={eleicaoForm.dataInscricaoInicio || ""} onChange={e => setEleicaoForm({ ...eleicaoForm, dataInscricaoInicio: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Inscrições Fim</label>
-                <Input type="date" value={eleicaoForm.dataInscricaoFim || ""} onChange={e => setEleicaoForm({ ...eleicaoForm, dataInscricaoFim: e.target.value })} />
-              </div>
+              {!isHistorico && (
+                <div>
+                  <label className="text-sm font-medium">Status da Eleição</label>
+                  <Select value={eleicaoForm.statusEleicao || "Planejamento"} onValueChange={v => setEleicaoForm({ ...eleicaoForm, statusEleicao: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Planejamento">Planejamento</SelectItem>
+                      <SelectItem value="Inscricoes">Inscrições</SelectItem>
+                      <SelectItem value="Campanha">Campanha</SelectItem>
+                      <SelectItem value="Votacao">Votação</SelectItem>
+                      <SelectItem value="Apuracao">Apuração</SelectItem>
+                      <SelectItem value="Concluida">Concluída</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {!isHistorico && (
+                <div>
+                  <label className="text-sm font-medium">Data do Edital</label>
+                  <Input type="date" value={eleicaoForm.dataEdital || ""} onChange={e => setEleicaoForm({ ...eleicaoForm, dataEdital: e.target.value })} />
+                </div>
+              )}
+              {!isHistorico && (
+                <div>
+                  <label className="text-sm font-medium">Inscrições Início</label>
+                  <Input type="date" value={eleicaoForm.dataInscricaoInicio || ""} onChange={e => setEleicaoForm({ ...eleicaoForm, dataInscricaoInicio: e.target.value })} />
+                </div>
+              )}
+              {!isHistorico && (
+                <div>
+                  <label className="text-sm font-medium">Inscrições Fim</label>
+                  <Input type="date" value={eleicaoForm.dataInscricaoFim || ""} onChange={e => setEleicaoForm({ ...eleicaoForm, dataInscricaoFim: e.target.value })} />
+                </div>
+              )}
               <div>
                 <label className="text-sm font-medium">Data da Eleição</label>
                 <Input type="date" value={eleicaoForm.dataEleicao || ""} onChange={e => setEleicaoForm({ ...eleicaoForm, dataEleicao: e.target.value })} />
@@ -1121,7 +1160,9 @@ export default function CipaCompleta() {
               <Button variant="outline" onClick={() => { setShowEleicaoDialog(false); setEleicaoForm({}); }}>Cancelar</Button>
               <Button onClick={() => {
                 if (!eleicaoForm.mandatoInicio || !eleicaoForm.mandatoFim) { toast.error("Informe início e fim do mandato"); return; }
-                createEleicao.mutate({ companyId, companyIds, ...eleicaoForm });
+                const { tipoLancamento, ...payload } = eleicaoForm;
+                payload.statusEleicao = isHistorico ? "Concluida" : (payload.statusEleicao || "Planejamento");
+                createEleicao.mutate({ companyId, companyIds, ...payload });
               }} disabled={createEleicao.isPending}>
                 {createEleicao.isPending ? "Salvando..." : "Criar Mandato"}
               </Button>

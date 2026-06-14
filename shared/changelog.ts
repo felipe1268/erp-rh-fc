@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3073 — **CIPA · ABA "MANDATOS/ELEIÇÕES" PASSA A PERMITIR LANÇAR MANDATOS ANTERIORES
+ * (HISTÓRICOS, JÁ CONCLUÍDOS) DE FORMA RÁPIDA, SEM TER DE PREENCHER TODO O FLUXO DE ELEIÇÃO.**
+ *
+ * PEDIDO (print do iPad — tela "CIPA › Mandatos/Eleições"): "quero poder ter como lançar os
+ * mandatos anteriores..". O diálogo "Novo Mandato" existente já aceitava datas passadas, mas era
+ * orientado a PLANEJAR uma nova eleição (campos de Edital, Inscrições Início/Fim, Status, etc.),
+ * tornando trabalhoso e confuso registrar um mandato que já aconteceu e está concluído.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE, ZERO schema/backend) em
+ * `client/src/pages/CipaCompleta.tsx`: o diálogo "Novo Mandato / Eleição CIPA" ganhou um seletor
+ * "Tipo de lançamento" no topo, com dois cards: **"Nova eleição"** (comportamento original, default)
+ * e **"Mandato anterior"** (histórico). Const derivada `isHistorico = eleicaoForm.tipoLancamento ===
+ * "historico"`. Ao escolher "Mandato anterior", o `statusEleicao` já é setado p/ `"Concluida"` e o
+ * formulário fica enxuto: ESCONDE os campos do processo eleitoral (Status, Data do Edital, Inscrições
+ * Início e Inscrições Fim) e mantém apenas Início do Mandato*, Fim do Mandato*, Data da Eleição, Data
+ * da Posse e Observações — além de um aviso `bg-emerald-50` explicando que o mandato entra como
+ * "Concluído" e que os membros podem ser cadastrados pela aba "Membros". No submit, o campo local
+ * `tipoLancamento` é removido do payload via desestruturação (o backend `eleicoes.create` por padrão
+ * descarta chaves desconhecidas, mas removemos por higiene) e, se histórico, `statusEleicao` é forçado
+ * p/ "Concluida". O backend (`server/routers/cipa.ts → eleicoes.create`) JÁ aceitava datas arbitrárias
+ * e qualquer status — nenhuma mudança foi necessária. A auto-seleção do "mandato ativo" (período que
+ * contém a data de hoje) NÃO é afetada: um mandato histórico tem período passado e não rouba a seleção.
+ * O valor "Concluida" (sem acento) já existe no mapa `STATUS_ELEICAO`, então o badge da tabela renderiza
+ * corretamente; o fluxo de Eleição Digital usa o valor acentuado "Concluída" e não é tocado por aqui.
+ *
  * Rev. 3072 — **CIPA · ABA "MEMBROS" PASSA A EXIBIR A FOTO DO COLABORADOR AO LADO DO NOME (MESMO
  * AVATAR REDONDO USADO NA BUSCA E NOS CANDIDATOS), CAINDO PARA A INICIAL QUANDO NÃO HÁ FOTO.**
  *
