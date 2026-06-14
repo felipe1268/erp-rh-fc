@@ -102,8 +102,9 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   const tabFromUrl = urlParams.get("tab") as Tab | null;
   const validTabs: Tab[] = ["itens", "medicoes", "comparativo", "documentos", "documento", "fd"];
   const [tab, setTab] = useState<Tab>(
-    tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl
+    tabFromUrl && validTabs.includes(tabFromUrl) && !(emModuloMedicoes && tabFromUrl === "documento") ? tabFromUrl
     : medicaoIdFromUrl ? "medicoes"
+    : emModuloMedicoes ? "medicoes"
     : "documento"
   );
   const [showGerarMedicao, setShowGerarMedicao] = useState(false);
@@ -165,6 +166,11 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
     setMedicaoDataInicio(inicioObra);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showGerarMedicao]);
+
+  // No módulo de Medições a aba de gestão "Contrato" (documento) não existe — bloqueia URLs antigas (?tab=documento)
+  useEffect(() => {
+    if (emModuloMedicoes && tab === "documento") setTab("medicoes");
+  }, [emModuloMedicoes, tab]);
 
   const recalcularDatasMut = trpc.terceiroContratos.recalcularDatasCronograma.useMutation({
     onSuccess: (r) => { toast.success(`Datas atualizadas do cronograma${r.usouEap ? " (via EAP)" : " (todas atividades)"}: ${fmtDate(r.dataInicio)} → ${fmtDate(r.dataTermino)}`); utils.terceiroContratos.getContrato.invalidate({ id }); },
@@ -440,8 +446,24 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
           )}
         </div>
 
+        {/* Contexto enxuto p/ medição — só no módulo de Medição de Terceiros */}
+        {emModuloMedicoes && (
+          <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+            {contrato.descricao && (
+              <span className="flex items-center gap-1.5 text-gray-600 min-w-0">
+                <FileText className="w-4 h-4 text-gray-400 shrink-0" />
+                <span className="truncate max-w-[460px]" title={contrato.descricao}>{contrato.descricao}</span>
+              </span>
+            )}
+            <span className="flex items-center gap-1.5 text-gray-600">
+              <ClipboardCheck className="w-4 h-4 text-gray-400 shrink-0" />
+              Dia da Medição: <strong className="text-gray-800">Dia {(contrato as any).diaMedicao ?? 25}</strong>
+            </span>
+          </div>
+        )}
+
         {/* Ações de Admin Master — cancelamento (soft) e exclusão definitiva (hard) */}
-        {isMaster && (
+        {isMaster && !emModuloMedicoes && (
           <div className="flex items-center gap-2 flex-wrap rounded-xl border border-red-200 bg-red-50/40 px-3 py-2">
             <span className="text-[10px] uppercase font-semibold tracking-wide text-red-600 flex items-center gap-1 mr-1">
               <Ban className="w-3.5 h-3.5" /> Admin Master
@@ -468,6 +490,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
         )}
 
         {/* Objeto do Contrato — escopo resumido e legível, editável p/ padronização */}
+        {!emModuloMedicoes && (
         <div className="rounded-xl border border-gray-200 bg-white p-4">
           <div className="flex items-center justify-between mb-1.5">
             <p className="text-[10px] text-gray-500 uppercase font-semibold tracking-wide">Objeto do Contrato</p>
@@ -523,9 +546,10 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
             <p className="text-sm text-gray-400 italic">Sem objeto definido. Clique em "Editar" para padronizar.</p>
           )}
         </div>
+        )}
 
         {/* Vigência do Contrato — destaque */}
-        {(() => {
+        {!emModuloMedicoes && (() => {
           const ini = contrato.dataInicio;
           const fim = contrato.dataTermino;
           const diasVigencia = ini && fim ? Math.ceil((new Date(fim + "T00:00:00").getTime() - new Date(ini + "T00:00:00").getTime()) / 86400000) : null;
@@ -641,7 +665,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
         })()}
 
         {/* Critérios de Medição e Pagamento */}
-        {(() => {
+        {!emModuloMedicoes && (() => {
           const dm = (contrato as any).diaMedicao ?? 25;
           const dp = (contrato as any).diaPagamento ?? 10;
           const pa = (contrato as any).prazoAprovacaoDias ?? 5;
@@ -782,7 +806,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
         })()}
 
         {/* Acesso ao Portal do Terceiro */}
-        {(() => {
+        {!emModuloMedicoes && (() => {
           const pl = (contrato as any).portalLogin;
           const empresaNome = contrato.empresa?.nomeFantasia || contrato.empresa?.razaoSocial || "—";
           return (
@@ -850,7 +874,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
         </div>
 
         {/* Orçamento vs Fechado */}
-        {showVariacao && (
+        {!emModuloMedicoes && showVariacao && (
           <div className={`rounded-xl border p-4 flex items-center gap-4 ${
             variacao > 0 ? "bg-red-50 border-red-200" :
             variacao < 0 ? "bg-green-50 border-green-200" :
@@ -895,7 +919,10 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
 
         {/* Tabs */}
         <div className="flex border-b border-gray-200">
-          {((["documento", "itens", "medicoes", "comparativo", "documentos"] as Tab[]).concat(
+          {((emModuloMedicoes
+            ? (["medicoes", "itens", "comparativo", "documentos"] as Tab[])
+            : (["documento", "itens", "medicoes", "comparativo", "documentos"] as Tab[])
+          ).concat(
             (contrato.naturezaIncluiMaterial || (contrato.fdMaterialRegistros?.length || 0) > 0) ? (["fd"] as Tab[]) : []
           )).map(t => (
             <button key={t} onClick={() => setTab(t)}

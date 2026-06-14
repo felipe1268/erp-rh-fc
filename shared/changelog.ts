@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3089 — **MEDIÇÃO DE TERCEIROS · REPAGINAÇÃO DA TELA DE DETALHE DO CONTRATO QUANDO ABERTA PELO
+ * MÓDULO DEDICADO: O LAYOUT FICA ENXUTO E FOCADO NO PROCESSO DE MEDIÇÃO — SOME TODA A GESTÃO DO CONTRATO
+ * QUE NÃO FAZ SENTIDO PARA QUEM ESTÁ MEDINDO.**
+ *
+ * PEDIDO (usuário, prints iPad): "repagine a tela... vamos focar no processo de medição aqui. Precisamos
+ * ser práticos, elimine o que não faz sentido para ter um layout limpo e fácil preenchimento." Ao clicar
+ * "Medir" no módulo "Medição Terceiros", a tela de detalhe do contrato (`/terceiros/contratos/:id`) abria
+ * com TODA a pilha de gestão do contrato antes das medições: ações de Admin Master (cancelar/excluir
+ * contrato), Objeto editável, Vigência com editar/recalcular, Critérios + Fluxograma de 6 passos, Acesso ao
+ * Portal do Terceiro e Orçamento×Fechado — muito scroll e contexto irrelevante para quem só quer medir.
+ *
+ * CAUSA-RAIZ: `ContratoDetalhe.tsx` renderiza a MESMA pilha de cards para os dois módulos. A Rev. 3088 já
+ * tornou a aba "Medições" ciente do módulo ativo (`emModuloMedicoes`), mas o RESTO da página continuava
+ * pesado de gestão de contrato.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE/SCHEMA/BACKEND): quando `emModuloMedicoes` (já calculado
+ * na Rev. 3088 via `useModule()`), a tela:
+ *   (1) abre DIRETO na aba "Medições" (default do `tab`);
+ *   (2) esconde os blocos de gestão do contrato: Admin Master (cancelar/excluir), Objeto do Contrato,
+ *       Vigência do Contrato (editar datas/atualizar do cronograma), Critérios de Medição + Fluxograma de
+ *       6 etapas, Acesso ao Portal do Terceiro e o card Orçamento×Fechado;
+ *   (3) acrescenta uma FAIXA DE CONTEXTO enxuta (objeto em 1 linha truncada + "Dia da Medição") no lugar
+ *       dos cards removidos;
+ *   (4) a barra de abas remove a aba "Contrato" (editor do documento) e põe "Medições" como PRIMEIRA.
+ * O Resumo financeiro (valores-chave) e as barras de progresso (avanço físico/financeiro) ficam mantidos
+ * por serem diretamente úteis à medição. Pelo módulo "Terceiros" (gestão do contrato) NADA muda — todos os
+ * cards, edições e a aba "Contrato" continuam 100% intactos. Arquivo único:
+ * `client/src/pages/terceiros/contratos/ContratoDetalhe.tsx`.
+ *
  * Rev. 3088 — **MEDIÇÃO DE TERCEIROS · A ABA "MEDIÇÕES" DO CONTRATO DEIXA DE SER CONFUSA QUANDO ABERTA PELO
  * PRÓPRIO MÓDULO DE MEDIÇÕES: SOME A MENSAGEM CONTRADITÓRIA "ABRIR MÓDULO DE MEDIÇÕES" (O USUÁRIO JÁ ESTÁ
  * NELE) E A EDIÇÃO JÁ VEM LIGADA.**
