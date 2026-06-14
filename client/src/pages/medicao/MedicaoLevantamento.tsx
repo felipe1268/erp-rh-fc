@@ -113,6 +113,15 @@ export default function MedicaoLevantamento() {
     return out.sort((a, b) => (a.eapCodigo || "").localeCompare(b.eapCodigo || "", undefined, { numeric: true }));
   }, [jaMedidoMap, itensOrcamento]);
 
+  // Rev. 3093 (T002/T003) — Contornos das OUTRAS medições do contrato, exibidos
+  // como camada de REFERÊNCIA clara/tracejada sobre a MESMA planta (pdfId+página).
+  // Ajuda o engenheiro a ver "o que já foi medido aqui" sem remedir.
+  const [verReferencia, setVerReferencia] = useState(false);
+  const { data: contornosRef } = trpc.medicao.getContornosReferencia.useQuery(
+    { contratoId, companyId, excluirCampoId: campoId },
+    { enabled: verReferencia && contratoId > 0 && campoId > 0 && companyId > 0 },
+  );
+
   const invalidate = () => {
     utils.medicao.getCampo.invalidate({ id: campoId, companyId });
   };
@@ -176,6 +185,14 @@ export default function MedicaoLevantamento() {
   const contornosPagina = useMemo(
     () => ((campo?.contornos ?? []) as any[]).filter((c) => c.pdfId === pdfSelId && (c.pagina ?? 1) === pagina),
     [campo, pdfSelId, pagina],
+  );
+
+  // Rev. 3093 — referência (medições anteriores) filtrada p/ a planta+página atual.
+  const referenciaPagina = useMemo(
+    () => verReferencia
+      ? ((contornosRef ?? []) as any[]).filter((c) => c.pdfId === pdfSelId && (c.pagina ?? 1) === pagina)
+      : [],
+    [verReferencia, contornosRef, pdfSelId, pagina],
   );
 
   // --- geometria → metros (PDF points) ---
@@ -476,6 +493,20 @@ export default function MedicaoLevantamento() {
           {/* Coluna do PDF */}
           <div className="space-y-2">
             {/* seletor de plantas */}
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <p className="text-xs text-gray-500 flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5" />Plantas do contrato (compartilhadas em todas as medições)
+              </p>
+              <Button
+                size="sm"
+                variant={verReferencia ? "default" : "outline"}
+                className="h-8 gap-1.5"
+                onClick={() => setVerReferencia((v) => !v)}
+                title="Mostra, em traço claro, os contornos já medidos em OUTRAS medições deste contrato"
+              >
+                <History className="h-4 w-4" />Ver medição anterior
+              </Button>
+            </div>
             <div className="flex items-center gap-2 flex-wrap">
               {pdfs.map((p) => (
                 <button
@@ -573,6 +604,20 @@ export default function MedicaoLevantamento() {
                         onPointerDown={onCanvasPointerDown}
                       >
                         <svg className="absolute inset-0 w-full h-full" viewBox="0 0 1 1" preserveAspectRatio="none">
+                          {/* Rev. 3093 — REFERÊNCIA (medições anteriores): traço claro
+                              tracejado, renderizado ATRÁS dos contornos desta medição. */}
+                          {referenciaPagina.map((c) => {
+                            let pts: GeoPonto[] = [];
+                            try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
+                            const cor = c.cor || COR_TIPO[c.tipo as TipoContorno] || "#94a3b8";
+                            if (c.tipo === "contagem") {
+                              return pts.map((p, i) => <circle key={`ref-${c.id}-${i}`} cx={p.x} cy={p.y} r={0.007} fill="none" stroke={cor} strokeWidth={0.0025} strokeOpacity={0.5} vectorEffect="non-scaling-stroke" />);
+                            }
+                            const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ") + (c.tipo !== "perimetro" ? " Z" : "");
+                            return (
+                              <path key={`ref-${c.id}`} d={d} fill={c.tipo === "perimetro" ? "none" : cor} fillOpacity={c.tipo === "perimetro" ? 0 : 0.06} stroke={cor} strokeOpacity={0.5} strokeWidth={0.0025} strokeDasharray="0.012 0.008" vectorEffect="non-scaling-stroke" />
+                            );
+                          })}
                           {/* contornos salvos */}
                           {contornosPagina.map((c) => {
                             let pts: GeoPonto[] = [];

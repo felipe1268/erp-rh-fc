@@ -38,6 +38,87 @@ async function assertCompanyAccess(ctxUser: any, companyId: number) {
   }
 }
 
+// Rev. 3093 — Biblioteca de plantas POR CONTRATO. As plantas (PDFs) + calibração
+// deixam de pender de cada medição (medicao_campo) e passam a viver num campo
+// dedicado status="biblioteca" por (contrato, origem). Assim o upload é feito 1x e
+// TODAS as medições do contrato enxergam a mesma planta (sem reupload). Os contornos
+// e fotos seguem por medição (referenciando o pdf.id compartilhado). IDs de contrato
+// COLIDEM entre módulos → escopo sempre por origem ('terceiro' vs cliente/legado-NULL).
+const origemCampoCond = (origem: "cliente" | "terceiro") =>
+  origem === "terceiro"
+    ? eq(medicaoCampo.origem, "terceiro")
+    : sql`(${medicaoCampo.origem} IS DISTINCT FROM 'terceiro')`;
+
+async function resolverBibliotecaPlantas(
+  db: any,
+  companyId: number,
+  contratoId: number,
+  origem: "cliente" | "terceiro",
+): Promise<{ id: number }> {
+  // Find-or-create da biblioteca. Sem UNIQUE no schema (regra de ouro: nenhum
+  // ALTER), a corrida "duas abas criam a biblioteca ao mesmo tempo" geraria 2
+  // bibliotecas — e `getCampo` lê só a de menor id, "sumindo" com PDFs gravados
+  // na outra. Serializa via pg_advisory_xact_lock por (company, contrato, origem)
+  // dentro de uma transação: o 2º chamador espera, depois encontra a já criada.
+  const lockKey2 = contratoId * 2 + (origem === "terceiro" ? 1 : 0);
+  return await db.transaction(async (tx: any) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${companyId}::int, ${lockKey2}::int)`);
+    const [lib] = await tx
+      .select({ id: medicaoCampo.id })
+      .from(medicaoCampo)
+      .where(and(
+        eq(medicaoCampo.companyId, companyId),
+        eq(medicaoCampo.contratoId, contratoId),
+        eq(medicaoCampo.status, "biblioteca"),
+        origemCampoCond(origem),
+        isNull(medicaoCampo.deletedAt),
+      ))
+      .orderBy(medicaoCampo.id)
+      .limit(1);
+    if (lib) return lib;
+    const [novo] = await tx.insert(medicaoCampo).values({
+      companyId,
+      contratoId,
+      numero: 0,
+      titulo: "Plantas do contrato",
+      status: "biblioteca",
+      origem,
+      medicaoId: null,
+    }).returning({ id: medicaoCampo.id });
+    return novo;
+  });
+}
+
+// Move plantas soltas (que ainda pendem de campos-medição) para a biblioteca do
+// contrato. Idempotente: preserva o pdf.id (contornos seguem referenciando-o) e,
+// após a 1ª execução, o WHERE não casa mais nada (no-op). Suporta a auto-cura de
+// contratos antigos cujas plantas foram enviadas antes da Rev. 3093.
+async function migrarPlantasParaBiblioteca(
+  db: any,
+  companyId: number,
+  contratoId: number,
+  origem: "cliente" | "terceiro",
+  bibliotecaId: number,
+): Promise<void> {
+  const camposNaoBiblioteca = db
+    .select({ id: medicaoCampo.id })
+    .from(medicaoCampo)
+    .where(and(
+      eq(medicaoCampo.companyId, companyId),
+      eq(medicaoCampo.contratoId, contratoId),
+      origemCampoCond(origem),
+      sql`${medicaoCampo.status} IS DISTINCT FROM 'biblioteca'`,
+    ));
+  await db.update(medicaoCampoPdfs)
+    .set({ medicaoCampoId: bibliotecaId, atualizadoEm: new Date() })
+    .where(and(
+      eq(medicaoCampoPdfs.companyId, companyId),
+      isNull(medicaoCampoPdfs.deletedAt),
+      sql`${medicaoCampoPdfs.medicaoCampoId} <> ${bibliotecaId}`,
+      inArray(medicaoCampoPdfs.medicaoCampoId, camposNaoBiblioteca),
+    ));
+}
+
 export const medicaoRouter = router({
 
   listarContratos: protectedProcedure
@@ -710,6 +791,9 @@ export const medicaoRouter = router({
           eq(medicaoCampo.companyId, input.companyId),
           eq(medicaoCampo.contratoId, input.contratoId),
           isNull(medicaoCampo.deletedAt),
+          // Rev. 3093 — a biblioteca de plantas é um campo interno (status="biblioteca");
+          // NÃO é um levantamento de medição e não aparece na listagem.
+          sql`${medicaoCampo.status} IS DISTINCT FROM 'biblioteca'`,
           // Sem `origem` explícito = escopo CLIENTE (legado: origem NULL/'cliente').
           // O fluxo de terceiros SEMPRE passa origem:"terceiro". JAMAIS cair em filtro
           // aberto (`true`): contratos homônimos de módulos distintos se misturariam.
@@ -737,7 +821,10 @@ export const medicaoRouter = router({
 
   getCampo: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      // Rev. 3093 — read-path passou a ESCREVER (migração p/ biblioteca), então
+      // reforça o guard de empresa (antes confiava só no eq(companyId) do input).
+      await assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const [campo] = await db
         .select()
@@ -745,10 +832,21 @@ export const medicaoRouter = router({
         .where(and(eq(medicaoCampo.id, input.id), eq(medicaoCampo.companyId, input.companyId)))
         .limit(1);
       if (!campo) return null;
+      // Rev. 3093 — as plantas (PDFs) vêm da BIBLIOTECA do contrato (compartilhadas
+      // por todas as medições), não do campo-medição. Resolve/cria a biblioteca,
+      // migra plantas legadas soltas e lê os PDFs de lá. Se o próprio campo já é a
+      // biblioteca, lê dele mesmo.
+      const origemNorm: "cliente" | "terceiro" = campo.origem === "terceiro" ? "terceiro" : "cliente";
+      let pdfCampoId = campo.id;
+      if (campo.status !== "biblioteca") {
+        const lib = await resolverBibliotecaPlantas(db, input.companyId, campo.contratoId, origemNorm);
+        await migrarPlantasParaBiblioteca(db, input.companyId, campo.contratoId, origemNorm, lib.id);
+        pdfCampoId = lib.id;
+      }
       const pdfs = await db
         .select()
         .from(medicaoCampoPdfs)
-        .where(and(eq(medicaoCampoPdfs.medicaoCampoId, campo.id), eq(medicaoCampoPdfs.companyId, input.companyId), isNull(medicaoCampoPdfs.deletedAt)))
+        .where(and(eq(medicaoCampoPdfs.medicaoCampoId, pdfCampoId), eq(medicaoCampoPdfs.companyId, input.companyId), isNull(medicaoCampoPdfs.deletedAt)))
         .orderBy(medicaoCampoPdfs.ordem, medicaoCampoPdfs.id);
       const contornos = await db
         .select()
@@ -820,6 +918,72 @@ export const medicaoRouter = router({
       return rows
         .filter((r) => r.orcamentoItemId != null)
         .map((r) => ({ orcamentoItemId: r.orcamentoItemId as number, quantidade: Number(r.quantidade) || 0 }));
+    }),
+
+  // Rev. 3093 — Contornos de OUTRAS medições do contrato, p/ exibir como REFERÊNCIA
+  // (camada clara) o que já foi medido antes sobre a MESMA planta. Read-only,
+  // tenant-guard por companyId + escopo por origem do campo atual (igual
+  // getHistoricoQuantidades). Exclui o campo atual e a biblioteca (sem contornos).
+  getContornosReferencia: protectedProcedure
+    .input(z.object({ contratoId: z.number(), companyId: z.number(), excluirCampoId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const [atual] = await db
+        .select({ origem: medicaoCampo.origem })
+        .from(medicaoCampo)
+        .where(and(
+          eq(medicaoCampo.id, input.excluirCampoId),
+          eq(medicaoCampo.companyId, input.companyId),
+          eq(medicaoCampo.contratoId, input.contratoId),
+        ))
+        .limit(1);
+      if (!atual) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Levantamento de campo inválido para este contrato/empresa." });
+      }
+      const origemNorm: "cliente" | "terceiro" = atual.origem === "terceiro" ? "terceiro" : "cliente";
+      const campos = await db
+        .select({ id: medicaoCampo.id, numero: medicaoCampo.numero, titulo: medicaoCampo.titulo })
+        .from(medicaoCampo)
+        .where(and(
+          eq(medicaoCampo.companyId, input.companyId),
+          eq(medicaoCampo.contratoId, input.contratoId),
+          isNull(medicaoCampo.deletedAt),
+          sql`${medicaoCampo.status} IS DISTINCT FROM 'biblioteca'`,
+          origemCampoCond(origemNorm),
+        ));
+      const tituloMap = new Map<number, { numero: number; titulo: string | null }>(
+        campos.map((c) => [c.id, { numero: c.numero, titulo: c.titulo }]),
+      );
+      const ids = campos.map((c) => c.id).filter((id) => id !== input.excluirCampoId);
+      if (ids.length === 0) return [] as any[];
+      const rows = await db
+        .select({
+          id: medicaoCampoContornos.id,
+          medicaoCampoId: medicaoCampoContornos.medicaoCampoId,
+          pdfId: medicaoCampoContornos.pdfId,
+          pagina: medicaoCampoContornos.pagina,
+          tipo: medicaoCampoContornos.tipo,
+          cor: medicaoCampoContornos.cor,
+          geometriaJson: medicaoCampoContornos.geometriaJson,
+          numero: medicaoCampoContornos.numero,
+          rotulo: medicaoCampoContornos.rotulo,
+          quantidade: medicaoCampoContornos.quantidade,
+          unidade: medicaoCampoContornos.unidade,
+        })
+        .from(medicaoCampoContornos)
+        .where(and(
+          inArray(medicaoCampoContornos.medicaoCampoId, ids),
+          eq(medicaoCampoContornos.companyId, input.companyId),
+          isNull(medicaoCampoContornos.deletedAt),
+        ))
+        .orderBy(medicaoCampoContornos.id);
+      return rows.map((r) => ({
+        ...r,
+        quantidade: r.quantidade != null ? Number(r.quantidade) : null,
+        campoNumero: tituloMap.get(r.medicaoCampoId)?.numero ?? null,
+        campoTitulo: tituloMap.get(r.medicaoCampoId)?.titulo ?? null,
+      }));
     }),
 
   criarCampo: protectedProcedure
@@ -919,24 +1083,32 @@ export const medicaoRouter = router({
       numPaginas: z.number().optional(),
       uuid: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      // Rev. 3093 — reforça o guard de empresa (escrita de planta na biblioteca).
+      await assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       const [campo] = await db
-        .select({ id: medicaoCampo.id })
+        .select({ id: medicaoCampo.id, contratoId: medicaoCampo.contratoId, origem: medicaoCampo.origem, status: medicaoCampo.status })
         .from(medicaoCampo)
         .where(and(eq(medicaoCampo.id, input.medicaoCampoId), eq(medicaoCampo.companyId, input.companyId)))
         .limit(1);
       if (!campo) throw new TRPCError({ code: "NOT_FOUND", message: "Medição não encontrada ou sem permissão." });
+      // Rev. 3093 — a planta é enviada à BIBLIOTECA do contrato (1x, compartilhada por
+      // todas as medições), não ao campo-medição que disparou o upload.
+      const origemNorm: "cliente" | "terceiro" = campo.origem === "terceiro" ? "terceiro" : "cliente";
+      const destinoCampoId = campo.status === "biblioteca"
+        ? campo.id
+        : (await resolverBibliotecaPlantas(db, input.companyId, campo.contratoId, origemNorm)).id;
       const buf = Buffer.from(input.base64, "base64");
-      const key = `medicao-campo/${input.companyId}/${input.medicaoCampoId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.pdf`;
+      const key = `medicao-campo/${input.companyId}/${destinoCampoId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.pdf`;
       const { url } = await storagePut(key, buf, input.contentType || "application/pdf");
       const [ordemRow] = await db
         .select({ max: sql<number>`COALESCE(MAX(ordem),0)::int` })
         .from(medicaoCampoPdfs)
-        .where(eq(medicaoCampoPdfs.medicaoCampoId, input.medicaoCampoId));
+        .where(eq(medicaoCampoPdfs.medicaoCampoId, destinoCampoId));
       const [row] = await db.insert(medicaoCampoPdfs).values({
         companyId: input.companyId,
-        medicaoCampoId: input.medicaoCampoId,
+        medicaoCampoId: destinoCampoId,
         uuid: input.uuid,
         nome: input.nome,
         tipo: input.tipo,

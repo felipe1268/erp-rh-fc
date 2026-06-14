@@ -1,6 +1,50 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3093 — **MEDIÇÃO/LEVANTAMENTO DE CAMPO · AS PLANTAS (PDF) PASSAM A VIVER NO NÍVEL DO CONTRATO
+ * (BIBLIOTECA COMPARTILHADA: ENVIA 1x, TODAS AS MEDIÇÕES ENXERGAM) E CADA LEVANTAMENTO PODE EXIBIR,
+ * COMO REFERÊNCIA CLARA/TRACEJADA, OS CONTORNOS JÁ MEDIDOS NAS MEDIÇÕES ANTERIORES DO MESMO CONTRATO.**
+ *
+ * PEDIDO (usuário, Task #89 — Incremento 1 de uma repaginação maior): no Levantamento de Campo, a planta
+ * estava amarrada a CADA medição/campo, obrigando a reenviar (e recalibrar) o mesmo PDF a cada nova
+ * medição. O usuário quer enviar a planta UMA vez por contrato e reusá-la em todas as medições; e quer
+ * VER por cima, em traço fraco, o que já foi medido antes — para não remedir a mesma região.
+ *
+ * CAUSA-RAIZ: o `medicao_campo_pdfs` referenciava o `medicao_campo` da medição específica; `getCampo`
+ * lia os PDFs DAQUELE campo e `uploadPdf` inseria NAQUELE campo. Não havia um "dono" do PDF no nível do
+ * contrato, então plantas (e a calibração, que vive no próprio PDF) não eram compartilhadas. Também não
+ * existia leitura cruzada dos contornos das outras medições para servir de referência visual.
+ *
+ * SOLUÇÃO (BACKEND ADITIVO + FRONTEND, ZERO ALTER/DROP/DELETE/SCHEMA — reaproveita as tabelas
+ * `medicao_campo`/`medicao_campo_pdfs`/`medicao_campo_contornos` existentes):
+ *   ARQUITETURA "BIBLIOTECA DE PLANTAS" sem schema novo — a biblioteca é um `medicao_campo` dedicado
+ *   por (contrato, origem) com `status="biblioteca"`, `numero=0`, `medicaoId=NULL`. Os PDFs (e sua
+ *   calibração) vivem nessa biblioteca; os contornos/fotos seguem por medição referenciando o `pdf.id`
+ *   compartilhado (preservado na migração → contornos legados continuam válidos).
+ *   (1) `server/routers/medicao.ts` — helpers `resolverBibliotecaPlantas` (find-or-create da biblioteca),
+ *       `migrarPlantasParaBiblioteca` (UPDATE idempotente que move PDFs soltos de campos não-biblioteca
+ *       para a biblioteca, preservando `pdf.id`) e `origemCampoCond` (escopo cliente×terceiro).
+ *   (2) `getCampo` — resolve a biblioteca do (contrato, origem do campo), roda a migração idempotente
+ *       (padrão self-heal) e retorna os PDFs DA BIBLIOTECA (contornos/fotos seguem por medição). Se o
+ *       próprio campo já é a biblioteca, lê dele mesmo.
+ *   (3) `uploadPdf` — insere a planta na BIBLIOTECA do contrato (resolvida via o campo informado), não
+ *       no campo da medição que disparou o envio. `listarCampos` passa a EXCLUIR `status="biblioteca"`
+ *       (a biblioteca é interna, não é um levantamento listável).
+ *   (4) nova proc read-only `getContornosReferencia({contratoId, companyId, excluirCampoId})`
+ *       (protectedProcedure + `assertCompanyAccess`; escopo por origem do campo atual, igual ao
+ *       `getHistoricoQuantidades`): retorna os contornos de OUTRAS medições do contrato (exclui a atual
+ *       e a biblioteca) com `pdfId/pagina/tipo/cor/geometriaJson/numero/rotulo/quantidade/unidade`.
+ *   (5) `client/src/pages/medicao/MedicaoLevantamento.tsx` — rótulo "Plantas do contrato (compartilhadas
+ *       em todas as medições)"; toggle "Ver medição anterior" que dispara `getContornosReferencia`
+ *       (enabled só quando ligado); camada SVG da referência (traço fraco, `strokeDasharray`,
+ *       opacidade baixa) renderizada ATRÁS dos contornos da medição atual, filtrada por `pdfId`+página.
+ *
+ * RESSALVA/DRIFT: este é o Incremento 1 (itens F+G do pedido). O Incremento 2 — desenho fluido, zoom por
+ * pinça, PDF sempre em P&B, ferramenta PAREDE (linha×altura→m²) e layout de produção — fica para revisões
+ * seguintes (não dependem de onde a planta é guardada). A migração das plantas soltas → biblioteca roda
+ * de forma idempotente no `getCampo` (escala atual de dados é trivial). Engine compartilhada entre Medição
+ * de Cliente e de Terceiros via `?origem=terceiro` (Rev. 3090) — a biblioteca é escopada por (contrato, origem).
+ *
  * Rev. 3092 — **MEDIÇÃO/LEVANTAMENTO DE CAMPO · O VISUALIZADOR DE PLANTAS (PDF) VOLTA A RENDERIZAR:
  * O "ERRO AO CARREGAR PDF" ERA UM CONFLITO DE VERSÃO ENTRE O pdf.js DA API (react-pdf) E O DO WORKER.**
  *
