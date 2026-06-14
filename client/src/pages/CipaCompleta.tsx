@@ -31,6 +31,22 @@ function formatDate(d: string | null | undefined) {
   return d;
 }
 
+// Mandato CIPA = 1 ano (NR-5). Soma/subtrai N anos de uma data "YYYY-MM-DD".
+// Sem new Date() (evita bug de fuso iOS). Clampa 29/02 → 28/02 quando o ano-destino
+// não é bissexto, pra não gerar data inválida que o <input type="date"> descarta.
+function addYearsStr(s: string, n: number): string {
+  if (!s) return "";
+  const [y, m, d] = s.split("-");
+  if (!y || !m || !d) return "";
+  const ny = Number(y) + n;
+  let nd = d;
+  if (m === "02" && d === "29") {
+    const bissexto = (ny % 4 === 0 && ny % 100 !== 0) || ny % 400 === 0;
+    if (!bissexto) nd = "28";
+  }
+  return `${String(ny).padStart(4, "0")}-${m}-${nd}`;
+}
+
 const STATUS_ELEICAO: Record<string, { label: string; color: string; bg: string }> = {
   Planejamento: { label: "Planejamento", color: "text-gray-700", bg: "bg-gray-100" },
   Inscricoes: { label: "Inscrições", color: "text-blue-700", bg: "bg-blue-100" },
@@ -1103,11 +1119,11 @@ export default function CipaCompleta() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium">Início do Mandato *</label>
-                <Input type="date" value={eleicaoForm.mandatoInicio || ""} onChange={e => setEleicaoForm({ ...eleicaoForm, mandatoInicio: e.target.value })} />
+                <Input type="date" value={eleicaoForm.mandatoInicio || ""} onChange={e => { const v = e.target.value; setEleicaoForm((f: any) => ({ ...f, mandatoInicio: v, mandatoFim: addYearsStr(v, 1) })); }} />
               </div>
               <div>
                 <label className="text-sm font-medium">Fim do Mandato *</label>
-                <Input type="date" value={eleicaoForm.mandatoFim || ""} onChange={e => setEleicaoForm({ ...eleicaoForm, mandatoFim: e.target.value })} />
+                <Input type="date" value={eleicaoForm.mandatoFim || ""} onChange={e => { const v = e.target.value; setEleicaoForm((f: any) => ({ ...f, mandatoFim: v, mandatoInicio: addYearsStr(v, -1) })); }} />
               </div>
               {!isHistorico && (
                 <div>

@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3074 — **CIPA · DIÁLOGO "NOVO MANDATO / ELEIÇÃO" GANHA AUTO-PREENCHIMENTO DO PERÍODO: AO
+ * DIGITAR O INÍCIO DO MANDATO, O FIM É CALCULADO SOZINHO (+1 ANO, PADRÃO NR-5) E VICE-VERSA.**
+ *
+ * PEDIDO (print do iPad — "Novo Mandato / Eleição CIPA"): "automatize esta tela, quando digitar a
+ * data de inicio já seja preenchido a final. ou vice versa. para facilitar a vida do usuário". O
+ * mandato da CIPA é de 1 ano (NR-5), então preencher as duas datas manualmente era trabalho dobrado.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE, ZERO schema/backend) em
+ * `client/src/pages/CipaCompleta.tsx`: novo helper puro `addYearsStr(s, n)` que soma/subtrai N anos
+ * de uma data ISO "YYYY-MM-DD" por manipulação de string (sem `new Date()`, evitando o bug de fuso do
+ * iOS Safari — ver memória `ios-date-string-crash`). Os dois `<Input type="date">` do período passaram
+ * a usar updater funcional: ao mudar "Início do Mandato", grava `mandatoInicio` E recalcula
+ * `mandatoFim = addYearsStr(v, +1)`; ao mudar "Fim do Mandato", grava `mandatoFim` E recalcula
+ * `mandatoInicio = addYearsStr(v, -1)`. É bidirecional e idempotente; limpar um campo limpa o outro
+ * (addYearsStr("") → ""). Vale tanto p/ "Nova eleição" quanto p/ "Mandato anterior" (mesmos campos).
+ * O usuário ainda pode ajustar qualquer das datas manualmente depois (a recalculada é só o atalho do
+ * gesto). Datas dos demais marcos (Edital/Inscrições/Eleição/Posse) seguem livres.
+ *
  * Rev. 3073 — **CIPA · ABA "MANDATOS/ELEIÇÕES" PASSA A PERMITIR LANÇAR MANDATOS ANTERIORES
  * (HISTÓRICOS, JÁ CONCLUÍDOS) DE FORMA RÁPIDA, SEM TER DE PREENCHER TODO O FLUXO DE ELEIÇÃO.**
  *
