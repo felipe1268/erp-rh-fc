@@ -1,6 +1,49 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3067 — **PADRONIZAÇÃO GLOBAL DE MOEDA: VARREDURA EM TODO O ERP PARA ELIMINAR AS ABREVIAÇÕES DE
+ * VALOR ("R$ X mil" / "R$ X,X mi" / "R$ XK" / "R$ XM" / "R$ Xk") — AGORA TUDO EXIBE O VALOR COMPLETO EM
+ * BRL POR EXTENSO (R$ 51.929,02 — PONTO P/ MILHAR, VÍRGULA P/ CENTAVOS), EM TELAS, TABELAS, KPIs, RÓTULOS
+ * E EIXOS DE GRÁFICOS.**
+ *
+ * PEDIDO (print do iPad — IMG_1995, gráfico "Distribuição por Mês — 2026" da Análise de Custos com eixos
+ * "R$ 7 mil"/"R$ 60 mil"): "Faça uma varredura em TODO o ERP e deixe tudo em número completo com ponto e
+ * vírgula (R$ 51.929,02) para padronizar tudo". A Rev. 3063 já tinha trocado as CÉLULAS da tabela mensal
+ * da Análise de Custos para `formatBRL`, mas manteve a abreviação `BRLk` nos EIXOS/RÓTULOS dos gráficos
+ * "p/ caber" — e o mesmo formato compacto existia espalhado em vários outros módulos.
+ *
+ * CONTEXTO: a preferência canônica do usuário (replit.md) já é "Moeda SEMPRE em formato BRL pt-BR
+ * (R$ 100.000,00)". O que faltava era ELIMINAR os formatadores compactos remanescentes. Varredura
+ * (`rg` escopado a `client/src`) mapeou TODOS os formatadores de moeda compacta — distinguindo-os de
+ * usos de `/1000` que NÃO são moeda (segundos em ProcessosTrabalhistas/Migration/Locados/Oraculo; km em
+ * PrecosCombustivel) e do "mil" por extenso de contratos (numeroExtenso.ts/contratoPjDocument.ts/
+ * ContratoPJView.tsx), que foram preservados.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE, ZERO schema/backend). Dois padrões de edição:
+ *  (1) FORMATADORES NOMEADOS — o corpo passou a delegar SEMPRE ao formatador completo do próprio arquivo
+ *      (`toLocaleString("pt-BR",{style:"currency",currency:"BRL"})`), sem ramos de abreviação:
+ *      `BRLk` em `FinanceiroAnaliseCustos.tsx`, `FinanceiroAnaliseCustosDetalhe.tsx` e
+ *      `FinanceiroAnaliseCFO.tsx` (este também trocou `BRL` de `maximumFractionDigits:0` p/ 2 casas);
+ *      `BRLShort` em `PrevisaoCaixa.tsx`; `fmtBRLShort` em `DashAvisoPrevio.tsx` e `DashFerias.tsx`;
+ *      `fmtBRLAxis` em `DashParceiros.tsx`; `formatBRL` em `DashboardObras.tsx`; `formatBRL(v,compact)`
+ *      em `PainelOrcamento.tsx` (parâmetro `compact` agora IGNORADO → sempre completo); `fmtK` em
+ *      `FrotasAnalitico.tsx`.
+ *  (2) tickFormatters/labels INLINE — a expressão compacta foi trocada por um `Intl.NumberFormat` BRL
+ *      completo inline, e nos eixos verticais com largura pequena a `width` do `<YAxis>` foi aumentada
+ *      (p/ ~108) p/ o valor completo não ser cortado: `FinanceiroContasAReceber.tsx`,
+ *      `FinanceiroCronograma.tsx`, `PlanejamentoDetalhe.tsx` (2 tickFormatters + 1 LabelList, +width),
+ *      `OrcamentoBdiIndicadores.tsx` (label do eixo SVG + tickFormatter), `PortalPlanejamentoCliente.tsx`
+ *      (2 eixos idênticos, +width), `ManutencoesDashboard.tsx`/`CombustivelDashboard.tsx`/
+ *      `PedagiosDashboard.tsx` (eixos Y +width e eixos X), `FrotasAnalitico.tsx` (eixo X → `fmt`).
+ *
+ * EFEITO: em TODO o ERP os valores monetários aparecem no mesmo formato completo R$ X.XXX,XX. Os nomes
+ * dos formatadores ("Short"/"k"/"Axis") foram mantidos p/ minimizar o diff — só o COMPORTAMENTO mudou.
+ *
+ * RESSALVA: como os eixos de gráfico agora mostram o valor completo (mais largo), a `width` de alguns
+ * `<YAxis>` foi aumentada p/ evitar clipping; gráficos muito estreitos podem ter menos ticks visíveis —
+ * é o trade-off explícito do pedido ("padronizar tudo"). Nenhum valor persistido, documento ou cálculo
+ * foi alterado — é puramente formatação de exibição.
+ *
  * Rev. 3066 — **AVISO PRÉVIO · CIPEIRO (ESTABILIDADE PROVISÓRIA): O CARD DA "INDENIZAÇÃO DO PERÍODO DE
  * ESTABILIDADE" GANHA UMA BARRA "TOTAL GERAL (RESCISÃO + INDENIZAÇÃO ESTABILIDADE)" SOMANDO O TOTAL LÍQUIDO
  * DA RESCISÃO COM A INDENIZAÇÃO — ANTES SÓ MOSTRAVA OS DOIS TOTAIS SEPARADOS.**

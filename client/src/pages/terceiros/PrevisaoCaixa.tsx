@@ -10,11 +10,8 @@ import {
 } from "lucide-react";
 
 const BRL = (v: any) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(v) || 0);
-const BRLShort = (v: number) => {
-  if (v >= 1000000) return `${(v / 1000000).toFixed(1)}M`;
-  if (v >= 1000) return `${(v / 1000).toFixed(1)}k`;
-  return v.toFixed(0);
-};
+// Rev. 3067 — padronização: SEMPRE valor completo em BRL (R$ X.XXX,XX), sem abreviar.
+const BRLShort = (v: number) => BRL(v);
 const fmtSemana = (s: string) => {
   if (!s) return "—";
   const [, m, d] = s.split("-");

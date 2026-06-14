@@ -25,11 +25,8 @@ const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", cur
 // Versão "short" mantida apenas para eixos de gráfico (onde o espaço é apertado).
 // KPIs, tabelas e drill-downs usam o valor completo em R$ por preferência do usuário.
 const fmtBRLShort = (v: number) => fmtBRL(v);
-const fmtBRLAxis = (v: number) => {
-  if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mi`;
-  if (v >= 1_000) return `R$ ${(v / 1_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil`;
-  return fmtBRL(v);
-};
+// Rev. 3067 — padronização: SEMPRE valor completo em BRL (R$ X.XXX,XX), sem abreviar.
+const fmtBRLAxis = (v: number) => fmtBRL(v);
 const fmtDateBR = (s: string | null | undefined) => {
   if (!s) return "—";
   const d = String(s).slice(0, 10);

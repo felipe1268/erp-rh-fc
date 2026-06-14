@@ -4710,7 +4710,7 @@ function AbaCronoFinanceiro({ curvaS, valorContrato }: { curvaS: any[]; valorCon
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="semana" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => (v / 1000).toFixed(0) + "k"} />
+              <YAxis width={108} tick={{ fontSize: 10 }} tickFormatter={(v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0)} />
               <Tooltip formatter={(v: any) => v == null ? "—" : fmtMoeda(Number(v))} />
               <Area type="monotone" dataKey="previstoR$" stroke="none" fill="url(#prevR)" />
               <Area type="monotone" dataKey="realizadoR$" stroke="none" fill="url(#realR)" />
@@ -4850,7 +4850,7 @@ function AbaCustoRh({ efetivoMensal }: { efetivoMensal: any[] }) {
             <ComposedChart data={dadosGrafico}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => (v / 1000).toFixed(0) + "k"} />
+              <YAxis width={108} tick={{ fontSize: 10 }} tickFormatter={(v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0)} />
               <Tooltip formatter={(v: any) => fmtMoeda(Number(v))} />
               <Line type="monotone" dataKey="Direto" stroke="#3b82f6" strokeWidth={2} />
               <Line type="monotone" dataKey="Indireto" stroke="#f59e0b" strokeWidth={2} />

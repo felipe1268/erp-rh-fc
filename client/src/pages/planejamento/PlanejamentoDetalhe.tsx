@@ -6181,11 +6181,9 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
           finSemLabel[s] = semanaLabel[s] ?? `Sem ${String(i + 1).padStart(2, "0")}`;
         });
 
-        const finTickFmt = (v: number) => {
-          if (v >= 1_000_000) return (v / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "M";
-          if (v >= 1_000)     return (v / 1_000).toLocaleString("pt-BR", { maximumFractionDigits: 0 }) + "k";
-          return v.toLocaleString("pt-BR", { maximumFractionDigits: 0 });
-        };
+        // Rev. 3067 — padronização: eixo em BRL completo (R$ X.XXX,XX), sem abreviar.
+        const finTickFmt = (v: number) =>
+          new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 
         const hoje2 = todayLocalISO();
         // Rev. 2650 — BCWS e BCWP medidos na MESMA semana-base (data-date).
@@ -6288,7 +6286,7 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
                 <XAxis dataKey="semana" tick={{ fontSize: 10 }} angle={-45} textAnchor="end"
                   height={55} interval={0}
                   tickFormatter={(v: string) => finSemLabel[v] ?? v} />
-                <YAxis tickFormatter={finTickFmt} tick={{ fontSize: 10 }} width={72} />
+                <YAxis tickFormatter={finTickFmt} tick={{ fontSize: 10 }} width={116} />
                 <Tooltip
                   content={({ payload, label }: any) => {
                     if (!payload?.length) return null;
@@ -10728,7 +10726,7 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
               <ComposedChart key={`${projetoId}-${cenario}`} data={chartData} margin={{ top: 8, right: 56, bottom: 24, left: 12 }} barCategoryGap="30%">
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "#94a3b8" }} />
-                <YAxis yAxisId="val" tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} tick={{ fontSize: 10 }} width={68} />
+                <YAxis yAxisId="val" tickFormatter={v => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0)} tick={{ fontSize: 10 }} width={108} />
                 <YAxis yAxisId="pct" orientation="right" tickFormatter={v => `${v.toFixed(0)}%`} tick={{ fontSize: 10 }} domain={[0, 100]} width={40} />
                 <Tooltip formatter={(v: any, name: string) => {
                   const pcts = ["Prev.Acum%","Real.Acum%","Venda Acum.%"];
@@ -12817,7 +12815,7 @@ function Compras({ projetoId, proj, utils, fmt, revisoes: revisoesAgendamento }:
                     <XAxis
                       type="number"
                       tick={{ fontSize: 10, fill: "#94a3b8" }}
-                      tickFormatter={(v: number) => v >= 1000 ? `R$${(v/1000).toFixed(0)}k` : `R$${v.toFixed(0)}`}
+                      tickFormatter={(v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0)}
                       axisLine={false} tickLine={false}
                     />
                     <YAxis
@@ -12837,7 +12835,7 @@ function Compras({ projetoId, proj, utils, fmt, revisoes: revisoesAgendamento }:
                         <Cell key={idx} fill={entry.classe === "A" ? "#ef4444" : entry.classe === "B" ? "#f59e0b" : "#10b981"} fillOpacity={0.85} />
                       ))}
                       <LabelList dataKey="total" position="right"
-                        formatter={(v: number) => v >= 1000 ? `R$${(v/1000).toFixed(0)}k` : `R$${v.toFixed(0)}`}
+                        formatter={(v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0)}
                         style={{ fontSize: 9, fill: "#64748b" }}
                       />
                     </Bar>
@@ -15767,7 +15765,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         const desvioFin    = realAcumFin - prevAcumFin;
         const desvioFatVsReal = cfHasFaturado ? faturadoAcumulado - realAcumFin : null;
         const maxFin       = Math.max(...(curvaFinanceiraFull as any[]).map((r: any) => r.baseline ?? 0), ...(curvaFinanceiraFull as any[]).map((r: any) => r.planejada ?? 0), ...(curvaFinanceiraFull as any[]).map((r: any) => r.realizada ?? 0), ...(curvaFinanceiraFull as any[]).map((r: any) => r.tendencia ?? 0), ...(curvaFinanceiraFull as any[]).map((r: any) => r.faturado ?? 0));
-        const finTickFmt   = (v: number) => v === 0 ? "0" : v.toLocaleString("pt-BR");
+        const finTickFmt   = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
         return (
         <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="refis-section-head border-b border-slate-600 px-5 py-2.5 flex items-center justify-between cursor-pointer select-none" style={{ background: "#1A3461", borderLeft: "3px solid #FFB800", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }} onClick={() => setColBloco3B(v => !v)}>
@@ -15868,7 +15866,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                     <YAxis
                       tickFormatter={finTickFmt}
                       tick={{ fontSize: 10 }}
-                      width={90}
+                      width={116}
                     />
                     <Tooltip
                       content={({ payload, label }: any) => {

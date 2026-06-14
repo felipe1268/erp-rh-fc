@@ -15,13 +15,8 @@ import {
   RadialBarChart, RadialBar,
 } from "recharts";
 
-function formatBRL(v: number, compact = false) {
-  if (compact) {
-    const abs = Math.abs(v);
-    const sign = v < 0 ? "-" : "";
-    if (abs >= 1_000_000) return `${sign}R$ ${(abs / 1_000_000).toFixed(1)}M`;
-    if (abs >= 1_000)     return `${sign}R$ ${(abs / 1_000).toFixed(0)}k`;
-  }
+// Rev. 3067 — padronização: SEMPRE valor completo em BRL (R$ X.XXX,XX); `compact` ignorado.
+function formatBRL(v: number, _compact = false) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 // KPI: sempre formato completo com centavos

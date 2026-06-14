@@ -445,7 +445,7 @@ export default function OrcamentoBdiIndicadores({
                     <g key={pct}>
                       <line x1={padL} x2={totalW - 10} y1={y} y2={y} stroke="#f0f0f0" strokeWidth={1} />
                       <text x={padL - 4} y={y + 3} textAnchor="end" fontSize={8} fill="#94a3b8">
-                        {`R$${((pct * maxVal) / 1e6).toFixed(2)}M`}
+                        {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format((pct * maxVal) || 0)}
                       </text>
                     </g>
                   );
@@ -796,7 +796,7 @@ export default function OrcamentoBdiIndicadores({
                   axisLine={{ stroke: "#e2e8f0" }}
                 />
                 <YAxis
-                  tickFormatter={v => v >= 1e6 ? `R$${(v/1e6).toFixed(1)}M` : `R$${(v/1e3).toFixed(0)}k`}
+                  tickFormatter={v => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0)}
                   tick={{ fontSize: 10 }}
                   width={70}
                 />

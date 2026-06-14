@@ -51,10 +51,8 @@ function fmtBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-/** Formata número curto para eixos dos gráficos: R$ 3,5 mil / R$ 1,2 mi */
+/** Rev. 3067 — padronização: SEMPRE valor completo em BRL (R$ 3.561,47), sem abreviar. */
 function fmtBRLShort(v: number) {
-  if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mi`;
-  if (v >= 1_000) return `R$ ${(v / 1_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil`;
   return fmtBRL(v);
 }
 

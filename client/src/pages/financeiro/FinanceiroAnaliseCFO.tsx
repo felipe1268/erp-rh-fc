@@ -19,13 +19,12 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip as RechTooltip, Legend,
 } from "recharts";
 
+// Rev. 3067 — padronização: SEMPRE valor completo em BRL (R$ X.XXX,XX), com centavos.
 function BRL(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v);
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 }
 function BRLk(v: number) {
-  if (Math.abs(v) >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(v) >= 1_000) return `R$ ${(v / 1_000).toFixed(0)}K`;
-  return BRL(v);
+  return BRL(v || 0);
 }
 function fmtPct(v: number, d = 1) { return `${v >= 0 ? "+" : ""}${v.toFixed(d)}%`; }
 function fmtDateBR(s: string) { return s ? s.split("-").reverse().join("/") : "—"; }

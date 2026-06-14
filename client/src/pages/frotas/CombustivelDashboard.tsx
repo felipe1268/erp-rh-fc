@@ -177,7 +177,7 @@ export default function CombustivelDashboard() {
               <ComposedChart data={evolucao}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis yAxisId="left" tick={{ fontSize: 10 }} tickFormatter={(v) => `R$ ${(v / 1000).toFixed(0)}k`} />
+                <YAxis yAxisId="left" width={108} tick={{ fontSize: 10 }} tickFormatter={(v) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0)} />
                 <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
                 <Tooltip content={({ active, payload, label }) => {
                   if (!active || !payload?.length) return null;
@@ -266,7 +266,7 @@ export default function CombustivelDashboard() {
                 <ResponsiveContainer width="100%" height={Math.max(200, Math.min(porPosto.length, 15) * 28)}>
                   <BarChart data={porPosto.slice(0, 15)} layout="vertical" margin={{ left: 0, right: 60 }}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.2} horizontal={false} />
-                    <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `R$ ${(v / 1000).toFixed(0)}k`} />
+                    <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0)} />
                     <YAxis type="category" dataKey="posto" tick={{ fontSize: 10 }} width={170} tickFormatter={(v: string) => v.length > 24 ? v.slice(0, 22) + "…" : v} />
                     <Tooltip content={({ active, payload }) => {
                       if (!active || !payload?.length) return null;

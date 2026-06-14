@@ -11,9 +11,8 @@ import {
 
 const n = (v: any) => parseFloat(v || "0") || 0;
 
+// Rev. 3067 — padronização: SEMPRE valor completo em BRL (R$ X.XXX,XX), sem abreviar.
 function formatBRL(v: number) {
-  if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(2).replace(".", ",")}M`;
-  if (v >= 1_000) return `R$ ${(v / 1_000).toFixed(1).replace(".", ",")}k`;
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 

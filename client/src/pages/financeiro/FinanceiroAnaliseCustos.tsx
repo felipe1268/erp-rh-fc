@@ -28,13 +28,9 @@ import { classificarGrupoCusto } from "@shared/custosCategorias";
 function formatBRL(value: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
 }
+// Rev. 3067 — padronização: SEMPRE valor completo em BRL (R$ X.XXX,XX), sem abreviar.
 function BRLk(v: number): string {
-  const n = v || 0;
-  const br = (x: number, d: number) =>
-    x.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
-  if (Math.abs(n) >= 1_000_000) return `R$ ${br(n / 1_000_000, 1)} mi`;
-  if (Math.abs(n) >= 1_000) return `R$ ${br(n / 1_000, 0)} mil`;
-  return formatBRL(n);
+  return formatBRL(v || 0);
 }
 function pct(part: number, total: number): number {
   return total > 0 ? (part / total) * 100 : 0;

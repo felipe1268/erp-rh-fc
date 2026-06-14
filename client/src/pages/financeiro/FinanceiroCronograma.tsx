@@ -13,8 +13,9 @@ import {
   Legend, ResponsiveContainer, Line, ComposedChart, ReferenceLine
 } from "recharts";
 
+// Rev. 3067 — padronização: SEMPRE valor completo em BRL (R$ X.XXX,XX), com centavos.
 const BRL = (v: number) =>
-  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v);
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
 const BRL2 = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -244,7 +245,7 @@ export default function FinanceiroCronograma() {
                       tick={{ fontSize: 10, fill: "#6b7280" }}
                       axisLine={false}
                       tickLine={false}
-                      tickFormatter={(v) => `R$${(v / 1e6).toFixed(1)}M`}
+                      tickFormatter={(v) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0)}
                       width={60}
                     />
                     <Tooltip content={<CustomTooltip />} />

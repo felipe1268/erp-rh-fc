@@ -208,9 +208,8 @@ function InteractivePie({ data, colorOffset = 0, unit = "", valueFormatter, onSl
 function fmt(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
+// Rev. 3067 — padronização: SEMPRE valor completo em BRL (R$ X.XXX,XX), sem abreviar.
 function fmtK(v: number) {
-  if (v >= 1000000) return `R$ ${(v / 1000000).toFixed(1)}M`;
-  if (v >= 1000) return `R$ ${(v / 1000).toFixed(1)}k`;
   return fmt(v);
 }
 function fmtNum(v: number, d = 1) {
@@ -1169,7 +1168,7 @@ export default function FrotasAnalitico() {
                       width={130}
                       tickFormatter={(v: string) => v.length > 18 ? v.slice(0, 16) + "…" : v}
                     />
-                    <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v: number) => v >= 1000 ? `R$${(v / 1000).toFixed(0)}k` : `R$${v.toFixed(0)}`} />
+                    <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v: number) => fmt(v || 0)} />
                     <Tooltip
                       formatter={(v: number, _: any, props: any) => [fmt(v), "Gasto"]}
                       labelFormatter={(name: string) => name}
