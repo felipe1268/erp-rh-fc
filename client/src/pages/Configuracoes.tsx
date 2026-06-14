@@ -24,6 +24,7 @@ import { AlmoxarifadoConfigSection } from "@/pages/configuracoes/AlmoxarifadoCon
 import { PlanejamentoConfigSection } from "@/pages/configuracoes/PlanejamentoConfigSection";
 import { IAConfigSection } from "@/pages/configuracoes/IAConfigSection";
 import TemplatesDocsTab from "@/pages/configuracoes/TemplatesDocsTab";
+import ContratoTemplate from "@/pages/terceiros/contratos/ContratoTemplate";
 import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, ChevronDown, Info, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign, FolderOpen, FileBarChart, Hammer, Truck, Megaphone, Briefcase, Brain, SlidersHorizontal, GitBranch, Upload, ShieldCheck, ShieldAlert, UserCheck } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -89,7 +90,7 @@ const CATEGORIAS = [
   { key: "notificacoes_sistema", label: "Notificações do Sistema", icon: Bell, color: "text-pink-600", bgColor: "bg-pink-50", borderColor: "border-pink-200" },
 ];
 
-type TabKey = "criterios" | "senha" | "limpeza" | "regras" | "notificacoes" | "contrato_pj" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup" | "terceiros" | "portal_cliente" | "templates_docs" | "socios";
+type TabKey = "criterios" | "senha" | "limpeza" | "regras" | "notificacoes" | "contrato_pj" | "contrato_terceiros" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup" | "terceiros" | "portal_cliente" | "templates_docs" | "socios";
 
 // Rev. 2403: mapa estático de cores das abas. CRÍTICO: Tailwind JIT só vê
 // classes LITERAIS no source — interpolação tipo `bg-${c}-500` não gera CSS.
@@ -335,6 +336,7 @@ export default function Configuracoes() {
     { key: "senha" as TabKey, label: "Minha Senha", icon: Key, minRole: "user", color: "emerald" },
     { key: "notificacoes" as TabKey, label: "Notificações E-mail", icon: Bell, minRole: "admin", color: "violet" },
     { key: "contrato_pj" as TabKey, label: "Contrato PJ", icon: FileText, minRole: "admin", color: "teal" },
+    { key: "contrato_terceiros" as TabKey, label: "Contrato Terceiros", icon: Handshake, minRole: "admin", color: "rose" },
     { key: "sindical" as TabKey, label: "Sindical / Dissídio", icon: Landmark, minRole: "admin", color: "orange" },
     { key: "sync_he" as TabKey, label: "Sincronizar HE", icon: RefreshCw, minRole: "admin", color: "cyan" },
     { key: "beneficios_alimentacao" as TabKey, label: "Benefícios Alimentação", icon: UtensilsCrossed, minRole: "admin", color: "lime" },
@@ -487,6 +489,22 @@ export default function Configuracoes() {
         {/* TAB: Templates de Documentos (Rev. 2141) */}
         {activeTab === "templates_docs" && (
           <TemplatesDocsTab />
+        )}
+
+        {activeTab === "contrato_terceiros" && (
+          <div className="space-y-3">
+            <div className="rounded-xl border border-rose-200 bg-rose-50/60 px-4 py-3">
+              <p className="text-sm font-semibold text-rose-800 flex items-center gap-2">
+                <Handshake className="w-4 h-4" /> Template do Contrato de Terceiros
+              </p>
+              <p className="text-xs text-rose-700/80 mt-0.5">
+                Configure aqui o texto, as cláusulas e o layout do contrato de prestação de serviços de terceiros.
+                Este template é preenchido automaticamente ao emitir cada contrato — no módulo Terceiros os contratos
+                ficam apenas para visualizar, assinar e baixar.
+              </p>
+            </div>
+            <ContratoTemplate embedded />
+          </div>
         )}
 
         {/* TAB: Critérios do Sistema */}

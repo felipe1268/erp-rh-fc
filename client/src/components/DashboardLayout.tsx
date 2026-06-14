@@ -320,7 +320,6 @@ const menuSectionsTerceiros: MenuSection[] = [
   {
     title: "Ferramentas",
     items: [
-      { icon: Settings2, label: "Template de Contrato", path: "/terceiros/contratos/template" },
       { icon: PenLine, label: "IntegraSign", path: "/integrasign" },
       { icon: TrendingUp, label: "Previsão de Caixa", path: "/terceiros/previsao-caixa" },
       { icon: Globe, label: "Portal Externo", path: "/terceiros/portal" },

@@ -212,7 +212,7 @@ function ToolbarButton({ active, onClick, children, title }: { active?: boolean;
   );
 }
 
-export default function ContratoTemplate() {
+export default function ContratoTemplate({ embedded = false }: { embedded?: boolean } = {}) {
   const [, navigate] = useLocation();
   const { companyId: rawCompanyId, isConstrutoras, getCompanyIds } = useCompany();
   const companyId = rawCompanyId > 0 ? rawCompanyId : (isConstrutoras ? (getCompanyIds()[0] || 0) : 0);
@@ -383,14 +383,16 @@ EAP          | Descrição                                             | Un    |
     .replace(/\{\{TESTEMUNHA_GESTOR_PROJETO\}\}/g, "Carlos Oliveira")
     .replace(/\{\{REVISAO_CRONOGRAMA\}\}/g, "Baseline (Rev 00)");
 
-  return (
-    <DashboardLayout noPadding>
+  const inner = (
+    <>
       <div className="h-full flex flex-col bg-gray-100 overflow-hidden">
         {/* Header bar */}
         <div className="bg-white border-b border-gray-200 px-4 py-2.5 flex items-center gap-3 flex-shrink-0">
-          <button onClick={() => navigate("/terceiros/contratos")} className="p-1.5 hover:bg-gray-100 rounded-lg">
-            <ArrowLeft className="w-4 h-4 text-gray-500" />
-          </button>
+          {!embedded && (
+            <button onClick={() => navigate("/terceiros/contratos")} className="p-1.5 hover:bg-gray-100 rounded-lg">
+              <ArrowLeft className="w-4 h-4 text-gray-500" />
+            </button>
+          )}
           <div className="flex-1 min-w-0">
             <Input
               value={nome}
@@ -861,6 +863,19 @@ EAP          | Descrição                                             | Un    |
           </div>
         </div>
       )}
-    </DashboardLayout>
+    </>
   );
+
+  if (embedded) {
+    return (
+      <div
+        className="flex flex-col bg-gray-100 rounded-xl border border-gray-200 overflow-hidden"
+        style={{ height: "calc(100vh - 240px)", minHeight: "600px" }}
+      >
+        {inner}
+      </div>
+    );
+  }
+
+  return <DashboardLayout noPadding>{inner}</DashboardLayout>;
 }

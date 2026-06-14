@@ -1,6 +1,54 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3065 — **CONTRATOS DE TERCEIROS · O TEMPLATE DO CONTRATO (TEXTO + CLÁUSULAS + LAYOUT) FOI
+ * CENTRALIZADO EM CONFIGURAÇÕES › "CONTRATO TERCEIROS"; NO MÓDULO TERCEIROS O CONTRATO PASSA A SER
+ * SOMENTE VISUALIZAR, ASSINAR (FCSIGN) E BAIXAR — A EDIÇÃO DE TEXTO/INLINE DO CONTRATO FOI REMOVIDA.**
+ *
+ * PEDIDO (prints do Contrato CT-2026-0006 no iPad): (1) centralizar nas CONFIGURAÇÕES o template do
+ * contrato de terceiros (template + cláusulas + layout configurados num único lugar); (2) deixar o
+ * módulo Terceiros SOMENTE com visualizar, assinar e baixar — tirar de lá a edição do texto do contrato.
+ *
+ * CONTEXTO: já EXISTIA um sistema de template de contrato de terceiros — tabelas
+ * `terceiro_contrato_templates` + `terceiro_template_revisoes`, backend em `terceiroContratos.ts`
+ * (`getTemplate`, `salvarTemplate`, `listarTemplateRevisoes`, `restaurarTemplateRevisao`,
+ * `gerarTextoContrato`, `salvarTextoContrato`) e um editor de página inteira em
+ * `client/src/pages/terceiros/contratos/ContratoTemplate.tsx` (TipTap + painel de variáveis + layout +
+ * revisões), acessível por um item de menu no submenu Terceiros e pela rota `/terceiros/contratos/template`.
+ * O problema era de LOCALIZAÇÃO/UX: a configuração do template vivia DENTRO do módulo Terceiros (não nas
+ * Configurações), e a tela do contrato (`ContratoDetalhe.tsx`, aba "Contrato") expunha uma toolbar de
+ * EDIÇÃO (Gerar/Regenerar, Editar texto, Salvar com revisões) misturada com as ações de assinatura.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE, ZERO schema/migração — REUSA todo o backend de template
+ * já existente):
+ * - `client/src/pages/terceiros/contratos/ContratoTemplate.tsx`: ganha prop opcional `embedded`. Quando
+ *   `embedded`, NÃO envolve em `DashboardLayout` (evita header/sidebar duplicados dentro das Configurações)
+ *   e esconde o botão "voltar"; o conteúdo (header com nome do template, toolbar Word, folha A4, painel de
+ *   variáveis, modais de Layout/Revisões) foi extraído para uma const `inner` e a página passa a retornar
+ *   `embedded ? <wrapper bounded-height>{inner}</wrapper> : <DashboardLayout>{inner}</DashboardLayout>`. A
+ *   rota `/terceiros/contratos/template` segue funcionando (página inteira) para deep-links/backward-compat.
+ * - `client/src/pages/Configuracoes.tsx`: NOVA aba "Contrato Terceiros" (`TabKey` `contrato_terceiros`,
+ *   ícone Handshake, cor `rose`, `minRole: "admin"`) que renderiza `<ContratoTemplate embedded />` com um
+ *   cabeçalho explicativo. Import direto (não-lazy) — fica no mesmo chunk da página de Configurações (que já
+ *   é lazy).
+ * - `client/src/components/DashboardLayout.tsx`: REMOVIDO o item de menu "Template de Contrato" do submenu
+ *   Ferramentas › Terceiros (a edição passou a ser centralizada nas Configurações).
+ * - `client/src/pages/terceiros/contratos/ContratoDetalhe.tsx` (aba "Contrato", contrato NÃO-assinado):
+ *   a toolbar perde os botões "Gerar/Regenerar", "Editar texto" e "Salvar" (+ removidos os modais "Editar
+ *   texto do contrato" e "Salvar com observação"), restando SOMENTE "Enviar p/ FcSign" + selo de versão +
+ *   um aviso de que a edição é centralizada nas Configurações. O texto do contrato agora AUTO-GERA a partir
+ *   do template via `useEffect` (com guard `useRef` p/ rodar 1x) quando o contrato ainda não tem
+ *   `textoContrato` e não está assinado — sem botão "Gerar". O empty-state vira passivo ("Gerando
+ *   documento..." durante a geração; senão, instrução pra atualizar a página). MANTIDO: visualização da
+ *   folha A4, o fluxo de assinatura (FcSign) e, quando assinado, o card view-only com Visualizar/Baixar PDF.
+ *
+ * EFEITO: a configuração do contrato de terceiros (texto + cláusulas + layout) tem agora um único ponto de
+ * verdade — Configurações › "Contrato Terceiros" (acesso restrito a admin); no módulo Terceiros os
+ * contratos ficam como documentos prontos para visualizar, enviar para assinatura e baixar, sem edição de
+ * texto inline. RESSALVA: a edição inline dos metadados do contrato (datas/objeto/natureza) NÃO foi
+ * removida nesta revisão — o escopo do pedido era o TEXTO/template do contrato; esses campos são dados de
+ * cadastro do contrato, não do template centralizado.
+ *
  * Rev. 3064 — **CONTRATOS DE TERCEIROS · CONTRATO 100% ASSINADO NO FCSIGN NÃO LIBERAVA AS MEDIÇÕES
  * (NEM SAÍA DO MODO EDITÁVEL): O STATUS DE ASSINATURA AGORA É ROBUSTO A RASCUNHOS/CANCELADOS E
  * ENVELOPES SOFT-DELETADOS, E A TELA RE-BUSCA SOZINHA QUANDO A JANELA VOLTA AO FOCO.**

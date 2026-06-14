@@ -268,6 +268,25 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
 
   const textoAtual = textoEditado ?? contrato?.textoContrato ?? null;
 
+  // Rev. 3065 — o módulo Terceiros é SÓ visualizar/assinar/baixar (o template é editado em
+  // Configurações › Contrato Terceiros). Quando o contrato ainda não tem texto e não está
+  // assinado, gera-se o documento automaticamente a partir do template — sem botão "Gerar".
+  const autoGerarTentadoRef = useRef(false);
+  useEffect(() => {
+    if (
+      tab === "documento" &&
+      id > 0 &&
+      !!contrato &&
+      !contratoAssinado &&
+      !(contrato as any)?.textoContrato &&
+      !autoGerarTentadoRef.current &&
+      !gerarTextoMut.isPending
+    ) {
+      autoGerarTentadoRef.current = true;
+      gerarTextoMut.mutate({ contratoId: id });
+    }
+  }, [tab, id, contrato, contratoAssinado, gerarTextoMut]);
+
   if (isLoading) return <DashboardLayout><div className="flex items-center justify-center h-64 text-gray-400">Carregando...</div></DashboardLayout>;
   if (!contrato) return <DashboardLayout><div className="p-8 text-center text-gray-400">Contrato não encontrado</div></DashboardLayout>;
 
@@ -1230,78 +1249,38 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
 
           return (
           <div className="space-y-4">
-            {/* Toolbar estilo Word */}
+            {/* Rev. 3065 — Toolbar SOMENTE visualizar / assinar / baixar. O template (texto,
+                cláusulas e layout) é editado em Configurações › Contrato Terceiros; aqui o
+                documento é apenas gerado automaticamente e enviado p/ assinatura. */}
             <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-4 py-2 shadow-sm flex-wrap">
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-2 h-8 text-xs"
-                disabled={gerarTextoMut.isPending}
-                onClick={() => gerarTextoMut.mutate({ contratoId: id })}
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${gerarTextoMut.isPending ? "animate-spin" : ""}`} />
-                {textoAtual ? "Regenerar" : "Gerar contrato"}
-              </Button>
               {textoAtual && (
-                <>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-2 h-8 text-xs"
-                    onClick={() => setShowEditModal(true)}
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                    Editar texto
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="gap-2 h-8 text-xs bg-blue-600 hover:bg-blue-700"
-                    disabled={salvarTextoMut.isPending || textoEditado === null}
-                    onClick={() => {
-                      const empNome = (contrato as any).empresa?.razaoSocial || (contrato as any).empresa?.nomeFantasia || "";
-                      const nomeAuto = [contrato.numeroContrato, empNome].filter(Boolean).join(" — ").slice(0, 200);
-                      setObsRevisao(nomeAuto);
-                      setShowObsModal(true);
-                    }}
-                  >
-                    <Save className="w-3.5 h-3.5" />
-                    Salvar
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-2 h-8 text-xs border-indigo-300 text-indigo-700 hover:bg-indigo-50"
-                    disabled={!textoAtual || criarEnvelopeMut.isPending}
-                    onClick={() => {
-                      const emp = (contrato as any).empresa;
-                      setFcSignSignatarios([
-                        { papel: "fornecedor", ordemAssinatura: 1, nome: emp?.responsavelNome || emp?.razaoSocial || "", email: emp?.email || "", cpfCnpj: emp?.cnpj || "", cargo: "Representante Legal", empresaNome: emp?.razaoSocial || "" },
-                        { papel: "gestor_projeto", ordemAssinatura: 2, nome: (contrato as any).obraResponsavel || "", email: "", cpfCnpj: "", cargo: "Gestor de Projeto", empresaNome: "FC Engenharia" },
-                      ]);
-                      setShowFcSignModal(true);
-                    }}
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    Enviar p/ FcSign
-                  </Button>
-                </>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-2 h-8 text-xs border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+                  disabled={!textoAtual || criarEnvelopeMut.isPending}
+                  onClick={() => {
+                    const emp = (contrato as any).empresa;
+                    setFcSignSignatarios([
+                      { papel: "fornecedor", ordemAssinatura: 1, nome: emp?.responsavelNome || emp?.razaoSocial || "", email: emp?.email || "", cpfCnpj: emp?.cnpj || "", cargo: "Representante Legal", empresaNome: emp?.razaoSocial || "" },
+                      { papel: "gestor_projeto", ordemAssinatura: 2, nome: (contrato as any).obraResponsavel || "", email: "", cpfCnpj: "", cargo: "Gestor de Projeto", empresaNome: "FC Engenharia" },
+                    ]);
+                    setShowFcSignModal(true);
+                  }}
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  Enviar p/ FcSign
+                </Button>
               )}
-              <div className="h-5 w-px bg-gray-200 mx-1" />
+              <span className="text-[11px] text-gray-400 flex items-center gap-1">
+                <Lock className="w-3 h-3" />
+                Documento gerado pelo template — edição centralizada em Configurações › Contrato Terceiros
+              </span>
               {(contrato as any).versaoTexto > 0 && (
                 <span className="text-[11px] text-gray-400 flex items-center gap-1">
                   <Clock className="w-3 h-3" />
                   v{(contrato as any).versaoTexto}
-                  {textoEditado !== null && <span className="text-orange-500 font-medium ml-1">● não salvo</span>}
                 </span>
-              )}
-              {revisoes.length > 0 && (
-                <button
-                  onClick={() => setShowRevisoes(r => !r)}
-                  className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-gray-600"
-                >
-                  <History className="w-3 h-3" />
-                  {revisoes.length} rev.
-                </button>
               )}
               <div className="ml-auto flex items-center gap-2">
                 <div className="flex items-center gap-1 text-[10px] text-gray-400">
@@ -1313,15 +1292,29 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
 
             {!textoAtual ? (
               <div className="py-20 text-center border-2 border-dashed border-gray-200 rounded-xl bg-gray-50/50">
-                <FileEdit className="w-14 h-14 mx-auto mb-4 text-gray-300" />
-                <p className="text-gray-500 text-base font-medium mb-1">Nenhum contrato gerado</p>
-                <p className="text-gray-400 text-sm mb-6">Clique para preencher o template com os dados deste contrato</p>
-                <div className="flex justify-center gap-3">
-                  <Button onClick={() => gerarTextoMut.mutate({ contratoId: id })} disabled={gerarTextoMut.isPending} className="gap-2 bg-blue-600 hover:bg-blue-700">
-                    <FileText className="w-4 h-4" />
-                    Gerar contrato
-                  </Button>
-                </div>
+                {gerarTextoMut.isPending ? (
+                  <>
+                    <Loader2 className="w-10 h-10 mx-auto mb-4 text-blue-400 animate-spin" />
+                    <p className="text-gray-500 text-base font-medium mb-1">Gerando documento...</p>
+                    <p className="text-gray-400 text-sm">Preenchendo o template com os dados deste contrato</p>
+                  </>
+                ) : (
+                  <>
+                    <FileEdit className="w-14 h-14 mx-auto mb-4 text-gray-300" />
+                    <p className="text-gray-500 text-base font-medium mb-1">Documento ainda não gerado</p>
+                    <p className="text-gray-400 text-sm mb-5">O contrato é montado automaticamente a partir do template (configurado em Configurações › Contrato Terceiros).</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                      disabled={gerarTextoMut.isPending}
+                      onClick={() => { autoGerarTentadoRef.current = true; gerarTextoMut.mutate({ contratoId: id }); }}
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      Tentar novamente
+                    </Button>
+                  </>
+                )}
               </div>
             ) : (
               <div className="flex justify-center">
@@ -1536,38 +1529,6 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
           );
         })()}
 
-        {/* Modal: Editar texto do contrato */}
-        {showEditModal && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-                <div>
-                  <h2 className="text-lg font-bold text-gray-800">Editar texto do contrato</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">Edite o texto e clique em "Aplicar" para visualizar as alterações no documento</p>
-                </div>
-                <button onClick={() => setShowEditModal(false)} className="text-gray-400 hover:text-gray-600 p-1">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="flex-1 overflow-hidden p-6">
-                <textarea
-                  value={textoAtual ?? ""}
-                  onChange={e => setTextoEditado(e.target.value)}
-                  className="w-full h-[60vh] rounded-lg border border-gray-200 p-5 text-[12px] font-mono text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 resize-none leading-relaxed bg-gray-50"
-                  spellCheck={false}
-                />
-              </div>
-              <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
-                <p className="text-[10px] text-gray-400">As alterações serão refletidas na visualização. Para salvar permanentemente, use o botão "Salvar" na barra de ferramentas.</p>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setShowEditModal(false)}>Fechar</Button>
-                  <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={() => setShowEditModal(false)}>Aplicar</Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Modal: Histórico de revisões */}
         {showRevisoes && revisoes.length > 0 && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -1603,31 +1564,6 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
               </div>
               <div className="px-6 py-3 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
                 <Button variant="outline" size="sm" className="w-full" onClick={() => setShowRevisoes(false)}>Fechar</Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Modal: Salvar com observação */}
-        {showObsModal && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
-              <h2 className="text-lg font-bold mb-1">Salvar Contrato</h2>
-              <p className="text-sm text-gray-500 mb-4">Adicione uma observação sobre esta revisão (opcional)</p>
-              <Input
-                placeholder="Ex: Ajustado prazo da Cláusula 2"
-                value={obsRevisao}
-                onChange={e => setObsRevisao(e.target.value)}
-              />
-              <div className="flex gap-3 mt-4 justify-end">
-                <Button variant="outline" onClick={() => setShowObsModal(false)}>Cancelar</Button>
-                <Button
-                  className="bg-blue-600 hover:bg-blue-700"
-                  disabled={salvarTextoMut.isPending}
-                  onClick={() => salvarTextoMut.mutate({ contratoId: id, texto: textoAtual!, observacao: obsRevisao || undefined })}
-                >
-                  {salvarTextoMut.isPending ? "Salvando..." : "Salvar"}
-                </Button>
               </div>
             </div>
           </div>
