@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3083 — **MEDIÇÃO DE TERCEIROS · VIRA MÓDULO DEDICADO COM BARRA DE COMANDO PRÓPRIA: AO ABRIR
+ * `/terceiros/medicoes` A SIDEBAR PASSA A MOSTRAR SÓ AS FUNÇÕES DE MEDIÇÃO (NÃO O MENU COMPLETO DO MÓDULO
+ * TERCEIROS) E O ITEM "MEDIÇÕES" FOI REMOVIDO DO MENU DE TERCEIROS (DEDUP — A FUNÇÃO FICA EM UM SÓ LUGAR).**
+ *
+ * PEDIDO (usuário, print iPad): "Ao clicar em Medições de Terceiros quero que abra uma barra de comando
+ * específica pra ela, não o menu inteiro do Terceiros" + "limpa o módulo de Terceiros, a função Medições
+ * não precisa aparecer em duas telas, deixa só em um lugar". Até a Rev. 3082 a rota `/terceiros/medicoes`
+ * resolvia `activeModule = "terceiros"`, então abria a sidebar inteira do Terceiros e o item "Medições"
+ * aparecia tanto no menu do Terceiros quanto era o destino do card dedicado da home (Rev. 3081).
+ *
+ * IMPLEMENTAÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE/SCHEMA/BACKEND/PERMISSÕES):
+ * - `client/src/contexts/ModuleContext.tsx`: NOVO `ModuleId` "medicao-terceiros"; `ROUTE_MODULE_MAP`
+ *   `/terceiros/medicoes` muda de "terceiros" → "medicao-terceiros" (a entrada na rota troca o módulo ativo
+ *   automaticamente, exact-match vence o longest-prefix do Terceiros); `MODULE_LABELS` += "Medição Terceiros";
+ *   validação do localStorage (`saved === "medicao-terceiros"`) atualizada p/ não cair no fallback "rh-dp".
+ * - `client/src/components/DashboardLayout.tsx`: NOVA seção `menuSectionsMedicaoTerceiros` (barra dedicada:
+ *   "Medições (a pagar)" → /terceiros/medicoes + "Contratos de Serviço" → /terceiros/contratos);
+ *   registrada nos Records EXAUSTIVOS `Record<ModuleId,...>` `MODULE_SECTIONS`, `MODULE_HOME_ROUTES`
+ *   (`/terceiros/medicoes`) e `MODULE_THEME` (Receipt, laranja, casando com o card da home Rev. 3081);
+ *   entrada no seletor `ALL_MODULE_DEFS` ("Medição Terceiros") reutilizando o gating do Terceiros
+ *   (`canAccessModule("terceiros") && isModEnabled("terceiros")`, mesmo modelo do `permId` do card da home);
+ *   REMOVIDO o item `{ icon: Receipt, label: "Medições", path: "/terceiros/medicoes" }` de
+ *   `menuSectionsTerceiros` (dedup). "Medições PJ" (`/pj-medicoes`) é função distinta (PJ) e permanece no
+ *   Terceiros — fora do escopo.
+ *
+ * DECISÃO DE ACL (importante): a feature `terceiros-medicoes` foi MANTIDA em `shared/modules.ts` de
+ * propósito — o `routeToFeatureKey` (montado de `MODULE_DEFINITIONS`) resolve a PERMISSÃO granular da rota
+ * `/terceiros/medicoes` por ela. O módulo dedicado reutiliza a permissão "terceiros" (sem novo módulo de
+ * permissão), então quem tem acesso ao Terceiros continua vendo o módulo no seletor/home e o item na sidebar
+ * dedicada via `canAccessFeature(...)`. NÃO houve mudança de permissões.
+ *
+ * VERIFICAÇÃO: HMR do Vite recompilou `ModuleContext.tsx` e `DashboardLayout.tsx` sem erro; app reinicia
+ * limpo; code_review (architect) PASS — registro exaustivo do `ModuleId` consistente, sem referências
+ * órfãs, gating coerente p/ não-admin e sem risco de loop/estado inválido no localStorage.
+ */
+
+/**
  * Rev. 3082 — **MEDIÇÕES · FECHAMENTO DO SESSION_PLAN (T003 + T007): (A) HISTÓRICO "JÁ MEDIDO" ACUMULADO
  * POR CONTRATO NO LEVANTAMENTO DE CAMPO (CINZA, REFERÊNCIA P/ NÃO REMEDIR O MESMO ITEM) E (B) A ABA
  * "MEDIÇÕES" DO CONTRATO DE TERCEIROS VIRA ESPELHO SÓ-LEITURA POR PADRÃO, COM TOGGLE "EDITAR NESTA ABA"

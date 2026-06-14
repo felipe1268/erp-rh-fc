@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react";
 import { useLocation } from "wouter";
 
-export type ModuleId = "rh-dp" | "sst" | "juridico" | "juridico-trabalhista" | "juridico-tributario" | "juridico-civil" | "avaliacao" | "terceiros" | "parceiros" | "orcamento" | "planejamento" | "medicao" | "cadastro" | "compras" | "almoxarifado" | "financeiro" | "gestao-documentos" | "operacional" | "frotas" | "comunicados-internos" | "curriculos" | "oraculo" | "portal-cliente" | "admin" | "all";
+export type ModuleId = "rh-dp" | "sst" | "juridico" | "juridico-trabalhista" | "juridico-tributario" | "juridico-civil" | "avaliacao" | "terceiros" | "parceiros" | "orcamento" | "planejamento" | "medicao" | "medicao-terceiros" | "cadastro" | "compras" | "almoxarifado" | "financeiro" | "gestao-documentos" | "operacional" | "frotas" | "comunicados-internos" | "curriculos" | "oraculo" | "portal-cliente" | "admin" | "all";
 
 interface ModuleContextType {
   activeModule: ModuleId;
@@ -62,7 +62,7 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/terceiros/empresas": "terceiros" as ModuleId,
   "/terceiros/funcionarios": "terceiros" as ModuleId,
   "/terceiros/contratos": "terceiros" as ModuleId,
-  "/terceiros/medicoes": "terceiros" as ModuleId,
+  "/terceiros/medicoes": "medicao-terceiros" as ModuleId,
   "/terceiros/previsao-caixa": "terceiros" as ModuleId,
   "/terceiros/obrigacoes": "terceiros" as ModuleId,
   "/terceiros/conformidade": "terceiros" as ModuleId,
@@ -184,6 +184,7 @@ const MODULE_LABELS: Record<ModuleId, string> = {
   "orcamento": "Orçamento",
   "planejamento": "Planejamento",
   "medicao": "Medição",
+  "medicao-terceiros": "Medição Terceiros",
   "cadastro": "Cadastro",
   "compras": "Compras",
   "almoxarifado": "Almoxarifado",
@@ -205,7 +206,7 @@ export function ModuleProvider({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [activeModule, setActiveModuleState] = useState<ModuleId>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved && (saved === "rh-dp" || saved === "sst" || saved === "juridico" || saved === "juridico-trabalhista" || saved === "juridico-tributario" || saved === "juridico-civil" || saved === "avaliacao" || saved === "terceiros" || saved === "parceiros" || saved === "orcamento" || saved === "planejamento" || saved === "medicao" || saved === "cadastro" || saved === "compras" || saved === "almoxarifado" || saved === "financeiro" || saved === "gestao-documentos" || saved === "operacional" || saved === "frotas" || saved === "comunicados-internos" || saved === "curriculos" || saved === "oraculo" || saved === "portal-cliente" || saved === "all")) {
+    if (saved && (saved === "rh-dp" || saved === "sst" || saved === "juridico" || saved === "juridico-trabalhista" || saved === "juridico-tributario" || saved === "juridico-civil" || saved === "avaliacao" || saved === "terceiros" || saved === "parceiros" || saved === "orcamento" || saved === "planejamento" || saved === "medicao" || saved === "medicao-terceiros" || saved === "cadastro" || saved === "compras" || saved === "almoxarifado" || saved === "financeiro" || saved === "gestao-documentos" || saved === "operacional" || saved === "frotas" || saved === "comunicados-internos" || saved === "curriculos" || saved === "oraculo" || saved === "portal-cliente" || saved === "all")) {
       return saved as ModuleId;
     }
     return "rh-dp";

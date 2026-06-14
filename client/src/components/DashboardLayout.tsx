@@ -299,7 +299,6 @@ const menuSectionsTerceiros: MenuSection[] = [
     items: [
       { icon: Building2, label: "Empresas de Serviço", path: "/terceiros/empresas" },
       { icon: FileSignature, label: "Contratos de Serviço", path: "/terceiros/contratos" },
-      { icon: Receipt, label: "Medições", path: "/terceiros/medicoes" },
       { icon: Briefcase, label: "Prestadores PJ", path: "/modulo-pj" },
       { icon: FileSpreadsheet, label: "Medições PJ", path: "/pj-medicoes" },
       { icon: LayoutDashboard, label: "Painel Terceiros", path: "/terceiros/painel" },
@@ -541,6 +540,16 @@ const menuSectionsMedicao: MenuSection[] = [
   },
 ];
 
+const menuSectionsMedicaoTerceiros: MenuSection[] = [
+  {
+    title: "Medição de Terceiros",
+    items: [
+      { icon: Receipt,       label: "Medições (a pagar)", path: "/terceiros/medicoes" },
+      { icon: FileSignature, label: "Contratos de Serviço", path: "/terceiros/contratos" },
+    ],
+  },
+];
+
 const menuSectionsGestaoDocumentos: MenuSection[] = [
   {
     title: "Proj./Doc. Técnicos",
@@ -736,6 +745,7 @@ export const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
   "orcamento":     menuSectionsOrcamento,
   "planejamento":  menuSectionsPlanejamento,
   "medicao":       menuSectionsMedicao,
+  "medicao-terceiros": menuSectionsMedicaoTerceiros,
   "cadastro":      menuSectionsCadastro,
   "compras":       menuSectionsCompras,
   "almoxarifado":  menuSectionsAlmoxarifado,
@@ -815,6 +825,7 @@ const MODULE_HOME_ROUTES: Record<ModuleId, string> = {
   "orcamento":      "/orcamento/painel",
   "planejamento":   "/planejamento",
   "medicao":        "/medicao",
+  "medicao-terceiros": "/terceiros/medicoes",
   "cadastro":       "/empresas",
   "compras":        "/compras/painel",
   "almoxarifado":   "/almoxarifado",
@@ -844,6 +855,7 @@ const MODULE_THEME: Record<ModuleId, { icon: any; color: string; bg: string }> =
   "orcamento":     { icon: Calculator, color: "text-cyan-400",   bg: "bg-cyan-500/20"    },
   "planejamento":  { icon: Target,        color: "text-green-400",   bg: "bg-green-500/20"   },
   "medicao":       { icon: FileBarChart,  color: "text-teal-400",    bg: "bg-teal-500/20"    },
+  "medicao-terceiros": { icon: Receipt,   color: "text-orange-400",  bg: "bg-orange-500/20"  },
   "cadastro":      { icon: BookOpen,      color: "text-indigo-400",  bg: "bg-indigo-500/20"  },
   "compras":       { icon: ShoppingCart,  color: "text-rose-400",    bg: "bg-rose-500/20"    },
   "almoxarifado":  { icon: Warehouse,     color: "text-emerald-400", bg: "bg-emerald-500/20" },
@@ -1636,6 +1648,7 @@ function DashboardLayoutContent({
     { id: "almoxarifado", label: "Almoxarifado",  icon: Warehouse,   color: "text-emerald-400", bg: "bg-emerald-500/20", path: "/almoxarifado",          canSee: () => (permIsAdminMaster || canAccessModule("almoxarifado")) && isModEnabled("almoxarifado") },
     { id: "financeiro",   label: "Financeiro",    icon: DollarSign,  color: "text-yellow-400",  bg: "bg-yellow-500/20",  path: "/financeiro",            canSee: () => (permIsAdminMaster || canAccessModule("financeiro"))   && isModEnabled("financeiro") },
     { id: "medicao",      label: "Medição",       icon: Construction,color: "text-orange-400",  bg: "bg-orange-500/20",  path: "/medicao",               canSee: () => (permIsAdminMaster || canAccessModule("medicao"))      && isModEnabled("medicao") },
+    { id: "medicao-terceiros", label: "Medição Terceiros", icon: Receipt, color: "text-orange-400", bg: "bg-orange-500/20", path: "/terceiros/medicoes", canSee: () => (permIsAdminMaster || canAccessModule("terceiros")) && isModEnabled("terceiros") },
     { id: "gestao-documentos", label: "Proj./Doc. Técnicos", icon: FolderOpen, color: "text-sky-400", bg: "bg-sky-500/20", path: "/gestao-documentos", canSee: () => (permIsAdminMaster || canAccessModule("gestao-documentos")) && isModEnabled("gestao-documentos") },
     { id: "operacional", label: "Operacional", icon: HardHat, color: "text-amber-400", bg: "bg-amber-500/20", path: "/operacional/painel", canSee: () => (permIsAdminMaster || canAccessModule("operacional")) && isModEnabled("operacional") },
     { id: "frotas", label: "Frotas", icon: Truck, color: "text-cyan-400", bg: "bg-cyan-500/20", path: "/frotas/painel", canSee: () => (permIsAdminMaster || canAccessModule("frotas")) && isModEnabled("frotas") },
