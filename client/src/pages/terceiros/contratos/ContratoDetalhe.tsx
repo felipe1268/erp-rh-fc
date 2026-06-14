@@ -20,7 +20,7 @@ import { gerarContratoAssinadoPdf } from "@/lib/contratoAssinadoPdf";
 import { toast } from "sonner";
 import { formatNumeroOcDisplay } from "@shared/numeroOc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { ln } from "@/contexts/ModuleContext";
+import { useModule } from "@/contexts/ModuleContext";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
@@ -94,7 +94,7 @@ export default function ContratoDetalheWrapper() {
 
 function ContratoDetalheInner({ routeId }: { routeId: number }) {
   const [, navigate] = useLocation();
-  const { activeModule } = ln();
+  const { activeModule } = useModule();
   const emModuloMedicoes = activeModule === "medicao-terceiros";
   const id = routeId;
   const urlParams = new URLSearchParams(window.location.search);
