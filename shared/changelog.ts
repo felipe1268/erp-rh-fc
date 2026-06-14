@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3098 — **MEDIÇÃO DE TERCEIROS · NA "CONFIGURAÇÃO DE RETENÇÕES DO CONTRATO (%)" O USUÁRIO VOLTA A
+ * CONSEGUIR APAGAR O "0" DOS CAMPOS (ISS/INSS/IRRF/OUTRAS/RET. TÉCNICA) NO TABLET (iPad/Safari) — O FIX
+ * ANTERIOR (Rev. 3096) RESOLVEU O LADO DO ESTADO REACT, MAS O `<input type="number">` NO iOS CONTINUAVA
+ * "GRUDANDO" O 0 AO APAGAR.**
+ *
+ * PEDIDO: usuário no iPad reportou de novo "Não consigo apagar o número 0" nos inputs de percentual de
+ * retenção (aba de medição → "RETENÇÕES E DESCONTOS" → "Configuração de Retenções do Contrato (%)").
+ *
+ * CAUSA-RAIZ: a Rev. 3096 já havia trocado o estado `percConfig` para TEXTO e o `onChange` para gravar o
+ * valor cru — o que corrige o caso em desktop. Porém os inputs continuavam `type="number"`. No iOS/Safari,
+ * `<input type="number">` controlado por React não reflete de forma confiável a string vazia ao apagar o
+ * último dígito (o campo "volta" a exibir 0), então no tablet o sintoma persistia.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO BACKEND/ALTER/DROP/DELETE/SCHEMA): em
+ * `client/src/pages/terceiros/contratos/ContratoDetalhe.tsx` os 5 inputs de % de retenção passam de
+ * `type="number"` para `type="text" inputMode="decimal"` (teclado numérico no mobile, mas edição livre de
+ * string — permite ficar vazio durante a digitação). O `onChange` sanitiza para aceitar só dígitos, ponto
+ * e vírgula (`replace(/[^0-9.,]/g, "")`), mantendo o estado em TEXTO. A conversão para número acontece SÓ
+ * no "Salvar Config", agora com suporte a vírgula decimal pt-BR
+ * (`parseFloat(String(...).replace(",", ".")) || 0`). Backend segue recebendo números.
+ *
+ * RESSALVA/DRIFT: nenhuma — cálculo/persistência idênticos; campo vazio ao salvar = 0.
+ *
  * Rev. 3097 — **MEDIÇÃO / LEVANTAMENTO DE CAMPO · A TELA DE DESENHO SOBRE A PLANTA (PDF) VIRA TÁTIL E
  * "FLUIDA" ESTILO AUTOCAD: PLANTA EM PRETO-E-BRANCO (ALTO CONTRASTE) POR PADRÃO, ZOOM POR PINÇA + PAN
  * COM 1 DEDO, FERRAMENTAS NOVAS RETÂNGULO (ARRASTAR) E DESENHO LIVRE (TRAÇO), FERRAMENTA PAREDE

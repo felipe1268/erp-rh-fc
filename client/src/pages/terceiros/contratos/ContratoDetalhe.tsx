@@ -2814,6 +2814,7 @@ function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEd
     onSuccess: () => { toast.success("Configuração de retenções salva"); setEditingConfig(false); utils.terceiroContratos.getContrato.invalidate(); },
     onError: (e: any) => toast.error(e.message),
   });
+  const parsePct = (s: string) => Math.min(100, Math.max(0, parseFloat(String(s).replace(",", ".")) || 0));
 
   const valorBruto = Number(m.valorMedido || 0);
   const pISS = Number(contrato.percISS || 0);
@@ -2908,9 +2909,12 @@ function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEd
             ].map(f => (
               <div key={f.key}>
                 <Label className="text-[10px] text-gray-500">{f.label}</Label>
-                <Input type="number" step="0.01" min="0" max="100" className="text-xs h-7"
+                <Input type="text" inputMode="decimal" className="text-xs h-7"
                   value={(percConfig as any)[f.key]}
-                  onChange={e => setPercConfig(prev => ({ ...prev, [f.key]: e.target.value }))}
+                  onChange={e => {
+                    const raw = e.target.value.replace(/[^0-9.,]/g, "");
+                    setPercConfig(prev => ({ ...prev, [f.key]: raw }));
+                  }}
                 />
               </div>
             ))}
@@ -2921,11 +2925,11 @@ function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEd
               onClick={() => salvarConfigMut.mutate({
                 contratoId: contrato.id,
                 companyId: contrato.companyId,
-                percISS: parseFloat(percConfig.percISS) || 0,
-                percINSS: parseFloat(percConfig.percINSS) || 0,
-                percIRRF: parseFloat(percConfig.percIRRF) || 0,
-                percOutrasRetencoes: parseFloat(percConfig.percOutrasRetencoes) || 0,
-                percRetencaoTecnica: parseFloat(percConfig.percRetencaoTecnica) || 0,
+                percISS: parsePct(percConfig.percISS),
+                percINSS: parsePct(percConfig.percINSS),
+                percIRRF: parsePct(percConfig.percIRRF),
+                percOutrasRetencoes: parsePct(percConfig.percOutrasRetencoes),
+                percRetencaoTecnica: parsePct(percConfig.percRetencaoTecnica),
               })}>
               <Save className="w-3 h-3" /> Salvar Config
             </Button>
