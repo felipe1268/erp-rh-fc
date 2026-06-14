@@ -11,9 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import {
   ArrowLeft, Plus, Loader2, FileText, Trash2, Ruler, Square, Box, Spline,
   Hash, MousePointer2, Crosshair, ZoomIn, ZoomOut, Check, Camera, Image as ImageIcon,
   Calculator, FileSpreadsheet, ChevronLeft, ChevronRight, X,
@@ -24,6 +21,7 @@ import {
   calcularContorno, distancia, fatorCalibracao,
 } from "@shared/levantamentoGeo";
 import { useLevantamentoOffline } from "@/hooks/useLevantamentoOffline";
+import { VincularItemCombobox, buildItensVinculaveis } from "./VincularItemCombobox";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
 
@@ -103,6 +101,16 @@ export default function MedicaoLevantamento() {
     (historicoQtd ?? []).forEach((h: any) => m.set(h.orcamentoItemId, h.quantidade));
     return m;
   }, [historicoQtd]);
+  // Rev. 3094 — Itens MENSURÁVEIS do orçamento (folhas da árvore EAP), já com o
+  // caminho de pavimento/etapa, p/ o combobox de busca + agrupamento.
+  const itensVinculaveis = useMemo(() => buildItensVinculaveis(itensOrcamento as any[]), [itensOrcamento]);
+  const vincularEmptyHint = useMemo(() => {
+    if (!orcamentoId || orcamentoId <= 0) return "Este contrato não tem orçamento vinculado. Vincule um orçamento à obra para liberar os itens da planilha.";
+    if ((itensOrcamento as any[]).length === 0) return "O orçamento vinculado está sem itens.";
+    if (itensVinculaveis.length === 0) return "O orçamento só tem grupos/etapas, sem itens mensuráveis.";
+    return undefined;
+  }, [orcamentoId, itensOrcamento, itensVinculaveis]);
+
   const jaMedidoLista = useMemo(() => {
     const itensById = new Map<number, any>((itensOrcamento as any[]).map((i) => [i.id, i]));
     const out: { id: number; eapCodigo: string; descricao: string; unidade: string; quantidade: number }[] = [];
@@ -660,6 +668,12 @@ export default function MedicaoLevantamento() {
             {/* contornos da página */}
             <div className="border rounded-lg p-3">
               <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5"><Ruler className="h-4 w-4" />Contornos desta página</h3>
+              {vincularEmptyHint && contornosPagina.length > 0 ? (
+                <div className="mb-2 flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-700">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                  <span>{vincularEmptyHint}</span>
+                </div>
+              ) : null}
               {contornosPagina.length === 0 ? (
                 <p className="text-xs text-gray-400">Nenhum contorno. Escolha uma ferramenta e marque na planta.</p>
               ) : (
@@ -676,20 +690,13 @@ export default function MedicaoLevantamento() {
                       </div>
                       <div className="mt-1 text-gray-600">Quantidade: <b>{numFmt(parseFloat(c.quantidade || "0"), 2)} {c.unidade}</b></div>
                       <div className="mt-1.5">
-                        <Select value={c.orcamentoItemId ? String(c.orcamentoItemId) : ""} onValueChange={(v) => bindItem(c.id, v)}>
-                          <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Vincular item do orçamento…" /></SelectTrigger>
-                          <SelectContent>
-                            {(itensOrcamento as any[]).filter((i) => i.tipo !== "grupo" && i.nivel > 0).map((i) => {
-                              const ja = jaMedidoMap.get(i.id) ?? 0;
-                              return (
-                                <SelectItem key={i.id} value={String(i.id)} className="text-xs">
-                                  {i.eapCodigo} · {i.descricao} ({i.unidade})
-                                  {ja > 0 ? <span className="text-gray-400"> · já medido: {numFmt(ja, 2)} {i.unidade}</span> : null}
-                                </SelectItem>
-                              );
-                            })}
-                          </SelectContent>
-                        </Select>
+                        <VincularItemCombobox
+                          items={itensVinculaveis}
+                          value={c.orcamentoItemId ? String(c.orcamentoItemId) : ""}
+                          onChange={(v) => bindItem(c.id, v)}
+                          jaMedidoMap={jaMedidoMap}
+                          emptyHint={vincularEmptyHint}
+                        />
                       </div>
                     </div>
                   ))}

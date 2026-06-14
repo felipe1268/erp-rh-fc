@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3094 — **MEDIÇÃO/LEVANTAMENTO DE CAMPO · O VÍNCULO "CONTORNO → ITEM DA PLANILHA" GANHA BUSCA
+ * QUE FILTRA CONFORME SE DIGITA (CÓDIGO/ATIVIDADE/PAVIMENTO) E AGRUPAMENTO POR PAVIMENTO/ETAPA, PARA
+ * QUE A MESMA ATIVIDADE REPETIDA EM VÁRIOS PAVIMENTOS NÃO SEJA CONFUNDIDA NA MEDIÇÃO.**
+ *
+ * PEDIDO (usuário): na lateral "Contornos desta página", o seletor "Vincular item do orçamento…" não
+ * mostrava os itens da planilha de forma utilizável — era um `<Select>` simples, sem busca, e que
+ * misturava grupos/etapas com as atividades. Quando a MESMA atividade se repete por pavimento (ex.
+ * "Tubo de PVC" no 5º, 6º, 7º pavimento), não dava para distinguir qual era qual → risco de erro na
+ * medição. O usuário quer: (a) um campo de BUSCA com filtro conforme digita o nome do item; (b) que
+ * atividades repetidas sejam DIVIDIDAS por pavimento.
+ *
+ * CAUSA-RAIZ: (1) o `<Select>` listava `itensOrcamento.filter(i => i.tipo !== "grupo" && i.nivel > 0)`,
+ * mas no dado real NÃO existe `tipo="grupo"` — os grupos vêm como `tipo="Etapa/Subetapa"` (ou vazio) —,
+ * então o filtro nunca removia os grupos e ainda assim não havia busca nem contexto de pavimento.
+ * (2) Cada opção mostrava só `eapCodigo · descricao (unidade)`, sem o caminho de pavimento/etapa, então
+ * itens homônimos repetidos eram indistinguíveis. (3) Quando o contrato não resolve `orcamentoId`, a
+ * lista vinha vazia SILENCIOSAMENTE (sem explicar o motivo).
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO BACKEND/ALTER/DROP/DELETE/SCHEMA):
+ *   (1) `client/src/pages/medicao/VincularItemCombobox.tsx` (novo) — combobox (Popover + cmdk Command)
+ *       com BUSCA própria (`shouldFilter={false}` + filtro JS por tokens, cap de 200 resultados p/ não
+ *       travar no tablet) que casa contra código EAP + descrição + caminho de pavimento; resultados
+ *       AGRUPADOS por `grupoPath` (caminho dos grupos ancestrais). Exporta `buildItensVinculaveis(itens)`:
+ *       detecção ROBUSTA de item MENSURÁVEL = FOLHA da árvore EAP (um item é grupo se existe outro cujo
+ *       `eapCodigo` começa com `code + "."`), independente do `tipo` inconsistente; também descarta
+ *       `tipo="Etapa/Subetapa"` (cabeçalho mesmo sem filhos). Cada folha carrega o `grupoPath` montado
+ *       dos `descricao` dos ancestrais (" › "). Mostra "já medido neste contrato" por item e permite
+ *       "Desvincular".
+ *   (2) `MedicaoLevantamento.tsx` — memo `itensVinculaveis` (= `buildItensVinculaveis(itensOrcamento)`),
+ *       substitui o `<Select>` pelo `VincularItemCombobox`, e adiciona BANNER âmbar explicando quando a
+ *       lista está vazia (sem orçamento vinculado / orçamento sem itens / só grupos) em vez de silêncio.
+ *
+ * RESSALVA/DRIFT: se a lista continuar vazia para um contrato específico, a causa é de DADOS (a obra do
+ * contrato não tem orçamento vinculado) — agora explicitada no banner; o vínculo de orçamento à obra é
+ * pré-requisito, não corrigível só no frontend. Continua valendo o Incremento 2 (desenho fluido, pinça,
+ * PDF P&B, ferramenta PAREDE, layout de produção) p/ revisões seguintes.
+ *
  * Rev. 3093 — **MEDIÇÃO/LEVANTAMENTO DE CAMPO · AS PLANTAS (PDF) PASSAM A VIVER NO NÍVEL DO CONTRATO
  * (BIBLIOTECA COMPARTILHADA: ENVIA 1x, TODAS AS MEDIÇÕES ENXERGAM) E CADA LEVANTAMENTO PODE EXIBIR,
  * COMO REFERÊNCIA CLARA/TRACEJADA, OS CONTORNOS JÁ MEDIDOS NAS MEDIÇÕES ANTERIORES DO MESMO CONTRATO.**
