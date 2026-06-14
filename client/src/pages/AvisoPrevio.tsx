@@ -3306,6 +3306,27 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                           Estimativa gerencial p/ análise da decisão. A dispensa de cipeiro só é permitida por justa causa
                           comprovada em inquérito judicial (Súmula 379 TST); prosseguir pode gerar reintegração + indenização.
                         </p>
+
+                        {(() => {
+                          const liquido = parseFloat(String(calculoPreview.totalLiquido || calculoPreview.previsaoRescisao?.totalLiquido || calculoPreview.previsaoRescisao?.total || '0'));
+                          const estab = parseFloat(String(ie.total || '0'));
+                          const totalGeral = liquido + estab;
+                          return (
+                            <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-lg p-4 mt-3 border-2 border-slate-700">
+                              <div className="flex justify-between items-center gap-3">
+                                <div>
+                                  <span className="text-base font-bold text-white">TOTAL GERAL (Rescisão + Indenização Estabilidade)</span>
+                                  <p className="text-[10px] text-slate-300">Soma do Total Líquido da rescisão com a indenização do período de estabilidade</p>
+                                </div>
+                                <span className="text-2xl font-extrabold text-white whitespace-nowrap">{formatMoeda(totalGeral.toFixed(2))}</span>
+                              </div>
+                              <div className="flex justify-end gap-4 mt-2 text-[10px] text-slate-300">
+                                <span>Rescisão líquida: {formatMoeda(liquido.toFixed(2))}</span>
+                                <span>Indenização estabilidade: {formatMoeda(estab.toFixed(2))}</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     );
                   })()}

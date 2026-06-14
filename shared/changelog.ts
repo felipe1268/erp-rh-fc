@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3066 — **AVISO PRÉVIO · CIPEIRO (ESTABILIDADE PROVISÓRIA): O CARD DA "INDENIZAÇÃO DO PERÍODO DE
+ * ESTABILIDADE" GANHA UMA BARRA "TOTAL GERAL (RESCISÃO + INDENIZAÇÃO ESTABILIDADE)" SOMANDO O TOTAL LÍQUIDO
+ * DA RESCISÃO COM A INDENIZAÇÃO — ANTES SÓ MOSTRAVA OS DOIS TOTAIS SEPARADOS.**
+ *
+ * PEDIDO (print do "Novo Aviso Prévio" no iPad — colaborador cipeiro, "Coloque o total tbm"): no card
+ * vermelho "ALERTA — CUSTO ADICIONAL EVENTUAL · Indenização do Período de Estabilidade — Cipeiro" via-se o
+ * "TOTAL LÍQUIDO RESCISÃO" (ex.: R$ 3.809,53) e, separado, o "TOTAL DA INDENIZAÇÃO DE ESTABILIDADE"
+ * (ex.: R$ 45.752,05), mas NÃO existia em lugar nenhum a SOMA dos dois — o gestor tinha que somar de cabeça
+ * pra ver a exposição total da decisão de dispensar o cipeiro.
+ *
+ * CONTEXTO: a indenização de estabilidade (Súmula 396 TST) é, por regra, uma verba SEPARADA da rescisão e
+ * NÃO entra no Total Líquido (o próprio card avisa isso) — então não é caso de "somar no total líquido", e
+ * sim de OFERECER um total gerencial à parte que junte as duas pontas pra análise da decisão. Já existia o
+ * mesmo padrão de "TOTAL GERAL" (barra escura slate) no fluxo oficial+complementar logo abaixo, então a
+ * adição reusa o mesmo visual.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE, ZERO schema/backend) em
+ * `client/src/pages/AvisoPrevio.tsx`, dentro do bloco do card de estabilidade
+ * (`calculoPreview.indenizacaoEstabilidade.aplicavel`): logo após o aviso jurídico em itálico, foi inserida
+ * uma barra escura (gradiente slate-800→900, mesmo estilo do "TOTAL GERAL (Oficial + Complementar)") com o
+ * rótulo "TOTAL GERAL (Rescisão + Indenização Estabilidade)" e, à direita, a soma. O cálculo é local:
+ * `liquido = parseFloat(calculoPreview.totalLiquido || previsaoRescisao.totalLiquido || previsaoRescisao.total || '0')`
+ * + `estab = parseFloat(ie.total || '0')`, formatados via `formatMoeda(x.toFixed(2))` (BRL pt-BR). Abaixo, em
+ * fonte pequena, os dois componentes ("Rescisão líquida: …" e "Indenização estabilidade: …") para
+ * rastreabilidade. O card e a barra só aparecem quando o colaborador é cipeiro com indenização aplicável.
+ *
+ * EFEITO: na simulação de dispensa de cipeiro o gestor passa a ver de imediato a exposição total
+ * (rescisão líquida + indenização de estabilidade) sem somar manualmente, mantendo a separação contábil
+ * (o Total Líquido da rescisão segue intacto e a indenização segue sinalizada como verba separada).
+ *
+ * RESSALVA: a barra é apenas EXIBIÇÃO no preview do cálculo; não altera valores persistidos, o TRCT, nem o
+ * documento gerado de Aviso Prévio.
+ *
  * Rev. 3065 — **CONTRATOS DE TERCEIROS · O TEMPLATE DO CONTRATO (TEXTO + CLÁUSULAS + LAYOUT) FOI
  * CENTRALIZADO EM CONFIGURAÇÕES › "CONTRATO TERCEIROS"; NO MÓDULO TERCEIROS O CONTRATO PASSA A SER
  * SOMENTE VISUALIZAR, ASSINAR (FCSIGN) E BAIXAR — A EDIÇÃO DE TEXTO/INLINE DO CONTRATO FOI REMOVIDA.**
