@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3096 — **MEDIÇÃO DE TERCEIROS · NA "CONFIGURAÇÃO DE RETENÇÕES DO CONTRATO (%)" O USUÁRIO VOLTA A
+ * CONSEGUIR APAGAR O "0" DOS CAMPOS (ISS/INSS/IRRF/OUTRAS/RET. TÉCNICA) PARA DIGITAR O PERCENTUAL —
+ * ANTES O CAMPO RESSURGIA COM "0" A CADA TECLA.**
+ *
+ * PEDIDO (usuário): "Não consigo apagar o número 0" nos inputs de percentual de retenção do contrato
+ * (aba de medição, bloco "RETENÇÕES E DESCONTOS" → "Configuração de Retenções do Contrato (%)").
+ *
+ * CAUSA-RAIZ: em `client/src/pages/terceiros/contratos/ContratoDetalhe.tsx` os inputs eram controlados
+ * por um estado NUMÉRICO (`percConfig` com `Number(...)`) e o `onChange` fazia
+ * `parseFloat(e.target.value) || 0`. Ao apagar o conteúdo, `e.target.value === ""` → `parseFloat("")` =
+ * `NaN` → `|| 0` força "0" de volta ao estado/campo. Resultado: impossível deixar o campo vazio e
+ * inconveniente digitar (o "0" inicial não saía).
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO BACKEND/ALTER/DROP/DELETE/SCHEMA): `percConfig` passa a guardar TEXTO
+ * (strings), o `onChange` grava o valor cru `e.target.value` (permite vazio durante a digitação) e a
+ * conversão para número (`parseFloat(...) || 0`) acontece SÓ no clique de "Salvar Config", no payload da
+ * `salvarRetencaoConfig` (cada campo coergido explicitamente). O backend continua recebendo números; a
+ * UI volta a permitir limpar/editar livremente.
+ *
+ * RESSALVA/DRIFT: nenhuma — comportamento de cálculo/persistência idêntico; só a edição do campo ficou
+ * natural. Campo vazio ao salvar = 0 (mesma semântica de antes).
+ *
  * Rev. 3095 — **MEDIÇÃO DE TERCEIROS · A LISTA "MEDIÇÕES REGISTRADAS" PASSA A SER ORGANIZADA POR MÊS E
  * ANO, COM NAVEGADOR DE ANO (`< 2026 >`) E 12 CHIPS (JAN–DEZ), CADA UM COM UM "DOT" DE STATUS
  * (AZUL = COM LANÇAMENTO · VERDE = CONSOLIDADO · CINZA = SEM DADOS), IGUAL À LEGENDA DO CONTAS A PAGAR.**

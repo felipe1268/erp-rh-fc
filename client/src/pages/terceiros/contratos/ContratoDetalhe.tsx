@@ -2798,11 +2798,11 @@ function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEd
   const [pdfLoading, setPdfLoading] = useState(false);
 
   const [percConfig, setPercConfig] = useState({
-    percISS: Number(contrato.percISS || 0),
-    percINSS: Number(contrato.percINSS || 0),
-    percIRRF: Number(contrato.percIRRF || 0),
-    percOutrasRetencoes: Number(contrato.percOutrasRetencoes || 0),
-    percRetencaoTecnica: Number(contrato.percRetencaoTecnica || 0),
+    percISS: String(Number(contrato.percISS || 0)),
+    percINSS: String(Number(contrato.percINSS || 0)),
+    percIRRF: String(Number(contrato.percIRRF || 0)),
+    percOutrasRetencoes: String(Number(contrato.percOutrasRetencoes || 0)),
+    percRetencaoTecnica: String(Number(contrato.percRetencaoTecnica || 0)),
   });
 
   const utils = trpc.useUtils();
@@ -2910,7 +2910,7 @@ function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEd
                 <Label className="text-[10px] text-gray-500">{f.label}</Label>
                 <Input type="number" step="0.01" min="0" max="100" className="text-xs h-7"
                   value={(percConfig as any)[f.key]}
-                  onChange={e => setPercConfig(prev => ({ ...prev, [f.key]: parseFloat(e.target.value) || 0 }))}
+                  onChange={e => setPercConfig(prev => ({ ...prev, [f.key]: e.target.value }))}
                 />
               </div>
             ))}
@@ -2918,7 +2918,15 @@ function RetencoesSec({ m, contrato, isEditable }: { m: any; contrato: any; isEd
           <div className="flex gap-2 justify-end pt-1">
             <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => setEditingConfig(false)}>Cancelar</Button>
             <Button size="sm" className="text-xs h-7 gap-1" disabled={salvarConfigMut.isPending}
-              onClick={() => salvarConfigMut.mutate({ contratoId: contrato.id, companyId: contrato.companyId, ...percConfig })}>
+              onClick={() => salvarConfigMut.mutate({
+                contratoId: contrato.id,
+                companyId: contrato.companyId,
+                percISS: parseFloat(percConfig.percISS) || 0,
+                percINSS: parseFloat(percConfig.percINSS) || 0,
+                percIRRF: parseFloat(percConfig.percIRRF) || 0,
+                percOutrasRetencoes: parseFloat(percConfig.percOutrasRetencoes) || 0,
+                percRetencaoTecnica: parseFloat(percConfig.percRetencaoTecnica) || 0,
+              })}>
               <Save className="w-3 h-3" /> Salvar Config
             </Button>
           </div>
