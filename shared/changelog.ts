@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3075 — **CONTRATOS DE TERCEIROS · "GERAR MEDIÇÃO AUTOMÁTICA" PASSA A RESPEITAR O "DIA DA
+ * MEDIÇÃO" DEFINIDO NOS CRITÉRIOS DO CONTRATO — O PERÍODO DEIXA DE CAIR EM "1º → ÚLTIMO DIA DO MÊS"
+ * (DIVERGÊNCIA COM O CONTRATO) E PASSA A FECHAR NO DIA DA MEDIÇÃO.**
+ *
+ * PEDIDO (prints do iPad — card "Critérios de Medição e Pagamento" mostra "Dia da Medição: Dia 25";
+ * modal "Gerar Medição Automática" mostrava Período 01/06/2026 → 30/06/2026): "a medição deve
+ * respeitar os critérios e datas que foram definidas em contrato.. ajuste isso para que não haja
+ * informações divergentes". O contrato define `diaMedicao` (default 25), mas o modal ignorava esse
+ * critério: para a 1ª medição usava 1º→último dia do mês (state inicial) e, nas seguintes, fechava
+ * o período "na data de hoje" (`new Date()`), divergindo do que está no contrato.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE, ZERO schema/backend — o backend `gerarMedicao` já
+ * recebe `dataInicio`/`dataFim` como entrada e só os persiste) em
+ * `client/src/pages/terceiros/contratos/ContratoDetalhe.tsx`: novos helpers puros no nível de módulo
+ * `addDaysISO(s,n)` (soma dias via `Date.UTC` — sem bug de fuso iOS), `cutoffMedicaoISO(diaMed,y,m)`
+ * (data de corte = Dia da Medição do mês, clampada ao último dia — fev/30→28/29) e
+ * `cutoffOnOrAfterISO(diaMed,inicio)` (próximo corte em/ após a data de início, avançando o mês
+ * quando o início já passou do corte). (1) MEDIÇÕES SEGUINTES: `autoFim` deixa de ser
+ * `new Date()` e vira `cutoffOnOrAfterISO(diaMed, inicioEfetivo)`; `autoInicio` (dia seguinte ao fim
+ * da medição anterior) passa a usar `addDaysISO` (antes `new Date(dataFim)` — risco de fuso). (2) 1ª
+ * MEDIÇÃO: novo `useEffect([showGerarMedicao])` semeia, ao abrir o modal, `medicaoDataInicio` =
+ * dia seguinte ao corte do mês anterior e `medicaoDataFim` = corte do mês corrente (campos seguem
+ * EDITÁVEIS p/ ajuste). (3) Textos de ajuda do modal atualizados ("fim no Dia da Medição definido no
+ * contrato (dia N)"). Mostra `diaMed = contrato.diaMedicao ?? 25`.
+ *
  * Rev. 3074 — **CIPA · DIÁLOGO "NOVO MANDATO / ELEIÇÃO" GANHA AUTO-PREENCHIMENTO DO PERÍODO: AO
  * DIGITAR O INÍCIO DO MANDATO, O FIM É CALCULADO SOZINHO (+1 ANO, PADRÃO NR-5) E VICE-VERSA.**
  *

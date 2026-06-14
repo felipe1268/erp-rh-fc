@@ -41,6 +41,33 @@ const fmtDate = (d: string | null | undefined) => {
   return `${day}/${m}/${y}`;
 };
 
+// ── Helpers de período de medição (respeitam o "Dia da Medição" do contrato) ──
+// Soma N dias a uma data ISO "YYYY-MM-DD" via UTC (sem bug de fuso iOS).
+const addDaysISO = (s: string, n: number): string => {
+  const [y, m, d] = s.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + n);
+  return dt.toISOString().slice(0, 10);
+};
+// Data de corte da medição = "Dia da Medição" do mês (mês 1-based),
+// clampado ao último dia do mês (ex.: dia 31 em fevereiro → 28/29).
+const cutoffMedicaoISO = (diaMedicao: number, year: number, month1: number): string => {
+  const ultimoDia = new Date(year, month1, 0).getDate();
+  const d = Math.min(Math.max(diaMedicao || 25, 1), ultimoDia);
+  return `${year}-${String(month1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+};
+// Próximo corte (no dia da medição) em ou após a data de início informada.
+const cutoffOnOrAfterISO = (diaMedicao: number, inicioISO: string): string => {
+  let y = Number(inicioISO.slice(0, 4));
+  let m = Number(inicioISO.slice(5, 7));
+  let corte = cutoffMedicaoISO(diaMedicao, y, m);
+  if (corte < inicioISO) {
+    m += 1; if (m > 12) { m = 1; y += 1; }
+    corte = cutoffMedicaoISO(diaMedicao, y, m);
+  }
+  return corte;
+};
+
 const STATUS_MEDICAO: Record<string, { label: string; cls: string }> = {
   rascunho:           { label: "Rascunho",            cls: "bg-gray-100 text-gray-600 border-gray-200" },
   aguardando_aprovacao:{ label: "Aguard. Aprovação",  cls: "bg-yellow-100 text-yellow-800 border-yellow-200" },
@@ -125,6 +152,25 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
       refetchOnWindowFocus: true,
     },
   );
+
+  // Ao abrir o modal da 1ª medição, semeia o período conforme os critérios do contrato
+  // (Dia da Medição): fim = corte do mês corrente; início = dia seguinte ao corte do mês anterior.
+  // Sem isso, o padrão caía em "1º → último dia do mês", divergindo do contrato. Editável.
+  useEffect(() => {
+    if (!showGerarMedicao || !contrato) return;
+    if ((contrato.medicoes?.length || 0) > 0) return; // medições seguintes são calculadas, não vêm do state
+    const diaMed = (contrato as any).diaMedicao ?? 25;
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth() + 1; // 1-based
+    const fim = cutoffMedicaoISO(diaMed, y, m);
+    const pm = m === 1 ? 12 : m - 1;
+    const py = m === 1 ? y - 1 : y;
+    const inicio = addDaysISO(cutoffMedicaoISO(diaMed, py, pm), 1);
+    setMedicaoDataInicio(inicio);
+    setMedicaoDataFim(fim);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showGerarMedicao]);
 
   const recalcularDatasMut = trpc.terceiroContratos.recalcularDatasCronograma.useMutation({
     onSuccess: (r) => { toast.success(`Datas atualizadas do cronograma${r.usouEap ? " (via EAP)" : " (todas atividades)"}: ${fmtDate(r.dataInicio)} → ${fmtDate(r.dataTermino)}`); utils.terceiroContratos.getContrato.invalidate({ id }); },
@@ -1661,14 +1707,16 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
               const proximoNumero = (contrato.medicoes?.length || 0) + 1;
               const numStr = String(proximoNumero).padStart(2, "0");
               const isFirst = proximoNumero === 1;
+              const diaMed = (contrato as any).diaMedicao ?? 25;
               const ultimaMedicao = contrato.medicoes?.length > 0
                 ? [...contrato.medicoes].sort((a: any, b: any) => (b.numero || 0) - (a.numero || 0))[0]
                 : null;
               const autoInicio = ultimaMedicao?.dataFim
-                ? (() => { const d = new Date(ultimaMedicao.dataFim); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); })()
+                ? addDaysISO(ultimaMedicao.dataFim.slice(0, 10), 1)
                 : null;
-              const autoFim = new Date().toISOString().slice(0, 10);
               const inicioEfetivo = isFirst ? medicaoDataInicio : (autoInicio || medicaoDataInicio);
+              // Fim = "Dia da Medição" do contrato (corte em/ após o início) — respeita o contrato.
+              const autoFim = cutoffOnOrAfterISO(diaMed, inicioEfetivo);
               const fimEfetivo = isFirst ? medicaoDataFim : autoFim;
               const periodoCalc = inicioEfetivo.slice(0, 7);
               return (
@@ -1723,7 +1771,10 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                       </div>
                     </div>
                     {!isFirst && (
-                      <p className="text-xs text-gray-400 mt-2">Período calculado automaticamente: início no dia seguinte à medição anterior, fim na data de hoje.</p>
+                      <p className="text-xs text-gray-400 mt-2">Período calculado automaticamente: início no dia seguinte à medição anterior, fim no Dia da Medição definido no contrato (dia {diaMed}).</p>
+                    )}
+                    {isFirst && (
+                      <p className="text-xs text-gray-400 mt-2">Período sugerido conforme o Dia da Medição do contrato (dia {diaMed}). Ajuste se necessário.</p>
                     )}
                     {contrato.docsComPendencia > 0 && (
                       <div className="flex items-start gap-2 p-3 bg-yellow-50 rounded-lg text-yellow-700 text-xs mt-4">
