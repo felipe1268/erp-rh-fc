@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3063 — **FINANCEIRO · ANÁLISE DE CUSTOS · A TABELA MENSAL POR CATEGORIA PASSA A EXIBIR OS
+ * VALORES EM BRL POR EXTENSO (R$ 232.000,00 — PONTO P/ MILHAR, VÍRGULA P/ CENTAVOS) EM VEZ DA
+ * ABREVIAÇÃO "R$ X mil" / "R$ X,X mi".**
+ *
+ * PEDIDO (print da tela "Análise de Custos" no iPad): valores em reais por extenso, "número com
+ * separação de ponto e vírgula" — ou seja, BRL completo em vez da abreviação compacta.
+ *
+ * CONTEXTO: a tela `FinanceiroAnaliseCustos.tsx` tinha um helper `BRLk(v)` que abrevia valores
+ * (>= 1.000 → "R$ X mil"; >= 1.000.000 → "R$ X,X mi") e caía no `formatBRL` só para valores < 1.000.
+ * Isso deixava a tabela mensal com formato MISTO ("R$ 232 mil" ao lado de "R$ 977,20"/"R$ 210,00"),
+ * violando a regra de ouro de moeda do projeto (sempre BRL pt-BR completo na EXIBIÇÃO).
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE, ZERO schema/backend): em
+ * `client/src/pages/financeiro/FinanceiroAnaliseCustos.tsx`, as CÉLULAS da tabela mensal por
+ * categoria (valor do mês, sublinhas "pago"/"a pagar" de cada linha e da linha "Total geral", e os
+ * totais por mês do rodapé) trocaram `BRLk(...)` por `formatBRL(...)` → BRL completo via
+ * `Intl.NumberFormat("pt-BR", {style:"currency", currency:"BRL"})`. O `BRLk` foi MANTIDO apenas nos
+ * eixos/labels dos gráficos (YAxis/XAxis `tickFormatter`), onde a forma compacta é necessária para
+ * caber. A tabela já vive dentro de um wrapper `overflow-x-auto`, então os números mais largos
+ * apenas rolam horizontalmente (sem quebrar o layout, inclusive no iPad). A página de drill-down
+ * (`FinanceiroAnaliseCustosDetalhe.tsx`) já usava `formatBRL` na sua tabela — sem mudança.
+ *
  * Rev. 3062 — **AVISO PRÉVIO · QUANDO O COLABORADOR É CIPEIRO (MEMBRO DA CIPA COM ESTABILIDADE
  * PROVISÓRIA), O FLUXO "NOVO AVISO PRÉVIO" PASSA A CALCULAR E EXIBIR A POSSÍVEL INDENIZAÇÃO DEVIDA
  * POR LEI (SÚMULA 396 TST) NA DISPENSA SEM JUSTA CAUSA — COMPONENTE A COMPONENTE + TOTAL, SEPARADO

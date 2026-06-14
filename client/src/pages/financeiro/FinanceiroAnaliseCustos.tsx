@@ -679,7 +679,7 @@ export default function FinanceiroAnaliseCustos() {
                                     >
                                       {v > 0 ? (
                                         <span className="inline-flex items-center justify-end gap-1">
-                                          <span className="text-gray-700">{BRLk(v)}</span>
+                                          <span className="text-gray-700">{formatBRL(v)}</span>
                                           {subiu ? (
                                             <ArrowUp className="w-3 h-3 text-rose-500 shrink-0" />
                                           ) : caiu ? (
@@ -695,9 +695,9 @@ export default function FinanceiroAnaliseCustos() {
                                 <td className="py-2.5 pl-3 text-right whitespace-nowrap align-middle group-hover:bg-indigo-50/60">
                                   <div className="font-semibold text-gray-800 tabular-nums">{formatBRL(l.total)}</div>
                                   <div className="text-[10px] tabular-nums mt-0.5">
-                                    <span className="text-emerald-600">{BRLk(l.pago)} pago</span>
+                                    <span className="text-emerald-600">{formatBRL(l.pago)} pago</span>
                                     {" · "}
-                                    <span className="text-amber-600">{BRLk(l.aPagar)} a pagar</span>
+                                    <span className="text-amber-600">{formatBRL(l.aPagar)} a pagar</span>
                                   </div>
                                 </td>
                               </tr>
@@ -708,14 +708,14 @@ export default function FinanceiroAnaliseCustos() {
                           <tr className="border-t-2 border-gray-200 font-semibold text-gray-700">
                             <td className="py-2.5 pr-3 sticky left-0 bg-white z-10">Total geral</td>
                             {tabelaMensal.totaisMes.map((t, i) => (
-                              <td key={i} className="py-2.5 px-2.5 text-right tabular-nums whitespace-nowrap">{t > 0 ? BRLk(t) : "—"}</td>
+                              <td key={i} className="py-2.5 px-2.5 text-right tabular-nums whitespace-nowrap">{t > 0 ? formatBRL(t) : "—"}</td>
                             ))}
                             <td className="py-2.5 pl-3 text-right whitespace-nowrap">
                               <div className="tabular-nums">{formatBRL(tabelaMensal.totalGeral)}</div>
                               <div className="text-[10px] font-medium tabular-nums mt-0.5">
-                                <span className="text-emerald-600">{BRLk(tabelaMensal.totalPago)} pago</span>
+                                <span className="text-emerald-600">{formatBRL(tabelaMensal.totalPago)} pago</span>
                                 {" · "}
-                                <span className="text-amber-600">{BRLk(tabelaMensal.totalAPagar)} a pagar</span>
+                                <span className="text-amber-600">{formatBRL(tabelaMensal.totalAPagar)} a pagar</span>
                               </div>
                             </td>
                           </tr>
