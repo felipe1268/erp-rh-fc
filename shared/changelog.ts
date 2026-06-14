@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3105 — **MEDIÇÃO / LEVANTAMENTO DE CAMPO · O DESENHO DOS CONTORNOS GANHA ESCOLHA DE COR E DE OPACIDADE
+ * DO PREENCHIMENTO — ANTES O PREENCHIMENTO ERA FIXO E "FRACO" (18%) E A COR ERA AUTOMÁTICA POR TIPO, SEM JEITO
+ * DE TROCAR. AGORA HÁ UM POPOVER "ESTILO" NA BARRA DE FERRAMENTAS (PALETA + SLIDER) E RECOLORIR EM MASSA NA
+ * BARRA DE MULTI-SELEÇÃO.**
+ *
+ * PEDIDO: "a cor do preenchimento do contorno está muito fraca; quero poder escolher a cor e a opacidade".
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE/SCHEMA/BACKEND — o campo `cor` do contorno JÁ existia e JÁ
+ * persistia via `off.saveContorno`):
+ *
+ * 1) ESTADO PERSISTIDO (localStorage, por usuário/navegador) em `MedicaoLevantamento.tsx`: `corDesenho`
+ *    (string; "" = cor automática por tipo via `COR_TIPO`) e `fillOpacity` (número 0.05..0.9, default 0.32 —
+ *    antes era 0.18 fixo). Dois `useEffect` espelham para `localStorage` (`medCorDesenho`/`medFillOpacity`);
+ *    leitura inicial valida o range. `corPreview = corDesenho || COR_TIPO.area` para os rascunhos.
+ *
+ * 2) RENDER: o preenchimento dos contornos salvos passa de `fillOpacity={fecha?0.18:0}` para
+ *    `fillOpacity={fecha?fillOpacity:0}`; os previews (retângulo arrastando e desenho livre) trocam o azul/
+ *    opacidade fixos por `corPreview`/`fillOpacity`. NOVOS contornos gravam `cor: corDesenho || COR_TIPO[tipo]`
+ *    em `finalizarContorno` (antes sempre `COR_TIPO[tipo]`).
+ *
+ * 3) UI "ESTILO" (Popover na toolbar, espelhando o Popover do OSnap): swatch "Auto" + 9 cores preset
+ *    (`CORES_PRESET`) + `<input type="color">` para cor personalizada; slider `<input type="range">` 5..90%
+ *    para a opacidade, com leitura do % ao lado. O botão mostra um quadradinho com a cor efetiva atual.
+ *
+ * 4) RECOLORIR EM MASSA: na barra azul de multi-seleção (Rev. 3101) entra uma fileira "Recolorir:" com as
+ *    9 cores preset; clicar chama `recolorSelecionados(cor)` → loop `recolorContorno(c, cor)`, que reusa
+ *    `off.saveContorno` por id/uuid PRESERVANDO TODOS os campos (geometria, métricas, número e o vínculo
+ *    `orcamentoItemId`/`itemEapCodigo`/`itemDescricao`) — espelho EXATO do `bindContornoItem`, só trocando a cor.
+ *
+ * RESSALVA/DRIFT: a opacidade é um setting GLOBAL de render (não persiste por contorno) — muda a aparência de
+ * TODOS os preenchimentos da tela de uma vez; a cor, sim, é por contorno (gravada). Recolorir reusa o mesmo
+ * caminho offline-first do bind; nenhuma coluna nova. Tudo em `client/src/pages/medicao/MedicaoLevantamento.tsx`.
+ *
  * Rev. 3104 — **MEDIÇÃO / LEVANTAMENTO DE CAMPO · A TELA DE DESENHO SOBRE A PLANTA PASSA A ACEITAR ARQUIVOS
  * DXF (CAD VETORIAL) ALÉM DE PDF — E, COMO O DXF CARREGA COORDENADAS REAIS, A ESCALA É CALIBRADA
  * AUTOMATICAMENTE (SEM O PASSO MANUAL "CALIBRAR 2 PONTOS"). DWG (FORMATO PROPRIETÁRIO/PAGO) FICA PARA DEPOIS.**

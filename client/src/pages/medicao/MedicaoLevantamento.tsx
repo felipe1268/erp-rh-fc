@@ -15,7 +15,7 @@ import {
   Hash, MousePointer2, Crosshair, ZoomIn, ZoomOut, Check, Camera, Image as ImageIcon,
   Calculator, FileSpreadsheet, ChevronLeft, ChevronRight, ChevronDown, X,
   Wifi, WifiOff, RefreshCw, Download, HardDrive, AlertTriangle, CheckCircle2, CloudOff, History,
-  RectangleHorizontal, PencilLine, BrickWall, Undo2, Contrast, Magnet,
+  RectangleHorizontal, PencilLine, BrickWall, Undo2, Contrast, Magnet, Palette,
 } from "lucide-react";
 import {
   type GeoPonto, type TipoContorno, UNIDADE_POR_TIPO, LABEL_TIPO,
@@ -38,6 +38,10 @@ const COR_TIPO: Record<TipoContorno, string> = {
   contagem: "#ea580c",
   parede: "#db2777",
 };
+// Paleta de cores para escolher o desenho dos contornos (cor sólida do traço/preenchimento).
+const CORES_PRESET = ["#2563eb", "#dc2626", "#059669", "#ea580c", "#7c3aed", "#db2777", "#0891b2", "#ca8a04", "#111827"];
+// Opacidade padrão do preenchimento (antes era 0.18 fixo — ficava "fraco"). Persistida por usuário.
+const FILL_OPACITY_DEFAULT = 0.32;
 const ICON_TIPO: Record<TipoContorno, JSX.Element> = {
   area: <Square className="h-4 w-4" />,
   volume: <Box className="h-4 w-4" />,
@@ -438,6 +442,20 @@ export default function MedicaoLevantamento() {
   const [osnapModes, setOsnapModes] = useState<Record<SnapKind, boolean>>(OSNAP_TODOS);
   const [snapHit, setSnapHit] = useState<{ p: GeoPonto; kind: SnapKind } | null>(null);
 
+  // --- Estilo do desenho: cor escolhida p/ NOVOS contornos + opacidade do
+  // preenchimento (render global). "" = cor automática por tipo (COR_TIPO).
+  // Persistido por usuário em localStorage (zero backend/schema).
+  const [corDesenho, setCorDesenho] = useState<string>(() => {
+    try { return localStorage.getItem("medCorDesenho") ?? ""; } catch { return ""; }
+  });
+  const [fillOpacity, setFillOpacity] = useState<number>(() => {
+    try { const v = parseFloat(localStorage.getItem("medFillOpacity") ?? ""); return v >= 0.05 && v <= 0.9 ? v : FILL_OPACITY_DEFAULT; } catch { return FILL_OPACITY_DEFAULT; }
+  });
+  useEffect(() => { try { localStorage.setItem("medCorDesenho", corDesenho); } catch { /* */ } }, [corDesenho]);
+  useEffect(() => { try { localStorage.setItem("medFillOpacity", String(fillOpacity)); } catch { /* */ } }, [fillOpacity]);
+  // Cor efetiva para previews (rascunho/retângulo) = cor escolhida ou o azul de área.
+  const corPreview = corDesenho || COR_TIPO.area;
+
   // F3 alterna o OSnap (atalho AutoCAD).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -683,7 +701,7 @@ export default function MedicaoLevantamento() {
       pdfId: pdfSel.id,
       pagina,
       tipo,
-      cor: COR_TIPO[tipo],
+      cor: corDesenho || COR_TIPO[tipo],
       geometriaJson: JSON.stringify(ptsNorm),
       espessura: espessura ? String(espessura) : null,
       metrosPorUnidade: String(calibAtualEff.metrosPorUnidade),
@@ -845,6 +863,39 @@ export default function MedicaoLevantamento() {
     if (alvos.length === 0) return;
     setBulkBusy(true);
     try { for (const c of alvos) await bindContornoItem(c, orcamentoItemId); }
+    finally { setBulkBusy(false); }
+  }
+
+  // Recolore UM contorno já salvo preservando TODOS os demais campos (inclusive
+  // o vínculo de item). Reusa o saveContorno por id/uuid (mesmo caminho do bind).
+  function recolorContorno(c: any, cor: string) {
+    return off.saveContorno({
+      id: c.id, uuid: c.uuid, pdfId: pdfSelId!,
+      pagina: c.pagina ?? pagina,
+      tipo: c.tipo as TipoContorno,
+      cor,
+      geometriaJson: c.geometriaJson ?? "[]",
+      espessura: c.espessura ?? null,
+      metrosPorUnidade: c.metrosPorUnidade ?? null,
+      area: c.area ?? null,
+      perimetro: c.perimetro ?? null,
+      volume: c.volume ?? null,
+      contagem: c.contagem ?? null,
+      quantidade: c.quantidade ?? null,
+      unidade: c.unidade ?? null,
+      numero: c.numero,
+      orcamentoItemId: c.orcamentoItemId ?? null,
+      itemEapCodigo: c.itemEapCodigo ?? null,
+      itemDescricao: c.itemDescricao ?? null,
+    });
+  }
+
+  async function recolorSelecionados(cor: string) {
+    if (bulkBusy) return;
+    const alvos = contornosPagina.filter((c) => selContornos.has(c.id));
+    if (alvos.length === 0) return;
+    setBulkBusy(true);
+    try { for (const c of alvos) await recolorContorno(c, cor); }
     finally { setBulkBusy(false); }
   }
 
@@ -1103,6 +1154,49 @@ export default function MedicaoLevantamento() {
                     </PopoverContent>
                   </Popover>
                   <div className="h-6 w-px bg-border mx-1" />
+                  {/* Estilo do desenho: cor (novos contornos) + opacidade do preenchimento */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button size="sm" variant="ghost" className="h-9 gap-1" title="Escolher a cor do desenho e a opacidade do preenchimento">
+                        <Palette className="h-4 w-4" />
+                        <span className="inline-block h-3.5 w-3.5 rounded-sm border border-gray-300" style={{ backgroundColor: corPreview }} />
+                        Estilo
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-3" align="start">
+                      <p className="text-xs font-medium pb-1.5 text-muted-foreground">Cor do desenho (novos contornos)</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button" title="Automática (cor por tipo)"
+                          onClick={() => setCorDesenho("")}
+                          className={`h-7 w-7 rounded-md border-2 text-[10px] font-semibold ${corDesenho === "" ? "border-gray-900" : "border-gray-200"}`}
+                        >Auto</button>
+                        {CORES_PRESET.map((cor) => (
+                          <button
+                            key={cor} type="button" title={cor}
+                            onClick={() => setCorDesenho(cor)}
+                            className={`h-7 w-7 rounded-md border-2 ${corDesenho.toLowerCase() === cor.toLowerCase() ? "border-gray-900" : "border-transparent"}`}
+                            style={{ backgroundColor: cor }}
+                          />
+                        ))}
+                        <label className="h-7 w-7 rounded-md border-2 border-dashed border-gray-300 grid place-items-center cursor-pointer overflow-hidden" title="Cor personalizada">
+                          <Palette className="h-3.5 w-3.5 text-gray-400" />
+                          <input type="color" value={corDesenho || COR_TIPO.area} onChange={(e) => setCorDesenho(e.target.value)} className="sr-only" />
+                        </label>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between">
+                        <p className="text-xs font-medium text-muted-foreground">Opacidade do preenchimento</p>
+                        <span className="text-xs tabular-nums text-gray-600">{Math.round(fillOpacity * 100)}%</span>
+                      </div>
+                      <input
+                        type="range" min={5} max={90} step={1}
+                        value={Math.round(fillOpacity * 100)}
+                        onChange={(e) => setFillOpacity(parseInt(e.target.value, 10) / 100)}
+                        className="w-full mt-1 accent-blue-600"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <div className="h-6 w-px bg-border mx-1" />
                   <Button size="sm" variant="ghost" className="h-9 w-9 p-0" onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}><ZoomOut className="h-4 w-4" /></Button>
                   <span className="text-xs tabular-nums w-10 text-center">{Math.round(zoom * 100)}%</span>
                   <Button size="sm" variant="ghost" className="h-9 w-9 p-0" onClick={() => setZoom((z) => Math.min(6, z + 0.25))}><ZoomIn className="h-4 w-4" /></Button>
@@ -1221,7 +1315,7 @@ export default function MedicaoLevantamento() {
                             const fecha = FECHA_POLIGONO(c.tipo);
                             const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ") + (fecha ? " Z" : "");
                             return (
-                              <path key={c.id} d={d} fill={fecha ? cor : "none"} fillOpacity={fecha ? 0.18 : 0} stroke={cor} strokeWidth={fecha ? 0.003 : 0.004} vectorEffect="non-scaling-stroke" />
+                              <path key={c.id} d={d} fill={fecha ? cor : "none"} fillOpacity={fecha ? fillOpacity : 0} stroke={cor} strokeWidth={fecha ? 0.003 : 0.004} vectorEffect="non-scaling-stroke" />
                             );
                           })}
                           {/* draft */}
@@ -1241,14 +1335,14 @@ export default function MedicaoLevantamento() {
                               y={Math.min(dragRect.a.y, dragRect.b.y)}
                               width={Math.abs(dragRect.a.x - dragRect.b.x)}
                               height={Math.abs(dragRect.a.y - dragRect.b.y)}
-                              fill={COR_TIPO.area} fillOpacity={0.15} stroke={COR_TIPO.area} strokeWidth={0.003} strokeDasharray="0.01 0.006" vectorEffect="non-scaling-stroke"
+                              fill={corPreview} fillOpacity={fillOpacity} stroke={corPreview} strokeWidth={0.003} strokeDasharray="0.01 0.006" vectorEffect="non-scaling-stroke"
                             />
                           )}
                           {/* preview do desenho livre */}
                           {freePts.length > 1 && (
                             <path
                               d={freePts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ")}
-                              fill={COR_TIPO.area} fillOpacity={0.1} stroke={COR_TIPO.area} strokeWidth={0.003} vectorEffect="non-scaling-stroke"
+                              fill={corPreview} fillOpacity={fillOpacity} stroke={corPreview} strokeWidth={0.003} vectorEffect="non-scaling-stroke"
                             />
                           )}
                           {/* calibração draft */}
@@ -1325,6 +1419,17 @@ export default function MedicaoLevantamento() {
                         placeholder={bulkBusy ? "Aplicando…" : "Vincular item a todos os selecionados…"}
                         disabled={bulkBusy}
                       />
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[11px] text-blue-700">Recolorir:</span>
+                        {CORES_PRESET.map((cor) => (
+                          <button
+                            key={cor} type="button" title={`Recolorir selecionados para ${cor}`}
+                            disabled={bulkBusy} onClick={() => { void recolorSelecionados(cor); }}
+                            className="h-5 w-5 rounded-sm border border-gray-300 disabled:opacity-50"
+                            style={{ backgroundColor: cor }}
+                          />
+                        ))}
+                      </div>
                       <Button
                         size="sm" variant="destructive" className="h-7 w-full gap-1 text-xs"
                         disabled={bulkBusy} onClick={excluirSelecionados}
