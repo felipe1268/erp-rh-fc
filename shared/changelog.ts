@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3071 — **CONTRATOS DE TERCEIROS · "GERAR MEDIÇÃO" QUEBRAVA COM O ERRO "itensContrato is not
+ * defined" — ReferenceError NO BACKEND (procedure `gerarMedicao`) QUE ABORTAVA A GERAÇÃO DA MEDIÇÃO E
+ * APARECIA COMO TOAST NO IPAD.**
+ *
+ * PEDIDO (print do iPad — IMG_2002, modal "Gerar Medição Automática · Medição 01", toast vermelho
+ * "itensContrato is not defined"). CAUSA-RAIZ: dentro da procedure `gerarMedicao` (server) os itens do
+ * contrato são carregados em `const itens = ...` (linha ~1236), mas no trecho que descobre o
+ * `orcamentoId` quando o contrato não tem um vinculado (`if (!orcIdGen) { const itemWithOrc =
+ * itensContrato.find(...) }`) o código referenciava `itensContrato` — nome que SÓ existe em OUTRAS
+ * procedures do mesmo arquivo (cópia/colagem). Como `itensContrato` não está definido nesse escopo, o
+ * V8 lançava `ReferenceError: itensContrato is not defined`, abortando o `gerarMedicao` antes de gravar
+ * a medição; o erro chegava ao cliente e era exibido no toast. Atingia contratos SEM `orcamentoId`
+ * direto (ramo `!orcIdGen`), que é justamente o caso da 1ª medição do print.
+ *
+ * SOLUÇÃO (BACKEND, 1 LINHA, ZERO ALTER/DROP/DELETE, ZERO schema) em
+ * `server/routers/terceiroContratos.ts`: na procedure `gerarMedicao`, `itensContrato.find(...)` →
+ * `itens.find(...)` (a variável correta já carregada no escopo). As demais ocorrências de
+ * `itensContrato` no arquivo (procedures `recalcularMedicao`, geração de boletim/databook etc.) estão
+ * corretas — lá a variável É declarada localmente; só o uso na `gerarMedicao` estava órfão.
+ *
  * Rev. 3070 — **CONTRATOS DE TERCEIROS · MODAL "GERAR MEDIÇÃO AUTOMÁTICA" REDESENHADO PARA NAVEGAÇÃO
  * MAIS FÁCIL E OBJETIVA — CABEÇALHO AZUL DESTACADO, EXPLICAÇÃO EM CARD, PERÍODO "INÍCIO → FIM" CLARO E
  * BOTÕES DE LARGURA IGUAL.**

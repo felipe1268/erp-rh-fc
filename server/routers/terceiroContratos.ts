@@ -1371,7 +1371,7 @@ export const terceiroContratosRouter = router({
       const orcEapNomeGen: Record<string, string> = {};
       let orcIdGen = contrato.orcamentoId;
       if (!orcIdGen) {
-        const itemWithOrc = itensContrato.find((ic: any) => ic.orcamentoItemId);
+        const itemWithOrc = itens.find((ic: any) => ic.orcamentoItemId);
         if ((itemWithOrc as any)?.orcamentoItemId) {
           const [orcItem] = await db.select({ orcamentoId: orcamentoItens.orcamentoId })
             .from(orcamentoItens).where(sql`${orcamentoItens.id} = ${(itemWithOrc as any).orcamentoItemId}`).limit(1);
