@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3072 — **CIPA · ABA "MEMBROS" PASSA A EXIBIR A FOTO DO COLABORADOR AO LADO DO NOME (MESMO
+ * AVATAR REDONDO USADO NA BUSCA E NOS CANDIDATOS), CAINDO PARA A INICIAL QUANDO NÃO HÁ FOTO.**
+ *
+ * PEDIDO (print do iPad — tela "CIPA › Membros"): "coloca fotos dos funcionários aqui... também".
+ * A tabela de membros mostrava só o nome em texto, enquanto a busca de colaboradores e a lista de
+ * candidatos já exibiam o avatar com foto.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE, ZERO schema/backend) em
+ * `client/src/pages/CipaCompleta.tsx`: novo `useMemo empById` indexa a query `employees.list` (que já
+ * retorna `fotoUrl` — é a mesma fonte que alimenta o avatar da busca) por `id`. Na célula "Colaborador"
+ * da tabela de membros, o nome passou a vir precedido por `<EmpAvatar emp={{ fotoUrl:
+ * empById[m.employeeId]?.fotoUrl, nomeCompleto: m.employeeName }} size={8} />` dentro de um
+ * `flex items-center gap-2.5`. Reusa o componente `EmpAvatar` já existente (img redonda `object-cover
+ * object-top` com `onError`→inicial). Membros desligados (fora do `excludeTerminated` da query) caem
+ * naturalmente no fallback de inicial. O clique na célula (abre o raio-X do colaborador) foi preservado.
+ *
  * Rev. 3071 — **CONTRATOS DE TERCEIROS · "GERAR MEDIÇÃO" QUEBRAVA COM O ERRO "itensContrato is not
  * defined" — ReferenceError NO BACKEND (procedure `gerarMedicao`) QUE ABORTAVA A GERAÇÃO DA MEDIÇÃO E
  * APARECIA COMO TOAST NO IPAD.**

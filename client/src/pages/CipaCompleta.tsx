@@ -151,6 +151,11 @@ export default function CipaCompleta() {
   );
   const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: !!companyId || companyIds?.length > 0 });
   const activeEmployees = useMemo(() => (empList as any[]).filter((e: any) => e.status === "Ativo" && !e.deletedAt), [empList]);
+  const empById = useMemo(() => {
+    const map: Record<number, any> = {};
+    for (const e of empList as any[]) map[e.id] = e;
+    return map;
+  }, [empList]);
 
   // Mutations
   const createEleicao = trpc.cipa.eleicoes.create.useMutation({
@@ -620,7 +625,10 @@ export default function CipaCompleta() {
                           ) : (membros as any[]).map((m: any) => (
                             <tr key={m.id} className={`border-b last:border-0 hover:bg-muted/20 ${m.statusMembro === "Encerrado" ? "opacity-60" : ""}`}>
                               <td className="p-3 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(m.employeeId)}>
-                                {m.employeeName}
+                                <div className="flex items-center gap-2.5">
+                                  <EmpAvatar emp={{ fotoUrl: empById[m.employeeId]?.fotoUrl, nomeCompleto: m.employeeName }} size={8} />
+                                  <span>{m.employeeName}</span>
+                                </div>
                               </td>
                               <td className="p-3">{formatCPF(m.employeeCpf)}</td>
                               <td className="p-3 text-xs">{m.employeeCargo}</td>
