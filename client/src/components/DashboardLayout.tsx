@@ -300,7 +300,6 @@ const menuSectionsTerceiros: MenuSection[] = [
       { icon: Building2, label: "Empresas de Serviço", path: "/terceiros/empresas" },
       { icon: FileSignature, label: "Contratos de Serviço", path: "/terceiros/contratos" },
       { icon: Briefcase, label: "Prestadores PJ", path: "/modulo-pj" },
-      { icon: FileSpreadsheet, label: "Medições PJ", path: "/pj-medicoes" },
       { icon: LayoutDashboard, label: "Painel Terceiros", path: "/terceiros/painel" },
     ],
   },
@@ -544,8 +543,8 @@ const menuSectionsMedicaoTerceiros: MenuSection[] = [
   {
     title: "Medição de Terceiros",
     items: [
-      { icon: Receipt,       label: "Medições (a pagar)", path: "/terceiros/medicoes" },
-      { icon: FileSignature, label: "Contratos de Serviço", path: "/terceiros/contratos" },
+      { icon: Receipt,         label: "Medições (a pagar)", path: "/terceiros/medicoes" },
+      { icon: FileSpreadsheet, label: "Medições PJ", path: "/pj-medicoes" },
     ],
   },
 ];

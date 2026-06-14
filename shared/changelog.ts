@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3084 — **MEDIÇÃO DE TERCEIROS · LIMPEZA DO MENU TERCEIROS: "MEDIÇÕES PJ" SAI DO MÓDULO TERCEIROS E
+ * PASSA A VIVER NA BARRA DEDICADA "MEDIÇÃO TERCEIROS" (AGORA TODA FUNÇÃO DE MEDIÇÃO FICA EM UM SÓ LUGAR).**
+ *
+ * PEDIDO (usuário, print iPad da sidebar do Terceiros): "Retire deste módulo tudo que está no módulo
+ * medições. De terceiros." A Rev. 3083 já tinha tirado o item "Medições" do Terceiros e criado a barra
+ * dedicada `medicao-terceiros`, MAS "Medições PJ" (`/pj-medicoes`) — que também é medição (de PJ) — ainda
+ * estava listada no menu do Terceiros. Esta revisão remove esse resíduo: nenhuma função de medição sobra
+ * no Terceiros; todas ficam na barra dedicada.
+ *
+ * IMPLEMENTAÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE/SCHEMA/BACKEND/PERMISSÕES):
+ * - `client/src/components/DashboardLayout.tsx`: REMOVIDO `{ icon: FileSpreadsheet, label: "Medições PJ",
+ *   path: "/pj-medicoes" }` de `menuSectionsTerceiros`; ADICIONADO o mesmo item em
+ *   `menuSectionsMedicaoTerceiros` (a barra dedicada agora lista: Medições (a pagar) + Medições PJ +
+ *   Contratos de Serviço).
+ * - `client/src/contexts/ModuleContext.tsx`: `ROUTE_MODULE_MAP["/pj-medicoes"]` muda de "terceiros" →
+ *   "medicao-terceiros", então abrir /pj-medicoes ativa a barra dedicada (consistente com os demais itens
+ *   da seção; não joga o usuário de volta pro menu inteiro do Terceiros).
+ *
+ * DECISÃO DE ACL: SEM mudança de permissões. O `routeToFeatureKey` resolve a permissão granular de
+ * `/pj-medicoes` pela sua própria feature em `shared/modules.ts` (preservada); o módulo dedicado reutiliza
+ * o gating do Terceiros (`canAccessModule("terceiros")`). Mover o item de menu NÃO altera ACL.
+ *
+ * VERIFICAÇÃO: HMR do Vite recompilou ambos arquivos sem erro (tsc --noEmit estoura o timeout neste
+ * monorepo grande — validar pelo build real esbuild/Vite). App sobe limpo (Server running + Neon).
+ *
  * Rev. 3083 — **MEDIÇÃO DE TERCEIROS · VIRA MÓDULO DEDICADO COM BARRA DE COMANDO PRÓPRIA: AO ABRIR
  * `/terceiros/medicoes` A SIDEBAR PASSA A MOSTRAR SÓ AS FUNÇÕES DE MEDIÇÃO (NÃO O MENU COMPLETO DO MÓDULO
  * TERCEIROS) E O ITEM "MEDIÇÕES" FOI REMOVIDO DO MENU DE TERCEIROS (DEDUP — A FUNÇÃO FICA EM UM SÓ LUGAR).**

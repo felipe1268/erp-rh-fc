@@ -264,6 +264,88 @@ export const terceiroContratosRouter = router({
       }));
     }),
 
+  // Rev. 3084 — Contratos prontos para medição mensal: ATIVOS e com ASSINATURA CONCLUÍDA.
+  // Alimenta a tela dedicada de Medições de Terceiros (substitui o item de menu "Contratos de Serviço").
+  // Um contrato só aparece aqui depois que pelo menos um envelope FcSign não-excluído está "concluido"
+  // (mesma regra ADESIVA do getContrato — Rev. 3064).
+  listarContratosParaMedicao: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const rows = await db.select().from(terceiroContratos)
+        .where(and(
+          eq(terceiroContratos.companyId, input.companyId),
+          eq(terceiroContratos.status, "ativo"),
+        ))
+        .orderBy(desc(terceiroContratos.criadoEm));
+      if (rows.length === 0) return [];
+
+      const contratoIds = rows.map(r => r.id);
+
+      // Envelopes não-excluídos dos contratos ativos → set dos que têm "concluido".
+      const assinadosSet = new Set<number>();
+      try {
+        const envs = await db.select({
+          contratoTerceiroId: integrasignEnvelopes.contratoTerceiroId,
+          status: integrasignEnvelopes.status,
+        })
+          .from(integrasignEnvelopes)
+          .where(and(
+            eq(integrasignEnvelopes.companyId, input.companyId),
+            inArray(integrasignEnvelopes.contratoTerceiroId, contratoIds),
+            isNull(integrasignEnvelopes.excluidoEm),
+          ));
+        envs.forEach(e => { if (e.status === "concluido" && e.contratoTerceiroId != null) assinadosSet.add(e.contratoTerceiroId); });
+      } catch {}
+
+      const assinados = rows.filter(r => assinadosSet.has(r.id));
+      if (assinados.length === 0) return [];
+
+      // Empresas terceiras (nome de exibição).
+      const empresas = await db.select({ id: empresasTerceiras.id, nomeFantasia: empresasTerceiras.nomeFantasia, razaoSocial: empresasTerceiras.razaoSocial })
+        .from(empresasTerceiras).where(eq(empresasTerceiras.companyId, input.companyId));
+      const empMap: Record<number, string> = {};
+      empresas.forEach(e => { empMap[e.id] = e.nomeFantasia || e.razaoSocial; });
+
+      // Acumulado medido por contrato (soma dos itens) → % global + saldo a medir.
+      const medidoPorContrato: Record<number, number> = {};
+      try {
+        const itens = await db.select({
+          contratoId: terceiroContratoItens.contratoId,
+          valorMedidoAcumulado: terceiroContratoItens.valorMedidoAcumulado,
+        })
+          .from(terceiroContratoItens)
+          .where(and(
+            eq(terceiroContratoItens.companyId, input.companyId),
+            inArray(terceiroContratoItens.contratoId, assinados.map(c => c.id)),
+          ));
+        itens.forEach(i => {
+          if (i.contratoId == null) return;
+          medidoPorContrato[i.contratoId] = (medidoPorContrato[i.contratoId] || 0) + n(i.valorMedidoAcumulado);
+        });
+      } catch {}
+
+      return assinados.map(r => {
+        const medido = medidoPorContrato[r.id] || 0;
+        const total = n(r.valorTotal);
+        return {
+          id: r.id,
+          numero: r.numeroContrato,
+          descricao: r.descricao,
+          obraId: r.obraId,
+          obraNome: r.obraNome,
+          empresaTerceiraId: r.empresaTerceiraId,
+          empresaNome: empMap[r.empresaTerceiraId] || "—",
+          valorTotal: total,
+          valorMedidoAcumulado: medido,
+          saldoAMedir: Math.max(total - medido, 0),
+          percentualMedido: total > 0 ? (medido / total) * 100 : 0,
+          diaMedicao: (r as any).diaMedicao ?? null,
+        };
+      });
+    }),
+
   getContrato: protectedProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ input, ctx }) => {

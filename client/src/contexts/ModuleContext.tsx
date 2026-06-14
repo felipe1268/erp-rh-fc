@@ -38,7 +38,7 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/aviso-previo": "rh-dp",
   "/ferias": "rh-dp",
   "/modulo-pj": "terceiros" as ModuleId,
-  "/pj-medicoes": "terceiros" as ModuleId,
+  "/pj-medicoes": "medicao-terceiros" as ModuleId,
   "/terceiros/pj/conformidade": "terceiros" as ModuleId,
   "/solicitacao-he": "rh-dp",
   "/contas-bancarias": "rh-dp",

@@ -6,7 +6,7 @@ import { useCompany } from "@/hooks/useCompany";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle, XCircle, ClipboardCheck, Zap, ChevronRight, AlertTriangle, ShieldCheck, UserCheck, Crown } from "lucide-react";
+import { CheckCircle, XCircle, ClipboardCheck, Zap, ChevronRight, AlertTriangle, ShieldCheck, UserCheck, Crown, FileSignature, Building2, Ruler } from "lucide-react";
 import { toast } from "sonner";
 
 const BRL = (v: any) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(v) || 0);
@@ -42,6 +42,13 @@ export default function Medicoes() {
     { enabled: companyId > 0 }
   );
   const tresNiveis = medCfg?.aprovacaoTresNiveis ?? true;
+
+  // Rev. 3084 — Contratos ATIVOS com assinatura concluída, prontos para medição mensal.
+  const { data: contratosParaMedir = [], isLoading: loadingContratos } =
+    trpc.terceiroContratos.listarContratosParaMedicao.useQuery(
+      { companyId },
+      { enabled: companyId > 0 }
+    );
 
   const invalidate = () => utils.terceiroContratos.listarMedicoes.invalidate();
 
@@ -88,6 +95,62 @@ export default function Medicoes() {
               </Badge>
             )}
           </div>
+        </div>
+
+        {/* Rev. 3084 — Contratos ATIVOS prontos para medição (só após assinaturas concluídas). */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <FileSignature className="w-4 h-4 text-orange-600" />
+            <h2 className="text-sm font-semibold text-gray-800">Contratos ativos para medir</h2>
+            <Badge className="bg-orange-50 text-orange-700 border border-orange-200 text-xs">{contratosParaMedir.length}</Badge>
+          </div>
+          {loadingContratos ? (
+            <div className="py-6 text-center text-gray-400 text-sm">Carregando contratos...</div>
+          ) : contratosParaMedir.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 py-6 px-4 text-center">
+              <FileSignature className="w-7 h-7 mx-auto mb-2 text-gray-300" />
+              <p className="text-sm text-gray-500">Nenhum contrato pronto para medição.</p>
+              <p className="text-xs text-gray-400">Os contratos aparecem aqui somente após a finalização das assinaturas.</p>
+            </div>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              {contratosParaMedir.map((c: any) => (
+                <button
+                  key={c.id}
+                  onClick={() => navigate(`/terceiros/contratos/${c.id}?tab=medicoes`)}
+                  className="text-left bg-white rounded-xl border border-gray-200 p-3 shadow-sm hover:border-orange-300 hover:shadow-md transition-all"
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="font-semibold text-gray-900 text-sm truncate">{c.numero || `Contrato #${c.id}`}</span>
+                    <Badge className="bg-green-100 text-green-700 border border-green-200 text-[10px]">Assinado</Badge>
+                  </div>
+                  <p className="text-xs text-gray-600 line-clamp-2 mb-2">{c.descricao}</p>
+                  <div className="flex items-center gap-1.5 text-[11px] text-gray-500 mb-2">
+                    <Building2 className="w-3 h-3 flex-shrink-0" />
+                    <span className="truncate">{c.empresaNome}</span>
+                    {c.obraNome && <><span className="text-gray-300">•</span><span className="truncate">{c.obraNome}</span></>}
+                  </div>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-gray-500">Medido: <strong className="text-gray-800">{Number(c.percentualMedido).toFixed(1)}%</strong></span>
+                    <span className="inline-flex items-center gap-1 text-orange-700 font-medium">
+                      <Ruler className="w-3 h-3" /> Medir <ChevronRight className="w-3 h-3" />
+                    </span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
+                    <div className="h-full bg-orange-400 rounded-full" style={{ width: `${Math.min(Number(c.percentualMedido) || 0, 100)}%` }} />
+                  </div>
+                  <div className="mt-1 text-[10px] text-gray-400">
+                    Saldo a medir: <strong className="text-gray-600">{BRL(c.saldoAMedir)}</strong> de {BRL(c.valorTotal)}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 pt-1">
+          <ClipboardCheck className="w-4 h-4 text-gray-500" />
+          <h2 className="text-sm font-semibold text-gray-800">Medições registradas</h2>
         </div>
 
         <div className="flex gap-3">
