@@ -239,6 +239,10 @@ export default function MedicaoLevantamento() {
   // marcações coloridas por cima). Filtro VISUAL apenas (não altera o arquivo).
   const [pdfPB, setPdfPB] = useState(true);
 
+  // Rev. 3101 — multi-seleção de contornos (apagar/vincular vários de uma vez).
+  const [selContornos, setSelContornos] = useState<Set<number>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+
   // Pré-visualização do arrasto (retângulo) e do traço livre.
   const [dragRect, setDragRect] = useState<{ a: GeoPonto; b: GeoPonto } | null>(null);
   const [freePts, setFreePts] = useState<GeoPonto[]>([]);
@@ -693,11 +697,9 @@ export default function MedicaoLevantamento() {
     }
   }
 
-  function bindItem(contornoId: number, orcamentoItemId: string) {
+  function bindContornoItem(c: any, orcamentoItemId: string) {
     const it = (itensOrcamento as any[]).find((i) => String(i.id) === orcamentoItemId);
-    const c = contornosPagina.find((x) => x.id === contornoId);
-    if (!c) return;
-    off.saveContorno({
+    return off.saveContorno({
       id: c.id, uuid: c.uuid, pdfId: pdfSelId!,
       pagina: c.pagina ?? pagina,
       tipo: c.tipo as TipoContorno,
@@ -716,6 +718,50 @@ export default function MedicaoLevantamento() {
       itemEapCodigo: it?.eapCodigo ?? null,
       itemDescricao: it?.descricao ?? null,
     });
+  }
+
+  function bindItem(contornoId: number, orcamentoItemId: string) {
+    const c = contornosPagina.find((x) => x.id === contornoId);
+    if (!c) return;
+    void bindContornoItem(c, orcamentoItemId);
+  }
+
+  // ===================== Multi-seleção de contornos (Rev. 3101) =====================
+  // Mantém a seleção só com ids que ainda existem na página atual.
+  useEffect(() => {
+    setSelContornos((prev) => {
+      if (prev.size === 0) return prev;
+      const validos = new Set(contornosPagina.map((c) => c.id));
+      const next = new Set<number>();
+      prev.forEach((id) => { if (validos.has(id)) next.add(id); });
+      return next.size === prev.size ? prev : next;
+    });
+  }, [contornosPagina]);
+
+  const toggleSelContorno = (id: number) =>
+    setSelContornos((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const allSelecionados = contornosPagina.length > 0 && selContornos.size === contornosPagina.length;
+  const toggleSelTodos = () =>
+    setSelContornos((prev) => (prev.size === contornosPagina.length ? new Set() : new Set(contornosPagina.map((c) => c.id))));
+
+  async function excluirSelecionados() {
+    if (bulkBusy) return;
+    const alvos = contornosPagina.filter((c) => selContornos.has(c.id));
+    if (alvos.length === 0) return;
+    if (!confirm(`Excluir ${alvos.length} contorno(s) selecionado(s)?`)) return;
+    setBulkBusy(true);
+    try { for (const c of alvos) await off.excluirContorno(c); setSelContornos(new Set()); }
+    finally { setBulkBusy(false); }
+  }
+
+  async function vincularItemSelecionados(orcamentoItemId: string) {
+    if (bulkBusy) return;
+    const alvos = contornosPagina.filter((c) => selContornos.has(c.id));
+    if (alvos.length === 0) return;
+    setBulkBusy(true);
+    try { for (const c of alvos) await bindContornoItem(c, orcamentoItemId); }
+    finally { setBulkBusy(false); }
   }
 
   function gerarMemoriaCalculo() {
@@ -1147,13 +1193,58 @@ export default function MedicaoLevantamento() {
                 <p className="text-xs text-gray-400">Nenhum contorno. Escolha uma ferramenta e marque na planta.</p>
               ) : (
                 <div className="space-y-2">
-                  {contornosPagina.map((c) => (
-                    <div key={c.id} className="border rounded-md p-2 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium flex items-center gap-1" style={{ color: c.cor }}>
-                          {ICON_TIPO[c.tipo as TipoContorno]} {LABEL_TIPO[c.tipo as TipoContorno]} #{String(c.numero ?? "").padStart(3, "0")}
-                        </span>
-                        <button className="text-red-600" onClick={() => { if (confirm("Excluir contorno?")) off.excluirContorno(c); }}>
+                  {/* barra de seleção em massa */}
+                  <div className="flex items-center gap-2 text-xs">
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <Checkbox checked={allSelecionados} onCheckedChange={toggleSelTodos} aria-label="Selecionar todos" />
+                      <span className="text-gray-600">
+                        {selContornos.size > 0 ? `${selContornos.size} selecionado(s)` : "Selecionar todos"}
+                      </span>
+                    </label>
+                    {selContornos.size > 0 && (
+                      <button className="ml-auto text-gray-400 hover:text-gray-600" onClick={() => setSelContornos(new Set())}>
+                        Limpar
+                      </button>
+                    )}
+                  </div>
+
+                  {/* ações em massa (aparecem só com algo selecionado) */}
+                  {selContornos.size > 0 && (
+                    <div className="rounded-md border border-blue-200 bg-blue-50 p-2 space-y-2">
+                      <div className="text-[11px] font-medium text-blue-700">
+                        Aplicar a {selContornos.size} contorno(s):
+                      </div>
+                      <VincularItemCombobox
+                        items={itensVinculaveis}
+                        value=""
+                        onChange={(v) => { void vincularItemSelecionados(v); }}
+                        jaMedidoMap={jaMedidoMap}
+                        emptyHint={vincularEmptyHint}
+                        placeholder={bulkBusy ? "Aplicando…" : "Vincular item a todos os selecionados…"}
+                        disabled={bulkBusy}
+                      />
+                      <Button
+                        size="sm" variant="destructive" className="h-7 w-full gap-1 text-xs"
+                        disabled={bulkBusy} onClick={excluirSelecionados}
+                      >
+                        {bulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        Excluir selecionados
+                      </Button>
+                    </div>
+                  )}
+
+                  {contornosPagina.map((c) => {
+                    const sel = selContornos.has(c.id);
+                    return (
+                    <div key={c.id} className={`border rounded-md p-2 text-xs ${sel ? "border-blue-400 bg-blue-50/40" : ""}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="flex items-center gap-1.5 font-medium cursor-pointer select-none min-w-0" style={{ color: c.cor }}>
+                          <Checkbox checked={sel} onCheckedChange={() => toggleSelContorno(c.id)} aria-label="Selecionar contorno" />
+                          <span className="flex items-center gap-1 truncate">
+                            {ICON_TIPO[c.tipo as TipoContorno]} {LABEL_TIPO[c.tipo as TipoContorno]} #{String(c.numero ?? "").padStart(3, "0")}
+                          </span>
+                        </label>
+                        <button className="text-red-600 shrink-0" onClick={() => { if (confirm("Excluir contorno?")) off.excluirContorno(c); }}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
@@ -1168,7 +1259,8 @@ export default function MedicaoLevantamento() {
                         />
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

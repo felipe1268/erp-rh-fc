@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3101 — **MEDIÇÃO / LEVANTAMENTO DE CAMPO · A LISTA "CONTORNOS DESTA PÁGINA" GANHA MULTI-SELEÇÃO:
+ * O USUÁRIO MARCA VÁRIOS CONTORNOS COM CAIXINHAS (OU "SELECIONAR TODOS") E APAGA OU VINCULA UM ITEM DO
+ * ORÇAMENTO A TODOS DE UMA VEZ — EM VEZ DE REPETIR A AÇÃO CONTORNO A CONTORNO.**
+ *
+ * PEDIDO: "quero múltipla seleção para apagar ou modificar vários de uma vez" (na lista de contornos da
+ * tela de Levantamento de Campo).
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO BACKEND/ALTER/DROP/DELETE/SCHEMA): em
+ * `client/src/pages/medicao/MedicaoLevantamento.tsx` adiciona-se estado `selContornos` (Set de ids) +
+ * `bulkBusy`. Um `useEffect` poda a seleção para conter só ids que ainda existem na página (troca de
+ * página/exclusão). Cada linha ganha um `<Checkbox>`; um cabeçalho com "Selecionar todos" (e contagem
+ * "N selecionado(s)" + "Limpar"); e uma barra de ações azul que só aparece com algo selecionado, com
+ * `VincularItemCombobox` (nova prop opcional `placeholder`) para **vincular o mesmo item do orçamento a
+ * todos os selecionados** e botão **"Excluir selecionados"** (com `confirm` + spinner). O `bindItem`
+ * antigo foi refatorado: extraiu-se `bindContornoItem(c, itemId)` (recebe o objeto), reusado tanto no
+ * vínculo individual quanto no `vincularItemSelecionados` (loop sequencial `await`); a exclusão em massa
+ * faz loop sequencial em `off.excluirContorno`. Tudo continua passando pelo hook offline-first (sem novo
+ * caminho de persistência).
+ *
+ * RESSALVA/DRIFT: nenhuma — as ações individuais (lixeira por linha + vínculo por linha) continuam
+ * intactas; a multi-seleção é puramente aditiva na UI. Engine compartilhada Cliente/Terceiros.
+ *
  * Rev. 3100 — **MEDIÇÃO / LEVANTAMENTO DE CAMPO · A ÁREA DE DESENHO SOBRE A PLANTA (PDF) GANHA "OSNAP"
  * ESTILO AUTOCAD (OBJECT SNAP): AO MARCAR/CONECTAR PONTOS, ELES "GRUDAM" AUTOMATICAMENTE NAS GEOMETRIAS
  * NOTÁVEIS DOS CONTORNOS JÁ DESENHADOS — EXTREMIDADE, PONTO MÉDIO, INTERSEÇÃO, NÓ/CENTRO, PERPENDICULAR E

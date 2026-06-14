@@ -80,6 +80,7 @@ export function VincularItemCombobox({
   jaMedidoMap,
   emptyHint,
   disabled,
+  placeholder,
 }: {
   items: ItemVinculavel[];
   value: string; // id do item vinculado ("" = nenhum)
@@ -87,6 +88,7 @@ export function VincularItemCombobox({
   jaMedidoMap?: Map<number, number>;
   emptyHint?: string;
   disabled?: boolean;
+  placeholder?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -135,7 +137,7 @@ export function VincularItemCombobox({
               ) : null}
             </span>
           ) : (
-            <span className="text-gray-400">Vincular item do orçamento…</span>
+            <span className="text-gray-400">{placeholder ?? "Vincular item do orçamento…"}</span>
           )}
           <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
         </Button>
