@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3061 — **CONTRATOS DE TERCEIROS · ABA "MEDIÇÕES" GANHA O BOTÃO "GERAR MEDIÇÃO" NO PRÓPRIO
+ * LUGAR — ANTES O BOTÃO SÓ EXISTIA NO CABEÇALHO DO TOPO DA PÁGINA (E SÓ QUANDO ASSINADO), ENTÃO O
+ * EMPTY-STATE DA ABA MANDAVA "USE O BOTÃO GERAR MEDIÇÃO" SEM TER BOTÃO ALGUM À VISTA.**
+ *
+ * PEDIDO (print da aba "Medições (0)"): "Cadê o botão gera medição? Não achei." O empty-state dizia
+ * "Nenhuma medição. Use o botão 'Gerar Medição' para criar a primeira", mas o botão ficava no
+ * cabeçalho do topo da página de detalhe — fora da aba e, no caso do usuário, escondido porque o
+ * contrato ainda não estava com a assinatura concluída.
+ *
+ * DIAGNÓSTICO: em `client/src/pages/terceiros/contratos/ContratoDetalhe.tsx` o botão "Gerar Medição"
+ * (`setShowGerarMedicao(true)`) só era renderizado no header do contrato e SOMENTE quando
+ * `assinaturaStatus==="concluido"`; caso contrário aparecia um aviso ("Envie para assinatura antes de
+ * gerar medições" / "Assinatura em andamento"). A aba "Medições" (`MedicoesTab`) tinha apenas o texto
+ * apontando para um botão inexistente naquela tela.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE, ZERO mudança de schema/backend):
+ *  - `MedicoesTab` passou a receber `setShowGerarMedicao` por prop e deriva `assinado =
+ *    assinaturaStatus==="concluido"`.
+ *  - Empty-state: quando ASSINADO, mostra o próprio botão "Gerar Medição" (azul, `Zap`); quando NÃO
+ *    assinado, mostra o motivo (badge âmbar `Clock`): "Conclua a assinatura do contrato (FcSign) para
+ *    gerar medições" ou "Envie o contrato para assinatura antes de gerar medições".
+ *  - Lista com medições: adicionado o botão "Gerar Medição" no topo da aba (alinhado à direita) quando
+ *    assinado, para gerar a próxima sem precisar rolar até o cabeçalho.
+ *  - O botão do cabeçalho do topo (e seu aviso) foi mantido — agora há paridade nos dois lugares.
+ *
  * Rev. 3060 — **CONTRATOS DE TERCEIROS · REMOVIDO O BOTÃO "ADICIONAR ITEM" DA ABA "ITENS" — ITENS
  * DO CONTRATO VÊM DEFINIDOS DO MÓDULO DE COMPRAS; ACRÉSCIMOS SERÃO TRATADOS COMO SEC (SERVIÇOS
  * EXTRAS CONTRATUAIS), VINCULADOS AO CONTRATO MAS COM RASTREABILIDADE SEPARADA.**

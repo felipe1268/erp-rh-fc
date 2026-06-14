@@ -828,7 +828,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
 
         {/* Tab: Medições */}
         {tab === "medicoes" && (
-          <MedicoesTab contrato={contrato} id={id} aprovarMut={aprovarMut} rejeitarMut={rejeitarMut} cancelarAprovacaoMut={cancelarAprovacaoMut} recalcularMut={recalcularMut} excluirMedicaoMut={excluirMedicaoMut} editarMedicaoItemMut={editarMedicaoItemMut} removerMedicaoItemMut={removerMedicaoItemMut} setEditMedicao={setEditMedicao} initialMedicaoId={medicaoIdFromUrl} />
+          <MedicoesTab contrato={contrato} id={id} aprovarMut={aprovarMut} rejeitarMut={rejeitarMut} cancelarAprovacaoMut={cancelarAprovacaoMut} recalcularMut={recalcularMut} excluirMedicaoMut={excluirMedicaoMut} editarMedicaoItemMut={editarMedicaoItemMut} removerMedicaoItemMut={removerMedicaoItemMut} setEditMedicao={setEditMedicao} initialMedicaoId={medicaoIdFromUrl} setShowGerarMedicao={setShowGerarMedicao} />
         )}
 
         {/* Tab: Comparativo */}
@@ -1919,7 +1919,8 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
   );
 }
 
-function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoMut, recalcularMut, excluirMedicaoMut, editarMedicaoItemMut, removerMedicaoItemMut, setEditMedicao, initialMedicaoId }: any) {
+function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoMut, recalcularMut, excluirMedicaoMut, editarMedicaoItemMut, removerMedicaoItemMut, setEditMedicao, initialMedicaoId, setShowGerarMedicao }: any) {
+  const assinado = (contrato as any).assinaturaStatus === "concluido";
   const [expandedMedicao, setExpandedMedicao] = useState<number | null>(initialMedicaoId ?? null);
   const medicaoRef = useRef<HTMLDivElement>(null);
 
@@ -1935,15 +1936,34 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
 
   if (contrato.medicoes.length === 0) {
     return (
-      <div className="py-10 text-center text-gray-400 text-sm">
-        <ClipboardCheck className="w-8 h-8 mx-auto mb-2 opacity-30" />
-        Nenhuma medição. Use o botão "Gerar Medição" para criar a primeira.
+      <div className="py-10 text-center text-sm">
+        <ClipboardCheck className="w-8 h-8 mx-auto mb-2 opacity-30 text-gray-400" />
+        <p className="text-gray-400 mb-4">Nenhuma medição gerada para este contrato.</p>
+        {assinado ? (
+          <Button onClick={() => setShowGerarMedicao(true)} className="gap-2 bg-blue-600 hover:bg-blue-700">
+            <Zap className="w-4 h-4" /> Gerar Medição
+          </Button>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+            <Clock className="w-3.5 h-3.5" />
+            {(contrato as any).assinaturaStatus
+              ? "Conclua a assinatura do contrato (FcSign) para gerar medições."
+              : "Envie o contrato para assinatura antes de gerar medições."}
+          </span>
+        )}
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
+      {assinado && (
+        <div className="flex justify-end">
+          <Button onClick={() => setShowGerarMedicao(true)} size="sm" className="gap-2 bg-blue-600 hover:bg-blue-700">
+            <Zap className="w-4 h-4" /> Gerar Medição
+          </Button>
+        </div>
+      )}
       {contrato.medicoes.map((m: any) => {
         const st = STATUS_MEDICAO[m.status || "rascunho"] || STATUS_MEDICAO.rascunho;
         const isExpanded = expandedMedicao === m.id;
