@@ -548,6 +548,28 @@ Regras:
   // HEAD e arquivos pequenos sem Range passam intactos (200 normal).
   const UPLOADS_DIR = path.join(process.cwd(), "server/uploads");
   const UPLOADS_MAX_CHUNK = 8 * 1024 * 1024; // 8MB — folga confortável sob o teto ~32MB
+  // Rev. 3108 — Deriva o MIME pela EXTENSÃO quando o content_type gravado é genérico
+  // (application/octet-stream) ou vazio. Muitos arquivos legados (387) foram persistidos
+  // como octet-stream → ao serem servidos pelo fallback de DB (disco efêmero perdeu o
+  // arquivo) o navegador (iOS Safari) recusa renderizar <img>/iframe → preview "não abre".
+  // express.static (disco) já infere certo pela extensão; o buraco era SÓ o fallback de DB.
+  const mimeFromKey = (k: string): string | null => {
+    const ext = (k.split("?")[0].split(".").pop() || "").toLowerCase();
+    const map: Record<string, string> = {
+      pdf: "application/pdf",
+      png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
+      webp: "image/webp", svg: "image/svg+xml", bmp: "image/bmp", tiff: "image/tiff", heic: "image/heic",
+      mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime",
+      mp3: "audio/mpeg", wav: "audio/wav", ogg: "audio/ogg",
+      txt: "text/plain", csv: "text/csv", json: "application/json", xml: "application/xml",
+      doc: "application/msword",
+      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      xls: "application/vnd.ms-excel",
+      xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      zip: "application/zip",
+    };
+    return map[ext] || null;
+  };
   app.use("/uploads", (req: any, _res: any, next: any) => {
     try {
       if (req.method !== "GET") return next(); // HEAD/etc: sem corpo grande
@@ -587,12 +609,22 @@ Regras:
       const key = req.path.replace(/^\/+/, '');
       const result = await dbRetrieve(key);
       if (result) {
-        const localPath = path.join(process.cwd(), "server/uploads", key);
+        const uploadsRoot = path.join(process.cwd(), "server/uploads");
+        const localPath = path.resolve(uploadsRoot, key);
+        // Rev. 3108 — guarda de path traversal: o fallback de DB grava em disco
+        // a partir de `key` (derivada de req.path). Confina a escrita ao diretório
+        // de uploads para impedir gravação fora dele (ex.: chave com "..").
+        if (localPath !== uploadsRoot && !localPath.startsWith(uploadsRoot + path.sep)) {
+          return res.status(400).send("Bad request");
+        }
         const dir = path.dirname(localPath);
         const fs = await import("fs");
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(localPath, result.buffer);
-        res.setHeader("Content-Type", result.contentType);
+        const ct = (!result.contentType || result.contentType === "application/octet-stream")
+          ? (mimeFromKey(key) || result.contentType || "application/octet-stream")
+          : result.contentType;
+        res.setHeader("Content-Type", ct);
         // Rev. 2917 — em PROD (Cloud Run) o disco é efêmero e na 1ª requisição o
         // arquivo vem do DB por aqui; enviar o buffer INTEIRO de um arquivo grande
         // estoura o teto ~32MB do proxy → 500. Aplica o MESMO cap de chunk/Range

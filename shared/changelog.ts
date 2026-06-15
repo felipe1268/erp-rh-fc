@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3108 — **DOCUMENTOS / RAIO-X DO FUNCIONÁRIO (E TODO O APP) · O LINK "VER" DO ATESTADO (E DE QUALQUER
+ * ANEXO PDF/IMAGEM) VOLTOU A ABRIR — ANTES O PREVIEW ABRIA EM BRANCO ("NÃO ABRIA") NO iPad/Safari PORQUE O
+ * ARQUIVO ERA SERVIDO COM O CONTENT-TYPE GENÉRICO `application/octet-stream`, QUE O SAFARI SE RECUSA A
+ * RENDERIZAR DENTRO DE `<img>`/`<iframe>`.**
+ *
+ * PEDIDO: "o link 'Ver' do atestado no Raio-X do Funcionário não abre" (print IMG_2040 — Atestado Médico
+ * 25/03/2026 com o botão "Ver" que não abria nada visível no iPad).
+ *
+ * CAUSA-RAIZ (infra, não da tela): o disco do app é EFÊMERO (Cloud Run/preview). Quando o arquivo some do
+ * disco, `/uploads` cai no FALLBACK de banco (`dbRetrieve` → tabela `uploaded_files`). 387 arquivos legados
+ * foram persistidos com `content_type = 'application/octet-stream'` (89 deles JPEGs de atestado). O fallback
+ * setava esse content-type genérico no header → o Safari iOS NÃO renderiza imagem/PDF com octet-stream dentro
+ * de `<img>`/`<iframe>` → o `DocumentPreviewDialog` abria em branco e o usuário via "não abre". (Quando o
+ * mesmo arquivo já estava em disco, o `express.static` inferia o MIME pela extensão e funcionava — por isso era
+ * intermitente.) A fiação da tela (`RaioXFuncionario.tsx` → `setAtestPreviewDoc` → `DocumentPreviewDialog`)
+ * estava CORRETA; o buraco era SÓ o caminho de fallback de DB.
+ *
+ * SOLUÇÃO (BACKEND SERVE-PATH + LIMPEZA DE DADOS via UPDATE — ZERO ALTER/DROP/DELETE/SCHEMA):
+ *
+ * 1) `server/_core/index.ts` — novo helper `mimeFromKey(key)` que deriva o MIME pela EXTENSÃO (pdf, jpg/jpeg,
+ *    png, gif, webp, svg, mp4, docx, xlsx, zip…). No handler de fallback de DB do `/uploads`, quando o
+ *    `content_type` gravado é vazio ou `application/octet-stream`, o header passa a usar o MIME derivado da
+ *    extensão (mantém o gravado quando já é específico). `express.static` (disco) já estava correto.
+ *    HARDENING (code review): o mesmo fallback grava o buffer em disco a partir de `key` (derivada de
+ *    `req.path`); adicionada guarda de PATH TRAVERSAL — `path.resolve(uploadsRoot, key)` precisa estar
+ *    confinado a `server/uploads` (senão 400), impedindo escrita fora do diretório via chave maliciosa.
+ *
+ * 2) DADOS (Neon, UPDATE em transação): corrigido `uploaded_files.content_type` dos 387 arquivos genéricos →
+ *    96 atualizados pela extensão (89 image/jpeg, 5 image/webp, 2 image/png); restaram 291 `.dwg`/`.ifc` (CAD,
+ *    sem MIME de navegador — corretamente intocados). NENHUM atestado-imagem ficou octet-stream.
+ *
+ * RESSALVA/DRIFT: correção de servidor + dados, sem mudança de UI. PDFs em `<iframe>` no iOS continuam
+ * dependendo do viewer nativo do Safari; com o content-type correto o Safari já trata melhor. Arquivos
+ * realmente perdidos (sem disco E sem linha em `uploaded_files`) seguem caindo na tela "Arquivo não encontrado".
+ *
  * Rev. 3107 — **MEDIÇÃO / LEVANTAMENTO DE CAMPO · OS AVISOS DE EXCLUSÃO ("EXCLUIR CONTORNO?", "EXCLUIR FOTO?",
  * "REMOVER PLANTA?", "EXCLUIR SELECIONADOS") DEIXARAM DE USAR O POP-UP NATIVO DO NAVEGADOR (QUE EXIBIA O
  * DOMÍNIO/URL FEIO TIPO "b41aedae-...replit.dev diz" NO TOPO) E PASSARAM A USAR UM DIÁLOGO ESTILIZADO DO APP,
