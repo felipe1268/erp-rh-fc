@@ -966,6 +966,10 @@ function MapeamentoPanel({ companyId, companyIds, onClickEmployee, empresaNome }
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchFase, setBatchFase] = useState<"processando" | "revisao">("processando");
   const [batchItems, setBatchItems] = useState<BatchItem[]>([]);
+  // Trava de revisão: vira true quando o lote produziu leituras a revisar e só zera
+  // quando a fila de aprovações é CONFIRMADA vazia (fetch resolvido, sem erro).
+  // Independe do `fila.length` transitório durante o refetch → fecha a brecha de corrida.
+  const [awaitingReview, setAwaitingReview] = useState(false);
   const batchAbortRef = useRef(false);
   const lerUmIA = trpc.docs.asos.lerComIA.useMutation();
 
@@ -978,17 +982,23 @@ function MapeamentoPanel({ companyId, companyIds, onClickEmployee, empresaNome }
     setBatchItems(unicos.map((a) => ({ ...a, status: "fila" as const })));
     setBatchOpen(true);
     setBatchRunning(true);
+    setAwaitingReview(false);
+    let okCount = 0;
     for (let i = 0; i < unicos.length; i++) {
       if (batchAbortRef.current) break;
       const a = unicos[i];
       setBatchItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, status: "processando" } : it)));
       try {
         await lerUmIA.mutateAsync({ asoId: a.asoId, companyId, companyIds });
+        okCount++;
         setBatchItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, status: "ok" } : it)));
       } catch (e: any) {
         setBatchItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, status: "erro", erro: e?.message || "Falha ao ler com IA" } : it)));
       }
     }
+    // Se houve leitura bem-sucedida, TRAVA até a fila de aprovação esvaziar de verdade
+    // (a flag só é zerada pelo effect quando o fetch resolver vazio, sem erro).
+    if (okCount > 0) setAwaitingReview(true);
     setBatchRunning(false);
     setBatchFase("revisao");
     await revisaoQ.refetch();
@@ -1156,8 +1166,15 @@ function MapeamentoPanel({ companyId, companyIds, onClickEmployee, empresaNome }
   const batchErros = batchItems.filter((it) => it.status === "erro").length;
   const batchPct = batchTotal > 0 ? Math.round((batchConcluidos / batchTotal) * 100) : 0;
   const batchAtual = batchItems.find((it) => it.status === "processando");
-  // O painel fica TRAVADO (não fecha) enquanto roda OU enquanto houver leitura aguardando aprovação.
-  const batchLocked = batchRunning || (batchFase === "revisao" && fila.length > 0);
+  // Zera a trava SÓ quando o fetch da fila resolveu (sem erro) e está realmente vazia.
+  useEffect(() => {
+    if (awaitingReview && !revisaoQ.isFetching && !revisaoQ.isError && fila.length === 0) {
+      setAwaitingReview(false);
+    }
+  }, [awaitingReview, revisaoQ.isFetching, revisaoQ.isError, fila.length]);
+  // O painel fica TRAVADO enquanto roda, durante QUALQUER refetch da fila, ou enquanto
+  // houver leitura aguardando revisão (flag `awaitingReview`, imune à corrida do refetch).
+  const batchLocked = batchRunning || awaitingReview || revisaoQ.isFetching || (batchFase === "revisao" && fila.length > 0);
 
   return (
     <>
@@ -1220,6 +1237,11 @@ function MapeamentoPanel({ companyId, companyIds, onClickEmployee, empresaNome }
               </div>
               {revisaoQ.isFetching ? (
                 <div className="py-6 text-center text-sm text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin inline mr-2" /> Carregando leituras…</div>
+              ) : revisaoQ.isError ? (
+                <div className="py-6 text-center text-sm text-red-700">
+                  <AlertTriangle className="h-5 w-5 inline mr-2" /> Falha ao carregar as leituras para revisão.
+                  <div className="mt-2"><Button size="sm" variant="outline" onClick={() => revisaoQ.refetch()}>Tentar novamente</Button></div>
+                </div>
               ) : fila.length === 0 ? (
                 <div className="py-6 text-center text-sm text-green-700"><CheckCircle2 className="h-5 w-5 inline mr-2" /> Tudo revisado. Você já pode fechar.</div>
               ) : (
@@ -1235,7 +1257,7 @@ function MapeamentoPanel({ companyId, companyIds, onClickEmployee, empresaNome }
 
         <DialogFooter className="px-5 py-3 border-t bg-slate-50 shrink-0 sm:justify-between">
           <span className="text-[11px] text-muted-foreground self-center">
-            {batchRunning ? "Aguarde a leitura terminar…" : fila.length > 0 ? `${fila.length} leitura(s) aguardando — aprove ou descarte cada uma para liberar o fechamento.` : "Tudo revisado — você já pode fechar."}
+            {batchRunning ? "Aguarde a leitura terminar…" : revisaoQ.isError ? "Falha ao carregar a fila — tente novamente para liberar o fechamento." : (awaitingReview || fila.length > 0) ? `${fila.length} leitura(s) aguardando — aprove ou descarte cada uma para liberar o fechamento.` : "Tudo revisado — você já pode fechar."}
           </span>
           <Button disabled={batchLocked} onClick={() => setBatchOpen(false)}>
             {batchLocked ? (batchRunning ? "Processando…" : "Aprove para fechar") : "Concluído — Fechar"}

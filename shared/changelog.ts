@@ -35,13 +35,19 @@
  *     (`onPointerDownOutside`/`onEscapeKeyDown` bloqueados + botão de fechar desabilitado).
  *   • FASE DE REVISÃO DENTRO DO MESMO PAINEL: ao terminar o lote, o overlay troca para a fase "revisão"
  *     e embute os cards de aprovação (componente `RevisaoCardIA`, extraído do antigo map inline da seção
- *     "Revisão por IA" para ser reaproveitado nos dois lugares). O painel FICA TRAVADO (não fecha — flag
- *     `batchLocked` = rodando OU fila de aprovações > 0) enquanto houver leitura aguardando: o "X" some
- *     (`showCloseButton={!batchLocked}`), clique-fora/Escape são bloqueados (`onInteractOutside`/
- *     `onPointerDownOutside`/`onEscapeKeyDown`) e o botão do rodapé fica desabilitado ("Aprove para
- *     fechar"). Só libera o "Concluído — Fechar" quando a fila esvazia (cada extração foi Aprovada ou
- *     Descartada via `RevisaoCardIA`). NADA é aplicado ao ASO sem o "Aprovar" — a garantia de revisão
- *     humana obrigatória (Rev. 3117+) continua intacta.
+ *     "Revisão por IA" para ser reaproveitado nos dois lugares). O painel FICA TRAVADO (não fecha) enquanto
+ *     houver leitura aguardando: `batchLocked` = `batchRunning` OU `awaitingReview` OU `revisaoQ.isFetching`
+ *     OU (fase "revisão" e fila > 0). O "X" some (`showCloseButton={!batchLocked}`), clique-fora/Escape
+ *     são bloqueados (`onInteractOutside`/`onPointerDownOutside`/`onEscapeKeyDown`) e o botão do rodapé
+ *     fica desabilitado ("Aprove para fechar").
+ *   • CORREÇÃO DE CORRIDA (refetch): a flag `awaitingReview` é setada quando o lote teve ≥1 leitura OK e
+ *     só é zerada por um `useEffect` quando o fetch da fila de aprovações resolve SEM erro E realmente
+ *     vazio. Isso impede que a janela transitória do `revisaoQ.refetch()` (em que `fila.length` fica 0
+ *     momentaneamente) destrave o fechamento ANTES da revisão. Em estado de ERRO do fetch o painel
+ *     permanece travado e a fase de revisão mostra "Tentar novamente" (sem falso "Tudo revisado").
+ *     Só libera o "Concluído — Fechar" quando cada extração foi Aprovada ou Descartada via `RevisaoCardIA`.
+ *     NADA é aplicado ao ASO sem o "Aprovar" — a garantia de revisão humana obrigatória (Rev. 3117+)
+ *     continua intacta.
  *
  * As mutations antigas `lerSelecionadosIA`/`lerLoteIA` continuam EXISTINDO no backend (não removidas),
  * apenas não são mais chamadas pelo client desta aba. Puramente UX + 1 endpoint de leitura.
