@@ -1582,13 +1582,14 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
       {/* Rev. 2854 — GRADE DE TAMANHOS (EPI) — mapeamento de compra */}
       {/* ============================================================ */}
       <Dialog open={gradeOpen} onOpenChange={setGradeOpen}>
-        <DialogContent className="max-w-none w-screen h-[100dvh] max-h-[100dvh] rounded-none overflow-y-auto p-4 sm:p-6">
-          <DialogHeader>
+        <DialogContent resizable={false} className="max-w-none w-screen h-[100dvh] max-h-[100dvh] top-0 left-0 translate-x-0 translate-y-0 rounded-none border-0 p-0 overflow-hidden flex flex-col">
+          <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 shrink-0">
             <DialogTitle className="flex items-center gap-2"><HardHat className="h-5 w-5 text-sky-600" /> Grade de Tamanhos (EPI)</DialogTitle>
             <DialogDescription>
               Resumo dos tamanhos de calçado, camisa e calça dos {gradeTamanhos.total} colaborador(es) ativo(s) — use para mapear a compra de EPI/uniforme e garantir o estoque.
             </DialogDescription>
           </DialogHeader>
+          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {([
               { titulo: "Calçado", dados: gradeTamanhos.calcado },
@@ -1670,8 +1671,9 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
               </div>
             )}
           </div>
+          </div>
 
-          <DialogFooter>
+          <DialogFooter className="px-4 sm:px-6 py-3 border-t border-border shrink-0">
             <Button variant="outline" onClick={() => setGradeOpen(false)}>Fechar</Button>
           </DialogFooter>
         </DialogContent>

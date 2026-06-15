@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3140 — **RH / COLABORADORES · O MODAL "GRADE DE TAMANHOS (EPI)" ABRE EM TELA CHEIA —
+ * APROVEITANDO TODA A LARGURA/ALTURA NO LUGAR DO CARD CENTRAL ESTREITO COM SCROLL APERTADO.**
+ *
+ * PEDIDO (iPad, print do modal "Grade de Tamanhos (EPI)" com as 3 tabelas Calçado/Camisa/Calça +
+ * lista "Sem informação de EPI"): "quero esta tela full screen".
+ *
+ * CONTEXTO/CAUSA: o `DialogContent` da Grade de Tamanhos já tinha `w-screen h-[100dvh]`, MAS faltava
+ * anular a centralização base do componente Dialog (`top-[50%] left-[50%] translate-x/y-[-50%]`),
+ * então o modal não fixava no viewport — abria como card central com margens (mesmo sintoma corrigido
+ * na Rev. 3124 para o modal de Lançamentos).
+ *
+ * CORREÇÃO (FRONTEND-ONLY; ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE): em `client/src/pages/Colaboradores.tsx`
+ * o `<DialogContent>` da Grade ganhou o padrão de tela cheia comprovado — `resizable={false}` +
+ * `max-w-none w-screen h-[100dvh] max-h-[100dvh] top-0 left-0 translate-x-0 translate-y-0 rounded-none
+ * border-0 p-0 overflow-hidden flex flex-col` (anula a centralização base). Estrutura interna virou
+ * flex-col: header fixo (`shrink-0`), corpo rolável (`flex-1 overflow-y-auto`) e footer fixo com
+ * borda — só o corpo rola, não o modal inteiro. Nenhuma lógica de dados/agregação tocada.
+ *
  * Rev. 3139 — **FINANCEIRO / LANÇAMENTOS · NOVO BOTÃO "SELEÇÃO MÚLTIPLA": O USUÁRIO MARCA VÁRIOS
  * LANÇAMENTOS DE UMA VEZ E (A) DÁ BAIXA COMO PAGO/RECEBIDO EM LOTE OU (B) CANCELA A BAIXA (ESTORNO)
  * EM LOTE — PARA AGILIZAR A CONCILIAÇÃO BANCÁRIA.**
