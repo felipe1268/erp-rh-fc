@@ -1,6 +1,51 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3123 — **CONTROLE DE DOCUMENTOS / ABA "MAPEAMENTO" · A LEITURA DE ASOs POR IA AGORA ABRE UM PAINEL
+ * DE PROGRESSO FIXO COM BARRA 0–100% E EVOLUÇÃO DETALHADA ITEM-A-ITEM — E ELE PERMANECE NA TELA ATÉ O
+ * USUÁRIO REVISAR/APROVAR CADA LEITURA (ANTES ERA SÓ UM "Processando..." MUDO NO BOTÃO, SEM NOÇÃO DE
+ * QUANTO FALTAVA NEM TRAVA PARA NÃO FECHAR ANTES DA APROVAÇÃO).**
+ *
+ * PEDIDO (iPad, build mode): "no processamento de IA dos ASOs, mostra a % de 0 a 100% com a evolução
+ * detalhada do processamento, e deixa o painel de processamento fixado na tela até eu aprovar o
+ * documento." Antes, "Ler selecionados com IA" e "Ler ASOs com IA (lote)" disparavam uma mutation de
+ * servidor (`lerSelecionadosIA`/`lerLoteIA`) que processava o lote inteiro de forma OPACA: o botão só
+ * mostrava "Processando..." e, ao terminar, jogava tudo de uma vez na seção "Revisão por IA" — sem
+ * porcentagem, sem saber qual ASO estava sendo lido, e nada impedia o usuário de sair da tela antes de
+ * aprovar.
+ *
+ * SOLUÇÃO — RUNNER CLIENT-SIDE + OVERLAY FIXO (FRONTEND + 1 ENDPOINT READ-ONLY; ZERO SCHEMA/ALTER/DROP/
+ * DELETE):
+ *   • BACKEND: novo endpoint READ-ONLY `docs.asos.listPendentesIA` em
+ *     `server/routers/controleDocumentos.ts` — lista os ASOs ELEGÍVEIS (colaboradores ativos, COM PDF,
+ *     SEM extração `aguardando_revisao`/`aprovado`), espelhando EXATAMENTE o filtro que o antigo
+ *     `lerLoteIA` aplicava no servidor. Tenant-safe (`assertAiModuleEnabled` + `resolveCompanyIdsGuard`).
+ *     Serve para o cliente saber QUAIS e QUANTOS ASOs vão entrar no lote, montando a lista de progresso
+ *     ANTES de começar.
+ *   • FRONTEND (`client/src/pages/ControleDocumentos.tsx`, `MapeamentoPanel`): o processamento deixou de
+ *     ser uma única mutation de servidor e virou um RUNNER CLIENT-SIDE (`runBatch`) que chama o já
+ *     existente `docs.asos.lerComIA` (1 ASO por vez) em sequência, atualizando o estado de cada item de
+ *     `fila → processando → ok/erro`. "Ler ASOs com IA (lote)" (`runLote`) primeiro faz
+ *     `listPendentesIA.fetch` e alimenta o runner; "Ler selecionados com IA" monta os alvos a partir da
+ *     seleção. A lista de alvos é EXPLÍCITA (sem cursor por efeito colateral → sem risco de estagnação).
+ *   • OVERLAY FIXO (Dialog): abre ao iniciar e mostra (1) barra de progresso 0–100% = round(processados ÷
+ *     total × 100); (2) "Processando X de N" + ASO atual sendo lido; (3) 3 contadores (Total / Lidos com
+ *     sucesso / Falhas); (4) LISTA item-a-item com ícone por estado (relógio=fila, spinner=lendo,
+ *     check=lido, X=falha) + mensagem de erro curta quando houver. Enquanto roda, o Dialog NÃO FECHA
+ *     (`onPointerDownOutside`/`onEscapeKeyDown` bloqueados + botão de fechar desabilitado).
+ *   • FASE DE REVISÃO DENTRO DO MESMO PAINEL: ao terminar o lote, o overlay troca para a fase "revisão"
+ *     e embute os cards de aprovação (componente `RevisaoCardIA`, extraído do antigo map inline da seção
+ *     "Revisão por IA" para ser reaproveitado nos dois lugares). O painel FICA TRAVADO (não fecha — flag
+ *     `batchLocked` = rodando OU fila de aprovações > 0) enquanto houver leitura aguardando: o "X" some
+ *     (`showCloseButton={!batchLocked}`), clique-fora/Escape são bloqueados (`onInteractOutside`/
+ *     `onPointerDownOutside`/`onEscapeKeyDown`) e o botão do rodapé fica desabilitado ("Aprove para
+ *     fechar"). Só libera o "Concluído — Fechar" quando a fila esvazia (cada extração foi Aprovada ou
+ *     Descartada via `RevisaoCardIA`). NADA é aplicado ao ASO sem o "Aprovar" — a garantia de revisão
+ *     humana obrigatória (Rev. 3117+) continua intacta.
+ *
+ * As mutations antigas `lerSelecionadosIA`/`lerLoteIA` continuam EXISTINDO no backend (não removidas),
+ * apenas não são mais chamadas pelo client desta aba. Puramente UX + 1 endpoint de leitura.
+ *
  * Rev. 3122 — **CONFIGURAÇÕES / "MÓDULOS DO SISTEMA" · O TOGGLE DO MÓDULO DE MEDIÇÃO DO CLIENTE FOI
  * RENOMEADO DE "MEDIÇÃO" PARA "MEDIÇÃO CLIENTE" — AGORA BATE COM O NOME DO CARD NA HOME E DEIXA CLARA
  * A DISTINÇÃO DO "MEDIÇÃO TERCEIROS" (QUE FICA LOGO ABAIXO NA LISTA).**

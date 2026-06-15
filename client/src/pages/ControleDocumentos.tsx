@@ -902,6 +902,42 @@ function SemASOPanel({ companyId, companyIds, onClickEmployee, onCreateAso }: { 
 }
 
 // ============ COMPONENTE: MAPEAMENTO / COBERTURA DE EXAMES (Rev. 3117) ============
+// Card de revisão de UMA extração da IA (reutilizado na seção inline e no overlay
+// de progresso do lote). A IA pré-preenche; nada é aplicado ao ASO sem o "Aprovar".
+function RevisaoCardIA({ f, companyId, companyIds, onClickEmployee, aprovarIA, rejeitarIA }: {
+  f: any; companyId: number; companyIds?: number[];
+  onClickEmployee: (id: number) => void; aprovarIA: any; rejeitarIA: any;
+}) {
+  return (
+    <div className="rounded-md border bg-white p-3 text-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <PersonPhoto src={f.fotoUrl} alt={f.nomeCompleto} size="sm" />
+          <div>
+            <button className="text-blue-600 hover:underline font-medium" onClick={() => onClickEmployee(f.employeeId)}>{f.nomeCompleto}</button>
+            <div className="text-[11px] text-muted-foreground">{f.funcao || "-"} · ASO {f.dataExame ? formatDate(f.dataExame) : "-"}{typeof f.confianca === "number" ? ` · confiança ${f.confianca}%` : ""}</div>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" className="gap-1 bg-green-600 hover:bg-green-700" onClick={() => aprovarIA.mutate({ extracaoId: f.id, companyId, companyIds })} disabled={aprovarIA.isPending}>
+            <CheckCircle2 className="h-4 w-4" /> Aprovar
+          </Button>
+          <Button size="sm" variant="outline" className="gap-1 border-red-300 text-red-700 hover:bg-red-50" onClick={() => rejeitarIA.mutate({ extracaoId: f.id, companyId, companyIds })} disabled={rejeitarIA.isPending}>
+            <X className="h-4 w-4" /> Descartar
+          </Button>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2 text-xs">
+        <div className="rounded bg-violet-50 p-2"><span className="text-muted-foreground">Apto altura (NR-35): </span><strong>{f.aptoAltura || "—"}</strong>{f.aptoAlturaAtual ? <span className="text-muted-foreground"> (atual: {f.aptoAlturaAtual})</span> : null}</div>
+        <div className="rounded bg-violet-50 p-2"><span className="text-muted-foreground">Espaço confinado (NR-33): </span><strong>{f.aptoEspacoConfinado || "—"}</strong>{f.aptoEspacoConfinadoAtual ? <span className="text-muted-foreground"> (atual: {f.aptoEspacoConfinadoAtual})</span> : null}</div>
+        <div className="rounded bg-violet-50 p-2"><span className="text-muted-foreground">Resultado: </span><strong>{f.resultado || "—"}</strong></div>
+      </div>
+      {f.restricoes ? <div className="mt-1 text-xs"><span className="text-muted-foreground">Restrições: </span>{f.restricoes}</div> : null}
+      {f.fatoresRisco ? <div className="mt-1 text-xs"><span className="text-muted-foreground">Fatores de risco: </span>{f.fatoresRisco}</div> : null}
+    </div>
+  );
+}
+
 function MapeamentoPanel({ companyId, companyIds, onClickEmployee, empresaNome }: { companyId: number; companyIds?: number[]; onClickEmployee: (id: number) => void; empresaNome: string }) {
   const { data, isLoading } = trpc.docs.asos.mapaCobertura.useQuery({ companyId, companyIds }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
   const utils = trpc.useUtils();
@@ -920,14 +956,54 @@ function MapeamentoPanel({ companyId, companyIds, onClickEmployee, empresaNome }
     onError: (e) => toast.error(e.message || "Falha ao ler o ASO com IA."),
     onSettled: () => setIaLoadingId(null),
   });
-  const lerLoteIA = trpc.docs.asos.lerLoteIA.useMutation({
-    onSuccess: (r: any) => { toast.success(`Lote processado: ${r.sucesso} ok, ${r.falha} falha(s).`); setShowRevisao(true); revisaoQ.refetch(); },
-    onError: (e) => toast.error(e.message || "Falha ao processar o lote."),
-  });
-  const lerSelecionadosIA = trpc.docs.asos.lerSelecionadosIA.useMutation({
-    onSuccess: (r: any) => { toast.success(`Selecionados processados: ${r.sucesso} ok, ${r.falha} falha(s).`); setSelecionados(new Set()); setShowRevisao(true); revisaoQ.refetch(); },
-    onError: (e) => toast.error(e.message || "Falha ao processar os selecionados."),
-  });
+
+  // ===== Lote DIRIGIDO PELO CLIENTE (1 ASO por vez) — progresso 0–100% detalhado =====
+  // Em vez de uma única mutation server-side opaca, percorremos a lista chamando
+  // `lerComIA` por ASO e atualizamos o estado a cada passo. O overlay fica FIXO até
+  // o usuário aprovar/descartar as leituras (nada é aplicado ao ASO sem aprovação).
+  type BatchItem = { asoId: number; nome: string; funcao?: string | null; status: "fila" | "processando" | "ok" | "erro"; erro?: string };
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchFase, setBatchFase] = useState<"processando" | "revisao">("processando");
+  const [batchItems, setBatchItems] = useState<BatchItem[]>([]);
+  const batchAbortRef = useRef(false);
+  const lerUmIA = trpc.docs.asos.lerComIA.useMutation();
+
+  const runBatch = useCallback(async (alvos: { asoId: number; nome: string; funcao?: string | null }[]) => {
+    const unicos = alvos.filter((a, i, arr) => arr.findIndex((x) => x.asoId === a.asoId) === i);
+    if (unicos.length === 0) { toast.info("Nenhum ASO elegível para leitura por IA (precisa ter PDF anexado e ainda não ter sido lido)."); return; }
+    batchAbortRef.current = false;
+    setShowRevisao(true);
+    setBatchFase("processando");
+    setBatchItems(unicos.map((a) => ({ ...a, status: "fila" as const })));
+    setBatchOpen(true);
+    setBatchRunning(true);
+    for (let i = 0; i < unicos.length; i++) {
+      if (batchAbortRef.current) break;
+      const a = unicos[i];
+      setBatchItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, status: "processando" } : it)));
+      try {
+        await lerUmIA.mutateAsync({ asoId: a.asoId, companyId, companyIds });
+        setBatchItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, status: "ok" } : it)));
+      } catch (e: any) {
+        setBatchItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, status: "erro", erro: e?.message || "Falha ao ler com IA" } : it)));
+      }
+    }
+    setBatchRunning(false);
+    setBatchFase("revisao");
+    await revisaoQ.refetch();
+    utils.docs.asos.mapaCobertura.invalidate();
+  }, [companyId, companyIds, lerUmIA, revisaoQ, utils]);
+
+  const runLote = useCallback(async () => {
+    try {
+      const pend = await utils.docs.asos.listPendentesIA.fetch({ companyId, companyIds, limite: 100 });
+      await runBatch((pend as any[]).map((p) => ({ asoId: p.asoId, nome: p.nomeCompleto, funcao: p.funcao })));
+    } catch (e: any) {
+      toast.error(e?.message || "Falha ao listar ASOs pendentes.");
+    }
+  }, [companyId, companyIds, runBatch, utils]);
+
   const aprovarIA = trpc.docs.asos.aprovarExtracaoIA.useMutation({
     onSuccess: () => { toast.success("Extração aprovada e aplicada ao ASO."); revisaoQ.refetch(); utils.docs.asos.mapaCobertura.invalidate(); },
     onError: (e) => toast.error(e.message || "Falha ao aprovar."),
@@ -1073,7 +1149,100 @@ function MapeamentoPanel({ companyId, companyIds, onClickEmployee, empresaNome }
     { label: "Sem ASO", valor: kpis.semAso, cor: "text-rose-700", bg: "bg-rose-50 border-rose-200", filtro: "sem_aso" },
   ];
 
+  // ===== Métricas do progresso do lote (0–100% detalhado) =====
+  const batchTotal = batchItems.length;
+  const batchConcluidos = batchItems.filter((it) => it.status === "ok" || it.status === "erro").length;
+  const batchOk = batchItems.filter((it) => it.status === "ok").length;
+  const batchErros = batchItems.filter((it) => it.status === "erro").length;
+  const batchPct = batchTotal > 0 ? Math.round((batchConcluidos / batchTotal) * 100) : 0;
+  const batchAtual = batchItems.find((it) => it.status === "processando");
+  // O painel fica TRAVADO (não fecha) enquanto roda OU enquanto houver leitura aguardando aprovação.
+  const batchLocked = batchRunning || (batchFase === "revisao" && fila.length > 0);
+
   return (
+    <>
+    <Dialog open={batchOpen} onOpenChange={(open) => { if (!open && !batchLocked) setBatchOpen(false); }}>
+      <DialogContent showCloseButton={!batchLocked} resizable={false} className="max-w-2xl w-[96vw] max-h-[92vh] p-0 gap-0 flex flex-col" onPointerDownOutside={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => { if (batchLocked) e.preventDefault(); }}>
+        <DialogHeader className="px-5 pt-5 pb-3 border-b shrink-0">
+          <DialogTitle className="flex items-center gap-2 text-violet-700">
+            <Sparkles className="h-5 w-5" />
+            {batchFase === "processando" ? "Lendo ASOs com IA" : "Revise e aprove as leituras"}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="px-5 py-4 overflow-y-auto">
+          {/* Barra de progresso 0–100% */}
+          <div className="mb-1 flex items-end justify-between">
+            <span className="text-sm font-medium text-slate-700">
+              {batchRunning ? `Processando ${Math.min(batchConcluidos + 1, batchTotal)} de ${batchTotal}` : `${batchConcluidos} de ${batchTotal} processados`}
+            </span>
+            <span className="text-2xl font-bold text-violet-700 tabular-nums">{batchPct}%</span>
+          </div>
+          <div className="h-3 w-full rounded-full bg-slate-100 overflow-hidden">
+            <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-all duration-300 ease-out" style={{ width: `${batchPct}%` }} />
+          </div>
+          {batchAtual && (
+            <p className="mt-2 text-xs text-violet-700 flex items-center gap-1.5">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Lendo laudo de <strong>{batchAtual.nome}</strong>…
+            </p>
+          )}
+
+          {/* Contadores */}
+          <div className="grid grid-cols-3 gap-2 mt-3 text-center">
+            <div className="rounded-lg border bg-slate-50 p-2"><div className="text-lg font-bold text-slate-700">{batchTotal}</div><div className="text-[11px] text-muted-foreground">Total</div></div>
+            <div className="rounded-lg border bg-green-50 p-2"><div className="text-lg font-bold text-green-700">{batchOk}</div><div className="text-[11px] text-muted-foreground">Lidos com sucesso</div></div>
+            <div className="rounded-lg border bg-red-50 p-2"><div className="text-lg font-bold text-red-700">{batchErros}</div><div className="text-[11px] text-muted-foreground">Falhas</div></div>
+          </div>
+
+          {/* Evolução detalhada item-a-item */}
+          <div className="mt-3 max-h-44 overflow-y-auto rounded-lg border divide-y">
+            {batchItems.map((it, i) => (
+              <div key={it.asoId} className="flex items-center gap-2 px-3 py-1.5 text-xs">
+                <span className="w-5 text-right tabular-nums text-muted-foreground">{i + 1}</span>
+                {it.status === "ok" ? <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                  : it.status === "erro" ? <X className="h-4 w-4 text-red-600 shrink-0" />
+                  : it.status === "processando" ? <Loader2 className="h-4 w-4 text-violet-600 animate-spin shrink-0" />
+                  : <Clock className="h-4 w-4 text-slate-300 shrink-0" />}
+                <span className="flex-1 truncate">{it.nome}{it.funcao ? <span className="text-muted-foreground"> · {it.funcao}</span> : null}</span>
+                <span className={`shrink-0 ${it.status === "ok" ? "text-green-700" : it.status === "erro" ? "text-red-700" : it.status === "processando" ? "text-violet-700" : "text-slate-400"}`}>
+                  {it.status === "ok" ? "Lido" : it.status === "erro" ? (it.erro && it.erro.length < 40 ? it.erro : "Falha") : it.status === "processando" ? "Lendo…" : "Na fila"}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Fase de REVISÃO — fica FIXO até o usuário aprovar/descartar cada leitura */}
+          {batchFase === "revisao" && (
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-semibold text-violet-800 flex items-center gap-1.5"><ClipboardCheck className="h-4 w-4" /> Aprovação obrigatória</h4>
+                <span className="text-[11px] text-violet-700">Nada é aplicado ao ASO sem o "Aprovar".</span>
+              </div>
+              {revisaoQ.isFetching ? (
+                <div className="py-6 text-center text-sm text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin inline mr-2" /> Carregando leituras…</div>
+              ) : fila.length === 0 ? (
+                <div className="py-6 text-center text-sm text-green-700"><CheckCircle2 className="h-5 w-5 inline mr-2" /> Tudo revisado. Você já pode fechar.</div>
+              ) : (
+                <div className="space-y-2">
+                  {fila.map((f: any) => (
+                    <RevisaoCardIA key={f.id} f={f} companyId={companyId} companyIds={companyIds} onClickEmployee={onClickEmployee} aprovarIA={aprovarIA} rejeitarIA={rejeitarIA} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="px-5 py-3 border-t bg-slate-50 shrink-0 sm:justify-between">
+          <span className="text-[11px] text-muted-foreground self-center">
+            {batchRunning ? "Aguarde a leitura terminar…" : fila.length > 0 ? `${fila.length} leitura(s) aguardando — aprove ou descarte cada uma para liberar o fechamento.` : "Tudo revisado — você já pode fechar."}
+          </span>
+          <Button disabled={batchLocked} onClick={() => setBatchOpen(false)}>
+            {batchLocked ? (batchRunning ? "Processando…" : "Aprove para fechar") : "Concluído — Fechar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     <Card>
       <CardHeader className="pb-3">
         <div className="flex flex-col gap-3">
@@ -1090,12 +1259,16 @@ function MapeamentoPanel({ companyId, companyIds, onClickEmployee, empresaNome }
                 <Printer className="h-4 w-4" /> Imprimir pendentes ({pendentes.length})
               </Button>
               {selecionados.size > 0 && (
-                <Button size="sm" className="gap-2 bg-violet-600 hover:bg-violet-700" onClick={() => lerSelecionadosIA.mutate({ companyId, companyIds, asoIds: Array.from(selecionados) })} disabled={lerSelecionadosIA.isPending}>
-                  {lerSelecionadosIA.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} {lerSelecionadosIA.isPending ? "Processando..." : `Ler selecionados com IA (${selecionados.size})`}
+                <Button size="sm" className="gap-2 bg-violet-600 hover:bg-violet-700" disabled={batchRunning} onClick={() => {
+                  const mapa = new Map(colaboradores.map((c) => [c.asoId, c]));
+                  runBatch(Array.from(selecionados).map((id) => { const c = mapa.get(id); return { asoId: id, nome: c?.nomeCompleto || `ASO #${id}`, funcao: c?.funcao }; }));
+                  setSelecionados(new Set());
+                }}>
+                  {batchRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} {batchRunning ? "Processando..." : `Ler selecionados com IA (${selecionados.size})`}
                 </Button>
               )}
-              <Button size="sm" variant="outline" className="gap-2 border-violet-300 text-violet-700 hover:bg-violet-50" onClick={() => lerLoteIA.mutate({ companyId, companyIds, limite: 10 })} disabled={lerLoteIA.isPending}>
-                <Sparkles className="h-4 w-4" /> {lerLoteIA.isPending ? "Processando..." : "Ler ASOs com IA (lote)"}
+              <Button size="sm" variant="outline" className="gap-2 border-violet-300 text-violet-700 hover:bg-violet-50" onClick={() => runLote()} disabled={batchRunning}>
+                {batchRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} {batchRunning ? "Processando..." : "Ler ASOs com IA (lote)"}
               </Button>
               <Button size="sm" variant={showRevisao ? "default" : "outline"} className={`gap-2 ${showRevisao ? "bg-violet-600 hover:bg-violet-700" : "border-violet-300 text-violet-700 hover:bg-violet-50"}`} onClick={() => setShowRevisao((v) => !v)}>
                 <ClipboardCheck className="h-4 w-4" /> Revisão por IA{fila.length > 0 ? ` (${fila.length})` : ""}
@@ -1149,32 +1322,7 @@ function MapeamentoPanel({ companyId, companyIds, onClickEmployee, empresaNome }
             ) : (
               <div className="space-y-2">
                 {fila.map((f: any) => (
-                  <div key={f.id} className="rounded-md border bg-white p-3 text-sm">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <PersonPhoto src={f.fotoUrl} alt={f.nomeCompleto} size="sm" />
-                        <div>
-                          <button className="text-blue-600 hover:underline font-medium" onClick={() => onClickEmployee(f.employeeId)}>{f.nomeCompleto}</button>
-                          <div className="text-[11px] text-muted-foreground">{f.funcao || "-"} · ASO {f.dataExame ? formatDate(f.dataExame) : "-"}{typeof f.confianca === "number" ? ` · confiança ${f.confianca}%` : ""}</div>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button size="sm" className="gap-1 bg-green-600 hover:bg-green-700" onClick={() => aprovarIA.mutate({ extracaoId: f.id, companyId, companyIds })} disabled={aprovarIA.isPending}>
-                          <CheckCircle2 className="h-4 w-4" /> Aprovar
-                        </Button>
-                        <Button size="sm" variant="outline" className="gap-1 border-red-300 text-red-700 hover:bg-red-50" onClick={() => rejeitarIA.mutate({ extracaoId: f.id, companyId, companyIds })} disabled={rejeitarIA.isPending}>
-                          <X className="h-4 w-4" /> Descartar
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2 text-xs">
-                      <div className="rounded bg-violet-50 p-2"><span className="text-muted-foreground">Apto altura (NR-35): </span><strong>{f.aptoAltura || "—"}</strong>{f.aptoAlturaAtual ? <span className="text-muted-foreground"> (atual: {f.aptoAlturaAtual})</span> : null}</div>
-                      <div className="rounded bg-violet-50 p-2"><span className="text-muted-foreground">Espaço confinado (NR-33): </span><strong>{f.aptoEspacoConfinado || "—"}</strong>{f.aptoEspacoConfinadoAtual ? <span className="text-muted-foreground"> (atual: {f.aptoEspacoConfinadoAtual})</span> : null}</div>
-                      <div className="rounded bg-violet-50 p-2"><span className="text-muted-foreground">Resultado: </span><strong>{f.resultado || "—"}</strong></div>
-                    </div>
-                    {f.restricoes ? <div className="mt-1 text-xs"><span className="text-muted-foreground">Restrições: </span>{f.restricoes}</div> : null}
-                    {f.fatoresRisco ? <div className="mt-1 text-xs"><span className="text-muted-foreground">Fatores de risco: </span>{f.fatoresRisco}</div> : null}
-                  </div>
+                  <RevisaoCardIA key={f.id} f={f} companyId={companyId} companyIds={companyIds} onClickEmployee={onClickEmployee} aprovarIA={aprovarIA} rejeitarIA={rejeitarIA} />
                 ))}
               </div>
             )}
@@ -1262,6 +1410,7 @@ function MapeamentoPanel({ companyId, companyIds, onClickEmployee, empresaNome }
         )}
       </CardContent>
     </Card>
+    </>
   );
 }
 

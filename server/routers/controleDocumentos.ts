@@ -973,6 +973,33 @@ export const controleDocumentosRouter = router({
         return { processados: alvo.length, sucesso, falha, erros };
       }),
 
+    // Lista (read-only, tenant-safe) os ASOs ELEGÍVEIS p/ leitura por IA: ativos, COM
+    // PDF anexado e SEM extração concluída/pendente (status "erro" volta à fila). Usado
+    // pela tela p/ DIRIGIR o lote no cliente (1 ASO por vez via lerComIA), exibindo
+    // progresso 0–100% detalhado. Espelha exatamente o filtro de pendência do lerLoteIA.
+    listPendentesIA: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), limite: z.number().min(1).max(200).optional() }))
+      .query(async ({ ctx, input }) => {
+        await assertAiModuleEnabled(input.companyId, "rh");
+        const db = (await getDb())!;
+        const ids = await resolveCompanyIdsGuard(ctx, input);
+        const limite = input.limite ?? 100;
+        const pend = ((await db.execute(sql`
+          SELECT a.id AS "asoId", a."employeeId" AS "employeeId",
+            e."nomeCompleto", e.funcao, e."fotoUrl", a."dataExame" AS "dataExame"
+          FROM asos a
+          JOIN employees e ON e.id = a."employeeId"
+          LEFT JOIN aso_extracao_ia x ON x.aso_id = a.id AND x.status IN ('aguardando_revisao', 'aprovado')
+          WHERE a."companyId" IN (${sql.join(ids.map((id) => sql`${id}`), sql`,`)})
+            AND a."deletedAt" IS NULL
+            AND a."documentoUrl" IS NOT NULL AND TRIM(a."documentoUrl") <> ''
+            AND x.id IS NULL
+          ORDER BY a.id DESC
+          LIMIT ${limite}
+        `)) as any).rows as Array<{ asoId: number; employeeId: number; nomeCompleto: string; funcao: string | null; fotoUrl: string | null; dataExame: string | null }>;
+        return pend;
+      }),
+
     // Fila de revisão: extrações pendentes (ou por status) com dados do colaborador.
     listExtracoesIA: protectedProcedure
       .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), status: z.string().optional() }))
