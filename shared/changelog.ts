@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3112 — **MEDIÇÃO / LEVANTAMENTO DE CAMPO · RASTREIO POR CONTORNO: AGORA CADA CONTORNO
+ * PODE RECEBER UM NOME/LOCAL (EX.: "APARTAMENTO 1402") E TER FOTOS VINCULADAS DIRETAMENTE A ELE
+ * — NÃO MAIS SÓ FOTOS SOLTAS DO LEVANTAMENTO. O NOME E A FOTO APARECEM NA LISTA "CONTORNOS DESTA
+ * PÁGINA", NA GALERIA DE FOTOS (COM ETIQUETA DO CONTORNO) E NA MEMÓRIA DE CÁLCULO.**
+ *
+ * PEDIDO: no Levantamento de Campo, conseguir rastrear cada medição — dar um nome a cada contorno
+ * e anexar a foto do local exato medido (rastreabilidade campo↔planta). O usuário escolheu começar
+ * por "Nome por contorno + Foto por contorno juntos".
+ *
+ * SOLUÇÃO (FRONTEND-ONLY — ZERO ALTER/DROP/DELETE/SCHEMA/BACKEND): o schema e o backend JÁ suportavam
+ * tudo — `medicao_campo_contornos.rotulo` (varchar 255) e `medicao_campo_fotos.contorno_id` já existem,
+ * e o `medicao.sincronizarLote`/upsert já lê `d.rotulo` e `d.contornoId`. Faltava só a UI + propagar o
+ * `contornoId` pela fila offline:
+ *
+ * 1) NOME POR CONTORNO (`client/src/pages/medicao/MedicaoLevantamento.tsx`): novo componente
+ *    `RotuloInput` (estado local, grava só no blur/Enter p/ não gerar 1 op por tecla) em cada linha da
+ *    lista "Contornos desta página"; `salvarRotulo()` persiste via `off.saveContorno` (UPDATE) preservando
+ *    TODOS os campos. CRÍTICO: como o upsert do servidor reescreve `rotulo` em TODA gravação, o
+ *    `rotulo: c.rotulo ?? null` foi adicionado também ao `bindContornoItem`, `recolorContorno` e
+ *    `salvarGeometriaContorno` — senão vincular item/recolorir/redimensionar apagaria o nome.
+ *
+ * 2) FOTO POR CONTORNO: botão "Foto" por linha (`addFotoContorno` → input file dedicado
+ *    `onFotoContornoSelected`) abre a câmera e anexa a foto com `contornoId` do alvo; miniaturas das fotos
+ *    daquele contorno aparecem inline (com badge "pendente" + excluir). A galeria geral "Fotos" ganhou uma
+ *    etiqueta azul (#NNN · rótulo) nas fotos vinculadas. `fotosPorContorno`/`contornoById` (useMemo) fazem
+ *    o agrupamento. A propagação offline-first: `useLevantamentoOffline.saveFoto` passou a aceitar
+ *    `contornoId` no `meta` e o inclui no `data` da op (que o `levantamentoSync` já envia como payload) e no
+ *    push otimista do `applyOps`.
+ *
+ * 3) MEMÓRIA DE CÁLCULO: a tabela "Contornos medidos" separou "Local / Nome" (rótulo) de "Item vinculado"
+ *    (antes uma coluna só "Item / Rótulo"); textos escapados com novo helper `escHtml` (anti-XSS no
+ *    `document.write`).
+ *
+ * Próxima entrega (já decidida, NÃO incluída aqui): categorias de serviço EDITÁVEIS com cores e tipo de
+ * medição automático.
+ *
  * Rev. 3111 — **MEDIÇÃO / LEVANTAMENTO DE CAMPO (DESENHO SOBRE A PLANTA) · DEPOIS DE CRIADO, UM
  * CONTORNO PODE SER AJUSTADO: NA FERRAMENTA "SELECIONAR", TOCAR NUM CONTORNO O SELECIONA E APARECEM
  * PONTOS AZUIS (HANDLES) PARA ARRASTAR E ALTERAR AS DIMENSÕES — RETÂNGULO GANHA 4 CANTOS + 4 LADOS;

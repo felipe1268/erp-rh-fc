@@ -61,6 +61,7 @@ function applyOps(base: any, ops: SyncOp[]): any {
           id: tempId, uuid: op.uuid, __blobKey: op.blobKey, __pending: true,
           arquivoUrl: "", legenda: op.data?.legenda ?? null,
           pdfId: op.data?.pdfId ?? null, pagina: op.data?.pagina ?? null,
+          contornoId: op.data?.contornoId ?? null,
         });
       }
     } else if (op.entity === "pdf") {
@@ -86,7 +87,7 @@ export type UseLevantamentoOffline = {
   saveContorno: (input: any) => Promise<void>;
   excluirContorno: (c: any) => Promise<void>;
   calibrarPdf: (pdf: any, calibracaoJson: string) => Promise<void>;
-  saveFoto: (file: File, meta: { pdfId?: number | null; pagina?: number | null }) => Promise<void>;
+  saveFoto: (file: File, meta: { pdfId?: number | null; pagina?: number | null; contornoId?: number | null }) => Promise<void>;
   excluirFoto: (f: any) => Promise<void>;
   // utilidades
   processNow: () => Promise<void>;
@@ -272,7 +273,7 @@ export function useLevantamentoOffline(args: {
     await reloadOps();
   }, [ops, campoId, contratoId, companyId, reloadOps]);
 
-  const saveFoto = useCallback(async (file: File, meta: { pdfId?: number | null; pagina?: number | null }) => {
+  const saveFoto = useCallback(async (file: File, meta: { pdfId?: number | null; pagina?: number | null; contornoId?: number | null }) => {
     const uuid = newUuid();
     const blobKey = fotoBlobKeyUuid(uuid);
     await putBlob(blobKey, file, file.type || "image/jpeg");
@@ -281,7 +282,7 @@ export function useLevantamentoOffline(args: {
       entity: "foto", action: "upsert", uuid, medicaoCampoId: campoId,
       atualizadoEm: new Date().toISOString(),
       blobKey, contentType: file.type || "image/jpeg",
-      data: { pdfId: meta.pdfId ?? null, pagina: meta.pagina ?? null },
+      data: { pdfId: meta.pdfId ?? null, pagina: meta.pagina ?? null, contornoId: meta.contornoId ?? null },
     });
     await reloadOps();
   }, [campoId, contratoId, companyId, reloadOps]);

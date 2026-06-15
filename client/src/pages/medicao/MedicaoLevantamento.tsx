@@ -171,6 +171,31 @@ function fileToBase64(file: File): Promise<string> {
 
 type Calibracao = { p1: GeoPonto; p2: GeoPonto; metros: number; metrosPorUnidade: number };
 
+// Escapa texto p/ interpolação segura em HTML (memória de cálculo via document.write).
+function escHtml(s: unknown): string {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+// Campo de NOME/RÓTULO de um contorno (ex.: "APARTAMENTO 1402"). Controlado por
+// estado local; só grava ao sair do campo (blur) ou Enter — evita uma op por tecla.
+function RotuloInput({ value, onCommit }: { value: string; onCommit: (v: string) => void }) {
+  const [v, setV] = useState(value);
+  return (
+    <input
+      type="text"
+      value={v}
+      onChange={(e) => setV(e.target.value)}
+      onBlur={() => { if (v !== value) onCommit(v); }}
+      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+      placeholder="Nome / local (ex.: APARTAMENTO 1402)"
+      maxLength={255}
+      className="w-full h-7 rounded-md border border-gray-200 px-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+    />
+  );
+}
+
 export default function MedicaoLevantamento() {
   const params = useParams<{ contratoId: string; campoId: string }>();
   const contratoId = parseInt(params.contratoId || "0");
@@ -860,6 +885,25 @@ export default function MedicaoLevantamento() {
     }
   }
 
+  // Foto VINCULADA a um contorno (rastreio): a câmera abre e a foto fica atrelada
+  // ao contorno-alvo via contornoId (mesmo fluxo offline-first do saveFoto).
+  const fotoContornoInputRef = useRef<HTMLInputElement>(null);
+  const fotoAlvoContornoRef = useRef<number | null>(null);
+  function addFotoContorno(c: any) {
+    fotoAlvoContornoRef.current = c.id;
+    fotoContornoInputRef.current?.click();
+  }
+  async function onFotoContornoSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    const alvo = fotoAlvoContornoRef.current;
+    fotoAlvoContornoRef.current = null;
+    if (alvo == null) return;
+    for (const file of files) {
+      await off.saveFoto(file, { pdfId: pdfSelId ?? null, pagina, contornoId: alvo });
+    }
+  }
+
   function bindContornoItem(c: any, orcamentoItemId: string) {
     const it = (itensOrcamento as any[]).find((i) => String(i.id) === orcamentoItemId);
     return off.saveContorno({
@@ -880,6 +924,7 @@ export default function MedicaoLevantamento() {
       orcamentoItemId: it ? it.id : null,
       itemEapCodigo: it?.eapCodigo ?? null,
       itemDescricao: it?.descricao ?? null,
+      rotulo: c.rotulo ?? null,
     });
   }
 
@@ -958,6 +1003,34 @@ export default function MedicaoLevantamento() {
       orcamentoItemId: c.orcamentoItemId ?? null,
       itemEapCodigo: c.itemEapCodigo ?? null,
       itemDescricao: c.itemDescricao ?? null,
+      rotulo: c.rotulo ?? null,
+    });
+  }
+
+  // Salva o NOME/RÓTULO de UM contorno (ex.: "APARTAMENTO 1402") preservando
+  // TODOS os demais campos. Mesmo caminho do recolor/bind (saveContorno → UPDATE).
+  function salvarRotulo(c: any, rotulo: string) {
+    const novo = rotulo.trim() || null;
+    if (novo === (c.rotulo ?? null)) return Promise.resolve();
+    return off.saveContorno({
+      id: c.id, uuid: c.uuid, pdfId: c.pdfId ?? pdfSelId!,
+      pagina: c.pagina ?? pagina,
+      tipo: c.tipo as TipoContorno,
+      cor: c.cor ?? COR_TIPO[c.tipo as TipoContorno],
+      geometriaJson: c.geometriaJson ?? "[]",
+      espessura: c.espessura ?? null,
+      metrosPorUnidade: c.metrosPorUnidade ?? null,
+      area: c.area ?? null,
+      perimetro: c.perimetro ?? null,
+      volume: c.volume ?? null,
+      contagem: c.contagem ?? null,
+      quantidade: c.quantidade ?? null,
+      unidade: c.unidade ?? null,
+      numero: c.numero,
+      orcamentoItemId: c.orcamentoItemId ?? null,
+      itemEapCodigo: c.itemEapCodigo ?? null,
+      itemDescricao: c.itemDescricao ?? null,
+      rotulo: novo,
     });
   }
 
@@ -1021,6 +1094,7 @@ export default function MedicaoLevantamento() {
       orcamentoItemId: c.orcamentoItemId ?? null,
       itemEapCodigo: c.itemEapCodigo ?? null,
       itemDescricao: c.itemDescricao ?? null,
+      rotulo: c.rotulo ?? null,
     });
   }
 
@@ -1089,7 +1163,8 @@ export default function MedicaoLevantamento() {
       <tr>
         <td style="border:1px solid #ccc;padding:5px;text-align:center">${String(c.numero ?? "").padStart(3, "0")}</td>
         <td style="border:1px solid #ccc;padding:5px">${LABEL_TIPO[c.tipo as TipoContorno] || c.tipo}</td>
-        <td style="border:1px solid #ccc;padding:5px">${c.itemDescricao || c.rotulo || "—"}</td>
+        <td style="border:1px solid #ccc;padding:5px">${escHtml(c.rotulo) || "—"}</td>
+        <td style="border:1px solid #ccc;padding:5px">${escHtml(c.itemDescricao) || "—"}</td>
         <td style="border:1px solid #ccc;padding:5px;text-align:right">${numFmt(parseFloat(c.quantidade || "0"), 2)} ${c.unidade || ""}</td>
         <td style="border:1px solid #ccc;padding:5px;text-align:right">${c.metrosPorUnidade ? numFmt(parseFloat(c.metrosPorUnidade), 6) : "—"}</td>
       </tr>`).join("");
@@ -1118,10 +1193,11 @@ export default function MedicaoLevantamento() {
         <thead><tr style="background:#f1f5f9">
           <th style="border:1px solid #ccc;padding:5px">Nº</th>
           <th style="border:1px solid #ccc;padding:5px">Tipo</th>
-          <th style="border:1px solid #ccc;padding:5px">Item / Rótulo</th>
+          <th style="border:1px solid #ccc;padding:5px">Local / Nome</th>
+          <th style="border:1px solid #ccc;padding:5px">Item vinculado</th>
           <th style="border:1px solid #ccc;padding:5px">Quantidade</th>
           <th style="border:1px solid #ccc;padding:5px">m/ponto</th>
-        </tr></thead><tbody>${rowsContornos || `<tr><td colspan="5" style="border:1px solid #ccc;padding:8px;text-align:center">Sem contornos</td></tr>`}</tbody>
+        </tr></thead><tbody>${rowsContornos || `<tr><td colspan="6" style="border:1px solid #ccc;padding:8px;text-align:center">Sem contornos</td></tr>`}</tbody>
       </table>
       <h3 style="font-size:13px;margin:18px 0 6px">Consolidação por item (R$)</h3>
       <table style="border-collapse:collapse;width:100%;font-size:11px">
@@ -1160,6 +1236,22 @@ export default function MedicaoLevantamento() {
   }
 
   const fotos = (campo.fotos ?? []) as any[];
+
+  // Rastreio: fotos agrupadas por contorno + índice de contorno por id (p/ rótulo
+  // na galeria geral). Fotos sem contornoId entram em "geral".
+  const fotosPorContorno = useMemo(() => {
+    const m = new Map<number, any[]>();
+    for (const f of fotos) {
+      if (f.contornoId == null) continue;
+      (m.get(f.contornoId) || m.set(f.contornoId, []).get(f.contornoId)!).push(f);
+    }
+    return m;
+  }, [fotos]);
+  const contornoById = useMemo(() => {
+    const m = new Map<number, any>();
+    for (const c of ((campo?.contornos ?? []) as any[])) m.set(c.id, c);
+    return m;
+  }, [campo]);
 
   return (
     <DashboardLayout>
@@ -1689,6 +1781,14 @@ export default function MedicaoLevantamento() {
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
+                      {/* Nome/rótulo do contorno (ex.: "APARTAMENTO 1402") */}
+                      <div className="mt-1.5">
+                        <RotuloInput
+                          key={`rot-${c.id}-${c.rotulo ?? ""}`}
+                          value={c.rotulo ?? ""}
+                          onCommit={(v) => { void salvarRotulo(c, v); }}
+                        />
+                      </div>
                       <div className="mt-1 text-gray-600">Quantidade: <b>{numFmt(parseFloat(c.quantidade || "0"), 2)} {c.unidade}</b></div>
                       <div className="mt-1.5">
                         <VincularItemCombobox
@@ -1698,6 +1798,32 @@ export default function MedicaoLevantamento() {
                           jaMedidoMap={jaMedidoMap}
                           emptyHint={vincularEmptyHint}
                         />
+                      </div>
+                      {/* Fotos vinculadas a este contorno (rastreio) */}
+                      <div className="mt-2 border-t pt-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-medium text-gray-500 flex items-center gap-1">
+                            <ImageIcon className="h-3 w-3" />Fotos ({(fotosPorContorno.get(c.id) ?? []).length})
+                          </span>
+                          <Button size="sm" variant="outline" className="h-6 gap-1 text-[11px] px-2" onClick={() => addFotoContorno(c)}>
+                            <Camera className="h-3 w-3" />Foto
+                          </Button>
+                        </div>
+                        {(fotosPorContorno.get(c.id) ?? []).length > 0 && (
+                          <div className="grid grid-cols-4 gap-1.5 mt-1.5">
+                            {(fotosPorContorno.get(c.id) ?? []).map((f) => (
+                              <div key={f.id} className="relative group">
+                                <a href={off.fotoSrcFor(f)} target="_blank" rel="noopener noreferrer">
+                                  <img src={off.fotoSrcFor(f)} alt={f.legenda || "foto"} className="w-full h-14 object-cover rounded border" />
+                                </a>
+                                {f.__pending && <span className="absolute bottom-0.5 left-0.5 bg-amber-500/90 text-white text-[8px] px-1 rounded">pend.</span>}
+                                <button className="absolute top-0.5 right-0.5 bg-white/90 rounded-full p-0.5 text-red-600 opacity-0 group-hover:opacity-100" onClick={() => askConfirm({ title: "Excluir foto?", description: "A foto será removida deste contorno. Esta ação não pode ser desfeita.", confirmText: "Excluir", onConfirm: () => off.excluirFoto(f) })}>
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                     );
@@ -1754,22 +1880,30 @@ export default function MedicaoLevantamento() {
                   <Camera className="h-3.5 w-3.5" />Adicionar
                 </Button>
                 <input ref={fotoInputRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={onFotoSelected} />
+                <input ref={fotoContornoInputRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={onFotoContornoSelected} />
               </div>
               {fotos.length === 0 ? (
                 <p className="text-xs text-gray-400">Sem fotos. Use "Adicionar" (a câmera abre no tablet).</p>
               ) : (
                 <div className="grid grid-cols-3 gap-2">
-                  {fotos.map((f) => (
+                  {fotos.map((f) => {
+                    const cv = f.contornoId != null ? contornoById.get(f.contornoId) : null;
+                    const tag = cv
+                      ? `#${String(cv.numero ?? "").padStart(3, "0")}${cv.rotulo ? " · " + cv.rotulo : ""}`
+                      : null;
+                    return (
                     <div key={f.id} className="relative group">
                       <a href={off.fotoSrcFor(f)} target="_blank" rel="noopener noreferrer">
                         <img src={off.fotoSrcFor(f)} alt={f.legenda || "foto"} className="w-full h-20 object-cover rounded-md border" />
                       </a>
+                      {tag && <span className="absolute bottom-1 right-1 max-w-[90%] truncate bg-blue-600/90 text-white text-[9px] px-1 rounded" title={tag}>{tag}</span>}
                       {f.__pending && <span className="absolute bottom-1 left-1 bg-amber-500/90 text-white text-[9px] px-1 rounded">pendente</span>}
                       <button className="absolute top-1 right-1 bg-white/90 rounded-full p-0.5 text-red-600 opacity-0 group-hover:opacity-100" onClick={() => askConfirm({ title: "Excluir foto?", description: "A foto será removida deste levantamento. Esta ação não pode ser desfeita.", confirmText: "Excluir", onConfirm: () => off.excluirFoto(f) })}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
