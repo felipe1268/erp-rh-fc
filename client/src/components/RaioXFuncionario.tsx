@@ -35,6 +35,69 @@ function formatDate(d: string | null | undefined) {
   return d;
 }
 
+// ── FICHA DO ASO (IA) — parsers que estruturam o texto livre em LINHAS DE TABELA ──
+// O objetivo é deixar os dados granulares (por restrição / por categoria de risco)
+// prontos para leitura tabular e, futuramente, para gráficos de perfil do funcionário.
+
+// Quebra o texto de restrições em itens individuais (1 frase = 1 item).
+// Evita lookbehind/lookahead (iOS Safari): split simples em ". " + limpeza.
+function parseRestricoesItens(raw: any): string[] {
+  const s = String(raw ?? "").trim();
+  if (!s) return [];
+  if (/^(nenhuma|sem restri|n[aã]o|n\/a|-)\.?$/i.test(s)) return [];
+  return s
+    .split(/\.\s+/)
+    .map((x) => x.trim().replace(/\.+$/, "").trim())
+    .filter(Boolean);
+}
+
+// Quebra os fatores de risco por CATEGORIA ("Físicos:", "Químicos:", ...).
+// Retorna [{ categoria, texto }]. Se não houver rótulos reconhecidos, devolve "Geral".
+function parseFatoresRiscoCategorias(raw: any): { categoria: string; texto: string }[] {
+  const s = String(raw ?? "").trim();
+  if (!s) return [];
+  const labels = [
+    "F[ií]sicos?",
+    "Qu[íi]micos?",
+    "Biol[óo]gicos?",
+    "Ergon[ôo]micos?",
+    "Mec[âa]nicos?",
+    "(?:De\\s+)?[Aa]cidentes",
+    "Psicossociais?",
+    "Psicossocial",
+  ];
+  const re = new RegExp(`(${labels.join("|")})\\s*:`, "gi");
+  const matches: { idx: number; len: number; cat: string }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s)) !== null) {
+    matches.push({ idx: m.index, len: m[0].length, cat: m[1] });
+    if (m.index === re.lastIndex) re.lastIndex++; // guarda contra match vazio
+  }
+  const norm = (c: string): string => {
+    const t = c.trim().toLowerCase();
+    if (t.startsWith("f")) return "Físicos";
+    if (t.startsWith("qu")) return "Químicos";
+    if (t.startsWith("bi")) return "Biológicos";
+    if (t.startsWith("er")) return "Ergonômicos";
+    if (t.startsWith("me")) return "Mecânicos";
+    if (t.includes("acidente")) return "Acidentes";
+    if (t.startsWith("psi")) return "Psicossociais";
+    return c.trim();
+  };
+  if (matches.length === 0) return [{ categoria: "Geral", texto: s }];
+  const out: { categoria: string; texto: string }[] = [];
+  // Preserva qualquer texto antes do 1º rótulo reconhecido (evita perda de dado).
+  const preamble = s.slice(0, matches[0].idx).trim().replace(/[;.:]\s*$/, "").trim();
+  if (preamble) out.push({ categoria: "Geral", texto: preamble });
+  for (let i = 0; i < matches.length; i++) {
+    const start = matches[i].idx + matches[i].len;
+    const end = i + 1 < matches.length ? matches[i + 1].idx : s.length;
+    const texto = s.slice(start, end).trim().replace(/[;.]\s*$/, "").trim();
+    if (texto) out.push({ categoria: norm(matches[i].cat), texto });
+  }
+  return out;
+}
+
 // Formata afastamento de horas (decimal → "Xh Ymin") — usado nos atestados parciais.
 function fmtHorasAfast(dec: number | string | null | undefined): string {
   const total = Number(dec) || 0;
@@ -844,11 +907,35 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
           const temRst = !!(rstxt && !/^(nenhuma|sem restri|n[aã]o|n\/a|-)\.?$/i.test(rstxt));
           const aptoTxt = (v: any) => { const t = String(v || "").trim(); return t || "—"; };
           const aptoCor = (v: any) => { const t = String(v || "").trim(); return /inapto|inad/i.test(t) ? "#991b1b" : /^apto/i.test(t) ? "#166534" : "#6b7280"; };
-          html += `<tr><td colspan="10" style="background:${temRst ? "#fef2f2" : "#f8fafc"};border-top:none">`;
-          html += `<div style="font-size:8px;font-weight:700;color:#7c3aed;margin-bottom:3px">✨ FICHA DO ASO (leitura por IA · revisada)${a.iaConfianca != null ? ` — confiança ${esc(a.iaConfianca)}%` : ""}</div>`;
-          html += `<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:9px;margin-bottom:3px"><span><b>Apto altura (NR-35):</b> <span style="color:${aptoCor(a.aptoAltura)};font-weight:600">${esc(aptoTxt(a.aptoAltura))}</span></span><span><b>Espaço confinado (NR-33):</b> <span style="color:${aptoCor(a.aptoEspacoConfinado)};font-weight:600">${esc(aptoTxt(a.aptoEspacoConfinado))}</span></span><span><b>Resultado:</b> <span style="color:${a.resultado === "Apto" ? "#166534" : "#991b1b"};font-weight:600">${esc(a.resultado || "—")}</span></span></div>`;
-          html += `<div style="font-size:9px;${temRst ? "color:#991b1b;font-weight:600;background:#fee2e2;padding:4px 6px;border-radius:3px;border:1px solid #fecaca" : "color:#6b7280"}"><b>${temRst ? "⚠️ Restrições:" : "Restrições:"}</b> ${temRst ? esc(rstxt) : "Sem restrições registradas."}</div>`;
-          if (a.fatoresRisco && String(a.fatoresRisco).trim()) html += `<div style="font-size:9px;color:#4b5563;margin-top:3px"><b>Fatores de risco:</b> ${esc(String(a.fatoresRisco).trim())}</div>`;
+          const restricoesItens = parseRestricoesItens(a.restricoes);
+          const fatoresItens = parseFatoresRiscoCategorias(a.fatoresRisco);
+          html += `<tr><td colspan="10" style="background:${temRst ? "#fef2f2" : "#f8fafc"};border-top:none;padding:6px">`;
+          html += `<div style="font-size:8px;font-weight:700;color:#7c3aed;margin-bottom:4px">✨ FICHA DO ASO (leitura por IA · revisada)${a.iaConfianca != null ? ` — confiança ${esc(a.iaConfianca)}%` : ""}</div>`;
+          // Aptidões — tabela campo/valor
+          html += `<table style="margin-bottom:5px"><thead><tr><th colspan="2">Aptidões</th></tr></thead><tbody>`;
+          html += `<tr><td style="width:45%">Apto altura (NR-35)</td><td style="color:${aptoCor(a.aptoAltura)};font-weight:600">${esc(aptoTxt(a.aptoAltura))}</td></tr>`;
+          html += `<tr><td>Espaço confinado (NR-33)</td><td style="color:${aptoCor(a.aptoEspacoConfinado)};font-weight:600">${esc(aptoTxt(a.aptoEspacoConfinado))}</td></tr>`;
+          html += `<tr><td>Resultado geral</td><td style="color:${a.resultado === "Apto" ? "#166534" : "#991b1b"};font-weight:600">${esc(a.resultado || "—")}</td></tr>`;
+          if (a.iaConfianca != null) html += `<tr><td>Confiança da leitura</td><td style="color:#7c3aed;font-weight:600">${esc(a.iaConfianca)}%</td></tr>`;
+          html += `</tbody></table>`;
+          // Restrições — tabela itemizada
+          html += `<table style="margin-bottom:5px"><thead><tr><th colspan="2"${temRst ? ' style="background:#fee2e2;color:#991b1b"' : ""}>${temRst ? `⚠️ Restrições (${restricoesItens.length})` : "Restrições"}</th></tr></thead><tbody>`;
+          if (temRst && restricoesItens.length > 0) {
+            restricoesItens.forEach((r: string, i: number) => {
+              html += `<tr><td style="width:24px;color:#991b1b;font-weight:700;vertical-align:top">${i + 1}</td><td style="color:#991b1b;font-weight:600">${esc(r)}</td></tr>`;
+            });
+          } else {
+            html += `<tr><td colspan="2" style="color:#6b7280">Sem restrições registradas.</td></tr>`;
+          }
+          html += `</tbody></table>`;
+          // Fatores de risco — tabela por categoria
+          if (fatoresItens.length > 0) {
+            html += `<table><thead><tr><th style="width:28%">Categoria de risco</th><th>Fatores identificados</th></tr></thead><tbody>`;
+            fatoresItens.forEach((f: { categoria: string; texto: string }) => {
+              html += `<tr><td style="font-weight:600;vertical-align:top">${esc(f.categoria)}</td><td>${esc(f.texto)}</td></tr>`;
+            });
+            html += `</tbody></table>`;
+          }
           html += `</td></tr>`;
         }
       });
@@ -1661,7 +1748,10 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                             <td className="p-3 max-w-[300px]">{a.examesRealizados || "-"}</td>
                             <td className="p-3">{a.documentoUrl ? <a href={a.documentoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1 whitespace-nowrap"><FileText className="h-3.5 w-3.5" /> Ver ASO</a> : <span className="text-muted-foreground text-xs">—</span>}</td>
                           </tr>
-                          {a.temIa && (
+                          {a.temIa && (() => {
+                            const restricoesItens = parseRestricoesItens(a.restricoes);
+                            const fatoresItens = parseFatoresRiscoCategorias(a.fatoresRisco);
+                            return (
                             <tr className="border-b last:border-0 bg-slate-50/60">
                               <td colSpan={10} className="px-3 pb-3 pt-0">
                                 <div className={`rounded-lg border ${temRestricoes ? "border-red-300 bg-red-50/40" : "border-slate-200 bg-white"} p-3`}>
@@ -1669,36 +1759,66 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                                     <Sparkles className="h-3.5 w-3.5 text-violet-500" /> FICHA DO ASO (leitura por IA · revisada)
                                     {a.iaConfianca != null && <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700">confiança {a.iaConfianca}%</span>}
                                   </div>
-                                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                                    <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
-                                      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Apto altura (NR-35)</div>
-                                      <div className="mt-1">{aptoBadge(a.aptoAltura)}</div>
+                                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                                    {/* Aptidões — tabela campo/valor */}
+                                    <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
+                                      <table className="w-full text-sm">
+                                        <thead>
+                                          <tr className="bg-slate-100"><th colSpan={2} className="px-3 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Aptidões</th></tr>
+                                        </thead>
+                                        <tbody>
+                                          <tr className="border-t border-slate-100"><td className="px-3 py-1.5 text-slate-600">Apto altura (NR-35)</td><td className="px-3 py-1.5 text-right">{aptoBadge(a.aptoAltura)}</td></tr>
+                                          <tr className="border-t border-slate-100"><td className="px-3 py-1.5 text-slate-600">Espaço confinado (NR-33)</td><td className="px-3 py-1.5 text-right">{aptoBadge(a.aptoEspacoConfinado)}</td></tr>
+                                          <tr className="border-t border-slate-100"><td className="px-3 py-1.5 text-slate-600">Resultado geral</td><td className="px-3 py-1.5 text-right"><span className={a.resultado === "Apto" ? "text-green-600 font-semibold" : "text-red-600 font-semibold"}>{a.resultado || "—"}</span></td></tr>
+                                          {a.iaConfianca != null && <tr className="border-t border-slate-100"><td className="px-3 py-1.5 text-slate-600">Confiança da leitura</td><td className="px-3 py-1.5 text-right font-medium text-violet-700">{a.iaConfianca}%</td></tr>}
+                                        </tbody>
+                                      </table>
                                     </div>
-                                    <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
-                                      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Espaço confinado (NR-33)</div>
-                                      <div className="mt-1">{aptoBadge(a.aptoEspacoConfinado)}</div>
-                                    </div>
-                                    <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
-                                      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Resultado</div>
-                                      <div className="mt-1"><span className={a.resultado === "Apto" ? "text-green-600 font-semibold text-sm" : "text-red-600 font-semibold text-sm"}>{a.resultado || "—"}</span></div>
+                                    {/* Restrições — tabela itemizada */}
+                                    <div className={`overflow-hidden rounded-md border ${temRestricoes ? "border-red-300" : "border-slate-200"} bg-white`}>
+                                      <table className="w-full text-sm">
+                                        <thead>
+                                          <tr className={temRestricoes ? "bg-red-100" : "bg-slate-100"}>
+                                            <th colSpan={2} className={`px-3 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide ${temRestricoes ? "text-red-700" : "text-slate-500"}`}>
+                                              <span className="inline-flex items-center gap-1.5">{temRestricoes && <AlertTriangle className="h-3.5 w-3.5 text-red-600" />} Restrições{temRestricoes ? ` (${restricoesItens.length})` : ""}</span>
+                                            </th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {temRestricoes && restricoesItens.length > 0 ? (
+                                            restricoesItens.map((r, i) => (
+                                              <tr key={i} className="border-t border-red-100"><td className="w-7 px-3 py-1.5 align-top font-semibold text-red-700">{i + 1}</td><td className="px-3 py-1.5 font-medium text-red-800">{r}</td></tr>
+                                            ))
+                                          ) : (
+                                            <tr className="border-t border-slate-100"><td colSpan={2} className="px-3 py-1.5 text-slate-500">Sem restrições registradas.</td></tr>
+                                          )}
+                                        </tbody>
+                                      </table>
                                     </div>
                                   </div>
-                                  <div className={`mt-2 rounded-md border p-2 ${temRestricoes ? "border-red-300 bg-red-100/60" : "border-slate-200 bg-slate-50"}`}>
-                                    <div className={`flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide ${temRestricoes ? "text-red-700" : "text-slate-400"}`}>
-                                      {temRestricoes && <AlertTriangle className="h-3.5 w-3.5 text-red-600" />} Restrições
-                                    </div>
-                                    <div className={`mt-1 text-sm ${temRestricoes ? "font-medium text-red-800" : "text-slate-500"}`}>{a.restricoes && String(a.restricoes).trim() ? a.restricoes : "Sem restrições registradas."}</div>
-                                  </div>
-                                  {a.fatoresRisco && String(a.fatoresRisco).trim() && (
-                                    <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 p-2">
-                                      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Fatores de risco</div>
-                                      <div className="mt-1 text-sm text-slate-600">{a.fatoresRisco}</div>
+                                  {/* Fatores de risco — tabela por categoria */}
+                                  {fatoresItens.length > 0 && (
+                                    <div className="mt-3 overflow-hidden rounded-md border border-slate-200 bg-white">
+                                      <table className="w-full text-sm">
+                                        <thead>
+                                          <tr className="bg-slate-100">
+                                            <th className="w-40 px-3 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Categoria de risco</th>
+                                            <th className="px-3 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Fatores identificados</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {fatoresItens.map((f, i) => (
+                                            <tr key={i} className="border-t border-slate-100"><td className="px-3 py-1.5 align-top font-medium text-slate-700">{f.categoria}</td><td className="px-3 py-1.5 text-slate-600">{f.texto}</td></tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
                                     </div>
                                   )}
                                 </div>
                               </td>
                             </tr>
-                          )}
+                            );
+                          })()}
                           </Fragment>
                           );
                         })}

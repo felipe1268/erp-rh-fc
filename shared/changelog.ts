@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3121 — **RAIO-X DO FUNCIONÁRIO / ABA "ASOs" · A "FICHA DO ASO (LEITURA POR IA · REVISADA)" DEIXOU
+ * DE SER BLOCOS DE TEXTO CORRIDO E VIROU UM CONJUNTO DE TABELAS ESTRUTURADAS (APTIDÕES, RESTRIÇÕES
+ * ITEMIZADAS, FATORES DE RISCO POR CATEGORIA) — DADOS GRANULARES PRONTOS PARA LEITURA TABULAR E PARA
+ * FUTUROS GRÁFICOS DE PERFIL DO FUNCIONÁRIO.**
+ *
+ * PEDIDO (iPad, com print da ficha atual): "Não está bom ainda.. cria tabela com informações detalhada
+ * e fácil leitura, não quero apenas texto como está, pq depois vou criar gráficos para análise do perfil
+ * de cada funcionário." A ficha (Rev. 3119) mostrava Apto altura/Espaço confinado/Resultado em 3 cards,
+ * e Restrições + Fatores de risco como PARÁGRAFOS de texto corrido — difícil de ler e impossível de
+ * consumir como dado estruturado.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY — ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE): os mesmos campos que já vinham do
+ * backend (`aptoAltura`/`aptoEspacoConfinado`/`resultado`/`restricoes`/`fatoresRisco`/`iaConfianca`)
+ * passam por 2 PARSERS PUROS novos em `client/src/components/RaioXFuncionario.tsx` que estruturam o
+ * texto livre em LINHAS DE TABELA:
+ *   • `parseRestricoesItens(raw)` — quebra o texto de restrições em 1 frase = 1 item (split em ". " +
+ *     limpeza; NADA de lookbehind/lookahead p/ não quebrar no iOS Safari); reconhece "sem restrições".
+ *   • `parseFatoresRiscoCategorias(raw)` — quebra os fatores por CATEGORIA ("Físicos:", "Químicos:",
+ *     "Biológicos:", "Ergonômicos:", "Mecânicos:", "Acidentes:", "Psicossociais:") retornando
+ *     [{categoria, texto}] normalizado; sem rótulos reconhecidos cai em "Geral" com o texto inteiro.
+ *
+ * RENDER (tela + PDF, MESMA estrutura nas duas superfícies):
+ *   • TELA (aba "ASOs"): a ficha vira (1) tabela "Aptidões" campo/valor (Apto altura NR-35, Espaço
+ *     confinado NR-33, Resultado geral, Confiança da leitura) com badges verde/vermelho; (2) tabela
+ *     "Restrições" ITEMIZADA (#/restrição) com destaque VERMELHO real quando há restrição + contador;
+ *     (3) tabela "Fatores de risco" por Categoria × Fatores identificados. Layout em grid 2-col
+ *     (Aptidões | Restrições) + Fatores full-width abaixo.
+ *   • PDF "Exportar PDF" (Documentos SST): replica as 3 tabelas usando o CSS de tabela já existente
+ *     do documento (th/td), com a mesma itemização e destaque de restrições. Conteúdo da IA continua
+ *     ESCAPADO (`esc`) antes de entrar no HTML (anti-XSS no contexto autenticado).
+ *
+ * Nada muda no fluxo de aprovação/IA: a ficha só aparece quando `temIa` (extração aprovada). Fichas
+ * sem rótulos de categoria ou sem restrições degradam graciosamente ("Geral" / "Sem restrições
+ * registradas."). Arquivos: `client/src/components/RaioXFuncionario.tsx` (parsers module-scope +
+ * render da tela `a.temIa` + builder do PDF SST).
+ *
  * Rev. 3120 — **CONFIGURAÇÕES / "MÓDULOS DO SISTEMA" · O MÓDULO "MEDIÇÃO TERCEIROS" PASSOU A APARECER
  * NA LISTA DE TOGGLES (ANTES SÓ EXISTIA NA HOME) — AGORA É HABILITÁVEL/DESABILITÁVEL DE FORMA
  * INDEPENDENTE, RESPEITANDO A HIERARQUIA COM O MÓDULO "TERCEIROS".**
