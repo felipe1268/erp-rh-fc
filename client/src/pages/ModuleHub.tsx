@@ -414,7 +414,7 @@ export default function ModuleHub() {
     "rh-dp": "rh", "sst": "sst", "juridico": "juridico",
     "juridico-trabalhista": "juridico", "juridico-tributario": "juridico", "juridico-civil": "juridico",
     "avaliacao": "avaliacao", "terceiros": "terceiros", "parceiros": "parceiros",
-    "cadastro": "cadastro", "medicao-terceiros": "terceiros",
+    "cadastro": "cadastro", "medicao-terceiros": "medicao-terceiros",
   };
   // Filtrar módulos: habilitados no config E acessíveis pelo grupo do usuário
   const activeModules = MODULES.filter(m => {
@@ -423,6 +423,8 @@ export default function ModuleHub() {
     const configKey = hubToConfigKey[m.id] ?? m.id;
     const modEnabled = m.id === "juridico"
       ? (isModuleEnabled("juridico") || isModuleEnabled("juridico-trabalhista") || isModuleEnabled("juridico-tributario") || isModuleEnabled("juridico-civil"))
+      : m.id === "medicao-terceiros"
+      ? (isModuleEnabled("terceiros") && isModuleEnabled("medicao-terceiros"))
       : isModuleEnabled(configKey);
     if (!modEnabled) return false;
     // Se o usuário pertence a um grupo (e não é admin_master), filtrar por permissões do grupo
@@ -434,6 +436,8 @@ export default function ModuleHub() {
       // Para o módulo "juridico" unificado, aceitar acesso via qualquer sub-módulo
       const canAccess = m.id === "juridico"
         ? (canAccessModule("juridico") || canAccessModule("juridico-trabalhista") || canAccessModule("juridico-tributario") || canAccessModule("juridico-civil"))
+        : m.id === "medicao-terceiros"
+        ? (canAccessModule("terceiros") || canAccessModule("medicao-terceiros"))
         : canAccessModule(permId);
       if (!canAccess) return false;
       // Validação adicional via rota (sistema legado ou fallback)

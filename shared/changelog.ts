@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3120 — **CONFIGURAÇÕES / "MÓDULOS DO SISTEMA" · O MÓDULO "MEDIÇÃO TERCEIROS" PASSOU A APARECER
+ * NA LISTA DE TOGGLES (ANTES SÓ EXISTIA NA HOME) — AGORA É HABILITÁVEL/DESABILITÁVEL DE FORMA
+ * INDEPENDENTE, RESPEITANDO A HIERARQUIA COM O MÓDULO "TERCEIROS".**
+ *
+ * PEDIDO (iPad, sobre a tela Configurações → Módulos do Sistema): "Falta colocar os novos módulos
+ * aqui, ajuste." A lista de toggles dos Módulos do Sistema estava incompleta em relação à home
+ * (ModuleHub): o card "Medição Terceiros" existia na home mas NÃO tinha um interruptor próprio em
+ * Configurações — sua visibilidade ficava amarrada apenas ao módulo "Terceiros".
+ *
+ * CAUSA: a procedure `moduleConfig.list` (server/routers.ts) define a lista canônica de toggles via
+ * o array `ALL_MODULES`, que não incluía `medicao-terceiros`. Além disso, o mapa `MODULE_INFO`
+ * (client/src/pages/Configuracoes.tsx) — que provê label/ícone/descrição de cada card — também não
+ * tinha a entrada, e o render faz `if (!info) return null` (card silenciosamente some). Por fim, o
+ * gating do card na home (ModuleHub `hubToConfigKey`/`modEnabled` e DashboardLayout `moduleDefs`)
+ * lia `isModEnabled("terceiros")` em vez de uma chave própria.
+ *
+ * SOLUÇÃO (FRONTEND + 1 entrada na lista do backend — ZERO ALTER/DROP/DELETE/SCHEMA):
+ *   • BACKEND (`server/routers.ts`, `moduleConfig.list`): `medicao-terceiros` adicionado ao array
+ *     `ALL_MODULES` (após `medicao`). O endpoint já faz default `enabled: true` quando não há linha
+ *     em `moduleConfig` → módulo nasce HABILITADO (backward compatible; nada some pra quem já usa).
+ *     O `moduleConfig.toggle` (que persiste por `moduleKey` livre) já aceita a nova chave sem mudança.
+ *   • FRONTEND CONFIGURAÇÕES (`Configuracoes.tsx`): nova entrada `medicao-terceiros` no `MODULE_INFO`
+ *     (label "Medição Terceiros", subtitle "Medição de Empresas Terceiras", ícone `Receipt`, cor
+ *     laranja, descrição do fluxo de medição de terceiros) + import de `Receipt` do lucide-react.
+ *   • GATING DA HOME/SIDEBAR — HIERARQUIA PAI→FILHO: o card de Medição Terceiros agora exige
+ *     `isModEnabled("terceiros") && isModEnabled("medicao-terceiros")` (ambos default true). Desligar
+ *     "Terceiros" continua escondendo "Medição Terceiros" (comportamento antigo preservado); desligar
+ *     só "Medição Terceiros" esconde apenas ele (capacidade nova). Acesso por permissão segue via
+ *     `terceiros` (ou `medicao-terceiros`). Pontos: `DashboardLayout.tsx` (`moduleDefs`) e
+ *     `ModuleHub.tsx` (`hubToConfigKey: "medicao-terceiros" → "medicao-terceiros"` + special-case no
+ *     cálculo de `modEnabled`).
+ *
+ * REGRA DE OURO mantida: nenhuma operação de schema/DDL; apenas leitura/escrita normal de
+ * `module_config` (que já existia). Default habilitado garante que nenhuma empresa perca o módulo.
+ *
+ * Arquivos: `server/routers.ts` (ALL_MODULES), `client/src/pages/Configuracoes.tsx` (MODULE_INFO +
+ * import Receipt), `client/src/components/DashboardLayout.tsx` (gating moduleDefs), `client/src/pages/
+ * ModuleHub.tsx` (hubToConfigKey + modEnabled), `shared/version.ts`, `shared/changelog.ts`, `replit.md`.
+ *
  * Rev. 3119 — **RAIO-X DO FUNCIONÁRIO / ABA "ASOs" · A LEITURA POR IA DO ASO (APTO ALTURA NR-35,
  * ESPAÇO CONFINADO NR-33, RESULTADO, RESTRIÇÕES, FATORES DE RISCO) AGORA APARECE COMO UMA FICHA
  * ORGANIZADA SOB CADA ASO — E RESTRIÇÕES SÃO DESTACADAS EM VERMELHO PARA NÃO PASSAR BATIDO.**
