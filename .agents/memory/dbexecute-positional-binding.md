@@ -19,3 +19,12 @@ updated or silent wrong update. No error is thrown.
 ALL placeholders sequentially in text order ($1,$2,...) and order the params array
 to match that exact appearance order. Same rule for repeated values in CTEs (use
 distinct sequential $N, list the value again in the array at its position).
+
+**Arrays as params = SILENT EXPANSION (PG error 42846 "cannot cast type record to integer").**
+Because `dbExecute` interpolates each param via Drizzle `sql\`...${val}\``, passing a
+JS ARRAY does NOT bind a single Postgres array — Drizzle expands it into
+comma-separated placeholders `$a, $b, $c`. So `id = ANY($N::int[])` with an array
+param becomes `ANY($a, $b, $c::int[])` = `ANY(ROW(...))` → 42846. Do NOT use
+`ANY($N::int[])` with this helper. Use the file's `inlineIds(idList)` helper:
+`id IN (${inlineIds(idList)})` (safe only because idList is pre-filtered with
+`Number.isInteger(n) && n > 0`). Bit bulkBaixa/bulkEstornar/bulkUpdateStatus.

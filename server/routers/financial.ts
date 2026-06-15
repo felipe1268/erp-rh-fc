@@ -1610,8 +1610,8 @@ export const financialRouter = router({
              forma_pagamento=COALESCE($3, forma_pagamento),
              valor_realizado=${isPago ? "valor_previsto" : "valor_realizado"},
              updated_at=NOW()
-       WHERE company_id=$4 AND id = ANY($5::int[]) AND status != 'cancelado'`,
-      [input.status, input.dataPagamento ?? null, input.formaPagamento ?? null, input.companyId, idList]
+       WHERE company_id=$4 AND id IN (${inlineIds(idList)}) AND status != 'cancelado'`,
+      [input.status, input.dataPagamento ?? null, input.formaPagamento ?? null, input.companyId]
     );
     const updated = (res as any).rowCount ?? idList.length;
     await createAuditLog({
@@ -1649,10 +1649,10 @@ export const financialRouter = router({
              valor_realizado = valor_previsto,
              updated_at = NOW()
        WHERE company_id = $3
-         AND id = ANY($4::int[])
+         AND id IN (${inlineIds(idList)})
          AND status NOT IN ('pago','recebido','cancelado')
        RETURNING id`,
-      [input.dataPagamento ?? null, input.formaPagamento ?? null, input.companyId, idList]
+      [input.dataPagamento ?? null, input.formaPagamento ?? null, input.companyId]
     );
     const updated = ((res as any).rows ?? []).length;
     await createAuditLog({
@@ -1689,10 +1689,10 @@ export const financialRouter = router({
              observacoes = CONCAT(COALESCE(observacoes,''), E'\n[ESTORNO LOTE ', TO_CHAR(NOW(),'DD/MM/YYYY HH24:MI'), ' por ', $1::text, ']: ', $2::text),
              updated_at = NOW()
        WHERE company_id = $3
-         AND id = ANY($4::int[])
+         AND id IN (${inlineIds(idList)})
          AND status IN ('pago','recebido')
        RETURNING id`,
-      [ctx.user?.name ?? "?", motivo, input.companyId, idList]
+      [ctx.user?.name ?? "?", motivo, input.companyId]
     );
     const updated = ((res as any).rows ?? []).length;
     await createAuditLog({

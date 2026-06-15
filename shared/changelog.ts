@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3142 — **FINANCEIRO / LANÇAMENTOS · CORRIGIDO O ERRO "cannot cast type record to integer"
+ * (DB code=42846) AO DAR BAIXA EM LOTE OU CANCELAR A BAIXA (ESTORNO) EM LOTE — A BAIXA/ESTORNO
+ * DE VÁRIOS LANÇAMENTOS SELECIONADOS VOLTOU A FUNCIONAR.**
+ *
+ * PEDIDO (iPad, print da tela "Lançamentos" com o toast vermelho "Erro no estorno em lote — DB:
+ * code=42846 | msg=cannot cast type record to integer" ao clicar "Cancelar baixa (2)"): "está com
+ * erro na baixa do mês".
+ *
+ * CAUSA-RAIZ: as procedures de lote `financial.bulkBaixa` e `financial.bulkEstornar` (introduzidas
+ * na Rev. 3139) — e também a `financial.bulkUpdateStatus` (Rev. 1620) — filtravam os IDs com
+ * `id = ANY($N::int[])` passando a LISTA de ids como parâmetro JS (array) para o helper `dbExecute`.
+ * O `dbExecute` interpola cada parâmetro via template `sql` do Drizzle (`sql\`${built}${paramVal}\``).
+ * Quando `paramVal` é um ARRAY JS, o Drizzle NÃO o envia como um único array Postgres — ele EXPANDE
+ * o array numa lista de placeholders separados por vírgula (`$a, $b, $c`). Resultado: `ANY($N::int[])`
+ * virava `ANY($a, $b, $c::int[])`, que o Postgres lê como `ANY(ROW(...))` → tenta converter um
+ * `record` em `integer` → erro 42846 "cannot cast type record to integer". A `bulkBaixa` quebrava
+ * pelo mesmo motivo (o usuário só não tinha clicado nela).
+ *
+ * CORREÇÃO (BACKEND-ONLY; ZERO ALTER/DROP/DELETE/SCHEMA): em `server/routers/financial.ts` as TRÊS
+ * procedures (`bulkUpdateStatus`, `bulkBaixa`, `bulkEstornar`) trocaram `id = ANY($N::int[])` pelo
+ * padrão JÁ COMPROVADO no próprio arquivo `id IN (${inlineIds(idList)})` — o helper `inlineIds`
+ * (linha 106, "Safe inline of integer IDs to avoid pg-driver array literal issues") materializa os
+ * inteiros direto no SQL. É seguro porque `idList` já passa por `filter(Number.isInteger(n) && n > 0)`
+ * (sem risco de injeção). O parâmetro `idList` saiu do array de params de cada query (deixando os
+ * placeholders restantes em ordem de aparição, como o `dbExecute` exige). Nenhuma lógica de baixa,
+ * estorno, tenancy (`_assertFinanceiroCompanyAccess`) ou dados foi alterada — só a forma de filtrar
+ * os IDs.
+ *
  * Rev. 3141 — **FINANCEIRO / LANÇAMENTOS · A SELEÇÃO MÚLTIPLA FICOU SEMPRE ATIVA — O CHECKBOX
  * POR LINHA + A BARRA DE BAIXA/ESTORNO EM LOTE APARECEM DIRETO, SEM PRECISAR LIGAR O MODO
  * "SELEÇÃO MÚLTIPLA".**
