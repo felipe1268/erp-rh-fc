@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3141 — **FINANCEIRO / LANÇAMENTOS · A SELEÇÃO MÚLTIPLA FICOU SEMPRE ATIVA — O CHECKBOX
+ * POR LINHA + A BARRA DE BAIXA/ESTORNO EM LOTE APARECEM DIRETO, SEM PRECISAR LIGAR O MODO
+ * "SELEÇÃO MÚLTIPLA".**
+ *
+ * PEDIDO (iPad, print da tela "Lançamentos" com o botão "Seleção múltipla"): "não quero este
+ * botão de seleção múltipla.. quero que já fique como seleção definitiva, não tem pq ter esta
+ * opção de escolher ou não."
+ *
+ * CONTEXTO: a Rev. 3139 introduziu a seleção múltipla atrás de um botão de alternância
+ * (`selecting`) — o usuário tinha que ligar o modo p/ ver os checkboxes e a barra de ações.
+ *
+ * CORREÇÃO (FRONTEND-ONLY; ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE): em
+ * `client/src/pages/financeiro/FinanceiroLancamentos.tsx` o estado `selecting`/`setSelecting`
+ * e o botão de alternância "Seleção múltipla" foram REMOVIDOS. Os checkboxes por linha, o
+ * "Selecionar todos" e a barra de ação (Dar baixa como pago / Cancelar baixa / Limpar) agora
+ * renderizam SEMPRE na aba Lançamentos. Nenhuma lógica de baixa/estorno em lote (`bulkBaixa`/
+ * `bulkEstornar`), tenancy ou dados foi tocada — só caiu o gate de UI.
+ *
  * Rev. 3140 — **RH / COLABORADORES · O MODAL "GRADE DE TAMANHOS (EPI)" ABRE EM TELA CHEIA —
  * APROVEITANDO TODA A LARGURA/ALTURA NO LUGAR DO CARD CENTRAL ESTREITO COM SCROLL APERTADO.**
  *

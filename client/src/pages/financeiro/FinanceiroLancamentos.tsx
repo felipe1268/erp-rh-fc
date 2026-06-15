@@ -124,7 +124,7 @@ export default function FinanceiroLancamentos() {
   const [viewId, setViewId] = useState<number | null>(null);
   const [showObs, setShowObs] = useState(false);
   // Rev. 3139 — Seleção múltipla p/ baixa/estorno em lote (conciliação bancária).
-  const [selecting, setSelecting] = useState(false);
+  // Rev. 3141 — seleção SEMPRE ativa (sem botão de alternância); checkbox por linha sempre visível.
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkBaixaOpen, setBulkBaixaOpen] = useState(false);
   const [bulkBaixaData, setBulkBaixaData] = useState(new Date().toISOString().split("T")[0]);
@@ -629,13 +629,6 @@ export default function FinanceiroLancamentos() {
                 <Zap className="w-3.5 h-3.5 mr-1.5" />Gerar Pendentes
               </Button>
             )}
-            {aba === "lancamentos" && (
-              <Button variant={selecting ? "default" : "outline"} size="sm" className="h-9"
-                onClick={() => { setSelecting(v => !v); setSelectedIds(new Set()); }}>
-                <CheckCircle className="w-3.5 h-3.5 mr-1.5" />
-                {selecting ? "Sair da seleção" : "Seleção múltipla"}
-              </Button>
-            )}
             <Button onClick={openNew} className="bg-blue-600 hover:bg-blue-700 text-white">
               <Plus className="w-4 h-4 mr-2" />Novo Lançamento
             </Button>
@@ -789,30 +782,28 @@ export default function FinanceiroLancamentos() {
                   <Filter className="w-4 h-4" />
                   {lancamentos.length} lançamento(s)
                 </CardTitle>
-                {selecting && (
-                  <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
-                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer select-none">
-                      <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} />
-                      Selecionar todos
-                    </label>
-                    <span className="text-sm text-gray-500">{selectedIds.size} selecionado(s)</span>
-                    <div className="flex-1" />
-                    <Button size="sm" className="h-8 bg-green-600 hover:bg-green-700 text-white"
-                      disabled={selBaixaveis === 0 || bulkBaixaMut.isPending}
-                      onClick={() => { setBulkBaixaData(new Date().toISOString().split("T")[0]); setBulkBaixaOpen(true); }}>
-                      <CheckCircle className="w-3.5 h-3.5 mr-1.5" />Dar baixa como pago{selBaixaveis > 0 ? ` (${selBaixaveis})` : ""}
-                    </Button>
-                    <Button size="sm" variant="outline" className="h-8 text-amber-700 border-amber-300 hover:bg-amber-50"
-                      disabled={selEstornaveis === 0 || bulkEstornarMut.isPending}
-                      onClick={() => { setBulkEstornarMotivo(""); setBulkEstornarOpen(true); }}>
-                      <RefreshCw className="w-3.5 h-3.5 mr-1.5" />Cancelar baixa{selEstornaveis > 0 ? ` (${selEstornaveis})` : ""}
-                    </Button>
-                    {selectedIds.size > 0 && (
-                      <Button size="sm" variant="ghost" className="h-8 text-gray-500"
-                        onClick={() => setSelectedIds(new Set())}>Limpar</Button>
-                    )}
-                  </div>
-                )}
+                <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer select-none">
+                    <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} />
+                    Selecionar todos
+                  </label>
+                  <span className="text-sm text-gray-500">{selectedIds.size} selecionado(s)</span>
+                  <div className="flex-1" />
+                  <Button size="sm" className="h-8 bg-green-600 hover:bg-green-700 text-white"
+                    disabled={selBaixaveis === 0 || bulkBaixaMut.isPending}
+                    onClick={() => { setBulkBaixaData(new Date().toISOString().split("T")[0]); setBulkBaixaOpen(true); }}>
+                    <CheckCircle className="w-3.5 h-3.5 mr-1.5" />Dar baixa como pago{selBaixaveis > 0 ? ` (${selBaixaveis})` : ""}
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-8 text-amber-700 border-amber-300 hover:bg-amber-50"
+                    disabled={selEstornaveis === 0 || bulkEstornarMut.isPending}
+                    onClick={() => { setBulkEstornarMotivo(""); setBulkEstornarOpen(true); }}>
+                    <RefreshCw className="w-3.5 h-3.5 mr-1.5" />Cancelar baixa{selEstornaveis > 0 ? ` (${selEstornaveis})` : ""}
+                  </Button>
+                  {selectedIds.size > 0 && (
+                    <Button size="sm" variant="ghost" className="h-8 text-gray-500"
+                      onClick={() => setSelectedIds(new Set())}>Limpar</Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent className="p-0">
                 {isLoading ? (
@@ -822,16 +813,14 @@ export default function FinanceiroLancamentos() {
                 ) : (
                   <div className="divide-y divide-gray-100">
                     {lancamentos.map((l: any) => (
-                      <div key={l.id} className={`px-5 py-3 flex items-center justify-between hover:bg-gray-50 ${selecting && selectedIds.has(l.id) ? "bg-blue-50" : ""}`}>
-                        {selecting && (
-                          <div className="mr-3 flex-shrink-0">
-                            <Checkbox
-                              checked={selectedIds.has(l.id)}
-                              disabled={l.status === "cancelado"}
-                              onCheckedChange={() => toggleSelect(l.id)}
-                            />
-                          </div>
-                        )}
+                      <div key={l.id} className={`px-5 py-3 flex items-center justify-between hover:bg-gray-50 ${selectedIds.has(l.id) ? "bg-blue-50" : ""}`}>
+                        <div className="mr-3 flex-shrink-0">
+                          <Checkbox
+                            checked={selectedIds.has(l.id)}
+                            disabled={l.status === "cancelado"}
+                            onCheckedChange={() => toggleSelect(l.id)}
+                          />
+                        </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-sm font-medium text-gray-800 truncate">{l.descricao ?? l.contaNome ?? "—"}</span>
