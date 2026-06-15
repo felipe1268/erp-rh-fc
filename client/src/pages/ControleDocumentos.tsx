@@ -983,18 +983,42 @@ function MapeamentoPanel({ companyId, companyIds, onClickEmployee, empresaNome }
     setBatchOpen(true);
     setBatchRunning(true);
     setAwaitingReview(false);
+    // Rev. 3128 — RITMO (pacing) + RETRY POR ITEM contra erros transitórios do
+    // Gemini (429 quota do free-tier / 503 "high demand"), que respondiam por
+    // ~95% das "Falhas". Antes os ASOs eram disparados em rajada, estourando o
+    // limite por minuto. Agora: pausa entre leituras + até 3 tentativas por ASO
+    // com backoff quando o erro é transitório (o backend também já faz retry).
+    const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+    const ehTransitorio = (m: string) => /429|50[0234]|quota|unavailable|high demand|sobrecarregad|overloaded|rate.?limit|limite de requisi|tente novamente/i.test(m || "");
+    const PACE_MS = 3500;
     let okCount = 0;
     for (let i = 0; i < unicos.length; i++) {
       if (batchAbortRef.current) break;
       const a = unicos[i];
       setBatchItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, status: "processando" } : it)));
-      try {
-        await lerUmIA.mutateAsync({ asoId: a.asoId, companyId, companyIds });
+      let ok = false;
+      let ultimoErro = "Falha ao ler com IA";
+      for (let tentativa = 0; tentativa < 3 && !batchAbortRef.current; tentativa++) {
+        try {
+          await lerUmIA.mutateAsync({ asoId: a.asoId, companyId, companyIds });
+          ok = true;
+          break;
+        } catch (e: any) {
+          ultimoErro = e?.message || "Falha ao ler com IA";
+          if (ehTransitorio(ultimoErro) && tentativa < 2) {
+            await sleep(5000 * (tentativa + 1));
+            continue;
+          }
+          break;
+        }
+      }
+      if (ok) {
         okCount++;
         setBatchItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, status: "ok" } : it)));
-      } catch (e: any) {
-        setBatchItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, status: "erro", erro: e?.message || "Falha ao ler com IA" } : it)));
+      } else {
+        setBatchItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, status: "erro", erro: ultimoErro } : it)));
       }
+      if (i < unicos.length - 1 && !batchAbortRef.current) await sleep(PACE_MS);
     }
     // Se houve leitura bem-sucedida, TRAVA até a fila de aprovação esvaziar de verdade
     // (a flag só é zerada pelo effect quando o fetch resolver vazio, sem erro).

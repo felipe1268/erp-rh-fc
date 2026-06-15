@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3128 — **CONTROLE DE DOCUMENTOS / ABA "MAPEAMENTO" · A LEITURA DE ASOs POR IA DEIXOU DE
+ * "FALHAR EM MASSA" (ERAM ~73 FALHAS P/ 6 SUCESSOS) — AGORA RESISTE AOS ERROS TRANSITÓRIOS DA API
+ * DO GEMINI (429 COTA DO FREE-TIER / 503 "HIGH DEMAND") COM RETRY + RITMO (PACING) + SALVAGE DE
+ * JSON TRUNCADO.**
+ *
+ * PEDIDO (iPad, build mode, com print): "está tendo muita falha na leitura dos ASOs, como podemos
+ * melhorar isso para que a leitura seja feita de forma correta e coesa?" O print mostrava "Lendo
+ * ASOs com IA · Processando 10 de 94 · 1 lido com sucesso · 8 falhas".
+ *
+ * DIAGNÓSTICO (consultando os `erro_msg` reais gravados em `aso_extracao_ia` no Neon): de 73
+ * falhas, ~95% eram erros TRANSITÓRIOS da API do Gemini — `429` ("You exceeded your current quota"
+ * do free-tier, métrica `generate_content_free_tier_requests`) e `503` ("This model is currently
+ * experiencing high demand", UNAVAILABLE). Havia ainda 1 caso de `Unterminated string in JSON at
+ * position 7421` (resposta truncada por estouro do `maxTokens: 2048`). CAUSA: (a) os 94 ASOs eram
+ * disparados em RAJADA pelo runner client-side (`runBatch` sem pausa), estourando o limite por
+ * minuto do free-tier; (b) `invokeGeminiVision` só dava retry em `429` — `503`/`500` morriam na
+ * 1ª tentativa; (c) o backoff ignorava o `retryDelay` que a própria API sugere; (d) `maxTokens`
+ * baixo truncava laudos longos.
+ *
+ * CORREÇÃO (FRONTEND + BACKEND DE IA; ZERO SCHEMA/ALTER/DROP/DELETE):
+ * 1) `server/_core/llm.ts` (`invokeGeminiVision`): retry passou a cobrir TODOS os transitórios
+ *    (429/500/502/503/504), `MAX_RETRIES` 3→5, e o tempo de espera agora é `max(retryDelay sugerido
+ *    pela API, backoff exponencial)` via novo helper `extrairRetryDelayMs` (lê `details[].retryDelay`
+ *    do corpo do erro).
+ * 2) `server/routers/controleDocumentos.ts`: `maxTokens` do ASO 2048→4096; `parseAsoIaLoose` ganhou
+ *    SALVAGE de JSON truncado — corta no último campo completo e fecha as chaves em vez de perder a
+ *    leitura inteira (vira extração parcial revisável, não "Falha").
+ * 3) `client/src/pages/ControleDocumentos.tsx` (`runBatch`): RITMO entre leituras (pausa ~3,5s) +
+ *    até 3 tentativas POR ASO com backoff quando o erro é transitório — espelha o retry do backend
+ *    e evita martelar a cota.
+ *
+ * RESSALVA: a chave do Gemini está no FREE-TIER (a métrica do 429 confirma). Retry+pacing reduzem
+ * drasticamente as falhas, mas se a cota DIÁRIA esgotar nada resolve no código — aí é subir p/ uma
+ * chave paga do Gemini (ou habilitar ANTHROPIC/OPENAI). Detalhe técnico: este bloco.
+ *
  * Rev. 3127 — **MEDIÇÃO / "LEVANTAMENTO" (ENGINE COMPARTILHADA CLIENTE×TERCEIRO) · A TELA DE
  * LEVANTAMENTO DEIXOU DE EXIGIR ESPECIFICAMENTE O MÓDULO DE MEDIÇÃO-CLIENTE — AGORA É LIBERADA P/
  * QUALQUER USUÁRIO QUE TENHA O MÓDULO DE MEDIÇÃO (CLIENTE) **OU** O DE TERCEIROS.**

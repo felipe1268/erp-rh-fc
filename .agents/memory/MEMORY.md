@@ -84,3 +84,5 @@
 - [iOS preview dialog blank](ios-preview-dialog-blank.md) — preview em branco no iPad com arquivo servindo OK = bug client-side do Radix Dialog: transform identidade fixo no <img> + PDF em <iframe>; dar transform condicional + botão Abrir top-level.
 - [PDF export XSS / per-function esc](pdf-export-xss-esc-scope.md) — print/PDF builders (document.write) define esc LOCALLY; new fields (esp. AI-sourced) must esc()/escAttr() or it's DOM XSS.
 - [ControleDocumentos hooks order](controledocumentos-hooks-order.md) — ControleDocumentos.tsx has mid-component early returns; new hooks MUST go above them or /controle-documentos crashes ("Rendered more hooks").
+
+- [Gemini free-tier transient failures](gemini-freetier-transient.md) — batch vision reads fail ~95% on transient 429/503; fix=backend retry on 429+5xx honoring retryDelay + client pacing; daily quota = hard ceiling.

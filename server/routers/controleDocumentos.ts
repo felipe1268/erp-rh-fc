@@ -298,7 +298,23 @@ function parseAsoIaLoose(raw: string): any {
   const first = txt.indexOf("{");
   const last = txt.lastIndexOf("}");
   if (first >= 0 && last > first) txt = txt.slice(first, last + 1);
-  return JSON.parse(txt);
+  try {
+    return JSON.parse(txt);
+  } catch {
+    // Rev. 3128 — SALVAGE de JSON truncado ("Unterminated string in JSON"):
+    // quando a resposta vem cortada (estouro de maxTokens), corta no último
+    // campo COMPLETO (última vírgula no topo do objeto) e fecha as chaves, em
+    // vez de perder a leitura inteira. Melhor uma extração parcial revisável
+    // que um "Falha".
+    let s = (raw || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+    const fi = s.indexOf("{");
+    if (fi >= 0) s = s.slice(fi);
+    const lastComma = s.lastIndexOf(",");
+    if (lastComma > 0) {
+      try { return JSON.parse(s.slice(0, lastComma) + "}"); } catch { /* segue */ }
+    }
+    throw new Error("A IA devolveu uma resposta incompleta/inválida (JSON truncado). Reprocesse este ASO.");
+  }
 }
 
 // Lê o PDF/imagem de um ASO (a partir de documentoUrl) e devolve base64 + mime.
@@ -364,7 +380,7 @@ async function processarAsoComIA(
       base64,
       mimeType,
       responseSchema: ASO_IA_SCHEMA as any,
-      maxTokens: 2048,
+      maxTokens: 4096,
     });
     const ex = parseAsoIaLoose(raw);
     const examesArr = Array.isArray(ex?.examesDetectados) ? ex.examesDetectados.map((s: any) => String(s)) : [];

@@ -589,6 +589,26 @@ export async function invokeAnthropicVision(params: {
 // OpenAI-compatible usado em invokeGemini não aceita inline_data binário).
 // Usado pelo upload em lote de contratos de locação. Retorna string (texto
 // concatenado). Suporta JSON mode via responseSchema (Gemini structured output).
+// Rev. 3128 — Extrai o `retryDelay` (ex.: "30s") que o Gemini devolve no corpo
+// dos erros 429/503 (details[].@type RetryInfo). Devolve ms (0 se ausente) para
+// respeitar a janela sugerida pela API em vez de só backoff cego.
+function extrairRetryDelayMs(errText: string): number {
+  try {
+    const j: any = JSON.parse(errText);
+    const details = j?.error?.details;
+    if (Array.isArray(details)) {
+      for (const d of details) {
+        const rd = d?.retryDelay;
+        if (typeof rd === "string") {
+          const m = rd.match(/([\d.]+)\s*s/i);
+          if (m) return Math.round(parseFloat(m[1]) * 1000);
+        }
+      }
+    }
+  } catch { /* corpo de erro não-JSON */ }
+  return 0;
+}
+
 export async function invokeGeminiVision(params: {
   prompt: string;
   base64: string;
@@ -642,7 +662,7 @@ export async function invokeGeminiVision(params: {
     } : {}),
   };
 
-  const MAX_RETRIES = 3;
+  const MAX_RETRIES = 5;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${googleKey}`,
@@ -660,9 +680,17 @@ export async function invokeGeminiVision(params: {
       return text;
     }
     const errText = await res.text();
-    if (res.status === 429 && attempt < MAX_RETRIES) {
-      const waitMs = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 500, 60000);
-      console.warn(`[Gemini Vision] 429 (tentativa ${attempt + 1}/${MAX_RETRIES + 1}). Aguardando ${Math.round(waitMs)}ms...`);
+    // Rev. 3128 — Retry em TODOS os erros transitórios do Gemini, não só 429:
+    // 429 (quota/rate-limit do free-tier), 500 (interno), 502/503/504 (modelo
+    // sobrecarregado / "high demand" UNAVAILABLE). Esses respondiam por ~95% das
+    // "Falhas" na leitura de ASOs em lote. Honra o `retryDelay` que a própria API
+    // sugere no corpo do erro (ou usa backoff exponencial, o que for MAIOR).
+    const transitorio = res.status === 429 || res.status === 500 || res.status === 502 || res.status === 503 || res.status === 504;
+    if (transitorio && attempt < MAX_RETRIES) {
+      const sugerido = extrairRetryDelayMs(errText);
+      const backoff = Math.min(2000 * Math.pow(2, attempt) + Math.random() * 750, 60000);
+      const waitMs = Math.min(Math.max(sugerido, backoff), 60000);
+      console.warn(`[Gemini Vision] ${res.status} (tentativa ${attempt + 1}/${MAX_RETRIES + 1}). Aguardando ${Math.round(waitMs)}ms...`);
       await new Promise(r => setTimeout(r, waitMs));
       continue;
     }
