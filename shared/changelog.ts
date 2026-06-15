@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3113 — **DOCUMENTOS / RAIO-X DO FUNCIONÁRIO (E TODO O APP) · O "VER" DO ATESTADO (E DE
+ * QUALQUER ANEXO PDF/IMAGEM) VOLTOU A MOSTRAR O DOCUMENTO NO iPad/iPhone — ANTES O PREVIEW
+ * ABRIA EM BRANCO DENTRO DO MODAL. AGORA O DIÁLOGO DE PREVIEW SEMPRE TEM UM BOTÃO "ABRIR"
+ * (ABRE O ARQUIVO EM TELA CHEIA, QUE O iOS SEMPRE RENDERIZA), PDF NO iOS MOSTRA UM CARD
+ * "TOQUE EM ABRIR" NO LUGAR DO iframe EM BRANCO, E A IMAGEM GANHOU FALLBACK SE NÃO CARREGAR.**
+ *
+ * PEDIDO: usuário (iPad/Safari) clicava em "Ver documento" no atestado do Raio-X (JEAN CARLOS
+ * RIBEIRO DA SILVA, atestado 25/03/2026) e o preview abria em branco.
+ *
+ * DIAGNÓSTICO: o arquivo serve CERTO (`/uploads/documentos/atestados/68-…jpeg` → HTTP 200,
+ * `image/jpeg`, fallback de DB da Rev. 3108 OK) e RENDERIZA em navegação top-level (confirmado).
+ * O branco era CLIENT-SIDE, só dentro do `DocumentPreviewDialog` no iOS Safari/WKWebView por duas
+ * causas: (1) o `<img>` carregava SEMPRE um `transform` identidade + `transition-transform`, que
+ * aninhado num modal `position:fixed` transformado dispara o bug de camada de composição do iOS
+ * (não pinta → branco); (2) PDF era exibido via `<iframe>`, que o iOS Safari não renderiza.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY em `client/src/components/DocumentPreviewDialog.tsx`, ZERO
+ * ALTER/DROP/DELETE/SCHEMA/BACKEND): (a) `transform` agora é aplicado SÓ quando há zoom/rotação/pan
+ * (estado de repouso = sem transform → sem camada de composição → iOS pinta a imagem); (b) novo
+ * botão "Abrir" SEMPRE visível no cabeçalho (`openExternal` → `window.open` top-level) como caminho
+ * garantido em qualquer device; (c) helper `isIOS()`: em PDF no iOS troca o `<iframe>` em branco por
+ * um card "Toque em Abrir para visualizar"; (d) estado `imgErr` + `onError` no `<img>` → fallback
+ * com botão "Abrir imagem" se a imagem falhar ao carregar. Afeta TODOS os consumidores do diálogo
+ * (atestados, ASO, advertências, documentos etc.), sem mudar o comportamento no desktop.
+ *
  * Rev. 3112 — **MEDIÇÃO / LEVANTAMENTO DE CAMPO · RASTREIO POR CONTORNO: AGORA CADA CONTORNO
  * PODE RECEBER UM NOME/LOCAL (EX.: "APARTAMENTO 1402") E TER FOTOS VINCULADAS DIRETAMENTE A ELE
  * — NÃO MAIS SÓ FOTOS SOLTAS DO LEVANTAMENTO. O NOME E A FOTO APARECEM NA LISTA "CONTORNOS DESTA

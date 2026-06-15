@@ -19,6 +19,15 @@ function isPdf(urlOrName: string): boolean {
   return /\.pdf$/i.test(extractPathname(urlOrName));
 }
 
+// iOS Safari/WKWebView não pinta PDF em <iframe> e tem bug de camada de
+// composição com transform aninhado dentro de modal fixed → preview em branco.
+// Detecta p/ oferecer "Abrir" como caminho garantido (navegação top-level renderiza).
+function isIOS(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  return /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && "ontouchend" in document);
+}
+
 export function canPreviewFile(urlOrName: string): boolean {
   return isPdf(urlOrName) || isImage(urlOrName);
 }
@@ -42,6 +51,7 @@ export default function DocumentPreviewDialog({
   const [rotation, setRotation] = useState(0);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [pdfZoom, setPdfZoom] = useState(100);
+  const [imgErr, setImgErr] = useState(false);
   const dragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -51,6 +61,7 @@ export default function DocumentPreviewDialog({
     setRotation(0);
     setPan({ x: 0, y: 0 });
     setPdfZoom(100);
+    setImgErr(false);
   }, [fileUrl, open]);
 
   const showPdf = !!(fileUrl && fileName) && (isPdf(fileUrl) || isPdf(fileName));
@@ -62,6 +73,10 @@ export default function DocumentPreviewDialog({
     a.href = fileUrl;
     a.download = fileName || "arquivo";
     a.click();
+  };
+
+  const openExternal = () => {
+    if (fileUrl) window.open(fileUrl, "_blank", "noopener,noreferrer");
   };
 
   // ===== Controles de zoom =====
@@ -175,6 +190,9 @@ export default function DocumentPreviewDialog({
           )}
 
           <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={openExternal} title="Abrir em nova aba">
+              <ExternalLink className="w-3 h-3 mr-1" /> Abrir
+            </Button>
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleDownload}>
               <Download className="w-3 h-3 mr-1" /> Baixar
             </Button>
@@ -192,26 +210,54 @@ export default function DocumentPreviewDialog({
           style={{ cursor: showImage && zoom > 1 ? (dragRef.current ? "grabbing" : "grab") : "default" }}
         >
           {showPdf && (
-            <iframe
-              src={`${fileUrl}#zoom=${pdfZoom}`}
-              key={pdfZoom}
-              className="w-full h-full min-h-[70vh]"
-              title="Preview PDF"
-            />
+            isIOS() ? (
+              // iOS Safari não renderiza PDF em <iframe> (fica em branco) → oferece
+              // abertura top-level, que SEMPRE renderiza o arquivo.
+              <div className="flex flex-col items-center justify-center h-full min-h-[70vh] gap-4 text-muted-foreground p-6 text-center">
+                <Eye className="w-10 h-10 text-blue-600" />
+                <p className="text-sm">No iPhone/iPad o PDF abre em tela cheia. Toque em <strong>Abrir</strong> para visualizar.</p>
+                <Button variant="default" size="sm" onClick={openExternal}>
+                  <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> Abrir documento
+                </Button>
+              </div>
+            ) : (
+              <iframe
+                src={`${fileUrl}#zoom=${pdfZoom}`}
+                key={pdfZoom}
+                className="w-full h-full min-h-[70vh]"
+                title="Preview PDF"
+              />
+            )
           )}
           {showImage && (
-            <div className="flex items-center justify-center h-full min-h-[70vh] p-4 select-none overflow-hidden">
-              <img
-                src={fileUrl}
-                alt={title || fileName}
-                draggable={false}
-                className="max-w-full max-h-[80vh] object-contain rounded shadow-lg transition-transform duration-100"
-                style={{
-                  transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom}) rotate(${rotation}deg)`,
-                  transformOrigin: "center center",
-                }}
-              />
-            </div>
+            imgErr ? (
+              <div className="flex flex-col items-center justify-center h-full min-h-[70vh] gap-4 text-muted-foreground p-6 text-center">
+                <Eye className="w-10 h-10 text-blue-600" />
+                <p className="text-sm">Não foi possível exibir a imagem aqui. Toque em <strong>Abrir</strong> para visualizá-la.</p>
+                <Button variant="default" size="sm" onClick={openExternal}>
+                  <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> Abrir imagem
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-full min-h-[70vh] p-4 select-none overflow-hidden">
+                <img
+                  src={fileUrl}
+                  alt={title || fileName}
+                  draggable={false}
+                  onError={() => setImgErr(true)}
+                  className="max-w-full max-h-[80vh] object-contain rounded shadow-lg transition-transform duration-100"
+                  style={{
+                    // Aplica transform SÓ quando há zoom/rotação/pan. Um transform
+                    // identidade fixo cria uma camada de composição que o iOS Safari
+                    // não pinta dentro de um modal fixed → preview em branco.
+                    transform: (zoom !== 1 || rotation !== 0 || pan.x !== 0 || pan.y !== 0)
+                      ? `translate(${pan.x}px, ${pan.y}px) scale(${zoom}) rotate(${rotation}deg)`
+                      : undefined,
+                    transformOrigin: "center center",
+                  }}
+                />
+              </div>
+            )
           )}
           {!showPdf && !showImage && (
             <div className="flex flex-col items-center justify-center h-full min-h-[70vh] gap-4 text-muted-foreground">
