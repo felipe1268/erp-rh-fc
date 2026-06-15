@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3127 — **MEDIÇÃO / "LEVANTAMENTO" (ENGINE COMPARTILHADA CLIENTE×TERCEIRO) · A TELA DE
+ * LEVANTAMENTO DEIXOU DE EXIGIR ESPECIFICAMENTE O MÓDULO DE MEDIÇÃO-CLIENTE — AGORA É LIBERADA P/
+ * QUALQUER USUÁRIO QUE TENHA O MÓDULO DE MEDIÇÃO (CLIENTE) **OU** O DE TERCEIROS.**
+ *
+ * PEDIDO (iPad, build mode, com print): usuária "Kellen Larissa" (perfil Usuário) recebia a tela
+ * "Acesso Restrito · Você não tem permissão para acessar esta página" ao abrir
+ * `/medicao/17/levantamento/1?origem=terceiro`. Pedido textual: "Libere esta função para todos que
+ * têm o módulo, quero 100% liberado."
+ *
+ * CAUSA-RAIZ: em `client/src/App.tsx`, a rota `"/medicao/:contratoId/levantamento/:campoId"` usava
+ * `<RouteGuard ... route="/medicao" />`. O `RouteGuard` libera quando `groupCanAccessRoute("/medicao")`
+ * é verdadeiro — ou seja, exigia o MÓDULO DE MEDIÇÃO-CLIENTE. Mas o Levantamento é uma engine
+ * COMPARTILHADA cliente×terceiro (varia por `?origem=cliente|terceiro`): um usuário que só tem o módulo
+ * de TERCEIROS (e navega no fluxo `origem=terceiro`) caía no "Acesso Restrito" mesmo tendo acesso
+ * legítimo à medição de terceiros.
+ *
+ * CORREÇÃO (FRONTEND-ONLY; ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE): o `RouteGuard` JÁ aceita um ARRAY de
+ * rotas (`routes.some(r => groupCanAccessRoute(r))`). A rota do Levantamento passou de
+ * `route="/medicao"` para `route={["/medicao", "/terceiros/medicoes"]}` — assim QUALQUER usuário que
+ * tenha o módulo de Medição (cliente) OU o de Terceiros (rota `/terceiros/medicoes`) abre a tela.
+ * Admin Master e usuários sem grupo continuam livres (regra pré-existente do guard). Os DADOS seguem
+ * protegidos pelos guards de tenancy no backend (IDOR fechados na Rev. 3126 em `terceiroContratos.ts`),
+ * então ampliar o gate de UI NÃO expõe dado de outra empresa. Comentário-âncora adicionado na rota.
+ *
  * Rev. 3126 — **MEDIÇÃO / "LEVANTAMENTO" (ENGINE COMPARTILHADA CLIENTE×TERCEIRO) · CORRIGIDA A TELA DE
  * ERRO "OCORREU UM ERRO INESPERADO · RENDERED MORE HOOKS THAN DURING THE PREVIOUS RENDER" QUE QUEBRAVA
  * A PÁGINA DE LEVANTAMENTO (EX.: `/medicao/17/levantamento/1?origem=terceiro`).**

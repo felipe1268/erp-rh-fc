@@ -589,7 +589,12 @@ function Router() {
         <Route path="/gestao-documentos"           component={() => <RouteGuard component={GestaoDocumentos} route="/gestao-documentos" />} />
         <Route path="/medicao"                   component={() => <RouteGuard component={MedicaoContratos} route="/medicao" />} />
         <Route path="/medicao/:id"               component={() => <RouteGuard component={MedicaoDetalhe} route="/medicao" />} />
-        <Route path="/medicao/:contratoId/levantamento/:campoId" component={() => <RouteGuard component={MedicaoLevantamento} route="/medicao" />} />
+        {/* Rev. 3127 — Levantamento é engine COMPARTILHADA cliente×terceiro (?origem=cliente|terceiro).
+            Guard ampliado: libera p/ quem tem o módulo de Medição (cliente, "/medicao") OU o de
+            Terceiros ("/terceiros/medicoes"). Antes só "/medicao" travava usuários terceiros-only
+            (ex.: tela "Acesso Restrito" em /medicao/:id/levantamento?origem=terceiro). Os dados seguem
+            protegidos pelos guards de tenancy no backend (terceiroContratos.ts / medicao). */}
+        <Route path="/medicao/:contratoId/levantamento/:campoId" component={() => <RouteGuard component={MedicaoLevantamento} route={["/medicao", "/terceiros/medicoes"]} />} />
         {/* Compras */}
         <Route path="/almoxarifado/categorias"     component={() => <RouteGuard component={AlmoxarifadoCategorias} route="/almoxarifado" />} />
         <Route path="/almoxarifado/movimentacoes" component={() => <RouteGuard component={AlmoxarifadoMovimentacoes} route="/almoxarifado/movimentacoes" />} />
