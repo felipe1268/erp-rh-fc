@@ -3248,6 +3248,13 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3002: colunas cliente_id/cliente_nome (financial_entries) garantidas.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3002 cliente_id/cliente_nome:`, e?.message || e); }
 
+        // ── Rev. 3135 — Centro de custo CADASTRADO classificado no lançamento (Análise de Custos) ──
+        try {
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS centro_custo_id INTEGER`);
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS centro_custo_nome VARCHAR(255)`);
+          console.log(`[SyncSchema+] Rev. 3135: colunas centro_custo_id/centro_custo_nome (financial_entries) garantidas.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3135 centro_custo:`, e?.message || e); }
+
         // ── Rev. 2694 — Empréstimo de ferramentas/equipamentos: colunas de rastreio (Rev. 2256) que nunca ganharam self-heal ──
         try {
           await db.execute(sql`ALTER TABLE warehouse_loans ADD COLUMN IF NOT EXISTS foto_devolucao_url TEXT`);

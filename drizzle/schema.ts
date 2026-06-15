@@ -7012,6 +7012,10 @@ export const financialEntries = pgTable("financial_entries", {
   obraNome: varchar("obra_nome", { length: 255 }),
   contaId: integer("conta_id"),
   contaNome: varchar("conta_nome", { length: 255 }),
+  // Rev. 3135 — Centro de custo CADASTRADO (financial_cost_centers) classificado
+  // no lançamento (override do derivado da categoria). Análise de Custos.
+  centroCustoId: integer("centro_custo_id"),
+  centroCustoNome: varchar("centro_custo_nome", { length: 255 }),
   tipo: text().notNull(),
   natureza: text().notNull(),
   valorPrevisto: numeric("valor_previsto", { precision: 15, scale: 2 }).notNull(),

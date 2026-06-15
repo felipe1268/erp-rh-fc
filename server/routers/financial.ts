@@ -1693,6 +1693,8 @@ export const financialRouter = router({
     contaId: z.number().nullable().optional(),
     obraNome: z.string().optional(),
     obraId: z.number().nullable().optional(),
+    centroCustoNome: z.string().nullable().optional(), // Rev. 3135
+    centroCustoId: z.number().nullable().optional(),   // Rev. 3135
     formaPagamento: z.string().optional(),
     fornecedorNome: z.string().optional(),
     observacoes: z.string().optional(),
@@ -1736,6 +1738,8 @@ export const financialRouter = router({
     if (input.contaId !== undefined) push("conta_id", input.contaId ?? null);
     if (input.obraNome !== undefined) push("obra_nome", input.obraNome || null);
     if (input.obraId !== undefined) push("obra_id", input.obraId ?? null);
+    if (input.centroCustoNome !== undefined) push("centro_custo_nome", input.centroCustoNome || null);
+    if (input.centroCustoId !== undefined) push("centro_custo_id", input.centroCustoId ?? null);
     if (input.formaPagamento !== undefined) push("forma_pagamento", input.formaPagamento || null);
     if (input.fornecedorNome !== undefined) push("fornecedor_nome", input.fornecedorNome?.trim() || null);
     if (input.observacoes !== undefined) push("observacoes", input.observacoes || null);
@@ -1818,12 +1822,16 @@ export const financialRouter = router({
     contaId: z.number().nullable().optional(),
     obraNome: z.string().nullable().optional(),
     obraId: z.number().nullable().optional(),
+    // Rev. 3135 — centro de custo CADASTRADO (substitui obra na Análise de Custos).
+    centroCustoNome: z.string().nullable().optional(),
+    centroCustoId: z.number().nullable().optional(),
   })).mutation(async ({ input, ctx }) => {
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const setCategoria = input.contaNome !== undefined || input.contaId !== undefined;
-    const setCentro = input.obraNome !== undefined || input.obraId !== undefined;
+    const setCentro = input.obraNome !== undefined || input.obraId !== undefined
+      || input.centroCustoNome !== undefined || input.centroCustoId !== undefined;
     if (!setCategoria && !setCentro) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "Informe categoria e/ou centro de custo para aplicar." });
     }
@@ -1834,6 +1842,8 @@ export const financialRouter = router({
     if (input.contaId !== undefined) push("conta_id", input.contaId ?? null);
     if (input.obraNome !== undefined) push("obra_nome", input.obraNome || null);
     if (input.obraId !== undefined) push("obra_id", input.obraId ?? null);
+    if (input.centroCustoNome !== undefined) push("centro_custo_nome", input.centroCustoNome || null);
+    if (input.centroCustoId !== undefined) push("centro_custo_id", input.centroCustoId ?? null);
     push("editado_por_id", ctx.user?.id ?? null);
     push("editado_por_nome", ctx.user?.name ?? null);
     sets.push(`editado_em = NOW()`);
@@ -4136,6 +4146,7 @@ export const financialRouter = router({
     const res = await dbExecute(db,
       `SELECT id, obra_id AS "obraId", obra_nome AS "obraNome", descricao,
               conta_id AS "contaId", conta_nome AS "contaNome",
+              centro_custo_id AS "centroCustoId", centro_custo_nome AS "centroCustoNome",
               valor_previsto AS "valorPrevisto",
               valor_realizado AS "valorRealizado", status,
               data_vencimento AS "dataVencimento", data_pagamento AS "dataPagamento",
