@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3129 — **PORTAL DO CLIENTE / AVALIAÇÕES (NPS) · "EXCLUIR SELECIONADOS" (EXCLUSÃO EM LOTE
+ * DE LINKS DE AVALIAÇÃO) PAROU DE FALHAR COM ERRO DE SQL — `ANY($2, $3::text[])` INVÁLIDO.**
+ *
+ * PEDIDO (iPad, com print): ao marcar 2 links e clicar "Excluir selecionados (2)" aparecia o erro
+ * "Failed query: UPDATE cliente_avaliacao_shortlink SET deletado_em = NOW() WHERE company_id = $1
+ * AND deletado_em IS NULL AND codigo = ANY($2, $3::text[]) RETURNING codigo · params: 60002,
+ * 239bcf6027d7a341, f91e22e4d0391c3d".
+ *
+ * CAUSA-RAIZ: em `server/routers/portalExterno.ts` o `excluirLinksAvaliacao` montava a cláusula
+ * com `AND codigo = ANY(${input.codigos}::text[])`. O `sql` template do Drizzle EXPANDE um array
+ * JS em placeholders separados por vírgula (`$2, $3`), então o trecho virava o SQL INVÁLIDO
+ * `ANY($2, $3::text[])` — `ANY()` aceita UM argumento (um array), não uma lista. A exclusão
+ * individual (`excluirLinkAvaliacao`, 1 código só) nunca quebrou porque não tem array.
+ *
+ * CORREÇÃO (BACKEND-ONLY; ZERO SCHEMA/ALTER/DROP/DELETE — exclusão segue lógica, via `deletado_em`):
+ * trocado `codigo = ANY(${codigos}::text[])` por `codigo IN (${codigos})`. `IN (...)` é EXATAMENTE
+ * o formato que a expansão de array do Drizzle gera (`IN ($2, $3)`), então passa a ser SQL válido.
+ * Guard de tenancy (company_id) e gate Admin Master inalterados. Detalhe: este bloco.
+ *
  * Rev. 3128 — **CONTROLE DE DOCUMENTOS / ABA "MAPEAMENTO" · A LEITURA DE ASOs POR IA DEIXOU DE
  * "FALHAR EM MASSA" (ERAM ~73 FALHAS P/ 6 SUCESSOS) — AGORA RESISTE AOS ERROS TRANSITÓRIOS DA API
  * DO GEMINI (429 COTA DO FREE-TIER / 503 "HIGH DEMAND") COM RETRY + RITMO (PACING) + SALVAGE DE

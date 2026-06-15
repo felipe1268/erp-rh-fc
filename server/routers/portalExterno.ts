@@ -1599,12 +1599,16 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o Admin Master pode excluir links de avaliação." });
       }
       const db = (await getDb())!;
+      // Rev. 3129 — o `sql` template do Drizzle EXPANDE um array JS em placeholders
+      // separados por vírgula (`$2, $3`), então `ANY(${codigos}::text[])` virava o
+      // SQL INVÁLIDO `ANY($2, $3::text[])` e a exclusão em lote falhava. Usamos `IN
+      // (...)`, que é exatamente o formato que essa expansão gera (`IN ($2, $3)`).
       const r = await db.execute(sql`
         UPDATE cliente_avaliacao_shortlink
         SET deletado_em = NOW()
         WHERE company_id = ${input.companyId}
           AND deletado_em IS NULL
-          AND codigo = ANY(${input.codigos}::text[])
+          AND codigo IN (${input.codigos})
         RETURNING codigo
       `);
       const rows = (((r as any).rows ?? r ?? []) as any[]);
