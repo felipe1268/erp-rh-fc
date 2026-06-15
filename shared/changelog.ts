@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3124 — **FINANCEIRO / "LANÇAMENTOS" · O MODAL "NOVO LANÇAMENTO" (E EDIÇÃO/RECORRÊNCIA) AGORA ABRE
+ * EM TELA CHEIA — APROVEITANDO TODA A LARGURA/ALTURA DA TELA NO LUGAR DO CARD CENTRAL ESTREITO COM
+ * SCROLL APERTADO.**
+ *
+ * PEDIDO (iPad, build mode, com print do modal): "QUERO A TELA FULL SCREEN". O modal de Novo Lançamento
+ * (também usado para Editar Lançamento e Editar Recorrência) abria como um card centralizado limitado a
+ * `max-w-[min(1200px,96vw)]` × `95vh`, deixando o formulário (valor, descrição, datas, vinculação,
+ * pagamento, etc.) espremido com bastante scroll interno — ruim no iPad.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, 1 CLASSNAME + 1 PROP; ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE): em
+ * `client/src/pages/financeiro/FinanceiroLancamentos.tsx` o `<DialogContent>` do modal passou de
+ * `max-w-[min(1200px,96vw)] w-[96vw] max-h-[95vh] h-[95vh]` para TELA CHEIA:
+ * `max-w-none w-screen h-[100dvh] max-h-[100dvh] top-0 left-0 translate-x-0 translate-y-0 rounded-none
+ * border-0 p-0 overflow-hidden flex flex-col` (as classes `top-0/left-0/translate-x-0/translate-y-0`
+ * anulam a centralização `top-[50%] left-[50%] -translate-1/2` do `DialogContent` base; `100dvh` em vez
+ * de `100vh` respeita as barras dinâmicas do Safari iOS). Também `resizable={false}` (sem alças de
+ * redimensionamento, que não fazem sentido em tela cheia). A estrutura interna já era um flex-col
+ * correto — header `shrink-0`, corpo `flex-1 min-h-0 overflow-y-auto`, rodapé `shrink-0` — então o
+ * formulário agora respira em tela cheia e só o corpo rola. O "X" de fechar (canto sup. dir.) e o botão
+ * "Cancelar" do rodapé seguem funcionando. Puramente layout/UX; nenhuma lógica de lançamento alterada.
+ *
  * Rev. 3123 — **CONTROLE DE DOCUMENTOS / ABA "MAPEAMENTO" · A LEITURA DE ASOs POR IA AGORA ABRE UM PAINEL
  * DE PROGRESSO FIXO COM BARRA 0–100% E EVOLUÇÃO DETALHADA ITEM-A-ITEM — E ELE PERMANECE NA TELA ATÉ O
  * USUÁRIO REVISAR/APROVAR CADA LEITURA (ANTES ERA SÓ UM "Processando..." MUDO NO BOTÃO, SEM NOÇÃO DE

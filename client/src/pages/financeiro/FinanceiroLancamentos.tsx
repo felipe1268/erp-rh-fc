@@ -906,7 +906,7 @@ export default function FinanceiroLancamentos() {
 
         {/* MODAL NOVO / EDITAR LANÇAMENTO */}
         <Dialog open={showNew} onOpenChange={(v) => { if (!v) { setShowNew(false); resetForm(); setShowObs(false); } }}>
-          <DialogContent className="max-w-[min(1200px,96vw)] w-[96vw] p-0 overflow-hidden flex flex-col max-h-[95vh] h-[95vh]">
+          <DialogContent resizable={false} className="max-w-none w-screen h-[100dvh] max-h-[100dvh] top-0 left-0 translate-x-0 translate-y-0 rounded-none border-0 p-0 overflow-hidden flex flex-col">
 
             {/* Header colorido conforme tipo */}
             <div className={`shrink-0 px-6 pt-5 pb-4 ${
