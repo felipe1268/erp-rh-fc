@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3119 — **RAIO-X DO FUNCIONÁRIO / ABA "ASOs" · A LEITURA POR IA DO ASO (APTO ALTURA NR-35,
+ * ESPAÇO CONFINADO NR-33, RESULTADO, RESTRIÇÕES, FATORES DE RISCO) AGORA APARECE COMO UMA FICHA
+ * ORGANIZADA SOB CADA ASO — E RESTRIÇÕES SÃO DESTACADAS EM VERMELHO PARA NÃO PASSAR BATIDO.**
+ *
+ * PEDIDO (iPad, sobre o painel "Revisão das leituras da IA"): "Quero isso mais estruturado,
+ * separando as informações como se fosse uma tabela; isso deve ser registrado no raio-x do
+ * funcionário na aba do ASO. Se o funcionário tiver restrições, o ERP deve destacar em vermelho.
+ * Quero como se fosse uma ficha organizada."
+ *
+ * SOLUÇÃO (BACKEND READ-ONLY + FRONTEND — ZERO ALTER/DROP/DELETE/SCHEMA):
+ *   • BACKEND (`server/routers/controleDocumentos.ts`, procedure `raioX`): os campos
+ *     `aptoAltura/aptoEspacoConfinado/restricoes` já vivem em `asos` (gravados na aprovação da IA),
+ *     mas `fatoresRisco`/`confianca` só existem na fila `aso_extracao_ia`. Agora o `raioX` faz um
+ *     SELECT das extrações com `status="aprovado"` do funcionário (tenant-safe, read-only) e mescla
+ *     em cada ASO: `fatoresRisco`, `iaConfianca`, fallback de apto/restrições e a flag `temIa`.
+ *     Nenhum laudo é tocado; nada é recalculado. O retorno passa a usar `asosComIa`.
+ *   • FRONTEND (`client/src/components/RaioXFuncionario.tsx`): na aba "ASOs", cada ASO com leitura
+ *     da IA (`temIa`) ganha uma linha-ficha abaixo da linha principal — cards "Apto altura (NR-35)",
+ *     "Espaço confinado (NR-33)" (badge verde Apto / vermelho Inapto), "Resultado", uma caixa de
+ *     "Restrições" (destaque VERMELHO quando há restrição real — borda/fundo/ícone de alerta) e
+ *     "Fatores de risco". Mesma ficha é replicada no PDF "Exportar PDF" (Documentos SST) com o
+ *     mesmo destaque vermelho de restrições. Detecção de "tem restrição" ignora textos vazios/
+ *     "nenhuma/sem restrições/N.A." A ficha só aparece quando há dados da IA.
+ *
+ * REGRA DE OURO mantida: a ficha é apenas LEITURA do que já foi aprovado; nada é aplicado ao ASO
+ * sem aprovação humana (que continua acontecendo na aba "Mapeamento").
+ *
+ * HARDENING (code review): (1) o PDF SST (`handleExportSST`) interpolava texto vindo da IA
+ * (restrições/fatores de risco) e demais campos dinâmicos direto no HTML do `document.write` SEM
+ * escape — XSS DOM-based no contexto autenticado. Agora `handleExportSST` tem `esc`/`escAttr`
+ * locais e TODO conteúdo dinâmico (ficha IA, linhas de ASO/Treinamento, cabeçalho do colaborador,
+ * URLs de anexo/logo) é escapado. (2) o SELECT de `aso_extracao_ia` no `raioX` ganhou filtro
+ * explícito `eq(companyId, emp.companyId)` como blindagem defensiva de tenant.
+ *
+ * Arquivos: `server/routers/controleDocumentos.ts` (raioX: merge de extrações aprovadas → asosComIa
+ * + filtro de empresa), `client/src/components/RaioXFuncionario.tsx` (ficha na aba ASOs + PDF SST
+ * com escaping), `shared/version.ts`, `shared/changelog.ts`, `replit.md`.
+ *
  * Rev. 3118 — **CONTROLE DE DOCUMENTOS / ABA "MAPEAMENTO" · MÚLTIPLA SELEÇÃO PARA LER VÁRIOS ASOs
  * COM IA DE UMA VEZ — ANTES SÓ DAVA P/ LER 1 POR LINHA (ícone ✨) OU O LOTE AUTOMÁTICO (10 pendentes).**
  *

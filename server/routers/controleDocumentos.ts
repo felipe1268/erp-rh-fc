@@ -1886,6 +1886,37 @@ export const controleDocumentosRouter = router({
         }
         return { ...a, ...statusCalc, isHistorico: !isLatestOfType };
       });
+
+      // Rev. 3119 — Mescla a leitura estruturada da IA (já APROVADA) em cada ASO p/ a
+      // ficha do Raio-X. `aptoAltura/aptoEspacoConfinado/restricoes` já vivem em `asos`
+      // (gravados na aprovação); `fatoresRisco`/`confianca` só existem na fila
+      // `aso_extracao_ia`, então puxamos de lá (status "aprovado") sem tocar o laudo.
+      const extracoesAprovadas = empAsos.length
+        ? await db.select({
+            asoId: asoExtracaoIa.asoId,
+            aptoAltura: asoExtracaoIa.aptoAltura,
+            aptoEspacoConfinado: asoExtracaoIa.aptoEspacoConfinado,
+            restricoes: asoExtracaoIa.restricoes,
+            fatoresRisco: asoExtracaoIa.fatoresRisco,
+            confianca: asoExtracaoIa.confianca,
+          }).from(asoExtracaoIa).where(and(
+            eq(asoExtracaoIa.employeeId, input.employeeId),
+            eq(asoExtracaoIa.companyId, emp.companyId),
+            eq(asoExtracaoIa.status, "aprovado"),
+          ))
+        : [];
+      const extracaoPorAso = new Map<number, any>();
+      for (const e of extracoesAprovadas) extracaoPorAso.set(e.asoId, e);
+      const asosComIa = asosComStatus.map((a: any) => {
+        const ex = extracaoPorAso.get(a.id);
+        const aptoAltura = a.aptoAltura ?? ex?.aptoAltura ?? null;
+        const aptoEspacoConfinado = a.aptoEspacoConfinado ?? ex?.aptoEspacoConfinado ?? null;
+        const restricoes = a.restricoes ?? ex?.restricoes ?? null;
+        const fatoresRisco = ex?.fatoresRisco ?? null;
+        const temIa = !!(aptoAltura || aptoEspacoConfinado || restricoes || fatoresRisco);
+        return { ...a, aptoAltura, aptoEspacoConfinado, restricoes, fatoresRisco, iaConfianca: ex?.confianca ?? null, temIa };
+      });
+
       // Treinamentos
       const empTreinamentos = await db.select().from(trainings).where(and(eq(trainings.employeeId, input.employeeId), isNull(trainings.deletedAt))).orderBy(desc(trainings.dataRealizacao));
       // Atestados
@@ -2881,7 +2912,7 @@ export const controleDocumentosRouter = router({
         funcionario: { ...emp, obraAtualNome, recontratadoDeCodigo },
         desempenho,
         funcaoDetalhes,
-        asos: asosComStatus,
+        asos: asosComIa,
         treinamentos: empTreinamentos,
         atestados: empAtestados,
         advertencias: empAdvertencias,

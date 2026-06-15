@@ -81,3 +81,4 @@
 - [Medição shared engine — origem + tenant guard](medicao-shared-engine-origem.md) — medicao_campo serve cliente×terceiro (IDs colidem); sem origem = escopo CLIENTE (nunca `true`); todo companyId precisa de assertCompanyAccess além do check de recurso.
 - [/uploads DB-fallback MIME + traversal](uploads-db-fallback-mime.md) — off-disk attachments fall back to uploaded_files; octet-stream content_type → Safari/iOS preview opens blank; derive MIME from extension + fix data; fallback's disk-write needs a path-traversal guard.
 - [iOS preview dialog blank](ios-preview-dialog-blank.md) — preview em branco no iPad com arquivo servindo OK = bug client-side do Radix Dialog: transform identidade fixo no <img> + PDF em <iframe>; dar transform condicional + botão Abrir top-level.
+- [PDF export XSS / per-function esc](pdf-export-xss-esc-scope.md) — print/PDF builders (document.write) define esc LOCALLY; new fields (esp. AI-sourced) must esc()/escAttr() or it's DOM XSS.
