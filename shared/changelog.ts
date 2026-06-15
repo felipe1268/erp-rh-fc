@@ -1,6 +1,48 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3134 — **FINANCEIRO / ANÁLISE DE CUSTOS · O GRÁFICO "CUSTO POR MÊS — {ANO}" (E SEU DRILL-DOWN)
+ * PASSOU A BUCKETIZAR OS LANÇAMENTOS PELA DATA DE PAGAMENTO (REGIME DE CAIXA), NÃO MAIS PELA
+ * COMPETÊNCIA — UM ITEM DE COMPETÊNCIA 12/2025 PAGO EM 01/2026 AGORA CAI EM JANEIRO, NÃO EM
+ * "DEZEMBRO/2026".**
+ *
+ * PEDIDO (iPad, com 2 prints — gráfico "Custo por Mês — 2026" + a lista de Lançamentos): "o grafico
+ * deve ler as datas de pagamentos não de competencia. se for competencia não é dezembro de 2026 mais
+ * de 2025". Caso real visível na print: contratos de MÃO DE OBRA TERCEIRIZADA com Comp. 10/12/2025,
+ * Venc. 05/01/2026, status Pago — apareciam pintados de verde ("Pago") em DEZEMBRO no gráfico de 2026,
+ * porque o mês era derivado da COMPETÊNCIA (só o mês, ignorando o ano).
+ *
+ * CAUSA-RAIZ: `mesNumDe(r)` (em `FinanceiroAnaliseCustos.tsx` e `FinanceiroAnaliseCustosDetalhe.tsx`)
+ * lia `dataCompetencia || dataVencimento` e extraía SÓ O MÊS (`slice(5,7)`), ignorando o ANO. Como o
+ * dataset vinha de `getContasAPagarByYear` filtrado por ANO DO VENCIMENTO, um lançamento de competência
+ * de dezembro de OUTRO ano caía no balde "Dez" do ano do gráfico. Dois critérios desalinhados (filtra
+ * por vencimento-ano, distribui por competência-mês) → vazamento cross-ano.
+ *
+ * CORREÇÃO (regime de CAIXA, ponta a ponta):
+ *  1) BACKEND (`getContasAPagarByYear`, server/routers/financial.ts): novo parâmetro OPCIONAL
+ *     `baseData: "vencimento" | "caixa"`. Default = "vencimento" (comportamento ANTIGO, INTACTO p/
+ *     Contas a Pagar e Fluxo de Caixa, que são visões por vencimento). Com `baseData:"caixa"`, o
+ *     filtro de ano passa a:
+ *     `(status='pago' AND year(data_pagamento)=ano) OR (status<>'pago' AND year(COALESCE(venc,created))=ano)`
+ *     — o PAGO entra pelo ANO DO PAGAMENTO (quando o dinheiro saiu) e o EM ABERTO pelo vencimento.
+ *     ATENÇÃO/ARMADILHA: `dbExecute` liga os placeholders por ORDEM DE APARIÇÃO (o número do $N é
+ *     cosmético), então o branch "caixa" empilha `input.ano` DUAS vezes em `yearVals`.
+ *  2) FRONTEND (Análise de Custos + drill-down): a query passa `baseData:"caixa"` e `mesNumDe` passou
+ *     a usar a DATA EFETIVA (`dataEfetivaDe`): pago → `dataPagamento`; em aberto → `dataVencimento`
+ *     (fallback competência). Como agora dataset e balde compartilham a MESMA data, some o vazamento:
+ *     todo PAGO retornado tem pagamento NO ano, todo EM ABERTO tem vencimento NO ano. Reflete
+ *     consistentemente em TODOS os agregados que passam por `mesNumDe` (porMes, KPIs, tabela mensal,
+ *     filtro de mês, categorias/fornecedores recortados por mês) e no drill-down (barras + lista batem).
+ *
+ * RESSALVA (esperada/intencional): um PAGO cujo pagamento caiu num ano e o vencimento em OUTRO passa a
+ * aparecer no ANO DO PAGAMENTO (correto p/ caixa) e some do ano do vencimento. Telas por vencimento
+ * (Contas a Pagar / Fluxo de Caixa) seguem inalteradas (default "vencimento").
+ *
+ * ARQUIVOS: `server/routers/financial.ts` (`getContasAPagarByYear` + param `baseData` + `yearCond`/
+ * `yearVals`), `client/src/pages/financeiro/FinanceiroAnaliseCustos.tsx` e
+ * `.../FinanceiroAnaliseCustosDetalhe.tsx` (`dataEfetivaDe`/`mesNumDe` + `baseData:"caixa"` na query).
+ * FRONTEND + 1 PARÂMETRO read-only no backend; ZERO ALTER/DROP/DELETE/SCHEMA.
+ *
  * Rev. 3133 — **FINANCEIRO / LANÇAMENTOS (`/financeiro/lancamentos`) · O SELETOR DE PERÍODO PASSOU A
  * USAR O MESMO PADRÃO DO CONTAS A RECEBER / CONTAS A PAGAR — TIMELINE "ANO + FAIXA DE MESES (JAN–DEZ)"
  * COM BOLINHAS DE STATUS (COM LANÇAMENTO / CONSOLIDADO / SEM DADOS) NO LUGAR DO CALENDÁRIO DE RANGE

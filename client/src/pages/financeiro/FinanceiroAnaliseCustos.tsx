@@ -53,8 +53,18 @@ function pagoDe(r: any): number {
 function previsaoDe(r: any): number {
   return r.status !== "pago" ? (Number(r.valorPrevisto ?? 0) || valorEfetivo(r)) : 0;
 }
+// Rev. 3134 — base CAIXA: o mês de um lançamento é o mês em que o dinheiro
+// SAIU (data de PAGAMENTO) quando já está PAGO; se ainda está EM ABERTO, usa o
+// vencimento (data prevista de saída). Antes lia a COMPETÊNCIA, o que jogava um
+// item de competência 2025 pago em 2026 no mês errado do gráfico de 2026.
+function dataEfetivaDe(r: any): string {
+  // Pago → data de pagamento; se faltar (legado/manual), cai p/ vencimento →
+  // competência (espelha o fallback COALESCE do backend, p/ não sumir do ano).
+  if (r.status === "pago") return String(r.dataPagamento || r.dataVencimento || r.dataCompetencia || "");
+  return String(r.dataVencimento || r.dataCompetencia || "");
+}
 function mesNumDe(r: any): number {
-  const s: string = (r.dataCompetencia || r.dataVencimento || "") as string;
+  const s = dataEfetivaDe(r);
   if (!s || s.length < 7) return 0;
   const m = parseInt(s.slice(5, 7), 10);
   return isNaN(m) ? 0 : m;
@@ -98,8 +108,10 @@ export default function FinanceiroAnaliseCustos() {
     setLocation(`/financeiro/analise-custos/detalhe?${qs.toString()}`);
   }
 
+  // Rev. 3134 — base CAIXA: o gráfico "Custo por Mês" passa a ler a DATA DE
+  // PAGAMENTO (pago) / vencimento (em aberto), não a competência.
   const { data, isLoading, refetch, isFetching } = (trpc as any).financial.getContasAPagarByYear.useQuery(
-    { companyId, ano },
+    { companyId, ano, baseData: "caixa" },
     { enabled: !!companyId }
   );
 

@@ -4092,6 +4092,7 @@ export const financialRouter = router({
     companyId: z.number(),
     companyIds: z.array(z.number()).optional(),
     ano: z.number(),
+    baseData: z.enum(["vencimento", "caixa"]).optional(), // Rev. 3134
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -4108,6 +4109,28 @@ export const financialRouter = router({
       await materializeRecorrentes(db, input.companyId, Math.min(mesesAteFimAno, 13));
     } catch (e: any) {
       console.error("[Rev.2214] materializeRecorrentes falhou em getContasAPagarByYear:", e?.message || e);
+    }
+
+    // Rev. 3134 — base de data opcional. "vencimento" (DEFAULT, usado por Contas a
+    // Pagar / Fluxo de Caixa): inclui despesas cujo VENCIMENTO cai no ano. "caixa"
+    // (Análise de Custos): o que está PAGO entra pelo ANO DO PAGAMENTO (quando o
+    // dinheiro de fato saiu) e o que está EM ABERTO entra pelo vencimento — assim o
+    // "Custo por Mês" lê a data de PAGAMENTO, não a competência (um item de
+    // competência 2025 pago em 2026 deixa de cair no mês errado de 2026).
+    // NB: dbExecute liga placeholders por ORDEM DE APARIÇÃO (o nº de $N é cosmético).
+    let yearCond: string;
+    const yearVals: any[] = [];
+    if (input.baseData === "caixa") {
+      // PAGO entra pelo ano do PAGAMENTO; mas legado/manual pode ter status='pago'
+      // SEM data_pagamento — nesse caso cai no fallback venc→competência→created_at
+      // (em vez de SUMIR do ano). EM ABERTO segue por vencimento (fallback created_at).
+      yearCond =
+        `((status = 'pago' AND EXTRACT(year FROM COALESCE(data_pagamento::date, data_vencimento::date, data_competencia::date, created_at::date)) = $1) ` +
+        `OR (status <> 'pago' AND EXTRACT(year FROM COALESCE(data_vencimento::date, data_competencia::date, created_at::date)) = $2))`;
+      yearVals.push(input.ano, input.ano);
+    } else {
+      yearCond = `EXTRACT(year FROM COALESCE(data_vencimento::date, created_at::date)) = $1`;
+      yearVals.push(input.ano);
     }
 
     const res = await dbExecute(db,
@@ -4129,9 +4152,9 @@ export const financialRouter = router({
        WHERE company_id IN (${inlineIds(ids)})
          AND tipo = 'despesa'
          AND status != 'cancelado'
-         AND EXTRACT(year FROM COALESCE(data_vencimento::date, created_at::date)) = $1
+         AND ${yearCond}
        ORDER BY data_vencimento ASC NULLS LAST`,
-      [input.ano]
+      yearVals
     );
     return rows(res);
   }),

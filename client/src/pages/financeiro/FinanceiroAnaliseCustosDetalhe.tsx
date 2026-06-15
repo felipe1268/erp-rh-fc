@@ -48,8 +48,16 @@ function valorEfetivo(r: any): number {
   if (real > 0) return real;
   return Number(r.valorPrevisto ?? 0);
 }
+// Rev. 3134 — base CAIXA (espelha a tela-mãe): mês = data de PAGAMENTO (pago)
+// ou vencimento (em aberto). Mantém o drill-down consistente com o gráfico.
+function dataEfetivaDe(r: any): string {
+  // Pago → data de pagamento; se faltar (legado/manual), cai p/ vencimento →
+  // competência (espelha o fallback COALESCE do backend, p/ não sumir do ano).
+  if (r.status === "pago") return String(r.dataPagamento || r.dataVencimento || r.dataCompetencia || "");
+  return String(r.dataVencimento || r.dataCompetencia || "");
+}
 function mesNumDe(r: any): number {
-  const s: string = (r.dataCompetencia || r.dataVencimento || "") as string;
+  const s = dataEfetivaDe(r);
   if (!s || s.length < 7) return 0;
   const m = parseInt(s.slice(5, 7), 10);
   return isNaN(m) ? 0 : m;
@@ -193,8 +201,10 @@ export default function FinanceiroAnaliseCustosDetalhe() {
     irPara([...extra, { t: "mes", v: String(mn) }]);
   };
 
+  // Rev. 3134 — base CAIXA: espelha o gráfico "Custo por Mês" (pago → data de
+  // pagamento; em aberto → vencimento), pra o drill-down bater com as barras.
   const { data, isLoading } = (trpc as any).financial.getContasAPagarByYear.useQuery(
-    { companyId, ano },
+    { companyId, ano, baseData: "caixa" },
     { enabled: !!companyId }
   );
   // Rev. 3019 — Espelha a tela-mãe: SÓ CUSTOS REAIS. Exclui a projeção do
