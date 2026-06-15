@@ -6,8 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
@@ -18,7 +16,7 @@ import { originLabel } from "@/lib/financialOrigins";
 import {
   Plus, Search, X, CheckCircle, AlertTriangle, TrendingUp, TrendingDown, Filter,
   Repeat, Pause, Play, Edit2, Calendar, Zap, ArrowUpRight, ArrowDownRight,
-  Building2, CreditCard, FileText, ChevronDown, ChevronUp, RefreshCw,
+  Building2, CreditCard, FileText, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, RefreshCw,
   ArrowLeftRight, Landmark, PlusCircle, Tag, Loader2, Pencil, Trash2, Eye,
 } from "lucide-react";
 
@@ -49,16 +47,6 @@ function getUltimoDiaMes() {
   return `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, "0")}-${String(last.getDate()).padStart(2, "0")}`;
 }
 
-// Rev. 2656 — conversão segura "YYYY-MM-DD" <-> Date (sem deslocamento de fuso).
-function strToDate(s: string | undefined): Date | undefined {
-  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return undefined;
-  const [y, m, d] = s.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
-function dateToStr(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
 const STATUS_COLORS: Record<string, string> = {
   previsto: "bg-gray-100 text-gray-700",
   a_pagar: "bg-orange-100 text-orange-700",
@@ -83,6 +71,9 @@ const FREQ_LABELS: Record<string, string> = {
   mensal: "Mensal", quinzenal: "Quinzenal", semanal: "Semanal",
   trimestral: "Trimestral", anual: "Anual",
 };
+
+// Rev. 3133 — timeline de meses (padrão Contas a Receber/Pagar).
+const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
 const INITIAL_FORM = {
   modoRecorrente: false,
@@ -113,6 +104,10 @@ export default function FinanceiroLancamentos() {
   // Rev. 2399 — filtro por PERÍODO LIVRE (passado E futuro). Default = mês atual.
   const [dataInicio, setDataInicio] = useState(getPrimeiroDiaMes());
   const [dataFim, setDataFim] = useState(getUltimoDiaMes());
+  // Rev. 3133 — período conduzido pela TIMELINE Ano + faixa de meses (mesmo
+  // padrão do Contas a Receber/Pagar). `mesSel=null` = "Ano todo".
+  const [ano, setAno] = useState(new Date().getFullYear());
+  const [mesSel, setMesSel] = useState<number | null>(new Date().getMonth() + 1);
   const [tipo, setTipo] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -124,9 +119,8 @@ export default function FinanceiroLancamentos() {
   const [editEntryId, setEditEntryId] = useState<number | null>(null);
   const [showDelete, setShowDelete] = useState<{ id: number; desc: string } | null>(null);
   const [deleteMotivo, setDeleteMotivo] = useState("");
-  // Rev. 2656 — Visualizar (detalhe read-only) + calendário de período aberto.
+  // Rev. 2656 — Visualizar (detalhe read-only).
   const [viewId, setViewId] = useState<number | null>(null);
-  const [calOpen, setCalOpen] = useState(false);
   const [showObs, setShowObs] = useState(false);
   const [form, setForm] = useState({ ...INITIAL_FORM });
 
@@ -152,6 +146,38 @@ export default function FinanceiroLancamentos() {
     { enabled: !!companyId }
   );
 
+  // Rev. 3133 — a TIMELINE comanda o período: ao trocar de ano/mês, recalcula
+  // dataInicio/dataFim (que continuam sendo a fonte de verdade do getEntries).
+  useEffect(() => {
+    if (mesSel == null) {
+      setDataInicio(`${ano}-01-01`);
+      setDataFim(`${ano}-12-31`);
+    } else {
+      const mm = String(mesSel).padStart(2, "0");
+      const ultimo = new Date(ano, mesSel, 0).getDate();
+      setDataInicio(`${ano}-${mm}-01`);
+      setDataFim(`${ano}-${mm}-${String(ultimo).padStart(2, "0")}`);
+    }
+  }, [ano, mesSel]);
+
+  // Rev. 3133 — resumo por mês p/ as bolinhas da timeline (mesmo padrão visual
+  // do Contas a Pagar): verde=consolidado (tudo pago/recebido), azul=com
+  // lançamento (tem algo em aberto), cinza=sem dados.
+  const { data: resumoMensal } = (trpc as any).financial.getEntriesResumoMensal.useQuery(
+    { companyId, ano, tipo: tipo !== "all" ? tipo : undefined },
+    { enabled: !!companyId }
+  );
+  const mesesStatus: Record<number, "consolidado" | "lancamento" | "vazio"> = (() => {
+    const map: Record<number, "consolidado" | "lancamento" | "vazio"> = {};
+    for (let m = 1; m <= 12; m++) map[m] = "vazio";
+    for (const r of (resumoMensal ?? [])) {
+      const m = Number(r.mes);
+      if (!m) continue;
+      map[m] = Number(r.total) === 0 ? "vazio" : Number(r.abertos) === 0 ? "consolidado" : "lancamento";
+    }
+    return map;
+  })();
+
   // Rev. 2656 — detalhe read-only do lançamento (botão "Visualizar").
   const detailQuery = (trpc as any).financial.getEntryDetalhe.useQuery(
     { id: viewId ?? 0, companyId },
@@ -168,6 +194,7 @@ export default function FinanceiroLancamentos() {
       utils.financial.getContasAReceber?.invalidate?.();
       utils.financial.getEntries?.invalidate?.();
       utils.financial.getEntryDetalhe?.invalidate?.();
+      utils.financial.getEntriesResumoMensal?.invalidate?.(); // Rev. 3133 — atualiza as bolinhas da timeline.
     } catch { /* noop */ }
   }
 
@@ -195,7 +222,7 @@ export default function FinanceiroLancamentos() {
   });
 
   const cancelMut = (trpc as any).financial.cancelEntry.useMutation({
-    onSuccess: () => { toast({ title: "Lançamento cancelado" }); setShowCancel(null); refetch(); },
+    onSuccess: () => { toast({ title: "Lançamento cancelado" }); setShowCancel(null); refetch(); invalidarContas(); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
 
@@ -522,31 +549,6 @@ export default function FinanceiroLancamentos() {
     return (l.descricao ?? "").toLowerCase().includes(q) || (l.obraNome ?? "").toLowerCase().includes(q) || (l.contaNome ?? "").toLowerCase().includes(q);
   });
 
-  // Rev. 2399 — atalhos de período (cliques rápidos).
-  function setPeriodoMesAtual() {
-    setDataInicio(getPrimeiroDiaMes());
-    setDataFim(getUltimoDiaMes());
-  }
-  function setPeriodoMesProximo() {
-    const d = new Date();
-    const pri = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-    const ult = new Date(d.getFullYear(), d.getMonth() + 2, 0);
-    setDataInicio(`${pri.getFullYear()}-${String(pri.getMonth() + 1).padStart(2, "0")}-01`);
-    setDataFim(`${ult.getFullYear()}-${String(ult.getMonth() + 1).padStart(2, "0")}-${String(ult.getDate()).padStart(2, "0")}`);
-  }
-  function setPeriodoMesAnterior() {
-    const d = new Date();
-    const pri = new Date(d.getFullYear(), d.getMonth() - 1, 1);
-    const ult = new Date(d.getFullYear(), d.getMonth(), 0);
-    setDataInicio(`${pri.getFullYear()}-${String(pri.getMonth() + 1).padStart(2, "0")}-01`);
-    setDataFim(`${ult.getFullYear()}-${String(ult.getMonth() + 1).padStart(2, "0")}-${String(ult.getDate()).padStart(2, "0")}`);
-  }
-  function setPeriodoAnoAtual() {
-    const y = new Date().getFullYear();
-    setDataInicio(`${y}-01-01`);
-    setDataFim(`${y}-12-31`);
-  }
-
   const totalReceitas = lancamentos.filter((l: any) => l.tipo === "receita" && l.status !== "cancelado").reduce((s: number, l: any) => s + Number(l.valorPrevisto ?? 0), 0);
   const totalDespesas = lancamentos.filter((l: any) => l.tipo === "despesa" && l.status !== "cancelado").reduce((s: number, l: any) => s + Number(l.valorPrevisto ?? 0), 0);
 
@@ -643,86 +645,86 @@ export default function FinanceiroLancamentos() {
 
             <Card className="border-0 shadow-sm">
               <CardContent className="p-4">
-                <div className="flex flex-wrap gap-3 items-end">
-                  {/* Rev. 2656 — Período por CALENDÁRIO ABERTO (range): seleciona "de … até …"
-                      em um calendário visual de 2 meses. Substitui os <input type=date>. */}
-                  <div className="flex flex-col">
-                    <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wide mb-1">Período</label>
-                    <Popover open={calOpen} onOpenChange={setCalOpen}>
-                      <PopoverTrigger asChild>
+                <div className="space-y-3">
+                  {/* Rev. 3133 — Período pelo MESMO PADRÃO do Contas a Receber/Pagar:
+                      navegação por ANO + faixa de meses (Jan–Dez) com bolinhas de
+                      status. Clicar num mês filtra aquele mês; "Ano todo" abre o ano. */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={() => setAno(a => a - 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <span className="text-base font-bold text-gray-800 min-w-[3.5rem] text-center">{ano}</span>
+                        <button type="button" onClick={() => setAno(a => a + 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
                         <Button
                           type="button"
-                          variant="outline"
-                          className="h-9 justify-start text-left font-normal min-w-[230px]"
+                          variant={mesSel == null ? "default" : "outline"}
+                          size="sm"
+                          className="h-8 text-xs ml-2"
+                          onClick={() => setMesSel(null)}
                         >
-                          <Calendar className="w-4 h-4 mr-2 text-gray-500" />
-                          {dataInicio || dataFim ? (
-                            <span className="text-sm">
-                              {dataInicio ? fmtDateBR(dataInicio) : "…"} <span className="text-gray-400">até</span> {dataFim ? fmtDateBR(dataFim) : "…"}
-                            </span>
-                          ) : (
-                            <span className="text-sm text-gray-400">Selecionar período</span>
-                          )}
+                          Ano todo
                         </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <CalendarPicker
-                          mode="range"
-                          numberOfMonths={2}
-                          defaultMonth={strToDate(dataInicio)}
-                          selected={{ from: strToDate(dataInicio), to: strToDate(dataFim) }}
-                          onSelect={(r: any) => {
-                            setDataInicio(r?.from ? dateToStr(r.from) : "");
-                            setDataFim(r?.to ? dateToStr(r.to) : "");
-                          }}
-                        />
-                        <div className="flex justify-end gap-2 border-t border-gray-100 p-2">
-                          <Button type="button" variant="ghost" size="sm" className="h-8 text-xs"
-                            onClick={() => { setDataInicio(""); setDataFim(""); }}>
-                            Limpar
-                          </Button>
-                          <Button type="button" size="sm" className="h-8 text-xs"
-                            onClick={() => setCalOpen(false)}>
-                            Aplicar
-                          </Button>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
+                      </div>
+                      <div className="flex items-center gap-4 text-xs text-gray-500">
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Com lançamento</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Consolidado</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Sem dados</span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+                      {MESES.map((m, i) => {
+                        const num = i + 1;
+                        const status = mesesStatus[num];
+                        const isSelected = mesSel === num;
+                        return (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => setMesSel(num)}
+                            className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
+                              ${isSelected
+                                ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
+                                : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"
+                              }`}
+                          >
+                            <span>{m}</span>
+                            <span className={`w-1.5 h-1.5 rounded-full ${
+                              status === "consolidado" ? "bg-green-500" :
+                              status === "lancamento" ? "bg-blue-500" :
+                              "bg-gray-300"
+                            }`} />
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="flex gap-1 items-center">
-                    <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={setPeriodoMesAnterior}>
-                      Mês anterior
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={setPeriodoMesAtual}>
-                      Mês atual
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={setPeriodoMesProximo}>
-                      Próximo mês
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={setPeriodoAnoAtual}>
-                      Ano todo
-                    </Button>
-                  </div>
-                  <Select value={tipo} onValueChange={setTipo}>
-                    <SelectTrigger className="w-36"><SelectValue placeholder="Tipo" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos os Tipos</SelectItem>
-                      <SelectItem value="receita">Receita</SelectItem>
-                      <SelectItem value="despesa">Despesa</SelectItem>
-                      <SelectItem value="imposto">Imposto</SelectItem>
-                      <SelectItem value="transferencia">Transferência</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-36"><SelectValue placeholder="Status" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos os Status</SelectItem>
-                      {Object.entries(STATUS_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <div className="relative flex-1 min-w-[200px]">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input className="pl-9" placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} />
+                  {/* Tipo / Status / Busca */}
+                  <div className="flex flex-wrap gap-3 items-center pt-3 border-t border-gray-100">
+                    <Select value={tipo} onValueChange={setTipo}>
+                      <SelectTrigger className="w-36"><SelectValue placeholder="Tipo" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os Tipos</SelectItem>
+                        <SelectItem value="receita">Receita</SelectItem>
+                        <SelectItem value="despesa">Despesa</SelectItem>
+                        <SelectItem value="imposto">Imposto</SelectItem>
+                        <SelectItem value="transferencia">Transferência</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger className="w-36"><SelectValue placeholder="Status" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os Status</SelectItem>
+                        {Object.entries(STATUS_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <div className="relative flex-1 min-w-[200px]">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <Input className="pl-9" placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} />
+                    </div>
                   </div>
                 </div>
               </CardContent>

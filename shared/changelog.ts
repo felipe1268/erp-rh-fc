@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3133 — **FINANCEIRO / LANÇAMENTOS (`/financeiro/lancamentos`) · O SELETOR DE PERÍODO PASSOU A
+ * USAR O MESMO PADRÃO DO CONTAS A RECEBER / CONTAS A PAGAR — TIMELINE "ANO + FAIXA DE MESES (JAN–DEZ)"
+ * COM BOLINHAS DE STATUS (COM LANÇAMENTO / CONSOLIDADO / SEM DADOS) NO LUGAR DO CALENDÁRIO DE RANGE
+ * ABERTO + BOTÕES "MÊS ANTERIOR/ATUAL/PRÓXIMO/ANO TODO".**
+ *
+ * PEDIDO (iPad, com 2 prints da tela "Lançamentos Financeiros"): "COLOCA O MESMO PADRÃO DE FILTRAR
+ * CONFORME O CONTAS A RECEBER E CONTAS A PAGAR, FICA MAIS FÁCIL PARA ORGANIZAR." A usuária queria a
+ * MESMA navegação por mês das telas de Contas a Receber/Pagar (faixa Jan–Dez com bolinhas) na tela
+ * de Lançamentos.
+ *
+ * O QUE MUDOU (UI): saiu o `Popover` de calendário de range (`mode="range"`, 2 meses) + a linha de 4
+ * botões de atalho ("Mês anterior / Mês atual / Próximo mês / Ano todo"). Entrou, espelhando o
+ * `FinanceiroContasAPagar.tsx`: navegação `‹ ANO ›` (ChevronLeft/Right) + um botão "Ano todo" +
+ * a faixa `grid grid-cols-6 sm:grid-cols-12` com os 12 meses, cada um com a bolinha de status
+ * (azul=com lançamento, verde=consolidado, cinza=sem dados) e a mesma legenda no topo. Clicar num
+ * mês filtra aquele mês; "Ano todo" (`mesSel=null`) abre Jan–Dez do ano selecionado. Tipo / Status /
+ * Busca seguem iguais, agora numa segunda linha abaixo da timeline.
+ *
+ * COMO O PERÍODO É CONDUZIDO: a timeline NÃO substitui a engine de filtro — apenas COMANDA os mesmos
+ * `dataInicio`/`dataFim` que já eram a fonte de verdade do `getEntries`. Um `useEffect([ano, mesSel])`
+ * recalcula o intervalo (mês → 1º..último dia via `new Date(ano, mesSel, 0)`; ano todo → `${ano}-01-01`
+ * .. `${ano}-12-31`). Default inalterado = mês corrente, então o carregamento inicial é idêntico ao de
+ * antes. Removidos os helpers/estado órfãos (`calOpen`, `setPeriodo*`, `strToDate`/`dateToStr`,
+ * imports `Popover`/`CalendarPicker`).
+ *
+ * BOLINHAS DOS MESES (NOVO ENDPOINT READ-ONLY): `financial.getEntriesResumoMensal({companyId, ano,
+ * tipo?})` em `server/routers/financial.ts` agrega SÓ CONTAGENS por mês (não puxa as ~milhares de
+ * linhas do ano) — `COUNT(*)` e `SUM(status NOT IN ('pago','recebido'))` agrupado por
+ * `EXTRACT(MONTH FROM COALESCE(data_competencia, data_vencimento, created_at::date))`, MESMA âncora de
+ * data do `getEntries`, excluindo `status='cancelado'`. Classifica cada mês: total=0 → "vazio";
+ * abertos=0 → "consolidado" (tudo pago/recebido); senão "com lançamento". Respeita o filtro de Tipo
+ * (passa `tipo` quando ≠ "all"). TENANCY: guardado por `_assertFinanceiroCompanyAccess(ctx.user,
+ * companyId)` (anti-IDOR) ALÉM do `resolveCompanyIds`. ZERO ALTER/DROP/DELETE (endpoint de leitura).
+ *
+ * ARQUIVOS: `client/src/pages/financeiro/FinanceiroLancamentos.tsx` (timeline + estado `ano`/`mesSel`
+ * + useEffect + query de resumo + remoção do calendário de range), `server/routers/financial.ts`
+ * (`getEntriesResumoMensal`). FRONTEND + 1 endpoint read-only; sem mudança de schema.
+ *
  * Rev. 3132 — **FINANCEIRO / LANÇAMENTOS · IMPORTAÇÃO EM LOTE (VIA SCRIPT CONTROLADO, SEM MÓDULO/ABA)
  * DA PLANILHA `Financeiro - Pagamentos 2026` INTEIRA — TODOS OS MESES — CADASTRANDO OS PAGAMENTOS
  * QUE AINDA NÃO EXISTIAM NO ERP, SEM DUPLICAR O QUE JÁ FOI LANÇADO À MÃO.**

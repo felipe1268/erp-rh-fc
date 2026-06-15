@@ -586,6 +586,46 @@ export const financialRouter = router({
     };
   }),
 
+  // Rev. 3133 — Resumo por mês p/ a TIMELINE de meses (Jan–Dez) da tela de
+  // Lançamentos — mesmo padrão visual do Contas a Pagar/Receber. Agrega só
+  // CONTAGENS por mês (não puxa as ~milhares de linhas do ano), classificando
+  // cada mês em: consolidado (tudo pago/recebido), com lançamento (tem aberto)
+  // ou sem dados. Mesma âncora de data do `getEntries` (competência → vencimento
+  // → criação) e MESMO escopo de tenancy. Read-only, guardado por IDOR.
+  getEntriesResumoMensal: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    ano: z.number().int().min(2000).max(2100),
+    tipo: z.string().optional(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    // Rev. 3133 — anti-IDOR: este endpoint NÃO aceita `companyIds` (que
+    // `resolveCompanyIds` confiaria sem validar item a item). O escopo é
+    // SEMPRE a única empresa pedida, já validada pelo assert acima.
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const conds: string[] = [
+      `e.company_id = ${Number(input.companyId)}`,
+      `e.status <> 'cancelado'`,
+      `EXTRACT(YEAR FROM COALESCE(e.data_competencia, e.data_vencimento, e.created_at::date)) = $1`,
+    ];
+    const vals: any[] = [input.ano];
+    if (input.tipo) { conds.push(`e.tipo = $2`); vals.push(input.tipo); }
+    const res = await dbExecute(db,
+      `SELECT EXTRACT(MONTH FROM COALESCE(e.data_competencia, e.data_vencimento, e.created_at::date))::int AS mes,
+              COUNT(*)::int AS total,
+              SUM(CASE WHEN e.status NOT IN ('pago','recebido') THEN 1 ELSE 0 END)::int AS abertos
+       FROM financial_entries e
+       WHERE ${conds.join(" AND ")}
+       GROUP BY 1`,
+      vals
+    );
+    return rows(res).map((r: any) => ({
+      mes: Number(r.mes),
+      total: Number(r.total),
+      abertos: Number(r.abertos),
+    }));
+  }),
+
   createEntry: protectedProcedure.input(z.object({
     companyId: z.number(),
     obraId: z.number().optional(),
