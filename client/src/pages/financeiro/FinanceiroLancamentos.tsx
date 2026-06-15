@@ -240,6 +240,25 @@ export default function FinanceiroLancamentos() {
     { companyId, ativo: true },
     { enabled: !!companyId },
   );
+  // Rev. 3125 — Obras ativas (obras.listActive) para o campo "Obra (opcional)" virar seleção.
+  const { data: obrasAtivasList } = (trpc as any).obras.listActive.useQuery(
+    { companyId },
+    { enabled: !!companyId },
+  );
+  const obrasOptions: { id: number; nome: string }[] = (() => {
+    const list: any[] = Array.isArray(obrasAtivasList) ? obrasAtivasList : [];
+    const seen = new Set<string>();
+    const out: { id: number; nome: string }[] = [];
+    for (const o of list) {
+      const nome = (o?.nome ?? "").trim();
+      if (!nome) continue;
+      const key = nome.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ id: o.id, nome });
+    }
+    return out.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  })();
   const fornecedoresOptions: { id: number; nome: string; cnpj?: string }[] = (() => {
     const list: any[] = Array.isArray(fornecedoresList) ? fornecedoresList : [];
     const seen = new Set<string>();
@@ -1172,7 +1191,26 @@ export default function FinanceiroLancamentos() {
                   </div>
                   <div>
                     <p className="text-[11px] text-gray-400 mb-1">Obra (opcional)</p>
-                    <Input value={form.obraNome} onChange={e => setForm(f => ({ ...f, obraNome: e.target.value }))} placeholder="Nome da obra" className="h-9" />
+                    <div className="relative">
+                      <Input
+                        value={form.obraNome}
+                        onChange={e => setForm(f => ({ ...f, obraNome: e.target.value }))}
+                        placeholder="Selecione ou digite a obra"
+                        className="h-9 pr-8"
+                        list="obras-financeiras-datalist"
+                      />
+                      <Building2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-300 pointer-events-none" />
+                      <datalist id="obras-financeiras-datalist">
+                        {obrasOptions.map(o => (
+                          <option key={o.id} value={o.nome} />
+                        ))}
+                      </datalist>
+                    </div>
+                    {obrasOptions.length > 0 && (
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        {obrasOptions.length} obra{obrasOptions.length !== 1 ? "s" : ""} ativa{obrasOptions.length !== 1 ? "s" : ""} — toque pra selecionar
+                      </p>
+                    )}
                   </div>
                 </div>
                 {/* Rev. 2226 — Fornecedor/Prestador disponível em AMBOS modos (único + recorrente)

@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3125 — **FINANCEIRO / "LANÇAMENTOS" · O CAMPO "OBRA (OPCIONAL)" DO MODAL DE LANÇAMENTO DEIXOU DE
+ * SER TEXTO LIVRE E AGORA SUGERE/SELECIONA AS OBRAS ATIVAS DA EMPRESA — NO LUGAR DE DIGITAR O NOME NA
+ * MÃO (E ARRISCAR ERRO/DIVERGÊNCIA DE GRAFIA).**
+ *
+ * PEDIDO (iPad, build mode, com print): "No nome da obra, precisa aparecer as obras ativas... para
+ * seleção." O campo "Obra (opcional)" do modal de Novo/Editar Lançamento era um `<Input>` de texto puro
+ * (`placeholder="Nome da obra"`), então o usuário tinha que lembrar e digitar o nome exato — sujeito a
+ * erro de digitação e divergência com o cadastro de Obras.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY; ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE): em
+ * `client/src/pages/financeiro/FinanceiroLancamentos.tsx` adicionada a query `obras.listActive`
+ * (`{ companyId }`, `enabled: !!companyId` — mesma usada em Almoxarifado/EPIs/ObraEfetivo, já
+ * tenant-safe no servidor) e derivado `obrasOptions` (nomes não-vazios, dedup case-insensitive,
+ * ordenados `localeCompare pt-BR`). O `<Input>` do campo "Obra (opcional)" ganhou `list=
+ * "obras-financeiras-datalist"` + um `<datalist>` com as obras ATIVAS (mesmo padrão de autocomplete já
+ * usado em "Conta/Categoria" e "Fornecedor"), ícone `Building2` à direita e um contador "N obras ativas
+ * — toque pra selecionar". Continua sendo um `datalist` (não um `<select>` fechado), então o usuário
+ * pode escolher uma obra existente OU digitar livremente (compat com lançamentos antigos / obras fora da
+ * lista). O estado segue em `form.obraNome` (string) — nada muda no schema nem no payload de gravação.
+ *
  * Rev. 3124 — **FINANCEIRO / "LANÇAMENTOS" · O MODAL "NOVO LANÇAMENTO" (E EDIÇÃO/RECORRÊNCIA) AGORA ABRE
  * EM TELA CHEIA — APROVEITANDO TODA A LARGURA/ALTURA DA TELA NO LUGAR DO CARD CENTRAL ESTREITO COM
  * SCROLL APERTADO.**
