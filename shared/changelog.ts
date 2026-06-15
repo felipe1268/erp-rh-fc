@@ -21,6 +21,13 @@
  * constante entre os renders "carregando" e "carregado". Nenhuma lógica de cálculo/visual mudou — apenas
  * a POSIÇÃO das declarações. Comentário-âncora adicionado explicando a obrigatoriedade da ordem.
  *
+ * HARDENING DE TENANCY (mesma revisão; superfície Medição-Terceiros que a engine de Levantamento
+ * consome): fechadas 2 brechas de IDOR cross-tenant em `server/routers/terceiroContratos.ts` —
+ * (1) `listarMedicoes` aceitava `companyId` de input e consultava direto sem validar acesso → agora
+ * chama `_assertCompanyAccess(ctx.user, input.companyId)` ANTES da query; (2) `getMedicao` recebia só
+ * `{ id }` e retornava medição/contrato/empresa por id direto sem checar tenant → agora carrega a linha,
+ * deriva o `companyId` dela e chama `_assertCompanyAccess`. Aditivo, sem ALTER/DROP/DELETE/SCHEMA.
+ *
  * Rev. 3125 — **FINANCEIRO / "LANÇAMENTOS" · O CAMPO "OBRA (OPCIONAL)" DO MODAL DE LANÇAMENTO DEIXOU DE
  * SER TEXTO LIVRE E AGORA SUGERE/SELECIONA AS OBRAS ATIVAS DA EMPRESA — NO LUGAR DE DIGITAR O NOME NA
  * MÃO (E ARRISCAR ERRO/DIVERGÊNCIA DE GRAFIA).**

@@ -1314,7 +1314,10 @@ export const terceiroContratosRouter = router({
 
   listarMedicoes: protectedProcedure
     .input(z.object({ companyId: z.number(), contratoId: z.number().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
+      // Rev. 3126 — guarda de tenancy: valida que o chamador tem acesso à empresa
+      // pedida ANTES de consultar (evita IDOR por forja de companyId no input).
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       let rows = await db.select().from(terceiroMedicoes)
         .where(eq(terceiroMedicoes.companyId, input.companyId))
@@ -1775,10 +1778,13 @@ export const terceiroContratosRouter = router({
 
   getMedicao: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       const [medicao] = await db.select().from(terceiroMedicoes).where(eq(terceiroMedicoes.id, input.id));
       if (!medicao) return null;
+      // Rev. 3126 — guarda de tenancy: o endpoint recebe só {id}; deriva o companyId
+      // da própria linha e valida o acesso do chamador (evita IDOR por enumeração de id).
+      await _assertCompanyAccess(ctx.user, (medicao as any).companyId);
       const itens = await db.select().from(terceiroMedicaoItens).where(eq(terceiroMedicaoItens.medicaoId, input.id));
       const [contrato] = await db.select().from(terceiroContratos).where(eq(terceiroContratos.id, medicao.contratoId));
       const [empresa] = await db.select().from(empresasTerceiras).where(eq(empresasTerceiras.id, medicao.empresaTerceiraId));
