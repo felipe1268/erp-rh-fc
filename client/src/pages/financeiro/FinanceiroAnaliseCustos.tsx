@@ -24,6 +24,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip as RechTooltip, Legend, LabelList,
 } from "recharts";
 import { classificarGrupoCusto } from "@shared/custosCategorias";
+import { buildCentroCustoMaps, centroCustoNomeDe } from "@shared/centroCusto";
 
 function formatBRL(value: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
@@ -114,6 +115,23 @@ export default function FinanceiroAnaliseCustos() {
     { companyId, ano, baseData: "caixa" },
     { enabled: !!companyId }
   );
+  // Rev. 3135 — Centros de Custo CADASTRADOS (financial_cost_centers) + categorias
+  // (p/ derivar o centro pelo vínculo categoria→centro de custo). Substitui obra.
+  const { data: accountsData } = (trpc as any).financial.getAccounts.useQuery(
+    { companyId, ativo: true },
+    { enabled: !!companyId }
+  );
+  const { data: costCentersData } = (trpc as any).financial.getCostCenters.useQuery(
+    { companyId },
+    { enabled: !!companyId }
+  );
+  const ccMaps = useMemo(
+    () => buildCentroCustoMaps(
+      Array.isArray(costCentersData) ? costCentersData : [],
+      Array.isArray(accountsData) ? accountsData : [],
+    ),
+    [costCentersData, accountsData]
+  );
 
   // Rev. 3019 — A Análise de Custos mostra SÓ CUSTOS REAIS (folha, compras,
   // benefícios, encargos, recorrentes…). Exclui a projeção do cronograma
@@ -189,11 +207,11 @@ export default function FinanceiroAnaliseCustos() {
   // Grupos padronizados são ≤17 — exibe todos no gráfico de barras.
   const barCategoria = useMemo(() => porCategoria, [porCategoria]);
 
-  // ─── Custo por centro de custo (obra) ───────────────────────────────────
+  // ─── Custo por centro de custo (CADASTRO — Rev. 3135, substitui obra) ─────
   const porCentroCusto = useMemo(() => {
     const map = new Map<string, { pago: number; previsao: number; value: number }>();
     for (const r of rowsFiltradas) {
-      const nome = (r.obraNome || "Sem centro de custo") as string;
+      const nome = centroCustoNomeDe(r, ccMaps);
       const cur = map.get(nome) ?? { pago: 0, previsao: 0, value: 0 };
       cur.pago += pagoDe(r);
       cur.previsao += previsaoDe(r);
@@ -204,7 +222,7 @@ export default function FinanceiroAnaliseCustos() {
       .map(([name, v]) => ({ name, ...v }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 12);
-  }, [rowsFiltradas]);
+  }, [rowsFiltradas, ccMaps]);
 
   // ─── Pareto 80/20 de categorias ─────────────────────────────────────────
   const pareto = useMemo(() => {

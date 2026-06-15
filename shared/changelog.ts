@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3135 — **FINANCEIRO / ANÁLISE DE CUSTOS · O SELETOR/GRÁFICO "CENTRO DE CUSTO" PASSOU A LISTAR OS
+ * CENTROS DE CUSTO CADASTRADOS (RH, DIRETORIA, DESPESAS GERAIS DE OBRAS, FINANCEIRO…) NO LUGAR DAS
+ * OBRAS — TANTO NO DASHBOARD QUANTO NA TELA DE DETALHE (FILTRO + EDIÇÃO/RECLASSIFICAÇÃO EM LOTE).**
+ *
+ * PEDIDO (iPad): "no seletor de Centro de Custo da Análise de Custos quero ver os Centros de Custo que
+ * estão cadastrados (RH, Diretoria, Despesas Gerais de Obras, Financeiro…), não as obras."
+ *
+ * CONTEXTO/CAUSA: a Análise de Custos agrupava o eixo "centro de custo" por `r.obraNome`, ou seja, usava
+ * a OBRA do lançamento como se fosse o centro de custo. Os Centros de Custo REAIS já existiam noutra
+ * estrutura (`financial_cost_centers`, lidos via `financial.getCostCenters`) e o vínculo natural é
+ * CATEGORIA → CENTRO DE CUSTO (`financial_accounts.centroCustoId`). Logo, faltava (a) uma fonte única
+ * de derivação do centro a partir do lançamento e (b) trocar a UI de obras→centros.
+ *
+ * CORREÇÃO (FRONTEND + ADITIVO no backend; ZERO ALTER/DROP/DELETE — só `ADD COLUMN IF NOT EXISTS`):
+ *  1) `shared/centroCusto.ts` (NOVO): helper compartilhado com `SEM_CENTRO_CUSTO`, `buildCentroCustoMaps`
+ *     (mapa id→nome dos centros + mapa categoria→centroId via financial_accounts) e `centroCustoNomeDe`
+ *     com PRIORIDADE: (i) CC explícito gravado no lançamento (`centroCustoNome`/`centroCustoId`); (ii)
+ *     derivado da categoria do lançamento via `financial_accounts.centroCustoId`; (iii) "Sem centro de
+ *     custo". Fonte única usada por dashboard e detalhe.
+ *  2) `drizzle/schema.ts` + self-heal `[SyncSchema+]` (Rev. 3135): `financialEntries` ganhou
+ *     `centroCustoId`/`centroCustoNome` (ADD COLUMN IF NOT EXISTS `centro_custo_id`/`centro_custo_nome`),
+ *     p/ permitir CC EXPLÍCITO por lançamento (override do derivado), gravado na edição/reclassificação.
+ *  3) `server/routers/financial.ts`: `getContasAPagarByYear` passou a trazer `centro_custo_id`/`nome` no
+ *     SELECT; `bulkReclassificar` e `updateEntry` aceitam e gravam `centroCustoId`/`centroCustoNome`.
+ *  4) `FinanceiroAnaliseCustos.tsx` (dashboard) e `FinanceiroAnaliseCustosDetalhe.tsx` (detalhe): novas
+ *     queries `getAccounts`+`getCostCenters` → `buildCentroCustoMaps`; o agrupamento "porCentroCusto" e
+ *     TODA a UI de obra (opções do filtro, edição inline, seleção/aplicação em lote, dialog) foram
+ *     convertidas de obra→centro de custo; removidos `obrasData`/`obraOpcoes`/`resolveObra`.
+ *
+ * RESSALVA: lançamentos sem categoria mapeada a um centro (e sem CC explícito) caem em "Sem centro de
+ * custo" — agrupador honesto, não some do total. Telas por OBRA seguem inalteradas (mudança restrita à
+ * Análise de Custos).
+ *
  * Rev. 3134 — **FINANCEIRO / ANÁLISE DE CUSTOS · O GRÁFICO "CUSTO POR MÊS — {ANO}" (E SEU DRILL-DOWN)
  * PASSOU A BUCKETIZAR OS LANÇAMENTOS PELA DATA DE PAGAMENTO (REGIME DE CAIXA), NÃO MAIS PELA
  * COMPETÊNCIA — UM ITEM DE COMPETÊNCIA 12/2025 PAGO EM 01/2026 AGORA CAI EM JANEIRO, NÃO EM

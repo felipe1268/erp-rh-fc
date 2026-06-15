@@ -28,6 +28,7 @@ import {
   Tooltip as RechTooltip, LabelList,
 } from "recharts";
 import { classificarGrupoCusto } from "@shared/custosCategorias";
+import { buildCentroCustoMaps, centroCustoNomeDe, SEM_CENTRO_CUSTO } from "@shared/centroCusto";
 
 function formatBRL(value: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
@@ -109,7 +110,7 @@ function linkDeOrigem(r: any): string | null {
 // o que ela representa (inclusive "Sem fornecedor").
 const keyOf: Record<string, (r: any) => string> = {
   fornecedor: (r) => ((r.fornecedorNome || "").trim()) || "Sem fornecedor",
-  centro: (r) => (r.obraNome || "Sem centro de custo"),
+  centro: (r) => (r.__centroNome || "Sem centro de custo"), // Rev. 3135 — centro de custo cadastrado (resolvido)
   categoria: (r) => (r.contaNome || "Sem categoria"),
   // Rev. 3027 — categoria PADRONIZADA (grupo canônico sem duplicatas).
   grupo: (r) => classificarGrupoCusto(r.contaNome, r.origemModulo),
@@ -207,14 +208,32 @@ export default function FinanceiroAnaliseCustosDetalhe() {
     { companyId, ano, baseData: "caixa" },
     { enabled: !!companyId }
   );
+  // Rev. 3135 — Centros de Custo CADASTRADOS (financial_cost_centers) + categorias
+  // (p/ derivar o centro pelo vínculo categoria→centro de custo). Substitui obra.
+  const { data: accountsData } = (trpc as any).financial.getAccounts.useQuery(
+    { companyId, ativo: true },
+    { enabled: !!companyId }
+  );
+  const { data: costCentersData } = (trpc as any).financial.getCostCenters.useQuery(
+    { companyId },
+    { enabled: !!companyId }
+  );
+  const ccMaps = useMemo(
+    () => buildCentroCustoMaps(
+      Array.isArray(costCentersData) ? costCentersData : [],
+      Array.isArray(accountsData) ? accountsData : [],
+    ),
+    [costCentersData, accountsData]
+  );
   // Rev. 3019 — Espelha a tela-mãe: SÓ CUSTOS REAIS. Exclui a projeção do
   // cronograma (origem 'cronograma_atividade' = valor de contrato distribuído
   // mês a mês), que duplicaria as despesas reais e inflava os totais.
+  // Rev. 3135 — enriquece cada linha com __centroNome (centro de custo resolvido).
   const rowsAll: any[] = useMemo(
-    () => (Array.isArray(data) ? data : []).filter(
-      (r) => String(r?.origemModulo ?? "") !== "cronograma_atividade"
-    ),
-    [data]
+    () => (Array.isArray(data) ? data : [])
+      .filter((r) => String(r?.origemModulo ?? "") !== "cronograma_atividade")
+      .map((r) => ({ ...r, __centroNome: centroCustoNomeDe(r, ccMaps) })),
+    [data, ccMaps]
   );
 
   // Recorte: filtro de mês herdado da tela-mãe + filtro primário (tipo/valor)
@@ -287,15 +306,7 @@ export default function FinanceiroAnaliseCustosDetalhe() {
   const CLEAR = "__clear__";
 
   // Opções dos seletores: Categoria = Plano de Contas (financial_accounts);
-  // Centro de Custo = OBRA (segue o que a coluna desta tela exibe).
-  const { data: accountsData } = (trpc as any).financial.getAccounts.useQuery(
-    { companyId, ativo: true },
-    { enabled: !!companyId }
-  );
-  const { data: obrasData } = (trpc as any).obras.getObras.useQuery(
-    { companyId },
-    { enabled: !!companyId }
-  );
+  // Centro de Custo = CADASTRO de Centros de Custo (financial_cost_centers) — Rev. 3135.
   const categoriaOpcoes: { id: number; nome: string }[] = useMemo(() => {
     const list: any[] = Array.isArray(accountsData) ? accountsData : [];
     const seen = new Set<string>();
@@ -310,13 +321,13 @@ export default function FinanceiroAnaliseCustosDetalhe() {
     }
     return out.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   }, [accountsData]);
-  const obraOpcoes: { id: number; nome: string }[] = useMemo(() => {
-    const list: any[] = Array.isArray(obrasData) ? obrasData : [];
+  const centroOpcoes: { id: number; nome: string }[] = useMemo(() => {
+    const list: any[] = Array.isArray(costCentersData) ? costCentersData : [];
     return list
       .map((o: any) => ({ id: o.id as number, nome: String(o?.nome ?? "").trim() }))
       .filter((o) => o.nome)
       .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
-  }, [obrasData]);
+  }, [costCentersData]);
 
   // Seleção múltipla (cancelados não são selecionáveis).
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -341,27 +352,32 @@ export default function FinanceiroAnaliseCustosDetalhe() {
 
   // Barra de ações em massa.
   const [bulkCat, setBulkCat] = useState<string>(KEEP);
-  const [bulkObra, setBulkObra] = useState<string>(KEEP);
+  const [bulkCentro, setBulkCentro] = useState<string>(KEEP);
 
   // Dialog de edição de UMA linha.
   const [editRow, setEditRow] = useState<any | null>(null);
   const [ef, setEf] = useState<{
-    descricao: string; fornecedorNome: string; contaSel: string; obraSel: string;
+    descricao: string; fornecedorNome: string; contaSel: string; centroSel: string;
     dataCompetencia: string; dataVencimento: string; valor: string;
   } | null>(null);
   const rowLocked = (r: any) => r?.status === "pago" || r?.status === "recebido";
   const abrirEdicao = (r: any) => {
     const cur = String(r.contaNome ?? "").trim();
     const catMatch = categoriaOpcoes.find((c) => c.nome.toLowerCase() === cur.toLowerCase());
-    const obraCur = String(r.obraNome ?? "").trim();
-    const obraMatch = obraOpcoes.find((o) => o.nome.toLowerCase() === obraCur.toLowerCase());
+    // Rev. 3135 — centro de custo cadastrado já resolvido em __centroNome.
+    const ccCur = String(r.__centroNome ?? "").trim();
+    const ccMatch = ccCur && ccCur !== SEM_CENTRO_CUSTO
+      ? centroOpcoes.find((o) => o.nome.toLowerCase() === ccCur.toLowerCase())
+      : undefined;
     const p = parseLanc(r);
     setEditRow(r);
     setEf({
       descricao: p.livre || r.descricao || r.origemDescricao || "",
       fornecedorNome: r.fornecedorNome || p.fornecedorDesc || "",
       contaSel: catMatch ? String(catMatch.id) : (cur ? "-1" : CLEAR),
-      obraSel: obraMatch ? String(obraMatch.id) : (obraCur ? "-1" : CLEAR),
+      // Rev. 3135 — se o centro atual não casa com a lista (centro inativo/legado),
+      // mantém o valor ATUAL via "-1" (não limpa implicitamente ao salvar).
+      centroSel: ccMatch ? String(ccMatch.id) : (ccCur && ccCur !== SEM_CENTRO_CUSTO ? "-1" : CLEAR),
       dataCompetencia: (r.dataCompetencia || "").slice(0, 10),
       dataVencimento: (r.dataVencimento || "").slice(0, 10),
       valor: String(Number(r.valorPrevisto ?? valorEfetivo(r)) || 0),
@@ -375,11 +391,15 @@ export default function FinanceiroAnaliseCustosDetalhe() {
     const has = cur && categoriaOpcoes.some((c) => c.nome.toLowerCase() === cur.toLowerCase());
     return cur && !has ? [{ id: -1, nome: cur }, ...categoriaOpcoes] : categoriaOpcoes;
   }, [editRow, categoriaOpcoes]);
-  const obraOpcoesDialog = useMemo(() => {
-    const cur = String(editRow?.obraNome ?? "").trim();
-    const has = cur && obraOpcoes.some((o) => o.nome.toLowerCase() === cur.toLowerCase());
-    return cur && !has ? [{ id: -1, nome: cur }, ...obraOpcoes] : obraOpcoes;
-  }, [editRow, obraOpcoes]);
+
+  // Rev. 3135 — inclui o centro de custo ATUAL (id=-1) se não casar com a lista
+  // (centro inativo/legado) p/ exibir e preservar sem limpar implicitamente.
+  const centroOpcoesDialog = useMemo(() => {
+    const cur = String((editRow as any)?.__centroNome ?? "").trim();
+    if (!cur || cur === SEM_CENTRO_CUSTO) return centroOpcoes;
+    const has = centroOpcoes.some((o) => o.nome.toLowerCase() === cur.toLowerCase());
+    return has ? centroOpcoes : [{ id: -1, nome: cur }, ...centroOpcoes];
+  }, [editRow, centroOpcoes]);
 
   const updateEntryMut = (trpc as any).financial.updateEntry.useMutation({
     onSuccess: () => {
@@ -394,7 +414,7 @@ export default function FinanceiroAnaliseCustosDetalhe() {
       toast({ title: `Reclassificado(s) ${res?.changed ?? 0} lançamento(s)` });
       fecharEdicao();
       limparSelecao();
-      setBulkCat(KEEP); setBulkObra(KEEP);
+      setBulkCat(KEEP); setBulkCentro(KEEP);
       utils.financial.getContasAPagarByYear.invalidate();
     },
     onError: (e: any) => toast({ title: "Erro ao aplicar", description: e?.message, variant: "destructive" }),
@@ -408,26 +428,32 @@ export default function FinanceiroAnaliseCustosDetalhe() {
     const o = categoriaOpcoes.find((c) => String(c.id) === sel);
     return { contaNome: o?.nome ?? "", contaId: o?.id ?? null };
   };
-  const resolveObra = (sel: string, fallback?: any): { obraNome: string; obraId: number | null } => {
-    if (sel === CLEAR) return { obraNome: "", obraId: null };
-    if (sel === "-1") return { obraNome: fallback?.obraNome || "", obraId: fallback?.obraId ?? null };
-    const o = obraOpcoes.find((x) => String(x.id) === sel);
-    return { obraNome: o?.nome ?? "", obraId: o?.id ?? null };
+  // Rev. 3135 — Centro de custo CADASTRADO (financial_cost_centers) → { nome, id }.
+  // "-1" = manter o centro ATUAL do lançamento (centro inativo/legado fora da lista),
+  // espelhando o padrão da categoria; evita limpar o CC sem o usuário pedir.
+  const resolveCentro = (sel: string, fallback?: any): { centroCustoNome: string; centroCustoId: number | null } => {
+    if (sel === CLEAR) return { centroCustoNome: "", centroCustoId: null };
+    if (sel === "-1") return {
+      centroCustoNome: fallback?.centroCustoNome || fallback?.__centroNome || "",
+      centroCustoId: fallback?.centroCustoId ?? null,
+    };
+    const o = centroOpcoes.find((x) => String(x.id) === sel);
+    return { centroCustoNome: o?.nome ?? "", centroCustoId: o?.id ?? null };
   };
 
   const salvarEdicao = () => {
     if (!editRow || !ef) return;
     const cat = resolveCat(ef.contaSel, editRow);
-    const obra = resolveObra(ef.obraSel, editRow);
+    const centro = resolveCentro(ef.centroSel, editRow);
     if (rowLocked(editRow)) {
       // Pago/recebido: só reclassifica categoria/centro (não toca valor/datas).
-      bulkMut.mutate({ companyId, ids: [editRow.id], ...cat, ...obra });
+      bulkMut.mutate({ companyId, ids: [editRow.id], ...cat, ...centro });
     } else {
       updateEntryMut.mutate({
         id: editRow.id, companyId,
         descricao: ef.descricao,
         fornecedorNome: ef.fornecedorNome,
-        ...cat, ...obra,
+        ...cat, ...centro,
         dataCompetencia: ef.dataCompetencia || undefined,
         dataVencimento: ef.dataVencimento || undefined,
         valorPrevisto: parseFloat(ef.valor) || 0,
@@ -440,7 +466,7 @@ export default function FinanceiroAnaliseCustosDetalhe() {
     const payload: any = { companyId, ids: Array.from(selected) };
     let temAlgo = false;
     if (bulkCat !== KEEP) { temAlgo = true; Object.assign(payload, resolveCat(bulkCat)); }
-    if (bulkObra !== KEEP) { temAlgo = true; Object.assign(payload, resolveObra(bulkObra)); }
+    if (bulkCentro !== KEEP) { temAlgo = true; Object.assign(payload, resolveCentro(bulkCentro)); }
     if (!temAlgo) {
       toast({ title: "Escolha categoria e/ou centro de custo", variant: "destructive" });
       return;
@@ -665,18 +691,18 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                     </Select>
                   </div>
                   <div className="flex-1 min-w-[160px]">
-                    <Select value={bulkObra} onValueChange={setBulkObra}>
+                    <Select value={bulkCentro} onValueChange={setBulkCentro}>
                       <SelectTrigger className="h-9 bg-white text-xs"><SelectValue placeholder="Centro de custo…" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value={KEEP}>Centro de custo — manter</SelectItem>
                         <SelectItem value={CLEAR}>Sem centro de custo</SelectItem>
-                        {obraOpcoes.map((o) => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
+                        {centroOpcoes.map((o) => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <Button size="sm" className="h-9" onClick={aplicarBulk} disabled={salvando || (bulkCat === KEEP && bulkObra === KEEP)}>
+                  <Button size="sm" className="h-9" onClick={aplicarBulk} disabled={salvando || (bulkCat === KEEP && bulkCentro === KEEP)}>
                     {salvando ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-1.5" />}
                     Aplicar
                   </Button>
@@ -780,7 +806,7 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                                 </span>
                                 <div className="flex items-center gap-1 text-[11px] text-gray-500 mt-1 min-w-0">
                                   <Layers className="w-3 h-3 shrink-0 text-gray-400" />
-                                  <span className="break-words leading-snug" title={r.obraNome || ""}>{r.obraNome || "Sem centro de custo"}</span>
+                                  <span className="break-words leading-snug" title={r.__centroNome || ""}>{r.__centroNome || "Sem centro de custo"}</span>
                                 </div>
                               </div>
                             </td>
@@ -914,12 +940,12 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-gray-600">Centro de Custo (obra)</Label>
-                  <Select value={ef.obraSel} onValueChange={(v) => setEf({ ...ef, obraSel: v })}>
+                  <Label className="text-xs font-medium text-gray-600">Centro de Custo</Label>
+                  <Select value={ef.centroSel} onValueChange={(v) => setEf({ ...ef, centroSel: v })}>
                     <SelectTrigger className="h-10 bg-white"><SelectValue placeholder="Selecione o centro de custo…" /></SelectTrigger>
                     <SelectContent align="start" className="max-h-72 max-w-[calc(100vw-2rem)]">
                       <SelectItem value={CLEAR}>Sem centro de custo</SelectItem>
-                      {obraOpcoesDialog.map((o) => (
+                      {centroOpcoesDialog.map((o) => (
                         <SelectItem key={o.id} value={String(o.id)} className="whitespace-normal leading-snug">{o.id === -1 ? `${o.nome} (atual)` : o.nome}</SelectItem>
                       ))}
                     </SelectContent>
