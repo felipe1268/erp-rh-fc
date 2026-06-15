@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3131 — **RH / COLETA DE CAMPO · QUANDO A COLETA ATINGE 100% DOS FUNCIONÁRIOS A COLETAR ELA
+ * AGORA SE FINALIZA SOZINHA (DÁ COMO "CONCLUÍDO" + FECHA O LINK / `ativo=0`) MESMO QUANDO A
+ * CONCLUSÃO NÃO VEIO DO ÚLTIMO ENVIO PÚBLICO.**
+ *
+ * PEDIDO (iPad, com print da tela "Coleta — VITRA/REVTE-CIVIL/..."): "Revise isso de forma que
+ * quando acabar tudo, fecha a coleta e dê como concluído e finalize a coleta."
+ *
+ * CAUSA-RAIZ: havia DUAS regras de conclusão desalinhadas em `server/routers/coletaRh.ts`. (1) O
+ * badge "Concluído" de `listarSessoes` é DERIVADO ao vivo: `concluida = totalAlocados > 0 &&
+ * coletados >= totalAlocados`, onde o universo é o conjunto de funcionários ATIVOS alocados na
+ * obra (interseção respostas ∩ ativos-alocados). (2) O auto-close (`UPDATE ... SET ativo=0`) só
+ * existia dentro de `enviarResposta` e só dispara no ÚLTIMO ENVIO do link público. Resultado: se a
+ * coleta atingisse 100% por OUTRO caminho que não um novo envio — tipicamente quando um
+ * funcionário é DESALOCADO/DESLIGADO e o universo "a coletar" ENCOLHE até bater no que já foi
+ * coletado — o badge virava "Concluído" mas o link permanecia ATIVO (botão "Desativar"), nunca
+ * finalizando de fato.
+ *
+ * CORREÇÃO (BACKEND-ONLY; ZERO SCHEMA/ALTER/DROP/DELETE): `listarSessoes` agora se AUTO-CURA em
+ * 3 etapas, de modo que o `ativo` do payload NUNCA divirja do banco: (1) 1ª passada calcula
+ * progresso/`concluida` de cada sessão (Map) e junta as candidatas em `finalizarIds` (`concluida`
+ * && `ativo === 1`); (2) roda UM ÚNICO `UPDATE coleta_rh_sessoes SET ativo=0 WHERE id IN (...) AND
+ * companyId IN (...) AND ativo=1 RETURNING id` — best-effort em try/catch (falha de escrita NÃO
+ * quebra a listagem), idempotente (o `AND ativo=1` evita reescrever quem já está fechado) e
+ * tenant-safe (restringe aos `companyIds` já autorizados por `assertColetaCompanyAccess`); (3) só
+ * os IDs EFETIVAMENTE retornados pelo `RETURNING` entram em `finalizadasSet` e SÓ esses são
+ * rebaixados a `ativo: 0` no payload (a UI mostra "Concluído" + botão "Ativar"). Se o UPDATE
+ * falhar, `finalizadasSet` fica vazio, a sessão volta com o `ativo` real e a finalização é
+ * re-tentada no próximo `list` — o badge "Concluído" (derivado) continua aparecendo. O auto-close
+ * de `enviarResposta` (Rev. 2902) segue como estava — esta revisão apenas FECHA A LACUNA do caminho
+ * que não passa por um novo envio. "Concluída" continua exigindo `totalAlocados > 0` (universo
+ * vazio jamais conclui) e `rejeitada` continua não contando como coletado. Detalhe: este bloco.
+ *
  * Rev. 3130 — **CONTROLE DE DOCUMENTOS / ABA "MAPEAMENTO" · ASO JÁ LIDO POR IA NÃO REAPARECE NO
  * LOTE DE LEITURA — INCLUSIVE OS "DESCARTADOS" (REJEITADOS) — EVITANDO RELER O MESMO PDF VÁRIAS
  * VEZES.**

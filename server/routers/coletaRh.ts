@@ -371,8 +371,18 @@ export const coletaRhRouter = router({
         for (const [obraId, set] of alocadosPorObra) totalAlocadosPorObra.set(obraId, set.size);
       }
 
-      return sessoes.map((s) => {
-        const { camposJson, itensCustomJson, ...rest } = s;
+      // Rev. 3131 — coletas que ATINGIRAM 100% mas ainda estão `ativo=1` precisam
+      // ser FINALIZADAS (auto-close). O auto-close de `enviarResposta` só dispara
+      // no ÚLTIMO envio do link público; se a conclusão acontecer por OUTRO motivo
+      // (ex.: funcionário desalocado/desligado encolhe o universo a coletar), o
+      // badge "Concluído" aparecia mas o link continuava ATIVO. Aqui a listagem
+      // se AUTO-CURA: persiste `ativo=0` p/ toda sessão concluída ainda ativa.
+      //
+      // 1ª passada — calcula progresso/conclusão de cada sessão (sem montar o
+      // payload ainda) e junta as candidatas a finalizar (concluída + ativo=1).
+      const progressoPorSessao = new Map<number, { totalAlocados: number; coletados: number; concluida: boolean }>();
+      const finalizarIds: number[] = [];
+      for (const s of sessoes) {
         const totalAlocados = totalAlocadosPorObra.get(s.obraId) ?? 0;
         // Rev. 2902 — coletados = funcionários DISTINTOS com resposta pendente/aprovada
         // QUE TAMBÉM estão no conjunto de ativos-alocados (interseção).
@@ -381,17 +391,53 @@ export const coletaRhRouter = router({
         const coletados = (coletadosSet && alocadosSet)
           ? Array.from(coletadosSet).filter((id) => alocadosSet.has(id)).length
           : 0;
+        const concluida = totalAlocados > 0 && coletados >= totalAlocados;
+        progressoPorSessao.set(s.id, { totalAlocados, coletados, concluida });
+        if (concluida && s.ativo === 1) finalizarIds.push(s.id);
+      }
+
+      // Rev. 3131 — persiste a finalização ANTES de montar o payload e usa o
+      // `RETURNING id` p/ refletir no retorno SÓ o que foi de fato gravado. Assim
+      // o `ativo:0` do payload nunca diverge do banco: se o UPDATE falhar
+      // (best-effort try/catch — não quebra a listagem), `finalizadasSet` fica
+      // vazio e a sessão volta com seu `ativo` real (o badge "Concluído"
+      // derivado ainda aparece; a finalização tenta de novo no próximo list).
+      // Idempotente (`AND ativo=1`) e tenant-safe (`companyId IN companyIds`).
+      const finalizadasSet = new Set<number>();
+      if (finalizarIds.length > 0) {
+        try {
+          const finalizadas = await db
+            .update(coletaRhSessoes)
+            .set({ ativo: 0 })
+            .where(and(
+              inArray(coletaRhSessoes.id, finalizarIds),
+              inArray(coletaRhSessoes.companyId, companyIds),
+              eq(coletaRhSessoes.ativo, 1),
+            ))
+            .returning({ id: coletaRhSessoes.id });
+          for (const f of finalizadas) finalizadasSet.add(f.id);
+        } catch (e: any) {
+          console.error("[coletaRh.listarSessoes] auto-finalização falhou:", e?.message || e);
+        }
+      }
+
+      return sessoes.map((s) => {
+        const { camposJson, itensCustomJson, ...rest } = s;
+        const prog = progressoPorSessao.get(s.id) ?? { totalAlocados: 0, coletados: 0, concluida: false };
+        // Rev. 3131 — só rebaixa p/ `ativo:0` no payload quando o UPDATE confirmou.
+        const ativoEfetivo = finalizadasSet.has(s.id) ? 0 : s.ativo;
         return {
           ...rest,
+          ativo: ativoEfetivo,
           grupos: resolverGruposColeta(camposJson),
           itensCustom: parseItensCustom(itensCustomJson),
           expirada: sessaoExpirada(s.expiraEm),
           totalRespostas: totalPorSessao.get(s.id) ?? 0,
           pendentes: pendPorSessao.get(s.id) ?? 0,
           // Rev. 2902 — progresso + conclusão da coleta.
-          totalAlocados,
-          coletados,
-          concluida: totalAlocados > 0 && coletados >= totalAlocados,
+          totalAlocados: prog.totalAlocados,
+          coletados: prog.coletados,
+          concluida: prog.concluida,
         };
       });
     }),

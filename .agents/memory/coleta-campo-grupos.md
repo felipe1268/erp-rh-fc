@@ -20,3 +20,10 @@ Link conclui (badge "Concluído" + auto `ativo=0`) quando 100% dos funcionários
 
 **Why:** contar "coletados" como qualquer resposta `pendente/aprovada` da sessão fecha o link cedo demais — resposta de quem saiu da obra ou foi desligado entra no numerador e infla a contagem acima do universo correto.
 **How to apply:** "coletados" SEMPRE = respostas (`pendente`/`aprovada`, `deleted_at IS NULL`) **INTERSECTADAS** com o conjunto de ativos-alocados; nunca o count cru de respostas. Vale nos DOIS pontos: `listarSessoes` (badge) e `enviarResposta` (auto-close best-effort em try/catch). `rejeitada` não conta; `total=0` nunca conclui.
+
+## Auto-finalização também no `listarSessoes` (não só no envio)
+
+O `enviarResposta` só fecha o link (`ativo=0`) no ÚLTIMO ENVIO público. Mas `concluida` é DERIVADA do universo ativos-alocados, que pode ENCOLHER sem novo envio (funcionário desalocado/desligado) — aí o badge vira "Concluído" mas o link ficava ATIVO. Por isso `listarSessoes` também AUTO-FINALIZA.
+
+**Why:** a conclusão pode acontecer por mudança de roster (universo encolhe), caminho que nunca passa por `enviarResposta`; sem self-heal na listagem o link concluído nunca fecha.
+**How to apply:** no `listarSessoes`, faça o write ANTES de montar o payload e reflita `ativo:0` SÓ para os IDs que o `UPDATE ... AND ativo=1 RETURNING id` confirmou — assim o payload nunca diverge do banco se o write (best-effort try/catch) falhar. NUNCA devolva `ativo:0` otimista antes da escrita confirmada.
