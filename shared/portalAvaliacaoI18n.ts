@@ -66,6 +66,10 @@ export interface AvaliacaoStrings {
   enviando: string;
   obrigadoTitulo: string;
   obrigadoTexto: string;
+  // Rev. 3138 — link público de USO ÚNICO já respondido: mensagem amigável de
+  // "pesquisa concluída" (em vez do texto de limite mensal / "módulo desativado").
+  concluidaTitulo: string;
+  concluidaTexto: string;
   toastEnviado: string;
   // Rev. 3001 — mensagem amigável quando o iOS/Safari derruba a requisição
   // no transporte ("The string did not match the expected pattern").
@@ -135,6 +139,8 @@ export const AVALIACAO_I18N: Record<AvaliacaoLang, AvaliacaoStrings> = {
     enviando: "Enviando...",
     obrigadoTitulo: "Obrigado pela avaliação!",
     obrigadoTexto: "Suas respostas foram registradas de forma totalmente anônima e ajudarão a FC Engenharia a melhorar continuamente.",
+    concluidaTitulo: "Pesquisa já concluída",
+    concluidaTexto: "Esta pesquisa de satisfação já foi respondida por meio deste link. Agradecemos a sua participação!",
     toastEnviado: "Obrigado! Sua avaliação foi enviada.",
     toastErroConexao: "Não foi possível enviar pela conexão atual. Verifique a internet e toque em \"Enviar\" novamente.",
     valGestor: 'Avalie todos os itens do bloco "Gestor / Responsável FC pela obra" (0 a 10).',
@@ -222,6 +228,8 @@ export const AVALIACAO_I18N: Record<AvaliacaoLang, AvaliacaoStrings> = {
     enviando: "Submitting...",
     obrigadoTitulo: "Thank you for your feedback!",
     obrigadoTexto: "Your answers were recorded completely anonymously and will help FC Engenharia improve continuously.",
+    concluidaTitulo: "Survey already completed",
+    concluidaTexto: "This satisfaction survey has already been answered through this link. Thank you for your participation!",
     toastEnviado: "Thank you! Your survey has been submitted.",
     toastErroConexao: "We couldn't submit over the current connection. Check your internet and tap \"Submit\" again.",
     valGestor: 'Please rate all items in the "FC Manager / Project lead" section (0 to 10).',
@@ -309,6 +317,8 @@ export const AVALIACAO_I18N: Record<AvaliacaoLang, AvaliacaoStrings> = {
     enviando: "提交中…",
     obrigadoTitulo: "感谢您的评价！",
     obrigadoTexto: "您的回答已完全匿名记录，将帮助 FC Engenharia 持续改进。",
+    concluidaTitulo: "问卷已完成",
+    concluidaTexto: "此满意度调查已通过该链接完成。感谢您的参与！",
     toastEnviado: "谢谢！您的评价已提交。",
     toastErroConexao: '当前网络无法提交。请检查网络后再次点击“提交”。',
     valGestor: '请为"FC 工程经理/负责人"部分的所有项目打分（0 到 10）。',

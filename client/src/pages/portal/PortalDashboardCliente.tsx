@@ -756,18 +756,30 @@ export default function PortalDashboardCliente({ publicToken }: { publicToken?: 
         {tab === "avaliacao" && (
           <div className="max-w-3xl mx-auto">
             {jaAvaliouEsteMes && !avaliado ? (
-              <div className="bg-white border rounded-2xl p-12 text-center">
-                <ShieldCheck className="w-20 h-20 text-emerald-500 mx-auto mb-4" />
-                <h2 className="text-2xl font-bold text-slate-800 mb-2">Avaliação deste {labelPer} já registrada</h2>
-                <p className="text-slate-600 mb-2">Para preservar o anonimato (LGPD), cada usuário envia apenas <b>{labelUmaPor}</b>.</p>
-                {/* Rev. 1591 — módulo desativado até a próxima janela */}
-                {proximaJanelaTxt ? (
-                  <p className="text-slate-500 text-sm">O módulo de Avaliação está desativado até <b>{proximaJanelaTxt}</b>, quando reabre automaticamente.</p>
-                ) : (
-                  <p className="text-slate-500 text-sm">Volte no próximo {labelPer} para registrar uma nova avaliação. Obrigado!</p>
-                )}
-                <p className="text-slate-400 text-xs mt-3">Precisa registrar uma nova agora? Solicite ao Admin Master da FC para cancelar a avaliação deste {labelPer}.</p>
-              </div>
+              isPublic ? (
+                // Rev. 3138 — LINK PÚBLICO de USO ÚNICO já respondido: NÃO mostramos
+                // o texto de "limite mensal / módulo desativado" (esse link não
+                // reabre por janela — ele simplesmente já cumpriu seu papel). O link
+                // segue válido (não desativado): exibimos um agradecimento amigável.
+                <div className="bg-white border rounded-2xl p-12 text-center">
+                  <CheckCircle2 className="w-20 h-20 text-emerald-500 mx-auto mb-4" />
+                  <h2 className="text-2xl font-bold text-slate-800 mb-2">{T.concluidaTitulo}</h2>
+                  <p className="text-slate-600">{T.concluidaTexto}</p>
+                </div>
+              ) : (
+                <div className="bg-white border rounded-2xl p-12 text-center">
+                  <ShieldCheck className="w-20 h-20 text-emerald-500 mx-auto mb-4" />
+                  <h2 className="text-2xl font-bold text-slate-800 mb-2">Avaliação deste {labelPer} já registrada</h2>
+                  <p className="text-slate-600 mb-2">Para preservar o anonimato (LGPD), cada usuário envia apenas <b>{labelUmaPor}</b>.</p>
+                  {/* Rev. 1591 — módulo desativado até a próxima janela */}
+                  {proximaJanelaTxt ? (
+                    <p className="text-slate-500 text-sm">O módulo de Avaliação está desativado até <b>{proximaJanelaTxt}</b>, quando reabre automaticamente.</p>
+                  ) : (
+                    <p className="text-slate-500 text-sm">Volte no próximo {labelPer} para registrar uma nova avaliação. Obrigado!</p>
+                  )}
+                  <p className="text-slate-400 text-xs mt-3">Precisa registrar uma nova agora? Solicite ao Admin Master da FC para cancelar a avaliação deste {labelPer}.</p>
+                </div>
+              )
             ) : avaliado ? (
               <div className="bg-white border rounded-2xl p-12 text-center">
                 <CheckCircle2 className="w-20 h-20 text-emerald-500 mx-auto mb-4" />

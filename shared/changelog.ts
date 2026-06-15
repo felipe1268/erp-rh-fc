@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3138 — **PORTAL DO CLIENTE / AVALIAÇÃO (NPS) · O LINK DE PESQUISA JÁ RESPONDIDO NÃO É MAIS
+ * "DESATIVADO": AO REABRIR, O CLIENTE VÊ UMA MENSAGEM AMIGÁVEL DE "PESQUISA JÁ CONCLUÍDA · OBRIGADO!"
+ * EM VEZ DO TEXTO DE LIMITE MENSAL / "MÓDULO DESATIVADO".**
+ *
+ * PEDIDO (iPad, print da tela "Acessos do Portal" com 3 links "Disponível" + 1 resposta · NPS 100):
+ * "o link que foi preenchido não deve ser desativado, e [mostrar] uma mensagem que esta pesquisa foi
+ * concluída."
+ *
+ * CONTEXTO/CAUSA: o link público de avaliação é de USO ÚNICO — o nonce `linkId` é consumido
+ * atomicamente em `cliente_avaliacao_link_uso` no envio (Rev. 2973). O link NÃO é tecnicamente
+ * desativado: `portalExterno.cliente.resolverLinkAvaliacao` (short-link `/a/<codigo>`) e o long-link
+ * `/portal/avaliacao/<token>` continuam devolvendo o token e renderizando `PortalDashboardCliente` em
+ * modo público. O problema era de UX/TEXTO: ao reabrir um link já respondido, a aba "Avaliação" caía no
+ * mesmo card do PORTAL LOGADO (limite por janela), exibindo "Avaliação deste mês já registrada" + "O
+ * módulo de Avaliação está DESATIVADO até <próxima janela>". Para um link de uso único isso é confuso
+ * (ele não reabre por janela — ele simplesmente já cumpriu o papel) e a palavra "desativado" passava a
+ * impressão de link quebrado.
+ *
+ * CORREÇÃO (FRONTEND + i18n; ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE):
+ *  1) `shared/portalAvaliacaoI18n.ts` — NOVAS chaves `concluidaTitulo`/`concluidaTexto` nos 3 idiomas
+ *     (pt/en/zh): "Pesquisa já concluída" + "Esta pesquisa de satisfação já foi respondida por meio
+ *     deste link. Agradecemos a sua participação!".
+ *  2) `client/src/pages/portal/PortalDashboardCliente.tsx` — no branch `jaAvaliouEsteMes && !avaliado`,
+ *     quando `isPublic` (link público), renderiza o card NOVO de "pesquisa concluída" (ícone
+ *     `CheckCircle2` + `T.concluidaTitulo`/`T.concluidaTexto`), SEM o texto de limite mensal / "módulo
+ *     desativado". O caso do PORTAL LOGADO (não-público) mantém o card original de janela mensal intacto.
+ *
+ * RESSALVA: nada muda no backend nem no claim de uso único — o link segue 1-resposta-por-link e
+ * permanece "Disponível" na listagem admin (não é desativado). É só a mensagem de reabertura que ficou
+ * amigável. Vale para os dois pontos de entrada públicos (short-link `/a/...` e long-link
+ * `/portal/avaliacao/...`), pois ambos renderizam o mesmo `PortalDashboardCliente`.
+ *
  * Rev. 3137 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O ERP AGORA LÊ O EXTRATO IMPORTADO E SUGERE
  * AUTOMATICAMENTE, PARA CADA LINHA, O LANÇAMENTO QUE BATE — E CONCILIA EM LOTE DANDO BAIXA (PAGO/RECEBIDO)
  * COM A DATA REAL DO EXTRATO (CAIXA REAL).**
