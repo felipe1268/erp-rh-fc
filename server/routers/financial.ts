@@ -522,6 +522,9 @@ export const financialRouter = router({
     dataInicio: z.string().optional(),
     dataFim: z.string().optional(),
     origemModulo: z.string().optional(),
+    // Rev. 3136 — exclui as PROJEÇÕES do cronograma da listagem (tela de Lançamentos),
+    // que precisa mostrar só caixa REAL. Opcional → default mantém o comportamento atual.
+    excluirCronograma: z.boolean().optional(),
     limit: z.number().default(100),
     offset: z.number().default(0),
   })).query(async ({ input }) => {
@@ -558,6 +561,10 @@ export const financialRouter = router({
       );
     }
     if (input.origemModulo) { conds.push(`e.origem_modulo=$${i++}`); vals.push(input.origemModulo); }
+    // Rev. 3136 — as projeções do cronograma (origem 'cronograma_atividade') NÃO são
+    // caixa real (são o valor de contrato distribuído mês a mês), então saem da tela de
+    // Lançamentos. Literal (sem placeholder) → não interfere na ligação posicional.
+    if (input.excluirCronograma) { conds.push(`COALESCE(e.origem_modulo,'') <> 'cronograma_atividade'`); }
     vals.push(input.limit, input.offset);
     const res = await dbExecute(db, 
       `SELECT e.id, e.company_id AS "companyId", e.obra_id AS "obraId", e.obra_nome AS "obraNome",
@@ -596,6 +603,7 @@ export const financialRouter = router({
     companyId: z.number(),
     ano: z.number().int().min(2000).max(2100),
     tipo: z.string().optional(),
+    excluirCronograma: z.boolean().optional(),
   })).query(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -610,6 +618,9 @@ export const financialRouter = router({
     ];
     const vals: any[] = [input.ano];
     if (input.tipo) { conds.push(`e.tipo = $2`); vals.push(input.tipo); }
+    // Rev. 3136 — mesma exclusão da listagem: as bolinhas da timeline refletem só
+    // caixa real (sem as projeções 'cronograma_atividade'). Literal, sem placeholder.
+    if (input.excluirCronograma) { conds.push(`COALESCE(e.origem_modulo,'') <> 'cronograma_atividade'`); }
     const res = await dbExecute(db,
       `SELECT EXTRACT(MONTH FROM COALESCE(e.data_competencia, e.data_vencimento, e.created_at::date))::int AS mes,
               COUNT(*)::int AS total,

@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3136 — **FINANCEIRO / LANÇAMENTOS · OS LANÇAMENTOS DE ORIGEM "CRONOGRAMA" (PROJEÇÕES DO VALOR DE
+ * CONTRATO DISTRIBUÍDO MÊS A MÊS) SAÍRAM DA TELA DE LANÇAMENTOS — QUE AGORA MOSTRA SÓ CAIXA REAL (O QUE
+ * REALMENTE ENTROU/SAIU DAS CONTAS, CONFORME LANÇAMENTOS E CONCILIAÇÃO BANCÁRIA).**
+ *
+ * PEDIDO (iPad, print da tela "Lançamentos" cheia de linhas "Cronograma: 02.01.02.02 … • Origem:
+ * Cronograma • A Pagar"): "estes lançamentos do cronograma tire daqui… vamos estudar esta função em
+ * outro momento. Agora preciso saber dos valores REAIS — tudo que realmente entrou e saiu das contas
+ * conforme os lançamentos e conciliação bancária, pra não ter erro."
+ *
+ * CONTEXTO/CAUSA: a tela de Lançamentos lista `financial.getEntries` SEM filtrar origem, então as
+ * projeções do cronograma (origem_modulo `cronograma_atividade` — o valor de contrato da obra
+ * distribuído mês a mês, NÃO caixa real; cf. regra "cronograma_atividade = projeção, não custo real")
+ * apareciam misturadas com os lançamentos reais, poluindo a leitura de quem entrou/saiu de fato e
+ * inflando a contagem e as bolinhas da timeline (Rev. 3133). A função Cronograma em si fica para estudo
+ * posterior — o pedido é só TIRAR DAQUI.
+ *
+ * CORREÇÃO (BACKEND ADITIVO + FRONTEND; ZERO ALTER/DROP/DELETE/SCHEMA):
+ *  1) `server/routers/financial.ts`: `getEntries` e `getEntriesResumoMensal` ganharam o param OPCIONAL
+ *     `excluirCronograma:boolean` (default ausente → comportamento INTACTO p/ os demais consumidores, ex.:
+ *     `FinanceiroConciliacao.tsx`). Quando `true`, acrescenta a condição LITERAL
+ *     `COALESCE(origem_modulo,'') <> 'cronograma_atividade'` — sem placeholder, logo NÃO interfere na
+ *     ligação posicional do `dbExecute`. Como o filtro vale tanto pra listagem quanto pro count e pro
+ *     resumo mensal, o total, o limite de 500 e as bolinhas da timeline passam a refletir só caixa real.
+ *  2) `client/src/pages/financeiro/FinanceiroLancamentos.tsx`: as duas queries (`getEntries` +
+ *     `getEntriesResumoMensal`) passam `excluirCronograma: true`.
+ *
+ * RESSALVA: mudança restrita à tela de Lançamentos. A função Cronograma (Cronograma Financeiro, import,
+ * etc.) e qualquer outra tela que consome `getEntries` seguem 100% inalteradas; nenhum dado foi tocado —
+ * os lançamentos `cronograma_atividade` continuam no banco, só não aparecem nesta listagem.
+ *
  * Rev. 3135 — **FINANCEIRO / ANÁLISE DE CUSTOS · O SELETOR/GRÁFICO "CENTRO DE CUSTO" PASSOU A LISTAR OS
  * CENTROS DE CUSTO CADASTRADOS (RH, DIRETORIA, DESPESAS GERAIS DE OBRAS, FINANCEIRO…) NO LUGAR DAS
  * OBRAS — TANTO NO DASHBOARD QUANTO NA TELA DE DETALHE (FILTRO + EDIÇÃO/RECLASSIFICAÇÃO EM LOTE).**

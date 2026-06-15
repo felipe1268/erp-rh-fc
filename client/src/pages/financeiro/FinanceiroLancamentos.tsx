@@ -135,6 +135,10 @@ export default function FinanceiroLancamentos() {
       dataFim: dataFim || undefined,
       tipo: tipo !== "all" ? tipo : undefined,
       status: statusFilter !== "all" ? statusFilter : undefined,
+      // Rev. 3136 — fora as projeções do cronograma: a tela de Lançamentos mostra só
+      // caixa REAL (o que entrou/saiu das contas). A função "Cronograma" segue intacta
+      // nas telas próprias (Cronograma Financeiro etc.).
+      excluirCronograma: true,
       limit: 500,
       offset: 0,
     },
@@ -164,7 +168,7 @@ export default function FinanceiroLancamentos() {
   // do Contas a Pagar): verde=consolidado (tudo pago/recebido), azul=com
   // lançamento (tem algo em aberto), cinza=sem dados.
   const { data: resumoMensal } = (trpc as any).financial.getEntriesResumoMensal.useQuery(
-    { companyId, ano, tipo: tipo !== "all" ? tipo : undefined },
+    { companyId, ano, tipo: tipo !== "all" ? tipo : undefined, excluirCronograma: true },
     { enabled: !!companyId }
   );
   const mesesStatus: Record<number, "consolidado" | "lancamento" | "vazio"> = (() => {
