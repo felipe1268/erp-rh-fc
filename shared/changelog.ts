@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3122 — **CONFIGURAÇÕES / "MÓDULOS DO SISTEMA" · O TOGGLE DO MÓDULO DE MEDIÇÃO DO CLIENTE FOI
+ * RENOMEADO DE "MEDIÇÃO" PARA "MEDIÇÃO CLIENTE" — AGORA BATE COM O NOME DO CARD NA HOME E DEIXA CLARA
+ * A DISTINÇÃO DO "MEDIÇÃO TERCEIROS" (QUE FICA LOGO ABAIXO NA LISTA).**
+ *
+ * PEDIDO (iPad, com prints da Home + Configurações): "Faltou ajustar a medição do cliente." Na HOME o
+ * card aparece como "Medição Cliente" (ModuleHub), mas na lista de toggles de Configurações → Módulos
+ * do Sistema o mesmo módulo aparecia só como "Medição" — inconsistência que, ao lado do recém-adicionado
+ * "Medição Terceiros" (Rev. 3120), ficava ambígua.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, 1 STRING — ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE): em
+ * `client/src/pages/Configuracoes.tsx`, a entrada `medicao` do `MODULE_INFO` teve o `label` trocado de
+ * "Medição" para "Medição Cliente" (subtitle "Medição de Contratos" e a key `medicao` permanecem
+ * intactos — nada muda no gating, no toggle persistido nem na navegação). Puramente cosmético/UX:
+ * alinha a nomenclatura Home ↔ Configurações.
+ *
  * Rev. 3121 — **RAIO-X DO FUNCIONÁRIO / ABA "ASOs" · A "FICHA DO ASO (LEITURA POR IA · REVISADA)" DEIXOU
  * DE SER BLOCOS DE TEXTO CORRIDO E VIROU UM CONJUNTO DE TABELAS ESTRUTURADAS (APTIDÕES, RESTRIÇÕES
  * ITEMIZADAS, FATORES DE RISCO POR CATEGORIA) — DADOS GRANULARES PRONTOS PARA LEITURA TABULAR E PARA
