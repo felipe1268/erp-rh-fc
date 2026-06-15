@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3110 — **COLABORADORES / RAIO-X DO FUNCIONÁRIO (ABA "DESEMPENHO") · A SEÇÃO "AVALIAÇÃO DO CLIENTE"
+ * GANHOU O BOTÃO "GERAR FICHA (PDF)" QUE EMITE UMA FICHA INSTITUCIONAL FC DA AVALIAÇÃO DO CLIENTE — PRONTA
+ * PARA IMPRIMIR OU SALVAR EM PDF E ENVIAR (EX.: WHATSAPP).**
+ *
+ * PEDIDO: gerar uma ficha em PDF da avaliação no Raio-X do Funcionário (prints IMG_2041/IMG_2042). Em
+ * `user_query` o usuário escolheu "Só a Avaliação do Cliente (notas + comentários do cliente)".
+ *
+ * SOLUÇÃO (FRONTEND-ONLY em `client/src/components/RaioXFuncionario.tsx`, ZERO ALTER/DROP/DELETE/SCHEMA/
+ * BACKEND):
+ *
+ * 1) Novo `gerarFichaAvaliacaoCliente()` (espelha o template do `handleExportSST`): abre janela de impressão
+ *    (window.open + print) com o cabeçalho institucional FC (faixa #1B2A4A, logo
+ *    `${origin}/logo-fc-branco-amarelo.png`, razão/CNPJ da empresa selecionada, "Emitido em/por") + barra do
+ *    colaborador (foto, nome, função, CPF, código, nº de avaliações).
+ *
+ * 2) Corpo: 5 cards de média (Geral/Gestor/Equipe/Prazo/Qualidade — cores 8+/6+/<6) + tabela
+ *    "Avaliações Registradas" com Data, Obra, as 5 notas coloridas e os "Comentários do Cliente"
+ *    (comentarioPositivo • comentarioMelhoria • comentarioGestor). Lê SOMENTE
+ *    `desempenho.avaliacaoCliente` (mesma fonte da tela; nada de avaliação interna).
+ *
+ * 3) Botão "Gerar Ficha (PDF)" (variant outline, ícone Printer) no cabeçalho do card "Avaliação do Cliente"
+ *    — só renderiza quando há avaliações (`avaliacaoCliente.total > 0`).
+ *
+ * SEGURANÇA: todo dado interpolado no HTML é escapado (`esc` p/ texto, `escAttr` p/ atributos — escapa aspas)
+ * e a `fotoUrl`/logo passam por `safeImgUrl` (allowlist http/https/blob/data:image) antes do `src` — evita
+ * injeção de atributo/`onerror` na janela de impressão.
+ *
  * Rev. 3109 — **COLABORADORES / GRADE DE TAMANHOS (EPI) · O DIÁLOGO "GRADE DE TAMANHOS" PASSOU A LISTAR
  * QUEM ESTÁ SEM OS DADOS DE EPI (COM FOTO E NOME) E A PERMITIR IMPRIMIR/GERAR PDF DESSA LISTA — ANTES SÓ
  * MOSTRAVA O CONTADOR "N SEM INFORMAÇÃO" SEM DIZER QUEM SÃO.**

@@ -808,6 +808,44 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
     setTimeout(() => printWindow.print(), 600);
   };
 
+  // Rev. 3110 — Ficha de Avaliação do Cliente (PDF/Imprimir) p/ enviar no WhatsApp
+  const gerarFichaAvaliacaoCliente = () => {
+    const ac = desempenho?.avaliacaoCliente;
+    if (!ac || ac.total === 0) return;
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+    const esc = (s: any) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const escAttr = (s: any) => esc(s).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    const safeImgUrl = (u: any) => { const s = String(u ?? "").trim(); return /^(https?:|blob:|data:image\/)/i.test(s) ? s : ""; };
+    const logoUrl = safeImgUrl(`${window.location.origin}/logo-fc-branco-amarelo.png?v=1712`);
+    const nomeEmpresa = selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || "Empresa";
+    const cnpjEmpresa = selectedCompany?.cnpj || "";
+    const corNota = (n: any) => n == null ? "#9ca3af" : Number(n) >= 8 ? "#166534" : Number(n) >= 6 ? "#854d0e" : "#991b1b";
+    const css = `@page{size:A4 portrait;margin:12mm 15mm 20mm 15mm}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;font-size:10px;color:#1a1a1a;line-height:1.4}.logo-bar{background:#1B2A4A;padding:14px 20px;display:flex;align-items:center;gap:16px;margin-bottom:16px;border-radius:6px}.logo-bar img{height:50px;object-fit:contain}.logo-bar .title{color:white;flex:1}.logo-bar .title h1{font-size:16px;font-weight:bold;letter-spacing:1.5px;margin-bottom:2px}.logo-bar .title p{font-size:10px;opacity:0.85}.logo-bar .info-right{color:white;text-align:right;font-size:9px;opacity:0.9}.logo-bar .info-right p{margin-bottom:2px}.emp-bar{background:#f0f4f8;border-left:4px solid #1B2A4A;padding:10px 16px;margin-bottom:14px;border-radius:0 4px 4px 0;display:flex;align-items:center;gap:12px}.emp-bar img{width:54px;height:54px;object-fit:cover;object-position:top;border-radius:50%;border:3px solid #1B2A4A}.emp-bar h2{font-size:15px;font-weight:700;color:#1B2A4A}.emp-bar .sub{font-size:10px;color:#4b5563;margin-top:2px}.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px}.card{border:1px solid #d1d9e6;border-radius:8px;padding:10px 6px;text-align:center;background:#f9fafb}.card .v{font-size:18px;font-weight:700}.card .l{font-size:9px;color:#6b7280;font-weight:600;margin-top:2px}.section-title{font-size:12px;font-weight:700;color:#1B2A4A;border-bottom:2px solid #2d4a7a;padding-bottom:3px;margin-bottom:6px}table{width:100%;border-collapse:collapse;font-size:9px;margin-bottom:4px}th{background:#e8edf4;color:#1B2A4A;font-weight:600;text-align:left;padding:4px 6px;border:1px solid #d1d9e6}td{padding:4px 6px;border:1px solid #e5e7eb;vertical-align:top}tr:nth-child(even){background:#f9fafb}.footer{margin-top:20px;border-top:1px solid #e5e7eb;padding-top:8px;display:flex;justify-content:space-between;font-size:8px;color:#6b7280}`;
+    let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ficha de Avaliação do Cliente - ${esc(emp?.nomeCompleto || "")}</title><style>${css}</style></head><body>`;
+    html += `<div class="logo-bar"><img src="${escAttr(logoUrl)}" alt="FC Engenharia" /><div class="title"><h1>FICHA DE AVALIAÇÃO DO CLIENTE</h1><p>${esc(nomeEmpresa.toUpperCase())}${cnpjEmpresa ? ' — CNPJ: ' + esc(cnpjEmpresa) : ''}</p></div><div class="info-right"><p>Emitido em: ${esc(dataEmissao)}</p><p>Emitido por: ${esc(userName)}</p></div></div>`;
+    const fotoOk = safeImgUrl(emp?.fotoUrl);
+    html += `<div class="emp-bar">${fotoOk ? `<img src="${escAttr(fotoOk)}" alt="Foto" />` : ""}<div><h2>${esc(emp?.nomeCompleto || "-")}</h2><div class="sub">Função: ${esc(emp?.funcao || (emp as any)?.cargo || "-")} | CPF: ${esc(formatCPFSafe(emp?.cpf))}${(emp as any)?.codigoInterno ? ` | Cód: ${esc((emp as any).codigoInterno)}` : ""} | ${esc(fmtNum(ac.total))} avaliação(ões)</div></div></div>`;
+    const medias = [
+      { label: "Geral", v: ac.mediaGeral }, { label: "Gestor", v: ac.mediaGestor },
+      { label: "Equipe", v: ac.mediaEquipe }, { label: "Prazo", v: ac.mediaPrazo }, { label: "Qualidade", v: ac.mediaQualidade },
+    ];
+    html += `<div class="cards">` + medias.map((m) => `<div class="card"><div class="v" style="color:${corNota(m.v)}">${m.v != null ? esc(m.v) : "—"}</div><div class="l">${esc(m.label)}</div></div>`).join("") + `</div>`;
+    html += `<div class="section-title">Avaliações Registradas (${esc(fmtNum(ac.total))})</div>`;
+    html += `<table><thead><tr><th>Data</th><th>Obra</th><th style="text-align:center">Geral</th><th style="text-align:center">Gestor</th><th style="text-align:center">Equipe</th><th style="text-align:center">Prazo</th><th style="text-align:center">Qualid.</th><th>Comentários do Cliente</th></tr></thead><tbody>`;
+    (ac.historico || []).forEach((a: any) => {
+      const data = a.criadoEm ? formatDate(String(a.criadoEm).split("T")[0]) : (a.anoPeriodo || "—");
+      const cel = (n: any) => `<td style="text-align:center;color:${corNota(n)};font-weight:700">${n == null ? "—" : esc(n)}</td>`;
+      const coments = [a.comentarioPositivo, a.comentarioMelhoria, a.comentarioGestor].filter(Boolean).map(esc).join(" • ");
+      html += `<tr><td style="white-space:nowrap">${esc(data)}</td><td>${esc(a.obraNome || "—")}</td>${cel(a.notaGeral)}${cel(a.notaGestor)}${cel(a.notaEquipe)}${cel(a.notaPrazo)}${cel(a.notaQualidade)}<td>${coments || "—"}</td></tr>`;
+    });
+    html += `</tbody></table>`;
+    html += `<div class="footer"><span>ERP FC Engenharia — Avaliação do Cliente</span><span>LGPD: Dados protegidos pela Lei 13.709/2018</span><span>${esc(dataEmissao)}</span></div></body></html>`;
+    printWindow.document.write(html);
+    printWindow.document.close();
+    setTimeout(() => printWindow.print(), 600);
+  };
+
   // ===================== FULL SCREEN OVERLAY =====================
   return createPortal(
     <div className="fixed inset-0 z-50 bg-background flex flex-col" style={{ width: "100vw", height: "100dvh" }}>
@@ -3342,9 +3380,14 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                     </div>
                   ) : (
                     <div className="bg-white rounded-xl border p-6">
-                      <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-4">
-                        <Handshake className="h-5 w-5 text-amber-500" /> Avaliação do Cliente — {desempenho.avaliacaoCliente.total}
-                      </h3>
+                      <div className="flex items-center justify-between gap-2 mb-4">
+                        <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                          <Handshake className="h-5 w-5 text-amber-500" /> Avaliação do Cliente — {desempenho.avaliacaoCliente.total}
+                        </h3>
+                        <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={gerarFichaAvaliacaoCliente}>
+                          <Printer className="h-4 w-4" /> Gerar Ficha (PDF)
+                        </Button>
+                      </div>
                       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
                         {[
                           { label: "Geral", v: desempenho.avaliacaoCliente.mediaGeral },
