@@ -1,6 +1,50 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3117 — **CONTROLE DE DOCUMENTOS / NOVA ABA "MAPEAMENTO" (COBERTURA DE EXAMES DO ASO) ·
+ * RASTREIA QUEM FEZ / NÃO FEZ CADA EXAME (FOCO NA AVALIAÇÃO PSICOSSOCIAL) + LEITURA DOS PDFs
+ * POR IA (GEMINI) COM REVISÃO HUMANA OBRIGATÓRIA ANTES DE GRAVAR NO ASO.**
+ *
+ * PEDIDO: ter uma visão de cobertura de exames do ASO — principalmente quem realizou ou não a
+ * Avaliação Psicossocial — e, numa 2ª fase, deixar a IA ler os PDFs dos ASOs e pré-preencher
+ * campos estruturados (apto altura NR-35, espaço confinado NR-33, restrições) para conferência.
+ *
+ * SOLUÇÃO — FASE 1 (SEM IA, dados já existentes em `asos.examesRealizados`):
+ *   • BACKEND (`server/routers/controleDocumentos.ts`): nova procedure `docs.asos.mapaCobertura`
+ *     (read-only, tenant-safe via `resolveCompanyIds`/guard de empresa). Retorna os colaboradores
+ *     ATIVOS + o último ASO vigente de cada um + os exames PARSEADOS para um conjunto canônico
+ *     (`EXAMES_CANONICOS` + `normalizarExame`/`detectarExamesCanonicos` — match de texto tolerante
+ *     a acentos/variações, ex.: "psicossocial", "avaliação psicossocial", "psicológico"), com
+ *     flags por colaborador (tem exame X? data, status válido/vencido via `calcularStatusASO`,
+ *     resultado). Psicossocial é só um dos exames canônicos — a aba serve a qualquer exame.
+ *   • FRONTEND (`client/src/pages/ControleDocumentos.tsx`): novo `TabsTrigger`/`TabsContent`
+ *     "mapeamento" (teal + `CheckCircle2`) com o componente `MapeamentoPanel`: KPIs clicáveis
+ *     (ativos / com ASO / fez em dia / fez vencido / não fez), filtro por exame (default
+ *     Psicossocial), tabela colaborador + último ASO + fez? + resultado, e impressão padrão FC
+ *     da lista de pendentes.
+ *
+ * SOLUÇÃO — FASE 2 (IA Gemini com REVISÃO HUMANA — NADA é aplicado ao ASO sem aprovação):
+ *   • SCHEMA ADITIVO (`drizzle/schema.ts`): colunas novas em `asos` (`aptoAltura`,
+ *     `aptoEspacoConfinado`, `restricoes`) + nova tabela `aso_extracao_ia` (asoId, companyId,
+ *     employeeId, status, extracaoBrutaJson, aptoAltura, aptoEspacoConfinado, restricoes,
+ *     fatoresRisco, examesDetectadosJson, confianca, revisadoPor/Em, createdAt). Self-heal
+ *     `[SyncSchema+]` em `server/_core/index.ts` cria tudo com `ADD COLUMN/TABLE IF NOT EXISTS`
+ *     (ZERO ALTER/DROP/DELETE). Confirmado no boot: "Rev. 3117: colunas estruturadas em asos +
+ *     tabela aso_extracao_ia garantidas".
+ *   • BACKEND IA (`controleDocumentos.ts`): `docs.asos.lerComIA(asoId)` e `docs.asos.lerLoteIA`
+ *     baixam o PDF do ASO (`documentoUrl`) → base64 → `invokeGeminiVision` (`server/_core/llm.ts`)
+ *     com `ASO_IA_SCHEMA`/`ASO_IA_PROMPT` estruturados → `parseAsoIaLoose` (tolerante) → gravam na
+ *     fila com status "aguardando_revisao". `docs.asos.listExtracoesIA` lista a fila;
+ *     `docs.asos.aprovarExtracaoIA` aplica nos campos do ASO; `docs.asos.rejeitarExtracaoIA`
+ *     descarta. TODAS gateadas por `assertAiModuleEnabled(companyId, "rh")` + tenant guard
+ *     (resolveCompanyIds + verificação de que asoId/extracaoId pertence à empresa).
+ *   • FRONTEND IA (`ControleDocumentos.tsx`): no `MapeamentoPanel`, botão "Ler ASOs com IA (lote)"
+ *     + toggle "Revisão por IA" no header; painel de revisão (extraído × atual, Aprovar/Descartar,
+ *     confiança %); botão IA (`Sparkles`) por linha da tabela quando há PDF.
+ *
+ * GARANTIAS: ZERO ALTER/DROP/DELETE (só ADD IF NOT EXISTS). App sobe limpo, self-heal Rev. 3117
+ * confirmado no Neon, typecheck limpo nos arquivos tocados.
+ *
  * Rev. 3116 — **COLABORADORES / GRADE DE TAMANHOS (EPI) · O DIÁLOGO AGORA ABRE EM TELA CHEIA
  * NO iPad/iPhone — ANTES ERA UM RETÂNGULO ESTREITO (max-w-2xl) QUE CORTAVA A COLUNA "CALÇA"
  * (Qtd e tamanhos truncados à direita).**

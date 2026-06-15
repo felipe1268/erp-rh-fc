@@ -832,6 +832,42 @@ Regras:
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_cp_employee ON company_partners(company_id, employee_id) WHERE employee_id IS NOT NULL`);
           console.log(`[SyncSchema+] Rev. 3051: coluna employee_id garantida em company_partners (unificação de sócios).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA company_partners.employee_id:`, e?.message || e); }
+
+        // Rev. 3117 — Mapeamento/Cobertura de exames do ASO + extração por IA (Fase 2).
+        // Colunas estruturadas em asos (camelCase, aspas obrigatórias) + tabela-fila
+        // aso_extracao_ia (snake_case). ADD COLUMN/TABLE IF NOT EXISTS (R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`ALTER TABLE asos ADD COLUMN IF NOT EXISTS "aptoAltura" TEXT`);
+          await db.execute(sql`ALTER TABLE asos ADD COLUMN IF NOT EXISTS "aptoEspacoConfinado" TEXT`);
+          await db.execute(sql`ALTER TABLE asos ADD COLUMN IF NOT EXISTS "restricoes" TEXT`);
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS aso_extracao_ia (
+              id SERIAL PRIMARY KEY,
+              aso_id INTEGER NOT NULL,
+              company_id INTEGER NOT NULL,
+              employee_id INTEGER NOT NULL,
+              status VARCHAR(30) DEFAULT 'aguardando_revisao' NOT NULL,
+              extracao_bruta_json TEXT,
+              resultado VARCHAR(50),
+              apto_altura VARCHAR(60),
+              apto_espaco_confinado VARCHAR(60),
+              restricoes TEXT,
+              fatores_risco TEXT,
+              exames_detectados_json TEXT,
+              confianca INTEGER,
+              erro_msg TEXT,
+              modelo VARCHAR(60),
+              revisado_por VARCHAR(255),
+              revisado_por_user_id INTEGER,
+              revisado_em TIMESTAMP,
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_aso_extr_company ON aso_extracao_ia(company_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_aso_extr_aso ON aso_extracao_ia(aso_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_aso_extr_status ON aso_extracao_ia(company_id, status)`);
+          console.log(`[SyncSchema+] Rev. 3117: colunas estruturadas em asos + tabela aso_extracao_ia garantidas.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA aso_extracao_ia:`, e?.message || e); }
         // Rev. 3051 — unicidade do vínculo sócio↔financeiro (1 registro financeiro por
         // employee dentro da empresa). Índice parcial (só employee_id NOT NULL) — não
         // afeta registros legados sem vínculo. Try/catch isolado: se houver duplicata

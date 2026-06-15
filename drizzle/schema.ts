@@ -92,6 +92,10 @@ export const asos = pgTable("asos", {
         clinica: varchar({ length: 255 }),
         observacoes: text(),
         documentoUrl: text(),
+        // Rev. 3117 — campos estruturados extraídos do laudo (Fase 2/IA, com revisão humana).
+        aptoAltura: text(),
+        aptoEspacoConfinado: text(),
+        restricoes: text(),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         deletedAt: timestamp({ mode: 'string' }),
@@ -102,6 +106,37 @@ export const asos = pgTable("asos", {
         index("idx_aso_company").on(table.companyId),
         index("idx_aso_employee").on(table.employeeId),
         index("idx_aso_validade").on(table.companyId, table.dataValidade),
+]);
+
+// Rev. 3117 — Fila de EXTRAÇÃO POR IA dos PDFs de ASO (Fase 2). A IA lê o laudo
+// e devolve campos estruturados que ficam em "aguardando_revisao" até um humano
+// aprovar (jamais grava laudo médico automaticamente). Colunas snake_case
+// (criadas via self-heal [SyncSchema+]).
+export const asoExtracaoIa = pgTable("aso_extracao_ia", {
+        id: serial("id").primaryKey().notNull(),
+        asoId: integer("aso_id").notNull(),
+        companyId: integer("company_id").notNull(),
+        employeeId: integer("employee_id").notNull(),
+        status: varchar("status", { length: 30 }).default('aguardando_revisao').notNull(),
+        extracaoBrutaJson: text("extracao_bruta_json"),
+        resultado: varchar("resultado", { length: 50 }),
+        aptoAltura: varchar("apto_altura", { length: 60 }),
+        aptoEspacoConfinado: varchar("apto_espaco_confinado", { length: 60 }),
+        restricoes: text("restricoes"),
+        fatoresRisco: text("fatores_risco"),
+        examesDetectadosJson: text("exames_detectados_json"),
+        confianca: integer("confianca"),
+        erroMsg: text("erro_msg"),
+        modelo: varchar("modelo", { length: 60 }),
+        revisadoPor: varchar("revisado_por", { length: 255 }),
+        revisadoPorUserId: integer("revisado_por_user_id"),
+        revisadoEm: timestamp("revisado_em", { mode: 'string' }),
+        createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+},
+(table) => [
+        index("idx_aso_extr_company").on(table.companyId),
+        index("idx_aso_extr_aso").on(table.asoId),
+        index("idx_aso_extr_status").on(table.companyId, table.status),
 ]);
 
 export const atestados = pgTable("atestados", {

@@ -19,7 +19,7 @@ import { nowBrasilia, todayBrasiliaLong } from "@/lib/dateUtils";
 import { removeAccents } from "@/lib/searchUtils";
 import {
   Search, FileText, AlertTriangle, ShieldAlert, GraduationCap, Stethoscope,
-  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X, Paperclip, Clock, Shield, ExternalLink, Filter, CheckCircle2, Zap, Info, PenTool, Building2, BookOpen, Users, MessageSquare, Loader2, ChevronDown, ChevronRight, Lock
+  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X, Paperclip, Clock, Shield, ExternalLink, Filter, CheckCircle2, Zap, Info, PenTool, Building2, BookOpen, Users, MessageSquare, Loader2, ChevronDown, ChevronRight, Lock, Sparkles, ClipboardCheck
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback, useRef, Fragment } from "react";
 import { toast } from "sonner";
@@ -892,6 +892,317 @@ function SemASOPanel({ companyId, companyIds, onClickEmployee, onCreateAso }: { 
                     </td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============ COMPONENTE: MAPEAMENTO / COBERTURA DE EXAMES (Rev. 3117) ============
+function MapeamentoPanel({ companyId, companyIds, onClickEmployee, empresaNome }: { companyId: number; companyIds?: number[]; onClickEmployee: (id: number) => void; empresaNome: string }) {
+  const { data, isLoading } = trpc.docs.asos.mapaCobertura.useQuery({ companyId, companyIds }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
+  const utils = trpc.useUtils();
+  const [exameKey, setExameKey] = useState("psicossocial");
+  const [statusFiltro, setStatusFiltro] = useState("todos");
+  const [search, setSearch] = useState("");
+  const [showRevisao, setShowRevisao] = useState(false);
+  const [iaLoadingId, setIaLoadingId] = useState<number | null>(null);
+
+  // ===== IA (Fase 2) — leitura de laudo com revisão humana =====
+  const revisaoQ = trpc.docs.asos.listExtracoesIA.useQuery({ companyId, companyIds, status: "aguardando_revisao" }, { enabled: showRevisao && !!companyId });
+  const fila = (revisaoQ.data as any[]) || [];
+  const lerComIA = trpc.docs.asos.lerComIA.useMutation({
+    onSuccess: () => { toast.success("ASO lido pela IA. Confira em 'Revisão por IA'."); setShowRevisao(true); revisaoQ.refetch(); },
+    onError: (e) => toast.error(e.message || "Falha ao ler o ASO com IA."),
+    onSettled: () => setIaLoadingId(null),
+  });
+  const lerLoteIA = trpc.docs.asos.lerLoteIA.useMutation({
+    onSuccess: (r: any) => { toast.success(`Lote processado: ${r.sucesso} ok, ${r.falha} falha(s).`); setShowRevisao(true); revisaoQ.refetch(); },
+    onError: (e) => toast.error(e.message || "Falha ao processar o lote."),
+  });
+  const aprovarIA = trpc.docs.asos.aprovarExtracaoIA.useMutation({
+    onSuccess: () => { toast.success("Extração aprovada e aplicada ao ASO."); revisaoQ.refetch(); utils.docs.asos.mapaCobertura.invalidate(); },
+    onError: (e) => toast.error(e.message || "Falha ao aprovar."),
+  });
+  const rejeitarIA = trpc.docs.asos.rejeitarExtracaoIA.useMutation({
+    onSuccess: () => { toast.success("Extração descartada."); revisaoQ.refetch(); },
+    onError: (e) => toast.error(e.message || "Falha ao rejeitar."),
+  });
+
+  const exames = (data?.exames as { key: string; label: string; total: number }[]) || [];
+  const colaboradores = (data?.colaboradores as any[]) || [];
+
+  // Garante que o exame selecionado existe nas opções; senão cai no 1º disponível.
+  useEffect(() => {
+    if (exames.length === 0) return;
+    if (!exames.some((e) => e.key === exameKey)) setExameKey(exames[0].key);
+  }, [exames, exameKey]);
+
+  const exameLabel = exames.find((e) => e.key === exameKey)?.label || "exame";
+
+  // Classifica cada colaborador em relação ao exame selecionado.
+  const classificar = (c: any): "fez_em_dia" | "fez_vencido" | "nao_fez" | "sem_aso" => {
+    if (!c.temAso) return "sem_aso";
+    const fez = (c.examesCanonicos || []).includes(exameKey);
+    if (!fez) return "nao_fez";
+    return c.status === "VENCIDO" ? "fez_vencido" : "fez_em_dia";
+  };
+
+  const enriquecidos = useMemo(() => colaboradores.map((c) => ({ ...c, _classe: classificar(c) })), [colaboradores, exameKey]);
+
+  const kpis = useMemo(() => {
+    const r = { total: enriquecidos.length, fezEmDia: 0, fezVencido: 0, naoFez: 0, semAso: 0 };
+    for (const c of enriquecidos) {
+      if (c._classe === "fez_em_dia") r.fezEmDia++;
+      else if (c._classe === "fez_vencido") r.fezVencido++;
+      else if (c._classe === "nao_fez") r.naoFez++;
+      else r.semAso++;
+    }
+    return r;
+  }, [enriquecidos]);
+
+  const filtrados = useMemo(() => {
+    let arr = enriquecidos;
+    if (statusFiltro !== "todos") arr = arr.filter((c) => c._classe === statusFiltro);
+    if (search) {
+      const s = removeAccents(search);
+      arr = arr.filter((c) => removeAccents(c.nomeCompleto || "").includes(s) || (c.cpf || "").includes(s));
+    }
+    return arr;
+  }, [enriquecidos, statusFiltro, search]);
+
+  // Pendentes do exame = não fez OU sem ASO (foco da cobrança).
+  const pendentes = useMemo(() => enriquecidos.filter((c) => c._classe === "nao_fez" || c._classe === "sem_aso"), [enriquecidos]);
+
+  const imprimirPendentes = () => {
+    const hoje = new Date().toLocaleDateString("pt-BR");
+    const esc = (s: any) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const linhas = pendentes
+      .map((c, i) => `<tr>
+        <td style="text-align:center">${i + 1}</td>
+        <td>${esc(c.nomeCompleto)}</td>
+        <td>${esc(c.cpf ? formatCPF(c.cpf) : "-")}</td>
+        <td>${esc(c.funcao || "-")}</td>
+        <td>${esc(c.obraNome || "-")}</td>
+        <td style="text-align:center">${c._classe === "sem_aso" ? "Sem ASO cadastrado" : "Exame não realizado"}</td>
+        <td style="text-align:center">${c.dataExame ? esc(formatDate(c.dataExame)) : "-"}</td>
+      </tr>`)
+      .join("");
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Pendentes — ${esc(exameLabel)}</title>
+      <style>
+        @page { size: A4 portrait; margin: 14mm 12mm 18mm 12mm; }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color:#111; }
+        .logo-bar { background:#1e3a6e; -webkit-print-color-adjust:exact; print-color-adjust:exact; padding:12px 18px; display:flex; align-items:center; gap:14px; }
+        .logo-bar img { height:46px; object-fit:contain; }
+        .logo-bar h1 { color:#fff; font-size:15px; letter-spacing:2px; }
+        .logo-bar p { color:#cdd8ef; font-size:9.5px; }
+        .meta { padding:10px 4px; display:flex; justify-content:space-between; border-bottom:2px solid #1e3a6e; margin-bottom:10px; }
+        .meta b { color:#1e3a6e; }
+        table { width:100%; border-collapse:collapse; }
+        th, td { border:1px solid #cbd5e1; padding:5px 6px; text-align:left; }
+        thead th { background:#eef2f8; -webkit-print-color-adjust:exact; print-color-adjust:exact; color:#1e3a6e; font-size:10px; text-transform:uppercase; }
+        tbody tr:nth-child(even) td { background:#f8fafc; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+        .footer { margin-top:14px; font-size:8.5px; color:#64748b; display:flex; justify-content:space-between; border-top:1px solid #e2e8f0; padding-top:6px; }
+      </style></head><body>
+      <div class="logo-bar">
+        <img src="${window.location.origin}/logo-fc-branco-amarelo.png?v=1712" alt="FC Engenharia" />
+        <div><h1>RELAÇÃO DE PENDÊNCIAS — ${esc(exameLabel.toUpperCase())}</h1><p>${esc(empresaNome)}</p></div>
+      </div>
+      <div class="meta"><span><b>Exame:</b> ${esc(exameLabel)}</span><span><b>Pendentes:</b> ${pendentes.length}</span><span><b>Emitido em:</b> ${hoje}</span></div>
+      <table>
+        <thead><tr><th style="width:28px">#</th><th>Colaborador</th><th>CPF</th><th>Função</th><th>Obra</th><th style="width:120px">Situação</th><th style="width:80px">Último ASO</th></tr></thead>
+        <tbody>${linhas || `<tr><td colspan="7" style="text-align:center;padding:18px">Nenhum colaborador pendente para este exame.</td></tr>`}</tbody>
+      </table>
+      <div class="footer"><span>ERP FC Engenharia — Controle de Documentos / Mapeamento de Exames</span><span class="lgpd">LGPD (Lei 13.709/2018) — Uso restrito e confidencial.</span></div>
+      </body></html>`;
+    const w = window.open("", "_blank");
+    if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 500); }
+  };
+
+  if (isLoading) return <div className="py-12 text-center text-muted-foreground">Carregando mapeamento...</div>;
+
+  const kpiCards = [
+    { label: "Colaboradores", valor: kpis.total, cor: "text-slate-700", bg: "bg-slate-50 border-slate-200", filtro: "todos" },
+    { label: "Fez — em dia", valor: kpis.fezEmDia, cor: "text-green-700", bg: "bg-green-50 border-green-200", filtro: "fez_em_dia" },
+    { label: "Fez — ASO vencido", valor: kpis.fezVencido, cor: "text-amber-700", bg: "bg-amber-50 border-amber-200", filtro: "fez_vencido" },
+    { label: "Não fez o exame", valor: kpis.naoFez, cor: "text-red-700", bg: "bg-red-50 border-red-200", filtro: "nao_fez" },
+    { label: "Sem ASO", valor: kpis.semAso, cor: "text-rose-700", bg: "bg-rose-50 border-rose-200", filtro: "sem_aso" },
+  ];
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-teal-600" />
+                Mapeamento / Cobertura de Exames
+              </CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">Quem fez e quem não fez cada exame, com base no ASO vigente de cada colaborador. Foco: <strong>Avaliação Psicossocial</strong>.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" className="gap-2 border-teal-300 text-teal-700 hover:bg-teal-50" onClick={imprimirPendentes} disabled={pendentes.length === 0}>
+                <Printer className="h-4 w-4" /> Imprimir pendentes ({pendentes.length})
+              </Button>
+              <Button size="sm" variant="outline" className="gap-2 border-violet-300 text-violet-700 hover:bg-violet-50" onClick={() => lerLoteIA.mutate({ companyId, companyIds, limite: 10 })} disabled={lerLoteIA.isPending}>
+                <Sparkles className="h-4 w-4" /> {lerLoteIA.isPending ? "Processando..." : "Ler ASOs com IA (lote)"}
+              </Button>
+              <Button size="sm" variant={showRevisao ? "default" : "outline"} className={`gap-2 ${showRevisao ? "bg-violet-600 hover:bg-violet-700" : "border-violet-300 text-violet-700 hover:bg-violet-50"}`} onClick={() => setShowRevisao((v) => !v)}>
+                <ClipboardCheck className="h-4 w-4" /> Revisão por IA{fila.length > 0 ? ` (${fila.length})` : ""}
+              </Button>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <div className="w-full sm:w-72">
+              <Select value={exameKey} onValueChange={(v) => { setExameKey(v); setStatusFiltro("todos"); }}>
+                <SelectTrigger><Filter className="h-4 w-4 mr-1 text-teal-600" /><SelectValue placeholder="Selecione o exame" /></SelectTrigger>
+                <SelectContent>
+                  {exames.map((e) => (
+                    <SelectItem key={e.key} value={e.key}>{e.label} ({e.total})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Buscar por nome ou CPF..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+            </div>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {/* KPIs — clicáveis para filtrar */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
+          {kpiCards.map((k) => (
+            <button
+              key={k.filtro}
+              onClick={() => setStatusFiltro(k.filtro)}
+              className={`text-left rounded-lg border-2 p-3 transition-all ${k.bg} ${statusFiltro === k.filtro ? "ring-2 ring-teal-400" : "hover:opacity-80"}`}
+            >
+              <div className={`text-2xl font-bold ${k.cor}`}>{k.valor}</div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">{k.label}</div>
+            </button>
+          ))}
+        </div>
+
+        {/* ===== Fila de REVISÃO POR IA (Fase 2) ===== */}
+        {showRevisao && (
+          <div className="mb-4 rounded-lg border-2 border-violet-200 bg-violet-50/40 p-3">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-semibold text-violet-800 flex items-center gap-2"><Sparkles className="h-4 w-4" /> Revisão das leituras da IA</h4>
+              <span className="text-[11px] text-violet-700">A IA pré-preenche; nada é aplicado ao ASO sem sua aprovação.</span>
+            </div>
+            {revisaoQ.isLoading ? (
+              <div className="py-6 text-center text-sm text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin inline mr-2" /> Carregando fila...</div>
+            ) : fila.length === 0 ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">Nenhuma leitura aguardando revisão. Use "Ler ASOs com IA (lote)" ou o botão IA de cada linha.</div>
+            ) : (
+              <div className="space-y-2">
+                {fila.map((f: any) => (
+                  <div key={f.id} className="rounded-md border bg-white p-3 text-sm">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <PersonPhoto src={f.fotoUrl} alt={f.nomeCompleto} size="sm" />
+                        <div>
+                          <button className="text-blue-600 hover:underline font-medium" onClick={() => onClickEmployee(f.employeeId)}>{f.nomeCompleto}</button>
+                          <div className="text-[11px] text-muted-foreground">{f.funcao || "-"} · ASO {f.dataExame ? formatDate(f.dataExame) : "-"}{typeof f.confianca === "number" ? ` · confiança ${f.confianca}%` : ""}</div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" className="gap-1 bg-green-600 hover:bg-green-700" onClick={() => aprovarIA.mutate({ extracaoId: f.id, companyId, companyIds })} disabled={aprovarIA.isPending}>
+                          <CheckCircle2 className="h-4 w-4" /> Aprovar
+                        </Button>
+                        <Button size="sm" variant="outline" className="gap-1 border-red-300 text-red-700 hover:bg-red-50" onClick={() => rejeitarIA.mutate({ extracaoId: f.id, companyId, companyIds })} disabled={rejeitarIA.isPending}>
+                          <X className="h-4 w-4" /> Descartar
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2 text-xs">
+                      <div className="rounded bg-violet-50 p-2"><span className="text-muted-foreground">Apto altura (NR-35): </span><strong>{f.aptoAltura || "—"}</strong>{f.aptoAlturaAtual ? <span className="text-muted-foreground"> (atual: {f.aptoAlturaAtual})</span> : null}</div>
+                      <div className="rounded bg-violet-50 p-2"><span className="text-muted-foreground">Espaço confinado (NR-33): </span><strong>{f.aptoEspacoConfinado || "—"}</strong>{f.aptoEspacoConfinadoAtual ? <span className="text-muted-foreground"> (atual: {f.aptoEspacoConfinadoAtual})</span> : null}</div>
+                      <div className="rounded bg-violet-50 p-2"><span className="text-muted-foreground">Resultado: </span><strong>{f.resultado || "—"}</strong></div>
+                    </div>
+                    {f.restricoes ? <div className="mt-1 text-xs"><span className="text-muted-foreground">Restrições: </span>{f.restricoes}</div> : null}
+                    {f.fatoresRisco ? <div className="mt-1 text-xs"><span className="text-muted-foreground">Fatores de risco: </span>{f.fatoresRisco}</div> : null}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {exames.length === 0 ? (
+          <div className="text-center py-10 text-muted-foreground">
+            <Stethoscope className="h-12 w-12 mx-auto mb-3 opacity-30" />
+            <p>Nenhum exame detectado nos ASOs cadastrados.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-teal-50/50">
+                  <th className="text-left p-2 font-medium">Colaborador</th>
+                  <th className="text-left p-2 font-medium">Função</th>
+                  <th className="text-left p-2 font-medium">Obra</th>
+                  <th className="text-left p-2 font-medium">Último ASO</th>
+                  <th className="text-center p-2 font-medium">{exameLabel}</th>
+                  <th className="text-left p-2 font-medium">Resultado</th>
+                  <th className="text-center p-2 font-medium">IA</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtrados.map((c) => (
+                  <tr key={c.employeeId} className="border-b hover:bg-muted/20">
+                    <td className="p-2">
+                      <div className="flex items-center gap-2">
+                        <PersonPhoto src={c.fotoUrl} alt={c.nomeCompleto} size="sm" />
+                        <div>
+                          <button className="text-blue-600 hover:underline font-medium text-left" onClick={() => onClickEmployee(c.employeeId)}>{c.nomeCompleto}</button>
+                          <div className="text-[11px] text-muted-foreground font-mono">{c.cpf ? formatCPF(c.cpf) : "-"}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-2 text-xs">{c.funcao || "-"}</td>
+                    <td className="p-2 text-xs">{c.obraNome || "-"}</td>
+                    <td className="p-2 text-xs">
+                      {c.temAso ? (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-mono">{formatDate(c.dataExame)}</span>
+                          <StatusBadge status={c.status} diasRestantes={c.diasRestantes ?? 0} />
+                        </div>
+                      ) : (
+                        <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100">SEM ASO</Badge>
+                      )}
+                    </td>
+                    <td className="p-2 text-center">
+                      {c._classe === "fez_em_dia" ? (
+                        <span className="inline-flex items-center gap-1 text-green-700"><CheckCircle2 className="h-4 w-4" /> Fez</span>
+                      ) : c._classe === "fez_vencido" ? (
+                        <span className="inline-flex items-center gap-1 text-amber-700"><AlertTriangle className="h-4 w-4" /> Fez (vencido)</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-red-600"><X className="h-4 w-4" /> Não fez</span>
+                      )}
+                    </td>
+                    <td className="p-2 text-xs">{c.resultado ? c.resultado.replace("_", " ") : "-"}</td>
+                    <td className="p-2 text-center">
+                      {c.temPdf ? (
+                        <Button size="sm" variant="ghost" className="h-7 px-2 text-violet-700 hover:bg-violet-50" title="Ler este ASO com IA" onClick={() => { setIaLoadingId(c.asoId); lerComIA.mutate({ asoId: c.asoId, companyId, companyIds }); }} disabled={lerComIA.isPending && iaLoadingId === c.asoId}>
+                          {lerComIA.isPending && iaLoadingId === c.asoId ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                        </Button>
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground">sem PDF</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {filtrados.length === 0 && (
+                  <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum colaborador para o filtro selecionado.</td></tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -2464,7 +2775,7 @@ export default function ControleDocumentos() {
               (md/lg = inclui iPad Pro 12.9" portrait 1024px) → 9 só em xl
               (≥1280px). Em qualquer iPad as 9 tabs ficam em 5×2 sem
               sobreposição; desktop wide volta pra linha única. */}
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-9 h-auto xl:h-12 gap-1 bg-transparent p-0">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-10 h-auto xl:h-12 gap-1 bg-transparent p-0">
             <TabsTrigger value="validade" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "validade" ? "border-red-500 bg-red-50 text-red-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-red-50/50 hover:text-red-600"}`}>
               <AlertTriangle className="h-4 w-4" /> Validade
             </TabsTrigger>
@@ -2473,6 +2784,9 @@ export default function ControleDocumentos() {
             </TabsTrigger>
             <TabsTrigger value="aso" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "aso" ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-blue-50/50 hover:text-blue-600"}`}>
               <Stethoscope className="h-4 w-4" /> ASO
+            </TabsTrigger>
+            <TabsTrigger value="mapeamento" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "mapeamento" ? "border-teal-500 bg-teal-50 text-teal-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-teal-50/50 hover:text-teal-600"}`}>
+              <CheckCircle2 className="h-4 w-4" /> Mapeamento
             </TabsTrigger>
             <TabsTrigger value="treinamentos" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "treinamentos" ? "border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-emerald-50/50 hover:text-emerald-600"}`}>
               <GraduationCap className="h-4 w-4" /> Treinamentos
@@ -2497,6 +2811,11 @@ export default function ControleDocumentos() {
           {/* ===================== ABA SEM ASO ===================== */}
           <TabsContent value="semASO">
             <SemASOPanel companyId={companyId} companyIds={companyIds} onClickEmployee={setRaioXEmployeeId} onCreateAso={(empId: number) => { setEditingAsoId(null); setAsoForm({ employeeId: empId }); setShowAsoDialog(true); }} />
+          </TabsContent>
+
+          {/* ===================== ABA MAPEAMENTO / COBERTURA ===================== */}
+          <TabsContent value="mapeamento">
+            <MapeamentoPanel companyId={companyId} companyIds={companyIds} onClickEmployee={setRaioXEmployeeId} empresaNome={nomeEmpresaCompleto} />
           </TabsContent>
 
           {/* ===================== ABA PAINEL DE VALIDADE ===================== */}

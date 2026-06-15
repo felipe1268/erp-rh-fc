@@ -1,16 +1,34 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
-import { getDb, userCanSeeAvisoStatus, userCanAccessEmployeeDossier } from "../db";
+import { getDb, userCanSeeAvisoStatus, userCanAccessEmployeeDossier, getCompaniesForUser } from "../db";
 import { TRPCError } from "@trpc/server";
 import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, employeeSiteHistory, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, heSolicitacaoFuncionarios, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados, ddsSessoes, ddsSessaoFuncionarios, signatureSessions, signatureSigners, equipamentoLocadoEventos, equipamentosLocados, users, clienteAvaliacoes, clienteAvaliacaoDetalhes } from "../../drizzle/schema";
 import { eq, and, desc, sql, ne, isNull, inArray, gte, lte, or, ilike } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
-import { storagePut } from "../storage";
+import { storagePut, dbRetrieve } from "../storage";
+import { assertAiModuleEnabled } from "../_core/aiConfig";
+import { invokeGeminiVision } from "../_core/llm";
+import { asoExtracaoIa } from "../../drizzle/schema";
 import { verificarAssinaturaMemorial } from "../services/assinaturaMemorial";
 import { logStatusChange } from "../lib/employeeStatusHelper";
 import { sendEmail } from "../services/smtpService";
 
 const LIMITE_DIAS_INSS = 15;
+
+// Guard multi-tenant: interseciona os companyIds pedidos com as empresas que o
+// usuário pode ver (admin/admin_master = todas). Bloqueia IDOR onde o cliente
+// envia companyId/companyIds de empresas a que não tem acesso. Lança se sobrar 0.
+async function resolveCompanyIdsGuard(
+  ctx: { user: { id: number; role?: string | null } },
+  input: { companyId: number; companyIds?: number[] }
+): Promise<number[]> {
+  const pedidos = resolveCompanyIds(input);
+  const permitidas = await getCompaniesForUser(ctx.user.id, (ctx.user.role || "") as string);
+  const permitidasSet = new Set(permitidas.map((c: any) => c.id));
+  const ok = pedidos.filter((id) => permitidasSet.has(id));
+  if (ok.length === 0) throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+  return ok;
+}
 
 // Rev. 2678 — Funcionários DESLIGADOS não entram no Controle de Documentos.
 // Mesma régua de "vínculo encerrado" usada em server/db.ts: status Desligado,
@@ -198,6 +216,195 @@ function calcularStatusASO(dataValidade: string): { status: string; diasRestante
   if (diasRestantes <= 7) return { status: `${diasRestantes} DIAS PARA VENCER`, diasRestantes };
   if (diasRestantes <= 30) return { status: `${diasRestantes} DIAS PARA VENCER`, diasRestantes };
   return { status: "VÁLIDO", diasRestantes };
+}
+
+// Rev. 3117 — Mapa/Cobertura de exames do ASO. Dicionário CANÔNICO usado para
+// detectar, a partir do texto livre `asos.examesRealizados`, quais exames cada
+// colaborador efetivamente fez. O foco do cliente é a "Avaliação Psicossocial",
+// mas a mesma régua serve para qualquer exame. Detecção por SUBSTRING normalizada
+// (sem acento, minúsculo) — robusta a vírgula/ponto-e-vírgula/quebra de linha.
+function normalizarExame(s: string): string {
+  return (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+
+const EXAMES_CANONICOS: { key: string; label: string; match: string[] }[] = [
+  { key: "psicossocial", label: "Avaliação Psicossocial", match: ["psicossocial"] },
+  { key: "audiometria", label: "Audiometria", match: ["audiometria"] },
+  { key: "acuidade_visual", label: "Acuidade Visual", match: ["acuidade visual"] },
+  { key: "avaliacao_clinica", label: "Avaliação Clínica", match: ["avaliacao clinica", "exame clinico", "avaliacao clinico"] },
+  { key: "ecg", label: "ECG (Eletrocardiograma)", match: ["ecg", "eletrocardiograma"] },
+  { key: "eeg", label: "EEG (Eletroencefalograma)", match: ["eletroencefalograma", "eeg"] },
+  { key: "espirometria", label: "Espirometria", match: ["espirometria"] },
+  { key: "hemograma", label: "Hemograma Completo", match: ["hemograma"] },
+  { key: "glicemia", label: "Glicemia de Jejum", match: ["glicemia"] },
+  { key: "raio_x_torax", label: "Raio-X de Tórax", match: ["raio-x de torax", "raio x de torax", "rx torax", "raio-x torax", "tórax", "torax"] },
+  { key: "raio_x_coluna", label: "Raio-X de Coluna", match: ["coluna"] },
+  { key: "eas_urina", label: "EAS (Urina)", match: ["eas", "urina"] },
+  { key: "toxicologico", label: "Toxicológico", match: ["toxicolog"] },
+  { key: "colinesterase", label: "Colinesterase", match: ["colinesterase"] },
+  { key: "hemoglobina_glicosilada", label: "Hemoglobina Glicosilada", match: ["hemoglobina glicosilada", "glicosilada"] },
+  { key: "colesterol", label: "Colesterol Total e Frações", match: ["colesterol"] },
+  { key: "triglicerides", label: "Triglicérides", match: ["triglicerid"] },
+  { key: "hepatico", label: "TGO/TGP (Hepático)", match: ["tgo", "tgp", "hepatic"] },
+  { key: "creatinina", label: "Creatinina", match: ["creatinina"] },
+  { key: "psa", label: "PSA", match: ["psa"] },
+  { key: "plumbemia", label: "Plumbemia (Chumbo)", match: ["plumbemia", "chumbo"] },
+];
+
+// Detecta quais exames canônicos aparecem no texto livre de exames realizados.
+function detectarExamesCanonicos(examesRealizados: string | null | undefined): string[] {
+  const txt = normalizarExame(examesRealizados || "");
+  if (!txt) return [];
+  const achados: string[] = [];
+  for (const ex of EXAMES_CANONICOS) {
+    if (ex.match.some((m) => txt.includes(m))) achados.push(ex.key);
+  }
+  return achados;
+}
+
+// ====================== IA — LEITURA DE LAUDO DE ASO (Rev. 3117, Fase 2) ======================
+// A IA lê o PDF do ASO e devolve campos ESTRUTURADOS (apto altura / espaço
+// confinado / restrições / fatores de risco / exames). NUNCA grava direto no
+// laudo: tudo entra na fila `aso_extracao_ia` com status "aguardando_revisao"
+// até um humano aprovar. Gateado por assertAiModuleEnabled(companyId,"rh").
+
+const ASO_IA_SCHEMA = {
+  type: "object",
+  properties: {
+    resultado: { type: "string" },            // Apto | Inapto | Apto com restrição | Não identificado
+    aptoAltura: { type: "string" },            // Apto | Inapto | Não avaliado
+    aptoEspacoConfinado: { type: "string" },   // Apto | Inapto | Não avaliado
+    restricoes: { type: "string" },            // restrições/observações médicas (texto)
+    fatoresRisco: { type: "string" },          // riscos ocupacionais citados (texto)
+    examesDetectados: { type: "array", items: { type: "string" } },
+    confianca: { type: "integer" },            // 0-100
+  },
+} as const;
+
+const ASO_IA_PROMPT = `Você é um analista de SST. Leia este ATESTADO DE SAÚDE OCUPACIONAL (ASO) e extraia, em português do Brasil, EXCLUSIVAMENTE as informações presentes no documento. Não invente. Se um campo não constar, use "Não avaliado" (para aptidões) ou string vazia.
+
+Devolva um JSON com:
+- "resultado": conclusão do ASO ("Apto", "Inapto", "Apto com restrição" ou "Não identificado").
+- "aptoAltura": aptidão para TRABALHO EM ALTURA (NR-35). Use "Apto", "Inapto" ou "Não avaliado".
+- "aptoEspacoConfinado": aptidão para ESPAÇO CONFINADO (NR-33). Use "Apto", "Inapto" ou "Não avaliado".
+- "restricoes": restrições/observações médicas registradas (texto curto). Vazio se não houver.
+- "fatoresRisco": riscos ocupacionais citados (ruído, poeira, químicos etc.). Vazio se não houver.
+- "examesDetectados": lista dos exames complementares realizados citados no laudo (ex.: "Audiometria", "Avaliação Psicossocial", "Hemograma").
+- "confianca": número 0-100 indicando sua confiança geral na extração.`;
+
+function parseAsoIaLoose(raw: string): any {
+  let txt = (raw || "").trim();
+  txt = txt.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  const first = txt.indexOf("{");
+  const last = txt.lastIndexOf("}");
+  if (first >= 0 && last > first) txt = txt.slice(first, last + 1);
+  return JSON.parse(txt);
+}
+
+// Lê o PDF/imagem de um ASO (a partir de documentoUrl) e devolve base64 + mime.
+// Fonte primária = uploaded_files (dbRetrieve), que é onde os 201 PDFs vivem;
+// fallback HTTP para URLs absolutas externas.
+async function lerArquivoAsoBase64(documentoUrl: string): Promise<{ base64: string; mimeType: string }> {
+  const url = (documentoUrl || "").trim();
+  if (!url) throw new Error("ASO sem documento anexado.");
+  const ext = (url.split("?")[0].split(".").pop() || "pdf").toLowerCase();
+  const mimeType = ext === "pdf" ? "application/pdf"
+    : ext === "png" ? "image/png"
+    : ext === "webp" ? "image/webp"
+    : (ext === "jpg" || ext === "jpeg") ? "image/jpeg"
+    : "application/pdf";
+
+  // 1) Tenta resolver a partir do banco (uploaded_files) por chave derivada da URL.
+  if (!/^https?:\/\//i.test(url)) {
+    const candidatos = [
+      url.replace(/^\/?uploads\//, "").replace(/^\//, ""),
+      url.replace(/^\//, ""),
+    ];
+    for (const key of candidatos) {
+      const got = await dbRetrieve(key);
+      if (got) return { base64: got.buffer.toString("base64"), mimeType: got.contentType || mimeType };
+    }
+  }
+
+  // 2) URL absoluta → fetch direto.
+  if (/^https?:\/\//i.test(url)) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Falha ao baixar o documento (${res.status}).`);
+    const buf = Buffer.from(await res.arrayBuffer());
+    return { base64: buf.toString("base64"), mimeType };
+  }
+
+  throw new Error("Documento do ASO não encontrado no armazenamento.");
+}
+
+// Núcleo compartilhado por lerComIA e lerLoteIA. Lê o ASO, chama o Gemini,
+// faz parse loose e UPSERT na fila aso_extracao_ia. Tenant-safe: só processa
+// se o ASO pertence a uma das empresas resolvidas. Falhas viram status "erro".
+async function processarAsoComIA(
+  db: any,
+  asoId: number,
+  ids: number[],
+  ctx: any,
+): Promise<{ ok: boolean; erro?: string; extracaoId?: number; extracao?: any }> {
+  const [aso] = await db
+    .select({ id: asos.id, companyId: asos.companyId, employeeId: asos.employeeId, documentoUrl: asos.documentoUrl })
+    .from(asos)
+    .where(and(eq(asos.id, asoId), isNull(asos.deletedAt)))
+    .limit(1);
+  if (!aso || !ids.includes(aso.companyId)) return { ok: false, erro: "ASO não encontrado." };
+  if (!aso.documentoUrl || !aso.documentoUrl.trim()) return { ok: false, erro: "ASO sem documento anexado." };
+
+  // UPSERT manual (sem DELETE): reaproveita a linha existente da fila se houver.
+  const [jaTem] = await db.select({ id: asoExtracaoIa.id }).from(asoExtracaoIa).where(eq(asoExtracaoIa.asoId, asoId)).limit(1);
+
+  try {
+    const { base64, mimeType } = await lerArquivoAsoBase64(aso.documentoUrl);
+    const raw = await invokeGeminiVision({
+      prompt: ASO_IA_PROMPT,
+      base64,
+      mimeType,
+      responseSchema: ASO_IA_SCHEMA as any,
+      maxTokens: 2048,
+    });
+    const ex = parseAsoIaLoose(raw);
+    const examesArr = Array.isArray(ex?.examesDetectados) ? ex.examesDetectados.map((s: any) => String(s)) : [];
+    const confianca = Number.isFinite(Number(ex?.confianca)) ? Math.max(0, Math.min(100, Math.round(Number(ex.confianca)))) : null;
+    const valores = {
+      asoId,
+      companyId: aso.companyId,
+      employeeId: aso.employeeId,
+      status: "aguardando_revisao",
+      extracaoBrutaJson: JSON.stringify(ex),
+      resultado: ex?.resultado ? String(ex.resultado).slice(0, 50) : null,
+      aptoAltura: ex?.aptoAltura ? String(ex.aptoAltura).slice(0, 60) : null,
+      aptoEspacoConfinado: ex?.aptoEspacoConfinado ? String(ex.aptoEspacoConfinado).slice(0, 60) : null,
+      restricoes: ex?.restricoes ? String(ex.restricoes) : null,
+      fatoresRisco: ex?.fatoresRisco ? String(ex.fatoresRisco) : null,
+      examesDetectadosJson: JSON.stringify(examesArr),
+      confianca,
+      erroMsg: null,
+      modelo: "gemini-2.5-flash",
+    };
+    let extracaoId: number;
+    if (jaTem) {
+      await db.update(asoExtracaoIa).set({ ...valores, revisadoPor: null, revisadoPorUserId: null, revisadoEm: null } as any).where(eq(asoExtracaoIa.id, jaTem.id));
+      extracaoId = jaTem.id;
+    } else {
+      const [ins] = await db.insert(asoExtracaoIa).values(valores as any).returning({ id: asoExtracaoIa.id });
+      extracaoId = ins.id;
+    }
+    return { ok: true, extracaoId, extracao: { ...valores, examesDetectados: examesArr } };
+  } catch (e: any) {
+    const msg = (e?.message || String(e)).slice(0, 500);
+    try {
+      if (jaTem) {
+        await db.update(asoExtracaoIa).set({ status: "erro", erroMsg: msg } as any).where(eq(asoExtracaoIa.id, jaTem.id));
+      } else {
+        await db.insert(asoExtracaoIa).values({ asoId, companyId: aso.companyId, employeeId: aso.employeeId, status: "erro", erroMsg: msg, modelo: "gemini-2.5-flash" } as any);
+      }
+    } catch { /* fila não materializada ainda — ignora */ }
+    return { ok: false, erro: msg };
+  }
 }
 
 async function abonarPontoPorAtestado(
@@ -608,6 +815,235 @@ export const controleDocumentosRouter = router({
         }
         await db.update(asos).set(updateData).where(eq(asos.id, input.id));
         return { url };
+      }),
+
+    // Rev. 3117 — MAPA / COBERTURA DE EXAMES (Fase 1, SEM IA).
+    // Para cada colaborador NÃO desligado, resolve o ASO VIGENTE (mais recente
+    // por data de exame) e detecta, via texto livre `examesRealizados`, quais
+    // exames canônicos foram feitos. Foco do cliente: "Avaliação Psicossocial"
+    // (quem fez / quem não fez). Retorna também a UNIÃO de exames presentes
+    // (para alimentar o filtro) e os colaboradores SEM nenhum ASO.
+    mapaCobertura: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
+      .query(async ({ ctx, input }) => {
+        const db = (await getDb())!;
+        const ids = await resolveCompanyIdsGuard(ctx, input);
+
+        // 1) Colaboradores NÃO desligados (mesma régua do Controle de Documentos)
+        //    com obra ativa (quando houver) — inclui Ativo/Aviso/Férias etc.
+        const emps = ((await db.execute(sql`
+          SELECT e.id, e."nomeCompleto", e.cpf, e.funcao, e."fotoUrl", e."dataAdmissao", e.status,
+            ob.nome as "obraNome"
+          FROM employees e
+          LEFT JOIN obra_funcionarios of2 ON of2."employeeId" = e.id AND of2."isActive" = 1
+          LEFT JOIN obras ob ON of2."obraId" = ob.id
+          WHERE e."companyId" IN (${sql.join(ids.map((id) => sql`${id}`), sql`,`)})
+            AND e."deletedAt" IS NULL
+            AND e.status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
+          ORDER BY e."nomeCompleto" ASC
+        `)) as any).rows as Array<{ id: number; nomeCompleto: string; cpf: string | null; funcao: string | null; fotoUrl: string | null; dataAdmissao: string | null; status: string; obraNome: string | null }>;
+
+        // 2) Todos os ASOs ativos da(s) empresa(s).
+        const asoRows = await db
+          .select({
+            id: asos.id,
+            employeeId: asos.employeeId,
+            tipo: asos.tipo,
+            dataExame: asos.dataExame,
+            dataValidade: asos.dataValidade,
+            resultado: asos.resultado,
+            examesRealizados: asos.examesRealizados,
+            documentoUrl: asos.documentoUrl,
+            observacoes: asos.observacoes,
+          })
+          .from(asos)
+          .where(and(inArray(asos.companyId, ids), isNull(asos.deletedAt)));
+
+        // ASO VIGENTE por colaborador = mais recente por dataExame (desempate por id).
+        const vigentePorEmp = new Map<number, typeof asoRows[number]>();
+        for (const a of asoRows) {
+          const atual = vigentePorEmp.get(a.employeeId);
+          if (!atual || (a.dataExame || "").localeCompare(atual.dataExame || "") > 0 || ((a.dataExame || "") === (atual.dataExame || "") && a.id > atual.id)) {
+            vigentePorEmp.set(a.employeeId, a);
+          }
+        }
+
+        const examesPresentes = new Set<string>();
+        const colaboradores = emps.map((e) => {
+          const aso = vigentePorEmp.get(e.id);
+          if (!aso) {
+            return {
+              employeeId: e.id, nomeCompleto: e.nomeCompleto, cpf: e.cpf, funcao: e.funcao,
+              fotoUrl: e.fotoUrl, obraNome: e.obraNome, statusFuncionario: e.status,
+              temAso: false, asoId: null as number | null, tipo: null as string | null,
+              dataExame: null as string | null, dataValidade: null as string | null,
+              resultado: null as string | null, status: "SEM ASO", diasRestantes: null as number | null,
+              examesCanonicos: [] as string[], examesTexto: null as string | null,
+              temPdf: false,
+            };
+          }
+          const examesCanonicos = detectarExamesCanonicos(aso.examesRealizados);
+          examesCanonicos.forEach((k) => examesPresentes.add(k));
+          const statusCalc = calcularStatusASO(aso.dataValidade);
+          return {
+            employeeId: e.id, nomeCompleto: e.nomeCompleto, cpf: e.cpf, funcao: e.funcao,
+            fotoUrl: e.fotoUrl, obraNome: e.obraNome, statusFuncionario: e.status,
+            temAso: true, asoId: aso.id, tipo: aso.tipo,
+            dataExame: aso.dataExame, dataValidade: aso.dataValidade,
+            resultado: aso.resultado, status: statusCalc.status, diasRestantes: statusCalc.diasRestantes,
+            examesCanonicos, examesTexto: aso.examesRealizados || null,
+            temPdf: !!(aso.documentoUrl && aso.documentoUrl.trim()),
+          };
+        });
+
+        // Opções de exame para o filtro: só os canônicos efetivamente presentes,
+        // na ordem do dicionário; "Avaliação Psicossocial" sempre vem primeiro.
+        const exames = EXAMES_CANONICOS
+          .filter((ex) => examesPresentes.has(ex.key))
+          .map((ex) => ({
+            key: ex.key,
+            label: ex.label,
+            total: colaboradores.filter((c) => c.examesCanonicos.includes(ex.key)).length,
+          }));
+
+        return { geradoEm: new Date().toISOString(), exames, colaboradores };
+      }),
+
+    // ============ IA (Fase 2) — LEITURA DE LAUDO COM REVISÃO HUMANA ============
+    // Lê 1 ASO com IA e grava o resultado na fila `aso_extracao_ia`
+    // (status "aguardando_revisao"). NUNCA aplica no laudo automaticamente.
+    lerComIA: protectedProcedure
+      .input(z.object({ asoId: z.number(), companyId: z.number(), companyIds: z.array(z.number()).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        await assertAiModuleEnabled(input.companyId, "rh");
+        const db = (await getDb())!;
+        const ids = await resolveCompanyIdsGuard(ctx, input);
+        const resultado = await processarAsoComIA(db, input.asoId, ids, ctx);
+        if (!resultado.ok) throw new TRPCError({ code: "BAD_REQUEST", message: resultado.erro });
+        return resultado;
+      }),
+
+    // Processa em LOTE os ASOs com PDF que ainda não têm extração (ou que falharam).
+    lerLoteIA: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), limite: z.number().min(1).max(50).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        await assertAiModuleEnabled(input.companyId, "rh");
+        const db = (await getDb())!;
+        const ids = await resolveCompanyIdsGuard(ctx, input);
+        const limite = input.limite ?? 10;
+        // ASOs ativos COM pdf que não têm extração concluída/pendente (status erro re-tenta).
+        const pend = ((await db.execute(sql`
+          SELECT a.id
+          FROM asos a
+          LEFT JOIN aso_extracao_ia x ON x.aso_id = a.id AND x.status IN ('aguardando_revisao', 'aprovado')
+          WHERE a."companyId" IN (${sql.join(ids.map((id) => sql`${id}`), sql`,`)})
+            AND a."deletedAt" IS NULL
+            AND a."documentoUrl" IS NOT NULL AND TRIM(a."documentoUrl") <> ''
+            AND x.id IS NULL
+          ORDER BY a.id DESC
+          LIMIT ${limite}
+        `)) as any).rows as Array<{ id: number }>;
+
+        let sucesso = 0, falha = 0;
+        const erros: string[] = [];
+        for (const r of pend) {
+          const res = await processarAsoComIA(db, r.id, ids, ctx);
+          if (res.ok) sucesso++;
+          else { falha++; if (erros.length < 10) erros.push(`ASO #${r.id}: ${res.erro}`); }
+        }
+        return { processados: pend.length, sucesso, falha, erros };
+      }),
+
+    // Fila de revisão: extrações pendentes (ou por status) com dados do colaborador.
+    listExtracoesIA: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), status: z.string().optional() }))
+      .query(async ({ ctx, input }) => {
+        await assertAiModuleEnabled(input.companyId, "rh");
+        const db = (await getDb())!;
+        const ids = await resolveCompanyIdsGuard(ctx, input);
+        const status = input.status || "aguardando_revisao";
+        const rows = ((await db.execute(sql`
+          SELECT x.id, x.aso_id AS "asoId", x.employee_id AS "employeeId", x.status,
+            x.resultado, x.apto_altura AS "aptoAltura", x.apto_espaco_confinado AS "aptoEspacoConfinado",
+            x.restricoes, x.fatores_risco AS "fatoresRisco", x.exames_detectados_json AS "examesDetectadosJson",
+            x.confianca, x.erro_msg AS "erroMsg", x.created_at AS "createdAt",
+            e."nomeCompleto", e.cpf, e.funcao, e."fotoUrl",
+            a.tipo, a."dataExame", a."dataValidade", a.resultado AS "resultadoAtual",
+            a."aptoAltura" AS "aptoAlturaAtual", a."aptoEspacoConfinado" AS "aptoEspacoConfinadoAtual",
+            a."restricoes" AS "restricoesAtual", a."documentoUrl"
+          FROM aso_extracao_ia x
+          JOIN asos a ON a.id = x.aso_id
+          JOIN employees e ON e.id = x.employee_id
+          WHERE x.company_id IN (${sql.join(ids.map((id) => sql`${id}`), sql`,`)})
+            AND x.status = ${status}
+          ORDER BY x.created_at DESC
+        `)) as any).rows;
+        return rows;
+      }),
+
+    // Aprova a extração: aplica os campos estruturados no ASO (com overrides do
+    // revisor) e marca a fila como aprovada. UPDATE (R-001/R-007/R-010 OK).
+    aprovarExtracaoIA: protectedProcedure
+      .input(z.object({
+        extracaoId: z.number(), companyId: z.number(), companyIds: z.array(z.number()).optional(),
+        overrides: z.object({
+          resultado: z.string().optional(),
+          aptoAltura: z.string().optional(),
+          aptoEspacoConfinado: z.string().optional(),
+          restricoes: z.string().optional(),
+        }).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await assertAiModuleEnabled(input.companyId, "rh");
+        const db = (await getDb())!;
+        const ids = await resolveCompanyIdsGuard(ctx, input);
+        const [ext] = await db.select().from(asoExtracaoIa).where(eq(asoExtracaoIa.id, input.extracaoId)).limit(1);
+        if (!ext || !ids.includes(ext.companyId)) throw new TRPCError({ code: "NOT_FOUND", message: "Extração não encontrada." });
+        if (ext.status !== "aguardando_revisao") throw new TRPCError({ code: "BAD_REQUEST", message: "Esta extração já foi revisada." });
+
+        const o = input.overrides || {};
+        const aptoAltura = o.aptoAltura ?? ext.aptoAltura ?? null;
+        const aptoEspacoConfinado = o.aptoEspacoConfinado ?? ext.aptoEspacoConfinado ?? null;
+        const restricoes = o.restricoes ?? ext.restricoes ?? null;
+
+        // Atômico: marca a fila como aprovada SÓ se ainda estiver pendente (guarda
+        // contra corrida/duplo-clique) e, no mesmo passo, aplica no ASO. Se outra
+        // chamada já aprovou, o UPDATE condicional não afeta linhas → aborta.
+        await db.transaction(async (tx) => {
+          const upd = (await tx.execute(sql`
+            UPDATE aso_extracao_ia
+            SET status = 'aprovado',
+                apto_altura = ${aptoAltura}, apto_espaco_confinado = ${aptoEspacoConfinado}, restricoes = ${restricoes},
+                revisado_por = ${ctx.user.name ?? "Sistema"}, revisado_por_user_id = ${ctx.user.id}, revisado_em = NOW()
+            WHERE id = ${input.extracaoId} AND status = 'aguardando_revisao'
+            RETURNING id
+          `)) as any;
+          if (!upd.rows || upd.rows.length === 0) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Esta extração já foi revisada." });
+          }
+          // Aplica no ASO (apenas colunas estruturadas aditivas; não toca no laudo bruto).
+          await tx.update(asos).set({ aptoAltura, aptoEspacoConfinado, restricoes, updatedAt: sql`NOW()` } as any).where(eq(asos.id, ext.asoId));
+        });
+
+        return { success: true };
+      }),
+
+    // Rejeita a extração (não aplica nada no ASO).
+    rejeitarExtracaoIA: protectedProcedure
+      .input(z.object({ extracaoId: z.number(), companyId: z.number(), companyIds: z.array(z.number()).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        await assertAiModuleEnabled(input.companyId, "rh");
+        const db = (await getDb())!;
+        const ids = await resolveCompanyIdsGuard(ctx, input);
+        const [ext] = await db.select().from(asoExtracaoIa).where(eq(asoExtracaoIa.id, input.extracaoId)).limit(1);
+        if (!ext || !ids.includes(ext.companyId)) throw new TRPCError({ code: "NOT_FOUND", message: "Extração não encontrada." });
+        await db.update(asoExtracaoIa).set({
+          status: "rejeitado",
+          revisadoPor: ctx.user.name ?? "Sistema",
+          revisadoPorUserId: ctx.user.id,
+          revisadoEm: sql`NOW()` as any,
+        }).where(eq(asoExtracaoIa.id, input.extracaoId));
+        return { success: true };
       }),
 
     importBatch: protectedProcedure
