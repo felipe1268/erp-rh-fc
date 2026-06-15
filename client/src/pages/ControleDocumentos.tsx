@@ -983,6 +983,22 @@ function MapeamentoPanel({ companyId, companyIds, onClickEmployee, empresaNome }
   const pendentes = useMemo(() => enriquecidos.filter((c) => c._classe === "nao_fez" || c._classe === "sem_aso"), [enriquecidos]);
 
   // ===== Multi-seleção p/ "Ler com IA" em lote (só linhas com PDF) =====
+  // Poda a seleção contra o dataset atual: ao trocar de empresa/contexto, asoIds que
+  // não existem mais (ou perderam o PDF) saem da seleção — evita disparar a IA em ASOs
+  // de outro recorte sem o usuário perceber.
+  const asoIdsValidos = useMemo(
+    () => new Set(colaboradores.filter((c) => c.temPdf).map((c) => c.asoId as number)),
+    [colaboradores],
+  );
+  useEffect(() => {
+    setSelecionados((prev) => {
+      let mudou = false;
+      const next = new Set<number>();
+      prev.forEach((id) => { if (asoIdsValidos.has(id)) next.add(id); else mudou = true; });
+      return mudou ? next : prev;
+    });
+  }, [asoIdsValidos]);
+
   const selecionaveis = useMemo(() => filtrados.filter((c) => c.temPdf), [filtrados]);
   const todosSelecionados = selecionaveis.length > 0 && selecionaveis.every((c) => selecionados.has(c.asoId));
   const toggleSelecionado = (asoId: number) => setSelecionados((prev) => {
