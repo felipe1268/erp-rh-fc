@@ -991,10 +991,20 @@ export const terceiroContratosRouter = router({
 
   listarItens: protectedProcedure
     .input(z.object({ contratoId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
+      // Rev. 3108 — guarda de tenant (code review): o endpoint só recebia contratoId.
+      // Resolve a empresa do contrato e exige acesso do chamador (anti-IDOR cross-tenant).
+      const [ctr] = await db.select({ companyId: terceiroContratos.companyId })
+        .from(terceiroContratos).where(eq(terceiroContratos.id, input.contratoId));
+      if (!ctr) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado." });
+      await _assertCompanyAccess(ctx.user, (ctr as any).companyId);
+
       const items = await db.select().from(terceiroContratoItens)
-        .where(eq(terceiroContratoItens.contratoId, input.contratoId))
+        .where(and(
+          eq(terceiroContratoItens.contratoId, input.contratoId),
+          eq(terceiroContratoItens.companyId, (ctr as any).companyId),
+        ))
         .orderBy(asc(terceiroContratoItens.ordem));
 
       const eapCodes = [...new Set(items.map(it => (it as any).eapCodigo).filter(Boolean))] as string[];

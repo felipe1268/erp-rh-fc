@@ -27,6 +27,10 @@
  *    HARDENING (code review): o mesmo fallback grava o buffer em disco a partir de `key` (derivada de
  *    `req.path`); adicionada guarda de PATH TRAVERSAL — `path.resolve(uploadsRoot, key)` precisa estar
  *    confinado a `server/uploads` (senão 400), impedindo escrita fora do diretório via chave maliciosa.
+ *    HARDENING #2 (code review da validação): `terceiroContratos.listarItens` só recebia `contratoId`,
+ *    sem `_assertCompanyAccess` e sem filtro por empresa — IDOR cross-tenant (consumido pelo novo fluxo de
+ *    levantamento de terceiros). Agora resolve a empresa do contrato, exige acesso do chamador
+ *    (FORBIDDEN/NOT_FOUND) e filtra `terceiro_contrato_itens` também por `company_id`.
  *
  * 2) DADOS (Neon, UPDATE em transação): corrigido `uploaded_files.content_type` dos 387 arquivos genéricos →
  *    96 atualizados pela extensão (89 image/jpeg, 5 image/webp, 2 image/png); restaram 291 `.dwg`/`.ifc` (CAD,
