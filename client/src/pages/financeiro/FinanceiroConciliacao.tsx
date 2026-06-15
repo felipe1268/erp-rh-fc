@@ -7,13 +7,22 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText } from "lucide-react";
+import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight } from "lucide-react";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+}
+
+function fmtData(v: any) {
+  if (!v) return "—";
+  try {
+    const d = typeof v === "string" ? new Date(v.length > 10 ? v : v + "T00:00:00") : new Date(v);
+    return isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR");
+  } catch { return "—"; }
 }
 
 function getDefaultDates() {
@@ -43,6 +52,9 @@ export default function FinanceiroConciliacao() {
   const [importFileName, setImportFileName] = useState("");
   const [csvSeparador, setCsvSeparador] = useState(";");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
+  const [toleranciaDias, setToleranciaDias] = useState(5);
+  const [selSug, setSelSug] = useState<Set<number>>(new Set());
 
   const { data: bankAccounts } = (trpc as any).financial.getBankAccounts.useQuery(
     { companyId },
@@ -80,6 +92,36 @@ export default function FinanceiroConciliacao() {
     },
     onError: (e: any) => toast({ title: "Erro na importação", description: e.message, variant: "destructive" }),
   });
+
+  const { data: sugData, isFetching: sugLoading, refetch: refetchSug } = (trpc as any).financial.sugerirConciliacao.useQuery(
+    { companyId, contaBancariaId: parseInt(contaBancariaId) || 0, dataInicio, dataFim, toleranciaDias },
+    { enabled: !!companyId && !!contaBancariaId && mostrarSugestoes }
+  );
+  const sugestoes: any[] = sugData?.sugestoes ?? [];
+  const semMatch: any[] = sugData?.semMatch ?? [];
+
+  const conciliarSugMut = (trpc as any).financial.conciliarSugestoes.useMutation({
+    onSuccess: (res: any) => {
+      toast({ title: `${res.conciliados} de ${res.total} conciliados e baixados!` });
+      setSelSug(new Set());
+      refetchSt();
+      refetchSug();
+    },
+    onError: (e: any) => toast({ title: "Erro ao conciliar", description: e.message, variant: "destructive" }),
+  });
+
+  const toggleSug = (id: number) => setSelSug(prev => {
+    const n = new Set(prev);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+  const selecionarAlta = () => setSelSug(new Set(sugestoes.filter(s => s.confianca === "alta").map(s => s.statementLineId)));
+  const selecionarTodas = () => setSelSug(new Set(sugestoes.map(s => s.statementLineId)));
+  const conciliarSelecionadas = () => {
+    const pares = sugestoes.filter(s => selSug.has(s.statementLineId)).map(s => ({ statementLineId: s.statementLineId, entryId: s.entryId }));
+    if (pares.length === 0) { toast({ title: "Selecione ao menos uma sugestão", variant: "destructive" }); return; }
+    conciliarSugMut.mutate({ companyId, pares });
+  };
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -203,6 +245,96 @@ export default function FinanceiroConciliacao() {
                 </CardContent>
               </Card>
             </div>
+
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-500" />
+                    Sugestões Automáticas de Conciliação
+                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs text-gray-500">Tolerância (dias)</Label>
+                    <Select value={String(toleranciaDias)} onValueChange={v => setToleranciaDias(parseInt(v))}>
+                      <SelectTrigger className="w-20 h-8"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {[0, 1, 2, 3, 5, 7, 10, 15, 30].map(d => <SelectItem key={d} value={String(d)}>{d}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      size="sm"
+                      variant={mostrarSugestoes ? "outline" : "default"}
+                      onClick={() => { setMostrarSugestoes(true); setSelSug(new Set()); if (mostrarSugestoes) refetchSug(); }}
+                      disabled={sugLoading}
+                    >
+                      <Sparkles className="w-4 h-4 mr-1" />
+                      {sugLoading ? "Analisando..." : mostrarSugestoes ? "Reanalisar" : "Sugerir conciliação"}
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              {mostrarSugestoes && (
+                <CardContent className="pt-0">
+                  {sugLoading ? (
+                    <p className="text-sm text-gray-500 py-6 text-center">Cruzando extrato × lançamentos por valor, direção e data…</p>
+                  ) : sugestoes.length === 0 ? (
+                    <p className="text-sm text-gray-500 py-6 text-center">
+                      Nenhuma sugestão automática para a conta/período selecionados.
+                      {sugData ? ` (${sugData.totalLinhas ?? 0} linha(s) de extrato analisada(s))` : ""}
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 flex-wrap text-sm">
+                        <Button size="sm" variant="outline" onClick={selecionarAlta}>Selecionar alta confiança</Button>
+                        <Button size="sm" variant="outline" onClick={selecionarTodas}>Selecionar todas</Button>
+                        <Button size="sm" variant="outline" onClick={() => setSelSug(new Set())}>Limpar</Button>
+                        <Button
+                          size="sm"
+                          className="ml-auto"
+                          onClick={conciliarSelecionadas}
+                          disabled={conciliarSugMut.isPending || selSug.size === 0}
+                        >
+                          <CheckCircle className="w-4 h-4 mr-1" />
+                          {conciliarSugMut.isPending ? "Conciliando..." : `Conciliar selecionadas (${selSug.size})`}
+                        </Button>
+                      </div>
+                      <div className="border rounded-md divide-y max-h-[480px] overflow-y-auto">
+                        {sugestoes.map(s => (
+                          <label key={s.statementLineId} className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer">
+                            <Checkbox checked={selSug.has(s.statementLineId)} onCheckedChange={() => toggleSug(s.statementLineId)} />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">Extrato</div>
+                              <div className="text-sm font-medium truncate">{s.extratoDescricao || "—"}</div>
+                              <div className="text-xs text-gray-500">{fmtData(s.extratoData)} · {formatBRL(Math.abs(s.extratoValor))}</div>
+                            </div>
+                            <ArrowRight className="w-4 h-4 text-gray-300 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">Lançamento</div>
+                              <div className="text-sm font-medium truncate">{s.entryFornecedor || s.entryDescricao || "—"}</div>
+                              <div className="text-xs text-gray-500 truncate">
+                                {fmtData(s.entryData)} · {formatBRL(Math.abs(s.entryValor))}
+                                {s.entryObra ? ` · ${s.entryObra}` : ""}
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-1 shrink-0">
+                              <Badge variant={s.confianca === "alta" ? "default" : "secondary"}>
+                                {s.confianca === "alta" ? "Alta" : "Média"}
+                              </Badge>
+                              <span className="text-[10px] text-gray-400">{s.deltaDias === 0 ? "mesmo dia" : `±${s.deltaDias}d`}</span>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                      {semMatch.length > 0 && (
+                        <p className="text-xs text-gray-400">
+                          {semMatch.length} linha(s) de extrato sem lançamento correspondente (concilie manualmente abaixo).
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              )}
+            </Card>
 
             <div className="grid grid-cols-2 gap-6">
               <Card className="border-0 shadow-sm">

@@ -1,6 +1,47 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3137 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O ERP AGORA LÊ O EXTRATO IMPORTADO E SUGERE
+ * AUTOMATICAMENTE, PARA CADA LINHA, O LANÇAMENTO QUE BATE — E CONCILIA EM LOTE DANDO BAIXA (PAGO/RECEBIDO)
+ * COM A DATA REAL DO EXTRATO (CAIXA REAL).**
+ *
+ * PEDIDO (iPad): "quero que o ERP faça a leitura dos extratos bancários e sugira a conciliação de cada
+ * lançamento — não ficar casando tudo manualmente." (Etapa 2 do plano de importação da planilha
+ * `Financeiro - Pagamentos 2026`: subir extrato por conta → conciliar por data+valor.)
+ *
+ * CONTEXTO/CAUSA: a tela `FinanceiroConciliacao.tsx` só tinha o matching MANUAL (selecionar 1 linha do
+ * extrato + 1 lançamento e clicar "Conciliar"). Com centenas de linhas por conta isso é inviável. O
+ * extrato já entra estruturado em `bank_statement_lines` (valor SINALIZADO: crédito +, débito −) e os
+ * lançamentos em `financial_entries` (valor em reais), então dá pra cruzar deterministicamente.
+ *
+ * CORREÇÃO (BACKEND ADITIVO + FRONTEND; ZERO ALTER/DROP/DELETE/SCHEMA):
+ *  1) `server/routers/financial.ts` — NOVO endpoint READ-ONLY `sugerirConciliacao` (companyId,
+ *     contaBancariaId, dataInicio?, dataFim?, toleranciaDias=5): pega as linhas de extrato NÃO conciliadas
+ *     da conta/período e os lançamentos NÃO conciliados/NÃO cancelados (da conta OU sem conta), e cruza por
+ *     VALOR (em CENTAVOS, evita ruído de float), DIREÇÃO (crédito↔receita / débito↔despesa; transferência
+ *     casa nos dois sentidos) e PROXIMIDADE DE DATA (janela `toleranciaDias`). Greedy pelo menor delta de
+ *     dias — cada linha e cada lançamento entram em no máx. 1 par. Retorna `sugestoes` (com confiança
+ *     alta/média), `semMatch` e `totalLinhas`. Usa `_assertFinanceiroCompanyAccess` (tenant).
+ *  2) `server/routers/financial.ts` — NOVO `conciliarSugestoes` (lote de pares {statementLineId, entryId}):
+ *     por par, marca a linha + o lançamento como conciliados E DÁ BAIXA — `status` vira pago/recebido
+ *     conforme o tipo e `data_pagamento = data do EXTRATO` (caixa REAL) quando ainda nula
+ *     (`COALESCE(data_pagamento, ...)`, não sobrescreve data manual existente); `valor_realizado =
+ *     COALESCE(valor_realizado, valor_previsto)`. Best-effort/idempotente (pula já conciliado/cancelado),
+ *     tenant-safe, RETURNING id p/ contar efetivos.
+ *  3) `client/src/pages/financeiro/FinanceiroConciliacao.tsx` — nova seção "Sugestões Automáticas de
+ *     Conciliação" (seletor de tolerância em dias, botão "Sugerir/Reanalisar", lista Extrato → Lançamento
+ *     com badge de confiança e Δ dias, "Selecionar alta confiança / todas / limpar" e "Conciliar
+ *     selecionadas (N)"). O matching manual antigo segue intacto abaixo p/ as linhas sem correspondência.
+ *
+ * NOTA TÉCNICA: o helper `dbExecute` (financial.ts) liga parâmetros por ORDEM DE APARIÇÃO do `$N` no texto
+ * (o número é cosmético) — todos os placeholders novos foram numerados em ordem ascendente de aparição com
+ * o array casando, p/ não corromper UPDATE.
+ *
+ * RESSALVA: a sugestão é uma PROPOSTA determinística (valor+direção+data) — o usuário confere e confirma;
+ * nada é gravado na simples geração da sugestão. Ainda PENDENTE (aguardando OK de escopo do usuário): o
+ * reset "fev/2026+ não considere nada pago" (status pago→a_pagar/a_receber + limpar data_pagamento), que
+ * mexe em dado real e por isso será executado só após o usuário escolher o escopo.
+ *
  * Rev. 3136 — **FINANCEIRO / LANÇAMENTOS · OS LANÇAMENTOS DE ORIGEM "CRONOGRAMA" (PROJEÇÕES DO VALOR DE
  * CONTRATO DISTRIBUÍDO MÊS A MÊS) SAÍRAM DA TELA DE LANÇAMENTOS — QUE AGORA MOSTRA SÓ CAIXA REAL (O QUE
  * REALMENTE ENTROU/SAIU DAS CONTAS, CONFORME LANÇAMENTOS E CONCILIAÇÃO BANCÁRIA).**

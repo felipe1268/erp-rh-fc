@@ -3237,6 +3237,152 @@ export const financialRouter = router({
     return { ok: true };
   }),
 
+  // Rev. 3137 — SUGESTÃO AUTOMÁTICA DE CONCILIAÇÃO. Lê o extrato (linhas ainda NÃO
+  // conciliadas) da conta + período e propõe, para CADA linha, o lançamento do
+  // sistema que casa por VALOR (em centavos, evita ruído de float), DIREÇÃO
+  // (crédito↔receita / débito↔despesa; transferência casa nos dois sentidos) e
+  // PROXIMIDADE DE DATA (janela `toleranciaDias`). Greedy pelo menor delta: cada
+  // linha e cada lançamento entram em no máx. 1 par. READ-ONLY (não grava nada).
+  sugerirConciliacao: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    contaBancariaId: z.number(),
+    dataInicio: z.string().optional(),
+    dataFim: z.string().optional(),
+    toleranciaDias: z.number().int().min(0).max(60).optional(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const tol = input.toleranciaDias ?? 5;
+
+    // dbExecute liga params por ORDEM DE APARIÇÃO ($N é cosmético) → manter ascendente.
+    const stConds = [`company_id=$1`, `conta_bancaria_id=$2`, `COALESCE(conciliado,0)=0`];
+    const stVals: any[] = [input.companyId, input.contaBancariaId];
+    let si = 3;
+    if (input.dataInicio) { stConds.push(`data>=$${si++}`); stVals.push(input.dataInicio); }
+    if (input.dataFim) { stConds.push(`data<=$${si++}`); stVals.push(input.dataFim); }
+    const stRes = await dbExecute(db,
+      `SELECT id, data, descricao, valor, tipo FROM bank_statement_lines
+       WHERE ${stConds.join(" AND ")} ORDER BY data ASC, id ASC`, stVals);
+    const linhas = rows(stRes) as any[];
+    if (linhas.length === 0) return { sugestoes: [], semMatch: [], totalLinhas: 0 };
+
+    // Lançamentos elegíveis: não conciliados, não cancelados, da conta (ou sem conta).
+    const entRes = await dbExecute(db,
+      `SELECT e.id, e.tipo, e.valor_previsto AS "valorPrevisto", e.valor_realizado AS "valorRealizado",
+              e.data_competencia AS "dataCompetencia", e.data_vencimento AS "dataVencimento",
+              e.data_pagamento AS "dataPagamento", e.descricao, e.fornecedor_nome AS "fornecedorNome",
+              e.conta_nome AS "contaNome", e.status, e.obra_nome AS "obraNome"
+       FROM financial_entries e
+       WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
+         AND (e.conta_bancaria_id=$2 OR e.conta_bancaria_id IS NULL)`,
+      [input.companyId, input.contaBancariaId]);
+    const entries = rows(entRes) as any[];
+
+    const toMs = (v: any) => {
+      if (!v) return null;
+      const s = typeof v === "string" ? v.slice(0, 10) : new Date(v).toISOString().slice(0, 10);
+      const t = Date.parse(s + "T00:00:00Z");
+      return isNaN(t) ? null : t;
+    };
+    const cents = (v: any) => Math.round(Math.abs(Number(v) || 0) * 100);
+    const entDate = (e: any) => toMs(e.dataPagamento) ?? toMs(e.dataVencimento) ?? toMs(e.dataCompetencia);
+    const entCents = (e: any) => cents(e.valorRealizado ?? e.valorPrevisto);
+
+    const byCents = new Map<number, any[]>();
+    for (const e of entries) { const k = entCents(e); if (!byCents.has(k)) byCents.set(k, []); byCents.get(k)!.push(e); }
+
+    type Cand = { linha: any; entry: any; delta: number };
+    const cands: Cand[] = [];
+    for (const ln of linhas) {
+      const lc = cents(ln.valor);
+      if (lc === 0) continue;
+      const dir = Number(ln.valor) >= 0 ? "receita" : "despesa";
+      const lms = toMs(ln.data);
+      for (const e of (byCents.get(lc) ?? [])) {
+        if (e.tipo !== dir && e.tipo !== "transferencia") continue;
+        const ems = entDate(e);
+        const delta = (lms != null && ems != null) ? Math.round(Math.abs(lms - ems) / 86400000) : 9999;
+        if (delta > tol) continue;
+        cands.push({ linha: ln, entry: e, delta });
+      }
+    }
+    const ambiguasPorLinha = new Map<number, number>();
+    for (const c of cands) ambiguasPorLinha.set(c.linha.id, (ambiguasPorLinha.get(c.linha.id) ?? 0) + 1);
+
+    cands.sort((a, b) => a.delta - b.delta || a.linha.id - b.linha.id);
+    const usadasLinha = new Set<number>(), usadasEntry = new Set<number>();
+    const sugestoes: any[] = [];
+    for (const c of cands) {
+      if (usadasLinha.has(c.linha.id) || usadasEntry.has(c.entry.id)) continue;
+      usadasLinha.add(c.linha.id); usadasEntry.add(c.entry.id);
+      const ambiguo = (ambiguasPorLinha.get(c.linha.id) ?? 1) > 1;
+      const ems = entDate(c.entry);
+      sugestoes.push({
+        statementLineId: c.linha.id, entryId: c.entry.id,
+        extratoData: c.linha.data, extratoDescricao: c.linha.descricao, extratoValor: Number(c.linha.valor),
+        entryDescricao: c.entry.descricao ?? c.entry.contaNome ?? "—",
+        entryFornecedor: c.entry.fornecedorNome ?? "", entryObra: c.entry.obraNome ?? "",
+        entryData: ems ? new Date(ems).toISOString().slice(0, 10) : null,
+        entryValor: Number(c.entry.valorRealizado ?? c.entry.valorPrevisto), entryTipo: c.entry.tipo,
+        deltaDias: c.delta, confianca: (!ambiguo && c.delta <= 1) ? "alta" : "media",
+      });
+    }
+    const matched = new Set(sugestoes.map(s => s.statementLineId));
+    const semMatch = linhas.filter(l => !matched.has(l.id))
+      .map(l => ({ statementLineId: l.id, data: l.data, descricao: l.descricao, valor: Number(l.valor) }));
+    return { sugestoes, semMatch, totalLinhas: linhas.length };
+  }),
+
+  // Rev. 3137 — CONCILIAÇÃO EM LOTE a partir das sugestões. Para cada par marca a
+  // linha do extrato + o lançamento como conciliados E dá BAIXA: status pago/recebido
+  // e `data_pagamento = data do EXTRATO` (caixa REAL) quando ainda não houver data.
+  // Best-effort por par (idempotente: pula o que já está conciliado/cancelado),
+  // tenant-safe. ZERO ALTER/DROP/DELETE.
+  conciliarSugestoes: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    pares: z.array(z.object({ statementLineId: z.number(), entryId: z.number() })).min(1),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    let conciliados = 0;
+    for (const p of input.pares) {
+      // 1) RESERVA ATÔMICA da linha do extrato — o guard COALESCE(conciliado,0)=0 no próprio
+      //    UPDATE garante UM ÚNICO VENCEDOR sob concorrência (sem transação/lock explícito):
+      //    dois pedidos simultâneos p/ a MESMA linha → só o 1º grava; o 2º recebe 0 linhas e pula.
+      const lnRes = await dbExecute(db,
+        `UPDATE bank_statement_lines SET conciliado=1, entry_id=$1
+          WHERE id=$2 AND company_id=$3 AND COALESCE(conciliado,0)=0
+          RETURNING data`,
+        [p.entryId, p.statementLineId, input.companyId]);
+      const ln = rows(lnRes)[0] as any;
+      if (!ln) continue; // linha já conciliada por outra requisição/par
+      const dataPg = typeof ln.data === "string" ? ln.data.slice(0, 10) : new Date(ln.data).toISOString().slice(0, 10);
+      // 2) Baixa do lançamento (guard idêntico → vencedor único do lado do lançamento também).
+      const upd = await dbExecute(db,
+        `UPDATE financial_entries
+            SET conciliado=1, data_conciliacao=CURRENT_DATE,
+                status = CASE WHEN tipo='receita' THEN 'recebido' ELSE 'pago' END,
+                data_pagamento = COALESCE(data_pagamento, $1::date),
+                valor_realizado = COALESCE(valor_realizado, valor_previsto)
+          WHERE id=$2 AND company_id=$3 AND COALESCE(conciliado,0)=0 AND status <> 'cancelado'
+          RETURNING id`,
+        [dataPg, p.entryId, input.companyId]);
+      if (rows(upd).length === 0) {
+        // 3) Lançamento já estava conciliado/cancelado (ou tomado por outro par) → DESFAZ a reserva
+        //    da linha p/ não deixar a linha conciliada apontando p/ um lançamento sem baixa.
+        await dbExecute(db,
+          `UPDATE bank_statement_lines SET conciliado=0, entry_id=NULL
+            WHERE id=$1 AND company_id=$2 AND entry_id=$3`,
+          [p.statementLineId, input.companyId, p.entryId]);
+        continue;
+      }
+      conciliados++;
+    }
+    return { ok: true, conciliados, total: input.pares.length };
+  }),
+
   // ─────────────────── RÉGUA DE COBRANÇA ───────────────────
 
   getCollectionRules: protectedProcedure.input(z.object({ companyId: z.number() })).query(async ({ input }) => {
