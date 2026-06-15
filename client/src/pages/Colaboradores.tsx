@@ -387,11 +387,22 @@ export default function Colaboradores() {
         .sort((x, y) => ordenar(x.tamanho, y.tamanho));
       return { itens, semInfo };
     };
+    const blank = (v: any) => !(v ?? "").toString().trim();
+    const semInfoList = ativos
+      .map((e: any) => ({
+        emp: e,
+        faltaCalcado: blank(e.tamanhoCalcado),
+        faltaCamisa: blank(e.tamanhoCamisa),
+        faltaCalca: blank(e.tamanhoCalca),
+      }))
+      .filter((x) => x.faltaCalcado || x.faltaCamisa || x.faltaCalca)
+      .sort((a, b) => (a.emp.nomeCompleto || "").localeCompare(b.emp.nomeCompleto || "", "pt-BR"));
     return {
       total: ativos.length,
       calcado: contar("tamanhoCalcado"),
       camisa: contar("tamanhoCamisa"),
       calca: contar("tamanhoCalca"),
+      semInfoList,
     };
   }, [employees]);
 
@@ -688,6 +699,61 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
     w.document.write(html);
     w.document.close();
     setTimeout(() => w.print(), 500);
+  };
+
+  // Rev. — Imprimir/PDF da lista de colaboradores ATIVOS sem dados de EPI
+  // (tamanho de calçado/camisa/calça em branco), com foto e nome.
+  const imprimirSemInfoEpi = () => {
+    const lista = gradeTamanhos.semInfoList;
+    if (!lista.length) { toast.error("Todos os colaboradores ativos já têm os tamanhos de EPI preenchidos."); return; }
+    const w = window.open("", "_blank");
+    if (!w) { toast.error("Popup bloqueado — libere e tente novamente."); return; }
+    const comp = companies?.find((c) => String(c.id) === String(selectedCompany));
+    const nomeEmpresa = (comp?.nomeFantasia || comp?.razaoSocial || "FC Engenharia").toUpperCase();
+    const cnpjEmpresa = comp?.cnpj || "";
+    const hoje = new Date().toLocaleDateString("pt-BR");
+    const esc = (s: any) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const escAttr = (s: any) => esc(s).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    const safeImgUrl = (u: any) => {
+      const s = String(u ?? "").trim();
+      return /^(https?:|blob:|data:image\/)/i.test(s) ? s : "";
+    };
+    const rows = lista.map((x, i) => {
+      const e: any = x.emp;
+      const iniciais = `${(e.nomeCompleto || "").charAt(0)}${((e.nomeCompleto || "").split(" ").pop() || "").charAt(0)}`.toUpperCase();
+      const fotoOk = safeImgUrl(e.fotoUrl);
+      const fotoCell = fotoOk
+        ? `<img class="foto" src="${escAttr(fotoOk)}" alt="" />`
+        : `<div class="foto ph">${esc(iniciais)}</div>`;
+      const faltam = [x.faltaCalcado && "Calçado", x.faltaCamisa && "Camisa", x.faltaCalca && "Calça"].filter(Boolean);
+      const faltaTags = faltam.map((f) => `<span class="tag">${f}</span>`).join(" ");
+      const sub = [e.funcao, e.obraAtualNome].filter(Boolean).map(esc).join(" • ");
+      return `<tr>
+        <td class="idx">${i + 1}</td>
+        <td class="cod">${esc(e.codigoInterno || "—")}</td>
+        <td class="nome-cell">${fotoCell}<div class="nome-wrap"><div class="nome">${esc(e.nomeCompleto || "—")}</div>${sub ? `<div class="sub">${sub}</div>` : ""}</div></td>
+        <td class="falta">${faltaTags}</td>
+      </tr>`;
+    }).join("");
+    const css = `@page{size:A4 portrait;margin:12mm 14mm 16mm 14mm}*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a1a}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+    .logo-bar{background:#1B2A4A;padding:12px 18px;display:flex;align-items:center;gap:14px;border-radius:6px;margin-bottom:12px;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+    .logo-bar img{height:46px;object-fit:contain}.logo-bar .t{color:#fff;flex:1}.logo-bar .t h1{font-size:15px;font-weight:bold;letter-spacing:1px}.logo-bar .t p{font-size:9px;opacity:.85;margin-top:2px}.logo-bar .r{color:#fff;text-align:right;font-size:9px;opacity:.9}
+    .subtitle{font-size:11px;color:#374151;margin-bottom:10px}.subtitle b{color:#1B2A4A}
+    table{width:100%;border-collapse:collapse}th{background:#e8edf4;color:#1B2A4A;font-weight:600;text-align:left;padding:6px 8px;border:1px solid #d1d9e6;font-size:10px;print-color-adjust:exact;-webkit-print-color-adjust:exact}td{padding:6px 8px;border:1px solid #e5e7eb;vertical-align:middle}tr{page-break-inside:avoid}tr:nth-child(even) td{background:#f9fafb}
+    .idx{width:26px;text-align:center;color:#6b7280;font-size:10px}.cod{width:60px;font-family:monospace;font-weight:bold;color:#1B2A4A;font-size:10px}
+    .nome-cell{display:flex;align-items:center;gap:10px}.foto{width:36px;height:36px;border-radius:50%;object-fit:cover;object-position:top;border:2px solid #c7d2fe;flex-shrink:0}.foto.ph{display:flex;align-items:center;justify-content:center;background:#dbeafe;color:#1e40af;font-weight:bold;font-size:11px}
+    .nome{font-weight:600}.sub{font-size:9px;color:#6b7280;margin-top:1px}
+    .falta{width:190px}.tag{display:inline-block;background:#fef2f2;color:#991b1b;border:1px solid #fecaca;border-radius:4px;padding:1px 6px;font-size:9px;font-weight:600;margin:1px 2px 1px 0;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+    .foot{margin-top:12px;font-size:9px;color:#9ca3af;text-align:right}`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Colaboradores sem dados de EPI</title><style>${css}</style></head><body>
+      <div class="logo-bar"><img src="${window.location.origin}/logo-fc.jpg" alt="FC" /><div class="t"><h1>COLABORADORES SEM DADOS DE EPI</h1><p>${esc(nomeEmpresa)}${cnpjEmpresa ? " — CNPJ: " + esc(cnpjEmpresa) : ""}</p></div><div class="r"><p>Emitido em ${hoje}</p><p>${lista.length} colaborador(es)</p></div></div>
+      <div class="subtitle">Lista de colaboradores <b>ativos</b> com tamanho de calçado, camisa e/ou calça <b>não informado</b>. Total: <b>${lista.length}</b> de ${gradeTamanhos.total} ativos.</div>
+      <table><thead><tr><th class="idx">#</th><th>Cód.</th><th>Colaborador</th><th>Falta informar</th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="foot">Gerado pelo ERP — ${esc(nomeEmpresa)}</div>
+    </body></html>`;
+    w.document.write(html);
+    w.document.close();
+    setTimeout(() => w.print(), 600);
   };
 
   const handleFotoUpload = (file: File) => {
@@ -1559,6 +1625,52 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
               </div>
             ))}
           </div>
+
+          {/* Lista de colaboradores ATIVOS sem dados de EPI (com foto e nome) */}
+          <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50/40">
+            <div className="px-3 py-2 border-b border-amber-200 flex items-center justify-between gap-2">
+              <div className="text-sm font-bold text-amber-800 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" /> Sem informação de EPI — {gradeTamanhos.semInfoList.length}
+              </div>
+              {gradeTamanhos.semInfoList.length > 0 && (
+                <Button size="sm" variant="outline" onClick={imprimirSemInfoEpi} className="gap-1.5 h-8 text-amber-800 border-amber-300 hover:bg-amber-100">
+                  <Printer className="h-3.5 w-3.5" /> Imprimir / PDF
+                </Button>
+              )}
+            </div>
+            {gradeTamanhos.semInfoList.length === 0 ? (
+              <p className="p-3 text-xs text-muted-foreground italic">Todos os colaboradores ativos têm os tamanhos preenchidos. 🎉</p>
+            ) : (
+              <div className="max-h-72 overflow-y-auto divide-y divide-amber-100">
+                {gradeTamanhos.semInfoList.map((x) => {
+                  const e: any = x.emp;
+                  const sub = [e.funcao, e.obraAtualNome].filter(Boolean).join(" • ");
+                  const faltam = [x.faltaCalcado && "Calçado", x.faltaCamisa && "Camisa", x.faltaCalca && "Calça"].filter(Boolean) as string[];
+                  return (
+                    <div key={e.id} className="flex items-center gap-3 px-3 py-2 hover:bg-amber-50">
+                      <div className="w-9 h-9 rounded-full overflow-hidden bg-blue-100 flex items-center justify-center shrink-0 border-2 border-blue-200">
+                        {e.fotoUrl ? (
+                          <img src={e.fotoUrl} alt="" className="w-full h-full object-cover object-top" />
+                        ) : (
+                          <span className="text-xs font-bold text-blue-700">{e.nomeCompleto?.charAt(0)}{e.nomeCompleto?.split(" ").pop()?.charAt(0)}</span>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-sm text-gray-800 truncate">{e.nomeCompleto}</div>
+                        {sub && <div className="text-[11px] text-muted-foreground truncate">{sub}</div>}
+                      </div>
+                      <div className="flex flex-wrap gap-1 justify-end shrink-0">
+                        {faltam.map((f) => (
+                          <span key={f} className="px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 text-[10px] font-semibold">{f}</span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setGradeOpen(false)}>Fechar</Button>
           </DialogFooter>

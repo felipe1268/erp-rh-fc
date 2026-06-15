@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3109 — **COLABORADORES / GRADE DE TAMANHOS (EPI) · O DIÁLOGO "GRADE DE TAMANHOS" PASSOU A LISTAR
+ * QUEM ESTÁ SEM OS DADOS DE EPI (COM FOTO E NOME) E A PERMITIR IMPRIMIR/GERAR PDF DESSA LISTA — ANTES SÓ
+ * MOSTRAVA O CONTADOR "N SEM INFORMAÇÃO" SEM DIZER QUEM SÃO.**
+ *
+ * PEDIDO: "Liste todos que não estão com os dados dos EPI, com nome e fotos" (print IMG_2043 — o popup
+ * "Grade de Tamanhos (EPI)" exibindo "24 sem informação" em Calçado/Camisa e "29 sem informação" em Calça,
+ * sem nenhuma forma de saber QUEM precisa ter o tamanho coletado).
+ *
+ * SOLUÇÃO (FRONTEND-ONLY em `client/src/pages/Colaboradores.tsx`, ZERO ALTER/DROP/DELETE/SCHEMA/BACKEND):
+ *
+ * 1) O `useMemo` `gradeTamanhos` (que já contava os tamanhos dos ATIVOS — status ≠ Desligado/Lista_Negra/
+ *    Inativo e não-listaNegra) ganhou `semInfoList`: a lista dos colaboradores ativos com `tamanhoCalcado`,
+ *    `tamanhoCamisa` e/ou `tamanhoCalca` em branco, cada um com flags `faltaCalcado/faltaCamisa/faltaCalca`,
+ *    ordenada por nome (pt-BR). Mesma definição de "em branco" do contador (`.trim()` vazio).
+ *
+ * 2) O `<Dialog>` da Grade de Tamanhos ganhou uma seção "Sem informação de EPI — N" abaixo das 3 colunas:
+ *    rola (max-h-72) e mostra POR PESSOA a foto (fotoUrl ou iniciais), nome, função • obra atual
+ *    (`obraAtualNome`) e badges vermelhos com EXATAMENTE o que falta (Calçado/Camisa/Calça).
+ *
+ * 3) Novo `imprimirSemInfoEpi()` abre uma janela de impressão (window.open + print) com o cabeçalho
+ *    institucional FC (faixa #1B2A4A, logo `${origin}/logo-fc.jpg`, razão/CNPJ da empresa selecionada,
+ *    data de emissão e contagem) e uma tabela com #, código interno, foto+nome+função/obra e as tags do
+ *    que falta — pronto para imprimir ou salvar como PDF e enviar (ex.: WhatsApp). Botão "Imprimir / PDF"
+ *    no cabeçalho da seção (só aparece quando há alguém na lista).
+ *
+ * Detalhe: lista cobre as 3 categorias de EPI numa visão única (quem falta QUALQUER tamanho aparece, com o
+ * detalhamento do que falta por pessoa). Sem mudança de dados nem de backend.
+ *
  * Rev. 3108 — **DOCUMENTOS / RAIO-X DO FUNCIONÁRIO (E TODO O APP) · O LINK "VER" DO ATESTADO (E DE QUALQUER
  * ANEXO PDF/IMAGEM) VOLTOU A ABRIR — ANTES O PREVIEW ABRIA EM BRANCO ("NÃO ABRIA") NO iPad/Safari PORQUE O
  * ARQUIVO ERA SERVIDO COM O CONTENT-TYPE GENÉRICO `application/octet-stream`, QUE O SAFARI SE RECUSA A
