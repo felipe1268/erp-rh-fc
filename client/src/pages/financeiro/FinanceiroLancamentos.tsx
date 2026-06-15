@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
@@ -122,6 +123,13 @@ export default function FinanceiroLancamentos() {
   // Rev. 2656 — Visualizar (detalhe read-only).
   const [viewId, setViewId] = useState<number | null>(null);
   const [showObs, setShowObs] = useState(false);
+  // Rev. 3139 — Seleção múltipla p/ baixa/estorno em lote (conciliação bancária).
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkBaixaOpen, setBulkBaixaOpen] = useState(false);
+  const [bulkBaixaData, setBulkBaixaData] = useState(new Date().toISOString().split("T")[0]);
+  const [bulkEstornarOpen, setBulkEstornarOpen] = useState(false);
+  const [bulkEstornarMotivo, setBulkEstornarMotivo] = useState("");
   const [form, setForm] = useState({ ...INITIAL_FORM });
 
   // Rev. 2082 — Cadastro inline de categoria sem sair do modal "Novo Lançamento".
@@ -249,6 +257,26 @@ export default function FinanceiroLancamentos() {
   const paidMut = (trpc as any).financial.updateEntryStatus.useMutation({
     onSuccess: () => { toast({ title: "Status atualizado!" }); refetch(); invalidarContas(); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+
+  // Rev. 3139 — Seleção múltipla + baixa/estorno em lote (conciliação bancária).
+  const bulkBaixaMut = (trpc as any).financial.bulkBaixa.useMutation({
+    onSuccess: (r: any) => {
+      toast({ title: "Baixa em lote concluída", description: `${r?.updated ?? 0} lançamento(s) marcados como pago/recebido.` });
+      setSelectedIds(new Set());
+      setBulkBaixaOpen(false);
+      refetch(); invalidarContas();
+    },
+    onError: (e: any) => toast({ title: "Erro na baixa em lote", description: e.message, variant: "destructive" }),
+  });
+  const bulkEstornarMut = (trpc as any).financial.bulkEstornar.useMutation({
+    onSuccess: (r: any) => {
+      toast({ title: "Estorno em lote concluído", description: `${r?.updated ?? 0} baixa(s) canceladas.` });
+      setSelectedIds(new Set());
+      setBulkEstornarOpen(false);
+      refetch(); invalidarContas();
+    },
+    onError: (e: any) => toast({ title: "Erro no estorno em lote", description: e.message, variant: "destructive" }),
   });
 
   // Rev. 2082 — Categorias (financial_accounts) + Centros de Custo + Mutation cadastro inline.
@@ -556,6 +584,20 @@ export default function FinanceiroLancamentos() {
   const totalReceitas = lancamentos.filter((l: any) => l.tipo === "receita" && l.status !== "cancelado").reduce((s: number, l: any) => s + Number(l.valorPrevisto ?? 0), 0);
   const totalDespesas = lancamentos.filter((l: any) => l.tipo === "despesa" && l.status !== "cancelado").reduce((s: number, l: any) => s + Number(l.valorPrevisto ?? 0), 0);
 
+  // Rev. 3139 — Seleção múltipla: só são selecionáveis lançamentos NÃO cancelados.
+  const selectableLancs = lancamentos.filter((l: any) => l.status !== "cancelado");
+  const selectableIds: number[] = selectableLancs.map((l: any) => l.id);
+  const allSelected = selectableIds.length > 0 && selectableIds.every((id: number) => selectedIds.has(id));
+  const toggleSelect = (id: number) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const toggleSelectAll = () => setSelectedIds(allSelected ? new Set() : new Set(selectableIds));
+  // Quantos dos selecionados estão aptos a cada ação (espelha o filtro do backend).
+  const selBaixaveis = selectableLancs.filter((l: any) => selectedIds.has(l.id) && !["pago", "recebido"].includes(l.status)).length;
+  const selEstornaveis = selectableLancs.filter((l: any) => selectedIds.has(l.id) && ["pago", "recebido"].includes(l.status)).length;
+
   const recEntries = recItems ?? [];
   const recAtivos = recEntries.filter((e: any) => e.ativo === 1);
   const recInativos = recEntries.filter((e: any) => e.ativo !== 1);
@@ -585,6 +627,13 @@ export default function FinanceiroLancamentos() {
                 onClick={() => generateMut.mutate({ companyId })}
                 disabled={generateMut.isPending}>
                 <Zap className="w-3.5 h-3.5 mr-1.5" />Gerar Pendentes
+              </Button>
+            )}
+            {aba === "lancamentos" && (
+              <Button variant={selecting ? "default" : "outline"} size="sm" className="h-9"
+                onClick={() => { setSelecting(v => !v); setSelectedIds(new Set()); }}>
+                <CheckCircle className="w-3.5 h-3.5 mr-1.5" />
+                {selecting ? "Sair da seleção" : "Seleção múltipla"}
               </Button>
             )}
             <Button onClick={openNew} className="bg-blue-600 hover:bg-blue-700 text-white">
@@ -740,6 +789,30 @@ export default function FinanceiroLancamentos() {
                   <Filter className="w-4 h-4" />
                   {lancamentos.length} lançamento(s)
                 </CardTitle>
+                {selecting && (
+                  <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer select-none">
+                      <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} />
+                      Selecionar todos
+                    </label>
+                    <span className="text-sm text-gray-500">{selectedIds.size} selecionado(s)</span>
+                    <div className="flex-1" />
+                    <Button size="sm" className="h-8 bg-green-600 hover:bg-green-700 text-white"
+                      disabled={selBaixaveis === 0 || bulkBaixaMut.isPending}
+                      onClick={() => { setBulkBaixaData(new Date().toISOString().split("T")[0]); setBulkBaixaOpen(true); }}>
+                      <CheckCircle className="w-3.5 h-3.5 mr-1.5" />Dar baixa como pago{selBaixaveis > 0 ? ` (${selBaixaveis})` : ""}
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-8 text-amber-700 border-amber-300 hover:bg-amber-50"
+                      disabled={selEstornaveis === 0 || bulkEstornarMut.isPending}
+                      onClick={() => { setBulkEstornarMotivo(""); setBulkEstornarOpen(true); }}>
+                      <RefreshCw className="w-3.5 h-3.5 mr-1.5" />Cancelar baixa{selEstornaveis > 0 ? ` (${selEstornaveis})` : ""}
+                    </Button>
+                    {selectedIds.size > 0 && (
+                      <Button size="sm" variant="ghost" className="h-8 text-gray-500"
+                        onClick={() => setSelectedIds(new Set())}>Limpar</Button>
+                    )}
+                  </div>
+                )}
               </CardHeader>
               <CardContent className="p-0">
                 {isLoading ? (
@@ -749,7 +822,16 @@ export default function FinanceiroLancamentos() {
                 ) : (
                   <div className="divide-y divide-gray-100">
                     {lancamentos.map((l: any) => (
-                      <div key={l.id} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50">
+                      <div key={l.id} className={`px-5 py-3 flex items-center justify-between hover:bg-gray-50 ${selecting && selectedIds.has(l.id) ? "bg-blue-50" : ""}`}>
+                        {selecting && (
+                          <div className="mr-3 flex-shrink-0">
+                            <Checkbox
+                              checked={selectedIds.has(l.id)}
+                              disabled={l.status === "cancelado"}
+                              onCheckedChange={() => toggleSelect(l.id)}
+                            />
+                          </div>
+                        )}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-sm font-medium text-gray-800 truncate">{l.descricao ?? l.contaNome ?? "—"}</span>
@@ -1574,6 +1656,79 @@ export default function FinanceiroLancamentos() {
               <Button variant="destructive" disabled={motivo.length < 5 || cancelMut.isPending}
                 onClick={() => cancelMut.mutate({ id: showCancel!.id, companyId, motivoCancelamento: motivo })}>
                 {cancelMut.isPending ? "Cancelando..." : "Confirmar Cancelamento"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 3139 — Confirmação: BAIXA EM LOTE (dar baixa como pago). */}
+        <Dialog open={bulkBaixaOpen} onOpenChange={(v) => { if (!v) setBulkBaixaOpen(false); }}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Dar baixa como pago</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <p className="text-sm text-gray-600">
+                <strong>{selBaixaveis}</strong> lançamento(s) serão marcados como <strong>pago/recebido</strong>.
+                {selectedIds.size > selBaixaveis && (
+                  <span className="block text-xs text-amber-600 mt-1">
+                    {selectedIds.size - selBaixaveis} já efetivado(s)/sem baixa pendente serão ignorados.
+                  </span>
+                )}
+              </p>
+              <div>
+                <Label>Data do pagamento</Label>
+                <Input type="date" value={bulkBaixaData} onChange={e => setBulkBaixaData(e.target.value)} className="mt-1" />
+                <p className="text-[11px] text-gray-400 mt-1">Aplicada apenas onde a data ainda estiver em branco.</p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setBulkBaixaOpen(false)}>Voltar</Button>
+              <Button className="bg-green-600 hover:bg-green-700 text-white"
+                disabled={selBaixaveis === 0 || bulkBaixaMut.isPending}
+                onClick={() => bulkBaixaMut.mutate({
+                  ids: Array.from(selectedIds),
+                  companyId,
+                  dataPagamento: bulkBaixaData || undefined,
+                })}>
+                {bulkBaixaMut.isPending ? "Processando..." : `Confirmar (${selBaixaveis})`}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 3139 — Confirmação: CANCELAR A BAIXA em lote (estorno). */}
+        <Dialog open={bulkEstornarOpen} onOpenChange={(v) => { if (!v) setBulkEstornarOpen(false); }}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Cancelar baixa</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <p className="text-sm text-gray-600">
+                <strong>{selEstornaveis}</strong> baixa(s) serão estornadas (voltam para <strong>a pagar/a receber</strong>),
+                limpando data e forma de pagamento.
+                {selectedIds.size > selEstornaveis && (
+                  <span className="block text-xs text-amber-600 mt-1">
+                    {selectedIds.size - selEstornaveis} não pago(s)/não recebido(s) serão ignorados.
+                  </span>
+                )}
+              </p>
+              <div>
+                <Label>Motivo (opcional)</Label>
+                <Textarea value={bulkEstornarMotivo} onChange={e => setBulkEstornarMotivo(e.target.value)} rows={2}
+                  placeholder="Ex.: ajuste de conciliação bancária" className="mt-1" />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setBulkEstornarOpen(false)}>Voltar</Button>
+              <Button variant="destructive"
+                disabled={selEstornaveis === 0 || bulkEstornarMut.isPending}
+                onClick={() => bulkEstornarMut.mutate({
+                  ids: Array.from(selectedIds),
+                  companyId,
+                  motivo: bulkEstornarMotivo.trim() || undefined,
+                })}>
+                {bulkEstornarMut.isPending ? "Processando..." : `Cancelar baixa (${selEstornaveis})`}
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -1623,6 +1623,87 @@ export const financialRouter = router({
     return { ok: true, updated };
   }),
 
+  // Rev. 3139 — BAIXA EM LOTE (multi-seleção da tela Lançamentos p/ conciliação
+  // bancária). Marca vários lançamentos como efetivados de uma vez, respeitando
+  // o tipo: receita → 'recebido', demais (despesa/imposto/transferência) → 'pago'.
+  // Só atua em títulos AINDA NÃO efetivados (a_pagar/a_receber/previsto/provisionado)
+  // — pulando já pagos/recebidos/cancelados. data_pagamento = data informada
+  // (default hoje quando vazia) só preenche se nula; valor_realizado = valor_previsto.
+  // Tenant-guard anti-IDOR via _assertFinanceiroCompanyAccess.
+  bulkBaixa: protectedProcedure.input(z.object({
+    ids: z.array(z.number()).min(1).max(500),
+    companyId: z.number(),
+    dataPagamento: z.string().optional(),
+    formaPagamento: z.string().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const idList = input.ids.filter(n => Number.isInteger(n) && n > 0);
+    if (idList.length === 0) return { ok: true, updated: 0 };
+    const res = await dbExecute(db,
+      `UPDATE financial_entries
+         SET status = CASE WHEN tipo='receita' THEN 'recebido' ELSE 'pago' END,
+             data_pagamento = COALESCE(data_pagamento, $1, CURRENT_DATE::text),
+             forma_pagamento = COALESCE($2, forma_pagamento),
+             valor_realizado = valor_previsto,
+             updated_at = NOW()
+       WHERE company_id = $3
+         AND id = ANY($4::int[])
+         AND status NOT IN ('pago','recebido','cancelado')
+       RETURNING id`,
+      [input.dataPagamento ?? null, input.formaPagamento ?? null, input.companyId, idList]
+    );
+    const updated = ((res as any).rows ?? []).length;
+    await createAuditLog({
+      action: "financial_entries_bulk_baixa",
+      userId: ctx.user?.id,
+      companyId: input.companyId,
+      details: `${updated} título(s) baixado(s) como pago/recebido (de ${idList.length} selecionado(s)) por ${ctx.user?.name ?? "?"}`,
+    });
+    return { ok: true, updated };
+  }),
+
+  // Rev. 3139 — ESTORNO (CANCELAR A BAIXA) EM LOTE. Reverte vários lançamentos
+  // pago→a_pagar / recebido→a_receber, limpando data_pagamento, valor_realizado,
+  // forma_pagamento e comprovante_url (mesma limpeza do estornarPagamento single).
+  // Só atua em títulos pago/recebido. Tenant-guard anti-IDOR.
+  bulkEstornar: protectedProcedure.input(z.object({
+    ids: z.array(z.number()).min(1).max(500),
+    companyId: z.number(),
+    motivo: z.string().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const idList = input.ids.filter(n => Number.isInteger(n) && n > 0);
+    if (idList.length === 0) return { ok: true, updated: 0 };
+    const motivo = (input.motivo ?? "").trim() || "Estorno em lote (conciliação bancária)";
+    const res = await dbExecute(db,
+      `UPDATE financial_entries
+         SET status = CASE WHEN status='recebido' THEN 'a_receber' WHEN status='pago' THEN 'a_pagar' ELSE status END,
+             data_pagamento = NULL,
+             valor_realizado = NULL,
+             forma_pagamento = NULL,
+             comprovante_url = NULL,
+             observacoes = CONCAT(COALESCE(observacoes,''), E'\n[ESTORNO LOTE ', TO_CHAR(NOW(),'DD/MM/YYYY HH24:MI'), ' por ', $1::text, ']: ', $2::text),
+             updated_at = NOW()
+       WHERE company_id = $3
+         AND id = ANY($4::int[])
+         AND status IN ('pago','recebido')
+       RETURNING id`,
+      [ctx.user?.name ?? "?", motivo, input.companyId, idList]
+    );
+    const updated = ((res as any).rows ?? []).length;
+    await createAuditLog({
+      action: "financial_entries_bulk_estorno",
+      userId: ctx.user?.id,
+      companyId: input.companyId,
+      details: `${updated} baixa(s) estornada(s) (de ${idList.length} selecionado(s)) por ${ctx.user?.name ?? "?"} — motivo: "${motivo}"`,
+    });
+    return { ok: true, updated };
+  }),
+
   cancelEntry: protectedProcedure.input(z.object({
     id: z.number(),
     companyId: z.number(),

@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3139 — **FINANCEIRO / LANÇAMENTOS · NOVO BOTÃO "SELEÇÃO MÚLTIPLA": O USUÁRIO MARCA VÁRIOS
+ * LANÇAMENTOS DE UMA VEZ E (A) DÁ BAIXA COMO PAGO/RECEBIDO EM LOTE OU (B) CANCELA A BAIXA (ESTORNO)
+ * EM LOTE — PARA AGILIZAR A CONCILIAÇÃO BANCÁRIA.**
+ *
+ * PEDIDO (iPad, print da tela "Lançamentos" 2026/Fev, 500 lançamentos, badges "Pago",
+ * origem importacao_excel): "coloque um botão para múltipla seleção... quero poder selecionar vários
+ * e dar baixa como pago, ou selecionar vários e cancelar a baixa... para fazer a conciliação bancária
+ * depois."
+ *
+ * CONTEXTO/CAUSA: a tela `FinanceiroLancamentos.tsx` só tinha baixa/estorno LINHA-A-LINHA (botão
+ * "Pagar"/"Receber" por item e o "X" de cancelar individual) — inviável para conciliar centenas de
+ * lançamentos importados da planilha `Financeiro - Pagamentos 2026`.
+ *
+ * CORREÇÃO (BACKEND ADITIVO + FRONTEND; ZERO ALTER/DROP/DELETE/SCHEMA):
+ * (1) NOVO endpoint `financial.bulkBaixa` (protectedProcedure) — recebe `ids[]` (máx 500) + companyId
+ *     + dataPagamento/formaPagamento opcionais; UM `UPDATE ... id = ANY($::int[])` marca em lote
+ *     respeitando o tipo (receita→'recebido', demais→'pago'), só nos títulos NÃO efetivados
+ *     (status NOT IN pago/recebido/cancelado), preenchendo `data_pagamento` via COALESCE (não
+ *     sobrescreve manual; default CURRENT_DATE) e `valor_realizado = valor_previsto`; RETURNING id
+ *     conta o efeito real; audit log.
+ * (2) NOVO endpoint `financial.bulkEstornar` — reverte em lote pago→a_pagar / recebido→a_receber
+ *     (CASE por status atual), só nos status pago/recebido, limpando data_pagamento/valor_realizado/
+ *     forma_pagamento/comprovante_url e anexando carimbo de estorno em `observacoes` (mesma limpeza
+ *     do `estornarPagamento` single); motivo opcional (default "Estorno em lote (conciliação
+ *     bancária)"); RETURNING id + audit log.
+ * (3) Ambos com tenant-guard anti-IDOR via `_assertFinanceiroCompanyAccess` (bulkUpdateStatus legado
+ *     não tinha; os novos têm). Placeholders `$N` ordenados por APARIÇÃO (dbExecute liga posicional).
+ * (4) `FinanceiroLancamentos.tsx` — botão "Seleção múltipla" no header (só aba Lançamentos); ao ativar,
+ *     aparece checkbox por linha + "Selecionar todos" + barra de ação com contador, "Dar baixa como
+ *     pago (N)", "Cancelar baixa (N)" e "Limpar". Os contadores (selBaixaveis/selEstornaveis) espelham
+ *     o filtro do backend, e cada ação tem um Dialog de confirmação (data de pagamento na baixa; motivo
+ *     opcional no estorno) avisando quantos selecionados serão ignorados por não estarem aptos.
+ *
+ * RESSALVA: a baixa NÃO concilia automaticamente contra extrato (isso é a sugestão automática da
+ * Rev. 3137); aqui é só efetivar/estornar em massa o status de caixa. Nenhum dado é tocado fora do
+ * UPDATE de status/baixa; tudo reversível pelo próprio "Cancelar baixa".
+ *
+ * Arquivos: `server/routers/financial.ts` (bulkBaixa + bulkEstornar), `client/src/pages/financeiro/
+ * FinanceiroLancamentos.tsx` (seleção múltipla + 2 dialogs), `shared/version.ts`.
+ *
  * Rev. 3138 — **PORTAL DO CLIENTE / AVALIAÇÃO (NPS) · O LINK DE PESQUISA JÁ RESPONDIDO NÃO É MAIS
  * "DESATIVADO": AO REABRIR, O CLIENTE VÊ UMA MENSAGEM AMIGÁVEL DE "PESQUISA JÁ CONCLUÍDA · OBRIGADO!"
  * EM VEZ DO TEXTO DE LIMITE MENSAL / "MÓDULO DESATIVADO".**
