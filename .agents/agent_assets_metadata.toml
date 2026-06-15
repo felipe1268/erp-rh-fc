@@ -191,3 +191,9 @@ id = "mGHP7pgNvbxtQ98AOBYKS"
 uri = "file://docs/Manual_Portal_Cliente_FC_Iniciante.pdf"
 type = "pdf"
 title = "Manual Iniciante v4.1 — correções do code review aplicadas"
+
+[[outputs]]
+id = "FKfojNGxssvlULHMjd_Ch"
+uri = "file://attached_assets/out/Relatorio_Importacao_Planilha_Aprovacao.xlsx"
+type = "table"
+title = "Relatório de Importação — Aprovação (Pagamentos 2026)"

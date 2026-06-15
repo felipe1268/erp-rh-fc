@@ -1,6 +1,49 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3132 — **FINANCEIRO / LANÇAMENTOS · IMPORTAÇÃO EM LOTE (VIA SCRIPT CONTROLADO, SEM MÓDULO/ABA)
+ * DA PLANILHA `Financeiro - Pagamentos 2026` INTEIRA — TODOS OS MESES — CADASTRANDO OS PAGAMENTOS
+ * QUE AINDA NÃO EXISTIAM NO ERP, SEM DUPLICAR O QUE JÁ FOI LANÇADO À MÃO.**
+ *
+ * PEDIDO (iPad): "Esta é a planilha com todos lançamentos. Leia toda ela, de todos os meses, e
+ * cadastre tudo que ainda não está no ERP, garantindo que não fará duplicações do que já foi
+ * cadastrado manualmente." Decisão do usuário: importar inclusive os casos duvidosos e os de
+ * Cliente/Faturamento Direto, MAS gerar um relatório de aprovação destacando-os (pois pode haver
+ * mesma data+valor com fornecedor diferente).
+ *
+ * BUG-RAIZ CORRIGIDO NA LEITURA: os valores da planilha são NÚMEROS NATIVOS (ex.: `304.8` =
+ * R$ 304,80), não texto BR. O parser anterior tratava como "2.800,00" e inflava/deflacionava os
+ * valores. Correção: ler `Valor Total Pago` / datas com `raw:true` (número/serial Excel) e usar
+ * `Math.round(parseFloat(v)*100)` dos DOIS lados (planilha e `valor_realizado`/`valor_previsto` do
+ * Neon), garantindo dedup consistente em centavos.
+ *
+ * ESCOPO REAL (Neon, company FC = 60002): planilha tem 3.143 pagamentos PAGOS (R$ 6.042.866,56),
+ * de fev/2025 e set/2025→mar/2026. Cruzando com os 10.931 lançamentos já existentes da FC por
+ * (valor em centavos + data±3d + token de fornecedor): 268 já existiam (PULADOS, não duplicados),
+ * 148 duvidosos (mesma data+valor, fornecedor difere), 2.727 novos. IMPORTADOS: 2.875
+ * (R$ 5.354.832,25 = 2.727 novos + 148 duvidosos; inclui 67 linhas Cliente/Fat.Direto).
+ *
+ * GRAVAÇÃO (TRANSAÇÃO ÚNICA; ZERO ALTER/DROP/DELETE — só INSERT/UPDATE de status): cada lançamento
+ * entra com `status='pago'`, `tipo='despesa'`, `natureza='variavel'`, `valor_previsto=valor_realizado`,
+ * datas (competência/vencimento/pagamento) da planilha, categoria em `conta_nome` (texto, igual aos
+ * manuais), `fornecedor_nome`, `forma_pagamento` mapeada, `conta_bancaria_id` resolvido p/ as contas
+ * cadastradas (SANTANDER FC→id4, CEF 3083-8→id2, CEF 2585-0→id3, CEF JF 1596-0→id5, Santander
+ * Locnow→id1; contas não cadastradas/multi-conta → null com a conta original guardada em
+ * `observacoes`). Categorias e obras genuinamente novas (após de-para por similaridade ≥0.6) foram
+ * criadas: 13 categorias (`financial_accounts`, codigo `IMP-NNN`) e 16 obras. RASTREABILIDADE E
+ * REVERSIBILIDADE: todo o lote leva `origem_modulo='importacao_excel'` e
+ * `origem_descricao='IMP_PLANILHA_v1|<classe>'` (classe = novo|loose|...), permitindo desfazer com
+ * um único `UPDATE financial_entries SET status='cancelado' WHERE company_id=60002 AND
+ * origem_modulo='importacao_excel' AND origem_descricao LIKE 'IMP_PLANILHA_v1%'` (SEM DELETE —
+ * SEMPRE com escopo de tenant `company_id`, nunca só pelo prefixo, p/ não tocar outras empresas).
+ * RESSALVA: a reversão é PARCIAL — cancela só os lançamentos; as 13 categorias e 16 obras criadas
+ * permanecem (são aditivas e inócuas se não usadas). Duvidosos levam `[REVISAR]` + nº do lançamento parecido em
+ * `observacoes`; Cliente/Fat.Direto levam `[CLIENTE/FAT.DIRETO]`. Entregue relatório de aprovação
+ * (xlsx) com comparativo mês a mês (planilha × importado × ERP total) + abas de duvidosos, cliente,
+ * categorias e obras criadas. RESSALVA: dedup exata não pega "mesmo pagamento lançado à mão com
+ * valor/nome diferente" — por isso o relatório de conferência. Conciliação de extrato/PIX é Etapa 2.
+ * Detalhe: este bloco.
+ *
  * Rev. 3131 — **RH / COLETA DE CAMPO · QUANDO A COLETA ATINGE 100% DOS FUNCIONÁRIOS A COLETAR ELA
  * AGORA SE FINALIZA SOZINHA (DÁ COMO "CONCLUÍDO" + FECHA O LINK / `ativo=0`) MESMO QUANDO A
  * CONCLUSÃO NÃO VEIO DO ÚLTIMO ENVIO PÚBLICO.**
