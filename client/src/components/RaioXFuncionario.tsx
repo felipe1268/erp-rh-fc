@@ -16,7 +16,7 @@ import {
   Palmtree, Shield, FileSignature, Ban, Star, Eye, ScrollText, Wrench,
   Package, PackageX, CheckCircle, XCircle, ShoppingCart,
   Trash2, Camera, Video, ImageIcon, Upload, ShieldCheck, Plus, Loader2, Pencil, RotateCcw, UserCheck, Handshake, Receipt, ExternalLink, MessageSquare,
-  Lock, RefreshCw,
+  Lock, RefreshCw, ThumbsUp, ThumbsDown,
 } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
@@ -129,6 +129,56 @@ const TIMELINE_COLORS: Record<string, string> = {
   purple: "bg-purple-500", amber: "bg-amber-500", teal: "bg-teal-500", cyan: "bg-cyan-500",
   emerald: "bg-emerald-500", indigo: "bg-indigo-500", gray: "bg-gray-400", violet: "bg-violet-500",
 };
+
+// Rev. 3114 — Critérios granulares da Avaliação do Cliente (Portal). Espelham
+// exatamente os blocos do formulário (PortalDashboardCliente.tsx). Usados para
+// detalhar TODOS os pontos analisados no Raio-X (tela + Ficha PDF), separando
+// pontos fortes de pontos a melhorar.
+const CRIT_PESSOA_RX: { key: string; label: string }[] = [
+  { key: "postura", label: "Postura e reforço positivo" },
+  { key: "documentos", label: "Entrega de documentos periódicos" },
+  { key: "prontoAtendimento", label: "Pronto atendimento" },
+  { key: "disponibilidade", label: "Disponibilidade" },
+  { key: "conhecimentoTecnico", label: "Conhecimento técnico" },
+  { key: "educacao", label: "Educação e cordialidade" },
+];
+const CRIT_EQUIPE_RX: { key: string; label: string }[] = [
+  { key: "tecnica", label: "Qualidade técnica do serviço" },
+  { key: "organizacao", label: "Organização e limpeza" },
+  { key: "seguranca", label: "Segurança (EPI / procedimentos)" },
+  { key: "pontualidade", label: "Pontualidade e assiduidade" },
+  { key: "educacao", label: "Educação e postura" },
+  { key: "comunicacao", label: "Comunicação e atendimento" },
+];
+const CRIT_ESCRITORIO_RX: { key: string; label: string }[] = [
+  { key: "atendimento", label: "Atendimento administrativo" },
+  { key: "documentacao", label: "Documentação e contratos" },
+  { key: "faturamento", label: "Faturamento e financeiro" },
+  { key: "agilidade", label: "Agilidade nas respostas" },
+  { key: "comunicacao", label: "Comunicação e transparência" },
+];
+const BLOCOS_AVAL_RX: { key: string; titulo: string; crit: { key: string; label: string }[] }[] = [
+  { key: "gestor", titulo: "Gestor", crit: CRIT_PESSOA_RX },
+  { key: "encarregado", titulo: "Encarregado", crit: CRIT_PESSOA_RX },
+  { key: "equipe", titulo: "Equipe Direta", crit: CRIT_EQUIPE_RX },
+  { key: "escritorio", titulo: "Escritório Central", crit: CRIT_ESCRITORIO_RX },
+];
+// Extrai todos os pontos {bloco, label, nota} de um objeto `detalhes` (jsonb).
+function extrairPontosAval(detalhes: any): { bloco: string; key: string; label: string; nota: number; nome?: string }[] {
+  if (!detalhes || typeof detalhes !== "object") return [];
+  const out: { bloco: string; key: string; label: string; nota: number; nome?: string }[] = [];
+  for (const b of BLOCOS_AVAL_RX) {
+    const dados = detalhes[b.key];
+    if (!dados || typeof dados !== "object") continue;
+    const nome = typeof dados.nome === "string" ? dados.nome : undefined;
+    for (const c of b.crit) {
+      const v = dados[c.key];
+      if (v == null || typeof v !== "number" || Number.isNaN(v)) continue;
+      out.push({ bloco: b.titulo, key: `${b.key}.${c.key}`, label: c.label, nota: v, nome });
+    }
+  }
+  return out;
+}
 
 interface RaioXProps {
   employeeId: number | null;
@@ -840,6 +890,46 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
       html += `<tr><td style="white-space:nowrap">${esc(data)}</td><td>${esc(a.obraNome || "—")}</td>${cel(a.notaGeral)}${cel(a.notaGestor)}${cel(a.notaEquipe)}${cel(a.notaPrazo)}${cel(a.notaQualidade)}<td>${coments || "—"}</td></tr>`;
     });
     html += `</tbody></table>`;
+
+    // Rev. 3114 — TODOS OS PONTOS ANALISADOS (critérios granulares) na Ficha.
+    const histDet = (ac.historico || []).filter((a: any) => extrairPontosAval(a.detalhes).length > 0);
+    if (histDet.length > 0) {
+      // Consolidado: média por critério.
+      const accF = new Map<string, { bloco: string; label: string; soma: number; n: number }>();
+      histDet.forEach((a: any) => {
+        extrairPontosAval(a.detalhes).forEach((p) => {
+          const cur = accF.get(p.key) || { bloco: p.bloco, label: p.label, soma: 0, n: 0 };
+          cur.soma += p.nota; cur.n += 1; accF.set(p.key, cur);
+        });
+      });
+      const consol = Array.from(accF.values()).map((c) => ({ ...c, media: Math.round((c.soma / c.n) * 10) / 10 }));
+      const fortesF = consol.filter((c) => c.media >= 8).sort((x, y) => y.media - x.media).slice(0, 6);
+      const fracosF = consol.filter((c) => c.media < 8).sort((x, y) => x.media - y.media).slice(0, 6);
+      const liItem = (c: any) => `<li style="display:flex;justify-content:space-between;gap:8px;padding:2px 0"><span>${esc(c.bloco)} · ${esc(c.label)}</span><b style="color:${corNota(c.media)}">${esc(c.media)}</b></li>`;
+      html += `<div class="section-title" style="margin-top:14px">Todos os Pontos Analisados</div>`;
+      html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">`;
+      html += `<div style="border:1px solid #bbf7d0;background:#f0fdf4;border-radius:6px;padding:8px"><div style="font-weight:700;color:#166534;font-size:9px;text-transform:uppercase;margin-bottom:4px">Pontos Fortes</div><ul style="list-style:none;font-size:9px">${fortesF.length ? fortesF.map(liItem).join("") : '<li style="color:#9ca3af">—</li>'}</ul></div>`;
+      html += `<div style="border:1px solid #fecaca;background:#fef2f2;border-radius:6px;padding:8px"><div style="font-weight:700;color:#991b1b;font-size:9px;text-transform:uppercase;margin-bottom:4px">Pontos a Melhorar</div><ul style="list-style:none;font-size:9px">${fracosF.length ? fracosF.map(liItem).join("") : '<li style="color:#9ca3af">Nenhum abaixo de 8</li>'}</ul></div>`;
+      html += `</div>`;
+      // Detalhe por avaliação.
+      histDet.forEach((a: any) => {
+        const data = a.criadoEm ? formatDate(String(a.criadoEm).split("T")[0]) : (a.anoPeriodo || "—");
+        html += `<div style="font-size:10px;font-weight:700;color:#1B2A4A;margin:8px 0 4px">${esc(a.obraNome || "—")} — ${esc(data)}</div>`;
+        html += `<table style="margin-bottom:6px"><thead><tr><th>Bloco</th><th>Critério</th><th style="text-align:center;width:50px">Nota</th></tr></thead><tbody>`;
+        BLOCOS_AVAL_RX.forEach((b) => {
+          const dados = a.detalhes?.[b.key];
+          if (!dados || typeof dados !== "object") return;
+          const itens = b.crit.map((c) => ({ label: c.label, nota: (dados as any)[c.key] })).filter((it) => typeof it.nota === "number");
+          if (itens.length === 0) return;
+          const blocoNome = dados.nome ? `${b.titulo} · ${esc(dados.nome)}` : b.titulo;
+          itens.forEach((it, i) => {
+            html += `<tr><td>${i === 0 ? blocoNome : ""}</td><td>${esc(it.label)}</td><td style="text-align:center;font-weight:700;color:${corNota(it.nota)}">${esc(it.nota)}</td></tr>`;
+          });
+        });
+        html += `</tbody></table>`;
+      });
+    }
+
     html += `<div class="footer"><span>ERP FC Engenharia — Avaliação do Cliente</span><span>LGPD: Dados protegidos pela Lei 13.709/2018</span><span>${esc(dataEmissao)}</span></div></body></html>`;
     printWindow.document.write(html);
     printWindow.document.close();
@@ -3439,6 +3529,114 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                           </tbody>
                         </table>
                       </div>
+
+                      {/* Rev. 3114 — TODOS OS PONTOS ANALISADOS (critérios granulares) */}
+                      {(() => {
+                        const hist = desempenho.avaliacaoCliente.historico as any[];
+                        const comDetalhes = hist.filter((a) => extrairPontosAval(a.detalhes).length > 0);
+                        if (comDetalhes.length === 0) return null;
+                        // Consolidado: média por critério (bloco+label) entre todas as avaliações.
+                        const acc = new Map<string, { key: string; bloco: string; label: string; soma: number; n: number }>();
+                        for (const a of comDetalhes) {
+                          for (const p of extrairPontosAval(a.detalhes)) {
+                            const cur = acc.get(p.key) || { key: p.key, bloco: p.bloco, label: p.label, soma: 0, n: 0 };
+                            cur.soma += p.nota; cur.n += 1; acc.set(p.key, cur);
+                          }
+                        }
+                        const consolidado = Array.from(acc.values())
+                          .map((c) => ({ ...c, media: Math.round((c.soma / c.n) * 10) / 10 }))
+                          .sort((x, y) => y.media - x.media);
+                        const fortes = consolidado.filter((c) => c.media >= 8).slice(0, 6);
+                        const fracos = consolidado.filter((c) => c.media < 8).sort((x, y) => x.media - y.media).slice(0, 6);
+                        const corBg = (n: number) => n >= 8 ? "bg-emerald-50 border-emerald-200" : n >= 6 ? "bg-amber-50 border-amber-200" : "bg-red-50 border-red-200";
+                        const corTxt = (n: number) => n >= 8 ? "text-emerald-700" : n >= 6 ? "text-amber-700" : "text-red-700";
+                        return (
+                          <div className="mt-5 pt-5 border-t space-y-5">
+                            <div className="flex items-center gap-2">
+                              <ClipboardList className="h-4 w-4 text-blue-600" />
+                              <h4 className="text-sm font-bold text-gray-800">Todos os pontos analisados</h4>
+                              <span className="text-[11px] text-gray-400">({consolidado.length} critérios · {comDetalhes.length} de {hist.length} avaliações com detalhamento)</span>
+                            </div>
+
+                            {/* Visão UNIFICADA: pontos fortes x pontos a melhorar */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3">
+                                <div className="flex items-center gap-1.5 mb-2 text-emerald-700 font-semibold text-xs uppercase tracking-wide">
+                                  <ThumbsUp className="h-3.5 w-3.5" /> Pontos fortes
+                                </div>
+                                {fortes.length === 0 ? (
+                                  <div className="text-xs text-gray-400 py-1">Nenhum critério com média ≥ 8.</div>
+                                ) : (
+                                  <ul className="space-y-1.5">
+                                    {fortes.map((c) => (
+                                      <li key={c.key} className="flex items-center justify-between gap-2 text-xs">
+                                        <span className="text-gray-700 truncate"><span className="text-gray-400">{c.bloco} · </span>{c.label}</span>
+                                        <span className={`font-bold tabular-nums ${corTxt(c.media)}`}>{c.media}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                              <div className="rounded-lg border border-red-200 bg-red-50/40 p-3">
+                                <div className="flex items-center gap-1.5 mb-2 text-red-700 font-semibold text-xs uppercase tracking-wide">
+                                  <ThumbsDown className="h-3.5 w-3.5" /> Pontos a melhorar
+                                </div>
+                                {fracos.length === 0 ? (
+                                  <div className="text-xs text-gray-400 py-1">Nenhum ponto abaixo de 8 — desempenho excelente.</div>
+                                ) : (
+                                  <ul className="space-y-1.5">
+                                    {fracos.map((c) => (
+                                      <li key={c.key} className="flex items-center justify-between gap-2 text-xs">
+                                        <span className="text-gray-700 truncate"><span className="text-gray-400">{c.bloco} · </span>{c.label}</span>
+                                        <span className={`font-bold tabular-nums ${corTxt(c.media)}`}>{c.media}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Visão INDIVIDUAL: detalhamento por avaliação, agrupado por bloco */}
+                            <div className="space-y-3">
+                              {comDetalhes.map((a) => {
+                                const data = a.criadoEm ? formatDate(String(a.criadoEm).split("T")[0]) : (a.anoPeriodo || "—");
+                                return (
+                                  <div key={a.id} className="rounded-lg border bg-gray-50/50 p-3">
+                                    <div className="text-xs font-semibold text-gray-700 mb-2">
+                                      {a.obraNome || "—"} <span className="text-gray-400 font-normal">· {data}</span>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                      {BLOCOS_AVAL_RX.map((b) => {
+                                        const dados = a.detalhes?.[b.key];
+                                        if (!dados || typeof dados !== "object") return null;
+                                        const itens = b.crit
+                                          .map((c) => ({ label: c.label, nota: dados[c.key] }))
+                                          .filter((it) => typeof it.nota === "number");
+                                        if (itens.length === 0) return null;
+                                        return (
+                                          <div key={b.key} className="bg-white rounded-md border p-2.5">
+                                            <div className="text-[11px] font-bold text-gray-600 uppercase tracking-wide mb-1.5">
+                                              {b.titulo}{dados.nome ? <span className="font-normal normal-case text-gray-400"> · {dados.nome}</span> : null}
+                                            </div>
+                                            <div className="space-y-1">
+                                              {itens.map((it, i) => (
+                                                <div key={i} className={`flex items-center justify-between gap-2 rounded border px-2 py-1 ${corBg(Number(it.nota))}`}>
+                                                  <span className="text-[11px] text-gray-700 truncate">{it.label}</span>
+                                                  <span className={`text-xs font-bold tabular-nums ${corTxt(Number(it.nota))}`}>{it.nota}</span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>

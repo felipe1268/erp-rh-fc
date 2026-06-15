@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb, userCanSeeAvisoStatus, userCanAccessEmployeeDossier } from "../db";
 import { TRPCError } from "@trpc/server";
-import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, employeeSiteHistory, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, heSolicitacaoFuncionarios, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados, ddsSessoes, ddsSessaoFuncionarios, signatureSessions, signatureSigners, equipamentoLocadoEventos, equipamentosLocados, users, clienteAvaliacoes } from "../../drizzle/schema";
+import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, employeeSiteHistory, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, heSolicitacaoFuncionarios, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados, ddsSessoes, ddsSessaoFuncionarios, signatureSessions, signatureSigners, equipamentoLocadoEventos, equipamentosLocados, users, clienteAvaliacoes, clienteAvaliacaoDetalhes } from "../../drizzle/schema";
 import { eq, and, desc, sql, ne, isNull, inArray, gte, lte, or, ilike } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
@@ -2381,6 +2381,26 @@ export const controleDocumentosRouter = router({
           .orderBy(desc(clienteAvaliacoes.criadoEm))
           .limit(200);
       }
+      // 3b) CRITÉRIOS GRANULARES (Rev. 3114) — cada avaliação do Portal grava em
+      // cliente_avaliacao_detalhes.dados (jsonb) os PONTOS individuais por bloco
+      // (gestor/encarregado/equipe/escritorio). O Raio-X só mostrava as 5 médias;
+      // agora anexa `detalhes` a cada item do histórico p/ exibir tudo (fortes/fracos).
+      const avalIds = avalClienteRows.map(r => r.id);
+      const detalhesMap = new Map<number, any>();
+      if (avalIds.length > 0) {
+        const detRows = await db.select({
+          avaliacaoId: clienteAvaliacaoDetalhes.avaliacaoId,
+          dados: clienteAvaliacaoDetalhes.dados,
+        }).from(clienteAvaliacaoDetalhes)
+          .where(and(
+            eq(clienteAvaliacaoDetalhes.companyId, emp.companyId),
+            inArray(clienteAvaliacaoDetalhes.avaliacaoId, avalIds),
+          ));
+        for (const d of detRows) {
+          if (d.avaliacaoId != null) detalhesMap.set(d.avaliacaoId, d.dados ?? null);
+        }
+      }
+      for (const r of avalClienteRows) r.detalhes = detalhesMap.get(r.id) ?? null;
       const _avg = (vals: Array<number | null>) => {
         const nums = vals.filter((n): n is number => n != null);
         return nums.length > 0 ? Math.round((nums.reduce((s, v) => s + v, 0) / nums.length) * 10) / 10 : null;

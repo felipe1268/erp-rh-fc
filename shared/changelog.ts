@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3114 — **COLABORADORES / RAIO-X DO FUNCIONÁRIO (ABA "DESEMPENHO") · A SEÇÃO "AVALIAÇÃO DO
+ * CLIENTE" AGORA MOSTRA TODOS OS PONTOS ANALISADOS PELO CLIENTE (NÃO MAIS SÓ AS 5 MÉDIAS GERAL/
+ * GESTOR/EQUIPE/PRAZO/QUALIDADE). CADA CRITÉRIO INDIVIDUAL DOS 4 BLOCOS (GESTOR, ENCARREGADO,
+ * EQUIPE DIRETA, ESCRITÓRIO CENTRAL) APARECE COM SUA NOTA, EM DUAS VISÕES: UMA UNIFICADA
+ * ("PONTOS FORTES" × "PONTOS A MELHORAR") E OUTRA INDIVIDUAL (DETALHE POR AVALIAÇÃO/OBRA). VALE
+ * NA TELA E NA FICHA (PDF).**
+ *
+ * PEDIDO: "Quero que apareça todos os pontos analisados, de forma individual ou de forma unificada
+ * e detalhada, destacando os pontos fortes e fracos." Exemplo real (MATEUS OLIVEIRA BRITO PIRES):
+ * a média "Qualidade 8.5" escondia que, na avaliação de junho, "Organização e limpeza" (equipe) e
+ * "Comunicação/Faturamento" (escritório) tinham nota 5 — pontos fracos antes invisíveis.
+ *
+ * DIAGNÓSTICO: os critérios granulares JÁ eram coletados pelo Portal do Cliente e gravados em
+ * `cliente_avaliacao_detalhes.dados` (jsonb, Rev. 2965) — 4 blocos: gestor/encarregado (6 critérios
+ * cada), equipe (6) e escritório (5). Mas a query `raioX` (`controleDocumentos.ts`) NÃO lia essa
+ * tabela; só trazia as 5 médias de `cliente_avaliacoes`. Logo a tela/Ficha não tinham como detalhar.
+ *
+ * SOLUÇÃO (BACKEND READ-ONLY + FRONTEND, ZERO ALTER/DROP/DELETE/SCHEMA): (1) BACKEND — `raioX`
+ * agora busca `cliente_avaliacao_detalhes.dados` (filtrando por `companyId` + `avaliacaoId IN`,
+ * tenant-safe) e anexa `detalhes` a cada item do histórico (SELECT puro, nada de escrita). (2)
+ * FRONTEND (`RaioXFuncionario.tsx`) — consts `CRIT_*_RX`/`BLOCOS_AVAL_RX` espelham EXATAMENTE os
+ * rótulos do formulário do Portal; helper `extrairPontosAval(detalhes)` achata o jsonb em
+ * {bloco,label,nota}. A seção "Avaliação do Cliente" ganhou "Todos os pontos analisados" com (a)
+ * visão UNIFICADA: média por critério entre todas as avaliações → top "Pontos fortes" (≥8) e
+ * "Pontos a melhorar" (<8, do menor ao maior); (b) visão INDIVIDUAL: por avaliação/obra, cada
+ * bloco com seus critérios coloridos (verde ≥8 / âmbar ≥6 / vermelho <6). (3) FICHA PDF
+ * (`gerarFichaAvaliacaoCliente`) — mesma lógica: blocos "Pontos Fortes"/"Pontos a Melhorar" +
+ * tabela detalhada por avaliação (Bloco/Critério/Nota), tudo escapado via `esc`. Avaliações antigas
+ * sem `detalhes` simplesmente não exibem a seção (degrada para o comportamento anterior).
+ *
  * Rev. 3113 — **DOCUMENTOS / RAIO-X DO FUNCIONÁRIO (E TODO O APP) · O "VER" DO ATESTADO (E DE
  * QUALQUER ANEXO PDF/IMAGEM) VOLTOU A MOSTRAR O DOCUMENTO NO iPad/iPhone — ANTES O PREVIEW
  * ABRIA EM BRANCO DENTRO DO MODAL. AGORA O DIÁLOGO DE PREVIEW SEMPRE TEM UM BOTÃO "ABRIR"
