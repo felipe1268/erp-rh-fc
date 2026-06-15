@@ -947,11 +947,14 @@ export const controleDocumentosRouter = router({
         const db = (await getDb())!;
         const ids = await resolveCompanyIdsGuard(ctx, input);
         const limite = input.limite ?? 10;
-        // ASOs ativos COM pdf que não têm extração concluída/pendente (status erro re-tenta).
+        // ASOs ativos COM pdf que ainda NÃO foram lidos por IA. Rev. 3130: "lido por IA"
+        // = qualquer extração aguardando_revisao | aprovado | rejeitado (descartado) — nesses
+        // 3 casos o arquivo JÁ foi lido, então NÃO reaparece no lote (evita reler o mesmo PDF).
+        // Apenas status 'erro' (leitura falhou, nunca concluiu) volta à fila p/ re-tentar.
         const pend = ((await db.execute(sql`
           SELECT a.id
           FROM asos a
-          LEFT JOIN aso_extracao_ia x ON x.aso_id = a.id AND x.status IN ('aguardando_revisao', 'aprovado')
+          LEFT JOIN aso_extracao_ia x ON x.aso_id = a.id AND x.status IN ('aguardando_revisao', 'aprovado', 'rejeitado')
           WHERE a."companyId" IN (${sql.join(ids.map((id) => sql`${id}`), sql`,`)})
             AND a."deletedAt" IS NULL
             AND a."documentoUrl" IS NOT NULL AND TRIM(a."documentoUrl") <> ''
@@ -1005,7 +1008,8 @@ export const controleDocumentosRouter = router({
             e."nomeCompleto", e.funcao, e."fotoUrl", a."dataExame" AS "dataExame"
           FROM asos a
           JOIN employees e ON e.id = a."employeeId"
-          LEFT JOIN aso_extracao_ia x ON x.aso_id = a.id AND x.status IN ('aguardando_revisao', 'aprovado')
+          -- Rev. 3130: já lido por IA (aguardando_revisao | aprovado | rejeitado) NÃO reaparece; só 'erro' re-tenta.
+          LEFT JOIN aso_extracao_ia x ON x.aso_id = a.id AND x.status IN ('aguardando_revisao', 'aprovado', 'rejeitado')
           WHERE a."companyId" IN (${sql.join(ids.map((id) => sql`${id}`), sql`,`)})
             AND a."deletedAt" IS NULL
             AND a."documentoUrl" IS NOT NULL AND TRIM(a."documentoUrl") <> ''

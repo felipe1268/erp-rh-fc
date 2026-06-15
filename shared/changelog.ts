@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3130 — **CONTROLE DE DOCUMENTOS / ABA "MAPEAMENTO" · ASO JÁ LIDO POR IA NÃO REAPARECE NO
+ * LOTE DE LEITURA — INCLUSIVE OS "DESCARTADOS" (REJEITADOS) — EVITANDO RELER O MESMO PDF VÁRIAS
+ * VEZES.**
+ *
+ * PEDIDO (iPad, com print do painel "Revisão das leituras da IA"): "Quem já foi lido por ia não
+ * precisa aparecer novamente, para evitar leitura do mesmo arquivo várias vezes."
+ *
+ * CAUSA: o filtro de "pendentes p/ IA" (em `lerLoteIA` e `listPendentesIA` de
+ * `server/routers/controleDocumentos.ts`) excluía da fila apenas ASOs com extração em
+ * `aguardando_revisao` ou `aprovado` (`LEFT JOIN ... AND x.status IN ('aguardando_revisao',
+ * 'aprovado')` + `x.id IS NULL`). Quem o usuário DESCARTAVA (botão "Descartar" →
+ * `rejeitarExtracaoIA` grava status `rejeitado`) caía de volta na fila e era RELIDO no próximo
+ * lote — exatamente o "ler o mesmo arquivo várias vezes" reclamado.
+ *
+ * CORREÇÃO (BACKEND-ONLY; ZERO SCHEMA/ALTER/DROP/DELETE): o filtro de pendência passou a tratar
+ * como "já lido por IA" os 3 estados terminais de leitura — `aguardando_revisao | aprovado |
+ * rejeitado` — então NENHUM deles reaparece no lote automático (`runLote` → `listPendentesIA`).
+ * Mantido o status `erro` re-tentável (leitura que FALHOU e nunca concluiu, ex.: 429/503 do
+ * Gemini — Rev. 3128) p/ não perder ASO por falha transitória. Os botões manuais ("Ler com IA"
+ * individual e "Ler selecionados") seguem deliberados — leem o ASO escolhido mesmo se rejeitado,
+ * pois é ação explícita do usuário. Tenancy (companyId) e gate `assertAiModuleEnabled` inalterados.
+ * Detalhe: este bloco.
+ *
  * Rev. 3129 — **PORTAL DO CLIENTE / AVALIAÇÕES (NPS) · "EXCLUIR SELECIONADOS" (EXCLUSÃO EM LOTE
  * DE LINKS DE AVALIAÇÃO) PAROU DE FALHAR COM ERRO DE SQL — `ANY($2, $3::text[])` INVÁLIDO.**
  *
