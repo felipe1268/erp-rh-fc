@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3111 — **MEDIÇÃO / LEVANTAMENTO DE CAMPO (DESENHO SOBRE A PLANTA) · DEPOIS DE CRIADO, UM
+ * CONTORNO PODE SER AJUSTADO: NA FERRAMENTA "SELECIONAR", TOCAR NUM CONTORNO O SELECIONA E APARECEM
+ * PONTOS AZUIS (HANDLES) PARA ARRASTAR E ALTERAR AS DIMENSÕES — RETÂNGULO GANHA 4 CANTOS + 4 LADOS;
+ * DEMAIS POLÍGONOS GANHAM UM PONTO POR VÉRTICE.**
+ *
+ * PEDIDO: "Depois q eu crie preciso poder fazer ajustes, o retângulo com ponto para alterar as dimensões"
+ * (print IMG_2044 — ferramenta "Retângulo" + um retângulo azul de DORMITÓRIO selecionado). Até então um
+ * contorno só podia ser apagado e refeito; não havia como redimensioná-lo após criar.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY em `client/src/pages/medicao/MedicaoLevantamento.tsx`, ZERO ALTER/DROP/DELETE/
+ * SCHEMA/BACKEND — reusa o `off.saveContorno` por id/uuid, mesmo caminho do recolor/bind):
+ *
+ * 1) SELEÇÃO POR TOQUE NA PLANTA: a ferramenta "Selecionar" agora faz hit-test no `onTap` via
+ *    `contornoSobPonto()` — fechados (área/volume) por ray-casting (`pontoEmPoligono`) OU proximidade da
+ *    borda; abertos (perímetro/parede) por proximidade da linha (`distAsArestas`); contagem por proximidade
+ *    do marcador. Tocar num contorno seleciona SÓ ele (`selContornos` = Set de 1); tocar no vazio limpa.
+ *    O contorno selecionado fica destacado (traço azul mais grosso + preenchimento mais forte).
+ *
+ * 2) HANDLES DE AJUSTE (quando há exatamente 1 selecionado): `detectRectBox()` reconhece retângulo
+ *    eixo-alinhado (4 cantos) e renderiza 4 círculos nos cantos (redimensiona as 2 dimensões, canto oposto
+ *    fixo) + 4 quadrados nos lados (move 1 lado → 1 dimensão). Polígono qualquer → 1 círculo por vértice
+ *    (move o vértice). Os handles têm seus próprios `onPointerDown/Move/Up` com `setPointerCapture` e
+ *    `stopPropagation` (não disparam o pan/zoom do overlay).
+ *
+ * 3) RECÁLCULO + PERSISTÊNCIA: ao arrastar, `pontosEditados()` recompõe a geometria em [0..1] (preview ao
+ *    vivo via estado `editDrag`); ao soltar, `salvarGeometriaContorno()` reconverte p/ PDF points
+ *    (`normToPt`), recalcula área/perímetro/volume/quantidade com `calcularContorno` (preservando
+ *    espessura/altura e o vínculo de item) e salva via `off.saveContorno` (UPDATE). MIN 0.004 evita
+ *    retângulo degenerado.
+ *
+ * Helpers puros novos no módulo: `detectRectBox`, `cantosDoBox`, `pontoEmPoligono`, `distAsArestas`.
+ * Texto de ajuda do canvas atualizado explicando o ajuste. ZERO mudança de backend/schema.
+ *
  * Rev. 3110 — **COLABORADORES / RAIO-X DO FUNCIONÁRIO (ABA "DESEMPENHO") · A SEÇÃO "AVALIAÇÃO DO CLIENTE"
  * GANHOU O BOTÃO "GERAR FICHA (PDF)" QUE EMITE UMA FICHA INSTITUCIONAL FC DA AVALIAÇÃO DO CLIENTE — PRONTA
  * PARA IMPRIMIR OU SALVAR EM PDF E ENVIAR (EX.: WHATSAPP).**

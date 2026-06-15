@@ -114,6 +114,45 @@ function interseccaoSegmentos(a: GeoPonto, b: GeoPonto, c: GeoPonto, d: GeoPonto
   return { x: a.x + t * r1, y: a.y + t * r2 };
 }
 
+// Rev. 3111 — ajuste de contorno criado: detecção de retângulo eixo-alinhado (4
+// cantos) p/ mostrar handles de redimensionamento e helpers de hit-test (seleção
+// por toque na planta) e geometria.
+function detectRectBox(pts: GeoPonto[]): { x0: number; y0: number; x1: number; y1: number } | null {
+  if (!pts || pts.length !== 4) return null;
+  const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const tol = 1e-4;
+  if (x1 - x0 < tol || y1 - y0 < tol) return null;
+  const ehCanto = (p: GeoPonto) =>
+    (Math.abs(p.x - x0) < tol || Math.abs(p.x - x1) < tol) &&
+    (Math.abs(p.y - y0) < tol || Math.abs(p.y - y1) < tol);
+  return pts.every(ehCanto) ? { x0, y0, x1, y1 } : null;
+}
+function cantosDoBox(b: { x0: number; y0: number; x1: number; y1: number }): GeoPonto[] {
+  return [{ x: b.x0, y: b.y0 }, { x: b.x1, y: b.y0 }, { x: b.x1, y: b.y1 }, { x: b.x0, y: b.y1 }];
+}
+// Ray-casting: ponto dentro do polígono fechado?
+function pontoEmPoligono(p: GeoPonto, pts: GeoPonto[]): boolean {
+  let dentro = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const xi = pts[i].x, yi = pts[i].y, xj = pts[j].x, yj = pts[j].y;
+    const corta = (yi > p.y) !== (yj > p.y) && p.x < ((xj - xi) * (p.y - yi)) / ((yj - yi) || 1e-9) + xi;
+    if (corta) dentro = !dentro;
+  }
+  return dentro;
+}
+// Menor distância do ponto às arestas (fecha = liga o último ao primeiro).
+function distAsArestas(p: GeoPonto, pts: GeoPonto[], fecha: boolean): number {
+  let min = Infinity;
+  const n = fecha ? pts.length : pts.length - 1;
+  for (let i = 0; i < n; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    const { pt } = projetarNoSegmento(p, a, b);
+    min = Math.min(min, distancia(p, pt));
+  }
+  return min;
+}
+
 const brl = (v: number) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const numFmt = (v: number, d = 2) =>
   (v || 0).toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -294,6 +333,18 @@ export default function MedicaoLevantamento() {
   // Pré-visualização do arrasto (retângulo) e do traço livre.
   const [dragRect, setDragRect] = useState<{ a: GeoPonto; b: GeoPonto } | null>(null);
   const [freePts, setFreePts] = useState<GeoPonto[]>([]);
+
+  // Rev. 3111 — ajuste de um contorno JÁ criado (handles de redimensionamento).
+  // `editDrag` = preview ao vivo dos pontos enquanto arrasta um handle.
+  const [editDrag, setEditDrag] = useState<{ contId: number; pts: GeoPonto[] } | null>(null);
+  const editRef = useRef<{
+    cont: any;
+    kind: "vertex" | "corner" | "edge";
+    idx: number;
+    base: GeoPonto[];
+    rect: { x0: number; y0: number; x1: number; y1: number } | null;
+    cur: GeoPonto[];
+  } | null>(null);
 
   // Diálogo numérico no app (substitui window.prompt p/ altura/escala — máscara pt-BR).
   const [numPrompt, setNumPrompt] = useState<
@@ -662,7 +713,13 @@ export default function MedicaoLevantamento() {
   }
 
   function onTap(ptRaw: GeoPonto) {
-    if (tool === "select") return;
+    if (tool === "select") {
+      // Rev. 3111 — tocar num contorno na planta seleciona só ele (e mostra os
+      // handles de ajuste). Tocar no vazio limpa a seleção.
+      const hit = contornoSobPonto(ptRaw);
+      setSelContornos(hit ? new Set([hit.id]) : new Set());
+      return;
+    }
     // OSnap: prende o ponto à geometria notável mais próxima (se houver).
     const hit = toolUsaSnap(tool) ? applySnap(ptRaw, snapFromPt()) : null;
     const pt = hit ? hit.p : ptRaw;
@@ -911,6 +968,116 @@ export default function MedicaoLevantamento() {
     setBulkBusy(true);
     try { for (const c of alvos) await recolorContorno(c, cor); }
     finally { setBulkBusy(false); }
+  }
+
+  // ===================== Ajuste de contorno criado (Rev. 3111) =====================
+  // Retorna o contorno (topo-primeiro) sob o ponto [0..1] — hit-test p/ selecionar
+  // tocando na planta. Fechados = ponto-dentro OU perto da borda; abertos = perto
+  // da linha; contagem = perto de um marcador.
+  function contornoSobPonto(pt: GeoPonto): any | null {
+    for (let i = contornosPagina.length - 1; i >= 0; i--) {
+      const c = contornosPagina[i];
+      let pts: GeoPonto[] = [];
+      try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
+      if (c.tipo === "contagem") {
+        if (pts.some((p) => distancia(p, pt) < 0.012)) return c;
+        continue;
+      }
+      if (pts.length < 2) continue;
+      if (FECHA_POLIGONO(c.tipo)) {
+        if (pontoEmPoligono(pt, pts) || distAsArestas(pt, pts, true) < 0.01) return c;
+      } else if (distAsArestas(pt, pts, false) < 0.01) {
+        return c;
+      }
+    }
+    return null;
+  }
+
+  // Salva UM contorno preservando TODOS os campos (cor/vínculo/etc.), com nova
+  // geometria + recálculo de área/perímetro/volume/quantidade. Mesmo caminho do
+  // recolorContorno/bind (off.saveContorno por id/uuid → UPDATE).
+  function salvarGeometriaContorno(c: any, ptsNorm: GeoPonto[]) {
+    const mpu = c.metrosPorUnidade ? parseFloat(c.metrosPorUnidade) : (calibAtualEff?.metrosPorUnidade ?? 0);
+    const esp = c.espessura ? parseFloat(c.espessura) : 0;
+    const cont = c.contagem ?? 0;
+    const r = mpu > 0
+      ? calcularContorno(c.tipo as TipoContorno, ptsNorm.map(normToPt), mpu, esp, cont)
+      : null;
+    return off.saveContorno({
+      id: c.id, uuid: c.uuid, pdfId: pdfSelId!,
+      pagina: c.pagina ?? pagina,
+      tipo: c.tipo as TipoContorno,
+      cor: c.cor ?? COR_TIPO[c.tipo as TipoContorno],
+      geometriaJson: JSON.stringify(ptsNorm),
+      espessura: c.espessura ?? null,
+      metrosPorUnidade: c.metrosPorUnidade ?? (mpu > 0 ? String(mpu) : null),
+      area: r ? (r.area ? String(r.area) : null) : (c.area ?? null),
+      perimetro: r ? (r.perimetro ? String(r.perimetro) : null) : (c.perimetro ?? null),
+      volume: r ? (r.volume ? String(r.volume) : null) : (c.volume ?? null),
+      contagem: c.contagem ?? null,
+      quantidade: r ? String(r.quantidade) : (c.quantidade ?? null),
+      unidade: r?.unidade ?? c.unidade ?? null,
+      numero: c.numero,
+      orcamentoItemId: c.orcamentoItemId ?? null,
+      itemEapCodigo: c.itemEapCodigo ?? null,
+      itemDescricao: c.itemDescricao ?? null,
+    });
+  }
+
+  // Calcula os pontos resultantes de arrastar um handle até `p` ([0..1]).
+  function pontosEditados(
+    ed: { kind: "vertex" | "corner" | "edge"; idx: number; base: GeoPonto[]; rect: { x0: number; y0: number; x1: number; y1: number } | null },
+    p: GeoPonto,
+  ): GeoPonto[] {
+    if (ed.kind === "vertex" || !ed.rect) {
+      const next = ed.base.map((q) => ({ ...q }));
+      if (next[ed.idx]) next[ed.idx] = { x: p.x, y: p.y };
+      return next;
+    }
+    const MIN = 0.004;
+    if (ed.kind === "corner") {
+      // canto oposto fica fixo; reconstrói o retângulo eixo-alinhado.
+      const fixo = cantosDoBox(ed.rect)[(ed.idx + 2) % 4];
+      const x0 = Math.min(p.x, fixo.x), x1 = Math.max(p.x, fixo.x);
+      const y0 = Math.min(p.y, fixo.y), y1 = Math.max(p.y, fixo.y);
+      return cantosDoBox({ x0, y0, x1: x1 - x0 < MIN ? x0 + MIN : x1, y1: y1 - y0 < MIN ? y0 + MIN : y1 });
+    }
+    // edge: 0=topo, 1=direita, 2=baixo, 3=esquerda — move só um lado (1 dimensão).
+    let { x0, y0, x1, y1 } = ed.rect;
+    if (ed.idx === 0) y0 = Math.min(p.y, y1 - MIN);
+    else if (ed.idx === 1) x1 = Math.max(p.x, x0 + MIN);
+    else if (ed.idx === 2) y1 = Math.max(p.y, y0 + MIN);
+    else x0 = Math.min(p.x, x1 - MIN);
+    return cantosDoBox({ x0, y0, x1, y1 });
+  }
+
+  function onHandleDown(e: React.PointerEvent, c: any, kind: "vertex" | "corner" | "edge", idx: number) {
+    e.stopPropagation();
+    e.preventDefault();
+    try { (e.currentTarget as Element).setPointerCapture(e.pointerId); } catch { /* */ }
+    let base: GeoPonto[] = [];
+    try { base = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
+    editRef.current = { cont: c, kind, idx, base, rect: detectRectBox(base), cur: base };
+    setEditDrag({ contId: c.id, pts: base });
+  }
+  function onHandleMove(e: React.PointerEvent) {
+    const ed = editRef.current;
+    if (!ed) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const p = getPtFromClient(e.clientX, e.clientY);
+    const next = pontosEditados(ed, p);
+    ed.cur = next;
+    setEditDrag({ contId: ed.cont.id, pts: next });
+  }
+  async function onHandleUp(e: React.PointerEvent) {
+    const ed = editRef.current;
+    if (!ed) return;
+    e.stopPropagation();
+    try { (e.currentTarget as Element).releasePointerCapture(e.pointerId); } catch { /* */ }
+    editRef.current = null;
+    setEditDrag(null);
+    if (ed.cur && ed.cur.length >= 2) await salvarGeometriaContorno(ed.cont, ed.cur);
   }
 
   function gerarMemoriaCalculo() {
@@ -1233,7 +1400,7 @@ export default function MedicaoLevantamento() {
                   )}
                 </div>
                 <p className="text-[11px] text-gray-400 px-1">
-                  Toque para marcar pontos · arraste com 1 dedo para mover (pan) · pinça com 2 dedos para zoom · a ferramenta permanece ativa após finalizar.
+                  Toque para marcar pontos · arraste com 1 dedo para mover (pan) · pinça com 2 dedos para zoom · a ferramenta permanece ativa após finalizar. Na ferramenta <b>Selecionar</b>, toque num contorno para selecioná-lo e arraste os pontos azuis (cantos/lados) para ajustar as dimensões.
                 </p>
 
                 {/* status calibração */}
@@ -1322,16 +1489,69 @@ export default function MedicaoLevantamento() {
                           {contornosPagina.map((c) => {
                             let pts: GeoPonto[] = [];
                             try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
+                            // Rev. 3111 — durante o ajuste, desenha o preview ao vivo.
+                            if (editDrag && editDrag.contId === c.id) pts = editDrag.pts;
                             const cor = c.cor || COR_TIPO[c.tipo as TipoContorno] || "#2563eb";
+                            const sel = tool === "select" && selContornos.has(c.id);
                             if (c.tipo === "contagem") {
-                              return pts.map((p, i) => <circle key={`${c.id}-${i}`} cx={p.x} cy={p.y} r={0.008} fill={cor} stroke="#fff" strokeWidth={0.002} />);
+                              return pts.map((p, i) => <circle key={`${c.id}-${i}`} cx={p.x} cy={p.y} r={sel ? 0.011 : 0.008} fill={cor} stroke={sel ? "#1d4ed8" : "#fff"} strokeWidth={sel ? 0.0035 : 0.002} />);
                             }
                             const fecha = FECHA_POLIGONO(c.tipo);
                             const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ") + (fecha ? " Z" : "");
                             return (
-                              <path key={c.id} d={d} fill={fecha ? cor : "none"} fillOpacity={fecha ? fillOpacity : 0} stroke={cor} strokeWidth={fecha ? 0.003 : 0.004} vectorEffect="non-scaling-stroke" />
+                              <path key={c.id} d={d} fill={fecha ? cor : "none"} fillOpacity={fecha ? (sel ? Math.min(0.55, fillOpacity + 0.18) : fillOpacity) : 0} stroke={sel ? "#1d4ed8" : cor} strokeWidth={(fecha ? 0.003 : 0.004) + (sel ? 0.0025 : 0)} vectorEffect="non-scaling-stroke" />
                             );
                           })}
+                          {/* Rev. 3111 — handles de ajuste do contorno selecionado (só 1).
+                              Retângulo eixo-alinhado → 4 cantos (redimensiona) + 4 lados
+                              (1 dimensão); demais polígonos → 1 handle por vértice. */}
+                          {tool === "select" && selContornos.size === 1 && (() => {
+                            const cid = [...selContornos][0];
+                            const c = contornosPagina.find((x) => x.id === cid);
+                            if (!c || c.tipo === "contagem") return null;
+                            let pts: GeoPonto[] = [];
+                            try { pts = JSON.parse(c.geometriaJson || "[]"); } catch { /* */ }
+                            if (editDrag && editDrag.contId === c.id) pts = editDrag.pts;
+                            if (pts.length < 2) return null;
+                            const hr = 0.013;
+                            const hp = (kind: "vertex" | "corner" | "edge", idx: number) => ({
+                              onPointerDown: (e: React.PointerEvent) => onHandleDown(e, c, kind, idx),
+                              onPointerMove: onHandleMove,
+                              onPointerUp: onHandleUp,
+                              onPointerCancel: onHandleUp,
+                              style: { cursor: "pointer" as const },
+                            });
+                            const box = detectRectBox(pts);
+                            if (box) {
+                              const cantos = cantosDoBox(box);
+                              const lados = [
+                                { x: (box.x0 + box.x1) / 2, y: box.y0 },
+                                { x: box.x1, y: (box.y0 + box.y1) / 2 },
+                                { x: (box.x0 + box.x1) / 2, y: box.y1 },
+                                { x: box.x0, y: (box.y0 + box.y1) / 2 },
+                              ];
+                              return (
+                                <g>
+                                  {lados.map((p, i) => (
+                                    <rect key={`ed-${i}`} x={p.x - hr * 0.72} y={p.y - hr * 0.72} width={hr * 1.44} height={hr * 1.44}
+                                      fill="#fff" stroke="#1d4ed8" strokeWidth={2} vectorEffect="non-scaling-stroke" {...hp("edge", i)} />
+                                  ))}
+                                  {cantos.map((p, i) => (
+                                    <circle key={`ec-${i}`} cx={p.x} cy={p.y} r={hr}
+                                      fill="#fff" stroke="#1d4ed8" strokeWidth={2.6} vectorEffect="non-scaling-stroke" {...hp("corner", i)} />
+                                  ))}
+                                </g>
+                              );
+                            }
+                            return (
+                              <g>
+                                {pts.map((p, i) => (
+                                  <circle key={`ev-${i}`} cx={p.x} cy={p.y} r={hr}
+                                    fill="#fff" stroke="#1d4ed8" strokeWidth={2.6} vectorEffect="non-scaling-stroke" {...hp("vertex", i)} />
+                                ))}
+                              </g>
+                            );
+                          })()}
                           {/* draft */}
                           {draft.length > 0 && (
                             <>
