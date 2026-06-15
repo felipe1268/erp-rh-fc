@@ -1149,6 +1149,14 @@ function MapeamentoPanel({ companyId, companyIds, onClickEmployee, empresaNome }
     if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 500); }
   };
 
+  // Zera a trava SÓ quando o fetch da fila resolveu (sem erro) e está realmente vazia.
+  // (Hook DEVE vir antes de qualquer early-return para não violar a ordem dos hooks.)
+  useEffect(() => {
+    if (awaitingReview && !revisaoQ.isFetching && !revisaoQ.isError && fila.length === 0) {
+      setAwaitingReview(false);
+    }
+  }, [awaitingReview, revisaoQ.isFetching, revisaoQ.isError, fila.length]);
+
   if (isLoading) return <div className="py-12 text-center text-muted-foreground">Carregando mapeamento...</div>;
 
   const kpiCards = [
@@ -1166,12 +1174,6 @@ function MapeamentoPanel({ companyId, companyIds, onClickEmployee, empresaNome }
   const batchErros = batchItems.filter((it) => it.status === "erro").length;
   const batchPct = batchTotal > 0 ? Math.round((batchConcluidos / batchTotal) * 100) : 0;
   const batchAtual = batchItems.find((it) => it.status === "processando");
-  // Zera a trava SÓ quando o fetch da fila resolveu (sem erro) e está realmente vazia.
-  useEffect(() => {
-    if (awaitingReview && !revisaoQ.isFetching && !revisaoQ.isError && fila.length === 0) {
-      setAwaitingReview(false);
-    }
-  }, [awaitingReview, revisaoQ.isFetching, revisaoQ.isError, fila.length]);
   // O painel fica TRAVADO enquanto roda, durante QUALQUER refetch da fila, ou enquanto
   // houver leitura aguardando revisão (flag `awaitingReview`, imune à corrida do refetch).
   const batchLocked = batchRunning || awaitingReview || revisaoQ.isFetching || (batchFase === "revisao" && fila.length > 0);

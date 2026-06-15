@@ -49,6 +49,11 @@
  *     NADA é aplicado ao ASO sem o "Aprovar" — a garantia de revisão humana obrigatória (Rev. 3117+)
  *     continua intacta.
  *
+ * HOTFIX (mesma Rev. 3123): o `useEffect` que zera a trava `awaitingReview` foi colocado, por engano,
+ * DEPOIS do early-return `if (isLoading) return …` do `MapeamentoPanel` — violando a ordem dos hooks do
+ * React ("Rendered more hooks than during the previous render", crash da tela /controle-documentos).
+ * Corrigido movendo o hook para ANTES de qualquer early-return.
+ *
  * As mutations antigas `lerSelecionadosIA`/`lerLoteIA` continuam EXISTINDO no backend (não removidas),
  * apenas não são mais chamadas pelo client desta aba. Puramente UX + 1 endpoint de leitura.
  *
