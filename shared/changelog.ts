@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3115 — **COMPRAS / ORDEM DE COMPRA (PDF) · O LOGO DA FC VOLTOU A APARECER NO CABEÇALHO
+ * AZUL-MARINHO DA OC — ANTES O CABEÇALHO MOSTRAVA SÓ A RAZÃO SOCIAL/CNPJ, SEM NENHUMA LOGOMARCA.
+ * MANTÉM O LAYOUT MODERNO; SÓ ACRESCENTA A MARCA.**
+ *
+ * PEDIDO (iPad): "Ajusta no novo layout que estamos usando, colocando o logo da FC e mantendo os
+ * padrões modernos." Print anexado da OC-2026-0159 mostrava o cabeçalho azul-marinho sem logo.
+ *
+ * DIAGNÓSTICO: o gerador `server/services/purchaseOrderPdf.ts` (pdfkit) JÁ tinha a lógica de logo
+ * (`resolveLogoSource(company.logoUrl)` → `doc.image(...)` no header). MAS a empresa FC (id 60002)
+ * tem `companies.logoUrl = "/logo-fc.jpg"` (caminho de asset estático servido na raiz do web),
+ * e o `resolveLogoSource` só sabia resolver `data:image...base64` OU `/uploads/...` existente em
+ * disco. Como `/logo-fc.jpg` não casava com nenhum dos dois, retornava `null` → nenhum logo. (O
+ * disco efêmero de `/uploads` agrava: mesmo upload some; mas o caso da FC nem era /uploads.)
+ *
+ * SOLUÇÃO (BACKEND-ONLY, ZERO ALTER/DROP/DELETE/SCHEMA, ZERO MUDANÇA DE DADOS):
+ *   (1) `resolveLogoSource` ganhou um 3º caminho: para `logoUrl` root-relativo (começa com "/" e
+ *       não "//"), tenta resolver o arquivo nos diretórios públicos do REPO (não no disco efêmero):
+ *       `dist/public` (prod) → `client/public` (dev) → `server/public` → `public`, usando o 1º que
+ *       `fs.existsSync`. Assim `/logo-fc.jpg` (e qualquer asset estático cadastrado) passa a embutir.
+ *   (2) No HEADER ESCURO (faixa `primary = #1B3A5C`), quando a empresa usa o logo FC de FUNDO BRANCO
+ *       (`/logo-fc.jpg`), troca AUTOMATICAMENTE para a variante de FUNDO TRANSPARENTE branco/amarelo
+ *       (`/logo-fc-branco-amarelo.png`, já existente no repo) — senão o JPEG viraria um quadrado
+ *       branco sobre o azul-marinho. Demais empresas continuam usando seu próprio `logoUrl`.
+ *   (3) Caixa do logo passou de quadrada 65×65 para 108×56 (o logo FC é "deitado") com
+ *       `align/valign: center` e centralização vertical na faixa de 85px; `nameX` recalculado.
+ *
+ * VALIDAÇÃO: render de teste isolado com pdfkit embutiu o PNG transparente (PDF ~160KB) e a
+ * conversão p/ imagem confirmou o logo branco/amarelo legível sobre o azul-marinho, com a razão
+ * social ao lado. Empresas sem logo resolvível seguem degradando p/ "só texto" (comportamento atual).
+ *
+ * ARQUIVOS: `server/services/purchaseOrderPdf.ts` (`resolveLogoSource` + bloco do header em
+ * `generateOCPdf`). `shared/version.ts` → Rev. 3115. Assets já existentes: `client/public/logo-fc.jpg`,
+ * `client/public/logo-fc-branco-amarelo.png` (espelhados em `dist/public` no build).
+ *
  * Rev. 3114 — **COLABORADORES / RAIO-X DO FUNCIONÁRIO (ABA "DESEMPENHO") · A SEÇÃO "AVALIAÇÃO DO
  * CLIENTE" AGORA MOSTRA TODOS OS PONTOS ANALISADOS PELO CLIENTE (NÃO MAIS SÓ AS 5 MÉDIAS GERAL/
  * GESTOR/EQUIPE/PRAZO/QUALIDADE). CADA CRITÉRIO INDIVIDUAL DOS 4 BLOCOS (GESTOR, ENCARREGADO,

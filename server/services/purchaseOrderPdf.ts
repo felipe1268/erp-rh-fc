@@ -170,6 +170,27 @@ function resolveLogoSource(logoUrl: string | null | undefined): string | Buffer 
     const localPath = path.join(process.cwd(), "server", logoUrl);
     if (fs.existsSync(localPath)) return localPath;
   }
+  // Caminho root-relativo servido como asset estático (ex.: "/logo-fc.jpg").
+  // O arquivo vive no REPO (não no disco efêmero de /uploads): em prod fica em
+  // dist/public, em dev em client/public. Tenta os candidatos e usa o 1º que existir.
+  if (logoUrl.startsWith("/") && !logoUrl.startsWith("//")) {
+    const rel = logoUrl.replace(/^\/+/, "");
+    // Hardening: só imagens, e CONFINA o caminho resolvido dentro da pasta pública
+    // (evita path traversal via logoUrl malicioso vindo do banco, ex.: "/../../etc").
+    if (/\.(png|jpe?g|webp|gif)$/i.test(rel)) {
+      const bases = ["dist/public", "client/public", "server/public", "public"];
+      for (const b of bases) {
+        const baseDir = path.resolve(process.cwd(), b);
+        const resolved = path.resolve(baseDir, rel);
+        if (
+          (resolved === baseDir || resolved.startsWith(baseDir + path.sep)) &&
+          fs.existsSync(resolved)
+        ) {
+          return resolved;
+        }
+      }
+    }
+  }
   return null;
 }
 
@@ -233,19 +254,27 @@ export function generateOCPdf(data: OCData): PDFKit.PDFDocument {
   const headerH = 85;
   doc.rect(0, 0, pageW, headerH).fill(primary);
 
-  const logoSrc = resolveLogoSource(company?.logoUrl);
+  // Logo no cabeçalho ESCURO: prefere a variante clara (branco/amarelo, fundo
+  // transparente) quando a empresa usa o logo FC de fundo branco — assim não vira
+  // um quadrado branco sobre o azul-marinho. Senão usa o logo cadastrado.
+  let logoSrc = resolveLogoSource(company?.logoUrl);
+  if (/logo-fc\.jpg$/i.test(company?.logoUrl || "")) {
+    const claro = resolveLogoSource("/logo-fc-branco-amarelo.png");
+    if (claro) logoSrc = claro;
+  }
   let logoRendered = false;
-  const logoSize = 65;
+  const logoBoxW = 108;
+  const logoBoxH = 56;
   if (logoSrc) {
     try {
-      doc.image(logoSrc, mL, 10, { fit: [logoSize, logoSize] });
+      doc.image(logoSrc, mL, (headerH - logoBoxH) / 2, { fit: [logoBoxW, logoBoxH], align: "center", valign: "center" });
       logoRendered = true;
     } catch {
       logoRendered = false;
     }
   }
 
-  const nameX = logoRendered ? mL + logoSize + 12 : mL + 10;
+  const nameX = logoRendered ? mL + logoBoxW + 14 : mL + 10;
   const ocBlockW = 155;
   const nameW = pageW - nameX - ocBlockW - mR - 15;
 
