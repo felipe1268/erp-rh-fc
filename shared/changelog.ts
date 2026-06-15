@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3116 — **COLABORADORES / GRADE DE TAMANHOS (EPI) · O DIÁLOGO AGORA ABRE EM TELA CHEIA
+ * NO iPad/iPhone — ANTES ERA UM RETÂNGULO ESTREITO (max-w-2xl) QUE CORTAVA A COLUNA "CALÇA"
+ * (Qtd e tamanhos truncados à direita).**
+ *
+ * PEDIDO (iPad): "Ajuste a tela para deixar ela full screen.. pq não quero ela retangular e
+ * cortando informação." Print anexado da Grade de Tamanhos (EPI) mostrava a 3ª coluna (Calça)
+ * cortada na borda direita do diálogo.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE/SCHEMA/BACKEND): em
+ * `client/src/pages/Colaboradores.tsx`, o `<DialogContent>` da Grade de Tamanhos trocou
+ * `max-w-2xl max-h-[85vh]` por `max-w-none w-screen h-[100dvh] max-h-[100dvh] rounded-none
+ * p-4 sm:p-6` — ocupa a viewport inteira (largura + altura, `100dvh` p/ respeitar a barra do
+ * Safari iOS), sem cantos arredondados. As 3 colunas (Calçado/Camisa/Calça) ganham espaço de
+ * sobra no grid `sm:grid-cols-3` e nada mais é truncado. Mantém o scroll vertical interno
+ * (`overflow-y-auto`) e a lista "Sem informação de EPI". Nenhuma lógica de dados alterada.
+ *
  * Rev. 3115 — **COMPRAS / ORDEM DE COMPRA (PDF) · O LOGO DA FC VOLTOU A APARECER NO CABEÇALHO
  * AZUL-MARINHO DA OC — ANTES O CABEÇALHO MOSTRAVA SÓ A RAZÃO SOCIAL/CNPJ, SEM NENHUMA LOGOMARCA.
  * MANTÉM O LAYOUT MODERNO; SÓ ACRESCENTA A MARCA.**

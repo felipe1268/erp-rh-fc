@@ -1582,7 +1582,7 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
       {/* Rev. 2854 — GRADE DE TAMANHOS (EPI) — mapeamento de compra */}
       {/* ============================================================ */}
       <Dialog open={gradeOpen} onOpenChange={setGradeOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-none w-screen h-[100dvh] max-h-[100dvh] rounded-none overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><HardHat className="h-5 w-5 text-sky-600" /> Grade de Tamanhos (EPI)</DialogTitle>
             <DialogDescription>
