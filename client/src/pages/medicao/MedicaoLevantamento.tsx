@@ -26,6 +26,10 @@ import { VincularItemCombobox, buildItensVinculaveis } from "./VincularItemCombo
 import { parseDxfPlanta, type DxfPlanta } from "./dxfPlanta";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
+  AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
 
@@ -847,14 +851,24 @@ export default function MedicaoLevantamento() {
   const toggleSelTodos = () =>
     setSelContornos((prev) => (prev.size === contornosPagina.length ? new Set() : new Set(contornosPagina.map((c) => c.id))));
 
+  // Confirmação estilizada (substitui o window.confirm nativo, que exibia o domínio/URL no topo).
+  const [confirmDlg, setConfirmDlg] = useState<{ title: string; description?: string; confirmText?: string; onConfirm: () => void } | null>(null);
+  const askConfirm = (opts: { title: string; description?: string; confirmText?: string; onConfirm: () => void }) => setConfirmDlg(opts);
+
   async function excluirSelecionados() {
     if (bulkBusy) return;
     const alvos = contornosPagina.filter((c) => selContornos.has(c.id));
     if (alvos.length === 0) return;
-    if (!confirm(`Excluir ${alvos.length} contorno(s) selecionado(s)?`)) return;
-    setBulkBusy(true);
-    try { for (const c of alvos) await off.excluirContorno(c); setSelContornos(new Set()); }
-    finally { setBulkBusy(false); }
+    askConfirm({
+      title: `Excluir ${alvos.length} contorno${alvos.length > 1 ? "s" : ""} selecionado${alvos.length > 1 ? "s" : ""}?`,
+      description: "Os contornos marcados serão removidos desta planta. Esta ação não pode ser desfeita.",
+      confirmText: "Excluir",
+      onConfirm: async () => {
+        setBulkBusy(true);
+        try { for (const c of alvos) await off.excluirContorno(c); setSelContornos(new Set()); }
+        finally { setBulkBusy(false); }
+      },
+    });
   }
 
   async function vincularItemSelecionados(orcamentoItemId: string) {
@@ -1077,7 +1091,7 @@ export default function MedicaoLevantamento() {
                   className={`px-3 py-1.5 rounded-lg border text-sm flex items-center gap-1.5 ${pdfSelId === p.id ? "border-blue-600 bg-blue-50 text-blue-700" : "border-gray-200 hover:border-gray-400"}`}
                 >
                   <FileText className="h-3.5 w-3.5" />{p.nome}
-                  <X className="h-3 w-3 ml-1 opacity-50 hover:opacity-100" onClick={(e) => { e.stopPropagation(); if (confirm(`Remover planta "${p.nome}"? Os contornos dela também saem.`)) excluirPdfM.mutate({ id: p.id, companyId }); }} />
+                  <X className="h-3 w-3 ml-1 opacity-50 hover:opacity-100" onClick={(e) => { e.stopPropagation(); askConfirm({ title: "Remover planta?", description: `A planta "${p.nome}" e todos os contornos desenhados nela serão removidos. Esta ação não pode ser desfeita.`, confirmText: "Remover", onConfirm: () => excluirPdfM.mutate({ id: p.id, companyId }) }); }} />
                 </button>
               ))}
               <Button size="sm" variant="outline" className="gap-1.5" disabled={uploadPdfM.isPending} onClick={() => pdfInputRef.current?.click()}>
@@ -1451,7 +1465,7 @@ export default function MedicaoLevantamento() {
                             {ICON_TIPO[c.tipo as TipoContorno]} {LABEL_TIPO[c.tipo as TipoContorno]} #{String(c.numero ?? "").padStart(3, "0")}
                           </span>
                         </label>
-                        <button className="text-red-600 shrink-0" onClick={() => { if (confirm("Excluir contorno?")) off.excluirContorno(c); }}>
+                        <button className="text-red-600 shrink-0" onClick={() => askConfirm({ title: "Excluir contorno?", description: `${LABEL_TIPO[c.tipo as TipoContorno]} #${String(c.numero ?? "").padStart(3, "0")} será removido. Esta ação não pode ser desfeita.`, confirmText: "Excluir", onConfirm: () => off.excluirContorno(c) })}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
@@ -1531,7 +1545,7 @@ export default function MedicaoLevantamento() {
                         <img src={off.fotoSrcFor(f)} alt={f.legenda || "foto"} className="w-full h-20 object-cover rounded-md border" />
                       </a>
                       {f.__pending && <span className="absolute bottom-1 left-1 bg-amber-500/90 text-white text-[9px] px-1 rounded">pendente</span>}
-                      <button className="absolute top-1 right-1 bg-white/90 rounded-full p-0.5 text-red-600 opacity-0 group-hover:opacity-100" onClick={() => { if (confirm("Excluir foto?")) off.excluirFoto(f); }}>
+                      <button className="absolute top-1 right-1 bg-white/90 rounded-full p-0.5 text-red-600 opacity-0 group-hover:opacity-100" onClick={() => askConfirm({ title: "Excluir foto?", description: "A foto será removida deste levantamento. Esta ação não pode ser desfeita.", confirmText: "Excluir", onConfirm: () => off.excluirFoto(f) })}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
@@ -1549,6 +1563,21 @@ export default function MedicaoLevantamento() {
           onResolve={(v) => { numPrompt.resolve(v); setNumPrompt(null); }}
         />
       )}
+
+      <AlertDialog open={!!confirmDlg} onOpenChange={(o) => { if (!o) setConfirmDlg(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmDlg?.title}</AlertDialogTitle>
+            {confirmDlg?.description && <AlertDialogDescription>{confirmDlg.description}</AlertDialogDescription>}
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-red-600 hover:bg-red-700 focus:ring-red-600" onClick={() => { confirmDlg?.onConfirm(); setConfirmDlg(null); }}>
+              {confirmDlg?.confirmText || "Confirmar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }

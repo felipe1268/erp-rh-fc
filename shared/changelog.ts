@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3107 — **MEDIÇÃO / LEVANTAMENTO DE CAMPO · OS AVISOS DE EXCLUSÃO ("EXCLUIR CONTORNO?", "EXCLUIR FOTO?",
+ * "REMOVER PLANTA?", "EXCLUIR SELECIONADOS") DEIXARAM DE USAR O POP-UP NATIVO DO NAVEGADOR (QUE EXIBIA O
+ * DOMÍNIO/URL FEIO TIPO "b41aedae-...replit.dev diz" NO TOPO) E PASSARAM A USAR UM DIÁLOGO ESTILIZADO DO APP,
+ * COM TÍTULO E TEXTO LIMPOS.**
+ *
+ * PEDIDO: "Revise a mensagem de alerta, não precisa ter os códigos, deixa ele melhor apresentável" (print
+ * IMG_2039: `window.confirm("Excluir contorno?")` exibindo o hash do domínio Replit no cabeçalho do alerta).
+ *
+ * CAUSA: a tela usava `window.confirm(...)` nativo em 4 pontos. O navegador SEMPRE prefixa o alerta nativo com
+ * a origem ("<domínio> diz"), e no preview Replit a origem é um hash longo — não há como remover/estilizar isso
+ * num `confirm()`.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO ALTER/DROP/DELETE/SCHEMA/BACKEND) em
+ * `client/src/pages/medicao/MedicaoLevantamento.tsx`:
+ *
+ * 1) Novo estado `confirmDlg` + helper `askConfirm({title, description, confirmText, onConfirm})` que abre um
+ *    único `<AlertDialog>` (shadcn `ui/alert-dialog`) renderizado ao fim do componente.
+ *
+ * 2) Os 4 `window.confirm(...)` foram trocados por `askConfirm(...)` com mensagens descritivas: "Excluir
+ *    contorno?" (cita tipo + número), "Excluir foto?", "Remover planta?" (cita o nome) e o bulk "Excluir N
+ *    contorno(s) selecionado(s)?". Botão de ação vermelho ("Excluir"/"Remover") + "Cancelar".
+ *
+ * 3) O fluxo assíncrono do bulk (`excluirSelecionados`) foi movido para dentro do `onConfirm` (mantendo
+ *    `bulkBusy`), preservando o comportamento offline-first.
+ *
+ * RESSALVA/DRIFT: mudança de apresentação — nenhuma alteração na lógica de exclusão (`off.excluirContorno`,
+ * `off.excluirFoto`, `excluirPdfM.mutate`). O `window.prompt` numérico já havia sido substituído antes
+ * (`NumberPromptDialog`, Rev. 3097); outros `window.confirm` fora desta tela não foram tocados.
+ *
  * Rev. 3106 — **FINANCEIRO / ANÁLISE DE CUSTOS · O MODAL "EDITAR LANÇAMENTO" (DRILL "POR CENTRO DE CUSTO")
  * FOI REDESENHADO PARA SER MAIS MODERNO E FÁCIL DE PREENCHER — E, PRINCIPALMENTE, PARA NÃO CORTAR NEM
  * SOBREPOR MAIS O TEXTO DO DROPDOWN DE CATEGORIA/CENTRO DE CUSTO (QUE APARECIA CLIPADO À ESQUERDA E SOBRE
