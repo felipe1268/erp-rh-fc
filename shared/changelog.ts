@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3118 — **CONTROLE DE DOCUMENTOS / ABA "MAPEAMENTO" · MÚLTIPLA SELEÇÃO PARA LER VÁRIOS ASOs
+ * COM IA DE UMA VEZ — ANTES SÓ DAVA P/ LER 1 POR LINHA (ícone ✨) OU O LOTE AUTOMÁTICO (10 pendentes).**
+ *
+ * PEDIDO (iPad, sobre a aba Mapeamento da Rev. 3117): "Quero múltipla seleção para gerar vários de
+ * uma vez". O usuário quer ESCOLHER quais ASOs mandar p/ a leitura por IA (não só o automático).
+ *
+ * SOLUÇÃO (FRONTEND + 1 procedure backend aditiva — ZERO ALTER/DROP/DELETE/SCHEMA):
+ *   • BACKEND (`server/routers/controleDocumentos.ts`): nova mutation `docs.asos.lerSelecionadosIA`
+ *     (input `asoIds: number[]` min 1 / max 100) que processa EXATAMENTE os ASOs escolhidos via o
+ *     mesmo `processarAsoComIA` (dedup de ids; cada ASO valida companyId contra os ids permitidos).
+ *     Gateada por `assertAiModuleEnabled(companyId,"rh")` + `resolveCompanyIdsGuard` (tenant guard),
+ *     idêntico às demais procedures de IA. Retorna {processados, sucesso, falha, erros}.
+ *   • FRONTEND (`client/src/pages/ControleDocumentos.tsx`, `MapeamentoPanel`): coluna de checkbox
+ *     na tabela (só linhas com PDF — `temPdf`), checkbox "selecionar todos" no cabeçalho (opera só
+ *     sobre os selecionáveis FILTRADOS), linha selecionada ganha realce violeta; estado
+ *     `selecionados: Set<asoId>`. Botão "Ler selecionados com IA (N)" aparece quando há seleção e
+ *     dispara `lerSelecionadosIA`; ao concluir limpa a seleção, abre a Revisão por IA e dá refetch
+ *     da fila. Os botões antigos ("Ler ASOs com IA (lote)" e ✨ por linha) seguem funcionando.
+ *     colSpan do "nenhum colaborador" 7→8.
+ *
+ * REGRA DE OURO mantida: nada é aplicado ao ASO sem aprovação humana na fila de revisão.
+ *
+ * Arquivos: `server/routers/controleDocumentos.ts` (lerSelecionadosIA), `client/src/pages/
+ * ControleDocumentos.tsx` (MapeamentoPanel: estado/seleção/checkboxes/botão), `shared/version.ts`,
+ * `shared/changelog.ts`, `replit.md`.
+ *
  * Rev. 3117 — **CONTROLE DE DOCUMENTOS / NOVA ABA "MAPEAMENTO" (COBERTURA DE EXAMES DO ASO) ·
  * RASTREIA QUEM FEZ / NÃO FEZ CADA EXAME (FOCO NA AVALIAÇÃO PSICOSSOCIAL) + LEITURA DOS PDFs
  * POR IA (GEMINI) COM REVISÃO HUMANA OBRIGATÓRIA ANTES DE GRAVAR NO ASO.**

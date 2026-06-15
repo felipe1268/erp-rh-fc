@@ -954,6 +954,25 @@ export const controleDocumentosRouter = router({
         return { processados: pend.length, sucesso, falha, erros };
       }),
 
+    // Processa em LOTE apenas os ASOs SELECIONADOS na tela (multi-seleção). Tenant-safe:
+    // processarAsoComIA valida companyId de cada ASO contra os ids permitidos.
+    lerSelecionadosIA: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), asoIds: z.array(z.number()).min(1).max(100) }))
+      .mutation(async ({ ctx, input }) => {
+        await assertAiModuleEnabled(input.companyId, "rh");
+        const db = (await getDb())!;
+        const ids = await resolveCompanyIdsGuard(ctx, input);
+        const alvo = Array.from(new Set(input.asoIds));
+        let sucesso = 0, falha = 0;
+        const erros: string[] = [];
+        for (const asoId of alvo) {
+          const res = await processarAsoComIA(db, asoId, ids, ctx);
+          if (res.ok) sucesso++;
+          else { falha++; if (erros.length < 10) erros.push(`ASO #${asoId}: ${res.erro}`); }
+        }
+        return { processados: alvo.length, sucesso, falha, erros };
+      }),
+
     // Fila de revisão: extrações pendentes (ou por status) com dados do colaborador.
     listExtracoesIA: protectedProcedure
       .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), status: z.string().optional() }))

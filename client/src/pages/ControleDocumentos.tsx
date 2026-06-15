@@ -910,6 +910,7 @@ function MapeamentoPanel({ companyId, companyIds, onClickEmployee, empresaNome }
   const [search, setSearch] = useState("");
   const [showRevisao, setShowRevisao] = useState(false);
   const [iaLoadingId, setIaLoadingId] = useState<number | null>(null);
+  const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
 
   // ===== IA (Fase 2) — leitura de laudo com revisão humana =====
   const revisaoQ = trpc.docs.asos.listExtracoesIA.useQuery({ companyId, companyIds, status: "aguardando_revisao" }, { enabled: showRevisao && !!companyId });
@@ -922,6 +923,10 @@ function MapeamentoPanel({ companyId, companyIds, onClickEmployee, empresaNome }
   const lerLoteIA = trpc.docs.asos.lerLoteIA.useMutation({
     onSuccess: (r: any) => { toast.success(`Lote processado: ${r.sucesso} ok, ${r.falha} falha(s).`); setShowRevisao(true); revisaoQ.refetch(); },
     onError: (e) => toast.error(e.message || "Falha ao processar o lote."),
+  });
+  const lerSelecionadosIA = trpc.docs.asos.lerSelecionadosIA.useMutation({
+    onSuccess: (r: any) => { toast.success(`Selecionados processados: ${r.sucesso} ok, ${r.falha} falha(s).`); setSelecionados(new Set()); setShowRevisao(true); revisaoQ.refetch(); },
+    onError: (e) => toast.error(e.message || "Falha ao processar os selecionados."),
   });
   const aprovarIA = trpc.docs.asos.aprovarExtracaoIA.useMutation({
     onSuccess: () => { toast.success("Extração aprovada e aplicada ao ASO."); revisaoQ.refetch(); utils.docs.asos.mapaCobertura.invalidate(); },
@@ -976,6 +981,25 @@ function MapeamentoPanel({ companyId, companyIds, onClickEmployee, empresaNome }
 
   // Pendentes do exame = não fez OU sem ASO (foco da cobrança).
   const pendentes = useMemo(() => enriquecidos.filter((c) => c._classe === "nao_fez" || c._classe === "sem_aso"), [enriquecidos]);
+
+  // ===== Multi-seleção p/ "Ler com IA" em lote (só linhas com PDF) =====
+  const selecionaveis = useMemo(() => filtrados.filter((c) => c.temPdf), [filtrados]);
+  const todosSelecionados = selecionaveis.length > 0 && selecionaveis.every((c) => selecionados.has(c.asoId));
+  const toggleSelecionado = (asoId: number) => setSelecionados((prev) => {
+    const next = new Set(prev);
+    if (next.has(asoId)) next.delete(asoId); else next.add(asoId);
+    return next;
+  });
+  const toggleTodos = () => setSelecionados((prev) => {
+    if (selecionaveis.every((c) => prev.has(c.asoId))) {
+      const next = new Set(prev);
+      selecionaveis.forEach((c) => next.delete(c.asoId));
+      return next;
+    }
+    const next = new Set(prev);
+    selecionaveis.forEach((c) => next.add(c.asoId));
+    return next;
+  });
 
   const imprimirPendentes = () => {
     const hoje = new Date().toLocaleDateString("pt-BR");
@@ -1049,6 +1073,11 @@ function MapeamentoPanel({ companyId, companyIds, onClickEmployee, empresaNome }
               <Button size="sm" variant="outline" className="gap-2 border-teal-300 text-teal-700 hover:bg-teal-50" onClick={imprimirPendentes} disabled={pendentes.length === 0}>
                 <Printer className="h-4 w-4" /> Imprimir pendentes ({pendentes.length})
               </Button>
+              {selecionados.size > 0 && (
+                <Button size="sm" className="gap-2 bg-violet-600 hover:bg-violet-700" onClick={() => lerSelecionadosIA.mutate({ companyId, companyIds, asoIds: Array.from(selecionados) })} disabled={lerSelecionadosIA.isPending}>
+                  {lerSelecionadosIA.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} {lerSelecionadosIA.isPending ? "Processando..." : `Ler selecionados com IA (${selecionados.size})`}
+                </Button>
+              )}
               <Button size="sm" variant="outline" className="gap-2 border-violet-300 text-violet-700 hover:bg-violet-50" onClick={() => lerLoteIA.mutate({ companyId, companyIds, limite: 10 })} disabled={lerLoteIA.isPending}>
                 <Sparkles className="h-4 w-4" /> {lerLoteIA.isPending ? "Processando..." : "Ler ASOs com IA (lote)"}
               </Button>
@@ -1146,6 +1175,9 @@ function MapeamentoPanel({ companyId, companyIds, onClickEmployee, empresaNome }
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-teal-50/50">
+                  <th className="text-center p-2 font-medium w-8">
+                    <input type="checkbox" className="h-4 w-4 accent-violet-600 cursor-pointer align-middle" checked={todosSelecionados} onChange={toggleTodos} disabled={selecionaveis.length === 0} title="Selecionar todos com PDF" />
+                  </th>
                   <th className="text-left p-2 font-medium">Colaborador</th>
                   <th className="text-left p-2 font-medium">Função</th>
                   <th className="text-left p-2 font-medium">Obra</th>
@@ -1157,7 +1189,12 @@ function MapeamentoPanel({ companyId, companyIds, onClickEmployee, empresaNome }
               </thead>
               <tbody>
                 {filtrados.map((c) => (
-                  <tr key={c.employeeId} className="border-b hover:bg-muted/20">
+                  <tr key={c.employeeId} className={`border-b hover:bg-muted/20 ${c.temPdf && selecionados.has(c.asoId) ? "bg-violet-50/50" : ""}`}>
+                    <td className="p-2 text-center">
+                      {c.temPdf ? (
+                        <input type="checkbox" className="h-4 w-4 accent-violet-600 cursor-pointer align-middle" checked={selecionados.has(c.asoId)} onChange={() => toggleSelecionado(c.asoId)} title="Selecionar para ler com IA" />
+                      ) : null}
+                    </td>
                     <td className="p-2">
                       <div className="flex items-center gap-2">
                         <PersonPhoto src={c.fotoUrl} alt={c.nomeCompleto} size="sm" />
@@ -1201,7 +1238,7 @@ function MapeamentoPanel({ companyId, companyIds, onClickEmployee, empresaNome }
                   </tr>
                 ))}
                 {filtrados.length === 0 && (
-                  <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum colaborador para o filtro selecionado.</td></tr>
+                  <tr><td colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum colaborador para o filtro selecionado.</td></tr>
                 )}
               </tbody>
             </table>
