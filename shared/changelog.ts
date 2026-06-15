@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3126 — **MEDIÇÃO / "LEVANTAMENTO" (ENGINE COMPARTILHADA CLIENTE×TERCEIRO) · CORRIGIDA A TELA DE
+ * ERRO "OCORREU UM ERRO INESPERADO · RENDERED MORE HOOKS THAN DURING THE PREVIOUS RENDER" QUE QUEBRAVA
+ * A PÁGINA DE LEVANTAMENTO (EX.: `/medicao/17/levantamento/1?origem=terceiro`).**
+ *
+ * SINTOMA (iPad, com print): ao abrir o Levantamento, a tela caía no ErrorBoundary com "Rendered more
+ * hooks than during the previous render" e o stack apontando para o chunk `MedicaoLevantamento`.
+ *
+ * CAUSA-RAIZ: em `client/src/pages/medicao/MedicaoLevantamento.tsx`, DOIS `useMemo` (`fotosPorContorno`
+ * e `contornoById`) estavam declarados DEPOIS dos early-returns de carregamento (`if (loadingCampo)
+ * return ...` e `if (!campo) return ...`). No 1º render (campo ainda carregando) o componente retornava
+ * cedo e esses 2 hooks NÃO rodavam; quando o `campo` chegava, o componente renderizava até o fim e
+ * passava a chamar 2 hooks A MAIS — violando a Regra dos Hooks do React (a contagem/ordem de hooks tem
+ * que ser idêntica em todo render).
+ *
+ * CORREÇÃO (FRONTEND-ONLY, REORDENAÇÃO; ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE): os 2 `useMemo` (e o
+ * derivado `const fotos = campo?.fotos ?? []`, agora com optional-chaining p/ tolerar `campo` nulo)
+ * foram MOVIDOS p/ ANTES dos early-returns, junto dos demais hooks de topo. Assim a contagem de hooks é
+ * constante entre os renders "carregando" e "carregado". Nenhuma lógica de cálculo/visual mudou — apenas
+ * a POSIÇÃO das declarações. Comentário-âncora adicionado explicando a obrigatoriedade da ordem.
+ *
  * Rev. 3125 — **FINANCEIRO / "LANÇAMENTOS" · O CAMPO "OBRA (OPCIONAL)" DO MODAL DE LANÇAMENTO DEIXOU DE
  * SER TEXTO LIVRE E AGORA SUGERE/SELECIONA AS OBRAS ATIVAS DA EMPRESA — NO LUGAR DE DIGITAR O NOME NA
  * MÃO (E ARRISCAR ERRO/DIVERGÊNCIA DE GRAFIA).**

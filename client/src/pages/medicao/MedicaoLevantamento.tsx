@@ -1228,17 +1228,12 @@ export default function MedicaoLevantamento() {
 
   const pageWidth = baseWidth * zoom;
 
-  if (loadingCampo) {
-    return <DashboardLayout><div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div></DashboardLayout>;
-  }
-  if (!campo) {
-    return <DashboardLayout><div className="p-8 text-center text-gray-500">Levantamento não encontrado.</div></DashboardLayout>;
-  }
-
-  const fotos = (campo.fotos ?? []) as any[];
-
   // Rastreio: fotos agrupadas por contorno + índice de contorno por id (p/ rótulo
   // na galeria geral). Fotos sem contornoId entram em "geral".
+  // IMPORTANTE: estes hooks DEVEM ficar ANTES dos early-returns abaixo (loading /
+  // campo ausente) — senão a contagem de hooks muda entre renders e o React quebra
+  // com "Rendered more hooks than during the previous render".
+  const fotos = (campo?.fotos ?? []) as any[];
   const fotosPorContorno = useMemo(() => {
     const m = new Map<number, any[]>();
     for (const f of fotos) {
@@ -1252,6 +1247,13 @@ export default function MedicaoLevantamento() {
     for (const c of ((campo?.contornos ?? []) as any[])) m.set(c.id, c);
     return m;
   }, [campo]);
+
+  if (loadingCampo) {
+    return <DashboardLayout><div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div></DashboardLayout>;
+  }
+  if (!campo) {
+    return <DashboardLayout><div className="p-8 text-center text-gray-500">Levantamento não encontrado.</div></DashboardLayout>;
+  }
 
   return (
     <DashboardLayout>
