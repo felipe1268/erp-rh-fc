@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3146 — **FINANCEIRO / CONTAS A PAGAR · O CARD "TOTAL <MÊS>" VOLTOU A BATER — A CONTAGEM
+ * DE CONTAS AGORA ESPELHA O MESMO ESCOPO (EFETIVO/PROJEÇÃO/TODOS) DO VALOR EXIBIDO, ENTÃO
+ * "TOTAL = PAGO + A PAGAR" FECHA TAMBÉM NA QUANTIDADE, NÃO SÓ NO VALOR.**
+ *
+ * PEDIDO (iPad, sobre a tela Contas a Pagar): "estes valores estão corretos? não fazem muito
+ * sentido para mim, tem valores que não batem". DIAGNÓSTICO (dados reais FC=60002, Fev/2026):
+ * o card "Total Fev" mostrava R$ 2.630.147,80 / 1684 contas, mas Pago (948) + A Pagar (581) = 1529,
+ * faltando 155 contas na conta. CAUSA-RAIZ: em `client/src/pages/financeiro/FinanceiroContasAPagar.tsx`
+ * o card "Total <mês>" exibia o VALOR de `totalMes` (soma de `escopoMes`, que no filtro padrão
+ * "Efetivo" EXCLUI as projeções de cronograma/PCP/folha projetada — `isProjecao`), mas a CONTAGEM
+ * vinha de `mesData.length` (TODAS as contas do mês, INCLUSIVE as 155 projeções que o "Efetivo"
+ * esconde). Resultado: valor de um escopo, contagem de outro — descasamento de 155 títulos. Todos os
+ * demais cards (Em Aberto Acum., A Pagar, Vencidas, Pago) já usavam `escopoMes`; só o "Total" usava
+ * `mesData`. (OBS.: "A Pagar" e "Vencidas" aparecerem idênticos — R$ 1.883.468,21 / 581 — NÃO é bug:
+ * como Fev/2026 é mês passado e hoje é 16/06/2026, TODO título não-pago de Fev já está vencido, então
+ * os dois conjuntos coincidem POR DESIGN.)
+ *
+ * CORREÇÃO (FRONTEND-ONLY; ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE): a contagem do card "Total <mês>"
+ * passou de `mesData.length` para `escopoMes.length` — mesmo conjunto que origina o valor. Com isso
+ * `escopoMes.length === pagos.length + pendentes.length` (1529 = 948 + 581) e o card reconcilia.
+ * Como bônus de clareza, quando o filtro "Efetivo" está ativo e há projeções escondidas
+ * (`projecoesOcultas > 0`), o card passa a exibir um sufixo discreto "· +N em projeção" explicando
+ * por que o total não é maior. Quando o filtro é "Todos", `escopoMes === mesData` e nada muda.
+ *
  * Rev. 3145 — **FINANCEIRO / LANÇAMENTOS · OS CARDS "TOTAL RECEITAS / DESPESAS / RESULTADO"
  * PASSARAM A SOMAR TODOS OS LANÇAMENTOS DO PERÍODO (NO SERVIDOR), E NÃO MAIS SÓ AS ~500
  * LINHAS QUE A LISTA CARREGA — ANTES O TOTAL VINHA SUB-RELATADO QUANDO O MÊS TINHA MAIS

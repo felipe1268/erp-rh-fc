@@ -804,7 +804,15 @@ export default function FinanceiroContasAPagar() {
             <CardContent className="p-4">
               <p className="text-xs text-gray-500 mb-1 flex items-center gap-1"><Banknote className="w-3 h-3" />Total {MESES[mesSel-1]}</p>
               <p className="text-lg font-bold text-gray-800">{formatBRL(totalMes)}</p>
-              <p className="text-xs text-gray-400">{mesData.length} conta(s)</p>
+              {/* Rev. 3146 — contagem espelha o MESMO escopo (Efetivo/Projeção/Todos) do valor.
+                  Antes usava mesData.length (todas) enquanto o valor somava só escopoMes → contagem
+                  não batia com Pago+A Pagar. Agora escopoMes.length = pagos + pendentes. */}
+              <p className="text-xs text-gray-400">
+                {escopoMes.length} conta(s)
+                {projecoesOcultas > 0 && (
+                  <span className="text-violet-500"> · +{projecoesOcultas} em projeção</span>
+                )}
+              </p>
             </CardContent>
           </Card>
           <Card className="border-0 shadow-sm border-l-4 border-l-indigo-500">
