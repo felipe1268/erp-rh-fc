@@ -160,6 +160,21 @@ export default function FinanceiroLancamentos() {
     { enabled: !!companyId }
   );
 
+  // Rev. 3145 — Totais do período somados NO SERVIDOR (todos os lançamentos),
+  // não só os 500 que a lista carrega. Mesmos filtros do getEntries acima.
+  const { data: totais } = (trpc as any).financial.getEntriesTotais.useQuery(
+    {
+      companyId,
+      dataInicio: dataInicio || undefined,
+      dataFim: dataFim || undefined,
+      tipo: tipo !== "all" ? tipo : undefined,
+      status: statusFilter !== "all" ? statusFilter : undefined,
+      excluirCronograma: true,
+      search: search || undefined,
+    },
+    { enabled: !!companyId }
+  );
+
   // Rev. 3133 — a TIMELINE comanda o período: ao trocar de ano/mês, recalcula
   // dataInicio/dataFim (que continuam sendo a fonte de verdade do getEntries).
   useEffect(() => {
@@ -209,6 +224,7 @@ export default function FinanceiroLancamentos() {
       utils.financial.getEntries?.invalidate?.();
       utils.financial.getEntryDetalhe?.invalidate?.();
       utils.financial.getEntriesResumoMensal?.invalidate?.(); // Rev. 3133 — atualiza as bolinhas da timeline.
+      utils.financial.getEntriesTotais?.invalidate?.(); // Rev. 3145 — mantém os cards de total atualizados pós-mutação.
     } catch { /* noop */ }
   }
 
@@ -593,8 +609,13 @@ export default function FinanceiroLancamentos() {
     return (l.descricao ?? "").toLowerCase().includes(q) || (l.obraNome ?? "").toLowerCase().includes(q) || (l.contaNome ?? "").toLowerCase().includes(q);
   });
 
-  const totalReceitas = lancamentos.filter((l: any) => l.tipo === "receita" && l.status !== "cancelado").reduce((s: number, l: any) => s + Number(l.valorPrevisto ?? 0), 0);
-  const totalDespesas = lancamentos.filter((l: any) => l.tipo === "despesa" && l.status !== "cancelado").reduce((s: number, l: any) => s + Number(l.valorPrevisto ?? 0), 0);
+  // Rev. 3145 — Totais vêm do agregado do servidor (TODOS os lançamentos do
+  // período, sem o teto de 500 da lista). Fallback p/ a soma da lista enquanto
+  // o agregado ainda não carregou, p/ o card não piscar zerado.
+  const listaReceitas = lancamentos.filter((l: any) => l.tipo === "receita" && l.status !== "cancelado").reduce((s: number, l: any) => s + Number(l.valorPrevisto ?? 0), 0);
+  const listaDespesas = lancamentos.filter((l: any) => l.tipo === "despesa" && l.status !== "cancelado").reduce((s: number, l: any) => s + Number(l.valorPrevisto ?? 0), 0);
+  const totalReceitas = totais ? Number(totais.receita ?? 0) : listaReceitas;
+  const totalDespesas = totais ? Number(totais.despesa ?? 0) : listaDespesas;
 
   // Rev. 3139 — Seleção múltipla: só são selecionáveis lançamentos NÃO cancelados.
   const selectableLancs = lancamentos.filter((l: any) => l.status !== "cancelado");

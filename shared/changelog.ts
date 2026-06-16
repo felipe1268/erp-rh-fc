@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3145 — **FINANCEIRO / LANÇAMENTOS · OS CARDS "TOTAL RECEITAS / DESPESAS / RESULTADO"
+ * PASSARAM A SOMAR TODOS OS LANÇAMENTOS DO PERÍODO (NO SERVIDOR), E NÃO MAIS SÓ AS ~500
+ * LINHAS QUE A LISTA CARREGA — ANTES O TOTAL VINHA SUB-RELATADO QUANDO O MÊS TINHA MAIS
+ * DE 500 LANÇAMENTOS.**
+ *
+ * PEDIDO (iPad): "pq os valores não estão convergindo? lançamento e contas a pagar não era para
+ * ter o mesmo valor?". DIAGNÓSTICO (dados reais FC=60002, Fev/2026): o card "Total Despesas" da
+ * tela de Lançamentos mostrava R$ 2.201.894,74, mas Fevereiro tem na verdade 1.578 despesas
+ * somando R$ 3.246.384,13. CAUSA-RAIZ: a tela `FinanceiroLancamentos.tsx` só busca no máximo
+ * `limit:500` lançamentos via `getEntries`, e os cards somavam EXCLUSIVAMENTE esse array capado
+ * (`data?.data`) — das 500 linhas carregadas só 462 eram despesa<>cancelado → R$ 2.201.894,74
+ * (bateu CRAVADO com a conta dos primeiros 500 no Neon). Ou seja: quando o mês passa de 500
+ * lançamentos, ~1.078 ficavam de fora e o total caía ~R$ 1 mi. (Diferença adicional vs. Contas a
+ * Pagar é POR DESIGN: aquela tela ancora por VENCIMENTO e não tem teto; Lançamentos ancora por
+ * sobreposição competência↔vencimento — isso permanece.)
+ *
+ * CORREÇÃO (ADITIVA; ZERO ALTER/DROP/DELETE/SCHEMA): NOVA procedure READ-ONLY
+ * `financial.getEntriesTotais` em `server/routers/financial.ts` que ESPELHA 1:1 os MESMOS filtros
+ * do `getEntries` (tenancy via `resolveCompanyIds`+`inlineIds`, obra, tipo, status, período por
+ * SOBREPOSIÇÃO competência↔vencimento↔criação, origemModulo, excluirCronograma) + busca textual
+ * (ILIKE em descrição/obra/conta), porém SEM `limit`/`offset` — agrega `SUM(valor_previsto)`
+ * agrupado por `tipo` e SEMPRE ignora cancelados (igual à regra do card). Respeita o caveat do
+ * `dbExecute` (placeholders ligados por ORDEM DE APARIÇÃO — cada aparição empurra seu valor em
+ * `vals`). FRONTEND `client/src/pages/financeiro/FinanceiroLancamentos.tsx`: nova `useQuery` com os
+ * MESMOS parâmetros do `getEntries` (companyId, dataInicio/dataFim, tipo, status, excluirCronograma,
+ * search); `totalReceitas`/`totalDespesas` passam a ler o agregado do servidor, com FALLBACK para a
+ * soma da lista enquanto o agregado carrega (card não pisca zerado). O `Resultado` é derivado e
+ * acompanha. A lista em si (e o search client-side) seguem inalterados.
+ *
  * Rev. 3144 — **RH / RAIO-X · FICHA DE AVALIAÇÃO DO CLIENTE (PDF) NÃO VAZA MAIS PARA FORA DA
  * PÁGINA — MARGENS ENXUTAS, TEXTO QUEBRA DENTRO DAS CÉLULAS E A DATA APARECE CERTA
  * ("16/06/2026" EM VEZ DE "16 00:51:59.419066/06/2026").**

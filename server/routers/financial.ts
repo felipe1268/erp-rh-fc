@@ -593,6 +593,81 @@ export const financialRouter = router({
     };
   }),
 
+  // Rev. 3145 — Totais AGREGADOS do período (Receitas/Despesas) somando TODOS os
+  // lançamentos no servidor, INDEPENDENTE do teto de paginação (`limit`) do
+  // `getEntries`. Antes os cards "Total Despesas/Receitas/Resultado" da tela de
+  // Lançamentos somavam só as ~500 linhas carregadas, então sub-relatavam o mês
+  // (Fev/2026: mostrava R$ 2,20 mi sendo que o real é R$ 3,25 mi). Espelha 1:1 os
+  // MESMOS filtros do `getEntries` (tenancy/obra/tipo/status/período por sobreposição
+  // competência↔vencimento↔criação/origem/excluirCronograma) + busca textual, e
+  // SEMPRE ignora cancelados (igual ao card). Read-only, guardado por IDOR via tenancy.
+  getEntriesTotais: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    companyIds: z.array(z.number()).optional(),
+    obraId: z.number().optional(),
+    tipo: z.string().optional(),
+    status: z.string().optional(),
+    mesCompetencia: z.string().optional(),
+    dataInicio: z.string().optional(),
+    dataFim: z.string().optional(),
+    origemModulo: z.string().optional(),
+    excluirCronograma: z.boolean().optional(),
+    search: z.string().optional(),
+  })).query(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    // Tenant-guard anti-IDOR (Rev. 3145): valida acesso à empresa antes de agregar.
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const ids = resolveCompanyIds(input);
+    const conds: string[] = [`e.company_id IN (${inlineIds(ids)})`];
+    const vals: any[] = [];
+    let i = 1;
+    if (input.obraId) { conds.push(`e.obra_id=$${i++}`); vals.push(input.obraId); }
+    if (input.tipo) { conds.push(`e.tipo=$${i++}`); vals.push(input.tipo); }
+    if (input.status) { conds.push(`e.status=$${i++}`); vals.push(input.status); }
+    if (input.mesCompetencia) { conds.push(`TO_CHAR(e.data_competencia,'YYYY-MM')=$${i++}`); vals.push(input.mesCompetencia); }
+    // Mesmo filtro de período por SOBREPOSIÇÃO do getEntries (competência OU
+    // vencimento; se ambos NULL → criação). NB: dbExecute liga placeholders por
+    // ORDEM DE APARIÇÃO — cada aparição empurra seu valor em `vals`.
+    if (input.dataInicio || input.dataFim) {
+      const rangeFor = (col: string) => {
+        if (input.dataInicio && input.dataFim) { const c = `${col} BETWEEN $${i++} AND $${i++}`; vals.push(input.dataInicio, input.dataFim); return c; }
+        if (input.dataInicio) { const c = `${col}>=$${i++}`; vals.push(input.dataInicio); return c; }
+        const c = `${col}<=$${i++}`; vals.push(input.dataFim); return c;
+      };
+      const cCompetencia = rangeFor("e.data_competencia");
+      const cVencimento = rangeFor("e.data_vencimento");
+      const cCriacao = rangeFor("e.created_at::date");
+      conds.push(
+        `((e.data_competencia IS NOT NULL AND ${cCompetencia}) ` +
+        `OR (e.data_vencimento IS NOT NULL AND ${cVencimento}) ` +
+        `OR (e.data_competencia IS NULL AND e.data_vencimento IS NULL AND ${cCriacao}))`
+      );
+    }
+    if (input.origemModulo) { conds.push(`e.origem_modulo=$${i++}`); vals.push(input.origemModulo); }
+    if (input.excluirCronograma) { conds.push(`COALESCE(e.origem_modulo,'') <> 'cronograma_atividade'`); }
+    if (input.search && input.search.trim()) {
+      const like = `%${input.search.trim()}%`;
+      conds.push(`(e.descricao ILIKE $${i++} OR e.obra_nome ILIKE $${i++} OR e.conta_nome ILIKE $${i++})`);
+      vals.push(like, like, like);
+    }
+    // Espelha o card: cancelados nunca entram no total.
+    conds.push(`e.status <> 'cancelado'`);
+    const res = await dbExecute(db,
+      `SELECT e.tipo, COALESCE(SUM(e.valor_previsto), 0) AS total
+       FROM financial_entries e
+       WHERE ${conds.join(" AND ")}
+       GROUP BY e.tipo`,
+      vals
+    );
+    let receita = 0, despesa = 0;
+    for (const r of rows(res)) {
+      if (r.tipo === "receita") receita = Number(r.total ?? 0);
+      else if (r.tipo === "despesa") despesa = Number(r.total ?? 0);
+    }
+    return { receita, despesa };
+  }),
+
   // Rev. 3133 — Resumo por mês p/ a TIMELINE de meses (Jan–Dez) da tela de
   // Lançamentos — mesmo padrão visual do Contas a Pagar/Receber. Agrega só
   // CONTAGENS por mês (não puxa as ~milhares de linhas do ano), classificando
