@@ -123,6 +123,26 @@ const FROTA_GRUPO_ICONS: Record<string, any> = {
   frota_outros: Truck,
 };
 
+// Rev. 3156 — "Ruído" de cancelados: um lançamento CANCELADO que veio de OUTRO
+// módulo (origem não-financeira) e que NUNCA teve baixa no financeiro (nunca foi
+// pago/recebido) é pura poluição visual — o cancelamento aconteceu na ORIGEM
+// (ex.: OC/Compra/Frota cancelada lá), não no financeiro, e não houve nenhum
+// movimento de caixa. Esses somem SEMPRE da lista (inclusive no filtro
+// "Cancelado"). Permanecem: o que foi cancelado DENTRO do financeiro (origem
+// manual/recorrente/importação) OU o que teve baixa em algum momento (há rastro
+// real de pagamento/realizado).
+const FINANCEIRO_NATIVE_ORIGENS = new Set(["recorrente", "importacao_excel"]);
+function teveBaixaFinanceiro(l: any): boolean {
+  return l?.dataPagamento != null || Number(l?.valorRealizado ?? 0) > 0;
+}
+function isCanceladoRuido(l: any): boolean {
+  if (l?.status !== "cancelado") return false;
+  const om = l?.origemModulo;
+  // origem null = lançamento manual (financeiro-nativo) → não é ruído.
+  const origemExterna = !!om && !FINANCEIRO_NATIVE_ORIGENS.has(om);
+  return origemExterna && !teveBaixaFinanceiro(l);
+}
+
 // Rev. 3153 — iPad/iOS Safari derruba a request de mutations em lote (45+ ids) e a
 // DOMException chega CRUA como "The string did not match the expected pattern" (e
 // variantes "load failed"/"failed to fetch"/aborted/timeout). Como as ações em lote
@@ -744,11 +764,15 @@ export default function FinanceiroLancamentos() {
     return (l.descricao ?? "").toLowerCase().includes(q) || (l.obraNome ?? "").toLowerCase().includes(q) || (l.contaNome ?? "").toLowerCase().includes(q);
   };
   const rawLancamentos = (data?.data ?? []) as any[];
+  // Rev. 3156 — descarta SEMPRE o ruído de cancelados (cancelado em outro módulo +
+  // nunca baixado no financeiro), antes de qualquer contagem/exibição. Some da
+  // lista e do contador "Mostrar cancelados (N)", pois nunca é mostrado.
+  const baseLancamentos = rawLancamentos.filter((l: any) => !isCanceladoRuido(l));
   // Rev. 3152 — quantos cancelados existem no recorte atual (p/ rotular o botão).
   // Quando o usuário filtra explicitamente por "Cancelado", eles aparecem sempre.
   const ocultandoCancelados = !showCancelados && statusFilter !== "cancelado";
-  const canceladosCount = rawLancamentos.filter((l: any) => l.status === "cancelado" && matchBusca(l)).length;
-  const lancamentos = rawLancamentos.filter((l: any) => {
+  const canceladosCount = baseLancamentos.filter((l: any) => l.status === "cancelado" && matchBusca(l)).length;
+  const lancamentos = baseLancamentos.filter((l: any) => {
     if (ocultandoCancelados && l.status === "cancelado") return false;
     return matchBusca(l);
   });

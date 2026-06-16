@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3156 — **FINANCEIRO / LANÇAMENTOS · OS LANÇAMENTOS CANCELADOS QUE VIERAM DE
+ * OUTRO MÓDULO E NUNCA FORAM PAGOS NO FINANCEIRO SUMIRAM DA LISTA — FICA SÓ O QUE
+ * FOI CANCELADO DENTRO DO PRÓPRIO FINANCEIRO OU O QUE TEVE BAIXA EM ALGUM MOMENTO.**
+ *
+ * PEDIDO (screenshot IMG_2094, filtro "Cancelado", iPad): a lista de cancelados vinha
+ * poluída por dezenas de linhas que NÃO nasceram no financeiro — Ordens de Compra,
+ * Compras e Frota canceladas LÁ na origem (ex.: "OC OC-2026-0076 — Bravo Locações",
+ * "Combustível Frotas — Abril/2026", "Ordem de Compra OC-2026-0093"), todas
+ * "Cancelado" e nunca pagas. O usuário: "deixa no financeiro somente o que foi
+ * cancelado DENTRO do financeiro; os demais cancelados em outros módulos e sem baixa
+ * são só poluição visual que não serve pra nada".
+ *
+ * REGRA (FRONTEND-ONLY, `FinanceiroLancamentos.tsx`): novo helper `isCanceladoRuido(l)`
+ * marca como RUÍDO um lançamento que: (1) `status === "cancelado"`, E (2) tem origem
+ * EXTERNA — `origemModulo` preenchido e fora do conjunto financeiro-nativo
+ * (`recorrente`/`importacao_excel`; origem `null` = lançamento manual = nativo), E
+ * (3) NUNCA teve baixa no financeiro (`dataPagamento == null` e `valorRealizado` 0/nulo
+ * via `teveBaixaFinanceiro`). Esses são descartados SEMPRE (`baseLancamentos`), antes
+ * de qualquer contagem/exibição — inclusive sob o filtro explícito "Cancelado" e no
+ * contador "Mostrar cancelados (N)". PERMANECEM: cancelados nativos do financeiro
+ * (manual/recorrente/importação) e qualquer cancelado que teve pagamento/realizado
+ * (rastro real de caixa). Como os totais de topo (`getEntriesTotais`) e as somas da
+ * lista já ignoravam `status==="cancelado"`, esconder o ruído é puramente visual — os
+ * números continuam batendo. A mecânica da Rev. 3152 (ocultar/mostrar cancelados) e do
+ * agrupamento de Frota (Rev. 3154/3155) seguem intactas sobre `baseLancamentos`. ZERO
+ * BACKEND/SCHEMA/ALTER/DROP/DELETE — o rastro dos cancelados continua no banco, só não
+ * aparece na tela.
+ *
  * Rev. 3155 — **FINANCEIRO / LANÇAMENTOS · O AGRUPAMENTO DOS LANÇAMENTOS DE FROTA
  * PASSOU DE "POR TIPO" PARA "POR POSTO/FORNECEDOR" — AGORA CADA LINHA-GRUPO É UM
  * POSTO (COMBUSTÍVEL) OU UMA OFICINA/FORNECEDOR (MANUTENÇÃO), ESPELHANDO O DASHBOARD
