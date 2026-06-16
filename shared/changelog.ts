@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3180 — **FINANCEIRO / CONTAS A RECEBER · NOVO BOTÃO "ANO TODO" NO SELETOR DE MESES QUE
+ * MOSTRA TODOS OS LANÇAMENTOS DO ANO DE UMA VEZ (SEM PRECISAR CLICAR MÊS A MÊS).**
+ *
+ * PEDIDO: "coloca um botão do ano todo para ver todos lançamentos do ano — facilita muito".
+ * A tela "Contas a Receber" só permitia ver um mês por vez (Jan…Dez); para somar/conferir o
+ * ano inteiro era preciso clicar mês a mês.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY `client/src/pages/financeiro/FinanceiroContasAReceberTitulos.tsx`):
+ * novo botão "Ano todo" ao lado da navegação de ano. Usa a sentinela `mesSel === 0` = "ano
+ * todo" (clicar de novo volta ao mês atual). Quando ativo: `mesData` deixa de filtrar por mês
+ * e devolve TODAS as linhas do ano (os filtros de busca/cliente/status continuam valendo); os
+ * KPIs do topo passam a rotular "A receber no ano"/"Recebido no ano"; a lista por cliente e o
+ * estado vazio ("Nenhum título a receber em {ano}") se ajustam. Guarda contra `MESES[-1]`
+ * (label undefined) em todos os pontos que liam `MESES[mesSel-1]`/`MESES_LONGO[mesSel-1]`.
+ * O botão "Ano todo" fica realçado (verde) quando ativo; nenhum dos botões de mês fica
+ * selecionado nesse estado. ZERO SCHEMA/ALTER/DROP/DELETE · ZERO BACKEND.
+ *
  * Rev. 3179 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · AGORA DÁ PRA "LIMPAR EXTRATO" (REMOVER UM
  * EXTRATO IMPORTADO POR ENGANO, POR CONTA + PERÍODO) E A IMPORTAÇÃO BLOQUEIA AUTOMATICAMENTE
  * QUANDO O ARQUIVO É DE UM MÊS DIFERENTE DO MÊS SELECIONADO NA TELA.**

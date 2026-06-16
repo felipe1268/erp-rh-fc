@@ -182,8 +182,9 @@ export default function FinanceiroContasAReceberTitulos() {
     return map;
   }, [linhas]);
 
+  // Rev. 3180 — mesSel === 0 => "Ano todo" (não filtra por mês; mostra o ano inteiro).
   const mesData = useMemo(
-    () => linhas.filter((t) => getMesFromDate(t.dataVencimento) === mesSel),
+    () => (mesSel === 0 ? linhas : linhas.filter((t) => getMesFromDate(t.dataVencimento) === mesSel)),
     [linhas, mesSel],
   );
 
@@ -303,6 +304,17 @@ export default function FinanceiroContasAReceberTitulos() {
                 <button onClick={() => setAno((a) => a + 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
                   <ChevronRight className="w-4 h-4" />
                 </button>
+                {/* Rev. 3180 — atalho "Ano todo": vê TODOS os lançamentos do ano de uma vez. */}
+                <button
+                  onClick={() => setMesSel((m) => (m === 0 ? new Date().getMonth() + 1 : 0))}
+                  className={`ml-1 px-3 py-1 rounded-lg border text-xs font-semibold transition-all
+                    ${mesSel === 0
+                      ? "border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm"
+                      : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                    }`}
+                >
+                  Ano todo
+                </button>
               </div>
               <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Com lançamento</span>
@@ -340,9 +352,9 @@ export default function FinanceiroContasAReceberTitulos() {
 
         {/* ───────────── KPIs (padrão Contas a Pagar) ───────────── */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <KCard label={`A receber em ${MESES[mesSel - 1]}`} value={formatBRL(kpis.abertoMes)} icon={<Clock className="w-3 h-3 text-amber-500" />} accent="border-l-amber-500" valueColor="text-amber-600"
+          <KCard label={mesSel === 0 ? "A receber no ano" : `A receber em ${MESES[mesSel - 1]}`} value={formatBRL(kpis.abertoMes)} icon={<Clock className="w-3 h-3 text-amber-500" />} accent="border-l-amber-500" valueColor="text-amber-600"
             sub={kpis.parcialMes > 0 ? <span className="text-blue-600">parcial {formatBRL(kpis.parcialMes)}</span> : undefined} />
-          <KCard label={`Recebido em ${MESES[mesSel - 1]}`} value={formatBRL(kpis.recebidoMes)} icon={<CheckCircle className="w-3 h-3 text-emerald-500" />} accent="border-l-emerald-500" valueColor="text-emerald-700" />
+          <KCard label={mesSel === 0 ? "Recebido no ano" : `Recebido em ${MESES[mesSel - 1]}`} value={formatBRL(kpis.recebidoMes)} icon={<CheckCircle className="w-3 h-3 text-emerald-500" />} accent="border-l-emerald-500" valueColor="text-emerald-700" />
           <KCard label="Em aberto (ano)" value={formatBRL(acum.aberto)} icon={<TrendingUp className="w-3 h-3 text-indigo-500" />} accent="border-l-indigo-500" valueColor="text-indigo-700"
             sub={acum.vencido > 0 ? <span className="text-red-600 font-medium">{formatBRL(acum.vencido)} vencido</span> : "em dia"} />
           <KCard label="Títulos vencidos (ano)" value={String(acum.qtdVenc)} icon={<AlertTriangle className="w-3 h-3 text-red-500" />} accent="border-l-red-500" valueColor="text-red-600" />
@@ -383,7 +395,7 @@ export default function FinanceiroContasAReceberTitulos() {
               <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
                 <Wallet className="h-6 w-6 text-slate-400" />
               </div>
-              <p className="text-sm font-medium text-slate-500">Nenhum título a receber em {MESES_LONGO[mesSel - 1]} de {ano}</p>
+              <p className="text-sm font-medium text-slate-500">Nenhum título a receber {mesSel === 0 ? `em ${ano}` : `em ${MESES_LONGO[mesSel - 1]} de ${ano}`}</p>
               <p className="text-xs text-slate-400">para os filtros selecionados.</p>
             </CardContent>
           </Card>
