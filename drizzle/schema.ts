@@ -7144,6 +7144,8 @@ export const financialTaxConfig = pgTable("financial_tax_config", {
   diaPagamentoGPS: integer("dia_pagamento_gps").default(20),
   diaPagamentoFGTS: integer("dia_pagamento_fgts").default(7),
   ativo: smallint().default(1).notNull(),
+  // Rev. 3183 — Toggle por empresa: importação automática de dados financeiros (default OFF).
+  autoImportEnabled: smallint("auto_import_enabled").default(0).notNull(),
   updatedAt: timestamp({ mode: "string" }).defaultNow().notNull(),
 }, (t) => [index("idx_ftc_company").on(t.companyId)]);
 

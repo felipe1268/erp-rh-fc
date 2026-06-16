@@ -11,6 +11,30 @@ function getMes(dateStr?: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+/**
+ * Rev. 3183 — Toggle por empresa: a importação automática de dados financeiros
+ * (gatilhos em tempo real + job agendado) só roda quando a empresa LIGA explicitamente
+ * em Configurações → Financeiro. DEFAULT OFF (coluna `auto_import_enabled` = 0, ausente
+ * ou erro → tratado como desligado). Lê `financial_tax_config.auto_import_enabled`.
+ */
+export async function isAutoImportFinanceiroEnabled(companyId: number): Promise<boolean> {
+  if (!companyId) return false;
+  try {
+    const { getDb } = await import("../db");
+    const { sql } = await import("drizzle-orm");
+    const db = await getDb();
+    if (!db) return false;
+    const res: any = await db.execute(sql`
+      SELECT COALESCE(auto_import_enabled, 0) AS v
+      FROM financial_tax_config WHERE company_id = ${companyId} LIMIT 1
+    `);
+    const r = res?.rows ?? (Array.isArray(res) ? res : []);
+    return Number(r[0]?.v ?? 0) === 1;
+  } catch {
+    return false;
+  }
+}
+
 async function syncNow(companyId: number, mes: string): Promise<void> {
   const { runAllDespesasImport, runAllReceitasImport } = await import("./financialIntegrationBridge");
   await Promise.all([
@@ -41,6 +65,8 @@ export function triggerFinancialSync(companyId: number, eventDateStr?: string): 
   const mes = getMes(eventDateStr);
   setImmediate(async () => {
     try {
+      // Rev. 3183 — só roda se a empresa LIGOU a importação automática em Configurações.
+      if (!(await isAutoImportFinanceiroEnabled(companyId))) return;
       await syncNow(companyId, mes);
     } catch {
       // silencioso — não impacta o módulo de origem
@@ -58,6 +84,8 @@ export function triggerFinancialSync(companyId: number, eventDateStr?: string): 
  */
 export async function triggerFinancialSyncAwaited(companyId: number, eventDateStr?: string): Promise<void> {
   if (!companyId) return;
+  // Rev. 3183 — respeita o toggle por empresa (default OFF). Desligado → não sincroniza.
+  if (!(await isAutoImportFinanceiroEnabled(companyId))) return;
   const mes = getMes(eventDateStr);
   // Rev. 1988 — usa syncNowStrict (sem swallow) pra que falhas reais propaguem
   // pro try/catch do caller (ex: aprovarMedicao). Antes era syncNow que mascarava tudo.

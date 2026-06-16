@@ -10,9 +10,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
+import { Switch } from "@/components/ui/switch";
 import { Settings, Users, Plus, Save, RefreshCw, UserCheck, CheckCircle2, Edit3, Loader2,
   Calculator, Receipt, Landmark, Briefcase, Info, AlertCircle, TrendingUp, Wallet, Lightbulb,
-  PiggyBank, BadgePercent, Sparkles } from "lucide-react";
+  PiggyBank, BadgePercent, Sparkles, Zap } from "lucide-react";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -156,9 +157,21 @@ export default function FinanceiroConfiguracoes() {
     }
   }
 
+  const [autoImportOn, setAutoImportOn] = useState(false);
   useEffect(() => {
-    if (taxConfig) setTaxForm({ ...taxConfig });
+    if (taxConfig) {
+      setTaxForm({ ...taxConfig });
+      setAutoImportOn(Number(taxConfig.autoImportEnabled) === 1);
+    }
   }, [taxConfig]);
+
+  const setAutoImportMut = (trpc as any).financial.setAutoImport.useMutation({
+    onSuccess: (r: any) => {
+      toast({ title: r?.enabled ? "Importação automática ATIVADA." : "Importação automática DESATIVADA." });
+      refetchTax();
+    },
+    onError: (e: any) => { setAutoImportOn(prev => !prev); toast({ title: "Erro", description: e.message, variant: "destructive" }); },
+  });
 
   const updateTaxMut = (trpc as any).financial.updateTaxConfig.useMutation({
     onSuccess: () => { toast({ title: "Configuração salva!" }); refetchTax(); },
@@ -250,6 +263,35 @@ export default function FinanceiroConfiguracoes() {
             <Button onClick={() => setShowAutoImport(true)} className="bg-white text-blue-700 hover:bg-blue-50 font-semibold h-10 shadow-md">
               <RefreshCw className="w-4 h-4 mr-2" />Auto-Importar Dados
             </Button>
+          </div>
+        </div>
+
+        {/* Rev. 3183 — Toggle por empresa: importação automática de dados financeiros (default OFF) */}
+        <div className="flex items-start justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/60 px-5 py-4">
+          <div className="flex items-start gap-3">
+            <Zap className={`w-5 h-5 mt-0.5 ${autoImportOn ? "text-emerald-600" : "text-gray-400"}`} />
+            <div>
+              <h3 className="font-semibold text-gray-800 text-sm">Importação Automática de Dados</h3>
+              <p className="text-xs text-gray-500 mt-1 max-w-2xl">
+                Quando <strong>ligada</strong>, o sistema importa sozinho lançamentos financeiros
+                (folha, PJ, parceiros, despesas e receitas/medições) periodicamente e ao aprovar medições.
+                Quando <strong>desligada</strong>, nada entra automático — você usa o botão
+                <em> Auto-Importar Dados</em> ou os <em>Recebíveis Previstos</em> quando quiser.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-1 flex-shrink-0">
+            <Switch
+              checked={autoImportOn}
+              disabled={!companyId || setAutoImportMut.isPending}
+              onCheckedChange={(v: boolean) => {
+                setAutoImportOn(v);
+                setAutoImportMut.mutate({ companyId, enabled: v });
+              }}
+            />
+            <span className={`text-[11px] font-semibold ${autoImportOn ? "text-emerald-600" : "text-gray-400"}`}>
+              {autoImportOn ? "Ligada" : "Desligada"}
+            </span>
           </div>
         </div>
 

@@ -1,6 +1,48 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3183 — **FINANCEIRO / CONFIGURAÇÕES · NOVO TOGGLE POR EMPRESA "IMPORTAÇÃO AUTOMÁTICA DE
+ * DADOS" (LIGA/DESLIGA) — DEFAULT DESLIGADO. AGORA O USUÁRIO DECIDE, DE FORMA CLARA E EXPLÍCITA,
+ * SE OS LANÇAMENTOS FINANCEIROS ENTRAM SOZINHOS OU SÓ MANUALMENTE.**
+ *
+ * PEDIDO (piloto FC FEV/2026): "não quero nada automático por hora... porém quero que você coloque
+ * nas Configurações a opção de habilitar ou não a opção de vir automático, assim o usuário irá
+ * definir de forma clara e objetiva." Contexto confirmado: hoje a receita já não materializa
+ * sozinha em `financial_entries` (Rev. 3161-3163); o que ainda roda automático é o JOB agendado
+ * (`financialAutoImportJob`: startup/retroação 6 meses + ciclo de 30 min — importa folha CLT, PJ,
+ * parceiros, despesas, receitas/medições e projeção 12m) e os GATILHOS em tempo real
+ * (`financialEventTrigger.triggerFinancialSync` / `triggerFinancialSyncAwaited`, este último é o
+ * caminho do "medição aprovada entra automática"). O usuário queria UMA chave para ligar/desligar
+ * tudo isso por empresa.
+ *
+ * SOLUÇÃO (BACKEND + FRONTEND, ZERO DESTRUTIVO):
+ *   • SCHEMA ADITIVO: nova coluna `financial_tax_config.auto_import_enabled` (SMALLINT DEFAULT 0)
+ *     em `drizzle/schema.ts` + self-heal `[SyncSchema+] Rev. 3183` (`ADD COLUMN IF NOT EXISTS`).
+ *     DEFAULT 0 = a partir desta revisão NADA entra automático até a empresa LIGAR — exatamente o
+ *     que o usuário pediu ("nada automático por hora").
+ *   • GATE CENTRAL: novo helper `isAutoImportFinanceiroEnabled(companyId)` em
+ *     `server/services/financialEventTrigger.ts` (lê a coluna; ausente/erro/0 → tratado como
+ *     DESLIGADO). Aplicado em: `triggerFinancialSync` (dentro do setImmediate), em
+ *     `triggerFinancialSyncAwaited` (early-return) e nos DOIS loops por empresa do job
+ *     (`runJob` e `runStartupRetroacao` em `financialAutoImportJob.ts` — `ensureTaxConfig` roda
+ *     antes pra garantir a linha, depois `continue` se desligado). Não foi preciso tocar os ~12
+ *     callers de `triggerFinancialSync` espalhados (parceiros, frotas, compras, terceiros,
+ *     planejamento) — o gate é dentro da função. Alertas de vencimento e o sync
+ *     financial_revenue→planejamento (que só propaga recebidos já confirmados) ficaram fora do
+ *     gate de propósito (não importam dados novos).
+ *   • API: `getTaxConfig` passou a devolver `autoImportEnabled` (COALESCE 0) e nova mutation
+ *     `financial.setAutoImport({companyId, enabled})` (chama `ensureTaxConfig`, grava 1/0, registra
+ *     auditoria `financial_auto_import_toggled`).
+ *   • UI (2 superfícies espelhadas): seção centralizada
+ *     `client/src/pages/configuracoes/FinanceiroConfigSection.tsx` (a do print, em Configurações →
+ *     Critérios) ganhou uma sub-seção "Importação Automática de Dados" com `Switch` (Ligada/
+ *     Desligada) logo abaixo do header; e a tela legada `client/src/pages/financeiro/
+ *     FinanceiroConfiguracoes.tsx` ganhou um card equivalente abaixo do header. Ambas leem/gravam
+ *     o MESMO flag via `getTaxConfig`/`setAutoImport`. O botão manual "Auto-Importar Dados" e os
+ *     "Recebíveis Previstos" seguem disponíveis independentemente do toggle.
+ *
+ * ZERO SCHEMA DESTRUTIVO / ZERO ALTER (exceto ADD COLUMN IF NOT EXISTS) / ZERO DROP / ZERO DELETE.
+ *
  * Rev. 3182 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NOVO "PAINEL DE CONCILIAÇÃO" — UMA TELA SÓ,
  * ESPAÇOSA, COM OS 3 BLOCOS QUE O USUÁRIO PEDIU: (1) SUGESTÕES AUTOMÁTICAS DE MATCH, (2) "NO
  * EXTRATO, SEM LANÇAMENTO NO ERP" E (3) "NO ERP, SEM EXTRATO". ABRE DIRETO APÓS IMPORTAR O

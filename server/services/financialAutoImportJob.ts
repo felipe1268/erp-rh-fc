@@ -7,7 +7,7 @@ import {
   runAllReceitasImport,
   gerarAlertasVencimento,
 } from "./financialIntegrationBridge";
-import { retroacaoStartup } from "./financialEventTrigger";
+import { retroacaoStartup, isAutoImportFinanceiroEnabled } from "./financialEventTrigger";
 
 // ============================================================
 // JOB DE AUTO-IMPORTAÇÃO FINANCEIRA — roda a cada hora
@@ -85,9 +85,13 @@ async function runJob(): Promise<void> {
 
   for (const companyId of companyIds) {
     try {
+      // Rev. 3183 — só importa automaticamente se a empresa LIGOU o toggle em Configurações
+      // → Financeiro (default OFF). Garante a config (cria a linha) antes de checar.
+      await ensureTaxConfig(companyId).catch(() => {});
+      if (!(await isAutoImportFinanceiroEnabled(companyId))) continue;
+
       // Seed plano de contas e configuração tributária
       await seedPlanoDeConta(companyId).catch(() => {});
-      await ensureTaxConfig(companyId).catch(() => {});
 
       // FASE 2 — Importar dados CLT, PJ, Parceiros (auto-import original)
       const { folha, pj, parceiros } = await runAllAutoImports(companyId, mes).catch(() => ({ folha: 0, pj: 0, parceiros: 0 }));
@@ -141,8 +145,10 @@ async function runStartupRetroacao(): Promise<void> {
     if (!companyIds.length) return;
     console.log(`[FinancialJob] Retroação de startup: importando últimos 6 meses para ${companyIds.length} empresa(s)...`);
     for (const companyId of companyIds) {
-      await seedPlanoDeConta(companyId).catch(() => {});
+      // Rev. 3183 — respeita o toggle por empresa (default OFF).
       await ensureTaxConfig(companyId).catch(() => {});
+      if (!(await isAutoImportFinanceiroEnabled(companyId))) continue;
+      await seedPlanoDeConta(companyId).catch(() => {});
       const total = await retroacaoStartup(companyId, 6).catch(() => 0);
       if (total > 0) console.log(`[FinancialJob] Startup: company=${companyId} → ${total} lançamentos históricos importados`);
     }

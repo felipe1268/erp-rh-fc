@@ -3273,6 +3273,12 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3135: colunas centro_custo_id/centro_custo_nome (financial_entries) garantidas.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3135 centro_custo:`, e?.message || e); }
 
+        // ── Rev. 3183 — Toggle "Importação automática de dados financeiros" por empresa (default OFF) ──
+        try {
+          await db.execute(sql`ALTER TABLE financial_tax_config ADD COLUMN IF NOT EXISTS auto_import_enabled SMALLINT DEFAULT 0`);
+          console.log(`[SyncSchema+] Rev. 3183: coluna auto_import_enabled (financial_tax_config) garantida.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3183 auto_import_enabled:`, e?.message || e); }
+
         // ── Rev. 2694 — Empréstimo de ferramentas/equipamentos: colunas de rastreio (Rev. 2256) que nunca ganharam self-heal ──
         try {
           await db.execute(sql`ALTER TABLE warehouse_loans ADD COLUMN IF NOT EXISTS foto_devolucao_url TEXT`);

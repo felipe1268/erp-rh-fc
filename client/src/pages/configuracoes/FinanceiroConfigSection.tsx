@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Save, ChevronRight, Banknote, FileText, Users, RefreshCw } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Save, ChevronRight, Banknote, FileText, Users, RefreshCw, Zap } from "lucide-react";
 import { toast } from "sonner";
 
 function fmtBRL(v: number) {
@@ -30,6 +31,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
 
   const [expanded, setExpanded] = useState<"tributario" | "socios" | null>(null);
   const [taxForm, setTaxForm] = useState<any>({});
+  const [autoImportOn, setAutoImportOn] = useState(false);
   const [showAutoImport, setShowAutoImport] = useState(false);
   const [importMes, setImportMes] = useState(() => {
     const d = new Date();
@@ -43,11 +45,24 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
     { companyId }, { enabled: !!companyId }
   );
 
-  useEffect(() => { if (taxConfig) setTaxForm({ ...taxConfig }); }, [taxConfig]);
+  useEffect(() => {
+    if (taxConfig) {
+      setTaxForm({ ...taxConfig });
+      setAutoImportOn(Number(taxConfig.autoImportEnabled) === 1);
+    }
+  }, [taxConfig]);
 
   const updateTaxMut = (trpc as any).financial.updateTaxConfig.useMutation({
     onSuccess: () => { toast.success("Configuração tributária salva!"); refetchTax(); },
     onError: (e: any) => toast.error(e.message || "Erro ao salvar"),
+  });
+
+  const setAutoImportMut = (trpc as any).financial.setAutoImport.useMutation({
+    onSuccess: (r: any) => {
+      toast.success(r?.enabled ? "Importação automática ATIVADA." : "Importação automática DESATIVADA.");
+      refetchTax();
+    },
+    onError: (e: any) => { setAutoImportOn(prev => !prev); toast.error(e.message || "Erro ao alterar"); },
   });
 
   const importMut = (trpc as any).financial.runAutoImport.useMutation({
@@ -82,6 +97,37 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
           <RefreshCw className="w-3.5 h-3.5 mr-1" />
           Auto-Importar Dados
         </Button>
+      </div>
+
+      {/* Sub-seção: Importação Automática (toggle por empresa — default OFF) */}
+      <div className="border-b border-emerald-100">
+        <div className="flex items-start justify-between gap-3 px-4 py-3 bg-white">
+          <div className="flex items-start gap-3">
+            <Zap className={`w-4 h-4 mt-0.5 ${autoImportOn ? "text-emerald-500" : "text-gray-400"}`} />
+            <div>
+              <span className="font-medium text-gray-800 text-sm">Importação Automática de Dados</span>
+              <p className="text-xs text-gray-500 mt-0.5 max-w-md">
+                Quando <strong>ligada</strong>, o sistema importa sozinho lançamentos financeiros
+                (folha, PJ, parceiros, despesas e receitas/medições) periodicamente e ao aprovar medições.
+                Quando <strong>desligada</strong>, nada entra automático — você usa o botão
+                <em> Auto-Importar Dados</em> ou os <em>Recebíveis Previstos</em> quando quiser.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-1 flex-shrink-0">
+            <Switch
+              checked={autoImportOn}
+              disabled={!companyId || setAutoImportMut.isPending}
+              onCheckedChange={(v: boolean) => {
+                setAutoImportOn(v);
+                setAutoImportMut.mutate({ companyId, enabled: v });
+              }}
+            />
+            <span className={`text-[11px] font-semibold ${autoImportOn ? "text-emerald-600" : "text-gray-400"}`}>
+              {autoImportOn ? "Ligada" : "Desligada"}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Sub-seção: Tributário */}

@@ -2871,9 +2871,10 @@ export const financialRouter = router({
 
   getTaxConfig: protectedProcedure.input(z.object({
     companyId: z.number(),
-  })).query(async ({ input }) => {
+  })).query(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
     await ensureTaxConfig(input.companyId);
     const res = await dbExecute(db, 
       `SELECT id, company_id AS "companyId", regime_tributario AS "regimeTributario",
@@ -2885,7 +2886,8 @@ export const financialRouter = router({
               aliquota_sistema AS "aliquotaSistema",
               dia_pagamento_iss AS "diaPagamentoISS", dia_pagamento_pis AS "diaPagamentoPIS",
               dia_pagamento_cofins AS "diaPagamentoCOFINS", dia_pagamento_darf AS "diaPagamentoDARF",
-              dia_pagamento_gps AS "diaPagamentoGPS", dia_pagamento_fgts AS "diaPagamentoFGTS"
+              dia_pagamento_gps AS "diaPagamentoGPS", dia_pagamento_fgts AS "diaPagamentoFGTS",
+              COALESCE(auto_import_enabled,0) AS "autoImportEnabled"
        FROM financial_tax_config WHERE company_id=$1 LIMIT 1`,
       [input.companyId]
     );
@@ -2938,6 +2940,29 @@ export const financialRouter = router({
     );
     await createAuditLog({ action: "tax_config_updated", userId: ctx.user?.id, companyId: input.companyId, details: "Configuração tributária atualizada" });
     return { ok: true };
+  }),
+
+  // Rev. 3183 — Toggle por empresa: liga/desliga a importação automática de dados financeiros
+  // (job agendado + gatilhos em tempo real). DEFAULT OFF — o usuário decide explicitamente.
+  setAutoImport: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    enabled: z.boolean(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    await ensureTaxConfig(input.companyId);
+    await dbExecute(db,
+      `UPDATE financial_tax_config SET auto_import_enabled=$1, updated_at=NOW() WHERE company_id=$2`,
+      [input.enabled ? 1 : 0, input.companyId]
+    );
+    await createAuditLog({
+      action: "financial_auto_import_toggled",
+      userId: ctx.user?.id,
+      companyId: input.companyId,
+      details: `Importação automática financeira ${input.enabled ? "ATIVADA" : "DESATIVADA"}`,
+    });
+    return { ok: true, enabled: input.enabled };
   }),
 
   // ─────────────────── CENTROS DE CUSTO ───────────────────
