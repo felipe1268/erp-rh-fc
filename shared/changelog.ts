@@ -1,6 +1,48 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3155 — **FINANCEIRO / LANÇAMENTOS · O AGRUPAMENTO DOS LANÇAMENTOS DE FROTA
+ * PASSOU DE "POR TIPO" PARA "POR POSTO/FORNECEDOR" — AGORA CADA LINHA-GRUPO É UM
+ * POSTO (COMBUSTÍVEL) OU UMA OFICINA/FORNECEDOR (MANUTENÇÃO), ESPELHANDO O DASHBOARD
+ * "POSTOS MAIS UTILIZADOS" DA FROTA.**
+ *
+ * PEDIDO (screenshots IMG_2096/IMG_2097, "Dash Combustível → Postos Mais Utilizados",
+ * iPad): na Rev. 3154 eu havia agrupado os lançamentos de frota por TIPO assumindo que
+ * o posto/fornecedor não existia nos dados. O usuário CORRIGIU: o posto/fornecedor
+ * EXISTE sim no módulo Frota (ex.: "Auto Posto Umuarama" R$ 38.878,69, "AUTO POSTO
+ * BRASIL GAS" R$ 2.282,08) — quer agrupar a lista de Lançamentos por POSTO/FORNECEDOR.
+ *
+ * DESCOBERTA DE DADOS: o posto vive em `fleet_fuel_records.posto` e o fornecedor de
+ * manutenção em `fleet_maintenances.fornecedor`; ambos se ligam a `financial_entries`
+ * via `origem_id` (= id do registro de frota) + `origem_modulo`
+ * ('frota_abastecimento'/'frota_manutencao'). O `financial_entries.fornecedor_nome`
+ * chega VAZIO nesses lançamentos (por isso a Rev. 3154 não os enxergava), mas o dado
+ * está a um JOIN de distância.
+ *
+ * BACKEND (READ-ONLY, `server/routers/financial.ts` · `getEntries`): a query passou a
+ * fazer dois `LEFT JOIN` 1:1 por PK (com guarda de `company_id`) —
+ * `fleet_fuel_records` (quando origem='frota_abastecimento') e `fleet_maintenances`
+ * (quando origem='frota_manutencao') — e expõe um novo campo
+ * `frotaFornecedor = COALESCE(NULLIF(BTRIM(fornecedor_nome),''), ffr.posto,
+ * fm.fornecedor)`. Sem ALTER/DROP/DELETE/UPDATE — é puramente leitura/enriquecimento.
+ * A query de COUNT e a `getEntriesTotais` não mudaram (joins 1:1 não alteram total).
+ *
+ * FRONTEND (`client/src/pages/financeiro/FinanceiroLancamentos.tsx`): (1) novo helper
+ * `frotaTipoKey(l)` isola o TIPO (combustível/manutenção/pedágio/outros) que define o
+ * ÍCONE e o rótulo de fallback. (2) `frotaGrupoOf(l)` agora agrupa por
+ * `frotaFornecedor`: a chave é `${tipoKey}::${fornecedor.toLowerCase()}` (o tipoKey na
+ * chave evita misturar um posto de combustível com uma oficina de manutenção de mesmo
+ * nome e mantém o ícone certo); o LABEL do grupo é o nome do posto/fornecedor. Quando o
+ * posto/fornecedor não veio, cai no agrupamento por tipo com rótulo "Combustível (sem
+ * posto)" / "Manutenção (sem fornecedor)". (3) `DisplayRow` (grupo) carrega `tipoKey`;
+ * o ícone da linha-grupo e do diálogo passou a vir de `FROTA_GRUPO_ICONS[tipoKey]`
+ * (antes era pela chave do grupo, que agora inclui o fornecedor). (4) Pedágio/Sem Parar
+ * segue detectado (origem futura `frota_pedagio` OU texto na descrição/conta). Toda a
+ * mecânica da Rev. 3154 (linha-grupo com checkbox de seleção em lote indeterminado,
+ * diálogo de membros com Pagar/olho, toggle "Frota agrupada/expandida", contador REAL,
+ * grupo de 1 item vira linha normal) foi PRESERVADA. ZERO BACKEND DE ESCRITA / SCHEMA /
+ * ALTER / DROP / DELETE.
+ *
  * Rev. 3154 — **FINANCEIRO / LANÇAMENTOS · OS LANÇAMENTOS VINDOS DO MÓDULO FROTA
  * (COMBUSTÍVEL, MANUTENÇÃO, PEDÁGIO/SEM PARAR) PASSARAM A SER AGRUPADOS NUMA ÚNICA
  * LINHA POR TIPO — A TELA FICOU LIMPA; CLICAR NA LINHA ABRE UM DIÁLOGO COM TODOS OS

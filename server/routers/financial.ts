@@ -582,8 +582,16 @@ export const financialRouter = router({
               e.descricao, e.observacoes, e.conciliado, e.parcela_numero AS "parcelaNumero",
               e.parcela_total AS "parcelaTotal", e.cheque_status AS "chequeStatus",
               e.fornecedor_nome AS "fornecedorNome",
+              -- Rev. 3155 — enriquece os lançamentos do módulo Frota com o POSTO
+              -- (abastecimento) / FORNECEDOR (manutenção) que vive nas tabelas da Frota
+              -- (financial_entries.fornecedor_nome chega vazio nesses), via origem_id.
+              -- Read-only (LEFT JOIN 1:1 por PK + guarda de company); permite agrupar a
+              -- lista por posto/fornecedor (não só por tipo).
+              COALESCE(NULLIF(BTRIM(e.fornecedor_nome), ''), ffr.posto, fm.fornecedor) AS "frotaFornecedor",
               e.criado_por_nome AS "criadoPorNome", e.created_at AS "createdAt"
        FROM financial_entries e
+       LEFT JOIN fleet_fuel_records ffr ON e.origem_modulo = 'frota_abastecimento' AND ffr.id = e.origem_id AND ffr.company_id = e.company_id
+       LEFT JOIN fleet_maintenances fm ON e.origem_modulo = 'frota_manutencao' AND fm.id = e.origem_id AND fm.company_id = e.company_id
        WHERE ${conds.join(" AND ")}
        ORDER BY COALESCE(e.data_competencia, e.data_vencimento, e.created_at::date) DESC, e.created_at DESC
        LIMIT $${i++} OFFSET $${i}`,

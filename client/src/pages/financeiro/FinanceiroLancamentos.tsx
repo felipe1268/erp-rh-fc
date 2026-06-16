@@ -76,26 +76,45 @@ const FREQ_LABELS: Record<string, string> = {
 };
 
 // Rev. 3154 — Agrupamento dos lançamentos vindos do módulo FROTA (combustível,
-// manutenção, pedágio/Sem Parar) numa única linha por TIPO, p/ deixar a lista
-// limpa. O detalhe (todos os lançamentos do grupo) abre num diálogo ao clicar.
-// Obs.: os lançamentos de frota não trazem "posto/fornecedor" (fornecedor_nome
-// vazio; descrição = veículo), então o agrupamento é por TIPO, não por posto.
-type FrotaGrupo = { key: string; label: string };
+// manutenção, pedágio/Sem Parar) numa única linha, p/ deixar a lista limpa.
+// O detalhe (todos os lançamentos do grupo) abre num diálogo ao clicar.
+// Rev. 3155 — o agrupamento passou a ser por POSTO/FORNECEDOR (o backend enriquece
+// `frotaFornecedor` a partir das tabelas da Frota), com fallback p/ TIPO quando o
+// posto/fornecedor não veio.
+type FrotaGrupo = { key: string; label: string; tipoKey: string };
 function isFrotaLanc(l: any): boolean {
   return typeof l?.origemModulo === "string" && l.origemModulo.startsWith("frota");
 }
-function frotaGrupoOf(l: any): FrotaGrupo | null {
-  if (!isFrotaLanc(l)) return null;
+// Rev. 3155 — tipo do lançamento de frota (define o ÍCONE e o rótulo de fallback).
+function frotaTipoKey(l: any): { tipoKey: string; tipoLabel: string } {
   const om = l.origemModulo as string;
   const txt = `${l.descricao ?? ""} ${l.contaNome ?? ""} ${l.origemDescricao ?? ""}`.toLowerCase();
   // Pedágio/Sem Parar pode chegar como origem própria (futura) ou embutido na
   // descrição/conta de abastecimento — detecta por texto antes do combustível.
   if (om === "frota_pedagio" || txt.includes("pedág") || txt.includes("pedag") || txt.includes("sem parar")) {
-    return { key: "pedagio", label: "Pedágio / Sem Parar" };
+    return { tipoKey: "pedagio", tipoLabel: "Pedágio / Sem Parar" };
   }
-  if (om === "frota_manutencao") return { key: "manutencao", label: "Manutenção de Veículos" };
-  if (om === "frota_abastecimento") return { key: "combustivel", label: "Combustível" };
-  return { key: "frota_outros", label: "Frota (outros)" };
+  if (om === "frota_manutencao") return { tipoKey: "manutencao", tipoLabel: "Manutenção de Veículos" };
+  if (om === "frota_abastecimento") return { tipoKey: "combustivel", tipoLabel: "Combustível" };
+  return { tipoKey: "frota_outros", tipoLabel: "Frota (outros)" };
+}
+// Rev. 3155 — agrupa os lançamentos de Frota por FORNECEDOR/POSTO (o backend enriquece
+// `frotaFornecedor` a partir de fleet_fuel_records.posto / fleet_maintenances.fornecedor).
+// A chave inclui o `tipoKey` p/ NÃO misturar um posto de combustível com uma oficina de
+// manutenção de mesmo nome (e p/ manter o ícone correto). Sem posto/fornecedor cai no
+// agrupamento por tipo ("Combustível (sem posto)" / "Manutenção (sem fornecedor)").
+function frotaGrupoOf(l: any): FrotaGrupo | null {
+  if (!isFrotaLanc(l)) return null;
+  const { tipoKey, tipoLabel } = frotaTipoKey(l);
+  const forn = String(l.frotaFornecedor ?? "").trim();
+  if (forn) {
+    return { key: `${tipoKey}::${forn.toLowerCase()}`, label: forn, tipoKey };
+  }
+  const semLabel =
+    tipoKey === "combustivel" ? "Combustível (sem posto)" :
+    tipoKey === "manutencao" ? "Manutenção (sem fornecedor)" :
+    tipoLabel;
+  return { key: tipoKey, label: semLabel, tipoKey };
 }
 const FROTA_GRUPO_ICONS: Record<string, any> = {
   combustivel: Fuel,
@@ -764,7 +783,7 @@ export default function FinanceiroLancamentos() {
   const temFrota = lancamentos.some((l: any) => isFrotaLanc(l));
   type DisplayRow =
     | { kind: "entry"; l: any }
-    | { kind: "group"; key: string; label: string; members: any[] };
+    | { kind: "group"; key: string; label: string; tipoKey: string; members: any[] };
   const displayRows: DisplayRow[] = (() => {
     if (!agruparFrota) return lancamentos.map((l: any) => ({ kind: "entry", l } as DisplayRow));
     const rows: DisplayRow[] = [];
@@ -773,7 +792,7 @@ export default function FinanceiroLancamentos() {
       const g = frotaGrupoOf(l);
       if (!g) { rows.push({ kind: "entry", l }); continue; }
       let grp = byKey.get(g.key);
-      if (!grp) { grp = { kind: "group", key: g.key, label: g.label, members: [] }; byKey.set(g.key, grp); rows.push(grp); }
+      if (!grp) { grp = { kind: "group", key: g.key, label: g.label, tipoKey: g.tipoKey, members: [] }; byKey.set(g.key, grp); rows.push(grp); }
       grp.members.push(l);
     }
     // Grupos com 1 item só voltam a ser linha normal.
@@ -784,6 +803,7 @@ export default function FinanceiroLancamentos() {
     ? lancamentos.filter((l: any) => frotaGrupoOf(l)?.key === frotaGrupoKey)
     : [];
   const frotaGrupoLabel = frotaGrupoMembros.length ? (frotaGrupoOf(frotaGrupoMembros[0])?.label ?? "Frota") : "Frota";
+  const frotaGrupoTipoKey = frotaGrupoMembros.length ? (frotaGrupoOf(frotaGrupoMembros[0])?.tipoKey ?? "") : "";
   const frotaGrupoTotal = frotaGrupoMembros.reduce((s: number, l: any) => s + Number(l.valorPrevisto ?? 0), 0);
 
   const recEntries = recItems ?? [];
@@ -974,7 +994,7 @@ export default function FinanceiroLancamentos() {
                     {temFrota && (
                       <Button variant="ghost" size="sm"
                         className={`h-7 px-2 text-xs font-normal ${agruparFrota ? "text-blue-700 hover:text-blue-800" : "text-gray-500 hover:text-gray-800"}`}
-                        title={agruparFrota ? "Mostrar os lançamentos de frota separados" : "Agrupar lançamentos de frota por tipo"}
+                        title={agruparFrota ? "Mostrar os lançamentos de frota separados" : "Agrupar lançamentos de frota por posto/fornecedor"}
                         onClick={() => setAgruparFrota((v) => !v)}>
                         <Layers className="w-3.5 h-3.5 mr-1" />
                         {agruparFrota ? "Frota agrupada" : "Frota expandida"}
@@ -1037,7 +1057,7 @@ export default function FinanceiroLancamentos() {
                   <div className="divide-y divide-gray-100">
                     {displayRows.map((row) => {
                       if (row.kind === "group") {
-                        const Icon = FROTA_GRUPO_ICONS[row.key] ?? Truck;
+                        const Icon = FROTA_GRUPO_ICONS[row.tipoKey] ?? Truck;
                         const grpSelIds: number[] = row.members.filter((m: any) => m.status !== "cancelado").map((m: any) => m.id);
                         const grpAllSel = grpSelIds.length > 0 && grpSelIds.every((id: number) => selectedIds.has(id));
                         const grpSelCount = grpSelIds.filter((id: number) => selectedIds.has(id)).length;
@@ -1796,7 +1816,7 @@ export default function FinanceiroLancamentos() {
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                {(() => { const I = FROTA_GRUPO_ICONS[frotaGrupoKey ?? ""] ?? Truck; return <I className="w-4 h-4 text-slate-600" />; })()}
+                {(() => { const I = FROTA_GRUPO_ICONS[frotaGrupoTipoKey] ?? Truck; return <I className="w-4 h-4 text-slate-600" />; })()}
                 {frotaGrupoLabel}
                 <Badge className="text-xs bg-slate-200 text-slate-700">{frotaGrupoMembros.length} lançamentos</Badge>
                 <span className="ml-auto text-sm font-bold text-red-600">-{formatBRL(frotaGrupoTotal)}</span>
