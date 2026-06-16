@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3157 — **RH / RAIO-X DO FUNCIONÁRIO · A FICHA NA TELA PASSOU A MOSTRAR A DATA
+ * DE NASCIMENTO COMPLETA (DIA/MÊS/ANO) — ANTES SÓ APARECIA "Aniversário: 18/03"
+ * (DIA/MÊS) E A "Idade".**
+ *
+ * PEDIDO (screenshot IMG_2095, iPad): "coloca o [dia] de nascimento na ficha tbm, dia
+ * mês e ano". O card de identificação do Raio-X já exibia "Idade" e "Aniversário"
+ * (só dia/mês), mas não a data de nascimento por extenso com o ANO. O PDF gerado
+ * (`emp?.dataNascimento` via `formatDateSafe`) já trazia a linha "Nascimento" há
+ * tempos — então a lacuna era só na ficha em tela.
+ *
+ * MUDANÇA (FRONTEND-ONLY, `client/src/components/RaioXFuncionario.tsx`): adicionado o
+ * item `Nascimento` (ícone `Calendar`) ao grid de campos do card, logo ANTES de
+ * "Idade", usando o mesmo `formatDateSafe(emp.dataNascimento)` (→ `DD/MM/AAAA`) que o
+ * PDF usa — portanto respeita a máscara de PII (`hidePersonal` → `PII_MASK` quando o
+ * usuário não tem a flag `dados_pessoais`). Só renderiza quando há `dataNascimento`.
+ * "Aniversário" e "Idade" seguem intactos. ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3156 — **FINANCEIRO / LANÇAMENTOS · OS LANÇAMENTOS CANCELADOS QUE VIERAM DE
  * OUTRO MÓDULO E NUNCA FORAM PAGOS NO FINANCEIRO SUMIRAM DA LISTA — FICA SÓ O QUE
  * FOI CANCELADO DENTRO DO PRÓPRIO FINANCEIRO OU O QUE TEVE BAIXA EM ALGUM MOMENTO.**

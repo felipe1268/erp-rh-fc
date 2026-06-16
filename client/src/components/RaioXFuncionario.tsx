@@ -1183,6 +1183,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                         (emp.recebeComplemento && emp.valorComplemento) ? { icon: Plus, label: "Complemento (por fora)", value: formatSalario(emp.valorComplemento) } : null,
                         (emp.recebeComplemento && emp.valorComplemento && emp.salarioBase) ? { icon: TrendingUp, label: "Salário TOTAL (Base + Complemento)", value: formatSalario(String((Number(String(emp.salarioBase).replace(/\./g,"").replace(",",".")) || 0) + (Number(String(emp.valorComplemento).replace(/\./g,"").replace(",",".")) || 0))) } : null,
                         emp.valorHora ? { icon: Clock, label: "Valor/Hora", value: formatSalario(emp.valorHora) } : null,
+                        emp.dataNascimento ? { icon: Calendar, label: "Nascimento", value: formatDateSafe(emp.dataNascimento) } : null,
                         emp.dataNascimento ? { icon: User, label: "Idade", value: calcIdadeSafe(emp.dataNascimento) } : null,
                         emp.dataNascimento ? { icon: Gift, label: "Aniversário", value: hidePersonal ? PII_MASK : `${anivInfo.aniversario} (${anivInfo.texto})` } : null,
                         emp.obraAtualNome ? { icon: HardHat, label: "Obra Principal", value: emp.obraAtualNome } : null,
