@@ -5,7 +5,7 @@
 // PERTINENTES ao item clicado: KPIs do recorte, distribuição por mês,
 // quebra por uma dimensão secundária e a tabela detalhada completa.
 // 100% client-side (ZERO novo backend).
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -263,16 +263,43 @@ export default function FinanceiroAnaliseCustosDetalhe() {
     return { total, pago, aberto, vencido, qtdVencido, qtd: rows.length };
   }, [rows]);
 
-  // Distribuição por mês (12 meses) do recorte.
+  // Rev. 3151 — Filtro por card de status (clique no KPI). Os cards seguem
+  // mostrando o resumo COMPLETO do recorte; este filtro só restringe a seção
+  // de baixo (gráficos + tabela) ao status escolhido. "Custo do recorte" e
+  // "Lançamentos" = limpar (mostrar tudo). Espelha a classificação dos kpis:
+  // pago = status pago · aberto = não pago · vencido = isVencido (subconjunto).
+  const [cardFiltro, setCardFiltro] = useState<null | "pago" | "aberto" | "vencido">(null);
+  const matchCardFiltro = (r: any): boolean => {
+    if (cardFiltro === "pago") return r.status === "pago";
+    if (cardFiltro === "aberto") return r.status !== "pago";
+    if (cardFiltro === "vencido") return isVencido(r);
+    return true;
+  };
+  const rowsView = useMemo(
+    () => (cardFiltro ? rows.filter(matchCardFiltro) : rows),
+    [rows, cardFiltro]
+  );
+  const cardFiltroLabel = cardFiltro === "pago" ? "Pago" : cardFiltro === "aberto" ? "Em aberto" : cardFiltro === "vencido" ? "Vencido" : null;
+  // Total da visão exibida (= kpis.total quando sem filtro; subconjunto quando filtrado).
+  const viewTotal = useMemo(
+    () => (cardFiltro ? rowsView.reduce((s, r) => s + valorEfetivo(r), 0) : kpis.total),
+    [rowsView, cardFiltro, kpis.total]
+  );
+  const toggleCardFiltro = (fk: "all" | "pago" | "aberto" | "vencido") => {
+    if (fk === "all") { setCardFiltro(null); return; }
+    setCardFiltro((cur) => (cur === fk ? null : fk));
+  };
+
+  // Distribuição por mês (12 meses) do recorte (respeita o filtro de card).
   const porMes = useMemo(() => {
     const arr = MESES_ABREV.map((m) => ({ mes: m, value: 0 }));
-    for (const r of rows) {
+    for (const r of rowsView) {
       const mn = mesNumDe(r);
       if (mn < 1 || mn > 12) continue;
       arr[mn - 1].value += valorEfetivo(r);
     }
     return arr;
-  }, [rows]);
+  }, [rowsView]);
 
   // Quebra secundária pertinente: escolhe a 1ª dimensão AINDA NÃO filtrada
   // (fornecedor → centro → categoria), considerando o filtro primário e os drills.
@@ -282,7 +309,7 @@ export default function FinanceiroAnaliseCustosDetalhe() {
     if (!dim) return { titulo: null as string | null, icon: Tag, dim: null as string | null, data: [] as { name: string; value: number }[] };
     const kf = keyOf[dim];
     const map = new Map<string, number>();
-    for (const r of rows) {
+    for (const r of rowsView) {
       const k = kf(r);
       map.set(k, (map.get(k) ?? 0) + valorEfetivo(r));
     }
@@ -292,12 +319,12 @@ export default function FinanceiroAnaliseCustosDetalhe() {
       .slice(0, 12);
     const meta = DIM_META[dim];
     return { titulo: meta.titulo, icon: meta.icon, dim, data };
-  }, [rows, tipo, extra]);
+  }, [rowsView, tipo, extra]);
 
-  // Lançamentos detalhados (ordenados por valor desc).
+  // Lançamentos detalhados (ordenados por valor desc · respeita o filtro de card).
   const lancamentos = useMemo(() => {
-    return [...rows].sort((a, b) => valorEfetivo(b) - valorEfetivo(a));
-  }, [rows]);
+    return [...rowsView].sort((a, b) => valorEfetivo(b) - valorEfetivo(a));
+  }, [rowsView]);
 
   // ───────── Rev. 3025 — Edição inline + reclassificação em massa ─────────
   const { toast } = useToast();
@@ -349,6 +376,10 @@ export default function FinanceiroAnaliseCustosDetalhe() {
         : new Set(selecionaveis.map((r) => r.id))
     );
   const limparSelecao = () => setSelected(new Set());
+  // Rev. 3151 — ao trocar o filtro de card, limpa a seleção em massa: senão
+  // ficariam selecionados itens OCULTOS pelo filtro e uma ação em lote
+  // (reclassificar) atingiria linhas que o usuário nem está vendo.
+  useEffect(() => { setSelected(new Set()); }, [cardFiltro]);
 
   // Barra de ações em massa.
   const [bulkCat, setBulkCat] = useState<string>(KEEP);
@@ -544,17 +575,27 @@ export default function FinanceiroAnaliseCustosDetalhe() {
 
         {/* KPIs do recorte */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {[
-            { label: "Custo do recorte", value: kpis.total, icon: CircleDollarSign, color: "text-rose-600", bg: "bg-rose-50", fmt: "brl" },
-            { label: "Pago", value: kpis.pago, icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-50", fmt: "brl" },
-            { label: "Em aberto", value: kpis.aberto, icon: Receipt, color: "text-amber-600", bg: "bg-amber-50", fmt: "brl" },
-            { label: "Vencido", value: kpis.vencido, icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50", fmt: "brl", badge: kpis.qtdVencido },
-            { label: "Lançamentos", value: kpis.qtd, icon: ListChecks, color: "text-indigo-600", bg: "bg-indigo-50", fmt: "int" },
-          ].map((c) => {
+          {([
+            { label: "Custo do recorte", value: kpis.total, icon: CircleDollarSign, color: "text-rose-600", bg: "bg-rose-50", fmt: "brl", fk: "all" as const, ring: "ring-rose-400" },
+            { label: "Pago", value: kpis.pago, icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-50", fmt: "brl", fk: "pago" as const, ring: "ring-emerald-400" },
+            { label: "Em aberto", value: kpis.aberto, icon: Receipt, color: "text-amber-600", bg: "bg-amber-50", fmt: "brl", fk: "aberto" as const, ring: "ring-amber-400" },
+            { label: "Vencido", value: kpis.vencido, icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50", fmt: "brl", badge: kpis.qtdVencido, fk: "vencido" as const, ring: "ring-red-400" },
+            { label: "Lançamentos", value: kpis.qtd, icon: ListChecks, color: "text-indigo-600", bg: "bg-indigo-50", fmt: "int", fk: "all" as const, ring: "ring-indigo-400" },
+          ] as Array<{ label: string; value: number; icon: any; color: string; bg: string; fmt: string; badge?: number; fk: "all" | "pago" | "aberto" | "vencido"; ring: string }>).map((c) => {
             const I = c.icon;
             const isInt = c.fmt === "int";
+            const ativo = c.fk !== "all" && cardFiltro === c.fk;
             return (
-              <Card key={c.label} className="border-0 shadow-sm">
+              <Card
+                key={c.label}
+                role="button"
+                tabIndex={0}
+                aria-pressed={ativo}
+                onClick={() => toggleCardFiltro(c.fk)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleCardFiltro(c.fk); } }}
+                className={`border-0 shadow-sm cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5 ${ativo ? `ring-2 ${c.ring} ring-offset-1` : ""}`}
+                title={c.fk === "all" ? "Mostrar todos os lançamentos" : ativo ? `Remover filtro · ${c.label}` : `Filtrar por ${c.label}`}
+              >
                 <CardContent className="p-3.5">
                   <div className="flex items-center justify-between mb-2">
                     <div className={`w-8 h-8 rounded-lg ${c.bg} flex items-center justify-center`}>
@@ -564,7 +605,10 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                       <span className="text-[10px] font-semibold text-red-700 bg-red-100 rounded-full px-1.5 py-0.5">{c.badge}</span>
                     )}
                   </div>
-                  <p className="text-[11px] text-gray-500 font-medium">{c.label}</p>
+                  <p className="text-[11px] text-gray-500 font-medium flex items-center gap-1">
+                    {c.label}
+                    {ativo && <span className="text-[9px] font-semibold text-gray-400">• filtrando</span>}
+                  </p>
                   <p
                     className={`text-sm lg:text-base font-bold ${c.color} mt-0.5 tabular-nums leading-tight whitespace-nowrap overflow-hidden text-ellipsis`}
                     title={isLoading ? undefined : isInt ? c.value.toLocaleString("pt-BR") : formatBRL(c.value)}
@@ -716,9 +760,20 @@ export default function FinanceiroAnaliseCustosDetalhe() {
             {/* Tabela detalhada */}
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2 pt-4 px-5">
-                <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2">
+                <CardTitle className="text-sm font-semibold text-gray-600 flex flex-wrap items-center gap-2">
                   <ListChecks className="w-4 h-4" /> Lançamentos detalhados
                   <span className="text-xs font-normal text-gray-400">({lancamentos.length})</span>
+                  {cardFiltroLabel && (
+                    <button
+                      type="button"
+                      onClick={() => setCardFiltro(null)}
+                      className="inline-flex items-center gap-1 rounded-full bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-2 py-0.5 text-[11px] font-medium"
+                      title="Remover filtro"
+                    >
+                      Filtrando: {cardFiltroLabel}
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent className="px-2 sm:px-5 pb-4">
@@ -841,12 +896,28 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                           </tr>
                         );
                       })}
+                      {lancamentos.length === 0 && (
+                        <tr>
+                          <td colSpan={7} className="py-10 text-center text-sm text-gray-400">
+                            Nenhum lançamento {cardFiltroLabel ? `com status "${cardFiltroLabel}"` : ""} neste recorte.
+                            {cardFiltroLabel && (
+                              <button
+                                type="button"
+                                onClick={() => setCardFiltro(null)}
+                                className="ml-2 text-indigo-600 hover:underline font-medium"
+                              >
+                                Mostrar tudo
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                     <tfoot>
                       <tr className="border-t-2 border-gray-200">
                         <td colSpan={4} className="py-2.5 pr-2 text-right font-semibold text-gray-600">Total do recorte</td>
                         <td className="py-2.5 px-2 text-center text-[11px] text-gray-400 font-medium whitespace-nowrap">{lancamentos.length} lanç.</td>
-                        <td className="py-2.5 pl-2 text-right tabular-nums font-bold text-rose-600 whitespace-nowrap">{formatBRL(kpis.total)}</td>
+                        <td className="py-2.5 pl-2 text-right tabular-nums font-bold text-rose-600 whitespace-nowrap">{formatBRL(viewTotal)}</td>
                         <td />
                       </tr>
                     </tfoot>

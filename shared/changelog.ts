@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3151 — **FINANCEIRO / CUSTO TOTAL (Análise de Custos · Detalhe) · OS 5 CARDS DE
+ * KPI ("Custo do recorte", "Pago", "Em aberto", "Vencido", "Lançamentos") VIRARAM
+ * FILTRO CLICÁVEL — TOCAR NUM CARD RESTRINGE OS GRÁFICOS E A TABELA ÀQUELE STATUS.**
+ *
+ * PEDIDO (screenshots IMG_2085/IMG_2086): "quero poder clicar no card e ver as
+ * informações, como um filtro". Antes os cards eram só leitura.
+ *
+ * COMPORTAMENTO: os cards continuam mostrando o RESUMO COMPLETO do recorte (não somem
+ * nem zeram entre si). Clicar em "Pago"/"Em aberto"/"Vencido" aplica um filtro de
+ * status (toggle — clicar de novo no mesmo card limpa); "Custo do recorte" e
+ * "Lançamentos" limpam o filtro (mostrar tudo). O filtro restringe a seção de baixo —
+ * "Distribuição por Mês", "Por Fornecedor" e a tabela "Lançamentos detalhados" —
+ * mantendo os KPIs de topo como visão-resumo.
+ *
+ * CLASSIFICAÇÃO (espelha exatamente os kpis): pago = `status === "pago"`; aberto =
+ * `status !== "pago"`; vencido = `isVencido(r)` (subconjunto de aberto). Card ativo
+ * ganha anel colorido + selo "• filtrando"; o header da tabela mostra um chip
+ * "Filtrando: <status> ✕" (clique remove) e o rodapé "Total do recorte" passa a somar
+ * a VISÃO exibida (`viewTotal`) em vez do total cheio quando há filtro. Lista vazia
+ * sob filtro mostra "Nenhum lançamento com status … · Mostrar tudo".
+ *
+ * IMPLEMENTAÇÃO (FRONTEND-ONLY): `client/src/pages/financeiro/FinanceiroAnaliseCustosDetalhe.tsx`
+ * — novo estado `cardFiltro` + `rowsView` (deriva de `rows`); `porMes`/`breakdown`/
+ * `lancamentos`/`viewTotal` passaram a consumir `rowsView`; cards com `role=button`,
+ * `aria-pressed`, teclado (Enter/Espaço) e `onClick` → `toggleCardFiltro`.
+ *
+ * ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3150 — **FINANCEIRO / LANÇAMENTOS · OS LANÇAMENTOS IMPORTADOS DA PLANILHA
  * (origem `importacao_excel`) PASSARAM A SER EDITÁVEIS PELO LÁPIS — ANTES O ERP
  * BLOQUEAVA COM "Edição bloqueada — Lançamento vinculado a 'importacao_excel' — edite
