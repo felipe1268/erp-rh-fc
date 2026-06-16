@@ -74,6 +74,29 @@ const FREQ_LABELS: Record<string, string> = {
   trimestral: "Trimestral", anual: "Anual",
 };
 
+// Rev. 3153 — iPad/iOS Safari derruba a request de mutations em lote (45+ ids) e a
+// DOMException chega CRUA como "The string did not match the expected pattern" (e
+// variantes "load failed"/"failed to fetch"/aborted/timeout). Como as ações em lote
+// (baixa/estorno/exclusão) são IDEMPOTENTES no backend, a operação muitas vezes JÁ
+// foi aplicada no servidor mesmo quando o iOS reporta erro. Detectamos o erro de
+// TRANSPORTE p/ tratar com mensagem branda + refetch (refletindo o estado real),
+// em vez de jogar a DOMException críptica na cara do usuário.
+function isTransportErr(msg?: string | null): boolean {
+  if (!msg) return false;
+  const m = msg.toLowerCase();
+  return (
+    m.includes("did not match the expected pattern") ||
+    m.includes("load failed") ||
+    m.includes("failed to fetch") ||
+    m.includes("networkerror") ||
+    m.includes("network connection") ||
+    m.includes("the operation couldn't be completed") ||
+    m.includes("aborted") ||
+    m.includes("timed out") ||
+    m.includes("tempo limite")
+  );
+}
+
 // Rev. 3133 — timeline de meses (padrão Contas a Receber/Pagar).
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
@@ -290,25 +313,53 @@ export default function FinanceiroLancamentos() {
   });
 
   // Rev. 3139 — Seleção múltipla + baixa/estorno em lote (conciliação bancária).
+  // Rev. 3153 — retry resiliente: só re-tenta quando o erro é de TRANSPORTE (iOS
+  // derrubou a request); ações em lote são idempotentes no backend, então re-tentar
+  // é seguro. Erros de regra de negócio NÃO re-tentam.
+  // react-query v5: `retry(failureCount, error)` é chamado APÓS cada falha, com
+  // failureCount = nº de falhas até agora (1 na 1ª). `count <= 2` ⇒ re-tenta após a
+  // 1ª e a 2ª falha e para na 3ª = ATÉ 2 retries (3 tentativas no total).
+  const bulkRetry = (count: number, e: any) => count <= 2 && isTransportErr(e?.message);
+  // Tratamento comum do onError em lote: se foi transporte (iOS), a operação pode já
+  // ter sido aplicada no servidor (idempotente) → fecha, limpa seleção, refetch e
+  // mostra aviso brando em vez da DOMException críptica.
+  const onBulkTransportFallback = (close: () => void) => {
+    setSelectedIds(new Set());
+    close();
+    refetch(); invalidarContas();
+    toast({
+      title: "Conexão instável",
+      description: "A ação pode ter sido aplicada. Atualizamos a lista — confira os status. Se faltou algo, refaça a seleção e tente de novo.",
+    });
+  };
   const bulkBaixaMut = (trpc as any).financial.bulkBaixa.useMutation({
+    retry: bulkRetry,
     onSuccess: (r: any) => {
       toast({ title: "Baixa em lote concluída", description: `${r?.updated ?? 0} lançamento(s) marcados como pago/recebido.` });
       setSelectedIds(new Set());
       setBulkBaixaOpen(false);
       refetch(); invalidarContas();
     },
-    onError: (e: any) => toast({ title: "Erro na baixa em lote", description: e.message, variant: "destructive" }),
+    onError: (e: any) => {
+      if (isTransportErr(e?.message)) return onBulkTransportFallback(() => setBulkBaixaOpen(false));
+      toast({ title: "Erro na baixa em lote", description: e.message, variant: "destructive" });
+    },
   });
   const bulkEstornarMut = (trpc as any).financial.bulkEstornar.useMutation({
+    retry: bulkRetry,
     onSuccess: (r: any) => {
       toast({ title: "Estorno em lote concluído", description: `${r?.updated ?? 0} baixa(s) canceladas.` });
       setSelectedIds(new Set());
       setBulkEstornarOpen(false);
       refetch(); invalidarContas();
     },
-    onError: (e: any) => toast({ title: "Erro no estorno em lote", description: e.message, variant: "destructive" }),
+    onError: (e: any) => {
+      if (isTransportErr(e?.message)) return onBulkTransportFallback(() => setBulkEstornarOpen(false));
+      toast({ title: "Erro no estorno em lote", description: e.message, variant: "destructive" });
+    },
   });
   const bulkDeleteMut = (trpc as any).financial.bulkDelete.useMutation({
+    retry: bulkRetry,
     onSuccess: (r: any) => {
       toast({ title: "Exclusão em lote concluída", description: `${r?.deleted ?? 0} lançamento(s) excluído(s).` });
       setSelectedIds(new Set());
@@ -316,7 +367,10 @@ export default function FinanceiroLancamentos() {
       setBulkDeleteMotivo("");
       refetch(); invalidarContas();
     },
-    onError: (e: any) => toast({ title: "Erro na exclusão em lote", description: e.message, variant: "destructive" }),
+    onError: (e: any) => {
+      if (isTransportErr(e?.message)) { setBulkDeleteMotivo(""); return onBulkTransportFallback(() => setBulkDeleteOpen(false)); }
+      toast({ title: "Erro na exclusão em lote", description: e.message, variant: "destructive" });
+    },
   });
   // Rev. 3148 — ZERAR MÊS (admin master + senha conferida no backend).
   const wipeMonthMut = (trpc as any).financial.wipeMonthEntries.useMutation({

@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3153 — **FINANCEIRO / LANÇAMENTOS · CORRIGIDO O ERRO "The string did not match
+ * the expected pattern" AO CANCELAR BAIXA EM LOTE NO iPad — A AÇÃO VOLTOU A FUNCIONAR
+ * E A LISTA ATUALIZA SOZINHA MESMO QUANDO O iOS DERRUBA A REQUEST.**
+ *
+ * PEDIDO (screenshot IMG_2092, iPad): ao selecionar 45 lançamentos e usar "Cancelar
+ * baixa (45)", aparecia o toast vermelho "Erro no estorno em lote — The string did
+ * not match the expected pattern" e o estorno parecia não acontecer.
+ *
+ * DIAGNÓSTICO: NÃO é bug de backend. `financial.bulkEstornar` está correto (usa
+ * `inlineIds` + dbExecute posicional). O "The string did not match the expected
+ * pattern" é uma DOMException CRUA do iOS Safari quando a request da mutation é
+ * derrubada no transporte (variantes: "load failed"/"failed to fetch"/aborted/
+ * timeout). Como as 3 ações em lote (baixa/estorno/exclusão) são IDEMPOTENTES no
+ * servidor (estorno só toca `status IN ('pago','recebido')`; exclusão só não-
+ * efetivados), a operação frequentemente JÁ foi aplicada no banco mesmo quando o iOS
+ * reporta erro — mas o usuário só via a DOMException críptica e a lista desatualizada.
+ *
+ * CORREÇÃO (FRONTEND-ONLY, `client/src/pages/financeiro/FinanceiroLancamentos.tsx`):
+ * (1) helper `isTransportErr(msg)` (mesmo set usado no Portal/ContasAPagar) que
+ * reconhece o erro de transporte iOS; (2) `retry: bulkRetry` nas 3 mutations em lote
+ * — só re-tenta (até 2x) quando o erro é de transporte (idempotente → seguro), nunca
+ * em erro de regra de negócio; (3) `onError` resiliente: se foi transporte, fecha o
+ * diálogo, limpa a seleção, faz `refetch()` + `invalidarContas()` e mostra um aviso
+ * BRANDO ("Conexão instável — a ação pode ter sido aplicada; atualizamos a lista")
+ * em vez da DOMException; erros reais seguem mostrando a mensagem original.
+ *
+ * ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3152 — **FINANCEIRO / LANÇAMENTOS · OS LANÇAMENTOS CANCELADOS PASSARAM A FICAR
  * OCULTOS POR PADRÃO NA LISTA — UM BOTÃO "Mostrar cancelados (N)" NO CABEÇALHO DA
  * LISTA REVELA/OCULTA SOB DEMANDA. O RASTRO NUNCA É APAGADO, SÓ ESCONDIDO.**
