@@ -1704,6 +1704,39 @@ export const financialRouter = router({
     return { ok: true, updated };
   }),
 
+  // Rev. 3143 — EXCLUSÃO EM LOTE (multi-seleção da tela Lançamentos). Espelha o
+  // deleteEntry single: hard-delete SÓ dos não-efetivados (status NOT IN
+  // ('pago','recebido')) — pagos/recebidos são pulados (use 'Cancelar baixa'
+  // p/ estornar antes). Tenant-guard anti-IDOR + auditoria com snapshot da
+  // contagem. id IN (inlineIds) p/ não cair no bug de array-expansion do dbExecute.
+  bulkDelete: protectedProcedure.input(z.object({
+    ids: z.array(z.number()).min(1).max(500),
+    companyId: z.number(),
+    motivo: z.string().min(5, "Informe o motivo da exclusão (mín. 5 caracteres)"),
+  })).mutation(async ({ input, ctx }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const idList = input.ids.filter(n => Number.isInteger(n) && n > 0);
+    if (idList.length === 0) return { ok: true, deleted: 0 };
+    const res = await dbExecute(db,
+      `DELETE FROM financial_entries
+        WHERE company_id = $1
+          AND id IN (${inlineIds(idList)})
+          AND status NOT IN ('pago','recebido')
+        RETURNING id`,
+      [input.companyId]
+    );
+    const deleted = ((res as any).rows ?? []).length;
+    await createAuditLog({
+      action: "financial_entries_bulk_deleted",
+      userId: ctx.user?.id,
+      companyId: input.companyId,
+      details: `${deleted} lançamento(s) EXCLUÍDO(s) em lote (de ${idList.length} selecionado(s); pagos/recebidos pulados) por ${ctx.user?.name ?? "?"} (id=${ctx.user?.id ?? "?"}) — motivo: "${input.motivo}"`,
+    });
+    return { ok: true, deleted };
+  }),
+
   cancelEntry: protectedProcedure.input(z.object({
     id: z.number(),
     companyId: z.number(),

@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3143 — **FINANCEIRO / LANÇAMENTOS · NOVA AÇÃO EM LOTE "EXCLUIR" NA BARRA DE SELEÇÃO —
+ * AGORA DÁ PARA APAGAR TODOS OS LANÇAMENTOS SELECIONADOS DE UMA VEZ (NÃO EFETIVADOS),
+ * SEM PRECISAR EXCLUIR UM POR UM PELA LIXEIRA DE CADA LINHA.**
+ *
+ * PEDIDO (iPad, tela "Lançamentos" com vários itens selecionados): "quero poder apagar todos
+ * lançamentos quando selecionar". CONTEXTO: a barra de seleção múltipla (sempre ativa desde a
+ * Rev. 3141) só tinha as ações "Dar baixa como pago", "Cancelar baixa" e "Limpar" — para excluir,
+ * o usuário tinha que clicar a lixeira de CADA linha individualmente, inviável para apagar um lote
+ * grande de importação (ex.: planilha duplicada).
+ *
+ * CORREÇÃO: NOVA procedure `financial.bulkDelete` em `server/routers/financial.ts` que ESPELHA
+ * exatamente o `deleteEntry` single — hard-delete SÓ dos lançamentos NÃO efetivados
+ * (`status NOT IN ('pago','recebido')`); pagos/recebidos são PULADOS (orientação: usar
+ * "Cancelar baixa" para estornar antes). Mesmo padrão dos demais bulks: tenant-guard anti-IDOR via
+ * `_assertFinanceiroCompanyAccess`, filtro `id IN (${inlineIds(idList)})` (evita o bug de expansão
+ * de array do `dbExecute`, ver Rev. 3142), `RETURNING id` para contar de verdade o que foi apagado,
+ * e `createAuditLog` ("financial_entries_bulk_deleted") com motivo + contagem. Input exige `motivo`
+ * mín. 5 chars (igual ao single). No frontend, `client/src/pages/financeiro/FinanceiroLancamentos.tsx`
+ * ganhou o botão "Excluir (N)" na barra (rose), o contador `selExcluiveis` (selecionados não
+ * efetivados) e um diálogo de confirmação com textarea de motivo obrigatório, que avisa quantos
+ * pagos/recebidos serão ignorados. ZERO ALTER/DROP/SCHEMA — o DELETE de financial_entries
+ * não-efetivados já é a regra existente do `deleteEntry` (lançamentos de origem regenerável).
+ *
  * Rev. 3142 — **FINANCEIRO / LANÇAMENTOS · CORRIGIDO O ERRO "cannot cast type record to integer"
  * (DB code=42846) AO DAR BAIXA EM LOTE OU CANCELAR A BAIXA (ESTORNO) EM LOTE — A BAIXA/ESTORNO
  * DE VÁRIOS LANÇAMENTOS SELECIONADOS VOLTOU A FUNCIONAR.**

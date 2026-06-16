@@ -130,6 +130,8 @@ export default function FinanceiroLancamentos() {
   const [bulkBaixaData, setBulkBaixaData] = useState(new Date().toISOString().split("T")[0]);
   const [bulkEstornarOpen, setBulkEstornarOpen] = useState(false);
   const [bulkEstornarMotivo, setBulkEstornarMotivo] = useState("");
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleteMotivo, setBulkDeleteMotivo] = useState("");
   const [form, setForm] = useState({ ...INITIAL_FORM });
 
   // Rev. 2082 — Cadastro inline de categoria sem sair do modal "Novo Lançamento".
@@ -277,6 +279,16 @@ export default function FinanceiroLancamentos() {
       refetch(); invalidarContas();
     },
     onError: (e: any) => toast({ title: "Erro no estorno em lote", description: e.message, variant: "destructive" }),
+  });
+  const bulkDeleteMut = (trpc as any).financial.bulkDelete.useMutation({
+    onSuccess: (r: any) => {
+      toast({ title: "Exclusão em lote concluída", description: `${r?.deleted ?? 0} lançamento(s) excluído(s).` });
+      setSelectedIds(new Set());
+      setBulkDeleteOpen(false);
+      setBulkDeleteMotivo("");
+      refetch(); invalidarContas();
+    },
+    onError: (e: any) => toast({ title: "Erro na exclusão em lote", description: e.message, variant: "destructive" }),
   });
 
   // Rev. 2082 — Categorias (financial_accounts) + Centros de Custo + Mutation cadastro inline.
@@ -597,6 +609,8 @@ export default function FinanceiroLancamentos() {
   // Quantos dos selecionados estão aptos a cada ação (espelha o filtro do backend).
   const selBaixaveis = selectableLancs.filter((l: any) => selectedIds.has(l.id) && !["pago", "recebido"].includes(l.status)).length;
   const selEstornaveis = selectableLancs.filter((l: any) => selectedIds.has(l.id) && ["pago", "recebido"].includes(l.status)).length;
+  // Rev. 3143 — excluíveis = selecionados NÃO efetivados (espelha o filtro do backend bulkDelete).
+  const selExcluiveis = selectableLancs.filter((l: any) => selectedIds.has(l.id) && !["pago", "recebido"].includes(l.status)).length;
 
   const recEntries = recItems ?? [];
   const recAtivos = recEntries.filter((e: any) => e.ativo === 1);
@@ -798,6 +812,11 @@ export default function FinanceiroLancamentos() {
                     disabled={selEstornaveis === 0 || bulkEstornarMut.isPending}
                     onClick={() => { setBulkEstornarMotivo(""); setBulkEstornarOpen(true); }}>
                     <RefreshCw className="w-3.5 h-3.5 mr-1.5" />Cancelar baixa{selEstornaveis > 0 ? ` (${selEstornaveis})` : ""}
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-8 text-rose-700 border-rose-300 hover:bg-rose-50"
+                    disabled={selExcluiveis === 0 || bulkDeleteMut.isPending}
+                    onClick={() => { setBulkDeleteMotivo(""); setBulkDeleteOpen(true); }}>
+                    <Trash2 className="w-3.5 h-3.5 mr-1.5" />Excluir{selExcluiveis > 0 ? ` (${selExcluiveis})` : ""}
                   </Button>
                   {selectedIds.size > 0 && (
                     <Button size="sm" variant="ghost" className="h-8 text-gray-500"
@@ -1626,6 +1645,51 @@ export default function FinanceiroLancamentos() {
                 onClick={() => deleteEntryMut.mutate({ id: showDelete!.id, companyId, motivo: deleteMotivo.trim() })}
               >
                 {deleteEntryMut.isPending ? "Excluindo..." : "Confirmar Exclusão"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 3143 — Modal de EXCLUSÃO EM LOTE (multi-seleção; motivo obrigatório min 5 chars). */}
+        <Dialog open={bulkDeleteOpen} onOpenChange={(v) => { if (!v) { setBulkDeleteOpen(false); setBulkDeleteMotivo(""); } }}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-rose-700">
+                <Trash2 className="w-4 h-4" />
+                Excluir {selExcluiveis} lançamento(s)
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="bg-rose-50 border border-rose-100 rounded-lg p-2.5 text-xs text-rose-700">
+                Esta ação <strong>remove definitivamente</strong> os <strong>{selExcluiveis}</strong> lançamento(s) selecionado(s) que ainda <strong>não foram pagos/recebidos</strong>.
+                {selectedIds.size > selExcluiveis && (
+                  <span className="block mt-1 text-amber-700">{selectedIds.size - selExcluiveis} já pago(s)/recebido(s) serão ignorados (use <em>Cancelar baixa</em> para estorná-los antes).</span>
+                )}
+              </div>
+              <div>
+                <Label>Motivo da exclusão (obrigatório)</Label>
+                <Textarea
+                  value={bulkDeleteMotivo}
+                  onChange={(e) => setBulkDeleteMotivo(e.target.value)}
+                  rows={3}
+                  placeholder="Ex: importação duplicada, lote de teste..."
+                  className="mt-1"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">{bulkDeleteMotivo.length}/5 caracteres mínimos</p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setBulkDeleteOpen(false); setBulkDeleteMotivo(""); }}>Voltar</Button>
+              <Button
+                variant="destructive"
+                disabled={selExcluiveis === 0 || bulkDeleteMotivo.trim().length < 5 || bulkDeleteMut.isPending}
+                onClick={() => bulkDeleteMut.mutate({
+                  ids: Array.from(selectedIds),
+                  companyId,
+                  motivo: bulkDeleteMotivo.trim(),
+                })}
+              >
+                {bulkDeleteMut.isPending ? "Excluindo..." : `Confirmar exclusão (${selExcluiveis})`}
               </Button>
             </DialogFooter>
           </DialogContent>
