@@ -630,7 +630,7 @@ export default function Usuarios() {
                           <div className="flex items-center gap-1.5">
                             <span className={`text-sm font-medium truncate ${u.status==="desligado" ? "text-muted-foreground line-through" : ""}`}>{u.name||u.username}</span>
                             <span className={`text-[9px] px-1.5 py-0.5 rounded border font-medium shrink-0 ${ROLE_BADGE[u.role]}`}>{ROLE_LABELS[u.role]||u.role}</span>
-                            {u.status==="desligado" && <span className="text-[9px] px-1.5 py-0.5 rounded border font-medium shrink-0 bg-red-50 text-red-600 border-red-200">Desligado</span>}
+                            {u.status==="desligado" && <span className="text-[9px] px-1.5 py-0.5 rounded border font-medium shrink-0 bg-red-50 text-red-600 border-red-200">Inativo</span>}
                           </div>
                           <div className="text-xs text-muted-foreground truncate">
                             {grpLabel
@@ -741,47 +741,57 @@ export default function Usuarios() {
                 {uPanel === "detail" && selectedUser && (
                   <div className="flex-1 overflow-y-auto p-6">
                     <div className="max-w-2xl mx-auto space-y-5">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                          <button className="lg:hidden" onClick={()=>setUPanel("list")}><ArrowLeft className="h-4 w-4" /></button>
-                          <div className={`h-12 w-12 rounded-full flex items-center justify-center text-white font-bold text-lg shrink-0 ${selectedUser.role==="admin_master"?"bg-purple-600":selectedUser.role==="admin"?"bg-blue-600":"bg-gray-400"}`}>
-                            {(selectedUser.name||selectedUser.username||"?").charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <h2 className="text-xl font-bold">{selectedUser.name||selectedUser.username}</h2>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className={`text-xs px-2 py-0.5 rounded border font-medium ${ROLE_BADGE[selectedUser.role]}`}>{ROLE_LABELS[selectedUser.role]||selectedUser.role}</span>
-                              <span className="text-xs text-muted-foreground">{selectedUser.email||selectedUser.username}</span>
+                      <div className="rounded-xl border bg-gradient-to-br from-muted/40 to-background p-5">
+                        <div className="flex items-start justify-between gap-4 flex-wrap">
+                          <div className="flex items-center gap-4 min-w-0">
+                            <button className="lg:hidden shrink-0" onClick={()=>setUPanel("list")}><ArrowLeft className="h-4 w-4" /></button>
+                            <div className={`h-14 w-14 rounded-full flex items-center justify-center text-white font-bold text-xl shrink-0 shadow-sm ${selectedUser.role==="admin_master"?"bg-purple-600":selectedUser.role==="admin"?"bg-blue-600":"bg-gray-400"}`}>
+                              {(selectedUser.name||selectedUser.username||"?").charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <h2 className="text-xl font-bold leading-tight">{selectedUser.name||selectedUser.username}</h2>
+                              <div className="flex items-center flex-wrap gap-2 mt-1.5">
+                                <span className={`text-[11px] px-2 py-0.5 rounded-full border font-medium ${ROLE_BADGE[selectedUser.role]}`}>{ROLE_LABELS[selectedUser.role]||selectedUser.role}</span>
+                                <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border font-medium ${selectedUser.status==="desligado" ? "bg-red-50 text-red-600 border-red-200" : "bg-green-50 text-green-700 border-green-200"}`}>
+                                  <span className={`h-1.5 w-1.5 rounded-full ${selectedUser.status==="desligado" ? "bg-red-500" : "bg-green-500"}`} />
+                                  {selectedUser.status==="desligado" ? "Inativo" : "Ativo"}
+                                </span>
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-1 truncate">{selectedUser.email||selectedUser.username}</p>
                             </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {isAdmin && selectedUser.id !== user?.id && (
-                            <div className={`flex items-center gap-2 h-8 px-2.5 rounded-md border ${selectedUser.status==="desligado" ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200"}`}>
-                              <Lock className={`h-3 w-3 ${selectedUser.status==="desligado" ? "text-red-600" : "text-green-600"}`} />
-                              <span className={`text-xs font-medium ${selectedUser.status==="desligado" ? "text-red-600" : "text-green-700"}`}>{selectedUser.status==="desligado" ? "Acesso desligado" : "Acesso ativo"}</span>
-                              <Switch
-                                checked={selectedUser.status!=="desligado"}
-                                disabled={setStatusMut.isPending}
-                                onCheckedChange={(v)=>{
-                                  const novo = v ? "ativo" : "desligado";
-                                  if (novo==="desligado" && !confirm(`Desligar o acesso de ${selectedUser.name||selectedUser.username}? A pessoa não conseguirá mais entrar no sistema (o cadastro é mantido).`)) return;
-                                  setStatusMut.mutate({ userId: selectedUser.id, status: novo });
-                                }} />
+                          <div className="flex flex-col items-stretch gap-2 shrink-0 w-full sm:w-auto">
+                            {isAdmin && selectedUser.id !== user?.id && (
+                              <div className={`flex items-center justify-between gap-3 h-9 px-3 rounded-lg border ${selectedUser.status==="desligado" ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200"}`}>
+                                <span className="flex items-center gap-1.5">
+                                  <Lock className={`h-3.5 w-3.5 ${selectedUser.status==="desligado" ? "text-red-600" : "text-green-600"}`} />
+                                  <span className={`text-xs font-medium ${selectedUser.status==="desligado" ? "text-red-600" : "text-green-700"}`}>{selectedUser.status==="desligado" ? "Acesso inativo" : "Acesso ativo"}</span>
+                                </span>
+                                <Switch
+                                  checked={selectedUser.status!=="desligado"}
+                                  disabled={setStatusMut.isPending}
+                                  onCheckedChange={(v)=>{
+                                    const novo = v ? "ativo" : "desligado";
+                                    if (novo==="desligado" && !confirm(`Inativar o acesso de ${selectedUser.name||selectedUser.username}? A pessoa não conseguirá mais entrar no sistema (o cadastro é mantido).`)) return;
+                                    setStatusMut.mutate({ userId: selectedUser.id, status: novo });
+                                  }} />
+                              </div>
+                            )}
+                            <div className="flex gap-2">
+                              {isAdmin && selectedUser.id !== user?.id && (
+                                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs flex-1"
+                                  onClick={()=>{ if(confirm(`Resetar senha de ${selectedUser.name}?`)) resetPwdMut.mutate({userId:selectedUser.id}); }}>
+                                  <RefreshCw className="h-3 w-3" /> Resetar senha
+                                </Button>
+                              )}
+                              {isMaster && selectedUser.id !== user?.id && (
+                                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs flex-1 text-red-600 hover:text-red-700 hover:border-red-300"
+                                  onClick={()=>{ if(confirm(`Excluir "${selectedUser.name}"?`)) deleteUserMut.mutate({userId:selectedUser.id}); }}>
+                                  <Trash2 className="h-3 w-3" /> Excluir
+                                </Button>
+                              )}
                             </div>
-                          )}
-                          {isAdmin && selectedUser.id !== user?.id && (
-                            <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs"
-                              onClick={()=>{ if(confirm(`Resetar senha de ${selectedUser.name}?`)) resetPwdMut.mutate({userId:selectedUser.id}); }}>
-                              <RefreshCw className="h-3 w-3" /> Resetar senha
-                            </Button>
-                          )}
-                          {isMaster && selectedUser.id !== user?.id && (
-                            <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs text-red-600 hover:text-red-700 hover:border-red-300"
-                              onClick={()=>{ if(confirm(`Excluir "${selectedUser.name}"?`)) deleteUserMut.mutate({userId:selectedUser.id}); }}>
-                              <Trash2 className="h-3 w-3" /> Excluir
-                            </Button>
-                          )}
+                          </div>
                         </div>
                       </div>
 

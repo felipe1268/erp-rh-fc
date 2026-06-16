@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3166 — **USUÁRIOS E PERMISSÕES · O ROTULO "DESLIGADO" / "ACESSO DESLIGADO" VIROU
+ * "INATIVO" / "ACESSO INATIVO" NA TELA (SÓ TEXTO; O VALOR DE STATUS `"desligado"` NO
+ * BANCO/BACKEND CONTINUA INTACTO) E O CABEÇALHO DO PAINEL DE DETALHE DO USUÁRIO GANHOU UM
+ * LAYOUT MAIS LIMPO — AVATAR MAIOR, BADGE DE STATUS COM BOLINHA (VERDE "ATIVO" / VERMELHO
+ * "INATIVO") AO LADO DO PERFIL, E OS BOTÕES (ACESSO / RESETAR SENHA / EXCLUIR) AGRUPADOS
+ * NUM CARD EM VEZ DE ESPREMIDOS NUMA LINHA SÓ.**
+ *
+ * PEDIDO: o usuário pediu (1) trocar a palavra "Desligado" por "Inativo" na tela "Usuários e
+ * Permissões" e (2) melhorar o layout do painel de detalhe (na captura os 3 botões + o pill
+ * de status apareciam apertados ao lado do nome). A palavra "desligado" é só nomenclatura
+ * visual — o estado canônico do registro (Rev. 3159) é o status `"desligado"` e NÃO pode
+ * mudar (loginLocal recusa 'desligado', context.ts zera a sessão, mutation setUserStatus
+ * grava 'ativo'/'desligado').
+ *
+ * MUDANÇA (FRONTEND-ONLY, `client/src/pages/Usuarios.tsx`):
+ *  1) RENOMEAÇÃO DE RÓTULO (apenas strings exibidas; ZERO mudança nas comparações
+ *     `status==="desligado"` / no valor gravado `novo="desligado"`):
+ *       - Badge do item da lista: "Desligado" → "Inativo".
+ *       - Pill do detalhe: "Acesso desligado" → "Acesso inativo" ("Acesso ativo" intacto).
+ *       - Texto do confirm(): "Desligar o acesso de …" → "Inativar o acesso de …".
+ *  2) LAYOUT DO CABEÇALHO DO DETALHE: o bloco nome+ações foi envolvido num card
+ *     (`rounded-xl border bg-gradient-to-br from-muted/40 to-background p-5`). Avatar
+ *     12→14 c/ sombra; ao lado do nome, além do badge de perfil, um NOVO badge de status
+ *     pill com bolinha (verde "Ativo" / vermelho "Inativo") para leitura rápida; e-mail
+ *     numa linha própria abaixo. As ações (pill com Switch de Acesso, "Resetar senha",
+ *     "Excluir") foram agrupadas numa coluna à direita (`flex-col items-stretch gap-2`,
+ *     `w-full sm:w-auto`) com os botões lado a lado em baixo (`flex-1`), deixando de ficar
+ *     espremidos. Comportamento (toggle, reset, excluir, guards isAdmin/isMaster/self)
+ *     100% preservado.
+ *
+ * Nenhuma mudança de backend, schema, rota ou valor de dados. ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3165 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O FILTRO DE PERÍODO DEIXOU DE SER DOIS
  * CAMPOS DE DATA (DATA INÍCIO / DATA FIM) E PASSOU A USAR O MESMO SELETOR-PADRÃO DE MÊS/ANO
  * DO RESTANTE DO FINANCEIRO — NAVEGAÇÃO POR ANO (‹ ›), BOTÃO "ANO TODO" E A FAIXA DE CHIPS
