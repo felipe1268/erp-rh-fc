@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3158 — **RH / COLABORADORES · OS CARDS DE RESUMO AGORA TÊM UM CARD "Sócio" —
+ * ANTES O TOTAL DE "Ativos" NÃO FECHAVA COM A SOMA DE "CLT" + "PJ" PORQUE OS SÓCIOS
+ * (tipoContrato='Socio') FICAVAM INVISÍVEIS ENTRE OS CARDS.**
+ *
+ * PEDIDO (screenshot IMG_2098, iPad): "verifique a quantidade total de funcionários
+ * nos ativos tá diferente se somar os CLT, PJ, férias, afastados...". Na FC (company
+ * 60002): Ativos = 106, mas CLT (94) + PJ (9) = 103 — faltavam 3. Investigação no
+ * Neon: os 3 são ATIVOS com `tipoContrato='Socio'`, que tinham filtro ("Socio") e
+ * itens de SelectItem na tela, mas NÃO tinham card no resumo — então a soma "não
+ * fechava". (Conferência paralela: "Na Empresa" = 124 = total 312 − desligados 163 −
+ * blacklist 25 = Ativos 106 + Férias 5 + Afastados 4 + Aviso 7 + Reclusos 2 + Licença
+ * 0 — esse JÁ batia.)
+ *
+ * MUDANÇA: (1) BACKEND `server/db.ts` (`getEmployeeStats`): novo campo `socio` no
+ * objeto de stats (e no early-return sem db), preenchido a partir do MESMO
+ * agrupamento `tipoContrato` já restrito a `status='Ativo'` que alimenta `clt`/`pj`
+ * (`else if (r.tipoContrato === 'Socio') stats.socio = r.cnt`). (2) FRONTEND
+ * `client/src/pages/Colaboradores.tsx`: novo card "Sócio" (ícone `Award`, ciano) logo
+ * após "PJ", com `filter: "Socio"` — que já era tratado em `displayEmployees`
+ * (`tipoContrato === "Socio" && !isInativo`). Agora a conta fecha: Ativos = CLT + PJ +
+ * Sócio (106 = 94 + 9 + 3). ZERO SCHEMA/ALTER/DROP/DELETE (apenas leitura agregada).
+ *
  * Rev. 3157 — **RH / RAIO-X DO FUNCIONÁRIO · A FICHA NA TELA PASSOU A MOSTRAR A DATA
  * DE NASCIMENTO COMPLETA (DIA/MÊS/ANO) — ANTES SÓ APARECIA "Aniversário: 18/03"
  * (DIA/MÊS) E A "Idade".**

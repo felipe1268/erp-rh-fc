@@ -1270,6 +1270,7 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
                 { label: "Ativos", value: statsQ.data?.ativos ?? "—", icon: UserCheck, color: "text-green-700", bg: "bg-green-50 border-green-200", filter: "Ativo" },
                 { label: "CLT", value: statsQ.data?.clt ?? "—", icon: FileText, color: "text-sky-700", bg: "bg-sky-50 border-sky-200", filter: "CLT" },
                 { label: "PJ", value: statsQ.data?.pj ?? "—", icon: Building2, color: "text-indigo-700", bg: "bg-indigo-50 border-indigo-200", filter: "PJ" },
+                { label: "Sócio", value: (statsQ.data as any)?.socio ?? "—", icon: Award, color: "text-cyan-700", bg: "bg-cyan-50 border-cyan-200", filter: "Socio" },
                 { label: "Férias", value: statsQ.data?.ferias ?? "—", icon: Palmtree, color: "text-blue-700", bg: "bg-blue-50 border-blue-200", filter: "Ferias" },
                 { label: "Afastados", value: statsQ.data?.afastados ?? "—", icon: HeartPulse, color: "text-amber-700", bg: "bg-amber-50 border-amber-200", filter: "Afastado" },
                 { label: "Licença", value: statsQ.data?.licenca ?? "—", icon: Clock, color: "text-purple-700", bg: "bg-purple-50 border-purple-200", filter: "Licenca" },

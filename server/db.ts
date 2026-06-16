@@ -1172,7 +1172,7 @@ export async function permanentDeleteEmployee(id: number, companyId: number) {
 
 export async function getEmployeeStats(companyId: number, companyIds?: number[]) {
   const db = await getDb();
-  if (!db) return { total: 0, naEmpresa: 0, ativos: 0, ferias: 0, afastados: 0, licenca: 0, desligados: 0, reclusos: 0, aviso: 0, blacklist: 0, clt: 0, pj: 0, porStatus: {} as Record<string, number> };
+  if (!db) return { total: 0, naEmpresa: 0, ativos: 0, ferias: 0, afastados: 0, licenca: 0, desligados: 0, reclusos: 0, aviso: 0, blacklist: 0, clt: 0, pj: 0, socio: 0, porStatus: {} as Record<string, number> };
   const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
 
   // Query única agrupada por (status, listaNegra) — fonte de verdade para todos os badges.
@@ -1216,6 +1216,7 @@ export async function getEmployeeStats(companyId: number, companyIds?: number[])
     blacklist: 0,   // TODOS com listaNegra=1, qualquer status
     clt: 0,
     pj: 0,
+    socio: 0,       // Ativos com tipoContrato='Socio' (fecha a conta: ativos = clt + pj + socio)
     porStatus: {} as Record<string, number>,
   };
 
@@ -1247,6 +1248,7 @@ export async function getEmployeeStats(companyId: number, companyIds?: number[])
   for (const r of tipoRows) {
     if (r.tipoContrato === 'CLT') stats.clt = r.cnt;
     else if (r.tipoContrato === 'PJ') stats.pj = r.cnt;
+    else if (r.tipoContrato === 'Socio') stats.socio = r.cnt;
   }
 
   // Vínculo ativo na empresa = todos que ainda têm conexão = total − dispensados (desligados + blacklist).
