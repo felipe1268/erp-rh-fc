@@ -790,6 +790,16 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2898: coluna excluido_em garantida em integrasign_envelopes (soft-delete).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA integrasign_envelopes.excluido_em:`, e?.message || e); }
 
+        // Rev. 3179/3181 — soft-delete de linhas de extrato bancário ("Limpar extrato" sem
+        // hard DELETE; TODAS as leituras/dedup filtram `excluido_em IS NULL`). O self-heal
+        // desta coluna NÃO chegou a entrar na Rev. 3179, então a coluna nunca foi criada no
+        // banco real (Neon) e a Conciliação inteira quebrava com `column "excluido_em" does
+        // not exist`. ADD COLUMN IF NOT EXISTS é aditivo (R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`ALTER TABLE bank_statement_lines ADD COLUMN IF NOT EXISTS excluido_em TIMESTAMP`);
+          console.log(`[SyncSchema+] Rev. 3181: coluna excluido_em garantida em bank_statement_lines (soft-delete de extrato).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA bank_statement_lines.excluido_em:`, e?.message || e); }
+
         // Rev. 2767 — "% Previsto" LITERAL por semana (Texto10 capturado em cada
         // upload da aba Avanço). Coluna JSON; ADD COLUMN IF NOT EXISTS (R-001/R-007/R-010 OK).
         try {

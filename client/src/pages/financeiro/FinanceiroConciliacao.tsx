@@ -921,31 +921,24 @@ export default function FinanceiroConciliacao() {
 
             <div className="px-6 py-5 space-y-5 flex-1 min-h-0 overflow-y-auto">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-gray-600">Conta Bancária *</Label>
-                <Select value={importConta} onValueChange={setImportConta}>
-                  <SelectTrigger className="w-full h-11">
-                    <div className="min-w-0 flex-1 text-left">
-                      <SelectValue placeholder="Selecione a conta..." />
+                <Label className="text-xs font-medium text-gray-600">Conta Bancária</Label>
+                {(() => {
+                  const conta = (bankAccounts ?? []).find((b: any) => String(b.id) === importConta);
+                  const periodo = mesSel != null ? `${MESES[mesSel - 1]}/${ano}` : `Ano ${ano}`;
+                  if (!conta) return (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-700">Selecione a conta bancária na tela antes de importar.</div>
+                  );
+                  const cor = bancoCor(conta.banco);
+                  return (
+                    <div className="flex items-center gap-2.5 rounded-xl border border-gray-200 bg-gray-50/70 px-3 py-2.5">
+                      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${cor.bg} ${cor.text}`}><Landmark className="w-4 h-4" /></span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-gray-800">{conta.banco}{conta.descricao ? ` · ${conta.descricao}` : ""}</span>
+                        <span className="block truncate text-[11px] text-gray-500">Ag. {formatAgencia(conta.agencia)}/{formatConta(conta.conta)} · {periodo}</span>
+                      </span>
                     </div>
-                  </SelectTrigger>
-                  <SelectContent className="max-w-[var(--radix-select-trigger-width)]">
-                    {(bankAccounts ?? []).map((b: any) => {
-                      const cor = bancoCor(b.banco);
-                      return (
-                        <SelectItem key={b.id} value={String(b.id)}>
-                          <span className="flex items-center gap-2 min-w-0">
-                            <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${cor.bg} ${cor.text}`}>
-                              <Landmark className="w-3.5 h-3.5" />
-                            </span>
-                            <span className="truncate">
-                              {b.banco} · {formatAgencia(b.agencia)}/{formatConta(b.conta)}
-                            </span>
-                          </span>
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+                  );
+                })()}
               </div>
 
               <div className="space-y-1.5">

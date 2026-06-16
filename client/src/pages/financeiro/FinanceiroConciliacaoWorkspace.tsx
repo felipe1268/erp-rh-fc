@@ -841,16 +841,19 @@ export default function FinanceiroConciliacaoWorkspace() {
           </DialogHeader>
           <div className="px-6 py-5 space-y-5 flex-1 min-h-0 overflow-y-auto">
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-gray-600">Conta Bancária *</Label>
-              <Select value={importConta} onValueChange={setImportConta}>
-                <SelectTrigger className="w-full h-11"><div className="min-w-0 flex-1 text-left"><SelectValue placeholder="Selecione a conta..." /></div></SelectTrigger>
-                <SelectContent className="max-w-[var(--radix-select-trigger-width)]">
-                  {(bankAccounts ?? []).map((b: any) => {
-                    const cor = bancoCor(b.banco);
-                    return (<SelectItem key={b.id} value={String(b.id)}><span className="flex items-center gap-2 min-w-0"><span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${cor.bg} ${cor.text}`}><Landmark className="w-3.5 h-3.5" /></span><span className="truncate">{b.banco} · {formatAgencia(b.agencia)}/{formatConta(b.conta)}</span></span></SelectItem>);
-                  })}
-                </SelectContent>
-              </Select>
+              <Label className="text-xs font-medium text-gray-600">Conta Bancária</Label>
+              {contaSel ? (
+                <div className="flex items-center gap-2.5 rounded-xl border border-gray-200 bg-gray-50/70 px-3 py-2.5">
+                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${bancoCor(contaSel.banco).bg} ${bancoCor(contaSel.banco).text}`}><Landmark className="w-4 h-4" /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-gray-800">{contaSel.banco}{contaSel.descricao ? ` · ${contaSel.descricao}` : ""}</span>
+                    <span className="block truncate text-[11px] text-gray-500">Ag. {formatAgencia(contaSel.agencia)}/{formatConta(contaSel.conta)} · {periodoLabel}</span>
+                  </span>
+                  <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-gray-400">Etapa 1</span>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-700">Selecione a conta na etapa 1 antes de importar.</div>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-gray-600">Arquivo *</Label>

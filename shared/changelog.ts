@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3181 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O DIÁLOGO "IMPORTAR EXTRATO BANCÁRIO"
+ * PAROU DE PEDIR A CONTA BANCÁRIA DE NOVO — AGORA MOSTRA (SÓ LEITURA) A CONTA E O MÊS JÁ
+ * ESCOLHIDOS NA TELA/ETAPA E SÓ PEDE O ARQUIVO.**
+ *
+ * PEDIDO (piloto FC FEV/2026): "aqui já tem um erro... não preciso escolher conta novamente
+ * pq a escolha já foi feita antes... preciso escolher o mês que quero fazer a conciliação e
+ * depois a conta bancária, e SOMENTE depois faço a importação — ou seja, não há necessidade
+ * de fazer uma nova indicação da conta". No Workspace de Conciliação (3 etapas) e na tela
+ * clássica, o usuário já seleciona MÊS + CONTA antes de abrir o diálogo; o diálogo então
+ * exibia outro `Select` de "Conta Bancária *", redundante e fonte de erro (dava pra escolher
+ * uma conta diferente da que estava sendo conciliada).
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO BACKEND): nos dois diálogos de importação — em
+ * `client/src/pages/financeiro/FinanceiroConciliacaoWorkspace.tsx` e em
+ * `client/src/pages/financeiro/FinanceiroConciliacao.tsx` — o `Select` editável de conta foi
+ * SUBSTITUÍDO por um cartão SOMENTE-LEITURA que mostra a conta já escolhida (ícone/cor do
+ * banco via `bancoCor`, banco + descrição, `Ag./Conta` formatadas via `formatAgencia`/
+ * `formatConta`) e o período (mês/ano) selecionado. A importação continua usando o estado
+ * `importConta` que JÁ é pré-preenchido com `contaBancariaId` quando o diálogo abre (não dá
+ * mais pra trocar a conta no diálogo). No Workspace reusa `contaSel`/`periodoLabel`; na tela
+ * clássica deriva a conta inline de `bankAccounts.find(id === importConta)` e o rótulo de
+ * período de `MESES[mesSel-1]/ano` (ou "Ano {ano}"). Se por algum motivo nenhuma conta estiver
+ * selecionada, mostra um aviso âmbar ("Selecione a conta na etapa 1/na tela antes de importar")
+ * e o botão "Importar" segue desabilitado (gate `!importConta` inalterado). O bloqueio de mês
+ * errado (Rev. 3179) e a barra de progresso (Rev. 3175) continuam intactos.
+ * ZERO SCHEMA/ALTER/DROP/DELETE · ZERO BACKEND.
+ *
  * Rev. 3180 — **FINANCEIRO / CONTAS A RECEBER · NOVO BOTÃO "ANO TODO" NO SELETOR DE MESES QUE
  * MOSTRA TODOS OS LANÇAMENTOS DO ANO DE UMA VEZ (SEM PRECISAR CLICAR MÊS A MÊS).**
  *
