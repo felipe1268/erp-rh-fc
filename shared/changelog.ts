@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3171 — **CADASTRO · CONTAS BANCÁRIAS · OS NÚMEROS DE AGÊNCIA E CONTA PASSARAM A SER
+ * EXIBIDOS NO PADRÃO BANCÁRIO BRASILEIRO — CORPO AGRUPADO POR PONTOS E DÍGITO VERIFICADOR
+ * SEPARADO POR TRAÇO (EX: "130026093" → "13.002.609-3"); MESMO PADRÃO REPLICADO NOS CARDS DE
+ * CONTA DA CONCILIAÇÃO BANCÁRIA.**
+ *
+ * PEDIDO (sobre a tela "Editar Conta Bancária"): "melhore o layout e os números, quero que
+ * ele seja separado por ponto e traço conforme o padrão contas". Antes os campos Agência/Conta
+ * eram exibidos crus (ex: "130026093"), sem o agrupamento por pontos nem o traço do dígito
+ * verificador que o padrão bancário usa.
+ *
+ * MUDANÇA — FORMATTERS (`client/src/lib/formatters.ts`, 2 helpers novos, idempotentes):
+ *  - `formatConta(val)`: tira a formatação, agrupa o corpo (todos menos o último dígito) com
+ *    pontos de milhar e prefixa o último dígito (verificador) com traço →
+ *    "130026093" → "13.002.609-3". `digits.length<=1` retorna cru.
+ *  - `formatAgencia(val)`: só dígitos; com 5+ dígitos separa o último com traço
+ *    ("0633" → "0633"; "06332" → "0633-2").
+ *
+ * MUDANÇA — TELAS:
+ *  - `client/src/pages/ContasBancarias.tsx`: cards da lista exibem
+ *    `formatAgencia(conta.agencia)` / `formatConta(conta.conta)` (mono + `tracking-wide`);
+ *    no diálogo de criação/edição, os inputs de Agência e Conta ganharam `font-mono` e
+ *    `onBlur` que normaliza o valor (`formatAgencia`/`formatConta`) ao sair do campo, com
+ *    placeholders atualizados ("Ex: 0633" / "Ex: 13.002.609-3").
+ *  - `client/src/pages/financeiro/FinanceiroConciliacao.tsx`: os cards de conta exibem
+ *    `Ag. {formatAgencia} / {formatConta}` (mesmo padrão).
+ *
+ * NOTA: nenhum casamento de backend usa o número da conta como string (a conciliação liga por
+ * `conta_bancaria_id`), então formatar o valor é seguro; a busca da lista continua por
+ * `includes`. ZERO SCHEMA/ALTER/DROP/DELETE · ZERO BACKEND.
+ *
  * Rev. 3170 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CADA CARD DE CONTA AGORA MOSTRA O
  * STATUS DE CONCILIAÇÃO DO PERÍODO — VERDE "CONCILIADO" QUANDO O EXTRATO JÁ FOI SUBIDO E
  * ESTÁ 100% CONCILIADO, AZUL "A CONCILIAR" QUANDO TEM EXTRATO COM PENDÊNCIA, CINZA "SEM

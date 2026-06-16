@@ -11,6 +11,7 @@ import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, Landmark, Check, RotateCcw } from "lucide-react";
+import { formatConta, formatAgencia } from "@/lib/formatters";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -364,8 +365,8 @@ export default function FinanceiroConciliacao() {
                             <p className="text-sm font-semibold text-gray-800 truncate">
                               {b.banco}{desc ? ` · ${desc}` : ""}
                             </p>
-                            <p className="text-xs text-gray-500 font-mono truncate">
-                              Ag. {b.agencia} / {b.conta}
+                            <p className="text-xs text-gray-500 font-mono tracking-wide truncate">
+                              Ag. {formatAgencia(b.agencia)} / {formatConta(b.conta)}
                             </p>
                             <span className={`mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${
                               isConsol ? "bg-green-100 text-green-700"

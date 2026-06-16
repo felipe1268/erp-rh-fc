@@ -42,6 +42,34 @@ export function formatCNPJ(val: unknown): string {
   return digits.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
 }
 
+/**
+ * Conta bancária no padrão brasileiro: agrupa o corpo com pontos de milhar e
+ * separa o último dígito (verificador) com traço. Ex: "130026093" → "13.002.609-3".
+ * Idempotente (remove formatação antes de reformatar). Mantém um eventual sufixo
+ * já presente; se o usuário digitou um traço próprio, ele é respeitado.
+ */
+export function formatConta(val: unknown): string {
+  if (!val && val !== 0) return "";
+  const raw = String(val).trim();
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length <= 1) return raw;
+  const check = digits.slice(-1);
+  const body = digits.slice(0, -1).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return `${body}-${check}`;
+}
+
+/**
+ * Agência no padrão brasileiro: mantém apenas os dígitos, com traço antes do
+ * verificador quando houver 5+ dígitos. Ex: "0633" → "0633"; "06332" → "0633-2".
+ */
+export function formatAgencia(val: unknown): string {
+  if (!val && val !== 0) return "";
+  const raw = String(val).trim();
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length >= 5) return `${digits.slice(0, -1)}-${digits.slice(-1)}`;
+  return digits || raw;
+}
+
 /** CEP: 00000-000 */
 export function formatCEP(val: unknown): string {
   if (!val) return "-";

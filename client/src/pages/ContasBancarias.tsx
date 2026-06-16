@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Badge } from "@/components/ui/badge";
 import { removeAccents } from "@/lib/searchUtils";
-import { fmtNum } from "@/lib/formatters";
+import { fmtNum, formatConta, formatAgencia } from "@/lib/formatters";
 
 type ContaForm = {
   banco: string;
@@ -304,11 +304,11 @@ export default function ContasBancarias() {
 
                     <div className="flex items-center gap-2">
                       <span className="text-muted-foreground">Agência:</span>
-                      <span className="font-mono font-medium">{conta.agencia}</span>
+                      <span className="font-mono font-medium tracking-wide">{formatAgencia(conta.agencia)}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-muted-foreground">Conta:</span>
-                      <span className="font-mono font-medium">{conta.conta}</span>
+                      <span className="font-mono font-medium tracking-wide">{formatConta(conta.conta)}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-muted-foreground">Tipo:</span>
@@ -425,17 +425,21 @@ export default function ContasBancarias() {
               <div>
                 <Label>Agência *</Label>
                 <Input
+                  className="font-mono tracking-wide"
                   value={form.agencia}
                   onChange={e => setForm(f => ({ ...f, agencia: e.target.value }))}
-                  placeholder="Ex: 0001"
+                  onBlur={e => setForm(f => ({ ...f, agencia: formatAgencia(e.target.value) }))}
+                  placeholder="Ex: 0633"
                 />
               </div>
               <div>
                 <Label>Conta *</Label>
                 <Input
+                  className="font-mono tracking-wide"
                   value={form.conta}
                   onChange={e => setForm(f => ({ ...f, conta: e.target.value }))}
-                  placeholder="Ex: 12345-6"
+                  onBlur={e => setForm(f => ({ ...f, conta: formatConta(e.target.value) }))}
+                  placeholder="Ex: 13.002.609-3"
                 />
               </div>
             </div>
