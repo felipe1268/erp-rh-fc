@@ -1,6 +1,48 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3149 — **FINANCEIRO / LANÇAMENTOS · IMPORTADA A PLANILHA-MESTRE DE PAGAMENTOS
+ * (003_DADOS_TRATADOS) PARA A FC=60002 — 8.080 LANÇAMENTOS / R$ 12.431.027,02 (AGO/2024 →
+ * ABR/2026), TODOS COMO "A PAGAR", DO MESMO JEITO QUE UM HUMANO LANÇARIA À MÃO.**
+ *
+ * PEDIDO: subir a planilha de pagamentos para o ERP (company FC=60002) como se fosse
+ * lançamento manual (mesma lógica do `financial.createEntry`), com de-para de nomes
+ * (obras/categorias/contas) e dedup contra o que já existia. Status confirmado pelo
+ * usuário = `a_pagar`, TODOS os meses, lançado mês a mês; e "apaga o lote anterior e
+ * refaz" (os 193 da v1).
+ *
+ * DIAGNÓSTICO/VALIDAÇÃO (Neon real, FC=60002):
+ *  - BUG ENCONTRADO E CORRIGIDO antes de gravar: cada aba mensal da planilha tem uma linha
+ *    `TOTAL` no rodapé (col Data="TOTAL", Parcela=soma do mês). Sem filtro, o total dava o
+ *    DOBRO (~R$ 24,8 mi / 8.097). FILTRO: só entra linha cuja col Data casa o regex
+ *    `DD/MM/AAAA`. Resultado bate 1:1 com o Resumo do usuário: 8.080 linhas /
+ *    R$ 12.431.027,02 / juros R$ 20.522,87 / descontos R$ 15.231,66 (17 abas; recorrentes
+ *    Mai–Dez/2026 EXCLUÍDAS de propósito).
+ *  - DEDUP = 0 colisões (data+valor) vs os 295 lançamentos reais já existentes. FEV/2026 NÃO
+ *    tinha lançamentos manuais (só `cronograma_atividade`=projeção + 1 revenue) — o "344
+ *    manuais" de planos antigos era falso.
+ *
+ * EXECUÇÃO (importador psycopg2 fora do app, espelhando as colunas do `createEntry`):
+ *  - Apaga o lote anterior (origem_modulo='importacao_excel' = 193 linhas da v1) e refaz.
+ *  - Cria SÓ o genuinamente novo após de-para token-aware (thr 0.62, evita duplicar grafia):
+ *    3 obras (Hotel Qiu 2 - Fase 3, JFC - Almoxarifado Itaguaçu, JFC - Casa Itaguaçu),
+ *    2 categorias (IMP-014 Propaganda e Marketing, IMP-015 Comunicação Visual,
+ *    financial_accounts tipo='despesa'/natureza='variavel'/nível 1) e 3 contas bancárias
+ *    (CAIXA ADM, Banco do Brasil - FC 37400-8, Santander - JF).
+ *  - INSERT em financial_entries espelhando o manual: tipo='despesa', natureza='variavel',
+ *    valor_previsto=Parcela, valor_realizado=NULL, data_competencia=data_vencimento=data,
+ *    data_pagamento=NULL, status='a_pagar', conta_nome=CATEGORIA, conta_bancaria_id resolvido
+ *    pelo de-para, juros/descontos na própria linha, fornecedor_nome, conciliado=0,
+ *    origem_modulo='importacao_excel', origem_descricao='IMP_PLANILHA_v2_<YYYY-MM>' (lote
+ *    rastreável/reversível). Condição/Grupo/CC/Quem-paga/CNPJ vão em `observacoes`.
+ *  - DE-PARA contas: 6 linhas "CAIXA ECONOMICA" (genérico) e linhas multi-conta/Faturamento
+ *    Direto/Pagamento Cliente ficam SEM banco vinculado (rótulo preservado em observações) —
+ *    a resolver na conciliação (Etapa 2 do plano).
+ *  - PERF: de-para fuzzy memoizado por nome único (era ~23ms/linha → o import inteiro caiu de
+ *    ~186s p/ ~10s) e INSERT via `execute_values` (multi-linha) em vez de `executemany`.
+ *  - ZERO ALTER/DROP/SCHEMA no app. Os DELETEs são só do próprio lote 'importacao_excel'
+ *    (re-importação idempotente), não de dados de produção.
+ *
  * Rev. 3148 — **FINANCEIRO / LANÇAMENTOS · NOVO BOTÃO "ZERAR MÊS" (EXCLUSIVO DO ADMIN
  * MASTER, COM A SENHA DELE CONFERIDA NO BACKEND) QUE APAGA TODOS OS LANÇAMENTOS DO MÊS
  * ANALISADO — DEIXANDO O MÊS COMPLETAMENTE ZERADO.**
