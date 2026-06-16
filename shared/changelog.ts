@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3148 — **FINANCEIRO / LANÇAMENTOS · NOVO BOTÃO "ZERAR MÊS" (EXCLUSIVO DO ADMIN
+ * MASTER, COM A SENHA DELE CONFERIDA NO BACKEND) QUE APAGA TODOS OS LANÇAMENTOS DO MÊS
+ * ANALISADO — DEIXANDO O MÊS COMPLETAMENTE ZERADO.**
+ *
+ * PEDIDO (iPad, tela Lançamentos, empresa "FC ENGENHARIA PROJETC", Abr/2026, 118
+ * lançamentos): "COLOQUE UM BOTÃO QUE SOMENTE O ADM MASTER, COM A SENHA DELE, PODER USAR
+ * PARA APAGAR TODOS LANÇAMENTOS DO MÊS QUE ESTAMOS ANALISANDO... TODOS OS LANÇAMENTOS PARA
+ * DEIXAR O MÊS ZERADO COM NENHUM LANÇAMENTO".
+ *
+ * CONTEXTO/DIAGNÓSTICO: o usuário estava em OUTRA empresa ("FC ENGENHARIA PROJETC", NÃO a
+ * FC=60002) — por isso a tentativa anterior de excluir um lançamento dava "Lançamento não
+ * encontrado" (aqueles valores cancelados de origem Compras simplesmente não existem na
+ * FC 60002 no Neon). Em vez de caçar lançamento a lançamento, ele quer zerar o mês inteiro.
+ *
+ * CORREÇÃO (BACKEND + FRONTEND; HARD-DELETE EXPLICITAMENTE AUTORIZADO PELO USUÁRIO, no
+ * mesmo espírito do deleteEntry/bulkDelete já existentes — Rev. 2398/3143):
+ *  - NOVA procedure `financial.wipeMonthEntries` ({companyId, dataInicio, dataFim, password,
+ *    motivo}). BLINDAGEM EM 5 CAMADAS: (1) role === 'admin_master' (senão FORBIDDEN);
+ *    (2) SENHA do master conferida NO SERVIDOR via bcrypt.compareSync contra users.password —
+ *    mesma semântica do _assertMasterComSenha de terceiroContratos.ts (usuário OAuth sem
+ *    senha local é liberado pela própria sessão); (3) tenant-guard `_assertFinanceiroCompanyAccess`
+ *    anti-IDOR; (4) `motivo` obrigatório (mín. 5 chars); (5) auditoria (`financial_month_wiped`)
+ *    com snapshot da contagem + total ANTES de apagar.
+ *  - ESCOPO = MESMO conjunto que a tela de Lançamentos mostra: período por SOBREPOSIÇÃO
+ *    (competência↔vencimento↔criação, espelhando o getEntries) + exclui projeções via
+ *    `sqlNotProjecao` (então NÃO toca as linhas de projeção do cronograma, que se regeneram
+ *    sozinhas). Apaga TODAS as situações reais (inclusive pago/recebido) p/ zerar de fato.
+ *    `dbExecute` liga placeholders por ORDEM DE APARIÇÃO → `vals` segue a ordem dos $N no texto.
+ *  - FRONTEND `FinanceiroLancamentos.tsx`: botão "Zerar mês" (vermelho, ícone alerta) que
+ *    aparece SÓ p/ admin_master (via `useAuth().user.role`) e SÓ quando um mês está selecionado
+ *    (mesSel != null; em "Ano todo" não aparece). Diálogo de confirmação com SENHA + MOTIVO +
+ *    aviso claro de irreversibilidade e de que apaga inclusive pagos/recebidos. Pós-sucesso
+ *    invalida getEntries/getEntriesTotais/getEntriesResumoMensal. O gate de role é DUPLO
+ *    (cliente esconde + servidor recusa).
+ *  - ZERO ALTER/DROP/SCHEMA — o DELETE de financial_entries já é regra existente do app.
+ *
  * Rev. 3147 — **FINANCEIRO (MÓDULO INTEIRO) · TRAVA "SÓ REAL": AS TELAS PASSARAM A MOSTRAR
  * APENAS CAIXA REAL (LANÇAMENTOS EFETIVOS) — TODAS AS PROJEÇÕES DO CRONOGRAMA/PCP/FOLHA
  * PROJETADA SUMIRAM POR PADRÃO, PORQUE ERA A PROJEÇÃO (R$ 17,3 MI / 6.211 LINHAS) QUE

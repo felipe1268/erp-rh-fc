@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/_core/hooks/useAuth";
 // Rev. 1626 — origens com label PT-BR amigável
 import { originLabel } from "@/lib/financialOrigins";
 import {
@@ -100,6 +101,9 @@ const INITIAL_FORM = {
 export default function FinanceiroLancamentos() {
   const { companyId } = useCompany();
   const { toast } = useToast();
+  // Rev. 3148 — "Zerar mês" é exclusivo do admin master (gate também no backend).
+  const { user } = useAuth();
+  const isMaster = user?.role === "admin_master";
 
   const [aba, setAba] = useState<"lancamentos" | "recorrencias">("lancamentos");
   // Rev. 2399 — filtro por PERÍODO LIVRE (passado E futuro). Default = mês atual.
@@ -132,6 +136,10 @@ export default function FinanceiroLancamentos() {
   const [bulkEstornarMotivo, setBulkEstornarMotivo] = useState("");
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleteMotivo, setBulkDeleteMotivo] = useState("");
+  // Rev. 3148 — "Zerar mês" (admin master + senha).
+  const [wipeOpen, setWipeOpen] = useState(false);
+  const [wipePassword, setWipePassword] = useState("");
+  const [wipeMotivo, setWipeMotivo] = useState("");
   const [form, setForm] = useState({ ...INITIAL_FORM });
 
   // Rev. 2082 — Cadastro inline de categoria sem sair do modal "Novo Lançamento".
@@ -305,6 +313,18 @@ export default function FinanceiroLancamentos() {
       refetch(); invalidarContas();
     },
     onError: (e: any) => toast({ title: "Erro na exclusão em lote", description: e.message, variant: "destructive" }),
+  });
+  // Rev. 3148 — ZERAR MÊS (admin master + senha conferida no backend).
+  const wipeMonthMut = (trpc as any).financial.wipeMonthEntries.useMutation({
+    onSuccess: (r: any) => {
+      toast({ title: "Mês zerado", description: `${r?.deleted ?? 0} lançamento(s) apagado(s). O mês ficou zerado.` });
+      setWipeOpen(false); setWipePassword(""); setWipeMotivo("");
+      setSelectedIds(new Set());
+      refetch(); invalidarContas();
+      utils.financial.getEntriesTotais?.invalidate?.();
+      utils.financial.getEntriesResumoMensal?.invalidate?.();
+    },
+    onError: (e: any) => toast({ title: "Não foi possível zerar o mês", description: e.message, variant: "destructive" }),
   });
 
   // Rev. 2082 — Categorias (financial_accounts) + Centros de Custo + Mutation cadastro inline.
@@ -839,6 +859,14 @@ export default function FinanceiroLancamentos() {
                     onClick={() => { setBulkDeleteMotivo(""); setBulkDeleteOpen(true); }}>
                     <Trash2 className="w-3.5 h-3.5 mr-1.5" />Excluir{selExcluiveis > 0 ? ` (${selExcluiveis})` : ""}
                   </Button>
+                  {isMaster && mesSel != null && (
+                    <Button size="sm" variant="outline" className="h-8 text-red-700 border-red-300 bg-red-50 hover:bg-red-100 font-semibold"
+                      disabled={wipeMonthMut.isPending}
+                      onClick={() => { setWipePassword(""); setWipeMotivo(""); setWipeOpen(true); }}
+                      title="Apagar TODOS os lançamentos do mês (admin master)">
+                      <AlertTriangle className="w-3.5 h-3.5 mr-1.5" />Zerar mês
+                    </Button>
+                  )}
                   {selectedIds.size > 0 && (
                     <Button size="sm" variant="ghost" className="h-8 text-gray-500"
                       onClick={() => setSelectedIds(new Set())}>Limpar</Button>
@@ -1711,6 +1739,61 @@ export default function FinanceiroLancamentos() {
                 })}
               >
                 {bulkDeleteMut.isPending ? "Excluindo..." : `Confirmar exclusão (${selExcluiveis})`}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 3148 — ZERAR MÊS (admin master + senha). Apaga TODOS os lançamentos do mês. */}
+        <Dialog open={wipeOpen} onOpenChange={(v) => { if (!v) { setWipeOpen(false); setWipePassword(""); setWipeMotivo(""); } }}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-red-700">
+                <AlertTriangle className="w-4 h-4" />
+                Zerar mês {mesSel != null ? `${String(mesSel).padStart(2, "0")}/${ano}` : ""}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-2.5 text-xs text-red-700">
+                Esta ação <strong>apaga DEFINITIVAMENTE TODOS os {data?.total ?? lancamentos.length} lançamento(s)</strong> deste mês — <strong>inclusive os já pagos/recebidos</strong>. O mês ficará <strong>zerado</strong>. <span className="block mt-1">Operação <strong>irreversível</strong> e registrada em auditoria. Exclusiva do <strong>admin master</strong>.</span>
+              </div>
+              <div>
+                <Label>Senha do admin master</Label>
+                <Input
+                  type="password"
+                  value={wipePassword}
+                  onChange={(e) => setWipePassword(e.target.value)}
+                  placeholder="Sua senha"
+                  className="mt-1"
+                  autoComplete="off"
+                />
+              </div>
+              <div>
+                <Label>Motivo (obrigatório)</Label>
+                <Textarea
+                  value={wipeMotivo}
+                  onChange={(e) => setWipeMotivo(e.target.value)}
+                  rows={2}
+                  placeholder="Ex: refazer o mês do zero, importação incorreta..."
+                  className="mt-1"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">{wipeMotivo.length}/5 caracteres mínimos</p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setWipeOpen(false); setWipePassword(""); setWipeMotivo(""); }}>Voltar</Button>
+              <Button
+                variant="destructive"
+                disabled={mesSel == null || !wipePassword || wipeMotivo.trim().length < 5 || wipeMonthMut.isPending}
+                onClick={() => wipeMonthMut.mutate({
+                  companyId,
+                  dataInicio,
+                  dataFim,
+                  password: wipePassword,
+                  motivo: wipeMotivo.trim(),
+                })}
+              >
+                {wipeMonthMut.isPending ? "Zerando..." : "Zerar mês"}
               </Button>
             </DialogFooter>
           </DialogContent>

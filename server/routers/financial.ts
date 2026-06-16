@@ -1822,6 +1822,80 @@ export const financialRouter = router({
     return { ok: true, deleted };
   }),
 
+  // Rev. 3148 — ZERAR MÊS (nuclear). Pedido user (iPad, tela Lançamentos):
+  // "botão que SÓ o admin master, COM A SENHA dele conferida no BACKEND, apaga
+  // TODOS os lançamentos do mês analisado p/ deixar o mês zerado". Blindagem
+  // máxima: (1) role admin_master, (2) senha do master conferida via bcrypt no
+  // servidor (OAuth sem senha local cai na própria sessão), (3) tenant-guard
+  // anti-IDOR, (4) motivo obrigatório, (5) auditoria com snapshot (contagem +
+  // total) ANTES de apagar. Escopo = MESMO conjunto da tela de Lançamentos:
+  // período por SOBREPOSIÇÃO (competência↔vencimento↔criação) + exclui projeções
+  // (sqlNotProjecao) — então NÃO toca as linhas de projeção que se regeneram, e
+  // apaga TODAS as situações reais (inclusive pago/recebido) p/ zerar de fato.
+  wipeMonthEntries: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    dataInicio: z.string().min(8),
+    dataFim: z.string().min(8),
+    password: z.string().optional(),
+    motivo: z.string().min(5, "Informe o motivo (mín. 5 caracteres)"),
+  })).mutation(async ({ input, ctx }) => {
+    // 1) Só admin master
+    if ((ctx as any).user?.role !== 'admin_master') {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas o admin master pode zerar o mês.' });
+    }
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    // 2) Confere a senha do master NO BACKEND (bcrypt). Mesma semântica do
+    //    _assertMasterComSenha (terceiroContratos): usuário OAuth sem senha
+    //    local é liberado pela própria credencial de sessão.
+    const ures = await dbExecute(db, `SELECT password FROM users WHERE id=$1`, [ctx.user?.id]);
+    const urow = rows(ures)[0] as any;
+    if (!urow) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário não encontrado." });
+    if (urow.password) {
+      if (!input.password) throw new TRPCError({ code: "BAD_REQUEST", message: "Senha do master é obrigatória." });
+      const bcrypt = await import("bcryptjs");
+      if (!bcrypt.compareSync(input.password, urow.password)) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha incorreta. Operação cancelada." });
+      }
+    }
+    // 3) Tenant-guard anti-IDOR
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    // 4) Período por SOBREPOSIÇÃO (espelha getEntries) + exclui projeções.
+    //    dbExecute liga placeholders por ORDEM DE APARIÇÃO no texto, então `vals`
+    //    segue exatamente a ordem em que cada $N aparece.
+    const vals: any[] = [input.companyId];
+    let i = 2;
+    const rangeFor = (col: string) => {
+      const c = `${col} BETWEEN $${i++} AND $${i++}`; vals.push(input.dataInicio, input.dataFim); return c;
+    };
+    const cCompetencia = rangeFor("data_competencia");
+    const cVencimento = rangeFor("data_vencimento");
+    const cCriacao = rangeFor("created_at::date");
+    const periodo =
+      `((data_competencia IS NOT NULL AND ${cCompetencia}) ` +
+      `OR (data_vencimento IS NOT NULL AND ${cVencimento}) ` +
+      `OR (data_competencia IS NULL AND data_vencimento IS NULL AND ${cCriacao}))`;
+    const where = `company_id = $1 AND ${periodo} AND ${sqlNotProjecao("origem_modulo")}`;
+    // Snapshot p/ auditoria ANTES de apagar (contagem + total).
+    const snap = await dbExecute(db,
+      `SELECT COUNT(*)::int AS n, COALESCE(SUM(valor_previsto),0) AS total FROM financial_entries WHERE ${where}`,
+      vals
+    );
+    const snapRow = (rows(snap)[0] ?? {}) as any;
+    const res = await dbExecute(db,
+      `DELETE FROM financial_entries WHERE ${where} RETURNING id`,
+      vals
+    );
+    const deleted = ((res as any).rows ?? []).length;
+    await createAuditLog({
+      action: "financial_month_wiped",
+      userId: ctx.user?.id,
+      companyId: input.companyId,
+      details: `MÊS ZERADO (${input.dataInicio} a ${input.dataFim}): ${deleted} lançamento(s) EXCLUÍDO(s) — TODAS as situações (inclusive pago/recebido) — por ${ctx.user?.name ?? "?"} (id=${ctx.user?.id ?? "?"}) — total apagado ~${Number(snapRow.total ?? 0)} — motivo: "${input.motivo}"`,
+    });
+    return { ok: true, deleted };
+  }),
+
   cancelEntry: protectedProcedure.input(z.object({
     id: z.number(),
     companyId: z.number(),
