@@ -88,3 +88,4 @@
 - [ControleDocumentos hooks order](controledocumentos-hooks-order.md) — ControleDocumentos.tsx has mid-component early returns; new hooks MUST go above them or /controle-documentos crashes ("Rendered more hooks").
 
 - [Gemini free-tier transient failures](gemini-freetier-transient.md) — batch vision reads fail ~95% on transient 429/503; fix=backend retry on 429+5xx honoring retryDelay + client pacing; daily quota = hard ceiling.
+- [Financeiro "só real" lock](financeiro-so-real-trava.md) — flag global esconde projeções; despesa via sqlNotProjecao no server, MAS receita do Fluxo de Caixa vem do getContasReceberMatrix e o split é client-side (forçar natureza=efetivo).

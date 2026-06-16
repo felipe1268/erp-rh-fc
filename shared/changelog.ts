@@ -1,6 +1,51 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3147 — **FINANCEIRO (MÓDULO INTEIRO) · TRAVA "SÓ REAL": AS TELAS PASSARAM A MOSTRAR
+ * APENAS CAIXA REAL (LANÇAMENTOS EFETIVOS) — TODAS AS PROJEÇÕES DO CRONOGRAMA/PCP/FOLHA
+ * PROJETADA SUMIRAM POR PADRÃO, PORQUE ERA A PROJEÇÃO (R$ 17,3 MI / 6.211 LINHAS) QUE
+ * INFLAVA OS NÚMEROS DO MÓDULO.**
+ *
+ * PEDIDO (iPad, sobre o Financeiro): "por hora vamos tirar todas as projeções do cronograma,
+ * vamos tratar o financeiro só com os lançamentos atuais e deixar as projeções para outra hora;
+ * agora quero aferir os lançamentos dos débitos e créditos, analisar o real, nada de projeções".
+ * Decisão confirmada via pergunta: "Travar o módulo Financeiro INTEIRO pra mostrar só REAL por
+ * padrão (esconder projeções nas telas)".
+ *
+ * DIAGNÓSTICO (Neon real, FC=60002, 2026, sem cancelados): o que inflava o módulo eram as
+ * PROJEÇÕES — só `cronograma_atividade` já são 6.211 linhas / R$ 17.334.606,12 em despesa (valor
+ * de contrato distribuído mês a mês), além de folha_projetada/encargos_projetado/PJ/13º/férias/
+ * rescisão/VR/VA projetados. Tirando TODAS as projeções, o quadro REAL fica: DÉBITOS 4.450 linhas /
+ * R$ 9.532.113,77 (pago 2.388 / R$ 3.088.820,81 + em aberto 2.062 / R$ 6.443.292,96) e CRÉDITOS só
+ * 5 linhas / R$ 450.000,00 (nada recebido — receita real entra por outro fluxo ainda não preenchido).
+ *
+ * CAUSA da inconsistência percebida: cada tela escondia projeção de um jeito diferente — Contas a
+ * Pagar tinha um seletor Efetivo/Projeção/Todos (default Efetivo, client-side); Lançamentos só
+ * excluía `cronograma_atividade` no servidor (`excluirCronograma`, Rev. 3136), deixando passar
+ * folha_projetada/encargos/etc.; Contas a Receber/Títulos e os agregadores não excluíam nada. Não
+ * havia fonte ÚNICA da lista de origens-projeção (duplicada em 2 telas, e o servidor só conhecia o
+ * cronograma solto).
+ *
+ * CORREÇÃO (ZERO ALTER/DROP/DELETE/SCHEMA — nenhum dado tocado; as projeções continuam gravadas,
+ * só não são LIDAS enquanto a trava estiver ligada):
+ *  • NOVO `shared/financeiroProjecao.ts` — fonte ÚNICA: `PROJECAO_ORIGENS` (as 10 origens de
+ *    forecast) + `isProjecaoOrigem()` + `sqlNotProjecao(col)` (fragmento SQL com identificadores
+ *    fixos inline, sem placeholder → compatível com a ligação POSICIONAL do `dbExecute`) + a flag
+ *    global `FINANCEIRO_SOMENTE_REAL = true` (ÚNICO ponto de flip p/ reabilitar projeções "outra hora").
+ *  • `server/routers/financial.ts`: com a flag ligada, os endpoints de leitura escondem TODAS as
+ *    projeções — `getEntries`/`getEntriesTotais`/`getEntriesResumoMensal` (a cond do `excluirCronograma`
+ *    virou o set completo), `getContasAPagarByYear` (Contas a Pagar, Fluxo de Caixa, Análise de Custos)
+ *    e `getContasAReceberByYear` (Títulos a Receber).
+ *  • Client: `FinanceiroContasAPagar.tsx` e `FinanceiroFluxoCaixa.tsx` passaram a importar o set do
+ *    shared (dedup); em Contas a Pagar o seletor Efetivo/Projeção/Todos some quando a trava está ON
+ *    (sem ele a tela "Projeção/Todos" viria vazia, já que o backend não devolve mais projeções).
+ *
+ * REVERSÍVEL: voltar `FINANCEIRO_SOMENTE_REAL` p/ `false` em `shared/financeiroProjecao.ts` reabilita
+ * tudo (endpoints voltam a devolver projeção e o seletor reaparece). ABRANGÊNCIA: trava GLOBAL (todas
+ * as empresas) — "módulo inteiro"; as demais empresas têm atividade real ~0, então o impacto é só
+ * esconder as projeções delas também. PRÓXIMA FRENTE (separada): aferir mês a mês os débitos reais
+ * contra o extrato bancário (ETAPA 2 — usuário reenviará a planilha).
+ *
  * Rev. 3146 — **FINANCEIRO / CONTAS A PAGAR · O CARD "TOTAL <MÊS>" VOLTOU A BATER — A CONTAGEM
  * DE CONTAS AGORA ESPELHA O MESMO ESCOPO (EFETIVO/PROJEÇÃO/TODOS) DO VALOR EXIBIDO, ENTÃO
  * "TOTAL = PAGO + A PAGAR" FECHA TAMBÉM NA QUANTIDADE, NÃO SÓ NO VALOR.**

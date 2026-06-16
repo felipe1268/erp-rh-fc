@@ -27,6 +27,9 @@ import {
   ORIGEM_LABELS, ORIGEM_ICONS, ORIGEM_COLORS,
   consolidateSubtype, unitLabelFor,
 } from "@/lib/financialOrigins";
+// Rev. 3147 — fonte única das projeções + TRAVA "só real" (esconde o seletor
+// Efetivo/Projeção; o backend já não devolve projeções com a trava ligada).
+import { isProjecaoOrigem, FINANCEIRO_SOMENTE_REAL } from "@shared/financeiroProjecao";
 
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
@@ -79,17 +82,9 @@ function extractOcNumero(c: any): string {
 // Origens forecast (sem fato gerador): cronograma e PCP de compras vindo do Planejamento.
 // Nota: planejamento_medicao é gravada como tipo='receita' pelo bridge, então não chega aqui;
 // excluída para evitar falsa expectativa de filtro.
-const PROJECAO_ORIGENS = new Set([
-  // Forecast de obra (Planejamento)
-  "cronograma_atividade", "planejamento_compra",
-  // Forecast de RH/Folha (Rev. 1630/1636)
-  "folha_projetada", "encargos_projetado",
-  "beneficio_vr_projetado", "beneficio_va_projetado",
-  "decimo_terceiro_projetado", "pj_projetado",
-  "ferias_projetada", "rescisao_projetada",
-]);
+// Rev. 3147 — set movido p/ shared/financeiroProjecao (fonte única client+server).
 function isProjecao(c: any): boolean {
-  return PROJECAO_ORIGENS.has(c?.origemModulo);
+  return isProjecaoOrigem(c?.origemModulo);
 }
 
 // Rev. 1629c — Remove prefixos redundantes de OC/OS/MED/etc da descrição,
@@ -957,6 +952,9 @@ export default function FinanceiroContasAPagar() {
               ))}
             </div>
             {/* Rev. 1629 — Efetivo × Projeção (separação fundamental APQC/PMBOK/Brealey-Myers) */}
+            {/* Rev. 3147 — com a TRAVA "só real" ligada o seletor some (o backend já
+                não devolve projeções; mostrar "Projeção/Todos" traria tela vazia). */}
+            {!FINANCEIRO_SOMENTE_REAL && (
             <div className="flex rounded-lg border border-violet-200 overflow-hidden" title="Efetivo = dívida real (OC, Folha, PJ, etc.). Projeção = forecast do cronograma.">
               {[
                 ["efetivo","Efetivo","💰"],
@@ -970,6 +968,7 @@ export default function FinanceiroContasAPagar() {
                 </button>
               ))}
             </div>
+            )}
             {origensDisponiveis.length > 0 && (
               <Select value={origemFilter} onValueChange={setOrigemFilter}>
                 <SelectTrigger className="w-40 h-8 text-xs">

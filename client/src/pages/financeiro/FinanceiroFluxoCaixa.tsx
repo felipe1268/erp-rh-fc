@@ -7,6 +7,7 @@ import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
   RefreshCw, TrendingUp, TrendingDown, Minus, AlertCircle, Wallet
 } from "lucide-react";
+import { isProjecaoOrigem, FINANCEIRO_SOMENTE_REAL } from "@shared/financeiroProjecao";
 
 // ─── Formatadores ─────────────────────────────────────────────────────────────
 
@@ -23,16 +24,9 @@ function PCT(v: number): string {
 }
 
 // ─── Rev. 2944 — Efetivo × Projeção (espelha FinanceiroContasAPagar / Rev. 1629) ──
-// Projeção = forecast vindo de Planejamento/Folha (sem fato gerador). Resto = Efetivo.
-const PROJECAO_ORIGENS = new Set<string>([
-  "cronograma_atividade", "planejamento_compra",
-  "folha_projetada", "encargos_projetado",
-  "beneficio_vr_projetado", "beneficio_va_projetado",
-  "decimo_terceiro_projetado", "pj_projetado",
-  "ferias_projetada", "rescisao_projetada",
-]);
+// Rev. 3147 — set movido p/ shared/financeiroProjecao (fonte única client+server).
 function isProjecaoDespesa(origem?: string | null): boolean {
-  return PROJECAO_ORIGENS.has(origem ?? "");
+  return isProjecaoOrigem(origem);
 }
 
 // ─── Rev. 2944 — Categorização de despesa por origem_modulo (dados reais Neon) ──
@@ -94,7 +88,9 @@ export default function FinanceiroFluxoCaixa() {
   const mesAtual = hoje.getMonth() + 1;
 
   const [ano, setAno]           = useState(hoje.getFullYear());
-  const [natureza, setNatureza] = useState<Natureza>("todos");
+  // Rev. 3147 — com a TRAVA "só real" ligada, o escopo trava em "efetivo" (receitas
+  // pela trilha medida/faturada, despesas sem projeção); senão começa em "todos".
+  const [natureza, setNatureza] = useState<Natureza>(FINANCEIRO_SOMENTE_REAL ? "efetivo" : "todos");
   const [exReceit, setExReceit] = useState(true);
   const [exDesp, setExDesp]     = useState(true);
   const [exFixas, setExFixas]   = useState(true);
@@ -454,6 +450,8 @@ export default function FinanceiroFluxoCaixa() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {/* Escopo Efetivo × Projeção (mesma régua do Contas a Pagar) */}
+            {/* Rev. 3147 — com a TRAVA "só real" ligada o seletor some (escopo fixo em "efetivo"). */}
+            {!FINANCEIRO_SOMENTE_REAL && (
             <div className="flex rounded-lg border border-violet-200 overflow-hidden"
               title="Efetivo = dívida/receita real. Projeção = forecast do cronograma e folha.">
               {NAT_OPTS.map(({ v, label }) => (
@@ -464,6 +462,7 @@ export default function FinanceiroFluxoCaixa() {
                 </button>
               ))}
             </div>
+            )}
             <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
               <button onClick={() => setAno(a => a - 1)} className="text-slate-400 hover:text-slate-700 p-0.5">
                 <ChevronLeft className="w-4 h-4" />

@@ -7,6 +7,10 @@ import { sql } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { seedPlanoDeConta, ensureTaxConfig } from "../services/financialSeedAccounts";
 import { runAllAutoImports } from "../services/financialAutoImport";
+// Rev. 3147 — TRAVA "Financeiro só real": fonte única das origens de projeção +
+// flag global. Quando FINANCEIRO_SOMENTE_REAL, os endpoints de leitura escondem
+// TODAS as projeções (cronograma/PCP/folha projetada/etc.), não só o cronograma.
+import { sqlNotProjecao, FINANCEIRO_SOMENTE_REAL } from "../../shared/financeiroProjecao";
 import {
   runAllDespesasImport,
   runAllReceitasImport,
@@ -564,7 +568,9 @@ export const financialRouter = router({
     // Rev. 3136 — as projeções do cronograma (origem 'cronograma_atividade') NÃO são
     // caixa real (são o valor de contrato distribuído mês a mês), então saem da tela de
     // Lançamentos. Literal (sem placeholder) → não interfere na ligação posicional.
-    if (input.excluirCronograma) { conds.push(`COALESCE(e.origem_modulo,'') <> 'cronograma_atividade'`); }
+    // Rev. 3147 — com a TRAVA global ligada, exclui TODAS as projeções (não só o
+    // cronograma); senão, mantém o comportamento por parâmetro (Rev. 3136).
+    if (input.excluirCronograma || FINANCEIRO_SOMENTE_REAL) { conds.push(sqlNotProjecao("e.origem_modulo")); }
     vals.push(input.limit, input.offset);
     const res = await dbExecute(db, 
       `SELECT e.id, e.company_id AS "companyId", e.obra_id AS "obraId", e.obra_nome AS "obraNome",
@@ -645,7 +651,9 @@ export const financialRouter = router({
       );
     }
     if (input.origemModulo) { conds.push(`e.origem_modulo=$${i++}`); vals.push(input.origemModulo); }
-    if (input.excluirCronograma) { conds.push(`COALESCE(e.origem_modulo,'') <> 'cronograma_atividade'`); }
+    // Rev. 3147 — com a TRAVA global ligada, exclui TODAS as projeções (não só o
+    // cronograma); senão, mantém o comportamento por parâmetro (Rev. 3136).
+    if (input.excluirCronograma || FINANCEIRO_SOMENTE_REAL) { conds.push(sqlNotProjecao("e.origem_modulo")); }
     if (input.search && input.search.trim()) {
       const like = `%${input.search.trim()}%`;
       conds.push(`(e.descricao ILIKE $${i++} OR e.obra_nome ILIKE $${i++} OR e.conta_nome ILIKE $${i++})`);
@@ -695,7 +703,9 @@ export const financialRouter = router({
     if (input.tipo) { conds.push(`e.tipo = $2`); vals.push(input.tipo); }
     // Rev. 3136 — mesma exclusão da listagem: as bolinhas da timeline refletem só
     // caixa real (sem as projeções 'cronograma_atividade'). Literal, sem placeholder.
-    if (input.excluirCronograma) { conds.push(`COALESCE(e.origem_modulo,'') <> 'cronograma_atividade'`); }
+    // Rev. 3147 — com a TRAVA global ligada, exclui TODAS as projeções (não só o
+    // cronograma); senão, mantém o comportamento por parâmetro (Rev. 3136).
+    if (input.excluirCronograma || FINANCEIRO_SOMENTE_REAL) { conds.push(sqlNotProjecao("e.origem_modulo")); }
     const res = await dbExecute(db,
       `SELECT EXTRACT(MONTH FROM COALESCE(e.data_competencia, e.data_vencimento, e.created_at::date))::int AS mes,
               COUNT(*)::int AS total,
@@ -4082,6 +4092,7 @@ export const financialRouter = router({
        WHERE company_id IN (${inlineIds(ids)})
          AND tipo = 'receita'
          AND status != 'cancelado'
+         ${FINANCEIRO_SOMENTE_REAL ? `AND ${sqlNotProjecao()}` : ""}
          AND EXTRACT(year FROM COALESCE(data_vencimento::date, created_at::date)) = $1
        ORDER BY data_vencimento ASC NULLS LAST`,
       [input.ano]
@@ -4509,6 +4520,7 @@ export const financialRouter = router({
        WHERE company_id IN (${inlineIds(ids)})
          AND tipo = 'despesa'
          AND status != 'cancelado'
+         ${FINANCEIRO_SOMENTE_REAL ? `AND ${sqlNotProjecao()}` : ""}
          AND ${yearCond}
        ORDER BY data_vencimento ASC NULLS LAST`,
       yearVals
