@@ -6926,4 +6926,155 @@ export const financialRouter = router({
     await markAlertRead(db, input.companyId, input.alertId ?? 0, String(ctx.user?.id ?? ""));
     return { success: true };
   }),
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Rev. 3161 — RECEBÍVEIS PREVISTOS (transferência manual → Contas a Receber)
+  // A materialização automática financial_revenue → financial_entries foi
+  // desligada (ver financialIntegrationBridge.runAllReceitasImport). Estas duas
+  // procedures listam os previstos ainda NÃO lançados e os materializam sob
+  // demanda. NB: dbExecute liga params por ORDEM DE APARIÇÃO do $N (o número é
+  // cosmético) → repetir o valor no array sempre que o placeholder reaparece.
+  // ─────────────────────────────────────────────────────────────────────────
+  getRecebiveisPrevistos: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    mes: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+  })).query(async ({ input, ctx }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const mes = input.mes ?? null;
+    const res = await dbExecute(db,
+      `SELECT fr.id, fr.obra_id, fr.obra_nome, fr.cliente_nome, fr.valor_medicao,
+              fr.valor_liquido_receber, fr.medicao_numero, fr.medicao_id,
+              fr.data_vencimento, fr.status, fr.created_at
+       FROM financial_revenue fr
+       WHERE fr.company_id = $1
+         AND fr.status NOT IN ('cancelado','recebido_total')
+         AND fr.valor_medicao > 0
+         AND NOT EXISTS (
+           SELECT 1 FROM financial_entries fe
+           WHERE fe.origem_modulo='revenue' AND fe.origem_id=fr.id AND fe.company_id=fr.company_id
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM financial_entries fe2
+           WHERE fe2.company_id=fr.company_id
+             AND fe2.origem_modulo='planejamento_medicao'
+             AND fe2.origem_id=fr.medicao_id
+             AND COALESCE(fe2.status,'') <> 'cancelado'
+         )
+         AND ($2::text IS NULL OR TO_CHAR(COALESCE(fr.data_vencimento::date, fr.created_at::date),'YYYY-MM')=$3)
+       ORDER BY COALESCE(fr.data_vencimento::date, fr.created_at::date) ASC, fr.id ASC
+       LIMIT 1000`,
+      [input.companyId, mes, mes]
+    );
+    const items = rows(res).map((r: any) => {
+      const valor = parseFloat(r.valor_liquido_receber ?? r.valor_medicao ?? "0") || 0;
+      const venc = r.data_vencimento ? String(r.data_vencimento).slice(0, 10) : null;
+      return {
+        id: Number(r.id),
+        obraId: r.obra_id ?? null,
+        obraNome: r.obra_nome ?? null,
+        clienteNome: r.cliente_nome ?? null,
+        medicaoNumero: r.medicao_numero ?? null,
+        valor,
+        dataVencimento: venc,
+        status: r.status ?? null,
+      };
+    }).filter((x: any) => x.valor > 0);
+    const valorTotal = items.reduce((s: number, x: any) => s + x.valor, 0);
+    return { items, total: items.length, valorTotal };
+  }),
+
+  transferirRecebiveisPrevistos: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    ids: z.array(z.number()).min(1),
+  })).mutation(async ({ input, ctx }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const statusMap: Record<string, string> = {
+      a_faturar: "a_receber", faturado: "a_receber", a_receber: "a_receber",
+      recebido_parcial: "recebido_parcial", recebido_total: "recebido", cancelado: "cancelado",
+    };
+    const criadoPorId = ctx.user?.id ?? null;
+    const criadoPorNome = (ctx.user as any)?.name ?? (ctx.user as any)?.nome ?? null;
+    const idList = inlineIds(input.ids);
+
+    // Só os IDs DESTA empresa e ainda não lançados (mesma régua de dedup da lista).
+    const sel = await dbExecute(db,
+      `SELECT fr.id, fr.obra_id, fr.obra_nome, fr.cliente_nome, fr.valor_medicao,
+              fr.valor_liquido_receber, fr.medicao_numero, fr.data_vencimento, fr.status, fr.created_at
+       FROM financial_revenue fr
+       WHERE fr.company_id=$1
+         AND fr.id IN (${idList})
+         AND fr.status NOT IN ('cancelado','recebido_total')
+         AND fr.valor_medicao > 0
+         AND NOT EXISTS (
+           SELECT 1 FROM financial_entries fe
+           WHERE fe.origem_modulo='revenue' AND fe.origem_id=fr.id AND fe.company_id=fr.company_id
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM financial_entries fe2
+           WHERE fe2.company_id=fr.company_id
+             AND fe2.origem_modulo='planejamento_medicao'
+             AND fe2.origem_id=fr.medicao_id
+             AND COALESCE(fe2.status,'') <> 'cancelado'
+         )`,
+      [input.companyId]
+    );
+    const candidatos = rows(sel) as any[];
+
+    let lancados = 0;
+    let pulados = 0;
+    await db.transaction(async (tx: any) => {
+      // Rev. 3161 — serializa transferências concorrentes da MESMA empresa (clique
+      // duplo / dois usuários). Sem isso, dois NOT EXISTS poderiam passar juntos e
+      // inserir o par 'revenue' em duplicidade (não há índice único). Lock por
+      // transação (libera no commit/rollback), SEM DDL/ALTER.
+      await dbExecute(tx, `SELECT pg_advisory_xact_lock(hashtext('fin_recebiveis_previstos'), $1)`, [input.companyId]);
+      for (const r of candidatos) {
+        const valor = parseFloat(r.valor_liquido_receber ?? r.valor_medicao ?? "0") || 0;
+        if (valor <= 0) { pulados++; continue; }
+        const vencimento = r.data_vencimento ? String(r.data_vencimento).slice(0, 10) : null;
+        const mesCompetencia = (vencimento ?? new Date().toISOString().slice(0, 10)).slice(0, 7);
+        const numInfo = r.medicao_numero ? ` #${r.medicao_numero}` : "";
+        const clienteInfo = r.cliente_nome ? ` — ${r.cliente_nome}` : "";
+        const entryStatus = statusMap[r.status] ?? "a_receber";
+        // ATÔMICO + idempotente: o WHERE NOT EXISTS re-checa o par origem='revenue'
+        // dentro da transação (cliques duplicados / dois usuários não duplicam).
+        const ins = await dbExecute(tx,
+          `INSERT INTO financial_entries
+             (company_id, obra_id, obra_nome, conta_nome, tipo, natureza,
+              valor_previsto, data_competencia, data_vencimento, status,
+              origem_modulo, origem_id, origem_descricao, descricao,
+              criado_por_id, criado_por_nome, created_at, updated_at)
+           SELECT $1,$2,$3,$4,'receita','variavel',$5,$6,$7,$8,'revenue',$9,$10,$11,$12,$13,NOW(),NOW()
+           WHERE NOT EXISTS (
+             SELECT 1 FROM financial_entries fe
+             WHERE fe.origem_modulo='revenue' AND fe.origem_id=$14 AND fe.company_id=$15
+           )
+           RETURNING id`,
+          [
+            input.companyId, r.obra_id ?? null, r.obra_nome ?? null, "Faturamento de Obras",
+            valor, mesCompetencia + "-01", vencimento, entryStatus,
+            r.id, `Medição${numInfo} — ${r.obra_nome ?? "Obra"}${clienteInfo}`,
+            `Faturamento${numInfo}: ${r.obra_nome ?? "Obra"}`,
+            criadoPorId, criadoPorNome,
+            r.id, input.companyId,
+          ]
+        );
+        if (rows(ins).length > 0) lancados++; else pulados++;
+      }
+    });
+
+    await createAuditLog({
+      action: "financial_recebiveis_previstos_transferidos",
+      userId: ctx.user?.id,
+      companyId: input.companyId,
+      details: `Recebíveis previstos → Contas a Receber: ${lancados} lançado(s), ${pulados} pulado(s) (de ${input.ids.length} solicitado(s)).`,
+    });
+
+    return { lancados, pulados, solicitados: input.ids.length };
+  }),
 });

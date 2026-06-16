@@ -246,6 +246,10 @@ export default function FinanceiroLancamentos() {
   const [showNewCat, setShowNewCat] = useState(false);
   const [catForm, setCatForm] = useState({ nome: "", natureza: "variavel" as string, centroCustoId: "" as string });
 
+  // Rev. 3161 — Recebíveis Previstos: tela à parte p/ transferir previstos → Contas a Receber.
+  const [showPrevistos, setShowPrevistos] = useState(false);
+  const [selPrevistos, setSelPrevistos] = useState<Set<number>>(new Set());
+
   const { data, isLoading, refetch } = (trpc as any).financial.getEntries.useQuery(
     {
       companyId,
@@ -335,6 +339,32 @@ export default function FinanceiroLancamentos() {
       utils.financial.getEntriesTotais?.invalidate?.(); // Rev. 3145 — mantém os cards de total atualizados pós-mutação.
     } catch { /* noop */ }
   }
+
+  // Rev. 3161 — Recebíveis Previstos (financial_revenue ainda não lançados em Contas a Receber).
+  // Escopo segue a timeline da tela: mês selecionado (mesSel) ou TODOS quando "Ano todo" (mesSel=null).
+  const previstosMes = mesSel != null ? `${ano}-${String(mesSel).padStart(2, "0")}` : undefined;
+  const { data: previstosData, refetch: refetchPrevistos } = (trpc as any).financial.getRecebiveisPrevistos.useQuery(
+    { companyId, mes: previstosMes },
+    { enabled: !!companyId }
+  );
+  const previstosItems: any[] = previstosData?.items ?? [];
+  const previstosCount = previstosData?.total ?? 0;
+  const togglePrevisto = (id: number) => setSelPrevistos(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const toggleAllPrevistos = () => setSelPrevistos(prev => prev.size === previstosItems.length ? new Set() : new Set(previstosItems.map((i: any) => i.id)));
+  const selPrevistosTotal = previstosItems.filter((i: any) => selPrevistos.has(i.id)).reduce((s: number, i: any) => s + (i.valor || 0), 0);
+  const transferirPrevistosMut = (trpc as any).financial.transferirRecebiveisPrevistos.useMutation({
+    onSuccess: (res: any) => {
+      toast({
+        title: `${res.lancados} recebível(is) lançado(s) em Contas a Receber`,
+        description: res.pulados > 0 ? `${res.pulados} já estavam lançados (ignorados).` : undefined,
+      });
+      setSelPrevistos(new Set());
+      refetchPrevistos();
+      refetch();
+      invalidarContas();
+    },
+    onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
 
   const createEntryMut = (trpc as any).financial.createEntry.useMutation({
     onSuccess: () => { toast({ title: "Lançamento criado!" }); setShowNew(false); resetForm(); refetch(); invalidarContas(); },
@@ -861,6 +891,10 @@ export default function FinanceiroLancamentos() {
                 <Zap className="w-3.5 h-3.5 mr-1.5" />Gerar Pendentes
               </Button>
             )}
+            <Button variant="outline" className="h-9 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+              onClick={() => setShowPrevistos(true)}>
+              <TrendingUp className="w-4 h-4 mr-2" />Recebíveis Previstos{previstosCount > 0 ? ` (${previstosCount})` : ""}
+            </Button>
             <Button onClick={openNew} className="bg-blue-600 hover:bg-blue-700 text-white">
               <Plus className="w-4 h-4 mr-2" />Novo Lançamento
             </Button>
@@ -2198,6 +2232,65 @@ export default function FinanceiroLancamentos() {
                   motivo: bulkEstornarMotivo.trim() || undefined,
                 })}>
                 {bulkEstornarMut.isPending ? "Processando..." : `Cancelar baixa (${selEstornaveis})`}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 3161 — Recebíveis Previstos: lista + seleção + transferência manual p/ Contas a Receber */}
+        <Dialog open={showPrevistos} onOpenChange={(o: boolean) => { if (!o) { setShowPrevistos(false); setSelPrevistos(new Set()); } }}>
+          <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-emerald-600" />
+                Recebíveis Previstos
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-gray-500 -mt-2">
+              Receitas previstas ainda não lançadas no Contas a Receber. Selecione e confirme para formalizar a entrada — o valor e a data de vencimento são preservados.
+            </p>
+            {previstosItems.length === 0 ? (
+              <div className="py-12 text-center text-gray-400 text-sm">
+                <CheckCircle className="w-8 h-8 mx-auto mb-2 text-emerald-400" />
+                Nenhum recebível previsto pendente. Tudo já foi lançado.
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between py-2 border-b">
+                  <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                    <Checkbox checked={selPrevistos.size > 0 && selPrevistos.size === previstosItems.length}
+                      onCheckedChange={toggleAllPrevistos} />
+                    Selecionar todos ({previstosItems.length})
+                  </label>
+                  <span className="text-sm text-gray-500">Total previsto: <b className="text-gray-900">{formatBRL(previstosData?.valorTotal ?? 0)}</b></span>
+                </div>
+                <div className="overflow-y-auto flex-1 divide-y">
+                  {previstosItems.map((it: any) => (
+                    <label key={it.id} className="flex items-center gap-3 py-2.5 px-1 cursor-pointer hover:bg-gray-50">
+                      <Checkbox checked={selPrevistos.has(it.id)} onCheckedChange={() => togglePrevisto(it.id)} />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-900 truncate">
+                          {it.obraNome || "Obra"}{it.medicaoNumero ? ` · Medição #${it.medicaoNumero}` : ""}
+                        </div>
+                        <div className="text-xs text-gray-500 truncate">
+                          {it.clienteNome || "—"} · Venc.: {fmtDateBR(it.dataVencimento)}
+                        </div>
+                      </div>
+                      <div className="text-sm font-semibold text-emerald-700 whitespace-nowrap">{formatBRL(it.valor)}</div>
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
+            <DialogFooter className="border-t pt-3">
+              <div className="flex-1 text-sm text-gray-600 self-center">
+                {selPrevistos.size > 0 && <>Selecionados: <b>{selPrevistos.size}</b> · {formatBRL(selPrevistosTotal)}</>}
+              </div>
+              <Button variant="outline" onClick={() => { setShowPrevistos(false); setSelPrevistos(new Set()); }}>Fechar</Button>
+              <Button className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                disabled={selPrevistos.size === 0 || transferirPrevistosMut.isPending}
+                onClick={() => transferirPrevistosMut.mutate({ companyId, ids: Array.from(selPrevistos) })}>
+                {transferirPrevistosMut.isPending ? "Lançando..." : `Efetuar lançamento (${selPrevistos.size})`}
               </Button>
             </DialogFooter>
           </DialogContent>

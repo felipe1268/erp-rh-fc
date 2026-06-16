@@ -2449,7 +2449,14 @@ export async function runAllReceitasImport(companyId: number, mesRef?: string) {
     importPlanejamentoProjetosPrevistoToFinancial(companyId, mes),
     importObrasToFinancialRevenue(companyId, mes),
     importAllMedicoesPrevistaToRevenue(companyId),
-    importFinancialRevenueToEntries(companyId, mes),
+    // Rev. 3161 — DESLIGADA a materialização automática financial_revenue →
+    // financial_entries. Antes, excluir uma receita prevista no Financeiro era
+    // inócuo: o próximo sync recriava o lançamento (origem='revenue'), então a
+    // exclusão "não colava". Agora a transferência é MANUAL e consciente, via a
+    // tela "Recebíveis Previstos" (financial.transferirRecebiveisPrevistos).
+    // Mantemos ACIMA os importers que POPULAM financial_revenue — a lista de
+    // previstos e o aviso automático (alerta "receita_prevista") seguem vivos.
+    // importFinancialRevenueToEntries(companyId, mes),
     importAtividadesCronogramaToFinancial(companyId, mes),
   ]);
 

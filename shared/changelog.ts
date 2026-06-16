@@ -1,7 +1,65 @@
 /**
  * Changelog centralizado do ERP.
  *
- * Rev. 3160 — **EPIs · DOIS BUGS CORRIGIDOS DE UMA VEZ: (A) NA "NOVA TRANSFERÊNCIA"
+ * Rev. 3161 — **FINANCEIRO / LANÇAMENTOS · AS RECEITAS PREVISTAS DEIXARAM DE CAIR
+ * SOZINHAS NO CONTAS A RECEBER — AGORA HÁ UM BOTÃO "RECEBÍVEIS PREVISTOS (N)" NA
+ * TELA DE LANÇAMENTOS ONDE O USUÁRIO SELECIONA QUAIS PREVISTOS VIRAM RECEITA
+ * (a_receber) E CONFIRMA A TRANSFERÊNCIA. SEM PERDER O AVISO AUTOMÁTICO.**
+ *
+ * PEDIDO: ao EXCLUIR uma receita prevista no Financeiro (ex.: "QIU 2", "LUCIANA")
+ * ela voltava sozinha no próximo sync — a exclusão "não colava". O usuário pediu
+ * que a entrada da receita no Contas a Receber seja MANUAL e CONSCIENTE (botão na
+ * tela de Lançamentos, lista do mês, seleção, confirmar), "mas sem perder o aviso
+ * automático das receitas".
+ *
+ * CAUSA-RAIZ: o pipeline `runAllReceitasImport` (financialIntegrationBridge)
+ * chamava `importFinancialRevenueToEntries(companyId, mes)` a CADA sync, que
+ * materializava TODO `financial_revenue` em aberto como `financial_entries`
+ * (origem_modulo='revenue'). Como o INSERT era idempotente por par
+ * (origem='revenue' + origem_id), excluir o lançamento só abria espaço pro
+ * próximo sync recriá-lo — daí a sensação de "exclusão que não cola".
+ *
+ * MUDANÇA:
+ *  1) BACKEND PIPELINE (`server/services/financialIntegrationBridge.ts`) — COMENTADA
+ *     a linha `importFinancialRevenueToEntries(companyId, mes)` dentro de
+ *     `runAllReceitasImport`. Desliga a materialização automática revenue→entries.
+ *     Os importers que POPULAM `financial_revenue` (medições, obras, previstas)
+ *     seguem ATIVOS — a lista de previstos e o aviso continuam vivos. A função
+ *     `importFinancialRevenueToEntries` permanece definida/exportada (não removida).
+ *  2) BACKEND ALERTA (`server/services/cfoPhase2.ts`) — `AlertaTipo` ganhou
+ *     "receita_prevista"; `generateFinancialAlerts` passou a emitir um alerta INFO
+ *     contando os `financial_revenue` em aberto e SEM par em `financial_entries`
+ *     (mesma régua de dedup), preservando o "aviso automático das receitas".
+ *  3) BACKEND PROCEDURES (`server/routers/financial.ts`, antes do fecho do router):
+ *     - `getRecebiveisPrevistos({companyId, mes?})` (query) — lista os previstos
+ *       NÃO lançados (status NOT IN cancelado/recebido_total, valor_medicao>0, sem
+ *       par origem='revenue' nem 'planejamento_medicao'); retorna {items, total,
+ *       valorTotal}. Tenant guard via `_assertFinanceiroCompanyAccess`.
+ *     - `transferirRecebiveisPrevistos({companyId, ids[]})` (mutation) — re-seleciona
+ *       só os IDs DESTA empresa ainda não lançados e materializa em
+ *       `financial_entries` (tipo='receita', natureza='variavel', origem='revenue',
+ *       status via statusMap → a_receber/recebido_parcial/recebido) dentro de
+ *       `db.transaction`, com INSERT...SELECT...WHERE NOT EXISTS (idempotente contra
+ *       cliques duplos / corrida). Retorna {lancados, pulados, solicitados} + audit.
+ *     - RACE: como `financial_entries` NÃO tem índice único em (company_id,origem_
+ *       modulo,origem_id), dois NOT EXISTS concorrentes poderiam ambos passar e
+ *       duplicar. A transação abre com `pg_advisory_xact_lock(hashtext('fin_
+ *       recebiveis_previstos'), companyId)` serializando transferências da MESMA
+ *       empresa (libera no commit/rollback) — SEM DDL/ALTER, respeitando R-001/007/010.
+ *     - NB: `dbExecute` liga params por ORDEM DE APARIÇÃO do $N (número cosmético);
+ *       os arrays foram montados nessa ordem e o filtro de mês repete o valor.
+ *  4) FRONTEND (`client/src/pages/financeiro/FinanceiroLancamentos.tsx`) — botão
+ *     "Recebíveis Previstos (N)" no header + Dialog com seleção (checkbox por linha
+ *     + "selecionar todos"), total previsto/selecionado, e "Efetuar lançamento (N)"
+ *     que chama a mutation e invalida getEntries/getContas/totais/resumo. A lista é
+ *     ESCOPADA pela timeline da tela: passa `mes=${ano}-${mesSel}` quando há mês
+ *     selecionado, ou TODOS os previstos em aberto quando "Ano todo" (mesSel=null).
+ *
+ * ZERO SCHEMA/ALTER/DROP/DELETE. Excluir um previsto no Financeiro agora "cola":
+ * o sync não o recria mais; ele só reaparece na lista de Recebíveis Previstos
+ * enquanto existir em `financial_revenue` (o que é o comportamento esperado).
+ *
+ * Rev. 3160 — **EPIs · DOIS BUGS CORRIGIDOS DE UMA VEZ: (A) NA "NOVA TRANSFERÊNCIA" (A) NA "NOVA TRANSFERÊNCIA"
  * O DROPDOWN DE OBRA (ORIGEM/DESTINO) APARECIA VAZIO PARA ADMIN COMUM; (B) NAS
  * ENTREGAS AGRUPADAS (MÚLTIPLOS EPIs NUMA LINHA) SUMIU O LÁPIS DE EDITAR ANTES DA
  * ASSINATURA — IMPOSSÍVEL CORRIGIR A DATA DE UMA ENTREGA EM LOTE.**

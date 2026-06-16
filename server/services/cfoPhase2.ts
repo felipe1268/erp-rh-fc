@@ -494,7 +494,8 @@ export async function computeDREDual(db: any, companyIds: number[], ano: number)
 export type AlertaSeveridade = "info" | "atencao" | "critico";
 export type AlertaTipo =
   | "vencido" | "vencendo_3d" | "decimo_terceiro" | "three_way_block"
-  | "liquidez_baixa" | "concentracao_fornecedor" | "ofx_pendente";
+  | "liquidez_baixa" | "concentracao_fornecedor" | "ofx_pendente"
+  | "receita_prevista";
 
 export async function generateFinancialAlerts(db: any, companyId: number): Promise<number> {
   let inseridos = 0;
@@ -572,6 +573,37 @@ export async function generateFinancialAlerts(db: any, companyId: number): Promi
     await ins("three_way_block", "atencao", `${qB} título(s) bloqueado(s) por 3-Way Match`,
       `R$ ${totalB.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} aguardam liberação (PO × Recebimento × NF).`,
       { qtd: qB, total: totalB });
+  }
+
+  // Rev. 3161 — RECEBÍVEIS PREVISTOS a lançar. Substitui o "aviso automático"
+  // que antes vinha da materialização revenue→entries (agora desligada): conta
+  // os financial_revenue em aberto e SEM par em financial_entries, pra o usuário
+  // não perder de vista as receitas previstas mesmo antes de transferi-las.
+  const prevRec = await exec(db, `
+    SELECT COUNT(*) AS qtd,
+           COALESCE(SUM(COALESCE(NULLIF(fr.valor_liquido_receber,0), fr.valor_medicao)::numeric),0) AS total
+    FROM financial_revenue fr
+    WHERE fr.company_id=$1
+      AND fr.status NOT IN ('cancelado','recebido_total')
+      AND fr.valor_medicao > 0
+      AND NOT EXISTS (
+        SELECT 1 FROM financial_entries fe
+        WHERE fe.origem_modulo='revenue' AND fe.origem_id=fr.id AND fe.company_id=fr.company_id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM financial_entries fe2
+        WHERE fe2.company_id=fr.company_id
+          AND fe2.origem_modulo='planejamento_medicao'
+          AND fe2.origem_id=fr.medicao_id
+          AND COALESCE(fe2.status,'') <> 'cancelado'
+      )
+  `, [companyId]);
+  const qPrev = Number(prevRec.rows[0]?.qtd || 0);
+  if (qPrev > 0) {
+    const totalPrev = Number(prevRec.rows[0]?.total || 0);
+    await ins("receita_prevista", "info", `${qPrev} recebível(is) previsto(s) a lançar`,
+      `R$ ${totalPrev.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} previstos aguardam transferência para o Contas a Receber (Lançamentos → "Recebíveis Previstos").`,
+      { qtd: qPrev, total: totalPrev });
   }
 
   return inseridos;
