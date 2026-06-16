@@ -7288,14 +7288,14 @@ export const financialApprovals = pgTable("financial_approvals", {
 // 13. Saldo de abertura dos bancos
 export const financialOpeningBalances = pgTable("financial_opening_balances", {
   id: serial().notNull(),
-  companyId: integer().notNull(),
+  companyId: integer("company_id").notNull(),
   contaBancariaId: integer("conta_bancaria_id"),
   contaNome: varchar("conta_nome", { length: 255 }),
   dataAbertura: date("data_abertura", { mode: "string" }).notNull(),
   valor: numeric({ precision: 15, scale: 2 }).notNull(),
   confirmedByUserId: integer("confirmed_by_user_id"),
   confirmedByName: varchar("confirmed_by_name", { length: 255 }),
-  createdAt: timestamp({ mode: "string" }).defaultNow().notNull(),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
 }, (t) => [index("idx_fob_company").on(t.companyId)]);
 
 // 14. Sócios e pró-labore

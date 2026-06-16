@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3167 — **CADASTRO · "CONTAS BANCÁRIAS" (RH&DP) · CORRIGIDO O BUG EM QUE A TELA
+ * MOSTRAVA "NENHUMA CONTA BANCÁRIA CADASTRADA" (0 CONTAS) MESMO COM A FC ENGENHARIA
+ * SELECIONADA — ENQUANTO O DROPDOWN DO FINANCEIRO LISTAVA AS 8 CONTAS NORMALMENTE. A
+ * CAUSA ERA UM ERRO DE SQL ("column \"companyId\" does not exist") QUE DERRUBAVA O
+ * ENDPOINT INTEIRO; AGORA A LISTA DE CONTAS APARECE NO CADASTRO.**
+ *
+ * SINTOMA: na tela de cadastro "Contas Bancárias" (módulo RH&DP / Folha), com a empresa
+ * FC ENGENHARIA selecionada no seletor, a lista vinha vazia ("Nenhuma conta bancária
+ * cadastrada"). Já o seletor de conta do Financeiro (Contas a Pagar/Receber, Lançamentos,
+ * Conciliação etc.) listava corretamente as 8 contas ativas da FC. Ambas leem a MESMA
+ * tabela (`company_bank_accounts`) e o cliente envia o MESMO `{ companyId }` — então o
+ * problema só podia estar no endpoint.
+ *
+ * CAUSA-RAIZ: o endpoint do cadastro (`folha.listarContasBancarias`) faz DUAS queries:
+ * (1) `company_bank_accounts` (OK) e (2) `financial_opening_balances` (saldo de abertura
+ * por conta, adicionado junto com o recurso de saldo inicial). A tabela
+ * `financial_opening_balances` é uma tabela de self-heal com colunas em **snake_case**
+ * (`company_id`, `created_at`), MAS o schema Drizzle (`drizzle/schema.ts`) a declarava
+ * com `companyId: integer()` e `createdAt: timestamp()` SEM o nome explícito da coluna.
+ * Como NÃO há `casing: "snake_case"` global no Drizzle deste projeto, o ORM emite o nome
+ * da PROPRIEDADE literalmente → gera `"companyId"` / `"createdAt"`, que NÃO existem no
+ * banco. Resultado: `db.select().from(financialOpeningBalances)` lançava
+ * `column "companyId" does not exist`, a query inteira do endpoint estourava, o React
+ * Query recebia erro (sem `data`) e a tela renderizava o estado vazio. O endpoint do
+ * Financeiro (`financial.getBankAccounts`) usa SQL cru com `"companyId"` (que existe em
+ * `company_bank_accounts`) e por isso nunca foi afetado.
+ *
+ * MUDANÇA (SCHEMA-MAPPING ONLY, `drizzle/schema.ts`): em `financialOpeningBalances`,
+ * mapear explicitamente as duas colunas para os nomes reais:
+ *   - `companyId: integer()` → `companyId: integer("company_id")`
+ *   - `createdAt: timestamp({...})` → `createdAt: timestamp("created_at", {...})`
+ * Isso alinha o mapeamento Drizzle à tabela real e conserta TODAS as leituras/escritas
+ * via Drizzle nessa tabela (também `upsertSaldoInicialConta`, usado ao criar conta com
+ * saldo inicial). É só metadado de mapeamento de coluna — a estrutura da tabela no banco
+ * NÃO muda. ZERO SCHEMA/ALTER/DROP/DELETE no banco · ZERO BACKEND lógico · ZERO FRONTEND.
+ *
+ * VALIDAÇÃO: contra o Neon real, `company_bank_accounts WHERE "companyId"=60002` retorna
+ * 9 (8 ativas) e `financial_opening_balances WHERE company_id=60002` retorna 0 sem erro —
+ * o endpoint agora resolve e devolve as contas em vez de estourar.
+ *
  * Rev. 3166 — **USUÁRIOS E PERMISSÕES · O ROTULO "DESLIGADO" / "ACESSO DESLIGADO" VIROU
  * "INATIVO" / "ACESSO INATIVO" NA TELA (SÓ TEXTO; O VALOR DE STATUS `"desligado"` NO
  * BANCO/BACKEND CONTINUA INTACTO) E O CABEÇALHO DO PAINEL DE DETALHE DO USUÁRIO GANHOU UM
