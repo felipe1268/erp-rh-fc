@@ -588,10 +588,17 @@ export const financialRouter = router({
               -- Read-only (LEFT JOIN 1:1 por PK + guarda de company); permite agrupar a
               -- lista por posto/fornecedor (não só por tipo).
               COALESCE(NULLIF(BTRIM(e.fornecedor_nome), ''), ffr.posto, fm.fornecedor) AS "frotaFornecedor",
+              -- Rev. 3164 — enriquece os lançamentos de Pagamento PJ (origem 'pagamento_pj')
+              -- com o NOME do contratado (pj_payments → employees), p/ a tela de Lançamentos
+              -- agrupar os PJ por mês (igual à Folha) e o diálogo de detalhe mostrar CADA
+              -- pagamento de forma rastreável. Read-only (LEFT JOIN 1:1 por PK + guarda de company).
+              NULLIF(BTRIM(pjemp."nomeCompleto"), '') AS "pjFornecedor",
               e.criado_por_nome AS "criadoPorNome", e.created_at AS "createdAt"
        FROM financial_entries e
        LEFT JOIN fleet_fuel_records ffr ON e.origem_modulo = 'frota_abastecimento' AND ffr.id = e.origem_id AND ffr.company_id = e.company_id
        LEFT JOIN fleet_maintenances fm ON e.origem_modulo = 'frota_manutencao' AND fm.id = e.origem_id AND fm.company_id = e.company_id
+       LEFT JOIN pj_payments pjp ON e.origem_modulo = 'pagamento_pj' AND pjp.id = e.origem_id AND pjp."companyId" = e.company_id
+       LEFT JOIN employees pjemp ON pjemp.id = pjp."employeeId" AND pjemp."companyId" = e.company_id
        WHERE ${conds.join(" AND ")}
        ORDER BY COALESCE(e.data_competencia, e.data_vencimento, e.created_at::date) DESC, e.created_at DESC
        LIMIT $${i++} OFFSET $${i}`,

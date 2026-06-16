@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3164 — **FINANCEIRO / LANÇAMENTOS · OS PAGAMENTOS DE PJ PASSARAM A SEGUIR A MESMA
+ * LÓGICA DA FOLHA — EM VEZ DE VÁRIAS LINHAS SOLTAS, O MÊS MOSTRA UMA ÚNICA LINHA COM O
+ * VALOR TOTAL DAS MEDIÇÕES PJ PAGAS; AO CLICAR, ABRE O DIÁLOGO COM CADA PAGAMENTO
+ * (ADIANTAMENTO / FECHAMENTO) RASTREÁVEL POR CONTRATADO E DATA.**
+ *
+ * PEDIDO: na tela de Lançamentos os pagamentos PJ apareciam como N linhas avulsas por mês
+ * (adiantamentos + fechamentos de cada contrato), poluindo a lista e dificultando ver
+ * "quanto saiu de PJ no mês". O usuário pediu o MESMO comportamento da Folha de pagamento:
+ * uma única linha consolidada por mês com o valor total, e o detalhe (cada pagamento)
+ * acessível ao clicar.
+ *
+ * DIFERENÇA vs. FOLHA: a Folha já chega CONSOLIDADA do backend (o bridge agrupa por
+ * tipo_folha antes de materializar o entry). Os pagamentos PJ, ao contrário, precisam
+ * permanecer como entries INDIVIDUAIS no banco — cada um tem sua própria baixa,
+ * conciliação e vínculo com `pj_payments.id` (origem_id). Consolidá-los no backend
+ * quebraria a baixa/conciliação por item. Por isso o agrupamento PJ é feito SÓ NO
+ * FRONTEND (visual), reaproveitando a MESMA engine de agrupamento já usada na Frota
+ * (Rev. 3154): a lista colapsa os entries `origem_modulo='pagamento_pj'` numa linha de
+ * grupo por mês (YYYY-MM da data de competência), e o diálogo de detalhe abre os membros.
+ *
+ * MUDANÇA (FRONTEND, `client/src/pages/financeiro/FinanceiroLancamentos.tsx`):
+ *  1) Generalização da engine de agrupamento que era exclusiva da Frota — identifiers
+ *     `agruparFrota`/`frotaGrupo*` renomeados p/ genéricos (`agrupar`/`grupo*`); `DisplayRow`
+ *     ganhou `groupKind: "frota" | "pj"`; o builder de `displayRows` agora colapsa Frota OU
+ *     PJ conforme o entry. Grupos com 1 só membro continuam colapsando p/ linha normal.
+ *  2) Helpers `isPjLanc` / `pjGrupoOf` (agrupa por mês YYYY-MM de `dataCompetencia`,
+ *     label "Pagamentos PJ — Mês/Ano").
+ *  3) Linha de grupo: ícone `Briefcase` + badge "PJ agrupado" quando `groupKind==="pj"`
+ *     (senão mantém o ícone/badge de Frota). Botão de alternância passou a aparecer com
+ *     Frota OU PJ presentes, com rótulo genérico "Agrupado"/"Expandido".
+ *  4) Diálogo de detalhe: ícone `Briefcase` p/ PJ; cada membro PJ mostra o NOME do
+ *     contratado como prefixo (`{pjFornecedor} — {descricao}`) + a data de pagamento,
+ *     deixando adiantamento/fechamento rastreáveis.
+ *
+ * MUDANÇA (BACKEND, READ-ONLY, `server/routers/financial.ts` · `getEntries`):
+ *     o entry de pagamento PJ não carrega o nome do contratado (só descrição genérica
+ *     "Adiantamento/Fechamento X% — YYYY-MM" + `origem_id`=`pj_payments.id`). Adicionada a
+ *     coluna `pjFornecedor` via `LEFT JOIN pj_payments pjp ON e.origem_modulo='pagamento_pj'
+ *     AND pjp.id=e.origem_id AND pjp."companyId"=e.company_id` + `LEFT JOIN employees pjemp
+ *     ON pjemp.id=pjp."employeeId" AND pjemp."companyId"=e.company_id`, lendo
+ *     `pjemp."nomeCompleto"`. Atenção ao casing: `financial_entries` é snake_case, mas
+ *     `pj_payments`/`employees` são camelCase (`"companyId"`,`"employeeId"`,`"nomeCompleto"`).
+ *     LEFT JOIN 1:1 por PK + guarda de company → sem fan-out, sem vazamento cross-tenant.
+ *
+ * ZERO SCHEMA/ALTER/DROP/DELETE. Backend estritamente aditivo (uma coluna de leitura).
+ *
  * Rev. 3163 — **FINANCEIRO / LANÇAMENTOS · FECHADA A ÚLTIMA PORTA DO LANÇAMENTO AUTOMÁTICO
  * DE RECEITA — CRIAR UM FATURAMENTO/MEDIÇÃO (createRevenue) NÃO DERRUBA MAIS A RECEITA
  * DIRETO NO CONTAS A RECEBER; A RECEITA NASCE SÓ COMO PREVISTO (financial_revenue) E SÓ

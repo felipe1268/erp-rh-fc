@@ -20,7 +20,7 @@ import {
   Repeat, Pause, Play, Edit2, Calendar, Zap, ArrowUpRight, ArrowDownRight,
   Building2, CreditCard, FileText, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, RefreshCw,
   ArrowLeftRight, Landmark, PlusCircle, Tag, Loader2, Pencil, Trash2, Eye,
-  Fuel, Wrench, Truck, Layers,
+  Fuel, Wrench, Truck, Layers, Briefcase,
 } from "lucide-react";
 
 function formatBRL(v: number) {
@@ -122,6 +122,24 @@ const FROTA_GRUPO_ICONS: Record<string, any> = {
   pedagio: CreditCard,
   frota_outros: Truck,
 };
+
+// Rev. 3164 — Agrupamento dos PAGAMENTOS PJ (origem 'pagamento_pj') por MÊS de
+// competência numa ÚNICA linha — mesma lógica visual da Folha de Pagamento: a lista
+// mostra o TOTAL pago no mês; clicar abre o diálogo com cada adiantamento/fechamento
+// (rastreável por contratado, via `pjFornecedor` enriquecido no backend). Os
+// lançamentos individuais permanecem intactos (baixa/conciliação seguem por item).
+function isPjLanc(l: any): boolean {
+  return l?.origemModulo === "pagamento_pj";
+}
+function pjGrupoOf(l: any): { key: string; label: string } | null {
+  if (!isPjLanc(l)) return null;
+  const ym = String(l.dataCompetencia ?? l.dataVencimento ?? "").slice(0, 7);
+  if (/^\d{4}-\d{2}$/.test(ym)) {
+    const [a, m] = ym.split("-");
+    return { key: `pj::${ym}`, label: `Pagamentos PJ — ${MESES[Number(m) - 1]}/${a}` };
+  }
+  return { key: "pj::sem-data", label: "Pagamentos PJ" };
+}
 
 // Rev. 3156 — "Ruído" de cancelados: um lançamento CANCELADO que veio de OUTRO
 // módulo (origem não-financeira) e que NUNCA teve baixa no financeiro (nunca foi
@@ -225,8 +243,8 @@ export default function FinanceiroLancamentos() {
   const [showObs, setShowObs] = useState(false);
   // Rev. 3154 — Agrupar lançamentos de Frota por tipo (combustível/manutenção/
   // pedágio) numa linha só; clicar abre o diálogo com todos do grupo.
-  const [agruparFrota, setAgruparFrota] = useState(true);
-  const [frotaGrupoKey, setFrotaGrupoKey] = useState<string | null>(null);
+  const [agrupar, setAgrupar] = useState(true);
+  const [grupoKey, setGrupoKey] = useState<string | null>(null);
   // Rev. 3139 — Seleção múltipla p/ baixa/estorno em lote (conciliação bancária).
   // Rev. 3141 — seleção SEMPRE ativa (sem botão de alternância); checkbox por linha sempre visível.
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -835,30 +853,47 @@ export default function FinanceiroLancamentos() {
   // única linha (combustível/manutenção/pedágio); o resto renderiza normal. Um
   // grupo com 1 item só vira linha normal (não vale esconder atrás de clique).
   const temFrota = lancamentos.some((l: any) => isFrotaLanc(l));
+  // Rev. 3164 — também agrupamos os pagamentos PJ por mês (mesma engine do grupo).
+  const temPj = lancamentos.some((l: any) => isPjLanc(l));
+  // Rev. 3164 — chave de grupo unificada: Frota (posto/fornecedor) OU PJ (mês).
+  const grupoKeyOf = (l: any): string | null => frotaGrupoOf(l)?.key ?? pjGrupoOf(l)?.key ?? null;
   type DisplayRow =
     | { kind: "entry"; l: any }
-    | { kind: "group"; key: string; label: string; tipoKey: string; members: any[] };
+    | { kind: "group"; groupKind: "frota" | "pj"; key: string; label: string; tipoKey: string; members: any[] };
   const displayRows: DisplayRow[] = (() => {
-    if (!agruparFrota) return lancamentos.map((l: any) => ({ kind: "entry", l } as DisplayRow));
+    if (!agrupar) return lancamentos.map((l: any) => ({ kind: "entry", l } as DisplayRow));
     const rows: DisplayRow[] = [];
     const byKey = new Map<string, Extract<DisplayRow, { kind: "group" }>>();
     for (const l of lancamentos) {
-      const g = frotaGrupoOf(l);
-      if (!g) { rows.push({ kind: "entry", l }); continue; }
-      let grp = byKey.get(g.key);
-      if (!grp) { grp = { kind: "group", key: g.key, label: g.label, tipoKey: g.tipoKey, members: [] }; byKey.set(g.key, grp); rows.push(grp); }
+      const fg = frotaGrupoOf(l);
+      const pg = fg ? null : pjGrupoOf(l);
+      if (!fg && !pg) { rows.push({ kind: "entry", l }); continue; }
+      const key = fg ? fg.key : pg!.key;
+      let grp = byKey.get(key);
+      if (!grp) {
+        grp = fg
+          ? { kind: "group", groupKind: "frota", key: fg.key, label: fg.label, tipoKey: fg.tipoKey, members: [] }
+          : { kind: "group", groupKind: "pj", key: pg!.key, label: pg!.label, tipoKey: "pj", members: [] };
+        byKey.set(key, grp);
+        rows.push(grp);
+      }
       grp.members.push(l);
     }
     // Grupos com 1 item só voltam a ser linha normal.
     return rows.map((r) => (r.kind === "group" && r.members.length === 1 ? { kind: "entry", l: r.members[0] } : r));
   })();
   // Membros do grupo aberto no diálogo de detalhe (recalculado da lista atual).
-  const frotaGrupoMembros = frotaGrupoKey
-    ? lancamentos.filter((l: any) => frotaGrupoOf(l)?.key === frotaGrupoKey)
+  const grupoMembros = grupoKey
+    ? lancamentos.filter((l: any) => grupoKeyOf(l) === grupoKey)
     : [];
-  const frotaGrupoLabel = frotaGrupoMembros.length ? (frotaGrupoOf(frotaGrupoMembros[0])?.label ?? "Frota") : "Frota";
-  const frotaGrupoTipoKey = frotaGrupoMembros.length ? (frotaGrupoOf(frotaGrupoMembros[0])?.tipoKey ?? "") : "";
-  const frotaGrupoTotal = frotaGrupoMembros.reduce((s: number, l: any) => s + Number(l.valorPrevisto ?? 0), 0);
+  const grupoIsPj = grupoMembros.length > 0 && isPjLanc(grupoMembros[0]);
+  const grupoLabel = grupoMembros.length
+    ? (grupoIsPj
+        ? (pjGrupoOf(grupoMembros[0])?.label ?? "Pagamentos PJ")
+        : (frotaGrupoOf(grupoMembros[0])?.label ?? "Frota"))
+    : "Grupo";
+  const grupoTipoKey = grupoMembros.length && !grupoIsPj ? (frotaGrupoOf(grupoMembros[0])?.tipoKey ?? "") : "";
+  const grupoTotal = grupoMembros.reduce((s: number, l: any) => s + Number(l.valorPrevisto ?? 0), 0);
 
   const recEntries = recItems ?? [];
   const recAtivos = recEntries.filter((e: any) => e.ativo === 1);
@@ -1048,14 +1083,14 @@ export default function FinanceiroLancamentos() {
                   <Filter className="w-4 h-4" />
                   {lancamentos.length} lançamento(s)
                   <div className="ml-auto flex items-center gap-1">
-                    {/* Rev. 3154 — alternar agrupamento dos lançamentos de Frota. */}
-                    {temFrota && (
+                    {/* Rev. 3154/3164 — alternar agrupamento (Frota por posto/fornecedor + PJ por mês). */}
+                    {(temFrota || temPj) && (
                       <Button variant="ghost" size="sm"
-                        className={`h-7 px-2 text-xs font-normal ${agruparFrota ? "text-blue-700 hover:text-blue-800" : "text-gray-500 hover:text-gray-800"}`}
-                        title={agruparFrota ? "Mostrar os lançamentos de frota separados" : "Agrupar lançamentos de frota por posto/fornecedor"}
-                        onClick={() => setAgruparFrota((v) => !v)}>
+                        className={`h-7 px-2 text-xs font-normal ${agrupar ? "text-blue-700 hover:text-blue-800" : "text-gray-500 hover:text-gray-800"}`}
+                        title={agrupar ? "Mostrar os lançamentos de Frota/PJ separados" : "Agrupar lançamentos de Frota (posto/fornecedor) e PJ (por mês)"}
+                        onClick={() => setAgrupar((v) => !v)}>
                         <Layers className="w-3.5 h-3.5 mr-1" />
-                        {agruparFrota ? "Frota agrupada" : "Frota expandida"}
+                        {agrupar ? "Agrupado" : "Expandido"}
                       </Button>
                     )}
                     {/* Rev. 3152 — revelar/ocultar cancelados (rastro preservado). */}
@@ -1115,7 +1150,7 @@ export default function FinanceiroLancamentos() {
                   <div className="divide-y divide-gray-100">
                     {displayRows.map((row) => {
                       if (row.kind === "group") {
-                        const Icon = FROTA_GRUPO_ICONS[row.tipoKey] ?? Truck;
+                        const Icon = row.groupKind === "pj" ? Briefcase : (FROTA_GRUPO_ICONS[row.tipoKey] ?? Truck);
                         const grpSelIds: number[] = row.members.filter((m: any) => m.status !== "cancelado").map((m: any) => m.id);
                         const grpAllSel = grpSelIds.length > 0 && grpSelIds.every((id: number) => selectedIds.has(id));
                         const grpSelCount = grpSelIds.filter((id: number) => selectedIds.has(id)).length;
@@ -1138,14 +1173,14 @@ export default function FinanceiroLancamentos() {
                                 title="Selecionar todos do grupo"
                               />
                             </div>
-                            <button type="button" onClick={() => setFrotaGrupoKey(row.key)} className="flex-1 min-w-0 text-left">
+                            <button type="button" onClick={() => setGrupoKey(row.key)} className="flex-1 min-w-0 text-left">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-slate-600">
                                   <Icon className="w-4 h-4" />
                                 </span>
                                 <span className="text-sm font-semibold text-gray-800">{row.label}</span>
                                 <Badge className="text-xs bg-slate-200 text-slate-700">{row.members.length} lançamentos</Badge>
-                                <Badge className="text-xs bg-blue-100 text-blue-700"><Layers className="w-2.5 h-2.5 mr-1" />Frota agrupada</Badge>
+                                <Badge className="text-xs bg-blue-100 text-blue-700"><Layers className="w-2.5 h-2.5 mr-1" />{row.groupKind === "pj" ? "PJ agrupado" : "Frota agrupada"}</Badge>
                                 {grpPartial && (
                                   <span className="text-[11px] text-blue-600">{grpSelCount} selecionado(s)</span>
                                 )}
@@ -1156,7 +1191,7 @@ export default function FinanceiroLancamentos() {
                               <p className="text-sm font-bold text-red-500">-{formatBRL(grpTotal)}</p>
                               <Button size="sm" variant="ghost" className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 h-7 px-2 text-xs"
                                 title="Ver lançamentos do grupo"
-                                onClick={() => setFrotaGrupoKey(row.key)}>
+                                onClick={() => setGrupoKey(row.key)}>
                                 Ver <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
                               </Button>
                             </div>
@@ -1870,21 +1905,21 @@ export default function FinanceiroLancamentos() {
         </Dialog>
 
         {/* Rev. 3154 — Detalhe do GRUPO de Frota: lista todos os lançamentos do tipo. */}
-        <Dialog open={!!frotaGrupoKey} onOpenChange={(v) => { if (!v) setFrotaGrupoKey(null); }}>
+        <Dialog open={!!grupoKey} onOpenChange={(v) => { if (!v) setGrupoKey(null); }}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                {(() => { const I = FROTA_GRUPO_ICONS[frotaGrupoTipoKey] ?? Truck; return <I className="w-4 h-4 text-slate-600" />; })()}
-                {frotaGrupoLabel}
-                <Badge className="text-xs bg-slate-200 text-slate-700">{frotaGrupoMembros.length} lançamentos</Badge>
-                <span className="ml-auto text-sm font-bold text-red-600">-{formatBRL(frotaGrupoTotal)}</span>
+                {(() => { const I = grupoIsPj ? Briefcase : (FROTA_GRUPO_ICONS[grupoTipoKey] ?? Truck); return <I className="w-4 h-4 text-slate-600" />; })()}
+                {grupoLabel}
+                <Badge className="text-xs bg-slate-200 text-slate-700">{grupoMembros.length} lançamentos</Badge>
+                <span className="ml-auto text-sm font-bold text-red-600">-{formatBRL(grupoTotal)}</span>
               </DialogTitle>
             </DialogHeader>
-            {frotaGrupoMembros.length === 0 ? (
+            {grupoMembros.length === 0 ? (
               <div className="py-10 text-center text-gray-400 text-sm">Nenhum lançamento neste grupo.</div>
             ) : (
               <div className="max-h-[60vh] overflow-y-auto divide-y divide-gray-100">
-                {frotaGrupoMembros.map((m: any) => (
+                {grupoMembros.map((m: any) => (
                   <div key={m.id} className={`px-1 py-2.5 flex items-center justify-between gap-3 ${selectedIds.has(m.id) ? "bg-blue-50" : ""}`}>
                     <div className="flex-shrink-0">
                       <Checkbox
@@ -1895,12 +1930,15 @@ export default function FinanceiroLancamentos() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium text-gray-800 truncate">{m.descricao ?? m.contaNome ?? "—"}</span>
+                        <span className="text-sm font-medium text-gray-800 truncate">
+                          {isPjLanc(m) && m.pjFornecedor ? `${m.pjFornecedor} — ${m.descricao ?? ""}` : (m.descricao ?? m.contaNome ?? "—")}
+                        </span>
                         <Badge className={`text-xs ${STATUS_COLORS[m.status] ?? "bg-gray-100 text-gray-700"}`}>{STATUS_LABELS[m.status] ?? m.status}</Badge>
                       </div>
                       <p className="text-xs text-gray-400 mt-0.5">
                         Comp.: {fmtDateBR(m.dataCompetencia)}
                         {m.dataVencimento && ` • Venc.: ${fmtDateBR(m.dataVencimento)}`}
+                        {m.dataPagamento && ` • Pago: ${fmtDateBR(m.dataPagamento)}`}
                         {m.obraNome && ` • ${m.obraNome}`}
                       </p>
                     </div>
@@ -1925,7 +1963,7 @@ export default function FinanceiroLancamentos() {
             )}
             <DialogFooter>
               <span className="mr-auto self-center text-xs text-gray-400">Selecione itens e use as ações em lote na lista (Dar baixa / Cancelar baixa / Excluir).</span>
-              <Button onClick={() => setFrotaGrupoKey(null)}>Fechar</Button>
+              <Button onClick={() => setGrupoKey(null)}>Fechar</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
