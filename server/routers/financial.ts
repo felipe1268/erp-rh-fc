@@ -3602,6 +3602,61 @@ export const financialRouter = router({
     return rows(res);
   }),
 
+  // Rev. 3178 — RELATÓRIO DE CONCILIAÇÃO (read-only) para o Workspace full-screen e PDF.
+  // Devolve, para a conta + período: (1) linhas do extrato JÁ conciliadas com o lançamento
+  // casado (descrição/fornecedor/valor/data), (2) linhas do extrato AINDA sem lançamento
+  // ("o que falta") e (3) lançamentos do sistema sem extrato no período. Tenant guard.
+  getConciliacaoReport: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    contaBancariaId: z.number(),
+    dataInicio: z.string(),
+    dataFim: z.string(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const p = [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim];
+
+    // 1) Extrato conciliado + lançamento casado
+    const concRes = await dbExecute(db,
+      `SELECT b.id, b.data, b.descricao, b.valor, b.tipo, b.entry_id AS "entryId",
+              e.descricao AS "entryDescricao", e.fornecedor_nome AS "entryFornecedor",
+              e.obra_nome AS "entryObra",
+              COALESCE(e.valor_realizado, e.valor_previsto) AS "entryValor",
+              COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) AS "entryData"
+         FROM bank_statement_lines b
+         LEFT JOIN financial_entries e ON e.id = b.entry_id AND e.company_id = b.company_id
+        WHERE b.company_id=$1 AND b.conta_bancaria_id=$2 AND b.data>=$3 AND b.data<=$4
+          AND COALESCE(b.conciliado,0)=1
+        ORDER BY b.data ASC, b.id ASC`, p);
+
+    // 2) Extrato SEM lançamento (pendências)
+    const pendRes = await dbExecute(db,
+      `SELECT id, data, descricao, valor, tipo
+         FROM bank_statement_lines
+        WHERE company_id=$1 AND conta_bancaria_id=$2 AND data>=$3 AND data<=$4
+          AND COALESCE(conciliado,0)=0
+        ORDER BY data ASC, id ASC`, p);
+
+    // 3) Lançamentos do sistema sem conciliação no período (conta ou sem conta)
+    const lancRes = await dbExecute(db,
+      `SELECT e.id, e.descricao, e.fornecedor_nome AS "fornecedorNome", e.obra_nome AS "obraNome",
+              COALESCE(e.valor_realizado, e.valor_previsto) AS valor, e.tipo, e.status,
+              COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) AS data
+         FROM financial_entries e
+        WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
+          AND (e.conta_bancaria_id=$2 OR e.conta_bancaria_id IS NULL)
+          AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) >= $3
+          AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) <= $4
+        ORDER BY data ASC, e.id ASC`, p);
+
+    return {
+      conciliados: rows(concRes),
+      extratoSemLancamento: rows(pendRes),
+      lancamentosSemExtrato: rows(lancRes),
+    };
+  }),
+
   // Rev. 3170 — Status de conciliação POR CONTA no período, p/ pintar cada card de conta
   // na tela de Conciliação: "consolidado" (tem extrato e 100% conciliado), "lancamento"
   // (tem extrato com pendências) ou "vazio" (sem linhas no período). READ-ONLY.

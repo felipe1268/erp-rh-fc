@@ -10,7 +10,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink } from "lucide-react";
+import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Maximize2 } from "lucide-react";
+import { useLocation } from "wouter";
 import { formatConta, formatAgencia } from "@/lib/formatters";
 
 function formatBRL(v: number) {
@@ -40,6 +41,7 @@ function bancoCor(banco?: string): { bg: string; text: string } {
 export default function FinanceiroConciliacao() {
   const { companyId } = useCompany();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   // Rev. 3165 — Período pelo MESMO PADRÃO das demais telas do Financeiro: navegação por
   // ANO + meses (Jan–Dez). `mesSel=null` = "Ano todo". dataInicio/dataFim derivam daí.
   const _now = new Date();
@@ -358,6 +360,9 @@ export default function FinanceiroConciliacao() {
                 </Button>
               )
             )}
+            <Button size="sm" variant="outline" className="h-9 border-blue-600 text-blue-700 hover:bg-blue-50" onClick={() => setLocation("/financeiro/conciliacao/workspace")}>
+              <Maximize2 className="w-3.5 h-3.5 mr-1.5" />Abrir em tela cheia
+            </Button>
             <Button size="sm" className="h-9" onClick={() => { setShowImport(true); setImportConta(contaBancariaId); }}>
               <Upload className="w-3.5 h-3.5 mr-1.5" />Importar Extrato
             </Button>

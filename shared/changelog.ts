@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3178 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NOVO "WORKSPACE DE CONCILIAÇÃO" EM TELA CHEIA
+ * (3 ETAPAS GUIADAS) QUE LEMBRA EXATAMENTE ONDE VOCÊ PAROU AO SAIR E VOLTAR, E QUE GERA UM
+ * RELATÓRIO PDF/IMPRESSÃO COM TUDO O QUE FOI CONCILIADO E TUDO O QUE AINDA FALTA.**
+ *
+ * PEDIDO: "criar uma tela nova full-screen de Conciliação Bancária — layout moderno, usabilidade
+ * fácil, ágil/inovador; NÃO perder histórico (ao sair e voltar abre EXATAMENTE na fase que parou,
+ * sem cancelar conciliação nem reprocessar); gerar RELATÓRIO PDF + imprimir tudo conciliado E o que
+ * não conciliou (saber o que falta/resolver)". A tela antiga (`/financeiro/conciliacao`) continua
+ * existindo intacta; ganhou só um botão "Abrir em tela cheia" no cabeçalho.
+ *
+ * SOLUÇÃO — NOVA PÁGINA `client/src/pages/financeiro/FinanceiroConciliacaoWorkspace.tsx`
+ * (rota nova `/financeiro/conciliacao/workspace`, registrada em `App.tsx` REUSANDO a permissão
+ * `route="/financeiro/conciliacao"` — SEM novo ModuleId/menu). É full-screen IMERSIVA (NÃO usa
+ * `DashboardLayout`): topbar fixa com botão "Sair", resumo da conta/período e botão "Importar
+ * Extrato"; abaixo um STEPPER clicável de 3 etapas:
+ *  - ETAPA 1 "Preparar": navegação ‹ ANO › + chips de mês (com bolinhas de status verde/azul/cinza
+ *    derivadas de `getBankStatements` do ano) + grade de cards de conta (pinta o status do período
+ *    via `getBankAccountsConciliacaoStatus`). Trocar de mês re-sincroniza a "Tolerância (dias)" com
+ *    os dias exatos do mês (FEV=28...), SEM sobrescrever um valor restaurado.
+ *  - ETAPA 2 "Conciliar": mini-cards (entradas/saídas pendentes, conciliados, % progresso) + botão
+ *    consolidar/reabrir mês; painel "Sugestões Automáticas" (reusa `sugerirConciliacao`,
+ *    selecionar alta/todas/limpar, conciliar em lote via `conciliarSugestoes`, e clique no lado
+ *    "Lançamento" abre o MESMO detalhe consultivo read-only de `getEntryDetalhe`); e conciliação
+ *    MANUAL extrato-pendente × lançamento (`getEntries` + `conciliarLancamento`).
+ *  - ETAPA 3 "Relatório": consome o NOVO endpoint read-only `getConciliacaoReport` e mostra
+ *    resumo (conciliado %/valor, extrato sem lançamento, lançamentos sem extrato, total) + 3 listas;
+ *    botão "Gerar PDF / Imprimir" abre `window.open` com cabeçalho FC (logo + faixa azul
+ *    `print-color-adjust:exact`), cards de resumo e 3 tabelas (conciliado / o que falta / lançamentos
+ *    sem extrato), tudo com `esc()` anti-XSS.
+ *
+ * PERSISTÊNCIA "abre onde parou": estado da sessão (etapa, contaBancariaId, ano, mesSel,
+ * toleranciaDias, filtro, seleções de sugestão, flag de sugestões abertas) é salvo em
+ * `localStorage` por empresa (`conc_ws_v1_<companyId>`) e restaurado UMA vez no mount (guard
+ * `restored` ref). As conciliações em si já são persistidas no banco — voltar NÃO cancela nem
+ * reprocessa nada; apenas re-busca o estado atual.
+ *
+ * BACKEND — NOVO endpoint read-only `financial.getConciliacaoReport({companyId, contaBancariaId,
+ * dataInicio, dataFim})` com `_assertFinanceiroCompanyAccess` (tenant guard anti-IDOR). Devolve:
+ * (1) `conciliados` = `bank_statement_lines` com `conciliado=1` LEFT JOIN `financial_entries`
+ * (descrição/fornecedor/obra/valor/data do lançamento casado), (2) `extratoSemLancamento` =
+ * linhas do extrato `conciliado=0` (o que falta), (3) `lancamentosSemExtrato` = lançamentos do
+ * sistema não conciliados, não cancelados, da conta (ou sem conta) no período. Usa o helper
+ * `dbExecute` (params por ordem de aparição, mantidos ascendentes $1..$4). NÃO grava nada.
+ *
+ * ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3177 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NAS "SUGESTÕES AUTOMÁTICAS DE CONCILIAÇÃO"
  * AGORA DÁ PRA CLICAR NO LANÇAMENTO DO ERP (LADO DIREITO DO PAR) E ABRIR UM DETALHE CONSULTIVO
  * (SOMENTE LEITURA) ANTES DE CONCILIAR — EVITANDO ERRO DE CONCILIAÇÃO POR CASAR O EXTRATO COM O
