@@ -1070,9 +1070,13 @@ export const financialRouter = router({
   getEntryDetalhe: protectedProcedure.input(z.object({
     id: z.number(),
     companyId: z.number(),
-  })).query(async ({ input }) => {
+  })).query(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    // Rev. 3177 — tenant guard (anti-IDOR): só filtrava por company_id, sem checar
+    // se o CHAMADOR tem acesso à empresa. Fecha a brecha agora que o detalhe é
+    // consumido também pela Conciliação Bancária.
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
 
     // 1) Entry principal (todos os campos)
     const entryRes = await dbExecute(db,

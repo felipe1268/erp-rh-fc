@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3177 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NAS "SUGESTÕES AUTOMÁTICAS DE CONCILIAÇÃO"
+ * AGORA DÁ PRA CLICAR NO LANÇAMENTO DO ERP (LADO DIREITO DO PAR) E ABRIR UM DETALHE CONSULTIVO
+ * (SOMENTE LEITURA) ANTES DE CONCILIAR — EVITANDO ERRO DE CONCILIAÇÃO POR CASAR O EXTRATO COM O
+ * LANÇAMENTO ERRADO.**
+ *
+ * PEDIDO: "preciso poder clicar no lançamento do ERP e abrir os lançamento para analisar de forma
+ * consultiva e não ter erro de conciliação". As sugestões mostravam só fornecedor + data + valor;
+ * dois lançamentos de MESMO valor/data (ex.: vários PIX p/ "Caixa Econômica Federal") ficavam
+ * indistinguíveis, então o usuário não tinha como conferir QUAL lançamento estava sendo casado.
+ *
+ * SOLUÇÃO — FRONTEND-ONLY `client/src/pages/financeiro/FinanceiroConciliacao.tsx`:
+ *  - O lado "Lançamento" de cada linha de sugestão (antes um `<div>` dentro do `<label>` que envolve
+ *    o Checkbox) virou um `<button type="button">` com `e.preventDefault()` + `e.stopPropagation()`
+ *    no onClick → clicar NÃO marca/desmarca o checkbox de seleção; só abre o detalhe. Ganhou ícone
+ *    de "olho" no hover, cor azul e sublinhado p/ sinalizar que é clicável.
+ *  - Novo estado `detalheEntryId` + `Dialog` read-only que consome o MESMO endpoint já existente
+ *    `financial.getEntryDetalhe` (usado em Contas a Pagar). Renderiza: cabeçalho (fornecedor/descrição
+ *    + tipo/natureza + valor + status), grade de campos (valor previsto/realizado, datas
+ *    competência/vencimento/pagamento, forma de pagamento, conta, obra, parcela, cheque, código de
+ *    barras, conciliado, dias em atraso, origem, criado por), descrição/observações/motivo de
+ *    cancelamento, botões de comprovante/anexo (abrem em nova aba), bloco da Ordem de Compra de
+ *    origem (numeroOc/NF/total/condição/status/itens) e o bloco genérico `origemDetalhes` (folha,
+ *    cronograma, frota, benefício, etc.) com seus campos.
+ *  - Helper local `field(label, value, key?)` que omite valores vazios (3º arg evita key duplicada
+ *    no `.map` de `origemDetalhes`); `DialogContent` com `max-h-[90vh] flex flex-col` + miolo
+ *    `flex-1 overflow-y-auto` (não estoura em iframe baixo).
+ *  - BACKEND (hardening, read-only): `getEntryDetalhe` ganhou `_assertFinanceiroCompanyAccess`
+ *    (anti-IDOR). Antes só filtrava `WHERE company_id=$2` sem validar se o CHAMADOR tinha acesso à
+ *    empresa — brecha pré-existente (mesma rota usada por Contas a Pagar) fechada agora que o detalhe
+ *    é exposto também na Conciliação Bancária. Sem alteração de payload/comportamento p/ acesso legítimo.
+ *
+ * ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3176 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · A "TOLERÂNCIA (DIAS)" DAS SUGESTÕES
  * AUTOMÁTICAS PASSOU A REFLETIR OS DIAS EXATOS DO MÊS SELECIONADO (FEV/2026 = 28, JANEIRO = 31...)
  * EM VEZ DE UM TETO FIXO DE 30 — E ESSE VALOR VIROU O PADRÃO.**
