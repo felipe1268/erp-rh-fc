@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3168 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · A SELEÇÃO DA CONTA DEIXOU DE SER UM
+ * DROPDOWN ("SELECIONE A CONTA...") E PASSOU A SER UMA GRADE DE CARDS CLICÁVEIS — UM CARD
+ * POR CONTA, COM ÍCONE/COR DO BANCO, NOME + DESCRIÇÃO E AGÊNCIA/CONTA VISÍVEIS DE UMA VEZ;
+ * CLICAR SELECIONA (CHECK AZUL) E CLICAR DE NOVO LIMPA A SELEÇÃO.**
+ *
+ * PEDIDO: "melhore a apresentação das contas, coloque em cards, para facilitar". A tela de
+ * Conciliação Bancária escolhia a conta por um `<Select>` que escondia as contas atrás de
+ * um clique e mostrava cada uma como uma linha de texto longa. Com várias contas (a FC tem
+ * 8), comparar/achar a conta certa era trabalhoso.
+ *
+ * MUDANÇA (FRONTEND-ONLY `client/src/pages/financeiro/FinanceiroConciliacao.tsx`): o bloco
+ * do dropdown "Conta Bancária" foi substituído por um grid responsivo
+ * (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-3`) de `<button>`s-card. Cada card mostra: um
+ * avatar quadrado com `Landmark` colorido conforme o banco (helper `bancoCor` — Caixa=azul,
+ * Santander=vermelho, Itaú=laranja, Bradesco=rosa, BB=amarelo, senão cinza), o nome do banco
+ * (+ ` · descrição/tipo` quando houver) e a linha `Ag. {agencia} / {conta}` em fonte mono.
+ * O card selecionado ganha borda/realce azul + um check circular azul; clicar no card já
+ * selecionado limpa a seleção (`setContaBancariaId("")`). Mantido o MESMO estado
+ * `contaBancariaId` (string) — toda a lógica de queries (`getBankStatements`,
+ * `getEntries`, `sugerirConciliacao`), bolinhas de status por mês, importação de extrato e
+ * conciliação continua intacta. O filtro "Status" (Todos/Pendentes/Conciliados) foi mantido
+ * logo abaixo dos cards. Adicionado estado vazio ("Nenhuma conta bancária cadastrada.")
+ * quando não há contas. Imports: `Landmark` e `Check` (lucide). ZERO SCHEMA/ALTER/DROP/
+ * DELETE · ZERO BACKEND.
+ *
  * Rev. 3167 — **CADASTRO · "CONTAS BANCÁRIAS" (RH&DP) · CORRIGIDO O BUG EM QUE A TELA
  * MOSTRAVA "NENHUMA CONTA BANCÁRIA CADASTRADA" (0 CONTAS) MESMO COM A FC ENGENHARIA
  * SELECIONADA — ENQUANTO O DROPDOWN DO FINANCEIRO LISTAVA AS 8 CONTAS NORMALMENTE. A

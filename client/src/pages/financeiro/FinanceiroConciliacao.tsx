@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
+import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, Landmark, Check } from "lucide-react";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -25,6 +25,16 @@ function fmtData(v: any) {
 }
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+function bancoCor(banco?: string): { bg: string; text: string } {
+  const b = (banco ?? "").toLowerCase();
+  if (b.includes("caixa")) return { bg: "bg-blue-100", text: "text-blue-700" };
+  if (b.includes("santander")) return { bg: "bg-red-100", text: "text-red-700" };
+  if (b.includes("ita")) return { bg: "bg-orange-100", text: "text-orange-700" };
+  if (b.includes("bradesco")) return { bg: "bg-pink-100", text: "text-pink-700" };
+  if (b.includes("brasil")) return { bg: "bg-yellow-100", text: "text-yellow-700" };
+  return { bg: "bg-gray-100", text: "text-gray-700" };
+}
 
 export default function FinanceiroConciliacao() {
   const { companyId } = useCompany();
@@ -253,20 +263,52 @@ export default function FinanceiroConciliacao() {
                   })}
                 </div>
               </div>
-              <div className="flex flex-wrap gap-3 items-end">
-                <div className="flex-1 min-w-[180px]">
-                  <p className="text-xs text-gray-500 mb-1">Conta Bancária</p>
-                  <Select value={contaBancariaId} onValueChange={setContaBancariaId}>
-                    <SelectTrigger><SelectValue placeholder="Selecione a conta..." /></SelectTrigger>
-                    <SelectContent>
-                      {(bankAccounts ?? []).map((b: any) => (
-                        <SelectItem key={b.id} value={String(b.id)}>
-                          {b.banco} - {b.agencia}/{b.conta} ({b.descricao ?? b.tipo ?? ""})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-2">Conta Bancária</p>
+                {(bankAccounts ?? []).length === 0 ? (
+                  <p className="text-sm text-gray-400 py-2">Nenhuma conta bancária cadastrada.</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                    {(bankAccounts ?? []).map((b: any) => {
+                      const isSel = contaBancariaId === String(b.id);
+                      const cor = bancoCor(b.banco);
+                      const desc = b.descricao ?? b.tipo ?? "";
+                      return (
+                        <button
+                          key={b.id}
+                          type="button"
+                          aria-pressed={isSel}
+                          aria-label={`Conta ${b.banco} agência ${b.agencia} conta ${b.conta}${isSel ? " (selecionada — clique para desmarcar)" : ""}`}
+                          onClick={() => setContaBancariaId(isSel ? "" : String(b.id))}
+                          className={`relative flex items-center gap-3 p-3 rounded-xl border text-left transition-all
+                            ${isSel
+                              ? "border-blue-500 bg-blue-50 ring-1 ring-blue-200 shadow-sm"
+                              : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
+                            }`}
+                        >
+                          <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${cor.bg}`}>
+                            <Landmark className={`h-[18px] w-[18px] ${cor.text}`} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-gray-800 truncate">
+                              {b.banco}{desc ? ` · ${desc}` : ""}
+                            </p>
+                            <p className="text-xs text-gray-500 font-mono truncate">
+                              Ag. {b.agencia} / {b.conta}
+                            </p>
+                          </div>
+                          {isSel && (
+                            <span className="h-5 w-5 rounded-full bg-blue-500 flex items-center justify-center shrink-0">
+                              <Check className="h-3 w-3 text-white" />
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div className="flex items-end">
                 <div>
                   <p className="text-xs text-gray-500 mb-1">Status</p>
                   <Select value={conciliadoFilter} onValueChange={setConciliadoFilter}>
