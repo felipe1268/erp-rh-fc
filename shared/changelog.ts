@@ -1,6 +1,45 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3154 — **FINANCEIRO / LANÇAMENTOS · OS LANÇAMENTOS VINDOS DO MÓDULO FROTA
+ * (COMBUSTÍVEL, MANUTENÇÃO, PEDÁGIO/SEM PARAR) PASSARAM A SER AGRUPADOS NUMA ÚNICA
+ * LINHA POR TIPO — A TELA FICOU LIMPA; CLICAR NA LINHA ABRE UM DIÁLOGO COM TODOS OS
+ * LANÇAMENTOS DAQUELE GRUPO.**
+ *
+ * PEDIDO (screenshot IMG_2093, Jan/2026, iPad): a lista de Lançamentos vinha poluída
+ * por dezenas de linhas de combustível ("Combustível VW/GOL...", "Combustível
+ * TOYOTA/COROLLA..." etc.), uma por veículo/abastecimento. O usuário pediu para
+ * AGRUPAR tudo que vem do módulo Frotas (combustível, pedágios/Sem Parar, manutenção)
+ * numa única linha por tipo, e poder ABRIR o detalhe (todos os lançamentos do grupo)
+ * com um clique. Tela mais limpa, detalhe sob demanda.
+ *
+ * OBSERVAÇÃO DE DADOS: os lançamentos de frota NÃO trazem posto/fornecedor
+ * (`fornecedor_nome` vazio; `descricao` = o VEÍCULO), então o agrupamento sugerido
+ * "Combustível Posto XYZ" não é possível pelos dados atuais — o agrupamento é por
+ * TIPO. Hoje o banco (FC=60002) tem `frota_abastecimento` (Combustível) e
+ * `frota_manutencao` (Manutenção); Pedágio/Sem Parar ainda NÃO existe como origem,
+ * mas já é detectado (origem futura `frota_pedagio` OU texto "pedágio"/"sem parar"
+ * na descrição/conta) para quando passar a existir.
+ *
+ * COMPORTAMENTO (FRONTEND-ONLY, `client/src/pages/financeiro/FinanceiroLancamentos.tsx`):
+ * (1) helper `frotaGrupoOf(l)` mapeia cada lançamento de frota num grupo
+ * (combustivel/manutencao/pedagio/frota_outros) com label e ícone; `isFrotaLanc`
+ * detecta origem que começa com "frota". (2) `displayRows` deriva a lista de
+ * exibição a partir de `lancamentos`: os de frota colapsam numa LINHA-GRUPO posicionada
+ * na 1ª ocorrência (mantendo a ordem do restante); grupos com 1 item só voltam a ser
+ * linha normal (não vale esconder atrás de clique). (3) A linha-grupo mostra ícone +
+ * label + contagem + total somado, tem checkbox que SELECIONA/DESSELECIONA TODOS os
+ * itens NÃO-cancelados do grupo (estado indeterminado quando parcial) — preservando as
+ * ações em lote (Dar baixa / Cancelar baixa / Excluir) existentes. (4) Clicar na linha
+ * abre o diálogo `frotaGrupoKey` listando cada lançamento do grupo (descrição/datas/
+ * status/valor) com checkbox individual, botão Pagar (quando a_pagar) e o olho de
+ * Visualizar (reaproveita `setViewId`). (5) Toggle no cabeçalho "Frota agrupada/Frota
+ * expandida" (default AGRUPADA) só aparece quando há frota no recorte. O contador
+ * "{N} lançamento(s)" continua refletindo o número REAL de lançamentos (agrupar é
+ * puramente visual; totais não mudam).
+ *
+ * ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3153 — **FINANCEIRO / LANÇAMENTOS · CORRIGIDO O ERRO "The string did not match
  * the expected pattern" AO CANCELAR BAIXA EM LOTE NO iPad — A AÇÃO VOLTOU A FUNCIONAR
  * E A LISTA ATUALIZA SOZINHA MESMO QUANDO O iOS DERRUBA A REQUEST.**

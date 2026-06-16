@@ -20,6 +20,7 @@ import {
   Repeat, Pause, Play, Edit2, Calendar, Zap, ArrowUpRight, ArrowDownRight,
   Building2, CreditCard, FileText, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, RefreshCw,
   ArrowLeftRight, Landmark, PlusCircle, Tag, Loader2, Pencil, Trash2, Eye,
+  Fuel, Wrench, Truck, Layers,
 } from "lucide-react";
 
 function formatBRL(v: number) {
@@ -72,6 +73,35 @@ const STATUS_LABELS: Record<string, string> = {
 const FREQ_LABELS: Record<string, string> = {
   mensal: "Mensal", quinzenal: "Quinzenal", semanal: "Semanal",
   trimestral: "Trimestral", anual: "Anual",
+};
+
+// Rev. 3154 — Agrupamento dos lançamentos vindos do módulo FROTA (combustível,
+// manutenção, pedágio/Sem Parar) numa única linha por TIPO, p/ deixar a lista
+// limpa. O detalhe (todos os lançamentos do grupo) abre num diálogo ao clicar.
+// Obs.: os lançamentos de frota não trazem "posto/fornecedor" (fornecedor_nome
+// vazio; descrição = veículo), então o agrupamento é por TIPO, não por posto.
+type FrotaGrupo = { key: string; label: string };
+function isFrotaLanc(l: any): boolean {
+  return typeof l?.origemModulo === "string" && l.origemModulo.startsWith("frota");
+}
+function frotaGrupoOf(l: any): FrotaGrupo | null {
+  if (!isFrotaLanc(l)) return null;
+  const om = l.origemModulo as string;
+  const txt = `${l.descricao ?? ""} ${l.contaNome ?? ""} ${l.origemDescricao ?? ""}`.toLowerCase();
+  // Pedágio/Sem Parar pode chegar como origem própria (futura) ou embutido na
+  // descrição/conta de abastecimento — detecta por texto antes do combustível.
+  if (om === "frota_pedagio" || txt.includes("pedág") || txt.includes("pedag") || txt.includes("sem parar")) {
+    return { key: "pedagio", label: "Pedágio / Sem Parar" };
+  }
+  if (om === "frota_manutencao") return { key: "manutencao", label: "Manutenção de Veículos" };
+  if (om === "frota_abastecimento") return { key: "combustivel", label: "Combustível" };
+  return { key: "frota_outros", label: "Frota (outros)" };
+}
+const FROTA_GRUPO_ICONS: Record<string, any> = {
+  combustivel: Fuel,
+  manutencao: Wrench,
+  pedagio: CreditCard,
+  frota_outros: Truck,
 };
 
 // Rev. 3153 — iPad/iOS Safari derruba a request de mutations em lote (45+ ids) e a
@@ -154,6 +184,10 @@ export default function FinanceiroLancamentos() {
   // Rev. 2656 — Visualizar (detalhe read-only).
   const [viewId, setViewId] = useState<number | null>(null);
   const [showObs, setShowObs] = useState(false);
+  // Rev. 3154 — Agrupar lançamentos de Frota por tipo (combustível/manutenção/
+  // pedágio) numa linha só; clicar abre o diálogo com todos do grupo.
+  const [agruparFrota, setAgruparFrota] = useState(true);
+  const [frotaGrupoKey, setFrotaGrupoKey] = useState<string | null>(null);
   // Rev. 3139 — Seleção múltipla p/ baixa/estorno em lote (conciliação bancária).
   // Rev. 3141 — seleção SEMPRE ativa (sem botão de alternância); checkbox por linha sempre visível.
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -724,6 +758,34 @@ export default function FinanceiroLancamentos() {
   // Rev. 3143 — excluíveis = selecionados NÃO efetivados (espelha o filtro do backend bulkDelete).
   const selExcluiveis = selectableLancs.filter((l: any) => selectedIds.has(l.id) && !["pago", "recebido"].includes(l.status)).length;
 
+  // Rev. 3154 — Linhas de exibição: agrupa lançamentos de Frota por tipo numa
+  // única linha (combustível/manutenção/pedágio); o resto renderiza normal. Um
+  // grupo com 1 item só vira linha normal (não vale esconder atrás de clique).
+  const temFrota = lancamentos.some((l: any) => isFrotaLanc(l));
+  type DisplayRow =
+    | { kind: "entry"; l: any }
+    | { kind: "group"; key: string; label: string; members: any[] };
+  const displayRows: DisplayRow[] = (() => {
+    if (!agruparFrota) return lancamentos.map((l: any) => ({ kind: "entry", l } as DisplayRow));
+    const rows: DisplayRow[] = [];
+    const byKey = new Map<string, Extract<DisplayRow, { kind: "group" }>>();
+    for (const l of lancamentos) {
+      const g = frotaGrupoOf(l);
+      if (!g) { rows.push({ kind: "entry", l }); continue; }
+      let grp = byKey.get(g.key);
+      if (!grp) { grp = { kind: "group", key: g.key, label: g.label, members: [] }; byKey.set(g.key, grp); rows.push(grp); }
+      grp.members.push(l);
+    }
+    // Grupos com 1 item só voltam a ser linha normal.
+    return rows.map((r) => (r.kind === "group" && r.members.length === 1 ? { kind: "entry", l: r.members[0] } : r));
+  })();
+  // Membros do grupo aberto no diálogo de detalhe (recalculado da lista atual).
+  const frotaGrupoMembros = frotaGrupoKey
+    ? lancamentos.filter((l: any) => frotaGrupoOf(l)?.key === frotaGrupoKey)
+    : [];
+  const frotaGrupoLabel = frotaGrupoMembros.length ? (frotaGrupoOf(frotaGrupoMembros[0])?.label ?? "Frota") : "Frota";
+  const frotaGrupoTotal = frotaGrupoMembros.reduce((s: number, l: any) => s + Number(l.valorPrevisto ?? 0), 0);
+
   const recEntries = recItems ?? [];
   const recAtivos = recEntries.filter((e: any) => e.ativo === 1);
   const recInativos = recEntries.filter((e: any) => e.ativo !== 1);
@@ -907,16 +969,28 @@ export default function FinanceiroLancamentos() {
                 <CardTitle className="text-base flex items-center gap-2">
                   <Filter className="w-4 h-4" />
                   {lancamentos.length} lançamento(s)
-                  {/* Rev. 3152 — revelar/ocultar cancelados (rastro preservado). */}
-                  {canceladosCount > 0 && statusFilter !== "cancelado" && (
-                    <Button variant="ghost" size="sm"
-                      className="ml-auto h-7 px-2 text-xs font-normal text-gray-500 hover:text-gray-800"
-                      onClick={() => setShowCancelados((v) => !v)}>
-                      {showCancelados
-                        ? `Ocultar cancelados (${canceladosCount})`
-                        : `Mostrar cancelados (${canceladosCount})`}
-                    </Button>
-                  )}
+                  <div className="ml-auto flex items-center gap-1">
+                    {/* Rev. 3154 — alternar agrupamento dos lançamentos de Frota. */}
+                    {temFrota && (
+                      <Button variant="ghost" size="sm"
+                        className={`h-7 px-2 text-xs font-normal ${agruparFrota ? "text-blue-700 hover:text-blue-800" : "text-gray-500 hover:text-gray-800"}`}
+                        title={agruparFrota ? "Mostrar os lançamentos de frota separados" : "Agrupar lançamentos de frota por tipo"}
+                        onClick={() => setAgruparFrota((v) => !v)}>
+                        <Layers className="w-3.5 h-3.5 mr-1" />
+                        {agruparFrota ? "Frota agrupada" : "Frota expandida"}
+                      </Button>
+                    )}
+                    {/* Rev. 3152 — revelar/ocultar cancelados (rastro preservado). */}
+                    {canceladosCount > 0 && statusFilter !== "cancelado" && (
+                      <Button variant="ghost" size="sm"
+                        className="h-7 px-2 text-xs font-normal text-gray-500 hover:text-gray-800"
+                        onClick={() => setShowCancelados((v) => !v)}>
+                        {showCancelados
+                          ? `Ocultar cancelados (${canceladosCount})`
+                          : `Mostrar cancelados (${canceladosCount})`}
+                      </Button>
+                    )}
+                  </div>
                 </CardTitle>
                 <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
                   <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer select-none">
@@ -961,8 +1035,59 @@ export default function FinanceiroLancamentos() {
                   <div className="p-8 text-center text-gray-400">Nenhum lançamento encontrado.</div>
                 ) : (
                   <div className="divide-y divide-gray-100">
-                    {lancamentos.map((l: any) => (
-                      <div key={l.id} className={`px-5 py-3 flex items-center justify-between hover:bg-gray-50 ${selectedIds.has(l.id) ? "bg-blue-50" : ""}`}>
+                    {displayRows.map((row) => {
+                      if (row.kind === "group") {
+                        const Icon = FROTA_GRUPO_ICONS[row.key] ?? Truck;
+                        const grpSelIds: number[] = row.members.filter((m: any) => m.status !== "cancelado").map((m: any) => m.id);
+                        const grpAllSel = grpSelIds.length > 0 && grpSelIds.every((id: number) => selectedIds.has(id));
+                        const grpSelCount = grpSelIds.filter((id: number) => selectedIds.has(id)).length;
+                        const grpSomeSel = grpSelCount > 0;
+                        const grpPartial = grpSomeSel && !grpAllSel;
+                        const grpTotal = row.members.reduce((s: number, m: any) => s + Number(m.valorPrevisto ?? 0), 0);
+                        const toggleGrp = () => setSelectedIds((prev) => {
+                          const next = new Set(prev);
+                          if (grpAllSel) grpSelIds.forEach((id: number) => next.delete(id));
+                          else grpSelIds.forEach((id: number) => next.add(id));
+                          return next;
+                        });
+                        return (
+                          <div key={`grp-${row.key}`} className={`px-5 py-3 flex items-center justify-between transition-colors ${grpSomeSel ? "bg-blue-50" : "bg-slate-50/60 hover:bg-slate-100"}`}>
+                            <div className="mr-3 flex-shrink-0">
+                              <Checkbox
+                                checked={grpAllSel ? true : grpPartial ? "indeterminate" : false}
+                                disabled={grpSelIds.length === 0}
+                                onCheckedChange={toggleGrp}
+                                title="Selecionar todos do grupo"
+                              />
+                            </div>
+                            <button type="button" onClick={() => setFrotaGrupoKey(row.key)} className="flex-1 min-w-0 text-left">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-slate-600">
+                                  <Icon className="w-4 h-4" />
+                                </span>
+                                <span className="text-sm font-semibold text-gray-800">{row.label}</span>
+                                <Badge className="text-xs bg-slate-200 text-slate-700">{row.members.length} lançamentos</Badge>
+                                <Badge className="text-xs bg-blue-100 text-blue-700"><Layers className="w-2.5 h-2.5 mr-1" />Frota agrupada</Badge>
+                                {grpPartial && (
+                                  <span className="text-[11px] text-blue-600">{grpSelCount} selecionado(s)</span>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-400 mt-0.5">Toque para ver os {row.members.length} lançamentos do grupo</p>
+                            </button>
+                            <div className="flex items-center gap-3 ml-3">
+                              <p className="text-sm font-bold text-red-500">-{formatBRL(grpTotal)}</p>
+                              <Button size="sm" variant="ghost" className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 h-7 px-2 text-xs"
+                                title="Ver lançamentos do grupo"
+                                onClick={() => setFrotaGrupoKey(row.key)}>
+                                Ver <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      }
+                      const l = row.l;
+                      return (
+                      <div key={`entry-${l.id}`} className={`px-5 py-3 flex items-center justify-between hover:bg-gray-50 ${selectedIds.has(l.id) ? "bg-blue-50" : ""}`}>
                         <div className="mr-3 flex-shrink-0">
                           <Checkbox
                             checked={selectedIds.has(l.id)}
@@ -1053,7 +1178,8 @@ export default function FinanceiroLancamentos() {
                           )}
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
@@ -1661,6 +1787,67 @@ export default function FinanceiroLancamentos() {
               >
                 {createAccountMut.isPending ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Salvando...</> : <><PlusCircle className="w-3.5 h-3.5 mr-1.5" />Cadastrar</>}
               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 3154 — Detalhe do GRUPO de Frota: lista todos os lançamentos do tipo. */}
+        <Dialog open={!!frotaGrupoKey} onOpenChange={(v) => { if (!v) setFrotaGrupoKey(null); }}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                {(() => { const I = FROTA_GRUPO_ICONS[frotaGrupoKey ?? ""] ?? Truck; return <I className="w-4 h-4 text-slate-600" />; })()}
+                {frotaGrupoLabel}
+                <Badge className="text-xs bg-slate-200 text-slate-700">{frotaGrupoMembros.length} lançamentos</Badge>
+                <span className="ml-auto text-sm font-bold text-red-600">-{formatBRL(frotaGrupoTotal)}</span>
+              </DialogTitle>
+            </DialogHeader>
+            {frotaGrupoMembros.length === 0 ? (
+              <div className="py-10 text-center text-gray-400 text-sm">Nenhum lançamento neste grupo.</div>
+            ) : (
+              <div className="max-h-[60vh] overflow-y-auto divide-y divide-gray-100">
+                {frotaGrupoMembros.map((m: any) => (
+                  <div key={m.id} className={`px-1 py-2.5 flex items-center justify-between gap-3 ${selectedIds.has(m.id) ? "bg-blue-50" : ""}`}>
+                    <div className="flex-shrink-0">
+                      <Checkbox
+                        checked={selectedIds.has(m.id)}
+                        disabled={m.status === "cancelado"}
+                        onCheckedChange={() => toggleSelect(m.id)}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-gray-800 truncate">{m.descricao ?? m.contaNome ?? "—"}</span>
+                        <Badge className={`text-xs ${STATUS_COLORS[m.status] ?? "bg-gray-100 text-gray-700"}`}>{STATUS_LABELS[m.status] ?? m.status}</Badge>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Comp.: {fmtDateBR(m.dataCompetencia)}
+                        {m.dataVencimento && ` • Venc.: ${fmtDateBR(m.dataVencimento)}`}
+                        {m.obraNome && ` • ${m.obraNome}`}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <p className={`text-sm font-bold ${m.tipo === "receita" ? "text-green-600" : "text-red-500"}`}>
+                        {m.tipo === "receita" ? "+" : "-"}{formatBRL(Number(m.valorPrevisto))}
+                      </p>
+                      {m.status === "a_pagar" && (
+                        <Button size="sm" variant="outline" className="text-green-600 border-green-300 h-7 px-2 text-xs"
+                          onClick={() => paidMut.mutate({ id: m.id, companyId, status: "pago", dataPagamento: new Date().toISOString().split("T")[0] })}>
+                          <CheckCircle className="w-3 h-3 mr-1" />Pagar
+                        </Button>
+                      )}
+                      <Button size="sm" variant="ghost" className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 h-7 w-7 p-0"
+                        title="Visualizar lançamento" onClick={() => setViewId(m.id)}>
+                        <Eye className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <DialogFooter>
+              <span className="mr-auto self-center text-xs text-gray-400">Selecione itens e use as ações em lote na lista (Dar baixa / Cancelar baixa / Excluir).</span>
+              <Button onClick={() => setFrotaGrupoKey(null)}>Fechar</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
