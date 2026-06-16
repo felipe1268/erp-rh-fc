@@ -2539,6 +2539,11 @@ export const appRouter = router({
       if (candidatos.length > 1) {
         console.warn(`[Login] Colisão de identificador normalizado: '${loginInput}' bateu em ${candidatos.length} contas — autenticado userId=${user.id} via senha exata`);
       }
+      // Rev. 3159 — usuário DESLIGADO não acessa o sistema (senha correta, mas acesso revogado).
+      if ((user as any).status === 'desligado') {
+        console.warn(`[Login] Acesso bloqueado (status=desligado): userId=${user.id} '${loginInput}'`);
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Acesso desativado. Procure o administrador do sistema." });
+      }
       // Usar o SDK para gerar o token no formato correto (openId, appId, name)
       const { sdk } = await import("./_core/sdk");
       const token = await sdk.createSessionToken(user.openId, { expiresInMs: 7 * 24 * 60 * 60 * 1000, name: user.name || user.username || user.openId });
@@ -2634,6 +2639,26 @@ export const appRouter = router({
       const logDetails = { ...updateData };
       if (logDetails.password) logDetails.password = "[REDACTED]";
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "usuarios", entityType: "user", entityId: input.userId, details: `Usuário editado: ${JSON.stringify(logDetails)}` });
+      return { success: true };
+    }),
+    // Rev. 3159 — liga/desliga o ACESSO de um usuário ao sistema (não exclui — para isso há deleteUser/lixeira).
+    setUserStatus: protectedProcedure.input(z.object({
+      userId: z.number(),
+      status: z.enum(["ativo", "desligado"]),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode alterar o acesso de usuários" });
+      if (input.userId === ctx.user.id) throw new TRPCError({ code: "BAD_REQUEST", message: "Você não pode desativar o próprio acesso" });
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { users } = await import("../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      const [alvo] = await db.select().from(users).where(eq(users.id, input.userId));
+      if (!alvo) throw new TRPCError({ code: "NOT_FOUND", message: "Usuário não encontrado" });
+      // Admin (não-master) não pode desativar um Admin Master.
+      if (ctx.user.role === "admin" && alvo.role === "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode alterar o acesso de outro Admin Master" });
+      await db.update(users).set({ status: input.status } as any).where(eq(users.id, input.userId));
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "usuarios", entityType: "user", entityId: input.userId, details: `Acesso do usuário ${alvo.name || alvo.username || input.userId} alterado para: ${input.status}` });
       return { success: true };
     }),
     deleteUser: protectedProcedure.input(z.object({

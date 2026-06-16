@@ -775,6 +775,14 @@ Regras:
         await db.execute(sql`ALTER TABLE curriculos ADD COLUMN IF NOT EXISTS historico_status_json TEXT`);
         console.log(`[SyncSchema+] Coluna historico_status_json garantida na tabela curriculos.`);
 
+        // Rev. 3159 — status de ACESSO do usuário ('ativo' | 'desligado'). Desligado bloqueia
+        // login E derruba sessões abertas SEM excluir o usuário (lixeira = deletedAt, distinto).
+        // ADD COLUMN IF NOT EXISTS com DEFAULT 'ativo' → ninguém é trancado fora (R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS status varchar(20) DEFAULT 'ativo'`);
+          console.log(`[SyncSchema+] Rev. 3159: coluna status garantida em users (controle de acesso ativo/desligado).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA users.status:`, e?.message || e); }
+
         // Rev. 2898 — soft-delete de envelopes IntegraSign ("excluir" sem destruir registro
         // legal/assinaturas; substitui o hard DELETE). ADD COLUMN IF NOT EXISTS (R-001/R-007/R-010 OK).
         try {

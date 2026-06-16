@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3159 — **USUÁRIOS E PERMISSÕES · NOVO CONTROLE DE ACESSO "ATIVO / DESLIGADO"
+ * POR USUÁRIO — DESLIGAR BLOQUEIA O LOGIN E DERRUBA A SESSÃO ABERTA NA HORA, SEM
+ * EXCLUIR O CADASTRO (DIFERENTE DA LIXEIRA/EXCLUIR).**
+ *
+ * PEDIDO (screenshot IMG_2099, iPad): "Coloca um campo de status, ativo/desligado
+ * para não ter acesso ao sistema, pensa em algo, para controle". O ERP já tinha a
+ * EXCLUSÃO (lixeira via `users.deletedAt`), mas não havia como REVOGAR o acesso
+ * temporariamente mantendo o usuário, suas permissões, vínculos de empresa/obra e
+ * histórico intactos para reativar depois.
+ *
+ * MUDANÇA:
+ * (1) SCHEMA `drizzle/schema.ts`: nova coluna `users.status varchar(20) DEFAULT
+ *     'ativo'`. Self-heal em `server/_core/index.ts` `[SyncSchema+]` via `ALTER TABLE
+ *     users ADD COLUMN IF NOT EXISTS status ... DEFAULT 'ativo'` — aditivo, todos os
+ *     usuários existentes nascem 'ativo' (ninguém é trancado fora). R-001/R-007/R-010 OK.
+ * (2) LOGIN `server/routers.ts` (`loginLocal`): após validar a senha, se
+ *     `status === 'desligado'` lança UNAUTHORIZED com mensagem clara ("Acesso
+ *     desativado. Procure o administrador do sistema.").
+ * (3) SESSÃO `server/_core/context.ts`: usuário com sessão JÁ aberta e
+ *     `status === 'desligado'` é tratado como NÃO autenticado (`user = null`), então
+ *     TODA `protectedProcedure` rejeita e o front devolve pro /login — o desligamento
+ *     vale na hora, não só no próximo login.
+ * (4) BACKEND `server/routers.ts`: nova mutation `userManagement.setUserStatus`
+ *     ({userId, status}) — admin/admin_master only, proíbe desativar a si mesmo,
+ *     admin (não-master) não mexe em admin_master, com auditoria (`createAuditLog`).
+ * (5) FRONTEND `client/src/pages/Usuarios.tsx`: badge "Desligado" (vermelho, nome
+ *     riscado) na lista + toggle "Acesso ativo / desligado" (`Switch`) no cabeçalho do
+ *     painel de detalhe, com confirmação ao desligar. `listUsers` já devolvia `...u`,
+ *     então o campo flui sem nova query.
+ *
  * Rev. 3158 — **RH / COLABORADORES · OS CARDS DE RESUMO AGORA TÊM UM CARD "Sócio" —
  * ANTES O TOTAL DE "Ativos" NÃO FECHAVA COM A SOMA DE "CLT" + "PJ" PORQUE OS SÓCIOS
  * (tipoContrato='Socio') FICAVAM INVISÍVEIS ENTRE OS CARDS.**

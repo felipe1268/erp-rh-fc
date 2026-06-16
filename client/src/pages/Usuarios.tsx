@@ -327,6 +327,10 @@ export default function Usuarios() {
     onSuccess: () => { toast.success("Usuário atualizado"); utils.userManagement.listUsers.invalidate(); },
     onError:   e => toast.error(e.message),
   });
+  const setStatusMut = trpc.userManagement.setUserStatus.useMutation({
+    onSuccess: (_d, vars) => { usersQuery.refetch(); setSelectedUser((p:any)=> p && p.id===vars.userId ? {...p, status: vars.status} : p); toast.success(vars.status==="desligado" ? "Acesso desativado" : "Acesso reativado"); },
+    onError: (e:any) => toast.error(e?.message || "Não foi possível alterar o acesso"),
+  });
   const deleteUserMut = trpc.userManagement.deleteUser.useMutation({
     onSuccess: () => { toast.success("Usuário excluído"); setSelectedUser(null); setUPanel("list"); utils.userManagement.listUsers.invalidate(); },
     onError:   e => toast.error(e.message),
@@ -624,8 +628,9 @@ export default function Usuarios() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-sm font-medium truncate">{u.name||u.username}</span>
+                            <span className={`text-sm font-medium truncate ${u.status==="desligado" ? "text-muted-foreground line-through" : ""}`}>{u.name||u.username}</span>
                             <span className={`text-[9px] px-1.5 py-0.5 rounded border font-medium shrink-0 ${ROLE_BADGE[u.role]}`}>{ROLE_LABELS[u.role]||u.role}</span>
+                            {u.status==="desligado" && <span className="text-[9px] px-1.5 py-0.5 rounded border font-medium shrink-0 bg-red-50 text-red-600 border-red-200">Desligado</span>}
                           </div>
                           <div className="text-xs text-muted-foreground truncate">
                             {grpLabel
@@ -750,7 +755,21 @@ export default function Usuarios() {
                             </div>
                           </div>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex items-center gap-2">
+                          {isAdmin && selectedUser.id !== user?.id && (
+                            <div className={`flex items-center gap-2 h-8 px-2.5 rounded-md border ${selectedUser.status==="desligado" ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200"}`}>
+                              <Lock className={`h-3 w-3 ${selectedUser.status==="desligado" ? "text-red-600" : "text-green-600"}`} />
+                              <span className={`text-xs font-medium ${selectedUser.status==="desligado" ? "text-red-600" : "text-green-700"}`}>{selectedUser.status==="desligado" ? "Acesso desligado" : "Acesso ativo"}</span>
+                              <Switch
+                                checked={selectedUser.status!=="desligado"}
+                                disabled={setStatusMut.isPending}
+                                onCheckedChange={(v)=>{
+                                  const novo = v ? "ativo" : "desligado";
+                                  if (novo==="desligado" && !confirm(`Desligar o acesso de ${selectedUser.name||selectedUser.username}? A pessoa não conseguirá mais entrar no sistema (o cadastro é mantido).`)) return;
+                                  setStatusMut.mutate({ userId: selectedUser.id, status: novo });
+                                }} />
+                            </div>
+                          )}
                           {isAdmin && selectedUser.id !== user?.id && (
                             <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs"
                               onClick={()=>{ if(confirm(`Resetar senha de ${selectedUser.name}?`)) resetPwdMut.mutate({userId:selectedUser.id}); }}>

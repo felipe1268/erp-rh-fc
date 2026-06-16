@@ -17,6 +17,11 @@ export async function createContext(
 
   try {
     user = await sdk.authenticateRequest(opts.req);
+    // Rev. 3159 — sessão de usuário DESLIGADO é derrubada na hora: trata como não autenticado,
+    // então TODA protectedProcedure rejeita e o front joga de volta pro /login (sem excluir o usuário).
+    if (user && (user as any).status === 'desligado') {
+      user = null;
+    }
   } catch (error) {
     // Authentication is optional for public procedures.
     user = null;
