@@ -92,6 +92,19 @@ export default function FinanceiroConciliacao() {
     { companyId, contaBancariaId: parseInt(contaBancariaId) || 0, dataInicio: `${ano}-01-01`, dataFim: `${ano}-12-31` },
     { enabled: !!companyId && !!contaBancariaId }
   );
+  // Rev. 3170 — Status de conciliação POR CONTA no período selecionado, p/ pintar cada
+  // card de conta (verde = extrato subido e 100% conciliado; azul = tem pendência;
+  // cinza = sem extrato no período). Independe da conta selecionada.
+  const { data: accStatus, refetch: refetchAccStatus } = (trpc as any).financial.getBankAccountsConciliacaoStatus.useQuery(
+    { companyId, dataInicio, dataFim },
+    { enabled: !!companyId }
+  );
+  const accStatusMap: Record<number, "consolidado" | "lancamento" | "vazio"> = useMemo(() => {
+    const map: Record<number, "consolidado" | "lancamento" | "vazio"> = {};
+    for (const a of (accStatus ?? [])) map[Number(a.contaBancariaId)] = a.status;
+    return map;
+  }, [accStatus]);
+
   const mesesStatus: Record<number, "consolidado" | "lancamento" | "vazio"> = useMemo(() => {
     const map: Record<number, "consolidado" | "lancamento" | "vazio"> = {};
     for (let m = 1; m <= 12; m++) map[m] = "vazio";
@@ -115,7 +128,7 @@ export default function FinanceiroConciliacao() {
   }, [statementsAno]);
 
   const conciliarMut = (trpc as any).financial.conciliarLancamento.useMutation({
-    onSuccess: () => { toast({ title: "Conciliação registrada!" }); refetchSt(); setSelectedStatement(null); setSelectedEntry(null); },
+    onSuccess: () => { toast({ title: "Conciliação registrada!" }); refetchSt(); refetchStAno(); refetchAccStatus(); setSelectedStatement(null); setSelectedEntry(null); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
 
@@ -126,6 +139,8 @@ export default function FinanceiroConciliacao() {
       setImportContent("");
       setImportFileName("");
       refetchSt();
+      refetchStAno();
+      refetchAccStatus();
     },
     onError: (e: any) => toast({ title: "Erro na importação", description: e.message, variant: "destructive" }),
   });
@@ -133,11 +148,11 @@ export default function FinanceiroConciliacao() {
   // Rev. 3169 — Consolidar / desconsolidar o mês de uma vez (fecha/reabre todas as
   // linhas do extrato da conta+período). Repinta o extrato do mês e as bolinhas do ano.
   const consolidarMut = (trpc as any).financial.consolidarMes.useMutation({
-    onSuccess: (res: any) => { toast({ title: `Mês consolidado! ${res.afetados} lançamento(s) marcado(s).` }); refetchSt(); refetchStAno(); },
+    onSuccess: (res: any) => { toast({ title: `Mês consolidado! ${res.afetados} lançamento(s) marcado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); },
     onError: (e: any) => toast({ title: "Erro ao consolidar", description: e.message, variant: "destructive" }),
   });
   const desconsolidarMut = (trpc as any).financial.desconsolidarMes.useMutation({
-    onSuccess: (res: any) => { toast({ title: `Mês reaberto! ${res.afetados} lançamento(s) desmarcado(s).` }); refetchSt(); refetchStAno(); },
+    onSuccess: (res: any) => { toast({ title: `Mês reaberto! ${res.afetados} lançamento(s) desmarcado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); },
     onError: (e: any) => toast({ title: "Erro ao desconsolidar", description: e.message, variant: "destructive" }),
   });
 
@@ -153,6 +168,8 @@ export default function FinanceiroConciliacao() {
       toast({ title: `${res.conciliados} de ${res.total} conciliados e baixados!` });
       setSelSug(new Set());
       refetchSt();
+      refetchStAno();
+      refetchAccStatus();
       refetchSug();
     },
     onError: (e: any) => toast({ title: "Erro ao conciliar", description: e.message, variant: "destructive" }),
@@ -311,21 +328,37 @@ export default function FinanceiroConciliacao() {
                       const isSel = contaBancariaId === String(b.id);
                       const cor = bancoCor(b.banco);
                       const desc = b.descricao ?? b.tipo ?? "";
+                      // Rev. 3170 — status de conciliação da conta no período: verde =
+                      // extrato subido e 100% conciliado; azul = tem extrato com pendência;
+                      // cinza = sem extrato. A cor do card segue esse status.
+                      const accSt = accStatusMap[Number(b.id)] ?? "vazio";
+                      const isConsol = accSt === "consolidado";
+                      const isLanc = accSt === "lancamento";
+                      const cardCls = isSel
+                        ? (isConsol
+                            ? "border-green-500 bg-green-50 ring-1 ring-green-200 shadow-sm"
+                            : "border-blue-500 bg-blue-50 ring-1 ring-blue-200 shadow-sm")
+                        : (isConsol
+                            ? "border-green-300 bg-green-50/60 hover:border-green-400"
+                            : isLanc
+                              ? "border-blue-200 bg-white hover:border-blue-300 hover:bg-blue-50/40"
+                              : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50");
                       return (
                         <button
                           key={b.id}
                           type="button"
                           aria-pressed={isSel}
-                          aria-label={`Conta ${b.banco} agência ${b.agencia} conta ${b.conta}${isSel ? " (selecionada — clique para desmarcar)" : ""}`}
+                          aria-label={`Conta ${b.banco} agência ${b.agencia} conta ${b.conta} — ${isConsol ? "conciliada" : isLanc ? "com pendências" : "sem extrato"}${isSel ? " (selecionada — clique para desmarcar)" : ""}`}
                           onClick={() => setContaBancariaId(isSel ? "" : String(b.id))}
-                          className={`relative flex items-center gap-3 p-3 rounded-xl border text-left transition-all
-                            ${isSel
-                              ? "border-blue-500 bg-blue-50 ring-1 ring-blue-200 shadow-sm"
-                              : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
-                            }`}
+                          className={`relative flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${cardCls}`}
                         >
-                          <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${cor.bg}`}>
+                          <div className={`relative h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${cor.bg}`}>
                             <Landmark className={`h-[18px] w-[18px] ${cor.text}`} />
+                            {isSel && (
+                              <span className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full flex items-center justify-center ring-2 ring-white ${isConsol ? "bg-green-500" : "bg-blue-500"}`}>
+                                <Check className="h-2.5 w-2.5 text-white" />
+                              </span>
+                            )}
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-semibold text-gray-800 truncate">
@@ -334,12 +367,16 @@ export default function FinanceiroConciliacao() {
                             <p className="text-xs text-gray-500 font-mono truncate">
                               Ag. {b.agencia} / {b.conta}
                             </p>
-                          </div>
-                          {isSel && (
-                            <span className="h-5 w-5 rounded-full bg-blue-500 flex items-center justify-center shrink-0">
-                              <Check className="h-3 w-3 text-white" />
+                            <span className={`mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                              isConsol ? "bg-green-100 text-green-700"
+                              : isLanc ? "bg-blue-100 text-blue-700"
+                              : "bg-gray-100 text-gray-500"
+                            }`}>
+                              {isConsol ? <><CheckCircle className="h-2.5 w-2.5" />Conciliado</>
+                                : isLanc ? <><AlertCircle className="h-2.5 w-2.5" />A conciliar</>
+                                : "Sem extrato"}
                             </span>
-                          )}
+                          </div>
                         </button>
                       );
                     })}

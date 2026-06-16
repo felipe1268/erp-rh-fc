@@ -3503,6 +3503,37 @@ export const financialRouter = router({
     return rows(res);
   }),
 
+  // Rev. 3170 — Status de conciliação POR CONTA no período, p/ pintar cada card de conta
+  // na tela de Conciliação: "consolidado" (tem extrato e 100% conciliado), "lancamento"
+  // (tem extrato com pendências) ou "vazio" (sem linhas no período). READ-ONLY.
+  getBankAccountsConciliacaoStatus: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    dataInicio: z.string(),
+    dataFim: z.string(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const res = await dbExecute(db,
+      `SELECT conta_bancaria_id AS "contaBancariaId",
+              COUNT(*)::int AS total,
+              SUM(CASE WHEN COALESCE(conciliado,0)=1 THEN 1 ELSE 0 END)::int AS conciliadas
+         FROM bank_statement_lines
+        WHERE company_id=$1 AND data>=$2 AND data<=$3
+        GROUP BY conta_bancaria_id`,
+      [input.companyId, input.dataInicio, input.dataFim]);
+    return rows(res).map((r: any) => {
+      const total = Number(r.total) || 0;
+      const conciliadas = Number(r.conciliadas) || 0;
+      return {
+        contaBancariaId: Number(r.contaBancariaId),
+        total,
+        conciliadas,
+        status: total === 0 ? "vazio" : conciliadas >= total ? "consolidado" : "lancamento",
+      };
+    });
+  }),
+
   conciliarLancamento: protectedProcedure.input(z.object({
     statementLineId: z.number(),
     entryId: z.number(),

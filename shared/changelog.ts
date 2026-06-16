@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3170 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CADA CARD DE CONTA AGORA MOSTRA O
+ * STATUS DE CONCILIAÇÃO DO PERÍODO — VERDE "CONCILIADO" QUANDO O EXTRATO JÁ FOI SUBIDO E
+ * ESTÁ 100% CONCILIADO, AZUL "A CONCILIAR" QUANDO TEM EXTRATO COM PENDÊNCIA, CINZA "SEM
+ * EXTRATO" QUANDO NÃO HÁ LINHAS NO PERÍODO.**
+ *
+ * PEDIDO: "as contas que já tiverem o extrato upado no sistema e 100% conciliado deveria
+ * aparecer um card verde... ou algo que mostre que já foi feito." Antes os cards de conta
+ * (Rev. 3168) eram todos iguais — não dava p/ saber, batendo o olho na grade, quais contas
+ * já estavam fechadas no mês.
+ *
+ * MUDANÇA — BACKEND (`server/routers/financial.ts`, 1 query nova READ-ONLY, tenant-safe via
+ * `_assertFinanceiroCompanyAccess`): `getBankAccountsConciliacaoStatus({companyId, dataInicio,
+ * dataFim})` agrega `bank_statement_lines` POR `conta_bancaria_id` no período
+ * (`COUNT(*)` total + `SUM(conciliado=1)`) e devolve, por conta, `{contaBancariaId, total,
+ * conciliadas, status}` onde status = "consolidado" (total>0 e conciliadas>=total),
+ * "lancamento" (tem linhas com pendência) ou "vazio" (sem linhas). MESMA semântica das
+ * bolinhas de mês (`mesesStatus`), mas por CONTA e independente da conta selecionada.
+ *
+ * MUDANÇA — FRONTEND (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): nova query
+ * `getBankAccountsConciliacaoStatus` (habilitada só com companyId) → `accStatusMap`. Cada
+ * card da grade de contas pinta conforme o status: consolidado = borda/fundo verde +
+ * pill verde "Conciliado" (`CheckCircle`); com pendência = realce azul + pill azul
+ * "A conciliar" (`AlertCircle`); sem extrato = neutro + pill cinza "Sem extrato". A seleção
+ * (clique) continua: card selecionado ganha ring (verde se consolidado, senão azul) e o
+ * check migrou p/ um badge sobreposto ao ícone do banco. As mutations/queries que mudam o
+ * estado (import, conciliar linha, conciliar sugestões, consolidar/desconsolidar mês) agora
+ * chamam `refetchAccStatus()` (e `refetchStAno()` onde faltava) p/ os cards repintarem na
+ * hora. ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3169 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NOVO BOTÃO "CONSOLIDAR {MÊS}" /
  * "DESCONSOLIDAR {MÊS}" QUE FECHA OU REABRE O MÊS INTEIRO DE UMA VEZ — MARCANDO/DESMARCANDO
  * TODAS AS LINHAS DO EXTRATO DA CONTA+PERÍODO COMO CONCILIADAS (A BOLINHA DO MÊS VIRA
