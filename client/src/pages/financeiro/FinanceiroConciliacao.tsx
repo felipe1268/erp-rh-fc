@@ -1,8 +1,7 @@
-import { useState, useRef } from "react";
+import { useMemo, useState, useRef } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -11,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight } from "lucide-react";
+import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -25,22 +24,22 @@ function fmtData(v: any) {
   } catch { return "—"; }
 }
 
-function getDefaultDates() {
-  const d = new Date();
-  const inicio = new Date(d.getFullYear(), d.getMonth(), 1);
-  const fim = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-  return {
-    inicio: inicio.toISOString().split("T")[0],
-    fim: fim.toISOString().split("T")[0],
-  };
-}
+const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
 export default function FinanceiroConciliacao() {
   const { companyId } = useCompany();
   const { toast } = useToast();
-  const defaults = getDefaultDates();
-  const [dataInicio, setDataInicio] = useState(defaults.inicio);
-  const [dataFim, setDataFim] = useState(defaults.fim);
+  // Rev. 3165 — Período pelo MESMO PADRÃO das demais telas do Financeiro: navegação por
+  // ANO + meses (Jan–Dez). `mesSel=null` = "Ano todo". dataInicio/dataFim derivam daí.
+  const _now = new Date();
+  const [ano, setAno] = useState(_now.getFullYear());
+  const [mesSel, setMesSel] = useState<number | null>(_now.getMonth() + 1);
+  const { dataInicio, dataFim } = useMemo(() => {
+    if (mesSel == null) return { dataInicio: `${ano}-01-01`, dataFim: `${ano}-12-31` };
+    const mm = String(mesSel).padStart(2, "0");
+    const ultimoDia = new Date(ano, mesSel, 0).getDate();
+    return { dataInicio: `${ano}-${mm}-01`, dataFim: `${ano}-${mm}-${String(ultimoDia).padStart(2, "0")}` };
+  }, [ano, mesSel]);
   const [contaBancariaId, setContaBancariaId] = useState<string>("");
   const [conciliadoFilter, setConciliadoFilter] = useState("all");
   const [selectedStatement, setSelectedStatement] = useState<number | null>(null);
@@ -76,6 +75,34 @@ export default function FinanceiroConciliacao() {
     { companyId, dataInicio, dataFim, limit: 100 },
     { enabled: !!companyId }
   );
+
+  // Rev. 3165 — Extrato do ANO inteiro (apenas p/ pintar as bolinhas de status de cada mês),
+  // independente do mês selecionado na timeline. Só busca quando há conta escolhida.
+  const { data: statementsAno } = (trpc as any).financial.getBankStatements.useQuery(
+    { companyId, contaBancariaId: parseInt(contaBancariaId) || 0, dataInicio: `${ano}-01-01`, dataFim: `${ano}-12-31` },
+    { enabled: !!companyId && !!contaBancariaId }
+  );
+  const mesesStatus: Record<number, "consolidado" | "lancamento" | "vazio"> = useMemo(() => {
+    const map: Record<number, "consolidado" | "lancamento" | "vazio"> = {};
+    for (let m = 1; m <= 12; m++) map[m] = "vazio";
+    const byMonth: Record<number, { total: number; pend: number }> = {};
+    for (const s of (statementsAno ?? [])) {
+      if (!s?.data) continue;
+      const raw = String(s.data);
+      const d = new Date(raw.length > 10 ? raw : raw + "T00:00:00");
+      if (isNaN(d.getTime())) continue;
+      const m = d.getMonth() + 1;
+      const b = byMonth[m] ?? { total: 0, pend: 0 };
+      b.total++;
+      if (!s.conciliado) b.pend++;
+      byMonth[m] = b;
+    }
+    for (let m = 1; m <= 12; m++) {
+      const b = byMonth[m];
+      map[m] = !b || b.total === 0 ? "vazio" : b.pend === 0 ? "consolidado" : "lancamento";
+    }
+    return map;
+  }, [statementsAno]);
 
   const conciliarMut = (trpc as any).financial.conciliarLancamento.useMutation({
     onSuccess: () => { toast({ title: "Conciliação registrada!" }); refetchSt(); setSelectedStatement(null); setSelectedEntry(null); },
@@ -169,38 +196,88 @@ export default function FinanceiroConciliacao() {
 
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
-            <div className="flex flex-wrap gap-3 items-end">
-              <div className="flex-1 min-w-[180px]">
-                <p className="text-xs text-gray-500 mb-1">Conta Bancária</p>
-                <Select value={contaBancariaId} onValueChange={setContaBancariaId}>
-                  <SelectTrigger><SelectValue placeholder="Selecione a conta..." /></SelectTrigger>
-                  <SelectContent>
-                    {(bankAccounts ?? []).map((b: any) => (
-                      <SelectItem key={b.id} value={String(b.id)}>
-                        {b.banco} - {b.agencia}/{b.conta} ({b.descricao ?? b.tipo ?? ""})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-3">
+              {/* Rev. 3165 — Período pelo MESMO PADRÃO do Lançamentos/Contas a Pagar:
+                  navegação por ANO + faixa de meses (Jan–Dez) com bolinhas de status.
+                  Clicar num mês filtra aquele mês; "Ano todo" abre o ano. */}
               <div>
-                <p className="text-xs text-gray-500 mb-1">Data Início</p>
-                <Input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="w-36" />
+                <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => setAno(a => a - 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <span className="text-base font-bold text-gray-800 min-w-[3.5rem] text-center">{ano}</span>
+                    <button type="button" onClick={() => setAno(a => a + 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                    <Button
+                      type="button"
+                      variant={mesSel == null ? "default" : "outline"}
+                      size="sm"
+                      className="h-8 text-xs ml-2"
+                      onClick={() => setMesSel(null)}
+                    >
+                      Ano todo
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-gray-500">
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Com lançamento</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Consolidado</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Sem dados</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+                  {MESES.map((m, i) => {
+                    const num = i + 1;
+                    const status = mesesStatus[num];
+                    const isSelected = mesSel === num;
+                    return (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setMesSel(num)}
+                        className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
+                          ${isSelected
+                            ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
+                            : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"
+                          }`}
+                      >
+                        <span>{m}</span>
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                          status === "consolidado" ? "bg-green-500" :
+                          status === "lancamento" ? "bg-blue-500" :
+                          "bg-gray-300"
+                        }`} />
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Data Fim</p>
-                <Input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="w-36" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Status</p>
-                <Select value={conciliadoFilter} onValueChange={setConciliadoFilter}>
-                  <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="pendente">Pendentes</SelectItem>
-                    <SelectItem value="conciliado">Conciliados</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="flex flex-wrap gap-3 items-end">
+                <div className="flex-1 min-w-[180px]">
+                  <p className="text-xs text-gray-500 mb-1">Conta Bancária</p>
+                  <Select value={contaBancariaId} onValueChange={setContaBancariaId}>
+                    <SelectTrigger><SelectValue placeholder="Selecione a conta..." /></SelectTrigger>
+                    <SelectContent>
+                      {(bankAccounts ?? []).map((b: any) => (
+                        <SelectItem key={b.id} value={String(b.id)}>
+                          {b.banco} - {b.agencia}/{b.conta} ({b.descricao ?? b.tipo ?? ""})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Status</p>
+                  <Select value={conciliadoFilter} onValueChange={setConciliadoFilter}>
+                    <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="pendente">Pendentes</SelectItem>
+                      <SelectItem value="conciliado">Conciliados</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
           </CardContent>

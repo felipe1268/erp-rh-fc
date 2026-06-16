@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3165 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O FILTRO DE PERÍODO DEIXOU DE SER DOIS
+ * CAMPOS DE DATA (DATA INÍCIO / DATA FIM) E PASSOU A USAR O MESMO SELETOR-PADRÃO DE MÊS/ANO
+ * DO RESTANTE DO FINANCEIRO — NAVEGAÇÃO POR ANO (‹ ›), BOTÃO "ANO TODO" E A FAIXA DE CHIPS
+ * JAN–DEZ COM AS BOLINHAS DE STATUS (COM LANÇAMENTO / CONSOLIDADO / SEM DADOS).**
+ *
+ * PEDIDO: na tela "Conciliação Bancária" o usuário tinha que digitar Data Início e Data Fim
+ * em dois date pickers soltos — diferente de todas as outras telas do Financeiro
+ * (Lançamentos, Contas a Pagar/Receber), que usam o seletor visual de mês/ano com chips
+ * Jan–Dez. Ele pediu para padronizar: "coloque o filtro por mês e ano conforme o nosso
+ * padrão".
+ *
+ * MUDANÇA (FRONTEND-ONLY, `client/src/pages/financeiro/FinanceiroConciliacao.tsx`):
+ *  1) Removidos os dois `<Input type="date">` (Data Início / Data Fim) e o helper
+ *     `getDefaultDates()`. Novo estado `ano` (default ano corrente) + `mesSel` (default mês
+ *     corrente; `null` = "Ano todo"). `dataInicio`/`dataFim` agora DERIVAM via `useMemo` de
+ *     `ano`+`mesSel` (mês → 1º..último dia; ano todo → 01-01..12-31), preservando 100% da
+ *     assinatura das queries existentes (`getBankStatements`, `getEntries`,
+ *     `sugerirConciliacao`) — nenhuma mudança de backend.
+ *  2) UI replicando o MESMO bloco do Lançamentos (Rev. 3133): cabeçalho com ‹ ano ›,
+ *     botão "Ano todo", legenda das bolinhas e grid `grid-cols-6 sm:grid-cols-12` de chips
+ *     Jan–Dez. Conta Bancária + Status continuam logo abaixo, na mesma linha.
+ *  3) Bolinhas de status por mês: nova query read-only `getBankStatements` do ANO INTEIRO
+ *     (`{ano}-01-01`..`{ano}-12-31`, só quando há conta selecionada) alimenta um `useMemo`
+ *     `mesesStatus` — por mês: sem extrato = "vazio" (cinza), com extrato e tudo conciliado
+ *     = "consolidado" (verde), com extrato e algo pendente = "lançamento" (azul).
+ *
+ * Removido o import não usado de `Input`. ZERO SCHEMA/ALTER/DROP/DELETE · ZERO BACKEND.
+ * Detalhe: `shared/changelog.ts`.
+ *
  * Rev. 3164 — **FINANCEIRO / LANÇAMENTOS · OS PAGAMENTOS DE PJ PASSARAM A SEGUIR A MESMA
  * LÓGICA DA FOLHA — EM VEZ DE VÁRIAS LINHAS SOLTAS, O MÊS MOSTRA UMA ÚNICA LINHA COM O
  * VALOR TOTAL DAS MEDIÇÕES PJ PAGAS; AO CLICAR, ABRE O DIÁLOGO COM CADA PAGAMENTO
