@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3150 — **FINANCEIRO / LANÇAMENTOS · OS LANÇAMENTOS IMPORTADOS DA PLANILHA
+ * (origem `importacao_excel`) PASSARAM A SER EDITÁVEIS PELO LÁPIS — ANTES O ERP
+ * BLOQUEAVA COM "Edição bloqueada — Lançamento vinculado a 'importacao_excel' — edite
+ * na origem."**
+ *
+ * PEDIDO (screenshot IMG_2082): o usuário tentou editar um lançamento que tinha vindo
+ * da importação da planilha-mestre (Rev. 3149) e levou o toast vermelho "edite na
+ * origem", sem conseguir corrigir nada.
+ *
+ * DIAGNÓSTICO: o bloqueio era SÓ no front (`FinanceiroLancamentos.tsx`). O backend
+ * `financial.updateEntry` JÁ permite editar qualquer origem desde a Rev. 2661 (que
+ * revogou o bloqueio "edite na origem"; só barra `pago`/`recebido`/`cancelado`). O
+ * client, porém, ainda barrava TODA origem ≠ `recorrente` em dois pontos: (1) o handler
+ * `openEditEntry` (lápis da linha e botão "Editar" do painel de visualização) e (2) o
+ * gate de exibição do botão "Editar" no rodapé do diálogo de detalhe.
+ *
+ * RACIONAL: diferente de Compras/Folha/Cronograma — que têm uma "origem viva" cuja
+ * edição precisa acontecer no módulo de origem pra não dessincronizar — a
+ * `importacao_excel` foi um CADASTRO ÚNICO (espelho de planilha, igual a um lançamento
+ * manual). Não há origem viva pra editar, então faz sentido editá-la aqui mesmo, como
+ * manuais e recorrentes.
+ *
+ * CORREÇÃO (FRONTEND-ONLY): em `client/src/pages/financeiro/FinanceiroLancamentos.tsx`
+ * os dois gates passaram a também aceitar `origemModulo === "importacao_excel"`:
+ *  - `openEditEntry`: a guarda passou de `origemModulo !== "recorrente"` para
+ *    `origemModulo !== "recorrente" && origemModulo !== "importacao_excel"`.
+ *  - botão "Editar" do painel de detalhe: condição passou a incluir
+ *    `|| origemModulo === "importacao_excel"`.
+ *
+ * PRESERVAÇÃO: o save (`updateEntryMut`) só envia tipo/natureza/valor/datas/descrição/
+ * conta(categoria)/obra/forma/fornecedor/observações. O `updateEntry` só atualiza o que
+ * vem no input — `conta_bancaria_id`, `juros`, `descontos` e o carimbo de rastreio
+ * (`origem_modulo`/`origem_descricao` = IMP_PLANILHA_v2_*) NÃO estão no input, então
+ * continuam intactos: o vínculo bancário e a rastreabilidade do lote sobrevivem à edição.
+ *
+ * ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3149 — **FINANCEIRO / LANÇAMENTOS · IMPORTADA A PLANILHA-MESTRE DE PAGAMENTOS
  * (003_DADOS_TRATADOS) PARA A FC=60002 — 8.080 LANÇAMENTOS / R$ 12.431.027,02 (AGO/2024 →
  * ABR/2026), TODOS COMO "A PAGAR", DO MESMO JEITO QUE UM HUMANO LANÇARIA À MÃO.**

@@ -458,7 +458,11 @@ export default function FinanceiroLancamentos() {
   // os dados do lançamento manual. Só pra entries SEM origem (manual) ou
   // origem='recorrente' (que ainda tem aba própria — aqui só edita a row).
   function openEditEntry(l: any) {
-    if (l.origemModulo && l.origemModulo !== "recorrente") {
+    // Rev. 3150 — lançamentos importados da planilha ('importacao_excel') são
+    // editáveis aqui (NÃO há "origem viva" pra editar — foi um cadastro único),
+    // assim como manuais e recorrentes. Demais origens (Compras/Folha/etc.)
+    // seguem bloqueadas no modal (edite na origem).
+    if (l.origemModulo && l.origemModulo !== "recorrente" && l.origemModulo !== "importacao_excel") {
       toast({
         title: "Edição bloqueada",
         description: `Lançamento vinculado a "${originLabel(l.origemModulo)}" — edite na origem.`,
@@ -1649,7 +1653,7 @@ export default function FinanceiroLancamentos() {
             )}
             <DialogFooter>
               {detailQuery.data?.entry &&
-               (!detailQuery.data.entry.origemModulo || detailQuery.data.entry.origemModulo === "recorrente") &&
+               (!detailQuery.data.entry.origemModulo || detailQuery.data.entry.origemModulo === "recorrente" || detailQuery.data.entry.origemModulo === "importacao_excel") &&
                detailQuery.data.entry.status !== "pago" && detailQuery.data.entry.status !== "recebido" &&
                detailQuery.data.entry.status !== "cancelado" && (
                 <Button variant="outline" onClick={() => { const ent = detailQuery.data.entry; setViewId(null); openEditEntry(ent); }}>
