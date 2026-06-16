@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3144 — **RH / RAIO-X · FICHA DE AVALIAÇÃO DO CLIENTE (PDF) NÃO VAZA MAIS PARA FORA DA
+ * PÁGINA — MARGENS ENXUTAS, TEXTO QUEBRA DENTRO DAS CÉLULAS E A DATA APARECE CERTA
+ * ("16/06/2026" EM VEZ DE "16 00:51:59.419066/06/2026").**
+ *
+ * PEDIDO (iPad, sobre o PDF "Ficha de Avaliação do Cliente"): "melhore a formatação... tá cortando...
+ * diminui a margem... pq hoje tá vazando para fora". CONTEXTO: o PDF gerado pelo Raio-X do
+ * funcionário (`gerarFichaAvaliacaoCliente` em `client/src/components/RaioXFuncionario.tsx`) estourava
+ * a largura útil da folha A4. DUAS causas: (1) margens largas no `@page` (15mm laterais / 20mm
+ * inferior); (2) a DATA das avaliações vinha malformada — `criadoEm` chega como timestamp em
+ * FORMATO COM ESPAÇO ("2026-06-16 00:51:59.419066", não ISO com "T"), então `String(criadoEm).split("T")[0]`
+ * devolvia a string inteira e o `formatDate` produzia o lixo "16 00:51:59.419066/06/2026" num `<td>`
+ * com `white-space:nowrap` → coluna larguíssima empurrando a tabela para fora da página.
+ *
+ * CORREÇÃO (FRONTEND-ONLY): no CSS do PDF, `@page` margin de `12mm 15mm 20mm 15mm` → `8mm 8mm 12mm 8mm`
+ * (mais área útil) e `th`/`td` ganharam `word-break:break-word; overflow-wrap:anywhere` + padding levemente
+ * menor (4px→3px) para o texto longo quebrar dentro da célula em vez de transbordar. A extração da data
+ * trocou `.split("T")[0]` por `.split(/[T ]/)[0]` (aceita ISO com "T" OU timestamp com espaço) nos 4 pontos
+ * do arquivo — 2 no PDF (tabela "Avaliações Registradas" + detalhe por avaliação) e 2 na tela do Raio-X
+ * (aba Desempenho), que sofriam do mesmo bug. ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3143 — **FINANCEIRO / LANÇAMENTOS · NOVA AÇÃO EM LOTE "EXCLUIR" NA BARRA DE SELEÇÃO —
  * AGORA DÁ PARA APAGAR TODOS OS LANÇAMENTOS SELECIONADOS DE UMA VEZ (NÃO EFETIVADOS),
  * SEM PRECISAR EXCLUIR UM POR UM PELA LIXEIRA DE CADA LINHA.**

@@ -974,7 +974,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
     const nomeEmpresa = selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || "Empresa";
     const cnpjEmpresa = selectedCompany?.cnpj || "";
     const corNota = (n: any) => n == null ? "#9ca3af" : Number(n) >= 8 ? "#166534" : Number(n) >= 6 ? "#854d0e" : "#991b1b";
-    const css = `@page{size:A4 portrait;margin:12mm 15mm 20mm 15mm}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;font-size:10px;color:#1a1a1a;line-height:1.4}.logo-bar{background:#1B2A4A;padding:14px 20px;display:flex;align-items:center;gap:16px;margin-bottom:16px;border-radius:6px}.logo-bar img{height:50px;object-fit:contain}.logo-bar .title{color:white;flex:1}.logo-bar .title h1{font-size:16px;font-weight:bold;letter-spacing:1.5px;margin-bottom:2px}.logo-bar .title p{font-size:10px;opacity:0.85}.logo-bar .info-right{color:white;text-align:right;font-size:9px;opacity:0.9}.logo-bar .info-right p{margin-bottom:2px}.emp-bar{background:#f0f4f8;border-left:4px solid #1B2A4A;padding:10px 16px;margin-bottom:14px;border-radius:0 4px 4px 0;display:flex;align-items:center;gap:12px}.emp-bar img{width:54px;height:54px;object-fit:cover;object-position:top;border-radius:50%;border:3px solid #1B2A4A}.emp-bar h2{font-size:15px;font-weight:700;color:#1B2A4A}.emp-bar .sub{font-size:10px;color:#4b5563;margin-top:2px}.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px}.card{border:1px solid #d1d9e6;border-radius:8px;padding:10px 6px;text-align:center;background:#f9fafb}.card .v{font-size:18px;font-weight:700}.card .l{font-size:9px;color:#6b7280;font-weight:600;margin-top:2px}.section-title{font-size:12px;font-weight:700;color:#1B2A4A;border-bottom:2px solid #2d4a7a;padding-bottom:3px;margin-bottom:6px}table{width:100%;border-collapse:collapse;font-size:9px;margin-bottom:4px}th{background:#e8edf4;color:#1B2A4A;font-weight:600;text-align:left;padding:4px 6px;border:1px solid #d1d9e6}td{padding:4px 6px;border:1px solid #e5e7eb;vertical-align:top}tr:nth-child(even){background:#f9fafb}.footer{margin-top:20px;border-top:1px solid #e5e7eb;padding-top:8px;display:flex;justify-content:space-between;font-size:8px;color:#6b7280}`;
+    const css = `@page{size:A4 portrait;margin:8mm 8mm 12mm 8mm}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;font-size:10px;color:#1a1a1a;line-height:1.4}.logo-bar{background:#1B2A4A;padding:14px 20px;display:flex;align-items:center;gap:16px;margin-bottom:16px;border-radius:6px}.logo-bar img{height:50px;object-fit:contain}.logo-bar .title{color:white;flex:1}.logo-bar .title h1{font-size:16px;font-weight:bold;letter-spacing:1.5px;margin-bottom:2px}.logo-bar .title p{font-size:10px;opacity:0.85}.logo-bar .info-right{color:white;text-align:right;font-size:9px;opacity:0.9}.logo-bar .info-right p{margin-bottom:2px}.emp-bar{background:#f0f4f8;border-left:4px solid #1B2A4A;padding:10px 16px;margin-bottom:14px;border-radius:0 4px 4px 0;display:flex;align-items:center;gap:12px}.emp-bar img{width:54px;height:54px;object-fit:cover;object-position:top;border-radius:50%;border:3px solid #1B2A4A}.emp-bar h2{font-size:15px;font-weight:700;color:#1B2A4A}.emp-bar .sub{font-size:10px;color:#4b5563;margin-top:2px}.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px}.card{border:1px solid #d1d9e6;border-radius:8px;padding:10px 6px;text-align:center;background:#f9fafb}.card .v{font-size:18px;font-weight:700}.card .l{font-size:9px;color:#6b7280;font-weight:600;margin-top:2px}.section-title{font-size:12px;font-weight:700;color:#1B2A4A;border-bottom:2px solid #2d4a7a;padding-bottom:3px;margin-bottom:6px}table{width:100%;border-collapse:collapse;font-size:9px;margin-bottom:4px}th{background:#e8edf4;color:#1B2A4A;font-weight:600;text-align:left;padding:3px 5px;border:1px solid #d1d9e6;word-break:break-word;overflow-wrap:anywhere}td{padding:3px 5px;border:1px solid #e5e7eb;vertical-align:top;word-break:break-word;overflow-wrap:anywhere}tr:nth-child(even){background:#f9fafb}.footer{margin-top:20px;border-top:1px solid #e5e7eb;padding-top:8px;display:flex;justify-content:space-between;font-size:8px;color:#6b7280}`;
     let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ficha de Avaliação do Cliente - ${esc(emp?.nomeCompleto || "")}</title><style>${css}</style></head><body>`;
     html += `<div class="logo-bar"><img src="${escAttr(logoUrl)}" alt="FC Engenharia" /><div class="title"><h1>FICHA DE AVALIAÇÃO DO CLIENTE</h1><p>${esc(nomeEmpresa.toUpperCase())}${cnpjEmpresa ? ' — CNPJ: ' + esc(cnpjEmpresa) : ''}</p></div><div class="info-right"><p>Emitido em: ${esc(dataEmissao)}</p><p>Emitido por: ${esc(userName)}</p></div></div>`;
     const fotoOk = safeImgUrl(emp?.fotoUrl);
@@ -987,7 +987,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
     html += `<div class="section-title">Avaliações Registradas (${esc(fmtNum(ac.total))})</div>`;
     html += `<table><thead><tr><th>Data</th><th>Obra</th><th style="text-align:center">Geral</th><th style="text-align:center">Gestor</th><th style="text-align:center">Equipe</th><th style="text-align:center">Prazo</th><th style="text-align:center">Qualid.</th><th>Comentários do Cliente</th></tr></thead><tbody>`;
     (ac.historico || []).forEach((a: any) => {
-      const data = a.criadoEm ? formatDate(String(a.criadoEm).split("T")[0]) : (a.anoPeriodo || "—");
+      const data = a.criadoEm ? formatDate(String(a.criadoEm).split(/[T ]/)[0]) : (a.anoPeriodo || "—");
       const cel = (n: any) => `<td style="text-align:center;color:${corNota(n)};font-weight:700">${n == null ? "—" : esc(n)}</td>`;
       const coments = [a.comentarioPositivo, a.comentarioMelhoria, a.comentarioGestor].filter(Boolean).map(esc).join(" • ");
       html += `<tr><td style="white-space:nowrap">${esc(data)}</td><td>${esc(a.obraNome || "—")}</td>${cel(a.notaGeral)}${cel(a.notaGestor)}${cel(a.notaEquipe)}${cel(a.notaPrazo)}${cel(a.notaQualidade)}<td>${coments || "—"}</td></tr>`;
@@ -1016,7 +1016,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
       html += `</div>`;
       // Detalhe por avaliação.
       histDet.forEach((a: any) => {
-        const data = a.criadoEm ? formatDate(String(a.criadoEm).split("T")[0]) : (a.anoPeriodo || "—");
+        const data = a.criadoEm ? formatDate(String(a.criadoEm).split(/[T ]/)[0]) : (a.anoPeriodo || "—");
         html += `<div style="font-size:10px;font-weight:700;color:#1B2A4A;margin:8px 0 4px">${esc(a.obraNome || "—")} — ${esc(data)}</div>`;
         html += `<table style="margin-bottom:6px"><thead><tr><th>Bloco</th><th>Critério</th><th style="text-align:center;width:50px">Nota</th></tr></thead><tbody>`;
         BLOCOS_AVAL_RX.forEach((b) => {
@@ -3701,7 +3701,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                               const coments = [a.comentarioPositivo, a.comentarioMelhoria, a.comentarioGestor].filter(Boolean).join(" • ");
                               return (
                                 <tr key={a.id} className="border-b last:border-0 hover:bg-gray-50 align-top">
-                                  <td className="p-2 text-xs whitespace-nowrap">{a.criadoEm ? formatDate(String(a.criadoEm).split("T")[0]) : (a.anoPeriodo || "—")}</td>
+                                  <td className="p-2 text-xs whitespace-nowrap">{a.criadoEm ? formatDate(String(a.criadoEm).split(/[T ]/)[0]) : (a.anoPeriodo || "—")}</td>
                                   <td className="p-2 text-xs font-medium">{a.obraNome || "—"}</td>
                                   <td className={`p-2 text-center ${cor(a.notaGeral)}`}>{a.notaGeral ?? "—"}</td>
                                   <td className={`p-2 text-center ${cor(a.notaGestor)}`}>{a.notaGestor ?? "—"}</td>
@@ -3785,7 +3785,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                             {/* Visão INDIVIDUAL: detalhamento por avaliação, agrupado por bloco */}
                             <div className="space-y-3">
                               {comDetalhes.map((a) => {
-                                const data = a.criadoEm ? formatDate(String(a.criadoEm).split("T")[0]) : (a.anoPeriodo || "—");
+                                const data = a.criadoEm ? formatDate(String(a.criadoEm).split(/[T ]/)[0]) : (a.anoPeriodo || "—");
                                 return (
                                   <div key={a.id} className="rounded-lg border bg-gray-50/50 p-3">
                                     <div className="text-xs font-semibold text-gray-700 mb-2">
