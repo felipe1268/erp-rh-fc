@@ -5,11 +5,20 @@ description: Nenhuma receita prevista/a_receber se materializa sozinha em financ
 
 # Receita NÃO cai mais sozinha no Contas a Receber
 
-Decisão (Rev. 3161 → 3162): NENHUM importador do bridge
-(`server/services/financialIntegrationBridge.ts`) materializa receita automaticamente
+Decisão (Rev. 3161 → 3162 → 3163): NENHUM caminho materializa receita automaticamente
 em `financial_entries`. O recebível só vira lançamento quando o usuário seleciona na
 tela "Recebíveis Previstos" (`getRecebiveisPrevistos` / `transferirRecebiveisPrevistos`
 em `server/routers/financial.ts`, UI em `FinanceiroLancamentos.tsx`).
+
+**ARMADILHA (Rev. 3163):** desligar os importers do BRIDGE não basta — existe um caminho
+DIRETO no router. `createRevenue` (`server/routers/financial.ts`, mutation manual de
+"nova receita/faturamento") inseria em `financial_revenue` E logo um `financial_entry`
+origem='revenue' a_receber ("Faturamento: …"). Esse INSERT automático foi REMOVIDO;
+`createRevenue` agora popula só `financial_revenue` (one-shot, sem dedup acoplado → seguro
+remover). Ao auditar "receita caindo sozinha", procure TODAS as fontes: bridge importers
++ `createRevenue` + `registrarRecebimento`. Como a receita não materializa mais sozinha,
+a "Dar Baixa" (`registrarRecebimento` caminho `frId`) ganhou um INSERT...WHERE NOT EXISTS
+que cria o entry 'recebido' se faltar (baixa sobre previsto não-lançado não some do livro).
 
 **Importadores que agora escrevem SÓ em `financial_revenue` (a FONTE da lista/aviso),
 nunca em entries:**

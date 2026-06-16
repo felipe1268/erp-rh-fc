@@ -2369,34 +2369,12 @@ export const financialRouter = router({
     );
     const id = rows(res)[0]?.id;
 
-    // Criar automaticamente um financial_entry tipo='receita' para aparecer no Contas a Receber
-    if (id) {
-      const mesComp = input.dataVencimento
-        ? input.dataVencimento.substring(0, 7)
-        : new Date().toISOString().substring(0, 7);
-      const obraInfo = input.obraNome ?? `Obra ${input.obraId}`;
-      const clienteInfo = input.clienteNome ? ` — ${input.clienteNome}` : "";
-      const medicaoInfo = input.medicaoNumero ? ` #${input.medicaoNumero}` : "";
-      await dbExecute(db, 
-        `INSERT INTO financial_entries
-         (company_id, obra_id, obra_nome, conta_nome, tipo, natureza,
-          valor_previsto, data_competencia, data_vencimento, status,
-          origem_modulo, origem_id, origem_descricao, descricao, cliente_nome, created_at, updated_at)
-         VALUES ($1,$2,$3,'Faturamento de Obras','receita','variavel',
-                 $4, $5::date, $6::date, 'a_receber',
-                 'revenue', $7, $8, $9, $10, NOW(), NOW())`,
-        [
-          input.companyId, input.obraId, obraInfo,
-          vlq > 0 ? vlq : input.valorMedicao,
-          mesComp + "-01",
-          input.dataVencimento ?? mesComp + "-30",
-          id,
-          `Medição${medicaoInfo} — ${obraInfo}${clienteInfo}`,
-          `Faturamento${medicaoInfo}: ${obraInfo}`,
-          input.clienteNome?.trim() || null,
-        ]
-      );
-    }
+    // Rev. 3163 — NÃO materializar mais a receita automaticamente em
+    // financial_entries (Contas a Receber). A receita prevista nasce SÓ em
+    // financial_revenue (status 'a_faturar', inserido acima — a FONTE de
+    // "Recebíveis Previstos") e só vira lançamento quando o usuário confirma na
+    // tela "Recebíveis Previstos" (financial.transferirRecebiveisPrevistos).
+    // Antes, criar uma receita aqui derrubava o previsto direto no livro.
 
     await createAuditLog({ action: "financial_revenue_created", userId: ctx.user?.id, companyId: input.companyId, details: `Receita obra ${input.obraId}: R$${input.valorMedicao}` });
     return { id };
@@ -2538,6 +2516,35 @@ export const financialRouter = router({
         [input.valorRecebido, input.dataRecebimento, input.contaBancariaId ?? null,
          input.frId, input.companyId]
       );
+      // Rev. 3163 — com a receita prevista NÃO sendo mais materializada
+      // automaticamente (createRevenue desligado), a baixa pode incidir sobre um
+      // previsto AINDA não lançado no livro. Garante o lançamento 'recebido' se
+      // ele não existir (idempotente via WHERE NOT EXISTS — não duplica quando o
+      // UPDATE acima já achou a linha). dbExecute liga params por ORDEM DE
+      // APARIÇÃO do $N (o número é cosmético) → repetir o valor no array.
+      {
+        const _obraNomeBx = input.obraNome ?? `Projeto ${input.projetoId}`;
+        const _mesDateBx = `${input.competencia}-01`;
+        await dbExecute(db,
+          `INSERT INTO financial_entries
+           (company_id, obra_id, obra_nome, conta_nome, tipo, natureza,
+            valor_previsto, valor_realizado, data_competencia, data_vencimento,
+            data_pagamento, status, origem_modulo, origem_id, origem_descricao,
+            descricao, conta_bancaria_id, created_at, updated_at)
+           SELECT $1,$2,$3,'Faturamento de Obras','receita','variavel',
+                  $4,$5,$6::date,$7::date,$8,'recebido',
+                  'revenue',$9,$10,$11,$12,NOW(),NOW()
+           WHERE NOT EXISTS (
+             SELECT 1 FROM financial_entries fe
+             WHERE fe.origem_modulo='revenue' AND fe.origem_id=$13 AND fe.company_id=$14
+           )`,
+          [input.companyId, input.obraId ?? null, _obraNomeBx,
+           input.valorPrevisto, input.valorRecebido, _mesDateBx, _mesDateBx,
+           input.dataRecebimento, input.frId,
+           `Recebimento — ${_obraNomeBx}`, `Baixa: ${_obraNomeBx}`,
+           input.contaBancariaId ?? null, input.frId, input.companyId]
+        );
+      }
       // Sync planejamento_medicoes → marcar competência como confirmada
       // Nota: parâmetros são listados com índices únicos ($4,$5,$6) para evitar
       // repetição que confunde o dbExecute (que trata $N como posição sequencial)

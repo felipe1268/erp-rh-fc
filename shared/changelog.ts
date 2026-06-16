@@ -1,6 +1,56 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3163 — **FINANCEIRO / LANÇAMENTOS · FECHADA A ÚLTIMA PORTA DO LANÇAMENTO AUTOMÁTICO
+ * DE RECEITA — CRIAR UM FATURAMENTO/MEDIÇÃO (createRevenue) NÃO DERRUBA MAIS A RECEITA
+ * DIRETO NO CONTAS A RECEBER; A RECEITA NASCE SÓ COMO PREVISTO (financial_revenue) E SÓ
+ * VIRA LANÇAMENTO QUANDO O USUÁRIO CONFIRMA NA TELA "RECEBÍVEIS PREVISTOS". A "DAR BAIXA"
+ * (registrarRecebimento) CONTINUA REGISTRANDO O RECEBIMENTO MESMO SE O PREVISTO AINDA NÃO
+ * FOI LANÇADO.**
+ *
+ * PEDIDO: mesmo após as Rev. 3161/3162, o usuário continuava vendo recebíveis caindo
+ * sozinhos em Lançamentos ("Faturamento: QIU 2 — FASE 4", "Faturamento: LUCIANA — FINAL
+ * BLOCO B" como "A Receber"). Ele entende que o recebível deve VIR da previsão de
+ * faturamento (cronograma/medições → `financial_revenue`) e aparecer na tela "Recebíveis
+ * Previstos" para ELE escolher lançar — JAMAIS automático.
+ *
+ * DIAGNÓSTICO (Neon, FC=60002): a Rev. 3162 desligou os IMPORTERS do
+ * `financialIntegrationBridge`, mas os 5 LEFTOVERS origem='revenue' (a_receber, R$450k,
+ * created_at TODAY) revelaram um caminho NÃO coberto: a materialização do lançamento NÃO
+ * vinha (só) do bridge, vinha de procedures DIRETAS no router `financial.ts`. A
+ * `createRevenue` (mutation manual de "nova receita/faturamento", chamada por
+ * `FinanceiroContasAReceber.tsx` e `FinanceiroReceitas.tsx`) inseria em `financial_revenue`
+ * (status 'a_faturar') E, logo em seguida, inseria um `financial_entry` tipo='receita'
+ * origem='revenue' status='a_receber' ("Faturamento: …") — exatamente os leftovers.
+ *
+ * MUDANÇA (BACKEND-ONLY, `server/routers/financial.ts`):
+ *  1) `createRevenue` — REMOVIDO o INSERT automático em `financial_entries` (o bloco
+ *     `if (id) { … }`). Mantido o INSERT em `financial_revenue` (a FONTE de "Recebíveis
+ *     Previstos"). Como `createRevenue` é manual one-shot (sem loop de dedup acoplado ao
+ *     entry), remover o lançamento é seguro — não duplica nem quebra dedup. A receita
+ *     manual agora aparece em "Recebíveis Previstos" (medicao_id NULL → não filtra no
+ *     check de planejamento_medicao) e o usuário a lança conscientemente.
+ *  2) `registrarRecebimento` (caminho `frId`, "Dar Baixa" sobre receita já existente) —
+ *     além do UPDATE do entry para 'recebido', ADICIONADO um INSERT...SELECT...WHERE NOT
+ *     EXISTS que CRIA o lançamento 'recebido' (origem='revenue') quando ele AINDA não
+ *     existe. Sem isso, dar baixa num previsto não-lançado (cenário novo, já que a receita
+ *     não materializa mais sozinha) sumiria com o recebimento real do livro. Idempotente:
+ *     o WHERE NOT EXISTS não duplica quando o UPDATE já achou a linha. dbExecute liga
+ *     params por ORDEM DE APARIÇÃO do $N → array ordenado conforme o texto.
+ *
+ * NÃO TOCADOS (decisão herdada da Rev. 3162): os importers de nicho do bridge
+ * `importMedicoesObraToFinancial` / `importMedicoesPJToFinancial` /
+ * `importTerceiroCobravelToFinancial` — o dedup deles é ACOPLADO ao próprio entry
+ * (`entryExists` na linha), então remover o `insertEntry` faria o `financial_revenue`
+ * duplicar a cada sync. São dormentes para a FC (0 entries hoje). O caminho `!frId` de
+ * `registrarRecebimento` (cria FR + entry 'recebido' direto) já é uma baixa consciente e
+ * permanece. A `updateRevenueStatus` e o `cancelarRecebimento` apenas UPDATE/DELETE de
+ * entries existentes — viram no-op quando não há entry, sem efeito colateral.
+ *
+ * LEFTOVERS (os 5 atuais origem='revenue' da FC): NÃO apagados por código (R-001/007/010);
+ * o usuário exclui pela lixeira e agora "colam" — nenhum caminho automático os recria.
+ * ZERO SCHEMA/ALTER/DROP/DELETE · ZERO FRONTEND.
+ *
  * Rev. 3162 — **FINANCEIRO / LANÇAMENTOS · DESLIGADO O QUE AINDA RESTAVA DO LANÇAMENTO
  * AUTOMÁTICO DE RECEBÍVEIS — NENHUMA RECEITA PREVISTA/A RECEBER ENTRA SOZINHA NO LIVRO
  * (CONTAS A RECEBER). DAQUI PRA FRENTE O RECEBÍVEL SÓ VIRA LANÇAMENTO QUANDO O USUÁRIO
