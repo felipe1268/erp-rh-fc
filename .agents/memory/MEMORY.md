@@ -90,3 +90,4 @@
 
 - [Gemini free-tier transient failures](gemini-freetier-transient.md) — batch vision reads fail ~95% on transient 429/503; fix=backend retry on 429+5xx honoring retryDelay + client pacing; daily quota = hard ceiling.
 - [Financeiro "só real" lock](financeiro-so-real-trava.md) — flag global esconde projeções; despesa via sqlNotProjecao no server, MAS receita do Fluxo de Caixa vem do getContasReceberMatrix e o split é client-side (forçar natureza=efetivo).
+- [canAccessObra true só p/ admin_master](canaccessobra-admin-semantics.md) — canAccessObra é true-p/-todas só quando allowedObraIds===null (admin_master); isAdmin comum=[] → lista filtrada fica VAZIA. Listas de "obras com escrita" devem espelhar canWriteCentral, não canAccessObra.

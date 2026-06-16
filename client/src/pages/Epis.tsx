@@ -196,6 +196,9 @@ export default function Epis() {
   const [selectedDeliveryIds, setSelectedDeliveryIds] = useState<Set<number>>(new Set());
   const [editingDelivery, setEditingDelivery] = useState<any>(null);
   const [editDeliveryForm, setEditDeliveryForm] = useState<any>({});
+  // Itens da entrega agrupada em edição (null = edição de item único). Em grupo,
+  // só data/motivo/observações são aplicados a TODOS os itens (qtd/EPI intactos).
+  const [editGroupItems, setEditGroupItems] = useState<any[] | null>(null);
 
   // Queries
   // Quando Construtoras selecionado, companyId=0 mas companyIds tem os IDs do pool
@@ -231,7 +234,11 @@ export default function Epis() {
   const obrasList = obrasQ.data ?? [];
   // Rev. 2950 — obras nas quais o usuário pode ESCREVER (cadastrar/ajustar/transferir).
   // Admin/full-access (canAccessObra sempre true) vê todas; restrito vê só as suas.
-  const obrasPermitidas = useMemo(() => (obrasList as any[]).filter((o: any) => canAccessObra(o.id)), [obrasList, allowedObraIds]);
+  const obrasPermitidas = useMemo(() => (
+    (isAdminMaster || isAdmin || allowedObraIds === null)
+      ? (obrasList as any[])
+      : (obrasList as any[]).filter((o: any) => canAccessObra(o.id))
+  ), [obrasList, allowedObraIds, isAdminMaster, isAdmin]);
 
   const capacidadeQ = trpc.epiAvancado.capacidadeContratacao.useQuery(
     { companyId: queryCompanyId },
@@ -2615,6 +2622,7 @@ export default function Epis() {
                         };
                         const canEdit = (d: any) => !d.assinaturaUrl;
                         const openEdit = (d: any) => {
+                          setEditGroupItems(null);
                           setEditingDelivery(d);
                           setEditDeliveryForm({
                             dataEntrega: d.dataEntrega || "",
@@ -2624,6 +2632,22 @@ export default function Epis() {
                             motivoTroca: d.motivoTroca || "",
                             epiId: d.epiId,
                             employeeId: d.employeeId,
+                          });
+                        };
+                        // Edição de entrega AGRUPADA: aplica data/motivo/observações a
+                        // TODOS os itens do grupo (qtd/EPI de cada item ficam intactos).
+                        const openEditGroup = (items: any[]) => {
+                          const first = items[0];
+                          setEditGroupItems(items);
+                          setEditingDelivery(first);
+                          setEditDeliveryForm({
+                            dataEntrega: first.dataEntrega || "",
+                            quantidade: first.quantidade || 1,
+                            motivo: first.motivo || "",
+                            observacoes: first.observacoes || "",
+                            motivoTroca: first.motivoTroca || "",
+                            epiId: first.epiId,
+                            employeeId: first.employeeId,
                           });
                         };
                         const grouped: any[] = [];
@@ -2702,6 +2726,12 @@ export default function Epis() {
                                 </td>
                                 <td className="p-3 text-center">
                                   <div className="flex items-center justify-center gap-1">
+                                    {!items.some((d: any) => d.assinaturaUrl) && (
+                                      <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar entrega (data/motivo)"
+                                        onClick={() => openEditGroup(items)}>
+                                        <Pencil className="h-3.5 w-3.5 text-amber-600" />
+                                      </Button>
+                                    )}
                                     <Button size="icon" variant="ghost" className="h-7 w-7" title="Ficha de Entrega"
                                       onClick={() => { setFichaSignature(null); setResponsavelSignature(null); setFichaDelivery({ ...first, _grupoItems: items }); setViewMode("ficha_epi"); }}>
                                       <FileText className="h-3.5 w-3.5 text-blue-600" />
@@ -2843,7 +2873,7 @@ export default function Epis() {
         {editingDelivery && (
           <FullScreenDialog
             open={!!editingDelivery}
-            onClose={() => setEditingDelivery(null)}
+            onClose={() => { setEditingDelivery(null); setEditGroupItems(null); }}
             title="Editar Entrega de EPI"
           >
             <div className="space-y-4 p-4">
@@ -2851,21 +2881,37 @@ export default function Epis() {
                 <Label>Funcionário</Label>
                 <p className="text-sm font-medium mt-1">{editingDelivery.nomeFunc || "—"}</p>
               </div>
-              <div>
-                <Label>EPI</Label>
-                <p className="text-sm font-medium mt-1">{editingDelivery.nomeEpi || "—"} {editingDelivery.caEpi ? `(CA: ${editingDelivery.caEpi})` : ""}</p>
-              </div>
+              {editGroupItems && editGroupItems.length > 1 ? (
+                <div>
+                  <Label>EPIs desta entrega ({editGroupItems.length})</Label>
+                  <div className="mt-1 space-y-0.5">
+                    {editGroupItems.map((it: any) => (
+                      <p key={it.id} className="text-xs text-muted-foreground">
+                        • {it.nomeEpi || "—"}{it.caEpi ? ` (CA: ${it.caEpi})` : ""} ×{it.quantidade || 1}
+                      </p>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-amber-700 mt-1">A data/motivo/observações serão aplicados a todos os itens acima.</p>
+                </div>
+              ) : (
+                <div>
+                  <Label>EPI</Label>
+                  <p className="text-sm font-medium mt-1">{editingDelivery.nomeEpi || "—"} {editingDelivery.caEpi ? `(CA: ${editingDelivery.caEpi})` : ""}</p>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Data da Entrega</Label>
                   <Input type="date" value={editDeliveryForm.dataEntrega || ""}
                     onChange={(e) => setEditDeliveryForm((f: any) => ({ ...f, dataEntrega: e.target.value }))} />
                 </div>
-                <div>
-                  <Label>Quantidade</Label>
-                  <Input type="number" min={1} value={editDeliveryForm.quantidade || 1}
-                    onChange={(e) => setEditDeliveryForm((f: any) => ({ ...f, quantidade: parseInt(e.target.value) || 1 }))} />
-                </div>
+                {!editGroupItems && (
+                  <div>
+                    <Label>Quantidade</Label>
+                    <Input type="number" min={1} value={editDeliveryForm.quantidade || 1}
+                      onChange={(e) => setEditDeliveryForm((f: any) => ({ ...f, quantidade: parseInt(e.target.value) || 1 }))} />
+                  </div>
+                )}
               </div>
               <div>
                 <Label>Motivo da Troca</Label>
@@ -2893,11 +2939,29 @@ export default function Epis() {
                   placeholder="Observações adicionais..." />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => setEditingDelivery(null)}>Cancelar</Button>
+                <Button variant="outline" onClick={() => { setEditingDelivery(null); setEditGroupItems(null); }}>Cancelar</Button>
                 <Button
                   className="bg-[#1B2A4A] hover:bg-[#243660]"
                   disabled={updateDeliveryMut.isPending}
-                  onClick={() => {
+                  onClick={async () => {
+                    if (editGroupItems && editGroupItems.length) {
+                      // Entrega agrupada: aplica data/motivo/observações a TODOS os itens
+                      // (sem tocar em quantidade/EPI → não mexe no estoque).
+                      try {
+                        for (const it of editGroupItems) {
+                          await updateDeliveryMut.mutateAsync({
+                            id: it.id,
+                            dataEntrega: editDeliveryForm.dataEntrega,
+                            motivo: editDeliveryForm.motivo,
+                            observacoes: editDeliveryForm.observacoes,
+                            motivoTroca: editDeliveryForm.motivoTroca || null,
+                          });
+                        }
+                        setEditGroupItems(null);
+                        setEditingDelivery(null);
+                      } catch { /* erro já exibido pelo onError da mutation */ }
+                      return;
+                    }
                     updateDeliveryMut.mutate({
                       id: editingDelivery.id,
                       dataEntrega: editDeliveryForm.dataEntrega,

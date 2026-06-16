@@ -1,6 +1,48 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3160 — **EPIs · DOIS BUGS CORRIGIDOS DE UMA VEZ: (A) NA "NOVA TRANSFERÊNCIA"
+ * O DROPDOWN DE OBRA (ORIGEM/DESTINO) APARECIA VAZIO PARA ADMIN COMUM; (B) NAS
+ * ENTREGAS AGRUPADAS (MÚLTIPLOS EPIs NUMA LINHA) SUMIU O LÁPIS DE EDITAR ANTES DA
+ * ASSINATURA — IMPOSSÍVEL CORRIGIR A DATA DE UMA ENTREGA EM LOTE.**
+ *
+ * PEDIDO (2 screenshots, iPad): "Na tela de transferência fica assim, como se não
+ * tivesse obra para selecionar. Sobre as entregas de EPIs, sumiu a função de editar
+ * antes de finalizar com as assinaturas. Eu precisava alterar a data desses dois que
+ * lancei. Analise e arrume isso de vez."
+ *
+ * BUG A — TRANSFERÊNCIA SEM OBRAS:
+ *  - CAUSA: o diálogo "Nova Transferência" popula os selects de obra de origem/destino
+ *    com `obrasPermitidas`, que filtrava `obrasList` por `canAccessObra(o.id)`. Esse
+ *    helper só retorna `true` para TODAS as obras quando `allowedObraIds === null`, o
+ *    que acontece SOMENTE para admin_master. Um ADMIN COMUM (`isAdmin`, sem ser master)
+ *    tem `allowedObraIds = []` → `obrasPermitidas` ficava VAZIO → dropdown sem opções.
+ *    (O formulário de Entrega usa `obrasList` cru, por isso nunca quebrou — só a
+ *    Transferência, que adotou `obrasPermitidas` na Rev. 2950, sofria.) O `canWriteCentral`
+ *    já reconhecia `isAdmin`, mas o filtro de obras não — daí a inconsistência.
+ *  - CORREÇÃO (FRONTEND-ONLY, `client/src/pages/Epis.tsx`): `obrasPermitidas` agora
+ *    devolve TODAS as obras quando `isAdminMaster || isAdmin || allowedObraIds === null`
+ *    (mesma régua do `canWriteCentral`); só usuários restritos seguem filtrados por
+ *    `canAccessObra`. Sem mexer em backend/escopo de quem é restrito.
+ *
+ * BUG B — ENTREGA AGRUPADA SEM EDIÇÃO:
+ *  - CAUSA: a lista de Entregas renderiza dois caminhos — linha ÚNICA (tem lápis
+ *    "Editar" quando `!d.assinaturaUrl`) e linha AGRUPADA (vários EPIs do mesmo
+ *    `grupoEntregaId` numa linha só). A linha agrupada só tinha Ficha + (Olho/Aguardando)
+ *    + Lixeira; NUNCA teve botão de editar. Logo, entregas em lote (ex.: kit com 8 EPIs)
+ *    não podiam ter a DATA corrigida antes da assinatura.
+ *  - CORREÇÃO (FRONTEND-ONLY, `client/src/pages/Epis.tsx`): adicionado o lápis "Editar"
+ *    na linha agrupada quando NENHUM item do grupo está assinado
+ *    (`!items.some(d => d.assinaturaUrl)`). Novo `openEditGroup(items)` + estado
+ *    `editGroupItems` reaproveitam o MESMO diálogo de edição; em modo grupo o diálogo
+ *    lista os EPIs do lote, OCULTA o campo Quantidade e, ao salvar, aplica
+ *    data/motivo/observações a TODOS os itens via loop `updateDeliveryMut.mutateAsync`
+ *    (NÃO envia `quantidade`/`epiId` → ZERO ajuste de estoque). O backend
+ *    `epis.updateDelivery` já recusa item com `assinaturaUrl` (trava de integridade
+ *    mantida). `openEdit` (item único) limpa `editGroupItems` para não vazar de estado.
+ *
+ * ZERO SCHEMA/ALTER/DROP/DELETE — puramente UI + lógica de permissão no cliente.
+ *
  * Rev. 3159 — **USUÁRIOS E PERMISSÕES · NOVO CONTROLE DE ACESSO "ATIVO / DESLIGADO"
  * POR USUÁRIO — DESLIGAR BLOQUEIA O LOGIN E DERRUBA A SESSÃO ABERTA NA HORA, SEM
  * EXCLUIR O CADASTRO (DIFERENTE DA LIXEIRA/EXCLUIR).**
