@@ -616,69 +616,100 @@ export default function FinanceiroConciliacao() {
         )}
 
         <Dialog open={showImport} onOpenChange={setShowImport}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Upload className="w-5 h-5" /> Importar Extrato Bancário
+          <DialogContent className="max-w-md overflow-hidden p-0 gap-0">
+            <DialogHeader className="px-6 pt-6 pb-4 border-b border-gray-100">
+              <DialogTitle className="flex items-center gap-3 text-left">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
+                  <Upload className="w-5 h-5" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-base font-semibold leading-tight">Importar Extrato Bancário</span>
+                  <span className="block text-xs font-normal text-gray-500 leading-tight mt-0.5">
+                    Anexe o extrato (OFX, QFX, CSV, PDF, imagem...)
+                  </span>
+                </span>
               </DialogTitle>
             </DialogHeader>
-            <div className="grid gap-4">
-              <div>
-                <Label>Conta Bancária *</Label>
+
+            <div className="px-6 py-5 space-y-5">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-gray-600">Conta Bancária *</Label>
                 <Select value={importConta} onValueChange={setImportConta}>
-                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                  <SelectContent>
-                    {(bankAccounts ?? []).map((b: any) => (
-                      <SelectItem key={b.id} value={String(b.id)}>
-                        {b.banco} - {b.agencia}/{b.conta}
-                      </SelectItem>
-                    ))}
+                  <SelectTrigger className="w-full h-11">
+                    <div className="min-w-0 flex-1 text-left">
+                      <SelectValue placeholder="Selecione a conta..." />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent className="max-w-[var(--radix-select-trigger-width)]">
+                    {(bankAccounts ?? []).map((b: any) => {
+                      const cor = bancoCor(b.banco);
+                      return (
+                        <SelectItem key={b.id} value={String(b.id)}>
+                          <span className="flex items-center gap-2 min-w-0">
+                            <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${cor.bg} ${cor.text}`}>
+                              <Landmark className="w-3.5 h-3.5" />
+                            </span>
+                            <span className="truncate">
+                              {b.banco} · {formatAgencia(b.agencia)}/{formatConta(b.conta)}
+                            </span>
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>Arquivo (OFX, QFX ou CSV) *</Label>
-                <div className="mt-1">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".ofx,.qfx,.csv,.txt"
-                    onChange={handleFileSelect}
-                    className="hidden"
-                  />
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <FileText className="w-4 h-4 mr-2" />
-                    {importFileName || "Selecionar arquivo..."}
-                  </Button>
-                </div>
-                {importContent && (
-                  <p className="text-xs text-green-600 mt-1">
-                    Arquivo carregado ({importFormato.toUpperCase()}, {(importContent.length / 1024).toFixed(1)} KB)
-                  </p>
-                )}
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-gray-600">Arquivo *</Label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`w-full rounded-xl border-2 border-dashed px-4 py-5 text-center transition-colors ${
+                    importContent
+                      ? "border-green-300 bg-green-50/60 hover:bg-green-50"
+                      : "border-gray-200 bg-gray-50/60 hover:border-blue-300 hover:bg-blue-50/40"
+                  }`}
+                >
+                  <span className={`mx-auto flex h-10 w-10 items-center justify-center rounded-full ${importContent ? "bg-green-100 text-green-600" : "bg-white text-gray-400 border border-gray-200"}`}>
+                    {importContent ? <Check className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
+                  </span>
+                  <span className="mt-2 block truncate text-sm font-medium text-gray-700">
+                    {importFileName || "Clique para selecionar um arquivo"}
+                  </span>
+                  <span className="mt-0.5 block text-[11px] text-gray-400">
+                    {importContent
+                      ? `${(importFileName.split(".").pop() || "arquivo").toUpperCase()} · ${(importContent.length / 1024).toFixed(1)} KB carregado`
+                      : "Qualquer formato (OFX, QFX, CSV, PDF, imagem...)"}
+                  </span>
+                </button>
               </div>
+
               {importFormato === "csv" && (
-                <div>
-                  <Label>Separador CSV</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-gray-600">Separador CSV</Label>
                   <Select value={csvSeparador} onValueChange={setCsvSeparador}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-full h-11"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value=";">Ponto e vírgula (;)</SelectItem>
                       <SelectItem value=",">Vírgula (,)</SelectItem>
                       <SelectItem value="\t">Tab</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-[11px] text-gray-400 mt-1">
+                  <p className="text-[11px] text-gray-400">
                     O CSV deve ter colunas: Data, Descrição, Valor (e opcionalmente Saldo)
                   </p>
                 </div>
               )}
             </div>
-            <DialogFooter>
+
+            <DialogFooter className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 sm:gap-2">
               <Button variant="outline" onClick={() => setShowImport(false)}>Cancelar</Button>
               <Button onClick={handleImport} disabled={importMut.isPending || !importContent || !importConta}>
                 {importMut.isPending ? "Importando..." : "Importar"}

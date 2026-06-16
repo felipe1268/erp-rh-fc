@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3172 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O DIÁLOGO "IMPORTAR EXTRATO BANCÁRIO"
+ * GANHOU UM LAYOUT MODERNO (SEM BARRA DE ROLAGEM HORIZONTAL) E O SELETOR DE ARQUIVO PASSOU A
+ * ACEITAR QUALQUER EXTENSÃO (OFX/QFX/CSV/PDF/IMAGEM...).**
+ *
+ * PEDIDO: "melhore o layout.. não quero precisar de barra de rolagem, e quero um visual moderno
+ * e prático" + "precisa por anexar PDF, ou JPG ou qualquer extensão". A barra de rolagem
+ * horizontal vinha do nome longo da conta no `SelectValue`/`SelectTrigger` sem truncamento.
+ *
+ * MUDANÇA — FRONTEND-ONLY (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`, diálogo):
+ *  - `DialogContent` com `overflow-hidden p-0 gap-0`; header com ícone em "pill" azul + subtítulo;
+ *    body com `px-6 py-5 space-y-5`; footer numa faixa `bg-gray-50/50` com borda superior.
+ *  - Conta Bancária: `SelectTrigger w-full h-11` + wrapper `min-w-0`; cada `SelectItem` ganhou
+ *    avatar colorido do banco (`bancoCor` + `Landmark`) e texto `truncate`
+ *    ("{banco} · {formatAgencia}/{formatConta}"); `SelectContent` limitado à largura do trigger →
+ *    elimina o overflow horizontal.
+ *  - Arquivo: a área virou um "dropzone" (borda tracejada, ícone circular, vira verde+check quando
+ *    carregado). O `<input type="file">` perdeu o `accept` fixo → aceita QUALQUER extensão; o chip
+ *    de status mostra a extensão real do arquivo (derivada do nome) + tamanho.
+ *  - Textos atualizados (Label "Arquivo *", subtítulo e placeholder citam "qualquer formato").
+ *
+ * NOTA: a detecção de formato p/ o parser do backend continua (ofx/qfx→"ofx", resto→"csv"); o
+ * parser de extrato em si não mudou. ZERO SCHEMA/ALTER/DROP/DELETE · ZERO BACKEND.
+ *
  * Rev. 3171 — **CADASTRO · CONTAS BANCÁRIAS · OS NÚMEROS DE AGÊNCIA E CONTA PASSARAM A SER
  * EXIBIDOS NO PADRÃO BANCÁRIO BRASILEIRO — CORPO AGRUPADO POR PONTOS E DÍGITO VERIFICADOR
  * SEPARADO POR TRAÇO (EX: "130026093" → "13.002.609-3"); MESMO PADRÃO REPLICADO NOS CARDS DE
