@@ -334,13 +334,18 @@ export default function FinanceiroConciliacao() {
 
       setImportPct(100);
       setImportLabel("Concluído!");
-      toast({ title: `Importação concluída! ${inserted} inseridos, ${skipped} duplicados ignorados` });
+      toast({ title: `Importação concluída! ${inserted} inseridos, ${skipped} duplicados ignorados`, description: "Abrindo o Painel de Conciliação…" });
       setShowImport(false);
       setImportContent("");
       setImportFileName("");
       refetchSt();
       refetchStAno();
       refetchAccStatus();
+      // Rev. 3182 — após importar, levar direto ao Painel de Conciliação (tela própria, 3 blocos).
+      const contaDestino = contaId || parseInt(contaBancariaId) || 0;
+      if (contaDestino) {
+        setLocation(`/financeiro/conciliacao/painel?conta=${contaDestino}&ano=${ano}&mes=${mesSel ?? new Date().getMonth() + 1}`);
+      }
     } catch (e: any) {
       toast({ title: "Erro na importação", description: e?.message || "Falha ao importar o extrato.", variant: "destructive" });
     } finally {
@@ -390,8 +395,8 @@ export default function FinanceiroConciliacao() {
                 </Button>
               )
             )}
-            <Button size="sm" variant="outline" className="h-9 border-blue-600 text-blue-700 hover:bg-blue-50" onClick={() => setLocation("/financeiro/conciliacao/workspace")}>
-              <Maximize2 className="w-3.5 h-3.5 mr-1.5" />Abrir em tela cheia
+            <Button size="sm" variant="outline" className="h-9 border-blue-600 text-blue-700 hover:bg-blue-50" onClick={() => setLocation(`/financeiro/conciliacao/painel?conta=${contaBancariaId}&ano=${ano}&mes=${mesSel ?? new Date().getMonth() + 1}`)}>
+              <Maximize2 className="w-3.5 h-3.5 mr-1.5" />Painel de Conciliação
             </Button>
             <Button size="sm" className="h-9" onClick={() => { setShowImport(true); setImportConta(contaBancariaId); }}>
               <Upload className="w-3.5 h-3.5 mr-1.5" />Importar Extrato

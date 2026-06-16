@@ -1,6 +1,51 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3182 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NOVO "PAINEL DE CONCILIAÇÃO" — UMA TELA SÓ,
+ * ESPAÇOSA, COM OS 3 BLOCOS QUE O USUÁRIO PEDIU: (1) SUGESTÕES AUTOMÁTICAS DE MATCH, (2) "NO
+ * EXTRATO, SEM LANÇAMENTO NO ERP" E (3) "NO ERP, SEM EXTRATO". ABRE DIRETO APÓS IMPORTAR O
+ * EXTRATO.**
+ *
+ * PEDIDO (piloto FC FEV/2026): o usuário rejeitou o botão "Abrir em tela cheia" (que levava ao
+ * Workspace de 3 etapas/stepper — Rev. 3178): "não faz sentido... o que eu falei era para dar a
+ * opção, APÓS importar o extrato, de abrir uma TELA PRÓPRIA de conciliação onde teríamos os
+ * valores sugeridos automaticamente, os valores que tem no ERP mas não no extrato e vice-versa.
+ * Do jeito que está hoje está pequeno e complicado de fazer esta conciliação." Ou seja: queria
+ * UMA tela ampla com os 3 blocos visíveis ao mesmo tempo, sem stepper, aberta logo após o import.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO BACKEND — o backend já entregava tudo): NOVA página
+ * `client/src/pages/financeiro/FinanceiroConciliacaoPainel.tsx` (rota nova
+ * `/financeiro/conciliacao/painel`, reusa a permissão `route="/financeiro/conciliacao"` em
+ * `client/src/App.tsx`). É uma ÚNICA tela rolável, sem etapas, que lê conta/ano/mês da query
+ * string (`?conta=&ano=&mes=`) e tem:
+ *   • Cabeçalho fixo: seletor de conta, navegação de ano + chips de mês (com bolinha de status
+ *     verde/azul/cinza via `getBankStatements` do ano), tolerância (dias) e os botões Importar
+ *     Extrato / Atualizar / Relatório PDF.
+ *   • Faixa de KPIs: % conciliado (barra), Extrato sem lançamento, Lançamento sem extrato e
+ *     contador de sugestões + atalho "Limpar extrato do período".
+ *   • BLOCO 1 — "Sugestões automáticas" (`sugerirConciliacao` → `sugestoes`): lista com checkbox,
+ *     par extrato → lançamento (olho abre o detalhe consultivo via `getEntryDetalhe`), badge de
+ *     confiança (Alta/Média) e Δdias; ações em lote "Alta confiança"/"Todas"/"Limpar" +
+ *     "Conciliar (N)" via `conciliarSugestoes` (casa + dá baixa).
+ *   • BLOCO 2 — duas colunas lado a lado a partir de `getConciliacaoReport`: à esquerda
+ *     "No extrato, sem lançamento no ERP" (`extratoSemLancamento`) e à direita "No ERP, sem
+ *     extrato" (`lancamentosSemExtrato`); selecionar 1 de cada lado abre uma BARRA FIXA inferior
+ *     que mostra os dois itens + diferença de valor e concilia manualmente via
+ *     `conciliarLancamento({statementLineId, entryId})`.
+ *   • `<details>` "Já conciliados no período" (`conciliados`) para conferência + geração de PDF.
+ *   • Diálogos reaproveitados: Importar Extrato (mesmo fluxo 2-fases `analyzeBankStatement` +
+ *     `insertBankStatementBatch` em lotes de 40 com barra de progresso, cartão de conta só-leitura
+ *     Rev. 3181, alerta de mês divergente Rev. 3179), Limpar Extrato (`limparExtrato`) e Detalhe
+ *     do Lançamento (read-only).
+ *
+ * INTEGRAÇÃO COM A TELA CLÁSSICA (`FinanceiroConciliacao.tsx`): o botão "Abrir em tela cheia"
+ * (que ia para o Workspace) virou "Painel de Conciliação" e agora aponta para a rota nova
+ * carregando `?conta=&ano=&mes=` já selecionados; ALÉM disso, ao concluir uma importação de
+ * extrato na tela clássica, o app REDIRECIONA automaticamente para o Painel da conta/período
+ * importados — atendendo ao "dar a opção de abrir a tela própria após importar". O Workspace
+ * stepper (Rev. 3178) continua existindo na rota `/workspace` (não removido, só deixou de ser o
+ * atalho principal). ZERO SCHEMA/ALTER/DROP/DELETE · ZERO BACKEND.
+ *
  * Rev. 3181 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O DIÁLOGO "IMPORTAR EXTRATO BANCÁRIO"
  * PAROU DE PEDIR A CONTA BANCÁRIA DE NOVO — AGORA MOSTRA (SÓ LEITURA) A CONTA E O MÊS JÁ
  * ESCOLHIDOS NA TELA/ETAPA E SÓ PEDE O ARQUIVO.**
