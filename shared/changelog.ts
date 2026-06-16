@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3152 — **FINANCEIRO / LANÇAMENTOS · OS LANÇAMENTOS CANCELADOS PASSARAM A FICAR
+ * OCULTOS POR PADRÃO NA LISTA — UM BOTÃO "Mostrar cancelados (N)" NO CABEÇALHO DA
+ * LISTA REVELA/OCULTA SOB DEMANDA. O RASTRO NUNCA É APAGADO, SÓ ESCONDIDO.**
+ *
+ * PEDIDO: a tela de Lançamentos misturava cancelados com os lançamentos vivos,
+ * poluindo a leitura do dia a dia. Opção escolhida pelo usuário (OPÇÃO 2): esconder
+ * os cancelados por padrão, com botão para revelá-los quando precisar auditar —
+ * preservando 100% do histórico (nada é deletado).
+ *
+ * COMPORTAMENTO: por padrão a lista NÃO mostra `status === "cancelado"`. O cabeçalho
+ * do card da lista ganha um botão discreto "Mostrar cancelados (N)" quando existe ao
+ * menos um cancelado no recorte atual (respeitando a busca); clicar alterna para
+ * "Ocultar cancelados (N)". Se o usuário escolher EXPLICITAMENTE o status "Cancelado"
+ * no filtro de status, eles aparecem sempre (o ocultamento só vale com status="all").
+ *
+ * PARIDADE COM OS CARDS: os agregados de topo já ignoram cancelado no servidor
+ * (`getEntriesTotais` → `e.status <> 'cancelado'`; `getEntriesResumoMensal` idem) e a
+ * soma da lista (`listaReceitas`/`listaDespesas`) também — então esconder na lista é
+ * puramente visual e mantém os totais batendo, sem regressão numérica.
+ *
+ * IMPLEMENTAÇÃO (FRONTEND-ONLY): `client/src/pages/financeiro/FinanceiroLancamentos.tsx`
+ * — novo estado `showCancelados` (default false); helper `matchBusca`; `canceladosCount`
+ * (cancelados no recorte que casam com a busca) p/ rotular o botão; `ocultandoCancelados`
+ * = `!showCancelados && statusFilter !== "cancelado"`; a derivação `lancamentos` filtra
+ * cancelados quando `ocultandoCancelados`; botão `Button` ghost no `CardTitle` da lista.
+ *
+ * ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3151 — **FINANCEIRO / CUSTO TOTAL (Análise de Custos · Detalhe) · OS 5 CARDS DE
  * KPI ("Custo do recorte", "Pago", "Em aberto", "Vencido", "Lançamentos") VIRARAM
  * FILTRO CLICÁVEL — TOCAR NUM CARD RESTRINGE OS GRÁFICOS E A TABELA ÀQUELE STATUS.**

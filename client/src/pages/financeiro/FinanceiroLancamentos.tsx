@@ -115,6 +115,10 @@ export default function FinanceiroLancamentos() {
   const [mesSel, setMesSel] = useState<number | null>(new Date().getMonth() + 1);
   const [tipo, setTipo] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  // Rev. 3152 — esconde lançamentos cancelados por padrão (lista limpa no dia a
+  // dia + totais batendo); o usuário revela via botão "Mostrar cancelados" quando
+  // precisa auditar. O rastro nunca é apagado, só ocultado.
+  const [showCancelados, setShowCancelados] = useState(false);
   const [search, setSearch] = useState("");
   const [showNew, setShowNew] = useState(false);
   const [showCancel, setShowCancel] = useState<{ id: number } | null>(null);
@@ -627,10 +631,19 @@ export default function FinanceiroLancamentos() {
     }
   }
 
-  const lancamentos = (data?.data ?? []).filter((l: any) => {
+  const matchBusca = (l: any): boolean => {
     if (!search) return true;
     const q = search.toLowerCase();
     return (l.descricao ?? "").toLowerCase().includes(q) || (l.obraNome ?? "").toLowerCase().includes(q) || (l.contaNome ?? "").toLowerCase().includes(q);
+  };
+  const rawLancamentos = (data?.data ?? []) as any[];
+  // Rev. 3152 — quantos cancelados existem no recorte atual (p/ rotular o botão).
+  // Quando o usuário filtra explicitamente por "Cancelado", eles aparecem sempre.
+  const ocultandoCancelados = !showCancelados && statusFilter !== "cancelado";
+  const canceladosCount = rawLancamentos.filter((l: any) => l.status === "cancelado" && matchBusca(l)).length;
+  const lancamentos = rawLancamentos.filter((l: any) => {
+    if (ocultandoCancelados && l.status === "cancelado") return false;
+    return matchBusca(l);
   });
 
   // Rev. 3145 — Totais vêm do agregado do servidor (TODOS os lançamentos do
@@ -840,6 +853,16 @@ export default function FinanceiroLancamentos() {
                 <CardTitle className="text-base flex items-center gap-2">
                   <Filter className="w-4 h-4" />
                   {lancamentos.length} lançamento(s)
+                  {/* Rev. 3152 — revelar/ocultar cancelados (rastro preservado). */}
+                  {canceladosCount > 0 && statusFilter !== "cancelado" && (
+                    <Button variant="ghost" size="sm"
+                      className="ml-auto h-7 px-2 text-xs font-normal text-gray-500 hover:text-gray-800"
+                      onClick={() => setShowCancelados((v) => !v)}>
+                      {showCancelados
+                        ? `Ocultar cancelados (${canceladosCount})`
+                        : `Mostrar cancelados (${canceladosCount})`}
+                    </Button>
+                  )}
                 </CardTitle>
                 <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
                   <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer select-none">
