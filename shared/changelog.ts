@@ -1,6 +1,59 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3162 — **FINANCEIRO / LANÇAMENTOS · DESLIGADO O QUE AINDA RESTAVA DO LANÇAMENTO
+ * AUTOMÁTICO DE RECEBÍVEIS — NENHUMA RECEITA PREVISTA/A RECEBER ENTRA SOZINHA NO LIVRO
+ * (CONTAS A RECEBER). DAQUI PRA FRENTE O RECEBÍVEL SÓ VIRA LANÇAMENTO QUANDO O USUÁRIO
+ * ESCOLHE NA TELA "RECEBÍVEIS PREVISTOS". EXCLUIR UM RECEBÍVEL AGORA "COLA" — NÃO VOLTA
+ * NO PRÓXIMO SYNC/STARTUP.**
+ *
+ * PEDIDO: mesmo após a Rev. 3161, o usuário continuava vendo recebíveis caindo sozinhos
+ * em Lançamentos ("Medição — …" como "Previsto" e "Faturamento: …" como "A Receber").
+ * Ele NÃO quer NENHUM recebível automático; quer que o botão/tela "Recebíveis Previstos"
+ * liste TODOS os previstos e ele decida quais lançar.
+ *
+ * DIAGNÓSTICO (Neon, FC=60002): as receitas visíveis em Lançamentos vinham de 2 origens —
+ * (a) origem='revenue' (status a_receber, "Faturamento: …") já desligada na Rev. 3161
+ * (`importFinancialRevenueToEntries`), mas com 5 LEFTOVERS ainda no banco; (b)
+ * origem='planejamento_medicao' (status previsto, "Medição — …") AINDA criada
+ * automaticamente por `importPlanejamentoMedicoesToFinancial` (sync mensal) e por
+ * `importAllMedicoesPrevistaToFinancial` (TODOS os meses, no startup `_core/index.ts` e
+ * no sync manual). Como `deleteEntry` é HARD DELETE de não-efetivados, excluir abria
+ * espaço pro próximo sync/startup recriar — daí "excluí e voltou".
+ *
+ * MUDANÇA (BACKEND-ONLY, `server/services/financialIntegrationBridge.ts`): COMENTADA /
+ * DESLIGADA toda materialização AUTOMÁTICA de RECEITA em `financial_entries`, MANTENDO
+ * intacta a população de `financial_revenue` (a FONTE da lista de previstos e do aviso):
+ *  1) `importPlanejamentoMedicoesToFinancial` — removido o `insertEntry` da medição
+ *     (origem='planejamento_medicao'); o INSERT em `financial_revenue` (dedup próprio por
+ *     `medicao_id`) permanece.
+ *  2) `importPlanejamentoProjetosPrevistoToFinancial` — removido o INSERT de
+ *     `financial_entries` (origem='planejamento_projeto_previsto'); o `financial_revenue`
+ *     (dedup `observacoes='planejamento_previsto'`) permanece.
+ *  3) `importObrasToFinancialRevenue` — removido o INSERT de `financial_entries`
+ *     (origem='obra_previsto'); o `financial_revenue` (dedup `observacoes='obra_previsto'`)
+ *     permanece.
+ *  4) `importAllMedicoesPrevistaToFinancial` — vira NO-OP (early `return 0`). A FONTE
+ *     equivalente segue viva em `importAllMedicoesPrevistaToRevenue` (financial_revenue).
+ *  (Já desligado na Rev. 3161: `importFinancialRevenueToEntries`.) NÃO tocados os
+ *  cobráveis de nicho `importMedicoesPJToFinancial` / `importTerceiroCobravelToFinancial`
+ *  (dedup acoplado ao próprio entry, sem contrapartida em financial_revenue e dormentes
+ *  na FC) nem `importAtividadesCronogramaToFinancial` (é DESPESA/projeção).
+ *
+ * CONSISTÊNCIA DO BOTÃO (`server/routers/financial.ts`): o dedup do branch
+ * origem='revenue' (em `getRecebiveisPrevistos`, no SELECT de `transferirRecebiveisPrevistos`
+ * e no `INSERT ... WHERE NOT EXISTS` final) ganhou `AND COALESCE(fe.status,'') <> 'cancelado'`
+ * — espelhando o branch 'planejamento_medicao' que já ignorava cancelado. Assim, se um
+ * recebível lançado for excluído/cancelado, ele REAPARECE na lista de previstos (volta a
+ * ser lançável), em vez de sumir pra sempre.
+ *
+ * LEFTOVERS EXISTENTES (os 9 que o usuário vê hoje na FC): NÃO foram apagados por código
+ * (R-001/007/010 — JAMAIS DELETE). Agora que os importers não recriam mais, basta o
+ * usuário excluí-los pela lixeira (ou seleção + "Excluir") na própria tela de Lançamentos
+ * que NÃO voltam; em seguida reaparecem em "Recebíveis Previstos" para lançamento manual.
+ *
+ * ZERO SCHEMA/ALTER/DROP/DELETE. ZERO FRONTEND (o botão/Dialog da Rev. 3161 continua).
+ *
  * Rev. 3161 — **FINANCEIRO / LANÇAMENTOS · AS RECEITAS PREVISTAS DEIXARAM DE CAIR
  * SOZINHAS NO CONTAS A RECEBER — AGORA HÁ UM BOTÃO "RECEBÍVEIS PREVISTOS (N)" NA
  * TELA DE LANÇAMENTOS ONDE O USUÁRIO SELECIONA QUAIS PREVISTOS VIRAM RECEITA

@@ -6954,6 +6954,7 @@ export const financialRouter = router({
          AND NOT EXISTS (
            SELECT 1 FROM financial_entries fe
            WHERE fe.origem_modulo='revenue' AND fe.origem_id=fr.id AND fe.company_id=fr.company_id
+             AND COALESCE(fe.status,'') <> 'cancelado'
          )
          AND NOT EXISTS (
            SELECT 1 FROM financial_entries fe2
@@ -7013,6 +7014,7 @@ export const financialRouter = router({
          AND NOT EXISTS (
            SELECT 1 FROM financial_entries fe
            WHERE fe.origem_modulo='revenue' AND fe.origem_id=fr.id AND fe.company_id=fr.company_id
+             AND COALESCE(fe.status,'') <> 'cancelado'
          )
          AND NOT EXISTS (
            SELECT 1 FROM financial_entries fe2
@@ -7053,6 +7055,7 @@ export const financialRouter = router({
            WHERE NOT EXISTS (
              SELECT 1 FROM financial_entries fe
              WHERE fe.origem_modulo='revenue' AND fe.origem_id=$14 AND fe.company_id=$15
+               AND COALESCE(fe.status,'') <> 'cancelado'
            )
            RETURNING id`,
           [

@@ -1,32 +1,35 @@
 ---
-name: Recebíveis previstos — materialização manual
-description: Por que revenue→entries deixou de ser automático e como evitar duplicar na transferência manual
+name: Recebíveis só entram no livro por decisão manual
+description: Nenhuma receita prevista/a_receber se materializa sozinha em financial_entries; o usuário escolhe na tela "Recebíveis Previstos". financial_revenue continua sendo a FONTE.
 ---
 
-# Recebíveis previstos (financial_revenue → financial_entries)
+# Receita NÃO cai mais sozinha no Contas a Receber
 
-A materialização AUTOMÁTICA de `financial_revenue` em `financial_entries` (origem='revenue')
-foi DESLIGADA: `runAllReceitasImport` (`financialIntegrationBridge`) não chama mais
-`importFinancialRevenueToEntries`. Os importers que POPULAM `financial_revenue` seguem ativos.
+Decisão (Rev. 3161 → 3162): NENHUM importador do bridge
+(`server/services/financialIntegrationBridge.ts`) materializa receita automaticamente
+em `financial_entries`. O recebível só vira lançamento quando o usuário seleciona na
+tela "Recebíveis Previstos" (`getRecebiveisPrevistos` / `transferirRecebiveisPrevistos`
+em `server/routers/financial.ts`, UI em `FinanceiroLancamentos.tsx`).
 
-**Why:** excluir uma receita prevista no Financeiro "não colava" — o próximo sync recriava o par
-idempotente. O usuário quis entrada MANUAL/consciente via botão "Recebíveis Previstos" na tela de
-Lançamentos, mas SEM perder o aviso (alerta INFO `receita_prevista` em `cfoPhase2`).
+**Importadores que agora escrevem SÓ em `financial_revenue` (a FONTE da lista/aviso),
+nunca em entries:**
+- `importPlanejamentoMedicoesToFinancial` (dedup revenue por `medicao_id`)
+- `importPlanejamentoProjetosPrevistoToFinancial` (dedup `observacoes='planejamento_previsto'`)
+- `importObrasToFinancialRevenue` (dedup `observacoes='obra_previsto'`)
+- `importAllMedicoesPrevistaToFinancial` → **NO-OP** (`return 0`); a fonte equivalente
+  é `importAllMedicoesPrevistaToRevenue`
+- `importFinancialRevenueToEntries` → chamada COMENTADA em `runAllReceitasImport`
 
-**How to apply:** se reativar a materialização automática, o bug do "exclui e volta" retorna —
-prefira manter a entrada manual. Qualquer novo writer do par origem='revenue' deve respeitar a
-mesma régua de dedup (status NOT IN cancelado/recebido_total, valor_medicao>0, sem par
-origem='revenue' nem 'planejamento_medicao').
+**Why:** o usuário excluía um recebível e ele "voltava" no próximo sync/startup porque
+`deleteEntry` é HARD DELETE de não-efetivados e o importer recriava. Agora a exclusão
+"cola".
 
-## Corrida na transferência manual
+**How to apply:** qualquer NOVO writer de receita NÃO deve inserir em `financial_entries`
+automaticamente — popule `financial_revenue` e deixe a tela lançar. O dedup do branch
+`origem='revenue'` (em `getRecebiveisPrevistos`, no SELECT do transferir e no
+INSERT...WHERE NOT EXISTS) inclui `AND COALESCE(fe.status,'') <> 'cancelado'`, então um
+recebível excluído/cancelado REAPARECE como lançável (não some).
 
-`financial_entries` NÃO tem índice único em `(company_id, origem_modulo, origem_id)`, então
-`INSERT...SELECT...WHERE NOT EXISTS` sozinho NÃO é seguro sob concorrência (dois NOT EXISTS
-passam juntos → duplica). A mutation serializa com
-`pg_advisory_xact_lock(hashtext('fin_recebiveis_previstos'), companyId)` no início da transação.
-
-**Why:** R-001/007/010 proíbem ALTER/DDL, então não dá pra criar o índice único; o advisory lock
-por transação resolve a corrida sem tocar no schema.
-
-**How to apply:** qualquer materialização idempotente-por-NOT-EXISTS nessa tabela precisa do mesmo
-lock (ou de um índice único, que aqui é proibido).
+**Não tocados (proposital):** `importMedicoesPJToFinancial` /
+`importTerceiroCobravelToFinancial` (dedup acoplado ao próprio entry, sem contrapartida
+em revenue, dormentes na FC); `importAtividadesCronogramaToFinancial` (é DESPESA/projeção).

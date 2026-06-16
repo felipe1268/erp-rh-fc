@@ -1463,26 +1463,15 @@ export async function importPlanejamentoMedicoesToFinancial(companyId: number, m
       const dataVenc = targetMes + "-28";
 
       // ── 1. financial_entries (livro geral) ──────────────────────
-      if (!(await entryExists(db, companyId, "planejamento_medicao", r.id))) {
-        await insertEntry(db, {
-          companyId,
-          obraId: r.obra_id ?? null,
-          obraNome: r.obra_nome ?? r.projeto_nome ?? null,
-          contaNome: "Receita de Medições / Contratos",
-          tipo: "receita",
-          natureza: "variavel",
-          valorPrevisto: valor,
-          valorRealizado: r.status === "faturada" ? valor : null,
-          dataCompetencia: targetMes + "-01",
-          dataVencimento: dataVenc,
-          status: statusFin,
-          origemModulo: "planejamento_medicao",
-          origemId: r.id,
-          origemDescricao: `Medição #${r.numero} — ${r.projeto_nome}${r.cliente ? " (" + r.cliente + ")" : ""}`,
-          descricao: `Medição${r.numero && Number(r.numero) > 0 ? ` ${r.numero}` : ""} — ${r.projeto_nome}${pct > 0 ? ` (${(pct * 100).toFixed(1)}%)` : ""}`,
-        });
-        imported++;
-      }
+      // Rev. 3162 — DESLIGADA a materialização automática da medição como
+      // lançamento de receita (origem='planejamento_medicao', "Previsto") no
+      // livro/Contas a Receber. O usuário NÃO quer que recebíveis caiam sozinhos
+      // em Lançamentos; agora ele escolhe o que lançar pela tela "Recebíveis
+      // Previstos" (financial.getRecebiveisPrevistos / transferirRecebiveisPrevistos).
+      // Mantemos ABAIXO a escrita em financial_revenue (a FONTE da lista de
+      // previstos), cujo dedup é próprio (por medicao_id) e independe do entry.
+      // void statusFin/valor preservados p/ não quebrar tipos.
+      void statusFin;
 
       // ── 2. financial_revenue (Contas a Receber) ──────────────────
       // Verifica se já existe pelo medicao_id para evitar duplicata
@@ -1730,43 +1719,11 @@ export async function importPlanejamentoProjetosPrevistoToFinancial(companyId: n
         const dataVencimento = mes + "-30";
 
         // ── 1. financial_entries (livro geral) ──────────────────
-        const { rows: entExisting } = await dbExecute(db,
-          `SELECT id FROM financial_entries
-           WHERE company_id=$1 AND origem_modulo=$2 AND origem_id=$3 AND data_competencia=$4
-           LIMIT 1`,
-          [companyId, "planejamento_projeto_previsto", proj.id, dataCompetencia]
-        );
-        if (entExisting.length === 0) {
-          await dbExecute(db,
-            `INSERT INTO financial_entries
-             (company_id, obra_id, obra_nome, conta_nome, tipo, natureza,
-              valor_previsto, valor_realizado, data_competencia, data_vencimento, data_pagamento,
-              status, origem_modulo, origem_id, origem_descricao, descricao, forma_pagamento,
-              created_at, updated_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW(),NOW())
-             ON CONFLICT DO NOTHING`,
-            [
-              companyId,
-              proj.obra_id ?? null,
-              nomeProjeto,
-              "Previsão de Faturamento",
-              "receita",
-              "variavel",
-              valorMensal,
-              null,
-              dataCompetencia,
-              dataVencimento,
-              null,
-              "previsto",
-              "planejamento_projeto_previsto",
-              proj.id,
-              `Previsão mensal — ${nomeProjeto}${proj.cliente ? " — " + proj.cliente : ""}`,
-              `Previsão ${mes}: ${nomeProjeto}`,
-              null,
-            ]
-          );
-          imported++;
-        }
+        // Rev. 3162 — DESLIGADA a materialização automática da previsão de
+        // projeto como lançamento de receita ("Previsto") no livro. Recebível
+        // só entra no livro por decisão manual (tela "Recebíveis Previstos").
+        // A escrita em financial_revenue (FONTE da lista) permanece ABAIXO,
+        // com dedup próprio (observacoes='planejamento_previsto').
 
         // ── 2. financial_revenue (Contas a Receber) ─────────────
         // Dedup: obra_nome + data_vencimento + observacoes='planejamento_previsto'
@@ -1910,29 +1867,12 @@ export async function importObrasToFinancialRevenue(companyId: number, mesRef?: 
         }
 
         // ── 2. financial_entries (fluxo de caixa projetado) ──────────────
-        if (valorMensal > 0) {
-          const { rows: entExist } = await dbExecute(db,
-            `SELECT id FROM financial_entries
-             WHERE company_id=$1 AND origem_modulo='obra_previsto' AND origem_id=$2 AND data_competencia=$3
-             LIMIT 1`,
-            [companyId, obra.id, dataCompetencia]
-          );
-          if (entExist.length === 0) {
-            await dbExecute(db,
-              `INSERT INTO financial_entries
-               (company_id, obra_id, obra_nome, conta_nome, tipo, natureza,
-                valor_previsto, valor_realizado, data_competencia, data_vencimento,
-                status, origem_modulo, origem_id, origem_descricao, descricao, created_at, updated_at)
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW(),NOW())
-               ON CONFLICT DO NOTHING`,
-              [companyId, obra.id, obra.nome, "Previsão de Faturamento",
-               "receita", "variavel", valorMensal, null,
-               dataCompetencia, dataVencimento, "a_receber",
-               "obra_previsto", obra.id, `Previsão de faturamento — ${obra.nome} (${mes})`,
-               `Previsão mensal obra: ${obra.nome}`]
-            );
-          }
-        }
+        // Rev. 3162 — DESLIGADA a materialização automática da previsão de obra
+        // (origem='obra_previsto', "A Receber") no livro. Recebível só entra no
+        // livro por decisão manual (tela "Recebíveis Previstos"). A escrita em
+        // financial_revenue (FONTE da lista, observacoes='obra_previsto') segue
+        // ACIMA com dedup próprio.
+        void dataCompetencia;
       }
     }
   } catch (e) {
@@ -2233,110 +2173,16 @@ export async function importAtividadesCronogramaToFinancial(
 // Creates financial_entries for EVERY future month in the measurement schedule
 // ─────────────────────────────────────────────────────────────────────────────
 export async function importAllMedicoesPrevistaToFinancial(companyId: number): Promise<number> {
-  const db = await getDb();
-  if (!db) return 0;
-  let imported = 0;
-
-  try {
-    const { rows } = await dbExecute(db,
-      `SELECT pm.id, pm.numero, pm.competencia, pm.valor_previsto,
-              pm.percentual_previsto, pm.status,
-              pp.nome AS projeto_nome, pp.cliente, pp.valor_contrato, pp.obra_id,
-              o.nome AS obra_nome
-       FROM planejamento_medicoes pm
-       JOIN planejamento_projetos pp ON pp.id = pm.projeto_id
-       LEFT JOIN obras o ON o.id = pp.obra_id
-       WHERE pp.company_id = $1
-         AND pm.status NOT IN ('cancelada','rejeitada')
-         AND COALESCE(pm.valor_previsto::numeric, 0) > 0
-       ORDER BY pm.competencia`,
-      [companyId]
-    );
-
-    // Pre-fetch existing entries to avoid duplicates
-    const { rows: existRows } = await dbExecute(db,
-      `SELECT origem_id::integer AS orig_id
-       FROM financial_entries
-       WHERE company_id = $1 AND origem_modulo = 'planejamento_medicao'`,
-      [companyId]
-    );
-    const existSet = new Set(existRows.map((r: any) => String(r.orig_id)));
-
-    const toInsert: any[] = [];
-    for (const r of rows) {
-      if (existSet.has(String(r.id))) continue;
-      const valorPrevisto = parseFloat(r.valor_previsto ?? "0");
-      if (valorPrevisto <= 0) continue;
-
-      const mes = r.competencia; // YYYY-MM
-      const dataComp = `${mes}-01`;
-      const dataVenc = `${mes}-28`;
-      const statusFin = (r.status === "aprovada" || r.status === "faturada") ? "pendente" : "previsto";
-      const pct = parseFloat(r.percentual_previsto ?? "0");
-
-      toInsert.push({
-        companyId,
-        obraId: r.obra_id ?? null,
-        obraNome: r.obra_nome ?? r.projeto_nome ?? null,
-        contaNome: "Receita de Medições / Contratos",
-        origemId: r.id,
-        origemDesc: `Medição #${r.numero ?? mes} — ${r.projeto_nome}${r.cliente ? " (" + r.cliente + ")" : ""}`,
-        descricao: `Medição ${r.numero ?? mes} — ${r.projeto_nome} (${(Number(pct) * 100).toFixed(1)}% previsto)`,
-        valorPrevisto,
-        dataComp,
-        dataVenc,
-        statusFin,
-      });
-    }
-
-    const pgPool = (db as any).$client;
-    const BATCH = 200;
-
-    if (pgPool && typeof pgPool.query === "function" && toInsert.length > 0) {
-      for (let i = 0; i < toInsert.length; i += BATCH) {
-        const batch = toInsert.slice(i, i + BATCH);
-        const vals = batch.map((_, idx) => {
-          const b = idx * 15;
-          return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7},$${b+8},$${b+9},$${b+10},$${b+11},$${b+12},$${b+13},$${b+14},$${b+15},NOW(),NOW())`;
-        }).join(",");
-        const params = batch.flatMap(e => [
-          e.companyId, e.obraId, e.obraNome, e.contaNome, "receita", "variavel",
-          e.valorPrevisto, null, e.dataComp, e.dataVenc, e.statusFin,
-          "planejamento_medicao", e.origemId, e.origemDesc, e.descricao
-        ]);
-        await pgPool.query(
-          `INSERT INTO financial_entries
-           (company_id,obra_id,obra_nome,conta_nome,tipo,natureza,
-            valor_previsto,valor_realizado,data_competencia,data_vencimento,
-            status,origem_modulo,origem_id,origem_descricao,descricao,created_at,updated_at)
-           VALUES ${vals} ON CONFLICT DO NOTHING`,
-          params
-        );
-        imported += batch.length;
-      }
-    } else if (toInsert.length > 0) {
-      for (const e of toInsert) {
-        await dbExecute(db,
-          `INSERT INTO financial_entries
-           (company_id,obra_id,obra_nome,conta_nome,tipo,natureza,
-            valor_previsto,valor_realizado,data_competencia,data_vencimento,
-            status,origem_modulo,origem_id,origem_descricao,descricao,created_at,updated_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW(),NOW())
-           ON CONFLICT DO NOTHING`,
-          [e.companyId, e.obraId, e.obraNome, e.contaNome, "receita", "variavel",
-           e.valorPrevisto, null, e.dataComp, e.dataVenc, e.statusFin,
-           "planejamento_medicao", e.origemId, e.origemDesc, e.descricao]
-        );
-        imported++;
-      }
-    }
-
-    console.log(`[FinancialBridge][all-medicoes-prevista] company=${companyId} inseridos=${imported}`);
-  } catch (e) {
-    console.error("[FinancialBridge][all-medicoes-prevista]", e);
-  }
-
-  return imported;
+  // Rev. 3162 — NO-OP (corpo removido). Esta função materializava TODAS as
+  // medições previstas como lançamentos de receita ("Previsto",
+  // origem='planejamento_medicao') no livro — em todos os meses, no startup
+  // (_core/index.ts) e no sync manual. O usuário NÃO quer recebíveis caindo
+  // sozinhos em Lançamentos; agora ele escolhe o que lançar pela tela
+  // "Recebíveis Previstos". A FONTE da lista (financial_revenue) continua sendo
+  // populada por importAllMedicoesPrevistaToRevenue. Mantida exportada
+  // (chamadores no startup/endpoint) como no-op idempotente que retorna 0.
+  void companyId;
+  return 0;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
