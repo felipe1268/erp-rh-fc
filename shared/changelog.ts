@@ -1,6 +1,51 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3173 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · A IMPORTAÇÃO DE EXTRATO PASSOU A LER O PDF
+ * DO EXTRATO DA CAIXA ECONÔMICA (INTERNET BANKING) AUTOMATICAMENTE — CADA TRANSAÇÃO VIRA UMA
+ * LINHA DO EXTRATO (DATA, HISTÓRICO+CONTRAPARTE+CNPJ+Nº DO CHEQUE/DOC, VALOR COM SINAL E SALDO),
+ * PRONTA PARA CONCILIAR.**
+ *
+ * PEDIDO: usuário anexou o PDF real do extrato da Caixa (FEV/2026, conta 000577325357-3) como
+ * "modelo" e pediu que a importação passasse a lê-lo. Até então o diálogo já ACEITAVA o PDF
+ * (Rev. 3172), mas o backend só parseava OFX/CSV — um PDF anexado não virava linhas.
+ *
+ * CAUSA/DESAFIO: o "extrato_pdf" da Caixa é um layout em colunas com posições X estáveis
+ * (Data x≈54 | Documento x≈151 | Histórico x≈211 | Valor x≈545 | Saldo x≈723 com sufixo C/D)
+ * onde CADA transação ocupa várias linhas (o histórico-tipo pode vir numa linha solta ACIMA da
+ * data — "PIX RECEBIDO", "CREDITO TRANSF INTERNET"... — o valor+saldo na "linha-valor" e a
+ * contraparte/CNPJ na linha da Data Efetiva logo ABAIXO). Texto plano embaralha tudo; a chave foi
+ * extração POSICIONAL (x,y) via `pdfjs-dist`.
+ *
+ * MUDANÇA — BACKEND (NOVO `server/services/caixaPdfParser.ts` + branch em
+ * `server/routers/financial.ts·importBankStatement`):
+ *  - `parseCaixaExtratoPdf(base64)`: decodifica o base64 (valida assinatura "%PDF-"), carrega o PDF
+ *    com `pdfjs-dist/legacy/build/pdf.mjs` (import LAZY — fica `external` no build esbuild, não pesa
+ *    no startup), reconstrói as LINHAS por agrupamento de Y em todas as páginas e classifica cada
+ *    linha pelas FAIXAS DE X (data/documento/histórico/valor/saldo).
+ *  - Âncora = a "linha-valor" (única com Valor na faixa X 520–700 E Saldo na faixa X≥700). Para cada
+ *    uma: a DATA é a DD/MM/AAAA na própria linha ou até 4 linhas acima; a DESCRIÇÃO junta o
+ *    histórico-solto de cima + o histórico da linha-valor + a contraparte da Data Efetiva de baixo,
+ *    e anexa "· Doc NNNNNN" quando há nº de cheque/documento (≠ 000000) — ótimo p/ conciliar cheques.
+ *    Linhas "SALDO DIA", cabeçalhos e rodapés (about:blank/SAC CAIXA/etc.) são ignorados.
+ *  - VALOR com sinal (negativo = débito, "- R$"); SALDO com sinal (negativo = saldo devedor "D").
+ *  - `importBankStatement.formato` ganhou `"pdf"`; reusa o MESMO caminho de INSERT + DEDUP
+ *    (company+conta+data+descrição+valor) + auditoria já existente. PDF digitalizado/foto (sem
+ *    camada de texto) → erro claro pedindo o PDF do internet banking.
+ *  - SEGURANÇA (anti-IDOR): `importBankStatement` agora chama `_assertFinanceiroCompanyAccess`
+ *    ANTES do ownerCheck (a conta pertencer ao companyId não provava que o USUÁRIO tinha acesso à
+ *    empresa) — fechado o gap de mutação cross-tenant; o ownerCheck vira 2ª barreira (defense-in-depth).
+ *  - VALIDAÇÃO EMPÍRICA: no PDF de referência (19 páginas, 216 transações) a continuidade de saldo
+ *    (saldo_anterior + valor = saldo_seguinte) bateu em 100% das linhas — prova de correção do parser.
+ *
+ * MUDANÇA — FRONTEND (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`):
+ *  - `handleFileSelect`: PDF → lê como base64 (`readAsDataURL`, tira o prefixo `data:`) e marca
+ *    `formato:"pdf"`; OFX/QFX e CSV/TXT seguem como texto (ISO-8859-1). IMAGENS (jpg/png/heic...) são
+ *    bloqueadas com toast explicando que foto de extrato ainda não é lida (sem OCR) — peça o PDF/OFX.
+ *  - Dica contextual quando um PDF é detectado; o tipo de estado `importFormato` virou ofx|csv|pdf.
+ *
+ * ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3172 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O DIÁLOGO "IMPORTAR EXTRATO BANCÁRIO"
  * GANHOU UM LAYOUT MODERNO (SEM BARRA DE ROLAGEM HORIZONTAL) E O SELETOR DE ARQUIVO PASSOU A
  * ACEITAR QUALQUER EXTENSÃO (OFX/QFX/CSV/PDF/IMAGEM...).**

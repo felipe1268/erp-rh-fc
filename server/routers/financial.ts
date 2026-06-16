@@ -31,6 +31,7 @@ import {
   gerarEFDReinf,
 } from "../services/financialKpiService";
 import { runFinancialJobNow } from "../services/financialAutoImportJob";
+import { parseCaixaExtratoPdf } from "../services/caixaPdfParser";
 import {
   computeThreeWayMatch, blockPaymentByThreeWay, releasePaymentByThreeWay,
   parseOFX, parseCNAB, suggestReconciliation, applyReconciliation,
@@ -4108,7 +4109,7 @@ export const financialRouter = router({
   importBankStatement: protectedProcedure.input(z.object({
     companyId: z.number(),
     contaBancariaId: z.number(),
-    formato: z.enum(["ofx", "csv"]),
+    formato: z.enum(["ofx", "csv", "pdf"]),
     conteudo: z.string(),
     csvSeparador: z.string().optional(),
     csvColunaData: z.number().optional(),
@@ -4118,6 +4119,8 @@ export const financialRouter = router({
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
 
     const ownerCheck = await dbExecute(db, 
       `SELECT id FROM company_bank_accounts WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
@@ -4129,7 +4132,19 @@ export const financialRouter = router({
 
     let lines: Array<{ data: string; descricao: string; valor: number; saldo: number | null }> = [];
 
-    if (input.formato === "ofx") {
+    if (input.formato === "pdf") {
+      try {
+        lines = await parseCaixaExtratoPdf(input.conteudo);
+      } catch (err: any) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: err?.message || "Falha ao ler o PDF do extrato." });
+      }
+      if (lines.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Não foi possível extrair transações do PDF. Verifique se é o extrato em PDF gerado pelo internet banking da Caixa (extratos digitalizados/foto não são lidos automaticamente).",
+        });
+      }
+    } else if (input.formato === "ofx") {
       const content = input.conteudo;
       const stmtTrnMatch = content.match(/<STMTTRN>([\s\S]*?)<\/STMTTRN>/gi);
       if (!stmtTrnMatch || stmtTrnMatch.length === 0) {

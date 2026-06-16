@@ -56,7 +56,7 @@ export default function FinanceiroConciliacao() {
   const [selectedStatement, setSelectedStatement] = useState<number | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<number | null>(null);
   const [showImport, setShowImport] = useState(false);
-  const [importFormato, setImportFormato] = useState<"ofx" | "csv">("ofx");
+  const [importFormato, setImportFormato] = useState<"ofx" | "csv" | "pdf">("ofx");
   const [importConta, setImportConta] = useState("");
   const [importContent, setImportContent] = useState("");
   const [importFileName, setImportFileName] = useState("");
@@ -192,13 +192,32 @@ export default function FinanceiroConciliacao() {
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+    const isImagem = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tif", "tiff", "heic", "heif"].includes(ext);
+    if (isImagem) {
+      e.target.value = "";
+      toast({
+        title: "Imagem não é lida automaticamente",
+        description: "Extratos em foto/imagem ainda não são interpretados. Envie o PDF gerado pelo internet banking, ou um arquivo OFX/CSV.",
+        variant: "destructive",
+      });
+      return;
+    }
     setImportFileName(file.name);
-    const ext = file.name.split(".").pop()?.toLowerCase();
-    if (ext === "ofx" || ext === "qfx") setImportFormato("ofx");
-    else setImportFormato("csv");
     const reader = new FileReader();
-    reader.onload = (ev) => { setImportContent(ev.target?.result as string ?? ""); };
-    reader.readAsText(file, "ISO-8859-1");
+    if (ext === "pdf") {
+      setImportFormato("pdf");
+      reader.onload = (ev) => {
+        const res = (ev.target?.result as string) ?? "";
+        setImportContent(res.replace(/^data:[^,]*,/, ""));
+      };
+      reader.readAsDataURL(file);
+    } else {
+      if (ext === "ofx" || ext === "qfx") setImportFormato("ofx");
+      else setImportFormato("csv");
+      reader.onload = (ev) => { setImportContent(ev.target?.result as string ?? ""); };
+      reader.readAsText(file, "ISO-8859-1");
+    }
   }
 
   function handleImport() {
@@ -706,6 +725,13 @@ export default function FinanceiroConciliacao() {
                     O CSV deve ter colunas: Data, Descrição, Valor (e opcionalmente Saldo)
                   </p>
                 </div>
+              )}
+
+              {importFormato === "pdf" && (
+                <p className="flex items-start gap-1.5 text-[11px] text-gray-500">
+                  <FileText className="w-3.5 h-3.5 shrink-0 mt-px text-blue-500" />
+                  PDF de extrato da Caixa (internet banking) detectado — as transações serão extraídas automaticamente. Selecione a conta correta acima.
+                </p>
               )}
             </div>
 
