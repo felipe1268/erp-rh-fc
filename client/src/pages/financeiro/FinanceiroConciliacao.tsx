@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,14 @@ export default function FinanceiroConciliacao() {
     const ultimoDia = new Date(ano, mesSel, 0).getDate();
     return { dataInicio: `${ano}-${mm}-01`, dataFim: `${ano}-${mm}-${String(ultimoDia).padStart(2, "0")}` };
   }, [ano, mesSel]);
+  // Rev. 3176 — A tolerância de conciliação passa a refletir os DIAS EXATOS do mês
+  // selecionado (FEV/2026 = 28, JAN = 31, etc.), em vez de um teto fixo de 30. Em
+  // "Ano todo" usa 31 (teto razoável; backend limita a 60). É o padrão e re-sincroniza
+  // ao trocar de mês/ano.
+  const diasDoMes = useMemo(() => {
+    if (mesSel == null) return 31;
+    return new Date(ano, mesSel, 0).getDate();
+  }, [ano, mesSel]);
   const [contaBancariaId, setContaBancariaId] = useState<string>("");
   const [conciliadoFilter, setConciliadoFilter] = useState("all");
   const [selectedStatement, setSelectedStatement] = useState<number | null>(null);
@@ -63,7 +71,14 @@ export default function FinanceiroConciliacao() {
   const [csvSeparador, setCsvSeparador] = useState(";");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
-  const [toleranciaDias, setToleranciaDias] = useState(5);
+  const [toleranciaDias, setToleranciaDias] = useState(() => new Date(_now.getFullYear(), _now.getMonth() + 1, 0).getDate());
+  // Re-sincroniza a tolerância com os dias exatos do mês ao trocar de mês/ano.
+  useEffect(() => { setToleranciaDias(diasDoMes); }, [diasDoMes]);
+  // Opções do dropdown: presets curtos + os dias exatos do mês (dedup, ordenado).
+  const tolOptions = useMemo(() => {
+    const set = new Set<number>([0, 1, 2, 3, 5, 7, 10, 15, diasDoMes]);
+    return Array.from(set).sort((a, b) => a - b);
+  }, [diasDoMes]);
   const [selSug, setSelSug] = useState<Set<number>>(new Set());
 
   const { data: bankAccounts } = (trpc as any).financial.getBankAccounts.useQuery(
@@ -523,7 +538,11 @@ export default function FinanceiroConciliacao() {
                     <Select value={String(toleranciaDias)} onValueChange={v => setToleranciaDias(parseInt(v))}>
                       <SelectTrigger className="w-20 h-8"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {[0, 1, 2, 3, 5, 7, 10, 15, 30].map(d => <SelectItem key={d} value={String(d)}>{d}</SelectItem>)}
+                        {tolOptions.map(d => (
+                          <SelectItem key={d} value={String(d)}>
+                            {d === diasDoMes && mesSel != null ? `${d} (mês)` : d}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <Button

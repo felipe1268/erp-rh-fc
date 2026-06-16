@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3176 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · A "TOLERÂNCIA (DIAS)" DAS SUGESTÕES
+ * AUTOMÁTICAS PASSOU A REFLETIR OS DIAS EXATOS DO MÊS SELECIONADO (FEV/2026 = 28, JANEIRO = 31...)
+ * EM VEZ DE UM TETO FIXO DE 30 — E ESSE VALOR VIROU O PADRÃO.**
+ *
+ * PEDIDO (print): "está com problema na janela de tolerância, total dos dias deveria ser os dias
+ * exatos de cada mês". O seletor de tolerância tinha um teto FIXO (…,15,30) que não cobria meses de
+ * 31 dias e não fazia sentido em FEV (28).
+ *
+ * SOLUÇÃO — FRONTEND-ONLY `client/src/pages/financeiro/FinanceiroConciliacao.tsx`:
+ *  - Novo `diasDoMes` (memo) = `new Date(ano, mesSel, 0).getDate()` → dias exatos do mês selecionado
+ *    ("Ano todo" → 31, teto razoável já que o backend limita a tolerância a 60).
+ *  - `toleranciaDias` INICIA nesse valor (lazy init) e RE-SINCRONIZA via `useEffect` ao trocar de
+ *    mês/ano (cada mês usa seus dias exatos).
+ *  - O dropdown (`tolOptions`) junta os presets curtos [0,1,2,3,5,7,10,15] com `diasDoMes`
+ *    (dedup + ordenado) e rotula a opção do mês como "N (mês)".
+ *  - Backend `sugerirConciliacao` INALTERADO (já aceitava `toleranciaDias` até 60).
+ *
+ * ZERO SCHEMA/ALTER/DROP/DELETE · ZERO BACKEND.
+ *
  * Rev. 3175 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O DIÁLOGO "IMPORTAR EXTRATO BANCÁRIO" GANHOU
  * UMA BARRA DE PROGRESSO REAL (0–100%) MOSTRANDO O QUE ESTÁ SENDO PROCESSADO ("LENDO EXTRATO...",
  * "GRAVANDO X DE Y TRANSAÇÕES...") — DÁ PRA VER QUE A IMPORTAÇÃO ESTÁ ANDANDO E NÃO TRAVADA.**
