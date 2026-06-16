@@ -7202,6 +7202,9 @@ export const bankStatementLines = pgTable("bank_statement_lines", {
   conciliado: smallint().default(0),
   entryId: integer("entry_id"),
   importadoEm: timestamp({ mode: "string" }).defaultNow().notNull(),
+  // Rev. 3179 — soft-delete: "Limpar extrato" marca a linha como excluída (NULL=ativa).
+  // Honra a regra JAMAIS DELETE: removemos via UPDATE e filtramos em todas as leituras.
+  excluidoEm: timestamp("excluido_em", { mode: "string" }),
 }, (t) => [
   index("idx_bsl_company").on(t.companyId),
   index("idx_bsl_conta").on(t.contaBancariaId),

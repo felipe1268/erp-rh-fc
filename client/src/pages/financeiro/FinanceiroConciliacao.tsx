@@ -5,12 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter, AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Maximize2 } from "lucide-react";
+import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Maximize2, Trash2, CalendarX } from "lucide-react";
 import { useLocation } from "wouter";
 import { formatConta, formatAgencia } from "@/lib/formatters";
 
@@ -84,6 +85,9 @@ export default function FinanceiroConciliacao() {
   const [selSug, setSelSug] = useState<Set<number>>(new Set());
   // Rev. 3177 — clicar no lançamento das sugestões abre um detalhe CONSULTIVO (read-only).
   const [detalheEntryId, setDetalheEntryId] = useState<number | null>(null);
+  // Rev. 3179 — "Limpar extrato" (confirmação) + alerta de extrato de outro mês.
+  const [confirmLimpar, setConfirmLimpar] = useState(false);
+  const [mismatch, setMismatch] = useState<{ detectado: string; selecionado: string; fora: number; total: number; anoNum: number; mesNum: number } | null>(null);
 
   const { data: bankAccounts } = (trpc as any).financial.getBankAccounts.useQuery(
     { companyId },
@@ -170,6 +174,15 @@ export default function FinanceiroConciliacao() {
     onSuccess: (res: any) => { toast({ title: `Mês reaberto! ${res.afetados} lançamento(s) desmarcado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); },
     onError: (e: any) => toast({ title: "Erro ao desconsolidar", description: e.message, variant: "destructive" }),
   });
+  // Rev. 3179 — Limpar extrato importado errado (conta+período). Soft-delete no backend.
+  const limparMut = (trpc as any).financial.limparExtrato.useMutation({
+    onSuccess: (res: any) => {
+      toast({ title: res.afetados > 0 ? `Extrato limpo! ${res.afetados} linha(s) removida(s).` : "Nada para limpar neste período." });
+      setConfirmLimpar(false);
+      refetchSt(); refetchStAno(); refetchAccStatus(); if (mostrarSugestoes) refetchSug();
+    },
+    onError: (e: any) => toast({ title: "Erro ao limpar extrato", description: e.message, variant: "destructive" }),
+  });
 
   const { data: sugData, isFetching: sugLoading, refetch: refetchSug } = (trpc as any).financial.sugerirConciliacao.useQuery(
     { companyId, contaBancariaId: parseInt(contaBancariaId) || 0, dataInicio, dataFim, toleranciaDias },
@@ -251,7 +264,7 @@ export default function FinanceiroConciliacao() {
     }
   }
 
-  async function handleImport() {
+  async function handleImport(skipMonthCheck = false) {
     if (!importContent) { toast({ title: "Selecione um arquivo", variant: "destructive" }); return; }
     if (!importConta) { toast({ title: "Selecione a conta bancária", variant: "destructive" }); return; }
     const contaId = parseInt(importConta);
@@ -276,6 +289,23 @@ export default function FinanceiroConciliacao() {
       }
       setImportPct(10);
       setImportLabel(`Extrato lido: ${total} transações. Gravando...`);
+
+      // Rev. 3179 — ALERTA/BLOQUEIO: extrato de outro mês ≠ mês selecionado. Detecta o
+      // mês DOMINANTE (YYYY-MM mais frequente) entre as linhas; havendo mês selecionado
+      // (não "Ano todo") e divergindo, ABORTA a gravação e abre o alerta de decisão.
+      if (!skipMonthCheck && mesSel != null) {
+        const selKey = `${ano}-${String(mesSel).padStart(2, "0")}`;
+        const counts = new Map<string, number>();
+        for (const l of linhas) { const k = String(l?.data ?? "").slice(0, 7); if (k.length === 7) counts.set(k, (counts.get(k) ?? 0) + 1); }
+        let dom = ""; let domN = 0;
+        for (const [k, n] of counts) { if (n > domN) { dom = k; domN = n; } }
+        if (dom && dom !== selKey) {
+          const fora = linhas.filter(l => String(l?.data ?? "").slice(0, 7) !== selKey).length;
+          const [ay, am] = dom.split("-");
+          setMismatch({ detectado: dom, selecionado: selKey, fora, total, anoNum: parseInt(ay, 10), mesNum: parseInt(am, 10) });
+          return; // não grava — usuário decide no alerta (trocar p/ o mês certo ou cancelar)
+        }
+      }
 
       // FASE 2 — gravar em lotes (progresso real = processadas/total)
       const CHUNK = 40;
@@ -366,6 +396,18 @@ export default function FinanceiroConciliacao() {
             <Button size="sm" className="h-9" onClick={() => { setShowImport(true); setImportConta(contaBancariaId); }}>
               <Upload className="w-3.5 h-3.5 mr-1.5" />Importar Extrato
             </Button>
+            {contaBancariaId && (statements ?? []).length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9 border-red-500 text-red-600 hover:bg-red-50"
+                disabled={limparMut.isPending}
+                onClick={() => setConfirmLimpar(true)}
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                {limparMut.isPending ? "Limpando..." : "Limpar extrato"}
+              </Button>
+            )}
           </div>
         </div>
 
@@ -982,12 +1024,69 @@ export default function FinanceiroConciliacao() {
 
             <DialogFooter className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 sm:gap-2 shrink-0">
               <Button variant="outline" onClick={() => setShowImport(false)} disabled={importRunning}>Cancelar</Button>
-              <Button onClick={handleImport} disabled={importRunning || !importContent || !importConta}>
+              <Button onClick={() => handleImport()} disabled={importRunning || !importContent || !importConta}>
                 {importRunning ? `Importando... ${importPct}%` : "Importar"}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Rev. 3179 — Confirmação de "Limpar extrato" (soft-delete por conta + período) */}
+        <AlertDialog open={confirmLimpar} onOpenChange={(o: boolean) => { if (!o) setConfirmLimpar(false); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2"><Trash2 className="w-5 h-5 text-red-600" />Limpar extrato importado?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Isso remove as <strong>{(statements ?? []).length}</strong> linha(s) de extrato da conta selecionada no período{mesSel != null ? <> de <strong>{MESES[mesSel - 1]}/{ano}</strong></> : <> do ano <strong>{ano}</strong></>}.
+                Os lançamentos do ERP que estavam conciliados com essas linhas voltam a ficar <strong>pendentes</strong> (nada é apagado do ERP).
+                Use quando importou o extrato errado e quer reimportar.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={limparMut.isPending}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-600 hover:bg-red-700"
+                disabled={limparMut.isPending}
+                onClick={(e: any) => { e.preventDefault(); limparMut.mutate({ companyId, contaBancariaId: parseInt(contaBancariaId), dataInicio, dataFim }); }}
+              >
+                {limparMut.isPending ? "Limpando..." : "Sim, limpar extrato"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Rev. 3179 — Alerta de extrato de OUTRO mês ≠ mês selecionado (bloqueia gravação) */}
+        <AlertDialog open={mismatch != null} onOpenChange={(o: boolean) => { if (!o) setMismatch(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2"><CalendarX className="w-5 h-5 text-amber-600" />Extrato de outro mês?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {mismatch && (
+                  <>
+                    Você selecionou <strong>{MESES[(mismatch.selecionado.length === 7 ? parseInt(mismatch.selecionado.slice(5, 7), 10) : 1) - 1]}/{mismatch.selecionado.slice(0, 4)}</strong>, mas o extrato parece ser de <strong>{MESES[mismatch.mesNum - 1]}/{mismatch.anoNum}</strong>
+                    {mismatch.fora > 0 ? <> ({mismatch.fora} de {mismatch.total} transações fora do mês selecionado)</> : null}.
+                    A importação foi <strong>bloqueada</strong> para evitar misturar meses. O que deseja fazer?
+                  </>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={importRunning}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-blue-600 hover:bg-blue-700"
+                disabled={importRunning}
+                onClick={(e: any) => {
+                  e.preventDefault();
+                  if (mismatch) { setAno(mismatch.anoNum); setMesSel(mismatch.mesNum); }
+                  setMismatch(null);
+                  setTimeout(() => handleImport(true), 0);
+                }}
+              >
+                {mismatch ? `Trocar para ${MESES[mismatch.mesNum - 1]}/${mismatch.anoNum} e importar` : "Importar"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </DashboardLayout>
   );

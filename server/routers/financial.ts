@@ -3588,7 +3588,7 @@ export const financialRouter = router({
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const conds = [`company_id=$1`, `conta_bancaria_id=$2`];
+    const conds = [`company_id=$1`, `conta_bancaria_id=$2`, `excluido_em IS NULL`];
     const vals: any[] = [input.companyId, input.contaBancariaId];
     let i = 3;
     if (input.dataInicio) { conds.push(`data>=$${i++}`); vals.push(input.dataInicio); }
@@ -3627,7 +3627,7 @@ export const financialRouter = router({
          FROM bank_statement_lines b
          LEFT JOIN financial_entries e ON e.id = b.entry_id AND e.company_id = b.company_id
         WHERE b.company_id=$1 AND b.conta_bancaria_id=$2 AND b.data>=$3 AND b.data<=$4
-          AND COALESCE(b.conciliado,0)=1
+          AND COALESCE(b.conciliado,0)=1 AND b.excluido_em IS NULL
         ORDER BY b.data ASC, b.id ASC`, p);
 
     // 2) Extrato SEM lançamento (pendências)
@@ -3635,7 +3635,7 @@ export const financialRouter = router({
       `SELECT id, data, descricao, valor, tipo
          FROM bank_statement_lines
         WHERE company_id=$1 AND conta_bancaria_id=$2 AND data>=$3 AND data<=$4
-          AND COALESCE(conciliado,0)=0
+          AND COALESCE(conciliado,0)=0 AND excluido_em IS NULL
         ORDER BY data ASC, id ASC`, p);
 
     // 3) Lançamentos do sistema sem conciliação no período (conta ou sem conta)
@@ -3673,7 +3673,7 @@ export const financialRouter = router({
               COUNT(*)::int AS total,
               SUM(CASE WHEN COALESCE(conciliado,0)=1 THEN 1 ELSE 0 END)::int AS conciliadas
          FROM bank_statement_lines
-        WHERE company_id=$1 AND data>=$2 AND data<=$3
+        WHERE company_id=$1 AND data>=$2 AND data<=$3 AND excluido_em IS NULL
         GROUP BY conta_bancaria_id`,
       [input.companyId, input.dataInicio, input.dataFim]);
     return rows(res).map((r: any) => {
@@ -3695,10 +3695,19 @@ export const financialRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await dbExecute(db, 
-      `UPDATE bank_statement_lines SET conciliado=1, entry_id=$1 WHERE id=$2 AND company_id=$3`,
+    // Rev. 3179 — NUNCA conciliar uma linha SOFT-DELETADA (excluido_em IS NULL). Usa
+    // RETURNING + guard: se a linha foi limpa (ou não existe na empresa), ABORTA antes
+    // de tocar o financial_entries (senão o lançamento ficaria conciliado=1 apontando
+    // p/ uma linha invisível na tela — estado fantasma).
+    const lnRes = await dbExecute(db,
+      `UPDATE bank_statement_lines SET conciliado=1, entry_id=$1
+        WHERE id=$2 AND company_id=$3 AND excluido_em IS NULL
+        RETURNING id`,
       [input.entryId, input.statementLineId, input.companyId]
     );
+    if (rows(lnRes).length === 0) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Linha do extrato não encontrada ou já removida." });
+    }
     await dbExecute(db, 
       `UPDATE financial_entries SET conciliado=1, data_conciliacao=CURRENT_DATE WHERE id=$1 AND company_id=$2`,
       [input.entryId, input.companyId]
@@ -3736,7 +3745,7 @@ export const financialRouter = router({
     const tol = input.toleranciaDias ?? 5;
 
     // dbExecute liga params por ORDEM DE APARIÇÃO ($N é cosmético) → manter ascendente.
-    const stConds = [`company_id=$1`, `conta_bancaria_id=$2`, `COALESCE(conciliado,0)=0`];
+    const stConds = [`company_id=$1`, `conta_bancaria_id=$2`, `COALESCE(conciliado,0)=0`, `excluido_em IS NULL`];
     const stVals: any[] = [input.companyId, input.contaBancariaId];
     let si = 3;
     if (input.dataInicio) { stConds.push(`data>=$${si++}`); stVals.push(input.dataInicio); }
@@ -3833,7 +3842,7 @@ export const financialRouter = router({
       //    dois pedidos simultâneos p/ a MESMA linha → só o 1º grava; o 2º recebe 0 linhas e pula.
       const lnRes = await dbExecute(db,
         `UPDATE bank_statement_lines SET conciliado=1, entry_id=$1
-          WHERE id=$2 AND company_id=$3 AND COALESCE(conciliado,0)=0
+          WHERE id=$2 AND company_id=$3 AND COALESCE(conciliado,0)=0 AND excluido_em IS NULL
           RETURNING data`,
         [p.entryId, p.statementLineId, input.companyId]);
       const ln = rows(lnRes)[0] as any;
@@ -3880,7 +3889,7 @@ export const financialRouter = router({
     const res = await dbExecute(db,
       `UPDATE bank_statement_lines SET conciliado=1
         WHERE company_id=$1 AND conta_bancaria_id=$2 AND data>=$3 AND data<=$4
-          AND COALESCE(conciliado,0)=0
+          AND COALESCE(conciliado,0)=0 AND excluido_em IS NULL
         RETURNING id`,
       [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim]);
     return { ok: true, afetados: rows(res).length };
@@ -3911,18 +3920,74 @@ export const financialRouter = router({
         `UPDATE financial_entries e SET conciliado=0, data_conciliacao=NULL
            FROM bank_statement_lines l
           WHERE l.company_id=$1 AND l.conta_bancaria_id=$2 AND l.data>=$3 AND l.data<=$4
-            AND COALESCE(l.conciliado,0)=1 AND l.entry_id IS NOT NULL
+            AND COALESCE(l.conciliado,0)=1 AND l.entry_id IS NOT NULL AND l.excluido_em IS NULL
             AND e.id=l.entry_id AND e.company_id=l.company_id`,
         [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim]);
       // 2) Desmarca as linhas do extrato e desfaz o vínculo.
       const res = await dbExecute(tx,
         `UPDATE bank_statement_lines SET conciliado=0, entry_id=NULL
           WHERE company_id=$1 AND conta_bancaria_id=$2 AND data>=$3 AND data<=$4
-            AND COALESCE(conciliado,0)=1
+            AND COALESCE(conciliado,0)=1 AND excluido_em IS NULL
           RETURNING id`,
         [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim]);
       afetados = rows(res).length;
     });
+    return { ok: true, afetados };
+  }),
+
+  // Rev. 3179 — LIMPAR EXTRATO: remove o extrato importado errado de uma conta+período.
+  // SOFT-DELETE (honra a regra JAMAIS DELETE): marca as linhas com excluido_em=NOW()
+  // em vez de apagar — todas as leituras filtram `excluido_em IS NULL`, então some da
+  // tela e o mesmo arquivo pode ser RE-importado limpo (o dedup também ignora excluídas).
+  // Antes de marcar, REVERTE a conciliação dos lançamentos vinculados (conciliado=0,
+  // data_conciliacao=NULL) — preserva status/valor/baixa — pra não deixar entry órfão.
+  // Tenant-safe (_assertFinanceiroCompanyAccess + ownerCheck da conta). Tudo em transação.
+  limparExtrato: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    contaBancariaId: z.number(),
+    dataInicio: z.string(),
+    dataFim: z.string(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+
+    const ownerCheck = await dbExecute(db,
+      `SELECT id FROM company_bank_accounts WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+      [input.contaBancariaId, input.companyId]);
+    if (rows(ownerCheck).length === 0) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Conta bancária não pertence a esta empresa" });
+    }
+
+    let afetados = 0;
+    // dbExecute liga params por ORDEM DE APARIÇÃO ($N é cosmético) → manter ascendente.
+    await db.transaction(async (tx: any) => {
+      // 1) Reverte o flag de conciliação dos lançamentos vinculados às linhas a remover
+      //    (antes de soft-deletar). Só o flag — preserva status/valor/data_pagamento.
+      await dbExecute(tx,
+        `UPDATE financial_entries e SET conciliado=0, data_conciliacao=NULL
+           FROM bank_statement_lines l
+          WHERE l.company_id=$1 AND l.conta_bancaria_id=$2 AND l.data>=$3 AND l.data<=$4
+            AND l.excluido_em IS NULL AND COALESCE(l.conciliado,0)=1 AND l.entry_id IS NOT NULL
+            AND e.id=l.entry_id AND e.company_id=l.company_id`,
+        [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim]);
+      // 2) Soft-delete das linhas do extrato no escopo (zera conciliado/entry_id também).
+      const res = await dbExecute(tx,
+        `UPDATE bank_statement_lines SET excluido_em=NOW(), conciliado=0, entry_id=NULL
+          WHERE company_id=$1 AND conta_bancaria_id=$2 AND data>=$3 AND data<=$4
+            AND excluido_em IS NULL
+          RETURNING id`,
+        [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim]);
+      afetados = rows(res).length;
+    });
+
+    await createAuditLog(db, {
+      userId: ctx.user?.id,
+      action: "bank_statement_clear",
+      details: `Limpeza de extrato (conta ${input.contaBancariaId}, ${input.dataInicio}..${input.dataFim}): ${afetados} linha(s) removida(s)`,
+      companyId: input.companyId,
+    });
+
     return { ok: true, afetados };
   }),
 
@@ -4290,7 +4355,7 @@ export const financialRouter = router({
     const importadoEm = new Date().toISOString();
     for (const line of lines) {
       const existing = await dbExecute(db, 
-        `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 LIMIT 1`,
+        `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND excluido_em IS NULL LIMIT 1`,
         [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor]
       );
       if (rows(existing).length > 0) { skipped++; continue; }
@@ -4379,7 +4444,7 @@ export const financialRouter = router({
     let skipped = 0;
     for (const line of input.linhas) {
       const existing = await dbExecute(db,
-        `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 LIMIT 1`,
+        `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND excluido_em IS NULL LIMIT 1`,
         [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor]
       );
       if (rows(existing).length > 0) { skipped++; continue; }

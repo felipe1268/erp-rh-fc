@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3179 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · AGORA DÁ PRA "LIMPAR EXTRATO" (REMOVER UM
+ * EXTRATO IMPORTADO POR ENGANO, POR CONTA + PERÍODO) E A IMPORTAÇÃO BLOQUEIA AUTOMATICAMENTE
+ * QUANDO O ARQUIVO É DE UM MÊS DIFERENTE DO MÊS SELECIONADO NA TELA.**
+ *
+ * PEDIDO: durante o piloto de conciliação (planilha FC FEV/2026 + extrato CEF), o usuário
+ * precisava (1) DESFAZER um extrato importado na conta/mês errados sem mexer no resto, e
+ * (2) ser AVISADO/BLOQUEADO quando seleciona FEV mas escolhe um arquivo de JAN/MAR — evitando
+ * misturar meses no mesmo período de conciliação.
+ *
+ * SOLUÇÃO — FEATURE 1 "LIMPAR EXTRATO" (SOFT-DELETE, REVERSÍVEL, SEM DELETE FÍSICO):
+ * NOVO endpoint `financial.limparExtrato({companyId, contaBancariaId, dataInicio, dataFim})`
+ * (server/routers/financial.ts). Tenant guard `_assertFinanceiroCompanyAccess` + ownerCheck.
+ * Em transação: para cada `bank_statement_lines` da conta+período (não excluída), REVERTE a
+ * conciliação dos `financial_entries` vinculados (`conciliado=0`, `data_conciliacao=NULL`,
+ * limpa o vínculo) e marca a linha do extrato com `excluido_em = NOW()` (NÃO faz `DELETE` —
+ * honra R-001/007/010). Auditoria `bank_statement_clear`. NOVA coluna additiva
+ * `bank_statement_lines.excluido_em` (drizzle/schema.ts + auto-`ADD COLUMN IF NOT EXISTS` no
+ * syncSchema). TODOS os reads/dedup de extrato passaram a filtrar `excluido_em IS NULL`
+ * (getBankStatements, getConciliacaoReport, getBankAccountsConciliacaoStatus, sugerirConciliacao,
+ * consolidar/desconsolidarMes, e os 2 dedup SELECTs do importBankStatement/insertBankStatementBatch),
+ * então a linha "limpa" some da tela mas pode ser reimportada (dedup não a enxerga).
+ *
+ * SOLUÇÃO — FEATURE 2 "ALERTA DE MÊS ERRADO" (FRONTEND, BLOQUEIO PRÉ-GRAVAÇÃO):
+ * em ambas as telas (`FinanceiroConciliacao.tsx` antiga + `FinanceiroConciliacaoWorkspace.tsx`),
+ * `handleImport` ganhou parâmetro `skipMonthCheck`. Após a FASE 1 (analyze; nada gravado ainda)
+ * calcula o mês DOMINANTE (YYYY-MM mais frequente entre as linhas); se há mês selecionado
+ * (≠ "Ano todo") e ele diverge, ABORTA antes de gravar e abre um `AlertDialog` com a contagem
+ * de transações fora do mês + 2 ações: "Trocar para {mês detectado} e importar" (ajusta ano/mês
+ * e reimporta com `skipMonthCheck=true`) ou "Cancelar". "Ano todo" pula a checagem.
+ *
+ * UI: botão "Limpar extrato" (vermelho, ícone lixeira) aparece só com conta selecionada e linhas
+ * existentes — no cabeçalho da tela antiga e no card de progresso do workspace; confirmação via
+ * shadcn `AlertDialog` (nunca `window.confirm` — domínio replit feio). Cuidado: como `handleImport`
+ * passou a receber arg, os `onClick={handleImport}` viraram `onClick={() => handleImport()}` (senão
+ * o evento entraria como `skipMonthCheck` truthy e puraria a checagem). ZERO SCHEMA destrutivo /
+ * ALTER / DROP / DELETE.
+ *
  * Rev. 3178 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NOVO "WORKSPACE DE CONCILIAÇÃO" EM TELA CHEIA
  * (3 ETAPAS GUIADAS) QUE LEMBRA EXATAMENTE ONDE VOCÊ PAROU AO SAIR E VOLTAR, E QUE GERA UM
  * RELATÓRIO PDF/IMPRESSÃO COM TUDO O QUE FOI CONCILIADO E TUDO O QUE AINDA FALTA.**
