@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3174 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O DIÁLOGO "IMPORTAR EXTRATO BANCÁRIO" PAROU
+ * DE FICAR COM TEXTO SOBREPOSTO / DESORGANIZADO QUANDO A JANELA É BAIXA (EX.: VISTA EM IFRAMES
+ * PEQUENOS DO CANVAS) — AGORA CABEÇALHO E RODAPÉ FICAM FIXOS E SÓ O MIOLO ROLA, SEM ESPREMER O
+ * CONTEÚDO; O TÍTULO TAMBÉM DEIXOU DE PASSAR POR BAIXO DO BOTÃO "X".**
+ *
+ * PEDIDO: usuário anexou print do diálogo e pediu "arrume este layout, está com texto sobreposto e
+ * não tá organizado". Em tamanho normal o diálogo já estava ok (Rev. 3172), mas em viewports
+ * baixos (≈520px de altura, como os iframes do canvas) o conteúdo não cabia e era espremido/cortado,
+ * dando aparência de sobreposição.
+ *
+ * MUDANÇA — FRONTEND-ONLY (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`, diálogo):
+ *  - `DialogContent` ganhou `max-h-[90vh] flex flex-col` (tailwind-merge troca o `grid` default por
+ *    `flex`); o miolo (`div` dos campos) virou `flex-1 min-h-0 overflow-y-auto` → rola quando a
+ *    altura é pequena, em vez de espremer/cortar.
+ *  - `DialogHeader`/`DialogFooter` ganharam `shrink-0` → cabeçalho e rodapé ficam SEMPRE visíveis e
+ *    fixos enquanto o miolo rola.
+ *  - `DialogHeader` ganhou `pr-14` (reserva espaço pro botão "X" absoluto top-right → o subtítulo
+ *    longo "Anexe o extrato (OFX, QFX, CSV, PDF, imagem...)" não passa mais por baixo do X) e o
+ *    bloco título/subtítulo passou a `items-start` + `flex-col justify-center` (alinhamento limpo
+ *    com o ícone "pill").
+ *
+ * ZERO SCHEMA/ALTER/DROP/DELETE · ZERO BACKEND.
+ *
  * Rev. 3173 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · A IMPORTAÇÃO DE EXTRATO PASSOU A LER O PDF
  * DO EXTRATO DA CAIXA ECONÔMICA (INTERNET BANKING) AUTOMATICAMENTE — CADA TRANSAÇÃO VIRA UMA
  * LINHA DO EXTRATO (DATA, HISTÓRICO+CONTRAPARTE+CNPJ+Nº DO CHEQUE/DOC, VALOR COM SINAL E SALDO),

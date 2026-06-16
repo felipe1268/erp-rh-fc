@@ -635,22 +635,22 @@ export default function FinanceiroConciliacao() {
         )}
 
         <Dialog open={showImport} onOpenChange={setShowImport}>
-          <DialogContent className="max-w-md overflow-hidden p-0 gap-0">
-            <DialogHeader className="px-6 pt-6 pb-4 border-b border-gray-100">
-              <DialogTitle className="flex items-center gap-3 text-left">
+          <DialogContent className="max-w-md max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0">
+            <DialogHeader className="px-6 pt-6 pb-4 pr-14 border-b border-gray-100 space-y-0 shrink-0">
+              <DialogTitle className="flex items-start gap-3 text-left">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
                   <Upload className="w-5 h-5" />
                 </span>
-                <span className="min-w-0">
+                <span className="min-w-0 flex flex-col justify-center">
                   <span className="block text-base font-semibold leading-tight">Importar Extrato Bancário</span>
-                  <span className="block text-xs font-normal text-gray-500 leading-tight mt-0.5">
+                  <span className="block text-xs font-normal text-gray-500 leading-snug mt-1">
                     Anexe o extrato (OFX, QFX, CSV, PDF, imagem...)
                   </span>
                 </span>
               </DialogTitle>
             </DialogHeader>
 
-            <div className="px-6 py-5 space-y-5">
+            <div className="px-6 py-5 space-y-5 flex-1 min-h-0 overflow-y-auto">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-gray-600">Conta Bancária *</Label>
                 <Select value={importConta} onValueChange={setImportConta}>
@@ -735,7 +735,7 @@ export default function FinanceiroConciliacao() {
               )}
             </div>
 
-            <DialogFooter className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 sm:gap-2">
+            <DialogFooter className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 sm:gap-2 shrink-0">
               <Button variant="outline" onClick={() => setShowImport(false)}>Cancelar</Button>
               <Button onClick={handleImport} disabled={importMut.isPending || !importContent || !importConta}>
                 {importMut.isPending ? "Importando..." : "Importar"}
