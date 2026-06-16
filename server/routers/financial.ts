@@ -220,6 +220,100 @@ async function materializeRecorrentes(
   return count;
 }
 
+// ─────────────────── PARSE DE EXTRATO (OFX/CSV/PDF) ───────────────────
+// Helper de módulo (puro: não toca DB) reusado pelo importBankStatement legado
+// e pelo fluxo em 2 fases (analyzeBankStatement + insertBankStatementBatch) que
+// dá progresso real (0–100%) no cliente.
+type ExtratoLine = { data: string; descricao: string; valor: number; saldo: number | null };
+
+async function parseExtratoLines(input: {
+  formato: "ofx" | "csv" | "pdf";
+  conteudo: string;
+  csvSeparador?: string;
+  csvColunaData?: number;
+  csvColunaDescricao?: number;
+  csvColunaValor?: number;
+  csvColunaSaldo?: number;
+}): Promise<ExtratoLine[]> {
+  let lines: ExtratoLine[] = [];
+
+  if (input.formato === "pdf") {
+    try {
+      lines = await parseCaixaExtratoPdf(input.conteudo);
+    } catch (err: any) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: err?.message || "Falha ao ler o PDF do extrato." });
+    }
+    if (lines.length === 0) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Não foi possível extrair transações do PDF. Verifique se é o extrato em PDF gerado pelo internet banking da Caixa (extratos digitalizados/foto não são lidos automaticamente).",
+      });
+    }
+  } else if (input.formato === "ofx") {
+    const content = input.conteudo;
+    const stmtTrnMatch = content.match(/<STMTTRN>([\s\S]*?)<\/STMTTRN>/gi);
+    if (!stmtTrnMatch || stmtTrnMatch.length === 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhuma transação encontrada no arquivo OFX" });
+    }
+    for (const trn of stmtTrnMatch) {
+      const dtposted = trn.match(/<DTPOSTED>(\d{8})/)?.[1] ?? "";
+      const trnamt = trn.match(/<TRNAMT>([-\d.,]+)/)?.[1] ?? "0";
+      const memo = trn.match(/<MEMO>([^<\n]+)/)?.[1]?.trim() ?? "";
+      const name = trn.match(/<NAME>([^<\n]+)/)?.[1]?.trim() ?? "";
+      if (!dtposted) continue;
+      const y = dtposted.slice(0, 4);
+      const m = dtposted.slice(4, 6);
+      const d = dtposted.slice(6, 8);
+      const dataStr = `${y}-${m}-${d}`;
+      const valor = parseFloat(trnamt.replace(",", "."));
+      lines.push({
+        data: dataStr,
+        descricao: memo || name || "Sem descrição",
+        valor: isNaN(valor) ? 0 : valor,
+        saldo: null,
+      });
+    }
+    const balMatch = content.match(/<BALAMT>([-\d.,]+)/);
+    if (balMatch && lines.length > 0) {
+      const lastLine = lines[lines.length - 1];
+      lastLine.saldo = parseFloat(balMatch[1].replace(",", "."));
+    }
+  } else {
+    const sep = input.csvSeparador ?? ";";
+    const colData = input.csvColunaData ?? 0;
+    const colDesc = input.csvColunaDescricao ?? 1;
+    const colValor = input.csvColunaValor ?? 2;
+    const colSaldo = input.csvColunaSaldo ?? -1;
+    const rawLines = input.conteudo.split(/\r?\n/).filter(l => l.trim().length > 0);
+    for (let i = 1; i < rawLines.length; i++) {
+      const cols = rawLines[i].split(sep).map(c => c.trim().replace(/^"|"$/g, ""));
+      if (cols.length < 3) continue;
+      const rawData = cols[colData] ?? "";
+      let dataStr = rawData;
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(rawData)) {
+        const [dd, mm, yyyy] = rawData.split("/");
+        dataStr = `${yyyy}-${mm}-${dd}`;
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dataStr)) continue;
+      const rawValor = (cols[colValor] ?? "0").replace(/\./g, "").replace(",", ".");
+      const valor = parseFloat(rawValor);
+      const saldoRaw = colSaldo >= 0 ? (cols[colSaldo] ?? "") : "";
+      const saldo = saldoRaw ? parseFloat(saldoRaw.replace(/\./g, "").replace(",", ".")) : null;
+      lines.push({
+        data: dataStr,
+        descricao: cols[colDesc] ?? "Sem descrição",
+        valor: isNaN(valor) ? 0 : valor,
+        saldo: saldo !== null && isNaN(saldo) ? null : saldo,
+      });
+    }
+  }
+
+  if (lines.length === 0) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhuma linha válida encontrada no arquivo" });
+  }
+  return lines;
+}
+
 export const financialRouter = router({
 
   // ─────────────────── PLANO DE CONTAS ───────────────────
@@ -4130,82 +4224,7 @@ export const financialRouter = router({
       throw new TRPCError({ code: "FORBIDDEN", message: "Conta bancária não pertence a esta empresa" });
     }
 
-    let lines: Array<{ data: string; descricao: string; valor: number; saldo: number | null }> = [];
-
-    if (input.formato === "pdf") {
-      try {
-        lines = await parseCaixaExtratoPdf(input.conteudo);
-      } catch (err: any) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: err?.message || "Falha ao ler o PDF do extrato." });
-      }
-      if (lines.length === 0) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Não foi possível extrair transações do PDF. Verifique se é o extrato em PDF gerado pelo internet banking da Caixa (extratos digitalizados/foto não são lidos automaticamente).",
-        });
-      }
-    } else if (input.formato === "ofx") {
-      const content = input.conteudo;
-      const stmtTrnMatch = content.match(/<STMTTRN>([\s\S]*?)<\/STMTTRN>/gi);
-      if (!stmtTrnMatch || stmtTrnMatch.length === 0) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhuma transação encontrada no arquivo OFX" });
-      }
-      for (const trn of stmtTrnMatch) {
-        const dtposted = trn.match(/<DTPOSTED>(\d{8})/)?.[1] ?? "";
-        const trnamt = trn.match(/<TRNAMT>([-\d.,]+)/)?.[1] ?? "0";
-        const memo = trn.match(/<MEMO>([^<\n]+)/)?.[1]?.trim() ?? "";
-        const name = trn.match(/<NAME>([^<\n]+)/)?.[1]?.trim() ?? "";
-        if (!dtposted) continue;
-        const y = dtposted.slice(0, 4);
-        const m = dtposted.slice(4, 6);
-        const d = dtposted.slice(6, 8);
-        const dataStr = `${y}-${m}-${d}`;
-        const valor = parseFloat(trnamt.replace(",", "."));
-        lines.push({
-          data: dataStr,
-          descricao: memo || name || "Sem descrição",
-          valor: isNaN(valor) ? 0 : valor,
-          saldo: null,
-        });
-      }
-      const balMatch = content.match(/<BALAMT>([-\d.,]+)/);
-      if (balMatch && lines.length > 0) {
-        const lastLine = lines[lines.length - 1];
-        lastLine.saldo = parseFloat(balMatch[1].replace(",", "."));
-      }
-    } else {
-      const sep = input.csvSeparador ?? ";";
-      const colData = input.csvColunaData ?? 0;
-      const colDesc = input.csvColunaDescricao ?? 1;
-      const colValor = input.csvColunaValor ?? 2;
-      const colSaldo = input.csvColunaSaldo ?? -1;
-      const rawLines = input.conteudo.split(/\r?\n/).filter(l => l.trim().length > 0);
-      for (let i = 1; i < rawLines.length; i++) {
-        const cols = rawLines[i].split(sep).map(c => c.trim().replace(/^"|"$/g, ""));
-        if (cols.length < 3) continue;
-        const rawData = cols[colData] ?? "";
-        let dataStr = rawData;
-        if (/^\d{2}\/\d{2}\/\d{4}$/.test(rawData)) {
-          const [dd, mm, yyyy] = rawData.split("/");
-          dataStr = `${yyyy}-${mm}-${dd}`;
-        }
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(dataStr)) continue;
-        const rawValor = (cols[colValor] ?? "0").replace(/\./g, "").replace(",", ".");
-        const valor = parseFloat(rawValor);
-        const saldoRaw = colSaldo >= 0 ? (cols[colSaldo] ?? "") : "";
-        const saldo = saldoRaw ? parseFloat(saldoRaw.replace(/\./g, "").replace(",", ".")) : null;
-        lines.push({
-          data: dataStr,
-          descricao: cols[colDesc] ?? "Sem descrição",
-          valor: isNaN(valor) ? 0 : valor,
-          saldo: saldo !== null && isNaN(saldo) ? null : saldo,
-        });
-      }
-    }
-
-    if (lines.length === 0) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhuma linha válida encontrada no arquivo" });
-    }
+    const lines = await parseExtratoLines(input);
 
     let inserted = 0;
     let skipped = 0;
@@ -4233,6 +4252,97 @@ export const financialRouter = router({
     });
 
     return { inserted, skipped, total: lines.length };
+  }),
+
+  // ─────────────────── IMPORTAÇÃO EXTRATO EM 2 FASES (progresso real) ───────────────────
+  // FASE 1: analisar = só faz o PARSE (OFX/CSV/PDF) e devolve as linhas + um carimbo
+  // `importadoEm` compartilhado por todos os lotes. NÃO grava nada.
+  analyzeBankStatement: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    contaBancariaId: z.number(),
+    formato: z.enum(["ofx", "csv", "pdf"]),
+    conteudo: z.string(),
+    csvSeparador: z.string().optional(),
+    csvColunaData: z.number().optional(),
+    csvColunaDescricao: z.number().optional(),
+    csvColunaValor: z.number().optional(),
+    csvColunaSaldo: z.number().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+
+    const ownerCheck = await dbExecute(db,
+      `SELECT id FROM company_bank_accounts WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+      [input.contaBancariaId, input.companyId]
+    );
+    if (rows(ownerCheck).length === 0) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Conta bancária não pertence a esta empresa" });
+    }
+
+    const lines = await parseExtratoLines(input);
+    return { lines, total: lines.length, importadoEm: new Date().toISOString() };
+  }),
+
+  // FASE 2: gravar um LOTE de linhas (com dedup idempotente). O cliente chama em
+  // sequência, fatiando as linhas, e calcula o % real = processadas/total. No último
+  // lote (`finalize`), grava a auditoria com os totais acumulados informados.
+  insertBankStatementBatch: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    contaBancariaId: z.number(),
+    formato: z.enum(["ofx", "csv", "pdf"]),
+    importadoEm: z.string(),
+    linhas: z.array(z.object({
+      data: z.string(),
+      descricao: z.string(),
+      valor: z.number(),
+      saldo: z.number().nullable(),
+    })),
+    finalize: z.boolean().optional(),
+    totalInseridos: z.number().optional(),
+    totalDuplicados: z.number().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+
+    const ownerCheck = await dbExecute(db,
+      `SELECT id FROM company_bank_accounts WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+      [input.contaBancariaId, input.companyId]
+    );
+    if (rows(ownerCheck).length === 0) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Conta bancária não pertence a esta empresa" });
+    }
+
+    let inserted = 0;
+    let skipped = 0;
+    for (const line of input.linhas) {
+      const existing = await dbExecute(db,
+        `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 LIMIT 1`,
+        [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor]
+      );
+      if (rows(existing).length > 0) { skipped++; continue; }
+      await dbExecute(db,
+        `INSERT INTO bank_statement_lines (company_id, conta_bancaria_id, data, descricao, valor, tipo, saldo_apos, conciliado, importado_em)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,0,$8)`,
+        [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor,
+         line.valor >= 0 ? "credito" : "debito", line.saldo, input.importadoEm]
+      );
+      inserted++;
+    }
+
+    if (input.finalize) {
+      await createAuditLog(db, {
+        userId: ctx.user?.id,
+        action: "bank_statement_import",
+        details: `Importação ${input.formato.toUpperCase()}: ${(input.totalInseridos ?? 0) + inserted} inseridos, ${(input.totalDuplicados ?? 0) + skipped} duplicados`,
+        companyId: input.companyId,
+      });
+    }
+
+    return { inserted, skipped };
   }),
 
   getContasAReceber: protectedProcedure.input(z.object({

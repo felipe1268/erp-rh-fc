@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3175 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O DIÁLOGO "IMPORTAR EXTRATO BANCÁRIO" GANHOU
+ * UMA BARRA DE PROGRESSO REAL (0–100%) MOSTRANDO O QUE ESTÁ SENDO PROCESSADO ("LENDO EXTRATO...",
+ * "GRAVANDO X DE Y TRANSAÇÕES...") — DÁ PRA VER QUE A IMPORTAÇÃO ESTÁ ANDANDO E NÃO TRAVADA.**
+ *
+ * PEDIDO: "quero um % de 0 a 100% e ver o que está sendo processado para ver se está funcionando".
+ * Antes o botão só dizia "Importando..." sem nenhum feedback — em PDFs grandes (ex.: 19 págs/216
+ * transações) dava a impressão de que tinha travado.
+ *
+ * SOLUÇÃO — IMPORTAÇÃO EM 2 FASES (progresso REAL, não fake):
+ *  BACKEND (`server/routers/financial.ts`): o parse foi extraído para o helper de módulo
+ *  `parseExtratoLines` (OFX/CSV/PDF), reusado pelo `importBankStatement` legado (mantido p/ compat).
+ *  Dois endpoints novos:
+ *   - `analyzeBankStatement` — só faz o PARSE e devolve `{ lines, total, importadoEm }` (carimbo
+ *     compartilhado por todos os lotes); NÃO grava nada. Tenant guard `_assertFinanceiroCompanyAccess`
+ *     + ownerCheck da conta.
+ *   - `insertBankStatementBatch` — grava UM LOTE de linhas com o MESMO dedup idempotente
+ *     (company+conta+data+descrição+valor); no lote final (`finalize`) grava a auditoria com os
+ *     totais acumulados (`totalInseridos`/`totalDuplicados` + os do lote). Tenant guard + ownerCheck
+ *     em TODO lote (anti-IDOR).
+ *  FRONTEND (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): `handleImport` virou async —
+ *  chama `analyze`, depois faz loop fatiando em lotes de 40 (`insertBatch.mutateAsync`), acumula
+ *  inseridos/duplicados e calcula `% = 10 + 90 × (processadas/total)`. Uma barra de progresso (faixa
+ *  azul + spinner `Loader2` + label + %) aparece no diálogo durante a importação; o botão mostra
+ *  "Importando... N%" e o Cancelar fica desabilitado. Idempotente: re-rodar pula as já gravadas.
+ *
+ * ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3174 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O DIÁLOGO "IMPORTAR EXTRATO BANCÁRIO" PAROU
  * DE FICAR COM TEXTO SOBREPOSTO / DESORGANIZADO QUANDO A JANELA É BAIXA (EX.: VISTA EM IFRAMES
  * PEQUENOS DO CANVAS) — AGORA CABEÇALHO E RODAPÉ FICAM FIXOS E SÓ O MIOLO ROLA, SEM ESPREMER O

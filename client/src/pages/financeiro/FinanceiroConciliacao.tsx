@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, Landmark, Check, RotateCcw } from "lucide-react";
+import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, Landmark, Check, RotateCcw, Loader2 } from "lucide-react";
 import { formatConta, formatAgencia } from "@/lib/formatters";
 
 function formatBRL(v: number) {
@@ -133,18 +133,13 @@ export default function FinanceiroConciliacao() {
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
 
-  const importMut = (trpc as any).financial.importBankStatement.useMutation({
-    onSuccess: (res: any) => {
-      toast({ title: `Importação concluída! ${res.inserted} inseridos, ${res.skipped} duplicados ignorados` });
-      setShowImport(false);
-      setImportContent("");
-      setImportFileName("");
-      refetchSt();
-      refetchStAno();
-      refetchAccStatus();
-    },
-    onError: (e: any) => toast({ title: "Erro na importação", description: e.message, variant: "destructive" }),
-  });
+  // Rev. 3175 — Importação em 2 fases com PROGRESSO REAL (0–100%): analisa (parse →
+  // devolve linhas) e grava em LOTES; o % = linhas processadas / total.
+  const analyzeMut = (trpc as any).financial.analyzeBankStatement.useMutation();
+  const insertBatchMut = (trpc as any).financial.insertBankStatementBatch.useMutation();
+  const [importRunning, setImportRunning] = useState(false);
+  const [importPct, setImportPct] = useState(0);
+  const [importLabel, setImportLabel] = useState("");
 
   // Rev. 3169 — Consolidar / desconsolidar o mês de uma vez (fecha/reabre todas as
   // linhas do extrato da conta+período). Repinta o extrato do mês e as bolinhas do ano.
@@ -220,16 +215,72 @@ export default function FinanceiroConciliacao() {
     }
   }
 
-  function handleImport() {
+  async function handleImport() {
     if (!importContent) { toast({ title: "Selecione um arquivo", variant: "destructive" }); return; }
     if (!importConta) { toast({ title: "Selecione a conta bancária", variant: "destructive" }); return; }
-    importMut.mutate({
-      companyId,
-      contaBancariaId: parseInt(importConta),
-      formato: importFormato,
-      conteudo: importContent,
-      csvSeparador: importFormato === "csv" ? csvSeparador : undefined,
-    });
+    const contaId = parseInt(importConta);
+    setImportRunning(true);
+    setImportPct(2);
+    setImportLabel("Lendo e analisando o extrato...");
+    try {
+      // FASE 1 — analisar (parse no servidor; nada é gravado ainda)
+      const analysis: any = await analyzeMut.mutateAsync({
+        companyId,
+        contaBancariaId: contaId,
+        formato: importFormato,
+        conteudo: importContent,
+        csvSeparador: importFormato === "csv" ? csvSeparador : undefined,
+      });
+      const linhas: any[] = analysis?.lines ?? [];
+      const total = linhas.length;
+      const importadoEm: string = analysis?.importadoEm;
+      if (total === 0) {
+        toast({ title: "Nenhuma transação encontrada no arquivo", variant: "destructive" });
+        return;
+      }
+      setImportPct(10);
+      setImportLabel(`Extrato lido: ${total} transações. Gravando...`);
+
+      // FASE 2 — gravar em lotes (progresso real = processadas/total)
+      const CHUNK = 40;
+      let inserted = 0;
+      let skipped = 0;
+      let processed = 0;
+      for (let i = 0; i < total; i += CHUNK) {
+        const slice = linhas.slice(i, i + CHUNK);
+        const isLast = i + CHUNK >= total;
+        const r: any = await insertBatchMut.mutateAsync({
+          companyId,
+          contaBancariaId: contaId,
+          formato: importFormato,
+          importadoEm,
+          linhas: slice,
+          finalize: isLast,
+          totalInseridos: inserted,
+          totalDuplicados: skipped,
+        });
+        inserted += r?.inserted ?? 0;
+        skipped += r?.skipped ?? 0;
+        processed += slice.length;
+        setImportPct(10 + Math.round((processed / total) * 90));
+        setImportLabel(`Gravando ${Math.min(processed, total)} de ${total} transações...`);
+      }
+
+      setImportPct(100);
+      setImportLabel("Concluído!");
+      toast({ title: `Importação concluída! ${inserted} inseridos, ${skipped} duplicados ignorados` });
+      setShowImport(false);
+      setImportContent("");
+      setImportFileName("");
+      refetchSt();
+      refetchStAno();
+      refetchAccStatus();
+    } catch (e: any) {
+      toast({ title: "Erro na importação", description: e?.message || "Falha ao importar o extrato.", variant: "destructive" });
+    } finally {
+      setImportRunning(false);
+      setTimeout(() => { setImportPct(0); setImportLabel(""); }, 500);
+    }
   }
 
   const pendentes = (statements ?? []).filter((s: any) => !s.conciliado);
@@ -733,12 +784,30 @@ export default function FinanceiroConciliacao() {
                   PDF de extrato da Caixa (internet banking) detectado — as transações serão extraídas automaticamente. Selecione a conta correta acima.
                 </p>
               )}
+
+              {importRunning && (
+                <div className="space-y-2 rounded-xl border border-blue-100 bg-blue-50/60 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-1.5 text-xs font-medium text-blue-800 truncate">
+                      <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
+                      <span className="truncate">{importLabel || "Processando..."}</span>
+                    </span>
+                    <span className="shrink-0 text-sm font-bold tabular-nums text-blue-700">{importPct}%</span>
+                  </div>
+                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-blue-100">
+                    <div
+                      className="h-full rounded-full bg-blue-600 transition-all duration-300 ease-out"
+                      style={{ width: `${importPct}%` }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <DialogFooter className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 sm:gap-2 shrink-0">
-              <Button variant="outline" onClick={() => setShowImport(false)}>Cancelar</Button>
-              <Button onClick={handleImport} disabled={importMut.isPending || !importContent || !importConta}>
-                {importMut.isPending ? "Importando..." : "Importar"}
+              <Button variant="outline" onClick={() => setShowImport(false)} disabled={importRunning}>Cancelar</Button>
+              <Button onClick={handleImport} disabled={importRunning || !importContent || !importConta}>
+                {importRunning ? `Importando... ${importPct}%` : "Importar"}
               </Button>
             </DialogFooter>
           </DialogContent>
