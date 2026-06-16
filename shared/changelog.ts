@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3169 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NOVO BOTÃO "CONSOLIDAR {MÊS}" /
+ * "DESCONSOLIDAR {MÊS}" QUE FECHA OU REABRE O MÊS INTEIRO DE UMA VEZ — MARCANDO/DESMARCANDO
+ * TODAS AS LINHAS DO EXTRATO DA CONTA+PERÍODO COMO CONCILIADAS (A BOLINHA DO MÊS VIRA
+ * VERDE/"CONSOLIDADO" OU VOLTA A "COM LANÇAMENTO").**
+ *
+ * PEDIDO: "quero um botão para consolidar e desconciliar o mês". Antes só dava p/ conciliar
+ * linha-a-linha (manual) ou via "Sugestões Automáticas" (par extrato↔lançamento). Não havia
+ * jeito de fechar o mês de uma vez nem de reabri-lo.
+ *
+ * MUDANÇA — BACKEND (`server/routers/financial.ts`, 2 mutations novas, tenant-safe via
+ * `_assertFinanceiroCompanyAccess`):
+ *  - `consolidarMes({companyId, contaBancariaId, dataInicio, dataFim})`: `UPDATE
+ *    bank_statement_lines SET conciliado=1` em TODAS as linhas pendentes da conta+período
+ *    (`COALESCE(conciliado,0)=0`). Só toca o flag da LINHA do extrato — não mexe em
+ *    `financial_entries`. Retorna `{afetados}`.
+ *  - `desconsolidarMes(...)`: reabre o mês. (1) Reverte SÓ o flag de conciliação dos
+ *    lançamentos ainda vinculados (`UPDATE financial_entries SET conciliado=0,
+ *    data_conciliacao=NULL FROM bank_statement_lines ... WHERE l.entry_id=e.id` — preserva
+ *    status/valor/data_pagamento, i.e. a BAIXA do caixa NÃO é desfeita); (2) `UPDATE
+ *    bank_statement_lines SET conciliado=0, entry_id=NULL` nas linhas conciliadas do
+ *    período. Retorna `{afetados}`. (params ordenados por aparição — regra do dbExecute).
+ *
+ * MUDANÇA — FRONTEND (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): no header,
+ * ao lado de "Importar Extrato", um botão toggle que só aparece quando há CONTA + um MÊS
+ * específico selecionado (`mesSel != null`) e o mês NÃO está vazio. Se o mês está
+ * "consolidado" → mostra "Desconsolidar {Mês}" (ícone `RotateCcw`); senão → "Consolidar
+ * {Mês}" (verde, ícone `CheckCircle`). As mutations repintam o extrato do mês (`refetchSt`)
+ * e as bolinhas do ano (`refetchStAno` — agora capturado da query `statementsAno`); toast
+ * informa quantos lançamentos foram marcados/desmarcados. Import `RotateCcw` (lucide).
+ * ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3168 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · A SELEÇÃO DA CONTA DEIXOU DE SER UM
  * DROPDOWN ("SELECIONE A CONTA...") E PASSOU A SER UMA GRADE DE CARDS CLICÁVEIS — UM CARD
  * POR CONTA, COM ÍCONE/COR DO BANCO, NOME + DESCRIÇÃO E AGÊNCIA/CONTA VISÍVEIS DE UMA VEZ;

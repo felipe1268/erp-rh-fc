@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, Landmark, Check } from "lucide-react";
+import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, Landmark, Check, RotateCcw } from "lucide-react";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -88,7 +88,7 @@ export default function FinanceiroConciliacao() {
 
   // Rev. 3165 — Extrato do ANO inteiro (apenas p/ pintar as bolinhas de status de cada mês),
   // independente do mês selecionado na timeline. Só busca quando há conta escolhida.
-  const { data: statementsAno } = (trpc as any).financial.getBankStatements.useQuery(
+  const { data: statementsAno, refetch: refetchStAno } = (trpc as any).financial.getBankStatements.useQuery(
     { companyId, contaBancariaId: parseInt(contaBancariaId) || 0, dataInicio: `${ano}-01-01`, dataFim: `${ano}-12-31` },
     { enabled: !!companyId && !!contaBancariaId }
   );
@@ -128,6 +128,17 @@ export default function FinanceiroConciliacao() {
       refetchSt();
     },
     onError: (e: any) => toast({ title: "Erro na importação", description: e.message, variant: "destructive" }),
+  });
+
+  // Rev. 3169 — Consolidar / desconsolidar o mês de uma vez (fecha/reabre todas as
+  // linhas do extrato da conta+período). Repinta o extrato do mês e as bolinhas do ano.
+  const consolidarMut = (trpc as any).financial.consolidarMes.useMutation({
+    onSuccess: (res: any) => { toast({ title: `Mês consolidado! ${res.afetados} lançamento(s) marcado(s).` }); refetchSt(); refetchStAno(); },
+    onError: (e: any) => toast({ title: "Erro ao consolidar", description: e.message, variant: "destructive" }),
+  });
+  const desconsolidarMut = (trpc as any).financial.desconsolidarMes.useMutation({
+    onSuccess: (res: any) => { toast({ title: `Mês reaberto! ${res.afetados} lançamento(s) desmarcado(s).` }); refetchSt(); refetchStAno(); },
+    onError: (e: any) => toast({ title: "Erro ao desconsolidar", description: e.message, variant: "destructive" }),
   });
 
   const { data: sugData, isFetching: sugLoading, refetch: refetchSug } = (trpc as any).financial.sugerirConciliacao.useQuery(
@@ -199,9 +210,36 @@ export default function FinanceiroConciliacao() {
             </h1>
             <p className="text-sm text-gray-500 mt-1">Relacione os lançamentos do sistema com o extrato bancário</p>
           </div>
-          <Button size="sm" className="h-9" onClick={() => { setShowImport(true); setImportConta(contaBancariaId); }}>
-            <Upload className="w-3.5 h-3.5 mr-1.5" />Importar Extrato
-          </Button>
+          <div className="flex items-center gap-2">
+            {contaBancariaId && mesSel != null && mesesStatus[mesSel] !== "vazio" && (
+              mesesStatus[mesSel] === "consolidado" ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-9"
+                  disabled={desconsolidarMut.isPending}
+                  onClick={() => desconsolidarMut.mutate({ companyId, contaBancariaId: parseInt(contaBancariaId), dataInicio, dataFim })}
+                >
+                  <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                  {desconsolidarMut.isPending ? "Reabrindo..." : `Desconsolidar ${MESES[mesSel - 1]}`}
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-9 border-green-600 text-green-700 hover:bg-green-50"
+                  disabled={consolidarMut.isPending}
+                  onClick={() => consolidarMut.mutate({ companyId, contaBancariaId: parseInt(contaBancariaId), dataInicio, dataFim })}
+                >
+                  <CheckCircle className="w-3.5 h-3.5 mr-1.5" />
+                  {consolidarMut.isPending ? "Consolidando..." : `Consolidar ${MESES[mesSel - 1]}`}
+                </Button>
+              )
+            )}
+            <Button size="sm" className="h-9" onClick={() => { setShowImport(true); setImportConta(contaBancariaId); }}>
+              <Upload className="w-3.5 h-3.5 mr-1.5" />Importar Extrato
+            </Button>
+          </div>
         </div>
 
         <Card className="border-0 shadow-sm">

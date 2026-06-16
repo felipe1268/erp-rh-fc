@@ -3678,6 +3678,69 @@ export const financialRouter = router({
     return { ok: true, conciliados, total: input.pares.length };
   }),
 
+  // Rev. 3169 — CONSOLIDAR O MÊS: marca TODAS as linhas do extrato da conta+período
+  // (ainda pendentes) como conciliado=1, fechando o mês de uma vez (a bolinha do mês
+  // fica VERDE/"Consolidado"). NÃO mexe em lançamentos (financial_entries) — é só o
+  // flag da linha do extrato. Tenant-safe. ZERO ALTER/DROP/DELETE.
+  consolidarMes: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    contaBancariaId: z.number(),
+    dataInicio: z.string(),
+    dataFim: z.string(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    // dbExecute liga params por ORDEM DE APARIÇÃO ($N é cosmético) → manter ascendente.
+    const res = await dbExecute(db,
+      `UPDATE bank_statement_lines SET conciliado=1
+        WHERE company_id=$1 AND conta_bancaria_id=$2 AND data>=$3 AND data<=$4
+          AND COALESCE(conciliado,0)=0
+        RETURNING id`,
+      [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim]);
+    return { ok: true, afetados: rows(res).length };
+  }),
+
+  // Rev. 3169 — DESCONSOLIDAR O MÊS: reabre o mês marcando TODAS as linhas conciliadas
+  // da conta+período como conciliado=0. Para as linhas que estavam PAREADAS a um
+  // lançamento (entry_id), também REVERTE o flag de conciliação do lançamento
+  // (conciliado=0, data_conciliacao=NULL) e desfaz o vínculo (entry_id=NULL) — SEM
+  // tocar em status/valor/baixa do lançamento (a baixa do caixa é preservada).
+  // Tenant-safe. ZERO ALTER/DROP/DELETE.
+  desconsolidarMes: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    contaBancariaId: z.number(),
+    dataInicio: z.string(),
+    dataFim: z.string(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    // Os 2 UPDATEs rodam em UMA transação: a etapa 1 depende do entry_id que a etapa 2
+    // apaga, então uma falha intermediária não pode deixar estado parcial.
+    let afetados = 0;
+    await db.transaction(async (tx: any) => {
+      // 1) Reverte o flag de conciliação dos lançamentos AINDA vinculados (antes de
+      //    limpar o entry_id das linhas). Só o flag — preserva status/valor/data_pagamento.
+      await dbExecute(tx,
+        `UPDATE financial_entries e SET conciliado=0, data_conciliacao=NULL
+           FROM bank_statement_lines l
+          WHERE l.company_id=$1 AND l.conta_bancaria_id=$2 AND l.data>=$3 AND l.data<=$4
+            AND COALESCE(l.conciliado,0)=1 AND l.entry_id IS NOT NULL
+            AND e.id=l.entry_id AND e.company_id=l.company_id`,
+        [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim]);
+      // 2) Desmarca as linhas do extrato e desfaz o vínculo.
+      const res = await dbExecute(tx,
+        `UPDATE bank_statement_lines SET conciliado=0, entry_id=NULL
+          WHERE company_id=$1 AND conta_bancaria_id=$2 AND data>=$3 AND data<=$4
+            AND COALESCE(conciliado,0)=1
+          RETURNING id`,
+        [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim]);
+      afetados = rows(res).length;
+    });
+    return { ok: true, afetados };
+  }),
+
   // ─────────────────── RÉGUA DE COBRANÇA ───────────────────
 
   getCollectionRules: protectedProcedure.input(z.object({ companyId: z.number() })).query(async ({ input }) => {
