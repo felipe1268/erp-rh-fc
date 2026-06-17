@@ -587,10 +587,15 @@ export default function FinanceiroConciliacaoWorkspace() {
                 <h2 className="text-base font-semibold flex items-center gap-2"><Sparkles className="w-4 h-4 text-amber-500" /> Sugestões Automáticas</h2>
                 <div className="flex items-center gap-2">
                   <Label className="text-xs text-gray-500">Tolerância (dias)</Label>
-                  <Select value={String(toleranciaDias)} onValueChange={v => setToleranciaDias(parseInt(v))}>
-                    <SelectTrigger className="w-20 h-8"><SelectValue /></SelectTrigger>
-                    <SelectContent position="popper" side="bottom" sideOffset={4} align="start" avoidCollisions={false}>{tolOptions.map(d => <SelectItem key={d} value={String(d)}>{d === diasDoMes && mesSel != null ? `${d} (mês)` : d}</SelectItem>)}</SelectContent>
-                  </Select>
+                  {/* Rev. 3189 — native <select> (ancorado pelo browser abaixo do campo;
+                      Radix Select abria no meio da tela em modo item-aligned). */}
+                  <select
+                    value={String(toleranciaDias)}
+                    onChange={e => setToleranciaDias(parseInt(e.target.value, 10))}
+                    className="h-8 w-20 rounded-md border border-input bg-transparent px-2 text-sm shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  >
+                    {tolOptions.map(d => <option key={d} value={String(d)}>{d === diasDoMes && mesSel != null ? `${d} (mês)` : d}</option>)}
+                  </select>
                   <Button size="sm" variant={mostrarSugestoes ? "outline" : "default"} onClick={() => { setMostrarSugestoes(true); setSelSug(new Set()); if (mostrarSugestoes) refetchSug(); }} disabled={sugLoading}>
                     <Sparkles className="w-4 h-4 mr-1" />{sugLoading ? "Analisando..." : mostrarSugestoes ? "Reanalisar" : "Sugerir conciliação"}
                   </Button>

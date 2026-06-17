@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3189 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O DROPDOWN "TOLERÂNCIA (DIAS)" PAROU DE
+ * ABRIR NO MEIO DA TELA: O SELETOR VIROU UM `<select>` NATIVO, CUJO MENU O PRÓPRIO BROWSER
+ * ANCORA LOGO ABAIXO DO CAMPO.**
+ *
+ * PEDIDO (piloto FC FEV/2026): "quando clico para abrir os dias, a janela não fica no local
+ * correto — fica no meio da tela. Arrume isso." Print mostrava a lista (0,1,2,3,5,7,10,15,28)
+ * flutuando no canto superior esquerdo, longe do campo (que fica à direita, no card "Sugestões
+ * Automáticas").
+ *
+ * CAUSA: o seletor de Tolerância usava o Radix `Select` (shadcn). Mesmo com os props de
+ * posicionamento aplicados na Rev. 3184 (`position="popper" side="bottom" align="start"
+ * avoidCollisions={false}`), no ambiente do usuário o Radix caía no modo "item-aligned"
+ * (tenta sobrepor o item selecionado ao gatilho e, clampado à viewport, jogava o menu pro
+ * meio/canto da tela) em vez de ancorar via popper.
+ *
+ * SOLUÇÃO (frontend-only, ZERO BACKEND / ZERO SCHEMA): troquei o Radix `Select` da Tolerância
+ * por um `<select>` HTML NATIVO nas duas telas que têm esse seletor —
+ * `client/src/pages/financeiro/FinanceiroConciliacao.tsx` e
+ * `client/src/pages/financeiro/FinanceiroConciliacaoWorkspace.tsx`. O dropdown nativo é
+ * renderizado e ancorado pelo próprio browser/SO sempre colado ao campo, então é impossível ele
+ * "saltar" pro meio da tela. Mantidos: o mesmo `tolOptions` (0,1,2,3,5,7,10,15 + dias do mês),
+ * o rótulo "(mês)" no valor de dias-do-mês, o estado `toleranciaDias` e o handler (agora
+ * `onChange`). Estilo Tailwind equivalente ao trigger anterior (`h-8 w-20`, borda, foco-ring).
+ * Os demais Radix `Select` dessas telas (Status, conta, formato de import) foram mantidos.
+ *
+ * IMPACTO: o menu de Tolerância abre sempre logo abaixo do campo, em qualquer navegador/desktop,
+ * sem depender da heurística de posicionamento do Radix. ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3188 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O KPI "ERP SEM EXTRATO" PAROU DE INFLAR
  * MUDANDO DE VALOR A CADA CONTA: OS LANÇAMENTOS SEM CONTA BANCÁRIA DEFINIDA (conta_bancaria_id
  * NULL) SAÍRAM DO NÚMERO DA CONTA E GANHARAM UM BLOCO PRÓPRIO "SEM CONTA BANCÁRIA DEFINIDA".**
