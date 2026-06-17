@@ -43,7 +43,8 @@ class ErrorBoundary extends Component<Props, State> {
         const now = Date.now();
         if (!lastReload || now - Number(lastReload) > 10000) {
           sessionStorage.setItem(reloadKey, String(now));
-          window.location.reload();
+          const rcb = (window as any).__reloadCacheBusting;
+          if (typeof rcb === 'function') rcb(now); else window.location.reload();
         }
       } catch { /* modo privado iOS: ignora e mostra erro normalmente */ }
       return { hasError: true, error };

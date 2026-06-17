@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3215 — **APP (TODAS AS TELAS) · CORREÇÃO DA TELA DE ERRO "TypeError: Importing a module
+ * script failed." QUE APARECIA NO iPad/iOS SAFARI APÓS UM DEPLOY — AGORA A PÁGINA SE
+ * AUTO-RECUPERA BUSCANDO O index.html NOVO (CACHE-BUSTING) EM VEZ DE CAIR NA TELA DE ERRO.**
+ *
+ * PEDIDO (piloto FC): "Tá com erro" + print (iPad Safari, app publicado erp-gestao-integrada.replit.app)
+ * mostrando a tela do ErrorBoundary com "TypeError: Importing a module script failed." e o chunk
+ * `index-CcJXW7jP.js`.
+ *
+ * CAUSA-RAIZ: a cada publish o Vite troca TODOS os hashes dos chunks. Uma aba que já estava ABERTA
+ * antes do deploy ainda guarda em memória as referências de chunk ANTIGAS do `index.html`. Ao navegar
+ * para uma rota `React.lazy`, o import aponta p/ um hash que não existe mais no servidor → iOS Safari
+ * lança "Importing a module script failed". JÁ EXISTIA auto-recuperação em 3 pontos (`lazyWithRetry`
+ * em `App.tsx`, `ErrorBoundary.tsx` e o handler `unhandledrejection` em `main.tsx`), todos com a
+ * mesma trava `sessionStorage __erp_chunk_reload` (janela 10s) que dispara `window.location.reload()`
+ * 1x. PORÉM no iOS Safari o `window.location.reload()` pode reusar o `index.html` em CACHE (mesmas
+ * referências de chunk antigas) → o chunk falha DE NOVO dentro dos 10s → a trava bloqueia o 2º reload
+ * → o erro borbulha p/ o ErrorBoundary e o usuário vê a tela de erro (foi exatamente o que aconteceu
+ * no print).
+ *
+ * SOLUÇÃO — FRONT (sem backend/schema): substituído o `window.location.reload()` "puro" por um reload
+ * COM CACHE-BUSTING. Novo helper `reloadCacheBusting(now)` em `client/src/main.tsx` adiciona um query
+ * param ÚNICO `_cb=<timestamp>` à URL e faz `window.location.replace(...)` — como a URL fica diferente,
+ * o navegador é OBRIGADO a buscar um `index.html` FRESCO (com os hashes novos), garantindo a
+ * auto-cura em 1 reload. O helper é exposto como `window.__reloadCacheBusting` e CONSUMIDO pelos 3
+ * pontos de recuperação (`main.tsx` unhandledrejection, `ErrorBoundary.tsx` getDerivedStateFromError,
+ * `lazyWithRetry` em `App.tsx`), com fallback p/ `window.location.reload()` caso o helper não exista.
+ * No boot, `main.tsx` LIMPA o param `_cb` da URL via `history.replaceState` (mantém a URL limpa após
+ * a recuperação). Server NÃO alterado (`index.html` já é `no-cache, no-store` e `/assets` 1y immutable).
+ *
+ * RESSALVA (igual às revisões anteriores de chunk): o fix só passa a valer em produção APÓS
+ * RE-PUBLICAR. A aba atualmente quebrada continua quebrada até um reload manual ("Recarregar página").
+ *
+ * ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE · só client.
+ *
  * Rev. 3214 — **FINANCEIRO / CONTROLE DE CHEQUES · A IMPORTAÇÃO DA PLANILHA (.xlsx) AGORA MOSTRA UMA
  * BARRA DE PROGRESSO DE 0 A 100% — TANTO NA ETAPA "ANALISAR PLANILHA" QUANTO NA "GRAVAR NOVO(S)" —
  * EM VEZ DE SÓ O TEXTO "ANALISANDO…".**

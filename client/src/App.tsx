@@ -117,7 +117,8 @@ function lazyWithRetry<T extends ComponentType<any>>(
         const last = Number(sessionStorage.getItem(KEY) || 0);
         if (!last || now - last > 10000) {
           sessionStorage.setItem(KEY, String(now));
-          window.location.reload();
+          const rcb = (window as any).__reloadCacheBusting;
+          if (typeof rcb === "function") rcb(now); else window.location.reload();
           // trava o render até a página recarregar (mostra o PageLoader)
           return await new Promise<{ default: T }>(() => {});
         }

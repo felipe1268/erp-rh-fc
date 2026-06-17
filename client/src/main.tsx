@@ -41,15 +41,42 @@ window.addEventListener("unhandledrejection", (event) => {
     msg.includes("Loading chunk")
   ) {
     event.preventDefault();
-    const key = "__erp_chunk_reload";
-    const last = sessionStorage.getItem(key);
-    const now = Date.now();
-    if (!last || now - Number(last) > 10000) {
-      sessionStorage.setItem(key, String(now));
-      window.location.reload();
-    }
+    // sessionStorage pode lançar exceção no modo privado do iOS — sempre em try/catch
+    try {
+      const key = "__erp_chunk_reload";
+      const last = sessionStorage.getItem(key);
+      const now = Date.now();
+      if (!last || now - Number(last) > 10000) {
+        sessionStorage.setItem(key, String(now));
+        reloadCacheBusting(now);
+      }
+    } catch { /* modo privado iOS: ignora */ }
   }
 });
+
+// Reload "cache-busting": no iOS Safari, window.location.reload() pode reusar o
+// index.html em cache (com referências de chunk ANTIGAS pós-deploy), o que faz o
+// chunk-load falhar de novo dentro da janela de 10s → cai no ErrorBoundary. Um
+// query param único força o navegador a buscar um index.html FRESCO (novos hashes).
+function reloadCacheBusting(now: number) {
+  try {
+    const u = new URL(window.location.href);
+    u.searchParams.set("_cb", String(now));
+    window.location.replace(u.toString());
+  } catch {
+    window.location.reload();
+  }
+}
+(window as any).__reloadCacheBusting = reloadCacheBusting;
+
+// Limpa o param "_cb" da URL após a recuperação (mantém a URL limpa).
+try {
+  const u = new URL(window.location.href);
+  if (u.searchParams.has("_cb")) {
+    u.searchParams.delete("_cb");
+    window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
+  }
+} catch { /* noop */ }
 
 import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from '@shared/const';

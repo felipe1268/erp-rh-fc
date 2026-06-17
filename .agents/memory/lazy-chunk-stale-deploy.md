@@ -32,3 +32,15 @@ loop.
 **How to apply:** any NEW lazy route must use `lazyWithRetry`, not bare `lazy`. The fix
 only takes effect in production AFTER re-publishing — the currently-deployed bundle stays
 broken until the next deploy; tell the user to re-publish.
+
+## Update: plain reload() reuses cached index.html on iOS
+
+`window.location.reload()` alone is NOT enough on iOS Safari — it can re-serve the
+CACHED `index.html` (same old chunk refs), so the lazy import fails AGAIN within the
+10s `__erp_chunk_reload` window, the guard blocks the 2nd reload, and the error bubbles
+to the ErrorBoundary (user sees the error screen). Fix: reload with a UNIQUE
+cache-busting query param (`_cb=<ts>`) via `location.replace` so the URL differs and the
+browser is forced to fetch a fresh index.html with new hashes in ONE reload. Helper
+`reloadCacheBusting(now)` lives in `main.tsx`, exposed as `window.__reloadCacheBusting`,
+consumed by all 3 recovery points (lazyWithRetry/ErrorBoundary/main unhandledrejection)
+with a `reload()` fallback; boot strips `_cb` via `history.replaceState`.
