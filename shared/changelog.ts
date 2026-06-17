@@ -1,6 +1,60 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3199 — **FINANCEIRO / CONTROLE DE CHEQUES · NOVO MÓDULO QUE IMPORTA A PLANILHA "CONTROLE DE
+ * CHEQUES" (ABAS MENSAIS JAN..DEZ) PARA UMA TABELA DEDICADA — O CHEQUE NÃO VIRA LANÇAMENTO, É APENAS
+ * UM REGISTRO DE CONTROLE/CONSULTA; E O Nº DO CHEQUE VIRA FONTE DE IDENTIFICAÇÃO NA CONCILIAÇÃO
+ * BANCÁRIA: AS LINHAS ANÔNIMAS DA CAIXA "COMPENSACAO CHEQUE NNN" PASSAM A MOSTRAR O FAVORECIDO.**
+ *
+ * PEDIDO (piloto FC): "temos uma planilha de CONTROLE DE CHEQUES com os cheques emitidos (favorecido,
+ * banco, nº, valor, vencimento, compensação, status). Quero importar isso para o ERP para consultar e
+ * filtrar; o cheque NÃO precisa virar lançamento financeiro. E na conciliação da Caixa as linhas só
+ * dizem 'COMPENSACAO CHEQUE 12345' — sem dizer pra quem foi; dá pra usar o controle de cheques para
+ * identificar o favorecido?" (Opção A escolhida: importar como CONTROLE, não como lançamento).
+ *
+ * FATOS DA PLANILHA (validados): abas mensais JAN..DEZ (a aba consolidada "Cheques" é template vazio →
+ * ignorada); header na linha 1, dados a partir da linha 3. Colunas: 0 Parcelas | 1 Cliente(=FORNECEDOR/
+ * favorecido) | 2 Cod Banco | 3 Banco | 4 Agência | 5 Conta Corrente (suja) | 6 Nº Cheque | 7 NF |
+ * 8 Valor (formato US "R$ 3,417.21") | 9 Data Vencimento (US M/D/YY) | 10 Data Compensação |
+ * 11 Observação (status). Valor/data lidos como SERIAL do Excel (raw), nunca pelo texto, p/ evitar
+ * troca dia/mês. Status normalizado: "Compensado" → compensado; "Descontar Cheque" / "faltam N dias
+ * para descontar" → pendente; sustado/cancelado/devolvido mapeados se aparecerem.
+ *
+ * SOLUÇÃO (TABELA NOVA self-heal + ROUTER + TELA + GANCHO NA CONCILIAÇÃO):
+ *  - SCHEMA `drizzle/schema.ts` (`financial_cheques`) + self-heal `[SyncSchema+]`
+ *    (`server/_core/index.ts`): `CREATE TABLE IF NOT EXISTS financial_cheques` (snake_case, padrão das
+ *    demais tabelas self-heal) com company_id, conta_bancaria_id (nullable), conta_corrente_raw,
+ *    banco_codigo/nome, agencia, numero_cheque, fornecedor_nome, fornecedor_id (nullable), parcela, nf,
+ *    valor (numeric), data_vencimento, data_compensacao, status, observacao, mes_ref, ano_ref,
+ *    origem_arquivo, lote_id, lancamento_id (link futuro), conciliado, data_conciliacao, excluido_em,
+ *    created_at, updated_at — 3 índices parciais `WHERE excluido_em IS NULL`. ZERO ALTER/DROP/DELETE.
+ *  - ROUTER `server/routers/cheques.ts` (registrado em `server/routers.ts`): `importarPreview(base64)`
+ *    parseia o Excel (xlsx), normaliza valor/data via serial, faz de-para fuzzy de fornecedor
+ *    (fornecedores) e conta (company_bank_accounts), dedup natural (company, numero_cheque, valor,
+ *    ano/mês) → relatório dry-run NOVO/JÁ EXISTE (ZERO write). `importarConfirmar(lote)` re-parseia o
+ *    base64 (stateless) e grava só os NOVOS com `lote_id` rastreável. `listar` (filtros conta/status/
+ *    período/fornecedor), `resumo` (cards), `atualizar`, `excluir` (soft `excluido_em`) e `reverterLote`.
+ *    Tenant guard `assertCompanyAccess` em TODAS as rotas; `dbExecute` local liga params por ORDEM DE
+ *    APARIÇÃO.
+ *  - TELA `client/src/pages/financeiro/FinanceiroCheques.tsx` (rota `/financeiro/cheques` em `App.tsx`,
+ *    menu Financeiro em `DashboardLayout.tsx` ícone `Banknote`, permissão `financeiro-cheques` em
+ *    `shared/modules.ts`): upload .xlsx → relatório de conferência → confirmar gravação; tabela com
+ *    filtros (conta/status/período/fornecedor), cards de resumo, edição/exclusão manual, tudo em BRL pt-BR.
+ *  - GANCHO NA CONCILIAÇÃO `server/routers/financial.ts` (`sugerirConciliacao`): carrega os cheques da
+ *    empresa (numero+valor→favorecido), extrai o nº de "COMPENSACAO CHEQUE NNN" da descrição da linha do
+ *    extrato e — EXIGINDO o VALOR bater (nunca pelo nome/nº sozinho) — anexa `chequeNumero`/
+ *    `chequeFornecedor` às sugestões e às linhas sem-match; `client/.../FinanceiroConciliacao.tsx` mostra
+ *    "Cheque nº X · favorecido" na linha do extrato e usa "cheque nº X" como `identificadoVia` quando não
+ *    houver outra identificação. Puramente INFORMATIVO — o cheque não concilia sozinho (não é lançamento).
+ *
+ * RESSALVA: a identificação por cheque exige nº + valor batendo; se a planilha não tiver o cheque ou o
+ * valor divergir, a linha segue anônima. O cheque permanece como CONTROLE (Opção A) e não gera obrigação
+ * financeira. Re-upload é idempotente (dedup natural). ZERO ALTER/DROP/DELETE.
+ *
+ * IMPACTO: a FC passa a consultar/filtrar os cheques emitidos dentro do ERP e a conciliação da Caixa
+ * deixa de exibir linhas "COMPENSACAO CHEQUE" anônimas — agora mostra o favorecido, acelerando o
+ * fechamento e reduzindo erro de identificação.
+ *
  * Rev. 3198 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · OS ITENS DA LISTA "NO EXTRATO, SEM LANÇAMENTO"
  * GANHARAM UM BOTÃO "LANÇAR" QUE ABRE UM FORMULÁRIO JÁ PRÉ-PREENCHIDO (DATA, CONTA E VALOR DO
  * EXTRATO) — O USUÁRIO SÓ COMPLETA OBRA, FORNECEDOR, CATEGORIA E CENTRO DE CUSTO; AO SALVAR, O

@@ -7088,6 +7088,47 @@ export const financialEntries = pgTable("financial_entries", {
   index("idx_fe_status").on(t.status),
 ]);
 
+// 2b. Controle de Cheques (Opção A) — camada de CONTROLE/identificação importada
+// da planilha "CONTROLE DE CHEQUES" (abas mensais). NÃO é lançamento financeiro;
+// serve para a Conciliação Bancária identificar as linhas anônimas
+// "COMPENSACAO CHEQUE NNN" do extrato da Caixa (nº + valor → fornecedor).
+// Aditiva/self-heal (CREATE TABLE IF NOT EXISTS) — ZERO ALTER/DROP/DELETE.
+export const financialCheques = pgTable("financial_cheques", {
+  id: serial().notNull(),
+  companyId: integer("company_id").notNull(),
+  contaBancariaId: integer("conta_bancaria_id"),
+  contaCorrenteRaw: varchar("conta_corrente_raw", { length: 60 }),
+  bancoCodigo: varchar("banco_codigo", { length: 20 }),
+  bancoNome: varchar("banco_nome", { length: 120 }),
+  agencia: varchar("agencia", { length: 20 }),
+  numeroCheque: varchar("numero_cheque", { length: 30 }),
+  fornecedorNome: varchar("fornecedor_nome", { length: 255 }),
+  fornecedorId: integer("fornecedor_id"),
+  obraId: integer("obra_id"),
+  obraNome: varchar("obra_nome", { length: 255 }),
+  parcela: varchar("parcela", { length: 20 }),
+  nf: varchar("nf", { length: 60 }),
+  valor: numeric("valor", { precision: 15, scale: 2 }),
+  dataVencimento: date("data_vencimento", { mode: "string" }),
+  dataCompensacao: date("data_compensacao", { mode: "string" }),
+  status: text("status").default("pendente").notNull(),
+  observacao: text("observacao"),
+  mesRef: integer("mes_ref"),
+  anoRef: integer("ano_ref"),
+  origemArquivo: varchar("origem_arquivo", { length: 255 }),
+  loteId: varchar("lote_id", { length: 40 }),
+  lancamentoId: integer("lancamento_id"),
+  conciliado: smallint().default(0),
+  dataConciliacao: date("data_conciliacao", { mode: "string" }),
+  excluidoEm: timestamp("excluido_em", { mode: "string" }),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_chq_company").on(t.companyId),
+  index("idx_chq_numero").on(t.numeroCheque),
+  index("idx_chq_status").on(t.status),
+]);
+
 // 3. Receitas de obras (medições → faturamento)
 export const financialRevenue = pgTable("financial_revenue", {
   id: serial().notNull(),

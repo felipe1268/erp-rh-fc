@@ -457,6 +457,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "financeiro-centros-custo",     label: "Centros de Custo",     route: "/financeiro/centros-de-custo",       icon: "Layers" },
       { key: "financeiro-obrigacoes-fiscais",label: "Obrigações Fiscais",   route: "/financeiro/obrigacoes-fiscais",     icon: "FileText" },
       { key: "financeiro-conciliacao",       label: "Conciliação Bancária", route: "/financeiro/conciliacao",            icon: "GitMerge" },
+      { key: "financeiro-cheques",           label: "Controle de Cheques",  route: "/financeiro/cheques",                icon: "Banknote" },
       { key: "financeiro-cronograma",        label: "Cronograma Financeiro",route: "/financeiro/cronograma",             icon: "CalendarRange" },
       { key: "financeiro-configuracoes",     label: "Configurações",        route: "/financeiro/configuracoes",          icon: "Settings" },
     ],

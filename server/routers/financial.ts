@@ -4097,6 +4097,37 @@ export const financialRouter = router({
       [input.companyId, input.contaBancariaId]);
     const entries = rows(entRes) as any[];
 
+    // Controle de Cheques — FONTE DE IDENTIFICAÇÃO p/ as linhas anônimas do extrato
+    // da Caixa "COMPENSACAO CHEQUE NNN". O cheque NÃO é lançamento; serve só para
+    // dizer QUEM é o favorecido. Identifica por nº + VALOR batendo (nunca pelo nome
+    // sozinho). Indexado por `${numeroSemZeros}|${centavos}` e por nº (desempate visual).
+    const chqRes = await dbExecute(db,
+      `SELECT numero_cheque AS "numeroCheque", valor, fornecedor_nome AS "fornecedorNome", status
+         FROM financial_cheques
+        WHERE company_id=$1 AND excluido_em IS NULL AND numero_cheque IS NOT NULL`,
+      [input.companyId]);
+    const chequesArr = rows(chqRes) as any[];
+    const chequesByNumVal = new Map<string, any>();
+    for (const c of chequesArr) {
+      const num = String(c.numeroCheque ?? "").replace(/[^0-9]/g, "").replace(/^0+/, "");
+      if (!num) continue;
+      const cts = c.valor != null ? Math.round(Math.abs(Number(c.valor)) * 100) : null;
+      if (cts != null) chequesByNumVal.set(`${num}|${cts}`, c);
+    }
+    const extrairNumCheque = (descricao: any): string | null => {
+      const m = String(descricao ?? "").match(/cheque\s*n?[ºo°.]*\s*0*(\d{1,12})/i);
+      if (m && m[1]) return m[1].replace(/^0+/, "") || m[1];
+      return null;
+    };
+    const identificarCheque = (ln: any): { numero: string; fornecedor: string } | null => {
+      const num = extrairNumCheque(ln.descricao);
+      if (!num) return null;
+      const cts = Math.round(Math.abs(Number(ln.valor) || 0) * 100);
+      const c = chequesByNumVal.get(`${num}|${cts}`); // exige nº + VALOR
+      if (!c) return null;
+      return { numero: num, fornecedor: c.fornecedorNome ?? "" };
+    };
+
     const toMs = (v: any) => {
       if (!v) return null;
       const s = typeof v === "string" ? v.slice(0, 10) : new Date(v).toISOString().slice(0, 10);
@@ -4176,9 +4207,26 @@ export const financialRouter = router({
         entryComprovanteBeneficiario: c.entry.comprovanteBeneficiario ?? null,
       });
     }
+    // Enriquece as SUGESTÕES já pareadas: se a linha é compensação de cheque e bate
+    // nº + valor com o Controle de Cheques, registra o favorecido (informativo).
+    for (const s of sugestoes) {
+      const chq = identificarCheque({ descricao: s.extratoDescricao, valor: s.extratoValor });
+      if (chq) {
+        s.chequeNumero = chq.numero;
+        s.chequeFornecedor = chq.fornecedor;
+        if (!s.identificadoVia) s.identificadoVia = `cheque nº ${chq.numero}`;
+      }
+    }
     const matched = new Set(sugestoes.map(s => s.statementLineId));
     const semMatch = linhas.filter(l => !matched.has(l.id))
-      .map(l => ({ statementLineId: l.id, data: l.data, descricao: l.descricao, valor: Number(l.valor) }));
+      .map(l => {
+        const chq = identificarCheque(l);
+        return {
+          statementLineId: l.id, data: l.data, descricao: l.descricao, valor: Number(l.valor),
+          chequeNumero: chq?.numero ?? null,
+          chequeFornecedor: chq?.fornecedor ?? null,
+        };
+      });
     return { sugestoes, semMatch, totalLinhas: linhas.length };
   }),
 

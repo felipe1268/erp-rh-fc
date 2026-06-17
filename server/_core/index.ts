@@ -851,6 +851,50 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3051: coluna employee_id garantida em company_partners (unificação de sócios).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA company_partners.employee_id:`, e?.message || e); }
 
+        // Controle de Cheques (Opção A) — tabela de CONTROLE importada da planilha
+        // "CONTROLE DE CHEQUES" (abas mensais). NÃO vira lançamento; serve p/ a
+        // Conciliação Bancária identificar as linhas "COMPENSACAO CHEQUE NNN" do
+        // extrato (nº + valor → fornecedor). CREATE TABLE IF NOT EXISTS (R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS financial_cheques (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              conta_bancaria_id INTEGER,
+              conta_corrente_raw VARCHAR(60),
+              banco_codigo VARCHAR(20),
+              banco_nome VARCHAR(120),
+              agencia VARCHAR(20),
+              numero_cheque VARCHAR(30),
+              fornecedor_nome VARCHAR(255),
+              fornecedor_id INTEGER,
+              obra_id INTEGER,
+              obra_nome VARCHAR(255),
+              parcela VARCHAR(20),
+              nf VARCHAR(60),
+              valor NUMERIC(15,2),
+              data_vencimento DATE,
+              data_compensacao DATE,
+              status TEXT DEFAULT 'pendente' NOT NULL,
+              observacao TEXT,
+              mes_ref INTEGER,
+              ano_ref INTEGER,
+              origem_arquivo VARCHAR(255),
+              lote_id VARCHAR(40),
+              lancamento_id INTEGER,
+              conciliado SMALLINT DEFAULT 0,
+              data_conciliacao DATE,
+              excluido_em TIMESTAMP,
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+              updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_chq_company ON financial_cheques(company_id) WHERE excluido_em IS NULL`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_chq_numero ON financial_cheques(company_id, numero_cheque) WHERE excluido_em IS NULL`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_chq_status ON financial_cheques(company_id, status) WHERE excluido_em IS NULL`);
+          console.log(`[SyncSchema+] Tabela financial_cheques garantida (Controle de Cheques).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA financial_cheques:`, e?.message || e); }
+
         // Rev. 3117 — Mapeamento/Cobertura de exames do ASO + extração por IA (Fase 2).
         // Colunas estruturadas em asos (camelCase, aspas obrigatórias) + tabela-fila
         // aso_extracao_ia (snake_case). ADD COLUMN/TABLE IF NOT EXISTS (R-001/R-007/R-010 OK).

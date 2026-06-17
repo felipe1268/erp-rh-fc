@@ -1159,6 +1159,11 @@ export default function FinanceiroConciliacao() {
                               <div className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">Extrato</div>
                               <div className="text-sm font-medium truncate">{s.extratoDescricao || "—"}</div>
                               <div className="text-xs text-gray-500">{fmtData(s.extratoData)} · {formatBRL(Math.abs(s.extratoValor))}</div>
+                              {s.chequeFornecedor && (
+                                <div className="text-[11px] text-emerald-700 truncate" title={`Cheque nº ${s.chequeNumero} — ${s.chequeFornecedor}`}>
+                                  🪙 Cheque nº {s.chequeNumero} · {s.chequeFornecedor}
+                                </div>
+                              )}
                             </div>
                             <ArrowRight className="w-4 h-4 text-gray-300 shrink-0" />
                             <button

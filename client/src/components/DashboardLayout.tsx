@@ -34,7 +34,7 @@ import {
   CalendarDays, TrendingUp, FileSpreadsheet, BookOpen, ShieldCheck,
   Store, Receipt, CheckCircle, CreditCard, Handshake, Bell as BellIcon, Globe,
   FileSearch, Brain, Scale, ClipboardPlus, ShieldAlert,
-  FileBarChart, DollarSign, Construction, ArrowLeftRight, Ban, Settings2,
+  FileBarChart, DollarSign, Construction, ArrowLeftRight, Ban, Settings2, Banknote,
   Warehouse, Wrench, Calculator, Target, Package, ShoppingCart, Truck, ArrowRightLeft, Gauge,
   Home, Tag, GripVertical, Network, ScanFace, PackageCheck, PenLine, ChevronLeft,
   Camera, Blocks, CheckSquare, FileCheck2, Milestone, Fuel,
@@ -484,6 +484,7 @@ const menuSectionsFinanceiro: MenuSection[] = [
       { icon: HandCoins,     label: "Contas a Receber",   path: "/financeiro/contas-a-receber-titulos" },
       { icon: CheckCircle,   label: "Contas a Pagar",     path: "/financeiro/contas-a-pagar" },
       { icon: ArrowLeftRight, label: "Conciliação Bancária", path: "/financeiro/conciliacao" },
+      { icon: Banknote, label: "Controle de Cheques", path: "/financeiro/cheques" },
     ],
   },
   {
