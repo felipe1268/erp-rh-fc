@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3197 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · A ÁREA DE CONCILIAÇÃO MANUAL (LADO A LADO)
+ * GANHOU UMA FAIXA DE AJUDA EXPLICANDO O PASSO A PASSO PARA CASAR MANUALMENTE OS ITENS QUE NÃO
+ * DERAM MATCH AUTOMÁTICO.**
+ *
+ * PEDIDO (piloto FC): "fucei os itens que não deram match na conciliação de forma automática — tem
+ * alguma forma de eu conciliar manualmente?". A conciliação manual 1:1 já EXISTIA (Rev. 3187):
+ * clicar numa linha do extrato (esquerda) + no lançamento do ERP (direita) faz aparecer uma barra
+ * azul no rodapé com o botão "Conciliar". O atrito era de DESCOBERTA: nada na tela dizia que era
+ * preciso clicar em um item de cada lado, então o usuário não percebia o fluxo.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY): em `client/src/pages/financeiro/FinanceiroConciliacao.tsx`, logo acima do
+ * grid das duas colunas ("No extrato, sem lançamento" × "No ERP, sem extrato") foi adicionada uma
+ * faixa de ajuda (ícone `Link2`, fundo azul claro) com o texto: clique em UM item de cada lado →
+ * confira o Δ (diferença) → "Conciliar"; sempre 1 para 1. A faixa só aparece quando há pelo menos
+ * uma pendência em alguma das listas (`repExt.length > 0 || repLan.length > 0`). Nenhuma mudança de
+ * lógica/mutação — só orientação visual. ZERO SCHEMA/ALTER/DROP/DELETE · ZERO BACKEND.
+ *
+ * RESSALVA: o caso N:1 (vários vales/abastecimentos que viram UM boleto no extrato) continua sem
+ * conciliação manual — é o agrupamento pendente de definição da janela de data (tema de outra
+ * revisão). A faixa trata só do match 1:1.
+ *
+ * IMPACTO: o usuário descobre e usa a conciliação manual sem precisar de instrução externa,
+ * reduzindo o volume de pendências que sobravam após as sugestões automáticas.
+ *
  * Rev. 3196 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · AS DUAS LISTAS DE PENDÊNCIAS ("NO EXTRATO, SEM
  * LANÇAMENTO" E "NO ERP, SEM EXTRATO") GANHARAM BOTÕES PARA EXPORTAR CADA UMA SEPARADAMENTE EM
  * EXCEL (.XLSX) E EM PDF.**

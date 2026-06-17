@@ -1198,6 +1198,15 @@ export default function FinanceiroConciliacao() {
             </Dialog>
 
             {/* Rev. 3187 — Conciliação manual lado a lado (fonte: getConciliacaoReport). */}
+            {/* Rev. 3197 — faixa de ajuda explicando o passo a passo da conciliação manual 1:1. */}
+            {(repExt.length > 0 || repLan.length > 0) && (
+              <div className="flex items-start gap-2 rounded-lg border border-blue-100 bg-blue-50/70 px-3 py-2.5 text-xs text-blue-800">
+                <Link2 className="w-4 h-4 shrink-0 mt-0.5 text-blue-500" />
+                <p className="leading-relaxed">
+                  <strong>Conciliar manualmente:</strong> clique em <strong>um item de cada lado</strong> — uma linha do extrato (esquerda) e o lançamento do ERP correspondente (direita). Aparece uma barra azul no rodapé com os dois lados; confira a diferença (Δ) e toque em <strong>"Conciliar"</strong>. É sempre <strong>1 para 1</strong>.
+                </p>
+              </div>
+            )}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Esquerda: no extrato, sem lançamento */}
               <Card className="border-0 shadow-sm">
