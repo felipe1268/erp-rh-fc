@@ -1,6 +1,55 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3187 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · REDESIGN PARA TELA ÚNICA: O "PAINEL DE
+ * CONCILIAÇÃO" SEPARADO FOI APOSENTADO E SEUS 3 BLOCOS (CONCILIADO / EXTRATO-SEM-LANÇAMENTO /
+ * ERP-SEM-EXTRATO) PASSARAM A VIVER NA PRÓPRIA TELA `/financeiro/conciliacao`, COM BARRA DE
+ * PROGRESSO, KPIs, RELATÓRIO PDF E ANEXO DE COMPROVANTE (PIX/BOLETO/RECIBO) POR LANÇAMENTO.**
+ *
+ * PEDIDO (piloto FC FEV/2026): "repagina a Conciliação Bancária numa tela só, sem precisar abrir
+ * outro painel; e deixa anexar o comprovante do PIX/boleto direto ali." A tela clássica tinha 3
+ * KPIs estáticos (entradas/saídas/conciliados) + um match manual cru que dependia do `getEntries`,
+ * e o "raio-X" de pendências só existia numa SEGUNDA tela (`/financeiro/conciliacao/painel`). Isso
+ * obrigava o usuário a pular de tela e não dava rastreabilidade do PIX/boleto (extrato anônimo).
+ *
+ * SOLUÇÃO (FRONTEND-ONLY + 2 endpoints já entregues no backend):
+ *   • `client/src/pages/financeiro/FinanceiroConciliacao.tsx` virou a TELA ÚNICA. Passa a ler
+ *     `financial.getConciliacaoReport` (conta+período) como FONTE ÚNICA dos 3 blocos
+ *     (`conciliados`/`extratoSemLancamento`/`lancamentosSemExtrato`) — o `getEntries` foi removido.
+ *   • Topo: card de PROGRESSO (`pctConc` = conciliados ÷ (conciliados+extratoSemLanç)) com barra +
+ *     4 KPIs (Conciliado, Extrato sem lançamento, ERP sem extrato, Sugestões prontas) com contagem
+ *     e valor (`formatBRL`).
+ *   • Sugestões automáticas: ao escolher a conta JÁ liga `mostrarSugestoes` (useEffect) e o pós-import
+ *     deixa de redirecionar pro Painel — a conta importada vira a conta ATIVA na própria tela e o
+ *     relatório/sugestões recarregam ali (`refetchReport`/`refetchSug`). O botão "Painel de
+ *     Conciliação" (`Maximize2`) virou "Relatório PDF" (`gerarRelatorioPDF`), que abre um HTML
+ *     imprimível (cabeçalho FC `logo-fc-branco-amarelo.png`, 3 tabelas + totais, `esc()` anti-XSS).
+ *   • 2 colunas de match manual agora vêm do report: esquerda = extrato sem lançamento
+ *     (`setSelectedStatement`), direita = ERP sem extrato (`setSelectedEntry`) com badge PIX/Boleto
+ *     (via `formaPagamento`), olho de detalhe (`setDetalheEntryId`) e CLIPE de comprovante — verde
+ *     quando há `comprovanteUrl` (abre), senão dispara upload. Card do par selecionado mostra Δ de
+ *     valor e botão "Conciliar" (`conciliarLancamento`). "Já conciliados" num `<details>` colapsável.
+ *   • Comprovante: `financial.uploadComprovante` ({fileName,fileBase64,contentType}→{url}, whitelist
+ *     PDF/Word/img 15MB) + `financial.anexarComprovanteEntry` gravam a URL no lançamento. Input file
+ *     escondido + `pedirComprovante`/`onComprovanteFile`.
+ *   • Removidos: página `FinanceiroConciliacaoPainel.tsx`, seu lazy import e a rota
+ *     `/financeiro/conciliacao/painel` em `App.tsx` (o Workspace permanece). Imports `useLocation`/
+ *     `Maximize2`/query `getEntries` saíram; entraram `Link2`/`X`.
+ *   • Estado de ERRO dedicado p/ `getConciliacaoReport` (banner vermelho + "Tentar novamente",
+ *     `retry:false`): sem isso, falha de query deixava a tela "vazia/zerada" — falso "tudo
+ *     conciliado". Achado pela revisão de código.
+ *
+ * ENDURECIMENTO DE SEGURANÇA (achado na revisão — IDOR pré-existente nos endpoints que a tela
+ * agora consome): adicionado `_assertFinanceiroCompanyAccess(ctx.user, companyId)` em
+ * `getBankStatements`, `conciliarLancamento` (ambos não desestruturavam `ctx`) e `getBankAccounts`
+ * (guard por id em `resolveCompanyIds`). Antes, o `companyId` vinha do cliente e os UPDATEs/SELECTs
+ * só filtravam por `company_id` SEM validar que o CHAMADOR pertencia àquela empresa — usuário
+ * autenticado podia ler/conciliar dados de outra empresa com IDs válidos.
+ *
+ * ZERO SCHEMA/ALTER/DROP/DELETE · backend reaproveitado (sem novas tabelas) — só guards aditivos.
+ *
+ * ──────────────────────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 3186 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O BOTÃO "PAINEL DE CONCILIAÇÃO" SAIU DO CABEÇALHO
  * DA TELA E PASSOU PRA LOGO ABAIXO DO BOTÃO "SUGERIR CONCILIAÇÃO" (DENTRO DO CARD "SUGESTÕES
  * AUTOMÁTICAS DE CONCILIAÇÃO"), ONDE FICA MAIS PERTO DO FLUXO DE TRABALHO.**

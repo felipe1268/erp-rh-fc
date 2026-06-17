@@ -11,8 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Maximize2, Trash2, CalendarX } from "lucide-react";
-import { useLocation } from "wouter";
+import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX } from "lucide-react";
 import { formatConta, formatAgencia } from "@/lib/formatters";
 
 function formatBRL(v: number) {
@@ -42,7 +41,6 @@ function bancoCor(banco?: string): { bg: string; text: string } {
 export default function FinanceiroConciliacao() {
   const { companyId } = useCompany();
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
   // Rev. 3165 — Período pelo MESMO PADRÃO das demais telas do Financeiro: navegação por
   // ANO + meses (Jan–Dez). `mesSel=null` = "Ano todo". dataInicio/dataFim derivam daí.
   const _now = new Date();
@@ -77,6 +75,8 @@ export default function FinanceiroConciliacao() {
   const [toleranciaDias, setToleranciaDias] = useState(() => new Date(_now.getFullYear(), _now.getMonth() + 1, 0).getDate());
   // Re-sincroniza a tolerância com os dias exatos do mês ao trocar de mês/ano.
   useEffect(() => { setToleranciaDias(diasDoMes); }, [diasDoMes]);
+  // Rev. 3187 — ao escolher a conta, já dispara as sugestões automáticas (tela única).
+  useEffect(() => { if (contaBancariaId) { setMostrarSugestoes(true); setSelSug(new Set()); } }, [contaBancariaId]);
   // Opções do dropdown: presets curtos + os dias exatos do mês (dedup, ordenado).
   const tolOptions = useMemo(() => {
     const set = new Set<number>([0, 1, 2, 3, 5, 7, 10, 15, diasDoMes]);
@@ -103,11 +103,6 @@ export default function FinanceiroConciliacao() {
       conciliado: conciliadoFilter !== "all" ? conciliadoFilter === "conciliado" : undefined,
     },
     { enabled: !!companyId && !!contaBancariaId }
-  );
-
-  const { data: entries } = (trpc as any).financial.getEntries.useQuery(
-    { companyId, dataInicio, dataFim, limit: 100 },
-    { enabled: !!companyId }
   );
 
   // Rev. 3165 — Extrato do ANO inteiro (apenas p/ pintar as bolinhas de status de cada mês),
@@ -152,7 +147,7 @@ export default function FinanceiroConciliacao() {
   }, [statementsAno]);
 
   const conciliarMut = (trpc as any).financial.conciliarLancamento.useMutation({
-    onSuccess: () => { toast({ title: "Conciliação registrada!" }); refetchSt(); refetchStAno(); refetchAccStatus(); setSelectedStatement(null); setSelectedEntry(null); },
+    onSuccess: () => { toast({ title: "Conciliação registrada!" }); refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug(); setSelectedStatement(null); setSelectedEntry(null); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
 
@@ -179,7 +174,7 @@ export default function FinanceiroConciliacao() {
     onSuccess: (res: any) => {
       toast({ title: res.afetados > 0 ? `Extrato limpo! ${res.afetados} linha(s) removida(s).` : "Nada para limpar neste período." });
       setConfirmLimpar(false);
-      refetchSt(); refetchStAno(); refetchAccStatus(); if (mostrarSugestoes) refetchSug();
+      refetchSt(); refetchStAno(); refetchAccStatus(); refetchSug(); refetchReport();
     },
     onError: (e: any) => toast({ title: "Erro ao limpar extrato", description: e.message, variant: "destructive" }),
   });
@@ -190,6 +185,55 @@ export default function FinanceiroConciliacao() {
   );
   const sugestoes: any[] = sugData?.sugestoes ?? [];
   const semMatch: any[] = sugData?.semMatch ?? [];
+
+  // Rev. 3187 — Relatório consolidado da conta/período (3 blocos), agora EMBUTIDO na tela
+  // única (o Painel separado foi aposentado). Conciliados, extrato-sem-lançamento e
+  // lançamento-sem-extrato vêm de uma fonte só (getConciliacaoReport), READ-ONLY.
+  const { data: report, isFetching: reportLoading, isError: reportIsError, error: reportError, refetch: refetchReport } = (trpc as any).financial.getConciliacaoReport.useQuery(
+    { companyId, contaBancariaId: parseInt(contaBancariaId) || 0, dataInicio, dataFim },
+    { enabled: !!companyId && !!contaBancariaId, retry: false }
+  );
+  const repConc: any[] = report?.conciliados ?? [];
+  const repExt: any[] = report?.extratoSemLancamento ?? [];
+  const repLan: any[] = report?.lancamentosSemExtrato ?? [];
+  const absSum = (arr: any[]) => arr.reduce((a, r) => a + Math.abs(Number(r.valor) || 0), 0);
+  const vConc = absSum(repConc), vExt = absSum(repExt), vLan = absSum(repLan);
+  const totLinhas = repConc.length + repExt.length;
+  const pctConc = totLinhas > 0 ? Math.round((repConc.length / totLinhas) * 100) : 0;
+
+  // Rev. 3187 — Anexar comprovante (PIX/boleto/recibo) a um lançamento "sem extrato",
+  // direto da tela. Faz upload (uploadComprovante valida tipo/tamanho) e grava a URL no
+  // lançamento (anexarComprovanteEntry) — rastreabilidade do PIX/boleto (extrato anônimo).
+  const comprovInputRef = useRef<HTMLInputElement>(null);
+  const [comprovEntryId, setComprovEntryId] = useState<number | null>(null);
+  const [comprovBusy, setComprovBusy] = useState<number | null>(null);
+  const uploadComprovanteMut = (trpc as any).financial.uploadComprovante.useMutation();
+  const anexarComprovMut = (trpc as any).financial.anexarComprovanteEntry.useMutation();
+  function pedirComprovante(entryId: number) { setComprovEntryId(entryId); setTimeout(() => comprovInputRef.current?.click(), 0); }
+  async function onComprovanteFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    const entryId = comprovEntryId;
+    setComprovEntryId(null);
+    if (!file || !entryId) return;
+    setComprovBusy(entryId);
+    try {
+      const b64: string = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(((r.result as string) || "").replace(/^data:[^,]*,/, ""));
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+      const up: any = await uploadComprovanteMut.mutateAsync({ fileName: file.name, fileBase64: b64, contentType: file.type || "application/octet-stream" });
+      await anexarComprovMut.mutateAsync({ companyId, entryId, comprovanteUrl: up.url });
+      toast({ title: "Comprovante anexado!", description: "Lançamento agora tem comprovante para rastreabilidade." });
+      refetchReport(); refetchSug();
+    } catch (err: any) {
+      toast({ title: "Erro ao anexar comprovante", description: err?.message || "Falha no upload.", variant: "destructive" });
+    } finally {
+      setComprovBusy(null);
+    }
+  }
 
   // Detalhe consultivo do lançamento (mesmo endpoint usado em Contas a Pagar).
   const detailQuery = (trpc as any).financial.getEntryDetalhe.useQuery(
@@ -216,6 +260,7 @@ export default function FinanceiroConciliacao() {
       refetchStAno();
       refetchAccStatus();
       refetchSug();
+      refetchReport();
     },
     onError: (e: any) => toast({ title: "Erro ao conciliar", description: e.message, variant: "destructive" }),
   });
@@ -334,18 +379,19 @@ export default function FinanceiroConciliacao() {
 
       setImportPct(100);
       setImportLabel("Concluído!");
-      toast({ title: `Importação concluída! ${inserted} inseridos, ${skipped} duplicados ignorados`, description: "Abrindo o Painel de Conciliação…" });
+      toast({ title: `Importação concluída! ${inserted} inseridos, ${skipped} duplicados ignorados`, description: "Atualizando a conciliação…" });
       setShowImport(false);
       setImportContent("");
       setImportFileName("");
+      // Rev. 3187 — após importar, a conta importada vira a conta ATIVA na própria tela e o
+      // relatório/sugestões recarregam ali mesmo (Painel separado aposentado).
+      if (contaId) setContaBancariaId(String(contaId));
+      setMostrarSugestoes(true);
       refetchSt();
       refetchStAno();
       refetchAccStatus();
-      // Rev. 3182 — após importar, levar direto ao Painel de Conciliação (tela própria, 3 blocos).
-      const contaDestino = contaId || parseInt(contaBancariaId) || 0;
-      if (contaDestino) {
-        setLocation(`/financeiro/conciliacao/painel?conta=${contaDestino}&ano=${ano}&mes=${mesSel ?? new Date().getMonth() + 1}`);
-      }
+      refetchReport();
+      refetchSug();
     } catch (e: any) {
       toast({ title: "Erro na importação", description: e?.message || "Falha ao importar o extrato.", variant: "destructive" });
     } finally {
@@ -354,10 +400,76 @@ export default function FinanceiroConciliacao() {
     }
   }
 
-  const pendentes = (statements ?? []).filter((s: any) => !s.conciliado);
-  const conciliados = (statements ?? []).filter((s: any) => s.conciliado);
-  const totalEntradas = pendentes.filter((s: any) => s.tipo === "credito").reduce((a: number, s: any) => a + Number(s.valor), 0);
-  const totalSaidas = pendentes.filter((s: any) => s.tipo === "debito").reduce((a: number, s: any) => a + Math.abs(Number(s.valor)), 0);
+  const periodoLabel = mesSel != null ? `${MESES[mesSel - 1]}/${ano}` : `Ano ${ano}`;
+  const contaSel = (bankAccounts ?? []).find((b: any) => String(b.id) === contaBancariaId);
+  const contaLabel = contaSel ? `${contaSel.banco}${contaSel.descricao ? ` · ${contaSel.descricao}` : ""} (Ag. ${formatAgencia(contaSel.agencia)}/${formatConta(contaSel.conta)})` : "—";
+
+  // Rev. 3187 — Relatório PDF (3 blocos) embutido na tela única (absorve o antigo Painel).
+  function gerarRelatorioPDF() {
+    if (!report) { toast({ title: "Relatório ainda carregando", variant: "destructive" }); return; }
+    const esc = (s: any) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" } as any)[c]);
+    const rowsConc = repConc.length
+      ? repConc.map((c: any) => `<tr><td>${esc(fmtData(c.data))}</td><td>${esc(c.descricao || "—")}</td><td>${esc(c.entryFornecedor || c.entryDescricao || ("Lançamento #" + (c.entryId ?? "")))}</td><td class="r">${esc(formatBRL(Math.abs(Number(c.valor) || 0)))}</td></tr>`).join("")
+      : `<tr><td colspan="4" class="empty">Nenhuma linha conciliada no período.</td></tr>`;
+    const rowsExt = repExt.length
+      ? repExt.map((c: any) => `<tr><td>${esc(fmtData(c.data))}</td><td>${esc(c.descricao || "—")}</td><td>${esc(Number(c.valor) >= 0 ? "Entrada" : "Saída")}</td><td class="r">${esc(formatBRL(Math.abs(Number(c.valor) || 0)))}</td></tr>`).join("")
+      : `<tr><td colspan="4" class="empty">Sem pendências — todo o extrato está conciliado.</td></tr>`;
+    const rowsLan = repLan.length
+      ? repLan.map((c: any) => `<tr><td>${esc(fmtData(c.data))}</td><td>${esc(c.fornecedorNome || c.descricao || ("Lançamento #" + c.id))}</td><td>${esc(c.obraNome || "—")}</td><td class="r">${esc(formatBRL(Math.abs(Number(c.valor) || 0)))}</td></tr>`).join("")
+      : `<tr><td colspan="4" class="empty">Nenhum lançamento sem extrato no período.</td></tr>`;
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Conciliação ${esc(periodoLabel)}</title>
+<style>
+  *{box-sizing:border-box} body{font-family:Arial,Helvetica,sans-serif;color:#1f2937;margin:0;padding:24px;font-size:12px}
+  .logo{display:block;height:54px;margin:0 auto 10px}
+  h1.brand{text-align:center;font-size:16px;margin:0;color:#1B2A4A;letter-spacing:.5px}
+  .band{background:#1B2A4A;color:#fff;text-align:center;padding:10px;margin:14px 0;border-radius:6px;letter-spacing:3px;font-weight:bold;font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .meta{display:flex;justify-content:space-between;font-size:11px;color:#4b5563;margin-bottom:14px;flex-wrap:wrap;gap:6px}
+  .cards{display:flex;gap:10px;margin:10px 0 18px;flex-wrap:wrap}
+  .card{flex:1;min-width:130px;border:1px solid #e5e7eb;border-radius:8px;padding:10px}
+  .card .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280}
+  .card .val{font-size:16px;font-weight:bold;margin-top:2px}
+  .green{color:#15803d}.red{color:#b91c1c}.blue{color:#1d4ed8}
+  h2{font-size:13px;margin:18px 0 6px;border-left:3px solid #1B2A4A;padding-left:8px}
+  table{width:100%;border-collapse:collapse;margin-bottom:8px}
+  th,td{border:1px solid #e5e7eb;padding:5px 7px;text-align:left;vertical-align:top}
+  th{background:#f3f4f6;font-size:10px;text-transform:uppercase;letter-spacing:.4px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  td.r,th.r{text-align:right;white-space:nowrap}
+  td.empty{text-align:center;color:#9ca3af;padding:14px}
+  tfoot td{font-weight:bold;background:#f9fafb}
+  @media print{body{padding:10px}}
+</style></head><body>
+  <img class="logo" src="${window.location.origin}/logo-fc-branco-amarelo.png?v=3187" alt="FC Engenharia"/>
+  <h1 class="brand">FC ENGENHARIA</h1>
+  <div class="band">RELATÓRIO DE CONCILIAÇÃO BANCÁRIA</div>
+  <div class="meta">
+    <span><strong>Conta:</strong> ${esc(contaLabel)}</span>
+    <span><strong>Período:</strong> ${esc(periodoLabel)}</span>
+    <span><strong>Emitido em:</strong> ${esc(new Date().toLocaleString("pt-BR"))}</span>
+  </div>
+  <div class="cards">
+    <div class="card"><div class="lbl">Conciliado</div><div class="val blue">${repConc.length} <span style="font-size:11px">(${pctConc}%)</span></div><div class="lbl">${esc(formatBRL(vConc))}</div></div>
+    <div class="card"><div class="lbl">Extrato sem lançamento</div><div class="val red">${repExt.length}</div><div class="lbl">${esc(formatBRL(vExt))}</div></div>
+    <div class="card"><div class="lbl">Lançamentos sem extrato</div><div class="val">${repLan.length}</div><div class="lbl">${esc(formatBRL(vLan))}</div></div>
+    <div class="card"><div class="lbl">Total do extrato</div><div class="val">${totLinhas}</div><div class="lbl">linhas no período</div></div>
+  </div>
+  <h2>1. Extrato conciliado (${repConc.length})</h2>
+  <table><thead><tr><th>Data</th><th>Descrição (extrato)</th><th>Lançamento casado</th><th class="r">Valor</th></tr></thead>
+  <tbody>${rowsConc}</tbody>
+  <tfoot><tr><td colspan="3">Total conciliado</td><td class="r">${esc(formatBRL(vConc))}</td></tr></tfoot></table>
+  <h2>2. Extrato SEM lançamento — o que falta (${repExt.length})</h2>
+  <table><thead><tr><th>Data</th><th>Descrição (extrato)</th><th>Tipo</th><th class="r">Valor</th></tr></thead>
+  <tbody>${rowsExt}</tbody>
+  <tfoot><tr><td colspan="3">Total pendente</td><td class="r">${esc(formatBRL(vExt))}</td></tr></tfoot></table>
+  <h2>3. Lançamentos do sistema sem extrato (${repLan.length})</h2>
+  <table><thead><tr><th>Data</th><th>Lançamento</th><th>Obra</th><th class="r">Valor</th></tr></thead>
+  <tbody>${rowsLan}</tbody>
+  <tfoot><tr><td colspan="3">Total sem extrato</td><td class="r">${esc(formatBRL(vLan))}</td></tr></tfoot></table>
+</body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) { toast({ title: "Permita pop-ups para gerar o relatório", variant: "destructive" }); return; }
+    w.document.write(html); w.document.close();
+    setTimeout(() => { try { w.focus(); w.print(); } catch { /* ignore */ } }, 350);
+  }
 
   return (
     <DashboardLayout>
@@ -564,35 +676,63 @@ export default function FinanceiroConciliacao() {
           </Card>
         ) : (
           <>
-            <div className="grid grid-cols-3 gap-4">
-              <Card className="border-0 shadow-sm">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <ArrowUpCircle className="w-4 h-4 text-green-600" />
-                    <span className="text-xs text-gray-500">Entradas Pendentes</span>
+            {/* Rev. 3187 — Estado de ERRO do relatório: sem isso a tela parecia "vazia/zerada"
+                quando getConciliacaoReport falhava (falso "tudo conciliado"). */}
+            {reportIsError && (
+              <Card className="border-0 shadow-sm ring-1 ring-red-200 bg-red-50/60">
+                <CardContent className="p-4 flex items-start justify-between gap-3 flex-wrap">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-red-800">Não foi possível carregar a conciliação</p>
+                      <p className="text-xs text-red-700 mt-0.5">{reportError?.message || "Falha ao consultar o relatório. Os números abaixo podem estar incompletos."}</p>
+                    </div>
                   </div>
-                  <p className="text-xl font-bold text-green-600">{formatBRL(totalEntradas)}</p>
+                  <Button size="sm" variant="outline" onClick={() => refetchReport()} className="border-red-300 text-red-700 hover:bg-red-100">
+                    <RefreshCw className="w-4 h-4 mr-1.5" /> Tentar novamente
+                  </Button>
                 </CardContent>
               </Card>
-              <Card className="border-0 shadow-sm">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <ArrowDownCircle className="w-4 h-4 text-red-500" />
-                    <span className="text-xs text-gray-500">Saídas Pendentes</span>
+            )}
+            {/* Rev. 3187 — Progresso da conciliação + KPIs (fonte única getConciliacaoReport). */}
+            <Card className="border-0 shadow-sm">
+              <CardContent className="p-4 space-y-4">
+                <div className="flex items-end justify-between flex-wrap gap-2">
+                  <div>
+                    <p className="text-xs text-gray-500">Progresso da conciliação · {periodoLabel}</p>
+                    <p className="text-2xl font-bold text-gray-900">{pctConc}<span className="text-base font-semibold text-gray-400">%</span> <span className="text-sm font-medium text-gray-500">conciliado</span></p>
                   </div>
-                  <p className="text-xl font-bold text-red-500">{formatBRL(totalSaidas)}</p>
-                </CardContent>
-              </Card>
-              <Card className="border-0 shadow-sm">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <CheckCircle className="w-4 h-4 text-blue-600" />
-                    <span className="text-xs text-gray-500">Itens Conciliados</span>
+                  <div className="text-right text-xs text-gray-500">
+                    <span className="font-semibold text-blue-700">{repConc.length}</span> de {totLinhas} linha(s) do extrato
                   </div>
-                  <p className="text-xl font-bold text-blue-600">{conciliados.length}</p>
-                </CardContent>
-              </Card>
-            </div>
+                </div>
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
+                  <div className={`h-full rounded-full transition-all duration-500 ${pctConc >= 100 ? "bg-green-500" : "bg-blue-600"}`} style={{ width: `${pctConc}%` }} />
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3">
+                    <div className="flex items-center gap-1.5 text-xs text-blue-700"><CheckCircle className="w-3.5 h-3.5" />Conciliado</div>
+                    <p className="text-lg font-bold text-blue-700 mt-0.5">{repConc.length}</p>
+                    <p className="text-[11px] text-gray-500">{formatBRL(vConc)}</p>
+                  </div>
+                  <div className="rounded-xl border border-red-100 bg-red-50/50 p-3">
+                    <div className="flex items-center gap-1.5 text-xs text-red-600"><AlertCircle className="w-3.5 h-3.5" />Extrato sem lançamento</div>
+                    <p className="text-lg font-bold text-red-600 mt-0.5">{repExt.length}</p>
+                    <p className="text-[11px] text-gray-500">{formatBRL(vExt)}</p>
+                  </div>
+                  <div className="rounded-xl border border-amber-100 bg-amber-50/50 p-3">
+                    <div className="flex items-center gap-1.5 text-xs text-amber-700"><FileText className="w-3.5 h-3.5" />ERP sem extrato</div>
+                    <p className="text-lg font-bold text-amber-700 mt-0.5">{repLan.length}</p>
+                    <p className="text-[11px] text-gray-500">{formatBRL(vLan)}</p>
+                  </div>
+                  <div className="rounded-xl border border-violet-100 bg-violet-50/50 p-3">
+                    <div className="flex items-center gap-1.5 text-xs text-violet-700"><Sparkles className="w-3.5 h-3.5" />Sugestões prontas</div>
+                    <p className="text-lg font-bold text-violet-700 mt-0.5">{sugLoading ? "…" : sugestoes.length}</p>
+                    <p className="text-[11px] text-gray-500">{semMatch.length} sem par</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-3">
@@ -628,9 +768,10 @@ export default function FinanceiroConciliacao() {
                       size="sm"
                       variant="outline"
                       className="border-blue-600 text-blue-700 hover:bg-blue-50"
-                      onClick={() => setLocation(`/financeiro/conciliacao/painel?conta=${contaBancariaId}&ano=${ano}&mes=${mesSel ?? new Date().getMonth() + 1}`)}
+                      onClick={gerarRelatorioPDF}
+                      disabled={!report}
                     >
-                      <Maximize2 className="w-4 h-4 mr-1" />Painel de Conciliação
+                      <FileText className="w-4 h-4 mr-1" />Relatório PDF
                     </Button>
                   </div>
                 </div>
@@ -831,37 +972,49 @@ export default function FinanceiroConciliacao() {
               </DialogContent>
             </Dialog>
 
-            <div className="grid grid-cols-2 gap-6">
+            {/* Rev. 3187 — Conciliação manual lado a lado (fonte: getConciliacaoReport). */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Esquerda: no extrato, sem lançamento */}
               <Card className="border-0 shadow-sm">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Extrato Bancário ({pendentes.length} pendentes)</CardTitle>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-500" />
+                    No extrato, sem lançamento ({repExt.length})
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
-                  {stLoading ? (
-                    <div className="p-6 text-center text-gray-500">Carregando...</div>
-                  ) : pendentes.length === 0 ? (
-                    <div className="p-6 text-center text-gray-400">
-                      <Upload className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                      <p>Nenhum item pendente.</p>
-                      <Button variant="outline" size="sm" className="mt-2" onClick={() => { setShowImport(true); setImportConta(contaBancariaId); }}>
-                        Importar Extrato
-                      </Button>
+                  {reportLoading ? (
+                    <div className="p-6 text-center text-gray-500 text-sm">Carregando…</div>
+                  ) : repExt.length === 0 ? (
+                    <div className="p-6 text-center text-gray-400 text-sm">
+                      {(statements ?? []).length === 0 ? (
+                        <>
+                          <Upload className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                          <p>Nenhum extrato importado neste período.</p>
+                          <Button variant="outline" size="sm" className="mt-2" onClick={() => { setShowImport(true); setImportConta(contaBancariaId); }}>
+                            Importar Extrato
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="w-8 h-8 mx-auto mb-2 text-green-300" />
+                          <p>Todo o extrato está conciliado. 🎉</p>
+                        </>
+                      )}
                     </div>
                   ) : (
-                    <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
-                      {pendentes.map((s: any) => (
+                    <div className="divide-y divide-gray-100 max-h-[420px] overflow-y-auto">
+                      {repExt.map((s: any) => (
                         <button
                           key={s.id}
                           onClick={() => setSelectedStatement(selectedStatement === s.id ? null : s.id)}
-                          className={`w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 transition-colors ${selectedStatement === s.id ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}
+                          className={`w-full px-4 py-3 flex items-center justify-between gap-2 text-left hover:bg-gray-50 transition-colors ${selectedStatement === s.id ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}
                         >
-                          <div>
-                            <p className="text-xs text-gray-500">{s.data ? new Date(s.data).toLocaleDateString("pt-BR") : "—"}</p>
-                            <p className="text-sm text-gray-700 truncate max-w-[180px]">{s.descricao}</p>
+                          <div className="min-w-0">
+                            <p className="text-xs text-gray-500">{fmtData(s.data)} · {Number(s.valor) >= 0 ? "Entrada" : "Saída"}</p>
+                            <p className="text-sm text-gray-700 truncate max-w-[200px]">{s.descricao || "—"}</p>
                           </div>
-                          <p className={`text-sm font-bold ${Number(s.valor) >= 0 ? "text-green-600" : "text-red-500"}`}>
-                            {formatBRL(Number(s.valor))}
-                          </p>
+                          <p className={`text-sm font-bold shrink-0 ${Number(s.valor) >= 0 ? "text-green-600" : "text-red-500"}`}>{formatBRL(Math.abs(Number(s.valor)))}</p>
                         </button>
                       ))}
                     </div>
@@ -869,51 +1022,120 @@ export default function FinanceiroConciliacao() {
                 </CardContent>
               </Card>
 
+              {/* Direita: no ERP, sem extrato + comprovantes */}
               <Card className="border-0 shadow-sm">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Lançamentos do Sistema</CardTitle>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-amber-600" />
+                    No ERP, sem extrato ({repLan.length})
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
-                  {!selectedStatement ? (
-                    <div className="p-6 text-center text-gray-400 text-sm">Selecione um item do extrato para relacionar.</div>
+                  {reportLoading ? (
+                    <div className="p-6 text-center text-gray-500 text-sm">Carregando…</div>
+                  ) : repLan.length === 0 ? (
+                    <div className="p-6 text-center text-gray-400 text-sm">Nenhum lançamento sem extrato no período.</div>
                   ) : (
-                    <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
-                      {(entries?.data ?? []).filter((e: any) => !e.conciliado && e.status !== "cancelado").map((e: any) => (
-                        <button
-                          key={e.id}
-                          onClick={() => setSelectedEntry(selectedEntry === e.id ? null : e.id)}
-                          className={`w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 transition-colors ${selectedEntry === e.id ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}
-                        >
-                          <div>
-                            <p className="text-xs text-gray-500">{e.dataCompetencia ? new Date(e.dataCompetencia).toLocaleDateString("pt-BR") : "—"}</p>
-                            <p className="text-sm text-gray-700 truncate max-w-[180px]">{e.descricao ?? e.contaNome ?? "—"}</p>
-                            <p className="text-xs text-gray-400">{e.obraNome ?? ""}</p>
+                    <div className="divide-y divide-gray-100 max-h-[420px] overflow-y-auto">
+                      {repLan.map((e: any) => {
+                        const forma = String(e.formaPagamento || "").toLowerCase();
+                        const isPix = forma.includes("pix");
+                        const isBoleto = forma.includes("boleto");
+                        return (
+                          <div
+                            key={e.id}
+                            className={`w-full px-4 py-3 flex items-center gap-2 hover:bg-gray-50 transition-colors ${selectedEntry === e.id ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}
+                          >
+                            <button onClick={() => setSelectedEntry(selectedEntry === e.id ? null : e.id)} className="flex-1 min-w-0 text-left">
+                              <p className="text-xs text-gray-500 flex items-center gap-1.5">
+                                {fmtData(e.data)}
+                                {(isPix || isBoleto) && <span className={`px-1.5 py-px rounded text-[10px] font-medium ${isPix ? "bg-emerald-100 text-emerald-700" : "bg-orange-100 text-orange-700"}`}>{isPix ? "PIX" : "Boleto"}</span>}
+                              </p>
+                              <p className="text-sm text-gray-700 truncate max-w-[200px]">{e.fornecedorNome || e.descricao || "—"}</p>
+                              <p className="text-xs text-gray-400 truncate max-w-[200px]">{e.obraNome || ""}</p>
+                            </button>
+                            <p className={`text-sm font-bold shrink-0 ${e.tipo === "receita" ? "text-green-600" : "text-red-500"}`}>{formatBRL(Math.abs(Number(e.valor)))}</p>
+                            <button type="button" onClick={() => setDetalheEntryId(e.id)} title="Ver detalhes" className="shrink-0 p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50"><Eye className="w-4 h-4" /></button>
+                            {e.comprovanteUrl ? (
+                              <a href={e.comprovanteUrl} target="_blank" rel="noreferrer" title="Comprovante anexado — abrir" className="shrink-0 p-1.5 rounded-md text-green-600 hover:bg-green-50"><Paperclip className="w-4 h-4" /></a>
+                            ) : (
+                              <button type="button" onClick={() => pedirComprovante(e.id)} disabled={comprovBusy === e.id} title="Anexar comprovante (PIX/boleto/recibo)" className="shrink-0 p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 disabled:opacity-50">
+                                {comprovBusy === e.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
+                              </button>
+                            )}
                           </div>
-                          <p className={`text-sm font-bold ${e.tipo === "receita" ? "text-green-600" : "text-red-500"}`}>
-                            {e.tipo === "receita" ? "+" : "-"}{formatBRL(Number(e.valorPrevisto))}
-                          </p>
-                        </button>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </CardContent>
               </Card>
             </div>
 
-            {selectedStatement && selectedEntry && (
-              <div className="flex justify-center">
-                <Button
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-8"
-                  disabled={conciliarMut.isPending}
-                  onClick={() => conciliarMut.mutate({ companyId, statementLineId: selectedStatement, entryId: selectedEntry })}
-                >
-                  <CheckCircle className="w-4 h-4 mr-2" />
-                  {conciliarMut.isPending ? "Conciliando..." : "Conciliar Selecionados"}
-                </Button>
-              </div>
+            {/* Conciliação manual do par selecionado */}
+            {(selectedStatement || selectedEntry) && (() => {
+              const ext = repExt.find((s: any) => s.id === selectedStatement);
+              const lan = repLan.find((e: any) => e.id === selectedEntry);
+              const delta = ext && lan ? Math.abs(Math.abs(Number(ext.valor)) - Math.abs(Number(lan.valor))) : null;
+              return (
+                <Card className="border-0 shadow-sm ring-1 ring-blue-200">
+                  <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] uppercase tracking-wide text-gray-400">Extrato</p>
+                      <p className="text-sm font-medium truncate">{ext ? `${fmtData(ext.data)} · ${ext.descricao || "—"}` : "Selecione uma linha do extrato"}</p>
+                      {ext && <p className="text-xs text-gray-500">{formatBRL(Math.abs(Number(ext.valor)))}</p>}
+                    </div>
+                    <Link2 className="w-5 h-5 text-blue-400 shrink-0 self-center" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] uppercase tracking-wide text-gray-400">Lançamento</p>
+                      <p className="text-sm font-medium truncate">{lan ? (lan.fornecedorNome || lan.descricao || "—") : "Selecione um lançamento"}</p>
+                      {lan && <p className="text-xs text-gray-500">{formatBRL(Math.abs(Number(lan.valor)))}</p>}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {delta != null && delta > 0.005 && <span className="text-[11px] px-2 py-1 rounded bg-amber-100 text-amber-700">Δ {formatBRL(delta)}</span>}
+                      <Button variant="ghost" size="sm" onClick={() => { setSelectedStatement(null); setSelectedEntry(null); }}><X className="w-4 h-4" /></Button>
+                      <Button
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                        disabled={!selectedStatement || !selectedEntry || conciliarMut.isPending}
+                        onClick={() => conciliarMut.mutate({ companyId, statementLineId: selectedStatement, entryId: selectedEntry })}
+                      >
+                        <CheckCircle className="w-4 h-4 mr-1.5" />{conciliarMut.isPending ? "Conciliando..." : "Conciliar"}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
+            {/* Já conciliados (colapsável) */}
+            {repConc.length > 0 && (
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-0">
+                  <details className="group">
+                    <summary className="flex items-center justify-between cursor-pointer select-none px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                      <span className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-600" />Já conciliados ({repConc.length}) · {formatBRL(vConc)}</span>
+                      <ChevronRight className="w-4 h-4 text-gray-400 transition-transform group-open:rotate-90" />
+                    </summary>
+                    <div className="divide-y divide-gray-100 max-h-[360px] overflow-y-auto border-t">
+                      {repConc.map((c: any) => (
+                        <div key={c.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-xs text-gray-500">{fmtData(c.data)}</p>
+                            <p className="text-sm text-gray-700 truncate max-w-[260px]">{c.descricao || "—"}</p>
+                            <p className="text-xs text-gray-400 truncate max-w-[260px]">↔ {c.entryFornecedor || c.entryDescricao || `Lançamento #${c.entryId ?? ""}`}</p>
+                          </div>
+                          <p className={`text-sm font-bold shrink-0 ${Number(c.valor) >= 0 ? "text-green-600" : "text-red-500"}`}>{formatBRL(Math.abs(Number(c.valor)))}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                </CardContent>
+              </Card>
             )}
           </>
         )}
+
+        <input ref={comprovInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.heic,.heif,.doc,.docx" onChange={onComprovanteFile} className="hidden" />
 
         <Dialog open={showImport} onOpenChange={setShowImport}>
           <DialogContent className="max-w-md max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0">

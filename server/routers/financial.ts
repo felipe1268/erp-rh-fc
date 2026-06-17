@@ -3228,10 +3228,11 @@ export const financialRouter = router({
   getBankAccounts: protectedProcedure.input(z.object({
     companyId: z.number(),
     companyIds: z.array(z.number()).optional(),
-  })).query(async ({ input }) => {
+  })).query(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const ids = resolveCompanyIds(input);
+    for (const cid of ids) await _assertFinanceiroCompanyAccess(ctx.user, cid);
     const res = await dbExecute(db, 
       `SELECT id, "companyId", banco, "codigoBanco", agencia, conta,
               "tipoConta" AS tipo, apelido AS descricao, ativo
@@ -3610,9 +3611,10 @@ export const financialRouter = router({
     dataInicio: z.string().optional(),
     dataFim: z.string().optional(),
     conciliado: z.boolean().optional(),
-  })).query(async ({ input }) => {
+  })).query(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
     const conds = [`company_id=$1`, `conta_bancaria_id=$2`, `excluido_em IS NULL`];
     const vals: any[] = [input.companyId, input.contaBancariaId];
     let i = 3;
@@ -3667,6 +3669,7 @@ export const financialRouter = router({
     const lancRes = await dbExecute(db,
       `SELECT e.id, e.descricao, e.fornecedor_nome AS "fornecedorNome", e.obra_nome AS "obraNome",
               COALESCE(e.valor_realizado, e.valor_previsto) AS valor, e.tipo, e.status,
+              e.forma_pagamento AS "formaPagamento", e.comprovante_url AS "comprovanteUrl",
               COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) AS data
          FROM financial_entries e
         WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
@@ -3717,9 +3720,10 @@ export const financialRouter = router({
     statementLineId: z.number(),
     entryId: z.number(),
     companyId: z.number(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
     // Rev. 3179 — NUNCA conciliar uma linha SOFT-DELETADA (excluido_em IS NULL). Usa
     // RETURNING + guard: se a linha foi limpa (ou não existe na empresa), ABORTA antes
     // de tocar o financial_entries (senão o lançamento ficaria conciliado=1 apontando
@@ -3748,6 +3752,31 @@ export const financialRouter = router({
          AND COALESCE(sib.conciliado,0)=0`,
       [input.entryId, input.companyId]
     );
+    return { ok: true };
+  }),
+
+  // Rev. 3187 — Anexar comprovante (PIX / boleto / recibo) a um lançamento direto da
+  // tela de Conciliação. O extrato de PIX/boleto é "anônimo" (não diz quem recebeu);
+  // o comprovante garante a RASTREABILIDADE. Grava a URL (já enviada via uploadComprovante,
+  // que valida tipo/tamanho) em financial_entries.comprovante_url. Aditivo, tenant-safe,
+  // ZERO ALTER/DROP/DELETE.
+  anexarComprovanteEntry: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    entryId: z.number(),
+    comprovanteUrl: z.string().min(1),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const res = await dbExecute(db,
+      `UPDATE financial_entries SET comprovante_url=$1, updated_at=NOW()
+        WHERE id=$2 AND company_id=$3
+        RETURNING id`,
+      [input.comprovanteUrl, input.entryId, input.companyId]);
+    if (rows(res).length === 0) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado nesta empresa." });
+    }
+    await createAuditLog({ action: "financial_entry_comprovante_anexado", userId: ctx.user?.id, companyId: input.companyId, details: `Entry ${input.entryId} comprovante anexado` });
     return { ok: true };
   }),
 
