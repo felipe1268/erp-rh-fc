@@ -3813,6 +3813,7 @@ export const financialRouter = router({
          FROM financial_entries e
         WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
           AND e.conta_bancaria_id=$2
+          AND ${sqlNotProjecao("e.origem_modulo")}
           AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) >= $3
           AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) <= $4
         ORDER BY data ASC, e.id ASC`, p);
@@ -3835,6 +3836,7 @@ export const financialRouter = router({
          FROM financial_entries e
         WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
           AND e.conta_bancaria_id IS NULL
+          AND ${sqlNotProjecao("e.origem_modulo")}
           AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) >= $2
           AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) <= $3
         ORDER BY data ASC, e.id ASC`,
@@ -4080,6 +4082,7 @@ export const financialRouter = router({
               e.comprovante_txid AS "comprovanteTxid"
        FROM financial_entries e
        WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
+         AND ${sqlNotProjecao("e.origem_modulo")}
          AND (e.conta_bancaria_id=$2 OR e.conta_bancaria_id IS NULL)`,
       [input.companyId, input.contaBancariaId]);
     const entries = rows(entRes) as any[];

@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3195 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · AS PROJEÇÕES (CRONOGRAMA DA OBRA, FOLHA
+ * PROJETADA, VR/VA PROJETADO, FÉRIAS/RESCISÃO PROJETADAS ETC.) DEIXARAM DE APARECER NA CONCILIAÇÃO —
+ * ELA PASSA A TRATAR SOMENTE DO QUE FOI EFETIVAMENTE PAGO/RECEBIDO (CAIXA REAL).**
+ *
+ * PEDIDO (piloto FC): a tela de Conciliação estava poluída com dezenas de linhas "Cronograma: 01.01
+ * - Equipe técnica… (2026-02)" / "01.02 - Refeições…" etc. da obra (ex.: "Hotel Qiu 2 - Fase 4").
+ * Esses lançamentos são PROJEÇÃO (o valor de CONTRATO da obra distribuído mês a mês — NÃO é
+ * pagamento real), então jamais batem com o extrato e inflavam falsamente o bloco "ERP sem extrato".
+ * O usuário: "isso é apenas projeção; a conciliação trata SOMENTE do que foi efetivamente pago; o
+ * ERP não pode misturar projeção com conta a pagar/receber efetiva".
+ *
+ * CAUSA-RAIZ: o módulo Financeiro já tinha a fonte única `PROJECAO_ORIGENS` + o helper
+ * `sqlNotProjecao()` (em `shared/financeiroProjecao.ts`) e a trava global `FINANCEIRO_SOMENTE_REAL`,
+ * mas as queries da CONCILIAÇÃO não aplicavam esse filtro — liam TODOS os `financial_entries`
+ * não-conciliados, inclusive os de origem de projeção (`cronograma_atividade`, `folha_projetada`,
+ * `beneficio_vr_projetado`, `beneficio_va_projetado`, `decimo_terceiro_projetado`, `pj_projetado`,
+ * `ferias_projetada`, `rescisao_projetada`, `planejamento_compra`, `encargos_projetado`).
+ *
+ * SOLUÇÃO (BACKEND-ONLY): em `server/routers/financial.ts`, as 3 queries que leem `financial_entries`
+ * na conciliação ganharam `AND ${sqlNotProjecao("e.origem_modulo")}`: (1) `getConciliacaoReport`
+ * bloco 3 "ERP sem extrato" (por conta), (2) bloco 3b "lançamentos sem conta bancária" e (3) o
+ * `sugerirConciliacao` (entries elegíveis ao match automático). `sqlNotProjecao` devolve SQL
+ * literal sem placeholder (identificadores fixos), então NÃO afeta a ligação posicional de params do
+ * `dbExecute`. O pintor de cards `getBankAccountsConciliacaoStatus` lê só `bank_statement_lines`
+ * (não precisou de filtro). ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
+ * IMPACTO: a conciliação some com o ruído de projeção e passa a comparar APENAS lançamentos de caixa
+ * real contra o extrato. Reversível/consistente com o resto do Financeiro (mesma fonte única
+ * `PROJECAO_ORIGENS`). RESSALVA: continua existindo o caso N:1 (vale-refeição por funcionário /
+ * combustível por veículo que viram 1 boleto único) — isso é tema de outra revisão (agrupamento).
+ *
  * Rev. 3194 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · A LISTA DE "SUGESTÕES AUTOMÁTICAS" GANHOU UM
  * CABEÇALHO FIXO NO TOPO QUE DEIXA EXPLÍCITO QUE A COLUNA DA ESQUERDA É O "EXTRATO (BANCO)" E A
  * DA DIREITA É O "LANÇAMENTO NO ERP".**
