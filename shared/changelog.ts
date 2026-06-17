@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3186 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O BOTÃO "PAINEL DE CONCILIAÇÃO" SAIU DO CABEÇALHO
+ * DA TELA E PASSOU PRA LOGO ABAIXO DO BOTÃO "SUGERIR CONCILIAÇÃO" (DENTRO DO CARD "SUGESTÕES
+ * AUTOMÁTICAS DE CONCILIAÇÃO"), ONDE FICA MAIS PERTO DO FLUXO DE TRABALHO.**
+ *
+ * PEDIDO (piloto FC FEV/2026): "coloca o botão painel de conciliação abaixo do sugerir conciliação,
+ * ajuste o layout." O botão estava no topo da tela (junto de Consolidar/Importar/Limpar), longe do
+ * card onde o usuário de fato roda as sugestões automáticas e decide entrar no Painel.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO BACKEND): em `client/src/pages/financeiro/FinanceiroConciliacao.tsx`
+ * o `<Button>` "Painel de Conciliação" (ícone `Maximize2`, rota
+ * `/financeiro/conciliacao/painel?conta=&ano=&mes=`) foi REMOVIDO da barra de ações do cabeçalho e
+ * RECOLOCADO no `CardHeader` do card "Sugestões Automáticas de Conciliação". Os controles à direita
+ * do card viraram uma coluna (`flex flex-col items-end gap-2`): linha 1 = Tolerância (dias) + "Sugerir
+ * conciliação"; linha 2 = "Painel de Conciliação" logo abaixo, alinhado à direita. Mesma rota, mesmo
+ * destino, mesma permissão (`route="/financeiro/conciliacao"`). ZERO SCHEMA/ALTER/DROP/DELETE · ZERO
+ * BACKEND.
+ *
+ * ──────────────────────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 3185 — **FINANCEIRO / MENU · "CONCILIAÇÃO BANCÁRIA" SAIU DO GRUPO "CADASTROS" E PASSOU PRO
  * GRUPO "MOVIMENTAÇÕES" (LOGO ABAIXO DE "CONTAS A PAGAR"), ONDE FAZ MAIS SENTIDO.**
  *

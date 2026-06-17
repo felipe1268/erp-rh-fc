@@ -395,9 +395,6 @@ export default function FinanceiroConciliacao() {
                 </Button>
               )
             )}
-            <Button size="sm" variant="outline" className="h-9 border-blue-600 text-blue-700 hover:bg-blue-50" onClick={() => setLocation(`/financeiro/conciliacao/painel?conta=${contaBancariaId}&ano=${ano}&mes=${mesSel ?? new Date().getMonth() + 1}`)}>
-              <Maximize2 className="w-3.5 h-3.5 mr-1.5" />Painel de Conciliação
-            </Button>
             <Button size="sm" className="h-9" onClick={() => { setShowImport(true); setImportConta(contaBancariaId); }}>
               <Upload className="w-3.5 h-3.5 mr-1.5" />Importar Extrato
             </Button>
@@ -604,26 +601,36 @@ export default function FinanceiroConciliacao() {
                     <Sparkles className="w-4 h-4 text-amber-500" />
                     Sugestões Automáticas de Conciliação
                   </CardTitle>
-                  <div className="flex items-center gap-2">
-                    <Label className="text-xs text-gray-500">Tolerância (dias)</Label>
-                    <Select value={String(toleranciaDias)} onValueChange={v => setToleranciaDias(parseInt(v))}>
-                      <SelectTrigger className="w-20 h-8"><SelectValue /></SelectTrigger>
-                      <SelectContent position="popper" side="bottom" sideOffset={4} align="start" avoidCollisions={false}>
-                        {tolOptions.map(d => (
-                          <SelectItem key={d} value={String(d)}>
-                            {d === diasDoMes && mesSel != null ? `${d} (mês)` : d}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="flex flex-col items-end gap-2">
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs text-gray-500">Tolerância (dias)</Label>
+                      <Select value={String(toleranciaDias)} onValueChange={v => setToleranciaDias(parseInt(v))}>
+                        <SelectTrigger className="w-20 h-8"><SelectValue /></SelectTrigger>
+                        <SelectContent position="popper" side="bottom" sideOffset={4} align="start" avoidCollisions={false}>
+                          {tolOptions.map(d => (
+                            <SelectItem key={d} value={String(d)}>
+                              {d === diasDoMes && mesSel != null ? `${d} (mês)` : d}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        size="sm"
+                        variant={mostrarSugestoes ? "outline" : "default"}
+                        onClick={() => { setMostrarSugestoes(true); setSelSug(new Set()); if (mostrarSugestoes) refetchSug(); }}
+                        disabled={sugLoading}
+                      >
+                        <Sparkles className="w-4 h-4 mr-1" />
+                        {sugLoading ? "Analisando..." : mostrarSugestoes ? "Reanalisar" : "Sugerir conciliação"}
+                      </Button>
+                    </div>
                     <Button
                       size="sm"
-                      variant={mostrarSugestoes ? "outline" : "default"}
-                      onClick={() => { setMostrarSugestoes(true); setSelSug(new Set()); if (mostrarSugestoes) refetchSug(); }}
-                      disabled={sugLoading}
+                      variant="outline"
+                      className="border-blue-600 text-blue-700 hover:bg-blue-50"
+                      onClick={() => setLocation(`/financeiro/conciliacao/painel?conta=${contaBancariaId}&ano=${ano}&mes=${mesSel ?? new Date().getMonth() + 1}`)}
                     >
-                      <Sparkles className="w-4 h-4 mr-1" />
-                      {sugLoading ? "Analisando..." : mostrarSugestoes ? "Reanalisar" : "Sugerir conciliação"}
+                      <Maximize2 className="w-4 h-4 mr-1" />Painel de Conciliação
                     </Button>
                   </div>
                 </div>
