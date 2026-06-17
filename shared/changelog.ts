@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3221 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · AS DUAS TELAS EXPANDIDAS DE PENDÊNCIA
+ * ("NO EXTRATO, SEM LANÇAMENTO" E "NO ERP, SEM EXTRATO") GANHARAM 3 CARDS DE RESUMO NO TOPO —
+ * TOTAL DE ENTRADAS, TOTAL DE SAÍDAS E SALDO (ENTRADAS − SAÍDAS) — E O LAYOUT DAS LINHAS FOI
+ * MODERNIZADO COM ÍCONE DIRECIONAL VERDE/VERMELHO + BADGE ENTRADA/SAÍDA. ANTES ERA SÓ A LISTA
+ * CRUA, SEM TOTAIS E SEM PISTA VISUAL DE DIREÇÃO.**
+ *
+ * PEDIDO (piloto FC): "coloca os cards do total de entrada e saida.. e saldo final do mes.. e
+ * melhore este layout não está legal, quero algo moderno e intuitivo, para as duas telas".
+ *
+ * SOLUÇÃO — FRONT-ONLY (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`):
+ * - Modal expandido (`expandedList`, serve AMBAS as telas extrato/erp): novo bloco de 3 cards
+ *   entre a barra de busca/export e a lista. Soma calculada sobre a lista JÁ FILTRADA pela busca
+ *   (`repExtView`/`repLanView`) → os totais reagem ao campo de busca. Direção: no EXTRATO
+ *   entrada = `valor ≥ 0`; no ERP entrada = `tipo === "receita"`. Saldo = entradas − saídas, com
+ *   cor azul (≥ 0) ou âmbar (< 0). Cada card mostra contador + total BRL via `formatBRL`.
+ * - Linhas modernizadas nos DOIS renderizadores compartilhados (refletem inline + tela cheia):
+ *   `renderExtratoRow` e `renderEntryRow` ganharam um avatar circular (9x9) com `ArrowDownCircle`
+ *   verde (entrada/receita) ou `ArrowUpCircle` vermelho (saída/despesa), badge "Entrada/Saída"
+ *   arredondado, descrição em `font-medium` e valor em emerald/rose. Removidos os `max-w-[200px]`
+ *   fixos (passou a `flex-1 min-w-0`) → trunca melhor no modo tela cheia.
+ *
+ * ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE · só UI (soma em memória sobre o relatório já
+ * carregado em `getConciliacaoReport`; nenhuma query nova).
+ *
  * Rev. 3220 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · OS "DEMONSTRATIVOS DE PAGAMENTO" (PDF COM
  * TODOS OS PIX + PDF COM TODOS OS BOLETOS PAGOS DO MÊS) AGORA PODEM SER LIDOS POR IA: BOTÃO
  * "LER COM IA" COM BARRA DE PROGRESSO 0→100% E UMA TELA (MODAL) QUE MOSTRA TUDO QUE A IA

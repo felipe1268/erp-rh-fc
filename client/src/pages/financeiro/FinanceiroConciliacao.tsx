@@ -552,20 +552,24 @@ export default function FinanceiroConciliacao() {
     const forma = String(e.formaPagamento || "").toLowerCase();
     const isPix = forma.includes("pix");
     const isBoleto = forma.includes("boleto");
+    const isReceita = e.tipo === "receita";
     return (
       <div
         key={e.id}
-        className={`w-full px-4 py-3 flex items-center gap-2 hover:bg-gray-50 transition-colors ${selectedEntry === e.id ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}
+        className={`w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors ${selectedEntry === e.id ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}
       >
+        <span className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${isReceita ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"}`}>
+          {isReceita ? <ArrowDownCircle className="w-5 h-5" /> : <ArrowUpCircle className="w-5 h-5" />}
+        </span>
         <button onClick={() => setSelectedEntry(selectedEntry === e.id ? null : e.id)} className="flex-1 min-w-0 text-left">
-          <p className="text-xs text-gray-500 flex items-center gap-1.5">
+          <p className="text-[11px] text-gray-400 flex items-center gap-1.5">
             {fmtData(e.data)}
-            {(isPix || isBoleto) && <span className={`px-1.5 py-px rounded text-[10px] font-medium ${isPix ? "bg-emerald-100 text-emerald-700" : "bg-orange-100 text-orange-700"}`}>{isPix ? "PIX" : "Boleto"}</span>}
+            {(isPix || isBoleto) && <span className={`px-1.5 py-px rounded-full text-[10px] font-medium ${isPix ? "bg-emerald-100 text-emerald-700" : "bg-orange-100 text-orange-700"}`}>{isPix ? "PIX" : "Boleto"}</span>}
           </p>
-          <p className="text-sm text-gray-700 truncate max-w-[200px]">{e.fornecedorNome || e.descricao || "—"}</p>
-          <p className="text-xs text-gray-400 truncate max-w-[200px]">{e.obraNome || ""}</p>
+          <p className="text-sm font-medium text-gray-700 truncate">{e.fornecedorNome || e.descricao || "—"}</p>
+          {e.obraNome && <p className="text-xs text-gray-400 truncate">{e.obraNome}</p>}
         </button>
-        <p className={`text-sm font-bold shrink-0 ${e.tipo === "receita" ? "text-green-600" : "text-red-500"}`}>{formatBRL(Math.abs(Number(e.valor)))}</p>
+        <p className={`text-sm font-bold shrink-0 ${isReceita ? "text-emerald-600" : "text-rose-500"}`}>{formatBRL(Math.abs(Number(e.valor)))}</p>
         <button type="button" onClick={() => setDetalheEntryId(e.id)} title="Ver detalhes" className="shrink-0 p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50"><Eye className="w-4 h-4" /></button>
         {e.comprovanteUrl ? (
           <a href={e.comprovanteUrl} target="_blank" rel="noreferrer" title="Comprovante anexado — abrir" className="shrink-0 p-1.5 rounded-md text-green-600 hover:bg-green-50"><Paperclip className="w-4 h-4" /></a>
@@ -580,20 +584,28 @@ export default function FinanceiroConciliacao() {
 
   // Rev. 3205 — renderiza uma linha do extrato (lista "No extrato, sem lançamento").
   // Extraída p/ reuso entre a lista inline e o modo tela cheia.
-  const renderExtratoRow = (s: any) => (
+  const renderExtratoRow = (s: any) => {
+    const isEntrada = Number(s.valor) >= 0;
+    return (
     <div
       key={s.id}
       className={`flex items-stretch ${selectedStatement === s.id ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}
     >
       <button
         onClick={() => setSelectedStatement(selectedStatement === s.id ? null : s.id)}
-        className="flex-1 min-w-0 px-4 py-3 flex items-center justify-between gap-2 text-left hover:bg-gray-50 transition-colors"
+        className="flex-1 min-w-0 px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-50 transition-colors"
       >
-        <div className="min-w-0">
-          <p className="text-xs text-gray-500">{fmtData(s.data)} · {Number(s.valor) >= 0 ? "Entrada" : "Saída"}</p>
-          <p className="text-sm text-gray-700 truncate">{s.descricao || "—"}</p>
+        <span className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${isEntrada ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"}`}>
+          {isEntrada ? <ArrowDownCircle className="w-5 h-5" /> : <ArrowUpCircle className="w-5 h-5" />}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] text-gray-400 flex items-center gap-1.5">
+            {fmtData(s.data)}
+            <span className={`px-1.5 py-px rounded-full text-[10px] font-medium ${isEntrada ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-600"}`}>{isEntrada ? "Entrada" : "Saída"}</span>
+          </p>
+          <p className="text-sm font-medium text-gray-700 truncate">{s.descricao || "—"}</p>
         </div>
-        <p className={`text-sm font-bold shrink-0 ${Number(s.valor) >= 0 ? "text-green-600" : "text-red-500"}`}>{formatBRL(Math.abs(Number(s.valor)))}</p>
+        <p className={`text-sm font-bold shrink-0 ${isEntrada ? "text-emerald-600" : "text-rose-500"}`}>{formatBRL(Math.abs(Number(s.valor)))}</p>
       </button>
       <button
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); abrirLancar(s); }}
@@ -604,7 +616,8 @@ export default function FinanceiroConciliacao() {
         <span className="text-[10px] font-medium leading-none">Lançar</span>
       </button>
     </div>
-  );
+    );
+  };
 
   // Detalhe consultivo do lançamento (mesmo endpoint usado em Contas a Pagar).
   const detailQuery = (trpc as any).financial.getEntryDetalhe.useQuery(
@@ -2206,6 +2219,44 @@ export default function FinanceiroConciliacao() {
                 <FileDown className="w-3.5 h-3.5 mr-1" />PDF
               </Button>
             </div>
+            {/* Rev. 3221 — Resumo do que está em tela: total de entradas, saídas e o saldo
+                (entradas − saídas). Reage à busca (soma só o que está filtrado). Extrato:
+                entrada = valor ≥ 0; ERP: entrada = tipo "receita". */}
+            {(() => {
+              const lista: any[] = expandedList === "extrato" ? repExtView : repLanView;
+              const ehEntrada = (r: any) => expandedList === "extrato" ? Number(r.valor) >= 0 : r.tipo === "receita";
+              let entrada = 0, saida = 0, ce = 0, cs = 0;
+              for (const r of lista) {
+                const v = Math.abs(Number(r.valor) || 0);
+                if (ehEntrada(r)) { entrada += v; ce++; } else { saida += v; cs++; }
+              }
+              const saldo = entrada - saida;
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 px-4 py-3 border-b bg-gray-50/60 shrink-0">
+                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-3 flex items-center gap-3">
+                    <span className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0"><ArrowDownCircle className="w-5 h-5" /></span>
+                    <div className="min-w-0">
+                      <p className="text-[11px] uppercase tracking-wide text-emerald-700/80 font-medium">Entradas · {ce}</p>
+                      <p className="text-lg font-bold text-emerald-700 truncate">{formatBRL(entrada)}</p>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-rose-100 bg-rose-50/70 p-3 flex items-center gap-3">
+                    <span className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0"><ArrowUpCircle className="w-5 h-5" /></span>
+                    <div className="min-w-0">
+                      <p className="text-[11px] uppercase tracking-wide text-rose-700/80 font-medium">Saídas · {cs}</p>
+                      <p className="text-lg font-bold text-rose-600 truncate">{formatBRL(saida)}</p>
+                    </div>
+                  </div>
+                  <div className={`rounded-xl border p-3 flex items-center gap-3 ${saldo >= 0 ? "border-blue-100 bg-blue-50/70" : "border-amber-100 bg-amber-50/70"}`}>
+                    <span className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${saldo >= 0 ? "bg-blue-100 text-blue-600" : "bg-amber-100 text-amber-600"}`}><Landmark className="w-5 h-5" /></span>
+                    <div className="min-w-0">
+                      <p className={`text-[11px] uppercase tracking-wide font-medium ${saldo >= 0 ? "text-blue-700/80" : "text-amber-700/80"}`}>Saldo do mês</p>
+                      <p className={`text-lg font-bold truncate ${saldo >= 0 ? "text-blue-700" : "text-amber-600"}`}>{formatBRL(saldo)}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
             <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
               {expandedList === "extrato"
                 ? (repExtView.length === 0 ? <div className="p-6 text-center text-gray-400 text-sm">{termoBusca ? "Nenhum item corresponde à busca." : "Nada a exibir."}</div> : repExtView.map(renderExtratoRow))
