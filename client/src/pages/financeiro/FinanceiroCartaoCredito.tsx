@@ -257,10 +257,10 @@ export default function FinanceiroCartaoCredito() {
         {/* Cabeçalho */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl font-bold flex items-center gap-2">
-              <CreditCard className="w-5 h-5 text-blue-700" /> Controle de Cartão de Crédito
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <CreditCard className="w-6 h-6 text-blue-700" /> Controle de Cartão de Crédito
             </h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-gray-500 mt-1">
               Cadastro de cartões, importação de faturas (PDF lido por IA) e classificação de gastos por obra/centro de custo. O cartão NÃO vira lançamento — é controle.
             </p>
           </div>
@@ -323,32 +323,50 @@ export default function FinanceiroCartaoCredito() {
         {/* ───────────── ABA FATURAS ───────────── */}
         {aba === "faturas" && (
           <>
-            <Card>
-              <CardContent className="pt-4 space-y-3">
-                {/* Régua ano + meses */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex items-center gap-1">
-                    <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setAno((a) => a - 1)}><ChevronLeft className="w-4 h-4" /></Button>
-                    <span className="font-semibold w-14 text-center">{ano}</span>
-                    <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setAno((a) => a + 1)}><ChevronRight className="w-4 h-4" /></Button>
+            {/* Navegação Ano + Meses (padrão Contas a Pagar) */}
+            <Card className="border-0 shadow-sm">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setAno((a) => a - 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <span className="text-base font-bold text-gray-800 min-w-[3.5rem] text-center">{ano}</span>
+                    <button onClick={() => setAno((a) => a + 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                    <Button size="sm" variant={mesSel == null ? "default" : "outline"} className="ml-2 h-7" onClick={() => setMesSel(null)}>Ano todo</Button>
                   </div>
-                  <Button size="sm" variant={mesSel == null ? "default" : "outline"} onClick={() => setMesSel(null)}>Ano todo</Button>
-                  <div className="flex flex-wrap gap-1">
-                    {MESES.slice(1).map((m, i) => {
-                      const num = i + 1;
-                      const r = resumoMensal.find((x) => x.mes === num);
-                      const temFatura = !!r && r.qtd > 0;
-                      return (
-                        <button
-                          key={num}
-                          onClick={() => setMesSel(num)}
-                          className={`px-2.5 py-1 rounded text-xs font-medium border flex items-center gap-1 ${mesSel === num ? "bg-blue-600 text-white border-blue-600" : "bg-white hover:bg-gray-50"}`}
-                        >
-                          {m}
-                          <span className={`w-1.5 h-1.5 rounded-full ${temFatura ? "bg-green-500" : "bg-gray-300"}`} />
-                        </button>
-                      );
-                    })}
+                  <div className="flex items-center gap-4 text-xs text-gray-500">
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Com fatura</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Sem fatura</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+                  {MESES.slice(1).map((m, i) => {
+                    const num = i + 1;
+                    const r = resumoMensal.find((x) => x.mes === num);
+                    const temFatura = !!r && r.qtd > 0;
+                    const isSelected = mesSel === num;
+                    return (
+                      <button
+                        key={num}
+                        onClick={() => setMesSel(num)}
+                        className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
+                          ${isSelected
+                            ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
+                            : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"
+                          }`}
+                      >
+                        <span>{m}</span>
+                        <span className={`w-1.5 h-1.5 rounded-full ${temFatura ? "bg-green-500" : "bg-gray-300"}`} />
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex flex-wrap items-center gap-2 mt-3">
+                  <div className="text-sm text-muted-foreground">
+                    {faturas.length} fatura(s) {mesSel != null ? `em ${MESES[mesSel]}/${ano}` : `em ${ano}`} · total <b className="text-foreground">{formatBRL(totalFaturasMes)}</b>
                   </div>
                   <div className="ml-auto flex items-center gap-2">
                     <Select value={cartaoFiltro != null ? String(cartaoFiltro) : "all"} onValueChange={(v) => setCartaoFiltro(v === "all" ? null : parseInt(v, 10))}>
@@ -362,9 +380,6 @@ export default function FinanceiroCartaoCredito() {
                     </Select>
                     <Button size="sm" onClick={abrirImport}><Upload className="w-4 h-4 mr-1" /> Importar fatura</Button>
                   </div>
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  {faturas.length} fatura(s) {mesSel != null ? `em ${MESES[mesSel]}/${ano}` : `em ${ano}`} · total <b className="text-foreground">{formatBRL(totalFaturasMes)}</b>
                 </div>
               </CardContent>
             </Card>

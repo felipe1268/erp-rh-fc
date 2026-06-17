@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3218 — **FINANCEIRO / CONTROLE DE CARTÃO DE CRÉDITO (ABA "FATURAS") · A RÉGUA DE
+ * ANO/MESES FOI PADRONIZADA PARA O MESMO FORMATO, TAMANHO E LAYOUT DA TELA "CONTAS A PAGAR"
+ * (CARDS DE MÊS ESPAÇADOS EM GRID DE 12 COLUNAS COM BOLINHA DE STATUS, NAVEGAÇÃO DE ANO À
+ * ESQUERDA E LEGENDA À DIREITA) — ANTES ERAM PILLS PEQUENAS E APERTADAS NUMA LINHA SÓ.**
+ *
+ * PEDIDO (piloto FC): "quero no mesmo formato, manter o tamanho e layout — padrão é tudo na vida",
+ * comparando a régua do Cartão de Crédito (pills compactas) com a régua-padrão do Contas a Pagar
+ * (grid de cards de mês). Consistência visual entre as telas financeiras.
+ *
+ * SOLUÇÃO — FRONT (`client/src/pages/financeiro/FinanceiroCartaoCredito.tsx`, aba "Faturas"):
+ * - O `Card` da régua virou `border-0 shadow-sm` + `CardContent p-4` (igual ao padrão).
+ * - Linha superior: navegação de ano com `<button>` discretos (ChevronLeft/Right `w-4 h-4`,
+ *   hover cinza) + ano `text-base font-bold text-gray-800 min-w-[3.5rem]` à esquerda e o botão
+ *   "Ano todo" logo após; LEGENDA à direita ("Com fatura" verde / "Sem fatura" cinza — refletindo
+ *   os 2 estados reais do cartão, sem o "Consolidado" que não existe aqui).
+ * - Os meses passaram de pills `px-2.5 py-1` numa `flex flex-wrap` para o GRID padrão
+ *   `grid grid-cols-6 sm:grid-cols-12 gap-1.5`, com cada mês num card `flex-col py-2 rounded-lg
+ *   border` + nome em cima e bolinha de status embaixo; selecionado em `border-blue-500 bg-blue-50
+ *   text-blue-700 shadow-sm` (mesma estética do Contas a Pagar; antes era pill azul cheia).
+ * - O filtro "Todos os cartões" + "Importar fatura" e o resumo "N fatura(s) … · total R$ …"
+ *   foram movidos para uma linha de ações abaixo do grid (`mt-3`), preservando 100% da
+ *   funcionalidade existente (estados `ano`/`mesSel`/`cartaoFiltro`, `resumoMensal`, import).
+ * - Cabeçalho da tela alinhado ao padrão (`text-2xl font-bold text-gray-900` + subtítulo
+ *   `text-gray-500 mt-1`), mantendo o ícone e as abas Cartões/Faturas.
+ *
+ * ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE · só client (UI/estética). Nenhuma lógica de dados,
+ * query ou contrato tRPC foi tocada.
+ *
+ * ---
+ *
  * Rev. 3217 — **MEDIÇÃO DE TERCEIROS · A MEDIÇÃO EXPANDIDA AGORA TEM ABAS INTERNAS
  * ("PLANILHA DE MEDIÇÃO" / "LEVANTAMENTO") EM VEZ DE SÓ UM BOTÃO SOLTO — A ABA "LEVANTAMENTO"
  * ABRE A FERRAMENTA DE DEMARCAÇÃO EM PDF (MAPA DE MEDIÇÃO) JÁ EXISTENTE, VINCULADA ÀQUELA
