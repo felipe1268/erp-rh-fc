@@ -1369,7 +1369,12 @@ export default function FinanceiroConciliacao() {
                     <div className="p-6 text-center text-gray-500 text-sm">Carregando…</div>
                   ) : repExt.length === 0 ? (
                     <div className="p-6 text-center text-gray-400 text-sm">
-                      {(statements ?? []).length === 0 ? (
+                      {/* Rev. 3200 — a mensagem deriva do RELATÓRIO (fonte única), NÃO do
+                          `statements` (query à parte). Antes, com o relatório zerado mas o
+                          `statements` com qualquer linha em cache/filtrada, a tela mostrava
+                          "Todo o extrato está conciliado 🎉" sem NADA ter sido conciliado
+                          (repConc=0). Só dizemos "conciliado" quando HÁ conciliados de fato. */}
+                      {repConc.length === 0 ? (
                         <>
                           <Upload className="w-8 h-8 mx-auto mb-2 text-gray-300" />
                           <p>Nenhum extrato importado neste período.</p>

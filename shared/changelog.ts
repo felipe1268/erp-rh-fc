@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3200 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO: A LISTA "NO EXTRATO, SEM LANÇAMENTO"
+ * DEIXOU DE DIZER FALSAMENTE "TODO O EXTRATO ESTÁ CONCILIADO 🎉" QUANDO, NA VERDADE, NÃO HAVIA NADA
+ * CONCILIADO (RELATÓRIO ZERADO). AGORA A MENSAGEM DERIVA DO RELATÓRIO (FONTE ÚNICA), NÃO DA QUERY À
+ * PARTE `statements`.**
+ *
+ * PEDIDO (piloto FC): "está com algum erro na conciliação — ele tá falando que foi conciliado
+ * automaticamente, mas não foi. O que houve?" (print: 0% conciliado, 0 de 0 linhas, todos os cards
+ * zerados, e ainda assim o card "No extrato, sem lançamento (0)" exibindo "Todo o extrato está
+ * conciliado 🎉").
+ *
+ * CAUSA-RAIZ: o estado-vazio do card "No extrato, sem lançamento" (`FinanceiroConciliacao.tsx`)
+ * decidia entre "Nenhum extrato importado" e "Todo o extrato está conciliado 🎉" lendo o tamanho da
+ * query SEPARADA `getBankStatements` (`statements`), e não o relatório `getConciliacaoReport` que é a
+ * FONTE ÚNICA desde a Rev. 3187. Quando o relatório vinha zerado (repConc=0 e repExt=0) mas o
+ * `statements` tinha QUALQUER linha em cache / sob filtro de conciliado, a condição
+ * `statements.length > 0` caía no ramo verde e mostrava "Todo o extrato está conciliado 🎉" — dando a
+ * impressão de uma conciliação automática que NUNCA aconteceu. (Eco da Rev. 3187, que já tratara o
+ * "falso tudo conciliado" no caminho de ERRO do relatório; este era o caminho de SUCESSO-mas-vazio.)
+ *
+ * SOLUÇÃO (FRONTEND-ONLY): no card "No extrato, sem lançamento", dentro do ramo `repExt.length === 0`,
+ * a escolha da mensagem passou a olhar `repConc.length` (do relatório):
+ *  - `repConc.length === 0` → não há linha NENHUMA no relatório p/ o período → "Nenhum extrato
+ *    importado neste período." + botão "Importar Extrato".
+ *  - `repConc.length > 0` → existem linhas e TODAS estão conciliadas → "Todo o extrato está
+ *    conciliado. 🎉" (verdadeiro).
+ * Assim a mensagem fica coerente com os KPIs do topo (que já liam o relatório) e nunca mais afirma
+ * "conciliado" sem haver conciliados de fato.
+ *
+ * ARQUIVOS: `client/src/pages/financeiro/FinanceiroConciliacao.tsx` (estado-vazio do card "No extrato,
+ * sem lançamento"). ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3199 — **FINANCEIRO / CONTROLE DE CHEQUES · NOVO MÓDULO QUE IMPORTA A PLANILHA "CONTROLE DE
  * CHEQUES" (ABAS MENSAIS JAN..DEZ) PARA UMA TABELA DEDICADA — O CHEQUE NÃO VIRA LANÇAMENTO, É APENAS
  * UM REGISTRO DE CONTROLE/CONSULTA; E O Nº DO CHEQUE VIRA FONTE DE IDENTIFICAÇÃO NA CONCILIAÇÃO
