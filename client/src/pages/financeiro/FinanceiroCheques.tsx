@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileSpreadsheet, Loader2, CheckCircle, AlertCircle, Trash2, Pencil, Search, RotateCcw, Banknote } from "lucide-react";
+import { Upload, FileSpreadsheet, Loader2, CheckCircle, AlertCircle, Trash2, Pencil, Search, RotateCcw, Banknote, ChevronLeft, ChevronRight } from "lucide-react";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
@@ -60,9 +60,11 @@ export default function FinanceiroCheques() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   // ── Filtros ──
+  // Mesmo padrão da Conciliação Bancária: navegação por ANO + faixa de meses
+  // (Jan–Dez) com bolinhas de status; "Ano todo" (mesSel=null) abre o ano inteiro.
   const [fStatus, setFStatus] = useState<string>("todos");
-  const [fAno, setFAno] = useState<string>(String(ANO_ATUAL));
-  const [fMes, setFMes] = useState<string>("todos");
+  const [ano, setAno] = useState<number>(ANO_ATUAL);
+  const [mesSel, setMesSel] = useState<number | null>(new Date().getMonth() + 1);
   const [fBusca, setFBusca] = useState<string>("");
 
   // ── Importação ──
@@ -76,17 +78,20 @@ export default function FinanceiroCheques() {
   const [editItem, setEditItem] = useState<any>(null);
   const [excluirItem, setExcluirItem] = useState<any>(null);
 
-  const listarArgs: any = { companyId, limit: 2000 };
+  const listarArgs: any = { companyId, limit: 2000, ano };
   if (fStatus !== "todos") listarArgs.status = fStatus;
-  if (fAno !== "todos") listarArgs.ano = Number(fAno);
-  if (fMes !== "todos") listarArgs.mes = Number(fMes);
+  if (mesSel != null) listarArgs.mes = mesSel;
   if (fBusca.trim()) listarArgs.busca = fBusca.trim();
 
   const { data: cheques = [], isLoading } = (trpc as any).cheques.listar.useQuery(
     listarArgs, { enabled: !!companyId }
   );
   const { data: resumo = [] } = (trpc as any).cheques.resumo.useQuery(
-    { companyId, ano: fAno !== "todos" ? Number(fAno) : undefined },
+    { companyId, ano },
+    { enabled: !!companyId }
+  );
+  const { data: resumoMensal = [] } = (trpc as any).cheques.resumoMensal.useQuery(
+    { companyId, ano },
     { enabled: !!companyId }
   );
 
@@ -103,11 +108,17 @@ export default function FinanceiroCheques() {
     return { map, totalGeral, qtdGeral };
   }, [resumo]);
 
-  const anos = useMemo(() => {
-    const set = new Set<number>([ANO_ATUAL, ANO_ATUAL - 1]);
-    for (const c of cheques as any[]) if (c.ano) set.add(c.ano);
-    return Array.from(set).sort((a, b) => b - a);
-  }, [cheques]);
+  // Status por mês p/ a bolinha da régua (mesmo padrão da Conciliação):
+  // verde = todos compensados; azul = tem cheque(s) mas com pendência; cinza = sem dados.
+  const mesesStatus = useMemo(() => {
+    const m: Record<number, "consolidado" | "lancamento" | "vazio"> = {};
+    for (let i = 1; i <= 12; i++) m[i] = "vazio";
+    for (const r of resumoMensal as any[]) {
+      if (!r.mes) continue;
+      m[r.mes] = r.qtd > 0 && r.compensados >= r.qtd ? "consolidado" : r.qtd > 0 ? "lancamento" : "vazio";
+    }
+    return m;
+  }, [resumoMensal]);
 
   async function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -144,6 +155,7 @@ export default function FinanceiroCheques() {
       if (fileRef.current) fileRef.current.value = "";
       utils?.cheques?.listar?.invalidate?.();
       utils?.cheques?.resumo?.invalidate?.();
+      utils?.cheques?.resumoMensal?.invalidate?.();
     } catch (err: any) {
       toast({ title: "Falha ao gravar", description: err?.message || String(err), variant: "destructive" });
     }
@@ -162,6 +174,7 @@ export default function FinanceiroCheques() {
       setEditItem(null);
       utils?.cheques?.listar?.invalidate?.();
       utils?.cheques?.resumo?.invalidate?.();
+      utils?.cheques?.resumoMensal?.invalidate?.();
     } catch (err: any) {
       toast({ title: "Falha ao salvar", description: err?.message || String(err), variant: "destructive" });
     }
@@ -175,6 +188,7 @@ export default function FinanceiroCheques() {
       setExcluirItem(null);
       utils?.cheques?.listar?.invalidate?.();
       utils?.cheques?.resumo?.invalidate?.();
+      utils?.cheques?.resumoMensal?.invalidate?.();
     } catch (err: any) {
       toast({ title: "Falha ao excluir", description: err?.message || String(err), variant: "destructive" });
     }
@@ -202,7 +216,7 @@ export default function FinanceiroCheques() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Card>
             <CardContent className="pt-4">
-              <div className="text-xs text-muted-foreground">Total ({fAno})</div>
+              <div className="text-xs text-muted-foreground">Total ({ano})</div>
               <div className="text-xl font-bold">{totais.qtdGeral}</div>
               <div className="text-sm text-muted-foreground">{formatBRL(totais.totalGeral)}</div>
             </CardContent>
@@ -232,45 +246,84 @@ export default function FinanceiroCheques() {
           </Card>
         </div>
 
-        {/* Filtros */}
+        {/* Filtros — mesmo padrão da Conciliação Bancária:
+            busca + status, e a faixa de meses (Jan–Dez) com bolinhas de status. */}
         <Card>
-          <CardContent className="pt-4 flex flex-wrap items-end gap-3">
-            <div className="flex-1 min-w-[200px]">
-              <Label className="text-xs">Buscar (nº ou fornecedor)</Label>
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input className="pl-8" value={fBusca} onChange={(e) => setFBusca(e.target.value)} placeholder="Nº do cheque ou fornecedor…" />
+          <CardContent className="pt-4 space-y-4">
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex-1 min-w-[200px]">
+                <Label className="text-xs">Buscar (nº ou fornecedor)</Label>
+                <div className="relative">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input className="pl-8" value={fBusca} onChange={(e) => setFBusca(e.target.value)} placeholder="Nº do cheque ou fornecedor…" />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">Status</Label>
+                <Select value={fStatus} onValueChange={setFStatus}>
+                  <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    {STATUS_OPTS.map((s) => <SelectItem key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
+
+            {/* Navegação por ANO + faixa de meses (Jan–Dez) com bolinhas de status.
+                Clicar num mês filtra aquele mês; "Ano todo" abre o ano. */}
             <div>
-              <Label className="text-xs">Status</Label>
-              <Select value={fStatus} onValueChange={setFStatus}>
-                <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  {STATUS_OPTS.map((s) => <SelectItem key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs">Ano</Label>
-              <Select value={fAno} onValueChange={setFAno}>
-                <SelectTrigger className="w-[110px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  {anos.map((a) => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs">Mês</Label>
-              <Select value={fMes} onValueChange={setFMes}>
-                <SelectTrigger className="w-[110px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  {MESES.slice(1).map((m, i) => <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => setAno(a => a - 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="text-base font-bold text-gray-800 min-w-[3.5rem] text-center">{ano}</span>
+                  <button type="button" onClick={() => setAno(a => a + 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                  <Button
+                    type="button"
+                    variant={mesSel == null ? "default" : "outline"}
+                    size="sm"
+                    className="h-8 text-xs ml-2"
+                    onClick={() => setMesSel(null)}
+                  >
+                    Ano todo
+                  </Button>
+                </div>
+                <div className="flex items-center gap-4 text-xs text-gray-500">
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Com lançamento</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Consolidado</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Sem dados</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+                {MESES.slice(1).map((m, i) => {
+                  const num = i + 1;
+                  const status = mesesStatus[num];
+                  const isSelected = mesSel === num;
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setMesSel(num)}
+                      className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
+                        ${isSelected
+                          ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
+                          : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"
+                        }`}
+                    >
+                      <span>{m}</span>
+                      <span className={`w-1.5 h-1.5 rounded-full ${
+                        status === "consolidado" ? "bg-green-500" :
+                        status === "lancamento" ? "bg-blue-500" :
+                        "bg-gray-300"
+                      }`} />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </CardContent>
         </Card>

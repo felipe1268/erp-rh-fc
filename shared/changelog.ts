@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3204 — **FINANCEIRO / CONTROLE DE CHEQUES · A TELA GANHOU A MESMA RÉGUA DE MÊS/ANO DA
+ * CONCILIAÇÃO BANCÁRIA: NAVEGAÇÃO POR ANO (SETAS `< 2026 >`), BOTÃO "ANO TODO" E A FAIXA DE MESES
+ * JAN–DEZ EM CHIPS COM BOLINHA DE STATUS (AZUL = COM LANÇAMENTO · VERDE = CONSOLIDADO/TODOS
+ * COMPENSADOS · CINZA = SEM DADOS), PRA MANTER O MESMO PADRÃO DE ORGANIZAÇÃO ENTRE AS TELAS.**
+ *
+ * PEDIDO (piloto FC): "no controle de cheques quero o mesmo filtro por mês e ano, para manter o mesmo
+ * padrão de organização" — acompanhado de prints da tela de Cheques (que usava dropdowns Ano/Mês) e da
+ * régua de chips da Conciliação Bancária (modelo a replicar).
+ *
+ * SOLUÇÃO — FRONT (`client/src/pages/financeiro/FinanceiroCheques.tsx`): os dropdowns "Ano" e "Mês"
+ * foram SUBSTITUÍDOS pela mesma régua usada na Conciliação — setas `<`/`>` pra trocar de ano, botão
+ * "Ano todo" (`mesSel = null` abre o ano inteiro) e a grade de 12 chips (Jan–Dez), cada um com uma
+ * bolinha de status. O estado passou de `fAno: string`/`fMes: string` ("todos") para `ano: number` +
+ * `mesSel: number | null` (default = mês atual, igual à Conciliação). A busca por nº/fornecedor e o
+ * filtro de Status continuam no mesmo card. O KPI "Total (ano)" agora lê `ano`.
+ *
+ * SOLUÇÃO — BACK (`server/routers/cheques.ts`): nova query `resumoMensal({ companyId, ano })` que
+ * agrega por mês do ano (`COUNT(*)` total + `COUNT(*) FILTER (WHERE status='compensado')`), usada no
+ * cliente pra pintar a bolinha de cada mês: tudo compensado → verde; tem cheque com pendência → azul;
+ * sem dados → cinza. As queries `listar`/`resumo` já aceitavam `mes`/`ano` (Rev. 3199/3202) e seguem
+ * inalteradas; a `resumoMensal` tem `assertCompanyAccess` (tenant guard) como as demais.
+ *
+ * ZERO SCHEMA/ALTER/DROP/DELETE · ZERO mudança no parser/dedup/importação de cheques · o cheque continua
+ * NÃO virando lançamento (Opção A). Apenas UI + uma query de leitura agregada.
+ *
  * Rev. 3203 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO DE BUG CRÍTICO: A TELA VOLTOU A
  * MOSTRAR "NÃO FOI POSSÍVEL CARREGAR A CONCILIAÇÃO" ("DB code=42703 | column e.comprovante_beneficiario
  * does not exist"). AS COLUNAS `comprovante_*` (Rev. 3193) NUNCA FORAM GARANTIDAS POR SELF-HEAL, ENTÃO

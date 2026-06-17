@@ -429,6 +429,26 @@ export const chequesRouter = router({
     return res.rows.map((r: any) => ({ status: r.status, qtd: r.qtd, total: parseFloat(r.total) || 0 }));
   }),
 
+  // Resumo POR MÊS do ano (para a régua de meses em chips, no mesmo padrão da
+  // Conciliação Bancária): por mês retorna qtd total e qtd compensados, pra
+  // pintar a bolinha de status (cinza=sem dados / verde=tudo compensado / azul=tem pendência).
+  resumoMensal: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    ano: z.number().int(),
+  })).query(async ({ input, ctx }) => {
+    await assertCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const res = await dbExecute(db,
+      `SELECT mes_ref AS "mes", COUNT(*)::int AS qtd,
+              COUNT(*) FILTER (WHERE status='compensado')::int AS compensados
+         FROM financial_cheques
+        WHERE company_id=$1 AND excluido_em IS NULL AND ano_ref=$2
+        GROUP BY mes_ref`,
+      [input.companyId, input.ano]);
+    return res.rows.map((r: any) => ({ mes: r.mes, qtd: r.qtd, compensados: r.compensados }));
+  }),
+
   // Edição manual (status, fornecedor, conta, obra, observação).
   atualizar: protectedProcedure.input(z.object({
     id: z.number(),
