@@ -7129,6 +7129,85 @@ export const financialCheques = pgTable("financial_cheques", {
   index("idx_chq_status").on(t.status),
 ]);
 
+// ─── Controle de Cartão de Crédito (cadastro + faturas + itens) ───────────────
+// Mesma filosofia do Controle de Cheques: CADASTRO/CONTROLE, NÃO vira lançamento.
+// Faturas (PDF) lidas por IA; cada COMPRA recebe obra + centro de custo + categoria.
+export const financialCartoes = pgTable("financial_cartoes", {
+  id: serial().notNull(),
+  companyId: integer("company_id").notNull(),
+  banco: varchar("banco", { length: 120 }),
+  bandeira: varchar("bandeira", { length: 60 }),
+  final4: varchar("final4", { length: 8 }),
+  titular: varchar("titular", { length: 255 }),
+  tipoPessoa: varchar("tipo_pessoa", { length: 4 }).default("PJ"),
+  diaFechamento: integer("dia_fechamento"),
+  diaVencimento: integer("dia_vencimento"),
+  limite: numeric("limite", { precision: 15, scale: 2 }),
+  ativo: smallint().default(1).notNull(),
+  observacao: text("observacao"),
+  excluidoEm: timestamp("excluido_em", { mode: "string" }),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_cartao_company").on(t.companyId),
+]);
+
+export const financialCartaoFaturas = pgTable("financial_cartao_faturas", {
+  id: serial().notNull(),
+  companyId: integer("company_id").notNull(),
+  cartaoId: integer("cartao_id"),
+  vencimento: date("vencimento", { mode: "string" }),
+  fechamento: date("fechamento", { mode: "string" }),
+  total: numeric("total", { precision: 15, scale: 2 }),
+  totalCompras: numeric("total_compras", { precision: 15, scale: 2 }),
+  faturaAnterior: numeric("fatura_anterior", { precision: 15, scale: 2 }),
+  pagamentos: numeric("pagamentos", { precision: 15, scale: 2 }),
+  mesRef: integer("mes_ref"),
+  anoRef: integer("ano_ref"),
+  origemArquivo: varchar("origem_arquivo", { length: 255 }),
+  loteId: varchar("lote_id", { length: 40 }),
+  conciliado: smallint().default(0),
+  dataConciliacao: date("data_conciliacao", { mode: "string" }),
+  observacao: text("observacao"),
+  excluidoEm: timestamp("excluido_em", { mode: "string" }),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_cartao_fat_company").on(t.companyId),
+  index("idx_cartao_fat_cartao").on(t.cartaoId),
+]);
+
+export const financialCartaoItens = pgTable("financial_cartao_itens", {
+  id: serial().notNull(),
+  companyId: integer("company_id").notNull(),
+  faturaId: integer("fatura_id").notNull(),
+  cartaoId: integer("cartao_id"),
+  data: date("data", { mode: "string" }),
+  descricao: varchar("descricao", { length: 300 }),
+  cidade: varchar("cidade", { length: 120 }),
+  valor: numeric("valor", { precision: 15, scale: 2 }),
+  moeda: varchar("moeda", { length: 10 }).default("BRL"),
+  cotacao: numeric("cotacao", { precision: 15, scale: 6 }),
+  valorOrigem: numeric("valor_origem", { precision: 15, scale: 2 }),
+  parcelaAtual: integer("parcela_atual"),
+  parcelaTotal: integer("parcela_total"),
+  tipo: text("tipo").default("compra").notNull(),
+  obraId: integer("obra_id"),
+  obraNome: varchar("obra_nome", { length: 255 }),
+  centroCustoId: integer("centro_custo_id"),
+  centroCustoNome: varchar("centro_custo_nome", { length: 255 }),
+  categoriaId: integer("categoria_id"),
+  categoriaNome: varchar("categoria_nome", { length: 255 }),
+  categoriaSugerida: varchar("categoria_sugerida", { length: 255 }),
+  statusClassificacao: text("status_classificacao").default("sugerido").notNull(),
+  excluidoEm: timestamp("excluido_em", { mode: "string" }),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_cartao_item_company").on(t.companyId),
+  index("idx_cartao_item_fatura").on(t.faturaId),
+]);
+
 // 3. Receitas de obras (medições → faturamento)
 export const financialRevenue = pgTable("financial_revenue", {
   id: serial().notNull(),

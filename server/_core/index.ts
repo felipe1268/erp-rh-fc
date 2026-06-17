@@ -895,6 +895,90 @@ Regras:
           console.log(`[SyncSchema+] Tabela financial_cheques garantida (Controle de Cheques).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA financial_cheques:`, e?.message || e); }
 
+        // Rev. 3210 — "CONTROLE DE CARTÃO DE CRÉDITO": cadastro de cartões +
+        // faturas (PDF lido por IA) + itens (compras classificáveis por obra/CC/
+        // categoria). CADASTRO/CONTROLE, NÃO vira lançamento (igual cheque).
+        // CREATE TABLE IF NOT EXISTS (R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS financial_cartoes (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              banco VARCHAR(120),
+              bandeira VARCHAR(60),
+              final4 VARCHAR(8),
+              titular VARCHAR(255),
+              tipo_pessoa VARCHAR(4) DEFAULT 'PJ',
+              dia_fechamento INTEGER,
+              dia_vencimento INTEGER,
+              limite NUMERIC(15,2),
+              ativo SMALLINT DEFAULT 1 NOT NULL,
+              observacao TEXT,
+              excluido_em TIMESTAMP,
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+              updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS financial_cartao_faturas (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              cartao_id INTEGER,
+              vencimento DATE,
+              fechamento DATE,
+              total NUMERIC(15,2),
+              total_compras NUMERIC(15,2),
+              fatura_anterior NUMERIC(15,2),
+              pagamentos NUMERIC(15,2),
+              mes_ref INTEGER,
+              ano_ref INTEGER,
+              origem_arquivo VARCHAR(255),
+              lote_id VARCHAR(40),
+              conciliado SMALLINT DEFAULT 0,
+              data_conciliacao DATE,
+              observacao TEXT,
+              excluido_em TIMESTAMP,
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+              updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS financial_cartao_itens (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              fatura_id INTEGER NOT NULL,
+              cartao_id INTEGER,
+              data DATE,
+              descricao VARCHAR(300),
+              cidade VARCHAR(120),
+              valor NUMERIC(15,2),
+              moeda VARCHAR(10) DEFAULT 'BRL',
+              cotacao NUMERIC(15,6),
+              valor_origem NUMERIC(15,2),
+              parcela_atual INTEGER,
+              parcela_total INTEGER,
+              tipo TEXT DEFAULT 'compra' NOT NULL,
+              obra_id INTEGER,
+              obra_nome VARCHAR(255),
+              centro_custo_id INTEGER,
+              centro_custo_nome VARCHAR(255),
+              categoria_id INTEGER,
+              categoria_nome VARCHAR(255),
+              categoria_sugerida VARCHAR(255),
+              status_classificacao TEXT DEFAULT 'sugerido' NOT NULL,
+              excluido_em TIMESTAMP,
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+              updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_cartao_company ON financial_cartoes(company_id) WHERE excluido_em IS NULL`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_cartao_fat_company ON financial_cartao_faturas(company_id) WHERE excluido_em IS NULL`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_cartao_fat_cartao ON financial_cartao_faturas(cartao_id) WHERE excluido_em IS NULL`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_cartao_item_company ON financial_cartao_itens(company_id) WHERE excluido_em IS NULL`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_cartao_item_fatura ON financial_cartao_itens(fatura_id) WHERE excluido_em IS NULL`);
+          console.log(`[SyncSchema+] Tabelas de Cartão de Crédito garantidas (Rev. 3210).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA financial_cartoes:`, e?.message || e); }
+
         // Rev. 3117 — Mapeamento/Cobertura de exames do ASO + extração por IA (Fase 2).
         // Colunas estruturadas em asos (camelCase, aspas obrigatórias) + tabela-fila
         // aso_extracao_ia (snake_case). ADD COLUMN/TABLE IF NOT EXISTS (R-001/R-007/R-010 OK).
