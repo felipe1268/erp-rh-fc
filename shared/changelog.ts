@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3225 — **OBRAS / CADASTRO E EDIÇÃO · NOVO CAMPO "JORNADA DE TRABALHO DA OBRA" (POR DIA DA
+ * SEMANA: ENTRADA / INTERVALO / SAÍDA, SEG A DOM). QUANDO PREENCHIDA, ESSA JORNADA PREVALECE SOBRE
+ * A DO FUNCIONÁRIO PARA TODOS OS ALOCADOS — RESPEITANDO A OBRA EM QUE A BATIDA OCORREU E A DATA DE
+ * ALOCAÇÃO/TRANSFERÊNCIA. EX. REVTE: SEG–QUI 12:00–22:00 (INTERV. 18:00–19:00), SEX 12:00–21:00
+ * (INTERV. 18:00–19:00) → CÁLCULO DE HORAS/ATRASOS/FALTAS USA A JORNADA DA OBRA, NÃO A DO CADASTRO
+ * PESSOAL.**
+ *
+ * PEDIDO (piloto FC): "uma obra pode ter horário próprio (ex.: REVTE entra meio-dia e sai 22h). Hoje
+ * o ponto calcula tudo pela jornada do cadastro do funcionário, então quem está nessa obra aparece
+ * com atraso/HE errados. Quero cadastrar a jornada NA OBRA e ela mandar — para quem estiver alocado
+ * lá, naquele dia, vale a jornada da obra; nos outros dias/obras, vale a do funcionário".
+ *
+ * SOLUÇÃO (override obra > funcionário, GATED — zero regressão onde nenhuma obra tem jornada):
+ * - SCHEMA ADITIVO: `obras.jornadaTrabalho` (`text("jornada_trabalho")`) guardando o MESMO JSON
+ *   dia-a-dia de `employees.jornadaTrabalho` (`{ seg:{entrada,intervalo,saida}, ... }`). Self-heal
+ *   `[SyncSchema+]`: `ALTER TABLE obras ADD COLUMN IF NOT EXISTS jornada_trabalho TEXT`. ZERO
+ *   ALTER destrutivo/DROP/DELETE.
+ * - HELPER novo `server/utils/jornadaObra.ts`: `parseJornadaObj`, `obraTemJornada` (obra "tem
+ *   jornada" só se ≥1 dia com entrada+saída), `jornadaEfetiva(empJ, obraJ)` (obra prevalece POR
+ *   INTEIRO quando existe — dia vazio na obra = folga), `obraNaDataFromAlocacoes` (resolve a obra do
+ *   dia sem batida via `employee_site_history`: alocação mais recente com dataInicio<=D<=dataFim||∞).
+ * - MOTOR DE PONTO (`server/routers/fechamentoPonto.ts`) tornado obra-aware em TODAS as procedures
+ *   que calculam minutos esperados: a obra do dia vem de `time_records.obraId` (com batida) ou da
+ *   alocação (sem batida); a jornada efetiva é resolvida por registro. Cada caminho é GATED em
+ *   `obraJornadaMap.size > 0` → se nenhuma obra da empresa tem jornada, o comportamento é idêntico
+ *   ao anterior (lê a do funcionário). Cobertos: `processRecords` + caller, `recalcularPeriodo`,
+ *   `getFaltasReport`, `getAtrasoDetalhe`, `manualEntry`, `getEmployeeDetail`, `linkUnmatchedToEmployee`,
+ *   `corrigirPeriodoEspecialManual`, simulação de folha/aviso. `dixiPonto.importAFD` resolve a obra
+ *   pelo SN do relógio. `getFaltaDetalhe` permanece read-only (classifica dia por dow, nunca leu
+ *   jornada — sem mudança).
+ * - ROUTER (`server/routers.ts`): `obras.create` e `obras.update` aceitam `jornadaTrabalho`
+ *   (`z.string().nullable().optional()`); `createObra`/`updateObra` já espalham o campo.
+ * - UI (`client/src/pages/Obras.tsx`): editor de jornada (tabela SEG→DOM com `TimeCombobox`,
+ *   contador de horas/semana, botão "Limpar") reutilizando o componente do cadastro de colaboradores;
+ *   decompõe o JSON no `openEdit` e recompõe no submit (só grava dias com entrada+saída).
+ *
+ * ZERO ALTER destrutivo · ZERO DROP/DELETE · schema só aditivo.
+ *
  * Rev. 3224 — **PONTO / FECHAMENTO DE PONTO · RELATÓRIO DE "CONFLITOS DE OBRA NO MESMO DIA" ·
  * ELIMINADOS OS FALSOS POSITIVOS: BATIDAS NA MESMA OBRA EM HORÁRIOS DIFERENTES (EX.: ENTRADA
  * 07:00 + SAÍDA 12:13) E ENTRADA SEM SAÍDA (FUNCIONÁRIO AINDA TRABALHANDO) NÃO SÃO MAIS MARCADAS

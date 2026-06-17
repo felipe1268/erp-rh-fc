@@ -2558,6 +2558,11 @@ export const obras = pgTable("obras", {
         // Rev. 2882 — número do contrato da obra (cadastro), usado no campo "Contrato nº"
         // das fichas do Databook (substitui o nº da Ordem de Compra no doc. do cliente).
         numeroContrato: varchar("numero_contrato", { length: 50 }),
+        // Jornada de trabalho POR DIA DA SEMANA da obra (JSON dia-a-dia, mesmo
+        // formato de employees.jornadaTrabalho: { seg:{entrada,intervalo,saida}, ... }).
+        // Quando preenchida, PREVALECE sobre a jornada do funcionário para todos
+        // os alocados (dia vazio = folga). Vazia/null → vale a jornada do funcionário.
+        jornadaTrabalho: text("jornada_trabalho"),
 },
 (table) => [
         index("idx_obra_company").on(table.companyId),

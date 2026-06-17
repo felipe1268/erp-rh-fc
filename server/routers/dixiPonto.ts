@@ -9,6 +9,7 @@ import { eq, and, sql, desc, inArray, isNull, like, or, between } from "drizzle-
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { jornadaEfetiva, obraTemJornada } from "../utils/jornadaObra";
 
 // ============================================================
 // AFD PARSER - Portaria 671
@@ -336,6 +337,17 @@ export const dixiPontoRouter = router({
         });
       }
 
+      // ===== JORNADA DA OBRA (prevalece sobre a do funcionário) =====
+      // O import AFD é sempre de UMA obra (resolvida acima por SN/device).
+      // Quando a obra tem jornada cadastrada, ela substitui a do funcionário.
+      let obraJornadaImport: string | null = null;
+      if (obraId) {
+        try {
+          const [oj] = await db.select({ j: obras.jornadaTrabalho }).from(obras).where(and(eq(obras.id, obraId), companyFilter(obras.companyId, input)));
+          if (oj && obraTemJornada(oj.j)) obraJornadaImport = oj.j as any;
+        } catch { /* sem jornada de obra → usa a do funcionário */ }
+      }
+
       // ===== BUSCAR FUNCIONÁRIOS POR CPF =====
       const empList = await db.select({
         id: employees.id,
@@ -490,9 +502,10 @@ export const dixiPontoRouter = router({
 
           let expectedMinutes = 480;
           let isDiaFolga = false;
-          if (emp.jornadaTrabalho) {
+          const empJornadaEfetiva = jornadaEfetiva(emp.jornadaTrabalho, obraJornadaImport);
+          if (empJornadaEfetiva) {
             try {
-              const jornada = typeof emp.jornadaTrabalho === "string" ? JSON.parse(emp.jornadaTrabalho) : emp.jornadaTrabalho;
+              const jornada = typeof empJornadaEfetiva === "string" ? JSON.parse(empJornadaEfetiva) : empJornadaEfetiva;
               const dayOfWeek = new Date(data + "T12:00:00").getDay();
               const dayMap: Record<number, string> = { 0: "dom", 1: "seg", 2: "ter", 3: "qua", 4: "qui", 5: "sex", 6: "sab" };
               const dayKey = dayMap[dayOfWeek];

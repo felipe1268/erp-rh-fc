@@ -815,6 +815,14 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2745: coluna "tabelasTotal" garantida em backups (progresso %).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA backups."tabelasTotal":`, e?.message || e); }
 
+        // Jornada de trabalho POR DIA DA SEMANA da OBRA (JSON dia-a-dia). Quando preenchida,
+        // PREVALECE sobre a jornada do funcionário no cálculo de ponto/atraso/falta dos alocados.
+        // Coluna aditiva TEXT; ADD COLUMN IF NOT EXISTS (R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`ALTER TABLE obras ADD COLUMN IF NOT EXISTS jornada_trabalho TEXT`);
+          console.log(`[SyncSchema+] coluna jornada_trabalho garantida em obras (jornada da obra prevalece sobre a do funcionário).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA obras.jornada_trabalho:`, e?.message || e); }
+
         // Rev. 2004 — Tabela de participações em DDS (Diálogo Diário de Segurança)
         try {
           await db.execute(sql`

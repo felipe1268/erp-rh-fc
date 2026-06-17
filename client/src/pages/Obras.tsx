@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Loader2, Wifi, X, AlertCircle, CheckCircle, ArrowLeft, FileText, Brain, BookOpen, Wrench, UserCheck, ChevronDown, Merge, Upload, Image as ImageIcon, Building, PackageOpen, ArrowLeftRight, ShieldCheck } from "lucide-react";
 import ModalAprovadoresEstoque from "@/components/obras/ModalAprovadoresEstoque";
+import { TimeCombobox, ENTRADA_OPTIONS, INTERVALO_OPTIONS, SAIDA_OPTIONS } from "@/components/TimeCombobox";
 import { useLocation } from "wouter";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
@@ -160,6 +161,41 @@ export default function Obras() {
   const [mesclarDialog, setMesclarDialog] = useState<{ open: boolean; sourceObra: any | null }>({ open: false, sourceObra: null });
   const [mesclarTargetId, setMesclarTargetId] = useState<number | null>(null);
   const [form, setForm] = useState<ObraForm>(emptyForm);
+  // Jornada de Trabalho da OBRA (por dia da semana). Estado separado (chaves dinâmicas
+  // jornada_<dia>_entrada/intervalo/saida) que vira JSON no submit e prevalece sobre a do funcionário.
+  const [jornadaForm, setJornadaForm] = useState<Record<string, string>>({});
+  const DIAS_JORNADA: { key: string; label: string }[] = [
+    { key: "seg", label: "Segunda" }, { key: "ter", label: "Terça" },
+    { key: "qua", label: "Quarta" }, { key: "qui", label: "Quinta" },
+    { key: "sex", label: "Sexta" }, { key: "sab", label: "Sábado" }, { key: "dom", label: "Domingo" },
+  ];
+  const decomporJornadaObra = (raw: any): Record<string, string> => {
+    const out: Record<string, string> = {};
+    if (!raw) return out;
+    try {
+      const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        DIAS_JORNADA.forEach(({ key }) => {
+          if (parsed[key]) {
+            out[`jornada_${key}_entrada`] = parsed[key].entrada || "";
+            out[`jornada_${key}_intervalo`] = parsed[key].intervalo || "";
+            out[`jornada_${key}_saida`] = parsed[key].saida || "";
+          }
+        });
+      }
+    } catch { /* formato inválido → vazio */ }
+    return out;
+  };
+  const comporJornadaObra = (): string | null => {
+    const obj: Record<string, { entrada: string; intervalo: string; saida: string }> = {};
+    DIAS_JORNADA.forEach(({ key }) => {
+      const entrada = jornadaForm[`jornada_${key}_entrada`] || "";
+      const intervalo = jornadaForm[`jornada_${key}_intervalo`] || "";
+      const saida = jornadaForm[`jornada_${key}_saida`] || "";
+      if (entrada && saida) obj[key] = { entrada, intervalo, saida };
+    });
+    return Object.keys(obj).length > 0 ? JSON.stringify(obj) : null;
+  };
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Em_Andamento");
   const [buscandoCep, setBuscandoCep] = useState(false);
@@ -237,7 +273,7 @@ export default function Obras() {
     return list;
   }, [obras, search, statusFilter, snsByObra]);
 
-  const openNew = () => { setEditingId(null); setForm(emptyForm); setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setPendingSns([]); setNomeError(false); setClienteOpen(false); setClienteBusca(""); setResponsavelOpen(false); setResponsavelBusca(""); setDialogOpen(true); };
+  const openNew = () => { setEditingId(null); setForm(emptyForm); setJornadaForm({}); setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setPendingSns([]); setNomeError(false); setClienteOpen(false); setClienteBusca(""); setResponsavelOpen(false); setResponsavelBusca(""); setDialogOpen(true); };
   const openEdit = (obra: any) => {
     setEditingId(obra.id);
     setForm({
@@ -266,6 +302,7 @@ export default function Obras() {
       percentualGerenciamentoMaterial: obra.percentualGerenciamentoMaterial || "0",
       percentualAdm: obra.percentualAdm || "0",
     });
+    setJornadaForm(decomporJornadaObra(obra.jornadaTrabalho));
     setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setNomeError(false);
     setClienteOpen(false); setClienteBusca(""); setResponsavelOpen(false); setResponsavelBusca("");
     setDialogOpen(true);
@@ -419,6 +456,7 @@ export default function Obras() {
       Object.entries(form).map(([k, v]) => [k, typeof v === "string" && v.trim() === "" ? (logoFields.includes(k) ? null : undefined) : v])
     ) as any;
     cleanForm.nome = nomeEfetivo;
+    cleanForm.jornadaTrabalho = comporJornadaObra();
     if (editingId) {
       updateMut.mutate({ id: editingId, ...cleanForm } as any);
     } else {
@@ -1085,6 +1123,91 @@ export default function Obras() {
             <div className="sm:col-span-2">
               <Label>Observações</Label>
               <Textarea value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} rows={3} />
+            </div>
+
+            {/* Jornada de Trabalho da OBRA — prevalece sobre a do funcionário p/ alocados */}
+            <div className="sm:col-span-2 border-t pt-4 mt-2">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <h4 className="text-sm font-semibold text-primary">Jornada de Trabalho da Obra</h4>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Quando preenchida, esta jornada <b>prevalece sobre a do funcionário</b> para todos os
+                    alocados (respeitando a data de alocação/transferência). Dia em branco = folga.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    let totalMin = 0;
+                    DIAS_JORNADA.forEach(({ key }) => {
+                      const ent = jornadaForm[`jornada_${key}_entrada`];
+                      const sai = jornadaForm[`jornada_${key}_saida`];
+                      const intv = jornadaForm[`jornada_${key}_intervalo`];
+                      if (ent && sai) {
+                        const [eh, em2] = ent.split(":").map(Number);
+                        const [sh, sm] = sai.split(":").map(Number);
+                        let mins = (sh * 60 + sm) - (eh * 60 + em2);
+                        if (intv) { const [ih, im] = intv.split(":").map(Number); mins -= (ih * 60 + im); }
+                        if (mins > 0) totalMin += mins;
+                      }
+                    });
+                    if (totalMin <= 0) return null;
+                    const horas = Math.floor(totalMin / 60);
+                    const minutos = totalMin % 60;
+                    return (
+                      <span className={`text-xs font-bold px-2 py-1 rounded ${totalMin === 2640 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>
+                        {horas}h{minutos > 0 ? String(minutos).padStart(2, '0') : ''}/semana {totalMin === 2640 ? '✅' : ''}
+                      </span>
+                    );
+                  })()}
+                  <Button
+                    type="button" variant="ghost" size="sm"
+                    className="h-7 text-xs text-muted-foreground"
+                    onClick={() => setJornadaForm({})}
+                  >
+                    Limpar
+                  </Button>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs border border-border rounded-lg">
+                  <thead>
+                    <tr className="bg-secondary/50">
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground w-24">Dia</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Entrada</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Intervalo</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Saída</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {DIAS_JORNADA.map(({ key, label }) => (
+                      <tr key={key} className="border-t">
+                        <td className="px-3 py-1.5 font-medium">{label}</td>
+                        <td className="px-1 py-1">
+                          <TimeCombobox
+                            value={jornadaForm[`jornada_${key}_entrada`] || ""}
+                            onChange={(v) => setJornadaForm(prev => ({ ...prev, [`jornada_${key}_entrada`]: v }))}
+                            options={ENTRADA_OPTIONS}
+                          />
+                        </td>
+                        <td className="px-1 py-1">
+                          <TimeCombobox
+                            value={jornadaForm[`jornada_${key}_intervalo`] || ""}
+                            onChange={(v) => setJornadaForm(prev => ({ ...prev, [`jornada_${key}_intervalo`]: v }))}
+                            options={INTERVALO_OPTIONS}
+                          />
+                        </td>
+                        <td className="px-1 py-1">
+                          <TimeCombobox
+                            value={jornadaForm[`jornada_${key}_saida`] || ""}
+                            onChange={(v) => setJornadaForm(prev => ({ ...prev, [`jornada_${key}_saida`]: v }))}
+                            options={SAIDA_OPTIONS}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             {/* Seção de SNs (Relógios de Ponto) - NOVA OBRA */}

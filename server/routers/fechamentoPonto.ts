@@ -3,12 +3,13 @@ import { router, protectedProcedure } from "../_core/trpc";
 import * as XLSX from "xlsx";
 import { getDb } from "../db";
 import {
-  timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio, pontoConsolidacao, obraSns, systemCriteria, terminationNotices, unmatchedDixiRecords, dixiNameMappings, vacationPeriods, fieldNotes, atestados, feriados, obraFuncionarios, obraPontoInconsistencies
+  timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio, pontoConsolidacao, obraSns, systemCriteria, terminationNotices, unmatchedDixiRecords, dixiNameMappings, vacationPeriods, fieldNotes, atestados, feriados, obraFuncionarios, obraPontoInconsistencies, employeeSiteHistory
 } from "../../drizzle/schema";
 import { eq, and, sql, like, or, between, inArray, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { parseBRL } from "../utils/parseBRL";
+import { jornadaEfetiva, obraTemJornada, obraNaDataFromAlocacoes, type AlocacaoObra } from "../utils/jornadaObra";
 
 // ============================================================
 // HELPERS
@@ -460,6 +461,9 @@ function processRecords(
   activeAvisos: Array<{ employeeId: number; dataInicio: string; dataFim: string; reducaoJornada: string | null }> = [],
   memoryMappings: Array<{ dixiName: string; employeeId: number }> = [],
   activeFeriasGozo: Array<{ employeeId: number; dataInicio: string; dataFim: string; periodo2Inicio: string | null; periodo2Fim: string | null; periodo3Inicio: string | null; periodo3Fim: string | null }> = [],
+  // Jornada da OBRA do lote (JSON). Quando preenchida, PREVALECE sobre a jornada
+  // do funcionário para TODOS os dias deste import (a obra é a do lote/SN).
+  obraJornada: string | null = null,
 ) {
   // Group by person+day
   const grouped: Record<string, Record<string, string[]>> = {};
@@ -519,6 +523,9 @@ function processRecords(
       continue;
     }
 
+    // Jornada efetiva: a da OBRA prevalece sobre a do funcionário quando cadastrada.
+    const empJornadaEfetiva = jornadaEfetiva(emp.jornadaTrabalho, obraJornada);
+
     for (const [data, horas] of Object.entries(days)) {
       horas.sort();
 
@@ -547,9 +554,9 @@ function processRecords(
 
       let expectedMinutes = 480; // default 8h se não tiver jornada definida
       let isDiaFolgaJornada = false; // true se o dia NÃO tem jornada (sáb/dom sem escala = tudo é HE)
-      if (emp.jornadaTrabalho) {
+      if (empJornadaEfetiva) {
         try {
-          const jornada = typeof emp.jornadaTrabalho === "string" ? JSON.parse(emp.jornadaTrabalho) : emp.jornadaTrabalho;
+          const jornada = typeof empJornadaEfetiva === "string" ? JSON.parse(empJornadaEfetiva) : empJornadaEfetiva;
           const dayOfWeek = new Date(data + "T12:00:00").getDay();
           const dayMap: Record<number, string> = { 0: "dom", 1: "seg", 2: "ter", 3: "qua", 4: "qui", 5: "sex", 6: "sab" };
           const dayKey = dayMap[dayOfWeek];
@@ -645,9 +652,9 @@ function processRecords(
         
         // Verificar se o excesso vem de chegada antecipada
         let chegouCedo = false;
-        if (entrada1 && emp.jornadaTrabalho) {
+        if (entrada1 && empJornadaEfetiva) {
           try {
-            const jornada = typeof emp.jornadaTrabalho === "string" ? JSON.parse(emp.jornadaTrabalho) : emp.jornadaTrabalho;
+            const jornada = typeof empJornadaEfetiva === "string" ? JSON.parse(empJornadaEfetiva) : empJornadaEfetiva;
             const dayOfWeek2 = new Date(data + "T12:00:00").getDay();
             const dayMap2: Record<number, string> = { 0: "dom", 1: "seg", 2: "ter", 3: "qua", 4: "qui", 5: "sex", 6: "sab" };
             const dayKey2 = dayMap2[dayOfWeek2];
@@ -1161,9 +1168,20 @@ export const fechamentoPontoRouter = router({
           employeeId: dixiNameMappings.employeeId,
         }).from(dixiNameMappings).where(companyFilter(dixiNameMappings.companyId, input));
 
+        // Jornada da OBRA do lote: quando cadastrada, PREVALECE sobre a do funcionário.
+        // (No caso normal, o lote é 1 obra. Em SN compartilhado o rec.obraId é reatribuído
+        // depois; o recálculo/relatório aplicam a jornada por obra-do-dia — ver recalcularPeriodo.)
+        let obraJornadaLote: string | null = null;
+        if (obraId) {
+          try {
+            const [oj] = await db.select({ j: obras.jornadaTrabalho }).from(obras).where(and(eq(obras.id, obraId), companyFilter(obras.companyId, input)));
+            if (oj && obraTemJornada(oj.j)) obraJornadaLote = oj.j as any;
+          } catch { /* sem jornada de obra → usa a do funcionário */ }
+        }
+
         // Process records - mesReferencia is auto-detected from each record's date
         const { timeRecordsToInsert, inconsistencies, unmatchedNames, unmatchedRecordsToInsert } = processRecords(
-          records, empList as any, obraId, input.companyId, criteria, activeAvisos, memMappings, activeFeriasGozo as any
+          records, empList as any, obraId, input.companyId, criteria, activeAvisos, memMappings, activeFeriasGozo as any, obraJornadaLote
         );
 
         // ===== SHARED SN: Reassign obraId by employee→obra assignment =====
@@ -2039,7 +2057,16 @@ export const fechamentoPontoRouter = router({
           message: `Funcionário ${input.employeeId} não pertence ao escopo da empresa ${input.companyId}.`,
         });
       }
-      const jornadaTrabalho = empData[0]?.jornadaTrabalho ?? null;
+      const jornadaFunc = empData[0]?.jornadaTrabalho ?? null;
+      // Jornada da OBRA do lançamento prevalece sobre a do funcionário.
+      let obraJornadaManual: string | null = null;
+      if (input.obraId) {
+        try {
+          const [oj] = await db.select({ j: obras.jornadaTrabalho }).from(obras).where(and(eq(obras.id, input.obraId), companyFilter(obras.companyId, input)));
+          if (oj && obraTemJornada(oj.j)) obraJornadaManual = oj.j as any;
+        } catch { /* sem jornada de obra → usa a do funcionário */ }
+      }
+      const jornadaTrabalho = jornadaEfetiva(jornadaFunc, obraJornadaManual);
       const dow = new Date(input.data + "T12:00:00Z").getUTCDay();
       const isWeekendDay = dow === 0 || dow === 6;
       // Weekend: 100% das horas trabalhadas = hora extra
@@ -2274,6 +2301,20 @@ export const fechamentoPontoRouter = router({
       const criteria = await getCriteriaMap(input.companyId);
       const empJornada = emp[0]?.jornadaTrabalho ?? null;
 
+      // Jornada da OBRA prevalece sobre a do funcionário (por registro, via obraId).
+      const cidsDet = resolveCompanyIds(input);
+      const obraJornadaMapDet = new Map<number, string>();
+      {
+        const obrasJ = await db.select({ id: obras.id, j: obras.jornadaTrabalho })
+          .from(obras).where(and(inArray(obras.companyId, cidsDet), isNull(obras.deletedAt)));
+        for (const o of obrasJ) if (obraTemJornada(o.j)) obraJornadaMapDet.set(o.id, o.j as string);
+      }
+      const jornadaEfetivaRecDet = (oid: number | null): string | null => {
+        if (obraJornadaMapDet.size === 0) return empJornada;
+        const obraJ = oid != null ? (obraJornadaMapDet.get(oid) ?? null) : null;
+        return jornadaEfetiva(empJornada, obraJ);
+      };
+
       function computeHeForRecord(rec: any): string {
         const trabMins = hhmmToMins(rec.horasTrabalhadas);
         if (trabMins <= 0) return "0:00";
@@ -2282,7 +2323,7 @@ export const fechamentoPontoRouter = router({
         if (!dateStr) return "0:00";
         const dow = new Date(dateStr + "T12:00:00Z").getUTCDay();
         if (dow === 0) return "0:00";
-        const expected = getExpectedMinsFromJornada(empJornada, dateStr)
+        const expected = getExpectedMinsFromJornada(jornadaEfetivaRecDet(rec.obraId ?? null), dateStr)
           ?? (criteria.jornadaHorasDiarias * 60);
         const he = Math.max(0, trabMins - expected);
         return minutesToHHMM(he);
@@ -4037,6 +4078,20 @@ export const fechamentoPontoRouter = router({
         (criteria as any)[c.chave] = parseFloat(String(c.valor));
       }
 
+      // Jornada da OBRA prevalece sobre a do funcionário (por registro, via rec.obraId).
+      const cidsLink = resolveCompanyIds(input);
+      const obraJornadaMapLink = new Map<number, string>();
+      {
+        const obrasJ = await db.select({ id: obras.id, j: obras.jornadaTrabalho })
+          .from(obras).where(and(inArray(obras.companyId, cidsLink), isNull(obras.deletedAt)));
+        for (const o of obrasJ) if (obraTemJornada(o.j)) obraJornadaMapLink.set(o.id, o.j as string);
+      }
+      const jornadaEfetivaRecLink = (oid: number | null): string | null => {
+        if (obraJornadaMapLink.size === 0) return emp.jornadaTrabalho ?? null;
+        const obraJ = oid != null ? (obraJornadaMapLink.get(oid) ?? null) : null;
+        return jornadaEfetiva(emp.jornadaTrabalho, obraJ);
+      };
+
       // Per-day lock: descobrir intervalos de ciclos consolidados que abrangem as datas pendentes.
       const datasPendentes = pendingRecords.map(r => String(r.data)).filter(Boolean);
       const minData = datasPendentes.length > 0 ? datasPendentes.reduce((a, b) => a < b ? a : b) : null;
@@ -4070,11 +4125,12 @@ export const fechamentoPontoRouter = router({
         if (entrada2 && saida2) totalMinutes += diffMinutes(entrada2, saida2);
         if (entrada3 && saida3) totalMinutes += diffMinutes(entrada3, saida3);
 
+        const recJornadaLink = jornadaEfetivaRecLink(rec.obraId ?? null);
         let expectedMinutes = 480;
         let isDiaFolgaJornada2 = false;
-        if (emp.jornadaTrabalho) {
+        if (recJornadaLink) {
           try {
-            const jornada = typeof emp.jornadaTrabalho === "string" ? JSON.parse(emp.jornadaTrabalho) : emp.jornadaTrabalho;
+            const jornada = typeof recJornadaLink === "string" ? JSON.parse(recJornadaLink) : recJornadaLink;
             const dayOfWeek = new Date(rec.data + "T12:00:00").getDay();
             const dayMap: Record<number, string> = { 0: "dom", 1: "seg", 2: "ter", 3: "qua", 4: "qui", 5: "sex", 6: "sab" };
             const dayKey = dayMap[dayOfWeek];
@@ -4103,9 +4159,9 @@ export const fechamentoPontoRouter = router({
         } else if (diffBruto > 0) {
           // Verificar se chegou cedo (hora extra por chegada antecipada)
           let chegouCedo2 = false;
-          if (entrada1 && emp.jornadaTrabalho) {
+          if (entrada1 && recJornadaLink) {
             try {
-              const jornada2 = typeof emp.jornadaTrabalho === "string" ? JSON.parse(emp.jornadaTrabalho) : emp.jornadaTrabalho;
+              const jornada2 = typeof recJornadaLink === "string" ? JSON.parse(recJornadaLink) : recJornadaLink;
               const dow2 = new Date(rec.data + "T12:00:00").getDay();
               const dm2: Record<number, string> = { 0: "dom", 1: "seg", 2: "ter", 3: "qua", 4: "qui", 5: "sex", 6: "sab" };
               const dk2 = dm2[dow2];
@@ -4448,8 +4504,21 @@ export const fechamentoPontoRouter = router({
       const [emp] = await db.select({ jornadaTrabalho: employees.jornadaTrabalho })
         .from(employees).where(eq(employees.id, input.employeeId));
 
+      // Jornada da OBRA prevalece sobre a do funcionário (por registro, via obraId).
+      const obraJornadaMapAv = new Map<number, string>();
+      {
+        const obrasJ = await db.select({ id: obras.id, j: obras.jornadaTrabalho })
+          .from(obras).where(and(eq(obras.companyId, input.companyId), isNull(obras.deletedAt)));
+        for (const o of obrasJ) if (obraTemJornada(o.j)) obraJornadaMapAv.set(o.id, o.j as string);
+      }
+      const jornadaEfetivaRecAv = (oid: number | null): string | null => {
+        if (obraJornadaMapAv.size === 0) return emp?.jornadaTrabalho ?? null;
+        const obraJ = oid != null ? (obraJornadaMapAv.get(oid) ?? null) : null;
+        return jornadaEfetiva(emp?.jornadaTrabalho ?? null, obraJ);
+      };
+
       const records = await db.select({
-        id: timeRecords.id, data: timeRecords.data,
+        id: timeRecords.id, data: timeRecords.data, obraId: timeRecords.obraId,
         entrada1: timeRecords.entrada1, saida1: timeRecords.saida1,
         entrada2: timeRecords.entrada2, saida2: timeRecords.saida2,
         entrada3: timeRecords.entrada3, saida3: timeRecords.saida3,
@@ -4466,6 +4535,7 @@ export const fechamentoPontoRouter = router({
       let corrigidos = 0;
       for (const rec of records) {
         const data = rec.data!;
+        const recJornadaAv = jornadaEfetivaRecAv(rec.obraId ?? null);
         const dm = (a: string | null | undefined, b: string | null | undefined) => {
           if (!a || !b) return 0;
           const [ah, am] = a.split(':').map(Number);
@@ -4480,9 +4550,9 @@ export const fechamentoPontoRouter = router({
 
         let expectedMinutes = 480;
         let isDiaFolga = false;
-        if (emp?.jornadaTrabalho) {
+        if (recJornadaAv) {
           try {
-            const jornada = typeof emp.jornadaTrabalho === 'string' ? JSON.parse(emp.jornadaTrabalho) : emp.jornadaTrabalho;
+            const jornada = typeof recJornadaAv === 'string' ? JSON.parse(recJornadaAv) : recJornadaAv;
             const dow = new Date(data + 'T12:00:00').getDay();
             const dayMap: Record<number, string> = { 0:'dom',1:'seg',2:'ter',3:'qua',4:'qui',5:'sex',6:'sab' };
             const dk = dayMap[dow];
@@ -4607,6 +4677,14 @@ export const fechamentoPontoRouter = router({
         )
       );
 
+      // Jornada da OBRA prevalece sobre a do funcionário (por registro, via obraId).
+      const obraJornadaMapSim = new Map<number, string>();
+      {
+        const obrasJ = await db.select({ id: obras.id, j: obras.jornadaTrabalho })
+          .from(obras).where(and(companyFilter(obras.companyId, input), isNull(obras.deletedAt)));
+        for (const o of obrasJ) if (obraTemJornada(o.j)) obraJornadaMapSim.set(o.id, o.j as string);
+      }
+
       for (const aviso of avisos) {
         // Busca o funcionário para obter a jornada de trabalho
         const empRows = await db.select({
@@ -4615,11 +4693,17 @@ export const fechamentoPontoRouter = router({
         }).from(employees).where(eq(employees.id, aviso.employeeId));
         if (!empRows.length) continue;
         const emp = empRows[0];
+        const jornadaEfetivaRecSim = (oid: number | null): string | null => {
+          if (obraJornadaMapSim.size === 0) return emp.jornadaTrabalho ?? null;
+          const obraJ = oid != null ? (obraJornadaMapSim.get(oid) ?? null) : null;
+          return jornadaEfetiva(emp.jornadaTrabalho, obraJ);
+        };
 
         // Busca registros não ajustados dentro do período do aviso
         const records = await db.select({
           id:              timeRecords.id,
           data:            timeRecords.data,
+          obraId:          timeRecords.obraId,
           entrada1:        timeRecords.entrada1,
           saida1:          timeRecords.saida1,
           entrada2:        timeRecords.entrada2,
@@ -4657,13 +4741,14 @@ export const fechamentoPontoRouter = router({
             if (parts.length === 2) totalMinutes = parseInt(parts[0]) * 60 + parseInt(parts[1]);
           }
 
-          // Calcula expectedMinutes a partir da jornada do funcionário para este dia
+          // Calcula expectedMinutes a partir da jornada efetiva (obra > func) deste dia
+          const recJornadaSim = jornadaEfetivaRecSim(rec.obraId ?? null);
           let expectedMinutes = 480;
           let isDiaFolga = false;
-          if (emp.jornadaTrabalho) {
+          if (recJornadaSim) {
             try {
-              const jornada = typeof emp.jornadaTrabalho === 'string'
-                ? JSON.parse(emp.jornadaTrabalho) : emp.jornadaTrabalho;
+              const jornada = typeof recJornadaSim === 'string'
+                ? JSON.parse(recJornadaSim) : recJornadaSim;
               const dow = new Date(data + 'T12:00:00').getDay();
               const dayMap: Record<number, string> = { 0:'dom',1:'seg',2:'ter',3:'qua',4:'qui',5:'sex',6:'sab' };
               const dk = dayMap[dow];
@@ -4792,6 +4877,16 @@ export const fechamentoPontoRouter = router({
           sql`${timeRecords.data} BETWEEN ${input.dataInicio} AND ${input.dataFim}`,
         ));
 
+      // Jornada da OBRA prevalece sobre a do funcionário: carrega a jornada das
+      // obras presentes nos registros (por rec.obraId). Map vazio → comportamento legado.
+      const obraJornadaMap = new Map<number, string>();
+      const obraIdsRecs = Array.from(new Set(recs.map(r => r.obraId).filter((x): x is number => x != null)));
+      if (obraIdsRecs.length > 0) {
+        const obrasJ = await db.select({ id: obras.id, j: obras.jornadaTrabalho })
+          .from(obras).where(and(inArray(obras.id, obraIdsRecs), companyFilter(obras.companyId, input)));
+        for (const o of obrasJ) if (obraTemJornada(o.j)) obraJornadaMap.set(o.id, o.j as string);
+      }
+
       let recalculados = 0;
       let pulados = 0;
       let lockedSkipped = 0;
@@ -4809,7 +4904,12 @@ export const fechamentoPontoRouter = router({
 
         const dow = new Date(dataStr + "T12:00:00Z").getUTCDay();
         const isWeekendDay = dow === 0 || dow === 6;
-        const expectedMins = isWeekendDay ? 0 : getExpectedMinsFromJornada(jornadaTrabalho, dataStr);
+        // A jornada da obra do registro (rec.obraId) prevalece sobre a do funcionário.
+        const jornadaEfetivaRec = jornadaEfetiva(
+          jornadaTrabalho,
+          rec.obraId != null ? (obraJornadaMap.get(rec.obraId) ?? null) : null,
+        );
+        const expectedMins = isWeekendDay ? 0 : getExpectedMinsFromJornada(jornadaEfetivaRec, dataStr);
         const heMins = isWeekendDay
           ? totalMinutes
           : (expectedMins !== null ? Math.max(0, totalMinutes - expectedMins) : 0);
@@ -4973,6 +5073,7 @@ export const fechamentoPontoRouter = router({
       const recs = await db.select({
         employeeId: timeRecords.employeeId,
         data: timeRecords.data,
+        obraId: timeRecords.obraId,
         entrada1: timeRecords.entrada1,
         saida1: timeRecords.saida1,
         entrada2: timeRecords.entrada2,
@@ -4984,6 +5085,41 @@ export const fechamentoPontoRouter = router({
       ));
       const recsByEmpDay = new Map<string, typeof recs[number]>();
       for (const r of recs) recsByEmpDay.set(`${r.employeeId}|${r.data}`, r);
+
+      // ----- 3b) Jornada da OBRA prevalece sobre a do funcionário (alocados).
+      // Carrega a jornada das obras da empresa que TÊM jornada cadastrada; e o
+      // histórico de lotação (employee_site_history) p/ resolver a obra dos dias
+      // SEM batida (faltas). Map vazio → comportamento legado (zero regressão).
+      const obraJornadaMap = new Map<number, string>();
+      const obrasJ = await db.select({ id: obras.id, j: obras.jornadaTrabalho })
+        .from(obras).where(and(inArray(obras.companyId, cids), isNull(obras.deletedAt)));
+      for (const o of obrasJ) if (obraTemJornada(o.j)) obraJornadaMap.set(o.id, o.j as string);
+      const alocByEmp = new Map<number, AlocacaoObra[]>();
+      if (obraJornadaMap.size > 0) {
+        const hist = await db.select({
+          employeeId: employeeSiteHistory.employeeId,
+          obraId: employeeSiteHistory.obraId,
+          dataInicio: employeeSiteHistory.dataInicio,
+          dataFim: employeeSiteHistory.dataFim,
+        }).from(employeeSiteHistory).where(and(
+          inArray(employeeSiteHistory.companyId, cids),
+          inArray(employeeSiteHistory.employeeId, empIds),
+        ));
+        for (const h of hist) {
+          const arr = alocByEmp.get(h.employeeId) || [];
+          arr.push({ obraId: h.obraId ?? null, dataInicio: h.dataInicio ?? null, dataFim: h.dataFim ?? null });
+          alocByEmp.set(h.employeeId, arr);
+        }
+      }
+      // Resolve a jornada efetiva (obra ou funcionário) p/ um dia de um funcionário.
+      function jornadaEfetivaDia(emp: { id: number; jornadaTrabalho: any }, ds: string): string | null {
+        if (obraJornadaMap.size === 0) return emp.jornadaTrabalho ?? null;
+        const rec = recsByEmpDay.get(`${emp.id}|${ds}`);
+        let oid: number | null = rec?.obraId ?? null;
+        if (oid == null) oid = obraNaDataFromAlocacoes(alocByEmp.get(emp.id) || [], ds);
+        const obraJ = oid != null ? (obraJornadaMap.get(oid) ?? null) : null;
+        return jornadaEfetiva(emp.jornadaTrabalho, obraJ);
+      }
 
       // ----- 4) Atestados que cobrem dias do período
       const ats = await db.select({
@@ -5088,10 +5224,12 @@ export const fechamentoPontoRouter = router({
       function getExpected(emp: typeof empList[number], dateStr: string) {
         const dow = new Date(dateStr + "T12:00:00Z").getUTCDay(); // 0=dom..6=sab
         if (dow === 0) return { isWorkday: false, entrada: null as string | null, saida: null as string | null, mins: 0 };
-        // Tenta jornada do funcionário
-        if (emp.jornadaTrabalho) {
+        // Jornada efetiva do dia: a da OBRA alocada prevalece sobre a do funcionário.
+        const jornadaDia = jornadaEfetivaDia(emp, dateStr);
+        // Tenta jornada efetiva (obra > funcionário)
+        if (jornadaDia) {
           try {
-            const parsed = typeof emp.jornadaTrabalho === "string" ? JSON.parse(emp.jornadaTrabalho) : emp.jornadaTrabalho;
+            const parsed = typeof jornadaDia === "string" ? JSON.parse(jornadaDia) : jornadaDia;
             if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
               const keys = ["dom","seg","ter","qua","qui","sex","sab"];
               const day = parsed[keys[dow]];
@@ -5362,6 +5500,7 @@ export const fechamentoPontoRouter = router({
       // mostrar no modal: "Trabalhou X de Y esperadas → déficit Z".
       const recs = await db.select({
         data: timeRecords.data,
+        obraId: timeRecords.obraId,
         entrada1: timeRecords.entrada1,
         saida1: timeRecords.saida1,
         entrada2: timeRecords.entrada2,
@@ -5379,7 +5518,36 @@ export const fechamentoPontoRouter = router({
       const criteria = await getCriteriaMap(input.companyId);
       const tolAtraso = criteria.pontoToleranciaAtraso;
 
-      // 4) Helper inline: entrada esperada por dia (jornadaTrabalho JSON)
+      // 3b) Jornada da OBRA prevalece sobre a do funcionário (contexto do modal).
+      // Carrega jornada das obras + alocações do colaborador. Map vazio → legado.
+      const obraJornadaMap = new Map<number, string>();
+      const obrasJ = await db.select({ id: obras.id, j: obras.jornadaTrabalho })
+        .from(obras).where(and(inArray(obras.companyId, cids), isNull(obras.deletedAt)));
+      for (const o of obrasJ) if (obraTemJornada(o.j)) obraJornadaMap.set(o.id, o.j as string);
+      const recObraByDay = new Map<string, number | null>();
+      for (const r of recs) recObraByDay.set(String(r.data), r.obraId ?? null);
+      let alocAtraso: AlocacaoObra[] = [];
+      if (obraJornadaMap.size > 0) {
+        const hist = await db.select({
+          obraId: employeeSiteHistory.obraId,
+          dataInicio: employeeSiteHistory.dataInicio,
+          dataFim: employeeSiteHistory.dataFim,
+        }).from(employeeSiteHistory).where(and(
+          inArray(employeeSiteHistory.companyId, cids),
+          eq(employeeSiteHistory.employeeId, input.employeeId),
+        ));
+        alocAtraso = hist.map(h => ({ obraId: h.obraId ?? null, dataInicio: h.dataInicio ?? null, dataFim: h.dataFim ?? null }));
+      }
+      // Jornada efetiva (string JSON) p/ um dia: obra-do-dia > funcionário.
+      function jornadaEfetivaDiaAtraso(ds: string): string | null {
+        if (obraJornadaMap.size === 0) return emp.jornadaTrabalho ?? null;
+        let oid = recObraByDay.get(ds) ?? null;
+        if (oid == null) oid = obraNaDataFromAlocacoes(alocAtraso, ds);
+        const obraJ = oid != null ? (obraJornadaMap.get(oid) ?? null) : null;
+        return jornadaEfetiva(emp.jornadaTrabalho, obraJ);
+      }
+
+      // 4) Helper inline: entrada esperada por dia (jornada efetiva — obra > func)
       let jornadaParsed: any = null;
       if (emp.jornadaTrabalho) {
         try { jornadaParsed = typeof emp.jornadaTrabalho === "string" ? JSON.parse(emp.jornadaTrabalho) : emp.jornadaTrabalho; } catch {}
@@ -5387,8 +5555,11 @@ export const fechamentoPontoRouter = router({
       const keysDow = ["dom","seg","ter","qua","qui","sex","sab"];
       function getEntradaEsperada(ds: string): string | null {
         const dow = new Date(ds + "T12:00:00Z").getUTCDay();
-        if (jornadaParsed && typeof jornadaParsed === "object" && !Array.isArray(jornadaParsed)) {
-          const day = jornadaParsed[keysDow[dow]];
+        const jStr = jornadaEfetivaDiaAtraso(ds);
+        let jParsed: any = null;
+        if (jStr) { try { jParsed = typeof jStr === "string" ? JSON.parse(jStr) : jStr; } catch {} }
+        if (jParsed && typeof jParsed === "object" && !Array.isArray(jParsed)) {
+          const day = jParsed[keysDow[dow]];
           if (day && day.entrada) return String(day.entrada);
         }
         return null;
@@ -5443,17 +5614,14 @@ export const fechamentoPontoRouter = router({
       };
       const dias: DiaAtraso[] = [];
       let acumulado = 0;
-      // Rev. 2032 — jornada (string JSON) já parseada em `jornadaParsed`,
-      // mas `getExpectedMinsFromJornada` espera a string; serializamos uma vez.
-      const jornadaStr = typeof emp.jornadaTrabalho === "string"
-        ? emp.jornadaTrabalho
-        : (emp.jornadaTrabalho ? JSON.stringify(emp.jornadaTrabalho) : null);
 
       for (const r of recs) {
         const ds = String(r.data);
         const dow = new Date(ds + "T12:00:00Z").getUTCDay();
         const esperada = getEntradaEsperada(ds);
         const real = r.entrada1 || null;
+        // Jornada efetiva do dia (obra > funcionário) — string p/ getExpectedMinsFromJornada.
+        const jornadaStr = jornadaEfetivaDiaAtraso(ds);
 
         // Fonte primária: o campo já gravado pelo motor (mesmo que a tabela).
         let minutos = 0;
