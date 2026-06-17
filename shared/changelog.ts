@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3207 — **FINANCEIRO / CONTROLE DE CHEQUES · A TELA GANHOU 3 CARDS DO MÊS SELECIONADO (TOTAL
+ * DE CHEQUES, COMPENSADOS E "FALTAM COMPENSAR" = PENDENTES), UMA LEGENDA DE STATUS PARA RASTREIO E,
+ * EM CADA LINHA, O MARCADOR "CONCILIADO NO EXTRATO" + O MOTIVO QUANDO O CHEQUE VOLTOU (DEVOLVIDO/
+ * SUSTADO/CANCELADO).**
+ *
+ * PEDIDO (piloto FC): "coloque mais 3 cards, total de cheques do mês, quantos compensados e quantos
+ * ainda faltam; se o cheque voltou e qual motivo; quando for conciliado no extrato quero saber a
+ * legenda de status de cada um para rastreio" + print da tela de Controle de Cheques.
+ *
+ * SOLUÇÃO — BACK (`server/routers/cheques.ts`): a query `resumo` passou a aceitar `mes` opcional
+ * (`AND mes_ref=$N`), mantendo a ordem posicional do `dbExecute` (companyId→ano→mes). `assertCompanyAccess`
+ * inalterado.
+ *
+ * SOLUÇÃO — FRONT (`client/src/pages/financeiro/FinanceiroCheques.tsx`): (1) nova query `resumoMes`
+ * (`cheques.resumo` com `mes: mesSel`, só roda com mês selecionado) + `totaisMes`; quando há mês
+ * selecionado renderiza a faixa "Resumo de MÊS/ano" com 3 cards: Total de cheques do mês (azul),
+ * Compensados no mês (verde) e Faltam compensar/pendentes (âmbar), cada um com qtd + valor BRL. (2)
+ * Na tabela, a coluna Status agora empilha: o badge de status + um marcador "Conciliado no extrato"
+ * (ícone `Link2`, com data) quando `conciliado` + o "Motivo: …" (da `observacao`) quando o cheque
+ * voltou (devolvido/sustado/cancelado). (3) Novo bloco de LEGENDA no cabeçalho da tabela (bolinhas
+ * coloridas por status + marcador de conciliado) para rastreio.
+ *
+ * ZERO SCHEMA/ALTER/DROP/DELETE · cheque continua NÃO virando lançamento · só leitura/agregação +
+ * apresentação (1 input opcional aditivo na query existente).
+ *
  * Rev. 3206 — **FINANCEIRO / CONTROLE DE CHEQUES · O MODAL "IMPORTAR CONTROLE DE CHEQUES" FICOU
  * APERTADO/RUIM (TUDO EMPILHADO NUMA COLUNA ESTREITA, AMOSTRA E KPIs ESPREMIDOS COM SCROLL CHEIO).
  * AGORA ELE ABRE EM TELA CHEIA (96vw × 94vh) COM LAYOUT EM DUAS COLUNAS E A AMOSTRA EM LARGURA TOTAL.**

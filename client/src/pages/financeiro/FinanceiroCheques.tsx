@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileSpreadsheet, Loader2, CheckCircle, AlertCircle, Trash2, Pencil, Search, RotateCcw, Banknote, ChevronLeft, ChevronRight } from "lucide-react";
+import { Upload, FileSpreadsheet, Loader2, CheckCircle, AlertCircle, Trash2, Pencil, Search, RotateCcw, Banknote, ChevronLeft, ChevronRight, Link2 } from "lucide-react";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
@@ -94,6 +94,12 @@ export default function FinanceiroCheques() {
     { companyId, ano },
     { enabled: !!companyId }
   );
+  // Resumo por STATUS do MÊS selecionado (p/ os 3 cards "do mês"). Só roda quando
+  // há um mês selecionado; em "Ano todo" os cards do mês ficam ocultos.
+  const { data: resumoMes = [] } = (trpc as any).cheques.resumo.useQuery(
+    { companyId, ano, mes: mesSel ?? undefined },
+    { enabled: !!companyId && mesSel != null }
+  );
 
   const previewMut = (trpc as any).cheques.importarPreview.useMutation();
   const confirmarMut = (trpc as any).cheques.importarConfirmar.useMutation();
@@ -107,6 +113,15 @@ export default function FinanceiroCheques() {
     const qtdGeral = (resumo as any[]).reduce((a, r) => a + (r.qtd || 0), 0);
     return { map, totalGeral, qtdGeral };
   }, [resumo]);
+
+  // Agregado do MÊS selecionado (Total / Compensados / Faltam compensar).
+  const totaisMes = useMemo(() => {
+    const map: Record<string, { qtd: number; total: number }> = {};
+    for (const r of resumoMes as any[]) map[r.status] = { qtd: r.qtd, total: r.total };
+    const qtd = (resumoMes as any[]).reduce((a, r) => a + (r.qtd || 0), 0);
+    const total = (resumoMes as any[]).reduce((a, r) => a + (r.total || 0), 0);
+    return { map, qtd, total };
+  }, [resumoMes]);
 
   // Status por mês p/ a bolinha da régua (mesmo padrão da Conciliação):
   // verde = todos compensados; azul = tem cheque(s) mas com pendência; cinza = sem dados.
@@ -246,6 +261,38 @@ export default function FinanceiroCheques() {
           </Card>
         </div>
 
+        {/* Cards do MÊS selecionado (Total / Compensados / Faltam compensar) */}
+        {mesSel != null && (
+          <div className="space-y-2">
+            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Resumo de {MESES[mesSel]}/{ano}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Card className="border-blue-200 bg-blue-50/40">
+                <CardContent className="pt-4">
+                  <div className="text-xs text-muted-foreground">Total de cheques do mês</div>
+                  <div className="text-xl font-bold text-blue-700">{totaisMes.qtd}</div>
+                  <div className="text-sm text-muted-foreground">{formatBRL(totaisMes.total)}</div>
+                </CardContent>
+              </Card>
+              <Card className="border-emerald-200 bg-emerald-50/40">
+                <CardContent className="pt-4">
+                  <div className="text-xs text-muted-foreground">Compensados no mês</div>
+                  <div className="text-xl font-bold text-emerald-700">{totaisMes.map["compensado"]?.qtd || 0}</div>
+                  <div className="text-sm text-muted-foreground">{formatBRL(totaisMes.map["compensado"]?.total || 0)}</div>
+                </CardContent>
+              </Card>
+              <Card className="border-amber-200 bg-amber-50/40">
+                <CardContent className="pt-4">
+                  <div className="text-xs text-muted-foreground">Faltam compensar (pendentes)</div>
+                  <div className="text-xl font-bold text-amber-600">{totaisMes.map["pendente"]?.qtd || 0}</div>
+                  <div className="text-sm text-muted-foreground">{formatBRL(totaisMes.map["pendente"]?.total || 0)}</div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        )}
+
         {/* Filtros — mesmo padrão da Conciliação Bancária:
             busca + status, e a faixa de meses (Jan–Dez) com bolinhas de status. */}
         <Card>
@@ -330,7 +377,19 @@ export default function FinanceiroCheques() {
 
         {/* Tabela */}
         <Card>
-          <CardHeader><CardTitle className="text-base">Cheques ({(cheques as any[]).length})</CardTitle></CardHeader>
+          <CardHeader className="space-y-3">
+            <CardTitle className="text-base">Cheques ({(cheques as any[]).length})</CardTitle>
+            {/* Legenda de status — p/ rastreio de cada cheque */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground">
+              <span className="font-medium uppercase tracking-wide">Legenda:</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-green-500" /> Compensado</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> Pendente</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-orange-500" /> Devolvido</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-red-500" /> Sustado</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-gray-400" /> Cancelado / Indefinido</span>
+              <span className="inline-flex items-center gap-1.5 text-emerald-700"><Link2 className="h-3 w-3" /> Conciliado no extrato</span>
+            </div>
+          </CardHeader>
           <CardContent>
             {isLoading ? (
               <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>
@@ -369,7 +428,19 @@ export default function FinanceiroCheques() {
                         <td className="py-2 pr-3">{fmtData(c.dataVencimento)}</td>
                         <td className="py-2 pr-3">{fmtData(c.dataCompensacao)}</td>
                         <td className="py-2 pr-3">{c.mes ? `${MESES[c.mes]}/${c.ano}` : c.ano}</td>
-                        <td className="py-2 pr-3">{statusBadge(c.status)}</td>
+                        <td className="py-2 pr-3">
+                          <div className="flex flex-col gap-1">
+                            {statusBadge(c.status)}
+                            {c.conciliado ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700" title={`Conciliado no extrato${c.dataConciliacao ? " em " + fmtData(c.dataConciliacao) : ""}`}>
+                                <Link2 className="h-3 w-3" /> Conciliado no extrato{c.dataConciliacao ? ` · ${fmtData(c.dataConciliacao)}` : ""}
+                              </span>
+                            ) : null}
+                            {(c.status === "devolvido" || c.status === "sustado" || c.status === "cancelado") && c.observacao ? (
+                              <span className="text-[10px] text-orange-700 max-w-[220px] truncate" title={c.observacao}>Motivo: {c.observacao}</span>
+                            ) : null}
+                          </div>
+                        </td>
                         <td className="py-2 pr-3 text-right whitespace-nowrap">
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditItem({ ...c })}><Pencil className="h-4 w-4" /></Button>
                           <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600" onClick={() => setExcluirItem(c)}><Trash2 className="h-4 w-4" /></Button>

@@ -410,21 +410,26 @@ export const chequesRouter = router({
     return res.rows;
   }),
 
-  // Cards de resumo por status (ano opcional).
+  // Cards de resumo por status (ano e mês opcionais).
   resumo: protectedProcedure.input(z.object({
     companyId: z.number(),
     ano: z.number().int().optional(),
+    mes: z.number().int().min(1).max(12).optional(),
   })).query(async ({ input, ctx }) => {
     await assertCompanyAccess(ctx.user, input.companyId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    // dbExecute liga params por ORDEM DE APARIÇÃO ($N é cosmético) — manter a
+    // ordem do array idêntica à ordem dos placeholders na string.
     const params: unknown[] = [input.companyId];
-    let anoPart = "";
-    if (input.ano != null) { anoPart = `AND ano_ref=$2`; params.push(input.ano); }
+    let extra = "";
+    let pi = 2;
+    if (input.ano != null) { extra += ` AND ano_ref=$${pi++}`; params.push(input.ano); }
+    if (input.mes != null) { extra += ` AND mes_ref=$${pi++}`; params.push(input.mes); }
     const res = await dbExecute(db,
       `SELECT status, COUNT(*)::int AS qtd, COALESCE(SUM(valor),0) AS total
          FROM financial_cheques
-        WHERE company_id=$1 AND excluido_em IS NULL ${anoPart}
+        WHERE company_id=$1 AND excluido_em IS NULL ${extra}
         GROUP BY status`, params);
     return res.rows.map((r: any) => ({ status: r.status, qtd: r.qtd, total: parseFloat(r.total) || 0 }));
   }),
