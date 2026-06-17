@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter, AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
@@ -185,6 +186,28 @@ export default function FinanceiroConciliacao() {
   );
   const sugestoes: any[] = sugData?.sugestoes ?? [];
   const semMatch: any[] = sugData?.semMatch ?? [];
+
+  // Rev. 3190 — barra de progresso 0→100% durante a análise ("Analisando..."). O
+  // sugerirConciliacao é uma query única (sem progresso real do servidor), então
+  // animamos: sobe gradual (mais devagar perto do fim) enquanto cruza e completa
+  // em 100% ao terminar, dando ao usuário a sensação de evolução.
+  const [sugProgress, setSugProgress] = useState(0);
+  useEffect(() => {
+    if (sugLoading) {
+      setSugProgress(8);
+      const id = setInterval(() => {
+        setSugProgress(p => {
+          if (p >= 92) return p;
+          const step = p < 50 ? 7 : p < 75 ? 3 : 1;
+          return Math.min(92, p + step);
+        });
+      }, 200);
+      return () => clearInterval(id);
+    }
+    setSugProgress(p => (p > 0 ? 100 : 0));
+    const t = setTimeout(() => setSugProgress(0), 700);
+    return () => clearTimeout(t);
+  }, [sugLoading]);
 
   // Rev. 3187 — Relatório consolidado da conta/período (3 blocos), agora EMBUTIDO na tela
   // única (o Painel separado foi aposentado). Conciliados, extrato-sem-lançamento e
@@ -828,7 +851,16 @@ export default function FinanceiroConciliacao() {
               {mostrarSugestoes && (
                 <CardContent className="pt-0">
                   {sugLoading ? (
-                    <p className="text-sm text-gray-500 py-6 text-center">Cruzando extrato × lançamentos por valor, direção e data…</p>
+                    <div className="py-6 space-y-3">
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="text-gray-600 flex items-center gap-2 min-w-0">
+                          <Loader2 className="w-4 h-4 animate-spin shrink-0 text-amber-500" />
+                          <span className="truncate">Cruzando extrato × lançamentos por valor, direção e data…</span>
+                        </span>
+                        <span className="font-semibold tabular-nums text-amber-600 shrink-0">{sugProgress}%</span>
+                      </div>
+                      <Progress value={sugProgress} className="h-2" />
+                    </div>
                   ) : sugestoes.length === 0 ? (
                     <p className="text-sm text-gray-500 py-6 text-center">
                       Nenhuma sugestão automática para a conta/período selecionados.

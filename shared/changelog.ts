@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3190 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O CARD "SUGESTÕES AUTOMÁTICAS" GANHOU UMA
+ * BARRA DE PROGRESSO 0→100% DURANTE A ANÁLISE ("ANALISANDO..."), PRA O USUÁRIO ACOMPANHAR A
+ * EVOLUÇÃO DO CRUZAMENTO EXTRATO × LANÇAMENTOS.**
+ *
+ * PEDIDO (piloto FC FEV/2026): "quando clicar quero ver o % de 0 a 100%, para ver a evolução".
+ * Ao clicar em "Sugerir conciliação", o card só mostrava o texto estático "Cruzando extrato ×
+ * lançamentos por valor, direção e data…" enquanto a análise rodava — sem nenhuma indicação de
+ * progresso.
+ *
+ * CAUSA/CONTEXTO: a análise (`financial.sugerirConciliacao`) é uma QUERY ÚNICA do tRPC — o
+ * servidor devolve todas as sugestões de uma vez, não há progresso incremental real a reportar.
+ *
+ * SOLUÇÃO (frontend-only, ZERO BACKEND / ZERO SCHEMA) em
+ * `client/src/pages/financeiro/FinanceiroConciliacao.tsx`: barra de progresso ANIMADA via
+ * `Progress` (shadcn). Novo estado `sugProgress` + `useEffect` ligado a `sugLoading`: ao entrar
+ * em "Analisando..." começa em 8% e sobe gradualmente (passo maior no início, menor perto do
+ * fim, teto 92% enquanto carrega — para nunca "estacionar" cravado em 100% antes da hora); ao
+ * terminar, completa em 100% e some após ~0,7s. Substituí o parágrafo estático pelo bloco com
+ * spinner + label + "{sugProgress}%" + a barra. Mesma fonte de dados/queries; nenhuma mudança no
+ * fluxo de conciliação.
+ *
+ * IMPACTO: feedback visual de evolução (0→100%) toda vez que se dispara/reanalisa a sugestão de
+ * conciliação. ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3189 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O DROPDOWN "TOLERÂNCIA (DIAS)" PAROU DE
  * ABRIR NO MEIO DA TELA: O SELETOR VIROU UM `<select>` NATIVO, CUJO MENU O PRÓPRIO BROWSER
  * ANCORA LOGO ABAIXO DO CAMPO.**
