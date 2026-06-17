@@ -99,6 +99,7 @@ export default function FinanceiroConciliacao() {
   const [detalheEntryId, setDetalheEntryId] = useState<number | null>(null);
   // Rev. 3179 — "Limpar extrato" (confirmação) + alerta de extrato de outro mês.
   const [confirmLimpar, setConfirmLimpar] = useState(false);
+  const [confirmConciliar, setConfirmConciliar] = useState(false);
   const [mismatch, setMismatch] = useState<{ detectado: string; selecionado: string; fora: number; total: number; anoNum: number; mesNum: number } | null>(null);
 
   const { data: bankAccounts } = (trpc as any).financial.getBankAccounts.useQuery(
@@ -317,6 +318,9 @@ export default function FinanceiroConciliacao() {
   );
   const sugestoes: any[] = sugData?.sugestoes ?? [];
   const semMatch: any[] = sugData?.semMatch ?? [];
+  // Rev. 3201 — fonte ÚNICA dos pares selecionados (contador + render do diálogo + payload),
+  // p/ o número exibido nunca divergir do que será efetivamente enviado.
+  const sugSelecionadas: any[] = sugestoes.filter(s => selSug.has(s.statementLineId));
 
   // Rev. 3190 — barra de progresso 0→100% durante a análise ("Analisando..."). O
   // sugerirConciliacao é uma query única (sem progresso real do servidor), então
@@ -493,13 +497,14 @@ export default function FinanceiroConciliacao() {
     onSuccess: (res: any) => {
       toast({ title: `${res.conciliados} de ${res.total} conciliados e baixados!` });
       setSelSug(new Set());
+      setConfirmConciliar(false);
       refetchSt();
       refetchStAno();
       refetchAccStatus();
       refetchSug();
       refetchReport();
     },
-    onError: (e: any) => toast({ title: "Erro ao conciliar", description: e.message, variant: "destructive" }),
+    onError: (e: any) => { setConfirmConciliar(false); toast({ title: "Erro ao conciliar", description: e.message, variant: "destructive" }); },
   });
 
   const toggleSug = (id: number) => setSelSug(prev => {
@@ -509,9 +514,18 @@ export default function FinanceiroConciliacao() {
   });
   const selecionarAlta = () => setSelSug(new Set(sugestoes.filter(s => s.confianca === "alta").map(s => s.statementLineId)));
   const selecionarTodas = () => setSelSug(new Set(sugestoes.map(s => s.statementLineId)));
+  // Rev. 3201 — A conciliação automática é APENAS SUGESTIVA: nada é gravado sem o
+  // usuário CONFIRMAR explicitamente cada valor. "Conciliar selecionadas" agora ABRE
+  // um diálogo de revisão (extrato → lançamento + valores) e só aplica após o
+  // "Confirmar conciliação". Frontend-only (o backend já era query-only p/ sugerir).
   const conciliarSelecionadas = () => {
-    const pares = sugestoes.filter(s => selSug.has(s.statementLineId)).map(s => ({ statementLineId: s.statementLineId, entryId: s.entryId }));
-    if (pares.length === 0) { toast({ title: "Selecione ao menos uma sugestão", variant: "destructive" }); return; }
+    if (selSug.size === 0) { toast({ title: "Selecione ao menos uma sugestão", variant: "destructive" }); return; }
+    setConfirmConciliar(true);
+  };
+  const confirmarConciliacao = () => {
+    if (conciliarSugMut.isPending) return; // blindagem contra clique duplo
+    const pares = sugSelecionadas.map(s => ({ statementLineId: s.statementLineId, entryId: s.entryId }));
+    if (pares.length === 0) { setConfirmConciliar(false); return; }
     conciliarSugMut.mutate({ companyId, pares });
   };
 
@@ -1689,6 +1703,48 @@ export default function FinanceiroConciliacao() {
                 onClick={(e: any) => { e.preventDefault(); limparMut.mutate({ companyId, contaBancariaId: parseInt(contaBancariaId), dataInicio, dataFim }); }}
               >
                 {limparMut.isPending ? "Limpando..." : "Sim, limpar extrato"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Rev. 3201 — Confirmação OBRIGATÓRIA da conciliação: a sugestão automática é
+            apenas sugestiva; o usuário revisa cada par (extrato → lançamento + valores)
+            e só então confirma. Nada é gravado sem este passo. */}
+        <AlertDialog open={confirmConciliar} onOpenChange={(o: boolean) => { if (!o && !conciliarSugMut.isPending) setConfirmConciliar(false); }}>
+          <AlertDialogContent className="max-w-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2"><CheckCircle className="w-5 h-5 text-emerald-600" />Confirmar conciliação?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Revise os <strong>{sugSelecionadas.length}</strong> par(es) selecionado(s) abaixo. As sugestões são apenas automáticas —
+                a conciliação só é aplicada (baixando os lançamentos) após a sua confirmação.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="border rounded-md max-h-[45vh] overflow-y-auto divide-y text-sm">
+              {sugSelecionadas.map(s => (
+                <div key={s.statementLineId} className="flex items-center gap-2 px-3 py-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] text-gray-400 uppercase tracking-wide">Extrato</div>
+                    <div className="truncate">{s.extratoDescricao || "—"}</div>
+                    <div className="text-xs text-gray-500">{fmtData(s.extratoData)} · {formatBRL(Math.abs(s.extratoValor))}</div>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-gray-300 shrink-0" />
+                  <div className="flex-1 min-w-0 text-blue-700">
+                    <div className="text-[10px] text-gray-400 uppercase tracking-wide">Lançamento</div>
+                    <div className="truncate">{s.entryFornecedor || s.entryDescricao || "—"}</div>
+                    <div className="text-xs text-gray-500">{fmtData(s.entryData)} · {formatBRL(Math.abs(s.entryValor))}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={conciliarSugMut.isPending}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-emerald-600 hover:bg-emerald-700"
+                disabled={conciliarSugMut.isPending || sugSelecionadas.length === 0}
+                onClick={(e: any) => { e.preventDefault(); confirmarConciliacao(); }}
+              >
+                {conciliarSugMut.isPending ? "Conciliando..." : `Confirmar conciliação (${sugSelecionadas.length})`}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

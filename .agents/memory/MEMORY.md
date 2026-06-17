@@ -96,3 +96,4 @@
 - [Recebíveis previstos manual](recebiveis-previstos-manual.md) — revenue→entries auto DESLIGADO (excluir não colava); transferência manual idempotente precisa de pg_advisory_xact_lock (sem índice único, ALTER proibido).
 - [Fetch server-side de URL do cliente = SSRF](comprovante-fetch-ssrf.md) — baixar anexo a partir de coluna *_url gravável pelo cliente NÃO pode usar fetch genérico; só resolver /uploads/<key> interno; sanitizar campos `extraido` do write path igual à IA.
 - [Controle de Cheques dedup](financial-cheques-dedup.md) — chave de dedup do importador inclui mes_ref (cheques distintos mesmo nº+valor em meses ≠); parser começa em i=3 (validado, não off-by-one); valor/data via SERIAL.
+- [Conciliação só sugestiva](conciliacao-so-sugestiva.md) — pedido do piloto FC: nada concilia/baixa sem confirmação EXPLÍCITA do usuário; "Selecionar todas" só pré-seleciona, aplicação passa por AlertDialog de revisão. Não reintroduzir one-click bulk apply.

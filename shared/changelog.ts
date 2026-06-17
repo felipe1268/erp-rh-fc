@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3201 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · A CONCILIAÇÃO AUTOMÁTICA AGORA É APENAS
+ * SUGESTIVA: NADA É GRAVADO SEM O USUÁRIO REVISAR E CONFIRMAR EXPLICITAMENTE CADA VALOR. O BOTÃO
+ * "CONCILIAR SELECIONADAS" PASSOU A ABRIR UM DIÁLOGO DE REVISÃO (EXTRATO → LANÇAMENTO + VALORES) QUE
+ * SÓ APLICA A BAIXA APÓS O "CONFIRMAR CONCILIAÇÃO".**
+ *
+ * PEDIDO (piloto FC): "a conciliação automática deve ser apenas sugestiva, todos os valores devem
+ * obrigatoriamente ser confirmados pelo usuário." (na esteira da Rev. 3200, em que o piloto temia que
+ * o sistema tivesse conciliado sozinho).
+ *
+ * DIAGNÓSTICO: o backend JÁ era só sugestivo — `sugerirConciliacao` é `.query()` (somente leitura) e a
+ * importação de extrato NÃO marca `conciliado=1` em nada. A única coisa que se parecia com
+ * "automático" era o atalho de UI: o usuário podia clicar "Selecionar todas" e em seguida "Conciliar
+ * selecionadas" e aplicar a baixa em massa SEM revisar cada par — contrariando "todos os valores devem
+ * obrigatoriamente ser confirmados pelo usuário".
+ *
+ * SOLUÇÃO (FRONTEND-ONLY): em `client/src/pages/financeiro/FinanceiroConciliacao.tsx`, `conciliarSelecionadas`
+ * deixou de chamar a mutation direto — agora apenas abre um `AlertDialog` (`confirmConciliar`) que lista
+ * CADA par selecionado (descrição/data/valor do EXTRATO → fornecedor/data/valor do LANÇAMENTO, em BRL
+ * pt-BR) numa lista rolável; só ao clicar "Confirmar conciliação (N)" é que `confirmarConciliacao`
+ * dispara `conciliarSugestoes`. O `onSuccess`/`onError` fecham o diálogo; o overlay não fecha enquanto
+ * a mutation está pendente. Os atalhos "Selecionar alta confiança"/"Selecionar todas" continuam, mas
+ * agora só PRÉ-SELECIONAM — a aplicação exige o passo de confirmação que mostra os valores. ZERO
+ * BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
+ * ARQUIVOS: `client/src/pages/financeiro/FinanceiroConciliacao.tsx` (estado `confirmConciliar`,
+ * `conciliarSelecionadas`/`confirmarConciliacao`, novo `AlertDialog` de revisão).
+ *
  * Rev. 3200 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO: A LISTA "NO EXTRATO, SEM LANÇAMENTO"
  * DEIXOU DE DIZER FALSAMENTE "TODO O EXTRATO ESTÁ CONCILIADO 🎉" QUANDO, NA VERDADE, NÃO HAVIA NADA
  * CONCILIADO (RELATÓRIO ZERADO). AGORA A MENSAGEM DERIVA DO RELATÓRIO (FONTE ÚNICA), NÃO DA QUERY À
