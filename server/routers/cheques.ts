@@ -97,6 +97,17 @@ function serialToISO(n: number): string | null {
     : `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
 }
 
+// Monta ISO só se (yr,mo,da) for uma data de calendário REAL (rejeita 29/02 de ano
+// não-bissexto, 31/04 etc.). Sem isso, datas impossíveis da planilha viram strings
+// como "2025-02-29" que o Postgres recusa e derrubam o LOTE INTEIRO da importação.
+function ymdToISO(yr: number, mo: number, da: number): string | null {
+  if (!(mo >= 1 && mo <= 12 && da >= 1 && da <= 31)) return null;
+  const dt = new Date(Date.UTC(yr, mo - 1, da));
+  if (isNaN(dt.getTime()) || dt.getUTCFullYear() !== yr || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== da)
+    return null;
+  return `${yr}-${String(mo).padStart(2, "0")}-${String(da).padStart(2, "0")}`;
+}
+
 function parseData(v: any): string | null {
   if (v == null || v === "") return null;
   if (v instanceof Date) {
@@ -111,9 +122,11 @@ function parseData(v: any): string | null {
     let yr = parseInt(m[3], 10); if (yr < 100) yr += 2000;
     let mo = parseInt(m[1], 10), da = parseInt(m[2], 10); // planilha é US (M/D/Y)
     if (mo > 12 && da <= 12) { const t = mo; mo = da; da = t; } // corrige se vier BR
-    if (mo >= 1 && mo <= 12 && da >= 1 && da <= 31)
-      return `${yr}-${String(mo).padStart(2, "0")}-${String(da).padStart(2, "0")}`;
+    return ymdToISO(yr, mo, da); // null se a data não existir (ex.: 29/02/2025)
   }
+  // Formato ISO em texto (YYYY-MM-DD…): validar via ymdToISO p/ não aceitar data impossível.
+  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) return ymdToISO(parseInt(iso[1], 10), parseInt(iso[2], 10), parseInt(iso[3], 10));
   const dt = new Date(s);
   return isNaN(dt.getTime()) ? null : dt.toISOString().slice(0, 10);
 }

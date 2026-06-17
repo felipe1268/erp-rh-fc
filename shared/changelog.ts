@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3209 — **FINANCEIRO / CONTROLE DE CHEQUES · BUG NA IMPORTAÇÃO: AO GRAVAR, A PLANILHA COM UMA
+ * DATA IMPOSSÍVEL (EX.: 29/02/2025 — 2025 NÃO É ANO BISSEXTO) DERRUBAVA O LOTE INTEIRO COM "FALHA
+ * AO GRAVAR · date/time field value out of range: 2025-02-29"; AGORA DATAS INVÁLIDAS VIRAM VAZIO E
+ * A IMPORTAÇÃO CONCLUI NORMALMENTE.**
+ *
+ * PEDIDO (piloto FC): print do modal "Importar Controle de Cheques" com toast "Falha ao gravar ·
+ * INSERT INTO financial_cheques … date/time field value out of range" ao clicar "Gravar 965 novo(s)".
+ *
+ * CAUSA-RAIZ: `parseData` (`server/routers/cheques.ts`) montava o ISO `YYYY-MM-DD` direto de
+ * dia/mês/ano vindos do texto da planilha SEM validar se a data EXISTE no calendário (aceitava
+ * `da <= 31` p/ qualquer mês). Uma célula "29/02/2025" virava a string `2025-02-29`; como o INSERT
+ * de TODAS as linhas roda numa única `db.transaction`, o Postgres rejeitava aquela data e abortava
+ * o lote inteiro — nenhuma das 965 linhas era gravada.
+ *
+ * SOLUÇÃO — BACK: novo helper `ymdToISO(yr,mo,da)` que só retorna o ISO se `Date.UTC` der uma data
+ * REAL (round-trip de ano/mês/dia bate); caso contrário retorna `null`. `parseData` passou a usar
+ * esse helper no ramo regex (M/D/Y → corrige BR). Vale p/ `data_vencimento` E `data_compensacao`
+ * (mesma função). Data impossível agora fica vazia (usuário corrige depois pela edição da linha) em
+ * vez de travar o import; o `ano_ref`/`mes_ref` já tinham fallback (compensação→aba→ano atual).
+ *
+ * ZERO SCHEMA/ALTER/DROP/DELETE · ZERO FRONT · cheque continua NÃO virando lançamento.
+ *
  * Rev. 3208 — **FINANCEIRO · OS MODAIS "TELA CHEIA" (IMPORTAR CONTROLE DE CHEQUES E EXPANDIR LISTA
  * DA CONCILIAÇÃO) NA VERDADE ABRIAM ESTREITOS (~512px) COM BARRA DE ROLAGEM HORIZONTAL; AGORA
  * ABREM DE FATO EM TELA CHEIA (96vw) SEM SCROLL LATERAL PARA LER AS INFORMAÇÕES.**
