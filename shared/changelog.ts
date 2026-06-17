@@ -1,6 +1,48 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3198 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · OS ITENS DA LISTA "NO EXTRATO, SEM LANÇAMENTO"
+ * GANHARAM UM BOTÃO "LANÇAR" QUE ABRE UM FORMULÁRIO JÁ PRÉ-PREENCHIDO (DATA, CONTA E VALOR DO
+ * EXTRATO) — O USUÁRIO SÓ COMPLETA OBRA, FORNECEDOR, CATEGORIA E CENTRO DE CUSTO; AO SALVAR, O
+ * LANÇAMENTO É CRIADO COMO "PAGO" E JÁ FICA CONCILIADO COM AQUELA LINHA DO EXTRATO.**
+ *
+ * PEDIDO (piloto FC): "todos os valores que estão no extrato e não estão lançados no ERP — precisamos
+ * de uma forma de lançar direto desta tela. Clicar no item e abrir a tela de lançamento com o que dá
+ * pra preencher já preenchido: data, conta em que está e valor; aí eu completo obra, fornecedor,
+ * categoria e centro de custo." Antes, lançar exigia sair da Conciliação, ir ao módulo de Lançamentos,
+ * recriar tudo na mão e depois voltar pra conciliar — fluxo penoso e propenso a erro de digitação de
+ * data/valor.
+ *
+ * SOLUÇÃO (FRONTEND + 1 AJUSTE BACKEND ADITIVO):
+ *  - FRONTEND `client/src/pages/financeiro/FinanceiroConciliacao.tsx`: cada linha da lista "No extrato,
+ *    sem lançamento" (`repExt`) foi reestruturada de um único `<button>` para um wrapper com DUAS
+ *    áreas — a área principal segue selecionando o item p/ a conciliação manual 1:1, e à direita um
+ *    botão "+ Lançar" (ícone `Plus`, `stopPropagation`) abre um Dialog. O Dialog vem pré-preenchido
+ *    com DATA (`s.data`), CONTA (a selecionada na tela = `contaBancariaId`, exibida como `contaLabel`
+ *    read-only) e VALOR (`abs(s.valor)` via máscara BRL `maskBRLInput`/`parseBRLInput`); o TIPO é
+ *    derivado do sinal (entrada→receita / saída→despesa). O usuário completa Obra (`obras.listActive`),
+ *    Fornecedor (datalist `compras.listarFornecedores`), Categoria (datalist `financial.getAccounts` —
+ *    ao casar a categoria, herda o centro de custo dela se ainda vazio), Centro de Custo
+ *    (`financial.getCostCenters`), Forma de pagamento e Descrição. Ao salvar (`submitLancar`): cria via
+ *    `financial.createEntry` (status `pago`, `dataPagamento`/`dataCompetencia` = data, `valorRealizado`
+ *    = valor, `contaBancariaId` = conta atual) e, com o id retornado, chama `conciliarLancamento`
+ *    (mesma mutation da conciliação manual) p/ casar automaticamente com a linha do extrato; os
+ *    refetches/limpeza de seleção reaproveitam o `onSuccess` do `conciliarMut` já existente.
+ *  - BACKEND `server/routers/financial.ts` (`createEntry`): a mutation passou a aceitar
+ *    `centroCustoId`/`centroCustoNome` (opcionais) e a gravá-los no INSERT em `centro_custo_id`/
+ *    `centro_custo_nome` — colunas que JÁ EXISTIAM em `financial_entries` (usadas no `updateEntry`),
+ *    portanto ZERO SCHEMA/ALTER. Como o `dbExecute` liga params por ORDEM DE APARIÇÃO ($N cosmético),
+ *    as duas colunas/placeholders/itens foram adicionados na MESMA posição relativa, antes de
+ *    `created_at`/`updated_at`, preservando o alinhamento posicional.
+ *
+ * RESSALVA: continua sendo 1 lançamento para 1 linha do extrato (1:1). O caso N:1 (vários
+ * vales/abastecimentos → 1 boleto) segue fora deste fluxo. Se a conciliação automática pós-criação
+ * falhar, o lançamento JÁ FOI criado (aparece em "No ERP, sem extrato") e pode ser casado manualmente.
+ * ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
+ * IMPACTO: o usuário zera a lista "No extrato, sem lançamento" sem sair da tela, sem redigitar
+ * data/conta/valor e sem o passo manual de conciliar depois — acelera muito o fechamento do mês.
+ *
  * Rev. 3197 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · A ÁREA DE CONCILIAÇÃO MANUAL (LADO A LADO)
  * GANHOU UMA FAIXA DE AJUDA EXPLICANDO O PASSO A PASSO PARA CASAR MANUALMENTE OS ITENS QUE NÃO
  * DERAM MATCH AUTOMÁTICO.**

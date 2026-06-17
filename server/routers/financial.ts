@@ -1000,9 +1000,17 @@ export const financialRouter = router({
     // Rev. 3002 — cliente do título (usado no Contas a Receber).
     clienteId: z.number().optional(),
     clienteNome: z.string().optional(),
+    // Rev. 3198 — centro de custo explícito no lançamento (colunas já existentes em
+    // financial_entries; Análise de Custos resolve explícito → derivado da categoria → nenhum).
+    centroCustoId: z.number().optional(),
+    centroCustoNome: z.string().optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    // Rev. 3198 — tenant guard anti-IDOR: o chamador precisa ter acesso à empresa
+    // alvo antes de criar QUALQUER lançamento (mesma proteção de updateEntry/conciliarLancamento).
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
 
     // ── Rev. 2693 — TRANSFERÊNCIA ENTRE CONTAS ─────────────────────────────────
     // Quando origem+destino são informadas, gera DUAS pernas em financial_entries:
@@ -1083,8 +1091,9 @@ export const financialRouter = router({
         parcela_numero, parcela_total, parcela_grupo_id,
         cheque_numero, cheque_banco, cheque_agencia, cheque_conta, cheque_titular,
         cheque_data_emissao, cheque_data_bom_para,
-        criado_por_id, criado_por_nome, fornecedor_nome, cliente_id, cliente_nome, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,NOW(),NOW())
+        criado_por_id, criado_por_nome, fornecedor_nome, cliente_id, cliente_nome,
+        centro_custo_id, centro_custo_nome, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,NOW(),NOW())
        RETURNING id`,
       [
         input.companyId, input.obraId ?? null, input.obraNome ?? null,
@@ -1100,6 +1109,7 @@ export const financialRouter = router({
         ctx.user?.id ?? null, ctx.user?.name ?? null,
         input.fornecedorNome?.trim() || null,
         input.clienteId ?? null, input.clienteNome?.trim() || null,
+        input.centroCustoId ?? null, input.centroCustoNome?.trim() || null,
       ]
     );
     const id = rows(res)[0]?.id;

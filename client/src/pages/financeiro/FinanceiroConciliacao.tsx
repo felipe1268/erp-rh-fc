@@ -7,16 +7,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter, AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX, FileSpreadsheet, FileDown } from "lucide-react";
+import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX, FileSpreadsheet, FileDown, Plus } from "lucide-react";
 import { formatConta, formatAgencia } from "@/lib/formatters";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+}
+// Rev. 3198 — máscara BRL pt-BR p/ o input de valor do "Lançar no ERP".
+function maskBRLInput(raw: string) {
+  const d = String(raw).replace(/\D/g, "");
+  return (Number(d || "0") / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function parseBRLInput(masked: string) {
+  const d = String(masked).replace(/\D/g, "");
+  return Number(d || "0") / 100;
 }
 
 function fmtData(v: any) {
@@ -95,6 +106,121 @@ export default function FinanceiroConciliacao() {
     { enabled: !!companyId }
   );
 
+  // ── Rev. 3198 — "Lançar no ERP" direto do item do extrato sem lançamento ─────────
+  // Carrega obras/categorias/centros de custo/fornecedores p/ o usuário completar o
+  // lançamento (data, conta e valor já vêm pré-preenchidos do extrato). Após criar,
+  // auto-concilia com a linha do extrato (mesma mutation da conciliação manual).
+  const { data: lancObras } = (trpc as any).obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
+  const { data: lancAccounts } = (trpc as any).financial.getAccounts.useQuery({ companyId, ativo: true }, { enabled: !!companyId });
+  const { data: lancCostCenters } = (trpc as any).financial.getCostCenters.useQuery({ companyId }, { enabled: !!companyId });
+  const { data: lancFornecedores } = (trpc as any).compras.listarFornecedores.useQuery({ companyId, ativo: true }, { enabled: !!companyId });
+  const obrasOpts: { id: number; nome: string }[] = useMemo(() => {
+    const seen = new Set<string>(); const out: { id: number; nome: string }[] = [];
+    for (const o of (Array.isArray(lancObras) ? lancObras : [])) {
+      const nome = String(o?.nome ?? "").trim(); if (!nome || seen.has(nome)) continue; seen.add(nome); out.push({ id: Number(o.id), nome });
+    }
+    return out.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  }, [lancObras]);
+  const catOpts: { id: number; nome: string; natureza: string | null; centroCustoId: number | null }[] = useMemo(() => {
+    const out: { id: number; nome: string; natureza: string | null; centroCustoId: number | null }[] = [];
+    for (const a of (Array.isArray(lancAccounts) ? lancAccounts : [])) {
+      const nome = String(a?.nome ?? "").trim(); if (!nome) continue;
+      out.push({ id: Number(a.id), nome, natureza: a.natureza ?? null, centroCustoId: a.centroCustoId ?? null });
+    }
+    return out.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  }, [lancAccounts]);
+  const ccOpts: { id: number; nome: string }[] = useMemo(() => {
+    const out: { id: number; nome: string }[] = [];
+    for (const c of (Array.isArray(lancCostCenters) ? lancCostCenters : [])) {
+      const nome = String(c?.nome ?? "").trim(); if (!nome) continue;
+      out.push({ id: Number(c.id), nome: c.codigo ? `${c.codigo} · ${nome}` : nome });
+    }
+    return out;
+  }, [lancCostCenters]);
+  const fornNomes: string[] = useMemo(() => {
+    const seen = new Set<string>(); const out: string[] = [];
+    for (const f of (Array.isArray(lancFornecedores) ? lancFornecedores : [])) {
+      const nome = String(f?.nome ?? f?.razaoSocial ?? f?.nomeFantasia ?? f?.fantasia ?? "").trim();
+      if (!nome || seen.has(nome.toLowerCase())) continue; seen.add(nome.toLowerCase()); out.push(nome);
+    }
+    return out.sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [lancFornecedores]);
+
+  const [lancStatement, setLancStatement] = useState<any | null>(null);
+  const [lancBusy, setLancBusy] = useState(false);
+  const [lancForm, setLancForm] = useState({ data: "", valor: "", descricao: "", obraId: "", contaNome: "", centroCustoId: "", fornecedorNome: "", formaPagamento: "" });
+  // Rev. 3198 — guarda o lançamento JÁ criado p/ a linha atual: se a conciliação
+  // automática falhar, um novo clique tenta SÓ conciliar (não recria → sem duplicidade).
+  const lancCreatedRef = useRef<{ stmtId: any; entryId: number } | null>(null);
+  const criarLancMut = (trpc as any).financial.createEntry.useMutation();
+
+  function abrirLancar(s: any) {
+    const abs = Math.abs(Number(s.valor) || 0);
+    lancCreatedRef.current = null;
+    setLancStatement(s);
+    setLancForm({
+      data: String(s.data ?? "").slice(0, 10),
+      valor: maskBRLInput(String(Math.round(abs * 100))),
+      descricao: s.descricao ?? "",
+      obraId: "", contaNome: "", centroCustoId: "", fornecedorNome: "", formaPagamento: "",
+    });
+  }
+
+  async function submitLancar() {
+    if (!lancStatement) return;
+    const valor = parseBRLInput(lancForm.valor);
+    if (!valor || valor <= 0) { toast({ title: "Informe um valor válido", variant: "destructive" }); return; }
+    if (!lancForm.data) { toast({ title: "Informe a data do lançamento", variant: "destructive" }); return; }
+    const tipo = Number(lancStatement.valor) >= 0 ? "receita" : "despesa";
+    const cat = catOpts.find(c => c.nome.trim().toLowerCase() === lancForm.contaNome.trim().toLowerCase());
+    const natureza = cat?.natureza === "fixo" || cat?.natureza === "variavel" ? cat.natureza : "variavel";
+    const obra = obrasOpts.find(o => String(o.id) === lancForm.obraId);
+    const cc = ccOpts.find(c => String(c.id) === lancForm.centroCustoId);
+    // Se já criamos o lançamento desta linha numa tentativa anterior (e só a
+    // conciliação falhou), reaproveita o id — NÃO recria (evita duplicidade).
+    const jaCriado = lancCreatedRef.current?.stmtId === lancStatement.id ? lancCreatedRef.current.entryId : undefined;
+    try {
+      setLancBusy(true);
+      let entryId = jaCriado;
+      if (!entryId) {
+        const novo: any = await criarLancMut.mutateAsync({
+          companyId, tipo, natureza,
+          valorPrevisto: valor, valorRealizado: valor,
+          dataCompetencia: lancForm.data, dataPagamento: lancForm.data,
+          status: "pago",
+          contaBancariaId: parseInt(contaBancariaId) || undefined,
+          obraId: obra?.id, obraNome: obra?.nome,
+          contaId: cat?.id, contaNome: lancForm.contaNome.trim() || undefined,
+          centroCustoId: cc?.id, centroCustoNome: cc?.nome,
+          fornecedorNome: lancForm.fornecedorNome.trim() || undefined,
+          descricao: lancForm.descricao.trim() || undefined,
+          formaPagamento: lancForm.formaPagamento || undefined,
+        });
+        entryId = novo?.id;
+        if (entryId) lancCreatedRef.current = { stmtId: lancStatement.id, entryId };
+      }
+      if (entryId) {
+        // Auto-concilia o lançamento com a linha do extrato (onSuccess refaz os fetches).
+        // Mutation DEDICADA (sem onError próprio) p/ o erro cair no catch abaixo sem toast duplo.
+        await lancConciliarMut.mutateAsync({ companyId, statementLineId: lancStatement.id, entryId });
+        lancCreatedRef.current = null;
+      } else {
+        toast({ title: "Lançamento criado!" });
+        refetchReport();
+      }
+      setLancStatement(null);
+    } catch (e: any) {
+      // Lançamento já criado + conciliação falhou: preserva o id; novo clique só concilia.
+      if (lancCreatedRef.current?.stmtId === lancStatement.id) {
+        toast({ title: "Lançamento criado, mas a conciliação falhou", description: `${e?.message ?? ""} — clique novamente para tentar conciliar (não recria o lançamento) ou concilie manualmente.`, variant: "destructive" });
+      } else {
+        toast({ title: "Erro ao lançar no ERP", description: e?.message, variant: "destructive" });
+      }
+    } finally {
+      setLancBusy(false);
+    }
+  }
+
   const { data: statements, isLoading: stLoading, refetch: refetchSt } = (trpc as any).financial.getBankStatements.useQuery(
     {
       companyId,
@@ -150,6 +276,11 @@ export default function FinanceiroConciliacao() {
   const conciliarMut = (trpc as any).financial.conciliarLancamento.useMutation({
     onSuccess: () => { toast({ title: "Conciliação registrada!" }); refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug(); setSelectedStatement(null); setSelectedEntry(null); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+  // Rev. 3198 — conciliação do fluxo "Lançar": SEM onError próprio (o erro é tratado
+  // no catch do submitLancar, preservando o id criado p/ não duplicar no retry).
+  const lancConciliarMut = (trpc as any).financial.conciliarLancamento.useMutation({
+    onSuccess: () => { toast({ title: "Lançado e conciliado!" }); refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug(); setSelectedStatement(null); setSelectedEntry(null); },
   });
 
   // Rev. 3175 — Importação em 2 fases com PROGRESSO REAL (0–100%): analisa (parse →
@@ -1251,17 +1382,29 @@ export default function FinanceiroConciliacao() {
                   ) : (
                     <div className="divide-y divide-gray-100 max-h-[420px] overflow-y-auto">
                       {repExt.map((s: any) => (
-                        <button
+                        <div
                           key={s.id}
-                          onClick={() => setSelectedStatement(selectedStatement === s.id ? null : s.id)}
-                          className={`w-full px-4 py-3 flex items-center justify-between gap-2 text-left hover:bg-gray-50 transition-colors ${selectedStatement === s.id ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}
+                          className={`flex items-stretch ${selectedStatement === s.id ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}
                         >
-                          <div className="min-w-0">
-                            <p className="text-xs text-gray-500">{fmtData(s.data)} · {Number(s.valor) >= 0 ? "Entrada" : "Saída"}</p>
-                            <p className="text-sm text-gray-700 truncate max-w-[200px]">{s.descricao || "—"}</p>
-                          </div>
-                          <p className={`text-sm font-bold shrink-0 ${Number(s.valor) >= 0 ? "text-green-600" : "text-red-500"}`}>{formatBRL(Math.abs(Number(s.valor)))}</p>
-                        </button>
+                          <button
+                            onClick={() => setSelectedStatement(selectedStatement === s.id ? null : s.id)}
+                            className="flex-1 min-w-0 px-4 py-3 flex items-center justify-between gap-2 text-left hover:bg-gray-50 transition-colors"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-xs text-gray-500">{fmtData(s.data)} · {Number(s.valor) >= 0 ? "Entrada" : "Saída"}</p>
+                              <p className="text-sm text-gray-700 truncate max-w-[200px]">{s.descricao || "—"}</p>
+                            </div>
+                            <p className={`text-sm font-bold shrink-0 ${Number(s.valor) >= 0 ? "text-green-600" : "text-red-500"}`}>{formatBRL(Math.abs(Number(s.valor)))}</p>
+                          </button>
+                          <button
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); abrirLancar(s); }}
+                            title="Lançar este item no ERP"
+                            className="shrink-0 px-3 flex flex-col items-center justify-center gap-0.5 border-l border-gray-100 text-blue-600 hover:bg-blue-50 transition-colors"
+                          >
+                            <Plus className="w-4 h-4" />
+                            <span className="text-[10px] font-medium leading-none">Lançar</span>
+                          </button>
+                        </div>
                       ))}
                     </div>
                   )}
@@ -1573,6 +1716,121 @@ export default function FinanceiroConciliacao() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Rev. 3198 — Lançar no ERP direto do item do extrato (data/conta/valor pré-preenchidos) */}
+        <Dialog open={lancStatement != null} onOpenChange={(o: boolean) => { if (!o && !lancBusy) setLancStatement(null); }}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Plus className="w-5 h-5 text-blue-600" />Lançar no ERP
+              </DialogTitle>
+            </DialogHeader>
+            {lancStatement && (
+              <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+                <div className="rounded-lg bg-blue-50 border border-blue-100 px-3 py-2 text-xs text-blue-800">
+                  Item do extrato em <strong>{contaLabel}</strong>. Data, conta e valor já vêm preenchidos — complete <strong>obra</strong>, <strong>fornecedor</strong>, <strong>categoria</strong> e <strong>centro de custo</strong>. Ao salvar, o lançamento é criado como <strong>pago</strong> e <strong>conciliado</strong> com esta linha.
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Data</Label>
+                    <Input type="date" value={lancForm.data} onChange={(e) => setLancForm(f => ({ ...f, data: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Valor (R$)</Label>
+                    <Input
+                      inputMode="numeric"
+                      value={lancForm.valor}
+                      onChange={(e) => setLancForm(f => ({ ...f, valor: maskBRLInput(e.target.value) }))}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Tipo</Label>
+                    <div className={`h-9 px-3 flex items-center rounded-md border text-sm font-medium ${Number(lancStatement.valor) >= 0 ? "text-green-700 border-green-200 bg-green-50" : "text-red-600 border-red-200 bg-red-50"}`}>
+                      {Number(lancStatement.valor) >= 0 ? "Receita (entrada)" : "Despesa (saída)"}
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Forma de pagamento</Label>
+                    <Select value={lancForm.formaPagamento || "nenhuma"} onValueChange={(v) => setLancForm(f => ({ ...f, formaPagamento: v === "nenhuma" ? "" : v }))}>
+                      <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="nenhuma">—</SelectItem>
+                        <SelectItem value="pix">Pix</SelectItem>
+                        <SelectItem value="boleto">Boleto</SelectItem>
+                        <SelectItem value="transferencia">Transferência</SelectItem>
+                        <SelectItem value="cheque">Cheque</SelectItem>
+                        <SelectItem value="debito_automatico">Débito automático</SelectItem>
+                        <SelectItem value="cartao">Cartão</SelectItem>
+                        <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                        <SelectItem value="deposito">Depósito</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">Obra</Label>
+                  <Select value={lancForm.obraId || "nenhuma"} onValueChange={(v) => setLancForm(f => ({ ...f, obraId: v === "nenhuma" ? "" : v }))}>
+                    <SelectTrigger><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="nenhuma">— Sem obra —</SelectItem>
+                      {obrasOpts.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Fornecedor / Pagador</Label>
+                  <Input
+                    list="lanc-fornecedores"
+                    value={lancForm.fornecedorNome}
+                    onChange={(e) => setLancForm(f => ({ ...f, fornecedorNome: e.target.value }))}
+                    placeholder="Digite ou selecione"
+                  />
+                  <datalist id="lanc-fornecedores">
+                    {fornNomes.map((n, i) => <option key={i} value={n} />)}
+                  </datalist>
+                </div>
+                <div>
+                  <Label className="text-xs">Categoria</Label>
+                  <Input
+                    list="lanc-categorias"
+                    value={lancForm.contaNome}
+                    onChange={(e) => {
+                      const nome = e.target.value;
+                      const cat = catOpts.find(c => c.nome.trim().toLowerCase() === nome.trim().toLowerCase());
+                      setLancForm(f => ({ ...f, contaNome: nome, centroCustoId: cat?.centroCustoId != null && !f.centroCustoId ? String(cat.centroCustoId) : f.centroCustoId }));
+                    }}
+                    placeholder="Digite ou selecione"
+                  />
+                  <datalist id="lanc-categorias">
+                    {catOpts.map(c => <option key={c.id} value={c.nome} />)}
+                  </datalist>
+                </div>
+                <div>
+                  <Label className="text-xs">Centro de custo</Label>
+                  <Select value={lancForm.centroCustoId || "nenhum"} onValueChange={(v) => setLancForm(f => ({ ...f, centroCustoId: v === "nenhum" ? "" : v }))}>
+                    <SelectTrigger><SelectValue placeholder="Selecione o centro de custo" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="nenhum">— Sem centro de custo —</SelectItem>
+                      {ccOpts.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Descrição</Label>
+                  <Textarea rows={2} value={lancForm.descricao} onChange={(e) => setLancForm(f => ({ ...f, descricao: e.target.value }))} />
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" disabled={lancBusy} onClick={() => setLancStatement(null)}>Cancelar</Button>
+              <Button className="bg-blue-600 hover:bg-blue-700" disabled={lancBusy} onClick={submitLancar}>
+                {lancBusy ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Lançando...</> : <><Check className="w-4 h-4 mr-1.5" />Lançar e conciliar</>}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
