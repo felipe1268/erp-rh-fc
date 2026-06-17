@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3214 — **FINANCEIRO / CONTROLE DE CHEQUES · A IMPORTAÇÃO DA PLANILHA (.xlsx) AGORA MOSTRA UMA
+ * BARRA DE PROGRESSO DE 0 A 100% — TANTO NA ETAPA "ANALISAR PLANILHA" QUANTO NA "GRAVAR NOVO(S)" —
+ * EM VEZ DE SÓ O TEXTO "ANALISANDO…".**
+ *
+ * PEDIDO (piloto FC): "QUERO UM % DE 0 A 100% PARA VER O AVANÇO" + print do modal "Importar Controle
+ * de Cheques" no estado "Analisando…" (sem nenhuma indicação de quanto falta).
+ *
+ * CONTEXTO/RESTRIÇÃO: os endpoints `cheques.importarPreview` e `cheques.importarConfirmar`
+ * (`server/routers/cheques.ts`) processam a planilha INTEIRA de uma vez no servidor (single-shot,
+ * sem streaming) e retornam o resultado de uma só vez. Não há, portanto, um progresso real por
+ * linha sem refatorar o backend p/ chunking/streaming. A solução de UX (padrão de mercado) é uma
+ * barra de progresso animada que avança de forma ASSINTÓTICA até ~92% enquanto a mutation está
+ * pendente e só CRAVA 100% quando a operação realmente conclui (sucesso) — em erro volta a 0.
+ *
+ * SOLUÇÃO — FRONT (`client/src/pages/financeiro/FinanceiroCheques.tsx`):
+ * - Estados `progresso` (0–100) e `progLabel` + `progRef` (handle do `setInterval`).
+ * - `iniciarProgresso(label)`: zera, seta 8% e abre um `setInterval` (180ms) que incrementa
+ *   `p + (92 - p) * 0.12` (curva que desacelera ao se aproximar de 92%).
+ * - `finalizarProgresso(ok)`: limpa o intervalo; se `ok` crava 100% e some após 700ms; se erro
+ *   volta a 0. `useEffect` de cleanup limpa o intervalo no unmount.
+ * - `rodarPreview` chama `iniciarProgresso("Analisando planilha…")` e `finalizarProgresso` no
+ *   sucesso/erro; `confirmarImport` idem com "Gravando cheques…".
+ * - UI: `<Progress>` (shadcn) + label + "NN%" abaixo do botão "Analisar planilha" (etapa preview) e
+ *   acima do `DialogFooter` (etapa gravação), cada um gated pelo seu `isPending`/`progLabel`.
+ *
+ * ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE · só UI (feedback visual). Cheque continua NÃO
+ * virando lançamento.
+ *
  * Rev. 3213 — **FINANCEIRO · O MÓDULO "CARTÃO DE CRÉDITO" (CRIADO NA REV. 3211) NÃO APARECIA NO MENU
  * LATERAL DO GRUPO "MOVIMENTAÇÕES" (LOGO ABAIXO DE "CONTROLE DE CHEQUES"); AGORA O ITEM ESTÁ VISÍVEL
  * E NAVEGÁVEL.**

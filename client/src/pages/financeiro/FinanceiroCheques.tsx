@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter, 
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
@@ -75,6 +76,43 @@ export default function FinanceiroCheques() {
   const [arquivoNome, setArquivoNome] = useState<string>("");
   const [preview, setPreview] = useState<any>(null);
   const [importOpen, setImportOpen] = useState(false);
+  // ── Progresso (barra 0→100%) ──
+  const [progresso, setProgresso] = useState<number>(0);
+  const [progLabel, setProgLabel] = useState<string>("");
+  const progRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const progTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const progOpRef = useRef<number>(0); // token da operação ativa (evita callback tardio sobrescrever)
+
+  function pararTimersProgresso() {
+    if (progRef.current) { clearInterval(progRef.current); progRef.current = null; }
+    if (progTimeoutRef.current) { clearTimeout(progTimeoutRef.current); progTimeoutRef.current = null; }
+  }
+  function iniciarProgresso(label: string): number {
+    pararTimersProgresso();
+    const token = ++progOpRef.current;
+    setProgLabel(label);
+    setProgresso(8);
+    // Avanço assintótico até ~92% enquanto a operação roda (server single-shot).
+    progRef.current = setInterval(() => {
+      setProgresso((p) => (p < 92 ? Math.min(92, p + (92 - p) * 0.12) : p));
+    }, 180);
+    return token;
+  }
+  function finalizarProgresso(token: number, ok: boolean) {
+    if (token !== progOpRef.current) return; // operação obsoleta — ignora
+    pararTimersProgresso();
+    if (ok) {
+      setProgresso(100);
+      progTimeoutRef.current = setTimeout(() => {
+        if (token !== progOpRef.current) return;
+        setProgresso(0); setProgLabel("");
+      }, 700);
+    } else {
+      setProgresso(0);
+      setProgLabel("");
+    }
+  }
+  useEffect(() => () => pararTimersProgresso(), []);
 
   // ── Edição ──
   const [editItem, setEditItem] = useState<any>(null);
@@ -174,20 +212,25 @@ export default function FinanceiroCheques() {
 
   async function rodarPreview() {
     if (!arquivoBase64) { toast({ title: "Selecione a planilha .xlsx primeiro." }); return; }
+    const tk = iniciarProgresso("Analisando planilha…");
     try {
       const rep = await previewMut.mutateAsync({ companyId, fileBase64: arquivoBase64 });
       setPreview(rep);
+      finalizarProgresso(tk, true);
     } catch (err: any) {
+      finalizarProgresso(tk, false);
       toast({ title: "Falha ao analisar", description: err?.message || String(err), variant: "destructive" });
     }
   }
 
   async function confirmarImport() {
     if (!arquivoBase64) return;
+    const tk = iniciarProgresso("Gravando cheques…");
     try {
       const r = await confirmarMut.mutateAsync({
         companyId, fileBase64: arquivoBase64, origemArquivo: arquivoNome,
       });
+      finalizarProgresso(tk, true);
       toast({ title: "Importação concluída", description: `${r.inseridos} novo(s) cheque(s) gravado(s); ${r.pulados} já existiam.` });
       setImportOpen(false);
       setArquivoBase64(null); setArquivoNome(""); setPreview(null);
@@ -196,6 +239,7 @@ export default function FinanceiroCheques() {
       utils?.cheques?.resumo?.invalidate?.();
       utils?.cheques?.resumoMensal?.invalidate?.();
     } catch (err: any) {
+      finalizarProgresso(tk, false);
       toast({ title: "Falha ao gravar", description: err?.message || String(err), variant: "destructive" });
     }
   }
@@ -585,6 +629,16 @@ export default function FinanceiroCheques() {
                   {previewMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                   {previewMut.isPending ? "Analisando…" : "Analisar planilha"}
                 </Button>
+
+                {(previewMut.isPending || (progresso > 0 && progLabel === "Analisando planilha…")) && (
+                  <div className="space-y-1.5">
+                    <Progress value={progresso} className="h-2.5" />
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{progLabel || "Analisando planilha…"}</span>
+                      <span className="font-semibold tabular-nums">{Math.round(progresso)}%</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Coluna direita: resumo / KPIs */}
@@ -676,9 +730,19 @@ export default function FinanceiroCheques() {
             )}
           </div>
 
+          {(confirmarMut.isPending || (progresso > 0 && progLabel === "Gravando cheques…")) && (
+            <div className="px-5 pt-3 space-y-1.5 border-t shrink-0">
+              <Progress value={progresso} className="h-2.5" />
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{progLabel || "Gravando cheques…"}</span>
+                <span className="font-semibold tabular-nums">{Math.round(progresso)}%</span>
+              </div>
+            </div>
+          )}
+
           <DialogFooter className="p-5 border-t shrink-0">
             <Button variant="outline" onClick={() => setImportOpen(false)}>Cancelar</Button>
-            <Button onClick={confirmarImport} disabled={!preview || preview.resumo.novos === 0 || confirmarMut.isPending} className="gap-2">
+            <Button onClick={confirmarImport} disabled={!preview || preview.resumo.novos === 0 || confirmarMut.isPending || previewMut.isPending} className="gap-2">
               {confirmarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
               Gravar {preview ? preview.resumo.novos : 0} novo(s)
             </Button>
