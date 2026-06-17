@@ -933,7 +933,16 @@ export default function FinanceiroConciliacao() {
                           {conciliarSugMut.isPending ? "Conciliando..." : `Conciliar selecionadas (${selSug.size})`}
                         </Button>
                       </div>
-                      <div className="border rounded-md divide-y max-h-[480px] overflow-y-auto">
+                      <div className="border rounded-md max-h-[480px] overflow-y-auto">
+                        {/* Cabeçalho fixo: deixa explícito qual coluna é o EXTRATO (banco) e qual é o LANÇAMENTO no ERP. */}
+                        <div className="sticky top-0 z-10 flex items-center gap-3 px-3 py-2 bg-gray-100 border-b text-xs font-semibold uppercase tracking-wide text-gray-700">
+                          <span className="w-4 shrink-0" aria-hidden />
+                          <div className="flex-1 min-w-0">Extrato <span className="font-normal normal-case text-gray-400">(banco)</span></div>
+                          <span className="w-4 shrink-0" aria-hidden />
+                          <div className="flex-1 min-w-0 text-blue-700">Lançamento no ERP</div>
+                          <span className="w-16 shrink-0 text-right text-gray-400 font-normal normal-case">Confiança</span>
+                        </div>
+                        <div className="divide-y">
                         {sugestoes.map(s => (
                           <label key={s.statementLineId} className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer">
                             <Checkbox checked={selSug.has(s.statementLineId)} onCheckedChange={() => toggleSug(s.statementLineId)} />
@@ -971,6 +980,7 @@ export default function FinanceiroConciliacao() {
                             </div>
                           </label>
                         ))}
+                        </div>
                       </div>
                       {semMatch.length > 0 && (
                         <p className="text-xs text-gray-400">

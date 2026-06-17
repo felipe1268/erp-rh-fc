@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3194 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · A LISTA DE "SUGESTÕES AUTOMÁTICAS" GANHOU UM
+ * CABEÇALHO FIXO NO TOPO QUE DEIXA EXPLÍCITO QUE A COLUNA DA ESQUERDA É O "EXTRATO (BANCO)" E A
+ * DA DIREITA É O "LANÇAMENTO NO ERP".**
+ *
+ * PEDIDO (piloto FC): nas sugestões, cada linha tem dois lados (extrato → lançamento), mas só havia
+ * um rótulo pequenininho "Extrato"/"Lançamento" repetido em cada linha — não ficava claro, à
+ * primeira vista, qual lado é o banco e qual é o ERP. O usuário pediu um cabeçalho no TOPO da tabela
+ * com os nomes das colunas em DESTAQUE.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY): em `client/src/pages/financeiro/FinanceiroConciliacao.tsx`, a lista de
+ * sugestões ganhou uma linha de cabeçalho `sticky top-0` (fundo cinza, texto bold uppercase) com 3
+ * colunas alinhadas às linhas: "Extrato (banco)" / "Lançamento no ERP" (em azul, igual ao link da
+ * linha) / "Confiança". O `divide-y` migrou pra um wrapper interno (a borda externa e o scroll
+ * `max-h` ficam no container) p/ o cabeçalho grudar no topo durante o scroll. Linhas, badges e
+ * lógica de conciliação inalterados. ZERO SCHEMA/ALTER/DROP/DELETE · ZERO BACKEND.
+ *
+ * IMPACTO: leitura imediata de qual lado é o extrato e qual é o ERP, sem depender dos micro-rótulos
+ * por linha. Puramente visual.
+ *
  * Rev. 3193 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · OS COMPROVANTES (PIX/BOLETO) VIRARAM FONTE
  * DE IDENTIFICAÇÃO NO MATCH EXTRATO×ERP: A IA LÊ O COMPROVANTE (BENEFICIÁRIO, CNPJ/CPF, ID DA
  * TRANSAÇÃO) E ISSO É USADO COMO DESEMPATE — NUNCA CONCILIA PELO NOME SOZINHO, SEMPRE EXIGE O
