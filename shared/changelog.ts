@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3208 — **FINANCEIRO · OS MODAIS "TELA CHEIA" (IMPORTAR CONTROLE DE CHEQUES E EXPANDIR LISTA
+ * DA CONCILIAÇÃO) NA VERDADE ABRIAM ESTREITOS (~512px) COM BARRA DE ROLAGEM HORIZONTAL; AGORA
+ * ABREM DE FATO EM TELA CHEIA (96vw) SEM SCROLL LATERAL PARA LER AS INFORMAÇÕES.**
+ *
+ * PEDIDO (piloto FC): "quero isso full screen de forma que não precise de barra de rolagem para ler
+ * as informações... a tela está muito estreita e não precisa disso" + print do modal "Importar
+ * Controle de Cheques" espremido numa coluna estreita com scrollbar horizontal.
+ *
+ * CAUSA-RAIZ: o componente `DialogContent` (`client/src/components/ui/dialog.tsx`) tem `resizable`
+ * default `true`, que aplica um `style` INLINE `width: min(512px, calc(100vw - 1rem))` + `maxWidth`.
+ * Estilo inline SEMPRE vence o className → as classes `w-[96vw]`/`max-w-[96vw]` das Rev. 3205 e 3206
+ * eram silenciosamente ignoradas e TODO modal "full screen" ficava travado em 512px (daí a coluna
+ * estreita + scroll horizontal).
+ *
+ * SOLUÇÃO — FRONT: passar `resizable={false}` nos `DialogContent` desses modais para que o `style`
+ * inline de largura NÃO seja aplicado e o className `w-[96vw]` valha. (1) `FinanceiroCheques.tsx`
+ * modal "Importar Controle de Cheques": `resizable={false}` + `max-h-[94vh]` (sobrescreve o
+ * `max-h-[92dvh]` base p/ encostar nos 94vh do `h-[94vh]`). (2) `FinanceiroConciliacao.tsx` modal
+ * de expandir lista (Rev. 3205, mesmo bug latente): `resizable={false}` + `max-h-[92vh]`.
+ *
+ * ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE · só layout (2 props + 1 classe de altura por modal).
+ * O componente `dialog.tsx` NÃO foi alterado (fix por instância, sem afetar os demais diálogos).
+ *
  * Rev. 3207 — **FINANCEIRO / CONTROLE DE CHEQUES · A TELA GANHOU 3 CARDS DO MÊS SELECIONADO (TOTAL
  * DE CHEQUES, COMPENSADOS E "FALTAM COMPENSAR" = PENDENTES), UMA LEGENDA DE STATUS PARA RASTREIO E,
  * EM CADA LINHA, O MARCADOR "CONCILIADO NO EXTRATO" + O MOTIVO QUANDO O CHEQUE VOLTOU (DEVOLVIDO/

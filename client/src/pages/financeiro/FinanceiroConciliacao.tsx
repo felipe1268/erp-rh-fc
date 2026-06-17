@@ -1913,7 +1913,7 @@ export default function FinanceiroConciliacao() {
         {/* Rev. 3205 — modo tela cheia: expande a lista escolhida p/ analisar melhor.
             Reutiliza exatamente as mesmas linhas (seleção/lançar/conciliar continuam funcionando). */}
         <Dialog open={!!expandedList} onOpenChange={(o: boolean) => { if (!o) setExpandedList(null); }}>
-          <DialogContent className="max-w-[96vw] w-[96vw] h-[92vh] flex flex-col p-0 gap-0">
+          <DialogContent resizable={false} className="max-w-[96vw] w-[96vw] h-[92vh] max-h-[92vh] flex flex-col p-0 gap-0">
             <DialogHeader className="px-4 py-3 border-b shrink-0">
               <DialogTitle className="flex items-center gap-2 text-base">
                 {expandedList === "extrato" ? (

@@ -457,7 +457,7 @@ export default function FinanceiroCheques() {
 
       {/* Dialog de importação */}
       <Dialog open={importOpen} onOpenChange={(o) => { setImportOpen(o); if (!o) { setPreview(null); setDragOver(false); } }}>
-        <DialogContent className="max-w-[96vw] w-[96vw] h-[94vh] flex flex-col p-0 gap-0">
+        <DialogContent resizable={false} className="max-w-[96vw] w-[96vw] h-[94vh] max-h-[94vh] flex flex-col p-0 gap-0">
           {/* Cabeçalho com faixa */}
           <div className="flex items-start gap-3 p-5 border-b bg-gradient-to-r from-blue-50 to-transparent shrink-0">
             <div className="rounded-xl bg-blue-600 text-white p-2.5 shadow-sm shrink-0">
