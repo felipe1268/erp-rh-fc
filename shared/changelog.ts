@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3213 — **FINANCEIRO · O MÓDULO "CARTÃO DE CRÉDITO" (CRIADO NA REV. 3211) NÃO APARECIA NO MENU
+ * LATERAL DO GRUPO "MOVIMENTAÇÕES" (LOGO ABAIXO DE "CONTROLE DE CHEQUES"); AGORA O ITEM ESTÁ VISÍVEL
+ * E NAVEGÁVEL.**
+ *
+ * PEDIDO (piloto FC): "crie este módulo do cartão de crédito nesta tela. para seguir com tudo" +
+ * print do menu "Movimentações" (Lançamentos → … → Controle de Cheques), sem o item de Cartão.
+ *
+ * CAUSA-RAIZ: na Rev. 3211 o item de menu foi registrado em `shared/modules.ts` (rota
+ * `/financeiro/cartao` + permissão `financeiro-cartao`, o que faz a ROTA e a permissão funcionarem),
+ * MAS o menu lateral visível é montado por uma LISTA HARDCODED em
+ * `client/src/components/DashboardLayout.tsx` (grupo "Movimentações"), que só tinha "Controle de
+ * Cheques". Como a tela tem duas fontes de verdade para o menu (modules.ts p/ permissão/rota +
+ * DashboardLayout p/ a árvore visível), faltava a entrada na segunda.
+ *
+ * SOLUÇÃO — FRONT (`DashboardLayout.tsx`): adicionada a entrada
+ * `{ icon: CreditCard, label: "Cartão de Crédito", path: "/financeiro/cartao" }` logo após "Controle
+ * de Cheques" no grupo "Movimentações" (ícone `CreditCard` já estava importado). O filtro de
+ * visibilidade resolve a permissão via `routeToFeatureKey` (derivado de `modules.ts`), então o item
+ * aparece p/ admin master (bypass) e p/ usuários com a permissão `financeiro-cartao`.
+ *
+ * ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE · só UI (1 item de menu).
+ *
  * Rev. 3212 — **FINANCEIRO / CONTROLE DE CHEQUES · OS 3 CARDS DE RESUMO (TOTAL DE CHEQUES /
  * COMPENSADOS / FALTAM COMPENSAR) AGORA FICAM FIXOS TAMBÉM QUANDO O USUÁRIO CLICA EM "ANO TODO":
  * NESSE CASO MOSTRAM O AGREGADO DO ANO INTEIRO (LABEL "RESUMO DE 2026 (ANO TODO)"), EM VEZ DE

@@ -485,6 +485,7 @@ const menuSectionsFinanceiro: MenuSection[] = [
       { icon: CheckCircle,   label: "Contas a Pagar",     path: "/financeiro/contas-a-pagar" },
       { icon: ArrowLeftRight, label: "Conciliação Bancária", path: "/financeiro/conciliacao" },
       { icon: Banknote, label: "Controle de Cheques", path: "/financeiro/cheques" },
+      { icon: CreditCard, label: "Cartão de Crédito", path: "/financeiro/cartao" },
     ],
   },
   {
