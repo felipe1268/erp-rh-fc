@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3185 — **FINANCEIRO / MENU · "CONCILIAÇÃO BANCÁRIA" SAIU DO GRUPO "CADASTROS" E PASSOU PRO
+ * GRUPO "MOVIMENTAÇÕES" (LOGO ABAIXO DE "CONTAS A PAGAR"), ONDE FAZ MAIS SENTIDO.**
+ *
+ * PEDIDO (piloto FC FEV/2026): "quero que a Conciliação Bancária fique no grupo Movimentações, faz
+ * mais sentido." A conciliação é uma operação do dia a dia (movimentação), não um cadastro — estava
+ * deslocada junto de Plano de Contas/Categorias/Centros de Custo/Configurações.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO BACKEND): em `client/src/components/DashboardLayout.tsx` o item
+ * `{ label: "Conciliação Bancária", path: "/financeiro/conciliacao" }` foi REMOVIDO do bloco
+ * `title: "Cadastros"` e INSERIDO no bloco `title: "Movimentações"`, logo após "Contas a Pagar".
+ * Mesma rota, mesma permissão (`route="/financeiro/conciliacao"`) e mesmo ícone (`ArrowLeftRight`) —
+ * só muda o agrupamento visual do menu lateral. ZERO SCHEMA/ALTER/DROP/DELETE · ZERO BACKEND.
+ *
+ * ──────────────────────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 3184 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO DE UX: O DROPDOWN "TOLERÂNCIA (DIAS)"
  * AGORA ABRE SEMPRE LOGO ABAIXO DO CAMPO, EM VEZ DE "SALTAR" PRO MEIO/TOPO DA TELA.**
  *

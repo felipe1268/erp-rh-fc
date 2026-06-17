@@ -483,6 +483,7 @@ const menuSectionsFinanceiro: MenuSection[] = [
       { icon: TrendingUp,    label: "Previsão de Faturamento",   path: "/financeiro/contas-a-receber" },
       { icon: HandCoins,     label: "Contas a Receber",   path: "/financeiro/contas-a-receber-titulos" },
       { icon: CheckCircle,   label: "Contas a Pagar",     path: "/financeiro/contas-a-pagar" },
+      { icon: ArrowLeftRight, label: "Conciliação Bancária", path: "/financeiro/conciliacao" },
     ],
   },
   {
@@ -501,7 +502,6 @@ const menuSectionsFinanceiro: MenuSection[] = [
       { icon: BookOpen,      label: "Plano de Contas",   path: "/financeiro/plano-de-contas" },
       { icon: Tag,           label: "Categorias",        path: "/financeiro/categorias" },
       { icon: Layers,        label: "Centros de Custo",  path: "/financeiro/centros-de-custo" },
-      { icon: ArrowLeftRight, label: "Conciliação Bancária", path: "/financeiro/conciliacao" },
       { icon: Settings2,     label: "Configurações",     path: "/financeiro/configuracoes" },
     ],
   },
