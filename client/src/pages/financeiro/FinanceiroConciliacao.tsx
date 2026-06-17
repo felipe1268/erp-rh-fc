@@ -14,7 +14,7 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX, FileSpreadsheet, FileDown, Plus, Maximize2 } from "lucide-react";
+import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX, FileSpreadsheet, FileDown, Plus, Maximize2, Search } from "lucide-react";
 import { formatConta, formatAgencia } from "@/lib/formatters";
 
 function formatBRL(v: number) {
@@ -74,6 +74,8 @@ export default function FinanceiroConciliacao() {
   }, [ano, mesSel]);
   const [contaBancariaId, setContaBancariaId] = useState<string>("");
   const [conciliadoFilter, setConciliadoFilter] = useState("all");
+  // Rev. 3219 — busca única que filtra AMBAS as listas (extrato sem lançamento + ERP sem extrato).
+  const [buscaConc, setBuscaConc] = useState("");
   const [selectedStatement, setSelectedStatement] = useState<number | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<number | null>(null);
   // Rev. 3205 — expandir uma das listas de pendência em tela cheia p/ analisar melhor.
@@ -356,6 +358,23 @@ export default function FinanceiroConciliacao() {
   const repConc: any[] = report?.conciliados ?? [];
   const repExt: any[] = report?.extratoSemLancamento ?? [];
   const repLan: any[] = report?.lancamentosSemExtrato ?? [];
+  // Rev. 3219 — filtro de busca (texto livre) aplicado às DUAS listas de pendência.
+  // Casa por descrição, fornecedor, obra, doc, data e valor (BRL formatado + número cru),
+  // normalizando acentos e caixa. String vazia = sem filtro (mantém tudo).
+  const normBusca = (v: any) => String(v ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const termoBusca = normBusca(buscaConc).trim();
+  const matchBusca = (r: any) => {
+    if (!termoBusca) return true;
+    const alvo = normBusca([
+      r.descricao, r.fornecedorNome, r.obraNome, r.documento, r.doc, r.formaPagamento,
+      fmtData(r.data),
+      formatBRL(Math.abs(Number(r.valor) || 0)),
+      String(Math.abs(Number(r.valor) || 0)),
+    ].filter(Boolean).join(" "));
+    return alvo.includes(termoBusca);
+  };
+  const repExtView: any[] = termoBusca ? repExt.filter(matchBusca) : repExt;
+  const repLanView: any[] = termoBusca ? repLan.filter(matchBusca) : repLan;
   // Rev. 3188 — lançamentos SEM conta bancária definida vêm num bloco próprio e NÃO entram
   // no número da conta (antes apareciam/contavam em todas as contas, inflando "ERP sem extrato").
   const repSemConta: any[] = report?.lancamentosSemConta ?? [];
@@ -1484,6 +1503,27 @@ export default function FinanceiroConciliacao() {
                 </p>
               </div>
             )}
+            {(repExt.length > 0 || repLan.length > 0) && (
+              <div className="relative max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                <Input
+                  value={buscaConc}
+                  onChange={(e) => setBuscaConc(e.target.value)}
+                  placeholder="Buscar nas duas listas (descrição, fornecedor, obra, valor…)"
+                  className="pl-9 pr-9 h-9"
+                />
+                {buscaConc && (
+                  <button
+                    type="button"
+                    onClick={() => setBuscaConc("")}
+                    title="Limpar busca"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Esquerda: no extrato, sem lançamento */}
               <Card className="border-0 shadow-sm">
@@ -1491,7 +1531,7 @@ export default function FinanceiroConciliacao() {
                   <div className="flex items-center justify-between gap-2">
                     <CardTitle className="text-sm flex items-center gap-2">
                       <AlertCircle className="w-4 h-4 text-red-500" />
-                      No extrato, sem lançamento ({repExt.length})
+                      No extrato, sem lançamento ({termoBusca ? `${repExtView.length}/${repExt.length}` : repExt.length})
                     </CardTitle>
                     {repExt.length > 0 && (
                       <div className="flex items-center gap-1 shrink-0">
@@ -1533,9 +1573,11 @@ export default function FinanceiroConciliacao() {
                         </>
                       )}
                     </div>
+                  ) : repExtView.length === 0 ? (
+                    <div className="p-6 text-center text-gray-400 text-sm">Nenhum item do extrato corresponde à busca.</div>
                   ) : (
                     <div className="divide-y divide-gray-100 max-h-[420px] overflow-y-auto">
-                      {repExt.map(renderExtratoRow)}
+                      {repExtView.map(renderExtratoRow)}
                     </div>
                   )}
                 </CardContent>
@@ -1547,7 +1589,7 @@ export default function FinanceiroConciliacao() {
                   <div className="flex items-center justify-between gap-2">
                     <CardTitle className="text-sm flex items-center gap-2">
                       <FileText className="w-4 h-4 text-amber-600" />
-                      No ERP, sem extrato ({repLan.length})
+                      No ERP, sem extrato ({termoBusca ? `${repLanView.length}/${repLan.length}` : repLan.length})
                     </CardTitle>
                     {repLan.length > 0 && (
                       <div className="flex items-center gap-1 shrink-0">
@@ -1569,9 +1611,11 @@ export default function FinanceiroConciliacao() {
                     <div className="p-6 text-center text-gray-500 text-sm">Carregando…</div>
                   ) : repLan.length === 0 ? (
                     <div className="p-6 text-center text-gray-400 text-sm">Nenhum lançamento sem extrato no período.</div>
+                  ) : repLanView.length === 0 ? (
+                    <div className="p-6 text-center text-gray-400 text-sm">Nenhum lançamento do ERP corresponde à busca.</div>
                   ) : (
                     <div className="divide-y divide-gray-100 max-h-[420px] overflow-y-auto">
-                      {repLan.map((e: any) => renderEntryRow(e))}
+                      {repLanView.map((e: any) => renderEntryRow(e))}
                     </div>
                   )}
                 </CardContent>
@@ -2014,13 +2058,27 @@ export default function FinanceiroConciliacao() {
             <DialogHeader className="px-4 py-3 border-b shrink-0">
               <DialogTitle className="flex items-center gap-2 text-base">
                 {expandedList === "extrato" ? (
-                  <><AlertCircle className="w-4 h-4 text-red-500" />No extrato, sem lançamento ({repExt.length})</>
+                  <><AlertCircle className="w-4 h-4 text-red-500" />No extrato, sem lançamento ({termoBusca ? `${repExtView.length}/${repExt.length}` : repExt.length})</>
                 ) : (
-                  <><FileText className="w-4 h-4 text-amber-600" />No ERP, sem extrato ({repLan.length})</>
+                  <><FileText className="w-4 h-4 text-amber-600" />No ERP, sem extrato ({termoBusca ? `${repLanView.length}/${repLan.length}` : repLan.length})</>
                 )}
               </DialogTitle>
             </DialogHeader>
-            <div className="flex items-center gap-1 px-4 py-2 border-b shrink-0">
+            <div className="flex items-center gap-2 px-4 py-2 border-b shrink-0">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                <Input
+                  value={buscaConc}
+                  onChange={(e) => setBuscaConc(e.target.value)}
+                  placeholder="Buscar (descrição, fornecedor, obra, valor…)"
+                  className="pl-9 pr-9 h-8"
+                />
+                {buscaConc && (
+                  <button type="button" onClick={() => setBuscaConc("")} title="Limpar busca" className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100">
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
               <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => expandedList && exportarListaExcel(expandedList)} title="Exportar para Excel">
                 <FileSpreadsheet className="w-3.5 h-3.5 mr-1" />Excel
               </Button>
@@ -2030,8 +2088,8 @@ export default function FinanceiroConciliacao() {
             </div>
             <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
               {expandedList === "extrato"
-                ? (repExt.length === 0 ? <div className="p-6 text-center text-gray-400 text-sm">Nada a exibir.</div> : repExt.map(renderExtratoRow))
-                : (repLan.length === 0 ? <div className="p-6 text-center text-gray-400 text-sm">Nada a exibir.</div> : repLan.map((e: any) => renderEntryRow(e)))}
+                ? (repExtView.length === 0 ? <div className="p-6 text-center text-gray-400 text-sm">{termoBusca ? "Nenhum item corresponde à busca." : "Nada a exibir."}</div> : repExtView.map(renderExtratoRow))
+                : (repLanView.length === 0 ? <div className="p-6 text-center text-gray-400 text-sm">{termoBusca ? "Nenhum item corresponde à busca." : "Nada a exibir."}</div> : repLanView.map((e: any) => renderEntryRow(e)))}
             </div>
           </DialogContent>
         </Dialog>

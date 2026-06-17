@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3219 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NOVO CAMPO DE BUSCA (TEXTO LIVRE) QUE
+ * FILTRA AS DUAS LISTAS DE PENDÊNCIA AO MESMO TEMPO — "NO EXTRATO, SEM LANÇAMENTO" (BANCO)
+ * E "NO ERP, SEM EXTRATO" — POR DESCRIÇÃO, FORNECEDOR, OBRA, DOCUMENTO, DATA E VALOR (BRL
+ * FORMATADO + NÚMERO CRU), COM NORMALIZAÇÃO DE ACENTO/CAIXA. ANTES NÃO HAVIA COMO PESQUISAR
+ * NESSAS LISTAS (204 / 184 ITENS), SÓ ROLAR.**
+ *
+ * PEDIDO (piloto FC): "preciso colocar um botão de busca para fazer pesquisa tanto no extrato
+ * quanto no erp... nas duas imagens" — as listas de "Sugestões Automáticas de Conciliação"
+ * (No extrato, sem lançamento / No ERP, sem extrato) têm centenas de linhas e não tinham filtro.
+ *
+ * SOLUÇÃO — FRONT (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`):
+ * - Estado único `buscaConc` (uma caixa de busca filtra AMBAS as listas — não duplica filtro).
+ * - Helper `normBusca` (lowercase + `normalize("NFD")` removendo diacríticos) + `matchBusca(r)`
+ *   que casa o termo contra `descricao`, `fornecedorNome`, `obraNome`, `documento`/`doc`,
+ *   `formaPagamento`, `fmtData(data)`, `formatBRL(|valor|)` E `String(|valor|)` (acha tanto
+ *   "1.114,80" quanto "1114.8"). Termo vazio = sem filtro (retorna a lista original, sem custo).
+ * - Derivados `repExtView`/`repLanView` (filtram `repExt`/`repLan` só quando há termo) usados em
+ *   TODA a renderização das duas listas: visão normal (2 colunas) E modo "Expandir" tela cheia.
+ * - Caixa de busca com ícone `Search`, placeholder e botão "X" p/ limpar — aparece acima do grid
+ *   (quando há pendências) e também dentro do modal de tela cheia (compartilha o mesmo estado).
+ * - Contadores dos cabeçalhos mostram "filtrados/total" (ex.: "No ERP, sem extrato (12/184)")
+ *   quando há busca ativa; sem busca, só o total. Empty-states específicos ("Nenhum item ...
+ *   corresponde à busca") quando a lista tem itens mas o filtro zera o resultado.
+ *
+ * ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE · só client (filtro em memória sobre o relatório
+ * já carregado; não refaz query). As listas de origem (`repExt`/`repLan`), exportações Excel/PDF
+ * e a conciliação manual 1-para-1 continuam intactas (operam sobre os dados completos).
+ *
+ * ---
+ *
  * Rev. 3218 — **FINANCEIRO / CONTROLE DE CARTÃO DE CRÉDITO (ABA "FATURAS") · A RÉGUA DE
  * ANO/MESES FOI PADRONIZADA PARA O MESMO FORMATO, TAMANHO E LAYOUT DA TELA "CONTAS A PAGAR"
  * (CARDS DE MÊS ESPAÇADOS EM GRID DE 12 COLUNAS COM BOLINHA DE STATUS, NAVEGAÇÃO DE ANO À
