@@ -979,6 +979,29 @@ Regras:
           console.log(`[SyncSchema+] Tabelas de Cartão de Crédito garantidas (Rev. 3210).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA financial_cartoes:`, e?.message || e); }
 
+        // Rev. 3216 — Demonstrativos consolidados de PIX/boletos por conta+ano+mês,
+        // usados como INFORMAÇÃO DE APOIO na Conciliação. CREATE TABLE IF NOT EXISTS
+        // (R-001/R-007/R-010 OK — sem ALTER/DROP/DELETE).
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS financial_conciliacao_demonstrativos (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              conta_bancaria_id INTEGER NOT NULL,
+              ano INTEGER NOT NULL,
+              mes INTEGER NOT NULL,
+              pix_url TEXT,
+              pix_nome TEXT,
+              boleto_url TEXT,
+              boleto_nome TEXT,
+              criado_em TIMESTAMP DEFAULT NOW() NOT NULL,
+              atualizado_em TIMESTAMP
+            )
+          `);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_fcd_chave ON financial_conciliacao_demonstrativos (company_id, conta_bancaria_id, ano, mes)`);
+          console.log(`[SyncSchema+] Rev. 3216: tabela financial_conciliacao_demonstrativos garantida (demonstrativos PIX/boleto na conciliação).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA financial_conciliacao_demonstrativos:`, e?.message || e); }
+
         // Rev. 3211 — Gancho "forma de pagamento = Cartão de Crédito" em
         // financial_entries: qual cartão + nº parcelas + estabelecimento.
         // Aditivas/nullable. ADD COLUMN IF NOT EXISTS (R-001/R-007/R-010 OK).

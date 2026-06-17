@@ -67,6 +67,20 @@ async function _assertFinanceiroCompanyAccess(ctxUser: any, companyId: number) {
   }
 }
 
+// Rev. 3216 — garante que a conta bancária pertence à empresa antes de
+// ler/gravar os demonstrativos consolidados. Evita persistir registros órfãos
+// (conta de outra empresa) via chamada direta da API (defesa em profundidade,
+// além do _assertFinanceiroCompanyAccess que já barra acesso cross-tenant).
+async function _assertContaBancariaPertenceEmpresa(db: any, contaBancariaId: number, companyId: number) {
+  const res = await dbExecute(db,
+    `SELECT id FROM company_bank_accounts WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+    [contaBancariaId, companyId]
+  );
+  if (!rows(res)[0]) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Conta bancária não pertence a esta empresa." });
+  }
+}
+
 // Executa queries parametrizadas corretamente no Drizzle ORM
 // dbExecute(db, string, array) ignora o array — é preciso usar sql template
 //
@@ -1216,6 +1230,81 @@ export const financialRouter = router({
     const key = `financeiro/comprovantes/${Date.now()}-${safeName}`;
     const { url } = await storagePut(key, buf, ct);
     return { url };
+  }),
+
+  // Rev. 3216 — Demonstrativos consolidados de pagamento (1 PDF com TODOS os PIX +
+  // 1 PDF com TODOS os boletos pagos do mês), por conta+ano+mês. INFORMAÇÃO DE APOIO
+  // à conciliação: o extrato só mostra "PIX valor X" sem beneficiário; o usuário
+  // consulta esses demonstrativos pra identificar quem recebeu. NÃO concilia nada
+  // sozinho e NÃO é comprovante por lançamento.
+  getConciliacaoDemonstrativos: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    contaBancariaId: z.number(),
+    ano: z.number(),
+    mes: z.number().min(1).max(12),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    await _assertContaBancariaPertenceEmpresa(db, input.contaBancariaId, input.companyId);
+    const res = await dbExecute(db,
+      `SELECT pix_url AS "pixUrl", pix_nome AS "pixNome",
+              boleto_url AS "boletoUrl", boleto_nome AS "boletoNome"
+       FROM financial_conciliacao_demonstrativos
+       WHERE company_id=$1 AND conta_bancaria_id=$2 AND ano=$3 AND mes=$4`,
+      [input.companyId, input.contaBancariaId, input.ano, input.mes]
+    );
+    return (rows(res)[0] as any) ?? { pixUrl: null, pixNome: null, boletoUrl: null, boletoNome: null };
+  }),
+
+  salvarConciliacaoDemonstrativo: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    contaBancariaId: z.number(),
+    ano: z.number(),
+    mes: z.number().min(1).max(12),
+    tipo: z.enum(["pix", "boleto"]),
+    url: z.string().min(1),
+    nome: z.string().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    await _assertContaBancariaPertenceEmpresa(db, input.contaBancariaId, input.companyId);
+    const nome = input.nome ?? null;
+    // Colunas fixas por tipo (whitelist via enum) — sem interpolação de identificador do usuário.
+    const colUrl = input.tipo === "pix" ? "pix_url" : "boleto_url";
+    const colNome = input.tipo === "pix" ? "pix_nome" : "boleto_nome";
+    await dbExecute(db,
+      `INSERT INTO financial_conciliacao_demonstrativos
+         (company_id, conta_bancaria_id, ano, mes, ${colUrl}, ${colNome}, criado_em, atualizado_em)
+       VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW())
+       ON CONFLICT (company_id, conta_bancaria_id, ano, mes)
+       DO UPDATE SET ${colUrl}=EXCLUDED.${colUrl}, ${colNome}=EXCLUDED.${colNome}, atualizado_em=NOW()`,
+      [input.companyId, input.contaBancariaId, input.ano, input.mes, input.url, nome]
+    );
+    return { ok: true };
+  }),
+
+  removerConciliacaoDemonstrativo: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    contaBancariaId: z.number(),
+    ano: z.number(),
+    mes: z.number().min(1).max(12),
+    tipo: z.enum(["pix", "boleto"]),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    await _assertContaBancariaPertenceEmpresa(db, input.contaBancariaId, input.companyId);
+    const colUrl = input.tipo === "pix" ? "pix_url" : "boleto_url";
+    const colNome = input.tipo === "pix" ? "pix_nome" : "boleto_nome";
+    await dbExecute(db,
+      `UPDATE financial_conciliacao_demonstrativos
+       SET ${colUrl}=NULL, ${colNome}=NULL, atualizado_em=NOW()
+       WHERE company_id=$1 AND conta_bancaria_id=$2 AND ano=$3 AND mes=$4`,
+      [input.companyId, input.contaBancariaId, input.ano, input.mes]
+    );
+    return { ok: true };
   }),
 
   // Rev. 1621 — Detalhe completo de um título (Contas a Pagar drill-down)

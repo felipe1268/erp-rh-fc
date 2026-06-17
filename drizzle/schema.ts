@@ -7348,6 +7348,26 @@ export const bankStatementLines = pgTable("bank_statement_lines", {
   index("idx_bsl_data").on(t.data),
 ]);
 
+// 7b. Rev. 3216 — Demonstrativos consolidados de pagamento (1 PDF com TODOS os PIX +
+// 1 PDF com TODOS os boletos pagos do mês), por conta+ano+mês. INFORMAÇÃO DE APOIO à
+// conciliação: o extrato só mostra "PIX valor X" sem beneficiário; o usuário consulta
+// esses demonstrativos pra identificar quem recebeu. NÃO é comprovante por lançamento.
+export const financialConciliacaoDemonstrativos = pgTable("financial_conciliacao_demonstrativos", {
+  id: serial().notNull(),
+  companyId: integer("company_id").notNull(),
+  contaBancariaId: integer("conta_bancaria_id").notNull(),
+  ano: integer().notNull(),
+  mes: integer().notNull(),
+  pixUrl: text("pix_url"),
+  pixNome: text("pix_nome"),
+  boletoUrl: text("boleto_url"),
+  boletoNome: text("boleto_nome"),
+  criadoEm: timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+  atualizadoEm: timestamp("atualizado_em", { mode: "string" }),
+}, (t) => [
+  uniqueIndex("uq_fcd_chave").on(t.companyId, t.contaBancariaId, t.ano, t.mes),
+]);
+
 // 8. Saldo bancário diário
 export const bankDailyBalance = pgTable("bank_daily_balance", {
   id: serial().notNull(),

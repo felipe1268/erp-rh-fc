@@ -445,6 +445,59 @@ export default function FinanceiroConciliacao() {
     }
   }
 
+  // Rev. 3216 — Demonstrativos consolidados de pagamento: 1 PDF com TODOS os PIX +
+  // 1 PDF com TODOS os boletos pagos do mês. Servem de CONSULTA pra identificar quem
+  // recebeu (o extrato só mostra "PIX valor X"). Por conta+ano+mês. NÃO concilia nada.
+  const demoInputRef = useRef<HTMLInputElement>(null);
+  const [demoKind, setDemoKind] = useState<"pix" | "boleto" | null>(null);
+  const [demoBusy, setDemoBusy] = useState<"pix" | "boleto" | null>(null);
+  const demoQuery = (trpc as any).financial.getConciliacaoDemonstrativos.useQuery(
+    { companyId, contaBancariaId: parseInt(contaBancariaId) || 0, ano, mes: mesSel ?? 0 },
+    { enabled: !!companyId && !!contaBancariaId && mesSel != null }
+  );
+  const salvarDemoMut = (trpc as any).financial.salvarConciliacaoDemonstrativo.useMutation();
+  const removerDemoMut = (trpc as any).financial.removerConciliacaoDemonstrativo.useMutation();
+  function pedirDemo(kind: "pix" | "boleto") { setDemoKind(kind); setTimeout(() => demoInputRef.current?.click(), 0); }
+  async function onDemoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    const kind = demoKind;
+    setDemoKind(null);
+    if (!file || !kind || mesSel == null || !contaBancariaId) return;
+    const ct = (file.type || "").toLowerCase();
+    if (ct !== "application/pdf") { toast({ title: "Use um arquivo PDF", description: "O demonstrativo deve ser um PDF.", variant: "destructive" }); return; }
+    setDemoBusy(kind);
+    try {
+      const b64: string = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(((r.result as string) || "").replace(/^data:[^,]*,/, ""));
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+      const up: any = await uploadComprovanteMut.mutateAsync({ fileName: file.name, fileBase64: b64, contentType: "application/pdf" });
+      await salvarDemoMut.mutateAsync({ companyId, contaBancariaId: parseInt(contaBancariaId), ano, mes: mesSel, tipo: kind, url: up.url, nome: file.name });
+      toast({ title: kind === "pix" ? "Demonstrativo de PIX anexado!" : "Demonstrativo de boletos anexado!", description: "Use como consulta pra identificar quem recebeu durante a conciliação." });
+      demoQuery.refetch();
+    } catch (err: any) {
+      toast({ title: "Erro ao anexar demonstrativo", description: err?.message || "Falha no upload.", variant: "destructive" });
+    } finally {
+      setDemoBusy(null);
+    }
+  }
+  async function removerDemo(kind: "pix" | "boleto") {
+    if (mesSel == null || !contaBancariaId) return;
+    setDemoBusy(kind);
+    try {
+      await removerDemoMut.mutateAsync({ companyId, contaBancariaId: parseInt(contaBancariaId), ano, mes: mesSel, tipo: kind });
+      toast({ title: "Demonstrativo removido" });
+      demoQuery.refetch();
+    } catch (err: any) {
+      toast({ title: "Erro ao remover", description: err?.message || "Falha ao remover.", variant: "destructive" });
+    } finally {
+      setDemoBusy(null);
+    }
+  }
+
   // Rev. 3188 — renderiza uma linha de lançamento (usada na lista "No ERP, sem extrato" da
   // conta E na lista "Sem conta definida"). Mesma interação: selecionar p/ casar, ver detalhe
   // e anexar/abrir comprovante.
@@ -1044,6 +1097,50 @@ export default function FinanceiroConciliacao() {
           </Card>
         ) : (
           <>
+            {/* Rev. 3216 — Demonstrativos consolidados (1 PDF de TODOS os PIX + 1 de TODOS os
+                boletos) por conta+mês. Consulta de apoio: o extrato só mostra "PIX valor X". */}
+            <Card className="border-0 shadow-sm ring-1 ring-indigo-100 bg-indigo-50/30">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-2 mb-3">
+                  <FileText className="w-4 h-4 text-indigo-600 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">Demonstrativos de pagamento (apoio à identificação)</p>
+                    <p className="text-xs text-gray-500">Anexe o PDF com <strong>todos os PIX</strong> e o PDF com <strong>todos os boletos pagos</strong> do mês. Servem só de consulta pra identificar quem recebeu — o extrato mostra apenas "PIX valor X".</p>
+                  </div>
+                </div>
+                {mesSel == null ? (
+                  <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    Selecione um mês (acima) para anexar os demonstrativos — eles são por mês.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {([
+                      { kind: "pix" as const, label: "Comprovantes de PIX", url: demoQuery.data?.pixUrl, nome: demoQuery.data?.pixNome },
+                      { kind: "boleto" as const, label: "Comprovantes de Boletos", url: demoQuery.data?.boletoUrl, nome: demoQuery.data?.boletoNome },
+                    ]).map((slot) => (
+                      <div key={slot.kind} className="rounded-lg border border-indigo-200 bg-white p-3">
+                        <p className="text-xs font-medium text-gray-600 mb-2">{slot.label} <span className="text-gray-400">· {MESES[mesSel - 1]}/{ano}</span></p>
+                        {slot.url ? (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
+                            <span className="text-xs text-gray-700 truncate flex-1 min-w-[80px]">{slot.nome || "documento.pdf"}</span>
+                            <a href={slot.url} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline">Abrir</a>
+                            <button type="button" onClick={() => pedirDemo(slot.kind)} disabled={demoBusy === slot.kind} className="text-xs font-medium text-gray-500 hover:text-gray-700 disabled:opacity-50">{demoBusy === slot.kind ? "Enviando..." : "Trocar"}</button>
+                            <button type="button" onClick={() => removerDemo(slot.kind)} disabled={demoBusy === slot.kind} className="text-xs font-medium text-red-500 hover:text-red-700 disabled:opacity-50">Remover</button>
+                          </div>
+                        ) : (
+                          <Button size="sm" variant="outline" onClick={() => pedirDemo(slot.kind)} disabled={demoBusy === slot.kind} className="border-indigo-200 text-indigo-700 hover:bg-indigo-50">
+                            <Upload className="w-3.5 h-3.5 mr-1.5" />{demoBusy === slot.kind ? "Enviando..." : "Anexar PDF"}
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <input ref={demoInputRef} type="file" accept="application/pdf,.pdf" onChange={onDemoFile} className="hidden" />
+              </CardContent>
+            </Card>
             {/* Rev. 3187 — Estado de ERRO do relatório: sem isso a tela parecia "vazia/zerada"
                 quando getConciliacaoReport falhava (falso "tudo conciliado"). */}
             {reportIsError && (

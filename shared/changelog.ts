@@ -1,6 +1,47 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3216 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NOVOS DOIS CAMPOS DE UPLOAD PARA OS
+ * DEMONSTRATIVOS CONSOLIDADOS DE PAGAMENTO (1 PDF COM TODOS OS PIX + 1 PDF COM TODOS OS
+ * BOLETOS PAGOS DO MÊS), POR CONTA + MÊS, USADOS COMO INFORMAÇÃO DE APOIO PARA IDENTIFICAR
+ * QUEM RECEBEU — O EXTRATO SÓ MOSTRA "PIX VALOR X" SEM BENEFICIÁRIO.**
+ *
+ * PEDIDO (piloto FC): "tenho um PDF com todos os comprovantes de PIX e outro dos boletos pagos;
+ * quero usar essa informação adicional pra ajudar a identificar a conciliação bancária, já que no
+ * extrato aparece só 'PIX valor xyz'. Não vou subir cada comprovante individualmente — é um
+ * demonstrativo consolidado. Preciso de DOIS campos separados pra facilitar o cadastro, já que são
+ * arquivos distintos."
+ *
+ * CONTEXTO: a Conciliação já tinha (Rev. 3187/3193) anexo de comprovante POR lançamento (clipe de
+ * papel na lista "No ERP, sem extrato") + leitura por IA do beneficiário. Esta revisão é OUTRA coisa:
+ * é um par de PDFs CONSOLIDADOS no NÍVEL DA TELA (conta+ano+mês), não por lançamento. Servem só de
+ * CONSULTA — NÃO conciliam nada sozinho e NÃO viram lançamento.
+ *
+ * SOLUÇÃO — BACK (`server/routers/financial.ts`): 3 procedures novas — `getConciliacaoDemonstrativos`
+ * (lê o par PIX/boleto da conta+mês), `salvarConciliacaoDemonstrativo` (upsert por `tipo` via ON
+ * CONFLICT na chave única; colunas fixas por tipo via whitelist do enum — sem interpolar identificador
+ * do usuário) e `removerConciliacaoDemonstrativo` (zera url/nome do tipo). Todas com
+ * `_assertFinanceiroCompanyAccess` (tenant guard). O upload do arquivo reaproveita o `uploadComprovante`
+ * existente (whitelist de tipo + limite 15 MB → `storagePut`); a URL servida é a do nosso storage
+ * (sem fetch server-side de URL do cliente → sem SSRF).
+ *
+ * SOLUÇÃO — SCHEMA (ADITIVO): nova tabela `financial_conciliacao_demonstrativos`
+ * (`drizzle/schema.ts` + self-heal `CREATE TABLE IF NOT EXISTS` em `server/_core/index.ts`) com
+ * `company_id, conta_bancaria_id, ano, mes, pix_url, pix_nome, boleto_url, boleto_nome` +
+ * UNIQUE INDEX `(company_id, conta_bancaria_id, ano, mes)`. ZERO ALTER/DROP/DELETE.
+ *
+ * SOLUÇÃO — FRONT (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): card "Demonstrativos de
+ * pagamento (apoio à identificação)" no topo da área de uma conta selecionada, com DOIS slots
+ * separados ("Comprovantes de PIX" / "Comprovantes de Boletos"). Cada slot: anexar PDF / abrir /
+ * trocar / remover, rotulado com mês/ano. Só PDF. Quando a régua está em "Ano todo" (`mesSel=null`),
+ * o card pede pra selecionar um mês (os demonstrativos são por mês).
+ *
+ * RESSALVA: esta fase é STORAGE + CONSULTA (o usuário abre os PDFs lado a lado pra identificar quem
+ * recebeu durante a conciliação manual). A leitura por IA desses PDFs consolidados → casamento
+ * automático com as linhas do extrato fica como próximo passo (fase 2).
+ *
+ * ZERO ALTER/DROP/DELETE · só ADD (tabela nova) + endpoints + UI.
+ *
  * Rev. 3215 — **APP (TODAS AS TELAS) · CORREÇÃO DA TELA DE ERRO "TypeError: Importing a module
  * script failed." QUE APARECIA NO iPad/iOS SAFARI APÓS UM DEPLOY — AGORA A PÁGINA SE
  * AUTO-RECUPERA BUSCANDO O index.html NOVO (CACHE-BUSTING) EM VEZ DE CAIR NA TELA DE ERRO.**
