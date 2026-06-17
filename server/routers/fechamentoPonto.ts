@@ -2135,8 +2135,10 @@ export const fechamentoPontoRouter = router({
           await tx.update(timeInconsistencies)
             .set({ status: "ajustado", resolvidoPor: ctx.user?.name || "RH", resolvidoEm: new Date().toISOString().split("T")[0] })
             .where(and(
+              companyFilter(timeInconsistencies.companyId, input),
               eq(timeInconsistencies.employeeId, input.employeeId),
               eq(timeInconsistencies.data, input.data),
+              eq(timeInconsistencies.status, "pendente"),
             ));
           action = "updated";
         } else {
@@ -2156,8 +2158,10 @@ export const fechamentoPontoRouter = router({
           await tx.update(timeInconsistencies)
             .set({ status: "ajustado", resolvidoPor: ctx.user?.name || "RH", resolvidoEm: new Date().toISOString().split("T")[0] })
             .where(and(
+              companyFilter(timeInconsistencies.companyId, input),
               eq(timeInconsistencies.employeeId, input.employeeId),
               eq(timeInconsistencies.data, input.data),
+              eq(timeInconsistencies.status, "pendente"),
             ));
           action = "created";
         }

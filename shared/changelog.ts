@@ -25,8 +25,11 @@
  *   `inconsistencies.refetch()`. Como o filtro default é "Pendentes" e a inconsistência vira
  *   "ajustado", a linha some sozinha após salvar a correção.
  * - BACK (`server/routers/fechamentoPonto.ts`, `manualEntry`): replica o `UPDATE timeInconsistencies
- *   SET status='ajustado'` (mesmo filtro employeeId+data) também no branch de INSERT, dentro da
- *   mesma transação. Assim a correção auto-resolve a inconsistência para TODOS os tipos.
+ *   SET status='ajustado'` também no branch de INSERT, dentro da mesma transação. Assim a correção
+ *   auto-resolve a inconsistência para TODOS os tipos. HARDENING (pós code-review): os DOIS UPDATEs
+ *   (UPDATE e INSERT) ganharam `companyFilter(timeInconsistencies.companyId, input)` (defesa em
+ *   profundidade multi-tenant) + `status='pendente'` no WHERE (só toca linhas ainda pendentes, não
+ *   reescreve resolvidas/justificadas).
  *
  * Resultado: "Corrigir" = ação única (lança o ponto correto + resolve a inconsistência). O botão
  * "Justificar" (sem penalidade, registra motivo, não altera o ponto) segue existindo para os casos

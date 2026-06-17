@@ -90,6 +90,7 @@
 - [Centro de Custo na Análise de Custos](centro-custo-analise-custos.md) — "centro de custo" = financial_cost_centers (cadastro), NÃO obra; resolução explícito→derivado da categoria→nenhum; edição usa "-1=manter atual" pra não limpar CC legado.
 - [PDF export XSS / per-function esc](pdf-export-xss-esc-scope.md) — print/PDF builders (document.write) define esc LOCALLY; new fields (esp. AI-sourced) must esc()/escAttr() or it's DOM XSS.
 - [ControleDocumentos hooks order](controledocumentos-hooks-order.md) — ControleDocumentos.tsx has mid-component early returns; new hooks MUST go above them or /controle-documentos crashes ("Rendered more hooks").
+- [Shared onSaved must refetch all lists](shared-onsaved-refetch-lists.md) — a save dialog's onSaved must invalidate EVERY query the write affects (incl. cascaded status flips), not just the host screen; auto-resolve UPDATEs need tenant + status='pendente' guards.
 
 - [Gemini free-tier transient failures](gemini-freetier-transient.md) — batch vision reads fail ~95% on transient 429/503; fix=backend retry on 429+5xx honoring retryDelay + client pacing; daily quota = hard ceiling.
 - [Financeiro "só real" lock](financeiro-so-real-trava.md) — flag global esconde projeções; despesa via sqlNotProjecao no server, MAS receita do Fluxo de Caixa vem do getContasReceberMatrix e o split é client-side (forçar natureza=efetivo).
