@@ -7038,6 +7038,15 @@ export const financialEntries = pgTable("financial_entries", {
   transferenciaGrupoId: varchar("transferencia_grupo_id", { length: 36 }),
   formaPagamento: text("forma_pagamento"),
   comprovanteUrl: text("comprovante_url"),
+  // Rev. 3193 — Dados EXTRAÍDOS do comprovante (PIX/boleto) por IA de visão (Gemini),
+  // usados como FONTE DE IDENTIFICAÇÃO p/ desempatar o match extrato×ERP na Conciliação.
+  // Aditivos/nullable; self-heal cria via ADD COLUMN IF NOT EXISTS.
+  comprovanteBeneficiario: text("comprovante_beneficiario"),
+  comprovanteDocumento: varchar("comprovante_documento", { length: 20 }),
+  comprovanteTxid: varchar("comprovante_txid", { length: 140 }),
+  comprovanteValor: numeric("comprovante_valor", { precision: 15, scale: 2 }),
+  comprovanteData: date("comprovante_data", { mode: "string" }),
+  comprovanteExtraidoEm: timestamp("comprovante_extraido_em", { mode: "string" }),
   codigoBarras: varchar("codigo_barras", { length: 100 }),
   chequeNumero: varchar("cheque_numero", { length: 20 }),
   chequeBanco: varchar("cheque_banco", { length: 100 }),

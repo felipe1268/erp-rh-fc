@@ -235,6 +235,9 @@ export default function FinanceiroConciliacao() {
   const [comprovBusy, setComprovBusy] = useState<number | null>(null);
   const uploadComprovanteMut = (trpc as any).financial.uploadComprovante.useMutation();
   const anexarComprovMut = (trpc as any).financial.anexarComprovanteEntry.useMutation();
+  // Rev. 3193 — leitura do comprovante por IA (beneficiário / CNPJ-CPF / ID-transação) p/
+  // usar como FONTE DE IDENTIFICAÇÃO no match. O usuário SEMPRE confere: nada concilia sozinho.
+  const lerComprovanteMut = (trpc as any).financial.lerComprovante.useMutation();
   function pedirComprovante(entryId: number) { setComprovEntryId(entryId); setTimeout(() => comprovInputRef.current?.click(), 0); }
   async function onComprovanteFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -250,14 +253,58 @@ export default function FinanceiroConciliacao() {
         r.onerror = rej;
         r.readAsDataURL(file);
       });
-      const up: any = await uploadComprovanteMut.mutateAsync({ fileName: file.name, fileBase64: b64, contentType: file.type || "application/octet-stream" });
-      await anexarComprovMut.mutateAsync({ companyId, entryId, comprovanteUrl: up.url });
-      toast({ title: "Comprovante anexado!", description: "Lançamento agora tem comprovante para rastreabilidade." });
+      const ct = file.type || "application/octet-stream";
+      const up: any = await uploadComprovanteMut.mutateAsync({ fileName: file.name, fileBase64: b64, contentType: ct });
+      // Leitura automática por IA ao subir (best-effort: se falhar, anexa sem identificação).
+      let extraido: any = undefined;
+      let viaMsg = "";
+      try {
+        const r: any = await lerComprovanteMut.mutateAsync({ companyId, fileBase64: b64, contentType: ct });
+        const d = r?.dados;
+        if (d && (d.beneficiario || d.documento || d.txid || d.valor || d.data)) {
+          extraido = { beneficiario: d.beneficiario ?? null, documento: d.documento ?? null, txid: d.txid ?? null, valor: d.valor ?? null, data: d.data ?? null };
+          if (d.beneficiario) viaMsg = ` Beneficiário lido: ${d.beneficiario}.`;
+        }
+      } catch { /* segue sem identificação por IA */ }
+      await anexarComprovMut.mutateAsync({ companyId, entryId, comprovanteUrl: up.url, extraido });
+      toast({ title: "Comprovante anexado!", description: `Lançamento agora tem comprovante para rastreabilidade.${viaMsg}` });
       refetchReport(); refetchSug();
     } catch (err: any) {
       toast({ title: "Erro ao anexar comprovante", description: err?.message || "Falha no upload.", variant: "destructive" });
     } finally {
       setComprovBusy(null);
+    }
+  }
+
+  // Rev. 3193 — RELER COMPROVANTES: relê por IA todos os comprovantes JÁ anexados que ainda
+  // não foram lidos (comprovante_extraido_em NULL). Processa em lotes no servidor (free-tier
+  // do Gemini) e repete até `restantes`=0; guard de estagnação evita loop infinito num doc
+  // ilegível. NÃO concilia nada — só preenche a identificação p/ melhorar as sugestões.
+  const relerComprovMut = (trpc as any).financial.relerComprovantesPendentes.useMutation();
+  const [relerBusy, setRelerBusy] = useState(false);
+  const [relerInfo, setRelerInfo] = useState<{ feitos: number; restantes: number } | null>(null);
+  async function relerComprovantes() {
+    if (relerBusy) return;
+    setRelerBusy(true);
+    setRelerInfo(null);
+    let feitos = 0;
+    try {
+      for (let iter = 0; iter < 200; iter++) {
+        const r: any = await relerComprovMut.mutateAsync({ companyId, limite: 6 });
+        feitos += Number(r?.processados ?? 0);
+        const restantes = Number(r?.restantes ?? 0);
+        setRelerInfo({ feitos, restantes });
+        if (restantes <= 0) break;
+        // Guard de estagnação: se um lote não avançou (0 processados) e ainda "restam",
+        // os pendentes são ilegíveis e já foram marcados — encerra p/ não rodar à toa.
+        if (Number(r?.processados ?? 0) === 0) break;
+      }
+      toast({ title: "Comprovantes relidos por IA", description: `${feitos} comprovante(s) identificado(s). As sugestões já consideram beneficiário/CNPJ/ID.` });
+      refetchSug(); refetchReport();
+    } catch (err: any) {
+      toast({ title: "Erro ao reler comprovantes", description: err?.message || "Falha na leitura por IA.", variant: "destructive" });
+    } finally {
+      setRelerBusy(false);
     }
   }
 
@@ -872,6 +919,10 @@ export default function FinanceiroConciliacao() {
                         <Button size="sm" variant="outline" onClick={selecionarAlta}>Selecionar alta confiança</Button>
                         <Button size="sm" variant="outline" onClick={selecionarTodas}>Selecionar todas</Button>
                         <Button size="sm" variant="outline" onClick={() => setSelSug(new Set())}>Limpar</Button>
+                        <Button size="sm" variant="outline" onClick={relerComprovantes} disabled={relerBusy} title="Lê por IA os comprovantes anexados (beneficiário/CNPJ/ID) p/ identificar melhor as sugestões">
+                          {relerBusy ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1" />}
+                          {relerBusy ? `Lendo${relerInfo ? ` (${relerInfo.feitos}, faltam ${relerInfo.restantes})` : "..."}` : "Reler comprovantes (IA)"}
+                        </Button>
                         <Button
                           size="sm"
                           className="ml-auto"
@@ -911,6 +962,11 @@ export default function FinanceiroConciliacao() {
                               <Badge variant={s.confianca === "alta" ? "default" : "secondary"}>
                                 {s.confianca === "alta" ? "Alta" : "Média"}
                               </Badge>
+                              {s.identificadoVia && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-px rounded text-[10px] font-medium bg-violet-100 text-violet-700" title={s.entryComprovanteBeneficiario ? `Comprovante: ${s.entryComprovanteBeneficiario}` : `Identificado pelo comprovante (${s.identificadoVia})`}>
+                                  <Sparkles className="w-2.5 h-2.5" /> {s.identificadoVia}
+                                </span>
+                              )}
                               <span className="text-[10px] text-gray-400">{s.deltaDias === 0 ? "mesmo dia" : `±${s.deltaDias}d`}</span>
                             </div>
                           </label>

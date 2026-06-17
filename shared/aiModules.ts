@@ -9,6 +9,7 @@ export type AiModuleKey =
   | "recrutamento"
   | "sst"
   | "planejamento"
+  | "financeiro"
   | "oraculo"
   | "assistente";
 
@@ -43,6 +44,11 @@ export const AI_MODULES: AiModuleDef[] = [
     key: "planejamento",
     label: "Planejamento — Análise de Efetivo",
     descricao: "Análise de efetivo e simulação de cronograma com IA.",
+  },
+  {
+    key: "financeiro",
+    label: "Financeiro — Leitura de Comprovantes",
+    descricao: "Leitura de comprovantes (PIX/boleto) por IA na Conciliação Bancária para identificar beneficiário, CNPJ/CPF e ID da transação.",
   },
   {
     key: "oraculo",

@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3193 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · OS COMPROVANTES (PIX/BOLETO) VIRARAM FONTE
+ * DE IDENTIFICAÇÃO NO MATCH EXTRATO×ERP: A IA LÊ O COMPROVANTE (BENEFICIÁRIO, CNPJ/CPF, ID DA
+ * TRANSAÇÃO) E ISSO É USADO COMO DESEMPATE — NUNCA CONCILIA PELO NOME SOZINHO, SEMPRE EXIGE O
+ * VALOR BATENDO; E O USUÁRIO SEMPRE CONFERE (NADA CONCILIA/ANEXA SOZINHO).**
+ *
+ * PEDIDO (piloto FC): o extrato bancário de PIX/boleto é "anônimo" — não diz quem recebeu. Quem
+ * carrega a identidade do pagamento é o COMPROVANTE (favorecido, CNPJ/CPF, ID/E2E do PIX ou nosso
+ * número do boleto). O usuário pediu p/ usar o comprovante como pista de identificação no
+ * cruzamento, com 3 condições: (1) leitura automática ao subir o comprovante + um botão "Reler"
+ * pros já anexados; (2) a identidade entra SÓ como desempate — jamais concilia por nome sem o
+ * valor bater; (3) o usuário SEMPRE faz a conferência — nada concilia nem anexa automaticamente.
+ *
+ * SOLUÇÃO. (a) NOVO MÓDULO DE IA "financeiro" (`shared/aiModules.ts`) p/ ligar/desligar a leitura
+ * de comprovantes em Configurações › Inteligência Artificial. (b) 6 COLUNAS ADITIVAS em
+ * `financial_entries` (`drizzle/schema.ts`): comprovante_beneficiario / _documento / _txid /
+ * _valor / _data / _extraido_em — criadas sozinhas pelo self-heal introspectivo (ADD COLUMN IF
+ * NOT EXISTS), ZERO ALTER/DROP/DELETE. (c) BACKEND (`server/routers/financial.ts`): helper
+ * `_lerComprovanteIA` roda o Gemini Vision (responseSchema, thinking:"off") e SANITIZA a saída
+ * (whitelist de chaves, CNPJ/CPF só dígitos, valor BR-aware, data normalizada p/ YYYY-MM-DD);
+ * `_baixarComprovante` recupera os bytes (/uploads/<key>→uploaded_files; senão fetch). Endpoints:
+ * `lerComprovante` (lê 1 arquivo e devolve os campos, NÃO grava), `relerComprovantesPendentes`
+ * (relê em LOTE os já anexados sem leitura — processa lotes pequenos do free-tier do Gemini e o
+ * cliente repete até restar 0; em arquivo ilegível marca `extraido_em=NOW()` p/ NÃO travar o
+ * loop), e `anexarComprovanteEntry` estendido c/ os campos extraídos opcionais (montagem do
+ * UPDATE respeitando a ligação POSICIONAL do dbExecute). (d) DESEMPATE em `sugerirConciliacao`:
+ * candidatos continuam exigindo VALOR + DATA dentro da tolerância; se o txid/CNPJ-CPF/beneficiário
+ * do comprovante aparece na DESCRIÇÃO da linha do extrato, marca `identificadoVia` e ELEVA a
+ * confiança p/ "alta" — e o sort prioriza os identificados. (e) FRONTEND
+ * (`FinanceiroConciliacao.tsx`): ao anexar um comprovante já dispara a leitura por IA (best-effort)
+ * e grava a identificação; botão "Reler comprovantes (IA)" no card de sugestões (loop com guard de
+ * estagnação); badge roxo "ID da transação/CNPJ-CPF/beneficiário" nas sugestões identificadas. Todo
+ * endpoint de IA é gateado por `assertAiModuleEnabled(companyId,"financeiro")` e o usuário continua
+ * clicando p/ conciliar — nada é automático.
+ *
+ * IMPACTO: o cruzamento extrato×ERP fica muito mais assertivo em PIX/boleto (onde antes só havia
+ * valor+data), preservando a regra de ouro de que a decisão final é SEMPRE do usuário. ZERO
+ * ALTER/DROP/DELETE · colunas via self-heal aditivo.
+ *
  * Rev. 3192 — **COLABORADORES · CORREÇÃO: O CARD "CLT" CONTAVA SÓ OS CLT ATIVOS — AGORA CONTA
  * TODOS OS CLT QUE AINDA TÊM VÍNCULO COM A EMPRESA (ATIVO, FÉRIAS, AFASTADO, LICENÇA, AVISO,
  * RECLUSO), EXCLUINDO APENAS OS DESLIGADOS/BLACKLIST.**

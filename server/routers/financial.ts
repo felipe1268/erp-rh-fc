@@ -4,7 +4,9 @@ import { resolveCompanyIds } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
-import { storagePut } from "../storage";
+import { storagePut, dbRetrieve } from "../storage";
+import { invokeGeminiVision } from "../_core/llm";
+import { assertAiModuleEnabled } from "../_core/aiConfig";
 import { seedPlanoDeConta, ensureTaxConfig } from "../services/financialSeedAccounts";
 import { runAllAutoImports } from "../services/financialAutoImport";
 // Rev. 3147 — TRAVA "Financeiro só real": fonte única das origens de projeção +
@@ -312,6 +314,137 @@ async function parseExtratoLines(input: {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhuma linha válida encontrada no arquivo" });
   }
   return lines;
+}
+
+// ─────────────────── Rev. 3193 — LEITURA DE COMPROVANTE (IA de visão) ───────────────────
+// O extrato de PIX/boleto é ANÔNIMO (não diz quem recebeu). O comprovante traz o
+// identificador que falta — beneficiário, CNPJ/CPF, ID da transação (e2e do PIX /
+// nosso número do boleto). Lemos isso com o Gemini Vision e usamos SÓ como DESEMPATE
+// no match extrato×ERP (nunca concilia pelo nome sozinho — exige valor batendo).
+type ComprovanteExtraido = {
+  beneficiario: string | null;
+  documento: string | null; // só dígitos (CNPJ/CPF)
+  txid: string | null;      // e2e PIX / nosso número / autenticação
+  valor: number | null;
+  data: string | null;      // YYYY-MM-DD
+  tipoDoc: string | null;   // pix | boleto | ted | outro
+};
+
+// Normaliza texto p/ comparação tolerante (sem acento, sem ruído, minúsculo).
+function _normTxt(s: any): string {
+  return String(s ?? "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function _soDigitos(s: any): string { return String(s ?? "").replace(/[^0-9]/g, ""); }
+
+// Parser BR-aware de número monetário vindo da IA ("2.500,00", "2500.00", "R$ 2.500,00").
+function _parseValorBR(v: any): number | null {
+  if (v == null) return null;
+  if (typeof v === "number") return isNaN(v) ? null : Math.abs(v);
+  let s = String(v).replace(/[^0-9.,-]/g, "").trim();
+  if (!s) return null;
+  if (s.includes(",")) {
+    // vírgula = decimal BR → remove pontos de milhar, troca vírgula por ponto
+    s = s.replace(/\./g, "").replace(",", ".");
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? null : Math.abs(n);
+}
+
+// Normaliza/sanitiza os campos de identificação de um comprovante — vindos da IA OU do
+// cliente (write path). Whitelist de chaves + clip de tamanho + data/valor BR-aware. Usado
+// tanto por `_lerComprovanteIA` quanto por `anexarComprovanteEntry` (não confiar no cliente).
+function _sanitizeComprovante(obj: any): ComprovanteExtraido {
+  const clip = (v: any, n: number) => { const s = String(v ?? "").trim(); return s ? s.slice(0, n) : null; };
+  const doc = _soDigitos(obj?.documento);
+  const tipo = _normTxt(obj?.tipoDoc);
+  const tipoDoc = ["pix", "boleto", "ted", "outro"].includes(tipo) ? tipo : (tipo ? "outro" : null);
+  let data: string | null = null;
+  const dRaw = String(obj?.data ?? "").trim();
+  const dm = dRaw.match(/(\d{4})-(\d{2})-(\d{2})/) || dRaw.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  if (dm) data = dm[0].includes("/") ? `${dm[3]}-${dm[2]}-${dm[1]}` : `${dm[1]}-${dm[2]}-${dm[3]}`;
+  return {
+    beneficiario: clip(obj?.beneficiario, 255),
+    documento: doc ? doc.slice(0, 20) : null,
+    txid: clip(obj?.txid, 140),
+    valor: _parseValorBR(obj?.valor),
+    data,
+    tipoDoc,
+  };
+}
+
+// MIME suportado pelo Gemini Vision (PDF + imagens estáticas). Word não é OCR-ável aqui.
+const _VISION_MIME = new Set([
+  "application/pdf", "image/jpeg", "image/jpg", "image/png",
+  "image/gif", "image/webp", "image/heic", "image/heif",
+]);
+
+// Roda o Gemini Vision sobre o comprovante e devolve os campos sanitizados.
+// Gateado pelo chamador via assertAiModuleEnabled(companyId,"financeiro").
+async function _lerComprovanteIA(base64: string, mimeType: string): Promise<ComprovanteExtraido> {
+  const mt = (mimeType || "").toLowerCase().split(";")[0].trim();
+  if (!_VISION_MIME.has(mt)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Tipo não suportado para leitura por IA. Use PDF, JPG, PNG ou WEBP." });
+  }
+  const prompt = [
+    "Você é um leitor de COMPROVANTES bancários brasileiros (PIX, boleto, TED, transferência).",
+    "Extraia APENAS o que estiver explícito no documento. NÃO invente dados.",
+    "Campos:",
+    "- beneficiario: nome de quem RECEBEU o dinheiro (favorecido/recebedor). Se for boleto, o BENEFICIÁRIO/cedente. Ignore o pagador.",
+    "- documento: CNPJ ou CPF do beneficiário (apenas dígitos, sem pontuação). Se não houver, null.",
+    "- txid: identificador da transação — ID/E2E do PIX, 'nosso número' do boleto, ou código de autenticação. Se não houver, null.",
+    "- valor: valor pago (número). Use ponto como separador decimal.",
+    "- data: data do pagamento no formato YYYY-MM-DD. Se não houver, null.",
+    "- tipoDoc: um de pix, boleto, ted, outro.",
+    "Responda SOMENTE o JSON.",
+  ].join("\n");
+  const responseSchema = {
+    type: "object",
+    properties: {
+      beneficiario: { type: "string", nullable: true },
+      documento: { type: "string", nullable: true },
+      txid: { type: "string", nullable: true },
+      valor: { type: "number", nullable: true },
+      data: { type: "string", nullable: true },
+      tipoDoc: { type: "string", nullable: true },
+    },
+  };
+  let raw = "";
+  try {
+    raw = await invokeGeminiVision({ prompt, base64, mimeType: mt, responseSchema, maxTokens: 1024, thinking: "off" });
+  } catch (err: any) {
+    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Falha ao ler o comprovante por IA: " + String(err?.message ?? "").slice(0, 160) });
+  }
+  // Salvagem robusta: o modelo às vezes embrulha em ```json ... ``` ou texto.
+  let obj: any = {};
+  try {
+    obj = JSON.parse(raw);
+  } catch {
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (m) { try { obj = JSON.parse(m[0]); } catch { obj = {}; } }
+  }
+  // Sanitização (whitelist de chaves + normalização defensiva da saída da IA).
+  return _sanitizeComprovante(obj);
+}
+
+// Recupera os BYTES de um comprovante JÁ ANEXADO (p/ reler por IA). SÓ resolve anexos
+// INTERNOS via /uploads/<key> → uploaded_files. NUNCA faz fetch de URL arbitrária: o
+// `comprovante_url` é gravado pelo cliente, então um fetch genérico abriria SSRF (alcance a
+// serviços internos / metadata). URL não-interna → retorna null (não lança).
+async function _baixarComprovante(url: string): Promise<{ base64: string; contentType: string } | null> {
+  if (!url) return null;
+  const m = url.match(/\/uploads\/(.+)$/);
+  if (!m) return null;
+  try {
+    const key = decodeURIComponent(m[1]);
+    const got = await dbRetrieve(key);
+    if (got) return { base64: got.buffer.toString("base64"), contentType: got.contentType };
+  } catch { /* anexo indisponível */ }
+  return null;
 }
 
 export const financialRouter = router({
@@ -3675,6 +3808,7 @@ export const financialRouter = router({
       `SELECT e.id, e.descricao, e.fornecedor_nome AS "fornecedorNome", e.obra_nome AS "obraNome",
               COALESCE(e.valor_realizado, e.valor_previsto) AS valor, e.tipo, e.status,
               e.forma_pagamento AS "formaPagamento", e.comprovante_url AS "comprovanteUrl",
+              e.comprovante_beneficiario AS "comprovanteBeneficiario",
               COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) AS data
          FROM financial_entries e
         WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
@@ -3696,6 +3830,7 @@ export const financialRouter = router({
       `SELECT e.id, e.descricao, e.fornecedor_nome AS "fornecedorNome", e.obra_nome AS "obraNome",
               COALESCE(e.valor_realizado, e.valor_previsto) AS valor, e.tipo, e.status,
               e.forma_pagamento AS "formaPagamento", e.comprovante_url AS "comprovanteUrl",
+              e.comprovante_beneficiario AS "comprovanteBeneficiario",
               COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) AS data
          FROM financial_entries e
         WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
@@ -3792,20 +3927,116 @@ export const financialRouter = router({
     companyId: z.number(),
     entryId: z.number(),
     comprovanteUrl: z.string().min(1),
+    // Rev. 3193 — campos OPCIONAIS já extraídos do comprovante por IA (via lerComprovante).
+    // Quando presentes, gravam a IDENTIFICAÇÃO (beneficiário/doc/txid) usada no desempate.
+    extraido: z.object({
+      beneficiario: z.string().nullable().optional(),
+      documento: z.string().nullable().optional(),
+      txid: z.string().nullable().optional(),
+      valor: z.number().nullable().optional(),
+      data: z.string().nullable().optional(),
+    }).optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    // dbExecute liga params por ORDEM DE APARIÇÃO ($N é cosmético) → montar na ordem.
+    const sets: string[] = [`comprovante_url=$1`];
+    const vals: any[] = [input.comprovanteUrl];
+    let i = 2;
+    if (input.extraido) {
+      // NÃO confiar no cliente: sanitiza igual à saída da IA (clip/data/valor/doc BR-aware).
+      const ex = _sanitizeComprovante(input.extraido);
+      sets.push(`comprovante_beneficiario=$${i++}`); vals.push(ex.beneficiario);
+      sets.push(`comprovante_documento=$${i++}`); vals.push(ex.documento);
+      sets.push(`comprovante_txid=$${i++}`); vals.push(ex.txid);
+      sets.push(`comprovante_valor=$${i++}`); vals.push(ex.valor);
+      sets.push(`comprovante_data=$${i++}`); vals.push(ex.data);
+      sets.push(`comprovante_extraido_em=NOW()`);
+    }
+    sets.push(`updated_at=NOW()`);
+    const pId = i++, pCo = i++;
+    vals.push(input.entryId, input.companyId);
     const res = await dbExecute(db,
-      `UPDATE financial_entries SET comprovante_url=$1, updated_at=NOW()
-        WHERE id=$2 AND company_id=$3
+      `UPDATE financial_entries SET ${sets.join(", ")}
+        WHERE id=$${pId} AND company_id=$${pCo}
         RETURNING id`,
-      [input.comprovanteUrl, input.entryId, input.companyId]);
+      vals);
     if (rows(res).length === 0) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado nesta empresa." });
     }
     await createAuditLog({ action: "financial_entry_comprovante_anexado", userId: ctx.user?.id, companyId: input.companyId, details: `Entry ${input.entryId} comprovante anexado` });
     return { ok: true };
+  }),
+
+  // Rev. 3193 — LÊ um comprovante por IA de visão (Gemini) e devolve os campos extraídos
+  // (beneficiário / CNPJ-CPF / ID-transação / valor / data). NÃO grava nada — o cliente usa
+  // o resultado pra anexar (com identificação) e pra casar em lote. Gateado pelo toggle de
+  // IA "financeiro" (Configurações › Inteligência Artificial). ZERO ALTER/DROP/DELETE.
+  lerComprovante: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    fileBase64: z.string().min(1),
+    contentType: z.string(),
+  })).mutation(async ({ input, ctx }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    await assertAiModuleEnabled(input.companyId, "financeiro");
+    const dados = await _lerComprovanteIA(input.fileBase64, input.contentType);
+    return { dados };
+  }),
+
+  // Rev. 3193 — RELÊ EM LOTE os comprovantes JÁ anexados que ainda não passaram pela IA
+  // (comprovante_url preenchido + comprovante_extraido_em NULL). Processa um lote pequeno por
+  // chamada (free-tier do Gemini); o cliente repete até `restantes`=0. Em falha por arquivo,
+  // marca `comprovante_extraido_em=NOW()` (sem dados) p/ NÃO travar o loop num doc ilegível.
+  // Gateado pelo toggle de IA "financeiro". ZERO ALTER/DROP/DELETE.
+  relerComprovantesPendentes: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    limite: z.number().int().min(1).max(20).optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    await assertAiModuleEnabled(input.companyId, "financeiro");
+    const lim = input.limite ?? 6;
+    const pendRes = await dbExecute(db,
+      `SELECT id, comprovante_url AS "comprovanteUrl"
+         FROM financial_entries
+        WHERE company_id=$1 AND comprovante_url IS NOT NULL AND comprovante_url <> ''
+          AND comprovante_extraido_em IS NULL
+        ORDER BY id DESC LIMIT ${lim}`,
+      [input.companyId]);
+    const pend = rows(pendRes) as any[];
+    let processados = 0, falhas = 0;
+    for (const e of pend) {
+      try {
+        const bin = await _baixarComprovante(e.comprovanteUrl);
+        if (!bin) throw new Error("download falhou");
+        const dados = await _lerComprovanteIA(bin.base64, bin.contentType);
+        await dbExecute(db,
+          `UPDATE financial_entries
+              SET comprovante_beneficiario=$1, comprovante_documento=$2, comprovante_txid=$3,
+                  comprovante_valor=$4, comprovante_data=$5, comprovante_extraido_em=NOW(), updated_at=NOW()
+            WHERE id=$6 AND company_id=$7`,
+          [dados.beneficiario, dados.documento, dados.txid, dados.valor, dados.data, e.id, input.companyId]);
+        processados++;
+      } catch {
+        falhas++;
+        // Marca como "tentado" p/ não reprocessar o mesmo arquivo ilegível em loop.
+        try {
+          await dbExecute(db,
+            `UPDATE financial_entries SET comprovante_extraido_em=NOW(), updated_at=NOW()
+              WHERE id=$1 AND company_id=$2 AND comprovante_extraido_em IS NULL`,
+            [e.id, input.companyId]);
+        } catch { /* best-effort */ }
+      }
+    }
+    const restRes = await dbExecute(db,
+      `SELECT COUNT(*)::int AS n FROM financial_entries
+        WHERE company_id=$1 AND comprovante_url IS NOT NULL AND comprovante_url <> ''
+          AND comprovante_extraido_em IS NULL`,
+      [input.companyId]);
+    const restantes = Number((rows(restRes)[0] as any)?.n ?? 0);
+    return { processados, falhas, restantes };
   }),
 
   // Rev. 3137 — SUGESTÃO AUTOMÁTICA DE CONCILIAÇÃO. Lê o extrato (linhas ainda NÃO
@@ -3843,7 +4074,10 @@ export const financialRouter = router({
       `SELECT e.id, e.tipo, e.valor_previsto AS "valorPrevisto", e.valor_realizado AS "valorRealizado",
               e.data_competencia AS "dataCompetencia", e.data_vencimento AS "dataVencimento",
               e.data_pagamento AS "dataPagamento", e.descricao, e.fornecedor_nome AS "fornecedorNome",
-              e.conta_nome AS "contaNome", e.status, e.obra_nome AS "obraNome"
+              e.conta_nome AS "contaNome", e.status, e.obra_nome AS "obraNome",
+              e.comprovante_beneficiario AS "comprovanteBeneficiario",
+              e.comprovante_documento AS "comprovanteDocumento",
+              e.comprovante_txid AS "comprovanteTxid"
        FROM financial_entries e
        WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
          AND (e.conta_bancaria_id=$2 OR e.conta_bancaria_id IS NULL)`,
@@ -3863,7 +4097,30 @@ export const financialRouter = router({
     const byCents = new Map<number, any[]>();
     for (const e of entries) { const k = entCents(e); if (!byCents.has(k)) byCents.set(k, []); byCents.get(k)!.push(e); }
 
-    type Cand = { linha: any; entry: any; delta: number };
+    // Rev. 3193 — DESEMPATE POR COMPROVANTE: o extrato de PIX/boleto é anônimo, mas o
+    // comprovante anexado ao lançamento traz beneficiário / CNPJ-CPF / ID-da-transação.
+    // Se algum desses identificadores aparece na DESCRIÇÃO da linha do extrato, é o mesmo
+    // pagamento → marca `via` e ELEVA a confiança. TRAVA: a identidade só atua sobre
+    // candidatos que JÁ casaram por VALOR + DATA (nunca concilia pelo nome sozinho).
+    const matchId = (ln: any, e: any): string | null => {
+      const d = _normTxt(ln.descricao);
+      if (!d) return null;
+      const dCompact = d.replace(/\s+/g, "");
+      const txid = _normTxt(e.comprovanteTxid).replace(/\s+/g, "");
+      if (txid && txid.length >= 8 && dCompact.includes(txid)) return "txid";
+      const doc = _soDigitos(e.comprovanteDocumento);
+      const dDigits = String(ln.descricao ?? "").replace(/[^0-9]/g, "");
+      if (doc && doc.length >= 11 && dDigits.includes(doc)) return "documento";
+      const benef = _normTxt(e.comprovanteBeneficiario);
+      if (benef) {
+        const toks = benef.split(" ").filter(t => t.length >= 4);
+        const hits = toks.filter(t => d.includes(t)).length;
+        if (toks.length > 0 && hits >= Math.min(2, toks.length)) return "beneficiario";
+      }
+      return null;
+    };
+
+    type Cand = { linha: any; entry: any; delta: number; via: string | null };
     const cands: Cand[] = [];
     for (const ln of linhas) {
       const lc = cents(ln.valor);
@@ -3875,13 +4132,15 @@ export const financialRouter = router({
         const ems = entDate(e);
         const delta = (lms != null && ems != null) ? Math.round(Math.abs(lms - ems) / 86400000) : 9999;
         if (delta > tol) continue;
-        cands.push({ linha: ln, entry: e, delta });
+        cands.push({ linha: ln, entry: e, delta, via: matchId(ln, e) });
       }
     }
     const ambiguasPorLinha = new Map<number, number>();
     for (const c of cands) ambiguasPorLinha.set(c.linha.id, (ambiguasPorLinha.get(c.linha.id) ?? 0) + 1);
 
-    cands.sort((a, b) => a.delta - b.delta || a.linha.id - b.linha.id);
+    // Ordena PRIORIZANDO os identificados pelo comprovante (via != null), depois menor
+    // distância de data, depois id — o greedy abaixo então fecha primeiro os pares "alta".
+    cands.sort((a, b) => (a.via ? 0 : 1) - (b.via ? 0 : 1) || a.delta - b.delta || a.linha.id - b.linha.id);
     const usadasLinha = new Set<number>(), usadasEntry = new Set<number>();
     const sugestoes: any[] = [];
     for (const c of cands) {
@@ -3889,6 +4148,7 @@ export const financialRouter = router({
       usadasLinha.add(c.linha.id); usadasEntry.add(c.entry.id);
       const ambiguo = (ambiguasPorLinha.get(c.linha.id) ?? 1) > 1;
       const ems = entDate(c.entry);
+      const viaLabel = c.via === "txid" ? "ID da transação" : c.via === "documento" ? "CNPJ/CPF" : c.via === "beneficiario" ? "beneficiário" : null;
       sugestoes.push({
         statementLineId: c.linha.id, entryId: c.entry.id,
         extratoData: c.linha.data, extratoDescricao: c.linha.descricao, extratoValor: Number(c.linha.valor),
@@ -3896,7 +4156,11 @@ export const financialRouter = router({
         entryFornecedor: c.entry.fornecedorNome ?? "", entryObra: c.entry.obraNome ?? "",
         entryData: ems ? new Date(ems).toISOString().slice(0, 10) : null,
         entryValor: Number(c.entry.valorRealizado ?? c.entry.valorPrevisto), entryTipo: c.entry.tipo,
-        deltaDias: c.delta, confianca: (!ambiguo && c.delta <= 1) ? "alta" : "media",
+        deltaDias: c.delta,
+        // Identificado pelo comprovante → "alta" mesmo que o valor fosse ambíguo.
+        confianca: c.via ? "alta" : ((!ambiguo && c.delta <= 1) ? "alta" : "media"),
+        identificadoVia: viaLabel,
+        entryComprovanteBeneficiario: c.entry.comprovanteBeneficiario ?? null,
       });
     }
     const matched = new Set(sugestoes.map(s => s.statementLineId));
