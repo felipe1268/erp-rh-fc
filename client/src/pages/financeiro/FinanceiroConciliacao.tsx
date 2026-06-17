@@ -476,6 +476,34 @@ export default function FinanceiroConciliacao() {
   );
   const salvarDemoMut = (trpc as any).financial.salvarConciliacaoDemonstrativo.useMutation();
   const removerDemoMut = (trpc as any).financial.removerConciliacaoDemonstrativo.useMutation();
+  // Rev. 3220 — Ler o demonstrativo com IA (lista de TODOS os pagamentos). Barra 0→100%
+  // assintótica (a tRPC é single-shot, sem progresso real) + modal "Tudo que a IA leu".
+  const lerDemoMut = (trpc as any).financial.lerDemonstrativoComIA.useMutation();
+  const [lerBusy, setLerBusy] = useState<"pix" | "boleto" | null>(null);
+  const [lerProgress, setLerProgress] = useState(0);
+  const [verLeitura, setVerLeitura] = useState<"pix" | "boleto" | null>(null);
+  const [buscaLeitura, setBuscaLeitura] = useState("");
+  async function lerDemoIA(kind: "pix" | "boleto") {
+    if (mesSel == null || !contaBancariaId) return;
+    setLerBusy(kind);
+    setLerProgress(6);
+    const tick = setInterval(() => setLerProgress(p => (p >= 92 ? 92 : p + Math.max(1, Math.round((92 - p) * 0.12)))), 350);
+    try {
+      await lerDemoMut.mutateAsync({ companyId, contaBancariaId: parseInt(contaBancariaId), ano, mes: mesSel, tipo: kind });
+      clearInterval(tick);
+      setLerProgress(100);
+      await demoQuery.refetch();
+      setBuscaLeitura("");
+      setVerLeitura(kind);
+      setTimeout(() => setLerProgress(0), 600);
+    } catch (err: any) {
+      clearInterval(tick);
+      setLerProgress(0);
+      toast({ title: "Erro ao ler com IA", description: err?.message || "Falha na leitura do demonstrativo.", variant: "destructive" });
+    } finally {
+      setLerBusy(null);
+    }
+  }
   function pedirDemo(kind: "pix" | "boleto") { setDemoKind(kind); setTimeout(() => demoInputRef.current?.click(), 0); }
   async function onDemoFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -1135,19 +1163,47 @@ export default function FinanceiroConciliacao() {
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {([
-                      { kind: "pix" as const, label: "Comprovantes de PIX", url: demoQuery.data?.pixUrl, nome: demoQuery.data?.pixNome },
-                      { kind: "boleto" as const, label: "Comprovantes de Boletos", url: demoQuery.data?.boletoUrl, nome: demoQuery.data?.boletoNome },
+                      { kind: "pix" as const, label: "Comprovantes de PIX", url: demoQuery.data?.pixUrl, nome: demoQuery.data?.pixNome, extraido: demoQuery.data?.pixExtraido, lidoEm: demoQuery.data?.pixLidoEm },
+                      { kind: "boleto" as const, label: "Comprovantes de Boletos", url: demoQuery.data?.boletoUrl, nome: demoQuery.data?.boletoNome, extraido: demoQuery.data?.boletoExtraido, lidoEm: demoQuery.data?.boletoLidoEm },
                     ]).map((slot) => (
                       <div key={slot.kind} className="rounded-lg border border-indigo-200 bg-white p-3">
                         <p className="text-xs font-medium text-gray-600 mb-2">{slot.label} <span className="text-gray-400">· {MESES[mesSel - 1]}/{ano}</span></p>
                         {slot.url ? (
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
-                            <span className="text-xs text-gray-700 truncate flex-1 min-w-[80px]">{slot.nome || "documento.pdf"}</span>
-                            <a href={slot.url} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline">Abrir</a>
-                            <button type="button" onClick={() => pedirDemo(slot.kind)} disabled={demoBusy === slot.kind} className="text-xs font-medium text-gray-500 hover:text-gray-700 disabled:opacity-50">{demoBusy === slot.kind ? "Enviando..." : "Trocar"}</button>
-                            <button type="button" onClick={() => removerDemo(slot.kind)} disabled={demoBusy === slot.kind} className="text-xs font-medium text-red-500 hover:text-red-700 disabled:opacity-50">Remover</button>
-                          </div>
+                          <>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
+                              <span className="text-xs text-gray-700 truncate flex-1 min-w-[80px]">{slot.nome || "documento.pdf"}</span>
+                              <a href={slot.url} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline">Abrir</a>
+                              <button type="button" onClick={() => pedirDemo(slot.kind)} disabled={demoBusy === slot.kind} className="text-xs font-medium text-gray-500 hover:text-gray-700 disabled:opacity-50">{demoBusy === slot.kind ? "Enviando..." : "Trocar"}</button>
+                              <button type="button" onClick={() => removerDemo(slot.kind)} disabled={demoBusy === slot.kind} className="text-xs font-medium text-red-500 hover:text-red-700 disabled:opacity-50">Remover</button>
+                            </div>
+                            {/* Rev. 3220 — Ler com IA + barra 0→100% + ver tudo que foi lido */}
+                            <div className="mt-2.5 pt-2.5 border-t border-gray-100">
+                              {lerBusy === slot.kind ? (
+                                <div>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="flex items-center gap-1.5 text-xs font-medium text-violet-700"><Loader2 className="w-3.5 h-3.5 animate-spin" />A IA está lendo o PDF…</span>
+                                    <span className="text-xs font-semibold tabular-nums text-violet-700">{lerProgress}%</span>
+                                  </div>
+                                  <Progress value={lerProgress} className="h-2" />
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <Button size="sm" onClick={() => lerDemoIA(slot.kind)} disabled={lerBusy !== null} className="bg-violet-600 hover:bg-violet-700 text-white h-8">
+                                    <Sparkles className="w-3.5 h-3.5 mr-1.5" />{Array.isArray(slot.extraido) ? "Reler com IA" : "Ler com IA"}
+                                  </Button>
+                                  {Array.isArray(slot.extraido) && (
+                                    <Button size="sm" variant="outline" onClick={() => { setBuscaLeitura(""); setVerLeitura(slot.kind); }} className="h-8 border-violet-200 text-violet-700 hover:bg-violet-50">
+                                      <Eye className="w-3.5 h-3.5 mr-1.5" />Ver {slot.extraido.length} pagamento{slot.extraido.length === 1 ? "" : "s"}
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
+                              {Array.isArray(slot.extraido) && lerBusy !== slot.kind && (
+                                <p className="text-[11px] text-gray-400 mt-1.5">Lido por IA{slot.lidoEm ? ` em ${fmtData(slot.lidoEm)}` : ""} · {slot.extraido.length} pagamento(s) · {formatBRL(slot.extraido.reduce((s: number, it: any) => s + (Number(it?.valor) || 0), 0))}</p>
+                              )}
+                            </div>
+                          </>
                         ) : (
                           <Button size="sm" variant="outline" onClick={() => pedirDemo(slot.kind)} disabled={demoBusy === slot.kind} className="border-indigo-200 text-indigo-700 hover:bg-indigo-50">
                             <Upload className="w-3.5 h-3.5 mr-1.5" />{demoBusy === slot.kind ? "Enviando..." : "Anexar PDF"}
@@ -1160,6 +1216,70 @@ export default function FinanceiroConciliacao() {
                 <input ref={demoInputRef} type="file" accept="application/pdf,.pdf" onChange={onDemoFile} className="hidden" />
               </CardContent>
             </Card>
+
+            {/* Rev. 3220 — Modal "Tudo que a IA leu": lista completa dos pagamentos extraídos
+                do demonstrativo (beneficiário, CPF/CNPJ, valor BRL, data, ID transação). */}
+            <Dialog open={verLeitura !== null} onOpenChange={(o) => { if (!o) setVerLeitura(null); }}>
+              <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-violet-600" />
+                    Tudo que a IA leu — {verLeitura === "pix" ? "Comprovantes de PIX" : "Comprovantes de Boletos"}
+                  </DialogTitle>
+                </DialogHeader>
+                {(() => {
+                  const lista: any[] = (verLeitura === "pix" ? demoQuery.data?.pixExtraido : demoQuery.data?.boletoExtraido) || [];
+                  const termo = normBusca(buscaLeitura).trim();
+                  const filtrada = !termo ? lista : lista.filter((it) => normBusca([it?.beneficiario, it?.documento, it?.txid, fmtData(it?.data), formatBRL(Number(it?.valor) || 0), String(it?.valor ?? "")].join(" ")).includes(termo));
+                  const total = filtrada.reduce((s, it) => s + (Number(it?.valor) || 0), 0);
+                  return (
+                    <>
+                      <div className="flex items-center gap-2 flex-wrap shrink-0">
+                        <div className="relative flex-1 min-w-[180px]">
+                          <Search className="w-4 h-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                          <Input value={buscaLeitura} onChange={(e) => setBuscaLeitura(e.target.value)} placeholder="Buscar por nome, CPF/CNPJ, valor, data…" className="pl-8 h-9" />
+                          {buscaLeitura && <button type="button" onClick={() => setBuscaLeitura("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>}
+                        </div>
+                        <Badge variant="secondary" className="shrink-0">{filtrada.length}{termo ? `/${lista.length}` : ""} pagamento(s)</Badge>
+                        <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100 shrink-0">Total {formatBRL(total)}</Badge>
+                      </div>
+                      <div className="overflow-auto flex-1 -mx-1 mt-1">
+                        {filtrada.length === 0 ? (
+                          <div className="text-center text-sm text-gray-500 py-10">{lista.length === 0 ? "A IA não encontrou pagamentos neste PDF." : "Nenhum pagamento corresponde à busca."}</div>
+                        ) : (
+                          <table className="w-full text-sm">
+                            <thead className="sticky top-0 bg-gray-50 text-xs text-gray-500">
+                              <tr>
+                                <th className="text-left font-medium px-2 py-2">Beneficiário</th>
+                                <th className="text-left font-medium px-2 py-2">CPF/CNPJ</th>
+                                <th className="text-left font-medium px-2 py-2">Data</th>
+                                <th className="text-left font-medium px-2 py-2">ID transação</th>
+                                <th className="text-right font-medium px-2 py-2">Valor</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {filtrada.map((it, i) => (
+                                <tr key={i} className="border-t border-gray-100 hover:bg-gray-50">
+                                  <td className="px-2 py-2 text-gray-800">{it?.beneficiario || <span className="text-gray-400">—</span>}</td>
+                                  <td className="px-2 py-2 text-gray-600 tabular-nums">{it?.documento || <span className="text-gray-400">—</span>}</td>
+                                  <td className="px-2 py-2 text-gray-600 tabular-nums whitespace-nowrap">{it?.data ? fmtData(it.data) : <span className="text-gray-400">—</span>}</td>
+                                  <td className="px-2 py-2 text-gray-500 text-xs max-w-[160px] truncate" title={it?.txid || ""}>{it?.txid || <span className="text-gray-400">—</span>}</td>
+                                  <td className="px-2 py-2 text-right font-semibold text-gray-800 tabular-nums whitespace-nowrap">{it?.valor != null ? formatBRL(Number(it.valor)) : <span className="text-gray-400">—</span>}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-gray-400 shrink-0">A leitura por IA é uma ajuda para identificar quem recebeu — confira sempre no PDF original. Não concilia nada automaticamente.</p>
+                    </>
+                  );
+                })()}
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setVerLeitura(null)}>Fechar</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
             {/* Rev. 3187 — Estado de ERRO do relatório: sem isso a tela parecia "vazia/zerada"
                 quando getConciliacaoReport falhava (falso "tudo conciliado"). */}
             {reportIsError && (

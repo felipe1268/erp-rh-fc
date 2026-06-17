@@ -118,3 +118,5 @@ server/uploads/documentos/
 server/uploads/vehicles/
 # Employee photos (fotos 3x4 de colaboradores) — PII, must NOT be versioned
 server/uploads/photos/
+# Comprovantes/demonstrativos financeiros (PIX/boletos) — dados bancários, must NOT be versioned
+server/uploads/financeiro/

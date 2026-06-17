@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3220 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · OS "DEMONSTRATIVOS DE PAGAMENTO" (PDF COM
+ * TODOS OS PIX + PDF COM TODOS OS BOLETOS PAGOS DO MÊS) AGORA PODEM SER LIDOS POR IA: BOTÃO
+ * "LER COM IA" COM BARRA DE PROGRESSO 0→100% E UMA TELA (MODAL) QUE MOSTRA TUDO QUE A IA
+ * EXTRAIU — QUEM RECEBEU, CPF/CNPJ, VALOR (BRL), DATA E ID DA TRANSAÇÃO — COM BUSCA, CONTADOR
+ * E TOTAL. ANTES O PDF SÓ FICAVA ANEXADO P/ ABRIR E LER MANUALMENTE.**
+ *
+ * PEDIDO (piloto FC): "quero ver o % de 0 a 100% e ver tudo que foi lido pela ia.. em uma tela
+ * com informações" — em cima dos demonstrativos consolidados criados na Rev. 3216 (1 PDF de
+ * TODOS os PIX + 1 PDF de TODOS os boletos do mês, por conta). O extrato bancário só mostra
+ * "PIX valor X" sem beneficiário; agora a IA lê o demonstrativo e lista quem recebeu cada valor.
+ *
+ * SOLUÇÃO — BACK (`server/routers/financial.ts`):
+ * - `_lerDemonstrativoIA(base64, mimeType)`: roda o Gemini Vision (`invokeGeminiVision`,
+ *   maxTokens 16384) com prompt p/ extrair a LISTA de TODOS os pagamentos do PDF consolidado
+ *   (≠ `_lerComprovanteIA`, que extrai 1 só). Salvagem de JSON robusta + sanitiza CADA item
+ *   pela MESMA whitelist defensiva `_sanitizeComprovante` (beneficiario/documento/txid/valor BR/
+ *   data/tipoDoc) e descarta linhas totalmente vazias.
+ * - Procedure `lerDemonstrativoComIA` (companyId, contaBancariaId, ano, mes, tipo pix|boleto):
+ *   guards `_assertFinanceiroCompanyAccess` + `_assertContaBancariaPertenceEmpresa` +
+ *   `assertAiModuleEnabled(companyId,"financeiro")`. Lê a URL salva, baixa o PDF SÓ via
+ *   `_baixarComprovante` (/uploads/<key> → uploaded_files; NUNCA fetch de URL arbitrária = sem
+ *   SSRF), roda a IA, PERSISTE o JSON extraído + timestamp (idempotente) e devolve {itens,total,count}.
+ * - `getConciliacaoDemonstrativos` agora também devolve `pixExtraido`/`pixLidoEm` e
+ *   `boletoExtraido`/`boletoLidoEm` (JSON parseado) p/ a tela reabrir a leitura sem reprocessar.
+ *   `salvar`/`remover` ZERAM a leitura antiga ao trocar/remover o PDF (conteúdo mudou).
+ *
+ * SCHEMA ADITIVO (`server/_core/index.ts`, `[SyncSchema+]`): `ADD COLUMN IF NOT EXISTS`
+ * `pix_extraido_json TEXT`, `pix_lido_em TIMESTAMP`, `boleto_extraido_json TEXT`,
+ * `boleto_lido_em TIMESTAMP` em `financial_conciliacao_demonstrativos`. ZERO ALTER destrutivo/DROP/DELETE.
+ *
+ * FRONT (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): em cada slot (PIX/Boletos)
+ * com PDF anexado, botão "Ler com IA" (ou "Reler com IA") que dispara `lerDemonstrativoComIA`
+ * com barra `<Progress>` assintótica 0→92% (single-shot, sem progresso real do servidor) que
+ * crava 100% ao resolver; ao terminar abre o modal "Tudo que a IA leu" (tabela beneficiário/
+ * CPF-CNPJ/data/ID transação/valor BRL, busca via `normBusca`, contador filtrados/total e total
+ * BRL). Linha-resumo "Lido por IA em DD/MM · N pagamento(s) · R$ total" quando já há leitura.
+ * É LEITURA E EXIBIÇÃO — não concilia nada automaticamente (aviso no rodapé do modal).
+ *
+ * ---
+ *
  * Rev. 3219 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NOVO CAMPO DE BUSCA (TEXTO LIVRE) QUE
  * FILTRA AS DUAS LISTAS DE PENDÊNCIA AO MESMO TEMPO — "NO EXTRATO, SEM LANÇAMENTO" (BANCO)
  * E "NO ERP, SEM EXTRATO" — POR DESCRIÇÃO, FORNECEDOR, OBRA, DOCUMENTO, DATA E VALOR (BRL

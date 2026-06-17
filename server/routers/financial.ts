@@ -445,6 +445,68 @@ async function _lerComprovanteIA(base64: string, mimeType: string): Promise<Comp
   return _sanitizeComprovante(obj);
 }
 
+// Rev. 3220 — Lê um DEMONSTRATIVO CONSOLIDADO (1 PDF com VÁRIOS PIX ou VÁRIOS boletos
+// pagos do mês) e devolve a LISTA de TODOS os pagamentos extraídos (não 1 só, como o
+// _lerComprovanteIA). Cada item é sanitizado pela MESMA whitelist defensiva. Gateado pelo
+// chamador via assertAiModuleEnabled(companyId,"financeiro").
+async function _lerDemonstrativoIA(base64: string, mimeType: string): Promise<ComprovanteExtraido[]> {
+  const mt = (mimeType || "").toLowerCase().split(";")[0].trim();
+  if (!_VISION_MIME.has(mt)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Tipo não suportado para leitura por IA. Use PDF, JPG, PNG ou WEBP." });
+  }
+  const prompt = [
+    "Você é um leitor de DEMONSTRATIVOS CONSOLIDADOS de pagamento bancário brasileiros.",
+    "O documento contém VÁRIOS pagamentos (vários PIX OU vários boletos pagos no mês).",
+    "Extraia TODOS os pagamentos listados — um item por pagamento. NÃO invente dados; use null quando não souber.",
+    "Para CADA pagamento:",
+    "- beneficiario: nome de quem RECEBEU o dinheiro (favorecido/recebedor). Em boleto, o BENEFICIÁRIO/cedente. Ignore o pagador.",
+    "- documento: CNPJ ou CPF do beneficiário (apenas dígitos, sem pontuação). Se não houver, null.",
+    "- txid: identificador da transação — ID/E2E do PIX, 'nosso número' do boleto, ou código de autenticação. Se não houver, null.",
+    "- valor: valor pago (número). Use ponto como separador decimal, SEM separador de milhar.",
+    "- data: data do pagamento no formato YYYY-MM-DD. Se não houver, null.",
+    "- tipoDoc: um de pix, boleto, ted, outro.",
+    "Responda SOMENTE o JSON no formato {\"itens\":[ ... ]}.",
+  ].join("\n");
+  const responseSchema = {
+    type: "object",
+    properties: {
+      itens: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            beneficiario: { type: "string", nullable: true },
+            documento: { type: "string", nullable: true },
+            txid: { type: "string", nullable: true },
+            valor: { type: "number", nullable: true },
+            data: { type: "string", nullable: true },
+            tipoDoc: { type: "string", nullable: true },
+          },
+        },
+      },
+    },
+  };
+  let raw = "";
+  try {
+    raw = await invokeGeminiVision({ prompt, base64, mimeType: mt, responseSchema, maxTokens: 16384, thinking: "off" });
+  } catch (err: any) {
+    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Falha ao ler o demonstrativo por IA: " + String(err?.message ?? "").slice(0, 160) });
+  }
+  // Salvagem robusta: o modelo às vezes embrulha em ```json ... ``` ou texto.
+  let obj: any = {};
+  try {
+    obj = JSON.parse(raw);
+  } catch {
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (m) { try { obj = JSON.parse(m[0]); } catch { obj = {}; } }
+  }
+  const arr = Array.isArray(obj?.itens) ? obj.itens : (Array.isArray(obj) ? obj : []);
+  // Sanitiza cada item + descarta linhas totalmente vazias (sem nome, valor e doc).
+  return arr
+    .map((it: any) => _sanitizeComprovante(it))
+    .filter((it: ComprovanteExtraido) => it.beneficiario || it.valor != null || it.documento || it.txid);
+}
+
 // Recupera os BYTES de um comprovante JÁ ANEXADO (p/ reler por IA). SÓ resolve anexos
 // INTERNOS via /uploads/<key> → uploaded_files. NUNCA faz fetch de URL arbitrária: o
 // `comprovante_url` é gravado pelo cliente, então um fetch genérico abriria SSRF (alcance a
@@ -1249,12 +1311,22 @@ export const financialRouter = router({
     await _assertContaBancariaPertenceEmpresa(db, input.contaBancariaId, input.companyId);
     const res = await dbExecute(db,
       `SELECT pix_url AS "pixUrl", pix_nome AS "pixNome",
-              boleto_url AS "boletoUrl", boleto_nome AS "boletoNome"
+              boleto_url AS "boletoUrl", boleto_nome AS "boletoNome",
+              pix_extraido_json AS "pixExtraidoJson", pix_lido_em AS "pixLidoEm",
+              boleto_extraido_json AS "boletoExtraidoJson", boleto_lido_em AS "boletoLidoEm"
        FROM financial_conciliacao_demonstrativos
        WHERE company_id=$1 AND conta_bancaria_id=$2 AND ano=$3 AND mes=$4`,
       [input.companyId, input.contaBancariaId, input.ano, input.mes]
     );
-    return (rows(res)[0] as any) ?? { pixUrl: null, pixNome: null, boletoUrl: null, boletoNome: null };
+    const r = (rows(res)[0] as any) ?? {};
+    // Rev. 3220 — o JSON extraído fica como TEXT no banco; entrega já parseado p/ o cliente.
+    const parse = (v: any) => { if (!v) return null; try { return JSON.parse(v); } catch { return null; } };
+    return {
+      pixUrl: r.pixUrl ?? null, pixNome: r.pixNome ?? null,
+      boletoUrl: r.boletoUrl ?? null, boletoNome: r.boletoNome ?? null,
+      pixExtraido: parse(r.pixExtraidoJson), pixLidoEm: r.pixLidoEm ?? null,
+      boletoExtraido: parse(r.boletoExtraidoJson), boletoLidoEm: r.boletoLidoEm ?? null,
+    };
   }),
 
   salvarConciliacaoDemonstrativo: protectedProcedure.input(z.object({
@@ -1274,12 +1346,17 @@ export const financialRouter = router({
     // Colunas fixas por tipo (whitelist via enum) — sem interpolação de identificador do usuário.
     const colUrl = input.tipo === "pix" ? "pix_url" : "boleto_url";
     const colNome = input.tipo === "pix" ? "pix_nome" : "boleto_nome";
+    // Rev. 3220 — ao anexar/trocar o PDF, ZERA a leitura por IA anterior daquele tipo
+    // (o conteúdo mudou → a extração antiga não vale mais).
+    const colJson = input.tipo === "pix" ? "pix_extraido_json" : "boleto_extraido_json";
+    const colLido = input.tipo === "pix" ? "pix_lido_em" : "boleto_lido_em";
     await dbExecute(db,
       `INSERT INTO financial_conciliacao_demonstrativos
          (company_id, conta_bancaria_id, ano, mes, ${colUrl}, ${colNome}, criado_em, atualizado_em)
        VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW())
        ON CONFLICT (company_id, conta_bancaria_id, ano, mes)
-       DO UPDATE SET ${colUrl}=EXCLUDED.${colUrl}, ${colNome}=EXCLUDED.${colNome}, atualizado_em=NOW()`,
+       DO UPDATE SET ${colUrl}=EXCLUDED.${colUrl}, ${colNome}=EXCLUDED.${colNome},
+                     ${colJson}=NULL, ${colLido}=NULL, atualizado_em=NOW()`,
       [input.companyId, input.contaBancariaId, input.ano, input.mes, input.url, nome]
     );
     return { ok: true };
@@ -1298,13 +1375,59 @@ export const financialRouter = router({
     await _assertContaBancariaPertenceEmpresa(db, input.contaBancariaId, input.companyId);
     const colUrl = input.tipo === "pix" ? "pix_url" : "boleto_url";
     const colNome = input.tipo === "pix" ? "pix_nome" : "boleto_nome";
+    const colJson = input.tipo === "pix" ? "pix_extraido_json" : "boleto_extraido_json";
+    const colLido = input.tipo === "pix" ? "pix_lido_em" : "boleto_lido_em";
     await dbExecute(db,
       `UPDATE financial_conciliacao_demonstrativos
-       SET ${colUrl}=NULL, ${colNome}=NULL, atualizado_em=NOW()
+       SET ${colUrl}=NULL, ${colNome}=NULL, ${colJson}=NULL, ${colLido}=NULL, atualizado_em=NOW()
        WHERE company_id=$1 AND conta_bancaria_id=$2 AND ano=$3 AND mes=$4`,
       [input.companyId, input.contaBancariaId, input.ano, input.mes]
     );
     return { ok: true };
+  }),
+
+  // Rev. 3220 — LÊ COM IA o demonstrativo consolidado JÁ ANEXADO (PIX ou Boletos) daquela
+  // conta+mês: baixa o PDF interno (/uploads → uploaded_files; NUNCA fetch de URL arbitrária),
+  // roda o Gemini Vision e devolve a LISTA de TODOS os pagamentos (beneficiário, CPF/CNPJ,
+  // valor, data, txid). Persiste o JSON extraído (coluna ADITIVA) p/ não reprocessar à toa.
+  // Gateado pelo toggle de IA "financeiro". ZERO ALTER/DROP/DELETE.
+  lerDemonstrativoComIA: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    contaBancariaId: z.number(),
+    ano: z.number(),
+    mes: z.number().min(1).max(12),
+    tipo: z.enum(["pix", "boleto"]),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    await _assertContaBancariaPertenceEmpresa(db, input.contaBancariaId, input.companyId);
+    await assertAiModuleEnabled(input.companyId, "financeiro");
+    const colUrl = input.tipo === "pix" ? "pix_url" : "boleto_url";
+    const urlRes = await dbExecute(db,
+      `SELECT ${colUrl} AS url FROM financial_conciliacao_demonstrativos
+       WHERE company_id=$1 AND conta_bancaria_id=$2 AND ano=$3 AND mes=$4`,
+      [input.companyId, input.contaBancariaId, input.ano, input.mes]);
+    const url = (rows(urlRes)[0] as any)?.url as string | undefined;
+    if (!url) throw new TRPCError({ code: "NOT_FOUND", message: "Nenhum PDF anexado para ler. Anexe o demonstrativo primeiro." });
+    const bin = await _baixarComprovante(url);
+    if (!bin) throw new TRPCError({ code: "BAD_REQUEST", message: "Não consegui acessar o PDF anexado para leitura." });
+    const itens = await _lerDemonstrativoIA(bin.base64, bin.contentType);
+    // Persiste a extração (coluna ADITIVA) — idempotente; sobrescreve a leitura anterior.
+    const colJson = input.tipo === "pix" ? "pix_extraido_json" : "boleto_extraido_json";
+    const colLido = input.tipo === "pix" ? "pix_lido_em" : "boleto_lido_em";
+    // Persistência OBRIGATÓRIA: se o UPDATE falhar (ex.: coluna ausente) NÃO mascaramos
+    // o erro — caso contrário a UI mostraria "lido em N", mas após um refresh a leitura
+    // sumiria (getConciliacaoDemonstrativos lê do banco). Deixe o erro propagar.
+    // ATENÇÃO: `dbExecute` liga params pela ORDEM DE APARIÇÃO do placeholder no texto
+    // (ignora o número $N). Por isso o JSON ($1) vem PRIMEIRO no SET e no array.
+    await dbExecute(db,
+      `UPDATE financial_conciliacao_demonstrativos
+       SET ${colJson}=$1, ${colLido}=NOW(), atualizado_em=NOW()
+       WHERE company_id=$2 AND conta_bancaria_id=$3 AND ano=$4 AND mes=$5`,
+      [JSON.stringify(itens), input.companyId, input.contaBancariaId, input.ano, input.mes]);
+    const total = itens.reduce((s, it) => s + (it.valor ?? 0), 0);
+    return { itens, total, count: itens.length };
   }),
 
   // Rev. 1621 — Detalhe completo de um título (Contas a Pagar drill-down)
