@@ -3282,6 +3282,20 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2655: colunas juros/descontos/outros (financial_entries + financial_revenue) + cheque_tipo (financial_entries) garantidas.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2655 baixa detalhada:`, e?.message || e); }
 
+        // ── Rev. 3203 — Dados EXTRAÍDOS do comprovante (PIX/boleto) por IA de visão (Rev. 3193) ──
+        // Estas colunas foram declaradas no schema na Rev. 3193 mas o self-heal nunca foi escrito,
+        // então DBs que não foram recriados ficaram SEM elas → getConciliacaoReport/sugerirConciliacao
+        // quebram com "column e.comprovante_beneficiario does not exist" (code 42703).
+        try {
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS comprovante_beneficiario TEXT`);
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS comprovante_documento VARCHAR(20)`);
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS comprovante_txid VARCHAR(140)`);
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS comprovante_valor NUMERIC(15,2)`);
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS comprovante_data DATE`);
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS comprovante_extraido_em TIMESTAMP`);
+          console.log(`[SyncSchema+] Rev. 3203: colunas comprovante_beneficiario/documento/txid/valor/data/extraido_em (financial_entries) garantidas.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3203 comprovante extraído:`, e?.message || e); }
+
         // ── Rev. 2657 — Anexo de documento por título no Contas a Pagar (boleto/NF/foto) ──
         try {
           await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS anexo_url TEXT`);

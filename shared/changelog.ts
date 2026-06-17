@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3203 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO DE BUG CRÍTICO: A TELA VOLTOU A
+ * MOSTRAR "NÃO FOI POSSÍVEL CARREGAR A CONCILIAÇÃO" ("DB code=42703 | column e.comprovante_beneficiario
+ * does not exist"). AS COLUNAS `comprovante_*` (Rev. 3193) NUNCA FORAM GARANTIDAS POR SELF-HEAL, ENTÃO
+ * BANCOS QUE NÃO FORAM RECRIADOS FICARAM SEM ELAS E TODA A CONCILIAÇÃO QUEBRAVA.**
+ *
+ * PEDIDO (piloto FC): "fiz a importação porém os dados não estão aparecendo mais pq?" — seguido do print
+ * com o erro vermelho "Não foi possível carregar a conciliação · DB: code=42703 | msg=column
+ * e.comprovante_beneficiario does not exist".
+ *
+ * DIAGNÓSTICO: a Rev. 3193 declarou 6 colunas de extração por IA do comprovante em `drizzle/schema.ts`
+ * (`comprovante_beneficiario/documento/txid/valor/data/extraido_em`) e o changelog dela dizia "via
+ * self-heal", MAS o bloco `ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS …` correspondente
+ * nunca foi escrito em `server/_core/index.ts`. Em DBs novos (drizzle push) as colunas nascem; no banco
+ * de produção da FC, que evolui por self-heal aditivo, elas ficaram FALTANDO. Como `getConciliacaoReport`
+ * (bloco 3/3b) e `sugerirConciliacao` fazem `SELECT e.comprovante_beneficiario …`, qualquer abertura da
+ * conciliação estourava 42703 → "Não foi possível carregar". (O sumiço de dados da conta "Caixa
+ * Guaratinguetá" era SEPARADO: as 121 linhas tinham sido apagadas via "Limpar extrato" — soft-delete —;
+ * a importação é puramente aditiva e não apaga nada.)
+ *
+ * SOLUÇÃO (`server/_core/index.ts`): adicionado o bloco de self-heal Rev. 3203 que garante as 6 colunas
+ * `comprovante_*` em `financial_entries` via `ADD COLUMN IF NOT EXISTS` (aditivo, idempotente, espelhando
+ * exatamente os tipos do schema: TEXT / VARCHAR(20) / VARCHAR(140) / NUMERIC(15,2) / DATE / TIMESTAMP).
+ * As 6 colunas também foram aplicadas imediatamente no banco da FC (mesmo comando aditivo) para destravar
+ * a tela na hora. Após o fix, as queries do report rodam OK (conta Santander = 216 linhas; conta
+ * Guaratinguetá = 0, pois foi limpa). ZERO SCHEMA DESTRUTIVO · ZERO ALTER/DROP/DELETE destrutivo (apenas
+ * ADD COLUMN IF NOT EXISTS, padrão de self-heal sancionado).
+ *
+ * ARQUIVOS: `server/_core/index.ts` (bloco self-heal Rev. 3203 das colunas comprovante_*).
+ *
  * Rev. 3202 — **FINANCEIRO / CONTROLE DE CHEQUES · A IMPORTAÇÃO DEIXOU DE PEDIR O "ANO DA PLANILHA":
  * O ERP AGORA LÊ O ANO AUTOMATICAMENTE DA DATA DE CADA CHEQUE E CLASSIFICA CADA LINHA SOZINHO. O MODAL
  * DE IMPORTAÇÃO FOI MODERNIZADO (ZONA DE ARRASTAR-E-SOLTAR, KPIs EM CARDS, CHIPS DE ABAS E SITUAÇÃO).**
