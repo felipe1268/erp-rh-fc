@@ -14,7 +14,7 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX, FileSpreadsheet, FileDown, Plus } from "lucide-react";
+import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX, FileSpreadsheet, FileDown, Plus, Maximize2 } from "lucide-react";
 import { formatConta, formatAgencia } from "@/lib/formatters";
 
 function formatBRL(v: number) {
@@ -76,6 +76,8 @@ export default function FinanceiroConciliacao() {
   const [conciliadoFilter, setConciliadoFilter] = useState("all");
   const [selectedStatement, setSelectedStatement] = useState<number | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<number | null>(null);
+  // Rev. 3205 — expandir uma das listas de pendência em tela cheia p/ analisar melhor.
+  const [expandedList, setExpandedList] = useState<"extrato" | "erp" | null>(null);
   const [showImport, setShowImport] = useState(false);
   const [importFormato, setImportFormato] = useState<"ofx" | "csv" | "pdf">("ofx");
   const [importConta, setImportConta] = useState("");
@@ -475,6 +477,34 @@ export default function FinanceiroConciliacao() {
       </div>
     );
   };
+
+  // Rev. 3205 — renderiza uma linha do extrato (lista "No extrato, sem lançamento").
+  // Extraída p/ reuso entre a lista inline e o modo tela cheia.
+  const renderExtratoRow = (s: any) => (
+    <div
+      key={s.id}
+      className={`flex items-stretch ${selectedStatement === s.id ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}
+    >
+      <button
+        onClick={() => setSelectedStatement(selectedStatement === s.id ? null : s.id)}
+        className="flex-1 min-w-0 px-4 py-3 flex items-center justify-between gap-2 text-left hover:bg-gray-50 transition-colors"
+      >
+        <div className="min-w-0">
+          <p className="text-xs text-gray-500">{fmtData(s.data)} · {Number(s.valor) >= 0 ? "Entrada" : "Saída"}</p>
+          <p className="text-sm text-gray-700 truncate">{s.descricao || "—"}</p>
+        </div>
+        <p className={`text-sm font-bold shrink-0 ${Number(s.valor) >= 0 ? "text-green-600" : "text-red-500"}`}>{formatBRL(Math.abs(Number(s.valor)))}</p>
+      </button>
+      <button
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); abrirLancar(s); }}
+        title="Lançar este item no ERP"
+        className="shrink-0 px-3 flex flex-col items-center justify-center gap-0.5 border-l border-gray-100 text-blue-600 hover:bg-blue-50 transition-colors"
+      >
+        <Plus className="w-4 h-4" />
+        <span className="text-[10px] font-medium leading-none">Lançar</span>
+      </button>
+    </div>
+  );
 
   // Detalhe consultivo do lançamento (mesmo endpoint usado em Contas a Pagar).
   const detailQuery = (trpc as any).financial.getEntryDetalhe.useQuery(
@@ -1374,6 +1404,9 @@ export default function FinanceiroConciliacao() {
                         <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => exportarListaPDF("extrato")} title="Exportar para PDF">
                           <FileDown className="w-3.5 h-3.5 mr-1" />PDF
                         </Button>
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => setExpandedList("extrato")} title="Expandir em tela cheia">
+                          <Maximize2 className="w-3.5 h-3.5 mr-1" />Expandir
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -1405,31 +1438,7 @@ export default function FinanceiroConciliacao() {
                     </div>
                   ) : (
                     <div className="divide-y divide-gray-100 max-h-[420px] overflow-y-auto">
-                      {repExt.map((s: any) => (
-                        <div
-                          key={s.id}
-                          className={`flex items-stretch ${selectedStatement === s.id ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}
-                        >
-                          <button
-                            onClick={() => setSelectedStatement(selectedStatement === s.id ? null : s.id)}
-                            className="flex-1 min-w-0 px-4 py-3 flex items-center justify-between gap-2 text-left hover:bg-gray-50 transition-colors"
-                          >
-                            <div className="min-w-0">
-                              <p className="text-xs text-gray-500">{fmtData(s.data)} · {Number(s.valor) >= 0 ? "Entrada" : "Saída"}</p>
-                              <p className="text-sm text-gray-700 truncate max-w-[200px]">{s.descricao || "—"}</p>
-                            </div>
-                            <p className={`text-sm font-bold shrink-0 ${Number(s.valor) >= 0 ? "text-green-600" : "text-red-500"}`}>{formatBRL(Math.abs(Number(s.valor)))}</p>
-                          </button>
-                          <button
-                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); abrirLancar(s); }}
-                            title="Lançar este item no ERP"
-                            className="shrink-0 px-3 flex flex-col items-center justify-center gap-0.5 border-l border-gray-100 text-blue-600 hover:bg-blue-50 transition-colors"
-                          >
-                            <Plus className="w-4 h-4" />
-                            <span className="text-[10px] font-medium leading-none">Lançar</span>
-                          </button>
-                        </div>
-                      ))}
+                      {repExt.map(renderExtratoRow)}
                     </div>
                   )}
                 </CardContent>
@@ -1450,6 +1459,9 @@ export default function FinanceiroConciliacao() {
                         </Button>
                         <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => exportarListaPDF("erp")} title="Exportar para PDF">
                           <FileDown className="w-3.5 h-3.5 mr-1" />PDF
+                        </Button>
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => setExpandedList("erp")} title="Expandir em tela cheia">
+                          <Maximize2 className="w-3.5 h-3.5 mr-1" />Expandir
                         </Button>
                       </div>
                     )}
@@ -1895,6 +1907,35 @@ export default function FinanceiroConciliacao() {
                 {lancBusy ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Lançando...</> : <><Check className="w-4 h-4 mr-1.5" />Lançar e conciliar</>}
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 3205 — modo tela cheia: expande a lista escolhida p/ analisar melhor.
+            Reutiliza exatamente as mesmas linhas (seleção/lançar/conciliar continuam funcionando). */}
+        <Dialog open={!!expandedList} onOpenChange={(o: boolean) => { if (!o) setExpandedList(null); }}>
+          <DialogContent className="max-w-[96vw] w-[96vw] h-[92vh] flex flex-col p-0 gap-0">
+            <DialogHeader className="px-4 py-3 border-b shrink-0">
+              <DialogTitle className="flex items-center gap-2 text-base">
+                {expandedList === "extrato" ? (
+                  <><AlertCircle className="w-4 h-4 text-red-500" />No extrato, sem lançamento ({repExt.length})</>
+                ) : (
+                  <><FileText className="w-4 h-4 text-amber-600" />No ERP, sem extrato ({repLan.length})</>
+                )}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex items-center gap-1 px-4 py-2 border-b shrink-0">
+              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => expandedList && exportarListaExcel(expandedList)} title="Exportar para Excel">
+                <FileSpreadsheet className="w-3.5 h-3.5 mr-1" />Excel
+              </Button>
+              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => expandedList && exportarListaPDF(expandedList)} title="Exportar para PDF">
+                <FileDown className="w-3.5 h-3.5 mr-1" />PDF
+              </Button>
+            </div>
+            <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
+              {expandedList === "extrato"
+                ? (repExt.length === 0 ? <div className="p-6 text-center text-gray-400 text-sm">Nada a exibir.</div> : repExt.map(renderExtratoRow))
+                : (repLan.length === 0 ? <div className="p-6 text-center text-gray-400 text-sm">Nada a exibir.</div> : repLan.map((e: any) => renderEntryRow(e)))}
+            </div>
           </DialogContent>
         </Dialog>
       </div>

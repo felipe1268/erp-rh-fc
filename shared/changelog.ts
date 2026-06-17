@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3205 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · AS DUAS LISTAS DE PENDÊNCIA ("NO EXTRATO, SEM
+ * LANÇAMENTO" E "NO ERP, SEM EXTRATO") GANHARAM UM BOTÃO "EXPANDIR" QUE ABRE A LISTA EM TELA CHEIA
+ * (MODAL 96vw × 92vh) PARA O USUÁRIO ANALISAR MELHOR, COM MAIS LINHAS VISÍVEIS DE UMA VEZ.**
+ *
+ * PEDIDO (piloto FC): "coloca um botão de expansão das telas, onde você consegue ver na tela inteira
+ * para analisar melhor" — acompanhado de print das duas listas lado a lado da Conciliação (cada uma
+ * limitada a ~7 linhas com scroll interno de 420px).
+ *
+ * SOLUÇÃO — FRONT (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): cada card de lista ganhou
+ * um botão "Expandir" (ícone `Maximize2`) ao lado de Excel/PDF. Clicar abre um `Dialog` em tela cheia
+ * (`max-w-[96vw] w-[96vw] h-[92vh]`, cabeçalho fixo + barra de Excel/PDF + corpo rolável) que renderiza
+ * EXATAMENTE as mesmas linhas — seleção p/ conciliar manual, botão "Lançar" e ações de comprovante
+ * continuam funcionando. Pra evitar duplicação, a linha do extrato foi extraída na função
+ * `renderExtratoRow` (reusada inline e no modal); a lista do ERP já usava `renderEntryRow`. Novo estado
+ * `expandedList: "extrato" | "erp" | null`. Removido o `max-w-[200px]` da descrição do extrato pra
+ * aproveitar a largura no modo expandido.
+ *
+ * ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE · só UI (botão + modal + extração de função). As mesmas
+ * exportações Excel/PDF por lista (Rev. 3196) ficam disponíveis dentro do modal.
+ *
  * Rev. 3204 — **FINANCEIRO / CONTROLE DE CHEQUES · A TELA GANHOU A MESMA RÉGUA DE MÊS/ANO DA
  * CONCILIAÇÃO BANCÁRIA: NAVEGAÇÃO POR ANO (SETAS `< 2026 >`), BOTÃO "ANO TODO" E A FAIXA DE MESES
  * JAN–DEZ EM CHIPS COM BOLINHA DE STATUS (AZUL = COM LANÇAMENTO · VERDE = CONSOLIDADO/TODOS
