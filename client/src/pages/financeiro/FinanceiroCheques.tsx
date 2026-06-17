@@ -26,6 +26,8 @@ function fmtData(v: any) {
 }
 const MESES = ["", "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const STATUS_OPTS = ["compensado", "pendente", "sustado", "cancelado", "devolvido", "indefinido"];
+// "Outros" = agregado dos status fora de compensado/pendente. Filtro client-side.
+const OUTROS_SET = ["sustado", "cancelado", "devolvido", "indefinido"];
 
 function statusBadge(s: string) {
   switch (s) {
@@ -79,9 +81,15 @@ export default function FinanceiroCheques() {
   const [excluirItem, setExcluirItem] = useState<any>(null);
 
   const listarArgs: any = { companyId, limit: 2000, ano };
-  if (fStatus !== "todos") listarArgs.status = fStatus;
+  // "outros" é um agregado client-side (vários status); não mandamos status ao
+  // servidor nesse caso — filtramos a lista localmente logo abaixo.
+  if (fStatus !== "todos" && fStatus !== "outros") listarArgs.status = fStatus;
   if (mesSel != null) listarArgs.mes = mesSel;
   if (fBusca.trim()) listarArgs.busca = fBusca.trim();
+
+  // Alterna o filtro de status ao clicar num card (clicar de novo no card ativo
+  // volta para "todos"). Mantém a régua de mês selecionada.
+  const toggleStatus = (s: string) => setFStatus((prev) => (prev === s ? "todos" : s));
 
   const { data: cheques = [], isLoading } = (trpc as any).cheques.listar.useQuery(
     listarArgs, { enabled: !!companyId }
@@ -134,6 +142,13 @@ export default function FinanceiroCheques() {
     }
     return m;
   }, [resumoMensal]);
+
+  // Lista exibida — aplica o filtro client-side de "Outros" (agregado de status).
+  const chequesFiltrados = useMemo(() => {
+    const arr = cheques as any[];
+    if (fStatus === "outros") return arr.filter((c) => OUTROS_SET.includes(c.status));
+    return arr;
+  }, [cheques, fStatus]);
 
   async function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -227,38 +242,60 @@ export default function FinanceiroCheques() {
           </Button>
         </div>
 
-        {/* Cards de resumo */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Card>
-            <CardContent className="pt-4">
+        {/* Cards de resumo — clicáveis: clicar filtra a lista por aquele status
+            (clicar de novo no card ativo limpa o filtro). Responsivos: 1 col no
+            mobile, 2 em telas pequenas, 4 a partir de md. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+          <button
+            type="button"
+            onClick={() => toggleStatus("todos")}
+            aria-pressed={fStatus === "todos"}
+            className={`text-left rounded-xl border bg-card transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-blue-300 ${fStatus === "todos" ? "ring-2 ring-blue-500 border-blue-300" : ""}`}
+          >
+            <div className="p-4">
               <div className="text-xs text-muted-foreground">Total ({ano})</div>
               <div className="text-xl font-bold">{totais.qtdGeral}</div>
               <div className="text-sm text-muted-foreground">{formatBRL(totais.totalGeral)}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4">
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleStatus("compensado")}
+            aria-pressed={fStatus === "compensado"}
+            className={`text-left rounded-xl border bg-card transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-green-300 ${fStatus === "compensado" ? "ring-2 ring-green-500 border-green-300" : ""}`}
+          >
+            <div className="p-4">
               <div className="text-xs text-muted-foreground">Compensados</div>
               <div className="text-xl font-bold text-green-700">{totais.map["compensado"]?.qtd || 0}</div>
               <div className="text-sm text-muted-foreground">{formatBRL(totais.map["compensado"]?.total || 0)}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4">
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleStatus("pendente")}
+            aria-pressed={fStatus === "pendente"}
+            className={`text-left rounded-xl border bg-card transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-amber-300 ${fStatus === "pendente" ? "ring-2 ring-amber-500 border-amber-300" : ""}`}
+          >
+            <div className="p-4">
               <div className="text-xs text-muted-foreground">Pendentes</div>
               <div className="text-xl font-bold text-amber-600">{totais.map["pendente"]?.qtd || 0}</div>
               <div className="text-sm text-muted-foreground">{formatBRL(totais.map["pendente"]?.total || 0)}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4">
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleStatus("outros")}
+            aria-pressed={fStatus === "outros"}
+            className={`text-left rounded-xl border bg-card transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-gray-300 ${fStatus === "outros" ? "ring-2 ring-gray-500 border-gray-300" : ""}`}
+          >
+            <div className="p-4">
               <div className="text-xs text-muted-foreground">Outros</div>
               <div className="text-xl font-bold text-gray-600">
                 {(totais.map["sustado"]?.qtd || 0) + (totais.map["cancelado"]?.qtd || 0) + (totais.map["devolvido"]?.qtd || 0) + (totais.map["indefinido"]?.qtd || 0)}
               </div>
               <div className="text-sm text-muted-foreground">sustado/cancelado/devolvido</div>
-            </CardContent>
-          </Card>
+            </div>
+          </button>
         </div>
 
         {/* Cards do MÊS selecionado (Total / Compensados / Faltam compensar) */}
@@ -267,28 +304,43 @@ export default function FinanceiroCheques() {
             <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Resumo de {MESES[mesSel]}/{ano}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <Card className="border-blue-200 bg-blue-50/40">
-                <CardContent className="pt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <button
+                type="button"
+                onClick={() => toggleStatus("todos")}
+                aria-pressed={fStatus === "todos"}
+                className={`text-left rounded-xl border bg-blue-50/40 border-blue-200 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-blue-300 ${fStatus === "todos" ? "ring-2 ring-blue-500" : ""}`}
+              >
+                <div className="p-4">
                   <div className="text-xs text-muted-foreground">Total de cheques do mês</div>
                   <div className="text-xl font-bold text-blue-700">{totaisMes.qtd}</div>
                   <div className="text-sm text-muted-foreground">{formatBRL(totaisMes.total)}</div>
-                </CardContent>
-              </Card>
-              <Card className="border-emerald-200 bg-emerald-50/40">
-                <CardContent className="pt-4">
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleStatus("compensado")}
+                aria-pressed={fStatus === "compensado"}
+                className={`text-left rounded-xl border bg-emerald-50/40 border-emerald-200 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-emerald-300 ${fStatus === "compensado" ? "ring-2 ring-emerald-500" : ""}`}
+              >
+                <div className="p-4">
                   <div className="text-xs text-muted-foreground">Compensados no mês</div>
                   <div className="text-xl font-bold text-emerald-700">{totaisMes.map["compensado"]?.qtd || 0}</div>
                   <div className="text-sm text-muted-foreground">{formatBRL(totaisMes.map["compensado"]?.total || 0)}</div>
-                </CardContent>
-              </Card>
-              <Card className="border-amber-200 bg-amber-50/40">
-                <CardContent className="pt-4">
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleStatus("pendente")}
+                aria-pressed={fStatus === "pendente"}
+                className={`text-left rounded-xl border bg-amber-50/40 border-amber-200 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-amber-300 ${fStatus === "pendente" ? "ring-2 ring-amber-500" : ""}`}
+              >
+                <div className="p-4">
                   <div className="text-xs text-muted-foreground">Faltam compensar (pendentes)</div>
                   <div className="text-xl font-bold text-amber-600">{totaisMes.map["pendente"]?.qtd || 0}</div>
                   <div className="text-sm text-muted-foreground">{formatBRL(totaisMes.map["pendente"]?.total || 0)}</div>
-                </CardContent>
-              </Card>
+                </div>
+              </button>
             </div>
           </div>
         )}
@@ -312,6 +364,7 @@ export default function FinanceiroCheques() {
                   <SelectContent>
                     <SelectItem value="todos">Todos</SelectItem>
                     {STATUS_OPTS.map((s) => <SelectItem key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</SelectItem>)}
+                    <SelectItem value="outros">Outros (sustado/cancelado/devolvido)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -378,7 +431,18 @@ export default function FinanceiroCheques() {
         {/* Tabela */}
         <Card>
           <CardHeader className="space-y-3">
-            <CardTitle className="text-base">Cheques ({(cheques as any[]).length})</CardTitle>
+            <CardTitle className="text-base flex items-center gap-2">
+              Cheques ({chequesFiltrados.length})
+              {fStatus !== "todos" && (
+                <button
+                  type="button"
+                  onClick={() => setFStatus("todos")}
+                  className="text-[11px] font-normal text-blue-600 hover:underline"
+                >
+                  filtrando por “{fStatus}” · limpar
+                </button>
+              )}
+            </CardTitle>
             {/* Legenda de status — p/ rastreio de cada cheque */}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground">
               <span className="font-medium uppercase tracking-wide">Legenda:</span>
@@ -393,9 +457,11 @@ export default function FinanceiroCheques() {
           <CardContent>
             {isLoading ? (
               <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>
-            ) : (cheques as any[]).length === 0 ? (
+            ) : chequesFiltrados.length === 0 ? (
               <div className="text-center text-muted-foreground py-10">
-                Nenhum cheque encontrado. Use <strong>Importar planilha</strong> para começar.
+                {fStatus !== "todos"
+                  ? <>Nenhum cheque com o filtro selecionado. <button type="button" onClick={() => setFStatus("todos")} className="text-blue-600 hover:underline">Limpar filtro</button>.</>
+                  : <>Nenhum cheque encontrado. Use <strong>Importar planilha</strong> para começar.</>}
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -414,7 +480,7 @@ export default function FinanceiroCheques() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(cheques as any[]).map((c) => (
+                    {chequesFiltrados.map((c) => (
                       <tr key={c.id} className="border-b hover:bg-muted/40">
                         <td className="py-2 pr-3 font-mono">{c.numeroCheque || "—"}</td>
                         <td className="py-2 pr-3">

@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3210 — **FINANCEIRO / CONTROLE DE CHEQUES · OS CARDS DE RESUMO (TOPO: TOTAL/COMPENSADOS/
+ * PENDENTES/OUTROS + OS 3 CARDS DO MÊS) VIRARAM BOTÕES CLICÁVEIS: CLICAR FILTRA A LISTA POR AQUELE
+ * STATUS (CLICAR DE NOVO NO CARD ATIVO LIMPA O FILTRO) E O GRID FICOU MAIS RESPONSIVO.**
+ *
+ * PEDIDO (piloto FC): "QUERO ESTES CARDS RESPONSIVOS, QUANDO CLICAR QUERO QUE SEJA FILTRADO AS
+ * INFORMAÇÕES" + print dos cards de resumo da tela de Controle de Cheques.
+ *
+ * SOLUÇÃO — FRONT (`client/src/pages/financeiro/FinanceiroCheques.tsx`): os 4 cards do topo e os 3
+ * cards do mês deixaram de ser `<Card>` estáticos e viraram `<button>` com `onClick` que aplica o
+ * filtro de status via novo helper `toggleStatus(s)` (clicar no card já ativo volta p/ "todos"),
+ * estado ativo com `ring`/`aria-pressed` + microinteração `hover:-translate-y-0.5 hover:shadow-md`.
+ * O card "Total" filtra "todos", "Compensados" → compensado, "Pendentes" → pendente e "Outros" →
+ * novo valor de filtro `"outros"` (agregado de sustado/cancelado/devolvido/indefinido) aplicado
+ * CLIENT-SIDE via `chequesFiltrados` (useMemo) — quando `fStatus==="outros"` NÃO mandamos `status`
+ * ao servidor (que só aceita 1 status) e filtramos a lista localmente pelo `OUTROS_SET`. O título da
+ * tabela passou a mostrar a contagem filtrada + atalho "limpar"; o empty-state distingue "sem cheque
+ * com o filtro" de "nenhum cheque". Grid responsivo: `grid-cols-1 sm:grid-cols-2 md:grid-cols-4`
+ * (topo) e `grid-cols-1 sm:grid-cols-3` (mês). O `<Select>` de Status ganhou a opção "Outros".
+ *
+ * GROUNDWORK (sem feature ativa ainda): adicionadas as tabelas `financial_cartoes` /
+ * `financial_cartao_faturas` / `financial_cartao_itens` (`drizzle/schema.ts`) + self-heal
+ * `[SyncSchema+]` (`CREATE TABLE IF NOT EXISTS`) p/ o futuro "Controle de Cartão de Crédito". São
+ * aditivas e inertes (nenhum router/UI as usa ainda).
+ *
+ * ZERO BACKEND DE CHEQUES · ZERO ALTER/DROP/DELETE · cheque continua NÃO virando lançamento.
+ *
  * Rev. 3209 — **FINANCEIRO / CONTROLE DE CHEQUES · BUG NA IMPORTAÇÃO: AO GRAVAR, A PLANILHA COM UMA
  * DATA IMPOSSÍVEL (EX.: 29/02/2025 — 2025 NÃO É ANO BISSEXTO) DERRUBAVA O LOTE INTEIRO COM "FALHA
  * AO GRAVAR · date/time field value out of range: 2025-02-29"; AGORA DATAS INVÁLIDAS VIRAM VAZIO E
