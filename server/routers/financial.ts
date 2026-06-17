@@ -3687,6 +3687,11 @@ export const financialRouter = router({
     // São candidatos a casar com o extrato de QUALQUER banco (o ERP não sabe a conta de
     // origem), por isso ficam num bloco à parte, idêntico em todas as contas, e NÃO são
     // somados ao número da conta. Independe de $2 (a conta selecionada).
+    // Rev. 3191 — `dbExecute` liga params por ORDEM DE APARIÇÃO ($N é cosmético). Este
+    // bloco filtra `conta_bancaria_id IS NULL` e NÃO usa a conta ($2), então o array
+    // compartilhado `p` (4 itens, com a conta na posição 2) desalinhava: o contaBancariaId
+    // caía na 1ª comparação de DATA → "invalid input syntax for type date: 2". Usa um array
+    // dedicado SEM a conta e placeholders $1,$2,$3 em ordem.
     const semContaRes = await dbExecute(db,
       `SELECT e.id, e.descricao, e.fornecedor_nome AS "fornecedorNome", e.obra_nome AS "obraNome",
               COALESCE(e.valor_realizado, e.valor_previsto) AS valor, e.tipo, e.status,
@@ -3695,9 +3700,10 @@ export const financialRouter = router({
          FROM financial_entries e
         WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
           AND e.conta_bancaria_id IS NULL
-          AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) >= $3
-          AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) <= $4
-        ORDER BY data ASC, e.id ASC`, p);
+          AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) >= $2
+          AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) <= $3
+        ORDER BY data ASC, e.id ASC`,
+      [input.companyId, input.dataInicio, input.dataFim]);
 
     return {
       conciliados: rows(concRes),

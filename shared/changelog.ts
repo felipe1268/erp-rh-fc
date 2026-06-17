@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3191 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO DE BUG: A TELA PAROU DE CARREGAR
+ * ("NÃO FOI POSSÍVEL CARREGAR A CONCILIAÇÃO · DB code=22007 | invalid input syntax for type
+ * date: '2'") — UM DESALINHAMENTO DE PARÂMETROS NO BLOCO "SEM CONTA BANCÁRIA" (Rev. 3188)
+ * MANDAVA O ID DA CONTA PARA UMA COMPARAÇÃO DE DATA.**
+ *
+ * SINTOMA (piloto FC FEV/2026): ao abrir `/financeiro/conciliacao` e selecionar uma conta (ex.:
+ * CEF Guaratinguetá, id=2), o card do relatório exibia "Não foi possível carregar a conciliação"
+ * com o erro de banco `22007 invalid input syntax for type date: "2"`. Como o relatório é a fonte
+ * única da tela (Rev. 3187), TUDO ficava em estado de erro — inclusive ações dependentes como
+ * "Limpar extrato" (que falhava com "Unexpected end of JSON input", consequência da página
+ * quebrada, não bug próprio).
+ *
+ * CAUSA-RAIZ: o helper `dbExecute` (server/routers/financial.ts) liga os parâmetros por ORDEM DE
+ * APARIÇÃO dos placeholders — o número do `$N` é apenas cosmético (ele faz `query.split(/\$\d+/g)`
+ * e injeta `params[0], params[1], …` na sequência em que os `$` surgem). O bloco 3b
+ * (`lancamentosSemConta`), criado na Rev. 3188, filtra `conta_bancaria_id IS NULL` e por isso NÃO
+ * usa a conta (`$2`); seus placeholders, em ordem de aparição, eram `$1` (company), `$3` (data >=)
+ * e `$4` (data <=). Mas a chamada reaproveitava o array compartilhado `p = [companyId,
+ * contaBancariaId, dataInicio, dataFim]` (4 itens). Resultado: 1º placeholder ← companyId (ok),
+ * 2º placeholder (a 1ª comparação de DATA) ← contaBancariaId (2) → Postgres tentava casar a data
+ * com "2" e abortava a query inteira.
+ *
+ * SOLUÇÃO (BACKEND-ONLY, ZERO SCHEMA): o bloco 3b passou a usar um array DEDICADO sem a conta —
+ * `[input.companyId, input.dataInicio, input.dataFim]` — e os placeholders foram renumerados para
+ * `$1,$2,$3` em ordem (alinhados à ordem de aparição). Os outros 3 blocos do `getConciliacaoReport`
+ * (conciliados, extrato-sem-lançamento, lançamentos-da-conta) já estavam corretos (usam os 4
+ * params em ordem) e não foram tocados.
+ *
+ * IMPACTO: a tela de Conciliação Bancária volta a carregar normalmente em qualquer conta/mês; o
+ * bloco "Sem conta bancária definida" lista os lançamentos `conta_bancaria_id IS NULL` do período;
+ * "Limpar extrato" e demais ações voltam a funcionar. Reforça a regra de ouro do `dbExecute`:
+ * sempre que um bloco PULA um placeholder, o array de params precisa pular o item correspondente
+ * (ou renumerar). ZERO BACKEND novo · ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3190 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O CARD "SUGESTÕES AUTOMÁTICAS" GANHOU UMA
  * BARRA DE PROGRESSO 0→100% DURANTE A ANÁLISE ("ANALISANDO..."), PRA O USUÁRIO ACOMPANHAR A
  * EVOLUÇÃO DO CRUZAMENTO EXTRATO × LANÇAMENTOS.**

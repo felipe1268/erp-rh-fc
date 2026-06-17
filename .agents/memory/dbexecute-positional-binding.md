@@ -20,6 +20,15 @@ ALL placeholders sequentially in text order ($1,$2,...) and order the params arr
 to match that exact appearance order. Same rule for repeated values in CTEs (use
 distinct sequential $N, list the value again in the array at its position).
 
+**SKIPPING a $N + reusing a shared array is the same trap (a SELECT variant).**
+When several queries share one params array (e.g. `p=[company,conta,dataIni,dataFim]`)
+but one query filters `conta_bancaria_id IS NULL` and so OMITS `$2`, leaving
+placeholders `$1,$3,$4`, dbExecute still binds by appearance: `$1`←company, then the
+NEXT placeholder (a DATE comparison) ←conta. Symptom: `22007 invalid input syntax
+for type date: "<contaId>"` and the whole report 500s. Fix: give that query its OWN
+array WITHOUT the skipped element and renumber to $1,$2,$3. Don't reuse the shared
+array whenever a query drops a placeholder.
+
 **Arrays as params = SILENT EXPANSION (PG error 42846 "cannot cast type record to integer").**
 Because `dbExecute` interpolates each param via Drizzle `sql\`...${val}\``, passing a
 JS ARRAY does NOT bind a single Postgres array — Drizzle expands it into
