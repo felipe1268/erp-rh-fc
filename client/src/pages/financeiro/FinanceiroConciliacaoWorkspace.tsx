@@ -589,7 +589,7 @@ export default function FinanceiroConciliacaoWorkspace() {
                   <Label className="text-xs text-gray-500">Tolerância (dias)</Label>
                   <Select value={String(toleranciaDias)} onValueChange={v => setToleranciaDias(parseInt(v))}>
                     <SelectTrigger className="w-20 h-8"><SelectValue /></SelectTrigger>
-                    <SelectContent>{tolOptions.map(d => <SelectItem key={d} value={String(d)}>{d === diasDoMes && mesSel != null ? `${d} (mês)` : d}</SelectItem>)}</SelectContent>
+                    <SelectContent position="popper" side="bottom" sideOffset={4} align="start" avoidCollisions={false}>{tolOptions.map(d => <SelectItem key={d} value={String(d)}>{d === diasDoMes && mesSel != null ? `${d} (mês)` : d}</SelectItem>)}</SelectContent>
                   </Select>
                   <Button size="sm" variant={mostrarSugestoes ? "outline" : "default"} onClick={() => { setMostrarSugestoes(true); setSelSug(new Set()); if (mostrarSugestoes) refetchSug(); }} disabled={sugLoading}>
                     <Sparkles className="w-4 h-4 mr-1" />{sugLoading ? "Analisando..." : mostrarSugestoes ? "Reanalisar" : "Sugerir conciliação"}

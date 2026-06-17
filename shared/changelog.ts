@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3184 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO DE UX: O DROPDOWN "TOLERÂNCIA (DIAS)"
+ * AGORA ABRE SEMPRE LOGO ABAIXO DO CAMPO, EM VEZ DE "SALTAR" PRO MEIO/TOPO DA TELA.**
+ *
+ * PEDIDO (piloto FC FEV/2026): "revisa a caixa e diálogo dos dias a ser considerado — ela está
+ * abrindo no meio da tela e deveria estar localizada logo abaixo do campo. Arrume isso de vez."
+ *
+ * CAUSA-RAIZ: o `<Select>` de Tolerância usa o `SelectContent` shadcn (Radix) que, por default, tem
+ * `avoidCollisions` ligado. Como o campo "Tolerância (dias)" fica no rodapé do card "Sugestões
+ * Automáticas de Conciliação" — perto do fim do viewport — não havia espaço abaixo, então o Radix
+ * VIRAVA a lista (9 opções: 0,1,2,3,5,7,10,15,28) pra CIMA. Com a lista longa, ela subia até o
+ * meio/topo da tela, dando a impressão de "abrir solta no meio".
+ *
+ * SOLUÇÃO (FRONTEND-ONLY, ZERO BACKEND): nos 3 seletores de Tolerância (telas
+ * `FinanceiroConciliacao.tsx`, `FinanceiroConciliacaoWorkspace.tsx` e `FinanceiroConciliacaoPainel.tsx`)
+ * o `SelectContent` passou a fixar `position="popper" side="bottom" sideOffset={4} align="start"
+ * avoidCollisions={false}` — ancorando o dropdown SEMPRE logo abaixo e à esquerda do campo. Quando
+ * não houver espaço, a própria lista rola internamente (já tem `max-h` + overflow), em vez de pular
+ * pro meio da tela. Mudança isolada nos 3 selects (NÃO mexe no `select.tsx` global, pra não afetar
+ * os demais dropdowns do sistema). ZERO SCHEMA/ALTER/DROP/DELETE · ZERO BACKEND.
+ *
+ * ──────────────────────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 3183 — **FINANCEIRO / CONFIGURAÇÕES · NOVO TOGGLE POR EMPRESA "IMPORTAÇÃO AUTOMÁTICA DE
  * DADOS" (LIGA/DESLIGA) — DEFAULT DESLIGADO. AGORA O USUÁRIO DECIDE, DE FORMA CLARA E EXPLÍCITA,
  * SE OS LANÇAMENTOS FINANCEIROS ENTRAM SOZINHOS OU SÓ MANUALMENTE.**

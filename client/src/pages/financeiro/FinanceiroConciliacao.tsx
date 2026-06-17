@@ -608,7 +608,7 @@ export default function FinanceiroConciliacao() {
                     <Label className="text-xs text-gray-500">Tolerância (dias)</Label>
                     <Select value={String(toleranciaDias)} onValueChange={v => setToleranciaDias(parseInt(v))}>
                       <SelectTrigger className="w-20 h-8"><SelectValue /></SelectTrigger>
-                      <SelectContent>
+                      <SelectContent position="popper" side="bottom" sideOffset={4} align="start" avoidCollisions={false}>
                         {tolOptions.map(d => (
                           <SelectItem key={d} value={String(d)}>
                             {d === diasDoMes && mesSel != null ? `${d} (mês)` : d}

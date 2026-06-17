@@ -412,7 +412,7 @@ export default function FinanceiroConciliacaoPainel() {
             <Label className="text-xs text-gray-500">Tolerância</Label>
             <Select value={String(toleranciaDias)} onValueChange={(v) => setToleranciaDias(parseInt(v))}>
               <SelectTrigger className="w-[110px] h-8 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" side="bottom" sideOffset={4} align="start" avoidCollisions={false}>
                 {tolOptions.map(d => <SelectItem key={d} value={String(d)}>{d === 0 ? "Mesmo dia" : `${d} dia${d > 1 ? "s" : ""}`}</SelectItem>)}
               </SelectContent>
             </Select>
