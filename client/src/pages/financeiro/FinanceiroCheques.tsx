@@ -386,9 +386,9 @@ export default function FinanceiroCheques() {
 
       {/* Dialog de importação */}
       <Dialog open={importOpen} onOpenChange={(o) => { setImportOpen(o); if (!o) { setPreview(null); setDragOver(false); } }}>
-        <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto p-0 gap-0">
+        <DialogContent className="max-w-[96vw] w-[96vw] h-[94vh] flex flex-col p-0 gap-0">
           {/* Cabeçalho com faixa */}
-          <div className="flex items-start gap-3 p-5 border-b bg-gradient-to-r from-blue-50 to-transparent">
+          <div className="flex items-start gap-3 p-5 border-b bg-gradient-to-r from-blue-50 to-transparent shrink-0">
             <div className="rounded-xl bg-blue-600 text-white p-2.5 shadow-sm shrink-0">
               <FileSpreadsheet className="h-5 w-5" />
             </div>
@@ -401,121 +401,138 @@ export default function FinanceiroCheques() {
             </div>
           </div>
 
-          <div className="p-5 space-y-4">
-            {/* Zona de upload (drag & drop) */}
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={() => fileRef.current?.click()}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileRef.current?.click(); }}
-              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => {
-                e.preventDefault(); setDragOver(false);
-                const f = e.dataTransfer.files?.[0];
-                if (f) onPickFile({ target: { files: [f] } } as any);
-              }}
-              className={`relative flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-8 text-center transition-colors cursor-pointer ${
-                dragOver ? "border-blue-500 bg-blue-50" : arquivoNome ? "border-emerald-300 bg-emerald-50/60" : "border-muted-foreground/25 hover:border-blue-400 hover:bg-muted/40"
-              }`}
-            >
-              <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={onPickFile} className="hidden" />
-              {arquivoNome ? (
-                <>
-                  <div className="rounded-full bg-emerald-100 text-emerald-700 p-2"><CheckCircle className="h-6 w-6" /></div>
-                  <div className="font-medium text-sm break-all">{arquivoNome}</div>
-                  <div className="text-xs text-muted-foreground">Clique para trocar o arquivo</div>
-                </>
-              ) : (
-                <>
-                  <div className="rounded-full bg-blue-100 text-blue-700 p-2"><Upload className="h-6 w-6" /></div>
-                  <div className="font-medium text-sm">Arraste a planilha aqui ou clique para selecionar</div>
-                  <div className="text-xs text-muted-foreground">Formato .xlsx com abas mensais (JAN…DEZ)</div>
-                </>
-              )}
-            </div>
-
-            <Button onClick={rodarPreview} disabled={!arquivoBase64 || previewMut.isPending} className="w-full gap-2">
-              {previewMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-              {previewMut.isPending ? "Analisando…" : "Analisar planilha"}
-            </Button>
-
-            {preview && (
-              <div className="space-y-3 border-t pt-4">
-                {/* KPIs em destaque */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  <div className="rounded-lg border bg-card p-3">
-                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Linhas lidas</div>
-                    <div className="text-xl font-bold">{preview.resumo.totalLinhas}</div>
-                  </div>
-                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-                    <div className="text-[11px] uppercase tracking-wide text-emerald-700/70">Novos</div>
-                    <div className="text-xl font-bold text-emerald-700">{preview.resumo.novos}</div>
-                  </div>
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                    <div className="text-[11px] uppercase tracking-wide text-amber-700/70">Já existem</div>
-                    <div className="text-xl font-bold text-amber-700">{preview.resumo.jaExistem}</div>
-                  </div>
-                  <div className="rounded-lg border bg-card p-3">
-                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Dup. no arquivo</div>
-                    <div className="text-xl font-bold">{preview.resumo.dupNoArquivo}</div>
-                  </div>
-                  <div className="rounded-lg border bg-card p-3">
-                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Sem fornecedor</div>
-                    <div className="text-xl font-bold">{preview.resumo.semFornecedor}</div>
-                  </div>
-                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
-                    <div className="text-[11px] uppercase tracking-wide text-blue-700/70">Valor (novos)</div>
-                    <div className="text-lg font-bold text-blue-700">{formatBRL(preview.resumo.valorTotalNovos)}</div>
-                  </div>
+          <div className="flex-1 min-h-0 overflow-y-auto p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+              {/* Coluna esquerda: upload + ação */}
+              <div className="space-y-4">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => fileRef.current?.click()}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileRef.current?.click(); }}
+                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault(); setDragOver(false);
+                    const f = e.dataTransfer.files?.[0];
+                    if (f) onPickFile({ target: { files: [f] } } as any);
+                  }}
+                  className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-4 py-16 text-center transition-colors cursor-pointer ${
+                    dragOver ? "border-blue-500 bg-blue-50" : arquivoNome ? "border-emerald-300 bg-emerald-50/60" : "border-muted-foreground/25 hover:border-blue-400 hover:bg-muted/40"
+                  }`}
+                >
+                  <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={onPickFile} className="hidden" />
+                  {arquivoNome ? (
+                    <>
+                      <div className="rounded-full bg-emerald-100 text-emerald-700 p-3"><CheckCircle className="h-8 w-8" /></div>
+                      <div className="font-medium text-base break-all">{arquivoNome}</div>
+                      <div className="text-sm text-muted-foreground">Clique para trocar o arquivo</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="rounded-full bg-blue-100 text-blue-700 p-3"><Upload className="h-8 w-8" /></div>
+                      <div className="font-medium text-base">Arraste a planilha aqui ou clique para selecionar</div>
+                      <div className="text-sm text-muted-foreground">Formato .xlsx com abas mensais (JAN…DEZ)</div>
+                    </>
+                  )}
                 </div>
 
-                {preview.abasLidas?.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                    <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
-                    <span className="text-muted-foreground">Abas detectadas:</span>
-                    {preview.abasLidas.map((a: string, i: number) => (
-                      <span key={i} className="rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 px-2 py-0.5">{a}</span>
-                    ))}
-                  </div>
-                )}
-                {preview.abasIgnoradas?.length > 0 && (
-                  <div className="text-xs text-muted-foreground">
-                    <AlertCircle className="inline h-3.5 w-3.5 text-amber-500 mr-1" />
-                    Ignoradas: {preview.abasIgnoradas.join(", ")}
-                  </div>
-                )}
+                <Button onClick={rodarPreview} disabled={!arquivoBase64 || previewMut.isPending} className="w-full gap-2" size="lg">
+                  {previewMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                  {previewMut.isPending ? "Analisando…" : "Analisar planilha"}
+                </Button>
+              </div>
 
-                {preview.amostra?.length > 0 && (
-                  <div className="max-h-52 overflow-y-auto border rounded-lg">
-                    <table className="w-full text-xs">
-                      <thead className="sticky top-0 bg-muted/95 backdrop-blur"><tr className="text-left">
-                        <th className="p-2">Nº</th><th className="p-2">Fornecedor</th><th className="p-2 text-right">Valor</th><th className="p-2">Situação</th>
-                      </tr></thead>
-                      <tbody>
-                        {preview.amostra.map((a: any, i: number) => (
-                          <tr key={i} className="border-t hover:bg-muted/40">
-                            <td className="p-2 font-mono">{a.numeroCheque}</td>
-                            <td className="p-2">{a.fornecedorNome || "—"}{!a.fornecedorIdentificado && a.fornecedorNome && <span className="text-amber-600" title="Fornecedor não vinculado"> ●</span>}</td>
-                            <td className="p-2 text-right">{a.valor != null ? formatBRL(a.valor) : "—"}</td>
-                            <td className="p-2">
-                              {a.situacao === "NOVO"
-                                ? <span className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5 text-[11px]">Novo</span>
-                                : a.situacao === "JA_EXISTE"
-                                  ? <span className="inline-flex items-center rounded-full bg-amber-50 text-amber-700 px-2 py-0.5 text-[11px]">Já existe</span>
-                                  : <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-500 px-2 py-0.5 text-[11px]">Dup.</span>}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+              {/* Coluna direita: resumo / KPIs */}
+              <div className="space-y-4">
+                {!preview ? (
+                  <div className="rounded-xl border border-dashed border-muted-foreground/25 p-10 text-center text-sm text-muted-foreground flex flex-col items-center justify-center gap-2 min-h-[280px]">
+                    <Search className="h-8 w-8 text-muted-foreground/40" />
+                    <div className="font-medium">O resumo aparece aqui</div>
+                    <div>Selecione a planilha e clique em <strong>Analisar planilha</strong> para ver linhas lidas, novos, duplicados e a amostra dos cheques.</div>
                   </div>
+                ) : (
+                  <>
+                    {/* KPIs em destaque */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      <div className="rounded-lg border bg-card p-3.5">
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Linhas lidas</div>
+                        <div className="text-2xl font-bold">{preview.resumo.totalLinhas}</div>
+                      </div>
+                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3.5">
+                        <div className="text-[11px] uppercase tracking-wide text-emerald-700/70">Novos</div>
+                        <div className="text-2xl font-bold text-emerald-700">{preview.resumo.novos}</div>
+                      </div>
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3.5">
+                        <div className="text-[11px] uppercase tracking-wide text-amber-700/70">Já existem</div>
+                        <div className="text-2xl font-bold text-amber-700">{preview.resumo.jaExistem}</div>
+                      </div>
+                      <div className="rounded-lg border bg-card p-3.5">
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Dup. no arquivo</div>
+                        <div className="text-2xl font-bold">{preview.resumo.dupNoArquivo}</div>
+                      </div>
+                      <div className="rounded-lg border bg-card p-3.5">
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Sem fornecedor</div>
+                        <div className="text-2xl font-bold">{preview.resumo.semFornecedor}</div>
+                      </div>
+                      <div className="rounded-lg border border-blue-200 bg-blue-50 p-3.5">
+                        <div className="text-[11px] uppercase tracking-wide text-blue-700/70">Valor (novos)</div>
+                        <div className="text-lg font-bold text-blue-700">{formatBRL(preview.resumo.valorTotalNovos)}</div>
+                      </div>
+                    </div>
+
+                    {preview.abasLidas?.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                        <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+                        <span className="text-muted-foreground">Abas detectadas:</span>
+                        {preview.abasLidas.map((a: string, i: number) => (
+                          <span key={i} className="rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 px-2 py-0.5">{a}</span>
+                        ))}
+                      </div>
+                    )}
+                    {preview.abasIgnoradas?.length > 0 && (
+                      <div className="text-xs text-muted-foreground">
+                        <AlertCircle className="inline h-3.5 w-3.5 text-amber-500 mr-1" />
+                        Ignoradas: {preview.abasIgnoradas.join(", ")}
+                      </div>
+                    )}
+                  </>
                 )}
+              </div>
+            </div>
+
+            {/* Amostra dos cheques — largura total */}
+            {preview?.amostra?.length > 0 && (
+              <div className="mt-6">
+                <div className="text-sm font-medium mb-2">Amostra dos cheques lidos</div>
+                <div className="border rounded-lg overflow-auto max-h-[42vh]">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-muted/95 backdrop-blur"><tr className="text-left">
+                      <th className="p-2.5">Nº</th><th className="p-2.5">Fornecedor</th><th className="p-2.5 text-right">Valor</th><th className="p-2.5">Situação</th>
+                    </tr></thead>
+                    <tbody>
+                      {preview.amostra.map((a: any, i: number) => (
+                        <tr key={i} className="border-t hover:bg-muted/40">
+                          <td className="p-2.5 font-mono">{a.numeroCheque}</td>
+                          <td className="p-2.5">{a.fornecedorNome || "—"}{!a.fornecedorIdentificado && a.fornecedorNome && <span className="text-amber-600" title="Fornecedor não vinculado"> ●</span>}</td>
+                          <td className="p-2.5 text-right">{a.valor != null ? formatBRL(a.valor) : "—"}</td>
+                          <td className="p-2.5">
+                            {a.situacao === "NOVO"
+                              ? <span className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5 text-[11px]">Novo</span>
+                              : a.situacao === "JA_EXISTE"
+                                ? <span className="inline-flex items-center rounded-full bg-amber-50 text-amber-700 px-2 py-0.5 text-[11px]">Já existe</span>
+                                : <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-500 px-2 py-0.5 text-[11px]">Dup.</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>
 
-          <DialogFooter className="p-5 pt-0">
+          <DialogFooter className="p-5 border-t shrink-0">
             <Button variant="outline" onClick={() => setImportOpen(false)}>Cancelar</Button>
             <Button onClick={confirmarImport} disabled={!preview || preview.resumo.novos === 0 || confirmarMut.isPending} className="gap-2">
               {confirmarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}

@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3206 — **FINANCEIRO / CONTROLE DE CHEQUES · O MODAL "IMPORTAR CONTROLE DE CHEQUES" FICOU
+ * APERTADO/RUIM (TUDO EMPILHADO NUMA COLUNA ESTREITA, AMOSTRA E KPIs ESPREMIDOS COM SCROLL CHEIO).
+ * AGORA ELE ABRE EM TELA CHEIA (96vw × 94vh) COM LAYOUT EM DUAS COLUNAS E A AMOSTRA EM LARGURA TOTAL.**
+ *
+ * PEDIDO (piloto FC): "melhore este layout está péssimo, deixa ele full screen" + print do modal de
+ * importação de cheques (largura `max-w-2xl`, KPIs e amostra empilhados e apertados).
+ *
+ * SOLUÇÃO — FRONT (`client/src/pages/financeiro/FinanceiroCheques.tsx`): o `DialogContent` passou de
+ * `max-w-2xl max-h-[88vh]` para tela cheia (`max-w-[96vw] w-[96vw] h-[94vh] flex flex-col`), com
+ * cabeçalho e rodapé fixos (`shrink-0`) e corpo rolável (`flex-1 min-h-0 overflow-y-auto`). O corpo
+ * virou grid de 2 colunas (`lg:grid-cols-2`): à ESQUERDA a zona de upload (dropzone maior, `py-16`,
+ * ícones/labels ampliados) + botão "Analisar planilha" (`size="lg"`); à DIREITA o resumo — quando não
+ * há preview mostra um placeholder ("O resumo aparece aqui"), e com preview mostra os 6 KPIs (cards
+ * maiores, números `text-2xl`) + chips de abas detectadas/ignoradas. A AMOSTRA dos cheques foi pra
+ * baixo em LARGURA TOTAL (tabela `text-sm`, `max-h-[42vh]`, cabeçalho sticky). Nada de lógica/estado/
+ * mutações mudou — só estrutura/CSS do modal.
+ *
+ * ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE · só UI (reorganização do modal). Importação/parser/
+ * dedup inalterados; cheque continua NÃO virando lançamento.
+ *
  * Rev. 3205 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · AS DUAS LISTAS DE PENDÊNCIA ("NO EXTRATO, SEM
  * LANÇAMENTO" E "NO ERP, SEM EXTRATO") GANHARAM UM BOTÃO "EXPANDIR" QUE ABRE A LISTA EM TELA CHEIA
  * (MODAL 96vw × 92vh) PARA O USUÁRIO ANALISAR MELHOR, COM MAIS LINHAS VISÍVEIS DE UMA VEZ.**
