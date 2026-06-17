@@ -158,6 +158,15 @@ function parseWorkbook(fileBase64: string, anoFallback: number): { rows: ChequeR
       const valor = parseValor(r[8]);
       if (!numeroCheque && valor == null) continue; // linha vazia
       const dataCompensacao = parseData(r[10]);
+      const dataVencimento = parseData(r[9]);
+      // ANO AUTOMÁTICO: a verdade está na própria linha. Prioriza a data de
+      // vencimento, depois a de compensação, e só então cai pro ano da aba/fallback.
+      const anoDeData = (iso: string | null): number | null => {
+        if (!iso) return null;
+        const y = parseInt(iso.slice(0, 4), 10);
+        return y >= 2000 && y <= 2100 ? y : null;
+      };
+      const anoLinha = anoDeData(dataVencimento) ?? anoDeData(dataCompensacao) ?? ano;
       rows.push({
         parcela: r[0] != null ? String(r[0]).trim().slice(0, 20) : null,
         fornecedorNome: r[1] != null ? String(r[1]).trim().slice(0, 255) : null,
@@ -168,11 +177,11 @@ function parseWorkbook(fileBase64: string, anoFallback: number): { rows: ChequeR
         numeroCheque: numeroCheque ? numeroCheque.slice(0, 30) : null,
         nf: r[7] != null ? String(r[7]).trim().slice(0, 60) : null,
         valor,
-        dataVencimento: parseData(r[9]),
+        dataVencimento,
         dataCompensacao,
         status: normStatus(r[11], dataCompensacao),
         observacao: r[11] != null ? String(r[11]).trim().slice(0, 500) : null,
-        mes, ano,
+        mes, ano: anoLinha,
       });
       lidas++;
     }
@@ -240,7 +249,9 @@ export const chequesRouter = router({
   // Relatório dry-run — ZERO gravação.
   importarPreview: protectedProcedure.input(z.object({
     companyId: z.number(),
-    ano: z.number().int().min(2000).max(2100),
+    // ano agora é OPCIONAL — o ERP deriva o ano de cada linha pela própria data
+    // da planilha; este valor só é fallback p/ linhas sem data nem ano na aba.
+    ano: z.number().int().min(2000).max(2100).optional(),
     fileBase64: z.string().min(10),
   })).mutation(async ({ input, ctx }) => {
     await assertCompanyAccess(ctx.user, input.companyId);
@@ -248,7 +259,7 @@ export const chequesRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
     let parsed;
-    try { parsed = parseWorkbook(input.fileBase64, input.ano); }
+    try { parsed = parseWorkbook(input.fileBase64, input.ano ?? new Date().getFullYear()); }
     catch (e: any) { throw new TRPCError({ code: "BAD_REQUEST", message: `Não consegui ler a planilha: ${e?.message || e}` }); }
 
     const [fornecedores, contas, existentes] = await Promise.all([
@@ -301,7 +312,8 @@ export const chequesRouter = router({
   // Gravação — insere só NOVO em transação, com lote rastreável.
   importarConfirmar: protectedProcedure.input(z.object({
     companyId: z.number(),
-    ano: z.number().int().min(2000).max(2100),
+    // ano OPCIONAL — derivado por linha da data da planilha (ver importarPreview).
+    ano: z.number().int().min(2000).max(2100).optional(),
     fileBase64: z.string().min(10),
     origemArquivo: z.string().max(255).optional(),
   })).mutation(async ({ input, ctx }) => {
@@ -310,7 +322,7 @@ export const chequesRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
     let parsed;
-    try { parsed = parseWorkbook(input.fileBase64, input.ano); }
+    try { parsed = parseWorkbook(input.fileBase64, input.ano ?? new Date().getFullYear()); }
     catch (e: any) { throw new TRPCError({ code: "BAD_REQUEST", message: `Não consegui ler a planilha: ${e?.message || e}` }); }
 
     const [fornecedores, contas, existentes] = await Promise.all([

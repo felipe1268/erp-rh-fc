@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3202 — **FINANCEIRO / CONTROLE DE CHEQUES · A IMPORTAÇÃO DEIXOU DE PEDIR O "ANO DA PLANILHA":
+ * O ERP AGORA LÊ O ANO AUTOMATICAMENTE DA DATA DE CADA CHEQUE E CLASSIFICA CADA LINHA SOZINHO. O MODAL
+ * DE IMPORTAÇÃO FOI MODERNIZADO (ZONA DE ARRASTAR-E-SOLTAR, KPIs EM CARDS, CHIPS DE ABAS E SITUAÇÃO).**
+ *
+ * PEDIDO (piloto FC): "melhore este layout, quero mais intuitivo e moderno; não quero precisar escolher
+ * o ano — essa informação tem na planilha, então o ERP deve ler automaticamente e fazer a separação e
+ * classificação de cada dado."
+ *
+ * SOLUÇÃO — ANO AUTOMÁTICO (BACKEND, `server/routers/cheques.ts`): no `parseWorkbook`, o ano de CADA
+ * linha passou a ser derivado da própria data do cheque — prioriza `data_vencimento`, depois
+ * `data_compensacao`, e só então cai pro ano lido do nome da aba (ex.: "JAN 2026") ou, por último, pro
+ * ano atual como fallback. Os inputs `ano` de `importarPreview`/`importarConfirmar` viraram OPCIONAIS
+ * (`z.number().optional()`); quando ausentes, o `parseWorkbook` recebe `new Date().getFullYear()`
+ * apenas como fallback para linhas sem data e sem ano na aba. A dedup natural
+ * `(company, numero_cheque, valor, ano_ref)` continua válida — o `ano_ref` agora vem da data real, mais
+ * confiável que o ano digitado.
+ *
+ * SOLUÇÃO — LAYOUT (FRONTEND, `client/src/pages/financeiro/FinanceiroCheques.tsx`): removido o campo
+ * "Ano da planilha" (e o estado `importAno`); os dois `mutateAsync` não enviam mais `ano`. O modal foi
+ * redesenhado: cabeçalho com faixa em degradê + ícone, ZONA DE UPLOAD com arrastar-e-soltar (estado
+ * `dragOver`, realce ao arrastar, confirmação verde quando o arquivo é escolhido, clique para trocar),
+ * botão "Analisar planilha" full-width com label de progresso, KPIs do preview em CARDS (linhas/novos/
+ * já existem/dup/sem fornecedor/valor), abas detectadas como CHIPS e a amostra com badges de situação.
+ * ZERO SCHEMA/ALTER/DROP/DELETE · Cheque continua NÃO virando lançamento (Opção A).
+ *
+ * ARQUIVOS: `server/routers/cheques.ts` (ano por linha via data + inputs `ano` opcionais),
+ * `client/src/pages/financeiro/FinanceiroCheques.tsx` (remoção do campo ano + modal modernizado com
+ * dropzone, KPIs em cards e chips).
+ *
  * Rev. 3201 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · A CONCILIAÇÃO AUTOMÁTICA AGORA É APENAS
  * SUGESTIVA: NADA É GRAVADO SEM O USUÁRIO REVISAR E CONFIRMAR EXPLICITAMENTE CADA VALOR. O BOTÃO
  * "CONCILIAR SELECIONADAS" PASSOU A ABRIR UM DIÁLOGO DE REVISÃO (EXTRATO → LANÇAMENTO + VALORES) QUE

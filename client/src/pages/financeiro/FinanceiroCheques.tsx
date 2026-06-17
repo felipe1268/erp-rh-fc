@@ -66,7 +66,7 @@ export default function FinanceiroCheques() {
   const [fBusca, setFBusca] = useState<string>("");
 
   // ── Importação ──
-  const [importAno, setImportAno] = useState<string>(String(ANO_ATUAL));
+  const [dragOver, setDragOver] = useState(false);
   const [arquivoBase64, setArquivoBase64] = useState<string | null>(null);
   const [arquivoNome, setArquivoNome] = useState<string>("");
   const [preview, setPreview] = useState<any>(null);
@@ -125,7 +125,7 @@ export default function FinanceiroCheques() {
   async function rodarPreview() {
     if (!arquivoBase64) { toast({ title: "Selecione a planilha .xlsx primeiro." }); return; }
     try {
-      const rep = await previewMut.mutateAsync({ companyId, ano: Number(importAno), fileBase64: arquivoBase64 });
+      const rep = await previewMut.mutateAsync({ companyId, fileBase64: arquivoBase64 });
       setPreview(rep);
     } catch (err: any) {
       toast({ title: "Falha ao analisar", description: err?.message || String(err), variant: "destructive" });
@@ -136,7 +136,7 @@ export default function FinanceiroCheques() {
     if (!arquivoBase64) return;
     try {
       const r = await confirmarMut.mutateAsync({
-        companyId, ano: Number(importAno), fileBase64: arquivoBase64, origemArquivo: arquivoNome,
+        companyId, fileBase64: arquivoBase64, origemArquivo: arquivoNome,
       });
       toast({ title: "Importação concluída", description: `${r.inseridos} novo(s) cheque(s) gravado(s); ${r.pulados} já existiam.` });
       setImportOpen(false);
@@ -332,75 +332,126 @@ export default function FinanceiroCheques() {
       </div>
 
       {/* Dialog de importação */}
-      <Dialog open={importOpen} onOpenChange={(o) => { setImportOpen(o); if (!o) { setPreview(null); } }}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><FileSpreadsheet className="h-5 w-5" /> Importar Controle de Cheques</DialogTitle>
-            <DialogDescription>
-              Selecione o arquivo .xlsx (abas mensais). O sistema analisa antes de gravar — nada é salvo até você confirmar.
-            </DialogDescription>
-          </DialogHeader>
+      <Dialog open={importOpen} onOpenChange={(o) => { setImportOpen(o); if (!o) { setPreview(null); setDragOver(false); } }}>
+        <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto p-0 gap-0">
+          {/* Cabeçalho com faixa */}
+          <div className="flex items-start gap-3 p-5 border-b bg-gradient-to-r from-blue-50 to-transparent">
+            <div className="rounded-xl bg-blue-600 text-white p-2.5 shadow-sm shrink-0">
+              <FileSpreadsheet className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <DialogTitle className="text-lg">Importar Controle de Cheques</DialogTitle>
+              <DialogDescription className="mt-0.5">
+                Arraste ou selecione a planilha <strong>.xlsx</strong>. O ano é lido automaticamente
+                de cada cheque — nada é gravado até você confirmar.
+              </DialogDescription>
+            </div>
+          </div>
 
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-end gap-3">
-              <div>
-                <Label className="text-xs">Ano da planilha</Label>
-                <Input type="number" className="w-[120px]" value={importAno} onChange={(e) => setImportAno(e.target.value)} />
-              </div>
-              <div className="flex-1 min-w-[220px]">
-                <Label className="text-xs">Arquivo (.xlsx)</Label>
-                <Input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={onPickFile} />
-              </div>
+          <div className="p-5 space-y-4">
+            {/* Zona de upload (drag & drop) */}
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => fileRef.current?.click()}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileRef.current?.click(); }}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault(); setDragOver(false);
+                const f = e.dataTransfer.files?.[0];
+                if (f) onPickFile({ target: { files: [f] } } as any);
+              }}
+              className={`relative flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-8 text-center transition-colors cursor-pointer ${
+                dragOver ? "border-blue-500 bg-blue-50" : arquivoNome ? "border-emerald-300 bg-emerald-50/60" : "border-muted-foreground/25 hover:border-blue-400 hover:bg-muted/40"
+              }`}
+            >
+              <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={onPickFile} className="hidden" />
+              {arquivoNome ? (
+                <>
+                  <div className="rounded-full bg-emerald-100 text-emerald-700 p-2"><CheckCircle className="h-6 w-6" /></div>
+                  <div className="font-medium text-sm break-all">{arquivoNome}</div>
+                  <div className="text-xs text-muted-foreground">Clique para trocar o arquivo</div>
+                </>
+              ) : (
+                <>
+                  <div className="rounded-full bg-blue-100 text-blue-700 p-2"><Upload className="h-6 w-6" /></div>
+                  <div className="font-medium text-sm">Arraste a planilha aqui ou clique para selecionar</div>
+                  <div className="text-xs text-muted-foreground">Formato .xlsx com abas mensais (JAN…DEZ)</div>
+                </>
+              )}
             </div>
 
-            {arquivoNome && (
-              <div className="text-sm text-muted-foreground flex items-center gap-2">
-                <FileSpreadsheet className="h-4 w-4" /> {arquivoNome}
-              </div>
-            )}
-
-            <Button onClick={rodarPreview} disabled={!arquivoBase64 || previewMut.isPending} className="gap-2">
+            <Button onClick={rodarPreview} disabled={!arquivoBase64 || previewMut.isPending} className="w-full gap-2">
               {previewMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-              Analisar planilha
+              {previewMut.isPending ? "Analisando…" : "Analisar planilha"}
             </Button>
 
             {preview && (
-              <div className="space-y-3 border-t pt-3">
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                  <div className="rounded bg-muted p-2"><div className="text-xs text-muted-foreground">Linhas lidas</div><div className="font-bold">{preview.resumo.totalLinhas}</div></div>
-                  <div className="rounded bg-green-50 p-2"><div className="text-xs text-muted-foreground">Novos</div><div className="font-bold text-green-700">{preview.resumo.novos}</div></div>
-                  <div className="rounded bg-amber-50 p-2"><div className="text-xs text-muted-foreground">Já existem</div><div className="font-bold text-amber-700">{preview.resumo.jaExistem}</div></div>
-                  <div className="rounded bg-muted p-2"><div className="text-xs text-muted-foreground">Dup. no arquivo</div><div className="font-bold">{preview.resumo.dupNoArquivo}</div></div>
-                  <div className="rounded bg-muted p-2"><div className="text-xs text-muted-foreground">Sem fornecedor vinc.</div><div className="font-bold">{preview.resumo.semFornecedor}</div></div>
-                  <div className="rounded bg-blue-50 p-2"><div className="text-xs text-muted-foreground">Valor (novos)</div><div className="font-bold text-blue-700">{formatBRL(preview.resumo.valorTotalNovos)}</div></div>
+              <div className="space-y-3 border-t pt-4">
+                {/* KPIs em destaque */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <div className="rounded-lg border bg-card p-3">
+                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Linhas lidas</div>
+                    <div className="text-xl font-bold">{preview.resumo.totalLinhas}</div>
+                  </div>
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                    <div className="text-[11px] uppercase tracking-wide text-emerald-700/70">Novos</div>
+                    <div className="text-xl font-bold text-emerald-700">{preview.resumo.novos}</div>
+                  </div>
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                    <div className="text-[11px] uppercase tracking-wide text-amber-700/70">Já existem</div>
+                    <div className="text-xl font-bold text-amber-700">{preview.resumo.jaExistem}</div>
+                  </div>
+                  <div className="rounded-lg border bg-card p-3">
+                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Dup. no arquivo</div>
+                    <div className="text-xl font-bold">{preview.resumo.dupNoArquivo}</div>
+                  </div>
+                  <div className="rounded-lg border bg-card p-3">
+                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Sem fornecedor</div>
+                    <div className="text-xl font-bold">{preview.resumo.semFornecedor}</div>
+                  </div>
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+                    <div className="text-[11px] uppercase tracking-wide text-blue-700/70">Valor (novos)</div>
+                    <div className="text-lg font-bold text-blue-700">{formatBRL(preview.resumo.valorTotalNovos)}</div>
+                  </div>
                 </div>
 
                 {preview.abasLidas?.length > 0 && (
-                  <div className="text-xs text-muted-foreground">
-                    <CheckCircle className="inline h-3 w-3 text-green-600 mr-1" />
-                    Abas lidas: {preview.abasLidas.join(", ")}
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                    <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+                    <span className="text-muted-foreground">Abas detectadas:</span>
+                    {preview.abasLidas.map((a: string, i: number) => (
+                      <span key={i} className="rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 px-2 py-0.5">{a}</span>
+                    ))}
                   </div>
                 )}
                 {preview.abasIgnoradas?.length > 0 && (
                   <div className="text-xs text-muted-foreground">
-                    <AlertCircle className="inline h-3 w-3 text-amber-500 mr-1" />
+                    <AlertCircle className="inline h-3.5 w-3.5 text-amber-500 mr-1" />
                     Ignoradas: {preview.abasIgnoradas.join(", ")}
                   </div>
                 )}
 
                 {preview.amostra?.length > 0 && (
-                  <div className="max-h-48 overflow-y-auto border rounded">
+                  <div className="max-h-52 overflow-y-auto border rounded-lg">
                     <table className="w-full text-xs">
-                      <thead className="sticky top-0 bg-muted"><tr className="text-left">
-                        <th className="p-1">Nº</th><th className="p-1">Fornecedor</th><th className="p-1 text-right">Valor</th><th className="p-1">Situação</th>
+                      <thead className="sticky top-0 bg-muted/95 backdrop-blur"><tr className="text-left">
+                        <th className="p-2">Nº</th><th className="p-2">Fornecedor</th><th className="p-2 text-right">Valor</th><th className="p-2">Situação</th>
                       </tr></thead>
                       <tbody>
                         {preview.amostra.map((a: any, i: number) => (
-                          <tr key={i} className="border-t">
-                            <td className="p-1 font-mono">{a.numeroCheque}</td>
-                            <td className="p-1">{a.fornecedorNome || "—"}{!a.fornecedorIdentificado && a.fornecedorNome && <span className="text-amber-600"> ●</span>}</td>
-                            <td className="p-1 text-right">{a.valor != null ? formatBRL(a.valor) : "—"}</td>
-                            <td className="p-1">{a.situacao === "NOVO" ? <span className="text-green-700">Novo</span> : a.situacao === "JA_EXISTE" ? <span className="text-amber-700">Já existe</span> : <span className="text-gray-500">Dup.</span>}</td>
+                          <tr key={i} className="border-t hover:bg-muted/40">
+                            <td className="p-2 font-mono">{a.numeroCheque}</td>
+                            <td className="p-2">{a.fornecedorNome || "—"}{!a.fornecedorIdentificado && a.fornecedorNome && <span className="text-amber-600" title="Fornecedor não vinculado"> ●</span>}</td>
+                            <td className="p-2 text-right">{a.valor != null ? formatBRL(a.valor) : "—"}</td>
+                            <td className="p-2">
+                              {a.situacao === "NOVO"
+                                ? <span className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5 text-[11px]">Novo</span>
+                                : a.situacao === "JA_EXISTE"
+                                  ? <span className="inline-flex items-center rounded-full bg-amber-50 text-amber-700 px-2 py-0.5 text-[11px]">Já existe</span>
+                                  : <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-500 px-2 py-0.5 text-[11px]">Dup.</span>}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -411,7 +462,7 @@ export default function FinanceiroCheques() {
             )}
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="p-5 pt-0">
             <Button variant="outline" onClick={() => setImportOpen(false)}>Cancelar</Button>
             <Button onClick={confirmarImport} disabled={!preview || preview.resumo.novos === 0 || confirmarMut.isPending} className="gap-2">
               {confirmarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
