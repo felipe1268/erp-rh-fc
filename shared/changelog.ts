@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3217 — **MEDIÇÃO DE TERCEIROS · A MEDIÇÃO EXPANDIDA AGORA TEM ABAS INTERNAS
+ * ("PLANILHA DE MEDIÇÃO" / "LEVANTAMENTO") EM VEZ DE SÓ UM BOTÃO SOLTO — A ABA "LEVANTAMENTO"
+ * ABRE A FERRAMENTA DE DEMARCAÇÃO EM PDF (MAPA DE MEDIÇÃO) JÁ EXISTENTE, VINCULADA ÀQUELA
+ * MEDIÇÃO/CONTRATO. + CORREÇÃO DO EDITOR BRL INLINE (V.PERÍODO): "ESC" AGORA CANCELA DE VERDADE
+ * (ANTES O `onBlur` AINDA GRAVAVA O VALOR APÓS O ESC).**
+ *
+ * CONTEXTO (Task #86 — Fluxo Manual de Medição de Terceiros): o fluxo manual em 3 passos pede
+ * que, DENTRO da medição, exista uma ABA "Levantamento" (passo 3), não apenas um botão de ação no
+ * card. A implementação anterior já criava a medição manual zerada (passo 1) e permitia lançar o
+ * medido por item em BRL na planilha (passo 2), mas o levantamento de campo ficava num botão solto
+ * no cabeçalho do card — faltava a estrutura de abas espelhando o processo.
+ *
+ * SOLUÇÃO — FRONT (`client/src/pages/terceiros/contratos/ContratoDetalhe.tsx`, componente
+ * `MedicoesTab`): ao expandir uma medição, o conteúdo passou a ter uma faixa de abas com
+ * "Planilha de Medição" (a planilha de lançamento BRL por item + retenções, já existente) e
+ * "Levantamento" (painel que mostra o levantamento vinculado com botão "Abrir ferramenta de
+ * levantamento", ou cria/vincula um novo via `fazerLevantamento` quando em modo edição e a medição
+ * ainda não foi aprovada/paga). A sub-aba ativa é por medição (`medSubTab: Record<id, "planilha"|
+ * "levantamento">`, default "planilha"). O botão de levantamento saiu do cabeçalho do card; lá ficou
+ * apenas um badge "Levantamento vinculado" como indicador quando há vínculo. A engine de levantamento
+ * continua a MESMA (origem="terceiro"): `medicao.criarCampo` + `terceiroContratos.vincularLevantamentoMedicao`,
+ * abrindo `/medicao/{contratoId}/levantamento/{campoId}?origem=terceiro`.
+ *
+ * SOLUÇÃO — FIX UX (mesmo arquivo, editor inline de V.Período em BRL): pressionar "Esc" agora marca
+ * `valorSubmitGuard.current = true` ANTES de `setEditingValor(null)`, então o `onBlur` disparado pela
+ * perda de foco cai no guard e NÃO grava. Antes o "Esc" limpava o state mas o `onBlur` ainda chamava
+ * `submitValorPeriodo`, persistindo o valor que o usuário queria descartar.
+ *
+ * ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE · só client (UI). O módulo "Terceiros" (gestão) e a
+ * aba Medições só-leitura quando aberta por ele continuam intactos (o gate `modoEdicao` é o mesmo).
+ *
+ * ---
+ *
  * Rev. 3216 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NOVOS DOIS CAMPOS DE UPLOAD PARA OS
  * DEMONSTRATIVOS CONSOLIDADOS DE PAGAMENTO (1 PDF COM TODOS OS PIX + 1 PDF COM TODOS OS
  * BOLETOS PAGOS DO MÊS), POR CONTA + MÊS, USADOS COMO INFORMAÇÃO DE APOIO PARA IDENTIFICAR

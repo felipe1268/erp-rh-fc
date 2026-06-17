@@ -2032,6 +2032,8 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
     setEditingValor(null);
   };
   const [recalcResult, setRecalcResult] = useState<any>(null);
+  // Task #86 — sub-abas DENTRO da medição expandida (Planilha de Medição / Levantamento), por medição.
+  const [medSubTab, setMedSubTab] = useState<Record<number, "planilha" | "levantamento">>({});
   const [, navigate] = useLocation();
   // Rev. 3090 (T005) — Levantamento de campo OBRIGATÓRIO da medição de terceiros.
   // A engine de levantamento (PDF/plantas + escala + contornos + fotos) é a MESMA do
@@ -2138,6 +2140,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
         const editavel = isEditable && modoEdicao; // Rev. 3082 (T007) — gate de edição da aba-espelho
         const mostrarRemover = isPreApproval && modoEdicao;
         const itens = m.itens || [];
+        const subTab = medSubTab[m.id] || "planilha";
 
         return (
           <div key={m.id} ref={m.id === initialMedicaoId ? medicaoRef : undefined} className={`bg-white rounded-xl border overflow-hidden ${m.id === initialMedicaoId ? "border-blue-400 ring-2 ring-blue-100" : "border-gray-200"}`}>
@@ -2223,27 +2226,13 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                   <p className="text-xs text-orange-700 font-medium"><AlertTriangle className="w-3.5 h-3.5 inline mr-1.5 text-orange-500" />{m.alertaDivergencia}</p>
                 </div>
               )}
-              <div className="mt-2 ml-6 flex flex-wrap items-center gap-2">
-                {m.levantamentoCampoId ? (
-                  <>
-                    <Badge variant="outline" className="gap-1 text-xs text-blue-700 border-blue-200 bg-blue-50">
-                      <Ruler className="w-3 h-3" /> Levantamento de campo vinculado
-                    </Badge>
-                    <Button size="sm" variant="outline" className="h-7 gap-1 text-[11px]" onClick={() => abrirLevantamento(m.levantamentoCampoId)}>
-                      <ExternalLink className="w-3 h-3" /> Abrir levantamento
-                    </Button>
-                  </>
-                ) : (
-                  modoEdicao && m.status !== "aprovada" && m.status !== "paga" && (
-                    <Button size="sm" variant="outline" className="h-7 gap-1 text-[11px] text-blue-700 border-blue-200 hover:bg-blue-50"
-                      disabled={levantando}
-                      onClick={() => fazerLevantamento(m)}>
-                      {levantando ? <Loader2 className="w-3 h-3 animate-spin" /> : <Ruler className="w-3 h-3" />}
-                      Fazer levantamento de campo (projeto/plantas)
-                    </Button>
-                  )
-                )}
-              </div>
+              {m.levantamentoCampoId && (
+                <div className="mt-2 ml-6">
+                  <Badge variant="outline" className="gap-1 text-xs text-blue-700 border-blue-200 bg-blue-50">
+                    <Ruler className="w-3 h-3" /> Levantamento vinculado
+                  </Badge>
+                </div>
+              )}
               {m.motivoRejeicao && (
                 <div className="mt-2 ml-6 p-2 bg-red-50 rounded-lg border border-red-100">
                   <p className="text-xs text-red-600"><AlertTriangle className="w-3 h-3 inline mr-1" />Rejeitada{(m as any).rejeitadoPor ? ` por ${(m as any).rejeitadoPor}` : ""}{(m as any).rejeitadoEm ? ` em ${fmtDate((m as any).rejeitadoEm)}` : ""}</p>
@@ -2277,9 +2266,24 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
               />
             </div>
 
-            {isExpanded && itens.length > 0 && (<>
-              <div className="border-t border-gray-100 overflow-x-auto">
-                <table className="w-full text-xs min-w-[900px]">
+            {isExpanded && (
+              <div className="border-t border-gray-100">
+                <div className="flex items-center gap-1 px-3 pt-2 bg-gray-50/60 border-b border-gray-100">
+                  {([["planilha", "Planilha de Medição", ClipboardCheck], ["levantamento", "Levantamento", Ruler]] as const).map(([key, label, Icon]) => (
+                    <button
+                      key={key}
+                      onClick={() => setMedSubTab(s => ({ ...s, [m.id]: key }))}
+                      className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 -mb-px transition-colors ${subTab === key ? "border-blue-600 text-blue-700" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />{label}
+                    </button>
+                  ))}
+                </div>
+
+                {subTab === "planilha" ? (
+                  itens.length > 0 ? (<>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs min-w-[900px]">
                   <thead>
                     <tr className="bg-gray-50 text-gray-500">
                       <th className="px-3 py-2 text-left w-[80px]">Item</th>
@@ -2397,7 +2401,7 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                                     onKeyDown={e => {
                                       if (e.key === "Enter") {
                                         submitValorPeriodo(item.id, m.id, contrato.companyId, editingValor.valor);
-                                      } else if (e.key === "Escape") setEditingValor(null);
+                                      } else if (e.key === "Escape") { valorSubmitGuard.current = true; setEditingValor(null); }
                                     }}
                                     onBlur={() => submitValorPeriodo(item.id, m.id, contrato.companyId, editingValor.valor)}
                                     autoFocus
@@ -2436,14 +2440,41 @@ function MedicoesTab({ contrato, id, emModuloMedicoes, aprovarMut, rejeitarMut, 
                       {mostrarRemover && <td />}
                     </tr>
                   </tfoot>
-                </table>
-              </div>
-              <RetencoesSec m={m} contrato={contrato} isEditable={editavel} />
-            </>)}
-
-            {isExpanded && itens.length === 0 && (
-              <div className="border-t border-gray-100 p-4 text-center text-xs text-gray-400">
-                Itens da medição não carregados. Expanda para ver detalhes.
+                    </table>
+                    </div>
+                    <RetencoesSec m={m} contrato={contrato} isEditable={editavel} />
+                  </>) : (
+                    <div className="p-4 text-center text-xs text-gray-400">
+                      Itens da medição não carregados. Expanda para ver detalhes.
+                    </div>
+                  )
+                ) : (
+                  <div className="p-4 space-y-3">
+                    <div className="flex items-start gap-2 rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2 text-xs text-blue-800">
+                      <Ruler className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                      <span>Levantamento de campo sobre o projeto (PDF/plantas): demarque áreas, volumes, perímetros e contagens vinculados a esta medição. O resultado pode alimentar a planilha.</span>
+                    </div>
+                    {m.levantamentoCampoId ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className="gap-1 text-xs text-blue-700 border-blue-200 bg-blue-50">
+                          <Ruler className="w-3 h-3" /> Levantamento de campo vinculado
+                        </Badge>
+                        <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={() => abrirLevantamento(m.levantamentoCampoId)}>
+                          <ExternalLink className="w-3 h-3" /> Abrir ferramenta de levantamento
+                        </Button>
+                      </div>
+                    ) : modoEdicao && m.status !== "aprovada" && m.status !== "paga" ? (
+                      <Button size="sm" variant="outline" className="h-8 gap-1 text-xs text-blue-700 border-blue-200 hover:bg-blue-50"
+                        disabled={levantando}
+                        onClick={() => fazerLevantamento(m)}>
+                        {levantando ? <Loader2 className="w-3 h-3 animate-spin" /> : <Ruler className="w-3 h-3" />}
+                        Fazer levantamento de campo (projeto/plantas)
+                      </Button>
+                    ) : (
+                      <p className="text-xs text-gray-400">Nenhum levantamento de campo vinculado a esta medição.</p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
