@@ -827,6 +827,7 @@ export default function FechamentoPonto() {
     stats.refetch();
     summary.refetch();
     conflitos.refetch();
+    inconsistencies.refetch();
     if (selectedEmployeeId) employeeDetail.refetch();
   };
 

@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3223 — **PONTO / FECHAMENTO DE PONTO · RELATÓRIO DE INCONSISTÊNCIAS · AO USAR O BOTÃO
+ * "CORRIGIR" (LÁPIS / LANÇAMENTO MANUAL) PARA TRATAR UMA INCONSISTÊNCIA, ELA AGORA DESAPARECE
+ * DA LISTA AUTOMATICAMENTE — NÃO PRECISA MAIS FAZER DOIS TRABALHOS (CORRIGIR E DEPOIS JUSTIFICAR).
+ * ANTES O LANÇAMENTO MANUAL SALVAVA O PONTO MAS A INCONSISTÊNCIA CONTINUAVA "PENDENTE" NA LISTA.**
+ *
+ * PEDIDO (piloto FC): "os lançamentos corrigidos pelo botão editar não estão desaparecendo da
+ * lista de inconsistências; só somem se eu JUSTIFICAR — mas justificar não me deixa corrigir o
+ * ponto. Tenho que fazer 2 trabalhos. Quero que ao editar eu já aprove a justificativa".
+ *
+ * CAUSA-RAIZ (dois pontos):
+ * - FRONT: o `ManualEntryDialog` (aberto pelo botão "Corrigir"/lápis) chamava `onSaved` →
+ *   `handleManualSaved`, que dava refetch em stats/summary/conflitos mas NÃO em `inconsistencies`.
+ *   Logo, mesmo o backend marcando a inconsistência como "ajustado", a lista (filtro default
+ *   "Pendentes") não era recarregada e a linha permanecia visível.
+ * - BACK: `fechamentoPonto.manualEntry` já marcava `timeInconsistencies.status="ajustado"` no
+ *   branch de UPDATE (quando o dia JÁ tinha registro — ex.: batida ímpar), mas NÃO no branch de
+ *   INSERT (dia sem registro — ex.: sem_registro / falta_batida). Nesses tipos a inconsistência
+ *   ficava pendente mesmo após a correção.
+ *
+ * SOLUÇÃO:
+ * - FRONT (`client/src/pages/FechamentoPonto.tsx`): `handleManualSaved` passou a chamar também
+ *   `inconsistencies.refetch()`. Como o filtro default é "Pendentes" e a inconsistência vira
+ *   "ajustado", a linha some sozinha após salvar a correção.
+ * - BACK (`server/routers/fechamentoPonto.ts`, `manualEntry`): replica o `UPDATE timeInconsistencies
+ *   SET status='ajustado'` (mesmo filtro employeeId+data) também no branch de INSERT, dentro da
+ *   mesma transação. Assim a correção auto-resolve a inconsistência para TODOS os tipos.
+ *
+ * Resultado: "Corrigir" = ação única (lança o ponto correto + resolve a inconsistência). O botão
+ * "Justificar" (sem penalidade, registra motivo, não altera o ponto) segue existindo para os casos
+ * em que NÃO há nada a corrigir.
+ *
+ * ZERO SCHEMA/ALTER/DROP/DELETE · só refetch novo no front + update já existente estendido ao 2º branch.
+ *
  * Rev. 3222 — **PONTO / ESPELHO DE PONTO · O ATESTADO MÉDICO (DE DIAS OU DE HORAS) LANÇADO NA
  * CENTRAL DE DOCUMENTOS AGORA APARECE NO ESPELHO DE PONTO DO COLABORADOR — O DIA COBERTO PELO
  * ATESTADO É MARCADO COMO "ATESTADO" (ROXO, ABONADO) EM VEZ DE "FALTA" (VERMELHO). ANTES O

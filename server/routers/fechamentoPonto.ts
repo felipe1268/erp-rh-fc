@@ -2149,6 +2149,16 @@ export const fechamentoPontoRouter = router({
               AND fonte = 'dixi'
           `);
           await tx.insert(timeRecords).values(record as any);
+          // Mesma resolução automática do branch de UPDATE: ao corrigir uma
+          // inconsistência cujo dia ainda não tinha registro (ex.: sem_registro /
+          // falta_batida), o lançamento manual também deve marcá-la como
+          // "ajustado" — caso contrário ela permaneceria pendente na lista.
+          await tx.update(timeInconsistencies)
+            .set({ status: "ajustado", resolvidoPor: ctx.user?.name || "RH", resolvidoEm: new Date().toISOString().split("T")[0] })
+            .where(and(
+              eq(timeInconsistencies.employeeId, input.employeeId),
+              eq(timeInconsistencies.data, input.data),
+            ));
           action = "created";
         }
 
