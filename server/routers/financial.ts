@@ -3665,7 +3665,12 @@ export const financialRouter = router({
           AND COALESCE(conciliado,0)=0 AND excluido_em IS NULL
         ORDER BY data ASC, id ASC`, p);
 
-    // 3) Lançamentos do sistema sem conciliação no período (conta ou sem conta)
+    // 3) Lançamentos do sistema sem conciliação no período — APENAS desta conta.
+    // Rev. 3188 — antes incluía também os lançamentos SEM conta (conta_bancaria_id IS
+    // NULL), que apareciam (e eram contados) em TODAS as contas, inflando o KPI "ERP sem
+    // extrato" e fazendo o número variar conforme a conta selecionada. Agora o bloco
+    // específico da conta traz só `conta_bancaria_id=$2`; os "sem conta" saem num bloco
+    // próprio (lancamentosSemConta) que NÃO entra na contagem por conta.
     const lancRes = await dbExecute(db,
       `SELECT e.id, e.descricao, e.fornecedor_nome AS "fornecedorNome", e.obra_nome AS "obraNome",
               COALESCE(e.valor_realizado, e.valor_previsto) AS valor, e.tipo, e.status,
@@ -3673,7 +3678,23 @@ export const financialRouter = router({
               COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) AS data
          FROM financial_entries e
         WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
-          AND (e.conta_bancaria_id=$2 OR e.conta_bancaria_id IS NULL)
+          AND e.conta_bancaria_id=$2
+          AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) >= $3
+          AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) <= $4
+        ORDER BY data ASC, e.id ASC`, p);
+
+    // 3b) Lançamentos sem conta bancária definida (conta_bancaria_id IS NULL) — Rev. 3188.
+    // São candidatos a casar com o extrato de QUALQUER banco (o ERP não sabe a conta de
+    // origem), por isso ficam num bloco à parte, idêntico em todas as contas, e NÃO são
+    // somados ao número da conta. Independe de $2 (a conta selecionada).
+    const semContaRes = await dbExecute(db,
+      `SELECT e.id, e.descricao, e.fornecedor_nome AS "fornecedorNome", e.obra_nome AS "obraNome",
+              COALESCE(e.valor_realizado, e.valor_previsto) AS valor, e.tipo, e.status,
+              e.forma_pagamento AS "formaPagamento", e.comprovante_url AS "comprovanteUrl",
+              COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) AS data
+         FROM financial_entries e
+        WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
+          AND e.conta_bancaria_id IS NULL
           AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) >= $3
           AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) <= $4
         ORDER BY data ASC, e.id ASC`, p);
@@ -3682,6 +3703,7 @@ export const financialRouter = router({
       conciliados: rows(concRes),
       extratoSemLancamento: rows(pendRes),
       lancamentosSemExtrato: rows(lancRes),
+      lancamentosSemConta: rows(semContaRes),
     };
   }),
 

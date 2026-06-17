@@ -196,8 +196,11 @@ export default function FinanceiroConciliacao() {
   const repConc: any[] = report?.conciliados ?? [];
   const repExt: any[] = report?.extratoSemLancamento ?? [];
   const repLan: any[] = report?.lancamentosSemExtrato ?? [];
+  // Rev. 3188 — lançamentos SEM conta bancária definida vêm num bloco próprio e NÃO entram
+  // no número da conta (antes apareciam/contavam em todas as contas, inflando "ERP sem extrato").
+  const repSemConta: any[] = report?.lancamentosSemConta ?? [];
   const absSum = (arr: any[]) => arr.reduce((a, r) => a + Math.abs(Number(r.valor) || 0), 0);
-  const vConc = absSum(repConc), vExt = absSum(repExt), vLan = absSum(repLan);
+  const vConc = absSum(repConc), vExt = absSum(repExt), vLan = absSum(repLan), vSemConta = absSum(repSemConta);
   const totLinhas = repConc.length + repExt.length;
   const pctConc = totLinhas > 0 ? Math.round((repConc.length / totLinhas) * 100) : 0;
 
@@ -234,6 +237,39 @@ export default function FinanceiroConciliacao() {
       setComprovBusy(null);
     }
   }
+
+  // Rev. 3188 — renderiza uma linha de lançamento (usada na lista "No ERP, sem extrato" da
+  // conta E na lista "Sem conta definida"). Mesma interação: selecionar p/ casar, ver detalhe
+  // e anexar/abrir comprovante.
+  const renderEntryRow = (e: any) => {
+    const forma = String(e.formaPagamento || "").toLowerCase();
+    const isPix = forma.includes("pix");
+    const isBoleto = forma.includes("boleto");
+    return (
+      <div
+        key={e.id}
+        className={`w-full px-4 py-3 flex items-center gap-2 hover:bg-gray-50 transition-colors ${selectedEntry === e.id ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}
+      >
+        <button onClick={() => setSelectedEntry(selectedEntry === e.id ? null : e.id)} className="flex-1 min-w-0 text-left">
+          <p className="text-xs text-gray-500 flex items-center gap-1.5">
+            {fmtData(e.data)}
+            {(isPix || isBoleto) && <span className={`px-1.5 py-px rounded text-[10px] font-medium ${isPix ? "bg-emerald-100 text-emerald-700" : "bg-orange-100 text-orange-700"}`}>{isPix ? "PIX" : "Boleto"}</span>}
+          </p>
+          <p className="text-sm text-gray-700 truncate max-w-[200px]">{e.fornecedorNome || e.descricao || "—"}</p>
+          <p className="text-xs text-gray-400 truncate max-w-[200px]">{e.obraNome || ""}</p>
+        </button>
+        <p className={`text-sm font-bold shrink-0 ${e.tipo === "receita" ? "text-green-600" : "text-red-500"}`}>{formatBRL(Math.abs(Number(e.valor)))}</p>
+        <button type="button" onClick={() => setDetalheEntryId(e.id)} title="Ver detalhes" className="shrink-0 p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50"><Eye className="w-4 h-4" /></button>
+        {e.comprovanteUrl ? (
+          <a href={e.comprovanteUrl} target="_blank" rel="noreferrer" title="Comprovante anexado — abrir" className="shrink-0 p-1.5 rounded-md text-green-600 hover:bg-green-50"><Paperclip className="w-4 h-4" /></a>
+        ) : (
+          <button type="button" onClick={() => pedirComprovante(e.id)} disabled={comprovBusy === e.id} title="Anexar comprovante (PIX/boleto/recibo)" className="shrink-0 p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 disabled:opacity-50">
+            {comprovBusy === e.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
+          </button>
+        )}
+      </div>
+    );
+  };
 
   // Detalhe consultivo do lançamento (mesmo endpoint usado em Contas a Pagar).
   const detailQuery = (trpc as any).financial.getEntryDetalhe.useQuery(
@@ -417,6 +453,10 @@ export default function FinanceiroConciliacao() {
     const rowsLan = repLan.length
       ? repLan.map((c: any) => `<tr><td>${esc(fmtData(c.data))}</td><td>${esc(c.fornecedorNome || c.descricao || ("Lançamento #" + c.id))}</td><td>${esc(c.obraNome || "—")}</td><td class="r">${esc(formatBRL(Math.abs(Number(c.valor) || 0)))}</td></tr>`).join("")
       : `<tr><td colspan="4" class="empty">Nenhum lançamento sem extrato no período.</td></tr>`;
+    // Rev. 3188 — bloco "sem conta definida" no PDF (não somado ao "ERP sem extrato").
+    const rowsSemConta = repSemConta.length
+      ? repSemConta.map((c: any) => `<tr><td>${esc(fmtData(c.data))}</td><td>${esc(c.fornecedorNome || c.descricao || ("Lançamento #" + c.id))}</td><td>${esc(c.obraNome || "—")}</td><td class="r">${esc(formatBRL(Math.abs(Number(c.valor) || 0)))}</td></tr>`).join("")
+      : "";
     const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Conciliação ${esc(periodoLabel)}</title>
 <style>
   *{box-sizing:border-box} body{font-family:Arial,Helvetica,sans-serif;color:#1f2937;margin:0;padding:24px;font-size:12px}
@@ -464,6 +504,11 @@ export default function FinanceiroConciliacao() {
   <table><thead><tr><th>Data</th><th>Lançamento</th><th>Obra</th><th class="r">Valor</th></tr></thead>
   <tbody>${rowsLan}</tbody>
   <tfoot><tr><td colspan="3">Total sem extrato</td><td class="r">${esc(formatBRL(vLan))}</td></tr></tfoot></table>
+  ${repSemConta.length ? `<h2>4. Lançamentos sem conta bancária definida (${repSemConta.length})</h2>
+  <p style="font-size:10px;color:#6b7280;margin:0 0 6px">Não somados ao bloco "ERP sem extrato" — sem conta de origem informada no ERP, aparecem em todas as contas.</p>
+  <table><thead><tr><th>Data</th><th>Lançamento</th><th>Obra</th><th class="r">Valor</th></tr></thead>
+  <tbody>${rowsSemConta}</tbody>
+  <tfoot><tr><td colspan="3">Total sem conta</td><td class="r">${esc(formatBRL(vSemConta))}</td></tr></tfoot></table>` : ""}
 </body></html>`;
     const w = window.open("", "_blank");
     if (!w) { toast({ title: "Permita pop-ups para gerar o relatório", variant: "destructive" }); return; }
@@ -1037,45 +1082,46 @@ export default function FinanceiroConciliacao() {
                     <div className="p-6 text-center text-gray-400 text-sm">Nenhum lançamento sem extrato no período.</div>
                   ) : (
                     <div className="divide-y divide-gray-100 max-h-[420px] overflow-y-auto">
-                      {repLan.map((e: any) => {
-                        const forma = String(e.formaPagamento || "").toLowerCase();
-                        const isPix = forma.includes("pix");
-                        const isBoleto = forma.includes("boleto");
-                        return (
-                          <div
-                            key={e.id}
-                            className={`w-full px-4 py-3 flex items-center gap-2 hover:bg-gray-50 transition-colors ${selectedEntry === e.id ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}
-                          >
-                            <button onClick={() => setSelectedEntry(selectedEntry === e.id ? null : e.id)} className="flex-1 min-w-0 text-left">
-                              <p className="text-xs text-gray-500 flex items-center gap-1.5">
-                                {fmtData(e.data)}
-                                {(isPix || isBoleto) && <span className={`px-1.5 py-px rounded text-[10px] font-medium ${isPix ? "bg-emerald-100 text-emerald-700" : "bg-orange-100 text-orange-700"}`}>{isPix ? "PIX" : "Boleto"}</span>}
-                              </p>
-                              <p className="text-sm text-gray-700 truncate max-w-[200px]">{e.fornecedorNome || e.descricao || "—"}</p>
-                              <p className="text-xs text-gray-400 truncate max-w-[200px]">{e.obraNome || ""}</p>
-                            </button>
-                            <p className={`text-sm font-bold shrink-0 ${e.tipo === "receita" ? "text-green-600" : "text-red-500"}`}>{formatBRL(Math.abs(Number(e.valor)))}</p>
-                            <button type="button" onClick={() => setDetalheEntryId(e.id)} title="Ver detalhes" className="shrink-0 p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50"><Eye className="w-4 h-4" /></button>
-                            {e.comprovanteUrl ? (
-                              <a href={e.comprovanteUrl} target="_blank" rel="noreferrer" title="Comprovante anexado — abrir" className="shrink-0 p-1.5 rounded-md text-green-600 hover:bg-green-50"><Paperclip className="w-4 h-4" /></a>
-                            ) : (
-                              <button type="button" onClick={() => pedirComprovante(e.id)} disabled={comprovBusy === e.id} title="Anexar comprovante (PIX/boleto/recibo)" className="shrink-0 p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 disabled:opacity-50">
-                                {comprovBusy === e.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
+                      {repLan.map((e: any) => renderEntryRow(e))}
                     </div>
                   )}
                 </CardContent>
               </Card>
             </div>
 
+            {/* Rev. 3188 — Lançamentos SEM conta bancária definida (conta_bancaria_id NULL).
+                Bloco à parte, fora do número da conta: o ERP não sabe de qual banco saíram,
+                então são candidatos a casar com o extrato de QUALQUER conta. Colapsável. */}
+            {repSemConta.length > 0 && (
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-0">
+                  <details className="group">
+                    <summary className="flex items-center justify-between cursor-pointer select-none px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                      <span className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-gray-500" />
+                        Sem conta bancária definida ({repSemConta.length}) · {formatBRL(vSemConta)}
+                      </span>
+                      <ChevronRight className="w-4 h-4 text-gray-400 transition-transform group-open:rotate-90" />
+                    </summary>
+                    <div className="border-t">
+                      <p className="px-4 py-2 text-[11px] text-gray-500 bg-gray-50/60">
+                        Estes lançamentos não têm conta bancária informada no ERP — por isso aparecem em todas as contas e <strong>não entram no número "ERP sem extrato"</strong> acima. Você pode casá-los com o extrato desta conta normalmente.
+                      </p>
+                      <div className="divide-y divide-gray-100 max-h-[420px] overflow-y-auto">
+                        {repSemConta.map((e: any) => renderEntryRow(e))}
+                      </div>
+                    </div>
+                  </details>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Conciliação manual do par selecionado */}
             {(selectedStatement || selectedEntry) && (() => {
               const ext = repExt.find((s: any) => s.id === selectedStatement);
-              const lan = repLan.find((e: any) => e.id === selectedEntry);
+              // Rev. 3188 — o lançamento selecionado pode estar na lista da conta OU na lista
+              // "sem conta definida" (ambas casáveis contra o extrato desta conta).
+              const lan = repLan.find((e: any) => e.id === selectedEntry) || repSemConta.find((e: any) => e.id === selectedEntry);
               const delta = ext && lan ? Math.abs(Math.abs(Number(ext.valor)) - Math.abs(Number(lan.valor))) : null;
               return (
                 <Card className="border-0 shadow-sm ring-1 ring-blue-200">
@@ -1096,8 +1142,8 @@ export default function FinanceiroConciliacao() {
                       <Button variant="ghost" size="sm" onClick={() => { setSelectedStatement(null); setSelectedEntry(null); }}><X className="w-4 h-4" /></Button>
                       <Button
                         className="bg-blue-600 hover:bg-blue-700 text-white"
-                        disabled={!selectedStatement || !selectedEntry || conciliarMut.isPending}
-                        onClick={() => conciliarMut.mutate({ companyId, statementLineId: selectedStatement, entryId: selectedEntry })}
+                        disabled={!ext || !lan || conciliarMut.isPending}
+                        onClick={() => { if (ext && lan) conciliarMut.mutate({ companyId, statementLineId: ext.id, entryId: lan.id }); }}
                       >
                         <CheckCircle className="w-4 h-4 mr-1.5" />{conciliarMut.isPending ? "Conciliando..." : "Conciliar"}
                       </Button>

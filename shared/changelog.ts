@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3188 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O KPI "ERP SEM EXTRATO" PAROU DE INFLAR
+ * MUDANDO DE VALOR A CADA CONTA: OS LANÇAMENTOS SEM CONTA BANCÁRIA DEFINIDA (conta_bancaria_id
+ * NULL) SAÍRAM DO NÚMERO DA CONTA E GANHARAM UM BLOCO PRÓPRIO "SEM CONTA BANCÁRIA DEFINIDA".**
+ *
+ * PEDIDO (piloto FC FEV/2026): o usuário notou que, ao clicar em contas bancárias diferentes na
+ * tela `/financeiro/conciliacao`, o KPI "ERP sem extrato" mudava de valor (ex.: APLICAÇÃO 394 /
+ * BB 408 / CAIXA ADM 411 / CEF 3083-8 578 / Santander Aparecida 844). Causa: a query
+ * `getConciliacaoReport` (bloco 3, `lancamentosSemExtrato`) filtrava
+ * `(e.conta_bancaria_id=$2 OR e.conta_bancaria_id IS NULL)` — ou seja, somava os lançamentos DA
+ * conta selecionada + TODOS os lançamentos SEM conta. Como o grosso dos lançamentos manuais de
+ * FEV foi digitado sem informar a conta, esse "piso" sem conta (~394) aparecia e era CONTADO em
+ * TODAS as contas, e cada conta somava os poucos próprios — por isso o número variava. O usuário
+ * escolheu a opção "separar os sem-conta num bloco à parte, fora do número da conta".
+ *
+ * SOLUÇÃO (backend + frontend, ZERO SCHEMA/ALTER/DROP/DELETE):
+ *   • BACKEND `server/routers/financial.ts` (`getConciliacaoReport`): o bloco 3
+ *     (`lancamentosSemExtrato`) passou a filtrar SÓ `e.conta_bancaria_id=$2` (específico da conta).
+ *     Novo bloco 3b `lancamentosSemConta` traz `e.conta_bancaria_id IS NULL` (independe de $2,
+ *     idêntico em todas as contas), mesmas demais condições (período, não conciliado, não cancelado).
+ *   • FRONTEND `client/src/pages/financeiro/FinanceiroConciliacao.tsx`: novo `repSemConta`/`vSemConta`.
+ *     O KPI "ERP sem extrato" e a lista "No ERP, sem extrato" agora contam SÓ `repLan` (da conta).
+ *     Os "sem conta" viraram um card colapsável `<details>` "Sem conta bancária definida (N) · R$…"
+ *     com nota explicando que não entram no número da conta e que ainda podem ser casados com o
+ *     extrato desta conta. A renderização da linha de lançamento foi extraída p/ `renderEntryRow`
+ *     (reuso nas 2 listas). A busca do par manual (`lan`) procura em `repLan` E `repSemConta`. O
+ *     "Relatório PDF" ganhou a seção "4. Lançamentos sem conta bancária definida".
+ *
+ * IMPACTO: o KPI "ERP sem extrato" agora é estável e representa de fato o que pertence àquela
+ * conta; os lançamentos sem conta ficam visíveis num bloco separado (sem dupla contagem),
+ * preservando o fluxo de conciliação. ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
+ * REVISÃO DE CÓDIGO (corrigido aqui): o botão "Conciliar" do par manual gateava por
+ * `selectedStatement`/`selectedEntry` (IDs crus, que podem ficar stale após troca de
+ * conta/período e apontar p/ um item fora da lista visível). Passou a gatear/agir pelos objetos
+ * JÁ RESOLVIDOS no dataset atual (`ext`/`lan`): `disabled={!ext || !lan}` e
+ * `mutate({ statementLineId: ext.id, entryId: lan.id })` — sem conciliar ID invisível.
+ *
  * Rev. 3187 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · REDESIGN PARA TELA ÚNICA: O "PAINEL DE
  * CONCILIAÇÃO" SEPARADO FOI APOSENTADO E SEUS 3 BLOCOS (CONCILIADO / EXTRATO-SEM-LANÇAMENTO /
  * ERP-SEM-EXTRATO) PASSARAM A VIVER NA PRÓPRIA TELA `/financeiro/conciliacao`, COM BARRA DE
