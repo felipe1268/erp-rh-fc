@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3212 — **FINANCEIRO / CONTROLE DE CHEQUES · OS 3 CARDS DE RESUMO (TOTAL DE CHEQUES /
+ * COMPENSADOS / FALTAM COMPENSAR) AGORA FICAM FIXOS TAMBÉM QUANDO O USUÁRIO CLICA EM "ANO TODO":
+ * NESSE CASO MOSTRAM O AGREGADO DO ANO INTEIRO (LABEL "RESUMO DE 2026 (ANO TODO)"), EM VEZ DE
+ * SUMIREM COMO ANTES (SÓ APARECIAM COM UM MÊS SELECIONADO).**
+ *
+ * PEDIDO (piloto FC): "QUERO ESTES CARDS FIXOS TBM.. QUANDO EU CLICAR NA OPÇÃO ANO TODO" + print dos
+ * 3 cards "Resumo de JUN/2026" e do botão "Ano todo". Até a Rev. 3211 os 3 cards (introduzidos na
+ * Rev. 3207) só renderizavam quando havia um mês selecionado (`mesSel != null`); ao escolher "Ano
+ * todo" (`mesSel === null`) eles desapareciam, deixando a tela sem o resumo agregado.
+ *
+ * SOLUÇÃO — FRONT (`client/src/pages/financeiro/FinanceiroCheques.tsx`): o bloco dos 3 cards deixou
+ * de ser gated por `mesSel != null` e passou a renderizar SEMPRE. Foi criado um derivado `cardTotais`
+ * que escolhe a fonte de dados conforme a régua: com mês selecionado usa `totaisMes` (agregado do mês,
+ * já vindo de `cheques.resumo({companyId, ano, mes})`); em "Ano todo" usa `totais` (agregado do ano,
+ * que já vem de `cheques.resumo({companyId, ano})` SEM filtro de mês — query preexistente que
+ * alimentava os cards do topo). Normalizou-se a forma `{qtd,total,map}` (o resumo do ano expunha
+ * `qtdGeral`/`totalGeral`). Título dinâmico via `cardTitulo` ("Resumo de MÊS/ano" ou "Resumo de ANO
+ * (ano todo)") e o sufixo das labels via `cardEscopo` ("do mês" / "do ano"). Os cards continuam
+ * sendo botões que filtram a lista por status (toggle p/ "todos"), comportamento da Rev. 3210.
+ *
+ * ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE · só UI (reuso de query já existente).
+ *
  * Rev. 3211 — **FINANCEIRO · NOVO MÓDULO "CONTROLE DE CARTÃO DE CRÉDITO" (CADASTRO DE CARTÕES +
  * IMPORTAÇÃO DE FATURA LIDA POR IA + CLASSIFICAÇÃO POR OBRA/CENTRO DE CUSTO/CATEGORIA) E O GANCHO
  * "FORMA DE PAGAMENTO = CARTÃO DE CRÉDITO" NO FORM DE LANÇAMENTOS. CARTÃO NÃO VIRA LANÇAMENTO

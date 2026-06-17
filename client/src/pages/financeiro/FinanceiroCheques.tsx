@@ -102,8 +102,8 @@ export default function FinanceiroCheques() {
     { companyId, ano },
     { enabled: !!companyId }
   );
-  // Resumo por STATUS do MÊS selecionado (p/ os 3 cards "do mês"). Só roda quando
-  // há um mês selecionado; em "Ano todo" os cards do mês ficam ocultos.
+  // Resumo por STATUS do MÊS selecionado (alimenta os 3 cards quando há um mês). Só roda
+  // com mês selecionado; em "Ano todo" os cards usam o resumo do ANO (`totais`) — Rev. 3212.
   const { data: resumoMes = [] } = (trpc as any).cheques.resumo.useQuery(
     { companyId, ano, mes: mesSel ?? undefined },
     { enabled: !!companyId && mesSel != null }
@@ -130,6 +130,15 @@ export default function FinanceiroCheques() {
     const total = (resumoMes as any[]).reduce((a, r) => a + (r.total || 0), 0);
     return { map, qtd, total };
   }, [resumoMes]);
+
+  // Rev. 3212 — os 3 cards de resumo agora aparecem TAMBÉM em "Ano todo" (mesSel=null):
+  // com mês selecionado usam o agregado do mês (totaisMes); em "Ano todo" usam o do ano
+  // (totais, que já vem de cheques.resumo({companyId,ano}) sem filtro de mês).
+  const cardTotais = mesSel != null
+    ? { qtd: totaisMes.qtd, total: totaisMes.total, map: totaisMes.map }
+    : { qtd: totais.qtdGeral, total: totais.totalGeral, map: totais.map };
+  const cardTitulo = mesSel != null ? `Resumo de ${MESES[mesSel]}/${ano}` : `Resumo de ${ano} (ano todo)`;
+  const cardEscopo = mesSel != null ? "do mês" : "do ano";
 
   // Status por mês p/ a bolinha da régua (mesmo padrão da Conciliação):
   // verde = todos compensados; azul = tem cheque(s) mas com pendência; cinza = sem dados.
@@ -298,52 +307,50 @@ export default function FinanceiroCheques() {
           </button>
         </div>
 
-        {/* Cards do MÊS selecionado (Total / Compensados / Faltam compensar) */}
-        {mesSel != null && (
-          <div className="space-y-2">
-            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Resumo de {MESES[mesSel]}/{ano}
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <button
-                type="button"
-                onClick={() => toggleStatus("todos")}
-                aria-pressed={fStatus === "todos"}
-                className={`text-left rounded-xl border bg-blue-50/40 border-blue-200 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-blue-300 ${fStatus === "todos" ? "ring-2 ring-blue-500" : ""}`}
-              >
-                <div className="p-4">
-                  <div className="text-xs text-muted-foreground">Total de cheques do mês</div>
-                  <div className="text-xl font-bold text-blue-700">{totaisMes.qtd}</div>
-                  <div className="text-sm text-muted-foreground">{formatBRL(totaisMes.total)}</div>
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => toggleStatus("compensado")}
-                aria-pressed={fStatus === "compensado"}
-                className={`text-left rounded-xl border bg-emerald-50/40 border-emerald-200 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-emerald-300 ${fStatus === "compensado" ? "ring-2 ring-emerald-500" : ""}`}
-              >
-                <div className="p-4">
-                  <div className="text-xs text-muted-foreground">Compensados no mês</div>
-                  <div className="text-xl font-bold text-emerald-700">{totaisMes.map["compensado"]?.qtd || 0}</div>
-                  <div className="text-sm text-muted-foreground">{formatBRL(totaisMes.map["compensado"]?.total || 0)}</div>
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => toggleStatus("pendente")}
-                aria-pressed={fStatus === "pendente"}
-                className={`text-left rounded-xl border bg-amber-50/40 border-amber-200 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-amber-300 ${fStatus === "pendente" ? "ring-2 ring-amber-500" : ""}`}
-              >
-                <div className="p-4">
-                  <div className="text-xs text-muted-foreground">Faltam compensar (pendentes)</div>
-                  <div className="text-xl font-bold text-amber-600">{totaisMes.map["pendente"]?.qtd || 0}</div>
-                  <div className="text-sm text-muted-foreground">{formatBRL(totaisMes.map["pendente"]?.total || 0)}</div>
-                </div>
-              </button>
-            </div>
+        {/* Cards de resumo (Total / Compensados / Faltam compensar) — mês selecionado OU ano todo */}
+        <div className="space-y-2">
+          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {cardTitulo}
           </div>
-        )}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <button
+              type="button"
+              onClick={() => toggleStatus("todos")}
+              aria-pressed={fStatus === "todos"}
+              className={`text-left rounded-xl border bg-blue-50/40 border-blue-200 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-blue-300 ${fStatus === "todos" ? "ring-2 ring-blue-500" : ""}`}
+            >
+              <div className="p-4">
+                <div className="text-xs text-muted-foreground">Total de cheques {cardEscopo}</div>
+                <div className="text-xl font-bold text-blue-700">{cardTotais.qtd}</div>
+                <div className="text-sm text-muted-foreground">{formatBRL(cardTotais.total)}</div>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleStatus("compensado")}
+              aria-pressed={fStatus === "compensado"}
+              className={`text-left rounded-xl border bg-emerald-50/40 border-emerald-200 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-emerald-300 ${fStatus === "compensado" ? "ring-2 ring-emerald-500" : ""}`}
+            >
+              <div className="p-4">
+                <div className="text-xs text-muted-foreground">Compensados {cardEscopo}</div>
+                <div className="text-xl font-bold text-emerald-700">{cardTotais.map["compensado"]?.qtd || 0}</div>
+                <div className="text-sm text-muted-foreground">{formatBRL(cardTotais.map["compensado"]?.total || 0)}</div>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleStatus("pendente")}
+              aria-pressed={fStatus === "pendente"}
+              className={`text-left rounded-xl border bg-amber-50/40 border-amber-200 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-amber-300 ${fStatus === "pendente" ? "ring-2 ring-amber-500" : ""}`}
+            >
+              <div className="p-4">
+                <div className="text-xs text-muted-foreground">Faltam compensar (pendentes)</div>
+                <div className="text-xl font-bold text-amber-600">{cardTotais.map["pendente"]?.qtd || 0}</div>
+                <div className="text-sm text-muted-foreground">{formatBRL(cardTotais.map["pendente"]?.total || 0)}</div>
+              </div>
+            </button>
+          </div>
+        </div>
 
         {/* Filtros — mesmo padrão da Conciliação Bancária:
             busca + status, e a faixa de meses (Jan–Dez) com bolinhas de status. */}
