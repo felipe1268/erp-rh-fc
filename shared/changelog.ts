@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3224 — **PONTO / FECHAMENTO DE PONTO · RELATÓRIO DE "CONFLITOS DE OBRA NO MESMO DIA" ·
+ * ELIMINADOS OS FALSOS POSITIVOS: BATIDAS NA MESMA OBRA EM HORÁRIOS DIFERENTES (EX.: ENTRADA
+ * 07:00 + SAÍDA 12:13) E ENTRADA SEM SAÍDA (FUNCIONÁRIO AINDA TRABALHANDO) NÃO SÃO MAIS MARCADAS
+ * COMO "BATIDA DUPLICADA". AGORA O CONFLITO NASCE SÓ DA PRESENÇA IMPOSSÍVEL — DUAS OBRAS DIFERENTES
+ * NO MESMO PERÍODO (EX.: QIU 07:00 SEM SAÍDA + PAPA 08:30).**
+ *
+ * PEDIDO (piloto FC): "um funcionário pode bater 07:00 e ainda não ter horas (não bateu a saída) —
+ * não posso ignorar essa batida. Pode bater 07:00 e depois 12:13 (1 entrada + 1 saída) — isso não é
+ * conflito (trabalhou manhã numa obra e tarde noutra). Conflito de verdade é quando ele bate na obra
+ * do Qiu às 7h, é realocado, esquece de bater a saída e bate entrada na obra do Papa às 8h30 — duas
+ * batidas no mesmo período em obras diferentes".
+ *
+ * CAUSA-RAIZ: a detecção (`getConflitosObraDia`) era binária e IGNORAVA horários quando era a mesma
+ * obra — qualquer 2+ registros do mesmo funcionário/obra/dia eram marcados cego como "Batida
+ * Duplicada" (`isSameObraDuplicate`). Por isso MARCOS, FABIO, RODRIGO, HENRIQUE e LEONARDO caíam como
+ * duplicados mesmo com horários totalmente distintos. As ações em lote replicavam o mesmo erro:
+ * `resolveAllDuplicatas` agrupava por (employeeId, obraId, data) e apagava tudo menos o "maior" SEM
+ * olhar horário; `resolveAllConflitos` aplicava rateio de deslocamento até em grupos de obra única.
+ *
+ * SOLUÇÃO (Opção A aprovada pelo piloto — só batidas IDÊNTICAS continuam sinalizadas):
+ * - `getConflitosObraDia`: novo motor de intervalos onde ENTRADA SEM SAÍDA ocupa o período até o fim
+ *   do dia (fim = Infinity). Conflito (`hasOverlap`) = dois intervalos em OBRAS DIFERENTES que se
+ *   cruzam no tempo (cobre o caso "esqueceu a saída na obra A e bateu na obra B"). MESMA obra só entra
+ *   no relatório se houver batida IDÊNTICA (mesmos horários — duplicata real do relógio), via novo
+ *   `hasExactDuplicate`. Mesma obra com horários diferentes (turnos legítimos) NÃO entra mais.
+ * - `resolveAllDuplicatas`: dentro de cada (employeeId, obraId, data) subagrupa por ASSINATURA de
+ *   horários (entrada1..3/saida1..3) e só colapsa quando a assinatura se repete 2+ (mantém manual/mais
+ *   horas). Assinatura única = batida legítima, jamais excluída. SELECT passou a trazer entrada3/saida3.
+ * - `resolveAllConflitos`: só aplica rateio de deslocamento quando há 2+ OBRAS distintas no dia
+ *   (`obrasDistintas.size >= 2`); grupos de obra única são pulados.
+ *
+ * Resultado: os contadores e botões do front ("Limpar N duplicatas", "Confirmar Deslocamentos") já
+ * dependiam de `isSameObraDuplicate`/`hasOverlap`, então a semântica foi preservada — só ficou precisa.
+ * Sem mudança de frontend.
+ *
+ * ZERO BACKEND DESTRUTIVO · ZERO SCHEMA/ALTER/DROP/DELETE · só lógica de detecção/lote.
+ *
  * Rev. 3223 — **PONTO / FECHAMENTO DE PONTO · RELATÓRIO DE INCONSISTÊNCIAS · AO USAR O BOTÃO
  * "CORRIGIR" (LÁPIS / LANÇAMENTO MANUAL) PARA TRATAR UMA INCONSISTÊNCIA, ELA AGORA DESAPARECE
  * DA LISTA AUTOMATICAMENTE — NÃO PRECISA MAIS FAZER DOIS TRABALHOS (CORRIGIR E DEPOIS JUSTIFICAR).

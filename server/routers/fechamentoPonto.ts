@@ -3061,14 +3061,30 @@ export const fechamentoPontoRouter = router({
       const obraKey = (r: { obraId: number | null; obraNome: string | null }) =>
         r.obraNome ? r.obraNome.trim().toUpperCase() : (r.obraId != null ? String(r.obraId) : '__null__');
 
-      const checkOverlap = (entries: typeof recs) => {
+      // Constrói intervalos de presença. Uma ENTRADA SEM SAÍDA (funcionário
+      // ainda trabalhando OU que esqueceu de bater a saída) ocupa o período até
+      // o fim do dia (fim = Infinity) — assim uma entrada em aberto numa obra
+      // conflita com qualquer batida posterior em OUTRA obra.
+      const INF = Number.POSITIVE_INFINITY;
+      const buildIntervalos = (entries: typeof recs) => {
         const intervalos: { obraKey: string; inicio: number; fim: number }[] = [];
         for (const r of entries) {
           const key = obraKey(r);
-          if (r.entrada1 && r.saida1) intervalos.push({ obraKey: key, inicio: parseTimeMin(r.entrada1), fim: parseTimeMin(r.saida1) });
-          if (r.entrada2 && r.saida2) intervalos.push({ obraKey: key, inicio: parseTimeMin(r.entrada2), fim: parseTimeMin(r.saida2) });
-          if (r.entrada3 && r.saida3) intervalos.push({ obraKey: key, inicio: parseTimeMin(r.entrada3), fim: parseTimeMin(r.saida3) });
+          const pares: Array<[string | null, string | null]> = [
+            [r.entrada1, r.saida1], [r.entrada2, r.saida2], [r.entrada3, r.saida3],
+          ];
+          for (const [ent, sai] of pares) {
+            if (ent) intervalos.push({ obraKey: key, inicio: parseTimeMin(ent), fim: sai ? parseTimeMin(sai) : INF });
+          }
         }
+        return intervalos;
+      };
+
+      // Conflito REAL = dois intervalos em OBRAS DIFERENTES que se cruzam no
+      // tempo (o funcionário não pode estar em 2 obras ao mesmo tempo). Batidas
+      // na MESMA obra nunca geram sobreposição aqui — são turnos do mesmo dia.
+      const checkOverlap = (entries: typeof recs) => {
+        const intervalos = buildIntervalos(entries);
         for (let i = 0; i < intervalos.length; i++) {
           for (let j = i + 1; j < intervalos.length; j++) {
             const a = intervalos[i], b = intervalos[j];
@@ -3076,6 +3092,20 @@ export const fechamentoPontoRouter = router({
               return true;
             }
           }
+        }
+        return false;
+      };
+
+      // Duplicata REAL na mesma obra = duas batidas IDÊNTICAS (mesmos horários
+      // de entrada/saída) — típico erro do relógio que registrou 2x a mesma
+      // batida. Batidas em horários DIFERENTES na mesma obra são legítimas
+      // (entrada + saída / turnos distintos) e NÃO são duplicata.
+      const hasExactDuplicate = (entries: typeof recs) => {
+        const vistos = new Set<string>();
+        for (const r of entries) {
+          const sig = `${obraKey(r)}|${r.entrada1 || ''}|${r.saida1 || ''}|${r.entrada2 || ''}|${r.saida2 || ''}|${r.entrada3 || ''}|${r.saida3 || ''}`;
+          if (vistos.has(sig)) return true;
+          vistos.add(sig);
         }
         return false;
       };
@@ -3161,7 +3191,10 @@ export const fechamentoPontoRouter = router({
           const [empId, data] = key.split('|');
 
           if (obraNames.size > 1) {
-            // Conflito entre obras realmente diferentes
+            // MÚLTIPLAS OBRAS no mesmo dia → deslocamento (válido) OU conflito,
+            // dependendo do horário. checkOverlap trata entrada-sem-saída como
+            // presença até o fim do dia (cobre o caso "esqueceu de bater a saída
+            // na obra A e bateu entrada na obra B").
             const overlap = checkOverlap(entries);
             const transferInfo = !overlap ? analyzeTransfer(entries) : null;
             conflitos.push({
@@ -3174,8 +3207,11 @@ export const fechamentoPontoRouter = router({
               obras: entries.map(e => ({ obraId: e.obraId, obraNome: e.obraNome, horasTrabalhadas: e.horasTrabalhadas })),
               records: entries.map(e => ({ id: e.id, obraId: e.obraId, obraNome: e.obraNome, horasTrabalhadas: e.horasTrabalhadas, entrada1: e.entrada1, saida1: e.saida1, entrada2: e.entrada2, saida2: e.saida2, entrada3: e.entrada3, saida3: e.saida3, ajusteManual: e.ajusteManual })),
             });
-          } else {
-            // Batidas duplicadas na mesma obra (mesmo obraId/obraNome, mesmo funcionário, mesmo dia)
+          } else if (hasExactDuplicate(entries)) {
+            // MESMA obra: só é conflito quando há batidas IDÊNTICAS (duplicata
+            // real do relógio). Vários registros na mesma obra em horários
+            // DIFERENTES são turnos legítimos (entrada + saída) e NÃO entram
+            // no relatório de conflitos.
             conflitos.push({
               employeeId: Number(empId),
               employeeName: empNames[Number(empId)] || 'Desconhecido',
@@ -3359,9 +3395,17 @@ export const fechamentoPontoRouter = router({
         // Extrair todos os intervalos de cada registro para verificar sobreposição
         const intervalos: { recId: number; obraId: number | null; inicio: number; fim: number }[] = [];
         for (const r of registros) {
+          // Par completo (entrada+saída) => intervalo fechado.
+          // Entrada SEM saída (ainda trabalhando) => intervalo ABERTO até o fim do dia
+          // (fim = Infinity), espelhando getConflitosObraDia. Isso garante que um
+          // deslocamento NÃO seja confirmado quando há presença impossível (obra A
+          // aberta sobrepondo obra B) — esse caso vira sobreposição e exige resolução manual.
           if (r.entrada1 && r.saida1) intervalos.push({ recId: r.id, obraId: r.obraId, inicio: parseTime(r.entrada1), fim: parseTime(r.saida1) });
+          else if (r.entrada1) intervalos.push({ recId: r.id, obraId: r.obraId, inicio: parseTime(r.entrada1), fim: Infinity });
           if (r.entrada2 && r.saida2) intervalos.push({ recId: r.id, obraId: r.obraId, inicio: parseTime(r.entrada2), fim: parseTime(r.saida2) });
+          else if (r.entrada2) intervalos.push({ recId: r.id, obraId: r.obraId, inicio: parseTime(r.entrada2), fim: Infinity });
           if (r.entrada3 && r.saida3) intervalos.push({ recId: r.id, obraId: r.obraId, inicio: parseTime(r.entrada3), fim: parseTime(r.saida3) });
+          else if (r.entrada3) intervalos.push({ recId: r.id, obraId: r.obraId, inicio: parseTime(r.entrada3), fim: Infinity });
         }
 
         // Verificar sobreposição entre obras DIFERENTES
@@ -3631,9 +3675,15 @@ export const fechamentoPontoRouter = router({
       const hasOverlap = (registros: any[]) => {
         const intervalos: { obraId: number | null; inicio: number; fim: number }[] = [];
         for (const r of registros) {
+          // Entrada SEM saída => intervalo ABERTO (fim = Infinity), igual a getConflitosObraDia,
+          // para que presença impossível (obra A aberta sobrepondo obra B) seja detectada como
+          // sobreposição e PULADA do rateio em lote (exige resolução manual).
           if (r.entrada1 && r.saida1) intervalos.push({ obraId: r.obraId, inicio: parseTime(r.entrada1), fim: parseTime(r.saida1) });
+          else if (r.entrada1) intervalos.push({ obraId: r.obraId, inicio: parseTime(r.entrada1), fim: Infinity });
           if (r.entrada2 && r.saida2) intervalos.push({ obraId: r.obraId, inicio: parseTime(r.entrada2), fim: parseTime(r.saida2) });
+          else if (r.entrada2) intervalos.push({ obraId: r.obraId, inicio: parseTime(r.entrada2), fim: Infinity });
           if (r.entrada3 && r.saida3) intervalos.push({ obraId: r.obraId, inicio: parseTime(r.entrada3), fim: parseTime(r.saida3) });
+          else if (r.entrada3) intervalos.push({ obraId: r.obraId, inicio: parseTime(r.entrada3), fim: Infinity });
         }
         for (let i = 0; i < intervalos.length; i++) {
           for (let j = i + 1; j < intervalos.length; j++) {
@@ -3655,6 +3705,11 @@ export const fechamentoPontoRouter = router({
           eq(timeRecords.employeeId, c.employeeId),
           eq(timeRecords.data, c.data!),
         ));
+
+        // Só é deslocamento quando há 2+ OBRAS distintas no dia. Vários
+        // registros na MESMA obra são turnos legítimos — não aplicar rateio.
+        const obrasDistintas = new Set(registros.map(r => r.obraId));
+        if (obrasDistintas.size < 2) { continue; }
 
         // Verificar sobreposição — se houver, PULAR e exigir resolução manual
         if (hasOverlap(registros)) {
@@ -3720,7 +3775,7 @@ export const fechamentoPontoRouter = router({
       // Buscar todos os registros do mês com campos necessários
       const allRecs = await db.execute(sql`
         SELECT id, "employeeId", "obraId", data, "horasTrabalhadas", "ajusteManual",
-               "entrada1", "saida1", "entrada2", "saida2"
+               "entrada1", "saida1", "entrada2", "saida2", "entrada3", "saida3"
         FROM time_records
         WHERE "companyId" IN (${sql.join((input.companyIds || [input.companyId]).map(id => sql`${id}`), sql`, `)})
           AND data BETWEEN ${mesStart} AND ${mesEnd}
@@ -3756,27 +3811,39 @@ export const fechamentoPontoRouter = router({
       const idsParaExcluir: number[] = [];
 
       for (const [, recs] of Object.entries(grupos)) {
-        if (recs.length < 2) continue; // Só processa duplicatas
+        if (recs.length < 2) continue; // Só processa grupos com 2+ registros
         const dataGrupo = recs[0]?.data ? String(recs[0].data) : null;
         if (dataGrupo && isLocked(dataGrupo)) { skippedLocked++; continue; }
 
-        // Ordenar: prioridade 1 = manual (ajusteManual=1), prioridade 2 = mais horas
-        const sorted = [...recs].sort((a, b) => {
-          if ((b.ajusteManual || 0) !== (a.ajusteManual || 0)) return (b.ajusteManual || 0) - (a.ajusteManual || 0);
-          return calcMinutos(b) - calcMinutos(a);
-        });
-
-        // Manter o primeiro (melhor candidato), marcar o resto para exclusão
-        const [manter, ...excluir] = sorted;
-        // Atualizar justificativa do que será mantido
-        await db.execute(sql`
-          UPDATE time_records SET justificativa = ${`[Duplicata resolvida em lote por ${resolvidoPor}] Registro com mais horas/ajuste manual mantido`}
-          WHERE id = ${manter.id}
-        `);
-        for (const exc of excluir) {
-          idsParaExcluir.push(Number(exc.id));
+        // Subagrupar por ASSINATURA de horários — só batidas IDÊNTICAS são
+        // duplicata real do relógio. Registros com horários DIFERENTES na mesma
+        // obra são turnos legítimos (entrada + saída) e NUNCA são excluídos.
+        const porAssinatura: Record<string, any[]> = {};
+        for (const r of recs) {
+          const sig = `${r.entrada1 || ''}|${r.saida1 || ''}|${r.entrada2 || ''}|${r.saida2 || ''}|${r.entrada3 || ''}|${r.saida3 || ''}`;
+          (porAssinatura[sig] ||= []).push(r);
         }
-        resolved++;
+
+        let grupoResolvido = false;
+        for (const dups of Object.values(porAssinatura)) {
+          if (dups.length < 2) continue; // assinatura única = batida legítima, mantém
+
+          // Ordenar: prioridade 1 = manual (ajusteManual=1), prioridade 2 = mais horas
+          const sorted = [...dups].sort((a, b) => {
+            if ((b.ajusteManual || 0) !== (a.ajusteManual || 0)) return (b.ajusteManual || 0) - (a.ajusteManual || 0);
+            return calcMinutos(b) - calcMinutos(a);
+          });
+
+          // Manter o primeiro (melhor candidato), excluir as cópias idênticas
+          const [manter, ...excluir] = sorted;
+          await db.execute(sql`
+            UPDATE time_records SET justificativa = ${`[Duplicata resolvida em lote por ${resolvidoPor}] Batida idêntica duplicada — mantido registro com ajuste manual/mais horas`}
+            WHERE id = ${manter.id}
+          `);
+          for (const exc of excluir) idsParaExcluir.push(Number(exc.id));
+          grupoResolvido = true;
+        }
+        if (grupoResolvido) resolved++;
       }
 
       // Excluir em lote
