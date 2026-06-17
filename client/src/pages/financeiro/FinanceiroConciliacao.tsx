@@ -12,7 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX } from "lucide-react";
+import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX, FileSpreadsheet, FileDown } from "lucide-react";
 import { formatConta, formatAgencia } from "@/lib/formatters";
 
 function formatBRL(v: number) {
@@ -586,6 +586,84 @@ export default function FinanceiroConciliacao() {
     setTimeout(() => { try { w.focus(); w.print(); } catch { /* ignore */ } }, 350);
   }
 
+  // Rev. 3196 — Exportar SEPARADAMENTE cada lista de pendências (Excel + PDF):
+  // "No extrato, sem lançamento" (repExt) e "No ERP, sem extrato" (repLan).
+  const slugPeriodo = () => String(periodoLabel || "").replace(/[^0-9A-Za-z]+/g, "-").replace(/^-|-$/g, "");
+
+  async function exportarListaExcel(qual: "extrato" | "erp") {
+    const lista = qual === "extrato" ? repExt : repLan;
+    if (lista.length === 0) { toast({ title: "Nada para exportar nesta lista", variant: "destructive" }); return; }
+    try {
+      const XLSX = await import("xlsx");
+      const titulo = qual === "extrato" ? "No extrato, sem lançamento" : "No ERP, sem extrato";
+      const aoa: any[][] = qual === "extrato"
+        ? [["Data", "Descrição (extrato)", "Tipo", "Valor (R$)"]]
+        : [["Data", "Lançamento", "Obra", "Valor (R$)"]];
+      let tot = 0;
+      lista.forEach((c: any) => {
+        const v = Math.abs(Number(c.valor) || 0); tot += v;
+        if (qual === "extrato") aoa.push([fmtData(c.data), c.descricao || "—", Number(c.valor) >= 0 ? "Entrada" : "Saída", v]);
+        else aoa.push([fmtData(c.data), c.fornecedorNome || c.descricao || ("Lançamento #" + c.id), c.obraNome || "—", v]);
+      });
+      aoa.push(["", "", "Total", tot]);
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws["!cols"] = [{ wch: 12 }, { wch: 50 }, { wch: 20 }, { wch: 16 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, titulo.slice(0, 31));
+      const fname = qual === "extrato" ? "extrato-sem-lancamento" : "erp-sem-extrato";
+      XLSX.writeFile(wb, `${fname}-${slugPeriodo()}.xlsx`);
+    } catch (e: any) {
+      toast({ title: "Falha ao gerar Excel", description: String(e?.message ?? e), variant: "destructive" });
+    }
+  }
+
+  function exportarListaPDF(qual: "extrato" | "erp") {
+    if (!report) { toast({ title: "Relatório ainda carregando", variant: "destructive" }); return; }
+    const lista = qual === "extrato" ? repExt : repLan;
+    if (lista.length === 0) { toast({ title: "Nada para exportar nesta lista", variant: "destructive" }); return; }
+    const esc = (s: any) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" } as any)[c]);
+    const isExt = qual === "extrato";
+    const titulo = isExt ? "EXTRATO SEM LANÇAMENTO NO ERP" : "LANÇAMENTOS DO ERP SEM EXTRATO";
+    const total = isExt ? vExt : vLan;
+    const head = isExt
+      ? `<tr><th>Data</th><th>Descrição (extrato)</th><th>Tipo</th><th class="r">Valor</th></tr>`
+      : `<tr><th>Data</th><th>Lançamento</th><th>Obra</th><th class="r">Valor</th></tr>`;
+    const body = lista.map((c: any) => isExt
+      ? `<tr><td>${esc(fmtData(c.data))}</td><td>${esc(c.descricao || "—")}</td><td>${esc(Number(c.valor) >= 0 ? "Entrada" : "Saída")}</td><td class="r">${esc(formatBRL(Math.abs(Number(c.valor) || 0)))}</td></tr>`
+      : `<tr><td>${esc(fmtData(c.data))}</td><td>${esc(c.fornecedorNome || c.descricao || ("Lançamento #" + c.id))}</td><td>${esc(c.obraNome || "—")}</td><td class="r">${esc(formatBRL(Math.abs(Number(c.valor) || 0)))}</td></tr>`
+    ).join("");
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(titulo)} ${esc(periodoLabel)}</title>
+<style>
+  *{box-sizing:border-box} body{font-family:Arial,Helvetica,sans-serif;color:#1f2937;margin:0;padding:24px;font-size:12px}
+  .logo{display:block;height:54px;margin:0 auto 10px}
+  h1.brand{text-align:center;font-size:16px;margin:0;color:#1B2A4A;letter-spacing:.5px}
+  .band{background:#1B2A4A;color:#fff;text-align:center;padding:10px;margin:14px 0;border-radius:6px;letter-spacing:3px;font-weight:bold;font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .meta{display:flex;justify-content:space-between;font-size:11px;color:#4b5563;margin-bottom:14px;flex-wrap:wrap;gap:6px}
+  table{width:100%;border-collapse:collapse;margin-bottom:8px}
+  th,td{border:1px solid #e5e7eb;padding:5px 7px;text-align:left;vertical-align:top}
+  th{background:#f3f4f6;font-size:10px;text-transform:uppercase;letter-spacing:.4px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  td.r,th.r{text-align:right;white-space:nowrap}
+  tfoot td{font-weight:bold;background:#f9fafb}
+  @media print{body{padding:10px}}
+</style></head><body>
+  <img class="logo" src="${window.location.origin}/logo-fc-branco-amarelo.png?v=3196" alt="FC Engenharia"/>
+  <h1 class="brand">FC ENGENHARIA</h1>
+  <div class="band">${esc(titulo)}</div>
+  <div class="meta">
+    <span><strong>Conta:</strong> ${esc(contaLabel)}</span>
+    <span><strong>Período:</strong> ${esc(periodoLabel)}</span>
+    <span><strong>Emitido em:</strong> ${esc(new Date().toLocaleString("pt-BR"))}</span>
+  </div>
+  <table><thead>${head}</thead>
+  <tbody>${body}</tbody>
+  <tfoot><tr><td colspan="3">Total (${lista.length})</td><td class="r">${esc(formatBRL(total))}</td></tr></tfoot></table>
+</body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) { toast({ title: "Permita pop-ups para gerar o relatório", variant: "destructive" }); return; }
+    w.document.write(html); w.document.close();
+    setTimeout(() => { try { w.focus(); w.print(); } catch { /* ignore */ } }, 350);
+  }
+
   return (
     <DashboardLayout>
       <div className="max-w-6xl mx-auto p-6 space-y-6">
@@ -1124,10 +1202,22 @@ export default function FinanceiroConciliacao() {
               {/* Esquerda: no extrato, sem lançamento */}
               <Card className="border-0 shadow-sm">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 text-red-500" />
-                    No extrato, sem lançamento ({repExt.length})
-                  </CardTitle>
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-red-500" />
+                      No extrato, sem lançamento ({repExt.length})
+                    </CardTitle>
+                    {repExt.length > 0 && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => exportarListaExcel("extrato")} title="Exportar para Excel">
+                          <FileSpreadsheet className="w-3.5 h-3.5 mr-1" />Excel
+                        </Button>
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => exportarListaPDF("extrato")} title="Exportar para PDF">
+                          <FileDown className="w-3.5 h-3.5 mr-1" />PDF
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   {reportLoading ? (
@@ -1172,10 +1262,22 @@ export default function FinanceiroConciliacao() {
               {/* Direita: no ERP, sem extrato + comprovantes */}
               <Card className="border-0 shadow-sm">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-amber-600" />
-                    No ERP, sem extrato ({repLan.length})
-                  </CardTitle>
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-amber-600" />
+                      No ERP, sem extrato ({repLan.length})
+                    </CardTitle>
+                    {repLan.length > 0 && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => exportarListaExcel("erp")} title="Exportar para Excel">
+                          <FileSpreadsheet className="w-3.5 h-3.5 mr-1" />Excel
+                        </Button>
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => exportarListaPDF("erp")} title="Exportar para PDF">
+                          <FileDown className="w-3.5 h-3.5 mr-1" />PDF
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   {reportLoading ? (

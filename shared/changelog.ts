@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3196 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · AS DUAS LISTAS DE PENDÊNCIAS ("NO EXTRATO, SEM
+ * LANÇAMENTO" E "NO ERP, SEM EXTRATO") GANHARAM BOTÕES PARA EXPORTAR CADA UMA SEPARADAMENTE EM
+ * EXCEL (.XLSX) E EM PDF.**
+ *
+ * PEDIDO (piloto FC): "preciso tirar estes relatórios separados, para Excel e PDF" — referindo-se
+ * às duas colunas da conciliação manual: "No extrato, sem lançamento (204)" (esquerda) e "No ERP,
+ * sem extrato (184)" (direita). Antes só existia o `gerarRelatorioPDF` (relatório consolidado dos 3
+ * blocos juntos, para impressão); não havia como tirar SÓ uma das listas, nem em Excel.
+ *
+ * SOLUÇÃO (FRONTEND-ONLY): em `client/src/pages/financeiro/FinanceiroConciliacao.tsx`, o cabeçalho de
+ * cada um dos dois cards ganhou um par de botões discretos (ghost) "Excel" e "PDF" (ícones
+ * `FileSpreadsheet`/`FileDown`), visíveis só quando a lista tem itens. Duas funções novas:
+ * `exportarListaExcel("extrato" | "erp")` — `await import("xlsx")` (SheetJS, já no projeto),
+ * `aoa_to_sheet` com cabeçalho + linhas + rodapé "Total", larguras de coluna e nome de arquivo com o
+ * período (`extrato-sem-lancamento-<período>.xlsx` / `erp-sem-extrato-<período>.xlsx`); e
+ * `exportarListaPDF("extrato" | "erp")` — gera HTML com o cabeçalho institucional FC (logo + faixa
+ * azul + meta conta/período/emissão), UMA tabela só da lista escolhida + rodapé "Total (N)", abre em
+ * nova aba e dispara `print()` (mesmo modelo/CSS do `gerarRelatorioPDF`, com `esc()` anti-XSS).
+ * Colunas: extrato = Data/Descrição/Tipo/Valor; ERP = Data/Lançamento/Obra/Valor. Valores em BRL na
+ * exibição (PDF) e numéricos no Excel (para somar). ZERO SCHEMA/ALTER/DROP/DELETE · ZERO BACKEND.
+ *
+ * IMPACTO: o usuário consegue extrair e circular cada lista de pendência isoladamente (planilha para
+ * trabalhar/filtrar, PDF para imprimir/anexar), sem o ruído do relatório consolidado. O
+ * `gerarRelatorioPDF` (3 blocos) continua disponível inalterado.
+ *
  * Rev. 3195 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · AS PROJEÇÕES (CRONOGRAMA DA OBRA, FOLHA
  * PROJETADA, VR/VA PROJETADO, FÉRIAS/RESCISÃO PROJETADAS ETC.) DEIXARAM DE APARECER NA CONCILIAÇÃO —
  * ELA PASSA A TRATAR SOMENTE DO QUE FOI EFETIVAMENTE PAGO/RECEBIDO (CAIXA REAL).**
