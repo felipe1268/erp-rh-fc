@@ -206,6 +206,10 @@ const INITIAL_FORM = {
   // Rev. 2693 — Transferência entre contas (origem → destino)
   contaBancariaOrigemId: "",
   contaBancariaDestinoId: "",
+  // Rev. 3211 — Gancho cartão de crédito (só usado quando formaPagamento="cartao_credito").
+  cartaoId: "",
+  cartaoParcelas: "",
+  cartaoEstabelecimento: "",
 };
 
 export default function FinanceiroLancamentos() {
@@ -516,6 +520,11 @@ export default function FinanceiroLancamentos() {
     { enabled: !!companyId },
   );
   // Rev. 2693 — Contas bancárias (origem/destino da transferência entre contas).
+  // Rev. 3211 — cartões cadastrados, p/ o gancho "forma de pagamento = Cartão de Crédito".
+  const { data: cartoesList } = (trpc as any).cartao.listarCartoes.useQuery(
+    { companyId: companyId! },
+    { enabled: !!companyId },
+  );
   const { data: bankAccounts } = (trpc as any).financial.getBankAccounts.useQuery(
     { companyId },
     { enabled: !!companyId },
@@ -798,6 +807,10 @@ export default function FinanceiroLancamentos() {
           contaNome: form.contaNome || undefined,
           obraNome: form.obraNome || undefined,
           formaPagamento: form.formaPagamento || undefined,
+          // Rev. 3211 — gancho cartão (backend só grava se forma="cartao_credito").
+          cartaoId: form.formaPagamento === "cartao_credito" && form.cartaoId ? Number(form.cartaoId) : undefined,
+          cartaoParcelas: form.formaPagamento === "cartao_credito" && form.cartaoParcelas ? parseInt(form.cartaoParcelas, 10) : undefined,
+          cartaoEstabelecimento: form.formaPagamento === "cartao_credito" ? (form.cartaoEstabelecimento || undefined) : undefined,
           fornecedorNome: form.fornecedorNome || undefined,
           observacoes: form.observacoes || undefined,
           status: form.tipo === "receita" ? "a_receber" : form.status,
@@ -1780,6 +1793,58 @@ export default function FinanceiroLancamentos() {
                     ) : null}
                   </div>
                 </div>
+
+                {/* Rev. 3211 — Gancho cartão de crédito: aparece só quando a forma é "Cartão de Crédito". */}
+                {form.formaPagamento === "cartao_credito" && (
+                  <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/40 p-3 space-y-2">
+                    <p className="text-[11px] font-semibold text-blue-700 flex items-center gap-1">
+                      <CreditCard className="w-3.5 h-3.5" /> Dados do cartão
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <p className="text-[11px] text-gray-400 mb-1">Cartão</p>
+                        <Select
+                          value={form.cartaoId || "none"}
+                          onValueChange={v => setForm(f => ({ ...f, cartaoId: v === "none" ? "" : v }))}
+                        >
+                          <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">—</SelectItem>
+                            {(Array.isArray(cartoesList) ? cartoesList : []).map((c: any) => (
+                              <SelectItem key={c.id} value={String(c.id)}>
+                                {(c.banco || "Banco")} · final {c.final4 || "????"}{c.tipoPessoa === "PF" ? " (PF)" : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-gray-400 mb-1">Parcelas</p>
+                        <Input
+                          type="number" min={1} max={99}
+                          value={form.cartaoParcelas}
+                          onChange={e => setForm(f => ({ ...f, cartaoParcelas: e.target.value }))}
+                          placeholder="1"
+                          className="h-9"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-gray-400 mb-1">Onde foi comprado</p>
+                        <Input
+                          value={form.cartaoEstabelecimento}
+                          onChange={e => setForm(f => ({ ...f, cartaoEstabelecimento: e.target.value }))}
+                          placeholder="Estabelecimento"
+                          className="h-9"
+                        />
+                      </div>
+                    </div>
+                    {(Array.isArray(cartoesList) ? cartoesList : []).length === 0 && (
+                      <p className="text-[10px] text-amber-600">
+                        Nenhum cartão cadastrado. Cadastre em Financeiro → Cartão de Crédito.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Observações (expansível) */}

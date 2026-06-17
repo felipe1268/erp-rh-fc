@@ -979,6 +979,16 @@ Regras:
           console.log(`[SyncSchema+] Tabelas de Cartão de Crédito garantidas (Rev. 3210).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA financial_cartoes:`, e?.message || e); }
 
+        // Rev. 3211 — Gancho "forma de pagamento = Cartão de Crédito" em
+        // financial_entries: qual cartão + nº parcelas + estabelecimento.
+        // Aditivas/nullable. ADD COLUMN IF NOT EXISTS (R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS cartao_id INTEGER`);
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS cartao_parcelas INTEGER`);
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS cartao_estabelecimento VARCHAR(255)`);
+          console.log(`[SyncSchema+] Rev. 3211: colunas de cartão (gancho) em financial_entries garantidas.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA cartao colunas financial_entries:`, e?.message || e); }
+
         // Rev. 3117 — Mapeamento/Cobertura de exames do ASO + extração por IA (Fase 2).
         // Colunas estruturadas em asos (camelCase, aspas obrigatórias) + tabela-fila
         // aso_extracao_ia (snake_case). ADD COLUMN/TABLE IF NOT EXISTS (R-001/R-007/R-010 OK).

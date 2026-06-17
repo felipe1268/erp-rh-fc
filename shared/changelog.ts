@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3211 — **FINANCEIRO · NOVO MÓDULO "CONTROLE DE CARTÃO DE CRÉDITO" (CADASTRO DE CARTÕES +
+ * IMPORTAÇÃO DE FATURA LIDA POR IA + CLASSIFICAÇÃO POR OBRA/CENTRO DE CUSTO/CATEGORIA) E O GANCHO
+ * "FORMA DE PAGAMENTO = CARTÃO DE CRÉDITO" NO FORM DE LANÇAMENTOS. CARTÃO NÃO VIRA LANÇAMENTO
+ * (MESMA FILOSOFIA DO CONTROLE DE CHEQUES).**
+ *
+ * PEDIDO (piloto FC): controlar os cartões de crédito da empresa — cadastrar cada cartão, importar a
+ * fatura (PDF) deixando a IA extrair os itens, e classificar cada compra por obra / centro de custo /
+ * categoria. Decisões fechadas com o usuário: (1) IOF/anuidade/encargos = apropriar ao Centro de
+ * Custo "Administrativo/Financeiro" (sem obra); (2) cartões PF NÃO viram cartão FC automaticamente —
+ * o sistema ALERTA/sugere regularização quando um cartão pessoal (`tipoPessoa="PF"`) é usado pela
+ * empresa; (3) implementar tudo agora, incluindo o gancho no form de Lançamentos.
+ *
+ * SOLUÇÃO — BACK (`server/routers/cartao.ts`, novo): CRUD de cartões (`listarCartoes`/`salvarCartao`/
+ * `excluirCartao`, com `alertaPessoal` derivado de `tipoPessoa="PF"`), faturas (`listarFaturas`/
+ * `resumoMensal` p/ a régua ano/mês + `excluirFatura`/`reverterLote`), itens (`listarItens`/
+ * `classificarItem` grava obra/CC/categoria) e importação por IA (`importarPreview` dry-run +
+ * `importarConfirmar` grava a partir do JSON do preview). Toda rota usa `assertCompanyAccess`
+ * (tenant guard) + `dbExecute` (molde do `cheques.ts`, params ligados por ORDEM DE APARIÇÃO). A IA é
+ * `invokeGeminiVision` (GOOGLE_API_KEY garantida) com `responseSchema` (`SCHEMA_FATURA`) e fallback
+ * `invokeAnthropicVision`; gate `assertAiModuleEnabled(companyId,"financeiro")`. Router registrado em
+ * `server/routers.ts` (`cartao: cartaoRouter`).
+ *
+ * GANCHO LANÇAMENTOS — `financial_entries` ganhou 3 colunas ADITIVAS/nullable (`cartao_id`,
+ * `cartao_parcelas`, `cartao_estabelecimento`) em `drizzle/schema.ts` + self-heal `[SyncSchema+]`
+ * (`ADD COLUMN IF NOT EXISTS`). `createEntry` (`server/routers/financial.ts`) aceita e grava os 3
+ * campos SOMENTE quando `formaPagamento==="cartao_credito"`. FRONT (`FinanceiroLancamentos.tsx`):
+ * estados no `INITIAL_FORM` + query `cartao.listarCartoes` + bloco condicional (Select de cartão,
+ * nº de parcelas, estabelecimento) que aparece só quando a forma é "Cartão de Crédito"; os campos
+ * entram no payload do `createEntry`.
+ *
+ * FRONT — tela nova `client/src/pages/financeiro/FinanceiroCartaoCredito.tsx` (abas Cartões /
+ * Faturas com régua ano/mês + modal de importação por IA / classificação de itens reusando
+ * `financial.getAccounts`/`getCostCenters`/`obras.listActive`). Menu em `shared/modules.ts`
+ * (`financeiro-cartao` → `/financeiro/cartao`, ícone `CreditCard`) + `App.tsx` (lazy + Route).
+ * As 3 tabelas (`financial_cartoes`/`_faturas`/`_itens`) já tinham sido criadas inertes na Rev. 3210.
+ *
+ * ZERO ALTER/DROP/DELETE (só CREATE TABLE / ADD COLUMN IF NOT EXISTS) · cartão NÃO vira lançamento.
+ *
  * Rev. 3210 — **FINANCEIRO / CONTROLE DE CHEQUES · OS CARDS DE RESUMO (TOPO: TOTAL/COMPENSADOS/
  * PENDENTES/OUTROS + OS 3 CARDS DO MÊS) VIRARAM BOTÕES CLICÁVEIS: CLICAR FILTRA A LISTA POR AQUELE
  * STATUS (CLICAR DE NOVO NO CARD ATIVO LIMPA O FILTRO) E O GRID FICOU MAIS RESPONSIVO.**

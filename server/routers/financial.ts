@@ -984,6 +984,11 @@ export const financialRouter = router({
     contaBancariaOrigemId: z.number().optional(),
     contaBancariaDestinoId: z.number().optional(),
     formaPagamento: z.string().optional(),
+    // Rev. 3211 — Gancho cartão: quando formaPagamento="cartao_credito", liga o
+    // lançamento a um cartão cadastrado + nº parcelas + estabelecimento (onde comprou).
+    cartaoId: z.number().nullable().optional(),
+    cartaoParcelas: z.number().int().min(1).max(99).nullable().optional(),
+    cartaoEstabelecimento: z.string().max(255).optional(),
     descricao: z.string().optional(),
     observacoes: z.string().optional(),
     parcelaNumero: z.number().optional(),
@@ -1092,8 +1097,9 @@ export const financialRouter = router({
         cheque_numero, cheque_banco, cheque_agencia, cheque_conta, cheque_titular,
         cheque_data_emissao, cheque_data_bom_para,
         criado_por_id, criado_por_nome, fornecedor_nome, cliente_id, cliente_nome,
-        centro_custo_id, centro_custo_nome, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,NOW(),NOW())
+        centro_custo_id, centro_custo_nome,
+        cartao_id, cartao_parcelas, cartao_estabelecimento, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,NOW(),NOW())
        RETURNING id`,
       [
         input.companyId, input.obraId ?? null, input.obraNome ?? null,
@@ -1110,6 +1116,10 @@ export const financialRouter = router({
         input.fornecedorNome?.trim() || null,
         input.clienteId ?? null, input.clienteNome?.trim() || null,
         input.centroCustoId ?? null, input.centroCustoNome?.trim() || null,
+        // Rev. 3211 — gancho cartão (só preenchido quando formaPagamento="cartao_credito").
+        input.formaPagamento === "cartao_credito" ? (input.cartaoId ?? null) : null,
+        input.formaPagamento === "cartao_credito" ? (input.cartaoParcelas ?? null) : null,
+        input.formaPagamento === "cartao_credito" ? (input.cartaoEstabelecimento?.trim() || null) : null,
       ]
     );
     const id = rows(res)[0]?.id;

@@ -80,6 +80,7 @@ import { dixiPontoRouter } from "./routers/dixiPonto";
 import { heSolicitacoesRouter } from "./routers/heSolicitacoes";
 import { financialRouter } from "./routers/financial";
 import { chequesRouter } from "./routers/cheques";
+import { cartaoRouter } from "./routers/cartao";
 import { pontoDescontosRouter } from "./routers/pontoDescontos";
 import { feriadosRouter } from "./routers/feriados";
 import { comunicadosInternosRouter } from "./routers/comunicadosInternos";
@@ -1572,6 +1573,7 @@ export const appRouter = router({
   heSolicitacoes: heSolicitacoesRouter,
   financial: financialRouter,
   cheques: chequesRouter,
+  cartao: cartaoRouter,
 
   // ============================================================
   // DESCONTOS CLT (Motor de Cálculo)

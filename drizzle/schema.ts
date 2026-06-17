@@ -7037,6 +7037,12 @@ export const financialEntries = pgTable("financial_entries", {
   parcelaGrupoId: varchar("parcela_grupo_id", { length: 36 }),
   transferenciaGrupoId: varchar("transferencia_grupo_id", { length: 36 }),
   formaPagamento: text("forma_pagamento"),
+  // Rev. 3211 — Gancho "forma de pagamento = Cartão de Crédito": qual cartão
+  // (financial_cartoes.id), nº de parcelas e onde foi comprado (estabelecimento).
+  // Permite, no futuro, casar a compra do ERP com o item da fatura. Aditivas/nullable.
+  cartaoId: integer("cartao_id"),
+  cartaoParcelas: integer("cartao_parcelas"),
+  cartaoEstabelecimento: varchar("cartao_estabelecimento", { length: 255 }),
   comprovanteUrl: text("comprovante_url"),
   // Rev. 3193 — Dados EXTRAÍDOS do comprovante (PIX/boleto) por IA de visão (Gemini),
   // usados como FONTE DE IDENTIFICAÇÃO p/ desempatar o match extrato×ERP na Conciliação.
