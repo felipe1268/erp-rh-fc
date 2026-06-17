@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3222 — **PONTO / ESPELHO DE PONTO · O ATESTADO MÉDICO (DE DIAS OU DE HORAS) LANÇADO NA
+ * CENTRAL DE DOCUMENTOS AGORA APARECE NO ESPELHO DE PONTO DO COLABORADOR — O DIA COBERTO PELO
+ * ATESTADO É MARCADO COMO "ATESTADO" (ROXO, ABONADO) EM VEZ DE "FALTA" (VERMELHO). ANTES O
+ * ATESTADO NÃO ERA REFLETIDO NO ESPELHO (EX.: DESILDO APARECIA COM FALTA NO DIA DO ATESTADO).**
+ *
+ * PEDIDO (piloto FC): "quando lança um atestado de dias ou horas, isso tem que aparecer no
+ * espelho de ponto do colaborador — o DESILDO lançou atestado e não apareceu".
+ *
+ * CAUSA-RAIZ: a tela "Espelho de Ponto" lê `horasExtras.getEspelhoPontoRange`, que consulta
+ * `time_records` (recordMap, com `tipoDia`), `vacation_periods` (férias) e aviso prévio — mas
+ * NUNCA consultava a tabela `atestados`. O `abonarPontoPorAtestado` (Central de Documentos) só
+ * escreve em `timecard_daily` e `ponto_descontos` — nenhum dos quais é lido pelo espelho. Logo
+ * o atestado abonava o desconto, mas o dia continuava "Falta" na régua do espelho.
+ *
+ * SOLUÇÃO — LADO-LEITURA (read-only, corrige retroativo p/ TODOS os atestados já existentes,
+ * sem escrita/sem ALTER):
+ * - BACK (`server/routers/horasExtras.ts`, `getEspelhoPontoRange`): nova query na tabela
+ *   `atestados` (filtra `deletedAt IS NULL`, `dataEmissao <= dataFim`). Projeta dois conjuntos
+ *   de datas no retorno (igual já faz com `feriasDates`):
+ *     · `atestadoDates` (tipo "dia"): cobre `diasAfastamento` dias a partir de `dataEmissao`
+ *       (mín. 1) — dia inteiro abonado.
+ *     · `atestadoHorasDates` (tipo "horas"): cobre só o dia da `dataEmissao` — ausência parcial.
+ *   Atenção às colunas snake_case no DB: `afastamento_tipo` (as demais são camelCase).
+ * - FRONT (`client/src/pages/EspelhoPonto.tsx`): `getDayStatus` ganhou os dois Sets. Tipo "dia"
+ *   marca "Atestado" sempre (mesmo dia futuro). Tipo "horas" só marca "Atestado" quando NÃO houve
+ *   batida no dia (preserva o trabalho parcial quando o colaborador trabalhou parte do dia). O
+ *   `summary` (cards) trata o dia de atestado como abonado: não conta falta nem trabalho/HE.
+ *
+ * ZERO SCHEMA/ALTER/DROP/DELETE · só leitura nova + projeção em memória.
+ *
  * Rev. 3221 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · AS DUAS TELAS EXPANDIDAS DE PENDÊNCIA
  * ("NO EXTRATO, SEM LANÇAMENTO" E "NO ERP, SEM EXTRATO") GANHARAM 3 CARDS DE RESUMO NO TOPO —
  * TOTAL DE ENTRADAS, TOTAL DE SAÍDAS E SALDO (ENTRADAS − SAÍDAS) — E O LAYOUT DAS LINHAS FOI

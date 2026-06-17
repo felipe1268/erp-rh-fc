@@ -869,6 +869,45 @@ export const horasExtrasRouter = router({
         }
       }
 
+      // ── Atestados projetados no Espelho de Ponto ──────────────────────────
+      // Rev. 3222 — O Espelho de Ponto lê `time_records`, mas atestados lançados
+      // pela Central de Documentos gravam em `atestados` (+ abono em
+      // `ponto_descontos`/`timecard_daily`), NUNCA em `time_records`. Resultado:
+      // o dia do atestado aparecia como "Falta" (vermelho) no espelho. Aqui
+      // projetamos os atestados do período direto da tabela `atestados`:
+      //  - tipo "dia"   → cobre `diasAfastamento` dias a partir de `dataEmissao`
+      //                   (dia inteiro abonado → marca "Atestado").
+      //  - tipo "horas" → cobre só o dia de `dataEmissao` (ausência parcial →
+      //                   o frontend só marca "Atestado" se NÃO houve batida no dia,
+      //                   preservando o trabalho parcial quando existir).
+      // Colunas snake_case no DB: `afastamento_tipo`. As demais são camelCase.
+      const atestRows = ((await db.execute(sql`
+        SELECT "dataEmissao", "diasAfastamento", "afastamento_tipo" AS "afastamentoTipo"
+        FROM atestados
+        WHERE "employeeId" = ${input.employeeId}
+          AND "companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
+          AND "deletedAt" IS NULL
+          AND "dataEmissao" <= ${input.dataFim}::date
+      `)) as any).rows || [];
+      const atestadoDatesSet = new Set<string>();       // tipo "dia"   — dia inteiro
+      const atestadoHorasDatesSet = new Set<string>();  // tipo "horas" — parcial
+      for (const a of atestRows) {
+        if (!a.dataEmissao) continue;
+        const ini = String(a.dataEmissao).slice(0, 10);
+        const tipo = String(a.afastamentoTipo || "dia");
+        if (tipo === "horas") {
+          if (ini >= input.dataInicio && ini <= input.dataFim) atestadoHorasDatesSet.add(ini);
+        } else {
+          const ndias = Math.max(1, Number(a.diasAfastamento) || 1);
+          const start = new Date(ini + "T12:00:00Z");
+          for (let i = 0; i < ndias; i++) {
+            const d = new Date(start); d.setUTCDate(start.getUTCDate() + i);
+            const ds = d.toISOString().slice(0, 10);
+            if (ds >= input.dataInicio && ds <= input.dataFim) atestadoDatesSet.add(ds);
+          }
+        }
+      }
+
       // Get time records with deduplication (best record per day)
       const records = ((await db.execute(sql`
         SELECT DISTINCT ON (tr.data)
@@ -926,6 +965,8 @@ export const horasExtrasRouter = router({
         records: recordMap,
         summary: { diasTrabalhados, totalHEMins, totalFaltaMins, totalAtrasoMins, totalRegistros: records.length },
         feriasDates: Array.from(feriasDates),
+        atestadoDates: Array.from(atestadoDatesSet),
+        atestadoHorasDates: Array.from(atestadoHorasDatesSet),
         avisoPrevio: avisoPrevio ? {
           tipo: avisoPrevio.tipo,
           dataInicio: String(avisoPrevio.dataInicio).slice(0, 10),

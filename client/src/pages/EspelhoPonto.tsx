@@ -88,7 +88,7 @@ function nextDay(d: string): string {
   return dt.toISOString().slice(0, 10);
 }
 
-function getDayStatus(dateStr: string, rec: any | null, feriasDates?: Set<string>, dataDesligamento?: string | null, empStatus?: string | null, feriadosSet?: Set<string>, isCargoConfianca?: boolean): DayStatus {
+function getDayStatus(dateStr: string, rec: any | null, feriasDates?: Set<string>, dataDesligamento?: string | null, empStatus?: string | null, feriadosSet?: Set<string>, isCargoConfianca?: boolean, atestadoDates?: Set<string>, atestadoHorasDates?: Set<string>): DayStatus {
   // Só marca como "desligado" se o status atual do cadastro for Desligado E a data
   // for posterior ao desligamento. Isso evita que uma dataDesligamentoEfetiva
   // residual (de um desligamento cancelado) mascare dias de funcionário Ativo.
@@ -101,6 +101,9 @@ function getDayStatus(dateStr: string, rec: any | null, feriasDates?: Set<string
   const { dow, isSun, isSat } = dayInfo(dateStr);
   if (isSun) return "domingo";
   if (isSat) return "sabado";
+  // Rev. 3222 — Atestado projetado da tabela `atestados` (não está em time_records).
+  // Tipo "dia" cobre o dia inteiro → marca "Atestado" (abonado), mesmo em dia futuro.
+  if (atestadoDates?.has(dateStr)) return "atestado";
   if (feriasDates?.has(dateStr)) return "ferias";
   const today = new Date().toISOString().slice(0, 10);
   if (dateStr > today) return "escuro";
@@ -109,6 +112,9 @@ function getDayStatus(dateStr: string, rec: any | null, feriasDates?: Set<string
   // Se o funcionário trabalhou no feriado (tem batidas), segue o fluxo normal e o dia
   // vira "he"/"normal"/"atraso" conforme as batidas — feriado trabalhado é HE 100%.
   if (feriadosSet?.has(dateStr) && noBatidas) return "feriado";
+  // Rev. 3222 — Atestado de HORAS (ausência parcial): só marca "Atestado" quando NÃO
+  // houve batida no dia (senão o trabalho parcial é preservado e o dia segue normal).
+  if (atestadoHorasDates?.has(dateStr) && noBatidas) return "atestado";
   if (noBatidas) {
     if ((rec?.fonte === "apontamento" || rec?.fonte === "dixi+apontamento") && rec?.justificativa) return "apontamento";
     // Rev. 1877 — Funcionário Art. 62 CLT (cargo de confiança/externo): dia útil
@@ -635,6 +641,17 @@ export default function EspelhoPonto() {
     () => new Set<string>(((espelhoQ.data as any)?.feriasDates as string[]) || []),
     [espelhoQ.data]
   );
+  // Rev. 3222 — Atestados projetados pelo backend a partir da tabela `atestados`
+  // (dia inteiro e horas), pra que o atestado lançado na Central de Documentos
+  // apareça no Espelho de Ponto (antes o dia ficava como "Falta").
+  const atestadoDatesSet = useMemo(
+    () => new Set<string>(((espelhoQ.data as any)?.atestadoDates as string[]) || []),
+    [espelhoQ.data]
+  );
+  const atestadoHorasDatesSet = useMemo(
+    () => new Set<string>(((espelhoQ.data as any)?.atestadoHorasDates as string[]) || []),
+    [espelhoQ.data]
+  );
   // Rev. 1840 — Set de feriados (nacionais + empresa + móveis) do período exibido.
   // Usado em getDayStatus pra que dias de feriado sem batida apareçam como "Feriado"
   // (laranja) em vez de "Falta" (vermelho), igual ao que o relatório do servidor já faz.
@@ -690,7 +707,11 @@ export default function EspelhoPonto() {
       const isWeekendDay = dow === 0 || dow === 6;
       const r = recordMap[d];
       const isFerias = feriasDatesSet.has(d);
-      const isAbonadoManual = r?.tipoDia === "feriado" || r?.tipoDia === "atestado" || r?.tipoDia === "bh";
+      // Rev. 3222 — Dia de atestado projetado (tabela `atestados`): dia inteiro abona
+      // sempre; atestado de horas só abona quando não houve batida no dia.
+      const hasBatidasDia = !!(r && r.horasTrabalhadas && r.horasTrabalhadas !== "0:00" && r.horasTrabalhadas !== "");
+      const isAtestadoProj = atestadoDatesSet.has(d) || (atestadoHorasDatesSet.has(d) && !hasBatidasDia);
+      const isAbonadoManual = r?.tipoDia === "feriado" || r?.tipoDia === "atestado" || r?.tipoDia === "bh" || isAtestadoProj;
       // Rev. 1840 — Feriado nacional sem batidas é abonado (não falta, não trabalho).
       // COM batidas, o funcionário trabalhou no feriado: HE/atrasos do dia entram
       // normalmente nos totais (HE 100% via hePercentualDomingo no servidor).
@@ -719,7 +740,7 @@ export default function EspelhoPonto() {
     }
     const saldoHEMins = totalHEMins - totalAtrasoMins;
     return { trabalhados, diasFalta, diasFerias, totalHEMins, totalAtrasoMins, totalTrabMins, saldoHEMins };
-  }, [allDays, recordMap, feriasDatesSet, feriadosSet, dataDesligamento, isCargoConfianca, cargoConfiancaDesde]);
+  }, [allDays, recordMap, feriasDatesSet, atestadoDatesSet, atestadoHorasDatesSet, feriadosSet, dataDesligamento, isCargoConfianca, cargoConfiancaDesde]);
 
   // Hide Ent.3/Saí.3 column when no records have a third shift
   const hasThirdShift = useMemo(
@@ -1168,7 +1189,7 @@ export default function EspelhoPonto() {
               {allDays.map((dateStr) => {
                 const { name, num, monthNum, isSun, isSat } = dayInfo(dateStr);
                 const rec = recordMap[dateStr] || null;
-                const s = getDayStatus(dateStr, rec, feriasDatesSet, dataDesligamento, empStatus, feriadosSet, cargoConfiancaAtivoEm(dateStr));
+                const s = getDayStatus(dateStr, rec, feriasDatesSet, dataDesligamento, empStatus, feriadosSet, cargoConfiancaAtivoEm(dateStr), atestadoDatesSet, atestadoHorasDatesSet);
                 const cfg = STATUS_STYLE[s];
                 // Dia em férias só bloqueia edição quando NÃO há registro. Se existe
                 // batida (ainda que ímpar), permitimos editar para corrigir/excluir —
@@ -1511,7 +1532,7 @@ export default function EspelhoPonto() {
                 {allDays.map((dateStr) => {
                   const { name, num, monthNum, isSun, isSat } = dayInfo(dateStr);
                   const rec = recordMap[dateStr] || null;
-                  const s = getDayStatus(dateStr, rec, feriasDatesSet, dataDesligamento, empStatus, feriadosSet, cargoConfiancaAtivoEm(dateStr));
+                  const s = getDayStatus(dateStr, rec, feriasDatesSet, dataDesligamento, empStatus, feriadosSet, cargoConfiancaAtivoEm(dateStr), atestadoDatesSet, atestadoHorasDatesSet);
                   const cfg = STATUS_STYLE[s];
                   const isWeekend = isSun || isSat;
                   const heM = rec ? parseHHMM(rec.horasExtras) : 0;
