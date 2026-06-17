@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3192 — **COLABORADORES · CORREÇÃO: O CARD "CLT" CONTAVA SÓ OS CLT ATIVOS — AGORA CONTA
+ * TODOS OS CLT QUE AINDA TÊM VÍNCULO COM A EMPRESA (ATIVO, FÉRIAS, AFASTADO, LICENÇA, AVISO,
+ * RECLUSO), EXCLUINDO APENAS OS DESLIGADOS/BLACKLIST.**
+ *
+ * PEDIDO (piloto FC): "o card do CLT tá errado, ele tá filtrando somente o CLT ativos, porém
+ * precisamos que tenham TODOS os CLT menos os desligados". Na tela de Colaboradores o card "CLT"
+ * mostrava 95, mas ao CLICAR no card a lista trazia mais gente — porque a contagem do badge e o
+ * filtro da lista usavam critérios diferentes.
+ *
+ * CAUSA-RAIZ: a contagem dos badges CLT/PJ/Sócio é feita no servidor (`getEmployeeStats` em
+ * `server/db.ts`) por uma query agrupada por `tipoContrato` que filtrava `status = 'Ativo'` — ou
+ * seja, SÓ os ativos. Já o filtro do cliente ao clicar no card (`Colaboradores.tsx`, helper
+ * `isInativo`) exclui apenas `Desligado`/`Lista_Negra`/flag `listaNegra` (mantém Férias, Afastado,
+ * Licença, Aviso, Recluso). Os dois critérios divergiam → o número do card (95) não batia com a
+ * lista.
+ *
+ * SOLUÇÃO (BACKEND-ONLY, ZERO SCHEMA): a query de `tipoContrato` em `getEmployeeStats` passou a
+ * usar o MESMO critério do filtro do cliente — `status NOT IN ('Desligado','Lista_Negra') AND
+ * COALESCE("listaNegra",0) <> 1` — em vez de `status = 'Ativo'`. Assim os badges CLT/PJ/Sócio
+ * contam todos os que ainda têm vínculo, menos desligados/blacklist. Comentários atualizados
+ * (incl. a nota legada "ativos = clt + pj + socio", que deixa de valer por design).
+ *
+ * VALIDAÇÃO (Neon, FC company 60002): CLT 95 → 112 (Ativo 95 + Aviso 7 + Afastado 4 + Férias 4 +
+ * Recluso 2; os 67 CLT desligados ficam de fora). PJ (9) e Sócio (3) inalterados (não havia
+ * não-ativos). Agora o número do card bate exatamente com a lista ao clicar.
+ *
+ * IMPACTO: card "CLT" (e PJ/Sócio) consistente com a lista filtrada; reflete o efetivo CLT real
+ * com vínculo, não só os ativos. ZERO SCHEMA/ALTER/DROP/DELETE · backend-only.
+ *
  * Rev. 3191 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO DE BUG: A TELA PAROU DE CARREGAR
  * ("NÃO FOI POSSÍVEL CARREGAR A CONCILIAÇÃO · DB code=22007 | invalid input syntax for type
  * date: '2'") — UM DESALINHAMENTO DE PARÂMETROS NO BLOCO "SEM CONTA BANCÁRIA" (Rev. 3188)

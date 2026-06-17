@@ -1186,12 +1186,16 @@ export async function getEmployeeStats(companyId: number, companyIds?: number[])
           GROUP BY status, "listaNegra"`
     ),
     db.execute(
-      // CLT/PJ: apenas quem está Ativo (mesmo critério do badge "Ativos")
+      // CLT/PJ/Sócio (Rev. 3192): TODOS que ainda têm vínculo com a empresa, MENOS os
+      // desligados/blacklist (mesmo critério do filtro do cliente `!isInativo` ao clicar no
+      // card e do badge "Na Empresa"). Inclui Ativo, Férias, Afastado, Licença, Aviso,
+      // Recluso etc.; exclui status 'Desligado'/'Lista_Negra' e a flag listaNegra=1.
       sql`SELECT "tipoContrato", COUNT(*) as cnt
           FROM employees
           WHERE "companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
             AND "deletedAt" IS NULL
-            AND status = 'Ativo'
+            AND status NOT IN ('Desligado', 'Lista_Negra')
+            AND COALESCE("listaNegra", 0) <> 1
           GROUP BY "tipoContrato"`
     ),
   ]);
@@ -1216,7 +1220,7 @@ export async function getEmployeeStats(companyId: number, companyIds?: number[])
     blacklist: 0,   // TODOS com listaNegra=1, qualquer status
     clt: 0,
     pj: 0,
-    socio: 0,       // Ativos com tipoContrato='Socio' (fecha a conta: ativos = clt + pj + socio)
+    socio: 0,       // tipoContrato='Socio' COM vínculo (não-desligados) — Rev. 3192
     porStatus: {} as Record<string, number>,
   };
 
@@ -1242,7 +1246,7 @@ export async function getEmployeeStats(companyId: number, companyIds?: number[])
     else if (r.status === "Aviso")     stats.aviso     += r.cnt;
   }
 
-  // CLT e PJ: contagem por tipo de contrato (apenas ativos)
+  // CLT/PJ/Sócio: contagem por tipo de contrato, TODOS menos desligados/blacklist (Rev. 3192)
   const tipoRows: Array<{ tipoContrato: string; cnt: number }> =
     ((tipoResult as any).rows || []).map((r: any) => ({ tipoContrato: r.tipoContrato, cnt: Number(r.cnt) }));
   for (const r of tipoRows) {
