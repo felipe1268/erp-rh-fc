@@ -121,6 +121,12 @@ export default function FinanceiroCheques() {
   const [editItem, setEditItem] = useState<any>(null);
   const [excluirItem, setExcluirItem] = useState<any>(null);
 
+  // ── Limpar cadastro (mês / ano inteiro) ──
+  // Fluxo: abrir (escopo) → 1ª confirmação → 2ª confirmação + senha → executa.
+  const [limparEscopo, setLimparEscopo] = useState<null | "mes" | "ano">(null);
+  const [limparEtapa, setLimparEtapa] = useState<1 | 2>(1);
+  const [limparSenha, setLimparSenha] = useState("");
+
   const listarArgs: any = { companyId, limit: 2000, ano };
   // "outros" é um agregado client-side (vários status); não mandamos status ao
   // servidor nesse caso — filtramos a lista localmente logo abaixo.
@@ -154,6 +160,15 @@ export default function FinanceiroCheques() {
   const confirmarMut = (trpc as any).cheques.importarConfirmar.useMutation();
   const atualizarMut = (trpc as any).cheques.atualizar.useMutation();
   const excluirMut = (trpc as any).cheques.excluir.useMutation();
+  const limparMut = (trpc as any).cheques.limparCadastro.useMutation();
+
+  // Prévia da limpeza p/ o escopo aberto: total/conciliados/consolidado/valor.
+  // mes = mês selecionado quando escopo="mes" (exige um mês selecionado).
+  const limparMesNum = limparEscopo === "mes" ? mesSel : null;
+  const { data: limparPrev } = (trpc as any).cheques.limparPreview.useQuery(
+    { companyId, ano, mes: limparMesNum ?? undefined },
+    { enabled: !!companyId && limparEscopo != null }
+  );
 
   const totais = useMemo(() => {
     const map: Record<string, { qtd: number; total: number }> = {};
@@ -308,6 +323,30 @@ export default function FinanceiroCheques() {
     }
   }
 
+  function fecharLimpar() {
+    setLimparEscopo(null);
+    setLimparEtapa(1);
+    setLimparSenha("");
+  }
+
+  async function executarLimpeza() {
+    if (!limparEscopo) return;
+    try {
+      const r = await limparMut.mutateAsync({
+        companyId, ano,
+        mes: limparEscopo === "mes" ? (mesSel ?? undefined) : undefined,
+        password: limparSenha,
+      });
+      toast({ title: "Cadastro limpo", description: `${r.removidos} cheque(s) removido(s) do controle.` });
+      fecharLimpar();
+      utils?.cheques?.listar?.invalidate?.();
+      utils?.cheques?.resumo?.invalidate?.();
+      utils?.cheques?.resumoMensal?.invalidate?.();
+    } catch (err: any) {
+      toast({ title: "Não foi possível limpar", description: err?.message || String(err), variant: "destructive" });
+    }
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -321,9 +360,28 @@ export default function FinanceiroCheques() {
               Importe a planilha de cheques para consulta e para identificar as compensações na conciliação bancária. Cheques aqui <strong>não viram lançamento</strong>.
             </p>
           </div>
-          <Button onClick={() => setImportOpen(true)} className="gap-2">
-            <Upload className="h-4 w-4" /> Importar planilha
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => { setLimparEtapa(1); setLimparSenha(""); setLimparEscopo("mes"); }}
+              disabled={mesSel == null}
+              title={mesSel == null ? "Selecione um mês para limpar" : `Limpar cheques de ${MESES[mesSel]}/${ano}`}
+              className="gap-2 border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800"
+            >
+              <Trash2 className="h-4 w-4" /> Limpar mês
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => { setLimparEtapa(1); setLimparSenha(""); setLimparEscopo("ano"); }}
+              title={`Limpar TODOS os cheques de ${ano}`}
+              className="gap-2 border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800"
+            >
+              <Trash2 className="h-4 w-4" /> Limpar ano inteiro
+            </Button>
+            <Button onClick={() => setImportOpen(true)} className="gap-2">
+              <Upload className="h-4 w-4" /> Importar planilha
+            </Button>
+          </div>
         </div>
 
         {/* Cards de resumo — clicáveis: clicar filtra a lista por aquele status
@@ -919,6 +977,113 @@ export default function FinanceiroCheques() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Limpar cadastro (mês / ano inteiro) — dupla confirmação + senha + alerta */}
+      <Dialog open={limparEscopo != null} onOpenChange={(o) => { if (!o) fecharLimpar(); }}>
+        <DialogContent className="max-w-lg">
+          {(() => {
+            const escopoLabel = limparEscopo === "mes"
+              ? `${mesSel != null ? MESES[mesSel] : ""}/${ano}`
+              : `o ano inteiro de ${ano}`;
+            const total = limparPrev?.total ?? null;
+            const conciliados = limparPrev?.conciliados ?? 0;
+            const consolidado = limparPrev?.consolidado ?? false;
+            const bloqueado = limparPrev?.bloqueado ?? false;
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-red-700">
+                    <AlertCircle className="h-5 w-5" />
+                    {limparEscopo === "mes" ? "Limpar cheques do mês" : "Limpar cheques do ano inteiro"}
+                  </DialogTitle>
+                  <DialogDescription>
+                    Você está prestes a remover do controle os cheques de <strong>{escopoLabel}</strong>.
+                  </DialogDescription>
+                </DialogHeader>
+
+                {/* Bloqueio: há cheque conciliado em extrato (mês consolidado) */}
+                {bloqueado ? (
+                  <div className="rounded-lg border-2 border-red-300 bg-red-50 p-4 space-y-2">
+                    <div className="flex items-center gap-2 font-semibold text-red-700">
+                      <AlertCircle className="h-5 w-5" /> Limpeza proibida
+                    </div>
+                    <p className="text-sm text-red-700">
+                      Existem <strong>{conciliados} cheque(s) já conciliado(s)</strong> em algum extrato neste período
+                      (mês consolidado). Apagar geraria <strong>erro na conciliação bancária</strong>.
+                      Reverta a conciliação desses cheques antes de limpar.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Alerta vermelho — perda de registros */}
+                    <div className="rounded-lg border-2 border-red-300 bg-red-50 p-4 space-y-1.5">
+                      <div className="flex items-center gap-2 font-semibold text-red-700">
+                        <AlertCircle className="h-5 w-5" /> Atenção: ação destrutiva
+                      </div>
+                      <p className="text-sm text-red-700">
+                        Todos os <strong>{total ?? "—"} cheque(s)</strong> de <strong>{escopoLabel}</strong> serão
+                        removidos do controle. <strong>Você perderá todos esses registros</strong> e precisará
+                        reimportar a planilha para recuperá-los.
+                      </p>
+                      {consolidado && (
+                        <p className="text-xs text-red-600">
+                          Observação: este período aparece como <strong>consolidado</strong> (todos compensados).
+                        </p>
+                      )}
+                    </div>
+
+                    {limparEtapa === 1 ? (
+                      <p className="text-sm text-muted-foreground">
+                        Esta é a <strong>1ª confirmação</strong>. Ao continuar, pediremos a confirmação final e a
+                        senha do seu login.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-red-700">
+                          2ª confirmação — digite a senha do seu login para concluir.
+                        </p>
+                        <Label className="text-xs">Senha do seu login</Label>
+                        <Input
+                          type="password"
+                          autoFocus
+                          value={limparSenha}
+                          onChange={(e) => setLimparSenha(e.target.value)}
+                          placeholder="••••••••"
+                          onKeyDown={(e) => { if (e.key === "Enter" && limparSenha.trim() && !limparMut.isPending) executarLimpeza(); }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <DialogFooter>
+                  <Button variant="outline" onClick={fecharLimpar}>Cancelar</Button>
+                  {!bloqueado && (
+                    limparEtapa === 1 ? (
+                      <Button
+                        onClick={() => setLimparEtapa(2)}
+                        disabled={total == null || total === 0}
+                        className="bg-red-600 hover:bg-red-700 gap-2"
+                      >
+                        <Trash2 className="h-4 w-4" /> Continuar
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={executarLimpeza}
+                        disabled={!limparSenha.trim() || limparMut.isPending}
+                        className="bg-red-600 hover:bg-red-700 gap-2"
+                      >
+                        {limparMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        Limpar definitivamente
+                      </Button>
+                    )
+                  )}
+                </DialogFooter>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

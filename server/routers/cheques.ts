@@ -566,4 +566,104 @@ export const chequesRouter = router({
       [input.companyId, input.loteId]);
     return { ok: true, revertidos: res.rows.length };
   }),
+
+  // ── PRÉVIA da limpeza (read-only): quantos cheques o MÊS/ANO tem e quantos já
+  //    estão conciliados num extrato. O front usa pra mostrar o aviso vermelho e
+  //    (se houver conciliados) o bloqueio ANTES de pedir a senha. mes ausente/null
+  //    = ano inteiro.
+  limparPreview: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    ano: z.number().int(),
+    mes: z.number().int().min(1).max(12).nullable().optional(),
+  })).query(async ({ input, ctx }) => {
+    await assertCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const params: unknown[] = [input.companyId, input.ano];
+    let extra = "";
+    if (input.mes != null) { extra = ` AND mes_ref=$3`; params.push(input.mes); }
+    const res = await dbExecute(db,
+      `SELECT COUNT(*)::int AS total,
+              COUNT(*) FILTER (WHERE conciliado=1)::int AS conciliados,
+              COUNT(*) FILTER (WHERE status='compensado')::int AS compensados,
+              COALESCE(SUM(valor),0) AS valor
+         FROM financial_cheques
+        WHERE company_id=$1 AND excluido_em IS NULL AND ano_ref=$2 ${extra}`,
+      params);
+    const r = res.rows[0] || {};
+    const total = Number(r.total) || 0;
+    const conciliados = Number(r.conciliados) || 0;
+    const compensados = Number(r.compensados) || 0;
+    // "Consolidado" = mesmo critério da régua de meses do front (tudo compensado).
+    const consolidado = total > 0 && compensados >= total;
+    return {
+      total, conciliados, compensados, consolidado,
+      valor: parseFloat(r.valor) || 0,
+      // Bloqueia quando há cheque conciliado em extrato (quebraria a conciliação
+      // já consolidada). Sinaliza o motivo pro aviso do front.
+      bloqueado: conciliados > 0,
+    };
+  }),
+
+  // ── LIMPAR o cadastro de cheques do MÊS ou do ANO inteiro (soft-delete).
+  //    Pedido (piloto FC): botão pra limpar os registros do mês e do ano inteiro,
+  //    com DUPLA confirmação + SENHA do usuário logado conferida no BACKEND +
+  //    alerta vermelho no front. GUARDA DE INTEGRIDADE: se QUALQUER cheque do
+  //    período já estiver CONCILIADO num extrato (conciliado=1), o ERP PROÍBE a
+  //    limpeza — não pode apagar cheque que já bateu num extrato consolidado, pra
+  //    não gerar erro na conciliação bancária. Exclusão é SOFT (excluido_em).
+  //    mes ausente/null = ano inteiro.
+  limparCadastro: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    ano: z.number().int(),
+    mes: z.number().int().min(1).max(12).nullable().optional(),
+    password: z.string().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    await assertCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    // 1) Senha do usuário logado conferida no BACKEND (bcrypt). OAuth sem senha
+    //    local é liberado pela própria credencial da sessão (mesma semântica do
+    //    wipeMonthEntries / _assertMasterComSenha).
+    const ures = await dbExecute(db, `SELECT password FROM users WHERE id=$1`, [ctx.user?.id]);
+    const urow = ures.rows[0] as any;
+    if (!urow) throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário não encontrado." });
+    if (urow.password) {
+      if (!input.password) throw new TRPCError({ code: "BAD_REQUEST", message: "Senha do seu login é obrigatória." });
+      const bcrypt = await import("bcryptjs");
+      if (!bcrypt.compareSync(input.password, urow.password)) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha incorreta. Operação cancelada." });
+      }
+    }
+    // 2) GUARDA: bloqueia se houver cheque CONCILIADO no período.
+    const cntParams: unknown[] = [input.companyId, input.ano];
+    let cntExtra = "";
+    if (input.mes != null) { cntExtra = ` AND mes_ref=$3`; cntParams.push(input.mes); }
+    const cnt = await dbExecute(db,
+      `SELECT COUNT(*) FILTER (WHERE conciliado=1)::int AS conciliados,
+              COUNT(*)::int AS total
+         FROM financial_cheques
+        WHERE company_id=$1 AND excluido_em IS NULL AND ano_ref=$2 ${cntExtra}`,
+      cntParams);
+    const conciliados = Number(cnt.rows[0]?.conciliados) || 0;
+    const total = Number(cnt.rows[0]?.total) || 0;
+    if (conciliados > 0) {
+      const escopo = input.mes != null ? `do mês ${input.mes}/${input.ano}` : `do ano ${input.ano}`;
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: `Limpeza bloqueada: ${conciliados} cheque(s) ${escopo} já foram conciliados em algum extrato (mês consolidado). Apagar geraria erro na conciliação bancária. Reverta a conciliação desses cheques antes de limpar.`,
+      });
+    }
+    if (total === 0) return { ok: true, removidos: 0 };
+    // 3) Soft-delete do período.
+    const delParams: unknown[] = [input.companyId, input.ano];
+    let delExtra = "";
+    if (input.mes != null) { delExtra = ` AND mes_ref=$3`; delParams.push(input.mes); }
+    const res = await dbExecute(db,
+      `UPDATE financial_cheques SET excluido_em=NOW()
+        WHERE company_id=$1 AND excluido_em IS NULL AND ano_ref=$2 ${delExtra}
+        RETURNING id`,
+      delParams);
+    return { ok: true, removidos: res.rows.length };
+  }),
 });

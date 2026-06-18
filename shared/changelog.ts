@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3231 — **FINANCEIRO / CONTROLE DE CHEQUES · NOVOS BOTÕES "LIMPAR MÊS" E "LIMPAR ANO INTEIRO"
+ * PARA APAGAR OS REGISTROS DE CHEQUE DO PERÍODO, COM DUPLA CONFIRMAÇÃO + SENHA DO LOGIN DO USUÁRIO
+ * (CONFERIDA NO BACKEND) + ALERTA VERMELHO DE PERDA TOTAL DOS REGISTROS. GUARDA DE INTEGRIDADE: SE
+ * QUALQUER CHEQUE DO PERÍODO JÁ FOI CONCILIADO EM ALGUM EXTRATO (MÊS CONSOLIDADO), O ERP PROÍBE A
+ * LIMPEZA E MOSTRA AVISO — PRA NÃO GERAR ERRO NA CONCILIAÇÃO BANCÁRIA.**
+ * - PEDIDO (piloto FC): "quero um botão para limpar as informações de cadastro do mês, e do ano
+ *   inteiro, com duas confirmações e senha do login do usuário digitada, e um alerta claro em vermelho
+ *   de que vai perder todos os registros. Porém, se o cheque tiver sido conciliado em algum extrato e
+ *   mês já consolidado, o ERP deve gerar uma mensagem de aviso, proibindo apagar para não gerar erros
+ *   no sistema."
+ * - SOLUÇÃO: a exclusão é SOFT (`excluido_em=NOW()`), no mesmo padrão de `excluir`/`reverterLote` do
+ *   módulo (ZERO ALTER/DROP/DELETE físico) — reimportar a planilha recupera os cheques.
+ * - BACK (`server/routers/cheques.ts`):
+ *   - `limparPreview` (query, read-only): por MÊS (mes!=null) ou ANO inteiro (mes=null) retorna
+ *     `total`, `conciliados` (FILTER conciliado=1), `compensados`, `consolidado` (total>0 &&
+ *     compensados>=total — mesmo critério da régua de meses), `valor` e `bloqueado` (=conciliados>0).
+ *   - `limparCadastro` (mutation): (1) `assertCompanyAccess` (tenant guard); (2) confere a SENHA do
+ *     usuário logado via bcrypt no servidor (OAuth sem senha local cai na própria sessão, mesma
+ *     semântica de `wipeMonthEntries`/`_assertMasterComSenha`); (3) GUARDA — conta `conciliado=1` no
+ *     período e, se >0, lança `FORBIDDEN` com mensagem explicando o bloqueio (não apaga); (4) se total=0
+ *     retorna sem ação; (5) `UPDATE financial_cheques SET excluido_em=NOW()` filtrando company_id +
+ *     ano_ref (+ mes_ref quando mês), RETURNING id pra contar removidos.
+ * - FRONT (`client/src/pages/financeiro/FinanceiroCheques.tsx`): 2 botões vermelhos no cabeçalho
+ *   ("Limpar mês" — desabilitado em "Ano todo"; "Limpar ano inteiro"). Diálogo com fluxo de 2 etapas:
+ *   1ª confirmação (alerta vermelho + total a apagar) → 2ª confirmação com input de SENHA (type
+ *   password, Enter dispara). Quando `limparPreview.bloqueado`, o diálogo troca pro card "Limpeza
+ *   proibida" (sem botão de ação), citando quantos cheques estão conciliados. Pós-sucesso invalida
+ *   listar/resumo/resumoMensal e fecha. ZERO ALTER/DROP/DELETE.
+ *
  * Rev. 3230 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · A LISTA "NO EXTRATO, SEM LANÇAMENTO" AGORA CRUZA
  * TAMBÉM O CONTROLE DE CARTÃO DE CRÉDITO: QUANDO UMA LINHA DO EXTRATO BATE COM O VALOR TOTAL DE UMA
  * FATURA DE CARTÃO, A LINHA PASSA A MOSTRAR "💳 FATURA <CARTÃO> · REF · VENC." E O BOTÃO "LANÇAR NO
