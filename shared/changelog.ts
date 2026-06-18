@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3287 — **PLANEJAMENTO / EFETIVO × IA (SIMULADOR DE MÃO DE OBRA + DIAGNÓSTICO) · A SIMULAÇÃO TRAVAVA
+ * EM 99% E DEPOIS MOSTRAVA "A IA DEMOROU DEMAIS OU A CONEXÃO CAIU DURANTE O PROCESSAMENTO — COMUM NO
+ * IPAD/SAFARI", MESMO QUANDO O SERVIDOR JÁ TINHA TERMINADO E SALVO A SIMULAÇÃO. AGORA, AO CAIR A CONEXÃO,
+ * O ERP RECUPERA AUTOMATICAMENTE O RESULTADO QUE O SERVIDOR PERSISTIU (POLLING DE `ultimaAnaliseEfetivo`)
+ * EM VEZ DE MOSTRAR O ERRO. 100% FRONT (RECUPERAÇÃO) + AJUSTE FINO DE BACKOFF NO BACKEND · ZERO
+ * SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (piloto FC): print do iPad/Safari na aba "Efetivo × IA" (obra REVTE-CIVIL) — "Simular previsão"
+ *   ia até 99% e estourava no banner "A IA demorou demais ou a conexão caiu durante o processamento — comum
+ *   no iPad/Safari em análises longas".
+ * - DIAGNÓSTICO (log de produção): `[Gemini Fast] 429 (tentativa 1/4). Aguardando 1153ms...` — a chamada de
+ *   IA (`simularEfetivo`, caminho rápido Gemini 2.5 Flash com `maxTokens: 16000`) é LONGA e o free-tier
+ *   ainda devolve 429 (rate-limit), então o tempo total estoura o timeout do proxy/WebKit do iPad, que
+ *   DERRUBA a requisição HTTP mantida aberta. PORÉM o handler tRPC no servidor CONTINUA rodando, termina a
+ *   IA e PERSISTE o resultado em `planejamento_analises_efetivo` (já era assim) — só o CLIENTE perdia a
+ *   resposta e mostrava o erro, descartando um trabalho que de fato foi concluído.
+ * - SOLUÇÃO — FRONT (`client/src/pages/planejamento/AnaliseEfetivoIA.tsx`): novo hook reutilizável
+ *   `useRecuperarAposQueda` + predicado extraído `isErroTransporteIos`. Quando a mutação
+ *   (`simularEfetivo`/`analisarEfetivo`) falha por erro de TRANSPORTE (DOMException crua do iOS: "Load
+ *   failed", "The operation was aborted", "did not match the expected pattern", timeouts etc.), o hook faz
+ *   POLLING de `iaCronograma.ultimaAnaliseEfetivo` (~4s iniciais + 5s por tentativa, até ~90s). Ao iniciar
+ *   a simulação fazemos `await ultimaQ.refetch()` p/ capturar uma baseline FRESCA da `criadoEm` da última
+ *   análise salva (NÃO a do cache, `staleTime` 60s, que poderia estar defasada/null e gerar falso positivo
+ *   de recuperação — fallback p/ o cache se o refetch falhar); se o polling devolver
+ *   uma análise com `criadoEm` DIFERENTE da baseline (= o servidor gravou uma NOVA), exibimos o resultado e
+ *   limpamos o erro (`mut.reset()`). Enquanto recupera, um banner âmbar ("A conexão caiu, mas a simulação
+ *   pode ter sido concluída no servidor. Recuperando o resultado…") substitui o banner de erro; se nada
+ *   novo surgir na janela, o hook desiste e o banner de erro vermelho reaparece p/ o usuário tentar de novo.
+ *   Aplicado IGUALMENTE ao Simulador E ao Diagnóstico (mesma arquitetura/mesmo modo de falha).
+ * - SOLUÇÃO — BACKEND (`server/_core/llm.ts`, `invokeGeminiFast`): o retry de 429 passou a HONRAR o
+ *   `retryDelay` que a própria API sugere no corpo do erro (helper `extrairRetryDelayMs`, já existente) em
+ *   vez de só backoff cego — `waitMs = min(max(sugerido, backoffExponencial), 20s)`. Retomar ANTES da janela
+ *   sugerida só queima tentativas com novos 429; o teto de 20s evita esticar demais o tempo total (a
+ *   recuperação client-side cobre o caso de a conexão cair enquanto o servidor ainda processa).
+ * - INALTERADO: o pipeline de IA (`simularEfetivo`/`analisarEfetivo`, prompts, `maxTokens`, caminho rápido
+ *   Gemini + fallback Claude), a persistência em `planejamento_analises_efetivo`, o histórico, a restauração
+ *   no primeiro carregamento, a barra de progresso e o `msgErroIA` (apenas reaproveita o predicado extraído).
+ * - ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3286 — **PLANEJAMENTO / PORTAL DO CLIENTE · O "% REALIZADO" DO PORTAL DIVERGIA DO MÓDULO PLANEJAMENTO
  * (FONTE DA VERDADE) — NA OBRA REVTE-CIVIL O PORTAL MOSTRAVA REALIZADO 20,72% ENQUANTO O MÓDULO MOSTRAVA 9,00%.
  * AGORA O PORTAL ESPELHA EXATAMENTE O SNAPSHOT MSP DA RAIZ (`realizadoMspSnapshot`), IGUAL AO PLANEJAMENTO. 100%

@@ -511,7 +511,14 @@ async function invokeGeminiFast(params: InvokeParams): Promise<InvokeResult> {
 
     const errText = await res.text();
     if (res.status === 429 && attempt < MAX_RETRIES) {
-      const waitMs = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 500, 60000);
+      // Rev. 3287 — honra o `retryDelay` sugerido pela API (free-tier) em vez de
+      // só backoff cego: retomar ANTES da janela apenas queima tentativas com
+      // novos 429. Usamos MAX(sugerido, backoff exponencial), com teto de 20s p/
+      // não estourar demais o tempo total (a recuperação client-side cobre o
+      // caso de a conexão do iPad cair enquanto o servidor ainda processa).
+      const sugerido = extrairRetryDelayMs(errText);
+      const backoff = 1000 * Math.pow(2, attempt) + Math.random() * 500;
+      const waitMs = Math.min(Math.max(sugerido, backoff), 20000);
       console.warn(`[Gemini Fast] 429 (tentativa ${attempt + 1}/${MAX_RETRIES + 1}). Aguardando ${Math.round(waitMs)}ms...`);
       await new Promise((r) => setTimeout(r, waitMs));
       continue;

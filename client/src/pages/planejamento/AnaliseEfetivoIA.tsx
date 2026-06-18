@@ -123,10 +123,10 @@ export default function AnaliseEfetivoIA({ projetoId, companyId }: Props) {
  * sem que haja qualquer bug no nosso pipeline (server/superjson/render foram
  * auditados e estão livres de datas iOS-inseguras). Aqui amaciamos a mensagem.
  * ──────────────────────────────────────────────────────────────────────── */
-function msgErroIA(err: any, fallback: string, acao = "Tente novamente"): string {
+function isErroTransporteIos(err: any): boolean {
   const raw = String(err?.message ?? "").trim();
   const low = raw.toLowerCase();
-  const ehTransporteIos =
+  return (
     raw === "" ||
     low.includes("did not match the expected pattern") ||
     low.includes("load failed") ||
@@ -138,11 +138,75 @@ function msgErroIA(err: any, fallback: string, acao = "Tente novamente"): string
     low.includes("the operation was aborted") ||
     low.includes("aborted") ||
     low.includes("timed out") ||
-    low.includes("tempo limite");
-  if (ehTransporteIos) {
+    low.includes("tempo limite")
+  );
+}
+
+function msgErroIA(err: any, fallback: string, acao = "Tente novamente"): string {
+  const raw = String(err?.message ?? "").trim();
+  if (isErroTransporteIos(err)) {
     return `A IA demorou demais ou a conexão caiu durante o processamento — comum no iPad/Safari em análises longas. ${acao}. Se persistir, use um navegador atualizado ou o computador.`;
   }
   return raw || fallback;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Recuperação após queda de conexão (iPad/Safari).
+ * As chamadas de IA (diagnóstico/simulação) são longas; o WebKit do iPad pode
+ * DERRUBAR a requisição mesmo quando o servidor JÁ terminou e PERSISTIU o
+ * resultado. Quando a mutação falha por erro de TRANSPORTE, fazemos polling de
+ * `ultimaAnaliseEfetivo`: se aparecer uma análise mais nova que a baseline
+ * (capturada ao iniciar), nós a exibimos em vez de mostrar o erro. Se nada
+ * novo surgir dentro da janela, desistimos e o banner de erro reaparece.
+ * Retorna `recuperando` (true enquanto tenta recuperar).
+ * ──────────────────────────────────────────────────────────────────────── */
+function useRecuperarAposQueda(opts: {
+  isError: boolean;
+  error: any;
+  refetchUltima: () => Promise<{ data?: { criadoEm?: string | null; resultado?: any } | null }>;
+  baselineCriadoEm: () => string | null | undefined;
+  onRecuperado: (resultado: any) => void;
+  resetMut: () => void;
+}): boolean {
+  const { isError, error, refetchUltima, baselineCriadoEm, onRecuperado, resetMut } = opts;
+  const [recuperando, setRecuperando] = useState(false);
+
+  useEffect(() => {
+    if (!isError || !isErroTransporteIos(error)) return;
+    let cancelado = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const baseline = baselineCriadoEm() ?? null;
+    let tentativas = 0;
+    const MAX = 18; // ~90s (4s inicial + 5s por tentativa)
+    setRecuperando(true);
+
+    const tick = async () => {
+      if (cancelado) return;
+      tentativas += 1;
+      try {
+        const r = await refetchUltima();
+        const row = r?.data;
+        if (!cancelado && row?.resultado && (row.criadoEm ?? null) !== baseline) {
+          onRecuperado(row.resultado);
+          resetMut();
+          setRecuperando(false);
+          return;
+        }
+      } catch { /* ignora; tenta de novo na próxima rodada */ }
+      if (cancelado) return;
+      if (tentativas < MAX) {
+        timer = setTimeout(tick, 5000);
+      } else {
+        setRecuperando(false); // desiste → o banner de erro reaparece
+      }
+    };
+    // Dá um respiro inicial pro servidor terminar de gravar.
+    timer = setTimeout(tick, 4000);
+    return () => { cancelado = true; clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isError, error]);
+
+  return recuperando;
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -261,8 +325,30 @@ function Diagnostico({ projetoId, companyId }: Props) {
     onSuccess: (d) => { setResult(d); setRestauradaEm(null); },
   });
   const { progresso, mostrar } = useProgressoSimulado(mut.isPending, mut.isSuccess);
+  // Baseline da última análise salva (capturada ao iniciar) p/ a recuperação
+  // distinguir uma análise NOVA (gravada pelo servidor) da já exibida.
+  const baselineRef = useRef<string | null>(null);
+  const recuperando = useRecuperarAposQueda({
+    isError: mut.isError,
+    error: mut.error,
+    refetchUltima: () => ultimaQ.refetch(),
+    baselineCriadoEm: () => baselineRef.current,
+    onRecuperado: (r) => { setResult(r); setRestauradaEm(null); },
+    resetMut: () => mut.reset(),
+  });
 
-  const gerar = () => mut.mutate({ projetoId, companyId });
+  const gerar = async () => {
+    // Captura uma baseline FRESCA (não a do cache, que tem staleTime 60s e pode
+    // estar defasada/null) p/ a recuperação distinguir com segurança uma análise
+    // NOVA gravada pelo servidor. Se o refetch falhar, cai no cache.
+    try {
+      const fresh = await ultimaQ.refetch();
+      baselineRef.current = fresh.data?.criadoEm ?? null;
+    } catch {
+      baselineRef.current = ultimaQ.data?.criadoEm ?? null;
+    }
+    mut.mutate({ projetoId, companyId });
+  };
   const analise = result?.analise;
 
   return (
@@ -297,7 +383,14 @@ function Diagnostico({ projetoId, companyId }: Props) {
 
       {mostrar && <PainelProgresso progresso={progresso} etapas={ETAPAS} titulo="Analisando efetivo × cronograma…" />}
 
-      {mut.isError && (
+      {recuperando && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700 flex items-start gap-2">
+          <Loader2 className="h-4 w-4 mt-0.5 shrink-0 animate-spin" />
+          <span>A conexão caiu, mas a análise pode ter sido concluída no servidor. Recuperando o resultado… aguarde alguns segundos.</span>
+        </div>
+      )}
+
+      {mut.isError && !recuperando && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 flex items-start gap-2">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
           <span>{msgErroIA(mut.error, "Erro ao gerar a análise.", "Toque em \u201CGerar análise\u201D novamente")}</span>
@@ -483,6 +576,17 @@ function Simulador({ projetoId, companyId }: Props) {
     onSuccess: (d) => { setResult(d); setRestauradaEm(null); },
   });
   const { progresso, mostrar } = useProgressoSimulado(mut.isPending, mut.isSuccess);
+  // Baseline da última simulação salva (capturada ao iniciar) p/ a recuperação
+  // distinguir uma simulação NOVA (gravada pelo servidor) da já exibida.
+  const baselineRef = useRef<string | null>(null);
+  const recuperando = useRecuperarAposQueda({
+    isError: mut.isError,
+    error: mut.error,
+    refetchUltima: () => ultimaQ.refetch(),
+    baselineCriadoEm: () => baselineRef.current,
+    onRecuperado: (r) => { setResult(r); setRestauradaEm(null); },
+    resetMut: () => mut.reset(),
+  });
 
   const porCargo: any[] = efetivoQ.data?.porCargoAtual ?? [];
   const keyOf = (cargo: string) => cargo.trim().toUpperCase();
@@ -510,8 +614,16 @@ function Simulador({ projetoId, companyId }: Props) {
   const deltaTotal = totalSimulado - totalAtual;
 
   const limpar = () => { setDeltas({}); setResult(null); setRestauradaEm(null); };
-  const simular = () => {
+  const simular = async () => {
     if (ajustes.length === 0) return;
+    // Baseline FRESCA (vê nota em `gerar`): evita falso positivo de recuperação
+    // por cache defasado/null.
+    try {
+      const fresh = await ultimaQ.refetch();
+      baselineRef.current = fresh.data?.criadoEm ?? null;
+    } catch {
+      baselineRef.current = ultimaQ.data?.criadoEm ?? null;
+    }
     mut.mutate({ projetoId, companyId, ajustes });
   };
 
@@ -662,7 +774,14 @@ function Simulador({ projetoId, companyId }: Props) {
 
       {mostrar && <PainelProgresso progresso={progresso} etapas={ETAPAS_SIM} titulo="Projetando o cenário…" />}
 
-      {mut.isError && (
+      {recuperando && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700 flex items-start gap-2">
+          <Loader2 className="h-4 w-4 mt-0.5 shrink-0 animate-spin" />
+          <span>A conexão caiu, mas a simulação pode ter sido concluída no servidor. Recuperando o resultado… aguarde alguns segundos.</span>
+        </div>
+      )}
+
+      {mut.isError && !recuperando && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 flex items-start gap-2">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
           <span>{msgErroIA(mut.error, "Erro ao gerar a simulação.", "Toque em \u201CSimular previsão\u201D novamente")}</span>
