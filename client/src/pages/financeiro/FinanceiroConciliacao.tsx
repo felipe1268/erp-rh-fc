@@ -14,7 +14,7 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX, FileSpreadsheet, FileDown, Plus, Maximize2, Search } from "lucide-react";
+import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX, FileSpreadsheet, FileDown, Plus, Maximize2, Minimize2, Search } from "lucide-react";
 import { formatConta, formatAgencia } from "@/lib/formatters";
 
 function formatBRL(v: number) {
@@ -537,6 +537,17 @@ export default function FinanceiroConciliacao() {
   // diálogo full-screen; `abrirLeituraFull(kind)` pré-filtra e abre (as "duas telas").
   const [leituraFull, setLeituraFull] = useState(false);
   const abrirLeituraFull = (k: "todos" | "pix" | "boleto") => { setDemoFiltro(k); setLeituraFull(true); };
+  // Expandir o painel de "Sugestões Automáticas de Conciliação" em tela cheia (analisar melhor).
+  const [sugFull, setSugFull] = useState(false);
+  // Rev. 3241 — quando expandido: fechar com Esc + travar o scroll de fundo (modal-like).
+  useEffect(() => {
+    if (!sugFull) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setSugFull(false); };
+    window.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prevOverflow; };
+  }, [sugFull]);
   // Rev. 3240 — computação ÚNICA da leitura combinada (PIX + boletos): alimenta a lista
   // inline E o diálogo de tela cheia, evitando deriva entre as duas. Reage a filtro+busca.
   const leituraIA = useMemo(() => {
@@ -1548,7 +1559,8 @@ export default function FinanceiroConciliacao() {
               </CardContent>
             </Card>
 
-            <Card className="border-0 shadow-sm">
+            {sugFull && <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setSugFull(false)} aria-hidden />}
+            <Card role={sugFull ? "dialog" : undefined} aria-modal={sugFull ? true : undefined} aria-label={sugFull ? "Sugestões automáticas de conciliação (tela cheia)" : undefined} className={`border-0 shadow-sm ${sugFull ? "fixed inset-3 z-50 flex flex-col overflow-auto bg-white shadow-2xl rounded-lg" : ""}`}>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <CardTitle className="text-base flex items-center gap-2">
@@ -1591,11 +1603,21 @@ export default function FinanceiroConciliacao() {
                     >
                       <FileText className="w-4 h-4 mr-1" />Relatório PDF
                     </Button>
+                    <Button
+                      size="sm"
+                      variant={sugFull ? "default" : "outline"}
+                      onClick={() => setSugFull(v => !v)}
+                      disabled={!mostrarSugestoes || sugLoading}
+                      title={sugFull ? "Recolher o painel" : "Expandir em tela cheia para analisar melhor"}
+                    >
+                      {sugFull ? <Minimize2 className="w-4 h-4 mr-1" /> : <Maximize2 className="w-4 h-4 mr-1" />}
+                      {sugFull ? "Recolher" : "Expandir"}
+                    </Button>
                   </div>
                 </div>
               </CardHeader>
               {mostrarSugestoes && (
-                <CardContent className="pt-0">
+                <CardContent className={`pt-0 ${sugFull ? "flex-1 min-h-0 flex flex-col" : ""}`}>
                   {sugLoading ? (
                     <div className="py-6 space-y-3">
                       <div className="flex items-center justify-between gap-3 text-sm">
@@ -1632,7 +1654,7 @@ export default function FinanceiroConciliacao() {
                           {conciliarSugMut.isPending ? "Conciliando..." : `Conciliar selecionadas (${selSug.size})`}
                         </Button>
                       </div>
-                      <div className="border rounded-md max-h-[480px] overflow-y-auto">
+                      <div className={`border rounded-md overflow-y-auto ${sugFull ? "max-h-[calc(100vh-220px)]" : "max-h-[480px]"}`}>
                         {/* Cabeçalho fixo: deixa explícito qual coluna é o EXTRATO (banco) e qual é o LANÇAMENTO no ERP. */}
                         <div className="sticky top-0 z-10 flex items-center gap-3 px-3 py-2 bg-gray-100 border-b text-xs font-semibold uppercase tracking-wide text-gray-700">
                           <span className="w-4 shrink-0" aria-hidden />

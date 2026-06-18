@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3241 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O PAINEL "SUGESTÕES AUTOMÁTICAS DE
+ * CONCILIAÇÃO" (A TABELA EXTRATO ↔ LANÇAMENTO NO ERP, COM CHECKBOXES E CONFIANÇA) GANHOU UM
+ * BOTÃO "EXPANDIR" QUE ABRE O PAINEL EM TELA CHEIA — DÁ MUITO MAIS ESPAÇO PRA REVISAR AS
+ * SUGESTÕES E DECIDIR O QUE CONCILIAR. UM CLIQUE EM "RECOLHER" VOLTA AO TAMANHO NORMAL. TODA A
+ * FUNCIONALIDADE (SELECIONAR ALTA/TODAS, RELER COMPROVANTES IA, CONCILIAR SELECIONADAS, ABRIR
+ * DETALHE DO LANÇAMENTO) CONTINUA IDÊNTICA — SÓ MUDA O TAMANHO DA ÁREA DE ANÁLISE. "CONCILIAÇÃO
+ * SÓ SUGESTIVA" PRESERVADA (NADA CONCILIA SEM CONFIRMAÇÃO EXPLÍCITA).**
+ * - PEDIDO (piloto FC): "quero poder expandir a tela das sugestões de conciliação pra analisar
+ *   melhor" (a lista ficava espremida num card de altura fixa de ~480px no meio da página).
+ * - SOLUÇÃO (FRONT, `client/src/pages/financeiro/FinanceiroConciliacao.tsx`): em vez de duplicar a
+ *   tabela num diálogo separado (risco de deriva entre as duas cópias), o PRÓPRIO card de sugestões
+ *   vira tela cheia via toggle de classe — ZERO duplicação de JSX, a mesma árvore React (mesmos
+ *   handlers/estado `selSug`) é só reposicionada. Novo estado `sugFull`:
+ *     · quando ligado, o `<Card>` recebe `fixed inset-3 z-50 flex flex-col overflow-auto bg-white
+ *       shadow-2xl rounded-lg` e um backdrop `fixed inset-0 bg-black/50 z-40` (clique fora recolhe);
+ *     · `CardContent` ganha `flex-1 min-h-0 flex flex-col` p/ a lista esticar;
+ *     · o container da lista troca `max-h-[480px]` por `max-h-[calc(100vh-220px)]` (aproveita a
+ *       altura toda, header sticky + toolbar continuam visíveis).
+ *   Novo botão no header do painel (ao lado do "Relatório PDF"): `Expandir` (Maximize2) / `Recolher`
+ *   (Minimize2), `disabled` enquanto não há sugestões carregadas (`!mostrarSugestoes || sugLoading`).
+ *   `Minimize2` adicionado aos imports do lucide-react. ZERO backend · ZERO SCHEMA/ALTER/DROP/DELETE
+ *   · só UI (reposicionamento via CSS sobre a tabela já renderizada por `getConciliacaoSugestoes`).
+ *
  * Rev. 3240 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DEMONSTRATIVOS DE PAGAMENTO · A LISTA
  * "TUDO QUE A IA LEU" (PIX + BOLETOS LIDOS POR IA) GANHOU UMA VISÃO EM TELA CHEIA (FULL
  * SCREEN) COM LAYOUT MODERNO E CARDS DE TOTAL (GERAL / PIX / BOLETOS) NO TOPO, PRA FACILITAR
