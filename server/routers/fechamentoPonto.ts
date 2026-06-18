@@ -3077,6 +3077,7 @@ export const fechamentoPontoRouter = router({
         saida3: timeRecords.saida3,
         horasTrabalhadas: timeRecords.horasTrabalhadas,
         ajusteManual: timeRecords.ajusteManual,
+        justificativa: timeRecords.justificativa,
       })
         .from(timeRecords)
         .leftJoin(employees, eq(timeRecords.employeeId, employees.id))
@@ -3234,6 +3235,17 @@ export const fechamentoPontoRouter = router({
           const [empId, data] = key.split('|');
 
           if (obraNames.size > 1) {
+            // JÁ RESOLVIDO: se TODOS os registros do dia já carregam o marcador
+            // de deslocamento confirmado (individual ou em lote), o conflito foi
+            // tratado pelo RH e NÃO deve reaparecer na lista. Antes desta guarda,
+            // confirmar_deslocamento só gravava a justificativa/rateio sem remover
+            // a condição multi-obra, então a linha "voltava" mesmo após o sucesso.
+            // Se um novo upload Dixi acrescentar um registro SEM o marcador, o
+            // `.every` falha e o conflito reaparece p/ nova conferência (correto).
+            const todosConfirmados = entries.every(e =>
+              (e.justificativa || '').includes('[Deslocamento confirmado'));
+            if (todosConfirmados) continue;
+
             // MÚLTIPLAS OBRAS no mesmo dia → deslocamento (válido) OU conflito,
             // dependendo do horário. checkOverlap trata entrada-sem-saída como
             // presença até o fim do dia (cobre o caso "esqueceu de bater a saída

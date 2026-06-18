@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3285 — **RH & DP / FECHAMENTO DE PONTO · CONFLITOS DE OBRA NO MESMO DIA · AO CONFIRMAR UM DESLOCAMENTO
+ * REAL ENTRE OBRAS (FUNCIONÁRIO BATEU EM 2+ OBRAS NO MESMO DIA), O ERP MOSTRAVA O TOAST DE SUCESSO ("DESLOCAMENTO
+ * ENTRE OBRAS CONFIRMADO COM RATEIO PROPORCIONAL. N REGISTROS ATUALIZADOS"), MAS A LINHA NÃO SUMIA DA LISTA
+ * "CONFLITOS DE OBRA NO MESMO DIA" — REAPARECIA NO REFETCH. EX.: FELIPPE RIBEIRO 03/06/2026 (HOTEL DO PAPA 06:21
+ * + HOTEL QIU 2 05:14). AGORA, CONFIRMADO O DESLOCAMENTO, O CONFLITO SAI DA LISTA. 100% BACKEND · READ-ONLY ·
+ * ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (piloto FC): "erro ao confirmar deslocamento do funcionário... ele aparece que foi realizado, porém
+ *   não some da lista".
+ * - DIAGNÓSTICO (`server/routers/fechamentoPonto.ts`): a ação `confirmar_deslocamento` (em `resolveConflito` e
+ *   no lote `resolveAllConflitos`) NÃO remove a condição que gera o conflito — ela apenas grava o marcador
+ *   `[Deslocamento confirmado por ...]`/`[Deslocamento confirmado em lote por ...]` na `justificativa` e o rateio
+ *   proporcional em `horasTrabalhadas` (CORRETO: os dois registros de obra devem permanecer, é deslocamento
+ *   real). Já a query `getConflitosObraDia` listava QUALQUER funcionário com 2+ obras no mesmo dia SEM checar se
+ *   o deslocamento já havia sido confirmado. O front (`FechamentoPonto.tsx`) já fazia `conflitos.refetch()` no
+ *   sucesso, então o refetch trazia o mesmo conflito de volta → impressão de "não some".
+ * - SOLUÇÃO (`getConflitosObraDia`): a query passou a trazer `justificativa` no `select`; no ramo de múltiplas
+ *   obras, antes de empurrar o conflito, calcula `todosConfirmados = entries.every(e => justificativa inclui
+ *   "Deslocamento confirmado")` e, se verdadeiro, faz `continue` (não lista). O substring "Deslocamento
+ *   confirmado" cobre tanto o marcador individual quanto o em lote. Se um novo upload Dixi acrescentar um
+ *   registro SEM o marcador, o `.every` falha e o conflito reaparece para nova conferência (comportamento
+ *   correto). A resolução `manter_obra` já se auto-resolvia (apaga os registros das outras obras → sobra 1 obra).
+ * - INALTERADO: a lógica de rateio/sobreposição, os marcadores de justificativa, o cálculo de horas, o caminho
+ *   `manter_obra`/`marcar_falta`/`excluir_registro`, e o refetch do front.
+ * - ZERO SCHEMA/ALTER/DROP/DELETE · READ-ONLY (a query só passou a filtrar o que já estava resolvido).
+ *
  * Rev. 3284 — **RH & DP / APONTAMENTO DE CAMPO ↔ ESPELHO DE PONTO · QUANDO O RH RESOLVIA UM APONTAMENTO DE
  * ATRASO (OU SAÍDA ANTECIPADA) CONFIRMANDO/AJUSTANDO O HORÁRIO DA BATIDA, O HORÁRIO CORRIGIDO FICAVA SÓ NO
  * `field_notes` E O ESPELHO DE PONTO (QUE LÊ `time_records`) CONTINUAVA MOSTRANDO O VALOR ANTIGO. EX.: ACÁCIO
