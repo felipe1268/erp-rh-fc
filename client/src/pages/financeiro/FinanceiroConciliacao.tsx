@@ -673,8 +673,8 @@ export default function FinanceiroConciliacao() {
     // Rev. 3239 — linha SINTÉTICA de grupo (VR/combustível/manutenção unificados).
     if (e.agrupado) {
       const expandido = gruposExpandidos.has(String(e.id));
-      const grpLabel = e.grupoTipo === "vr" ? "Vale Refeição" : e.grupoTipo === "combustivel" ? "Combustível" : "Manutenção";
-      const grpColor = e.grupoTipo === "vr" ? "bg-amber-100 text-amber-700" : e.grupoTipo === "combustivel" ? "bg-sky-100 text-sky-700" : "bg-violet-100 text-violet-700";
+      const grpLabel = e.grupoTipo === "vr" ? "Vale Refeição" : e.grupoTipo === "combustivel" ? "Combustível" : e.grupoTipo === "parceiro" ? "Parceiro" : "Manutenção";
+      const grpColor = e.grupoTipo === "vr" ? "bg-amber-100 text-amber-700" : e.grupoTipo === "combustivel" ? "bg-sky-100 text-sky-700" : e.grupoTipo === "parceiro" ? "bg-fuchsia-100 text-fuchsia-700" : "bg-violet-100 text-violet-700";
       const itens: any[] = Array.isArray(e.itens) ? e.itens : [];
       return (
         <div key={e.id} className={`border-b last:border-b-0 ${selectedEntry === e.id ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}>

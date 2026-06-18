@@ -157,6 +157,7 @@ function _agruparConciliacao(arr: any[]): any[] {
     beneficio_vr: "vr",
     frota_abastecimento: "combustivel",
     frota_manutencao: "manutencao",
+    parceiro_lancamento: "parceiro",
   };
   const passthrough: any[] = [];
   const groups = new Map<string, any>();
@@ -172,10 +173,15 @@ function _agruparConciliacao(arr: any[]): any[] {
       chave = `vr|${ym}`;
       label = `Vale Refeição ${ym}`;
     } else {
-      const fornRaw = (r.frotaFornecedor && String(r.frotaFornecedor).trim()) || "";
+      // combustível / manutenção → fornecedor da Frota; parceiro → parceiro conveniado.
+      const fornRaw = (tipoG === "parceiro"
+        ? (r.parceiroFornecedor && String(r.parceiroFornecedor).trim())
+        : (r.frotaFornecedor && String(r.frotaFornecedor).trim())) || "";
       const fn = _normNomeConc(fornRaw);
-      chave = `${tipoG}|${fn || "SEM"}`;
-      const pre = tipoG === "combustivel" ? "Combustível" : "Manutenção";
+      // Parceiro fecha por MÊS (no extrato paga-se só o total mensal de cada parceiro);
+      // Frota agrupa pelo fornecedor dentro do período já filtrado.
+      chave = tipoG === "parceiro" ? `parceiro|${fn || "SEM"}|${ym}` : `${tipoG}|${fn || "SEM"}`;
+      const pre = tipoG === "combustivel" ? "Combustível" : tipoG === "manutencao" ? "Manutenção" : "Parceiro";
       label = fornRaw ? `${pre} · ${fornRaw}` : `${pre} (sem fornecedor)`;
     }
     let g = groups.get(chave);
@@ -206,9 +212,12 @@ function _agruparConciliacao(arr: any[]): any[] {
     g.itens.push({ id: r.id, descricao: r.descricao, fornecedorNome: r.fornecedorNome, valor: Number(r.valor) || 0, data: dataStr });
     if (dataStr && dataStr < g.dataMin) g.dataMin = dataStr;
     if (dataStr && dataStr > g.dataMax) { g.dataMax = dataStr; g.data = dataStr; }
-    if (tipoG !== "vr" && r.frotaFornecedor) {
-      const k = String(r.frotaFornecedor).trim();
-      if (k) g._fornCount.set(k, (g._fornCount.get(k) || 0) + 1);
+    if (tipoG !== "vr") {
+      const fornForCount = tipoG === "parceiro" ? r.parceiroFornecedor : r.frotaFornecedor;
+      if (fornForCount) {
+        const k = String(fornForCount).trim();
+        if (k) g._fornCount.set(k, (g._fornCount.get(k) || 0) + 1);
+      }
     }
   }
   const out: any[] = [...passthrough];
@@ -219,7 +228,7 @@ function _agruparConciliacao(arr: any[]): any[] {
       let best = ""; let bestN = -1;
       for (const [k, n] of g._fornCount) if (n > bestN) { best = k; bestN = n; }
       g.fornecedorNome = best || null;
-      const pre = g.grupoTipo === "combustivel" ? "Combustível" : "Manutenção";
+      const pre = g.grupoTipo === "combustivel" ? "Combustível" : g.grupoTipo === "manutencao" ? "Manutenção" : "Parceiro";
       g.descricao = best ? `${pre} · ${best}` : `${pre} (sem fornecedor)`;
     }
     delete g._fornCount;
@@ -4580,10 +4589,13 @@ export const financialRouter = router({
               e.comprovante_beneficiario AS "comprovanteBeneficiario",
               e.origem_modulo AS "origemModulo",
               COALESCE(NULLIF(TRIM(ff.posto),''), NULLIF(TRIM(fm.fornecedor),'')) AS "frotaFornecedor",
+              COALESCE(NULLIF(TRIM(pc.nome_fantasia),''), NULLIF(TRIM(pc.razao_social),'')) AS "parceiroFornecedor",
               COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) AS data
          FROM financial_entries e
          LEFT JOIN fleet_fuel_records ff ON e.origem_modulo='frota_abastecimento' AND ff.id = e.origem_id
          LEFT JOIN fleet_maintenances fm ON e.origem_modulo='frota_manutencao' AND fm.id = e.origem_id
+         LEFT JOIN lancamentos_parceiros lp ON e.origem_modulo='parceiro_lancamento' AND lp.id = e.origem_id AND lp."companyId" = e.company_id
+         LEFT JOIN parceiros_conveniados pc ON pc.id = lp."parceiroId" AND pc."companyId" = e.company_id
         WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
           AND e.conta_bancaria_id=$2
           AND ${sqlNotProjecao("e.origem_modulo")}
@@ -4607,10 +4619,13 @@ export const financialRouter = router({
               e.comprovante_beneficiario AS "comprovanteBeneficiario",
               e.origem_modulo AS "origemModulo",
               COALESCE(NULLIF(TRIM(ff.posto),''), NULLIF(TRIM(fm.fornecedor),'')) AS "frotaFornecedor",
+              COALESCE(NULLIF(TRIM(pc.nome_fantasia),''), NULLIF(TRIM(pc.razao_social),'')) AS "parceiroFornecedor",
               COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) AS data
          FROM financial_entries e
          LEFT JOIN fleet_fuel_records ff ON e.origem_modulo='frota_abastecimento' AND ff.id = e.origem_id
          LEFT JOIN fleet_maintenances fm ON e.origem_modulo='frota_manutencao' AND fm.id = e.origem_id
+         LEFT JOIN lancamentos_parceiros lp ON e.origem_modulo='parceiro_lancamento' AND lp.id = e.origem_id AND lp."companyId" = e.company_id
+         LEFT JOIN parceiros_conveniados pc ON pc.id = lp."parceiroId" AND pc."companyId" = e.company_id
         WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
           AND e.conta_bancaria_id IS NULL
           AND ${sqlNotProjecao("e.origem_modulo")}

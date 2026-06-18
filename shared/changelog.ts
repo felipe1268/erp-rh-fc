@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3254 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · OS "LANÇAMENTOS PARCEIRO" (MÓDULO PARCEIROS
+ * CONVENIADOS) AGORA SÃO UNIFICADOS NA LISTA DE PENDÊNCIAS DA CONCILIAÇÃO — IGUAL À FROTA
+ * (COMBUSTÍVEL/MANUTENÇÃO) — SOMANDO TODOS OS LANÇAMENTOS DO MESMO PARCEIRO NO MÊS NUMA ÚNICA LINHA
+ * SINTÉTICA COM O TOTAL EM BRL. COMO NO EXTRATO PAGA-SE SÓ O TOTAL MENSAL DE CADA PARCEIRO, A LISTA
+ * DEIXA DE TER DEZENAS DE LINHAS INDIVIDUAIS "LANÇAMENTO PARCEIRO 2026-02". CLICAR NO CHEVRON EXPANDE
+ * OS LANÇAMENTOS-MEMBRO (DATA, COLABORADOR/DESCRIÇÃO, VALOR) PARA ANÁLISE, E A CONCILIAÇÃO É N:1
+ * (CASA O GRUPO INTEIRO CONTRA UMA LINHA DO EXTRATO). 100% READ-ONLY — ENTRIES PERMANECEM INDIVIDUAIS
+ * NO BANCO (PRESERVA BAIXA/CONCILIAÇÃO POR ITEM); SÓ A APRESENTAÇÃO COLAPSA.**
+ * - PEDIDO (piloto FC): "Precisa fazer a mesma unificação feita para os lançamentos de manutenção/
+ *   combustível do módulo Frotas, para o módulo Parceiro também — somar tudo e gerar um total por
+ *   fornecedor, pq no extrato pagamos só o valor total de cada mês; o valor em separado fica para
+ *   analisar ao clicar no item" (prints IMG_2175 painel "Sem conta bancária definida (59) ·
+ *   R$ 809.989,64" com vários "Lançamento Parceiro 2026-02" soltos; IMG_2176/IMG_2177 — Parceiros
+ *   Conveniados e Lançamentos).
+ * - SOLUÇÃO (reaproveita a engine de agrupamento da Rev. 3239):
+ *   - BACK (`server/routers/financial.ts`, `_agruparConciliacao` — READ-ONLY): adicionado
+ *     `parceiro_lancamento: "parceiro"` ao mapa `GRUP`; no ramo de fornecedor, parceiro usa a nova
+ *     coluna `parceiroFornecedor` (nome do parceiro) e fecha a chave por MÊS (`parceiro|<forn>|<YYYY-MM>`,
+ *     pois cada parceiro é pago uma vez por mês), enquanto Frota mantém a chave por fornecedor no
+ *     período já filtrado; o prefixo do rótulo e o `_fornCount` (nome predominante) passaram a cobrir
+ *     "Parceiro". As DUAS queries da `getConciliacaoReport` (lançamentos da conta + "sem conta
+ *     bancária definida") ganharam `LEFT JOIN lancamentos_parceiros lp ON e.origem_modulo='parceiro_
+ *     lancamento' AND lp.id=e.origem_id` + `LEFT JOIN parceiros_conveniados pc ON pc.id=lp."parceiroId"`
+ *     e a coluna `COALESCE(NULLIF(TRIM(pc.nome_fantasia),''),NULLIF(TRIM(pc.razao_social),'')) AS
+ *     "parceiroFornecedor"` (mesmo molde do `frotaFornecedor`). Tudo company-scoped via `e.company_id=$1`.
+ *     HARDENING (pós code-review): as DUAS JOINs por `origem_id` foram amarradas ao tenant —
+ *     `lp."companyId"=e.company_id` e `pc."companyId"=e.company_id` — para que um `origem_id`
+ *     forjado/inconsistente NÃO vaze o nome de parceiro de outra empresa (defesa em profundidade,
+ *     não confiar só no filtro de `financial_entries`).
+ *   - FRONT (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`, `renderEntryRow`): `grpLabel`/
+ *     `grpColor` ganharam o caso `grupoTipo==="parceiro"` ("Parceiro", pílula fúcsia). O resto da
+ *     linha sintética (expandir membros via `gruposExpandidos`, total em BRL, conciliação N:1 com
+ *     `conciliarGrupoMut` enviando `itensIds`) já era genérico e funciona sem mudança.
+ * - ZERO BACKEND NOVO (só leitura/agregação) · ZERO SCHEMA/ALTER/DROP/DELETE. esbuild limpo nos dois
+ *   arquivos.
+ *
  * Rev. 3253 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O DIÁLOGO "LANÇAR NO ERP" (ABERTO A PARTIR DE UM
  * ITEM DO EXTRATO BANCÁRIO) GANHOU O LAYOUT MODERNO PADRÃO FC: CABEÇALHO EM FAIXA AZUL
  * (`#1B2A4A`→`#2c3f63`) COM ÍCONE EM CÍRCULO E PÍLULAS DE CONTEXTO (CONTA, DATA E VALOR EM BRL — VERDE
