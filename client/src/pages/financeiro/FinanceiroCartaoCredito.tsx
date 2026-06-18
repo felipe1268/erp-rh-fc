@@ -65,9 +65,30 @@ function tipoBadge(t: string) {
 }
 
 const CARTAO_FORM_INICIAL = {
-  banco: "", bandeira: "", final4: "", titular: "", tipoPessoa: "PJ",
+  banco: "", bandeira: "", final4: "", titular: "", tipoPessoa: "PJ", status: "ativo",
   diaFechamento: "", diaVencimento: "", limite: "", observacao: "",
 };
+
+const STATUS_CARTAO_OPCOES = [
+  { value: "ativo", label: "Ativo" },
+  { value: "bloqueado", label: "Bloqueado" },
+  { value: "renegociado", label: "Renegociado" },
+  { value: "cancelado", label: "Cancelado" },
+  { value: "inativo", label: "Inativo" },
+] as const;
+
+function statusCartaoBadge(status?: string) {
+  const s = (status || "ativo").toLowerCase();
+  const map: Record<string, { label: string; cls: string }> = {
+    ativo: { label: "Ativo", cls: "bg-green-100 text-green-700 hover:bg-green-100" },
+    bloqueado: { label: "Bloqueado", cls: "bg-orange-100 text-orange-700 hover:bg-orange-100" },
+    renegociado: { label: "Renegociado", cls: "bg-amber-100 text-amber-800 hover:bg-amber-100" },
+    cancelado: { label: "Cancelado", cls: "bg-red-100 text-red-700 hover:bg-red-100" },
+    inativo: { label: "Inativo", cls: "bg-gray-200 text-gray-600 hover:bg-gray-200" },
+  };
+  const it = map[s] || map.ativo;
+  return <Badge className={it.cls}>{it.label}</Badge>;
+}
 
 export default function FinanceiroCartaoCredito() {
   const { companyId } = useCompany();
@@ -101,7 +122,7 @@ export default function FinanceiroCartaoCredito() {
     setCartaoEdit(c);
     setCartaoForm({
       banco: c.banco ?? "", bandeira: c.bandeira ?? "", final4: c.final4 ?? "",
-      titular: c.titular ?? "", tipoPessoa: c.tipoPessoa ?? "PJ",
+      titular: c.titular ?? "", tipoPessoa: c.tipoPessoa ?? "PJ", status: c.status ?? "ativo",
       diaFechamento: c.diaFechamento != null ? String(c.diaFechamento) : "",
       diaVencimento: c.diaVencimento != null ? String(c.diaVencimento) : "",
       limite: c.limite != null ? maskBRL(String(Math.round(Number(c.limite) * 100))) : "",
@@ -118,6 +139,7 @@ export default function FinanceiroCartaoCredito() {
       final4: cartaoForm.final4.trim() || undefined,
       titular: cartaoForm.titular.trim() || undefined,
       tipoPessoa: cartaoForm.tipoPessoa as "PF" | "PJ",
+      status: cartaoForm.status as "ativo" | "bloqueado" | "renegociado" | "cancelado" | "inativo",
       diaFechamento: cartaoForm.diaFechamento ? parseInt(cartaoForm.diaFechamento, 10) : null,
       diaVencimento: cartaoForm.diaVencimento ? parseInt(cartaoForm.diaVencimento, 10) : null,
       limite: cartaoForm.limite.trim() === "" ? null : parseMaskBRL(cartaoForm.limite),
@@ -403,7 +425,10 @@ export default function FinanceiroCartaoCredito() {
                           <p className="font-semibold truncate">{c.banco || "Banco —"} {c.bandeira ? `· ${c.bandeira}` : ""}</p>
                           <p className="text-sm text-muted-foreground">final {c.final4 || "????"} · {c.titular || "sem titular"}</p>
                         </div>
-                        <Badge variant={c.tipoPessoa === "PF" ? "outline" : "secondary"} className={c.tipoPessoa === "PF" ? "border-amber-400 text-amber-700" : ""}>{c.tipoPessoa}</Badge>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <Badge variant={c.tipoPessoa === "PF" ? "outline" : "secondary"} className={c.tipoPessoa === "PF" ? "border-amber-400 text-amber-700" : ""}>{c.tipoPessoa}</Badge>
+                          {statusCartaoBadge(c.status)}
+                        </div>
                       </div>
                       <div className="mt-2 text-xs text-muted-foreground grid grid-cols-2 gap-1">
                         <span>Fecha dia: <b>{c.diaFechamento ?? "—"}</b></span>
@@ -574,6 +599,17 @@ export default function FinanceiroCartaoCredito() {
                     <SelectContent>
                       <SelectItem value="PJ">PJ (empresa)</SelectItem>
                       <SelectItem value="PF">PF (pessoal)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Status</Label>
+                  <Select value={cartaoForm.status} onValueChange={(v) => setCartaoForm((f) => ({ ...f, status: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {STATUS_CARTAO_OPCOES.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

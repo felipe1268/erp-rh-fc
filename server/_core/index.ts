@@ -917,6 +917,7 @@ Regras:
               final4 VARCHAR(8),
               titular VARCHAR(255),
               tipo_pessoa VARCHAR(4) DEFAULT 'PJ',
+              status VARCHAR(20) DEFAULT 'ativo',
               dia_fechamento INTEGER,
               dia_vencimento INTEGER,
               limite NUMERIC(15,2),
@@ -979,6 +980,8 @@ Regras:
               updated_at TIMESTAMP DEFAULT NOW() NOT NULL
             )
           `);
+          await db.execute(sql`ALTER TABLE financial_cartoes ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'ativo'`);
+          await db.execute(sql`UPDATE financial_cartoes SET status = CASE WHEN ativo = 0 THEN 'inativo' ELSE 'ativo' END WHERE status IS NULL`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_cartao_company ON financial_cartoes(company_id) WHERE excluido_em IS NULL`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_cartao_fat_company ON financial_cartao_faturas(company_id) WHERE excluido_em IS NULL`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_cartao_fat_cartao ON financial_cartao_faturas(cartao_id) WHERE excluido_em IS NULL`);

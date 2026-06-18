@@ -125,6 +125,14 @@ function normItemDate(raw: any, fechamentoISO: string | null): string | null {
 const TIPOS_ITEM = ["compra", "credito", "encargo"] as const;
 const STATUS_CLASSIF = ["sugerido", "confirmado", "ignorado"] as const;
 
+// Status do CARTÃO (situação cadastral). "ativo" é o padrão; "cancelado"/"inativo"
+// tiram o cartão de operação (ativo=0 → some do de-para da IA e fica esmaecido).
+const STATUS_CARTAO = ["ativo", "bloqueado", "renegociado", "cancelado", "inativo"] as const;
+type StatusCartao = (typeof STATUS_CARTAO)[number];
+function ativoDeStatus(s: StatusCartao | undefined | null): number {
+  return s === "cancelado" || s === "inativo" ? 0 : 1;
+}
+
 // ─────────────────────────── De-para (p/ sugestão da IA) ───────────────────────────
 async function carregarCartoes(db: any, companyId: number) {
   const res = await dbExecute(db,
@@ -310,7 +318,8 @@ export const cartaoRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const res = await dbExecute(db,
       `SELECT id, company_id AS "companyId", banco, bandeira, final4,
-              titular, tipo_pessoa AS "tipoPessoa", dia_fechamento AS "diaFechamento",
+              titular, tipo_pessoa AS "tipoPessoa",
+              CASE WHEN status IS NOT NULL THEN status WHEN ativo = 0 THEN 'inativo' ELSE 'ativo' END AS status, dia_fechamento AS "diaFechamento",
               dia_vencimento AS "diaVencimento", limite, ativo, observacao,
               created_at AS "createdAt"
          FROM financial_cartoes
@@ -333,6 +342,7 @@ export const cartaoRouter = router({
     final4: z.string().max(8).optional(),
     titular: z.string().max(255).optional(),
     tipoPessoa: z.enum(["PF", "PJ"]).default("PJ"),
+    status: z.enum(STATUS_CARTAO).default("ativo"),
     diaFechamento: z.number().int().min(1).max(31).nullable().optional(),
     diaVencimento: z.number().int().min(1).max(31).nullable().optional(),
     limite: z.number().nullable().optional(),
@@ -343,15 +353,15 @@ export const cartaoRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const res = await dbExecute(db,
       `INSERT INTO financial_cartoes
-         (company_id, banco, bandeira, final4, titular, tipo_pessoa,
-          dia_fechamento, dia_vencimento, limite, observacao, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW()) RETURNING id`,
+         (company_id, banco, bandeira, final4, titular, tipo_pessoa, status,
+          dia_fechamento, dia_vencimento, limite, ativo, observacao, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW(),NOW()) RETURNING id`,
       [
         input.companyId, input.banco ?? null, input.bandeira ?? null,
         input.final4 ? soDigitos(input.final4).slice(-4) : null,
-        input.titular ?? null, input.tipoPessoa,
+        input.titular ?? null, input.tipoPessoa, input.status,
         input.diaFechamento ?? null, input.diaVencimento ?? null,
-        input.limite ?? null, input.observacao ?? null,
+        input.limite ?? null, ativoDeStatus(input.status), input.observacao ?? null,
       ]);
     return { id: res.rows[0]?.id };
   }),
@@ -364,6 +374,7 @@ export const cartaoRouter = router({
     final4: z.string().max(8).nullable().optional(),
     titular: z.string().max(255).nullable().optional(),
     tipoPessoa: z.enum(["PF", "PJ"]).optional(),
+    status: z.enum(STATUS_CARTAO).optional(),
     diaFechamento: z.number().int().min(1).max(31).nullable().optional(),
     diaVencimento: z.number().int().min(1).max(31).nullable().optional(),
     limite: z.number().nullable().optional(),
@@ -381,10 +392,11 @@ export const cartaoRouter = router({
     if (input.final4 !== undefined) add("final4", input.final4 ? soDigitos(input.final4).slice(-4) : null);
     if (input.titular !== undefined) add("titular", input.titular);
     if (input.tipoPessoa !== undefined) add("tipo_pessoa", input.tipoPessoa);
+    if (input.status !== undefined) { add("status", input.status); add("ativo", ativoDeStatus(input.status)); }
     if (input.diaFechamento !== undefined) add("dia_fechamento", input.diaFechamento);
     if (input.diaVencimento !== undefined) add("dia_vencimento", input.diaVencimento);
     if (input.limite !== undefined) add("limite", input.limite);
-    if (input.ativo !== undefined) add("ativo", input.ativo ? 1 : 0);
+    if (input.ativo !== undefined && input.status === undefined) add("ativo", input.ativo ? 1 : 0);
     if (input.observacao !== undefined) add("observacao", input.observacao);
     if (sets.length === 0) return { ok: true, alterado: 0 };
     sets.push(`updated_at=NOW()`);

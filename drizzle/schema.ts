@@ -7151,6 +7151,7 @@ export const financialCartoes = pgTable("financial_cartoes", {
   final4: varchar("final4", { length: 8 }),
   titular: varchar("titular", { length: 255 }),
   tipoPessoa: varchar("tipo_pessoa", { length: 4 }).default("PJ"),
+  status: varchar("status", { length: 20 }).default("ativo"),
   diaFechamento: integer("dia_fechamento"),
   diaVencimento: integer("dia_vencimento"),
   limite: numeric("limite", { precision: 15, scale: 2 }),

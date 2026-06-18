@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3269 — **FINANCEIRO / CARTÃO DE CRÉDITO · A TELA DE CADASTRO DE CARTÕES GANHOU O CAMPO "STATUS"
+ * (ATIVO / BLOQUEADO / RENEGOCIADO / CANCELADO / INATIVO), QUE APARECE COMO BADGE COLORIDO EM CADA
+ * CARTÃO DA LISTA. ALÉM DISSO, OS 5 CARTÕES DA PLANILHA ENVIADA PELO PILOTO FORAM CADASTRADOS NO ERP
+ * (4 NA FC ENGENHARIA, 1 NA LOCNOW), COM BANCO/BANDEIRA/FINAL/TITULAR/STATUS/FECHAMENTO/VENCIMENTO/
+ * LIMITE/OBSERVAÇÃO.**
+ * - PEDIDO (piloto FC): "na tela de cadastro dos cartões coloque o status, e já estou te mandando uma
+ *   planilha com todos nossos cartões que quero que vc faça o cadastro no ERP" (planilha CARTOES.xlsx).
+ * - CAUSA: a tabela `financial_cartoes` só tinha o flag binário `ativo` (smallint 0/1); não havia uma
+ *   situação cadastral rica (renegociado, bloqueado, cancelado) para os cartões.
+ * - SCHEMA (ADITIVO): nova coluna `status VARCHAR(20) DEFAULT 'ativo'` em `financial_cartoes`
+ *   (`drizzle/schema.ts`) + self-heal `[SyncSchema+]` em `server/_core/index.ts` (na CREATE TABLE e
+ *   `ALTER TABLE … ADD COLUMN IF NOT EXISTS status`). O `ativo` legado é DERIVADO do status
+ *   (`cancelado`/`inativo` → 0; demais → 1) para preservar o de-para da IA (só cartão ativo casa fatura)
+ *   e o esmaecimento visual da listagem.
+ * - BACK (`server/routers/cartao.ts`): const `STATUS_CARTAO` + helper `ativoDeStatus`; `listarCartoes`
+ *   passou a retornar `COALESCE(status,'ativo')`; `criarCartao` grava `status` + `ativo` derivado;
+ *   `atualizarCartao` aceita `status` e, quando informado, sincroniza `ativo` (mantendo o input `ativo`
+ *   legado só quando `status` não vem).
+ * - FRONT (`client/src/pages/financeiro/FinanceiroCartaoCredito.tsx`): `CARTAO_FORM_INICIAL` ganhou
+ *   `status:"ativo"`; const `STATUS_CARTAO_OPCOES` + helper `statusCartaoBadge` (cores por status); novo
+ *   `<Select>` "Status" ao lado de "Tipo"; edição/salvar propagam `status`; cada card da lista mostra o
+ *   badge de status ao lado do badge PJ/PF.
+ * - DADOS (INSERT no Neon, tenant correto, guard anti-duplicidade por `final4`): Caixa/Elo 9754
+ *   (renegociado, "Em acordo - 27/06 vence a parcela 5/24"), Caixa/Visa 9552 (ativo, fech 15/venc 26/
+ *   limite R$ 20.000), Banco do Brasil/Elo 0840 (cancelado), Santander/Mastercard 5578 (ativo, fech 20/
+ *   venc 1/limite R$ 70.000) → FC ENGENHARIA (company 60002); Santander/Mastercard 4466 (ativo, fech 15/
+ *   venc 25/limite R$ 45.000) → LOCNOW (company 90001).
+ * - ZERO ALTER DESTRUTIVO/DROP/DELETE (só ADD COLUMN IF NOT EXISTS + INSERT).
+ *
  * Rev. 3268 — **FINANCEIRO / MENU LATERAL · O ITEM "PREVISÃO DE FATURAMENTO" SAIU DO GRUPO
  * "MOVIMENTAÇÕES" E PASSOU PARA O GRUPO "ANÁLISE" (LOGO ACIMA DE "ANÁLISE DE CUSTOS"), QUE FAZ MAIS
  * SENTIDO PELO CARÁTER ANALÍTICO/PROJETIVO DA TELA. SÓ ORGANIZAÇÃO DE MENU — A ROTA E A TELA NÃO MUDAM.**
