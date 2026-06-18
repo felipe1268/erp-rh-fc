@@ -3605,6 +3605,46 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2985: colunas extras do cliente_avaliacao_shortlink garantidas (persistência/idioma/soft-delete).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2985 cliente_avaliacao_shortlink cols:`, e?.message || e); }
 
+        // ── Rev. 3272 — Relógio de ponto (SN) DUPLICADO na MESMA obra ──
+        // Re-vincular o mesmo SN à mesma obra criava 2ª linha ATIVA (addSnToObra
+        // não barrava o duplicado na própria obra). Resultado: obra "considerando"
+        // 3 relógios sendo 2. Cura: desativa as linhas ativas excedentes por
+        // (companyId, obraId, sn), MANTENDO a de MENOR dataVinculo (a original) —
+        // tiebreak por id. UPDATE-only, idempotente (R-001/007/010: zero DELETE/ALTER/DROP).
+        try {
+          const dedup = await db.execute(sql`
+            UPDATE obra_sns o
+               SET status = 'inativo',
+                   "dataLiberacao" = (now() AT TIME ZONE 'UTC')::date,
+                   "updatedAt" = now()
+             WHERE o.status = 'ativo'
+               AND o.id <> (
+                 SELECT k.id FROM obra_sns k
+                  WHERE k.status = 'ativo'
+                    AND k."companyId" = o."companyId"
+                    AND k."obraId" = o."obraId"
+                    AND k.sn = o.sn
+                  ORDER BY k."dataVinculo" ASC NULLS LAST, k.id ASC
+                  LIMIT 1
+               )
+               AND EXISTS (
+                 SELECT 1 FROM obra_sns d
+                  WHERE d.status = 'ativo'
+                    AND d."companyId" = o."companyId"
+                    AND d."obraId" = o."obraId"
+                    AND d.sn = o.sn
+                    AND d.id <> o.id
+               )
+          `);
+          const n = (dedup as any)?.rowCount ?? 0;
+          if (n > 0) console.log(`[SyncSchema+] Rev. 3272: ${n} relógio(s) de ponto duplicado(s) por obra desativado(s) (mantida a 1ª vinculação).`);
+          // Guard ATÔMICO contra recorrência: índice único PARCIAL impede 2 linhas
+          // ATIVAS do mesmo SN na mesma obra (fecha a janela de corrida do SELECT→INSERT
+          // do addSnToObra). NULL em obraId é distinto no índice (pool de SNs livres ok).
+          // Roda DEPOIS da cura (dados já únicos) → CREATE não falha. CREATE, não ALTER/DROP.
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_obra_sn_ativo ON obra_sns ("companyId", "obraId", sn) WHERE status = 'ativo'`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3272 dedup obra_sns:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

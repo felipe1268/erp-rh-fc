@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3272 — **OBRAS / CADASTRO (RELÓGIOS DE PONTO) · UMA OBRA ESTAVA "CONSIDERANDO 3 RELÓGIOS DE
+ * PONTO" QUANDO DEVERIA TER 2: O MESMO Nº DE SÉRIE (SN AYTC14025213) APARECIA DUPLICADO NA MESMA
+ * OBRA. CAUSA: VINCULAR O MESMO SN DE NOVO À MESMA OBRA CRIAVA UMA 2ª LINHA "ATIVA" (O GUARD SÓ
+ * BARRAVA SN ATIVO EM OUTRA OBRA, NÃO NA PRÓPRIA). AGORA O VÍNCULO É IDEMPOTENTE (NÃO DUPLICA), O
+ * DADO EXISTENTE FOI CURADO (1 LINHA ATIVA POR SN+OBRA) E AS TELAS/CONTAGENS DEDUPLICAM. ZERO
+ * ALTER/DROP/DELETE — CURA POR UPDATE IDEMPOTENTE + ÍNDICE ÚNICO PARCIAL ADITIVO QUE IMPEDE A
+ * RECORRÊNCIA (FECHA A JANELA DE CORRIDA DO SELECT→INSERT).**
+ * - PEDIDO (piloto FC): numa obra, "por que você está considerando 2x o mesmo relógio de ponto? está
+ *   considerando 3, sendo que um deles está repetido" (SN AYTC14025213 duplicado).
+ * - CAUSA-RAIZ (confirmada por query direta no Neon): a tabela `obra_sns` tinha 2 linhas ATIVAS
+ *   idênticas para o mesmo (companyId 60002, obraId 12, sn AYTC14025213) — id=120001 (dataVínculo
+ *   2026-02-23, a original) e id=3 (dataVínculo 2026-06-17, re-vínculo acidental). Era o ÚNICO grupo
+ *   duplicado em todo o banco. No CÓDIGO: `addSnToObra` (`server/db.ts`) fazia INSERT cru sem checar
+ *   se o SN já estava ATIVO na MESMA obra; `checkSnAvailability` só bloqueia SN ativo em OUTRA obra
+ *   (usa `excludeObraId`), então re-adicionar na própria obra passava direto e duplicava.
+ * - SOLUÇÃO:
+ *   1) PREVENÇÃO (`server/db.ts`, `addSnToObra`): antes do INSERT, busca linha ATIVA com mesmo
+ *      (companyId, obraId, sn). Se existir, NÃO duplica — retorna o id existente (re-vínculo
+ *      idempotente) e, se veio apelido novo, só atualiza o apelido da linha vigente. Como SELECT→
+ *      INSERT não é atômico (2 requisições simultâneas podiam recriar o duplicado), o INSERT virou
+ *      try/catch: na violação do índice único (23505) relê a linha ativa e devolve o id (idempotente).
+ *   1b) GUARD ATÔMICO (`server/_core/index.ts`, mesmo bloco Rev. 3272, APÓS a cura): índice único
+ *      PARCIAL `uq_obra_sn_ativo` em `obra_sns ("companyId","obraId",sn) WHERE status='ativo'`
+ *      (CREATE UNIQUE INDEX IF NOT EXISTS — aditivo, padrão já usado no projeto; NULL em obraId é
+ *      distinto, preserva o pool de SNs livres). Criado SÓ depois do UPDATE de cura (dados já únicos),
+ *      então a criação nunca falha. Fecha de vez a janela de corrida.
+ *   2) CURA DO DADO (`server/_core/index.ts`, novo bloco `[SyncSchema+] Rev. 3272`): UPDATE
+ *      idempotente que desativa (status='inativo' + dataLiberacao) as linhas ATIVAS EXCEDENTES por
+ *      (companyId, obraId, sn), MANTENDO a de MENOR dataVínculo (a original), tiebreak por id.
+ *      UPDATE-only — ZERO DELETE/ALTER/DROP (R-001/007/010). Roda no boot (dev no restart, prod no
+ *      deploy) e é no-op depois de curado.
+ *   3) DEDUP NAS LEITURAS (`server/db.ts`): `getObraSns` esconde o "fantasma" liberado/duplicado de um
+ *      SN que ainda tem linha ATIVA na obra (e nunca mostra 2 ativas do mesmo SN), preservando os
+ *      liberados genuínos; `getAvailableSns` (realocação) deixa de oferecer SN que ainda tem linha
+ *      ativa (não está livre de fato) e deduplica por SN.
+ *   4) RATEIO (`server/routers/fechamentoPonto.ts`): a query de SNs por obra (que NÃO filtrava status)
+ *      passou a exigir `status='ativo'` e a deduplicar por SN ao montar `obraSnMap`.
+ * - RESSALVA: a tela de edição da obra mostra SNs liberados genuínos (histórico) normalmente; só o
+ *   duplicado-fantasma (gêmeo de um SN ativo) é ocultado.
+ * - GOTCHA (corrigido nesta rev.): o UPDATE de cura no `[SyncSchema+]` PRECISA gravar `dataLiberacao`
+ *   como `::date` e `updatedAt` como `now()` — gravar `to_char(...)` (text) nessas colunas date/
+ *   timestamp dá erro de tipo, que era engolido pelo catch (e o log capado escondia a FALHA), por
+ *   isso a cura não surtia efeito até o ajuste.
+ * - ZERO ALTER/DROP/DELETE. Única DDL: `CREATE UNIQUE INDEX IF NOT EXISTS uq_obra_sn_ativo` (aditivo,
+ *   padrão do projeto), criado SÓ após a cura dos dados.
+ *
  * Rev. 3271 — **OBRAS / CADASTRO · O BADGE "Xh/SEMANA" DA "JORNADA DE TRABALHO DA OBRA" MOSTRAVA
  * 35h/SEMANA QUANDO A JORNADA LANÇADA SOMAVA 44h (SEG–QUI 12:00–22:00 c/ 1h INTERVALO = 9h; SEX
  * 12:00–21:00 c/ 1h = 8h → 4×9+8 = 44h). CAUSA: UM DIA TINHA O INTERVALO GRAVADO COMO O RÓTULO

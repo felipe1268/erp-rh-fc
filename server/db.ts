@@ -2562,7 +2562,20 @@ export async function restoreJobFunction(id: number) {
 export async function getObraSns(obraId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(obraSns).where(eq(obraSns.obraId, obraId)).orderBy(desc(obraSns.createdAt));
+  const rows = await db.select().from(obraSns).where(eq(obraSns.obraId, obraId)).orderBy(desc(obraSns.createdAt));
+  // Dedup: se um SN tem linha ATIVA na obra, esconde os "fantasmas" liberados/duplicados
+  // do MESMO SN (lixo de re-vínculo). Mantém liberados genuínos (SN sem gêmeo ativo).
+  const snsAtivos = new Set(rows.filter((r: any) => r.status === "ativo").map((r: any) => r.sn));
+  const seenAtivo = new Set<string>();
+  return rows.filter((r: any) => {
+    if (r.status === "ativo") {
+      if (seenAtivo.has(r.sn)) return false; // 2ª linha ativa do mesmo SN → some
+      seenAtivo.add(r.sn);
+      return true;
+    }
+    // inativo: só mostra se NÃO houver uma linha ativa do mesmo SN nesta obra
+    return !snsAtivos.has(r.sn);
+  });
 }
 
 export async function getObraSnsByCompany(companyId: number) {
@@ -2618,15 +2631,54 @@ export async function checkSnAvailability(companyId: number, sn: string, exclude
 export async function addSnToObra(data: { companyId: number; obraId?: number; sn: string; apelido?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const [result] = await db.insert(obraSns).values({
-    companyId: data.companyId,
-    obraId: data.obraId,
-    sn: data.sn,
-    apelido: data.apelido || null,
-    status: "ativo",
-    dataVinculo: new Date().toISOString().split("T")[0],
-  });
-  return { id: result[0].id };
+  // Guard anti-duplicidade: se o MESMO SN já está ATIVO nesta MESMA obra, não cria
+  // outra linha (re-vínculo idempotente). checkSnAvailability só barra SN ativo em
+  // OUTRA obra (excludeObraId) — por isso re-adicionar na mesma obra duplicava.
+  if (data.obraId != null) {
+    const existente = await db.select({ id: obraSns.id }).from(obraSns).where(and(
+      eq(obraSns.companyId, data.companyId),
+      eq(obraSns.obraId, data.obraId),
+      eq(obraSns.sn, data.sn),
+      eq(obraSns.status, "ativo"),
+    ));
+    if (existente.length > 0) {
+      // Atualiza o apelido se veio um novo, mas não duplica a linha.
+      if (data.apelido) {
+        await db.update(obraSns).set({ apelido: data.apelido, updatedAt: new Date().toISOString() }).where(eq(obraSns.id, existente[0].id));
+      }
+      return { id: existente[0].id };
+    }
+  }
+  try {
+    const [result] = await db.insert(obraSns).values({
+      companyId: data.companyId,
+      obraId: data.obraId,
+      sn: data.sn,
+      apelido: data.apelido || null,
+      status: "ativo",
+      dataVinculo: new Date().toISOString().split("T")[0],
+    });
+    return { id: result[0].id };
+  } catch (e: any) {
+    // Corrida: outra requisição inseriu o MESMO SN ativo nesta obra entre o SELECT
+    // acima e este INSERT. O índice único parcial uq_obra_sn_ativo (Rev. 3272) barra
+    // a 2ª linha (23505) → tratamos como re-vínculo idempotente: relê e devolve o id.
+    if (data.obraId != null && (e?.code === "23505" || /duplicate key|uq_obra_sn_ativo/i.test(e?.message || ""))) {
+      const existente = await db.select({ id: obraSns.id }).from(obraSns).where(and(
+        eq(obraSns.companyId, data.companyId),
+        eq(obraSns.obraId, data.obraId),
+        eq(obraSns.sn, data.sn),
+        eq(obraSns.status, "ativo"),
+      ));
+      if (existente.length > 0) {
+        if (data.apelido) {
+          await db.update(obraSns).set({ apelido: data.apelido, updatedAt: new Date().toISOString() }).where(eq(obraSns.id, existente[0].id));
+        }
+        return { id: existente[0].id };
+      }
+    }
+    throw e;
+  }
 }
 
 export async function updateSnObra(id: number, data: { sn?: string; obraId?: number; status?: string; apelido?: string }) {
@@ -2666,8 +2718,20 @@ export async function releaseObraSns(obraId: number) {
 export async function getAvailableSns(companyId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(obraSns)
+  const inativos = await db.select().from(obraSns)
     .where(and(eq(obraSns.companyId, companyId), eq(obraSns.status, "inativo")));
+  // Não oferecer p/ realocação um SN que AINDA tem linha ativa (fantasma de re-vínculo):
+  // ele não está realmente livre. Dedup por SN também.
+  const ativos = await db.select({ sn: obraSns.sn }).from(obraSns)
+    .where(and(eq(obraSns.companyId, companyId), eq(obraSns.status, "ativo")));
+  const snsAtivos = new Set(ativos.map((r: any) => r.sn));
+  const seen = new Set<string>();
+  return inativos.filter((r: any) => {
+    if (snsAtivos.has(r.sn)) return false;
+    if (seen.has(r.sn)) return false;
+    seen.add(r.sn);
+    return true;
+  });
 }
 
 // Buscar obra pelo SN ativo (para integração DIXI)

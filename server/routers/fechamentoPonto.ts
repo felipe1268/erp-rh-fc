@@ -2514,11 +2514,13 @@ export const fechamentoPontoRouter = router({
           and(
             companyFilter(obraSns.companyId, input),
             inArray(obraSns.obraId, obraIds as number[]),
+            eq(obraSns.status, "ativo"),
           )
         );
         for (const s of linkedSns) {
           if (s.obraId == null) continue;
           if (!obraSnMap[s.obraId]) obraSnMap[s.obraId] = [];
+          if (obraSnMap[s.obraId].includes(s.sn)) continue; // dedup por SN
           obraSnMap[s.obraId].push(s.sn);
         }
         for (const oId of obraIds) {
