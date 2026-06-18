@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   CreditCard, Upload, Loader2, CheckCircle, AlertTriangle, Trash2, Pencil,
   ChevronLeft, ChevronRight, PlusCircle, ListTree, FileText, Building2, ShieldAlert,
+  Search, Layers,
 } from "lucide-react";
 
 function formatBRL(v: number | null | undefined) {
@@ -259,6 +260,70 @@ export default function FinanceiroCartaoCredito() {
       itensQ.refetch();
     } catch (e: any) {
       toast({ title: "Erro ao classificar", description: e?.message || String(e), variant: "destructive" });
+    }
+  }
+
+  // ── Filtros, resumo e classificação em massa dos itens da fatura ─────
+  const [itemBusca, setItemBusca] = useState("");
+  const [itemStatus, setItemStatus] = useState<"todos" | "pendente" | "sugerido" | "confirmado" | "ignorado">("todos");
+  const [bulkObra, setBulkObra] = useState("keep");
+  const [bulkCC, setBulkCC] = useState("keep");
+  const [bulkCat, setBulkCat] = useState("keep");
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  function resetFaturaFiltros() {
+    setItemBusca(""); setItemStatus("todos");
+    setBulkObra("keep"); setBulkCC("keep"); setBulkCat("keep");
+    setBulkOpen(false);
+  }
+
+  const itensFiltrados = useMemo(() => {
+    const q = itemBusca.trim().toLowerCase();
+    return itens.filter((it) => {
+      if (q && !(`${it.descricao || ""} ${it.cidade || ""}`.toLowerCase().includes(q))) return false;
+      if (itemStatus === "pendente") return it.obraId == null;
+      if (itemStatus !== "todos") return (it.statusClassificacao || "sugerido") === itemStatus;
+      return true;
+    });
+  }, [itens, itemBusca, itemStatus]);
+
+  const resumoItens = useMemo(() => {
+    let classificados = 0, confirmados = 0, pendentes = 0, valorConf = 0, valorPend = 0;
+    for (const it of itens) {
+      const v = Number(it.valor) || 0;
+      if (it.obraId != null) classificados++; else { pendentes++; valorPend += v; }
+      if ((it.statusClassificacao || "") === "confirmado") { confirmados++; valorConf += v; }
+    }
+    const pct = itens.length ? Math.round((classificados / itens.length) * 100) : 0;
+    return { total: itens.length, classificados, confirmados, pendentes, valorConf, valorPend, pct };
+  }, [itens]);
+
+  async function aplicarBulk() {
+    if (!companyId) return;
+    const alvos = itensFiltrados;
+    if (alvos.length === 0) { setBulkOpen(false); return; }
+    const o = obras.find((x) => String(x.id) === bulkObra);
+    const cc = costCenters.find((x) => String(x.id) === bulkCC);
+    const cat = categorias.find((x) => String(x.id) === bulkCat);
+    const patch: any = {};
+    if (bulkObra !== "keep") { patch.obraId = bulkObra === "none" ? null : parseInt(bulkObra, 10); patch.obraNome = bulkObra === "none" ? null : (o ? (o.nome ?? o.name ?? null) : null); }
+    if (bulkCC !== "keep") { patch.centroCustoId = bulkCC === "none" ? null : parseInt(bulkCC, 10); patch.centroCustoNome = bulkCC === "none" ? null : (cc ? cc.nome : null); }
+    if (bulkCat !== "keep") { patch.categoriaId = bulkCat === "none" ? null : parseInt(bulkCat, 10); patch.categoriaNome = bulkCat === "none" ? null : (cat ? cat.nome : null); }
+    if (Object.keys(patch).length === 0) { setBulkOpen(false); return; }
+    setBulkBusy(true);
+    try {
+      for (const it of alvos) {
+        await classificarItem.mutateAsync({ id: it.id, companyId, ...patch });
+      }
+      await itensQ.refetch();
+      toast({ title: "Classificação aplicada", description: `${alvos.length} item(ns) atualizados.` });
+      setBulkOpen(false);
+      setBulkObra("keep"); setBulkCC("keep"); setBulkCat("keep");
+    } catch (e: any) {
+      toast({ title: "Erro ao aplicar em massa", description: e?.message || String(e), variant: "destructive" });
+    } finally {
+      setBulkBusy(false);
     }
   }
 
@@ -600,48 +665,112 @@ export default function FinanceiroCartaoCredito() {
       </Dialog>
 
       {/* ───────────── MODAL CLASSIFICAR ITENS ───────────── */}
-      <Dialog open={!!faturaItens} onOpenChange={(v) => { if (!v) setFaturaItens(null); }}>
-        <DialogContent resizable={false} className="max-w-[96vw] w-[96vw] h-[92vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><ListTree className="w-5 h-5" /> Classificar itens da fatura</DialogTitle>
-            <DialogDescription>
-              {faturaItens && <>{faturaItens.cartaoBanco || "Cartão"} · final {faturaItens.cartaoFinal4 || "????"} · Venc. {fmtData(faturaItens.vencimento)} · Total {formatBRL(faturaItens.total)}</>}
-            </DialogDescription>
-          </DialogHeader>
+      <Dialog open={!!faturaItens} onOpenChange={(v) => { if (!v) { setFaturaItens(null); resetFaturaFiltros(); } }}>
+        <DialogContent resizable={false} className="max-w-[96vw] w-[96vw] h-[92vh] flex flex-col p-0 gap-0 overflow-hidden">
+          {/* Cabeçalho — faixa azul institucional */}
+          <div className="bg-gradient-to-r from-[#1B2A4A] to-[#2c3f63] px-6 py-4 text-white shrink-0">
+            <DialogHeader className="space-y-1">
+              <DialogTitle className="flex items-center gap-2 text-white text-lg">
+                <span className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-white/15"><ListTree className="w-5 h-5" /></span>
+                Classificar itens da fatura
+              </DialogTitle>
+              <DialogDescription className="text-white/70">
+                Vincule cada compra a uma obra, centro de custo e categoria. Use a classificação em massa para acelerar.
+              </DialogDescription>
+            </DialogHeader>
+            {faturaItens && (
+              <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                <span className="px-2.5 py-1 rounded-full bg-white/10">{faturaItens.cartaoBanco || "Cartão"} · final {faturaItens.cartaoFinal4 || "????"}</span>
+                <span className="px-2.5 py-1 rounded-full bg-white/10">Venc. {fmtData(faturaItens.vencimento)}</span>
+                <span className="px-2.5 py-1 rounded-full bg-white/20 font-semibold">Total {formatBRL(faturaItens.total)}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Barra de progresso + filtros + ação em massa */}
+          {!itensQ.isLoading && itens.length > 0 && (
+            <div className="px-6 py-3 border-b bg-muted/30 shrink-0 space-y-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-semibold tabular-nums">{resumoItens.classificados}/{resumoItens.total}</span>
+                  <span className="text-muted-foreground">com obra</span>
+                </div>
+                <div className="flex-1 min-w-[120px] max-w-[260px] h-2 rounded-full bg-gray-200 overflow-hidden">
+                  <div className="h-full bg-emerald-500 transition-all" style={{ width: `${resumoItens.pct}%` }} />
+                </div>
+                <span className="text-xs text-muted-foreground tabular-nums">{resumoItens.pct}%</span>
+                <div className="ml-auto flex flex-wrap gap-2 text-xs">
+                  <span className="px-2 py-1 rounded bg-emerald-50 text-emerald-700">Confirmado: {formatBRL(resumoItens.valorConf)}</span>
+                  <span className="px-2 py-1 rounded bg-amber-50 text-amber-700">Sem obra: {formatBRL(resumoItens.valorPend)}</span>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <Input value={itemBusca} onChange={(e) => setItemBusca(e.target.value)} placeholder="Buscar descrição ou cidade…" className="h-8 pl-8 w-[230px]" />
+                </div>
+                <Select value={itemStatus} onValueChange={(v) => setItemStatus(v as any)}>
+                  <SelectTrigger className="h-8 w-[170px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os status</SelectItem>
+                    <SelectItem value="pendente">Sem obra</SelectItem>
+                    <SelectItem value="sugerido">Sugerido</SelectItem>
+                    <SelectItem value="confirmado">Confirmado</SelectItem>
+                    <SelectItem value="ignorado">Ignorado</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-xs text-muted-foreground tabular-nums">{itensFiltrados.length} de {itens.length}</span>
+                <Button size="sm" variant="outline" className="h-8 ml-auto" disabled={itensFiltrados.length === 0} onClick={() => setBulkOpen(true)}>
+                  <Layers className="w-4 h-4 mr-1" /> Classificar em massa
+                </Button>
+              </div>
+            </div>
+          )}
+
           <div className="flex-1 overflow-auto">
             {itensQ.isLoading ? (
               <div className="py-10 text-center text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin inline" /> Carregando…</div>
             ) : itens.length === 0 ? (
               <div className="py-10 text-center text-muted-foreground">Esta fatura não tem itens.</div>
+            ) : itensFiltrados.length === 0 ? (
+              <div className="py-10 text-center text-muted-foreground">Nenhum item corresponde ao filtro.</div>
             ) : (
               <table className="w-full text-xs">
-                <thead className="sticky top-0 bg-gray-50 z-10">
-                  <tr className="text-left text-muted-foreground">
-                    <th className="p-2">Data</th><th className="p-2">Descrição</th><th className="p-2">Tipo</th>
-                    <th className="p-2 text-right">Valor</th><th className="p-2">Obra</th><th className="p-2">Centro de custo</th>
-                    <th className="p-2">Categoria</th><th className="p-2">Status</th>
+                <thead className="sticky top-0 bg-gray-50 z-10 shadow-sm">
+                  <tr className="text-left text-muted-foreground uppercase text-[10px] tracking-wide">
+                    <th className="p-2.5">Data</th><th className="p-2.5">Descrição</th><th className="p-2.5">Tipo</th>
+                    <th className="p-2.5 text-right">Valor</th><th className="p-2.5">Obra</th><th className="p-2.5">Centro de custo</th>
+                    <th className="p-2.5">Categoria</th><th className="p-2.5">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {itens.map((it) => (
-                    <tr key={it.id} className="border-t align-top">
-                      <td className="p-2 whitespace-nowrap">{fmtData(it.data)}</td>
-                      <td className="p-2 min-w-[160px]">{it.descricao || "—"}{it.parcelaTotal ? <span className="text-muted-foreground"> ({it.parcelaAtual}/{it.parcelaTotal})</span> : ""}{it.cidade ? <div className="text-[10px] text-muted-foreground">{it.cidade}</div> : null}</td>
-                      <td className="p-2">{tipoBadge(it.tipo)}</td>
-                      <td className="p-2 text-right whitespace-nowrap">{formatBRL(it.valor)}</td>
-                      <td className="p-2">
+                  {itensFiltrados.map((it) => {
+                    const stt = it.statusClassificacao || "sugerido";
+                    const sttCls = stt === "confirmado"
+                      ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                      : stt === "ignorado"
+                      ? "border-gray-300 bg-gray-50 text-gray-500"
+                      : "border-amber-300 bg-amber-50 text-amber-700";
+                    const semObra = it.obraId == null;
+                    return (
+                    <tr key={it.id} className={`border-t align-top hover:bg-blue-50/40 ${semObra ? "bg-amber-50/20" : ""}`}>
+                      <td className="p-2.5 whitespace-nowrap">{fmtData(it.data)}</td>
+                      <td className="p-2.5 min-w-[160px]"><span className="font-medium text-gray-800">{it.descricao || "—"}</span>{it.parcelaTotal ? <span className="text-muted-foreground"> ({it.parcelaAtual}/{it.parcelaTotal})</span> : ""}{it.cidade ? <div className="text-[10px] text-muted-foreground">{it.cidade}</div> : null}</td>
+                      <td className="p-2.5">{tipoBadge(it.tipo)}</td>
+                      <td className="p-2.5 text-right whitespace-nowrap tabular-nums font-medium">{formatBRL(it.valor)}</td>
+                      <td className="p-2.5">
                         <Select value={it.obraId != null ? String(it.obraId) : "none"} onValueChange={(v) => {
                           const o = obras.find((x) => String(x.id) === v);
                           aplicarClassificacao(it, { obraId: v === "none" ? null : parseInt(v, 10), obraNome: o ? (o.nome ?? o.name ?? null) : null });
                         }}>
-                          <SelectTrigger className="h-7 w-[150px]"><SelectValue placeholder="—" /></SelectTrigger>
+                          <SelectTrigger className={`h-7 w-[150px] ${semObra ? "border-amber-300 text-amber-700" : ""}`}><SelectValue placeholder="—" /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="none">— (sem obra)</SelectItem>
                             {obras.map((o) => <SelectItem key={o.id} value={String(o.id)}>{o.nome ?? o.name}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </td>
-                      <td className="p-2">
+                      <td className="p-2.5">
                         <Select value={it.centroCustoId != null ? String(it.centroCustoId) : "none"} onValueChange={(v) => {
                           const cc = costCenters.find((x) => String(x.id) === v);
                           aplicarClassificacao(it, { centroCustoId: v === "none" ? null : parseInt(v, 10), centroCustoNome: cc ? cc.nome : null });
@@ -653,7 +782,7 @@ export default function FinanceiroCartaoCredito() {
                           </SelectContent>
                         </Select>
                       </td>
-                      <td className="p-2">
+                      <td className="p-2.5">
                         <Select value={it.categoriaId != null ? String(it.categoriaId) : "none"} onValueChange={(v) => {
                           const cat = categorias.find((x) => String(x.id) === v);
                           aplicarClassificacao(it, { categoriaId: v === "none" ? null : parseInt(v, 10), categoriaNome: cat ? cat.nome : null });
@@ -665,9 +794,9 @@ export default function FinanceiroCartaoCredito() {
                           </SelectContent>
                         </Select>
                       </td>
-                      <td className="p-2">
-                        <Select value={it.statusClassificacao || "sugerido"} onValueChange={(v) => aplicarClassificacao(it, { statusClassificacao: v })}>
-                          <SelectTrigger className="h-7 w-[120px]"><SelectValue /></SelectTrigger>
+                      <td className="p-2.5">
+                        <Select value={stt} onValueChange={(v) => aplicarClassificacao(it, { statusClassificacao: v })}>
+                          <SelectTrigger className={`h-7 w-[120px] ${sttCls}`}><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="sugerido">Sugerido</SelectItem>
                             <SelectItem value="confirmado">Confirmado</SelectItem>
@@ -676,16 +805,70 @@ export default function FinanceiroCartaoCredito() {
                         </Select>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setFaturaItens(null)}>Fechar</Button>
+          <DialogFooter className="px-6 py-3 border-t bg-muted/30 shrink-0">
+            <Button variant="outline" onClick={() => { setFaturaItens(null); resetFaturaFiltros(); }}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ───────────── MODAL CLASSIFICAR EM MASSA ───────────── */}
+      <AlertDialog open={bulkOpen} onOpenChange={(v) => { if (!bulkBusy) setBulkOpen(v); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2"><Layers className="w-5 h-5 text-blue-700" /> Classificar {itensFiltrados.length} item(ns)</AlertDialogTitle>
+            <AlertDialogDescription>
+              Aplica a definição abaixo a TODOS os itens atualmente filtrados. Deixe "Manter atual" nos campos que não quiser alterar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3 py-1">
+            <div>
+              <Label className="text-xs">Obra</Label>
+              <Select value={bulkObra} onValueChange={setBulkObra}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="keep">Manter atual</SelectItem>
+                  <SelectItem value="none">— (sem obra)</SelectItem>
+                  {obras.map((o) => <SelectItem key={o.id} value={String(o.id)}>{o.nome ?? o.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Centro de custo</Label>
+              <Select value={bulkCC} onValueChange={setBulkCC}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="keep">Manter atual</SelectItem>
+                  <SelectItem value="none">— (nenhum)</SelectItem>
+                  {costCenters.map((cc) => <SelectItem key={cc.id} value={String(cc.id)}>{cc.nome}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Categoria</Label>
+              <Select value={bulkCat} onValueChange={setBulkCat}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="keep">Manter atual</SelectItem>
+                  <SelectItem value="none">— (nenhuma)</SelectItem>
+                  {categorias.map((cat) => <SelectItem key={cat.id} value={String(cat.id)}>{cat.nome}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkBusy}>Cancelar</AlertDialogCancel>
+            <Button onClick={aplicarBulk} disabled={bulkBusy || (bulkObra === "keep" && bulkCC === "keep" && bulkCat === "keep")}>
+              {bulkBusy ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Aplicando…</> : <>Aplicar a {itensFiltrados.length}</>}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ───────────── ALERTS EXCLUIR ───────────── */}
       <AlertDialog open={!!cartaoExcluir} onOpenChange={(v) => { if (!v) setCartaoExcluir(null); }}>

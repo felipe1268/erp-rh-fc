@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3250 — **FINANCEIRO / CONTROLE DE CARTÃO DE CRÉDITO · O DIÁLOGO "CLASSIFICAR ITENS DA FATURA"
+ * GANHOU UM LAYOUT MODERNO E MUITO MAIS USÁVEL: (1) CABEÇALHO EM FAIXA AZUL COM ÍCONE E PÍLULAS DE
+ * CONTEXTO (CARTÃO/FINAL, VENCIMENTO, TOTAL EM BRL); (2) BARRA DE PROGRESSO MOSTRANDO QUANTOS ITENS
+ * JÁ TÊM OBRA (X/Y + %) MAIS CHIPS COM VALOR CONFIRMADO E VALOR AINDA SEM OBRA; (3) BUSCA POR
+ * DESCRIÇÃO/CIDADE E FILTRO POR STATUS (TODOS / SEM OBRA / SUGERIDO / CONFIRMADO / IGNORADO); (4)
+ * NOVO BOTÃO "CLASSIFICAR EM MASSA" QUE APLICA OBRA, CENTRO DE CUSTO E/OU CATEGORIA A TODOS OS ITENS
+ * FILTRADOS DE UMA VEZ (CAMPOS COM OPÇÃO "MANTER ATUAL" P/ NÃO SOBRESCREVER); (5) TABELA POLIDA
+ * (LINHAS COM HOVER, ITENS SEM OBRA REALÇADOS EM ÂMBAR, STATUS COMO PÍLULA COLORIDA, VALORES
+ * `tabular-nums`). 100% READ-ONLY NO BACKEND — A AÇÃO EM MASSA REUSA A MUTATION DE CLASSIFICAÇÃO
+ * EXISTENTE (`cartao.classificarItem`), ITEM A ITEM.**
+ * - PEDIDO (piloto FC, sobre o diálogo "Classificar itens da fatura"): "quero um layout moderno e
+ *   fácil usabilidade" (print: fatura com dezenas de linhas, todas "— (sem obra)", classificadas
+ *   uma a uma).
+ * - SOLUÇÃO (FRONT, `client/src/pages/financeiro/FinanceiroCartaoCredito.tsx`):
+ *     · diálogo redesenhado: `DialogContent` sem padding (`p-0 gap-0 overflow-hidden`) com cabeçalho
+ *       em faixa azul (`#1B2A4A`→`#2c3f63`) + ícone e pílulas de contexto; rodapé destacado.
+ *     · novos estados/derivados client-side: `itemBusca`, `itemStatus`, `itensFiltrados` (useMemo:
+ *       busca em descrição+cidade, filtro por status ou "sem obra") e `resumoItens` (useMemo:
+ *       classificados/total, %, valor confirmado, valor sem obra).
+ *     · `aplicarBulk()` — percorre `itensFiltrados` chamando a mutation `classificarItem` por item
+ *       com o patch montado a partir dos selects de massa; cada select tem "Manter atual" (`keep`),
+ *       "—" (limpar = `none`) ou um id; refetch único + toast ao final; AlertDialog de confirmação
+ *       com 3 selects (Obra/CC/Categoria) e botão "Aplicar a N".
+ *     · tabela agora itera `itensFiltrados` (empty-state próprio p/ filtro vazio), linhas com hover,
+ *       realce âmbar p/ itens sem obra, gatilho de status colorido por estado, `tabular-nums`.
+ *     · filtros e seleção de massa são resetados ao fechar o diálogo (`resetFaturaFiltros`).
+ * - ZERO BACKEND NOVO · ZERO SCHEMA/ALTER/DROP/DELETE — só apresentação, filtros client-side e
+ *   reuso da mutation de classificação existente.
+ *
  * Rev. 3249 — **FINANCEIRO / CONTROLE DE CARTÃO DE CRÉDITO · O DIÁLOGO "NOVO CARTÃO / EDITAR CARTÃO"
  * GANHOU UM LAYOUT MODERNO (CABEÇALHO AZUL COM ÍCONE, SEÇÕES "IDENTIFICAÇÃO" E "DATAS & LIMITE",
  * RODAPÉ DESTACADO) E O CAMPO "LIMITE" PASSOU A USAR MÁSCARA DE MOEDA BRL AUTOMÁTICA — DIGITANDO
