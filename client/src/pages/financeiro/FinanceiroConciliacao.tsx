@@ -1008,7 +1008,7 @@ export default function FinanceiroConciliacao() {
   tfoot td{font-weight:bold;background:#f9fafb}
   @media print{body{padding:10px}}
 </style></head><body>
-  <img class="logo" src="${window.location.origin}/logo-fc-branco-amarelo.png?v=3187" alt="FC Engenharia"/>
+  <img class="logo" src="${window.location.origin}/logo-fc.jpg?v=3260" alt="FC Engenharia"/>
   <h1 class="brand">FC ENGENHARIA</h1>
   <div class="band">RELATÓRIO DE CONCILIAÇÃO BANCÁRIA</div>
   <div class="meta">
@@ -1106,7 +1106,7 @@ export default function FinanceiroConciliacao() {
   tfoot td{font-weight:bold;background:#f9fafb}
   @media print{body{padding:10px}}
 </style></head><body>
-  <img class="logo" src="${window.location.origin}/logo-fc-branco-amarelo.png?v=3196" alt="FC Engenharia"/>
+  <img class="logo" src="${window.location.origin}/logo-fc.jpg?v=3260" alt="FC Engenharia"/>
   <h1 class="brand">FC ENGENHARIA</h1>
   <div class="band">${esc(titulo)}</div>
   <div class="meta">
@@ -1173,7 +1173,7 @@ export default function FinanceiroConciliacao() {
   tfoot td{font-weight:bold;background:#f9fafb}
   @media print{body{padding:10px}}
 </style></head><body>
-  <img class="logo" src="${window.location.origin}/logo-fc-branco-amarelo.png?v=3252" alt="FC Engenharia"/>
+  <img class="logo" src="${window.location.origin}/logo-fc.jpg?v=3260" alt="FC Engenharia"/>
   <h1 class="brand">FC ENGENHARIA</h1>
   <div class="band">CHEQUES DEVOLVIDOS NO BANCO</div>
   <div class="meta">

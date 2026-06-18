@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3260 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · OS 3 RELATÓRIOS EM PDF/IMPRESSÃO DESTE MÓDULO
+ * (RELATÓRIO DE CONCILIAÇÃO BANCÁRIA, LISTAS POR STATUS E "CHEQUES DEVOLVIDOS NO BANCO") DEIXARAM DE
+ * APARECER COM O LOGO "CORTADO" NO CABEÇALHO. ANTES USAVAM O LOGO BRANCO+AMARELO (FEITO P/ FUNDO ESCURO);
+ * COMO A PÁGINA DO PDF É BRANCA, A PARTE BRANCA DO LOGO SUMIA E SOBRAVA SÓ O ARCO AMARELO, DANDO
+ * IMPRESSÃO DE LOGO CORTADO. AGORA USAM O LOGO INSTITUCIONAL COLORIDO (`logo-fc.jpg`), QUE É O PADRÃO FC
+ * P/ DOCUMENTOS DE FUNDO BRANCO. SÓ APRESENTAÇÃO.**
+ * - PEDIDO (piloto FC): "Ajuste a página não pode cortar o logo, precisa manter nosso padrão sempre"
+ *   (print IMG_2187 — relatório "Cheques devolvidos no banco" com o logo aparecendo cortado/incompleto).
+ * - CAUSA-RAIZ: as 3 funções de relatório de `client/src/pages/financeiro/FinanceiroConciliacao.tsx`
+ *   referenciavam `logo-fc-branco-amarelo.png` — variante branco+amarelo do logo, desenhada p/ fundo
+ *   ESCURO (faixa azul). Renderizado sobre o corpo BRANCO do PDF (`body{...}` sem fundo), os traços
+ *   brancos do logo ficavam invisíveis e só o arco amarelo aparecia → efeito de "logo cortado". A REGRA
+ *   DE OURO FC (replit.md, Rev. 2106+) define o cabeçalho institucional sobre fundo branco com o logo
+ *   colorido `logo-fc.jpg`.
+ * - SOLUÇÃO (FRONT, só troca de `src`): os 3 `<img class="logo">` passaram de
+ *   `logo-fc-branco-amarelo.png` para `${window.location.origin}/logo-fc.jpg?v=3260` (cache-bust novo),
+ *   mantendo a mesma classe `.logo` (height 54px, centralizado) e todo o restante do cabeçalho (h1.brand
+ *   "FC ENGENHARIA" + faixa azul `#1B2A4A` com o título do doc) intactos. Ambos os arquivos JÁ existem em
+ *   `client/public/` (`logo-fc.jpg`, 5 KB, colorido sobre branco). Aplicado nos 3 relatórios do módulo
+ *   p/ manter o padrão consistente ("sempre"), não só no de cheques devolvidos.
+ * - EFEITO: o cabeçalho dos relatórios sai com o logo FC colorido completo sobre fundo branco, no padrão
+ *   institucional. ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE · só troca de asset no HTML do print.
+ *
  * Rev. 3259 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NO PAINEL "CHEQUES DEVOLVIDOS NO BANCO", A LEGENDA DO
  * MOTIVO DA DEVOLUÇÃO PASSOU A MOSTRAR A DESCRIÇÃO REAL (BACEN/COMPE) AO LADO DO CÓDIGO — INCLUSIVE O
  * MOTIVO 39, QUE ANTES CAÍA NUM GENÉRICO "DEVOLUÇÃO DE CHEQUE (MOTIVO 39)". AGORA O 39 APARECE COMO
