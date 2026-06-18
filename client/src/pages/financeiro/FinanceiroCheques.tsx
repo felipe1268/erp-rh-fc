@@ -13,7 +13,7 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileSpreadsheet, Loader2, CheckCircle, AlertCircle, Trash2, Pencil, Search, RotateCcw, Banknote, ChevronLeft, ChevronRight, Link2 } from "lucide-react";
+import { Upload, FileSpreadsheet, FileText, Sparkles, Loader2, CheckCircle, AlertCircle, Trash2, Pencil, Search, RotateCcw, Banknote, ChevronLeft, ChevronRight, Link2, X } from "lucide-react";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
@@ -71,11 +71,18 @@ export default function FinanceiroCheques() {
   const [fBusca, setFBusca] = useState<string>("");
 
   // ── Importação ──
+  // Dois modos: "xlsx" (planilha mensal) e "pdf" (vários PDFs/imagens de cheque
+  // lidos por IA — o ERP deriva mês/ano da DATA de cada cheque).
+  const [importMode, setImportMode] = useState<"xlsx" | "pdf">("xlsx");
   const [dragOver, setDragOver] = useState(false);
   const [arquivoBase64, setArquivoBase64] = useState<string | null>(null);
   const [arquivoNome, setArquivoNome] = useState<string>("");
   const [preview, setPreview] = useState<any>(null);
   const [importOpen, setImportOpen] = useState(false);
+  // PDFs (IA): arquivos selecionados + linhas acumuladas da leitura.
+  const pdfRef = useRef<HTMLInputElement>(null);
+  const [pdfFiles, setPdfFiles] = useState<{ name: string; base64: string; mimeType: string }[]>([]);
+  const [pdfRows, setPdfRows] = useState<any[]>([]);
   // ── Progresso (barra 0→100%) ──
   const [progresso, setProgresso] = useState<number>(0);
   const [progLabel, setProgLabel] = useState<string>("");
@@ -158,6 +165,9 @@ export default function FinanceiroCheques() {
 
   const previewMut = (trpc as any).cheques.importarPreview.useMutation();
   const confirmarMut = (trpc as any).cheques.importarConfirmar.useMutation();
+  const lerPdfMut = (trpc as any).cheques.lerChequesPdf.useMutation();
+  const pdfPreviewMut = (trpc as any).cheques.importarPdfPreview.useMutation();
+  const pdfConfirmarMut = (trpc as any).cheques.importarPdfConfirmar.useMutation();
   const atualizarMut = (trpc as any).cheques.atualizar.useMutation();
   const excluirMut = (trpc as any).cheques.excluir.useMutation();
   const limparMut = (trpc as any).cheques.limparCadastro.useMutation();
@@ -288,6 +298,91 @@ export default function FinanceiroCheques() {
       finalizarProgresso(tk, false);
       toast({ title: "Falha ao gravar", description: err?.message || String(err), variant: "destructive" });
     }
+  }
+
+  // ── PDFs (IA) ──
+  async function onPickPdfs(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    try {
+      const lidos = await Promise.all(files.map(async (f) => ({
+        name: f.name, base64: await fileToBase64(f),
+        mimeType: f.type || (f.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/jpeg"),
+      })));
+      // Acumula (permite escolher mais arquivos em cliques sucessivos), evitando dup por nome.
+      setPdfFiles((prev) => {
+        const map = new Map(prev.map((p) => [p.name, p]));
+        for (const l of lidos) map.set(l.name, l);
+        return Array.from(map.values());
+      });
+      setPreview(null); setPdfRows([]);
+    } catch {
+      toast({ title: "Erro", description: "Não consegui ler um dos arquivos.", variant: "destructive" });
+    }
+    if (pdfRef.current) pdfRef.current.value = "";
+  }
+
+  function removerPdf(name: string) {
+    setPdfFiles((prev) => prev.filter((p) => p.name !== name));
+    setPreview(null); setPdfRows([]);
+  }
+
+  async function rodarPreviewPdf() {
+    if (!pdfFiles.length) { toast({ title: "Selecione ao menos um PDF/imagem de cheque." }); return; }
+    const tk = iniciarProgresso(`Lendo arquivo 1/${pdfFiles.length}…`);
+    try {
+      const todas: any[] = [];
+      for (let i = 0; i < pdfFiles.length; i++) {
+        setProgLabel(`Lendo arquivo ${i + 1}/${pdfFiles.length}…`);
+        const f = pdfFiles[i];
+        const r = await lerPdfMut.mutateAsync({ companyId, fileBase64: f.base64, mimeType: f.mimeType, fileName: f.name });
+        if (Array.isArray(r?.rows)) todas.push(...r.rows);
+      }
+      setProgLabel("Montando prévia…");
+      const rep = await pdfPreviewMut.mutateAsync({ companyId, rows: todas });
+      setPdfRows(todas);
+      setPreview(rep);
+      setPreviewFiltro("todos"); setPreviewBusca("");
+      finalizarProgresso(tk, true);
+      if (todas.length === 0) toast({ title: "Nenhum cheque lido", description: "A IA não encontrou cheques nos arquivos enviados.", variant: "destructive" });
+    } catch (err: any) {
+      finalizarProgresso(tk, false);
+      toast({ title: "Falha ao ler por IA", description: err?.message || String(err), variant: "destructive" });
+    }
+  }
+
+  async function confirmarImportPdf() {
+    if (!pdfRows.length) return;
+    const tk = iniciarProgresso("Gravando cheques…");
+    try {
+      const nomes = pdfFiles.map((p) => p.name).join(", ").slice(0, 200);
+      const r = await pdfConfirmarMut.mutateAsync({ companyId, rows: pdfRows, origemArquivo: nomes || "PDFs (IA)" });
+      finalizarProgresso(tk, true);
+      toast({ title: "Importação concluída", description: `${r.inseridos} novo(s) cheque(s) gravado(s); ${r.pulados} já existiam.` });
+      setImportOpen(false);
+      setPdfFiles([]); setPdfRows([]); setPreview(null);
+      utils?.cheques?.listar?.invalidate?.();
+      utils?.cheques?.resumo?.invalidate?.();
+      utils?.cheques?.resumoMensal?.invalidate?.();
+    } catch (err: any) {
+      finalizarProgresso(tk, false);
+      toast({ title: "Falha ao gravar", description: err?.message || String(err), variant: "destructive" });
+    }
+  }
+
+  // Dispara a análise conforme o modo ativo (planilha ou PDFs por IA).
+  const analisando = previewMut.isPending || lerPdfMut.isPending || pdfPreviewMut.isPending;
+  const gravando = confirmarMut.isPending || pdfConfirmarMut.isPending;
+  function analisarAtual() { return importMode === "pdf" ? rodarPreviewPdf() : rodarPreview(); }
+  function confirmarAtual() { return importMode === "pdf" ? confirmarImportPdf() : confirmarImport(); }
+  function trocarModo(m: "xlsx" | "pdf") {
+    if (m === importMode) return;
+    setImportMode(m);
+    setPreview(null); setPreviewFiltro("todos"); setPreviewBusca("");
+    setArquivoBase64(null); setArquivoNome("");
+    setPdfFiles([]); setPdfRows([]);
+    if (fileRef.current) fileRef.current.value = "";
+    if (pdfRef.current) pdfRef.current.value = "";
   }
 
   async function salvarEdicao() {
@@ -672,58 +767,113 @@ export default function FinanceiroCheques() {
             <div className="min-w-0">
               <DialogTitle className="text-lg">Importar Controle de Cheques</DialogTitle>
               <DialogDescription className="mt-0.5">
-                Arraste ou selecione a planilha <strong>.xlsx</strong>. O ano é lido automaticamente
-                de cada cheque — nada é gravado até você confirmar.
+                {importMode === "pdf"
+                  ? <>Selecione <strong>vários PDFs ou fotos</strong> de cheque — a IA lê cada um e o mês/ano é derivado da <strong>data do cheque</strong>. Nada é gravado até você confirmar.</>
+                  : <>Arraste ou selecione a planilha <strong>.xlsx</strong>. O ano é lido automaticamente de cada cheque — nada é gravado até você confirmar.</>}
               </DialogDescription>
             </div>
+          </div>
+
+          {/* Seletor de modo: planilha mensal × PDFs lidos por IA */}
+          <div className="flex gap-2 px-5 pt-3 shrink-0">
+            <button type="button" onClick={() => trocarModo("xlsx")}
+              className={`flex items-center gap-2 rounded-lg border px-3.5 py-2 text-sm font-medium transition ${importMode === "xlsx" ? "border-blue-500 bg-blue-50 text-blue-700 ring-1 ring-blue-300" : "bg-card hover:bg-muted text-muted-foreground"}`}>
+              <FileSpreadsheet className="h-4 w-4" /> Planilha (.xlsx)
+            </button>
+            <button type="button" onClick={() => trocarModo("pdf")}
+              className={`flex items-center gap-2 rounded-lg border px-3.5 py-2 text-sm font-medium transition ${importMode === "pdf" ? "border-violet-500 bg-violet-50 text-violet-700 ring-1 ring-violet-300" : "bg-card hover:bg-muted text-muted-foreground"}`}>
+              <Sparkles className="h-4 w-4" /> Cheques em PDF / foto (IA)
+            </button>
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto p-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
               {/* Coluna esquerda: upload + ação */}
               <div className="space-y-4">
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => fileRef.current?.click()}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileRef.current?.click(); }}
-                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                  onDragLeave={() => setDragOver(false)}
-                  onDrop={(e) => {
-                    e.preventDefault(); setDragOver(false);
-                    const f = e.dataTransfer.files?.[0];
-                    if (f) onPickFile({ target: { files: [f] } } as any);
-                  }}
-                  className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-4 py-16 text-center transition-colors cursor-pointer ${
-                    dragOver ? "border-blue-500 bg-blue-50" : arquivoNome ? "border-emerald-300 bg-emerald-50/60" : "border-muted-foreground/25 hover:border-blue-400 hover:bg-muted/40"
-                  }`}
-                >
-                  <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={onPickFile} className="hidden" />
-                  {arquivoNome ? (
-                    <>
-                      <div className="rounded-full bg-emerald-100 text-emerald-700 p-3"><CheckCircle className="h-8 w-8" /></div>
-                      <div className="font-medium text-base break-all">{arquivoNome}</div>
-                      <div className="text-sm text-muted-foreground">Clique para trocar o arquivo</div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="rounded-full bg-blue-100 text-blue-700 p-3"><Upload className="h-8 w-8" /></div>
-                      <div className="font-medium text-base">Arraste a planilha aqui ou clique para selecionar</div>
-                      <div className="text-sm text-muted-foreground">Formato .xlsx com abas mensais (JAN…DEZ)</div>
-                    </>
-                  )}
-                </div>
+                {importMode === "xlsx" ? (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => fileRef.current?.click()}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") fileRef.current?.click(); }}
+                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={(e) => {
+                      e.preventDefault(); setDragOver(false);
+                      const f = e.dataTransfer.files?.[0];
+                      if (f) onPickFile({ target: { files: [f] } } as any);
+                    }}
+                    className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-4 py-16 text-center transition-colors cursor-pointer ${
+                      dragOver ? "border-blue-500 bg-blue-50" : arquivoNome ? "border-emerald-300 bg-emerald-50/60" : "border-muted-foreground/25 hover:border-blue-400 hover:bg-muted/40"
+                    }`}
+                  >
+                    <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={onPickFile} className="hidden" />
+                    {arquivoNome ? (
+                      <>
+                        <div className="rounded-full bg-emerald-100 text-emerald-700 p-3"><CheckCircle className="h-8 w-8" /></div>
+                        <div className="font-medium text-base break-all">{arquivoNome}</div>
+                        <div className="text-sm text-muted-foreground">Clique para trocar o arquivo</div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="rounded-full bg-blue-100 text-blue-700 p-3"><Upload className="h-8 w-8" /></div>
+                        <div className="font-medium text-base">Arraste a planilha aqui ou clique para selecionar</div>
+                        <div className="text-sm text-muted-foreground">Formato .xlsx com abas mensais (JAN…DEZ)</div>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => pdfRef.current?.click()}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") pdfRef.current?.click(); }}
+                      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                      onDragLeave={() => setDragOver(false)}
+                      onDrop={(e) => {
+                        e.preventDefault(); setDragOver(false);
+                        const fs = Array.from(e.dataTransfer.files || []);
+                        if (fs.length) onPickPdfs({ target: { files: fs } } as any);
+                      }}
+                      className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-4 py-12 text-center transition-colors cursor-pointer ${
+                        dragOver ? "border-violet-500 bg-violet-50" : pdfFiles.length ? "border-violet-300 bg-violet-50/60" : "border-muted-foreground/25 hover:border-violet-400 hover:bg-muted/40"
+                      }`}
+                    >
+                      <input ref={pdfRef} type="file" accept=".pdf,image/*" multiple onChange={onPickPdfs} className="hidden" />
+                      <div className="rounded-full bg-violet-100 text-violet-700 p-3"><FileText className="h-8 w-8" /></div>
+                      <div className="font-medium text-base">
+                        {pdfFiles.length ? `${pdfFiles.length} arquivo(s) selecionado(s) — clique para adicionar mais` : "Arraste vários PDFs/fotos aqui ou clique para selecionar"}
+                      </div>
+                      <div className="text-sm text-muted-foreground">PDF ou imagem (JPG/PNG) — um ou vários cheques por arquivo</div>
+                    </div>
 
-                <Button onClick={rodarPreview} disabled={!arquivoBase64 || previewMut.isPending} className="w-full gap-2" size="lg">
-                  {previewMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                  {previewMut.isPending ? "Analisando…" : "Analisar planilha"}
+                    {pdfFiles.length > 0 && (
+                      <div className="space-y-1.5 max-h-44 overflow-auto rounded-lg border p-2">
+                        {pdfFiles.map((f) => (
+                          <div key={f.name} className="flex items-center gap-2 text-sm">
+                            <FileText className="h-3.5 w-3.5 text-violet-600 shrink-0" />
+                            <span className="truncate flex-1" title={f.name}>{f.name}</span>
+                            <button type="button" onClick={() => removerPdf(f.name)} className="text-muted-foreground hover:text-red-600 shrink-0" title="Remover">
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <Button onClick={analisarAtual} disabled={(importMode === "pdf" ? pdfFiles.length === 0 : !arquivoBase64) || analisando} className="w-full gap-2" size="lg">
+                  {analisando ? <Loader2 className="h-4 w-4 animate-spin" /> : (importMode === "pdf" ? <Sparkles className="h-4 w-4" /> : <Search className="h-4 w-4" />)}
+                  {analisando ? "Analisando…" : (importMode === "pdf" ? "Ler cheques por IA" : "Analisar planilha")}
                 </Button>
 
-                {(previewMut.isPending || (progresso > 0 && progLabel === "Analisando planilha…")) && (
+                {(analisando || (progresso > 0 && (progLabel.startsWith("Analisando") || progLabel.startsWith("Lendo") || progLabel.startsWith("Montando")))) && (
                   <div className="space-y-1.5">
                     <Progress value={progresso} className="h-2.5" />
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{progLabel || "Analisando planilha…"}</span>
+                      <span>{progLabel || "Analisando…"}</span>
                       <span className="font-semibold tabular-nums">{Math.round(progresso)}%</span>
                     </div>
                   </div>
@@ -907,7 +1057,7 @@ export default function FinanceiroCheques() {
             )}
           </div>
 
-          {(confirmarMut.isPending || (progresso > 0 && progLabel === "Gravando cheques…")) && (
+          {(gravando || (progresso > 0 && progLabel === "Gravando cheques…")) && (
             <div className="px-5 pt-3 space-y-1.5 border-t shrink-0">
               <Progress value={progresso} className="h-2.5" />
               <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -919,8 +1069,8 @@ export default function FinanceiroCheques() {
 
           <DialogFooter className="p-5 border-t shrink-0">
             <Button variant="outline" onClick={() => setImportOpen(false)}>Cancelar</Button>
-            <Button onClick={confirmarImport} disabled={!preview || preview.resumo.novos === 0 || confirmarMut.isPending || previewMut.isPending} className="gap-2">
-              {confirmarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+            <Button onClick={confirmarAtual} disabled={!preview || preview.resumo.novos === 0 || gravando || analisando} className="gap-2">
+              {gravando ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
               Gravar {preview ? preview.resumo.novos : 0} novo(s)
             </Button>
           </DialogFooter>

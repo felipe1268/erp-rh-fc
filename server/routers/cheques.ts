@@ -25,6 +25,7 @@ import { z } from "zod";
 import { sql } from "drizzle-orm";
 import * as XLSX from "xlsx";
 import { randomUUID } from "crypto";
+import { invokeGeminiVision, invokeAnthropicVision } from "../_core/llm";
 
 // ─────────────────────────── Tenant guard ───────────────────────────
 async function assertCompanyAccess(ctxUser: any, companyId: number) {
@@ -280,6 +281,273 @@ function chaveDedup(row: ChequeRow): string {
   return `${row.numeroCheque ?? ""}|${cents}|${row.ano}|${row.mes ?? ""}`;
 }
 
+// ─────────────────────────── Leitura por IA (PDF/imagem de cheque) ───────────────────────────
+// O usuário pode subir VÁRIOS PDFs/imagens de cheque; a IA lê CADA um, extrai os
+// cheques e o ERP deriva mês/ano da DATA do cheque. Mesmo padrão do Cartão de
+// Crédito (Gemini primário + Anthropic fallback; JSON com salvage).
+const PROMPT_CHEQUE = `Você é um extrator de dados de CHEQUES bancários brasileiros a partir de imagens/PDF (escaneados ou fotos).
+O documento pode conter UM ou VÁRIOS cheques (uma página por cheque, vários por página, ou um comprovante/relação de cheques).
+Extraia TODOS os cheques encontrados. Para CADA cheque devolva:
+- numeroCheque: o número do cheque (string, só dígitos) — costuma estar no topo/canto.
+- valor: valor em BRL (número, ponto decimal) — o valor do cheque.
+- banco: nome do banco emissor (ex.: "Itaú", "Bradesco", "Caixa", "Santander").
+- bancoCodigo: código de compensação do banco (3 dígitos), se visível.
+- agencia: número da agência, se visível.
+- contaCorrente: número da conta corrente, se visível.
+- favorecido: nome do favorecido/beneficiário (a quem o cheque foi emitido — "Pague-se a"/"Pagar a"), se houver.
+- data: data do cheque em YYYY-MM-DD (a data de emissão / "bom para" escrita no cheque). É ESSENCIAL para definir o mês/ano.
+- cidade: praça/cidade de emissão, se houver.
+Regras: NÃO invente valores — use null quando não conseguir ler. Valores monetários SEM separador de milhar e com ponto decimal.
+Responda SOMENTE com JSON no formato: { "cheques": [ { ... } ] }`;
+
+const SCHEMA_CHEQUE = {
+  type: "object",
+  properties: {
+    cheques: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          numeroCheque: { type: "string", nullable: true },
+          valor: { type: "number", nullable: true },
+          banco: { type: "string", nullable: true },
+          bancoCodigo: { type: "string", nullable: true },
+          agencia: { type: "string", nullable: true },
+          contaCorrente: { type: "string", nullable: true },
+          favorecido: { type: "string", nullable: true },
+          data: { type: "string", nullable: true },
+          cidade: { type: "string", nullable: true },
+        },
+      },
+    },
+  },
+} as const;
+
+function salvageJson(text: string): any {
+  if (!text) throw new Error("IA não retornou conteúdo.");
+  try { return JSON.parse(text); } catch { /* fallback abaixo */ }
+  const start = text.indexOf("{"), end = text.lastIndexOf("}");
+  if (start > -1 && end > start) {
+    try { return JSON.parse(text.slice(start, end + 1)); } catch { /* segue erro */ }
+  }
+  throw new Error("Não consegui interpretar o JSON da IA.");
+}
+
+async function lerChequesComIA(fileBase64: string, mimeType: string): Promise<any> {
+  const lerAnthropic = async () => {
+    const txt = await invokeAnthropicVision({
+      prompt: PROMPT_CHEQUE + "\nResponda SOMENTE com JSON válido.",
+      files: [{ base64: fileBase64, mimeType }],
+      maxTokens: 8192,
+    });
+    return salvageJson(txt);
+  };
+  // Gemini é o caminho primário (GOOGLE_API_KEY garantida + suporta PDF/imagem + JSON mode).
+  if (process.env.GOOGLE_API_KEY) {
+    try {
+      const txt = await invokeGeminiVision({
+        prompt: PROMPT_CHEQUE,
+        base64: fileBase64,
+        mimeType,
+        responseSchema: SCHEMA_CHEQUE as any,
+        maxTokens: 8192,
+        thinking: "off",
+      });
+      return salvageJson(txt);
+    } catch (errGemini) {
+      // Fallback Anthropic em falha de RUNTIME do Gemini (timeout/quota/5xx).
+      // Se o Anthropic não estiver configurado, re-lança o erro original do Gemini.
+      try {
+        return await lerAnthropic();
+      } catch {
+        throw errGemini;
+      }
+    }
+  }
+  // Sem GOOGLE_API_KEY: Anthropic é o caminho único (se a integração estiver configurada).
+  return await lerAnthropic();
+}
+
+function clip(s: any, n: number): string | null {
+  if (s == null) return null;
+  const t = String(s).trim();
+  return t ? t.slice(0, n) : null;
+}
+
+// Sanitiza uma linha de cheque vinda do CLIENTE (lida por IA antes) — re-valida
+// TUDO no servidor (datas reais, valor numérico, status na whitelist, ano/mês
+// derivados da data) pra a UI não conseguir injetar lixo na gravação.
+function sanitizeChequeRow(r: any): ChequeRow {
+  const dataVencimento = parseData(r?.dataVencimento);
+  const dataCompensacao = parseData(r?.dataCompensacao);
+  const valor = parseValor(r?.valor);
+  const anoDeData = (iso: string | null): number | null => {
+    if (!iso) return null;
+    const y = parseInt(iso.slice(0, 4), 10);
+    return y >= 2000 && y <= 2100 ? y : null;
+  };
+  const ano = anoDeData(dataVencimento) ?? anoDeData(dataCompensacao)
+    ?? (Number.isFinite(r?.ano) ? Math.min(2100, Math.max(2000, Math.trunc(r.ano))) : new Date().getFullYear());
+  const mesFromData = dataVencimento ? parseInt(dataVencimento.slice(5, 7), 10)
+    : (dataCompensacao ? parseInt(dataCompensacao.slice(5, 7), 10) : null);
+  const mes = mesFromData ?? (Number.isFinite(r?.mes) && r.mes >= 1 && r.mes <= 12 ? Math.trunc(r.mes) : null);
+  const statusRaw = normTxt(r?.status);
+  const status = (STATUS_VALIDOS as readonly string[]).includes(statusRaw)
+    ? statusRaw : normStatus(r?.status, dataCompensacao);
+  const numero = clip(soDigitos(r?.numeroCheque) || r?.numeroCheque, 30);
+  return {
+    parcela: clip(r?.parcela, 20),
+    fornecedorNome: clip(r?.fornecedorNome, 255),
+    bancoCodigo: clip(r?.bancoCodigo, 20),
+    bancoNome: clip(r?.bancoNome, 120),
+    agencia: clip(r?.agencia, 20),
+    contaCorrenteRaw: clip(r?.contaCorrenteRaw, 60),
+    numeroCheque: numero,
+    nf: clip(r?.nf, 60),
+    valor,
+    dataVencimento,
+    dataCompensacao,
+    status,
+    observacao: clip(r?.observacao, 500),
+    mes, ano,
+    aba: clip(r?.aba, 120) ?? "PDF",
+    linhaExcel: Number.isFinite(r?.linhaExcel) ? Math.trunc(r.linhaExcel) : 0,
+  };
+}
+
+// Cheque cru da IA → ChequeRow canônico (passa pelo sanitize p/ validar tudo).
+function normalizarChequeIA(raw: any, origemNome: string): ChequeRow {
+  return sanitizeChequeRow({
+    parcela: null,
+    fornecedorNome: raw?.favorecido ?? raw?.fornecedor ?? null,
+    bancoCodigo: raw?.bancoCodigo ?? null,
+    bancoNome: raw?.banco ?? null,
+    agencia: raw?.agencia ?? null,
+    contaCorrenteRaw: raw?.contaCorrente ?? raw?.conta ?? null,
+    numeroCheque: raw?.numeroCheque ?? raw?.numero ?? null,
+    nf: null,
+    valor: raw?.valor ?? null,
+    dataVencimento: raw?.data ?? raw?.dataVencimento ?? null,
+    dataCompensacao: null,
+    status: "pendente",
+    observacao: raw?.cidade ? `Praça: ${String(raw.cidade).trim()}` : null,
+    mes: null, ano: 0,
+    aba: origemNome,
+    linhaExcel: 0,
+  });
+}
+
+// ─────────────────────────── Relatório dry-run + gravação (compartilhados) ───────────────────────────
+// Monta o relatório de prévia (resumo/porMes/linhas) a partir de linhas já
+// normalizadas — usado tanto pela planilha quanto pelos PDFs lidos por IA.
+function montarRelatorio(
+  rows: ChequeRow[],
+  fornecedores: { id: number; chaves: string[] }[],
+  contas: { id: number; digitos: string }[],
+  existentes: Set<string>,
+) {
+  const vistosNoArquivo = new Set<string>();
+  let novos = 0, jaExistem = 0, dupNoArquivo = 0, semFornecedor = 0, semConta = 0, semValor = 0, valorTotalNovos = 0;
+  const porMes: Record<string, { mes: number; novos: number; jaExistem: number; valor: number }> = {};
+  const linhas: any[] = [];
+
+  for (const row of rows) {
+    const fornecedorId = matchFornecedor(row.fornecedorNome, fornecedores);
+    const contaBancariaId = matchConta(row.contaCorrenteRaw, contas);
+    const temFornecedor = !!fornecedorId;
+    const temConta = !!contaBancariaId;
+    const temValor = row.valor != null && row.valor > 0;
+    if (!temFornecedor) semFornecedor++;
+    if (!temConta) semConta++;
+    if (!temValor) semValor++;
+    const chave = chaveDedup(row);
+    let situacao: "NOVO" | "JA_EXISTE" | "DUP_ARQUIVO";
+    if (existentes.has(chave)) { situacao = "JA_EXISTE"; jaExistem++; }
+    else if (vistosNoArquivo.has(chave)) { situacao = "DUP_ARQUIVO"; dupNoArquivo++; }
+    else { situacao = "NOVO"; novos++; valorTotalNovos += row.valor ?? 0; vistosNoArquivo.add(chave); }
+
+    const mk = `${row.ano}-${String(row.mes).padStart(2, "0")}`;
+    if (!porMes[mk]) porMes[mk] = { mes: row.mes ?? 0, novos: 0, jaExistem: 0, valor: 0 };
+    if (situacao === "NOVO") { porMes[mk].novos++; porMes[mk].valor += row.valor ?? 0; }
+    else if (situacao === "JA_EXISTE") porMes[mk].jaExistem++;
+
+    linhas.push({
+      aba: row.aba, linhaExcel: row.linhaExcel, mes: row.mes, ano: row.ano,
+      numeroCheque: row.numeroCheque, fornecedorNome: row.fornecedorNome,
+      fornecedorIdentificado: temFornecedor, contaCorrenteRaw: row.contaCorrenteRaw,
+      contaIdentificada: temConta, semValor: !temValor,
+      valor: row.valor, dataVencimento: row.dataVencimento, dataCompensacao: row.dataCompensacao,
+      status: row.status, situacao,
+    });
+  }
+
+  return {
+    resumo: {
+      totalLinhas: rows.length, novos, jaExistem, dupNoArquivo,
+      semFornecedor, semConta, semValor, valorTotalNovos: Math.round(valorTotalNovos * 100) / 100,
+    },
+    porMes: Object.entries(porMes).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => ({ ref: k, ...v })),
+    amostra: linhas.slice(0, 40),
+    linhas,
+  };
+}
+
+// Insere só os NOVOS (dedup natural) numa transação já aberta — compartilhado
+// pela planilha e pelos PDFs.
+async function inserirCheques(
+  tx: any, companyId: number, rows: ChequeRow[],
+  fornecedores: { id: number; chaves: string[] }[],
+  contas: { id: number; digitos: string }[],
+  existentes: Set<string>, origem: string, loteId: string,
+): Promise<{ inseridos: number; pulados: number }> {
+  const vistos = new Set<string>();
+  let inseridos = 0, pulados = 0;
+  for (const row of rows) {
+    const chave = chaveDedup(row);
+    if (existentes.has(chave) || vistos.has(chave)) { pulados++; continue; }
+    vistos.add(chave);
+    const fornecedorId = matchFornecedor(row.fornecedorNome, fornecedores);
+    const contaBancariaId = matchConta(row.contaCorrenteRaw, contas);
+    await dbExecute(tx,
+      `INSERT INTO financial_cheques
+         (company_id, conta_bancaria_id, conta_corrente_raw, banco_codigo, banco_nome,
+          agencia, numero_cheque, fornecedor_nome, fornecedor_id, parcela, nf, valor,
+          data_vencimento, data_compensacao, status, observacao, mes_ref, ano_ref,
+          origem_arquivo, lote_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
+      [
+        companyId, contaBancariaId, row.contaCorrenteRaw, row.bancoCodigo, row.bancoNome,
+        row.agencia, row.numeroCheque, row.fornecedorNome, fornecedorId, row.parcela, row.nf, row.valor,
+        row.dataVencimento, row.dataCompensacao, row.status, row.observacao, row.mes, row.ano,
+        origem, loteId,
+      ]);
+    inseridos++;
+  }
+  return { inseridos, pulados };
+}
+
+// Schema permissivo p/ as linhas que o cliente devolve da leitura por IA — o
+// servidor re-sanitiza tudo via sanitizeChequeRow (não confia no input cru).
+const chequeRowInputSchema = z.object({
+  parcela: z.string().nullish(),
+  fornecedorNome: z.string().nullish(),
+  bancoCodigo: z.string().nullish(),
+  bancoNome: z.string().nullish(),
+  agencia: z.string().nullish(),
+  contaCorrenteRaw: z.string().nullish(),
+  numeroCheque: z.string().nullish(),
+  nf: z.string().nullish(),
+  valor: z.number().nullish(),
+  dataVencimento: z.string().nullish(),
+  dataCompensacao: z.string().nullish(),
+  status: z.string().nullish(),
+  observacao: z.string().nullish(),
+  mes: z.number().nullish(),
+  ano: z.number().nullish(),
+  aba: z.string().nullish(),
+  linhaExcel: z.number().nullish(),
+}).passthrough();
+
 // ─────────────────────────── Router ───────────────────────────
 export const chequesRouter = router({
 
@@ -305,55 +573,11 @@ export const chequesRouter = router({
       carregarExistentes(db, input.companyId),
     ]);
 
-    const vistosNoArquivo = new Set<string>();
-    let novos = 0, jaExistem = 0, dupNoArquivo = 0, semFornecedor = 0, semConta = 0, semValor = 0, valorTotalNovos = 0;
-    const porMes: Record<string, { mes: number; novos: number; jaExistem: number; valor: number }> = {};
-    // Lista COMPLETA de TODAS as linhas lidas (não só amostra) — pra o usuário VER,
-    // FILTRAR e VALIDAR cada cheque (duplicados, sem conta, sem fornecedor, sem valor)
-    // e localizar/corrigir a linha exata no Excel (aba + linha).
-    const linhas: any[] = [];
-
-    for (const row of parsed.rows) {
-      const fornecedorId = matchFornecedor(row.fornecedorNome, fornecedores);
-      const contaBancariaId = matchConta(row.contaCorrenteRaw, contas);
-      const temFornecedor = !!fornecedorId;
-      const temConta = !!contaBancariaId;
-      const temValor = row.valor != null && row.valor > 0;
-      if (!temFornecedor) semFornecedor++;
-      if (!temConta) semConta++;
-      if (!temValor) semValor++;
-      const chave = chaveDedup(row);
-      let situacao: "NOVO" | "JA_EXISTE" | "DUP_ARQUIVO";
-      if (existentes.has(chave)) { situacao = "JA_EXISTE"; jaExistem++; }
-      else if (vistosNoArquivo.has(chave)) { situacao = "DUP_ARQUIVO"; dupNoArquivo++; }
-      else { situacao = "NOVO"; novos++; valorTotalNovos += row.valor ?? 0; vistosNoArquivo.add(chave); }
-
-      const mk = `${row.ano}-${String(row.mes).padStart(2, "0")}`;
-      if (!porMes[mk]) porMes[mk] = { mes: row.mes ?? 0, novos: 0, jaExistem: 0, valor: 0 };
-      if (situacao === "NOVO") { porMes[mk].novos++; porMes[mk].valor += row.valor ?? 0; }
-      else if (situacao === "JA_EXISTE") porMes[mk].jaExistem++;
-
-      linhas.push({
-        aba: row.aba, linhaExcel: row.linhaExcel, mes: row.mes, ano: row.ano,
-        numeroCheque: row.numeroCheque, fornecedorNome: row.fornecedorNome,
-        fornecedorIdentificado: temFornecedor, contaCorrenteRaw: row.contaCorrenteRaw,
-        contaIdentificada: temConta, semValor: !temValor,
-        valor: row.valor, dataVencimento: row.dataVencimento, dataCompensacao: row.dataCompensacao,
-        status: row.status, situacao,
-      });
-    }
-
+    const relatorio = montarRelatorio(parsed.rows, fornecedores, contas, existentes);
     return {
-      resumo: {
-        totalLinhas: parsed.rows.length, novos, jaExistem, dupNoArquivo,
-        semFornecedor, semConta, semValor, valorTotalNovos: Math.round(valorTotalNovos * 100) / 100,
-      },
+      ...relatorio,
       abasLidas: parsed.abasLidas,
       abasIgnoradas: parsed.abasIgnoradas,
-      porMes: Object.entries(porMes).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => ({ ref: k, ...v })),
-      // Compat: `amostra` segue existindo (primeiras 40) p/ clientes antigos; a UI nova usa `linhas`.
-      amostra: linhas.slice(0, 40),
-      linhas,
     };
   }),
 
@@ -381,34 +605,77 @@ export const chequesRouter = router({
 
     const loteId = randomUUID();
     const origem = (input.origemArquivo || "planilha").slice(0, 255);
-    const vistos = new Set<string>();
-    let inseridos = 0, pulados = 0;
+    let resultado = { inseridos: 0, pulados: 0 };
 
     await db.transaction(async (tx: any) => {
-      for (const row of parsed.rows) {
-        const chave = chaveDedup(row);
-        if (existentes.has(chave) || vistos.has(chave)) { pulados++; continue; }
-        vistos.add(chave);
-        const fornecedorId = matchFornecedor(row.fornecedorNome, fornecedores);
-        const contaBancariaId = matchConta(row.contaCorrenteRaw, contas);
-        await dbExecute(tx,
-          `INSERT INTO financial_cheques
-             (company_id, conta_bancaria_id, conta_corrente_raw, banco_codigo, banco_nome,
-              agencia, numero_cheque, fornecedor_nome, fornecedor_id, parcela, nf, valor,
-              data_vencimento, data_compensacao, status, observacao, mes_ref, ano_ref,
-              origem_arquivo, lote_id)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
-          [
-            input.companyId, contaBancariaId, row.contaCorrenteRaw, row.bancoCodigo, row.bancoNome,
-            row.agencia, row.numeroCheque, row.fornecedorNome, fornecedorId, row.parcela, row.nf, row.valor,
-            row.dataVencimento, row.dataCompensacao, row.status, row.observacao, row.mes, row.ano,
-            origem, loteId,
-          ]);
-        inseridos++;
-      }
+      resultado = await inserirCheques(tx, input.companyId, parsed.rows, fornecedores, contas, existentes, origem, loteId);
     });
 
-    return { inseridos, pulados, loteId };
+    return { ...resultado, loteId };
+  }),
+
+  // ── PDFs lidos por IA ──────────────────────────────────────────────
+  // Lê UM PDF/imagem de cheque(s) via IA e devolve as linhas normalizadas. O
+  // cliente chama uma vez por arquivo (mostrando "Lendo arquivo i/n"), acumula
+  // as linhas e depois roda importarPdfPreview. ZERO gravação.
+  lerChequesPdf: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    fileBase64: z.string().min(10),
+    mimeType: z.string().min(3).max(120),
+    fileName: z.string().max(255).optional(),
+  })).mutation(async ({ input, ctx }) => {
+    await assertCompanyAccess(ctx.user, input.companyId);
+    let bruto: any;
+    try { bruto = await lerChequesComIA(input.fileBase64, input.mimeType); }
+    catch (e: any) { throw new TRPCError({ code: "BAD_REQUEST", message: `Não consegui ler o arquivo por IA: ${e?.message || e}` }); }
+    const arr: any[] = Array.isArray(bruto?.cheques) ? bruto.cheques : (Array.isArray(bruto) ? bruto : []);
+    const origemNome = (input.fileName || "PDF").slice(0, 120);
+    const rows = arr.map((c) => normalizarChequeIA(c, origemNome));
+    return { fileName: origemNome, total: rows.length, rows };
+  }),
+
+  // Relatório dry-run (mesma forma do importarPreview) a partir das linhas lidas
+  // por IA. Re-sanitiza tudo no servidor. ZERO gravação.
+  importarPdfPreview: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    rows: z.array(chequeRowInputSchema).max(5000),
+  })).mutation(async ({ input, ctx }) => {
+    await assertCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const rows = input.rows.map(sanitizeChequeRow);
+    const [fornecedores, contas, existentes] = await Promise.all([
+      carregarFornecedores(db, input.companyId),
+      carregarContas(db, input.companyId),
+      carregarExistentes(db, input.companyId),
+    ]);
+    const relatorio = montarRelatorio(rows, fornecedores, contas, existentes);
+    return { ...relatorio, abasLidas: [] as string[], abasIgnoradas: [] as AbaIgnorada[] };
+  }),
+
+  // Gravação dos cheques lidos por IA — insere só NOVO em transação. Re-sanitiza
+  // tudo no servidor (não confia no input cru do cliente).
+  importarPdfConfirmar: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    rows: z.array(chequeRowInputSchema).max(5000),
+    origemArquivo: z.string().max(255).optional(),
+  })).mutation(async ({ input, ctx }) => {
+    await assertCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const rows = input.rows.map(sanitizeChequeRow);
+    const [fornecedores, contas, existentes] = await Promise.all([
+      carregarFornecedores(db, input.companyId),
+      carregarContas(db, input.companyId),
+      carregarExistentes(db, input.companyId),
+    ]);
+    const loteId = randomUUID();
+    const origem = (input.origemArquivo || "PDFs (IA)").slice(0, 255);
+    let resultado = { inseridos: 0, pulados: 0 };
+    await db.transaction(async (tx: any) => {
+      resultado = await inserirCheques(tx, input.companyId, rows, fornecedores, contas, existentes, origem, loteId);
+    });
+    return { ...resultado, loteId };
   }),
 
   // Listagem com filtros.

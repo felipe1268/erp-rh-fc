@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3232 — **FINANCEIRO / CONTROLE DE CHEQUES · IMPORTAÇÃO · O DIÁLOGO "IMPORTAR CONTROLE DE
+ * CHEQUES" GANHOU UM SEGUNDO MODO: ALÉM DA PLANILHA .XLSX, AGORA DÁ PRA SUBIR VÁRIOS PDFs/FOTOS DE
+ * CHEQUE DE UMA VEZ — A IA LÊ CADA UM, EXTRAI OS CHEQUES E O ERP IMPORTA TODOS NAS DATAS/MESES
+ * RESPECTIVOS (mes_ref/ano_ref DERIVADOS DA DATA DE CADA CHEQUE). MESMA PRÉVIA (KPIs CLICÁVEIS,
+ * TABELA FILTRÁVEL, DEDUP, "GRAVAR N NOVOS") E NADA É GRAVADO ATÉ CONFIRMAR.**
+ * - PEDIDO (piloto FC): "no botão de importar cheques, deixar subir vários PDFs/imagens de cheque e
+ *   o ERP ler cada um por IA e importar todos os cheques nas datas/meses certos".
+ * - SOLUÇÃO: reaproveita TODO o pipeline já existente do import por planilha (dedup por
+ *   nº+valor+ano+mês, match de fornecedor/conta, relatório dry-run, gravação SOFT em transação). O
+ *   que muda é a FONTE das linhas: em vez do parser de workbook, vem da leitura por IA (Gemini Vision
+ *   primário via GOOGLE_API_KEY + fallback Anthropic), no mesmo molde do Cartão de Crédito.
+ * - BACK (`server/routers/cheques.ts`):
+ *   - Helpers IA: `PROMPT_CHEQUE`/`SCHEMA_CHEQUE` (extrai numeroCheque, valor, banco, bancoCodigo,
+ *     agencia, contaCorrente, favorecido, data YYYY-MM-DD, cidade), `salvageJson`, `lerChequesComIA`
+ *     (Gemini→fallback Anthropic), `normalizarChequeIA` (cheque cru → ChequeRow) e `sanitizeChequeRow`
+ *     (re-valida TUDO no servidor: data via `parseData`, valor via `parseValor`, status na whitelist
+ *     `STATUS_VALIDOS`, ano/mês DERIVADOS da data do cheque, strings clipadas por tamanho — não confia
+ *     no input do cliente, padrão da memória "AI output sanitization").
+ *   - Refactor sem mudança de comportamento: extraídos `montarRelatorio` (loop de prévia) e
+ *     `inserirCheques` (loop de gravação em transação) — usados tanto pela planilha quanto pelos PDFs.
+ *     `importarPreview`/`importarConfirmar` passaram a chamá-los (mesma saída de antes).
+ *   - 3 procedures novas: `lerChequesPdf` ({companyId,fileBase64,mimeType,fileName}; assertCompanyAccess;
+ *     1 arquivo por chamada; devolve `{rows,fileName,total}`; ZERO db), `importarPdfPreview`
+ *     ({companyId,rows}; re-sanitiza → `montarRelatorio`; devolve report + abasLidas/abasIgnoradas vazias),
+ *     `importarPdfConfirmar` ({companyId,rows,origemArquivo?}; re-sanitiza → transação `inserirCheques`;
+ *     devolve `{inseridos,pulados,loteId}`). `chequeRowInputSchema` permissivo (.passthrough) pois o
+ *     servidor re-sanitiza.
+ * - FRONT (`client/src/pages/financeiro/FinanceiroCheques.tsx`): seletor de modo "Planilha (.xlsx)" ×
+ *   "Cheques em PDF / foto (IA)" no topo do diálogo. No modo PDF: dropzone `multiple` (`.pdf,image/*`),
+ *   lista de arquivos com remover (X), botão "Ler cheques por IA" que roda um loop por arquivo com
+ *   progresso "Lendo arquivo i/n…" → acumula linhas → `importarPdfPreview`. A coluna direita (KPIs) e a
+ *   tabela "Cheques lidos" são reaproveitadas (mesma forma do report; coluna "Aba/Linha" mostra o nome
+ *   do arquivo). Botões de Analisar/Gravar e barras de progresso passaram a usar `analisando`/`gravando`
+ *   (cobrindo as mutations dos dois modos). Trocar de modo limpa a prévia e os arquivos.
+ * - ZERO SCHEMA/ALTER/DROP/DELETE · gravação SOFT no mesmo padrão do import por planilha.
+ *
  * Rev. 3231 — **FINANCEIRO / CONTROLE DE CHEQUES · NOVOS BOTÕES "LIMPAR MÊS" E "LIMPAR ANO INTEIRO"
  * PARA APAGAR OS REGISTROS DE CHEQUE DO PERÍODO, COM DUPLA CONFIRMAÇÃO + SENHA DO LOGIN DO USUÁRIO
  * (CONFERIDA NO BACKEND) + ALERTA VERMELHO DE PERDA TOTAL DOS REGISTROS. GUARDA DE INTEGRIDADE: SE
