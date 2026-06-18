@@ -52,6 +52,69 @@ async function dbExecute(db: any, query: string, params: unknown[] = []): Promis
   return { rows: (res as any)?.rows ?? (Array.isArray(res) ? res : []) };
 }
 
+// ───────────── Dupla checagem extrato ↔ cheque (Rev. 3234) ─────────────
+// Cruza cada cheque do controle com o EXTRATO BANCÁRIO já importado
+// (bank_statement_lines) pra dizer se o banco REALMENTE compensou aquela folha.
+// Espelha a estratégia de match da Conciliação Bancária (financial.ts, Rev. 3229),
+// da mais forte p/ a mais fraca:
+//   (1) nº do cheque extraído da descrição do extrato + VALOR (exige a palavra "cheque");
+//   (2) fallback VALOR + DATA (== data_compensacao do cheque) QUANDO ÚNICO e a descrição
+//       parece de cheque/compensação (trava p/ não casar PIX/tarifa de mesmo valor+data).
+// SÓ LEITURA — esta função não grava nada.
+type MatchExtrato = { encontrado: boolean; dataExtrato: string | null; forte: boolean };
+async function montarMatcherExtrato(db: any, companyId: number): Promise<(cheque: any) => MatchExtrato> {
+  const res = await dbExecute(db,
+    `SELECT data, descricao, valor
+       FROM bank_statement_lines
+      WHERE company_id=$1 AND excluido_em IS NULL`,
+    [companyId]);
+  const cents = (v: any) => (v != null && v !== "" ? Math.round(Math.abs(Number(v)) * 100) : null);
+  const dia = (v: any) => (v ? String(v).slice(0, 10) : null);
+  const extrNum = (descricao: any): string | null => {
+    const m = String(descricao ?? "").match(/cheque\s*n?[ºo°.]*\s*0*(\d{1,12})/i);
+    if (m && m[1]) return m[1].replace(/^0+/, "") || m[1];
+    return null;
+  };
+  const pareceCheque = (descricao: any) => /cheq|compensa/i.test(String(descricao ?? ""));
+  // AMBOS os índices guardam LISTAS e só confirmam quando ÚNICO. Como esta procedure
+  // GRAVA conciliado=1 (≠ Rev. 3229 que só exibe), o match forte nº+valor também exige
+  // unicidade: se o extrato tiver 2 linhas com mesmo nº+valor (reapresentação/estorno/
+  // histórico em anos diferentes), fica AMBÍGUO → "não encontrado" (entra em "a conferir",
+  // jamais marca cheque errado). Isso cobre o falso-positivo e a colisão histórica.
+  const byNumVal = new Map<string, any[]>();  // "num|cents" → linhas (match forte, só quando único)
+  const byValData = new Map<string, any[]>(); // "cents|dia" → linhas (match fraco, só quando único)
+  for (const l of (res.rows as any[])) {
+    const cts = cents(l.valor);
+    if (cts == null || cts === 0) continue;
+    const num = extrNum(l.descricao);
+    if (num) { const k = `${num}|${cts}`; if (!byNumVal.has(k)) byNumVal.set(k, []); byNumVal.get(k)!.push(l); }
+    if (pareceCheque(l.descricao)) {
+      const d = dia(l.data);
+      if (d) { const k = `${cts}|${d}`; if (!byValData.has(k)) byValData.set(k, []); byValData.get(k)!.push(l); }
+    }
+  }
+  return function matchCheque(cheque: any): MatchExtrato {
+    const cts = cents(cheque.valor);
+    if (cts == null || cts === 0) return { encontrado: false, dataExtrato: null, forte: false };
+    const num = String(cheque.numeroCheque ?? cheque.numero_cheque ?? "").replace(/[^0-9]/g, "").replace(/^0+/, "");
+    if (num) { const arr = byNumVal.get(`${num}|${cts}`); if (arr && arr.length === 1) return { encontrado: true, dataExtrato: dia(arr[0].data), forte: true }; }
+    const dc = dia(cheque.dataCompensacao ?? cheque.data_compensacao);
+    if (dc) { const arr = byValData.get(`${cts}|${dc}`); if (arr && arr.length === 1) return { encontrado: true, dataExtrato: dia(arr[0].data), forte: false }; }
+    return { encontrado: false, dataExtrato: null, forte: false };
+  };
+}
+// Classifica o cheque contra o extrato: confirmado (banco compensou E controle já diz
+// "compensado") × divergente (banco compensou MAS controle diz != compensado → ALERTA).
+function classificarExtrato(status: any, m: MatchExtrato) {
+  const compensado = String(status ?? "").toLowerCase() === "compensado";
+  return {
+    extratoEncontrado: m.encontrado,
+    extratoData: m.dataExtrato,
+    extratoConfirmado: m.encontrado && compensado,
+    extratoDivergente: m.encontrado && !compensado,
+  };
+}
+
 // ─────────────────────────── Parsers ───────────────────────────
 const MES_MAP: Record<string, number> = {
   JAN: 1, FEV: 2, MAR: 3, ABR: 4, MAI: 5, JUN: 6,
@@ -741,7 +804,10 @@ export const chequesRouter = router({
         ORDER BY ano_ref DESC, mes_ref DESC, data_vencimento DESC NULLS LAST, id DESC
         LIMIT $${p}`,
       [...params, input.limit]);
-    return res.rows;
+    // Rev. 3234 — dupla checagem: anota cada cheque com o cruzamento contra o extrato
+    // bancário (confirmado × divergente). SÓ LEITURA — alimenta o alerta na tela.
+    const matchCheque = await montarMatcherExtrato(db, input.companyId);
+    return (res.rows as any[]).map((c) => ({ ...c, ...classificarExtrato(c.status, matchCheque(c)) }));
   }),
 
   // Cards de resumo por status (ano e mês opcionais).
@@ -786,6 +852,115 @@ export const chequesRouter = router({
         GROUP BY mes_ref`,
       [input.companyId, input.ano]);
     return res.rows.map((r: any) => ({ mes: r.mes, qtd: r.qtd, compensados: r.compensados }));
+  }),
+
+  // ───────────── Dupla checagem extrato ↔ cheque (Rev. 3234) ─────────────
+  // RESUMO da conferência do controle contra o EXTRATO BANCÁRIO importado. READ-ONLY:
+  // conta confirmados (banco compensou + controle já "compensado"), divergências (banco
+  // compensou MAS controle diz devolvido/sustado/pendente/etc → ALERTA p/ análise),
+  // já conferidos (conciliado=1) e não encontrados. Devolve a LISTA das divergências
+  // p/ o painel de análise. Não grava nada.
+  verificarExtratoResumo: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    ano: z.number().int().optional(),
+    mes: z.number().int().min(1).max(12).optional(),
+  })).query(async ({ input, ctx }) => {
+    await assertCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    // dbExecute liga params por ORDEM DE APARIÇÃO — manter array na ordem dos placeholders.
+    const params: unknown[] = [input.companyId];
+    let extra = ""; let pi = 2;
+    if (input.ano != null) { extra += ` AND ano_ref=$${pi++}`; params.push(input.ano); }
+    if (input.mes != null) { extra += ` AND mes_ref=$${pi++}`; params.push(input.mes); }
+    const res = await dbExecute(db,
+      `SELECT id, numero_cheque AS "numeroCheque", fornecedor_nome AS "fornecedorNome",
+              valor, status, data_compensacao AS "dataCompensacao",
+              data_vencimento AS "dataVencimento", mes_ref AS "mes", ano_ref AS "ano",
+              COALESCE(conciliado,0) AS conciliado
+         FROM financial_cheques
+        WHERE company_id=$1 AND excluido_em IS NULL${extra}`, params);
+    const matchCheque = await montarMatcherExtrato(db, input.companyId);
+    let confirmados = 0, divergencias = 0, jaConferidos = 0, naoEncontrados = 0, aConferir = 0;
+    const divergenciasLista: any[] = [];
+    for (const c of (res.rows as any[])) {
+      const cls = classificarExtrato(c.status, matchCheque(c));
+      if (cls.extratoConfirmado) {
+        confirmados++;
+        if (Number(c.conciliado) === 1) jaConferidos++; else aConferir++;
+      } else if (cls.extratoDivergente) {
+        divergencias++;
+        divergenciasLista.push({
+          id: c.id, numeroCheque: c.numeroCheque, fornecedorNome: c.fornecedorNome,
+          valor: Number(c.valor) || 0, status: c.status,
+          dataCompensacao: c.dataCompensacao, dataVencimento: c.dataVencimento,
+          dataExtrato: cls.extratoData, mes: c.mes, ano: c.ano,
+        });
+      } else {
+        naoEncontrados++;
+      }
+    }
+    divergenciasLista.sort((a, b) => (b.valor - a.valor));
+    return { confirmados, divergencias, jaConferidos, naoEncontrados, aConferir, divergenciasLista };
+  }),
+
+  // AÇÃO EXPLÍCITA do usuário (botão "Conferir com o extrato"). Marca conciliado=1 +
+  // data_conciliacao SOMENTE nos cheques que o banco confirmou compensados E cujo status
+  // no controle JÁ é "compensado" (consistentes). JAMAIS toca em divergências nem muda
+  // status — divergências só viram ALERTA p/ análise manual. Honra "conciliação só
+  // sugestiva": nada de baixa financeira, só um selo de conferência (idempotente).
+  conferirExtrato: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    ano: z.number().int().optional(),
+    mes: z.number().int().min(1).max(12).optional(),
+  })).mutation(async ({ input, ctx }) => {
+    await assertCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const params: unknown[] = [input.companyId];
+    let extra = ""; let pi = 2;
+    if (input.ano != null) { extra += ` AND ano_ref=$${pi++}`; params.push(input.ano); }
+    if (input.mes != null) { extra += ` AND mes_ref=$${pi++}`; params.push(input.mes); }
+    const res = await dbExecute(db,
+      `SELECT id, numero_cheque AS "numeroCheque", valor, status,
+              data_compensacao AS "dataCompensacao", COALESCE(conciliado,0) AS conciliado
+         FROM financial_cheques
+        WHERE company_id=$1 AND excluido_em IS NULL${extra}`, params);
+    const matchCheque = await montarMatcherExtrato(db, input.companyId);
+    const alvos: { id: number; dt: string }[] = [];
+    let divergencias = 0, jaConferidos = 0;
+    for (const c of (res.rows as any[])) {
+      const cls = classificarExtrato(c.status, matchCheque(c));
+      if (cls.extratoConfirmado) {
+        if (Number(c.conciliado) === 1) { jaConferidos++; continue; }
+        alvos.push({ id: c.id, dt: cls.extratoData || new Date().toISOString().slice(0, 10) });
+      } else if (cls.extratoDivergente) {
+        divergencias++;
+      }
+    }
+    if (alvos.length === 0) return { conferidos: 0, divergencias, jaConferidos };
+    // UPDATE em lote via VALUES join. dbExecute liga por ORDEM DE APARIÇÃO: os pares
+    // (id,dt) aparecem PRIMEIRO no texto, company_id por ÚLTIMO → montar o flat nessa
+    // ordem. Cast ::date evita o erro "date < text". COALESCE(conciliado,0)<>1 = idempotente.
+    const CHUNK = 200;
+    let conferidos = 0;
+    for (let i = 0; i < alvos.length; i += CHUNK) {
+      const lote = alvos.slice(i, i + CHUNK);
+      let n = 1;
+      const valuesSql = lote.map(() => `($${n++}::int, $${n++}::date)`).join(",");
+      const flat: unknown[] = [];
+      for (const a of lote) { flat.push(a.id, a.dt); }
+      flat.push(input.companyId); // company_id = último placeholder no texto
+      const upd = await dbExecute(db,
+        `UPDATE financial_cheques f
+            SET conciliado=1, data_conciliacao = COALESCE(f.data_conciliacao, v.dt)
+           FROM (VALUES ${valuesSql}) AS v(id, dt)
+          WHERE f.id = v.id AND f.company_id=$${n} AND COALESCE(f.conciliado,0)<>1
+          RETURNING f.id`,
+        flat);
+      conferidos += (upd.rows?.length ?? 0);
+    }
+    return { conferidos, divergencias, jaConferidos };
   }),
 
   // Edição manual (status, fornecedor, conta, obra, observação).

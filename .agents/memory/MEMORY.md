@@ -100,3 +100,4 @@
 - [Espelho de Ponto read-surface](espelho-ponto-read-surface.md) — espelho lê `time_records` + projeções de `getEspelhoPontoRange`; abono de atestado escreve em `timecard_daily`/`ponto_descontos` (NÃO lidos) → não aparece. Projete no retorno.
 - [Controle de Cheques dedup](financial-cheques-dedup.md) — chave de dedup do importador inclui mes_ref (cheques distintos mesmo nº+valor em meses ≠); parser começa em i=3 (validado, não off-by-one); valor/data via SERIAL.
 - [Conciliação só sugestiva](conciliacao-so-sugestiva.md) — pedido do piloto FC: nada concilia/baixa sem confirmação EXPLÍCITA do usuário; "Selecionar todas" só pré-seleciona, aplicação passa por AlertDialog de revisão. Não reintroduzir one-click bulk apply.
+- [Cheque↔extrato write-match uniqueness](cheque-extrato-write-match-uniqueness.md) — matcher que GRAVA conciliado=1 exige unicidade em TODOS os índices (forte e fraco); ambíguo→a conferir, nunca marca. Display molde (Rev.3229) aceita first-match.

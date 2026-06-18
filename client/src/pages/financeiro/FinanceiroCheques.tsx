@@ -13,7 +13,7 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileSpreadsheet, FileText, Sparkles, Loader2, CheckCircle, AlertCircle, Trash2, Pencil, Search, RotateCcw, Banknote, ChevronLeft, ChevronRight, Link2, X } from "lucide-react";
+import { Upload, FileSpreadsheet, FileText, Sparkles, Loader2, CheckCircle, AlertCircle, AlertTriangle, ShieldCheck, Trash2, Pencil, Search, RotateCcw, Banknote, ChevronLeft, ChevronRight, Link2, X } from "lucide-react";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
@@ -134,6 +134,10 @@ export default function FinanceiroCheques() {
   const [limparEtapa, setLimparEtapa] = useState<1 | 2>(1);
   const [limparSenha, setLimparSenha] = useState("");
 
+  // ── Dupla checagem com o extrato (Rev. 3234) ──
+  const [conferirOpen, setConferirOpen] = useState(false);
+  const [divergOpen, setDivergOpen] = useState(false);
+
   const listarArgs: any = { companyId, limit: 2000, ano };
   // "outros" é um agregado client-side (vários status); não mandamos status ao
   // servidor nesse caso — filtramos a lista localmente logo abaixo.
@@ -171,6 +175,32 @@ export default function FinanceiroCheques() {
   const atualizarMut = (trpc as any).cheques.atualizar.useMutation();
   const excluirMut = (trpc as any).cheques.excluir.useMutation();
   const limparMut = (trpc as any).cheques.limparCadastro.useMutation();
+
+  // Dupla checagem com o extrato (Rev. 3234): resumo da conferência do período atual.
+  const { data: verif } = (trpc as any).cheques.verificarExtratoResumo.useQuery(
+    { companyId, ano, mes: mesSel ?? undefined },
+    { enabled: !!companyId }
+  );
+  const conferirMut = (trpc as any).cheques.conferirExtrato.useMutation();
+
+  async function conferirComExtrato() {
+    try {
+      const r = await conferirMut.mutateAsync({ companyId, ano, mes: mesSel ?? undefined });
+      setConferirOpen(false);
+      await Promise.all([
+        utils?.cheques?.listar?.invalidate?.(),
+        utils?.cheques?.verificarExtratoResumo?.invalidate?.(),
+        utils?.cheques?.resumo?.invalidate?.(),
+      ]);
+      toast({
+        title: "Conferência concluída",
+        description: `${r.conferidos} cheque(s) marcado(s) como conferido(s) no extrato.` +
+          (r.divergencias > 0 ? ` ${r.divergencias} divergência(s) aguardam sua análise.` : ""),
+      });
+    } catch (err: any) {
+      toast({ title: "Não foi possível conferir", description: err?.message || String(err), variant: "destructive" });
+    }
+  }
 
   // Prévia da limpeza p/ o escopo aberto: total/conciliados/consolidado/valor.
   // mes = mês selecionado quando escopo="mes" (exige um mês selecionado).
@@ -473,11 +503,37 @@ export default function FinanceiroCheques() {
             >
               <Trash2 className="h-4 w-4" /> Limpar ano inteiro
             </Button>
+            <Button
+              variant="outline"
+              onClick={() => setConferirOpen(true)}
+              title="Cruza os cheques com o extrato bancário importado e marca os confirmados"
+              className="gap-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+            >
+              <ShieldCheck className="h-4 w-4" /> Conferir com o extrato
+            </Button>
             <Button onClick={() => setImportOpen(true)} className="gap-2">
               <Upload className="h-4 w-4" /> Importar planilha
             </Button>
           </div>
         </div>
+
+        {/* Alerta de divergência (Rev. 3234) — dupla checagem: o banco compensou cheques
+            que no controle constam como devolvido/sustado/pendente. Não altera nada;
+            só sinaliza p/ análise manual. */}
+        {verif && verif.divergencias > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-300 bg-red-50 px-4 py-3">
+            <div className="flex items-start gap-2.5 text-sm text-red-800">
+              <AlertTriangle className="h-5 w-5 shrink-0 text-red-600" />
+              <div>
+                <strong>{verif.divergencias} divergência(s) entre o controle e o extrato.</strong>{" "}
+                O banco compensou cheque(s) que aqui constam como devolvido/sustado/pendente. Confira manualmente.
+              </div>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => setDivergOpen(true)} className="gap-1.5 border-red-300 text-red-700 hover:bg-red-100">
+              <Search className="h-4 w-4" /> Analisar divergências
+            </Button>
+          </div>
+        )}
 
         {/* Cards de resumo — clicáveis: clicar filtra a lista por aquele status
             (clicar de novo no card ativo limpa o filtro). Responsivos: 1 col no
@@ -687,6 +743,7 @@ export default function FinanceiroCheques() {
               <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-red-500" /> Sustado</span>
               <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-gray-400" /> Cancelado / Indefinido</span>
               <span className="inline-flex items-center gap-1.5 text-emerald-700"><Link2 className="h-3 w-3" /> Conciliado no extrato</span>
+              <span className="inline-flex items-center gap-1.5 text-red-700"><AlertTriangle className="h-3 w-3" /> Divergência (banco compensou, controle não)</span>
             </div>
           </CardHeader>
           <CardContent>
@@ -737,6 +794,16 @@ export default function FinanceiroCheques() {
                                 <Link2 className="h-3 w-3" /> Conciliado no extrato{c.dataConciliacao ? ` · ${fmtData(c.dataConciliacao)}` : ""}
                               </span>
                             ) : null}
+                            {/* Rev. 3234 — dupla checagem extrato↔controle */}
+                            {c.extratoDivergente ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-red-700" title={`O banco compensou este cheque${c.extratoData ? " em " + fmtData(c.extratoData) : ""}, mas no controle está como "${c.status}". Analise.`}>
+                                <AlertTriangle className="h-3 w-3" /> Banco compensou — analisar{c.extratoData ? ` · ${fmtData(c.extratoData)}` : ""}
+                              </span>
+                            ) : c.extratoConfirmado && !c.conciliado ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600" title={`Confere com o extrato${c.extratoData ? " (compensado em " + fmtData(c.extratoData) + ")" : ""}. Use "Conferir com o extrato" para marcar.`}>
+                                <CheckCircle className="h-3 w-3" /> Confere com o extrato
+                              </span>
+                            ) : null}
                             {(c.status === "devolvido" || c.status === "sustado" || c.status === "cancelado") && c.observacao ? (
                               <span className="text-[10px] text-orange-700 max-w-[220px] truncate" title={c.observacao}>Motivo: {c.observacao}</span>
                             ) : null}
@@ -755,6 +822,111 @@ export default function FinanceiroCheques() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ── Dupla checagem (Rev. 3234): confirmar a conferência com o extrato ── */}
+      <AlertDialog open={conferirOpen} onOpenChange={setConferirOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-emerald-600" /> Conferir cheques com o extrato
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm">
+                <p>
+                  O ERP cruza os cheques de <strong>{mesSel != null ? `${MESES[mesSel]}/${ano}` : `${ano} (ano todo)`}</strong> com o
+                  extrato bancário importado e marca como <strong>conferidos</strong> apenas os que o banco compensou
+                  <strong> e</strong> que aqui já constam como <strong>compensado</strong>. Nada é baixado financeiramente.
+                </p>
+                {verif ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-lg border bg-emerald-50 border-emerald-200 p-2.5">
+                      <div className="text-xs text-emerald-700">Serão marcados agora</div>
+                      <div className="text-lg font-bold text-emerald-700">{verif.aConferir}</div>
+                    </div>
+                    <div className="rounded-lg border bg-muted/40 p-2.5">
+                      <div className="text-xs text-muted-foreground">Já conferidos</div>
+                      <div className="text-lg font-bold">{verif.jaConferidos}</div>
+                    </div>
+                    <div className="rounded-lg border bg-red-50 border-red-200 p-2.5">
+                      <div className="text-xs text-red-700">Divergências (não serão alteradas)</div>
+                      <div className="text-lg font-bold text-red-700">{verif.divergencias}</div>
+                    </div>
+                    <div className="rounded-lg border bg-muted/40 p-2.5">
+                      <div className="text-xs text-muted-foreground">Sem correspondência no extrato</div>
+                      <div className="text-lg font-bold">{verif.naoEncontrados}</div>
+                    </div>
+                  </div>
+                ) : null}
+                {verif && verif.divergencias > 0 ? (
+                  <p className="text-red-700">
+                    <AlertTriangle className="inline h-4 w-4 mr-1" />
+                    As <strong>{verif.divergencias} divergência(s)</strong> (banco compensou, mas o controle diz
+                    devolvido/sustado/pendente) <strong>NÃO</strong> serão alteradas — o status é mantido para você analisar.
+                  </p>
+                ) : null}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={conferirMut.isLoading}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); conferirComExtrato(); }}
+              disabled={conferirMut.isLoading || !verif || verif.aConferir === 0}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              {conferirMut.isLoading ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Conferindo…</> : <>Marcar {verif?.aConferir ?? 0} como conferido(s)</>}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Dupla checagem (Rev. 3234): lista de divergências p/ análise ── */}
+      <Dialog open={divergOpen} onOpenChange={setDivergOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-700">
+              <AlertTriangle className="h-5 w-5" /> Divergências entre o controle e o extrato
+            </DialogTitle>
+            <DialogDescription>
+              O banco compensou estes cheques, mas no controle eles constam como devolvido/sustado/pendente/etc.
+              O ERP <strong>não corrige o status automaticamente</strong> — revise cada caso e ajuste manualmente se for o caso.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto">
+            {verif && verif.divergenciasLista && verif.divergenciasLista.length > 0 ? (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs text-muted-foreground uppercase">
+                    <th className="py-2 pr-3">Nº Cheque</th>
+                    <th className="py-2 pr-3">Fornecedor</th>
+                    <th className="py-2 pr-3 text-right">Valor</th>
+                    <th className="py-2 pr-3">Status no controle</th>
+                    <th className="py-2 pr-3">Compensado no extrato</th>
+                    <th className="py-2 pr-3">Mês</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {verif.divergenciasLista.map((d: any) => (
+                    <tr key={d.id} className="border-b hover:bg-muted/40">
+                      <td className="py-2 pr-3 font-mono">{d.numeroCheque || "—"}</td>
+                      <td className="py-2 pr-3">{d.fornecedorNome || <span className="text-muted-foreground">—</span>}</td>
+                      <td className="py-2 pr-3 text-right font-medium">{formatBRL(d.valor)}</td>
+                      <td className="py-2 pr-3">{statusBadge(d.status)}</td>
+                      <td className="py-2 pr-3 text-red-700">{fmtData(d.dataExtrato)}</td>
+                      <td className="py-2 pr-3">{d.mes ? `${MESES[d.mes]}/${d.ano}` : d.ano}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="text-center text-muted-foreground py-8">Nenhuma divergência no período.</div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDivergOpen(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog de importação */}
       <Dialog open={importOpen} onOpenChange={(o) => { setImportOpen(o); if (!o) { setPreview(null); setDragOver(false); } }}>

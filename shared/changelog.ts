@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3234 — **FINANCEIRO / CONTROLE DE CHEQUES · DUPLA CHECAGEM EXTRATO ↔ CHEQUE · O ERP AGORA
+ * CONFERE CADA CHEQUE DO CONTROLE CONTRA O EXTRATO BANCÁRIO IMPORTADO: QUANDO O BANCO REALMENTE
+ * COMPENSOU O CHEQUE E O CONTROLE JÁ DIZ "COMPENSADO", O ERP MARCA O CHEQUE COMO CONFERIDO
+ * (conciliado=1 + data_conciliacao); QUANDO O BANCO COMPENSOU MAS O CONTROLE DIZ
+ * DEVOLVIDO/SUSTADO/PENDENTE/ETC, O ERP GERA UM ALERTA VERMELHO P/ ANÁLISE MANUAL — NUNCA
+ * CORRIGE O STATUS AUTOMATICAMENTE.**
+ * - PEDIDO (piloto FC): "no controle de cheques, fazer uma dupla checagem: quando o ERP verifica o
+ *   extrato e confirma que o cheque compensou, marcar no controle; se o cheque estiver com status
+ *   diferente de compensado (devolvido/sustado etc.) mas o banco compensou, gerar alerta para análise".
+ * - CAUSA-RAIZ: `conciliado=1` NUNCA era escrito (o badge "Conciliado no extrato" em FinanceiroCheques
+ *   era código morto); a Conciliação Bancária (financial.ts, Rev. 3229) já cruzava extrato→cheque, mas
+ *   não expunha o status nem alimentava o Controle de Cheques.
+ * - SOLUÇÃO (BACK, `server/routers/cheques.ts`): helpers `montarMatcherExtrato(db,companyId)` (carrega
+ *   `bank_statement_lines` da empresa — snake_case: company_id/data/descricao/valor/excluido_em — e monta
+ *   maps `byNumVal` [nº do cheque extraído da descrição + valor em centavos, match FORTE] e `byValData`
+ *   [valor+data, match FRACO só quando ÚNICO e a descrição "parece cheque/compensação", espelhando a
+ *   estratégia da Rev. 3229]) + `classificarExtrato(status,m)` (devolve extratoEncontrado/extratoData/
+ *   extratoConfirmado/extratoDivergente). SÓ LEITURA. `listar` passou a anexar esses flags a cada cheque.
+ *   Duas procedures novas: `verificarExtratoResumo` (read-only — conta confirmados/divergências/
+ *   jaConferidos/naoEncontrados/aConferir e devolve `divergenciasLista[]` ordenada por valor) e
+ *   `conferirExtrato` (AÇÃO EXPLÍCITA do usuário — marca conciliado=1 + data_conciliacao SOMENTE nos
+ *   confirmados consistentes, via UPDATE em lote `FROM (VALUES (...)::int,(...)::date)` em CHUNKS de 200,
+ *   com `COALESCE(conciliado,0)<>1` p/ idempotência; cast `::date` evita "date < text"; como `dbExecute`
+ *   liga params por ORDEM DE APARIÇÃO, o flat segue [id,dt,...,company_id] com company_id por ÚLTIMO).
+ *   JAMAIS toca em divergências nem muda status. Ambas com `assertCompanyAccess`.
+ * - SOLUÇÃO (FRONT, `client/src/pages/financeiro/FinanceiroCheques.tsx`): botão "Conferir com o extrato"
+ *   no header (AlertDialog de confirmação mostrando aConferir/jaConferidos/divergências/naoEncontrados —
+ *   honra "conciliação só sugestiva", nada baixa sem o clique); banner vermelho de divergências quando
+ *   `verif.divergencias>0` + diálogo "Analisar divergências" (tabela nº/fornecedor/valor/status/data do
+ *   extrato/mês); por linha, badge ⚠ "Banco compensou — analisar" (divergente) ou ✓ "Confere com o
+ *   extrato" (confirmado ainda não conferido); legenda nova; query `verificarExtratoResumo`
+ *   {companyId,ano,mes:mesSel} + mutation `conferirExtrato` com invalidate de listar/resumo/verificar.
+ * - ZERO mudança de status automática · ZERO baixa financeira · ZERO SCHEMA/ALTER/DROP/DELETE (só
+ *   UPDATE de conciliado/data_conciliacao, colunas já existentes; exclusão lógica preservada).
+ *
  * Rev. 3233 — **FINANCEIRO / CONTROLE DE CHEQUES · IMPORTAÇÃO (PLANILHA E PDF/IA) · A GRAVAÇÃO DOS
  * CHEQUES NÃO TRAVA MAIS PERTO DO FIM (FICAVA EM ~92% E DAVA ERRO AO GRAVAR ~1122 CHEQUES). A
  * INSERÇÃO PASSOU DE 1 INSERT POR CHEQUE (1122 IDAS AO BANCO, SEQUENCIAIS, DENTRO DA TRANSAÇÃO →
