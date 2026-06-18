@@ -2293,32 +2293,50 @@ export default function FinanceiroConciliacao() {
             apenas sugestiva; o usuário revisa cada par (extrato → lançamento + valores)
             e só então confirma. Nada é gravado sem este passo. */}
         <AlertDialog open={confirmConciliar} onOpenChange={(o: boolean) => { if (!o && !conciliarSugMut.isPending) setConfirmConciliar(false); }}>
-          <AlertDialogContent className="max-w-2xl">
-            <AlertDialogHeader>
-              <AlertDialogTitle className="flex items-center gap-2"><CheckCircle className="w-5 h-5 text-emerald-600" />Confirmar conciliação?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Revise os <strong>{sugSelecionadas.length}</strong> par(es) selecionado(s) abaixo. As sugestões são apenas automáticas —
-                a conciliação só é aplicada (baixando os lançamentos) após a sua confirmação.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="border rounded-md max-h-[45vh] overflow-y-auto divide-y text-sm">
-              {sugSelecionadas.map(s => (
-                <div key={s.statementLineId} className="flex items-center gap-2 px-3 py-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[10px] text-gray-400 uppercase tracking-wide">Extrato</div>
-                    <div className="truncate">{s.extratoDescricao || "—"}</div>
-                    <div className="text-xs text-gray-500">{fmtData(s.extratoData)} · {formatBRL(Math.abs(s.extratoValor))}</div>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-gray-300 shrink-0" />
-                  <div className="flex-1 min-w-0 text-blue-700">
-                    <div className="text-[10px] text-gray-400 uppercase tracking-wide">Lançamento</div>
-                    <div className="truncate">{s.entryFornecedor || s.entryDescricao || "—"}</div>
-                    <div className="text-xs text-gray-500">{fmtData(s.entryData)} · {formatBRL(Math.abs(s.entryValor))}</div>
-                  </div>
+          <AlertDialogContent className="max-w-2xl p-0 gap-0 overflow-hidden">
+            <AlertDialogHeader className="space-y-0 text-left bg-gradient-to-r from-[#1B2A4A] to-[#2c3f63] px-6 py-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 ring-1 ring-white/25 shrink-0">
+                  <CheckCircle className="w-5 h-5 text-emerald-300" />
                 </div>
-              ))}
+                <div className="min-w-0 flex-1">
+                  <AlertDialogTitle className="text-white text-lg font-semibold leading-tight">Confirmar conciliação?</AlertDialogTitle>
+                  <AlertDialogDescription className="text-white/70 text-xs mt-1 leading-relaxed">
+                    As sugestões são apenas automáticas — a baixa dos lançamentos só é aplicada após a sua confirmação.
+                  </AlertDialogDescription>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 pt-3">
+                <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1 text-xs font-medium text-white ring-1 ring-white/20">
+                  <Link2 className="w-3.5 h-3.5" />{sugSelecionadas.length} par{sugSelecionadas.length === 1 ? "" : "es"} selecionado{sugSelecionadas.length === 1 ? "" : "s"}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/20 px-3 py-1 text-xs font-semibold text-emerald-100 ring-1 ring-emerald-300/30 tabular-nums">
+                  Total {formatBRL(sugSelecionadas.reduce((acc, s) => acc + Math.abs(s.extratoValor || 0), 0))}
+                </span>
+              </div>
+            </AlertDialogHeader>
+            <div className="px-6 py-4">
+              <div className="border rounded-lg max-h-[45vh] overflow-y-auto divide-y text-sm bg-white">
+                {sugSelecionadas.map(s => (
+                  <div key={s.statementLineId} className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50/80 transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[10px] text-gray-400 uppercase tracking-wide font-medium">Extrato</div>
+                      <div className="truncate text-gray-800">{s.extratoDescricao || "—"}</div>
+                      <div className="text-xs text-gray-500 tabular-nums">{fmtData(s.extratoData)} · {formatBRL(Math.abs(s.extratoValor))}</div>
+                    </div>
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-50 shrink-0">
+                      <ArrowRight className="w-3.5 h-3.5 text-blue-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[10px] text-gray-400 uppercase tracking-wide font-medium">Lançamento</div>
+                      <div className="truncate text-blue-700 font-medium">{s.entryFornecedor || s.entryDescricao || "—"}</div>
+                      <div className="text-xs text-gray-500 tabular-nums">{fmtData(s.entryData)} · {formatBRL(Math.abs(s.entryValor))}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <AlertDialogFooter>
+            <AlertDialogFooter className="border-t bg-gray-50 px-6 py-4">
               <AlertDialogCancel disabled={conciliarSugMut.isPending}>Cancelar</AlertDialogCancel>
               <AlertDialogAction
                 className="bg-emerald-600 hover:bg-emerald-700"

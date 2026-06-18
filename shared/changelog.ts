@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3251 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O DIÁLOGO "CONFIRMAR CONCILIAÇÃO?" GANHOU O
+ * LAYOUT MODERNO PADRÃO FC: CABEÇALHO EM FAIXA AZUL (`#1B2A4A`→`#2c3f63`) COM ÍCONE EM CÍRCULO E
+ * PÍLULAS DE CONTEXTO (N PARES SELECIONADOS + TOTAL EM BRL), CORPO COM A LISTA DE PARES (EXTRATO →
+ * LANÇAMENTO) EM CARDS POLIDOS (HOVER, SETA EM CÍRCULO AZUL, VALORES `tabular-nums`) E RODAPÉ
+ * DESTACADO. ANTES ERA UM ALERTDIALOG PADRÃO SEM IDENTIDADE VISUAL. "CONCILIAÇÃO SÓ SUGESTIVA"
+ * PRESERVADA — NADA MUDA NO FLUXO, SÓ A APRESENTAÇÃO.**
+ * - PEDIDO (piloto FC): "melhore o layout para ficar no padrão moderno que estamos fazendo" (print
+ *   do diálogo "Confirmar conciliação?" ainda no estilo antigo).
+ * - SOLUÇÃO (FRONT, `client/src/pages/financeiro/FinanceiroConciliacao.tsx`): o `AlertDialogContent`
+ *   do bloco "Rev. 3201 — Confirmação OBRIGATÓRIA" passou a `p-0 gap-0 overflow-hidden`; o
+ *   `AlertDialogHeader` virou a faixa azul (gradiente, `text-left`, `space-y-0`) com ícone
+ *   `CheckCircle` em círculo `bg-white/15`, `AlertDialogTitle`/`AlertDialogDescription` em branco e
+ *   duas pílulas — "N par(es) selecionado(s)" (`Link2`) e "Total <BRL>" (soma de `Math.abs(extratoValor)`
+ *   via `reduce`). O corpo ganhou `px-6 py-4` + lista em `rounded-lg` com cada par em card
+ *   (`hover:bg-gray-50/80`, seta `ArrowRight` dentro de círculo `bg-blue-50`, rótulos uppercase,
+ *   fornecedor do lançamento em `text-blue-700 font-medium`). Rodapé `border-t bg-gray-50 px-6 py-4`.
+ * - ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE · só apresentação (mesma lógica, mesmos botões,
+ *   mesma mutation `conciliarSugMut`/`confirmarConciliacao`). esbuild limpo.
+ *
  * Rev. 3250 — **FINANCEIRO / CONTROLE DE CARTÃO DE CRÉDITO · O DIÁLOGO "CLASSIFICAR ITENS DA FATURA"
  * GANHOU UM LAYOUT MODERNO E MUITO MAIS USÁVEL: (1) CABEÇALHO EM FAIXA AZUL COM ÍCONE E PÍLULAS DE
  * CONTEXTO (CARTÃO/FINAL, VENCIMENTO, TOTAL EM BRL); (2) BARRA DE PROGRESSO MOSTRANDO QUANTOS ITENS
