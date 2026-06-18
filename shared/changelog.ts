@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3280 — **RH & DP / DISSÍDIO · O "RELATÓRIO DE DIFERENÇAS SALARIAIS RETROATIVAS (DISSÍDIO)" SAIU DE
+ * CONFIGURAÇÕES › SINDICAL/DISSÍDIO E PASSOU PARA O MÓDULO RH › FOLHA DE PAGAMENTO (BOTÃO "DIFERENÇAS
+ * DISSÍDIO" NO CABEÇALHO, ABRINDO UM DIÁLOGO COM O RELATÓRIO ESCOPADO PELO ANO SELECIONADO NO CALENDÁRIO —
+ * ASSIM, NA COMPETÊNCIA DA DATA-BASE/MAIO, O RH VISUALIZA AS DIFERENÇAS A PAGAR). EM CONFIGURAÇÕES PERMANECE
+ * O CAMPO "DATA DE VIGÊNCIA" (A PARTIR DE QUANDO O REAJUSTE SE APLICA) NO CADASTRO "NOVO ANO". 100% FRONT ·
+ * READ-ONLY · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (piloto FC): "o relatório das diferenças a pagar do dissídio não deve aparecer em Configurações;
+ *   ele deve aparecer no módulo RH, no menu Folha de Pagamento, assim no mês de maio (data-base) consigo
+ *   visualizar"; e "em Configurações, deixe um campo para eu digitar a data (a partir de quando) o reajuste
+ *   deve ser aplicado".
+ * - SOLUÇÃO (mover relatório): a procedure `sindical.relatorioDiferencas` (read-only, com guard
+ *   `assertCompanyAccess`) foi REAPROVEITADA sem mudança de backend. Em `client/src/pages/Configuracoes.tsx`
+ *   (componente `SindicalDissidioTab`) foram removidos o botão "Relatório Diferenças", o estado
+ *   `showRelatorio`, a query `relatorioQuery` e todo o bloco da tabela do relatório. Em
+ *   `client/src/pages/FolhaPagamento.tsx` (tela principal/resumo): novo estado `showDissidioRel`, query
+ *   `dissidioRelQuery = trpc.sindical.relatorioDiferencas.useQuery({ companyId, companyIds,
+ *   anoReferencia: anoSelecionado }, { enabled: showDissidioRel && (companyId>0 || companyIds.length>0) })`,
+ *   botão "Diferenças Dissídio" (ícone `FileBarChart`) no cabeçalho ao lado de "Aprovações RH", e um `Dialog`
+ *   com os 4 cards de totais (Total Geral / Na Folha / Resc. Complementar / Funcionários — todos em BRL via
+ *   `formatBRL`) + tabela por funcionário (Ano, Tipo Folha/Resc. Compl., mês de pagamento, %, base de verbas,
+ *   diferença). O escopo por `anoReferencia=anoSelecionado` faz o relatório refletir o ano do calendário da
+ *   folha (data-base/maio do exercício corrente).
+ * - CAMPO DE VIGÊNCIA: o input `type="date"` "Data de Vigência" já existia no formulário "Novo Ano" de
+ *   `SindicalDissidioTab` (estado `novaVigencia`, propagado em `sindical.cadastrar` como `dataVigencia`) —
+ *   mantido como está, atendendo ao pedido "campo para digitar a data a partir de quando aplicar".
+ * - ZERO BACKEND NOVO · ZERO SCHEMA/ALTER/DROP/DELETE. Apenas realocação de UI (read-only) + limpeza dos
+ *   estados/query órfãos em Configurações.
+ *
  * Rev. 3279 — **RH & DP / FOLHA DE PAGAMENTO (CÁLCULO INTERNO) · CORRIGIDA UMA CONDIÇÃO DE CORRIDA QUE
  * FAZIA O RESUMO DO VALE ("Funcionários / Total Vale" + botão "Ver Resultado") E O RESUMO DO PAGAMENTO
  * ("Bruto / Descontos / Líquido" + "Ver Resultado") SUMIREM PARA ALGUNS USUÁRIOS, DE FORMA APARENTEMENTE

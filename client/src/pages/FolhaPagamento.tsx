@@ -12,7 +12,7 @@ import {
   Eye, Trash2, RefreshCw, ArrowLeft, XCircle, Info, Building2,
   FileSpreadsheet, AlertCircle, ShieldCheck, Clock, TrendingUp, TrendingDown,
   Filter, Briefcase, BarChart3, ChevronDown, ChevronUp, Lightbulb, Wrench, ArrowRight, MapPin, Scale,
-  HardHat, Ban, User, CheckCircle2, Calculator, Zap, Moon, FileCheck, Wallet, Pencil, Save, X, FileDown, PenLine, ClipboardCheck
+  HardHat, Ban, User, CheckCircle2, Calculator, Zap, Moon, FileCheck, Wallet, Pencil, Save, X, FileDown, PenLine, ClipboardCheck, FileBarChart
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import FullScreenDialog from "@/components/FullScreenDialog";
@@ -358,6 +358,7 @@ export default function FolhaPagamento() {
   const [anoSelecionado, setAnoSelecionado] = useState(now.getFullYear());
   const [mesSelecionado, setMesSelecionado] = useState(now.getMonth() + 1);
   const mesAno = `${anoSelecionado}-${String(mesSelecionado).padStart(2, "0")}`;
+  const [showDissidioRel, setShowDissidioRel] = useState(false);
 
   // Upload refs (direto no seletor de arquivos)
   const valeInputRef = useRef<HTMLInputElement>(null);
@@ -476,6 +477,11 @@ export default function FolhaPagamento() {
   // ===== QUERIES =====
   const statusMes = trpc.folha.statusMes.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
   const mesesComLanc = trpc.folha.listarMesesComLancamentos.useQuery({ companyId, companyIds, ano: anoSelecionado }, { enabled: companyId > 0 || companyIds.length > 0 });
+  // Rev. 3280 — Relatório de Diferenças Salariais (Dissídio) movido de Configurações p/ a Folha (escopo: ano selecionado)
+  const dissidioRelQuery = trpc.sindical.relatorioDiferencas.useQuery(
+    { companyId, companyIds, anoReferencia: anoSelecionado },
+    { enabled: showDissidioRel && (companyId > 0 || companyIds.length > 0) }
+  );
   const lancamentos = trpc.folha.listarLancamentos.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
   const itensDetail = trpc.folha.listarItens.useQuery(
     { folhaLancamentoId: viewLancId! },
@@ -5852,6 +5858,9 @@ export default function FolhaPagamento() {
                 </span>
               )}
             </Button>
+            <Button size="sm" variant="outline" className="text-emerald-700 border-emerald-200" onClick={() => setShowDissidioRel(true)}>
+              <FileBarChart className="h-4 w-4 mr-1" /> Diferenças Dissídio
+            </Button>
             <PrintActions title={`Folha de Pagamento - ${formatMesAno(mesAno)}`} />
           </div>
         </div>
@@ -5908,6 +5917,83 @@ export default function FolhaPagamento() {
           <CalendarDays className="h-4 w-4 text-[#1B2A4A]" />
           <span className="text-sm font-semibold text-[#1B2A4A]">{formatMesAno(mesAno)}</span>
         </div>
+
+        {/* ===== RELATÓRIO DE DIFERENÇAS SALARIAIS (DISSÍDIO) ===== */}
+        <Dialog open={showDissidioRel} onOpenChange={setShowDissidioRel}>
+          <DialogContent className="max-w-4xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileBarChart className="h-5 w-5 text-emerald-600" />
+                Diferenças Salariais Retroativas (Dissídio) — {fmtNum(anoSelecionado)}
+              </DialogTitle>
+              <DialogDescription>
+                Diferenças geradas ao aplicar um dissídio com data de vigência no passado (ex.: data-base 01/05). A coluna "Pagto" indica o mês em que cada diferença é paga na folha.
+              </DialogDescription>
+            </DialogHeader>
+            {dissidioRelQuery.isLoading ? (
+              <div className="text-center py-8 text-muted-foreground text-sm">
+                <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" /> Carregando relatório...
+              </div>
+            ) : !dissidioRelQuery.data || dissidioRelQuery.data.rows.length === 0 ? (
+              <p className="text-sm text-gray-500 py-8 text-center">Nenhuma diferença salarial gerada para {fmtNum(anoSelecionado)}. Diferenças surgem ao aplicar um dissídio com data de vigência no passado (Configurações › Sindical/Dissídio).</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                  <div className="bg-emerald-50 rounded-md p-2 border border-emerald-100">
+                    <p className="text-[10px] text-gray-500 uppercase">Total Geral</p>
+                    <p className="text-sm font-bold text-emerald-700">{formatBRL(dissidioRelQuery.data.totalGeral)}</p>
+                  </div>
+                  <div className="bg-emerald-50 rounded-md p-2 border border-emerald-100">
+                    <p className="text-[10px] text-gray-500 uppercase">Na Folha</p>
+                    <p className="text-sm font-bold text-emerald-700">{formatBRL(dissidioRelQuery.data.totalFolha)}</p>
+                  </div>
+                  <div className="bg-emerald-50 rounded-md p-2 border border-emerald-100">
+                    <p className="text-[10px] text-gray-500 uppercase">Resc. Complementar</p>
+                    <p className="text-sm font-bold text-amber-700">{formatBRL(dissidioRelQuery.data.totalComplementar)}</p>
+                  </div>
+                  <div className="bg-emerald-50 rounded-md p-2 border border-emerald-100">
+                    <p className="text-[10px] text-gray-500 uppercase">Funcionários</p>
+                    <p className="text-sm font-bold text-gray-700">{fmtNum(dissidioRelQuery.data.qtdFuncionarios)}</p>
+                  </div>
+                </div>
+                <div className="overflow-x-auto max-h-[55vh]">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-emerald-200 text-[10px] text-gray-500 uppercase">
+                        <th className="text-left py-1.5 px-2">Funcionário</th>
+                        <th className="text-left py-1.5 px-2">Ano</th>
+                        <th className="text-center py-1.5 px-2">Tipo</th>
+                        <th className="text-center py-1.5 px-2">Pagto</th>
+                        <th className="text-right py-1.5 px-2">%</th>
+                        <th className="text-right py-1.5 px-2">Base (verbas)</th>
+                        <th className="text-right py-1.5 px-2">Diferença</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dissidioRelQuery.data.rows.map((r: any) => (
+                        <tr key={r.id} className="border-b border-emerald-100 hover:bg-emerald-50/40">
+                          <td className="py-1.5 px-2 font-medium">{r.employeeName || `#${r.employeeId}`}</td>
+                          <td className="py-1.5 px-2 text-muted-foreground">{r.anoReferencia ?? '—'}</td>
+                          <td className="py-1.5 px-2 text-center">
+                            {r.diferencaTipo === 'rescisao_complementar' ? (
+                              <Badge variant="outline" className="border-amber-300 text-amber-700 text-[10px]">Resc. Compl.</Badge>
+                            ) : (
+                              <Badge variant="outline" className="border-emerald-300 text-emerald-700 text-[10px]">Folha</Badge>
+                            )}
+                          </td>
+                          <td className="py-1.5 px-2 text-center text-muted-foreground">{r.diferencaMesPagamento || '—'}</td>
+                          <td className="py-1.5 px-2 text-right">{r.percentualAplicado}%</td>
+                          <td className="py-1.5 px-2 text-right text-muted-foreground">{r.diferencaBaseVerbas ? formatBRL(r.diferencaBaseVerbas) : '—'}</td>
+                          <td className="py-1.5 px-2 text-right font-semibold text-emerald-700">{formatBRL(r.valorRetroativo)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* ===== OVERLAY DE PROGRESSO DO CÁLCULO ===== */}
         <Dialog open={calcType !== null}>
