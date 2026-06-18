@@ -3649,7 +3649,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v1775c-2026-05-14-gd-isolated-block";
+    const COLFIX_VERSION = "v3273-2026-06-18-ferias-dataAgendamento";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -3927,6 +3927,8 @@ Regras:
             ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS media_he VARCHAR(20);
             ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS media_dsr_he VARCHAR(20);
             ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS arredondamento_provento VARCHAR(20);
+            ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS "dataAgendamento" TIMESTAMP;
+            UPDATE vacation_periods SET "dataAgendamento" = "createdAt" WHERE "dataAgendamento" IS NULL AND "dataInicio" IS NOT NULL;
             ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS modalidade_fd VARCHAR(20) DEFAULT 'normal';
             ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS fd_valor NUMERIC(14,2);
             ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS fd_pagador VARCHAR(20);

@@ -3482,6 +3482,8 @@ export const vacationPeriods = pgTable("vacation_periods", {
         reciboNome: varchar("recibo_nome", { length: 255 }),
         // you can use { mode: 'date' }, if you want to have Date as type for this column
         dataPagamento: date({ mode: 'string' }),
+        // Rev. 3273 — carimbo de quando a férias passou a "agendada" (exibido sob a tag Agendada)
+        dataAgendamento: timestamp({ mode: 'string' }),
         status: text().default('pendente').notNull(),
         vencida: smallint().default(0),
         pagamentoEmDobro: smallint().default(0),

@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3273 — **RH & DP / FÉRIAS · NA COLUNA "STATUS", LOGO ABAIXO DA TAG "AGENDADA", AGORA APARECE A
+ * DATA EM QUE A FÉRIAS FOI AGENDADA ("Agendada em DD/MM/AAAA"). ANTES SÓ HAVIA A DATA DE PAGAMENTO
+ * (NOUTRA COLUNA), SEM REGISTRO DE QUANDO O AGENDAMENTO FOI FEITO. SCHEMA ADITIVO (NOVA COLUNA +
+ * BACKFILL) — ZERO ALTER DESTRUTIVO/DROP/DELETE.**
+ * - PEDIDO (piloto FC): "em férias, abaixo da tag AGENDADA mostrar a data em que a férias foi
+ *   agendada (hoje só mostra a data de pagamento)". Ref.: `attached_assets/image_1781790623497.png`.
+ * - CAUSA: `vacation_periods` não guardava a data do agendamento; a tela só tinha `dataPagamento` e o
+ *   `createdAt` (criação do registro, nem sempre = momento do agendamento p/ registros futuros).
+ * - SCHEMA (ADITIVO): nova coluna `dataAgendamento TIMESTAMP` em `vacation_periods`
+ *   (`drizzle/schema.ts`, sem nome explícito → coluna camelCase `"dataAgendamento"`) + self-heal
+ *   `[ColFix]` em `server/_core/index.ts`: `ALTER TABLE … ADD COLUMN IF NOT EXISTS "dataAgendamento"
+ *   TIMESTAMP` seguido de BACKFILL idempotente `UPDATE … SET "dataAgendamento"="createdAt" WHERE
+ *   "dataAgendamento" IS NULL AND "dataInicio" IS NOT NULL` (preenche o histórico já agendado com a
+ *   melhor aproximação disponível — a data de criação). GOTCHA: o bloco `[ColFix]` é VERSION-GATED por
+ *   `COLFIX_VERSION`; foi necessário BUMPAR a constante (`v3273-2026-06-18-ferias-dataAgendamento`) p/
+ *   o ALTER+backfill efetivamente rodar (sem o bump o bloco loga "Versão ok, pulando migrations").
+ * - BACK (`server/routers/avisoPrevioFerias.ts`): carimba `dataAgendamento` em TODOS os caminhos que
+ *   levam o período a `status='agendada'` — (1) `create` (nasce agendada → `new Date().toISOString()`);
+ *   (2) update genérico (`COALESCE("dataAgendamento", NOW())` via `sql` — preserva a 1ª data se já
+ *   houver); (3) `definirDataFerias` (preserva a original ou carimba agora); (4) `reverterEmGozo` (ao
+ *   voltar p/ agendada, mantém a data original). A `ferias.list` passou a expor `dataAgendamento` no
+ *   SELECT.
+ * - FRONT (`client/src/pages/Ferias.tsx`): sob o badge de Status, quando `status==="agendada"` e há
+ *   `dataAgendamento`, renderiza um `<div>` discreto "Agendada em {formatDate(...)}". Como `formatDate`
+ *   faz `split("-")` e quebra com timestamp, o valor passa por `String(f.dataAgendamento).slice(0,10)`
+ *   (vale p/ ISO e p/ formato com espaço).
+ * - VALIDAÇÃO (Neon): coluna criada (`timestamp without time zone`); backfill cobriu 45/45 "agendada"
+ *   e 6/6 "em_gozo" com `dataAgendamento` preenchida.
+ * - ZERO ALTER DESTRUTIVO/DROP/DELETE. Única DDL: `ADD COLUMN IF NOT EXISTS` (aditivo) + UPDATE de
+ *   backfill idempotente.
+ *
  * Rev. 3272 — **OBRAS / CADASTRO (RELÓGIOS DE PONTO) · UMA OBRA ESTAVA "CONSIDERANDO 3 RELÓGIOS DE
  * PONTO" QUANDO DEVERIA TER 2: O MESMO Nº DE SÉRIE (SN AYTC14025213) APARECIA DUPLICADO NA MESMA
  * OBRA. CAUSA: VINCULAR O MESMO SN DE NOVO À MESMA OBRA CRIAVA UMA 2ª LINHA "ATIVA" (O GUARD SÓ

@@ -1356,6 +1356,11 @@ export default function Ferias() {
                             <td className="p-3 text-xs">{formatDate(f.dataPagamento)}</td>
                             <td className="p-3 text-center">
                               <span className={`text-xs px-2 py-1 rounded-full font-medium ${st.bg} ${st.color}`}>{st.label}</span>
+                              {f.status === "agendada" && f.dataAgendamento && (
+                                <div className="text-[10px] text-muted-foreground mt-1" title="Data em que as férias foram agendadas">
+                                  Agendada em {formatDate(String(f.dataAgendamento).slice(0, 10))}
+                                </div>
+                              )}
                             </td>
                             <td className="p-3">
                               <div className="flex items-center justify-center gap-1">

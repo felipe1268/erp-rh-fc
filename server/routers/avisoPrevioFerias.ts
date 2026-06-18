@@ -2707,6 +2707,7 @@ export const avisoPrevioFeriasRouter = router({
           dataSugeridaInicio: vacationPeriods.dataSugeridaInicio,
           dataSugeridaFim: vacationPeriods.dataSugeridaFim,
           createdAt: vacationPeriods.createdAt,
+          dataAgendamento: vacationPeriods.dataAgendamento,
           employeeName: employees.nomeCompleto,
           employeeCpf: employees.cpf,
           employeeCargo: employees.cargo,
@@ -3106,6 +3107,8 @@ export const avisoPrevioFeriasRouter = router({
           valorTotal: total.toFixed(2),
           dataPagamento,
           status: input.dataInicio ? 'agendada' : 'pendente',
+          // Rev. 3273 — carimba a data de agendamento quando já nasce "agendada"
+          dataAgendamento: input.dataInicio ? new Date().toISOString() : null,
           aprovadoPor: ctx.user.name ?? 'Sistema',
           aprovadoPorUserId: ctx.user.id,
           observacoes: input.observacoes || null,
@@ -3153,6 +3156,8 @@ export const avisoPrevioFeriasRouter = router({
         const { id, ...rest } = input;
         const updateData: any = {};
         Object.entries(rest).forEach(([k, v]) => { if (v !== undefined) updateData[k] = v; });
+        // Rev. 3273 — ao passar a "agendada", carimba a data de agendamento preservando a 1ª (COALESCE)
+        if (updateData.status === 'agendada') updateData.dataAgendamento = sql`COALESCE("dataAgendamento", NOW())`;
         await db.update(vacationPeriods).set(updateData).where(eq(vacationPeriods.id, id));
 
         // Busca companyId e employeeId para sincronização de status e correção de ponto
@@ -3517,6 +3522,8 @@ export const avisoPrevioFeriasRouter = router({
           await db.update(vacationPeriods).set({
             status: novoStatus,
             observacoes: novaObs,
+            // Rev. 3273 — ao reverter p/ agendada, mantém a data de agendamento original (ou carimba agora)
+            ...(novoStatus === 'agendada' ? { dataAgendamento: (periodo as any).dataAgendamento || new Date().toISOString() } : {}),
           } as any).where(eq(vacationPeriods.id, input.id));
 
           try {
@@ -3706,6 +3713,8 @@ export const avisoPrevioFeriasRouter = router({
           valorTotal: total.toFixed(2),
           dataPagamento: dtPag.toISOString().split('T')[0],
           status: 'agendada',
+          // Rev. 3273 — preserva a 1ª data de agendamento; carimba agora se ainda não houver
+          dataAgendamento: (periodo as any).dataAgendamento || new Date().toISOString(),
           dataAlteradaPeloRh: foiAlterada,
           faltasInjustificadas: totalFaltas,
           diasDireitoOriginal: diasDireito,
