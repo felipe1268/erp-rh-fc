@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3274 — **COMPRAS / ORDEM DE COMPRA · O MESMO INSUMO QUE A OC GRAVA DIVIDIDO POR ETAPA DA EAP
+ * (EX.: CIMENTO ALOCADO EM FUNDAÇÃO, LAJE, ETC.) PASSA A APARECER NUMA ÚNICA LINHA NA OC — TANTO NA
+ * TELA DE VISUALIZAÇÃO QUANTO NO PDF/IMPRESSÃO —, COM QTD/ENTREGUE/TOTAL SOMADOS. NA TELA, QUANDO HÁ
+ * MAIS DE UMA ETAPA, A LINHA É EXPANSÍVEL E MOSTRA O RATEIO POR ETAPA. O CUSTO POR ETAPA SEGUE SENDO
+ * CALCULADO SEPARADAMENTE (EM VALOR, R$) — ISTO É PURAMENTE APRESENTAÇÃO. ZERO BACKEND DE
+ * NEGÓCIO/SCHEMA/ALTER/DROP/DELETE; NADA DE CONVERSÃO DE UNIDADE (CONTROLE SEGUE EM VALORES).**
+ * - PEDIDO (piloto FC): "na OC, como reatendemos por etapa, no fim ela divide várias vezes o mesmo
+ *   item (ex.: CIMENTO). É o mesmo insumo: o sistema deve calcular o custo separadamente por etapa,
+ *   mas visualmente na OC pode aparecer como UM ÚNICO ITEM". Ref.: `attached_assets/image_1781792279487.png`
+ *   (OC-2026-521 com cimento repetido 3×: 100 + 200 + 200 kg). Decisões confirmadas: (1) consolidar na
+ *   tela E no PDF, com detalhe por etapa expansível; (2) saldo/custo por etapa controlado em VALOR (R$);
+ *   (3) NÃO mexer em unidade/conversão (o controle já é em valores).
+ * - CAUSA (por design, Rev. 2486): a OC agrupa itens por etapa da EAP — cada linha de
+ *   `compras_ordens_itens` carrega o código da etapa em `insumoCodigo` (neste sistema essa coluna
+ *   guarda o código da EAP, não um código de insumo). O mesmo insumo solicitado p/ N etapas vira N
+ *   linhas, o que faz o item se repetir na OC.
+ * - SOLUÇÃO (SÓ APRESENTAÇÃO): novo helper compartilhado `shared/ocItensConsolidados.ts`
+ *   (`consolidarOcItens`) agrupa as linhas pela chave `descrição + unidade` (normalizada: `trim` +
+ *   `toLowerCase`), somando `quantidade`/`quantidadeEntregue`/`total` (total da linha tem fallback
+ *   `qtd × preço` quando vier 0) e derivando o preço unitário PONDERADO (`total ÷ quantidade`). As
+ *   linhas originais ficam preservadas em `etapas[]` (ordem de aparição) + flags de verba
+ *   (`temSemVerba`/`temEstouro`/`temAvulso`).
+ * - FRONT (`client/src/pages/compras/Ordens.tsx`): novo componente `OcItensConsolidados` (estado de
+ *   expansão PRÓPRIO — evita risco de ordem de hooks no componente-mãe) substitui a tabela inline do
+ *   diálogo `detalhe`: 1 linha por insumo; quando `qtdEtapas > 1`, mostra badge "N etapas" + chevron
+ *   que expande sub-linhas "↳ Etapa <código EAP>" com qtd/entregue/total daquela etapa. Badges
+ *   FORA DO ORÇAMENTO/PREJUÍZO preservados (no grupo e por etapa).
+ * - PDF (`server/services/purchaseOrderPdf.ts`): o loop de itens passou a iterar
+ *   `consolidarOcItens(itens)` — 1 linha por insumo, qtd/total somados, preço ponderado. O documento
+ *   do fornecedor não precisa do rateio por etapa (informação interna), então no papel fica só a
+ *   linha consolidada. A seção de TOTAIS usa `oc.subtotal`/`oc.total` (não soma das linhas), então a
+ *   consolidação NÃO altera os totais.
+ * - RESSALVA: a chave de agrupamento é `descrição + unidade`; itens com descrições divergentes (ex.:
+ *   grafia diferente) não se fundem. Saldo por etapa continua em VALOR, fora desta camada visual.
+ * - ZERO SCHEMA/ALTER/DROP/DELETE · ZERO conversão de unidade · sem novas rotas. Detalhe: este arquivo.
+ *
  * Rev. 3273 — **RH & DP / FÉRIAS · NA COLUNA "STATUS", LOGO ABAIXO DA TAG "AGENDADA", AGORA APARECE A
  * DATA EM QUE A FÉRIAS FOI AGENDADA ("Agendada em DD/MM/AAAA"). ANTES SÓ HAVIA A DATA DE PAGAMENTO
  * (NOUTRA COLUNA), SEM REGISTRO DE QUANDO O AGENDAMENTO FOI FEITO. SCHEMA ADITIVO (NOVA COLUNA +

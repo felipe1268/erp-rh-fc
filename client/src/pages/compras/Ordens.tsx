@@ -1,7 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { DraggableCommandBar } from "@/components/DraggableCommandBar";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, Fragment } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -19,8 +19,9 @@ import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
 import { formatNumeroCotacaoDisplay } from "@shared/numeroCotacao";
 import { formatNumeroOcDisplay } from "@shared/numeroOc";
+import { consolidarOcItens } from "@shared/ocItensConsolidados";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Check, Paperclip, Upload, X, FileText, Save, Edit3, ClipboardCheck, Calendar, RotateCcw, Ban } from "lucide-react";
+import { Plus, Search, Trash2, ShoppingBag, ChevronRight, ChevronDown, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Check, Paperclip, Upload, X, FileText, Save, Edit3, ClipboardCheck, Calendar, RotateCcw, Ban } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { calcularSemaforo, semaforoCor, semaforoTooltip, type SemaforoResult } from "@/lib/semaforoEntrega";
 import { PurchaseTimeline } from "@/components/compras/PurchaseTimeline";
@@ -161,6 +162,119 @@ function agruparItens(itens: ItemForm[]): GrupoForm[] {
     }
   }
   return grupos;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Tabela de itens da OC com CONSOLIDAÇÃO visual: o mesmo insumo (mesma
+// descrição + unidade), que a OC grava dividido por etapa da EAP, aparece
+// numa ÚNICA linha (qtd/entregue/total somados). Quando há mais de uma
+// etapa, a linha é EXPANSÍVEL para mostrar o rateio por etapa. O custo por
+// etapa segue calculado por linha (em VALOR) — isto é só apresentação.
+// ════════════════════════════════════════════════════════════════════
+function OcItensConsolidados({ itens }: { itens: any[] }) {
+  const [expandidos, setExpandidos] = useState<Set<string>>(new Set());
+  const grupos = useMemo(() => consolidarOcItens(itens ?? []), [itens]);
+  const toggle = (k: string) =>
+    setExpandidos((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      return next;
+    });
+  const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const nfmt = (v: number) => v.toLocaleString("pt-BR");
+  const numOf = (v: unknown) => {
+    const n = parseFloat(String(v ?? "0"));
+    return Number.isFinite(n) ? n : 0;
+  };
+  const badge = (estouro: boolean, avulso: boolean) =>
+    estouro ? (
+      <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200 print:border-red-400">PREJUÍZO</span>
+    ) : avulso ? (
+      <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-100 text-orange-700 border border-orange-200 print:border-orange-400">FORA DO ORÇAMENTO</span>
+    ) : null;
+
+  return (
+    <div className="rounded-lg border border-gray-200 overflow-hidden">
+      <Table>
+        <TableHeader>
+          <TableRow className="border-gray-200 bg-gray-50 hover:bg-gray-50">
+            <TableHead className="text-gray-500 text-xs">Descrição</TableHead>
+            <TableHead className="text-gray-500 text-xs w-16">Un.</TableHead>
+            <TableHead className="text-gray-500 text-xs w-20">Qtd</TableHead>
+            <TableHead className="text-gray-500 text-xs w-24">Entregue</TableHead>
+            <TableHead className="text-gray-500 text-xs w-28">Total</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {grupos.map((g) => {
+            const multi = g.qtdEtapas > 1;
+            const aberto = expandidos.has(g.chave);
+            const rowBg = g.temSemVerba ? (g.temEstouro ? "bg-red-50 print:bg-red-50" : "bg-orange-50 print:bg-orange-50") : "";
+            return (
+              <Fragment key={g.chave}>
+                <TableRow className={`border-gray-100 ${rowBg}`}>
+                  <TableCell className="text-gray-900 text-sm">
+                    <div className="flex items-center gap-1.5">
+                      {multi ? (
+                        <button
+                          type="button"
+                          onClick={() => toggle(g.chave)}
+                          className="inline-flex items-center justify-center h-5 w-5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 shrink-0 print:hidden"
+                          title={aberto ? "Recolher etapas" : "Ver rateio por etapa"}
+                        >
+                          {aberto ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                        </button>
+                      ) : (
+                        <span className="inline-block h-5 w-5 shrink-0 print:hidden" />
+                      )}
+                      <span>{g.descricao}</span>
+                      {multi && (
+                        <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold bg-violet-50 text-violet-700 border border-violet-200">
+                          {g.qtdEtapas} etapas
+                        </span>
+                      )}
+                      {badge(g.temEstouro, g.temAvulso)}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-gray-500 text-sm">{g.unidade || "un"}</TableCell>
+                  <TableCell className="text-gray-500 text-sm">{nfmt(g.quantidade)}</TableCell>
+                  <TableCell className="text-gray-500 text-sm">{nfmt(g.quantidadeEntregue)}</TableCell>
+                  <TableCell className="text-emerald-700 text-sm font-medium">{brl(g.total)}</TableCell>
+                </TableRow>
+                {multi && aberto && g.etapas.map((et: any, i: number) => {
+                  const etEstouro = !!et.semVerba && et.motivoSemVerba !== "avulso";
+                  const etAvulso = !!et.semVerba && et.motivoSemVerba === "avulso";
+                  return (
+                    <TableRow key={`${g.chave}-et-${et.id ?? i}`} className="border-gray-100 bg-gray-50/60">
+                      <TableCell className="text-gray-500 text-xs">
+                        <div className="flex items-center gap-1 pl-7">
+                          <span className="text-gray-300">↳</span>
+                          <span>
+                            Etapa{" "}
+                            {et.insumoCodigo ? (
+                              <code className="font-mono text-violet-600 bg-violet-50 px-1 rounded">{et.insumoCodigo}</code>
+                            ) : (
+                              <span className="text-gray-400 italic">sem etapa</span>
+                            )}
+                            {et.eapDescricao ? <span className="text-gray-400"> — {et.eapDescricao}</span> : null}
+                          </span>
+                          {badge(etEstouro, etAvulso)}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-gray-400 text-xs">{et.unidade || "un"}</TableCell>
+                      <TableCell className="text-gray-400 text-xs">{nfmt(numOf(et.quantidade))}</TableCell>
+                      <TableCell className="text-gray-400 text-xs">{nfmt(numOf(et.quantidadeEntregue))}</TableCell>
+                      <TableCell className="text-gray-500 text-xs">{brl(numOf(et.total) || numOf(et.quantidade) * numOf(et.precoUnitario))}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </Fragment>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  );
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -2115,36 +2229,7 @@ export default function Ordens() {
                   );
                 })()}
 
-                <div className="rounded-lg border border-gray-200 overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="border-gray-200 bg-gray-50 hover:bg-gray-50">
-                        <TableHead className="text-gray-500 text-xs">Descrição</TableHead>
-                        <TableHead className="text-gray-500 text-xs w-16">Un.</TableHead>
-                        <TableHead className="text-gray-500 text-xs w-20">Qtd</TableHead>
-                        <TableHead className="text-gray-500 text-xs w-24">Entregue</TableHead>
-                        <TableHead className="text-gray-500 text-xs w-28">Total</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(detalhe.itens as any[]).map((it: any) => (
-                        <TableRow key={it.id} className={`border-gray-100 ${it.semVerba ? (it.motivoSemVerba === "avulso" ? "bg-orange-50 print:bg-orange-50" : "bg-red-50 print:bg-red-50") : ""}`}>
-                          <TableCell className="text-gray-900 text-sm">
-                            {it.descricao}
-                            {it.semVerba && (it.motivoSemVerba === "avulso"
-                              ? <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-100 text-orange-700 border border-orange-200 print:border-orange-400">FORA DO ORÇAMENTO</span>
-                              : <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200 print:border-red-400">PREJUÍZO</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-gray-500 text-sm">{it.unidade || "un"}</TableCell>
-                          <TableCell className="text-gray-500 text-sm">{parseFloat(it.quantidade).toLocaleString("pt-BR")}</TableCell>
-                          <TableCell className="text-gray-500 text-sm">{parseFloat(it.quantidadeEntregue || "0").toLocaleString("pt-BR")}</TableCell>
-                          <TableCell className="text-emerald-700 text-sm font-medium">{parseFloat(it.total || "0").toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                <OcItensConsolidados itens={detalhe.itens as any[]} />
 
                 <div className="rounded-lg border border-gray-200 bg-white p-4">
                   <PurchaseTimeline companyId={companyId} ordemId={detalhe.id} />

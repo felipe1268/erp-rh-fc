@@ -14,6 +14,7 @@ import {
 } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
+import { consolidarOcItens } from "../../shared/ocItensConsolidados";
 
 type ComprasOrdem = InferSelectModel<typeof comprasOrdens>;
 type ComprasOrdemItem = InferSelectModel<typeof comprasOrdensItens>;
@@ -422,10 +423,15 @@ export function generateOCPdf(data: OCData): PDFKit.PDFDocument {
 
   y = drawTableHeader(y);
 
-  itens.forEach((item, idx) => {
-    const qty = parseFloat(item.quantidade || "0");
-    const price = parseFloat(item.precoUnitario || "0");
-    const total = parseFloat(item.total || "0");
+  // Consolida o MESMO insumo (mesma descrição + unidade) numa única linha,
+  // somando quantidade e total — a divisão por etapa da EAP é interna e não
+  // precisa aparecer no documento do fornecedor. (Rev. — consolidação visual.)
+  const itensConsolidados = consolidarOcItens(itens);
+
+  itensConsolidados.forEach((item, idx) => {
+    const qty = item.quantidade;
+    const price = item.precoUnitario;
+    const total = item.total;
 
     const descText = item.descricao || "—";
     const descH = doc.heightOfString(descText, { width: colWidths[1] - 10, fontSize: 7 });
