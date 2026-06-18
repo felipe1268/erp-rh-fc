@@ -422,6 +422,28 @@ export default function Fornecedores() {
     }
   }, [fornecedores]);
 
+  // Rev. 3262 — atalho "Cadastrar" vindo da Folha PJ (?novo=<cnpj> ou ?novo=1):
+  // abre o cadastro de nova empresa já marcada como prestador de serviço, com
+  // o CNPJ preenchido quando disponível.
+  const novoFromUrlRef = useRef(false);
+  useEffect(() => {
+    if (novoFromUrlRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const novo = params.get("novo");
+    if (!novo) return;
+    novoFromUrlRef.current = true;
+    const cnpjDigits = novo.replace(/\D/g, "");
+    abrirNovo();
+    setForm(prev => ({
+      ...prev,
+      cnpj: cnpjDigits.length === 14 ? formatCNPJ(cnpjDigits) : "",
+      isPrestadorServico: true,
+    }));
+    const url = new URL(window.location.href);
+    url.searchParams.delete("novo");
+    window.history.replaceState({}, "", url.pathname);
+  }, []);
+
   const lastFetchedCNPJ = useRef("");
 
   const buscarCNPJ = useCallback(async () => {

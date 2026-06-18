@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3262 — **MÓDULO PJ / FOLHA PJ (PAGAMENTOS) · A ABA "FOLHA PJ" GANHOU DUAS LEITURAS NOVAS, 100%
+ * READ-ONLY, P/ AMARRAR CADA PRESTADOR AO CADASTRO DE FORNECEDORES: (1) UMA COLUNA "FORNECEDOR CADASTRADO"
+ * COM BADGE — VERDE QUANDO O CNPJ DO CONTRATO PJ CASA EXATAMENTE COM UM FORNECEDOR (MOSTRA A RAZÃO SOCIAL),
+ * ÂMBAR QUANDO HÁ SUGESTÃO POR NOME A CONFIRMAR, E CINZA "NÃO CADASTRADO" COM ATALHO "CADASTRAR" QUE ABRE A
+ * TELA DE FORNECEDORES JÁ COMO PRESTADOR DE SERVIÇO E COM O CNPJ PREENCHIDO; (2) UM PAINEL "RANKING POR
+ * FORNECEDOR" COM O SOMATÓRIO HISTÓRICO EM BRL POR PRESTADOR (RECEBIDO/PAGO EM DESTAQUE, TOTAL LANÇADO, E O
+ * QUANTO CAI NO MÊS SELECIONADO SINALIZADO EM ROXO), ORDENADO DO MAIOR P/ O MENOR. ZERO ESCRITA · ZERO
+ * SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (piloto FC): saber, dentro da própria Folha PJ, quais prestadores já estão cadastrados como
+ *   Fornecedores e quanto cada um já recebeu no histórico — sem sair da tela.
+ * - SOLUÇÃO:
+ *   • BACK `server/routers/pjContracts.ts`: importou a tabela `fornecedores`; helpers `normCnpj`
+ *     (só dígitos), `normNomeEmpresa` (uppercase + colapsa espaços + tira pontuação), `carregarFornecedorIndex`
+ *     (índice por CNPJ + por nome, prestador de serviço), `matchFornecedor` (CNPJ exato → "match"; senão nome →
+ *     "sugestao"; senão "ausente") e `carregarCnpjPorEmployee`. A query `pagamentos.list` ganhou LEFT JOIN em
+ *     `pj_contracts` p/ trazer `cnpjPrestador`/`razaoSocialPrestador` e cada linha recebe
+ *     `fornecedorStatus`/`fornecedorId`/`fornecedorNome`/`cnpjPrestador`. Nova query `pagamentos.rankingFornecedores`:
+ *     `SUM(NULLIF(valor,'')::numeric)` por employee (totalHistorico / totalRecebido=pago / totalMes / qtd) + o
+ *     mesmo match, ordenado desc por recebido. Ambas tenant-bound por companyId.
+ *   • FRONT `client/src/pages/ModuloPJ.tsx`: componente `FornecedorCadastroBadge` (verde/âmbar/cinza); nova
+ *     coluna na tabela de pagamentos; painel "Ranking por fornecedor" (tabela com #, prestador, badge, recebido,
+ *     total lançado, no mês destacado, qtd + tfoot com totais), ícone `Award`.
+ *   • FRONT `client/src/pages/compras/Fornecedores.tsx`: novo handler de URL `?novo=<cnpj>` que abre o cadastro
+ *     de nova empresa já marcada `isPrestadorServico=true` e com o CNPJ preenchido (espelha o handler `?edit=`).
+ * - EFEITO: o usuário enxerga na Folha PJ quem já é fornecedor (e cadastra em 1 clique quem não é) e tem o
+ *   ranking de gasto histórico por prestador. NADA é gravado — só leitura/apresentação.
+ * - ZERO BACKEND DE ESCRITA · ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3261 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · OS PAGAMENTOS DE PRESTADORES PJ (MÓDULO TERCEIROS,
  * ORIGEM `pagamento_pj` — EX.: "ADIANTAMENTO 40%" E "FECHAMENTO 60%") DEIXARAM DE APARECER SOLTOS E SEM
  * NOME NA LISTA DE PENDÊNCIAS DA CONCILIAÇÃO E AGORA SÃO UNIFICADOS POR PRESTADOR + MÊS NUMA ÚNICA LINHA

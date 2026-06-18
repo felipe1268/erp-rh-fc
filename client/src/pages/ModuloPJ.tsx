@@ -20,7 +20,7 @@ import {
   Briefcase, Plus, Search, DollarSign, AlertTriangle, FileText,
   Trash2, Eye, X, Clock, CheckCircle2, RefreshCw, Calendar, Pencil,
   Users, TrendingUp, FileSignature, Ban, Printer, Upload, FolderOpen,
-  ExternalLink, File,
+  ExternalLink, File, XCircle, Award,
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
@@ -37,6 +37,40 @@ function formatCNPJ(v: string | null | undefined) {
   const n = v.replace(/\D/g, "");
   if (n.length !== 14) return v;
   return n.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+}
+
+/**
+ * Rev. 3262 — Badge do cruzamento prestador × catálogo de Fornecedores.
+ * verde = casou por CNPJ; ambar = sugestão por nome (a confirmar);
+ * cinza = não cadastrado, com atalho para cadastrar já como prestador.
+ */
+function FornecedorCadastroBadge({ status, nome, cnpj }: { status?: string; nome?: string | null; cnpj?: string | null }) {
+  if (status === "verde") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-green-100 text-green-700 text-[11px] font-medium px-2 py-0.5" title={nome ? `Cadastrado: ${nome}` : "Fornecedor cadastrado"}>
+        <CheckCircle2 className="h-3 w-3" /> Cadastrado
+      </span>
+    );
+  }
+  if (status === "ambar") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 text-[11px] font-medium px-2 py-0.5" title={nome ? `Sugestão por nome (confirme): ${nome}` : "Sugestão por nome — confirme o cadastro"}>
+        <AlertTriangle className="h-3 w-3" /> A confirmar
+      </span>
+    );
+  }
+  const cnpjDigits = (cnpj || "").replace(/\D/g, "");
+  const href = `/compras/fornecedores${cnpjDigits.length === 14 ? `?novo=${cnpjDigits}` : "?novo=1"}`;
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 text-gray-600 text-[11px] font-medium px-2 py-0.5" title="Prestador sem cadastro no catálogo de Fornecedores">
+        <XCircle className="h-3 w-3" /> Não cadastrado
+      </span>
+      <a href={href} className="text-[11px] font-medium text-blue-600 hover:text-blue-700 hover:underline whitespace-nowrap" title="Cadastrar este prestador no catálogo de Fornecedores">
+        Cadastrar
+      </a>
+    </span>
+  );
 }
 
 const STATUS_CONTRATO: Record<string, { label: string; color: string; bg: string }> = {
@@ -96,6 +130,10 @@ export default function ModuloPJ() {
     { enabled: !!companyId || companyIds?.length > 0 }
   );
   const { data: pagamentos = [], refetch: refetchPagamentos } = trpc.pj.pagamentos.list.useQuery(
+    { companyId, mesReferencia: mesRef },
+    { enabled: (!!companyId || companyIds?.length > 0) && tab === "pagamentos" }
+  );
+  const { data: rankingFornecedores = [] } = trpc.pj.pagamentos.rankingFornecedores.useQuery(
     { companyId, mesReferencia: mesRef },
     { enabled: (!!companyId || companyIds?.length > 0) && tab === "pagamentos" }
   );
@@ -629,6 +667,7 @@ export default function ModuloPJ() {
                     <thead>
                       <tr className="border-b bg-muted/30">
                         <th className="p-3 text-left font-medium">Prestador</th>
+                        <th className="p-3 text-left font-medium">Fornecedor cadastrado</th>
                         <th className="p-3 text-left font-medium">Tipo</th>
                         <th className="p-3 text-left font-medium">Descrição</th>
                         <th className="p-3 text-right font-medium">Valor</th>
@@ -639,7 +678,7 @@ export default function ModuloPJ() {
                     </thead>
                     <tbody>
                       {(pagamentos as any[]).length === 0 ? (
-                        <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">
+                        <tr><td colSpan={8} className="py-12 text-center text-muted-foreground">
                           Nenhuma medição para {mesRef}. Novos contratos já geram as previsões automaticamente — para contratos antigos use "Sincronizar Previsões".
                         </td></tr>
                       ) : (pagamentos as any[]).map((p: any) => {
@@ -647,6 +686,9 @@ export default function ModuloPJ() {
                         return (
                           <tr key={p.id} className="border-b last:border-0 hover:bg-muted/20">
                             <td className="p-3 font-medium">{p.employeeName}</td>
+                            <td className="p-3">
+                              <FornecedorCadastroBadge status={p.fornecedorStatus} nome={p.fornecedorNome} cnpj={p.cnpjPrestador} />
+                            </td>
                             <td className="p-3">
                               <Badge variant={p.tipo === "adiantamento" ? "secondary" : p.tipo === "bonificacao" ? "default" : "outline"}>
                                 {p.tipo === "adiantamento" ? "Adiantamento" : p.tipo === "bonificacao" ? "Bonificação" : "Fechamento"}
@@ -686,6 +728,66 @@ export default function ModuloPJ() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Rev. 3262 — Ranking por fornecedor (somatório histórico em BRL) */}
+            {(rankingFornecedores as any[]).length > 0 && (
+              <Card className="mt-6">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Award className="h-5 w-5 text-purple-600" />
+                    Ranking por fornecedor
+                    <span className="text-xs font-normal text-muted-foreground">(somatório histórico — recebido em destaque; mês {mesRef} sinalizado)</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/30">
+                          <th className="p-3 text-left font-medium w-10">#</th>
+                          <th className="p-3 text-left font-medium">Prestador</th>
+                          <th className="p-3 text-left font-medium">Fornecedor cadastrado</th>
+                          <th className="p-3 text-right font-medium">Recebido (histórico)</th>
+                          <th className="p-3 text-right font-medium">Total lançado</th>
+                          <th className="p-3 text-right font-medium">No mês ({mesRef})</th>
+                          <th className="p-3 text-center font-medium">Lançs.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(rankingFornecedores as any[]).map((r: any, i: number) => (
+                          <tr key={r.employeeId} className="border-b last:border-0 hover:bg-muted/20">
+                            <td className="p-3 text-muted-foreground">{i + 1}</td>
+                            <td className="p-3 font-medium">{r.employeeName}</td>
+                            <td className="p-3">
+                              <FornecedorCadastroBadge status={r.fornecedorStatus} nome={r.fornecedorNome} cnpj={r.cnpjPrestador} />
+                            </td>
+                            <td className="p-3 text-right font-bold text-green-700">{formatMoeda(r.totalRecebido)}</td>
+                            <td className="p-3 text-right text-muted-foreground">{formatMoeda(r.totalHistorico)}</td>
+                            <td className="p-3 text-right">
+                              {r.totalMes > 0 ? (
+                                <span className="inline-flex items-center rounded-full bg-purple-100 text-purple-700 font-semibold px-2 py-0.5">{formatMoeda(r.totalMes)}</span>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </td>
+                            <td className="p-3 text-center text-muted-foreground">{r.qtd}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t bg-muted/40 font-semibold">
+                          <td className="p-3" colSpan={3}>Total geral</td>
+                          <td className="p-3 text-right text-green-700">{formatMoeda((rankingFornecedores as any[]).reduce((s, r) => s + (r.totalRecebido || 0), 0))}</td>
+                          <td className="p-3 text-right">{formatMoeda((rankingFornecedores as any[]).reduce((s, r) => s + (r.totalHistorico || 0), 0))}</td>
+                          <td className="p-3 text-right text-purple-700">{formatMoeda((rankingFornecedores as any[]).reduce((s, r) => s + (r.totalMes || 0), 0))}</td>
+                          <td className="p-3 text-center">{(rankingFornecedores as any[]).reduce((s, r) => s + (r.qtd || 0), 0)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
         </Tabs>
 

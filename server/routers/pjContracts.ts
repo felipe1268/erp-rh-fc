@@ -1,7 +1,7 @@
 import { protectedProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
-import { pjContracts, pjPayments, pjDocumentos, pjContractRevisoes, pjContractAditivos, employees, companies, comprasOrdens } from "../../drizzle/schema";
+import { pjContracts, pjPayments, pjDocumentos, pjContractRevisoes, pjContractAditivos, employees, companies, comprasOrdens, fornecedores } from "../../drizzle/schema";
 import { eq, and, sql, isNull, desc, asc, lte, gte, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
@@ -281,6 +281,116 @@ _______________________________
 Testemunha 2
 Nome:
 CPF:`;
+
+// ---------------------------------------------------------------------------
+// Cruzamento prestador PJ × catálogo de Fornecedores (Rev. 3262)
+// READ-ONLY: apenas casa o CNPJ/nome do prestador contra `fornecedores` para
+// sinalizar se o prestador já está cadastrado (verde), se há sugestão por nome
+// a confirmar (ambar) ou se não há cadastro (cinza). Não escreve nada.
+// ---------------------------------------------------------------------------
+
+/** Mantém só os dígitos de um CNPJ. */
+function normCnpj(v?: string | null): string {
+  return (v || "").replace(/\D/g, "");
+}
+
+/**
+ * Normaliza o nome de uma empresa para comparação tolerante:
+ * remove acentos, caixa alta, pontuação e sufixos societários comuns.
+ */
+function normNomeEmpresa(v?: string | null): string {
+  let s = (v || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  s = s.replace(/\b(LTDA|EIRELI|EPP|MEI|ME|SA)\b/g, " ").replace(/\s+/g, " ").trim();
+  return s;
+}
+
+type FornecedorMatchIndex = {
+  porCnpj: Map<string, { id: number; nome: string }>;
+  porNome: Map<string, { id: number; nome: string }>;
+};
+
+export type FornecedorMatch = {
+  fornecedorStatus: "verde" | "ambar" | "cinza";
+  fornecedorId: number | null;
+  fornecedorNome: string | null;
+};
+
+/** Carrega os fornecedores da empresa e indexa por CNPJ e por nome. */
+async function carregarFornecedorIndex(db: any, input: { companyId: number; companyIds?: number[] }): Promise<FornecedorMatchIndex> {
+  const forns = await db.select({
+    id: fornecedores.id,
+    cnpj: fornecedores.cnpj,
+    razaoSocial: fornecedores.razaoSocial,
+    nomeFantasia: fornecedores.nomeFantasia,
+  })
+    .from(fornecedores)
+    .where(companyFilter(fornecedores.companyId, input));
+
+  const porCnpj = new Map<string, { id: number; nome: string }>();
+  const porNome = new Map<string, { id: number; nome: string }>();
+  for (const f of forns as any[]) {
+    const nome = f.razaoSocial || f.nomeFantasia || "";
+    const c = normCnpj(f.cnpj);
+    if (c.length === 14 && !porCnpj.has(c)) porCnpj.set(c, { id: f.id, nome });
+    const rz = normNomeEmpresa(f.razaoSocial);
+    if (rz && !porNome.has(rz)) porNome.set(rz, { id: f.id, nome });
+    const nf = normNomeEmpresa(f.nomeFantasia);
+    if (nf && !porNome.has(nf)) porNome.set(nf, { id: f.id, nome });
+  }
+  return { porCnpj, porNome };
+}
+
+/** Casa um prestador (cnpj + nome) contra o índice de fornecedores. */
+function matchFornecedor(cnpjPrestador: string | null | undefined, nomePrestador: string | null | undefined, idx: FornecedorMatchIndex): FornecedorMatch {
+  const c = normCnpj(cnpjPrestador);
+  if (c.length === 14) {
+    const hit = idx.porCnpj.get(c);
+    if (hit) return { fornecedorStatus: "verde", fornecedorId: hit.id, fornecedorNome: hit.nome };
+  }
+  const n = normNomeEmpresa(nomePrestador);
+  if (n && n.length >= 4) {
+    const exato = idx.porNome.get(n);
+    if (exato) return { fornecedorStatus: "ambar", fornecedorId: exato.id, fornecedorNome: exato.nome };
+    for (const [nomeForn, hit] of idx.porNome) {
+      if (nomeForn.length >= 6 && (nomeForn.includes(n) || n.includes(nomeForn))) {
+        return { fornecedorStatus: "ambar", fornecedorId: hit.id, fornecedorNome: hit.nome };
+      }
+    }
+  }
+  return { fornecedorStatus: "cinza", fornecedorId: null, fornecedorNome: null };
+}
+
+/**
+ * Monta um mapa employeeId → { cnpj, razaoSocial } a partir dos contratos PJ
+ * da empresa, para que pagamentos sem contrato vinculado (lançamento manual)
+ * ainda consigam herdar o CNPJ do prestador.
+ */
+async function carregarCnpjPorEmployee(db: any, input: { companyId: number; companyIds?: number[] }): Promise<Map<number, { cnpj: string | null; razaoSocial: string | null }>> {
+  const contratos = await db.select({
+    employeeId: pjContracts.employeeId,
+    cnpjPrestador: pjContracts.cnpjPrestador,
+    razaoSocialPrestador: pjContracts.razaoSocialPrestador,
+    status: pjContracts.status,
+  })
+    .from(pjContracts)
+    .where(and(companyFilter(pjContracts.companyId, input), isNull(pjContracts.deletedAt)))
+    .orderBy(asc(pjContracts.status));
+
+  const map = new Map<number, { cnpj: string | null; razaoSocial: string | null }>();
+  for (const c of contratos as any[]) {
+    const atual = map.get(c.employeeId);
+    // Prioriza qualquer contrato com CNPJ preenchido.
+    if (!atual || (!normCnpj(atual.cnpj) && normCnpj(c.cnpjPrestador))) {
+      map.set(c.employeeId, { cnpj: c.cnpjPrestador ?? null, razaoSocial: c.razaoSocialPrestador ?? null });
+    }
+  }
+  return map;
+}
 
 export const pjContractsRouter = router({
   // ============================================================
@@ -786,13 +896,28 @@ export const pjContractsRouter = router({
           observacoes: pjPayments.observacoes,
           createdAt: pjPayments.createdAt,
           employeeName: employees.nomeCompleto,
+          cnpjPrestador: pjContracts.cnpjPrestador,
+          razaoSocialPrestador: pjContracts.razaoSocialPrestador,
         })
         .from(pjPayments)
         .innerJoin(employees, eq(pjPayments.employeeId, employees.id))
+        .leftJoin(pjContracts, and(eq(pjPayments.contractId, pjContracts.id), eq(pjContracts.companyId, pjPayments.companyId)))
         .where(and(...conditions))
         .orderBy(asc(employees.nomeCompleto), asc(pjPayments.mesReferencia), asc(pjPayments.tipo));
-        
-        return rows;
+
+        // Rev. 3262 — enriquece cada pagamento com o cruzamento contra o
+        // catálogo de Fornecedores (cadastrado/sugestão/não cadastrado).
+        const [idx, cnpjPorEmp] = await Promise.all([
+          carregarFornecedorIndex(db, input),
+          carregarCnpjPorEmployee(db, input),
+        ]);
+        return (rows as any[]).map((r) => {
+          const fallback = cnpjPorEmp.get(r.employeeId);
+          const cnpj = normCnpj(r.cnpjPrestador) ? r.cnpjPrestador : (fallback?.cnpj ?? null);
+          const nome = r.razaoSocialPrestador || fallback?.razaoSocial || r.employeeName;
+          const m = matchFornecedor(cnpj, nome, idx);
+          return { ...r, cnpjPrestador: cnpj, ...m };
+        });
       }),
 
     /**
@@ -894,6 +1019,62 @@ export const pjContractsRouter = router({
         const db = (await getDb())!;
         await db.delete(pjPayments).where(eq(pjPayments.id, input.id));
         return { success: true };
+      }),
+
+    /**
+     * Rev. 3262 — Ranking por fornecedor (READ-ONLY).
+     * Soma histórica em BRL por prestador (employee), destacando quanto já foi
+     * recebido (pagamentos com `dataPagamento`/status `pago`) e o total do mês
+     * de referência. Cada linha vem com o cruzamento contra o catálogo de
+     * Fornecedores (cadastrado/sugestão/não cadastrado).
+     */
+    rankingFornecedores: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string().optional() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        // Safe-cast: `valor` é varchar e pode conter valor legado/mascarado;
+        // só converte quando casa com o formato numérico canônico, senão 0
+        // (evita derrubar a query inteira com erro de cast).
+        const valNum = sql<string>`CASE WHEN ${pjPayments.valor} ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN ${pjPayments.valor}::numeric ELSE 0 END`;
+        const pago = sql`(${pjPayments.status} = 'pago' OR ${pjPayments.dataPagamento} IS NOT NULL)`;
+        const mes = input.mesReferencia ?? null;
+
+        const rows = await db.select({
+          employeeId: pjPayments.employeeId,
+          employeeName: employees.nomeCompleto,
+          totalHistorico: sql<string>`COALESCE(SUM(${valNum}), 0)`,
+          totalRecebido: sql<string>`COALESCE(SUM(CASE WHEN ${pago} THEN ${valNum} ELSE 0 END), 0)`,
+          totalMes: sql<string>`COALESCE(SUM(CASE WHEN ${mes} IS NOT NULL AND ${pjPayments.mesReferencia} = ${mes} THEN ${valNum} ELSE 0 END), 0)`,
+          qtd: sql<number>`COUNT(*)`,
+        })
+          .from(pjPayments)
+          .innerJoin(employees, eq(pjPayments.employeeId, employees.id))
+          .where(companyFilter(pjPayments.companyId, input))
+          .groupBy(pjPayments.employeeId, employees.nomeCompleto);
+
+        const [idx, cnpjPorEmp] = await Promise.all([
+          carregarFornecedorIndex(db, input),
+          carregarCnpjPorEmployee(db, input),
+        ]);
+
+        const enriched = (rows as any[]).map((r) => {
+          const fallback = cnpjPorEmp.get(r.employeeId);
+          const cnpj = fallback?.cnpj ?? null;
+          const nome = fallback?.razaoSocial || r.employeeName;
+          const m = matchFornecedor(cnpj, nome, idx);
+          return {
+            employeeId: r.employeeId,
+            employeeName: r.employeeName,
+            cnpjPrestador: cnpj,
+            totalHistorico: parseFloat(r.totalHistorico || "0"),
+            totalRecebido: parseFloat(r.totalRecebido || "0"),
+            totalMes: parseFloat(r.totalMes || "0"),
+            qtd: Number(r.qtd || 0),
+            ...m,
+          };
+        });
+        enriched.sort((a, b) => b.totalRecebido - a.totalRecebido || b.totalHistorico - a.totalHistorico);
+        return enriched;
       }),
   }),
 
