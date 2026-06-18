@@ -1,6 +1,58 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3278 — **RH & DP / SINDICAL · DISSÍDIO GANHOU DATA DE VIGÊNCIA: QUANDO O ACORDO É FECHADO
+ * COM ATRASO (EX.: VIGÊNCIA 01/05, APLICADO EM JUNHO), O ERP PASSA A CALCULAR A DIFERENÇA SALARIAL
+ * RETROATIVA DE TODAS AS VERBAS JÁ PAGAS NO VALOR ANTIGO (SALÁRIO + HE + FÉRIAS × % DO REAJUSTE) E
+ * A LANÇA COMO PROVENTO "DIFERENÇA SALARIAL (REF. MM/AAAA)" NA FOLHA DO MÊS DE APLICAÇÃO. PJ NUNCA
+ * RECEBE. DESLIGADOS NO PERÍODO RETROATIVO GERAM RESCISÃO COMPLEMENTAR. NOVO RELATÓRIO DEDICADO LISTA
+ * SÓ AS DIFERENÇAS. SCHEMA 100% ADITIVO (ADD COLUMN IF NOT EXISTS) — ZERO ALTER/DROP/DELETE.**
+ * - PEDIDO (piloto FC): dissídios costumam ser fechados depois da data-base; o mês já foi pago no valor
+ *   antigo e a empresa precisa pagar a diferença retroativa no mês seguinte, numa linha própria da folha,
+ *   sem reabrir o mês anterior. PJ não entra. Quem foi desligado no intervalo precisa de complemento.
+ * - DECISÕES CONFIRMADAS: (a) a diferença é paga na folha do MÊS DE APLICAÇÃO (junho), o mês anterior
+ *   (maio) fica intacto no valor antigo; (b) a diferença incide sobre TODAS as verbas do período retroativo
+ *   (salário bruto + HE aprovada/paga + férias pagas) × % do reajuste; (c) a folha é INTERNA (Cálculo
+ *   Interno), então a base é lida do que foi efetivamente apurado; (d) desligados no período → rescisão
+ *   complementar; (e) relatório dedicado só das diferenças para conferência.
+ * - SOLUÇÃO:
+ *   1) SCHEMA (`drizzle/schema.ts` + self-heal `[SyncSchema+] Rev. 3278` em `server/_core/index.ts`):
+ *      `dissidios.dataVigencia` (date); `dissidio_funcionarios` +4 cols (`diferenca_mes_pagamento` VARCHAR(7),
+ *      `diferenca_base_verbas` VARCHAR(20), `diferenca_breakdown_json` JSON, `diferenca_tipo` TEXT);
+ *      `termination_notices` +5 cols (`previsaoDissidioComplementar` TEXT + `baixaDissidio{Valor,Data,Por,Obs}`).
+ *      Tudo ADD COLUMN IF NOT EXISTS — ZERO ALTER/DROP/DELETE.
+ *   2) CADASTRO (`server/routers/sindical.ts` `cadastrar`): aceita `dataVigencia` opcional (default
+ *      `${ano}-05-01`) e persiste. Helper `mesesRetroativosEntre(fromYM, toYMExcl)` lista os meses do
+ *      intervalo [vigência .. mês-de-aplicação) (exclusivo no fim).
+ *   3) APLICAR (`sindical.aplicar`): além de reajustar o salário dos CLT ativos, calcula os meses retroativos
+ *      e, para cada funcionário, soma as verbas desses meses (salário de `payroll_payments.salarioBrutoMes`,
+ *      HE de `he_period_employees.valorHETotal` em períodos aprovados/pagos, férias de `vacation_periods.valorTotal`
+ *      pela `dataPagamento`), multiplica pelo % e grava em `dissidio_funcionarios` (`diferencaTipo='folha'`,
+ *      `diferencaMesPagamento`=mês de aplicação, `diferencaBaseVerbas`, `diferencaBreakdownJson` com os meses).
+ *      Desligados no período (via `termination_notices.dataFim`) entram em `calcularRescisaoComplementar`
+ *      (`diferencaTipo='rescisao_complementar'`) e o JSON da previsão é gravado em
+ *      `termination_notices.previsaoDissidioComplementar`. PJ é ignorado (a folha só itera CLT). Retorno traz
+ *      `mesesRetroativos`, `mesPagamento`, `diferencasGeradas`, `desligadosComplementares`, `totalDiferencas`.
+ *   4) FOLHA (`server/routers/payrollEngine.ts` `simularPagamento`): antes do loop, pré-busca as diferenças
+ *      tipo `folha` cujo `diferencaMesPagamento` = mês de referência; soma o valor em `totalProventos`, grava
+ *      `adicionaisValor`/`adicionaisDetalhes` (rótulo "DIFERENÇA SALARIAL (ref. MM/AAAA)") no INSERT e propaga
+ *      nos results. `client/src/pages/FolhaPagamento.tsx` mostra uma sub-linha "+ R$ X dissídio" na coluna Total.
+ *   5) RELATÓRIO (`sindical.relatorioDiferencas`, read-only): lista as linhas de `dissidio_funcionarios` com
+ *      `valorRetroativo > 0` (folha + complementar), com nome, ano, %, base, mês de pagamento e valor; devolve
+ *      totais (geral/folha/complementar) e qtd de funcionários. UI: aba Sindical em `Configuracoes.tsx`
+ *      (`SindicalDissidioTab`) ganhou input "Data de Vigência" no cadastro e botão/seção "Relatório Diferenças".
+ *   6) EXPOSIÇÃO: o `ferias.list`/getById de `avisoPrevioFerias.ts` passou a trazer `previsaoDissidioComplementar`
+ *      e os campos `baixaDissidio*` (getById já usava select() completo; o list ganhou as colunas explícitas).
+ *   7) HARDENING (pós code-review): helper local `assertCompanyAccess(ctxUser, input)` aplicado em
+ *      `sindical.aplicar` e `sindical.relatorioDiferencas` — valida TODOS os companyId/companyIds resolvidos
+ *      contra as empresas do usuário (admin/admin_master = global), fechando o IDOR do relatório (que era
+ *      apenas protectedProcedure + companyFilter confiando no companyId do cliente). Além disso, TODAS as
+ *      escritas do `aplicar` (reajuste de salário, linhas de diferença, complementares e o flip do status do
+ *      dissídio) foram envolvidas numa transação ÚNICA (`db.transaction`) — falha parcial faz rollback e a
+ *      retentativa começa limpa, sem duplo reajuste nem linhas órfãs em `dissidio_funcionarios` (o guard de
+ *      status='aplicado' já barrava re-aplicação completa).
+ * - ZERO ALTER DESTRUTIVO/DROP/DELETE. Apenas ADD COLUMN IF NOT EXISTS.
+ *
  * Rev. 3277 — **RH & DP / RESCISÃO · O CÁLCULO DE FÉRIAS VENCIDAS NA RESCISÃO PASSOU A CONSIDERAR O
  * SALDO POR DIA (REFLETINDO GOZO PARCIAL), NÃO MAIS PERÍODOS INTEIROS. ANTES, UM PERÍODO AQUISITIVO
  * COMPLETO EM QUE O COLABORADOR GOZOU SÓ PARTE (EX.: 5 DE 30 DIAS, status='concluida') TINHA OS 25

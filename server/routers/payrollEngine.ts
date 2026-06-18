@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, getCompaniesForUser } from "../db";
-import { employees, timeRecords, systemCriteria, obras, heSolicitacoes, vrBenefits, advances, vacationPeriods, companyBankAccounts } from "../../drizzle/schema";
+import { employees, timeRecords, systemCriteria, obras, heSolicitacoes, vrBenefits, advances, vacationPeriods, companyBankAccounts, dissidioFuncionarios } from "../../drizzle/schema";
 import { eq, and, sql, between, inArray, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
@@ -3462,6 +3462,41 @@ export const payrollEngineRouter = router({
 
       const paymentInsertRows: any[] = [];
 
+      // ===== Rev. 3278 — DIFERENÇA SALARIAL retroativa do DISSÍDIO =====
+      // Quando um dissídio com vigência no passado é aplicado, a diferença das
+      // verbas já pagas no valor antigo é lançada como PROVENTO na folha do mês
+      // de aplicação (linha "DIFERENÇA SALARIAL (ref. MM/AAAA)"). Lê só as linhas
+      // tipo 'folha' (ativos); desligados têm rescisão complementar à parte.
+      const difDissidioMap = new Map<number, { valor: number; detalhes: any[] }>();
+      try {
+        const difRows = await db.select({
+          employeeId: dissidioFuncionarios.employeeId,
+          valorRetroativo: dissidioFuncionarios.valorRetroativo,
+          breakdown: dissidioFuncionarios.diferencaBreakdownJson,
+        })
+          .from(dissidioFuncionarios)
+          .where(and(
+            inArray(dissidioFuncionarios.companyId, allCompanyIds),
+            eq(dissidioFuncionarios.diferencaMesPagamento, input.mesReferencia),
+            eq(dissidioFuncionarios.diferencaTipo, 'folha'),
+          ));
+        for (const r of difRows) {
+          const valor = parseBRL(r.valorRetroativo);
+          if (!(valor > 0)) continue;
+          const bk: any = r.breakdown || {};
+          const meses: string[] = Array.isArray(bk.meses) ? bk.meses : [];
+          const refLabel = meses.length > 0
+            ? meses.map((m) => { const [y, mm] = m.split('-'); return `${mm}/${y}`; }).join(', ')
+            : 'retroativo';
+          difDissidioMap.set(r.employeeId, {
+            valor,
+            detalhes: [{ label: `DIFERENÇA SALARIAL (ref. ${refLabel})`, valor, tipo: 'dissidio' }],
+          });
+        }
+      } catch (e: any) {
+        console.error('[Folha] FALHA ao carregar diferença de dissídio (Rev. 3278):', e?.message || e);
+      }
+
       // Dias reais do mês para cálculo proporcional do horista (220h = ref 30 dias)
       const diasNoMesSim = new Date(year, month, 0).getDate();
 
@@ -3473,7 +3508,11 @@ export const payrollEngineRouter = router({
         const salarioBruto = valorHora * horasMensaisEmp;
         // HE = 0 — Hora Extra é módulo separado (he_periods)
         const valorHE = 0;
-        const totalProventos = salarioBruto;
+        // Rev. 3278 — DIFERENÇA SALARIAL retroativa do dissídio (provento adicional).
+        const difDissidio = difDissidioMap.get(emp.id);
+        const adicionaisValor = difDissidio ? difDissidio.valor : 0;
+        const adicionaisDetalhes = difDissidio ? difDissidio.detalhes : null;
+        const totalProventos = salarioBruto + adicionaisValor;
 
         const adv = advMap.get(emp.id);
         const descontoAdiantamento = adv ? parseBRL(adv.valorTotalVale) : 0;
@@ -3655,7 +3694,8 @@ export const payrollEngineRouter = router({
           ${formatMoney(descontoVrFaltas)}, ${formatMoney(descontoVtFaltas)}, ${formatMoney(finalPensao)}, ${formatMoney(finalInss)}, ${formatMoney(fgtsValor)}, ${formatMoney(finalOutros)},
           ${formatMoney(finalConvenio)}, ${formatMoney(finalIr)}, ${formatMoney(finalSindicato)}, ${formatMoney(finalEpi)},
           ${formatMoney(totalDescontos)}, ${formatMoney(acertoEscuroValor)}, ${JSON.stringify(acertoEscuroDetalhes)}, ${formatMoney(salarioLiquido)},
-          'simulado', ${dataPagamentoPrevista}, ${manuaisJsonStr}, ${histJsonStr})`);
+          'simulado', ${dataPagamentoPrevista}, ${manuaisJsonStr}, ${histJsonStr},
+          ${formatMoney(adicionaisValor)}, ${adicionaisDetalhes ? JSON.stringify(adicionaisDetalhes) : null})`);
 
         grandTotalLiquido += salarioLiquido;
         grandTotalBruto += salarioBruto;
@@ -3664,6 +3704,8 @@ export const payrollEngineRouter = router({
         results.push({
           employeeId: emp.id, nome: emp.nomeCompleto, funcao: emp.funcao, codigoInterno: emp.codigoInterno,
           salarioBruto, valorHE, totalProventos,
+          // Rev. 3278 — diferença salarial retroativa do dissídio (provento).
+          adicionaisValor, adicionaisDetalhes,
           // Valores finais (com overrides aplicados) — usados na tabela (11 categorias)
           descontoAdiantamento: finalVale, descontoInss: finalInss, descontoIrrf: finalIr,
           descontoFaltas, faltasQtd, descontoAtrasos: finalAtrasos, atrasosMinutos,
@@ -3754,7 +3796,8 @@ export const payrollEngineRouter = router({
             "descontoVrFaltas", "descontoVtFaltas", "descontoPensao", "descontoInss", "descontoFgts", "descontoOutros",
             "descontoConvenio", "descontoIrrf", "descontoSindicato", "descontoEpi",
             "totalDescontos", "acertoEscuroValor", "acertoEscuroDetalhes", "salarioLiquido",
-            status, "dataPagamentoPrevista", "descontosManuaisJson", "descontosManuaisHistorico")
+            status, "dataPagamentoPrevista", "descontosManuaisJson", "descontosManuaisHistorico",
+            "adicionaisValor", "adicionaisDetalhes")
           VALUES ${sql.join(paymentInsertRows, sql`,`)}
         `);
       }

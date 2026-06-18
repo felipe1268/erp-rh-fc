@@ -823,6 +823,11 @@ export const dissidioFuncionarios = pgTable("dissidio_funcionarios", {
         diferencaValor: varchar({ length: 20 }),
         mesesRetroativos: integer().default(0),
         valorRetroativo: varchar({ length: 20 }),
+        // Rev. 3278 — DIFERENÇA SALARIAL retroativa do dissídio (vigência no passado).
+        diferencaMesPagamento: varchar("diferenca_mes_pagamento", { length: 7 }),
+        diferencaBaseVerbas: varchar("diferenca_base_verbas", { length: 20 }),
+        diferencaBreakdownJson: json("diferenca_breakdown_json"),
+        diferencaTipo: text("diferenca_tipo"),
         status: text().default('pendente').notNull(),
         motivoExclusao: text(),
         aplicadoEm: timestamp({ mode: 'string' }),
@@ -861,6 +866,9 @@ export const dissidios = pgTable("dissidios", {
         retroativo: smallint().default(1).notNull(),
         // you can use { mode: 'date' }, if you want to have Date as type for this column
         dataRetroativoInicio: date({ mode: 'string' }),
+        // Rev. 3278 — DATA DE VIGÊNCIA do acordo (a partir de quando o reajuste vale).
+        // Meses entre a vigência e a aplicação geram DIFERENÇA SALARIAL retroativa.
+        dataVigencia: date("data_vigencia", { mode: 'string' }),
         status: text().default('rascunho').notNull(),
         observacoes: text(),
         documentoUrl: text(),
@@ -3256,6 +3264,13 @@ export const terminationNotices = pgTable("termination_notices", {
         baixaComplementarData: date("baixa_complementar_data", { mode: 'string' }),
         baixaComplementarPor: varchar("baixa_complementar_por", { length: 255 }),
         baixaComplementarObs: text("baixa_complementar_obs"),
+        // Rev. 3278 — Complemento de DISSÍDIO p/ desligados (diferença retroativa do reajuste).
+        // Campos PRÓPRIOS p/ NÃO colidir com o complemento "por fora" (baixaComplementar*).
+        previsaoDissidioComplementar: text("previsao_dissidio_complementar"),
+        baixaDissidioValor: varchar("baixa_dissidio_valor", { length: 20 }),
+        baixaDissidioData: date("baixa_dissidio_data", { mode: 'string' }),
+        baixaDissidioPor: varchar("baixa_dissidio_por", { length: 255 }),
+        baixaDissidioObs: text("baixa_dissidio_obs"),
 },
 (table) => [
         index("tn_company").on(table.companyId),

@@ -31,6 +31,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { removeAccents } from "@/lib/searchUtils";
 import { fmtNum } from "@/lib/formatters";
+import { formatBRL } from "@/lib/formatBRL";
 
 const MODULES_LIST = [
   { key: "colaboradores", label: "Colaboradores" },
@@ -1007,8 +1008,10 @@ export default function Configuracoes() {
 function SindicalDissidioTab({ companyId, isMaster }: { companyId: number; isMaster: boolean }) {
   const [novoAno, setNovoAno] = useState<number>(new Date().getFullYear());
   const [novoPercentual, setNovoPercentual] = useState("");
+  const [novaVigencia, setNovaVigencia] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [confirmAplicar, setConfirmAplicar] = useState<number | null>(null);
+  const [showRelatorio, setShowRelatorio] = useState(false);
 
   const listaQuery = trpc.sindical.listar.useQuery(
     { companyId },
@@ -1019,6 +1022,7 @@ function SindicalDissidioTab({ companyId, isMaster }: { companyId: number; isMas
     onSuccess: () => {
       toast.success("Dissídio cadastrado com sucesso!");
       setNovoPercentual("");
+      setNovaVigencia("");
       setShowForm(false);
       listaQuery.refetch();
     },
@@ -1026,13 +1030,21 @@ function SindicalDissidioTab({ companyId, isMaster }: { companyId: number; isMas
   });
 
   const aplicarMutation = trpc.sindical.aplicar.useMutation({
-    onSuccess: (data) => {
-      toast.success(`Dissídio ${data.ano} aplicado! ${data.aplicados} funcionário(s) reajustado(s) em ${data.percentual}%`);
+    onSuccess: (data: any) => {
+      const difMsg = data.totalDiferencas > 0
+        ? ` Diferença retroativa (${data.mesesRetroativos?.length || 0} mês/meses → folha de ${data.mesPagamento}): ${formatBRL(data.totalDiferencas)} em ${data.diferencasGeradas || 0} funcionário(s)${data.desligadosComplementares ? `, ${data.desligadosComplementares} rescisão(ões) complementar(es)` : ''}.`
+        : '';
+      toast.success(`Dissídio ${data.ano} aplicado! ${data.aplicados} funcionário(s) reajustado(s) em ${data.percentual}%.${difMsg}`);
       setConfirmAplicar(null);
       listaQuery.refetch();
     },
     onError: (err: any) => toast.error(err.message),
   });
+
+  const relatorioQuery = trpc.sindical.relatorioDiferencas.useQuery(
+    { companyId },
+    { enabled: companyId > 0 && showRelatorio }
+  );
 
   const excluirMutation = trpc.sindical.excluir.useMutation({
     onSuccess: () => {
@@ -1066,11 +1078,16 @@ function SindicalDissidioTab({ companyId, isMaster }: { companyId: number; isMas
                 Cadastre o percentual de reajuste por ano. Ao aplicar, <strong>todos os funcionários CLT ativos</strong> terão o salário reajustado automaticamente. É lei — não há exclusão individual.
               </CardDescription>
             </div>
-            {isMaster && !showForm && (
-              <Button onClick={() => setShowForm(true)} className="gap-1.5">
-                <Plus className="w-4 h-4" /> Novo Ano
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => setShowRelatorio(v => !v)} className="gap-1.5">
+                <FileBarChart className="w-4 h-4" /> {showRelatorio ? 'Ocultar' : 'Relatório'} Diferenças
               </Button>
-            )}
+              {isMaster && !showForm && (
+                <Button onClick={() => setShowForm(true)} className="gap-1.5">
+                  <Plus className="w-4 h-4" /> Novo Ano
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -1106,8 +1123,17 @@ function SindicalDissidioTab({ companyId, isMaster }: { companyId: number; isMas
                     className="w-[160px] bg-white mt-1"
                   />
                 </div>
+                <div>
+                  <Label className="text-xs font-medium text-gray-600">Data de Vigência</Label>
+                  <Input
+                    type="date"
+                    value={novaVigencia}
+                    onChange={e => setNovaVigencia(e.target.value)}
+                    className="w-[170px] bg-white mt-1"
+                  />
+                </div>
                 <Button
-                  onClick={() => cadastrarMutation.mutate({ companyId, anoReferencia: novoAno, percentualReajuste: novoPercentual })}
+                  onClick={() => cadastrarMutation.mutate({ companyId, anoReferencia: novoAno, percentualReajuste: novoPercentual, dataVigencia: novaVigencia || undefined })}
                   disabled={cadastrarMutation.isPending || !novoPercentual}
                   className="gap-1.5"
                 >
@@ -1117,8 +1143,79 @@ function SindicalDissidioTab({ companyId, isMaster }: { companyId: number; isMas
                 <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
               </div>
               <p className="text-[10px] text-blue-600 mt-2">
-                Art. 468 CLT — O percentual nunca pode ser menor que o ano anterior.
+                Art. 468 CLT — O percentual nunca pode ser menor que o ano anterior. <strong>Data de Vigência</strong>: se no passado (ex.: 01/05), gera <strong>diferença salarial retroativa</strong> paga na folha do mês de aplicação. Em branco = 01/05 do ano.
               </p>
+            </div>
+          )}
+
+          {/* Rev. 3278 — Relatório de DIFERENÇAS SALARIAIS retroativas */}
+          {showRelatorio && (
+            <div className="mb-6 p-4 border-2 border-emerald-200 rounded-lg bg-emerald-50/40">
+              <h4 className="text-sm font-semibold text-emerald-800 mb-3 flex items-center gap-2">
+                <FileBarChart className="w-4 h-4" /> Diferenças Salariais Retroativas (Dissídio)
+              </h4>
+              {relatorioQuery.isLoading ? (
+                <div className="text-center py-6 text-muted-foreground text-sm">
+                  <Loader2 className="w-5 h-5 animate-spin mx-auto mb-1" /> Carregando relatório...
+                </div>
+              ) : !relatorioQuery.data || relatorioQuery.data.rows.length === 0 ? (
+                <p className="text-xs text-gray-500 py-4 text-center">Nenhuma diferença salarial gerada. Diferenças surgem ao aplicar um dissídio com data de vigência no passado.</p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                    <div className="bg-white rounded-md p-2 border border-emerald-100">
+                      <p className="text-[10px] text-gray-500 uppercase">Total Geral</p>
+                      <p className="text-sm font-bold text-emerald-700">{formatBRL(relatorioQuery.data.totalGeral)}</p>
+                    </div>
+                    <div className="bg-white rounded-md p-2 border border-emerald-100">
+                      <p className="text-[10px] text-gray-500 uppercase">Na Folha</p>
+                      <p className="text-sm font-bold text-emerald-700">{formatBRL(relatorioQuery.data.totalFolha)}</p>
+                    </div>
+                    <div className="bg-white rounded-md p-2 border border-emerald-100">
+                      <p className="text-[10px] text-gray-500 uppercase">Resc. Complementar</p>
+                      <p className="text-sm font-bold text-amber-700">{formatBRL(relatorioQuery.data.totalComplementar)}</p>
+                    </div>
+                    <div className="bg-white rounded-md p-2 border border-emerald-100">
+                      <p className="text-[10px] text-gray-500 uppercase">Funcionários</p>
+                      <p className="text-sm font-bold text-gray-700">{relatorioQuery.data.qtdFuncionarios}</p>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-emerald-200 text-[10px] text-gray-500 uppercase">
+                          <th className="text-left py-1.5 px-2">Funcionário</th>
+                          <th className="text-left py-1.5 px-2">Ano</th>
+                          <th className="text-center py-1.5 px-2">Tipo</th>
+                          <th className="text-center py-1.5 px-2">Pagto</th>
+                          <th className="text-right py-1.5 px-2">%</th>
+                          <th className="text-right py-1.5 px-2">Base (verbas)</th>
+                          <th className="text-right py-1.5 px-2">Diferença</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {relatorioQuery.data.rows.map((r: any) => (
+                          <tr key={r.id} className="border-b border-emerald-100 hover:bg-white/60">
+                            <td className="py-1.5 px-2 font-medium">{r.employeeName || `#${r.employeeId}`}</td>
+                            <td className="py-1.5 px-2 text-muted-foreground">{r.anoReferencia ?? '—'}</td>
+                            <td className="py-1.5 px-2 text-center">
+                              {r.diferencaTipo === 'rescisao_complementar' ? (
+                                <Badge variant="outline" className="border-amber-300 text-amber-700 text-[10px]">Resc. Compl.</Badge>
+                              ) : (
+                                <Badge variant="outline" className="border-emerald-300 text-emerald-700 text-[10px]">Folha</Badge>
+                              )}
+                            </td>
+                            <td className="py-1.5 px-2 text-center text-muted-foreground">{r.diferencaMesPagamento || '—'}</td>
+                            <td className="py-1.5 px-2 text-right">{r.percentualAplicado}%</td>
+                            <td className="py-1.5 px-2 text-right text-muted-foreground">{r.diferencaBaseVerbas ? formatBRL(r.diferencaBaseVerbas) : '—'}</td>
+                            <td className="py-1.5 px-2 text-right font-semibold text-emerald-700">{formatBRL(r.valorRetroativo)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </div>
           )}
 

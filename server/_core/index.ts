@@ -823,6 +823,22 @@ Regras:
           console.log(`[SyncSchema+] coluna jornada_trabalho garantida em obras (jornada da obra prevalece sobre a do funcionário).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA obras.jornada_trabalho:`, e?.message || e); }
 
+        // Rev. 3278 — DISSÍDIO com DATA DE VIGÊNCIA + DIFERENÇA SALARIAL retroativa.
+        // Colunas aditivas (R-001/R-007/R-010 OK — ADD COLUMN IF NOT EXISTS).
+        try {
+          await db.execute(sql`ALTER TABLE dissidios ADD COLUMN IF NOT EXISTS data_vigencia DATE`);
+          await db.execute(sql`ALTER TABLE dissidio_funcionarios ADD COLUMN IF NOT EXISTS diferenca_mes_pagamento VARCHAR(7)`);
+          await db.execute(sql`ALTER TABLE dissidio_funcionarios ADD COLUMN IF NOT EXISTS diferenca_base_verbas VARCHAR(20)`);
+          await db.execute(sql`ALTER TABLE dissidio_funcionarios ADD COLUMN IF NOT EXISTS diferenca_breakdown_json JSON`);
+          await db.execute(sql`ALTER TABLE dissidio_funcionarios ADD COLUMN IF NOT EXISTS diferenca_tipo TEXT`);
+          await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS previsao_dissidio_complementar TEXT`);
+          await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS baixa_dissidio_valor VARCHAR(20)`);
+          await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS baixa_dissidio_data DATE`);
+          await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS baixa_dissidio_por VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS baixa_dissidio_obs TEXT`);
+          console.log(`[SyncSchema+] Rev. 3278: colunas de DISSÍDIO (data_vigencia + diferença salarial retroativa + complementar de dissídio p/ desligados) garantidas.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 3278 dissídio:`, e?.message || e); }
+
         // Rev. 2004 — Tabela de participações em DDS (Diálogo Diário de Segurança)
         try {
           await db.execute(sql`

@@ -4162,7 +4162,17 @@ export default function FolhaPagamento() {
                           <td className="py-2 px-2 text-muted-foreground text-[10px] whitespace-nowrap max-w-[140px] truncate" title={f.funcao}>{f.funcao}</td>
                           <td className="text-right py-2 px-2 border-l border-green-100">{formatBRL(f.salarioBruto)}</td>
                           <td className="text-right py-2 px-2 text-green-700">{f.valorHE > 0 ? formatBRL(f.valorHE) : '—'}</td>
-                          <td className="text-right py-2 px-2 font-semibold text-green-800">{formatBRL(f.totalProventos)}</td>
+                          <td className="text-right py-2 px-2 font-semibold text-green-800">
+                            {formatBRL(f.totalProventos)}
+                            {f.adicionaisValor > 0 && (
+                              <span
+                                className="block text-[9px] font-normal text-emerald-600 whitespace-nowrap"
+                                title={(Array.isArray(f.adicionaisDetalhes) && f.adicionaisDetalhes[0]?.label) || 'Diferença salarial (dissídio)'}
+                              >
+                                + {formatBRL(f.adicionaisValor)} dissídio
+                              </span>
+                            )}
+                          </td>
                           <DescontoCell f={f} campo="vale" valor={valVale} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="border-l border-red-100 text-orange-600 text-right" />
                           <DescontoCell f={f} campo="inss" valor={valInss} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-red-600 text-right" />
                           <DescontoCell f={f} campo="ir" valor={valIr} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-red-600 text-right" />
