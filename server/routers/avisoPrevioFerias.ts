@@ -3571,6 +3571,65 @@ export const avisoPrevioFeriasRouter = router({
       }),
 
     // ============================================================
+    // CANCELAR AGENDAMENTO DE FÉRIAS (agendada → pendente) — Rev. 3275
+    // Volta o período para "A Vencer", limpando as datas do gozo
+    // (início/fim/pagamento/agendamento). Mantém valores calculados e
+    // registra o cancelamento em observações + auditoria.
+    // ============================================================
+    cancelarAgendamento: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        motivo: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const [periodo] = await db.select().from(vacationPeriods).where(eq(vacationPeriods.id, input.id));
+        if (!periodo) throw new TRPCError({ code: 'NOT_FOUND', message: 'Período de férias não encontrado.' });
+        // Guard de tenant (anti-IDOR): o usuário precisa ter acesso à empresa do
+        // período (admin/admin_master = global). Evita cancelar agendamento de outro tenant via id.
+        const empresasUsuario = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+        if (periodo.companyId != null && !empresasUsuario.some(c => c.id === periodo.companyId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem acesso a este período de férias.' });
+        }
+        if (periodo.status !== 'agendada') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Apenas férias com status "Agendada" podem ter o agendamento cancelado.' });
+        }
+
+        try {
+          const motivo = (input.motivo || '').trim();
+          const obsAnterior = periodo.observacoes || '';
+          const novaObs = `[AGENDAMENTO CANCELADO] por ${ctx.user.name} em ${new Date().toLocaleDateString('pt-BR')}.${motivo ? ' Motivo: ' + motivo : ''}${obsAnterior ? '\n---\n' + obsAnterior : ''}`;
+
+          await db.update(vacationPeriods).set({
+            status: 'pendente',
+            dataInicio: null,
+            dataFim: null,
+            dataPagamento: null,
+            dataAgendamento: null,
+            observacoes: novaObs,
+          } as any).where(eq(vacationPeriods.id, input.id));
+
+          // Limpa eventual projeção de ponto criada pelo agendamento
+          corrigirPontoFuncionario(periodo.companyId, periodo.employeeId).catch(() => {});
+
+          await createAuditLog({
+            userId: ctx.user.id,
+            userName: ctx.user.name ?? 'Sistema',
+            action: 'CANCELAR_AGENDAMENTO_FERIAS',
+            module: 'ferias',
+            entityType: 'vacationPeriods',
+            entityId: input.id,
+            details: `Agendamento de férias cancelado (volta para A Vencer).${motivo ? ' Motivo: ' + motivo : ''}`,
+          });
+
+          return { success: true };
+        } catch (err: any) {
+          console.error('[cancelarAgendamento] Erro:', err);
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: err?.message || 'Erro ao cancelar agendamento de férias.' });
+        }
+      }),
+
+    // ============================================================
     // REVERTER FÉRIAS CONCLUÍDA → EM GOZO (disponível a todos)
     // ============================================================
     reverterParaEmGozo: protectedProcedure

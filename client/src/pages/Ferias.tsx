@@ -816,6 +816,22 @@ export default function Ferias() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  // Rev. 3275 — Cancelar agendamento (agendada → A Vencer)
+  const [showCancelAgendamentoDialog, setShowCancelAgendamentoDialog] = useState(false);
+  const [cancelAgendamentoItem, setCancelAgendamentoItem] = useState<any>(null);
+  const [cancelAgendamentoMotivo, setCancelAgendamentoMotivo] = useState("");
+  const cancelarAgendamento = trpc.avisoPrevio.ferias.cancelarAgendamento.useMutation({
+    onSuccess: () => {
+      refetch(); refetchVencidas();
+      utils.employees.list.invalidate();
+      setShowCancelAgendamentoDialog(false);
+      setCancelAgendamentoItem(null);
+      setCancelAgendamentoMotivo("");
+      toast.success("Agendamento cancelado! As férias voltaram para A Vencer.");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   // Employee search
   const [empSearch, setEmpSearch] = useState("");
   const [empDropdownOpen, setEmpDropdownOpen] = useState(false);
@@ -1376,6 +1392,16 @@ export default function Ferias() {
                                     }
                                   }}>
                                     <Play className="h-3.5 w-3.5 mr-1" /> Iniciar Gozo
+                                  </Button>
+                                )}
+                                {/* Rev. 3275 — Cancelar agendamento (agendada → A Vencer) */}
+                                {f.status === "agendada" && !perdeuFerias && (
+                                  <Button size="sm" variant="ghost" className="h-7 px-2 text-red-600 hover:bg-red-50 font-medium text-xs" title="Cancelar agendamento (volta para A Vencer)" onClick={() => {
+                                    setCancelAgendamentoItem(f);
+                                    setCancelAgendamentoMotivo("");
+                                    setShowCancelAgendamentoDialog(true);
+                                  }}>
+                                    <Ban className="h-3.5 w-3.5 mr-1" /> Cancelar
                                   </Button>
                                 )}
                                 {/* Rev. 1703 — Direito perdido (Art. 133 IV CLT): único botão é Concluir,
@@ -3180,6 +3206,51 @@ export default function Ferias() {
             >
               {reverterEmGozo.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Undo2 className="h-4 w-4 mr-2" />}
               Reverter
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rev. 3275 — Cancelar agendamento de férias (agendada → A Vencer) */}
+      <Dialog open={showCancelAgendamentoDialog} onOpenChange={(open) => { if (!open) { setShowCancelAgendamentoDialog(false); setCancelAgendamentoItem(null); setCancelAgendamentoMotivo(""); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Ban className="h-5 w-5" /> Cancelar Agendamento de Férias
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+              <p className="text-sm font-medium text-red-800">O agendamento será cancelado e o período voltará para "A Vencer".</p>
+              <p className="text-xs text-red-600 mt-1">As datas de início, fim e pagamento serão removidas. Você poderá reagendar depois.</p>
+            </div>
+            {cancelAgendamentoItem && (
+              <div className="bg-muted/30 rounded-lg p-3">
+                <p className="text-sm font-medium">{cancelAgendamentoItem.employeeName}</p>
+                <p className="text-xs text-muted-foreground">Período: {formatDate(cancelAgendamentoItem.periodoAquisitivoInicio)} a {formatDate(cancelAgendamentoItem.periodoAquisitivoFim)}</p>
+                {cancelAgendamentoItem.dataInicio && <p className="text-xs text-muted-foreground">Gozo agendado: {formatDate(cancelAgendamentoItem.dataInicio)} a {formatDate(cancelAgendamentoItem.dataFim)}</p>}
+              </div>
+            )}
+            <div>
+              <label className="text-sm font-medium">Motivo do cancelamento <span className="text-muted-foreground">(opcional)</span></label>
+              <Textarea
+                placeholder="Ex: Reagendamento solicitado pelo colaborador, mudança de data..."
+                value={cancelAgendamentoMotivo}
+                onChange={(e) => setCancelAgendamentoMotivo(e.target.value)}
+                className="mt-1"
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setShowCancelAgendamentoDialog(false); setCancelAgendamentoItem(null); setCancelAgendamentoMotivo(""); }}>Voltar</Button>
+            <Button
+              variant="destructive"
+              disabled={cancelarAgendamento.isPending}
+              onClick={() => { if (cancelAgendamentoItem) cancelarAgendamento.mutate({ id: cancelAgendamentoItem.id, motivo: cancelAgendamentoMotivo.trim() || undefined }); }}
+            >
+              {cancelarAgendamento.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Ban className="h-4 w-4 mr-2" />}
+              Cancelar Agendamento
             </Button>
           </DialogFooter>
         </DialogContent>

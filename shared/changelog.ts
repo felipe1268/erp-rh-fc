@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3275 — **RH & DP / FÉRIAS · AGORA É POSSÍVEL CANCELAR O AGENDAMENTO DE UMA FÉRIAS. NA LINHA DE
+ * UMA FÉRIAS COM STATUS "AGENDADA" SURGIU O BOTÃO "CANCELAR" (ÍCONE BAN, VERMELHO) QUE, APÓS
+ * CONFIRMAÇÃO EM DIÁLOGO (COM MOTIVO OPCIONAL), DEVOLVE O PERÍODO PARA "A VENCER" (status='pendente')
+ * LIMPANDO AS DATAS DO GOZO (INÍCIO/FIM/PAGAMENTO/AGENDAMENTO). ANTES SÓ DAVA P/ EDITAR A DATA OU
+ * INICIAR O GOZO — NÃO HAVIA COMO DESFAZER O AGENDAMENTO SEM IR PARA "EM GOZO" E REVERTER. ZERO
+ * SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (piloto FC): "preciso ter a possibilidade de cancelar o agendamento de férias". Refs.:
+ *   `attached_assets/image_1781794318885.png` (form Definir Data) e `attached_assets/image_1781794355959.png`
+ *   (linhas "Agendada" com Editar / Iniciar Gozo / olho — sem ação de cancelar).
+ * - CAUSA: o ciclo de status de `vacation_periods` (pendente → agendada → em_gozo → concluida) só tinha
+ *   reversão a partir de `em_gozo` (`reverterEmGozo`) e de `concluida` (`reverterParaEmGozo`). Para uma
+ *   férias apenas AGENDADA, não havia caminho de volta: as únicas ações eram Editar (PenLine) e Iniciar
+ *   Gozo (Play). Para "desmarcar" era preciso iniciar o gozo e depois reverter — fluxo errado.
+ * - BACK (`server/routers/avisoPrevioFerias.ts`): nova procedure `cancelarAgendamento` (protectedProcedure,
+ *   input `{ id, motivo? }`). GUARD DE TENANT (anti-IDOR): valida `periodo.companyId ∈ getCompaniesForUser`
+ *   (admin/admin_master = global; senão FORBIDDEN) antes de qualquer escrita. Depois valida que o período
+ *   existe e que `status==='agendada'` (senão BAD_REQUEST);
+ *   faz `UPDATE` setando `status='pendente'` e ZERANDO `dataInicio`/`dataFim`/`dataPagamento`/`dataAgendamento`
+ *   (=null), preservando os VALORES já calculados; carimba o cancelamento em `observacoes`
+ *   (`[AGENDAMENTO CANCELADO] por <user> em DD/MM/AAAA. Motivo: …`) e grava `createAuditLog`
+ *   (`CANCELAR_AGENDAMENTO_FERIAS`). Dispara `corrigirPontoFuncionario` (fire-and-forget) p/ limpar
+ *   eventual projeção de ponto criada pelo agendamento. NÃO mexe no status do `employee` — "agendada"
+ *   nunca leva o colaborador a `Ferias` (isso só acontece em `em_gozo`), então não há sincronização a
+ *   desfazer. A coluna `vencida` segue derivada na leitura (a `list` calcula `vencida` quando o período
+ *   concessivo já passou e o status é `pendente`), então o item reaparece corretamente em "A Vencer"/
+ *   "Vencidas" conforme a data.
+ * - FRONT (`client/src/pages/Ferias.tsx`): hook `cancelarAgendamento` (invalida `refetch`/`refetchVencidas`
+ *   + `employees.list`) + estados `showCancelAgendamentoDialog`/`cancelAgendamentoItem`/`cancelAgendamentoMotivo`.
+ *   Na coluna de ações, quando `status==='agendada' && !perdeuFerias`, aparece o botão "Cancelar" (ícone
+ *   `Ban`, vermelho) que abre um diálogo de confirmação (mostra colaborador + período + gozo agendado;
+ *   campo Motivo opcional; botões "Voltar" e "Cancelar Agendamento" destrutivo). O motivo é enviado só
+ *   quando preenchido (`trim() || undefined`).
+ * - ZERO SCHEMA/ALTER/DROP/DELETE · sem novas colunas · sem novas rotas além da procedure. Detalhe: este arquivo.
+ *
  * Rev. 3274 — **COMPRAS / ORDEM DE COMPRA · O MESMO INSUMO QUE A OC GRAVA DIVIDIDO POR ETAPA DA EAP
  * (EX.: CIMENTO ALOCADO EM FUNDAÇÃO, LAJE, ETC.) PASSA A APARECER NUMA ÚNICA LINHA NA OC — TANTO NA
  * TELA DE VISUALIZAÇÃO QUANTO NO PDF/IMPRESSÃO —, COM QTD/ENTREGUE/TOTAL SOMADOS. NA TELA, QUANDO HÁ
