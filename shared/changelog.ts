@@ -1,6 +1,48 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3243 — **FINANCEIRO · NOVA CATEGORIA "DASHBOARDS" NO MENU DO MÓDULO FINANCEIRO, COM 5
+ * PAINÉIS VISUAIS DEDICADOS (CONTAS A RECEBER, CONTAS A PAGAR, CONCILIAÇÃO BANCÁRIA, CONTROLE DE
+ * CHEQUES E CARTÃO DE CRÉDITO). CADA PAINEL TEM UM CABEÇALHO MODERNO COM GRADIENTE + SELETOR DE
+ * ANO + ATUALIZAR, CARDS DE INDICADOR (KPI) E GRÁFICOS RESPONSIVOS (RECHARTS) — TUDO CLICÁVEL:
+ * UM CLIQUE EM QUALQUER CARD OU GRÁFICO ABRE A TELA OPERACIONAL CORRESPONDENTE PRA O USUÁRIO AGIR.
+ * 100% READ-ONLY — NENHUM BACKEND NOVO, NENHUM SCHEMA, NENHUMA ESCRITA.**
+ * - PEDIDO (piloto FC): "criar uma categoria de Dashboards no Financeiro com painéis dedicados pra
+ *   cada área (receber, pagar, conciliação, cheques, cartão), com visual moderno, gráficos
+ *   responsivos e que ao clicar leve pra tela da operação".
+ * - SOLUÇÃO (FRONT, novo diretório `client/src/pages/financeiro/dashboards/`):
+ *     · `_kit.tsx` — kit compartilhado de apresentação: `formatBRL`/`formatBRLCompact` (eixos curtos
+ *       em pt-BR "R$ 120 mil"/"R$ 1,2 mi"), `MESES_ABREV`, `PALETTE`, `THEMES` (emerald/rose/blue/
+ *       violet/amber), `DashHeader` (banner gradiente + ano ± + refresh), `KpiCard` (clicável,
+ *       tons default/good/warn/bad), `ChartCard` (título + subtítulo + botão "Abrir" + altura),
+ *       `EmptyState` e `BRLTooltip` (tooltip recharts padronizado em BRL).
+ *     · `DashReceber.tsx` (tema emerald, `financial.getContasAReceberByYear`): KPIs Previsto/Recebido/
+ *       A receber/Vencido; gráficos Previsto×Recebido por mês (ComposedChart), por status (Pie),
+ *       aging por faixa de atraso (Bar) e top clientes/obras (Bar horizontal). Tudo → `/financeiro/
+ *       contas-a-receber-titulos`.
+ *     · `DashPagar.tsx` (tema rose, `financial.getContasAPagarByYear`): KPIs Previsto/Pago/Em aberto/
+ *       Vencido; Previsto×Pago por mês, Pago×Em aberto (Pie), aging, top fornecedores e por centro de
+ *       custo (Bar horizontal). Tudo → `/financeiro/contas-a-pagar`.
+ *     · `DashCheques.tsx` (tema violet, `cheques.resumo` + `cheques.verificarExtratoResumo` +
+ *       `cheques.listar`): KPIs Cheques no ano/Conferidos no extrato/Confere — falta marcar/
+ *       Divergências; por status (Pie), conferência com o extrato (Bar), valor por mês (Bar) e top
+ *       fornecedores (Bar horizontal). Tudo → `/financeiro/cheques`.
+ *     · `DashCartao.tsx` (tema amber, `cartao.listarFaturas`): KPIs Faturas/Total faturado/Total em
+ *       compras/Conciliadas; total por mês (Bar), por cartão-banco (Bar horizontal) e conciliação das
+ *       faturas (Pie). Tudo → `/financeiro/cartao`.
+ *     · `DashConciliacao.tsx` (tema blue, `financial.getBankAccounts` + `getBankAccountsConciliacaoStatus`
+ *       no range do ano): KPIs Linhas do extrato/Conciliadas/Pendentes/% conciliado; conciliadas×
+ *       pendentes (Pie), situação das contas (Pie) e conciliação por conta bancária (Bar empilhada).
+ *       Tooltip de CONTAGEM ("N linhas"/"N contas") — não BRL, pois os endpoints retornam contagens.
+ *       Tudo → `/financeiro/conciliacao`.
+ * - SOLUÇÃO (MENU/ROTAS): nova seção "Dashboards" em `menuSectionsFinanceiro`
+ *   (`client/src/components/DashboardLayout.tsx`), logo após o "Painel", com os 5 itens. 5 rotas em
+ *   `client/src/App.tsx` (`/financeiro/dashboards/{receber,pagar,conciliacao,cheques,cartao}`) via
+ *   `lazyWithRetry` + `RouteGuard`, REUSANDO a `route` de permissão da tela operacional de cada painel
+ *   (sem mexer em `shared/modules.ts`).
+ * - Agregação 100% client-side dos endpoints JÁ existentes (por mês/status/aging/top-N via `useMemo`).
+ *   ZERO backend novo · ZERO SCHEMA/ALTER/DROP/DELETE · só leitura e apresentação.
+ *
  * Rev. 3242 — **FINANCEIRO / CONTROLE DE CHEQUES · A TELA GANHOU FILTROS E CARDS DEDICADOS À
  * CONFERÊNCIA COM O EXTRATO BANCÁRIO: AGORA DÁ PRA VER, NUM RELANCE, OS CHEQUES QUE FORAM
  * COMPENSADOS *E* VERIFICADOS NO EXTRATO ("CONFERIDOS NO EXTRATO"), OS QUE JÁ BATEM COM O

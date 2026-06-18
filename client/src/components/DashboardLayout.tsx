@@ -477,6 +477,16 @@ const menuSectionsFinanceiro: MenuSection[] = [
     ],
   },
   {
+    title: "Dashboards",
+    items: [
+      { icon: HandCoins,      label: "Contas a Receber",    path: "/financeiro/dashboards/receber" },
+      { icon: CheckCircle,    label: "Contas a Pagar",      path: "/financeiro/dashboards/pagar" },
+      { icon: ArrowLeftRight, label: "Conciliação Bancária", path: "/financeiro/dashboards/conciliacao" },
+      { icon: Banknote,       label: "Controle de Cheques", path: "/financeiro/dashboards/cheques" },
+      { icon: CreditCard,     label: "Cartão de Crédito",   path: "/financeiro/dashboards/cartao" },
+    ],
+  },
+  {
     title: "Movimentações",
     items: [
       { icon: DollarSign,    label: "Lançamentos",       path: "/financeiro/lancamentos" },
@@ -1395,6 +1405,15 @@ function DashboardLayoutContent({
     // Se NÃO pertence a grupo: usar permissões individuais (canAccessFeature)
     // Admin master: sem filtro
     if (!permIsAdminMaster) {
+      // Painéis "Dashboards" do Financeiro reaproveitam a permissão da tela operacional
+      // correspondente (sem registrar rota nova em shared/modules.ts).
+      const DASHBOARD_ROUTE_ALIAS: Record<string, string> = {
+        '/financeiro/dashboards/receber': '/financeiro/contas-a-receber-titulos',
+        '/financeiro/dashboards/pagar': '/financeiro/contas-a-pagar',
+        '/financeiro/dashboards/conciliacao': '/financeiro/conciliacao',
+        '/financeiro/dashboards/cheques': '/financeiro/cheques',
+        '/financeiro/dashboards/cartao': '/financeiro/cartao',
+      };
       const filterWithChildren = (items: MenuItem[], checkFn: (item: MenuItem) => boolean): MenuItem[] => {
         return items.map(item => {
           if (item.children && item.children.length > 0) {
@@ -1409,7 +1428,7 @@ function DashboardLayoutContent({
         const groupCheck = (item: MenuItem) => {
           if (adminOnlyPaths.includes(item.path) || item.path === '/revisoes') return true;
           if (item.path === '/ajuda') return true;
-          return groupCanAccessRoute(item.path);
+          return groupCanAccessRoute(DASHBOARD_ROUTE_ALIAS[item.path] ?? item.path);
         };
         sections = sections.map(s => ({ ...s, items: filterWithChildren(s.items, groupCheck) }));
       } else {
@@ -1420,7 +1439,8 @@ function DashboardLayoutContent({
           const sharedPaths = ['/empresas', '/obras', '/obras/efetivo', '/setores', '/funcoes', '/clientes', '/gerenciadoras'];
           if (sharedPaths.includes(item.path)) return accessibleModules.length > 0;
           if (item.path === '/dashboards') return accessibleModules.length > 0;
-          const itemBasePath = item.path.split('?')[0];
+          const aliasedPath = DASHBOARD_ROUTE_ALIAS[item.path] ?? item.path;
+          const itemBasePath = aliasedPath.split('?')[0];
           const featureInfo = routeToFeatureKey.get(itemBasePath);
           if (featureInfo) return canAccessFeature(featureInfo.moduleId, featureInfo.featureKey);
           if (item.path.includes('?')) {

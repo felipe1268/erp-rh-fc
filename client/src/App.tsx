@@ -198,6 +198,11 @@ const FinanceiroAnaliseCFO    = lazyWithRetry(() => import("./pages/financeiro/F
 const FinanceiroAnaliseCustos = lazyWithRetry(() => import("./pages/financeiro/FinanceiroAnaliseCustos"));
 const FinanceiroAnaliseCustosDetalhe = lazyWithRetry(() => import("./pages/financeiro/FinanceiroAnaliseCustosDetalhe"));
 const FinanceiroCFOSuite      = lazyWithRetry(() => import("./pages/financeiro/FinanceiroCFOSuite"));
+const DashReceber             = lazyWithRetry(() => import("./pages/financeiro/dashboards/DashReceber"));
+const DashPagar               = lazyWithRetry(() => import("./pages/financeiro/dashboards/DashPagar"));
+const DashConciliacao         = lazyWithRetry(() => import("./pages/financeiro/dashboards/DashConciliacao"));
+const DashCheques             = lazyWithRetry(() => import("./pages/financeiro/dashboards/DashCheques"));
+const DashCartao              = lazyWithRetry(() => import("./pages/financeiro/dashboards/DashCartao"));
 const ApontamentosCampo = lazyWithRetry(() => import("./pages/ApontamentosCampo"));
 const Feriados = lazyWithRetry(() => import("./pages/Feriados"));
 const ComunicadosInternos = lazyWithRetry(() => import("./pages/ComunicadosInternos"));
@@ -480,6 +485,11 @@ function Router() {
         <Route path={"/solicitacao-he"} component={() => <RouteGuard component={SolicitacaoHE} route="/solicitacao-he" />} />
         <Route path={"/banco-horas"} component={() => <RouteGuard component={BancoHoras} route="/banco-horas" />} />
         <Route path="/financeiro" component={() => <RouteGuard component={FinanceiroDashboard} route="/financeiro" />} />
+        <Route path="/financeiro/dashboards/receber" component={() => <RouteGuard component={DashReceber} route="/financeiro/contas-a-receber-titulos" />} />
+        <Route path="/financeiro/dashboards/pagar" component={() => <RouteGuard component={DashPagar} route="/financeiro/contas-a-pagar" />} />
+        <Route path="/financeiro/dashboards/conciliacao" component={() => <RouteGuard component={DashConciliacao} route="/financeiro/conciliacao" />} />
+        <Route path="/financeiro/dashboards/cheques" component={() => <RouteGuard component={DashCheques} route="/financeiro/cheques" />} />
+        <Route path="/financeiro/dashboards/cartao" component={() => <RouteGuard component={DashCartao} route="/financeiro/cartao" />} />
         <Route path="/financeiro/lancamentos" component={() => <RouteGuard component={FinanceiroLancamentos} route="/financeiro/lancamentos" />} />
         <Route path="/financeiro/receitas" component={() => { window.location.replace("/financeiro/contas-a-receber"); return null; }} />
         <Route path="/financeiro/contas-a-pagar" component={() => <RouteGuard component={FinanceiroContasAPagar} route="/financeiro/contas-a-pagar" />} />
