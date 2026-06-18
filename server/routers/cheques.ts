@@ -151,6 +151,8 @@ type ChequeRow = {
   numeroCheque: string | null; nf: string | null; valor: number | null;
   dataVencimento: string | null; dataCompensacao: string | null; status: string;
   observacao: string | null; mes: number | null; ano: number;
+  // Origem na planilha (pra o usuário localizar/corrigir a linha no Excel).
+  aba: string; linhaExcel: number;
 };
 
 // Aba (planilha) que o importador NÃO leu, com o motivo + quantas linhas com cara
@@ -215,6 +217,7 @@ function parseWorkbook(fileBase64: string, anoFallback: number): { rows: ChequeR
         status: normStatus(r[11], dataCompensacao),
         observacao: r[11] != null ? String(r[11]).trim().slice(0, 500) : null,
         mes, ano: anoLinha,
+        aba: sheetName, linhaExcel: i + 1,
       });
       lidas++;
     }
@@ -303,15 +306,22 @@ export const chequesRouter = router({
     ]);
 
     const vistosNoArquivo = new Set<string>();
-    let novos = 0, jaExistem = 0, dupNoArquivo = 0, semFornecedor = 0, semConta = 0, valorTotalNovos = 0;
+    let novos = 0, jaExistem = 0, dupNoArquivo = 0, semFornecedor = 0, semConta = 0, semValor = 0, valorTotalNovos = 0;
     const porMes: Record<string, { mes: number; novos: number; jaExistem: number; valor: number }> = {};
-    const amostra: any[] = [];
+    // Lista COMPLETA de TODAS as linhas lidas (não só amostra) — pra o usuário VER,
+    // FILTRAR e VALIDAR cada cheque (duplicados, sem conta, sem fornecedor, sem valor)
+    // e localizar/corrigir a linha exata no Excel (aba + linha).
+    const linhas: any[] = [];
 
     for (const row of parsed.rows) {
       const fornecedorId = matchFornecedor(row.fornecedorNome, fornecedores);
       const contaBancariaId = matchConta(row.contaCorrenteRaw, contas);
-      if (!fornecedorId) semFornecedor++;
-      if (!contaBancariaId) semConta++;
+      const temFornecedor = !!fornecedorId;
+      const temConta = !!contaBancariaId;
+      const temValor = row.valor != null && row.valor > 0;
+      if (!temFornecedor) semFornecedor++;
+      if (!temConta) semConta++;
+      if (!temValor) semValor++;
       const chave = chaveDedup(row);
       let situacao: "NOVO" | "JA_EXISTE" | "DUP_ARQUIVO";
       if (existentes.has(chave)) { situacao = "JA_EXISTE"; jaExistem++; }
@@ -323,9 +333,11 @@ export const chequesRouter = router({
       if (situacao === "NOVO") { porMes[mk].novos++; porMes[mk].valor += row.valor ?? 0; }
       else if (situacao === "JA_EXISTE") porMes[mk].jaExistem++;
 
-      if (amostra.length < 40) amostra.push({
-        mes: row.mes, numeroCheque: row.numeroCheque, fornecedorNome: row.fornecedorNome,
-        fornecedorIdentificado: !!fornecedorId, contaIdentificada: !!contaBancariaId,
+      linhas.push({
+        aba: row.aba, linhaExcel: row.linhaExcel, mes: row.mes, ano: row.ano,
+        numeroCheque: row.numeroCheque, fornecedorNome: row.fornecedorNome,
+        fornecedorIdentificado: temFornecedor, contaCorrenteRaw: row.contaCorrenteRaw,
+        contaIdentificada: temConta, semValor: !temValor,
         valor: row.valor, dataVencimento: row.dataVencimento, dataCompensacao: row.dataCompensacao,
         status: row.status, situacao,
       });
@@ -334,12 +346,14 @@ export const chequesRouter = router({
     return {
       resumo: {
         totalLinhas: parsed.rows.length, novos, jaExistem, dupNoArquivo,
-        semFornecedor, semConta, valorTotalNovos: Math.round(valorTotalNovos * 100) / 100,
+        semFornecedor, semConta, semValor, valorTotalNovos: Math.round(valorTotalNovos * 100) / 100,
       },
       abasLidas: parsed.abasLidas,
       abasIgnoradas: parsed.abasIgnoradas,
       porMes: Object.entries(porMes).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => ({ ref: k, ...v })),
-      amostra,
+      // Compat: `amostra` segue existindo (primeiras 40) p/ clientes antigos; a UI nova usa `linhas`.
+      amostra: linhas.slice(0, 40),
+      linhas,
     };
   }),
 

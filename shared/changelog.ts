@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3227 — **FINANCEIRO / CONTROLE DE CHEQUES · IMPORTAÇÃO DA PLANILHA · A PRÉVIA AGORA LISTA TODOS
+ * OS CHEQUES LIDOS (NÃO MAIS UMA AMOSTRA DE 40) NUMA TABELA FILTRÁVEL E PESQUISÁVEL, COM A ABA E A
+ * LINHA EXATA DO EXCEL DE CADA UM. OS CARDS DE RESUMO VIRARAM FILTROS CLICÁVEIS (TODOS / NOVOS / JÁ
+ * EXISTEM / DUPLICADOS / SEM FORNECEDOR / SEM CONTA / SEM VALOR) E FORAM ACRESCENTADOS OS CARDS "SEM
+ * CONTA" E "SEM VALOR" — O USUÁRIO PODE VER, VALIDAR E LOCALIZAR CADA ITEM ANTES DE GRAVAR.**
+ *
+ * PEDIDO (piloto FC): "leu 1049, vai cadastrar 1046, tem 3 duplicados e 151 'sem conta' — mas o ERP só
+ * me dá os NÚMEROS, não me deixa VER cada cheque. Quero listar os duplicados, os sem conta, os sem
+ * fornecedor e os sem valor pra conferir e corrigir, não só uma amostra de 3/40."
+ *
+ * CAUSA-RAIZ: `importarPreview` (`server/routers/cheques.ts`) só devolvia `amostra` (as primeiras 40
+ * linhas) + contadores agregados; a UI (`FinanceiroCheques.tsx`) renderizava uma tabela "Amostra dos
+ * cheques lidos" estática (Nº / Fornecedor / Valor / Situação), sem filtro, sem busca e sem como
+ * localizar a origem da linha na planilha. Não havia contagem de "sem valor".
+ *
+ * SOLUÇÃO (transparência total, ZERO mudança de regra de import):
+ * - BACK (`server/routers/cheques.ts`): `ChequeRow` ganhou `aba: string` e `linhaExcel: number`,
+ *   preenchidos no `parseWorkbook` (push de cada linha: `aba: sheetName, linhaExcel: i + 1`).
+ *   `importarPreview` agora monta `linhas[]` com TODAS as linhas lidas (não só 40), cada uma com
+ *   aba/linhaExcel/nº/fornecedor(+identificado)/contaCorrenteRaw(+identificada)/valor/`semValor`/
+ *   vencimento/compensação/status/situacao (NOVO|JA_EXISTE|DUP_ARQUIVO). Novo contador `semValor`
+ *   (valor nulo ou ≤ 0) no `resumo`. `amostra` segue existindo (= `linhas.slice(0,40)`) para
+ *   retrocompatibilidade. O caminho de gravação (`importarConfirmar`) é intacto.
+ * - FRONT (`client/src/pages/financeiro/FinanceiroCheques.tsx`): novos estados `previewFiltro`
+ *   (todos|novos|jaExistem|dup|semFornecedor|semConta|semValor) e `previewBusca`; useMemo
+ *   `previewLinhas` aplica filtro + busca livre (nº, fornecedor, aba, conta, valor BRL, data) sobre
+ *   `preview.linhas` (fallback `amostra`). A tabela "Amostra" virou "Cheques lidos na planilha":
+ *   colunas Aba/Linha · Nº · Fornecedor · Conta · Vencimento · Valor · Situação, com chips de filtro
+ *   (com contagem), campo de busca, contador "Mostrando N de M" e cap de render em 1000 linhas
+ *   (refine a busca p/ as demais). Os 6 cards de KPI viraram `<button>` que setam o filtro (com
+ *   anel de seleção) e foram adicionados os cards "Sem conta" e "Sem valor". Sem valor destacado em
+ *   vermelho; fornecedor/conta não vinculados marcados com "●" âmbar.
+ *
+ * IMPACTO: nenhuma mudança no que É ou NÃO É importado; apenas visibilidade/validação pré-gravação.
+ * ZERO BACKEND DE GRAVAÇÃO ALTERADO · ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3226 — **FINANCEIRO / CONTROLE DE CHEQUES · IMPORTAÇÃO DA PLANILHA · A MENSAGEM "IGNORADAS"
  * AGORA EXPLICA QUE SÃO ABAS (PLANILHAS) NÃO LIDAS — NÃO CHEQUES — E MOSTRA, PARA CADA ABA PULADA,
  * O NOME, O MOTIVO E QUANTAS LINHAS COM CARA DE CHEQUE FICARAM DE FORA, PARA O USUÁRIO MAPEAR E

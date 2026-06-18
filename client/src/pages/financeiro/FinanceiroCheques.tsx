@@ -79,6 +79,9 @@ export default function FinanceiroCheques() {
   // ── Progresso (barra 0→100%) ──
   const [progresso, setProgresso] = useState<number>(0);
   const [progLabel, setProgLabel] = useState<string>("");
+  // Validação da prévia de importação: filtro por categoria + busca livre.
+  const [previewFiltro, setPreviewFiltro] = useState<"todos" | "novos" | "jaExistem" | "dup" | "semFornecedor" | "semConta" | "semValor">("todos");
+  const [previewBusca, setPreviewBusca] = useState<string>("");
   const progRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const progTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const progOpRef = useRef<number>(0); // token da operação ativa (evita callback tardio sobrescrever)
@@ -197,6 +200,33 @@ export default function FinanceiroCheques() {
     return arr;
   }, [cheques, fStatus]);
 
+  // Lista da PRÉVIA de importação, aplicando filtro de categoria + busca livre.
+  // Usa `preview.linhas` (lista completa nova) com fallback p/ `preview.amostra` (compat).
+  const previewLinhas = useMemo(() => {
+    const base: any[] = (preview?.linhas ?? preview?.amostra ?? []) as any[];
+    const porFiltro = base.filter((l) => {
+      switch (previewFiltro) {
+        case "novos": return l.situacao === "NOVO";
+        case "jaExistem": return l.situacao === "JA_EXISTE";
+        case "dup": return l.situacao === "DUP_ARQUIVO";
+        case "semFornecedor": return !l.fornecedorIdentificado;
+        case "semConta": return !l.contaIdentificada;
+        case "semValor": return l.semValor === true || l.valor == null || Number(l.valor) <= 0;
+        default: return true;
+      }
+    });
+    const q = previewBusca.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (!q) return porFiltro;
+    return porFiltro.filter((l) => {
+      const campos = [
+        l.numeroCheque, l.fornecedorNome, l.aba, l.contaCorrenteRaw, l.status,
+        l.valor != null ? formatBRL(Number(l.valor)) : "", l.valor != null ? String(l.valor) : "",
+        l.dataVencimento ? fmtData(l.dataVencimento) : "",
+      ].filter(Boolean).join(" ").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      return campos.includes(q);
+    });
+  }, [preview, previewFiltro, previewBusca]);
+
   async function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -216,6 +246,7 @@ export default function FinanceiroCheques() {
     try {
       const rep = await previewMut.mutateAsync({ companyId, fileBase64: arquivoBase64 });
       setPreview(rep);
+      setPreviewFiltro("todos"); setPreviewBusca("");
       finalizarProgresso(tk, true);
     } catch (err: any) {
       finalizarProgresso(tk, false);
@@ -647,32 +678,47 @@ export default function FinanceiroCheques() {
                   <div className="rounded-xl border border-dashed border-muted-foreground/25 p-10 text-center text-sm text-muted-foreground flex flex-col items-center justify-center gap-2 min-h-[280px]">
                     <Search className="h-8 w-8 text-muted-foreground/40" />
                     <div className="font-medium">O resumo aparece aqui</div>
-                    <div>Selecione a planilha e clique em <strong>Analisar planilha</strong> para ver linhas lidas, novos, duplicados e a amostra dos cheques.</div>
+                    <div>Selecione a planilha e clique em <strong>Analisar planilha</strong> para ver linhas lidas, novos, duplicados e a lista completa dos cheques.</div>
                   </div>
                 ) : (
                   <>
-                    {/* KPIs em destaque */}
+                    {/* KPIs em destaque — clicáveis: cada card filtra a tabela abaixo. */}
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                      <div className="rounded-lg border bg-card p-3.5">
+                      <button type="button" onClick={() => setPreviewFiltro("todos")}
+                        className={`text-left rounded-lg border bg-card p-3.5 transition hover:ring-2 hover:ring-primary/30 ${previewFiltro === "todos" ? "ring-2 ring-primary" : ""}`}>
                         <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Linhas lidas</div>
                         <div className="text-2xl font-bold">{preview.resumo.totalLinhas}</div>
-                      </div>
-                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3.5">
+                      </button>
+                      <button type="button" onClick={() => setPreviewFiltro("novos")}
+                        className={`text-left rounded-lg border border-emerald-200 bg-emerald-50 p-3.5 transition hover:ring-2 hover:ring-emerald-300 ${previewFiltro === "novos" ? "ring-2 ring-emerald-500" : ""}`}>
                         <div className="text-[11px] uppercase tracking-wide text-emerald-700/70">Novos</div>
                         <div className="text-2xl font-bold text-emerald-700">{preview.resumo.novos}</div>
-                      </div>
-                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3.5">
+                      </button>
+                      <button type="button" onClick={() => setPreviewFiltro("jaExistem")}
+                        className={`text-left rounded-lg border border-amber-200 bg-amber-50 p-3.5 transition hover:ring-2 hover:ring-amber-300 ${previewFiltro === "jaExistem" ? "ring-2 ring-amber-500" : ""}`}>
                         <div className="text-[11px] uppercase tracking-wide text-amber-700/70">Já existem</div>
                         <div className="text-2xl font-bold text-amber-700">{preview.resumo.jaExistem}</div>
-                      </div>
-                      <div className="rounded-lg border bg-card p-3.5">
+                      </button>
+                      <button type="button" onClick={() => setPreviewFiltro("dup")}
+                        className={`text-left rounded-lg border bg-card p-3.5 transition hover:ring-2 hover:ring-primary/30 ${previewFiltro === "dup" ? "ring-2 ring-primary" : ""}`}>
                         <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Dup. no arquivo</div>
                         <div className="text-2xl font-bold">{preview.resumo.dupNoArquivo}</div>
-                      </div>
-                      <div className="rounded-lg border bg-card p-3.5">
+                      </button>
+                      <button type="button" onClick={() => setPreviewFiltro("semFornecedor")}
+                        className={`text-left rounded-lg border bg-card p-3.5 transition hover:ring-2 hover:ring-primary/30 ${previewFiltro === "semFornecedor" ? "ring-2 ring-primary" : ""}`}>
                         <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Sem fornecedor</div>
                         <div className="text-2xl font-bold">{preview.resumo.semFornecedor}</div>
-                      </div>
+                      </button>
+                      <button type="button" onClick={() => setPreviewFiltro("semConta")}
+                        className={`text-left rounded-lg border bg-card p-3.5 transition hover:ring-2 hover:ring-primary/30 ${previewFiltro === "semConta" ? "ring-2 ring-primary" : ""}`}>
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Sem conta</div>
+                        <div className="text-2xl font-bold">{preview.resumo.semConta ?? 0}</div>
+                      </button>
+                      <button type="button" onClick={() => setPreviewFiltro("semValor")}
+                        className={`text-left rounded-lg border bg-card p-3.5 transition hover:ring-2 hover:ring-primary/30 ${previewFiltro === "semValor" ? "ring-2 ring-primary" : ""}`}>
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Sem valor</div>
+                        <div className="text-2xl font-bold">{preview.resumo.semValor ?? 0}</div>
+                      </button>
                       <div className="rounded-lg border border-blue-200 bg-blue-50 p-3.5">
                         <div className="text-[11px] uppercase tracking-wide text-blue-700/70">Valor (novos)</div>
                         <div className="text-lg font-bold text-blue-700">{formatBRL(preview.resumo.valorTotalNovos)}</div>
@@ -721,21 +767,72 @@ export default function FinanceiroCheques() {
               </div>
             </div>
 
-            {/* Amostra dos cheques — largura total */}
-            {preview?.amostra?.length > 0 && (
+            {/* Cheques lidos — tabela COMPLETA, filtrável e pesquisável p/ validar cada item */}
+            {(preview?.linhas?.length > 0 || preview?.amostra?.length > 0) && (
               <div className="mt-6">
-                <div className="text-sm font-medium mb-2">Amostra dos cheques lidos</div>
-                <div className="border rounded-lg overflow-auto max-h-[42vh]">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                  <div className="text-sm font-medium">Cheques lidos na planilha</div>
+                  <div className="relative w-full sm:w-72">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input value={previewBusca} onChange={(e) => setPreviewBusca(e.target.value)}
+                      placeholder="Buscar nº, fornecedor, aba, valor…" className="pl-8 h-9" />
+                  </div>
+                </div>
+
+                {/* Chips de filtro (espelham os cards clicáveis) */}
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {([
+                    ["todos", "Todos", preview.resumo.totalLinhas],
+                    ["novos", "Novos", preview.resumo.novos],
+                    ["jaExistem", "Já existem", preview.resumo.jaExistem],
+                    ["dup", "Duplicados", preview.resumo.dupNoArquivo],
+                    ["semFornecedor", "Sem fornecedor", preview.resumo.semFornecedor],
+                    ["semConta", "Sem conta", preview.resumo.semConta ?? 0],
+                    ["semValor", "Sem valor", preview.resumo.semValor ?? 0],
+                  ] as [typeof previewFiltro, string, number][]).map(([key, label, count]) => (
+                    <button key={key} type="button" onClick={() => setPreviewFiltro(key)}
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition ${previewFiltro === key ? "bg-primary text-primary-foreground border-primary" : "bg-card hover:bg-muted"}`}>
+                      {label}
+                      <span className={`rounded-full px-1.5 text-[10px] font-semibold ${previewFiltro === key ? "bg-primary-foreground/20" : "bg-muted-foreground/10"}`}>{count}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="text-[11px] text-muted-foreground mb-1.5">
+                  Mostrando {Math.min(previewLinhas.length, 1000)} de {previewLinhas.length} linha(s)
+                  {previewLinhas.length > 1000 && " (limitado a 1000 — refine a busca para ver as demais)"}
+                </div>
+
+                <div className="border rounded-lg overflow-auto max-h-[46vh]">
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-muted/95 backdrop-blur"><tr className="text-left">
-                      <th className="p-2.5">Nº</th><th className="p-2.5">Fornecedor</th><th className="p-2.5 text-right">Valor</th><th className="p-2.5">Situação</th>
+                      <th className="p-2.5">Aba / Linha</th>
+                      <th className="p-2.5">Nº</th>
+                      <th className="p-2.5">Fornecedor</th>
+                      <th className="p-2.5">Conta</th>
+                      <th className="p-2.5">Vencimento</th>
+                      <th className="p-2.5 text-right">Valor</th>
+                      <th className="p-2.5">Situação</th>
                     </tr></thead>
                     <tbody>
-                      {preview.amostra.map((a: any, i: number) => (
+                      {previewLinhas.length === 0 ? (
+                        <tr><td colSpan={7} className="p-6 text-center text-muted-foreground">Nenhuma linha para este filtro/busca.</td></tr>
+                      ) : previewLinhas.slice(0, 1000).map((a: any, i: number) => (
                         <tr key={i} className="border-t hover:bg-muted/40">
-                          <td className="p-2.5 font-mono">{a.numeroCheque}</td>
-                          <td className="p-2.5">{a.fornecedorNome || "—"}{!a.fornecedorIdentificado && a.fornecedorNome && <span className="text-amber-600" title="Fornecedor não vinculado"> ●</span>}</td>
-                          <td className="p-2.5 text-right">{a.valor != null ? formatBRL(a.valor) : "—"}</td>
+                          <td className="p-2.5 whitespace-nowrap text-xs text-muted-foreground">
+                            {a.aba ? <>{a.aba}{a.linhaExcel ? <span className="font-mono"> · L{a.linhaExcel}</span> : null}</> : "—"}
+                          </td>
+                          <td className="p-2.5 font-mono">{a.numeroCheque || "—"}</td>
+                          <td className="p-2.5">
+                            {a.fornecedorNome || "—"}
+                            {!a.fornecedorIdentificado && <span className="text-amber-600" title="Fornecedor não vinculado"> ●</span>}
+                          </td>
+                          <td className="p-2.5 text-xs">
+                            {a.contaCorrenteRaw || "—"}
+                            {!a.contaIdentificada && <span className="text-amber-600" title="Conta não vinculada"> ●</span>}
+                          </td>
+                          <td className="p-2.5 whitespace-nowrap text-xs">{a.dataVencimento ? fmtData(a.dataVencimento) : "—"}</td>
+                          <td className={`p-2.5 text-right ${a.semValor ? "text-red-600 font-medium" : ""}`}>{a.valor != null && a.valor > 0 ? formatBRL(a.valor) : "—"}</td>
                           <td className="p-2.5">
                             {a.situacao === "NOVO"
                               ? <span className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5 text-[11px]">Novo</span>
