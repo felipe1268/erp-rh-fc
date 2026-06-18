@@ -689,9 +689,31 @@ export default function FinanceiroCheques() {
                       </div>
                     )}
                     {preview.abasIgnoradas?.length > 0 && (
-                      <div className="text-xs text-muted-foreground">
-                        <AlertCircle className="inline h-3.5 w-3.5 text-amber-500 mr-1" />
-                        Ignoradas: {preview.abasIgnoradas.join(", ")}
+                      <div className="text-xs text-muted-foreground space-y-1 rounded-md border border-amber-200 bg-amber-50/60 p-2">
+                        <div className="flex items-center gap-1 font-medium text-amber-700">
+                          <AlertCircle className="h-3.5 w-3.5" />
+                          Abas ignoradas (não importadas): {preview.abasIgnoradas.length}
+                        </div>
+                        <ul className="ml-1 space-y-0.5">
+                          {preview.abasIgnoradas.map((a: any, i: number) => (
+                            <li key={i} className="flex flex-wrap items-baseline gap-x-1.5">
+                              <span className="font-medium text-foreground">{typeof a === "string" ? a : a.nome}</span>
+                              {typeof a !== "string" && (
+                                <>
+                                  <span>— {a.motivo}</span>
+                                  {a.linhas > 0 && (
+                                    <span className="rounded-full bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[10px] font-medium">
+                                      {a.linhas} linha(s) com cara de cheque ficaram de fora
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="ml-1 text-[11px] text-muted-foreground">
+                          Só abas nomeadas por mês (JAN, FEV, …) são lidas. Se uma aba acima contém cheques a cadastrar, renomeie-a para o mês correspondente e reimporte.
+                        </p>
                       </div>
                     )}
                   </>

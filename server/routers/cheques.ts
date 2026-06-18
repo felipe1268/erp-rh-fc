@@ -153,17 +153,37 @@ type ChequeRow = {
   observacao: string | null; mes: number | null; ano: number;
 };
 
+// Aba (planilha) que o importador NÃO leu, com o motivo + quantas linhas com cara
+// de cheque ela continha (pra mapear/consultar dados que ficaram de fora).
+type AbaIgnorada = { nome: string; motivo: string; linhas: number };
+
 // Faz o parsing completo do .xlsx (base64) → linhas normalizadas. Ignora abas
 // que não são meses (ex.: "Cheques"/"cheques" consolidada, "RESUMO ...").
-function parseWorkbook(fileBase64: string, anoFallback: number): { rows: ChequeRow[]; abasLidas: string[]; abasIgnoradas: string[] } {
+function parseWorkbook(fileBase64: string, anoFallback: number): { rows: ChequeRow[]; abasLidas: string[]; abasIgnoradas: AbaIgnorada[] } {
   const wb = XLSX.read(fileBase64, { type: "base64" });
   const rows: ChequeRow[] = [];
-  const abasLidas: string[] = [], abasIgnoradas: string[] = [];
+  const abasLidas: string[] = [];
+  const abasIgnoradas: AbaIgnorada[] = [];
+  // Conta linhas que "parecem cheque" (nº do cheque OU valor) — mesma heurística do
+  // parser — pra avisar quando uma aba PULADA na verdade tem dados a cadastrar.
+  const contarLinhasCheque = (aoa: any[][]): number => {
+    let c = 0;
+    for (let i = 3; i < aoa.length; i++) {
+      const r = aoa[i] || [];
+      const numeroCheque = r[6] != null ? String(r[6]).trim() : "";
+      const valor = parseValor(r[8]);
+      if (numeroCheque || valor != null) c++;
+    }
+    return c;
+  };
   for (const sheetName of wb.SheetNames) {
     const { mes, ano } = parseSheetName(sheetName, anoFallback);
-    if (mes == null) { abasIgnoradas.push(sheetName); continue; }
     const ws = wb.Sheets[sheetName];
     const aoa: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+    if (mes == null) {
+      abasIgnoradas.push({ nome: sheetName, motivo: "Não é uma aba de mês (ex.: consolidado/resumo)", linhas: contarLinhasCheque(aoa) });
+      continue;
+    }
     let lidas = 0;
     for (let i = 3; i < aoa.length; i++) {
       const r = aoa[i] || [];
@@ -198,7 +218,8 @@ function parseWorkbook(fileBase64: string, anoFallback: number): { rows: ChequeR
       });
       lidas++;
     }
-    if (lidas > 0) abasLidas.push(`${sheetName} (${lidas})`); else abasIgnoradas.push(sheetName);
+    if (lidas > 0) abasLidas.push(`${sheetName} (${lidas})`);
+    else abasIgnoradas.push({ nome: sheetName, motivo: "Aba de mês sem cheques válidos", linhas: contarLinhasCheque(aoa) });
   }
   return { rows, abasLidas, abasIgnoradas };
 }

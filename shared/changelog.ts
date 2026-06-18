@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3226 — **FINANCEIRO / CONTROLE DE CHEQUES · IMPORTAÇÃO DA PLANILHA · A MENSAGEM "IGNORADAS"
+ * AGORA EXPLICA QUE SÃO ABAS (PLANILHAS) NÃO LIDAS — NÃO CHEQUES — E MOSTRA, PARA CADA ABA PULADA,
+ * O NOME, O MOTIVO E QUANTAS LINHAS COM CARA DE CHEQUE FICARAM DE FORA, PARA O USUÁRIO MAPEAR E
+ * CONSULTAR O QUE NÃO FOI CADASTRADO.**
+ *
+ * PEDIDO (piloto FC): "por que aparece 'Ignoradas: Cheques (2)'? Preciso poder mapear e consultar o
+ * motivo de eles não terem sido cadastrados." A mensagem antiga ("Ignoradas: Cheques (2)") lia-se
+ * como "2 CHEQUES ignorados", quando na verdade é a ABA chamada "Cheques (2)" (cópia que o Excel
+ * auto-nomeia / aba consolidada) que foi PULADA por inteiro — o importador só lê abas nomeadas por
+ * mês (JAN, FEV, …). Se essa aba tivesse cheques de verdade, eles sumiam silenciosamente.
+ *
+ * CAUSA-RAIZ: `parseWorkbook` (`server/routers/cheques.ts`) devolvia `abasIgnoradas: string[]` (só o
+ * nome da aba), sem motivo nem contagem; o front renderizava `Ignoradas: {join(", ")}` — ambíguo
+ * (parecia contagem de cheques) e sem rastreabilidade do que ficou de fora.
+ *
+ * SOLUÇÃO (transparência, ZERO mudança de regra de import):
+ * - BACK (`server/routers/cheques.ts`): novo tipo `AbaIgnorada = { nome; motivo; linhas }`.
+ *   `parseWorkbook` agora SEMPRE lê o `aoa` da aba (mesmo a pulada) e, via helper `contarLinhasCheque`
+ *   (mesma heurística do parser: linha a partir de i=3 com nº do cheque OU valor), reporta:
+ *   (a) aba que não é mês (`mes == null`) → motivo "Não é uma aba de mês (ex.: consolidado/resumo)";
+ *   (b) aba de mês sem nenhuma linha válida (`lidas === 0`) → motivo "Aba de mês sem cheques válidos".
+ *   `importarPreview` propaga `abasIgnoradas` no novo formato (o caminho de confirmação não usa).
+ * - FRONT (`client/src/pages/financeiro/FinanceiroCheques.tsx`): bloco "Abas ignoradas (não
+ *   importadas): N" com lista nome — motivo + badge âmbar "X linha(s) com cara de cheque ficaram de
+ *   fora" quando `linhas > 0`, + dica para renomear a aba ao mês correspondente e reimportar. Guarda
+ *   de retrocompatibilidade: aceita item `string` (formato antigo) OU objeto.
+ *
+ * IMPACTO: nenhuma mudança no que É ou NÃO É importado; apenas diagnóstico/rastreabilidade. ZERO
+ * BACKEND DE GRAVAÇÃO · ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3225 — **OBRAS / CADASTRO E EDIÇÃO · NOVO CAMPO "JORNADA DE TRABALHO DA OBRA" (POR DIA DA
  * SEMANA: ENTRADA / INTERVALO / SAÍDA, SEG A DOM). QUANDO PREENCHIDA, ESSA JORNADA PREVALECE SOBRE
  * A DO FUNCIONÁRIO PARA TODOS OS ALOCADOS — RESPEITANDO A OBRA EM QUE A BATIDA OCORREU E A DATA DE
