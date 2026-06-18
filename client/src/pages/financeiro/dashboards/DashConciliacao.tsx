@@ -9,26 +9,21 @@ import {
 } from "recharts";
 import { ArrowLeftRight, Landmark, CheckCircle2, Clock, Percent } from "lucide-react";
 import {
-  PALETTE, DashHeader, KpiCard, ChartCard, EmptyState,
+  PALETTE, formatBRL, formatBRLCompact, DashHeader, KpiCard, ChartCard, EmptyState, BRLTooltip,
+  ComparativoAnual, DetailDialog, DetailColumn,
 } from "./_kit";
 
 const DESTINO = "/financeiro/conciliacao";
 
-function NumTooltip({ active, payload, label }: any) {
-  if (!active || !payload || !payload.length) return null;
-  return (
-    <div className="bg-white border border-slate-200 rounded-lg shadow-lg px-3 py-2 text-xs">
-      {label != null && <p className="font-semibold text-slate-700 mb-1">{label}</p>}
-      {payload.map((p: any, i: number) => (
-        <div key={i} className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-sm" style={{ background: p.color || p.fill }} />
-          <span className="text-slate-500">{p.name}:</span>
-          <span className="font-semibold text-slate-800">{Number(p.value) || 0} linhas</span>
-        </div>
-      ))}
-    </div>
-  );
-}
+const COLS: DetailColumn[] = [
+  { key: "conta", label: "Conta bancária" },
+  { key: "linhas", label: "Linhas", align: "right" },
+  { key: "conciliadas", label: "Conciliadas", align: "right" },
+  { key: "pendentes", label: "Pendentes", align: "right" },
+  { key: "valorConciliado", label: "Conciliado (R$)", align: "right", brl: true },
+  { key: "valorPendente", label: "Pendente (R$)", align: "right", brl: true },
+  { key: "valorTotal", label: "Movimentado (R$)", align: "right", brl: true },
+];
 
 export default function DashConciliacao() {
   const { companyId } = useCompany();
@@ -45,7 +40,13 @@ export default function DashConciliacao() {
   const { data: status, isLoading, refetch: r2 } = (trpc as any).financial.getBankAccountsConciliacaoStatus.useQuery(
     { companyId, dataInicio, dataFim }, { enabled: !!companyId }
   );
-  const refetch = () => { r1(); r2(); };
+  const { data: mensal, refetch: r3 } = (trpc as any).financial.getConciliacaoResumoMensal.useQuery(
+    { companyId, ano }, { enabled: !!companyId }
+  );
+  const { data: mensalPrev } = (trpc as any).financial.getConciliacaoResumoMensal.useQuery(
+    { companyId, ano: ano - 1 }, { enabled: !!companyId }
+  );
+  const refetch = () => { r1(); r2(); r3(); };
 
   const contasArr: any[] = Array.isArray(contas) ? contas : [];
   const statusArr: any[] = Array.isArray(status) ? status : [];
@@ -55,33 +56,54 @@ export default function DashConciliacao() {
     return [c.banco, c.descricao].filter(Boolean).join(" · ") || `Conta ${id}`;
   };
 
+  const [det, setDet] = useState(false);
+
   const kpis = useMemo(() => {
-    let total = 0, conciliadas = 0;
-    for (const s of statusArr) { total += Number(s.total) || 0; conciliadas += Number(s.conciliadas) || 0; }
-    const pendentes = Math.max(total - conciliadas, 0);
-    const pct = total > 0 ? (conciliadas / total) * 100 : 0;
-    return { total, conciliadas, pendentes, pct, contas: statusArr.length };
+    let total = 0, conciliadas = 0, valorTotal = 0, valorConciliado = 0;
+    for (const s of statusArr) {
+      total += Number(s.total) || 0;
+      conciliadas += Number(s.conciliadas) || 0;
+      valorTotal += Number(s.valorTotal) || 0;
+      valorConciliado += Number(s.valorConciliado) || 0;
+    }
+    const valorPendente = Math.max(valorTotal - valorConciliado, 0);
+    const pct = valorTotal > 0 ? (valorConciliado / valorTotal) * 100 : 0;
+    return { total, conciliadas, pendentes: Math.max(total - conciliadas, 0), valorTotal, valorConciliado, valorPendente, pct, contas: statusArr.length };
   }, [statusArr]);
 
+  const detalheContas = useMemo(() =>
+    statusArr.map((s) => ({
+      conta: nomeConta(s.contaBancariaId),
+      linhas: Number(s.total) || 0,
+      conciliadas: Number(s.conciliadas) || 0,
+      pendentes: Math.max((Number(s.total) || 0) - (Number(s.conciliadas) || 0), 0),
+      valorTotal: Number(s.valorTotal) || 0,
+      valorConciliado: Number(s.valorConciliado) || 0,
+      valorPendente: Math.max((Number(s.valorTotal) || 0) - (Number(s.valorConciliado) || 0), 0),
+    })).sort((a, b) => b.valorTotal - a.valorTotal),
+  [statusArr, contasArr]);
+
   const pizza = useMemo(() => ([
-    { name: "Conciliadas", value: kpis.conciliadas },
-    { name: "Pendentes", value: kpis.pendentes },
+    { name: "Conciliado", value: kpis.valorConciliado },
+    { name: "Pendente", value: kpis.valorPendente },
   ].filter((x) => x.value > 0)), [kpis]);
 
   const porConta = useMemo(() =>
-    statusArr.map((s) => ({
-      name: nomeConta(s.contaBancariaId),
-      Conciliadas: Number(s.conciliadas) || 0,
-      Pendentes: Math.max((Number(s.total) || 0) - (Number(s.conciliadas) || 0), 0),
-    })).sort((a, b) => (b.Conciliadas + b.Pendentes) - (a.Conciliadas + a.Pendentes)).slice(0, 10),
-  [statusArr, contasArr]);
+    detalheContas.slice(0, 10).map((d) => ({
+      name: d.conta, Conciliado: d.valorConciliado, Pendente: d.valorPendente,
+    })),
+  [detalheContas]);
 
-  const situacao = useMemo(() => {
-    const acc: Record<string, number> = { consolidado: 0, lancamento: 0, vazio: 0 };
-    for (const s of statusArr) acc[s.status] = (acc[s.status] || 0) + 1;
-    const lbl: Record<string, string> = { consolidado: "Consolidada", lancamento: "Em andamento", vazio: "Sem movimento" };
-    return Object.entries(acc).map(([k, v]) => ({ name: lbl[k] || k, value: v })).filter((x) => x.value > 0);
-  }, [statusArr]);
+  const serieAtual = useMemo(() => {
+    const a = new Array(12).fill(0);
+    for (const m of (Array.isArray(mensal) ? mensal : [])) { const i = Number(m.mes); if (i >= 1 && i <= 12) a[i - 1] = Number(m.valorTotal) || 0; }
+    return a;
+  }, [mensal]);
+  const seriePrev = useMemo(() => {
+    const a = new Array(12).fill(0);
+    for (const m of (Array.isArray(mensalPrev) ? mensalPrev : [])) { const i = Number(m.mes); if (i >= 1 && i <= 12) a[i - 1] = Number(m.valorTotal) || 0; }
+    return a;
+  }, [mensalPrev]);
 
   const semDados = !isLoading && statusArr.length === 0;
 
@@ -90,15 +112,18 @@ export default function DashConciliacao() {
       <div className="max-w-[1600px] mx-auto p-4 md:p-6 space-y-5">
         <DashHeader
           theme="blue" icon={ArrowLeftRight} title="Dashboard · Conciliação Bancária"
-          subtitle={`Linhas de extrato conciliadas × pendentes · ${ano}`} ano={ano} onAno={setAno} onRefresh={refetch}
+          subtitle={`Valor movimentado no extrato × conciliado · ${ano}`} ano={ano} onAno={setAno} onRefresh={refetch}
         />
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <KpiCard icon={Landmark} label="Linhas do extrato" value={String(kpis.total)} sub={`${kpis.contas} contas`} onClick={ir} />
-          <KpiCard icon={CheckCircle2} label="Conciliadas" value={String(kpis.conciliadas)} tone="good" onClick={ir} />
-          <KpiCard icon={Clock} label="Pendentes" value={String(kpis.pendentes)} tone="warn" onClick={ir} />
-          <KpiCard icon={Percent} label="% conciliado" value={`${kpis.pct.toFixed(0)}%`}
-            tone={kpis.pct >= 90 ? "good" : kpis.pct >= 50 ? "warn" : "bad"} onClick={ir} />
+          <KpiCard icon={Landmark} label="Movimentado no extrato" value={formatBRL(kpis.valorTotal)}
+            sub={`${kpis.total} linhas · ${kpis.contas} contas`} onClick={() => setDet(true)} />
+          <KpiCard icon={CheckCircle2} label="Conciliado" value={formatBRL(kpis.valorConciliado)} tone="good"
+            sub={`${kpis.conciliadas} linhas`} onClick={() => setDet(true)} />
+          <KpiCard icon={Clock} label="Pendente" value={formatBRL(kpis.valorPendente)} tone="warn"
+            sub={`${kpis.pendentes} linhas`} onClick={() => setDet(true)} />
+          <KpiCard icon={Percent} label="% conciliado (R$)" value={`${kpis.pct.toFixed(0)}%`}
+            tone={kpis.pct >= 90 ? "good" : kpis.pct >= 50 ? "warn" : "bad"} onClick={() => setDet(true)} />
         </div>
 
         {semDados ? (
@@ -106,54 +131,52 @@ export default function DashConciliacao() {
         ) : (
           <>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <ChartCard title="Conciliadas × pendentes" subtitle="Linhas do extrato no ano" onOpen={ir}>
+              <ChartCard title="Conciliado × pendente (R$)" subtitle="Clique para ver as contas" onOpen={ir}>
                 {pizza.length === 0 ? <EmptyState /> : (
                   <ResponsiveContainer>
                     <PieChart>
                       <Pie data={pizza} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={95}
-                        innerRadius={55} paddingAngle={2} onClick={ir} label>
+                        innerRadius={55} paddingAngle={2} onClick={() => setDet(true)} className="cursor-pointer">
                         <Cell fill="#10b981" /><Cell fill="#f59e0b" />
                       </Pie>
-                      <Tooltip content={<NumTooltip />} />
+                      <Tooltip content={<BRLTooltip />} />
                       <Legend wrapperStyle={{ fontSize: 12 }} />
                     </PieChart>
                   </ResponsiveContainer>
                 )}
               </ChartCard>
 
-              <ChartCard title="Situação das contas" subtitle="Status de conciliação por conta" onOpen={ir}>
-                {situacao.length === 0 ? <EmptyState /> : (
+              <ChartCard title="Por conta bancária (R$)" subtitle="Clique para detalhar todas as contas" onOpen={ir} height={Math.max(220, porConta.length * 44)}>
+                {porConta.length === 0 ? <EmptyState /> : (
                   <ResponsiveContainer>
-                    <PieChart>
-                      <Pie data={situacao} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={95}
-                        innerRadius={55} paddingAngle={2} onClick={ir} label>
-                        {situacao.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
-                      </Pie>
-                      <Tooltip formatter={(v: any) => [`${v} contas`, ""]} />
+                    <BarChart data={porConta} layout="vertical" onClick={() => setDet(true)} margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" horizontal={false} />
+                      <XAxis type="number" tickFormatter={formatBRLCompact} tick={{ fontSize: 11, fill: "#64748b" }} />
+                      <YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 11, fill: "#475569" }} />
+                      <Tooltip content={<BRLTooltip />} cursor={{ fill: "#f1f5f9" }} />
                       <Legend wrapperStyle={{ fontSize: 12 }} />
-                    </PieChart>
+                      <Bar dataKey="Conciliado" stackId="a" fill="#10b981" maxBarSize={28} className="cursor-pointer" />
+                      <Bar dataKey="Pendente" stackId="a" fill="#f59e0b" radius={[0, 4, 4, 0]} maxBarSize={28} className="cursor-pointer" />
+                    </BarChart>
                   </ResponsiveContainer>
                 )}
               </ChartCard>
             </div>
 
-            <ChartCard title="Conciliação por conta bancária" subtitle="Clique para abrir a conciliação" onOpen={ir} height={Math.max(260, porConta.length * 44)}>
-              {porConta.length === 0 ? <EmptyState /> : (
-                <ResponsiveContainer>
-                  <BarChart data={porConta} layout="vertical" onClick={ir} margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" horizontal={false} />
-                    <XAxis type="number" tick={{ fontSize: 11, fill: "#64748b" }} />
-                    <YAxis type="category" dataKey="name" width={170} tick={{ fontSize: 11, fill: "#475569" }} />
-                    <Tooltip content={<NumTooltip />} cursor={{ fill: "#f1f5f9" }} />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Bar dataKey="Conciliadas" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} maxBarSize={28} />
-                    <Bar dataKey="Pendentes" stackId="a" fill="#f59e0b" radius={[0, 4, 4, 0]} maxBarSize={28} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </ChartCard>
+            <ComparativoAnual
+              title="Movimentação do extrato — mês a mês e ano a ano"
+              subtitle={`Valor movimentado em ${ano} vs ${ano - 1}`}
+              serieAtual={serieAtual} seriePrev={seriePrev}
+              anoAtual={ano} anoPrev={ano - 1} goodWhen="up" valorLabel="Movimentado"
+            />
           </>
         )}
+
+        <DetailDialog
+          open={det} onOpenChange={setDet}
+          title="Conciliação por conta bancária" subtitle={`Ano ${ano} · valores em BRL`}
+          columns={COLS} rows={detalheContas} totalKey="valorTotal" onGoTo={ir}
+        />
       </div>
     </DashboardLayout>
   );

@@ -47,8 +47,17 @@ export default function DashReceber() {
   const rowsPrev: any[] = Array.isArray(dataPrev) ? dataPrev : [];
 
   const [det, setDet] = useState<{ title: string; subtitle?: string; rows: any[] } | null>(null);
-  const abrir = (title: string, subtitle: string, list: any[]) => setDet({ title, subtitle, rows: list });
   const nomeCli = (r: any) => r.clienteNome || r.obraNome || "—";
+  const abrir = (title: string, subtitle: string, list: any[]) =>
+    setDet({ title, subtitle, rows: list.map((r) => ({ ...r, cliente: nomeCli(r) })) });
+
+  const emAberto = (r: any) => r.status !== "recebido" &&
+    Math.max((Number(r.valorPrevisto) || 0) - (Number(r.valorRealizado) || 0), 0) > 0;
+  const estaVencido = (r: any) => {
+    if (!emAberto(r)) return false;
+    const venc = (r.dataVencimento || "").slice(0, 10);
+    return !!venc && venc < hojeStr;
+  };
 
   const kpis = useMemo(() => {
     let previsto = 0, recebido = 0, vencido = 0, aReceber = 0, qtdVenc = 0;
@@ -145,17 +154,23 @@ export default function DashReceber() {
         />
 
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-          <KpiCard icon={TrendingUp} label="Previsto no ano" value={formatBRL(kpis.previsto)} onClick={ir} />
+          <KpiCard icon={TrendingUp} label="Previsto no ano" value={formatBRL(kpis.previsto)}
+            onClick={() => abrir("Todos os recebíveis", `Ano ${ano}`, rows)} />
           <KpiCard icon={CheckCircle2} label="Recebido" value={formatBRL(kpis.recebido)} tone="good"
-            sub={kpis.previsto > 0 ? `${((kpis.recebido / kpis.previsto) * 100).toFixed(0)}% do previsto` : undefined} onClick={ir} />
-          <KpiCard icon={Clock} label="A receber (saldo)" value={formatBRL(kpis.aReceber)} tone="warn" onClick={ir} />
+            sub={kpis.previsto > 0 ? `${((kpis.recebido / kpis.previsto) * 100).toFixed(0)}% do previsto` : undefined}
+            onClick={() => abrir("Recebíveis com recebimento", `Ano ${ano}`, rows.filter((r) => (Number(r.valorRealizado) || 0) > 0))} />
+          <KpiCard icon={Clock} label="A receber (saldo)" value={formatBRL(kpis.aReceber)} tone="warn"
+            onClick={() => abrir("Recebíveis em aberto", `Ano ${ano}`, rows.filter(emAberto))} />
           <KpiCard icon={AlertTriangle} label="Vencido em aberto" value={formatBRL(kpis.vencido)} tone="bad"
-            sub={`${kpis.qtdVenc} título(s)`} onClick={ir} />
-          <KpiCard icon={Receipt} label="Ticket médio" value={formatBRL(kpis.ticket)} sub={`${rows.length} títulos`} onClick={ir} />
+            sub={`${kpis.qtdVenc} título(s)`}
+            onClick={() => abrir("Recebíveis vencidos em aberto", `Ano ${ano}`, rows.filter(estaVencido))} />
+          <KpiCard icon={Receipt} label="Ticket médio" value={formatBRL(kpis.ticket)} sub={`${rows.length} títulos`}
+            onClick={() => abrir("Todos os recebíveis", `Ano ${ano}`, rows)} />
           <KpiCard icon={Percent} label={`Recebido vs ${ano - 1}`}
             value={recebidoPrevAno > 0 ? `${(((kpis.recebido - recebidoPrevAno) / recebidoPrevAno) * 100).toFixed(0)}%` : "—"}
             tone={kpis.recebido >= recebidoPrevAno ? "good" : "bad"}
-            sub={`${ano - 1}: ${formatBRL(recebidoPrevAno)}`} onClick={ir} />
+            sub={`${ano - 1}: ${formatBRL(recebidoPrevAno)}`}
+            onClick={() => abrir("Recebíveis com recebimento", `Ano ${ano}`, rows.filter((r) => (Number(r.valorRealizado) || 0) > 0))} />
         </div>
 
         {semDados ? (

@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3248 — **FINANCEIRO / DASHBOARDS · OS 5 PAINÉIS VISUAIS (CONTAS A RECEBER, CONTAS A PAGAR,
+ * CONCILIAÇÃO BANCÁRIA, CONTROLE DE CHEQUES E CARTÃO DE CRÉDITO) FORAM ENRIQUECIDOS: (1) TUDO EM
+ * BRL — A CONCILIAÇÃO, QUE MOSTRAVA SÓ CONTAGEM DE LINHAS, AGORA EXIBE O VALOR MOVIMENTADO E
+ * CONCILIADO EM REAIS; (2) CLICAR EM QUALQUER GRÁFICO/KPI ABRE UM DIÁLOGO (DRILL-DOWN) COM TODOS
+ * OS LANÇAMENTOS PERTINENTES NUMA TABELA MAXIMIZÁVEL, EM VEZ DE SÓ NAVEGAR; (3) MAIS KPIs E
+ * GRÁFICOS (TICKET MÉDIO, AGING, CENTRO DE CUSTO, FATURADO×COMPRAS ETC.); (4) NOVA TABELA
+ * COMPARATIVA EM TODOS OS PAINÉIS — MÊS A MÊS E ANO A ANO, COM SETAS ↑/↓ E % DE VARIAÇÃO
+ * (VERDE/VERMELHO CONFORME A MÉTRICA SEJA RECEITA OU CUSTO). 100% READ-ONLY.**
+ * - PEDIDO (piloto FC): "melhore os 5 dashboards: tudo em BRL (a conciliação só mostra contagem
+ *   de linhas); ao clicar no gráfico abrir um diálogo com todos os dados, não só navegar; mais
+ *   KPIs/gráficos detalhados; e uma tabela comparativa em todos comparando mês a mês e ano a ano,
+ *   mostrando se subiu ou desceu com setinhas/percentual".
+ * - SOLUÇÃO (FRONT, kit compartilhado `client/src/pages/financeiro/dashboards/_kit.tsx`):
+ *     · `formatPct`/`variacaoPct` — variação % com tratamento de base zero ("novo"/"zerou").
+ *     · `DeltaBadge({curr,prev,goodWhen})` — pílula com seta ↑/↓ + % colorido; `goodWhen="up"`
+ *       (receitas: subir=verde) ou `"down"` (custos: subir=vermelho). `title` mostra BRL atual×anterior.
+ *     · `DetailDialog` — tabela genérica de drill-down (colunas `DetailColumn` com `brl`/`format`),
+ *       rodapé de total, botão "Abrir tela operacional"; usa o DialogContent maximizável (Rev. 3237).
+ *     · `ComparativoAnual` — tabela dos 12 meses: valor do ano atual, do ano anterior, Δ a/a (vs mesmo
+ *       mês) e Δ m/m (vs mês anterior), + KPIs de variação anual e linha de total; clique no mês faz
+ *       drill-down quando o painel fornece `onOpenMes`.
+ * - SOLUÇÃO (cada painel, `DashReceber/DashPagar/DashConciliacao/DashCheques/DashCartao.tsx`):
+ *     · 2ª query do ano-1 (mesma procedure) p/ as séries do comparativo ano-a-ano.
+ *     · cliques nos gráficos (barra→`activeLabel`, fatia→`payload`) e nos KPIs abrem o `DetailDialog`
+ *       com as linhas filtradas (mês, status, fornecedor/cliente, centro de custo, faixa de aging,
+ *       estágio de conferência, cartão etc.) — agregação client-side `useMemo`, sem backend novo.
+ *     · KPIs/gráficos extras: ticket médio, aging de recebíveis/contas, distribuição por centro de
+ *       custo, faturado×compras, variação vs ano anterior.
+ * - SOLUÇÃO (BACK, `server/routers/financial.ts`, READ-ONLY): `getBankAccountsConciliacaoStatus`
+ *   passou a retornar `valorTotal`/`valorConciliado` (SUM(ABS(valor)) — débito vem negativo); NOVA
+ *   procedure `getConciliacaoResumoMensal` ({companyId,ano}) agrega o extrato por mês (valor total e
+ *   conciliado) p/ alimentar o comparativo do Dashboard de Conciliação. Ambas com
+ *   `_assertFinanceiroCompanyAccess` (tenant guard).
+ * - ZERO SCHEMA/ALTER/DROP/DELETE · ZERO mutação de dado — só leitura e apresentação.
+ *
  * Rev. 3247 — **FINANCEIRO / CONTROLE DE CHEQUES · A DATA DE COMPENSAÇÃO AGORA É PREENCHIDA
  * AUTOMATICAMENTE PELO ERP QUANDO O CHEQUE É COMPENSADO NO EXTRATO. AO RODAR "CONFERIR COM O
  * EXTRATO", ALÉM DE MARCAR O CHEQUE COMO CONFERIDO, O SISTEMA GRAVA A DATA EM QUE O BANCO O
