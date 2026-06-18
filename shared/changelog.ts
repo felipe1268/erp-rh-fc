@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3279 — **RH & DP / FOLHA DE PAGAMENTO (CÁLCULO INTERNO) · CORRIGIDA UMA CONDIÇÃO DE CORRIDA QUE
+ * FAZIA O RESUMO DO VALE ("Funcionários / Total Vale" + botão "Ver Resultado") E O RESUMO DO PAGAMENTO
+ * ("Bruto / Descontos / Líquido" + "Ver Resultado") SUMIREM PARA ALGUNS USUÁRIOS, DE FORMA APARENTEMENTE
+ * "ALEATÓRIA" — O QUE FOI DIAGNOSTICADO COMO "PERMISSÃO" MAS NÃO ERA. NÃO HÁ TRAVA POR PAPEL NESSES
+ * RESUMOS; O QUE FALHAVA ERA A HIDRATAÇÃO DO ESTADO NO CLIENT. 100% FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - SINTOMA (piloto FC): a usuária Isabela (role `user`, "RH e DP") via no wizard "Concluído 27/05" no
+ *   Calcular Vale e no Simular Pagamento, mas NÃO via o mini-resumo nem o botão "Ver Resultado"; a Ana
+ *   (admin_master) via tudo. Suspeita inicial: permissão.
+ * - DIAGNÓSTICO: (1) o render dos resumos (`{valeOk && valeResult && ...}` e `{valeResult && ...}`) NÃO tem
+ *   trava por `isMaster`/papel — todas as travas `isMaster` ficam em telas de DETALHE/13º, fora do wizard.
+ *   (2) `payrollEngine.getPeriod` (server) faz `SELECT *` e devolve o `valeResultJson`/`pagamentoResultJson`
+ *   para QUALQUER usuário. (3) Isabela e Ana têm acesso IDÊNTICO às empresas (60002/60004/90001 em
+ *   `user_companies`) e só existe UMA competência por mês (companyId 60002), que TEM o JSON — logo não era
+ *   dado, empresa, papel nem versão de bundle (o resumo já existia na publicação anterior). (4) A diferença
+ *   real estava em DOIS `useEffect` concorrentes em `FolhaPagamento.tsx`: um hidratava de `payrollPeriod.data`
+ *   com guard `!valeResult`, outro (dep `[mesAno]`) zerava `valeResult`/`pagamentoResult`/`afericaoResult` +
+ *   `lastLoadedPeriodId`. Quando o `getPeriod` do mês-alvo já estava no CACHE do React Query (troca instantânea
+ *   de mês), os dois effects mudavam na MESMA renderização e rodavam em ordem de declaração: o de hidratar
+ *   rodava primeiro, via o resultado do mês ANTERIOR (truthy) e PULAVA por causa do `!valeResult` (mas já
+ *   carimbava `lastLoadedPeriodId=novoId`); em seguida o de `[mesAno]` zerava tudo. Como `payrollPeriod.data`
+ *   não mudava mais, o effect de hidratar não re-rodava → `valeResult`/`pagamentoResult` ficavam NULL "para
+ *   sempre" → os resumos sumiam. Por depender só do estado de cache/navegação de cada sessão, o efeito era
+ *   NÃO-DETERMINÍSTICO por usuário (parecia "permissão").
+ * - SOLUÇÃO (`client/src/pages/FolhaPagamento.tsx`): os dois effects viraram UM SÓ, determinístico, chaveado
+ *   pela IDENTIDADE do período (`pid = pd?.id ?? "none"`). Só re-hidrata/limpa quando `pid` MUDA; mesma
+ *   identidade (ex.: refetch após mutação de desconto) faz early-return e PRESERVA as edições locais. Quando
+ *   há período, hidrata SEMPRE a partir do snapshot (sem o guard `!valeResult`), limpando o estado quando a
+ *   coluna correspondente vier vazia; `pid === "none"` (mês sem competência) limpa os três resultados.
+ *   `lastLoadedPeriodId` agora é `number | "none" | null`. O reset existente ao fechar o "Relatório de
+ *   Aferição" (`lastLoadedPeriodId.current = null` + `refetch`) segue compatível: força re-hidratação completa
+ *   do snapshot no próximo `data`. ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3278 — **RH & DP / SINDICAL · DISSÍDIO GANHOU DATA DE VIGÊNCIA: QUANDO O ACORDO É FECHADO
  * COM ATRASO (EX.: VIGÊNCIA 01/05, APLICADO EM JUNHO), O ERP PASSA A CALCULAR A DIFERENÇA SALARIAL
  * RETROATIVA DE TODAS AS VERBAS JÁ PAGAS NO VALOR ANTIGO (SALÁRIO + HE + FÉRIAS × % DO REAJUSTE) E

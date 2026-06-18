@@ -681,13 +681,36 @@ export default function FolhaPagamento() {
     onError: (err) => toast.error(`Erro ao salvar desconto: ${err.message}`),
   });
 
-  const lastLoadedPeriodId = useRef<number | null>(null);
+  // Hidratação dos resultados (vale/pagamento/aferição) a partir do snapshot do
+  // período. Effect ÚNICO e determinístico: dispara só quando a IDENTIDADE do
+  // período muda ("none" quando não há competência). Antes havia DOIS effects —
+  // um hidratava ([payrollPeriod.data], com guard `!valeResult`) e outro zerava
+  // tudo ([mesAno]). Quando o getPeriod do mês-alvo já estava em cache do React
+  // Query (troca instantânea), os dois mudavam na MESMA renderização: o de
+  // hidratar rodava primeiro, via o resultado do mês anterior (truthy) e PULAVA
+  // por causa do `!valeResult`; em seguida o de [mesAno] zerava tudo — deixando
+  // valeResult/pagamentoResult NULL "para sempre" (o data não mudava de novo).
+  // Resultado: o resumo do Vale/Pagamento sumia de forma não-determinística,
+  // dependendo só do estado de cache de cada sessão (não de permissão).
+  const lastLoadedPeriodId = useRef<number | "none" | null>(null);
   useEffect(() => {
     const pd = payrollPeriod.data as any;
-    if (!pd?.id) return;
-    if (lastLoadedPeriodId.current === pd.id) return;
-    lastLoadedPeriodId.current = pd.id;
-    if (pd.afericaoResultJson && !afericaoResult) {
+    const pid: number | "none" = pd?.id ?? "none";
+    // Mesma identidade de período (ex.: refetch após mutação) → preserva edições
+    // locais já aplicadas em valeResult/pagamentoResult/afericaoResult.
+    if (lastLoadedPeriodId.current === pid) return;
+    lastLoadedPeriodId.current = pid;
+
+    if (pid === "none") {
+      setAfericaoResult(null);
+      setValeResult(null);
+      setPagamentoResult(null);
+      return;
+    }
+
+    // Hidrata SEMPRE a partir do snapshot do período (sem depender do estado
+    // anterior), limpando quando a respectiva coluna vier vazia.
+    if (pd.afericaoResultJson) {
       try {
         const parsed = JSON.parse(pd.afericaoResultJson);
         if (parsed.divergenciasList) {
@@ -697,26 +720,28 @@ export default function FolhaPagamento() {
           }
         }
         setAfericaoResult(parsed);
-      } catch { /* ignore */ }
+      } catch { setAfericaoResult(null); }
+    } else {
+      setAfericaoResult(null);
     }
-    if (pd.valeResultJson && !valeResult) {
-      try { setValeResult(JSON.parse(pd.valeResultJson)); } catch { /* ignore */ }
+
+    if (pd.valeResultJson) {
+      try { setValeResult(JSON.parse(pd.valeResultJson)); } catch { setValeResult(null); }
+    } else {
+      setValeResult(null);
     }
-    if (pd.pagamentoResultJson && !pagamentoResult) {
-      try { setPagamentoResult(JSON.parse(pd.pagamentoResultJson)); } catch { /* ignore */ }
+
+    if (pd.pagamentoResultJson) {
+      try { setPagamentoResult(JSON.parse(pd.pagamentoResultJson)); } catch { setPagamentoResult(null); }
+    } else {
+      setPagamentoResult(null);
     }
+
     // Hidrata toggles DSR a partir das colunas persistidas em payroll_periods
     if (pd.aplicarDsrFalta !== undefined && pd.aplicarDsrFalta !== null) {
       setAplicarDsrFalta(Number(pd.aplicarDsrFalta) === 1);
     }
   }, [payrollPeriod.data]);
-
-  useEffect(() => {
-    setAfericaoResult(null);
-    setValeResult(null);
-    setPagamentoResult(null);
-    lastLoadedPeriodId.current = null;
-  }, [mesAno]);
 
   useEffect(() => {
     if (!calcType) return;

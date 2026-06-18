@@ -105,3 +105,5 @@
 - [Cheque↔extrato write-match uniqueness](cheque-extrato-write-match-uniqueness.md) — matcher que GRAVA conciliado=1 exige unicidade em TODOS os índices (forte e fraco); ambíguo→a conferir, nunca marca. Display molde (Rev.3229) aceita first-match.
 - [Blacklist visibility backend gate](blacklist-visibility-backend-gate.md) — Lista_Negra é admin_master-only; gateie em employees.list E faça o cacheKey variar por papel (senão vaza por cache).
 - [Self-heal date/timestamp typecast](selfheal-date-timestamp-typecast.md) — cure UPDATE into date/timestamp col needs `::date`/`now()`, NOT `to_char` text; type error is swallowed by catch + capped log → cura silently no-ops. Verify via direct Neon pg, not executeSql.
+
+- [RQ cache-hit hydration race](rq-cache-hit-hydration-race.md) — dois useEffects (um hidrata de query.data, outro reseta por outra dep) anulam estado em cache hit; unifique num só effect chaveado pela identidade do dado.
