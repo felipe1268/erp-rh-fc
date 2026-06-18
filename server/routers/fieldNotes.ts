@@ -312,14 +312,26 @@ export const fieldNotesRouter = router({
       // === VINCULAR AO PONTO ===
       // Tipos de ocorrência que impactam o cartão de ponto
       const tiposVinculaveis = ['falta', 'atraso', 'saida_antecipada', 'abandono_posto', 'esqueceu_bater', 'outro'];
-      // Ações que NÃO gravam no ponto (somente advertências/elogios sem impacto de horas)
+      // Ações que NÃO gravam MARCADOR DISCIPLINAR no ponto (advertências/elogios sem impacto de horas)
       const acoesNaoVinculam = ['nenhuma'];
+      // Tipos que carregam BATIDAS de ponto (entrada/saída)
+      const tiposComHorario = ['atraso', 'saida_antecipada', 'esqueceu_bater', 'outro'];
+      const temHorarioResolvido = !!(resolveEntrada1 || resolveSaida1 || resolveEntrada2 || resolveSaida2);
 
-      const deveVincular = note.data
+      // O marcador disciplinar (falta/atraso) respeita a acaoTomada.
+      const deveMarcarDisciplina = !!note.data
         && tiposVinculaveis.includes(note.tipoOcorrencia)
         && !acoesNaoVinculam.includes(input.acaoTomada);
+      // As BATIDAS do ponto são FATO (horário real), não ação disciplinar: quando o RH
+      // confirma/ajusta um horário ao resolver o apontamento, ele DEVE refletir no espelho
+      // de ponto MESMO com acaoTomada='nenhuma'. (Antes, atraso/saída antecipada nunca
+      // gravavam entrada/saída no time_records e 'nenhuma' pulava a vinculação inteira,
+      // então a correção do horário ficava só no field_notes e o espelho exibia o valor antigo.)
+      const deveSincronizarHorario = !!note.data
+        && tiposComHorario.includes(note.tipoOcorrencia)
+        && temHorarioResolvido;
 
-      if (deveVincular) {
+      if (deveMarcarDisciplina || deveSincronizarHorario) {
         const allRecs = await db.select().from(timeRecords)
           .where(and(
             eq(timeRecords.companyId, note.companyId),
@@ -356,7 +368,17 @@ export const fieldNotesRouter = router({
         const exHadDixi = ex && (ex.fonte === "dixi" || ex.fonte === "dixi+apontamento");
         const resolveFonte = exHadDixi ? "dixi+apontamento" : "apontamento";
 
-        if (note.tipoOcorrencia === 'falta' || note.tipoOcorrencia === 'abandono_posto') {
+        // Guard anti-sobrescrita: NÃO regravar as batidas de uma correção POSTERIOR
+        // (manual/dixi) com o horário ANTIGO do apontamento quando o RH não digitou um
+        // horário novo na resolução. Batidas manuais/dixi são correções/importações que
+        // vieram DEPOIS do apontamento — sincronizar de volta corromperia o ponto (mesma
+        // razão pela qual o backfill desta correção tocou só fonte='apontamento'). Se o RH
+        // digitou um horário explícito no resolve, esse vence (intenção deliberada).
+        const temHorarioNovoInput = !!(input.entrada1 || input.saida1 || input.entrada2 || input.saida2);
+        const exFonteProtegida = !!ex && (ex.fonte === "manual" || ex.fonte === "dixi" || ex.fonte === "dixi+apontamento");
+        const podeSincronizarBatidas = temHorarioNovoInput || !exFonteProtegida;
+
+        if ((note.tipoOcorrencia === 'falta' || note.tipoOcorrencia === 'abandono_posto') && deveMarcarDisciplina) {
           if (ex) {
             await db.update(timeRecords).set({
               faltas: "1", horasTrabalhadas: "00:00",
@@ -388,12 +410,21 @@ export const fieldNotesRouter = router({
           const horasTrabalhadas = `${hh}:${String(mm).padStart(2, '0')}`;
 
           if (ex) {
-            await db.update(timeRecords).set({
-              entrada1: fE1, saida1: fS1, entrada2: fE2, saida2: fS2,
-              horasTrabalhadas, faltas: "0",
-              justificativa: ex.justificativa ? `${ex.justificativa} | ${justificativa}` : justificativa,
-              ajusteManual: 1, ajustadoPor: resolvidoPor, fonte: resolveFonte,
-            }).where(eq(timeRecords.id, ex.id));
+            if (podeSincronizarBatidas) {
+              await db.update(timeRecords).set({
+                entrada1: fE1, saida1: fS1, entrada2: fE2, saida2: fS2,
+                horasTrabalhadas, faltas: "0",
+                justificativa: ex.justificativa ? `${ex.justificativa} | ${justificativa}` : justificativa,
+                ajusteManual: 1, ajustadoPor: resolvidoPor, fonte: resolveFonte,
+              }).where(eq(timeRecords.id, ex.id));
+            } else {
+              // ex é correção posterior (manual/dixi) e o RH não digitou horário novo:
+              // preserva as batidas/horas/fonte, só anexa a justificativa da resolução.
+              await db.update(timeRecords).set({
+                justificativa: ex.justificativa ? `${ex.justificativa} | ${justificativa}` : justificativa,
+                ajusteManual: 1, ajustadoPor: resolvidoPor,
+              }).where(eq(timeRecords.id, ex.id));
+            }
           } else {
             await db.insert(timeRecords).values({
               companyId: note.companyId, employeeId: note.employeeId,
@@ -405,26 +436,73 @@ export const fieldNotesRouter = router({
             });
           }
         } else if (note.tipoOcorrencia === 'atraso' || note.tipoOcorrencia === 'saida_antecipada') {
-          if (ex) {
-            await db.update(timeRecords).set({
-              atrasos: note.tipoOcorrencia === 'atraso' ? "1:00" : ex.atrasos,
-              justificativa: ex.justificativa ? `${ex.justificativa} | ${justificativa}` : justificativa,
-              ajusteManual: 1, ajustadoPor: resolvidoPor, fonte: resolveFonte,
-            }).where(eq(timeRecords.id, ex.id));
-          } else {
-            await db.insert(timeRecords).values({
-              companyId: note.companyId, employeeId: note.employeeId,
-              data: note.data, mesReferencia: mesRef, obraId: note.obraId,
-              faltas: "0", horasTrabalhadas: "00:00",
-              horasExtras: "0:00", horasNoturnas: "0:00",
-              atrasos: note.tipoOcorrencia === 'atraso' ? "1:00" : "0:00",
-              fonte: "apontamento", ajusteManual: 1, ajustadoPor: resolvidoPor, justificativa,
-            });
+          const atrasoMarker = deveMarcarDisciplina && note.tipoOcorrencia === 'atraso' ? "1:00" : null;
+          if (temHorarioResolvido) {
+            // BATIDAS confirmadas pelo RH → refletem no espelho de ponto (fix do apontamento de atraso)
+            const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+            const fE1 = resolveEntrada1 || ex?.entrada1 || null;
+            const fS1 = resolveSaida1 || ex?.saida1 || null;
+            const fE2 = resolveEntrada2 || ex?.entrada2 || null;
+            const fS2 = resolveSaida2 || ex?.saida2 || null;
+            let totalMin = 0;
+            if (fE1 && fS1) totalMin += toMin(fS1) - toMin(fE1);
+            if (fE2 && fS2) totalMin += toMin(fS2) - toMin(fE2);
+            if (totalMin < 0) totalMin = 0;
+            const hh = Math.floor(totalMin / 60);
+            const mm = totalMin % 60;
+            const horasTrabalhadas = `${hh}:${String(mm).padStart(2, '0')}`;
+            if (ex) {
+              if (podeSincronizarBatidas) {
+                await db.update(timeRecords).set({
+                  entrada1: fE1, saida1: fS1, entrada2: fE2, saida2: fS2,
+                  horasTrabalhadas,
+                  ...(atrasoMarker ? { atrasos: atrasoMarker } : {}),
+                  justificativa: ex.justificativa ? `${ex.justificativa} | ${justificativa}` : justificativa,
+                  ajusteManual: 1, ajustadoPor: resolvidoPor, fonte: resolveFonte,
+                }).where(eq(timeRecords.id, ex.id));
+              } else {
+                // ex é correção posterior (manual/dixi) e sem horário novo: preserva as
+                // batidas/horas/fonte; só marca disciplina (se houver) e anexa justificativa.
+                await db.update(timeRecords).set({
+                  ...(atrasoMarker ? { atrasos: atrasoMarker } : {}),
+                  justificativa: ex.justificativa ? `${ex.justificativa} | ${justificativa}` : justificativa,
+                  ajusteManual: 1, ajustadoPor: resolvidoPor,
+                }).where(eq(timeRecords.id, ex.id));
+              }
+            } else {
+              await db.insert(timeRecords).values({
+                companyId: note.companyId, employeeId: note.employeeId,
+                data: note.data, mesReferencia: mesRef, obraId: note.obraId,
+                entrada1: fE1, saida1: fS1, entrada2: fE2, saida2: fS2,
+                horasTrabalhadas, faltas: "0",
+                horasExtras: "0:00", horasNoturnas: "0:00",
+                atrasos: atrasoMarker || "0:00",
+                fonte: "apontamento", ajusteManual: 1, ajustadoPor: resolvidoPor, justificativa,
+              });
+            }
+          } else if (deveMarcarDisciplina) {
+            // Sem horário informado: mantém o comportamento anterior (só marca atraso/justificativa).
+            if (ex) {
+              await db.update(timeRecords).set({
+                atrasos: note.tipoOcorrencia === 'atraso' ? "1:00" : ex.atrasos,
+                justificativa: ex.justificativa ? `${ex.justificativa} | ${justificativa}` : justificativa,
+                ajusteManual: 1, ajustadoPor: resolvidoPor, fonte: resolveFonte,
+              }).where(eq(timeRecords.id, ex.id));
+            } else {
+              await db.insert(timeRecords).values({
+                companyId: note.companyId, employeeId: note.employeeId,
+                data: note.data, mesReferencia: mesRef, obraId: note.obraId,
+                faltas: "0", horasTrabalhadas: "00:00",
+                horasExtras: "0:00", horasNoturnas: "0:00",
+                atrasos: note.tipoOcorrencia === 'atraso' ? "1:00" : "0:00",
+                fonte: "apontamento", ajusteManual: 1, ajustadoPor: resolvidoPor, justificativa,
+              });
+            }
           }
         }
       }
 
-      return { success: true, vinculadoPonto: !!deveVincular };
+      return { success: true, vinculadoPonto: !!(deveMarcarDisciplina || deveSincronizarHorario) };
     }),
 
   setEmAnalise: protectedProcedure

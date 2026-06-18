@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3284 — **RH & DP / APONTAMENTO DE CAMPO ↔ ESPELHO DE PONTO · QUANDO O RH RESOLVIA UM APONTAMENTO DE
+ * ATRASO (OU SAÍDA ANTECIPADA) CONFIRMANDO/AJUSTANDO O HORÁRIO DA BATIDA, O HORÁRIO CORRIGIDO FICAVA SÓ NO
+ * `field_notes` E O ESPELHO DE PONTO (QUE LÊ `time_records`) CONTINUAVA MOSTRANDO O VALOR ANTIGO. EX.: ACÁCIO
+ * EM 10/06/2026 — OCORRÊNCIA MOSTRAVA ENTRADA 07:37, ESPELHO MOSTRAVA 07:00. AGORA AS BATIDAS CONFIRMADAS NA
+ * RESOLUÇÃO SINCRONIZAM SEMPRE NO `time_records`, MESMO COM acaoTomada='nenhuma'. 100% BACKEND + BACKFILL
+ * ESTREITO (2 LINHAS) · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (piloto FC): "o apontamento do funcionário Acácio não está refletindo corretamente no espelho de
+ *   ponto" — a ocorrência (atraso, exame médico) registrava ENTRADA 07:37, mas o espelho exibia 07:00.
+ * - DIAGNÓSTICO (dados reais no Neon, FC ENGENHARIA 60002): `field_notes #133` (tipo=atraso, status=resolvido,
+ *   acaoTomada='nenhuma', entrada1='07:37') vs `time_records #13260` (entrada1='07:00', fonte='apontamento').
+ *   A justificativa do `time_records` estava no formato do CREATE (não do resolve), provando que o `resolve`
+ *   NÃO tocou o ponto. DUAS RAÍZES no `server/routers/fieldNotes.ts` `resolve`: (1) o gate `deveVincular`
+ *   excluía acaoTomada='nenhuma', então a correção do horário pulava o `time_records` por completo; (2) MESMO
+ *   quando vinculava, o ramo `atraso`/`saida_antecipada` NUNCA gravava entrada1/saida1/horasTrabalhadas no
+ *   `time_records` — só `atrasos`/justificativa/fonte. As batidas (horário real) são FATO, não ação
+ *   disciplinar, e por isso deveriam sincronizar independentemente da ação tomada.
+ * - SOLUÇÃO — BACKEND (`server/routers/fieldNotes.ts`, `resolve`): o antigo `deveVincular` foi separado em
+ *   `deveMarcarDisciplina` (FALTA/ATRASO marker — ainda respeita acaoTomada, exclui 'nenhuma') e
+ *   `deveSincronizarHorario` (tipo ∈ [atraso, saida_antecipada, esqueceu_bater, outro] + horário resolvido,
+ *   INDEPENDENTE de acaoTomada). O bloco roda se qualquer um for verdadeiro. O ramo `atraso`/`saida_antecipada`
+ *   passou a gravar fE1/fS1/fE2/fS2 (`resolveEntradaX || ex?.entradaX`) e recalcular `horasTrabalhadas` quando
+ *   há horário; o marcador `atrasos='1:00'` só é aplicado se `deveMarcarDisciplina`. Sem horário informado,
+ *   mantém o comportamento anterior (só marca atraso/justificativa). Ramos `falta`/`abandono` ganharam guard
+ *   explícito `&& deveMarcarDisciplina` (preservando o comportamento de antes). Ramo `esqueceu_bater`/`outro`
+ *   inalterado na lógica (já gravava horas), agora também sincroniza com acaoTomada='nenhuma'.
+ * - SOLUÇÃO — BACKFILL ESTREITO E SEGURO (script único, transacional): só as linhas `atraso`/`saida_antecipada`
+ *   com `fonte='apontamento'` (apontamento puro) cujas batidas do `time_records` divergiam do `field_notes` —
+ *   2 linhas (Acácio #133: 07:00→07:37; #138 emp 33: 07:00→07:12). DELIBERADAMENTE NÃO se fez backfill cego
+ *   das 25 linhas "divergentes" do diagnóstico: a maioria é `fonte='manual'`/`'dixi'`, onde as batidas foram
+ *   legitimamente corrigidas/importadas DEPOIS do apontamento (ex.: field_note com ordem de almoço bagunçada,
+ *   ou batidas reais do relógio Dixi) — sincronizar field_notes→time_records ali CORROMPERIA o ponto. O fix de
+ *   código só atua no momento do resolve (sem edição manual/dixi posterior), então é seguro daqui pra frente.
+ * - INALTERADO: o `create` (que já sincronizava horários no `time_records`), a leitura do espelho
+ *   (`getEspelhoPontoRange` em `horasExtras.ts` lê só `time_records`), a tag "Apontamento"
+ *   (`fonte='apontamento'`) e todo o resto do fluxo.
+ * - ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3283 — **FINANCEIRO / CONTROLE DE CARTÃO DE CRÉDITO · A LISTA "CARTÕES CADASTRADOS" GANHOU UM
  * VISUAL DE CARTÃO FÍSICO: CADA CARTÃO AGORA TEM UMA FAIXA SUPERIOR COLORIDA (GRADIENTE POR BANDEIRA) COM
  * O LOGO DA BANDEIRA (VISA, MASTERCARD, ELO, AMEX, HIPERCARD, DINERS, DISCOVER + FALLBACK GENÉRICO), CHIP

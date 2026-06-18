@@ -19,3 +19,21 @@ dos sets de datas, igual `feriasDates`). Não adianta gravar só em `timecard_da
 Atestado de tipo "dia" cobre `diasAfastamento` dias; tipo "horas" cobre só `dataEmissao`
 (parcial — frontend só marca atestado se não houve batida, pra preservar trabalho parcial).
 Coluna `afastamento_tipo` é snake_case no DB (as demais da tabela `atestados` são camelCase).
+
+**Apontamento de campo (`field_notes`) → espelho:** o espelho NÃO lê `field_notes`, só
+`time_records`. Logo, a resolução de uma ocorrência (`fieldNotes.resolve`) PRECISA gravar
+as batidas corrigidas no `time_records` pra refletir.
+
+**Princípio durável (separar HORÁRIO de DISCIPLINA):** a BATIDA confirmada/ajustada na
+resolução é FATO (horário real), não ação disciplinar — deve sincronizar no `time_records`
+mesmo quando `acaoTomada='nenhuma'`. Já o marcador disciplinar (falta/atraso) é que respeita
+a `acaoTomada`. São dois gates distintos; não acoplar um ao outro. Atenção: ramos de tipos
+com batida (atraso/saída antecipada) precisam gravar TODAS as batidas + recalcular horas, não
+só o marcador/justificativa.
+
+**Sincronizar field_notes→time_records só onde é seguro:** uma batida em `time_records` com
+`fonte='manual'`/`'dixi'` (ou `dixi+apontamento`) é correção/importação que veio DEPOIS do
+apontamento; reescrevê-la com o horário antigo do field_note corromperia o ponto. Regra: só
+sobrescrever batidas se o RH digitou um horário NOVO na resolução, OU se a linha ainda é
+`fonte='apontamento'`. Qualquer backfill em massa de divergências deve ter o mesmo escopo
+(tocar só `fonte='apontamento'`).
