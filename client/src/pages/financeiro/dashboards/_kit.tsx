@@ -1,6 +1,15 @@
 import { ReactNode } from "react";
 import { Card } from "@/components/ui/card";
-import { RefreshCw, ChevronLeft, ChevronRight, ArrowUpRight, LucideIcon } from "lucide-react";
+import {
+  RefreshCw, ChevronLeft, ChevronRight, ArrowUpRight, ArrowUp, ArrowDown, Minus,
+  ExternalLink, LucideIcon,
+} from "lucide-react";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Table, TableHeader, TableBody, TableHead, TableRow, TableCell, TableFooter,
+} from "@/components/ui/table";
 
 /* ──────────────────────────────────────────────────────────────────────────
  * Kit compartilhado dos Dashboards Financeiros (Rev. 3243).
@@ -166,5 +175,254 @@ export function BRLTooltip({ active, payload, label }: any) {
         </div>
       ))}
     </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Rev. 3248 — Primitivos de comparação + drill-down (BRL).
+ * READ-ONLY. Usados por todos os 5 dashboards financeiros.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+export function formatPct(n: number, casas = 1): string {
+  const v = Number(n);
+  if (!isFinite(v)) return "—";
+  return `${v >= 0 ? "+" : ""}${v.toFixed(casas)}%`;
+}
+
+/** Variação percentual (curr vs prev) com tratamento de base zero. */
+export function variacaoPct(curr: number, prev: number): number | null {
+  const c = Number(curr) || 0, p = Number(prev) || 0;
+  const base = Math.abs(p);
+  if (base < 0.005) return c > 0 ? Infinity : c < 0 ? -Infinity : 0;
+  return ((c - p) / base) * 100;
+}
+
+/* Selo de delta com seta ↑/↓ + % colorido. `goodWhen` define a semântica:
+ * "up" → subir é bom (receitas), "down" → subir é ruim (custos/despesas). */
+export function DeltaBadge({
+  curr, prev, goodWhen = "up", size = "sm",
+}: {
+  curr: number; prev: number; goodWhen?: "up" | "down"; size?: "sm" | "xs";
+}) {
+  const diff = (Number(curr) || 0) - (Number(prev) || 0);
+  const up = diff > 0.005, down = diff < -0.005;
+  const pct = variacaoPct(curr, prev);
+  const isGood = (goodWhen === "up" && up) || (goodWhen === "down" && down);
+  const isBad = (up || down) && !isGood;
+  const cls = !up && !down
+    ? "text-slate-400 bg-slate-100"
+    : isGood ? "text-emerald-700 bg-emerald-100" : "text-rose-700 bg-rose-100";
+  const Icon = up ? ArrowUp : down ? ArrowDown : Minus;
+  const label =
+    pct == null ? "—"
+    : pct === Infinity ? "novo"
+    : pct === -Infinity ? "zerou"
+    : formatPct(pct);
+  const pad = size === "xs" ? "px-1 py-0.5 text-[10px]" : "px-1.5 py-0.5 text-[11px]";
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 rounded-md font-semibold tabular-nums ${pad} ${cls}`}
+      title={`${formatBRL(curr)} vs ${formatBRL(prev)} · Δ ${formatBRL(diff)}`}
+    >
+      <Icon className="w-3 h-3 shrink-0" />
+      {label}
+    </span>
+  );
+}
+
+/* ─────────────────────── Diálogo de drill-down (tabela) ─────────────────────
+ * Genérico: clica num gráfico → abre com TODAS as linhas pertinentes em BRL.
+ * O DialogContent já traz o botão de maximizar (Rev. 3237). */
+export type DetailColumn = {
+  key: string;
+  label: string;
+  align?: "left" | "right" | "center";
+  brl?: boolean;                       // formata como moeda
+  format?: (v: any, row: any) => ReactNode;
+  className?: string;
+};
+
+export function DetailDialog({
+  open, onOpenChange, title, subtitle, columns, rows, totalKey, onGoTo, goLabel = "Abrir tela operacional",
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  title: string;
+  subtitle?: string;
+  columns: DetailColumn[];
+  rows: any[];
+  totalKey?: string;
+  onGoTo?: () => void;
+  goLabel?: string;
+}) {
+  const total = totalKey != null
+    ? rows.reduce((s, r) => s + (Number(r[totalKey]) || 0), 0)
+    : null;
+  const alignCls = (a?: string) => (a === "right" ? "text-right" : a === "center" ? "text-center" : "text-left");
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-5xl">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          {subtitle && <DialogDescription>{subtitle}</DialogDescription>}
+        </DialogHeader>
+        <div className="max-h-[62vh] overflow-auto rounded-lg border border-slate-200">
+          {rows.length === 0 ? (
+            <div className="py-16"><EmptyState message="Sem itens para detalhar." /></div>
+          ) : (
+            <Table>
+              <TableHeader className="sticky top-0 bg-slate-50 z-10">
+                <TableRow>
+                  {columns.map((c) => (
+                    <TableHead key={c.key} className={`${alignCls(c.align)} text-xs font-semibold`}>{c.label}</TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row, i) => (
+                  <TableRow key={i} className="text-xs">
+                    {columns.map((c) => {
+                      const raw = row[c.key];
+                      const content = c.format
+                        ? c.format(raw, row)
+                        : c.brl ? formatBRL(Number(raw) || 0)
+                        : (raw ?? "—");
+                      return (
+                        <TableCell key={c.key} className={`${alignCls(c.align)} ${c.brl ? "tabular-nums" : ""} ${c.className || ""}`}>
+                          {content}
+                        </TableCell>
+                      );
+                    })}
+                  </TableRow>
+                ))}
+              </TableBody>
+              {total != null && (
+                <TableFooter className="sticky bottom-0">
+                  <TableRow>
+                    {columns.map((c, idx) => (
+                      <TableCell key={c.key} className={`${alignCls(c.align)} font-bold text-xs tabular-nums`}>
+                        {idx === 0 ? `Total · ${rows.length} item(ns)` : c.key === totalKey ? formatBRL(total) : ""}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                </TableFooter>
+              )}
+            </Table>
+          )}
+        </div>
+        {onGoTo && (
+          <DialogFooter>
+            <button
+              onClick={onGoTo}
+              className="inline-flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-700 transition"
+            >
+              <ExternalLink className="w-4 h-4" /> {goLabel}
+            </button>
+          </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ───────────────────── Tabela comparativa mês×mês + ano×ano ─────────────────
+ * Para cada mês: valor do ano atual, do ano anterior, Δ a/a (vs mesmo mês),
+ * Δ m/m (vs mês anterior do ano atual). Linha de TOTAL no rodapé.
+ * `goodWhen` colore as setas (custos: down=bom; receitas: up=bom). */
+export function ComparativoAnual({
+  title, subtitle, serieAtual, seriePrev, anoAtual, anoPrev,
+  goodWhen = "down", valorLabel = "Valor", onOpenMes,
+}: {
+  title: string;
+  subtitle?: string;
+  serieAtual: number[];   // 12 posições
+  seriePrev: number[];    // 12 posições
+  anoAtual: number;
+  anoPrev: number;
+  goodWhen?: "up" | "down";
+  valorLabel?: string;
+  onOpenMes?: (mesIndex: number) => void;
+}) {
+  const totAtual = serieAtual.reduce((s, v) => s + (Number(v) || 0), 0);
+  const totPrev = seriePrev.reduce((s, v) => s + (Number(v) || 0), 0);
+  const pctAno = variacaoPct(totAtual, totPrev);
+  return (
+    <Card className="p-4 border-slate-200">
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div className="min-w-0">
+          <h3 className="font-semibold text-slate-800 text-sm md:text-base">{title}</h3>
+          {subtitle && <p className="text-xs text-slate-400">{subtitle}</p>}
+        </div>
+        <DeltaBadge curr={totAtual} prev={totPrev} goodWhen={goodWhen} />
+      </div>
+
+      {/* KPIs de variação anual */}
+      <div className="grid grid-cols-3 gap-2 mb-3">
+        <div className="rounded-lg bg-slate-50 px-3 py-2">
+          <p className="text-[11px] text-slate-500">Total {anoAtual}</p>
+          <p className="text-sm md:text-base font-bold text-slate-900 tabular-nums">{formatBRL(totAtual)}</p>
+        </div>
+        <div className="rounded-lg bg-slate-50 px-3 py-2">
+          <p className="text-[11px] text-slate-500">Total {anoPrev}</p>
+          <p className="text-sm md:text-base font-bold text-slate-600 tabular-nums">{formatBRL(totPrev)}</p>
+        </div>
+        <div className="rounded-lg bg-slate-50 px-3 py-2">
+          <p className="text-[11px] text-slate-500">Variação a/a</p>
+          <p className="text-sm md:text-base font-bold tabular-nums">
+            {pctAno == null ? "—" : pctAno === Infinity ? "novo" : formatPct(pctAno)}
+          </p>
+        </div>
+      </div>
+
+      <div className="max-h-[420px] overflow-auto rounded-lg border border-slate-200">
+        <Table>
+          <TableHeader className="sticky top-0 bg-slate-50 z-10">
+            <TableRow>
+              <TableHead className="text-xs font-semibold">Mês</TableHead>
+              <TableHead className="text-right text-xs font-semibold">{anoAtual}</TableHead>
+              <TableHead className="text-right text-xs font-semibold">{anoPrev}</TableHead>
+              <TableHead className="text-right text-xs font-semibold">Δ a/a</TableHead>
+              <TableHead className="text-right text-xs font-semibold">Δ m/m</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {MESES_ABREV.map((mes, i) => {
+              const cur = Number(serieAtual[i]) || 0;
+              const prev = Number(seriePrev[i]) || 0;
+              const mesAnt = i > 0 ? (Number(serieAtual[i - 1]) || 0) : null;
+              const clicavel = !!onOpenMes && (cur > 0 || prev > 0);
+              return (
+                <TableRow
+                  key={mes}
+                  className={`text-xs ${clicavel ? "cursor-pointer hover:bg-slate-50" : ""}`}
+                  onClick={clicavel ? () => onOpenMes!(i) : undefined}
+                >
+                  <TableCell className="font-medium text-slate-700">{mes}</TableCell>
+                  <TableCell className="text-right tabular-nums text-slate-900">{cur ? formatBRL(cur) : "—"}</TableCell>
+                  <TableCell className="text-right tabular-nums text-slate-500">{prev ? formatBRL(prev) : "—"}</TableCell>
+                  <TableCell className="text-right">
+                    {cur === 0 && prev === 0 ? <span className="text-slate-300">—</span> : <DeltaBadge curr={cur} prev={prev} goodWhen={goodWhen} size="xs" />}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {mesAnt == null || (cur === 0 && mesAnt === 0) ? <span className="text-slate-300">—</span> : <DeltaBadge curr={cur} prev={mesAnt} goodWhen={goodWhen} size="xs" />}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+          <TableFooter className="sticky bottom-0">
+            <TableRow>
+              <TableCell className="font-bold text-xs">Total {valorLabel}</TableCell>
+              <TableCell className="text-right font-bold text-xs tabular-nums">{formatBRL(totAtual)}</TableCell>
+              <TableCell className="text-right font-bold text-xs tabular-nums">{formatBRL(totPrev)}</TableCell>
+              <TableCell className="text-right" colSpan={2}>
+                <DeltaBadge curr={totAtual} prev={totPrev} goodWhen={goodWhen} size="xs" />
+              </TableCell>
+            </TableRow>
+          </TableFooter>
+        </Table>
+      </div>
+      {onOpenMes && <p className="text-[11px] text-slate-400 mt-2">Clique num mês para ver os lançamentos.</p>}
+    </Card>
   );
 }

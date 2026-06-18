@@ -4644,7 +4644,9 @@ export const financialRouter = router({
     const res = await dbExecute(db,
       `SELECT conta_bancaria_id AS "contaBancariaId",
               COUNT(*)::int AS total,
-              SUM(CASE WHEN COALESCE(conciliado,0)=1 THEN 1 ELSE 0 END)::int AS conciliadas
+              SUM(CASE WHEN COALESCE(conciliado,0)=1 THEN 1 ELSE 0 END)::int AS conciliadas,
+              COALESCE(SUM(ABS(valor)),0) AS "valorTotal",
+              COALESCE(SUM(CASE WHEN COALESCE(conciliado,0)=1 THEN ABS(valor) ELSE 0 END),0) AS "valorConciliado"
          FROM bank_statement_lines
         WHERE company_id=$1 AND data>=$2 AND data<=$3 AND excluido_em IS NULL
         GROUP BY conta_bancaria_id`,
@@ -4656,9 +4658,42 @@ export const financialRouter = router({
         contaBancariaId: Number(r.contaBancariaId),
         total,
         conciliadas,
+        // Rev. 3248 — BRL movimentado p/ os dashboards (READ-ONLY; |valor| pois débito vem negativo).
+        valorTotal: Number(r.valorTotal) || 0,
+        valorConciliado: Number(r.valorConciliado) || 0,
         status: total === 0 ? "vazio" : conciliadas >= total ? "consolidado" : "lancamento",
       };
     });
+  }),
+
+  // Rev. 3248 — Resumo MENSAL do extrato (BRL movimentado + conciliado por mês) p/ a
+  // tabela comparativa mês×mês / ano×ano do Dashboard de Conciliação. READ-ONLY.
+  getConciliacaoResumoMensal: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    ano: z.number(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const res = await dbExecute(db,
+      `SELECT EXTRACT(month FROM data)::int AS mes,
+              COUNT(*)::int AS total,
+              SUM(CASE WHEN COALESCE(conciliado,0)=1 THEN 1 ELSE 0 END)::int AS conciliadas,
+              COALESCE(SUM(ABS(valor)),0) AS "valorTotal",
+              COALESCE(SUM(CASE WHEN COALESCE(conciliado,0)=1 THEN ABS(valor) ELSE 0 END),0) AS "valorConciliado"
+         FROM bank_statement_lines
+        WHERE company_id=$1 AND excluido_em IS NULL
+          AND EXTRACT(year FROM data)=$2
+        GROUP BY EXTRACT(month FROM data)
+        ORDER BY 1`,
+      [input.companyId, input.ano]);
+    return rows(res).map((r: any) => ({
+      mes: Number(r.mes) || 0,
+      total: Number(r.total) || 0,
+      conciliadas: Number(r.conciliadas) || 0,
+      valorTotal: Number(r.valorTotal) || 0,
+      valorConciliado: Number(r.valorConciliado) || 0,
+    }));
   }),
 
   conciliarLancamento: protectedProcedure.input(z.object({
