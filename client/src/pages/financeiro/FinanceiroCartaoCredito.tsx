@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter, 
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
@@ -181,23 +182,54 @@ export default function FinanceiroCartaoCredito() {
   const [importBusy, setImportBusy] = useState(false);
   const [preview, setPreview] = useState<any | null>(null);
   const [arquivoNome, setArquivoNome] = useState("");
+  // Rev. 3267 — barra de progresso 0→100% durante a leitura por IA. Como a leitura é UMA
+  // chamada só (sem stream), o progresso é ESTIMADO: sobe assintoticamente até 95% enquanto
+  // espera e crava 100% ao concluir.
+  const [importPct, setImportPct] = useState(0);
+  const [importLabel, setImportLabel] = useState("");
+  const progTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const importarPreview = (trpc as any).cartao.importarPreview.useMutation();
   const importarConfirmar = (trpc as any).cartao.importarConfirmar.useMutation();
 
+  function pararProgresso() {
+    if (progTimer.current) { clearInterval(progTimer.current); progTimer.current = null; }
+  }
+  function iniciarProgresso(label: string) {
+    pararProgresso();
+    setImportPct(3);
+    setImportLabel(label);
+    progTimer.current = setInterval(() => {
+      setImportPct((p) => {
+        if (p >= 95) return 95;
+        const inc = p < 50 ? 4 : p < 80 ? 2 : 1; // desacelera conforme sobe
+        return Math.min(95, p + inc);
+      });
+    }, 350);
+  }
+
+  // Rev. 3267 — garante que o timer de progresso seja sempre limpo no unmount
+  // (evita setInterval órfão atualizando estado após o componente sair de tela).
+  useEffect(() => () => pararProgresso(), []);
+
   function abrirImport() {
+    pararProgresso(); setImportPct(0); setImportLabel("");
     setPreview(null); setArquivoNome(""); setImportModal(true);
   }
   async function onArquivoSelecionado(file: File | undefined) {
     if (!file || !companyId) return;
     setImportBusy(true); setPreview(null); setArquivoNome(file.name);
+    iniciarProgresso(`Lendo "${file.name}" com a IA…`);
     try {
       const b64 = await fileToBase64(file);
       const mime = file.type || (file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "application/octet-stream");
       const res = await importarPreview.mutateAsync({ companyId, fileBase64: b64, mimeType: mime });
+      pararProgresso(); setImportPct(100); setImportLabel("Leitura concluída");
       setPreview(res);
     } catch (e: any) {
+      pararProgresso(); setImportPct(0); setImportLabel("");
       toast({ title: "Falha ao ler a fatura", description: e?.message || String(e), variant: "destructive" });
     } finally {
+      pararProgresso();
       setImportBusy(false);
     }
   }
@@ -596,9 +628,22 @@ export default function FinanceiroCartaoCredito() {
           </DialogHeader>
           <div className="flex-1 overflow-auto space-y-4">
             {!preview && (
-              <label className={`flex flex-col items-center justify-center gap-3 border-2 border-dashed rounded-lg py-16 cursor-pointer hover:bg-gray-50 ${importBusy ? "opacity-60 pointer-events-none" : ""}`}>
-                {importBusy ? <Loader2 className="w-10 h-10 animate-spin text-blue-600" /> : <Upload className="w-10 h-10 text-gray-400" />}
-                <span className="text-sm text-muted-foreground">{importBusy ? `Lendo "${arquivoNome}" com a IA…` : "Clique para selecionar o PDF da fatura"}</span>
+              <label className={`flex flex-col items-center justify-center gap-3 border-2 border-dashed rounded-lg py-16 cursor-pointer hover:bg-gray-50 ${importBusy ? "opacity-100 pointer-events-none" : ""}`}>
+                {importBusy ? (
+                  <div className="w-full max-w-md flex flex-col items-center gap-3 px-6">
+                    <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
+                    <span className="text-sm text-muted-foreground text-center">{importLabel || `Lendo "${arquivoNome}" com a IA…`}</span>
+                    <div className="w-full flex items-center gap-3">
+                      <Progress value={importPct} className="h-2 flex-1" />
+                      <span className="text-sm font-semibold tabular-nums text-blue-700 w-12 text-right">{Math.round(importPct)}%</span>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <Upload className="w-10 h-10 text-gray-400" />
+                    <span className="text-sm text-muted-foreground">Clique para selecionar o PDF da fatura</span>
+                  </>
+                )}
                 <input type="file" accept="application/pdf,image/*" className="hidden" disabled={importBusy} onChange={(e) => onArquivoSelecionado(e.target.files?.[0])} />
               </label>
             )}

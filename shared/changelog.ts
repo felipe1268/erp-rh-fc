@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3267 — **FINANCEIRO / CARTÃO DE CRÉDITO · O DIÁLOGO "IMPORTAR FATURA (PDF)" GANHOU UMA BARRA DE
+ * PROGRESSO DE 0 A 100% DURANTE A LEITURA DO PDF PELA IA, NO LUGAR DO SPINNER "PELADO" QUE NÃO DAVA
+ * NOÇÃO DE ANDAMENTO. A BARRA SOBE SUAVEMENTE ENQUANTO A IA LÊ E CRAVA 100% AO TERMINAR (ENTÃO MOSTRA
+ * O PREVIEW). SÓ APRESENTAÇÃO — NADA MUDA NA LEITURA/IMPORTAÇÃO.**
+ * - PEDIDO (piloto FC): sobre o spinner do "Lendo 'Fatura 06-2026.pdf' com a IA…", "coloque de 0 a 100%"
+ *   (print da tela com o loading sem percentual).
+ * - CAUSA: a importação chamava `cartao.importarPreview` (UMA chamada de IA, sem stream de progresso) e
+ *   exibia só um `<Loader2>` girando + o texto "Lendo … com a IA…" — sem qualquer indicador de %.
+ * - SOLUÇÃO (SÓ FRONT, `client/src/pages/financeiro/FinanceiroCartaoCredito.tsx`): como a leitura é
+ *   atômica (sem stream), o progresso é ESTIMADO — novos estados `importPct`/`importLabel` + ref
+ *   `progTimer`; `iniciarProgresso(label)` arranca em 3% e um `setInterval` (350ms) sobe
+ *   assintoticamente até um teto de 95% (incremento desacelera: +4 abaixo de 50%, +2 abaixo de 80%,
+ *   +1 depois), `pararProgresso()` limpa o timer; em `onArquivoSelecionado` o sucesso crava 100%
+ *   ("Leitura concluída") e o erro zera, sempre limpando o timer no `finally`. O bloco de "ocupado" do
+ *   diálogo passou a renderizar o spinner + rótulo + `<Progress value={importPct}>` com o "NN%" ao lado
+ *   (`tabular-nums`); `abrirImport` reseta o estado. A barra só aparece na fase de leitura (a área de
+ *   upload é `{!preview && …}`), então a gravação (`importarConfirmar`) segue com o spinner do botão.
+ * - EFEITO: feedback visual claro de andamento durante a leitura da fatura, sem prometer precisão de
+ *   stream que o backend não fornece.
+ * - ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3266 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O TEXTO ROXO "IDENTIFICADO NOS DEMONSTRATIVOS"
  * (PIX/BOLETO/TED LIDOS POR IA) DA LISTA "NO EXTRATO, SEM LANÇAMENTO" VIROU CLICÁVEL: ABRE UM DIÁLOGO
  * DE CONFERÊNCIA QUE COLOCA LADO A LADO OS DADOS LIDOS PELA IA (TIPO/BENEFICIÁRIO/DOCUMENTO/TXID/VALOR/
