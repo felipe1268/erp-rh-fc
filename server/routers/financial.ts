@@ -4078,21 +4078,95 @@ export const financialRouter = router({
       if (dia && pareceCheque(l.descricao)) { const arr = chqByValData.get(`${cts}|${dia}`); if (arr && arr.length === 1) return arr[0]; }
       return null;
     };
+
+    // 2c) Rev. 3230 — CRUZAMENTO COM O CONTROLE DE CARTÃO DE CRÉDITO. Mesma filosofia do
+    // cheque, MAS para o cartão o ERP só considera o VALOR TOTAL DA FATURA (pra dizer se a
+    // fatura foi paga ou não). O detalhe dos gastos (por obra/centro de custo) vive no módulo
+    // Cartão de Crédito — aqui na conciliação a fatura é UM pagamento só (saída). READ-ONLY.
+    const fatRes = await dbExecute(db,
+      `SELECT f.id, f.total, f.vencimento, f.fechamento, f.mes_ref AS "mesRef", f.ano_ref AS "anoRef",
+              COALESCE(f.conciliado,0) AS conciliado,
+              c.banco AS "cartaoBanco", c.bandeira AS "cartaoBandeira", c.final4 AS "cartaoFinal4"
+         FROM financial_cartao_faturas f
+         LEFT JOIN financial_cartoes c ON c.id = f.cartao_id AND c.company_id = f.company_id
+        WHERE f.company_id=$1 AND f.excluido_em IS NULL AND f.total IS NOT NULL`,
+      [input.companyId]);
+    const faturasRep = rows(fatRes) as any[];
+    const fatByTotal = new Map<string, any[]>();
+    const fatByTotalVenc = new Map<string, any[]>();
+    for (const f of faturasRep) {
+      const cts = chqCents(f.total);
+      if (cts == null || cts === 0) continue;
+      { const k = `${cts}`; if (!fatByTotal.has(k)) fatByTotal.set(k, []); fatByTotal.get(k)!.push(f); }
+      const v = chqDia(f.vencimento);
+      if (v) { const k = `${cts}|${v}`; if (!fatByTotalVenc.has(k)) fatByTotalVenc.set(k, []); fatByTotalVenc.get(k)!.push(f); }
+    }
+    const pareceCartao = (descricao: any) => /cart[aã]o|fatura|cr[eé]dito|visa|master|elo\b|amex|hipercard/i.test(String(descricao ?? ""));
+    // Janela temporal p/ o fallback médio: vencimento da fatura perto da linha do extrato (±45d),
+    // ou — sem vencimento — competência (mês/ano ref) compatível com a data da linha.
+    const faturaDentroJanela = (f: any, diaLinha: string | null): boolean => {
+      if (!diaLinha) return false;
+      const venc = chqDia(f.vencimento);
+      if (venc) {
+        const ms = Date.parse(`${diaLinha}T00:00:00Z`) - Date.parse(`${venc}T00:00:00Z`);
+        if (Number.isNaN(ms)) return false;
+        return Math.abs(ms) <= 45 * 24 * 60 * 60 * 1000;
+      }
+      const mes = Number(f.mesRef), ano = Number(f.anoRef);
+      if (mes >= 1 && mes <= 12 && ano >= 2000) {
+        const ly = Number(diaLinha.slice(0, 4)), lm = Number(diaLinha.slice(5, 7));
+        const diffMeses = Math.abs((ly * 12 + lm) - (ano * 12 + mes));
+        return diffMeses <= 1;
+      }
+      return false;
+    };
+    const matchFaturaLinha = (l: any): any | null => {
+      const cts = chqCents(l.valor);
+      if (cts == null || cts === 0) return null;
+      // Pagamento de fatura = SAÍDA (valor negativo no extrato). Evita casar "entrada".
+      if (Number(l.valor) >= 0) return null;
+      const dia = chqDia(l.data);
+      // (1) forte: VALOR TOTAL + data do extrato == vencimento da fatura, quando ÚNICO.
+      if (dia) { const arr = fatByTotalVenc.get(`${cts}|${dia}`); if (arr && arr.length === 1) return arr[0]; }
+      // (2) médio: VALOR TOTAL + descrição com indício de cartão/fatura, quando ÚNICO E na janela temporal.
+      if (pareceCartao(l.descricao)) {
+        const arr = fatByTotal.get(`${cts}`);
+        if (arr && arr.length === 1 && faturaDentroJanela(arr[0], dia)) return arr[0];
+      }
+      return null;
+    };
+
     const extratoSemLancamento = rows(pendRes).map((l: any) => {
       const c = matchChequeLinha(l);
-      if (!c) return l;
-      const num = String(c.numeroCheque ?? "").replace(/^0+/, "") || (c.numeroCheque ?? null);
-      return {
-        ...l,
-        chequeNumero: num ?? null,
-        chequeFornecedor: c.fornecedorNome ?? null,
-        chequeFornecedorId: c.fornecedorId ?? null,
-        chequeObraId: c.obraId ?? null,
-        chequeObraNome: c.obraNome ?? null,
-        chequeNf: c.nf ?? null,
-        chequeVencimento: c.dataVencimento ?? null,
-        chequeBanco: c.bancoNome ?? null,
-      };
+      if (c) {
+        const num = String(c.numeroCheque ?? "").replace(/^0+/, "") || (c.numeroCheque ?? null);
+        return {
+          ...l,
+          chequeNumero: num ?? null,
+          chequeFornecedor: c.fornecedorNome ?? null,
+          chequeFornecedorId: c.fornecedorId ?? null,
+          chequeObraId: c.obraId ?? null,
+          chequeObraNome: c.obraNome ?? null,
+          chequeNf: c.nf ?? null,
+          chequeVencimento: c.dataVencimento ?? null,
+          chequeBanco: c.bancoNome ?? null,
+        };
+      }
+      const f = matchFaturaLinha(l);
+      if (f) {
+        const label = [f.cartaoBanco, f.cartaoBandeira, f.cartaoFinal4 ? `final ${f.cartaoFinal4}` : ""].filter(Boolean).join(" ").trim();
+        return {
+          ...l,
+          faturaId: f.id,
+          faturaCartao: label || "Cartão",
+          faturaVencimento: f.vencimento ?? null,
+          faturaTotal: f.total ?? null,
+          faturaMesRef: f.mesRef ?? null,
+          faturaAnoRef: f.anoRef ?? null,
+          faturaConciliado: Number(f.conciliado) === 1 ? 1 : 0,
+        };
+      }
+      return l;
     });
 
     // 3) Lançamentos do sistema sem conciliação no período — APENAS desta conta.

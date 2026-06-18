@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3230 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · A LISTA "NO EXTRATO, SEM LANÇAMENTO" AGORA CRUZA
+ * TAMBÉM O CONTROLE DE CARTÃO DE CRÉDITO: QUANDO UMA LINHA DO EXTRATO BATE COM O VALOR TOTAL DE UMA
+ * FATURA DE CARTÃO, A LINHA PASSA A MOSTRAR "💳 FATURA <CARTÃO> · REF · VENC." E O BOTÃO "LANÇAR NO
+ * ERP" JÁ ABRE PRÉ-PREENCHIDO COMO UM ÚNICO PAGAMENTO (FORMA = CARTÃO). O DETALHE DOS GASTOS POR
+ * OBRA/CENTRO DE CUSTO CONTINUA NO MÓDULO CARTÃO DE CRÉDITO — A CONCILIAÇÃO SÓ OLHA O VALOR TOTAL.**
+ * - PEDIDO (piloto FC): "o cartão de crédito tem a mesma lógica do controle de cheques, porém aqui o
+ *   ERP deve considerar APENAS o valor total da fatura, pra ver se foi paga ou não; quem quiser
+ *   analisar os custos detalhadamente vê no módulo Cartão de Crédito. Mas a conciliação bancária deve
+ *   OBRIGATORIAMENTE consultar esse banco de dados também pra fazer a correta conciliação."
+ * - CAUSA-RAIZ: a Rev. 3229 cruzou só `financial_cheques`; a fatura do cartão (pagamento ÚNICO no
+ *   extrato, valor = total da fatura) não era identificada → a linha vinha "crua" e o "Lançar" abria
+ *   em branco, sem saber que era a fatura do cartão X.
+ * - SOLUÇÃO (READ-ONLY): BACK (`server/routers/financial.ts`, `getConciliacaoReport`) carrega
+ *   `financial_cartao_faturas` (excluido_em IS NULL, total NOT NULL, READ-ONLY) com LEFT JOIN em
+ *   `financial_cartoes` (banco/bandeira/final4), monta `fatByTotal` (cents → array) e `fatByTotalVenc`
+ *   (cents+vencimento → array) e aplica `matchFaturaLinha` SÓ em SAÍDAS (valor < 0): (1) VALOR TOTAL +
+ *   data do extrato == vencimento da fatura, quando ÚNICO; (2) VALOR TOTAL + descrição com indício de
+ *   cartão/fatura (`pareceCartao`: cart[aã]o|fatura|cr[eé]dito|visa|master|elo|amex|hipercard), quando
+ *   ÚNICO. O cheque tem precedência (match mais específico). A linha casada recebe `faturaId`,
+ *   `faturaCartao`, `faturaVencimento`, `faturaTotal`, `faturaMesRef`, `faturaAnoRef`, `faturaConciliado`.
+ * - FRONT (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): chip índigo "💳 Fatura <cartão> ·
+ *   mm/aaaa · venc." em `renderExtratoRow` (só quando não é cheque); `abrirLancar` pré-preenche
+ *   descrição ("Pagamento fatura cartão X (mm/aaaa)") + forma = cartão (SEM obra/fornecedor — o rateio
+ *   por obra/centro de custo é do módulo Cartão de Crédito); faixa índigo de identificação no diálogo
+ *   "Lançar"; busca livre (`matchBusca`) agora cobre campos de cheque + fatura; PDF do bloco "Extrato
+ *   SEM lançamento" imprime a linha da fatura. ZERO BACKEND DE GRAVAÇÃO · ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3229 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · A LISTA "NO EXTRATO, SEM LANÇAMENTO" AGORA CRUZA
  * TODAS AS INFORMAÇÕES DO CONTROLE DE CHEQUES: CADA LINHA DE COMPENSAÇÃO DE CHEQUE PASSA A MOSTRAR
  * QUEM É O FAVORECIDO (FORNECEDOR · OBRA · NF) E O BOTÃO "LANÇAR NO ERP" JÁ ABRE PRÉ-PREENCHIDO COM

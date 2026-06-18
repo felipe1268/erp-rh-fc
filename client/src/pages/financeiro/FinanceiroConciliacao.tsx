@@ -172,15 +172,21 @@ export default function FinanceiroConciliacao() {
     const descCheque = temCheque
       ? [`Cheque nº ${s.chequeNumero ?? ""}`.trim(), s.chequeFornecedor ? `— ${s.chequeFornecedor}` : "", s.chequeNf ? `(NF ${s.chequeNf})` : ""].filter(Boolean).join(" ")
       : "";
+    // Rev. 3230 — fatura de cartão: o ERP só considera o VALOR TOTAL (pagamento único).
+    // Sem obra/fornecedor (o detalhe por obra/centro vive no módulo Cartão de Crédito).
+    const temFatura = !temCheque && !!s.faturaId;
+    const descFatura = temFatura
+      ? `Pagamento fatura cartão ${s.faturaCartao ?? ""}${s.faturaMesRef ? ` (${String(s.faturaMesRef).padStart(2, "0")}/${s.faturaAnoRef ?? ""})` : ""}`.trim()
+      : "";
     setLancForm({
       data: String(s.data ?? "").slice(0, 10),
       valor: maskBRLInput(String(Math.round(abs * 100))),
-      descricao: temCheque ? (descCheque || descBase) : descBase,
+      descricao: temCheque ? (descCheque || descBase) : (temFatura ? (descFatura || descBase) : descBase),
       obraId: obraDoCheque ? String(obraDoCheque.id) : "",
       contaNome: "",
       centroCustoId: "",
       fornecedorNome: s.chequeFornecedor ?? "",
-      formaPagamento: temCheque ? "cheque" : "",
+      formaPagamento: temCheque ? "cheque" : (temFatura ? "cartao" : ""),
     });
   }
 
@@ -380,6 +386,8 @@ export default function FinanceiroConciliacao() {
     if (!termoBusca) return true;
     const alvo = normBusca([
       r.descricao, r.fornecedorNome, r.obraNome, r.documento, r.doc, r.formaPagamento,
+      r.chequeNumero, r.chequeFornecedor, r.chequeObraNome, r.chequeNf,
+      r.faturaCartao, r.faturaMesRef != null ? `${String(r.faturaMesRef).padStart(2, "0")}/${r.faturaAnoRef ?? ""}` : "",
       fmtData(r.data),
       formatBRL(Math.abs(Number(r.valor) || 0)),
       String(Math.abs(Number(r.valor) || 0)),
@@ -630,6 +638,11 @@ export default function FinanceiroConciliacao() {
               🪙 Cheque nº {s.chequeNumero ?? "—"} · {s.chequeFornecedor}{s.chequeObraNome ? ` · ${s.chequeObraNome}` : ""}
             </p>
           )}
+          {s.faturaId && !s.chequeFornecedor && (
+            <p className="text-[11px] text-indigo-700 truncate" title={`Fatura do cartão ${s.faturaCartao ?? "—"}${s.faturaVencimento ? ` · venc. ${fmtData(s.faturaVencimento)}` : ""}${s.faturaTotal != null ? ` · total ${formatBRL(Math.abs(Number(s.faturaTotal)))}` : ""}`}>
+              💳 Fatura {s.faturaCartao ?? "cartão"}{s.faturaMesRef ? ` · ${String(s.faturaMesRef).padStart(2, "0")}/${s.faturaAnoRef ?? ""}` : ""}{s.faturaVencimento ? ` · venc. ${fmtData(s.faturaVencimento)}` : ""}
+            </p>
+          )}
         </div>
         <p className={`text-sm font-bold shrink-0 ${isEntrada ? "text-emerald-600" : "text-rose-500"}`}>{formatBRL(Math.abs(Number(s.valor)))}</p>
       </button>
@@ -832,7 +845,7 @@ export default function FinanceiroConciliacao() {
       ? repConc.map((c: any) => `<tr><td>${esc(fmtData(c.data))}</td><td>${esc(c.descricao || "—")}</td><td>${esc(c.entryFornecedor || c.entryDescricao || ("Lançamento #" + (c.entryId ?? "")))}</td><td class="r">${esc(formatBRL(Math.abs(Number(c.valor) || 0)))}</td></tr>`).join("")
       : `<tr><td colspan="4" class="empty">Nenhuma linha conciliada no período.</td></tr>`;
     const rowsExt = repExt.length
-      ? repExt.map((c: any) => `<tr><td>${esc(fmtData(c.data))}</td><td>${esc(c.descricao || "—")}${c.chequeFornecedor ? `<br><span style="color:#047857;font-size:10px">🪙 Cheque nº ${esc(c.chequeNumero ?? "—")} · ${esc(c.chequeFornecedor)}${c.chequeObraNome ? ` · ${esc(c.chequeObraNome)}` : ""}${c.chequeNf ? ` · NF ${esc(c.chequeNf)}` : ""}</span>` : ""}</td><td>${esc(Number(c.valor) >= 0 ? "Entrada" : "Saída")}</td><td class="r">${esc(formatBRL(Math.abs(Number(c.valor) || 0)))}</td></tr>`).join("")
+      ? repExt.map((c: any) => `<tr><td>${esc(fmtData(c.data))}</td><td>${esc(c.descricao || "—")}${c.chequeFornecedor ? `<br><span style="color:#047857;font-size:10px">🪙 Cheque nº ${esc(c.chequeNumero ?? "—")} · ${esc(c.chequeFornecedor)}${c.chequeObraNome ? ` · ${esc(c.chequeObraNome)}` : ""}${c.chequeNf ? ` · NF ${esc(c.chequeNf)}` : ""}</span>` : (c.faturaId ? `<br><span style="color:#4338ca;font-size:10px">💳 Fatura ${esc(c.faturaCartao ?? "cartão")}${c.faturaMesRef ? ` · ${esc(String(c.faturaMesRef).padStart(2, "0"))}/${esc(c.faturaAnoRef ?? "")}` : ""}${c.faturaVencimento ? ` · venc. ${esc(fmtData(c.faturaVencimento))}` : ""}</span>` : "")}</td><td>${esc(Number(c.valor) >= 0 ? "Entrada" : "Saída")}</td><td class="r">${esc(formatBRL(Math.abs(Number(c.valor) || 0)))}</td></tr>`).join("")
       : `<tr><td colspan="4" class="empty">Sem pendências — todo o extrato está conciliado.</td></tr>`;
     const rowsLan = repLan.length
       ? repLan.map((c: any) => `<tr><td>${esc(fmtData(c.data))}</td><td>${esc(c.fornecedorNome || c.descricao || ("Lançamento #" + c.id))}</td><td>${esc(c.obraNome || "—")}</td><td class="r">${esc(formatBRL(Math.abs(Number(c.valor) || 0)))}</td></tr>`).join("")
@@ -2159,6 +2172,15 @@ export default function FinanceiroConciliacao() {
                     {lancStatement.chequeNf ? <> · NF {lancStatement.chequeNf}</> : null}
                     {lancStatement.chequeVencimento ? <> · venc. {fmtData(lancStatement.chequeVencimento)}</> : null}
                     . Fornecedor, obra e forma de pagamento já foram pré-preenchidos — confira a categoria e o centro de custo.
+                  </div>
+                )}
+                {lancStatement.faturaId && !lancStatement.chequeFornecedor && (
+                  <div className="rounded-lg bg-indigo-50 border border-indigo-100 px-3 py-2 text-xs text-indigo-800">
+                    💳 Identificado no <strong>Controle de Cartão de Crédito</strong>: fatura do cartão <strong>{lancStatement.faturaCartao ?? "—"}</strong>
+                    {lancStatement.faturaMesRef ? <> · ref. <strong>{String(lancStatement.faturaMesRef).padStart(2, "0")}/{lancStatement.faturaAnoRef ?? ""}</strong></> : null}
+                    {lancStatement.faturaVencimento ? <> · venc. {fmtData(lancStatement.faturaVencimento)}</> : null}
+                    {lancStatement.faturaTotal != null ? <> · total <strong>{formatBRL(Math.abs(Number(lancStatement.faturaTotal)))}</strong></> : null}
+                    . Aqui a fatura entra como <strong>um único pagamento</strong> (forma = cartão); o detalhe dos gastos por obra/centro de custo fica no módulo <strong>Cartão de Crédito</strong>.
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-3">
