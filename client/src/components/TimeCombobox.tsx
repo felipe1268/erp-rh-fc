@@ -57,6 +57,12 @@ export function TimeCombobox({
       return `${h}:${m}`;
     }
 
+    // "1 hora", "2 horas"
+    const horaMatch = trimmed.match(/^(\d{1,2})\s*horas?$/i);
+    if (horaMatch) {
+      return `${horaMatch[1].padStart(2, "0")}:00`;
+    }
+
     // Just numbers: "0730" → "07:30", "17" → "17:00"
     if (/^\d{3,4}$/.test(trimmed)) {
       const padded = trimmed.padStart(4, "0");

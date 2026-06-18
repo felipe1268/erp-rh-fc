@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3271 — **OBRAS / CADASTRO · O BADGE "Xh/SEMANA" DA "JORNADA DE TRABALHO DA OBRA" MOSTRAVA
+ * 35h/SEMANA QUANDO A JORNADA LANÇADA SOMAVA 44h (SEG–QUI 12:00–22:00 c/ 1h INTERVALO = 9h; SEX
+ * 12:00–21:00 c/ 1h = 8h → 4×9+8 = 44h). CAUSA: UM DIA TINHA O INTERVALO GRAVADO COMO O RÓTULO
+ * "1 hora" (NÃO O VALUE "01:00"), O QUE QUEBRAVA O PARSE E DESCARTAVA O DIA INTEIRO DO TOTAL. AGORA
+ * O CÁLCULO É ROBUSTO E O BADGE BATE OS 44h. 100% SÓ FRONT.**
+ * - PEDIDO (piloto FC): "no cadastro de obra, por que você está considerando 35h semanais sendo que a
+ *   jornada lançada soma 44h?" (print com Seg–Qui 12:00–22:00 / 1 hora e Sex 12:00–21:00 / 1 hora).
+ * - CAUSA: o badge somava os minutos por dia com `intv.split(":").map(Number)`. Quando o intervalo
+ *   estava gravado como o RÓTULO "1 hora" (em vez do value "01:00") — o que acontece quando o valor é
+ *   DIGITADO livremente no `TimeCombobox` (o `parseTimeInput` não convertia "1 hora") ou veio de dado
+ *   antigo — `"1 hora".split(":")` → `["1 hora"]` → `Number` = `NaN`; `mins` virava `NaN`, o guard
+ *   `if (mins > 0)` falhava e AQUELE DIA INTEIRO (9h) era descartado. 44h − 9h = exatamente os 35h do
+ *   print. Visualmente "01:00" e "1 hora" são idênticos no combobox (ambos exibem "1 hora"), por isso o
+ *   bug passava despercebido.
+ * - SOLUÇÃO (SÓ FRONT):
+ *   1) `client/src/pages/Obras.tsx` — novos helpers de módulo `jornadaParaMinutos` (tolera "HH:MM",
+ *      "1 hora"/"2 horas", "1h30", "30 min" e número puro=horas) e `minutosParaHHMM`. `jornadaParaMinutos`
+ *      retorna SENTINELA `null` para ausente/inválido (≠ 0, que é "00:00" válido), forçando o chamador a
+ *      DESCARTAR o dia em vez de tratar lixo textual como meia-noite (que inflaria a jornada). No badge:
+ *      entrada/saída inválidas (`null`) descartam o dia; intervalo inválido cai p/ 0 (sem descontar nem
+ *      descartar o dia).
+ *   2) `comporJornadaObra` (gravação) agora NORMALIZA entrada/intervalo/saída para "HH:MM" canônico antes
+ *      de serializar o JSON — cura o dado na origem (badge E backend leem valor limpo no próximo save);
+ *      intervalo inválido/zerado vira "" (sem desconto), entrada/saída inválidas mantêm o raw.
+ *   3) `client/src/components/TimeCombobox.tsx` — `parseTimeInput` ganhou branch p/ "1 hora"/"2 horas"
+ *      → "01:00"/"02:00", evitando que digitação livre regrave o rótulo.
+ * - RESSALVA: obras antigas com intervalo-rótulo persistido só têm o JSON curado ao serem reabertas e
+ *   salvas; o badge já exibe certo ao vivo independentemente disso.
+ * - ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3270 — **RH & DP / COLABORADORES · AO IMPRIMIR (OU GERAR PDF) A "LISTA DE COLABORADORES
  * DESLIGADOS", OS FUNCIONÁRIOS DA BLACKLIST (LISTA NEGRA) AGORA TAMBÉM ENTRAM NA LISTA IMPRESSA,
  * INTERCALADOS EM ORDEM ALFABÉTICA COM OS DESLIGADOS NORMAIS E COM O BADGE "⚑ BLACKLIST" NA COLUNA

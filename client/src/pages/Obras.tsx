@@ -21,6 +21,33 @@ import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { removeAccents } from "@/lib/searchUtils";
 
+// Converte qualquer representação de hora/duração ("HH:MM", "1 hora", "2 horas",
+// "1h30", "30 min", "8") para minutos. Robusto contra dados gravados como RÓTULO
+// (ex.: intervalo "1 hora" em vez do value "01:00"), que quebrava o cálculo.
+// Retorna minutos ou `null` quando o valor é ausente/inválido (sentinela).
+// `null` ≠ 0: 0 é um horário válido ("00:00"); `null` força o chamador a
+// descartar o dia em vez de tratar lixo textual como meia-noite (inflaria a jornada).
+const jornadaParaMinutos = (raw: string | undefined | null): number | null => {
+  if (!raw) return null;
+  const s = String(raw).trim().toLowerCase();
+  if (!s || s === "-") return null;
+  let m = s.match(/^(\d{1,2}):(\d{2})$/);            // HH:MM
+  if (m) return Number(m[1]) * 60 + Number(m[2]);
+  m = s.match(/^(\d{1,2})h(\d{1,2})?$/);             // 1h30, 1h
+  if (m) return Number(m[1]) * 60 + Number(m[2] || 0);
+  m = s.match(/^(\d{1,2})\s*horas?$/);               // 1 hora, 2 horas
+  if (m) return Number(m[1]) * 60;
+  m = s.match(/^(\d{1,3})\s*min/);                   // 30 min, 30min
+  if (m) return Number(m[1]);
+  m = s.match(/^(\d{1,2})$/);                        // só número = horas
+  if (m) return Number(m[1]) * 60;
+  return null;
+};
+const minutosParaHHMM = (min: number): string => {
+  const h = Math.floor(min / 60), mm = min % 60;
+  return `${String(h).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+};
+
 const STATUS_OPTIONS = [
   { value: "Planejamento", label: "Planejamento", color: "bg-blue-100 text-blue-800" },
   { value: "Em_Andamento", label: "Em Andamento", color: "bg-green-100 text-green-800" },
@@ -189,10 +216,22 @@ export default function Obras() {
   const comporJornadaObra = (): string | null => {
     const obj: Record<string, { entrada: string; intervalo: string; saida: string }> = {};
     DIAS_JORNADA.forEach(({ key }) => {
-      const entrada = jornadaForm[`jornada_${key}_entrada`] || "";
-      const intervalo = jornadaForm[`jornada_${key}_intervalo`] || "";
-      const saida = jornadaForm[`jornada_${key}_saida`] || "";
-      if (entrada && saida) obj[key] = { entrada, intervalo, saida };
+      const entradaRaw = jornadaForm[`jornada_${key}_entrada`] || "";
+      const intervaloRaw = jornadaForm[`jornada_${key}_intervalo`] || "";
+      const saidaRaw = jornadaForm[`jornada_${key}_saida`] || "";
+      if (entradaRaw && saidaRaw) {
+        // Normaliza tudo p/ "HH:MM" canônico — evita gravar rótulo ("1 hora")
+        // que depois quebra o cálculo de horas (badge e backend).
+        const entMin = jornadaParaMinutos(entradaRaw);
+        const saiMin = jornadaParaMinutos(saidaRaw);
+        const intMin = jornadaParaMinutos(intervaloRaw);
+        obj[key] = {
+          // Inválido → mantém o raw (backward compat, não corrompe dado válido).
+          entrada: entMin !== null ? minutosParaHHMM(entMin) : entradaRaw,
+          intervalo: intMin !== null && intMin > 0 ? minutosParaHHMM(intMin) : "",
+          saida: saiMin !== null ? minutosParaHHMM(saiMin) : saidaRaw,
+        };
+      }
     });
     return Object.keys(obj).length > 0 ? JSON.stringify(obj) : null;
   };
@@ -1142,11 +1181,14 @@ export default function Obras() {
                       const ent = jornadaForm[`jornada_${key}_entrada`];
                       const sai = jornadaForm[`jornada_${key}_saida`];
                       const intv = jornadaForm[`jornada_${key}_intervalo`];
-                      if (ent && sai) {
-                        const [eh, em2] = ent.split(":").map(Number);
-                        const [sh, sm] = sai.split(":").map(Number);
-                        let mins = (sh * 60 + sm) - (eh * 60 + em2);
-                        if (intv) { const [ih, im] = intv.split(":").map(Number); mins -= (ih * 60 + im); }
+                      const entMin = jornadaParaMinutos(ent);
+                      const saiMin = jornadaParaMinutos(sai);
+                      // Entrada/saída inválidas → descarta o dia (não trata lixo como 00:00).
+                      if (entMin !== null && saiMin !== null) {
+                        let mins = saiMin - entMin;
+                        // Intervalo inválido cai p/ 0 (não descarta o dia inteiro).
+                        const intMin = jornadaParaMinutos(intv);
+                        if (intMin !== null && intMin > 0) mins -= intMin;
                         if (mins > 0) totalMin += mins;
                       }
                     });
