@@ -490,7 +490,6 @@ const menuSectionsFinanceiro: MenuSection[] = [
     title: "Movimentações",
     items: [
       { icon: DollarSign,    label: "Lançamentos",       path: "/financeiro/lancamentos" },
-      { icon: TrendingUp,    label: "Previsão de Faturamento",   path: "/financeiro/contas-a-receber" },
       { icon: HandCoins,     label: "Contas a Receber",   path: "/financeiro/contas-a-receber-titulos" },
       { icon: CheckCircle,   label: "Contas a Pagar",     path: "/financeiro/contas-a-pagar" },
       { icon: ArrowLeftRight, label: "Conciliação Bancária", path: "/financeiro/conciliacao" },
@@ -501,6 +500,7 @@ const menuSectionsFinanceiro: MenuSection[] = [
   {
     title: "Análise",
     items: [
+      { icon: TrendingUp,    label: "Previsão de Faturamento", path: "/financeiro/contas-a-receber" },
       { icon: Scissors,      label: "Análise de Custos", path: "/financeiro/analise-custos" },
       { icon: TrendingUp,    label: "Cronograma Financeiro", path: "/financeiro/cronograma" },
       { icon: BarChart3,     label: "DRE",               path: "/financeiro/dre" },

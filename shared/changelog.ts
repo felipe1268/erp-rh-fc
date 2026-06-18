@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3268 — **FINANCEIRO / MENU LATERAL · O ITEM "PREVISÃO DE FATURAMENTO" SAIU DO GRUPO
+ * "MOVIMENTAÇÕES" E PASSOU PARA O GRUPO "ANÁLISE" (LOGO ACIMA DE "ANÁLISE DE CUSTOS"), QUE FAZ MAIS
+ * SENTIDO PELO CARÁTER ANALÍTICO/PROJETIVO DA TELA. SÓ ORGANIZAÇÃO DE MENU — A ROTA E A TELA NÃO MUDAM.**
+ * - PEDIDO (piloto FC): "coloque a previsão de faturamento no grupo de análise, faz mais sentido ela lá".
+ * - SOLUÇÃO (SÓ FRONT, `client/src/components/DashboardLayout.tsx`, `menuSectionsFinanceiro`): o item
+ *   `{ icon: TrendingUp, label: "Previsão de Faturamento", path: "/financeiro/contas-a-receber" }` foi
+ *   REMOVIDO da seção "Movimentações" e INSERIDO no topo da seção "Análise". A rota (`/financeiro/
+ *   contas-a-receber`), o ícone (`TrendingUp`) e a permissão associada são exatamente os mesmos —
+ *   nenhuma rota nova, nenhum registro de permissão a mexer.
+ * - ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3267 — **FINANCEIRO / CARTÃO DE CRÉDITO · O DIÁLOGO "IMPORTAR FATURA (PDF)" GANHOU UMA BARRA DE
  * PROGRESSO DE 0 A 100% DURANTE A LEITURA DO PDF PELA IA, NO LUGAR DO SPINNER "PELADO" QUE NÃO DAVA
  * NOÇÃO DE ANDAMENTO. A BARRA SOBE SUAVEMENTE ENQUANTO A IA LÊ E CRAVA 100% AO TERMINAR (ENTÃO MOSTRA
