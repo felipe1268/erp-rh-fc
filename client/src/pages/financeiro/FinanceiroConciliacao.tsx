@@ -797,6 +797,11 @@ export default function FinanceiroConciliacao() {
               {s.demoTipo === "boleto" ? "🧾" : "💸"} {s.demoTipo === "boleto" ? "Boleto" : s.demoTipo === "ted" ? "TED" : "PIX"}{s.demoBeneficiario ? ` · ${s.demoBeneficiario}` : ""}{s.demoMatch === "valor" ? " · provável" : ""} <span className="opacity-60">(demonstrativo)</span>
             </p>
           )}
+          {s.vinculoTipo && (
+            <p className={`text-[11px] truncate ${s.vinculoVia === "cnpj" ? "text-emerald-700" : "text-amber-700"}`} title={`${s.vinculoTipo === "cliente" ? "Cliente" : "Fornecedor"} cadastrado: ${s.vinculoNome}${s.vinculoVia === "cnpj" ? " · CNPJ confere com o cadastro" : " · sugestão por nome — confira antes de lançar"}`}>
+              {s.vinculoTipo === "cliente" ? "👤" : "🏢"} {s.vinculoTipo === "cliente" ? "Cliente" : "Fornecedor"}: {s.vinculoNome}{s.vinculoVia === "nome" ? " · sugestão" : ""} <span className="opacity-60">(cadastro)</span>
+            </p>
+          )}
         </div>
         <p className={`text-sm font-bold shrink-0 ${isEntrada ? "text-emerald-600" : "text-rose-500"}`}>{formatBRL(Math.abs(Number(s.valor)))}</p>
       </button>

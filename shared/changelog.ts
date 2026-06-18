@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3265 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NA LISTA "NO EXTRATO, SEM LANÇAMENTO", CADA LINHA
+ * AGORA TENTA SE AMARRAR AO CADASTRO — IGUAL AO VÍNCULO DOS CHEQUES: SAÍDA (PAGAMENTO) PROCURA UM
+ * FORNECEDOR CADASTRADO E ENTRADA (RECEBÍVEL) PROCURA UM CLIENTE CADASTRADO. QUANDO O CNPJ APARECE NA
+ * DESCRIÇÃO DO EXTRATO E CASA COM O CADASTRO, MOSTRA UM BADGE VERDE "🏢 FORNECEDOR: NOME (CADASTRO)" /
+ * "👤 CLIENTE: NOME (CADASTRO)"; QUANDO SÓ O NOME BATE (BENEFICIÁRIO DO DEMONSTRATIVO OU DA DESCRIÇÃO),
+ * MOSTRA UM BADGE ÂMBAR "· SUGESTÃO" P/ O USUÁRIO CONFERIR. 100% READ-ONLY — SÓ IDENTIFICA/SUGERE, NÃO
+ * CONCILIA NEM BAIXA NADA.**
+ * - PEDIDO (piloto FC): "Seria possível fazer a mesma lógica de tentar vincular com o cadastro do
+ *   fornecedor, e tentar vincular os recebíveis com o cadastro dos clientes? Se sim, pode fazer"
+ *   (prints IMG_2198 — lista "No extrato, sem lançamento" com linhas trazendo CNPJ na descrição, ex.:
+ *   "PAG BOLETO IBC - GAUCHO COMERCIO DE PARAFUSOS E FERRAMENT - 18.443.081/0001-60"; IMG_2199 — tela
+ *   de Clientes cadastrados PJ/PF).
+ * - CAUSA: até a Rev. 3263 só o CHEQUE puxava o fornecedor (do Controle de Cheques, via
+ *   `chequeFornecedorId`); os DEMAIS pagamentos/recebimentos (PIX, boleto, TED, débito) ficavam sem
+ *   nenhum vínculo ao cadastro de Fornecedores/Clientes, mesmo quando a descrição do extrato trazia o
+ *   CNPJ ou o nome do beneficiário.
+ * - SOLUÇÃO (SÓ LEITURA, espelha `normCnpj`/`matchFornecedor` do módulo PJ — Rev. 3262):
+ *   • BACK (`server/routers/financial.ts`, `getConciliacaoStatus`): novos helpers `_normCnpj`/`_normNome`
+ *     + `buildCadIdx` indexam por CNPJ (14 díg.) e por nome (razão/fantasia, sem sufixos societários);
+ *     2 queries READ-ONLY tenant-bound carregam `fornecedores` (ativo) e `clientes` (ativo); `extrCnpj`
+ *     extrai o CNPJ da descrição do extrato (regex tolerante a pontuação); `matchCadastro(l, beneficiario)`
+ *     escolhe o índice pela natureza da linha (ENTRADA→clientes, SAÍDA→fornecedores) e casa, do forte p/
+ *     o fraco: (1) CNPJ exato → `via:"cnpj"` (verde); (2) nome do beneficiário do demonstrativo OU da
+ *     própria descrição (exato ou substring ≥6 chars) → `via:"nome"` (âmbar/"sugestão").
+ *   • O map `extratoSemLancamento` foi reestruturado de early-returns p/ if/else aninhado, anexando os
+ *     campos `vinculoTipo`/`vinculoId`/`vinculoNome`/`vinculoVia` ao objeto da linha. O vínculo é PULADO
+ *     quando o cheque já amarrou fornecedor (`chequeFornecedorId`) ou quando é fatura de cartão
+ *     (`faturaId`) — ali o fornecedor não se aplica.
+ *   • FRONT (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`, `renderExtratoRow`): novo badge
+ *     (verde se `vinculoVia==="cnpj"`, âmbar se `"nome"`) "🏢 Fornecedor: X" / "👤 Cliente: X" com
+ *     `title` explicando se o CNPJ confere ou se é sugestão por nome a confirmar.
+ * - EFEITO: pagamentos e recebíveis "soltos" no extrato passam a apontar O FORNECEDOR/CLIENTE provável do
+ *   cadastro, acelerando o "Lançar no ERP" sem nunca conciliar automaticamente.
+ * - ZERO BACKEND DE ESCRITA · ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3264 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NA SEÇÃO "SUGESTÕES AUTOMÁTICAS DE CONCILIAÇÃO",
  * AGORA DÁ PARA CLICAR TANTO NO ITEM DO EXTRATO (BANCO) QUANTO NO LANÇAMENTO DO ERP PARA ABRIR O DETALHE
  * COMPLETO DA DESPESA/RECEITA — COM UM NOVO BLOCO "CONFERÊNCIA DA CONCILIAÇÃO" QUE COLOCA OS DOIS LADOS

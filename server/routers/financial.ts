@@ -4481,11 +4481,75 @@ export const financialRouter = router({
       return null;
     };
 
+    // 2c-ter) Rev. 3265 — VÍNCULO DA LINHA DO EXTRATO COM O CADASTRO (mesma filosofia do
+    // cheque, agora p/ os DEMAIS pagamentos/recebimentos): SAÍDA → tenta amarrar a um
+    // FORNECEDOR cadastrado; ENTRADA → tenta amarrar a um CLIENTE (recebível). Sinal FORTE =
+    // CNPJ presente na descrição do extrato casa com o cadastro (badge "cadastro"); FRACO =
+    // nome do beneficiário (vindo do demonstrativo) OU da própria descrição casa por nome
+    // (rótulo "sugestão", p/ o usuário confirmar). READ-ONLY: só identifica/sugere — não grava
+    // nem concilia nada (honra "conciliação só sugestiva"). Espelha `normCnpj`/`matchFornecedor`
+    // do módulo PJ (Rev. 3262).
+    const _normCnpj = (v: any) => String(v ?? "").replace(/\D/g, "");
+    const _normNome = (v: any) => {
+      let s = String(v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase()
+        .replace(/[^A-Z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+      return s.replace(/\b(LTDA|EIRELI|EPP|MEI|ME|SA)\b/g, " ").replace(/\s+/g, " ").trim();
+    };
+    type CadHit = { id: number; nome: string };
+    type CadIdx = { porCnpj: Map<string, CadHit>; porNome: Map<string, CadHit> };
+    const buildCadIdx = (arr: any[]): CadIdx => {
+      const porCnpj = new Map<string, CadHit>();
+      const porNome = new Map<string, CadHit>();
+      for (const f of arr) {
+        const nome = f.razaoSocial || f.nomeFantasia || "";
+        const c = _normCnpj(f.cnpj);
+        if (c.length === 14 && !porCnpj.has(c)) porCnpj.set(c, { id: f.id, nome });
+        const rz = _normNome(f.razaoSocial); if (rz && !porNome.has(rz)) porNome.set(rz, { id: f.id, nome });
+        const nf = _normNome(f.nomeFantasia); if (nf && !porNome.has(nf)) porNome.set(nf, { id: f.id, nome });
+      }
+      return { porCnpj, porNome };
+    };
+    const fornRes = await dbExecute(db,
+      `SELECT id, cnpj, razao_social AS "razaoSocial", nome_fantasia AS "nomeFantasia"
+         FROM fornecedores WHERE company_id=$1 AND COALESCE(ativo,true)=true`,
+      [input.companyId]);
+    const cliRes = await dbExecute(db,
+      `SELECT id, cnpj, razao_social AS "razaoSocial", nome_fantasia AS "nomeFantasia"
+         FROM clientes WHERE company_id=$1 AND COALESCE(ativo,true)=true`,
+      [input.companyId]);
+    const fornIdx = buildCadIdx(rows(fornRes) as any[]);
+    const cliIdx = buildCadIdx(rows(cliRes) as any[]);
+    const extrCnpj = (descricao: any): string | null => {
+      const m = String(descricao ?? "").match(/\b(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})\b/);
+      if (m && m[1]) { const c = m[1].replace(/\D/g, ""); return c.length === 14 ? c : null; }
+      return null;
+    };
+    const matchCadastro = (l: any, beneficiario: string | null): { tipo: "fornecedor" | "cliente"; id: number; nome: string; via: "cnpj" | "nome" } | null => {
+      const isEntrada = Number(l.valor) >= 0;
+      const idx = isEntrada ? cliIdx : fornIdx;
+      const tipo: "fornecedor" | "cliente" = isEntrada ? "cliente" : "fornecedor";
+      // 1) CNPJ na descrição do extrato (forte)
+      const c = extrCnpj(l.descricao);
+      if (c) { const hit = idx.porCnpj.get(c); if (hit) return { tipo, id: hit.id, nome: hit.nome, via: "cnpj" }; }
+      // 2) nome do beneficiário (demonstrativo) ou da própria descrição (fraco → "sugestão")
+      for (const cand of [beneficiario, l.descricao]) {
+        const n = _normNome(cand);
+        if (!n || n.length < 4) continue;
+        const exato = idx.porNome.get(n);
+        if (exato) return { tipo, id: exato.id, nome: exato.nome, via: "nome" };
+        for (const [nm, hit] of idx.porNome) {
+          if (nm.length >= 6 && (nm.includes(n) || n.includes(nm))) return { tipo, id: hit.id, nome: hit.nome, via: "nome" };
+        }
+      }
+      return null;
+    };
+
     const extratoSemLancamento = rows(pendRes).map((l: any) => {
+      let out: any = l;
       const c = matchChequeLinha(l);
       if (c) {
         const num = String(c.numeroCheque ?? "").replace(/^0+/, "") || (c.numeroCheque ?? null);
-        return {
+        out = {
           ...l,
           chequeNumero: num ?? null,
           chequeFornecedor: c.fornecedorNome ?? null,
@@ -4496,37 +4560,46 @@ export const financialRouter = router({
           chequeVencimento: c.dataVencimento ?? null,
           chequeBanco: c.bancoNome ?? null,
         };
+      } else {
+        const f = matchFaturaLinha(l);
+        if (f) {
+          const label = [f.cartaoBanco, f.cartaoBandeira, f.cartaoFinal4 ? `final ${f.cartaoFinal4}` : ""].filter(Boolean).join(" ").trim();
+          out = {
+            ...l,
+            faturaId: f.id,
+            faturaCartao: label || "Cartão",
+            faturaVencimento: f.vencimento ?? null,
+            faturaTotal: f.total ?? null,
+            faturaMesRef: f.mesRef ?? null,
+            faturaAnoRef: f.anoRef ?? null,
+            faturaConciliado: Number(f.conciliado) === 1 ? 1 : 0,
+          };
+        } else {
+          // Rev. 3238 — SEGUNDA VERIFICAÇÃO: nada casou (lançamento/cheque/fatura). Consulta os
+          // demonstrativos de pagamento (PIX/boleto lidos por IA) p/ identificar beneficiário + tipo.
+          const d = matchDemonstrativoLinha(l);
+          if (d) {
+            const tipo = d.it.tipoDoc && /pix|boleto|ted/i.test(d.it.tipoDoc) ? d.it.tipoDoc.toLowerCase() : d.it.origemTipo;
+            out = {
+              ...l,
+              demoBeneficiario: d.it.beneficiario ?? null,
+              demoDocumento: d.it.documento ?? null,
+              demoTxid: d.it.txid ?? null,
+              demoTipo: tipo,        // "pix" | "boleto" | "ted"
+              demoData: d.it.data ?? null,
+              demoMatch: d.origem,   // "txid" | "data" | "valor"
+            };
+          }
+        }
       }
-      const f = matchFaturaLinha(l);
-      if (f) {
-        const label = [f.cartaoBanco, f.cartaoBandeira, f.cartaoFinal4 ? `final ${f.cartaoFinal4}` : ""].filter(Boolean).join(" ").trim();
-        return {
-          ...l,
-          faturaId: f.id,
-          faturaCartao: label || "Cartão",
-          faturaVencimento: f.vencimento ?? null,
-          faturaTotal: f.total ?? null,
-          faturaMesRef: f.mesRef ?? null,
-          faturaAnoRef: f.anoRef ?? null,
-          faturaConciliado: Number(f.conciliado) === 1 ? 1 : 0,
-        };
+      // Rev. 3265 — vínculo com o cadastro (fornecedor p/ saída, cliente p/ entrada). Pulado
+      // quando o cheque já amarrou um fornecedor (`chequeFornecedorId`) ou quando é fatura de
+      // cartão (`faturaId`) — ali o fornecedor não se aplica.
+      if (!out.chequeFornecedorId && !out.faturaId) {
+        const vinc = matchCadastro(l, out.demoBeneficiario ?? null);
+        if (vinc) out = { ...out, vinculoTipo: vinc.tipo, vinculoId: vinc.id, vinculoNome: vinc.nome, vinculoVia: vinc.via };
       }
-      // Rev. 3238 — SEGUNDA VERIFICAÇÃO: nada casou (lançamento/cheque/fatura). Consulta os
-      // demonstrativos de pagamento (PIX/boleto lidos por IA) p/ identificar beneficiário + tipo.
-      const d = matchDemonstrativoLinha(l);
-      if (d) {
-        const tipo = d.it.tipoDoc && /pix|boleto|ted/i.test(d.it.tipoDoc) ? d.it.tipoDoc.toLowerCase() : d.it.origemTipo;
-        return {
-          ...l,
-          demoBeneficiario: d.it.beneficiario ?? null,
-          demoDocumento: d.it.documento ?? null,
-          demoTxid: d.it.txid ?? null,
-          demoTipo: tipo,        // "pix" | "boleto" | "ted"
-          demoData: d.it.data ?? null,
-          demoMatch: d.origem,   // "txid" | "data" | "valor"
-        };
-      }
-      return l;
+      return out;
     });
 
     // 2d) Rev. 3235 — TENTATIVA DE PAGAMENTO FRUSTRADA (cheque devolvido/sustado).
