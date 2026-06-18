@@ -178,15 +178,23 @@ export default function FinanceiroConciliacao() {
     const descFatura = temFatura
       ? `Pagamento fatura cartão ${s.faturaCartao ?? ""}${s.faturaMesRef ? ` (${String(s.faturaMesRef).padStart(2, "0")}/${s.faturaAnoRef ?? ""})` : ""}`.trim()
       : "";
+    // Rev. 3238 — segunda verificação: identificado nos Demonstrativos de pagamento (PIX/boleto
+    // lidos por IA). Pré-preenche beneficiário, forma (pix/boleto/ted) e enriquece a descrição.
+    const temDemo = !temCheque && !temFatura && (!!s.demoBeneficiario || !!s.demoTipo);
+    const demoLabel = s.demoTipo === "boleto" ? "Boleto" : s.demoTipo === "ted" ? "TED" : "PIX";
+    const demoForma = s.demoTipo === "boleto" ? "boleto" : s.demoTipo === "ted" ? "transferencia" : "pix";
+    const descDemo = temDemo
+      ? [demoLabel, s.demoBeneficiario ? `— ${s.demoBeneficiario}` : "", s.demoDocumento ? `(${s.demoDocumento})` : ""].filter(Boolean).join(" ").trim()
+      : "";
     setLancForm({
       data: String(s.data ?? "").slice(0, 10),
       valor: maskBRLInput(String(Math.round(abs * 100))),
-      descricao: temCheque ? (descCheque || descBase) : (temFatura ? (descFatura || descBase) : descBase),
+      descricao: temCheque ? (descCheque || descBase) : (temFatura ? (descFatura || descBase) : (temDemo ? (descDemo || descBase) : descBase)),
       obraId: obraDoCheque ? String(obraDoCheque.id) : "",
       contaNome: "",
       centroCustoId: "",
-      fornecedorNome: s.chequeFornecedor ?? "",
-      formaPagamento: temCheque ? "cheque" : (temFatura ? "cartao" : ""),
+      fornecedorNome: s.chequeFornecedor ?? (temDemo ? (s.demoBeneficiario ?? "") : ""),
+      formaPagamento: temCheque ? "cheque" : (temFatura ? "cartao" : (temDemo ? demoForma : "")),
     });
   }
 
@@ -395,6 +403,7 @@ export default function FinanceiroConciliacao() {
       r.descricao, r.fornecedorNome, r.obraNome, r.documento, r.doc, r.formaPagamento,
       r.chequeNumero, r.chequeFornecedor, r.chequeObraNome, r.chequeNf,
       r.faturaCartao, r.faturaMesRef != null ? `${String(r.faturaMesRef).padStart(2, "0")}/${r.faturaAnoRef ?? ""}` : "",
+      r.demoBeneficiario, r.demoDocumento, r.demoTipo,
       fmtData(r.data),
       formatBRL(Math.abs(Number(r.valor) || 0)),
       String(Math.abs(Number(r.valor) || 0)),
@@ -673,6 +682,11 @@ export default function FinanceiroConciliacao() {
               💳 Fatura {s.faturaCartao ?? "cartão"}{s.faturaMesRef ? ` · ${String(s.faturaMesRef).padStart(2, "0")}/${s.faturaAnoRef ?? ""}` : ""}{s.faturaVencimento ? ` · venc. ${fmtData(s.faturaVencimento)}` : ""}
             </p>
           )}
+          {!s.chequeFornecedor && !s.faturaId && (s.demoBeneficiario || s.demoTipo) && (
+            <p className="text-[11px] text-violet-700 truncate" title={`Identificado nos Demonstrativos de pagamento (leitura por IA): ${s.demoTipo === "boleto" ? "Boleto" : s.demoTipo === "ted" ? "TED" : "PIX"}${s.demoBeneficiario ? ` — ${s.demoBeneficiario}` : ""}${s.demoDocumento ? ` · ${s.demoDocumento}` : ""}${s.demoMatch === "valor" ? " · correspondência provável (só valor)" : ""}`}>
+              {s.demoTipo === "boleto" ? "🧾" : "💸"} {s.demoTipo === "boleto" ? "Boleto" : s.demoTipo === "ted" ? "TED" : "PIX"}{s.demoBeneficiario ? ` · ${s.demoBeneficiario}` : ""}{s.demoMatch === "valor" ? " · provável" : ""} <span className="opacity-60">(demonstrativo)</span>
+            </p>
+          )}
         </div>
         <p className={`text-sm font-bold shrink-0 ${isEntrada ? "text-emerald-600" : "text-rose-500"}`}>{formatBRL(Math.abs(Number(s.valor)))}</p>
       </button>
@@ -875,7 +889,7 @@ export default function FinanceiroConciliacao() {
       ? repConc.map((c: any) => `<tr><td>${esc(fmtData(c.data))}</td><td>${esc(c.descricao || "—")}</td><td>${esc(c.entryFornecedor || c.entryDescricao || ("Lançamento #" + (c.entryId ?? "")))}</td><td class="r">${esc(formatBRL(Math.abs(Number(c.valor) || 0)))}</td></tr>`).join("")
       : `<tr><td colspan="4" class="empty">Nenhuma linha conciliada no período.</td></tr>`;
     const rowsExt = repExt.length
-      ? repExt.map((c: any) => `<tr><td>${esc(fmtData(c.data))}</td><td>${esc(c.descricao || "—")}${c.chequeFornecedor ? `<br><span style="color:#047857;font-size:10px">🪙 Cheque nº ${esc(c.chequeNumero ?? "—")} · ${esc(c.chequeFornecedor)}${c.chequeObraNome ? ` · ${esc(c.chequeObraNome)}` : ""}${c.chequeNf ? ` · NF ${esc(c.chequeNf)}` : ""}</span>` : (c.faturaId ? `<br><span style="color:#4338ca;font-size:10px">💳 Fatura ${esc(c.faturaCartao ?? "cartão")}${c.faturaMesRef ? ` · ${esc(String(c.faturaMesRef).padStart(2, "0"))}/${esc(c.faturaAnoRef ?? "")}` : ""}${c.faturaVencimento ? ` · venc. ${esc(fmtData(c.faturaVencimento))}` : ""}</span>` : "")}</td><td>${esc(Number(c.valor) >= 0 ? "Entrada" : "Saída")}</td><td class="r">${esc(formatBRL(Math.abs(Number(c.valor) || 0)))}</td></tr>`).join("")
+      ? repExt.map((c: any) => `<tr><td>${esc(fmtData(c.data))}</td><td>${esc(c.descricao || "—")}${c.chequeFornecedor ? `<br><span style="color:#047857;font-size:10px">🪙 Cheque nº ${esc(c.chequeNumero ?? "—")} · ${esc(c.chequeFornecedor)}${c.chequeObraNome ? ` · ${esc(c.chequeObraNome)}` : ""}${c.chequeNf ? ` · NF ${esc(c.chequeNf)}` : ""}</span>` : (c.faturaId ? `<br><span style="color:#4338ca;font-size:10px">💳 Fatura ${esc(c.faturaCartao ?? "cartão")}${c.faturaMesRef ? ` · ${esc(String(c.faturaMesRef).padStart(2, "0"))}/${esc(c.faturaAnoRef ?? "")}` : ""}${c.faturaVencimento ? ` · venc. ${esc(fmtData(c.faturaVencimento))}` : ""}</span>` : ((c.demoBeneficiario || c.demoTipo) ? `<br><span style="color:#6d28d9;font-size:10px">${c.demoTipo === "boleto" ? "🧾 Boleto" : c.demoTipo === "ted" ? "💸 TED" : "💸 PIX"}${c.demoBeneficiario ? ` · ${esc(c.demoBeneficiario)}` : ""}${c.demoDocumento ? ` · ${esc(c.demoDocumento)}` : ""}${c.demoMatch === "valor" ? " · provável" : ""} (demonstrativo)</span>` : ""))}</td><td>${esc(Number(c.valor) >= 0 ? "Entrada" : "Saída")}</td><td class="r">${esc(formatBRL(Math.abs(Number(c.valor) || 0)))}</td></tr>`).join("")
       : `<tr><td colspan="4" class="empty">Sem pendências — todo o extrato está conciliado.</td></tr>`;
     const rowsLan = repLan.length
       ? repLan.map((c: any) => `<tr><td>${esc(fmtData(c.data))}</td><td>${esc(c.fornecedorNome || c.descricao || ("Lançamento #" + c.id))}</td><td>${esc(c.obraNome || "—")}</td><td class="r">${esc(formatBRL(Math.abs(Number(c.valor) || 0)))}</td></tr>`).join("")
@@ -2278,6 +2292,15 @@ export default function FinanceiroConciliacao() {
                     {lancStatement.faturaVencimento ? <> · venc. {fmtData(lancStatement.faturaVencimento)}</> : null}
                     {lancStatement.faturaTotal != null ? <> · total <strong>{formatBRL(Math.abs(Number(lancStatement.faturaTotal)))}</strong></> : null}
                     . Aqui a fatura entra como <strong>um único pagamento</strong> (forma = cartão); o detalhe dos gastos por obra/centro de custo fica no módulo <strong>Cartão de Crédito</strong>.
+                  </div>
+                )}
+                {!lancStatement.chequeFornecedor && !lancStatement.faturaId && (lancStatement.demoBeneficiario || lancStatement.demoTipo) && (
+                  <div className="rounded-lg bg-violet-50 border border-violet-100 px-3 py-2 text-xs text-violet-800">
+                    {lancStatement.demoTipo === "boleto" ? "🧾" : "💸"} Identificado nos <strong>Demonstrativos de pagamento</strong> (leitura por IA): {lancStatement.demoTipo === "boleto" ? <strong>Boleto</strong> : lancStatement.demoTipo === "ted" ? <strong>TED</strong> : <strong>PIX</strong>}
+                    {lancStatement.demoBeneficiario ? <> — <strong>{lancStatement.demoBeneficiario}</strong></> : null}
+                    {lancStatement.demoDocumento ? <> · CNPJ/CPF {lancStatement.demoDocumento}</> : null}
+                    {lancStatement.demoMatch === "valor" ? <> · <strong>correspondência provável</strong> (só pelo valor — confira no comprovante)</> : null}
+                    . Beneficiário e forma de pagamento já foram pré-preenchidos — confira obra, categoria e centro de custo.
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-3">

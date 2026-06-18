@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3238 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SEGUNDA VERIFICAÇÃO PELOS DEMONSTRATIVOS
+ * DE PAGAMENTO · QUANDO UMA LINHA DO EXTRATO FICA "SEM LANÇAMENTO" E O ERP NÃO IDENTIFICA DE
+ * ONDE É (NEM CHEQUE NEM FATURA), ELE AGORA CONSULTA AUTOMATICAMENTE A LISTA "TUDO QUE A IA LEU
+ * NOS DEMONSTRATIVOS" (OS COMPROVANTES DE PIX/BOLETOS DO MÊS LIDOS POR IA) PARA TENTAR DIZER QUEM
+ * RECEBEU E SE O PAGAMENTO FOI PIX OU BOLETO. O EXTRATO DE PIX/BOLETO É ANÔNIMO; O DEMONSTRATIVO
+ * TRAZ BENEFICIÁRIO / CNPJ-CPF / ID DA TRANSAÇÃO. A LINHA GANHA UM SELO ROXO ("💸 PIX · FULANO ·
+ * (DEMONSTRATIVO)" / "🧾 BOLETO · ...") E O "LANÇAR NO ERP" JÁ VEM PRÉ-PREENCHIDO (BENEFICIÁRIO +
+ * FORMA DE PAGAMENTO). TUDO READ-ONLY — NÃO CONCILIA NEM BAIXA NADA (HONRA "CONCILIAÇÃO SÓ
+ * SUGESTIVA"); QUANDO O CASAMENTO É SÓ PELO VALOR, A LINHA É MARCADA COMO "PROVÁVEL".**
+ * - PEDIDO (piloto FC): "se na conciliação bancária o ERP não identificar os valores ou de onde é,
+ *   quando o pagamento foi PIX ou boleto, ele obrigatoriamente deve consultar essa tela (a lista de
+ *   tudo que a IA leu nos demonstrativos) para uma segunda verificação e tentar conciliar melhor."
+ * - CONTEXTO: a Rev. 3229 cruzava o extrato com o Controle de Cheques e a Rev. 3230 com o Cartão de
+ *   Crédito, mas os pagamentos PIX/boleto avulsos (que só existem nos Demonstrativos de pagamento
+ *   lidos por IA — `pix_extraido_json`/`boleto_extraido_json`) não eram cruzados; a linha do extrato
+ *   ficava anônima ("sem lançamento", sem dizer quem recebeu nem se foi PIX ou boleto).
+ * - SOLUÇÃO (BACK, `server/routers/financial.ts`, `getConciliacaoReport`): novo passo "2c-bis". Carrega
+ *   os itens extraídos dos demonstrativos do período (`SELECT pix_extraido_json/boleto_extraido_json`
+ *   das linhas cujo `(ano*12+mes)` cai dentro de `[dataInicio, dataFim]`), monta um catálogo
+ *   `DemoItem` {beneficiario, documento, txid, valor, data, tipoDoc, origemTipo}. Novo matcher
+ *   `matchDemonstrativoLinha` roda SÓ depois de `matchChequeLinha` e `matchFaturaLinha` falharem,
+ *   e SÓ em SAÍDAS (valor < 0 = pagamento feito). Estratégia, do mais forte ao mais fraco: (1) txid/
+ *   e2e/nosso-número presente na descrição (normalizado p/ alfanumérico) + valor batendo; (2) VALOR
+ *   + DATA exatos, quando ÚNICO; (3) VALOR ÚNICO no período (rótulo "provável"). Acerto anexa
+ *   `demoBeneficiario`/`demoDocumento`/`demoTxid`/`demoTipo`/`demoData`/`demoMatch` na linha. ZERO
+ *   SCHEMA · ZERO ALTER/DROP/DELETE · nenhuma escrita (não toca `conciliado`).
+ * - SOLUÇÃO (FRONT, `client/src/pages/financeiro/FinanceiroConciliacao.tsx`): na lista "no extrato,
+ *   sem lançamento", novo selo roxo abaixo da descrição (só quando não há cheque/fatura) com tipo +
+ *   beneficiário + "(demonstrativo)" e sufixo "· provável" no match só-por-valor. `abrirLancar`
+ *   pré-preenche `fornecedorNome` = beneficiário, `formaPagamento` = pix/boleto/transferência e
+ *   enriquece a descrição. Novo banner roxo no diálogo "Lançar no ERP" explicando a identificação
+ *   (incluindo o aviso de "correspondência provável"). Busca da Conciliação e export em PDF passaram
+ *   a incluir os campos `demo*`. ZERO conciliação/baixa automática.
+ *
  * Rev. 3237 — **UI / GERAL · TODAS AS JANELAS (DIÁLOGOS) DO ERP GANHARAM UM BOTÃO DE
  * MAXIMIZAR/RESTAURAR NO TOPO, AO LADO DO "X" DE FECHAR. UM CLIQUE EXPANDE A JANELA PARA
  * QUASE A TELA INTEIRA (ÓTIMO PARA TABELAS/LISTAS LONGAS, COMO "TUDO QUE A IA LEU NOS

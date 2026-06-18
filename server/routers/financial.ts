@@ -4268,6 +4268,77 @@ export const financialRouter = router({
       return null;
     };
 
+    // 2c-bis) Rev. 3238 — SEGUNDA VERIFICAÇÃO PELOS DEMONSTRATIVOS DE PAGAMENTO (PIX/BOLETO
+    // lidos por IA — a lista "Tudo que a IA leu nos demonstrativos"). Quando a linha do extrato
+    // NÃO casou com lançamento, cheque NEM fatura, o ERP é OBRIGADO a consultar os comprovantes
+    // PIX/boletos do mês p/ tentar dizer QUEM recebeu e SE foi PIX ou boleto — o extrato de
+    // PIX/boleto é anônimo, mas o demonstrativo traz beneficiário/CNPJ/txid. READ-ONLY: só
+    // identifica/sugere, NÃO concilia nem baixa nada (honra "conciliação só sugestiva"). Match,
+    // do mais forte p/ o mais fraco: (1) txid/e2e/nosso número presente na descrição + valor;
+    // (2) VALOR + DATA exatos, quando ÚNICO; (3) VALOR ÚNICO no período (rótulo "provável").
+    // Só SAÍDAS — demonstrativo = pagamento FEITO.
+    type DemoItem = { beneficiario: string | null; documento: string | null; txid: string | null; valor: number | null; data: string | null; tipoDoc: string | null; origemTipo: "pix" | "boleto" };
+    const ymOf = (s: string) => { const y = Number(String(s).slice(0, 4)); const m = Number(String(s).slice(5, 7)); return (y >= 2000 && m >= 1 && m <= 12) ? y * 12 + m : null; };
+    const startYM = ymOf(input.dataInicio), endYM = ymOf(input.dataFim);
+    const demoItens: DemoItem[] = [];
+    if (startYM != null && endYM != null) {
+      const demoRes = await dbExecute(db,
+        `SELECT pix_extraido_json AS "pixJson", boleto_extraido_json AS "boletoJson"
+           FROM financial_conciliacao_demonstrativos
+          WHERE company_id=$1 AND conta_bancaria_id=$2 AND (ano*12+mes) >= $3 AND (ano*12+mes) <= $4`,
+        [input.companyId, input.contaBancariaId, startYM, endYM]);
+      for (const row of (rows(demoRes) as any[])) {
+        for (const [json, origemTipo] of [[row.pixJson, "pix"], [row.boletoJson, "boleto"]] as [any, "pix" | "boleto"][]) {
+          if (!json) continue;
+          let arr: any[] = [];
+          try { const pj = JSON.parse(json); if (Array.isArray(pj)) arr = pj; } catch { arr = []; }
+          for (const it of arr) {
+            if (!it) continue;
+            demoItens.push({
+              beneficiario: it.beneficiario != null ? String(it.beneficiario) : null,
+              documento: it.documento != null ? String(it.documento) : null,
+              txid: it.txid != null ? String(it.txid) : null,
+              valor: it.valor != null && !Number.isNaN(Number(it.valor)) ? Math.abs(Number(it.valor)) : null,
+              data: it.data ? String(it.data).slice(0, 10) : null,
+              tipoDoc: it.tipoDoc != null ? String(it.tipoDoc) : null,
+              origemTipo,
+            });
+          }
+        }
+      }
+    }
+    const demoByValData = new Map<string, DemoItem[]>();
+    const demoByVal = new Map<string, DemoItem[]>();
+    const demoTxids: { txid: string; cents: number | null; it: DemoItem }[] = [];
+    const normAlnum = (s: any) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    for (const it of demoItens) {
+      const cts = it.valor != null ? Math.round(it.valor * 100) : null;
+      if (cts == null || cts === 0) continue;
+      { const k = `${cts}`; if (!demoByVal.has(k)) demoByVal.set(k, []); demoByVal.get(k)!.push(it); }
+      if (it.data) { const k = `${cts}|${it.data}`; if (!demoByValData.has(k)) demoByValData.set(k, []); demoByValData.get(k)!.push(it); }
+      const tx = normAlnum(it.txid);
+      if (tx.length >= 6) demoTxids.push({ txid: tx, cents: cts, it });
+    }
+    const matchDemonstrativoLinha = (l: any): { it: DemoItem; origem: "txid" | "data" | "valor" } | null => {
+      if (Number(l.valor) >= 0) return null; // só saídas (pagamento feito)
+      const cts = chqCents(l.valor);
+      if (cts == null || cts === 0) return null;
+      // (1) txid/e2e/nosso número na descrição + valor (forte)
+      if (demoTxids.length) {
+        const desc = normAlnum(l.descricao);
+        if (desc) {
+          const hit = demoTxids.find((t) => desc.includes(t.txid) && (t.cents == null || t.cents === cts));
+          if (hit) return { it: hit.it, origem: "txid" };
+        }
+      }
+      // (2) valor + data exatos, quando único (forte)
+      const dia = chqDia(l.data);
+      if (dia) { const arr = demoByValData.get(`${cts}|${dia}`); if (arr && arr.length === 1) return { it: arr[0], origem: "data" }; }
+      // (3) valor único no período (provável)
+      const arrV = demoByVal.get(`${cts}`); if (arrV && arrV.length === 1) return { it: arrV[0], origem: "valor" };
+      return null;
+    };
+
     const extratoSemLancamento = rows(pendRes).map((l: any) => {
       const c = matchChequeLinha(l);
       if (c) {
@@ -4296,6 +4367,21 @@ export const financialRouter = router({
           faturaMesRef: f.mesRef ?? null,
           faturaAnoRef: f.anoRef ?? null,
           faturaConciliado: Number(f.conciliado) === 1 ? 1 : 0,
+        };
+      }
+      // Rev. 3238 — SEGUNDA VERIFICAÇÃO: nada casou (lançamento/cheque/fatura). Consulta os
+      // demonstrativos de pagamento (PIX/boleto lidos por IA) p/ identificar beneficiário + tipo.
+      const d = matchDemonstrativoLinha(l);
+      if (d) {
+        const tipo = d.it.tipoDoc && /pix|boleto|ted/i.test(d.it.tipoDoc) ? d.it.tipoDoc.toLowerCase() : d.it.origemTipo;
+        return {
+          ...l,
+          demoBeneficiario: d.it.beneficiario ?? null,
+          demoDocumento: d.it.documento ?? null,
+          demoTxid: d.it.txid ?? null,
+          demoTipo: tipo,        // "pix" | "boleto" | "ted"
+          demoData: d.it.data ?? null,
+          demoMatch: d.origem,   // "txid" | "data" | "valor"
         };
       }
       return l;
