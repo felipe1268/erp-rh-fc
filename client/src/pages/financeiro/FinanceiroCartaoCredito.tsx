@@ -20,6 +20,17 @@ import {
 function formatBRL(v: number | null | undefined) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 }
+// Máscara de moeda BRL (digita centavos → "1.234,56"; ponto p/ milhar, vírgula p/ centavos).
+function maskBRL(raw: string): string {
+  const digits = String(raw).replace(/\D/g, "");
+  if (!digits) return "";
+  const n = parseInt(digits, 10) / 100;
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function parseMaskBRL(masked: string): number {
+  const digits = String(masked).replace(/\D/g, "");
+  return digits ? parseInt(digits, 10) / 100 : 0;
+}
 function fmtData(v: any) {
   if (!v) return "—";
   try {
@@ -91,7 +102,7 @@ export default function FinanceiroCartaoCredito() {
       titular: c.titular ?? "", tipoPessoa: c.tipoPessoa ?? "PJ",
       diaFechamento: c.diaFechamento != null ? String(c.diaFechamento) : "",
       diaVencimento: c.diaVencimento != null ? String(c.diaVencimento) : "",
-      limite: c.limite != null ? String(c.limite) : "",
+      limite: c.limite != null ? maskBRL(String(Math.round(Number(c.limite) * 100))) : "",
       observacao: c.observacao ?? "",
     });
     setCartaoModal(true);
@@ -107,7 +118,7 @@ export default function FinanceiroCartaoCredito() {
       tipoPessoa: cartaoForm.tipoPessoa as "PF" | "PJ",
       diaFechamento: cartaoForm.diaFechamento ? parseInt(cartaoForm.diaFechamento, 10) : null,
       diaVencimento: cartaoForm.diaVencimento ? parseInt(cartaoForm.diaVencimento, 10) : null,
-      limite: cartaoForm.limite ? parseFloat(cartaoForm.limite.replace(/\./g, "").replace(",", ".")) : null,
+      limite: cartaoForm.limite.trim() === "" ? null : parseMaskBRL(cartaoForm.limite),
       observacao: cartaoForm.observacao.trim() || undefined,
     };
     try {
@@ -439,38 +450,69 @@ export default function FinanceiroCartaoCredito() {
 
       {/* ───────────── MODAL CARTÃO (criar/editar) ───────────── */}
       <Dialog open={cartaoModal} onOpenChange={setCartaoModal}>
-        <DialogContent resizable={false} className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{cartaoEdit ? "Editar cartão" : "Novo cartão"}</DialogTitle>
-            <DialogDescription>Cartões pessoais (PF) usados pela empresa geram alerta de regularização.</DialogDescription>
+        <DialogContent resizable={false} className="max-w-xl p-0 overflow-hidden gap-0">
+          <DialogHeader className="border-b bg-gradient-to-r from-[#1B2A4A] to-[#2c3f63] px-6 py-5 text-left">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25">
+                <CreditCard className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-semibold text-white">{cartaoEdit ? "Editar cartão" : "Novo cartão"}</DialogTitle>
+                <DialogDescription className="text-xs text-white/70">Cartões pessoais (PF) usados pela empresa geram alerta de regularização.</DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label>Banco</Label><Input value={cartaoForm.banco} onChange={(e) => setCartaoForm((f) => ({ ...f, banco: e.target.value }))} placeholder="Ex: Santander" /></div>
-            <div><Label>Bandeira</Label><Input value={cartaoForm.bandeira} onChange={(e) => setCartaoForm((f) => ({ ...f, bandeira: e.target.value }))} placeholder="Ex: Mastercard" /></div>
-            <div><Label>Final (4 dígitos)</Label><Input value={cartaoForm.final4} maxLength={4} onChange={(e) => setCartaoForm((f) => ({ ...f, final4: e.target.value.replace(/[^0-9]/g, "") }))} placeholder="1234" /></div>
-            <div>
-              <Label>Tipo</Label>
-              <Select value={cartaoForm.tipoPessoa} onValueChange={(v) => setCartaoForm((f) => ({ ...f, tipoPessoa: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="PJ">PJ (empresa)</SelectItem>
-                  <SelectItem value="PF">PF (pessoal)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="col-span-2"><Label>Titular</Label><Input value={cartaoForm.titular} onChange={(e) => setCartaoForm((f) => ({ ...f, titular: e.target.value }))} placeholder="Nome impresso no cartão" /></div>
-            <div><Label>Dia fechamento</Label><Input type="number" min={1} max={31} value={cartaoForm.diaFechamento} onChange={(e) => setCartaoForm((f) => ({ ...f, diaFechamento: e.target.value }))} /></div>
-            <div><Label>Dia vencimento</Label><Input type="number" min={1} max={31} value={cartaoForm.diaVencimento} onChange={(e) => setCartaoForm((f) => ({ ...f, diaVencimento: e.target.value }))} /></div>
-            <div className="col-span-2"><Label>Limite (R$)</Label><Input value={cartaoForm.limite} onChange={(e) => setCartaoForm((f) => ({ ...f, limite: e.target.value }))} placeholder="Ex: 10000,00" /></div>
-            <div className="col-span-2"><Label>Observação</Label><Textarea rows={2} value={cartaoForm.observacao} onChange={(e) => setCartaoForm((f) => ({ ...f, observacao: e.target.value }))} /></div>
+
+          <div className="space-y-5 px-6 py-5">
+            <section className="space-y-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Identificação</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">Banco</Label><Input value={cartaoForm.banco} onChange={(e) => setCartaoForm((f) => ({ ...f, banco: e.target.value }))} placeholder="Ex: Santander" /></div>
+                <div className="space-y-1"><Label className="text-xs">Bandeira</Label><Input value={cartaoForm.bandeira} onChange={(e) => setCartaoForm((f) => ({ ...f, bandeira: e.target.value }))} placeholder="Ex: Mastercard" /></div>
+                <div className="space-y-1"><Label className="text-xs">Final (4 dígitos)</Label><Input className="tabular-nums" value={cartaoForm.final4} maxLength={4} inputMode="numeric" onChange={(e) => setCartaoForm((f) => ({ ...f, final4: e.target.value.replace(/[^0-9]/g, "") }))} placeholder="1234" /></div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Tipo</Label>
+                  <Select value={cartaoForm.tipoPessoa} onValueChange={(v) => setCartaoForm((f) => ({ ...f, tipoPessoa: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PJ">PJ (empresa)</SelectItem>
+                      <SelectItem value="PF">PF (pessoal)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-2 space-y-1"><Label className="text-xs">Titular</Label><Input value={cartaoForm.titular} onChange={(e) => setCartaoForm((f) => ({ ...f, titular: e.target.value }))} placeholder="Nome impresso no cartão" /></div>
+              </div>
+            </section>
+
+            <section className="space-y-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Datas & limite</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">Dia fechamento</Label><Input className="tabular-nums" type="number" min={1} max={31} value={cartaoForm.diaFechamento} onChange={(e) => setCartaoForm((f) => ({ ...f, diaFechamento: e.target.value }))} placeholder="Ex: 5" /></div>
+                <div className="space-y-1"><Label className="text-xs">Dia vencimento</Label><Input className="tabular-nums" type="number" min={1} max={31} value={cartaoForm.diaVencimento} onChange={(e) => setCartaoForm((f) => ({ ...f, diaVencimento: e.target.value }))} placeholder="Ex: 12" /></div>
+                <div className="col-span-2 space-y-1">
+                  <Label className="text-xs">Limite</Label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">R$</span>
+                    <Input className="pl-9 tabular-nums" inputMode="decimal" value={cartaoForm.limite} onChange={(e) => setCartaoForm((f) => ({ ...f, limite: maskBRL(e.target.value) }))} placeholder="10.000,00" />
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-1">
+              <Label className="text-xs">Observação</Label>
+              <Textarea rows={2} value={cartaoForm.observacao} onChange={(e) => setCartaoForm((f) => ({ ...f, observacao: e.target.value }))} placeholder="Anotações internas (opcional)" />
+            </section>
+
+            {cartaoForm.tipoPessoa === "PF" && (
+              <div className="flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-700">
+                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>Este é um cartão <b>pessoal</b>. Ele NÃO será convertido em cartão FC automaticamente — o sistema apenas sinaliza para regularização.</span>
+              </div>
+            )}
           </div>
-          {cartaoForm.tipoPessoa === "PF" && (
-            <div className="flex items-start gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
-              <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>Este é um cartão <b>pessoal</b>. Ele NÃO será convertido em cartão FC automaticamente — o sistema apenas sinaliza para regularização.</span>
-            </div>
-          )}
-          <DialogFooter>
+
+          <DialogFooter className="border-t bg-muted/30 px-6 py-4">
             <Button variant="outline" onClick={() => setCartaoModal(false)}>Cancelar</Button>
             <Button onClick={salvarCartao} disabled={criarCartao.isLoading || atualizarCartao.isLoading}>
               {(criarCartao.isLoading || atualizarCartao.isLoading) && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}

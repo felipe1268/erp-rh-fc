@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3249 — **FINANCEIRO / CONTROLE DE CARTÃO DE CRÉDITO · O DIÁLOGO "NOVO CARTÃO / EDITAR CARTÃO"
+ * GANHOU UM LAYOUT MODERNO (CABEÇALHO AZUL COM ÍCONE, SEÇÕES "IDENTIFICAÇÃO" E "DATAS & LIMITE",
+ * RODAPÉ DESTACADO) E O CAMPO "LIMITE" PASSOU A USAR MÁSCARA DE MOEDA BRL AUTOMÁTICA — DIGITANDO
+ * OS NÚMEROS, O VALOR JÁ APARECE FORMATADO "R$ 10.000,00" (PONTO P/ MILHAR, VÍRGULA P/ CENTAVOS),
+ * FACILITANDO O LANÇAMENTO. ANTES O CAMPO ERA UM TEXTO LIVRE QUE EXIGIA DIGITAR A PONTUAÇÃO À MÃO.**
+ * - PEDIDO (piloto FC, sobre a tela de cadastro de cartão): "quero um layout moderno e todos os
+ *   valores separados por ponto e vírgula para facilitar o lançamento".
+ * - SOLUÇÃO (FRONT, `client/src/pages/financeiro/FinanceiroCartaoCredito.tsx`):
+ *     · novos helpers locais `maskBRL`/`parseMaskBRL` (mesmo motor "digita centavos → 1.234,56" já
+ *       usado em Contas a Receber): o `onChange` do Limite passa o texto por `maskBRL`, o `salvarCartao`
+ *       converte com `parseMaskBRL(...) || null`, e o `abrirEditarCartao` formata o valor vindo do banco
+ *       via `maskBRL(String(Math.round(Number(c.limite)*100)))` p/ exibir já mascarado na edição.
+ *     · diálogo redesenhado: `DialogContent` sem padding com cabeçalho em faixa azul (`#1B2A4A`) +
+ *       ícone do cartão, corpo dividido em seções com rótulos uppercase, input do Limite com prefixo
+ *       "R$" embutido e `tabular-nums`/`inputMode` adequados, rodapé com fundo destacado.
+ * - ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE — só apresentação e máscara de input no cliente.
+ *
  * Rev. 3248 — **FINANCEIRO / DASHBOARDS · OS 5 PAINÉIS VISUAIS (CONTAS A RECEBER, CONTAS A PAGAR,
  * CONCILIAÇÃO BANCÁRIA, CONTROLE DE CHEQUES E CARTÃO DE CRÉDITO) FORAM ENRIQUECIDOS: (1) TUDO EM
  * BRL — A CONCILIAÇÃO, QUE MOSTRAVA SÓ CONTAGEM DE LINHAS, AGORA EXIBE O VALOR MOVIMENTADO E
