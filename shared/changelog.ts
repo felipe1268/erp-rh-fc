@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3277 — **RH & DP / RESCISÃO · O CÁLCULO DE FÉRIAS VENCIDAS NA RESCISÃO PASSOU A CONSIDERAR O
+ * SALDO POR DIA (REFLETINDO GOZO PARCIAL), NÃO MAIS PERÍODOS INTEIROS. ANTES, UM PERÍODO AQUISITIVO
+ * COMPLETO EM QUE O COLABORADOR GOZOU SÓ PARTE (EX.: 5 DE 30 DIAS, status='concluida') TINHA OS 25
+ * DIAS RESTANTES IGNORADOS — A RESCISÃO PAGAVA 0 DE FÉRIAS VENCIDAS DAQUELE PERÍODO. AGORA PAGA OS
+ * DIAS REMANESCENTES (base/30 × diasRestantes + 1/3). ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (piloto FC): caso Isabela (emp 420136) — período aquisitivo 02/04/2025–01/04/2026 (30 dias),
+ *   gozou 5 (status='concluida', diasGozo=5), faltam 25 dias NÃO pagos; a rescisão ignorava esse saldo.
+ * - CAUSA: TODAS as contagens de "férias vencidas" da rescisão usavam SQL no formato
+ *   `status NOT IN ('concluida','cancelada','em_gozo')` + `COUNT(*)`, ou seja: (a) tratavam cada período
+ *   como BLOCO INTEIRO de 30 dias e (b) DESCARTAVAM por completo qualquer período `concluida`/`em_gozo` —
+ *   exatamente o caso do gozo parcial. O dinheiro era `(base/30) × (periodosVencidos × 30)`, indiferente
+ *   ao quanto já fora efetivamente gozado.
+ * - SOLUÇÃO (BACK, read-only, sem schema):
+ *   1) `server/utils/rescisaoCalc.ts` — `calcularRescisaoCompleta` e `calcularRescisaoComplementar`
+ *      ganharam o parâmetro opcional `diasVencidosOverride?: number`. Quando informado, o valor das férias
+ *      vencidas vira `feriasVencidasBase = (base/30) × diasVencidos` (+ 1/3), por DIA; sem ele, mantém o
+ *      fallback antigo `periodosVencidos × 30` (compat total). `diasVencidos` é exposto nos dois returns.
+ *   2) `server/routers/avisoPrevioFerias.ts` — criada a FONTE ÚNICA do saldo: `saldoDiasVencidoPeriodo(r, corte)`
+ *      (saldo de 1 período: concluida/em_gozo → 30 − diasGozo − (abono?10:0); pendente/agendada/vencida → 30,
+ *      salvo dataPagamento ≤ corte → 0; cancelada/excluída/períodoAquisitivoFim ≥ corte → 0) e
+ *      `getFeriasVencidasSaldo(db, employeeId, corte)` que soma os saldos > 0 → `{ periodosVencidos (nº de
+ *      períodos com saldo), diasVencidos (soma p/ dinheiro), detalhes[] (com saldoDias por período) }`. Em
+ *      falha de query devolve `undefined/undefined` → o calc cai no fallback matemático (mesma semântica do
+ *      try/catch antigo).
+ *   3) As 8 chamadas de cálculo que contavam férias vencidas passaram a usar o helper e a propagar
+ *      `diasVencidosOverride`: CREATE, BATCH `list` (busca todas as linhas dos funcionários 1x e calcula em
+ *      JS via `saldoDiasVencidoPeriodo`, com `vpDiasMap`/`vpPeriodosMap`), `getById` (principal + complementar),
+ *      PREVIEW/SIMULAR (principal + complementar; `periodosVencidosDetalhes` agora carrega `saldoDias`),
+ *      COMPLEMENTAR-simular (cenários trabalhado + indenizado), UPDATE (principal + complementar) e RECALC
+ *      (principal + complementar).
+ * - RESULTADO ESPERADO (Isabela): diasVencidos = 25 → base 1727,61/30×25 = 1439,68 + 1/3 = R$ 1.919,57
+ *   (antes: R$ 0,00 por aquele período). A proporcional (período corrente) segue inalterada.
+ * - ZERO BANCO ESTRUTURAL · ZERO SCHEMA/ALTER/DROP/DELETE — só leitura de `vacation_periods` e cálculo.
+ *
  * Rev. 3276 — **COMPRAS / SOLICITAÇÃO DE COMPRA (SC) · A TELA "SOLICITAÇÕES (SC)" GANHOU UM FILTRO POR
  * PERÍODO (DE/ATÉ) AO LADO DO SELETOR "TODAS AS OBRAS", FILTRANDO PELA "DATA POSTADA" (criadoEm) — A
  * MESMA DATA USADA NA ORDENAÇÃO PADRÃO E EXIBIDA NA LISTA. ESCOLHIDO O PERÍODO, A TABELA, OS PILLS DE

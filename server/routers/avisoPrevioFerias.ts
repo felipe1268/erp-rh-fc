@@ -261,6 +261,99 @@ function calcularPeriodosFerias(dataAdmissao: string) {
   return periodos;
 }
 
+// ============================================================================
+// FÉRIAS VENCIDAS — SALDO DE DIAS (Rev. — corrige gozo PARCIAL)
+// ----------------------------------------------------------------------------
+// As contagens antigas tratavam férias vencidas como PERÍODOS INTEIROS e excluíam
+// qualquer período `concluida`/`em_gozo`. Resultado: um período aquisitivo COMPLETO
+// em que o funcionário gozou só uma parte (ex.: 5 de 30 dias, status='concluida')
+// tinha os 25 dias restantes IGNORADOS na rescisão.
+//
+// Agora o saldo é por DIA. Para CADA período aquisitivo já COMPLETO até a data de
+// corte (`periodoAquisitivoFim` < corte), não cancelado e não excluído:
+//   • concluida / em_gozo → saldo = 30 − diasGozo − (abono ? 10 : 0)
+//   • pendente / agendada / vencida → 30 (nada gozado), salvo se JÁ pago antes do
+//     corte (dataPagamento ≤ corte → quitado antecipadamente → 0).
+// `periodosVencidos` (contagem p/ exibição) = nº de períodos com saldo > 0.
+// `diasVencidos` (dinheiro) = soma dos saldos. Idêntico ao modelo antigo quando
+// todos os períodos em aberto têm 30 dias cheios.
+// ============================================================================
+const DIAS_DIREITO_FERIAS = 30;
+
+function vpVal(r: any, name: string): any {
+  return r[name] ?? r[name.toLowerCase()];
+}
+
+/** Saldo de DIAS de férias vencidas de UM período aquisitivo, dada a data de corte
+ *  (YYYY-MM-DD = término do aviso). Retorna 0 quando o período não está vencido,
+ *  está cancelado/excluído, já foi quitado, ou já foi 100% gozado/vendido. */
+function saldoDiasVencidoPeriodo(r: any, corte: string): number {
+  const pafRaw = vpVal(r, 'periodoAquisitivoFim');
+  if (!pafRaw) return 0;
+  const paf = String(pafRaw).slice(0, 10);
+  if (paf >= corte) return 0; // período aquisitivo ainda não completo até o aviso
+  const status = String(vpVal(r, 'status') || '');
+  if (status === 'cancelada') return 0;
+  if (vpVal(r, 'deletedAt')) return 0;
+  const abonoDias = Number(vpVal(r, 'abonoPecuniario')) === 1 ? 10 : 0;
+  const gozou = status === 'concluida' || status === 'em_gozo';
+  if (!gozou) {
+    // Nada gozado: período inteiro devido, salvo se pago antecipadamente.
+    const dpagRaw = vpVal(r, 'dataPagamento');
+    const dpag = dpagRaw ? String(dpagRaw).slice(0, 10) : null;
+    if (dpag && dpag <= corte) return 0;
+    const saldoPend = DIAS_DIREITO_FERIAS - abonoDias;
+    return saldoPend > 0 ? saldoPend : 0;
+  }
+  const diasGozados = Number(vpVal(r, 'diasGozo')) || 0;
+  const saldo = DIAS_DIREITO_FERIAS - diasGozados - abonoDias;
+  return saldo > 0 ? saldo : 0;
+}
+
+interface FeriasVencidasSaldo {
+  periodosVencidos: number | undefined;
+  diasVencidos: number | undefined;
+  detalhes: Array<{ periodoAquisitivoInicio: string; periodoAquisitivoFim: string; periodoConcessivoFim: string; saldoDias: number }>;
+}
+
+/** Fonte ÚNICA do saldo de férias vencidas de um funcionário até a data de corte.
+ *  Em caso de falha de query, retorna {undefined, undefined} → o calc cai no
+ *  fallback matemático (mesma semântica do try/catch antigo). */
+async function getFeriasVencidasSaldo(db: any, employeeId: number, corte: string): Promise<FeriasVencidasSaldo> {
+  try {
+    const rows = ((await db.execute(sql`
+      SELECT "periodoAquisitivoInicio", "periodoAquisitivoFim", "periodoConcessivoFim",
+             "diasGozo", "abonoPecuniario", status, "dataPagamento", "deletedAt"
+      FROM vacation_periods
+      WHERE "employeeId" = ${employeeId}
+        AND "periodoAquisitivoFim" IS NOT NULL
+        AND "periodoAquisitivoFim" < ${corte}
+        AND status != 'cancelada'
+        AND "deletedAt" IS NULL
+      ORDER BY "periodoAquisitivoFim" ASC
+    `)) as any).rows || [];
+    let diasVencidos = 0;
+    let periodosVencidos = 0;
+    const detalhes: FeriasVencidasSaldo['detalhes'] = [];
+    for (const r of rows) {
+      const saldo = saldoDiasVencidoPeriodo(r, corte);
+      if (saldo > 0) {
+        diasVencidos += saldo;
+        periodosVencidos += 1;
+        detalhes.push({
+          periodoAquisitivoInicio: String(vpVal(r, 'periodoAquisitivoInicio') || '').slice(0, 10),
+          periodoAquisitivoFim: String(vpVal(r, 'periodoAquisitivoFim') || '').slice(0, 10),
+          periodoConcessivoFim: String(vpVal(r, 'periodoConcessivoFim') || '').slice(0, 10),
+          saldoDias: saldo,
+        });
+      }
+    }
+    return { periodosVencidos, diasVencidos, detalhes };
+  } catch {
+    return { periodosVencidos: undefined, diasVencidos: undefined, detalhes: [] };
+  }
+}
+
 /**
  * Helper: monta a previsão de rescisão complementar para o funcionário se ele
  * tiver complemento salarial ("por fora") cadastrado. Retorna null caso contrário.
@@ -275,6 +368,7 @@ function buildPrevisaoComplementar(emp: any, params: {
   tipo: string;
   diasTrabalhadosMes: number;
   periodosVencidosOverride?: number;
+  diasVencidosOverride?: number;
 }) {
   if (!emp || !emp.recebeComplemento) return null;
   const valorComplemento = parseBRL(emp.valorComplemento);
@@ -337,20 +431,8 @@ export async function criarAvisoPrevioInterno(
   const diasFeriasMesSaidaCreate = await diasFeriasNoMesDaSaida(db, emp.id, dataFim);
   const diasTrabalhadosMes = params.diasTrabalhados ?? Math.max(0, dtFimAviso.getDate() - diasFeriasMesSaidaCreate);
 
-  // Contagem real de férias vencidas do banco
-  let periodosVencidosRealCreate: number | undefined;
-  try {
-    const vpCr = ((await db.execute(sql`
-      SELECT COUNT(*)::int AS total FROM vacation_periods
-      WHERE "employeeId" = ${emp.id}
-        AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
-        AND "periodoAquisitivoFim" IS NOT NULL
-        AND "periodoAquisitivoFim" < ${dataFim}
-        AND ("dataPagamento" IS NULL OR "dataPagamento" > ${dataFim})
-        AND "deletedAt" IS NULL
-    `)) as any).rows || [];
-    periodosVencidosRealCreate = Number(vpCr[0]?.total ?? 0);
-  } catch { /* fallback */ }
+  // Saldo real de férias vencidas do banco (por DIA — reflete gozo parcial)
+  const saldoVencCreate = await getFeriasVencidasSaldo(db, emp.id, dataFim);
 
   const incluirMultaFgtsCreate = await getIncluirMultaFgts(db, params.companyId);
   const previsao = calcularRescisaoCompleta({
@@ -361,7 +443,8 @@ export async function criarAvisoPrevioInterno(
     tipo: params.tipo,
     vrDiario: params.vrDiario ?? 0,
     diasTrabalhadosMes,
-    periodosVencidosOverride: periodosVencidosRealCreate,
+    periodosVencidosOverride: saldoVencCreate.periodosVencidos,
+    diasVencidosOverride: saldoVencCreate.diasVencidos,
     descontarAvisoNaoCumprido: params.descontarAvisoNaoCumprido,
     incluirMultaFgts: incluirMultaFgtsCreate,
   });
@@ -373,7 +456,8 @@ export async function criarAvisoPrevioInterno(
     dataFimAviso: dataFim,
     tipo: params.tipo,
     diasTrabalhadosMes,
-    periodosVencidosOverride: periodosVencidosRealCreate,
+    periodosVencidosOverride: saldoVencCreate.periodosVencidos,
+    diasVencidosOverride: saldoVencCreate.diasVencidos,
   });
 
   const [result] = await db.insert(terminationNotices).values({
@@ -535,29 +619,42 @@ export const avisoPrevioFeriasRouter = router({
           for (const e of emps) empMap.set(e.id, e);
         }
 
-        // Batch: contar férias vencidas por (employeeId, dataFim) usando uma única query correlacionada
-        const vpCountMap = new Map<string, number>();
-        if (rows.length > 0) {
+        // Batch: SALDO de férias vencidas (por DIA — reflete gozo parcial) por
+        // (employeeId, dataFim). Busca TODAS as linhas dos funcionários de uma vez
+        // e calcula o saldo em JS via a MESMA função usada nos demais caminhos
+        // (`saldoDiasVencidoPeriodo`), evitando duplicar a regra em SQL.
+        const vpDiasMap = new Map<string, number>();      // key → saldo de dias
+        const vpPeriodosMap = new Map<string, number>();  // key → nº de períodos com saldo > 0
+        if (empIds.length > 0) {
           try {
-            const pairs = rows
-              .filter(r => r.dataFim)
-              .map(r => sql`(${r.employeeId}, ${r.dataFim!})`);
-            if (pairs.length > 0) {
-              const vpCounts = ((await db.execute(sql`
-                SELECT p.emp_id, p.data_fim, COUNT(vp.*)::int AS total
-                FROM (VALUES ${sql.join(pairs, sql`, `)}) AS p(emp_id, data_fim)
-                LEFT JOIN vacation_periods vp
-                  ON vp."employeeId" = p.emp_id
-                  AND vp.status NOT IN ('concluida', 'cancelada', 'em_gozo')
-                  AND vp."periodoAquisitivoFim" IS NOT NULL
-                  AND vp."periodoAquisitivoFim" < p.data_fim::date
-                  AND (vp."dataPagamento" IS NULL OR vp."dataPagamento" > p.data_fim::date)
-                  AND vp."deletedAt" IS NULL
-                GROUP BY p.emp_id, p.data_fim
-              `)) as any).rows || [];
-              for (const vc of vpCounts) {
-                vpCountMap.set(`${vc.emp_id}|${vc.data_fim}`, Number(vc.total));
+            const vpAll = ((await db.execute(sql`
+              SELECT "employeeId", "periodoAquisitivoFim", "diasGozo", "abonoPecuniario",
+                     status, "dataPagamento", "deletedAt"
+              FROM vacation_periods
+              WHERE "employeeId" IN (${sql.join(empIds.map(id => sql`${id}`), sql`, `)})
+                AND "periodoAquisitivoFim" IS NOT NULL
+                AND status != 'cancelada'
+                AND "deletedAt" IS NULL
+            `)) as any).rows || [];
+            // Agrupa por employeeId p/ não varrer tudo a cada par
+            const vpPorEmp = new Map<number, any[]>();
+            for (const vp of vpAll) {
+              const eid = Number(vpVal(vp, 'employeeId'));
+              if (!vpPorEmp.has(eid)) vpPorEmp.set(eid, []);
+              vpPorEmp.get(eid)!.push(vp);
+            }
+            for (const r of rows) {
+              if (!r.dataFim) continue;
+              const key = `${r.employeeId}|${r.dataFim}`;
+              if (vpDiasMap.has(key)) continue;
+              const corte = String(r.dataFim).slice(0, 10);
+              let dias = 0, periodos = 0;
+              for (const vp of (vpPorEmp.get(r.employeeId) || [])) {
+                const s = saldoDiasVencidoPeriodo(vp, corte);
+                if (s > 0) { dias += s; periodos += 1; }
               }
+              vpDiasMap.set(key, dias);
+              vpPeriodosMap.set(key, periodos);
             }
           } catch { /* fallback — uses stored value */ }
         }
@@ -575,8 +672,10 @@ export const avisoPrevioFeriasRouter = router({
               const diasFeriasMesSaidaList = await diasFeriasNoMesDaSaida(db, r.employeeId, r.dataFim);
               const diasTrabalhadosMes = Math.max(0, dtFimAviso.getDate() - diasFeriasMesSaidaList);
 
-              const periodosVencidosRealList = vpCountMap.get(`${r.employeeId}|${r.dataFim}`) ?? 0;
-              
+              const vkey = `${r.employeeId}|${r.dataFim}`;
+              const periodosVencidosRealList = vpPeriodosMap.has(vkey) ? vpPeriodosMap.get(vkey)! : undefined;
+              const diasVencidosRealList = vpDiasMap.has(vkey) ? vpDiasMap.get(vkey)! : undefined;
+
               const previsao = calcularRescisaoCompleta({
                 salarioBase,
                 dataAdmissao,
@@ -586,6 +685,7 @@ export const avisoPrevioFeriasRouter = router({
                 vrDiario: 0,
                 diasTrabalhadosMes,
                 periodosVencidosOverride: periodosVencidosRealList,
+                diasVencidosOverride: diasVencidosRealList,
                 descontarAvisoNaoCumprido: !!(r as any).descontarAvisoNaoCumprido,
                 incluirMultaFgts: multaMapList.get(Number(emp.companyId)) ?? true,
               });
@@ -653,20 +753,9 @@ export const avisoPrevioFeriasRouter = router({
               dataFimParaCalculo = row.novoEmpregoComunicadoEm;
             }
 
-            // Contagem real de férias vencidas do banco
-            let periodosVencidosRealById: number | undefined;
-            try {
-              const vpById = ((await db.execute(sql`
-                SELECT COUNT(*)::int AS total FROM vacation_periods
-                WHERE "employeeId" = ${row.employeeId}
-                  AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
-                  AND "periodoAquisitivoFim" IS NOT NULL
-                  AND "periodoAquisitivoFim" < ${dataFimParaCalculo}
-                  AND ("dataPagamento" IS NULL OR "dataPagamento" > ${dataFimParaCalculo})
-                  AND "deletedAt" IS NULL
-              `)) as any).rows || [];
-              periodosVencidosRealById = Number(vpById[0]?.total ?? 0);
-            } catch { /* fallback */ }
+            // Saldo real de férias vencidas do banco (por DIA — reflete gozo parcial)
+            const saldoVencById = await getFeriasVencidasSaldo(db, row.employeeId, dataFimParaCalculo);
+            const periodosVencidosRealById = saldoVencById.periodosVencidos;
 
             const incluirMultaFgtsById = await getIncluirMultaFgts(db, emp.companyId);
             const previsao = calcularRescisaoCompleta({
@@ -678,6 +767,7 @@ export const avisoPrevioFeriasRouter = router({
               vrDiario: 0,
               diasTrabalhadosMes: diasTrabMes,
               periodosVencidosOverride: periodosVencidosRealById,
+              diasVencidosOverride: saldoVencById.diasVencidos,
               mediaInsalubridade: parseFloat(String((row as any).mediaInsalubridade || '0').replace(',', '.')) || 0,
               mediaHorasExtras: parseFloat(String((row as any).mediaHorasExtras || '0').replace(',', '.')) || 0,
               descontarAvisoNaoCumprido: !!(row as any).descontarAvisoNaoCumprido,
@@ -727,6 +817,7 @@ export const avisoPrevioFeriasRouter = router({
               tipo: row.tipo,
               diasTrabalhadosMes: diasTrabMes,
               periodosVencidosOverride: periodosVencidosRealById,
+              diasVencidosOverride: saldoVencById.diasVencidos,
             });
 
             // Retornar com previsão recalculada (incluir dataAdmissao para cálculo de tempo de serviço no frontend)
@@ -923,33 +1014,15 @@ export const avisoPrevioFeriasRouter = router({
         // CONTAGEM REAL DE FÉRIAS VENCIDAS (banco de dados)
         // Considera apenas períodos NÃO concluídos/cancelados/em gozo
         // ============================================================
-        let periodosVencidosReal: number | undefined;
-        let periodosVencidosDetalhes: Array<{ periodoAquisitivoInicio: string; periodoAquisitivoFim: string; periodoConcessivoFim: string }> = [];
-        try {
-          // Rev. 2205 — antes COUNT(*) só; agora trazemos as datas pra mostrar
-          // QUANDO cada período venceu (Lilian: "coloca um campo de quando
-          // venceu as ferias para saber"). O `periodoConcessivoFim` é a data
-          // LIMITE pro empregador conceder o gozo (Art. 134 CLT — 12 meses
-          // após o fim do período aquisitivo). Ordenado pelo mais antigo.
-          const vpRows = ((await db.execute(sql`
-            SELECT "periodoAquisitivoInicio", "periodoAquisitivoFim", "periodoConcessivoFim"
-            FROM vacation_periods
-            WHERE "employeeId" = ${input.employeeId}
-              AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
-              AND "periodoAquisitivoFim" IS NOT NULL
-              AND "periodoAquisitivoFim" < ${dataFimAviso}
-              AND ("dataPagamento" IS NULL OR "dataPagamento" > ${dataFimAviso})
-              AND "deletedAt" IS NULL
-            ORDER BY "periodoAquisitivoFim" ASC
-          `)) as any).rows || [];
-          periodosVencidosDetalhes = vpRows.map((r: any) => ({
-            periodoAquisitivoInicio: String(r.periodoAquisitivoInicio || r.periodoaquisitivoinicio || ''),
-            periodoAquisitivoFim: String(r.periodoAquisitivoFim || r.periodoaquisitivofim || ''),
-            periodoConcessivoFim: String(r.periodoConcessivoFim || r.periodoconcessivofim || ''),
-          }));
-          periodosVencidosReal = periodosVencidosDetalhes.length;
-        } catch { /* fallback para cálculo matemático */ }
-        
+        // Rev. 2205 — trazemos as datas pra mostrar QUANDO cada período venceu
+        // (Lilian: "coloca um campo de quando venceu as ferias para saber"). O
+        // `periodoConcessivoFim` é a data LIMITE pro empregador conceder o gozo
+        // (Art. 134 CLT). Agora o saldo é por DIA (reflete gozo parcial) e os
+        // detalhes carregam `saldoDias` de cada período.
+        const saldoVencSim = await getFeriasVencidasSaldo(db, input.employeeId, dataFimAviso);
+        const periodosVencidosReal = saldoVencSim.periodosVencidos;
+        const periodosVencidosDetalhes = saldoVencSim.detalhes;
+
         // ============================================================
         // CÁLCULO DAS VERBAS RESCISÓRIAS
         // ============================================================
@@ -963,6 +1036,7 @@ export const avisoPrevioFeriasRouter = router({
           vrDiario,
           diasTrabalhadosMes,
           periodosVencidosOverride: periodosVencidosReal,
+          diasVencidosOverride: saldoVencSim.diasVencidos,
           descontarAvisoNaoCumprido: input.descontarAvisoNaoCumprido,
           incluirMultaFgts: incluirMultaFgtsGerar,
         });
@@ -985,6 +1059,7 @@ export const avisoPrevioFeriasRouter = router({
           tipo: input.tipo,
           diasTrabalhadosMes,
           periodosVencidosOverride: periodosVencidosReal,
+          diasVencidosOverride: saldoVencSim.diasVencidos,
         });
 
         // ============================================================
@@ -1155,19 +1230,8 @@ export const avisoPrevioFeriasRouter = router({
         // CONTAGEM REAL DE FÉRIAS VENCIDAS (banco de dados)
         // Considera apenas períodos NÃO concluídos/cancelados/em gozo
         // ============================================================
-        let periodosVencidosRealComp: number | undefined;
-        try {
-          const vpRowsComp = ((await db.execute(sql`
-            SELECT COUNT(*)::int AS total FROM vacation_periods
-            WHERE "employeeId" = ${input.employeeId}
-              AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
-              AND "periodoAquisitivoFim" IS NOT NULL
-              AND "periodoAquisitivoFim" < ${input.dataDesligamento}
-              AND ("dataPagamento" IS NULL OR "dataPagamento" > ${input.dataDesligamento})
-              AND "deletedAt" IS NULL
-          `)) as any).rows || [];
-          periodosVencidosRealComp = Number(vpRowsComp[0]?.total ?? 0);
-        } catch { /* fallback para cálculo matemático */ }
+        const saldoVencComp = await getFeriasVencidasSaldo(db, input.employeeId, input.dataDesligamento);
+        const periodosVencidosRealComp = saldoVencComp.periodosVencidos;
 
         // ============================================================
         // CENÁRIO 1: AVISO TRABALHADO
@@ -1192,6 +1256,7 @@ export const avisoPrevioFeriasRouter = router({
           dataFimAviso: dataFimTrab, tipo: 'empregador_trabalhado',
           vrDiario, diasTrabalhadosMes: diasTrabMesTrab,
           periodosVencidosOverride: periodosVencidosRealComp,
+          diasVencidosOverride: saldoVencComp.diasVencidos,
           incluirMultaFgts: incluirMultaFgtsComp,
         });
         const totalBrutoTrab = parseFloat(prevTrab.total);
@@ -1223,6 +1288,7 @@ export const avisoPrevioFeriasRouter = router({
           dataFimAviso: dataFimInd, tipo: 'empregador_indenizado',
           vrDiario, diasTrabalhadosMes: diasTrabMesInd,
           periodosVencidosOverride: periodosVencidosRealComp,
+          diasVencidosOverride: saldoVencComp.diasVencidos,
           incluirMultaFgts: incluirMultaFgtsComp,
         });
         const totalBrutoInd = parseFloat(prevInd.total);
@@ -1497,20 +1563,9 @@ export const avisoPrevioFeriasRouter = router({
           const diasFeriasMesSaidaUpd = await diasFeriasNoMesDaSaida(db, aviso.employeeId, dataFim);
           const diasTrabalhadosMes = diasTrabalhados ?? Math.max(0, dtFimAviso.getDate() - diasFeriasMesSaidaUpd);
 
-          // Contagem real de férias vencidas do banco
-          let periodosVencidosRealUpd: number | undefined;
-          try {
-            const vpUpd = ((await db.execute(sql`
-              SELECT COUNT(*)::int AS total FROM vacation_periods
-              WHERE "employeeId" = ${aviso.employeeId}
-                AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
-                AND "periodoAquisitivoFim" IS NOT NULL
-                AND "periodoAquisitivoFim" < ${dataFim}
-                AND ("dataPagamento" IS NULL OR "dataPagamento" > ${dataFim})
-                AND "deletedAt" IS NULL
-            `)) as any).rows || [];
-            periodosVencidosRealUpd = Number(vpUpd[0]?.total ?? 0);
-          } catch { /* fallback */ }
+          // Saldo real de férias vencidas do banco (por DIA — reflete gozo parcial)
+          const saldoVencUpd = await getFeriasVencidasSaldo(db, aviso.employeeId, dataFim);
+          const periodosVencidosRealUpd = saldoVencUpd.periodosVencidos;
 
           const descontarAvisoFlag = input.descontarAvisoNaoCumprido !== undefined
             ? input.descontarAvisoNaoCumprido
@@ -1525,6 +1580,7 @@ export const avisoPrevioFeriasRouter = router({
             vrDiario: 0,
             diasTrabalhadosMes,
             periodosVencidosOverride: periodosVencidosRealUpd,
+            diasVencidosOverride: saldoVencUpd.diasVencidos,
             descontarAvisoNaoCumprido: descontarAvisoFlag,
             incluirMultaFgts: incluirMultaFgtsUpd,
           });
@@ -1537,6 +1593,7 @@ export const avisoPrevioFeriasRouter = router({
             tipo,
             diasTrabalhadosMes,
             periodosVencidosOverride: periodosVencidosRealUpd,
+            diasVencidosOverride: saldoVencUpd.diasVencidos,
           });
 
           updateData.tipo = tipo;
@@ -1626,20 +1683,9 @@ export const avisoPrevioFeriasRouter = router({
             const diasFeriasMesRec = await diasFeriasNoMesDaSaida(db, aviso.employeeId, dataFim);
             const diasTrabalhadosMes = Math.max(0, dtFimAviso.getDate() - diasFeriasMesRec);
 
-            // Contagem real de férias vencidas do banco
-            let periodosVencidosRealRec: number | undefined;
-            try {
-              const vpRec = ((await db.execute(sql`
-                SELECT COUNT(*)::int AS total FROM vacation_periods
-                WHERE "employeeId" = ${aviso.employeeId}
-                  AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
-                  AND "periodoAquisitivoFim" IS NOT NULL
-                  AND "periodoAquisitivoFim" < ${dataFim}
-                  AND ("dataPagamento" IS NULL OR "dataPagamento" > ${dataFim})
-                  AND "deletedAt" IS NULL
-              `)) as any).rows || [];
-              periodosVencidosRealRec = Number(vpRec[0]?.total ?? 0);
-            } catch { /* fallback */ }
+            // Saldo real de férias vencidas do banco (por DIA — reflete gozo parcial)
+            const saldoVencRec = await getFeriasVencidasSaldo(db, aviso.employeeId, dataFim);
+            const periodosVencidosRealRec = saldoVencRec.periodosVencidos;
 
             const previsao = calcularRescisaoCompleta({
               salarioBase,
@@ -1650,6 +1696,7 @@ export const avisoPrevioFeriasRouter = router({
               vrDiario: 0,
               diasTrabalhadosMes,
               periodosVencidosOverride: periodosVencidosRealRec,
+              diasVencidosOverride: saldoVencRec.diasVencidos,
               descontarAvisoNaoCumprido: !!(aviso as any).descontarAvisoNaoCumprido,
               incluirMultaFgts: multaMapRec.get(Number(aviso.companyId)) ?? true,
             });
@@ -1662,6 +1709,7 @@ export const avisoPrevioFeriasRouter = router({
               tipo,
               diasTrabalhadosMes,
               periodosVencidosOverride: periodosVencidosRealRec,
+              diasVencidosOverride: saldoVencRec.diasVencidos,
             });
 
             await db.update(terminationNotices).set({

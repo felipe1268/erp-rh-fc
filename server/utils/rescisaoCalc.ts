@@ -337,6 +337,12 @@ export function calcularRescisaoCompleta(params: {
   vrDiario: number;
   diasTrabalhadosMes: number;
   periodosVencidosOverride?: number;
+  /** SALDO de dias de férias vencidas (30 − dias gozados − abono) somado de TODOS
+   * os períodos aquisitivos COMPLETOS ainda não quitados. Quando informado, as
+   * férias vencidas são pagas por DIA `(base/30)×dias`, refletindo gozos PARCIAIS
+   * (ex.: período concluído com só 5 de 30 dias → saldo 25). Sem ele, cai no modelo
+   * antigo de períodos INTEIROS (`periodosVencidos × 30`). */
+  diasVencidosOverride?: number;
   mediaInsalubridade?: number;
   mediaHorasExtras?: number;
   /** Art. 487 §2º — quando empregado pede demissão e NÃO cumpre o aviso, o
@@ -383,7 +389,14 @@ export function calcularRescisaoCompleta(params: {
   const periodosVencidos = params.periodosVencidosOverride !== undefined
     ? params.periodosVencidosOverride
     : Math.max(0, calcularFeriasVencidas(dataAdmissao, dataProjecao) - 1);
-  const feriasVencidasBase = periodosVencidos > 0 ? baseFerias13 * periodosVencidos : 0;
+  // SALDO de dias: quando o caller informa `diasVencidosOverride`, paga-se POR DIA
+  // `(base/30)×dias` — refletindo gozos PARCIAIS (período concluído com só 5 de 30
+  // dias deixa 25 dias em aberto). Sem o override de dias, mantém o modelo antigo de
+  // períodos INTEIROS (`periodosVencidos × 30`), o que equivale a `(base/30)×(periodos×30)`.
+  const diasVencidos = params.diasVencidosOverride !== undefined
+    ? params.diasVencidosOverride
+    : periodosVencidos * 30;
+  const feriasVencidasBase = diasVencidos > 0 ? (baseFerias13 / 30) * diasVencidos : 0;
   const feriasVencidasTerco = feriasVencidasBase / 3;
   const feriasVencidas = feriasVencidasBase + feriasVencidasTerco;
 
@@ -469,6 +482,7 @@ export function calcularRescisaoCompleta(params: {
     feriasVencidasBase: feriasVencidasBase.toFixed(2),
     feriasVencidasTerco: feriasVencidasTerco.toFixed(2),
     periodosVencidos,
+    diasVencidos,
     decimoTerceiroProporcional: decimoTerceiroProporcional.toFixed(2),
     incAvosFeriasProjecao: incAvosFerias,
     incAvos13Projecao: incAvos13,
@@ -519,6 +533,8 @@ export function calcularRescisaoComplementar(params: {
   tipo: string;
   diasTrabalhadosMes: number;
   periodosVencidosOverride?: number;
+  /** Mesmo conceito de `calcularRescisaoCompleta`: saldo de DIAS de férias vencidas. */
+  diasVencidosOverride?: number;
 }) {
   const { valorComplemento, dataAdmissao, dataDesligamento, tipo, diasTrabalhadosMes } = params;
 
@@ -549,7 +565,11 @@ export function calcularRescisaoComplementar(params: {
   const periodosVencidos = params.periodosVencidosOverride !== undefined
     ? params.periodosVencidosOverride
     : Math.max(0, calcularFeriasVencidas(dataAdmissao, dataProjecao) - 1);
-  const feriasVencidasBase = periodosVencidos > 0 ? valorComplemento * periodosVencidos : 0;
+  // SALDO de dias (reflete gozos PARCIAIS) — vide calcularRescisaoCompleta.
+  const diasVencidos = params.diasVencidosOverride !== undefined
+    ? params.diasVencidosOverride
+    : periodosVencidos * 30;
+  const feriasVencidasBase = diasVencidos > 0 ? (valorComplemento / 30) * diasVencidos : 0;
   const feriasVencidasTerco = feriasVencidasBase / 3;
   const feriasVencidas = feriasVencidasBase + feriasVencidasTerco;
 
@@ -578,6 +598,7 @@ export function calcularRescisaoComplementar(params: {
     mesesFerias,
     meses13o,
     periodosVencidos,
+    diasVencidos,
     dataSaida,
     saldoSalario: saldoSalario.toFixed(2),
     feriasProporcional: feriasProporcional.toFixed(2),
