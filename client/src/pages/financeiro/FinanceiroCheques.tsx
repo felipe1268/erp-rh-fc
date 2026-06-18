@@ -824,7 +824,7 @@ export default function FinanceiroCheques() {
                 <Label className="text-xs">Status</Label>
                 <Select value={fStatus} onValueChange={setFStatus}>
                   <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
                     <SelectItem value="todos">Todos</SelectItem>
                     {STATUS_OPTS.map((s) => <SelectItem key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</SelectItem>)}
                     <SelectItem value="outros">Outros (sustado/cancelado/devolvido)</SelectItem>
@@ -931,7 +931,7 @@ export default function FinanceiroCheques() {
                   <span className="text-xs text-blue-700">Alterar status para:</span>
                   <Select value={bulkStatus} onValueChange={setBulkStatus}>
                     <SelectTrigger className="h-8 w-[170px] bg-white"><SelectValue placeholder="Escolha o status" /></SelectTrigger>
-                    <SelectContent>
+                    <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
                       {STATUS_OPTS.map((s) => <SelectItem key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -1487,7 +1487,7 @@ export default function FinanceiroCheques() {
                 <Label className="text-xs">Status</Label>
                 <Select value={editItem.status} onValueChange={(v) => setEditItem({ ...editItem, status: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
                     {STATUS_OPTS.map((s) => <SelectItem key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</SelectItem>)}
                   </SelectContent>
                 </Select>

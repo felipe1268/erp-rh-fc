@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3255 — **FINANCEIRO / CONTROLE DE CHEQUES · OS DROPDOWNS DE STATUS (FILTRO "STATUS", AÇÃO EM
+ * LOTE "ALTERAR STATUS PARA" E EDIÇÃO POR CHEQUE) PASSARAM A ABRIR ANCORADOS LOGO ABAIXO DO CAMPO,
+ * ALINHADOS À ESQUERDA — EM VEZ DE FLUTUAR CENTRALIZADOS "NO MEIO DA TELA" (PROBLEMA VISÍVEL NO
+ * IPAD/SAFARI). SÓ POSICIONAMENTO DO MENU — MESMAS OPÇÕES (COMPENSADO/PENDENTE/SUSTADO/CANCELADO/
+ * DEVOLVIDO/INDEFINIDO) E MESMA LÓGICA DE FILTRO/ALTERAÇÃO.**
+ * - PEDIDO (piloto FC): "Arrume a tela de status, ela está aparecendo no meio da tela e não abaixo
+ *   do campo status como deveria ser" (prints IMG_2180/IMG_2181 — o menu de status do "Alterar status
+ *   para" abrindo solto sobre a área de busca, longe do gatilho).
+ * - CAUSA: o componente compartilhado `client/src/components/ui/select.tsx` usa por padrão
+ *   `position="popper"` PORÉM `align="center"`, o que centraliza o `SelectContent` sobre um gatilho
+ *   estreito (`w-[150px]`/`w-[170px]`), dando a impressão de menu "flutuando no meio" e descolado do
+ *   campo (agravado no Safari/iPad com a página rolada).
+ * - SOLUÇÃO (FRONT, `client/src/pages/financeiro/FinanceiroCheques.tsx`): os 3 `SelectContent` de
+ *   status (filtro "Status"; ação em lote "Alterar status para" no balão azul de seleção; e o select
+ *   "Status" do diálogo "Editar cheque") receberam props explícitas
+ *   `position="popper" side="bottom" align="start" sideOffset={4}` — o menu passa a abrir colado à
+ *   borda inferior-esquerda do gatilho (mantendo o flip automático para cima quando não há espaço).
+ *   Nenhuma mudança no componente compartilhado (evita afetar selects de todo o app).
+ * - ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE. esbuild limpo.
+ *
  * Rev. 3254 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · OS "LANÇAMENTOS PARCEIRO" (MÓDULO PARCEIROS
  * CONVENIADOS) AGORA SÃO UNIFICADOS NA LISTA DE PENDÊNCIAS DA CONCILIAÇÃO — IGUAL À FROTA
  * (COMBUSTÍVEL/MANUTENÇÃO) — SOMANDO TODOS OS LANÇAMENTOS DO MESMO PARCEIRO NO MÊS NUMA ÚNICA LINHA
