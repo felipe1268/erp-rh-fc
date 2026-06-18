@@ -1054,6 +1054,29 @@ export const chequesRouter = router({
     return { ok: true, alterado: res.rows.length };
   }),
 
+  // Rev. 3245 — alteração de STATUS em LOTE (múltipla seleção na tela). Atômico:
+  // um único UPDATE com `id IN (...)` filtrando por company_id + não-excluído.
+  // Não toca conciliação/extrato — só o status do controle (ação explícita do user).
+  atualizarStatusLote: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    ids: z.array(z.number().int()).min(1).max(1000),
+    status: z.enum(STATUS_VALIDOS),
+  })).mutation(async ({ input, ctx }) => {
+    await assertCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    // de-dup defensivo dos ids
+    const ids = Array.from(new Set(input.ids));
+    // dbExecute liga params por ORDEM DE APARIÇÃO: status, depois os ids, depois company.
+    const idsPh = ids.map((_, i) => `$${i + 2}`).join(", ");
+    const res = await dbExecute(db,
+      `UPDATE financial_cheques SET status=$1, updated_at=NOW()
+        WHERE id IN (${idsPh}) AND company_id=$${ids.length + 2} AND excluido_em IS NULL
+        RETURNING id`,
+      [input.status, ...ids, input.companyId]);
+    return { ok: true, alterado: res.rows.length };
+  }),
+
   // Exclusão (soft).
   excluir: protectedProcedure.input(z.object({
     id: z.number(), companyId: z.number(),

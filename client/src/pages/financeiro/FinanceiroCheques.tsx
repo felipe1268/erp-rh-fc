@@ -9,6 +9,7 @@ import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter, 
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
@@ -133,6 +134,10 @@ export default function FinanceiroCheques() {
   // ── Edição ──
   const [editItem, setEditItem] = useState<any>(null);
   const [excluirItem, setExcluirItem] = useState<any>(null);
+  // Rev. 3245 — múltipla seleção p/ alterar status em lote.
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkStatus, setBulkStatus] = useState<string>("");
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   // ── Limpar cadastro (mês / ano inteiro) ──
   // Fluxo: abrir (escopo) → 1ª confirmação → 2ª confirmação + senha → executa.
@@ -179,6 +184,7 @@ export default function FinanceiroCheques() {
   const pdfPreviewMut = (trpc as any).cheques.importarPdfPreview.useMutation();
   const pdfConfirmarMut = (trpc as any).cheques.importarPdfConfirmar.useMutation();
   const atualizarMut = (trpc as any).cheques.atualizar.useMutation();
+  const bulkStatusMut = (trpc as any).cheques.atualizarStatusLote.useMutation();
   const excluirMut = (trpc as any).cheques.excluir.useMutation();
   const limparMut = (trpc as any).cheques.limparCadastro.useMutation();
 
@@ -266,6 +272,49 @@ export default function FinanceiroCheques() {
     if (fStatus === "divergente") return arr.filter((c) => c.extratoDivergente === true);
     return arr;
   }, [cheques, fStatus]);
+
+  // Rev. 3245 — múltipla seleção. IDs visíveis (a seleção só age sobre o que está
+  // na tela); estado derivado p/ o "selecionar todos" do cabeçalho.
+  const idsVisiveis = useMemo(() => (chequesFiltrados as any[]).map((c) => c.id), [chequesFiltrados]);
+  const selVisiveis = useMemo(() => idsVisiveis.filter((id) => selectedIds.has(id)), [idsVisiveis, selectedIds]);
+  const allSelecionados = idsVisiveis.length > 0 && selVisiveis.length === idsVisiveis.length;
+  const someSelecionados = selVisiveis.length > 0 && !allSelecionados;
+  const toggleSel = (id: number) => setSelectedIds((prev) => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+  const toggleSelAll = () => setSelectedIds((prev) => {
+    const next = new Set(prev);
+    if (allSelecionados) { for (const id of idsVisiveis) next.delete(id); }
+    else { for (const id of idsVisiveis) next.add(id); }
+    return next;
+  });
+  const limparSelecao = () => setSelectedIds(new Set());
+
+  // Ao trocar filtro/mês/ano/busca a lista muda — limpa a seleção p/ não agir
+  // sobre cheques que saíram da tela.
+  useEffect(() => { setSelectedIds(new Set()); setBulkStatus(""); }, [fStatus, mesSel, ano, fBusca]);
+
+  async function aplicarBulkStatus() {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0 || !bulkStatus) return;
+    try {
+      const r = await bulkStatusMut.mutateAsync({ companyId, ids, status: bulkStatus });
+      setBulkOpen(false);
+      limparSelecao();
+      setBulkStatus("");
+      await Promise.all([
+        utils?.cheques?.listar?.invalidate?.(),
+        utils?.cheques?.resumo?.invalidate?.(),
+        utils?.cheques?.resumoMensal?.invalidate?.(),
+        utils?.cheques?.verificarExtratoResumo?.invalidate?.(),
+      ]);
+      toast({ title: "Status atualizado", description: `${r?.alterado ?? ids.length} cheque(s) alterado(s).` });
+    } catch (err: any) {
+      toast({ title: "Falha ao alterar status", description: err?.message || String(err), variant: "destructive" });
+    }
+  }
 
   // Lista da PRÉVIA de importação, aplicando filtro de categoria + busca livre.
   // Usa `preview.linhas` (lista completa nova) com fallback p/ `preview.amostra` (compat).
@@ -807,6 +856,34 @@ export default function FinanceiroCheques() {
               <span className="inline-flex items-center gap-1.5 text-emerald-700"><Link2 className="h-3 w-3" /> Conciliado no extrato</span>
               <span className="inline-flex items-center gap-1.5 text-red-700"><AlertTriangle className="h-3 w-3" /> Divergência (banco compensou, controle não)</span>
             </div>
+            {/* Rev. 3245 — barra de ação em lote (aparece com ≥1 cheque selecionado). */}
+            {selectedIds.size > 0 && (
+              <div className="flex flex-wrap items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+                <span className="text-sm font-medium text-blue-800">
+                  {selectedIds.size} cheque(s) selecionado(s)
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-blue-700">Alterar status para:</span>
+                  <Select value={bulkStatus} onValueChange={setBulkStatus}>
+                    <SelectTrigger className="h-8 w-[170px] bg-white"><SelectValue placeholder="Escolha o status" /></SelectTrigger>
+                    <SelectContent>
+                      {STATUS_OPTS.map((s) => <SelectItem key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    size="sm"
+                    className="h-8 bg-blue-600 hover:bg-blue-700"
+                    disabled={!bulkStatus || bulkStatusMut.isPending}
+                    onClick={() => setBulkOpen(true)}
+                  >
+                    {bulkStatusMut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Aplicar
+                  </Button>
+                </div>
+                <button type="button" onClick={limparSelecao} className="text-xs text-blue-700 hover:underline">
+                  Limpar seleção
+                </button>
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -822,6 +899,13 @@ export default function FinanceiroCheques() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-left text-xs text-muted-foreground uppercase">
+                      <th className="py-2 pr-3 w-8">
+                        <Checkbox
+                          checked={allSelecionados ? true : someSelecionados ? "indeterminate" : false}
+                          onCheckedChange={toggleSelAll}
+                          aria-label="Selecionar todos"
+                        />
+                      </th>
                       <th className="py-2 pr-3">Nº Cheque</th>
                       <th className="py-2 pr-3">Fornecedor</th>
                       <th className="py-2 pr-3">Banco</th>
@@ -835,7 +919,14 @@ export default function FinanceiroCheques() {
                   </thead>
                   <tbody>
                     {chequesFiltrados.map((c) => (
-                      <tr key={c.id} className="border-b hover:bg-muted/40">
+                      <tr key={c.id} className={`border-b hover:bg-muted/40 ${selectedIds.has(c.id) ? "bg-blue-50/60" : ""}`}>
+                        <td className="py-2 pr-3">
+                          <Checkbox
+                            checked={selectedIds.has(c.id)}
+                            onCheckedChange={() => toggleSel(c.id)}
+                            aria-label={`Selecionar cheque ${c.numeroCheque || c.id}`}
+                          />
+                        </td>
                         <td className="py-2 pr-3 font-mono">{c.numeroCheque || "—"}</td>
                         <td className="py-2 pr-3">
                           {c.fornecedorNome || <span className="text-muted-foreground">—</span>}
@@ -1353,6 +1444,30 @@ export default function FinanceiroCheques() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Rev. 3245 — confirmar alteração de status em lote */}
+      <AlertDialog open={bulkOpen} onOpenChange={(o) => { if (!o) setBulkOpen(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Alterar status de {selectedIds.size} cheque(s)?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Os <strong>{selectedIds.size}</strong> cheque(s) selecionado(s) passarão para o status{" "}
+              <strong>{bulkStatus ? bulkStatus[0].toUpperCase() + bulkStatus.slice(1) : "—"}</strong>.
+              Esta ação altera apenas o status no controle e não afeta a conciliação bancária nem lançamentos financeiros.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkStatusMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); aplicarBulkStatus(); }}
+              disabled={bulkStatusMut.isPending || !bulkStatus}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {bulkStatusMut.isPending ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Aplicando…</> : "Alterar status"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Confirmar exclusão */}
       <AlertDialog open={!!excluirItem} onOpenChange={(o) => { if (!o) setExcluirItem(null); }}>

@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3245 — **FINANCEIRO / CONTROLE DE CHEQUES · A TELA GANHOU MÚLTIPLA SELEÇÃO: UMA CAIXA DE
+ * MARCAÇÃO POR CHEQUE (+ "SELECIONAR TODOS" NO CABEÇALHO) E UMA BARRA DE AÇÃO QUE, COM ≥1 CHEQUE
+ * SELECIONADO, PERMITE ALTERAR O STATUS DE TODOS DE UMA VEZ (COMPENSADO/PENDENTE/SUSTADO/
+ * CANCELADO/DEVOLVIDO/INDEFINIDO), COM CONFIRMAÇÃO. ANTES O STATUS SÓ MUDAVA UM A UM PELO LÁPIS.**
+ * - PEDIDO (piloto FC): "quero múltipla seleção para poder alterar o status do cheque".
+ * - SOLUÇÃO (BACK, `server/routers/cheques.ts`): nova procedure `atualizarStatusLote`
+ *   ({companyId, ids[], status}) — UPDATE ATÔMICO único `... WHERE id IN (...) AND company_id=$N
+ *   AND excluido_em IS NULL`; `assertCompanyAccess` (tenant guard) + `z.enum(STATUS_VALIDOS)` +
+ *   de-dup defensivo dos ids + cap de 1000. Placeholders montados na ORDEM DE APARIÇÃO que o
+ *   `dbExecute` exige (status, ids…, company). NÃO toca conciliação/extrato.
+ * - SOLUÇÃO (FRONT, `client/src/pages/financeiro/FinanceiroCheques.tsx`): coluna de `Checkbox`
+ *   (linha + cabeçalho com estado indeterminate p/ seleção parcial); estado `selectedIds:Set`,
+ *   `bulkStatus`, `bulkOpen`; a seleção SÓ age sobre os cheques VISÍVEIS (`idsVisiveis`) e é
+ *   LIMPA via `useEffect` quando filtro/mês/ano/busca mudam (não age sobre o que saiu da tela);
+ *   barra azul com Select de status + "Aplicar" → AlertDialog de confirmação → `aplicarBulkStatus`
+ *   invalida `listar`/`resumo`/`resumoMensal`/`verificarExtratoResumo`. Linha selecionada destacada.
+ * - ZERO SCHEMA/ALTER/DROP/DELETE · alteração de status é ação explícita do usuário (com confirmação).
+ *
  * Rev. 3244 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NO PAINEL "CHEQUES DEVOLVIDOS NO BANCO", A
  * LEGENDA (TAG-PÍLULA) DO MOTIVO DA DEVOLUÇÃO AGORA APARECE SEMPRE EM CADA CHEQUE — INCLUSIVE
  * QUANDO O EXTRATO NÃO TROUXE O CÓDIGO/ALÍNEA BACEN, CASO EM QUE MOSTRA "MOTIVO NÃO INFORMADO".
