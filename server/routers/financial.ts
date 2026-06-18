@@ -158,6 +158,7 @@ function _agruparConciliacao(arr: any[]): any[] {
     frota_abastecimento: "combustivel",
     frota_manutencao: "manutencao",
     parceiro_lancamento: "parceiro",
+    pagamento_pj: "pj",
   };
   const passthrough: any[] = [];
   const groups = new Map<string, any>();
@@ -173,16 +174,22 @@ function _agruparConciliacao(arr: any[]): any[] {
       chave = `vr|${ym}`;
       label = `Vale Refeição ${ym}`;
     } else {
-      // combustível / manutenção → fornecedor da Frota; parceiro → parceiro conveniado.
+      // combustível / manutenção → fornecedor da Frota; parceiro → parceiro conveniado;
+      // pj → prestador (contratado PJ — pj_payments→employees/pj_contracts). Rev. 3261.
       const fornRaw = (tipoG === "parceiro"
         ? (r.parceiroFornecedor && String(r.parceiroFornecedor).trim())
+        : tipoG === "pj"
+        ? (r.pjFornecedor && String(r.pjFornecedor).trim())
         : (r.frotaFornecedor && String(r.frotaFornecedor).trim())) || "";
       const fn = _normNomeConc(fornRaw);
-      // Parceiro fecha por MÊS (no extrato paga-se só o total mensal de cada parceiro);
-      // Frota agrupa pelo fornecedor dentro do período já filtrado.
-      chave = tipoG === "parceiro" ? `parceiro|${fn || "SEM"}|${ym}` : `${tipoG}|${fn || "SEM"}`;
-      const pre = tipoG === "combustivel" ? "Combustível" : tipoG === "manutencao" ? "Manutenção" : "Parceiro";
-      label = fornRaw ? `${pre} · ${fornRaw}` : `${pre} (sem fornecedor)`;
+      // Parceiro e PJ fecham por MÊS (no extrato paga-se por prestador/mês — adiantamento +
+      // fechamento somam numa única linha do terceiro); Frota agrupa pelo fornecedor dentro
+      // do período já filtrado.
+      const porMes = tipoG === "parceiro" || tipoG === "pj";
+      chave = porMes ? `${tipoG}|${fn || "SEM"}|${ym}` : `${tipoG}|${fn || "SEM"}`;
+      const pre = tipoG === "combustivel" ? "Combustível" : tipoG === "manutencao" ? "Manutenção" : tipoG === "pj" ? "Pagamento PJ" : "Parceiro";
+      const semLabel = tipoG === "pj" ? `${pre} (sem prestador)` : `${pre} (sem fornecedor)`;
+      label = fornRaw ? `${pre} · ${fornRaw}` : semLabel;
     }
     let g = groups.get(chave);
     if (!g) {
@@ -213,7 +220,7 @@ function _agruparConciliacao(arr: any[]): any[] {
     if (dataStr && dataStr < g.dataMin) g.dataMin = dataStr;
     if (dataStr && dataStr > g.dataMax) { g.dataMax = dataStr; g.data = dataStr; }
     if (tipoG !== "vr") {
-      const fornForCount = tipoG === "parceiro" ? r.parceiroFornecedor : r.frotaFornecedor;
+      const fornForCount = tipoG === "parceiro" ? r.parceiroFornecedor : tipoG === "pj" ? r.pjFornecedor : r.frotaFornecedor;
       if (fornForCount) {
         const k = String(fornForCount).trim();
         if (k) g._fornCount.set(k, (g._fornCount.get(k) || 0) + 1);
@@ -228,8 +235,8 @@ function _agruparConciliacao(arr: any[]): any[] {
       let best = ""; let bestN = -1;
       for (const [k, n] of g._fornCount) if (n > bestN) { best = k; bestN = n; }
       g.fornecedorNome = best || null;
-      const pre = g.grupoTipo === "combustivel" ? "Combustível" : g.grupoTipo === "manutencao" ? "Manutenção" : "Parceiro";
-      g.descricao = best ? `${pre} · ${best}` : `${pre} (sem fornecedor)`;
+      const pre = g.grupoTipo === "combustivel" ? "Combustível" : g.grupoTipo === "manutencao" ? "Manutenção" : g.grupoTipo === "pj" ? "Pagamento PJ" : "Parceiro";
+      g.descricao = best ? `${pre} · ${best}` : (g.grupoTipo === "pj" ? `${pre} (sem prestador)` : `${pre} (sem fornecedor)`);
     }
     delete g._fornCount;
     out.push(g);
@@ -4590,12 +4597,16 @@ export const financialRouter = router({
               e.origem_modulo AS "origemModulo",
               COALESCE(NULLIF(TRIM(ff.posto),''), NULLIF(TRIM(fm.fornecedor),'')) AS "frotaFornecedor",
               COALESCE(NULLIF(TRIM(pc.nome_fantasia),''), NULLIF(TRIM(pc.razao_social),'')) AS "parceiroFornecedor",
+              COALESCE(NULLIF(TRIM(pjemp."nomeCompleto"),''), NULLIF(TRIM(pjc."razaoSocialPrestador"),'')) AS "pjFornecedor",
               COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) AS data
          FROM financial_entries e
          LEFT JOIN fleet_fuel_records ff ON e.origem_modulo='frota_abastecimento' AND ff.id = e.origem_id
          LEFT JOIN fleet_maintenances fm ON e.origem_modulo='frota_manutencao' AND fm.id = e.origem_id
          LEFT JOIN lancamentos_parceiros lp ON e.origem_modulo='parceiro_lancamento' AND lp.id = e.origem_id AND lp."companyId" = e.company_id
          LEFT JOIN parceiros_conveniados pc ON pc.id = lp."parceiroId" AND pc."companyId" = e.company_id
+         LEFT JOIN pj_payments pjp ON e.origem_modulo='pagamento_pj' AND pjp.id = e.origem_id AND pjp."companyId" = e.company_id
+         LEFT JOIN employees pjemp ON pjemp.id = pjp."employeeId" AND pjemp."companyId" = e.company_id
+         LEFT JOIN pj_contracts pjc ON pjc.id = pjp."contractId" AND pjc."companyId" = e.company_id
         WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
           AND e.conta_bancaria_id=$2
           AND ${sqlNotProjecao("e.origem_modulo")}
@@ -4620,12 +4631,16 @@ export const financialRouter = router({
               e.origem_modulo AS "origemModulo",
               COALESCE(NULLIF(TRIM(ff.posto),''), NULLIF(TRIM(fm.fornecedor),'')) AS "frotaFornecedor",
               COALESCE(NULLIF(TRIM(pc.nome_fantasia),''), NULLIF(TRIM(pc.razao_social),'')) AS "parceiroFornecedor",
+              COALESCE(NULLIF(TRIM(pjemp."nomeCompleto"),''), NULLIF(TRIM(pjc."razaoSocialPrestador"),'')) AS "pjFornecedor",
               COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) AS data
          FROM financial_entries e
          LEFT JOIN fleet_fuel_records ff ON e.origem_modulo='frota_abastecimento' AND ff.id = e.origem_id
          LEFT JOIN fleet_maintenances fm ON e.origem_modulo='frota_manutencao' AND fm.id = e.origem_id
          LEFT JOIN lancamentos_parceiros lp ON e.origem_modulo='parceiro_lancamento' AND lp.id = e.origem_id AND lp."companyId" = e.company_id
          LEFT JOIN parceiros_conveniados pc ON pc.id = lp."parceiroId" AND pc."companyId" = e.company_id
+         LEFT JOIN pj_payments pjp ON e.origem_modulo='pagamento_pj' AND pjp.id = e.origem_id AND pjp."companyId" = e.company_id
+         LEFT JOIN employees pjemp ON pjemp.id = pjp."employeeId" AND pjemp."companyId" = e.company_id
+         LEFT JOIN pj_contracts pjc ON pjc.id = pjp."contractId" AND pjc."companyId" = e.company_id
         WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
           AND e.conta_bancaria_id IS NULL
           AND ${sqlNotProjecao("e.origem_modulo")}

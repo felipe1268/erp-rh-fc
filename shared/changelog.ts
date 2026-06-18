@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3261 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · OS PAGAMENTOS DE PRESTADORES PJ (MÓDULO TERCEIROS,
+ * ORIGEM `pagamento_pj` — EX.: "ADIANTAMENTO 40%" E "FECHAMENTO 60%") DEIXARAM DE APARECER SOLTOS E SEM
+ * NOME NA LISTA DE PENDÊNCIAS DA CONCILIAÇÃO E AGORA SÃO UNIFICADOS POR PRESTADOR + MÊS NUMA ÚNICA LINHA
+ * SINTÉTICA "PAGAMENTO PJ · NOME DO PRESTADOR" COM O TOTAL EM BRL — IGUAL À FROTA (COMBUSTÍVEL/MANUTENÇÃO)
+ * E AO PARCEIRO (REV. 3254). CLICAR NO CHEVRON EXPANDE OS PAGAMENTOS-MEMBRO (ADIANTAMENTO/FECHAMENTO) P/
+ * ANÁLISE; CONCILIAÇÃO É N:1 (GRUPO INTEIRO × 1 LINHA DO EXTRATO). NÃO ASSUME PIX — A FORMA DE PAGAMENTO É
+ * A DEFINIDA PELO USUÁRIO. 100% READ-ONLY — OS ENTRIES SEGUEM INDIVIDUAIS NO BANCO.**
+ * - PEDIDO (piloto FC): "Estes dois pagamentos vêm dos colaboradores PJ, PRECISA fazer a mesma lógica e
+ *   verificar como podemos agrupar pq vem do módulo terceiros e precisa vir SEPARADO POR NOME DE CADA
+ *   TERCEIRO; normalmente é pix, mas a forma de pagamento é definida pelo usuário. Pense numa forma
+ *   eficiente e faça" (prints IMG_2192 — painel "Sem conta bancária definida" com "Adiantamento 40% -
+ *   Serviços de engenharia" e "Fechamento 60% - Serviços de engenharia" soltos, sem o nome do prestador;
+ *   IMG_2193; IMG_2194 — Módulo PJ com a lista de prestadores).
+ * - CAUSA-RAIZ: o agrupador read-only da Conciliação (`_agruparConciliacao` em `server/routers/financial.ts`,
+ *   mapa `GRUP`) só conhecia VR, Frota (abastecimento/manutenção) e Parceiro. `pagamento_pj` NÃO estava no
+ *   mapa → cada pagamento PJ caía no `passthrough` como linha individual, e como o `financial_entry` de PJ
+ *   guarda só uma descrição genérica ("Adiantamento 40% - Serviços de engenharia") sem o contratado, a tela
+ *   não mostrava DE QUEM era o pagamento. (A memória interna dizia que PJ já agrupava na Conciliação — estava
+ *   desatualizada; o ground-truth do `GRUP` não tinha `pagamento_pj`.)
+ * - SOLUÇÃO (reaproveita 100% a engine da Rev. 3239/3254 — só estende p/ o tipo "pj"):
+ *   • BACK `_agruparConciliacao`: `pagamento_pj: "pj"` no mapa `GRUP`; o tipo "pj" agrupa COMO o parceiro —
+ *     por PRESTADOR + MÊS (`pj|<prestador-normalizado>|<YYYY-MM>`), prefixo de rótulo "Pagamento PJ",
+ *     usando a nova coluna `pjFornecedor`; `_fornCount`/prefixo do loop final cobrem "pj"; quando o
+ *     prestador é nulo cai em "Pagamento PJ (sem prestador)".
+ *   • BACK `getConciliacaoReport` (as 2 queries — conta selecionada `lancRes` e "sem conta" `semContaRes`):
+ *     adicionados 3 LEFT JOIN read-only amarrados por `origem_id` + `companyId` (tenant-binding obrigatório):
+ *     `pj_payments pjp` (origem `pagamento_pj`), `employees pjemp` (pjp.employeeId) e `pj_contracts pjc`
+ *     (pjp.contractId); coluna `COALESCE(NULLIF(TRIM(pjemp."nomeCompleto"),''), NULLIF(TRIM(pjc."razaoSocialPrestador"),'')) AS "pjFornecedor"`
+ *     (nome do contratado, fallback razão social do contrato).
+ *   • FRONT `client/src/pages/financeiro/FinanceiroConciliacao.tsx` (`renderEntryRow` da linha agrupada):
+ *     `grpLabel` ganhou o caso "pj" → "Pagamento PJ"; `grpColor` → pílula índigo (`bg-indigo-100 text-indigo-700`),
+ *     distinta de Parceiro (fúcsia) e Manutenção (violeta). Expandir/total/conciliação N:1 já eram genéricos.
+ * - EFEITO: na Conciliação, os pagamentos PJ do mesmo prestador no mês colapsam numa linha "Pagamento PJ ·
+ *   NOME" com o total em BRL e a contagem de itens; o chevron mostra cada pagamento (adiantamento/fechamento)
+ *   pela descrição. SOMA preservada; só a contagem de linhas cai (lista enxuta). NÃO assume forma PIX.
+ *   ZERO BACKEND NOVO DE ESCRITA · ZERO SCHEMA/ALTER/DROP/DELETE — só leitura/apresentação.
+ *
  * Rev. 3260 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · OS 3 RELATÓRIOS EM PDF/IMPRESSÃO DESTE MÓDULO
  * (RELATÓRIO DE CONCILIAÇÃO BANCÁRIA, LISTAS POR STATUS E "CHEQUES DEVOLVIDOS NO BANCO") DEIXARAM DE
  * APARECER COM O LOGO "CORTADO" NO CABEÇALHO. ANTES USAVAM O LOGO BRANCO+AMARELO (FEITO P/ FUNDO ESCURO);
