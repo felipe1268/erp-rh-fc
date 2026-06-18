@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3228 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DEMONSTRATIVOS DE PAGAMENTO (PIX + BOLETOS) ·
+ * A LEITURA POR IA DEIXOU DE ABRIR UM MODAL E AGORA APARECE INLINE, LOGO ABAIXO DOS ANEXOS, NUMA
+ * LISTA COMBINADA (PIX + BOLETOS) NO MESMO MOLDE DO EXTRATO/ERP — COM CARDS DE TOTAL GERAL / PIX /
+ * BOLETOS (QUE REAGEM AO FILTRO E À BUSCA), CHIPS DE TIPO (TODOS / PIX / BOLETOS) E BUSCA LIVRE. AO
+ * ANEXAR UM PDF A ANÁLISE DISPARA AUTOMATICAMENTE (ANEXAR → ANALISAR → LISTA).**
+ *
+ * PEDIDO (piloto FC): "quero anexar o arquivo dentro da tela, fazer a análise de TODAS as informações
+ * e já aparecer ABAIXO uma lista igual à do extrato e do ERP de tudo que a IA leu nos arquivos, com
+ * cards de valor total etc. Isso vale para o PIX e os boletos — manter a mesma metodologia do extrato."
+ *
+ * CAUSA-RAIZ: desde a Rev. 3220 a leitura por IA dos demonstrativos era exibida num Dialog/modal
+ * ("Tudo que a IA leu"), separado por tipo (um modal pra PIX, outro pra boletos), acessado por um
+ * botão "Ver N pagamentos". O usuário queria a consulta INLINE, combinada (PIX + boletos juntos) e
+ * com cards de total, espelhando a metodologia já usada nas telas expandidas do extrato/ERP (Rev. 3221).
+ *
+ * SOLUÇÃO (FRONT-ONLY, `client/src/pages/financeiro/FinanceiroConciliacao.tsx`, ZERO backend / ZERO
+ * schema): o backend (`lerDemonstrativoComIA` / `getConciliacaoDemonstrativos`) já extraía e persistia
+ * `pixExtraido`/`boletoExtraido` (beneficiario/documento/txid/valor/data) — nada mudou nele.
+ * - Estado: removido `verLeitura` (que abria o modal); adicionado `demoFiltro` (todos|pix|boleto).
+ *   `buscaLeitura` reaproveitado para a busca livre da lista inline.
+ * - Modal "Tudo que a IA leu" (Dialog) REMOVIDO; no lugar, um `<Card>` inline renderizado logo abaixo
+ *   do card de anexos quando há ao menos uma leitura (pix OU boleto). Ele monta a lista COMBINADA
+ *   (`todos = pix.map(_tipo:"pix") + boleto.map(_tipo:"boleto")`), aplica filtro por chip + busca livre
+ *   (nome, CPF/CNPJ, txid, valor BRL, data, tipo) e exibe 3 cards no molde do extrato: Total geral ·
+ *   N (violeta), PIX · N (verde), Boletos · N (azul) — todos somando sobre a lista JÁ FILTRADA.
+ * - Tabela com coluna "Tipo" (badge PIX verde / Boleto azul) + Beneficiário / CPF-CNPJ / Data /
+ *   ID transação / Valor (BRL), `max-h-[460px]` com header sticky, rodapé "Mostrando N de M".
+ * - Botão "Ver N pagamentos" do slot virou um rótulo "N pagamentos na lista abaixo".
+ * - FLUXO: `onDemoFile` agora, após anexar+salvar, chama `lerDemoIA(kind)` automaticamente — anexar
+ *   já dispara a análise e a lista aparece sozinha. `lerDemoIA` agora seta `demoFiltro` (em vez de
+ *   abrir o modal) para focar a lista no tipo recém-lido.
+ *
+ * ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE · só UI. Validado: esbuild OK.
+ *
  * Rev. 3227 — **FINANCEIRO / CONTROLE DE CHEQUES · IMPORTAÇÃO DA PLANILHA · A PRÉVIA AGORA LISTA TODOS
  * OS CHEQUES LIDOS (NÃO MAIS UMA AMOSTRA DE 40) NUMA TABELA FILTRÁVEL E PESQUISÁVEL, COM A ABA E A
  * LINHA EXATA DO EXCEL DE CADA UM. OS CARDS DE RESUMO VIRARAM FILTROS CLICÁVEIS (TODOS / NOVOS / JÁ

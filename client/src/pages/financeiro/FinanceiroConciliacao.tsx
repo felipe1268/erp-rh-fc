@@ -481,7 +481,10 @@ export default function FinanceiroConciliacao() {
   const lerDemoMut = (trpc as any).financial.lerDemonstrativoComIA.useMutation();
   const [lerBusy, setLerBusy] = useState<"pix" | "boleto" | null>(null);
   const [lerProgress, setLerProgress] = useState(0);
-  const [verLeitura, setVerLeitura] = useState<"pix" | "boleto" | null>(null);
+  // Rev. 3228 — a leitura da IA agora aparece INLINE (lista combinada PIX+boletos,
+  // metodologia do extrato: cards de total + filtro + busca). `demoFiltro` controla
+  // qual tipo a tabela mostra; `buscaLeitura` é a busca livre da lista inline.
+  const [demoFiltro, setDemoFiltro] = useState<"todos" | "pix" | "boleto">("todos");
   const [buscaLeitura, setBuscaLeitura] = useState("");
   async function lerDemoIA(kind: "pix" | "boleto") {
     if (mesSel == null || !contaBancariaId) return;
@@ -494,7 +497,7 @@ export default function FinanceiroConciliacao() {
       setLerProgress(100);
       await demoQuery.refetch();
       setBuscaLeitura("");
-      setVerLeitura(kind);
+      setDemoFiltro(kind);
       setTimeout(() => setLerProgress(0), 600);
     } catch (err: any) {
       clearInterval(tick);
@@ -523,8 +526,13 @@ export default function FinanceiroConciliacao() {
       });
       const up: any = await uploadComprovanteMut.mutateAsync({ fileName: file.name, fileBase64: b64, contentType: "application/pdf" });
       await salvarDemoMut.mutateAsync({ companyId, contaBancariaId: parseInt(contaBancariaId), ano, mes: mesSel, tipo: kind, url: up.url, nome: file.name });
-      toast({ title: kind === "pix" ? "Demonstrativo de PIX anexado!" : "Demonstrativo de boletos anexado!", description: "Use como consulta pra identificar quem recebeu durante a conciliação." });
-      demoQuery.refetch();
+      toast({ title: kind === "pix" ? "Demonstrativo de PIX anexado!" : "Demonstrativo de boletos anexado!", description: "Analisando com IA pra listar todos os pagamentos…" });
+      setDemoBusy(null);
+      // Rev. 3228 — após anexar, dispara a leitura por IA automaticamente para a lista
+      // aparecer logo abaixo (fluxo: anexar → analisar → lista, como pedido). O próprio
+      // lerDemoIA já faz o refetch do demoQuery, então não duplicamos a chamada aqui.
+      await lerDemoIA(kind);
+      return;
     } catch (err: any) {
       toast({ title: "Erro ao anexar demonstrativo", description: err?.message || "Falha no upload.", variant: "destructive" });
     } finally {
@@ -1206,9 +1214,7 @@ export default function FinanceiroConciliacao() {
                                     <Sparkles className="w-3.5 h-3.5 mr-1.5" />{Array.isArray(slot.extraido) ? "Reler com IA" : "Ler com IA"}
                                   </Button>
                                   {Array.isArray(slot.extraido) && (
-                                    <Button size="sm" variant="outline" onClick={() => { setBuscaLeitura(""); setVerLeitura(slot.kind); }} className="h-8 border-violet-200 text-violet-700 hover:bg-violet-50">
-                                      <Eye className="w-3.5 h-3.5 mr-1.5" />Ver {slot.extraido.length} pagamento{slot.extraido.length === 1 ? "" : "s"}
-                                    </Button>
+                                    <span className="text-xs text-violet-700/80 font-medium">{slot.extraido.length} pagamento{slot.extraido.length === 1 ? "" : "s"} na lista abaixo</span>
                                   )}
                                 </div>
                               )}
@@ -1230,69 +1236,115 @@ export default function FinanceiroConciliacao() {
               </CardContent>
             </Card>
 
-            {/* Rev. 3220 — Modal "Tudo que a IA leu": lista completa dos pagamentos extraídos
-                do demonstrativo (beneficiário, CPF/CNPJ, valor BRL, data, ID transação). */}
-            <Dialog open={verLeitura !== null} onOpenChange={(o) => { if (!o) setVerLeitura(null); }}>
-              <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-violet-600" />
-                    Tudo que a IA leu — {verLeitura === "pix" ? "Comprovantes de PIX" : "Comprovantes de Boletos"}
-                  </DialogTitle>
-                </DialogHeader>
-                {(() => {
-                  const lista: any[] = (verLeitura === "pix" ? demoQuery.data?.pixExtraido : demoQuery.data?.boletoExtraido) || [];
-                  const termo = normBusca(buscaLeitura).trim();
-                  const filtrada = !termo ? lista : lista.filter((it) => normBusca([it?.beneficiario, it?.documento, it?.txid, fmtData(it?.data), formatBRL(Number(it?.valor) || 0), String(it?.valor ?? "")].join(" ")).includes(termo));
-                  const total = filtrada.reduce((s, it) => s + (Number(it?.valor) || 0), 0);
-                  return (
-                    <>
-                      <div className="flex items-center gap-2 flex-wrap shrink-0">
-                        <div className="relative flex-1 min-w-[180px]">
-                          <Search className="w-4 h-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                          <Input value={buscaLeitura} onChange={(e) => setBuscaLeitura(e.target.value)} placeholder="Buscar por nome, CPF/CNPJ, valor, data…" className="pl-8 h-9" />
-                          {buscaLeitura && <button type="button" onClick={() => setBuscaLeitura("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>}
+            {/* Rev. 3228 — Lista INLINE "Tudo que a IA leu" (metodologia do extrato): lista
+                combinada PIX + boletos logo abaixo dos anexos, com cards de total geral/PIX/
+                boletos (reagem ao filtro+busca), chips de tipo e busca livre. Sem modal. */}
+            {mesSel != null && (Array.isArray(demoQuery.data?.pixExtraido) || Array.isArray(demoQuery.data?.boletoExtraido)) && (() => {
+              const pixArr: any[] = Array.isArray(demoQuery.data?.pixExtraido) ? demoQuery.data.pixExtraido : [];
+              const boletoArr: any[] = Array.isArray(demoQuery.data?.boletoExtraido) ? demoQuery.data.boletoExtraido : [];
+              const todos = [
+                ...pixArr.map((it) => ({ ...it, _tipo: "pix" as const })),
+                ...boletoArr.map((it) => ({ ...it, _tipo: "boleto" as const })),
+              ];
+              const porFiltro = demoFiltro === "todos" ? todos : todos.filter((it) => it._tipo === demoFiltro);
+              const termo = normBusca(buscaLeitura).trim();
+              const lista = !termo ? porFiltro : porFiltro.filter((it) => normBusca([it?.beneficiario, it?.documento, it?.txid, fmtData(it?.data), formatBRL(Number(it?.valor) || 0), String(it?.valor ?? ""), it._tipo === "pix" ? "pix" : "boleto"].join(" ")).includes(termo));
+              const pixVis = lista.filter((it) => it._tipo === "pix");
+              const bolVis = lista.filter((it) => it._tipo === "boleto");
+              const somaPix = pixVis.reduce((s, it) => s + (Number(it?.valor) || 0), 0);
+              const somaBol = bolVis.reduce((s, it) => s + (Number(it?.valor) || 0), 0);
+              const total = somaPix + somaBol;
+              const chips = [
+                { key: "todos" as const, label: `Todos (${todos.length})` },
+                { key: "pix" as const, label: `PIX (${pixArr.length})` },
+                { key: "boleto" as const, label: `Boletos (${boletoArr.length})` },
+              ];
+              return (
+                <Card className="border-0 shadow-sm ring-1 ring-violet-100">
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start gap-2">
+                      <Sparkles className="w-4 h-4 text-violet-600 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800">Tudo que a IA leu nos demonstrativos</p>
+                        <p className="text-xs text-gray-500">Lista de TODOS os pagamentos identificados nos PDFs anexados — só consulta, não concilia nada automaticamente.</p>
+                      </div>
+                    </div>
+                    {/* Cards de total (metodologia do extrato) — reagem ao filtro + busca */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="rounded-xl border border-violet-100 bg-violet-50/70 p-3 flex items-center gap-3">
+                        <span className="w-10 h-10 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center shrink-0"><Landmark className="w-5 h-5" /></span>
+                        <div className="min-w-0">
+                          <p className="text-[11px] uppercase tracking-wide text-violet-700/80 font-medium">Total geral · {lista.length}</p>
+                          <p className="text-lg font-bold text-violet-700 truncate">{formatBRL(total)}</p>
                         </div>
-                        <Badge variant="secondary" className="shrink-0">{filtrada.length}{termo ? `/${lista.length}` : ""} pagamento(s)</Badge>
-                        <Badge className="bg-violet-100 text-violet-700 hover:bg-violet-100 shrink-0">Total {formatBRL(total)}</Badge>
                       </div>
-                      <div className="overflow-auto flex-1 -mx-1 mt-1">
-                        {filtrada.length === 0 ? (
-                          <div className="text-center text-sm text-gray-500 py-10">{lista.length === 0 ? "A IA não encontrou pagamentos neste PDF." : "Nenhum pagamento corresponde à busca."}</div>
-                        ) : (
-                          <table className="w-full text-sm">
-                            <thead className="sticky top-0 bg-gray-50 text-xs text-gray-500">
-                              <tr>
-                                <th className="text-left font-medium px-2 py-2">Beneficiário</th>
-                                <th className="text-left font-medium px-2 py-2">CPF/CNPJ</th>
-                                <th className="text-left font-medium px-2 py-2">Data</th>
-                                <th className="text-left font-medium px-2 py-2">ID transação</th>
-                                <th className="text-right font-medium px-2 py-2">Valor</th>
+                      <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-3 flex items-center gap-3">
+                        <span className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0"><ArrowDownCircle className="w-5 h-5" /></span>
+                        <div className="min-w-0">
+                          <p className="text-[11px] uppercase tracking-wide text-emerald-700/80 font-medium">PIX · {pixVis.length}</p>
+                          <p className="text-lg font-bold text-emerald-700 truncate">{formatBRL(somaPix)}</p>
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3 flex items-center gap-3">
+                        <span className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0"><FileText className="w-5 h-5" /></span>
+                        <div className="min-w-0">
+                          <p className="text-[11px] uppercase tracking-wide text-blue-700/80 font-medium">Boletos · {bolVis.length}</p>
+                          <p className="text-lg font-bold text-blue-700 truncate">{formatBRL(somaBol)}</p>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Chips de tipo + busca livre */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {chips.map((c) => (
+                        <button key={c.key} type="button" onClick={() => setDemoFiltro(c.key)}
+                          className={`text-xs font-medium px-2.5 py-1 rounded-full border transition-colors ${demoFiltro === c.key ? "bg-violet-600 border-violet-600 text-white" : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                          {c.label}
+                        </button>
+                      ))}
+                      <div className="relative flex-1 min-w-[180px]">
+                        <Search className="w-4 h-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                        <Input value={buscaLeitura} onChange={(e) => setBuscaLeitura(e.target.value)} placeholder="Buscar por nome, CPF/CNPJ, valor, data…" className="pl-8 h-9" />
+                        {buscaLeitura && <button type="button" onClick={() => setBuscaLeitura("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>}
+                      </div>
+                    </div>
+                    {/* Lista (igual ao extrato/erp) */}
+                    <div className="overflow-auto max-h-[460px] border border-gray-100 rounded-lg">
+                      {lista.length === 0 ? (
+                        <div className="text-center text-sm text-gray-500 py-10">{todos.length === 0 ? "A IA não encontrou pagamentos nos PDFs." : "Nenhum pagamento corresponde ao filtro/busca."}</div>
+                      ) : (
+                        <table className="w-full text-sm">
+                          <thead className="sticky top-0 bg-gray-50 text-xs text-gray-500 z-10">
+                            <tr>
+                              <th className="text-left font-medium px-2 py-2">Tipo</th>
+                              <th className="text-left font-medium px-2 py-2">Beneficiário</th>
+                              <th className="text-left font-medium px-2 py-2">CPF/CNPJ</th>
+                              <th className="text-left font-medium px-2 py-2">Data</th>
+                              <th className="text-left font-medium px-2 py-2">ID transação</th>
+                              <th className="text-right font-medium px-2 py-2">Valor</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {lista.map((it, i) => (
+                              <tr key={i} className="border-t border-gray-100 hover:bg-gray-50">
+                                <td className="px-2 py-2">
+                                  <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${it._tipo === "pix" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}>{it._tipo === "pix" ? "PIX" : "Boleto"}</span>
+                                </td>
+                                <td className="px-2 py-2 text-gray-800">{it?.beneficiario || <span className="text-gray-400">—</span>}</td>
+                                <td className="px-2 py-2 text-gray-600 tabular-nums">{it?.documento || <span className="text-gray-400">—</span>}</td>
+                                <td className="px-2 py-2 text-gray-600 tabular-nums whitespace-nowrap">{it?.data ? fmtData(it.data) : <span className="text-gray-400">—</span>}</td>
+                                <td className="px-2 py-2 text-gray-500 text-xs max-w-[160px] truncate" title={it?.txid || ""}>{it?.txid || <span className="text-gray-400">—</span>}</td>
+                                <td className="px-2 py-2 text-right font-semibold text-gray-800 tabular-nums whitespace-nowrap">{it?.valor != null ? formatBRL(Number(it.valor)) : <span className="text-gray-400">—</span>}</td>
                               </tr>
-                            </thead>
-                            <tbody>
-                              {filtrada.map((it, i) => (
-                                <tr key={i} className="border-t border-gray-100 hover:bg-gray-50">
-                                  <td className="px-2 py-2 text-gray-800">{it?.beneficiario || <span className="text-gray-400">—</span>}</td>
-                                  <td className="px-2 py-2 text-gray-600 tabular-nums">{it?.documento || <span className="text-gray-400">—</span>}</td>
-                                  <td className="px-2 py-2 text-gray-600 tabular-nums whitespace-nowrap">{it?.data ? fmtData(it.data) : <span className="text-gray-400">—</span>}</td>
-                                  <td className="px-2 py-2 text-gray-500 text-xs max-w-[160px] truncate" title={it?.txid || ""}>{it?.txid || <span className="text-gray-400">—</span>}</td>
-                                  <td className="px-2 py-2 text-right font-semibold text-gray-800 tabular-nums whitespace-nowrap">{it?.valor != null ? formatBRL(Number(it.valor)) : <span className="text-gray-400">—</span>}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-gray-400 shrink-0">A leitura por IA é uma ajuda para identificar quem recebeu — confira sempre no PDF original. Não concilia nada automaticamente.</p>
-                    </>
-                  );
-                })()}
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setVerLeitura(null)}>Fechar</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-gray-400">Mostrando {lista.length} de {porFiltro.length}{termo ? ` (filtro "${buscaLeitura.trim()}")` : ""} · A leitura por IA é uma ajuda para identificar quem recebeu — confira sempre no PDF original. Não concilia nada automaticamente.</p>
+                  </CardContent>
+                </Card>
+              );
+            })()}
             {/* Rev. 3187 — Estado de ERRO do relatório: sem isso a tela parecia "vazia/zerada"
                 quando getConciliacaoReport falhava (falso "tudo conciliado"). */}
             {reportIsError && (
