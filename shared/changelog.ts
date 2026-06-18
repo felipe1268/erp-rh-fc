@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3276 — **COMPRAS / SOLICITAÇÃO DE COMPRA (SC) · A TELA "SOLICITAÇÕES (SC)" GANHOU UM FILTRO POR
+ * PERÍODO (DE/ATÉ) AO LADO DO SELETOR "TODAS AS OBRAS", FILTRANDO PELA "DATA POSTADA" (criadoEm) — A
+ * MESMA DATA USADA NA ORDENAÇÃO PADRÃO E EXIBIDA NA LISTA. ESCOLHIDO O PERÍODO, A TABELA, OS PILLS DE
+ * TIPO, OS MINI-BLOCOS DO CARD "STATUS DAS SOLICITAÇÕES" E OS KPIs PASSAM A REFLETIR SÓ AS SCs DAQUELE
+ * INTERVALO. UM BOTÃO "X" LIMPA O PERÍODO. 100% FRONT · READ-ONLY · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (piloto FC): "preciso de um filtro de data na tela de Solicitação de Compra". Ref.:
+ *   `attached_assets/image_1781794575067.png` (área à direita do seletor de obras destacada à mão).
+ * - CAUSA: a barra de filtros da SC tinha busca textual, seletor de obra, pills de tipo e filtro de
+ *   status/breakdown — mas nenhum recorte temporal. Com 348 SCs no total a lista ficava longa sem como
+ *   limitar por janela de tempo.
+ * - SOLUÇÃO (SÓ FRONT, `client/src/pages/compras/Solicitacoes.tsx`): (1) novos estados `filtroDataDe`/
+ *   `filtroDataAte` (string "YYYY-MM-DD", vazio = sem restrição); (2) predicado `dentroDoPeriodo(r)` que
+ *   compara `r.criadoEm` contra `[filtroDataDe T00:00:00 .. filtroDataAte T23:59:59]` (limites inclusivos;
+ *   sem `criadoEm` → fora quando há filtro ativo); (3) o predicado é aplicado em `listaFiltradaObraBase`
+ *   (alimenta tabela + pills + breakdown + sort) E em `listaKpisBase` (alimenta os KPIs e o card "Status
+ *   das Solicitações"), mantendo todos os contadores consistentes com a janela; (4) UI: dois `<Input
+ *   type="date">` ("de" e "até", com `min`/`max` recíprocos) num contêiner com ícone `CalendarDays`,
+ *   inseridos logo após o `<Select>` de obras; botão `X` (só quando há período) zera ambos.
+ * - O backend (`compras.listarSolicitacoes`) já retorna TODAS as SCs da empresa (sem paginação), então o
+ *   recorte client-side cobre o conjunto completo. Nada muda no servidor.
+ * - ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3275 — **RH & DP / FÉRIAS · AGORA É POSSÍVEL CANCELAR O AGENDAMENTO DE UMA FÉRIAS. NA LINHA DE
  * UMA FÉRIAS COM STATUS "AGENDADA" SURGIU O BOTÃO "CANCELAR" (ÍCONE BAN, VERMELHO) QUE, APÓS
  * CONFIRMAÇÃO EM DIÁLOGO (COM MOTIVO OPCIONAL), DEVOLVE O PERÍODO PARA "A VENCER" (status='pendente')

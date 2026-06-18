@@ -1105,6 +1105,9 @@ export default function Solicitacoes() {
   const [filtroBreakdown, setFiltroBreakdown] = useState<string | null>(null);
   const [filtroObra, setFiltroObra] = useState("todas");
   const [filtroClassificacao, setFiltroClassificacao] = useState("todas");
+  // Rev. 3276 — Filtro por período (Data postada = criadoEm). Vazio = sem restrição.
+  const [filtroDataDe, setFiltroDataDe] = useState("");
+  const [filtroDataAte, setFiltroDataAte] = useState("");
   // Rev. 2089 — Ordenação clicável por coluna. Default: criadoEm DESC (mais recentes primeiro).
   type SortKey = "criadoEm" | "tipo" | "prioridade" | "status" | "numeroSc" | "titulo" | "obra" | "dataNecessidade";
   const [sortKey, setSortKey] = useState<SortKey>("criadoEm");
@@ -2254,7 +2257,16 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const listaFiltradaObraBase = filtroObra === "todas" ? lista : lista.filter((r: any) => String(r.obraId) === filtroObra);
+  // Rev. 3276 — Predicado de período sobre a Data postada (criadoEm). Vazio = passa tudo.
+  const dentroDoPeriodo = (r: any): boolean => {
+    if (!filtroDataDe && !filtroDataAte) return true;
+    const ts = r.criadoEm ? new Date(r.criadoEm).getTime() : 0;
+    if (!ts) return false;
+    if (filtroDataDe && ts < new Date(filtroDataDe + "T00:00:00").getTime()) return false;
+    if (filtroDataAte && ts > new Date(filtroDataAte + "T23:59:59.999").getTime()) return false;
+    return true;
+  };
+  const listaFiltradaObraBase = (filtroObra === "todas" ? lista : lista.filter((r: any) => String(r.obraId) === filtroObra)).filter(dentroDoPeriodo);
   // Considera SC como "totalmente entregue" quando:
   //  - já está num status final (concluida/recebido/aprovado/recusado/cancelado), OU
   //  - todos os itens da SC têm quantidadeAtendida >= quantidade
@@ -2349,7 +2361,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
   const todasSCs = filtroStatus !== "todos" ? (qTodas.data ?? lista) : lista;
   const urgentesAtivos = useMemo(() => todasSCs.filter((r: any) => r.prioridade === "urgente" && !["aprovado", "cancelado", "recusado"].includes(r.status) && !r._hasOC), [todasSCs]);
   // KPIs sempre calculados a partir do total sem filtro de status (apenas filtro de obra aplicado)
-  const listaKpisBase = filtroObra === "todas" ? todasSCs : todasSCs.filter((r: any) => String(r.obraId) === filtroObra);
+  const listaKpisBase = (filtroObra === "todas" ? todasSCs : todasSCs.filter((r: any) => String(r.obraId) === filtroObra)).filter(dentroDoPeriodo);
   const kpis = useMemo(() => ({
     pendenteOC:       listaKpisBase.filter((r: any) => !(r._hasOC) && !["aprovado", "recusado", "cancelado"].includes(r.status)).length,
     pendenteEntrega:  listaKpisBase.filter((r: any) => r._hasOC === true && !scEntregueTotal(r)).length,
@@ -2503,6 +2515,40 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
             ))}
           </SelectContent>
         </Select>
+        {/* Rev. 3276 — Filtro por período (Data postada). De/Até + limpar. */}
+        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-300 rounded-md">
+          <CalendarDays className="h-4 w-4 text-gray-400 shrink-0" />
+          <Input
+            type="date"
+            value={filtroDataDe}
+            max={filtroDataAte || undefined}
+            onChange={e => setFiltroDataDe(e.target.value)}
+            className="h-7 w-[140px] border-0 shadow-none px-1 text-gray-900 focus-visible:ring-0"
+            title="Data postada — de"
+            aria-label="Data postada de"
+          />
+          <span className="text-gray-400 text-sm">até</span>
+          <Input
+            type="date"
+            value={filtroDataAte}
+            min={filtroDataDe || undefined}
+            onChange={e => setFiltroDataAte(e.target.value)}
+            className="h-7 w-[140px] border-0 shadow-none px-1 text-gray-900 focus-visible:ring-0"
+            title="Data postada — até"
+            aria-label="Data postada até"
+          />
+          {(filtroDataDe || filtroDataAte) && (
+            <button
+              type="button"
+              onClick={() => { setFiltroDataDe(""); setFiltroDataAte(""); }}
+              className="text-gray-400 hover:text-gray-700 transition-colors"
+              title="Limpar período"
+              aria-label="Limpar filtro de período"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
         {/* Rev. 2301 — Filtro por TIPO em pills coloridos (substitui o dropdown).
             Contadores cross-filter: respeitam busca + obra + status (breakdown + kpis),
             só ignoram o próprio filtro de classificação. */}
