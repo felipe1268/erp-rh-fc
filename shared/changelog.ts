@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3252 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O PAINEL "CHEQUES DEVOLVIDOS NO BANCO" GANHOU UM
+ * BOTÃO "PDF / IMPRIMIR" QUE GERA UM RELATÓRIO INSTITUCIONAL FC (LOGO + FAIXA AZUL) COM CARDS DE
+ * RESUMO (QTD/TOTAL EM BRL, PENDENTES, QUITADOS) E UMA TABELA POR CHEQUE: IDENTIFICAÇÃO
+ * (Nº/FORNECEDOR/OBRA/NF), VALOR, MOTIVO DA DEVOLUÇÃO (ALÍNEA BACEN), DATAS DE COMPENSAÇÃO/DEVOLUÇÃO
+ * E A SITUAÇÃO (QUITADO POR REAPRESENTAÇÃO / OUTRO MEIO OU PENDENTE). 100% READ-ONLY — APENAS
+ * APRESENTA O QUE A TELA JÁ MOSTRA, PRONTO PARA IMPRIMIR OU SALVAR EM PDF.**
+ * - PEDIDO (piloto FC): "quero poder gerar relatório em PDF desta lista e imprimir" (print do painel
+ *   "Cheques devolvidos no banco (3)").
+ * - SOLUÇÃO (FRONT, `client/src/pages/financeiro/FinanceiroConciliacao.tsx`): nova função
+ *   `gerarRelatorioDevolvidosPDF()` no mesmo molde das já existentes (`gerarRelatorioPDF`/
+ *   `exportarListaPDF`) — monta HTML com `esc()` (XSS), cabeçalho `logo-fc-branco-amarelo.png` +
+ *   faixa azul `#1B2A4A` + meta (conta/período/emitido em), 3 cards de resumo (`repDevol.length` +
+ *   `totalDevol` via `reduce` de `Math.abs(valor||valorCents/100)`, `nPend` por `resolucao.tipo`,
+ *   `nQuit`), tabela com Cheque/Identificação, Valor, Motivo (alínea Bacen ou "Motivo não
+ *   informado"), Datas (Comp./Devol.) e Situação (reapresentado/pix/pendente), e `window.open`+`print`
+ *   (mesmo guard de pop-up). Botão "PDF / Imprimir" (`FileDown`) adicionado ao header do card do
+ *   painel (`CardHeader` reorganizado num flex com a `CardTitle`).
+ * - ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE · só leitura de `repDevol` (já carregado). esbuild limpo.
+ *
  * Rev. 3251 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O DIÁLOGO "CONFIRMAR CONCILIAÇÃO?" GANHOU O
  * LAYOUT MODERNO PADRÃO FC: CABEÇALHO EM FAIXA AZUL (`#1B2A4A`→`#2c3f63`) COM ÍCONE EM CÍRCULO E
  * PÍLULAS DE CONTEXTO (N PARES SELECIONADOS + TOTAL EM BRL), CORPO COM A LISTA DE PARES (EXTRATO →

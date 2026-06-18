@@ -1124,6 +1124,79 @@ export default function FinanceiroConciliacao() {
     setTimeout(() => { try { w.focus(); w.print(); } catch { /* ignore */ } }, 350);
   }
 
+  // Rev. 3252 — Relatório em PDF/impressão da lista "Cheques devolvidos no banco"
+  // (par compensação+devolução, saldo zero). READ-ONLY: só apresenta o que a tela
+  // já mostra (motivo Bacen, datas, resolução/pendência) num documento imprimível.
+  function gerarRelatorioDevolvidosPDF() {
+    if (repDevol.length === 0) { toast({ title: "Nenhum cheque devolvido no período", variant: "destructive" }); return; }
+    const esc = (s: any) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" } as any)[c]);
+    const totalDevol = repDevol.reduce((acc: number, d: any) => acc + Math.abs(Number(d.valor) || (d.valorCents ? d.valorCents / 100 : 0)), 0);
+    const nPend = repDevol.filter((d: any) => (d.resolucao?.tipo ?? "pendente") === "pendente").length;
+    const nQuit = repDevol.length - nPend;
+    const rows = repDevol.map((d: any) => {
+      const res = d.resolucao ?? { tipo: "pendente" };
+      const cheque = d.chequeNumero ? `nº ${d.chequeNumero}` : (d.doc ? `Doc ${d.doc}` : "—");
+      const ident = [d.fornecedor, d.obraNome, d.nf ? `NF ${d.nf}` : ""].filter(Boolean).join(" · ");
+      const motivo = d.motivoCodigo != null
+        ? `Motivo ${esc(d.motivoCodigo)}${d.motivoTexto ? ` · ${esc(d.motivoTexto)}` : ""}`
+        : `<span style="color:#6b7280">Motivo não informado</span>`;
+      const situacao = res.tipo === "reapresentado"
+        ? `<span style="color:#047857">Quitado: cheque reapresentado em ${esc(fmtData(res.data))}</span>`
+        : res.tipo === "pix"
+          ? `<span style="color:#1d4ed8">Quitado por outro meio (PIX/TED) em ${esc(fmtData(res.data))}${res.descricao ? ` — ${esc(res.descricao)}` : ""}</span>`
+          : `<span style="color:#b45309">Sem quitação identificada — analisar (reapresentar, cobrar ou substituir)</span>`;
+      return `<tr>
+        <td>Cheque ${esc(cheque)}${ident ? `<br><span style="color:#6b7280;font-size:10px">${esc(ident)}</span>` : ""}</td>
+        <td class="r" style="color:#b91c1c;white-space:nowrap">${esc(formatBRL(Math.abs(Number(d.valor) || (d.valorCents ? d.valorCents / 100 : 0))))}</td>
+        <td>${motivo}</td>
+        <td style="white-space:nowrap">Comp. ${esc(fmtData(d.dataDebito))}<br>Devol. ${esc(fmtData(d.dataCredito))}</td>
+        <td>${situacao}</td>
+      </tr>`;
+    }).join("");
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Cheques devolvidos ${esc(periodoLabel)}</title>
+<style>
+  *{box-sizing:border-box} body{font-family:Arial,Helvetica,sans-serif;color:#1f2937;margin:0;padding:24px;font-size:12px}
+  .logo{display:block;height:54px;margin:0 auto 10px}
+  h1.brand{text-align:center;font-size:16px;margin:0;color:#1B2A4A;letter-spacing:.5px}
+  .band{background:#1B2A4A;color:#fff;text-align:center;padding:10px;margin:14px 0;border-radius:6px;letter-spacing:3px;font-weight:bold;font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .meta{display:flex;justify-content:space-between;font-size:11px;color:#4b5563;margin-bottom:14px;flex-wrap:wrap;gap:6px}
+  .cards{display:flex;gap:10px;margin:10px 0 18px;flex-wrap:wrap}
+  .card{flex:1;min-width:130px;border:1px solid #e5e7eb;border-radius:8px;padding:10px}
+  .card .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280}
+  .card .val{font-size:16px;font-weight:bold;margin-top:2px}
+  .red{color:#b91c1c}.amber{color:#b45309}.green{color:#15803d}
+  .note{font-size:10px;color:#6b7280;margin:0 0 10px}
+  table{width:100%;border-collapse:collapse;margin-bottom:8px}
+  th,td{border:1px solid #e5e7eb;padding:5px 7px;text-align:left;vertical-align:top}
+  th{background:#f3f4f6;font-size:10px;text-transform:uppercase;letter-spacing:.4px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  td.r,th.r{text-align:right;white-space:nowrap}
+  tfoot td{font-weight:bold;background:#f9fafb}
+  @media print{body{padding:10px}}
+</style></head><body>
+  <img class="logo" src="${window.location.origin}/logo-fc-branco-amarelo.png?v=3252" alt="FC Engenharia"/>
+  <h1 class="brand">FC ENGENHARIA</h1>
+  <div class="band">CHEQUES DEVOLVIDOS NO BANCO</div>
+  <div class="meta">
+    <span><strong>Conta:</strong> ${esc(contaLabel)}</span>
+    <span><strong>Período:</strong> ${esc(periodoLabel)}</span>
+    <span><strong>Emitido em:</strong> ${esc(new Date().toLocaleString("pt-BR"))}</span>
+  </div>
+  <div class="cards">
+    <div class="card"><div class="lbl">Cheques devolvidos</div><div class="val red">${repDevol.length}</div><div class="lbl">${esc(formatBRL(totalDevol))}</div></div>
+    <div class="card"><div class="lbl">Pendentes</div><div class="val amber">${nPend}</div><div class="lbl">sem quitação identificada</div></div>
+    <div class="card"><div class="lbl">Quitados</div><div class="val green">${nQuit}</div><div class="lbl">reapresentado ou outro meio</div></div>
+  </div>
+  <p class="note">Pares de compensação + devolução do mesmo cheque (saldo zero), exibidos no painel "Cheques devolvidos no banco". Documento informativo — nenhuma baixa é feita automaticamente.</p>
+  <table><thead><tr><th>Cheque / Identificação</th><th class="r">Valor</th><th>Motivo (alínea Bacen)</th><th>Datas</th><th>Situação</th></tr></thead>
+  <tbody>${rows}</tbody>
+  <tfoot><tr><td>Total (${repDevol.length})</td><td class="r">${esc(formatBRL(totalDevol))}</td><td colspan="3"></td></tr></tfoot></table>
+</body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) { toast({ title: "Permita pop-ups para gerar o relatório", variant: "destructive" }); return; }
+    w.document.write(html); w.document.close();
+    setTimeout(() => { try { w.focus(); w.print(); } catch { /* ignore */ } }, 350);
+  }
+
   return (
     <DashboardLayout>
       <div className="max-w-6xl mx-auto p-6 space-y-6">
@@ -1884,11 +1957,16 @@ export default function FinanceiroConciliacao() {
             {repDevol.length > 0 && (
               <Card className="border-0 shadow-sm mb-6 border-l-4 border-l-amber-400">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <RotateCcw className="w-4 h-4 text-amber-500" />
-                    Cheques devolvidos no banco ({repDevol.length})
-                    <span className="font-normal text-[11px] text-gray-400">tentativa de pagamento frustrada — saldo zero</span>
-                  </CardTitle>
+                  <div className="flex items-start justify-between gap-2">
+                    <CardTitle className="text-sm flex items-center gap-2 flex-wrap">
+                      <RotateCcw className="w-4 h-4 text-amber-500" />
+                      Cheques devolvidos no banco ({repDevol.length})
+                      <span className="font-normal text-[11px] text-gray-400">tentativa de pagamento frustrada — saldo zero</span>
+                    </CardTitle>
+                    <Button size="sm" variant="outline" className="h-7 shrink-0" onClick={gerarRelatorioDevolvidosPDF}>
+                      <FileDown className="w-3.5 h-3.5 mr-1" />PDF / Imprimir
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="divide-y divide-gray-100 max-h-[460px] overflow-y-auto">
