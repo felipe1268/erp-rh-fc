@@ -1901,9 +1901,13 @@ export default function FinanceiroConciliacao() {
                               <p className="text-sm font-medium text-gray-800 flex items-center flex-wrap gap-x-2 gap-y-1">
                                 <span>Cheque {d.chequeNumero ? `nº ${d.chequeNumero}` : (d.doc ? `Doc ${d.doc}` : "—")}</span>
                                 <span className="text-rose-500 font-bold">{formatBRL(Math.abs(Number(d.valor) || d.valorCents / 100))}</span>
-                                {d.motivoCodigo != null && (
+                                {d.motivoCodigo != null ? (
                                   <span className={`px-1.5 py-px rounded-full text-[10px] font-medium ${d.motivoSustado ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`} title={d.motivoTexto ?? ""}>
                                     Motivo {d.motivoCodigo}{d.motivoTexto ? ` · ${d.motivoTexto}` : ""}
+                                  </span>
+                                ) : (
+                                  <span className="px-1.5 py-px rounded-full text-[10px] font-medium bg-gray-100 text-gray-600" title="O extrato não trouxe o código da devolução (alínea Bacen) deste cheque. Verifique o motivo direto no extrato/banco.">
+                                    Motivo não informado
                                   </span>
                                 )}
                               </p>

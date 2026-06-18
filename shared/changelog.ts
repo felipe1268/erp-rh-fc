@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3244 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NO PAINEL "CHEQUES DEVOLVIDOS NO BANCO", A
+ * LEGENDA (TAG-PÍLULA) DO MOTIVO DA DEVOLUÇÃO AGORA APARECE SEMPRE EM CADA CHEQUE — INCLUSIVE
+ * QUANDO O EXTRATO NÃO TROUXE O CÓDIGO/ALÍNEA BACEN, CASO EM QUE MOSTRA "MOTIVO NÃO INFORMADO".
+ * ANTES, SEM O CÓDIGO, A TAG SUMIA E O CHEQUE FICAVA SEM NENHUMA INDICAÇÃO DE MOTIVO, DIFICULTANDO
+ * A ANÁLISE. SÓ CONSULTA — NENHUMA BAIXA/CONCILIAÇÃO AUTOMÁTICA.**
+ * - PEDIDO (piloto FC): "coloque a legenda do motivo que foi devolvido sempre, para facilitar a
+ *   análise".
+ * - SOLUÇÃO (FRONT, `client/src/pages/financeiro/FinanceiroConciliacao.tsx`, bloco "Rev. 3235 —
+ *   CHEQUES DEVOLVIDOS"): a renderização do badge de motivo passou de `{d.motivoCodigo != null && (…)}`
+ *   (só mostrava quando havia código) para um ternário: COM código → tag como antes (vermelha se
+ *   sustado, âmbar caso contrário, `title` = `motivoTexto`); SEM código → tag NEUTRA cinza "Motivo
+ *   não informado" com `title` explicando que o extrato não trouxe a alínea Bacen e orientando a
+ *   conferir direto no extrato/banco. Assim TODO cheque devolvido exibe uma legenda de motivo.
+ * - ZERO backend · ZERO SCHEMA/ALTER/DROP/DELETE · "Conciliação só sugestiva" preservada.
+ *
  * Rev. 3243 — **FINANCEIRO · NOVA CATEGORIA "DASHBOARDS" NO MENU DO MÓDULO FINANCEIRO, COM 5
  * PAINÉIS VISUAIS DEDICADOS (CONTAS A RECEBER, CONTAS A PAGAR, CONCILIAÇÃO BANCÁRIA, CONTROLE DE
  * CHEQUES E CARTÃO DE CRÉDITO). CADA PAINEL TEM UM CABEÇALHO MODERNO COM GRADIENTE + SELETOR DE
