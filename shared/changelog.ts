@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3247 — **FINANCEIRO / CONTROLE DE CHEQUES · A DATA DE COMPENSAÇÃO AGORA É PREENCHIDA
+ * AUTOMATICAMENTE PELO ERP QUANDO O CHEQUE É COMPENSADO NO EXTRATO. AO RODAR "CONFERIR COM O
+ * EXTRATO", ALÉM DE MARCAR O CHEQUE COMO CONFERIDO, O SISTEMA GRAVA A DATA EM QUE O BANCO O
+ * COMPENSOU (DATA DO EXTRATO) NO CAMPO "DATA DE COMPENSAÇÃO" — E TAMBÉM FAZ BACKFILL DESSA DATA
+ * NOS CHEQUES JÁ CONFERIDOS QUE ESTAVAM SEM ELA. ASSIM A COLUNA "DIAS P/ COMPENSAR" PASSA A
+ * MOSTRAR "COMPENSADO · DD/MM" CORRETO, GARANTINDO INFORMAÇÃO CONFIÁVEL PARA ANÁLISE FUTURA.**
+ * - PEDIDO (piloto FC): "a data de compensação deve ser preenchida automaticamente pelo ERP,
+ *   quando o cheque for compensado no extrato. Garantindo assim as informações corretas, para
+ *   análise futura". (Antes a coluna ficava sempre "—" porque o conferir só marcava conciliado.)
+ * - SOLUÇÃO (BACK, `server/routers/cheques.ts`, procedure `conferirExtrato`):
+ *     · o UPDATE em lote dos cheques recém-conferidos agora também grava
+ *       `data_compensacao = COALESCE(f.data_compensacao, v.dt)` (não sobrescreve uma data já
+ *       existente) + `updated_at = NOW()`, usando `v.dt` = data do extrato (`extratoData`) em que
+ *       o banco compensou — mesma fonte/ordem-de-aparição de placeholders do `data_conciliacao`.
+ *     · NOVO passo de BACKFILL: cheques que JÁ estavam conferidos (`conciliado=1`) porém SEM
+ *       `data_compensacao` entram numa lista `backfill` e recebem a data do extrato via UPDATE
+ *       em lote próprio (`WHERE ... AND f.data_compensacao IS NULL`), curando o histórico antigo.
+ *     · retorno ganhou o campo `backfilled` (qtd de datas preenchidas no histórico); o early-return
+ *       de "nada a fazer" passou a considerar AMBAS as listas (`alvos` + `backfill`).
+ *     · mantém "conciliação só sugestiva": NADA disso muda status nem faz baixa financeira — só
+ *       roda na AÇÃO EXPLÍCITA do usuário ("Conferir com o extrato") e só nos cheques que o banco
+ *       confirmou compensados E cujo status no controle já é "compensado" (consistentes).
+ * - SOLUÇÃO (FRONT, `client/src/pages/financeiro/FinanceiroCheques.tsx`): o toast de conferência
+ *   passou a informar "Data de compensação preenchida em N cheque(s)" quando `r.backfilled > 0`.
+ * - ZERO SCHEMA/ALTER/DROP/DELETE (coluna `data_compensacao` já existia) · só UPDATE de dado
+ *   (preenchimento), disparado por ação explícita do usuário.
+ *
  * Rev. 3246 — **FINANCEIRO / CONTROLE DE CHEQUES · A LISTA GANHOU UMA COLUNA "DIAS P/ COMPENSAR"
  * QUE MOSTRA A CONTAGEM REGRESSIVA ATÉ O VENCIMENTO DE CADA CHEQUE ("FALTAM N DIAS" / "COMPENSA
  * HOJE" / "VENCIDO HÁ N DIAS"), OU "COMPENSADO · DD/MM" QUANDO JÁ COMPENSOU. ALÉM DISSO, A COLUNA

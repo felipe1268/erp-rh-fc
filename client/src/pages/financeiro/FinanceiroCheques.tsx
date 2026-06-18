@@ -271,6 +271,7 @@ export default function FinanceiroCheques() {
       toast({
         title: "Conferência concluída",
         description: `${r.conferidos} cheque(s) marcado(s) como conferido(s) no extrato.` +
+          (r.backfilled > 0 ? ` Data de compensação preenchida em ${r.backfilled} cheque(s).` : "") +
           (r.divergencias > 0 ? ` ${r.divergencias} divergência(s) aguardam sua análise.` : ""),
       });
     } catch (err: any) {

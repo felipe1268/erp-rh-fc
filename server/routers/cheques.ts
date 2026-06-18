@@ -982,17 +982,25 @@ export const chequesRouter = router({
         WHERE company_id=$1 AND excluido_em IS NULL${extra}`, params);
     const matchCheque = await montarMatcherExtrato(db, input.companyId);
     const alvos: { id: number; dt: string }[] = [];
+    // Rev. 3247 — já conferidos mas SEM data de compensação preenchida → backfill com a
+    // data em que o banco compensou (extratoData), garantindo informação correta p/ análise.
+    const backfill: { id: number; dt: string }[] = [];
     let divergencias = 0, jaConferidos = 0;
     for (const c of (res.rows as any[])) {
       const cls = classificarExtrato(c.status, matchCheque(c));
       if (cls.extratoConfirmado) {
-        if (Number(c.conciliado) === 1) { jaConferidos++; continue; }
-        alvos.push({ id: c.id, dt: cls.extratoData || new Date().toISOString().slice(0, 10) });
+        const dt = cls.extratoData || new Date().toISOString().slice(0, 10);
+        if (Number(c.conciliado) === 1) {
+          jaConferidos++;
+          if (!c.dataCompensacao) backfill.push({ id: c.id, dt });
+          continue;
+        }
+        alvos.push({ id: c.id, dt });
       } else if (cls.extratoDivergente) {
         divergencias++;
       }
     }
-    if (alvos.length === 0) return { conferidos: 0, divergencias, jaConferidos };
+    if (alvos.length === 0 && backfill.length === 0) return { conferidos: 0, backfilled: 0, divergencias, jaConferidos };
     // UPDATE em lote via VALUES join. dbExecute liga por ORDEM DE APARIÇÃO: os pares
     // (id,dt) aparecem PRIMEIRO no texto, company_id por ÚLTIMO → montar o flat nessa
     // ordem. Cast ::date evita o erro "date < text". COALESCE(conciliado,0)<>1 = idempotente.
@@ -1007,14 +1015,35 @@ export const chequesRouter = router({
       flat.push(input.companyId); // company_id = último placeholder no texto
       const upd = await dbExecute(db,
         `UPDATE financial_cheques f
-            SET conciliado=1, data_conciliacao = COALESCE(f.data_conciliacao, v.dt)
+            SET conciliado=1,
+                data_conciliacao = COALESCE(f.data_conciliacao, v.dt),
+                data_compensacao = COALESCE(f.data_compensacao, v.dt),
+                updated_at = NOW()
            FROM (VALUES ${valuesSql}) AS v(id, dt)
           WHERE f.id = v.id AND f.company_id=$${n} AND COALESCE(f.conciliado,0)<>1
           RETURNING f.id`,
         flat);
       conferidos += (upd.rows?.length ?? 0);
     }
-    return { conferidos, divergencias, jaConferidos };
+    // Backfill: já conferidos porém sem data_compensacao → preenche com a data do extrato.
+    let backfilled = 0;
+    for (let i = 0; i < backfill.length; i += CHUNK) {
+      const lote = backfill.slice(i, i + CHUNK);
+      let n = 1;
+      const valuesSql = lote.map(() => `($${n++}::int, $${n++}::date)`).join(",");
+      const flat: unknown[] = [];
+      for (const a of lote) { flat.push(a.id, a.dt); }
+      flat.push(input.companyId); // company_id = último placeholder no texto
+      const upd = await dbExecute(db,
+        `UPDATE financial_cheques f
+            SET data_compensacao = v.dt, updated_at = NOW()
+           FROM (VALUES ${valuesSql}) AS v(id, dt)
+          WHERE f.id = v.id AND f.company_id=$${n} AND f.data_compensacao IS NULL
+          RETURNING f.id`,
+        flat);
+      backfilled += (upd.rows?.length ?? 0);
+    }
+    return { conferidos, backfilled, divergencias, jaConferidos };
   }),
 
   // Edição manual (status, fornecedor, conta, obra, observação).
