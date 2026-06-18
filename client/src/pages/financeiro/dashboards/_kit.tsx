@@ -1,8 +1,8 @@
-import { ReactNode } from "react";
+import { ReactNode, useState, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import {
   RefreshCw, ChevronLeft, ChevronRight, ArrowUpRight, ArrowUp, ArrowDown, Minus,
-  ExternalLink, LucideIcon,
+  ExternalLink, LucideIcon, Search, ListFilter,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -243,7 +243,8 @@ export type DetailColumn = {
 };
 
 export function DetailDialog({
-  open, onOpenChange, title, subtitle, columns, rows, totalKey, onGoTo, goLabel = "Abrir tela operacional",
+  open, onOpenChange, title, subtitle, columns, rows, totalKey, onGoTo,
+  goLabel = "Abrir tela operacional", icon: Icon = ListFilter, searchable = true,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -254,67 +255,129 @@ export function DetailDialog({
   totalKey?: string;
   onGoTo?: () => void;
   goLabel?: string;
+  icon?: LucideIcon;
+  searchable?: boolean;
 }) {
-  const total = totalKey != null
-    ? rows.reduce((s, r) => s + (Number(r[totalKey]) || 0), 0)
-    : null;
+  const [q, setQ] = useState("");
   const alignCls = (a?: string) => (a === "right" ? "text-right" : a === "center" ? "text-center" : "text-left");
+
+  // Busca client-side genérica: casa em qualquer valor cru das colunas.
+  const filtered = useMemo(() => {
+    const ql = q.trim().toLowerCase();
+    if (!ql) return rows;
+    return rows.filter((r) => columns.some((c) => String(r[c.key] ?? "").toLowerCase().includes(ql)));
+  }, [q, rows, columns]);
+
+  const totalAll = totalKey != null ? rows.reduce((s, r) => s + (Number(r[totalKey]) || 0), 0) : null;
+  const totalFiltered = totalKey != null ? filtered.reduce((s, r) => s + (Number(r[totalKey]) || 0), 0) : null;
+  const isFiltered = q.trim() !== "" && filtered.length !== rows.length;
+
+  const handleOpenChange = (o: boolean) => {
+    if (!o) setQ("");
+    onOpenChange(o);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          {subtitle && <DialogDescription>{subtitle}</DialogDescription>}
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent
+        resizable={false}
+        className="p-0 gap-0 overflow-hidden flex flex-col w-[96vw] sm:max-w-[1400px] h-[90dvh] max-h-[90dvh] [&_[data-slot=dialog-close]]:text-white [&_[data-slot=dialog-close]]:opacity-90 [&_[data-slot=dialog-close]]:hover:opacity-100 [&_[data-slot=dialog-maximize]]:text-white [&_[data-slot=dialog-maximize]]:opacity-90 [&_[data-slot=dialog-maximize]]:hover:opacity-100"
+      >
+        {/* Cabeçalho — faixa azul padrão FC */}
+        <DialogHeader className="shrink-0 space-y-0 text-left px-6 py-5 bg-gradient-to-r from-[#1B2A4A] to-[#2c3f63] text-white">
+          <div className="flex items-start gap-3 pr-20">
+            <div className="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+              <Icon className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <DialogTitle className="text-white text-lg md:text-xl font-bold leading-tight">{title}</DialogTitle>
+              {subtitle && <DialogDescription className="text-white/70 text-sm mt-0.5">{subtitle}</DialogDescription>}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 mt-4">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-medium tabular-nums">
+              {isFiltered ? `${filtered.length} de ${rows.length}` : rows.length} {rows.length === 1 ? "item" : "itens"}
+            </span>
+            {totalAll != null && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold tabular-nums">
+                Total {formatBRL(isFiltered ? (totalFiltered || 0) : totalAll)}
+              </span>
+            )}
+          </div>
         </DialogHeader>
-        <div className="max-h-[62vh] overflow-auto rounded-lg border border-slate-200">
-          {rows.length === 0 ? (
-            <div className="py-16"><EmptyState message="Sem itens para detalhar." /></div>
+
+        {/* Barra de busca */}
+        {searchable && rows.length > 0 && (
+          <div className="shrink-0 px-6 py-3 border-b border-slate-200 bg-slate-50/70 flex items-center gap-3">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Buscar nos resultados…"
+                className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+              />
+            </div>
+            {isFiltered && <span className="text-xs text-slate-500 tabular-nums">{filtered.length} resultado(s)</span>}
+          </div>
+        )}
+
+        {/* Corpo — tabela rolável */}
+        <div className="flex-1 min-h-0 px-6 py-4">
+          {filtered.length === 0 ? (
+            <div className="h-full flex items-center justify-center">
+              <EmptyState message={q.trim() ? "Nenhum item corresponde à busca." : "Sem itens para detalhar."} />
+            </div>
           ) : (
-            <Table>
-              <TableHeader className="sticky top-0 bg-slate-50 z-10">
-                <TableRow>
-                  {columns.map((c) => (
-                    <TableHead key={c.key} className={`${alignCls(c.align)} text-xs font-semibold`}>{c.label}</TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row, i) => (
-                  <TableRow key={i} className="text-xs">
-                    {columns.map((c) => {
-                      const raw = row[c.key];
-                      const content = c.format
-                        ? c.format(raw, row)
-                        : c.brl ? formatBRL(Number(raw) || 0)
-                        : (raw ?? "—");
-                      return (
-                        <TableCell key={c.key} className={`${alignCls(c.align)} ${c.brl ? "tabular-nums" : ""} ${c.className || ""}`}>
-                          {content}
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                ))}
-              </TableBody>
-              {total != null && (
-                <TableFooter className="sticky bottom-0">
+            <div className="h-full rounded-xl border border-slate-200 overflow-auto">
+              <Table>
+                <TableHeader className="sticky top-0 bg-slate-100 z-10">
                   <TableRow>
-                    {columns.map((c, idx) => (
-                      <TableCell key={c.key} className={`${alignCls(c.align)} font-bold text-xs tabular-nums`}>
-                        {idx === 0 ? `Total · ${rows.length} item(ns)` : c.key === totalKey ? formatBRL(total) : ""}
-                      </TableCell>
+                    {columns.map((c) => (
+                      <TableHead key={c.key} className={`${alignCls(c.align)} text-xs font-semibold text-slate-600 whitespace-nowrap`}>{c.label}</TableHead>
                     ))}
                   </TableRow>
-                </TableFooter>
-              )}
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((row, i) => (
+                    <TableRow key={i} className="text-xs odd:bg-white even:bg-slate-50/50 hover:bg-blue-50/50 transition-colors">
+                      {columns.map((c) => {
+                        const raw = row[c.key];
+                        const content = c.format
+                          ? c.format(raw, row)
+                          : c.brl ? formatBRL(Number(raw) || 0)
+                          : (raw ?? "—");
+                        return (
+                          <TableCell key={c.key} className={`${alignCls(c.align)} ${c.brl ? "tabular-nums" : ""} ${c.className || ""}`}>
+                            {content}
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  ))}
+                </TableBody>
+                {totalFiltered != null && (
+                  <TableFooter className="sticky bottom-0">
+                    <TableRow>
+                      {columns.map((c, idx) => (
+                        <TableCell key={c.key} className={`${alignCls(c.align)} font-bold text-xs tabular-nums`}>
+                          {idx === 0 ? `Total · ${filtered.length} item(ns)` : c.key === totalKey ? formatBRL(totalFiltered) : ""}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  </TableFooter>
+                )}
+              </Table>
+            </div>
           )}
         </div>
+
+        {/* Rodapé destacado */}
         {onGoTo && (
-          <DialogFooter>
+          <DialogFooter className="shrink-0 border-t border-slate-200 bg-gray-50 px-6 py-4 sm:justify-end">
             <button
               onClick={onGoTo}
-              className="inline-flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-700 transition"
+              className="inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-700 transition shadow-sm"
             >
               <ExternalLink className="w-4 h-4" /> {goLabel}
             </button>

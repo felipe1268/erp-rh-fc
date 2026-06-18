@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3257 — **FINANCEIRO / DASHBOARDS · O DIÁLOGO DE DRILL-DOWN (ABERTO AO CLICAR NUM GRÁFICO/BARRA
+ * DOS 5 PAINÉIS — EX.: "CHEQUES · FERRAGENS SANTA RITA") PASSOU A ABRIR EM TELA CHEIA COM O LAYOUT
+ * MODERNO PADRÃO FC: CABEÇALHO EM FAIXA AZUL (`#1B2A4A`→`#2c3f63`) COM ÍCONE EM CÍRCULO E PÍLULAS DE
+ * CONTEXTO (Nº DE ITENS + TOTAL EM BRL), BARRA DE BUSCA QUE FILTRA OS RESULTADOS, TABELA POLIDA (HEADER
+ * STICKY, ZEBRA, HOVER, `tabular-nums`) OCUPANDO TODA A ÁREA E RODAPÉ DESTACADO COM O BOTÃO "ABRIR TELA
+ * OPERACIONAL". SÓ APRESENTAÇÃO — MESMOS DADOS E MESMA NAVEGAÇÃO.**
+ * - PEDIDO (piloto FC): "Quero esta tela em full screen, layout moderno e detalhado para uma análise
+ *   fácil e visual, use nosso padrão de layout moderno" (print IMG_2183 — drill-down de cheques pequeno,
+ *   no estilo antigo `max-w-5xl`).
+ * - SOLUÇÃO (FRONT, `client/src/pages/financeiro/dashboards/_kit.tsx`, componente `DetailDialog`):
+ *   - `DialogContent` → `resizable={false}` (o tamanho passa a ser governado pela classe) +
+ *     `p-0 gap-0 overflow-hidden flex flex-col w-[96vw] sm:max-w-[1400px] h-[90dvh] max-h-[90dvh]` —
+ *     quase tela cheia; o botão Maximizar (Rev. 3237) continua disponível e leva a 100% da viewport.
+ *     Utilitárias `[&_[data-slot=dialog-close]]`/`[&_[data-slot=dialog-maximize]]` deixam os botões
+ *     brancos sobre a faixa azul.
+ *   - `DialogHeader` virou faixa azul (gradiente `#1B2A4A`→`#2c3f63`, `text-left`, `space-y-0`,
+ *     `px-6 py-5`) com ícone em círculo `bg-white/15` (nova prop opcional `icon`, default `ListFilter`,
+ *     p/ não quebrar call-sites), `DialogTitle`+`DialogDescription` em branco e 2 pílulas — contagem de
+ *     itens (mostra "N de M" quando filtrado) e Total em BRL (acompanha o filtro).
+ *   - Nova barra de busca (`searchable`, default `true`): input client-side que casa em qualquer valor
+ *     cru das colunas (`useMemo` de `filtered`); contador de resultados; busca reseta ao fechar.
+ *   - Corpo `flex-1 min-h-0 px-6 py-4` com a tabela dentro de um card `h-full overflow-auto`
+ *     (header sticky, linhas zebra `odd/even` + `hover:bg-blue-50/50`, rodapé de TOTAL sticky em BRL).
+ *   - Rodapé `border-t bg-gray-50 px-6 py-4` com o botão "Abrir tela operacional".
+ *   - Componente é o kit compartilhado → vale para os 5 dashboards (Receber, Pagar, Conciliação,
+ *     Cheques, Cartão) sem alterar nenhum call-site (props novas são opcionais com default).
+ * - ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE. esbuild limpo.
+ *
  * Rev. 3256 — **FINANCEIRO / DASHBOARDS · NA TABELA COMPARATIVA (MÊS A MÊS / ANO A ANO) DOS 5 PAINÉIS,
  * AS COLUNAS DE ANO PASSARAM A SEGUIR ORDEM CRONOLÓGICA — O ANO MAIS ANTIGO À ESQUERDA E O MAIS RECENTE
  * À DIREITA (EX.: 2025 ANTES DE 2026), EM VEZ DO ATUAL PRIMEIRO. SÓ ORDEM DAS COLUNAS — OS VALORES,
