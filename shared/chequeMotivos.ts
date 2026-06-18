@@ -64,6 +64,8 @@ export const MOTIVOS_DEVOLUCAO_CHEQUE: Record<number, MotivoDevolucao> = {
   23: M(23, "Cheques de órgão/entidade pública fora das especificações", "impedimento", false, false),
   24: M(24, "Bloqueio judicial ou determinação do Banco Central", "impedimento", false, false),
   25: M(25, "Cancelamento de talonário pelo banco sacado", "impedimento", false, false),
+  26: M(26, "Inoperância temporária de transporte", "impedimento", false, true),
+  27: M(27, "Feriado municipal não previsto no calendário", "impedimento", false, true),
   28: M(28, "Contraordem/oposição (sustação) por furto ou roubo", "sustacao", true, false),
   29: M(29, "Falta de confirmação do recebimento do talonário pelo correntista", "impedimento", false, false),
   30: M(30, "Furto ou roubo de malotes", "impedimento", false, false),
@@ -73,6 +75,7 @@ export const MOTIVOS_DEVOLUCAO_CHEQUE: Record<number, MotivoDevolucao> = {
   34: M(34, "Cheque apresentado por banco não indicado no cruzamento, sem endosso-mandato", "irregularidade", false, true),
   35: M(35, "Cheque fraudado / emitido sem controle do banco / adulterado", "irregularidade", false, false),
   37: M(37, "Registro inconsistente na compensação eletrônica", "operacional", false, true),
+  39: M(39, "Imagem do cheque fora dos padrões técnicos da COMPE (truncagem)", "operacional", false, true),
   // Apresentação indevida
   40: M(40, "Moeda inválida", "apresentacao_indevida", false, true),
   41: M(41, "Cheque apresentado a banco que não o sacado", "apresentacao_indevida", false, true),

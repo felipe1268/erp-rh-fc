@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3259 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NO PAINEL "CHEQUES DEVOLVIDOS NO BANCO", A LEGENDA DO
+ * MOTIVO DA DEVOLUÇÃO PASSOU A MOSTRAR A DESCRIÇÃO REAL (BACEN/COMPE) AO LADO DO CÓDIGO — INCLUSIVE O
+ * MOTIVO 39, QUE ANTES CAÍA NUM GENÉRICO "DEVOLUÇÃO DE CHEQUE (MOTIVO 39)". AGORA O 39 APARECE COMO
+ * "MOTIVO 39 · IMAGEM DO CHEQUE FORA DOS PADRÕES TÉCNICOS DA COMPE (TRUNCAGEM)" E TAMBÉM FORAM
+ * ADICIONADOS OS MOTIVOS 26 (INOPERÂNCIA TEMPORÁRIA DE TRANSPORTE) E 27 (FERIADO MUNICIPAL NÃO PREVISTO),
+ * COMPLETANDO A TABELA OFICIAL. SÓ CONSULTA.**
+ * - PEDIDO (piloto FC): "Coloca a legenda de cada motivo possível que o cheque voltou, exemplo qual é o
+ *   motivo 39? Coloque ao lado" (print IMG_2186 — cheque com badge "Motivo 39 · Devolução de cheque
+ *   (motivo 39)", sem o significado real).
+ * - CAUSA-RAIZ: a biblioteca `shared/chequeMotivos.ts` (tabela `MOTIVOS_DEVOLUCAO_CHEQUE`) não tinha o
+ *   código 39, então `getMotivoDevolucao` caía no fallback genérico (`"Devolução de cheque (motivo N)"`).
+ *   O badge da tela JÁ mostra `motivoTexto` ao lado do código (Rev. 3244), logo bastava preencher o
+ *   dicionário com a descrição oficial.
+ * - SOLUÇÃO (SÓ DADOS, `shared/chequeMotivos.ts`): adicionados à `MOTIVOS_DEVOLUCAO_CHEQUE` os motivos
+ *   oficiais que faltavam, confirmados contra o Manual Operacional da COMPE / FEBRABAN e a regulamentação
+ *   BACEN (Circ. 3.535 / Res. 1.682):
+ *   - `39` = "Imagem do cheque fora dos padrões técnicos da COMPE (truncagem)" — grupo operacional,
+ *     reapresentável (a IF sacada devolve o registro cuja imagem não atende ao Manual de Definições
+ *     Técnicas; o cheque pode voltar com imagem corrigida).
+ *   - `26` = "Inoperância temporária de transporte" — grupo impedimento, reapresentável.
+ *   - `27` = "Feriado municipal não previsto no calendário" — grupo impedimento, reapresentável.
+ *   O motivo `33` ("Divergência de endosso") foi conferido contra a tabela oficial BACEN e mantido como
+ *   está (algumas fontes secundárias o confundem com "divergência numérico×extenso", mas a Res. 1.682
+ *   define 33 = divergência de endosso). Nada mais foi alterado na tabela.
+ * - EFEITO: o badge passa a exibir "Motivo 39 · Imagem do cheque fora dos padrões técnicos da COMPE
+ *   (truncagem)" (e idem p/ 26/27 quando ocorrerem) tanto na tela "Cheques devolvidos no banco" quanto no
+ *   relatório PDF (Rev. 3252), pois ambos leem o mesmo `motivoTexto`. ZERO BACKEND NOVO · ZERO SCHEMA/
+ *   ALTER/DROP/DELETE · só dicionário. esbuild limpo.
+ *
  * Rev. 3258 — **FINANCEIRO / CRONOGRAMA FINANCEIRO · OS VALORES DA TELA "CRONOGRAMA FINANCEIRO"
  * (PREVISÃO DE FATURAMENTO × CUSTO × RESULTADO POR OBRA) PASSARAM A SER 100% FIÉIS AO ORÇAMENTO +
  * CRONOGRAMA — SEM UM CENTAVO DE DIFERENÇA. ANTES: "CUSTO PREVISTO" MOSTRAVA O VALOR DE **VENDA**
