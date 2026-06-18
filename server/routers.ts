@@ -435,11 +435,20 @@ export const appRouter = router({
       const canSeeAviso = await userCanSeeAvisoStatus(ctx.user.id, ctx.user.role);
       // Se o filtro pedir Aviso e o usuário não pode ver, devolve vazio.
       if (!canSeeAviso && input.status === 'Aviso') return [] as any[];
-      const cacheKey = `emp:list:${input.companyId}:${(input.companyIds ?? []).join(',')}:${input.search ?? ''}:${input.status ?? ''}:${input.excludeTerminated ?? ''}:${input.includeTerminatedInMonth ?? ''}:av${canSeeAviso ? 1 : 0}`;
+      // Rev. 3270 — blacklist (Lista_Negra) é visível SÓ p/ admin_master, inclusive via API
+      // (o front já gateia, mas o endpoint precisa impor — defesa em profundidade).
+      const isAdminMaster = ctx.user.role === 'admin_master';
+      if (!isAdminMaster && input.status === 'Lista_Negra') return [] as any[];
+      const cacheKey = `emp:list:${input.companyId}:${(input.companyIds ?? []).join(',')}:${input.search ?? ''}:${input.status ?? ''}:${input.excludeTerminated ?? ''}:${input.includeTerminatedInMonth ?? ''}:av${canSeeAviso ? 1 : 0}:bl${isAdminMaster ? 1 : 0}`;
       const rows = await memCache.getOrFetch(cacheKey, TTL.SHORT, async () => {
-        const data = await getEmployees(input.companyId, input.search, input.status, input.companyIds, input.excludeTerminated, input.includeTerminatedInMonth);
+        let data = await getEmployees(input.companyId, input.search, input.status, input.companyIds, input.excludeTerminated, input.includeTerminatedInMonth);
         if (!canSeeAviso && Array.isArray(data)) {
           for (const e of data as any[]) if (e && e.status === 'Aviso') e.status = 'Ativo';
+        }
+        // Rev. 3270 — defesa em profundidade: remove a blacklist da resposta p/ não-master
+        // (qualquer recorte sem filtro explícito não pode vazar Lista_Negra).
+        if (!isAdminMaster && Array.isArray(data)) {
+          data = (data as any[]).filter((e) => !(e && (e.status === 'Lista_Negra' || e.listaNegra === 1 || e.listaNegra === true)));
         }
         return data;
       });

@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3270 — **RH & DP / COLABORADORES · AO IMPRIMIR (OU GERAR PDF) A "LISTA DE COLABORADORES
+ * DESLIGADOS", OS FUNCIONÁRIOS DA BLACKLIST (LISTA NEGRA) AGORA TAMBÉM ENTRAM NA LISTA IMPRESSA,
+ * INTERCALADOS EM ORDEM ALFABÉTICA COM OS DESLIGADOS NORMAIS E COM O BADGE "⚑ BLACKLIST" NA COLUNA
+ * STATUS. NA TELA NADA MUDA — OS CARDS "DESLIGADOS" (163) E "BLACKLIST" (25) SEGUEM SEPARADOS; A
+ * BLACKLIST SÓ APARECE NO PAPEL/PDF. 100% READ-ONLY · SÓ FRONT.**
+ * - PEDIDO (piloto FC): "Preciso que ao imprimir, os funcionários da blacklist também estejam na lista
+ *   de desligados" (prints: aba "Desligados" = 163, aba "Blacklist" = 25; o PDF "LISTA DE COLABORADORES
+ *   DESLIGADOS" só trazia os Desligados normais).
+ * - CAUSA: o filtro "Desligado" carrega do servidor SÓ `status='Desligado'` (`getEmployees` →
+ *   `eq(status,'Desligado')`), então os colaboradores da lista negra (`status='Lista_Negra'` /
+ *   `listaNegra=1`) nem chegavam ao cliente — e a impressão é `window.print()` do DOM visível
+ *   (`PrintActions`), logo o que não está na tela não sai no papel.
+ * - SOLUÇÃO (SÓ FRONT, `client/src/pages/Colaboradores.tsx`):
+ *   1) Nova query paralela `blacklistPrintRaw` (`trpc.employees.list` com `status:"Lista_Negra"`),
+ *      habilitada SOMENTE quando `statusFilter==="Desligado"` E `isAdminMaster` (não-master nunca vê
+ *      lista negra — espelha o guard da linha que filtra `displayEmployees` p/ não-master).
+ *   2) `blacklistPrintList` (useMemo): conjunto canônico de blacklist (`status==="Lista_Negra" ||
+ *      listaNegra===1`) com EXATAMENTE os mesmos filtros secundários dos Desligados (skill, período de
+ *      desligamento, idade, função, foto), p/ o papel sair consistente.
+ *   3) `renderRows` (useMemo): mescla `displayEmployees` (printOnly:false) + `blacklistPrintList`
+ *      (printOnly:true) e ordena tudo por nome (pt-BR). O `<tbody>` passou a mapear `renderRows`; cada
+ *      `<tr>` printOnly recebe `className "hidden print:table-row"` (escondido na tela, visível só no
+ *      print). Seleção/checkbox e `isAllSelected` seguem em `displayEmployees` (linhas print-only não
+ *      são selecionáveis).
+ *   4) O rótulo "N colaboradores no período" ganhou variante print-only (`hidden print:inline`) que usa
+ *      `renderRows.length` (combinado), enquanto a tela mantém `displayEmployees.length` — evita
+ *      contagem inconsistente no PDF.
+ * - A coluna Status já renderizava o badge "⚑ Blacklist" p/ `listaNegra`, então as linhas saem
+ *   visualmente distinguíveis sem mudança adicional.
+ * - ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3269 — **FINANCEIRO / CARTÃO DE CRÉDITO · A TELA DE CADASTRO DE CARTÕES GANHOU O CAMPO "STATUS"
  * (ATIVO / BLOQUEADO / RENEGOCIADO / CANCELADO / INATIVO), QUE APARECE COMO BADGE COLORIDO EM CADA
  * CARTÃO DA LISTA. ALÉM DISSO, OS 5 CARTÕES DA PLANILHA ENVIADA PELO PILOTO FORAM CADASTRADOS NO ERP

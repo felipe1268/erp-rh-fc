@@ -102,3 +102,4 @@
 - [Conciliação só sugestiva](conciliacao-so-sugestiva.md) — pedido do piloto FC: nada concilia/baixa sem confirmação EXPLÍCITA do usuário; "Selecionar todas" só pré-seleciona, aplicação passa por AlertDialog de revisão. Não reintroduzir one-click bulk apply.
 - [Cheque estorno pairing false-positive](cheque-estorno-pairing-false-positive.md) — par "débito compensação × crédito devolução" é heurístico; sem guardas (cheque-especial/tarifa, janela de data, pool único) some com pendência legítima e bloqueia confirmação. Read-only.
 - [Cheque↔extrato write-match uniqueness](cheque-extrato-write-match-uniqueness.md) — matcher que GRAVA conciliado=1 exige unicidade em TODOS os índices (forte e fraco); ambíguo→a conferir, nunca marca. Display molde (Rev.3229) aceita first-match.
+- [Blacklist visibility backend gate](blacklist-visibility-backend-gate.md) — Lista_Negra é admin_master-only; gateie em employees.list E faça o cacheKey variar por papel (senão vaza por cache).

@@ -346,6 +346,16 @@ export default function Colaboradores() {
     { enabled: hasValidSelection }
   );
 
+  // Rev. 3270 — Blacklist na IMPRESSÃO da lista de Desligados: o filtro "Desligado"
+  // carrega só status='Desligado' (server), então a lista negra (status='Lista_Negra')
+  // nem chega ao cliente. Carregamos os blacklist em paralelo SOMENTE quando o filtro
+  // é "Desligado" e o usuário é admin master (não-master nunca vê lista negra), para
+  // anexá-los como linhas PRINT-ONLY (escondidas na tela, visíveis no papel/PDF).
+  const { data: blacklistPrintRaw } = trpc.employees.list.useQuery(
+    { companyId: queryCompanyId, companyIds: isConstrutoras ? queryCompanyIds : undefined, search: search || undefined, status: "Lista_Negra" },
+    { enabled: hasValidSelection && statusFilter === "Desligado" && isAdminMaster }
+  );
+
   // Skill filter: get employee IDs that have the selected skill
   const skillFilterId = skillFilter !== "all" ? Number(skillFilter) : null;
   const employeesBySkillQ = trpc.skills.searchBySkill.useQuery(
@@ -459,6 +469,56 @@ export default function Colaboradores() {
     }
     return list;
   }, [employees, skillEmployeeIds, statusFilter, desligDe, desligAte, idadeFilter, funcaoFilter, fotoFilter]);
+
+  // Rev. 3270 — Colaboradores da BLACKLIST para anexar à IMPRESSÃO da lista de
+  // Desligados. Aplica EXATAMENTE os mesmos filtros secundários (skill, período de
+  // desligamento, idade, função, foto) usados nos Desligados, para que o papel saia
+  // consistente. Conjunto canônico de blacklist = listaNegra=1 OU status='Lista_Negra'.
+  const blacklistPrintList = useMemo(() => {
+    if (statusFilter !== "Desligado" || !isAdminMaster) return [] as any[];
+    let list = (blacklistPrintRaw ?? []).filter(
+      (e: any) => e.status === "Lista_Negra" || e.listaNegra === 1 || e.listaNegra === true
+    );
+    if (skillEmployeeIds) list = list.filter((e: any) => skillEmployeeIds.has(e.id));
+    if (desligDe || desligAte) {
+      list = list.filter((e: any) => {
+        const d = e.dataDesligamentoEfetiva;
+        if (!d) return false;
+        if (desligDe && d < desligDe) return false;
+        if (desligAte && d > desligAte) return false;
+        return true;
+      });
+    }
+    if (idadeFilter && idadeFilter !== "Todas") {
+      list = list.filter((e: any) => {
+        const idade = calcIdadeAnos(e.dataNascimento);
+        if (idade === null) return idadeFilter === "Sem data";
+        if (idadeFilter === "Sem data") return false;
+        if (idadeFilter === "60+") return idade >= 60;
+        const m = idadeFilter.match(/^(\d+)-(\d+)$/);
+        if (!m) return true;
+        return idade >= parseInt(m[1], 10) && idade <= parseInt(m[2], 10);
+      });
+    }
+    if (funcaoFilter && funcaoFilter !== "Todas") {
+      list = list.filter((e: any) => e.funcao === funcaoFilter);
+    }
+    if (fotoFilter === "ComFoto") {
+      list = list.filter((e: any) => !!e.fotoUrl && String(e.fotoUrl).trim() !== "");
+    } else if (fotoFilter === "SemFoto") {
+      list = list.filter((e: any) => !(e.fotoUrl && String(e.fotoUrl).trim() !== ""));
+    }
+    return list;
+  }, [blacklistPrintRaw, statusFilter, isAdminMaster, skillEmployeeIds, desligDe, desligAte, idadeFilter, funcaoFilter, fotoFilter]);
+
+  // Rev. 3270 — linhas renderizadas na tabela: Desligados (tela + papel) + Blacklist
+  // (somente papel). `printOnly` marca as linhas escondidas na tela via CSS.
+  const renderRows = useMemo(() => {
+    const base = (displayEmployees ?? []).map((e: any) => ({ emp: e, printOnly: false }));
+    for (const e of blacklistPrintList) base.push({ emp: e, printOnly: true });
+    base.sort((a, b) => (a.emp.nomeCompleto || "").localeCompare(b.emp.nomeCompleto || "", "pt-BR"));
+    return base;
+  }, [displayEmployees, blacklistPrintList]);
 
   const createMut = trpc.employees.create.useMutation({
     onSuccess: (result: any) => {
@@ -1375,7 +1435,10 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
               </Button>
             )}
             {(desligDe || desligAte) && displayEmployees.length > 0 && (
-              <span className="text-xs text-orange-600 ml-auto">{displayEmployees.length} colaborador{displayEmployees.length !== 1 ? "es" : ""} no período</span>
+              <>
+                <span className="text-xs text-orange-600 ml-auto print:hidden">{displayEmployees.length} colaborador{displayEmployees.length !== 1 ? "es" : ""} no período</span>
+                <span className="text-xs text-orange-600 ml-auto hidden print:inline">{renderRows.length} colaborador{renderRows.length !== 1 ? "es" : ""} no período</span>
+              </>
             )}
           </div>
         )}
@@ -1414,8 +1477,8 @@ ${obs ? `<div style="border:1px solid #999;padding:10px;margin-top:12px;backgrou
                 </tr>
               </thead>
               <tbody>
-                {[...displayEmployees].sort((a, b) => (a.nomeCompleto || '').localeCompare(b.nomeCompleto || '', 'pt-BR')).map(emp => (
-                  <tr key={emp.id} className={`border-t border-border hover:bg-secondary/30 transition-colors ${selectedIds.has(emp.id) ? "bg-primary/5" : ""}`}>
+                {renderRows.map(({ emp, printOnly }) => (
+                  <tr key={emp.id} className={`border-t border-border hover:bg-secondary/30 transition-colors ${selectedIds.has(emp.id) ? "bg-primary/5" : ""} ${printOnly ? "hidden print:table-row" : ""}`}>
                     <td className="px-3 py-3">
                       <Checkbox
                         checked={selectedIds.has(emp.id)}
