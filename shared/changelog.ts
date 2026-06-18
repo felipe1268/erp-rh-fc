@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3263 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O VÍNCULO ENTRE A LINHA "CHEQUE COMPENSADO" DO
+ * EXTRATO E O CADASTRO DO CONTROLE DE CHEQUES VOLTOU A APARECER NOS CASOS EM QUE A CAIXA IDENTIFICA O
+ * CHEQUE COMO "DOC NNNNNN" (EX.: "CHEQUE COMPENSADO · DOC 000990") E/OU QUANDO O BANCO ARREDONDA 1
+ * CENTAVO NA COMPENSAÇÃO (CHEQUE CADASTRADO R$ 2.410,12 × EXTRATO R$ 2.410,13). ANTES O EXTRATOR SÓ
+ * RECONHECIA O PADRÃO "CHEQUE Nº NNN" E O MATCH EXIGIA VALOR EXATO — ENTÃO ESSES CHEQUES APARECIAM SEM
+ * O BADGE "CHEQUE Nº N · FORNECEDOR" QUE OS DEMAIS MOSTRAM. 100% READ-ONLY.**
+ * - PEDIDO (piloto FC): "O cheque está cadastrado, indica que foi compensado, mas no relatório não mostra
+ *   o link com o cheque como nos demais; faça uma verificação geral para garantir que o vínculo está
+ *   ocorrendo" (prints IMG_2195 — Controle de Cheques com o cheque 990 CASA BRASIL R$ 2.410,12 marcado
+ *   "Compensado"; IMG_2196 — Conciliação "No extrato, sem lançamento" mostrando "CHEQUE COMPENSADO · Doc
+ *   000990 · R$ 2.410,13" SEM o badge do cheque, enquanto "Doc 000935" aparece com "Cheque nº 935 ·
+ *   ELETROGUARA").
+ * - CAUSA-RAIZ: os dois matchers de EXIBIÇÃO de cheque da Conciliação (`server/routers/financial.ts`:
+ *   `matchChequeLinha` na lista "no extrato sem lançamento" e `identificarCheque` nas sugestões/semMatch)
+ *   só extraíam o número pela regex `cheque\s*nº\s*NNN`. A descrição da Caixa "CHEQUE COMPENSADO · Doc
+ *   000990" NÃO tem "cheque nº" — o número vem após "Doc" — então `extrNumChq` devolvia null e o match caía
+ *   no fallback VALOR+DATA; como o extrato trazia 1 centavo a mais (arredondamento bancário), a chave
+ *   `valor|data` também não batia → nenhum vínculo. O caso "Doc 000935" só aparecia porque casou pelo
+ *   fallback valor+data (valor sem arredondamento, único naquele dia).
+ * - SOLUÇÃO (SÓ LEITURA, espelhada nos 2 matchers):
+ *   • Novo extrator `extrDocNum`/`extrairDocCheque` (`\bdoc(?:umento)?\.?\s*0*(\d{1,12})`) que pega o
+ *     número do "Doc NNN" — usado SÓ quando a linha já `pareceCheque` (`/cheq|compensa/i`), para "Doc" de
+ *     PIX/boleto não casar por engano.
+ *   • Novo índice `chqByNum`/`chequesByNum` (número → lista de cheques). Achado o número, o match tenta
+ *     primeiro VALOR EXATO (`num|cts`) e, se falhar, casa por número com TOLERÂNCIA de ≤2 centavos —
+ *     somente quando há EXATAMENTE 1 cheque desse número dentro da tolerância (uniqueness guard), nunca
+ *     em ambiguidade.
+ * - DELIBERADAMENTE NÃO ALTERADO: o matcher que GRAVA `conciliado=1` na Dupla Checagem do Controle de
+ *   Cheques (`server/routers/cheques.ts`) segue ESTRITO (nº+valor exato com unicidade) — lá 1 centavo de
+ *   diferença é uma divergência legítima a sinalizar ao usuário ("banco compensou, controle não"), e
+ *   afrouxar geraria conciliação automática de falso-positivo. A tolerância vale só para EXIBIÇÃO.
+ * - EFEITO: o cheque 990 (e equivalentes com "Doc NNN" e/ou ±1 centavo) volta a exibir o badge "Cheque nº
+ *   N · Fornecedor" na Conciliação, igual aos demais. NADA é gravado.
+ * - ZERO BACKEND DE ESCRITA · ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3262 — **MÓDULO PJ / FOLHA PJ (PAGAMENTOS) · A ABA "FOLHA PJ" GANHOU DUAS LEITURAS NOVAS, 100%
  * READ-ONLY, P/ AMARRAR CADA PRESTADOR AO CADASTRO DE FORNECEDORES: (1) UMA COLUNA "FORNECEDOR CADASTRADO"
  * COM BADGE — VERDE QUANDO O CNPJ DO CONTRATO PJ CASA EXATAMENTE COM UM FORNECEDOR (MOSTRA A RAZÃO SOCIAL),

@@ -4297,17 +4297,31 @@ export const financialRouter = router({
     const chqCents = (v: any) => v != null ? Math.round(Math.abs(Number(v)) * 100) : null;
     const chqDia = (v: any) => v ? String(v).slice(0, 10) : null;
     const chqByNumVal = new Map<string, any>();
+    const chqByNum = new Map<string, any[]>();
     const chqByValData = new Map<string, any[]>();
     for (const c of chequesRep) {
       const cts = chqCents(c.valor);
       if (cts == null) continue;
       const num = String(c.numeroCheque ?? "").replace(/[^0-9]/g, "").replace(/^0+/, "");
-      if (num) chqByNumVal.set(`${num}|${cts}`, c);
+      if (num) {
+        chqByNumVal.set(`${num}|${cts}`, c);
+        if (!chqByNum.has(num)) chqByNum.set(num, []);
+        chqByNum.get(num)!.push(c);
+      }
       const dc = chqDia(c.dataCompensacao);
       if (dc) { const k = `${cts}|${dc}`; if (!chqByValData.has(k)) chqByValData.set(k, []); chqByValData.get(k)!.push(c); }
     }
     const extrNumChq = (descricao: any): string | null => {
       const m = String(descricao ?? "").match(/cheque\s*n?[ºo°.]*\s*0*(\d{1,12})/i);
+      if (m && m[1]) return m[1].replace(/^0+/, "") || m[1];
+      return null;
+    };
+    // Rev. 3263 — A Caixa identifica o cheque na descrição como "Doc NNNNNN"
+    // ("CHEQUE COMPENSADO · Doc 000990", "DEBITO CHEQUE PAG AGENCIA ... Doc 000981"),
+    // sem a palavra "cheque nº". Esse extrator pega o número do "Doc" — mas SÓ é usado
+    // quando a linha já pareceCheque (senão "Doc" de PIX/boleto casaria por engano).
+    const extrDocNum = (descricao: any): string | null => {
+      const m = String(descricao ?? "").match(/\bdoc(?:umento)?\.?\s*0*(\d{1,12})/i);
       if (m && m[1]) return m[1].replace(/^0+/, "") || m[1];
       return null;
     };
@@ -4319,10 +4333,23 @@ export const financialRouter = router({
     const matchChequeLinha = (l: any): any | null => {
       const cts = chqCents(l.valor);
       if (cts == null || cts === 0) return null;
-      const num = extrNumChq(l.descricao);
-      if (num) { const c = chqByNumVal.get(`${num}|${cts}`); if (c) return c; }
+      const ehCheque = pareceCheque(l.descricao);
+      // 1) número do cheque ("cheque nº NNN") OU número do documento "Doc NNN" (Caixa) quando
+      //    a linha parece cheque. Rev. 3263 — o banco às vezes arredonda 1 centavo na
+      //    compensação (cheque R$ 2.410,12 → extrato R$ 2.410,13); então, achado o número,
+      //    casa por VALOR EXATO e, se falhar, por número com tolerância de ≤2 centavos ÚNICO.
+      const num = extrNumChq(l.descricao) ?? (ehCheque ? extrDocNum(l.descricao) : null);
+      if (num) {
+        const exato = chqByNumVal.get(`${num}|${cts}`);
+        if (exato) return exato;
+        const arr = chqByNum.get(num);
+        if (arr) {
+          const perto = arr.filter((c) => { const v = chqCents(c.valor); return v != null && Math.abs(v - cts) <= 2; });
+          if (perto.length === 1) return perto[0];
+        }
+      }
       const dia = chqDia(l.data);
-      if (dia && pareceCheque(l.descricao)) { const arr = chqByValData.get(`${cts}|${dia}`); if (arr && arr.length === 1) return arr[0]; }
+      if (dia && ehCheque) { const arr = chqByValData.get(`${cts}|${dia}`); if (arr && arr.length === 1) return arr[0]; }
       return null;
     };
 
@@ -5027,22 +5054,42 @@ export const financialRouter = router({
       [input.companyId]);
     const chequesArr = rows(chqRes) as any[];
     const chequesByNumVal = new Map<string, any>();
+    const chequesByNum = new Map<string, any[]>();
     for (const c of chequesArr) {
       const num = String(c.numeroCheque ?? "").replace(/[^0-9]/g, "").replace(/^0+/, "");
       if (!num) continue;
       const cts = c.valor != null ? Math.round(Math.abs(Number(c.valor)) * 100) : null;
-      if (cts != null) chequesByNumVal.set(`${num}|${cts}`, c);
+      if (cts != null) {
+        chequesByNumVal.set(`${num}|${cts}`, c);
+        if (!chequesByNum.has(num)) chequesByNum.set(num, []);
+        chequesByNum.get(num)!.push(c);
+      }
     }
     const extrairNumCheque = (descricao: any): string | null => {
       const m = String(descricao ?? "").match(/cheque\s*n?[ºo°.]*\s*0*(\d{1,12})/i);
       if (m && m[1]) return m[1].replace(/^0+/, "") || m[1];
       return null;
     };
+    // Rev. 3263 — mesma lógica do matchChequeLinha: número via "Doc NNN" (Caixa) quando a
+    // linha parece cheque + tolerância de ≤2 centavos no valor (arredondamento bancário).
+    const extrairDocCheque = (descricao: any): string | null => {
+      const m = String(descricao ?? "").match(/\bdoc(?:umento)?\.?\s*0*(\d{1,12})/i);
+      if (m && m[1]) return m[1].replace(/^0+/, "") || m[1];
+      return null;
+    };
     const identificarCheque = (ln: any): { numero: string; fornecedor: string } | null => {
-      const num = extrairNumCheque(ln.descricao);
+      const ehCheque = /cheq|compensa/i.test(String(ln.descricao ?? ""));
+      const num = extrairNumCheque(ln.descricao) ?? (ehCheque ? extrairDocCheque(ln.descricao) : null);
       if (!num) return null;
       const cts = Math.round(Math.abs(Number(ln.valor) || 0) * 100);
-      const c = chequesByNumVal.get(`${num}|${cts}`); // exige nº + VALOR
+      let c = chequesByNumVal.get(`${num}|${cts}`); // exige nº + VALOR
+      if (!c) {
+        const arr = chequesByNum.get(num);
+        if (arr) {
+          const perto = arr.filter((x) => { const v = x.valor != null ? Math.round(Math.abs(Number(x.valor)) * 100) : null; return v != null && Math.abs(v - cts) <= 2; });
+          if (perto.length === 1) c = perto[0];
+        }
+      }
       if (!c) return null;
       return { numero: num, fornecedor: c.fornecedorNome ?? "" };
     };
