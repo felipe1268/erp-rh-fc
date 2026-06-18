@@ -7373,6 +7373,30 @@ export const financialConciliacaoDemonstrativos = pgTable("financial_conciliacao
   uniqueIndex("uq_fcd_chave").on(t.companyId, t.contaBancariaId, t.ano, t.mes),
 ]);
 
+// Rev. 3266 — VEREDICTO do usuário sobre a identificação por IA dos demonstrativos
+// (texto roxo da Conciliação). 1 veredicto por LINHA do extrato (confirmado/errado).
+// NÃO concilia/baixa nada — só registra a conferência da leitura.
+export const financialConciliacaoDemoConfirmacoes = pgTable("financial_conciliacao_demo_confirmacoes", {
+  id: serial().notNull(),
+  companyId: integer("company_id").notNull(),
+  contaBancariaId: integer("conta_bancaria_id").notNull(),
+  extratoLinhaId: integer("extrato_linha_id").notNull(),
+  demonstrativoId: integer("demonstrativo_id"),
+  tipo: varchar({ length: 12 }),
+  veredicto: varchar({ length: 12 }).notNull(), // confirmado | errado | pendente
+  beneficiario: text(),
+  documento: text(),
+  txid: text(),
+  valor: numeric({ precision: 15, scale: 2 }),
+  dataPagamento: date("data_pagamento", { mode: "string" }),
+  usuarioId: integer("usuario_id"),
+  usuarioNome: varchar("usuario_nome", { length: 255 }),
+  criadoEm: timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+  atualizadoEm: timestamp("atualizado_em", { mode: "string" }),
+}, (t) => [
+  uniqueIndex("uq_fcdc_linha").on(t.companyId, t.contaBancariaId, t.extratoLinhaId),
+]);
+
 // 8. Saldo bancário diário
 export const bankDailyBalance = pgTable("bank_daily_balance", {
   id: serial().notNull(),

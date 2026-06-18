@@ -1,6 +1,50 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3266 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O TEXTO ROXO "IDENTIFICADO NOS DEMONSTRATIVOS"
+ * (PIX/BOLETO/TED LIDOS POR IA) DA LISTA "NO EXTRATO, SEM LANÇAMENTO" VIROU CLICÁVEL: ABRE UM DIÁLOGO
+ * DE CONFERÊNCIA QUE COLOCA LADO A LADO OS DADOS LIDOS PELA IA (TIPO/BENEFICIÁRIO/DOCUMENTO/TXID/VALOR/
+ * DATA) × A LINHA DO EXTRATO (DATA/DESCRIÇÃO/VALOR), COM Δ DO VALOR (VERDE "VALORES IDÊNTICOS" OU ÂMBAR
+ * COM A DIFERENÇA EM BRL), COMO A IDENTIFICAÇÃO CASOU (TXID / VALOR+DATA / VALOR ÚNICO) E LINK(S) PARA
+ * ABRIR O(S) PDF(S) DO DEMONSTRATIVO DAQUELE MÊS. O USUÁRIO ENTÃO CONFIRMA ("✓ CONFERIDO") OU MARCA
+ * COMO ERRADO ("✗ ERRADO") — O VEREDICTO FICA PERSISTIDO E A LINHA REFLETE O ESTADO (VERDE / ROSA
+ * TACHADO). NÃO CONCILIA NEM BAIXA NADA (HONRA "CONCILIAÇÃO SÓ SUGESTIVA").**
+ * - PEDIDO (piloto FC): sobre o texto roxo "identificado nos demonstrativos", "queria poder clicar pra
+ *   ver de onde a IA tirou isso, conferir com o documento e dizer se está certo ou errado". "Pode fazer".
+ * - CAUSA: até a Rev. 3265 o texto roxo era um `<p>` estático — informava a leitura por IA mas não dava
+ *   como abrir o demonstrativo de origem nem registrar se a identificação estava certa. Faltava (1) o
+ *   backend devolver o valor lido + a referência do demonstrativo (id/ano/mês) + os PDFs, e (2) um lugar
+ *   p/ guardar o veredicto do usuário.
+ * - SOLUÇÃO:
+ *   • SCHEMA (ADITIVO — R-001/007/010 OK): nova tabela `financial_conciliacao_demo_confirmacoes`
+ *     (`drizzle/schema.ts` + self-heal `[SyncSchema+]` em `server/_core/index.ts`, CREATE TABLE/INDEX IF
+ *     NOT EXISTS) — 1 veredicto por LINHA do extrato, índice único `uq_fcdc_linha`
+ *     (company_id, conta_bancaria_id, extrato_linha_id). Guarda também um snapshot do que foi conferido
+ *     (tipo/beneficiário/documento/txid/valor/data) + usuário + timestamps. Sem ALTER destrutivo/DROP/DELETE.
+ *   • BACK READ (`server/routers/financial.ts`, `getConciliacaoReport`): a query dos demonstrativos passou
+ *     a trazer `id/ano/mes` + as colunas de arquivos (`pix_url`/`pix_arquivos_json`/boleto…), e o `DemoItem`
+ *     ganhou `demId/demAno/demMes/arquivos[]` (helper `_parseArqDemo` espelha o array por tipo c/ fallback
+ *     legado). Antes do `extratoSemLancamento.map`, um SELECT tenant-bound (try/catch) monta `veredictoByLinha`
+ *     (só confirmado/errado). No bloco `if (d)` da identificação por demonstrativo, a linha agora expõe
+ *     `demoValor/demoDemonstrativoId/demoAno/demoMes/demoArquivos` + `demoVeredicto/demoVeredictoEm/demoVeredictoPor`.
+ *   • BACK WRITE (`server/routers/financial.ts`): nova mutation `confirmarDemonstrativo`
+ *     (input companyId/contaBancariaId/extratoLinhaId/veredicto[confirmado|errado|pendente] + snapshot) —
+ *     guards `_assertFinanceiroCompanyAccess` + `_assertContaBancariaPertenceEmpresa` + IDOR (SELECT em
+ *     `bank_statement_lines` exigindo id ∈ empresa+conta, não excluída); upsert
+ *     INSERT…ON CONFLICT(company,conta,linha) DO UPDATE (usa EXCLUDED — `dbExecute` liga params por ORDEM DE
+ *     APARIÇÃO, e o DO UPDATE não tem params). "pendente" = desfazer (sem DELETE).
+ *   • FRONT (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): o texto roxo virou
+ *     `<span role="button">` (NÃO `<button>` — evita aninhar dentro do botão da linha) com
+ *     onClick/onKeyDown `preventDefault`+`stopPropagation` → `setDemoConf(s)`; cor por veredicto
+ *     (violeta padrão / esmeralda "✓ conferido" / rosa tachado "✗ errado"). Novo `<Dialog>` (faixa azul
+ *     institucional `print-color-adjust:exact`) com 2 cards (extrato × IA), pílulas de Δ valor / como casou /
+ *     mês do demonstrativo, links p/ os PDFs (`target=_blank rel=noopener`) e botões Confirmar (esmeralda) /
+ *     Marcar errado (rosa) / Desfazer (quando já há veredicto). Mutation `confirmarDemonstrativo` com
+ *     onSuccess→toast + `refetchReport()` + fecha.
+ * - EFEITO: a identificação por IA deixa de ser informativa-passiva e passa a ser auditável — o piloto abre
+ *   o documento, valida o que a IA leu e deixa registrado certo/errado, sem nunca conciliar automaticamente.
+ * - ZERO ALTER/DROP/DELETE (só CREATE TABLE/INDEX IF NOT EXISTS aditivo + INSERT/UPDATE de dados).
+ *
  * Rev. 3265 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NA LISTA "NO EXTRATO, SEM LANÇAMENTO", CADA LINHA
  * AGORA TENTA SE AMARRAR AO CADASTRO — IGUAL AO VÍNCULO DOS CHEQUES: SAÍDA (PAGAMENTO) PROCURA UM
  * FORNECEDOR CADASTRADO E ENTRADA (RECEBÍVEL) PROCURA UM CLIENTE CADASTRADO. QUANDO O CNPJ APARECE NA

@@ -125,6 +125,10 @@ export default function FinanceiroConciliacao() {
     setDetalheEntryId(s.entryId);
   };
   const fecharDetalhe = () => { setDetalheEntryId(null); setDetalheExtrato(null); };
+  // Rev. 3266 — diálogo de CONFERÊNCIA da identificação por IA (texto roxo clicável).
+  // Guarda a linha do extrato (com os campos demo* já vindos do getConciliacaoReport) p/
+  // montar o comparativo lado a lado + abrir o PDF do demonstrativo + confirmar/marcar errado.
+  const [demoConf, setDemoConf] = useState<any | null>(null);
   // Rev. 3179 — "Limpar extrato" (confirmação) + alerta de extrato de outro mês.
   const [confirmLimpar, setConfirmLimpar] = useState(false);
   const [confirmConciliar, setConfirmConciliar] = useState(false);
@@ -412,6 +416,34 @@ export default function FinanceiroConciliacao() {
     { companyId, contaBancariaId: parseInt(contaBancariaId) || 0, dataInicio, dataFim },
     { enabled: !!companyId && !!contaBancariaId, retry: false }
   );
+  // Rev. 3266 — grava o veredicto da conferência da identificação por IA (confirmado/errado/
+  // desfazer). NÃO concilia/baixa nada — só registra. Após salvar, refaz o report p/ a tela
+  // refletir o ✓/✗ na linha e fecha o diálogo.
+  const confirmarDemoMut = (trpc as any).financial.confirmarDemonstrativo.useMutation({
+    onSuccess: (_d: any, vars: any) => {
+      toast({ title: vars?.veredicto === "errado" ? "Marcado como errado" : vars?.veredicto === "pendente" ? "Conferência desfeita" : "Identificação confirmada" });
+      refetchReport();
+      setDemoConf(null);
+    },
+    onError: (e: any) => toast({ title: "Não consegui salvar a conferência", description: e?.message || "Tente novamente.", variant: "destructive" }),
+  });
+  const salvarDemoVeredicto = (veredicto: "confirmado" | "errado" | "pendente") => {
+    if (!demoConf) return;
+    confirmarDemoMut.mutate({
+      companyId,
+      contaBancariaId: parseInt(contaBancariaId) || 0,
+      extratoLinhaId: Number(demoConf.id),
+      veredicto,
+      demonstrativoId: demoConf.demoDemonstrativoId != null ? Number(demoConf.demoDemonstrativoId) : undefined,
+      tipo: demoConf.demoTipo ?? undefined,
+      beneficiario: demoConf.demoBeneficiario ?? undefined,
+      documento: demoConf.demoDocumento ?? undefined,
+      txid: demoConf.demoTxid ?? undefined,
+      valor: demoConf.demoValor != null ? Number(demoConf.demoValor) : undefined,
+      dataPagamento: demoConf.demoData ?? undefined,
+    });
+  };
+
   const repConc: any[] = report?.conciliados ?? [];
   // Rev. 3235 — as linhas que formam um par de ESTORNO (débito do cheque + crédito de
   // devolução do MESMO cheque) NÃO entram na lista normal "no extrato, sem lançamento":
@@ -793,9 +825,18 @@ export default function FinanceiroConciliacao() {
             </p>
           )}
           {!s.chequeFornecedor && !s.faturaId && (s.demoBeneficiario || s.demoTipo) && (
-            <p className="text-[11px] text-violet-700 truncate" title={`Identificado nos Demonstrativos de pagamento (leitura por IA): ${s.demoTipo === "boleto" ? "Boleto" : s.demoTipo === "ted" ? "TED" : "PIX"}${s.demoBeneficiario ? ` — ${s.demoBeneficiario}` : ""}${s.demoDocumento ? ` · ${s.demoDocumento}` : ""}${s.demoMatch === "valor" ? " · correspondência provável (só valor)" : ""}`}>
-              {s.demoTipo === "boleto" ? "🧾" : "💸"} {s.demoTipo === "boleto" ? "Boleto" : s.demoTipo === "ted" ? "TED" : "PIX"}{s.demoBeneficiario ? ` · ${s.demoBeneficiario}` : ""}{s.demoMatch === "valor" ? " · provável" : ""} <span className="opacity-60">(demonstrativo)</span>
-            </p>
+            // Rev. 3266 — clicável: abre a CONFERÊNCIA da identificação por IA (dados lidos ×
+            // extrato + PDF). role="button" (não <button>) p/ não aninhar dentro do botão da linha.
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDemoConf(s); }}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setDemoConf(s); } }}
+              title={`Clique p/ CONFERIR a identificação por IA: ${s.demoTipo === "boleto" ? "Boleto" : s.demoTipo === "ted" ? "TED" : "PIX"}${s.demoBeneficiario ? ` — ${s.demoBeneficiario}` : ""}${s.demoDocumento ? ` · ${s.demoDocumento}` : ""}${s.demoMatch === "valor" ? " · correspondência provável (só valor)" : ""}${s.demoVeredicto === "confirmado" ? " · CONFERIDO" : s.demoVeredicto === "errado" ? " · MARCADO COMO ERRADO" : ""}`}
+              className={`block text-[11px] truncate cursor-pointer hover:underline ${s.demoVeredicto === "errado" ? "text-rose-600 line-through" : s.demoVeredicto === "confirmado" ? "text-emerald-700" : "text-violet-700"}`}
+            >
+              {s.demoTipo === "boleto" ? "🧾" : "💸"} {s.demoTipo === "boleto" ? "Boleto" : s.demoTipo === "ted" ? "TED" : "PIX"}{s.demoBeneficiario ? ` · ${s.demoBeneficiario}` : ""}{s.demoMatch === "valor" ? " · provável" : ""}{s.demoVeredicto === "confirmado" ? " ✓ conferido" : s.demoVeredicto === "errado" ? " ✗ errado" : ""} <span className="opacity-60">(demonstrativo)</span>
+            </span>
           )}
           {s.vinculoTipo && (
             <p className={`text-[11px] truncate ${s.vinculoVia === "cnpj" ? "text-emerald-700" : "text-amber-700"}`} title={`${s.vinculoTipo === "cliente" ? "Cliente" : "Fornecedor"} cadastrado: ${s.vinculoNome}${s.vinculoVia === "cnpj" ? " · CNPJ confere com o cadastro" : " · sugestão por nome — confira antes de lançar"}`}>
@@ -2005,6 +2046,115 @@ export default function FinanceiroConciliacao() {
                 <DialogFooter className="shrink-0">
                   <Button variant="outline" onClick={fecharDetalhe}>Fechar</Button>
                 </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Rev. 3266 — CONFERÊNCIA da identificação por IA (texto roxo clicável). Mostra os
+                dados LIDOS pela IA no demonstrativo × a linha do extrato lado a lado, Δ do valor,
+                link p/ o(s) PDF(s) do demonstrativo e botões Confirmar / Marcar errado / Desfazer.
+                100% read-only quanto à conciliação — só registra o veredicto da leitura. */}
+            <Dialog open={!!demoConf} onOpenChange={(o) => { if (!o) setDemoConf(null); }}>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0">
+                {demoConf && (() => {
+                  const tipoLbl = demoConf.demoTipo === "boleto" ? "Boleto" : demoConf.demoTipo === "ted" ? "TED" : "PIX";
+                  const vExtrato = Math.abs(Number(demoConf.valor) || 0);
+                  const vDemo = demoConf.demoValor != null ? Math.abs(Number(demoConf.demoValor)) : null;
+                  const delta = vDemo != null ? Math.abs(vExtrato - vDemo) : null;
+                  const igual = delta != null && delta < 0.005;
+                  const viaLbl = demoConf.demoMatch === "txid" ? "Identificador (txid / e2e / nosso número) na descrição + valor"
+                    : demoConf.demoMatch === "data" ? "Valor + data exatos (único no período)"
+                    : "Valor único no período (correspondência provável)";
+                  const arquivos: { url: string; nome: string | null }[] = Array.isArray(demoConf.demoArquivos) ? demoConf.demoArquivos : [];
+                  const ver = demoConf.demoVeredicto as string | null;
+                  return (
+                  <>
+                    <div className="bg-[#1B2A4A] text-white px-5 py-4 rounded-t-lg" style={{ printColorAdjust: "exact" }}>
+                      <DialogHeader>
+                        <DialogTitle className="text-white text-base flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-amber-300" /> Conferência da identificação (IA)
+                        </DialogTitle>
+                      </DialogHeader>
+                      <p className="text-[12px] text-blue-100 mt-1">
+                        Esta linha do extrato foi <strong>identificada automaticamente</strong> lendo os demonstrativos de pagamento. Confira os dados abaixo e <strong>confirme</strong> ou <strong>marque como errado</strong>. Isso <strong>não concilia nem baixa</strong> nada — só registra a conferência.
+                      </p>
+                    </div>
+                    <div className="p-5 space-y-4">
+                      {ver && (
+                        <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${ver === "errado" ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"}`}>
+                          {ver === "errado" ? <X className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+                          <span>{ver === "errado" ? "Esta identificação foi marcada como ERRADA" : "Esta identificação foi CONFERIDA"}{demoConf.demoVeredictoPor ? ` por ${demoConf.demoVeredictoPor}` : ""}{demoConf.demoVeredictoEm ? ` · ${fmtData(String(demoConf.demoVeredictoEm).slice(0, 10))}` : ""}.</span>
+                        </div>
+                      )}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Lado do EXTRATO (banco) */}
+                        <div className="rounded-lg border border-gray-200 p-3">
+                          <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-2 flex items-center gap-1"><Landmark className="w-3.5 h-3.5" /> Linha do extrato (banco)</div>
+                          <div className="space-y-1.5 text-sm">
+                            <div><span className="text-gray-400 text-[11px] uppercase block">Data</span>{fmtData(demoConf.data)}</div>
+                            <div><span className="text-gray-400 text-[11px] uppercase block">Descrição</span><span className="break-words">{demoConf.descricao || "—"}</span></div>
+                            <div><span className="text-gray-400 text-[11px] uppercase block">Valor</span><span className="font-bold text-rose-600">{formatBRL(vExtrato)}</span></div>
+                          </div>
+                        </div>
+                        {/* Lado da IA (demonstrativo) */}
+                        <div className="rounded-lg border border-violet-200 bg-violet-50/40 p-3">
+                          <div className="text-[11px] font-semibold uppercase tracking-wide text-violet-600 mb-2 flex items-center gap-1"><Sparkles className="w-3.5 h-3.5" /> Lido pela IA no demonstrativo</div>
+                          <div className="space-y-1.5 text-sm">
+                            <div><span className="text-gray-400 text-[11px] uppercase block">Tipo</span>{tipoLbl}</div>
+                            <div><span className="text-gray-400 text-[11px] uppercase block">Beneficiário</span><span className="break-words">{demoConf.demoBeneficiario || "—"}</span></div>
+                            {demoConf.demoDocumento && <div><span className="text-gray-400 text-[11px] uppercase block">Documento</span><span className="break-words">{demoConf.demoDocumento}</span></div>}
+                            {demoConf.demoTxid && <div><span className="text-gray-400 text-[11px] uppercase block">Txid / Identificador</span><span className="break-words text-[12px]">{demoConf.demoTxid}</span></div>}
+                            <div><span className="text-gray-400 text-[11px] uppercase block">Valor lido</span><span className="font-bold text-violet-700">{vDemo != null ? formatBRL(vDemo) : "—"}</span></div>
+                            {demoConf.demoData && <div><span className="text-gray-400 text-[11px] uppercase block">Data do pagamento</span>{fmtData(demoConf.demoData)}</div>}
+                          </div>
+                        </div>
+                      </div>
+                      {/* Δ valor + como casou */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {delta != null && (
+                          <span className={`px-2.5 py-1 rounded-full text-[12px] font-medium ${igual ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                            {igual ? "✓ Valores idênticos" : `Δ valor: ${formatBRL(delta)}`}
+                          </span>
+                        )}
+                        <span className="px-2.5 py-1 rounded-full text-[12px] font-medium bg-gray-100 text-gray-600" title={viaLbl}>Como casou: {viaLbl}</span>
+                        {(demoConf.demoMes != null && demoConf.demoAno != null) && (
+                          <span className="px-2.5 py-1 rounded-full text-[12px] font-medium bg-blue-50 text-blue-700">Demonstrativo {String(demoConf.demoMes).padStart(2, "0")}/{demoConf.demoAno}</span>
+                        )}
+                      </div>
+                      {/* PDFs do demonstrativo */}
+                      <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Demonstrativo (PDF de origem)</div>
+                        {arquivos.length === 0 ? (
+                          <p className="text-[12px] text-gray-400">Nenhum arquivo anexado ao demonstrativo deste mês.</p>
+                        ) : (
+                          <div className="flex flex-col gap-1.5">
+                            {arquivos.map((a, i) => (
+                              <a key={i} href={a.url} target="_blank" rel="noopener noreferrer"
+                                 className="inline-flex items-center gap-2 text-[13px] text-blue-600 hover:underline">
+                                <FileText className="w-4 h-4 shrink-0" />
+                                <span className="truncate">{a.nome || `Demonstrativo ${tipoLbl} ${i + 1}`}</span>
+                                <ExternalLink className="w-3.5 h-3.5 shrink-0 opacity-70" />
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <DialogFooter className="px-5 pb-5 gap-2 flex-wrap">
+                      {ver && (
+                        <Button variant="outline" disabled={confirmarDemoMut.isPending} onClick={() => salvarDemoVeredicto("pendente")}>
+                          <RotateCcw className="w-4 h-4 mr-1.5" /> Desfazer
+                        </Button>
+                      )}
+                      <Button variant="outline" className="border-rose-300 text-rose-600 hover:bg-rose-50" disabled={confirmarDemoMut.isPending} onClick={() => salvarDemoVeredicto("errado")}>
+                        <X className="w-4 h-4 mr-1.5" /> Marcar como errado
+                      </Button>
+                      <Button className="bg-emerald-600 hover:bg-emerald-700" disabled={confirmarDemoMut.isPending} onClick={() => salvarDemoVeredicto("confirmado")}>
+                        {confirmarDemoMut.isPending ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Check className="w-4 h-4 mr-1.5" />} Confirmar identificação
+                      </Button>
+                    </DialogFooter>
+                  </>
+                  );
+                })()}
               </DialogContent>
             </Dialog>
 

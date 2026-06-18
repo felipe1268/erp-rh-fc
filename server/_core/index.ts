@@ -1020,6 +1020,36 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3216/3220/3236: tabela financial_conciliacao_demonstrativos garantida (demonstrativos PIX/boleto + leitura por IA + vários arquivos por tipo).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA financial_conciliacao_demonstrativos:`, e?.message || e); }
 
+        // Rev. 3266 — CONFERÊNCIA da identificação por IA: o usuário abre o texto roxo da
+        // Conciliação, vê os dados lidos (beneficiário/txid/valor) × extrato + o PDF, e
+        // CONFIRMA ou MARCA COMO ERRADO. 1 veredicto por linha do extrato. NÃO concilia/baixa
+        // nada. CREATE TABLE/INDEX IF NOT EXISTS (R-001/R-007/R-010 OK — sem ALTER/DROP/DELETE).
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS financial_conciliacao_demo_confirmacoes (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              conta_bancaria_id INTEGER NOT NULL,
+              extrato_linha_id INTEGER NOT NULL,
+              demonstrativo_id INTEGER,
+              tipo VARCHAR(12),
+              veredicto VARCHAR(12) NOT NULL,
+              beneficiario TEXT,
+              documento TEXT,
+              txid TEXT,
+              valor NUMERIC(15,2),
+              data_pagamento DATE,
+              usuario_id INTEGER,
+              usuario_nome VARCHAR(255),
+              criado_em TIMESTAMP DEFAULT NOW() NOT NULL,
+              atualizado_em TIMESTAMP
+            )
+          `);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_fcdc_linha ON financial_conciliacao_demo_confirmacoes (company_id, conta_bancaria_id, extrato_linha_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_fcdc_company ON financial_conciliacao_demo_confirmacoes (company_id)`);
+          console.log(`[SyncSchema+] Rev. 3266: tabela financial_conciliacao_demo_confirmacoes garantida (conferência da identificação por IA).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA financial_conciliacao_demo_confirmacoes:`, e?.message || e); }
+
         // Rev. 3211 — Gancho "forma de pagamento = Cartão de Crédito" em
         // financial_entries: qual cartão + nº parcelas + estabelecimento.
         // Aditivas/nullable. ADD COLUMN IF NOT EXISTS (R-001/R-007/R-010 OK).

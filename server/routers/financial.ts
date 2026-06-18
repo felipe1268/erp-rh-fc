@@ -1538,6 +1538,55 @@ export const financialRouter = router({
     return { ok: true, total: arr.length };
   }),
 
+  // Rev. 3266 — CONFERÊNCIA da identificação por IA dos demonstrativos. A partir do texto
+  // roxo da Conciliação, o usuário abre o diálogo (dados lidos × extrato + PDF) e CONFIRMA
+  // ou MARCA COMO ERRADO a leitura. Grava 1 veredicto por LINHA do extrato. NÃO concilia/
+  // baixa nada (honra "conciliação só sugestiva"). Tenant + IDOR guard (linha ∈ empresa+conta).
+  // ZERO ALTER/DROP/DELETE — só INSERT/UPDATE (upsert por linha; "pendente" = desfazer).
+  confirmarDemonstrativo: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    contaBancariaId: z.number(),
+    extratoLinhaId: z.number().int(),
+    veredicto: z.enum(["confirmado", "errado", "pendente"]),
+    demonstrativoId: z.number().int().optional(),
+    tipo: z.string().max(12).optional(),
+    beneficiario: z.string().max(500).optional(),
+    documento: z.string().max(120).optional(),
+    txid: z.string().max(200).optional(),
+    valor: z.number().optional(),
+    dataPagamento: z.string().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    await _assertContaBancariaPertenceEmpresa(db, input.contaBancariaId, input.companyId);
+    // IDOR guard — a linha do extrato precisa pertencer à empresa E à conta informadas.
+    const lin = await dbExecute(db,
+      `SELECT id FROM bank_statement_lines
+        WHERE id=$1 AND company_id=$2 AND conta_bancaria_id=$3 AND excluido_em IS NULL`,
+      [input.extratoLinhaId, input.companyId, input.contaBancariaId]);
+    if (!rows(lin).length) throw new TRPCError({ code: "NOT_FOUND", message: "Linha do extrato não encontrada nesta conta." });
+    const dataPg = input.dataPagamento && /^\d{4}-\d{2}-\d{2}/.test(input.dataPagamento) ? input.dataPagamento.slice(0, 10) : null;
+    const usuarioNome = (String((ctx.user as any)?.name ?? (ctx.user as any)?.email ?? "").slice(0, 255)) || null;
+    const usuarioId = Number((ctx.user as any)?.id) || null;
+    // dbExecute liga params por ORDEM DE APARIÇÃO ($N é cosmético) → array na mesma ordem.
+    await dbExecute(db,
+      `INSERT INTO financial_conciliacao_demo_confirmacoes
+         (company_id, conta_bancaria_id, extrato_linha_id, demonstrativo_id, tipo, veredicto,
+          beneficiario, documento, txid, valor, data_pagamento, usuario_id, usuario_nome, criado_em, atualizado_em)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),NOW())
+       ON CONFLICT (company_id, conta_bancaria_id, extrato_linha_id)
+       DO UPDATE SET demonstrativo_id=EXCLUDED.demonstrativo_id, tipo=EXCLUDED.tipo, veredicto=EXCLUDED.veredicto,
+                     beneficiario=EXCLUDED.beneficiario, documento=EXCLUDED.documento, txid=EXCLUDED.txid,
+                     valor=EXCLUDED.valor, data_pagamento=EXCLUDED.data_pagamento,
+                     usuario_id=EXCLUDED.usuario_id, usuario_nome=EXCLUDED.usuario_nome, atualizado_em=NOW()`,
+      [input.companyId, input.contaBancariaId, input.extratoLinhaId,
+       input.demonstrativoId ?? null, input.tipo ?? null, input.veredicto,
+       input.beneficiario ?? null, input.documento ?? null, input.txid ?? null,
+       input.valor ?? null, dataPg, usuarioId, usuarioNome]);
+    return { ok: true, veredicto: input.veredicto };
+  }),
+
   // Rev. 3236 — remove UM arquivo (por `indice`) da lista do tipo, ou TODOS (sem `indice`).
   // Reescreve o array, espelha o 1º restante nas colunas legadas e ZERA a leitura por IA
   // (o conjunto mudou). Tenant-safe. ZERO ALTER/DROP/DELETE (UPDATE de colunas).
@@ -4419,17 +4468,34 @@ export const financialRouter = router({
     // do mais forte p/ o mais fraco: (1) txid/e2e/nosso número presente na descrição + valor;
     // (2) VALOR + DATA exatos, quando ÚNICO; (3) VALOR ÚNICO no período (rótulo "provável").
     // Só SAÍDAS — demonstrativo = pagamento FEITO.
-    type DemoItem = { beneficiario: string | null; documento: string | null; txid: string | null; valor: number | null; data: string | null; tipoDoc: string | null; origemTipo: "pix" | "boleto" };
+    // Rev. 3266 — o DemoItem agora carrega TAMBÉM a referência do demonstrativo-pai
+    // (id/ano/mês) e a lista de PDFs daquele tipo, p/ o diálogo de conferência abrir o
+    // documento certo e o cliente saber de QUAL leitura veio a identificação.
+    type DemoItem = { beneficiario: string | null; documento: string | null; txid: string | null; valor: number | null; data: string | null; tipoDoc: string | null; origemTipo: "pix" | "boleto"; demId: number; demAno: number; demMes: number; arquivos: { url: string; nome: string | null }[] };
     const ymOf = (s: string) => { const y = Number(String(s).slice(0, 4)); const m = Number(String(s).slice(5, 7)); return (y >= 2000 && m >= 1 && m <= 12) ? y * 12 + m : null; };
     const startYM = ymOf(input.dataInicio), endYM = ymOf(input.dataFim);
+    const _parseArqDemo = (v: any, legacyUrl: any, legacyNome: any): { url: string; nome: string | null }[] => {
+      let a: any[] = [];
+      if (v) { try { const p = JSON.parse(v); if (Array.isArray(p)) a = p; } catch { a = []; } }
+      a = a.filter((x: any) => x && x.url).map((x: any) => ({ url: String(x.url), nome: x.nome != null ? String(x.nome) : null }));
+      if (a.length === 0 && legacyUrl) a = [{ url: String(legacyUrl), nome: legacyNome != null ? String(legacyNome) : null }];
+      return a;
+    };
     const demoItens: DemoItem[] = [];
     if (startYM != null && endYM != null) {
       const demoRes = await dbExecute(db,
-        `SELECT pix_extraido_json AS "pixJson", boleto_extraido_json AS "boletoJson"
+        `SELECT id, ano, mes,
+                pix_extraido_json AS "pixJson", boleto_extraido_json AS "boletoJson",
+                pix_url AS "pixUrl", pix_nome AS "pixNome", pix_arquivos_json AS "pixArqJson",
+                boleto_url AS "boletoUrl", boleto_nome AS "boletoNome", boleto_arquivos_json AS "boletoArqJson"
            FROM financial_conciliacao_demonstrativos
           WHERE company_id=$1 AND conta_bancaria_id=$2 AND (ano*12+mes) >= $3 AND (ano*12+mes) <= $4`,
         [input.companyId, input.contaBancariaId, startYM, endYM]);
       for (const row of (rows(demoRes) as any[])) {
+        const arqByTipo: Record<"pix" | "boleto", { url: string; nome: string | null }[]> = {
+          pix: _parseArqDemo(row.pixArqJson, row.pixUrl, row.pixNome),
+          boleto: _parseArqDemo(row.boletoArqJson, row.boletoUrl, row.boletoNome),
+        };
         for (const [json, origemTipo] of [[row.pixJson, "pix"], [row.boletoJson, "boleto"]] as [any, "pix" | "boleto"][]) {
           if (!json) continue;
           let arr: any[] = [];
@@ -4444,6 +4510,10 @@ export const financialRouter = router({
               data: it.data ? String(it.data).slice(0, 10) : null,
               tipoDoc: it.tipoDoc != null ? String(it.tipoDoc) : null,
               origemTipo,
+              demId: Number(row.id),
+              demAno: Number(row.ano),
+              demMes: Number(row.mes),
+              arquivos: arqByTipo[origemTipo],
             });
           }
         }
@@ -4544,6 +4614,23 @@ export const financialRouter = router({
       return null;
     };
 
+    // Rev. 3266 — VEREDICTO do usuário sobre a identificação por IA (texto roxo): confirmado
+    // ou errado, por LINHA do extrato. Só LEITURA aqui — anexa ao retorno p/ a tela refletir
+    // o estado da conferência (✓ conferido / ✗ marcado errado). try/catch defensivo caso a
+    // tabela ainda não exista (o self-heal a cria no boot).
+    const veredictoByLinha = new Map<number, { veredicto: string; em: string | null; por: string | null }>();
+    try {
+      const vRes = await dbExecute(db,
+        `SELECT extrato_linha_id AS "linhaId", veredicto, atualizado_em AS "em", criado_em AS "criadoEm", usuario_nome AS "por"
+           FROM financial_conciliacao_demo_confirmacoes
+          WHERE company_id=$1 AND conta_bancaria_id=$2`,
+        [input.companyId, input.contaBancariaId]);
+      for (const v of (rows(vRes) as any[])) {
+        if (v.veredicto === "confirmado" || v.veredicto === "errado")
+          veredictoByLinha.set(Number(v.linhaId), { veredicto: String(v.veredicto), em: (v.em ?? v.criadoEm) ?? null, por: v.por ?? null });
+      }
+    } catch { /* tabela ainda não materializada — sem veredictos */ }
+
     const extratoSemLancamento = rows(pendRes).map((l: any) => {
       let out: any = l;
       const c = matchChequeLinha(l);
@@ -4580,6 +4667,7 @@ export const financialRouter = router({
           const d = matchDemonstrativoLinha(l);
           if (d) {
             const tipo = d.it.tipoDoc && /pix|boleto|ted/i.test(d.it.tipoDoc) ? d.it.tipoDoc.toLowerCase() : d.it.origemTipo;
+            const ver = veredictoByLinha.get(Number(l.id));
             out = {
               ...l,
               demoBeneficiario: d.it.beneficiario ?? null,
@@ -4588,6 +4676,15 @@ export const financialRouter = router({
               demoTipo: tipo,        // "pix" | "boleto" | "ted"
               demoData: d.it.data ?? null,
               demoMatch: d.origem,   // "txid" | "data" | "valor"
+              // Rev. 3266 — dados p/ o diálogo de conferência (valor lido, PDF do mês) + veredicto.
+              demoValor: d.it.valor ?? null,
+              demoDemonstrativoId: d.it.demId,
+              demoAno: d.it.demAno,
+              demoMes: d.it.demMes,
+              demoArquivos: d.it.arquivos,
+              demoVeredicto: ver?.veredicto ?? null,   // "confirmado" | "errado" | null
+              demoVeredictoEm: ver?.em ?? null,
+              demoVeredictoPor: ver?.por ?? null,
             };
           }
         }
