@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3229 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · A LISTA "NO EXTRATO, SEM LANÇAMENTO" AGORA CRUZA
+ * TODAS AS INFORMAÇÕES DO CONTROLE DE CHEQUES: CADA LINHA DE COMPENSAÇÃO DE CHEQUE PASSA A MOSTRAR
+ * QUEM É O FAVORECIDO (FORNECEDOR · OBRA · NF) E O BOTÃO "LANÇAR NO ERP" JÁ ABRE PRÉ-PREENCHIDO COM
+ * ESSES DADOS (FORNECEDOR / OBRA / FORMA = CHEQUE / DESCRIÇÃO) PARA O CADASTRO CORRETO DA DESPESA.**
+ *
+ * PEDIDO (piloto FC): "na conciliação, cruzar com o Controle de Cheques. O extrato traz valor + nº do
+ * cheque + data; quando o cheque está no extrato mas NÃO tem lançamento no ERP, o sistema tem que apontar
+ * QUEM é o favorecido naquela lista 'no extrato sem lançamento' e já sugerir o Lançar com os dados do
+ * cheque (fornecedor/obra/valor) pra eu cadastrar a despesa certa. Conciliação 100% eficiente."
+ *
+ * CAUSA-RAIZ: o cruzamento com `financial_cheques` (nº + valor → fornecedor) só existia em
+ * `sugerirConciliacao` (painel "Sugestões Automáticas"), alimentando `sugestoes`/`semMatch`. A lista que
+ * de fato tem o botão "Lançar" — `getConciliacaoReport.extratoSemLancamento` (= `repExt` na UI) — NÃO
+ * cruzava cheque nenhum: devolvia só id/data/descricao/valor/tipo. Então a linha anônima "COMPENSACAO
+ * CHEQUE NNN" aparecia sem favorecido e o "Lançar" abria em branco (obra/fornecedor/forma vazios).
+ *
+ * SOLUÇÃO:
+ * - BACK (`server/routers/financial.ts`, `getConciliacaoReport`): após a query de pendências, carrega os
+ *   cheques da empresa (`financial_cheques`, excluido_em IS NULL, READ-ONLY) e monta 2 índices —
+ *   `chqByNumVal` (`nºlimpo|cents`) e `chqByValData` (`cents|dataCompensacao` → array). Para cada linha
+ *   do extrato sem lançamento aplica `matchChequeLinha`: (1) nº extraído da descrição (regex
+ *   `/cheque\s*n?[ºo°.]*\s*0*(\d{1,12})/i`) + VALOR; (2) fallback VALOR + DATA (extrato == compensação)
+ *   QUANDO ÚNICO (descrições da Caixa sem o número) — TRAVA `pareceCheque` (descrição com `cheq|compensa`)
+ *   p/ NÃO marcar PIX/tarifa/transferência de mesmo valor+data como cheque (evita favorecido/obra errados).
+ *   A linha casada recebe `chequeNumero`,
+ *   `chequeFornecedor`, `chequeFornecedorId`, `chequeObraId`, `chequeObraNome`, `chequeNf`,
+ *   `chequeVencimento`, `chequeBanco`. ZERO escrita, ZERO schema.
+ * - FRONT (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): `renderExtratoRow` mostra um chip
+ *   verde "🪙 Cheque nº X · Fornecedor · Obra" sob a descrição da linha. `abrirLancar` pré-preenche
+ *   `fornecedorNome = chequeFornecedor`, `obraId` (se a obra do cheque estiver em `obrasOpts`),
+ *   `formaPagamento = "cheque"` e enriquece a descrição ("Cheque nº X — Fornecedor (NF Y)"). O diálogo
+ *   "Lançar no ERP" ganha uma faixa verde de identificação (nº/fornecedor/obra/NF/vencimento). O PDF do
+ *   relatório (bloco "Extrato SEM lançamento") também imprime a linha do cheque sob a descrição.
+ *
+ * ZERO BACKEND DE GRAVAÇÃO · ZERO SCHEMA/ALTER/DROP/DELETE — só leitura cruzada + UI. Validado: esbuild OK.
+ *
  * Rev. 3228 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DEMONSTRATIVOS DE PAGAMENTO (PIX + BOLETOS) ·
  * A LEITURA POR IA DEIXOU DE ABRIR UM MODAL E AGORA APARECE INLINE, LOGO ABAIXO DOS ANEXOS, NUMA
  * LISTA COMBINADA (PIX + BOLETOS) NO MESMO MOLDE DO EXTRATO/ERP — COM CARDS DE TOTAL GERAL / PIX /

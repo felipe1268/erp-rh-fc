@@ -163,11 +163,24 @@ export default function FinanceiroConciliacao() {
     const abs = Math.abs(Number(s.valor) || 0);
     lancCreatedRef.current = null;
     setLancStatement(s);
+    // Rev. 3229 — se a linha do extrato foi identificada como compensação de um cheque do
+    // Controle de Cheques, pré-preenche fornecedor/obra/forma e enriquece a descrição p/
+    // o cadastro correto da despesa (cruzamento total extrato ↔ controle de cheques).
+    const temCheque = !!s.chequeFornecedor || s.chequeNumero != null;
+    const obraDoCheque = s.chequeObraId != null ? obrasOpts.find(o => o.id === Number(s.chequeObraId)) : undefined;
+    const descBase = String(s.descricao ?? "").trim();
+    const descCheque = temCheque
+      ? [`Cheque nº ${s.chequeNumero ?? ""}`.trim(), s.chequeFornecedor ? `— ${s.chequeFornecedor}` : "", s.chequeNf ? `(NF ${s.chequeNf})` : ""].filter(Boolean).join(" ")
+      : "";
     setLancForm({
       data: String(s.data ?? "").slice(0, 10),
       valor: maskBRLInput(String(Math.round(abs * 100))),
-      descricao: s.descricao ?? "",
-      obraId: "", contaNome: "", centroCustoId: "", fornecedorNome: "", formaPagamento: "",
+      descricao: temCheque ? (descCheque || descBase) : descBase,
+      obraId: obraDoCheque ? String(obraDoCheque.id) : "",
+      contaNome: "",
+      centroCustoId: "",
+      fornecedorNome: s.chequeFornecedor ?? "",
+      formaPagamento: temCheque ? "cheque" : "",
     });
   }
 
@@ -612,6 +625,11 @@ export default function FinanceiroConciliacao() {
             <span className={`px-1.5 py-px rounded-full text-[10px] font-medium ${isEntrada ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-600"}`}>{isEntrada ? "Entrada" : "Saída"}</span>
           </p>
           <p className="text-sm font-medium text-gray-700 truncate">{s.descricao || "—"}</p>
+          {s.chequeFornecedor && (
+            <p className="text-[11px] text-emerald-700 truncate" title={`Cheque nº ${s.chequeNumero ?? "—"} — ${s.chequeFornecedor}${s.chequeObraNome ? ` · ${s.chequeObraNome}` : ""}${s.chequeNf ? ` · NF ${s.chequeNf}` : ""}`}>
+              🪙 Cheque nº {s.chequeNumero ?? "—"} · {s.chequeFornecedor}{s.chequeObraNome ? ` · ${s.chequeObraNome}` : ""}
+            </p>
+          )}
         </div>
         <p className={`text-sm font-bold shrink-0 ${isEntrada ? "text-emerald-600" : "text-rose-500"}`}>{formatBRL(Math.abs(Number(s.valor)))}</p>
       </button>
@@ -814,7 +832,7 @@ export default function FinanceiroConciliacao() {
       ? repConc.map((c: any) => `<tr><td>${esc(fmtData(c.data))}</td><td>${esc(c.descricao || "—")}</td><td>${esc(c.entryFornecedor || c.entryDescricao || ("Lançamento #" + (c.entryId ?? "")))}</td><td class="r">${esc(formatBRL(Math.abs(Number(c.valor) || 0)))}</td></tr>`).join("")
       : `<tr><td colspan="4" class="empty">Nenhuma linha conciliada no período.</td></tr>`;
     const rowsExt = repExt.length
-      ? repExt.map((c: any) => `<tr><td>${esc(fmtData(c.data))}</td><td>${esc(c.descricao || "—")}</td><td>${esc(Number(c.valor) >= 0 ? "Entrada" : "Saída")}</td><td class="r">${esc(formatBRL(Math.abs(Number(c.valor) || 0)))}</td></tr>`).join("")
+      ? repExt.map((c: any) => `<tr><td>${esc(fmtData(c.data))}</td><td>${esc(c.descricao || "—")}${c.chequeFornecedor ? `<br><span style="color:#047857;font-size:10px">🪙 Cheque nº ${esc(c.chequeNumero ?? "—")} · ${esc(c.chequeFornecedor)}${c.chequeObraNome ? ` · ${esc(c.chequeObraNome)}` : ""}${c.chequeNf ? ` · NF ${esc(c.chequeNf)}` : ""}</span>` : ""}</td><td>${esc(Number(c.valor) >= 0 ? "Entrada" : "Saída")}</td><td class="r">${esc(formatBRL(Math.abs(Number(c.valor) || 0)))}</td></tr>`).join("")
       : `<tr><td colspan="4" class="empty">Sem pendências — todo o extrato está conciliado.</td></tr>`;
     const rowsLan = repLan.length
       ? repLan.map((c: any) => `<tr><td>${esc(fmtData(c.data))}</td><td>${esc(c.fornecedorNome || c.descricao || ("Lançamento #" + c.id))}</td><td>${esc(c.obraNome || "—")}</td><td class="r">${esc(formatBRL(Math.abs(Number(c.valor) || 0)))}</td></tr>`).join("")
@@ -2134,6 +2152,15 @@ export default function FinanceiroConciliacao() {
                 <div className="rounded-lg bg-blue-50 border border-blue-100 px-3 py-2 text-xs text-blue-800">
                   Item do extrato em <strong>{contaLabel}</strong>. Data, conta e valor já vêm preenchidos — complete <strong>obra</strong>, <strong>fornecedor</strong>, <strong>categoria</strong> e <strong>centro de custo</strong>. Ao salvar, o lançamento é criado como <strong>pago</strong> e <strong>conciliado</strong> com esta linha.
                 </div>
+                {lancStatement.chequeFornecedor && (
+                  <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2 text-xs text-emerald-800">
+                    🪙 Identificado no <strong>Controle de Cheques</strong>: cheque nº <strong>{lancStatement.chequeNumero ?? "—"}</strong> — <strong>{lancStatement.chequeFornecedor}</strong>
+                    {lancStatement.chequeObraNome ? <> · obra <strong>{lancStatement.chequeObraNome}</strong></> : null}
+                    {lancStatement.chequeNf ? <> · NF {lancStatement.chequeNf}</> : null}
+                    {lancStatement.chequeVencimento ? <> · venc. {fmtData(lancStatement.chequeVencimento)}</> : null}
+                    . Fornecedor, obra e forma de pagamento já foram pré-preenchidos — confira a categoria e o centro de custo.
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs">Data</Label>

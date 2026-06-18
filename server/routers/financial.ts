@@ -4030,6 +4030,71 @@ export const financialRouter = router({
           AND COALESCE(conciliado,0)=0 AND excluido_em IS NULL
         ORDER BY data ASC, id ASC`, p);
 
+    // 2b) Rev. 3229 — CRUZAMENTO TOTAL COM O CONTROLE DE CHEQUES. Para cada linha do
+    // extrato AINDA sem lançamento, tenta identificar de QUAL cheque ela é a compensação
+    // (o cheque NÃO é lançamento; serve p/ dizer QUEM é o favorecido + obra/NF/vencimento).
+    // Assim a tela aponta a ORIGEM da despesa e o "Lançar no ERP" já vem pré-preenchido
+    // (fornecedor/obra/forma) p/ o cadastro correto. Estratégia de match, da mais forte
+    // p/ a mais fraca: (1) nº do cheque extraído da descrição + VALOR; (2) fallback VALOR
+    // + DATA de compensação == data do extrato, QUANDO ÚNICO (descrições da Caixa que não
+    // trazem o número). Só leitura — não grava nada.
+    const chqRes = await dbExecute(db,
+      `SELECT numero_cheque AS "numeroCheque", valor, fornecedor_nome AS "fornecedorNome",
+              fornecedor_id AS "fornecedorId", obra_id AS "obraId", obra_nome AS "obraNome",
+              nf, data_vencimento AS "dataVencimento", data_compensacao AS "dataCompensacao",
+              banco_nome AS "bancoNome", status
+         FROM financial_cheques
+        WHERE company_id=$1 AND excluido_em IS NULL`,
+      [input.companyId]);
+    const chequesRep = rows(chqRes) as any[];
+    const chqCents = (v: any) => v != null ? Math.round(Math.abs(Number(v)) * 100) : null;
+    const chqDia = (v: any) => v ? String(v).slice(0, 10) : null;
+    const chqByNumVal = new Map<string, any>();
+    const chqByValData = new Map<string, any[]>();
+    for (const c of chequesRep) {
+      const cts = chqCents(c.valor);
+      if (cts == null) continue;
+      const num = String(c.numeroCheque ?? "").replace(/[^0-9]/g, "").replace(/^0+/, "");
+      if (num) chqByNumVal.set(`${num}|${cts}`, c);
+      const dc = chqDia(c.dataCompensacao);
+      if (dc) { const k = `${cts}|${dc}`; if (!chqByValData.has(k)) chqByValData.set(k, []); chqByValData.get(k)!.push(c); }
+    }
+    const extrNumChq = (descricao: any): string | null => {
+      const m = String(descricao ?? "").match(/cheque\s*n?[ºo°.]*\s*0*(\d{1,12})/i);
+      if (m && m[1]) return m[1].replace(/^0+/, "") || m[1];
+      return null;
+    };
+    // Rev. 3229 — só consideramos o fallback VALOR+DATA quando a descrição TEM indício de
+    // cheque/compensação. Sem essa trava, qualquer linha (PIX/tarifa/transferência) com o
+    // mesmo valor+data de UM cheque seria marcada como cheque e pré-preencheria fornecedor/
+    // obra ERRADOS. O caminho nº+valor já é seguro (a regex exige a palavra "cheque").
+    const pareceCheque = (descricao: any) => /cheq|compensa/i.test(String(descricao ?? ""));
+    const matchChequeLinha = (l: any): any | null => {
+      const cts = chqCents(l.valor);
+      if (cts == null || cts === 0) return null;
+      const num = extrNumChq(l.descricao);
+      if (num) { const c = chqByNumVal.get(`${num}|${cts}`); if (c) return c; }
+      const dia = chqDia(l.data);
+      if (dia && pareceCheque(l.descricao)) { const arr = chqByValData.get(`${cts}|${dia}`); if (arr && arr.length === 1) return arr[0]; }
+      return null;
+    };
+    const extratoSemLancamento = rows(pendRes).map((l: any) => {
+      const c = matchChequeLinha(l);
+      if (!c) return l;
+      const num = String(c.numeroCheque ?? "").replace(/^0+/, "") || (c.numeroCheque ?? null);
+      return {
+        ...l,
+        chequeNumero: num ?? null,
+        chequeFornecedor: c.fornecedorNome ?? null,
+        chequeFornecedorId: c.fornecedorId ?? null,
+        chequeObraId: c.obraId ?? null,
+        chequeObraNome: c.obraNome ?? null,
+        chequeNf: c.nf ?? null,
+        chequeVencimento: c.dataVencimento ?? null,
+        chequeBanco: c.bancoNome ?? null,
+      };
+    });
+
     // 3) Lançamentos do sistema sem conciliação no período — APENAS desta conta.
     // Rev. 3188 — antes incluía também os lançamentos SEM conta (conta_bancaria_id IS
     // NULL), que apareciam (e eram contados) em TODAS as contas, inflando o KPI "ERP sem
@@ -4076,7 +4141,7 @@ export const financialRouter = router({
 
     return {
       conciliados: rows(concRes),
-      extratoSemLancamento: rows(pendRes),
+      extratoSemLancamento,
       lancamentosSemExtrato: rows(lancRes),
       lancamentosSemConta: rows(semContaRes),
     };
