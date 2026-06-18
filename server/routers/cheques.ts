@@ -501,27 +501,46 @@ async function inserirCheques(
   existentes: Set<string>, origem: string, loteId: string,
 ): Promise<{ inseridos: number; pulados: number }> {
   const vistos = new Set<string>();
-  let inseridos = 0, pulados = 0;
+  let pulados = 0;
+
+  // 1) Dedup + match de fornecedor/conta EM MEMÓRIA → coleta as linhas a gravar.
+  const COLS = 20;
+  const valoresPorLinha: unknown[][] = [];
   for (const row of rows) {
     const chave = chaveDedup(row);
     if (existentes.has(chave) || vistos.has(chave)) { pulados++; continue; }
     vistos.add(chave);
     const fornecedorId = matchFornecedor(row.fornecedorNome, fornecedores);
     const contaBancariaId = matchConta(row.contaCorrenteRaw, contas);
+    valoresPorLinha.push([
+      companyId, contaBancariaId, row.contaCorrenteRaw, row.bancoCodigo, row.bancoNome,
+      row.agencia, row.numeroCheque, row.fornecedorNome, fornecedorId, row.parcela, row.nf, row.valor,
+      row.dataVencimento, row.dataCompensacao, row.status, row.observacao, row.mes, row.ano,
+      origem, loteId,
+    ]);
+  }
+
+  // 2) INSERT multi-linha em CHUNKS — reduz N round-trips (ex.: 1122 → ~12) e
+  //    evita o timeout que travava a gravação perto do fim. `dbExecute` liga os
+  //    params por ORDEM DE APARIÇÃO, então placeholders e array seguem a mesma
+  //    sequência. CHUNK*COLS fica MUITO abaixo do teto de 65535 binds do Postgres.
+  const CHUNK = 100; // 100 linhas × 20 cols = 2000 binds por statement
+  let inseridos = 0;
+  for (let i = 0; i < valoresPorLinha.length; i += CHUNK) {
+    const lote = valoresPorLinha.slice(i, i + CHUNK);
+    let n = 0;
+    const valuesSql = lote
+      .map(() => `(${Array.from({ length: COLS }, () => `$${++n}`).join(",")})`)
+      .join(",");
     await dbExecute(tx,
       `INSERT INTO financial_cheques
          (company_id, conta_bancaria_id, conta_corrente_raw, banco_codigo, banco_nome,
           agencia, numero_cheque, fornecedor_nome, fornecedor_id, parcela, nf, valor,
           data_vencimento, data_compensacao, status, observacao, mes_ref, ano_ref,
           origem_arquivo, lote_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
-      [
-        companyId, contaBancariaId, row.contaCorrenteRaw, row.bancoCodigo, row.bancoNome,
-        row.agencia, row.numeroCheque, row.fornecedorNome, fornecedorId, row.parcela, row.nf, row.valor,
-        row.dataVencimento, row.dataCompensacao, row.status, row.observacao, row.mes, row.ano,
-        origem, loteId,
-      ]);
-    inseridos++;
+       VALUES ${valuesSql}`,
+      lote.flat());
+    inseridos += lote.length;
   }
   return { inseridos, pulados };
 }

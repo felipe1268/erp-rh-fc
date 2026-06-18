@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3233 — **FINANCEIRO / CONTROLE DE CHEQUES · IMPORTAÇÃO (PLANILHA E PDF/IA) · A GRAVAÇÃO DOS
+ * CHEQUES NÃO TRAVA MAIS PERTO DO FIM (FICAVA EM ~92% E DAVA ERRO AO GRAVAR ~1122 CHEQUES). A
+ * INSERÇÃO PASSOU DE 1 INSERT POR CHEQUE (1122 IDAS AO BANCO, SEQUENCIAIS, DENTRO DA TRANSAÇÃO →
+ * TIMEOUT/ERRO) PARA INSERT MULTI-LINHA EM LOTES DE 100 (1122 → ~12 IDAS AO BANCO). MESMO RESULTADO
+ * (DEDUP, MATCH FORNECEDOR/CONTA, GRAVAÇÃO SOFT EM TRANSAÇÃO), SÓ QUE RÁPIDO E SEM ERRO.**
+ * - PEDIDO (piloto FC): "ao importar a planilha de cheques, quando chega em 92% demora muito e dá
+ *   erro; resolver isso de vez para não demorar e não dar erros".
+ * - CAUSA-RAIZ: `inserirCheques` fazia um `INSERT` individual por linha dentro de `db.transaction`.
+ *   Para ~1122 cheques novos eram ~1122 round-trips SEQUENCIAIS ao Postgres — lento e estourando o
+ *   tempo da requisição perto do fim. O "92%" da tela é só um TETO SIMULADO (a barra sobe
+ *   assintoticamente até 92% e espera a resposta single-shot do servidor, pulando para 100% no
+ *   sucesso); como o servidor não respondia a tempo, a barra ficava presa em 92% e a mutation
+ *   terminava em erro. O frontend está correto — o gargalo era 100% no backend.
+ * - SOLUÇÃO (BACK, `server/routers/cheques.ts`, `inserirCheques`): a função agora roda em 2 fases —
+ *   (1) dedup (`chaveDedup` + `existentes`/`vistos`) e match de fornecedor/conta EM MEMÓRIA, coletando
+ *   as linhas a gravar em `valoresPorLinha[]`; (2) `INSERT INTO financial_cheques ... VALUES (...),(...)`
+ *   multi-linha em CHUNKS de 100 (100 × 20 cols = 2000 binds/statement, MUITO abaixo do teto de 65535
+ *   binds do Postgres). Como `dbExecute` liga os params por ORDEM DE APARIÇÃO (o `$N` é cosmético: ele
+ *   faz split por `/\$\d+/g` e interpola via `sql` template do drizzle), os placeholders gerados e o
+ *   `lote.flat()` seguem exatamente a mesma sequência. As 20 colunas e a semântica continuam idênticas
+ *   (company_id, conta_bancaria_id, conta_corrente_raw, banco_codigo/nome, agencia, numero_cheque,
+ *   fornecedor_nome/_id, parcela, nf, valor, data_vencimento, data_compensacao, status, observacao,
+ *   mes_ref, ano_ref, origem_arquivo, lote_id).
+ * - BENEFÍCIO: vale para OS DOIS caminhos de gravação, pois ambos chamam `inserirCheques` —
+ *   `importarConfirmar` (planilha .xlsx) e `importarPdfConfirmar` (PDFs/fotos lidos por IA, Rev. 3232).
+ * - ZERO mudança de comportamento (mesma contagem inseridos/pulados, mesma dedup, mesma transação) ·
+ *   ZERO SCHEMA/ALTER/DROP/DELETE · ZERO mudança no frontend.
+ *
  * Rev. 3232 — **FINANCEIRO / CONTROLE DE CHEQUES · IMPORTAÇÃO · O DIÁLOGO "IMPORTAR CONTROLE DE
  * CHEQUES" GANHOU UM SEGUNDO MODO: ALÉM DA PLANILHA .XLSX, AGORA DÁ PRA SUBIR VÁRIOS PDFs/FOTOS DE
  * CHEQUE DE UMA VEZ — A IA LÊ CADA UM, EXTRAI OS CHEQUES E O ERP IMPORTA TODOS NAS DATAS/MESES
