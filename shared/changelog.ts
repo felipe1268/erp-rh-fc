@@ -1,6 +1,49 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3288 — **PLANEJAMENTO / PORTAL DO CLIENTE · O "% PREVISTO" E A CURVA S DO PORTAL DIVERGIAM DO MÓDULO
+ * PLANEJAMENTO (FONTE DA VERDADE): NA OBRA REVTE-CIVIL O PORTAL MOSTRAVA PREVISTO 8% (DESVIO +1%) ENQUANTO O
+ * MÓDULO MOSTRAVA 9% (DESVIO 0) NO MESMO CUTOFF 11/06/2026. AGORA O PORTAL LÊ O "% PREVISTO" DA MESMA CURVA
+ * ÚNICA QUE O ENGENHEIRO VÊ (`previsto_semanas_json` + OVERRIDE LITERAL `previsto_literal_json`) VIA O HELPER
+ * COMPARTILHADO `parsePrevistoCurva().raizAt(cutoff)`, E A CURVA S DE TRABALHO PASSA A REUSAR O NÚCLEO
+ * COMPARTILHADO `computeCurvaSData` (EXTRAÍDO DE `planejamento.getCurvaS`) — BYTE-IDÊNTICA AO MÓDULO. 100%
+ * BACKEND · READ-ONLY · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (piloto FC): "faça com que TODAS as infos do Portal do Cliente fiquem SEMPRE iguais ao módulo
+ *   Planejamento" — incluindo % Previsto, desvio e Curva S. Continuação natural da Rev. 3286 (que já alinhou
+ *   só o REALIZADO ao `realizadoMspSnapshot`).
+ * - DIAGNÓSTICO (Neon, projeto id=43 REVTE-CIVIL, FC 60002, cutoff 11/06/2026): havia TRÊS valores distintos
+ *   de "% Previsto em 11/06": (a) `previstoMspSnapshot` = **8** (Texto11 da raiz — o que o Portal lia); (b)
+ *   curva `previsto_semanas_json.raiz[2026-06-11]` = **10** (rollup minuto-a-minuto do motor); (c)
+ *   `previsto_literal_json.valores["2026-06-11"]` = **9** (Texto10 capturado no upload daquela semana). O
+ *   módulo usa `previstoCurva.raizAt(cutoff)`, que aplica o OVERRIDE LITERAL primeiro → **9** (= o que o
+ *   engenheiro vê). O Portal usava `previstoMspSnapshot` = **8** → divergência de 1% no MESMO dia + Curva S
+ *   por distribuição LINEAR própria (`computeCurvaPlanejada`), diferente do snapshot-baseline e do override
+ *   de realizado que o módulo aplica em `getCurvaS`.
+ * - SOLUÇÃO — NOVO HELPER PURO (`shared/previstoCurva.ts`, `parsePrevistoCurva`): réplica fiel do hook
+ *   `previstoCurva`/`raizAt` de `PlanejamentoDetalhe.tsx` (idxAt = maior cutoff ≤ alvo; valAt = antes do 1º
+ *   cutoff → 0%; override literal por semana com guarda de revisão ativa). Devolve `{ semanas, raiz,
+ *   revisaoId, raizAt, ativAt }` ou `null` (cai no fallback) quando o snapshot está ausente/malformado/de
+ *   outra revisão.
+ * - SOLUÇÃO — KPI (`server/routers/portalExterno.ts`, `planejamentoObra`): `pctTotalPrevisto` passou a usar
+ *   `parsePrevistoCurva(projeto.previstoSemanasJson, projeto.previstoLiteralJson, revisao.id).raizAt(cutoffStr)`
+ *   como fonte primária; fallback p/ o `previstoMspSnapshot`/linear SÓ quando a curva está ausente/stale. O
+ *   `desvio` (= realizado − previsto) segue automaticamente. No REVTE: previsto 8→9, desvio +1→0 (== módulo).
+ * - SOLUÇÃO — CURVA S (REFATOR MECÂNICO, ZERO MUDANÇA DE COMPORTAMENTO NO MÓDULO): o corpo de
+ *   `planejamento.getCurvaS` foi extraído VERBATIM p/ `export async function computeCurvaSData(input)`;
+ *   `getCurvaS` virou um wrapper `=> computeCurvaSData(input)`. O Portal agora chama
+ *   `computeCurvaSData({ projetoId, revisaoId, baselineId: baselineRev?.id ?? revisao.id,
+ *   usarPesoPorDuracao: true })` (curva de TRABALHO = duração) dentro de try/catch — fallback p/ a curva
+ *   ponderada local antiga só se o núcleo falhar. Isso traz p/ o Portal o snapshot-baseline
+ *   (`curvaPrevistoSnapshot`) E o override de realizado pelo `realizadoMspSnapshot` no StatusDate, exatamente
+ *   como o módulo. Sem ciclo de import (planejamento.ts não importa portalExterno.ts; import dinâmico).
+ * - VALIDAÇÃO (Neon, proj 43): `raizAt("2026-06-11")` = 9 (override literal), `raizAt("2026-06-18")` = 11
+ *   (raiz) — idênticos ao módulo. tsc limpo nos 3 arquivos. App sobe sem erros.
+ * - INALTERADO: módulo interno de Planejamento (getCurvaS devolve o MESMO objeto), realizado do Portal
+ *   (Rev. 3286), `% Previsto` financeiro (`curvaS` simplificada das abas Crono-Financeiro/Prev-Medição),
+ *   abas REFIS/Curva S/Avanço Semanal (agora alimentadas pela curva correta), atividades/atrasadas/próximas.
+ *   REGRA DE OURO respeitada: o Portal só REPLICA o snapshot/curva do MS Project, NUNCA recalcula. ZERO
+ *   SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3287 — **PLANEJAMENTO / EFETIVO × IA (SIMULADOR DE MÃO DE OBRA + DIAGNÓSTICO) · A SIMULAÇÃO TRAVAVA
  * EM 99% E DEPOIS MOSTRAVA "A IA DEMOROU DEMAIS OU A CONEXÃO CAIU DURANTE O PROCESSAMENTO — COMUM NO
  * IPAD/SAFARI", MESMO QUANDO O SERVIDOR JÁ TINHA TERMINADO E SALVO A SIMULAÇÃO. AGORA, AO CAIR A CONEXÃO,

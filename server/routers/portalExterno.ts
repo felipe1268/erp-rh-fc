@@ -2738,11 +2738,29 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         && calMSP?.statusDateSnapshot
         && cutoffStr === calMSP.statusDateSnapshot
         && envSnapOk;
-      const pctTotalPrevisto = usaSnapshot
-        ? +Number(calMSP!.previstoMspSnapshot).toFixed(2)
-        : (isFinite(projIniEff) && isFinite(projFimEff) && projFimEff > projIniEff)
-          ? +Math.min(100, fracaoDecorridaMs(projIniEff, refMs, projFimEff, calMSP) * 100).toFixed(2)
-          : 0;
+      // Rev. 3288 — PARIDADE TOTAL Portal × Planejamento: o "% Previsto" passa a
+      // espelhar EXATAMENTE o módulo interno, lendo a MESMA curva única
+      // (`previsto_semanas_json` + override literal `previsto_literal_json`) via o
+      // helper compartilhado `parsePrevistoCurva().raizAt(cutoff)` — réplica fiel
+      // do hook `previstoCurva.raizAt` de PlanejamentoDetalhe.tsx. Antes o Portal
+      // usava `previstoMspSnapshot` (Texto11 da raiz), que divergia da curva no
+      // MESMO cutoff (ex.: REVTE-CIVIL — Portal 8% vs módulo 9% em 11/06). Fallback
+      // p/ o snapshot/linear SÓ quando a curva está ausente/stale (XML antigo ou
+      // revisão divergente). REGRA DE OURO: só REPLICA o snapshot do MSP.
+      const { parsePrevistoCurva } = await import("../../shared/previstoCurva");
+      const previstoCurva = parsePrevistoCurva(
+        (projeto as any).previstoSemanasJson,
+        (projeto as any).previstoLiteralJson,
+        revisao.id,
+      );
+      const previstoDaCurva = previstoCurva ? previstoCurva.raizAt(cutoffStr) : null;
+      const pctTotalPrevisto = (previstoDaCurva != null && Number.isFinite(previstoDaCurva))
+        ? +Number(previstoDaCurva).toFixed(2)
+        : usaSnapshot
+          ? +Number(calMSP!.previstoMspSnapshot).toFixed(2)
+          : (isFinite(projIniEff) && isFinite(projFimEff) && projFimEff > projIniEff)
+            ? +Math.min(100, fracaoDecorridaMs(projIniEff, refMs, projFimEff, calMSP) * 100).toFixed(2)
+            : 0;
       // Rev. 3286 — REALIZADO do Portal ESPELHA o snapshot MSP da raiz UID=0
       // (`realizadoMspSnapshot` = AD/(AD+RD)) — IDÊNTICO ao módulo Planejamento
       // (`PlanejamentoDetalhe.avancoAtual`). Antes o Portal recalculava a média
@@ -2935,12 +2953,39 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
           }
         }
       }
-      const curvaData = {
-        curvaBaseline,
-        curvaPlanejada: curvaPlanejadaSep,
-        curvaRealizada: curvaRealizadaSerie,
-        curvaTendencia,
+      // Rev. 3288 — Curva S de Trabalho IDÊNTICA ao módulo: reusa o NÚCLEO
+      // compartilhado `computeCurvaSData` (extraído de planejamento.getCurvaS),
+      // com pesagem por DURAÇÃO (`usarPesoPorDuracao:true` = curva de TRABALHO),
+      // ativando o snapshot-baseline (`curvaPrevistoSnapshot`) e o override do
+      // realizado pelo `realizadoMspSnapshot` no StatusDate — exatamente como o
+      // engenheiro vê na tela interna. Fallback p/ a curva ponderada local (acima)
+      // SÓ se o núcleo falhar. REGRA DE OURO: o Portal só REPLICA o Planejamento.
+      let curvaData: {
+        curvaBaseline: { semana: string; acumulado: number }[];
+        curvaPlanejada: { semana: string; acumulado: number }[];
+        curvaRealizada: { semana: string; acumulado: number }[];
+        curvaTendencia: { semana: string; acumulado: number }[];
       };
+      try {
+        const { computeCurvaSData } = await import("./planejamento");
+        curvaData = await computeCurvaSData({
+          projetoId: projeto.id,
+          revisaoId: revisao.id,
+          baselineId: baselineRev?.id ?? revisao.id,
+          usarPesoPorDuracao: true,
+        });
+      } catch (errCurvaNucleo) {
+        console.error(
+          `[Portal/CurvaS] Núcleo compartilhado computeCurvaSData falhou (projeto ${projeto.id}, revisão ${revisao.id}) — usando fallback ponderado local:`,
+          errCurvaNucleo,
+        );
+        curvaData = {
+          curvaBaseline,
+          curvaPlanejada: curvaPlanejadaSep,
+          curvaRealizada: curvaRealizadaSerie,
+          curvaTendencia,
+        };
+      }
 
       // ── REFIS lançados (mais recentes primeiro) ─────────────────────────
       const refisRows = await db.select().from(planejamentoRefis)
