@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3240 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DEMONSTRATIVOS DE PAGAMENTO · A LISTA
+ * "TUDO QUE A IA LEU" (PIX + BOLETOS LIDOS POR IA) GANHOU UMA VISÃO EM TELA CHEIA (FULL
+ * SCREEN) COM LAYOUT MODERNO E CARDS DE TOTAL (GERAL / PIX / BOLETOS) NO TOPO, PRA FACILITAR
+ * A ANÁLISE — ANTES OS VALORES APARECIAM CORTADOS NUM MODAL ESTREITO. A TABELA AGORA OCUPA A
+ * LARGURA TODA (NADA DE "R$ 1..." TRUNCADO), COM BUSCA LIVRE E CHIPS DE TIPO (TODOS/PIX/
+ * BOLETOS). DÁ PRA ABRIR A TELA CHEIA JÁ FILTRADA POR PIX OU POR BOLETOS (AS "DUAS TELAS")
+ * DIRETO DOS SLOTS DE ANEXO, OU PELO BOTÃO "TELA CHEIA" NA LISTA INLINE. SÓ CONSULTA — NÃO
+ * CONCILIA NEM BAIXA NADA.**
+ * - PEDIDO (piloto FC): "quero as duas telas [a leitura de PIX e a de boletos] em tela cheia, com
+ *   layout moderno e cards com valores totais para fácil análise" (os modais antigos eram estreitos
+ *   e cortavam os valores no iPad).
+ * - SOLUÇÃO (FRONT, `client/src/pages/financeiro/FinanceiroConciliacao.tsx`): a computação da leitura
+ *   combinada (PIX+boletos, filtro+busca) foi extraída pra um `useMemo` ÚNICO `leituraIA`
+ *   `{pixArr,boletoArr,temDados,todos,porFiltro,lista,pixVis,bolVis,somaPix,somaBol,total,termo,chips}`
+ *   — alimenta TANTO a lista inline QUANTO o novo diálogo de tela cheia, sem deriva de números entre
+ *   as duas. Novo estado `leituraFull` + handler `abrirLeituraFull(kind)` (pré-filtra `demoFiltro` e
+ *   abre). O diálogo full-screen reaproveita o padrão do `expandedList` (`DialogContent resizable=false`
+ *   `w-[98vw] h-[96vh] flex-col p-0`): header com gradiente violeta + mês/ano, 3 cards de total grandes
+ *   (geral/PIX/boletos, ícones Landmark/ArrowDownCircle/FileText), chips de tipo + busca, tabela ampla
+ *   (px-4 py-2.5, sem truncar valor) e rodapé "Mostrando X de Y". A lista inline ganhou botão "Tela
+ *   cheia" (Maximize2) e cada slot de anexo (PIX/Boletos) ganhou link "Ver em tela cheia" que abre já
+ *   filtrado. ZERO backend · ZERO SCHEMA · "conciliação só sugestiva" preservada (a tela é read-only).
+ *
  * Rev. 3239 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · UNIFICAÇÃO DE LANÇAMENTOS QUE NO EXTRATO
  * APARECEM COMO UM ÚNICO VALOR · O VALE REFEIÇÃO (RH), QUE NO ERP VIVE PULVERIZADO EM CENTENAS
  * DE LINHAS (UMA POR FUNCIONÁRIO), AGORA APARECE NA CONCILIAÇÃO COMO 1 LINHA POR MÊS (TOTAL); O

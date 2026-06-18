@@ -533,6 +533,35 @@ export default function FinanceiroConciliacao() {
   // controla qual tipo a tabela mostra; `buscaLeitura` é a busca livre da lista inline.
   const [demoFiltro, setDemoFiltro] = useState<"todos" | "pix" | "boleto">("todos");
   const [buscaLeitura, setBuscaLeitura] = useState("");
+  // Rev. 3240 — visão "tela cheia" da leitura da IA (PIX/boletos). `leituraFull` abre o
+  // diálogo full-screen; `abrirLeituraFull(kind)` pré-filtra e abre (as "duas telas").
+  const [leituraFull, setLeituraFull] = useState(false);
+  const abrirLeituraFull = (k: "todos" | "pix" | "boleto") => { setDemoFiltro(k); setLeituraFull(true); };
+  // Rev. 3240 — computação ÚNICA da leitura combinada (PIX + boletos): alimenta a lista
+  // inline E o diálogo de tela cheia, evitando deriva entre as duas. Reage a filtro+busca.
+  const leituraIA = useMemo(() => {
+    const pixArr: any[] = Array.isArray(demoQuery.data?.pixExtraido) ? demoQuery.data.pixExtraido : [];
+    const boletoArr: any[] = Array.isArray(demoQuery.data?.boletoExtraido) ? demoQuery.data.boletoExtraido : [];
+    const temDados = Array.isArray(demoQuery.data?.pixExtraido) || Array.isArray(demoQuery.data?.boletoExtraido);
+    const todos = [
+      ...pixArr.map((it) => ({ ...it, _tipo: "pix" as const })),
+      ...boletoArr.map((it) => ({ ...it, _tipo: "boleto" as const })),
+    ];
+    const porFiltro = demoFiltro === "todos" ? todos : todos.filter((it) => it._tipo === demoFiltro);
+    const termo = normBusca(buscaLeitura).trim();
+    const lista = !termo ? porFiltro : porFiltro.filter((it) => normBusca([it?.beneficiario, it?.documento, it?.txid, fmtData(it?.data), formatBRL(Number(it?.valor) || 0), String(it?.valor ?? ""), it._tipo === "pix" ? "pix" : "boleto"].join(" ")).includes(termo));
+    const pixVis = lista.filter((it) => it._tipo === "pix");
+    const bolVis = lista.filter((it) => it._tipo === "boleto");
+    const somaPix = pixVis.reduce((s, it) => s + (Number(it?.valor) || 0), 0);
+    const somaBol = bolVis.reduce((s, it) => s + (Number(it?.valor) || 0), 0);
+    const total = somaPix + somaBol;
+    const chips = [
+      { key: "todos" as const, label: `Todos (${todos.length})` },
+      { key: "pix" as const, label: `PIX (${pixArr.length})` },
+      { key: "boleto" as const, label: `Boletos (${boletoArr.length})` },
+    ];
+    return { pixArr, boletoArr, temDados, todos, porFiltro, lista, pixVis, bolVis, somaPix, somaBol, total, termo, chips };
+  }, [demoQuery.data, demoFiltro, buscaLeitura]);
   const _fileToB64 = (file: File): Promise<string> => new Promise((res, rej) => {
     const r = new FileReader();
     r.onload = () => res(((r.result as string) || "").replace(/^data:[^,]*,/, ""));
@@ -1348,7 +1377,12 @@ export default function FinanceiroConciliacao() {
                               )}
                             </div>
                             {Array.isArray(slot.extraido) && (
-                              <p className="text-[11px] text-gray-400 mt-1.5">Lido por IA{slot.lidoEm ? ` em ${fmtData(slot.lidoEm)}` : ""} · {slot.extraido.length} pagamento(s) · {formatBRL(slot.extraido.reduce((s: number, it: any) => s + (Number(it?.valor) || 0), 0))}</p>
+                              <div className="mt-1.5 flex items-center justify-between gap-2 flex-wrap">
+                                <p className="text-[11px] text-gray-400">Lido por IA{slot.lidoEm ? ` em ${fmtData(slot.lidoEm)}` : ""} · {slot.extraido.length} pagamento(s) · {formatBRL(slot.extraido.reduce((s: number, it: any) => s + (Number(it?.valor) || 0), 0))}</p>
+                                <button type="button" onClick={() => abrirLeituraFull(slot.kind)} className="inline-flex items-center gap-1 text-[11px] font-medium text-violet-600 hover:text-violet-800 hover:underline">
+                                  <Maximize2 className="w-3 h-3" />Ver em tela cheia
+                                </button>
+                              </div>
                             )}
                           </>
                         )}
@@ -1363,35 +1397,22 @@ export default function FinanceiroConciliacao() {
             {/* Rev. 3228 — Lista INLINE "Tudo que a IA leu" (metodologia do extrato): lista
                 combinada PIX + boletos logo abaixo dos anexos, com cards de total geral/PIX/
                 boletos (reagem ao filtro+busca), chips de tipo e busca livre. Sem modal. */}
-            {mesSel != null && (Array.isArray(demoQuery.data?.pixExtraido) || Array.isArray(demoQuery.data?.boletoExtraido)) && (() => {
-              const pixArr: any[] = Array.isArray(demoQuery.data?.pixExtraido) ? demoQuery.data.pixExtraido : [];
-              const boletoArr: any[] = Array.isArray(demoQuery.data?.boletoExtraido) ? demoQuery.data.boletoExtraido : [];
-              const todos = [
-                ...pixArr.map((it) => ({ ...it, _tipo: "pix" as const })),
-                ...boletoArr.map((it) => ({ ...it, _tipo: "boleto" as const })),
-              ];
-              const porFiltro = demoFiltro === "todos" ? todos : todos.filter((it) => it._tipo === demoFiltro);
-              const termo = normBusca(buscaLeitura).trim();
-              const lista = !termo ? porFiltro : porFiltro.filter((it) => normBusca([it?.beneficiario, it?.documento, it?.txid, fmtData(it?.data), formatBRL(Number(it?.valor) || 0), String(it?.valor ?? ""), it._tipo === "pix" ? "pix" : "boleto"].join(" ")).includes(termo));
-              const pixVis = lista.filter((it) => it._tipo === "pix");
-              const bolVis = lista.filter((it) => it._tipo === "boleto");
-              const somaPix = pixVis.reduce((s, it) => s + (Number(it?.valor) || 0), 0);
-              const somaBol = bolVis.reduce((s, it) => s + (Number(it?.valor) || 0), 0);
-              const total = somaPix + somaBol;
-              const chips = [
-                { key: "todos" as const, label: `Todos (${todos.length})` },
-                { key: "pix" as const, label: `PIX (${pixArr.length})` },
-                { key: "boleto" as const, label: `Boletos (${boletoArr.length})` },
-              ];
+            {mesSel != null && leituraIA.temDados && (() => {
+              const { porFiltro, lista, pixVis, bolVis, somaPix, somaBol, total, termo, chips, todos } = leituraIA;
               return (
                 <Card className="border-0 shadow-sm ring-1 ring-violet-100">
                   <CardContent className="p-4 space-y-3">
-                    <div className="flex items-start gap-2">
-                      <Sparkles className="w-4 h-4 text-violet-600 mt-0.5 shrink-0" />
-                      <div>
-                        <p className="text-sm font-semibold text-gray-800">Tudo que a IA leu nos demonstrativos</p>
-                        <p className="text-xs text-gray-500">Lista de TODOS os pagamentos identificados nos PDFs anexados — só consulta, não concilia nada automaticamente.</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2 min-w-0">
+                        <Sparkles className="w-4 h-4 text-violet-600 mt-0.5 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-800">Tudo que a IA leu nos demonstrativos</p>
+                          <p className="text-xs text-gray-500">Lista de TODOS os pagamentos identificados nos PDFs anexados — só consulta, não concilia nada automaticamente.</p>
+                        </div>
                       </div>
+                      <Button size="sm" variant="outline" onClick={() => abrirLeituraFull(demoFiltro)} className="border-violet-200 text-violet-700 hover:bg-violet-50 h-8 shrink-0">
+                        <Maximize2 className="w-3.5 h-3.5 mr-1.5" />Tela cheia
+                      </Button>
                     </div>
                     {/* Cards de total (metodologia do extrato) — reagem ao filtro + busca */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -2536,6 +2557,95 @@ export default function FinanceiroConciliacao() {
               {expandedList === "extrato"
                 ? (repExtView.length === 0 ? <div className="p-6 text-center text-gray-400 text-sm">{termoBusca ? "Nenhum item corresponde à busca." : "Nada a exibir."}</div> : repExtView.map(renderExtratoRow))
                 : (repLanView.length === 0 ? <div className="p-6 text-center text-gray-400 text-sm">{termoBusca ? "Nenhum item corresponde à busca." : "Nada a exibir."}</div> : repLanView.map((e: any) => renderEntryRow(e)))}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 3240 — "Tudo que a IA leu" em TELA CHEIA: visão ampla (sem truncar valores)
+            com cards de total (geral/PIX/boletos), chips de tipo e busca livre. Reusa o
+            mesmo `leituraIA` da lista inline (fonte única). Só consulta — não concilia. */}
+        <Dialog open={leituraFull} onOpenChange={(o: boolean) => { if (!o) setLeituraFull(false); }}>
+          <DialogContent resizable={false} className="max-w-[98vw] w-[98vw] h-[96vh] max-h-[96vh] flex flex-col p-0 gap-0">
+            <DialogHeader className="px-5 py-4 border-b shrink-0 bg-gradient-to-r from-violet-50 to-white">
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <Sparkles className="w-5 h-5 text-violet-600" />
+                Tudo que a IA leu nos demonstrativos
+                {mesSel != null && <span className="text-sm font-medium text-gray-400">· {MESES[mesSel - 1]}/{ano}</span>}
+              </DialogTitle>
+            </DialogHeader>
+            {/* Cards de total — grandes, fáceis de analisar */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 px-5 py-4 border-b bg-gray-50/60 shrink-0">
+              <div className="rounded-xl border border-violet-100 bg-violet-50/70 p-4 flex items-center gap-3">
+                <span className="w-12 h-12 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center shrink-0"><Landmark className="w-6 h-6" /></span>
+                <div className="min-w-0">
+                  <p className="text-[11px] uppercase tracking-wide text-violet-700/80 font-medium">Total geral · {leituraIA.lista.length}</p>
+                  <p className="text-2xl font-bold text-violet-700 truncate">{formatBRL(leituraIA.total)}</p>
+                </div>
+              </div>
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-4 flex items-center gap-3">
+                <span className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0"><ArrowDownCircle className="w-6 h-6" /></span>
+                <div className="min-w-0">
+                  <p className="text-[11px] uppercase tracking-wide text-emerald-700/80 font-medium">PIX · {leituraIA.pixVis.length}</p>
+                  <p className="text-2xl font-bold text-emerald-700 truncate">{formatBRL(leituraIA.somaPix)}</p>
+                </div>
+              </div>
+              <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-4 flex items-center gap-3">
+                <span className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0"><FileText className="w-6 h-6" /></span>
+                <div className="min-w-0">
+                  <p className="text-[11px] uppercase tracking-wide text-blue-700/80 font-medium">Boletos · {leituraIA.bolVis.length}</p>
+                  <p className="text-2xl font-bold text-blue-700 truncate">{formatBRL(leituraIA.somaBol)}</p>
+                </div>
+              </div>
+            </div>
+            {/* Chips de tipo + busca */}
+            <div className="flex items-center gap-2 flex-wrap px-5 py-3 border-b shrink-0">
+              {leituraIA.chips.map((c) => (
+                <button key={c.key} type="button" onClick={() => setDemoFiltro(c.key)}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${demoFiltro === c.key ? "bg-violet-600 border-violet-600 text-white" : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                  {c.label}
+                </button>
+              ))}
+              <div className="relative flex-1 min-w-[220px] max-w-lg">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <Input value={buscaLeitura} onChange={(e) => setBuscaLeitura(e.target.value)} placeholder="Buscar por nome, CPF/CNPJ, valor, data…" className="pl-9 pr-9 h-9" />
+                {buscaLeitura && <button type="button" onClick={() => setBuscaLeitura("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>}
+              </div>
+            </div>
+            {/* Tabela ampla — full width, sem truncar valores */}
+            <div className="flex-1 overflow-auto">
+              {leituraIA.lista.length === 0 ? (
+                <div className="text-center text-sm text-gray-500 py-16">{leituraIA.todos.length === 0 ? "A IA não encontrou pagamentos nos PDFs." : "Nenhum pagamento corresponde ao filtro/busca."}</div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-gray-50 text-xs text-gray-500 z-10 shadow-sm">
+                    <tr>
+                      <th className="text-left font-medium px-4 py-3">Tipo</th>
+                      <th className="text-left font-medium px-4 py-3">Beneficiário</th>
+                      <th className="text-left font-medium px-4 py-3">CPF/CNPJ</th>
+                      <th className="text-left font-medium px-4 py-3">Data</th>
+                      <th className="text-left font-medium px-4 py-3">ID transação</th>
+                      <th className="text-right font-medium px-4 py-3">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leituraIA.lista.map((it, i) => (
+                      <tr key={`${it?._tipo || "x"}|${it?.txid || it?.documento || ""}|${it?.data || ""}|${it?.valor ?? ""}|${i}`} className="border-t border-gray-100 hover:bg-violet-50/40">
+                        <td className="px-4 py-2.5">
+                          <span className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${it._tipo === "pix" ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"}`}>{it._tipo === "pix" ? "PIX" : "Boleto"}</span>
+                        </td>
+                        <td className="px-4 py-2.5 text-gray-800 font-medium">{it?.beneficiario || <span className="text-gray-400 font-normal">—</span>}</td>
+                        <td className="px-4 py-2.5 text-gray-600 tabular-nums whitespace-nowrap">{it?.documento || <span className="text-gray-400">—</span>}</td>
+                        <td className="px-4 py-2.5 text-gray-600 tabular-nums whitespace-nowrap">{it?.data ? fmtData(it.data) : <span className="text-gray-400">—</span>}</td>
+                        <td className="px-4 py-2.5 text-gray-500 text-xs max-w-[260px] truncate" title={it?.txid || ""}>{it?.txid || <span className="text-gray-400">—</span>}</td>
+                        <td className="px-4 py-2.5 text-right font-bold text-gray-900 tabular-nums whitespace-nowrap">{it?.valor != null ? formatBRL(Number(it.valor)) : <span className="text-gray-400 font-normal">—</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <div className="px-5 py-3 border-t shrink-0 bg-gray-50/60">
+              <p className="text-[11px] text-gray-400">Mostrando {leituraIA.lista.length} de {leituraIA.porFiltro.length}{leituraIA.termo ? ` (filtro "${buscaLeitura.trim()}")` : ""} · A leitura por IA é uma ajuda para identificar quem recebeu — confira sempre no PDF original. Não concilia nada automaticamente.</p>
             </div>
           </DialogContent>
         </Dialog>
