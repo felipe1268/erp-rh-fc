@@ -4873,7 +4873,10 @@ export const financialRouter = router({
               COUNT(*)::int AS total,
               SUM(CASE WHEN COALESCE(conciliado,0)=1 THEN 1 ELSE 0 END)::int AS conciliadas,
               COALESCE(SUM(ABS(valor)),0) AS "valorTotal",
-              COALESCE(SUM(CASE WHEN COALESCE(conciliado,0)=1 THEN ABS(valor) ELSE 0 END),0) AS "valorConciliado"
+              COALESCE(SUM(CASE WHEN COALESCE(conciliado,0)=1 THEN ABS(valor) ELSE 0 END),0) AS "valorConciliado",
+              -- Rev. 3282 — split p/ os cards "Entradas" e "Saídas" (giro bruto = entradas+saídas).
+              COALESCE(SUM(CASE WHEN valor>=0 THEN valor ELSE 0 END),0) AS "valorEntradas",
+              COALESCE(SUM(CASE WHEN valor<0 THEN ABS(valor) ELSE 0 END),0) AS "valorSaidas"
          FROM bank_statement_lines
         WHERE company_id=$1 AND data>=$2 AND data<=$3 AND excluido_em IS NULL
         GROUP BY conta_bancaria_id`,
@@ -4888,6 +4891,9 @@ export const financialRouter = router({
         // Rev. 3248 — BRL movimentado p/ os dashboards (READ-ONLY; |valor| pois débito vem negativo).
         valorTotal: Number(r.valorTotal) || 0,
         valorConciliado: Number(r.valorConciliado) || 0,
+        // Rev. 3282 — entradas (créditos) e saídas (débitos) separadas p/ os cards.
+        valorEntradas: Number(r.valorEntradas) || 0,
+        valorSaidas: Number(r.valorSaidas) || 0,
         status: total === 0 ? "vazio" : conciliadas >= total ? "consolidado" : "lancamento",
       };
     });

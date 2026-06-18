@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3282 — **FINANCEIRO / DASHBOARD DE CONCILIAÇÃO BANCÁRIA · O CARD ÚNICO "MOVIMENTADO NO EXTRATO"
+ * (QUE SOMAVA ENTRADAS + SAÍDAS NUM VALOR SÓ E PARECIA INFLADO/ERRADO) FOI SUBSTITUÍDO POR 3 CARDS CLAROS
+ * AGRUPADOS EM "MOVIMENTAÇÃO DO EXTRATO": ENTRADAS (CRÉDITOS), SAÍDAS (DÉBITOS) E SALDO LÍQUIDO (ENTROU −
+ * SAIU). O "GIRO BRUTO" (A SOMA ANTIGA) VIROU SUBTÍTULO DO CARD DE SALDO LÍQUIDO. OS CARDS DE CONCILIAÇÃO
+ * (CONCILIADO / PENDENTE / % CONCILIADO) FORAM SEPARADOS NUM SEGUNDO GRUPO ROTULADO "CONCILIAÇÃO". 100%
+ * READ-ONLY · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (piloto FC): o "Movimentado no extrato" (R$ 16.006.184,16 em 2026) parecia errado/duplicado;
+ *   o usuário pediu p/ separar entrada e saída da movimentação ("não ficar confuso") e questionou a
+ *   utilidade prática do total de movimentação.
+ * - DIAGNÓSTICO (dados reais no Neon, FC ENGENHARIA 60002, ano 2026): NÃO HÁ DUPLICAÇÃO — 1999 linhas, 0
+ *   duplicatas exatas. O R$ 16.006.184,16 é a MOVIMENTAÇÃO BRUTA (`SUM(ABS(valor))` de toda linha) =
+ *   Entradas R$ 7.919.219,44 + Saídas R$ 8.086.964,72; o Saldo líquido é −R$ 167.745,28. A fórmula está
+ *   matematicamente correta; o problema era SEMÂNTICO: um KPI único somando o que entrou COM o que saiu
+ *   passa a falsa impressão de valor inflado/duplicado. (≈ R$ 1,7 mi do bruto são transferências entre as
+ *   2 contas Caixa da própria empresa, contadas nos dois lados — natural no conceito de giro bruto.)
+ * - SOLUÇÃO — BACKEND (`server/routers/financial.ts`, `getBankAccountsConciliacaoStatus`): a query por conta
+ *   ganhou `valorEntradas` (`SUM(valor>=0)`) e `valorSaidas` (`SUM(ABS(valor) WHERE valor<0)`), mantendo
+ *   `valorTotal`/`valorConciliado` intactos (100% aditivo, READ-ONLY). O sinal do valor é a fonte (crédito
+ *   positivo / débito negativo), batendo exatamente com o `ABS` já usado (entradas+saídas = giro bruto).
+ * - SOLUÇÃO — FRONT (`client/src/pages/financeiro/dashboards/DashConciliacao.tsx`): `kpis` agrega
+ *   `valorEntradas`/`valorSaidas`/`saldoLiquido`; o grid de 4 KPIs virou 2 grupos rotulados —
+ *   "Movimentação do extrato" (Entradas verde / Saídas vermelho / Saldo líquido com o giro bruto como
+ *   subtítulo) e "Conciliação" (Conciliado / Pendente / % conciliado). O diálogo de detalhe por conta
+ *   ganhou as colunas Entradas/Saídas e o "Movimentado" foi renomeado p/ "Giro bruto". Ícones
+ *   `ArrowDownLeft`/`ArrowUpRight`/`Scale`.
+ * - NA PRÁTICA (resposta ao usuário): o giro bruto serve só como métrica de VOLUME (quanto a conta girou /
+ *   sanidade da importação). O que é acionável no dia a dia é Entradas, Saídas e Saldo líquido — por isso
+ *   eles passaram a liderar e o giro foi rebaixado a subtítulo.
+ * - ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3281 — **RH & DP / FOLHA DE ADIANTAMENTO (VALE — CÁLCULO INTERNO) · FUNCIONÁRIOS EM AVISO PRÉVIO
  * TRABALHADO (status "Aviso") E EM FÉRIAS (status "Ferias") VOLTARAM A APARECER NO VALE/ADIANTAMENTO. ANTES,
  * A SELEÇÃO DO VALE PEGAVA SÓ status='Ativo' ESTRITO — ENTÃO COLABORADORES CUJO STATUS VIRAVA "AVISO" OU

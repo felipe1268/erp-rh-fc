@@ -7,7 +7,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   PieChart, Pie, Cell,
 } from "recharts";
-import { ArrowLeftRight, Landmark, CheckCircle2, Clock, Percent } from "lucide-react";
+import { ArrowLeftRight, ArrowDownLeft, ArrowUpRight, Scale, CheckCircle2, Clock, Percent } from "lucide-react";
 import {
   PALETTE, formatBRL, formatBRLCompact, DashHeader, KpiCard, ChartCard, EmptyState, BRLTooltip,
   ComparativoAnual, DetailDialog, DetailColumn,
@@ -20,9 +20,11 @@ const COLS: DetailColumn[] = [
   { key: "linhas", label: "Linhas", align: "right" },
   { key: "conciliadas", label: "Conciliadas", align: "right" },
   { key: "pendentes", label: "Pendentes", align: "right" },
+  { key: "valorEntradas", label: "Entradas (R$)", align: "right", brl: true },
+  { key: "valorSaidas", label: "Saídas (R$)", align: "right", brl: true },
   { key: "valorConciliado", label: "Conciliado (R$)", align: "right", brl: true },
   { key: "valorPendente", label: "Pendente (R$)", align: "right", brl: true },
-  { key: "valorTotal", label: "Movimentado (R$)", align: "right", brl: true },
+  { key: "valorTotal", label: "Giro bruto (R$)", align: "right", brl: true },
 ];
 
 export default function DashConciliacao() {
@@ -59,16 +61,19 @@ export default function DashConciliacao() {
   const [det, setDet] = useState(false);
 
   const kpis = useMemo(() => {
-    let total = 0, conciliadas = 0, valorTotal = 0, valorConciliado = 0;
+    let total = 0, conciliadas = 0, valorTotal = 0, valorConciliado = 0, valorEntradas = 0, valorSaidas = 0;
     for (const s of statusArr) {
       total += Number(s.total) || 0;
       conciliadas += Number(s.conciliadas) || 0;
       valorTotal += Number(s.valorTotal) || 0;
       valorConciliado += Number(s.valorConciliado) || 0;
+      valorEntradas += Number(s.valorEntradas) || 0;
+      valorSaidas += Number(s.valorSaidas) || 0;
     }
     const valorPendente = Math.max(valorTotal - valorConciliado, 0);
     const pct = valorTotal > 0 ? (valorConciliado / valorTotal) * 100 : 0;
-    return { total, conciliadas, pendentes: Math.max(total - conciliadas, 0), valorTotal, valorConciliado, valorPendente, pct, contas: statusArr.length };
+    const saldoLiquido = valorEntradas - valorSaidas;
+    return { total, conciliadas, pendentes: Math.max(total - conciliadas, 0), valorTotal, valorConciliado, valorPendente, valorEntradas, valorSaidas, saldoLiquido, pct, contas: statusArr.length };
   }, [statusArr]);
 
   const detalheContas = useMemo(() =>
@@ -78,6 +83,8 @@ export default function DashConciliacao() {
       conciliadas: Number(s.conciliadas) || 0,
       pendentes: Math.max((Number(s.total) || 0) - (Number(s.conciliadas) || 0), 0),
       valorTotal: Number(s.valorTotal) || 0,
+      valorEntradas: Number(s.valorEntradas) || 0,
+      valorSaidas: Number(s.valorSaidas) || 0,
       valorConciliado: Number(s.valorConciliado) || 0,
       valorPendente: Math.max((Number(s.valorTotal) || 0) - (Number(s.valorConciliado) || 0), 0),
     })).sort((a, b) => b.valorTotal - a.valorTotal),
@@ -115,15 +122,31 @@ export default function DashConciliacao() {
           subtitle={`Valor movimentado no extrato × conciliado · ${ano}`} ano={ano} onAno={setAno} onRefresh={refetch}
         />
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <KpiCard icon={Landmark} label="Movimentado no extrato" value={formatBRL(kpis.valorTotal)}
-            sub={`${kpis.total} linhas · ${kpis.contas} contas`} onClick={() => setDet(true)} />
-          <KpiCard icon={CheckCircle2} label="Conciliado" value={formatBRL(kpis.valorConciliado)} tone="good"
-            sub={`${kpis.conciliadas} linhas`} onClick={() => setDet(true)} />
-          <KpiCard icon={Clock} label="Pendente" value={formatBRL(kpis.valorPendente)} tone="warn"
-            sub={`${kpis.pendentes} linhas`} onClick={() => setDet(true)} />
-          <KpiCard icon={Percent} label="% conciliado (R$)" value={`${kpis.pct.toFixed(0)}%`}
-            tone={kpis.pct >= 90 ? "good" : kpis.pct >= 50 ? "warn" : "bad"} onClick={() => setDet(true)} />
+        {/* Rev. 3282 — Movimentação separada em Entradas / Saídas / Saldo líquido (o giro
+            bruto vira subtítulo, p/ não confundir entrada+saída somadas com "o que sobrou"). */}
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 px-1">Movimentação do extrato</h3>
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+            <KpiCard icon={ArrowDownLeft} label="Entradas (créditos)" value={formatBRL(kpis.valorEntradas)} tone="good"
+              sub="Tudo que entrou nas contas" onClick={() => setDet(true)} />
+            <KpiCard icon={ArrowUpRight} label="Saídas (débitos)" value={formatBRL(kpis.valorSaidas)} tone="bad"
+              sub="Tudo que saiu das contas" onClick={() => setDet(true)} />
+            <KpiCard icon={Scale} label="Saldo líquido" value={formatBRL(kpis.saldoLiquido)}
+              tone={kpis.saldoLiquido >= 0 ? "good" : "bad"}
+              sub={`Entrou − saiu · giro bruto ${formatBRL(kpis.valorTotal)}`} onClick={() => setDet(true)} />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 px-1">Conciliação</h3>
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+            <KpiCard icon={CheckCircle2} label="Conciliado" value={formatBRL(kpis.valorConciliado)} tone="good"
+              sub={`${kpis.conciliadas} de ${kpis.total} linhas`} onClick={() => setDet(true)} />
+            <KpiCard icon={Clock} label="Pendente" value={formatBRL(kpis.valorPendente)} tone="warn"
+              sub={`${kpis.pendentes} linhas`} onClick={() => setDet(true)} />
+            <KpiCard icon={Percent} label="% conciliado (R$)" value={`${kpis.pct.toFixed(0)}%`}
+              tone={kpis.pct >= 90 ? "good" : kpis.pct >= 50 ? "warn" : "bad"} onClick={() => setDet(true)} />
+          </div>
         </div>
 
         {semDados ? (
