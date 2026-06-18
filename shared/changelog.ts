@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3246 — **FINANCEIRO / CONTROLE DE CHEQUES · A LISTA GANHOU UMA COLUNA "DIAS P/ COMPENSAR"
+ * QUE MOSTRA A CONTAGEM REGRESSIVA ATÉ O VENCIMENTO DE CADA CHEQUE ("FALTAM N DIAS" / "COMPENSA
+ * HOJE" / "VENCIDO HÁ N DIAS"), OU "COMPENSADO · DD/MM" QUANDO JÁ COMPENSOU. ALÉM DISSO, A COLUNA
+ * "MÊS" — QUE FICAVA REPETINDO O MESMO MÊS QUE JÁ ESTÁ SELECIONADO NO FILTRO — SÓ APARECE AGORA
+ * NA VISÃO "ANO TODO". A ANTIGA COLUNA "COMPENSAÇÃO" (SÓ A DATA) FOI ABSORVIDA PELA NOVA COLUNA.
+ * SÓ APRESENTAÇÃO/LAYOUT — NENHUMA REGRA, BAIXA OU CÁLCULO DE NEGÓCIO MUDOU.**
+ * - PEDIDO (piloto FC): "melhore este layout e coloque quantos dias faltam para cada cheque
+ *   compensar; não sei se faz sentido ter o mês na coluna já que separamos o lançamento por mês".
+ * - SOLUÇÃO (FRONT, `client/src/pages/financeiro/FinanceiroCheques.tsx`):
+ *     · novo helper `diasAteData(v)` — diferença em DIAS no fuso LOCAL à meia-noite (evita off-by-one
+ *       e o crash de `new Date()` no iOS, parseando strings "YYYY-MM-DD" como `+"T00:00:00"`).
+ *     · novo renderer `compensaCell(c)` — já compensado (status `compensado` OU `dataCompensacao`)
+ *       → "Compensado · DD/MM" (verde); `devolvido` → selo âmbar "Devolvido"; `sustado`/`cancelado`
+ *       → "—" (não vão compensar); pendente/indefinido → pílula pela contagem do vencimento:
+ *       futuro = azul "faltam N dias"/"falta 1 dia"; hoje = âmbar "compensa hoje"; passado = vermelho
+ *       "vencido há N dias". `title` em cada caso com a data real do vencimento/compensação.
+ *     · a coluna "Compensação" (que só mostrava `fmtData(dataCompensacao)`, em branco p/ pendentes)
+ *       foi SUBSTITUÍDA pela coluna "Dias p/ compensar" (a data de compensação ficou embutida no
+ *       selo "Compensado · DD/MM"), reduzindo uma coluna.
+ *     · a coluna "Mês" (`th` + `td`) passou a ser CONDICIONAL `mesSel == null` — só renderiza na
+ *       visão "Ano todo"; com um mês específico selecionado ela some (era redundante com o filtro).
+ *     · polimento: `whitespace-nowrap` em Vencimento/Dias/Mês p/ evitar quebras feias.
+ * - ZERO backend · ZERO SCHEMA/ALTER/DROP/DELETE · read-only (apresentação).
+ *
  * Rev. 3245 — **FINANCEIRO / CONTROLE DE CHEQUES · A TELA GANHOU MÚLTIPLA SELEÇÃO: UMA CAIXA DE
  * MARCAÇÃO POR CHEQUE (+ "SELECIONAR TODOS" NO CABEÇALHO) E UMA BARRA DE AÇÃO QUE, COM ≥1 CHEQUE
  * SELECIONADO, PERMITE ALTERAR O STATUS DE TODOS DE UMA VEZ (COMPENSADO/PENDENTE/SUSTADO/

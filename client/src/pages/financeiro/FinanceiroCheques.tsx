@@ -37,6 +37,20 @@ const OUTROS_SET = ["sustado", "cancelado", "devolvido", "indefinido"];
 //   divergente = banco compensou MAS controle não está "compensado" (análise)
 const EXTRATO_FILTERS = ["conferido", "confere", "divergente"];
 
+// Rev. 3246 — diferença em DIAS (no fuso local, à meia-noite) entre uma data e hoje.
+// >0 = no futuro (faltam N dias); 0 = hoje; <0 = no passado (vencido há N dias).
+function diasAteData(v: any): number | null {
+  if (!v) return null;
+  try {
+    const d = typeof v === "string" ? new Date(v.length > 10 ? v : v + "T00:00:00") : new Date(v);
+    if (isNaN(d.getTime())) return null;
+    const hoje = new Date();
+    const a = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const b = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()).getTime();
+    return Math.round((a - b) / 86400000);
+  } catch { return null; }
+}
+
 function statusBadge(s: string) {
   switch (s) {
     case "compensado": return <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Compensado</Badge>;
@@ -46,6 +60,56 @@ function statusBadge(s: string) {
     case "devolvido": return <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100">Devolvido</Badge>;
     default: return <Badge variant="outline">Indefinido</Badge>;
   }
+}
+
+// Rev. 3246 — célula "Dias p/ compensar": substitui a antiga coluna "Compensação".
+// Já compensado → "Compensado · DD/MM"; devolvido → selo âmbar; sustado/cancelado → "—";
+// pendente/indefinido → contagem regressiva pelo vencimento (faltam N dias / hoje / vencido).
+function compensaCell(c: any) {
+  const jaCompensado = c.status === "compensado" || !!c.dataCompensacao;
+  if (jaCompensado) {
+    return (
+      <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-green-700"
+        title={c.dataCompensacao ? `Compensado em ${fmtData(c.dataCompensacao)}` : "Compensado"}>
+        <CheckCircle className="h-3.5 w-3.5" /> Compensado{c.dataCompensacao ? ` · ${fmtData(c.dataCompensacao)}` : ""}
+      </span>
+    );
+  }
+  if (c.status === "devolvido") {
+    return (
+      <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-orange-700" title="Cheque devolvido — não compensou">
+        <RotateCcw className="h-3.5 w-3.5" /> Devolvido
+      </span>
+    );
+  }
+  if (c.status === "sustado" || c.status === "cancelado") {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+  const dias = diasAteData(c.dataVencimento);
+  if (dias == null) return <span className="text-xs text-muted-foreground">—</span>;
+  if (dias > 0) {
+    return (
+      <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700"
+        title={`Compensa em ${fmtData(c.dataVencimento)}`}>
+        {dias === 1 ? "falta 1 dia" : `faltam ${dias} dias`}
+      </span>
+    );
+  }
+  if (dias === 0) {
+    return (
+      <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700"
+        title={`Compensa hoje (${fmtData(c.dataVencimento)})`}>
+        compensa hoje
+      </span>
+    );
+  }
+  const atraso = Math.abs(dias);
+  return (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700"
+      title={`Vencimento era ${fmtData(c.dataVencimento)} e o cheque ainda consta pendente`}>
+      vencido há {atraso} {atraso === 1 ? "dia" : "dias"}
+    </span>
+  );
 }
 
 function fileToBase64(file: File): Promise<string> {
@@ -910,9 +974,9 @@ export default function FinanceiroCheques() {
                       <th className="py-2 pr-3">Fornecedor</th>
                       <th className="py-2 pr-3">Banco</th>
                       <th className="py-2 pr-3 text-right">Valor</th>
-                      <th className="py-2 pr-3">Vencimento</th>
-                      <th className="py-2 pr-3">Compensação</th>
-                      <th className="py-2 pr-3">Mês</th>
+                      <th className="py-2 pr-3 whitespace-nowrap">Vencimento</th>
+                      <th className="py-2 pr-3 whitespace-nowrap">Dias p/ compensar</th>
+                      {mesSel == null && <th className="py-2 pr-3">Mês</th>}
                       <th className="py-2 pr-3">Status</th>
                       <th className="py-2 pr-3 text-right">Ações</th>
                     </tr>
@@ -936,9 +1000,9 @@ export default function FinanceiroCheques() {
                         </td>
                         <td className="py-2 pr-3 text-xs">{c.bancoNome || "—"}</td>
                         <td className="py-2 pr-3 text-right font-medium">{c.valor != null ? formatBRL(Number(c.valor)) : "—"}</td>
-                        <td className="py-2 pr-3">{fmtData(c.dataVencimento)}</td>
-                        <td className="py-2 pr-3">{fmtData(c.dataCompensacao)}</td>
-                        <td className="py-2 pr-3">{c.mes ? `${MESES[c.mes]}/${c.ano}` : c.ano}</td>
+                        <td className="py-2 pr-3 whitespace-nowrap">{fmtData(c.dataVencimento)}</td>
+                        <td className="py-2 pr-3">{compensaCell(c)}</td>
+                        {mesSel == null && <td className="py-2 pr-3 whitespace-nowrap">{c.mes ? `${MESES[c.mes]}/${c.ano}` : c.ano}</td>}
                         <td className="py-2 pr-3">
                           <div className="flex flex-col gap-1">
                             {statusBadge(c.status)}
