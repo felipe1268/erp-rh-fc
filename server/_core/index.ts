@@ -1013,7 +1013,11 @@ Regras:
           await db.execute(sql`ALTER TABLE financial_conciliacao_demonstrativos ADD COLUMN IF NOT EXISTS pix_lido_em TIMESTAMP`);
           await db.execute(sql`ALTER TABLE financial_conciliacao_demonstrativos ADD COLUMN IF NOT EXISTS boleto_extraido_json TEXT`);
           await db.execute(sql`ALTER TABLE financial_conciliacao_demonstrativos ADD COLUMN IF NOT EXISTS boleto_lido_em TIMESTAMP`);
-          console.log(`[SyncSchema+] Rev. 3216/3220: tabela financial_conciliacao_demonstrativos garantida (demonstrativos PIX/boleto + leitura por IA na conciliação).`);
+          // Rev. 3236 — colunas ADITIVAS p/ VÁRIOS arquivos por tipo (JSON [{url,nome}]).
+          // ADD COLUMN IF NOT EXISTS (R-001/007/010 OK — sem ALTER destrutivo/DROP/DELETE).
+          await db.execute(sql`ALTER TABLE financial_conciliacao_demonstrativos ADD COLUMN IF NOT EXISTS pix_arquivos_json TEXT`);
+          await db.execute(sql`ALTER TABLE financial_conciliacao_demonstrativos ADD COLUMN IF NOT EXISTS boleto_arquivos_json TEXT`);
+          console.log(`[SyncSchema+] Rev. 3216/3220/3236: tabela financial_conciliacao_demonstrativos garantida (demonstrativos PIX/boleto + leitura por IA + vários arquivos por tipo).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA financial_conciliacao_demonstrativos:`, e?.message || e); }
 
         // Rev. 3211 — Gancho "forma de pagamento = Cartão de Crédito" em

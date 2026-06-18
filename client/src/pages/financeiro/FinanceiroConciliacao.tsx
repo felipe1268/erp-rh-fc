@@ -497,87 +497,110 @@ export default function FinanceiroConciliacao() {
   // recebeu (o extrato só mostra "PIX valor X"). Por conta+ano+mês. NÃO concilia nada.
   const demoInputRef = useRef<HTMLInputElement>(null);
   const [demoKind, setDemoKind] = useState<"pix" | "boleto" | null>(null);
-  const [demoBusy, setDemoBusy] = useState<"pix" | "boleto" | null>(null);
+  // Rev. 3236 — progresso REAL (0→100%) do fluxo "anexar vários + ler com IA". Quando
+  // ativo, o slot do tipo mostra a barra + rótulo detalhado ("Enviando 2 de 5", "Lendo
+  // com IA 3 de 7"). Substitui a antiga barra ASSINTÓTICA/falsa (single-shot da tRPC).
+  const [demoProg, setDemoProg] = useState<{ kind: "pix" | "boleto"; pct: number; label: string } | null>(null);
   const demoQuery = (trpc as any).financial.getConciliacaoDemonstrativos.useQuery(
     { companyId, contaBancariaId: parseInt(contaBancariaId) || 0, ano, mes: mesSel ?? 0 },
     { enabled: !!companyId && !!contaBancariaId && mesSel != null }
   );
   const salvarDemoMut = (trpc as any).financial.salvarConciliacaoDemonstrativo.useMutation();
   const removerDemoMut = (trpc as any).financial.removerConciliacaoDemonstrativo.useMutation();
-  // Rev. 3220 — Ler o demonstrativo com IA (lista de TODOS os pagamentos). Barra 0→100%
-  // assintótica (a tRPC é single-shot, sem progresso real) + modal "Tudo que a IA leu".
-  const lerDemoMut = (trpc as any).financial.lerDemonstrativoComIA.useMutation();
-  const [lerBusy, setLerBusy] = useState<"pix" | "boleto" | null>(null);
-  const [lerProgress, setLerProgress] = useState(0);
-  // Rev. 3228 — a leitura da IA agora aparece INLINE (lista combinada PIX+boletos,
-  // metodologia do extrato: cards de total + filtro + busca). `demoFiltro` controla
-  // qual tipo a tabela mostra; `buscaLeitura` é a busca livre da lista inline.
+  // Rev. 3236 — leitura por IA agora é POR ARQUIVO (loop no cliente = progresso real),
+  // depois salva a lista combinada. lerDemonstrativoArquivoIA não grava; salvarDemonstrativoExtraido persiste.
+  const lerDemoArquivoMut = (trpc as any).financial.lerDemonstrativoArquivoIA.useMutation();
+  const salvarDemoExtraidoMut = (trpc as any).financial.salvarDemonstrativoExtraido.useMutation();
+  // Rev. 3228 — a leitura da IA aparece INLINE (lista combinada PIX+boletos). `demoFiltro`
+  // controla qual tipo a tabela mostra; `buscaLeitura` é a busca livre da lista inline.
   const [demoFiltro, setDemoFiltro] = useState<"todos" | "pix" | "boleto">("todos");
   const [buscaLeitura, setBuscaLeitura] = useState("");
-  async function lerDemoIA(kind: "pix" | "boleto") {
+  const _fileToB64 = (file: File): Promise<string> => new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(((r.result as string) || "").replace(/^data:[^,]*,/, ""));
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+  const _sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+  // Lê TODOS os PDFs do tipo com IA, um a um (progresso real), e salva a lista combinada.
+  // `count` permite informar o total já sabido (evita corrida com o refetch logo após o upload).
+  async function lerDemoIA(kind: "pix" | "boleto", opts?: { baseStart?: number; count?: number }) {
     if (mesSel == null || !contaBancariaId) return;
-    setLerBusy(kind);
-    setLerProgress(6);
-    const tick = setInterval(() => setLerProgress(p => (p >= 92 ? 92 : p + Math.max(1, Math.round((92 - p) * 0.12)))), 350);
-    try {
-      await lerDemoMut.mutateAsync({ companyId, contaBancariaId: parseInt(contaBancariaId), ano, mes: mesSel, tipo: kind });
-      clearInterval(tick);
-      setLerProgress(100);
-      await demoQuery.refetch();
-      setBuscaLeitura("");
-      setDemoFiltro(kind);
-      setTimeout(() => setLerProgress(0), 600);
-    } catch (err: any) {
-      clearInterval(tick);
-      setLerProgress(0);
-      toast({ title: "Erro ao ler com IA", description: err?.message || "Falha na leitura do demonstrativo.", variant: "destructive" });
-    } finally {
-      setLerBusy(null);
+    const arrAtual = kind === "pix" ? (demoQuery.data?.pixArquivos || []) : (demoQuery.data?.boletoArquivos || []);
+    const n = opts?.count ?? arrAtual.length;
+    if (n === 0) { toast({ title: "Anexe ao menos um PDF", description: "Não há demonstrativo para ler.", variant: "destructive" }); return; }
+    const base = opts?.baseStart ?? 2;
+    const span = Math.max(1, 100 - base);
+    const itens: any[] = [];
+    let falhas = 0;
+    setDemoProg({ kind, pct: base, label: `Lendo com IA — 0 de ${n}…` });
+    for (let i = 0; i < n; i++) {
+      setDemoProg({ kind, pct: base + Math.round((i / n) * span * 0.9), label: `Lendo com IA — arquivo ${i + 1} de ${n}…` });
+      try {
+        const r: any = await lerDemoArquivoMut.mutateAsync({ companyId, contaBancariaId: parseInt(contaBancariaId), ano, mes: mesSel, tipo: kind, indice: i });
+        if (Array.isArray(r?.itens)) itens.push(...r.itens);
+      } catch { falhas++; }
+      if (i < n - 1) await _sleep(300); // pacing p/ o free-tier do Gemini (429/503 transiente)
     }
+    setDemoProg({ kind, pct: base + Math.round(span * 0.95), label: "Salvando leitura…" });
+    try {
+      await salvarDemoExtraidoMut.mutateAsync({ companyId, contaBancariaId: parseInt(contaBancariaId), ano, mes: mesSel, tipo: kind, itens });
+    } catch (err: any) {
+      setDemoProg(null);
+      toast({ title: "Erro ao salvar leitura", description: err?.message || "Falha ao gravar a extração.", variant: "destructive" });
+      return;
+    }
+    setDemoProg({ kind, pct: 100, label: `Concluído · ${itens.length} pagamento(s)` });
+    await demoQuery.refetch();
+    setBuscaLeitura("");
+    setDemoFiltro(kind);
+    setTimeout(() => setDemoProg(null), 700);
+    if (falhas > 0) toast({ title: `${falhas} arquivo(s) não puderam ser lidos`, description: "Use 'Reler com IA' para tentar novamente.", variant: "destructive" });
   }
   function pedirDemo(kind: "pix" | "boleto") { setDemoKind(kind); setTimeout(() => demoInputRef.current?.click(), 0); }
+  // Rev. 3236 — aceita VÁRIOS PDFs de uma vez: faz upload de cada (progresso 1→44%),
+  // grava a lista (append) e em seguida lê TODOS com IA (46→100%).
   async function onDemoFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files || []);
     e.target.value = "";
     const kind = demoKind;
     setDemoKind(null);
-    if (!file || !kind || mesSel == null || !contaBancariaId) return;
-    const ct = (file.type || "").toLowerCase();
-    if (ct !== "application/pdf") { toast({ title: "Use um arquivo PDF", description: "O demonstrativo deve ser um PDF.", variant: "destructive" }); return; }
-    setDemoBusy(kind);
+    if (!files.length || !kind || mesSel == null || !contaBancariaId) return;
+    const pdfs = files.filter(f => (f.type || "").toLowerCase() === "application/pdf");
+    const pulados = files.length - pdfs.length;
+    if (pdfs.length === 0) { toast({ title: "Use arquivos PDF", description: "Os demonstrativos devem ser PDFs.", variant: "destructive" }); return; }
+    const existentes = (kind === "pix" ? demoQuery.data?.pixArquivos?.length : demoQuery.data?.boletoArquivos?.length) || 0;
+    const total = pdfs.length;
+    setDemoProg({ kind, pct: 1, label: `Enviando — 0 de ${total}…` });
     try {
-      const b64: string = await new Promise((res, rej) => {
-        const r = new FileReader();
-        r.onload = () => res(((r.result as string) || "").replace(/^data:[^,]*,/, ""));
-        r.onerror = rej;
-        r.readAsDataURL(file);
-      });
-      const up: any = await uploadComprovanteMut.mutateAsync({ fileName: file.name, fileBase64: b64, contentType: "application/pdf" });
-      await salvarDemoMut.mutateAsync({ companyId, contaBancariaId: parseInt(contaBancariaId), ano, mes: mesSel, tipo: kind, url: up.url, nome: file.name });
-      toast({ title: kind === "pix" ? "Demonstrativo de PIX anexado!" : "Demonstrativo de boletos anexado!", description: "Analisando com IA pra listar todos os pagamentos…" });
-      setDemoBusy(null);
-      // Rev. 3228 — após anexar, dispara a leitura por IA automaticamente para a lista
-      // aparecer logo abaixo (fluxo: anexar → analisar → lista, como pedido). O próprio
-      // lerDemoIA já faz o refetch do demoQuery, então não duplicamos a chamada aqui.
-      await lerDemoIA(kind);
-      return;
+      const novos: { url: string; nome: string }[] = [];
+      for (let i = 0; i < total; i++) {
+        setDemoProg({ kind, pct: 1 + Math.round((i / total) * 40), label: `Enviando — arquivo ${i + 1} de ${total}…` });
+        const b64 = await _fileToB64(pdfs[i]);
+        const up: any = await uploadComprovanteMut.mutateAsync({ fileName: pdfs[i].name, fileBase64: b64, contentType: "application/pdf" });
+        novos.push({ url: up.url, nome: pdfs[i].name });
+      }
+      setDemoProg({ kind, pct: 44, label: "Salvando anexos…" });
+      await salvarDemoMut.mutateAsync({ companyId, contaBancariaId: parseInt(contaBancariaId), ano, mes: mesSel, tipo: kind, arquivos: novos });
+      if (pulados > 0) toast({ title: `${pulados} arquivo(s) ignorado(s)`, description: "Apenas PDFs são aceitos." });
+      // Lê TODOS (existentes + novos) com IA, com progresso real 46→100%.
+      await lerDemoIA(kind, { baseStart: 46, count: existentes + novos.length });
     } catch (err: any) {
+      setDemoProg(null);
       toast({ title: "Erro ao anexar demonstrativo", description: err?.message || "Falha no upload.", variant: "destructive" });
-    } finally {
-      setDemoBusy(null);
     }
   }
-  async function removerDemo(kind: "pix" | "boleto") {
+  async function removerDemo(kind: "pix" | "boleto", indice?: number) {
     if (mesSel == null || !contaBancariaId) return;
-    setDemoBusy(kind);
+    setDemoProg({ kind, pct: 50, label: "Removendo…" });
     try {
-      await removerDemoMut.mutateAsync({ companyId, contaBancariaId: parseInt(contaBancariaId), ano, mes: mesSel, tipo: kind });
-      toast({ title: "Demonstrativo removido" });
-      demoQuery.refetch();
+      await removerDemoMut.mutateAsync({ companyId, contaBancariaId: parseInt(contaBancariaId), ano, mes: mesSel, tipo: kind, indice });
+      toast({ title: indice != null ? "Arquivo removido" : "Demonstrativo removido", description: "Use 'Ler com IA' para atualizar a lista." });
+      await demoQuery.refetch();
     } catch (err: any) {
       toast({ title: "Erro ao remover", description: err?.message || "Falha ao remover.", variant: "destructive" });
     } finally {
-      setDemoBusy(null);
+      setDemoProg(null);
     }
   }
 
@@ -1211,7 +1234,7 @@ export default function FinanceiroConciliacao() {
                   <FileText className="w-4 h-4 text-indigo-600 mt-0.5 shrink-0" />
                   <div>
                     <p className="text-sm font-semibold text-gray-800">Demonstrativos de pagamento (apoio à identificação)</p>
-                    <p className="text-xs text-gray-500">Anexe o PDF com <strong>todos os PIX</strong> e o PDF com <strong>todos os boletos pagos</strong> do mês. Servem só de consulta pra identificar quem recebeu — o extrato mostra apenas "PIX valor X".</p>
+                    <p className="text-xs text-gray-500">Anexe <strong>um ou vários PDFs</strong> com os <strong>PIX</strong> e os <strong>boletos pagos</strong> do mês (pode subir todos de uma vez). Servem só de consulta pra identificar quem recebeu — o extrato mostra apenas "PIX valor X".</p>
                   </div>
                 </div>
                 {mesSel == null ? (
@@ -1222,55 +1245,55 @@ export default function FinanceiroConciliacao() {
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {([
-                      { kind: "pix" as const, label: "Comprovantes de PIX", url: demoQuery.data?.pixUrl, nome: demoQuery.data?.pixNome, extraido: demoQuery.data?.pixExtraido, lidoEm: demoQuery.data?.pixLidoEm },
-                      { kind: "boleto" as const, label: "Comprovantes de Boletos", url: demoQuery.data?.boletoUrl, nome: demoQuery.data?.boletoNome, extraido: demoQuery.data?.boletoExtraido, lidoEm: demoQuery.data?.boletoLidoEm },
+                      { kind: "pix" as const, label: "Comprovantes de PIX", arquivos: (demoQuery.data?.pixArquivos || []) as { url: string; nome: string | null }[], extraido: demoQuery.data?.pixExtraido, lidoEm: demoQuery.data?.pixLidoEm },
+                      { kind: "boleto" as const, label: "Comprovantes de Boletos", arquivos: (demoQuery.data?.boletoArquivos || []) as { url: string; nome: string | null }[], extraido: demoQuery.data?.boletoExtraido, lidoEm: demoQuery.data?.boletoLidoEm },
                     ]).map((slot) => (
                       <div key={slot.kind} className="rounded-lg border border-indigo-200 bg-white p-3">
                         <p className="text-xs font-medium text-gray-600 mb-2">{slot.label} <span className="text-gray-400">· {MESES[mesSel - 1]}/{ano}</span></p>
-                        {slot.url ? (
-                          <>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
-                              <span className="text-xs text-gray-700 truncate flex-1 min-w-[80px]">{slot.nome || "documento.pdf"}</span>
-                              <a href={slot.url} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline">Abrir</a>
-                              <button type="button" onClick={() => pedirDemo(slot.kind)} disabled={demoBusy === slot.kind} className="text-xs font-medium text-gray-500 hover:text-gray-700 disabled:opacity-50">{demoBusy === slot.kind ? "Enviando..." : "Trocar"}</button>
-                              <button type="button" onClick={() => removerDemo(slot.kind)} disabled={demoBusy === slot.kind} className="text-xs font-medium text-red-500 hover:text-red-700 disabled:opacity-50">Remover</button>
+                        {demoProg?.kind === slot.kind ? (
+                          /* Rev. 3236 — barra de progresso REAL (0→100%) com rótulo detalhado */
+                          <div className="py-1">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="flex items-center gap-1.5 text-xs font-medium text-violet-700"><Loader2 className="w-3.5 h-3.5 animate-spin" />{demoProg.label}</span>
+                              <span className="text-xs font-semibold tabular-nums text-violet-700">{demoProg.pct}%</span>
                             </div>
-                            {/* Rev. 3220 — Ler com IA + barra 0→100% + ver tudo que foi lido */}
-                            <div className="mt-2.5 pt-2.5 border-t border-gray-100">
-                              {lerBusy === slot.kind ? (
-                                <div>
-                                  <div className="flex items-center justify-between mb-1">
-                                    <span className="flex items-center gap-1.5 text-xs font-medium text-violet-700"><Loader2 className="w-3.5 h-3.5 animate-spin" />A IA está lendo o PDF…</span>
-                                    <span className="text-xs font-semibold tabular-nums text-violet-700">{lerProgress}%</span>
-                                  </div>
-                                  <Progress value={lerProgress} className="h-2" />
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <Button size="sm" onClick={() => lerDemoIA(slot.kind)} disabled={lerBusy !== null} className="bg-violet-600 hover:bg-violet-700 text-white h-8">
-                                    <Sparkles className="w-3.5 h-3.5 mr-1.5" />{Array.isArray(slot.extraido) ? "Reler com IA" : "Ler com IA"}
-                                  </Button>
-                                  {Array.isArray(slot.extraido) && (
-                                    <span className="text-xs text-violet-700/80 font-medium">{slot.extraido.length} pagamento{slot.extraido.length === 1 ? "" : "s"} na lista abaixo</span>
-                                  )}
-                                </div>
-                              )}
-                              {Array.isArray(slot.extraido) && lerBusy !== slot.kind && (
-                                <p className="text-[11px] text-gray-400 mt-1.5">Lido por IA{slot.lidoEm ? ` em ${fmtData(slot.lidoEm)}` : ""} · {slot.extraido.length} pagamento(s) · {formatBRL(slot.extraido.reduce((s: number, it: any) => s + (Number(it?.valor) || 0), 0))}</p>
-                              )}
-                            </div>
-                          </>
+                            <Progress value={demoProg.pct} className="h-2" />
+                          </div>
                         ) : (
-                          <Button size="sm" variant="outline" onClick={() => pedirDemo(slot.kind)} disabled={demoBusy === slot.kind} className="border-indigo-200 text-indigo-700 hover:bg-indigo-50">
-                            <Upload className="w-3.5 h-3.5 mr-1.5" />{demoBusy === slot.kind ? "Enviando..." : "Anexar PDF"}
-                          </Button>
+                          <>
+                            {slot.arquivos.length > 0 && (
+                              <div className="space-y-1.5 mb-2.5">
+                                {slot.arquivos.map((f, idx) => (
+                                  <div key={idx} className="flex items-center gap-2">
+                                    <FileText className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                                    <span className="text-xs text-gray-700 truncate flex-1 min-w-[60px]" title={f.nome || "documento.pdf"}>{f.nome || "documento.pdf"}</span>
+                                    <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline">Abrir</a>
+                                    <button type="button" onClick={() => removerDemo(slot.kind, idx)} className="text-xs font-medium text-red-500 hover:text-red-700">Remover</button>
+                                  </div>
+                                ))}
+                                <p className="text-[11px] text-gray-400">{slot.arquivos.length} arquivo(s) anexado(s)</p>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Button size="sm" variant="outline" onClick={() => pedirDemo(slot.kind)} disabled={demoProg !== null} className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 h-8">
+                                <Upload className="w-3.5 h-3.5 mr-1.5" />{slot.arquivos.length > 0 ? "Anexar mais PDFs" : "Anexar PDF(s)"}
+                              </Button>
+                              {slot.arquivos.length > 0 && (
+                                <Button size="sm" onClick={() => lerDemoIA(slot.kind)} disabled={demoProg !== null} className="bg-violet-600 hover:bg-violet-700 text-white h-8">
+                                  <Sparkles className="w-3.5 h-3.5 mr-1.5" />{Array.isArray(slot.extraido) ? "Reler com IA" : "Ler com IA"}
+                                </Button>
+                              )}
+                            </div>
+                            {Array.isArray(slot.extraido) && (
+                              <p className="text-[11px] text-gray-400 mt-1.5">Lido por IA{slot.lidoEm ? ` em ${fmtData(slot.lidoEm)}` : ""} · {slot.extraido.length} pagamento(s) · {formatBRL(slot.extraido.reduce((s: number, it: any) => s + (Number(it?.valor) || 0), 0))}</p>
+                            )}
+                          </>
                         )}
                       </div>
                     ))}
                   </div>
                 )}
-                <input ref={demoInputRef} type="file" accept="application/pdf,.pdf" onChange={onDemoFile} className="hidden" />
+                <input ref={demoInputRef} type="file" accept="application/pdf,.pdf" multiple onChange={onDemoFile} className="hidden" />
               </CardContent>
             </Card>
 

@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3236 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DEMONSTRATIVOS DE PAGAMENTO · O SLOT DE
+ * "COMPROVANTES DE PIX" E O DE "COMPROVANTES DE BOLETOS" AGORA ACEITAM VÁRIOS PDFs DE UMA VEZ
+ * (ANTES ERA 1 PDF POR TIPO, QUE SUBSTITUÍA O ANTERIOR) — DÁ PRA SUBIR TODOS OS COMPROVANTES DO
+ * MÊS NUMA TACADA. O FLUXO "ANEXAR → LER COM IA" GANHOU UMA BARRA DE PROGRESSO REAL (0→100%) COM
+ * RÓTULO DETALHADO ("ENVIANDO ARQUIVO 2 DE 5", "LENDO COM IA ARQUIVO 3 DE 7", "SALVANDO LEITURA"),
+ * NO LUGAR DA BARRA ASSINTÓTICA FALSA. CADA ARQUIVO APARECE NA LISTA COM "ABRIR" E "REMOVER"
+ * INDIVIDUAIS. TUDO READ-ONLY — NADA CONCILIA NEM BAIXA.**
+ * - PEDIDO (piloto FC): "na parte de Demonstrativos de pagamento da Conciliação, deixar anexar
+ *   vários PDFs de uma vez (não só um) e mostrar uma barra de progresso de verdade, em porcentagem,
+ *   conforme vai processando."
+ * - CAUSA-RAIZ: o slot guardava só 1 URL/nome por tipo (`pix_url`/`pix_nome`/`boleto_url`/`boleto_nome`)
+ *   e cada upload SUBSTITUÍA o anterior; a leitura por IA era um único `lerDemonstrativoComIA`
+ *   (single-shot na tRPC, sem progresso real), então a barra subia de forma ASSINTÓTICA/fake até 92%.
+ * - SOLUÇÃO (BACK, `server/routers/financial.ts`): novas colunas-array `pix_arquivos_json`/
+ *   `boleto_arquivos_json` (TEXT com JSON `[{url,nome}]`); helper `_carregarDemoArquivos` lê o array
+ *   com FALLBACK para a coluna legacy `*_url`/`*_nome` (backward-compat). `getConciliacaoDemonstrativos`
+ *   passou a devolver `pixArquivos`/`boletoArquivos`. `salvarConciliacaoDemonstrativo` agora aceita
+ *   `arquivos[]` e faz APPEND + dedup por url (espelha o 1º na coluna legacy + zera a extração).
+ *   `removerConciliacaoDemonstrativo` ganhou `indice?` (remove 1 arquivo ou tudo). Novas procedures
+ *   `lerDemonstrativoArquivoIA` (lê UM arquivo por índice, SEM gravar — url vem do DB = SSRF-safe) e
+ *   `salvarDemonstrativoExtraido` (persiste a lista combinada, re-sanitizada via `_sanitizeComprovante`).
+ * - SOLUÇÃO (SELF-HEAL, `server/_core/index.ts`): `ADD COLUMN IF NOT EXISTS pix_arquivos_json` /
+ *   `boleto_arquivos_json` TEXT na tabela de demonstrativos (padrão das colunas de extração, sem ALTER
+ *   destrutivo/DROP/DELETE — R-001/007/010).
+ * - SOLUÇÃO (FRONT, `client/src/pages/financeiro/FinanceiroConciliacao.tsx`): input file com `multiple`;
+ *   `onDemoFile` faz upload de cada PDF em loop (progresso 1→44%) → `salvarConciliacaoDemonstrativo`
+ *   (append) → `lerDemoIA` por arquivo (46→100%). Novo estado `demoProg{kind,pct,label}` substitui
+ *   `demoBusy`/`lerBusy`/`lerProgress`. `lerDemoIA` lê cada arquivo por índice com `_sleep(300)` de
+ *   pacing (free-tier Gemini 429/503) e salva a lista combinada via `salvarDemonstrativoExtraido`.
+ *   A UI do slot lista TODOS os arquivos (Abrir/Remover por índice) + botões "Anexar mais PDFs" e
+ *   "Ler/Reler com IA" + a barra de progresso real com rótulo. Texto do card atualizado p/ "um ou
+ *   vários PDFs". ZERO conciliação/baixa automática · ZERO SCHEMA destrutivo.
+ *
  * Rev. 3235 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CHEQUE DEVOLVIDO = TENTATIVA DE PAGAMENTO
  * FRUSTRADA · O ERP AGORA ENTENDE O PAR "DÉBITO DA COMPENSAÇÃO + CRÉDITO DA DEVOLUÇÃO DO MESMO
  * CHEQUE" COMO UM ÚNICO EVENTO DE SALDO ZERO (NÃO É SAÍDA NEM ENTRADA REAL): RETIRA OS DOIS DA

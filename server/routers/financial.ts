@@ -508,6 +508,32 @@ async function _lerDemonstrativoIA(base64: string, mimeType: string): Promise<Co
     .filter((it: ComprovanteExtraido) => it.beneficiario || it.valor != null || it.documento || it.txid);
 }
 
+// Rev. 3236 — Demonstrativos passam a aceitar VÁRIOS PDFs por tipo (PIX/boleto). A lista
+// de arquivos vive em `pix_arquivos_json` / `boleto_arquivos_json` (TEXT = JSON [{url,nome}]).
+// Este helper carrega essa lista JÁ NORMALIZADA, com FALLBACK pro modelo antigo de 1 PDF
+// (pix_url/pix_nome) — assim demonstrativos anexados antes da Rev. 3236 continuam visíveis
+// e legíveis (índice 0). Tipo via enum (whitelist de identificador, sem interpolação livre).
+async function _carregarDemoArquivos(
+  db: any, companyId: number, contaBancariaId: number, ano: number, mes: number, tipo: "pix" | "boleto"
+): Promise<{ url: string; nome: string | null }[]> {
+  const colArr = tipo === "pix" ? "pix_arquivos_json" : "boleto_arquivos_json";
+  const colUrl = tipo === "pix" ? "pix_url" : "boleto_url";
+  const colNome = tipo === "pix" ? "pix_nome" : "boleto_nome";
+  const res = await dbExecute(db,
+    `SELECT ${colArr} AS arr, ${colUrl} AS url, ${colNome} AS nome
+       FROM financial_conciliacao_demonstrativos
+      WHERE company_id=$1 AND conta_bancaria_id=$2 AND ano=$3 AND mes=$4`,
+    [companyId, contaBancariaId, ano, mes]);
+  const r = (rows(res)[0] as any) ?? {};
+  let arr: any[] = [];
+  if (r.arr) { try { const p = JSON.parse(r.arr); if (Array.isArray(p)) arr = p; } catch { arr = []; } }
+  arr = arr
+    .filter((x: any) => x && x.url)
+    .map((x: any) => ({ url: String(x.url), nome: x.nome != null ? String(x.nome) : null }));
+  if (arr.length === 0 && r.url) arr = [{ url: String(r.url), nome: r.nome != null ? String(r.nome) : null }];
+  return arr;
+}
+
 // Recupera os BYTES de um comprovante JÁ ANEXADO (p/ reler por IA). SÓ resolve anexos
 // INTERNOS via /uploads/<key> → uploaded_files. NUNCA faz fetch de URL arbitrária: o
 // `comprovante_url` é gravado pelo cliente, então um fetch genérico abriria SSRF (alcance a
@@ -1313,6 +1339,7 @@ export const financialRouter = router({
     const res = await dbExecute(db,
       `SELECT pix_url AS "pixUrl", pix_nome AS "pixNome",
               boleto_url AS "boletoUrl", boleto_nome AS "boletoNome",
+              pix_arquivos_json AS "pixArquivosJson", boleto_arquivos_json AS "boletoArquivosJson",
               pix_extraido_json AS "pixExtraidoJson", pix_lido_em AS "pixLidoEm",
               boleto_extraido_json AS "boletoExtraidoJson", boleto_lido_em AS "boletoLidoEm"
        FROM financial_conciliacao_demonstrativos
@@ -1322,9 +1349,20 @@ export const financialRouter = router({
     const r = (rows(res)[0] as any) ?? {};
     // Rev. 3220 — o JSON extraído fica como TEXT no banco; entrega já parseado p/ o cliente.
     const parse = (v: any) => { if (!v) return null; try { return JSON.parse(v); } catch { return null; } };
+    // Rev. 3236 — lista de arquivos por tipo (vários PDFs), com FALLBACK pro modelo antigo
+    // de 1 PDF (pix_url/pix_nome) p/ demonstrativos anexados antes desta revisão.
+    const parseArr = (v: any, legacyUrl: any, legacyNome: any): { url: string; nome: string | null }[] => {
+      let a: any[] = [];
+      if (v) { try { const p = JSON.parse(v); if (Array.isArray(p)) a = p; } catch { a = []; } }
+      a = a.filter((x: any) => x && x.url).map((x: any) => ({ url: String(x.url), nome: x.nome != null ? String(x.nome) : null }));
+      if (a.length === 0 && legacyUrl) a = [{ url: String(legacyUrl), nome: legacyNome != null ? String(legacyNome) : null }];
+      return a;
+    };
     return {
       pixUrl: r.pixUrl ?? null, pixNome: r.pixNome ?? null,
       boletoUrl: r.boletoUrl ?? null, boletoNome: r.boletoNome ?? null,
+      pixArquivos: parseArr(r.pixArquivosJson, r.pixUrl, r.pixNome),
+      boletoArquivos: parseArr(r.boletoArquivosJson, r.boletoUrl, r.boletoNome),
       pixExtraido: parse(r.pixExtraidoJson), pixLidoEm: r.pixLidoEm ?? null,
       boletoExtraido: parse(r.boletoExtraidoJson), boletoLidoEm: r.boletoLidoEm ?? null,
     };
@@ -1336,39 +1374,65 @@ export const financialRouter = router({
     ano: z.number(),
     mes: z.number().min(1).max(12),
     tipo: z.enum(["pix", "boleto"]),
-    url: z.string().min(1),
+    // Rev. 3236 — agora aceita VÁRIOS arquivos de uma vez (append). `url`/`nome` ficam só
+    // por retrocompatibilidade (chamada antiga de 1 PDF). Ao menos uma das fontes é exigida.
+    url: z.string().min(1).optional(),
     nome: z.string().optional(),
+    arquivos: z.array(z.object({ url: z.string().min(1), nome: z.string().optional() })).optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
     await _assertContaBancariaPertenceEmpresa(db, input.contaBancariaId, input.companyId);
-    const nome = input.nome ?? null;
+    // Normaliza a entrada num array de novos arquivos (suporta o formato antigo de 1 PDF).
+    const novos = (input.arquivos && input.arquivos.length
+      ? input.arquivos
+      : (input.url ? [{ url: input.url, nome: input.nome }] : []))
+      .filter((x) => x && x.url)
+      .map((x) => ({ url: String(x.url), nome: x.nome != null ? String(x.nome) : null }));
+    if (novos.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum arquivo informado." });
+    // Hardening Rev. 3236 — só aceita anexos do namespace interno `/uploads/<key>` (paridade
+    // com `_baixarComprovante`): URL gravável pelo cliente fora disso = anexo inválido/SSRF.
+    if (novos.some((x) => !/\/uploads\//.test(x.url)))
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Anexo inválido: URL fora do namespace de uploads." });
     // Colunas fixas por tipo (whitelist via enum) — sem interpolação de identificador do usuário.
     const colUrl = input.tipo === "pix" ? "pix_url" : "boleto_url";
     const colNome = input.tipo === "pix" ? "pix_nome" : "boleto_nome";
+    const colArr = input.tipo === "pix" ? "pix_arquivos_json" : "boleto_arquivos_json";
     // Rev. 3220 — ao anexar/trocar o PDF, ZERA a leitura por IA anterior daquele tipo
-    // (o conteúdo mudou → a extração antiga não vale mais).
+    // (o conteúdo mudou → a extração antiga não vale mais; o cliente relê tudo em seguida).
     const colJson = input.tipo === "pix" ? "pix_extraido_json" : "boleto_extraido_json";
     const colLido = input.tipo === "pix" ? "pix_lido_em" : "boleto_lido_em";
+    // APPEND: carrega o que já existe (com fallback do modelo antigo), concatena os novos e
+    // deduplica por URL. O 1º arquivo é espelhado nas colunas legadas (compat com leitores antigos).
+    const atual = await _carregarDemoArquivos(db, input.companyId, input.contaBancariaId, input.ano, input.mes, input.tipo);
+    const seen = new Set<string>();
+    const arr = [...atual, ...novos].filter((x) => { if (seen.has(x.url)) return false; seen.add(x.url); return true; });
+    const arrJson = JSON.stringify(arr);
+    const first = arr[0];
+    // dbExecute liga params por ORDEM DE APARIÇÃO ($N é cosmético) → manter ascendente.
     await dbExecute(db,
       `INSERT INTO financial_conciliacao_demonstrativos
-         (company_id, conta_bancaria_id, ano, mes, ${colUrl}, ${colNome}, criado_em, atualizado_em)
-       VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW())
+         (company_id, conta_bancaria_id, ano, mes, ${colArr}, ${colUrl}, ${colNome}, criado_em, atualizado_em)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW())
        ON CONFLICT (company_id, conta_bancaria_id, ano, mes)
-       DO UPDATE SET ${colUrl}=EXCLUDED.${colUrl}, ${colNome}=EXCLUDED.${colNome},
+       DO UPDATE SET ${colArr}=EXCLUDED.${colArr}, ${colUrl}=EXCLUDED.${colUrl}, ${colNome}=EXCLUDED.${colNome},
                      ${colJson}=NULL, ${colLido}=NULL, atualizado_em=NOW()`,
-      [input.companyId, input.contaBancariaId, input.ano, input.mes, input.url, nome]
+      [input.companyId, input.contaBancariaId, input.ano, input.mes, arrJson, first.url, first.nome]
     );
-    return { ok: true };
+    return { ok: true, total: arr.length };
   }),
 
+  // Rev. 3236 — remove UM arquivo (por `indice`) da lista do tipo, ou TODOS (sem `indice`).
+  // Reescreve o array, espelha o 1º restante nas colunas legadas e ZERA a leitura por IA
+  // (o conjunto mudou). Tenant-safe. ZERO ALTER/DROP/DELETE (UPDATE de colunas).
   removerConciliacaoDemonstrativo: protectedProcedure.input(z.object({
     companyId: z.number(),
     contaBancariaId: z.number(),
     ano: z.number(),
     mes: z.number().min(1).max(12),
     tipo: z.enum(["pix", "boleto"]),
+    indice: z.number().int().min(0).optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -1376,15 +1440,82 @@ export const financialRouter = router({
     await _assertContaBancariaPertenceEmpresa(db, input.contaBancariaId, input.companyId);
     const colUrl = input.tipo === "pix" ? "pix_url" : "boleto_url";
     const colNome = input.tipo === "pix" ? "pix_nome" : "boleto_nome";
+    const colArr = input.tipo === "pix" ? "pix_arquivos_json" : "boleto_arquivos_json";
     const colJson = input.tipo === "pix" ? "pix_extraido_json" : "boleto_extraido_json";
     const colLido = input.tipo === "pix" ? "pix_lido_em" : "boleto_lido_em";
+    let arr: { url: string; nome: string | null }[] = [];
+    if (input.indice != null) {
+      arr = await _carregarDemoArquivos(db, input.companyId, input.contaBancariaId, input.ano, input.mes, input.tipo);
+      // Hardening Rev. 3236 — índice fora da faixa = erro explícito (evita "sucesso" sem efeito).
+      if (input.indice >= arr.length)
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Índice de arquivo inválido." });
+      arr.splice(input.indice, 1);
+    }
+    const arrJson = arr.length ? JSON.stringify(arr) : null;
+    const first = arr[0] ?? null;
+    // dbExecute liga params por ORDEM DE APARIÇÃO → array na mesma ordem dos placeholders.
     await dbExecute(db,
       `UPDATE financial_conciliacao_demonstrativos
-       SET ${colUrl}=NULL, ${colNome}=NULL, ${colJson}=NULL, ${colLido}=NULL, atualizado_em=NOW()
-       WHERE company_id=$1 AND conta_bancaria_id=$2 AND ano=$3 AND mes=$4`,
-      [input.companyId, input.contaBancariaId, input.ano, input.mes]
+       SET ${colArr}=$1, ${colUrl}=$2, ${colNome}=$3, ${colJson}=NULL, ${colLido}=NULL, atualizado_em=NOW()
+       WHERE company_id=$4 AND conta_bancaria_id=$5 AND ano=$6 AND mes=$7`,
+      [arrJson, first?.url ?? null, first?.nome ?? null, input.companyId, input.contaBancariaId, input.ano, input.mes]
     );
-    return { ok: true };
+    return { ok: true, total: arr.length };
+  }),
+
+  // Rev. 3236 — LÊ COM IA UM arquivo (por `indice`) da lista do tipo e devolve seus itens —
+  // SEM gravar nada (o cliente chama em loop p/ ter PROGRESSO REAL 0→100% e depois salva a
+  // lista combinada via salvarDemonstrativoExtraido). A URL vem SEMPRE do banco (nunca do
+  // cliente) → sem SSRF/IDOR; _baixarComprovante só resolve /uploads internos. Gateado pelo IA.
+  lerDemonstrativoArquivoIA: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    contaBancariaId: z.number(),
+    ano: z.number(),
+    mes: z.number().min(1).max(12),
+    tipo: z.enum(["pix", "boleto"]),
+    indice: z.number().int().min(0),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    await _assertContaBancariaPertenceEmpresa(db, input.contaBancariaId, input.companyId);
+    await assertAiModuleEnabled(input.companyId, "financeiro");
+    const arr = await _carregarDemoArquivos(db, input.companyId, input.contaBancariaId, input.ano, input.mes, input.tipo);
+    const url = arr[input.indice]?.url;
+    if (!url) throw new TRPCError({ code: "NOT_FOUND", message: "Arquivo não encontrado para leitura." });
+    const bin = await _baixarComprovante(url);
+    if (!bin) throw new TRPCError({ code: "BAD_REQUEST", message: "Não consegui acessar o PDF anexado para leitura." });
+    const itens = await _lerDemonstrativoIA(bin.base64, bin.contentType);
+    return { itens, indice: input.indice, count: itens.length };
+  }),
+
+  // Rev. 3236 — PERSISTE a lista combinada de pagamentos lida dos VÁRIOS PDFs do tipo
+  // (o cliente acumula os itens do loop de lerDemonstrativoArquivoIA). RE-SANITIZA cada
+  // item no servidor (defesa em profundidade: o cliente não é fonte confiável). ZERO ALTER/DROP.
+  salvarDemonstrativoExtraido: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    contaBancariaId: z.number(),
+    ano: z.number(),
+    mes: z.number().min(1).max(12),
+    tipo: z.enum(["pix", "boleto"]),
+    itens: z.array(z.any()),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    await _assertContaBancariaPertenceEmpresa(db, input.contaBancariaId, input.companyId);
+    const clean = input.itens
+      .map((it) => _sanitizeComprovante(it))
+      .filter((it) => it.beneficiario || it.valor != null || it.documento || it.txid);
+    const colJson = input.tipo === "pix" ? "pix_extraido_json" : "boleto_extraido_json";
+    const colLido = input.tipo === "pix" ? "pix_lido_em" : "boleto_lido_em";
+    // dbExecute liga params por ORDEM DE APARIÇÃO → o JSON ($1) vem PRIMEIRO no array.
+    await dbExecute(db,
+      `UPDATE financial_conciliacao_demonstrativos
+       SET ${colJson}=$1, ${colLido}=NOW(), atualizado_em=NOW()
+       WHERE company_id=$2 AND conta_bancaria_id=$3 AND ano=$4 AND mes=$5`,
+      [JSON.stringify(clean), input.companyId, input.contaBancariaId, input.ano, input.mes]);
+    return { ok: true, count: clean.length };
   }),
 
   // Rev. 3220 — LÊ COM IA o demonstrativo consolidado JÁ ANEXADO (PIX ou Boletos) daquela
