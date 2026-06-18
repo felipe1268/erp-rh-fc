@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3237 — **UI / GERAL · TODAS AS JANELAS (DIÁLOGOS) DO ERP GANHARAM UM BOTÃO DE
+ * MAXIMIZAR/RESTAURAR NO TOPO, AO LADO DO "X" DE FECHAR. UM CLIQUE EXPANDE A JANELA PARA
+ * QUASE A TELA INTEIRA (ÓTIMO PARA TABELAS/LISTAS LONGAS, COMO "TUDO QUE A IA LEU NOS
+ * DEMONSTRATIVOS"); OUTRO CLIQUE RESTAURA AO TAMANHO ANTERIOR. VALE PARA TODAS AS TELAS DE
+ * UMA VEZ — É CENTRALIZADO NO COMPONENTE DE DIÁLOGO.**
+ * - PEDIDO (piloto FC): "colocar um botão no topo da janela para maximizar/minimizar, em
+ *   todas as telas — facilita muito no dia a dia."
+ * - SOLUÇÃO (FRONT, `client/src/components/ui/dialog.tsx`): `DialogContent` (usado por TODOS
+ *   os diálogos shadcn do app) ganhou estado local `maximized` + prop `maximizable` (default
+ *   `true`). Novo botão (ícones `Maximize2`/`Minimize2`) num container flex no `top-4 right-4`
+ *   junto do "X". Maximizado → `width/height = calc(100vw/100dvh - 1rem)` e ignora
+ *   drag/resize manuais (alças de redimensionar ficam ocultas); restaurado → volta ao
+ *   width do `useResizableWidth`. AlertDialog (confirmações) NÃO é afetado (componente à
+ *   parte). ZERO backend · ZERO SCHEMA.
+ *
  * Rev. 3236 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DEMONSTRATIVOS DE PAGAMENTO · O SLOT DE
  * "COMPROVANTES DE PIX" E O DE "COMPROVANTES DE BOLETOS" AGORA ACEITAM VÁRIOS PDFs DE UMA VEZ
  * (ANTES ERA 1 PDF POR TIPO, QUE SUBSTITUÍA O ANTERIOR) — DÁ PRA SUBIR TODOS OS COMPROVANTES DO
