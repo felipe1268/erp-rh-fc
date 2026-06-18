@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3258 — **FINANCEIRO / CRONOGRAMA FINANCEIRO · OS VALORES DA TELA "CRONOGRAMA FINANCEIRO"
+ * (PREVISÃO DE FATURAMENTO × CUSTO × RESULTADO POR OBRA) PASSARAM A SER 100% FIÉIS AO ORÇAMENTO +
+ * CRONOGRAMA — SEM UM CENTAVO DE DIFERENÇA. ANTES: "CUSTO PREVISTO" MOSTRAVA O VALOR DE **VENDA**
+ * DISTRIBUÍDO (E AINDA PERDIA CENTAVOS) E A "RECEITA PREVISTA" FICAVA ZERADA, DANDO RESULTADO E MARGEM
+ * ERRADOS (EX.: QIU 2 — CUSTO R$ 9.499.800,55 / RECEITA R$ 0,00). AGORA: RECEITA = VALOR DE VENDA DO
+ * ORÇAMENTO, CUSTO = VALOR DE CUSTO DO ORÇAMENTO, AMBOS DISTRIBUÍDOS PELO CRONOGRAMA FÍSICO-FINANCEIRO,
+ * COM O TOTAL POR OBRA CRAVADO NO ORÇAMENTO (QIU 2 → RECEITA R$ 9.500.000,00 / CUSTO R$ 8.233.001,80 /
+ * RESULTADO +R$ 1.266.998,20 / MARGEM 13,34%; LUCIANA BLOCO B → R$ 1.840.000,00 / R$ 1.459.918,78 /
+ * +R$ 380.081,22 / 20,66%). 100% READ-ONLY.**
+ * - PEDIDO (piloto FC): "Verifique novamente, todos estes valores estão errados, preciso que seja 100%
+ *   fiel ao orçamento e planejamento, não pode ter nenhum centavo de diferença" (prints IMG_2184/2185 —
+ *   Luciana e Qiu 2 com Receita R$ 0,00 e Custo ≈ valor de venda).
+ * - CAUSA-RAIZ (3 problemas):
+ *   1. O "Custo Previsto" lia `financial_entries` com `origem_modulo='cronograma_atividade'`, que são a
+ *      PROJEÇÃO do contrato (valor de VENDA distribuído mês a mês, gravado como `tipo='despesa'`) — logo
+ *      o "custo" era na verdade a venda. (ver memória `cronograma-atividade-projecao-custos.md`).
+ *   2. A "Receita Prevista" lia entradas `tipo='receita'` que não existem (não há medições materializadas
+ *      como receita; `importAllMedicoesPrevistaToFinancial` é no-op desde a Rev. 3162) → ficava R$ 0,00.
+ *   3. A soma dos pesos do cronograma NÃO é exatamente 100% (QIU 2 = 99,9979%; Luciana = 99,9999%), então
+ *      `peso/100 × venda` perdia centavos (daí R$ 9.499.800,55 em vez de R$ 9.500.000,00).
+ * - SOLUÇÃO (BACK, READ-ONLY, `server/routers/financial.ts`, `getCronogramaFinanceiro` reescrito p/ calcular
+ *   AO VIVO a partir da FONTE DA VERDADE, sem depender do ledger compartilhado):
+ *   - VENDA por projeto = `COALESCE(NULLIF(valor_contrato,0), orc.valor_negociado, orc."totalVenda", …)`;
+ *     CUSTO por projeto = `COALESCE(orc."totalCusto", …)` (orçamento direto por `orcamento_id` OU o mais
+ *     recente da obra via LATERAL; revisão = a mais recente APROVADA, senão a mais recente).
+ *   - Distribuição por atividade-folha: `frac = peso / Σpeso` (NORMALIZA p/ 100% → mata o erro #3),
+ *     valor da atividade = `(venda|custo) × frac`, repartido IGUALMENTE entre os meses
+ *     `data_inicio→data_fim`. Acumula floats por mês, arredonda por mês e joga o RESTO de arredondamento
+ *     no ÚLTIMO mês de cada obra → total por obra = orçamento EXATO (à vírgula, validado contra o Neon:
+ *     diff = R$ 0,00 nas 2 obras).
+ *   - REALIZADO honesto: receita realizada = medições efetivamente medidas (`planejamento_medicoes.valor_medido`);
+ *     custo realizado = despesas reais PAGAS por obra EXCLUINDO `cronograma_atividade` (não duplica a projeção).
+ *   - Saída idêntica (`{ meses, obras, totais }`) → FRONT (`FinanceiroCronograma.tsx`) inalterado; "Atualizar
+ *     dados" segue sincronizando os outros módulos, mas a tela agora é sempre live/correta.
+ * - NÃO altera a importação `importAtividadesCronogramaToFinancial` nem o ledger `financial_entries` (outras
+ *   telas — Análise de Custos, Contas a Pagar comprometidas — continuam intactas). ZERO SCHEMA/ALTER/DROP/
+ *   DELETE. esbuild limpo.
+ *
  * Rev. 3257 — **FINANCEIRO / DASHBOARDS · O DIÁLOGO DE DRILL-DOWN (ABERTO AO CLICAR NUM GRÁFICO/BARRA
  * DOS 5 PAINÉIS — EX.: "CHEQUES · FERRAGENS SANTA RITA") PASSOU A ABRIR EM TELA CHEIA COM O LAYOUT
  * MODERNO PADRÃO FC: CABEÇALHO EM FAIXA AZUL (`#1B2A4A`→`#2c3f63`) COM ÍCONE EM CÍRCULO E PÍLULAS DE

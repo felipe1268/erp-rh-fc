@@ -7065,69 +7065,223 @@ export const financialRouter = router({
   getCronogramaFinanceiro: protectedProcedure.input(z.object({
     companyId: z.number(),
     obraId: z.number().optional(),
-  })).query(async ({ input }) => {
+  })).query(async ({ ctx, input }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
     const db = await getDb();
     if (!db) return { meses: [], obras: [], totais: null };
 
     const { companyId, obraId } = input;
-    const obraClause = obraId ? `AND fe.obra_id = ${Number(obraId)}` : "";
+    const obraClauseProj = obraId ? `AND pp.obra_id = ${Number(obraId)}` : "";
 
-    // Monthly breakdown with receita and custo
-    const { rows: mesesRows } = await dbExecute(db,
-      `SELECT
-         TO_CHAR(fe.data_competencia, 'YYYY-MM') AS mes,
-         SUM(CASE WHEN fe.tipo='receita'
-               THEN COALESCE(fe.valor_previsto::numeric, 0) ELSE 0 END) AS receita_prevista,
-         SUM(CASE WHEN fe.tipo='despesa'
-               THEN COALESCE(fe.valor_previsto::numeric, 0) ELSE 0 END) AS custo_previsto,
-         SUM(CASE WHEN fe.tipo='receita' AND fe.status IN ('pendente','pago','recebido','faturado')
-               THEN COALESCE(fe.valor_realizado::numeric, fe.valor_previsto::numeric, 0) ELSE 0 END) AS receita_realizada,
-         SUM(CASE WHEN fe.tipo='despesa' AND fe.status IN ('pago')
-               THEN COALESCE(fe.valor_realizado::numeric, fe.valor_previsto::numeric, 0) ELSE 0 END) AS custo_realizado
-       FROM financial_entries fe
-       WHERE fe.company_id = $1
-         AND fe.origem_modulo IN ('cronograma_atividade','planejamento_medicao','medicao_obra')
-         AND fe.status != 'cancelado'
-         ${obraClause}
-       GROUP BY mes
-       ORDER BY mes`,
+    const r2 = (x: number) => Math.round((x + Number.EPSILON) * 100) / 100;
+    const monthsBetween = (ini: string, fim: string): string[] => {
+      const [iy, im] = (ini ?? "").split("-").map(Number);
+      const [fy, fm] = (fim ?? "").split("-").map(Number);
+      if (!iy || !im || !fy || !fm) return [];
+      const out: string[] = [];
+      let y = iy, m = im;
+      while (y < fy || (y === fy && m <= fm)) {
+        out.push(`${y}-${String(m).padStart(2, "0")}`);
+        m++; if (m > 12) { m = 1; y++; }
+        if (out.length > 120) break;
+      }
+      return out;
+    };
+
+    // ── 1. Projetos + valor de VENDA e CUSTO do orçamento (fonte da verdade) ──
+    // Venda = valor de contrato/negociado/totalVenda; Custo = totalCusto do orçamento.
+    // Revisão escolhida: a mais recente APROVADA; senão a mais recente qualquer.
+    const { rows: projetos } = await dbExecute(db,
+      `SELECT pp.id AS projeto_id, pp.obra_id, o.nome AS obra_nome,
+              COALESCE(
+                NULLIF(pp.valor_contrato::numeric, 0),
+                orc_d.valor_negociado::numeric,
+                orc_d."totalVenda"::numeric,
+                orc_o.valor_negociado::numeric,
+                orc_o."totalVenda"::numeric,
+                0
+              ) AS venda,
+              COALESCE(orc_d."totalCusto"::numeric, orc_o."totalCusto"::numeric, 0) AS custo,
+              rev.revisao_id
+       FROM planejamento_projetos pp
+       JOIN obras o ON o.id = pp.obra_id
+       LEFT JOIN orcamentos orc_d ON orc_d.id = pp.orcamento_id AND orc_d.deleted_at IS NULL
+       LEFT JOIN LATERAL (
+         SELECT valor_negociado, "totalVenda", "totalCusto"
+         FROM orcamentos
+         WHERE "obraId" = pp.obra_id AND deleted_at IS NULL
+         ORDER BY id DESC LIMIT 1
+       ) orc_o ON true
+       LEFT JOIN LATERAL (
+         SELECT id AS revisao_id
+         FROM planejamento_revisoes
+         WHERE projeto_id = pp.id
+         ORDER BY (CASE WHEN status = 'aprovada' THEN 0 ELSE 1 END), numero DESC
+         LIMIT 1
+       ) rev ON true
+       WHERE pp.company_id = $1
+         AND o."deletedAt" IS NULL
+         ${obraClauseProj}`,
       [companyId]
     );
 
-    // Per-obra breakdown (for filter dropdown + by-obra table)
-    const { rows: obrasRows } = await dbExecute(db,
-      `SELECT
-         fe.obra_id,
-         fe.obra_nome,
-         SUM(CASE WHEN fe.tipo='receita'
-               THEN COALESCE(fe.valor_previsto::numeric, 0) ELSE 0 END) AS total_receita,
-         SUM(CASE WHEN fe.tipo='despesa'
-               THEN COALESCE(fe.valor_previsto::numeric, 0) ELSE 0 END) AS total_custo
+    const revisaoIds = projetos.map((p: any) => Number(p.revisao_id)).filter(Boolean);
+
+    // ── 2. Atividades-folha das revisões escolhidas (peso + janela de meses) ──
+    let atividades: any[] = [];
+    if (revisaoIds.length > 0) {
+      const { rows } = await dbExecute(db,
+        `SELECT a.revisao_id,
+                a.peso_financeiro::numeric AS peso,
+                TO_CHAR(a.data_inicio, 'YYYY-MM') AS ini_mes,
+                TO_CHAR(a.data_fim, 'YYYY-MM') AS fim_mes
+         FROM planejamento_atividades a
+         WHERE a.revisao_id IN (${revisaoIds.join(",")})
+           AND a.is_grupo = false
+           AND a.disabled = false
+           AND a.data_inicio IS NOT NULL
+           AND a.data_fim IS NOT NULL`,
+        []
+      );
+      atividades = rows;
+    }
+
+    // Agrupa atividades por revisão e soma os pesos (para NORMALIZAR a 100%).
+    const ativPorRev = new Map<number, any[]>();
+    const somaPesoRev = new Map<number, number>();
+    for (const a of atividades) {
+      const rid = Number(a.revisao_id);
+      if (!ativPorRev.has(rid)) ativPorRev.set(rid, []);
+      ativPorRev.get(rid)!.push(a);
+      somaPesoRev.set(rid, (somaPesoRev.get(rid) ?? 0) + parseFloat(a.peso ?? "0"));
+    }
+
+    // ── 3. Distribui venda/custo por mês, por obra — sem perder centavos ──────
+    // Para cada projeto: fração = peso / Σpeso (normaliza p/ 100%); distribui
+    // igualmente entre os meses da atividade; arredonda por mês e joga o resto
+    // no último mês do projeto → total por obra = orçamento EXATO (à vírgula).
+    type MesAgg = { receitaPrevista: number; custoPrevisto: number; receitaRealizada: number; custoRealizado: number };
+    const mesesMap = new Map<string, MesAgg>();
+    const getMes = (k: string): MesAgg => {
+      if (!mesesMap.has(k)) mesesMap.set(k, { receitaPrevista: 0, custoPrevisto: 0, receitaRealizada: 0, custoRealizado: 0 });
+      return mesesMap.get(k)!;
+    };
+    const obrasMap = new Map<number, { obraId: number; obraNome: string; totalReceita: number; totalCusto: number }>();
+    const getObra = (id: number, nome: string) => {
+      if (!obrasMap.has(id)) obrasMap.set(id, { obraId: id, obraNome: nome ?? `Obra ${id}`, totalReceita: 0, totalCusto: 0 });
+      return obrasMap.get(id)!;
+    };
+
+    for (const proj of projetos) {
+      const rid = Number(proj.revisao_id);
+      const venda = parseFloat(proj.venda ?? "0");
+      const custo = parseFloat(proj.custo ?? "0");
+      const ativs = ativPorRev.get(rid) ?? [];
+      const somaPeso = somaPesoRev.get(rid) ?? 0;
+      if (ativs.length === 0 || somaPeso <= 0 || (venda <= 0 && custo <= 0)) continue;
+
+      // floats por mês (deste projeto)
+      const vendaMes = new Map<string, number>();
+      const custoMes = new Map<string, number>();
+      for (const at of ativs) {
+        const peso = parseFloat(at.peso ?? "0");
+        if (peso <= 0) continue;
+        const frac = peso / somaPeso; // normaliza: Σfrac = 1 → total = venda/custo exatos
+        const meses = monthsBetween(at.ini_mes, at.fim_mes);
+        if (meses.length === 0) continue;
+        const vM = (venda * frac) / meses.length;
+        const cM = (custo * frac) / meses.length;
+        for (const m of meses) {
+          vendaMes.set(m, (vendaMes.get(m) ?? 0) + vM);
+          custoMes.set(m, (custoMes.get(m) ?? 0) + cM);
+        }
+      }
+
+      // arredonda por mês + carrega o resto no último mês (cronológico)
+      const monthKeys = [...new Set([...vendaMes.keys(), ...custoMes.keys()])].sort();
+      if (monthKeys.length === 0) continue;
+      const lastK = monthKeys[monthKeys.length - 1];
+      let accV = 0, accC = 0;
+      const roundedV = new Map<string, number>();
+      const roundedC = new Map<string, number>();
+      for (const m of monthKeys) {
+        const rv = r2(vendaMes.get(m) ?? 0);
+        const rc = r2(custoMes.get(m) ?? 0);
+        roundedV.set(m, rv); accV += rv;
+        roundedC.set(m, rc); accC += rc;
+      }
+      roundedV.set(lastK, r2((roundedV.get(lastK) ?? 0) + (r2(venda) - r2(accV))));
+      roundedC.set(lastK, r2((roundedC.get(lastK) ?? 0) + (r2(custo) - r2(accC))));
+
+      const obraAgg = getObra(Number(proj.obra_id), proj.obra_nome);
+      for (const m of monthKeys) {
+        const cell = getMes(m);
+        const rv = roundedV.get(m) ?? 0;
+        const rc = roundedC.get(m) ?? 0;
+        cell.receitaPrevista += rv;
+        cell.custoPrevisto += rc;
+        obraAgg.totalReceita += rv;
+        obraAgg.totalCusto += rc;
+      }
+    }
+
+    // ── 4. REALIZADO (execução real) ─────────────────────────────────────────
+    // Receita realizada = medições efetivamente medidas (planejamento_medicoes).
+    // Custo realizado    = despesas reais PAGAS por obra, EXCLUINDO a projeção
+    //   do cronograma (origem_modulo='cronograma_atividade'), p/ não duplicar.
+    const { rows: medReal } = await dbExecute(db,
+      `SELECT TO_CHAR(pm.competencia, 'YYYY-MM') AS mes, pp.obra_id,
+              SUM(pm.valor_medido::numeric) AS v
+       FROM planejamento_medicoes pm
+       JOIN planejamento_projetos pp ON pp.id = pm.projeto_id
+       WHERE pp.company_id = $1
+         AND pm.status NOT IN ('cancelada','rejeitada')
+         AND COALESCE(pm.valor_medido::numeric, 0) > 0
+         ${obraId ? `AND pp.obra_id = ${Number(obraId)}` : ""}
+       GROUP BY mes, pp.obra_id`,
+      [companyId]
+    );
+    for (const r of medReal) {
+      const m = String(r.mes);
+      if (!m || m.length < 7) continue;
+      getMes(m).receitaRealizada += parseFloat(r.v ?? "0");
+    }
+
+    const { rows: custoRealRows } = await dbExecute(db,
+      `SELECT TO_CHAR(fe.data_competencia, 'YYYY-MM') AS mes,
+              SUM(COALESCE(fe.valor_realizado::numeric, fe.valor_previsto::numeric, 0)) AS v
        FROM financial_entries fe
        WHERE fe.company_id = $1
-         AND fe.origem_modulo IN ('cronograma_atividade','planejamento_medicao','medicao_obra')
+         AND fe.tipo = 'despesa'
+         AND fe.status = 'pago'
+         AND COALESCE(fe.origem_modulo, '') <> 'cronograma_atividade'
          AND fe.obra_id IS NOT NULL
-         AND fe.status != 'cancelado'
-       GROUP BY fe.obra_id, fe.obra_nome
-       ORDER BY total_custo DESC`,
+         ${obraId ? `AND fe.obra_id = ${Number(obraId)}` : ""}
+       GROUP BY mes`,
       [companyId]
     );
+    for (const r of custoRealRows) {
+      const m = String(r.mes);
+      if (!m || m.length < 7) continue;
+      getMes(m).custoRealizado += parseFloat(r.v ?? "0");
+    }
 
-    // Build monthly array with accumulated %
+    // ── 5. Monta a saída (meses ordenados + acumulado + totais + obras) ───────
+    const ordered = [...mesesMap.keys()].sort();
+    const totalReceita = ordered.reduce((s, k) => s + mesesMap.get(k)!.receitaPrevista, 0);
     let acumReceita = 0;
-    let totalReceita = mesesRows.reduce((s: number, r: any) => s + parseFloat(r.receita_prevista ?? "0"), 0);
-
-    const meses = mesesRows.map((r: any) => {
-      const recPrev = parseFloat(r.receita_prevista ?? "0");
-      const custoPrev = parseFloat(r.custo_previsto ?? "0");
-      const recReal = parseFloat(r.receita_realizada ?? "0");
-      const custoReal = parseFloat(r.custo_realizado ?? "0");
+    const meses = ordered.map((k) => {
+      const c = mesesMap.get(k)!;
+      const recPrev = r2(c.receitaPrevista);
+      const custoPrev = r2(c.custoPrevisto);
+      const recReal = r2(c.receitaRealizada);
+      const custoReal = r2(c.custoRealizado);
       acumReceita += recPrev;
-      const resultado = recPrev - custoPrev;
+      const resultado = r2(recPrev - custoPrev);
       const margemPct = recPrev > 0 ? (resultado / recPrev) * 100 : 0;
       const acumPct = totalReceita > 0 ? (acumReceita / totalReceita) * 100 : 0;
       return {
-        mes: r.mes,
+        mes: k,
         receitaPrevista: recPrev,
         custoPrevisto: custoPrev,
         resultadoPrevisto: resultado,
@@ -7135,24 +7289,22 @@ export const financialRouter = router({
         acumPct,
         receitaRealizada: recReal,
         custoRealizado: custoReal,
-        resultadoRealizado: recReal - custoReal,
+        resultadoRealizado: r2(recReal - custoReal),
       };
     });
 
     const totais = {
-      totalReceitaPrevista: totalReceita,
-      totalCustoPrevisto: meses.reduce((s: number, m: any) => s + m.custoPrevisto, 0),
-      resultadoPrevisto: meses.reduce((s: number, m: any) => s + m.resultadoPrevisto, 0),
-      receitaRealizada: meses.reduce((s: number, m: any) => s + m.receitaRealizada, 0),
-      custoRealizado: meses.reduce((s: number, m: any) => s + m.custoRealizado, 0),
+      totalReceitaPrevista: r2(meses.reduce((s, m) => s + m.receitaPrevista, 0)),
+      totalCustoPrevisto: r2(meses.reduce((s, m) => s + m.custoPrevisto, 0)),
+      resultadoPrevisto: r2(meses.reduce((s, m) => s + m.resultadoPrevisto, 0)),
+      receitaRealizada: r2(meses.reduce((s, m) => s + m.receitaRealizada, 0)),
+      custoRealizado: r2(meses.reduce((s, m) => s + m.custoRealizado, 0)),
     };
 
-    const obras = obrasRows.map((r: any) => ({
-      obraId: r.obra_id,
-      obraNome: r.obra_nome ?? `Obra ${r.obra_id}`,
-      totalReceita: parseFloat(r.total_receita ?? "0"),
-      totalCusto: parseFloat(r.total_custo ?? "0"),
-    }));
+    const obras = [...obrasMap.values()]
+      .map((o) => ({ ...o, totalReceita: r2(o.totalReceita), totalCusto: r2(o.totalCusto) }))
+      .filter((o) => o.totalReceita > 0 || o.totalCusto > 0)
+      .sort((a, b) => b.totalReceita - a.totalReceita);
 
     return { meses, obras, totais };
   }),
@@ -7160,7 +7312,8 @@ export const financialRouter = router({
   // Trigger: importa todas as medições previstas para o cronograma financeiro
   importarCronogramaFinanceiro: protectedProcedure.input(z.object({
     companyId: z.number(),
-  })).mutation(async ({ input }) => {
+  })).mutation(async ({ ctx, input }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
     const { companyId } = input;
     const [n1, n2, n3] = await Promise.all([
       importAllMedicoesPrevistaToFinancial(companyId),
