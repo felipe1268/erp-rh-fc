@@ -1,6 +1,53 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3235 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CHEQUE DEVOLVIDO = TENTATIVA DE PAGAMENTO
+ * FRUSTRADA · O ERP AGORA ENTENDE O PAR "DÉBITO DA COMPENSAÇÃO + CRÉDITO DA DEVOLUÇÃO DO MESMO
+ * CHEQUE" COMO UM ÚNICO EVENTO DE SALDO ZERO (NÃO É SAÍDA NEM ENTRADA REAL): RETIRA OS DOIS DA
+ * LISTA "NO EXTRATO, SEM LANÇAMENTO" E OS MOSTRA NUM BLOCO PRÓPRIO "CHEQUES DEVOLVIDOS", JÁ COM
+ * O MOTIVO TRADUZIDO (ALÍNEA BACEN — BIBLIOTECA INTERNA) E A BUSCA DA QUITAÇÃO REAL
+ * (REAPRESENTAÇÃO COMPENSADA OU PIX/TED DE MESMO VALOR). TUDO READ-ONLY — NADA É BAIXADO.**
+ * - PEDIDO (piloto FC): "quando um cheque é compensado e depois devolvido no extrato, isso é uma
+ *   tentativa de pagamento que não deu certo: não pode contar como saída e nem o crédito da
+ *   devolução como entrada. O ERP deve juntar os dois, me dizer o motivo da devolução e procurar
+ *   se o pagamento foi quitado de outro jeito (cheque reapresentado ou PIX). Também quero uma
+ *   biblioteca dos motivos de devolução do Banco Central."
+ * - CAUSA-RAIZ: a Conciliação (Rev. 3229+) listava a compensação como SAÍDA e a devolução como
+ *   ENTRADA, duas linhas soltas em "No extrato, sem lançamento" — o usuário não percebia que era
+ *   o MESMO cheque (saldo líquido zero) e podia lançar uma despesa que nunca se concretizou. Pior:
+ *   a dupla checagem da Rev. 3234 (`cheques.ts`) podia confirmar (conciliado=1) um cheque cujo
+ *   débito foi DEPOIS estornado, marcando como "compensado de verdade" algo que voltou.
+ * - SOLUÇÃO (NOVA BIBLIOTECA, `shared/chequeMotivos.ts`): tabela `MOTIVOS_DEVOLUCAO_CHEQUE` com as
+ *   alíneas do Bacen (11/12 sem fundos, 13 conta encerrada, 20/25 sustação/contraordem, 21
+ *   contraordem, 22 divergência/insuficiência de assinatura, 28 roubo/furto/extravio, 31 erro
+ *   formal, 35 fraude, 48 acima do valor do cheque especial, 70 sustação por aviso, etc.), com
+ *   `grupo` (sem_fundos/sustacao/encerramento/formal/fraude/outro), label, flags `sustado` e
+ *   `reapresentavel`; `getMotivoDevolucao` com fallback genérico p/ código fora da tabela
+ *   ("Motivo NN"); parsers `parseMotivoCodigo`/`parseMotivoDevolucao`/`pareceDevolucaoCheque`/
+ *   `pareceCompensacaoCheque`/`parseDocNumero`/`parseChequeNumero`; e o motor `detectarParesEstorno`
+ *   que casa cada CRÉDITO de devolução com o DÉBITO de compensação de MESMO valor (chave forte =
+ *   Doc/nº do cheque; fallback = valor + débito anterior mais próximo da data da devolução),
+ *   devolvendo `ParEstorno[]` com motivo, datas e ids das duas linhas.
+ * - SOLUÇÃO (BACK conciliação, `server/routers/financial.ts`, `getConciliacaoReport`): após montar
+ *   `extratoSemLancamento`, roda `detectarParesEstorno` sobre as linhas; cada par vira um item de
+ *   `chequesDevolvidos` (com fornecedor/obra/NF herdados do match de cheque já existente,
+ *   `matchChequeLinha`) e procura a quitação real ENTRE AS LINHAS LIVRES: (a) reapresentação =
+ *   outro DÉBITO de cheque de mesmo valor em data ≥ devolução; (b) substituição = PIX/TED/transf.
+ *   de mesmo valor em data ≥ compensação. As linhas do par e a linha de quitação são marcadas
+ *   (`reversal`/`reversalResolveGrupo`) p/ saírem da lista crua. READ-ONLY: nenhum INSERT/UPDATE.
+ * - SOLUÇÃO (BACK controle, `server/routers/cheques.ts`, `montarMatcherExtrato`): antes de indexar
+ *   o extrato, detecta os pares de estorno e EXCLUI os débitos estornados dos maps de confirmação
+ *   `byNumVal`/`byValData` (assim a Rev. 3234 não confirma um cheque que voltou); esses débitos
+ *   entram em maps próprios `devByNumVal`/`devByValData` e `classificarExtrato` passa a expor
+ *   `extratoDevolvido`/`extratoMotivoCodigo`/`extratoMotivoTexto` por cheque.
+ * - SOLUÇÃO (FRONT, `FinanceiroConciliacao.tsx`): `repExt` agora FILTRA `reversal`/`reversalResolveGrupo`
+ *   (estornos e quitações saem da lista normal e dos exports Excel/PDF); novo Card "Cheques
+ *   devolvidos no banco" (faixa âmbar) listando cada par com valor, badge do motivo (vermelho se
+ *   sustado), fornecedor/obra/NF, datas compensou→devolvido e a RESOLUÇÃO (verde "reapresentado e
+ *   compensado", azul "quitado por PIX/TED", âmbar "sem quitação — analisar"). `FinanceiroCheques.tsx`:
+ *   badge âmbar "Devolvido no banco · mot. NN" (precedência sobre "Banco compensou — analisar").
+ * - ZERO baixa/lançamento automático · ZERO mudança de status · ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3234 — **FINANCEIRO / CONTROLE DE CHEQUES · DUPLA CHECAGEM EXTRATO ↔ CHEQUE · O ERP AGORA
  * CONFERE CADA CHEQUE DO CONTROLE CONTRA O EXTRATO BANCÁRIO IMPORTADO: QUANDO O BANCO REALMENTE
  * COMPENSOU O CHEQUE E O CONTROLE JÁ DIZ "COMPENSADO", O ERP MARCA O CHEQUE COMO CONFERIDO

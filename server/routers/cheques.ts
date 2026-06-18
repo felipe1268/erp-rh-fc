@@ -26,6 +26,7 @@ import { sql } from "drizzle-orm";
 import * as XLSX from "xlsx";
 import { randomUUID } from "crypto";
 import { invokeGeminiVision, invokeAnthropicVision } from "../_core/llm";
+import { detectarParesEstorno, type ParEstorno } from "../../shared/chequeMotivos";
 
 // ─────────────────────────── Tenant guard ───────────────────────────
 async function assertCompanyAccess(ctxUser: any, companyId: number) {
@@ -61,10 +62,19 @@ async function dbExecute(db: any, query: string, params: unknown[] = []): Promis
 //   (2) fallback VALOR + DATA (== data_compensacao do cheque) QUANDO ÚNICO e a descrição
 //       parece de cheque/compensação (trava p/ não casar PIX/tarifa de mesmo valor+data).
 // SÓ LEITURA — esta função não grava nada.
-type MatchExtrato = { encontrado: boolean; dataExtrato: string | null; forte: boolean };
+type MatchExtrato = {
+  encontrado: boolean;
+  dataExtrato: string | null;
+  forte: boolean;
+  // Rev. 3235 — o débito que casou com este cheque foi DEPOIS estornado (cheque
+  // devolvido/sustado no extrato): a compensação NÃO se concretizou.
+  devolvido: boolean;
+  motivoCodigo: number | null;
+  motivoTexto: string | null;
+};
 async function montarMatcherExtrato(db: any, companyId: number): Promise<(cheque: any) => MatchExtrato> {
   const res = await dbExecute(db,
-    `SELECT data, descricao, valor
+    `SELECT id, data, descricao, valor
        FROM bank_statement_lines
       WHERE company_id=$1 AND excluido_em IS NULL`,
     [companyId]);
@@ -76,6 +86,16 @@ async function montarMatcherExtrato(db: any, companyId: number): Promise<(cheque
     return null;
   };
   const pareceCheque = (descricao: any) => /cheq|compensa/i.test(String(descricao ?? ""));
+  // Rev. 3235 — antes de indexar, descobre os PARES DE ESTORNO (débito do cheque +
+  // crédito de devolução do MESMO cheque). O débito estornado NÃO pode confirmar o
+  // cheque (a compensação foi revertida); ele sai dos índices de match e vira um sinal
+  // próprio "devolvido" com o motivo (alínea Bacen) p/ o controle exibir e analisar.
+  const linhas = (res.rows as any[]);
+  const pares = detectarParesEstorno(linhas.map((l) => ({
+    id: l.id, valorCents: cents(l.valor), isCredito: Number(l.valor) >= 0, descricao: l.descricao, data: dia(l.data),
+  })));
+  const devolvidoPorDebitoId = new Map<any, ParEstorno>();
+  for (const p of pares) devolvidoPorDebitoId.set(p.debitoId, p);
   // AMBOS os índices guardam LISTAS e só confirmam quando ÚNICO. Como esta procedure
   // GRAVA conciliado=1 (≠ Rev. 3229 que só exibe), o match forte nº+valor também exige
   // unicidade: se o extrato tiver 2 linhas com mesmo nº+valor (reapresentação/estorno/
@@ -83,28 +103,52 @@ async function montarMatcherExtrato(db: any, companyId: number): Promise<(cheque
   // jamais marca cheque errado). Isso cobre o falso-positivo e a colisão histórica.
   const byNumVal = new Map<string, any[]>();  // "num|cents" → linhas (match forte, só quando único)
   const byValData = new Map<string, any[]>(); // "cents|dia" → linhas (match fraco, só quando único)
-  for (const l of (res.rows as any[])) {
+  const devByNumVal = new Map<string, ParEstorno>();  // "num|cents" → par de estorno (débito devolvido)
+  const devByValData = new Map<string, ParEstorno>(); // "cents|dia" → par de estorno (débito devolvido)
+  for (const l of linhas) {
     const cts = cents(l.valor);
     if (cts == null || cts === 0) continue;
+    const par = devolvidoPorDebitoId.get(l.id);
     const num = extrNum(l.descricao);
-    if (num) { const k = `${num}|${cts}`; if (!byNumVal.has(k)) byNumVal.set(k, []); byNumVal.get(k)!.push(l); }
-    if (pareceCheque(l.descricao)) {
-      const d = dia(l.data);
-      if (d) { const k = `${cts}|${d}`; if (!byValData.has(k)) byValData.set(k, []); byValData.get(k)!.push(l); }
+    const d = pareceCheque(l.descricao) ? dia(l.data) : null;
+    if (par) {
+      // Débito ESTORNADO: fora dos índices de confirmação; entra nos mapas "devolvido".
+      if (num) devByNumVal.set(`${num}|${cts}`, par);
+      if (d) devByValData.set(`${cts}|${d}`, par);
+      continue;
     }
+    if (num) { const k = `${num}|${cts}`; if (!byNumVal.has(k)) byNumVal.set(k, []); byNumVal.get(k)!.push(l); }
+    if (d) { const k = `${cts}|${d}`; if (!byValData.has(k)) byValData.set(k, []); byValData.get(k)!.push(l); }
   }
+  const devolvidoHit = (par: ParEstorno | undefined): MatchExtrato | null => {
+    if (!par) return null;
+    return { encontrado: false, dataExtrato: par.dataCredito ?? par.dataDebito ?? null, forte: false,
+      devolvido: true, motivoCodigo: par.motivo?.codigo ?? null, motivoTexto: par.motivo?.motivo ?? null };
+  };
   return function matchCheque(cheque: any): MatchExtrato {
     const cts = cents(cheque.valor);
-    if (cts == null || cts === 0) return { encontrado: false, dataExtrato: null, forte: false };
+    const vazio: MatchExtrato = { encontrado: false, dataExtrato: null, forte: false, devolvido: false, motivoCodigo: null, motivoTexto: null };
+    if (cts == null || cts === 0) return vazio;
     const num = String(cheque.numeroCheque ?? cheque.numero_cheque ?? "").replace(/[^0-9]/g, "").replace(/^0+/, "");
-    if (num) { const arr = byNumVal.get(`${num}|${cts}`); if (arr && arr.length === 1) return { encontrado: true, dataExtrato: dia(arr[0].data), forte: true }; }
     const dc = dia(cheque.dataCompensacao ?? cheque.data_compensacao);
-    if (dc) { const arr = byValData.get(`${cts}|${dc}`); if (arr && arr.length === 1) return { encontrado: true, dataExtrato: dia(arr[0].data), forte: false }; }
-    return { encontrado: false, dataExtrato: null, forte: false };
+    if (num) {
+      const arr = byNumVal.get(`${num}|${cts}`);
+      if (arr && arr.length === 1) return { ...vazio, encontrado: true, dataExtrato: dia(arr[0].data), forte: true };
+      const dev = devolvidoHit(devByNumVal.get(`${num}|${cts}`));
+      if (dev) return dev;
+    }
+    if (dc) {
+      const arr = byValData.get(`${cts}|${dc}`);
+      if (arr && arr.length === 1) return { ...vazio, encontrado: true, dataExtrato: dia(arr[0].data), forte: false };
+      const dev = devolvidoHit(devByValData.get(`${cts}|${dc}`));
+      if (dev) return dev;
+    }
+    return vazio;
   };
 }
 // Classifica o cheque contra o extrato: confirmado (banco compensou E controle já diz
-// "compensado") × divergente (banco compensou MAS controle diz != compensado → ALERTA).
+// "compensado") × divergente (banco compensou MAS controle diz != compensado → ALERTA)
+// × devolvido (Rev. 3235 — o débito foi estornado no extrato; compensação não vingou).
 function classificarExtrato(status: any, m: MatchExtrato) {
   const compensado = String(status ?? "").toLowerCase() === "compensado";
   return {
@@ -112,6 +156,9 @@ function classificarExtrato(status: any, m: MatchExtrato) {
     extratoData: m.dataExtrato,
     extratoConfirmado: m.encontrado && compensado,
     extratoDivergente: m.encontrado && !compensado,
+    extratoDevolvido: m.devolvido,
+    extratoMotivoCodigo: m.motivoCodigo,
+    extratoMotivoTexto: m.motivoTexto,
   };
 }
 

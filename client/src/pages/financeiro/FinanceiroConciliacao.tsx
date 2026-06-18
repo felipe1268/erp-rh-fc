@@ -375,7 +375,14 @@ export default function FinanceiroConciliacao() {
     { enabled: !!companyId && !!contaBancariaId, retry: false }
   );
   const repConc: any[] = report?.conciliados ?? [];
-  const repExt: any[] = report?.extratoSemLancamento ?? [];
+  // Rev. 3235 — as linhas que formam um par de ESTORNO (débito do cheque + crédito de
+  // devolução do MESMO cheque) NÃO entram na lista normal "no extrato, sem lançamento":
+  // o par tem saldo zero (tentativa de pagamento frustrada) e é tratado num bloco próprio
+  // ("Cheques devolvidos"). A linha de quitação real (reapresentação/PIX) também sai da
+  // lista crua porque é exibida amarrada ao par.
+  const repExtRaw: any[] = report?.extratoSemLancamento ?? [];
+  const repExt: any[] = repExtRaw.filter((r) => !r.reversal && !r.reversalResolveGrupo);
+  const repDevol: any[] = report?.chequesDevolvidos ?? [];
   const repLan: any[] = report?.lancamentosSemExtrato ?? [];
   // Rev. 3219 — filtro de busca (texto livre) aplicado às DUAS listas de pendência.
   // Casa por descrição, fornecedor, obra, doc, data e valor (BRL formatado + número cru),
@@ -1739,6 +1746,73 @@ export default function FinanceiroConciliacao() {
                   </button>
                 )}
               </div>
+            )}
+            {/* Rev. 3235 — CHEQUES DEVOLVIDOS (tentativa de pagamento frustrada). O par
+                débito (compensação) + crédito (devolução) do MESMO cheque tem saldo ZERO:
+                não é saída nem entrada real. O ERP pareia, traduz o motivo (alínea Bacen)
+                e mostra a quitação real encontrada (reapresentação ou PIX/TED) — ou avisa
+                que segue PENDENTE p/ o usuário decidir. READ-ONLY: nada é baixado. */}
+            {repDevol.length > 0 && (
+              <Card className="border-0 shadow-sm mb-6 border-l-4 border-l-amber-400">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <RotateCcw className="w-4 h-4 text-amber-500" />
+                    Cheques devolvidos no banco ({repDevol.length})
+                    <span className="font-normal text-[11px] text-gray-400">tentativa de pagamento frustrada — saldo zero</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="divide-y divide-gray-100 max-h-[460px] overflow-y-auto">
+                    {repDevol.map((d: any) => {
+                      const res = d.resolucao ?? { tipo: "pendente" };
+                      return (
+                        <div key={d.grupoId} className="px-4 py-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-gray-800 flex items-center flex-wrap gap-x-2 gap-y-1">
+                                <span>Cheque {d.chequeNumero ? `nº ${d.chequeNumero}` : (d.doc ? `Doc ${d.doc}` : "—")}</span>
+                                <span className="text-rose-500 font-bold">{formatBRL(Math.abs(Number(d.valor) || d.valorCents / 100))}</span>
+                                {d.motivoCodigo != null && (
+                                  <span className={`px-1.5 py-px rounded-full text-[10px] font-medium ${d.motivoSustado ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`} title={d.motivoTexto ?? ""}>
+                                    Motivo {d.motivoCodigo}{d.motivoTexto ? ` · ${d.motivoTexto}` : ""}
+                                  </span>
+                                )}
+                              </p>
+                              {(d.fornecedor || d.obraNome || d.nf) && (
+                                <p className="text-[11px] text-gray-500 truncate">
+                                  {[d.fornecedor, d.obraNome, d.nf ? `NF ${d.nf}` : ""].filter(Boolean).join(" · ")}
+                                </p>
+                              )}
+                              <p className="text-[11px] text-gray-400">
+                                Compensou {fmtData(d.dataDebito)} → devolvido {fmtData(d.dataCredito)}
+                                {d.motivoGrupo ? ` · ${d.motivoGrupo}` : ""}
+                                {d.motivoReapresentavel === false ? " · não reapresentável" : ""}
+                              </p>
+                              {/* Resolução: quitação real encontrada ou pendência */}
+                              {res.tipo === "reapresentado" ? (
+                                <p className="text-[11px] text-emerald-700 mt-1 flex items-center gap-1">
+                                  <CheckCircle className="w-3.5 h-3.5" /> Quitado: cheque reapresentado e compensado em {fmtData(res.data)}.
+                                </p>
+                              ) : res.tipo === "pix" ? (
+                                <p className="text-[11px] text-blue-700 mt-1 flex items-center gap-1">
+                                  <CheckCircle className="w-3.5 h-3.5" /> Quitado por outro meio (PIX/TED) em {fmtData(res.data)}{res.descricao ? ` — ${res.descricao}` : ""}.
+                                </p>
+                              ) : (
+                                <p className="text-[11px] text-amber-700 mt-1 flex items-center gap-1">
+                                  <AlertCircle className="w-3.5 h-3.5" /> Sem quitação identificada no período — analisar (reapresentar, cobrar ou substituir).
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="px-4 py-2 border-t bg-amber-50/40 text-[11px] text-amber-800">
+                    Estes pares (compensação + devolução) foram retirados da lista "No extrato, sem lançamento" por terem saldo zero. Nenhuma baixa é feita automaticamente — confira e decida.
+                  </div>
+                </CardContent>
+              </Card>
             )}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Esquerda: no extrato, sem lançamento */}

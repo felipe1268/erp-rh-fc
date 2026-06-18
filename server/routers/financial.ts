@@ -13,6 +13,7 @@ import { runAllAutoImports } from "../services/financialAutoImport";
 // flag global. Quando FINANCEIRO_SOMENTE_REAL, os endpoints de leitura escondem
 // TODAS as projeções (cronograma/PCP/folha projetada/etc.), não só o cronograma.
 import { sqlNotProjecao, FINANCEIRO_SOMENTE_REAL } from "../../shared/financeiroProjecao";
+import { detectarParesEstorno, pareceCompensacaoCheque, type LinhaEstornoMin } from "../../shared/chequeMotivos";
 import {
   runAllDespesasImport,
   runAllReceitasImport,
@@ -4169,6 +4170,83 @@ export const financialRouter = router({
       return l;
     });
 
+    // 2d) Rev. 3235 — TENTATIVA DE PAGAMENTO FRUSTRADA (cheque devolvido/sustado).
+    // No extrato, o cheque aparece como DÉBITO (compensação) e, dias depois, volta como
+    // CRÉDITO (devolução) do MESMO valor/doc. Esse par tem saldo ZERO: NÃO é saída real
+    // nem entrada real — foi um pagamento que não se concretizou. O ERP pareia os dois,
+    // traduz o motivo (alínea Bacen — biblioteca shared/chequeMotivos) e PROCURA a quitação
+    // real: (a) reapresentação do cheque que compensou depois, ou (b) PIX/TED de mesmo valor.
+    // Tudo READ-ONLY — só sinaliza p/ o usuário analisar e decidir. Não grava/baixa nada.
+    const linhaById = new Map<any, any>(extratoSemLancamento.map((l: any) => [l.id, l]));
+    const linhasMin: LinhaEstornoMin[] = extratoSemLancamento.map((l: any) => ({
+      id: l.id,
+      valorCents: chqCents(l.valor),
+      isCredito: Number(l.valor) >= 0,
+      descricao: l.descricao,
+      data: chqDia(l.data),
+    }));
+    const paresEstorno = detectarParesEstorno(linhasMin);
+    const minById = new Map<any, LinhaEstornoMin>(linhasMin.map((l) => [l.id, l]));
+    const consumidos = new Set<any>();
+    for (const p of paresEstorno) { consumidos.add(p.debitoId); consumidos.add(p.creditoId); }
+    const livres = linhasMin.filter((l) => !consumidos.has(l.id));
+    const chequesDevolvidos = paresEstorno.map((p, idx) => {
+      const grupoId = `dev-${idx}`;
+      const deb: any = linhaById.get(p.debitoId);
+      const cred: any = linhaById.get(p.creditoId);
+      const cMatch = deb ? matchChequeLinha(deb) : null;
+      // Busca da quitação real entre as linhas LIVRES (não pertencentes a outro par).
+      // (a) Reapresentação: outro DÉBITO de cheque de mesmo valor, em data >= devolução.
+      let resolucao: any = { tipo: "pendente" };
+      const reap = livres.find((l) =>
+        !consumidos.has(l.id) && !l.isCredito && l.valorCents === p.valorCents &&
+        pareceCompensacaoCheque(l.descricao) && (!l.data || !p.dataCredito || l.data >= p.dataCredito));
+      if (reap) {
+        const rl: any = linhaById.get(reap.id);
+        consumidos.add(reap.id);
+        if (rl) { rl.reversalResolveGrupo = grupoId; rl.reversalResolveTipo = "reapresentado"; }
+        resolucao = { tipo: "reapresentado", lineId: reap.id, data: rl?.data ?? null, descricao: rl?.descricao ?? null, valor: rl?.valor ?? null };
+      } else {
+        // (b) Substituição por PIX/TED/transferência de MESMO valor (saída), em data >= débito.
+        const pix = livres.find((l) =>
+          !consumidos.has(l.id) && !l.isCredito && l.valorCents === p.valorCents &&
+          /pix|ted\b|doc\b|transf/i.test(String(l.descricao ?? "")) &&
+          (!l.data || !p.dataDebito || l.data >= p.dataDebito));
+        if (pix) {
+          const pl: any = linhaById.get(pix.id);
+          consumidos.add(pix.id);
+          if (pl) { pl.reversalResolveGrupo = grupoId; pl.reversalResolveTipo = "pix"; }
+          resolucao = { tipo: "pix", lineId: pix.id, data: pl?.data ?? null, descricao: pl?.descricao ?? null, valor: pl?.valor ?? null };
+        }
+      }
+      // Marca as duas linhas do par como estorno (saem da lista normal no front).
+      if (deb) deb.reversal = { papel: "debito", grupoId, doc: p.doc, motivoCodigo: p.motivo?.codigo ?? null };
+      if (cred) cred.reversal = { papel: "credito", grupoId, doc: p.doc, motivoCodigo: p.motivo?.codigo ?? null };
+      return {
+        grupoId,
+        doc: p.doc,
+        chequeNumero: p.chequeNumero,
+        valor: deb?.valor ?? cred?.valor ?? null,
+        valorCents: p.valorCents,
+        motivoCodigo: p.motivo?.codigo ?? null,
+        motivoTexto: p.motivo?.motivo ?? null,
+        motivoGrupo: p.motivo?.grupo ?? null,
+        motivoSustado: !!p.motivo?.sustado,
+        motivoReapresentavel: p.motivo?.reapresentavel ?? null,
+        dataDebito: p.dataDebito,
+        dataCredito: p.dataCredito,
+        descricaoDebito: p.descricaoDebito,
+        descricaoCredito: p.descricaoCredito,
+        fornecedor: cMatch?.fornecedorNome ?? null,
+        obraNome: cMatch?.obraNome ?? null,
+        nf: cMatch?.nf ?? null,
+        debitoId: p.debitoId,
+        creditoId: p.creditoId,
+        resolucao,
+      };
+    });
+    void minById;
+
     // 3) Lançamentos do sistema sem conciliação no período — APENAS desta conta.
     // Rev. 3188 — antes incluía também os lançamentos SEM conta (conta_bancaria_id IS
     // NULL), que apareciam (e eram contados) em TODAS as contas, inflando o KPI "ERP sem
@@ -4216,6 +4294,7 @@ export const financialRouter = router({
     return {
       conciliados: rows(concRes),
       extratoSemLancamento,
+      chequesDevolvidos,
       lancamentosSemExtrato: rows(lancRes),
       lancamentosSemConta: rows(semContaRes),
     };

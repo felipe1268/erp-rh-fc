@@ -795,7 +795,12 @@ export default function FinanceiroCheques() {
                               </span>
                             ) : null}
                             {/* Rev. 3234 — dupla checagem extrato↔controle */}
-                            {c.extratoDivergente ? (
+                            {/* Rev. 3235 — cheque DEVOLVIDO no extrato (tentativa frustrada): tem precedência. */}
+                            {c.extratoDevolvido ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700" title={`O banco DEVOLVEU este cheque no extrato${c.extratoMotivoCodigo ? ` (motivo ${c.extratoMotivoCodigo}${c.extratoMotivoTexto ? " — " + c.extratoMotivoTexto : ""})` : ""}. A compensação não se concretizou — analise a quitação na Conciliação Bancária.`}>
+                                <RotateCcw className="h-3 w-3" /> Devolvido no banco{c.extratoMotivoCodigo ? ` · mot. ${c.extratoMotivoCodigo}` : ""}
+                              </span>
+                            ) : c.extratoDivergente ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-medium text-red-700" title={`O banco compensou este cheque${c.extratoData ? " em " + fmtData(c.extratoData) : ""}, mas no controle está como "${c.status}". Analise.`}>
                                 <AlertTriangle className="h-3 w-3" /> Banco compensou — analisar{c.extratoData ? ` · ${fmtData(c.extratoData)}` : ""}
                               </span>
