@@ -29,6 +29,12 @@ const MESES = ["", "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set"
 const STATUS_OPTS = ["compensado", "pendente", "sustado", "cancelado", "devolvido", "indefinido"];
 // "Outros" = agregado dos status fora de compensado/pendente. Filtro client-side.
 const OUTROS_SET = ["sustado", "cancelado", "devolvido", "indefinido"];
+// Rev. 3242 — filtros derivados das flags do EXTRATO (não são "status" do banco; filtro
+// client-side sobre as flags que o `listar` já anexa). NÃO devem ir como `status` ao backend.
+//   conferido  = conciliado=1 (compensado E verificado/conferido no extrato)
+//   confere    = banco compensou + controle compensado, mas ainda NÃO marcado (conciliado=0)
+//   divergente = banco compensou MAS controle não está "compensado" (análise)
+const EXTRATO_FILTERS = ["conferido", "confere", "divergente"];
 
 function statusBadge(s: string) {
   switch (s) {
@@ -139,9 +145,9 @@ export default function FinanceiroCheques() {
   const [divergOpen, setDivergOpen] = useState(false);
 
   const listarArgs: any = { companyId, limit: 2000, ano };
-  // "outros" é um agregado client-side (vários status); não mandamos status ao
-  // servidor nesse caso — filtramos a lista localmente logo abaixo.
-  if (fStatus !== "todos" && fStatus !== "outros") listarArgs.status = fStatus;
+  // "outros" e os filtros de EXTRATO são agregados client-side (vários status / flags
+  // derivadas); não mandamos status ao servidor nesses casos — filtramos localmente abaixo.
+  if (fStatus !== "todos" && fStatus !== "outros" && !EXTRATO_FILTERS.includes(fStatus)) listarArgs.status = fStatus;
   if (mesSel != null) listarArgs.mes = mesSel;
   if (fBusca.trim()) listarArgs.busca = fBusca.trim();
 
@@ -252,6 +258,12 @@ export default function FinanceiroCheques() {
   const chequesFiltrados = useMemo(() => {
     const arr = cheques as any[];
     if (fStatus === "outros") return arr.filter((c) => OUTROS_SET.includes(c.status));
+    // Rev. 3242 — filtros de EXTRATO (flags derivadas que o `listar` já anexa).
+    // `conciliado` vem da coluna integer (1/0) — comparar com Number, NÃO `=== true`
+    // (espelha o backend `Number(c.conciliado)===1`); `extratoConfirmado/Divergente` já são boolean.
+    if (fStatus === "conferido") return arr.filter((c) => Number(c.conciliado) === 1);
+    if (fStatus === "confere") return arr.filter((c) => c.extratoConfirmado && Number(c.conciliado) !== 1);
+    if (fStatus === "divergente") return arr.filter((c) => c.extratoDivergente === true);
     return arr;
   }, [cheques, fStatus]);
 
@@ -636,6 +648,52 @@ export default function FinanceiroCheques() {
           </div>
         </div>
 
+        {/* Rev. 3242 — Conferência com o EXTRATO (cheques compensados E verificados no extrato).
+            Fonte: verificarExtratoResumo (não afetado pelo filtro de status). Clicar filtra a lista. */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <Link2 className="h-3.5 w-3.5" /> Conferência com o extrato {cardEscopo}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <button
+              type="button"
+              onClick={() => toggleStatus("conferido")}
+              aria-pressed={fStatus === "conferido"}
+              className={`text-left rounded-xl border bg-emerald-50/40 border-emerald-200 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-emerald-300 ${fStatus === "conferido" ? "ring-2 ring-emerald-500" : ""}`}
+            >
+              <div className="p-4">
+                <div className="flex items-center gap-1.5 text-xs text-emerald-700"><Link2 className="h-3.5 w-3.5" /> Conferidos no extrato</div>
+                <div className="text-xl font-bold text-emerald-700">{verif?.jaConferidos ?? 0}</div>
+                <div className="text-sm text-muted-foreground">{formatBRL(verif?.valorJaConferidos || 0)}</div>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleStatus("confere")}
+              aria-pressed={fStatus === "confere"}
+              className={`text-left rounded-xl border bg-teal-50/40 border-teal-200 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-teal-300 ${fStatus === "confere" ? "ring-2 ring-teal-500" : ""}`}
+            >
+              <div className="p-4">
+                <div className="flex items-center gap-1.5 text-xs text-teal-700"><CheckCircle className="h-3.5 w-3.5" /> Confere — falta marcar</div>
+                <div className="text-xl font-bold text-teal-700">{verif?.aConferir ?? 0}</div>
+                <div className="text-sm text-muted-foreground">{formatBRL(verif?.valorAConferir || 0)}</div>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleStatus("divergente")}
+              aria-pressed={fStatus === "divergente"}
+              className={`text-left rounded-xl border bg-red-50/40 border-red-200 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-red-300 ${fStatus === "divergente" ? "ring-2 ring-red-500" : ""}`}
+            >
+              <div className="p-4">
+                <div className="flex items-center gap-1.5 text-xs text-red-700"><AlertTriangle className="h-3.5 w-3.5" /> Divergências</div>
+                <div className="text-xl font-bold text-red-700">{verif?.divergencias ?? 0}</div>
+                <div className="text-sm text-muted-foreground">{formatBRL(verif?.valorDivergencias || 0)}</div>
+              </div>
+            </button>
+          </div>
+        </div>
+
         {/* Filtros — mesmo padrão da Conciliação Bancária:
             busca + status, e a faixa de meses (Jan–Dez) com bolinhas de status. */}
         <Card>
@@ -656,6 +714,10 @@ export default function FinanceiroCheques() {
                     <SelectItem value="todos">Todos</SelectItem>
                     {STATUS_OPTS.map((s) => <SelectItem key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</SelectItem>)}
                     <SelectItem value="outros">Outros (sustado/cancelado/devolvido)</SelectItem>
+                    {/* Rev. 3242 — filtros por conferência com o extrato */}
+                    <SelectItem value="conferido">✓ Conferidos no extrato</SelectItem>
+                    <SelectItem value="confere">Confere — falta marcar</SelectItem>
+                    <SelectItem value="divergente">⚠ Divergências (banco × controle)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -730,7 +792,7 @@ export default function FinanceiroCheques() {
                   onClick={() => setFStatus("todos")}
                   className="text-[11px] font-normal text-blue-600 hover:underline"
                 >
-                  filtrando por “{fStatus}” · limpar
+                  filtrando por “{({ conferido: "Conferidos no extrato", confere: "Confere — falta marcar", divergente: "Divergências", outros: "Outros" } as Record<string, string>)[fStatus] || fStatus}” · limpar
                 </button>
               )}
             </CardTitle>
@@ -789,23 +851,24 @@ export default function FinanceiroCheques() {
                         <td className="py-2 pr-3">
                           <div className="flex flex-col gap-1">
                             {statusBadge(c.status)}
+                            {/* Rev. 3242 — TAG de conferência com o extrato como pílula (análise diária). */}
                             {c.conciliado ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700" title={`Conciliado no extrato${c.dataConciliacao ? " em " + fmtData(c.dataConciliacao) : ""}`}>
+                              <span className="inline-flex w-fit items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700" title={`Conciliado no extrato${c.dataConciliacao ? " em " + fmtData(c.dataConciliacao) : ""}`}>
                                 <Link2 className="h-3 w-3" /> Conciliado no extrato{c.dataConciliacao ? ` · ${fmtData(c.dataConciliacao)}` : ""}
                               </span>
                             ) : null}
                             {/* Rev. 3234 — dupla checagem extrato↔controle */}
                             {/* Rev. 3235 — cheque DEVOLVIDO no extrato (tentativa frustrada): tem precedência. */}
                             {c.extratoDevolvido ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700" title={`O banco DEVOLVEU este cheque no extrato${c.extratoMotivoCodigo ? ` (motivo ${c.extratoMotivoCodigo}${c.extratoMotivoTexto ? " — " + c.extratoMotivoTexto : ""})` : ""}. A compensação não se concretizou — analise a quitação na Conciliação Bancária.`}>
+                              <span className="inline-flex w-fit items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700" title={`O banco DEVOLVEU este cheque no extrato${c.extratoMotivoCodigo ? ` (motivo ${c.extratoMotivoCodigo}${c.extratoMotivoTexto ? " — " + c.extratoMotivoTexto : ""})` : ""}. A compensação não se concretizou — analise a quitação na Conciliação Bancária.`}>
                                 <RotateCcw className="h-3 w-3" /> Devolvido no banco{c.extratoMotivoCodigo ? ` · mot. ${c.extratoMotivoCodigo}` : ""}
                               </span>
                             ) : c.extratoDivergente ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-red-700" title={`O banco compensou este cheque${c.extratoData ? " em " + fmtData(c.extratoData) : ""}, mas no controle está como "${c.status}". Analise.`}>
+                              <span className="inline-flex w-fit items-center gap-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700" title={`O banco compensou este cheque${c.extratoData ? " em " + fmtData(c.extratoData) : ""}, mas no controle está como "${c.status}". Analise.`}>
                                 <AlertTriangle className="h-3 w-3" /> Banco compensou — analisar{c.extratoData ? ` · ${fmtData(c.extratoData)}` : ""}
                               </span>
                             ) : c.extratoConfirmado && !c.conciliado ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600" title={`Confere com o extrato${c.extratoData ? " (compensado em " + fmtData(c.extratoData) + ")" : ""}. Use "Conferir com o extrato" para marcar.`}>
+                              <span className="inline-flex w-fit items-center gap-1 rounded-full bg-teal-100 px-1.5 py-0.5 text-[10px] font-medium text-teal-700" title={`Confere com o extrato${c.extratoData ? " (compensado em " + fmtData(c.extratoData) + ")" : ""}. Use "Conferir com o extrato" para marcar.`}>
                                 <CheckCircle className="h-3 w-3" /> Confere com o extrato
                               </span>
                             ) : null}

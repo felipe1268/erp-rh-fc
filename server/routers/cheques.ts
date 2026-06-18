@@ -929,17 +929,21 @@ export const chequesRouter = router({
         WHERE company_id=$1 AND excluido_em IS NULL${extra}`, params);
     const matchCheque = await montarMatcherExtrato(db, input.companyId);
     let confirmados = 0, divergencias = 0, jaConferidos = 0, naoEncontrados = 0, aConferir = 0;
+    // Rev. 3242 — totais BRL p/ os cards de "extrato" no front (qtd + valor, igual aos demais).
+    let valorConfirmados = 0, valorDivergencias = 0, valorJaConferidos = 0, valorAConferir = 0;
     const divergenciasLista: any[] = [];
     for (const c of (res.rows as any[])) {
       const cls = classificarExtrato(c.status, matchCheque(c));
+      const v = Number(c.valor) || 0;
       if (cls.extratoConfirmado) {
-        confirmados++;
-        if (Number(c.conciliado) === 1) jaConferidos++; else aConferir++;
+        confirmados++; valorConfirmados += v;
+        if (Number(c.conciliado) === 1) { jaConferidos++; valorJaConferidos += v; }
+        else { aConferir++; valorAConferir += v; }
       } else if (cls.extratoDivergente) {
-        divergencias++;
+        divergencias++; valorDivergencias += v;
         divergenciasLista.push({
           id: c.id, numeroCheque: c.numeroCheque, fornecedorNome: c.fornecedorNome,
-          valor: Number(c.valor) || 0, status: c.status,
+          valor: v, status: c.status,
           dataCompensacao: c.dataCompensacao, dataVencimento: c.dataVencimento,
           dataExtrato: cls.extratoData, mes: c.mes, ano: c.ano,
         });
@@ -948,7 +952,10 @@ export const chequesRouter = router({
       }
     }
     divergenciasLista.sort((a, b) => (b.valor - a.valor));
-    return { confirmados, divergencias, jaConferidos, naoEncontrados, aConferir, divergenciasLista };
+    return {
+      confirmados, divergencias, jaConferidos, naoEncontrados, aConferir, divergenciasLista,
+      valorConfirmados, valorDivergencias, valorJaConferidos, valorAConferir,
+    };
   }),
 
   // AÇÃO EXPLÍCITA do usuário (botão "Conferir com o extrato"). Marca conciliado=1 +

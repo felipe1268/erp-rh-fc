@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3242 — **FINANCEIRO / CONTROLE DE CHEQUES · A TELA GANHOU FILTROS E CARDS DEDICADOS À
+ * CONFERÊNCIA COM O EXTRATO BANCÁRIO: AGORA DÁ PRA VER, NUM RELANCE, OS CHEQUES QUE FORAM
+ * COMPENSADOS *E* VERIFICADOS NO EXTRATO ("CONFERIDOS NO EXTRATO"), OS QUE JÁ BATEM COM O
+ * EXTRATO MAS AINDA NÃO FORAM MARCADOS ("CONFERE — FALTA MARCAR") E AS DIVERGÊNCIAS (BANCO
+ * COMPENSOU × CONTROLE NÃO). TRÊS CARDS CLICÁVEIS NO TOPO (QTD + VALOR BRL) FILTRAM A LISTA, E
+ * CADA LANÇAMENTO GANHOU UMA TAG-PÍLULA COLORIDA NA COLUNA STATUS PRA FACILITAR A ANÁLISE NO
+ * DIA A DIA. SÓ CONSULTA — NÃO CONCILIA NEM BAIXA NADA.**
+ * - PEDIDO (piloto FC): "preciso de filtros dos cheques que foram compensado e verificado no
+ *   extrato, apresentar isso em cards e colocar uma tag em cada lançamento para facilitar a análise
+ *   no dia a dia".
+ * - SOLUÇÃO (FRONT, `client/src/pages/financeiro/FinanceiroCheques.tsx`):
+ *     · Novo conjunto `EXTRATO_FILTERS = ["conferido","confere","divergente"]` — pseudo-filtros
+ *       DERIVADOS das flags que o `listar` já anexa por cheque (`conciliado`, `extratoConfirmado`,
+ *       `extratoDivergente`). NÃO são "status" do banco, então NÃO vão no `listarArgs.status`
+ *       (guard adicionado no passo que monta os args). O filtro é client-side em `chequesFiltrados`:
+ *       `conferido` = `c.conciliado===true`; `confere` = `c.extratoConfirmado && !c.conciliado`;
+ *       `divergente` = `c.extratoDivergente===true`.
+ *     · Nova faixa de 3 cards "Conferência com o extrato" (Conferidos no extrato / Confere — falta
+ *       marcar / Divergências) alimentada por `verificarExtratoResumo` (fonte NÃO afetada pelo filtro
+ *       de status), cada card clicável via `toggleStatus(...)` mostrando QTD + valor BRL.
+ *     · 3 novas opções no dropdown de Status (mesmos pseudo-filtros) + rótulo amigável no
+ *       "filtrando por …".
+ *     · As tags por linha (Conciliado no extrato / Devolvido no banco / Banco compensou — analisar /
+ *       Confere com o extrato) viraram PÍLULAS coloridas (`rounded-full bg-*-100`) em vez de texto
+ *       solto — mais visíveis pra varredura diária.
+ * - SOLUÇÃO (BACK, `server/routers/cheques.ts` / `verificarExtratoResumo`): o resumo passou a somar
+ *   também os TOTAIS BRL (`valorJaConferidos`, `valorAConferir`, `valorConfirmados`,
+ *   `valorDivergencias`) p/ os cards exibirem valor junto da contagem. READ-ONLY — apenas leitura +
+ *   acumulação em memória, ZERO escrita. ZERO SCHEMA/ALTER/DROP/DELETE. "Conciliação só sugestiva"
+ *   preservada (nada é conferido/baixado sem o botão explícito "Conferir com o extrato").
+ *
  * Rev. 3241 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O PAINEL "SUGESTÕES AUTOMÁTICAS DE
  * CONCILIAÇÃO" (A TABELA EXTRATO ↔ LANÇAMENTO NO ERP, COM CHECKBOXES E CONFIANÇA) GANHOU UM
  * BOTÃO "EXPANDIR" QUE ABRE O PAINEL EM TELA CHEIA — DÁ MUITO MAIS ESPAÇO PRA REVISAR AS
