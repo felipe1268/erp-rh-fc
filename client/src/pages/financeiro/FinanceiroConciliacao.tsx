@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter, AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -2462,16 +2462,38 @@ export default function FinanceiroConciliacao() {
 
         {/* Rev. 3198 — Lançar no ERP direto do item do extrato (data/conta/valor pré-preenchidos) */}
         <Dialog open={lancStatement != null} onOpenChange={(o: boolean) => { if (!o && !lancBusy) setLancStatement(null); }}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Plus className="w-5 h-5 text-blue-600" />Lançar no ERP
-              </DialogTitle>
+          <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden [&_[data-slot=dialog-close]]:text-white/80 [&_[data-slot=dialog-close]]:hover:text-white [&_[data-slot=dialog-maximize]]:text-white/80 [&_[data-slot=dialog-maximize]]:hover:text-white">
+            <DialogHeader className="space-y-0 text-left bg-gradient-to-r from-[#1B2A4A] to-[#2c3f63] px-6 py-5">
+              <div className="flex items-start gap-3 pr-12">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 ring-1 ring-white/25 shrink-0">
+                  <Plus className="w-5 h-5 text-white" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <DialogTitle className="text-white text-lg font-semibold leading-tight">Lançar no ERP</DialogTitle>
+                  <DialogDescription className="text-white/70 text-xs mt-1 leading-relaxed">
+                    Ao salvar, o lançamento é criado como <span className="font-medium text-white/90">pago</span> e <span className="font-medium text-white/90">conciliado</span> com esta linha do extrato.
+                  </DialogDescription>
+                </div>
+              </div>
+              {lancStatement && (
+                <div className="flex flex-wrap items-center gap-2 pt-3">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1 text-xs font-medium text-white ring-1 ring-white/20">
+                    <Landmark className="w-3.5 h-3.5" />{contaLabel}
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1 text-xs font-medium text-white ring-1 ring-white/20 tabular-nums">
+                    {fmtData(lancStatement.data)}
+                  </span>
+                  <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold tabular-nums ring-1 ${Number(lancStatement.valor) >= 0 ? "bg-emerald-400/20 text-emerald-100 ring-emerald-300/30" : "bg-red-400/20 text-red-100 ring-red-300/30"}`}>
+                    {Number(lancStatement.valor) >= 0 ? <ArrowUpCircle className="w-3.5 h-3.5" /> : <ArrowDownCircle className="w-3.5 h-3.5" />}
+                    {formatBRL(Math.abs(Number(lancStatement.valor) || 0))}
+                  </span>
+                </div>
+              )}
             </DialogHeader>
             {lancStatement && (
-              <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+              <div className="space-y-4 max-h-[68vh] overflow-y-auto px-6 py-4">
                 <div className="rounded-lg bg-blue-50 border border-blue-100 px-3 py-2 text-xs text-blue-800">
-                  Item do extrato em <strong>{contaLabel}</strong>. Data, conta e valor já vêm preenchidos — complete <strong>obra</strong>, <strong>fornecedor</strong>, <strong>categoria</strong> e <strong>centro de custo</strong>. Ao salvar, o lançamento é criado como <strong>pago</strong> e <strong>conciliado</strong> com esta linha.
+                  Item do extrato em <strong>{contaLabel}</strong>. Data, conta e valor já vêm preenchidos — complete <strong>obra</strong>, <strong>fornecedor</strong>, <strong>categoria</strong> e <strong>centro de custo</strong>.
                 </div>
                 {lancStatement.chequeFornecedor && (
                   <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2 text-xs text-emerald-800">
@@ -2500,6 +2522,7 @@ export default function FinanceiroConciliacao() {
                     . Beneficiário e forma de pagamento já foram pré-preenchidos — confira obra, categoria e centro de custo.
                   </div>
                 )}
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 pt-1">Valores &amp; data</div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs">Data</Label>
@@ -2509,6 +2532,7 @@ export default function FinanceiroConciliacao() {
                     <Label className="text-xs">Valor (R$)</Label>
                     <Input
                       inputMode="numeric"
+                      className="tabular-nums"
                       value={lancForm.valor}
                       onChange={(e) => setLancForm(f => ({ ...f, valor: maskBRLInput(e.target.value) }))}
                     />
@@ -2539,6 +2563,7 @@ export default function FinanceiroConciliacao() {
                     </Select>
                   </div>
                 </div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 pt-1">Classificação</div>
                 <div>
                   <Label className="text-xs">Obra</Label>
                   <Select value={lancForm.obraId || "nenhuma"} onValueChange={(v) => setLancForm(f => ({ ...f, obraId: v === "nenhuma" ? "" : v }))}>
@@ -2593,7 +2618,7 @@ export default function FinanceiroConciliacao() {
                 </div>
               </div>
             )}
-            <DialogFooter>
+            <DialogFooter className="border-t bg-gray-50 px-6 py-4">
               <Button variant="outline" disabled={lancBusy} onClick={() => setLancStatement(null)}>Cancelar</Button>
               <Button className="bg-blue-600 hover:bg-blue-700" disabled={lancBusy} onClick={submitLancar}>
                 {lancBusy ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Lançando...</> : <><Check className="w-4 h-4 mr-1.5" />Lançar e conciliar</>}

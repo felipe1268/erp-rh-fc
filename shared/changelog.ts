@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3253 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O DIÁLOGO "LANÇAR NO ERP" (ABERTO A PARTIR DE UM
+ * ITEM DO EXTRATO BANCÁRIO) GANHOU O LAYOUT MODERNO PADRÃO FC: CABEÇALHO EM FAIXA AZUL
+ * (`#1B2A4A`→`#2c3f63`) COM ÍCONE EM CÍRCULO E PÍLULAS DE CONTEXTO (CONTA, DATA E VALOR EM BRL — VERDE
+ * P/ RECEITA, VERMELHO P/ DESPESA), CORPO SECCIONADO ("VALORES & DATA" / "CLASSIFICAÇÃO") COM RÓTULOS
+ * UPPERCASE E RODAPÉ DESTACADO. ANTES ERA UM DIÁLOGO PADRÃO SEM IDENTIDADE VISUAL. SÓ APRESENTAÇÃO —
+ * MESMA LÓGICA DE LANÇAMENTO/CONCILIAÇÃO.**
+ * - PEDIDO (piloto FC): "Melhore o layout para ficar no padrão moderno" (print IMG_2174 do diálogo
+ *   "Lançar no ERP" ainda no estilo antigo).
+ * - SOLUÇÃO (FRONT, `client/src/pages/financeiro/FinanceiroConciliacao.tsx`, bloco "Rev. 3198 — Lançar
+ *   no ERP"): o `DialogContent` passou a `p-0 gap-0 overflow-hidden max-w-lg` + classes utilitárias
+ *   `[&_[data-slot=dialog-close]]`/`[&_[data-slot=dialog-maximize]]` p/ deixar os botões close/maximize
+ *   brancos sobre a faixa azul; o `DialogHeader` virou a faixa azul (gradiente, `text-left`, `space-y-0`,
+ *   `px-6 py-5`) com ícone `Plus` em círculo `bg-white/15 ring-1 ring-white/25`, `DialogTitle` +
+ *   `DialogDescription` (importada agora) em branco e três pílulas — Conta (`Landmark` + `contaLabel`),
+ *   Data (`fmtData(lancStatement.data)`) e Valor (`ArrowUpCircle`/`ArrowDownCircle` + `formatBRL` de
+ *   `Math.abs(Number(valor))`, esmeralda p/ entrada e vermelho p/ saída via `Number(valor) >= 0`). O corpo
+ *   ganhou `px-6 py-4` + dois rótulos de seção uppercase ("Valores & data", "Classificação") e o input de
+ *   Valor recebeu `tabular-nums`. Rodapé `border-t bg-gray-50 px-6 py-4`. `DialogDescription` adicionada
+ *   ao import de `@/components/ui/dialog`.
+ * - ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE · só apresentação (mesma lógica/botões, mesma
+ *   `submitLancar`/`lancForm`). esbuild limpo.
+ *
  * Rev. 3252 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O PAINEL "CHEQUES DEVOLVIDOS NO BANCO" GANHOU UM
  * BOTÃO "PDF / IMPRIMIR" QUE GERA UM RELATÓRIO INSTITUCIONAL FC (LOGO + FAIXA AZUL) COM CARDS DE
  * RESUMO (QTD/TOTAL EM BRL, PENDENTES, QUITADOS) E UMA TABELA POR CHEQUE: IDENTIFICAÇÃO
