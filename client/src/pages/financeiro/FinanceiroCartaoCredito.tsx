@@ -13,6 +13,7 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
+import { BandeiraLogo, ChipCartao, bandeiraGradiente } from "@/components/BandeiraCartao";
 import {
   CreditCard, Upload, Loader2, CheckCircle, AlertTriangle, Trash2, Pencil,
   ChevronLeft, ChevronRight, PlusCircle, ListTree, FileText, Building2, ShieldAlert,
@@ -417,36 +418,68 @@ export default function FinanceiroCartaoCredito() {
               ) : cartoes.length === 0 ? (
                 <div className="py-10 text-center text-muted-foreground">Nenhum cartão cadastrado. Clique em "Novo cartão".</div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {cartoes.map((c) => (
-                    <div key={c.id} className={`rounded-lg border p-3 ${c.alertaPessoal ? "border-amber-300 bg-amber-50/40" : "bg-white"} ${(c.ativo === 1 || c.ativo === true) ? "" : "opacity-60"}`}>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="font-semibold truncate">{c.banco || "Banco —"} {c.bandeira ? `· ${c.bandeira}` : ""}</p>
-                          <p className="text-sm text-muted-foreground">final {c.final4 || "????"} · {c.titular || "sem titular"}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {cartoes.map((c) => {
+                    const ativo = c.ativo === 1 || c.ativo === true;
+                    return (
+                      <div
+                        key={c.id}
+                        className={`group rounded-xl border overflow-hidden bg-white shadow-sm transition hover:shadow-md ${c.alertaPessoal ? "border-amber-300" : "border-gray-200"} ${ativo ? "" : "opacity-60"}`}
+                      >
+                        {/* Faixa superior — estilo cartão físico */}
+                        <div className={`relative px-4 pt-3 pb-4 text-white ${bandeiraGradiente(c.bandeira)}`}>
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="font-semibold text-sm truncate text-white drop-shadow-sm">{c.banco || "Banco —"}</p>
+                            <div className="shrink-0 flex items-center min-h-[24px]">
+                              <BandeiraLogo bandeira={c.bandeira} />
+                            </div>
+                          </div>
+                          <div className="mt-4 flex items-center gap-2">
+                            <ChipCartao />
+                            <span className="font-mono tracking-[0.18em] text-sm text-white/95">
+                              ••••&nbsp;••••&nbsp;••••&nbsp;{c.final4 || "????"}
+                            </span>
+                          </div>
+                          <div className="mt-2 flex items-end justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-[9px] uppercase tracking-wider text-white/60">Titular</p>
+                              <p className="text-xs font-medium truncate text-white/95">{c.titular || "sem titular"}</p>
+                            </div>
+                            <Badge
+                              variant={c.tipoPessoa === "PF" ? "outline" : "secondary"}
+                              className={c.tipoPessoa === "PF" ? "border-white/60 text-white bg-white/10" : "bg-white/20 text-white border-transparent hover:bg-white/20"}
+                            >
+                              {c.tipoPessoa}
+                            </Badge>
+                          </div>
                         </div>
-                        <div className="flex flex-col items-end gap-1 shrink-0">
-                          <Badge variant={c.tipoPessoa === "PF" ? "outline" : "secondary"} className={c.tipoPessoa === "PF" ? "border-amber-400 text-amber-700" : ""}>{c.tipoPessoa}</Badge>
-                          {statusCartaoBadge(c.status)}
+
+                        {/* Corpo branco — dados + ações */}
+                        <div className="p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            {statusCartaoBadge(c.status)}
+                            <span className="text-xs text-muted-foreground">
+                              Limite: <b className="text-foreground">{c.limite != null ? formatBRL(c.limite) : "—"}</b>
+                            </span>
+                          </div>
+                          <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-muted-foreground">
+                            <span>Fecha dia: <b className="text-foreground">{c.diaFechamento ?? "—"}</b></span>
+                            <span>Vence dia: <b className="text-foreground">{c.diaVencimento ?? "—"}</b></span>
+                          </div>
+                          {c.alertaPessoal && (
+                            <div className="mt-2 flex items-start gap-1.5 text-[11px] text-amber-700 bg-amber-100/60 rounded p-1.5">
+                              <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                              <span>Cartão <b>pessoal (PF)</b> usado pela empresa. Avalie regularização (cartão PJ ou reembolso ao titular).</span>
+                            </div>
+                          )}
+                          <div className="mt-2 flex justify-end gap-1 border-t pt-2">
+                            <Button size="sm" variant="ghost" onClick={() => abrirEditarCartao(c)}><Pencil className="w-3.5 h-3.5" /></Button>
+                            <Button size="sm" variant="ghost" className="text-red-600 hover:text-red-700" onClick={() => setCartaoExcluir(c)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                          </div>
                         </div>
                       </div>
-                      <div className="mt-2 text-xs text-muted-foreground grid grid-cols-2 gap-1">
-                        <span>Fecha dia: <b>{c.diaFechamento ?? "—"}</b></span>
-                        <span>Vence dia: <b>{c.diaVencimento ?? "—"}</b></span>
-                        <span className="col-span-2">Limite: <b>{c.limite != null ? formatBRL(c.limite) : "—"}</b></span>
-                      </div>
-                      {c.alertaPessoal && (
-                        <div className="mt-2 flex items-start gap-1.5 text-[11px] text-amber-700 bg-amber-100/60 rounded p-1.5">
-                          <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                          <span>Cartão <b>pessoal (PF)</b> usado pela empresa. Avalie regularização (cartão PJ ou reembolso ao titular).</span>
-                        </div>
-                      )}
-                      <div className="mt-2 flex justify-end gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => abrirEditarCartao(c)}><Pencil className="w-3.5 h-3.5" /></Button>
-                        <Button size="sm" variant="ghost" className="text-red-600 hover:text-red-700" onClick={() => setCartaoExcluir(c)}><Trash2 className="w-3.5 h-3.5" /></Button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>

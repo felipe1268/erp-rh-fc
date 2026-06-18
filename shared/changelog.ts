@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3283 — **FINANCEIRO / CONTROLE DE CARTÃO DE CRÉDITO · A LISTA "CARTÕES CADASTRADOS" GANHOU UM
+ * VISUAL DE CARTÃO FÍSICO: CADA CARTÃO AGORA TEM UMA FAIXA SUPERIOR COLORIDA (GRADIENTE POR BANDEIRA) COM
+ * O LOGO DA BANDEIRA (VISA, MASTERCARD, ELO, AMEX, HIPERCARD, DINERS, DISCOVER + FALLBACK GENÉRICO), CHIP
+ * DOURADO DECORATIVO, OS DÍGITOS MASCARADOS "•••• •••• •••• 9552" E O TITULAR; O CORPO BRANCO ABAIXO
+ * MANTÉM STATUS, LIMITE, FECHA/VENCE DIA, O ALERTA DE CARTÃO PESSOAL (PF) E OS BOTÕES EDITAR/EXCLUIR.
+ * 100% FRONT · READ-ONLY · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (piloto FC): "melhore o layout e coloca o símbolo dos cartões para facilitar e melhorar o
+ *   visual" (print da tela Controle de Cartão de Crédito com 4 cartões em cards planos sem identidade de
+ *   bandeira).
+ * - SOLUÇÃO — NOVO COMPONENTE (`client/src/components/BandeiraCartao.tsx`): `resolverBandeira()` normaliza
+ *   o texto livre do campo "Bandeira" (minúsculo, sem acento) p/ uma chave canônica; `bandeiraGradiente()`
+ *   devolve o gradiente Tailwind da faixa por bandeira; `<BandeiraLogo>` renderiza o logo (Visa/Hipercard =
+ *   wordmark, Mastercard = 2 círculos SVG, Elo = "elo" + 3 dots coloridos, Amex/Diners = pill, Discover =
+ *   wordmark + dot, genérico = ícone CreditCard) pensado p/ fundo escuro; `<ChipCartao>` é um chip dourado
+ *   SVG decorativo. Tudo inline/local — SEM dependência de imagem externa ou asset.
+ * - SOLUÇÃO — TELA (`client/src/pages/financeiro/FinanceiroCartaoCredito.tsx`, aba "Cartões"): cada item
+ *   do grid virou um card com (1) faixa superior `bandeiraGradiente(c.bandeira)` text-white com banco +
+ *   `<BandeiraLogo>` no topo, chip + dígitos mascarados terminando em `c.final4`, titular + badge PJ/PF; e
+ *   (2) corpo branco com `statusCartaoBadge` + Limite, grid Fecha/Vence dia, alerta PF e ações
+ *   Editar/Excluir sobre uma borda superior. `gap` do grid 3→4, cards `rounded-xl` + `hover:shadow-md`.
+ * - INALTERADO: dados, queries, mutations, formulário de cadastro/edição, importação de faturas por IA,
+ *   classificação por obra/centro de custo. Mudança é puramente de APRESENTAÇÃO.
+ * - ZERO SCHEMA/ALTER/DROP/DELETE · ZERO BACKEND.
+ *
  * Rev. 3282 — **FINANCEIRO / DASHBOARD DE CONCILIAÇÃO BANCÁRIA · O CARD ÚNICO "MOVIMENTADO NO EXTRATO"
  * (QUE SOMAVA ENTRADAS + SAÍDAS NUM VALOR SÓ E PARECIA INFLADO/ERRADO) FOI SUBSTITUÍDO POR 3 CARDS CLAROS
  * AGRUPADOS EM "MOVIMENTAÇÃO DO EXTRATO": ENTRADAS (CRÉDITOS), SAÍDAS (DÉBITOS) E SALDO LÍQUIDO (ENTROU −
