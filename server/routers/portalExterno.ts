@@ -2743,7 +2743,24 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         : (isFinite(projIniEff) && isFinite(projFimEff) && projFimEff > projIniEff)
           ? +Math.min(100, fracaoDecorridaMs(projIniEff, refMs, projFimEff, calMSP) * 100).toFixed(2)
           : 0;
-      const pctTotalRealizado = +Math.min(100, somaRealizado).toFixed(2);
+      // Rev. 3286 — REALIZADO do Portal ESPELHA o snapshot MSP da raiz UID=0
+      // (`realizadoMspSnapshot` = AD/(AD+RD)) — IDÊNTICO ao módulo Planejamento
+      // (`PlanejamentoDetalhe.avancoAtual`). Antes o Portal recalculava a média
+      // ponderada por `pesoFinanceiro` (`somaRealizado`), que divergia do módulo
+      // (ex.: REVTE-CIVIL — Portal 20,72% vs Planejamento 9,00%). REGRA DE OURO:
+      // o Portal só REPLICA o Planejamento (snapshot do XML do MS Project), NUNCA
+      // recalcula. Gate igual ao do %Previsto (snapshot presente + statusDate +
+      // envelope intacto) + monotonicidade: o cutoff cobre o statusDate
+      // (`cutoffStr >= statusDateSnapshot`, espelha `semFimVis >= sd` do módulo).
+      // Fallback p/ o cálculo ponderado SÓ quando o snapshot está ausente/stale
+      // (XML antigo sem AD/RD gravado) — UI continua mostrando algo, não zero.
+      const usaSnapshotReal = calMSP?.realizadoMspSnapshot != null
+        && !!calMSP?.statusDateSnapshot
+        && envSnapOk
+        && cutoffStr >= calMSP.statusDateSnapshot;
+      const pctTotalRealizado = usaSnapshotReal
+        ? +Math.min(100, Math.max(0, Number(calMSP!.realizadoMspSnapshot))).toFixed(2)
+        : +Math.min(100, somaRealizado).toFixed(2);
       const desvio = +(pctTotalRealizado - pctTotalPrevisto).toFixed(2);
 
       // Semana atual: atividades cuja janela toca [seg, dom]

@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3286 — **PLANEJAMENTO / PORTAL DO CLIENTE · O "% REALIZADO" DO PORTAL DIVERGIA DO MÓDULO PLANEJAMENTO
+ * (FONTE DA VERDADE) — NA OBRA REVTE-CIVIL O PORTAL MOSTRAVA REALIZADO 20,72% ENQUANTO O MÓDULO MOSTRAVA 9,00%.
+ * AGORA O PORTAL ESPELHA EXATAMENTE O SNAPSHOT MSP DA RAIZ (`realizadoMspSnapshot`), IGUAL AO PLANEJAMENTO. 100%
+ * BACKEND · READ-ONLY · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (piloto FC): "está dando divergência do realizado entre o módulo de planejamento e o portal do
+ *   cliente; o portal apenas replica a informação de lá, precisa respeitar o que está no módulo de planejamento".
+ * - DIAGNÓSTICO (dados reais no Neon, projeto id=43, FC ENGENHARIA 60002): o módulo Planejamento
+ *   (`PlanejamentoDetalhe.avancoAtual`) lê o snapshot da raiz UID=0 do XML do MS Project
+ *   (`calendarioJson.realizadoMspSnapshot` = AD/(AD+RD) = 9,00% @ statusDate 11/06/2026). Já o Portal
+ *   (`server/routers/portalExterno.ts`, procedure `cliente.planejamentoObra`, `kpis.realizado`) RECALCULAVA o
+ *   realizado como média ponderada por `pesoFinanceiro` das folhas (`somaRealizado` = 20,72%), ignorando o
+ *   snapshot. Como algumas atividades concluídas têm peso financeiro alto mas duração-rollup baixa, os dois
+ *   números divergiam estruturalmente. O `% Previsto` do Portal JÁ usava o snapshot (`previstoMspSnapshot`,
+ *   gate `cutoffStr === statusDateSnapshot` + envelope intacto) — só o realizado ficou para trás.
+ * - SOLUÇÃO (`server/routers/portalExterno.ts`, `cliente.planejamentoObra`): `pctTotalRealizado` passou a
+ *   espelhar `calMSP.realizadoMspSnapshot` com o MESMO gate do `avancoAtual` do módulo — snapshot presente +
+ *   `statusDateSnapshot` set + `envSnapOk` (envelope start/finish do projeto == os do snapshot) + monotonicidade
+ *   `cutoffStr >= statusDateSnapshot` (espelha o `semFimVis >= sd` do módulo). Com o gate satisfeito → realizado
+ *   = clamp(0..100, snapshot) = 9,00%. Quando o snapshot está ausente/stale (XML antigo sem AD/RD, ou envelope
+ *   editado depois do import) cai no fallback antigo (`somaRealizado`) para a UI não zerar.
+ * - REGRA DE OURO respeitada: o Portal só REPLICA o snapshot do MS Project, NUNCA recalcula avanço próprio para
+ *   os cards agregados. Esta correção aplica a mesma single-source-of-truth do módulo Planejamento ao Portal.
+ * - INALTERADO: o `% Previsto` do Portal (já lia o snapshot), a Curva S por semana, a aba REFIS / modo "com
+ *   indiretas" (toggle do cliente, recálculo client-side próprio), atividades/atrasadas/próximas, e todo o
+ *   restante da procedure. O `desvio` (realizado − previsto) agora reflete os números corretos (9,00 − 8,00 =
+ *   +1,00% no cutoff oficial 11/06), em vez do fantasma +12,72%.
+ * - ZERO SCHEMA/ALTER/DROP/DELETE · READ-ONLY (só mudou de qual campo o KPI é lido).
+ *
  * Rev. 3285 — **RH & DP / FECHAMENTO DE PONTO · CONFLITOS DE OBRA NO MESMO DIA · AO CONFIRMAR UM DESLOCAMENTO
  * REAL ENTRE OBRAS (FUNCIONÁRIO BATEU EM 2+ OBRAS NO MESMO DIA), O ERP MOSTRAVA O TOAST DE SUCESSO ("DESLOCAMENTO
  * ENTRE OBRAS CONFIRMADO COM RATEIO PROPORCIONAL. N REGISTROS ATUALIZADOS"), MAS A LINHA NÃO SUMIA DA LISTA
