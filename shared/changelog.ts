@@ -1,6 +1,47 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3281 — **RH & DP / FOLHA DE ADIANTAMENTO (VALE — CÁLCULO INTERNO) · FUNCIONÁRIOS EM AVISO PRÉVIO
+ * TRABALHADO (status "Aviso") E EM FÉRIAS (status "Ferias") VOLTARAM A APARECER NO VALE/ADIANTAMENTO. ANTES,
+ * A SELEÇÃO DO VALE PEGAVA SÓ status='Ativo' ESTRITO — ENTÃO COLABORADORES CUJO STATUS VIRAVA "AVISO" OU
+ * "FERIAS" NO FIM DO MÊS (EX.: AVISO/GOZO COMEÇANDO APÓS O DIA 15) SUMIAM DA FOLHA DE ADIANTAMENTO, MESMO
+ * TENDO TRABALHADO A 1ª QUINZENA INTEIRA. AGORA A SELEÇÃO USA status IN ('Ativo','Aviso','Ferias'),
+ * ESPELHANDO O FILTRO DA FOLHA DE PAGAMENTO. 100% BACKEND (SELEÇÃO) · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - SINTOMA (piloto FC): na "Folha de Adiantamento de Maio/2026" (Cálculo Interno — Vale/Adiantamento,
+ *   93 funcionários, 40%) os colaboradores KELLEN (id 420100) e LUIS CLAUDIO (id 420083) NÃO apareciam; e
+ *   ELIZEU (id 420160), já desligado, APARECIA.
+ * - DIAGNÓSTICO (dados reais no Neon):
+ *   • KELLEN: status="Aviso" (aviso prévio TRABALHADO `empregador_trabalhado` em andamento, dataInicio
+ *     26/05 → 24/06). Trabalhou a 1ª quinzena (1–15) inteira, mas a query de seleção do `gerarVale`
+ *     (`empListAtivos`, `server/routers/payrollEngine.ts`) usava `eq(employees.status,'Ativo')` ESTRITO →
+ *     "Aviso" caía fora. O caminho de "desligados com aviso" exige status='Desligado' (aviso CONCLUÍDO),
+ *     então também não a pegava. Resultado: nenhuma linha em `payroll_advances` p/ 2026-05.
+ *   • LUIS CLAUDIO: status="Ferias" (gozo `em_gozo` 25/05 → 23/06). Idem — "Ferias" caía fora do filtro
+ *     estrito, apesar de ter trabalhado a 1ª quinzena. Sem linha em 2026-05.
+ *   • ELIZEU: status="Desligado", aviso prévio CONCLUÍDO em MARÇO (dataInicio 02/03, dataFim 31/03),
+ *     dataDemissao 31/03. A linha de maio em `payroll_advances` (R$ 1.400, mensalista) é SNAPSHOT ANTIGO,
+ *     gerado quando ele ainda estava "Ativo". Num recálculo o caminho de desligados exige
+ *     `tn.dataFim >= 2026-05-01` (31/03 reprova) → Elizeu sai sozinho. (Obs.: `dataDesligamentoEfetiva`
+ *     estava como 15/05, provável erro de digitação do RH, mas irrelevante: o aviso terminou em março.)
+ * - SOLUÇÃO — VALE (`server/routers/payrollEngine.ts`, `gerarVale`): a seleção de ativos (`empListAtivos`)
+ *   e a de "excluídos por falta de dado salarial" passaram de `eq(employees.status,'Ativo')` para
+ *   `sql\`${'$'}{employees.status} IN ('Ativo','Aviso','Ferias')\``. A proporcionalidade de férias já
+ *   existente (`feriasMesMap`/`feriasQuinzenaMap`) e a regra de bloqueio "<10 dias úteis na quinzena 1–15"
+ *   tratam automaticamente quem NÃO trabalhou o suficiente (vira alerta/bloqueio, não some). O ramo blunt
+ *   de "Aviso" aqui é SEGURO porque esse gate zera quem não trabalhou — ex.: aviso INDENIZADO (sem ponto)
+ *   cai em 0 dias trabalhados → alerta, sem evento financeiro. Aviso TRABALHADO (Kellen) gera vale.
+ * - SOLUÇÃO — FOLHA (`payrollEngine.simularPagamento`): para NÃO deixar o vale órfão (vale gerado p/ quem
+ *   está em "Aviso", mas fora da folha do mês), o filtro de seleção da folha ganhou um ramo
+ *   `status='Aviso'` que ESPELHA o ramo já existente de Desligado-em-aviso (Rev. 2496): `EXISTS` de um
+ *   `termination_notices` NÃO-cancelado, NÃO-indenizado, com `dataFim >= 1º dia do mês` e `dataInicio <=
+ *   último dia do mês`. É 100% ADITIVO (só ACRESCENTA quem está em "Aviso" trabalhando o período; não
+ *   altera 'Ativo'/'Ferias'/'Desligado'). O `EXISTS tipo NOT LIKE '%indenizado%'` é OBRIGATÓRIO porque
+ *   `criarAvisoPrevioInterno` carimba status='Aviso' para TODO tipo (inclusive indenizado) — sem ele a
+ *   folha trabalhada vazaria avisos indenizados.
+ * - AÇÃO DO RH: após publicar, REGERAR o vale de maio (botão "Consolidar Vale") p/ o snapshot refletir a
+ *   nova seleção — Kellen e Luis Claudio entram (proporcional/integral conforme o caso) e Elizeu sai.
+ * - ZERO SCHEMA/ALTER/DROP/DELETE. Mudança restrita aos filtros de status da seleção (vale + folha).
+ *
  * Rev. 3280 — **RH & DP / DISSÍDIO · O "RELATÓRIO DE DIFERENÇAS SALARIAIS RETROATIVAS (DISSÍDIO)" SAIU DE
  * CONFIGURAÇÕES › SINDICAL/DISSÍDIO E PASSOU PARA O MÓDULO RH › FOLHA DE PAGAMENTO (BOTÃO "DIFERENÇAS
  * DISSÍDIO" NO CABEÇALHO, ABRINDO UM DIÁLOGO COM O RELATÓRIO ESCOPADO PELO ANO SELECIONADO NO CALENDÁRIO —

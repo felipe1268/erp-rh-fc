@@ -2077,7 +2077,15 @@ export const payrollEngineRouter = router({
       const { year, month } = parseMesRef(input.mesReferencia);
       const diasUteis = getDiasUteisNoMes(year, month);
 
-      // Get active CLT employees — exclui Ferias, Afastado e demais inativos
+      // Get active CLT employees.
+      // Rev. — INCLUI 'Aviso' (aviso prévio TRABALHADO em andamento) e 'Ferias'
+      // além de 'Ativo'. O vale é um adiantamento da 1ª quinzena: quem está em
+      // aviso trabalhado ou em férias CONTINUA empregado e trabalhou (no todo ou
+      // em parte) o mês — a proporcionalidade de férias (feriasMesMap) e a regra
+      // de bloqueio "<10 dias na quinzena" já tratam quem não trabalhou o suficiente.
+      // Antes, com `= 'Ativo'` estrito, funcionários cujo status virava 'Aviso'/'Ferias'
+      // no fim do mês (ex.: férias/aviso começando após o dia 15) sumiam do vale,
+      // mesmo tendo trabalhado a quinzena inteira. Espelha o filtro da folha.
       const empListAtivos = await db.select({
         id: employees.id,
         companyId: employees.companyId,
@@ -2092,7 +2100,7 @@ export const payrollEngineRouter = router({
         and(
           companyFilter(employees.companyId, input),
           eq(employees.tipoContrato, "CLT"),
-          eq(employees.status, "Ativo"),
+          sql`${employees.status} IN ('Ativo', 'Aviso', 'Ferias')`,
           sql`${employees.deletedAt} IS NULL`,
           sql`(${employees.valorHora} IS NOT NULL AND ${employees.valorHora} != '') OR ${employees.tipoRemuneracao} = 'mensalista'`,
         )
@@ -2172,7 +2180,7 @@ export const payrollEngineRouter = router({
         and(
           companyFilter(employees.companyId, input),
           eq(employees.tipoContrato, "CLT"),
-          eq(employees.status, "Ativo"),
+          sql`${employees.status} IN ('Ativo', 'Aviso', 'Ferias')`,
           sql`${employees.deletedAt} IS NULL`,
           sql`(${employees.valorHora} IS NULL OR ${employees.valorHora} = '')`,
           sql`(${employees.tipoRemuneracao} IS NULL OR ${employees.tipoRemuneracao} != 'mensalista')`,
@@ -2946,8 +2954,29 @@ export const payrollEngineRouter = router({
           // Efetiva` ANTERIOR ao mês (se o RH já efetivou a saída antes do
           // período, ele não entra na folha por mais que o aviso projete em
           // diante). Aviso INDENIZADO sempre fora (dataFim só projeção).
+          //
+          // Rev. 3281 — INCLUI também quem está em status='Aviso' (aviso prévio
+          // TRABALHADO ainda EM ANDAMENTO — ainda não virou 'Desligado'). Esses
+          // colaboradores estão trabalhando o aviso e DEVEM entrar na folha do
+          // mês (senão o vale gerado p/ eles — que agora inclui 'Aviso' — ficaria
+          // órfão). Espelha o ramo de Desligado: EXISTS de aviso não-indenizado,
+          // não-cancelado, sobrepondo o mês. `criarAvisoPrevioInterno` carimba
+          // status='Aviso' para TODO tipo (inclusive indenizado), por isso o
+          // EXISTS com `tipo NOT LIKE '%indenizado%'` é OBRIGATÓRIO aqui.
           sql`(
             ${employees.status} IN ('Ativo', 'Ferias')
+            OR (
+              ${employees.status} = 'Aviso'
+              AND EXISTS (
+                SELECT 1 FROM termination_notices tn
+                WHERE tn."employeeId" = ${employees.id}
+                  AND tn."deletedAt" IS NULL
+                  AND tn.status NOT IN ('cancelado')
+                  AND tn.tipo NOT LIKE '%indenizado%'
+                  AND tn."dataFim" >= ${primeiroDiaMesAviso}::date
+                  AND tn."dataInicio" <= ${ultimoDiaMesAviso}::date
+              )
+            )
             OR (
               ${employees.status} = 'Desligado'
               AND (${employees.dataDesligamentoEfetiva} IS NULL
