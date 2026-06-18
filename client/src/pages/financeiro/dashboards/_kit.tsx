@@ -379,8 +379,8 @@ export function ComparativoAnual({
           <TableHeader className="sticky top-0 bg-slate-50 z-10">
             <TableRow>
               <TableHead className="text-xs font-semibold">Mês</TableHead>
-              <TableHead className="text-right text-xs font-semibold">{anoAtual}</TableHead>
               <TableHead className="text-right text-xs font-semibold">{anoPrev}</TableHead>
+              <TableHead className="text-right text-xs font-semibold">{anoAtual}</TableHead>
               <TableHead className="text-right text-xs font-semibold">Δ a/a</TableHead>
               <TableHead className="text-right text-xs font-semibold">Δ m/m</TableHead>
             </TableRow>
@@ -398,8 +398,8 @@ export function ComparativoAnual({
                   onClick={clicavel ? () => onOpenMes!(i) : undefined}
                 >
                   <TableCell className="font-medium text-slate-700">{mes}</TableCell>
-                  <TableCell className="text-right tabular-nums text-slate-900">{cur ? formatBRL(cur) : "—"}</TableCell>
                   <TableCell className="text-right tabular-nums text-slate-500">{prev ? formatBRL(prev) : "—"}</TableCell>
+                  <TableCell className="text-right tabular-nums text-slate-900">{cur ? formatBRL(cur) : "—"}</TableCell>
                   <TableCell className="text-right">
                     {cur === 0 && prev === 0 ? <span className="text-slate-300">—</span> : <DeltaBadge curr={cur} prev={prev} goodWhen={goodWhen} size="xs" />}
                   </TableCell>
@@ -413,8 +413,8 @@ export function ComparativoAnual({
           <TableFooter className="sticky bottom-0">
             <TableRow>
               <TableCell className="font-bold text-xs">Total {valorLabel}</TableCell>
-              <TableCell className="text-right font-bold text-xs tabular-nums">{formatBRL(totAtual)}</TableCell>
               <TableCell className="text-right font-bold text-xs tabular-nums">{formatBRL(totPrev)}</TableCell>
+              <TableCell className="text-right font-bold text-xs tabular-nums">{formatBRL(totAtual)}</TableCell>
               <TableCell className="text-right" colSpan={2}>
                 <DeltaBadge curr={totAtual} prev={totPrev} goodWhen={goodWhen} size="xs" />
               </TableCell>

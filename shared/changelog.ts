@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3256 — **FINANCEIRO / DASHBOARDS · NA TABELA COMPARATIVA (MÊS A MÊS / ANO A ANO) DOS 5 PAINÉIS,
+ * AS COLUNAS DE ANO PASSARAM A SEGUIR ORDEM CRONOLÓGICA — O ANO MAIS ANTIGO À ESQUERDA E O MAIS RECENTE
+ * À DIREITA (EX.: 2025 ANTES DE 2026), EM VEZ DO ATUAL PRIMEIRO. SÓ ORDEM DAS COLUNAS — OS VALORES,
+ * AS VARIAÇÕES Δ A/A E Δ M/M E OS CLIQUES POR MÊS CONTINUAM IDÊNTICOS.**
+ * - PEDIDO (piloto FC): "Altere a ordem — o ano mais velho fica à esquerda e aí sucessivamente"
+ *   (print IMG_2182 — tabela com 2026 antes de 2025).
+ * - SOLUÇÃO (FRONT, `client/src/pages/financeiro/dashboards/_kit.tsx`, componente `ComparativoAnual`):
+ *   no cabeçalho, nas linhas de cada mês e na linha de TOTAL, as duas células de ano foram trocadas de
+ *   posição — `{anoPrev}`/`totPrev`/`prev` agora vêm ANTES de `{anoAtual}`/`totAtual`/`cur`. A cor de
+ *   destaque acompanhou (ano recente em `text-slate-900`, anterior em `text-slate-500`). A lógica dos
+ *   `DeltaBadge` (Δ a/a = `cur` vs `prev`; Δ m/m = `cur` vs mês anterior) e o `onOpenMes` não mudaram.
+ *   Como é o kit compartilhado, vale para os 5 dashboards (Receber, Pagar, Conciliação, Cheques, Cartão).
+ * - ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE. esbuild limpo.
+ *
  * Rev. 3255 — **FINANCEIRO / CONTROLE DE CHEQUES · OS DROPDOWNS DE STATUS (FILTRO "STATUS", AÇÃO EM
  * LOTE "ALTERAR STATUS PARA" E EDIÇÃO POR CHEQUE) PASSARAM A ABRIR ANCORADOS LOGO ABAIXO DO CAMPO,
  * ALINHADOS À ESQUERDA — EM VEZ DE FLUTUAR CENTRALIZADOS "NO MEIO DA TELA" (PROBLEMA VISÍVEL NO
