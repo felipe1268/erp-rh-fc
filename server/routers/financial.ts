@@ -130,6 +130,105 @@ function inlineIds(ids: number[]): string {
   return ids.map(Number).join(",");
 }
 
+// Rev. 3239 — Normaliza nome de fornecedor p/ AGRUPAR variações de caixa/acento como
+// um mesmo emissor (ex.: "Auto Peças Mecânica Guincho Jefcar" == "AUTO PEÇAS MECANICA
+// GUINCHO JEFCAR"). Só p/ a CHAVE de grupo; a exibição usa a grafia original mais
+// frequente.
+function _normNomeConc(s: any): string {
+  return String(s ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Rev. 3239 — UNIFICA na Conciliação Bancária os lançamentos que no EXTRATO aparecem
+// como UM ÚNICO valor total (mas no ERP vivem pulverizados em N linhas):
+//   • Vale Refeição (RH, origem `beneficio_vr`) → 1 total por MÊS (YYYY-MM).
+//   • Combustível (Frota, `frota_abastecimento`) → agrupado pelo POSTO (fornecedor).
+//   • Manutenção (Frota, `frota_manutencao`)    → agrupado pelo FORNECEDOR cadastrado.
+// As demais linhas passam intactas. A SOMA é preservada (KPI não muda); só a CONTAGEM
+// cai (objetivo: a lista deixa de ter centenas de linhas). Cada grupo é uma linha
+// SINTÉTICA {id:"grp:…" (string), agrupado:true, itensIds:[…], qtd, valor=soma, …}.
+// READ-ONLY (só formata o retorno; nada é gravado aqui).
+function _agruparConciliacao(arr: any[]): any[] {
+  const GRUP: Record<string, string> = {
+    beneficio_vr: "vr",
+    frota_abastecimento: "combustivel",
+    frota_manutencao: "manutencao",
+  };
+  const passthrough: any[] = [];
+  const groups = new Map<string, any>();
+  for (const r of arr) {
+    const tipoG = GRUP[String(r.origemModulo ?? "")];
+    if (!tipoG) { passthrough.push(r); continue; }
+    const dataStr = typeof r.data === "string"
+      ? r.data.slice(0, 10)
+      : (r.data ? new Date(r.data).toISOString().slice(0, 10) : "");
+    const ym = dataStr.slice(0, 7);
+    let chave: string; let label: string;
+    if (tipoG === "vr") {
+      chave = `vr|${ym}`;
+      label = `Vale Refeição ${ym}`;
+    } else {
+      const fornRaw = (r.frotaFornecedor && String(r.frotaFornecedor).trim()) || "";
+      const fn = _normNomeConc(fornRaw);
+      chave = `${tipoG}|${fn || "SEM"}`;
+      const pre = tipoG === "combustivel" ? "Combustível" : "Manutenção";
+      label = fornRaw ? `${pre} · ${fornRaw}` : `${pre} (sem fornecedor)`;
+    }
+    let g = groups.get(chave);
+    if (!g) {
+      g = {
+        id: `grp:${chave}`,
+        agrupado: true,
+        grupoTipo: tipoG,
+        descricao: label,
+        fornecedorNome: tipoG === "vr" ? null : null,
+        obraNome: null,
+        valor: 0,
+        tipo: r.tipo || "despesa",
+        status: r.status,
+        data: dataStr,
+        dataMin: dataStr || "9999-12-31",
+        dataMax: dataStr || "0000-01-01",
+        qtd: 0,
+        itensIds: [] as number[],
+        itens: [] as any[],
+        _fornCount: new Map<string, number>(),
+      };
+      groups.set(chave, g);
+    }
+    g.valor += Number(r.valor) || 0;
+    g.qtd += 1;
+    g.itensIds.push(r.id);
+    g.itens.push({ id: r.id, descricao: r.descricao, fornecedorNome: r.fornecedorNome, valor: Number(r.valor) || 0, data: dataStr });
+    if (dataStr && dataStr < g.dataMin) g.dataMin = dataStr;
+    if (dataStr && dataStr > g.dataMax) { g.dataMax = dataStr; g.data = dataStr; }
+    if (tipoG !== "vr" && r.frotaFornecedor) {
+      const k = String(r.frotaFornecedor).trim();
+      if (k) g._fornCount.set(k, (g._fornCount.get(k) || 0) + 1);
+    }
+  }
+  const out: any[] = [...passthrough];
+  for (const g of groups.values()) {
+    if (g.grupoTipo === "vr") {
+      g.fornecedorNome = null;
+    } else if (g._fornCount.size) {
+      let best = ""; let bestN = -1;
+      for (const [k, n] of g._fornCount) if (n > bestN) { best = k; bestN = n; }
+      g.fornecedorNome = best || null;
+      const pre = g.grupoTipo === "combustivel" ? "Combustível" : "Manutenção";
+      g.descricao = best ? `${pre} · ${best}` : `${pre} (sem fornecedor)`;
+    }
+    delete g._fornCount;
+    out.push(g);
+  }
+  out.sort((a, b) => String(a.data || "").localeCompare(String(b.data || "")) || String(a.id).localeCompare(String(b.id)));
+  return out;
+}
+
 // Rev. 2214 — Helper compartilhado: materializa recorrências ativas em
 // `financial_entries` até um horizonte (em meses a partir de hoje).
 // Idempotente: pula meses já materializados (checagem por
@@ -4470,13 +4569,21 @@ export const financialRouter = router({
     // extrato" e fazendo o número variar conforme a conta selecionada. Agora o bloco
     // específico da conta traz só `conta_bancaria_id=$2`; os "sem conta" saem num bloco
     // próprio (lancamentosSemConta) que NÃO entra na contagem por conta.
+    // Rev. 3239 — além das colunas do lançamento, traz `origem_modulo` e o FORNECEDOR REAL
+    // da Frota (posto do abastecimento / fornecedor da manutenção) via LEFT JOIN por
+    // origem_id, p/ o agrupador (_agruparConciliacao) unificar combustível/manutenção pelo
+    // NOME DO FORNECEDOR (o extrato mostra só o total). VR não precisa de join (agrupa por mês).
     const lancRes = await dbExecute(db,
       `SELECT e.id, e.descricao, e.fornecedor_nome AS "fornecedorNome", e.obra_nome AS "obraNome",
               COALESCE(e.valor_realizado, e.valor_previsto) AS valor, e.tipo, e.status,
               e.forma_pagamento AS "formaPagamento", e.comprovante_url AS "comprovanteUrl",
               e.comprovante_beneficiario AS "comprovanteBeneficiario",
+              e.origem_modulo AS "origemModulo",
+              COALESCE(NULLIF(TRIM(ff.posto),''), NULLIF(TRIM(fm.fornecedor),'')) AS "frotaFornecedor",
               COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) AS data
          FROM financial_entries e
+         LEFT JOIN fleet_fuel_records ff ON e.origem_modulo='frota_abastecimento' AND ff.id = e.origem_id
+         LEFT JOIN fleet_maintenances fm ON e.origem_modulo='frota_manutencao' AND fm.id = e.origem_id
         WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
           AND e.conta_bancaria_id=$2
           AND ${sqlNotProjecao("e.origem_modulo")}
@@ -4498,8 +4605,12 @@ export const financialRouter = router({
               COALESCE(e.valor_realizado, e.valor_previsto) AS valor, e.tipo, e.status,
               e.forma_pagamento AS "formaPagamento", e.comprovante_url AS "comprovanteUrl",
               e.comprovante_beneficiario AS "comprovanteBeneficiario",
+              e.origem_modulo AS "origemModulo",
+              COALESCE(NULLIF(TRIM(ff.posto),''), NULLIF(TRIM(fm.fornecedor),'')) AS "frotaFornecedor",
               COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) AS data
          FROM financial_entries e
+         LEFT JOIN fleet_fuel_records ff ON e.origem_modulo='frota_abastecimento' AND ff.id = e.origem_id
+         LEFT JOIN fleet_maintenances fm ON e.origem_modulo='frota_manutencao' AND fm.id = e.origem_id
         WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
           AND e.conta_bancaria_id IS NULL
           AND ${sqlNotProjecao("e.origem_modulo")}
@@ -4512,8 +4623,10 @@ export const financialRouter = router({
       conciliados: rows(concRes),
       extratoSemLancamento,
       chequesDevolvidos,
-      lancamentosSemExtrato: rows(lancRes),
-      lancamentosSemConta: rows(semContaRes),
+      // Rev. 3239 — UNIFICA VR (por mês) + combustível/manutenção (por fornecedor) nas duas
+      // listas de pendência. SOMA preservada; só a contagem cai (lista enxuta).
+      lancamentosSemExtrato: _agruparConciliacao(rows(lancRes)),
+      lancamentosSemConta: _agruparConciliacao(rows(semContaRes)),
     };
   }),
 
@@ -4585,6 +4698,90 @@ export const financialRouter = router({
       [input.entryId, input.companyId]
     );
     return { ok: true };
+  }),
+
+  // Rev. 3239 — CONCILIAÇÃO EM GRUPO (N lançamentos : 1 linha do extrato). Usada quando a
+  // tela unifica VR / combustível / manutenção num único total (o extrato mostra só o valor
+  // somado). Marca a linha do extrato como conciliada (entry_id = 1º membro, "representante")
+  // e BAIXA todos os lançamentos-membro (conciliado + data_conciliacao + status pago/recebido).
+  // Registra cada membro em `financial_conciliacao_grupo` (tabela-link AUTO-CRIADA) para o
+  // "Desconsolidar mês" conseguir REVERTER o grupo inteiro depois — sem isso, só o
+  // representante voltaria e o grupo reapareceria quebrado. AÇÃO EXPLÍCITA do usuário
+  // ("conciliação só sugestiva"): nada roda sozinho. ZERO ALTER/DROP/DELETE.
+  conciliarGrupoLancamentos: protectedProcedure.input(z.object({
+    statementLineId: z.number(),
+    entryIds: z.array(z.number().int()).min(1).max(5000),
+    companyId: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const ids = Array.from(new Set(input.entryIds)).filter((n) => Number.isInteger(n) && n > 0);
+    if (ids.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Grupo sem lançamentos válidos." });
+    let conciliados = 0;
+    await db.transaction(async (tx: any) => {
+      // 0) Self-heal: tabela-link p/ reversibilidade (idempotente). `revertido_em` evita
+      //    DELETE no undo (honra a regra JAMAIS DELETE).
+      await dbExecute(tx,
+        `CREATE TABLE IF NOT EXISTS financial_conciliacao_grupo (
+           id serial PRIMARY KEY,
+           company_id integer NOT NULL,
+           statement_line_id integer NOT NULL,
+           entry_id integer NOT NULL,
+           created_at timestamp DEFAULT NOW(),
+           revertido_em timestamp
+         )`, []);
+      await dbExecute(tx,
+        `CREATE INDEX IF NOT EXISTS idx_fcg_line ON financial_conciliacao_grupo (company_id, statement_line_id)`, []);
+      // 1) RESERVA ATÔMICA da linha (guard conciliado=0 → vencedor único sob concorrência).
+      //    entry_id = representante (1º membro), só p/ ter um vínculo direto na linha.
+      const lnRes = await dbExecute(tx,
+        `UPDATE bank_statement_lines SET conciliado=1, entry_id=$1
+          WHERE id=$2 AND company_id=$3 AND COALESCE(conciliado,0)=0 AND excluido_em IS NULL
+          RETURNING data`,
+        [ids[0], input.statementLineId, input.companyId]);
+      if (rows(lnRes).length === 0) {
+        throw new TRPCError({ code: "CONFLICT", message: "Linha do extrato já conciliada ou removida." });
+      }
+      const ln = rows(lnRes)[0] as any;
+      const dataPg = typeof ln.data === "string" ? ln.data.slice(0, 10) : new Date(ln.data).toISOString().slice(0, 10);
+      // 2) Baixa de TODOS os membros. CRÍTICO: `dbExecute` liga params por ORDEM DE APARIÇÃO
+      //    TEXTUAL ($N é cosmético/ignorado). Como o `data_pagamento` (cláusula SET) aparece
+      //    ANTES do `IN (...)` no texto, ele PRECISA ser o 1º placeholder e o 1º item do array,
+      //    senão `dataPg` cairia no IN e um id cairia no ::date. Ordem: dataPg → ids → companyId.
+      const ph = ids.map((_, i) => `$${i + 2}`).join(",");
+      const upd = await dbExecute(tx,
+        `UPDATE financial_entries
+            SET conciliado=1, data_conciliacao=CURRENT_DATE,
+                status = CASE WHEN tipo='receita' THEN 'recebido' ELSE 'pago' END,
+                data_pagamento = COALESCE(data_pagamento, $1::date),
+                valor_realizado = COALESCE(valor_realizado, valor_previsto)
+          WHERE id IN (${ph}) AND company_id=$${ids.length + 2}
+            AND COALESCE(conciliado,0)=0 AND status <> 'cancelado'
+          RETURNING id`,
+        [dataPg, ...ids, input.companyId]);
+      const okIds = rows(upd).map((r: any) => Number(r.id));
+      conciliados = okIds.length;
+      if (conciliados === 0) {
+        // Nenhum membro pôde ser baixado (já conciliados/cancelados): desfaz a reserva da linha.
+        throw new TRPCError({ code: "CONFLICT", message: "Nenhum lançamento do grupo pôde ser conciliado (já conciliados ou cancelados)." });
+      }
+      // 3) Registra os vínculos p/ undo (em lotes de 300 linhas).
+      for (let i = 0; i < okIds.length; i += 300) {
+        const chunk = okIds.slice(i, i + 300);
+        const vals: string[] = [];
+        const params: any[] = [];
+        chunk.forEach((eid, j) => {
+          vals.push(`($${j * 3 + 1},$${j * 3 + 2},$${j * 3 + 3})`);
+          params.push(input.companyId, input.statementLineId, eid);
+        });
+        await dbExecute(tx,
+          `INSERT INTO financial_conciliacao_grupo (company_id, statement_line_id, entry_id) VALUES ${vals.join(",")}`,
+          params);
+      }
+    });
+    await createAuditLog({ action: "financial_conciliacao_grupo", userId: ctx.user?.id, companyId: input.companyId, details: `Linha ${input.statementLineId} conciliada com ${conciliados} lançamento(s) em grupo` });
+    return { ok: true, conciliados, total: ids.length };
   }),
 
   // Rev. 3187 — Anexar comprovante (PIX / boleto / recibo) a um lançamento direto da
@@ -4987,6 +5184,30 @@ export const financialRouter = router({
             AND COALESCE(l.conciliado,0)=1 AND l.entry_id IS NOT NULL AND l.excluido_em IS NULL
             AND e.id=l.entry_id AND e.company_id=l.company_id`,
         [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim]);
+      // 1b) Rev. 3239 — reverte os MEMBROS de conciliações EM GRUPO (VR/combustível/manutenção)
+      //     via a tabela-link `financial_conciliacao_grupo`. O entry_id da linha só guarda o
+      //     representante; sem isto os demais membros ficariam conciliado=1 órfãos. Tolerante
+      //     à ausência da tabela (companhias que nunca usaram grupo) — try/catch silencioso.
+      try {
+        await dbExecute(tx,
+          `UPDATE financial_entries e SET conciliado=0, data_conciliacao=NULL
+             FROM financial_conciliacao_grupo g
+             JOIN bank_statement_lines l ON l.id=g.statement_line_id AND l.company_id=g.company_id
+            WHERE g.company_id=$1 AND l.conta_bancaria_id=$2 AND l.data>=$3 AND l.data<=$4
+              AND g.revertido_em IS NULL AND COALESCE(l.conciliado,0)=1 AND l.excluido_em IS NULL
+              AND e.id=g.entry_id AND e.company_id=g.company_id`,
+          [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim]);
+        // Marca os vínculos como revertidos (SEM DELETE — honra a regra).
+        await dbExecute(tx,
+          `UPDATE financial_conciliacao_grupo g SET revertido_em=NOW()
+             FROM bank_statement_lines l
+            WHERE l.id=g.statement_line_id AND l.company_id=g.company_id
+              AND g.company_id=$1 AND l.conta_bancaria_id=$2 AND l.data>=$3 AND l.data<=$4
+              AND g.revertido_em IS NULL AND COALESCE(l.conciliado,0)=1 AND l.excluido_em IS NULL`,
+          [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim]);
+      } catch (e: any) {
+        if (!/relation .*financial_conciliacao_grupo.* does not exist/i.test(String(e?.message ?? ""))) throw e;
+      }
       // 2) Desmarca as linhas do extrato e desfaz o vínculo.
       const res = await dbExecute(tx,
         `UPDATE bank_statement_lines SET conciliado=0, entry_id=NULL

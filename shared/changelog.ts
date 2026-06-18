@@ -1,6 +1,47 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3239 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · UNIFICAÇÃO DE LANÇAMENTOS QUE NO EXTRATO
+ * APARECEM COMO UM ÚNICO VALOR · O VALE REFEIÇÃO (RH), QUE NO ERP VIVE PULVERIZADO EM CENTENAS
+ * DE LINHAS (UMA POR FUNCIONÁRIO), AGORA APARECE NA CONCILIAÇÃO COMO 1 LINHA POR MÊS (TOTAL); O
+ * COMBUSTÍVEL E A MANUTENÇÃO (FROTA), QUE TAMBÉM VÊM PICADOS, SÃO AGRUPADOS PELO NOME DO
+ * FORNECEDOR/POSTO (O EXTRATO SÓ MOSTRA O VALOR TOTAL PAGO AO FORNECEDOR). CADA GRUPO É UMA
+ * LINHA SINTÉTICA COM SELO DO TIPO, CONTAGEM DE ITENS E BOTÃO P/ EXPANDIR E VER OS LANÇAMENTOS
+ * QUE O COMPÕEM. CASAR O GRUPO COM A LINHA DO EXTRATO BAIXA TODOS OS MEMBROS DE UMA VEZ
+ * (N LANÇAMENTOS : 1 LINHA). A SOMA TOTAL NÃO MUDA — SÓ A QUANTIDADE DE LINHAS CAI DRASTICAMENTE.**
+ * - PEDIDO (piloto FC): "na conciliação bancária, o VR deveria ser 1 lançamento total no mês (e não
+ *   um por funcionário); combustível e manutenção da frota deveriam ser agrupados por fornecedor,
+ *   porque no extrato bancário aparece só o valor total pago — não dá pra casar centenas de linhas
+ *   contra uma só."
+ * - CONTEXTO: a tela "No ERP, sem extrato" listava cada entry individualmente (VR ~481 linhas/mês,
+ *   combustível ~347, manutenção ~72), inviável de casar 1:1 com a única linha consolidada do banco.
+ * - SOLUÇÃO (BACK, `server/routers/financial.ts`): novos helpers `_normNomeConc` (NFD+UPPER+collapse,
+ *   p/ unir variações de caixa/acento do mesmo fornecedor — ex.: "...Jefcar" == "...JEFCAR") e
+ *   `_agruparConciliacao` (READ-ONLY, só formata o retorno). Os 2 SELECTs de `getConciliacaoReport`
+ *   (lista da conta + "sem conta") passaram a trazer `origem_modulo` e o FORNECEDOR REAL da Frota via
+ *   LEFT JOIN em `fleet_fuel_records` (posto) / `fleet_maintenances` (fornecedor) por `origem_id`. O
+ *   agrupador unifica: VR (`beneficio_vr`) por MÊS (YYYY-MM); combustível (`frota_abastecimento`) e
+ *   manutenção (`frota_manutencao`) pelo fornecedor normalizado (exibe a grafia original mais
+ *   frequente). Demais linhas passam intactas; a SOMA é preservada. Cada grupo vira
+ *   `{id:"grp:…", agrupado:true, grupoTipo, qtd, valor=Σ, itensIds:[…], itens:[…]}`.
+ * - SOLUÇÃO (BACK, conciliação N:1): nova procedure `conciliarGrupoLancamentos({statementLineId,
+ *   entryIds[], companyId})` — RESERVA ATÔMICA da linha do extrato (guard `conciliado=0`, vencedor
+ *   único sob concorrência; `entry_id` = 1º membro "representante"), BAIXA todos os membros
+ *   (`conciliado=1` + `data_conciliacao` + `status` pago/recebido + `data_pagamento`/`valor_realizado`
+ *   por COALESCE), e registra cada vínculo em `financial_conciliacao_grupo` (tabela-link AUTO-CRIADA
+ *   via `CREATE TABLE IF NOT EXISTS`, com `revertido_em` p/ UNDO sem DELETE). `desconsolidarMes` ganhou
+ *   um passo "1b" que reverte os MEMBROS do grupo via a tabela-link (tolerante à ausência da tabela)
+ *   antes de limpar as linhas — sem isso, só o representante voltaria e o grupo reapareceria quebrado.
+ *   `dbExecute` liga params por ORDEM DE APARIÇÃO (IN com placeholders explícitos, não `ANY(array)`).
+ *   AÇÃO EXPLÍCITA do usuário ("conciliação só sugestiva"). ZERO ALTER/DROP/DELETE.
+ * - SOLUÇÃO (FRONT, `client/src/pages/financeiro/FinanceiroConciliacao.tsx`): `renderEntryRow` trata
+ *   `e.agrupado` — linha sintética com selo colorido por tipo (VR âmbar / combustível azul / manutenção
+ *   violeta), badge "N itens", botão chevron p/ expandir e listar os membros inline (data/fornecedor/
+ *   valor). `selectedEntry` agora aceita `number|string` (id de grupo "grp:…"). O painel manual de
+ *   conciliação detecta `lan.agrupado` e chama `conciliarGrupoMut` (envia `itensIds`) em vez do par 1:1;
+ *   toast informa quantos lançamentos foram baixados. Busca e export PDF já operam sobre as linhas de
+ *   grupo (têm descrição/fornecedor/valor/data). ZERO conciliação/baixa automática.
+ *
  * Rev. 3238 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SEGUNDA VERIFICAÇÃO PELOS DEMONSTRATIVOS
  * DE PAGAMENTO · QUANDO UMA LINHA DO EXTRATO FICA "SEM LANÇAMENTO" E O ERP NÃO IDENTIFICA DE
  * ONDE É (NEM CHEQUE NEM FATURA), ELE AGORA CONSULTA AUTOMATICAMENTE A LISTA "TUDO QUE A IA LEU

@@ -14,7 +14,7 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX, FileSpreadsheet, FileDown, Plus, Maximize2, Search } from "lucide-react";
+import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX, FileSpreadsheet, FileDown, Plus, Maximize2, Search } from "lucide-react";
 import { formatConta, formatAgencia } from "@/lib/formatters";
 
 function formatBRL(v: number) {
@@ -77,7 +77,10 @@ export default function FinanceiroConciliacao() {
   // Rev. 3219 — busca única que filtra AMBAS as listas (extrato sem lançamento + ERP sem extrato).
   const [buscaConc, setBuscaConc] = useState("");
   const [selectedStatement, setSelectedStatement] = useState<number | null>(null);
-  const [selectedEntry, setSelectedEntry] = useState<number | null>(null);
+  // Rev. 3239 — pode ser um id numérico (lançamento individual) OU um id de GRUPO ("grp:…").
+  const [selectedEntry, setSelectedEntry] = useState<number | string | null>(null);
+  // Rev. 3239 — grupos expandidos (mostra os lançamentos-membro inline).
+  const [gruposExpandidos, setGruposExpandidos] = useState<Set<string>>(new Set());
   // Rev. 3205 — expandir uma das listas de pendência em tela cheia p/ analisar melhor.
   const [expandedList, setExpandedList] = useState<"extrato" | "erp" | null>(null);
   const [showImport, setShowImport] = useState(false);
@@ -308,6 +311,12 @@ export default function FinanceiroConciliacao() {
   const conciliarMut = (trpc as any).financial.conciliarLancamento.useMutation({
     onSuccess: () => { toast({ title: "Conciliação registrada!" }); refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug(); setSelectedStatement(null); setSelectedEntry(null); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+  // Rev. 3239 — conciliação de um GRUPO unificado (VR / combustível / manutenção) contra UMA
+  // linha do extrato (N lançamentos : 1 linha). Mesma UX do par 1:1, mas envia os itensIds.
+  const conciliarGrupoMut = (trpc as any).financial.conciliarGrupoLancamentos.useMutation({
+    onSuccess: (res: any) => { toast({ title: `Grupo conciliado! ${res.conciliados} lançamento(s) baixado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug(); setSelectedStatement(null); setSelectedEntry(null); },
+    onError: (e: any) => toast({ title: "Erro ao conciliar grupo", description: e.message, variant: "destructive" }),
   });
   // Rev. 3198 — conciliação do fluxo "Lançar": SEM onError próprio (o erro é tratado
   // no catch do submitLancar, preservando o id criado p/ não duplicar no retry).
@@ -621,6 +630,46 @@ export default function FinanceiroConciliacao() {
     const isPix = forma.includes("pix");
     const isBoleto = forma.includes("boleto");
     const isReceita = e.tipo === "receita";
+    // Rev. 3239 — linha SINTÉTICA de grupo (VR/combustível/manutenção unificados).
+    if (e.agrupado) {
+      const expandido = gruposExpandidos.has(String(e.id));
+      const grpLabel = e.grupoTipo === "vr" ? "Vale Refeição" : e.grupoTipo === "combustivel" ? "Combustível" : "Manutenção";
+      const grpColor = e.grupoTipo === "vr" ? "bg-amber-100 text-amber-700" : e.grupoTipo === "combustivel" ? "bg-sky-100 text-sky-700" : "bg-violet-100 text-violet-700";
+      const itens: any[] = Array.isArray(e.itens) ? e.itens : [];
+      return (
+        <div key={e.id} className={`border-b last:border-b-0 ${selectedEntry === e.id ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}>
+          <div className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors">
+            <span className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-rose-50 text-rose-500">
+              <ArrowUpCircle className="w-5 h-5" />
+            </span>
+            <button onClick={() => setSelectedEntry(selectedEntry === e.id ? null : e.id)} className="flex-1 min-w-0 text-left">
+              <p className="text-[11px] text-gray-400 flex items-center gap-1.5">
+                {fmtData(e.data)}
+                <span className={`px-1.5 py-px rounded-full text-[10px] font-medium ${grpColor}`}>{grpLabel}</span>
+                <span className="px-1.5 py-px rounded-full text-[10px] font-medium bg-gray-100 text-gray-600">{e.qtd} itens</span>
+              </p>
+              <p className="text-sm font-medium text-gray-700 truncate">{e.descricao || "—"}</p>
+              <p className="text-[11px] text-gray-400 truncate">Total unificado · clique para casar com o extrato</p>
+            </button>
+            <p className="text-sm font-bold shrink-0 text-rose-500">{formatBRL(Math.abs(Number(e.valor)))}</p>
+            <button type="button" onClick={() => setGruposExpandidos((prev) => { const n = new Set(prev); if (n.has(String(e.id))) n.delete(String(e.id)); else n.add(String(e.id)); return n; })} title={expandido ? "Recolher itens" : "Ver os itens do grupo"} className="shrink-0 p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50">
+              {expandido ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          </div>
+          {expandido && (
+            <div className="bg-gray-50 px-4 py-2 max-h-72 overflow-auto border-t">
+              {itens.map((it: any) => (
+                <div key={it.id} className="flex items-center gap-2 py-1 text-xs text-gray-600">
+                  <span className="text-gray-400 shrink-0 w-16">{fmtData(it.data)}</span>
+                  <span className="flex-1 min-w-0 truncate">{it.fornecedorNome || it.descricao || "—"}</span>
+                  <span className="font-medium text-rose-500 shrink-0">{formatBRL(Math.abs(Number(it.valor)))}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
     return (
       <div
         key={e.id}
@@ -1993,7 +2042,7 @@ export default function FinanceiroConciliacao() {
                     </div>
                     <Link2 className="w-5 h-5 text-blue-400 shrink-0 self-center" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-[11px] uppercase tracking-wide text-gray-400">Lançamento</p>
+                      <p className="text-[11px] uppercase tracking-wide text-gray-400">Lançamento{lan?.agrupado ? ` · grupo (${lan.qtd} itens)` : ""}</p>
                       <p className="text-sm font-medium truncate">{lan ? (lan.fornecedorNome || lan.descricao || "—") : "Selecione um lançamento"}</p>
                       {lan && <p className="text-xs text-gray-500">{formatBRL(Math.abs(Number(lan.valor)))}</p>}
                     </div>
@@ -2002,10 +2051,15 @@ export default function FinanceiroConciliacao() {
                       <Button variant="ghost" size="sm" onClick={() => { setSelectedStatement(null); setSelectedEntry(null); }}><X className="w-4 h-4" /></Button>
                       <Button
                         className="bg-blue-600 hover:bg-blue-700 text-white"
-                        disabled={!ext || !lan || conciliarMut.isPending}
-                        onClick={() => { if (ext && lan) conciliarMut.mutate({ companyId, statementLineId: ext.id, entryId: lan.id }); }}
+                        disabled={!ext || !lan || conciliarMut.isPending || conciliarGrupoMut.isPending}
+                        onClick={() => {
+                          if (!ext || !lan) return;
+                          // Rev. 3239 — grupo unificado → conciliação N:1 (envia os itensIds).
+                          if (lan.agrupado) conciliarGrupoMut.mutate({ companyId, statementLineId: ext.id, entryIds: lan.itensIds });
+                          else conciliarMut.mutate({ companyId, statementLineId: ext.id, entryId: lan.id });
+                        }}
                       >
-                        <CheckCircle className="w-4 h-4 mr-1.5" />{conciliarMut.isPending ? "Conciliando..." : "Conciliar"}
+                        <CheckCircle className="w-4 h-4 mr-1.5" />{(conciliarMut.isPending || conciliarGrupoMut.isPending) ? "Conciliando..." : "Conciliar"}
                       </Button>
                     </div>
                   </CardContent>
