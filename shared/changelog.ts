@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3264 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NA SEÇÃO "SUGESTÕES AUTOMÁTICAS DE CONCILIAÇÃO",
+ * AGORA DÁ PARA CLICAR TANTO NO ITEM DO EXTRATO (BANCO) QUANTO NO LANÇAMENTO DO ERP PARA ABRIR O DETALHE
+ * COMPLETO DA DESPESA/RECEITA — COM UM NOVO BLOCO "CONFERÊNCIA DA CONCILIAÇÃO" QUE COLOCA OS DOIS LADOS
+ * (EXTRATO × ERP) LADO A LADO, COM Δ DO VALOR (VERDE "VALORES IDÊNTICOS" OU ÂMBAR COM A DIFERENÇA EM
+ * BRL), Δ DE DIAS, A CONFIANÇA (ALTA/MÉDIA) E COMO A SUGESTÃO FOI IDENTIFICADA — PARA O USUÁRIO VALIDAR
+ * (OU NÃO) O PAR ANTES DE CONCILIAR. 100% READ-ONLY · SÓ FRONT.**
+ * - PEDIDO (piloto FC): "Quero poder clicar no lançamento do extrato OU no ERP para ver detalhadamente a
+ *   despesa ou receita, para validar ou não a conciliação" (print IMG_2197 — lista de sugestões em que só
+ *   o lado do ERP era clicável; o lado do extrato não abria nada).
+ * - CAUSA: na Rev. 3177 só o lado "Lançamento no ERP" virou botão (abre o detalhe `getEntryDetalhe`); o
+ *   lado do extrato continuava sendo uma `<div>` estática, sem ação de clique. Não havia comparação
+ *   explícita extrato × lançamento dentro do detalhe para apoiar a decisão de conciliar.
+ * - SOLUÇÃO (SÓ FRONT, `client/src/pages/financeiro/FinanceiroConciliacao.tsx`):
+ *   • O item do EXTRATO virou `<button>` (mesmo padrão do lado ERP: `preventDefault`+`stopPropagation`
+ *     para não alternar o checkbox da linha) e ambos os lados agora chamam o novo helper `abrirDetalheSug(s)`.
+ *   • `abrirDetalheSug` guarda os dados do extrato da sugestão (`detalheExtrato`: data/descrição/valor,
+ *     cheque, valor do ERP, `deltaDias`, `confianca`, `identificadoVia`) e abre o detalhe via
+ *     `setDetalheEntryId(s.entryId)`. `fecharDetalhe()` zera os dois estados ao fechar.
+ *   • Novo bloco "Conferência da conciliação" no topo do diálogo (renderizado só quando aberto a partir
+ *     de uma sugestão): dois cards (Extrato banco × Lançamento ERP) + pílulas de Δ valor (`< 0,005` =
+ *     "valores idênticos"), Δ dias, confiança e via de identificação. O detalhe completo do lançamento
+ *     (`getEntryDetalhe`) segue abaixo, inalterado.
+ * - EFEITO: clicar em qualquer um dos dois lados abre o mesmo detalhe consultivo já com a comparação
+ *   pronta, permitindo validar o par antes de marcar "Conciliar selecionadas".
+ * - ZERO BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3263 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O VÍNCULO ENTRE A LINHA "CHEQUE COMPENSADO" DO
  * EXTRATO E O CADASTRO DO CONTROLE DE CHEQUES VOLTOU A APARECER NOS CASOS EM QUE A CAIXA IDENTIFICA O
  * CHEQUE COMO "DOC NNNNNN" (EX.: "CHEQUE COMPENSADO · DOC 000990") E/OU QUANDO O BANCO ARREDONDA 1

@@ -104,6 +104,27 @@ export default function FinanceiroConciliacao() {
   const [selSug, setSelSug] = useState<Set<number>>(new Set());
   // Rev. 3177 — clicar no lançamento das sugestões abre um detalhe CONSULTIVO (read-only).
   const [detalheEntryId, setDetalheEntryId] = useState<number | null>(null);
+  // Rev. 3264 — clicar TAMBÉM no item do extrato abre o detalhe + bloco de conferência (extrato × ERP) p/ validar a conciliação.
+  const [detalheExtrato, setDetalheExtrato] = useState<null | {
+    data: string | null; descricao: string | null; valor: number;
+    chequeNumero?: any; chequeFornecedor?: string | null;
+    entryValor?: number; deltaDias?: number; confianca?: string; identificadoVia?: string | null;
+  }>(null);
+  const abrirDetalheSug = (s: any) => {
+    setDetalheExtrato({
+      data: s.extratoData ?? null,
+      descricao: s.extratoDescricao ?? null,
+      valor: Number(s.extratoValor) || 0,
+      chequeNumero: s.chequeNumero,
+      chequeFornecedor: s.chequeFornecedor ?? null,
+      entryValor: Number(s.entryValor) || 0,
+      deltaDias: s.deltaDias,
+      confianca: s.confianca,
+      identificadoVia: s.identificadoVia ?? null,
+    });
+    setDetalheEntryId(s.entryId);
+  };
+  const fecharDetalhe = () => { setDetalheEntryId(null); setDetalheExtrato(null); };
   // Rev. 3179 — "Limpar extrato" (confirmação) + alerta de extrato de outro mês.
   const [confirmLimpar, setConfirmLimpar] = useState(false);
   const [confirmConciliar, setConfirmConciliar] = useState(false);
@@ -1740,20 +1761,27 @@ export default function FinanceiroConciliacao() {
                         {sugestoes.map(s => (
                           <label key={s.statementLineId} className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer">
                             <Checkbox checked={selSug.has(s.statementLineId)} onCheckedChange={() => toggleSug(s.statementLineId)} />
-                            <div className="flex-1 min-w-0">
-                              <div className="text-xs text-gray-400 uppercase tracking-wide mb-0.5">Extrato</div>
-                              <div className="text-sm font-medium truncate">{s.extratoDescricao || "—"}</div>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); abrirDetalheSug(s); }}
+                              title="Ver detalhes e conferir a conciliação"
+                              className="flex-1 min-w-0 text-left rounded-md -m-1 p-1 hover:bg-gray-100 transition-colors group/ext"
+                            >
+                              <div className="text-xs text-gray-400 uppercase tracking-wide mb-0.5 flex items-center gap-1">
+                                Extrato <Eye className="w-3 h-3 text-gray-400 opacity-0 group-hover/ext:opacity-100 transition-opacity" />
+                              </div>
+                              <div className="text-sm font-medium truncate group-hover/ext:underline">{s.extratoDescricao || "—"}</div>
                               <div className="text-xs text-gray-500">{fmtData(s.extratoData)} · {formatBRL(Math.abs(s.extratoValor))}</div>
                               {s.chequeFornecedor && (
                                 <div className="text-[11px] text-emerald-700 truncate" title={`Cheque nº ${s.chequeNumero} — ${s.chequeFornecedor}`}>
                                   🪙 Cheque nº {s.chequeNumero} · {s.chequeFornecedor}
                                 </div>
                               )}
-                            </div>
+                            </button>
                             <ArrowRight className="w-4 h-4 text-gray-300 shrink-0" />
                             <button
                               type="button"
-                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDetalheEntryId(s.entryId); }}
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); abrirDetalheSug(s); }}
                               title="Ver detalhes do lançamento"
                               className="flex-1 min-w-0 text-left rounded-md -m-1 p-1 hover:bg-blue-50 transition-colors group/lan"
                             >
@@ -1793,15 +1821,72 @@ export default function FinanceiroConciliacao() {
             </Card>
 
             {/* Rev. 3177 — Detalhe CONSULTIVO (read-only) do lançamento, aberto ao clicar na sugestão. */}
-            <Dialog open={!!detalheEntryId} onOpenChange={(o) => !o && setDetalheEntryId(null)}>
+            <Dialog open={!!detalheEntryId} onOpenChange={(o) => !o && fecharDetalhe()}>
               <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
                 <DialogHeader className="shrink-0 pr-14">
                   <DialogTitle className="flex items-center gap-2">
                     <FileText className="w-5 h-5 text-blue-600 shrink-0" />
                     {detEntry ? `Lançamento #${detEntry.id}` : "Lançamento"}
                   </DialogTitle>
+                  {detalheExtrato && (
+                    <DialogDescription>Confira o item do extrato e o lançamento no ERP antes de validar a conciliação.</DialogDescription>
+                  )}
                 </DialogHeader>
                 <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+                  {/* Rev. 3264 — bloco de CONFERÊNCIA (extrato × ERP) quando aberto a partir de uma sugestão. */}
+                  {detalheExtrato && (() => {
+                    const vExtrato = Math.abs(Number(detalheExtrato.valor) || 0);
+                    const vEntry = Math.abs(Number(detEntry?.valorRealizado ?? detEntry?.valorPrevisto ?? detalheExtrato.entryValor ?? 0));
+                    const dv = Math.abs(vExtrato - vEntry);
+                    const igual = dv < 0.005;
+                    return (
+                      <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50/40 p-3">
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-blue-700 mb-2 flex items-center gap-1.5">
+                          <Link2 className="w-3.5 h-3.5" /> Conferência da conciliação
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="rounded-md bg-white border p-2.5 min-w-0">
+                            <div className="text-[10px] uppercase tracking-wide text-gray-400 mb-0.5">Extrato (banco)</div>
+                            <div className="text-sm font-medium text-gray-900 break-words">{detalheExtrato.descricao || "—"}</div>
+                            <div className="text-xs text-gray-500 mt-0.5">{fmtData(detalheExtrato.data)}</div>
+                            <div className="text-base font-bold tabular-nums text-gray-900 mt-1">{formatBRL(vExtrato)}</div>
+                            {detalheExtrato.chequeFornecedor && (
+                              <div className="text-[11px] text-emerald-700 mt-1 truncate" title={`Cheque nº ${detalheExtrato.chequeNumero} — ${detalheExtrato.chequeFornecedor}`}>
+                                🪙 Cheque nº {detalheExtrato.chequeNumero} · {detalheExtrato.chequeFornecedor}
+                              </div>
+                            )}
+                          </div>
+                          <div className="rounded-md bg-white border p-2.5 min-w-0">
+                            <div className="text-[10px] uppercase tracking-wide text-blue-400 mb-0.5">Lançamento (ERP)</div>
+                            <div className="text-sm font-medium text-blue-700 break-words">{detEntry ? (detEntry.fornecedorNome || detEntry.descricao || detEntry.contaNome || "Lançamento") : (detailQuery.isLoading ? "Carregando…" : "—")}</div>
+                            <div className="text-xs text-gray-500 mt-0.5">{detEntry ? fmtData(detEntry.dataPagamento ?? detEntry.dataVencimento ?? detEntry.dataCompetencia) : ""}</div>
+                            <div className="text-base font-bold tabular-nums text-blue-700 mt-1">{formatBRL(vEntry)}</div>
+                          </div>
+                        </div>
+                        <div className="mt-2 flex items-center gap-2 flex-wrap text-xs">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium ${igual ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                            {igual ? <CheckCircle className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                            {igual ? "Valores idênticos" : `Δ valor ${formatBRL(dv)}`}
+                          </span>
+                          {detalheExtrato.deltaDias != null && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium">
+                              {detalheExtrato.deltaDias === 0 ? "Mesmo dia" : `±${detalheExtrato.deltaDias} dia(s)`}
+                            </span>
+                          )}
+                          {detalheExtrato.confianca && (
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium ${detalheExtrato.confianca === "alta" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"}`}>
+                              Confiança {detalheExtrato.confianca === "alta" ? "alta" : "média"}
+                            </span>
+                          )}
+                          {detalheExtrato.identificadoVia && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-medium">
+                              <Sparkles className="w-3 h-3" /> {detalheExtrato.identificadoVia}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                   {detailQuery.isLoading ? (
                     <div className="py-12 text-center text-gray-500 text-sm flex items-center justify-center gap-2">
                       <Loader2 className="w-4 h-4 animate-spin" /> Carregando lançamento…
@@ -1913,7 +1998,7 @@ export default function FinanceiroConciliacao() {
                   ) : null}
                 </div>
                 <DialogFooter className="shrink-0">
-                  <Button variant="outline" onClick={() => setDetalheEntryId(null)}>Fechar</Button>
+                  <Button variant="outline" onClick={fecharDetalhe}>Fechar</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
