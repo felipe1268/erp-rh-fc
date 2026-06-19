@@ -637,8 +637,20 @@ export default function FolhaPagamento() {
   // Rev. 3302 — Arredondamento (Master): força líquido p/ real cheio (lote/individual).
   const [arredOpen, setArredOpen] = useState(false);
   const [arredOrigem, setArredOrigem] = useState<'vale' | 'folha'>('vale');
+  // Identidade do período já hidratado (declarada aqui, ANTES das mutações que
+  // precisam forçar re-hidratação — ver effect de hidratação mais abaixo).
+  const lastLoadedPeriodId = useRef<number | "none" | null>(null);
   const arredondarMut = trpc.payrollEngine.arredondarLote.useMutation({
-    onSuccess: (data: any) => { toast.success(data?.message || "Arredondamento aplicado."); payrollPeriod.refetch(); },
+    onSuccess: (data: any) => {
+      toast.success(data?.message || "Arredondamento aplicado.");
+      // Rev. 3305 — o arredondamento já persistiu colunas + snapshot (vale/folha) no
+      // backend. O effect de hidratação normalmente PULA o refetch do mesmo período
+      // (guard `lastLoadedPeriodId === pid`) p/ preservar edições locais; aqui o
+      // snapshot É a verdade nova, então zeramos o guard p/ forçar a re-leitura do
+      // valeResultJson/pagamentoResultJson fresco — senão a tela fica com o valor velho.
+      lastLoadedPeriodId.current = null;
+      payrollPeriod.refetch();
+    },
     onError: (err: any) => toast.error(`Erro ao arredondar: ${err?.message || err}`),
   });
   const aplicarArred = useCallback((modo: 'cima' | 'baixo' | 'normal', employeeIds?: number[]) => {
@@ -829,7 +841,6 @@ export default function FolhaPagamento() {
   // valeResult/pagamentoResult NULL "para sempre" (o data não mudava de novo).
   // Resultado: o resumo do Vale/Pagamento sumia de forma não-determinística,
   // dependendo só do estado de cache de cada sessão (não de permissão).
-  const lastLoadedPeriodId = useRef<number | "none" | null>(null);
   useEffect(() => {
     const pd = payrollPeriod.data as any;
     const pid: number | "none" = pd?.id ?? "none";

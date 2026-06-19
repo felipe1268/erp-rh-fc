@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3305 — **RH & DP / FOLHA DE VALE + FOLHA DE PAGAMENTO · O BOTÃO "ARREDONDAMENTO" (Rev. 3302) NÃO MOSTRAVA
+ * EFEITO NA TELA: AO ESCOLHER PARA CIMA / PARA BAIXO / MAIS PRÓXIMO, O TOAST DIZIA "N VALE(S) ARREDONDADO(S)" MAS
+ * OS VALORES EXIBIDOS CONTINUAVAM IGUAIS (EX.: ACÁCIO SEGUIA 1.167,00 EM VEZ DE IR P/ 1.166,00 NO "PARA BAIXO").
+ * NÃO ERA BUG DE BACKEND — O BANCO E O SNAPSHOT JÁ GRAVAVAM O VALOR CORRETO (CONFIRMADO NO NEON: `valorLiquidoVale`
+ * = 1166.00 / `valorLiquidoExato` = 1166.88 / `valeResultJson.valorLiquido` = 1166); A TELA É QUE NÃO RE-LIA O
+ * SNAPSHOT FRESCO. 100% FRONT · ZERO MUDANÇA DE BACKEND/DADOS/ENDPOINT/SCHEMA (R-001/R-007/R-010 OK).**
+ * - SINTOMA (piloto FC): "o arredondamento não funciona — não muda nada nem pra cima nem pra baixo". O preview do
+ *   dialog mostrava os 3 totais DIFERENTES (cima/normal/baixo, lendo `valorLiquidoExato` com centavos do snapshot),
+ *   então o usuário esperava ver a mudança refletida; após aplicar, a tabela ficava idêntica.
+ * - DIAGNÓSTICO (Neon via pg, company 60002 / 2026-06): a mutation `arredondarLote` RODOU e PERSISTIU certo — em
+ *   `payroll_advances` o líquido pago foi p/ 1166.00 (exato 1166.88 preservado) e `sincronizarValeJson` reescreveu
+ *   o `valeResultJson` com `valorLiquido=1166`. Idem path FOLHA (regrava `pagamentoResultJson`). Logo um simples
+ *   reload da página mostraria o valor correto — o estado EM MEMÓRIA é que ficava velho.
+ * - CAUSA: o effect de hidratação (`client/src/pages/FolhaPagamento.tsx`) tem guard `if (lastLoadedPeriodId.current
+ *   === pid) return;` que PRESERVA edições locais quando o `payrollPeriod.refetch()` traz o MESMO período. As demais
+ *   mutações de vale (editarLiquidoVale etc.) já fazem `setValeResult` otimista no `onSuccess`; o `arredondarMut`
+ *   só fazia `refetch()` — e o guard pulava a re-leitura do snapshot, deixando `valeResult`/`pagamentoResult` velhos.
+ * - CORREÇÃO (`FolhaPagamento.tsx`, só wiring do `arredondarMut`): (1) o `useRef lastLoadedPeriodId` foi MOVIDO p/
+ *   antes da declaração da mutation (estava depois, no effect de hidratação); (2) no `onSuccess` do `arredondarMut`,
+ *   antes do `payrollPeriod.refetch()`, faz `lastLoadedPeriodId.current = null` p/ FORÇAR o effect a re-hidratar
+ *   `valeResultJson`/`pagamentoResultJson` frescos (o snapshot já é a verdade nova pós-arredondamento). Cobre vale E
+ *   folha (mesma mutation). Nenhuma outra mutation alterada — o comportamento de preservar edições locais delas fica
+ *   intacto.
+ * - VALIDAÇÃO: esbuild parse limpo; `tsc --noEmit` sem erros no arquivo; app sobe no Neon DEV (workflow Start
+ *   application running). Dados reais conferidos no Neon (não no executeSql, que aponta p/ outra base).
+ *
  * Rev. 3304 — **FINANCEIRO / CONTROLE DE CARTÃO DE CRÉDITO (CADASTRO DE CARTÃO) · O BOTÃO "SALVAR" DO MODAL "NOVO
  * CARTÃO / EDITAR CARTÃO" FICAVA INACESSÍVEL EM TELAS MAIS BAIXAS (iPad): O CONTEÚDO DO FORMULÁRIO (IDENTIFICAÇÃO +
  * DATAS & LIMITE + OBSERVAÇÃO + AVISO PF) FICAVA MAIS ALTO QUE A VIEWPORT E, COMO O DIALOG TINHA `overflow-hidden`
