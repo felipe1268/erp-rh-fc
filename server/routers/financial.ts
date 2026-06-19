@@ -4923,7 +4923,13 @@ export const financialRouter = router({
               COALESCE(SUM(CASE WHEN COALESCE(conciliado,0)=1 THEN ABS(valor) ELSE 0 END),0) AS "valorConciliado",
               -- Rev. 3282 — split p/ os cards "Entradas" e "Saídas" (giro bruto = entradas+saídas).
               COALESCE(SUM(CASE WHEN valor>=0 THEN valor ELSE 0 END),0) AS "valorEntradas",
-              COALESCE(SUM(CASE WHEN valor<0 THEN ABS(valor) ELSE 0 END),0) AS "valorSaidas"
+              COALESCE(SUM(CASE WHEN valor<0 THEN ABS(valor) ELSE 0 END),0) AS "valorSaidas",
+              -- Rev. 3316 — conciliado e pendente SEPARADOS por direção (crédito × débito)
+              -- p/ o card "A conciliar" não somar entrada+saída como se fossem o mesmo sinal.
+              COALESCE(SUM(CASE WHEN COALESCE(conciliado,0)=1 AND valor>=0 THEN valor ELSE 0 END),0) AS "valorConciliadoEntradas",
+              COALESCE(SUM(CASE WHEN COALESCE(conciliado,0)=1 AND valor<0 THEN ABS(valor) ELSE 0 END),0) AS "valorConciliadoSaidas",
+              SUM(CASE WHEN COALESCE(conciliado,0)<>1 AND valor>=0 THEN 1 ELSE 0 END)::int AS "pendentesEntradas",
+              SUM(CASE WHEN COALESCE(conciliado,0)<>1 AND valor<0 THEN 1 ELSE 0 END)::int AS "pendentesSaidas"
          FROM bank_statement_lines
         WHERE company_id=$1 AND data>=$2 AND data<=$3 AND excluido_em IS NULL
         GROUP BY conta_bancaria_id`,
@@ -4941,6 +4947,11 @@ export const financialRouter = router({
         // Rev. 3282 — entradas (créditos) e saídas (débitos) separadas p/ os cards.
         valorEntradas: Number(r.valorEntradas) || 0,
         valorSaidas: Number(r.valorSaidas) || 0,
+        // Rev. 3316 — conciliado/pendente por direção (crédito × débito).
+        valorConciliadoEntradas: Number(r.valorConciliadoEntradas) || 0,
+        valorConciliadoSaidas: Number(r.valorConciliadoSaidas) || 0,
+        pendentesEntradas: Number(r.pendentesEntradas) || 0,
+        pendentesSaidas: Number(r.pendentesSaidas) || 0,
         status: total === 0 ? "vazio" : conciliadas >= total ? "consolidado" : "lancamento",
       };
     });

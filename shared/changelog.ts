@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3316 — **FINANCEIRO / DASHBOARD DE CONCILIAÇÃO BANCÁRIA · O CARD "PENDENTE" SOMAVA ENTRADAS (CRÉDITOS) + SAÍDAS
+ * (DÉBITOS) EM MÓDULO COMO SE FOSSEM O MESMO SINAL (EX.: R$ 8,2M + R$ 9,6M = R$ 17,9M "A CONCILIAR"), UM VALOR SEM
+ * SIGNIFICADO CONTÁBIL QUE CONFUNDIA O USUÁRIO. AGORA O "PENDENTE" FOI SEPARADO EM DOIS CARDS — "CRÉDITOS A CONCILIAR" E
+ * "DÉBITOS A CONCILIAR" — E TODOS OS CARDS DAS DUAS SEÇÕES (MOVIMENTAÇÃO E CONCILIAÇÃO) GANHARAM UMA LEGENDA EXPLICANDO O
+ * CÁLCULO E A CONSIDERAÇÃO FEITA. 100% FINANCEIRO (1 BACKEND READ-ONLY + 1 FRONT) · ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - MOTIVAÇÃO (pedido do usuário): no Dashboard de Conciliação o card "Pendente" mostrava ~R$ 17,9M "não conciliado",
+ *   que era exatamente Entradas (R$ 8.257.298,05) + Saídas (R$ 9.643.093,35). Como crédito e débito têm sinais opostos,
+ *   somá-los em módulo gera um montante que não reflete a realidade e atrapalha a "batida de olho". O usuário pediu
+ *   (a) separar crédito-a-conciliar de débito-a-conciliar e (b) colocar legenda dizendo qual é o cálculo de cada card.
+ * - BACKEND (`server/routers/financial.ts`, `getBankAccountsConciliacaoStatus`): a query (READ-ONLY, agregada por conta)
+ *   ganhou 4 colunas novas — `valorConciliadoEntradas` (Σ crédito conciliado), `valorConciliadoSaidas` (Σ |débito|
+ *   conciliado), `pendentesEntradas` e `pendentesSaidas` (contagem de linhas NÃO conciliadas por direção). Com isso o
+ *   front calcula pendente por direção = movimentado − conciliado, sem somar sinais opostos. Mesmo guard de tenant
+ *   (`_assertFinanceiroCompanyAccess`) e mesmo `excluido_em IS NULL` de antes. `getConciliacaoResumoMensal` intacto.
+ * - FRONT (`client/src/pages/financeiro/dashboards/DashConciliacao.tsx`): o KPI agregado acumula os 4 novos campos;
+ *   `valorPendenteEntradas = max(valorEntradas − valorConciliadoEntradas, 0)` e idem p/ saídas. A seção "Conciliação"
+ *   trocou o card único "Pendente" por DOIS — "Créditos a conciliar" (ícone ArrowDownLeft, sub "N entrada(s) sem baixa")
+ *   e "Débitos a conciliar" (ArrowUpRight, "N saída(s) sem baixa") — e o grid virou `lg:grid-cols-4` (Conciliado, Créd.,
+ *   Déb., % conciliado). O `DetailDialog` por conta ganhou as colunas "Créd. a conciliar" / "Déb. a conciliar" e o antigo
+ *   "Pendente (R$)" virou "Total a conciliar (R$)". Cada uma das 2 seções de cards (Movimentação e Conciliação) ganhou
+ *   uma legenda `<p>` ("Como é calculado: …") explicando a fórmula e a consideração (crédito = valor≥0, débito = valor<0
+ *   em módulo, saldo = entradas−saídas, conciliado = linha casada com lançamento do ERP, % = conciliado÷total movimentado).
+ * - NÃO MEXIDO: os gráficos "Conciliado × pendente" (pizza) e "Por conta bancária" (barras) seguem comparando conciliado
+ *   × total-a-conciliar (visão de alto nível legítima, ambos somas em módulo); só o card-resumo confundia. `formatBRL`
+ *   pt-BR mantido em todos os valores.
+ * - VALIDAÇÃO: `tsc --noEmit` limpo nos 2 arquivos tocados. Sem ALTER/DROP/DELETE — só SELECT agregado novo + UI.
+ *
  * Rev. 3315 — **RH & DP / DISSÍDIO COLETIVO · A APLICAÇÃO EM MASSA DO REAJUSTE (EX.: 5,15% DA DATA-BASE DE MAIO) PASSOU
  * A (1) ALCANÇAR TODOS OS FUNCIONÁRIOS CLT ATIVOS — NÃO SÓ OS COM STATUS LITERAL "ATIVO" — E (2) SEPARAR OS ADMITIDOS
  * NO MÊS DA DATA-BASE EM UMA LISTA DE DECISÃO MANUAL, JÁ QUE QUEM ENTROU NAQUELE MÊS COSTUMA TER ENTRADO COM O SALÁRIO

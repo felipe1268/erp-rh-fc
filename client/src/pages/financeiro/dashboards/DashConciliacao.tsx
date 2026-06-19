@@ -23,7 +23,9 @@ const COLS: DetailColumn[] = [
   { key: "valorEntradas", label: "Entradas (R$)", align: "right", brl: true },
   { key: "valorSaidas", label: "Saídas (R$)", align: "right", brl: true },
   { key: "valorConciliado", label: "Conciliado (R$)", align: "right", brl: true },
-  { key: "valorPendente", label: "Pendente (R$)", align: "right", brl: true },
+  { key: "valorPendenteEntradas", label: "Créd. a conciliar (R$)", align: "right", brl: true },
+  { key: "valorPendenteSaidas", label: "Déb. a conciliar (R$)", align: "right", brl: true },
+  { key: "valorPendente", label: "Total a conciliar (R$)", align: "right", brl: true },
 ];
 
 export default function DashConciliacao() {
@@ -61,6 +63,7 @@ export default function DashConciliacao() {
 
   const kpis = useMemo(() => {
     let total = 0, conciliadas = 0, valorTotal = 0, valorConciliado = 0, valorEntradas = 0, valorSaidas = 0;
+    let valorConciliadoEntradas = 0, valorConciliadoSaidas = 0, pendentesEntradas = 0, pendentesSaidas = 0;
     for (const s of statusArr) {
       total += Number(s.total) || 0;
       conciliadas += Number(s.conciliadas) || 0;
@@ -68,11 +71,24 @@ export default function DashConciliacao() {
       valorConciliado += Number(s.valorConciliado) || 0;
       valorEntradas += Number(s.valorEntradas) || 0;
       valorSaidas += Number(s.valorSaidas) || 0;
+      valorConciliadoEntradas += Number(s.valorConciliadoEntradas) || 0;
+      valorConciliadoSaidas += Number(s.valorConciliadoSaidas) || 0;
+      pendentesEntradas += Number(s.pendentesEntradas) || 0;
+      pendentesSaidas += Number(s.pendentesSaidas) || 0;
     }
     const valorPendente = Math.max(valorTotal - valorConciliado, 0);
+    // Rev. 3316 — pendente SEPARADO por direção (não somar crédito + débito como se
+    // fossem o mesmo sinal, que era o que inflava o "Pendente" p/ um número irreal).
+    const valorPendenteEntradas = Math.max(valorEntradas - valorConciliadoEntradas, 0);
+    const valorPendenteSaidas = Math.max(valorSaidas - valorConciliadoSaidas, 0);
     const pct = valorTotal > 0 ? (valorConciliado / valorTotal) * 100 : 0;
     const saldoLiquido = valorEntradas - valorSaidas;
-    return { total, conciliadas, pendentes: Math.max(total - conciliadas, 0), valorTotal, valorConciliado, valorPendente, valorEntradas, valorSaidas, saldoLiquido, pct, contas: statusArr.length };
+    return {
+      total, conciliadas, pendentes: Math.max(total - conciliadas, 0),
+      valorTotal, valorConciliado, valorPendente, valorEntradas, valorSaidas, saldoLiquido, pct,
+      valorPendenteEntradas, valorPendenteSaidas, pendentesEntradas, pendentesSaidas,
+      contas: statusArr.length,
+    };
   }, [statusArr]);
 
   const detalheContas = useMemo(() =>
@@ -86,6 +102,9 @@ export default function DashConciliacao() {
       valorSaidas: Number(s.valorSaidas) || 0,
       valorConciliado: Number(s.valorConciliado) || 0,
       valorPendente: Math.max((Number(s.valorTotal) || 0) - (Number(s.valorConciliado) || 0), 0),
+      // Rev. 3316 — pendente por direção (crédito × débito).
+      valorPendenteEntradas: Math.max((Number(s.valorEntradas) || 0) - (Number(s.valorConciliadoEntradas) || 0), 0),
+      valorPendenteSaidas: Math.max((Number(s.valorSaidas) || 0) - (Number(s.valorConciliadoSaidas) || 0), 0),
     })).sort((a, b) => b.valorTotal - a.valorTotal),
   [statusArr, contasArr]);
 
@@ -136,18 +155,37 @@ export default function DashConciliacao() {
               tone={kpis.saldoLiquido >= 0 ? "good" : "bad"}
               sub="Entrou − saiu (o que sobrou no período)" onClick={() => setDet(true)} />
           </div>
+          <p className="text-[11px] leading-relaxed text-slate-400 px-1">
+            <span className="font-medium text-slate-500">Como é calculado:</span> soma das linhas do extrato bancário
+            importado no período. <strong>Entradas</strong> = linhas de crédito (valor ≥ 0); <strong>Saídas</strong> = linhas
+            de débito (valor &lt; 0, somadas em módulo); <strong>Saldo líquido</strong> = entradas − saídas. Linhas excluídas
+            não entram na conta.
+          </p>
         </div>
 
         <div className="space-y-2">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 px-1">Conciliação</h3>
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+          {/* Rev. 3316 — "Pendente" foi separado em Créditos a conciliar × Débitos a conciliar.
+              Antes era 1 card só que somava crédito + débito em módulo (ex.: 8,2M + 9,6M = 17,9M),
+              um valor sem significado contábil que confundia a leitura. */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <KpiCard icon={CheckCircle2} label="Conciliado" value={formatBRL(kpis.valorConciliado)} tone="good"
               sub={`${kpis.conciliadas} de ${kpis.total} linhas`} onClick={() => setDet(true)} />
-            <KpiCard icon={Clock} label="Pendente" value={formatBRL(kpis.valorPendente)} tone="warn"
-              sub={`${kpis.pendentes} linhas`} onClick={() => setDet(true)} />
+            <KpiCard icon={ArrowDownLeft} label="Créditos a conciliar" value={formatBRL(kpis.valorPendenteEntradas)} tone="warn"
+              sub={`${kpis.pendentesEntradas} entrada(s) sem baixa`} onClick={() => setDet(true)} />
+            <KpiCard icon={ArrowUpRight} label="Débitos a conciliar" value={formatBRL(kpis.valorPendenteSaidas)} tone="warn"
+              sub={`${kpis.pendentesSaidas} saída(s) sem baixa`} onClick={() => setDet(true)} />
             <KpiCard icon={Percent} label="% conciliado (R$)" value={`${kpis.pct.toFixed(0)}%`}
-              tone={kpis.pct >= 90 ? "good" : kpis.pct >= 50 ? "warn" : "bad"} onClick={() => setDet(true)} />
+              tone={kpis.pct >= 90 ? "good" : kpis.pct >= 50 ? "warn" : "bad"}
+              sub={`${kpis.pendentes} de ${kpis.total} linhas a conciliar`} onClick={() => setDet(true)} />
           </div>
+          <p className="text-[11px] leading-relaxed text-slate-400 px-1">
+            <span className="font-medium text-slate-500">Como é calculado:</span> <strong>Conciliado</strong> = linhas do
+            extrato já casadas com um lançamento do ERP (valor em módulo). <strong>A conciliar</strong> = linhas ainda sem
+            correspondência, separadas por <strong>crédito</strong> (a receber/identificar) e <strong>débito</strong> (a
+            pagar/identificar) — não somamos crédito + débito, pois têm sinais opostos. <strong>% conciliado</strong> =
+            conciliado ÷ total movimentado (em módulo).
+          </p>
         </div>
 
         {semDados ? (
