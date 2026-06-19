@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3300 — **FINANCEIRO / DASHBOARD · CONCILIAÇÃO BANCÁRIA · DOIS AJUSTES PEDIDOS PELO PILOTO FC:
+ * (1) APOSENTADO O "GIRO BRUTO" (ENTRADAS + SAÍDAS SOMADAS) — O USUÁRIO NÃO VÊ SENTIDO CONTÁBIL EM SOMAR
+ * CRÉDITO COM DÉBITO ("R$ 16 MI"); O NÚMERO SAIU DO SUBTÍTULO DO "SALDO LÍQUIDO", DA COLUNA DO MODAL E DO
+ * TOTAL DO MODAL, E A RÉGUA MÊS A MÊS / ANO A ANO PASSOU A MOSTRAR O *SALDO LÍQUIDO* (ENTROU − SAIU) NO LUGAR
+ * DO GIRO BRUTO. (2) O RELATÓRIO "CONCILIAÇÃO POR CONTA BANCÁRIA" (MODAL) ESTAVA CORTANDO COLUNAS À DIREITA NO
+ * iPad — REMOVER A COLUNA "GIRO BRUTO (R$)" ENXUGOU A TABELA DE 9 → 8 COLUNAS (O `Table` SHADCN JÁ TEM
+ * `overflow-x-auto` PRÓPRIO P/ O RESTANTE). 100% ADITIVO NO BACKEND (SÓ AMPLIA UM SELECT READ-ONLY) ·
+ * ZERO SCHEMA/ALTER/DROP/DELETE (R-001/R-007/R-010 OK).**
+ * - PEDIDO (piloto FC): "tire estes 16 milhões — não faz sentido somar [entradas+saídas] pra mim... não vejo
+ *   a necessidade disso" + "ajusta a tela do relatório que está cortando a informação".
+ * - DEFINIÇÃO: "giro bruto" = Σ|valor| das linhas do extrato = entradas (créditos) + saídas (débitos) somadas.
+ *   Como nada estava conciliado, esse total coincidia com o "Pendente" (R$ 16.006.184,16) e com o "Total 2026"
+ *   da régua mensal. O "Pendente"/"% conciliado" (valor A CONCILIAR) PERMANECEM — são o núcleo do dashboard e
+ *   caem conforme o usuário concilia; só o GIRO BRUTO (soma estática crédito+débito) foi removido.
+ * - BACKEND (`server/routers/financial.ts`, aditivo/READ-ONLY): `getConciliacaoResumoMensal` passou a devolver
+ *   `valorEntradas` (Σ valor>=0) e `valorSaidas` (Σ |valor| onde valor<0) POR MÊS — mesma convenção de sinal de
+ *   `getBankAccountsConciliacaoStatus` (Rev. 3282). Só amplia o SELECT/projeção; `valorTotal`/`valorConciliado`
+ *   continuam para não quebrar outros consumidores.
+ * - FRONTEND (`client/src/pages/financeiro/dashboards/DashConciliacao.tsx`):
+ *   • KPI "Saldo líquido": subtítulo deixou de exibir "· giro bruto R$ X" → agora "Entrou − saiu (o que sobrou
+ *     no período)". `kpis.valorTotal` continua calculado internamente (denominador do "% conciliado").
+ *   • Régua `ComparativoAnual`: `serieAtual`/`seriePrev` passaram de `m.valorTotal` (giro bruto) p/
+ *     `valorEntradas − valorSaidas` (SALDO LÍQUIDO) por mês; título "Saldo líquido do extrato — mês a mês e ano
+ *     a ano", subtítulo "Entradas − saídas em A vs A-1", `valorLabel="Saldo líquido"` (mantém `goodWhen="up"`).
+ *   • Modal `DetailDialog` "Conciliação por conta bancária": removida a coluna `valorTotal` ("Giro bruto (R$)")
+ *     do `COLS` (9 → 8 colunas) e removido o `totalKey="valorTotal"` (some o chip "Total R$ 16 mi" do cabeçalho e
+ *     a linha de total do rodapé que somava giro bruto). As demais colunas (Entradas/Saídas/Conciliado/Pendente)
+ *     ficam e a tabela rola na horizontal pelo `overflow-x-auto` do `Table`.
+ * - VALIDAÇÃO: esbuild parse limpo nos arquivos tocados; app sobe no Neon DEV (workflow Start application
+ *   running). Sem novas dependências; sem mudança de schema.
+ *
  * Rev. 3299 — **PLANEJAMENTO / EFETIVO × IA (VISÃO GERAL — TODAS AS OBRAS) · NOVA "AGENDA POR MÊS" + DUAS
  * MELHORIAS NO "PLANO DE AÇÃO POR EQUIPE": (1) NENHUMA SUGESTÃO É RETROATIVA — TODA "DATA IDEAL"/DATA
  * ESTIMADA É CLAMPADA P/ HOJE OU FUTURO (DATA VENCIDA → HOJE, COM SELO "ATRASADO"); (2) NOVA AÇÃO

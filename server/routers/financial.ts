@@ -4913,7 +4913,12 @@ export const financialRouter = router({
               COUNT(*)::int AS total,
               SUM(CASE WHEN COALESCE(conciliado,0)=1 THEN 1 ELSE 0 END)::int AS conciliadas,
               COALESCE(SUM(ABS(valor)),0) AS "valorTotal",
-              COALESCE(SUM(CASE WHEN COALESCE(conciliado,0)=1 THEN ABS(valor) ELSE 0 END),0) AS "valorConciliado"
+              COALESCE(SUM(CASE WHEN COALESCE(conciliado,0)=1 THEN ABS(valor) ELSE 0 END),0) AS "valorConciliado",
+              -- Rev. 3300 — entradas/saídas separadas por mês p/ a régua de SALDO LÍQUIDO
+              -- (entrou − saiu) mês a mês; substitui o "giro bruto" (entrada+saída somadas),
+              -- que o usuário descartou por não fazer sentido contábil.
+              COALESCE(SUM(CASE WHEN valor>=0 THEN valor ELSE 0 END),0) AS "valorEntradas",
+              COALESCE(SUM(CASE WHEN valor<0 THEN ABS(valor) ELSE 0 END),0) AS "valorSaidas"
          FROM bank_statement_lines
         WHERE company_id=$1 AND excluido_em IS NULL
           AND EXTRACT(year FROM data)=$2
@@ -4926,6 +4931,8 @@ export const financialRouter = router({
       conciliadas: Number(r.conciliadas) || 0,
       valorTotal: Number(r.valorTotal) || 0,
       valorConciliado: Number(r.valorConciliado) || 0,
+      valorEntradas: Number(r.valorEntradas) || 0,
+      valorSaidas: Number(r.valorSaidas) || 0,
     }));
   }),
 

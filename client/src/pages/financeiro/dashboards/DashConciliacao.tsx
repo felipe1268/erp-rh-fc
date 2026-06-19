@@ -24,7 +24,6 @@ const COLS: DetailColumn[] = [
   { key: "valorSaidas", label: "Saídas (R$)", align: "right", brl: true },
   { key: "valorConciliado", label: "Conciliado (R$)", align: "right", brl: true },
   { key: "valorPendente", label: "Pendente (R$)", align: "right", brl: true },
-  { key: "valorTotal", label: "Giro bruto (R$)", align: "right", brl: true },
 ];
 
 export default function DashConciliacao() {
@@ -101,14 +100,16 @@ export default function DashConciliacao() {
     })),
   [detalheContas]);
 
+  // Rev. 3300 — régua mensal agora é SALDO LÍQUIDO (entrou − saiu), não mais "giro bruto"
+  // (entrada+saída somadas), que o usuário descartou por não fazer sentido contábil.
   const serieAtual = useMemo(() => {
     const a = new Array(12).fill(0);
-    for (const m of (Array.isArray(mensal) ? mensal : [])) { const i = Number(m.mes); if (i >= 1 && i <= 12) a[i - 1] = Number(m.valorTotal) || 0; }
+    for (const m of (Array.isArray(mensal) ? mensal : [])) { const i = Number(m.mes); if (i >= 1 && i <= 12) a[i - 1] = (Number(m.valorEntradas) || 0) - (Number(m.valorSaidas) || 0); }
     return a;
   }, [mensal]);
   const seriePrev = useMemo(() => {
     const a = new Array(12).fill(0);
-    for (const m of (Array.isArray(mensalPrev) ? mensalPrev : [])) { const i = Number(m.mes); if (i >= 1 && i <= 12) a[i - 1] = Number(m.valorTotal) || 0; }
+    for (const m of (Array.isArray(mensalPrev) ? mensalPrev : [])) { const i = Number(m.mes); if (i >= 1 && i <= 12) a[i - 1] = (Number(m.valorEntradas) || 0) - (Number(m.valorSaidas) || 0); }
     return a;
   }, [mensalPrev]);
 
@@ -133,7 +134,7 @@ export default function DashConciliacao() {
               sub="Tudo que saiu das contas" onClick={() => setDet(true)} />
             <KpiCard icon={Scale} label="Saldo líquido" value={formatBRL(kpis.saldoLiquido)}
               tone={kpis.saldoLiquido >= 0 ? "good" : "bad"}
-              sub={`Entrou − saiu · giro bruto ${formatBRL(kpis.valorTotal)}`} onClick={() => setDet(true)} />
+              sub="Entrou − saiu (o que sobrou no período)" onClick={() => setDet(true)} />
           </div>
         </div>
 
@@ -187,10 +188,10 @@ export default function DashConciliacao() {
             </div>
 
             <ComparativoAnual
-              title="Movimentação do extrato — mês a mês e ano a ano"
-              subtitle={`Valor movimentado em ${ano} vs ${ano - 1}`}
+              title="Saldo líquido do extrato — mês a mês e ano a ano"
+              subtitle={`Entradas − saídas em ${ano} vs ${ano - 1}`}
               serieAtual={serieAtual} seriePrev={seriePrev}
-              anoAtual={ano} anoPrev={ano - 1} goodWhen="up" valorLabel="Movimentado"
+              anoAtual={ano} anoPrev={ano - 1} goodWhen="up" valorLabel="Saldo líquido"
             />
           </>
         )}
@@ -198,7 +199,7 @@ export default function DashConciliacao() {
         <DetailDialog
           open={det} onOpenChange={setDet}
           title="Conciliação por conta bancária" subtitle={`Ano ${ano} · valores em BRL`}
-          columns={COLS} rows={detalheContas} totalKey="valorTotal" onGoTo={ir}
+          columns={COLS} rows={detalheContas} onGoTo={ir}
         />
       </div>
     </DashboardLayout>
