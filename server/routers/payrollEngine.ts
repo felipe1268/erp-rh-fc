@@ -2805,7 +2805,10 @@ export const payrollEngineRouter = router({
       );
 
       const contas = await db.select().from(companyBankAccounts)
-        .where(inArray(companyBankAccounts.companyId, allowed));
+        .where(and(
+          inArray(companyBankAccounts.companyId, allowed),
+          isNull(companyBankAccounts.deletedAt),
+        ));
       const contaMap = new Map(contas.map((c: any) => [c.id, c]));
 
       return emps.map((e: any) => {

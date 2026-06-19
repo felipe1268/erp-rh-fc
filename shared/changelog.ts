@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3317 — **RH & DP / FOLHA DE VALE (CÁLCULO INTERNO — VALE/ADIANTAMENTO) · O TOGGLE "VISÃO GERAL / POR BANCO" QUE JÁ
+ * EXISTIA SÓ NA FOLHA DE PAGAMENTO FOI REPLICADO NA FOLHA DO VALE. ANTES, PARA SABER QUANTO SAIRIA DE CADA CONTA-EMPRESA
+ * PAGADORA NO VALE, O USUÁRIO TINHA QUE CONFERIR FUNCIONÁRIO A FUNCIONÁRIO; AGORA O VALE TEM A MESMA VISÃO AGRUPADA POR
+ * CONTA BANCÁRIA DA EMPRESA (CARDS-RESUMO + TABELAS POR CONTA COM CPF/AGÊNCIA/CONTA/PIX). 100% RH & DP (1 BACKEND
+ * READ-ONLY + 1 FRONT) · ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - MOTIVAÇÃO (pedido do usuário, com prints de referência da Folha de Pagamento): o conceito de "separar por banco" já
+ *   existia na Folha de Pagamento (toggle "Visão Geral / Por Banco") e o usuário pediu o MESMO comportamento na Folha do
+ *   Vale, para visualizar o total do adiantamento agrupado pela conta-empresa pagadora.
+ * - RAIZ TÉCNICA: o agrupamento "Por Banco" da Folha de Pagamento usa campos `contaEmpresa*` (banco/agência/conta/tipo/
+ *   apelido/código) que são injetados em cada funcionário SOMENTE dentro de `simularPagamento` (enrichment via
+ *   `contaBancariaEmpresaId` + `contaEmpresaMap`). A Folha do Vale (`gerarVale`) NÃO carrega esses campos: o resultado é
+ *   persistido como SNAPSHOT em `payroll_periods.valeResultJson` e os funcionários só têm nome/CPF-less/valores. Regenerar
+ *   o vale para injetar os campos só corrigiria snapshots novos.
+ * - SOLUÇÃO (JOIN client-side sobre mapa leve, funciona inclusive em snapshots ANTIGOS):
+ *   BACKEND (`server/routers/payrollEngine.ts`): nova QUERY `contasBancariasFolha({companyId, companyIds?})` — read-only —
+ *   que retorna, por empresa acessível, o mapa `employeeId → {cpf, tipoChavePix, chavePix, contaEmpresaId,
+ *   contaEmpresaBanco/CodigoBanco/Agencia/Conta/Tipo/Apelido}` (JOIN `employees.contaBancariaEmpresaId` ⋈
+ *   `company_bank_accounts`). Filtra `deletedAt IS NULL`.
+ *   FRONT (`client/src/pages/FolhaPagamento.tsx`, view `calculo_vale`): novo state `valeSubView` ("geral"|"por_banco") +
+ *   query `contasBancariasFolha`; toggle de 2 botões (Visão Geral / Por Banco) idêntico ao da Folha de Pagamento; em
+ *   "Por Banco", a lista de funcionários do vale (excluindo rejeitados/excluídos) é agrupada pela conta-empresa via o mapa,
+ *   com cards-resumo (total líquido por conta) + uma tabela por conta (Funcionário, CPF, Agência, Conta, Tipo, Pix, Bruto,
+ *   IR, Líquido) e subtotais. Funcionários sem conta-empresa caem em "Sem conta definida". A Visão Geral (busca + tabela de
+ *   Aprovados + alertas + edição de valor/líquido) ficou intacta dentro de `valeSubView === "geral"`.
+ *   Valores do vale: Líquido = `valorLiquido ?? valorTotalVale`; Bruto = `valorTotalVale`; IR = `irRetido`.
+ * - SEGURANÇA: a nova query tem tenant guard explícito — interseção das empresas pedidas (`resolveCompanyIds`) com as
+ *   acessíveis do usuário (`getCompaniesForUser`, que retorna TODAS p/ admin/admin_master); vazio → FORBIDDEN. Sem isto,
+ *   `resolveCompanyIds` confiaria cegamente no companyId/companyIds do cliente (IDOR). NÃO há geração de remessa CNAB no
+ *   vale (o botão "Gerar Remessa CNAB" continua exclusivo da Folha de Pagamento, cujo motor é salário-base).
+ * - ARQUIVOS: `server/routers/payrollEngine.ts` (+`contasBancariasFolha`), `client/src/pages/FolhaPagamento.tsx`
+ *   (+`valeSubView`, +query, +toggle, +view por_banco), `shared/version.ts`→3317.
+ *
  * Rev. 3316 — **FINANCEIRO / DASHBOARD DE CONCILIAÇÃO BANCÁRIA · O CARD "PENDENTE" SOMAVA ENTRADAS (CRÉDITOS) + SAÍDAS
  * (DÉBITOS) EM MÓDULO COMO SE FOSSEM O MESMO SINAL (EX.: R$ 8,2M + R$ 9,6M = R$ 17,9M "A CONCILIAR"), UM VALOR SEM
  * SIGNIFICADO CONTÁBIL QUE CONFUNDIA O USUÁRIO. AGORA O "PENDENTE" FOI SEPARADO EM DOIS CARDS — "CRÉDITOS A CONCILIAR" E
