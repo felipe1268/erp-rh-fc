@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3336 — **FINANCEIRO / CONTROLE DE CARTÃO DE CRÉDITO · CORREÇÃO: NO DIÁLOGO "VINCULAR FATURA AO CARTÃO", O SELETOR
+ * "CARTÃO" NÃO PERMITIA ESCOLHER O CARTÃO NO TABLET/iPad — A LISTA SUSPENSA ABRIA RECORTADA (ÚLTIMAS OPÇÕES CORTADAS,
+ * SEM ROLAGEM USÁVEL NO TOQUE). 100% FRONT · BUGFIX/UX · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário, no iPad, com print): "não to conseguindo escolher o cartão no tablet, arruma isso / melhore o layout".
+ * - RAIZ: o `<SelectContent>` do cartão usava o posicionamento PADRÃO do Radix (`position="item-aligned"`), que ancora a
+ *   lista CENTRADA sobre o item selecionado. Dentro de um `DialogContent` estreito (`max-w-md`) no iPad, isso joga as
+ *   opções de baixo (ex.: "Caixa · final 5550") para FORA da área visível e a rolagem em modo item-aligned é instável no
+ *   toque (Safari/iPad) — o usuário via a lista mas não conseguia alcançar/tocar a opção desejada.
+ * - CORREÇÃO (`client/src/pages/financeiro/FinanceiroCartaoCredito.tsx`): o `<SelectContent>` passou a
+ *   `position="popper" side="bottom" align="start" sideOffset={4} className="max-h-[50vh] overflow-y-auto z-[60]"` —
+ *   ancora a lista ABAIXO do gatilho, limita a altura a 50% da viewport e habilita rolagem própria (toque-friendly);
+ *   `z-[60]` garante que fica acima do conteúdo do diálogo. `<SelectTrigger>` ganhou `h-11` (alvo de toque maior). Mesmo
+ *   padrão `position="popper"` já usado em outros selects do app (ex.: status no diálogo de cheques). Nenhuma mudança de
+ *   lógica/estado/endpoint — `vincularCartaoId`/`salvarVincular`/`cartao.vincularFaturaCartao` intactos.
+ * - ESCOPO: 100% front, um único `<SelectContent>`. Sem rota/permissão/schema novo. RESSALVA: não foi possível reproduzir
+ *   no iPad dentro do ambiente (login bloqueia screenshot autenticado); a correção alinha o seletor ao padrão funcional
+ *   touch-friendly — re-publicar é necessário p/ o usuário ver o efeito.
+ * - ARQUIVOS: `client/src/pages/financeiro/FinanceiroCartaoCredito.tsx`, `shared/version.ts` (3336), `shared/changelog.ts`,
+ *   `replit.md`, `replit-history.md`.
+ *
  * Rev. 3335 — **FINANCEIRO / CONTROLE DE CHEQUES · DIÁLOGO "LANÇAR CHEQUE MANUALMENTE" REDESENHADO (LAYOUT MODERNO,
  * CABEÇALHO NAVY FC) + AUTOMAÇÃO: O CAMPO "FAVORECIDO" AGORA CONSULTA O CADASTRO DE FORNECEDORES (BUSCA POR NOME/CNPJ,
  * COM FALLBACK "DIGITAR MANUALMENTE") E UM NOVO SELETOR "CONTA DE ONDE O CHEQUE FOI EMITIDO" PREENCHE BANCO/AGÊNCIA/CONTA

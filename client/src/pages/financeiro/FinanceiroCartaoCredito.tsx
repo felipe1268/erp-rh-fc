@@ -1723,8 +1723,8 @@ export default function FinanceiroCartaoCredito() {
             <div className="space-y-1.5">
               <Label className="text-xs">Cartão</Label>
               <Select value={vincularCartaoId} onValueChange={setVincularCartaoId}>
-                <SelectTrigger><SelectValue placeholder="Selecione o cartão" /></SelectTrigger>
-                <SelectContent>
+                <SelectTrigger className="h-11"><SelectValue placeholder="Selecione o cartão" /></SelectTrigger>
+                <SelectContent position="popper" side="bottom" align="start" sideOffset={4} className="max-h-[50vh] overflow-y-auto z-[60]">
                   <SelectItem value="none">Não identificado (sem cartão)</SelectItem>
                   {cartoes.map((c) => (
                     <SelectItem key={c.id} value={String(c.id)}>
