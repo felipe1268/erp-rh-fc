@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3318 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O BOTÃO "DESCONSOLIDAR MÊS" QUEBRAVA COM "ERRO AO DESCONSOLIDAR — DB:
+ * code=25P02 | msg=current transaction is aborted, commands ignored until end of transaction block" EM EMPRESAS QUE NUNCA
+ * USARAM CONCILIAÇÃO EM GRUPO. O USUÁRIO QUE CONSOLIDOU UM MÊS POR ENGANO NÃO CONSEGUIA REVERTER. AGORA DESCONSOLIDA NORMAL.
+ * 100% BACKEND · BUGFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - SINTOMA (print do usuário): ao clicar "Desconsolidar Mai" na conta "Santander - FC - Aparecida", aparecia o toast de
+ *   erro com SQLSTATE `25P02`.
+ * - RAIZ: `desconsolidarMes` (`server/routers/financial.ts`) roda 3 etapas em UMA transação: (1) reverte o flag dos
+ *   lançamentos vinculados; (1b) Rev. 3239 — reverte os MEMBROS de conciliações EM GRUPO via a tabela-link
+ *   `financial_conciliacao_grupo`; (2) desmarca as linhas do extrato. A tabela `financial_conciliacao_grupo` é AUTO-CRIADA
+ *   só no PRIMEIRO uso de conciliação em grupo (em `criarConciliacaoGrupo`), então em empresas que nunca usaram esse recurso
+ *   ela NÃO EXISTE. O passo 1b tinha um `try/catch` que pretendia "tolerar" a ausência da tabela engolindo o erro
+ *   `relation ... does not exist`. PROBLEMA: no Postgres, QUALQUER statement que falha dentro de uma transação ABORTA a
+ *   transação inteira; engolir o erro no JS NÃO desfaz o aborto. Resultado: o passo 2 (UPDATE em `bank_statement_lines`)
+ *   rodava sobre uma transação já abortada e estourava com `25P02` ("current transaction is aborted") — esse é o erro que
+ *   chegava ao usuário, mascarando a causa real (`relation does not exist`).
+ * - CORREÇÃO: checar a existência da tabela ANTES da transação (`SELECT to_regclass('public.financial_conciliacao_grupo')`,
+ *   FORA do bloco transacional) e só rodar o passo 1b quando `temGrupo` for verdadeiro. Sem o `try/catch` interno: a
+ *   transação nunca é envenenada porque o statement problemático nem é emitido em empresas sem a tabela. Para empresas que
+ *   USAM grupo, o comportamento é idêntico ao anterior (1b roda normalmente). Erros REAIS de SQL em 1b voltam a propagar e
+ *   reverter a transação (não são mais mascarados). Tenant guard (`_assertFinanceiroCompanyAccess`) e o restante intactos.
+ * - LIÇÃO: NUNCA "tolerar" tabela/coluna inexistente com try/catch DENTRO de uma transação Postgres — o aborto da transação
+ *   persiste e o próximo statement vira `25P02`. Faça a checagem (to_regclass / information_schema) FORA da transação e
+ *   gateie o statement opcional, ou use SAVEPOINT/ROLLBACK TO SAVEPOINT.
+ * - ARQUIVOS: `server/routers/financial.ts` (`desconsolidarMes`), `shared/version.ts`→3318.
+ *
  * Rev. 3317 — **RH & DP / FOLHA DE VALE (CÁLCULO INTERNO — VALE/ADIANTAMENTO) · O TOGGLE "VISÃO GERAL / POR BANCO" QUE JÁ
  * EXISTIA SÓ NA FOLHA DE PAGAMENTO FOI REPLICADO NA FOLHA DO VALE. ANTES, PARA SABER QUANTO SAIRIA DE CADA CONTA-EMPRESA
  * PAGADORA NO VALE, O USUÁRIO TINHA QUE CONFERIR FUNCIONÁRIO A FUNCIONÁRIO; AGORA O VALE TEM A MESMA VISÃO AGRUPADA POR

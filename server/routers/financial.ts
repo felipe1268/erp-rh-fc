@@ -5524,6 +5524,18 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    // Rev. 3318 — A tabela de conciliação em GRUPO (`financial_conciliacao_grupo`) só
+    // existe em empresas que JÁ usaram esse recurso (ela é auto-criada no primeiro uso).
+    // NÃO dá pra "tolerar" a ausência com try/catch DENTRO da transação: no Postgres,
+    // qualquer statement que falha (ex.: `relation ... does not exist`) ABORTA a transação
+    // inteira → os comandos seguintes (passo 2) passam a falhar com SQLSTATE 25P02
+    // ("current transaction is aborted, commands ignored until end of transaction block").
+    // Era exatamente esse o erro ao Desconsolidar em empresas sem conciliação em grupo.
+    // Solução: checar a existência da tabela ANTES da transação (to_regclass, fora dela)
+    // e só rodar o passo 1b quando ela existir — assim a transação nunca é envenenada.
+    const grupoChk = await dbExecute(db,
+      `SELECT to_regclass('public.financial_conciliacao_grupo') AS reg`, []);
+    const temGrupo = !!rows(grupoChk)[0]?.reg;
     // Os 2 UPDATEs rodam em UMA transação: a etapa 1 depende do entry_id que a etapa 2
     // apaga, então uma falha intermediária não pode deixar estado parcial.
     let afetados = 0;
@@ -5537,11 +5549,11 @@ export const financialRouter = router({
             AND COALESCE(l.conciliado,0)=1 AND l.entry_id IS NOT NULL AND l.excluido_em IS NULL
             AND e.id=l.entry_id AND e.company_id=l.company_id`,
         [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim]);
-      // 1b) Rev. 3239 — reverte os MEMBROS de conciliações EM GRUPO (VR/combustível/manutenção)
-      //     via a tabela-link `financial_conciliacao_grupo`. O entry_id da linha só guarda o
-      //     representante; sem isto os demais membros ficariam conciliado=1 órfãos. Tolerante
-      //     à ausência da tabela (companhias que nunca usaram grupo) — try/catch silencioso.
-      try {
+      // 1b) Rev. 3239/3318 — reverte os MEMBROS de conciliações EM GRUPO (VR/combustível/
+      //     manutenção) via a tabela-link `financial_conciliacao_grupo`. O entry_id da linha
+      //     só guarda o representante; sem isto os demais membros ficariam conciliado=1
+      //     órfãos. Só roda quando a tabela existe (vide pré-checagem `temGrupo` acima).
+      if (temGrupo) {
         await dbExecute(tx,
           `UPDATE financial_entries e SET conciliado=0, data_conciliacao=NULL
              FROM financial_conciliacao_grupo g
@@ -5558,8 +5570,6 @@ export const financialRouter = router({
               AND g.company_id=$1 AND l.conta_bancaria_id=$2 AND l.data>=$3 AND l.data<=$4
               AND g.revertido_em IS NULL AND COALESCE(l.conciliado,0)=1 AND l.excluido_em IS NULL`,
           [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim]);
-      } catch (e: any) {
-        if (!/relation .*financial_conciliacao_grupo.* does not exist/i.test(String(e?.message ?? ""))) throw e;
       }
       // 2) Desmarca as linhas do extrato e desfaz o vínculo.
       const res = await dbExecute(tx,
