@@ -2551,7 +2551,7 @@ export default function FinanceiroConciliacao() {
               {importFormato === "pdf" && (
                 <p className="flex items-start gap-1.5 text-[11px] text-gray-500">
                   <FileText className="w-3.5 h-3.5 shrink-0 mt-px text-blue-500" />
-                  PDF de extrato da Caixa (internet banking) detectado — as transações serão extraídas automaticamente. Selecione a conta correta acima.
+                  PDF de extrato bancário detectado — as transações serão extraídas automaticamente (Caixa por leitura direta; demais bancos por IA). Selecione a conta correta acima.
                 </p>
               )}
 

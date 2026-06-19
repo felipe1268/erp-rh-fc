@@ -35,6 +35,7 @@ import {
 } from "../services/financialKpiService";
 import { runFinancialJobNow } from "../services/financialAutoImportJob";
 import { parseCaixaExtratoPdf } from "../services/caixaPdfParser";
+import { parseExtratoComIA } from "../services/extratoIaParser";
 import {
   computeThreeWayMatch, blockPaymentByThreeWay, releasePaymentByThreeWay,
   parseOFX, parseCNAB, suggestReconciliation, applyReconciliation,
@@ -370,16 +371,36 @@ async function parseExtratoLines(input: {
   let lines: ExtratoLine[] = [];
 
   if (input.formato === "pdf") {
+    // 1) Caminho determinístico: layout em colunas da CAIXA (rápido, sem IA).
+    let caixaErr: any = null;
     try {
       lines = await parseCaixaExtratoPdf(input.conteudo);
     } catch (err: any) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: err?.message || "Falha ao ler o PDF do extrato." });
+      caixaErr = err;
+      // "não é um PDF válido" é fatal — não adianta tentar a IA.
+      if (/não é um PDF válido/i.test(err?.message || "")) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: err.message });
+      }
     }
+    // 2) FALLBACK IA: qualquer outro banco (Banco do Brasil, Itaú, Bradesco...) tem
+    //    layout diferente e o parser da Caixa devolve 0 linhas. Aí lemos via IA.
     if (lines.length === 0) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "Não foi possível extrair transações do PDF. Verifique se é o extrato em PDF gerado pelo internet banking da Caixa (extratos digitalizados/foto não são lidos automaticamente).",
-      });
+      try {
+        lines = await parseExtratoComIA(input.conteudo, "application/pdf");
+      } catch (iaErr: any) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Não foi possível extrair transações do PDF. Tente novamente em instantes; se persistir, envie o extrato em OFX/CSV (extratos digitalizados/foto têm leitura limitada). Detalhe: " +
+            (iaErr?.message || caixaErr?.message || "falha na leitura"),
+        });
+      }
+      if (lines.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Não foi possível extrair transações do PDF. Confira se o arquivo é um extrato bancário (e não comprovante/fatura) ou envie em OFX/CSV.",
+        });
+      }
     }
   } else if (input.formato === "ofx") {
     const content = input.conteudo;
