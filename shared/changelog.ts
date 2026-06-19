@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3324 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CLICAR NUMA LINHA DO EXTRATO SEM LANÇAMENTO ABRE UMA TELA FULL-SCREEN
+ * RESPONSIVA E BEM FORMATADA: ENTRADA (CRÉDITO) → INDICAR O CLIENTE QUE PAGOU + LANÇAR NO CONTAS A RECEBER; SAÍDA (DÉBITO)
+ * → INDICAR O FORNECEDOR + LANÇAR NO CONTAS A PAGAR. 100% FINANCEIRO (FRONT, REUSA ENDPOINTS) · ADITIVO · REGRA DE OURO
+ * MANTIDA (NADA CONCILIA SEM CLIQUE EXPLÍCITO) · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (print do usuário): o diálogo "Lançar no ERP" era pequeno e genérico (sempre criava como pago+conciliado).
+ *   O piloto FC quis uma tela full-screen, responsiva e bem formatada, que separe os dois fluxos: quando a linha é
+ *   ENTRADA, deve perguntar QUAL CLIENTE pagou e jogar no Contas a Receber; quando é SAÍDA, perguntar o fornecedor e
+ *   jogar no Contas a Pagar.
+ * - FRONT (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): o `Dialog` "Lançar no ERP" virou full-screen no
+ *   mobile (`w-screen h-[100dvh]`) e amplo no desktop (`sm:max-w-4xl sm:h-[92vh]`), com header/body/footer em coluna flex
+ *   (`shrink-0` + body `flex-1 min-h-0 overflow-y-auto`). Título/descrição passam a ser MODE-AWARE ("Lançar no Contas a
+ *   Receber" vs "...a Pagar"). Novo painel "Dados do extrato" (valor grande colorido, entrada/saída, data, conta da linha
+ *   via memo `lancContaLabel`, descrição). Campo condicional: ENTRADA mostra "Cliente que pagou" (datalist do cadastro de
+ *   clientes — query `clientes.list` + memo `clienteOpts`); SAÍDA mostra "Fornecedor". Centro de custo só aparece em saída.
+ * - MOTOR (`submitLancar(conciliar: boolean)`): ENTRADA → `criarTituloReceber` (status a_receber); se "Lançar e conciliar",
+ *   `darBaixaReceber` (recebido, seta a conta bancária da linha) + `conciliarLancamento`. SAÍDA → `createEntry` despesa
+ *   ("Só lançar" = status a_pagar; "Lançar e conciliar" = pago + `conciliarLancamento`). A conta bancária usada é a da
+ *   PRÓPRIA linha (`lancStatement.contaBancariaId`), funcionando também no Panorama Geral (sem conta selecionada).
+ * - REGRA DE OURO: o footer tem 3 botões — Cancelar / "Só lançar" (`submitLancar(false)`, NÃO concilia) / "Lançar e
+ *   conciliar" (`submitLancar(true)`). A conciliação só acontece no clique explícito; nada é baixado/conciliado
+ *   automaticamente. `lancCreatedRef` segue evitando duplicidade quando a baixa/conciliação falha e o usuário repete.
+ * - ARQUIVOS: `client/src/pages/financeiro/FinanceiroConciliacao.tsx` (imports `Users`/`Building2`; query `clientes.list`
+ *   + `clienteOpts`; `lancForm` com `clienteId`/`clienteNome`; mutations `criarReceberMut`/`darBaixaReceberMut`; memo
+ *   `lancContaLabel`; `abrirLancar` pré-preenche cliente na entrada; `submitLancar(conciliar)` reescrita; JSX do diálogo
+ *   full-screen), `shared/version.ts` (3324), `shared/changelog.ts`, `replit.md`.
+ *
  * Rev. 3323 — **PLANEJAMENTO / PROJETOS · O PAINEL "EFETIVO × IA — TODAS AS OBRAS" FICAVA SEMPRE ABERTO NO TOPO DA TELA
  * DE PROJETOS, POLUINDO A VISÃO. AGORA É UM BOTÃO ("PAINEL GERENCIAL · ABRIR ANÁLISE") QUE ABRE A ANÁLISE EM TELA PRÓPRIA
  * (COM "VOLTAR AOS PROJETOS"). 100% FRONT · UX/ADITIVO · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
