@@ -4928,15 +4928,15 @@ export const financialRouter = router({
 
     // Contas COM extrato (linhas não excluídas) no período + dados cadastrais p/ rótulo.
     const contasRes = await dbExecute(db,
-      `SELECT cba.id AS "id", cba.banco AS "banco", cba.descricao AS "descricao",
+      `SELECT cba.id AS "id", cba.banco AS "banco", cba.apelido AS "descricao",
               cba.agencia AS "agencia", cba.conta AS "conta",
               COUNT(b.id)::int AS "linhas"
          FROM company_bank_accounts cba
          JOIN bank_statement_lines b
-           ON b.conta_bancaria_id = cba.id AND b.company_id = cba.company_id
+           ON b.conta_bancaria_id = cba.id AND b.company_id = cba."companyId"
           AND b.data >= $2 AND b.data <= $3 AND b.excluido_em IS NULL
-        WHERE cba.company_id = $1
-        GROUP BY cba.id, cba.banco, cba.descricao, cba.agencia, cba.conta
+        WHERE cba."companyId" = $1
+        GROUP BY cba.id, cba.banco, cba.apelido, cba.agencia, cba.conta
         ORDER BY cba.banco ASC, cba.id ASC`,
       [input.companyId, input.dataInicio, input.dataFim]);
     const contas = rows(contasRes);

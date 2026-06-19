@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3320 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O "PANORAMA GERAL DO MÊS" (Rev. 3319) ESTOURAVA "NÃO CONSEGUI MONTAR
+ * O PANORAMA — DB: code=42703 | msg=column cba.company_id does not exist" AO SELECIONAR QUALQUER MÊS. NENHUM PANORAMA
+ * CARREGAVA. AGORA MONTA NORMAL. 100% BACKEND · BUGFIX (HOTFIX da Rev. 3319) · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - SINTOMA (print do usuário): clicar num mês (sem conta) na Conciliação Bancária mostrava o card "Panorama geral do mês"
+ *   com o erro vermelho `code=42703 | column cba.company_id does not exist` e botão "Tentar de novo".
+ * - RAIZ: a query de descoberta de contas em `getConciliacaoReportGeral` (`server/routers/financial.ts`) referenciava
+ *   `cba.company_id` (no JOIN e no WHERE) e `cba.descricao`. A tabela `company_bank_accounts` usa colunas em **camelCase**
+ *   (`"companyId"`) e **NÃO tem** coluna `descricao` — o rótulo da conta vem de `apelido`. (A tabela self-heal
+ *   `bank_statement_lines`, por outro lado, é snake_case e `b.company_id` está correto — a mistura de convenções foi o que
+ *   induziu o erro.) Postgres aborta na 1ª coluna inexistente → `42703`, então o panorama inteiro falhava.
+ * - CORREÇÃO: `cba.company_id` → `cba."companyId"` (JOIN + WHERE) e `cba.descricao` → `cba.apelido AS "descricao"` (SELECT +
+ *   GROUP BY). O alias de saída `"descricao"` foi mantido → o front e o resto do helper não mudam. `b.company_id`
+ *   (bank_statement_lines) permanece intacto.
+ * - LIÇÃO: `company_bank_accounts` é camelCase (`"companyId"`, sem `descricao` → use `apelido`); `bank_statement_lines` é
+ *   snake_case (`company_id`). Ao fazer JOIN entre uma tabela do Drizzle (camelCase) e uma self-heal (snake_case), aspar e
+ *   conferir a convenção de CADA lado — SQL cru não é validado pelo tsc, então só estoura em runtime.
+ * - ARQUIVOS: `server/routers/financial.ts` (query `getConciliacaoReportGeral`), `shared/version.ts`→3320.
+ *
  * Rev. 3319 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · AO SELECIONAR UM MÊS SEM ESCOLHER UMA CONTA, A TELA SÓ MOSTRAVA
  * "SELECIONE UMA CONTA BANCÁRIA" — NÃO HAVIA VISÃO CONSOLIDADA DO MÊS. AGORA, MÊS SELECIONADO + NENHUMA CONTA EXIBE O
  * "PANORAMA GERAL DO MÊS": TOTAIS AGREGADOS (CONCILIADOS / NO EXTRATO SEM LANÇAMENTO / NO ERP SEM EXTRATO / % CONCILIADO)
