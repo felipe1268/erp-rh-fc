@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   Sparkles, Loader2, Users, ArrowRight, MapPin, AlertTriangle,
   TrendingUp, TrendingDown, CheckCircle2, Building2, RefreshCw, Lightbulb, Clock, Plane, CalendarClock,
-  Printer, FileWarning, Move,
+  Printer, FileWarning, Move, Gauge, Activity,
 } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 
@@ -16,6 +16,26 @@ function deltaTone(delta: number) {
   if (delta > 0) return { txt: "text-red-700", bg: "bg-red-50", border: "border-red-200", label: "Falta", icon: <TrendingUp className="h-3.5 w-3.5" /> };
   if (delta < 0) return { txt: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200", label: "Sobra", icon: <TrendingDown className="h-3.5 w-3.5" /> };
   return { txt: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", label: "Equilibrado", icon: <CheckCircle2 className="h-3.5 w-3.5" /> };
+}
+
+function SectionTitle({ icon, children, count, accent = "indigo" }: { icon: React.ReactNode; children: React.ReactNode; count?: number; accent?: "indigo" | "emerald" | "red" | "amber" }) {
+  const bar: Record<string, string> = {
+    indigo: "from-indigo-500 to-indigo-300", emerald: "from-emerald-500 to-emerald-300",
+    red: "from-red-500 to-red-300", amber: "from-amber-500 to-amber-300",
+  };
+  const chip: Record<string, string> = {
+    indigo: "text-indigo-700 bg-indigo-50 border-indigo-100", emerald: "text-emerald-700 bg-emerald-50 border-emerald-100",
+    red: "text-red-700 bg-red-50 border-red-100", amber: "text-amber-700 bg-amber-50 border-amber-100",
+  };
+  return (
+    <div className="flex items-center gap-2 mb-2.5">
+      <span className={`h-5 w-1 rounded-full bg-gradient-to-b ${bar[accent]}`} />
+      <span className="text-[13px] font-bold text-slate-800 flex items-center gap-1.5">{icon}{children}</span>
+      {typeof count === "number" && count > 0 && (
+        <span className={`text-[10px] font-bold rounded-full border px-1.5 py-0.5 ${chip[accent]}`}>{count}</span>
+      )}
+    </div>
+  );
 }
 
 export default function EfetivoGlobalIA({ companyId }: Props) {
@@ -89,6 +109,22 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
   const planoEquipe = (resultado?.planoEquipe ?? []) as any[];
   const planoRealocar = planoEquipe.filter((p) => p?.acao === "realocar");
   const planoAviso = planoEquipe.filter((p) => p?.acao === "aviso_previo");
+
+  // Saúde do efetivo (dial gerencial): % de funções equilibradas + contagem por situação.
+  const saude = useMemo(() => {
+    const hs = (resultado?.histograma ?? []) as any[];
+    let falta = 0, sobra = 0, ok = 0, totFalta = 0, totSobra = 0;
+    for (const h of hs) {
+      const d = Number(h.delta) || 0;
+      if (d > 0) { falta++; totFalta += d; }
+      else if (d < 0) { sobra++; totSobra += Math.abs(d); }
+      else ok++;
+    }
+    const tot = falta + sobra + ok;
+    const pct = tot ? Math.round((ok / tot) * 100) : 0;
+    return { falta, sobra, ok, totFalta, totSobra, tot, pct };
+  }, [resultado]);
+  const dialColor = saude.pct >= 80 ? "#10b981" : saude.pct >= 50 ? "#f59e0b" : "#ef4444";
 
   // Relatório imprimível / PDF — padrão institucional FC (faixa azul #1B2A4A).
   // TODO o texto vindo da IA é escapado (esc/escAttr) antes de entrar no HTML — evita XSS.
@@ -213,56 +249,56 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
 
   return (
     <div className="rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50/60 to-white shadow-sm mb-5 overflow-hidden">
-      {/* Cabeçalho do painel */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-indigo-100 bg-white/70">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="h-9 w-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0">
-            <Sparkles className="h-4.5 w-4.5" />
+      {/* Cabeçalho gerencial — faixa institucional FC (#1B2A4A) */}
+      <div className="relative px-5 py-4 bg-gradient-to-br from-[#1B2A4A] via-[#22315a] to-[#1B2A4A] text-white overflow-hidden">
+        <div className="absolute inset-0 opacity-[0.07] pointer-events-none" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, #ffffff 1px, transparent 0)", backgroundSize: "18px 18px" }} />
+        <div className="relative flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-11 w-11 rounded-xl bg-white/10 ring-1 ring-white/20 backdrop-blur flex items-center justify-center shrink-0">
+              <Gauge className="h-6 w-6 text-sky-300" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-sky-300/90 bg-white/10 rounded px-1.5 py-0.5">Painel Gerencial</span>
+              <h2 className="text-base font-bold leading-tight mt-1">Efetivo × IA — Todas as Obras</h2>
+              <p className="text-[11px] text-slate-300 leading-tight">Cruza o efetivo de cada obra com o cronograma de 8 semanas e indica realocação ou aviso prévio por equipe.</p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <h2 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
-              Efetivo × IA — Todas as Obras
-            </h2>
-            <p className="text-[11px] text-slate-500 leading-tight">
-              Cruza o efetivo de cada obra com o cronograma e sugere remanejamento entre obras próximas (mesma cidade).
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {geradoEm && !loading && (
-            <span className="hidden sm:flex items-center gap-1 text-[10px] text-slate-400">
-              <Clock className="h-3 w-3" />
-              {new Date(geradoEm).toLocaleString("pt-BR")}{criadoPor ? ` · ${criadoPor}` : ""}
-            </span>
-          )}
-          {resultado && !loading && (
+          <div className="flex items-center gap-2">
+            {geradoEm && !loading && (
+              <span className="hidden md:flex items-center gap-1 text-[10px] text-slate-300/90">
+                <Clock className="h-3 w-3" />
+                {new Date(geradoEm).toLocaleString("pt-BR")}{criadoPor ? ` · ${criadoPor}` : ""}
+              </span>
+            )}
+            {resultado && !loading && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 bg-white/10 border-white/25 text-white hover:bg-white/20 hover:text-white"
+                onClick={imprimirRelatorio}
+                title="Imprimir / gerar PDF do relatório (padrão FC)"
+              >
+                <Printer className="h-4 w-4" /> Imprimir / PDF
+              </Button>
+            )}
             <Button
               size="sm"
-              variant="outline"
-              className="gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-              onClick={imprimirRelatorio}
-              title="Imprimir / gerar PDF do relatório (padrão FC)"
+              className="gap-1.5 bg-sky-500 hover:bg-sky-400 text-white shadow-sm"
+              disabled={loading || !companyId}
+              onClick={() => analisar.mutate({ companyId })}
             >
-              <Printer className="h-4 w-4" /> Imprimir / PDF
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : (resultado ? <RefreshCw className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />)}
+              {loading ? "Analisando..." : (resultado ? "Reanalisar" : "Analisar todas as obras")}
             </Button>
-          )}
-          <Button
-            size="sm"
-            className="gap-1.5 bg-indigo-600 hover:bg-indigo-700"
-            disabled={loading || !companyId}
-            onClick={() => analisar.mutate({ companyId })}
-          >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : (resultado ? <RefreshCw className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />)}
-            {loading ? "Analisando..." : (resultado ? "Reanalisar" : "Analisar todas as obras")}
-          </Button>
+          </div>
         </div>
       </div>
 
       {/* Barra de progresso */}
       {loading && (
-        <div className="px-4 pt-3">
-          <div className="h-1.5 w-full rounded-full bg-indigo-100 overflow-hidden">
-            <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${progress}%` }} />
+        <div className="px-5 pt-3">
+          <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+            <div className="h-full bg-sky-500 transition-all duration-500" style={{ width: `${progress}%` }} />
           </div>
           <p className="text-[11px] text-slate-500 mt-1.5">
             Lendo o efetivo e o cronograma de cada obra e consolidando uma única análise de IA...
