@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3309 — **RH & DP / FÉRIAS · ABA "CALENDÁRIO DE FÉRIAS" · A LISTA DE COLABORADORES VINHA EM ORDEM ARBITRÁRIA
+ * (ORDEM DE CHEGADA DOS REGISTROS / employeeId), DIFICULTANDO ACHAR UMA PESSOA. AGORA O CALENDÁRIO É ORDENADO POR
+ * NOME DO COLABORADOR (A→Z), IGNORANDO ACENTOS. 100% FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (piloto FC): "Organiza em ordem alfabética as férias" (print da aba Calendário de Férias 2026).
+ * - CORREÇÃO (`client/src/pages/Ferias.tsx`, useMemo `calendarioAgrupado`): após agrupar os períodos por
+ *   `employeeId`, o `Object.values(map)` passou a ser ordenado por `removeAccents(employee.nome).localeCompare(...,
+ *   "pt-BR")`. Sem mexer em backend, dados ou nas cores/legendas; só a ORDEM das linhas muda.
+ * - VALIDAÇÃO: esbuild parse limpo; `tsc --noEmit` sem erros no arquivo; app sobe no Neon DEV.
+ *
  * Rev. 3308 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA (IMPORTAR EXTRATO) · A IMPORTAÇÃO DE EXTRATO EM PDF DO BANCO DO
  * BRASIL QUEBRAVA COM "ERRO NA IMPORTAÇÃO — NÃO FOI POSSÍVEL EXTRAIR TRANSAÇÕES DO PDF. VERIFIQUE SE É O EXTRATO EM
  * PDF GERADO PELO INTERNET BANKING DA CAIXA". O PARSER DE PDF ERA HARDCODED PRO LAYOUT EM COLUNAS DA CAIXA — QUALQUER

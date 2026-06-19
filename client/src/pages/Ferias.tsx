@@ -956,7 +956,11 @@ export default function Ferias() {
       }
       map[row.employeeId].periodos.push(row);
     }
-    return Object.values(map);
+    // Rev. 3309 — ordena o Calendário de Férias por nome do colaborador (A→Z),
+    // ignorando acentos, pra facilitar localizar a pessoa na lista.
+    return Object.values(map).sort((a, b) =>
+      removeAccents(a.employee?.nome || "").localeCompare(removeAccents(b.employee?.nome || ""), "pt-BR")
+    );
   }, [calendarioCompleto]);
 
   const handleSubmit = () => {
