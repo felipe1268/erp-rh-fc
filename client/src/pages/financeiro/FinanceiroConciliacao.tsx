@@ -1710,7 +1710,7 @@ export default function FinanceiroConciliacao() {
                   <div className="flex items-center gap-2">
                     <Landmark className="w-5 h-5 text-blue-600" />
                     <div>
-                      <p className="text-base font-bold text-gray-800">Panorama geral do mês</p>
+                      <p className="text-base font-bold text-gray-800">{modoData === "mes" ? (mesSel == null ? "Panorama geral do ano" : "Panorama geral do mês") : modoData === "dia" ? "Panorama geral do dia" : "Panorama geral do período"}</p>
                       <p className="text-xs text-gray-500">Todas as contas com extrato em {periodoLabel}. Clique numa conta para conciliar.</p>
                     </div>
                   </div>
