@@ -17,7 +17,7 @@ import { BandeiraLogo, ChipCartao, bandeiraGradiente } from "@/components/Bandei
 import {
   CreditCard, Upload, Loader2, CheckCircle, AlertTriangle, Trash2, Pencil,
   ChevronLeft, ChevronRight, PlusCircle, ListTree, FileText, Building2, ShieldAlert,
-  Search, Layers,
+  Search, Layers, BarChart3, TrendingUp, TrendingDown, Minus,
 } from "lucide-react";
 
 function formatBRL(v: number | null | undefined) {
@@ -55,6 +55,45 @@ function fileToBase64(file: File): Promise<string> {
 }
 const MESES = ["", "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const ANO_ATUAL = new Date().getFullYear();
+
+// Célula do comparativo mês a mês: valor da fatura do mês + seta/% vs o mês
+// ANTERIOR QUE TEVE FATURA (pula meses sem fatura). Subiu = vermelho (gasto maior);
+// abaixou = verde; sem mês anterior = traço.
+function renderCelulaComparativo(meses: number[], mes: number) {
+  const valor = meses[mes] || 0;
+  if (valor === 0) return <span className="text-gray-300">—</span>;
+  // procura o mês anterior (1..mes-1) com fatura > 0
+  let anterior = 0;
+  for (let m = mes - 1; m >= 1; m--) {
+    if ((meses[m] || 0) > 0) { anterior = meses[m]; break; }
+  }
+  let delta: React.ReactNode = null;
+  if (anterior > 0) {
+    const diff = valor - anterior;
+    const pct = (diff / anterior) * 100;
+    if (Math.abs(pct) < 0.05) {
+      delta = (
+        <span className="inline-flex items-center gap-0.5 text-[10px] text-gray-400">
+          <Minus className="w-3 h-3" /> 0%
+        </span>
+      );
+    } else {
+      const subiu = diff > 0;
+      delta = (
+        <span className={`inline-flex items-center gap-0.5 text-[10px] ${subiu ? "text-red-600" : "text-emerald-600"}`}>
+          {subiu ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+          {subiu ? "+" : ""}{pct.toFixed(0)}%
+        </span>
+      );
+    }
+  }
+  return (
+    <div className="flex flex-col items-end leading-tight">
+      <span className="text-gray-800">{formatBRL(valor)}</span>
+      {delta}
+    </div>
+  );
+}
 
 function tipoBadge(t: string) {
   switch (t) {
@@ -95,7 +134,7 @@ export default function FinanceiroCartaoCredito() {
   const { companyId } = useCompany();
   const { toast } = useToast();
 
-  const [aba, setAba] = useState<"cartoes" | "faturas">("cartoes");
+  const [aba, setAba] = useState<"cartoes" | "faturas" | "comparativo">("cartoes");
 
   // ── Cartões ──────────────────────────────────────────────────────────
   const cartoesQ = (trpc as any).cartao.listarCartoes.useQuery(
@@ -185,6 +224,43 @@ export default function FinanceiroCartaoCredito() {
   );
   const faturas = (faturasQ.data ?? []) as any[];
   const totalFaturasMes = useMemo(() => faturas.reduce((a, f) => a + (f.total ?? 0), 0), [faturas]);
+
+  // ── Comparativo mês a mês (matriz cartão × mês) ──────────────────────
+  const comparativoQ = (trpc as any).cartao.comparativoMensal.useQuery(
+    { companyId: companyId!, ano },
+    { enabled: !!companyId && aba === "comparativo" },
+  );
+  const comparativoRaw = (comparativoQ.data ?? []) as Array<{ cartaoId: number; mes: number; total: number; qtd: number }>;
+  // Monta linhas: uma por cartão (com fatura no ano) + linha "Total geral".
+  const comparativo = useMemo(() => {
+    // total[cartaoId][mes 1..12] = valor da fatura daquele mês
+    const porCartao = new Map<number, number[]>();
+    for (const r of comparativoRaw) {
+      if (!r.mes || r.mes < 1 || r.mes > 12) continue;
+      if (!porCartao.has(r.cartaoId)) porCartao.set(r.cartaoId, Array(13).fill(0));
+      const arr = porCartao.get(r.cartaoId)!;
+      arr[r.mes] += r.total || 0;
+    }
+    const labelCartao = (id: number) => {
+      const c = cartoes.find((x: any) => x.id === id);
+      if (!c) return `Cartão #${id}`;
+      const banco = c.banco || "Cartão";
+      return c.final4 ? `${banco} · final ${c.final4}` : banco;
+    };
+    const linhas = Array.from(porCartao.entries())
+      .map(([cartaoId, meses]) => ({
+        cartaoId,
+        label: labelCartao(cartaoId),
+        meses,
+        totalAno: meses.reduce((a, v) => a + v, 0),
+      }))
+      .filter((l) => l.totalAno > 0)
+      .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+    // Linha total geral (soma de todos os cartões por mês)
+    const totalGeral = Array(13).fill(0);
+    for (const l of linhas) for (let m = 1; m <= 12; m++) totalGeral[m] += l.meses[m];
+    return { linhas, totalGeral, totalGeralAno: totalGeral.reduce((a, v) => a + v, 0) };
+  }, [comparativoRaw, cartoes]);
 
   const excluirFatura = (trpc as any).cartao.excluirFatura.useMutation();
   const [faturaExcluir, setFaturaExcluir] = useState<any | null>(null);
@@ -426,6 +502,9 @@ export default function FinanceiroCartaoCredito() {
             <Button variant={aba === "faturas" ? "default" : "outline"} size="sm" onClick={() => setAba("faturas")}>
               <FileText className="w-4 h-4 mr-1" /> Faturas
             </Button>
+            <Button variant={aba === "comparativo" ? "default" : "outline"} size="sm" onClick={() => setAba("comparativo")}>
+              <BarChart3 className="w-4 h-4 mr-1" /> Comparativo
+            </Button>
           </div>
         </div>
 
@@ -625,6 +704,77 @@ export default function FinanceiroCartaoCredito() {
               </CardContent>
             </Card>
           </>
+        )}
+
+        {/* ───────────── ABA COMPARATIVO (mês a mês) ───────────── */}
+        {aba === "comparativo" && (
+          <Card className="border-0 shadow-sm">
+            <CardContent className="p-4">
+              {/* Navegação de ano */}
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setAno((a) => a - 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="text-base font-bold text-gray-800 min-w-[3.5rem] text-center">{ano}</span>
+                  <button onClick={() => setAno((a) => a + 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                  <span className="inline-flex items-center gap-1"><TrendingUp className="w-3.5 h-3.5 text-red-600" /> subiu</span>
+                  <span className="inline-flex items-center gap-1"><TrendingDown className="w-3.5 h-3.5 text-emerald-600" /> abaixou</span>
+                  <span className="inline-flex items-center gap-1"><Minus className="w-3.5 h-3.5 text-gray-400" /> sem variação</span>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mb-3">
+                Total da fatura de cada cartão, mês a mês em {ano}. A setinha ao lado do valor mostra se subiu ou abaixou em relação ao mês anterior com fatura.
+              </p>
+
+              {comparativoQ.isLoading ? (
+                <div className="py-10 text-center text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin inline" /> Carregando…</div>
+              ) : comparativo.linhas.length === 0 ? (
+                <div className="py-10 text-center text-muted-foreground">Nenhuma fatura importada em {ano}. Importe faturas na aba "Faturas".</div>
+              ) : (
+                <div className="overflow-x-auto -mx-4 px-4">
+                  <table className="w-full text-sm border-separate border-spacing-0">
+                    <thead>
+                      <tr className="text-xs text-muted-foreground">
+                        <th className="sticky left-0 z-10 bg-white text-left font-medium py-2 pr-3 min-w-[150px]">Cartão</th>
+                        {MESES.slice(1).map((m) => (
+                          <th key={m} className="text-right font-medium py-2 px-2 whitespace-nowrap min-w-[96px]">{m}</th>
+                        ))}
+                        <th className="text-right font-medium py-2 pl-3 whitespace-nowrap min-w-[110px]">Total {ano}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {comparativo.linhas.map((l) => (
+                        <tr key={l.cartaoId} className="border-t hover:bg-gray-50/60">
+                          <td className="sticky left-0 z-10 bg-white py-2 pr-3 font-medium text-gray-800 whitespace-nowrap">{l.label}</td>
+                          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                            <td key={m} className="py-2 px-2 text-right tabular-nums">
+                              {renderCelulaComparativo(l.meses, m)}
+                            </td>
+                          ))}
+                          <td className="py-2 pl-3 text-right tabular-nums font-semibold text-gray-900 whitespace-nowrap">{formatBRL(l.totalAno)}</td>
+                        </tr>
+                      ))}
+                      {/* Linha Total geral */}
+                      <tr className="border-t-2 border-gray-300 bg-gray-50/80 font-semibold">
+                        <td className="sticky left-0 z-10 bg-gray-50/80 py-2 pr-3 text-gray-900 whitespace-nowrap">Total geral</td>
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                          <td key={m} className="py-2 px-2 text-right tabular-nums">
+                            {renderCelulaComparativo(comparativo.totalGeral, m)}
+                          </td>
+                        ))}
+                        <td className="py-2 pl-3 text-right tabular-nums text-gray-900 whitespace-nowrap">{formatBRL(comparativo.totalGeralAno)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
       </div>
 

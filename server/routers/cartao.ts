@@ -549,6 +549,31 @@ export const cartaoRouter = router({
     return res.rows.map((r: any) => ({ mes: r.mes, qtd: r.qtd, total: parseFloat(r.total) || 0 }));
   }),
 
+  // Comparativo MÊS A MÊS por cartão (matriz cartão × mês do ano) — leitura pura
+  // p/ a tela "Comparativo": ver se a fatura de cada cartão subiu ou abaixou entre
+  // os meses. Read-only; sem ALTER/DROP/DELETE.
+  comparativoMensal: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    ano: z.number().int(),
+  })).query(async ({ input, ctx }) => {
+    await assertCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const res = await dbExecute(db,
+      `SELECT cartao_id AS "cartaoId", mes_ref AS "mes",
+              COALESCE(SUM(total),0) AS total, COUNT(*)::int AS qtd
+         FROM financial_cartao_faturas
+        WHERE company_id=$1 AND excluido_em IS NULL AND ano_ref=$2
+        GROUP BY cartao_id, mes_ref`,
+      [input.companyId, input.ano]);
+    return res.rows.map((r: any) => ({
+      cartaoId: Number(r.cartaoId),
+      mes: Number(r.mes),
+      total: parseFloat(r.total) || 0,
+      qtd: Number(r.qtd) || 0,
+    }));
+  }),
+
   excluirFatura: protectedProcedure.input(z.object({
     id: z.number(), companyId: z.number(),
   })).mutation(async ({ input, ctx }) => {

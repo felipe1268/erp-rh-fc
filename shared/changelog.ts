@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3326 — **FINANCEIRO / CONTROLE DE CARTÃO DE CRÉDITO · NOVA ABA "COMPARATIVO" — TELA MÊS A MÊS DE CADA CARTÃO/FATURA
+ * PRA VER SE O GASTO SUBIU OU ABAIXOU ENTRE OS MESES. MATRIZ CARTÃO × MÊS (JAN..DEZ) DO ANO, COM SETA/% DE VARIAÇÃO VS O
+ * MÊS ANTERIOR COM FATURA + LINHA "TOTAL GERAL" + COLUNA "TOTAL DO ANO". 100% FINANCEIRO (1 BACKEND READ-ONLY + 1 FRONT) ·
+ * ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (print do usuário — tela de Controle de Cartão de Crédito): "Quero uma tela comparativa de mês a mês de cada
+ *   cartão e fatura para ver se subiu ou abaixou entre os meses". O módulo já tinha as abas "Cartões" e "Faturas" (régua
+ *   de meses com total por fatura), mas nenhuma visão que cruzasse os meses lado a lado pra enxergar a tendência.
+ * - BACKEND (`server/routers/cartao.ts`, novo `comparativoMensal({companyId, ano})`): query READ-ONLY que agrega
+ *   `financial_cartao_faturas` por `cartao_id` + `mes_ref` (SUM(total), COUNT) do ano, respeitando `excluido_em IS NULL` e
+ *   o tenant guard `assertCompanyAccess`. Devolve `[{cartaoId, mes, total, qtd}]`. Nada grava — mesma filosofia de controle.
+ * - FRONT (`client/src/pages/financeiro/FinanceiroCartaoCredito.tsx`): novo valor `"comparativo"` no estado `aba` + botão
+ *   "Comparativo" (ícone `BarChart3`) ao lado de Cartões/Faturas. A view monta uma matriz (memo `comparativo`): uma linha
+ *   por cartão com fatura no ano (rótulo `${banco} · final ${final4}`), colunas Jan..Dez, célula = total da fatura do mês +
+ *   seta de tendência (`renderCelulaComparativo`): compara com o ÚLTIMO mês anterior QUE TEVE FATURA (pula meses zerados);
+ *   subiu = vermelho `TrendingUp` (+%), abaixou = verde `TrendingDown` (−%), igual = cinza `Minus` (0%). Coluna final
+ *   "Total {ano}" por cartão + linha "Total geral" (soma de todos os cartões por mês, mesma régua de variação). Navegação
+ *   de ano (reusa `ano`); primeira coluna sticky pra rolar horizontalmente no mobile; estados loading/empty.
+ * - MOEDA em BRL via `formatBRL`; valores read-only direto do snapshot das faturas importadas. SEM rota/permissão nova
+ *   (mesma tela do módulo de cartão).
+ * - ARQUIVOS: `server/routers/cartao.ts` (`comparativoMensal`), `client/src/pages/financeiro/FinanceiroCartaoCredito.tsx`
+ *   (aba + botão + memo + `renderCelulaComparativo` + ícones), `shared/version.ts` (3326), `shared/changelog.ts`, `replit.md`.
+ *
  * Rev. 3325 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NO PANORAMA GERAL DO MÊS, O BLOCO "LANÇAMENTOS SEM CONTA BANCÁRIA
  * DEFINIDA" ERA UMA LISTA INERTE (NÃO DAVA PRA CLICAR) — O USUÁRIO NÃO CONSEGUIA SABER DE ONDE VEIO CADA LANÇAMENTO PRA
  * IR DEFINIR A CONTA. AGORA CADA LINHA É CLICÁVEL E ABRE A TELA DE DETALHES DO LANÇAMENTO (MESMO DIÁLOGO JÁ USADO NAS
