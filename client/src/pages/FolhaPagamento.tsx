@@ -9484,13 +9484,20 @@ function ComparativoFolhaErpView({ companyId, mesAno, lancamentoId, onBack }: { 
     { companyId, mesReferencia: mesAno },
     { enabled: companyId > 0 }
   );
+  // Rev. 3310 — líquido REAL calculado pelo ERP (pagamento simulado/consolidado),
+  // vindo de payroll_payments via payrollEngine.listarPagamentos. É a fonte honesta
+  // pra comparar o LÍQUIDO Folha (PDF) × Líquido ERP (inclui INSS/IRRF/FGTS).
+  const pagsErp = trpc.payrollEngine.listarPagamentos.useQuery(
+    { companyId, mesReferencia: mesAno },
+    { enabled: companyId > 0 }
+  );
 
   const [search, setSearch] = useState("");
   const [somenteDivergencia, setSomenteDivergencia] = useState(false);
   const [ordenarPor, setOrdenarPor] = useState<"nome" | "diferenca" | "liquido">("nome");
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
-  const isLoading = itens.isLoading || descCLT.isLoading || heCruz.isLoading;
+  const isLoading = itens.isLoading || descCLT.isLoading || heCruz.isLoading || pagsErp.isLoading;
 
   const descMap = useMemo(() => {
     const m = new Map<number, any>();
@@ -9507,6 +9514,21 @@ function ComparativoFolhaErpView({ companyId, mesAno, lancamentoId, onBack }: { 
     }
     return m;
   }, [heCruz.data]);
+
+  // Rev. 3310 — employeeId → líquido REAL do ERP (salarioLiquido = valor pago).
+  // Só entra no mapa quando há pagamento simulado/consolidado COM líquido numérico
+  // válido (NaN é descartado); a PRESENÇA da chave = "tem simulação no mês" (não o
+  // valor > 0, senão líquido 0/negativo seria lido como "sem simulação" e mascararia
+  // divergência real).
+  const pagMap = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const p of ((pagsErp.data as any[]) || [])) {
+      if (p.employeeId == null) continue;
+      const liq = parseFloat(String(p.salarioLiquido ?? ""));
+      if (Number.isFinite(liq)) m.set(Number(p.employeeId), liq);
+    }
+    return m;
+  }, [pagsErp.data]);
 
   const linhas = useMemo(() => {
     return ((itens.data as any[]) || []).map((it) => {
@@ -9530,6 +9552,14 @@ function ComparativoFolhaErpView({ companyId, mesAno, lancamentoId, onBack }: { 
       // Líquido ERP parcial: Sal. Base + HE − Descontos operacionais (sem INSS/IRRF/FGTS)
       const liqErpParcial = salErp + heErpValor - descErp;
 
+      // Rev. 3310 — Líquido ERP REAL (pagamento simulado/consolidado do ERP), quando existe.
+      // "tem simulação" = chave presente no pagMap (valor numérico válido, inclusive 0
+      // ou negativo); NÃO usar `> 0`, senão líquido 0 viraria "—" e esconderia divergência.
+      const temLiqErp = empId != null && pagMap.has(Number(empId));
+      const liqErpRealRaw = temLiqErp ? (pagMap.get(Number(empId)) as number) : null;
+      const liqErpReal = liqErpRealRaw;
+      const diffLiq = temLiqErp ? Math.abs(liqFolha - (liqErpRealRaw as number)) : 0;
+
       const diffSal = salErp > 0 ? Math.abs(salFolha - salErp) : 0;
       const diffHe = he ? Math.abs(heContabValor - heErpValor) : 0;
       const diffDesc = desc ? Math.abs(descContab - descErp) : 0;
@@ -9546,11 +9576,14 @@ function ComparativoFolhaErpView({ companyId, mesAno, lancamentoId, onBack }: { 
         heContabValor, heErpValor, heSistemaH, diffHe,
         descContab, descErp, diffDesc,
         liqFolha, liqErpParcial,
+        liqErpReal, temLiqErp, diffLiq,
         diffTotal,
-        temDivergencia: diffTotal > 1, // tolerância R$1
+        // Rev. 3310 — a divergência também dispara pela diferença de LÍQUIDO (o valor
+        // mais importante na conferência com a contabilidade), tolerância R$1.
+        temDivergencia: diffTotal > 1 || diffLiq > 1,
       };
     });
-  }, [itens.data, descMap, heMap]);
+  }, [itens.data, descMap, heMap, pagMap]);
 
   const linhasFiltradas = useMemo(() => {
     const s = search.trim().toLowerCase();
@@ -9571,14 +9604,14 @@ function ComparativoFolhaErpView({ companyId, mesAno, lancamentoId, onBack }: { 
   }, [linhas, search, somenteDivergencia, ordenarPor]);
 
   const totais = useMemo(() => {
-    let liqFolha = 0, liqErp = 0, diff = 0, comDiv = 0;
+    let liqFolha = 0, liqErpReal = 0, diffLiq = 0, diff = 0, comDiv = 0, comLiqErp = 0;
     for (const l of linhasFiltradas) {
       liqFolha += l.liqFolha;
-      liqErp += l.liqErpParcial;
+      if (l.temLiqErp) { liqErpReal += (l.liqErpReal as number); diffLiq += l.diffLiq; comLiqErp++; }
       diff += l.diffTotal;
       if (l.temDivergencia) comDiv++;
     }
-    return { liqFolha, liqErp, diff, count: linhasFiltradas.length, comDiv };
+    return { liqFolha, liqErpReal, diffLiq, diff, count: linhasFiltradas.length, comDiv, comLiqErp };
   }, [linhasFiltradas]);
 
   const fmtBRL = (n: number) => `R$ ${Number(n || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -9589,13 +9622,16 @@ function ComparativoFolhaErpView({ companyId, mesAno, lancamentoId, onBack }: { 
   });
 
   const exportarCSV = () => {
-    const headers = ["Funcionário", "Código", "Cargo", "Sal.Base Folha", "Sal.Base ERP", "HE Folha", "HE ERP (proxy)", "Descontos Folha", "Descontos ERP", "Líquido Folha", "Líquido ERP parcial", "Diferença total", "Status"];
+    const headers = ["Funcionário", "Código", "Cargo", "Sal.Base Folha", "Sal.Base ERP", "HE Folha", "HE ERP (proxy)", "Descontos Folha", "Descontos ERP", "Líquido Folha", "Líquido ERP", "Dif. Líquido", "Líquido ERP parcial", "Diferença total", "Status"];
     const rows = linhasFiltradas.map(l => [
       l.nome, l.codigo, l.cargo,
       l.salFolha.toFixed(2), l.salErp.toFixed(2),
       l.heContabValor.toFixed(2), l.heErpValor.toFixed(2),
       l.descContab.toFixed(2), l.descErp.toFixed(2),
-      l.liqFolha.toFixed(2), l.liqErpParcial.toFixed(2),
+      l.liqFolha.toFixed(2),
+      l.temLiqErp ? (l.liqErpReal as number).toFixed(2) : "",
+      l.temLiqErp ? l.diffLiq.toFixed(2) : "",
+      l.liqErpParcial.toFixed(2),
       l.diffTotal.toFixed(2),
       l.temDivergencia ? "DIVERGÊNCIA" : "OK",
     ]);
@@ -9638,7 +9674,7 @@ function ComparativoFolhaErpView({ companyId, mesAno, lancamentoId, onBack }: { 
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
         <div className="rounded-lg p-3 text-center border-2 border-slate-200 bg-white">
           <p className="text-[10px] uppercase tracking-wide text-slate-500">Funcionários</p>
           <p className="text-2xl font-black text-[#1B2A4A]">{totais.count}</p>
@@ -9648,8 +9684,13 @@ function ComparativoFolhaErpView({ companyId, mesAno, lancamentoId, onBack }: { 
           <p className="text-base font-black text-blue-900">{fmtBRL(totais.liqFolha)}</p>
         </div>
         <div className="rounded-lg p-3 text-center border-2 border-indigo-200 bg-indigo-50">
-          <p className="text-[10px] uppercase tracking-wide text-indigo-700">Líquido ERP parcial*</p>
-          <p className="text-base font-black text-indigo-900">{fmtBRL(totais.liqErp)}</p>
+          <p className="text-[10px] uppercase tracking-wide text-indigo-700">Líquido ERP</p>
+          <p className="text-base font-black text-indigo-900">{totais.comLiqErp > 0 ? fmtBRL(totais.liqErpReal) : "—"}</p>
+          <p className="text-[9px] text-indigo-500">{totais.comLiqErp}/{totais.count} c/ simulação</p>
+        </div>
+        <div className="rounded-lg p-3 text-center border-2 border-purple-200 bg-purple-50">
+          <p className="text-[10px] uppercase tracking-wide text-purple-700">Dif. Líquido</p>
+          <p className="text-base font-black text-purple-900">{totais.comLiqErp > 0 ? fmtBRL(totais.diffLiq) : "—"}</p>
         </div>
         <div className="rounded-lg p-3 text-center border-2 border-amber-200 bg-amber-50">
           <p className="text-[10px] uppercase tracking-wide text-amber-700">Soma diferenças</p>
@@ -9721,7 +9762,9 @@ function ComparativoFolhaErpView({ companyId, mesAno, lancamentoId, onBack }: { 
                 <th className="px-3 py-2 font-medium text-right">Desc. Folha</th>
                 <th className="px-3 py-2 font-medium text-right">Desc. ERP</th>
                 <th className="px-3 py-2 font-medium text-right border-l border-slate-200">Líquido Folha</th>
-                <th className="px-3 py-2 font-medium text-right">Diferença</th>
+                <th className="px-3 py-2 font-medium text-right">Líquido ERP</th>
+                <th className="px-3 py-2 font-medium text-right">Dif. Líquido</th>
+                <th className="px-3 py-2 font-medium text-right border-l border-slate-200">Diferença</th>
               </tr>
             </thead>
             <tbody>
@@ -9756,7 +9799,13 @@ function ComparativoFolhaErpView({ companyId, mesAno, lancamentoId, onBack }: { 
                       {l.descErp > 0 ? fmtBRL(l.descErp) : <span className="text-slate-400">—</span>}
                     </td>
                     <td className="px-3 py-2 text-right font-mono font-bold text-blue-900 border-l border-slate-200">{fmtBRL(l.liqFolha)}</td>
-                    <td className={`px-3 py-2 text-right font-mono font-bold ${l.temDivergencia ? "text-red-700" : "text-emerald-700"}`}>
+                    <td className="px-3 py-2 text-right font-mono font-bold text-indigo-900">
+                      {l.temLiqErp ? fmtBRL(l.liqErpReal as number) : <span className="text-slate-400" title="ERP ainda não simulou/consolidou o pagamento deste mês para este funcionário">—</span>}
+                    </td>
+                    <td className={`px-3 py-2 text-right font-mono font-bold ${l.temLiqErp ? (l.diffLiq > 1 ? "text-red-700" : "text-emerald-700") : "text-slate-400"}`}>
+                      {l.temLiqErp ? (l.diffLiq > 0.01 ? fmtBRL(l.diffLiq) : "OK") : "—"}
+                    </td>
+                    <td className={`px-3 py-2 text-right font-mono font-bold border-l border-slate-200 ${l.temDivergencia ? "text-red-700" : "text-emerald-700"}`}>
                       {l.diffTotal > 0.01 ? fmtBRL(l.diffTotal) : "OK"}
                     </td>
                   </tr>
@@ -9764,7 +9813,7 @@ function ComparativoFolhaErpView({ companyId, mesAno, lancamentoId, onBack }: { 
                 if (isOpen) {
                   rows.push(
                     <tr key={`exp-${l.id}`} className="border-b border-slate-200 bg-slate-50/70">
-                      <td colSpan={10} className="px-4 py-3">
+                      <td colSpan={12} className="px-4 py-3">
                         <DetalhamentoVerbasFuncionario linha={l} />
                       </td>
                     </tr>
@@ -9781,9 +9830,11 @@ function ComparativoFolhaErpView({ companyId, mesAno, lancamentoId, onBack }: { 
       <div className="text-[11px] text-muted-foreground bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1">
         <p><strong>Como ler este comparativo:</strong></p>
         <p>• <strong>Folha</strong> = valores importados do PDF da contabilidade (verdade fiscal).</p>
-        <p>• <strong>ERP</strong> = valores calculados pelo ERP. <strong>Apenas Sal. Base (do cadastro), HE (proxy = salário ÷ 220 × 1,5/h; fallback R$50/h) e Descontos operacionais (faltas/atrasos/DSR via motor CLT) são recalculados.</strong> INSS, IRRF e FGTS o ERP NÃO recalcula (exibe "—").</p>
-        <p>• <strong>Líquido ERP parcial</strong>* = Sal. Base ERP + HE ERP − Descontos ERP. NÃO inclui INSS/IRRF/FGTS, então é maior que o líquido real do PDF — usar SÓ como referência de prioridade.</p>
-        <p>• Linha <span className="bg-red-50/60 px-1 rounded font-semibold">vermelha</span> = diferença total &gt; R$ 1,00 nos campos comparáveis.</p>
+        <p>• <strong>ERP</strong> = valores calculados pelo ERP. <strong>Apenas Sal. Base (do cadastro), HE (proxy = salário ÷ 220 × 1,5/h; fallback R$50/h) e Descontos operacionais (faltas/atrasos/DSR via motor CLT) são recalculados nas colunas por verba.</strong> INSS, IRRF e FGTS o ERP NÃO recalcula nessas colunas (exibe "—").</p>
+        <p>• <strong className="text-indigo-800">Líquido ERP</strong> = líquido REAL do <strong>pagamento simulado/consolidado do ERP</strong> (motor CLT completo, já com INSS/IRRF). É o que deve bater com o <strong>Líquido Folha</strong> do PDF. Aparece "—" quando o pagamento do mês ainda não foi simulado/consolidado no ERP para o funcionário (rode "Simular Pagamento" antes).</p>
+        <p>• <strong className="text-purple-800">Dif. Líquido</strong> = |Líquido Folha − Líquido ERP|. <strong>É o número mais importante da conferência com a contabilidade.</strong></p>
+        <p>• <strong>Líquido ERP parcial</strong> (CSV/detalhe) = Sal. Base + HE − Descontos operacionais, SEM INSS/IRRF/FGTS — só referência grosseira de prioridade quando não há simulação.</p>
+        <p>• Linha <span className="bg-red-50/60 px-1 rounded font-semibold">vermelha</span> = diferença &gt; R$ 1,00 nos campos comparáveis OU no Líquido.</p>
         <p>• Clique em qualquer linha pra expandir o detalhamento completo (proventos e descontos verba-por-verba do PDF).</p>
       </div>
     </div>
@@ -9911,9 +9962,25 @@ function DetalhamentoVerbasFuncionario({ linha }: { linha: any }) {
         <p className="text-[11px] text-muted-foreground max-w-xl">
           *ERP só recalcula HE (proxy = salário ÷ 220 × 1,5/h; fallback R$50/h) e Descontos Operacionais (faltas/atrasos/DSR pelo motor CLT). INSS, IRRF e FGTS são lidos do PDF — o ERP não os recalcula. Use este detalhamento como ponto de partida pra auditoria contábil.
         </p>
-        <div className="text-right">
-          <p className="text-[10px] uppercase text-slate-500">Líquido Folha (oficial — PDF)</p>
-          <p className="text-base font-black text-blue-900 font-mono">{fmt(linha.liqFolha)}</p>
+        <div className="flex items-end gap-6">
+          <div className="text-right">
+            <p className="text-[10px] uppercase text-slate-500">Líquido Folha (oficial — PDF)</p>
+            <p className="text-base font-black text-blue-900 font-mono">{fmt(linha.liqFolha)}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] uppercase text-slate-500">Líquido ERP (simulado/consolidado)</p>
+            <p className="text-base font-black text-indigo-900 font-mono">
+              {linha.temLiqErp ? fmt(linha.liqErpReal) : <span className="text-slate-400">—</span>}
+            </p>
+          </div>
+          {linha.temLiqErp && (
+            <div className="text-right">
+              <p className="text-[10px] uppercase text-slate-500">Diferença</p>
+              <p className={`text-base font-black font-mono ${linha.diffLiq > 1 ? "text-red-700" : "text-emerald-700"}`}>
+                {linha.diffLiq > 0.01 ? fmt(linha.diffLiq) : "OK"}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

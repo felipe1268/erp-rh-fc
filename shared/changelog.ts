@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3310 — **RH & DP / FOLHA DE PAGAMENTO · ABA "COMPARATIVO FOLHA × ERP (VERBA POR VERBA)" · O COMPARATIVO
+ * CRUZAVA VÁRIAS VERBAS (SAL. BASE, HE, DESCONTOS) MAS NÃO COMPARAVA O VALOR MAIS IMPORTANTE: O LÍQUIDO. A TELA SÓ
+ * MOSTRAVA O "LÍQUIDO FOLHA" (DO PDF) E UM "LÍQUIDO ERP PARCIAL" QUE NÃO INCLUI INSS/IRRF/FGTS (LOGO SEMPRE MAIOR QUE
+ * O REAL — IMPRESTÁVEL PRA CONFERÊNCIA). AGORA HÁ COLUNAS "LÍQUIDO ERP" (LÍQUIDO REAL DO PAGAMENTO SIMULADO/CONSOLIDADO
+ * DO ERP, JÁ COM INSS/IRRF) E "DIF. LÍQUIDO" (|FOLHA − ERP|), E A DIVERGÊNCIA TAMBÉM DISPARA POR DIFERENÇA DE LÍQUIDO.
+ * 100% FRONT · ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (piloto FC): "o comparativo Folha × ERP compara várias verbas mas não compara o líquido".
+ * - FONTE HONESTA DO LÍQUIDO ERP: `payroll_payments.salarioLiquido` (valor PAGO arredondado, motor CLT completo) via
+ *   `trpc.payrollEngine.listarPagamentos.useQuery({companyId, mesReferencia})`. NÃO foi usado o `liqErpParcial`
+ *   (Sal.Base + HE − Descontos operacionais), que exclui INSS/IRRF/FGTS e por isso superestima o líquido.
+ * - CORREÇÃO (`client/src/pages/FolhaPagamento.tsx`, componente `ComparativoFolhaErpView` + `DetalhamentoVerbasFuncionario`):
+ *   (1) nova query `pagsErp` (listarPagamentos) + entrada no `isLoading`; (2) `pagMap` useMemo (employeeId →
+ *   parseFloat(salarioLiquido)); (3) em `linhas`: novos campos `liqErpReal`/`temLiqErp`/`diffLiq` e
+ *   `temDivergencia = diffTotal > 1 || diffLiq > 1`; (4) `totais` soma `liqErpReal`/`diffLiq` só das linhas com
+ *   simulação (`comLiqErp`); (5) KPIs: grid sm:grid-cols-5→6, "Líquido ERP parcial*" virou "Líquido ERP" (real, com
+ *   contador "N/N c/ simulação") + novo card "Dif. Líquido"; (6) tabela: 2 colunas novas ("Líquido ERP" e "Dif.
+ *   Líquido") após "Líquido Folha", colSpan do detalhamento 10→12; (7) CSV ganhou as 2 colunas; (8) rodapé do
+ *   detalhamento expandido mostra Líquido Folha × Líquido ERP × Diferença; (9) legenda reescrita explicando a
+ *   diferença entre "Líquido ERP" (real) e "Líquido ERP parcial".
+ * - COMPORTAMENTO / DETECÇÃO DE SIMULAÇÃO (corrigido em review): "tem simulação no mês" = PRESENÇA da chave no
+ *   `pagMap` (líquido numérico válido via `Number.isFinite`, INCLUSIVE 0 ou negativo) — NÃO `liquido > 0`. Usar `> 0`
+ *   classificaria um líquido legítimo de R$ 0,00 como "sem simulação" e exibiria "—", MASCARANDO uma divergência real
+ *   contra um Líquido Folha != 0. Quando o funcionário não tem pagamento simulado/consolidado no mês, "Líquido ERP" e
+ *   "Dif. Líquido" exibem "—" (não inflam falsa divergência); `salarioLiquido` não numérico (NaN) é descartado do mapa
+ *   (tratado como ausente). O `liqErpParcial` foi MANTIDO (usado no expand/CSV como referência grosseira de prioridade).
+ * - VALIDAÇÃO: esbuild parse limpo em `FolhaPagamento.tsx`; endpoint `listarPagamentos` confirmado retornando `pp.*`
+ *   (inclui `employeeId` + `salarioLiquido`) como array; architect PASS após corrigir a detecção `> 0` → `pagMap.has`;
+ *   app sobe no Neon DEV.
+ *
  * Rev. 3309 — **RH & DP / FÉRIAS · ABA "CALENDÁRIO DE FÉRIAS" · A LISTA DE COLABORADORES VINHA EM ORDEM ARBITRÁRIA
  * (ORDEM DE CHEGADA DOS REGISTROS / employeeId), DIFICULTANDO ACHAR UMA PESSOA. AGORA O CALENDÁRIO É ORDENADO POR
  * NOME DO COLABORADOR (A→Z), IGNORANDO ACENTOS. 100% FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**
