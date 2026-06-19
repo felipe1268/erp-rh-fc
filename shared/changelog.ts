@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3312 — **RH & DP / FOLHA DE VALE · UM FUNCIONÁRIO DESLIGADO (ELIZEU, SAÍDA EFETIVA EM 15/05/2026) CONTINUAVA
+ * APARECENDO E "RECEBENDO" VALE EM JUNHO/2026. A GERAÇÃO DO VALE (`gerarVale`) JÁ EXCLUÍA CORRETAMENTE QUEM SAIU ANTES
+ * DO MÊS, MAS O SNAPSHOT (`valeResultJson`), GERADO QUANDO ELE AINDA ERA ATIVO, FICAVA CONGELADO — E A SANITIZAÇÃO DE
+ * LEITURA (REV. 3292) SÓ REMOVIA QUEM HOJE É PJ/SÓCIO/EXCLUÍDO, NÃO QUEM FOI DESLIGADO. AGORA A SANITIZAÇÃO TAMBÉM
+ * REMOVE DA LEITURA (E BLOQUEIA NA APROVAÇÃO/REVERSÃO) DESLIGADOS CUJA SAÍDA EFETIVA É ANTERIOR AO 1º DIA DO MÊS.
+ * 100% BACKEND · READ-ONLY (NÃO REGRAVA SNAPSHOT) · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - CAUSA-RAIZ: Elizeu (id 420160, company 60002) está `status="Desligado"`, CLT mensalista, `dataDemissao=2026-03-31`,
+ *   `dataDesligamentoEfetiva=2026-05-15`, aviso prévio trabalhado 02–31/03 (concluído). O filtro de `gerarVale` p/
+ *   desligados-em-aviso exige `dataDesligamentoEfetiva >= 1º do mês` E `tn.dataFim >= 1º do mês` → em JUNHO ele falha
+ *   ambos (15/05 < 01/06; aviso terminou 31/03), logo NÃO seria incluído numa geração nova. Porém os snapshots de
+ *   maio E junho já o continham (`status:"calculado"`), gerados quando ele ainda era Ativo. A sanitização de leitura
+ *   `getIdsInelegiveisVale` (Rev. 3292) só marcava `deletedAt`/`tipoContrato in (PJ,Socio)` → desligado passava batido.
+ * - CORREÇÃO (`server/routers/payrollEngine.ts`): `getIdsInelegiveisVale(db, ids, mesReferencia?)` ganhou parâmetro de
+ *   mês; quando informado, além de PJ/Sócio/excluído também marca INELEGÍVEL quem está em `EMPLOYEE_STATUS_DESLIGADOS`
+ *   (`Desligado`/`Lista_Negra`/`Inativo`) e cuja saída efetiva (`dataDesligamentoEfetiva ?? dataDemissao`, fatiada p/
+ *   `YYYY-MM-DD`, comparação lexicográfica) é `< ${mes}-01`. Desligado em aviso que AINDA cobre o mês tem saída no/após
+ *   o 1º dia → permanece (recebe vale proporcional). `sanitizarValeSnapshotNaoClt` passou a receber e repassar
+ *   `mesReferencia`; `getPeriod` repassa `input.mesReferencia`. Guardas duros de `decidirVale` e `reverterVale` também
+ *   passam o mês (não promovem/aprovam vale de quem saiu antes) e tiveram a mensagem de bloqueio generalizada
+ *   ("inelegível ao vale (PJ/Sócio/excluído ou desligado antes do mês)").
+ * - VALIDAÇÃO: esbuild parse limpo (`payrollEngine.ts`); confirmado no Neon DEV que Elizeu estava nos snapshots de
+ *   2026-05 e 2026-06; após o fix a leitura de `getPeriod` o remove e recalcula `totalVale`/`totalFuncionarios`. NÃO
+ *   regrava o snapshot (read-only, como a Rev. 3292): a linha em `payroll_advances` persiste mas deixa de ser exibida,
+ *   contada e aprovável. Sem ALTER/DROP/DELETE.
+ *
  * Rev. 3311 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA (IMPORTAR EXTRATO) · A IMPORTAÇÃO DE EXTRATO EM PDF DO BANCO DO
  * BRASIL DEPENDIA DO FALLBACK DE IA (REV. 3308), QUE ESTOURAVA A COTA DO GEMINI FREE-TIER (429 RESOURCE_EXHAUSTED) E
  * DEVOLVIA UM ERRO CONFUSO. ALÉM DISSO, UM EXTRATO BB SEM LANÇAMENTOS ("*** A CONTA NAO FOI MOVIMENTADA ***") CAÍA NA

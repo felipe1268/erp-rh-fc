@@ -4,6 +4,7 @@ import { getDb, getCompaniesForUser } from "../db";
 import { employees, timeRecords, systemCriteria, obras, heSolicitacoes, vrBenefits, advances, vacationPeriods, companyBankAccounts, dissidioFuncionarios } from "../../drizzle/schema";
 import { eq, and, sql, between, inArray, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
+import { EMPLOYEE_STATUS_DESLIGADOS } from "../../shared/modules";
 import { TRPCError } from "@trpc/server";
 import { parseBRL } from "../utils/parseBRL";
 import { gerarCnab240 } from "./cnab240";
@@ -468,19 +469,34 @@ async function sincronizarValeJson(db: any, companyId: number, mesReferencia: st
  * um vale gerado quando a pessoa era CLT NÃO pode sobreviver depois que ela vira PJ
  * (ex.: recontratação como PJ). READ-ONLY.
  */
-async function getIdsInelegiveisVale(db: any, ids: number[]): Promise<Set<number>> {
+async function getIdsInelegiveisVale(db: any, ids: number[], mesReferencia?: string): Promise<Set<number>> {
   const inelegivel = new Set<number>();
   const limpos = [...new Set(ids.map((n) => Number(n)).filter((n) => Number.isFinite(n)))];
   if (limpos.length === 0) return inelegivel;
+  // Rev. 3312 — quando o mês é conhecido, também barra DESLIGADOS cuja saída
+  // efetiva (dataDesligamentoEfetiva, ou dataDemissao na falta) é ANTERIOR ao 1º
+  // dia do mês: já não trabalhavam no período, mas ficaram congelados no snapshot
+  // (gerado quando eram Ativo). Desligado em aviso prévio que ainda cobre o mês
+  // tem saída >= 1º dia (ou datas no mês) → permanece (recebe vale proporcional).
+  let primeiroDiaMes: string | null = null;
+  if (mesReferencia && /^\d{4}-\d{2}$/.test(mesReferencia)) primeiroDiaMes = `${mesReferencia}-01`;
   try {
     const rows = ((await db.execute(sql`
-      SELECT id, COALESCE("tipoContrato", 'CLT') as "tipoContrato", "deletedAt"
+      SELECT id, COALESCE("tipoContrato", 'CLT') as "tipoContrato", "deletedAt",
+             status, "dataDesligamentoEfetiva", "dataDemissao"
       FROM employees
       WHERE id IN (${sql.join(limpos.map((id) => sql`${id}`), sql`,`)})
     `)) as any).rows || [];
     for (const r of rows as any[]) {
       const tc = String(r.tipoContrato || "CLT");
-      if (r.deletedAt != null || tc === "PJ" || tc === "Socio") inelegivel.add(Number(r.id));
+      if (r.deletedAt != null || tc === "PJ" || tc === "Socio") { inelegivel.add(Number(r.id)); continue; }
+      if (primeiroDiaMes && EMPLOYEE_STATUS_DESLIGADOS.includes(String(r.status || ""))) {
+        const saida = r.dataDesligamentoEfetiva || r.dataDemissao;
+        if (saida) {
+          const saidaISO = String(saida).slice(0, 10); // YYYY-MM-DD (comparação lexicográfica segura)
+          if (saidaISO < primeiroDiaMes) inelegivel.add(Number(r.id));
+        }
+      }
     }
   } catch (e) {
     console.error("[getIdsInelegiveisVale] erro:", e);
@@ -493,13 +509,13 @@ async function getIdsInelegiveisVale(db: any, ids: number[]): Promise<Set<number
  * remove funcionários que hoje são PJ/Sócio/excluídos e recalcula os agregados.
  * Não persiste (read-only); só corrige o que é exibido. Mantém o tipo string.
  */
-async function sanitizarValeSnapshotNaoClt(db: any, jsonStr: string | null): Promise<string | null> {
+async function sanitizarValeSnapshotNaoClt(db: any, jsonStr: string | null, mesReferencia?: string): Promise<string | null> {
   if (!jsonStr) return jsonStr;
   try {
     const json = typeof jsonStr === "string" ? JSON.parse(jsonStr) : jsonStr;
     if (!json || !Array.isArray(json.funcionarios) || json.funcionarios.length === 0) return jsonStr;
     const ids = json.funcionarios.map((f: any) => Number(f.employeeId));
-    const inelegivel = await getIdsInelegiveisVale(db, ids);
+    const inelegivel = await getIdsInelegiveisVale(db, ids, mesReferencia);
     if (inelegivel.size === 0) return jsonStr;
     json.funcionarios = json.funcionarios.filter((f: any) => !inelegivel.has(Number(f.employeeId)));
     let totalVale = 0;
@@ -551,7 +567,7 @@ export const payrollEngineRouter = router({
       // Rev. 3292 — sanitiza o snapshot de vale na leitura: ninguém que hoje é
       // PJ/Sócio/excluído pode aparecer (cura snapshots gerados quando era CLT).
       if (period.valeResultJson) {
-        period.valeResultJson = await sanitizarValeSnapshotNaoClt(db, period.valeResultJson);
+        period.valeResultJson = await sanitizarValeSnapshotNaoClt(db, period.valeResultJson, input.mesReferencia);
       }
       return period;
     }),
@@ -2791,13 +2807,13 @@ export const payrollEngineRouter = router({
 
       // Rev. 3292 — guarda dura: quem hoje é PJ/Sócio/excluído NUNCA recebe vale,
       // mesmo que a decisão peça "pagar" (snapshot velho de quando era CLT).
-      const inelegivelVale = await getIdsInelegiveisVale(db, input.decisoes.map((d) => d.employeeId));
+      const inelegivelVale = await getIdsInelegiveisVale(db, input.decisoes.map((d) => d.employeeId), input.mesReferencia);
 
       for (const decisao of input.decisoes) {
         if (decisao.pagar && inelegivelVale.has(decisao.employeeId)) {
           await db.execute(sql`
             UPDATE payroll_advances SET status = 'rejeitado', bloqueado = 1,
-              "motivoBloqueio" = COALESCE("motivoBloqueio", '') || ' [BLOQUEADO: PJ/Sócio/excluído não recebe vale]'
+              "motivoBloqueio" = COALESCE("motivoBloqueio", '') || ' [BLOQUEADO: inelegível ao vale (PJ/Sócio/excluído ou desligado antes do mês)]'
             WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND "employeeId" = ${decisao.employeeId}
           `);
           rejeitados++;
@@ -2872,14 +2888,14 @@ export const payrollEngineRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       // Rev. 3292 — guarda dura: reverter NUNCA pode promover vale a quem hoje é
       // PJ/Sócio/excluído (caminho alternativo ao decidirVale para 'calculado'+evento).
-      const inelegivelRev = await getIdsInelegiveisVale(db, [input.employeeId]);
+      const inelegivelRev = await getIdsInelegiveisVale(db, [input.employeeId], input.mesReferencia);
       if (inelegivelRev.has(input.employeeId)) {
         await db.execute(sql`
           UPDATE payroll_advances SET status = 'rejeitado', bloqueado = 1,
-            "motivoBloqueio" = COALESCE("motivoBloqueio", '') || ' [BLOQUEADO: PJ/Sócio/excluído não recebe vale]'
+            "motivoBloqueio" = COALESCE("motivoBloqueio", '') || ' [BLOQUEADO: inelegível ao vale (PJ/Sócio/excluído ou desligado antes do mês)]'
           WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND "employeeId" = ${input.employeeId}
         `);
-        return { message: "Funcionário é PJ/Sócio/excluído — vale não pode ser revertido (não recebe adiantamento)." };
+        return { message: "Funcionário inelegível ao vale (PJ/Sócio/excluído ou desligado antes do mês) — não pode ser revertido." };
       }
       const revertidoPorNome = ctx.user.name || "Usuário";
       await db.execute(sql`
