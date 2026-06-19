@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,11 +20,28 @@ import {
   Repeat, Pause, Play, Edit2, Calendar, Zap, ArrowUpRight, ArrowDownRight,
   Building2, CreditCard, FileText, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, RefreshCw,
   ArrowLeftRight, Landmark, PlusCircle, Tag, Loader2, Pencil, Trash2, Eye,
-  Fuel, Wrench, Truck, Layers, Briefcase,
+  Fuel, Wrench, Truck, Layers, Briefcase, Banknote,
 } from "lucide-react";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+}
+
+// Rev. 3330 — soma `months` meses a uma data ISO "YYYY-MM-DD" (parcelas de cheque).
+// Constrói a partir das PARTES numéricas (não do parse de string) p/ evitar bug de
+// fuso/iOS; usa UTC e deixa o Date normalizar overflow de mês (ex.: 31/01 + 1 mês).
+function addMonthsISO(iso: string, months: number): string {
+  const t = String(iso || "").slice(0, 10);
+  const m = t.split("-");
+  if (m.length < 3) return t;
+  const y = parseInt(m[0], 10), mo = parseInt(m[1], 10) - 1, d = parseInt(m[2], 10);
+  if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return t;
+  // Rev. 3330 — soma de mês com CLAMP para o último dia do mês de destino, evitando
+  // o overflow do Date (31/01 + 1 mês iria pra 03/03; aqui vira 28/02 ou 29/02).
+  const alvoMes = mo + months;
+  const ultimoDia = new Date(Date.UTC(y, alvoMes + 1, 0)).getUTCDate();
+  const diaClamp = Math.min(d, ultimoDia);
+  return new Date(Date.UTC(y, alvoMes, diaClamp)).toISOString().slice(0, 10);
 }
 
 // Rev. 1626 — regra de ouro: dd/MM/aaaa
@@ -210,6 +227,15 @@ const INITIAL_FORM = {
   cartaoId: "",
   cartaoParcelas: "",
   cartaoEstabelecimento: "",
+  // Rev. 3330 — Gancho CHEQUE (só usado quando formaPagamento="cheque" e tipo="despesa").
+  // Ao lançar, cadastra automaticamente N cheques no Controle de Cheques.
+  chequeParcelas: "1",
+  chequeNumeroInicial: "",
+  chequeBanco: "",
+  chequeAgencia: "",
+  chequeConta: "",
+  chequePrimeiroVenc: "",
+  chequeStatus: "pendente",
 };
 
 export default function FinanceiroLancamentos() {
@@ -391,6 +417,27 @@ export default function FinanceiroLancamentos() {
   const createEntryMut = (trpc as any).financial.createEntry.useMutation({
     onSuccess: () => { toast({ title: "Lançamento criado!" }); setShowNew(false); resetForm(); refetch(); invalidarContas(); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+
+  // Rev. 3330 — ao lançar uma despesa por CHEQUE, cadastra automaticamente os
+  // cheques (1+ parcelas) no Controle de Cheques. Disparado no onSuccess do
+  // createEntry; o lançamento já está salvo, então erro aqui é informativo (não
+  // some com a despesa). Dedup natural ignora cheques que já existirem.
+  const criarChequesLoteMut = (trpc as any).cheques.criarManualLote.useMutation({
+    onSuccess: (r: any) => {
+      if (r?.criados > 0) {
+        toast({
+          title: `${r.criados} cheque${r.criados !== 1 ? "s" : ""} cadastrado${r.criados !== 1 ? "s" : ""} no Controle de Cheques`,
+          description: r.pulados > 0 ? `${r.pulados} já existia(m) no controle (ignorado(s)).` : undefined,
+        });
+      } else {
+        toast({ title: "Cheques já cadastrados", description: "Todos os cheques desta despesa já constavam no Controle de Cheques." });
+      }
+    },
+    onError: (e: any) => toast({
+      title: "Despesa lançada, mas falhou ao registrar os cheques",
+      description: e.message, variant: "destructive",
+    }),
   });
 
   const createRecMut = (trpc as any).financial.createRecurringEntry.useMutation({
@@ -719,6 +766,35 @@ export default function FinanceiroLancamentos() {
     updateRecMut.mutate({ id: item.id, companyId, ativo: item.ativo === 1 ? 0 : 1 });
   }
 
+  // Rev. 3330 — divisão da despesa em N cheques (parcelas). Cada parcela: valor
+  // (centavos exatos, o último absorve o resíduo), nº de cheque sequencial (se o
+  // 1º for numérico), vencimento +1 mês a cada parcela. Alimenta o preview e o
+  // payload enviado ao Controle de Cheques.
+  const chequeAtivo = form.tipo === "despesa" && form.formaPagamento === "cheque";
+  const chequePreview = useMemo(() => {
+    if (!chequeAtivo) return [] as Array<{ idx: number; valor: number; numeroCheque: string; dataVencimento: string; parcela: string }>;
+    const total = parseFloat(form.valorPrevisto) || 0;
+    const n = Math.min(120, Math.max(1, parseInt(form.chequeParcelas || "1", 10) || 1));
+    if (total <= 0) return [];
+    const centsTotal = Math.round(total * 100);
+    const base = Math.floor(centsTotal / n);
+    const resto = centsTotal - base * n;
+    const baseVenc = form.chequePrimeiroVenc || form.dataVencimento || form.dataCompetencia || "";
+    const numIni = form.chequeNumeroInicial.trim();
+    const numIniNum = /^\d+$/.test(numIni) ? parseInt(numIni, 10) : null;
+    return Array.from({ length: n }, (_, i) => {
+      const cents = base + (i === n - 1 ? resto : 0);
+      const numeroCheque = numIniNum != null ? String(numIniNum + i) : (n === 1 ? numIni : "");
+      return {
+        idx: i + 1,
+        valor: cents / 100,
+        numeroCheque,
+        dataVencimento: addMonthsISO(baseVenc, i),
+        parcela: `${i + 1}/${n}`,
+      };
+    });
+  }, [chequeAtivo, form.valorPrevisto, form.chequeParcelas, form.chequePrimeiroVenc, form.dataVencimento, form.dataCompetencia, form.chequeNumeroInicial]);
+
   function handleSave() {
     // Rev. 2693 — Transferência entre contas: fluxo enxuto (sem descrição/categoria).
     if (form.tipo === "transferencia") {
@@ -796,6 +872,24 @@ export default function FinanceiroLancamentos() {
           observacoes: form.observacoes || "",
         });
       } else {
+        // Rev. 3330 — se a despesa é por CHEQUE, captura o lote de parcelas ANTES de
+        // mutar (o onSuccess reseta o form) e dispara o cadastro no Controle de Cheques
+        // assim que a despesa for salva.
+        const chequePayload = chequeAtivo && chequePreview.length > 0 ? {
+          companyId,
+          fornecedorNome: form.fornecedorNome || undefined,
+          bancoNome: form.chequeBanco || undefined,
+          agencia: form.chequeAgencia || undefined,
+          contaCorrenteRaw: form.chequeConta || undefined,
+          status: (form.chequeStatus || "pendente") as any,
+          observacao: form.descricao ? `Despesa: ${form.descricao}` : undefined,
+          parcelas: chequePreview.map(p => ({
+            valor: p.valor,
+            numeroCheque: p.numeroCheque || undefined,
+            parcela: p.parcela,
+            dataVencimento: p.dataVencimento || undefined,
+          })),
+        } : null;
         createEntryMut.mutate({
           companyId,
           tipo: form.tipo,
@@ -814,7 +908,9 @@ export default function FinanceiroLancamentos() {
           fornecedorNome: form.fornecedorNome || undefined,
           observacoes: form.observacoes || undefined,
           status: form.tipo === "receita" ? "a_receber" : form.status,
-        });
+        }, chequePayload ? {
+          onSuccess: () => { criarChequesLoteMut.mutate(chequePayload); },
+        } : undefined);
       }
     }
   }
@@ -1841,6 +1937,113 @@ export default function FinanceiroLancamentos() {
                     {(Array.isArray(cartoesList) ? cartoesList : []).length === 0 && (
                       <p className="text-[10px] text-amber-600">
                         Nenhum cartão cadastrado. Cadastre em Financeiro → Cartão de Crédito.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Rev. 3330 — Gancho CHEQUE: aparece só quando a forma é "Cheque" numa
+                    DESPESA. Pergunta em quantas vezes (parcelas) + dados do cheque e
+                    cadastra automaticamente os cheques no Controle de Cheques ao lançar. */}
+                {chequeAtivo && (
+                  <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/40 p-3 space-y-3">
+                    <p className="text-[11px] font-semibold text-blue-700 flex items-center gap-1">
+                      <Banknote className="w-3.5 h-3.5" /> Cheque — cadastro automático no Controle de Cheques
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      <div>
+                        <p className="text-[11px] text-gray-400 mb-1">Em quantas vezes</p>
+                        <Input
+                          type="number" min={1} max={120}
+                          value={form.chequeParcelas}
+                          onChange={e => setForm(f => ({ ...f, chequeParcelas: e.target.value }))}
+                          placeholder="1"
+                          className="h-9"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-gray-400 mb-1">Nº do 1º cheque</p>
+                        <Input
+                          value={form.chequeNumeroInicial}
+                          onChange={e => setForm(f => ({ ...f, chequeNumeroInicial: e.target.value }))}
+                          placeholder="Ex: 000429"
+                          className="h-9"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-gray-400 mb-1">1º vencimento</p>
+                        <Input
+                          type="date"
+                          value={form.chequePrimeiroVenc}
+                          onChange={e => setForm(f => ({ ...f, chequePrimeiroVenc: e.target.value }))}
+                          className="h-9"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-gray-400 mb-1">Banco</p>
+                        <Input
+                          value={form.chequeBanco}
+                          onChange={e => setForm(f => ({ ...f, chequeBanco: e.target.value }))}
+                          placeholder="Ex: Caixa"
+                          className="h-9"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-gray-400 mb-1">Agência</p>
+                        <Input
+                          value={form.chequeAgencia}
+                          onChange={e => setForm(f => ({ ...f, chequeAgencia: e.target.value }))}
+                          placeholder="Ex: 1234"
+                          className="h-9"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-gray-400 mb-1">Conta corrente</p>
+                        <Input
+                          value={form.chequeConta}
+                          onChange={e => setForm(f => ({ ...f, chequeConta: e.target.value }))}
+                          placeholder="Ex: 00012345-6"
+                          className="h-9"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-gray-400 mb-1">Situação inicial dos cheques</p>
+                      <Select
+                        value={form.chequeStatus}
+                        onValueChange={v => setForm(f => ({ ...f, chequeStatus: v }))}
+                      >
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pendente">Pendente</SelectItem>
+                          <SelectItem value="compensado">Compensado</SelectItem>
+                          <SelectItem value="sustado">Sustado</SelectItem>
+                          <SelectItem value="devolvido">Devolvido</SelectItem>
+                          <SelectItem value="cancelado">Cancelado</SelectItem>
+                          <SelectItem value="indefinido">Indefinido</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {chequePreview.length > 0 ? (
+                      <div className="rounded-md border border-blue-100 bg-white overflow-hidden">
+                        <p className="text-[11px] font-semibold text-blue-700 px-3 py-1.5 border-b border-blue-100 bg-blue-50/60">
+                          {chequePreview.length} cheque{chequePreview.length !== 1 ? "s" : ""} a cadastrar — total {formatBRL(chequePreview.reduce((s, p) => s + p.valor, 0))}
+                        </p>
+                        <div className="max-h-40 overflow-y-auto divide-y divide-gray-100">
+                          {chequePreview.map(p => (
+                            <div key={p.idx} className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs">
+                              <span className="text-gray-500 shrink-0 w-12">{p.parcela}</span>
+                              <span className="text-gray-700 flex-1 min-w-0 truncate">
+                                {p.numeroCheque ? `Cheque ${p.numeroCheque}` : "Sem nº"} · venc. {fmtDateBR(p.dataVencimento)}
+                              </span>
+                              <span className="font-semibold text-gray-800 shrink-0">{formatBRL(p.valor)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-amber-600">
+                        Informe o valor da despesa acima para gerar os cheques.
                       </p>
                     )}
                   </div>

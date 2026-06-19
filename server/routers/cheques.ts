@@ -1134,6 +1134,96 @@ export const chequesRouter = router({
     return { ok: true, id: res.rows[0]?.id, mes: row.mes, ano: row.ano };
   }),
 
+  // Lançamento em LOTE (parcelado): cadastra N cheques de uma despesa de uma vez.
+  // Reusa toda a higienização/dedup/ownership de `criarManual`; o cliente (tela
+  // "Novo Lançamento", forma=Cheque) calcula a divisão em parcelas e manda o array
+  // pronto. Aqui validamos tenant + ownership e gravamos só o que é NOVO (dedup
+  // natural por nº+valor+mês+ano), todos sob o MESMO lote_id. ZERO ALTER/DROP/DELETE.
+  criarManualLote: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    fornecedorNome: z.string().max(255).nullable().optional(),
+    fornecedorId: z.number().nullable().optional(),
+    bancoNome: z.string().max(120).nullable().optional(),
+    bancoCodigo: z.string().max(20).nullable().optional(),
+    agencia: z.string().max(20).nullable().optional(),
+    contaCorrenteRaw: z.string().max(60).nullable().optional(),
+    contaBancariaId: z.number().nullable().optional(),
+    nf: z.string().max(60).nullable().optional(),
+    observacao: z.string().max(500).nullable().optional(),
+    status: z.enum(STATUS_VALIDOS).optional(),
+    parcelas: z.array(z.object({
+      valor: z.number().positive(),
+      numeroCheque: z.string().max(30).nullable().optional(),
+      parcela: z.string().max(20).nullable().optional(),
+      dataVencimento: z.string().nullable().optional(),
+      dataCompensacao: z.string().nullable().optional(),
+    })).min(1).max(120),
+  })).mutation(async ({ input, ctx }) => {
+    await assertCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    // Ownership do fornecedor/conta EXPLÍCITOS (anti-IDOR) — validado UMA vez (são
+    // compartilhados por todas as parcelas); senão tenta casar por nome/dígitos.
+    const fornecedoresDaEmpresa = await carregarFornecedores(db, input.companyId);
+    const contasDaEmpresa = await carregarContas(db, input.companyId);
+    let fornecedorId: number | null = null;
+    if (input.fornecedorId != null) {
+      if (!fornecedoresDaEmpresa.some((f) => f.id === input.fornecedorId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Fornecedor não pertence a esta empresa." });
+      }
+      fornecedorId = input.fornecedorId;
+    } else if (input.fornecedorNome) {
+      fornecedorId = matchFornecedor(input.fornecedorNome, fornecedoresDaEmpresa);
+    }
+    let contaBancariaId: number | null = null;
+    if (input.contaBancariaId != null) {
+      if (!contasDaEmpresa.some((c) => c.id === input.contaBancariaId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Conta bancária não pertence a esta empresa." });
+      }
+      contaBancariaId = input.contaBancariaId;
+    } else if (input.contaCorrenteRaw) {
+      contaBancariaId = matchConta(input.contaCorrenteRaw, contasDaEmpresa);
+    }
+    const existentes = await carregarExistentes(db, input.companyId);
+    const loteId = randomUUID();
+    const criados: number[] = [];
+    let pulados = 0;
+    let primeiroMes: number | null = null;
+    let primeiroAno: number | null = null;
+    for (const p of input.parcelas) {
+      const row = sanitizeChequeRow({
+        parcela: p.parcela, fornecedorNome: input.fornecedorNome,
+        bancoCodigo: input.bancoCodigo, bancoNome: input.bancoNome,
+        agencia: input.agencia, contaCorrenteRaw: input.contaCorrenteRaw,
+        numeroCheque: p.numeroCheque, nf: input.nf, valor: p.valor,
+        dataVencimento: p.dataVencimento, dataCompensacao: p.dataCompensacao,
+        status: input.status, observacao: input.observacao, aba: "Manual",
+      });
+      if (row.valor == null || row.valor <= 0) { pulados++; continue; }
+      const chave = chaveDedup(row);
+      if (existentes.has(chave)) { pulados++; continue; }  // já existe (banco) ou repetido no próprio lote
+      const res = await dbExecute(db,
+        `INSERT INTO financial_cheques
+           (company_id, conta_bancaria_id, conta_corrente_raw, banco_codigo, banco_nome,
+            agencia, numero_cheque, fornecedor_nome, fornecedor_id, parcela, nf, valor,
+            data_vencimento, data_compensacao, status, observacao, mes_ref, ano_ref,
+            origem_arquivo, lote_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+         RETURNING id`,
+        [input.companyId, contaBancariaId, row.contaCorrenteRaw, row.bancoCodigo, row.bancoNome,
+         row.agencia, row.numeroCheque, row.fornecedorNome, fornecedorId, row.parcela, row.nf, row.valor,
+         row.dataVencimento, row.dataCompensacao, row.status, row.observacao, row.mes, row.ano,
+         "manual", loteId]);
+      const id = res.rows[0]?.id;
+      if (id) {
+        criados.push(id);
+        existentes.add(chave);
+        if (primeiroMes == null) { primeiroMes = row.mes; primeiroAno = row.ano; }
+      }
+    }
+    return { ok: true, criados: criados.length, pulados, mes: primeiroMes, ano: primeiroAno };
+  }),
+
   // Edição manual (status, fornecedor, conta, obra, observação).
   atualizar: protectedProcedure.input(z.object({
     id: z.number(),

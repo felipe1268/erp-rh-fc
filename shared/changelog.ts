@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3330 — **FINANCEIRO / NOVO LANÇAMENTO (DESPESA) · AO ESCOLHER A FORMA DE PAGAMENTO "CHEQUE", A TELA PASSA A
+ * PERGUNTAR "EM QUANTAS VEZES" (PARCELAS) + OS DADOS DO CHEQUE (Nº DO 1º, BANCO, AGÊNCIA, CONTA, 1º VENCIMENTO,
+ * SITUAÇÃO) E, AO LANÇAR A DESPESA, CADASTRA AUTOMATICAMENTE O(S) CHEQUE(S) NO CONTROLE DE CHEQUES. 100% FINANCEIRO
+ * (1 BACKEND + 1 FRONT) · ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário, print da tela "Novo Lançamento" com Forma=Cheque): "No lançamento, quando eu lançar cheque precisa
+ *   perguntar em quantas vezes e todas informações pertinentes para que o cheque seja cadastrado automaticamente no nosso
+ *   banco de dados de controle de cheque... faça isso funcionar". Antes, escolher "Cheque" como forma de pagamento não tinha
+ *   nenhum efeito no Controle de Cheques — o usuário tinha que ir lá e lançar o cheque à mão (Rev. 3329).
+ * - BACKEND (`server/routers/cheques.ts`, nova mutation `criarManualLote`): cadastra N cheques de uma despesa de uma vez.
+ *   Reaproveita TODA a higienização/dedup/ownership do `criarManual` (Rev. 3329): tenant guard `assertCompanyAccess`,
+ *   validação de ownership do `fornecedorId`/`contaBancariaId` EXPLÍCITOS (anti-IDOR) feita UMA vez (são compartilhados por
+ *   todas as parcelas), `sanitizeChequeRow` por parcela (datas reais, status na whitelist, mês/ano derivados da data),
+ *   dedup natural via `chaveDedup` + `carregarExistentes` — grava só o que é NOVO (cheques já existentes são pulados, não
+ *   gera erro). Todos os cheques do lote sob o MESMO `lote_id` (`randomUUID`), `origem_arquivo="manual"`. Retorna
+ *   `{ok, criados, pulados, mes, ano}`. Aceita array `parcelas[]` (min 1, max 120) com valor/numeroCheque/parcela/datas.
+ * - FRONT (`client/src/pages/financeiro/FinanceiroLancamentos.tsx`): quando `tipo="despesa"` E `formaPagamento="cheque"`,
+ *   aparece um painel "Cheque — cadastro automático no Controle de Cheques" (ícone `Banknote`, azul) abaixo do bloco de
+ *   pagamento, com: "Em quantas vezes" (parcelas), "Nº do 1º cheque" (numérico → sequência incrementa nos demais), "1º
+ *   vencimento" (cada parcela +1 mês), Banco/Agência/Conta e "Situação inicial" (Select de status). Um memo `chequePreview`
+ *   divide o valor da despesa em parcelas (centavos exatos, o ÚLTIMO cheque absorve o resíduo do arredondamento) e mostra
+ *   um preview rolável (parcela, nº, vencimento, valor BRL + total). Ao lançar, captura o lote ANTES de mutar (o onSuccess
+ *   reseta o form) e dispara `cheques.criarManualLote` no `onSuccess` do `createEntry` — a despesa já está salva, então erro
+ *   no cadastro dos cheques é informativo (não some com a despesa). Helper `addMonthsISO` soma meses a partir das PARTES
+ *   numéricas da data (UTC) p/ evitar bug de fuso/iOS. Sem rota/permissão nova.
+ * - ARQUIVOS: `server/routers/cheques.ts`, `client/src/pages/financeiro/FinanceiroLancamentos.tsx`, `shared/version.ts`
+ *   (3330), `shared/changelog.ts`, `replit.md`, `replit-history.md`.
+ *
  * Rev. 3329 — **FINANCEIRO / CONTROLE DE CHEQUES · NOVO BOTÃO "LANÇAR CHEQUE" PARA CADASTRAR UM CHEQUE MANUALMENTE
  * (ALÉM DA IMPORTAÇÃO POR PLANILHA/IA). DIÁLOGO COM FORMULÁRIO (Nº, VALOR EM BRL, FORNECEDOR, BANCO, AGÊNCIA, CONTA,
  * VENCIMENTO, COMPENSAÇÃO, STATUS, OBSERVAÇÃO); MÊS/ANO DERIVADOS DA DATA NO BACKEND; DEDUP NATURAL BLOQUEIA DUPLICATA.
