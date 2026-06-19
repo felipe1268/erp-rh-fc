@@ -285,7 +285,7 @@ async function coletarEfetivoCronograma(db: any, projetoId: number, companyId: n
     : c === "escritorio_central" ? "Indireto (escritório)"
     : "—";
 
-  type CargoAgg = { cargo: string; categoria: string; total: number; ativos: number; indisponiveis: number; clt: number; terceiro: number; feriasHorizonte: number };
+  type CargoAgg = { cargo: string; categoria: string; total: number; ativos: number; indisponiveis: number; clt: number; terceiro: number; feriasHorizonte: number; feriasAntecipaveis: number };
   const porCargoMap = new Map<string, CargoAgg>();
   // empId → dados básicos do alocado (p/ cruzar com férias na seção 4b).
   const empInfoById = new Map<number, { nome: string; cargo: string; categoria: string }>();
@@ -299,7 +299,7 @@ async function coletarEfetivoCronograma(db: any, projetoId: number, companyId: n
     const cargoNome = String(emp.funcao || emp.cargo || "Sem função").trim();
     const key = norm(cargoNome);
     if (!porCargoMap.has(key)) {
-      porCargoMap.set(key, { cargo: cargoNome, categoria: catLabel(catMap.get(key) || ""), total: 0, ativos: 0, indisponiveis: 0, clt: 0, terceiro: 0, feriasHorizonte: 0 });
+      porCargoMap.set(key, { cargo: cargoNome, categoria: catLabel(catMap.get(key) || ""), total: 0, ativos: 0, indisponiveis: 0, clt: 0, terceiro: 0, feriasHorizonte: 0, feriasAntecipaveis: 0 });
     }
     const g = porCargoMap.get(key)!;
     g.total++;
@@ -462,6 +462,24 @@ async function coletarEfetivoCronograma(db: any, projetoId: number, companyId: n
   for (const [ck, set] of feriasHorizPorCargo) {
     const g = porCargoMap.get(ck);
     if (g) g.feriasHorizonte = set.size;
+  }
+
+  // 4d. Férias ANTECIPÁVEIS por função (alternativa ao aviso prévio p/ GANHAR TEMPO):
+  // funcionários ATIVOS hoje com um período de férias FUTURO (ainda não iniciado) —
+  // pode ser antecipado p/ cobrir ~30 dias e dar tempo de buscar outra obra p/
+  // realocação ANTES de decidir pela demissão. Quem já está em gozo / já iniciou não
+  // entra (não há o que antecipar).
+  const feriasAntecipPorCargo = new Map<string, Set<number>>();
+  for (const f of feriasPeriodos) {
+    if (f.bucket === "em_gozo" || f.inicio <= hoje) continue; // já iniciado/em gozo
+    if (!ativosIds.has(f.empId)) continue;                    // só quem está ativo hoje
+    const ck = norm(f.cargo);
+    if (!feriasAntecipPorCargo.has(ck)) feriasAntecipPorCargo.set(ck, new Set());
+    feriasAntecipPorCargo.get(ck)!.add(f.empId);
+  }
+  for (const [ck, set] of feriasAntecipPorCargo) {
+    const g = porCargoMap.get(ck);
+    if (g) g.feriasAntecipaveis = set.size;
   }
 
   // 5. Blocos textuais para os prompts
@@ -2580,7 +2598,7 @@ Retorne um JSON com esta estrutura exata:
         grupoProximidade: string;
         totalEfetivo: number; totalAtivos: number; totalIndisponiveis: number;
         emAndamento: number; proximas: number;
-        porCargo: { cargo: string; categoria: string; total: number; ativos: number; indisponiveis: number; feriasHorizonte: number }[];
+        porCargo: { cargo: string; categoria: string; total: number; ativos: number; indisponiveis: number; feriasHorizonte: number; feriasAntecipaveis: number }[];
         proximasTopo: string[];
         frentesConcluindo: string[];
       };
@@ -2618,6 +2636,7 @@ Retorne um JSON com esta estrutura exata:
               cargo: g.cargo, categoria: g.categoria,
               total: g.total, ativos: g.ativos, indisponiveis: g.indisponiveis,
               feriasHorizonte: Number(g.feriasHorizonte) || 0,
+              feriasAntecipaveis: Number(g.feriasAntecipaveis) || 0,
             })),
             proximasTopo: (c.proximas || []).slice(0, 4).map((a: any) =>
               `${a.nome}${a.recursoPrincipal ? ` (recurso: ${a.recursoPrincipal})` : ""}`),
@@ -2660,7 +2679,7 @@ Retorne um JSON com esta estrutura exata:
       // 5. Monta o contexto multi-obra p/ a IA (compacto, p/ caber no free-tier).
       const obrasTxt = obrasData.map((o, i) => {
         const cargosTxt = o.porCargo.length
-          ? o.porCargo.map((g) => `      • ${g.cargo} [${g.categoria}]: ${g.total} (ativos ${g.ativos}, indisp. ${g.indisponiveis}${g.feriasHorizonte ? `, entram de FÉRIAS inadiáveis nas próx. 8 sem: ${g.feriasHorizonte} → disponível no horizonte ${Math.max(0, g.ativos - g.feriasHorizonte)}` : ""})`).join("\n")
+          ? o.porCargo.map((g) => `      • ${g.cargo} [${g.categoria}]: ${g.total} (ativos ${g.ativos}, indisp. ${g.indisponiveis}${g.feriasHorizonte ? `, entram de FÉRIAS inadiáveis nas próx. 8 sem: ${g.feriasHorizonte} → disponível no horizonte ${Math.max(0, g.ativos - g.feriasHorizonte)}` : ""}${g.feriasAntecipaveis ? `, podem ANTECIPAR férias (período futuro agendável): ${g.feriasAntecipaveis}` : ""})`).join("\n")
           : "      • (sem efetivo alocado)";
         const proxTxt = o.proximasTopo.length ? o.proximasTopo.map((a) => `      - ${a}`).join("\n") : "      - (nenhuma)";
         const concluiTxt = o.frentesConcluindo.length ? o.frentesConcluindo.map((a) => `      - ${a}`).join("\n") : "      - (nenhuma frente concluindo no horizonte)";
@@ -2682,11 +2701,14 @@ ${concluiTxt}`;
 
 ESTIMATIVA DE DATA DE SOBRA: para CADA função em que houver sobra, ESTIME EM QUE DATA a mão de obra ficará disponível para realocar. A sobra surge quando uma FRENTE/ATIVIDADE CONCLUI (a equipe daquela frente se libera). Use a lista "Frentes que CONCLUEM no horizonte" de cada obra (cada uma traz a data de término e, quando há, o recurso/função) para inferir a data. Se várias frentes da mesma função concluem em datas diferentes, use a data em que a sobra efetivamente se materializa (a frente cuja conclusão libera a quantidade indicada). Toda data DD/MM/AAAA dentro do horizonte das próximas 8 semanas.
 
-PLANO DE AÇÃO POR EQUIPE (realocar × aviso prévio): para CADA sobra de equipe, decida e recomende UMA ação clara, com a DATA IDEAL para agir:
+PLANO DE AÇÃO POR EQUIPE (realocar × antecipar férias × aviso prévio): para CADA sobra de equipe, decida e recomende UMA ação clara, com a DATA IDEAL para agir. Ordem de preferência: realocar > antecipar_ferias > aviso_previo.
 - "realocar": há OUTRA obra do MESMO grupo de proximidade (mesma cidade/estado) com FALTA da mesma função no horizonte. A "dataIdeal" é a data em que a equipe se libera na origem (quando a frente conclui). Informe a obra de destino.
-- "aviso_previo": a obra está CONCLUINDO (fim de obra / sem mais frentes que demandem aquela função) e NÃO há obra próxima que absorva a equipe. Nesse caso o ideal é PROVIDENCIAR O AVISO PRÉVIO. Como o aviso prévio legal dura ~30 dias, a "dataIdeal" para INICIAR o aviso deve ser ~30 dias ANTES da data em que a frente/obra conclui e a equipe deixa de ter trabalho (para que o aviso termine junto com o fim do serviço). Nunca proponha aviso prévio quando há realocação possível.
+- "antecipar_ferias": a obra tende ao fim (sobra de equipe) e NÃO há realocação imediata, MAS a função tem funcionário(s) com FÉRIAS FUTURAS agendáveis (indicado na obra como "podem ANTECIPAR férias"). ANTES de partir para o aviso prévio, PREFIRA antecipar as férias: cobre ~30 dias, segura a demissão e dá tempo de buscar outra obra para realocação. Só use esta ação quando a função TIVER férias antecipáveis NAQUELA obra; a "dataIdeal" é o quanto antes (a partir de HOJE).
+- "aviso_previo": a obra está CONCLUINDO (fim de obra / sem mais frentes que demandem aquela função), NÃO há obra próxima que absorva a equipe E NÃO há férias antecipáveis para ganhar tempo. Nesse caso o ideal é PROVIDENCIAR O AVISO PRÉVIO. Como o aviso prévio legal dura ~30 dias, a "dataIdeal" para INICIAR o aviso deve ser ~30 dias ANTES da data em que a frente/obra conclui e a equipe deixa de ter trabalho (para que o aviso termine junto com o fim do serviço). Nunca proponha aviso prévio quando há realocação possível ou férias a antecipar.
 - "manter": efetivo equilibrado / não há sobra real — não inclua no plano.
 NÃO invente fim de obra: só recomende "aviso_previo" quando houver evidência (frente/obra concluindo no horizonte e ausência de demanda próxima).
+
+REGRA DURA — NUNCA proponha datas RETROATIVAS: a análise é feita HOJE (${isoParaBR(new Date().toISOString())}). TODA data sugerida ("dataIdeal", "dataEstimada", "dataDisponivel") deve ser HOJE ou no FUTURO. Se o cálculo apontar uma data já passada (ex.: a frente conclui em menos de 30 dias, então o aviso prévio já deveria ter começado), use HOJE e deixe claro no "motivo" que é uma providência ATRASADA / IMEDIATA.
 
 REGRA DURA DE PROXIMIDADE: só sugira mover equipe entre obras do MESMO grupo de proximidade (mesma cidade/estado) — a empresa não remaneja gente entre cidades diferentes. Use SOMENTE os grupos com 2+ obras listados. Se não houver nenhum grupo com 2+ obras, retorne "transferencias": [].
 
@@ -2714,7 +2736,7 @@ Retorne um JSON EXATAMENTE nesta estrutura (sem markdown, sem comentários):
     { "cargo": "string", "obra": "string (nome EXATO da obra onde a sobra surge)", "dataEstimada": "DD/MM/AAAA — quando a mão de obra fica livre", "quantidade": number, "motivo": "string — qual frente concluindo libera a equipe", "sugestao": "string — para onde realocar (obra/frente) ou ação" }
   ],
   "planoEquipe": [
-    { "cargo": "string", "obra": "string (nome EXATO da obra onde a equipe sobra)", "quantidade": number, "acao": "realocar | aviso_previo", "dataIdeal": "DD/MM/AAAA — quando agir (realocar: quando a equipe se libera; aviso_previo: ~30 dias antes do fim do serviço)", "destino": "string — obra de destino se acao=realocar, vazio se aviso_previo", "motivo": "string — por que esta ação (frente/obra concluindo, com ou sem demanda próxima)" }
+    { "cargo": "string", "obra": "string (nome EXATO da obra onde a equipe sobra)", "quantidade": number, "acao": "realocar | antecipar_ferias | aviso_previo", "dataIdeal": "DD/MM/AAAA — quando agir; NUNCA retroativa (HOJE ou futuro). realocar: quando a equipe se libera; antecipar_ferias: o quanto antes; aviso_previo: ~30 dias antes do fim do serviço", "destino": "string — obra de destino se acao=realocar, vazio caso contrário", "motivo": "string — por que esta ação (frente/obra concluindo; se há férias a antecipar; com ou sem demanda próxima)" }
   ],
   "transferencias": [
     { "cargo": "string", "deObra": "string (nome EXATO de uma obra da lista)", "paraObra": "string (nome EXATO de OUTRA obra do MESMO grupo de proximidade)", "cidade": "string", "quantidade": number, "dataDisponivel": "DD/MM/AAAA — data estimada em que a equipe se libera na origem (vazio se imediato)", "motivo": "string — por que sobra na origem e falta no destino", "impacto": "string — efeito no prazo das duas obras" }
@@ -2723,7 +2745,7 @@ Retorne um JSON EXATAMENTE nesta estrutura (sem markdown, sem comentários):
   "recomendacoes": [ "string — ações práticas e priorizadas" ]
 }
 
-Regras: em "histograma" inclua TODAS as funções que aparecem no efetivo das obras; "delta" = recomendadoTotal - atualTotal (negativo = sobra/reduzir). Em "previsaoDisponibilidade" inclua UM item por função+obra em que há sobra (delta negativo / frente concluindo), com a DATA ESTIMADA em que a equipe se libera — derive a data das "Frentes que CONCLUEM no horizonte"; se não houver frente concluindo que justifique a sobra, NÃO invente data (omita o item). Considere que parte do efetivo ENTRA DE FÉRIAS INADIÁVEIS nas próximas 8 semanas (quando indicado na função como "entram de FÉRIAS ... → disponível no horizonte N"): a disponibilidade REAL no horizonte é o "disponível no horizonte", menor que o efetivo atual — leve isso em conta ao apontar falta de equipe e ao priorizar transferências. Em "transferencias", "deObra" e "paraObra" devem ser nomes EXATOS de obras do MESMO grupo de proximidade; jamais misture cidades; "dataDisponivel" = quando a equipe da origem se libera (use as frentes concluindo). Em "planoEquipe" inclua UM item por equipe que SOBRA, com a ação clara ("realocar" quando há obra próxima com falta da mesma função; "aviso_previo" quando a obra conclui e NÃO há obra próxima que absorva — neste caso "dataIdeal" ~30 dias antes do fim do serviço) e a "dataIdeal" para agir; "obra" e "destino" devem ser nomes EXATOS de obras da lista; não inclua ação "manter". Seja específico e quantitativo.`;
+Regras: em "histograma" inclua TODAS as funções que aparecem no efetivo das obras; "delta" = recomendadoTotal - atualTotal (negativo = sobra/reduzir). Em "previsaoDisponibilidade" inclua UM item por função+obra em que há sobra (delta negativo / frente concluindo), com a DATA ESTIMADA em que a equipe se libera — derive a data das "Frentes que CONCLUEM no horizonte"; se não houver frente concluindo que justifique a sobra, NÃO invente data (omita o item). Considere que parte do efetivo ENTRA DE FÉRIAS INADIÁVEIS nas próximas 8 semanas (quando indicado na função como "entram de FÉRIAS ... → disponível no horizonte N"): a disponibilidade REAL no horizonte é o "disponível no horizonte", menor que o efetivo atual — leve isso em conta ao apontar falta de equipe e ao priorizar transferências. Em "transferencias", "deObra" e "paraObra" devem ser nomes EXATOS de obras do MESMO grupo de proximidade; jamais misture cidades; "dataDisponivel" = quando a equipe da origem se libera (use as frentes concluindo). Em "planoEquipe" inclua UM item por equipe que SOBRA, com a ação clara (ordem de preferência realocar > antecipar_ferias > aviso_previo): "realocar" quando há obra próxima com falta da mesma função; "antecipar_ferias" quando NÃO há realocação mas a função TEM funcionário(s) com férias futuras agendáveis (indicado como "podem ANTECIPAR férias") — antecipa as férias p/ ganhar ~30 dias e buscar realocação; "aviso_previo" só quando a obra conclui, NÃO há obra próxima que absorva E NÃO há férias a antecipar (neste caso "dataIdeal" ~30 dias antes do fim do serviço). Toda "dataIdeal" deve ser HOJE ou no FUTURO — JAMAIS retroativa; se já estiver atrasada, use HOJE. "obra" e "destino" devem ser nomes EXATOS de obras da lista; não inclua ação "manter". Seja específico e quantitativo.`;
 
       let parsed: any = null;
       let erroIa: string | null = null;
@@ -2783,6 +2805,27 @@ Regras: em "histograma" inclua TODAS as funções que aparecem no efetivo das ob
       // 7. Transferências: FILTRO DURO de proximidade no servidor (mesma cidade/estado).
       const obraInfo = new Map<string, { cidade: string; estado: string }>();
       for (const o of obrasData) obraInfo.set(normTxt(o.obra), { cidade: o.cidade, estado: o.estado });
+
+      // No-retroativo: a análise é feita HOJE — NENHUMA data sugerida pode cair no
+      // passado. Se a IA devolver data já vencida, clampa p/ HOJE e marca "atrasado"
+      // (= providência imediata). Vale p/ dataIdeal / dataEstimada / dataDisponivel.
+      const hoje0 = new Date(); hoje0.setHours(0, 0, 0, 0);
+      const hojeBR = isoParaBR(new Date().toISOString());
+      const naoRetroativoBR = (s: any): { data: string | null; atrasado: boolean } => {
+        const raw = String(s ?? "").trim();
+        if (!raw) return { data: null, atrasado: false };
+        const m = /(\d{2})\/(\d{2})\/(\d{4})/.exec(raw);
+        if (!m) return { data: raw.slice(0, 40), atrasado: false };
+        const d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1])); d.setHours(0, 0, 0, 0);
+        if (isNaN(d.getTime())) return { data: raw.slice(0, 40), atrasado: false };
+        return d.getTime() < hoje0.getTime() ? { data: hojeBR, atrasado: true } : { data: raw.slice(0, 40), atrasado: false };
+      };
+      // Whitelist determinística p/ a ação "antecipar_ferias": só obra|função que
+      // REALMENTE tem funcionário(s) com férias futuras agendáveis (do efetivo real).
+      const antecipFeriasSet = new Set<string>();
+      for (const o of obrasData) for (const g of o.porCargo) {
+        if ((g.feriasAntecipaveis || 0) > 0) antecipFeriasSet.add(`${normTxt(o.obra)}|${normTxt(g.cargo)}`);
+      }
       const transferencias: any[] = [];
       if (parsed && Array.isArray(parsed.transferencias)) {
         for (const t of parsed.transferencias) {
@@ -2799,7 +2842,7 @@ Regras: em "histograma" inclua TODAS as funções que aparecem no efetivo das ob
             paraObra: String(t?.paraObra ?? ""),
             cidade: `${de.cidade || "—"}/${de.estado || "—"}`,
             quantidade: qtd,
-            dataDisponivel: String(t?.dataDisponivel ?? "").trim().slice(0, 40) || null,
+            dataDisponivel: naoRetroativoBR(t?.dataDisponivel).data,
             motivo: String(t?.motivo ?? "").slice(0, 600),
             impacto: String(t?.impacto ?? "").slice(0, 600),
           });
@@ -2814,12 +2857,13 @@ Regras: em "histograma" inclua TODAS as funções que aparecem no efetivo das ob
           if (!obraInfo.has(normTxt(d?.obra))) continue;            // obra inexistente → descarta
           const qtd = Math.min(999, Math.max(0, Math.round(Number(d?.quantidade) || 0)));
           const cargo = String(d?.cargo ?? "").trim().slice(0, 120);
-          const dataEstimada = String(d?.dataEstimada ?? "").trim().slice(0, 40);
-          if (!cargo || !dataEstimada) continue;                   // sem função ou sem data → descarta
+          const dn = naoRetroativoBR(d?.dataEstimada);
+          if (!cargo || !dn.data) continue;                        // sem função ou sem data → descarta
           previsaoDisponibilidade.push({
             cargo,
             obra: String(d?.obra ?? "").trim().slice(0, 300),
-            dataEstimada,
+            dataEstimada: dn.data,
+            atrasado: dn.atrasado,
             quantidade: qtd > 0 ? qtd : null,
             motivo: String(d?.motivo ?? "").trim().slice(0, 600),
             sugestao: String(d?.sugestao ?? "").trim().slice(0, 600),
@@ -2834,10 +2878,13 @@ Regras: em "histograma" inclua TODAS as funções que aparecem no efetivo das ob
         for (const p of parsed.planoEquipe) {
           if (!obraInfo.has(normTxt(p?.obra))) continue;           // obra inexistente → descarta
           const cargo = String(p?.cargo ?? "").trim().slice(0, 120);
-          const dataIdeal = String(p?.dataIdeal ?? "").trim().slice(0, 40);
+          const dn = naoRetroativoBR(p?.dataIdeal);
           let acao = String(p?.acao ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
-          if (acao !== "realocar" && acao !== "aviso_previo") continue; // ação inválida → descarta
+          if (acao !== "realocar" && acao !== "aviso_previo" && acao !== "antecipar_ferias") continue; // ação inválida → descarta
           if (!cargo) continue;
+          // GATE determinístico: só aceita "antecipar_ferias" se a função TEM férias
+          // antecipáveis NAQUELA obra (whitelist do efetivo real). Senão → aviso prévio.
+          if (acao === "antecipar_ferias" && !antecipFeriasSet.has(`${normTxt(p?.obra)}|${normTxt(cargo)}`)) acao = "aviso_previo";
           const qtd = Math.min(999, Math.max(0, Math.round(Number(p?.quantidade) || 0)));
           // destino só vale se for outra obra existente E ação=realocar
           const destinoRaw = String(p?.destino ?? "").trim();
@@ -2849,7 +2896,8 @@ Regras: em "histograma" inclua TODAS as funções que aparecem no efetivo das ob
             obra: String(p?.obra ?? "").trim().slice(0, 300),
             quantidade: qtd > 0 ? qtd : null,
             acao,
-            dataIdeal: dataIdeal || null,
+            dataIdeal: dn.data,
+            atrasado: dn.atrasado,
             destino,
             motivo: String(p?.motivo ?? "").trim().slice(0, 600),
           });

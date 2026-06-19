@@ -38,6 +38,75 @@ function SectionTitle({ icon, children, count, accent = "indigo" }: { icon: Reac
   );
 }
 
+const MESES_PT = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+// Metadados de exibição das 3 ações do plano: realocar / antecipar férias / aviso prévio.
+function acaoMeta(acao: any): { label: string; cls: string; Icon: any } {
+  if (acao === "realocar") return { label: "Realocar", cls: "bg-emerald-100 text-emerald-700", Icon: Move };
+  if (acao === "antecipar_ferias") return { label: "Antecipar férias", cls: "bg-amber-100 text-amber-700", Icon: Plane };
+  return { label: "Aviso prévio", cls: "bg-red-100 text-red-700", Icon: FileWarning };
+}
+
+// Sugestões NUNCA são retroativas: o backend já clampa datas vencidas p/ HOJE e marca
+// `atrasado`. Aqui revalidamos no cliente (cobre também análises salvas antes do fix).
+function ehAtrasado(brDate: any, flag?: boolean): boolean {
+  if (flag) return true;
+  const m = norm(brDate).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return false;
+  const d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1])); d.setHours(0, 0, 0, 0);
+  const h = new Date(); h.setHours(0, 0, 0, 0);
+  return d.getTime() < h.getTime();
+}
+
+// Agrupa o plano de ação (realocar / aviso prévio) por mês/ano da DATA IDEAL.
+// A dataIdeal já vem com a folga de ~30 dias (aviso prévio) ou a data em que a
+// equipe se libera (realocar) — então o agrupamento responde "quando agir".
+function agruparPorMes(itens: any[]) {
+  const buckets = new Map<string, { key: string; label: string; ord: number; itens: any[] }>();
+  const semData: any[] = [];
+  for (const p of itens) {
+    const m = norm(p?.dataIdeal).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    const dia = m ? Number(m[1]) : 0;
+    const mes = m ? Number(m[2]) : 0;
+    const ano = m ? Number(m[3]) : 0;
+    if (!m || mes < 1 || mes > 12 || !ano) { semData.push(p); continue; }
+    const key = `${ano}-${String(mes).padStart(2, "0")}`;
+    if (!buckets.has(key)) buckets.set(key, { key, label: `${MESES_PT[mes - 1]}/${ano}`, ord: ano * 100 + mes, itens: [] });
+    buckets.get(key)!.itens.push({ ...p, _dia: dia });
+  }
+  const grupos = Array.from(buckets.values()).sort((a, b) => a.ord - b.ord);
+  for (const g of grupos) g.itens.sort((a, b) => (a._dia || 0) - (b._dia || 0));
+  return { grupos, semData };
+}
+
+function AgendaRow({ p }: { p: any }) {
+  const meta = acaoMeta(p?.acao);
+  const atrasado = ehAtrasado(p?.dataIdeal, p?.atrasado);
+  const obs = p?.acao === "realocar"
+    ? (norm(p.destino) ? <span className="text-emerald-700 font-medium">→ {p.destino}</span> : (norm(p.motivo) || "—"))
+    : p?.acao === "antecipar_ferias"
+      ? (norm(p.motivo) || "Antecipar férias p/ ganhar tempo e buscar realocação")
+      : (norm(p.motivo) || "Fim de obra (sem demanda próxima)");
+  return (
+    <tr className="border-t border-slate-100 hover:bg-slate-50/60 text-xs text-slate-700">
+      <td className="px-3 py-2 whitespace-nowrap font-semibold text-slate-800">
+        {norm(p.dataIdeal) || "—"}
+        {atrasado && <span className="ml-1 text-[9px] font-bold text-rose-700 bg-rose-100 rounded px-1 py-0.5 align-middle">atrasado</span>}
+      </td>
+      <td className="px-3 py-2 whitespace-nowrap">
+        <span className={`text-[10px] font-bold rounded-full px-2 py-0.5 inline-flex items-center gap-1 ${meta.cls}`}>
+          <meta.Icon className="h-3 w-3" />
+          {meta.label}
+        </span>
+      </td>
+      <td className="px-3 py-2 font-medium text-slate-800">{p.cargo}</td>
+      <td className="px-3 py-2 text-center tabular-nums font-semibold">{Number(p.quantidade) > 0 ? p.quantidade : "—"}</td>
+      <td className="px-3 py-2 text-amber-700">{p.obra}</td>
+      <td className="px-3 py-2 text-slate-600">{obs}</td>
+    </tr>
+  );
+}
+
 export default function EfetivoGlobalIA({ companyId }: Props) {
   const { selectedCompany } = useCompany();
   const [resultado, setResultado] = useState<any | null>(null);
@@ -108,6 +177,7 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
   const grupos = (resultado?.gruposProximidade ?? []) as any[];
   const planoEquipe = (resultado?.planoEquipe ?? []) as any[];
   const planoRealocar = planoEquipe.filter((p) => p?.acao === "realocar");
+  const planoFerias = planoEquipe.filter((p) => p?.acao === "antecipar_ferias");
   const planoAviso = planoEquipe.filter((p) => p?.acao === "aviso_previo");
 
   // Saúde do efetivo (dial gerencial): % de funções equilibradas + contagem por situação.
@@ -126,6 +196,9 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
   }, [resultado]);
   const dialColor = saude.pct >= 80 ? "#10b981" : saude.pct >= 50 ? "#f59e0b" : "#ef4444";
 
+  // Agenda por mês/ano: quando começar a realocar / dar aviso prévio por falta de frente.
+  const agenda = useMemo(() => agruparPorMes((resultado?.planoEquipe ?? []) as any[]), [resultado]);
+
   // Relatório imprimível / PDF — padrão institucional FC (faixa azul #1B2A4A).
   // TODO o texto vindo da IA é escapado (esc/escAttr) antes de entrar no HTML — evita XSS.
   const imprimirRelatorio = () => {
@@ -141,11 +214,14 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
     const dataEmissao = new Date().toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
     const dataAnalise = geradoEm ? new Date(geradoEm).toLocaleString("pt-BR") : dataEmissao;
 
-    const css = `@page{size:A4 portrait;margin:12mm 14mm 16mm 14mm}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;font-size:10px;color:#1a1a1a;line-height:1.45}.logo-bar{background:#1B2A4A;padding:14px 20px;display:flex;align-items:center;gap:16px;margin-bottom:14px;border-radius:6px;print-color-adjust:exact;-webkit-print-color-adjust:exact}.logo-bar img{height:48px;object-fit:contain}.logo-bar .title{color:#fff;flex:1}.logo-bar .title h1{font-size:15px;font-weight:bold;letter-spacing:1.4px;margin-bottom:2px}.logo-bar .title p{font-size:9.5px;opacity:.88}.logo-bar .info-right{color:#fff;text-align:right;font-size:9px;opacity:.92}.logo-bar .info-right p{margin-bottom:2px}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}.kpi{border:1px solid #d1d9e6;border-radius:8px;padding:9px 8px;text-align:center;background:#f9fafb}.kpi .v{font-size:18px;font-weight:700;color:#1B2A4A}.kpi .l{font-size:8.5px;color:#6b7280;font-weight:600;margin-top:2px}.section{margin-bottom:14px;page-break-inside:avoid}.section-title{font-size:12px;font-weight:700;color:#1B2A4A;border-bottom:2px solid #2d4a7a;padding-bottom:3px;margin-bottom:7px;display:flex;align-items:center;gap:6px}.intro{background:#f0f4f8;border-left:4px solid #1B2A4A;padding:9px 13px;border-radius:0 4px 4px 0;font-size:10px;color:#334155;margin-bottom:14px;print-color-adjust:exact;-webkit-print-color-adjust:exact}table{width:100%;border-collapse:collapse;font-size:9px;margin-bottom:4px}th{background:#e8edf4;color:#1B2A4A;font-weight:600;text-align:left;padding:4px 6px;border:1px solid #d1d9e6;print-color-adjust:exact;-webkit-print-color-adjust:exact}td{padding:4px 6px;border:1px solid #e5e7eb;vertical-align:top;word-break:break-word;overflow-wrap:anywhere}tr:nth-child(even){background:#f9fafb}.tag{display:inline-block;padding:1px 7px;border-radius:10px;font-size:8px;font-weight:700;print-color-adjust:exact;-webkit-print-color-adjust:exact}.tag-realoc{background:#dcfce7;color:#166534}.tag-aviso{background:#fef2f2;color:#991b1b}.tag-data{background:#1B2A4A;color:#fff}.muted{color:#6b7280}.empty{color:#9ca3af;font-size:9px;font-style:italic;padding:6px 0}ul.bul{margin:0;padding-left:16px}ul.bul li{margin-bottom:2px}.bar-wrap{display:flex;align-items:center;gap:6px}.bar-track{flex:1;height:8px;background:#eef2f7;border-radius:6px;overflow:hidden}.bar-fill{height:100%;border-radius:6px;print-color-adjust:exact;-webkit-print-color-adjust:exact}.footer{margin-top:18px;border-top:1px solid #e5e7eb;padding-top:7px;display:flex;justify-content:space-between;font-size:8px;color:#94a3b8}`;
+    const css = `@page{size:A4 portrait;margin:12mm 14mm 16mm 14mm}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;font-size:10px;color:#1a1a1a;line-height:1.45}.logo-bar{background:#1B2A4A;padding:14px 20px;display:flex;align-items:center;gap:16px;margin-bottom:14px;border-radius:6px;print-color-adjust:exact;-webkit-print-color-adjust:exact}.logo-bar img{height:48px;object-fit:contain}.logo-bar .title{color:#fff;flex:1}.logo-bar .title h1{font-size:15px;font-weight:bold;letter-spacing:1.4px;margin-bottom:2px}.logo-bar .title p{font-size:9.5px;opacity:.88}.logo-bar .info-right{color:#fff;text-align:right;font-size:9px;opacity:.92}.logo-bar .info-right p{margin-bottom:2px}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}.kpi{border:1px solid #d1d9e6;border-radius:8px;padding:9px 8px;text-align:center;background:#f9fafb}.kpi .v{font-size:18px;font-weight:700;color:#1B2A4A}.kpi .l{font-size:8.5px;color:#6b7280;font-weight:600;margin-top:2px}.section{margin-bottom:14px;page-break-inside:avoid}.section-title{font-size:12px;font-weight:700;color:#1B2A4A;border-bottom:2px solid #2d4a7a;padding-bottom:3px;margin-bottom:7px;display:flex;align-items:center;gap:6px}.intro{background:#f0f4f8;border-left:4px solid #1B2A4A;padding:9px 13px;border-radius:0 4px 4px 0;font-size:10px;color:#334155;margin-bottom:14px;print-color-adjust:exact;-webkit-print-color-adjust:exact}table{width:100%;border-collapse:collapse;font-size:9px;margin-bottom:4px}th{background:#e8edf4;color:#1B2A4A;font-weight:600;text-align:left;padding:4px 6px;border:1px solid #d1d9e6;print-color-adjust:exact;-webkit-print-color-adjust:exact}td{padding:4px 6px;border:1px solid #e5e7eb;vertical-align:top;word-break:break-word;overflow-wrap:anywhere}tr:nth-child(even){background:#f9fafb}.tag{display:inline-block;padding:1px 7px;border-radius:10px;font-size:8px;font-weight:700;print-color-adjust:exact;-webkit-print-color-adjust:exact}.tag-realoc{background:#dcfce7;color:#166534}.tag-ferias{background:#fef3c7;color:#92400e}.tag-aviso{background:#fef2f2;color:#991b1b}.tag-data{background:#1B2A4A;color:#fff}.tag-atraso{background:#ffe4e6;color:#9f1239}.muted{color:#6b7280}.empty{color:#9ca3af;font-size:9px;font-style:italic;padding:6px 0}ul.bul{margin:0;padding-left:16px}ul.bul li{margin-bottom:2px}.bar-wrap{display:flex;align-items:center;gap:6px}.bar-track{flex:1;height:8px;background:#eef2f7;border-radius:6px;overflow:hidden}.bar-fill{height:100%;border-radius:6px;print-color-adjust:exact;-webkit-print-color-adjust:exact}.footer{margin-top:18px;border-top:1px solid #e5e7eb;padding-top:7px;display:flex;justify-content:space-between;font-size:8px;color:#94a3b8}`;
 
     const tagAcao = (acao: string) => acao === "realocar"
       ? `<span class="tag tag-realoc">REALOCAR</span>`
-      : `<span class="tag tag-aviso">AVISO PRÉVIO</span>`;
+      : acao === "antecipar_ferias"
+        ? `<span class="tag tag-ferias">ANTECIPAR FÉRIAS</span>`
+        : `<span class="tag tag-aviso">AVISO PRÉVIO</span>`;
+    const tagAtraso = (p: any) => ehAtrasado(p?.dataIdeal, p?.atrasado) ? ` <span class="tag tag-atraso">ATRASADO</span>` : "";
 
     let html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Efetivo × IA — Todas as Obras</title><style>${css}</style></head><body>`;
     html += `<div class="logo-bar"><img src="${escAttr(logoUrl)}" alt="Logo" /><div class="title"><h1>EFETIVO × IA — PLANEJAMENTO DE MÃO DE OBRA</h1><p>${esc(nomeEmpresa.toUpperCase())}${cnpjEmpresa ? " — CNPJ: " + esc(cnpjEmpresa) : ""}</p></div><div class="info-right"><p>Análise gerada em: ${esc(dataAnalise)}</p><p>Impresso em: ${esc(dataEmissao)}</p></div></div>`;
@@ -169,20 +245,49 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
       html += `<div class="section"><div class="section-title">Leitura geral</div><p style="font-size:10px;color:#334155">${esc(resultado.resumoExecutivo)}</p></div>`;
     }
 
-    // Plano de ação por equipe (REALOCAR × AVISO PRÉVIO) — destaque do relatório
-    html += `<div class="section"><div class="section-title">Plano de ação por equipe — realocar × aviso prévio</div>`;
+    // Plano de ação por equipe (REALOCAR × ANTECIPAR FÉRIAS × AVISO PRÉVIO) — destaque do relatório
+    html += `<div class="section"><div class="section-title">Plano de ação por equipe — realocar × antecipar férias × aviso prévio</div>`;
     if (planoEquipe.length === 0) {
-      html += `<p class="empty">Nenhuma ação de realocação ou aviso prévio recomendada no horizonte.</p>`;
+      html += `<p class="empty">Nenhuma ação de realocação, antecipação de férias ou aviso prévio recomendada no horizonte.</p>`;
     } else {
-      html += `<table><thead><tr><th style="width:80px">Ação</th><th>Função</th><th>Obra (origem)</th><th style="width:46px;text-align:center">Qtd</th><th style="width:78px">Data ideal</th><th>Destino / Justificativa</th></tr></thead><tbody>`;
+      html += `<table><thead><tr><th style="width:96px">Ação</th><th>Função</th><th>Obra (origem)</th><th style="width:46px;text-align:center">Qtd</th><th style="width:78px">Data ideal</th><th>Destino / Justificativa</th></tr></thead><tbody>`;
       for (const p of planoEquipe) {
-        const dest = p.acao === "realocar" && norm(p.destino) ? `<strong>→ ${esc(p.destino)}</strong>` : `<span class="muted">Fim de obra — providenciar aviso prévio</span>`;
-        html += `<tr><td>${tagAcao(p.acao)}</td><td><strong>${esc(p.cargo)}</strong></td><td>${esc(p.obra)}</td><td style="text-align:center">${esc(Number(p.quantidade) > 0 ? p.quantidade : "—")}</td><td>${norm(p.dataIdeal) ? `<span class="tag tag-data">${esc(p.dataIdeal)}</span>` : "—"}</td><td>${dest}${norm(p.motivo) ? `<div class="muted" style="margin-top:3px">${esc(p.motivo)}</div>` : ""}</td></tr>`;
+        const dest = p.acao === "realocar" && norm(p.destino)
+          ? `<strong>→ ${esc(p.destino)}</strong>`
+          : p.acao === "antecipar_ferias"
+            ? `<span class="muted">Antecipar férias p/ ganhar tempo e buscar realocação</span>`
+            : `<span class="muted">Fim de obra — providenciar aviso prévio</span>`;
+        html += `<tr><td>${tagAcao(p.acao)}${tagAtraso(p)}</td><td><strong>${esc(p.cargo)}</strong></td><td>${esc(p.obra)}</td><td style="text-align:center">${esc(Number(p.quantidade) > 0 ? p.quantidade : "—")}</td><td>${norm(p.dataIdeal) ? `<span class="tag tag-data">${esc(p.dataIdeal)}</span>` : "—"}</td><td>${dest}${norm(p.motivo) ? `<div class="muted" style="margin-top:3px">${esc(p.motivo)}</div>` : ""}</td></tr>`;
       }
       html += `</tbody></table>`;
-      html += `<p style="font-size:8px;color:#94a3b8;margin-top:4px">Aviso prévio: a data ideal considera ~30 dias antes do fim do serviço, para que o aviso termine junto com a conclusão da frente/obra.</p>`;
+      html += `<p style="font-size:8px;color:#94a3b8;margin-top:4px">Antecipar férias: alternativa ao aviso prévio quando há período de férias agendável — ganha ~30 dias para buscar realocação. Aviso prévio: a data ideal considera ~30 dias antes do fim do serviço, para que o aviso termine junto com a conclusão da frente/obra. Nenhuma data é retroativa (sempre hoje ou futuro).</p>`;
     }
     html += `</div>`;
+
+    // Agenda por mês/ano — quando começar a realocar / antecipar férias / dar aviso prévio
+    if (planoEquipe.length > 0) {
+      const ag = agruparPorMes(planoEquipe);
+      html += `<div class="section"><div class="section-title">Agenda por mês — quando começar a realocar / antecipar férias / dar aviso prévio</div>`;
+      html += `<table><thead><tr><th style="width:78px">Data ideal</th><th style="width:96px">Ação</th><th>Função</th><th style="width:46px;text-align:center">Qtd</th><th>Obra (origem)</th><th>Destino / Observação</th></tr></thead><tbody>`;
+      const linhaAgenda = (p: any) => {
+        const obs = p.acao === "realocar"
+          ? (norm(p.destino) ? `<strong style="color:#166534">→ ${esc(p.destino)}</strong>` : (norm(p.motivo) ? esc(p.motivo) : "—"))
+          : p.acao === "antecipar_ferias"
+            ? (norm(p.motivo) ? esc(p.motivo) : `<span class="muted">Antecipar férias p/ ganhar tempo e buscar realocação</span>`)
+            : (norm(p.motivo) ? esc(p.motivo) : `<span class="muted">Fim de obra (sem demanda próxima)</span>`);
+        return `<tr><td><span class="tag tag-data">${norm(p.dataIdeal) ? esc(p.dataIdeal) : "—"}</span>${tagAtraso(p)}</td><td>${tagAcao(p.acao)}</td><td><strong>${esc(p.cargo)}</strong></td><td style="text-align:center">${esc(Number(p.quantidade) > 0 ? p.quantidade : "—")}</td><td style="color:#854d0e">${esc(p.obra)}</td><td>${obs}</td></tr>`;
+      };
+      for (const g of ag.grupos) {
+        const pessoas = g.itens.reduce((s: number, x: any) => s + (Number(x.quantidade) || 0), 0);
+        html += `<tr><td colspan="6" style="background:#1B2A4A;color:#fff;font-weight:700;font-size:9px;padding:4px 6px;print-color-adjust:exact;-webkit-print-color-adjust:exact">${esc(g.label)} — ${esc(pessoas)} pessoa(s)</td></tr>`;
+        for (const p of g.itens) html += linhaAgenda(p);
+      }
+      if (ag.semData.length > 0) {
+        html += `<tr><td colspan="6" style="background:#cbd5e1;color:#1f2937;font-weight:700;font-size:9px;padding:4px 6px;print-color-adjust:exact;-webkit-print-color-adjust:exact">Sem data definida pela IA</td></tr>`;
+        for (const p of ag.semData) html += linhaAgenda(p);
+      }
+      html += `</tbody></table></div>`;
+    }
 
     // Remanejamento sugerido
     html += `<div class="section"><div class="section-title">Remanejamento sugerido (entre obras próximas)</div>`;
@@ -388,16 +493,16 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
               </div>
             )}
 
-            {/* Plano de ação por equipe — realocar × aviso prévio */}
+            {/* Plano de ação por equipe — realocar × antecipar férias × aviso prévio */}
             {planoEquipe.length > 0 && (
               <div>
-                <SectionTitle icon={<Move className="h-4 w-4 text-indigo-600" />} count={planoEquipe.length}>Plano de ação por equipe — realocar × aviso prévio</SectionTitle>
+                <SectionTitle icon={<Move className="h-4 w-4 text-indigo-600" />} count={planoEquipe.length}>Plano de ação por equipe — realocar × antecipar férias × aviso prévio</SectionTitle>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
                   {planoRealocar.map((p, i) => (
                     <div key={`r${i}`} className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
                       <div className="flex items-center justify-between gap-2 mb-1.5">
                         <span className="text-[10px] font-bold text-white bg-emerald-600 rounded-full px-2 py-0.5 flex items-center gap-1"><Move className="h-3 w-3" /> REALOCAR</span>
-                        {norm(p.dataIdeal) && <span className="text-[10px] font-bold text-white bg-slate-700 rounded-full px-2 py-0.5 flex items-center gap-1"><CalendarClock className="h-3 w-3" /> {p.dataIdeal}</span>}
+                        {norm(p.dataIdeal) && <span className={`text-[10px] font-bold text-white rounded-full px-2 py-0.5 flex items-center gap-1 ${ehAtrasado(p.dataIdeal, p.atrasado) ? "bg-rose-600" : "bg-slate-700"}`}><CalendarClock className="h-3 w-3" /> {p.dataIdeal}{ehAtrasado(p.dataIdeal, p.atrasado) ? " · atrasado" : ""}</span>}
                       </div>
                       <p className="text-xs font-semibold text-slate-800 mb-1">{p.cargo}{Number(p.quantidade) > 0 && <span className="text-emerald-700"> · {p.quantidade} pessoa(s)</span>}</p>
                       <div className="flex items-center gap-2 text-xs text-slate-700 mb-1">
@@ -408,11 +513,22 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
                       {p.motivo && <p className="text-[11px] text-slate-600 leading-snug">{p.motivo}</p>}
                     </div>
                   ))}
+                  {planoFerias.map((p, i) => (
+                    <div key={`f${i}`} className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <span className="text-[10px] font-bold text-white bg-amber-500 rounded-full px-2 py-0.5 flex items-center gap-1"><Plane className="h-3 w-3" /> ANTECIPAR FÉRIAS</span>
+                        {norm(p.dataIdeal) && <span className={`text-[10px] font-bold text-white rounded-full px-2 py-0.5 flex items-center gap-1 ${ehAtrasado(p.dataIdeal, p.atrasado) ? "bg-rose-600" : "bg-slate-700"}`}><CalendarClock className="h-3 w-3" /> {p.dataIdeal}{ehAtrasado(p.dataIdeal, p.atrasado) ? " · atrasado" : ""}</span>}
+                      </div>
+                      <p className="text-xs font-semibold text-slate-800 mb-1">{p.cargo}{Number(p.quantidade) > 0 && <span className="text-amber-700"> · {p.quantidade} pessoa(s)</span>}</p>
+                      <p className="text-[10px] text-slate-500 flex items-center gap-1 mb-1"><Building2 className="h-3 w-3" /> {p.obra} <span className="text-amber-600 font-medium">· antecipar férias p/ ganhar tempo e buscar realocação</span></p>
+                      {p.motivo && <p className="text-[11px] text-slate-600 leading-snug">{p.motivo}</p>}
+                    </div>
+                  ))}
                   {planoAviso.map((p, i) => (
                     <div key={`a${i}`} className="rounded-lg border border-red-200 bg-red-50/50 p-3">
                       <div className="flex items-center justify-between gap-2 mb-1.5">
                         <span className="text-[10px] font-bold text-white bg-red-600 rounded-full px-2 py-0.5 flex items-center gap-1"><FileWarning className="h-3 w-3" /> AVISO PRÉVIO</span>
-                        {norm(p.dataIdeal) && <span className="text-[10px] font-bold text-white bg-slate-700 rounded-full px-2 py-0.5 flex items-center gap-1"><CalendarClock className="h-3 w-3" /> {p.dataIdeal}</span>}
+                        {norm(p.dataIdeal) && <span className={`text-[10px] font-bold text-white rounded-full px-2 py-0.5 flex items-center gap-1 ${ehAtrasado(p.dataIdeal, p.atrasado) ? "bg-rose-600" : "bg-slate-700"}`}><CalendarClock className="h-3 w-3" /> {p.dataIdeal}{ehAtrasado(p.dataIdeal, p.atrasado) ? " · atrasado" : ""}</span>}
                       </div>
                       <p className="text-xs font-semibold text-slate-800 mb-1">{p.cargo}{Number(p.quantidade) > 0 && <span className="text-red-700"> · {p.quantidade} pessoa(s)</span>}</p>
                       <p className="text-[10px] text-slate-500 flex items-center gap-1 mb-1"><Building2 className="h-3 w-3" /> {p.obra} <span className="text-red-600 font-medium">· fim de obra (sem demanda próxima)</span></p>
@@ -420,7 +536,60 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
                     </div>
                   ))}
                 </div>
-                <p className="text-[10px] text-slate-400 mt-1.5">Aviso prévio: a data ideal já considera ~30 dias antes do fim do serviço, para que o aviso termine junto com a conclusão da frente/obra.</p>
+                <p className="text-[10px] text-slate-400 mt-1.5">Antecipar férias: alternativa ao aviso prévio quando há período agendável — ganha ~30 dias para buscar realocação. Aviso prévio: a data ideal já considera ~30 dias antes do fim do serviço, para que o aviso termine junto com a conclusão da frente/obra. Nenhuma sugestão é retroativa (sempre hoje ou futuro).</p>
+              </div>
+            )}
+
+            {/* Agenda por mês/ano — quando começar a realocar / dar aviso prévio */}
+            {planoEquipe.length > 0 && (
+              <div>
+                <SectionTitle icon={<CalendarClock className="h-4 w-4 text-indigo-600" />} count={planoEquipe.length}>Agenda por mês — quando começar a realocar / dar aviso prévio</SectionTitle>
+                <p className="text-[11px] text-slate-500 mb-2.5">Data ideal para <strong>iniciar</strong> a ação, já com folga de ~30 dias antes do fim da frente — tempo de cumprir o aviso prévio e a obra concluir junto.</p>
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500 text-left">
+                        <th className="px-3 py-2 font-semibold">Data ideal</th>
+                        <th className="px-3 py-2 font-semibold">Ação</th>
+                        <th className="px-3 py-2 font-semibold">Função</th>
+                        <th className="px-3 py-2 font-semibold text-center">Qtd</th>
+                        <th className="px-3 py-2 font-semibold">Obra (origem)</th>
+                        <th className="px-3 py-2 font-semibold">Destino / Observação</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {agenda.grupos.map((g) => {
+                        const pessoas = g.itens.reduce((s: number, x: any) => s + (Number(x.quantidade) || 0), 0);
+                        const nReal = g.itens.filter((x: any) => x.acao === "realocar").length;
+                        const nFerias = g.itens.filter((x: any) => x.acao === "antecipar_ferias").length;
+                        const nAviso = g.itens.filter((x: any) => x.acao === "aviso_previo").length;
+                        return (
+                          <React.Fragment key={g.key}>
+                            <tr className="bg-[#1B2A4A] text-white">
+                              <td colSpan={6} className="px-3 py-1.5">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <span className="text-xs font-bold tracking-wide flex items-center gap-1.5"><CalendarClock className="h-3.5 w-3.5 text-sky-300" /> {g.label}</span>
+                                  <span className="text-[10px] text-slate-300">
+                                    {pessoas} pessoa(s){nReal > 0 ? ` · ${nReal} realocar` : ""}{nFerias > 0 ? ` · ${nFerias} antecipar férias` : ""}{nAviso > 0 ? ` · ${nAviso} aviso prévio` : ""}
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                            {g.itens.map((p: any, i: number) => <AgendaRow key={`${g.key}-${i}`} p={p} />)}
+                          </React.Fragment>
+                        );
+                      })}
+                      {agenda.semData.length > 0 && (
+                        <>
+                          <tr className="bg-slate-200 text-slate-700">
+                            <td colSpan={6} className="px-3 py-1.5 text-xs font-bold">Sem data definida pela IA</td>
+                          </tr>
+                          {agenda.semData.map((p: any, i: number) => <AgendaRow key={`sd-${i}`} p={p} />)}
+                        </>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 

@@ -1,6 +1,48 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3299 — **PLANEJAMENTO / EFETIVO × IA (VISÃO GERAL — TODAS AS OBRAS) · NOVA "AGENDA POR MÊS" + DUAS
+ * MELHORIAS NO "PLANO DE AÇÃO POR EQUIPE": (1) NENHUMA SUGESTÃO É RETROATIVA — TODA "DATA IDEAL"/DATA
+ * ESTIMADA É CLAMPADA P/ HOJE OU FUTURO (DATA VENCIDA → HOJE, COM SELO "ATRASADO"); (2) NOVA AÇÃO
+ * "ANTECIPAR FÉRIAS" COMO ALTERNATIVA AO AVISO PRÉVIO — QUANDO A FUNÇÃO QUE SOBRA TEM FUNCIONÁRIO(S) COM
+ * FÉRIAS FUTURAS AGENDÁVEIS, A IA SUGERE ANTECIPAR AS FÉRIAS P/ GANHAR ~30 DIAS E BUSCAR REALOCAÇÃO ANTES
+ * DE DEMITIR (ORDEM DE PREFERÊNCIA REALOCAR > ANTECIPAR FÉRIAS > AVISO PRÉVIO). MAIS A "AGENDA POR MÊS" —
+ * TABELA RESUMO AGRUPADA POR MÊS/ANO DE QUANDO COMEÇAR A REALOCAR / ANTECIPAR FÉRIAS / DAR AVISO PRÉVIO.
+ * TUDO NA TELA E NO PDF PADRÃO FC. 100% ADITIVO · CONTEXTO+PROMPT+SCHEMA+SANITIZAÇÃO+UI · ZERO MUDANÇA DE
+ * SCHEMA/ALTER/DROP/DELETE · ESCAPAGEM XSS (esc/escAttr) PRESERVADA (R-001/R-007/R-010 OK).**
+ * - PEDIDOS (piloto FC): (a) "quero um resumo em tabela, por mês e ano, de quando podemos começar a demitir
+ *   ou realocar o efetivo devido à falta de frente; gap de 30 dias antes"; (b) "nenhuma ação pode ser
+ *   retroativa — só de hoje pra frente"; (c) "antes de demitir, se a pessoa tem férias a vencer, sugerir
+ *   antecipar as férias pra ganhar tempo e tentar realocar".
+ * - BACKEND (`server/routers/iaCronograma.ts`, aditivo/determinístico):
+ *   • Férias antecipáveis por cargo×obra: `CargoAgg`/`ObraEfetivo.porCargo` ganharam `feriasAntecipaveis`;
+ *     nova seção "4d" conta, por função, os ATIVOS com período de férias FUTURO ainda não iniciado
+ *     (bucket ≠ em_gozo, início > hoje); propagado no map copy + `cargosTxt` (contexto da IA).
+ *   • Helper `naoRetroativoBR(brData)` → `{data, atrasado}`: normaliza DD/MM/AAAA, descarta datas inválidas e
+ *     CLAMPA qualquer data < hoje p/ hoje (marca `atrasado:true`). `antecipFeriasSet` = whitelist
+ *     `obra|cargo` das funções que realmente têm férias antecipáveis (gate determinístico).
+ *   • `systemPrompt`: nova ação `antecipar_ferias` (ordem realocar > antecipar_ferias > aviso_previo) + REGRA
+ *     DURA "nenhuma data retroativa" no enum do `planoEquipe` e no parágrafo final "Regras".
+ *   • SANITIZAÇÃO: `transferencias[].dataDisponivel`, `previsaoDisponibilidade[].dataEstimada` e
+ *     `planoEquipe[].dataIdeal` passam por `naoRetroativoBR` (+ flag `atrasado`); enum do plano aceita
+ *     `antecipar_ferias` SÓ se `antecipFeriasSet` confirmar férias naquela obra/função — senão rebaixa p/
+ *     `aviso_previo` (a IA não inventa férias).
+ * - FRONTEND (`client/src/pages/planejamento/EfetivoGlobalIA.tsx`):
+ *   • Helpers `acaoMeta(acao)` (rótulo/cor/ícone das 3 ações) e `ehAtrasado(brData, flag)` (revalida no
+ *     cliente, cobre análises salvas antes do fix).
+ *   • Novo helper de módulo `agruparPorMes(itens)`: parse da `dataIdeal` (regex DD/MM/AAAA), agrupa por chave
+ *     `AAAA-MM`, ordena meses asc e itens por dia; sem data válida → bucket "Sem data definida pela IA" no
+ *     fim. Rótulo pt-BR via `MESES_PT`. `AgendaRow` e `useMemo` `agenda`.
+ *   • Plano de ação: novos cards âmbar "ANTECIPAR FÉRIAS" (ícone Plane) entre realocar (verde) e aviso prévio
+ *     (vermelho); badge de data fica rosa "· atrasado" quando vencida. Agenda por mês mostra contagem por ação
+ *     (nº realocar / nº antecipar férias / nº aviso) por grupo.
+ *   • PDF (`imprimirRelatorio`): `tagAcao` ganhou tag "ANTECIPAR FÉRIAS" (.tag-ferias) + `tagAtraso` (.tag-atraso)
+ *     nas tabelas Plano e Agenda; rodapés explicam antecipação de férias e a regra não-retroativa. TODO texto
+ *     de IA escapado com os `esc`/`escAttr` LOCAIS — sem regressão de XSS.
+ *   • PRESERVADO: fonte de dados, tRPC e o restante do PDF ficam IDÊNTICOS.
+ * - VALIDAÇÃO: esbuild parse limpo nos 2 arquivos; app sobe no Neon DEV (workflow Start application running).
+ *   Sem novas dependências (Plane/CalendarClock/Move/FileWarning já no lucide-react).
+ *
  * Rev. 3298 — **PLANEJAMENTO / EFETIVO × IA (VISÃO GERAL — TODAS AS OBRAS) · REDESIGN GERENCIAL DO PAINEL
  * ON-SCREEN: NOVO LAYOUT "PAINEL GERENCIAL" MAIS MODERNO E DETALHADO, COM CABEÇALHO NA FAIXA INSTITUCIONAL
  * FC (#1B2A4A), UM DIAL/GAUGE RADIAL DE "SAÚDE DO EFETIVO" (% DE FUNÇÕES EQUILIBRADAS, COR VERDE/ÂMBAR/
