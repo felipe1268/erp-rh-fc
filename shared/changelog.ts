@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3338 — **FINANCEIRO / DASHBOARD DE CONCILIAÇÃO BANCÁRIA · NOVA COLUNA "SALDO (R$)" NA TABELA "CONCILIAÇÃO POR CONTA
+ * BANCÁRIA" (DETAIL DIALOG), = ENTRADAS − SAÍDAS POR CONTA, COLORIDA (VERDE=POSITIVO, VERMELHO=NEGATIVO) + LINHA DE TOTAL
+ * NO RODAPÉ CONSOLIDANDO O SALDO GERAL — PRA VER DE RELANCE SE O PERÍODO FECHOU POSITIVO OU NEGATIVO. 100% FRONT ·
+ * ADITIVO · READ-ONLY · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário, no iPad, com print da tabela "Conciliação por conta bancária"): "quero ver o saldo tbm, entrada −
+ *   saída, pra ver se o mês fechou positivo ou negativo em função da comparação simples do que entrou − o que saiu".
+ * - RAIZ: a tabela por conta (DetailDialog do dashboard `/financeiro/dashboards/conciliacao`) JÁ mostrava Entradas e Saídas
+ *   em colunas separadas, mas NÃO o saldo (entrou − saiu); o `saldoLiquido` só existia como KPI agregado do período, não
+ *   por conta nem na tabela. O usuário tinha de fazer a conta de cabeça por linha.
+ * - CORREÇÃO (`client/src/pages/financeiro/dashboards/DashConciliacao.tsx`): (1) nova coluna `saldo` em `COLS`, logo após
+ *   "Saídas (R$)", com `format` custom que renderiza `formatBRL(n)` colorido — `text-emerald-600` p/ positivo,
+ *   `text-red-600` p/ negativo, `text-slate-500` p/ zero — em `font-semibold tabular-nums`. (2) cada linha de `detalheContas`
+ *   ganhou `saldo: valorEntradas − valorSaidas`. (3) o `<DetailDialog>` passou a receber `totalKey="saldo"` → o rodapé
+ *   sticky agora soma o saldo de TODAS as contas (saldo geral consolidado do período/ano). NENHUMA query/rota/permissão
+ *   nova — reusa `getConciliacaoReport` (já traz `valorEntradas`/`valorSaidas` por conta).
+ * - ESCOPO: 100% front, 1 arquivo. Sem backend/schema/endpoint. Moeda em BRL via `formatBRL` (regra de ouro). RESSALVA:
+ *   não foi possível reproduzir autenticado no ambiente (login bloqueia screenshot); re-publicar p/ o usuário ver no iPad.
+ * - ARQUIVOS: `client/src/pages/financeiro/dashboards/DashConciliacao.tsx`, `shared/version.ts` (3338),
+ *   `shared/changelog.ts`, `replit.md`, `replit-history.md`.
+ *
  * Rev. 3337 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NO MODO "MÊS", CLICAR EM "ANO TODO" AGORA ABRE O "PANORAMA GERAL"
  * CONSOLIDADO DO ANO INTEIRO (TODAS AS CONTAS), REAPROVEITANDO A MESMA VISÃO/LÓGICA DO PANORAMA MENSAL — ANTES "ANO TODO"
  * SÓ MOSTRAVA O EMPTY-STATE ("SELECIONE UM MÊS…"). 100% FRONT · BUGFIX/UX · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**

@@ -22,6 +22,17 @@ const COLS: DetailColumn[] = [
   { key: "pendentes", label: "Pendentes", align: "right" },
   { key: "valorEntradas", label: "Entradas (R$)", align: "right", brl: true },
   { key: "valorSaidas", label: "Saídas (R$)", align: "right", brl: true },
+  {
+    key: "saldo", label: "Saldo (R$)", align: "right",
+    format: (v: any) => {
+      const n = Number(v) || 0;
+      return (
+        <span className={`tabular-nums font-semibold ${n > 0 ? "text-emerald-600" : n < 0 ? "text-red-600" : "text-slate-500"}`}>
+          {formatBRL(n)}
+        </span>
+      );
+    },
+  },
   { key: "valorConciliado", label: "Conciliado (R$)", align: "right", brl: true },
   { key: "valorPendenteEntradas", label: "Créd. a conciliar (R$)", align: "right", brl: true },
   { key: "valorPendenteSaidas", label: "Déb. a conciliar (R$)", align: "right", brl: true },
@@ -100,6 +111,7 @@ export default function DashConciliacao() {
       valorTotal: Number(s.valorTotal) || 0,
       valorEntradas: Number(s.valorEntradas) || 0,
       valorSaidas: Number(s.valorSaidas) || 0,
+      saldo: (Number(s.valorEntradas) || 0) - (Number(s.valorSaidas) || 0),
       valorConciliado: Number(s.valorConciliado) || 0,
       valorPendente: Math.max((Number(s.valorTotal) || 0) - (Number(s.valorConciliado) || 0), 0),
       // Rev. 3316 — pendente por direção (crédito × débito).
@@ -237,7 +249,7 @@ export default function DashConciliacao() {
         <DetailDialog
           open={det} onOpenChange={setDet}
           title="Conciliação por conta bancária" subtitle={`Ano ${ano} · valores em BRL`}
-          columns={COLS} rows={detalheContas} onGoTo={ir}
+          columns={COLS} rows={detalheContas} onGoTo={ir} totalKey="saldo"
         />
       </div>
     </DashboardLayout>
