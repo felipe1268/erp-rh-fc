@@ -200,6 +200,30 @@ export default function FinanceiroCartaoCredito() {
     }
   }
 
+  // ── Vincular fatura ⇄ cartão (botão "Vincular" da aba Faturas) ──────────
+  const vincularFatura = (trpc as any).cartao.vincularFaturaCartao.useMutation();
+  const [faturaVincular, setFaturaVincular] = useState<any | null>(null);
+  const [vincularCartaoId, setVincularCartaoId] = useState<string>("none");
+  function abrirVincular(f: any) {
+    setFaturaVincular(f);
+    setVincularCartaoId(f.cartaoId != null ? String(f.cartaoId) : "none");
+  }
+  async function salvarVincular() {
+    if (!companyId || !faturaVincular) return;
+    try {
+      await vincularFatura.mutateAsync({
+        id: faturaVincular.id,
+        companyId,
+        cartaoId: vincularCartaoId === "none" ? null : parseInt(vincularCartaoId, 10),
+      });
+      toast({ title: "Fatura vinculada ao cartão" });
+      setFaturaVincular(null);
+      faturasQ.refetch(); resumoMensalQ.refetch();
+    } catch (e: any) {
+      toast({ title: "Erro ao vincular", description: e?.message || String(e), variant: "destructive" });
+    }
+  }
+
   // ── Importação por IA ────────────────────────────────────────────────
   const [importModal, setImportModal] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
@@ -588,6 +612,7 @@ export default function FinanceiroCartaoCredito() {
                             <td className="py-2 pr-3 text-center">{f.qtdItens}</td>
                             <td className="py-2 pr-3">{f.mes ? `${MESES[f.mes]}/${f.ano}` : (f.ano ?? "—")}</td>
                             <td className="py-2 pr-3 text-right">
+                              <Button size="sm" variant="outline" className="h-7" onClick={() => abrirVincular(f)}><Pencil className="w-3.5 h-3.5 mr-1" /> Vincular</Button>
                               <Button size="sm" variant="outline" className="h-7" onClick={() => setFaturaItens(f)}><ListTree className="w-3.5 h-3.5 mr-1" /> Classificar</Button>
                               <Button size="sm" variant="ghost" className="h-7 text-red-600" onClick={() => setFaturaExcluir(f)}><Trash2 className="w-3.5 h-3.5" /></Button>
                             </td>
@@ -997,6 +1022,55 @@ export default function FinanceiroCartaoCredito() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ───────────── MODAL VINCULAR FATURA ⇄ CARTÃO ───────────── */}
+      <Dialog open={!!faturaVincular} onOpenChange={(v) => { if (!v) setFaturaVincular(null); }}>
+        <DialogContent resizable={false} className="max-w-md p-0 overflow-hidden gap-0">
+          <DialogHeader className="border-b bg-gradient-to-r from-[#1B2A4A] to-[#2c3f63] px-6 py-5 text-left">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25">
+                <CreditCard className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-semibold text-white">Vincular fatura ao cartão</DialogTitle>
+                <DialogDescription className="text-xs text-white/70">O vínculo é permanente e também atualiza os itens desta fatura.</DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="space-y-4 px-6 py-5">
+            {faturaVincular && (
+              <div className="rounded-lg border bg-gray-50 px-3 py-2 text-xs text-muted-foreground">
+                Fatura de {faturaVincular.mes ? `${MESES[faturaVincular.mes]}/${faturaVincular.ano}` : (faturaVincular.ano ?? "—")} ·
+                {" "}vencimento {fmtData(faturaVincular.vencimento)} · total <span className="font-medium text-gray-700">{formatBRL(faturaVincular.total)}</span>
+                {" "}· {faturaVincular.qtdItens} item(ns)
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Cartão</Label>
+              <Select value={vincularCartaoId} onValueChange={setVincularCartaoId}>
+                <SelectTrigger><SelectValue placeholder="Selecione o cartão" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Não identificado (sem cartão)</SelectItem>
+                  {cartoes.map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.banco || "Banco"} · final {c.final4 || "????"}{c.tipoPessoa === "PF" ? " (PF)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {cartoes.length === 0 && (
+                <p className="text-[11px] text-amber-700">Nenhum cartão cadastrado. Cadastre um cartão na aba "Cartões" primeiro.</p>
+              )}
+            </div>
+          </div>
+          <DialogFooter className="border-t bg-gray-50/50 px-6 py-4 sm:gap-2">
+            <Button variant="outline" onClick={() => setFaturaVincular(null)} disabled={vincularFatura.isPending}>Cancelar</Button>
+            <Button onClick={salvarVincular} disabled={vincularFatura.isPending} className="bg-[#1B2A4A] hover:bg-[#22315a]">
+              {vincularFatura.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null} Salvar vínculo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={!!faturaExcluir} onOpenChange={(v) => { if (!v) setFaturaExcluir(null); }}>
         <AlertDialogContent>

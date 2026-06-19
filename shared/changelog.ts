@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3303 — **FINANCEIRO / CONTROLE DE CARTÃO DE CRÉDITO (ABA FATURAS) · NOVO BOTÃO "VINCULAR" EM CADA FATURA
+ * QUE PERMITE ESCOLHER MANUALMENTE A QUAL CARTÃO CADASTRADO A FATURA PERTENCE — RESOLVE AS FATURAS QUE ENTRAM COMO
+ * "NÃO IDENTIFICADO" (CARTÃO NÃO RECONHECIDO PELO FINAL/TITULAR NA IMPORTAÇÃO POR IA). O VÍNCULO É PERMANENTE E
+ * PROPAGA O CARTÃO PARA OS ITENS DA FATURA (MESMA CASCATA DO importarConfirmar). 100% ADITIVO · NOVO ENDPOINT +
+ * DIALOG · ZERO SCHEMA/ALTER/DROP/DELETE (R-001/R-007/R-010 OK).**
+ * - PEDIDO (piloto FC): "preciso ter um botão de editar para poder vincular qual fatura é relacionada a qual cartão
+ *   para sempre ficar vinculado" — a fatura importada aparecia com "⚠ Não identificado" e não havia como corrigir o
+ *   cartão depois (só Classificar itens ou Excluir).
+ * - BACKEND (`server/routers/cartao.ts`, novo `vincularFaturaCartao`): input `{id, companyId, cartaoId: number|null}`.
+ *   `assertCompanyAccess` + TENANT GUARD do cartão (SELECT em `financial_cartoes` por `id`+`company_id`+`excluido_em
+ *   IS NULL`; cartão de outra empresa/excluído → BAD_REQUEST). Em `db.transaction`: UPDATE `financial_cartao_faturas`
+ *   (`cartao_id`, limpa `observacao` "Cartão não identificado…" via CASE quando passa a ter cartão; guarda
+ *   `excluido_em IS NULL`; NOT_FOUND se 0 linhas) + UPDATE em cascata `financial_cartao_itens` (`cartao_id` de todos
+ *   os itens da fatura). `cartaoId=null` DESVINCULA (volta a "Não identificado").
+ * - FRONTEND (`client/src/pages/financeiro/FinanceiroCartaoCredito.tsx`): botão "Vincular" (ícone Pencil, outline) na
+ *   coluna Ações de cada fatura, antes de "Classificar". Abre dialog (padrão faixa azul #1B2A4A) com resumo da fatura
+ *   (mês/venc/total/itens) + `Select` de cartões (lista todos os cadastrados + opção "Não identificado (sem cartão)").
+ *   `salvarVincular` → mutation → `faturasQ.refetch()` + `resumoMensalQ.refetch()`. Estado `faturaVincular`/
+ *   `vincularCartaoId`; aviso quando não há cartões cadastrados.
+ * - VALIDAÇÃO: esbuild parse limpo nos 2 arquivos tocados (cartao.ts 519.6kb, FinanceiroCartaoCredito.tsx 64.2kb);
+ *   app sobe no Neon DEV (workflow Start application running).
+ *
  * Rev. 3302 — **RH & DP / FOLHA DE VALE + FOLHA DE PAGAMENTO · NOVO BOTÃO "ARREDONDAMENTO" (TOPO-DIREITO, SÓ
  * MASTER) QUE FORÇA O LÍQUIDO P/ O REAL CHEIO (SEM CENTAVOS) EM LOTE (TODOS) OU INDIVIDUAL, ESCOLHENDO A DIREÇÃO:
  * PARA CIMA (↑ Math.ceil), PARA BAIXO (↓ Math.floor) OU MAIS PRÓXIMO (≈ Math.round). USADO NA CONFERÊNCIA COM A

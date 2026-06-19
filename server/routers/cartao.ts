@@ -466,6 +466,47 @@ export const cartaoRouter = router({
     }));
   }),
 
+  // Vincula (ou desvincula) uma fatura a um cartão cadastrado. Usado pelo botão
+  // "Vincular" da aba Faturas quando a fatura entrou como "Não identificado".
+  // Propaga o cartão p/ os itens da fatura (mesma cascata do importarConfirmar) e
+  // limpa a observação "Cartão não identificado…" quando passa a ter cartão.
+  // Tenant guard: o cartão precisa pertencer à MESMA empresa (e não estar excluído).
+  vincularFaturaCartao: protectedProcedure.input(z.object({
+    id: z.number(),
+    companyId: z.number(),
+    cartaoId: z.number().nullable(),
+  })).mutation(async ({ input, ctx }) => {
+    await assertCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    if (input.cartaoId != null) {
+      const ck = await dbExecute(db,
+        `SELECT id FROM financial_cartoes WHERE id=$1 AND company_id=$2 AND excluido_em IS NULL LIMIT 1`,
+        [input.cartaoId, input.companyId]);
+      if (ck.rows.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Cartão inválido ou de outra empresa." });
+      }
+    }
+    return await db.transaction(async (tx: any) => {
+      const fat = await dbExecute(tx,
+        `UPDATE financial_cartao_faturas
+            SET cartao_id=$1,
+                observacao = CASE WHEN $1::int IS NULL THEN observacao ELSE NULL END,
+                updated_at=NOW()
+          WHERE id=$2 AND company_id=$3 AND excluido_em IS NULL
+          RETURNING id`,
+        [input.cartaoId, input.id, input.companyId]);
+      if (fat.rows.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Fatura não encontrada." });
+      }
+      await dbExecute(tx,
+        `UPDATE financial_cartao_itens SET cartao_id=$1, updated_at=NOW()
+          WHERE fatura_id=$2 AND company_id=$3`,
+        [input.cartaoId, input.id, input.companyId]);
+      return { ok: true };
+    });
+  }),
+
   // Resumo POR MÊS do ano (para a régua de meses em chips, padrão Conciliação/Cheques).
   resumoMensal: protectedProcedure.input(z.object({
     companyId: z.number(),
