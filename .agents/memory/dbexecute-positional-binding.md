@@ -29,6 +29,15 @@ for type date: "<contaId>"` and the whole report 500s. Fix: give that query its 
 array WITHOUT the skipped element and renumber to $1,$2,$3. Don't reuse the shared
 array whenever a query drops a placeholder.
 
+**REUSING the same $N twice in one query is the same trap (UPDATE/CASE variant).**
+Writing the same value as `$1` in two spots (e.g. `SET cartao_id=$1, observacao = CASE
+WHEN $1::int IS NULL ...`) creates TWO appearance slots but you only pass it once in the
+array → every later placeholder shifts down by one and the LAST one (often `company_id`)
+ends up empty (`company_id= AND`) → invalid SQL / "Failed query". Fix: give each
+appearance its OWN sequential placeholder and REPEAT the value in the array at its
+position (`...cartao_id=$1, CASE WHEN $2::int..., WHERE id=$3 AND company_id=$4` with
+`[cartaoId, cartaoId, id, companyId]`). Never reuse a `$N`.
+
 **Arrays as params = SILENT EXPANSION (PG error 42846 "cannot cast type record to integer").**
 Because `dbExecute` interpolates each param via Drizzle `sql\`...${val}\``, passing a
 JS ARRAY does NOT bind a single Postgres array — Drizzle expands it into

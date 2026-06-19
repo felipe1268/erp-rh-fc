@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3307 — **FINANCEIRO / CONTROLE DE CARTÃO DE CRÉDITO (ABA FATURAS) · O BOTÃO "VINCULAR" (Rev. 3303) QUEBRAVA
+ * COM "ERRO AO VINCULAR — Failed query: UPDATE financial_cartao_faturas SET cartao_id=$1, observacao = CASE WHEN
+ * $2::int IS NULL ... WHERE id=$3 AND company_id= AND excluido_em IS NULL" — REPARE NO `company_id= ` SEM VALOR. NÃO
+ * ERA O `company_id` QUE FALTAVA NO INPUT; ERA UM DESALINHAMENTO DE PLACEHOLDERS NO `dbExecute`. 100% BACKEND · BUGFIX ·
+ * ZERO MUDANÇA DE SCHEMA/ENDPOINT/INPUT (R-001/R-007/R-010 OK).**
+ * - SINTOMA (piloto FC): toast "Erro ao vincular — Failed query: ... WHERE id=$3 AND company_id= AND ... params: 3,5,60002".
+ * - CAUSA: o helper `dbExecute` (`server/routers/cartao.ts`) liga parâmetros por ORDEM DE APARIÇÃO dos placeholders
+ *   (`$N` é cosmético — ele faz `query.split(/\$\d+/g)` e injeta `params[i]` em cada fenda, na sequência). O UPDATE do
+ *   `vincularFaturaCartao` REUTILIZAVA `$1` DUAS VEZES (`SET cartao_id=$1` e `CASE WHEN $1::int IS NULL`), então o texto
+ *   tinha 4 fendas (cartao_id, CASE, id, company_id) mas o array só tinha 3 valores `[cartaoId, id, companyId]`. O bind
+ *   por aparição empurrou tudo: CASE recebeu `id`, o `WHERE id` recebeu `companyId` e o `company_id` ficou SEM valor
+ *   (`company_id= AND`) → SQL inválida. (Exatamente o footgun já documentado: dbExecute ignora o número do `$N`.)
+ * - CORREÇÃO (`server/routers/cartao.ts`, só o UPDATE do `vincularFaturaCartao`): cada aparição ganhou seu próprio
+ *   placeholder sequencial — `SET cartao_id=$1, observacao = CASE WHEN $2::int IS NULL ... WHERE id=$3 AND company_id=$4`
+ *   — e o array passou a repetir o `cartaoId`: `[cartaoId, cartaoId, id, companyId]`. Comentário inline adicionado
+ *   alertando p/ NÃO reusar `$N` neste helper. O segundo UPDATE (itens) já usava cada `$N` uma vez — intocado.
+ * - VALIDAÇÃO: esbuild parse limpo (cartao.ts); `tsc --noEmit` sem erros no arquivo; app sobe no Neon DEV.
+ *
  * Rev. 3306 — **FINANCEIRO / CONTROLE DE CARTÃO DE CRÉDITO (IMPORTAR FATURA POR IA) · A LEITURA DA FATURA (PDF)
  * QUEBRAVA COM "FALHA AO LER A FATURA — GEMINI VISION FALHOU: 429 ... RESOURCE_EXHAUSTED / generate_content_free_tier_requests,
  * limit: 20, model gemini-2.5-flash" QUANDO A COTA DO FREE-TIER DO GOOGLE ESGOTAVA (POR-MINUTO OU DIÁRIA). AGORA, QUANDO

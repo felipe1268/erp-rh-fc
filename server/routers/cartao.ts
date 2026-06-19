@@ -506,14 +506,18 @@ export const cartaoRouter = router({
       }
     }
     return await db.transaction(async (tx: any) => {
+      // OBS: dbExecute liga params por ORDEM DE APARIÇÃO ($N é cosmético). NÃO
+      // reutilizar o mesmo $N — cada aparição precisa do seu próprio valor no
+      // array (por isso `cartaoId` aparece 2x). Reusar `$1` quebrava a contagem
+      // e deixava `company_id` sem valor (Rev. 3307).
       const fat = await dbExecute(tx,
         `UPDATE financial_cartao_faturas
             SET cartao_id=$1,
-                observacao = CASE WHEN $1::int IS NULL THEN observacao ELSE NULL END,
+                observacao = CASE WHEN $2::int IS NULL THEN observacao ELSE NULL END,
                 updated_at=NOW()
-          WHERE id=$2 AND company_id=$3 AND excluido_em IS NULL
+          WHERE id=$3 AND company_id=$4 AND excluido_em IS NULL
           RETURNING id`,
-        [input.cartaoId, input.id, input.companyId]);
+        [input.cartaoId, input.cartaoId, input.id, input.companyId]);
       if (fat.rows.length === 0) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Fatura não encontrada." });
       }
