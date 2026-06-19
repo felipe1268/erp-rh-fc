@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3292 — **RH & DP / FOLHA DE PAGAMENTO (VALE / ADIANTAMENTO) · "POR QUE ESTÁ CALCULANDO VALE PRA
+ * ENIVALDO SE ELE É PJ?" — UM FUNCIONÁRIO QUE FOI RECONTRATADO COMO PJ CONTINUAVA APARECENDO NO CARD DE
+ * VALE (E NA LISTA DE "DECISÃO NECESSÁRIA") COM ADIANTAMENTO PROPORCIONAL, PORQUE O SNAPSHOT DO VALE
+ * (`payroll_periods.valeResultJson`) HAVIA SIDO GERADO QUANDO ELE AINDA ERA CLT MENSALISTA E NUNCA FOI
+ * REGERADO DEPOIS DA VIRADA PRA PJ. AGORA O SNAPSHOT É SANITIZADO NA LEITURA (QUEM HOJE É PJ/SÓCIO/EXCLUÍDO
+ * SOME DA TELA) E HÁ GUARDA DURA NA APROVAÇÃO (PJ/SÓCIO NUNCA RECEBE VALE, NEM SE FORÇADO). 100% BACKEND ·
+ * READ-ONLY NO READ + UPDATE DEFENSIVO NA DECISÃO · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - SINTOMA (piloto FC, empresa 60002 "FC ENGENHARIA PROJETOS E OBRAS", competência 06/2026): ENIVALDO DA SILVA
+ *   ANDRIONI aparecia na aba "Cálculo do Vale" com adiantamento de R$ 1.440,00 (= 4.000 × 27/30 dias × 40%) e
+ *   alerta "Admitido no mês de referência — vale proporcional", mesmo sendo PJ. PJ não tem adiantamento.
+ * - DIAGNÓSTICO (Neon): a pessoa tem 3 cadastros — id=12 (CLT, Desligado em maio/2026), id=1200013 (CLT, outra
+ *   empresa 60005) e id=136 (PJ Ativo, comp 60002, admissão 04/06/2026, recontratação CORRETA como PJ mensalista).
+ *   O snapshot `valeResultJson` da comp 60002 (06/2026) tinha a entrada do id=136 com `isMensalista:true`, gerada
+ *   QUANDO id=136 ainda era CLT; depois ele virou PJ e o snapshot não foi regerado → entrada "fantasma". Havia
+ *   ainda uma linha órfã em `payroll_advances` (id=136, 06/2026, status "alerta", R$ 1.440) do mesmo momento.
+ * - RAIZ: o snapshot do vale é materializado em `gerarVale` (que filtra `tipoContrato='CLT'`), mas é IMUTÁVEL até
+ *   um novo "gerar". Entre a geração e a virada CLT→PJ, a leitura (`getPeriod`) e a aprovação (`decidirVale`)
+ *   confiavam 100% no snapshot, sem reconferir o tipo de contrato ATUAL. Logo, um vale legítimo de quando era CLT
+ *   sobrevivia indevidamente após a recontratação como PJ.
+ * - CORREÇÃO (`server/routers/payrollEngine.ts`, aditiva, sem schema):
+ *   (1) `getPeriod` agora passa `valeResultJson` por `sanitizarValeSnapshotNaoClt` — helper READ-ONLY que parseia o
+ *       JSON (coluna `text`), busca o `tipoContrato`/`deletedAt` ATUAIS dos `employeeId` do snapshot via
+ *       `getIdsInelegiveisVale`, REMOVE quem hoje é PJ/Sócio ou tem `deletedAt`, e RECALCULA os agregados
+ *       (`totalFuncionarios`, `totalAlertas`, `totalVale` = soma dos líquidos dos `status:'calculado'`). Não persiste
+ *       nada (só corrige o que é exibido) e devolve o mesmo tipo string que o front faz `JSON.parse`. Se ninguém é
+ *       inelegível, retorna o JSON original intacto (zero efeito colateral em folhas saudáveis).
+ *   (2) `decidirVale` ganhou GUARDA DURA: antes do laço de decisões, monta o set de inelegíveis via
+ *       `getIdsInelegiveisVale`; qualquer `pagar:true` para PJ/Sócio/excluído é convertido em `rejeitado` + `bloqueado=1`
+ *       com motivo "[BLOQUEADO: PJ/Sócio/excluído não recebe vale]" e NÃO gera `financial_events` — o dinheiro nunca sai.
+ *   `consolidarVale` não precisou de guarda (só vira o status do período; o evento financeiro por funcionário nasce no
+ *   `decidirVale`, já blindado). A linha órfã em `payroll_advances` é higienizada naturalmente no próximo "Gerar Vale"
+ *   (que faz `DELETE FROM payroll_advances` do mês antes de reinserir só CLT) — sem DELETE manual nesta revisão.
+ * - EFEITO: ao reabrir a Folha, ENIVALDO (e qualquer recontratado PJ/Sócio/excluído) some do card e da lista de
+ *   decisão sem precisar regerar; e mesmo que alguém clique "Pagar", o backend recusa. `gerarVale` já filtrava CLT,
+ *   então novas gerações nascem corretas; o fix cobre o intervalo entre gerações.
+ * - VALIDAÇÃO: diagnóstico cruzado no Neon (3 cadastros, snapshot id=4, advance órfã id=136); `gerarVale` atual NÃO
+ *   reincluiria o id=136 (PJ). tsc limpo nos arquivos tocados (ruído pré-existente de `changelog.ts` ignorado).
+ *
  * Rev. 3291 — **PLANEJAMENTO / EFETIVO × IA (DIAGNÓSTICO + SIMULADOR DE MÃO DE OBRA) · "RESOLVE ISSO DE
  * VEZ": O SIMULADOR (E O DIAGNÓSTICO) CAÍA NO iPad/SAFARI COM "A IA DEMOROU DEMAIS OU A CONEXÃO CAIU" E,
  * AO REABRIR, NUNCA RESTAURAVA O RESULTADO — PORQUE A TABELA QUE GUARDA AS ANÁLISES (`planejamento_analises_efetivo`)
