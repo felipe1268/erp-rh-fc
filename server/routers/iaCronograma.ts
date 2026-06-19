@@ -2507,4 +2507,330 @@ Retorne um JSON com esta estrutura exata:
         previsaoImpacto: "",
       };
     }),
+
+  // ── Efetivo × IA — VISÃO GERAL DE TODAS AS OBRAS (Rev. 3294) ───────────────
+  // Cruza o efetivo atual por função de TODAS as obras ativas da empresa
+  // SELECIONADA com o cronograma das próximas 8 semanas e sugere remanejamento de
+  // equipe SÓ entre obras PRÓXIMAS (mesma cidade/estado — `obras` não tem lat/long).
+  // O histograma (efetivo atual por função) é DETERMINÍSTICO (vem do banco); a IA é
+  // a camada que recomenda o efetivo-alvo e prioriza transferências. UMA chamada de
+  // IA consolidada (evita estourar a quota do free-tier). A proximidade é garantida
+  // NO SERVIDOR: qualquer transferência sugerida entre cidades diferentes é
+  // descartada, mesmo que a IA a proponha. Persiste em `planejamento_analises_efetivo`
+  // (projetoId=0, tipo="global") p/ recuperação após queda de conexão (iPad/Safari).
+  efetivoGlobal: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Banco de dados indisponível.");
+      const companyId = input.companyId;
+      await assertCompanyAccessIa(ctx, companyId);
+      await assertAiModuleEnabled(companyId, "planejamento");
+
+      const normTxt = (s: any) => String(s ?? "").trim().toUpperCase();
+      const cidadeKey = (cidade: any, estado: any) =>
+        `${normTxt(cidade) || "—"}|${normTxt(estado) || "—"}`;
+
+      // 1. Projetos ativos da empresa COM obra vinculada + localização da obra.
+      const projetosRaw = await db.select({
+        id:       planejamentoProjetos.id,
+        nome:     planejamentoProjetos.nome,
+        obraId:   planejamentoProjetos.obraId,
+        status:   planejamentoProjetos.status,
+        obraNome: obras.nome,
+        cidade:   obras.cidade,
+        estado:   obras.estado,
+        obraAtiva: obras.isActive,
+      }).from(planejamentoProjetos)
+        .leftJoin(obras, eq(planejamentoProjetos.obraId, obras.id))
+        .where(eq(planejamentoProjetos.companyId, companyId))
+        .orderBy(desc(planejamentoProjetos.id));
+
+      const ativos = (projetosRaw as any[]).filter((p) => {
+        if (!p.obraId) return false;
+        if (Number(p.obraAtiva) !== 1) return false;
+        const st = String(p.status || "").toLowerCase();
+        if (st.includes("conclu") || st.includes("suspen")) return false;
+        return true;
+      });
+
+      // 2. Coleta o efetivo×cronograma de cada obra (dedupe por obraId; cap 40 obras).
+      type ObraEfetivo = {
+        obraId: number; projetoId: number; obra: string; cidade: string; estado: string;
+        grupoProximidade: string;
+        totalEfetivo: number; totalAtivos: number; totalIndisponiveis: number;
+        emAndamento: number; proximas: number;
+        porCargo: { cargo: string; categoria: string; total: number; ativos: number; indisponiveis: number }[];
+        proximasTopo: string[];
+      };
+      const obrasData: ObraEfetivo[] = [];
+      const obrasVistas = new Set<number>();
+      const obrasIgnoradas: { obra: string; motivo: string }[] = [];
+      for (const p of ativos) {
+        if (obrasVistas.has(p.obraId)) continue;
+        if (obrasData.length >= 40) break;
+        obrasVistas.add(p.obraId);
+        try {
+          const c = await coletarEfetivoCronograma(db, p.id, companyId);
+          obrasData.push({
+            obraId: p.obraId,
+            projetoId: p.id,
+            obra: p.obraNome || c.obra?.nome || `Obra ${p.obraId}`,
+            cidade: String(p.cidade || "").trim(),
+            estado: String(p.estado || "").trim(),
+            grupoProximidade: cidadeKey(p.cidade, p.estado),
+            totalEfetivo: c.totalEfetivo,
+            totalAtivos: c.totalAtivos,
+            totalIndisponiveis: c.totalIndisponiveis,
+            emAndamento: (c.emAndamento || []).length,
+            proximas: (c.proximas || []).length,
+            porCargo: (c.porCargo || []).map((g: any) => ({
+              cargo: g.cargo, categoria: g.categoria,
+              total: g.total, ativos: g.ativos, indisponiveis: g.indisponiveis,
+            })),
+            proximasTopo: (c.proximas || []).slice(0, 4).map((a: any) =>
+              `${a.nome}${a.recursoPrincipal ? ` (recurso: ${a.recursoPrincipal})` : ""}`),
+          });
+        } catch (err: any) {
+          obrasIgnoradas.push({ obra: p.obraNome || `Obra ${p.obraId}`, motivo: String(err?.message ?? "sem cronograma/efetivo") });
+        }
+      }
+
+      // 3. Histograma DETERMINÍSTICO: soma do efetivo atual por função (todas as obras).
+      const histMap = new Map<string, { cargo: string; categoria: string; atualTotal: number; ativos: number; obras: { obra: string; cidade: string; total: number }[] }>();
+      for (const o of obrasData) {
+        for (const g of o.porCargo) {
+          const k = normTxt(g.cargo);
+          if (!histMap.has(k)) histMap.set(k, { cargo: g.cargo, categoria: g.categoria, atualTotal: 0, ativos: 0, obras: [] });
+          const h = histMap.get(k)!;
+          h.atualTotal += g.total;
+          h.ativos += g.ativos;
+          h.obras.push({ obra: o.obra, cidade: o.cidade, total: g.total });
+        }
+      }
+
+      // 4. Grupos de proximidade (mesma cidade/estado) com 2+ obras = candidatos a remanejamento.
+      const grupos = new Map<string, ObraEfetivo[]>();
+      for (const o of obrasData) {
+        if (!grupos.has(o.grupoProximidade)) grupos.set(o.grupoProximidade, []);
+        grupos.get(o.grupoProximidade)!.push(o);
+      }
+      const gruposComTroca = Array.from(grupos.entries()).filter(([, arr]) => arr.length >= 2);
+
+      // 5. Monta o contexto multi-obra p/ a IA (compacto, p/ caber no free-tier).
+      const obrasTxt = obrasData.map((o, i) => {
+        const cargosTxt = o.porCargo.length
+          ? o.porCargo.map((g) => `      • ${g.cargo} [${g.categoria}]: ${g.total} (ativos ${g.ativos}, indisp. ${g.indisponiveis})`).join("\n")
+          : "      • (sem efetivo alocado)";
+        const proxTxt = o.proximasTopo.length ? o.proximasTopo.map((a) => `      - ${a}`).join("\n") : "      - (nenhuma)";
+        return `  ${i + 1}. OBRA: ${o.obra} | Cidade: ${o.cidade || "—"}/${o.estado || "—"} | Grupo de proximidade: ${o.grupoProximidade}
+     Efetivo total ${o.totalEfetivo} (ativos ${o.totalAtivos}, indisponíveis ${o.totalIndisponiveis}) | Atividades hoje: ${o.emAndamento} | Próximas 8 sem.: ${o.proximas}
+     Efetivo por função:
+${cargosTxt}
+     Principais frentes que iniciam nas próximas semanas:
+${proxTxt}`;
+      }).join("\n\n");
+
+      const gruposTxt = gruposComTroca.length
+        ? gruposComTroca.map(([k, arr]) => `  - ${k}: ${arr.map((o) => o.obra).join(" / ")}`).join("\n")
+        : "  (Nenhum grupo com 2+ obras na mesma cidade/estado — NÃO há remanejamento possível entre obras próximas; deixe \"transferencias\" vazio.)";
+
+      const systemPrompt = `Você é JULINHO, engenheiro sênior de planejamento e gestão de mão de obra da FC Engenharia (construção civil pesada). Aqui você faz a VISÃO GERAL DE TODAS AS OBRAS ATIVAS DE UMA EMPRESA ao mesmo tempo: cruza o efetivo atual de cada obra com o cronograma das próximas 8 semanas e identifica ONDE SOBRA gente (função terminando a frente) e ONDE FALTA (frente entrando sem efetivo), para sugerir REMANEJAMENTO de equipe entre obras.
+
+REGRA DURA DE PROXIMIDADE: só sugira mover equipe entre obras do MESMO grupo de proximidade (mesma cidade/estado) — a empresa não remaneja gente entre cidades diferentes. Use SOMENTE os grupos com 2+ obras listados. Se não houver nenhum grupo com 2+ obras, retorne "transferencias": [].
+
+Seja realista e conservador: só sugira mover quando houver EVIDÊNCIA de sobra numa obra (frente concluindo / função superdimensionada) E falta na outra (frente entrando). A quantidade deve ser pequena e plausível. Responda em português brasileiro, técnico e direto. Responda APENAS com JSON válido, sem texto fora do JSON. Datas SEMPRE DD/MM/AAAA.`;
+
+      const userPrompt = `# Visão Geral — Efetivo × Cronograma de TODAS as obras
+**Empresa (id):** ${companyId}
+**Data de referência:** ${isoParaBR(new Date().toISOString())}
+**Obras ativas analisadas:** ${obrasData.length}
+
+## OBRAS
+${obrasTxt || "  (Nenhuma obra ativa com cronograma importado.)"}
+
+## GRUPOS DE PROXIMIDADE (remanejamento SÓ dentro destes)
+${gruposTxt}
+
+---
+Retorne um JSON EXATAMENTE nesta estrutura (sem markdown, sem comentários):
+{
+  "resumoExecutivo": "string — 2 a 4 frases com a leitura geral (onde sobra, onde falta, principais oportunidades de remanejamento)",
+  "histograma": [
+    { "cargo": "string", "categoria": "string", "atualTotal": number, "recomendadoTotal": number, "delta": number, "leitura": "string — 1 frase por função" }
+  ],
+  "transferencias": [
+    { "cargo": "string", "deObra": "string (nome EXATO de uma obra da lista)", "paraObra": "string (nome EXATO de OUTRA obra do MESMO grupo de proximidade)", "cidade": "string", "quantidade": number, "motivo": "string — por que sobra na origem e falta no destino", "impacto": "string — efeito no prazo das duas obras" }
+  ],
+  "riscos": [ "string" ],
+  "recomendacoes": [ "string — ações práticas e priorizadas" ]
+}
+
+Regras: em "histograma" inclua TODAS as funções que aparecem no efetivo das obras; "delta" = recomendadoTotal - atualTotal (negativo = sobra/reduzir). Em "transferencias", "deObra" e "paraObra" devem ser nomes EXATOS de obras do MESMO grupo de proximidade; jamais misture cidades. Seja específico e quantitativo.`;
+
+      let parsed: any = null;
+      let erroIa: string | null = null;
+      try {
+        const result = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user",   content: userPrompt },
+          ],
+          maxTokens: 8000,
+          response_format: { type: "json_object" },
+          fast: true,
+        });
+        const content = result.choices?.[0]?.message?.content;
+        const raw = typeof content === "string"
+          ? content
+          : Array.isArray(content) ? ((content[0] as any)?.text ?? "") : "";
+        const r = extrairJsonIa(raw);
+        parsed = r.parsed ? brDatasDeep(r.parsed) : r.parsed;
+        erroIa = r.erroIa;
+      } catch (err: any) {
+        erroIa = err?.message?.includes("Nenhuma chave")
+          ? "Nenhuma chave de IA configurada. Configure ANTHROPIC_API_KEY ou GOOGLE_API_KEY nas secrets para usar a análise."
+          : `Não foi possível gerar a análise de IA: ${err?.message ?? "erro desconhecido"}.`;
+      }
+
+      // 6. Histograma final = DETERMINÍSTICO (atual) + recomendado da IA (quando houver).
+      const recoMap = new Map<string, { recomendadoTotal: number; leitura: string }>();
+      if (parsed && Array.isArray(parsed.histograma)) {
+        for (const h of parsed.histograma) {
+          recoMap.set(normTxt(h?.cargo), {
+            recomendadoTotal: Number.isFinite(Number(h?.recomendadoTotal)) ? Math.max(0, Math.round(Number(h.recomendadoTotal))) : 0,
+            leitura: String(h?.leitura ?? ""),
+          });
+        }
+      }
+      const histograma = Array.from(histMap.values())
+        .sort((a, b) => b.atualTotal - a.atualTotal)
+        .map((h) => {
+          const reco = recoMap.get(normTxt(h.cargo));
+          const recomendadoTotal = reco ? reco.recomendadoTotal : h.atualTotal;
+          return {
+            cargo: h.cargo,
+            categoria: h.categoria,
+            atualTotal: h.atualTotal,
+            ativos: h.ativos,
+            recomendadoTotal,
+            delta: recomendadoTotal - h.atualTotal,
+            leitura: reco?.leitura ?? "",
+            obras: h.obras,
+          };
+        });
+
+      // 7. Transferências: FILTRO DURO de proximidade no servidor (mesma cidade/estado).
+      const obraInfo = new Map<string, { cidade: string; estado: string }>();
+      for (const o of obrasData) obraInfo.set(normTxt(o.obra), { cidade: o.cidade, estado: o.estado });
+      const transferencias: any[] = [];
+      if (parsed && Array.isArray(parsed.transferencias)) {
+        for (const t of parsed.transferencias) {
+          const de = obraInfo.get(normTxt(t?.deObra));
+          const para = obraInfo.get(normTxt(t?.paraObra));
+          const qtd = Math.round(Number(t?.quantidade) || 0);
+          if (!de || !para) continue;                                   // obra inexistente → descarta
+          if (normTxt(t?.deObra) === normTxt(t?.paraObra)) continue;    // mesma obra → descarta
+          if (cidadeKey(de.cidade, de.estado) !== cidadeKey(para.cidade, para.estado)) continue; // cidades ≠ → DESCARTA
+          if (qtd <= 0) continue;
+          transferencias.push({
+            cargo: String(t?.cargo ?? "").slice(0, 120),
+            deObra: String(t?.deObra ?? ""),
+            paraObra: String(t?.paraObra ?? ""),
+            cidade: `${de.cidade || "—"}/${de.estado || "—"}`,
+            quantidade: qtd,
+            motivo: String(t?.motivo ?? "").slice(0, 600),
+            impacto: String(t?.impacto ?? "").slice(0, 600),
+          });
+        }
+      }
+
+      const resultado = {
+        geradoEm: new Date().toISOString(),
+        companyId,
+        totalObras: obrasData.length,
+        obrasIgnoradas,
+        gruposProximidade: gruposComTroca.map(([k, arr]) => ({ grupo: k, obras: arr.map((o) => o.obra) })),
+        resumoTotais: {
+          efetivoTotal: obrasData.reduce((s, o) => s + o.totalEfetivo, 0),
+          ativos: obrasData.reduce((s, o) => s + o.totalAtivos, 0),
+          indisponiveis: obrasData.reduce((s, o) => s + o.totalIndisponiveis, 0),
+          funcoes: histograma.length,
+        },
+        obras: obrasData.map((o) => ({
+          obra: o.obra, cidade: o.cidade, estado: o.estado,
+          totalEfetivo: o.totalEfetivo, totalAtivos: o.totalAtivos, totalIndisponiveis: o.totalIndisponiveis,
+          emAndamento: o.emAndamento, proximas: o.proximas,
+        })),
+        histograma,
+        transferencias,
+        resumoExecutivo: ((): string | null => {
+          const s = String(parsed?.resumoExecutivo ?? "").trim();
+          return s ? s.slice(0, 2000) : null;
+        })(),
+        riscos: (Array.isArray(parsed?.riscos) ? parsed.riscos : [])
+          .map((r: any) => String(r ?? "").trim().slice(0, 600))
+          .filter(Boolean)
+          .slice(0, 20),
+        recomendacoes: (Array.isArray(parsed?.recomendacoes) ? parsed.recomendacoes : [])
+          .map((r: any) => String(r ?? "").trim().slice(0, 600))
+          .filter(Boolean)
+          .slice(0, 20),
+        erroIa,
+      };
+
+      // 8. Persiste (best-effort) p/ recuperação após queda — projetoId=0, tipo="global".
+      try {
+        await db.insert(planejamentoAnalisesEfetivo).values({
+          projetoId: 0,
+          companyId,
+          tipo: "global",
+          veredito: null,
+          titulo: `Efetivo × IA — ${obrasData.length} obra(s)`.slice(0, 400),
+          obra: null,
+          revisaoNumero: null,
+          resultado,
+          contexto: {},
+          erroIa,
+          criadoPor: ((ctx.user as any).name ?? null),
+        });
+      } catch (err: any) {
+        console.error("[efetivoGlobal] falha ao persistir (ignorado):", err?.message ?? err);
+      }
+
+      return resultado;
+    }),
+
+  // Última visão geral global salva — restaura o resultado ao reabrir / após queda.
+  ultimaEfetivoGlobal: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Banco de dados indisponível.");
+      const companyId = input.companyId;
+      await assertCompanyAccessIa(ctx, companyId);
+      await assertAiModuleEnabled(companyId, "planejamento");
+      try {
+        const [row] = await db
+          .select()
+          .from(planejamentoAnalisesEfetivo)
+          .where(and(
+            eq(planejamentoAnalisesEfetivo.projetoId, 0),
+            eq(planejamentoAnalisesEfetivo.companyId, companyId),
+            eq(planejamentoAnalisesEfetivo.tipo, "global"),
+          ))
+          .orderBy(desc(planejamentoAnalisesEfetivo.criadoEm))
+          .limit(1);
+        if (!row) return null;
+        return {
+          id: (row as any).id,
+          criadoEm: (row as any).criadoEm,
+          criadoPor: (row as any).criadoPor ?? null,
+          resultado: brDatasDeep((row as any).resultado),
+        };
+      } catch (err: any) {
+        console.error("[ultimaEfetivoGlobal] falha (retornando null):", err?.message ?? err);
+        return null;
+      }
+    }),
 });

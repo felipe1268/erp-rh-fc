@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import EfetivoGlobalIA from "./EfetivoGlobalIA";
 
 const n = (v: any) => parseFloat(v || "0") || 0;
 
@@ -258,6 +259,9 @@ export default function PlanejamentoLista() {
             </div>
           ))}
         </div>
+
+        {/* Efetivo × IA — Visão Geral de Todas as Obras */}
+        {!!companyId && <EfetivoGlobalIA companyId={companyId} />}
 
         {/* Busca */}
         <div className="relative mb-4 max-w-sm">

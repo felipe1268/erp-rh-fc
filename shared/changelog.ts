@@ -1,6 +1,54 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3294 — **PLANEJAMENTO / EFETIVO × IA · NOVA "VISÃO GERAL — EFETIVO × IA (TODAS AS OBRAS)":
+ * UMA TELA ÚNICA QUE CRUZA O EFETIVO ATUAL POR FUNÇÃO DE TODAS AS OBRAS ATIVAS DA EMPRESA SELECIONADA
+ * COM O CRONOGRAMA DAS PRÓXIMAS 8 SEMANAS E APONTA ONDE SOBRA E ONDE FALTA EQUIPE, SUGERINDO
+ * REMANEJAMENTO DE PESSOAL — MAS SÓ ENTRE OBRAS PRÓXIMAS (MESMA CIDADE/ESTADO). O EFETIVO ATUAL POR
+ * FUNÇÃO É DETERMINÍSTICO (VEM DO BANCO, SEMPRE VISÍVEL); A IA É A CAMADA QUE RECOMENDA O EFETIVO-ALVO
+ * E PRIORIZA AS TRANSFERÊNCIAS. 100% ADITIVO · 2 ENDPOINTS NOVOS + 1 COMPONENTE + 1 LINHA NA TELA DE
+ * PROJETOS · ZERO SCHEMA NOVO/ALTER/DROP/DELETE (R-001/R-007/R-010 OK).**
+ * - PEDIDO (piloto FC): "uma visão geral que cruze os cronogramas de TODAS as obras pra achar onde sobra
+ *   e onde falta equipe e sugerir remanejamento". ESCOPO definido pelo usuário: (1) só a EMPRESA
+ *   SELECIONADA; (2) só sugerir mover equipe entre OBRAS PRÓXIMAS.
+ * - PROXIMIDADE: a tabela `obras` NÃO tem lat/long — só `cidade`/`estado`/`cep`/`endereco`. Definimos
+ *   "obras próximas" = MESMA CIDADE + MESMO ESTADO (chave `CIDADE|ESTADO` normalizada em uppercase). O
+ *   filtro de proximidade é GARANTIDO NO SERVIDOR: qualquer transferência sugerida pela IA entre obras de
+ *   cidades/estados diferentes é DESCARTADA na pós-processagem, mesmo que a IA insista. Só grupos com 2+
+ *   obras na mesma cidade entram como candidatos a remanejamento (e isso é dito no prompt).
+ * - ARQUITETURA (1 chamada de IA p/ não estourar o free-tier do Gemini): reaproveita o helper já
+ *   existente `coletarEfetivoCronograma(db, projetoId, companyId)` por obra (efetivo por cargo +
+ *   atividades em andamento/próximas 56 dias). O backend lista os projetos ATIVOS da empresa com obra
+ *   vinculada e obra `isActive=1` (exclui status concluído/suspenso), coleta cada obra em try/catch
+ *   (pula obra sem revisão/efetivo, registrando em `obrasIgnoradas`), monta o HISTOGRAMA DETERMINÍSTICO
+ *   (Σ do efetivo atual por função, com a lista de obras de cada função), agrupa as obras por
+ *   proximidade e manda UM ÚNICO contexto multi-obra compacto p/ a IA.
+ * - BACKEND (`server/routers/iaCronograma.ts`, aditivo): novo endpoint `efetivoGlobal({companyId})`
+ *   (mutation) — autoriza via `assertCompanyAccessIa` + `assertAiModuleEnabled(companyId,"planejamento")`,
+ *   monta o contexto, faz `invokeLLM({fast:true, response_format:json_object, maxTokens:8000})` pedindo
+ *   `{resumoExecutivo, histograma[], transferencias[], riscos[], recomendacoes[]}`, e na volta: (a) o
+ *   histograma final usa o ATUAL determinístico do banco e só pega o `recomendadoTotal`/`leitura` da IA
+ *   (se a IA omitir uma função, o recomendado cai p/ o atual, delta 0); (b) as transferências passam
+ *   pelo FILTRO DURO de proximidade (obra existe? mesma `CIDADE|ESTADO`? deObra≠paraObra? qtd>0?) e o que
+ *   não passar é descartado. SANITIZAÇÃO de saída: `resumoExecutivo` é coagido p/ string (≤2000) e
+ *   `riscos`/`recomendacoes` p/ array de strings (≤600 cada, máx 20, vazios descartados) — se a IA devolver
+ *   objeto/array no lugar de texto, o painel React não quebra ("Objects are not valid as a React child").
+ *   Persiste best-effort em `planejamento_analises_efetivo` com `projetoId=0` +
+ *   `tipo="global"` p/ RECUPERAÇÃO após queda de conexão (iPad/Safari). Novo endpoint
+ *   `ultimaEfetivoGlobal({companyId})` (query) restaura a última visão geral salva. Reusa a tabela já
+ *   existente (Rev. 3291 já a tem no self-heal `[SyncSchema+]`) — ZERO schema novo.
+ * - FRONTEND (novo `client/src/pages/planejamento/EfetivoGlobalIA.tsx` + 1 linha em
+ *   `PlanejamentoLista.tsx`): painel na própria tela Planejamento › Projetos (reusa a permissão
+ *   `planejamento` que o usuário já tem — SEM rota/menu/permissão nova, evitando as pegadinhas de
+ *   registro de menu/permissão). Botão "Analisar todas as obras" com barra de progresso; cards de
+ *   totais; resumo executivo; cards de remanejamento sugerido (deObra → paraObra, cidade, função,
+ *   qtd, motivo, impacto); histograma por função (barras atual × recomendado, badge Sobra/Falta/
+ *   Equilibrado pelo delta); riscos + recomendações; lista de obras ignoradas. Restaura a última
+ *   análise via `ultimaEfetivoGlobal` ao abrir e, em erro de transporte na mutation, tenta recuperar o
+ *   resultado fresco persistido antes de falhar (padrão iPad da Rev. 3287).
+ * - VALIDAÇÃO: `tsc --noEmit` limpo nos arquivos tocados (iaCronograma.ts, EfetivoGlobalIA.tsx,
+ *   PlanejamentoLista.tsx). App sobe sem erros no Neon de DEV.
+ *
  * Rev. 3293 — **RH & DP / FOLHA DE PAGAMENTO (VALE + FOLHA MENSAL) · ARREDONDAMENTO PARA MÚLTIPLOS DE
  * R$ 1,00 COM CARRY-FORWARD AUDITÁVEL. O VALOR PAGO (VALE E LÍQUIDO DA FOLHA) AGORA É O REAL INTEIRO
  * MAIS PRÓXIMO DO LÍQUIDO EXATO; O RESIDUAL EM CENTAVOS NÃO SE PERDE — VIRA SALDO QUE CARREGA PRA O
