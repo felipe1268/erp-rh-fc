@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3296 — **PLANEJAMENTO / EFETIVO × IA (VISÃO GERAL — TODAS AS OBRAS) · A IA AGORA ESTIMA EM QUE
+ * DATA VAI SOBRAR MÃO DE OBRA PARA REALOCAR: ALÉM DE APONTAR "SOBRA (-2)" POR FUNÇÃO, A ANÁLISE PASSA A
+ * DIZER *QUANDO* A EQUIPE SE LIBERA — A SOBRA SURGE QUANDO UMA FRENTE/ATIVIDADE CONCLUI. NOVA SEÇÃO
+ * "PREVISÃO DE DISPONIBILIDADE (QUANDO SOBRA MÃO DE OBRA)" COM DATA ESTIMADA POR FUNÇÃO/OBRA + DATA
+ * "DISPONÍVEL A PARTIR DE" EM CADA CARD DE REMANEJAMENTO. 100% ADITIVO · CONTEXTO+PROMPT+SANITIZAÇÃO+UI ·
+ * ZERO SCHEMA/ALTER/DROP/DELETE (R-001/R-007/R-010 OK).**
+ * - PEDIDO (piloto FC): "quero que a resposta estime em que data vai sobrar mão de obra para realocar" —
+ *   hoje a tela mostra "Sobra (-2)" para SERVENTE mas não diz QUANDO essa sobra acontece.
+ * - DEFINIÇÃO: a sobra se materializa quando uma FRENTE (atividade) CONCLUI e libera a equipe daquela
+ *   frente. A fonte determinística da data é o `dataFim` das atividades-folha dentro do horizonte das
+ *   próximas 8 semanas (em andamento + próximas que terminam ≤ 56 dias).
+ * - BACKEND (`server/routers/iaCronograma.ts`, aditivo):
+ *   • `efetivoGlobal`: o tipo `ObraEfetivo` ganha `frentesConcluindo: string[]`; por obra, combina
+ *     `emAndamento`+`proximas`, filtra as atividades cujo `dataFim` cai no horizonte (helpers `hojeG`/
+ *     `horizG`/`parseDtG`), ordena pela data de término (a mais próxima primeiro), pega as 6 primeiras e
+ *     formata "{nome} — conclui DD/MM/AAAA (recurso: …)". Esse bloco entra no contexto multi-obra da IA
+ *     ("Frentes que CONCLUEM no horizonte (liberam equipe → quando SOBRA mão de obra)").
+ *   • Prompt: nova diretriz no `systemPrompt` ("ESTIMATIVA DE DATA DE SOBRA…"); o schema JSON ganha
+ *     `previsaoDisponibilidade: [{cargo, obra, dataEstimada, quantidade, motivo, sugestao}]` e cada
+ *     `transferencias[]` ganha `dataDisponivel` (quando a equipe da origem se libera). Regras pedem para
+ *     derivar a data das frentes concluindo e NÃO inventar data sem frente que justifique.
+ *   • Sanitização: `previsaoDisponibilidade` só aceita itens cuja `obra` existe na lista analisada
+ *     (`obraInfo`), exige `cargo`+`dataEstimada`, clampa `quantidade`; `transferencias[].dataDisponivel`
+ *     é normalizado (string ≤40, `null` se vazio). Datas passam pelo `brDatasDeep` já existente.
+ * - FRONTEND (`client/src/pages/planejamento/EfetivoGlobalIA.tsx`):
+ *   • Nova seção "Previsão de disponibilidade (quando sobra mão de obra)" (verde, ícone CalendarClock):
+ *     cards por função com badge da data estimada, obra, quantidade, motivo (frente que conclui) e
+ *     sugestão de realocação — só renderiza quando há itens.
+ *   • Cada card de "Remanejamento sugerido" mostra "Disponível a partir de DD/MM/AAAA" quando a IA
+ *     informa `dataDisponivel`.
+ * - VALIDADO: esbuild parse limpo nos 2 arquivos tocados; app sobe no Neon DEV (HTTP 200).
+ *
  * Rev. 3295 — **PLANEJAMENTO / EFETIVO × IA (VISÃO GERAL — TODAS AS OBRAS) · O NÚMERO DETERMINÍSTICO POR
  * FUNÇÃO AGORA ABATE QUEM ENTRA DE FÉRIAS NO HORIZONTE: ALÉM DO "EFETIVO ATUAL" (ATIVOS) E DO "RECOMENDADO"
  * (IA), O HISTOGRAMA PASSA A MOSTRAR O "DISPONÍVEL NO HORIZONTE" = ATIVOS − QUEM ENTRA DE FÉRIAS INADIÁVEIS

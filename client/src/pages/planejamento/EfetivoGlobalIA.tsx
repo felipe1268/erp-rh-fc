@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import {
   Sparkles, Loader2, Users, ArrowRight, MapPin, AlertTriangle,
-  TrendingUp, TrendingDown, CheckCircle2, Building2, RefreshCw, Lightbulb, Clock, Plane,
+  TrendingUp, TrendingDown, CheckCircle2, Building2, RefreshCw, Lightbulb, Clock, Plane, CalendarClock,
 } from "lucide-react";
 
 type Props = { companyId: number };
@@ -78,6 +78,7 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
 
   const erroIa = resultado?.erroIa as string | null | undefined;
   const transferencias = (resultado?.transferencias ?? []) as any[];
+  const previsaoDisponibilidade = (resultado?.previsaoDisponibilidade ?? []) as any[];
   const histograma = (resultado?.histograma ?? []) as any[];
   const totais = resultado?.resumoTotais ?? null;
   const obrasIgnoradas = (resultado?.obrasIgnoradas ?? []) as any[];
@@ -205,7 +206,12 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
                         <ArrowRight className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
                         <span className="font-medium text-emerald-700 truncate max-w-[40%]">{t.paraObra}</span>
                       </div>
-                      <p className="text-[10px] text-slate-400 flex items-center gap-1 mb-1.5"><MapPin className="h-3 w-3" /> {t.cidade}</p>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-1.5">
+                        <p className="text-[10px] text-slate-400 flex items-center gap-1"><MapPin className="h-3 w-3" /> {t.cidade}</p>
+                        {norm(t.dataDisponivel) && (
+                          <span className="text-[10px] font-semibold text-emerald-700 flex items-center gap-1"><CalendarClock className="h-3 w-3" /> Disponível a partir de {t.dataDisponivel}</span>
+                        )}
+                      </div>
                       {t.motivo && <p className="text-[11px] text-slate-600 leading-snug">{t.motivo}</p>}
                       {t.impacto && <p className="text-[11px] text-slate-500 leading-snug mt-1"><strong>Impacto:</strong> {t.impacto}</p>}
                     </div>
@@ -213,6 +219,33 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
                 </div>
               )}
             </div>
+
+            {/* Previsão de disponibilidade — QUANDO sobra mão de obra p/ realocar */}
+            {previsaoDisponibilidade.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
+                  <CalendarClock className="h-3.5 w-3.5 text-emerald-600" /> Previsão de disponibilidade (quando sobra mão de obra)
+                </p>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
+                  {previsaoDisponibilidade.map((d, i) => (
+                    <div key={i} className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-3">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="text-xs font-semibold text-slate-800">{d.cargo}</span>
+                        <span className="text-[10px] font-bold text-white bg-emerald-600 rounded-full px-2 py-0.5 flex items-center gap-1 shrink-0">
+                          <CalendarClock className="h-3 w-3" /> {d.dataEstimada}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 flex items-center gap-1 mb-1.5">
+                        <Building2 className="h-3 w-3" /> {d.obra}
+                        {Number(d.quantidade) > 0 && <span className="font-semibold text-emerald-700">· {d.quantidade} pessoa(s)</span>}
+                      </p>
+                      {d.motivo && <p className="text-[11px] text-slate-600 leading-snug">{d.motivo}</p>}
+                      {d.sugestao && <p className="text-[11px] text-slate-500 leading-snug mt-1"><strong>Sugestão:</strong> {d.sugestao}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Histograma por função */}
             <div>

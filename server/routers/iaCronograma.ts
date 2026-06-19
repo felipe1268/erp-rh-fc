@@ -2582,10 +2582,20 @@ Retorne um JSON com esta estrutura exata:
         emAndamento: number; proximas: number;
         porCargo: { cargo: string; categoria: string; total: number; ativos: number; indisponiveis: number; feriasHorizonte: number }[];
         proximasTopo: string[];
+        frentesConcluindo: string[];
       };
       const obrasData: ObraEfetivo[] = [];
       const obrasVistas = new Set<number>();
       const obrasIgnoradas: { obra: string; motivo: string }[] = [];
+      // Helpers de data p/ as frentes que CONCLUEM no horizonte (= quando a equipe
+      // se libera p/ realocar). Horizonte = 56 dias (mesmo das próximas 8 semanas).
+      const hojeG = new Date(); hojeG.setHours(0, 0, 0, 0);
+      const horizG = new Date(hojeG); horizG.setDate(horizG.getDate() + 56);
+      const parseDtG = (s: any): Date | null => {
+        if (!s) return null;
+        const d = new Date(String(s).slice(0, 10) + "T00:00:00");
+        return isNaN(d.getTime()) ? null : d;
+      };
       for (const p of ativos) {
         if (obrasVistas.has(p.obraId)) continue;
         if (obrasData.length >= 40) break;
@@ -2611,6 +2621,14 @@ Retorne um JSON com esta estrutura exata:
             })),
             proximasTopo: (c.proximas || []).slice(0, 4).map((a: any) =>
               `${a.nome}${a.recursoPrincipal ? ` (recurso: ${a.recursoPrincipal})` : ""}`),
+            // Frentes que CONCLUEM dentro do horizonte (libera a equipe = quando
+            // SOBRA mão de obra). Em andamento + próximas com dataFim ≤ 56 dias,
+            // ordenadas pela data de término (a mais próxima primeiro).
+            frentesConcluindo: [...(c.emAndamento || []), ...(c.proximas || [])]
+              .filter((a: any) => { const f = parseDtG(a.dataFim); return f != null && f >= hojeG && f <= horizG; })
+              .sort((a: any, b: any) => (parseDtG(a.dataFim)!.getTime()) - (parseDtG(b.dataFim)!.getTime()))
+              .slice(0, 6)
+              .map((a: any) => `${a.nome} — conclui ${isoParaBR(a.dataFim)}${a.recursoPrincipal ? ` (recurso: ${a.recursoPrincipal})` : ""}`),
           });
         } catch (err: any) {
           obrasIgnoradas.push({ obra: p.obraNome || `Obra ${p.obraId}`, motivo: String(err?.message ?? "sem cronograma/efetivo") });
@@ -2645,12 +2663,15 @@ Retorne um JSON com esta estrutura exata:
           ? o.porCargo.map((g) => `      • ${g.cargo} [${g.categoria}]: ${g.total} (ativos ${g.ativos}, indisp. ${g.indisponiveis}${g.feriasHorizonte ? `, entram de FÉRIAS inadiáveis nas próx. 8 sem: ${g.feriasHorizonte} → disponível no horizonte ${Math.max(0, g.ativos - g.feriasHorizonte)}` : ""})`).join("\n")
           : "      • (sem efetivo alocado)";
         const proxTxt = o.proximasTopo.length ? o.proximasTopo.map((a) => `      - ${a}`).join("\n") : "      - (nenhuma)";
+        const concluiTxt = o.frentesConcluindo.length ? o.frentesConcluindo.map((a) => `      - ${a}`).join("\n") : "      - (nenhuma frente concluindo no horizonte)";
         return `  ${i + 1}. OBRA: ${o.obra} | Cidade: ${o.cidade || "—"}/${o.estado || "—"} | Grupo de proximidade: ${o.grupoProximidade}
      Efetivo total ${o.totalEfetivo} (ativos ${o.totalAtivos}, indisponíveis ${o.totalIndisponiveis}) | Atividades hoje: ${o.emAndamento} | Próximas 8 sem.: ${o.proximas}
      Efetivo por função:
 ${cargosTxt}
      Principais frentes que iniciam nas próximas semanas:
-${proxTxt}`;
+${proxTxt}
+     Frentes que CONCLUEM no horizonte (liberam equipe → quando SOBRA mão de obra):
+${concluiTxt}`;
       }).join("\n\n");
 
       const gruposTxt = gruposComTroca.length
@@ -2658,6 +2679,8 @@ ${proxTxt}`;
         : "  (Nenhum grupo com 2+ obras na mesma cidade/estado — NÃO há remanejamento possível entre obras próximas; deixe \"transferencias\" vazio.)";
 
       const systemPrompt = `Você é JULINHO, engenheiro sênior de planejamento e gestão de mão de obra da FC Engenharia (construção civil pesada). Aqui você faz a VISÃO GERAL DE TODAS AS OBRAS ATIVAS DE UMA EMPRESA ao mesmo tempo: cruza o efetivo atual de cada obra com o cronograma das próximas 8 semanas e identifica ONDE SOBRA gente (função terminando a frente) e ONDE FALTA (frente entrando sem efetivo), para sugerir REMANEJAMENTO de equipe entre obras.
+
+ESTIMATIVA DE DATA DE SOBRA: para CADA função em que houver sobra, ESTIME EM QUE DATA a mão de obra ficará disponível para realocar. A sobra surge quando uma FRENTE/ATIVIDADE CONCLUI (a equipe daquela frente se libera). Use a lista "Frentes que CONCLUEM no horizonte" de cada obra (cada uma traz a data de término e, quando há, o recurso/função) para inferir a data. Se várias frentes da mesma função concluem em datas diferentes, use a data em que a sobra efetivamente se materializa (a frente cuja conclusão libera a quantidade indicada). Toda data DD/MM/AAAA dentro do horizonte das próximas 8 semanas.
 
 REGRA DURA DE PROXIMIDADE: só sugira mover equipe entre obras do MESMO grupo de proximidade (mesma cidade/estado) — a empresa não remaneja gente entre cidades diferentes. Use SOMENTE os grupos com 2+ obras listados. Se não houver nenhum grupo com 2+ obras, retorne "transferencias": [].
 
@@ -2681,14 +2704,17 @@ Retorne um JSON EXATAMENTE nesta estrutura (sem markdown, sem comentários):
   "histograma": [
     { "cargo": "string", "categoria": "string", "atualTotal": number, "recomendadoTotal": number, "delta": number, "leitura": "string — 1 frase por função" }
   ],
+  "previsaoDisponibilidade": [
+    { "cargo": "string", "obra": "string (nome EXATO da obra onde a sobra surge)", "dataEstimada": "DD/MM/AAAA — quando a mão de obra fica livre", "quantidade": number, "motivo": "string — qual frente concluindo libera a equipe", "sugestao": "string — para onde realocar (obra/frente) ou ação" }
+  ],
   "transferencias": [
-    { "cargo": "string", "deObra": "string (nome EXATO de uma obra da lista)", "paraObra": "string (nome EXATO de OUTRA obra do MESMO grupo de proximidade)", "cidade": "string", "quantidade": number, "motivo": "string — por que sobra na origem e falta no destino", "impacto": "string — efeito no prazo das duas obras" }
+    { "cargo": "string", "deObra": "string (nome EXATO de uma obra da lista)", "paraObra": "string (nome EXATO de OUTRA obra do MESMO grupo de proximidade)", "cidade": "string", "quantidade": number, "dataDisponivel": "DD/MM/AAAA — data estimada em que a equipe se libera na origem (vazio se imediato)", "motivo": "string — por que sobra na origem e falta no destino", "impacto": "string — efeito no prazo das duas obras" }
   ],
   "riscos": [ "string" ],
   "recomendacoes": [ "string — ações práticas e priorizadas" ]
 }
 
-Regras: em "histograma" inclua TODAS as funções que aparecem no efetivo das obras; "delta" = recomendadoTotal - atualTotal (negativo = sobra/reduzir). Considere que parte do efetivo ENTRA DE FÉRIAS INADIÁVEIS nas próximas 8 semanas (quando indicado na função como "entram de FÉRIAS ... → disponível no horizonte N"): a disponibilidade REAL no horizonte é o "disponível no horizonte", menor que o efetivo atual — leve isso em conta ao apontar falta de equipe e ao priorizar transferências. Em "transferencias", "deObra" e "paraObra" devem ser nomes EXATOS de obras do MESMO grupo de proximidade; jamais misture cidades. Seja específico e quantitativo.`;
+Regras: em "histograma" inclua TODAS as funções que aparecem no efetivo das obras; "delta" = recomendadoTotal - atualTotal (negativo = sobra/reduzir). Em "previsaoDisponibilidade" inclua UM item por função+obra em que há sobra (delta negativo / frente concluindo), com a DATA ESTIMADA em que a equipe se libera — derive a data das "Frentes que CONCLUEM no horizonte"; se não houver frente concluindo que justifique a sobra, NÃO invente data (omita o item). Considere que parte do efetivo ENTRA DE FÉRIAS INADIÁVEIS nas próximas 8 semanas (quando indicado na função como "entram de FÉRIAS ... → disponível no horizonte N"): a disponibilidade REAL no horizonte é o "disponível no horizonte", menor que o efetivo atual — leve isso em conta ao apontar falta de equipe e ao priorizar transferências. Em "transferencias", "deObra" e "paraObra" devem ser nomes EXATOS de obras do MESMO grupo de proximidade; jamais misture cidades; "dataDisponivel" = quando a equipe da origem se libera (use as frentes concluindo). Seja específico e quantitativo.`;
 
       let parsed: any = null;
       let erroIa: string | null = null;
@@ -2764,8 +2790,30 @@ Regras: em "histograma" inclua TODAS as funções que aparecem no efetivo das ob
             paraObra: String(t?.paraObra ?? ""),
             cidade: `${de.cidade || "—"}/${de.estado || "—"}`,
             quantidade: qtd,
+            dataDisponivel: String(t?.dataDisponivel ?? "").trim().slice(0, 40) || null,
             motivo: String(t?.motivo ?? "").slice(0, 600),
             impacto: String(t?.impacto ?? "").slice(0, 600),
+          });
+        }
+      }
+
+      // 7b. Previsão de disponibilidade: QUANDO (data) cada função sobra p/ realocar.
+      // Só aceita itens cuja obra existe na lista analisada (evita alucinação).
+      const previsaoDisponibilidade: any[] = [];
+      if (parsed && Array.isArray(parsed.previsaoDisponibilidade)) {
+        for (const d of parsed.previsaoDisponibilidade) {
+          if (!obraInfo.has(normTxt(d?.obra))) continue;            // obra inexistente → descarta
+          const qtd = Math.round(Number(d?.quantidade) || 0);
+          const cargo = String(d?.cargo ?? "").trim().slice(0, 120);
+          const dataEstimada = String(d?.dataEstimada ?? "").trim().slice(0, 40);
+          if (!cargo || !dataEstimada) continue;                   // sem função ou sem data → descarta
+          previsaoDisponibilidade.push({
+            cargo,
+            obra: String(d?.obra ?? "").trim().slice(0, 300),
+            dataEstimada,
+            quantidade: qtd > 0 ? qtd : null,
+            motivo: String(d?.motivo ?? "").trim().slice(0, 600),
+            sugestao: String(d?.sugestao ?? "").trim().slice(0, 600),
           });
         }
       }
@@ -2790,6 +2838,7 @@ Regras: em "histograma" inclua TODAS as funções que aparecem no efetivo das ob
         })),
         histograma,
         transferencias,
+        previsaoDisponibilidade,
         resumoExecutivo: ((): string | null => {
           const s = String(parsed?.resumoExecutivo ?? "").trim();
           return s ? s.slice(0, 2000) : null;
