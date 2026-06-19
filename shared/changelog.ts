@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3327 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NO "PANORAMA GERAL DO MÊS" OS 7 CARDS DE CIMA (TOTAL DE ENTRADAS,
+ * TOTAL DE SAÍDAS, SALDO DO MÊS, CONCILIADOS, NO EXTRATO SEM LANÇAMENTO, NO ERP SEM EXTRATO, % CONCILIADO) ERAM SÓ
+ * NÚMEROS INERTES; AGORA CADA CARD É CLICÁVEL E ABRE UM DIÁLOGO COM TODAS AS LINHAS/INFORMAÇÕES QUE COMPÕEM AQUELE
+ * NÚMERO (LISTA DETALHADA OU RESUMO POR CONTA). 100% FRONT · UX/ADITIVO · REGRA DE OURO MANTIDA (SÓ LEITURA — NADA
+ * CONCILIA/BAIXA) · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (print do usuário — Panorama Geral do Mês): "Os cards não estão responsivos, quero clicar neles e abrir todas
+ *   informações pertinentes". Os cards de resumo mostravam o total mas não deixavam ver de onde vinha cada valor.
+ * - FRONT (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): os 7 cards viraram `<button>` (hover + ícone `Eye`)
+ *   que setam o estado `panoramaDrill` ("entradas" | "saidas" | "saldo" | "conciliados" | "extratoSemLanc" |
+ *   "lancSemExtrato" | "pct"). Um novo `Dialog` (full-screen no mobile, amplo no desktop) renderiza o conteúdo conforme
+ *   o card clicado.
+ * - DADOS: nada de backend novo — o relatório `getConciliacaoReportGeral` já devolve por conta as listas `conciliados`,
+ *   `extratoSemLancamento` e `lancamentosSemExtrato`. Um memo `drill` ACHATA essas listas para a empresa toda (filtra os
+ *   pares de estorno no extrato, mesma regra do por-conta) e deriva `entradas` (valor>0) e `saidas` (valor<0) a partir de
+ *   `[conciliados + extratoSemLancamento]` — exatamente a base usada no backend para os totais de movimentação (Rev. 3322).
+ *   Todas as linhas ordenadas por data.
+ * - CONTEÚDO POR CARD: entradas/saídas/conciliados/extrato-sem-lançamento/ERP-sem-extrato → LISTA de linhas (ícone de
+ *   direção, data, descrição/fornecedor, rótulo da conta, valor BRL colorido); lançamentos do ERP têm olho que fecha o
+ *   drill e abre o detalhe consultivo (`setDetalheEntryId`, só para ids reais — pula grupos sintéticos). "Saldo do mês" →
+ *   resumo entradas×saídas + tabela de saldo POR CONTA. "% conciliado" → barra de progresso e fração conciliado/total POR
+ *   CONTA. Rodapé reforça "somente leitura — para conciliar, abra a conta no panorama".
+ * - MOEDA em BRL via `formatBRL`. SEM rota/permissão/endpoint novo. Hooks no topo do componente (memo + estado), sem
+ *   condicional. ARQUIVOS: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`, `shared/version.ts` (3327),
+ *   `shared/changelog.ts`, `replit.md`.
+ *
  * Rev. 3326 — **FINANCEIRO / CONTROLE DE CARTÃO DE CRÉDITO · NOVA ABA "COMPARATIVO" — TELA MÊS A MÊS DE CADA CARTÃO/FATURA
  * PRA VER SE O GASTO SUBIU OU ABAIXOU ENTRE OS MESES. MATRIZ CARTÃO × MÊS (JAN..DEZ) DO ANO, COM SETA/% DE VARIAÇÃO VS O
  * MÊS ANTERIOR COM FATURA + LINHA "TOTAL GERAL" + COLUNA "TOTAL DO ANO". 100% FINANCEIRO (1 BACKEND READ-ONLY + 1 FRONT) ·

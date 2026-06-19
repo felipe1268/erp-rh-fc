@@ -519,6 +519,33 @@ export default function FinanceiroConciliacao() {
   // origem pelo backend). O extrato filtra os pares de estorno (mesma regra do por-conta).
   const geralExtAll: any[] = (reportGeral?.extratoSemLancamento ?? []).filter((r: any) => !r.reversal && !r.reversalResolveGrupo);
   const geralLanAll: any[] = reportGeral?.lancamentosSemExtrato ?? [];
+  // Rev. 3327 — DRILL-IN DOS CARDS DO PANORAMA: cada card de cima vira clicável e abre um
+  // diálogo com TODAS as linhas que compõem aquele número. Os dados já vêm no report (por
+  // conta); aqui apenas achatamos para a empresa toda. READ-ONLY (nada concilia/baixa).
+  const [panoramaDrill, setPanoramaDrill] = useState<null | "entradas" | "saidas" | "saldo" | "conciliados" | "extratoSemLanc" | "lancSemExtrato" | "pct">(null);
+  const drill = useMemo(() => {
+    const contas: any[] = reportGeral?.contas ?? [];
+    const conc: any[] = [];
+    const ext: any[] = [];
+    const lan: any[] = [];
+    for (const c of contas) {
+      for (const x of (c.conciliados ?? [])) conc.push(x);
+      for (const x of (c.extratoSemLancamento ?? []).filter((r: any) => !r.reversal && !r.reversalResolveGrupo)) ext.push(x);
+      for (const x of (c.lancamentosSemExtrato ?? [])) lan.push(x);
+    }
+    // Movimentação do extrato = conciliado + pendente (mesma base do backend p/ entradas/saídas).
+    const extratoTodo = [...conc, ...ext];
+    const entradas = extratoTodo.filter((x: any) => (Number(x.valor) || 0) > 0);
+    const saidas = extratoTodo.filter((x: any) => (Number(x.valor) || 0) < 0);
+    const ordPorData = (a: any, b: any) => String(a.data ?? "").localeCompare(String(b.data ?? ""));
+    return {
+      conciliados: [...conc].sort(ordPorData),
+      extratoSemLanc: [...ext].sort(ordPorData),
+      lancSemExtrato: [...lan].sort(ordPorData),
+      entradas: [...entradas].sort(ordPorData),
+      saidas: [...saidas].sort(ordPorData),
+    };
+  }, [reportGeral]);
   // Ao carregar o panorama, abre por padrão as contas com pendências (extrato OU ERP).
   useEffect(() => {
     if (!reportGeral || geralExpInit) return;
@@ -1636,7 +1663,7 @@ export default function FinanceiroConciliacao() {
                         contas com extrato. Crédito = entrada; débito = saída. Independe do
                         status de conciliação — é o quanto entrou e saiu no banco. */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
-                      <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 flex items-center gap-3">
+                      <button type="button" onClick={() => setPanoramaDrill("entradas")} title="Ver todas as entradas (créditos) do mês" className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 flex items-center gap-3 text-left hover:bg-emerald-100/70 hover:border-emerald-300 transition-colors">
                         <div className="h-10 w-10 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
                           <ArrowDownCircle className="w-5 h-5 text-emerald-600" />
                         </div>
@@ -1645,8 +1672,9 @@ export default function FinanceiroConciliacao() {
                           <p className="text-xl font-bold text-emerald-700 truncate">{formatBRL(geralTotais?.valorEntradas ?? 0)}</p>
                           <p className="text-[11px] text-emerald-600/80">{geralTotais?.qtdEntradas ?? 0} crédito(s)</p>
                         </div>
-                      </div>
-                      <div className="rounded-xl border border-red-200 bg-red-50/70 p-3 flex items-center gap-3">
+                        <Eye className="w-4 h-4 text-emerald-400 shrink-0 ml-auto" />
+                      </button>
+                      <button type="button" onClick={() => setPanoramaDrill("saidas")} title="Ver todas as saídas (débitos) do mês" className="rounded-xl border border-red-200 bg-red-50/70 p-3 flex items-center gap-3 text-left hover:bg-red-100/70 hover:border-red-300 transition-colors">
                         <div className="h-10 w-10 rounded-lg bg-red-100 flex items-center justify-center shrink-0">
                           <ArrowUpCircle className="w-5 h-5 text-red-600" />
                         </div>
@@ -1655,8 +1683,9 @@ export default function FinanceiroConciliacao() {
                           <p className="text-xl font-bold text-red-600 truncate">{formatBRL(geralTotais?.valorSaidas ?? 0)}</p>
                           <p className="text-[11px] text-red-600/80">{geralTotais?.qtdSaidas ?? 0} débito(s)</p>
                         </div>
-                      </div>
-                      <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex items-center gap-3">
+                        <Eye className="w-4 h-4 text-red-400 shrink-0 ml-auto" />
+                      </button>
+                      <button type="button" onClick={() => setPanoramaDrill("saldo")} title="Ver o resumo do saldo (entradas × saídas) por conta" className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex items-center gap-3 text-left hover:bg-slate-100/70 hover:border-slate-300 transition-colors">
                         <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
                           <Landmark className="w-5 h-5 text-slate-600" />
                         </div>
@@ -1667,30 +1696,35 @@ export default function FinanceiroConciliacao() {
                           ); })()}
                           <p className="text-[11px] text-slate-500">{geralTotais?.contas ?? 0} conta(s) com extrato</p>
                         </div>
-                      </div>
+                        <Eye className="w-4 h-4 text-slate-400 shrink-0 ml-auto" />
+                      </button>
                     </div>
                     {/* KPIs agregados da empresa no mês */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                      <div className="rounded-xl border border-green-200 bg-green-50/60 p-3">
+                      <button type="button" onClick={() => setPanoramaDrill("conciliados")} title="Ver as linhas já conciliadas do mês" className="rounded-xl border border-green-200 bg-green-50/60 p-3 text-left hover:bg-green-100/70 hover:border-green-300 transition-colors relative">
+                        <Eye className="w-3.5 h-3.5 text-green-400 absolute top-2 right-2" />
                         <p className="text-[11px] text-green-700 font-medium">Conciliados</p>
                         <p className="text-lg font-bold text-green-700">{geralTotais?.conciliados ?? 0}</p>
                         <p className="text-[11px] text-green-600/80">{formatBRL(geralTotais?.valorConciliado ?? 0)}</p>
-                      </div>
-                      <div className="rounded-xl border border-rose-200 bg-rose-50/60 p-3">
+                      </button>
+                      <button type="button" onClick={() => setPanoramaDrill("extratoSemLanc")} title="Ver as linhas do extrato ainda sem lançamento no ERP" className="rounded-xl border border-rose-200 bg-rose-50/60 p-3 text-left hover:bg-rose-100/70 hover:border-rose-300 transition-colors relative">
+                        <Eye className="w-3.5 h-3.5 text-rose-400 absolute top-2 right-2" />
                         <p className="text-[11px] text-rose-700 font-medium">No extrato, sem lançamento</p>
                         <p className="text-lg font-bold text-rose-700">{geralTotais?.extratoSemLancamento ?? 0}</p>
                         <p className="text-[11px] text-rose-600/80">{formatBRL(geralTotais?.valorExtratoSemLancamento ?? 0)}</p>
-                      </div>
-                      <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+                      </button>
+                      <button type="button" onClick={() => setPanoramaDrill("lancSemExtrato")} title="Ver os lançamentos do ERP ainda sem linha no extrato" className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 text-left hover:bg-amber-100/70 hover:border-amber-300 transition-colors relative">
+                        <Eye className="w-3.5 h-3.5 text-amber-400 absolute top-2 right-2" />
                         <p className="text-[11px] text-amber-700 font-medium">No ERP, sem extrato</p>
                         <p className="text-lg font-bold text-amber-700">{geralTotais?.lancamentosSemExtrato ?? 0}</p>
                         <p className="text-[11px] text-amber-600/80">{formatBRL(geralTotais?.valorLancamentosSemExtrato ?? 0)}</p>
-                      </div>
-                      <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3">
+                      </button>
+                      <button type="button" onClick={() => setPanoramaDrill("pct")} title="Ver o detalhamento do % conciliado por conta" className="rounded-xl border border-blue-200 bg-blue-50/60 p-3 text-left hover:bg-blue-100/70 hover:border-blue-300 transition-colors relative">
+                        <Eye className="w-3.5 h-3.5 text-blue-400 absolute top-2 right-2" />
                         <p className="text-[11px] text-blue-700 font-medium">% conciliado</p>
                         <p className="text-lg font-bold text-blue-700">{geralTotais?.pctConciliado ?? 0}%</p>
                         <p className="text-[11px] text-blue-600/80">{geralTotais?.contas ?? 0} conta(s) com extrato</p>
-                      </div>
+                      </button>
                     </div>
                     <p className="text-[11px] text-gray-400 mb-4">Como é calculado: <strong>Total de entradas/saídas</strong> = soma dos créditos (entradas) e dos débitos (saídas) de TODO o extrato do mês, somando todas as contas (independe da conciliação). Os 4 cards de conciliação contam as linhas (em módulo) por situação. Cada conta abaixo mostra suas próprias entradas/saídas — cada lançamento segue vinculado à sua conta.</p>
 
@@ -2279,6 +2313,135 @@ export default function FinanceiroConciliacao() {
                 </CardContent>
               )}
             </Card>
+
+            {/* Rev. 3327 — DRILL-IN dos cards do Panorama: abre TODAS as linhas que compõem
+                cada card (entradas/saídas/saldo/conciliados/extrato-sem-lançamento/ERP-sem-extrato/
+                % conciliado). READ-ONLY — só leitura; nada concilia/baixa aqui. */}
+            <Dialog open={!!panoramaDrill} onOpenChange={(o) => !o && setPanoramaDrill(null)}>
+              <DialogContent className="max-w-2xl w-screen h-[100dvh] sm:w-auto sm:h-auto sm:max-h-[90vh] flex flex-col p-0 gap-0">
+                {(() => {
+                  const cfg: Record<string, { titulo: string; icone: any; cor: string; itens: any[]; tipo: "extrato" | "entry"; valor: number; qtdLabel: string }> = {
+                    entradas: { titulo: "Entradas do mês (créditos)", icone: ArrowDownCircle, cor: "text-emerald-600", itens: drill.entradas, tipo: "extrato", valor: geralTotais?.valorEntradas ?? 0, qtdLabel: "crédito(s)" },
+                    saidas: { titulo: "Saídas do mês (débitos)", icone: ArrowUpCircle, cor: "text-red-600", itens: drill.saidas, tipo: "extrato", valor: geralTotais?.valorSaidas ?? 0, qtdLabel: "débito(s)" },
+                    saldo: { titulo: "Saldo do mês — entradas × saídas", icone: Landmark, cor: "text-slate-600", itens: [], tipo: "extrato", valor: (geralTotais?.valorEntradas ?? 0) - (geralTotais?.valorSaidas ?? 0), qtdLabel: "" },
+                    conciliados: { titulo: "Linhas conciliadas do mês", icone: CheckCircle, cor: "text-green-600", itens: drill.conciliados, tipo: "extrato", valor: geralTotais?.valorConciliado ?? 0, qtdLabel: "linha(s)" },
+                    extratoSemLanc: { titulo: "No extrato, sem lançamento no ERP", icone: AlertCircle, cor: "text-rose-600", itens: drill.extratoSemLanc, tipo: "extrato", valor: geralTotais?.valorExtratoSemLancamento ?? 0, qtdLabel: "linha(s)" },
+                    lancSemExtrato: { titulo: "No ERP, sem linha no extrato", icone: FileText, cor: "text-amber-600", itens: drill.lancSemExtrato, tipo: "entry", valor: geralTotais?.valorLancamentosSemExtrato ?? 0, qtdLabel: "lançamento(s)" },
+                    pct: { titulo: "% conciliado — por conta", icone: CheckCircle, cor: "text-blue-600", itens: [], tipo: "extrato", valor: geralTotais?.pctConciliado ?? 0, qtdLabel: "" },
+                  };
+                  const c = panoramaDrill ? cfg[panoramaDrill] : null;
+                  if (!c) return null;
+                  const Icone = c.icone;
+                  const isLista = panoramaDrill !== "saldo" && panoramaDrill !== "pct";
+                  return (
+                    <>
+                      <DialogHeader className="px-5 pt-5 pb-4 pr-14 border-b border-gray-100 shrink-0">
+                        <DialogTitle className="flex items-center gap-2 text-base">
+                          <Icone className={`w-5 h-5 shrink-0 ${c.cor}`} />
+                          {c.titulo}
+                        </DialogTitle>
+                        <DialogDescription className="text-xs">
+                          {MESES[(mesSel ?? 1) - 1]}/{ano} · {panoramaDrill === "pct"
+                            ? `${geralTotais?.conciliados ?? 0} de ${(geralTotais?.conciliados ?? 0) + (geralTotais?.extratoSemLancamento ?? 0)} linha(s) do extrato`
+                            : panoramaDrill === "saldo"
+                              ? `${geralTotais?.contas ?? 0} conta(s) com extrato`
+                              : `${c.itens.length} ${c.qtdLabel}`}
+                          {isLista && <> · <span className={`font-semibold ${c.cor}`}>{formatBRL(c.valor)}</span></>}
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <div className="flex-1 overflow-auto px-5 py-4 min-h-0">
+                        {/* SALDO — resumo entradas × saídas por conta */}
+                        {panoramaDrill === "saldo" ? (
+                          <div className="space-y-2">
+                            <div className="grid grid-cols-2 gap-3 mb-3">
+                              <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
+                                <p className="text-[11px] text-emerald-700 font-medium">Entradas</p>
+                                <p className="text-base font-bold text-emerald-700">{formatBRL(geralTotais?.valorEntradas ?? 0)}</p>
+                              </div>
+                              <div className="rounded-lg border border-red-200 bg-red-50/60 p-3">
+                                <p className="text-[11px] text-red-700 font-medium">Saídas</p>
+                                <p className="text-base font-bold text-red-600">{formatBRL(geralTotais?.valorSaidas ?? 0)}</p>
+                              </div>
+                            </div>
+                            <div className="rounded-lg border border-gray-100 divide-y">
+                              {geralContas.map((cc: any) => {
+                                const t = cc.totais ?? {};
+                                const saldo = (t.valorEntradas ?? 0) - (t.valorSaidas ?? 0);
+                                return (
+                                  <div key={cc.contaBancariaId} className="flex items-center gap-2 px-3 py-2 text-xs">
+                                    <span className="flex-1 min-w-0 truncate text-gray-700 font-medium">{cc.contaLabel}</span>
+                                    <span className="text-emerald-600 shrink-0">▼ {formatBRL(t.valorEntradas ?? 0)}</span>
+                                    <span className="text-red-500 shrink-0">▲ {formatBRL(t.valorSaidas ?? 0)}</span>
+                                    <span className={`font-bold shrink-0 w-28 text-right ${saldo >= 0 ? "text-emerald-700" : "text-red-600"}`}>{formatBRL(saldo)}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : panoramaDrill === "pct" ? (
+                          /* % CONCILIADO — por conta */
+                          <div className="rounded-lg border border-gray-100 divide-y">
+                            {geralContas.map((cc: any) => {
+                              const t = cc.totais ?? {};
+                              const base = (t.conciliados ?? 0) + (t.extratoSemLancamento ?? 0);
+                              const pct = base > 0 ? Math.round(((t.conciliados ?? 0) / base) * 100) : 0;
+                              return (
+                                <div key={cc.contaBancariaId} className="px-3 py-2.5 text-xs">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="flex-1 min-w-0 truncate text-gray-700 font-medium">{cc.contaLabel}</span>
+                                    <span className="shrink-0 text-gray-400">{t.conciliados ?? 0}/{base} linha(s)</span>
+                                    <span className={`font-bold shrink-0 w-12 text-right ${pct >= 100 ? "text-green-600" : pct > 0 ? "text-blue-600" : "text-gray-400"}`}>{pct}%</span>
+                                  </div>
+                                  <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                                    <div className={`h-full ${pct >= 100 ? "bg-green-500" : "bg-blue-500"}`} style={{ width: `${pct}%` }} />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : c.itens.length === 0 ? (
+                          <div className="py-12 text-center text-sm text-gray-400">Nenhuma linha nesta situação em {MESES[(mesSel ?? 1) - 1]}/{ano}.</div>
+                        ) : (
+                          /* LISTAS de linhas (entradas/saídas/conciliados/extrato/ERP) */
+                          <div className="rounded-lg border border-gray-100 divide-y">
+                            {c.itens.map((it: any, i: number) => {
+                              const v = Number(it.valor) || 0;
+                              const isEntrada = v >= 0;
+                              const primario = it.fornecedorNome || it.descricao || it.entryFornecedor || it.entryDescricao || (it.entryId ? `Lançamento #${it.entryId}` : "—");
+                              const podeDetalhar = c.tipo === "entry" && it.id != null && !it.agrupado && !String(it.id).includes("#");
+                              return (
+                                <div key={it.id ?? i} className="flex items-center gap-2 px-3 py-2 text-xs">
+                                  <span className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${isEntrada ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"}`}>
+                                    {isEntrada ? <ArrowDownCircle className="w-4 h-4" /> : <ArrowUpCircle className="w-4 h-4" />}
+                                  </span>
+                                  <span className="text-gray-400 shrink-0 w-16">{fmtData(it.data)}</span>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="truncate text-gray-700">{primario}</p>
+                                    {it.contaLabel && <p className="truncate text-[10px] text-gray-400">{it.contaLabel}</p>}
+                                  </div>
+                                  <span className={`font-semibold shrink-0 ${isEntrada ? "text-emerald-600" : "text-rose-500"}`}>{formatBRL(Math.abs(v))}</span>
+                                  {podeDetalhar && (
+                                    <button type="button" onClick={() => { setPanoramaDrill(null); setDetalheEntryId(Number(it.id)); }} title="Ver detalhes e origem do lançamento" className="shrink-0 p-1 rounded-md text-gray-300 hover:text-blue-600 hover:bg-blue-50">
+                                      <Eye className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="border-t border-gray-100 px-5 py-3 shrink-0 flex items-center justify-between gap-2">
+                        <p className="text-[11px] text-gray-400">Somente leitura — para conciliar, abra a conta no panorama.</p>
+                        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setPanoramaDrill(null)}>Fechar</Button>
+                      </div>
+                    </>
+                  );
+                })()}
+              </DialogContent>
+            </Dialog>
 
             {/* Rev. 3177 — Detalhe CONSULTIVO (read-only) do lançamento, aberto ao clicar na sugestão. */}
             <Dialog open={!!detalheEntryId} onOpenChange={(o) => !o && fecharDetalhe()}>
