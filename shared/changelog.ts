@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3329 — **FINANCEIRO / CONTROLE DE CHEQUES · NOVO BOTÃO "LANÇAR CHEQUE" PARA CADASTRAR UM CHEQUE MANUALMENTE
+ * (ALÉM DA IMPORTAÇÃO POR PLANILHA/IA). DIÁLOGO COM FORMULÁRIO (Nº, VALOR EM BRL, FORNECEDOR, BANCO, AGÊNCIA, CONTA,
+ * VENCIMENTO, COMPENSAÇÃO, STATUS, OBSERVAÇÃO); MÊS/ANO DERIVADOS DA DATA NO BACKEND; DEDUP NATURAL BLOQUEIA DUPLICATA.
+ * 100% FINANCEIRO (1 BACKEND + 1 FRONT) · ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário): "no Controle de Cheques quero poder lançar um cheque manualmente, não só importar planilha". Até aqui
+ *   só havia entrada por importação (planilha XLSX ou PDF via IA) — não dava pra cadastrar um cheque avulso na mão.
+ * - BACKEND (`server/routers/cheques.ts`, nova mutation `criarManual({companyId, ...campos})`): reaproveita TODA a
+ *   higienização da importação — `sanitizeChequeRow` valida datas reais, normaliza `status` na whitelist e DERIVA `mes_ref`/
+ *   `ano_ref` da data (vencimento → compensação). Tenant guard `assertCompanyAccess`. Dedup natural via `chaveDedup` +
+ *   `carregarExistentes` (lança `CONFLICT` se já houver cheque com mesmo nº+valor+mês+ano). Fornecedor/conta: usa o id
+ *   EXPLÍCITO quando enviado, senão tenta casar por nome/dígitos (`matchFornecedor`/`matchConta`, os mesmos da importação).
+ *   INSERT único (20 colunas, $1..$20 em ordem de aparição — `dbExecute` liga por ordem), `origem_arquivo="manual"`,
+ *   `lote_id` via `randomUUID()`, `conciliado` nasce 0 (não toca conciliação/extrato). Retorna `{ok,id,mes,ano}`.
+ * - FRONT (`client/src/pages/financeiro/FinanceiroCheques.tsx`): botão "Lançar cheque" (ícone `Banknote`, azul) no cabeçalho,
+ *   ao lado de "Importar planilha". Abre um `Dialog` com formulário em grade 2-col: Valor* (máscara BRL `maskBRL`/`parseMaskBRL`
+ *   com prefixo "R$"), Nº do cheque, Fornecedor/favorecido, Banco, Agência, Conta corrente, Status (`Select` com `STATUS_OPTS`),
+ *   Data de vencimento, Data de compensação e Observação. Só o VALOR é obrigatório (gate no submit). Ao salvar, reposiciona
+ *   o filtro de ano/mês (`setAno`/`setMesSel`) no mês/ano do cheque recém-lançado p/ ele aparecer na lista e invalida
+ *   `listar`/`resumo`/`resumoMensal`; toasts de sucesso/erro (inclui o CONFLICT de duplicata). Sem rota/permissão nova.
+ * - ARQUIVOS: `server/routers/cheques.ts`, `client/src/pages/financeiro/FinanceiroCheques.tsx`, `shared/version.ts` (3329),
+ *   `shared/changelog.ts`, `replit.md`, `replit-history.md`.
+ *
  * Rev. 3328 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NOVO SELETOR DE PERÍODO COM 3 MODOS — "MÊS" (PADRÃO, A GRADE JAN–DEZ
  * DE SEMPRE), "PERÍODO" (FAIXA DE DATAS ARBITRÁRIA) E "DIA" (UMA DATA → CONCILIAÇÃO DIÁRIA JÁ USÁVEL). FASE 1 DO PLANO
  * DE 3 FASES (FASE 2 = FITID DO OFX; FASE 3 = SALDO DO DIA + MAPA DE DIAS). 100% FRONT · UX/ADITIVO · REGRA DE OURO

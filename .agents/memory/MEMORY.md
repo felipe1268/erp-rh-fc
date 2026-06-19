@@ -116,3 +116,4 @@
 
 - [Per-bank deterministic parser gate](per-bank-deterministic-parser-gate.md) — parser determinístico por banco só pode emitir linhas quando confirma SEU banco (isBancoX); gating por "≥1 linha" sequestra o fallback de IA de outros bancos.
 - [Vale snapshot é fonte de leitura](vale-snapshot-is-read-source.md) — Folha lê snapshot do período, não payroll_advances; todo write de decisão deve re-sincronizar o snapshot ou some no reload.
+- [criarManual explicit-id IDOR](cheques-criar-manual-idor.md) — INSERT de 1 linha que aceita FK id explícito (fornecedorId/contaBancariaId) deve validar ownership da empresa; assertCompanyAccess só autoriza a empresa, não o recurso referenciado.
