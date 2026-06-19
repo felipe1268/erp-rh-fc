@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3311 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA (IMPORTAR EXTRATO) · A IMPORTAÇÃO DE EXTRATO EM PDF DO BANCO DO
+ * BRASIL DEPENDIA DO FALLBACK DE IA (REV. 3308), QUE ESTOURAVA A COTA DO GEMINI FREE-TIER (429 RESOURCE_EXHAUSTED) E
+ * DEVOLVIA UM ERRO CONFUSO. ALÉM DISSO, UM EXTRATO BB SEM LANÇAMENTOS ("*** A CONTA NAO FOI MOVIMENTADA ***") CAÍA NA
+ * MESMA MENSAGEM GENÉRICA DE FALHA, COMO SE O PARSER TIVESSE QUEBRADO. AGORA O BANCO DO BRASIL TEM UM PARSER
+ * DETERMINÍSTICO PRÓPRIO (LEITURA DIRETA DO TEXTO DO PDF, SEM IA) E O CASO "CONTA NÃO MOVIMENTADA" RETORNA UMA
+ * MENSAGEM CLARA. 100% BACKEND (+1 LINHA DE DICA NO FRONT) · ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - CAUSA: `parseExtratoLines` (`server/routers/financial.ts`) só tinha 2 caminhos pra PDF: (1) parser determinístico
+ *   da CAIXA (`parseCaixaExtratoPdf`, por POSIÇÃO X via pdfjs) e (2) fallback de IA (`parseExtratoComIA`). O extrato do
+ *   BB é um PDF de TEXTO selecionável (a Caixa devolve 0 linhas) → ia direto pra IA → 429 do Gemini (e o Anthropic,
+ *   quando indisponível, deixava o erro de cota propagar). Extrato BB sem movimento → 0 linhas em tudo → mensagem
+ *   "não foi possível extrair transações" (confusa: a conta simplesmente não foi movimentada).
+ * - DESCOBERTA: o "Extrato de conta corrente" do BB (internet banking) extrai TEXTO LIMPO via `pdf-parse` — UMA linha
+ *   por lançamento, com os campos CONCATENADOS: `<Dt.balancete DD/MM/AAAA><Ag 4d><Lote 5d><Histórico 3d> <descrição>
+ *   <Documento><Valor 9.999,99 D|C><Saldo 9.999,99 C|D>`. A âncora confiável é o TOKEN MONETÁRIO `9.999,99 C|D`.
+ * - CORREÇÃO (novo `server/services/bbPdfParser.ts`, `parseBancoBrasilExtratoPdf`): valida `%PDF-`; lê o texto via
+ *   `pdf-parse/lib/pdf-parse.js` (entrypoint da lib, evita o harness de teste do `index.js`); detecta se é mesmo BB
+ *   (`Banco do Brasil`/`autoatendimento.bb.com.br`/`Extrato de conta corrente`) e a flag `semMovimento` (regex
+ *   `N[ÃA]O FOI MOVIMENTAD`); por linha que começa com data, IGNORA "Saldo Anterior"/"S A L D O"/"SALDO DIA", coleta
+ *   os tokens `R$,CC` (1º=Valor com sinal por D/C; último=Saldo quando há 2+); descrição = linha menos data, dígitos
+ *   colados (ag+lote+histórico), tokens monetários e nº de documento residual. Retorna `{lines, isBancoBrasil,
+ *   semMovimento}`.
+ * - WIRING (`parseExtratoLines`): caminho PDF virou 3 etapas — (1) Caixa determinístico → (2) BB determinístico (se
+ *   `isBancoBrasil && 0 linhas && semMovimento` → BAD_REQUEST claro "a conta não foi movimentada"; senão usa
+ *   `bb.lines`) → (3) fallback de IA pros demais bancos. "Não é PDF válido" continua fatal; qualquer outra falha do
+ *   parser BB cai pro fallback de IA (não regride). FRONT (`FinanceiroConciliacao.tsx`): dica passou a citar "Caixa e
+ *   Banco do Brasil por leitura direta; demais bancos por IA".
+ * - VALIDAÇÃO: esbuild parse limpo (`bbPdfParser.ts` + `financial.ts`); teste de runtime do parser contra o extrato BB
+ *   real anexado (jan/2026, conta não movimentada) → `{lines:[], isBancoBrasil:true, semMovimento:true}`; app sobe no
+ *   Neon DEV (HTTP 200). NOTA: a amostra disponível é SEM movimento — o layout da LINHA DE TRANSAÇÃO (valor+saldo) foi
+ *   inferido do cabeçalho/estrutura do extrato; revalidar com um extrato BB COM lançamentos quando houver amostra. A
+ *   cota DIÁRIA do Gemini esgotada na leitura de FATURA DE CARTÃO (fluxo separado, `cartao.ts`) segue sendo teto
+ *   rígido — não tratada aqui.
+ *
  * Rev. 3310 — **RH & DP / FOLHA DE PAGAMENTO · ABA "COMPARATIVO FOLHA × ERP (VERBA POR VERBA)" · O COMPARATIVO
  * CRUZAVA VÁRIAS VERBAS (SAL. BASE, HE, DESCONTOS) MAS NÃO COMPARAVA O VALOR MAIS IMPORTANTE: O LÍQUIDO. A TELA SÓ
  * MOSTRAVA O "LÍQUIDO FOLHA" (DO PDF) E UM "LÍQUIDO ERP PARCIAL" QUE NÃO INCLUI INSS/IRRF/FGTS (LOGO SEMPRE MAIOR QUE

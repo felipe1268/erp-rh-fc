@@ -35,6 +35,7 @@ import {
 } from "../services/financialKpiService";
 import { runFinancialJobNow } from "../services/financialAutoImportJob";
 import { parseCaixaExtratoPdf } from "../services/caixaPdfParser";
+import { parseBancoBrasilExtratoPdf } from "../services/bbPdfParser";
 import { parseExtratoComIA } from "../services/extratoIaParser";
 import {
   computeThreeWayMatch, blockPaymentByThreeWay, releasePaymentByThreeWay,
@@ -382,8 +383,33 @@ async function parseExtratoLines(input: {
         throw new TRPCError({ code: "BAD_REQUEST", message: err.message });
       }
     }
-    // 2) FALLBACK IA: qualquer outro banco (Banco do Brasil, Itaú, Bradesco...) tem
-    //    layout diferente e o parser da Caixa devolve 0 linhas. Aí lemos via IA.
+    // 2) Caminho determinístico do BANCO DO BRASIL: o "Extrato de conta corrente" do BB
+    //    é PDF de TEXTO selecionável (uma linha por lançamento) — parser próprio, SEM IA
+    //    (não consome cota do Gemini). Também detecta "conta não movimentada".
+    if (lines.length === 0) {
+      try {
+        const bb = await parseBancoBrasilExtratoPdf(input.conteudo);
+        if (bb.isBancoBrasil && bb.lines.length === 0 && bb.semMovimento) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "Este extrato do Banco do Brasil não tem lançamentos no período: a conta não foi movimentada. Confira o período/conta selecionados e tente outro extrato.",
+          });
+        }
+        // SÓ confiar no parser determinístico do BB quando o PDF É MESMO do BB.
+        // Para outros bancos (texto selecionável), as linhas extraídas pela heurística
+        // genérica não são confiáveis — deixa vazio p/ cair no fallback de IA (etapa 3).
+        if (bb.isBancoBrasil) lines = bb.lines;
+      } catch (bbErr: any) {
+        if (bbErr instanceof TRPCError) throw bbErr;
+        if (/não é um PDF válido/i.test(bbErr?.message || "")) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: bbErr.message });
+        }
+        // qualquer outra falha do parser BB: segue pro fallback de IA.
+      }
+    }
+    // 3) FALLBACK IA: qualquer outro banco (Itaú, Bradesco, Santander...) tem layout
+    //    diferente e os parsers determinísticos devolvem 0 linhas. Aí lemos via IA.
     if (lines.length === 0) {
       try {
         lines = await parseExtratoComIA(input.conteudo, "application/pdf");

@@ -112,3 +112,5 @@
 
 - [RQ cache-hit hydration race](rq-cache-hit-hydration-race.md) — dois useEffects (um hidrata de query.data, outro reseta por outra dep) anulam estado em cache hit; unifique num só effect chaveado pela identidade do dado.
 - [Conceder obra implica empresa](grant-obra-implies-company.md) — usuário comum: empresas visíveis = user_companies + DONAS das obras de getEffectiveAllowedObraIds; sem isso, obra concedida sem vínculo de empresa some (só vê como Adm).
+
+- [Per-bank deterministic parser gate](per-bank-deterministic-parser-gate.md) — parser determinístico por banco só pode emitir linhas quando confirma SEU banco (isBancoX); gating por "≥1 linha" sequestra o fallback de IA de outros bancos.
