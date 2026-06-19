@@ -2682,6 +2682,12 @@ ${concluiTxt}`;
 
 ESTIMATIVA DE DATA DE SOBRA: para CADA função em que houver sobra, ESTIME EM QUE DATA a mão de obra ficará disponível para realocar. A sobra surge quando uma FRENTE/ATIVIDADE CONCLUI (a equipe daquela frente se libera). Use a lista "Frentes que CONCLUEM no horizonte" de cada obra (cada uma traz a data de término e, quando há, o recurso/função) para inferir a data. Se várias frentes da mesma função concluem em datas diferentes, use a data em que a sobra efetivamente se materializa (a frente cuja conclusão libera a quantidade indicada). Toda data DD/MM/AAAA dentro do horizonte das próximas 8 semanas.
 
+PLANO DE AÇÃO POR EQUIPE (realocar × aviso prévio): para CADA sobra de equipe, decida e recomende UMA ação clara, com a DATA IDEAL para agir:
+- "realocar": há OUTRA obra do MESMO grupo de proximidade (mesma cidade/estado) com FALTA da mesma função no horizonte. A "dataIdeal" é a data em que a equipe se libera na origem (quando a frente conclui). Informe a obra de destino.
+- "aviso_previo": a obra está CONCLUINDO (fim de obra / sem mais frentes que demandem aquela função) e NÃO há obra próxima que absorva a equipe. Nesse caso o ideal é PROVIDENCIAR O AVISO PRÉVIO. Como o aviso prévio legal dura ~30 dias, a "dataIdeal" para INICIAR o aviso deve ser ~30 dias ANTES da data em que a frente/obra conclui e a equipe deixa de ter trabalho (para que o aviso termine junto com o fim do serviço). Nunca proponha aviso prévio quando há realocação possível.
+- "manter": efetivo equilibrado / não há sobra real — não inclua no plano.
+NÃO invente fim de obra: só recomende "aviso_previo" quando houver evidência (frente/obra concluindo no horizonte e ausência de demanda próxima).
+
 REGRA DURA DE PROXIMIDADE: só sugira mover equipe entre obras do MESMO grupo de proximidade (mesma cidade/estado) — a empresa não remaneja gente entre cidades diferentes. Use SOMENTE os grupos com 2+ obras listados. Se não houver nenhum grupo com 2+ obras, retorne "transferencias": [].
 
 Seja realista e conservador: só sugira mover quando houver EVIDÊNCIA de sobra numa obra (frente concluindo / função superdimensionada) E falta na outra (frente entrando). A quantidade deve ser pequena e plausível. Responda em português brasileiro, técnico e direto. Responda APENAS com JSON válido, sem texto fora do JSON. Datas SEMPRE DD/MM/AAAA.`;
@@ -2707,6 +2713,9 @@ Retorne um JSON EXATAMENTE nesta estrutura (sem markdown, sem comentários):
   "previsaoDisponibilidade": [
     { "cargo": "string", "obra": "string (nome EXATO da obra onde a sobra surge)", "dataEstimada": "DD/MM/AAAA — quando a mão de obra fica livre", "quantidade": number, "motivo": "string — qual frente concluindo libera a equipe", "sugestao": "string — para onde realocar (obra/frente) ou ação" }
   ],
+  "planoEquipe": [
+    { "cargo": "string", "obra": "string (nome EXATO da obra onde a equipe sobra)", "quantidade": number, "acao": "realocar | aviso_previo", "dataIdeal": "DD/MM/AAAA — quando agir (realocar: quando a equipe se libera; aviso_previo: ~30 dias antes do fim do serviço)", "destino": "string — obra de destino se acao=realocar, vazio se aviso_previo", "motivo": "string — por que esta ação (frente/obra concluindo, com ou sem demanda próxima)" }
+  ],
   "transferencias": [
     { "cargo": "string", "deObra": "string (nome EXATO de uma obra da lista)", "paraObra": "string (nome EXATO de OUTRA obra do MESMO grupo de proximidade)", "cidade": "string", "quantidade": number, "dataDisponivel": "DD/MM/AAAA — data estimada em que a equipe se libera na origem (vazio se imediato)", "motivo": "string — por que sobra na origem e falta no destino", "impacto": "string — efeito no prazo das duas obras" }
   ],
@@ -2714,7 +2723,7 @@ Retorne um JSON EXATAMENTE nesta estrutura (sem markdown, sem comentários):
   "recomendacoes": [ "string — ações práticas e priorizadas" ]
 }
 
-Regras: em "histograma" inclua TODAS as funções que aparecem no efetivo das obras; "delta" = recomendadoTotal - atualTotal (negativo = sobra/reduzir). Em "previsaoDisponibilidade" inclua UM item por função+obra em que há sobra (delta negativo / frente concluindo), com a DATA ESTIMADA em que a equipe se libera — derive a data das "Frentes que CONCLUEM no horizonte"; se não houver frente concluindo que justifique a sobra, NÃO invente data (omita o item). Considere que parte do efetivo ENTRA DE FÉRIAS INADIÁVEIS nas próximas 8 semanas (quando indicado na função como "entram de FÉRIAS ... → disponível no horizonte N"): a disponibilidade REAL no horizonte é o "disponível no horizonte", menor que o efetivo atual — leve isso em conta ao apontar falta de equipe e ao priorizar transferências. Em "transferencias", "deObra" e "paraObra" devem ser nomes EXATOS de obras do MESMO grupo de proximidade; jamais misture cidades; "dataDisponivel" = quando a equipe da origem se libera (use as frentes concluindo). Seja específico e quantitativo.`;
+Regras: em "histograma" inclua TODAS as funções que aparecem no efetivo das obras; "delta" = recomendadoTotal - atualTotal (negativo = sobra/reduzir). Em "previsaoDisponibilidade" inclua UM item por função+obra em que há sobra (delta negativo / frente concluindo), com a DATA ESTIMADA em que a equipe se libera — derive a data das "Frentes que CONCLUEM no horizonte"; se não houver frente concluindo que justifique a sobra, NÃO invente data (omita o item). Considere que parte do efetivo ENTRA DE FÉRIAS INADIÁVEIS nas próximas 8 semanas (quando indicado na função como "entram de FÉRIAS ... → disponível no horizonte N"): a disponibilidade REAL no horizonte é o "disponível no horizonte", menor que o efetivo atual — leve isso em conta ao apontar falta de equipe e ao priorizar transferências. Em "transferencias", "deObra" e "paraObra" devem ser nomes EXATOS de obras do MESMO grupo de proximidade; jamais misture cidades; "dataDisponivel" = quando a equipe da origem se libera (use as frentes concluindo). Em "planoEquipe" inclua UM item por equipe que SOBRA, com a ação clara ("realocar" quando há obra próxima com falta da mesma função; "aviso_previo" quando a obra conclui e NÃO há obra próxima que absorva — neste caso "dataIdeal" ~30 dias antes do fim do serviço) e a "dataIdeal" para agir; "obra" e "destino" devem ser nomes EXATOS de obras da lista; não inclua ação "manter". Seja específico e quantitativo.`;
 
       let parsed: any = null;
       let erroIa: string | null = null;
@@ -2818,6 +2827,35 @@ Regras: em "histograma" inclua TODAS as funções que aparecem no efetivo das ob
         }
       }
 
+      // 7c. Plano de ação por equipe: REALOCAR (obra próxima com falta) × AVISO PRÉVIO
+      // (fim de obra sem demanda próxima). Só aceita obra/destino existentes; "acao" enum.
+      const planoEquipe: any[] = [];
+      if (parsed && Array.isArray(parsed.planoEquipe)) {
+        for (const p of parsed.planoEquipe) {
+          if (!obraInfo.has(normTxt(p?.obra))) continue;           // obra inexistente → descarta
+          const cargo = String(p?.cargo ?? "").trim().slice(0, 120);
+          const dataIdeal = String(p?.dataIdeal ?? "").trim().slice(0, 40);
+          let acao = String(p?.acao ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+          if (acao !== "realocar" && acao !== "aviso_previo") continue; // ação inválida → descarta
+          if (!cargo) continue;
+          const qtd = Math.round(Number(p?.quantidade) || 0);
+          // destino só vale se for outra obra existente E ação=realocar
+          const destinoRaw = String(p?.destino ?? "").trim();
+          const destino = (acao === "realocar" && destinoRaw && obraInfo.has(normTxt(destinoRaw)) && normTxt(destinoRaw) !== normTxt(p?.obra))
+            ? destinoRaw.slice(0, 300) : null;
+          if (acao === "realocar" && !destino) continue;          // realocar sem destino válido → descarta
+          planoEquipe.push({
+            cargo,
+            obra: String(p?.obra ?? "").trim().slice(0, 300),
+            quantidade: qtd > 0 ? qtd : null,
+            acao,
+            dataIdeal: dataIdeal || null,
+            destino,
+            motivo: String(p?.motivo ?? "").trim().slice(0, 600),
+          });
+        }
+      }
+
       const resultado = {
         geradoEm: new Date().toISOString(),
         companyId,
@@ -2839,6 +2877,7 @@ Regras: em "histograma" inclua TODAS as funções que aparecem no efetivo das ob
         histograma,
         transferencias,
         previsaoDisponibilidade,
+        planoEquipe,
         resumoExecutivo: ((): string | null => {
           const s = String(parsed?.resumoExecutivo ?? "").trim();
           return s ? s.slice(0, 2000) : null;
