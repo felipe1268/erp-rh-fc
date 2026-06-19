@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3322 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · PANORAMA GERAL DO MÊS GANHOU OS CARDS "TOTAL DE ENTRADAS" E "TOTAL
+ * DE SAÍDAS" (+ "SALDO DO MÊS"), SOMANDO TODAS AS CONTAS QUANDO NENHUMA ESTÁ SELECIONADA E POR CONTA AO EXPANDIR CADA
+ * UMA. 100% FINANCEIRO (1 BACKEND READ-ONLY + 1 FRONT) · ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (print do usuário): os cards do panorama só mostravam contagens de conciliação (Conciliados / No extrato sem
+ *   lançamento / No ERP sem extrato / % conciliado). O piloto FC quis ver o VALOR TOTAL DE ENTRADA somando todas as
+ *   contas quando não indica nenhuma, e por conta quando entra numa específica — separando ENTRADAS de SAÍDAS.
+ * - O QUE É: movimentação real do extrato no mês. Crédito (`valor > 0`) = entrada; débito (`valor < 0`) = saída.
+ *   Considera TODO o extrato do período (conciliado + pendente) — independe do status de conciliação, é o quanto
+ *   efetivamente entrou e saiu no banco. Usa o mesmo sinal de `valor` que o resto do motor de conciliação já adota
+ *   (`Number(l.valor) >= 0` = entrada/crédito).
+ * - BACKEND (`server/routers/financial.ts`, `getConciliacaoReportGeral`): helpers `somaEntradas`/`somaSaidas`/
+ *   `qtdEntradas`/`qtdSaidas` definidos UMA vez antes do loop de contas e reusados; o extrato de cada conta
+ *   (`conciliados + extratoSemLancamento`) alimenta `totais.valorEntradas`/`valorSaidas`/`qtdEntradas`/`qtdSaidas` por
+ *   conta; o agregado da empresa soma `[...conciliados, ...extratoSemLancamento]` de todas as contas. READ-ONLY — não
+ *   concilia/baixa nada (Regra de Ouro intacta).
+ * - FRONT (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): nova linha de 3 cards de destaque acima dos KPIs
+ *   de conciliação — "Total de entradas" (verde, ArrowDownCircle), "Total de saídas" (vermelho, ArrowUpCircle) e "Saldo
+ *   do mês (entradas − saídas)" (cinza, sinal colorido). Cada card de CONTA passou a exibir suas próprias entradas/saídas
+ *   na linha-resumo (sempre visível, mesmo recolhida). Legenda "Como é calculado" atualizada. Valores em `formatBRL`.
+ * - ARQUIVOS: `server/routers/financial.ts` (`getConciliacaoReportGeral` ~L4960/5005/5044), `client/src/pages/financeiro/
+ *   FinanceiroConciliacao.tsx` (panorama: cards globais + linha-resumo por conta + legenda), `shared/version.ts` (3322),
+ *   `shared/changelog.ts`, `replit.md`.
+ *
  * Rev. 3321 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O "PANORAMA GERAL DO MÊS" (Rev. 3319/3320) AINDA ESTOURAVA AO
  * SELECIONAR UM MÊS — AGORA COM "DB: code=22007 | msg=invalid input syntax for type date: \"60002\"". NENHUM PANORAMA
  * CARREGAVA. AGORA MONTA NORMAL. 100% BACKEND · BUGFIX (2º HOTFIX da Rev. 3319) · ZERO SCHEMA/ALTER/DROP/DELETE.**
