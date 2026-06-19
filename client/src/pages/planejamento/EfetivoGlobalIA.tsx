@@ -248,7 +248,7 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
   };
 
   return (
-    <div className="rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50/60 to-white shadow-sm mb-5 overflow-hidden">
+    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm mb-5 overflow-hidden">
       {/* Cabeçalho gerencial — faixa institucional FC (#1B2A4A) */}
       <div className="relative px-5 py-4 bg-gradient-to-br from-[#1B2A4A] via-[#22315a] to-[#1B2A4A] text-white overflow-hidden">
         <div className="absolute inset-0 opacity-[0.07] pointer-events-none" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, #ffffff 1px, transparent 0)", backgroundSize: "18px 18px" }} />
@@ -309,10 +309,12 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
       {/* Conteúdo */}
       <div className="p-4">
         {!resultado && !loading && (
-          <div className="flex flex-col items-center justify-center py-8 text-center text-slate-400 gap-2">
-            <Users className="h-8 w-8 text-indigo-200" />
+          <div className="flex flex-col items-center justify-center py-10 text-center gap-3">
+            <div className="h-14 w-14 rounded-2xl bg-slate-50 ring-1 ring-slate-100 flex items-center justify-center">
+              <Gauge className="h-7 w-7 text-[#1B2A4A]/40" />
+            </div>
             <p className="text-sm text-slate-500 max-w-md">
-              Clique em <strong>Analisar todas as obras</strong> para ver onde sobra e onde falta equipe,
+              Clique em <strong className="text-slate-700">Analisar todas as obras</strong> para ver onde sobra e onde falta equipe,
               e receber sugestões de remanejamento entre obras da mesma cidade.
             </p>
           </div>
@@ -327,32 +329,61 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
               </div>
             )}
 
-            {/* Totais */}
+            {/* Dashboard gerencial: dial de saúde + KPIs */}
             {totais && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                {[
-                  { label: "Obras analisadas", value: resultado.totalObras ?? 0, icon: <Building2 className="h-4 w-4" />, color: "text-indigo-600", bg: "bg-indigo-50" },
-                  { label: "Efetivo total", value: totais.efetivoTotal ?? 0, icon: <Users className="h-4 w-4" />, color: "text-blue-600", bg: "bg-blue-50" },
-                  { label: "Disponíveis (ativos)", value: totais.ativos ?? 0, icon: <CheckCircle2 className="h-4 w-4" />, color: "text-emerald-600", bg: "bg-emerald-50" },
-                  ...(Number(totais.feriasHorizonte) > 0
-                    ? [{ label: "Entram de férias (8 sem)", value: totais.feriasHorizonte ?? 0, icon: <Plane className="h-4 w-4" />, color: "text-amber-600", bg: "bg-amber-50" }]
-                    : [{ label: "Funções", value: totais.funcoes ?? 0, icon: <TrendingUp className="h-4 w-4" />, color: "text-purple-600", bg: "bg-purple-50" }]),
-                ].map((k, i) => (
-                  <div key={i} className="bg-white rounded-lg border border-slate-100 p-2.5 flex items-center gap-2.5">
-                    <div className={`w-7 h-7 rounded-md ${k.bg} ${k.color} flex items-center justify-center shrink-0`}>{k.icon}</div>
-                    <div>
-                      <p className="text-[10px] text-slate-500 leading-tight">{k.label}</p>
-                      <p className={`text-base font-bold ${k.color} leading-tight`}>{k.value}</p>
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+                {/* Dial / gauge de saúde do efetivo */}
+                <div className="lg:col-span-4 rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 flex items-center gap-4">
+                  <div className="relative shrink-0">
+                    <svg width="96" height="96" viewBox="0 0 96 96" className="-rotate-90">
+                      <circle cx="48" cy="48" r="40" fill="none" stroke="#e2e8f0" strokeWidth="10" />
+                      <circle
+                        cx="48" cy="48" r="40" fill="none" stroke={dialColor} strokeWidth="10" strokeLinecap="round"
+                        strokeDasharray={`${(saude.pct / 100) * 251.33} 251.33`}
+                        className="transition-all duration-700"
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-2xl font-extrabold text-slate-800 leading-none">{saude.pct}%</span>
+                      <span className="text-[8px] font-semibold text-slate-400 uppercase tracking-wide mt-0.5">saúde</span>
                     </div>
                   </div>
-                ))}
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1.5"><Activity className="h-3.5 w-3.5 text-indigo-600" /> Saúde do efetivo</p>
+                    <div className="space-y-1.5 text-[11px]">
+                      <div className="flex items-center gap-1.5 text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" /> <strong>{saude.ok}</strong> equilibrada(s)</div>
+                      <div className="flex items-center gap-1.5 text-red-700"><span className="h-2 w-2 rounded-full bg-red-500 shrink-0" /> <strong>{saude.falta}</strong> com falta {saude.totFalta > 0 && <span className="text-slate-400">(+{saude.totFalta})</span>}</div>
+                      <div className="flex items-center gap-1.5 text-amber-700"><span className="h-2 w-2 rounded-full bg-amber-500 shrink-0" /> <strong>{saude.sobra}</strong> com sobra {saude.totSobra > 0 && <span className="text-slate-400">(−{saude.totSobra})</span>}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* KPIs */}
+                <div className="lg:col-span-8 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: "Obras analisadas", value: resultado.totalObras ?? 0, icon: <Building2 className="h-5 w-5" />, color: "text-indigo-600", bg: "bg-indigo-50", ring: "ring-indigo-100" },
+                    { label: "Efetivo total", value: totais.efetivoTotal ?? 0, icon: <Users className="h-5 w-5" />, color: "text-blue-600", bg: "bg-blue-50", ring: "ring-blue-100" },
+                    { label: "Disponíveis (ativos)", value: totais.ativos ?? 0, icon: <CheckCircle2 className="h-5 w-5" />, color: "text-emerald-600", bg: "bg-emerald-50", ring: "ring-emerald-100" },
+                    ...(Number(totais.feriasHorizonte) > 0
+                      ? [{ label: "Entram de férias (8 sem)", value: totais.feriasHorizonte ?? 0, icon: <Plane className="h-5 w-5" />, color: "text-amber-600", bg: "bg-amber-50", ring: "ring-amber-100" }]
+                      : [{ label: "Funções", value: totais.funcoes ?? 0, icon: <TrendingUp className="h-5 w-5" />, color: "text-purple-600", bg: "bg-purple-50", ring: "ring-purple-100" }]),
+                  ].map((k, i) => (
+                    <div key={i} className="rounded-xl border border-slate-200 bg-white p-3 flex flex-col gap-2 hover:shadow-sm transition-shadow">
+                      <div className={`w-9 h-9 rounded-lg ${k.bg} ${k.color} ring-1 ${k.ring} flex items-center justify-center`}>{k.icon}</div>
+                      <div>
+                        <p className={`text-2xl font-extrabold ${k.color} leading-none`}>{k.value}</p>
+                        <p className="text-[10px] text-slate-500 leading-tight mt-1">{k.label}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
             {/* Resumo executivo */}
             {resultado.resumoExecutivo && (
-              <div className="rounded-lg border border-indigo-100 bg-white p-3">
-                <p className="text-xs font-semibold text-indigo-700 mb-1 flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Leitura geral</p>
+              <div className="rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50/70 to-white p-4">
+                <p className="text-xs font-bold text-indigo-700 mb-1.5 flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Leitura geral</p>
                 <p className="text-sm text-slate-700 leading-relaxed">{resultado.resumoExecutivo}</p>
               </div>
             )}
@@ -360,9 +391,7 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
             {/* Plano de ação por equipe — realocar × aviso prévio */}
             {planoEquipe.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
-                  <Move className="h-3.5 w-3.5 text-indigo-600" /> Plano de ação por equipe — realocar × aviso prévio
-                </p>
+                <SectionTitle icon={<Move className="h-4 w-4 text-indigo-600" />} count={planoEquipe.length}>Plano de ação por equipe — realocar × aviso prévio</SectionTitle>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
                   {planoRealocar.map((p, i) => (
                     <div key={`r${i}`} className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
@@ -397,9 +426,7 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
 
             {/* Transferências sugeridas */}
             <div>
-              <p className="text-xs font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
-                <ArrowRight className="h-3.5 w-3.5 text-indigo-600" /> Remanejamento sugerido (entre obras próximas)
-              </p>
+              <SectionTitle icon={<ArrowRight className="h-4 w-4 text-indigo-600" />} count={transferencias.length}>Remanejamento sugerido (entre obras próximas)</SectionTitle>
               {transferencias.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 p-3 text-xs text-slate-500">
                   Nenhuma transferência sugerida entre obras da mesma cidade no momento.
@@ -435,9 +462,7 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
             {/* Previsão de disponibilidade — QUANDO sobra mão de obra p/ realocar */}
             {previsaoDisponibilidade.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
-                  <CalendarClock className="h-3.5 w-3.5 text-emerald-600" /> Previsão de disponibilidade (quando sobra mão de obra)
-                </p>
+                <SectionTitle icon={<CalendarClock className="h-4 w-4 text-emerald-600" />} count={previsaoDisponibilidade.length} accent="emerald">Previsão de disponibilidade (quando sobra mão de obra)</SectionTitle>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
                   {previsaoDisponibilidade.map((d, i) => (
                     <div key={i} className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-3">
@@ -461,55 +486,56 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
 
             {/* Histograma por função */}
             <div>
-              <p className="text-xs font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
-                <Users className="h-3.5 w-3.5 text-indigo-600" /> Efetivo por função (atual × recomendado)
-              </p>
+              <SectionTitle icon={<Users className="h-4 w-4 text-indigo-600" />} count={histograma.length}>Efetivo por função (atual × recomendado)</SectionTitle>
               {histograma.length === 0 ? (
                 <p className="text-xs text-slate-400">Sem efetivo alocado nas obras analisadas.</p>
               ) : (
-                <div className="space-y-1.5">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
                   {histograma.map((h, i) => {
                     const tone = deltaTone(Number(h.delta) || 0);
                     const atual = Number(h.atualTotal) || 0;
                     const reco = Number(h.recomendadoTotal) || 0;
                     return (
-                      <div key={i} className={`rounded-lg border ${tone.border} ${tone.bg} p-2.5`}>
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                          <span className="text-xs font-semibold text-slate-800 truncate">
-                            {h.cargo}{h.categoria ? <span className="text-[10px] font-normal text-slate-400"> · {h.categoria}</span> : null}
+                      <div key={i} className="rounded-xl border border-slate-200 bg-white p-3 hover:shadow-sm transition-shadow">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="text-sm font-semibold text-slate-800 truncate">
+                            {h.cargo}{h.categoria ? <span className="text-[10px] font-medium text-slate-400 ml-1.5">{h.categoria}</span> : null}
                           </span>
-                          <span className={`text-[10px] font-bold flex items-center gap-1 ${tone.txt}`}>
-                            {tone.icon} {tone.label}{h.delta ? ` (${h.delta > 0 ? "+" : ""}${h.delta})` : ""}
+                          <span className={`text-[10px] font-bold flex items-center gap-1 rounded-full border px-2 py-0.5 ${tone.bg} ${tone.txt} ${tone.border}`}>
+                            {tone.icon} {tone.label}{h.delta ? ` ${h.delta > 0 ? "+" : ""}${h.delta}` : ""}
                           </span>
                         </div>
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-slate-500 w-20 shrink-0">Atual: {atual}</span>
-                            <div className="flex-1 h-2 rounded-full bg-white overflow-hidden border border-slate-100">
-                              <div className="h-full bg-slate-400" style={{ width: `${(atual / histMax) * 100}%` }} />
+                            <span className="text-[10px] font-medium text-slate-500 w-14 shrink-0">Atual</span>
+                            <div className="flex-1 h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                              <div className="h-full bg-slate-400 rounded-full transition-all duration-500" style={{ width: `${(atual / histMax) * 100}%` }} />
                             </div>
+                            <span className="text-xs font-bold text-slate-700 w-6 text-right tabular-nums">{atual}</span>
                           </div>
                           {Number(h.feriasHorizonte) > 0 && (
                             <div className="flex items-center gap-2">
-                              <span className="text-[10px] text-amber-600 w-20 shrink-0 flex items-center gap-0.5"><Plane className="h-2.5 w-2.5" /> Disp.: {Number(h.disponivelHorizonte) || 0}</span>
-                              <div className="flex-1 h-2 rounded-full bg-white overflow-hidden border border-slate-100">
-                                <div className="h-full bg-amber-400" style={{ width: `${((Number(h.disponivelHorizonte) || 0) / histMax) * 100}%` }} />
+                              <span className="text-[10px] font-medium text-amber-600 w-14 shrink-0 flex items-center gap-0.5"><Plane className="h-2.5 w-2.5" /> Disp.</span>
+                              <div className="flex-1 h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                                <div className="h-full bg-amber-400 rounded-full transition-all duration-500" style={{ width: `${((Number(h.disponivelHorizonte) || 0) / histMax) * 100}%` }} />
                               </div>
+                              <span className="text-xs font-bold text-amber-600 w-6 text-right tabular-nums">{Number(h.disponivelHorizonte) || 0}</span>
                             </div>
                           )}
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-slate-500 w-20 shrink-0">Recom.: {reco}</span>
-                            <div className="flex-1 h-2 rounded-full bg-white overflow-hidden border border-slate-100">
-                              <div className="h-full bg-indigo-500" style={{ width: `${(reco / histMax) * 100}%` }} />
+                            <span className="text-[10px] font-medium text-indigo-600 w-14 shrink-0">Recom.</span>
+                            <div className="flex-1 h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                              <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${(reco / histMax) * 100}%` }} />
                             </div>
+                            <span className="text-xs font-bold text-indigo-700 w-6 text-right tabular-nums">{reco}</span>
                           </div>
                         </div>
                         {Number(h.feriasHorizonte) > 0 && (
-                          <p className="text-[10px] text-amber-700 mt-1 flex items-center gap-1">
+                          <p className="text-[10px] text-amber-700 mt-2 flex items-center gap-1">
                             <Plane className="h-3 w-3" /> {h.feriasHorizonte} pessoa(s) entram de férias inadiáveis nas próximas 8 semanas (já abatidas do "Disp.")
                           </p>
                         )}
-                        {h.leitura && <p className="text-[11px] text-slate-600 leading-snug mt-1.5">{h.leitura}</p>}
+                        {h.leitura && <p className="text-[11px] text-slate-600 leading-snug mt-2 pt-2 border-t border-slate-100">{h.leitura}</p>}
                       </div>
                     );
                   })}
@@ -520,17 +546,17 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
             {/* Riscos + recomendações */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {Array.isArray(resultado.riscos) && resultado.riscos.length > 0 && (
-                <div className="rounded-lg border border-red-100 bg-red-50/50 p-3">
-                  <p className="text-xs font-semibold text-red-700 mb-1.5 flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Riscos</p>
-                  <ul className="space-y-1 text-[11px] text-slate-700 list-disc pl-4">
+                <div className="rounded-xl border border-red-100 bg-gradient-to-br from-red-50/70 to-white p-4">
+                  <p className="text-[13px] font-bold text-red-700 mb-2 flex items-center gap-1.5"><AlertTriangle className="h-4 w-4" /> Riscos</p>
+                  <ul className="space-y-1.5 text-[11px] text-slate-700 list-disc pl-4 marker:text-red-400">
                     {resultado.riscos.map((r: string, i: number) => <li key={i}>{r}</li>)}
                   </ul>
                 </div>
               )}
               {Array.isArray(resultado.recomendacoes) && resultado.recomendacoes.length > 0 && (
-                <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3">
-                  <p className="text-xs font-semibold text-emerald-700 mb-1.5 flex items-center gap-1.5"><Lightbulb className="h-3.5 w-3.5" /> Recomendações</p>
-                  <ul className="space-y-1 text-[11px] text-slate-700 list-disc pl-4">
+                <div className="rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50/70 to-white p-4">
+                  <p className="text-[13px] font-bold text-emerald-700 mb-2 flex items-center gap-1.5"><Lightbulb className="h-4 w-4" /> Recomendações</p>
+                  <ul className="space-y-1.5 text-[11px] text-slate-700 list-disc pl-4 marker:text-emerald-400">
                     {resultado.recomendacoes.map((r: string, i: number) => <li key={i}>{r}</li>)}
                   </ul>
                 </div>

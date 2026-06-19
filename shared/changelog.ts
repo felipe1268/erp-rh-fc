@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3298 — **PLANEJAMENTO / EFETIVO × IA (VISÃO GERAL — TODAS AS OBRAS) · REDESIGN GERENCIAL DO PAINEL
+ * ON-SCREEN: NOVO LAYOUT "PAINEL GERENCIAL" MAIS MODERNO E DETALHADO, COM CABEÇALHO NA FAIXA INSTITUCIONAL
+ * FC (#1B2A4A), UM DIAL/GAUGE RADIAL DE "SAÚDE DO EFETIVO" (% DE FUNÇÕES EQUILIBRADAS, COR VERDE/ÂMBAR/
+ * VERMELHO) AO LADO DOS KPIs MAIORES, TÍTULOS DE SEÇÃO COM CONTADOR/ACENTO E HISTOGRAMA POR FUNÇÃO EM
+ * CARDS LADO-A-LADO COM NÚMEROS EM DESTAQUE. 100% VISUAL/ADITIVO · ZERO MUDANÇA DE DADOS/ENDPOINTS/SCHEMA ·
+ * O PDF E TODA A LÓGICA tRPC/SANITIZAÇÃO FICAM INTACTOS (R-001/R-007/R-010 OK).**
+ * - PEDIDO (piloto FC): "faz um layout mais moderno e detalhado... quero uma apresentação dial — gerencial".
+ *   Interpretação: o painel "Efetivo × IA — Todas as Obras" da tela Planejamento › Projetos deve ganhar
+ *   cara de DASHBOARD GERENCIAL/EXECUTIVO, com um DIAL (gauge) e mais densidade de informação, sem alterar
+ *   nenhum dado já calculado (tudo vem do `efetivoGlobal`/`ultimaEfetivoGlobal`).
+ * - FRONTEND (`client/src/pages/planejamento/EfetivoGlobalIA.tsx`, SÓ apresentação):
+ *   • CABEÇALHO: faixa em gradiente #1B2A4A→#22315a (padrão institucional FC), ícone Gauge, selo "PAINEL
+ *     GERENCIAL", botões Reanalisar (sky) e Imprimir/PDF (ghost claro sobre a faixa). Wrapper externo
+ *     passou a neutro (rounded-2xl, borda slate, fundo branco) já que o destaque agora é a faixa azul.
+ *   • DIAL/GAUGE: novo `useMemo` `saude` deriva do `histograma` quantas funções estão equilibradas/falta/
+ *     sobra + totais de pessoas (Σ deltas) e a `% saúde` = equilibradas/total; SVG donut (stroke-dasharray
+ *     sobre raio 40, circunferência 251,33) com cor dinâmica (≥80% verde, ≥50% âmbar, senão vermelho) e o
+ *     "%" central; ao lado, legenda com as 3 situações. KPIs reorganizados em grid 12-col (dial 4 + KPIs 8),
+ *     tiles maiores (número 2xl, ícone com ring).
+ *   • SEÇÕES: novo componente `SectionTitle` (barrinha-acento + título 13px + chip de contagem) aplicado a
+ *     "Plano de ação", "Remanejamento", "Previsão de disponibilidade" e "Efetivo por função".
+ *   • HISTOGRAMA: cards brancos rounded-xl em grid de 2 colunas (xl), badge de situação como pill colorida,
+ *     barras com trilho slate-100 + número à direita em `tabular-nums` (Atual/Disp./Recom.), leitura da IA
+ *     separada por borda superior. Riscos/Recomendações e resumo executivo ganharam cards com leve gradiente.
+ *   • PRESERVADO: toda a fonte de dados, `imprimirRelatorio` (PDF padrão FC) e a escapagem XSS (`esc`/
+ *     `escAttr` locais) ficam IDÊNTICOS — o redesign não toca em texto vindo da IA no caminho do PDF.
+ * - VALIDAÇÃO: esbuild parse limpo no arquivo (44,6kb, sem erros); app sobe no Neon DEV (workflow Start
+ *   application running). Sem novas dependências (Gauge/Activity já no lucide-react).
+ *
  * Rev. 3297 — **PLANEJAMENTO / EFETIVO × IA (VISÃO GERAL — TODAS AS OBRAS) · RELATÓRIO IMPRIMÍVEL/PDF NO
  * PADRÃO INSTITUCIONAL FC (FAIXA AZUL #1B2A4A) + NOVO "PLANO DE AÇÃO POR EQUIPE" QUE, PARA CADA SOBRA,
  * DECIDE ENTRE *REALOCAR* (HÁ OBRA PRÓXIMA COM DEMANDA — COM A DATA IDEAL EM QUE A EQUIPE SE LIBERA) E
