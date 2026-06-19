@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3304 — **FINANCEIRO / CONTROLE DE CARTÃO DE CRÉDITO (CADASTRO DE CARTÃO) · O BOTÃO "SALVAR" DO MODAL "NOVO
+ * CARTÃO / EDITAR CARTÃO" FICAVA INACESSÍVEL EM TELAS MAIS BAIXAS (iPad): O CONTEÚDO DO FORMULÁRIO (IDENTIFICAÇÃO +
+ * DATAS & LIMITE + OBSERVAÇÃO + AVISO PF) FICAVA MAIS ALTO QUE A VIEWPORT E, COMO O DIALOG TINHA `overflow-hidden`
+ * SEM TETO DE ALTURA NEM SCROLL, O RODAPÉ COM "CANCELAR/SALVAR" ERA CORTADO ABAIXO DA DOBRA — O USUÁRIO PREENCHIA E
+ * NÃO ENCONTRAVA COMO SALVAR. 100% FRONT/CSS · ZERO MUDANÇA DE DADOS/ENDPOINT/SCHEMA (R-001/R-007/R-010 OK).**
+ * - SINTOMA (piloto FC): "na tela de cadastro de cartão de crédito não tem botão de salvar, então quando coloco as
+ *   informações elas não salvam" (print mostrava o form até "Observação", com o rodapé fora da tela).
+ * - CAUSA: o `<DialogContent>` do modal de cartão usava `max-w-xl p-0 overflow-hidden gap-0` SEM `max-height` nem área
+ *   de scroll. Em viewports baixas o conteúdo extrapolava e o `DialogFooter` (que SEMPRE existiu, com o botão Salvar
+ *   chamando `salvarCartao` → `criarCartao`/`atualizarCartao`) ficava clipado. Não era ausência de botão — era recorte.
+ * - CORREÇÃO (`client/src/pages/financeiro/FinanceiroCartaoCredito.tsx`, só layout do modal cartão): `DialogContent`
+ *   ganhou `flex flex-col max-h-[90vh]`; `DialogHeader` e `DialogFooter` ganharam `shrink-0` (ficam fixos topo/rodapé);
+ *   a `<div>` do corpo do formulário virou `flex-1 min-h-0 overflow-y-auto` (rola internamente). Resultado: o rodapé
+ *   com Cancelar/Salvar fica SEMPRE visível e o miolo rola quando não cabe.
+ * - VALIDAÇÃO: esbuild parse limpo (70.0kb); app sobe no Neon DEV (workflow Start application running).
+ *
  * Rev. 3303 — **FINANCEIRO / CONTROLE DE CARTÃO DE CRÉDITO (ABA FATURAS) · NOVO BOTÃO "VINCULAR" EM CADA FATURA
  * QUE PERMITE ESCOLHER MANUALMENTE A QUAL CARTÃO CADASTRADO A FATURA PERTENCE — RESOLVE AS FATURAS QUE ENTRAM COMO
  * "NÃO IDENTIFICADO" (CARTÃO NÃO RECONHECIDO PELO FINAL/TITULAR NA IMPORTAÇÃO POR IA). O VÍNCULO É PERMANENTE E

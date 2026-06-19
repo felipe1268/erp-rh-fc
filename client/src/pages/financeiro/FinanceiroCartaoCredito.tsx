@@ -630,8 +630,8 @@ export default function FinanceiroCartaoCredito() {
 
       {/* ───────────── MODAL CARTÃO (criar/editar) ───────────── */}
       <Dialog open={cartaoModal} onOpenChange={setCartaoModal}>
-        <DialogContent resizable={false} className="max-w-xl p-0 overflow-hidden gap-0">
-          <DialogHeader className="border-b bg-gradient-to-r from-[#1B2A4A] to-[#2c3f63] px-6 py-5 text-left">
+        <DialogContent resizable={false} className="max-w-xl p-0 overflow-hidden gap-0 flex flex-col max-h-[90vh]">
+          <DialogHeader className="shrink-0 border-b bg-gradient-to-r from-[#1B2A4A] to-[#2c3f63] px-6 py-5 text-left">
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25">
                 <CreditCard className="h-5 w-5 text-white" />
@@ -643,7 +643,7 @@ export default function FinanceiroCartaoCredito() {
             </div>
           </DialogHeader>
 
-          <div className="space-y-5 px-6 py-5">
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-5 px-6 py-5">
             <section className="space-y-3">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Identificação</p>
               <div className="grid grid-cols-2 gap-3">
@@ -703,7 +703,7 @@ export default function FinanceiroCartaoCredito() {
             )}
           </div>
 
-          <DialogFooter className="border-t bg-muted/30 px-6 py-4">
+          <DialogFooter className="shrink-0 border-t bg-muted/30 px-6 py-4">
             <Button variant="outline" onClick={() => setCartaoModal(false)}>Cancelar</Button>
             <Button onClick={salvarCartao} disabled={criarCartao.isLoading || atualizarCartao.isLoading}>
               {(criarCartao.isLoading || atualizarCartao.isLoading) && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
