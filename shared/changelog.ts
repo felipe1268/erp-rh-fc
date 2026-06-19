@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3333 — **FINANCEIRO / DASHBOARD · CONTROLE DE CHEQUES · NOVA SEÇÃO "ANÁLISE GERENCIAL" NO DASHBOARD DE CHEQUES
+ * (`/financeiro/dashboards/cheques`), REPLICANDO O FORMATO DETALHADO/SEGREGADO DA ABA "GERENCIAL" DO CARTÃO (Rev. 3332):
+ * KPIs ANALÍTICOS (TICKET MÉDIO, PRAZO MÉDIO DE COMPENSAÇÃO, TAXA DE DEVOLUÇÃO, % CONCILIADO) + EVOLUÇÃO MENSAL POR STATUS
+ * (BARRAS EMPILHADAS), POR BANCO EMISSOR, POR OBRA, PERFIL DE PARCELAMENTO (À VISTA × Nx), DISTRIBUIÇÃO POR FAIXA DE VALOR,
+ * PRAZO DE COMPENSAÇÃO (BUCKETS DE DIAS) E FORNECEDORES RECORRENTES (VEZES · MESES · VALOR). 100% FRONT · ADITIVO ·
+ * READ-ONLY · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário, sobre o Dashboard de Cheques — mesmo molde da Rev. 3332 do cartão): "quero o mesmo formato detalhado
+ *   dos dados que fizemos no dash do cartão de crédito — quanto mais segregados e com indicadores importantes para uma
+ *   análise refinada, melhor". O dashboard de cheques já trazia status (pizza), conferência com extrato, valor por mês,
+ *   comparativo a/a e top fornecedores; faltava a leitura ANALÍTICA/segregada dos próprios cheques.
+ * - ARQUITETURA: segue o padrão dos dashboards `_kit`-based (`DashCartao`/`DashCheques`/…): agregação 100% CLIENT-SIDE a
+ *   partir do `cheques.listar({companyId, ano, limit:2000})` (que já devolve campos ricos: `bancoNome`/`bancoCodigo`,
+ *   `obraId`/`obraNome`, `parcela`, `valor`, `dataVencimento`, `dataCompensacao`, `status`, `mes`/`ano`, `conciliado` +
+ *   `extratoConfirmado`/`extratoDivergente`). NENHUM endpoint/rota/permissão novo — nada toca o backend nem o schema.
+ * - FRONT (`client/src/pages/financeiro/dashboards/DashCheques.tsx`): seção "Análise gerencial" (ícone `BarChart3`) abaixo
+ *   do "Top fornecedores". Helpers module-level (read-only): `toDate` (iOS-safe `…T00:00:00` — NÃO o formato-espaço que
+ *   estoura no Safari), `diasComp` (vencimento→compensação em dias), `parcelasDe` (extrai N de "x/N", senão à vista),
+ *   `DEVOLVIDOS` (devolvido/sustado/cancelado), `FAIXAS_VALOR`, `PRAZO_BUCKETS`. Memos: `stats` (KPIs), `statusKeys` +
+ *   `evolStatus` (empilhado dinâmico por status), `porBanco`, `porObra`, `perfilParcelas`, `porFaixa`, `prazoBuckets`,
+ *   `recorrentes` (vezes>1, top 12). Gráficos recharts (já dep) reaproveitam o `_kit`: `KpiCard`/`ChartCard`/`BRLTooltip`/
+ *   `EmptyState`/`PALETTE`/`formatBRL`/`formatBRLCompact`. Todos os cortes são clicáveis e abrem o `DetailDialog` (`abrir`)
+ *   com a lista de cheques filtrada; eixos de valor em `formatBRLCompact` pt-BR (consistente com os demais cards do
+ *   dashboard) e tooltips/diálogos em `formatBRL` cheio; tooltips de contagem em "X cheque(s)".
+ * - ARQUIVOS: `client/src/pages/financeiro/dashboards/DashCheques.tsx`, `shared/version.ts` (3333), `shared/changelog.ts`,
+ *   `replit.md`, `replit-history.md`.
+ *
  * Rev. 3332 — **FINANCEIRO / CONTROLE DE CARTÃO DE CRÉDITO · NOVA ABA "GERENCIAL" QUE MAPEIA CADA LANÇAMENTO DA FATURA
  * (TABELA `financial_cartao_itens`) EM VÁRIOS GRÁFICOS DE ANÁLISE GERENCIAL: COMPOSIÇÃO POR TIPO (COMPRA × ENCARGOS/JUROS ×
  * CRÉDITOS), EVOLUÇÃO MÊS A MÊS, PERFIL DE PARCELAMENTO (À VISTA × Nx — "EM QUANTAS VEZES"), O QUE É COMPRADO RECORRENTEMENTE
