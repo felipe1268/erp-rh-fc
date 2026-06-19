@@ -1,11 +1,29 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { getDb } from "../db";
+import { getDb, getCompaniesForUser } from "../db";
 import { dissidios, dissidioFuncionarios, employees } from "../../drizzle/schema";
-import { eq, and, sql, desc, inArray } from "drizzle-orm";
+import { eq, and, sql, desc, inArray, notInArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { parseBRL } from "../utils/parseBRL";
+import { EMPLOYEE_STATUS_DESLIGADOS } from "../../shared/modules";
+
+const MESES_PT = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+// Funcionário admitido DENTRO do mês/ano da data-base do dissídio.
+// Regra do usuário (Rev. 3315): esses colaboradores já foram contratados com o
+// salário NEGOCIADO pós-dissídio (ex.: Lilian) OU não (ex.: Mateus, 9,95/h),
+// então NÃO recebem o reajuste automaticamente — exigem decisão manual do gestor.
+function admitidoNoMesBase(dataAdmissao: string | null | undefined, mesDataBase: number, anoReferencia: number): boolean {
+  if (!dataAdmissao) return false;
+  const s = String(dataAdmissao).slice(0, 10);
+  const parts = s.split("-");
+  if (parts.length < 2) return false;
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  if (!Number.isFinite(y) || !Number.isFinite(m)) return false;
+  return y === anoReferencia && m === mesDataBase;
+}
 
 // ============================================================
 // MÓDULO DISSÍDIO COLETIVO — SEPARADO POR ANO
@@ -188,9 +206,18 @@ export const dissidioRouter = router({
   simular: protectedProcedure.input(z.object({
     dissidioId: z.number(),
     companyId: z.number(),
-  })).query(async ({ input }) => {
+  })).query(async ({ input, ctx }) => {
     const db = (await getDb())!;
-    const [dissidio] = await db.select().from(dissidios).where(eq(dissidios.id, input.dissidioId));
+    // Tenant guard — simular lê salários (dado sensível) e o companyFilter não
+    // intersecta com as empresas do usuário; confirmamos o acesso aqui.
+    const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+    if (!(allowed as any[]).some(c => c.id === input.companyId)) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem acesso a esta empresa.' });
+    }
+    // O dissídio também é amarrado à empresa (evita IDOR: companyId permitido +
+    // dissidioId de outra empresa).
+    const [dissidio] = await db.select().from(dissidios)
+      .where(and(eq(dissidios.id, input.dissidioId), companyFilter(dissidios.companyId, input)));
     if (!dissidio) throw new TRPCError({ code: 'NOT_FOUND' });
     
     const percentual = parseFloat(dissidio.percentualReajuste);
@@ -207,7 +234,7 @@ export const dissidioRouter = router({
     }).from(employees)
       .where(and(
         companyFilter(employees.companyId, input),
-        sql`${employees.status} = 'Ativo'`,
+        notInArray(employees.status, EMPLOYEE_STATUS_DESLIGADOS),
         sql`${employees.tipoContrato} != 'PJ'`,
       ));
     
@@ -230,30 +257,41 @@ export const dissidioRouter = router({
       
       const diferenca = salarioNovo - salarioAtual;
       const valorRetroativo = diferenca * mesesRetro;
+      const requerDecisao = admitidoNoMesBase(f.dataAdmissao, dissidio.mesDataBase, dissidio.anoReferencia);
       
       return {
         employeeId: f.id,
         nome: f.nome,
         funcao: f.funcao,
         tipoContrato: f.tipoContrato,
+        dataAdmissao: f.dataAdmissao,
         salarioAtual: salarioAtual.toFixed(2),
         salarioNovo: salarioNovo.toFixed(2),
         percentualAplicado: percentual.toFixed(2),
         diferenca: diferenca.toFixed(2),
         mesesRetroativos: mesesRetro,
         valorRetroativo: valorRetroativo.toFixed(2),
+        // Rev. 3315 — admitido no mês da data-base: exige decisão manual do gestor
+        // (não entra no reajuste automático; aplicar só com aprovação explícita).
+        requerDecisao,
       };
     });
     
     const totalFuncionarios = simulacao.length;
-    const totalDiferencaMensal = simulacao.reduce((acc, s) => acc + parseFloat(s.diferenca), 0);
-    const totalRetroativo = simulacao.reduce((acc, s) => acc + parseFloat(s.valorRetroativo), 0);
+    const totalRequerDecisao = simulacao.filter(s => s.requerDecisao).length;
+    // Totais automáticos consideram só quem NÃO exige decisão (os admitidos no
+    // mês da data-base ficam de fora até o gestor decidir caso a caso).
+    const auto = simulacao.filter(s => !s.requerDecisao);
+    const totalDiferencaMensal = auto.reduce((acc, s) => acc + parseFloat(s.diferenca), 0);
+    const totalRetroativo = auto.reduce((acc, s) => acc + parseFloat(s.valorRetroativo), 0);
     
     return {
       dissidio,
       simulacao,
       resumo: {
         totalFuncionarios,
+        totalAutomaticos: auto.length,
+        totalRequerDecisao,
         percentualReajuste: percentual,
         mesesRetroativos: mesesRetro,
         totalDiferencaMensal: totalDiferencaMensal.toFixed(2),
@@ -268,11 +306,17 @@ export const dissidioRouter = router({
     dissidioId: z.number(),
     companyId: z.number(),
     funcionariosExcluidos: z.array(z.number()).optional(), // IDs de funcionários a excluir
+    // Rev. 3315 — IDs dos admitidos no mês da data-base que o gestor APROVOU para
+    // receber o reajuste. Quem é admitido no mês e NÃO está aqui fica de fora.
+    funcionariosMesBaseAprovados: z.array(z.number()).optional(),
   })).mutation(async ({ input, ctx }) => {
     if (ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas Admin Master pode aplicar dissídios' });
     const db = (await getDb())!;
     
-    const [dissidio] = await db.select().from(dissidios).where(eq(dissidios.id, input.dissidioId));
+    // Dissídio amarrado à empresa (evita aplicar dissídio de outra empresa via
+    // companyId permitido + dissidioId estrangeiro, mesmo sendo admin_master).
+    const [dissidio] = await db.select().from(dissidios)
+      .where(and(eq(dissidios.id, input.dissidioId), companyFilter(dissidios.companyId, input)));
     if (!dissidio) throw new TRPCError({ code: 'NOT_FOUND' });
     if (dissidio.status === 'aplicado') throw new TRPCError({ code: 'BAD_REQUEST', message: 'Este dissídio já foi aplicado' });
     if (dissidio.status === 'cancelado') throw new TRPCError({ code: 'BAD_REQUEST', message: 'Este dissídio foi cancelado' });
@@ -280,12 +324,14 @@ export const dissidioRouter = router({
     const percentual = parseFloat(dissidio.percentualReajuste);
     const pisoNovo = dissidio.pisoSalarial ? parseFloat(dissidio.pisoSalarial) : 0;
     const excluidos = new Set(input.funcionariosExcluidos || []);
+    const aprovadosMesBase = new Set(input.funcionariosMesBaseAprovados || []);
+    const mesBaseNome = MESES_PT[(dissidio.mesDataBase || 1) - 1] || String(dissidio.mesDataBase);
     
     // Buscar funcionários ativos CLT
     const funcs = await db.select().from(employees)
       .where(and(
         companyFilter(employees.companyId, input),
-        sql`${employees.status} = 'Ativo'`,
+        notInArray(employees.status, EMPLOYEE_STATUS_DESLIGADOS),
         sql`${employees.tipoContrato} != 'PJ'`,
       ));
     
@@ -299,6 +345,7 @@ export const dissidioRouter = router({
     
     let aplicados = 0;
     let excluídosCount = 0;
+    let naoAplicadosMesBase = 0;
     const hojeStr = new Date().toISOString();
     
     for (const func of funcs) {
@@ -318,6 +365,27 @@ export const dissidioRouter = router({
           motivoExclusao: 'Excluído manualmente na aplicação do dissídio',
         });
         excluídosCount++;
+        continue;
+      }
+      
+      // Rev. 3315 — admitido no mês da data-base só recebe se o gestor APROVOU
+      // explicitamente (senão é registrado como excluído com motivo próprio).
+      if (admitidoNoMesBase(func.dataAdmissao, dissidio.mesDataBase, dissidio.anoReferencia) && !aprovadosMesBase.has(func.id)) {
+        await db.insert(dissidioFuncionarios).values({
+          dissidioId: input.dissidioId,
+          employeeId: func.id,
+          companyId: input.companyId,
+          salarioAnterior: func.salarioBase || '0',
+          salarioNovo: func.salarioBase || '0',
+          percentualAplicado: '0',
+          diferencaValor: '0',
+          mesesRetroativos: 0,
+          valorRetroativo: '0',
+          status: 'excluido',
+          motivoExclusao: `Admitido em ${mesBaseNome}/${dissidio.anoReferencia} (mês da data-base) — reajuste não aplicado por decisão do gestor`,
+        });
+        excluídosCount++;
+        naoAplicadosMesBase++;
         continue;
       }
       
@@ -369,6 +437,7 @@ export const dissidioRouter = router({
       success: true,
       aplicados,
       excluidos: excluídosCount,
+      naoAplicadosMesBase,
       totalFuncionarios: funcs.length,
     };
   }),

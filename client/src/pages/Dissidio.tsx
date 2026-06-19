@@ -474,12 +474,25 @@ export default function Dissidio() {
           </Button>
         </div>
 
+        {/* Aviso sobre admitidos no mês da data-base */}
+        {(simulacao.resumo.totalRequerDecisao ?? 0) > 0 && (
+          <Card className="border-orange-300 bg-orange-50/60 dark:bg-orange-950/20">
+            <CardContent className="pt-4 flex items-center gap-3">
+              <AlertTriangle className="w-5 h-5 text-orange-600 flex-shrink-0" />
+              <div className="text-sm">
+                <p className="font-medium text-orange-700 dark:text-orange-400">{simulacao.resumo.totalRequerDecisao} admitido(s) no mês da data-base ({mesNome(simulacao.dissidio.mesDataBase)}) exigem sua decisão</p>
+                <p className="text-xs text-muted-foreground">Estes não entram no reajuste automático (já costumam ter o salário negociado). Na tela de aplicação você decide caso a caso quem recebe.</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Resumo da simulação */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="border-blue-200">
             <CardContent className="pt-4 text-center">
-              <p className="text-3xl font-bold text-blue-600">{fmtNum(simulacao.resumo.totalFuncionarios)}</p>
-              <p className="text-xs text-muted-foreground">Funcionários Elegíveis</p>
+              <p className="text-3xl font-bold text-blue-600">{fmtNum(simulacao.resumo.totalAutomaticos ?? simulacao.resumo.totalFuncionarios)}</p>
+              <p className="text-xs text-muted-foreground">Reajuste Automático{(simulacao.resumo.totalRequerDecisao ?? 0) > 0 ? ` (+${simulacao.resumo.totalRequerDecisao} a decidir)` : ''}</p>
             </CardContent>
           </Card>
           <Card className="border-green-200">
@@ -550,25 +563,50 @@ export default function Dissidio() {
   );
 }
 
+const MESES_LABEL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const mesNome = (n: number) => MESES_LABEL[(n || 1) - 1] || String(n);
+
 function AplicarDissidioView({ dissidioId, companyId, onVoltar, onAplicado }: { dissidioId: number; companyId: number; onVoltar: () => void; onAplicado: () => void }) {
   const simularQuery = trpc.dissidio.simular.useQuery({ dissidioId, companyId });
   const aplicarMut = trpc.dissidio.aplicar.useMutation({
-    onSuccess: (data) => { toast.success(`Dissídio aplicado com sucesso a ${data.aplicados} funcionários!`); onAplicado(); },
+    onSuccess: (data) => {
+      const extra = data.naoAplicadosMesBase > 0 ? ` (${data.naoAplicadosMesBase} admitido(s) no mês da data-base ficaram de fora)` : "";
+      toast.success(`Dissídio aplicado com sucesso a ${data.aplicados} funcionários!${extra}`);
+      onAplicado();
+    },
     onError: (e) => toast.error(e.message),
   });
 
+  // Funcionários NORMAIS começam INCLUÍDOS (desmarcar p/ excluir).
   const [excludedIds, setExcludedIds] = useState<Set<number>>(new Set());
+  // Admitidos no mês da data-base começam SEM aprovação (não recebem por padrão);
+  // o gestor marca caso a caso quem deve receber.
+  const [aprovadosMesBase, setAprovadosMesBase] = useState<Set<number>>(new Set());
   const simulacao = simularQuery.data;
 
   const toggleExclude = (id: number) => {
-    const next = new Set(excludedIds);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    setExcludedIds(next);
+    setExcludedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleAprovadoMesBase = (id: number) => {
+    setAprovadosMesBase(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   };
 
   if (!simulacao) return <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin" /></div>;
 
-  const selectedCount = simulacao.simulacao.length - excludedIds.size;
+  const linhas = simulacao.simulacao as any[];
+  const linhasNormais = linhas.filter(f => !f.requerDecisao);
+  const linhasMesBase = linhas.filter(f => f.requerDecisao);
+  const selectedNormais = linhasNormais.filter(f => !excludedIds.has(f.employeeId)).length;
+  const selectedMesBase = linhasMesBase.filter(f => aprovadosMesBase.has(f.employeeId)).length;
+  const selectedCount = selectedNormais + selectedMesBase;
 
   return (
     <div className="space-y-6">
@@ -579,7 +617,7 @@ function AplicarDissidioView({ dissidioId, companyId, onVoltar, onAplicado }: { 
           <p className="text-sm text-muted-foreground">Reajuste de {simulacao.dissidio.percentualReajuste}% — Desmarque funcionários que não devem receber</p>
         </div>
         <Button
-          onClick={() => aplicarMut.mutate({ dissidioId, companyId, funcionariosExcluidos: Array.from(excludedIds) })}
+          onClick={() => aplicarMut.mutate({ dissidioId, companyId, funcionariosExcluidos: Array.from(excludedIds), funcionariosMesBaseAprovados: Array.from(aprovadosMesBase) })}
           disabled={selectedCount === 0 || aplicarMut.isPending}
           className="bg-green-600 hover:bg-green-700"
         >
@@ -598,8 +636,61 @@ function AplicarDissidioView({ dissidioId, companyId, onVoltar, onAplicado }: { 
         </CardContent>
       </Card>
 
+      {/* Admitidos no mês da data-base — exigem decisão manual */}
+      {linhasMesBase.length > 0 && (
+        <Card className="border-orange-300 bg-orange-50/60 dark:bg-orange-950/20">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2 text-orange-700 dark:text-orange-400">
+              <AlertTriangle className="w-4 h-4" /> {linhasMesBase.length} admitido(s) no mês da data-base ({mesNome(simulacao.dissidio.mesDataBase)}) — você decide quem recebe
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Quem foi admitido no mês do dissídio normalmente já entrou com o salário negociado. Por padrão NÃO recebem o reajuste —
+              marque "Aplicar" apenas para quem deve receber (ex.: contratado com valor antigo).
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs text-muted-foreground">
+                    <th className="py-2 px-2 w-16">Aplicar</th>
+                    <th className="py-2 px-2">Funcionário</th>
+                    <th className="py-2 px-2">Função</th>
+                    <th className="py-2 px-2">Admissão</th>
+                    <th className="py-2 px-2 text-right">Salário Atual</th>
+                    <th className="py-2 px-2 text-right">Salário Novo</th>
+                    <th className="py-2 px-2 text-right">Diferença</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {linhasMesBase.map((f: any) => {
+                    const aprovado = aprovadosMesBase.has(f.employeeId);
+                    return (
+                      <tr key={f.employeeId} className={`border-b hover:bg-muted/50 ${aprovado ? '' : 'opacity-50'}`}>
+                        <td className="py-2 px-2">
+                          <Checkbox checked={aprovado} onCheckedChange={() => toggleAprovadoMesBase(f.employeeId)} />
+                        </td>
+                        <td className="py-2 px-2 font-medium">{f.nome}</td>
+                        <td className="py-2 px-2 text-muted-foreground">{f.funcao || '—'}</td>
+                        <td className="py-2 px-2 text-muted-foreground">{f.dataAdmissao ? new Date(String(f.dataAdmissao).slice(0,10) + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+                        <td className="py-2 px-2 text-right">R$ {Number(f.salarioAtual).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        <td className="py-2 px-2 text-right font-semibold text-green-600">R$ {Number(f.salarioNovo).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        <td className="py-2 px-2 text-right text-primary">+R$ {Number(f.diferenca).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
-        <CardContent className="pt-4">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Demais funcionários ({linhasNormais.length}) — reajuste automático</CardTitle>
+        </CardHeader>
+        <CardContent>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -614,7 +705,7 @@ function AplicarDissidioView({ dissidioId, companyId, onVoltar, onAplicado }: { 
                 </tr>
               </thead>
               <tbody>
-                {simulacao.simulacao.map((f: any) => {
+                {linhasNormais.map((f: any) => {
                   const excluded = excludedIds.has(f.employeeId);
                   return (
                     <tr key={f.employeeId} className={`border-b hover:bg-muted/50 ${excluded ? 'opacity-40' : ''}`}>

@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3315 — **RH & DP / DISSÍDIO COLETIVO · A APLICAÇÃO EM MASSA DO REAJUSTE (EX.: 5,15% DA DATA-BASE DE MAIO) PASSOU
+ * A (1) ALCANÇAR TODOS OS FUNCIONÁRIOS CLT ATIVOS — NÃO SÓ OS COM STATUS LITERAL "ATIVO" — E (2) SEPARAR OS ADMITIDOS
+ * NO MÊS DA DATA-BASE EM UMA LISTA DE DECISÃO MANUAL, JÁ QUE QUEM ENTROU NAQUELE MÊS COSTUMA TER ENTRADO COM O SALÁRIO
+ * JÁ NEGOCIADO E NÃO DEVE RECEBER O REAJUSTE AUTOMATICAMENTE. ANTES, O DISSÍDIO SÓ PEGAVA `status='Ativo'` (DEIXAVA DE
+ * FORA QUEM ESTAVA EM FÉRIAS/AVISO/AFASTADO ETC.) E APLICAVA O % LINEARMENTE A QUALQUER UM, INCLUSIVE RECÉM-ADMITIDOS.
+ * 100% RH & DP (1 BACKEND + 1 FRONT) · ADITIVO/BUGFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - MOTIVAÇÃO (pedido do usuário): a regra do dissídio é reajustar o efetivo CLT vigente, mas (a) o filtro antigo
+ *   `eq(status,'Ativo')` excluía silenciosamente quem estava em qualquer sub-status não-"Ativo" (Férias, Aviso, Afastado,
+ *   Atestado…), gente que TAMBÉM tem direito; e (b) quem foi admitido NO PRÓPRIO MÊS da data-base normalmente já entrou
+ *   com o piso/salário pós-dissídio negociado — aplicar o % de novo seria reajuste em dobro. Mas há exceções (alguém
+ *   contratado naquele mês ainda com valor antigo). A decisão tem de ser do gestor, caso a caso. Exemplos citados:
+ *   Lilian (admitida em maio → NÃO aplica) vs. Mateus Siqueira (admitido em maio a 9,95/h → aplica).
+ * - REGRA NOVA: "ativo" agora = NÃO-DESLIGADO. O filtro virou `notInArray(employees.status, EMPLOYEE_STATUS_DESLIGADOS)`
+ *   (Desligado/Lista_Negra/Inativo), igual ao resto do RH; pega todos os sub-status de quem segue na empresa. PJ
+ *   continua fora (`tipoContrato != 'PJ'`).
+ * - ADMITIDOS NO MÊS DA DATA-BASE: novo helper `admitidoNoMesBase(dataAdmissao, mesDataBase, anoReferencia)` compara
+ *   ano+mês do ISO 'YYYY-MM-DD' da admissão com a data-base do dissídio. Em `simular`, cada linha ganha
+ *   `requerDecisao` (true se admitido no mês) + `dataAdmissao`; os TOTAIS automáticos (impacto mensal/retroativo) passam
+ *   a SOMAR só quem `!requerDecisao` (os de decisão não inflam o custo até o gestor decidir). `resumo` ganhou
+ *   `totalAutomaticos` e `totalRequerDecisao`.
+ * - APLICAÇÃO (`aplicar`): novo input opcional `funcionariosMesBaseAprovados: number[]` (IDs que o gestor liberou). No
+ *   loop, APÓS o branch de exclusão manual, quem é `admitidoNoMesBase` e NÃO está aprovado é gravado em
+ *   `dissidio_funcionarios` com `status:'excluido'` e `motivoExclusao` explicando "Admitido em <Mês>/<Ano> (mês da
+ *   data-base) — reajuste não aplicado por decisão do gestor", contando `naoAplicadosMesBase`; o salário NÃO é tocado.
+ *   Quem está aprovado segue o fluxo normal de reajuste. Retorno ganhou `naoAplicadosMesBase`.
+ * - FRONT (`client/src/pages/Dissidio.tsx`): a tela de simulação ganhou um aviso laranja "N admitido(s) no mês da
+ *   data-base exigem sua decisão" + o KPI passou a mostrar "Reajuste Automático (+N a decidir)". A tela de aplicação
+ *   (`AplicarDissidioView`) agora tem DUAS tabelas: (1) "Admitidos no mês da data-base" — checkbox "Aplicar" começa
+ *   DESMARCADO (default = não recebe), com coluna Admissão; (2) "Demais funcionários" — reajuste automático, checkbox
+ *   "Incluir" começa marcado (desmarcar p/ excluir). `selectedCount` = normais-não-excluídos + aprovados-do-mês-base; o
+ *   submit envia `funcionariosExcluidos` + `funcionariosMesBaseAprovados`. Toast de sucesso informa quantos do mês-base
+ *   ficaram de fora. Helper `mesNome` extraído p/ escopo de módulo (era local do componente raiz).
+ * - SEGURANÇA (tenant guard): `simular` ganhou `ctx` + guarda explícita `getCompaniesForUser` → `FORBIDDEN` se o
+ *   `companyId` não está nas empresas do usuário (antes lia efetivo de qualquer empresa via input). Além disso, o
+ *   lookup do dissídio em `simular` E em `aplicar` passou a ser amarrado à empresa
+ *   (`and(eq(dissidios.id, ...), companyFilter(dissidios.companyId, input))`) — fecha o IDOR de `companyId` permitido +
+ *   `dissidioId` de outra empresa (vale até p/ admin_master no `aplicar`). `aplicar` segue admin_master-only.
+ * - VALIDAÇÃO: `tsc --noEmit` limpo nos 2 arquivos tocados. Sem ALTER/DROP/DELETE — só leitura, INSERT em
+ *   `dissidio_funcionarios` e UPDATE de salário dos aprovados (igual ao fluxo já existente).
+ *
  * Rev. 3314 — **ALMOXARIFADO / EQUIPAMENTOS PRÓPRIOS · CADASTRO "NOVO EQUIPAMENTO" GANHOU CAMPO "QUANTIDADE" PARA
  * REGISTRAR VÁRIOS ITENS IDÊNTICOS DE UMA VEZ. ANTES, PRA CADASTRAR 10 PRANCHAS IGUAIS O USUÁRIO PRECISAVA ABRIR O
  * MODAL E PREENCHER TUDO 10 VEZES. AGORA DIGITA A QUANTIDADE (1..100) E O SERVIDOR CRIA N REGISTROS, CADA UM COM SEU
