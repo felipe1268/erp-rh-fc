@@ -4927,6 +4927,11 @@ export const financialRouter = router({
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
 
     // Contas COM extrato (linhas não excluídas) no período + dados cadastrais p/ rótulo.
+    // Rev. 3321 — `dbExecute` liga params por ORDEM DE APARIÇÃO do `$N` no texto ($N é
+    // cosmético: o helper faz split(/\$\d+/g) e consome params[0..N] na sequência). Aqui
+    // `b.data >= …`/`b.data <= …` aparecem ANTES do `cba."companyId" = …`, então o array
+    // PRECISA seguir essa ordem: [dataInicio, dataFim, companyId]. (Antes estava
+    // [companyId, dataInicio, dataFim] → companyId 60002 caía no `b.data >=` → 22007.)
     const contasRes = await dbExecute(db,
       `SELECT cba.id AS "id", cba.banco AS "banco", cba.apelido AS "descricao",
               cba.agencia AS "agencia", cba.conta AS "conta",
@@ -4934,11 +4939,11 @@ export const financialRouter = router({
          FROM company_bank_accounts cba
          JOIN bank_statement_lines b
            ON b.conta_bancaria_id = cba.id AND b.company_id = cba."companyId"
-          AND b.data >= $2 AND b.data <= $3 AND b.excluido_em IS NULL
-        WHERE cba."companyId" = $1
+          AND b.data >= $1 AND b.data <= $2 AND b.excluido_em IS NULL
+        WHERE cba."companyId" = $3
         GROUP BY cba.id, cba.banco, cba.apelido, cba.agencia, cba.conta
         ORDER BY cba.banco ASC, cba.id ASC`,
-      [input.companyId, input.dataInicio, input.dataFim]);
+      [input.dataInicio, input.dataFim, input.companyId]);
     const contas = rows(contasRes);
 
     const contasOut: any[] = [];

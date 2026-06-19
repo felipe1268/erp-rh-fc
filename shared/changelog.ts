@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3321 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O "PANORAMA GERAL DO MÊS" (Rev. 3319/3320) AINDA ESTOURAVA AO
+ * SELECIONAR UM MÊS — AGORA COM "DB: code=22007 | msg=invalid input syntax for type date: \"60002\"". NENHUM PANORAMA
+ * CARREGAVA. AGORA MONTA NORMAL. 100% BACKEND · BUGFIX (2º HOTFIX da Rev. 3319) · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - SINTOMA (print do usuário): o card "Panorama geral do mês" mostrava o erro vermelho
+ *   `code=22007 | msg=invalid input syntax for type date: "60002"` e botão "Tentar de novo". (`60002` é o `companyId`
+ *   da empresa selecionada — FC Engenharia.)
+ * - RAIZ: o helper `dbExecute` (`server/routers/financial.ts`) liga os parâmetros por **ORDEM DE APARIÇÃO** do `$N` no
+ *   texto da query — o número do `$N` é puramente COSMÉTICO (o helper faz `query.split(/\$\d+/g)` e consome
+ *   `params[0..N]` na sequência em que os placeholders aparecem). Na query de descoberta de contas de
+ *   `getConciliacaoReportGeral`, os placeholders apareciam no texto na ordem `b.data >= $2`, `b.data <= $3`,
+ *   `cba."companyId" = $1` — ou seja, ordem de aparição = [data, data, companyId]. Mas o array passado estava na ordem
+ *   `[input.companyId, input.dataInicio, input.dataFim]`. Resultado: o `companyId` (60002) era ligado ao 1º placeholder
+ *   (`b.data >= …`) → Postgres tentou converter "60002" para `date` e estourou `22007`.
+ * - CORREÇÃO: alinhar a ordem do ARRAY à ordem de APARIÇÃO dos placeholders. Renumerados p/ `$1`/`$2`/`$3` na sequência
+ *   natural (`b.data >= $1`, `b.data <= $2`, `cba."companyId" = $3`) e o array virou `[input.dataInicio, input.dataFim,
+ *   input.companyId]`. Comentário explicativo adicionado acima da query.
+ * - POR QUE PASSOU NA REV. 3320: o hotfix anterior corrigiu o NOME das colunas (camelCase/`apelido`), mas a query só
+ *   chegava a ser PARSEADA depois disso — o erro de binding posicional só aparece em runtime, com o valor real, e o
+ *   `tsc` não valida SQL cru. Os dois bugs estavam na MESMA query, em camadas (nome de coluna → binding de parâmetro).
+ * - LIÇÃO: no `dbExecute` deste arquivo, SEMPRE ordene o array de params pela ordem em que os `$N` aparecem no texto,
+ *   não pelo número do `$N`. Ao escrever/editar qualquer query com múltiplos placeholders, confira a ordem de aparição.
+ * - ARQUIVOS: `server/routers/financial.ts` (`getConciliacaoReportGeral`, ~L4938), `shared/version.ts` (3321),
+ *   `shared/changelog.ts`, `replit.md`.
+ *
  * Rev. 3320 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O "PANORAMA GERAL DO MÊS" (Rev. 3319) ESTOURAVA "NÃO CONSEGUI MONTAR
  * O PANORAMA — DB: code=42703 | msg=column cba.company_id does not exist" AO SELECIONAR QUALQUER MÊS. NENHUM PANORAMA
  * CARREGAVA. AGORA MONTA NORMAL. 100% BACKEND · BUGFIX (HOTFIX da Rev. 3319) · ZERO SCHEMA/ALTER/DROP/DELETE.**
