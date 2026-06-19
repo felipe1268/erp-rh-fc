@@ -1542,6 +1542,43 @@ export default function FinanceiroConciliacao() {
                   </div>
                 ) : (
                   <>
+                    {/* Rev. 3322 — MOVIMENTAÇÃO DO MÊS (entradas × saídas), somando todas as
+                        contas com extrato. Crédito = entrada; débito = saída. Independe do
+                        status de conciliação — é o quanto entrou e saiu no banco. */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
+                          <ArrowDownCircle className="w-5 h-5 text-emerald-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[11px] text-emerald-700 font-medium">Total de entradas</p>
+                          <p className="text-xl font-bold text-emerald-700 truncate">{formatBRL(geralTotais?.valorEntradas ?? 0)}</p>
+                          <p className="text-[11px] text-emerald-600/80">{geralTotais?.qtdEntradas ?? 0} crédito(s)</p>
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-red-200 bg-red-50/70 p-3 flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-lg bg-red-100 flex items-center justify-center shrink-0">
+                          <ArrowUpCircle className="w-5 h-5 text-red-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[11px] text-red-700 font-medium">Total de saídas</p>
+                          <p className="text-xl font-bold text-red-600 truncate">{formatBRL(geralTotais?.valorSaidas ?? 0)}</p>
+                          <p className="text-[11px] text-red-600/80">{geralTotais?.qtdSaidas ?? 0} débito(s)</p>
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                          <Landmark className="w-5 h-5 text-slate-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[11px] text-slate-600 font-medium">Saldo do mês (entradas − saídas)</p>
+                          {(() => { const saldo = (geralTotais?.valorEntradas ?? 0) - (geralTotais?.valorSaidas ?? 0); return (
+                            <p className={`text-xl font-bold truncate ${saldo >= 0 ? "text-emerald-700" : "text-red-600"}`}>{formatBRL(saldo)}</p>
+                          ); })()}
+                          <p className="text-[11px] text-slate-500">{geralTotais?.contas ?? 0} conta(s) com extrato</p>
+                        </div>
+                      </div>
+                    </div>
                     {/* KPIs agregados da empresa no mês */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                       <div className="rounded-xl border border-green-200 bg-green-50/60 p-3">
@@ -1565,7 +1602,7 @@ export default function FinanceiroConciliacao() {
                         <p className="text-[11px] text-blue-600/80">{geralTotais?.contas ?? 0} conta(s) com extrato</p>
                       </div>
                     </div>
-                    <p className="text-[11px] text-gray-400 mb-4">Como é calculado: cada conta passa pelo mesmo motor de conciliação; os valores acima somam todas as contas do mês (em módulo). Cada lançamento continua vinculado à sua conta — entre na conta para conciliar.</p>
+                    <p className="text-[11px] text-gray-400 mb-4">Como é calculado: <strong>Total de entradas/saídas</strong> = soma dos créditos (entradas) e dos débitos (saídas) de TODO o extrato do mês, somando todas as contas (independe da conciliação). Os 4 cards de conciliação contam as linhas (em módulo) por situação. Cada conta abaixo mostra suas próprias entradas/saídas — cada lançamento segue vinculado à sua conta.</p>
 
                     {/* Listas unificadas, agrupadas por conta (cada linha pertence à sua conta).
                         Conciliar manualmente AQUI no panorama: 1 linha do extrato + 1 lançamento,
@@ -1601,7 +1638,11 @@ export default function FinanceiroConciliacao() {
                               </div>
                               <div className="min-w-0 flex-1">
                                 <p className="text-sm font-semibold text-gray-800 truncate">{c.contaLabel}</p>
-                                <p className="text-[11px] text-gray-400">{c.linhas} linha(s) no extrato</p>
+                                <p className="text-[11px] text-gray-400 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                  <span>{c.linhas} linha(s) no extrato</span>
+                                  <span className="text-emerald-600 font-semibold" title="Total de entradas (créditos) no extrato">▼ entradas {formatBRL(t.valorEntradas ?? 0)}</span>
+                                  <span className="text-red-600 font-semibold" title="Total de saídas (débitos) no extrato">▲ saídas {formatBRL(t.valorSaidas ?? 0)}</span>
+                                </p>
                               </div>
                               <div className="hidden sm:flex items-center gap-1.5 shrink-0">
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700" title="Conciliados">{t.conciliados ?? 0} concil.</span>

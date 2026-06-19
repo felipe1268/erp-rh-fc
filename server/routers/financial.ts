@@ -4953,6 +4953,15 @@ export const financialRouter = router({
     const lancamentosSemExtrato: any[] = [];
     let lancamentosSemConta: any[] = [];
 
+    // Rev. 3322 — TOTAL DE ENTRADAS/SAÍDAS movimentado no extrato (crédito = valor>0,
+    // débito = valor<0). Considera TODO o extrato do mês (conciliado + pendente) — é a
+    // movimentação REAL do banco, independe do status de conciliação. Helpers definidos
+    // uma vez e reusados por conta e no agregado da empresa.
+    const somaEntradas = (arr: any[]) => arr.reduce((a: number, x: any) => { const v = Number(x.valor) || 0; return v > 0 ? a + v : a; }, 0);
+    const somaSaidas = (arr: any[]) => arr.reduce((a: number, x: any) => { const v = Number(x.valor) || 0; return v < 0 ? a + Math.abs(v) : a; }, 0);
+    const qtdEntradas = (arr: any[]) => arr.reduce((a: number, x: any) => (Number(x.valor) || 0) > 0 ? a + 1 : a, 0);
+    const qtdSaidas = (arr: any[]) => arr.reduce((a: number, x: any) => (Number(x.valor) || 0) < 0 ? a + 1 : a, 0);
+
     for (const c of contas) {
       const contaId = Number(c.id);
       const contaLabel = `${c.banco ?? "Banco"}${c.descricao ? " · " + c.descricao : ""}`;
@@ -4981,6 +4990,8 @@ export const financialRouter = router({
       }
 
       const somaAbs = (arr: any[]) => arr.reduce((a: number, x: any) => a + Math.abs(Number(x.valor) || 0), 0);
+      // Extrato completo da conta (conciliado + pendente) p/ a movimentação entrada/saída.
+      const extratoConta = [...conc, ...ext];
       contasOut.push({
         ...tag,
         linhas: Number(c.linhas) || 0,
@@ -4996,6 +5007,11 @@ export const financialRouter = router({
           valorConciliado: somaAbs(conc),
           valorExtratoSemLancamento: somaAbs(ext),
           valorLancamentosSemExtrato: somaAbs(lan),
+          // Rev. 3322 — movimentação do extrato desta conta no mês.
+          valorEntradas: somaEntradas(extratoConta),
+          valorSaidas: somaSaidas(extratoConta),
+          qtdEntradas: qtdEntradas(extratoConta),
+          qtdSaidas: qtdSaidas(extratoConta),
         },
       });
     }
@@ -5022,6 +5038,11 @@ export const financialRouter = router({
         valorExtratoSemLancamento: somaAbs(extratoSemLancamento),
         valorLancamentosSemExtrato: somaAbs(lancamentosSemExtrato),
         valorLancamentosSemConta: somaAbs(lancamentosSemConta),
+        // Rev. 3322 — movimentação agregada (todas as contas com extrato no mês).
+        valorEntradas: somaEntradas([...conciliados, ...extratoSemLancamento]),
+        valorSaidas: somaSaidas([...conciliados, ...extratoSemLancamento]),
+        qtdEntradas: qtdEntradas([...conciliados, ...extratoSemLancamento]),
+        qtdSaidas: qtdSaidas([...conciliados, ...extratoSemLancamento]),
       },
     };
   }),
