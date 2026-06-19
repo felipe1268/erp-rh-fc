@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3319 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · AO SELECIONAR UM MÊS SEM ESCOLHER UMA CONTA, A TELA SÓ MOSTRAVA
+ * "SELECIONE UMA CONTA BANCÁRIA" — NÃO HAVIA VISÃO CONSOLIDADA DO MÊS. AGORA, MÊS SELECIONADO + NENHUMA CONTA EXIBE O
+ * "PANORAMA GERAL DO MÊS": TOTAIS AGREGADOS (CONCILIADOS / NO EXTRATO SEM LANÇAMENTO / NO ERP SEM EXTRATO / % CONCILIADO)
+ * DE TODAS AS CONTAS COM EXTRATO + UM CARD POR CONTA COM SEUS NÚMEROS E DRILL-IN (CLIQUE ABRE A CONTA P/ CONCILIAR). CADA
+ * LANÇAMENTO CONTINUA VINCULADO À SUA CONTA NO BACKEND. 100% FINANCEIRO (1 BACKEND READ-ONLY + 1 FRONT) · ADITIVO ·
+ * READ-ONLY (NADA CONCILIA/BAIXA NO PANORAMA) · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - MOTIVAÇÃO (pedido do usuário): clicar só no MÊS (sem conta) devia dar um retrato unificado de TODAS as contas com
+ *   extrato naquele mês — totais agregados + abertura por conta — em vez do vazio "selecione uma conta". Ações de conciliação
+ *   continuam exclusivas de cada conta (regra de ouro: nada concilia/baixa sem o usuário entrar na conta e confirmar).
+ * - BACKEND (`server/routers/financial.ts`):
+ *   (a) REFATOR: o motor de `getConciliacaoReport` (montagem dos 3 blocos — conciliados, extrato-sem-lançamento,
+ *       lançamento-sem-extrato + cheques devolvidos + lançamentos-sem-conta) foi EXTRAÍDO para um helper module-level
+ *       `_computeConciliacaoReport(db, companyId, contaBancariaId, dataInicio, dataFim)`, reusável fora do contexto tRPC. A
+ *       procedure `getConciliacaoReport` agora só faz auth (`_assertFinanceiroCompanyAccess`) + delega ao helper — saída
+ *       IDÊNTICA (refactor puro, sem mudança de comportamento).
+ *   (b) NOVA QUERY read-only `getConciliacaoReportGeral({companyId, dataInicio, dataFim})`: auth idêntica; lista as contas
+ *       COM extrato no período (JOIN `company_bank_accounts` ⋈ `bank_statement_lines` com `excluido_em IS NULL`, agrupando
+ *       por conta); para CADA conta roda o MESMO `_computeConciliacaoReport`, tagueia cada linha com `{contaBancariaId,
+ *       contaBanco, contaDescricao, contaLabel}`, agrega os blocos e calcula `totais` (contagens + valores em módulo +
+ *       `pctConciliado`). O bloco `lancamentosSemConta` é company-wide (idêntico em toda conta), então é incluído UMA vez
+ *       (pega o 1º não-vazio) p/ não somar N vezes. Retorna `{contas[], conciliados[], extratoSemLancamento[],
+ *       lancamentosSemExtrato[], chequesDevolvidos[], lancamentosSemConta[], totais}`.
+ * - FRONT (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): nova query `getConciliacaoReportGeral` habilitada SÓ
+ *   quando `companyId && mesSel != null && !contaBancariaId`. O empty-state foi substituído: (1) sem mês e sem conta → texto
+ *   "selecione um mês ou uma conta"; (2) com mês e sem conta → "Panorama geral do mês" — KPIs agregados (Conciliados / No
+ *   extrato sem lançamento / No ERP sem extrato / % conciliado) + grid de cards por conta (rótulo, nº de linhas, status
+ *   verde/azul reaproveitando `accStatusMap`, mini-contadores e botão que faz `setContaBancariaId` p/ drill-in) + bloco
+ *   "Lançamentos sem conta definida" (preview read-only). Estados de loading/erro/vazio próprios. A visão por-conta (com a
+ *   conciliação manual e demais ações) ficou intacta.
+ * - SEGURANÇA: ambas as rotas mantêm `_assertFinanceiroCompanyAccess`; a query geral só enxerga contas/linhas do próprio
+ *   `companyId` (filtro explícito no JOIN) e é estritamente read-only.
+ * - LIÇÃO: ao precisar reusar um corpo grande de uma procedure tRPC fora do contexto `{input, ctx}`, extraia para um helper
+ *   module-level que recebe `db` + parâmetros simples e faça a procedure delegar — os helpers locais (arrow) e os
+ *   module-level (rows/dbExecute/_agruparConciliacao) seguem funcionando sem mudança.
+ * - ARQUIVOS: `server/routers/financial.ts` (+`_computeConciliacaoReport`, `getConciliacaoReport` delega,
+ *   +`getConciliacaoReportGeral`), `client/src/pages/financeiro/FinanceiroConciliacao.tsx` (+query geral, +painel panorama),
+ *   `shared/version.ts`→3319.
+ *
  * Rev. 3318 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O BOTÃO "DESCONSOLIDAR MÊS" QUEBRAVA COM "ERRO AO DESCONSOLIDAR — DB:
  * code=25P02 | msg=current transaction is aborted, commands ignored until end of transaction block" EM EMPRESAS QUE NUNCA
  * USARAM CONCILIAÇÃO EM GRUPO. O USUÁRIO QUE CONSOLIDOU UM MÊS POR ENGANO NÃO CONSEGUIA REVERTER. AGORA DESCONSOLIDA NORMAL.

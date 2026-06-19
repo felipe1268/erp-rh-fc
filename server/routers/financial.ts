@@ -712,6 +712,564 @@ async function _baixarComprovante(url: string): Promise<{ base64: string; conten
   return null;
 }
 
+// Rev. 3319 — Motor de conciliação extraído de getConciliacaoReport p/ reuso no panorama
+// geral do mês (getConciliacaoReportGeral roda este motor por conta). READ-ONLY.
+async function _computeConciliacaoReport(db: any, companyId: number, contaBancariaId: number, dataInicio: string, dataFim: string) {
+  const input = { companyId, contaBancariaId, dataInicio, dataFim };
+    const p = [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim];
+
+    // 1) Extrato conciliado + lançamento casado
+    const concRes = await dbExecute(db,
+      `SELECT b.id, b.data, b.descricao, b.valor, b.tipo, b.entry_id AS "entryId",
+              e.descricao AS "entryDescricao", e.fornecedor_nome AS "entryFornecedor",
+              e.obra_nome AS "entryObra",
+              COALESCE(e.valor_realizado, e.valor_previsto) AS "entryValor",
+              COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) AS "entryData"
+         FROM bank_statement_lines b
+         LEFT JOIN financial_entries e ON e.id = b.entry_id AND e.company_id = b.company_id
+        WHERE b.company_id=$1 AND b.conta_bancaria_id=$2 AND b.data>=$3 AND b.data<=$4
+          AND COALESCE(b.conciliado,0)=1 AND b.excluido_em IS NULL
+        ORDER BY b.data ASC, b.id ASC`, p);
+
+    // 2) Extrato SEM lançamento (pendências)
+    const pendRes = await dbExecute(db,
+      `SELECT id, data, descricao, valor, tipo
+         FROM bank_statement_lines
+        WHERE company_id=$1 AND conta_bancaria_id=$2 AND data>=$3 AND data<=$4
+          AND COALESCE(conciliado,0)=0 AND excluido_em IS NULL
+        ORDER BY data ASC, id ASC`, p);
+
+    // 2b) Rev. 3229 — CRUZAMENTO TOTAL COM O CONTROLE DE CHEQUES. Para cada linha do
+    // extrato AINDA sem lançamento, tenta identificar de QUAL cheque ela é a compensação
+    // (o cheque NÃO é lançamento; serve p/ dizer QUEM é o favorecido + obra/NF/vencimento).
+    // Assim a tela aponta a ORIGEM da despesa e o "Lançar no ERP" já vem pré-preenchido
+    // (fornecedor/obra/forma) p/ o cadastro correto. Estratégia de match, da mais forte
+    // p/ a mais fraca: (1) nº do cheque extraído da descrição + VALOR; (2) fallback VALOR
+    // + DATA de compensação == data do extrato, QUANDO ÚNICO (descrições da Caixa que não
+    // trazem o número). Só leitura — não grava nada.
+    const chqRes = await dbExecute(db,
+      `SELECT numero_cheque AS "numeroCheque", valor, fornecedor_nome AS "fornecedorNome",
+              fornecedor_id AS "fornecedorId", obra_id AS "obraId", obra_nome AS "obraNome",
+              nf, data_vencimento AS "dataVencimento", data_compensacao AS "dataCompensacao",
+              banco_nome AS "bancoNome", status
+         FROM financial_cheques
+        WHERE company_id=$1 AND excluido_em IS NULL`,
+      [input.companyId]);
+    const chequesRep = rows(chqRes) as any[];
+    const chqCents = (v: any) => v != null ? Math.round(Math.abs(Number(v)) * 100) : null;
+    const chqDia = (v: any) => v ? String(v).slice(0, 10) : null;
+    const chqByNumVal = new Map<string, any>();
+    const chqByNum = new Map<string, any[]>();
+    const chqByValData = new Map<string, any[]>();
+    for (const c of chequesRep) {
+      const cts = chqCents(c.valor);
+      if (cts == null) continue;
+      const num = String(c.numeroCheque ?? "").replace(/[^0-9]/g, "").replace(/^0+/, "");
+      if (num) {
+        chqByNumVal.set(`${num}|${cts}`, c);
+        if (!chqByNum.has(num)) chqByNum.set(num, []);
+        chqByNum.get(num)!.push(c);
+      }
+      const dc = chqDia(c.dataCompensacao);
+      if (dc) { const k = `${cts}|${dc}`; if (!chqByValData.has(k)) chqByValData.set(k, []); chqByValData.get(k)!.push(c); }
+    }
+    const extrNumChq = (descricao: any): string | null => {
+      const m = String(descricao ?? "").match(/cheque\s*n?[ºo°.]*\s*0*(\d{1,12})/i);
+      if (m && m[1]) return m[1].replace(/^0+/, "") || m[1];
+      return null;
+    };
+    // Rev. 3263 — A Caixa identifica o cheque na descrição como "Doc NNNNNN"
+    // ("CHEQUE COMPENSADO · Doc 000990", "DEBITO CHEQUE PAG AGENCIA ... Doc 000981"),
+    // sem a palavra "cheque nº". Esse extrator pega o número do "Doc" — mas SÓ é usado
+    // quando a linha já pareceCheque (senão "Doc" de PIX/boleto casaria por engano).
+    const extrDocNum = (descricao: any): string | null => {
+      const m = String(descricao ?? "").match(/\bdoc(?:umento)?\.?\s*0*(\d{1,12})/i);
+      if (m && m[1]) return m[1].replace(/^0+/, "") || m[1];
+      return null;
+    };
+    // Rev. 3229 — só consideramos o fallback VALOR+DATA quando a descrição TEM indício de
+    // cheque/compensação. Sem essa trava, qualquer linha (PIX/tarifa/transferência) com o
+    // mesmo valor+data de UM cheque seria marcada como cheque e pré-preencheria fornecedor/
+    // obra ERRADOS. O caminho nº+valor já é seguro (a regex exige a palavra "cheque").
+    const pareceCheque = (descricao: any) => /cheq|compensa/i.test(String(descricao ?? ""));
+    const matchChequeLinha = (l: any): any | null => {
+      const cts = chqCents(l.valor);
+      if (cts == null || cts === 0) return null;
+      const ehCheque = pareceCheque(l.descricao);
+      // 1) número do cheque ("cheque nº NNN") OU número do documento "Doc NNN" (Caixa) quando
+      //    a linha parece cheque. Rev. 3263 — o banco às vezes arredonda 1 centavo na
+      //    compensação (cheque R$ 2.410,12 → extrato R$ 2.410,13); então, achado o número,
+      //    casa por VALOR EXATO e, se falhar, por número com tolerância de ≤2 centavos ÚNICO.
+      const num = extrNumChq(l.descricao) ?? (ehCheque ? extrDocNum(l.descricao) : null);
+      if (num) {
+        const exato = chqByNumVal.get(`${num}|${cts}`);
+        if (exato) return exato;
+        const arr = chqByNum.get(num);
+        if (arr) {
+          const perto = arr.filter((c) => { const v = chqCents(c.valor); return v != null && Math.abs(v - cts) <= 2; });
+          if (perto.length === 1) return perto[0];
+        }
+      }
+      const dia = chqDia(l.data);
+      if (dia && ehCheque) { const arr = chqByValData.get(`${cts}|${dia}`); if (arr && arr.length === 1) return arr[0]; }
+      return null;
+    };
+
+    // 2c) Rev. 3230 — CRUZAMENTO COM O CONTROLE DE CARTÃO DE CRÉDITO. Mesma filosofia do
+    // cheque, MAS para o cartão o ERP só considera o VALOR TOTAL DA FATURA (pra dizer se a
+    // fatura foi paga ou não). O detalhe dos gastos (por obra/centro de custo) vive no módulo
+    // Cartão de Crédito — aqui na conciliação a fatura é UM pagamento só (saída). READ-ONLY.
+    const fatRes = await dbExecute(db,
+      `SELECT f.id, f.total, f.vencimento, f.fechamento, f.mes_ref AS "mesRef", f.ano_ref AS "anoRef",
+              COALESCE(f.conciliado,0) AS conciliado,
+              c.banco AS "cartaoBanco", c.bandeira AS "cartaoBandeira", c.final4 AS "cartaoFinal4"
+         FROM financial_cartao_faturas f
+         LEFT JOIN financial_cartoes c ON c.id = f.cartao_id AND c.company_id = f.company_id
+        WHERE f.company_id=$1 AND f.excluido_em IS NULL AND f.total IS NOT NULL`,
+      [input.companyId]);
+    const faturasRep = rows(fatRes) as any[];
+    const fatByTotal = new Map<string, any[]>();
+    const fatByTotalVenc = new Map<string, any[]>();
+    for (const f of faturasRep) {
+      const cts = chqCents(f.total);
+      if (cts == null || cts === 0) continue;
+      { const k = `${cts}`; if (!fatByTotal.has(k)) fatByTotal.set(k, []); fatByTotal.get(k)!.push(f); }
+      const v = chqDia(f.vencimento);
+      if (v) { const k = `${cts}|${v}`; if (!fatByTotalVenc.has(k)) fatByTotalVenc.set(k, []); fatByTotalVenc.get(k)!.push(f); }
+    }
+    const pareceCartao = (descricao: any) => /cart[aã]o|fatura|cr[eé]dito|visa|master|elo\b|amex|hipercard/i.test(String(descricao ?? ""));
+    // Janela temporal p/ o fallback médio: vencimento da fatura perto da linha do extrato (±45d),
+    // ou — sem vencimento — competência (mês/ano ref) compatível com a data da linha.
+    const faturaDentroJanela = (f: any, diaLinha: string | null): boolean => {
+      if (!diaLinha) return false;
+      const venc = chqDia(f.vencimento);
+      if (venc) {
+        const ms = Date.parse(`${diaLinha}T00:00:00Z`) - Date.parse(`${venc}T00:00:00Z`);
+        if (Number.isNaN(ms)) return false;
+        return Math.abs(ms) <= 45 * 24 * 60 * 60 * 1000;
+      }
+      const mes = Number(f.mesRef), ano = Number(f.anoRef);
+      if (mes >= 1 && mes <= 12 && ano >= 2000) {
+        const ly = Number(diaLinha.slice(0, 4)), lm = Number(diaLinha.slice(5, 7));
+        const diffMeses = Math.abs((ly * 12 + lm) - (ano * 12 + mes));
+        return diffMeses <= 1;
+      }
+      return false;
+    };
+    const matchFaturaLinha = (l: any): any | null => {
+      const cts = chqCents(l.valor);
+      if (cts == null || cts === 0) return null;
+      // Pagamento de fatura = SAÍDA (valor negativo no extrato). Evita casar "entrada".
+      if (Number(l.valor) >= 0) return null;
+      const dia = chqDia(l.data);
+      // (1) forte: VALOR TOTAL + data do extrato == vencimento da fatura, quando ÚNICO.
+      if (dia) { const arr = fatByTotalVenc.get(`${cts}|${dia}`); if (arr && arr.length === 1) return arr[0]; }
+      // (2) médio: VALOR TOTAL + descrição com indício de cartão/fatura, quando ÚNICO E na janela temporal.
+      if (pareceCartao(l.descricao)) {
+        const arr = fatByTotal.get(`${cts}`);
+        if (arr && arr.length === 1 && faturaDentroJanela(arr[0], dia)) return arr[0];
+      }
+      return null;
+    };
+
+    // 2c-bis) Rev. 3238 — SEGUNDA VERIFICAÇÃO PELOS DEMONSTRATIVOS DE PAGAMENTO (PIX/BOLETO
+    // lidos por IA — a lista "Tudo que a IA leu nos demonstrativos"). Quando a linha do extrato
+    // NÃO casou com lançamento, cheque NEM fatura, o ERP é OBRIGADO a consultar os comprovantes
+    // PIX/boletos do mês p/ tentar dizer QUEM recebeu e SE foi PIX ou boleto — o extrato de
+    // PIX/boleto é anônimo, mas o demonstrativo traz beneficiário/CNPJ/txid. READ-ONLY: só
+    // identifica/sugere, NÃO concilia nem baixa nada (honra "conciliação só sugestiva"). Match,
+    // do mais forte p/ o mais fraco: (1) txid/e2e/nosso número presente na descrição + valor;
+    // (2) VALOR + DATA exatos, quando ÚNICO; (3) VALOR ÚNICO no período (rótulo "provável").
+    // Só SAÍDAS — demonstrativo = pagamento FEITO.
+    // Rev. 3266 — o DemoItem agora carrega TAMBÉM a referência do demonstrativo-pai
+    // (id/ano/mês) e a lista de PDFs daquele tipo, p/ o diálogo de conferência abrir o
+    // documento certo e o cliente saber de QUAL leitura veio a identificação.
+    type DemoItem = { beneficiario: string | null; documento: string | null; txid: string | null; valor: number | null; data: string | null; tipoDoc: string | null; origemTipo: "pix" | "boleto"; demId: number; demAno: number; demMes: number; arquivos: { url: string; nome: string | null }[] };
+    const ymOf = (s: string) => { const y = Number(String(s).slice(0, 4)); const m = Number(String(s).slice(5, 7)); return (y >= 2000 && m >= 1 && m <= 12) ? y * 12 + m : null; };
+    const startYM = ymOf(input.dataInicio), endYM = ymOf(input.dataFim);
+    const _parseArqDemo = (v: any, legacyUrl: any, legacyNome: any): { url: string; nome: string | null }[] => {
+      let a: any[] = [];
+      if (v) { try { const p = JSON.parse(v); if (Array.isArray(p)) a = p; } catch { a = []; } }
+      a = a.filter((x: any) => x && x.url).map((x: any) => ({ url: String(x.url), nome: x.nome != null ? String(x.nome) : null }));
+      if (a.length === 0 && legacyUrl) a = [{ url: String(legacyUrl), nome: legacyNome != null ? String(legacyNome) : null }];
+      return a;
+    };
+    const demoItens: DemoItem[] = [];
+    if (startYM != null && endYM != null) {
+      const demoRes = await dbExecute(db,
+        `SELECT id, ano, mes,
+                pix_extraido_json AS "pixJson", boleto_extraido_json AS "boletoJson",
+                pix_url AS "pixUrl", pix_nome AS "pixNome", pix_arquivos_json AS "pixArqJson",
+                boleto_url AS "boletoUrl", boleto_nome AS "boletoNome", boleto_arquivos_json AS "boletoArqJson"
+           FROM financial_conciliacao_demonstrativos
+          WHERE company_id=$1 AND conta_bancaria_id=$2 AND (ano*12+mes) >= $3 AND (ano*12+mes) <= $4`,
+        [input.companyId, input.contaBancariaId, startYM, endYM]);
+      for (const row of (rows(demoRes) as any[])) {
+        const arqByTipo: Record<"pix" | "boleto", { url: string; nome: string | null }[]> = {
+          pix: _parseArqDemo(row.pixArqJson, row.pixUrl, row.pixNome),
+          boleto: _parseArqDemo(row.boletoArqJson, row.boletoUrl, row.boletoNome),
+        };
+        for (const [json, origemTipo] of [[row.pixJson, "pix"], [row.boletoJson, "boleto"]] as [any, "pix" | "boleto"][]) {
+          if (!json) continue;
+          let arr: any[] = [];
+          try { const pj = JSON.parse(json); if (Array.isArray(pj)) arr = pj; } catch { arr = []; }
+          for (const it of arr) {
+            if (!it) continue;
+            demoItens.push({
+              beneficiario: it.beneficiario != null ? String(it.beneficiario) : null,
+              documento: it.documento != null ? String(it.documento) : null,
+              txid: it.txid != null ? String(it.txid) : null,
+              valor: it.valor != null && !Number.isNaN(Number(it.valor)) ? Math.abs(Number(it.valor)) : null,
+              data: it.data ? String(it.data).slice(0, 10) : null,
+              tipoDoc: it.tipoDoc != null ? String(it.tipoDoc) : null,
+              origemTipo,
+              demId: Number(row.id),
+              demAno: Number(row.ano),
+              demMes: Number(row.mes),
+              arquivos: arqByTipo[origemTipo],
+            });
+          }
+        }
+      }
+    }
+    const demoByValData = new Map<string, DemoItem[]>();
+    const demoByVal = new Map<string, DemoItem[]>();
+    const demoTxids: { txid: string; cents: number | null; it: DemoItem }[] = [];
+    const normAlnum = (s: any) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    for (const it of demoItens) {
+      const cts = it.valor != null ? Math.round(it.valor * 100) : null;
+      if (cts == null || cts === 0) continue;
+      { const k = `${cts}`; if (!demoByVal.has(k)) demoByVal.set(k, []); demoByVal.get(k)!.push(it); }
+      if (it.data) { const k = `${cts}|${it.data}`; if (!demoByValData.has(k)) demoByValData.set(k, []); demoByValData.get(k)!.push(it); }
+      const tx = normAlnum(it.txid);
+      if (tx.length >= 6) demoTxids.push({ txid: tx, cents: cts, it });
+    }
+    const matchDemonstrativoLinha = (l: any): { it: DemoItem; origem: "txid" | "data" | "valor" } | null => {
+      if (Number(l.valor) >= 0) return null; // só saídas (pagamento feito)
+      const cts = chqCents(l.valor);
+      if (cts == null || cts === 0) return null;
+      // (1) txid/e2e/nosso número na descrição + valor (forte)
+      if (demoTxids.length) {
+        const desc = normAlnum(l.descricao);
+        if (desc) {
+          const hit = demoTxids.find((t) => desc.includes(t.txid) && (t.cents == null || t.cents === cts));
+          if (hit) return { it: hit.it, origem: "txid" };
+        }
+      }
+      // (2) valor + data exatos, quando único (forte)
+      const dia = chqDia(l.data);
+      if (dia) { const arr = demoByValData.get(`${cts}|${dia}`); if (arr && arr.length === 1) return { it: arr[0], origem: "data" }; }
+      // (3) valor único no período (provável)
+      const arrV = demoByVal.get(`${cts}`); if (arrV && arrV.length === 1) return { it: arrV[0], origem: "valor" };
+      return null;
+    };
+
+    // 2c-ter) Rev. 3265 — VÍNCULO DA LINHA DO EXTRATO COM O CADASTRO (mesma filosofia do
+    // cheque, agora p/ os DEMAIS pagamentos/recebimentos): SAÍDA → tenta amarrar a um
+    // FORNECEDOR cadastrado; ENTRADA → tenta amarrar a um CLIENTE (recebível). Sinal FORTE =
+    // CNPJ presente na descrição do extrato casa com o cadastro (badge "cadastro"); FRACO =
+    // nome do beneficiário (vindo do demonstrativo) OU da própria descrição casa por nome
+    // (rótulo "sugestão", p/ o usuário confirmar). READ-ONLY: só identifica/sugere — não grava
+    // nem concilia nada (honra "conciliação só sugestiva"). Espelha `normCnpj`/`matchFornecedor`
+    // do módulo PJ (Rev. 3262).
+    const _normCnpj = (v: any) => String(v ?? "").replace(/\D/g, "");
+    const _normNome = (v: any) => {
+      let s = String(v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase()
+        .replace(/[^A-Z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+      return s.replace(/\b(LTDA|EIRELI|EPP|MEI|ME|SA)\b/g, " ").replace(/\s+/g, " ").trim();
+    };
+    type CadHit = { id: number; nome: string };
+    type CadIdx = { porCnpj: Map<string, CadHit>; porNome: Map<string, CadHit> };
+    const buildCadIdx = (arr: any[]): CadIdx => {
+      const porCnpj = new Map<string, CadHit>();
+      const porNome = new Map<string, CadHit>();
+      for (const f of arr) {
+        const nome = f.razaoSocial || f.nomeFantasia || "";
+        const c = _normCnpj(f.cnpj);
+        if (c.length === 14 && !porCnpj.has(c)) porCnpj.set(c, { id: f.id, nome });
+        const rz = _normNome(f.razaoSocial); if (rz && !porNome.has(rz)) porNome.set(rz, { id: f.id, nome });
+        const nf = _normNome(f.nomeFantasia); if (nf && !porNome.has(nf)) porNome.set(nf, { id: f.id, nome });
+      }
+      return { porCnpj, porNome };
+    };
+    const fornRes = await dbExecute(db,
+      `SELECT id, cnpj, razao_social AS "razaoSocial", nome_fantasia AS "nomeFantasia"
+         FROM fornecedores WHERE company_id=$1 AND COALESCE(ativo,true)=true`,
+      [input.companyId]);
+    const cliRes = await dbExecute(db,
+      `SELECT id, cnpj, razao_social AS "razaoSocial", nome_fantasia AS "nomeFantasia"
+         FROM clientes WHERE company_id=$1 AND COALESCE(ativo,true)=true`,
+      [input.companyId]);
+    const fornIdx = buildCadIdx(rows(fornRes) as any[]);
+    const cliIdx = buildCadIdx(rows(cliRes) as any[]);
+    const extrCnpj = (descricao: any): string | null => {
+      const m = String(descricao ?? "").match(/\b(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})\b/);
+      if (m && m[1]) { const c = m[1].replace(/\D/g, ""); return c.length === 14 ? c : null; }
+      return null;
+    };
+    const matchCadastro = (l: any, beneficiario: string | null): { tipo: "fornecedor" | "cliente"; id: number; nome: string; via: "cnpj" | "nome" } | null => {
+      const isEntrada = Number(l.valor) >= 0;
+      const idx = isEntrada ? cliIdx : fornIdx;
+      const tipo: "fornecedor" | "cliente" = isEntrada ? "cliente" : "fornecedor";
+      // 1) CNPJ na descrição do extrato (forte)
+      const c = extrCnpj(l.descricao);
+      if (c) { const hit = idx.porCnpj.get(c); if (hit) return { tipo, id: hit.id, nome: hit.nome, via: "cnpj" }; }
+      // 2) nome do beneficiário (demonstrativo) ou da própria descrição (fraco → "sugestão")
+      for (const cand of [beneficiario, l.descricao]) {
+        const n = _normNome(cand);
+        if (!n || n.length < 4) continue;
+        const exato = idx.porNome.get(n);
+        if (exato) return { tipo, id: exato.id, nome: exato.nome, via: "nome" };
+        for (const [nm, hit] of idx.porNome) {
+          if (nm.length >= 6 && (nm.includes(n) || n.includes(nm))) return { tipo, id: hit.id, nome: hit.nome, via: "nome" };
+        }
+      }
+      return null;
+    };
+
+    // Rev. 3266 — VEREDICTO do usuário sobre a identificação por IA (texto roxo): confirmado
+    // ou errado, por LINHA do extrato. Só LEITURA aqui — anexa ao retorno p/ a tela refletir
+    // o estado da conferência (✓ conferido / ✗ marcado errado). try/catch defensivo caso a
+    // tabela ainda não exista (o self-heal a cria no boot).
+    const veredictoByLinha = new Map<number, { veredicto: string; em: string | null; por: string | null }>();
+    try {
+      const vRes = await dbExecute(db,
+        `SELECT extrato_linha_id AS "linhaId", veredicto, atualizado_em AS "em", criado_em AS "criadoEm", usuario_nome AS "por"
+           FROM financial_conciliacao_demo_confirmacoes
+          WHERE company_id=$1 AND conta_bancaria_id=$2`,
+        [input.companyId, input.contaBancariaId]);
+      for (const v of (rows(vRes) as any[])) {
+        if (v.veredicto === "confirmado" || v.veredicto === "errado")
+          veredictoByLinha.set(Number(v.linhaId), { veredicto: String(v.veredicto), em: (v.em ?? v.criadoEm) ?? null, por: v.por ?? null });
+      }
+    } catch { /* tabela ainda não materializada — sem veredictos */ }
+
+    const extratoSemLancamento = rows(pendRes).map((l: any) => {
+      let out: any = l;
+      const c = matchChequeLinha(l);
+      if (c) {
+        const num = String(c.numeroCheque ?? "").replace(/^0+/, "") || (c.numeroCheque ?? null);
+        out = {
+          ...l,
+          chequeNumero: num ?? null,
+          chequeFornecedor: c.fornecedorNome ?? null,
+          chequeFornecedorId: c.fornecedorId ?? null,
+          chequeObraId: c.obraId ?? null,
+          chequeObraNome: c.obraNome ?? null,
+          chequeNf: c.nf ?? null,
+          chequeVencimento: c.dataVencimento ?? null,
+          chequeBanco: c.bancoNome ?? null,
+        };
+      } else {
+        const f = matchFaturaLinha(l);
+        if (f) {
+          const label = [f.cartaoBanco, f.cartaoBandeira, f.cartaoFinal4 ? `final ${f.cartaoFinal4}` : ""].filter(Boolean).join(" ").trim();
+          out = {
+            ...l,
+            faturaId: f.id,
+            faturaCartao: label || "Cartão",
+            faturaVencimento: f.vencimento ?? null,
+            faturaTotal: f.total ?? null,
+            faturaMesRef: f.mesRef ?? null,
+            faturaAnoRef: f.anoRef ?? null,
+            faturaConciliado: Number(f.conciliado) === 1 ? 1 : 0,
+          };
+        } else {
+          // Rev. 3238 — SEGUNDA VERIFICAÇÃO: nada casou (lançamento/cheque/fatura). Consulta os
+          // demonstrativos de pagamento (PIX/boleto lidos por IA) p/ identificar beneficiário + tipo.
+          const d = matchDemonstrativoLinha(l);
+          if (d) {
+            const tipo = d.it.tipoDoc && /pix|boleto|ted/i.test(d.it.tipoDoc) ? d.it.tipoDoc.toLowerCase() : d.it.origemTipo;
+            const ver = veredictoByLinha.get(Number(l.id));
+            out = {
+              ...l,
+              demoBeneficiario: d.it.beneficiario ?? null,
+              demoDocumento: d.it.documento ?? null,
+              demoTxid: d.it.txid ?? null,
+              demoTipo: tipo,        // "pix" | "boleto" | "ted"
+              demoData: d.it.data ?? null,
+              demoMatch: d.origem,   // "txid" | "data" | "valor"
+              // Rev. 3266 — dados p/ o diálogo de conferência (valor lido, PDF do mês) + veredicto.
+              demoValor: d.it.valor ?? null,
+              demoDemonstrativoId: d.it.demId,
+              demoAno: d.it.demAno,
+              demoMes: d.it.demMes,
+              demoArquivos: d.it.arquivos,
+              demoVeredicto: ver?.veredicto ?? null,   // "confirmado" | "errado" | null
+              demoVeredictoEm: ver?.em ?? null,
+              demoVeredictoPor: ver?.por ?? null,
+            };
+          }
+        }
+      }
+      // Rev. 3265 — vínculo com o cadastro (fornecedor p/ saída, cliente p/ entrada). Pulado
+      // quando o cheque já amarrou um fornecedor (`chequeFornecedorId`) ou quando é fatura de
+      // cartão (`faturaId`) — ali o fornecedor não se aplica.
+      if (!out.chequeFornecedorId && !out.faturaId) {
+        const vinc = matchCadastro(l, out.demoBeneficiario ?? null);
+        if (vinc) out = { ...out, vinculoTipo: vinc.tipo, vinculoId: vinc.id, vinculoNome: vinc.nome, vinculoVia: vinc.via };
+      }
+      return out;
+    });
+
+    // 2d) Rev. 3235 — TENTATIVA DE PAGAMENTO FRUSTRADA (cheque devolvido/sustado).
+    // No extrato, o cheque aparece como DÉBITO (compensação) e, dias depois, volta como
+    // CRÉDITO (devolução) do MESMO valor/doc. Esse par tem saldo ZERO: NÃO é saída real
+    // nem entrada real — foi um pagamento que não se concretizou. O ERP pareia os dois,
+    // traduz o motivo (alínea Bacen — biblioteca shared/chequeMotivos) e PROCURA a quitação
+    // real: (a) reapresentação do cheque que compensou depois, ou (b) PIX/TED de mesmo valor.
+    // Tudo READ-ONLY — só sinaliza p/ o usuário analisar e decidir. Não grava/baixa nada.
+    const linhaById = new Map<any, any>(extratoSemLancamento.map((l: any) => [l.id, l]));
+    const linhasMin: LinhaEstornoMin[] = extratoSemLancamento.map((l: any) => ({
+      id: l.id,
+      valorCents: chqCents(l.valor),
+      isCredito: Number(l.valor) >= 0,
+      descricao: l.descricao,
+      data: chqDia(l.data),
+    }));
+    const paresEstorno = detectarParesEstorno(linhasMin);
+    const minById = new Map<any, LinhaEstornoMin>(linhasMin.map((l) => [l.id, l]));
+    const consumidos = new Set<any>();
+    for (const p of paresEstorno) { consumidos.add(p.debitoId); consumidos.add(p.creditoId); }
+    const livres = linhasMin.filter((l) => !consumidos.has(l.id));
+    const chequesDevolvidos = paresEstorno.map((p, idx) => {
+      const grupoId = `dev-${idx}`;
+      const deb: any = linhaById.get(p.debitoId);
+      const cred: any = linhaById.get(p.creditoId);
+      const cMatch = deb ? matchChequeLinha(deb) : null;
+      // Busca da quitação real entre as linhas LIVRES (não pertencentes a outro par).
+      // (a) Reapresentação: outro DÉBITO de cheque de mesmo valor, em data >= devolução.
+      let resolucao: any = { tipo: "pendente" };
+      const reap = livres.find((l) =>
+        !consumidos.has(l.id) && !l.isCredito && l.valorCents === p.valorCents &&
+        pareceCompensacaoCheque(l.descricao) && (!l.data || !p.dataCredito || l.data >= p.dataCredito));
+      if (reap) {
+        const rl: any = linhaById.get(reap.id);
+        consumidos.add(reap.id);
+        if (rl) { rl.reversalResolveGrupo = grupoId; rl.reversalResolveTipo = "reapresentado"; }
+        resolucao = { tipo: "reapresentado", lineId: reap.id, data: rl?.data ?? null, descricao: rl?.descricao ?? null, valor: rl?.valor ?? null };
+      } else {
+        // (b) Substituição por PIX/TED/transferência de MESMO valor (saída), em data >= débito.
+        const pix = livres.find((l) =>
+          !consumidos.has(l.id) && !l.isCredito && l.valorCents === p.valorCents &&
+          /pix|ted\b|doc\b|transf/i.test(String(l.descricao ?? "")) &&
+          (!l.data || !p.dataDebito || l.data >= p.dataDebito));
+        if (pix) {
+          const pl: any = linhaById.get(pix.id);
+          consumidos.add(pix.id);
+          if (pl) { pl.reversalResolveGrupo = grupoId; pl.reversalResolveTipo = "pix"; }
+          resolucao = { tipo: "pix", lineId: pix.id, data: pl?.data ?? null, descricao: pl?.descricao ?? null, valor: pl?.valor ?? null };
+        }
+      }
+      // Marca as duas linhas do par como estorno (saem da lista normal no front).
+      if (deb) deb.reversal = { papel: "debito", grupoId, doc: p.doc, motivoCodigo: p.motivo?.codigo ?? null };
+      if (cred) cred.reversal = { papel: "credito", grupoId, doc: p.doc, motivoCodigo: p.motivo?.codigo ?? null };
+      return {
+        grupoId,
+        doc: p.doc,
+        chequeNumero: p.chequeNumero,
+        valor: deb?.valor ?? cred?.valor ?? null,
+        valorCents: p.valorCents,
+        motivoCodigo: p.motivo?.codigo ?? null,
+        motivoTexto: p.motivo?.motivo ?? null,
+        motivoGrupo: p.motivo?.grupo ?? null,
+        motivoSustado: !!p.motivo?.sustado,
+        motivoReapresentavel: p.motivo?.reapresentavel ?? null,
+        dataDebito: p.dataDebito,
+        dataCredito: p.dataCredito,
+        descricaoDebito: p.descricaoDebito,
+        descricaoCredito: p.descricaoCredito,
+        fornecedor: cMatch?.fornecedorNome ?? null,
+        obraNome: cMatch?.obraNome ?? null,
+        nf: cMatch?.nf ?? null,
+        debitoId: p.debitoId,
+        creditoId: p.creditoId,
+        resolucao,
+      };
+    });
+    void minById;
+
+    // 3) Lançamentos do sistema sem conciliação no período — APENAS desta conta.
+    // Rev. 3188 — antes incluía também os lançamentos SEM conta (conta_bancaria_id IS
+    // NULL), que apareciam (e eram contados) em TODAS as contas, inflando o KPI "ERP sem
+    // extrato" e fazendo o número variar conforme a conta selecionada. Agora o bloco
+    // específico da conta traz só `conta_bancaria_id=$2`; os "sem conta" saem num bloco
+    // próprio (lancamentosSemConta) que NÃO entra na contagem por conta.
+    // Rev. 3239 — além das colunas do lançamento, traz `origem_modulo` e o FORNECEDOR REAL
+    // da Frota (posto do abastecimento / fornecedor da manutenção) via LEFT JOIN por
+    // origem_id, p/ o agrupador (_agruparConciliacao) unificar combustível/manutenção pelo
+    // NOME DO FORNECEDOR (o extrato mostra só o total). VR não precisa de join (agrupa por mês).
+    const lancRes = await dbExecute(db,
+      `SELECT e.id, e.descricao, e.fornecedor_nome AS "fornecedorNome", e.obra_nome AS "obraNome",
+              COALESCE(e.valor_realizado, e.valor_previsto) AS valor, e.tipo, e.status,
+              e.forma_pagamento AS "formaPagamento", e.comprovante_url AS "comprovanteUrl",
+              e.comprovante_beneficiario AS "comprovanteBeneficiario",
+              e.origem_modulo AS "origemModulo",
+              COALESCE(NULLIF(TRIM(ff.posto),''), NULLIF(TRIM(fm.fornecedor),'')) AS "frotaFornecedor",
+              COALESCE(NULLIF(TRIM(pc.nome_fantasia),''), NULLIF(TRIM(pc.razao_social),'')) AS "parceiroFornecedor",
+              COALESCE(NULLIF(TRIM(pjemp."nomeCompleto"),''), NULLIF(TRIM(pjc."razaoSocialPrestador"),'')) AS "pjFornecedor",
+              COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) AS data
+         FROM financial_entries e
+         LEFT JOIN fleet_fuel_records ff ON e.origem_modulo='frota_abastecimento' AND ff.id = e.origem_id
+         LEFT JOIN fleet_maintenances fm ON e.origem_modulo='frota_manutencao' AND fm.id = e.origem_id
+         LEFT JOIN lancamentos_parceiros lp ON e.origem_modulo='parceiro_lancamento' AND lp.id = e.origem_id AND lp."companyId" = e.company_id
+         LEFT JOIN parceiros_conveniados pc ON pc.id = lp."parceiroId" AND pc."companyId" = e.company_id
+         LEFT JOIN pj_payments pjp ON e.origem_modulo='pagamento_pj' AND pjp.id = e.origem_id AND pjp."companyId" = e.company_id
+         LEFT JOIN employees pjemp ON pjemp.id = pjp."employeeId" AND pjemp."companyId" = e.company_id
+         LEFT JOIN pj_contracts pjc ON pjc.id = pjp."contractId" AND pjc."companyId" = e.company_id
+        WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
+          AND e.conta_bancaria_id=$2
+          AND ${sqlNotProjecao("e.origem_modulo")}
+          AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) >= $3
+          AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) <= $4
+        ORDER BY data ASC, e.id ASC`, p);
+
+    // 3b) Lançamentos sem conta bancária definida (conta_bancaria_id IS NULL) — Rev. 3188.
+    // São candidatos a casar com o extrato de QUALQUER banco (o ERP não sabe a conta de
+    // origem), por isso ficam num bloco à parte, idêntico em todas as contas, e NÃO são
+    // somados ao número da conta. Independe de $2 (a conta selecionada).
+    // Rev. 3191 — `dbExecute` liga params por ORDEM DE APARIÇÃO ($N é cosmético). Este
+    // bloco filtra `conta_bancaria_id IS NULL` e NÃO usa a conta ($2), então o array
+    // compartilhado `p` (4 itens, com a conta na posição 2) desalinhava: o contaBancariaId
+    // caía na 1ª comparação de DATA → "invalid input syntax for type date: 2". Usa um array
+    // dedicado SEM a conta e placeholders $1,$2,$3 em ordem.
+    const semContaRes = await dbExecute(db,
+      `SELECT e.id, e.descricao, e.fornecedor_nome AS "fornecedorNome", e.obra_nome AS "obraNome",
+              COALESCE(e.valor_realizado, e.valor_previsto) AS valor, e.tipo, e.status,
+              e.forma_pagamento AS "formaPagamento", e.comprovante_url AS "comprovanteUrl",
+              e.comprovante_beneficiario AS "comprovanteBeneficiario",
+              e.origem_modulo AS "origemModulo",
+              COALESCE(NULLIF(TRIM(ff.posto),''), NULLIF(TRIM(fm.fornecedor),'')) AS "frotaFornecedor",
+              COALESCE(NULLIF(TRIM(pc.nome_fantasia),''), NULLIF(TRIM(pc.razao_social),'')) AS "parceiroFornecedor",
+              COALESCE(NULLIF(TRIM(pjemp."nomeCompleto"),''), NULLIF(TRIM(pjc."razaoSocialPrestador"),'')) AS "pjFornecedor",
+              COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) AS data
+         FROM financial_entries e
+         LEFT JOIN fleet_fuel_records ff ON e.origem_modulo='frota_abastecimento' AND ff.id = e.origem_id
+         LEFT JOIN fleet_maintenances fm ON e.origem_modulo='frota_manutencao' AND fm.id = e.origem_id
+         LEFT JOIN lancamentos_parceiros lp ON e.origem_modulo='parceiro_lancamento' AND lp.id = e.origem_id AND lp."companyId" = e.company_id
+         LEFT JOIN parceiros_conveniados pc ON pc.id = lp."parceiroId" AND pc."companyId" = e.company_id
+         LEFT JOIN pj_payments pjp ON e.origem_modulo='pagamento_pj' AND pjp.id = e.origem_id AND pjp."companyId" = e.company_id
+         LEFT JOIN employees pjemp ON pjemp.id = pjp."employeeId" AND pjemp."companyId" = e.company_id
+         LEFT JOIN pj_contracts pjc ON pjc.id = pjp."contractId" AND pjc."companyId" = e.company_id
+        WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
+          AND e.conta_bancaria_id IS NULL
+          AND ${sqlNotProjecao("e.origem_modulo")}
+          AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) >= $2
+          AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) <= $3
+        ORDER BY data ASC, e.id ASC`,
+      [input.companyId, input.dataInicio, input.dataFim]);
+
+    return {
+      conciliados: rows(concRes),
+      extratoSemLancamento,
+      chequesDevolvidos,
+      // Rev. 3239 — UNIFICA VR (por mês) + combustível/manutenção (por fornecedor) nas duas
+      // listas de pendência. SOMA preservada; só a contagem cai (lista enxuta).
+      lancamentosSemExtrato: _agruparConciliacao(rows(lancRes)),
+      lancamentosSemConta: _agruparConciliacao(rows(semContaRes)),
+    };
+}
+
 export const financialRouter = router({
 
   // ─────────────────── PLANO DE CONTAS ───────────────────
@@ -4350,557 +4908,109 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
-    const p = [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim];
+    return _computeConciliacaoReport(db, input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim);
+  }),
 
-    // 1) Extrato conciliado + lançamento casado
-    const concRes = await dbExecute(db,
-      `SELECT b.id, b.data, b.descricao, b.valor, b.tipo, b.entry_id AS "entryId",
-              e.descricao AS "entryDescricao", e.fornecedor_nome AS "entryFornecedor",
-              e.obra_nome AS "entryObra",
-              COALESCE(e.valor_realizado, e.valor_previsto) AS "entryValor",
-              COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) AS "entryData"
-         FROM bank_statement_lines b
-         LEFT JOIN financial_entries e ON e.id = b.entry_id AND e.company_id = b.company_id
-        WHERE b.company_id=$1 AND b.conta_bancaria_id=$2 AND b.data>=$3 AND b.data<=$4
-          AND COALESCE(b.conciliado,0)=1 AND b.excluido_em IS NULL
-        ORDER BY b.data ASC, b.id ASC`, p);
+  // Rev. 3319 — PANORAMA GERAL DO MÊS (sem conta selecionada). Roda o MESMO motor de
+  // conciliação (_computeConciliacaoReport) para CADA conta com extrato no período e
+  // devolve (a) os blocos por conta — cada linha tagueada com a conta de origem (o
+  // vínculo no backend continua por conta) — e (b) os totais agregados da empresa. O
+  // bloco "lançamentos sem conta" (conta_bancaria_id IS NULL) é IDÊNTICO em toda conta,
+  // então é computado UMA vez (não some N vezes). READ-ONLY — não concilia/baixa nada.
+  getConciliacaoReportGeral: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    dataInicio: z.string(),
+    dataFim: z.string(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
 
-    // 2) Extrato SEM lançamento (pendências)
-    const pendRes = await dbExecute(db,
-      `SELECT id, data, descricao, valor, tipo
-         FROM bank_statement_lines
-        WHERE company_id=$1 AND conta_bancaria_id=$2 AND data>=$3 AND data<=$4
-          AND COALESCE(conciliado,0)=0 AND excluido_em IS NULL
-        ORDER BY data ASC, id ASC`, p);
-
-    // 2b) Rev. 3229 — CRUZAMENTO TOTAL COM O CONTROLE DE CHEQUES. Para cada linha do
-    // extrato AINDA sem lançamento, tenta identificar de QUAL cheque ela é a compensação
-    // (o cheque NÃO é lançamento; serve p/ dizer QUEM é o favorecido + obra/NF/vencimento).
-    // Assim a tela aponta a ORIGEM da despesa e o "Lançar no ERP" já vem pré-preenchido
-    // (fornecedor/obra/forma) p/ o cadastro correto. Estratégia de match, da mais forte
-    // p/ a mais fraca: (1) nº do cheque extraído da descrição + VALOR; (2) fallback VALOR
-    // + DATA de compensação == data do extrato, QUANDO ÚNICO (descrições da Caixa que não
-    // trazem o número). Só leitura — não grava nada.
-    const chqRes = await dbExecute(db,
-      `SELECT numero_cheque AS "numeroCheque", valor, fornecedor_nome AS "fornecedorNome",
-              fornecedor_id AS "fornecedorId", obra_id AS "obraId", obra_nome AS "obraNome",
-              nf, data_vencimento AS "dataVencimento", data_compensacao AS "dataCompensacao",
-              banco_nome AS "bancoNome", status
-         FROM financial_cheques
-        WHERE company_id=$1 AND excluido_em IS NULL`,
-      [input.companyId]);
-    const chequesRep = rows(chqRes) as any[];
-    const chqCents = (v: any) => v != null ? Math.round(Math.abs(Number(v)) * 100) : null;
-    const chqDia = (v: any) => v ? String(v).slice(0, 10) : null;
-    const chqByNumVal = new Map<string, any>();
-    const chqByNum = new Map<string, any[]>();
-    const chqByValData = new Map<string, any[]>();
-    for (const c of chequesRep) {
-      const cts = chqCents(c.valor);
-      if (cts == null) continue;
-      const num = String(c.numeroCheque ?? "").replace(/[^0-9]/g, "").replace(/^0+/, "");
-      if (num) {
-        chqByNumVal.set(`${num}|${cts}`, c);
-        if (!chqByNum.has(num)) chqByNum.set(num, []);
-        chqByNum.get(num)!.push(c);
-      }
-      const dc = chqDia(c.dataCompensacao);
-      if (dc) { const k = `${cts}|${dc}`; if (!chqByValData.has(k)) chqByValData.set(k, []); chqByValData.get(k)!.push(c); }
-    }
-    const extrNumChq = (descricao: any): string | null => {
-      const m = String(descricao ?? "").match(/cheque\s*n?[ºo°.]*\s*0*(\d{1,12})/i);
-      if (m && m[1]) return m[1].replace(/^0+/, "") || m[1];
-      return null;
-    };
-    // Rev. 3263 — A Caixa identifica o cheque na descrição como "Doc NNNNNN"
-    // ("CHEQUE COMPENSADO · Doc 000990", "DEBITO CHEQUE PAG AGENCIA ... Doc 000981"),
-    // sem a palavra "cheque nº". Esse extrator pega o número do "Doc" — mas SÓ é usado
-    // quando a linha já pareceCheque (senão "Doc" de PIX/boleto casaria por engano).
-    const extrDocNum = (descricao: any): string | null => {
-      const m = String(descricao ?? "").match(/\bdoc(?:umento)?\.?\s*0*(\d{1,12})/i);
-      if (m && m[1]) return m[1].replace(/^0+/, "") || m[1];
-      return null;
-    };
-    // Rev. 3229 — só consideramos o fallback VALOR+DATA quando a descrição TEM indício de
-    // cheque/compensação. Sem essa trava, qualquer linha (PIX/tarifa/transferência) com o
-    // mesmo valor+data de UM cheque seria marcada como cheque e pré-preencheria fornecedor/
-    // obra ERRADOS. O caminho nº+valor já é seguro (a regex exige a palavra "cheque").
-    const pareceCheque = (descricao: any) => /cheq|compensa/i.test(String(descricao ?? ""));
-    const matchChequeLinha = (l: any): any | null => {
-      const cts = chqCents(l.valor);
-      if (cts == null || cts === 0) return null;
-      const ehCheque = pareceCheque(l.descricao);
-      // 1) número do cheque ("cheque nº NNN") OU número do documento "Doc NNN" (Caixa) quando
-      //    a linha parece cheque. Rev. 3263 — o banco às vezes arredonda 1 centavo na
-      //    compensação (cheque R$ 2.410,12 → extrato R$ 2.410,13); então, achado o número,
-      //    casa por VALOR EXATO e, se falhar, por número com tolerância de ≤2 centavos ÚNICO.
-      const num = extrNumChq(l.descricao) ?? (ehCheque ? extrDocNum(l.descricao) : null);
-      if (num) {
-        const exato = chqByNumVal.get(`${num}|${cts}`);
-        if (exato) return exato;
-        const arr = chqByNum.get(num);
-        if (arr) {
-          const perto = arr.filter((c) => { const v = chqCents(c.valor); return v != null && Math.abs(v - cts) <= 2; });
-          if (perto.length === 1) return perto[0];
-        }
-      }
-      const dia = chqDia(l.data);
-      if (dia && ehCheque) { const arr = chqByValData.get(`${cts}|${dia}`); if (arr && arr.length === 1) return arr[0]; }
-      return null;
-    };
-
-    // 2c) Rev. 3230 — CRUZAMENTO COM O CONTROLE DE CARTÃO DE CRÉDITO. Mesma filosofia do
-    // cheque, MAS para o cartão o ERP só considera o VALOR TOTAL DA FATURA (pra dizer se a
-    // fatura foi paga ou não). O detalhe dos gastos (por obra/centro de custo) vive no módulo
-    // Cartão de Crédito — aqui na conciliação a fatura é UM pagamento só (saída). READ-ONLY.
-    const fatRes = await dbExecute(db,
-      `SELECT f.id, f.total, f.vencimento, f.fechamento, f.mes_ref AS "mesRef", f.ano_ref AS "anoRef",
-              COALESCE(f.conciliado,0) AS conciliado,
-              c.banco AS "cartaoBanco", c.bandeira AS "cartaoBandeira", c.final4 AS "cartaoFinal4"
-         FROM financial_cartao_faturas f
-         LEFT JOIN financial_cartoes c ON c.id = f.cartao_id AND c.company_id = f.company_id
-        WHERE f.company_id=$1 AND f.excluido_em IS NULL AND f.total IS NOT NULL`,
-      [input.companyId]);
-    const faturasRep = rows(fatRes) as any[];
-    const fatByTotal = new Map<string, any[]>();
-    const fatByTotalVenc = new Map<string, any[]>();
-    for (const f of faturasRep) {
-      const cts = chqCents(f.total);
-      if (cts == null || cts === 0) continue;
-      { const k = `${cts}`; if (!fatByTotal.has(k)) fatByTotal.set(k, []); fatByTotal.get(k)!.push(f); }
-      const v = chqDia(f.vencimento);
-      if (v) { const k = `${cts}|${v}`; if (!fatByTotalVenc.has(k)) fatByTotalVenc.set(k, []); fatByTotalVenc.get(k)!.push(f); }
-    }
-    const pareceCartao = (descricao: any) => /cart[aã]o|fatura|cr[eé]dito|visa|master|elo\b|amex|hipercard/i.test(String(descricao ?? ""));
-    // Janela temporal p/ o fallback médio: vencimento da fatura perto da linha do extrato (±45d),
-    // ou — sem vencimento — competência (mês/ano ref) compatível com a data da linha.
-    const faturaDentroJanela = (f: any, diaLinha: string | null): boolean => {
-      if (!diaLinha) return false;
-      const venc = chqDia(f.vencimento);
-      if (venc) {
-        const ms = Date.parse(`${diaLinha}T00:00:00Z`) - Date.parse(`${venc}T00:00:00Z`);
-        if (Number.isNaN(ms)) return false;
-        return Math.abs(ms) <= 45 * 24 * 60 * 60 * 1000;
-      }
-      const mes = Number(f.mesRef), ano = Number(f.anoRef);
-      if (mes >= 1 && mes <= 12 && ano >= 2000) {
-        const ly = Number(diaLinha.slice(0, 4)), lm = Number(diaLinha.slice(5, 7));
-        const diffMeses = Math.abs((ly * 12 + lm) - (ano * 12 + mes));
-        return diffMeses <= 1;
-      }
-      return false;
-    };
-    const matchFaturaLinha = (l: any): any | null => {
-      const cts = chqCents(l.valor);
-      if (cts == null || cts === 0) return null;
-      // Pagamento de fatura = SAÍDA (valor negativo no extrato). Evita casar "entrada".
-      if (Number(l.valor) >= 0) return null;
-      const dia = chqDia(l.data);
-      // (1) forte: VALOR TOTAL + data do extrato == vencimento da fatura, quando ÚNICO.
-      if (dia) { const arr = fatByTotalVenc.get(`${cts}|${dia}`); if (arr && arr.length === 1) return arr[0]; }
-      // (2) médio: VALOR TOTAL + descrição com indício de cartão/fatura, quando ÚNICO E na janela temporal.
-      if (pareceCartao(l.descricao)) {
-        const arr = fatByTotal.get(`${cts}`);
-        if (arr && arr.length === 1 && faturaDentroJanela(arr[0], dia)) return arr[0];
-      }
-      return null;
-    };
-
-    // 2c-bis) Rev. 3238 — SEGUNDA VERIFICAÇÃO PELOS DEMONSTRATIVOS DE PAGAMENTO (PIX/BOLETO
-    // lidos por IA — a lista "Tudo que a IA leu nos demonstrativos"). Quando a linha do extrato
-    // NÃO casou com lançamento, cheque NEM fatura, o ERP é OBRIGADO a consultar os comprovantes
-    // PIX/boletos do mês p/ tentar dizer QUEM recebeu e SE foi PIX ou boleto — o extrato de
-    // PIX/boleto é anônimo, mas o demonstrativo traz beneficiário/CNPJ/txid. READ-ONLY: só
-    // identifica/sugere, NÃO concilia nem baixa nada (honra "conciliação só sugestiva"). Match,
-    // do mais forte p/ o mais fraco: (1) txid/e2e/nosso número presente na descrição + valor;
-    // (2) VALOR + DATA exatos, quando ÚNICO; (3) VALOR ÚNICO no período (rótulo "provável").
-    // Só SAÍDAS — demonstrativo = pagamento FEITO.
-    // Rev. 3266 — o DemoItem agora carrega TAMBÉM a referência do demonstrativo-pai
-    // (id/ano/mês) e a lista de PDFs daquele tipo, p/ o diálogo de conferência abrir o
-    // documento certo e o cliente saber de QUAL leitura veio a identificação.
-    type DemoItem = { beneficiario: string | null; documento: string | null; txid: string | null; valor: number | null; data: string | null; tipoDoc: string | null; origemTipo: "pix" | "boleto"; demId: number; demAno: number; demMes: number; arquivos: { url: string; nome: string | null }[] };
-    const ymOf = (s: string) => { const y = Number(String(s).slice(0, 4)); const m = Number(String(s).slice(5, 7)); return (y >= 2000 && m >= 1 && m <= 12) ? y * 12 + m : null; };
-    const startYM = ymOf(input.dataInicio), endYM = ymOf(input.dataFim);
-    const _parseArqDemo = (v: any, legacyUrl: any, legacyNome: any): { url: string; nome: string | null }[] => {
-      let a: any[] = [];
-      if (v) { try { const p = JSON.parse(v); if (Array.isArray(p)) a = p; } catch { a = []; } }
-      a = a.filter((x: any) => x && x.url).map((x: any) => ({ url: String(x.url), nome: x.nome != null ? String(x.nome) : null }));
-      if (a.length === 0 && legacyUrl) a = [{ url: String(legacyUrl), nome: legacyNome != null ? String(legacyNome) : null }];
-      return a;
-    };
-    const demoItens: DemoItem[] = [];
-    if (startYM != null && endYM != null) {
-      const demoRes = await dbExecute(db,
-        `SELECT id, ano, mes,
-                pix_extraido_json AS "pixJson", boleto_extraido_json AS "boletoJson",
-                pix_url AS "pixUrl", pix_nome AS "pixNome", pix_arquivos_json AS "pixArqJson",
-                boleto_url AS "boletoUrl", boleto_nome AS "boletoNome", boleto_arquivos_json AS "boletoArqJson"
-           FROM financial_conciliacao_demonstrativos
-          WHERE company_id=$1 AND conta_bancaria_id=$2 AND (ano*12+mes) >= $3 AND (ano*12+mes) <= $4`,
-        [input.companyId, input.contaBancariaId, startYM, endYM]);
-      for (const row of (rows(demoRes) as any[])) {
-        const arqByTipo: Record<"pix" | "boleto", { url: string; nome: string | null }[]> = {
-          pix: _parseArqDemo(row.pixArqJson, row.pixUrl, row.pixNome),
-          boleto: _parseArqDemo(row.boletoArqJson, row.boletoUrl, row.boletoNome),
-        };
-        for (const [json, origemTipo] of [[row.pixJson, "pix"], [row.boletoJson, "boleto"]] as [any, "pix" | "boleto"][]) {
-          if (!json) continue;
-          let arr: any[] = [];
-          try { const pj = JSON.parse(json); if (Array.isArray(pj)) arr = pj; } catch { arr = []; }
-          for (const it of arr) {
-            if (!it) continue;
-            demoItens.push({
-              beneficiario: it.beneficiario != null ? String(it.beneficiario) : null,
-              documento: it.documento != null ? String(it.documento) : null,
-              txid: it.txid != null ? String(it.txid) : null,
-              valor: it.valor != null && !Number.isNaN(Number(it.valor)) ? Math.abs(Number(it.valor)) : null,
-              data: it.data ? String(it.data).slice(0, 10) : null,
-              tipoDoc: it.tipoDoc != null ? String(it.tipoDoc) : null,
-              origemTipo,
-              demId: Number(row.id),
-              demAno: Number(row.ano),
-              demMes: Number(row.mes),
-              arquivos: arqByTipo[origemTipo],
-            });
-          }
-        }
-      }
-    }
-    const demoByValData = new Map<string, DemoItem[]>();
-    const demoByVal = new Map<string, DemoItem[]>();
-    const demoTxids: { txid: string; cents: number | null; it: DemoItem }[] = [];
-    const normAlnum = (s: any) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
-    for (const it of demoItens) {
-      const cts = it.valor != null ? Math.round(it.valor * 100) : null;
-      if (cts == null || cts === 0) continue;
-      { const k = `${cts}`; if (!demoByVal.has(k)) demoByVal.set(k, []); demoByVal.get(k)!.push(it); }
-      if (it.data) { const k = `${cts}|${it.data}`; if (!demoByValData.has(k)) demoByValData.set(k, []); demoByValData.get(k)!.push(it); }
-      const tx = normAlnum(it.txid);
-      if (tx.length >= 6) demoTxids.push({ txid: tx, cents: cts, it });
-    }
-    const matchDemonstrativoLinha = (l: any): { it: DemoItem; origem: "txid" | "data" | "valor" } | null => {
-      if (Number(l.valor) >= 0) return null; // só saídas (pagamento feito)
-      const cts = chqCents(l.valor);
-      if (cts == null || cts === 0) return null;
-      // (1) txid/e2e/nosso número na descrição + valor (forte)
-      if (demoTxids.length) {
-        const desc = normAlnum(l.descricao);
-        if (desc) {
-          const hit = demoTxids.find((t) => desc.includes(t.txid) && (t.cents == null || t.cents === cts));
-          if (hit) return { it: hit.it, origem: "txid" };
-        }
-      }
-      // (2) valor + data exatos, quando único (forte)
-      const dia = chqDia(l.data);
-      if (dia) { const arr = demoByValData.get(`${cts}|${dia}`); if (arr && arr.length === 1) return { it: arr[0], origem: "data" }; }
-      // (3) valor único no período (provável)
-      const arrV = demoByVal.get(`${cts}`); if (arrV && arrV.length === 1) return { it: arrV[0], origem: "valor" };
-      return null;
-    };
-
-    // 2c-ter) Rev. 3265 — VÍNCULO DA LINHA DO EXTRATO COM O CADASTRO (mesma filosofia do
-    // cheque, agora p/ os DEMAIS pagamentos/recebimentos): SAÍDA → tenta amarrar a um
-    // FORNECEDOR cadastrado; ENTRADA → tenta amarrar a um CLIENTE (recebível). Sinal FORTE =
-    // CNPJ presente na descrição do extrato casa com o cadastro (badge "cadastro"); FRACO =
-    // nome do beneficiário (vindo do demonstrativo) OU da própria descrição casa por nome
-    // (rótulo "sugestão", p/ o usuário confirmar). READ-ONLY: só identifica/sugere — não grava
-    // nem concilia nada (honra "conciliação só sugestiva"). Espelha `normCnpj`/`matchFornecedor`
-    // do módulo PJ (Rev. 3262).
-    const _normCnpj = (v: any) => String(v ?? "").replace(/\D/g, "");
-    const _normNome = (v: any) => {
-      let s = String(v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase()
-        .replace(/[^A-Z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
-      return s.replace(/\b(LTDA|EIRELI|EPP|MEI|ME|SA)\b/g, " ").replace(/\s+/g, " ").trim();
-    };
-    type CadHit = { id: number; nome: string };
-    type CadIdx = { porCnpj: Map<string, CadHit>; porNome: Map<string, CadHit> };
-    const buildCadIdx = (arr: any[]): CadIdx => {
-      const porCnpj = new Map<string, CadHit>();
-      const porNome = new Map<string, CadHit>();
-      for (const f of arr) {
-        const nome = f.razaoSocial || f.nomeFantasia || "";
-        const c = _normCnpj(f.cnpj);
-        if (c.length === 14 && !porCnpj.has(c)) porCnpj.set(c, { id: f.id, nome });
-        const rz = _normNome(f.razaoSocial); if (rz && !porNome.has(rz)) porNome.set(rz, { id: f.id, nome });
-        const nf = _normNome(f.nomeFantasia); if (nf && !porNome.has(nf)) porNome.set(nf, { id: f.id, nome });
-      }
-      return { porCnpj, porNome };
-    };
-    const fornRes = await dbExecute(db,
-      `SELECT id, cnpj, razao_social AS "razaoSocial", nome_fantasia AS "nomeFantasia"
-         FROM fornecedores WHERE company_id=$1 AND COALESCE(ativo,true)=true`,
-      [input.companyId]);
-    const cliRes = await dbExecute(db,
-      `SELECT id, cnpj, razao_social AS "razaoSocial", nome_fantasia AS "nomeFantasia"
-         FROM clientes WHERE company_id=$1 AND COALESCE(ativo,true)=true`,
-      [input.companyId]);
-    const fornIdx = buildCadIdx(rows(fornRes) as any[]);
-    const cliIdx = buildCadIdx(rows(cliRes) as any[]);
-    const extrCnpj = (descricao: any): string | null => {
-      const m = String(descricao ?? "").match(/\b(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})\b/);
-      if (m && m[1]) { const c = m[1].replace(/\D/g, ""); return c.length === 14 ? c : null; }
-      return null;
-    };
-    const matchCadastro = (l: any, beneficiario: string | null): { tipo: "fornecedor" | "cliente"; id: number; nome: string; via: "cnpj" | "nome" } | null => {
-      const isEntrada = Number(l.valor) >= 0;
-      const idx = isEntrada ? cliIdx : fornIdx;
-      const tipo: "fornecedor" | "cliente" = isEntrada ? "cliente" : "fornecedor";
-      // 1) CNPJ na descrição do extrato (forte)
-      const c = extrCnpj(l.descricao);
-      if (c) { const hit = idx.porCnpj.get(c); if (hit) return { tipo, id: hit.id, nome: hit.nome, via: "cnpj" }; }
-      // 2) nome do beneficiário (demonstrativo) ou da própria descrição (fraco → "sugestão")
-      for (const cand of [beneficiario, l.descricao]) {
-        const n = _normNome(cand);
-        if (!n || n.length < 4) continue;
-        const exato = idx.porNome.get(n);
-        if (exato) return { tipo, id: exato.id, nome: exato.nome, via: "nome" };
-        for (const [nm, hit] of idx.porNome) {
-          if (nm.length >= 6 && (nm.includes(n) || n.includes(nm))) return { tipo, id: hit.id, nome: hit.nome, via: "nome" };
-        }
-      }
-      return null;
-    };
-
-    // Rev. 3266 — VEREDICTO do usuário sobre a identificação por IA (texto roxo): confirmado
-    // ou errado, por LINHA do extrato. Só LEITURA aqui — anexa ao retorno p/ a tela refletir
-    // o estado da conferência (✓ conferido / ✗ marcado errado). try/catch defensivo caso a
-    // tabela ainda não exista (o self-heal a cria no boot).
-    const veredictoByLinha = new Map<number, { veredicto: string; em: string | null; por: string | null }>();
-    try {
-      const vRes = await dbExecute(db,
-        `SELECT extrato_linha_id AS "linhaId", veredicto, atualizado_em AS "em", criado_em AS "criadoEm", usuario_nome AS "por"
-           FROM financial_conciliacao_demo_confirmacoes
-          WHERE company_id=$1 AND conta_bancaria_id=$2`,
-        [input.companyId, input.contaBancariaId]);
-      for (const v of (rows(vRes) as any[])) {
-        if (v.veredicto === "confirmado" || v.veredicto === "errado")
-          veredictoByLinha.set(Number(v.linhaId), { veredicto: String(v.veredicto), em: (v.em ?? v.criadoEm) ?? null, por: v.por ?? null });
-      }
-    } catch { /* tabela ainda não materializada — sem veredictos */ }
-
-    const extratoSemLancamento = rows(pendRes).map((l: any) => {
-      let out: any = l;
-      const c = matchChequeLinha(l);
-      if (c) {
-        const num = String(c.numeroCheque ?? "").replace(/^0+/, "") || (c.numeroCheque ?? null);
-        out = {
-          ...l,
-          chequeNumero: num ?? null,
-          chequeFornecedor: c.fornecedorNome ?? null,
-          chequeFornecedorId: c.fornecedorId ?? null,
-          chequeObraId: c.obraId ?? null,
-          chequeObraNome: c.obraNome ?? null,
-          chequeNf: c.nf ?? null,
-          chequeVencimento: c.dataVencimento ?? null,
-          chequeBanco: c.bancoNome ?? null,
-        };
-      } else {
-        const f = matchFaturaLinha(l);
-        if (f) {
-          const label = [f.cartaoBanco, f.cartaoBandeira, f.cartaoFinal4 ? `final ${f.cartaoFinal4}` : ""].filter(Boolean).join(" ").trim();
-          out = {
-            ...l,
-            faturaId: f.id,
-            faturaCartao: label || "Cartão",
-            faturaVencimento: f.vencimento ?? null,
-            faturaTotal: f.total ?? null,
-            faturaMesRef: f.mesRef ?? null,
-            faturaAnoRef: f.anoRef ?? null,
-            faturaConciliado: Number(f.conciliado) === 1 ? 1 : 0,
-          };
-        } else {
-          // Rev. 3238 — SEGUNDA VERIFICAÇÃO: nada casou (lançamento/cheque/fatura). Consulta os
-          // demonstrativos de pagamento (PIX/boleto lidos por IA) p/ identificar beneficiário + tipo.
-          const d = matchDemonstrativoLinha(l);
-          if (d) {
-            const tipo = d.it.tipoDoc && /pix|boleto|ted/i.test(d.it.tipoDoc) ? d.it.tipoDoc.toLowerCase() : d.it.origemTipo;
-            const ver = veredictoByLinha.get(Number(l.id));
-            out = {
-              ...l,
-              demoBeneficiario: d.it.beneficiario ?? null,
-              demoDocumento: d.it.documento ?? null,
-              demoTxid: d.it.txid ?? null,
-              demoTipo: tipo,        // "pix" | "boleto" | "ted"
-              demoData: d.it.data ?? null,
-              demoMatch: d.origem,   // "txid" | "data" | "valor"
-              // Rev. 3266 — dados p/ o diálogo de conferência (valor lido, PDF do mês) + veredicto.
-              demoValor: d.it.valor ?? null,
-              demoDemonstrativoId: d.it.demId,
-              demoAno: d.it.demAno,
-              demoMes: d.it.demMes,
-              demoArquivos: d.it.arquivos,
-              demoVeredicto: ver?.veredicto ?? null,   // "confirmado" | "errado" | null
-              demoVeredictoEm: ver?.em ?? null,
-              demoVeredictoPor: ver?.por ?? null,
-            };
-          }
-        }
-      }
-      // Rev. 3265 — vínculo com o cadastro (fornecedor p/ saída, cliente p/ entrada). Pulado
-      // quando o cheque já amarrou um fornecedor (`chequeFornecedorId`) ou quando é fatura de
-      // cartão (`faturaId`) — ali o fornecedor não se aplica.
-      if (!out.chequeFornecedorId && !out.faturaId) {
-        const vinc = matchCadastro(l, out.demoBeneficiario ?? null);
-        if (vinc) out = { ...out, vinculoTipo: vinc.tipo, vinculoId: vinc.id, vinculoNome: vinc.nome, vinculoVia: vinc.via };
-      }
-      return out;
-    });
-
-    // 2d) Rev. 3235 — TENTATIVA DE PAGAMENTO FRUSTRADA (cheque devolvido/sustado).
-    // No extrato, o cheque aparece como DÉBITO (compensação) e, dias depois, volta como
-    // CRÉDITO (devolução) do MESMO valor/doc. Esse par tem saldo ZERO: NÃO é saída real
-    // nem entrada real — foi um pagamento que não se concretizou. O ERP pareia os dois,
-    // traduz o motivo (alínea Bacen — biblioteca shared/chequeMotivos) e PROCURA a quitação
-    // real: (a) reapresentação do cheque que compensou depois, ou (b) PIX/TED de mesmo valor.
-    // Tudo READ-ONLY — só sinaliza p/ o usuário analisar e decidir. Não grava/baixa nada.
-    const linhaById = new Map<any, any>(extratoSemLancamento.map((l: any) => [l.id, l]));
-    const linhasMin: LinhaEstornoMin[] = extratoSemLancamento.map((l: any) => ({
-      id: l.id,
-      valorCents: chqCents(l.valor),
-      isCredito: Number(l.valor) >= 0,
-      descricao: l.descricao,
-      data: chqDia(l.data),
-    }));
-    const paresEstorno = detectarParesEstorno(linhasMin);
-    const minById = new Map<any, LinhaEstornoMin>(linhasMin.map((l) => [l.id, l]));
-    const consumidos = new Set<any>();
-    for (const p of paresEstorno) { consumidos.add(p.debitoId); consumidos.add(p.creditoId); }
-    const livres = linhasMin.filter((l) => !consumidos.has(l.id));
-    const chequesDevolvidos = paresEstorno.map((p, idx) => {
-      const grupoId = `dev-${idx}`;
-      const deb: any = linhaById.get(p.debitoId);
-      const cred: any = linhaById.get(p.creditoId);
-      const cMatch = deb ? matchChequeLinha(deb) : null;
-      // Busca da quitação real entre as linhas LIVRES (não pertencentes a outro par).
-      // (a) Reapresentação: outro DÉBITO de cheque de mesmo valor, em data >= devolução.
-      let resolucao: any = { tipo: "pendente" };
-      const reap = livres.find((l) =>
-        !consumidos.has(l.id) && !l.isCredito && l.valorCents === p.valorCents &&
-        pareceCompensacaoCheque(l.descricao) && (!l.data || !p.dataCredito || l.data >= p.dataCredito));
-      if (reap) {
-        const rl: any = linhaById.get(reap.id);
-        consumidos.add(reap.id);
-        if (rl) { rl.reversalResolveGrupo = grupoId; rl.reversalResolveTipo = "reapresentado"; }
-        resolucao = { tipo: "reapresentado", lineId: reap.id, data: rl?.data ?? null, descricao: rl?.descricao ?? null, valor: rl?.valor ?? null };
-      } else {
-        // (b) Substituição por PIX/TED/transferência de MESMO valor (saída), em data >= débito.
-        const pix = livres.find((l) =>
-          !consumidos.has(l.id) && !l.isCredito && l.valorCents === p.valorCents &&
-          /pix|ted\b|doc\b|transf/i.test(String(l.descricao ?? "")) &&
-          (!l.data || !p.dataDebito || l.data >= p.dataDebito));
-        if (pix) {
-          const pl: any = linhaById.get(pix.id);
-          consumidos.add(pix.id);
-          if (pl) { pl.reversalResolveGrupo = grupoId; pl.reversalResolveTipo = "pix"; }
-          resolucao = { tipo: "pix", lineId: pix.id, data: pl?.data ?? null, descricao: pl?.descricao ?? null, valor: pl?.valor ?? null };
-        }
-      }
-      // Marca as duas linhas do par como estorno (saem da lista normal no front).
-      if (deb) deb.reversal = { papel: "debito", grupoId, doc: p.doc, motivoCodigo: p.motivo?.codigo ?? null };
-      if (cred) cred.reversal = { papel: "credito", grupoId, doc: p.doc, motivoCodigo: p.motivo?.codigo ?? null };
-      return {
-        grupoId,
-        doc: p.doc,
-        chequeNumero: p.chequeNumero,
-        valor: deb?.valor ?? cred?.valor ?? null,
-        valorCents: p.valorCents,
-        motivoCodigo: p.motivo?.codigo ?? null,
-        motivoTexto: p.motivo?.motivo ?? null,
-        motivoGrupo: p.motivo?.grupo ?? null,
-        motivoSustado: !!p.motivo?.sustado,
-        motivoReapresentavel: p.motivo?.reapresentavel ?? null,
-        dataDebito: p.dataDebito,
-        dataCredito: p.dataCredito,
-        descricaoDebito: p.descricaoDebito,
-        descricaoCredito: p.descricaoCredito,
-        fornecedor: cMatch?.fornecedorNome ?? null,
-        obraNome: cMatch?.obraNome ?? null,
-        nf: cMatch?.nf ?? null,
-        debitoId: p.debitoId,
-        creditoId: p.creditoId,
-        resolucao,
-      };
-    });
-    void minById;
-
-    // 3) Lançamentos do sistema sem conciliação no período — APENAS desta conta.
-    // Rev. 3188 — antes incluía também os lançamentos SEM conta (conta_bancaria_id IS
-    // NULL), que apareciam (e eram contados) em TODAS as contas, inflando o KPI "ERP sem
-    // extrato" e fazendo o número variar conforme a conta selecionada. Agora o bloco
-    // específico da conta traz só `conta_bancaria_id=$2`; os "sem conta" saem num bloco
-    // próprio (lancamentosSemConta) que NÃO entra na contagem por conta.
-    // Rev. 3239 — além das colunas do lançamento, traz `origem_modulo` e o FORNECEDOR REAL
-    // da Frota (posto do abastecimento / fornecedor da manutenção) via LEFT JOIN por
-    // origem_id, p/ o agrupador (_agruparConciliacao) unificar combustível/manutenção pelo
-    // NOME DO FORNECEDOR (o extrato mostra só o total). VR não precisa de join (agrupa por mês).
-    const lancRes = await dbExecute(db,
-      `SELECT e.id, e.descricao, e.fornecedor_nome AS "fornecedorNome", e.obra_nome AS "obraNome",
-              COALESCE(e.valor_realizado, e.valor_previsto) AS valor, e.tipo, e.status,
-              e.forma_pagamento AS "formaPagamento", e.comprovante_url AS "comprovanteUrl",
-              e.comprovante_beneficiario AS "comprovanteBeneficiario",
-              e.origem_modulo AS "origemModulo",
-              COALESCE(NULLIF(TRIM(ff.posto),''), NULLIF(TRIM(fm.fornecedor),'')) AS "frotaFornecedor",
-              COALESCE(NULLIF(TRIM(pc.nome_fantasia),''), NULLIF(TRIM(pc.razao_social),'')) AS "parceiroFornecedor",
-              COALESCE(NULLIF(TRIM(pjemp."nomeCompleto"),''), NULLIF(TRIM(pjc."razaoSocialPrestador"),'')) AS "pjFornecedor",
-              COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) AS data
-         FROM financial_entries e
-         LEFT JOIN fleet_fuel_records ff ON e.origem_modulo='frota_abastecimento' AND ff.id = e.origem_id
-         LEFT JOIN fleet_maintenances fm ON e.origem_modulo='frota_manutencao' AND fm.id = e.origem_id
-         LEFT JOIN lancamentos_parceiros lp ON e.origem_modulo='parceiro_lancamento' AND lp.id = e.origem_id AND lp."companyId" = e.company_id
-         LEFT JOIN parceiros_conveniados pc ON pc.id = lp."parceiroId" AND pc."companyId" = e.company_id
-         LEFT JOIN pj_payments pjp ON e.origem_modulo='pagamento_pj' AND pjp.id = e.origem_id AND pjp."companyId" = e.company_id
-         LEFT JOIN employees pjemp ON pjemp.id = pjp."employeeId" AND pjemp."companyId" = e.company_id
-         LEFT JOIN pj_contracts pjc ON pjc.id = pjp."contractId" AND pjc."companyId" = e.company_id
-        WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
-          AND e.conta_bancaria_id=$2
-          AND ${sqlNotProjecao("e.origem_modulo")}
-          AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) >= $3
-          AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) <= $4
-        ORDER BY data ASC, e.id ASC`, p);
-
-    // 3b) Lançamentos sem conta bancária definida (conta_bancaria_id IS NULL) — Rev. 3188.
-    // São candidatos a casar com o extrato de QUALQUER banco (o ERP não sabe a conta de
-    // origem), por isso ficam num bloco à parte, idêntico em todas as contas, e NÃO são
-    // somados ao número da conta. Independe de $2 (a conta selecionada).
-    // Rev. 3191 — `dbExecute` liga params por ORDEM DE APARIÇÃO ($N é cosmético). Este
-    // bloco filtra `conta_bancaria_id IS NULL` e NÃO usa a conta ($2), então o array
-    // compartilhado `p` (4 itens, com a conta na posição 2) desalinhava: o contaBancariaId
-    // caía na 1ª comparação de DATA → "invalid input syntax for type date: 2". Usa um array
-    // dedicado SEM a conta e placeholders $1,$2,$3 em ordem.
-    const semContaRes = await dbExecute(db,
-      `SELECT e.id, e.descricao, e.fornecedor_nome AS "fornecedorNome", e.obra_nome AS "obraNome",
-              COALESCE(e.valor_realizado, e.valor_previsto) AS valor, e.tipo, e.status,
-              e.forma_pagamento AS "formaPagamento", e.comprovante_url AS "comprovanteUrl",
-              e.comprovante_beneficiario AS "comprovanteBeneficiario",
-              e.origem_modulo AS "origemModulo",
-              COALESCE(NULLIF(TRIM(ff.posto),''), NULLIF(TRIM(fm.fornecedor),'')) AS "frotaFornecedor",
-              COALESCE(NULLIF(TRIM(pc.nome_fantasia),''), NULLIF(TRIM(pc.razao_social),'')) AS "parceiroFornecedor",
-              COALESCE(NULLIF(TRIM(pjemp."nomeCompleto"),''), NULLIF(TRIM(pjc."razaoSocialPrestador"),'')) AS "pjFornecedor",
-              COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) AS data
-         FROM financial_entries e
-         LEFT JOIN fleet_fuel_records ff ON e.origem_modulo='frota_abastecimento' AND ff.id = e.origem_id
-         LEFT JOIN fleet_maintenances fm ON e.origem_modulo='frota_manutencao' AND fm.id = e.origem_id
-         LEFT JOIN lancamentos_parceiros lp ON e.origem_modulo='parceiro_lancamento' AND lp.id = e.origem_id AND lp."companyId" = e.company_id
-         LEFT JOIN parceiros_conveniados pc ON pc.id = lp."parceiroId" AND pc."companyId" = e.company_id
-         LEFT JOIN pj_payments pjp ON e.origem_modulo='pagamento_pj' AND pjp.id = e.origem_id AND pjp."companyId" = e.company_id
-         LEFT JOIN employees pjemp ON pjemp.id = pjp."employeeId" AND pjemp."companyId" = e.company_id
-         LEFT JOIN pj_contracts pjc ON pjc.id = pjp."contractId" AND pjc."companyId" = e.company_id
-        WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
-          AND e.conta_bancaria_id IS NULL
-          AND ${sqlNotProjecao("e.origem_modulo")}
-          AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) >= $2
-          AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) <= $3
-        ORDER BY data ASC, e.id ASC`,
+    // Contas COM extrato (linhas não excluídas) no período + dados cadastrais p/ rótulo.
+    const contasRes = await dbExecute(db,
+      `SELECT cba.id AS "id", cba.banco AS "banco", cba.descricao AS "descricao",
+              cba.agencia AS "agencia", cba.conta AS "conta",
+              COUNT(b.id)::int AS "linhas"
+         FROM company_bank_accounts cba
+         JOIN bank_statement_lines b
+           ON b.conta_bancaria_id = cba.id AND b.company_id = cba.company_id
+          AND b.data >= $2 AND b.data <= $3 AND b.excluido_em IS NULL
+        WHERE cba.company_id = $1
+        GROUP BY cba.id, cba.banco, cba.descricao, cba.agencia, cba.conta
+        ORDER BY cba.banco ASC, cba.id ASC`,
       [input.companyId, input.dataInicio, input.dataFim]);
+    const contas = rows(contasRes);
 
+    const contasOut: any[] = [];
+    const conciliados: any[] = [];
+    const extratoSemLancamento: any[] = [];
+    const chequesDevolvidos: any[] = [];
+    const lancamentosSemExtrato: any[] = [];
+    let lancamentosSemConta: any[] = [];
+
+    for (const c of contas) {
+      const contaId = Number(c.id);
+      const contaLabel = `${c.banco ?? "Banco"}${c.descricao ? " · " + c.descricao : ""}`;
+      const tag = { contaBancariaId: contaId, contaBanco: c.banco ?? null, contaDescricao: c.descricao ?? null, contaLabel };
+      const rep: any = await _computeConciliacaoReport(db, input.companyId, contaId, input.dataInicio, input.dataFim);
+
+      const conc = (rep.conciliados ?? []).map((r: any) => ({ ...r, ...tag }));
+      const ext = (rep.extratoSemLancamento ?? []).map((r: any) => ({ ...r, ...tag }));
+      const dev = (rep.chequesDevolvidos ?? []).map((r: any) => ({ ...r, ...tag }));
+      const lan = (rep.lancamentosSemExtrato ?? []).map((r: any) => ({ ...r, ...tag }));
+
+      conciliados.push(...conc);
+      extratoSemLancamento.push(...ext);
+      chequesDevolvidos.push(...dev);
+      lancamentosSemExtrato.push(...lan);
+      // "Sem conta" é company-wide e idêntico em toda conta: pega o 1º não-vazio só uma vez.
+      if (lancamentosSemConta.length === 0 && (rep.lancamentosSemConta ?? []).length > 0) {
+        lancamentosSemConta = rep.lancamentosSemConta;
+      }
+
+      const somaAbs = (arr: any[]) => arr.reduce((a: number, x: any) => a + Math.abs(Number(x.valor) || 0), 0);
+      contasOut.push({
+        ...tag,
+        linhas: Number(c.linhas) || 0,
+        conciliados: conc,
+        extratoSemLancamento: ext,
+        chequesDevolvidos: dev,
+        lancamentosSemExtrato: lan,
+        totais: {
+          conciliados: conc.length,
+          extratoSemLancamento: ext.length,
+          lancamentosSemExtrato: lan.length,
+          chequesDevolvidos: dev.length,
+          valorConciliado: somaAbs(conc),
+          valorExtratoSemLancamento: somaAbs(ext),
+          valorLancamentosSemExtrato: somaAbs(lan),
+        },
+      });
+    }
+
+    const somaAbs = (arr: any[]) => arr.reduce((a: number, x: any) => a + Math.abs(Number(x.valor) || 0), 0);
+    const totalExtrato = conciliados.length + extratoSemLancamento.length;
     return {
-      conciliados: rows(concRes),
+      contas: contasOut,
+      conciliados,
       extratoSemLancamento,
       chequesDevolvidos,
-      // Rev. 3239 — UNIFICA VR (por mês) + combustível/manutenção (por fornecedor) nas duas
-      // listas de pendência. SOMA preservada; só a contagem cai (lista enxuta).
-      lancamentosSemExtrato: _agruparConciliacao(rows(lancRes)),
-      lancamentosSemConta: _agruparConciliacao(rows(semContaRes)),
+      lancamentosSemExtrato,
+      lancamentosSemConta,
+      totais: {
+        contas: contasOut.length,
+        totalExtrato,
+        conciliados: conciliados.length,
+        extratoSemLancamento: extratoSemLancamento.length,
+        lancamentosSemExtrato: lancamentosSemExtrato.length,
+        lancamentosSemConta: lancamentosSemConta.length,
+        chequesDevolvidos: chequesDevolvidos.length,
+        pctConciliado: totalExtrato > 0 ? Math.round((conciliados.length / totalExtrato) * 100) : 0,
+        valorConciliado: somaAbs(conciliados),
+        valorExtratoSemLancamento: somaAbs(extratoSemLancamento),
+        valorLancamentosSemExtrato: somaAbs(lancamentosSemExtrato),
+        valorLancamentosSemConta: somaAbs(lancamentosSemConta),
+      },
     };
   }),
 

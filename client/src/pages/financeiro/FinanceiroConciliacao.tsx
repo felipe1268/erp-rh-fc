@@ -416,6 +416,17 @@ export default function FinanceiroConciliacao() {
     { companyId, contaBancariaId: parseInt(contaBancariaId) || 0, dataInicio, dataFim },
     { enabled: !!companyId && !!contaBancariaId, retry: false }
   );
+  // Rev. 3319 — PANORAMA GERAL DO MÊS: quando há um MÊS selecionado mas NENHUMA conta,
+  // roda o mesmo motor de conciliação para TODAS as contas com extrato no período e
+  // devolve totais agregados + por conta. READ-ONLY (nada concilia sem entrar na conta).
+  const geralAtivo = !!companyId && mesSel != null && !contaBancariaId;
+  const { data: reportGeral, isFetching: geralLoading, isError: geralIsError, error: geralError, refetch: refetchGeral } = (trpc as any).financial.getConciliacaoReportGeral.useQuery(
+    { companyId, dataInicio, dataFim },
+    { enabled: geralAtivo, retry: false }
+  );
+  const geralTotais: any = reportGeral?.totais ?? null;
+  const geralContas: any[] = reportGeral?.contas ?? [];
+  const geralSemConta: any[] = reportGeral?.lancamentosSemConta ?? [];
   // Rev. 3266 — grava o veredicto da conferência da identificação por IA (confirmado/errado/
   // desfazer). NÃO concilia/baixa nada — só registra. Após salvar, refaz o report p/ a tela
   // refletir o ✓/✗ na linha e fecha o diálogo.
@@ -1459,14 +1470,147 @@ export default function FinanceiroConciliacao() {
           </CardContent>
         </Card>
 
-        {!contaBancariaId ? (
+        {!contaBancariaId && mesSel == null ? (
           <Card className="border-0 shadow-sm">
             <CardContent className="p-12 text-center">
               <RefreshCw className="w-14 h-14 mx-auto mb-4 text-gray-300" />
-              <p className="text-gray-500 font-medium">Selecione uma conta bancária para iniciar a conciliação.</p>
+              <p className="text-gray-500 font-medium">Selecione um mês para ver o panorama geral, ou uma conta para conciliar.</p>
               <p className="text-xs text-gray-400 mt-2">Ou importe um extrato bancário (OFX/CSV) para começar</p>
             </CardContent>
           </Card>
+        ) : !contaBancariaId ? (
+          /* Rev. 3319 — PANORAMA GERAL DO MÊS (mês selecionado, sem conta): visão unificada
+             de TODAS as contas com extrato no período. Totais agregados + por conta, com
+             drill-in (abrir a conta) p/ conciliar. READ-ONLY — nada concilia aqui. */
+          <div className="space-y-4">
+            <Card className="border-0 shadow-sm">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Landmark className="w-5 h-5 text-blue-600" />
+                    <div>
+                      <p className="text-base font-bold text-gray-800">Panorama geral do mês</p>
+                      <p className="text-xs text-gray-500">Todas as contas com extrato em {MESES[(mesSel ?? 1) - 1]}/{ano}. Clique numa conta para conciliar.</p>
+                    </div>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => refetchGeral()} disabled={geralLoading} className="h-8 text-xs">
+                    {geralLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <RefreshCw className="w-3.5 h-3.5 mr-1" />}
+                    Atualizar
+                  </Button>
+                </div>
+
+                {geralLoading ? (
+                  <div className="p-10 text-center text-gray-400 text-sm flex items-center justify-center gap-2">
+                    <Loader2 className="w-5 h-5 animate-spin" /> Calculando o panorama de todas as contas…
+                  </div>
+                ) : geralIsError ? (
+                  <div className="p-6 text-center">
+                    <AlertCircle className="w-8 h-8 mx-auto mb-2 text-red-400" />
+                    <p className="text-sm text-red-700 font-medium">Não consegui montar o panorama.</p>
+                    <p className="text-xs text-gray-500 mt-1">{geralError?.message || "Tente novamente."}</p>
+                    <Button size="sm" variant="outline" onClick={() => refetchGeral()} className="mt-3 border-red-300 text-red-700 hover:bg-red-100">Tentar de novo</Button>
+                  </div>
+                ) : geralContas.length === 0 ? (
+                  <div className="p-10 text-center text-gray-400 text-sm">
+                    Nenhuma conta com extrato importado em {MESES[(mesSel ?? 1) - 1]}/{ano}. Importe um extrato (OFX/CSV) ou escolha outro mês.
+                  </div>
+                ) : (
+                  <>
+                    {/* KPIs agregados da empresa no mês */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                      <div className="rounded-xl border border-green-200 bg-green-50/60 p-3">
+                        <p className="text-[11px] text-green-700 font-medium">Conciliados</p>
+                        <p className="text-lg font-bold text-green-700">{geralTotais?.conciliados ?? 0}</p>
+                        <p className="text-[11px] text-green-600/80">{formatBRL(geralTotais?.valorConciliado ?? 0)}</p>
+                      </div>
+                      <div className="rounded-xl border border-rose-200 bg-rose-50/60 p-3">
+                        <p className="text-[11px] text-rose-700 font-medium">No extrato, sem lançamento</p>
+                        <p className="text-lg font-bold text-rose-700">{geralTotais?.extratoSemLancamento ?? 0}</p>
+                        <p className="text-[11px] text-rose-600/80">{formatBRL(geralTotais?.valorExtratoSemLancamento ?? 0)}</p>
+                      </div>
+                      <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+                        <p className="text-[11px] text-amber-700 font-medium">No ERP, sem extrato</p>
+                        <p className="text-lg font-bold text-amber-700">{geralTotais?.lancamentosSemExtrato ?? 0}</p>
+                        <p className="text-[11px] text-amber-600/80">{formatBRL(geralTotais?.valorLancamentosSemExtrato ?? 0)}</p>
+                      </div>
+                      <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3">
+                        <p className="text-[11px] text-blue-700 font-medium">% conciliado</p>
+                        <p className="text-lg font-bold text-blue-700">{geralTotais?.pctConciliado ?? 0}%</p>
+                        <p className="text-[11px] text-blue-600/80">{geralTotais?.contas ?? 0} conta(s) com extrato</p>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-gray-400 mb-4">Como é calculado: cada conta passa pelo mesmo motor de conciliação; os valores acima somam todas as contas do mês (em módulo). Cada lançamento continua vinculado à sua conta — entre na conta para conciliar.</p>
+
+                    {/* Por conta */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                      {geralContas.map((c: any) => {
+                        const cor = bancoCor(c.contaBanco);
+                        const t = c.totais ?? {};
+                        const st = accStatusMap[Number(c.contaBancariaId)] ?? "vazio";
+                        const isConsol = st === "consolidado";
+                        return (
+                          <button
+                            key={c.contaBancariaId}
+                            type="button"
+                            onClick={() => setContaBancariaId(String(c.contaBancariaId))}
+                            className={`text-left rounded-xl border p-3 transition-all hover:shadow-sm ${isConsol ? "border-green-300 bg-green-50/40 hover:border-green-400" : "border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50/30"}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${cor.bg}`}>
+                                <Landmark className={`h-[18px] w-[18px] ${cor.text}`} />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-gray-800 truncate">{c.contaLabel}</p>
+                                <p className="text-[11px] text-gray-400">{c.linhas} linha(s) no extrato</p>
+                              </div>
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${isConsol ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
+                                {isConsol ? <><CheckCircle className="h-2.5 w-2.5" />Conciliado</> : <><AlertCircle className="h-2.5 w-2.5" />A conciliar</>}
+                              </span>
+                              <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 mt-3">
+                              <div className="rounded-lg bg-green-50 px-2 py-1.5 text-center">
+                                <p className="text-[10px] text-green-700">Conciliados</p>
+                                <p className="text-sm font-bold text-green-700">{t.conciliados ?? 0}</p>
+                              </div>
+                              <div className="rounded-lg bg-rose-50 px-2 py-1.5 text-center">
+                                <p className="text-[10px] text-rose-700">Sem lançam.</p>
+                                <p className="text-sm font-bold text-rose-700">{t.extratoSemLancamento ?? 0}</p>
+                              </div>
+                              <div className="rounded-lg bg-amber-50 px-2 py-1.5 text-center">
+                                <p className="text-[10px] text-amber-700">Sem extrato</p>
+                                <p className="text-sm font-bold text-amber-700">{t.lancamentosSemExtrato ?? 0}</p>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Lançamentos sem conta definida (company-wide, contado uma vez) */}
+                    {geralSemConta.length > 0 && (
+                      <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50/60 p-3">
+                        <p className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                          <AlertCircle className="w-4 h-4 text-gray-400" />
+                          Lançamentos sem conta bancária definida ({geralSemConta.length})
+                        </p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">Não pertencem a nenhuma conta — defina a conta bancária no lançamento para que entrem na conciliação.</p>
+                        <div className="mt-2 max-h-48 overflow-auto rounded-lg border border-gray-100 bg-white divide-y">
+                          {geralSemConta.slice(0, 50).map((e: any) => (
+                            <div key={e.id} className="flex items-center gap-2 px-3 py-2 text-xs">
+                              <span className="text-gray-400 shrink-0 w-16">{fmtData(e.data)}</span>
+                              <span className="flex-1 min-w-0 truncate text-gray-700">{e.fornecedorNome || e.descricao || "—"}</span>
+                              <span className={`font-semibold shrink-0 ${e.tipo === "receita" ? "text-emerald-600" : "text-rose-500"}`}>{formatBRL(Math.abs(Number(e.valor) || 0))}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         ) : (
           <>
             {/* Rev. 3216 — Demonstrativos consolidados (1 PDF de TODOS os PIX + 1 de TODOS os
