@@ -285,10 +285,12 @@ async function coletarEfetivoCronograma(db: any, projetoId: number, companyId: n
     : c === "escritorio_central" ? "Indireto (escritório)"
     : "—";
 
-  type CargoAgg = { cargo: string; categoria: string; total: number; ativos: number; indisponiveis: number; clt: number; terceiro: number };
+  type CargoAgg = { cargo: string; categoria: string; total: number; ativos: number; indisponiveis: number; clt: number; terceiro: number; feriasHorizonte: number };
   const porCargoMap = new Map<string, CargoAgg>();
   // empId → dados básicos do alocado (p/ cruzar com férias na seção 4b).
   const empInfoById = new Map<number, { nome: string; cargo: string; categoria: string }>();
+  // ids dos funcionários ATIVOS hoje (p/ abater só quem conta no efetivo disponível).
+  const ativosIds = new Set<number>();
   let totalEfetivo = 0, totalAtivos = 0, totalIndisponiveis = 0;
   for (const a of allocs as any[]) {
     const emp: any = a.employee;
@@ -297,11 +299,11 @@ async function coletarEfetivoCronograma(db: any, projetoId: number, companyId: n
     const cargoNome = String(emp.funcao || emp.cargo || "Sem função").trim();
     const key = norm(cargoNome);
     if (!porCargoMap.has(key)) {
-      porCargoMap.set(key, { cargo: cargoNome, categoria: catLabel(catMap.get(key) || ""), total: 0, ativos: 0, indisponiveis: 0, clt: 0, terceiro: 0 });
+      porCargoMap.set(key, { cargo: cargoNome, categoria: catLabel(catMap.get(key) || ""), total: 0, ativos: 0, indisponiveis: 0, clt: 0, terceiro: 0, feriasHorizonte: 0 });
     }
     const g = porCargoMap.get(key)!;
     g.total++;
-    if (emp.status === "Ativo") { g.ativos++; totalAtivos++; }
+    if (emp.status === "Ativo") { g.ativos++; totalAtivos++; if (emp.id != null) ativosIds.add(emp.id); }
     else { g.indisponiveis++; totalIndisponiveis++; }
     const vinc = String(emp.tipoContrato || "").toUpperCase();
     if (vinc.includes("CLT")) g.clt++;
@@ -443,6 +445,24 @@ async function coletarEfetivoCronograma(db: any, projetoId: number, companyId: n
     feriasPeriodos.sort((a, b) => a.inicio.getTime() - b.inicio.getTime());
   }
   const bucketLabel = (b: string) => b === "em_gozo" ? "EM GOZO AGORA" : b === "proximas" ? "PRÓXIMAS 8 SEMANAS" : "FUTURO";
+
+  // 4c. Abatimento DETERMINÍSTICO de férias no horizonte (próximas 8 semanas):
+  // conta, por função, os funcionários ATIVOS hoje que ENTRAM de férias INADIÁVEIS
+  // dentro do horizonte (bucket "proximas"). Quem já está em gozo agora já saiu de
+  // "ativos" (status ≠ "Ativo"), então NÃO entra aqui — evita dupla contagem.
+  // O 1º período REMANEJÁVEL não abate (pode ser negociado se a função for imprescindível).
+  const feriasHorizPorCargo = new Map<string, Set<number>>();
+  for (const f of feriasPeriodos) {
+    if (f.bucket !== "proximas" || !f.inadiavel) continue;
+    if (!ativosIds.has(f.empId)) continue;
+    const ck = norm(f.cargo);
+    if (!feriasHorizPorCargo.has(ck)) feriasHorizPorCargo.set(ck, new Set());
+    feriasHorizPorCargo.get(ck)!.add(f.empId);
+  }
+  for (const [ck, set] of feriasHorizPorCargo) {
+    const g = porCargoMap.get(ck);
+    if (g) g.feriasHorizonte = set.size;
+  }
 
   // 5. Blocos textuais para os prompts
   const efetivoTxt = porCargo.length === 0
@@ -2560,7 +2580,7 @@ Retorne um JSON com esta estrutura exata:
         grupoProximidade: string;
         totalEfetivo: number; totalAtivos: number; totalIndisponiveis: number;
         emAndamento: number; proximas: number;
-        porCargo: { cargo: string; categoria: string; total: number; ativos: number; indisponiveis: number }[];
+        porCargo: { cargo: string; categoria: string; total: number; ativos: number; indisponiveis: number; feriasHorizonte: number }[];
         proximasTopo: string[];
       };
       const obrasData: ObraEfetivo[] = [];
@@ -2587,6 +2607,7 @@ Retorne um JSON com esta estrutura exata:
             porCargo: (c.porCargo || []).map((g: any) => ({
               cargo: g.cargo, categoria: g.categoria,
               total: g.total, ativos: g.ativos, indisponiveis: g.indisponiveis,
+              feriasHorizonte: Number(g.feriasHorizonte) || 0,
             })),
             proximasTopo: (c.proximas || []).slice(0, 4).map((a: any) =>
               `${a.nome}${a.recursoPrincipal ? ` (recurso: ${a.recursoPrincipal})` : ""}`),
@@ -2597,14 +2618,15 @@ Retorne um JSON com esta estrutura exata:
       }
 
       // 3. Histograma DETERMINÍSTICO: soma do efetivo atual por função (todas as obras).
-      const histMap = new Map<string, { cargo: string; categoria: string; atualTotal: number; ativos: number; obras: { obra: string; cidade: string; total: number }[] }>();
+      const histMap = new Map<string, { cargo: string; categoria: string; atualTotal: number; ativos: number; feriasHorizonte: number; obras: { obra: string; cidade: string; total: number }[] }>();
       for (const o of obrasData) {
         for (const g of o.porCargo) {
           const k = normTxt(g.cargo);
-          if (!histMap.has(k)) histMap.set(k, { cargo: g.cargo, categoria: g.categoria, atualTotal: 0, ativos: 0, obras: [] });
+          if (!histMap.has(k)) histMap.set(k, { cargo: g.cargo, categoria: g.categoria, atualTotal: 0, ativos: 0, feriasHorizonte: 0, obras: [] });
           const h = histMap.get(k)!;
           h.atualTotal += g.total;
           h.ativos += g.ativos;
+          h.feriasHorizonte += (g.feriasHorizonte || 0);
           h.obras.push({ obra: o.obra, cidade: o.cidade, total: g.total });
         }
       }
@@ -2620,7 +2642,7 @@ Retorne um JSON com esta estrutura exata:
       // 5. Monta o contexto multi-obra p/ a IA (compacto, p/ caber no free-tier).
       const obrasTxt = obrasData.map((o, i) => {
         const cargosTxt = o.porCargo.length
-          ? o.porCargo.map((g) => `      • ${g.cargo} [${g.categoria}]: ${g.total} (ativos ${g.ativos}, indisp. ${g.indisponiveis})`).join("\n")
+          ? o.porCargo.map((g) => `      • ${g.cargo} [${g.categoria}]: ${g.total} (ativos ${g.ativos}, indisp. ${g.indisponiveis}${g.feriasHorizonte ? `, entram de FÉRIAS inadiáveis nas próx. 8 sem: ${g.feriasHorizonte} → disponível no horizonte ${Math.max(0, g.ativos - g.feriasHorizonte)}` : ""})`).join("\n")
           : "      • (sem efetivo alocado)";
         const proxTxt = o.proximasTopo.length ? o.proximasTopo.map((a) => `      - ${a}`).join("\n") : "      - (nenhuma)";
         return `  ${i + 1}. OBRA: ${o.obra} | Cidade: ${o.cidade || "—"}/${o.estado || "—"} | Grupo de proximidade: ${o.grupoProximidade}
@@ -2666,7 +2688,7 @@ Retorne um JSON EXATAMENTE nesta estrutura (sem markdown, sem comentários):
   "recomendacoes": [ "string — ações práticas e priorizadas" ]
 }
 
-Regras: em "histograma" inclua TODAS as funções que aparecem no efetivo das obras; "delta" = recomendadoTotal - atualTotal (negativo = sobra/reduzir). Em "transferencias", "deObra" e "paraObra" devem ser nomes EXATOS de obras do MESMO grupo de proximidade; jamais misture cidades. Seja específico e quantitativo.`;
+Regras: em "histograma" inclua TODAS as funções que aparecem no efetivo das obras; "delta" = recomendadoTotal - atualTotal (negativo = sobra/reduzir). Considere que parte do efetivo ENTRA DE FÉRIAS INADIÁVEIS nas próximas 8 semanas (quando indicado na função como "entram de FÉRIAS ... → disponível no horizonte N"): a disponibilidade REAL no horizonte é o "disponível no horizonte", menor que o efetivo atual — leve isso em conta ao apontar falta de equipe e ao priorizar transferências. Em "transferencias", "deObra" e "paraObra" devem ser nomes EXATOS de obras do MESMO grupo de proximidade; jamais misture cidades. Seja específico e quantitativo.`;
 
       let parsed: any = null;
       let erroIa: string | null = null;
@@ -2708,11 +2730,14 @@ Regras: em "histograma" inclua TODAS as funções que aparecem no efetivo das ob
         .map((h) => {
           const reco = recoMap.get(normTxt(h.cargo));
           const recomendadoTotal = reco ? reco.recomendadoTotal : h.atualTotal;
+          const disponivelHorizonte = Math.max(0, h.ativos - h.feriasHorizonte);
           return {
             cargo: h.cargo,
             categoria: h.categoria,
             atualTotal: h.atualTotal,
             ativos: h.ativos,
+            feriasHorizonte: h.feriasHorizonte,
+            disponivelHorizonte,
             recomendadoTotal,
             delta: recomendadoTotal - h.atualTotal,
             leitura: reco?.leitura ?? "",
@@ -2755,6 +2780,7 @@ Regras: em "histograma" inclua TODAS as funções que aparecem no efetivo das ob
           efetivoTotal: obrasData.reduce((s, o) => s + o.totalEfetivo, 0),
           ativos: obrasData.reduce((s, o) => s + o.totalAtivos, 0),
           indisponiveis: obrasData.reduce((s, o) => s + o.totalIndisponiveis, 0),
+          feriasHorizonte: Array.from(histMap.values()).reduce((s, h) => s + h.feriasHorizonte, 0),
           funcoes: histograma.length,
         },
         obras: obrasData.map((o) => ({

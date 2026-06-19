@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3295 — **PLANEJAMENTO / EFETIVO × IA (VISÃO GERAL — TODAS AS OBRAS) · O NÚMERO DETERMINÍSTICO POR
+ * FUNÇÃO AGORA ABATE QUEM ENTRA DE FÉRIAS NO HORIZONTE: ALÉM DO "EFETIVO ATUAL" (ATIVOS) E DO "RECOMENDADO"
+ * (IA), O HISTOGRAMA PASSA A MOSTRAR O "DISPONÍVEL NO HORIZONTE" = ATIVOS − QUEM ENTRA DE FÉRIAS INADIÁVEIS
+ * NAS PRÓXIMAS 8 SEMANAS, POR FUNÇÃO. A IA RECEBE ESSE DADO E LEVA EM CONTA A INDISPONIBILIDADE FUTURA AO
+ * APONTAR FALTA DE EQUIPE E PRIORIZAR TRANSFERÊNCIAS. 100% ADITIVO · SÓ CÁLCULO DETERMINÍSTICO +
+ * PROPAGAÇÃO + UI · ZERO SCHEMA/ALTER/DROP/DELETE (R-001/R-007/R-010 OK).**
+ * - PEDIDO (piloto FC): "a visão geral deveria abater as férias do número por função — o disponível de
+ *   verdade no horizonte é os ativos menos quem vai entrar de férias inadiáveis nas próximas semanas".
+ * - DEFINIÇÃO: "disponível no horizonte" por função = ATIVOS − (quem entra de FÉRIAS INADIÁVEIS dentro das
+ *   próximas 8 semanas = mesmo horizonte do cronograma). Quem JÁ está de férias (em gozo) NÃO conta de novo
+ *   porque já sai da contagem de ativos — evita dupla contagem. Só o 1º período de férias (remanejável) NÃO
+ *   é abatido; abate-se apenas o que cai no bucket "proximas" e é inadiável.
+ * - BACKEND (`server/routers/iaCronograma.ts`, aditivo, determinístico):
+ *   • `coletarEfetivoCronograma`: `CargoAgg` ganha `feriasHorizonte`; novo `Set` de IDs de funcionários
+ *     ATIVOS por cargo; após ordenar os períodos de férias, nova seção conta por função os ATIVOS cujo
+ *     período de férias cai em `bucket==="proximas"` E `inadiavel`, somando em `feriasHorizonte` (via
+ *     `norm(cargo)`).
+ *   • `efetivoGlobal`: o tipo `porCargo` e o `histMap` propagam `feriasHorizonte`; o histograma de saída
+ *     ganha `feriasHorizonte` + `disponivelHorizonte = max(0, ativos − feriasHorizonte)`; `resumoTotais`
+ *     soma `feriasHorizonte`; o contexto multi-obra da IA mostra, por função, "entram de FÉRIAS inadiáveis
+ *     nas próx. 8 sem: N → disponível no horizonte M", e uma REGRA nova no prompt manda a IA considerar a
+ *     disponibilidade REAL (menor que o efetivo atual) ao apontar falta e priorizar transferências.
+ * - FRONTEND (`client/src/pages/planejamento/EfetivoGlobalIA.tsx`):
+ *   • KPI extra "Entram de férias (8 sem)" (âmbar, ícone avião) quando o total > 0 (no lugar do card
+ *     "Funções").
+ *   • Por função no histograma: nova barra âmbar "Disp.: {disponivelHorizonte}" (entre Atual e Recom.) e
+ *     uma linha explicativa "N pessoa(s) entram de férias inadiáveis nas próximas 8 semanas (já abatidas
+ *     do Disp.)" — só quando `feriasHorizonte > 0`.
+ * - VALIDADO: `tsc --noEmit` limpo nos 2 arquivos tocados; app sobe no Neon DEV.
+ *
  * Rev. 3294 — **PLANEJAMENTO / EFETIVO × IA · NOVA "VISÃO GERAL — EFETIVO × IA (TODAS AS OBRAS)":
  * UMA TELA ÚNICA QUE CRUZA O EFETIVO ATUAL POR FUNÇÃO DE TODAS AS OBRAS ATIVAS DA EMPRESA SELECIONADA
  * COM O CRONOGRAMA DAS PRÓXIMAS 8 SEMANAS E APONTA ONDE SOBRA E ONDE FALTA EQUIPE, SUGERINDO

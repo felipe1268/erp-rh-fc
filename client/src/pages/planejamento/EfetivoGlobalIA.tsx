@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import {
   Sparkles, Loader2, Users, ArrowRight, MapPin, AlertTriangle,
-  TrendingUp, TrendingDown, CheckCircle2, Building2, RefreshCw, Lightbulb, Clock,
+  TrendingUp, TrendingDown, CheckCircle2, Building2, RefreshCw, Lightbulb, Clock, Plane,
 } from "lucide-react";
 
 type Props = { companyId: number };
@@ -159,7 +159,9 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
                   { label: "Obras analisadas", value: resultado.totalObras ?? 0, icon: <Building2 className="h-4 w-4" />, color: "text-indigo-600", bg: "bg-indigo-50" },
                   { label: "Efetivo total", value: totais.efetivoTotal ?? 0, icon: <Users className="h-4 w-4" />, color: "text-blue-600", bg: "bg-blue-50" },
                   { label: "Disponíveis (ativos)", value: totais.ativos ?? 0, icon: <CheckCircle2 className="h-4 w-4" />, color: "text-emerald-600", bg: "bg-emerald-50" },
-                  { label: "Funções", value: totais.funcoes ?? 0, icon: <TrendingUp className="h-4 w-4" />, color: "text-purple-600", bg: "bg-purple-50" },
+                  ...(Number(totais.feriasHorizonte) > 0
+                    ? [{ label: "Entram de férias (8 sem)", value: totais.feriasHorizonte ?? 0, icon: <Plane className="h-4 w-4" />, color: "text-amber-600", bg: "bg-amber-50" }]
+                    : [{ label: "Funções", value: totais.funcoes ?? 0, icon: <TrendingUp className="h-4 w-4" />, color: "text-purple-600", bg: "bg-purple-50" }]),
                 ].map((k, i) => (
                   <div key={i} className="bg-white rounded-lg border border-slate-100 p-2.5 flex items-center gap-2.5">
                     <div className={`w-7 h-7 rounded-md ${k.bg} ${k.color} flex items-center justify-center shrink-0`}>{k.icon}</div>
@@ -242,6 +244,14 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
                               <div className="h-full bg-slate-400" style={{ width: `${(atual / histMax) * 100}%` }} />
                             </div>
                           </div>
+                          {Number(h.feriasHorizonte) > 0 && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-amber-600 w-20 shrink-0 flex items-center gap-0.5"><Plane className="h-2.5 w-2.5" /> Disp.: {Number(h.disponivelHorizonte) || 0}</span>
+                              <div className="flex-1 h-2 rounded-full bg-white overflow-hidden border border-slate-100">
+                                <div className="h-full bg-amber-400" style={{ width: `${((Number(h.disponivelHorizonte) || 0) / histMax) * 100}%` }} />
+                              </div>
+                            </div>
+                          )}
                           <div className="flex items-center gap-2">
                             <span className="text-[10px] text-slate-500 w-20 shrink-0">Recom.: {reco}</span>
                             <div className="flex-1 h-2 rounded-full bg-white overflow-hidden border border-slate-100">
@@ -249,6 +259,11 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
                             </div>
                           </div>
                         </div>
+                        {Number(h.feriasHorizonte) > 0 && (
+                          <p className="text-[10px] text-amber-700 mt-1 flex items-center gap-1">
+                            <Plane className="h-3 w-3" /> {h.feriasHorizonte} pessoa(s) entram de férias inadiáveis nas próximas 8 semanas (já abatidas do "Disp.")
+                          </p>
+                        )}
                         {h.leitura && <p className="text-[11px] text-slate-600 leading-snug mt-1.5">{h.leitura}</p>}
                       </div>
                     );
