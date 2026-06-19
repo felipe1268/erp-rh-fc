@@ -2788,7 +2788,7 @@ Regras: em "histograma" inclua TODAS as funções que aparecem no efetivo das ob
         for (const t of parsed.transferencias) {
           const de = obraInfo.get(normTxt(t?.deObra));
           const para = obraInfo.get(normTxt(t?.paraObra));
-          const qtd = Math.round(Number(t?.quantidade) || 0);
+          const qtd = Math.min(999, Math.max(0, Math.round(Number(t?.quantidade) || 0)));
           if (!de || !para) continue;                                   // obra inexistente → descarta
           if (normTxt(t?.deObra) === normTxt(t?.paraObra)) continue;    // mesma obra → descarta
           if (cidadeKey(de.cidade, de.estado) !== cidadeKey(para.cidade, para.estado)) continue; // cidades ≠ → DESCARTA
@@ -2812,7 +2812,7 @@ Regras: em "histograma" inclua TODAS as funções que aparecem no efetivo das ob
       if (parsed && Array.isArray(parsed.previsaoDisponibilidade)) {
         for (const d of parsed.previsaoDisponibilidade) {
           if (!obraInfo.has(normTxt(d?.obra))) continue;            // obra inexistente → descarta
-          const qtd = Math.round(Number(d?.quantidade) || 0);
+          const qtd = Math.min(999, Math.max(0, Math.round(Number(d?.quantidade) || 0)));
           const cargo = String(d?.cargo ?? "").trim().slice(0, 120);
           const dataEstimada = String(d?.dataEstimada ?? "").trim().slice(0, 40);
           if (!cargo || !dataEstimada) continue;                   // sem função ou sem data → descarta
@@ -2838,7 +2838,7 @@ Regras: em "histograma" inclua TODAS as funções que aparecem no efetivo das ob
           let acao = String(p?.acao ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
           if (acao !== "realocar" && acao !== "aviso_previo") continue; // ação inválida → descarta
           if (!cargo) continue;
-          const qtd = Math.round(Number(p?.quantidade) || 0);
+          const qtd = Math.min(999, Math.max(0, Math.round(Number(p?.quantidade) || 0)));
           // destino só vale se for outra obra existente E ação=realocar
           const destinoRaw = String(p?.destino ?? "").trim();
           const destino = (acao === "realocar" && destinoRaw && obraInfo.has(normTxt(destinoRaw)) && normTxt(destinoRaw) !== normTxt(p?.obra))

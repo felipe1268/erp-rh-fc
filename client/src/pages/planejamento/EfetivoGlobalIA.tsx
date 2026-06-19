@@ -235,6 +235,17 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
               {new Date(geradoEm).toLocaleString("pt-BR")}{criadoPor ? ` · ${criadoPor}` : ""}
             </span>
           )}
+          {resultado && !loading && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+              onClick={imprimirRelatorio}
+              title="Imprimir / gerar PDF do relatório (padrão FC)"
+            >
+              <Printer className="h-4 w-4" /> Imprimir / PDF
+            </Button>
+          )}
           <Button
             size="sm"
             className="gap-1.5 bg-indigo-600 hover:bg-indigo-700"
@@ -307,6 +318,44 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
               <div className="rounded-lg border border-indigo-100 bg-white p-3">
                 <p className="text-xs font-semibold text-indigo-700 mb-1 flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Leitura geral</p>
                 <p className="text-sm text-slate-700 leading-relaxed">{resultado.resumoExecutivo}</p>
+              </div>
+            )}
+
+            {/* Plano de ação por equipe — realocar × aviso prévio */}
+            {planoEquipe.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
+                  <Move className="h-3.5 w-3.5 text-indigo-600" /> Plano de ação por equipe — realocar × aviso prévio
+                </p>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
+                  {planoRealocar.map((p, i) => (
+                    <div key={`r${i}`} className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <span className="text-[10px] font-bold text-white bg-emerald-600 rounded-full px-2 py-0.5 flex items-center gap-1"><Move className="h-3 w-3" /> REALOCAR</span>
+                        {norm(p.dataIdeal) && <span className="text-[10px] font-bold text-white bg-slate-700 rounded-full px-2 py-0.5 flex items-center gap-1"><CalendarClock className="h-3 w-3" /> {p.dataIdeal}</span>}
+                      </div>
+                      <p className="text-xs font-semibold text-slate-800 mb-1">{p.cargo}{Number(p.quantidade) > 0 && <span className="text-emerald-700"> · {p.quantidade} pessoa(s)</span>}</p>
+                      <div className="flex items-center gap-2 text-xs text-slate-700 mb-1">
+                        <span className="font-medium text-amber-700 truncate max-w-[44%]">{p.obra}</span>
+                        <ArrowRight className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                        <span className="font-medium text-emerald-700 truncate max-w-[44%]">{p.destino}</span>
+                      </div>
+                      {p.motivo && <p className="text-[11px] text-slate-600 leading-snug">{p.motivo}</p>}
+                    </div>
+                  ))}
+                  {planoAviso.map((p, i) => (
+                    <div key={`a${i}`} className="rounded-lg border border-red-200 bg-red-50/50 p-3">
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <span className="text-[10px] font-bold text-white bg-red-600 rounded-full px-2 py-0.5 flex items-center gap-1"><FileWarning className="h-3 w-3" /> AVISO PRÉVIO</span>
+                        {norm(p.dataIdeal) && <span className="text-[10px] font-bold text-white bg-slate-700 rounded-full px-2 py-0.5 flex items-center gap-1"><CalendarClock className="h-3 w-3" /> {p.dataIdeal}</span>}
+                      </div>
+                      <p className="text-xs font-semibold text-slate-800 mb-1">{p.cargo}{Number(p.quantidade) > 0 && <span className="text-red-700"> · {p.quantidade} pessoa(s)</span>}</p>
+                      <p className="text-[10px] text-slate-500 flex items-center gap-1 mb-1"><Building2 className="h-3 w-3" /> {p.obra} <span className="text-red-600 font-medium">· fim de obra (sem demanda próxima)</span></p>
+                      {p.motivo && <p className="text-[11px] text-slate-600 leading-snug">{p.motivo}</p>}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1.5">Aviso prévio: a data ideal já considera ~30 dias antes do fim do serviço, para que o aviso termine junto com a conclusão da frente/obra.</p>
               </div>
             )}
 

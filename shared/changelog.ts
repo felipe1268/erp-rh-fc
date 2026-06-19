@@ -1,6 +1,51 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3297 — **PLANEJAMENTO / EFETIVO × IA (VISÃO GERAL — TODAS AS OBRAS) · RELATÓRIO IMPRIMÍVEL/PDF NO
+ * PADRÃO INSTITUCIONAL FC (FAIXA AZUL #1B2A4A) + NOVO "PLANO DE AÇÃO POR EQUIPE" QUE, PARA CADA SOBRA,
+ * DECIDE ENTRE *REALOCAR* (HÁ OBRA PRÓXIMA COM DEMANDA — COM A DATA IDEAL EM QUE A EQUIPE SE LIBERA) E
+ * *AVISO PRÉVIO* (OBRA CONCLUINDO SEM DEMANDA PRÓXIMA — COM A DATA IDEAL ~30 DIAS ANTES DO FIM DO SERVIÇO,
+ * P/ O AVISO TERMINAR JUNTO COM A OBRA). 100% ADITIVO · PROMPT+SCHEMA+SANITIZAÇÃO+UI+BOTÃO IMPRIMIR ·
+ * ZERO SCHEMA/ALTER/DROP/DELETE (R-001/R-007/R-010 OK).**
+ * - PEDIDO (piloto FC): "quero um relatório melhor — poder imprimir e gerar PDF no nosso padrão de
+ *   formação — análise detalhada e bem apresentada, incluindo QUANDO é o ideal realocar a equipe OU já
+ *   providenciar o aviso prévio da equipe por final de obra."
+ * - DEFINIÇÃO (realocar × aviso prévio): para CADA equipe que SOBRA (frente/obra concluindo no horizonte),
+ *   a IA escolhe UMA ação: (a) "realocar" quando há OUTRA obra do MESMO grupo de proximidade (mesma
+ *   cidade/estado) com FALTA da mesma função → `dataIdeal` = data em que a equipe se libera na origem +
+ *   `destino` = obra que absorve; (b) "aviso_previo" quando a obra está CONCLUINDO e NÃO há obra próxima
+ *   que absorva → como o aviso prévio dura ~30 dias, a `dataIdeal` para INICIAR o aviso é ~30 dias ANTES
+ *   do fim do serviço (para o aviso terminar junto com a conclusão). Nunca propõe aviso quando há
+ *   realocação possível; "manter" não entra no plano.
+ * - BACKEND (`server/routers/iaCronograma.ts`, aditivo):
+ *   • `systemPrompt`: nova diretriz "PLANO DE AÇÃO POR EQUIPE (realocar × aviso prévio)" detalhando os
+ *     critérios e a regra dos ~30 dias do aviso prévio.
+ *   • Schema JSON: novo array `planoEquipe: [{cargo, obra, quantidade, acao:"realocar|aviso_previo",
+ *     dataIdeal:"DD/MM/AAAA", destino, motivo}]` + regra correspondente no bloco "Regras".
+ *   • Sanitização (`7c`): só aceita itens cuja `obra` existe na lista (`obraInfo`); `acao` normalizada
+ *     (lower + espaços/hífen→"_") e restrita ao enum realocar|aviso_previo (descarta o resto); `destino`
+ *     só vale se for OUTRA obra existente E acao=realocar (realocar sem destino válido → descarta);
+ *     `quantidade` clampada; `dataIdeal`/strings cortadas; entra em `resultado.planoEquipe`. Datas seguem
+ *     pelo `brDatasDeep` já existente.
+ * - FRONTEND (`client/src/pages/planejamento/EfetivoGlobalIA.tsx`):
+ *   • Nova seção on-screen "Plano de ação por equipe — realocar × aviso prévio": cards verdes (REALOCAR,
+ *     ícone Move, origem→destino + badge da data ideal) e cards vermelhos (AVISO PRÉVIO, ícone FileWarning,
+ *     obra "fim de obra (sem demanda próxima)" + badge da data ideal), com nota explicando a regra dos
+ *     ~30 dias. Só renderiza quando há itens.
+ *   • Botão "Imprimir / PDF" (ícone Printer) no cabeçalho do painel (aparece quando há resultado): abre
+ *     `window.open` + `document.write` com HTML no PADRÃO INSTITUCIONAL FC — faixa azul #1B2A4A com logo
+ *     (fallback `${origin}/logo-fc.jpg`), razão social/CNPJ, data da análise/impressão, KPIs, leitura
+ *     geral, TABELA "Plano de ação por equipe" (tags REALOCAR/AVISO PRÉVIO + data ideal + destino/motivo),
+ *     remanejamento, previsão de disponibilidade, efetivo por função (atual×recomendado), riscos,
+ *     recomendações, obras fora da análise e rodapé. `print-color-adjust:exact` nas faixas.
+ *   • SEGURANÇA (XSS): TODO texto vindo da IA passa por `esc`/`escAttr` LOCAIS antes de entrar no HTML do
+ *     PDF (memória pdf-export-xss-esc-scope.md); `safeImgUrl` valida o logo (http/blob/data:image apenas).
+ * - VALIDAÇÃO: esbuild parse limpo nos 2 arquivos; app sobe no Neon DEV (HTTP 200).
+ * - SEM follow-ups novos.
+ */
+export const _CHANGELOG_3297 = true;
+
+/*
  * Rev. 3296 — **PLANEJAMENTO / EFETIVO × IA (VISÃO GERAL — TODAS AS OBRAS) · A IA AGORA ESTIMA EM QUE
  * DATA VAI SOBRAR MÃO DE OBRA PARA REALOCAR: ALÉM DE APONTAR "SOBRA (-2)" POR FUNÇÃO, A ANÁLISE PASSA A
  * DIZER *QUANDO* A EQUIPE SE LIBERA — A SOBRA SURGE QUANDO UMA FRENTE/ATIVIDADE CONCLUI. NOVA SEÇÃO
