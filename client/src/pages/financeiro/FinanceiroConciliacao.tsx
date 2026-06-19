@@ -133,6 +133,12 @@ export default function FinanceiroConciliacao() {
   const [confirmLimpar, setConfirmLimpar] = useState(false);
   const [confirmConciliar, setConfirmConciliar] = useState(false);
   const [mismatch, setMismatch] = useState<{ detectado: string; selecionado: string; fora: number; total: number; anoNum: number; mesNum: number } | null>(null);
+  // Rev. 3319 — PANORAMA: contas expandidas (listas unificadas por conta) + blocos
+  // "já conciliados" abertos por conta + confirmação da conciliação 1-a-1 feita no painel.
+  const [geralContasExp, setGeralContasExp] = useState<Set<number>>(new Set());
+  const [geralExpInit, setGeralExpInit] = useState(false);
+  const [geralConcExp, setGeralConcExp] = useState<Set<number>>(new Set());
+  const [confirmGeralConciliar, setConfirmGeralConciliar] = useState<{ ext: any; lan: any } | null>(null);
 
   const { data: bankAccounts } = (trpc as any).financial.getBankAccounts.useQuery(
     { companyId },
@@ -334,13 +340,13 @@ export default function FinanceiroConciliacao() {
   }, [statementsAno]);
 
   const conciliarMut = (trpc as any).financial.conciliarLancamento.useMutation({
-    onSuccess: () => { toast({ title: "Conciliação registrada!" }); refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug(); setSelectedStatement(null); setSelectedEntry(null); },
+    onSuccess: () => { toast({ title: "Conciliação registrada!" }); refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug(); if (!contaBancariaId && mesSel != null) refetchGeral(); setConfirmGeralConciliar(null); setSelectedStatement(null); setSelectedEntry(null); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
   // Rev. 3239 — conciliação de um GRUPO unificado (VR / combustível / manutenção) contra UMA
   // linha do extrato (N lançamentos : 1 linha). Mesma UX do par 1:1, mas envia os itensIds.
   const conciliarGrupoMut = (trpc as any).financial.conciliarGrupoLancamentos.useMutation({
-    onSuccess: (res: any) => { toast({ title: `Grupo conciliado! ${res.conciliados} lançamento(s) baixado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug(); setSelectedStatement(null); setSelectedEntry(null); },
+    onSuccess: (res: any) => { toast({ title: `Grupo conciliado! ${res.conciliados} lançamento(s) baixado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug(); if (!contaBancariaId && mesSel != null) refetchGeral(); setConfirmGeralConciliar(null); setSelectedStatement(null); setSelectedEntry(null); },
     onError: (e: any) => toast({ title: "Erro ao conciliar grupo", description: e.message, variant: "destructive" }),
   });
   // Rev. 3198 — conciliação do fluxo "Lançar": SEM onError próprio (o erro é tratado
@@ -427,6 +433,26 @@ export default function FinanceiroConciliacao() {
   const geralTotais: any = reportGeral?.totais ?? null;
   const geralContas: any[] = reportGeral?.contas ?? [];
   const geralSemConta: any[] = reportGeral?.lancamentosSemConta ?? [];
+  // Rev. 3319 — listas unificadas do panorama (cada linha já vem tagueada com a conta de
+  // origem pelo backend). O extrato filtra os pares de estorno (mesma regra do por-conta).
+  const geralExtAll: any[] = (reportGeral?.extratoSemLancamento ?? []).filter((r: any) => !r.reversal && !r.reversalResolveGrupo);
+  const geralLanAll: any[] = reportGeral?.lancamentosSemExtrato ?? [];
+  // Ao carregar o panorama, abre por padrão as contas com pendências (extrato OU ERP).
+  useEffect(() => {
+    if (!reportGeral || geralExpInit) return;
+    const abrir = new Set<number>();
+    for (const c of geralContas) {
+      const t = c.totais ?? {};
+      if ((t.extratoSemLancamento ?? 0) > 0 || (t.lancamentosSemExtrato ?? 0) > 0) abrir.add(Number(c.contaBancariaId));
+    }
+    setGeralContasExp(abrir);
+    setGeralExpInit(true);
+  }, [reportGeral, geralExpInit, geralContas]);
+  // Reseta a inicialização quando sai do modo panorama, p/ recalcular ao voltar.
+  useEffect(() => { if (!geralAtivo) { setGeralExpInit(false); setGeralContasExp(new Set()); } }, [geralAtivo]);
+  // Rev. 3319 — limpa a seleção (extrato/lançamento) e o diálogo ao trocar de modo
+  // (panorama ↔ conta específica), pra não carregar seleção residual de um modo no outro.
+  useEffect(() => { setSelectedStatement(null); setSelectedEntry(null); setConfirmGeralConciliar(null); }, [contaBancariaId]);
   // Rev. 3266 — grava o veredicto da conferência da identificação por IA (confirmado/errado/
   // desfazer). NÃO concilia/baixa nada — só registra. Após salvar, refaz o report p/ a tela
   // refletir o ✓/✗ na linha e fecha o diálogo.
@@ -1541,21 +1567,35 @@ export default function FinanceiroConciliacao() {
                     </div>
                     <p className="text-[11px] text-gray-400 mb-4">Como é calculado: cada conta passa pelo mesmo motor de conciliação; os valores acima somam todas as contas do mês (em módulo). Cada lançamento continua vinculado à sua conta — entre na conta para conciliar.</p>
 
-                    {/* Por conta */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                    {/* Listas unificadas, agrupadas por conta (cada linha pertence à sua conta).
+                        Conciliar manualmente AQUI no panorama: 1 linha do extrato + 1 lançamento,
+                        sempre da MESMA conta, com confirmação. READ-ONLY até confirmar. */}
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <p className="text-xs font-semibold text-gray-600">Conciliação por conta ({geralContas.length})</p>
+                      <div className="flex items-center gap-1.5">
+                        <Button size="sm" variant="ghost" className="h-7 text-[11px] px-2" onClick={() => setGeralContasExp(new Set(geralContas.map((c: any) => Number(c.contaBancariaId))))}>Expandir todas</Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-[11px] px-2" onClick={() => setGeralContasExp(new Set())}>Recolher todas</Button>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
                       {geralContas.map((c: any) => {
                         const cor = bancoCor(c.contaBanco);
                         const t = c.totais ?? {};
                         const st = accStatusMap[Number(c.contaBancariaId)] ?? "vazio";
                         const isConsol = st === "consolidado";
+                        const contaId = Number(c.contaBancariaId);
+                        const exp = geralContasExp.has(contaId);
+                        const concAberto = geralConcExp.has(contaId);
+                        const cExt: any[] = (c.extratoSemLancamento ?? []).filter((r: any) => !r.reversal && !r.reversalResolveGrupo);
+                        const cLan: any[] = c.lancamentosSemExtrato ?? [];
+                        const cConc: any[] = c.conciliados ?? [];
+                        const cDevol: any[] = c.chequesDevolvidos ?? [];
                         return (
-                          <button
-                            key={c.contaBancariaId}
-                            type="button"
-                            onClick={() => setContaBancariaId(String(c.contaBancariaId))}
-                            className={`text-left rounded-xl border p-3 transition-all hover:shadow-sm ${isConsol ? "border-green-300 bg-green-50/40 hover:border-green-400" : "border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50/30"}`}
-                          >
-                            <div className="flex items-center gap-3">
+                          <div key={c.contaBancariaId} className={`rounded-xl border ${isConsol ? "border-green-200 bg-green-50/30" : "border-gray-200 bg-white"}`}>
+                            <div className="flex items-center gap-3 p-3">
+                              <button type="button" onClick={() => setGeralContasExp((prev) => { const n = new Set(prev); if (n.has(contaId)) n.delete(contaId); else n.add(contaId); return n; })} className="shrink-0 p-1 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50" title={exp ? "Recolher" : "Expandir"}>
+                                {exp ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                              </button>
                               <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${cor.bg}`}>
                                 <Landmark className={`h-[18px] w-[18px] ${cor.text}`} />
                               </div>
@@ -1563,26 +1603,73 @@ export default function FinanceiroConciliacao() {
                                 <p className="text-sm font-semibold text-gray-800 truncate">{c.contaLabel}</p>
                                 <p className="text-[11px] text-gray-400">{c.linhas} linha(s) no extrato</p>
                               </div>
-                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${isConsol ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
+                              <div className="hidden sm:flex items-center gap-1.5 shrink-0">
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700" title="Conciliados">{t.conciliados ?? 0} concil.</span>
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-100 text-rose-700" title="No extrato, sem lançamento">{t.extratoSemLancamento ?? 0} extrato</span>
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700" title="No ERP, sem extrato">{t.lancamentosSemExtrato ?? 0} ERP</span>
+                              </div>
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 ${isConsol ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
                                 {isConsol ? <><CheckCircle className="h-2.5 w-2.5" />Conciliado</> : <><AlertCircle className="h-2.5 w-2.5" />A conciliar</>}
                               </span>
-                              <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
+                              <Button size="sm" variant="outline" className="h-7 text-[11px] px-2 shrink-0" onClick={() => setContaBancariaId(String(c.contaBancariaId))} title="Abrir a conta no modo conciliação completo">
+                                Abrir conta <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
+                              </Button>
                             </div>
-                            <div className="grid grid-cols-3 gap-2 mt-3">
-                              <div className="rounded-lg bg-green-50 px-2 py-1.5 text-center">
-                                <p className="text-[10px] text-green-700">Conciliados</p>
-                                <p className="text-sm font-bold text-green-700">{t.conciliados ?? 0}</p>
+
+                            {exp && (
+                              <div className="border-t border-gray-100 p-3 space-y-3">
+                                <p className="text-[11px] text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                                  <strong>Conciliar:</strong> escolha <strong>uma linha do extrato</strong> (esquerda) e o <strong>lançamento do ERP</strong> correspondente (direita) — sempre da MESMA conta. A barra azul no rodapé mostra os dois lados e o botão de confirmar.
+                                </p>
+                                <div className="grid md:grid-cols-2 gap-3">
+                                  <div className="rounded-lg border border-rose-100 overflow-hidden">
+                                    <div className="px-3 py-2 bg-rose-50 text-rose-700 text-xs font-semibold flex items-center gap-1.5"><AlertCircle className="w-3.5 h-3.5" />No extrato, sem lançamento ({cExt.length})</div>
+                                    <div className="divide-y max-h-80 overflow-auto">
+                                      {cExt.length ? cExt.map((s: any) => renderExtratoRow(s)) : <div className="px-4 py-6 text-center text-xs text-gray-400">Nada pendente no extrato.</div>}
+                                    </div>
+                                  </div>
+                                  <div className="rounded-lg border border-amber-100 overflow-hidden">
+                                    <div className="px-3 py-2 bg-amber-50 text-amber-700 text-xs font-semibold flex items-center gap-1.5"><AlertCircle className="w-3.5 h-3.5" />No ERP, sem extrato ({cLan.length})</div>
+                                    <div className="divide-y max-h-80 overflow-auto">
+                                      {cLan.length ? cLan.map((e: any) => renderEntryRow(e)) : <div className="px-4 py-6 text-center text-xs text-gray-400">Nada pendente no ERP.</div>}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {cDevol.length > 0 && (
+                                  <div className="rounded-lg border border-orange-100 overflow-hidden">
+                                    <div className="px-3 py-2 bg-orange-50 text-orange-700 text-xs font-semibold flex items-center gap-1.5"><AlertCircle className="w-3.5 h-3.5" />Cheques devolvidos ({cDevol.length})</div>
+                                    <div className="divide-y max-h-48 overflow-auto bg-white">
+                                      {cDevol.map((d: any, i: number) => (
+                                        <div key={d.id ?? i} className="flex items-center gap-2 px-3 py-2 text-xs">
+                                          <span className="text-gray-400 shrink-0 w-16">{fmtData(d.data)}</span>
+                                          <span className="flex-1 min-w-0 truncate text-gray-700">{d.descricao || d.chequeFornecedor || "—"}</span>
+                                          <span className="font-semibold shrink-0 text-rose-500">{formatBRL(Math.abs(Number(d.valor) || 0))}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                <div className="rounded-lg border border-green-100 overflow-hidden">
+                                  <button type="button" onClick={() => setGeralConcExp((prev) => { const n = new Set(prev); if (n.has(contaId)) n.delete(contaId); else n.add(contaId); return n; })} className="w-full px-3 py-2 bg-green-50 text-green-700 text-xs font-semibold flex items-center gap-1.5 hover:bg-green-100">
+                                    <CheckCircle className="w-3.5 h-3.5" />Já conciliados ({cConc.length}){concAberto ? <ChevronUp className="w-3.5 h-3.5 ml-auto" /> : <ChevronDown className="w-3.5 h-3.5 ml-auto" />}
+                                  </button>
+                                  {concAberto && (
+                                    <div className="divide-y max-h-64 overflow-auto bg-white">
+                                      {cConc.length ? cConc.map((cc: any, i: number) => (
+                                        <div key={cc.id ?? i} className="flex items-center gap-2 px-3 py-2 text-xs">
+                                          <span className="text-gray-400 shrink-0 w-16">{fmtData(cc.data)}</span>
+                                          <span className="flex-1 min-w-0 truncate text-gray-700">{cc.entryFornecedor || cc.entryDescricao || cc.descricao || (cc.entryId ? `Lançamento #${cc.entryId}` : "—")}</span>
+                                          <span className="font-semibold shrink-0 text-green-600">{formatBRL(Math.abs(Number(cc.valor) || 0))}</span>
+                                        </div>
+                                      )) : <div className="px-4 py-6 text-center text-xs text-gray-400">Nenhum conciliado ainda.</div>}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                              <div className="rounded-lg bg-rose-50 px-2 py-1.5 text-center">
-                                <p className="text-[10px] text-rose-700">Sem lançam.</p>
-                                <p className="text-sm font-bold text-rose-700">{t.extratoSemLancamento ?? 0}</p>
-                              </div>
-                              <div className="rounded-lg bg-amber-50 px-2 py-1.5 text-center">
-                                <p className="text-[10px] text-amber-700">Sem extrato</p>
-                                <p className="text-sm font-bold text-amber-700">{t.lancamentosSemExtrato ?? 0}</p>
-                              </div>
-                            </div>
-                          </button>
+                            )}
+                          </div>
                         );
                       })}
                     </div>
@@ -1610,6 +1697,50 @@ export default function FinanceiroConciliacao() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Rev. 3319 — Barra de conciliação do PANORAMA: 1 linha do extrato + 1 lançamento,
+                sempre da MESMA conta. Abre o diálogo de confirmação (regra de ouro: nada
+                concilia sem confirmação explícita). Resolve os dois lados nas listas unificadas. */}
+            {(selectedStatement || selectedEntry) && (() => {
+              const ext = geralExtAll.find((s: any) => s.id === selectedStatement);
+              const lan = geralLanAll.find((e: any) => e.id === selectedEntry) || geralSemConta.find((e: any) => e.id === selectedEntry);
+              if (!ext && !lan) return null;
+              const contasDiferem = !!(ext && lan && lan.contaBancariaId != null && Number(ext.contaBancariaId) !== Number(lan.contaBancariaId));
+              const delta = (ext && lan) ? Math.abs(Math.abs(Number(ext.valor) || 0) - Math.abs(Number(lan.valor) || 0)) : null;
+              const podeConciliar = !!ext && !!lan && !contasDiferem && !conciliarMut.isPending && !conciliarGrupoMut.isPending;
+              return (
+                <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t shadow-[0_-4px_12px_rgba(0,0,0,0.08)] px-4 py-3">
+                  <div className="max-w-5xl mx-auto flex items-center gap-3 flex-wrap">
+                    <div className="flex-1 min-w-[180px]">
+                      <p className="text-[11px] text-gray-400">Extrato</p>
+                      {ext ? (
+                        <p className="text-sm font-medium text-gray-700 truncate">{fmtData(ext.data)} · {ext.descricao || "—"} · <span className="font-bold">{formatBRL(Math.abs(Number(ext.valor) || 0))}</span> <span className="text-[11px] text-gray-400">({ext.contaLabel})</span></p>
+                      ) : <p className="text-sm text-gray-400">Selecione uma linha do extrato</p>}
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-gray-300 shrink-0" />
+                    <div className="flex-1 min-w-[180px]">
+                      <p className="text-[11px] text-gray-400">Lançamento (ERP)</p>
+                      {lan ? (
+                        <p className="text-sm font-medium text-gray-700 truncate">{fmtData(lan.data)} · {lan.fornecedorNome || lan.descricao || "—"} · <span className="font-bold">{formatBRL(Math.abs(Number(lan.valor) || 0))}</span>{lan.contaLabel ? <span className="text-[11px] text-gray-400"> ({lan.contaLabel})</span> : null}</p>
+                      ) : <p className="text-sm text-gray-400">Selecione um lançamento</p>}
+                    </div>
+                    {delta != null && (
+                      <div className="shrink-0 text-center">
+                        <p className="text-[11px] text-gray-400">Δ</p>
+                        <p className={`text-sm font-bold ${delta === 0 ? "text-green-600" : "text-amber-600"}`}>{formatBRL(delta)}</p>
+                      </div>
+                    )}
+                    {contasDiferem && (
+                      <span className="text-[11px] text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-2 py-1 shrink-0">Contas diferentes — não dá pra conciliar.</span>
+                    )}
+                    <Button className="bg-blue-600 hover:bg-blue-700 text-white shrink-0" disabled={!podeConciliar} onClick={() => { if (ext && lan) setConfirmGeralConciliar({ ext, lan }); }}>
+                      <CheckCircle className="w-4 h-4 mr-1.5" />Conciliar
+                    </Button>
+                    <Button variant="ghost" size="sm" className="shrink-0" onClick={() => { setSelectedStatement(null); setSelectedEntry(null); }}><X className="w-4 h-4" /></Button>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         ) : (
           <>
@@ -2806,6 +2937,57 @@ export default function FinanceiroConciliacao() {
                 onClick={(e: any) => { e.preventDefault(); confirmarConciliacao(); }}
               >
                 {conciliarSugMut.isPending ? "Conciliando..." : `Confirmar conciliação (${sugSelecionadas.length})`}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Rev. 3319 — Confirmação da conciliação 1-a-1 feita NO PANORAMA (regra de ouro:
+            nada concilia/baixa sem confirmação explícita). Grava o vínculo na conta correta. */}
+        <AlertDialog open={!!confirmGeralConciliar} onOpenChange={(o: boolean) => { if (!o && !conciliarMut.isPending && !conciliarGrupoMut.isPending) setConfirmGeralConciliar(null); }}>
+          <AlertDialogContent className="max-w-xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmar conciliação?</AlertDialogTitle>
+              <AlertDialogDescription>
+                A baixa do lançamento só é aplicada após a sua confirmação. O vínculo é gravado na conta de origem da linha do extrato.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            {confirmGeralConciliar && (() => {
+              const { ext, lan } = confirmGeralConciliar;
+              const delta = Math.abs(Math.abs(Number(ext?.valor) || 0) - Math.abs(Number(lan?.valor) || 0));
+              return (
+                <div className="border rounded-lg divide-y text-sm bg-white">
+                  <div className="px-3 py-2.5">
+                    <div className="text-[10px] text-gray-400 uppercase tracking-wide font-medium">Extrato · {ext?.contaLabel}</div>
+                    <div className="truncate text-gray-800">{ext?.descricao || "—"}</div>
+                    <div className="text-xs text-gray-500 tabular-nums">{fmtData(ext?.data)} · {formatBRL(Math.abs(Number(ext?.valor) || 0))}</div>
+                  </div>
+                  <div className="px-3 py-2.5">
+                    <div className="text-[10px] text-gray-400 uppercase tracking-wide font-medium">Lançamento (ERP){lan?.contaLabel ? ` · ${lan.contaLabel}` : ""}</div>
+                    <div className="truncate text-blue-700 font-medium">{lan?.fornecedorNome || lan?.descricao || "—"}</div>
+                    <div className="text-xs text-gray-500 tabular-nums">{fmtData(lan?.data)} · {formatBRL(Math.abs(Number(lan?.valor) || 0))}</div>
+                  </div>
+                  <div className="px-3 py-2 flex items-center justify-between">
+                    <span className="text-xs text-gray-500">Diferença (Δ)</span>
+                    <span className={`text-sm font-bold tabular-nums ${delta === 0 ? "text-green-600" : "text-amber-600"}`}>{formatBRL(delta)}</span>
+                  </div>
+                </div>
+              );
+            })()}
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={conciliarMut.isPending || conciliarGrupoMut.isPending}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-blue-600 hover:bg-blue-700"
+                disabled={conciliarMut.isPending || conciliarGrupoMut.isPending}
+                onClick={(e: any) => {
+                  e.preventDefault();
+                  const par = confirmGeralConciliar;
+                  if (!par?.ext || !par?.lan) return;
+                  if (par.lan.agrupado) conciliarGrupoMut.mutate({ companyId, statementLineId: par.ext.id, entryIds: par.lan.itensIds });
+                  else conciliarMut.mutate({ companyId, statementLineId: par.ext.id, entryId: par.lan.id });
+                }}
+              >
+                {(conciliarMut.isPending || conciliarGrupoMut.isPending) ? "Conciliando..." : "Confirmar conciliação"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

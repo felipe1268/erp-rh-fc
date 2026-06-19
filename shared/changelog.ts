@@ -4,12 +4,14 @@
  * Rev. 3319 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · AO SELECIONAR UM MÊS SEM ESCOLHER UMA CONTA, A TELA SÓ MOSTRAVA
  * "SELECIONE UMA CONTA BANCÁRIA" — NÃO HAVIA VISÃO CONSOLIDADA DO MÊS. AGORA, MÊS SELECIONADO + NENHUMA CONTA EXIBE O
  * "PANORAMA GERAL DO MÊS": TOTAIS AGREGADOS (CONCILIADOS / NO EXTRATO SEM LANÇAMENTO / NO ERP SEM EXTRATO / % CONCILIADO)
- * DE TODAS AS CONTAS COM EXTRATO + UM CARD POR CONTA COM SEUS NÚMEROS E DRILL-IN (CLIQUE ABRE A CONTA P/ CONCILIAR). CADA
- * LANÇAMENTO CONTINUA VINCULADO À SUA CONTA NO BACKEND. 100% FINANCEIRO (1 BACKEND READ-ONLY + 1 FRONT) · ADITIVO ·
- * READ-ONLY (NADA CONCILIA/BAIXA NO PANORAMA) · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * DE TODAS AS CONTAS COM EXTRATO + UM BLOCO EXPANSÍVEL POR CONTA (LISTAS EXTRATO×ERP, CHEQUES DEVOLVIDOS, JÁ CONCILIADOS) E
+ * DRILL-IN (ABRIR CONTA). O USUÁRIO PODE CONCILIAR 1-A-1 DENTRO DO PANORAMA (BARRA INFERIOR + DIÁLOGO DE CONFIRMAÇÃO) SEM
+ * PRECISAR ENTRAR EM CADA CONTA. 100% FINANCEIRO (1 BACKEND READ-ONLY + GUARDS NAS 2 MUTATIONS DE CONCILIAÇÃO + 1 FRONT) ·
+ * ADITIVO · REGRA DE OURO MANTIDA (NADA CONCILIA/BAIXA SEM CONFIRMAÇÃO EXPLÍCITA; ZERO BULK ONE-CLICK) · ZERO SCHEMA/ALTER/
+ * DROP/DELETE.**
  * - MOTIVAÇÃO (pedido do usuário): clicar só no MÊS (sem conta) devia dar um retrato unificado de TODAS as contas com
- *   extrato naquele mês — totais agregados + abertura por conta — em vez do vazio "selecione uma conta". Ações de conciliação
- *   continuam exclusivas de cada conta (regra de ouro: nada concilia/baixa sem o usuário entrar na conta e confirmar).
+ *   extrato naquele mês — totais agregados + abertura por conta — em vez do vazio "selecione uma conta"; e permitir conciliar
+ *   sem o vai-e-volta de entrar em cada conta. A conciliação continua sempre por AÇÃO EXPLÍCITA (botão + AlertDialog).
  * - BACKEND (`server/routers/financial.ts`):
  *   (a) REFATOR: o motor de `getConciliacaoReport` (montagem dos 3 blocos — conciliados, extrato-sem-lançamento,
  *       lançamento-sem-extrato + cheques devolvidos + lançamentos-sem-conta) foi EXTRAÍDO para um helper module-level
@@ -19,25 +21,40 @@
  *   (b) NOVA QUERY read-only `getConciliacaoReportGeral({companyId, dataInicio, dataFim})`: auth idêntica; lista as contas
  *       COM extrato no período (JOIN `company_bank_accounts` ⋈ `bank_statement_lines` com `excluido_em IS NULL`, agrupando
  *       por conta); para CADA conta roda o MESMO `_computeConciliacaoReport`, tagueia cada linha com `{contaBancariaId,
- *       contaBanco, contaDescricao, contaLabel}`, agrega os blocos e calcula `totais` (contagens + valores em módulo +
- *       `pctConciliado`). O bloco `lancamentosSemConta` é company-wide (idêntico em toda conta), então é incluído UMA vez
- *       (pega o 1º não-vazio) p/ não somar N vezes. Retorna `{contas[], conciliados[], extratoSemLancamento[],
- *       lancamentosSemExtrato[], chequesDevolvidos[], lancamentosSemConta[], totais}`.
- * - FRONT (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): nova query `getConciliacaoReportGeral` habilitada SÓ
- *   quando `companyId && mesSel != null && !contaBancariaId`. O empty-state foi substituído: (1) sem mês e sem conta → texto
- *   "selecione um mês ou uma conta"; (2) com mês e sem conta → "Panorama geral do mês" — KPIs agregados (Conciliados / No
- *   extrato sem lançamento / No ERP sem extrato / % conciliado) + grid de cards por conta (rótulo, nº de linhas, status
- *   verde/azul reaproveitando `accStatusMap`, mini-contadores e botão que faz `setContaBancariaId` p/ drill-in) + bloco
- *   "Lançamentos sem conta definida" (preview read-only). Estados de loading/erro/vazio próprios. A visão por-conta (com a
- *   conciliação manual e demais ações) ficou intacta.
- * - SEGURANÇA: ambas as rotas mantêm `_assertFinanceiroCompanyAccess`; a query geral só enxerga contas/linhas do próprio
- *   `companyId` (filtro explícito no JOIN) e é estritamente read-only.
- * - LIÇÃO: ao precisar reusar um corpo grande de uma procedure tRPC fora do contexto `{input, ctx}`, extraia para um helper
- *   module-level que recebe `db` + parâmetros simples e faça a procedure delegar — os helpers locais (arrow) e os
- *   module-level (rows/dbExecute/_agruparConciliacao) seguem funcionando sem mudança.
+ *       contaBanco, contaDescricao, contaLabel}`, agrega os blocos e calcula `totais`. `lancamentosSemConta` é company-wide,
+ *       então entra UMA vez. Retorna `{contas[], conciliados[], extratoSemLancamento[], lancamentosSemExtrato[],
+ *       chequesDevolvidos[], lancamentosSemConta[], totais}`.
+ *       BUG CORRIGIDO: os lançamentos AGRUPADOS (id sintético `grp:vr|YYYY-MM` etc., SEM conta no id) colidiam entre contas
+ *       no array concatenado do panorama → o `.find` do front casava com o grupo errado / "contas diferentes" falso. Os ids
+ *       sintéticos passam a ser re-chaveados por conta (`grp:…#cNN`) na montagem, mantendo `itensIds` (ids REAIS) intactos.
+ *   (c) GUARD DE CONTA (server-side, defense-in-depth) nas mutations de conciliação — o guard do front é bypassável por
+ *       chamada direta da API. `conciliarLancamento`: pré-check (antes de qualquer write) que a conta da linha do extrato e a
+ *       conta do lançamento batem (ou lançamento sem conta — `conta_bancaria_id IS NULL` — casa com qualquer banco); mismatch
+ *       → `CONFLICT`. `conciliarGrupoLancamentos`: o UPDATE dos membros ganhou `AND (conta_bancaria_id IS NULL OR
+ *       conta_bancaria_id = <conta da linha>)`, e o representante (`entry_id` da linha) é reapontado p/ o 1º membro REALMENTE
+ *       baixado (`okIds[0]`) — antes a reserva usava `ids[0]`, que podia ser de outra conta e ficar como vínculo
+ *       cross-account inconsistente. Tudo na transação existente. No fluxo por-conta o lançamento já vem filtrado pela conta
+ *       selecionada → NUNCA bloqueia conciliação legítima.
+ * - FRONT (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): query `getConciliacaoReportGeral` habilitada SÓ quando
+ *   `companyId && mesSel != null && !contaBancariaId`. Empty-state vira "Panorama geral do mês": KPIs agregados + blocos de
+ *   conta EXPANSÍVEIS (header com toggle, "Abrir conta" via `setContaBancariaId`, badges; corpo com 2 colunas reaproveitando
+ *   `renderExtratoRow`/`renderEntryRow`, cheques devolvidos read-only e "Já conciliados" colapsável) + bloco "sem conta".
+ *   `useEffect` abre por padrão as contas com pendência e reseta ao sair do panorama. CONCILIAÇÃO NO PANORAMA: barra inferior
+ *   fixa (resolve extrato em `geralExtAll` e lançamento em `geralLanAll`/`geralSemConta` pelo id selecionado; mostra Δ; guard
+ *   que bloqueia o botão quando as contas diferem) → `AlertDialog` de confirmação → `conciliarMut` (1-a-1) ou
+ *   `conciliarGrupoMut` (`itensIds`) conforme `lan.agrupado`; `onSuccess` refaz `refetchGeral` e limpa a seleção. `useEffect`
+ *   keyed em `contaBancariaId` limpa a seleção/diálogo ao trocar panorama↔conta (sem seleção residual vazada). A visão
+ *   por-conta segue intacta.
+ * - SEGURANÇA: todas as rotas mantêm `_assertFinanceiroCompanyAccess`; a query geral é read-only e só enxerga o próprio
+ *   `companyId`; o cruzamento entre contas (extrato de A × lançamento de B) é bloqueado no front E no backend.
+ * - LIÇÃO 1: id sintético de agregação (sem chave de tenant/escopo) vira colisão quando várias fontes são concatenadas num
+ *   array global — re-chaveie com o escopo (conta) na montagem, mantendo os ids reais à parte p/ as mutations. LIÇÃO 2: guard
+ *   só no front é cosmético; toda mutation alcançável por API que cruza recursos (linha×lançamento) precisa revalidar o
+ *   vínculo no servidor — inclusive o "representante" gravado numa coluna FK (entry_id), não só os itens baixados.
  * - ARQUIVOS: `server/routers/financial.ts` (+`_computeConciliacaoReport`, `getConciliacaoReport` delega,
- *   +`getConciliacaoReportGeral`), `client/src/pages/financeiro/FinanceiroConciliacao.tsx` (+query geral, +painel panorama),
- *   `shared/version.ts`→3319.
+ *   +`getConciliacaoReportGeral` com re-key por conta, guards em `conciliarLancamento`/`conciliarGrupoLancamentos`),
+ *   `client/src/pages/financeiro/FinanceiroConciliacao.tsx` (+query geral, +painel panorama expansível, +barra/diálogo de
+ *   conciliação, +reset de seleção), `shared/version.ts`→3319.
  *
  * Rev. 3318 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O BOTÃO "DESCONSOLIDAR MÊS" QUEBRAVA COM "ERRO AO DESCONSOLIDAR — DB:
  * code=25P02 | msg=current transaction is aborted, commands ignored until end of transaction block" EM EMPRESAS QUE NUNCA

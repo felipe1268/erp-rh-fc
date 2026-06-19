@@ -4957,7 +4957,14 @@ export const financialRouter = router({
       const conc = (rep.conciliados ?? []).map((r: any) => ({ ...r, ...tag }));
       const ext = (rep.extratoSemLancamento ?? []).map((r: any) => ({ ...r, ...tag }));
       const dev = (rep.chequesDevolvidos ?? []).map((r: any) => ({ ...r, ...tag }));
-      const lan = (rep.lancamentosSemExtrato ?? []).map((r: any) => ({ ...r, ...tag }));
+      // Rev. 3319 — grupos sintéticos (`grp:vr|YYYY-MM`, etc.) NÃO trazem a conta no id; no
+      // panorama (várias contas concatenadas) dois grupos de contas diferentes colidiriam no
+      // mesmo id e o `.find` do front casaria com o grupo errado. Re-chaveia o id sintético
+      // por conta (`grp:…#cNN`) p/ unicidade global. `itensIds` (ids REAIS) ficam intactos —
+      // a conciliação em grupo segue mandando os entryIds corretos.
+      const lan = (rep.lancamentosSemExtrato ?? []).map((r: any) => (
+        r.agrupado ? { ...r, ...tag, id: `${r.id}#c${contaId}` } : { ...r, ...tag }
+      ));
 
       conciliados.push(...conc);
       extratoSemLancamento.push(...ext);
@@ -5112,6 +5119,30 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    // Rev. 3319 — GUARD DE CONTA (server-side): a linha do extrato e o lançamento precisam
+    // ser da MESMA conta bancária (ou o lançamento sem conta — conta_bancaria_id IS NULL —
+    // que casa com qualquer banco). O guard do front (panorama) é bypassável por chamada
+    // direta da API; aqui fechamos o cruzamento entre contas. No fluxo por-conta o lançamento
+    // já vem filtrado pela conta selecionada, então NUNCA bloqueia conciliações legítimas.
+    const lnContaRes = await dbExecute(db,
+      `SELECT conta_bancaria_id AS "contaBancariaId" FROM bank_statement_lines
+        WHERE id=$1 AND company_id=$2 AND excluido_em IS NULL`,
+      [input.statementLineId, input.companyId]);
+    if (rows(lnContaRes).length === 0) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Linha do extrato não encontrada ou já removida." });
+    }
+    const lineConta = Number((rows(lnContaRes)[0] as any).contaBancariaId);
+    const enContaRes = await dbExecute(db,
+      `SELECT conta_bancaria_id AS "contaBancariaId" FROM financial_entries
+        WHERE id=$1 AND company_id=$2`,
+      [input.entryId, input.companyId]);
+    if (rows(enContaRes).length === 0) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado nesta empresa." });
+    }
+    const entryConta = (rows(enContaRes)[0] as any).contaBancariaId;
+    if (entryConta != null && Number(entryConta) !== lineConta) {
+      throw new TRPCError({ code: "CONFLICT", message: "Este lançamento é de outra conta bancária — não pode ser conciliado com esta linha do extrato." });
+    }
     // Rev. 3179 — NUNCA conciliar uma linha SOFT-DELETADA (excluido_em IS NULL). Usa
     // RETURNING + guard: se a linha foi limpa (ou não existe na empresa), ABORTA antes
     // de tocar o financial_entries (senão o lançamento ficaria conciliado=1 apontando
@@ -5181,13 +5212,17 @@ export const financialRouter = router({
       const lnRes = await dbExecute(tx,
         `UPDATE bank_statement_lines SET conciliado=1, entry_id=$1
           WHERE id=$2 AND company_id=$3 AND COALESCE(conciliado,0)=0 AND excluido_em IS NULL
-          RETURNING data`,
+          RETURNING data, conta_bancaria_id AS "contaBancariaId"`,
         [ids[0], input.statementLineId, input.companyId]);
       if (rows(lnRes).length === 0) {
         throw new TRPCError({ code: "CONFLICT", message: "Linha do extrato já conciliada ou removida." });
       }
       const ln = rows(lnRes)[0] as any;
       const dataPg = typeof ln.data === "string" ? ln.data.slice(0, 10) : new Date(ln.data).toISOString().slice(0, 10);
+      // Rev. 3319 — GUARD DE CONTA: só baixa membros da MESMA conta da linha (ou sem conta).
+      // `dbExecute` liga params por ORDEM DE APARIÇÃO ($N é cosmético), então o lineConta vai
+      // como ÚLTIMO item do array (aparece por último no texto, na cláusula de conta).
+      const lineConta = Number(ln.contaBancariaId);
       // 2) Baixa de TODOS os membros. CRÍTICO: `dbExecute` liga params por ORDEM DE APARIÇÃO
       //    TEXTUAL ($N é cosmético/ignorado). Como o `data_pagamento` (cláusula SET) aparece
       //    ANTES do `IN (...)` no texto, ele PRECISA ser o 1º placeholder e o 1º item do array,
@@ -5201,13 +5236,23 @@ export const financialRouter = router({
                 valor_realizado = COALESCE(valor_realizado, valor_previsto)
           WHERE id IN (${ph}) AND company_id=$${ids.length + 2}
             AND COALESCE(conciliado,0)=0 AND status <> 'cancelado'
+            AND (conta_bancaria_id IS NULL OR conta_bancaria_id = $${ids.length + 3})
           RETURNING id`,
-        [dataPg, ...ids, input.companyId]);
+        [dataPg, ...ids, input.companyId, lineConta]);
       const okIds = rows(upd).map((r: any) => Number(r.id));
       conciliados = okIds.length;
       if (conciliados === 0) {
         // Nenhum membro pôde ser baixado (já conciliados/cancelados): desfaz a reserva da linha.
         throw new TRPCError({ code: "CONFLICT", message: "Nenhum lançamento do grupo pôde ser conciliado (já conciliados ou cancelados)." });
+      }
+      // Rev. 3319 — a reserva (passo 1) usou ids[0] como representante (entry_id), mas ids[0]
+      // pode ser de OUTRA conta e ter sido PULADO pelo guard de conta do passo 2 (não baixado).
+      // Reaponta o entry_id da linha p/ o 1º membro REALMENTE baixado (sempre da conta da linha
+      // ou sem conta), evitando vínculo cross-account inconsistente em bank_statement_lines.
+      if (okIds[0] !== ids[0]) {
+        await dbExecute(tx,
+          `UPDATE bank_statement_lines SET entry_id=$1 WHERE id=$2 AND company_id=$3`,
+          [okIds[0], input.statementLineId, input.companyId]);
       }
       // 3) Registra os vínculos p/ undo (em lotes de 300 linhas).
       for (let i = 0; i < okIds.length; i += 300) {
