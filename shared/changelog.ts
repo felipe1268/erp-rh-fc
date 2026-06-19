@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3290 — **RH & DP / DASHBOARD DE FUNCIONÁRIOS (DRILL-DOWN "FUNÇÃO: X") · A TABELA QUE LISTA OS
+ * FUNCIONÁRIOS DE UMA FUNÇÃO (EX.: "FUNÇÃO: CARPINTEIRO") GANHOU DUAS COLUNAS NOVAS: "OBRA" (A OBRA EM QUE A
+ * PESSOA ESTÁ ALOCADA AGORA) E "CIPA" (SE É MEMBRO DA CIPA DO MANDATO VIGENTE — "CIPA ATIVA" — OU SE FOI MEMBRO
+ * DE UM MANDATO ANTERIOR MAS AINDA TEM ESTABILIDADE — "ESTÁVEL (ANTERIOR)"). 100% BACKEND READ-ONLY +
+ * FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (piloto FC): na tela "Função: <X>", além de nome/CPF/setor/status, mostrar por funcionário (a) a OBRA
+ *   em que ele está e (b) uma flag de CIPA — "CIPA Ativa" OU "membro da CIPA do mandato anterior mas ainda com
+ *   estabilidade".
+ * - LOCALIZAÇÃO: a tela é o `DrillDownModal` (`client/src/components/DrillDownModal.tsx`), aberto a partir do
+ *   Dashboard de Funcionários (`DashFuncionarios`), alimentado por `dashboards.drillDown` → `getDrillDown`
+ *   (`server/routers/dashboards.ts`). O retorno trazia só colunas de `employees` (sem obra, sem CIPA).
+ * - BACKEND (`getDrillDown`, 100% aditivo, READ-ONLY, sem N+1 — 2 queries extras): após buscar os funcionários,
+ *   coleta os `empIds` e faz (1) OBRA ATIVA — `obra_funcionarios` (isActive=1) ⋈ `obras.nome`, escopada por
+ *   `companyWhere` e `inArray(empIds)`, ≤1 alocação ativa por funcionário (uniq index) → `Map<empId, obraNome>`;
+ *   (2) CIPA — `cipa_members` ⋈ `cipa_elections`, escopada por empresa + `empIds`: classifica "ativa" se
+ *   `mandatoFim >= hoje` (mandato vigente) e, senão, "estavel_anterior" se `fimEstabilidade >= hoje` (membro de
+ *   mandato anterior com estabilidade do Art. 10 ADCT ainda vigente — até 1 ano após o fim do mandato); CIPA
+ *   ativa tem prioridade. Cada query roda em try/catch (falha numa não derruba a lista). O retorno passou a
+ *   incluir `obra`, `cipaStatus` ('ativa'|'estavel_anterior'|null), `cipaCargo` e `cipaFimEstabilidade`.
+ * - FRONT (`DrillDownModal.tsx`): a `<table>` ganhou as colunas "Obra" (badge azul com `MapPin` ou "-") e "CIPA"
+ *   (badge verde "CIPA Ativa" com `title` do cargo; badge âmbar "Estável (anterior)" com `title` da data-limite
+ *   de estabilidade; ou "-"). Como o drill-down é genérico, as colunas aparecem em TODOS os recortes (útil em
+ *   qualquer um), não só em "funcao".
+ * - VALIDAÇÃO: tsc limpo nos arquivos tocados; app sobe sem erros novos. INALTERADO: filtros/where do drill-down,
+ *   teto de linhas, navegação para `/raio-x/:id`, demais colunas. ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3289 — **CONTROLE DE ACESSO / USUÁRIOS · UM USUÁRIO COMUM (PERFIL "USUÁRIO") COM UMA OBRA CONCEDIDA NA
  * ABA "OBRAS COM ACESSO" MAS SEM NENHUMA EMPRESA MARCADA EM "EMPRESAS COM ACESSO" NÃO CONSEGUIA VER A OBRA
  * (ALMOXARIFADO, ETC.) — A OBRA SÓ APARECIA QUANDO O PERFIL VIRAVA "ADM". CAUSA: CONCEDER UMA OBRA NÃO

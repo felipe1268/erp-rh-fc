@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
-import { Loader2, Users } from "lucide-react";
+import { Loader2, Users, MapPin, ShieldCheck } from "lucide-react";
 import { useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import FullScreenDialog from "@/components/FullScreenDialog";
@@ -101,6 +101,8 @@ export default function DrillDownModal({ open, onOpenChange, title, filterType, 
                   <th className="text-left py-3 px-4 font-semibold text-gray-600 text-xs uppercase tracking-wide">CPF</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-600 text-xs uppercase tracking-wide">Função</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-600 text-xs uppercase tracking-wide">Setor</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-600 text-xs uppercase tracking-wide">Obra</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-600 text-xs uppercase tracking-wide">CIPA</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-600 text-xs uppercase tracking-wide">Status</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-600 text-xs uppercase tracking-wide">Admissão</th>
                   {(filterType === "demissaoMes" || filterType === "movimentacaoMes") && (
@@ -125,6 +127,28 @@ export default function DrillDownModal({ open, onOpenChange, title, filterType, 
                     <td className="py-3 px-4 text-xs text-gray-500 font-mono">{emp.cpf || "-"}</td>
                     <td className="py-3 px-4 text-xs text-gray-600">{emp.funcao || "-"}</td>
                     <td className="py-3 px-4 text-xs text-gray-600">{emp.setor || "-"}</td>
+                    <td className="py-3 px-4 text-xs text-gray-600">
+                      {emp.obra ? (
+                        <span className="inline-flex items-center gap-1 text-blue-700 font-medium">
+                          <MapPin className="h-3 w-3 shrink-0" /> {emp.obra}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4">
+                      {emp.cipaStatus === "ativa" ? (
+                        <Badge className="text-[10px] bg-green-100 text-green-700" title={emp.cipaCargo ? `CIPA · ${(emp.cipaCargo || "").replace(/_/g, " ")}` : "Membro da CIPA vigente"}>
+                          <ShieldCheck className="h-3 w-3 mr-0.5" /> CIPA Ativa
+                        </Badge>
+                      ) : emp.cipaStatus === "estavel_anterior" ? (
+                        <Badge className="text-[10px] bg-amber-100 text-amber-700" title={`Estabilidade CIPA (mandato anterior)${emp.cipaFimEstabilidade ? ` até ${formatDate(emp.cipaFimEstabilidade)}` : ""}`}>
+                          <ShieldCheck className="h-3 w-3 mr-0.5" /> Estável (anterior)
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-gray-400">-</span>
+                      )}
+                    </td>
                     <td className="py-3 px-4">
                       <Badge className={`text-[10px] ${STATUS_BADGE[emp.status] || "bg-gray-100 text-gray-700"}`}>
                         {(emp.status || "").replace(/_/g, " ")}

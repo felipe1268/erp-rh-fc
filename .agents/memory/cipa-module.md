@@ -24,3 +24,9 @@ duplicate tokens. The unique index lives in `[SyncSchema+]` self-heal.
 
 **Voto secreto:** `cipa_votes` has NO link to the voter; `registrarVoto` is an atomic claim
 `UPDATE cipa_voters ... WHERE jaVotou=0 RETURNING` = 1 vote per link, anonymous.
+
+**Membro VÁLIDO (vigência/estabilidade):** ao derivar status CIPA de um funcionário
+(ativa vs estável), filtre SEMPRE `cipaMembers.statusMembro != 'Encerrado'` (régua do
+módulo `checkEstabilidade`). "Ativa" = membro de election com `mandatoFim >= hoje`;
+senão "estável (anterior)" = `fimEstabilidade >= hoje`. Datas são `date({mode:'string'})`
+YYYY-MM-DD → comparação lexicográfica de string é válida. Ativa tem prioridade sobre estável.

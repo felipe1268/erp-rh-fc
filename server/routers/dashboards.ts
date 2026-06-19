@@ -11,6 +11,7 @@ import {
   asos, trainings, employeeDocuments, obraFuncionarios,
   hePeriods, hePeriodEmployees,
   parceirosConveniados, lancamentosParceiros, pagamentosParceiros,
+  cipaMembers, cipaElections,
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, desc, count, asc, isNull, inArray } from "drizzle-orm";
 import { parseBRL } from "../utils/parseBRL";
@@ -2400,7 +2401,98 @@ async function getDrillDown(companyId: number, filterType: string, filterValue: 
     tipoContrato: employees.tipoContrato,
   }).from(employees).where(whereClause).orderBy(employees.nomeCompleto).limit(rowLimit);
 
-  return results;
+  // ────────────────────────────────────────────────────────────────────────
+  // Enriquecimento (Rev. 3290): OBRA ativa + status CIPA por funcionário.
+  // Pedido do piloto FC: na drill-down "Função: X", mostrar a obra em que a
+  // pessoa está e se ela é da CIPA ATIVA (mandato vigente) ou membro da CIPA de
+  // um mandato ANTERIOR mas que AINDA tem estabilidade (Art. 10 ADCT — até 1
+  // ano após o fim do mandato). 100% aditivo · READ-ONLY · sem N+1 (2 queries).
+  const empIds = results.map((r) => r.id).filter((n): n is number => Number.isFinite(n));
+  const obraMap = new Map<number, string>();
+  const cipaMap = new Map<
+    number,
+    { status: "ativa" | "estavel_anterior"; cargo: string | null; fimEstabilidade: string | null }
+  >();
+  if (empIds.length > 0) {
+    try {
+      // Obra ativa (≤1 alocação ativa por funcionário — uniq index).
+      const obraRows = await db
+        .select({ employeeId: obraFuncionarios.employeeId, obraNome: obras.nome })
+        .from(obraFuncionarios)
+        .innerJoin(obras, eq(obraFuncionarios.obraId, obras.id))
+        .where(
+          and(
+            companyWhere(obraFuncionarios, companyId, companyIds),
+            eq(obraFuncionarios.isActive, 1),
+            inArray(obraFuncionarios.employeeId, empIds),
+          ),
+        );
+      for (const o of obraRows) {
+        if (o.employeeId != null && o.obraNome && !obraMap.has(o.employeeId)) {
+          obraMap.set(o.employeeId, o.obraNome);
+        }
+      }
+    } catch (e) {
+      console.error("[getDrillDown] falha ao derivar obra ativa:", e);
+    }
+    try {
+      // CIPA: membro de mandato vigente (mandatoFim >= hoje) = "ativa"; senão,
+      // membro com estabilidade ainda vigente (fimEstabilidade >= hoje) de um
+      // mandato anterior = "estavel_anterior". CIPA ativa tem prioridade.
+      const hoje = new Date().toISOString().split("T")[0];
+      const cipaRows = await db
+        .select({
+          employeeId: cipaMembers.employeeId,
+          cargoCipa: cipaMembers.cargoCipa,
+          fimEstabilidade: cipaMembers.fimEstabilidade,
+          mandatoFim: cipaElections.mandatoFim,
+        })
+        .from(cipaMembers)
+        .innerJoin(cipaElections, eq(cipaMembers.electionId, cipaElections.id))
+        .where(
+          and(
+            companyWhere(cipaMembers, companyId, companyIds),
+            inArray(cipaMembers.employeeId, empIds),
+            // Mesma régua de "membro válido" do módulo CIPA (checkEstabilidade):
+            // ignora membros encerrados, que não contam p/ vigência nem estabilidade.
+            sql`${cipaMembers.statusMembro} != 'Encerrado'`,
+          ),
+        );
+      for (const c of cipaRows) {
+        if (c.employeeId == null) continue;
+        const ativa = !!c.mandatoFim && c.mandatoFim >= hoje;
+        const estavel = !!c.fimEstabilidade && c.fimEstabilidade >= hoje;
+        if (!ativa && !estavel) continue;
+        const prev = cipaMap.get(c.employeeId);
+        if (ativa) {
+          cipaMap.set(c.employeeId, {
+            status: "ativa",
+            cargo: c.cargoCipa ?? null,
+            fimEstabilidade: c.fimEstabilidade ?? null,
+          });
+        } else if (estavel && (!prev || prev.status !== "ativa")) {
+          cipaMap.set(c.employeeId, {
+            status: "estavel_anterior",
+            cargo: c.cargoCipa ?? null,
+            fimEstabilidade: c.fimEstabilidade ?? null,
+          });
+        }
+      }
+    } catch (e) {
+      console.error("[getDrillDown] falha ao derivar status CIPA:", e);
+    }
+  }
+
+  return results.map((r) => {
+    const cipa = cipaMap.get(r.id);
+    return {
+      ...r,
+      obra: obraMap.get(r.id) ?? null,
+      cipaStatus: cipa?.status ?? null,
+      cipaCargo: cipa?.cargo ?? null,
+      cipaFimEstabilidade: cipa?.fimEstabilidade ?? null,
+    };
+  });
 }
 
 // ============================================================
