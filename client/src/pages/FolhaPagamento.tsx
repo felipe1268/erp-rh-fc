@@ -9362,7 +9362,7 @@ function ComparativoFolhaErpView({ companyId, mesAno, lancamentoId, onBack }: { 
       return {
         id: it.id as number,
         empId,
-        nome: it.nome as string,
+        nome: (it.nome || "") as string,
         codigo: (it.codigo || "") as string,
         cargo: (it.funcao || it.employee?.cargo || "") as string,
         item: it,
@@ -9388,7 +9388,7 @@ function ComparativoFolhaErpView({ companyId, mesAno, lancamentoId, onBack }: { 
         case "diferenca": return b.diffTotal - a.diffTotal;
         case "liquido": return b.liqFolha - a.liqFolha;
         case "nome":
-        default: return a.nome.localeCompare(b.nome, "pt-BR");
+        default: return (a.nome || "").localeCompare(b.nome || "", "pt-BR");
       }
     });
     return arr;

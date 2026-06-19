@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3301 — **RH & DP / FOLHA DE PAGAMENTO · CONFERÊNCIA COM CONTABILIDADE · O BOTÃO "COMPARATIVO FOLHA × ERP
+ * (VERBA POR VERBA)" QUEBRAVA A TELA INTEIRA COM `TypeError: Cannot read properties of undefined (reading
+ * 'localeCompare')` ASSIM QUE ABRIA. CAUSA: NO `ComparativoFolhaErpView`, A LINHA POR FUNCIONÁRIO COPIAVA
+ * `nome: it.nome` DIRETO DO ITEM DO PDF ANALÍTICO (`folha.listarItens`); QUANDO UM ITEM VINHA SEM `nome`
+ * (LINHA SEM FUNCIONÁRIO VINCULADO / TOTALIZADOR), `nome` FICAVA `undefined` E O SORT PADRÃO POR NOME
+ * (`a.nome.localeCompare(...)`) ESTOURAVA, DERRUBANDO O COMPONENTE INTEIRO. 100% FRONT · DEFENSIVO · ZERO
+ * SCHEMA/ALTER/DROP/DELETE (R-001/R-007/R-010 OK).**
+ * - SINTOMA (piloto FC): "o botão de comparativo de folha não está funcionando... dá erro na tela" — tela de
+ *   erro genérica "Ocorreu um erro inesperado" com o stack apontando pro chunk `FolhaPagamento`.
+ * - CORREÇÃO (`client/src/pages/FolhaPagamento.tsx`, `ComparativoFolhaErpView`):
+ *   • Fonte da linha: `nome: it.nome` → `nome: (it.nome || "")` — garante string sempre (cobre também o filtro
+ *     de busca `l.nome.toLowerCase()`, que estouraria do mesmo jeito ao digitar com algum nome nulo).
+ *   • Sort: `a.nome.localeCompare(b.nome, "pt-BR")` → `(a.nome || "").localeCompare(b.nome || "", "pt-BR")`
+ *     (defesa em profundidade).
+ * - NÃO MEXE em backend, dados ou layout; só blinda contra `nome` ausente. Demais relatórios da tela
+ *   (Consolidado de Divergências, Comparativo de Descontos, Cruzamento Hora Extra) já tratavam null.
+ * - VALIDAÇÃO: esbuild parse limpo no arquivo tocado; app sobe no Neon DEV (workflow Start application running).
+ *
  * Rev. 3300 — **FINANCEIRO / DASHBOARD · CONCILIAÇÃO BANCÁRIA · DOIS AJUSTES PEDIDOS PELO PILOTO FC:
  * (1) APOSENTADO O "GIRO BRUTO" (ENTRADAS + SAÍDAS SOMADAS) — O USUÁRIO NÃO VÊ SENTIDO CONTÁBIL EM SOMAR
  * CRÉDITO COM DÉBITO ("R$ 16 MI"); O NÚMERO SAIU DO SUBTÍTULO DO "SALDO LÍQUIDO", DA COLUNA DO MODAL E DO
