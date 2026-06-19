@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3302 — **RH & DP / FOLHA DE VALE + FOLHA DE PAGAMENTO · NOVO BOTÃO "ARREDONDAMENTO" (TOPO-DIREITO, SÓ
+ * MASTER) QUE FORÇA O LÍQUIDO P/ O REAL CHEIO (SEM CENTAVOS) EM LOTE (TODOS) OU INDIVIDUAL, ESCOLHENDO A DIREÇÃO:
+ * PARA CIMA (↑ Math.ceil), PARA BAIXO (↓ Math.floor) OU MAIS PRÓXIMO (≈ Math.round). USADO NA CONFERÊNCIA COM A
+ * CONTABILIDADE, QUE JÁ ARREDONDA DIFERENTE DO AUTOMÁTICO POR TER O HISTÓRICO. O VALOR FORÇADO VIRA O *PAGO FINAL*
+ * — SEM CARRY-FORWARD (residual 0), CONSISTENTE COM O OVERRIDE MANUAL DO MASTER (Rev. 3293). 100% ADITIVO ·
+ * NOVO ENDPOINT + DIALOG REUSÁVEL · ZERO SCHEMA/ALTER/DROP/DELETE (R-001/R-007/R-010 OK).**
+ * - PEDIDO (piloto FC): "preciso de um botão de arredondamento na folha de vale e na de pagamento — às vezes a
+ *   contabilidade arredonda pra cima, às vezes pra baixo, e o automático não bate com o que eles já têm". 5 padrões
+ *   confirmados pelo usuário: (1) arredonda p/ real cheio sem centavos; (2) afeta o LÍQUIDO; (3) 3 direções
+ *   (cima/baixo/mais próximo); (4) lote OU individual; (5) valor forçado é FINAL, sem jogar centavos pro mês seguinte.
+ * - BACKEND (`server/routers/payrollEngine.ts`, novo `arredondarLote` após `editarLiquidoVale`): admin_master only.
+ *   Input `{companyId, mesReferencia, origem:'vale'|'folha', modo:'cima'|'baixo'|'normal', employeeIds?, motivo?}`
+ *   (employeeIds omitido/vazio = LOTE/todos). `roundFn` = ceil/floor/round.
+ *   • VALE: guarda contra `vale_consolidado`; loop `payroll_advances` (pula `rejeitado`); exato = `valorLiquidoExato
+ *     ?? valorLiquidoVale`; seta `valorTotalVale=valorAdiantamento=valorLiquidoVale=round(exato)`, IR=0,
+ *     `ajusteArredondamento=0`, append em `observacoes` (auditoria); DELETE da linha 'vale' do
+ *     `payroll_rounding_ledger` (zera carry); UPDATE `financial_events` (saida_vale); `sincronizarValeJson` no fim.
+ *   • FOLHA: guarda contra `pagamentoConsolidadoEm`; loop `pagamentoResultJson.funcionarios`; exato =
+ *     `salarioLiquidoExato ?? salarioLiquido`; seta `salarioLiquido=round(exato)`, `ajuste=pago−exato`; UPDATE
+ *     `payroll_payments`; DELETE+INSERT da linha 'folha' do ledger com residual 0; regrava `totalLiquido` +
+ *     `pagamentoResultJson` em `payroll_periods`.
+ * - FRONTEND (`client/src/pages/FolhaPagamento.tsx`): componente module-level `ArredondamentoDialog` (reusável nas 2
+ *   telas) com abas "Em lote (todos)" (3 botões de direção + preview do total + confirmação) e "Individual" (busca +
+ *   lista rolável com ↑ ≈ ↓ por funcionário, mostrando exato/atual). Botão "Arredondamento" (ícone Calculator) no
+ *   header da view de Vale e da view de Pagamento, SÓ p/ `isMaster`, desabilitado quando consolidado. Mutation
+ *   `arredondarLote` → `onSuccess` faz `payrollPeriod.refetch()` (re-hidrata valeResult/pagamentoResult).
+ * - VALIDAÇÃO: esbuild parse limpo nos 2 arquivos tocados; app sobe no Neon DEV (workflow Start application running).
+ *
  * Rev. 3301 — **RH & DP / FOLHA DE PAGAMENTO · CONFERÊNCIA COM CONTABILIDADE · O BOTÃO "COMPARATIVO FOLHA × ERP
  * (VERBA POR VERBA)" QUEBRAVA A TELA INTEIRA COM `TypeError: Cannot read properties of undefined (reading
  * 'localeCompare')` ASSIM QUE ABRIA. CAUSA: NO `ComparativoFolhaErpView`, A LINHA POR FUNCIONÁRIO COPIAVA

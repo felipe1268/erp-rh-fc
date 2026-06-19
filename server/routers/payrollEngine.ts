@@ -3063,6 +3063,146 @@ export const payrollEngineRouter = router({
       };
     }),
 
+  // Rev. 3302 — Arredondamento em LOTE ou INDIVIDUAL do líquido (real cheio, sem
+  // centavos) na Folha de Vale OU Folha de Pagamento, forçando a DIREÇÃO (cima/baixo/
+  // mais próximo). O valor forçado vira o PAGO FINAL — sem carry-forward (residual 0),
+  // consistente com o override manual do Master (Rev. 3293). Usado quando a contabilidade
+  // arredonda diferente do automático por já ter o histórico dos arredondamentos.
+  arredondarLote: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(),
+      origem: z.enum(['vale', 'folha']),
+      modo: z.enum(['cima', 'baixo', 'normal']),
+      employeeIds: z.array(z.number()).optional(), // omitido/vazio = TODOS (lote)
+      motivo: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user?.role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas usuários Master podem arredondar valores." });
+      }
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      const roundFn = input.modo === 'cima' ? Math.ceil : input.modo === 'baixo' ? Math.floor : Math.round;
+      const modoLabel = input.modo === 'cima' ? 'p/ cima' : input.modo === 'baixo' ? 'p/ baixo' : 'p/ mais próximo';
+      const editadoPor = ctx.user.name || ctx.user.email || "Master";
+      const alvoSet = input.employeeIds && input.employeeIds.length ? new Set(input.employeeIds.map(Number)) : null;
+
+      if (input.origem === 'vale') {
+        // Rev. 3302 — transação única: ou TUDO (advances + ledger + financial_events
+        // + snapshot do vale) ou NADA. Sem isso, falha no meio deixava parte dos vales
+        // arredondados, ledger divergente do valor pago e JSON fora de sincronia.
+        return await db.transaction(async (tx: any) => {
+          // Revalida consolidação DENTRO da transação, travando a linha do período
+          // (FOR UPDATE) p/ eliminar corrida com consolidar/desconsolidar concorrente.
+          const per = ((await tx.execute(sql`
+            SELECT status FROM payroll_periods
+            WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} LIMIT 1 FOR UPDATE
+          `)) as any).rows || [];
+          if (per.length && per[0].status === 'vale_consolidado') {
+            throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Vale consolidado — desconsolide para arredondar." });
+          }
+          const rows = ((await tx.execute(sql`
+            SELECT "employeeId", "valorTotalVale", "valorLiquidoVale", "valorLiquidoExato", status
+            FROM payroll_advances
+            WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+          `)) as any).rows || [];
+          let n = 0;
+          for (const r of rows) {
+            const eid = Number(r.employeeId);
+            if (alvoSet && !alvoSet.has(eid)) continue;
+            if (r.status === 'rejeitado') continue; // não paga → não arredonda
+            const exatoSrc = r.valorLiquidoExato != null ? r.valorLiquidoExato : r.valorLiquidoVale;
+            const exato = parseFloat(String(exatoSrc)) || 0;
+            const pago = Math.max(0, roundFn(exato));
+            const pagoStr = pago.toFixed(2);
+            const liqAnt = parseFloat(String(r.valorLiquidoVale)) || 0;
+            const obs = `[ARRED ${modoLabel} por ${editadoPor}: Líq R$ ${liqAnt.toFixed(2)} → R$ ${pagoStr} (exato R$ ${exato.toFixed(2)}), IR zerado${input.motivo ? ` | Motivo: ${input.motivo}` : ""}]`;
+            await tx.execute(sql`
+              UPDATE payroll_advances
+              SET "valorTotalVale" = ${pagoStr},
+                  "valorAdiantamento" = ${pagoStr},
+                  "irRetidoAdiantamento" = ${"0.00"},
+                  "valorLiquidoVale" = ${pagoStr},
+                  "ajusteArredondamento" = ${"0.00"},
+                  "valorLiquidoExato" = ${exato.toFixed(2)},
+                  "observacoes" = COALESCE("observacoes", '') || ${' ' + obs},
+                  "updatedAt" = NOW()
+              WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND "employeeId" = ${eid}
+            `);
+            // override manual = sem residual: remove a linha 'vale' do ledger (carry-forward).
+            await tx.execute(sql`DELETE FROM payroll_rounding_ledger WHERE "companyId" = ${input.companyId} AND "employeeId" = ${eid} AND "mesReferencia" = ${input.mesReferencia} AND "origem" = 'vale'`);
+            await tx.execute(sql`
+              UPDATE financial_events
+              SET valor = ${pagoStr},
+                  descricao = descricao || ${` (arred ${modoLabel}: → ${pagoStr})`}
+              WHERE "companyId" = ${input.companyId}
+                AND "mesCompetencia" = ${input.mesReferencia}
+                AND "employeeId" = ${eid}
+                AND "origemTipo" = 'payroll_advance'
+                AND tipo = 'saida_vale'
+            `);
+            n++;
+          }
+          await sincronizarValeJson(tx, input.companyId, input.mesReferencia);
+          return { success: true, origem: 'vale', total: n, message: `${n} vale(s) arredondado(s) ${modoLabel}.` };
+        });
+      }
+
+      // origem === 'folha' — também em transação única (payments + ledger + snapshot).
+      return await db.transaction(async (tx: any) => {
+        // Revalida consolidação DENTRO da transação, travando o período (FOR UPDATE).
+        const guard = ((await tx.execute(sql`
+          SELECT "pagamentoConsolidadoEm", "pagamentoResultJson"
+          FROM payroll_periods
+          WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} LIMIT 1 FOR UPDATE
+        `)) as any).rows || [];
+        if (guard.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Período de folha não encontrado" });
+        if (guard[0].pagamentoConsolidadoEm) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Pagamento consolidado — desconsolide para arredondar." });
+        const payload = (() => { try { return JSON.parse(guard[0].pagamentoResultJson || '{}'); } catch { return {}; } })();
+        const funcionarios: any[] = payload.funcionarios || [];
+        const ordemFolha = ordemArredondamento(input.mesReferencia, "folha");
+        let n = 0;
+        for (let i = 0; i < funcionarios.length; i++) {
+          const f = funcionarios[i];
+          const eid = Number(f.employeeId);
+          if (alvoSet && !alvoSet.has(eid)) continue;
+          const exato = Number(f.salarioLiquidoExato != null ? f.salarioLiquidoExato : f.salarioLiquido) || 0;
+          const pago = Math.max(0, roundFn(exato));
+          const ajuste = Math.round((pago - exato) * 100) / 100;
+          funcionarios[i] = { ...f, salarioLiquido: pago, salarioLiquidoExato: exato, ajusteArredondamento: ajuste, saldoAnteriorArredondamento: 0 };
+          await tx.execute(sql`
+            UPDATE payroll_payments
+            SET "salarioLiquido" = ${formatMoney(pago)},
+                "salarioLiquidoExato" = ${formatMoney(exato)},
+                "ajusteArredondamento" = ${formatMoney(ajuste)},
+                "updatedAt" = NOW()
+            WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND "employeeId" = ${eid}
+          `);
+          // override manual = sem residual: regrava a linha 'folha' do ledger com residual 0.
+          await tx.execute(sql`DELETE FROM payroll_rounding_ledger WHERE "companyId" = ${input.companyId} AND "employeeId" = ${eid} AND "mesReferencia" = ${input.mesReferencia} AND "origem" = 'folha'`);
+          await tx.execute(sql`
+            INSERT INTO payroll_rounding_ledger ("companyId", "employeeId", "origem", "mesReferencia", "ordem",
+              "valorExato", "saldoAnterior", "ajusteAplicado", "valorPago", "residualGerado")
+            VALUES (${input.companyId}, ${eid}, 'folha', ${input.mesReferencia}, ${ordemFolha},
+              ${formatMoney(exato)}, ${"0.00"}, ${formatMoney(ajuste)}, ${formatMoney(pago)}, ${"0.00"})
+          `);
+          n++;
+        }
+        const grandTotalLiquido = funcionarios.reduce((s, x) => s + Number(x.salarioLiquido || 0), 0);
+        payload.funcionarios = funcionarios;
+        payload.totalLiquido = grandTotalLiquido;
+        await tx.execute(sql`
+          UPDATE payroll_periods SET
+            "totalLiquido" = ${formatMoney(grandTotalLiquido)},
+            "pagamentoResultJson" = ${JSON.stringify(payload)}
+          WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+        `);
+        return { success: true, origem: 'folha', total: n, message: `${n} líquido(s) arredondado(s) ${modoLabel}.` };
+      });
+    }),
+
   // ============================================================
   // 6. SIMULAR PAGAMENTO
   // ============================================================

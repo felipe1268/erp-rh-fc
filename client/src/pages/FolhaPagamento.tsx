@@ -80,6 +80,124 @@ const CAMPO_LABELS: Record<CampoDesconto, string> = {
   outros: 'Outros (VA / Seguro Vida / Acerto Escuro)',
 };
 
+// Rev. 3302 — Dialog de Arredondamento (lote/individual, cima/baixo/mais próximo) do
+// líquido p/ real cheio. Reusável na Folha de Vale e na Folha de Pagamento.
+function ArredondamentoDialog({
+  open, onOpenChange, origem, funcionarios, isPending, onAplicar,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  origem: 'vale' | 'folha';
+  funcionarios: any[];
+  isPending: boolean;
+  onAplicar: (modo: 'cima' | 'baixo' | 'normal', employeeIds?: number[]) => void;
+}) {
+  const [aba, setAba] = useState<'lote' | 'individual'>('lote');
+  const [busca, setBusca] = useState('');
+  const [loteModo, setLoteModo] = useState<'cima' | 'baixo' | 'normal' | null>(null);
+
+  const exatoDe = (f: any) => origem === 'vale'
+    ? Number(f.valorLiquidoExato ?? f.valorLiquido ?? f.valorTotalVale ?? 0)
+    : Number(f.salarioLiquidoExato ?? f.salarioLiquido ?? 0);
+  const atualDe = (f: any) => origem === 'vale'
+    ? Number(f.valorLiquido ?? f.valorTotalVale ?? 0)
+    : Number(f.salarioLiquido ?? 0);
+
+  const elegiveis = (funcionarios || []).filter((f: any) => origem === 'vale' ? f.status !== 'rejeitado' : true);
+  const lista = useMemo(() => elegiveis
+    .filter((f: any) => !busca || (f.nome || '').toUpperCase().includes(busca.toUpperCase()))
+    .sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR')),
+    [funcionarios, origem, busca]);
+  const totalAlvo = elegiveis.length;
+
+  const dirLabel = (m: string) => m === 'cima' ? 'Para cima ↑' : m === 'baixo' ? 'Para baixo ↓' : 'Mais próximo';
+  const dirSym = (m: string) => m === 'cima' ? '↑' : m === 'baixo' ? '↓' : '≈';
+  const previewLote = (m: 'cima' | 'baixo' | 'normal') => {
+    const fn = m === 'cima' ? Math.ceil : m === 'baixo' ? Math.floor : Math.round;
+    return elegiveis.reduce((s: number, f: any) => s + Math.max(0, fn(exatoDe(f))), 0);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) { setLoteModo(null); setBusca(''); } onOpenChange(o); }}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Calculator className="h-5 w-5 text-[#1B2A4A]" />
+            Arredondamento — {origem === 'vale' ? 'Folha de Vale' : 'Folha de Pagamento'}
+          </DialogTitle>
+          <DialogDescription>
+            Arredonda o <b>líquido</b> para o real cheio (sem centavos). O valor forçado vira o <b>valor final pago</b> — não joga a sobra de centavos pro mês seguinte.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex gap-1 bg-slate-100 p-1 rounded-lg w-fit">
+          <button className={`px-3 py-1.5 text-sm rounded-md font-medium transition ${aba === 'lote' ? 'bg-white shadow text-[#1B2A4A]' : 'text-slate-500'}`} onClick={() => setAba('lote')}>Em lote (todos)</button>
+          <button className={`px-3 py-1.5 text-sm rounded-md font-medium transition ${aba === 'individual' ? 'bg-white shadow text-[#1B2A4A]' : 'text-slate-500'}`} onClick={() => setAba('individual')}>Individual</button>
+        </div>
+
+        {aba === 'lote' && (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Aplica a <b>{totalAlvo}</b> funcionário(s). Escolha a direção:</p>
+            <div className="grid grid-cols-3 gap-2">
+              {(['cima', 'normal', 'baixo'] as const).map(m => (
+                <button key={m} onClick={() => setLoteModo(m)}
+                  className={`border rounded-lg p-3 text-center transition ${loteModo === m ? 'border-[#1B2A4A] ring-2 ring-[#1B2A4A]/30 bg-[#1B2A4A]/5' : 'hover:border-slate-400'}`}>
+                  <div className="text-lg font-bold">{dirSym(m)}</div>
+                  <div className="text-xs font-semibold">{dirLabel(m)}</div>
+                  <div className="text-[11px] text-muted-foreground mt-1">Total: {formatBRL(previewLote(m))}</div>
+                </button>
+              ))}
+            </div>
+            {loteModo && (
+              <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <span className="text-sm text-amber-800">Confirmar arredondar <b>{totalAlvo}</b> {dirLabel(loteModo).toLowerCase()}?</span>
+                <Button size="sm" disabled={isPending} onClick={() => onAplicar(loteModo)} className="bg-[#1B2A4A] hover:bg-[#22315a]">
+                  {isPending ? 'Aplicando...' : 'Confirmar'}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {aba === 'individual' && (
+          <div className="space-y-2">
+            <Input placeholder="Buscar funcionário..." value={busca} onChange={e => setBusca(e.target.value)} className="h-8" />
+            <div className="max-h-[50vh] overflow-y-auto border rounded-lg divide-y">
+              {lista.length === 0 && <p className="text-sm text-muted-foreground p-3 text-center">Nenhum funcionário.</p>}
+              {lista.map((f: any) => {
+                const exato = exatoDe(f); const atual = atualDe(f);
+                return (
+                  <div key={f.employeeId} className="flex items-center gap-2 p-2 text-sm">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{f.nome}</div>
+                      <div className="text-[11px] text-muted-foreground">Exato {formatBRL(exato)} • Atual {formatBRL(atual)}</div>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <button title={`Para cima (${formatBRL(Math.max(0, Math.ceil(exato)))})`} disabled={isPending}
+                        className="h-7 w-7 rounded border hover:bg-green-50 text-green-700 font-bold disabled:opacity-40"
+                        onClick={() => onAplicar('cima', [f.employeeId])}>↑</button>
+                      <button title={`Mais próximo (${formatBRL(Math.max(0, Math.round(exato)))})`} disabled={isPending}
+                        className="h-7 w-7 rounded border hover:bg-slate-50 text-slate-600 font-bold disabled:opacity-40"
+                        onClick={() => onAplicar('normal', [f.employeeId])}>≈</button>
+                      <button title={`Para baixo (${formatBRL(Math.max(0, Math.floor(exato)))})`} disabled={isPending}
+                        className="h-7 w-7 rounded border hover:bg-amber-50 text-amber-700 font-bold disabled:opacity-40"
+                        onClick={() => onAplicar('baixo', [f.employeeId])}>↓</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function MemorialCalculo({ campo, f }: { campo: CampoDesconto; f: any }) {
   const m = f.memorialCalculo || {};
   const fmt = (n: number) => `R$ ${(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -516,6 +634,19 @@ export default function FolhaPagamento() {
   );
   const [valeResult, setValeResult] = useState<any>(null);
   const [pagamentoResult, setPagamentoResult] = useState<any>(null);
+  // Rev. 3302 — Arredondamento (Master): força líquido p/ real cheio (lote/individual).
+  const [arredOpen, setArredOpen] = useState(false);
+  const [arredOrigem, setArredOrigem] = useState<'vale' | 'folha'>('vale');
+  const arredondarMut = trpc.payrollEngine.arredondarLote.useMutation({
+    onSuccess: (data: any) => { toast.success(data?.message || "Arredondamento aplicado."); payrollPeriod.refetch(); },
+    onError: (err: any) => toast.error(`Erro ao arredondar: ${err?.message || err}`),
+  });
+  const aplicarArred = useCallback((modo: 'cima' | 'baixo' | 'normal', employeeIds?: number[]) => {
+    arredondarMut.mutate({
+      companyId, mesReferencia: mesAno, origem: arredOrigem, modo,
+      ...(employeeIds && employeeIds.length ? { employeeIds } : {}),
+    });
+  }, [arredondarMut, companyId, mesAno, arredOrigem]);
   const divergenciasFolha = trpc.payrollEngine.validarDivergenciasFolha.useQuery(
     { companyId, mesReferencia: mesAno },
     { enabled: companyId > 0 }
@@ -2363,6 +2494,14 @@ export default function FolhaPagamento() {
               </div>
             </div>
             <div className="flex items-center gap-2 no-print">
+              {isMaster && (
+                <Button size="sm" variant="outline" className="text-xs"
+                  onClick={() => { setArredOrigem('vale'); setArredOpen(true); }}
+                  disabled={(payrollPeriod.data as any)?.status === 'vale_consolidado'}
+                  title={(payrollPeriod.data as any)?.status === 'vale_consolidado' ? 'Vale consolidado — desconsolide para arredondar' : 'Arredondar líquidos para real cheio'}>
+                  <Calculator className="h-4 w-4 mr-1" /> Arredondamento
+                </Button>
+              )}
               {(payrollPeriod.data as any)?.status !== 'vale_consolidado' && (
                 <div className="flex flex-col items-end gap-0.5">
                   <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
@@ -2907,6 +3046,14 @@ export default function FolhaPagamento() {
             </CardContent>
           </Card>
         </div>
+        <ArredondamentoDialog
+          open={arredOpen && arredOrigem === 'vale'}
+          onOpenChange={setArredOpen}
+          origem="vale"
+          funcionarios={valeResult?.funcionarios || []}
+          isPending={arredondarMut.isPending}
+          onAplicar={aplicarArred}
+        />
         <PrintFooterLGPD />
       </DashboardLayout>
     );
@@ -3678,6 +3825,15 @@ export default function FolhaPagamento() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {isMaster && (
+                <Button size="sm" variant="outline" className="text-xs print:hidden"
+                  onClick={() => { setArredOrigem('folha'); setArredOpen(true); }}
+                  disabled={pagamentoConsolidado}
+                  title={pagamentoConsolidado ? 'Pagamento consolidado — desconsolide para arredondar' : 'Arredondar líquidos para real cheio'}>
+                  <Calculator className="h-4 w-4 mr-1" />
+                  Arredondamento
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -4321,6 +4477,15 @@ export default function FolhaPagamento() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <ArredondamentoDialog
+          open={arredOpen && arredOrigem === 'folha'}
+          onOpenChange={setArredOpen}
+          origem="folha"
+          funcionarios={pagamentoResult?.funcionarios || []}
+          isPending={arredondarMut.isPending}
+          onAplicar={aplicarArred}
+        />
 
         <PrintFooterLGPD />
       </DashboardLayout>
