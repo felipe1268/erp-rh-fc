@@ -115,3 +115,4 @@
 - [Conceder obra implica empresa](grant-obra-implies-company.md) — usuário comum: empresas visíveis = user_companies + DONAS das obras de getEffectiveAllowedObraIds; sem isso, obra concedida sem vínculo de empresa some (só vê como Adm).
 
 - [Per-bank deterministic parser gate](per-bank-deterministic-parser-gate.md) — parser determinístico por banco só pode emitir linhas quando confirma SEU banco (isBancoX); gating por "≥1 linha" sequestra o fallback de IA de outros bancos.
+- [Vale snapshot é fonte de leitura](vale-snapshot-is-read-source.md) — Folha lê snapshot do período, não payroll_advances; todo write de decisão deve re-sincronizar o snapshot ou some no reload.

@@ -2873,7 +2873,13 @@ export const payrollEngineRouter = router({
           rejeitados++;
         }
       }
-      
+
+      // Rev. 3313 — persiste a decisão (aprovar/rejeitar) no snapshot valeResultJson.
+      // Sem isto, decidirVale só atualizava payroll_advances; como o card/Folha LÊ o
+      // snapshot, a exclusão "voltava" como 'calculado' no próximo reload (getPeriod).
+      // Espelha o que reverterVale já faz.
+      await sincronizarValeJson(db, input.companyId, input.mesReferencia);
+
       return {
         aprovados,
         rejeitados,

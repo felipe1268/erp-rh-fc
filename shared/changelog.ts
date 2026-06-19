@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3313 — **RH & DP / FOLHA DE VALE · O "BOTÃO" DE EXCLUIR O PAGAMENTO DO VALE (POR FUNCIONÁRIO) NÃO FUNCIONAVA.
+ * NA TABELA DE FUNCIONÁRIOS SEM ALERTA, O "⊘ EXCLUIR" / "✓ OK" DA LINHA ERA UM BADGE DECORATIVO NÃO-CLICÁVEL — A ÚNICA
+ * AÇÃO REAL ERA MARCAR O CHECKBOX E CLICAR NO BOTÃO DE LOTE "NÃO PAGAR SELECIONADOS" (NÃO ÓBVIO). ALÉM DISSO, A
+ * EXCLUSÃO (`decidirVale` PAGAR:FALSE) ATUALIZAVA SÓ `payroll_advances` E NÃO O SNAPSHOT `valeResultJson` QUE O CARD/
+ * FOLHA LÊ — LOGO REVERTIA P/ 'CALCULADO' NO PRÓXIMO RELOAD. AGORA O "EXCLUIR" DA LINHA É UM BOTÃO QUE EXCLUI AQUELE
+ * FUNCIONÁRIO E A DECISÃO PERSISTE NO SNAPSHOT. 100% BUGFIX (1 BACKEND + 1 FRONT) · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - CAUSA-RAIZ 1 (UX): em `client/src/pages/FolhaPagamento.tsx`, o cell de ação da tabela "SEM alerta" renderizava
+ *   `<Badge>Excluir</Badge>` (quando o checkbox estava marcado) ou `<Badge>OK</Badge>` — ambos NÃO-clicáveis. O usuário
+ *   clicava no "Excluir" vermelho esperando remover o pagamento e nada acontecia (a tabela "COM alerta" já tinha botões
+ *   ✓/✗, mas funcionário sem alerta como o ELIZEU caía na SEM alerta). CORREÇÃO: o branch não-rejeitado virou um
+ *   `<button>` "Excluir" (XCircle) que chama `decidirValeMut.mutate({ decisoes:[{ employeeId, pagar:false }] })` com
+ *   confirm, e remove o id de `valeExcluirSel`. Linha rejeitada mantém o botão "Reverter". O checkbox + botão de lote
+ *   continuam para exclusão em massa.
+ * - CAUSA-RAIZ 2 (PERSISTÊNCIA): `decidirVale` (`server/routers/payrollEngine.ts`) só dava UPDATE em `payroll_advances`
+ *   (status 'rejeitado'/'calculado') e NÃO sincronizava o snapshot `valeResultJson`. Como `getPeriod` LÊ o snapshot, a
+ *   exclusão sobrevivia na sessão (update otimista) mas "voltava" como 'calculado' num reload. CORREÇÃO: após o loop de
+ *   decisões, `decidirVale` passou a chamar `sincronizarValeJson(db, companyId, mesReferencia)` — a MESMA função que
+ *   `reverterVale`/aprovações já usavam — que reescreve `funcionarios[].status`/valores e `totalVale` a partir de
+ *   `payroll_advances`. Agora a decisão persiste e o card/Folha refletem no reload.
+ * - VALIDAÇÃO: `tsc --noEmit` limpo nos 2 arquivos tocados. Confirmado no Neon DEV que o `pa_status` do Elizeu (id
+ *   420160, 2026-06) estava 'calculado' (nenhuma exclusão chegava ao backend antes) e que o snapshot de junho continha
+ *   `employeeId:420160`. NOTA: a Rev. 3312 já remove desligados (como o Elizeu) da LEITURA de meses posteriores à saída,
+ *   então este fix vale principalmente p/ exclusões MANUAIS de funcionários elegíveis; o app PUBLICADO precisa ser
+ *   re-publicado p/ herdar 3312+3313. Sem ALTER/DROP/DELETE.
+ *
  * Rev. 3312 — **RH & DP / FOLHA DE VALE · UM FUNCIONÁRIO DESLIGADO (ELIZEU, SAÍDA EFETIVA EM 15/05/2026) CONTINUAVA
  * APARECENDO E "RECEBENDO" VALE EM JUNHO/2026. A GERAÇÃO DO VALE (`gerarVale`) JÁ EXCLUÍA CORRETAMENTE QUEM SAIU ANTES
  * DO MÊS, MAS O SNAPSHOT (`valeResultJson`), GERADO QUANDO ELE AINDA ERA ATIVO, FICAVA CONGELADO — E A SANITIZAÇÃO DE

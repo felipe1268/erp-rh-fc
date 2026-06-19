@@ -3019,14 +3019,23 @@ export default function FolhaPagamento() {
                               >
                                 <RefreshCw className="h-3 w-3 mr-0.5" /> Reverter
                               </button>
-                            ) : isSel ? (
-                              <Badge className="bg-red-100 text-red-600 text-[10px]">
-                                <XCircle className="h-3 w-3 mr-0.5" /> Excluir
-                              </Badge>
                             ) : (
-                              <Badge className="bg-green-100 text-green-700 text-[10px]">
-                                <CheckCircle className="h-3 w-3 mr-0.5" /> OK
-                              </Badge>
+                              // Rev. 3313 — antes era um Badge NÃO-clicável ("Excluir"/"OK"):
+                              // o usuário clicava esperando excluir e nada acontecia (a única
+                              // ação real era o botão de lote "Não Pagar Selecionados"). Agora é
+                              // um botão que exclui ESTE funcionário do vale (decidirVale pagar:false).
+                              <button
+                                className="text-[10px] text-red-600 hover:text-red-800 hover:underline flex items-center gap-0.5 mx-auto no-print disabled:opacity-50"
+                                title="Excluir este funcionário do vale (não pagar este mês)"
+                                onClick={() => {
+                                  if (!confirm(`Excluir ${f.nome} do vale deste mês? O funcionário NÃO receberá o adiantamento.`)) return;
+                                  decidirValeMut.mutate({ companyId, companyIds, mesReferencia: mesAno, decisoes: [{ employeeId: f.employeeId, pagar: false }] });
+                                  setValeExcluirSel(prev => { const n = new Set(prev); n.delete(f.employeeId); return n; });
+                                }}
+                                disabled={decidirValeMut.isPending}
+                              >
+                                <XCircle className="h-3 w-3 mr-0.5" /> Excluir
+                              </button>
                             )}
                           </td>
                         </tr>
