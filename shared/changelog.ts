@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3314 — **ALMOXARIFADO / EQUIPAMENTOS PRÓPRIOS · CADASTRO "NOVO EQUIPAMENTO" GANHOU CAMPO "QUANTIDADE" PARA
+ * REGISTRAR VÁRIOS ITENS IDÊNTICOS DE UMA VEZ. ANTES, PRA CADASTRAR 10 PRANCHAS IGUAIS O USUÁRIO PRECISAVA ABRIR O
+ * MODAL E PREENCHER TUDO 10 VEZES. AGORA DIGITA A QUANTIDADE (1..100) E O SERVIDOR CRIA N REGISTROS, CADA UM COM SEU
+ * PRÓPRIO PATRIMÔNIO EQP-NNNN SEQUENCIAL. 100% ADITIVO (1 BACKEND + 1 FRONT) · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - MOTIVAÇÃO: o módulo é patrimônio-a-patrimônio (cada item físico tem 1 EQP-NNNN único, com status/obra/localização
+ *   próprios). Itens iguais (pranchas, escoras, andaimes) obrigavam a repetir o formulário inteiro — tedioso e
+ *   propenso a erro. O pedido do usuário foi exatamente "um campo de quantidade pra não cadastrar várias vezes o
+ *   mesmo item".
+ * - BACKEND (`server/routers/equipamentos.ts`, `proprioCriar`): novo input opcional `quantidade` (z.number().int().
+ *   min(1).max(100)). O insert virou um LOOP externo de `quantidade` iterações; cada iteração mantém o retry de até 8
+ *   tentativas em UNIQUE violation (anti-race entre dispositivos, Rev. 2513). Como `proximoCodigoPatrimonio` relê o MAX
+ *   a cada item, os números saem ENCADEADOS (EQP-0114, EQP-0115, …). Mesmas `baseVals` (descrição, categoria, foto,
+ *   status, obra etc.) replicadas em todos. Retorno passou de `{id, codigoPatrimonio}` p/ `{id, codigoPatrimonio,
+ *   quantidadeCriada, codigos[]}` (backward-compat: os 2 primeiros campos seguem presentes). Se um item do lote falhar
+ *   após 8 tentativas, o erro informa quantos JÁ entraram (os anteriores ficam gravados — não recadastrar tudo).
+ * - FRONT (`client/src/pages/equipamentos/Proprios.tsx`): `EMPTY_FORM.quantidade = "1"`; novo campo "Quantidade"
+ *   (stepper −/+ com input numérico 1..100, clamp em onChange/onBlur) logo abaixo do Patrimônio, SÓ no NOVO (na edição
+ *   cada patrimônio é 1 item imutável). Quando >1, dica azul "Serão criados N equipamentos idênticos…". `salvar()`
+ *   manda `quantidade: qtd` no `criar.mutate`. `onSuccess` lê `quantidadeCriada`/`codigos` e mostra toast "N
+ *   equipamentos cadastrados (EQP-AAAA a EQP-BBBB)!"; também invalida a 2ª query (auto-ID) pra o próximo patrimônio já
+ *   contar os recém-criados. Fluxo de import do Almoxarifado (importQueue) e a edição seguem intactos.
+ * - SEGURANÇA (tenant guard): aproveitando que o cadastro em LOTE eleva o raio de impacto (até 100 inserts/chamada),
+ *   `proprioCriar` ganhou guarda explícita de empresa no início — antes o INSERT confiava no `companyId` do cliente
+ *   (sem `companyFilter`, que de toda forma não intersecta com as empresas do user). Agora: `getCompaniesForUser` →
+ *   se `companyId` não está nas permitidas, `FORBIDDEN` (mesmo padrão das demais mutations do router).
+ * - VALIDAÇÃO: `tsc --noEmit` limpo nos 2 arquivos tocados. Sem ALTER/DROP/DELETE — só INSERTs adicionais.
+ *
  * Rev. 3313 — **RH & DP / FOLHA DE VALE · O "BOTÃO" DE EXCLUIR O PAGAMENTO DO VALE (POR FUNCIONÁRIO) NÃO FUNCIONAVA.
  * NA TABELA DE FUNCIONÁRIOS SEM ALERTA, O "⊘ EXCLUIR" / "✓ OK" DA LINHA ERA UM BADGE DECORATIVO NÃO-CLICÁVEL — A ÚNICA
  * AÇÃO REAL ERA MARCAR O CHECKBOX E CLICAR NO BOTÃO DE LOTE "NÃO PAGAR SELECIONADOS" (NÃO ÓBVIO). ALÉM DISSO, A

@@ -406,10 +406,23 @@ export const equipamentosRouter = router({
       // Quando status="em_obra" exige obra; senão força almoxarifado/null.
       status: z.enum(["disponivel", "em_obra", "manutencao", "baixado"]).optional(),
       localizacaoAtualObraId: z.number().nullable().optional(),
+      // Rev. 3314 — cadastro em LOTE: registra N itens idênticos de uma vez
+      // (cada um ganha SEU próprio patrimônio EQP-NNNN sequencial). Evita
+      // repetir o formulário pra equipamentos iguais (ex.: 10 pranchas).
+      quantidade: z.number().int().min(1).max(100).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Rev. 3314 — tenant guard explícito: o INSERT confiava no `companyId`
+      // vindo do cliente (sem `companyFilter`, que de toda forma não intersecta
+      // com as empresas do user). Com o cadastro em LOTE (até 100 inserts/call)
+      // o raio de impacto cresceu, então confirmamos o acesso aqui.
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = (allowedCompanies as any[]).map(c => c.id);
+      if (!allowedIds.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
       // Rev. 2513 — guarda defensiva pós-normalização: rejeita descrição
       // que vire vazia depois do upperBR (ex: payload só com espaços).
       if (!upperBR(input.descricao)) {
@@ -461,28 +474,57 @@ export const equipamentosRouter = router({
         criadoPorUserId: ctx.user.id,
         criadoPorNome: ctx.user.name || String(ctx.user.id),
       };
-      let lastErr: any = null;
-      for (let attempt = 0; attempt < 8; attempt++) {
-        const cod = await proximoCodigoPatrimonio(db, input.companyId);
-        try {
-          const [created] = await db.insert(equipamentosProprios).values({
-            ...baseVals,
-            codigoPatrimonio: cod,
-          }).returning({ id: equipamentosProprios.id, codigoPatrimonio: equipamentosProprios.codigoPatrimonio });
-          return { id: created.id, codigoPatrimonio: created.codigoPatrimonio };
-        } catch (e: any) {
-          // 23505 = unique_violation (Postgres). Outro device pegou o N. — retry.
-          // Rev. 2561 — lê código/mensagem do erro pg DENTRO do wrapper Drizzle
-          // (`e.cause`), pois `e.code`/`e.message` do Drizzle não trazem o code
-          // real e a `message` é o dump "Failed query… params:" (com base64).
-          const { code, message } = pgInfo(e);
-          const isUnique = code === "23505" || /uq_equip_proprio_company_patrimonio|duplicate key/i.test(message);
-          // Erro NÃO-unique: traduz pra mensagem limpa (nunca vaza base64/params).
-          if (!isUnique) throw cleanDbError(e, "cadastrar o equipamento");
-          lastErr = e;
+      // Rev. 3314 — cadastro em LOTE. Insere `quantidade` itens idênticos
+      // (cada um com SEU patrimônio sequencial). Cada insert mantém o retry
+      // de UNIQUE violation (anti-race entre dispositivos). Sequencial de
+      // propósito: `proximoCodigoPatrimonio` relê o MAX a cada item, então
+      // os números saem encadeados (EQP-0114, EQP-0115, …).
+      const quantidade = Math.min(Math.max(input.quantidade ?? 1, 1), 100);
+      const codigos: string[] = [];
+      let primeiroId: number | null = null;
+      for (let i = 0; i < quantidade; i++) {
+        let lastErr: any = null;
+        let inserido = false;
+        for (let attempt = 0; attempt < 8; attempt++) {
+          const cod = await proximoCodigoPatrimonio(db, input.companyId);
+          try {
+            const [created] = await db.insert(equipamentosProprios).values({
+              ...baseVals,
+              codigoPatrimonio: cod,
+            }).returning({ id: equipamentosProprios.id, codigoPatrimonio: equipamentosProprios.codigoPatrimonio });
+            if (primeiroId == null) primeiroId = created.id;
+            codigos.push(created.codigoPatrimonio);
+            inserido = true;
+            break;
+          } catch (e: any) {
+            // 23505 = unique_violation (Postgres). Outro device pegou o N. — retry.
+            // Rev. 2561 — lê código/mensagem do erro pg DENTRO do wrapper Drizzle
+            // (`e.cause`), pois `e.code`/`e.message` do Drizzle não trazem o code
+            // real e a `message` é o dump "Failed query… params:" (com base64).
+            const { code, message } = pgInfo(e);
+            const isUnique = code === "23505" || /uq_equip_proprio_company_patrimonio|duplicate key/i.test(message);
+            // Erro NÃO-unique: traduz pra mensagem limpa (nunca vaza base64/params).
+            if (!isUnique) throw cleanDbError(e, "cadastrar o equipamento");
+            lastErr = e;
+          }
+        }
+        if (!inserido) {
+          // Falhou um item do lote. Os anteriores JÁ foram gravados — informa
+          // quantos entraram pra o usuário não recadastrar tudo.
+          const parcial = codigos.length > 0 ? ` ${codigos.length} de ${quantidade} já foram cadastrados.` : "";
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `Não foi possível gerar um patrimônio único após 8 tentativas.${parcial} Tente novamente.`,
+            cause: lastErr,
+          });
         }
       }
-      throw new TRPCError({ code: "CONFLICT", message: "Não foi possível gerar um patrimônio único após 8 tentativas. Tente novamente.", cause: lastErr });
+      return {
+        id: primeiroId!,
+        codigoPatrimonio: codigos[0],
+        quantidadeCriada: codigos.length,
+        codigos,
+      };
     }),
 
   proprioAtualizar: protectedProcedure

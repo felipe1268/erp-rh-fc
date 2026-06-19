@@ -47,6 +47,8 @@ const EMPTY_FORM = {
   codigoPatrimonio: "", descricao: "", categoria: "", numeroSerie: "",
   marca: "", modelo: "", dataAquisicao: "", valorAquisicao: "",
   vidaUtilMeses: "", observacoes: "",
+  // Rev. 3314 — quantidade pra cadastro em LOTE de itens idênticos (só no NOVO).
+  quantidade: "1",
   // Rev. 2512 — status editável no modal
   status: "disponivel" as StatusEquip,
   // Rev. 2514 — obra atual (só usada quando status="em_obra"; senão NULL).
@@ -319,8 +321,11 @@ export default function EquipamentosProprios() {
   }
 
   const criar = trpc.equipamentos.proprioCriar.useMutation({
-    onSuccess: () => {
+    onSuccess: (res: any) => {
       utils.equipamentos.propriosListar.invalidate();
+      // Rev. 2364 — segunda query (auto-ID) também precisa refrescar pra o
+      // próximo patrimônio sugerido já contar o(s) item(ns) recém-criado(s).
+      utils.equipamentos.propriosListar.invalidate({ companyId });
       if (importQueue.length > 0) {
         const [next, ...rest] = importQueue;
         setImportQueue(rest);
@@ -332,7 +337,15 @@ export default function EquipamentosProprios() {
           toast.success(`${importTotal} equipamento${importTotal !== 1 ? "s" : ""} próprio${importTotal !== 1 ? "s" : ""} importado${importTotal !== 1 ? "s" : ""} do Almoxarifado.`);
           setImportTotal(0);
         } else {
-          toast.success("Equipamento cadastrado!");
+          // Rev. 3314 — cadastro em LOTE: avisa quantos foram criados.
+          const n = Number(res?.quantidadeCriada) || 1;
+          if (n > 1) {
+            const primeiro = res?.codigos?.[0];
+            const ultimo = res?.codigos?.[res.codigos.length - 1];
+            toast.success(`${n} equipamentos cadastrados${primeiro && ultimo ? ` (${primeiro} a ${ultimo})` : ""}!`);
+          } else {
+            toast.success("Equipamento cadastrado!");
+          }
         }
       }
     },
@@ -455,6 +468,9 @@ export default function EquipamentosProprios() {
       if (emObra && !form.localizacaoAtualObraId) {
         return toast.error("Selecione a obra onde o equipamento está.");
       }
+      // Rev. 3314 — quantidade pra cadastro em LOTE (1..100). Cada item ganha
+      // seu próprio patrimônio sequencial no servidor.
+      const qtd = Math.min(Math.max(parseInt(form.quantidade) || 1, 1), 100);
       criar.mutate({
         companyId,
         // codigoPatrimonio omitido propositalmente — servidor gera (Rev. 2513).
@@ -470,6 +486,7 @@ export default function EquipamentosProprios() {
         observacoes: form.observacoes || undefined,
         status: form.status,
         localizacaoAtualObraId: emObra ? form.localizacaoAtualObraId : null,
+        quantidade: qtd,
       });
     }
   }
@@ -1055,6 +1072,54 @@ export default function EquipamentosProprios() {
                     )}
                   </div>
                 </div>
+
+                {/* QUANTIDADE — Rev. 3314: cadastro em LOTE de itens idênticos.
+                    Só no NOVO (na edição cada patrimônio é 1 item imutável). */}
+                {!editingId && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-800 mb-1">
+                      Quantidade <span className="font-normal text-slate-500">(itens iguais)</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        aria-label="Diminuir quantidade"
+                        onClick={() => setForm(p => ({ ...p, quantidade: String(Math.max(1, (parseInt(p.quantidade) || 1) - 1)) }))}
+                        className="h-10 w-10 shrink-0 rounded-lg border-2 border-slate-200 bg-white text-lg font-bold text-slate-700 hover:bg-slate-50 active:scale-95 transition"
+                      >
+                        −
+                      </button>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        max={100}
+                        value={form.quantidade}
+                        onChange={e => {
+                          const v = e.target.value;
+                          if (v === "") return setForm(p => ({ ...p, quantidade: "" }));
+                          const n = Math.min(100, Math.max(1, parseInt(v) || 1));
+                          setForm(p => ({ ...p, quantidade: String(n) }));
+                        }}
+                        onBlur={() => setForm(p => ({ ...p, quantidade: String(Math.min(100, Math.max(1, parseInt(p.quantidade) || 1))) }))}
+                        className="w-full text-center px-3 py-2 border-2 border-slate-200 rounded-lg text-sm font-semibold text-slate-800 focus:border-blue-500 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        aria-label="Aumentar quantidade"
+                        onClick={() => setForm(p => ({ ...p, quantidade: String(Math.min(100, (parseInt(p.quantidade) || 1) + 1)) }))}
+                        className="h-10 w-10 shrink-0 rounded-lg border-2 border-slate-200 bg-white text-lg font-bold text-slate-700 hover:bg-slate-50 active:scale-95 transition"
+                      >
+                        +
+                      </button>
+                    </div>
+                    {(parseInt(form.quantidade) || 1) > 1 && (
+                      <p className="mt-1 text-[11px] text-blue-700">
+                        Serão criados {parseInt(form.quantidade)} equipamentos idênticos, cada um com seu próprio patrimônio sequencial.
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* STATUS — Rev. 2512 (edição) / Rev. 2552 (também no cadastro) */}
                 <div>
