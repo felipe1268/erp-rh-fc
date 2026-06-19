@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3306 — **FINANCEIRO / CONTROLE DE CARTÃO DE CRÉDITO (IMPORTAR FATURA POR IA) · A LEITURA DA FATURA (PDF)
+ * QUEBRAVA COM "FALHA AO LER A FATURA — GEMINI VISION FALHOU: 429 ... RESOURCE_EXHAUSTED / generate_content_free_tier_requests,
+ * limit: 20, model gemini-2.5-flash" QUANDO A COTA DO FREE-TIER DO GOOGLE ESGOTAVA (POR-MINUTO OU DIÁRIA). AGORA, QUANDO
+ * O GEMINI FALHA (MESMO DEPOIS DOS RETRIES INTERNOS QUE HONRAM O `retryDelay`), A LEITURA CAI AUTOMATICAMENTE PRO
+ * ANTHROPIC VISION (CLAUDE), QUE SUPORTA PDF E ESTÁ DISPONÍVEL VIA A INTEGRAÇÃO ANTHROPIC INSTALADA. 100% BACKEND ·
+ * ADITIVO (SÓ FALLBACK) · ZERO MUDANÇA DE SCHEMA/ENDPOINT/PROMPT (R-001/R-007/R-010 OK).**
+ * - SINTOMA (piloto FC): toast vermelho "Falha ao ler a fatura — Não consegui ler a fatura com a IA: Gemini Vision
+ *   falhou: 429 ... You exceeded your current quota ... Quota exceeded for metric generate_content_free_tier_requests,
+ *   limit: 20, model: gemini-2.5-flash. Please retry in 27.79s. RESOURCE_EXHAUSTED".
+ * - CAUSA: a `GOOGLE_API_KEY` está no FREE-TIER do Gemini (limite de ~20 requisições/min + teto diário). `lerFaturaComIA`
+ *   (`server/routers/cartao.ts`) usava o Gemini como caminho primário e SÓ caía pro Anthropic quando `GOOGLE_API_KEY`
+ *   estava AUSENTE. Como a chave existe, ao estourar a cota o `invokeGeminiVision` esgotava os retries (MAX_RETRIES=5,
+ *   honrando o `retryDelay` sugerido) e propagava o 429 — derrubando a importação inteira, sem alternativa.
+ * - CORREÇÃO (`server/routers/cartao.ts`, só `lerFaturaComIA`): a chamada ao `invokeGeminiVision` virou try/catch; em
+ *   QUALQUER erro do Gemini (tipicamente 429 RESOURCE_EXHAUSTED) guarda o erro, loga um warn e CAI pro `invokeAnthropicVision`
+ *   (Claude, model `claude-sonnet-4-6`) — que aceita o PDF como bloco `document` e roda via a integração instalada
+ *   (`AI_INTEGRATIONS_ANTHROPIC_*`). Se o Anthropic também não estiver configurado (lança "Anthropic não configurado")
+ *   ou falhar, propaga-se o erro do GEMINI (que traz a mensagem de cota, mais útil pro usuário). `maxTokens` do fallback
+ *   subiu de 8192 → 16384 p/ casar com o caminho Gemini e cobrir faturas grandes (muitos itens) sem truncar o JSON.
+ *   O `salvageJson` continua blindando saída parcial em ambos os caminhos.
+ * - NOTA (teto rígido): retry+fallback resolvem cota POR-MINUTO e quedas transitórias; se o Anthropic também estiver
+ *   indisponível E a cota DIÁRIA do Gemini esgotar, a leitura ainda falha (precisa de chave Gemini paga ou da integração
+ *   Anthropic ativa). Com a integração Anthropic instalada, o fallback cobre o cenário do piloto.
+ * - VALIDAÇÃO: esbuild parse limpo (cartao.ts, 519.8kb bundle); `tsc --noEmit` sem erros no arquivo; app sobe no Neon DEV.
+ *
  * Rev. 3305 — **RH & DP / FOLHA DE VALE + FOLHA DE PAGAMENTO · O BOTÃO "ARREDONDAMENTO" (Rev. 3302) NÃO MOSTRAVA
  * EFEITO NA TELA: AO ESCOLHER PARA CIMA / PARA BAIXO / MAIS PRÓXIMO, O TOAST DIZIA "N VALE(S) ARREDONDADO(S)" MAS
  * OS VALORES EXIBIDOS CONTINUAVAM IGUAIS (EX.: ACÁCIO SEGUIA 1.167,00 EM VEZ DE IR P/ 1.166,00 NO "PARA BAIXO").

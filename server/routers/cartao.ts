@@ -245,24 +245,42 @@ function salvageJson(text: string): any {
 
 async function lerFaturaComIA(fileBase64: string, mimeType: string): Promise<any> {
   // Gemini é o caminho primário (GOOGLE_API_KEY garantida + suporta PDF + JSON mode).
+  // Rev. 3306 — quando o Gemini falha (tipicamente 429 RESOURCE_EXHAUSTED do
+  // free-tier, mesmo depois dos retries internos com retryDelay), CAI PRO Anthropic
+  // Vision (Claude), que suporta PDF e está disponível via a integração instalada.
+  // Antes o fallback só acontecia se GOOGLE_API_KEY estivesse AUSENTE — então a cota
+  // esgotada do Gemini derrubava a leitura inteira ("Falha ao ler a fatura").
+  let geminiErr: any = null;
   if (process.env.GOOGLE_API_KEY) {
-    const txt = await invokeGeminiVision({
-      prompt: PROMPT_FATURA,
-      base64: fileBase64,
-      mimeType,
-      responseSchema: SCHEMA_FATURA as any,
+    try {
+      const txt = await invokeGeminiVision({
+        prompt: PROMPT_FATURA,
+        base64: fileBase64,
+        mimeType,
+        responseSchema: SCHEMA_FATURA as any,
+        maxTokens: 16384,
+        thinking: "off",
+      });
+      return salvageJson(txt);
+    } catch (e: any) {
+      geminiErr = e;
+      console.warn(`[cartao] Gemini Vision falhou na leitura da fatura, tentando Anthropic: ${e?.message || e}`);
+    }
+  }
+  // Fallback Anthropic (se a integração/chave estiver configurada). `invokeAnthropicVision`
+  // lança "Anthropic não configurado" quando não há cliente — nesse caso propagamos o
+  // erro do Gemini (que traz a mensagem de cota, mais útil pro usuário).
+  try {
+    const txt = await invokeAnthropicVision({
+      prompt: PROMPT_FATURA + "\nResponda SOMENTE com JSON válido.",
+      files: [{ base64: fileBase64, mimeType }],
       maxTokens: 16384,
-      thinking: "off",
     });
     return salvageJson(txt);
+  } catch (e: any) {
+    if (geminiErr) throw geminiErr;
+    throw e;
   }
-  // Fallback Anthropic (se a integração estiver configurada).
-  const txt = await invokeAnthropicVision({
-    prompt: PROMPT_FATURA + "\nResponda SOMENTE com JSON válido.",
-    files: [{ base64: fileBase64, mimeType }],
-    maxTokens: 8192,
-  });
-  return salvageJson(txt);
 }
 
 // Normaliza uma fatura crua da IA → forma canônica (datas/valores validados,
