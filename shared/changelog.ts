@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3334 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO: NO "PANORAMA GERAL DO MÊS", CLICAR NOS CARDS/OLHO
+ * (ENTRADAS, SAÍDAS, SALDO, CONCILIADOS, EXTRATO SEM LANÇAMENTO, ERP SEM EXTRATO, % CONCILIADO — drill-in da Rev. 3327)
+ * NÃO ABRIA O DIÁLOGO EM ALGUNS DISPOSITIVOS (Safari/iPad/touch). 100% FRONT · BUGFIX/UX · ZERO BACKEND/SCHEMA/ALTER/
+ * DROP/DELETE.**
+ * - PEDIDO (usuário, frustrado): "clico no card ou no olho e não acontece nada, não abre nada — arrume isso de vez".
+ * - INVESTIGAÇÃO: a lógica de abertura estava correta (cards = `<button onClick={() => setPanoramaDrill(...)}>`,
+ *   `<Dialog open={!!panoramaDrill}>`, memo `drill` e conteúdo do `DialogContent` null-safe, sem `useEffect` que zere
+ *   `panoramaDrill`, portal `#radix-portal` presente). A ÚNICA diferença concreta entre ESTE diálogo (relatado quebrado)
+ *   e o diálogo de detalhe da MESMA tela (comprovadamente funcional, `detalheEntryId`) era o COMBO de layout full-screen.
+ * - RAIZ (provável, específica de dispositivo): o `DialogContent` do drill usava `className="max-w-2xl w-screen
+ *   h-[100dvh] sm:w-auto sm:h-auto sm:max-h-[90vh] flex flex-col p-0 gap-0"` com o `DialogContent` em modo `resizable`
+ *   PADRÃO (true). O `resizable` injeta um `style` INLINE de `width` (que SOBREPÕE o `w-screen`) + handles de
+ *   redimensionamento nas bordas; somado às unidades `dvh` (frágeis/sem suporte no Safari antigo) e ao full-screen
+ *   `h-[100dvh]`, o conjunto é instável no Safari/iPad/touch — exatamente a classe de diálogo que o usuário reporta
+ *   "não abrir" (o mesmo combo nasceu na Rev. 3324, "Lançar no ERP").
+ * - CORREÇÃO (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): o `DialogContent` do drill `panoramaDrill`
+ *   passou a `resizable={false} className="max-w-2xl w-[calc(100vw-1rem)] sm:w-auto max-h-[88vh] flex flex-col p-0
+ *   gap-0"` — REMOVE `w-screen`/`h-[100dvh]` e o `dvh`, DESLIGA o `resizable` (some o override inline de largura e os
+ *   handles), e adota o MESMO molde do diálogo `detalheEntryId` (largura responsiva via `calc`/`sm:w-auto` + `max-h`
+ *   em `vh` + `flex flex-col`). Nenhuma mudança de lógica: cards, estado, memo `drill` e conteúdo seguem idênticos.
+ * - ESCOPO: 100% front, um único `DialogContent`. SEM rota/endpoint/permissão/schema novo. Regra de Ouro intacta
+ *   (drill é READ-ONLY). RESSALVA: não foi possível reproduzir o "não abre" no ambiente (login bloqueia screenshot
+ *   autenticado); a correção alinha o diálogo ao padrão funcional e elimina o combo frágil — re-publicar é necessário
+ *   p/ o usuário (provável build/cache antigo no iPad) ver o efeito.
+ * - ARQUIVOS: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`, `shared/version.ts` (3334), `shared/changelog.ts`,
+ *   `replit.md`, `replit-history.md`.
+ *
  * Rev. 3333 — **FINANCEIRO / DASHBOARD · CONTROLE DE CHEQUES · NOVA SEÇÃO "ANÁLISE GERENCIAL" NO DASHBOARD DE CHEQUES
  * (`/financeiro/dashboards/cheques`), REPLICANDO O FORMATO DETALHADO/SEGREGADO DA ABA "GERENCIAL" DO CARTÃO (Rev. 3332):
  * KPIs ANALÍTICOS (TICKET MÉDIO, PRAZO MÉDIO DE COMPENSAÇÃO, TAXA DE DEVOLUÇÃO, % CONCILIADO) + EVOLUÇÃO MENSAL POR STATUS

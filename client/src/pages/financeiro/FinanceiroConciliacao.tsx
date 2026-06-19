@@ -2395,7 +2395,7 @@ export default function FinanceiroConciliacao() {
                 cada card (entradas/saídas/saldo/conciliados/extrato-sem-lançamento/ERP-sem-extrato/
                 % conciliado). READ-ONLY — só leitura; nada concilia/baixa aqui. */}
             <Dialog open={!!panoramaDrill} onOpenChange={(o) => !o && setPanoramaDrill(null)}>
-              <DialogContent className="max-w-2xl w-screen h-[100dvh] sm:w-auto sm:h-auto sm:max-h-[90vh] flex flex-col p-0 gap-0">
+              <DialogContent resizable={false} className="max-w-2xl w-[calc(100vw-1rem)] sm:w-auto max-h-[88vh] flex flex-col p-0 gap-0">
                 {(() => {
                   const cfg: Record<string, { titulo: string; icone: any; cor: string; itens: any[]; tipo: "extrato" | "entry"; valor: number; qtdLabel: string }> = {
                     entradas: { titulo: "Entradas do mês (créditos)", icone: ArrowDownCircle, cor: "text-emerald-600", itens: drill.entradas, tipo: "extrato", valor: geralTotais?.valorEntradas ?? 0, qtdLabel: "crédito(s)" },
