@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3308 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA (IMPORTAR EXTRATO) · A IMPORTAÇÃO DE EXTRATO EM PDF DO BANCO DO
+ * BRASIL QUEBRAVA COM "ERRO NA IMPORTAÇÃO — NÃO FOI POSSÍVEL EXTRAIR TRANSAÇÕES DO PDF. VERIFIQUE SE É O EXTRATO EM
+ * PDF GERADO PELO INTERNET BANKING DA CAIXA". O PARSER DE PDF ERA HARDCODED PRO LAYOUT EM COLUNAS DA CAIXA — QUALQUER
+ * OUTRO BANCO (BB, ITAÚ, BRADESCO, SANTANDER...) DEVOLVIA 0 LINHAS E CAÍA NO ERRO FATAL. AGORA, QUANDO O PARSER
+ * DETERMINÍSTICO DA CAIXA NÃO RECONHECE NENHUMA TRANSAÇÃO, A LEITURA CAI AUTOMATICAMENTE PRO FALLBACK DE IA (GEMINI
+ * VISION → ANTHROPIC), QUE LÊ O PDF DE QUALQUER BANCO. 100% BACKEND (+1 LINHA DE TEXTO NO FRONT) · ADITIVO (SÓ
+ * FALLBACK) · ZERO MUDANÇA DE SCHEMA/ENDPOINT (R-001/R-007/R-010 OK).**
+ * - SINTOMA (piloto FC): toast "Erro na importação — Não foi possível extrair transações do PDF..." ao anexar o extrato
+ *   `bb5664 - 012026.pdf` (Banco do Brasil), com a conta "Banco do Brasil - FC" selecionada.
+ * - CAUSA: `parseExtratoLines` (`server/routers/financial.ts`) chamava SÓ `parseCaixaExtratoPdf`
+ *   (`server/services/caixaPdfParser.ts`), que classifica linhas por POSIÇÃO X fixa do layout da CAIXA. Num PDF do BB
+ *   as colunas ficam em X diferentes → nenhuma "linha-valor" casa → 0 transações → `BAD_REQUEST` com a mensagem
+ *   específica da Caixa. A própria dica da tela ("PDF de extrato da Caixa detectado") reforçava o engano.
+ * - CORREÇÃO: novo `server/services/extratoIaParser.ts` (`parseExtratoComIA`) que reusa a infra de visão da Rev. 3306
+ *   (`invokeGeminiVision` primário → `invokeAnthropicVision` fallback) com prompt + responseSchema p/ extrair
+ *   `{data ISO, descricao, valor COM SINAL (neg=débito), saldo}`, parser BR-aware de valores (milhar/decimal/sinal) e
+ *   `salvageJson` p/ saída cercada de prosa. Em `parseExtratoLines`, o caminho PDF virou 2 etapas: (1) tenta o parser
+ *   determinístico da Caixa (rápido, sem IA); (2) se voltar 0 linhas, cai pro `parseExtratoComIA`. "Arquivo não é PDF
+ *   válido" continua erro FATAL (não chama IA). Mensagens de erro reescritas bank-agnostic. FRONT
+ *   (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): a dica "PDF de extrato da Caixa detectado" virou "PDF de
+ *   extrato bancário detectado (Caixa por leitura direta; demais bancos por IA)".
+ * - NOTA (teto rígido): extratos digitalizados/foto e cota DIÁRIA esgotada do Gemini+Anthropic indisponível ainda
+ *   falham — nesses casos a tela orienta enviar OFX/CSV.
+ * - VALIDAÇÃO: esbuild parse limpo (extratoIaParser.ts + financial.ts); `tsc --noEmit` sem erros nos arquivos tocados;
+ *   app sobe no Neon DEV.
+ *
  * Rev. 3307 — **FINANCEIRO / CONTROLE DE CARTÃO DE CRÉDITO (ABA FATURAS) · O BOTÃO "VINCULAR" (Rev. 3303) QUEBRAVA
  * COM "ERRO AO VINCULAR — Failed query: UPDATE financial_cartao_faturas SET cartao_id=$1, observacao = CASE WHEN
  * $2::int IS NULL ... WHERE id=$3 AND company_id= AND excluido_em IS NULL" — REPARE NO `company_id= ` SEM VALOR. NÃO
