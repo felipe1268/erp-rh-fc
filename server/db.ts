@@ -281,12 +281,42 @@ export async function getCompaniesForUser(userId: number, role: string) {
   if (role === 'admin_master' || role === 'admin') {
     return getCompanies();
   }
+  // Rev. 3289 — UNIÃO: vínculos explícitos (user_companies) + EMPRESAS DONAS das
+  // obras concedidas ao usuário (allowed_obra_ids / responsável / grupo Escritório
+  // Central). Conceder uma obra passa a IMPLICAR acesso à empresa dona dela.
+  // Sem isto, um usuário com obra concedida na empresa X mas SEM vínculo de
+  // empresa caía no fallback LIMIT 1 (primeira empresa alfabética), ficava preso
+  // a uma empresa ERRADA e nunca via aquela obra (almoxarifado etc.) — só aparecia
+  // ao virar admin (que vê todas). 100% aditivo: usuários sem obra concedida e sem
+  // vínculo continuam no mesmo fallback de antes.
+  const companyIdSet = new Set<number>();
   const links = await db.select({ companyId: userCompanies.companyId })
     .from(userCompanies).where(eq(userCompanies.userId, userId));
-  if (links.length > 0) {
-    const companyIds = links.map(l => l.companyId);
+  for (const l of links) {
+    const n = Number(l.companyId);
+    if (Number.isFinite(n)) companyIdSet.add(n);
+  }
+  try {
+    const obraIds = await getEffectiveAllowedObraIds(userId, role);
+    if (Array.isArray(obraIds) && obraIds.length > 0) {
+      const compRes = await db.execute(sql`
+        SELECT DISTINCT "companyId" FROM obras
+         WHERE id = ANY(${obraIds}) AND "deletedAt" IS NULL
+      `);
+      const compRows: any[] = (compRes as any)?.rows ?? (compRes as any) ?? [];
+      for (const r of compRows) {
+        const n = Number(r.companyId);
+        if (Number.isFinite(n)) companyIdSet.add(n);
+      }
+    }
+  } catch (e) {
+    // Não derruba a leitura: cai no fallback (vínculos explícitos ou LIMIT 1),
+    // mas LOGA para não mascarar falha transitória da derivação por obra.
+    console.error(`[getCompaniesForUser] falha ao derivar empresas das obras (userId=${userId}):`, e);
+  }
+  if (companyIdSet.size > 0) {
     const result = await db.select().from(companies)
-      .where(and(isNull(companies.deletedAt), inArray(companies.id, companyIds)))
+      .where(and(isNull(companies.deletedAt), inArray(companies.id, Array.from(companyIdSet))))
       .orderBy(companies.razaoSocial);
     if (result.length > 0) return result;
   }

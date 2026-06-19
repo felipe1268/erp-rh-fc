@@ -108,3 +108,4 @@
 - [Self-heal date/timestamp typecast](selfheal-date-timestamp-typecast.md) — cure UPDATE into date/timestamp col needs `::date`/`now()`, NOT `to_char` text; type error is swallowed by catch + capped log → cura silently no-ops. Verify via direct Neon pg, not executeSql.
 
 - [RQ cache-hit hydration race](rq-cache-hit-hydration-race.md) — dois useEffects (um hidrata de query.data, outro reseta por outra dep) anulam estado em cache hit; unifique num só effect chaveado pela identidade do dado.
+- [Conceder obra implica empresa](grant-obra-implies-company.md) — usuário comum: empresas visíveis = user_companies + DONAS das obras de getEffectiveAllowedObraIds; sem isso, obra concedida sem vínculo de empresa some (só vê como Adm).

@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3289 — **CONTROLE DE ACESSO / USUÁRIOS · UM USUÁRIO COMUM (PERFIL "USUÁRIO") COM UMA OBRA CONCEDIDA NA
+ * ABA "OBRAS COM ACESSO" MAS SEM NENHUMA EMPRESA MARCADA EM "EMPRESAS COM ACESSO" NÃO CONSEGUIA VER A OBRA
+ * (ALMOXARIFADO, ETC.) — A OBRA SÓ APARECIA QUANDO O PERFIL VIRAVA "ADM". CAUSA: CONCEDER UMA OBRA NÃO
+ * CONCEDIA ACESSO À EMPRESA DONA DA OBRA, E UM USUÁRIO SEM VÍNCULO DE EMPRESA CAÍA NUM FALLBACK QUE ENTREGAVA
+ * A PRIMEIRA EMPRESA ALFABÉTICA (LIMIT 1) — UMA EMPRESA ERRADA. AGORA O ACESSO À EMPRESA É DERIVADO DAS OBRAS
+ * CONCEDIDAS: CONCEDER UMA OBRA IMPLICA ACESSO À EMPRESA DELA. 100% BACKEND · READ-ONLY · ZERO
+ * SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (piloto FC): "garanta que quando eu criar um novo usuário ele tenha os mesmos critérios de acesso…
+ *   não tá abrindo as obras para o usuário manual; ele tá como usuário, só aparece a obra quando fica como Adm.
+ *   Precisa liberar para ele o acesso às informações das obras que ele tem acesso (almoxarifado etc.)".
+ * - DIAGNÓSTICO (Neon): usuário Manoel Rocha (id=396141, role="user") tinha `users.allowed_obra_ids` = "[13]"
+ *   (obra IGREJA SÃO GERALDO - POITA, EM_ANDAMENTO, ativa, `companyId`=60002 FC ENGENHARIA) MAS `user_companies`
+ *   VAZIO (nenhuma empresa marcada) e o grupo "Almoxarifado" com `acesso_todas_obras=0`. Fluxo da falha:
+ *   `getCompaniesForUser` (server/db.ts), p/ usuário comum SEM vínculo de empresa, caía no fallback
+ *   `SELECT … FROM companies … ORDER BY razaoSocial LIMIT 1` → devolvia a 1ª empresa do sistema (NÃO a 60002).
+ *   O seletor de empresa (`companies.list`) mostrava só essa empresa errada; `obras.listForAlmoxarifado` então
+ *   buscava obras DAQUELA empresa e a obra 13 (empresa 60002) nunca aparecia. Admin contorna tudo (vê todas as
+ *   empresas + ignora o filtro de obra), por isso "só aparecia como Adm".
+ * - SOLUÇÃO (`server/db.ts`, `getCompaniesForUser`, ramo usuário comum): as empresas visíveis passaram a ser a
+ *   UNIÃO de (a) vínculos explícitos em `user_companies` + (b) EMPRESAS DONAS das obras efetivamente concedidas
+ *   ao usuário — `getEffectiveAllowedObraIds` (cobre `allowed_obra_ids`, obras onde é responsável e o grupo
+ *   "Escritório Central") → `SELECT DISTINCT "companyId" FROM obras WHERE id = ANY(...)`. Só cai no fallback
+ *   LIMIT 1 quando o conjunto fica REALMENTE vazio (usuário sem obra E sem vínculo). 100% ADITIVO: ninguém
+ *   perde acesso; usuários sem obra concedida e sem vínculo seguem idênticos ao comportamento anterior.
+ * - EFEITO: como `companies.list`, `obras.listForAlmoxarifado` e os guards de tenancy passam por
+ *   `getCompaniesForUser`, conceder a obra agora libera automaticamente a empresa dona → a obra aparece no
+ *   seletor e no almoxarifado SEM precisar marcar a empresa à mão NEM promover a Adm. Vale p/ usuários
+ *   existentes (auto-cura na próxima leitura, sem backfill) E novos usuários.
+ * - VALIDAÇÃO (Neon): a derivação a partir de `allowed_obra_ids=[13]` resolve `companyId`=60002
+ *   (FC ENGENHARIA E CONSTRUCAO LTDA), exatamente a empresa dona da obra IGREJA SÃO GERALDO. tsc limpo no
+ *   arquivo tocado; app sobe sem erros novos.
+ * - INALTERADO: admin/admin_master (continuam vendo todas as empresas); ACL de terceiros (L2122) que lê
+ *   `user_companies` cru sem o fallback LIMIT 1; filtro de status EM_ANDAMENTO das obras; cadastro/edição de
+ *   usuário. ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3288 — **PLANEJAMENTO / PORTAL DO CLIENTE · O "% PREVISTO" E A CURVA S DO PORTAL DIVERGIAM DO MÓDULO
  * PLANEJAMENTO (FONTE DA VERDADE): NA OBRA REVTE-CIVIL O PORTAL MOSTRAVA PREVISTO 8% (DESVIO +1%) ENQUANTO O
  * MÓDULO MOSTRAVA 9% (DESVIO 0) NO MESMO CUTOFF 11/06/2026. AGORA O PORTAL LÊ O "% PREVISTO" DA MESMA CURVA
