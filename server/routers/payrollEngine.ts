@@ -2765,6 +2765,68 @@ export const payrollEngineRouter = router({
     }),
 
   // ============================================================
+  // 4b. CONTAS BANCÁRIAS DA FOLHA (mapa employeeId → conta-empresa)
+  // ============================================================
+  // Rev. 3317 — O snapshot do Vale (`valeResultJson`) NÃO carrega os campos
+  // de conta-empresa (só `simularPagamento` enriquece os funcionários com eles).
+  // Para a view "Por Banco" do Vale funcionar inclusive sobre snapshots ANTIGOS
+  // sem precisar regerar o vale, o front faz um JOIN client-side com este mapa
+  // leve (employeeId → conta-empresa para pagamento + dados PIX/CPF).
+  contasBancariasFolha: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      // Tenant guard: intersecta as empresas pedidas com as acessíveis do usuário
+      // (getCompaniesForUser retorna TODAS p/ admin/admin_master). Sem isto,
+      // resolveCompanyIds confiaria cegamente no companyId/companyIds do cliente.
+      const permitidas = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const permitidasIds = new Set((permitidas || []).map((c: any) => Number(c.id)));
+      const allowed = resolveCompanyIds(input).filter(id => permitidasIds.has(Number(id)));
+      if (allowed.length === 0) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso às empresas solicitadas" });
+      }
+
+      const emps = await db.select({
+        id: employees.id,
+        cpf: employees.cpf,
+        contaEmpresaId: employees.contaBancariaEmpresaId,
+        tipoChavePix: employees.tipoChavePix,
+        chavePix: employees.chavePix,
+      }).from(employees).where(
+        and(
+          inArray(employees.companyId, allowed),
+          isNull(employees.deletedAt),
+        )
+      );
+
+      const contas = await db.select().from(companyBankAccounts)
+        .where(inArray(companyBankAccounts.companyId, allowed));
+      const contaMap = new Map(contas.map((c: any) => [c.id, c]));
+
+      return emps.map((e: any) => {
+        const ce: any = e.contaEmpresaId ? contaMap.get(e.contaEmpresaId) : null;
+        return {
+          employeeId: e.id,
+          cpf: e.cpf || null,
+          tipoChavePix: e.tipoChavePix || null,
+          chavePix: e.chavePix || null,
+          contaEmpresaId: e.contaEmpresaId || null,
+          contaEmpresaBanco: ce?.banco || null,
+          contaEmpresaCodigoBanco: ce?.codigoBanco || null,
+          contaEmpresaAgencia: ce?.agencia || null,
+          contaEmpresaConta: ce?.conta || null,
+          contaEmpresaTipo: ce?.tipoConta || null,
+          contaEmpresaApelido: ce?.apelido || null,
+        };
+      });
+    }),
+
+  // ============================================================
   // 5. LISTAR VALES DO MÊS
   // ============================================================
   listarVales: protectedProcedure

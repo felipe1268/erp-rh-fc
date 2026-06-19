@@ -518,6 +518,7 @@ export default function FolhaPagamento() {
     }, tickMs);
   }, []);
   const [pagamentoSubView, setPagamentoSubView] = useState<"geral" | "por_banco">("geral");
+  const [valeSubView, setValeSubView] = useState<"geral" | "por_banco">("geral");
   const [pagamentoSearch, setPagamentoSearch] = useState("");
   const [pagamentoFuncao, setPagamentoFuncao] = useState<string>("__all__");
 
@@ -630,6 +631,12 @@ export default function FolhaPagamento() {
   // ===== PAYROLL ENGINE (Cálculo Interno) =====
   const payrollPeriod = trpc.payrollEngine.getPeriod.useQuery(
     { companyId, mesReferencia: mesAno },
+    { enabled: companyId > 0 || companyIds.length > 0 }
+  );
+  // Rev. 3317 — mapa employeeId → conta-empresa para a view "Por Banco" do Vale
+  // (o snapshot do vale não carrega esses campos; JOIN client-side).
+  const contasBancariasFolha = trpc.payrollEngine.contasBancariasFolha.useQuery(
+    { companyId, companyIds },
     { enabled: companyId > 0 || companyIds.length > 0 }
   );
   const [valeResult, setValeResult] = useState<any>(null);
@@ -2812,6 +2819,27 @@ export default function FolhaPagamento() {
             </Card>
           )}
 
+          {/* Rev. 3317 — TOGGLE VISÃO GERAL / POR BANCO (espelha a Folha de Pagamento) */}
+          <div className="flex items-center gap-2 flex-wrap no-print">
+            <Button
+              variant={valeSubView === "geral" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setValeSubView("geral")}
+              className="text-xs"
+            >
+              <BarChart3 className="h-3.5 w-3.5 mr-1" /> Visão Geral
+            </Button>
+            <Button
+              variant={valeSubView === "por_banco" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setValeSubView("por_banco")}
+              className="text-xs"
+            >
+              <Building2 className="h-3.5 w-3.5 mr-1" /> Por Banco
+            </Button>
+          </div>
+
+          {valeSubView === "geral" && (<>
           {/* CAMPO DE BUSCA */}
           <div className="relative no-print">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -3065,6 +3093,174 @@ export default function FolhaPagamento() {
               </div>
             </CardContent>
           </Card>
+          </>)}
+
+          {valeSubView === "por_banco" && (() => {
+            // Rev. 3317 — Agrupa o vale pela CONTA DA EMPRESA PARA PAGAMENTO
+            // (mesma lógica da Folha de Pagamento). O snapshot do vale não carrega
+            // os campos de conta-empresa, então fazemos o JOIN com o mapa
+            // `contasBancariasFolha` (employeeId → conta-empresa). Funcionários sem
+            // conta-empresa definida caem em "Sem conta definida".
+            const SEM_CONTA = "__sem_conta__";
+            const mapaContas = new Map<number, any>(
+              (contasBancariasFolha.data || []).map((c: any) => [Number(c.employeeId), c])
+            );
+            const valeFuncs = ((valeResult?.funcionarios || []) as any[])
+              .filter((f: any) => f.status !== 'rejeitado' && !valeExcluirSel.has(f.employeeId));
+            const liqDe = (f: any) => parseBRLNum(String(f.valorLiquido ?? f.valorTotalVale ?? 0));
+            const brutoDe = (f: any) => parseBRLNum(String(f.valorTotalVale ?? 0));
+            const irDe = (f: any) => parseBRLNum(String(f.irRetido ?? 0));
+            const byAcct: Record<string, any[]> = {};
+            const acctMeta: Record<string, any> = {};
+            for (const f of valeFuncs) {
+              const cb = mapaContas.get(Number(f.employeeId));
+              const key = cb?.contaEmpresaId ? String(cb.contaEmpresaId) : SEM_CONTA;
+              if (!byAcct[key]) {
+                byAcct[key] = [];
+                acctMeta[key] = key === SEM_CONTA ? null : {
+                  id: cb.contaEmpresaId,
+                  banco: cb.contaEmpresaBanco || "Banco",
+                  agencia: cb.contaEmpresaAgencia || null,
+                  conta: cb.contaEmpresaConta || null,
+                  tipo: cb.contaEmpresaTipo || null,
+                  apelido: cb.contaEmpresaApelido || null,
+                };
+              }
+              byAcct[key].push({ ...f, _cb: cb });
+            }
+            const acctKeys = Object.keys(byAcct).sort((a, b) => {
+              if (a === SEM_CONTA) return 1;
+              if (b === SEM_CONTA) return -1;
+              const ma = acctMeta[a], mb = acctMeta[b];
+              return ((ma?.banco || '').localeCompare(mb?.banco || '')) || ((ma?.agencia || '').localeCompare(mb?.agencia || ''));
+            });
+            const bankColors: Record<string, string> = {
+              "Caixa": "bg-blue-600", "Bradesco": "bg-red-600", "Santander": "bg-red-700",
+              "Itaú": "bg-orange-500", "C6": "bg-gray-800", "Nubank": "bg-purple-600",
+              "Inter": "bg-orange-600", "Banco do Brasil": "bg-yellow-600",
+            };
+            const dotColorFor = (meta: any): string => {
+              if (!meta) return "bg-gray-400";
+              const banco = meta.banco || '';
+              for (const k of Object.keys(bankColors)) {
+                if (banco.toLowerCase().includes(k.toLowerCase())) return bankColors[k];
+              }
+              return "bg-gray-500";
+            };
+            const acctLabel = (meta: any): string => !meta ? "Sem conta definida" : (meta.apelido || meta.banco);
+            const acctSubtitle = (meta: any): string | null => {
+              if (!meta) return null;
+              const parts: string[] = [];
+              if (meta.apelido && meta.banco && meta.apelido !== meta.banco) parts.push(meta.banco);
+              if (meta.agencia) parts.push(`Ag ${meta.agencia}`);
+              if (meta.conta) parts.push(`Cc ${meta.conta}`);
+              return parts.length ? parts.join(' • ') : null;
+            };
+            if (valeFuncs.length === 0) {
+              return (
+                <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">
+                  Nenhum funcionário no vale para exibir por banco.
+                </CardContent></Card>
+              );
+            }
+            return (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {acctKeys.map(key => {
+                    const meta = acctMeta[key];
+                    const bkFuncs = byAcct[key];
+                    const totalLiq = bkFuncs.reduce((s: number, f: any) => s + liqDe(f), 0);
+                    const subtitle = acctSubtitle(meta);
+                    return (
+                      <div key={key} className="bg-white border rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className={`h-3 w-3 rounded-full ${dotColorFor(meta)}`} />
+                          <span className="text-sm font-semibold">{acctLabel(meta)}</span>
+                        </div>
+                        {subtitle && <p className="text-[10px] text-muted-foreground font-mono mb-0.5">{subtitle}</p>}
+                        <p className="text-lg font-bold text-[#1B2A4A]">{formatBRL(totalLiq)}</p>
+                        <p className="text-[10px] text-muted-foreground">{bkFuncs.length} funcionário{bkFuncs.length !== 1 ? 's' : ''}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {acctKeys.map(key => {
+                  const meta = acctMeta[key];
+                  const bkFuncs = byAcct[key];
+                  const totalLiq = bkFuncs.reduce((s: number, f: any) => s + liqDe(f), 0);
+                  const totalBruto = bkFuncs.reduce((s: number, f: any) => s + brutoDe(f), 0);
+                  const totalIr = bkFuncs.reduce((s: number, f: any) => s + irDe(f), 0);
+                  const subtitle = acctSubtitle(meta);
+                  return (
+                    <Card key={key} className="overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className={`h-3.5 w-3.5 rounded-full shrink-0 ${dotColorFor(meta)}`} />
+                          <h3 className="font-semibold text-sm truncate">{acctLabel(meta)}</h3>
+                          {subtitle && <span className="text-[10px] text-muted-foreground font-mono truncate hidden sm:inline">{subtitle}</span>}
+                          <span className="text-xs text-muted-foreground bg-gray-200 px-2 py-0.5 rounded-full shrink-0">{bkFuncs.length}</span>
+                        </div>
+                        <div className="flex items-center gap-4 text-xs">
+                          <span className="text-green-700">Bruto: <strong>{formatBRL(totalBruto)}</strong></span>
+                          {totalIr > 0 && <span className="text-red-600">IR: <strong>-{formatBRL(totalIr)}</strong></span>}
+                          <span className="text-[#1B2A4A] text-sm font-bold">{formatBRL(totalLiq)}</span>
+                        </div>
+                      </div>
+                      <CardContent className="p-0">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-[11px]">
+                            <thead>
+                              <tr className="bg-gray-50/80 border-b border-gray-200 text-[10px] text-gray-500 uppercase tracking-wider">
+                                <th className="text-left py-2 px-3 font-semibold">Funcionário</th>
+                                <th className="text-left py-2 px-2 font-semibold">CPF</th>
+                                <th className="text-left py-2 px-2 font-semibold">Agência</th>
+                                <th className="text-left py-2 px-2 font-semibold">Conta</th>
+                                <th className="text-left py-2 px-2 font-semibold">Tipo</th>
+                                <th className="text-left py-2 px-2 font-semibold">Pix</th>
+                                <th className="text-right py-2 px-2 font-semibold text-green-700">Bruto</th>
+                                <th className="text-right py-2 px-2 font-semibold text-red-600">IR</th>
+                                <th className="text-right py-2 px-3 font-semibold text-[#1B2A4A]">Líquido</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {bkFuncs.sort((a: any, b: any) => (a.nome || '').localeCompare(b.nome || '')).map((f: any, i: number) => {
+                                const zebra = i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50';
+                                const cb = f._cb;
+                                const pixInfo = cb?.tipoChavePix ? `${cb.tipoChavePix}: ${cb.chavePix || '—'}` : '—';
+                                const ir = irDe(f);
+                                return (
+                                  <tr key={i} className={`border-b border-gray-100 hover:bg-blue-50/40 transition-colors ${zebra}`}>
+                                    <td className="py-2 px-3 font-medium whitespace-nowrap">{f.nome}</td>
+                                    <td className="py-2 px-2 text-muted-foreground font-mono text-[10px]">{cb?.cpf || '—'}</td>
+                                    <td className="py-2 px-2 font-mono text-[10px]">{meta?.agencia || '—'}</td>
+                                    <td className="py-2 px-2 font-mono text-[10px]">{meta?.conta || '—'}</td>
+                                    <td className="py-2 px-2 text-[10px]">{meta?.tipo || '—'}</td>
+                                    <td className="py-2 px-2 text-[10px] max-w-[160px] truncate" title={pixInfo}>{pixInfo}</td>
+                                    <td className="text-right py-2 px-2 text-green-700">{formatBRL(brutoDe(f))}</td>
+                                    <td className="text-right py-2 px-2 text-red-600">{ir > 0 ? `-${formatBRL(ir)}` : '—'}</td>
+                                    <td className="text-right py-2 px-3 font-bold text-[#1B2A4A]">{formatBRL(liqDe(f))}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                            <tfoot>
+                              <tr className="border-t-2 border-gray-300 bg-gray-100 font-bold text-xs">
+                                <td className="py-2.5 px-3" colSpan={6}>SUBTOTAL — {bkFuncs.length} funcionário{bkFuncs.length !== 1 ? 's' : ''}</td>
+                                <td className="text-right py-2.5 px-2 text-green-700">{formatBRL(totalBruto)}</td>
+                                <td className="text-right py-2.5 px-2 text-red-600">{totalIr > 0 ? `-${formatBRL(totalIr)}` : '—'}</td>
+                                <td className="text-right py-2.5 px-3 text-[#1B2A4A] text-sm">{formatBRL(totalLiq)}</td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
         <ArredondamentoDialog
           open={arredOpen && arredOrigem === 'vale'}
