@@ -1812,14 +1812,22 @@ export default function FinanceiroConciliacao() {
                           <AlertCircle className="w-4 h-4 text-gray-400" />
                           Lançamentos sem conta bancária definida ({geralSemConta.length})
                         </p>
-                        <p className="text-[11px] text-gray-400 mt-0.5">Não pertencem a nenhuma conta — defina a conta bancária no lançamento para que entrem na conciliação.</p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">Não pertencem a nenhuma conta — clique numa linha para ver de onde veio o lançamento e definir a conta bancária.</p>
                         <div className="mt-2 max-h-48 overflow-auto rounded-lg border border-gray-100 bg-white divide-y">
                           {geralSemConta.slice(0, 50).map((e: any) => (
-                            <div key={e.id} className="flex items-center gap-2 px-3 py-2 text-xs">
+                            <button
+                              key={e.id}
+                              type="button"
+                              onClick={() => setDetalheEntryId(Number(e.id))}
+                              title="Ver detalhes e a origem deste lançamento"
+                              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-blue-50/60 focus-visible:bg-blue-50 transition-colors"
+                            >
                               <span className="text-gray-400 shrink-0 w-16">{fmtData(e.data)}</span>
                               <span className="flex-1 min-w-0 truncate text-gray-700">{e.fornecedorNome || e.descricao || "—"}</span>
+                              {e.origemModulo && <span className="hidden sm:inline-block shrink-0 px-1.5 py-px rounded-full text-[10px] font-medium bg-gray-100 text-gray-500 truncate max-w-[120px]">{e.origemModulo}</span>}
                               <span className={`font-semibold shrink-0 ${e.tipo === "receita" ? "text-emerald-600" : "text-rose-500"}`}>{formatBRL(Math.abs(Number(e.valor) || 0))}</span>
-                            </div>
+                              <Eye className="w-3.5 h-3.5 text-gray-300 shrink-0" />
+                            </button>
                           ))}
                         </div>
                       </div>

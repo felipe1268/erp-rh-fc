@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3325 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NO PANORAMA GERAL DO MÊS, O BLOCO "LANÇAMENTOS SEM CONTA BANCÁRIA
+ * DEFINIDA" ERA UMA LISTA INERTE (NÃO DAVA PRA CLICAR) — O USUÁRIO NÃO CONSEGUIA SABER DE ONDE VEIO CADA LANÇAMENTO PRA
+ * IR DEFINIR A CONTA. AGORA CADA LINHA É CLICÁVEL E ABRE A TELA DE DETALHES DO LANÇAMENTO (MESMO DIÁLOGO JÁ USADO NAS
+ * LISTAS POR CONTA), QUE MOSTRA A "ORIGEM" (MÓDULO QUE CRIOU), CONTA, OBRA, DATAS, STATUS ETC. 100% FRONT · UX/ADITIVO ·
+ * ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (print do usuário — "Quero poder clicar e ver onde ver a informação"): o painel "Lançamentos sem conta
+ *   bancária definida (N)" do Panorama Geral listava data/descrição/valor sem nenhuma ação de clique. As listas POR CONTA
+ *   já tinham o olho de "Ver detalhes" (via `renderEntryRow` → `setDetalheEntryId`), mas a versão agregada do Panorama
+ *   (`geralSemConta`) usava um render simples e inerte.
+ * - FRONT (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): cada linha do bloco `geralSemConta` virou um
+ *   `<button>` que chama `setDetalheEntryId(e.id)` — reaproveitando o MESMO diálogo de detalhes (`detalheEntryId` /
+ *   `detailQuery`) já existente, que exibe Origem (`origemModulo`), Conta, Obra, datas, status, descrição/observações,
+ *   comprovante etc. Hover azul + ícone `Eye` como affordance; quando o item já traz `origemModulo`, mostra um chip
+ *   discreto com a origem direto na linha (oculto no mobile). Texto-guia atualizado ("clique numa linha para ver de onde
+ *   veio o lançamento e definir a conta bancária").
+ * - SEM novo endpoint/rota/permissão: o detalhe é carregado pela query que já alimenta o diálogo nas demais listas.
+ * - ARQUIVOS: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`, `shared/version.ts` (3325), `shared/changelog.ts`,
+ *   `replit.md`.
+ *
  * Rev. 3324 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CLICAR NUMA LINHA DO EXTRATO SEM LANÇAMENTO ABRE UMA TELA FULL-SCREEN
  * RESPONSIVA E BEM FORMATADA: ENTRADA (CRÉDITO) → INDICAR O CLIENTE QUE PAGOU + LANÇAR NO CONTAS A RECEBER; SAÍDA (DÉBITO)
  * → INDICAR O FORNECEDOR + LANÇAR NO CONTAS A PAGAR. 100% FINANCEIRO (FRONT, REUSA ENDPOINTS) · ADITIVO · REGRA DE OURO
