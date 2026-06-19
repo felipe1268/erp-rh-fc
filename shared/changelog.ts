@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3332 — **FINANCEIRO / CONTROLE DE CARTÃO DE CRÉDITO · NOVA ABA "GERENCIAL" QUE MAPEIA CADA LANÇAMENTO DA FATURA
+ * (TABELA `financial_cartao_itens`) EM VÁRIOS GRÁFICOS DE ANÁLISE GERENCIAL: COMPOSIÇÃO POR TIPO (COMPRA × ENCARGOS/JUROS ×
+ * CRÉDITOS), EVOLUÇÃO MÊS A MÊS, PERFIL DE PARCELAMENTO (À VISTA × Nx — "EM QUANTAS VEZES"), O QUE É COMPRADO RECORRENTEMENTE
+ * (Nº DE VEZES + MESES DISTINTOS + VALOR), ENCARGOS/JUROS POR NATUREZA (IOF/ANUIDADE/JUROS/MULTA/…), QUAL OBRA MAIS COMPRA E
+ * GASTO POR CATEGORIA. 100% FINANCEIRO (1 BACKEND READ-ONLY + 1 FRONT) · ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário, sobre o Dashboard do Cartão de Crédito): "coloca muitos gráficos de análise, separando cada lançamento,
+ *   mapeando compras recorrentes, juros, o que compramos recorrentemente, o perfil de compra (em quantas vezes), qual obra
+ *   compra mais no cartão, quais itens e em quantas vezes — mapear tudo para uma análise gerencial". A página já tinha as
+ *   abas Cartões/Faturas/Comparativo; faltava a leitura ANALÍTICA dos ITENS (cada compra) que a importação por IA já grava.
+ * - BACKEND (`server/routers/cartao.ts`, nova query read-only `analiseGerencial({companyId, ano, cartaoId?})`): agrega
+ *   `financial_cartao_itens` ⋈ `financial_cartao_faturas` (escopo por `ano_ref` da fatura + cartão opcional) num só round-trip
+ *   em 7 cortes SQL: (1) `porTipo` (compra/encargo/credito → qtd + SUM); (2) `porMes` (mês × tipo); (3) `perfilParcelas`
+ *   (distribuição por `parcela_total`, só compras); (4) `estabelecimentos` (descrição normalizada `UPPER(TRIM)` com
+ *   `COUNT(*) vezes`, `COUNT(DISTINCT mes_ref) meses`, SUM e `MAX(parcela_total)`, HAVING vezes>1 — recorrência real);
+ *   (5) `encargos` (descrições do tipo=encargo p/ classificar IOF/anuidade/juros/multa no front); (6) `porObra`; (7)
+ *   `porCategoria`. Tenant guard `assertCompanyAccess`; `excluido_em IS NULL` em itens e faturas; segue a regra do helper
+ *   `dbExecute` (params ligados por ORDEM DE APARIÇÃO — $1 company, $2 ano, $3 cartão só quando há filtro). SEM rota/
+ *   permissão/escrita nova — só leitura agregada.
+ * - FRONT (`client/src/pages/financeiro/FinanceiroCartaoCredito.tsx`): nova aba "Gerencial" (ícone `PieChart`) ao lado de
+ *   Comparativo. Cabeçalho navy padrão FC com navegação de ano + 4 KPIs (Compras do ano/qtd; Encargos & juros; % parcelado;
+ *   ticket médio). Gráficos (recharts, já dep): PIZZA de composição por tipo (compra navy / encargo vermelho / crédito verde,
+ *   valores absolutos); BARRAS AGRUPADAS de evolução mês a mês (compras × encargos × |créditos|); BARRAS do perfil de
+ *   parcelamento (À vista × 2x..Nx, cor distinta p/ parcelado); BARRAS HORIZONTAIS de encargos por natureza (classificados
+ *   por palavra-chave na descrição) com total; TABELA de recorrência (estabelecimento/item · vezes · meses · parcelas ·
+ *   total); BARRAS HORIZONTAIS de gasto por obra e por categoria. Toda moeda via `formatBRL` e eixos Y em BRL inteiro (sem
+ *   abreviação k/M — respeita a regra). Aviso âmbar quando obra/categoria ainda não foram classificadas nos itens (no banco,
+ *   hoje, quase tudo está sem obra/categoria) orientando a classificar nas faturas p/ os gráficos ganharem detalhe.
+ * - DADOS REAIS (empresa 60002, 1113 itens): tipos populados (compra 773 · encargo 176 · credito 164), `parcela_total` rico
+ *   (1x..12x) e descrições recorrentes (MERCADOLIVRE 47x, IOF 31x, ANUIDADE 15x, UBER 13x) — análises de compra/encargo/
+ *   parcelamento/recorrência já têm massa; obra/categoria dependem de classificação manual (self-fill conforme classificam).
+ * - ARQUIVOS: `server/routers/cartao.ts` (endpoint `analiseGerencial`), `client/src/pages/financeiro/FinanceiroCartaoCredito.tsx`
+ *   (aba + query + memo + JSX), `shared/version.ts` (3332), `shared/changelog.ts`, `replit.md`, `replit-history.md`.
+ *
  * Rev. 3331 — **FINANCEIRO / CONTROLE DE CARTÃO DE CRÉDITO · ABA "COMPARATIVO" GANHOU LAYOUT MODERNO NO PADRÃO FC
  * (CABEÇALHO NAVY, KPIs DO ANO, TABELA REFINADA) E, ABAIXO DA TABELA, UM GRÁFICO DE BARRAS COM O TOTAL GERAL POR MÊS
  * — CADA BARRA COLORIDA PELA TENDÊNCIA VS O MÊS ANTERIOR COM FATURA (VERMELHO=SUBIU, VERDE=ABAIXOU, NAVY=BASE/1º MÊS).

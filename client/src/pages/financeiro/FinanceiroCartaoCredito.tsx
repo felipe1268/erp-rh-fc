@@ -18,8 +18,9 @@ import {
   CreditCard, Upload, Loader2, CheckCircle, AlertTriangle, Trash2, Pencil,
   ChevronLeft, ChevronRight, PlusCircle, ListTree, FileText, Building2, ShieldAlert,
   Search, Layers, BarChart3, TrendingUp, TrendingDown, Minus,
+  PieChart as PieIcon, Repeat, Percent, Store, Receipt, Wallet,
 } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from "recharts";
 
 function formatBRL(v: number | null | undefined) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
@@ -157,7 +158,7 @@ export default function FinanceiroCartaoCredito() {
   const { companyId } = useCompany();
   const { toast } = useToast();
 
-  const [aba, setAba] = useState<"cartoes" | "faturas" | "comparativo">("cartoes");
+  const [aba, setAba] = useState<"cartoes" | "faturas" | "comparativo" | "gerencial">("cartoes");
 
   // ── Cartões ──────────────────────────────────────────────────────────
   const cartoesQ = (trpc as any).cartao.listarCartoes.useQuery(
@@ -305,6 +306,104 @@ export default function FinanceiroCartaoCredito() {
     const mediaMensal = comMov.length ? comMov.reduce((a, b) => a + b.total, 0) / comMov.length : 0;
     return { data, maior, menor, mediaMensal, mesesComMov: comMov.length };
   }, [comparativo]);
+
+  // ── Análise gerencial (itens da fatura) ──────────────────────────────
+  const gerencialQ = (trpc as any).cartao.analiseGerencial.useQuery(
+    { companyId: companyId!, ano, ...(cartaoFiltro != null ? { cartaoId: cartaoFiltro } : {}) },
+    { enabled: !!companyId && aba === "gerencial" },
+  );
+  const gerencialRaw = gerencialQ.data as {
+    porTipo: Array<{ tipo: string; qtd: number; total: number }>;
+    porMes: Array<{ mes: number; tipo: string; total: number }>;
+    perfilParcelas: Array<{ parcelas: number; qtd: number; total: number }>;
+    estabelecimentos: Array<{ est: string; vezes: number; meses: number; total: number; maxParcelas: number }>;
+    encargos: Array<{ est: string; qtd: number; total: number }>;
+    porObra: Array<{ obra: string; qtd: number; total: number }>;
+    porCategoria: Array<{ cat: string; qtd: number; total: number }>;
+  } | undefined;
+
+  // Classifica um encargo pela descrição (IOF, Anuidade, Juros, Multa, Outros).
+  const classifEncargo = (est: string): string => {
+    const s = (est || "").toUpperCase();
+    if (s.includes("IOF")) return "IOF";
+    if (s.includes("ANUIDADE")) return "Anuidade";
+    if (s.includes("JURO")) return "Juros";
+    if (s.includes("MULTA") || s.includes("MORA")) return "Multa/Mora";
+    if (s.includes("SEGURO")) return "Seguro";
+    if (s.includes("TARIFA") || s.includes("TAXA")) return "Tarifas";
+    return "Outros encargos";
+  };
+
+  const gerencial = useMemo(() => {
+    const d = gerencialRaw;
+    if (!d) return null;
+    // KPIs por tipo (compra positivo; crédito chega negativo no banco).
+    const tot = (t: string) => d.porTipo.find((x) => x.tipo === t)?.total ?? 0;
+    const qtdT = (t: string) => d.porTipo.find((x) => x.tipo === t)?.qtd ?? 0;
+    const totalCompras = tot("compra");
+    const totalEncargos = tot("encargo");
+    const totalCreditos = Math.abs(tot("credito"));
+    const qtdCompras = qtdT("compra");
+    const ticketMedio = qtdCompras > 0 ? totalCompras / qtdCompras : 0;
+
+    // Perfil de parcelamento: à vista (1x) vs parcelado (>1x).
+    const aVista = d.perfilParcelas.filter((p) => p.parcelas <= 1).reduce((a, p) => a + p.total, 0);
+    const parcelado = d.perfilParcelas.filter((p) => p.parcelas > 1).reduce((a, p) => a + p.total, 0);
+    const pctParcelado = totalCompras > 0 ? (parcelado / totalCompras) * 100 : 0;
+
+    // Composição por tipo (pizza) — usa valores absolutos.
+    const COMPOSICAO_COR: Record<string, string> = { compra: "#1B2A4A", encargo: "#dc2626", credito: "#059669" };
+    const COMPOSICAO_LABEL: Record<string, string> = { compra: "Compras", encargo: "Encargos/Juros", credito: "Créditos/Pagamentos" };
+    const composicao = d.porTipo
+      .map((t) => ({ key: t.tipo, name: COMPOSICAO_LABEL[t.tipo] ?? t.tipo, value: Math.abs(t.total), qtd: t.qtd, color: COMPOSICAO_COR[t.tipo] ?? "#94a3b8" }))
+      .filter((x) => x.value > 0);
+
+    // Evolução mês a mês (barras agrupadas): compra × encargo × |crédito|.
+    const porMesMap = new Map<number, { mes: string; compra: number; encargo: number; credito: number }>();
+    for (let m = 1; m <= 12; m++) porMesMap.set(m, { mes: MESES[m], compra: 0, encargo: 0, credito: 0 });
+    for (const r of d.porMes) {
+      const slot = porMesMap.get(r.mes);
+      if (!slot) continue;
+      if (r.tipo === "compra") slot.compra += r.total;
+      else if (r.tipo === "encargo") slot.encargo += r.total;
+      else if (r.tipo === "credito") slot.credito += Math.abs(r.total);
+    }
+    const evolucao = Array.from(porMesMap.values());
+    const evolucaoTemDado = evolucao.some((e) => e.compra || e.encargo || e.credito);
+
+    // Perfil de parcelamento (barras): label "À vista", "2x"..."Nx".
+    const perfil = d.perfilParcelas.map((p) => ({
+      label: p.parcelas <= 1 ? "À vista" : `${p.parcelas}x`,
+      parcelas: p.parcelas,
+      qtd: p.qtd,
+      total: p.total,
+    }));
+
+    // Encargos agrupados por natureza (IOF/Anuidade/Juros/…).
+    const encMap = new Map<string, { nome: string; total: number; qtd: number }>();
+    for (const e of d.encargos) {
+      const nome = classifEncargo(e.est);
+      const cur = encMap.get(nome) ?? { nome, total: 0, qtd: 0 };
+      cur.total += e.total; cur.qtd += e.qtd;
+      encMap.set(nome, cur);
+    }
+    const encargosNatureza = Array.from(encMap.values()).sort((a, b) => b.total - a.total);
+
+    // Obras: detecta se há classificação real (algo diferente de "(sem obra)").
+    const obrasClassificadas = d.porObra.some((o) => o.obra !== "(sem obra)");
+    const categoriasClassificadas = d.porCategoria.some((c) => c.cat !== "(sem categoria)");
+
+    const temDados = d.porTipo.length > 0;
+
+    return {
+      totalCompras, totalEncargos, totalCreditos, qtdCompras, ticketMedio,
+      aVista, parcelado, pctParcelado,
+      composicao, evolucao, evolucaoTemDado, perfil,
+      estabelecimentos: d.estabelecimentos, encargosNatureza,
+      porObra: d.porObra, porCategoria: d.porCategoria,
+      obrasClassificadas, categoriasClassificadas, temDados,
+    };
+  }, [gerencialRaw]);
 
   const excluirFatura = (trpc as any).cartao.excluirFatura.useMutation();
   const [faturaExcluir, setFaturaExcluir] = useState<any | null>(null);
@@ -548,6 +647,9 @@ export default function FinanceiroCartaoCredito() {
             </Button>
             <Button variant={aba === "comparativo" ? "default" : "outline"} size="sm" onClick={() => setAba("comparativo")}>
               <BarChart3 className="w-4 h-4 mr-1" /> Comparativo
+            </Button>
+            <Button variant={aba === "gerencial" ? "default" : "outline"} size="sm" onClick={() => setAba("gerencial")}>
+              <PieIcon className="w-4 h-4 mr-1" /> Gerencial
             </Button>
           </div>
         </div>
@@ -893,6 +995,309 @@ export default function FinanceiroCartaoCredito() {
                   </div>
                 </CardContent>
               </Card>
+            )}
+          </div>
+        )}
+
+        {/* ───────────── ABA GERENCIAL (análise dos itens) ───────────── */}
+        {aba === "gerencial" && (
+          <div className="space-y-4">
+            {/* Cabeçalho navy + navegação de ano */}
+            <Card className="border-0 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between gap-3 flex-wrap bg-gradient-to-r from-[#1B2A4A] to-[#2c3f63] px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25">
+                    <PieIcon className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-semibold leading-tight text-white">Análise gerencial do cartão</h2>
+                    <p className="text-xs text-white/70">Cada compra mapeada por tipo, parcelamento, recorrência, obra e encargos em {ano}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setAno((a) => a - 1)} className="rounded-lg p-1.5 text-white/80 transition-colors hover:bg-white/10">
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <span className="min-w-[3.5rem] text-center text-sm font-bold text-white">{ano}</span>
+                  <button onClick={() => setAno((a) => a + 1)} className="rounded-lg p-1.5 text-white/80 transition-colors hover:bg-white/10">
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              <CardContent className="p-4">
+                {gerencialQ.isLoading ? (
+                  <div className="py-10 text-center text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin inline" /> Carregando análise…</div>
+                ) : gerencialQ.isError ? (
+                  <div className="py-10 text-center text-red-600"><AlertTriangle className="w-5 h-5 inline mr-1" /> Erro ao carregar a análise. Tente novamente.</div>
+                ) : !gerencial || !gerencial.temDados ? (
+                  <div className="py-10 text-center text-muted-foreground">Nenhum item de fatura importado em {ano}. Importe faturas (PDF) na aba "Faturas".</div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    <div className="rounded-xl bg-gradient-to-br from-[#1B2A4A] to-[#2c3f63] p-3 text-white shadow-sm">
+                      <p className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-white/60"><Wallet className="h-3 w-3" /> Compras {ano}</p>
+                      <p className="mt-0.5 text-lg font-bold tabular-nums">{formatBRL(gerencial.totalCompras)}</p>
+                      <p className="mt-0.5 text-[10px] text-white/60">{gerencial.qtdCompras} {gerencial.qtdCompras === 1 ? "lançamento" : "lançamentos"}</p>
+                    </div>
+                    <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
+                      <p className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground"><Receipt className="h-3 w-3" /> Encargos / juros</p>
+                      <p className="mt-0.5 text-lg font-bold tabular-nums text-red-600">{formatBRL(gerencial.totalEncargos)}</p>
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">IOF, anuidade, juros, multas…</p>
+                    </div>
+                    <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
+                      <p className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground"><Percent className="h-3 w-3" /> % parcelado</p>
+                      <p className="mt-0.5 text-lg font-bold tabular-nums text-gray-800">{gerencial.pctParcelado.toFixed(0)}%</p>
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">{formatBRL(gerencial.parcelado)} em parcelas</p>
+                    </div>
+                    <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
+                      <p className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground"><CreditCard className="h-3 w-3" /> Ticket médio</p>
+                      <p className="mt-0.5 text-lg font-bold tabular-nums text-gray-800">{formatBRL(gerencial.ticketMedio)}</p>
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">por compra</p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {gerencial && gerencial.temDados && (
+              <>
+                {/* Linha 1: composição por tipo (pizza) + evolução mês a mês (barras) */}
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <Card className="border-0 shadow-sm">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+                        <PieIcon className="h-4 w-4 text-[#1B2A4A]" /> Composição da fatura por tipo
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-2">
+                      <div className="h-[280px] w-full" role="img" aria-label="Gráfico de pizza da composição da fatura por tipo">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie data={gerencial.composicao} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={58} outerRadius={92} paddingAngle={2}>
+                              {gerencial.composicao.map((c) => (<Cell key={c.key} fill={c.color} />))}
+                            </Pie>
+                            <Tooltip formatter={(v: any, n: any) => [formatBRL(Number(v)), n]} />
+                            <Legend verticalAlign="bottom" height={36} formatter={(v) => <span className="text-xs text-gray-600">{v}</span>} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <p className="mt-1 text-center text-[11px] text-muted-foreground">Créditos/pagamentos mostrados em valor absoluto.</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-0 shadow-sm">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+                        <BarChart3 className="h-4 w-4 text-[#1B2A4A]" /> Evolução mês a mês — compras × encargos
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-2">
+                      {gerencial.evolucaoTemDado ? (
+                        <div className="h-[280px] w-full" role="img" aria-label="Gráfico de barras de compras, encargos e créditos por mês">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={gerencial.evolucao} margin={{ top: 16, right: 8, left: 8, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f3" />
+                              <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={false} tickLine={false} />
+                              <YAxis tickFormatter={(v) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })} tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={false} tickLine={false} width={84} />
+                              <Tooltip formatter={(v: any, n: any) => [formatBRL(Number(v)), n]} cursor={{ fill: "rgba(27,42,74,0.05)" }} />
+                              <Legend verticalAlign="top" height={28} formatter={(v) => <span className="text-xs text-gray-600">{v}</span>} />
+                              <Bar dataKey="compra" name="Compras" fill="#1B2A4A" radius={[4, 4, 0, 0]} maxBarSize={26} />
+                              <Bar dataKey="encargo" name="Encargos" fill="#dc2626" radius={[4, 4, 0, 0]} maxBarSize={26} />
+                              <Bar dataKey="credito" name="Créditos" fill="#059669" radius={[4, 4, 0, 0]} maxBarSize={26} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      ) : (
+                        <div className="py-16 text-center text-sm text-muted-foreground">Sem movimento mensal em {ano}.</div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Linha 2: perfil de parcelamento (barras) + encargos por natureza */}
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <Card className="border-0 shadow-sm">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+                        <Layers className="h-4 w-4 text-[#1B2A4A]" /> Perfil de compra — em quantas vezes
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-2">
+                      {gerencial.perfil.length > 0 ? (
+                        <div className="h-[280px] w-full" role="img" aria-label="Gráfico de barras do valor de compras por número de parcelas">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={gerencial.perfil} margin={{ top: 16, right: 8, left: 8, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f3" />
+                              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={false} tickLine={false} />
+                              <YAxis tickFormatter={(v) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })} tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={false} tickLine={false} width={84} />
+                              <Tooltip formatter={(v: any) => formatBRL(Number(v))} labelFormatter={(l: any) => `${l}`} cursor={{ fill: "rgba(27,42,74,0.05)" }} />
+                              <Bar dataKey="total" name="Valor" radius={[6, 6, 0, 0]} maxBarSize={48}>
+                                {gerencial.perfil.map((p) => (<Cell key={p.parcelas} fill={p.parcelas > 1 ? "#2c3f63" : "#1B2A4A"} />))}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      ) : (
+                        <div className="py-16 text-center text-sm text-muted-foreground">Sem compras classificadas.</div>
+                      )}
+                      <div className="mt-2 flex items-center justify-center gap-4 text-[11px] text-muted-foreground">
+                        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: "#1B2A4A" }} /> à vista</span>
+                        <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: "#2c3f63" }} /> parcelado</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-0 shadow-sm">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+                        <Receipt className="h-4 w-4 text-[#1B2A4A]" /> Encargos &amp; juros por natureza
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-2">
+                      {gerencial.encargosNatureza.length > 0 ? (
+                        <div className="space-y-2">
+                          {gerencial.encargosNatureza.map((e) => {
+                            const max = gerencial.encargosNatureza[0].total || 1;
+                            const pct = Math.max(3, (e.total / max) * 100);
+                            return (
+                              <div key={e.nome} className="flex items-center gap-2">
+                                <span className="w-28 shrink-0 truncate text-xs text-gray-600" title={e.nome}>{e.nome}</span>
+                                <div className="relative h-6 flex-1 overflow-hidden rounded-md bg-gray-100">
+                                  <div className="absolute inset-y-0 left-0 rounded-md bg-gradient-to-r from-red-500 to-red-400" style={{ width: `${pct}%` }} />
+                                </div>
+                                <span className="w-24 shrink-0 text-right text-xs font-semibold tabular-nums text-gray-800">{formatBRL(e.total)}</span>
+                              </div>
+                            );
+                          })}
+                          <div className="mt-3 flex items-center justify-between border-t pt-2 text-sm font-semibold">
+                            <span className="text-gray-600">Total de encargos</span>
+                            <span className="tabular-nums text-red-600">{formatBRL(gerencial.totalEncargos)}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="py-16 text-center text-sm text-muted-foreground">Nenhum encargo/juros identificado em {ano}.</div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Estabelecimentos / itens recorrentes */}
+                <Card className="border-0 shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+                      <Repeat className="h-4 w-4 text-[#1B2A4A]" /> O que é comprado recorrentemente
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground">Estabelecimentos/itens com mais de uma compra no ano — nº de vezes, meses distintos e valor.</p>
+                  </CardHeader>
+                  <CardContent className="pt-2">
+                    {gerencial.estabelecimentos.length > 0 ? (
+                      <div className="-mx-4 overflow-x-auto px-4">
+                        <table className="w-full border-separate border-spacing-0 text-sm">
+                          <thead>
+                            <tr className="bg-gray-50/70 text-xs text-muted-foreground">
+                              <th className="rounded-l-lg px-3 py-2.5 text-left font-semibold">Estabelecimento / item</th>
+                              <th className="whitespace-nowrap px-3 py-2.5 text-center font-medium"><Store className="mr-1 inline h-3.5 w-3.5" />Vezes</th>
+                              <th className="whitespace-nowrap px-3 py-2.5 text-center font-medium">Meses</th>
+                              <th className="whitespace-nowrap px-3 py-2.5 text-center font-medium">Parcelas</th>
+                              <th className="whitespace-nowrap rounded-r-lg px-3 py-2.5 text-right font-semibold">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {gerencial.estabelecimentos.map((e) => (
+                              <tr key={e.est} className="border-t transition-colors hover:bg-blue-50/40">
+                                <td className="px-3 py-2 font-medium text-gray-800">{e.est}</td>
+                                <td className="px-3 py-2 text-center tabular-nums">
+                                  <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">{e.vezes}x</Badge>
+                                </td>
+                                <td className="px-3 py-2 text-center tabular-nums text-gray-600">{e.meses}</td>
+                                <td className="px-3 py-2 text-center tabular-nums text-gray-600">{e.maxParcelas > 1 ? `até ${e.maxParcelas}x` : "à vista"}</td>
+                                <td className="px-3 py-2 text-right font-semibold tabular-nums text-gray-900">{formatBRL(e.total)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="py-10 text-center text-sm text-muted-foreground">Nenhuma compra recorrente identificada em {ano}.</div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Por obra + por categoria */}
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <Card className="border-0 shadow-sm">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+                        <Building2 className="h-4 w-4 text-[#1B2A4A]" /> Qual obra mais compra no cartão
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-2">
+                      {!gerencial.obrasClassificadas && (
+                        <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          <span>As compras ainda não foram classificadas por obra. Classifique os itens em cada fatura (botão "Itens") para este gráfico ganhar detalhe.</span>
+                        </div>
+                      )}
+                      {gerencial.porObra.length > 0 ? (
+                        <div className="space-y-2">
+                          {gerencial.porObra.map((o) => {
+                            const max = gerencial.porObra[0].total || 1;
+                            const pct = Math.max(3, (o.total / max) * 100);
+                            const semObra = o.obra === "(sem obra)";
+                            return (
+                              <div key={o.obra} className="flex items-center gap-2">
+                                <span className={`w-32 shrink-0 truncate text-xs ${semObra ? "italic text-gray-400" : "text-gray-600"}`} title={o.obra}>{o.obra}</span>
+                                <div className="relative h-6 flex-1 overflow-hidden rounded-md bg-gray-100">
+                                  <div className="absolute inset-y-0 left-0 rounded-md" style={{ width: `${pct}%`, background: semObra ? "#cbd5e1" : "linear-gradient(90deg,#1B2A4A,#2c3f63)" }} />
+                                </div>
+                                <span className="w-24 shrink-0 text-right text-xs font-semibold tabular-nums text-gray-800">{formatBRL(o.total)}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="py-10 text-center text-sm text-muted-foreground">Sem dados de obra em {ano}.</div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-0 shadow-sm">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+                        <ListTree className="h-4 w-4 text-[#1B2A4A]" /> Gasto por categoria
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-2">
+                      {!gerencial.categoriasClassificadas && (
+                        <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          <span>As compras ainda não foram classificadas por categoria. Classifique os itens nas faturas para este gráfico ganhar detalhe.</span>
+                        </div>
+                      )}
+                      {gerencial.porCategoria.length > 0 ? (
+                        <div className="space-y-2">
+                          {gerencial.porCategoria.map((c) => {
+                            const max = gerencial.porCategoria[0].total || 1;
+                            const pct = Math.max(3, (c.total / max) * 100);
+                            const semCat = c.cat === "(sem categoria)";
+                            return (
+                              <div key={c.cat} className="flex items-center gap-2">
+                                <span className={`w-32 shrink-0 truncate text-xs ${semCat ? "italic text-gray-400" : "text-gray-600"}`} title={c.cat}>{c.cat}</span>
+                                <div className="relative h-6 flex-1 overflow-hidden rounded-md bg-gray-100">
+                                  <div className="absolute inset-y-0 left-0 rounded-md" style={{ width: `${pct}%`, background: semCat ? "#cbd5e1" : "linear-gradient(90deg,#1B2A4A,#2c3f63)" }} />
+                                </div>
+                                <span className="w-24 shrink-0 text-right text-xs font-semibold tabular-nums text-gray-800">{formatBRL(c.total)}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="py-10 text-center text-sm text-muted-foreground">Sem dados de categoria em {ano}.</div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </>
             )}
           </div>
         )}

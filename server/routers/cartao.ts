@@ -574,6 +574,76 @@ export const cartaoRouter = router({
     }));
   }),
 
+  // ── Análise gerencial dos ITENS da fatura (read-only) ────────────────
+  // Rev. 3332 — agrega financial_cartao_itens (granularidade de COMPRA) em
+  // várias dimensões gerenciais num só round-trip: composição por tipo
+  // (compra×encargo/juros×crédito), evolução mês a mês, perfil de
+  // parcelamento (à vista vs Nx), estabelecimentos/itens recorrentes (com nº
+  // de vezes e meses distintos), encargos/juros detalhados, gasto por obra e
+  // por categoria. Escopo por ANO (via ano_ref da fatura) + cartão opcional.
+  // ZERO escrita / ALTER / DROP / DELETE — só leitura agregada.
+  analiseGerencial: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    ano: z.number().int(),
+    cartaoId: z.number().optional(),
+  })).query(async ({ input, ctx }) => {
+    await assertCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    // Filtro de cartão opcional. As queries começam SEMPRE com $1=company,
+    // $2=ano; o $3 (cartão) só entra no texto quando há filtro — o dbExecute
+    // liga params por ordem de aparição, então o array acompanha o texto.
+    const cartaoCond = input.cartaoId != null ? ` AND i.cartao_id=$3` : "";
+    const P = (): unknown[] => input.cartaoId != null
+      ? [input.companyId, input.ano, input.cartaoId]
+      : [input.companyId, input.ano];
+    const BASE = `FROM financial_cartao_itens i
+        JOIN financial_cartao_faturas f ON f.id = i.fatura_id AND f.company_id = i.company_id AND f.excluido_em IS NULL
+       WHERE i.company_id=$1 AND i.excluido_em IS NULL AND f.ano_ref=$2${cartaoCond}`;
+
+    const porTipoR = await dbExecute(db,
+      `SELECT i.tipo, COUNT(*)::int AS qtd, COALESCE(SUM(i.valor),0) AS total
+         ${BASE} GROUP BY i.tipo`, P());
+    const porMesR = await dbExecute(db,
+      `SELECT f.mes_ref AS "mes", i.tipo, COALESCE(SUM(i.valor),0) AS total
+         ${BASE} GROUP BY f.mes_ref, i.tipo`, P());
+    const perfilR = await dbExecute(db,
+      `SELECT COALESCE(i.parcela_total,1) AS parcelas, COUNT(*)::int AS qtd,
+              COALESCE(SUM(i.valor),0) AS total
+         ${BASE} AND i.tipo='compra' GROUP BY 1 ORDER BY 1`, P());
+    const estabR = await dbExecute(db,
+      `SELECT UPPER(TRIM(i.descricao)) AS est, COUNT(*)::int AS vezes,
+              COUNT(DISTINCT f.mes_ref)::int AS meses, COALESCE(SUM(i.valor),0) AS total,
+              MAX(COALESCE(i.parcela_total,1))::int AS "maxParcelas"
+         ${BASE} AND i.tipo='compra' AND i.descricao IS NOT NULL AND TRIM(i.descricao)<>''
+        GROUP BY 1 HAVING COUNT(*)>1 ORDER BY vezes DESC, total DESC LIMIT 20`, P());
+    const encargosR = await dbExecute(db,
+      `SELECT UPPER(TRIM(i.descricao)) AS est, COUNT(*)::int AS qtd,
+              COALESCE(SUM(i.valor),0) AS total
+         ${BASE} AND i.tipo='encargo' AND i.descricao IS NOT NULL AND TRIM(i.descricao)<>''
+        GROUP BY 1 ORDER BY total DESC LIMIT 30`, P());
+    const porObraR = await dbExecute(db,
+      `SELECT COALESCE(NULLIF(TRIM(i.obra_nome),''),'(sem obra)') AS obra,
+              COUNT(*)::int AS qtd, COALESCE(SUM(i.valor),0) AS total
+         ${BASE} AND i.tipo='compra' GROUP BY 1 ORDER BY total DESC LIMIT 15`, P());
+    const porCatR = await dbExecute(db,
+      `SELECT COALESCE(NULLIF(TRIM(i.categoria_nome),''),'(sem categoria)') AS cat,
+              COUNT(*)::int AS qtd, COALESCE(SUM(i.valor),0) AS total
+         ${BASE} AND i.tipo='compra' GROUP BY 1 ORDER BY total DESC LIMIT 15`, P());
+
+    const num = (v: any) => (v != null ? parseFloat(v) : 0) || 0;
+    return {
+      porTipo: porTipoR.rows.map((r: any) => ({ tipo: String(r.tipo || ""), qtd: Number(r.qtd) || 0, total: num(r.total) })),
+      porMes: porMesR.rows.map((r: any) => ({ mes: Number(r.mes) || 0, tipo: String(r.tipo || ""), total: num(r.total) })),
+      perfilParcelas: perfilR.rows.map((r: any) => ({ parcelas: Number(r.parcelas) || 1, qtd: Number(r.qtd) || 0, total: num(r.total) })),
+      estabelecimentos: estabR.rows.map((r: any) => ({ est: String(r.est || ""), vezes: Number(r.vezes) || 0, meses: Number(r.meses) || 0, total: num(r.total), maxParcelas: Number(r.maxParcelas) || 1 })),
+      encargos: encargosR.rows.map((r: any) => ({ est: String(r.est || ""), qtd: Number(r.qtd) || 0, total: num(r.total) })),
+      porObra: porObraR.rows.map((r: any) => ({ obra: String(r.obra || ""), qtd: Number(r.qtd) || 0, total: num(r.total) })),
+      porCategoria: porCatR.rows.map((r: any) => ({ cat: String(r.cat || ""), qtd: Number(r.qtd) || 0, total: num(r.total) })),
+    };
+  }),
+
   excluirFatura: protectedProcedure.input(z.object({
     id: z.number(), companyId: z.number(),
   })).mutation(async ({ input, ctx }) => {
