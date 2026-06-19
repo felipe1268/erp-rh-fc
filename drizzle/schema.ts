@@ -4792,6 +4792,10 @@ export const payrollAdvances = pgTable("payroll_advances", {
         valorTotalVale: varchar({ length: 20 }).notNull(),
         irRetidoAdiantamento: varchar({ length: 20 }).default('0'),
         valorLiquidoVale: varchar({ length: 20 }),
+        // Rev. 3293 — arredondamento p/ R$ 1 com carry-forward. valorLiquidoVale passa
+        // a guardar o valor PAGO (arredondado); o exato e o ajuste ficam aqui p/ auditoria.
+        ajusteArredondamento: varchar({ length: 20 }).default('0'),
+        valorLiquidoExato: varchar({ length: 20 }),
         bloqueado: smallint().default(0).notNull(),
         motivoBloqueio: text(),
         faltasNoPeriodo: integer().default(0),
@@ -4850,6 +4854,10 @@ export const payrollPayments = pgTable("payroll_payments", {
         descontosManuaisJson: json(),
         descontosManuaisHistorico: json(),
         salarioLiquido: varchar({ length: 20 }).notNull(),
+        // Rev. 3293 — salarioLiquido passa a guardar o valor PAGO (arredondado p/ R$ 1
+        // com carry-forward); o exato e o ajuste ficam aqui p/ auditoria do holerite.
+        ajusteArredondamento: varchar({ length: 20 }).default('0'),
+        salarioLiquidoExato: varchar({ length: 20 }),
         status: text().default('simulado').notNull(),
         dataPagamento: date({ mode: 'string' }),
         dataPagamentoPrevista: date({ mode: 'string' }),
@@ -4864,6 +4872,31 @@ export const payrollPayments = pgTable("payroll_payments", {
         index("ppay_employee_mes").on(table.employeeId, table.mesReferencia),
         index("ppay_period").on(table.periodId),
         index("ppay_status").on(table.status),
+]);
+
+// Rev. 3293 — Ledger de ARREDONDAMENTO p/ múltiplos de R$ 1 com CARRY-FORWARD.
+// Cada evento de pagamento (vale OU folha mensal) paga o real inteiro mais próximo
+// do líquido exato; o residual (±centavos) é o SALDO que carrega p/ o próximo evento
+// do MESMO funcionário (vale→folha→vale...). Uma linha por (empresa, funcionário,
+// origem, mês). NÃO vira lançamento; é trilha de auditoria. `ordem` = ((ano*12)+(mês-1))*2
+// + (origem==='folha'?1:0) → garante vale(M) < folha(M) < vale(M+1).
+export const payrollRoundingLedger = pgTable("payroll_rounding_ledger", {
+        id: serial().notNull(),
+        companyId: integer().notNull(),
+        employeeId: integer().notNull(),
+        origem: varchar({ length: 10 }).notNull(),        // 'vale' | 'folha'
+        mesReferencia: varchar({ length: 7 }).notNull(),
+        ordem: integer().notNull(),
+        valorExato: varchar({ length: 20 }).notNull(),
+        saldoAnterior: varchar({ length: 20 }).default('0').notNull(),
+        ajusteAplicado: varchar({ length: 20 }).default('0').notNull(),
+        valorPago: varchar({ length: 20 }).notNull(),
+        residualGerado: varchar({ length: 20 }).default('0').notNull(),
+        criadoEm: timestamp({ mode: 'string' }).defaultNow().notNull(),
+        atualizadoEm: timestamp({ mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+        uniqueIndex("idx_prl_unique").on(table.companyId, table.employeeId, table.origem, table.mesReferencia),
+        index("idx_prl_emp_ordem").on(table.companyId, table.employeeId, table.ordem),
 ]);
 
 // Acertos retroativos do período "no escuro"

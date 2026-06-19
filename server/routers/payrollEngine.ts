@@ -14,6 +14,59 @@ import { gerarCnab240 } from "./cnab240";
 function formatMoney(val: number): string {
   return val.toFixed(2);
 }
+
+// ============================================================
+// Rev. 3293 — ARREDONDAMENTO P/ MÚLTIPLOS DE R$ 1 com CARRY-FORWARD auditável.
+// Cada evento de pagamento de um funcionário (vale OU folha mensal) paga o real
+// inteiro mais próximo do líquido EXATO; o residual em centavos vira SALDO que
+// carrega p/ o PRÓXIMO evento do mesmo funcionário (vale→folha→vale...).
+// Prova: residual_n = exato_n + B_{n-1} − pago_n = B_n (saldo corrente após o
+// evento n). Logo o carry do evento n = B_{n-1} = residual do ÚLTIMO evento
+// anterior (maior `ordem` < ordemAtual), NÃO a soma de todos → estável em regeneração.
+// ============================================================
+function ordemArredondamento(mesReferencia: string, origem: "vale" | "folha"): number {
+  const [y, m] = (mesReferencia || "").split("-").map((x) => parseInt(x, 10));
+  if (!y || !m) return 0;
+  return ((y * 12) + (m - 1)) * 2 + (origem === "folha" ? 1 : 0);
+}
+type SaldoArredItem = { ordem: number; residual: number };
+type SaldoArredMap = Map<string, SaldoArredItem[]>;
+async function carregarSaldosArredondamento(db: any, companyIds: number[]): Promise<SaldoArredMap> {
+  const map: SaldoArredMap = new Map();
+  if (!companyIds || companyIds.length === 0) return map;
+  try {
+    const rows = ((await db.execute(sql`
+      SELECT "companyId", "employeeId", "ordem", "residualGerado"
+      FROM payroll_rounding_ledger
+      WHERE "companyId" IN (${sql.join(companyIds.map((id) => sql`${id}`), sql`,`)})
+    `)) as any).rows || [];
+    for (const r of rows) {
+      const key = `${r.companyId}:${r.employeeId}`;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push({ ordem: Number(r.ordem) || 0, residual: parseFloat(r.residualGerado) || 0 });
+    }
+  } catch (e: any) {
+    console.error("[arredondamento] falha ao carregar saldos (assumindo 0):", e?.message || e);
+  }
+  return map;
+}
+function saldoAnteriorArred(saldos: SaldoArredMap, companyId: number, employeeId: number, ordemAtual: number): number {
+  const arr = saldos.get(`${companyId}:${employeeId}`) || [];
+  let melhorOrdem = -Infinity;
+  let saldo = 0;
+  for (const e of arr) {
+    if (e.ordem < ordemAtual && e.ordem > melhorOrdem) { melhorOrdem = e.ordem; saldo = e.residual; }
+  }
+  return Math.round(saldo * 100) / 100;
+}
+type ArredResultado = { valorExato: number; saldoAnterior: number; valorPago: number; ajuste: number; residual: number };
+function aplicarArredondamentoReal(valorExato: number, saldoAnterior: number): ArredResultado {
+  const base = valorExato + saldoAnterior;
+  const valorPago = Math.max(0, Math.round(base));
+  const residual = Math.round((base - valorPago) * 100) / 100;
+  const ajuste = Math.round((valorPago - valorExato) * 100) / 100;
+  return { valorExato, saldoAnterior, valorPago, ajuste, residual };
+}
 function parseTime(str: string | null | undefined): number | null {
   if (!str) return null;
   const parts = str.split(":");
@@ -2410,6 +2463,14 @@ export const payrollEngineRouter = router({
       // Pre-calculate all employees in memory (no DB calls in loop)
       const advanceInsertRows: any[] = [];
       const eventInsertRows: any[] = [];
+      // Rev. 3293 — arredondamento p/ R$ 1 com carry-forward (vale). DELETE do ledger
+      // do mês/origem ANTES de ler saldos (idempotente; não lê o próprio vale(M) atual).
+      const ledgerInsertRows: any[] = [];
+      const ordemVale = ordemArredondamento(input.mesReferencia, "vale");
+      for (const cid of allCompanyIds) {
+        await db.execute(sql`DELETE FROM payroll_rounding_ledger WHERE "companyId" = ${cid} AND "mesReferencia" = ${input.mesReferencia} AND "origem" = 'vale'`);
+      }
+      const saldosArred = await carregarSaldosArredondamento(db, allCompanyIds);
 
       // Dias úteis na primeira quinzena (1–15) — exclui domingos (construção civil trabalha sábado)
       let diasUteisFirstHalf = 0;
@@ -2547,6 +2608,7 @@ export const payrollEngineRouter = router({
           advanceInsertRows.push(sql`(${emp.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatMoney(salarioBruto)}, ${percentual},
             ${formatMoney(valorAdiantamento)}, ${formatMoney(valorHE)}, ${minutesToHHMM(minutosHE)}, ${formatMoney(valorTotalVale)},
             ${formatMoney(irAdiantamento)}, ${formatMoney(valorLiquidoVale)},
+            ${formatMoney(0)}, ${formatMoney(valorLiquidoVale)},
             ${1}, ${motivoBloqueio},
             ${faltas}, ${emp.valorHora}, ${criteria.cargaHorariaDiaria}, ${diasUteis}, ${'alerta'})`);
           results.push({
@@ -2562,17 +2624,31 @@ export const payrollEngineRouter = router({
 
         // Aprovado automaticamente, aprovado manualmente ou previously rejeitado
         const savedMotivo = foiAprovadoManualmente ? motivoBloqueio : null;
+        // Rev. 3293 — arredondamento p/ R$ 1 com carry-forward (só no path disbursado;
+        // rejeitado não paga nem arredonda). valorLiquidoVale gravado = valor PAGO.
+        let valorPagoVale = valorLiquidoVale;
+        let ajusteVale = 0;
+        let saldoAntVale = 0;
+        let residualVale = 0;
+        if (!isRejeitadoPrev) {
+          saldoAntVale = saldoAnteriorArred(saldosArred, emp.companyId, emp.id, ordemVale);
+          const arr = aplicarArredondamentoReal(valorLiquidoVale, saldoAntVale);
+          valorPagoVale = arr.valorPago; ajusteVale = arr.ajuste; residualVale = arr.residual;
+          ledgerInsertRows.push(sql`(${emp.companyId}, ${emp.id}, 'vale', ${input.mesReferencia}, ${ordemVale},
+            ${formatMoney(valorLiquidoVale)}, ${formatMoney(saldoAntVale)}, ${formatMoney(ajusteVale)}, ${formatMoney(valorPagoVale)}, ${formatMoney(residualVale)})`);
+        }
         advanceInsertRows.push(sql`(${emp.companyId}, ${emp.id}, ${input.mesReferencia}, ${formatMoney(salarioBruto)}, ${percentual},
           ${formatMoney(valorAdiantamento)}, ${formatMoney(valorHE)}, ${minutesToHHMM(minutosHE)}, ${formatMoney(valorTotalVale)},
-          ${formatMoney(irAdiantamento)}, ${formatMoney(valorLiquidoVale)},
+          ${formatMoney(irAdiantamento)}, ${formatMoney(valorPagoVale)},
+          ${formatMoney(ajusteVale)}, ${formatMoney(valorLiquidoVale)},
           ${0}, ${savedMotivo},
           ${faltas}, ${emp.valorHora}, ${criteria.cargaHorariaDiaria}, ${diasUteis}, ${'calculado'})`);
 
         if (!isRejeitadoPrev) {
           eventInsertRows.push(sql`(${emp.companyId}, 'saida_vale', 'folha_pagamento', ${input.mesReferencia}, ${dataPrevista},
-            ${formatMoney(valorLiquidoVale)}, 'consolidado', ${emp.id}, ${emp.nomeCompleto},
+            ${formatMoney(valorPagoVale)}, 'consolidado', ${emp.id}, ${emp.nomeCompleto},
             ${`Vale ${input.mesReferencia} - ${emp.nomeCompleto}`}, 'payroll_advance', ${ctx.user.name || "Sistema"})`);
-          totalVale += valorLiquidoVale;
+          totalVale += valorPagoVale;
         }
 
         const temAlertaFerias = !foiAprovadoManualmente && !isRejeitadoPrev && diasFeriasNoMes > 0;
@@ -2585,7 +2661,8 @@ export const payrollEngineRouter = router({
         results.push({
           employeeId: emp.id, nome: emp.nomeCompleto, valorHora, salarioBruto,
           valorAdiantamento, valorHE, valorTotalVale,
-          irRetido: irAdiantamento, valorLiquido: valorLiquidoVale,
+          irRetido: irAdiantamento, valorLiquido: valorPagoVale,
+          valorLiquidoExato: valorLiquidoVale, ajusteArredondamento: ajusteVale, saldoAnteriorArredondamento: saldoAntVale,
           isMensalista,
           temAlerta: temAlertaInfo, alertaTipo: alertaTipoFinal,
           alertaMotivo: alertaMotivoList.join(" | "),
@@ -2599,6 +2676,7 @@ export const payrollEngineRouter = router({
           INSERT INTO payroll_advances ("companyId", "employeeId", "mesReferencia", "salarioBrutoMes", "percentualAdiantamento",
             "valorAdiantamento", "valorHorasExtras", "horasExtrasQtd", "valorTotalVale",
             "irRetidoAdiantamento", "valorLiquidoVale",
+            "ajusteArredondamento", "valorLiquidoExato",
             "bloqueado", "motivoBloqueio",
             "faltasNoPeriodo", "valorHora", "cargaHorariaDiaria", "diasUteisNoMes", status)
           VALUES ${sql.join(advanceInsertRows, sql`,`)}
@@ -2623,6 +2701,15 @@ export const payrollEngineRouter = router({
         await db.execute(sql`
           INSERT INTO financial_events ("companyId", tipo, categoria, "mesCompetencia", "dataPrevista", valor, status, "employeeId", "employeeName", descricao, "origemTipo", "criadoPor")
           VALUES ${sql.join(eventInsertRows, sql`,`)}
+        `);
+      }
+
+      // Rev. 3293 — grava o ledger de arredondamento do vale (carry-forward auditável).
+      if (ledgerInsertRows.length > 0) {
+        await db.execute(sql`
+          INSERT INTO payroll_rounding_ledger ("companyId", "employeeId", "origem", "mesReferencia", "ordem",
+            "valorExato", "saldoAnterior", "ajusteAplicado", "valorPago", "residualGerado")
+          VALUES ${sql.join(ledgerInsertRows, sql`,`)}
         `);
       }
 
@@ -2695,7 +2782,10 @@ export const payrollEngineRouter = router({
       const { year, month } = parseMesRef(input.mesReferencia);
       const criteria = await getPayrollCriteria(db, input.companyId);
       const dataPrevista = `${year}-${String(month).padStart(2, "0")}-${String(criteria.diaAdiantamento).padStart(2, "0")}`;
-      
+      // Rev. 3293 — arredondamento p/ R$ 1 com carry-forward ao aprovar vale bloqueado.
+      const ordemValeDec = ordemArredondamento(input.mesReferencia, "vale");
+      const saldosArredDec = await carregarSaldosArredondamento(db, [input.companyId]);
+
       let aprovados = 0;
       let rejeitados = 0;
 
@@ -2723,17 +2813,36 @@ export const payrollEngineRouter = router({
           `);
           // Create financial event for approved
           const advRows = ((await db.execute(sql`
-            SELECT "valorTotalVale", "valorLiquidoVale" FROM payroll_advances 
+            SELECT "valorTotalVale", "valorLiquidoVale", "valorLiquidoExato" FROM payroll_advances 
             WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND "employeeId" = ${decisao.employeeId}
           `)) as any).rows || [];
           const adv = (advRows as any[])?.[0];
           if (adv) {
-            const valorFinanceiro = adv.valorLiquidoVale ?? adv.valorTotalVale;
+            // Rev. 3293 — arredonda o líquido EXATO p/ R$ 1 com carry-forward (disbursement
+            // do vale bloqueado). Grava pago em valorLiquidoVale + ledger + financial_event.
+            const valorExatoVale = parseBRL(adv.valorLiquidoExato ?? adv.valorLiquidoVale ?? adv.valorTotalVale);
+            const saldoAntDec = saldoAnteriorArred(saldosArredDec, input.companyId, decisao.employeeId, ordemValeDec);
+            const arrDec = aplicarArredondamentoReal(valorExatoVale, saldoAntDec);
+            await db.execute(sql`
+              UPDATE payroll_advances SET "valorLiquidoVale" = ${formatMoney(arrDec.valorPago)},
+                "ajusteArredondamento" = ${formatMoney(arrDec.ajuste)}, "valorLiquidoExato" = ${formatMoney(valorExatoVale)}
+              WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND "employeeId" = ${decisao.employeeId}
+            `);
+            await db.execute(sql`DELETE FROM payroll_rounding_ledger WHERE "companyId" = ${input.companyId} AND "employeeId" = ${decisao.employeeId} AND "mesReferencia" = ${input.mesReferencia} AND "origem" = 'vale'`);
+            await db.execute(sql`
+              INSERT INTO payroll_rounding_ledger ("companyId", "employeeId", "origem", "mesReferencia", "ordem",
+                "valorExato", "saldoAnterior", "ajusteAplicado", "valorPago", "residualGerado")
+              VALUES (${input.companyId}, ${decisao.employeeId}, 'vale', ${input.mesReferencia}, ${ordemValeDec},
+                ${formatMoney(valorExatoVale)}, ${formatMoney(saldoAntDec)}, ${formatMoney(arrDec.ajuste)}, ${formatMoney(arrDec.valorPago)}, ${formatMoney(arrDec.residual)})
+            `);
             const empRows = ((await db.execute(sql`SELECT "nomeCompleto" FROM employees WHERE id = ${decisao.employeeId}`)) as any).rows || [];
             const empName = (empRows as any[])?.[0]?.nomeCompleto || 'Funcionário';
+            // Rev. 3293 — idempotência: remove evento de vale anterior deste funcionário
+            // antes de reinserir, p/ re-aprovação não duplicar a saída financeira.
+            await db.execute(sql`DELETE FROM financial_events WHERE "companyId" = ${input.companyId} AND "mesCompetencia" = ${input.mesReferencia} AND "employeeId" = ${decisao.employeeId} AND "origemTipo" = 'payroll_advance' AND tipo = 'saida_vale'`);
             await db.execute(sql`
               INSERT INTO financial_events ("companyId", tipo, categoria, "mesCompetencia", "dataPrevista", valor, status, "employeeId", "employeeName", descricao, "origemTipo", "criadoPor")
-              VALUES (${input.companyId}, 'saida_vale', 'folha_pagamento', ${input.mesReferencia}, ${dataPrevista}, ${valorFinanceiro}, 'consolidado', ${decisao.employeeId}, ${empName}, ${`Vale ${input.mesReferencia} - ${empName} (aprovado manualmente)`}, 'payroll_advance', ${ctx.user.name || "Sistema"})
+              VALUES (${input.companyId}, 'saida_vale', 'folha_pagamento', ${input.mesReferencia}, ${dataPrevista}, ${formatMoney(arrDec.valorPago)}, 'consolidado', ${decisao.employeeId}, ${empName}, ${`Vale ${input.mesReferencia} - ${empName} (aprovado manualmente)`}, 'payroll_advance', ${ctx.user.name || "Sistema"})
             `);
           }
           aprovados++;
@@ -2841,12 +2950,19 @@ export const payrollEngineRouter = router({
             "valorAdiantamento" = ${valorFormatado},
             "irRetidoAdiantamento" = ${"0.00"},
             "valorLiquidoVale" = ${valorFormatado},
+            "ajusteArredondamento" = ${"0.00"},
+            "valorLiquidoExato" = ${valorFormatado},
             "observacoes" = COALESCE("observacoes", '') || ${' ' + obs},
             "updatedAt" = NOW()
         WHERE "companyId" = ${input.companyId}
           AND "mesReferencia" = ${input.mesReferencia}
           AND "employeeId" = ${input.employeeId}
       `);
+
+      // Rev. 3293 — override manual do master substitui o arredondamento automático;
+      // remove a linha 'vale' do ledger p/ não corromper o carry-forward dos próximos
+      // eventos (o valor forçado pelo master vira o pago final, sem residual).
+      await db.execute(sql`DELETE FROM payroll_rounding_ledger WHERE "companyId" = ${input.companyId} AND "employeeId" = ${input.employeeId} AND "mesReferencia" = ${input.mesReferencia} AND "origem" = 'vale'`);
 
       await db.execute(sql`
         UPDATE financial_events
@@ -2909,12 +3025,19 @@ export const payrollEngineRouter = router({
             "valorAdiantamento" = ${brutoFormatado},
             "irRetidoAdiantamento" = ${"0.00"},
             "valorLiquidoVale" = ${liquidoFormatado},
+            "ajusteArredondamento" = ${"0.00"},
+            "valorLiquidoExato" = ${liquidoFormatado},
             "observacoes" = COALESCE("observacoes", '') || ${' ' + obs},
             "updatedAt" = NOW()
         WHERE "companyId" = ${input.companyId}
           AND "mesReferencia" = ${input.mesReferencia}
           AND "employeeId" = ${input.employeeId}
       `);
+
+      // Rev. 3293 — override manual do master substitui o arredondamento automático;
+      // remove a linha 'vale' do ledger p/ não corromper o carry-forward dos próximos
+      // eventos (o valor forçado pelo master vira o pago final, sem residual).
+      await db.execute(sql`DELETE FROM payroll_rounding_ledger WHERE "companyId" = ${input.companyId} AND "employeeId" = ${input.employeeId} AND "mesReferencia" = ${input.mesReferencia} AND "origem" = 'vale'`);
 
       await db.execute(sql`
         UPDATE financial_events
@@ -3575,6 +3698,12 @@ export const payrollEngineRouter = router({
       }
 
       const paymentInsertRows: any[] = [];
+      // Rev. 3293 — arredondamento p/ R$ 1 com carry-forward (folha mensal). DELETE do
+      // ledger folha/mês ANTES de ler saldos (idempotente em re-simulação).
+      const ledgerInsertRowsFolha: any[] = [];
+      const ordemFolha = ordemArredondamento(input.mesReferencia, "folha");
+      await db.execute(sql`DELETE FROM payroll_rounding_ledger WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} AND "origem" = 'folha'`);
+      const saldosArredFolha = await carregarSaldosArredondamento(db, [input.companyId]);
 
       // ===== Rev. 3278 — DIFERENÇA SALARIAL retroativa do DISSÍDIO =====
       // Quando um dissídio com vigência no passado é aplicado, a diferença das
@@ -3797,7 +3926,13 @@ export const payrollEngineRouter = router({
 
         const totalDescontos = finalVale + finalInss + finalIr + finalFaltas + finalAtrasos
                               + finalSindicato + finalPensao + finalVt + finalConvenio + finalEpi + finalOutros;
-        const salarioLiquido = totalProventos - totalDescontos;
+        const salarioLiquidoExato = totalProventos - totalDescontos;
+        // Rev. 3293 — arredonda p/ R$ 1 com carry-forward; salarioLiquido = valor PAGO.
+        const saldoAntFolha = saldoAnteriorArred(saldosArredFolha, input.companyId, emp.id, ordemFolha);
+        const arrFolha = aplicarArredondamentoReal(salarioLiquidoExato, saldoAntFolha);
+        const salarioLiquido = arrFolha.valorPago;
+        ledgerInsertRowsFolha.push(sql`(${input.companyId}, ${emp.id}, 'folha', ${input.mesReferencia}, ${ordemFolha},
+          ${formatMoney(salarioLiquidoExato)}, ${formatMoney(saldoAntFolha)}, ${formatMoney(arrFolha.ajuste)}, ${formatMoney(salarioLiquido)}, ${formatMoney(arrFolha.residual)})`);
 
         const manuaisJsonStr = Object.keys(ovrManuais).length > 0 ? JSON.stringify(ovrManuais) : null;
         const histJsonStr = Object.keys(ovrHist).length > 0 ? JSON.stringify(ovrHist) : null;
@@ -3808,6 +3943,7 @@ export const payrollEngineRouter = router({
           ${formatMoney(descontoVrFaltas)}, ${formatMoney(descontoVtFaltas)}, ${formatMoney(finalPensao)}, ${formatMoney(finalInss)}, ${formatMoney(fgtsValor)}, ${formatMoney(finalOutros)},
           ${formatMoney(finalConvenio)}, ${formatMoney(finalIr)}, ${formatMoney(finalSindicato)}, ${formatMoney(finalEpi)},
           ${formatMoney(totalDescontos)}, ${formatMoney(acertoEscuroValor)}, ${JSON.stringify(acertoEscuroDetalhes)}, ${formatMoney(salarioLiquido)},
+          ${formatMoney(arrFolha.ajuste)}, ${formatMoney(salarioLiquidoExato)},
           'simulado', ${dataPagamentoPrevista}, ${manuaisJsonStr}, ${histJsonStr},
           ${formatMoney(adicionaisValor)}, ${adicionaisDetalhes ? JSON.stringify(adicionaisDetalhes) : null})`);
 
@@ -3827,7 +3963,7 @@ export const payrollEngineRouter = router({
           descontoPensao: finalPensao, descontoSindicato: finalSindicato, descontoEpi: finalEpi,
           descontoFgts: fgtsValor, acertoEscuroValor, descontoConvenio: finalConvenio,
           descontoOutros: finalOutros,
-          totalDescontos, salarioLiquido, dataPagamentoPrevista, vaValor,
+          totalDescontos, salarioLiquido, salarioLiquidoExato, ajusteArredondamento: arrFolha.ajuste, saldoAnteriorArredondamento: saldoAntFolha, dataPagamentoPrevista, vaValor,
           vtValor: finalVt, vtDiario, vrValor: vrValorMensal, vrDiario, seguroVidaValor, rateioPorObra,
           // Memorial de cálculo (valores originais antes de overrides) — 11 chaves alinhadas com a UI
           calculadoOriginal: {
@@ -3910,9 +4046,19 @@ export const payrollEngineRouter = router({
             "descontoVrFaltas", "descontoVtFaltas", "descontoPensao", "descontoInss", "descontoFgts", "descontoOutros",
             "descontoConvenio", "descontoIrrf", "descontoSindicato", "descontoEpi",
             "totalDescontos", "acertoEscuroValor", "acertoEscuroDetalhes", "salarioLiquido",
+            "ajusteArredondamento", "salarioLiquidoExato",
             status, "dataPagamentoPrevista", "descontosManuaisJson", "descontosManuaisHistorico",
             "adicionaisValor", "adicionaisDetalhes")
           VALUES ${sql.join(paymentInsertRows, sql`,`)}
+        `);
+      }
+
+      // Rev. 3293 — grava o ledger de arredondamento da folha (carry-forward auditável).
+      if (ledgerInsertRowsFolha.length > 0) {
+        await db.execute(sql`
+          INSERT INTO payroll_rounding_ledger ("companyId", "employeeId", "origem", "mesReferencia", "ordem",
+            "valorExato", "saldoAnterior", "ajusteAplicado", "valorPago", "residualGerado")
+          VALUES ${sql.join(ledgerInsertRowsFolha, sql`,`)}
         `);
       }
 
@@ -4083,7 +4229,15 @@ export const payrollEngineRouter = router({
       const totalDescontos = finalVale + finalInss + finalIr + finalFaltas + finalAtrasos
                             + finalSindicato + finalPensao + finalVt + finalConvenio + finalEpi + finalOutros;
       const totalProventos = Number(f.totalProventos || 0);
-      const salarioLiquido = totalProventos - totalDescontos;
+      const salarioLiquidoExato = totalProventos - totalDescontos;
+      // Rev. 3293 — reaplica arredondamento p/ R$ 1 com carry-forward ao editar desconto
+      // manual; sem isto o líquido voltava a ter centavos e o ledger/colunas *Exato
+      // ficavam defasados (o pago da folha deixava de ser múltiplo inteiro).
+      const ordemFolhaEdit = ordemArredondamento(input.mesReferencia, "folha");
+      const saldosArredEdit = await carregarSaldosArredondamento(db, [input.companyId]);
+      const saldoAntEdit = saldoAnteriorArred(saldosArredEdit, input.companyId, input.employeeId, ordemFolhaEdit);
+      const arrEdit = aplicarArredondamentoReal(salarioLiquidoExato, saldoAntEdit);
+      const salarioLiquido = arrEdit.valorPago;
 
       // Atualiza objeto funcionario no payload (mantém colunas concretas em sincronia para a UI)
       funcionarios[idx] = {
@@ -4100,6 +4254,9 @@ export const payrollEngineRouter = router({
         descontoOutros: finalOutros,
         totalDescontos,
         salarioLiquido,
+        salarioLiquidoExato,
+        ajusteArredondamento: arrEdit.ajuste,
+        saldoAnteriorArredondamento: saldoAntEdit,
         descontosManuais: manuais,
         descontosManuaisHistorico: historico,
       };
@@ -4123,6 +4280,8 @@ export const payrollEngineRouter = router({
       const setFragments: any[] = [
         sql`"totalDescontos" = ${formatMoney(totalDescontos)}`,
         sql`"salarioLiquido" = ${formatMoney(salarioLiquido)}`,
+        sql`"ajusteArredondamento" = ${formatMoney(arrEdit.ajuste)}`,
+        sql`"salarioLiquidoExato" = ${formatMoney(salarioLiquidoExato)}`,
         sql`"descontosManuaisJson" = ${manuaisStr}::jsonb`,
         sql`"descontosManuaisHistorico" = ${histStr}::jsonb`,
         sql`"updatedAt" = NOW()`,
@@ -4136,6 +4295,16 @@ export const payrollEngineRouter = router({
         WHERE "companyId" = ${input.companyId}
           AND "mesReferencia" = ${input.mesReferencia}
           AND "employeeId" = ${input.employeeId}
+      `);
+
+      // Rev. 3293 — regrava a linha 'folha' do ledger de arredondamento (idempotente:
+      // DELETE+INSERT) p/ o carry-forward do próximo evento refletir o líquido editado.
+      await db.execute(sql`DELETE FROM payroll_rounding_ledger WHERE "companyId" = ${input.companyId} AND "employeeId" = ${input.employeeId} AND "mesReferencia" = ${input.mesReferencia} AND "origem" = 'folha'`);
+      await db.execute(sql`
+        INSERT INTO payroll_rounding_ledger ("companyId", "employeeId", "origem", "mesReferencia", "ordem",
+          "valorExato", "saldoAnterior", "ajusteAplicado", "valorPago", "residualGerado")
+        VALUES (${input.companyId}, ${input.employeeId}, 'folha', ${input.mesReferencia}, ${ordemFolhaEdit},
+          ${formatMoney(salarioLiquidoExato)}, ${formatMoney(saldoAntEdit)}, ${formatMoney(arrEdit.ajuste)}, ${formatMoney(salarioLiquido)}, ${formatMoney(arrEdit.residual)})
       `);
 
       // Atualiza payroll_periods com payload novo + totais

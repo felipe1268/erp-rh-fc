@@ -875,6 +875,40 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3051: coluna employee_id garantida em company_partners (unificação de sócios).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA company_partners.employee_id:`, e?.message || e); }
 
+        // Rev. 3293 — Arredondamento p/ múltiplos de R$ 1 com CARRY-FORWARD auditável no
+        // VALE e na FOLHA mensal. Nova tabela payroll_rounding_ledger (trilha de auditoria,
+        // 1 linha por empresa×funcionário×origem×mês) + colunas de auditoria em
+        // payroll_advances (ajusteArredondamento/valorLiquidoExato) e payroll_payments
+        // (ajusteArredondamento/salarioLiquidoExato). Tabelas payroll usam camelCase
+        // QUOTED — a DDL precisa espelhar exatamente o schema Drizzle. CREATE TABLE IF NOT
+        // EXISTS + ADD COLUMN IF NOT EXISTS (aditivo/idempotente — R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS payroll_rounding_ledger (
+              id SERIAL PRIMARY KEY,
+              "companyId" INTEGER NOT NULL,
+              "employeeId" INTEGER NOT NULL,
+              origem VARCHAR(10) NOT NULL,
+              "mesReferencia" VARCHAR(7) NOT NULL,
+              ordem INTEGER NOT NULL,
+              "valorExato" VARCHAR(20) NOT NULL,
+              "saldoAnterior" VARCHAR(20) DEFAULT '0' NOT NULL,
+              "ajusteAplicado" VARCHAR(20) DEFAULT '0' NOT NULL,
+              "valorPago" VARCHAR(20) NOT NULL,
+              "residualGerado" VARCHAR(20) DEFAULT '0' NOT NULL,
+              "criadoEm" TIMESTAMP DEFAULT NOW() NOT NULL,
+              "atualizadoEm" TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_prl_unique ON payroll_rounding_ledger ("companyId", "employeeId", origem, "mesReferencia")`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_prl_emp_ordem ON payroll_rounding_ledger ("companyId", "employeeId", ordem)`);
+          await db.execute(sql`ALTER TABLE payroll_advances ADD COLUMN IF NOT EXISTS "ajusteArredondamento" VARCHAR(20) DEFAULT '0'`);
+          await db.execute(sql`ALTER TABLE payroll_advances ADD COLUMN IF NOT EXISTS "valorLiquidoExato" VARCHAR(20)`);
+          await db.execute(sql`ALTER TABLE payroll_payments ADD COLUMN IF NOT EXISTS "ajusteArredondamento" VARCHAR(20) DEFAULT '0'`);
+          await db.execute(sql`ALTER TABLE payroll_payments ADD COLUMN IF NOT EXISTS "salarioLiquidoExato" VARCHAR(20)`);
+          console.log(`[SyncSchema+] Rev. 3293: payroll_rounding_ledger + colunas de arredondamento (advances/payments) garantidas.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 3293 arredondamento:`, e?.message || e); }
+
         // Rev. 3291 — Efetivo × IA (Planejamento → aba "Análise/Simulador"): a tabela
         // planejamento_analises_efetivo NUNCA entrou no self-heal, então nasceu
         // dessincronizada do schema Drizzle (em dev a tabela nem existia; em prod a

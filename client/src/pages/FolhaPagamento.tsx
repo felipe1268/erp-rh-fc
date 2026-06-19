@@ -4216,7 +4216,17 @@ export default function FolhaPagamento() {
                           <DescontoCell f={f} campo="epi" valor={valEpi} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-red-600 text-right" />
                           <DescontoCell f={f} campo="outros" valor={valOutros} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-red-600 text-right" />
                           <td className="text-right py-2 px-2 font-semibold text-red-700">{formatBRL(f.totalDescontos)}</td>
-                          <td className="text-right py-2 px-2 border-l border-blue-100 font-bold text-[#1B2A4A]">{formatBRL(f.salarioLiquido)}</td>
+                          <td className="text-right py-2 px-2 border-l border-blue-100 font-bold text-[#1B2A4A]">
+                            {formatBRL(f.salarioLiquido)}
+                            {Math.abs(Number(f.ajusteArredondamento || 0)) >= 0.005 && (
+                              <span
+                                className={`block text-[9px] font-normal whitespace-nowrap ${Number(f.ajusteArredondamento) >= 0 ? 'text-emerald-600' : 'text-amber-600'}`}
+                                title={`Ajuste de arredondamento p/ R$ 1.\nLíquido exato: ${formatBRL(Number(f.salarioLiquidoExato ?? f.salarioLiquido))}\nSaldo anterior: ${formatBRL(Number(f.saldoAnteriorArredondamento || 0))}\nAjuste: ${Number(f.ajusteArredondamento) >= 0 ? '+' : ''}${formatBRL(Number(f.ajusteArredondamento))}\nResidual carregado p/ o próximo evento.`}
+                              >
+                                {Number(f.ajusteArredondamento) >= 0 ? '+' : '−'} {formatBRL(Math.abs(Number(f.ajusteArredondamento)))} arred.
+                              </span>
+                            )}
+                          </td>
                           <td className="text-right py-2 px-2 text-[10px] text-muted-foreground">{formatBRL(f.descontoFgts)}</td>
                         </tr>
                       );

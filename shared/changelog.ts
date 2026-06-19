@@ -1,6 +1,65 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3293 — **RH & DP / FOLHA DE PAGAMENTO (VALE + FOLHA MENSAL) · ARREDONDAMENTO PARA MÚLTIPLOS DE
+ * R$ 1,00 COM CARRY-FORWARD AUDITÁVEL. O VALOR PAGO (VALE E LÍQUIDO DA FOLHA) AGORA É O REAL INTEIRO
+ * MAIS PRÓXIMO DO LÍQUIDO EXATO; O RESIDUAL EM CENTAVOS NÃO SE PERDE — VIRA SALDO QUE CARREGA PRA O
+ * PRÓXIMO EVENTO DO MESMO FUNCIONÁRIO (VALE → FOLHA → VALE...). CADA EVENTO MOSTRA UMA LINHA AUDITÁVEL
+ * "AJUSTE DE ARREDONDAMENTO" (= PAGO − EXATO, ±) NO HOLERITE, E TODA A TRILHA FICA PERSISTIDA NUMA
+ * TABELA-LEDGER. 100% ADITIVO · CREATE TABLE IF NOT EXISTS + ADD COLUMN IF NOT EXISTS · ZERO ALTER
+ * DESTRUTIVO/DROP/DELETE (R-001/R-007/R-010 OK).**
+ * - PEDIDO (piloto FC): pagar sempre em valores "redondos" (sem centavos) tanto no vale quanto no líquido
+ *   da folha, mas SEM o funcionário perder ou ganhar dinheiro ao longo do tempo — o que sobra/falta de
+ *   um mês deve compensar no próximo. Ou seja: arredondamento p/ R$ 1 com carry-forward exato.
+ * - MODELO MATEMÁTICO: para o evento n de um funcionário, `pago_n = round(exato_n + B_{n-1})`, onde
+ *   `B_{n-1}` é o saldo residual acumulado ATÉ o evento anterior. O residual gerado é
+ *   `residual_n = exato_n + B_{n-1} − pago_n = B_n`. Como `residual_n` JÁ é o saldo corrente acumulado,
+ *   o carry de um novo evento é simplesmente o `residualGerado` do ÚLTIMO evento anterior (o de MAIOR
+ *   `ordem` < ordem atual) — NÃO a soma de todos os residuais (somar contaria o saldo em dobro). Isso
+ *   também torna a regeneração de um mês IDEMPOTENTE: reprocessar o vale/folha de M lê o mesmo saldo
+ *   anterior e produz o mesmo pago. `ordem = ((ano*12)+(mês-1))*2 + (origem==='folha'?1:0)` garante a
+ *   sequência temporal vale(M) < folha(M) < vale(M+1) < folha(M+1)...
+ * - SCHEMA (`drizzle/schema.ts` + self-heal `[SyncSchema+]` em `server/_core/index.ts`, Rev. 3293):
+ *   nova tabela `payroll_rounding_ledger` (camelCase QUOTED, como as demais tabelas payroll): uma linha
+ *   por (`companyId`,`employeeId`,`origem`,`mesReferencia`) com `ordem`, `valorExato`, `saldoAnterior`,
+ *   `ajusteAplicado`, `valorPago`, `residualGerado` + uniqueIndex `idx_prl_unique` e index
+ *   `idx_prl_emp_ordem`. Colunas de auditoria `ajusteArredondamento`/`valorLiquidoExato` em
+ *   `payroll_advances` e `ajusteArredondamento`/`salarioLiquidoExato` em `payroll_payments`. O
+ *   `valorLiquidoVale`/`salarioLiquido` passam a guardar o valor PAGO (arredondado); o exato fica na
+ *   coluna `*Exato`. DDL aditiva/idempotente, aplicada e VALIDADA no Neon de DEV (13 colunas no ledger
+ *   + 2 índices + colunas em advances/payments confirmadas).
+ * - HELPERS (`server/routers/payrollEngine.ts`): `ordemArredondamento(mes,origem)`;
+ *   `carregarSaldosArredondamento(db,companyIds)` (carrega o ledger inteiro da(s) empresa(s) p/ memória);
+ *   `saldoAnteriorArred(saldos,company,emp,ordemAtual)` (devolve o residual do evento de MAIOR ordem <
+ *   ordemAtual; NÃO soma); `aplicarArredondamentoReal(exato,saldoAnterior)` → `{ valorPago, ajuste,
+ *   residual }` com `valorPago = max(0, round(exato+saldo))`.
+ * - VALE (`gerarVale`): antes do laço, DELETE do ledger `origem='vale'` do mês (idempotente) e
+ *   `carregarSaldosArredondamento`. No path DISBURSADO (`!isRejeitadoPrev` — rejeitado não paga nem
+ *   arredonda), arredonda o líquido exato, grava o PAGO em `valorLiquidoVale`, no `financial_event` e
+ *   no `totalVale`, e empilha a linha do ledger. O path BLOQUEADO grava exato (ajuste=0) — ao aprovar
+ *   depois é que arredonda. `decidirVale`: ao aprovar um vale bloqueado, lê o exato (`valorLiquidoExato`
+ *   ?? `valorLiquidoVale`), aplica o arredondamento com carry, atualiza o advance, regrava o ledger
+ *   (DELETE+INSERT da linha vale do mês) e lança o `financial_event` com o PAGO.
+ * - FOLHA (`simularPagamento`): antes do laço, DELETE do ledger `origem='folha'` do mês +
+ *   `carregarSaldosArredondamento`. Por funcionário: `salarioLiquidoExato = proventos − descontos`;
+ *   `salarioLiquido` (= PAGO) = `aplicarArredondamentoReal(...)`; grava ajuste/exato no
+ *   `payroll_payments`, soma o PAGO no `grandTotalLiquido` e empilha o ledger; INSERT em lote do ledger
+ *   após o INSERT dos pagamentos.
+ * - HOLERITE (`client/src/pages/FolhaPagamento.tsx`): sob a célula "Líquido", quando |ajuste| ≥ R$ 0,005,
+ *   uma sub-linha "+/− R$ x arred." (verde p/ crédito, âmbar p/ débito) com tooltip mostrando líquido
+ *   exato, saldo anterior, ajuste aplicado e nota de que o residual carrega p/ o próximo evento.
+ * - EDIÇÕES MANUAIS (consistência do carry — fix pós-review): (a) `editarDescontoManual` (folha) agora
+ *   REAPLICA o arredondamento com carry sobre o líquido recomputado e regrava ledger + colunas
+ *   `ajusteArredondamento`/`salarioLiquidoExato` (antes voltava a ter centavos e o ledger ficava
+ *   defasado); (b) `editarValorVale`/`editarLiquidoVale` (override do master) zeram `ajusteArredondamento`,
+ *   gravam `valorLiquidoExato` = valor forçado e DELETAM a linha 'vale' do ledger — o valor do master vira
+ *   o pago final, sem residual, sem corromper o carry dos próximos eventos; (c) `decidirVale` deleta o
+ *   `financial_event` de vale anterior do funcionário antes de reinserir (re-aprovação não duplica a saída).
+ * - RESSALVA: o residual carrega na ORDEM dos eventos (vale antes da folha do mesmo mês). Folhas/vales
+ *   antigos (pré-Rev. 3293) não têm linha de ledger; o saldo inicial de cada funcionário é 0 e começa a
+ *   acumular a partir da primeira geração após esta revisão. tsc limpo nos arquivos tocados (ruído
+ *   pré-existente de `changelog.ts` ignorado).
+ *
  * Rev. 3292 — **RH & DP / FOLHA DE PAGAMENTO (VALE / ADIANTAMENTO) · "POR QUE ESTÁ CALCULANDO VALE PRA
  * ENIVALDO SE ELE É PJ?" — UM FUNCIONÁRIO QUE FOI RECONTRATADO COMO PJ CONTINUAVA APARECENDO NO CARD DE
  * VALE (E NA LISTA DE "DECISÃO NECESSÁRIA") COM ADIANTAMENTO PROPORCIONAL, PORQUE O SNAPSHOT DO VALE
