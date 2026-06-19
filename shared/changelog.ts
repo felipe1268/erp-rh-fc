@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3335 — **FINANCEIRO / CONTROLE DE CHEQUES · DIÁLOGO "LANÇAR CHEQUE MANUALMENTE" REDESENHADO (LAYOUT MODERNO,
+ * CABEÇALHO NAVY FC) + AUTOMAÇÃO: O CAMPO "FAVORECIDO" AGORA CONSULTA O CADASTRO DE FORNECEDORES (BUSCA POR NOME/CNPJ,
+ * COM FALLBACK "DIGITAR MANUALMENTE") E UM NOVO SELETOR "CONTA DE ONDE O CHEQUE FOI EMITIDO" PREENCHE BANCO/AGÊNCIA/CONTA
+ * AUTOMATICAMENTE AO CLICAR. 100% FRONT · UX/ADITIVO · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário): "quero uma tela moderna, consultar o favorecido no cadastro de fornecedor, poder clicar na conta
+ *   que o cheque foi emitido e todos os dados já vai ser preenchido automaticamente — vamos automatizar tudo que é possível".
+ * - CONTEXTO: o diálogo de lançamento manual (Rev. 3329) tinha o favorecido como `<Input>` livre e banco/agência/conta
+ *   digitados à mão (placeholders "A quem o cheque foi emitido" / "Casa com a conta cadastrada"). O BACKEND `criarManual`
+ *   (`server/routers/cheques.ts`) JÁ ACEITAVA `fornecedorId` e `contaBancariaId` (com guard anti-IDOR de ownership) — só
+ *   faltava a UI alimentar esses campos. NENHUMA mudança de backend foi necessária.
+ * - FRONT (`client/src/pages/financeiro/FinanceiroCheques.tsx`): (1) duas novas queries READ-ONLY já existentes no app —
+ *   `compras.listarFornecedores({companyId, ativo:true})` e `financial.getBankAccounts({companyId})` — memoizadas em
+ *   `fornecedorOpts`/`contaOpts` (dedup + sort pt-BR; subtítulo = CNPJ no favorecido, "Ag. X · C/C Y" na conta). (2) O
+ *   campo Favorecido virou `<SearchableSelect>` (combobox pesquisável reaproveitado de `client/src/components/SearchableSelect.tsx`)
+ *   que busca por nome OU CNPJ no cadastro; ao escolher, grava `fornecedorId` + `fornecedorNome` (vínculo) e mostra selo
+ *   "Vinculado ao cadastro". Toggle "Digitar manualmente"/"Buscar no cadastro" permite favorecido fora do cadastro
+ *   (`favorecidoManual` → volta ao `<Input>` livre, zera o id). Atalho "Cadastrar novo fornecedor" abre `/compras/fornecedores`.
+ *   (3) Novo seletor "Conta de onde o cheque foi emitido" (`<SearchableSelect>` sobre `contaOpts`) — `selecionarContaEmitente`
+ *   autopreenche `bancoNome` (apelido/banco), `bancoCodigo` (codigoBanco), `agencia`, `contaCorrenteRaw` (conta) e fixa
+ *   `contaBancariaId`; os 3 inputs banco/agência/conta seguem editáveis p/ ajuste manual. (4) `manualVazio` ganhou
+ *   `fornecedorId`/`contaBancariaId` (number|null); `salvarManual` envia ambos ao `criarManual`. (5) Visual: `DialogContent`
+ *   `resizable={false}` no molde estável (sem `w-screen`/`dvh`), cabeçalho navy `from-[#1B2A4A] to-[#2c3f63]` com chip do
+ *   ícone, corpo rolável em blocos (Valor/Nº · Favorecido · Conta emitente · Datas/Status · Observação), footer fixo com
+ *   CTA navy.
+ * - ESCOPO: 100% front, um único arquivo de tela. Reusa endpoints/permissões existentes (sem rota nova). Moeda BRL via
+ *   `maskBRL`/`parseMaskBRL` intactos. Regra de Ouro N/A (cheques não viram lançamento financeiro). RESSALVA: não foi
+ *   possível reproduzir/testar autenticado no ambiente (login bloqueia screenshot); re-publicar é necessário p/ o usuário ver.
+ * - ARQUIVOS: `client/src/pages/financeiro/FinanceiroCheques.tsx`, `shared/version.ts` (3335), `shared/changelog.ts`,
+ *   `replit.md`, `replit-history.md`.
+ *
  * Rev. 3334 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO: NO "PANORAMA GERAL DO MÊS", CLICAR NOS CARDS/OLHO
  * (ENTRADAS, SAÍDAS, SALDO, CONCILIADOS, EXTRATO SEM LANÇAMENTO, ERP SEM EXTRATO, % CONCILIADO — drill-in da Rev. 3327)
  * NÃO ABRIA O DIÁLOGO EM ALGUNS DISPOSITIVOS (Safari/iPad/touch). 100% FRONT · BUGFIX/UX · ZERO BACKEND/SCHEMA/ALTER/

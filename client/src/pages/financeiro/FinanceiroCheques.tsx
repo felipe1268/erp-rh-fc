@@ -14,7 +14,8 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, FileSpreadsheet, FileText, Sparkles, Loader2, CheckCircle, AlertCircle, AlertTriangle, ShieldCheck, Trash2, Pencil, Search, RotateCcw, Banknote, ChevronLeft, ChevronRight, Link2, X } from "lucide-react";
+import { Upload, FileSpreadsheet, FileText, Sparkles, Loader2, CheckCircle, AlertCircle, AlertTriangle, ShieldCheck, Trash2, Pencil, Search, RotateCcw, Banknote, ChevronLeft, ChevronRight, Link2, X, Landmark, User, CalendarDays, Hash, FileSignature, ExternalLink, Keyboard, CheckCheck } from "lucide-react";
+import { SearchableSelect, type SearchableSelectOption } from "@/components/SearchableSelect";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
@@ -208,12 +209,15 @@ export default function FinanceiroCheques() {
 
   // ── Lançamento manual (Rev. 3329) ──
   const manualVazio = {
-    numeroCheque: "", valor: "", fornecedorNome: "", bancoNome: "", bancoCodigo: "",
-    agencia: "", contaCorrenteRaw: "", dataVencimento: "", dataCompensacao: "",
+    numeroCheque: "", valor: "", fornecedorNome: "", fornecedorId: null as number | null,
+    bancoNome: "", bancoCodigo: "", agencia: "", contaCorrenteRaw: "",
+    contaBancariaId: null as number | null, dataVencimento: "", dataCompensacao: "",
     status: "pendente", parcela: "", nf: "", observacao: "",
   };
   const [manualOpen, setManualOpen] = useState(false);
   const [manualForm, setManualForm] = useState<typeof manualVazio>({ ...manualVazio });
+  // Permite digitar um favorecido que não está no cadastro de fornecedores.
+  const [favorecidoManual, setFavorecidoManual] = useState(false);
 
   // ── Edição ──
   const [editItem, setEditItem] = useState<any>(null);
@@ -279,6 +283,41 @@ export default function FinanceiroCheques() {
     { enabled: !!companyId }
   );
   const conferirMut = (trpc as any).cheques.conferirExtrato.useMutation();
+
+  // ── Fontes p/ o lançamento manual moderno (Rev. 3335) ──
+  // Favorecido = cadastro de fornecedores; Conta emitida = contas bancárias da empresa.
+  const { data: fornecedoresList } = (trpc as any).compras.listarFornecedores.useQuery(
+    { companyId, ativo: true },
+    { enabled: !!companyId },
+  );
+  const { data: bankAccounts } = (trpc as any).financial.getBankAccounts.useQuery(
+    { companyId },
+    { enabled: !!companyId },
+  );
+  const fornecedorOpts: SearchableSelectOption[] = useMemo(() => {
+    const list: any[] = Array.isArray(fornecedoresList) ? fornecedoresList : [];
+    const seen = new Set<string>();
+    const out: SearchableSelectOption[] = [];
+    for (const f of list) {
+      const nome = String(f.razaoSocial || f.nomeFantasia || "").trim();
+      if (!nome) continue;
+      const k = String(f.id);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push({ value: k, label: nome, subtitle: f.cnpj || undefined, searchExtra: f.cnpj || "" });
+    }
+    return out.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+  }, [fornecedoresList]);
+  const contaOpts: SearchableSelectOption[] = useMemo(() => {
+    const list: any[] = Array.isArray(bankAccounts) ? bankAccounts : [];
+    return list.map((b: any) => {
+      const banco = String(b.descricao || b.banco || "").trim();
+      const ag = String(b.agencia || "").trim();
+      const cc = String(b.conta || "").trim();
+      const sub = [ag && `Ag. ${ag}`, cc && `C/C ${cc}`].filter(Boolean).join(" · ");
+      return { value: String(b.id), label: banco || `Conta ${b.id}`, subtitle: sub || undefined, searchExtra: `${b.banco || ""} ${ag} ${cc}` };
+    });
+  }, [bankAccounts]);
 
   async function conferirComExtrato() {
     try {
@@ -480,7 +519,26 @@ export default function FinanceiroCheques() {
   // ── Lançamento manual (Rev. 3329) ──
   function abrirManual() {
     setManualForm({ ...manualVazio });
+    setFavorecidoManual(false);
     setManualOpen(true);
+  }
+  // Ao escolher uma conta cadastrada, autopreenche banco/agência/conta (Rev. 3335).
+  function selecionarContaEmitente(id: string) {
+    const c = (Array.isArray(bankAccounts) ? bankAccounts : []).find((b: any) => String(b.id) === id);
+    if (!c) return;
+    setManualForm((f) => ({
+      ...f,
+      contaBancariaId: c.id,
+      bancoNome: String(c.descricao || c.banco || "").trim(),
+      bancoCodigo: String(c.codigoBanco || "").trim(),
+      agencia: String(c.agencia || "").trim(),
+      contaCorrenteRaw: String(c.conta || "").trim(),
+    }));
+  }
+  // Ao escolher um fornecedor cadastrado, fixa nome + id (vínculo) (Rev. 3335).
+  function selecionarFavorecido(id: string) {
+    const opt = fornecedorOpts.find((o) => o.value === id);
+    setManualForm((f) => ({ ...f, fornecedorId: Number(id), fornecedorNome: opt?.label || f.fornecedorNome }));
   }
   async function salvarManual() {
     const valor = parseMaskBRL(manualForm.valor);
@@ -494,10 +552,12 @@ export default function FinanceiroCheques() {
         numeroCheque: manualForm.numeroCheque.trim() || null,
         valor,
         fornecedorNome: manualForm.fornecedorNome.trim() || null,
+        fornecedorId: manualForm.fornecedorId ?? null,
         bancoNome: manualForm.bancoNome.trim() || null,
         bancoCodigo: manualForm.bancoCodigo.trim() || null,
         agencia: manualForm.agencia.trim() || null,
         contaCorrenteRaw: manualForm.contaCorrenteRaw.trim() || null,
+        contaBancariaId: manualForm.contaBancariaId ?? null,
         dataVencimento: manualForm.dataVencimento || null,
         dataCompensacao: manualForm.dataCompensacao || null,
         status: manualForm.status,
@@ -1545,73 +1605,138 @@ export default function FinanceiroCheques() {
         </DialogContent>
       </Dialog>
 
-      {/* Lançamento manual de um cheque (Rev. 3329) */}
-      <Dialog open={manualOpen} onOpenChange={(o) => { setManualOpen(o); if (!o) setManualForm({ ...manualVazio }); }}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Banknote className="h-5 w-5 text-blue-700" /> Lançar cheque manualmente
+      {/* Lançamento manual de um cheque — layout moderno (Rev. 3335) */}
+      <Dialog open={manualOpen} onOpenChange={(o) => { setManualOpen(o); if (!o) { setManualForm({ ...manualVazio }); setFavorecidoManual(false); } }}>
+        <DialogContent resizable={false} className="max-w-2xl w-[calc(100vw-1rem)] sm:w-auto max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+          {/* Cabeçalho navy no padrão FC */}
+          <DialogHeader className="shrink-0 bg-gradient-to-r from-[#1B2A4A] to-[#2c3f63] px-6 py-4 text-white">
+            <DialogTitle className="flex items-center gap-2.5 text-white">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/15">
+                <Banknote className="h-5 w-5" />
+              </span>
+              Lançar cheque manualmente
             </DialogTitle>
-            <DialogDescription>
-              Cadastre um cheque sem planilha. O mês/ano é derivado da <strong>data de vencimento</strong> (ou da compensação).
-              Apenas o <strong>valor</strong> é obrigatório. Cheques aqui <strong>não viram lançamento financeiro</strong>.
+            <DialogDescription className="text-white/70 text-xs leading-relaxed">
+              Busque o <strong className="text-white/90">favorecido</strong> no cadastro de fornecedores e clique na <strong className="text-white/90">conta emitente</strong> para
+              preencher banco, agência e conta automaticamente. Apenas o <strong className="text-white/90">valor</strong> é obrigatório.
+              Cheques aqui <strong className="text-white/90">não viram lançamento financeiro</strong>.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs">Valor *</Label>
-              <div className="relative">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
-                <Input className="pl-9 tabular-nums" inputMode="decimal" placeholder="0,00"
-                  value={manualForm.valor}
-                  onChange={(e) => setManualForm((f) => ({ ...f, valor: maskBRL(e.target.value) }))} />
+
+          <div className="flex-1 overflow-y-auto min-h-0 px-6 py-5 space-y-5">
+            {/* Bloco 1 — Valor + nº */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-medium text-gray-600 flex items-center gap-1.5"><Banknote className="h-3.5 w-3.5 text-[#1B2A4A]" />Valor *</Label>
+                <div className="relative mt-1">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">R$</span>
+                  <Input className="pl-9 tabular-nums text-base font-semibold h-11" inputMode="decimal" placeholder="0,00"
+                    value={manualForm.valor}
+                    onChange={(e) => setManualForm((f) => ({ ...f, valor: maskBRL(e.target.value) }))} />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-gray-600 flex items-center gap-1.5"><Hash className="h-3.5 w-3.5 text-[#1B2A4A]" />Nº do cheque</Label>
+                <Input className="mt-1 h-11" value={manualForm.numeroCheque} onChange={(e) => setManualForm((f) => ({ ...f, numeroCheque: e.target.value }))} placeholder="Ex.: 000123" />
               </div>
             </div>
+
+            {/* Bloco 2 — Favorecido (cadastro de fornecedores) */}
+            <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5"><User className="h-3.5 w-3.5 text-[#1B2A4A]" />Favorecido</Label>
+                <button type="button"
+                  onClick={() => { setFavorecidoManual((v) => !v); setManualForm((f) => ({ ...f, fornecedorId: null })); }}
+                  className="text-[11px] font-medium text-[#1B2A4A] hover:underline flex items-center gap-1">
+                  {favorecidoManual ? (<><Search className="h-3 w-3" />Buscar no cadastro</>) : (<><Keyboard className="h-3 w-3" />Digitar manualmente</>)}
+                </button>
+              </div>
+              {favorecidoManual ? (
+                <Input value={manualForm.fornecedorNome}
+                  onChange={(e) => setManualForm((f) => ({ ...f, fornecedorNome: e.target.value, fornecedorId: null }))}
+                  placeholder="A quem o cheque foi emitido" />
+              ) : (
+                <SearchableSelect
+                  options={fornecedorOpts}
+                  value={manualForm.fornecedorId != null ? String(manualForm.fornecedorId) : ""}
+                  onValueChange={selecionarFavorecido}
+                  placeholder="Consultar fornecedor cadastrado…"
+                  searchPlaceholder="Buscar por nome ou CNPJ…"
+                  emptyMessage={fornecedorOpts.length === 0 ? "Nenhum fornecedor cadastrado." : "Nenhum resultado."}
+                />
+              )}
+              {!favorecidoManual && manualForm.fornecedorId != null && (
+                <p className="mt-1.5 text-[11px] text-green-700 flex items-center gap-1"><CheckCheck className="h-3 w-3" />Vinculado ao cadastro de fornecedores.</p>
+              )}
+              {!favorecidoManual && (
+                <button type="button"
+                  onClick={() => window.open("/compras/fornecedores", "_blank", "noopener,noreferrer")}
+                  className="mt-2 text-[11px] text-gray-500 hover:text-[#1B2A4A] flex items-center gap-1">
+                  <ExternalLink className="h-3 w-3" />Cadastrar novo fornecedor
+                </button>
+              )}
+            </div>
+
+            {/* Bloco 3 — Conta emitente (autopreenche banco/agência/conta) */}
+            <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-4 space-y-3">
+              <Label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5"><Landmark className="h-3.5 w-3.5 text-[#1B2A4A]" />Conta de onde o cheque foi emitido</Label>
+              <SearchableSelect
+                options={contaOpts}
+                value={manualForm.contaBancariaId != null ? String(manualForm.contaBancariaId) : ""}
+                onValueChange={selecionarContaEmitente}
+                placeholder="Clique e escolha a conta…"
+                searchPlaceholder="Buscar banco / agência / conta…"
+                emptyMessage={contaOpts.length === 0 ? "Nenhuma conta bancária cadastrada." : "Nenhum resultado."}
+              />
+              {manualForm.contaBancariaId != null && (
+                <p className="text-[11px] text-green-700 flex items-center gap-1"><CheckCheck className="h-3 w-3" />Banco, agência e conta preenchidos automaticamente — ajuste abaixo se precisar.</p>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                <div>
+                  <Label className="text-[11px] text-gray-500">Banco</Label>
+                  <Input className="mt-1" value={manualForm.bancoNome} onChange={(e) => setManualForm((f) => ({ ...f, bancoNome: e.target.value }))} placeholder="Ex.: Itaú" />
+                </div>
+                <div>
+                  <Label className="text-[11px] text-gray-500">Agência</Label>
+                  <Input className="mt-1" value={manualForm.agencia} onChange={(e) => setManualForm((f) => ({ ...f, agencia: e.target.value }))} placeholder="Ex.: 1234" />
+                </div>
+                <div>
+                  <Label className="text-[11px] text-gray-500">Conta corrente</Label>
+                  <Input className="mt-1" value={manualForm.contaCorrenteRaw} onChange={(e) => setManualForm((f) => ({ ...f, contaCorrenteRaw: e.target.value }))} placeholder="Ex.: 12345-6" />
+                </div>
+              </div>
+            </div>
+
+            {/* Bloco 4 — Datas + status */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <Label className="text-xs font-medium text-gray-600 flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 text-[#1B2A4A]" />Vencimento</Label>
+                <Input className="mt-1" type="date" value={manualForm.dataVencimento} onChange={(e) => setManualForm((f) => ({ ...f, dataVencimento: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-gray-600 flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 text-[#1B2A4A]" />Compensação</Label>
+                <Input className="mt-1" type="date" value={manualForm.dataCompensacao} onChange={(e) => setManualForm((f) => ({ ...f, dataCompensacao: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-gray-600 flex items-center gap-1.5"><FileSignature className="h-3.5 w-3.5 text-[#1B2A4A]" />Status</Label>
+                <Select value={manualForm.status} onValueChange={(v) => setManualForm((f) => ({ ...f, status: v }))}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
+                    {STATUS_OPTS.map((s) => <SelectItem key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
             <div>
-              <Label className="text-xs">Nº do cheque</Label>
-              <Input value={manualForm.numeroCheque} onChange={(e) => setManualForm((f) => ({ ...f, numeroCheque: e.target.value }))} placeholder="Ex.: 000123" />
-            </div>
-            <div className="sm:col-span-2">
-              <Label className="text-xs">Fornecedor / favorecido</Label>
-              <Input value={manualForm.fornecedorNome} onChange={(e) => setManualForm((f) => ({ ...f, fornecedorNome: e.target.value }))} placeholder="A quem o cheque foi emitido" />
-            </div>
-            <div>
-              <Label className="text-xs">Banco</Label>
-              <Input value={manualForm.bancoNome} onChange={(e) => setManualForm((f) => ({ ...f, bancoNome: e.target.value }))} placeholder="Ex.: Itaú" />
-            </div>
-            <div>
-              <Label className="text-xs">Agência</Label>
-              <Input value={manualForm.agencia} onChange={(e) => setManualForm((f) => ({ ...f, agencia: e.target.value }))} placeholder="Ex.: 1234" />
-            </div>
-            <div>
-              <Label className="text-xs">Conta corrente</Label>
-              <Input value={manualForm.contaCorrenteRaw} onChange={(e) => setManualForm((f) => ({ ...f, contaCorrenteRaw: e.target.value }))} placeholder="Casa com a conta cadastrada" />
-            </div>
-            <div>
-              <Label className="text-xs">Status</Label>
-              <Select value={manualForm.status} onValueChange={(v) => setManualForm((f) => ({ ...f, status: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
-                  {STATUS_OPTS.map((s) => <SelectItem key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs">Data de vencimento</Label>
-              <Input type="date" value={manualForm.dataVencimento} onChange={(e) => setManualForm((f) => ({ ...f, dataVencimento: e.target.value }))} />
-            </div>
-            <div>
-              <Label className="text-xs">Data de compensação</Label>
-              <Input type="date" value={manualForm.dataCompensacao} onChange={(e) => setManualForm((f) => ({ ...f, dataCompensacao: e.target.value }))} />
-            </div>
-            <div className="sm:col-span-2">
-              <Label className="text-xs">Observação</Label>
-              <Textarea value={manualForm.observacao} onChange={(e) => setManualForm((f) => ({ ...f, observacao: e.target.value }))} placeholder="Opcional" />
+              <Label className="text-xs font-medium text-gray-600">Observação</Label>
+              <Textarea className="mt-1" value={manualForm.observacao} onChange={(e) => setManualForm((f) => ({ ...f, observacao: e.target.value }))} placeholder="Opcional" />
             </div>
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="shrink-0 border-t bg-gray-50/80 px-6 py-3">
             <Button variant="outline" onClick={() => setManualOpen(false)} disabled={criarManualMut.isPending}>Cancelar</Button>
-            <Button onClick={salvarManual} disabled={criarManualMut.isPending || !manualForm.valor} className="gap-2">
+            <Button onClick={salvarManual} disabled={criarManualMut.isPending || !manualForm.valor} className="gap-2 bg-[#1B2A4A] hover:bg-[#2c3f63]">
               {criarManualMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Lançar cheque
             </Button>
           </DialogFooter>
