@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3337 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NO MODO "MÊS", CLICAR EM "ANO TODO" AGORA ABRE O "PANORAMA GERAL"
+ * CONSOLIDADO DO ANO INTEIRO (TODAS AS CONTAS), REAPROVEITANDO A MESMA VISÃO/LÓGICA DO PANORAMA MENSAL — ANTES "ANO TODO"
+ * SÓ MOSTRAVA O EMPTY-STATE ("SELECIONE UM MÊS…"). 100% FRONT · BUGFIX/UX · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário, no iPad, com print): "quando eu clicar em ver a conciliação do ano todo tem que aparecer também,
+ *   usando a mesma lógica que fizemos para ver todas as movimentações das contas no mês — deve ser propagada para o ano
+ *   todo quando o usuário clicar nesse filtro".
+ * - RAIZ: o gate `periodoDefinido` (Rev. 3328) era `modoData==="mes" ? mesSel != null : ...`. Em "Ano todo", `mesSel`
+ *   fica `null` → `periodoDefinido=false` → `geralAtivo=false` → renderiza o empty-state em vez do Panorama Geral. PORÉM o
+ *   memo `dataInicio`/`dataFim` JÁ tratava `mesSel==null` como o range do ano inteiro (`${ano}-01-01` … `${ano}-12-31`) e
+ *   o backend `getConciliacaoReportGeral` JÁ aceita range arbitrário — só o gate da UI barrava.
+ * - CORREÇÃO (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): `periodoDefinido` no modo "mes" passou a ser
+ *   sempre `true` (mês selecionado OU "Ano todo" — ambos são períodos definidos; on mount `mesSel` nasce no mês atual, logo
+ *   nunca há "modo mês sem seleção"). Assim "Ano todo" ativa `geralAtivo`, dispara `getConciliacaoReportGeral` com o range
+ *   do ano e renderiza o MESMO Panorama Geral (totais agregados + por conta + drill-in dos 7 cards da Rev. 3327/3334),
+ *   agora consolidando JAN–DEZ. `periodoLabel` já exibia "Ano {ano}". NENHUMA mudança de backend/estado/endpoint; recursos
+ *   estritamente mensais (consolidar mês, demonstrativos IA, check de import) seguem gated à parte em `mesSel != null`,
+ *   intactos. Tolerância em "Ano todo" continua 31 (irrelevante ao panorama, que só usa datas).
+ * - ESCOPO: 100% front, uma linha de gate. Sem rota/permissão/schema novo. RESSALVA: não foi possível reproduzir
+ *   autenticado no ambiente (login bloqueia screenshot); re-publicar p/ o usuário ver no iPad.
+ * - ARQUIVOS: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`, `shared/version.ts` (3337), `shared/changelog.ts`,
+ *   `replit.md`, `replit-history.md`.
+ *
  * Rev. 3336 — **FINANCEIRO / CONTROLE DE CARTÃO DE CRÉDITO · CORREÇÃO: NO DIÁLOGO "VINCULAR FATURA AO CARTÃO", O SELETOR
  * "CARTÃO" NÃO PERMITIA ESCOLHER O CARTÃO NO TABLET/iPad — A LISTA SUSPENSA ABRIA RECORTADA (ÚLTIMAS OPÇÕES CORTADAS,
  * SEM ROLAGEM USÁVEL NO TOQUE). 100% FRONT · BUGFIX/UX · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**

@@ -79,8 +79,9 @@ export default function FinanceiroConciliacao() {
     return { dataInicio: `${ano}-${mm}-01`, dataFim: `${ano}-${mm}-${String(ultimoDia).padStart(2, "0")}` };
   }, [modoData, diaSel, periIni, periFim, ano, mesSel]);
   // Rev. 3328 — período "definido o suficiente" p/ rodar o panorama geral:
-  // mês selecionado (modo mês) OU uma data/faixa válida (dia/período).
-  const periodoDefinido = modoData === "mes" ? mesSel != null : modoData === "dia" ? !!diaSel : (!!periIni && !!periFim);
+  // mês selecionado OU "Ano todo" (modo mês — mesSel==null já vira o range ano inteiro,
+  // Rev. 3337) OU uma data/faixa válida (dia/período).
+  const periodoDefinido = modoData === "mes" ? true : modoData === "dia" ? !!diaSel : (!!periIni && !!periFim);
   // Rev. 3176 — A tolerância de conciliação passa a refletir os DIAS EXATOS do mês
   // selecionado (FEV/2026 = 28, JAN = 31, etc.), em vez de um teto fixo de 30. Em
   // "Ano todo" usa 31 (teto razoável; backend limita a 60). É o padrão e re-sincroniza
