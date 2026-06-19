@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3331 — **FINANCEIRO / CONTROLE DE CARTÃO DE CRÉDITO · ABA "COMPARATIVO" GANHOU LAYOUT MODERNO NO PADRÃO FC
+ * (CABEÇALHO NAVY, KPIs DO ANO, TABELA REFINADA) E, ABAIXO DA TABELA, UM GRÁFICO DE BARRAS COM O TOTAL GERAL POR MÊS
+ * — CADA BARRA COLORIDA PELA TENDÊNCIA VS O MÊS ANTERIOR COM FATURA (VERMELHO=SUBIU, VERDE=ABAIXOU, NAVY=BASE/1º MÊS).
+ * 100% FRONT · UX/ADITIVO · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário, print da aba "Comparativo" do Controle de Cartão de Crédito): "faça um layout mais moderno, seguindo
+ *   nosso padrão e abaixo da tabela coloca um gráfico em barras com os comparativos". Antes a aba era só uma tabela matriz
+ *   cartão×mês com navegação de ano — funcional, mas visualmente seca e sem leitura gráfica da evolução.
+ * - FRONT (`client/src/pages/financeiro/FinanceiroCartaoCredito.tsx`): a aba "comparativo" virou um `<div className="space-y-4">`
+ *   com 2 cards. CARD 1 (tabela): cabeçalho com faixa NAVY (gradiente `from-[#1B2A4A] to-[#2c3f63]`, ícone `BarChart3` em
+ *   chip translúcido, título + navegação de ano embutida) — mesmo padrão do modal de cartão. Dentro, uma fileira de 4 KPIs
+ *   (Total {ano} em card navy; Maior fatura mensal; Menor fatura mensal; Média mensal — mês de referência embaixo de cada).
+ *   A tabela matriz cartão×mês foi REFINADA (header com fundo `bg-gray-50/70` + cantos arredondados, hover azul nas linhas,
+ *   linha "Total geral" com filete navy `border-[#1B2A4A]/20` + fundo `bg-[#1B2A4A]/[0.04]`), mantendo a 1ª coluna sticky e
+ *   `renderCelulaComparativo` (valor + seta de variação) intactos. CARD 2 (gráfico): `BarChart` do recharts (já dep do
+ *   projeto) com eixo X = meses Jan..Dez, eixo Y formatado em BRL inteiro (`toLocaleString` style currency, sem abreviação
+ *   k/M — respeita a regra de moeda), `Tooltip` custom (`ComparativoTooltip`: mês + valor BRL + % vs mês anterior), barras
+ *   com `radius` arredondado e `Cell` colorido por `TREND_COLOR` (up=#dc2626, down=#059669, flat/base=#1B2A4A) + legenda.
+ * - DADOS (memo `comparativoChart`, derivado do memo `comparativo` já existente): varre `comparativo.totalGeral[1..12]`,
+ *   calcula a variação % de cada mês vs o ÚLTIMO mês com fatura (mesma semântica das setas da tabela — pula meses sem fatura),
+ *   marca `trend` (up/down/flat) e deriva os KPIs (maior/menor mês com fatura, média mensal, nº de meses com fatura). SEM
+ *   query nova — reaproveita `cartao.comparativoMensal`. Sem rota/permissão/endpoint novo.
+ * - ARQUIVOS: `client/src/pages/financeiro/FinanceiroCartaoCredito.tsx`, `shared/version.ts` (3331), `shared/changelog.ts`,
+ *   `replit.md`, `replit-history.md`.
+ *
  * Rev. 3330 — **FINANCEIRO / NOVO LANÇAMENTO (DESPESA) · AO ESCOLHER A FORMA DE PAGAMENTO "CHEQUE", A TELA PASSA A
  * PERGUNTAR "EM QUANTAS VEZES" (PARCELAS) + OS DADOS DO CHEQUE (Nº DO 1º, BANCO, AGÊNCIA, CONTA, 1º VENCIMENTO,
  * SITUAÇÃO) E, AO LANÇAR A DESPESA, CADASTRA AUTOMATICAMENTE O(S) CHEQUE(S) NO CONTROLE DE CHEQUES. 100% FINANCEIRO

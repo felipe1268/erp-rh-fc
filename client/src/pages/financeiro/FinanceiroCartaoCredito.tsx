@@ -19,6 +19,7 @@ import {
   ChevronLeft, ChevronRight, PlusCircle, ListTree, FileText, Building2, ShieldAlert,
   Search, Layers, BarChart3, TrendingUp, TrendingDown, Minus,
 } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 function formatBRL(v: number | null | undefined) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
@@ -55,6 +56,28 @@ function fileToBase64(file: File): Promise<string> {
 }
 const MESES = ["", "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const ANO_ATUAL = new Date().getFullYear();
+// Rev. 3331 — cores do gráfico do comparativo: barra colorida por tendência vs o
+// mês anterior com fatura (espelha as setas da tabela). Navy = base/1º mês.
+const TREND_COLOR: Record<"up" | "down" | "flat", string> = { up: "#dc2626", down: "#059669", flat: "#1B2A4A" };
+
+// Tooltip do gráfico de barras do comparativo (valor BRL + variação vs mês anterior).
+function ComparativoTooltip({ active, payload }: any) {
+  if (!active || !payload || !payload.length) return null;
+  const d = payload[0]?.payload;
+  if (!d || !d.total) return null;
+  const trendTxt =
+    d.pct == null ? "1º mês com fatura"
+    : d.trend === "flat" ? "sem variação vs mês anterior"
+    : `${d.pct > 0 ? "+" : ""}${d.pct.toFixed(0)}% vs mês anterior`;
+  const trendColor = d.trend === "up" ? "text-red-600" : d.trend === "down" ? "text-emerald-600" : "text-gray-500";
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-lg">
+      <p className="text-xs font-semibold text-gray-800">{d.mes}</p>
+      <p className="text-sm font-bold tabular-nums text-[#1B2A4A]">{formatBRL(d.total)}</p>
+      <p className={`text-[11px] ${trendColor}`}>{trendTxt}</p>
+    </div>
+  );
+}
 
 // Célula do comparativo mês a mês: valor da fatura do mês + seta/% vs o mês
 // ANTERIOR QUE TEVE FATURA (pula meses sem fatura). Subiu = vermelho (gasto maior);
@@ -261,6 +284,27 @@ export default function FinanceiroCartaoCredito() {
     for (const l of linhas) for (let m = 1; m <= 12; m++) totalGeral[m] += l.meses[m];
     return { linhas, totalGeral, totalGeralAno: totalGeral.reduce((a, v) => a + v, 0) };
   }, [comparativoRaw, cartoes]);
+
+  // ── Dados do gráfico de barras (total geral por mês) + KPIs do ano ─────
+  const comparativoChart = useMemo(() => {
+    const tg = comparativo.totalGeral; // array[13] = total geral por mês
+    const data: Array<{ mes: string; total: number; pct: number | null; trend: "up" | "down" | "flat" }> = [];
+    let prev = 0;
+    for (let m = 1; m <= 12; m++) {
+      const total = tg[m] || 0;
+      let pct: number | null = null;
+      if (total > 0 && prev > 0) pct = ((total - prev) / prev) * 100;
+      let trend: "up" | "down" | "flat" = "flat";
+      if (pct != null) trend = Math.abs(pct) < 0.05 ? "flat" : pct > 0 ? "up" : "down";
+      data.push({ mes: MESES[m], total, pct, trend });
+      if (total > 0) prev = total;
+    }
+    const comMov = data.filter((d) => d.total > 0);
+    const maior = comMov.length ? comMov.reduce((a, b) => (b.total > a.total ? b : a)) : null;
+    const menor = comMov.length ? comMov.reduce((a, b) => (b.total < a.total ? b : a)) : null;
+    const mediaMensal = comMov.length ? comMov.reduce((a, b) => a + b.total, 0) / comMov.length : 0;
+    return { data, maior, menor, mediaMensal, mesesComMov: comMov.length };
+  }, [comparativo]);
 
   const excluirFatura = (trpc as any).cartao.excluirFatura.useMutation();
   const [faturaExcluir, setFaturaExcluir] = useState<any | null>(null);
@@ -708,73 +752,149 @@ export default function FinanceiroCartaoCredito() {
 
         {/* ───────────── ABA COMPARATIVO (mês a mês) ───────────── */}
         {aba === "comparativo" && (
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-4">
-              {/* Navegação de ano */}
-              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setAno((a) => a - 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <span className="text-base font-bold text-gray-800 min-w-[3.5rem] text-center">{ano}</span>
-                  <button onClick={() => setAno((a) => a + 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
+          <div className="space-y-4">
+            <Card className="border-0 shadow-sm overflow-hidden">
+              {/* Cabeçalho navy — padrão FC */}
+              <div className="flex items-center justify-between gap-3 flex-wrap bg-gradient-to-r from-[#1B2A4A] to-[#2c3f63] px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25">
+                    <BarChart3 className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-semibold leading-tight text-white">Comparativo mês a mês</h2>
+                    <p className="text-xs text-white/70">Evolução da fatura de cada cartão em {ano}</p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-                  <span className="inline-flex items-center gap-1"><TrendingUp className="w-3.5 h-3.5 text-red-600" /> subiu</span>
-                  <span className="inline-flex items-center gap-1"><TrendingDown className="w-3.5 h-3.5 text-emerald-600" /> abaixou</span>
-                  <span className="inline-flex items-center gap-1"><Minus className="w-3.5 h-3.5 text-gray-400" /> sem variação</span>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setAno((a) => a - 1)} className="rounded-lg p-1.5 text-white/80 transition-colors hover:bg-white/10">
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <span className="min-w-[3.5rem] text-center text-sm font-bold text-white">{ano}</span>
+                  <button onClick={() => setAno((a) => a + 1)} className="rounded-lg p-1.5 text-white/80 transition-colors hover:bg-white/10">
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground mb-3">
-                Total da fatura de cada cartão, mês a mês em {ano}. A setinha ao lado do valor mostra se subiu ou abaixou em relação ao mês anterior com fatura.
-              </p>
 
-              {comparativoQ.isLoading ? (
-                <div className="py-10 text-center text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin inline" /> Carregando…</div>
-              ) : comparativo.linhas.length === 0 ? (
-                <div className="py-10 text-center text-muted-foreground">Nenhuma fatura importada em {ano}. Importe faturas na aba "Faturas".</div>
-              ) : (
-                <div className="overflow-x-auto -mx-4 px-4">
-                  <table className="w-full text-sm border-separate border-spacing-0">
-                    <thead>
-                      <tr className="text-xs text-muted-foreground">
-                        <th className="sticky left-0 z-10 bg-white text-left font-medium py-2 pr-3 min-w-[150px]">Cartão</th>
-                        {MESES.slice(1).map((m) => (
-                          <th key={m} className="text-right font-medium py-2 px-2 whitespace-nowrap min-w-[96px]">{m}</th>
-                        ))}
-                        <th className="text-right font-medium py-2 pl-3 whitespace-nowrap min-w-[110px]">Total {ano}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {comparativo.linhas.map((l) => (
-                        <tr key={l.cartaoId} className="border-t hover:bg-gray-50/60">
-                          <td className="sticky left-0 z-10 bg-white py-2 pr-3 font-medium text-gray-800 whitespace-nowrap">{l.label}</td>
-                          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                            <td key={m} className="py-2 px-2 text-right tabular-nums">
-                              {renderCelulaComparativo(l.meses, m)}
-                            </td>
+              <CardContent className="p-4">
+                {comparativoQ.isLoading ? (
+                  <div className="py-10 text-center text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin inline" /> Carregando…</div>
+                ) : comparativo.linhas.length === 0 ? (
+                  <div className="py-10 text-center text-muted-foreground">Nenhuma fatura importada em {ano}. Importe faturas na aba "Faturas".</div>
+                ) : (
+                  <>
+                    {/* KPIs do ano */}
+                    <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                      <div className="rounded-xl bg-gradient-to-br from-[#1B2A4A] to-[#2c3f63] p-3 text-white shadow-sm">
+                        <p className="text-[10px] uppercase tracking-wider text-white/60">Total {ano}</p>
+                        <p className="mt-0.5 text-lg font-bold tabular-nums">{formatBRL(comparativo.totalGeralAno)}</p>
+                        <p className="mt-0.5 text-[10px] text-white/60">{comparativoChart.mesesComMov} {comparativoChart.mesesComMov === 1 ? "mês" : "meses"} com fatura</p>
+                      </div>
+                      <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Maior fatura</p>
+                        <p className="mt-0.5 text-lg font-bold tabular-nums text-red-600">{comparativoChart.maior ? formatBRL(comparativoChart.maior.total) : "—"}</p>
+                        <p className="mt-0.5 text-[10px] text-muted-foreground">{comparativoChart.maior ? `${comparativoChart.maior.mes}/${ano}` : "—"}</p>
+                      </div>
+                      <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Menor fatura</p>
+                        <p className="mt-0.5 text-lg font-bold tabular-nums text-emerald-600">{comparativoChart.menor ? formatBRL(comparativoChart.menor.total) : "—"}</p>
+                        <p className="mt-0.5 text-[10px] text-muted-foreground">{comparativoChart.menor ? `${comparativoChart.menor.mes}/${ano}` : "—"}</p>
+                      </div>
+                      <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Média mensal</p>
+                        <p className="mt-0.5 text-lg font-bold tabular-nums text-gray-800">{formatBRL(comparativoChart.mediaMensal)}</p>
+                        <p className="mt-0.5 text-[10px] text-muted-foreground">por mês com fatura</p>
+                      </div>
+                    </div>
+
+                    {/* Legenda */}
+                    <div className="mb-2 flex items-center justify-end gap-3 text-[11px] text-muted-foreground">
+                      <span className="inline-flex items-center gap-1"><TrendingUp className="w-3.5 h-3.5 text-red-600" /> subiu</span>
+                      <span className="inline-flex items-center gap-1"><TrendingDown className="w-3.5 h-3.5 text-emerald-600" /> abaixou</span>
+                      <span className="inline-flex items-center gap-1"><Minus className="w-3.5 h-3.5 text-gray-400" /> sem variação</span>
+                    </div>
+
+                    {/* Tabela */}
+                    <div className="-mx-4 overflow-x-auto px-4">
+                      <table className="w-full border-separate border-spacing-0 text-sm">
+                        <thead>
+                          <tr className="bg-gray-50/70 text-xs text-muted-foreground">
+                            <th className="sticky left-0 z-10 min-w-[150px] rounded-l-lg bg-gray-50/70 px-3 py-2.5 text-left font-semibold">Cartão</th>
+                            {MESES.slice(1).map((m) => (
+                              <th key={m} className="min-w-[96px] whitespace-nowrap px-2 py-2.5 text-right font-medium">{m}</th>
+                            ))}
+                            <th className="min-w-[110px] whitespace-nowrap rounded-r-lg px-3 py-2.5 text-right font-semibold">Total {ano}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {comparativo.linhas.map((l) => (
+                            <tr key={l.cartaoId} className="border-t transition-colors hover:bg-blue-50/40">
+                              <td className="sticky left-0 z-10 whitespace-nowrap bg-white px-3 py-2 font-medium text-gray-800">{l.label}</td>
+                              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                                <td key={m} className="px-2 py-2 text-right tabular-nums">
+                                  {renderCelulaComparativo(l.meses, m)}
+                                </td>
+                              ))}
+                              <td className="whitespace-nowrap px-3 py-2 text-right font-semibold tabular-nums text-gray-900">{formatBRL(l.totalAno)}</td>
+                            </tr>
                           ))}
-                          <td className="py-2 pl-3 text-right tabular-nums font-semibold text-gray-900 whitespace-nowrap">{formatBRL(l.totalAno)}</td>
-                        </tr>
-                      ))}
-                      {/* Linha Total geral */}
-                      <tr className="border-t-2 border-gray-300 bg-gray-50/80 font-semibold">
-                        <td className="sticky left-0 z-10 bg-gray-50/80 py-2 pr-3 text-gray-900 whitespace-nowrap">Total geral</td>
-                        {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                          <td key={m} className="py-2 px-2 text-right tabular-nums">
-                            {renderCelulaComparativo(comparativo.totalGeral, m)}
-                          </td>
-                        ))}
-                        <td className="py-2 pl-3 text-right tabular-nums text-gray-900 whitespace-nowrap">{formatBRL(comparativo.totalGeralAno)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                          {/* Linha Total geral */}
+                          <tr className="border-t-2 border-[#1B2A4A]/20 bg-[#1B2A4A]/[0.04] font-semibold">
+                            <td className="sticky left-0 z-10 whitespace-nowrap bg-[#f4f6f9] px-3 py-2.5 text-gray-900">Total geral</td>
+                            {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                              <td key={m} className="px-2 py-2.5 text-right tabular-nums">
+                                {renderCelulaComparativo(comparativo.totalGeral, m)}
+                              </td>
+                            ))}
+                            <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-gray-900">{formatBRL(comparativo.totalGeralAno)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Gráfico de barras — total geral por mês (comparativo) */}
+            {!comparativoQ.isLoading && comparativo.linhas.length > 0 && (
+              <Card className="border-0 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+                    <BarChart3 className="h-4 w-4 text-[#1B2A4A]" /> Total geral por mês — {ano}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-2">
+                  <div className="h-[300px] w-full" role="img" aria-label={`Gráfico de barras do total geral de faturas por mês em ${ano}`}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={comparativoChart.data} margin={{ top: 16, right: 8, left: 8, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef0f3" />
+                        <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={false} tickLine={false} />
+                        <YAxis
+                          tickFormatter={(v) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}
+                          tick={{ fontSize: 11, fill: "#6b7280" }}
+                          axisLine={false}
+                          tickLine={false}
+                          width={84}
+                        />
+                        <Tooltip content={<ComparativoTooltip />} cursor={{ fill: "rgba(27,42,74,0.05)" }} />
+                        <Bar dataKey="total" radius={[6, 6, 0, 0]} maxBarSize={48}>
+                          {comparativoChart.data.map((d) => (
+                            <Cell key={d.mes} fill={TREND_COLOR[d.trend]} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center justify-center gap-4 text-[11px] text-muted-foreground">
+                    <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: "#1B2A4A" }} /> base / 1º mês</span>
+                    <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: "#dc2626" }} /> subiu vs mês anterior</span>
+                    <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: "#059669" }} /> abaixou vs mês anterior</span>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         )}
       </div>
 
