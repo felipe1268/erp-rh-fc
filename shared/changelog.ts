@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3291 — **PLANEJAMENTO / EFETIVO × IA (DIAGNÓSTICO + SIMULADOR DE MÃO DE OBRA) · "RESOLVE ISSO DE
+ * VEZ": O SIMULADOR (E O DIAGNÓSTICO) CAÍA NO iPad/SAFARI COM "A IA DEMOROU DEMAIS OU A CONEXÃO CAIU" E,
+ * AO REABRIR, NUNCA RESTAURAVA O RESULTADO — PORQUE A TABELA QUE GUARDA AS ANÁLISES (`planejamento_analises_efetivo`)
+ * ESTAVA DESSINCRONIZADA DO SCHEMA: EM PRODUÇÃO FALTAVA A COLUNA `contexto` E EM DEV A TABELA NEM EXISTIA. COM
+ * ISSO, TODA GRAVAÇÃO (`salvarAnaliseEfetivo`) E TODA LEITURA (`ultimaAnaliseEfetivo`) FALHAVAM EM SILÊNCIO →
+ * A IA RODAVA, MAS NADA ERA SALVO E A RECUPERAÇÃO APÓS QUEDA DE CONEXÃO NÃO TINHA O QUE BUSCAR. SELF-HEAL
+ * ADITIVO (CREATE TABLE IF NOT EXISTS + ADD COLUMN IF NOT EXISTS) · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
+ * - SINTOMA (piloto FC, iPad): a aba "Simulador" de Planejamento travava em ~99% e exibia o banner de erro de
+ *   transporte; ao reabrir a tela, o resultado anterior também não voltava (ficava em branco).
+ * - DIAGNÓSTICO (logs de PRODUÇÃO): dois erros recorrentes — `[salvarAnaliseEfetivo] falha ao persistir (ignorado)`
+ *   (INSERT em `planejamento_analises_efetivo` falhando) e `[ultimaAnaliseEfetivo] falha (retornando null)`
+ *   (SELECT na mesma tabela falhando). Ambas as queries referenciam a coluna `contexto`. Inspeção do Neon de DEV:
+ *   a tabela `planejamento_analises_efetivo` NEM EXISTIA. Causa: a tabela foi definida em `drizzle/schema.ts`
+ *   (com `contexto json`) mas NUNCA recebeu entrada no self-heal `[SyncSchema+]` — então nasceu dessincronizada
+ *   (prod com tabela antiga sem `contexto`; dev sem tabela). Como `db.select()` lista TODAS as colunas, a query
+ *   inteira quebrava → persistência E leitura morriam, e a recuperação após queda (iPad) — que faz polling de
+ *   `ultimaAnaliseEfetivo` — nunca encontrava a análise recém-gerada, reexibindo o erro de transporte.
+ * - CORREÇÃO (`server/_core/index.ts`, bloco `[SyncSchema+]`, 100% ADITIVO/IDEMPOTENTE — R-001/R-007/R-010 OK):
+ *   `CREATE TABLE IF NOT EXISTS planejamento_analises_efetivo (...)` com TODAS as colunas do schema (id, projeto_id,
+ *   company_id, tipo, veredito, titulo, obra, revisao_numero, resultado, contexto, erro_ia, criado_por, criado_em),
+ *   seguido de `ADD COLUMN IF NOT EXISTS` para CADA coluna opcional (especialmente `contexto`) — assim cura tanto o
+ *   ambiente onde a tabela falta (cria) quanto o onde a tabela existe mas está sem colunas adicionadas depois (adiciona).
+ *   Mais um índice `idx_plan_anal_efet (projeto_id, company_id, tipo, criado_em DESC)` para o padrão de consulta de
+ *   `ultimaAnaliseEfetivo`/`listarAnalisesEfetivo`. Aplicado também ao Neon de DEV nesta revisão (validado: 13 colunas).
+ * - EFEITO: a IA passa a PERSISTIR o resultado; ao reabrir, o último diagnóstico/simulação volta sozinho; e quando o
+ *   WebKit do iPad derruba a requisição APÓS o servidor já ter salvado, o polling de recuperação encontra a análise
+ *   nova e a exibe em vez do erro. INALTERADO: o motor de IA (`simularEfetivo`/`analisarEfetivo` via `invokeLLM fast`),
+ *   o front (`AnaliseEfetivoIA.tsx`) e o schema Drizzle (a tabela já estava lá; só faltava o self-heal). RESSALVA: o
+ *   esgotamento de quota do Gemini free-tier (429) sem `ANTHROPIC_API_KEY` configurada segue podendo fazer a IA
+ *   falhar de fato — situação real de quota, agora reportada com `erroIa`, não mais mascarada por persistência quebrada.
+ * - VALIDAÇÃO: tsc limpo nos arquivos tocados; app sobe sem erros novos; Neon de dev com as 13 colunas garantidas.
+ *
  * Rev. 3290 — **RH & DP / DASHBOARD DE FUNCIONÁRIOS (DRILL-DOWN "FUNÇÃO: X") · A TABELA QUE LISTA OS
  * FUNCIONÁRIOS DE UMA FUNÇÃO (EX.: "FUNÇÃO: CARPINTEIRO") GANHOU DUAS COLUNAS NOVAS: "OBRA" (A OBRA EM QUE A
  * PESSOA ESTÁ ALOCADA AGORA) E "CIPA" (SE É MEMBRO DA CIPA DO MANDATO VIGENTE — "CIPA ATIVA" — OU SE FOI MEMBRO

@@ -875,6 +875,49 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3051: coluna employee_id garantida em company_partners (unificação de sócios).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA company_partners.employee_id:`, e?.message || e); }
 
+        // Rev. 3291 — Efetivo × IA (Planejamento → aba "Análise/Simulador"): a tabela
+        // planejamento_analises_efetivo NUNCA entrou no self-heal, então nasceu
+        // dessincronizada do schema Drizzle (em dev a tabela nem existia; em prod a
+        // coluna `contexto` — adicionada depois ao schema — faltava). Resultado: TODA
+        // persistência (`salvarAnaliseEfetivo`) e TODA leitura (`ultimaAnaliseEfetivo`)
+        // falhavam → a IA rodava mas nada era salvo e a recuperação após queda de
+        // conexão (iPad/Safari) nunca encontrava o resultado, reexibindo o erro de
+        // transporte. CREATE TABLE IF NOT EXISTS + ADD COLUMN IF NOT EXISTS (aditivo,
+        // idempotente — R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS planejamento_analises_efetivo (
+              id SERIAL PRIMARY KEY,
+              projeto_id INTEGER NOT NULL,
+              company_id INTEGER,
+              tipo VARCHAR(20) NOT NULL,
+              veredito VARCHAR(40),
+              titulo VARCHAR(400),
+              obra VARCHAR(300),
+              revisao_numero INTEGER,
+              resultado JSON DEFAULT '{}'::json,
+              contexto JSON DEFAULT '{}'::json,
+              erro_ia TEXT,
+              criado_por VARCHAR(200),
+              criado_em TIMESTAMP DEFAULT NOW()
+            )
+          `);
+          // Tabelas que já existiam em prod podem estar sem colunas adicionadas depois
+          // ao schema (notadamente `contexto`). Garante cada coluna idempotentemente.
+          await db.execute(sql`ALTER TABLE planejamento_analises_efetivo ADD COLUMN IF NOT EXISTS company_id INTEGER`);
+          await db.execute(sql`ALTER TABLE planejamento_analises_efetivo ADD COLUMN IF NOT EXISTS veredito VARCHAR(40)`);
+          await db.execute(sql`ALTER TABLE planejamento_analises_efetivo ADD COLUMN IF NOT EXISTS titulo VARCHAR(400)`);
+          await db.execute(sql`ALTER TABLE planejamento_analises_efetivo ADD COLUMN IF NOT EXISTS obra VARCHAR(300)`);
+          await db.execute(sql`ALTER TABLE planejamento_analises_efetivo ADD COLUMN IF NOT EXISTS revisao_numero INTEGER`);
+          await db.execute(sql`ALTER TABLE planejamento_analises_efetivo ADD COLUMN IF NOT EXISTS resultado JSON DEFAULT '{}'::json`);
+          await db.execute(sql`ALTER TABLE planejamento_analises_efetivo ADD COLUMN IF NOT EXISTS contexto JSON DEFAULT '{}'::json`);
+          await db.execute(sql`ALTER TABLE planejamento_analises_efetivo ADD COLUMN IF NOT EXISTS erro_ia TEXT`);
+          await db.execute(sql`ALTER TABLE planejamento_analises_efetivo ADD COLUMN IF NOT EXISTS criado_por VARCHAR(200)`);
+          await db.execute(sql`ALTER TABLE planejamento_analises_efetivo ADD COLUMN IF NOT EXISTS criado_em TIMESTAMP DEFAULT NOW()`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_plan_anal_efet ON planejamento_analises_efetivo(projeto_id, company_id, tipo, criado_em DESC)`);
+          console.log(`[SyncSchema+] Rev. 3291: tabela planejamento_analises_efetivo garantida (Efetivo × IA — persistência/recuperação do diagnóstico e do simulador).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA planejamento_analises_efetivo:`, e?.message || e); }
+
         // Controle de Cheques (Opção A) — tabela de CONTROLE importada da planilha
         // "CONTROLE DE CHEQUES" (abas mensais). NÃO vira lançamento; serve p/ a
         // Conciliação Bancária identificar as linhas "COMPENSACAO CHEQUE NNN" do
