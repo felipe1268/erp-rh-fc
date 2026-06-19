@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3328 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NOVO SELETOR DE PERÍODO COM 3 MODOS — "MÊS" (PADRÃO, A GRADE JAN–DEZ
+ * DE SEMPRE), "PERÍODO" (FAIXA DE DATAS ARBITRÁRIA) E "DIA" (UMA DATA → CONCILIAÇÃO DIÁRIA JÁ USÁVEL). FASE 1 DO PLANO
+ * DE 3 FASES (FASE 2 = FITID DO OFX; FASE 3 = SALDO DO DIA + MAPA DE DIAS). 100% FRONT · UX/ADITIVO · REGRA DE OURO
+ * MANTIDA (NADA CONCILIA/BAIXA SEM CONFIRMAÇÃO) · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário, plano em 3 fases — aprovado "Pode segui concordo com vc"): "Fase 1 — Seletor Mês/Período/Dia na tela
+ *   (a parte visível, te dá a conciliação diária já usável)". A tela só filtrava por MÊS (grade Jan–Dez + "Ano todo"); não
+ *   dava pra olhar UM dia específico nem uma faixa arbitrária — inviável pra quem concilia diariamente.
+ * - FRONT (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): novo estado `modoData: "mes" | "dia" | "periodo"`
+ *   (default "mes" → comportamento idêntico ao anterior) + `diaSel` (YYYY-MM-DD), `periIni`/`periFim` (faixa). O memo
+ *   `dataInicio`/`dataFim` agora ramifica por modo: DIA → início=fim=`diaSel`; PERÍODO → faixa (auto-ordena se invertida);
+ *   MÊS → mês/ano (ou ano todo) como antes. Como TODAS as queries (`getConciliacaoReport`, `getConciliacaoReportGeral`,
+ *   sugestões, extrato) já recebiam `dataInicio`/`dataFim` ARBITRÁRIOS, o backend não precisou mudar — o panorama geral e a
+ *   conciliação por conta passam a funcionar para dia/faixa automaticamente.
+ * - UI: toggle segmentado "Mês | Período | Dia" no topo do card de filtro. Em "Mês" mantém a grade Jan–Dez + "Ano todo"; em
+ *   "Dia" mostra um `<input type=date>` + botão "Hoje"; em "Período" mostra "De … até …" com dois `<input type=date>`.
+ * - GUARDAS/ROTULOS sensíveis ao modo: `periodoDefinido` (mês selecionado OU data/faixa válida) substitui o antigo
+ *   `mesSel != null` no `geralAtivo` (liga o panorama geral), nas guardas de `refetchGeral` (6 lugares) e no empty-state;
+ *   `diasDoMes` (tolerância-padrão de conciliação) vira o nº de dias da FAIXA em dia/período (mín. 1, teto 60); `periodoLabel`
+ *   ficou mode-aware (dia = `DD/MM/AAAA`; período = `DD/MM/AAAA – DD/MM/AAAA`; mês = `MMM/AAAA`/`Ano N`) e alimenta os títulos
+ *   de PDF/print, a barra de progresso, o cabeçalho do panorama, o drill dos cards e o aviso do "Limpar extrato".
+ * - RECURSOS QUE SÃO POR-MÊS continuam só no modo "Mês": consolidar/desconsolidar, demonstrativos PIX/boleto (IA) e a
+ *   verificação de "extrato de outro mês" no import — gateados por `modoData === "mes"` (em dia/período exibem o aviso de que
+ *   são por mês). Nenhuma rota/permissão/endpoint novo; hooks no topo; sem `mkdir`.
+ * - ARQUIVOS: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`, `shared/version.ts` (3328), `shared/changelog.ts`,
+ *   `replit.md`, `replit-history.md`.
+ *
  * Rev. 3327 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NO "PANORAMA GERAL DO MÊS" OS 7 CARDS DE CIMA (TOTAL DE ENTRADAS,
  * TOTAL DE SAÍDAS, SALDO DO MÊS, CONCILIADOS, NO EXTRATO SEM LANÇAMENTO, NO ERP SEM EXTRATO, % CONCILIADO) ERAM SÓ
  * NÚMEROS INERTES; AGORA CADA CARD É CLICÁVEL E ABRE UM DIÁLOGO COM TODAS AS LINHAS/INFORMAÇÕES QUE COMPÕEM AQUELE

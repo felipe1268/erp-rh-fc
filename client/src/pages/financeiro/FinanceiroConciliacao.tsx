@@ -56,22 +56,46 @@ export default function FinanceiroConciliacao() {
   // Rev. 3165 — Período pelo MESMO PADRÃO das demais telas do Financeiro: navegação por
   // ANO + meses (Jan–Dez). `mesSel=null` = "Ano todo". dataInicio/dataFim derivam daí.
   const _now = new Date();
+  const hojeStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
   const [ano, setAno] = useState(_now.getFullYear());
   const [mesSel, setMesSel] = useState<number | null>(_now.getMonth() + 1);
+  // Rev. 3328 — SELETOR Mês/Período/Dia. Mantém o modo "mes" (ano + grade Jan–Dez,
+  // 100% compatível); adiciona "dia" (uma data → conciliação diária) e "periodo"
+  // (faixa arbitrária). dataInicio/dataFim derivam do modo ativo; o backend
+  // (getConciliacaoReport / getConciliacaoReportGeral) já aceita range arbitrário.
+  const [modoData, setModoData] = useState<"mes" | "dia" | "periodo">("mes");
+  const [diaSel, setDiaSel] = useState<string>(hojeStr);
+  const [periIni, setPeriIni] = useState<string>(`${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-01`);
+  const [periFim, setPeriFim] = useState<string>(hojeStr);
   const { dataInicio, dataFim } = useMemo(() => {
+    if (modoData === "dia") { const d = diaSel || hojeStr; return { dataInicio: d, dataFim: d }; }
+    if (modoData === "periodo") {
+      const i = periIni || hojeStr; const f = periFim || hojeStr;
+      return i <= f ? { dataInicio: i, dataFim: f } : { dataInicio: f, dataFim: i };
+    }
     if (mesSel == null) return { dataInicio: `${ano}-01-01`, dataFim: `${ano}-12-31` };
     const mm = String(mesSel).padStart(2, "0");
     const ultimoDia = new Date(ano, mesSel, 0).getDate();
     return { dataInicio: `${ano}-${mm}-01`, dataFim: `${ano}-${mm}-${String(ultimoDia).padStart(2, "0")}` };
-  }, [ano, mesSel]);
+  }, [modoData, diaSel, periIni, periFim, ano, mesSel]);
+  // Rev. 3328 — período "definido o suficiente" p/ rodar o panorama geral:
+  // mês selecionado (modo mês) OU uma data/faixa válida (dia/período).
+  const periodoDefinido = modoData === "mes" ? mesSel != null : modoData === "dia" ? !!diaSel : (!!periIni && !!periFim);
   // Rev. 3176 — A tolerância de conciliação passa a refletir os DIAS EXATOS do mês
   // selecionado (FEV/2026 = 28, JAN = 31, etc.), em vez de um teto fixo de 30. Em
   // "Ano todo" usa 31 (teto razoável; backend limita a 60). É o padrão e re-sincroniza
   // ao trocar de mês/ano.
   const diasDoMes = useMemo(() => {
-    if (mesSel == null) return 31;
-    return new Date(ano, mesSel, 0).getDate();
-  }, [ano, mesSel]);
+    if (modoData === "mes") {
+      if (mesSel == null) return 31;
+      return new Date(ano, mesSel, 0).getDate();
+    }
+    // Rev. 3328 — dia/período: tolerância-padrão = nº de dias da faixa (mín. 1, teto 60).
+    const di = new Date(dataInicio + "T00:00:00");
+    const df = new Date(dataFim + "T00:00:00");
+    const span = Math.round((df.getTime() - di.getTime()) / 86400000) + 1;
+    return Math.max(1, Math.min(span, 60));
+  }, [modoData, ano, mesSel, dataInicio, dataFim]);
   const [contaBancariaId, setContaBancariaId] = useState<string>("");
   const [conciliadoFilter, setConciliadoFilter] = useState("all");
   // Rev. 3219 — busca única que filtra AMBAS as listas (extrato sem lançamento + ERP sem extrato).
@@ -307,10 +331,10 @@ export default function FinanceiroConciliacao() {
           }
           await lancConciliarMut.mutateAsync({ companyId, statementLineId: lancStatement.id, entryId });
           lancCreatedRef.current = null;
-          if (!contaBancariaId && mesSel != null) refetchGeral();
+          if (!contaBancariaId && periodoDefinido) refetchGeral();
         } else {
           toast({ title: "Recebível lançado no Contas a Receber!" });
-          refetchReport(); if (!contaBancariaId && mesSel != null) refetchGeral();
+          refetchReport(); if (!contaBancariaId && periodoDefinido) refetchGeral();
         }
         setLancStatement(null);
       } catch (e: any) {
@@ -351,10 +375,10 @@ export default function FinanceiroConciliacao() {
         // Mutation DEDICADA (sem onError próprio) p/ o erro cair no catch abaixo sem toast duplo.
         await lancConciliarMut.mutateAsync({ companyId, statementLineId: lancStatement.id, entryId });
         lancCreatedRef.current = null;
-        if (!contaBancariaId && mesSel != null) refetchGeral();
+        if (!contaBancariaId && periodoDefinido) refetchGeral();
       } else {
         toast({ title: "Conta a pagar lançada!" });
-        refetchReport(); if (!contaBancariaId && mesSel != null) refetchGeral();
+        refetchReport(); if (!contaBancariaId && periodoDefinido) refetchGeral();
       }
       setLancStatement(null);
     } catch (e: any) {
@@ -422,13 +446,13 @@ export default function FinanceiroConciliacao() {
   }, [statementsAno]);
 
   const conciliarMut = (trpc as any).financial.conciliarLancamento.useMutation({
-    onSuccess: () => { toast({ title: "Conciliação registrada!" }); refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug(); if (!contaBancariaId && mesSel != null) refetchGeral(); setConfirmGeralConciliar(null); setSelectedStatement(null); setSelectedEntry(null); },
+    onSuccess: () => { toast({ title: "Conciliação registrada!" }); refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug(); if (!contaBancariaId && periodoDefinido) refetchGeral(); setConfirmGeralConciliar(null); setSelectedStatement(null); setSelectedEntry(null); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
   // Rev. 3239 — conciliação de um GRUPO unificado (VR / combustível / manutenção) contra UMA
   // linha do extrato (N lançamentos : 1 linha). Mesma UX do par 1:1, mas envia os itensIds.
   const conciliarGrupoMut = (trpc as any).financial.conciliarGrupoLancamentos.useMutation({
-    onSuccess: (res: any) => { toast({ title: `Grupo conciliado! ${res.conciliados} lançamento(s) baixado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug(); if (!contaBancariaId && mesSel != null) refetchGeral(); setConfirmGeralConciliar(null); setSelectedStatement(null); setSelectedEntry(null); },
+    onSuccess: (res: any) => { toast({ title: `Grupo conciliado! ${res.conciliados} lançamento(s) baixado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug(); if (!contaBancariaId && periodoDefinido) refetchGeral(); setConfirmGeralConciliar(null); setSelectedStatement(null); setSelectedEntry(null); },
     onError: (e: any) => toast({ title: "Erro ao conciliar grupo", description: e.message, variant: "destructive" }),
   });
   // Rev. 3198 — conciliação do fluxo "Lançar": SEM onError próprio (o erro é tratado
@@ -507,7 +531,7 @@ export default function FinanceiroConciliacao() {
   // Rev. 3319 — PANORAMA GERAL DO MÊS: quando há um MÊS selecionado mas NENHUMA conta,
   // roda o mesmo motor de conciliação para TODAS as contas com extrato no período e
   // devolve totais agregados + por conta. READ-ONLY (nada concilia sem entrar na conta).
-  const geralAtivo = !!companyId && mesSel != null && !contaBancariaId;
+  const geralAtivo = !!companyId && periodoDefinido && !contaBancariaId;
   const { data: reportGeral, isFetching: geralLoading, isError: geralIsError, error: geralError, refetch: refetchGeral } = (trpc as any).financial.getConciliacaoReportGeral.useQuery(
     { companyId, dataInicio, dataFim },
     { enabled: geralAtivo, retry: false }
@@ -720,7 +744,7 @@ export default function FinanceiroConciliacao() {
   const [demoProg, setDemoProg] = useState<{ kind: "pix" | "boleto"; pct: number; label: string } | null>(null);
   const demoQuery = (trpc as any).financial.getConciliacaoDemonstrativos.useQuery(
     { companyId, contaBancariaId: parseInt(contaBancariaId) || 0, ano, mes: mesSel ?? 0 },
-    { enabled: !!companyId && !!contaBancariaId && mesSel != null }
+    { enabled: !!companyId && !!contaBancariaId && modoData === "mes" && mesSel != null }
   );
   const salvarDemoMut = (trpc as any).financial.salvarConciliacaoDemonstrativo.useMutation();
   const removerDemoMut = (trpc as any).financial.removerConciliacaoDemonstrativo.useMutation();
@@ -1117,7 +1141,7 @@ export default function FinanceiroConciliacao() {
       // Rev. 3179 — ALERTA/BLOQUEIO: extrato de outro mês ≠ mês selecionado. Detecta o
       // mês DOMINANTE (YYYY-MM mais frequente) entre as linhas; havendo mês selecionado
       // (não "Ano todo") e divergindo, ABORTA a gravação e abre o alerta de decisão.
-      if (!skipMonthCheck && mesSel != null) {
+      if (!skipMonthCheck && modoData === "mes" && mesSel != null) {
         const selKey = `${ano}-${String(mesSel).padStart(2, "0")}`;
         const counts = new Map<string, number>();
         for (const l of linhas) { const k = String(l?.data ?? "").slice(0, 7); if (k.length === 7) counts.set(k, (counts.get(k) ?? 0) + 1); }
@@ -1179,7 +1203,13 @@ export default function FinanceiroConciliacao() {
     }
   }
 
-  const periodoLabel = mesSel != null ? `${MESES[mesSel - 1]}/${ano}` : `Ano ${ano}`;
+  // Rev. 3328 — rótulo do período sensível ao modo (mês / dia / faixa). Usado nos
+  // títulos de PDF/print, na barra de progresso e nos cabeçalhos do panorama.
+  const periodoLabel = modoData === "dia"
+    ? fmtData(diaSel)
+    : modoData === "periodo"
+      ? `${fmtData(dataInicio)} – ${fmtData(dataFim)}`
+      : mesSel != null ? `${MESES[mesSel - 1]}/${ano}` : `Ano ${ano}`;
   const contaSel = (bankAccounts ?? []).find((b: any) => String(b.id) === contaBancariaId);
   const contaLabel = contaSel ? `${contaSel.banco}${contaSel.descricao ? ` · ${contaSel.descricao}` : ""} (Ag. ${formatAgencia(contaSel.agencia)}/${formatConta(contaSel.conta)})` : "—";
   // Rev. 3324 — rótulo da conta da PRÓPRIA linha (no panorama não há conta selecionada;
@@ -1429,7 +1459,7 @@ export default function FinanceiroConciliacao() {
             <p className="text-sm text-gray-500 mt-1">Relacione os lançamentos do sistema com o extrato bancário</p>
           </div>
           <div className="flex items-center gap-2">
-            {contaBancariaId && mesSel != null && mesesStatus[mesSel] !== "vazio" && (
+            {contaBancariaId && modoData === "mes" && mesSel != null && mesesStatus[mesSel] !== "vazio" && (
               mesesStatus[mesSel] === "consolidado" ? (
                 <Button
                   size="sm"
@@ -1479,6 +1509,21 @@ export default function FinanceiroConciliacao() {
                   navegação por ANO + faixa de meses (Jan–Dez) com bolinhas de status.
                   Clicar num mês filtra aquele mês; "Ano todo" abre o ano. */}
               <div>
+                {/* Rev. 3328 — seletor de MODO de período: Mês (padrão) / Período (faixa) / Dia (conciliação diária). */}
+                <div className="flex items-center gap-1.5 mb-3 p-1 bg-gray-100 rounded-lg w-fit">
+                  {(([["mes", "Mês"], ["periodo", "Período"], ["dia", "Dia"]]) as [typeof modoData, string][]).map(([val, lbl]) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setModoData(val)}
+                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${modoData === val ? "bg-white text-blue-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+                {modoData === "mes" ? (
+                <>
                 <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                   <div className="flex items-center gap-2">
                     <button type="button" onClick={() => setAno(a => a - 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
@@ -1530,6 +1575,38 @@ export default function FinanceiroConciliacao() {
                     );
                   })}
                 </div>
+                </>
+                ) : modoData === "dia" ? (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <label className="text-xs font-medium text-gray-500">Dia</label>
+                    <input
+                      type="date"
+                      value={diaSel}
+                      onChange={(e) => setDiaSel(e.target.value)}
+                      className="h-9 rounded-md border border-gray-200 px-3 text-sm focus:border-blue-400 focus:outline-none"
+                    />
+                    <Button type="button" size="sm" variant="outline" className="h-9 text-xs" onClick={() => setDiaSel(hojeStr)}>Hoje</Button>
+                    <span className="text-xs text-gray-400">Conciliação diária — mostra só o movimento desse dia.</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <label className="text-xs font-medium text-gray-500">De</label>
+                    <input
+                      type="date"
+                      value={periIni}
+                      onChange={(e) => setPeriIni(e.target.value)}
+                      className="h-9 rounded-md border border-gray-200 px-3 text-sm focus:border-blue-400 focus:outline-none"
+                    />
+                    <label className="text-xs font-medium text-gray-500">até</label>
+                    <input
+                      type="date"
+                      value={periFim}
+                      onChange={(e) => setPeriFim(e.target.value)}
+                      className="h-9 rounded-md border border-gray-200 px-3 text-sm focus:border-blue-400 focus:outline-none"
+                    />
+                    <span className="text-xs text-gray-400">Faixa de datas arbitrária.</span>
+                  </div>
+                )}
               </div>
               <div>
                 <p className="text-xs text-gray-500 mb-2">Conta Bancária</p>
@@ -1613,11 +1690,11 @@ export default function FinanceiroConciliacao() {
           </CardContent>
         </Card>
 
-        {!contaBancariaId && mesSel == null ? (
+        {!contaBancariaId && !periodoDefinido ? (
           <Card className="border-0 shadow-sm">
             <CardContent className="p-12 text-center">
               <RefreshCw className="w-14 h-14 mx-auto mb-4 text-gray-300" />
-              <p className="text-gray-500 font-medium">Selecione um mês para ver o panorama geral, ou uma conta para conciliar.</p>
+              <p className="text-gray-500 font-medium">{modoData === "dia" ? "Escolha uma data para ver o panorama do dia, ou uma conta para conciliar." : modoData === "periodo" ? "Defina o período (de…até) para ver o panorama, ou uma conta para conciliar." : "Selecione um mês para ver o panorama geral, ou uma conta para conciliar."}</p>
               <p className="text-xs text-gray-400 mt-2">Ou importe um extrato bancário (OFX/CSV) para começar</p>
             </CardContent>
           </Card>
@@ -1633,7 +1710,7 @@ export default function FinanceiroConciliacao() {
                     <Landmark className="w-5 h-5 text-blue-600" />
                     <div>
                       <p className="text-base font-bold text-gray-800">Panorama geral do mês</p>
-                      <p className="text-xs text-gray-500">Todas as contas com extrato em {MESES[(mesSel ?? 1) - 1]}/{ano}. Clique numa conta para conciliar.</p>
+                      <p className="text-xs text-gray-500">Todas as contas com extrato em {periodoLabel}. Clique numa conta para conciliar.</p>
                     </div>
                   </div>
                   <Button size="sm" variant="outline" onClick={() => refetchGeral()} disabled={geralLoading} className="h-8 text-xs">
@@ -1655,7 +1732,7 @@ export default function FinanceiroConciliacao() {
                   </div>
                 ) : geralContas.length === 0 ? (
                   <div className="p-10 text-center text-gray-400 text-sm">
-                    Nenhuma conta com extrato importado em {MESES[(mesSel ?? 1) - 1]}/{ano}. Importe um extrato (OFX/CSV) ou escolha outro mês.
+                    Nenhuma conta com extrato importado em {periodoLabel}. Importe um extrato (OFX/CSV) ou escolha outro período.
                   </div>
                 ) : (
                   <>
@@ -1928,10 +2005,10 @@ export default function FinanceiroConciliacao() {
                     <p className="text-xs text-gray-500">Anexe <strong>um ou vários PDFs</strong> com os <strong>PIX</strong> e os <strong>boletos pagos</strong> do mês (pode subir todos de uma vez). Servem só de consulta pra identificar quem recebeu — o extrato mostra apenas "PIX valor X".</p>
                   </div>
                 </div>
-                {mesSel == null ? (
+                {modoData !== "mes" || mesSel == null ? (
                   <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                     <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                    Selecione um mês (acima) para anexar os demonstrativos — eles são por mês.
+                    Selecione um mês (modo "Mês", acima) para anexar os demonstrativos — eles são por mês.
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1996,7 +2073,7 @@ export default function FinanceiroConciliacao() {
             {/* Rev. 3228 — Lista INLINE "Tudo que a IA leu" (metodologia do extrato): lista
                 combinada PIX + boletos logo abaixo dos anexos, com cards de total geral/PIX/
                 boletos (reagem ao filtro+busca), chips de tipo e busca livre. Sem modal. */}
-            {mesSel != null && leituraIA.temDados && (() => {
+            {modoData === "mes" && mesSel != null && leituraIA.temDados && (() => {
               const { porFiltro, lista, pixVis, bolVis, somaPix, somaBol, total, termo, chips, todos } = leituraIA;
               return (
                 <Card className="border-0 shadow-sm ring-1 ring-violet-100">
@@ -2168,7 +2245,7 @@ export default function FinanceiroConciliacao() {
                       >
                         {tolOptions.map(d => (
                           <option key={d} value={String(d)}>
-                            {d === diasDoMes && mesSel != null ? `${d} (mês)` : d}
+                            {d === diasDoMes && modoData === "mes" && mesSel != null ? `${d} (mês)` : d}
                           </option>
                         ))}
                       </select>
@@ -2341,7 +2418,7 @@ export default function FinanceiroConciliacao() {
                           {c.titulo}
                         </DialogTitle>
                         <DialogDescription className="text-xs">
-                          {MESES[(mesSel ?? 1) - 1]}/{ano} · {panoramaDrill === "pct"
+                          {periodoLabel} · {panoramaDrill === "pct"
                             ? `${geralTotais?.conciliados ?? 0} de ${(geralTotais?.conciliados ?? 0) + (geralTotais?.extratoSemLancamento ?? 0)} linha(s) do extrato`
                             : panoramaDrill === "saldo"
                               ? `${geralTotais?.contas ?? 0} conta(s) com extrato`
@@ -2401,7 +2478,7 @@ export default function FinanceiroConciliacao() {
                             })}
                           </div>
                         ) : c.itens.length === 0 ? (
-                          <div className="py-12 text-center text-sm text-gray-400">Nenhuma linha nesta situação em {MESES[(mesSel ?? 1) - 1]}/{ano}.</div>
+                          <div className="py-12 text-center text-sm text-gray-400">Nenhuma linha nesta situação em {periodoLabel}.</div>
                         ) : (
                           /* LISTAS de linhas (entradas/saídas/conciliados/extrato/ERP) */
                           <div className="rounded-lg border border-gray-100 divide-y">
@@ -3060,7 +3137,7 @@ export default function FinanceiroConciliacao() {
                 <Label className="text-xs font-medium text-gray-600">Conta Bancária</Label>
                 {(() => {
                   const conta = (bankAccounts ?? []).find((b: any) => String(b.id) === importConta);
-                  const periodo = mesSel != null ? `${MESES[mesSel - 1]}/${ano}` : `Ano ${ano}`;
+                  const periodo = periodoLabel;
                   if (!conta) return (
                     <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-700">Selecione a conta bancária na tela antes de importar.</div>
                   );
@@ -3166,7 +3243,7 @@ export default function FinanceiroConciliacao() {
             <AlertDialogHeader>
               <AlertDialogTitle className="flex items-center gap-2"><Trash2 className="w-5 h-5 text-red-600" />Limpar extrato importado?</AlertDialogTitle>
               <AlertDialogDescription>
-                Isso remove as <strong>{(statements ?? []).length}</strong> linha(s) de extrato da conta selecionada no período{mesSel != null ? <> de <strong>{MESES[mesSel - 1]}/{ano}</strong></> : <> do ano <strong>{ano}</strong></>}.
+                Isso remove as <strong>{(statements ?? []).length}</strong> linha(s) de extrato da conta selecionada no período de <strong>{periodoLabel}</strong>.
                 Os lançamentos do ERP que estavam conciliados com essas linhas voltam a ficar <strong>pendentes</strong> (nada é apagado do ERP).
                 Use quando importou o extrato errado e quer reimportar.
               </AlertDialogDescription>
@@ -3628,7 +3705,7 @@ export default function FinanceiroConciliacao() {
               <DialogTitle className="flex items-center gap-2 text-base">
                 <Sparkles className="w-5 h-5 text-violet-600" />
                 Tudo que a IA leu nos demonstrativos
-                {mesSel != null && <span className="text-sm font-medium text-gray-400">· {MESES[mesSel - 1]}/{ano}</span>}
+                {modoData === "mes" && mesSel != null && <span className="text-sm font-medium text-gray-400">· {MESES[mesSel - 1]}/{ano}</span>}
               </DialogTitle>
             </DialogHeader>
             {/* Cards de total — grandes, fáceis de analisar */}
