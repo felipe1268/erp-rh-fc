@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3323 — **PLANEJAMENTO / PROJETOS · O PAINEL "EFETIVO × IA — TODAS AS OBRAS" FICAVA SEMPRE ABERTO NO TOPO DA TELA
+ * DE PROJETOS, POLUINDO A VISÃO. AGORA É UM BOTÃO ("PAINEL GERENCIAL · ABRIR ANÁLISE") QUE ABRE A ANÁLISE EM TELA PRÓPRIA
+ * (COM "VOLTAR AOS PROJETOS"). 100% FRONT · UX/ADITIVO · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (print do usuário): "Não quero a análise sempre aberta, quero uma aba para poder clicar e abrir outra
+ *   tela... está ficando muito poluído a tela." O componente `EfetivoGlobalIA` era renderizado inline e sempre visível
+ *   logo abaixo dos KPIs, empurrando a busca e a grade de projetos pra baixo.
+ * - SOLUÇÃO (`client/src/pages/planejamento/PlanejamentoLista.tsx`): novo estado local `showEfetivoIA` (default false).
+ *   No lugar do painel inline entrou um BOTÃO largo (card escuro "Painel Gerencial / Efetivo × IA — Todas as Obras" com
+ *   ícone Sparkles + CTA "Abrir análise"). Ao clicar, a tela troca pra uma VISÃO DEDICADA que mostra só o
+ *   `EfetivoGlobalIA` + um botão "Voltar aos projetos" (ArrowLeft) que volta pro estado anterior. Cabeçalho e KPIs da
+ *   página seguem sempre visíveis; a busca e a grade de projetos só aparecem no modo lista.
+ * - SEM ROTA/PERMISSÃO NOVA: é toggle de estado na MESMA página (não mexe em `App.tsx`, sidebar, `shared/modules.ts` nem
+ *   permissões). O componente `EfetivoGlobalIA` e seus endpoints (`efetivoGlobal`/`ultimaEfetivoGlobal`) ficam intactos —
+ *   inclusive a recuperação após queda continua funcionando ao reabrir a tela.
+ * - ARQUIVOS: `client/src/pages/planejamento/PlanejamentoLista.tsx` (import de ícones Sparkles/ChevronRight; estado
+ *   `showEfetivoIA`; botão + render condicional envolvendo busca/lista), `shared/version.ts` (3323), `shared/changelog.ts`,
+ *   `replit.md`.
+ *
  * Rev. 3322 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · PANORAMA GERAL DO MÊS GANHOU OS CARDS "TOTAL DE ENTRADAS" E "TOTAL
  * DE SAÍDAS" (+ "SALDO DO MÊS"), SOMANDO TODAS AS CONTAS QUANDO NENHUMA ESTÁ SELECIONADA E POR CONTA AO EXPANDIR CADA
  * UMA. 100% FINANCEIRO (1 BACKEND READ-ONLY + 1 FRONT) · ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.**

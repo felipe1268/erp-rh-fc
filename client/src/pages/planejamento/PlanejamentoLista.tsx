@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import {
   Plus, Search, Loader2, CalendarRange, Building2, User, DollarSign,
   TrendingUp, Clock, CheckCircle2, AlertTriangle, Trash2, Eye, MapPin, ArrowLeft, Pencil,
-  Info, FolderPlus, FileText, CheckCircle,
+  Info, FolderPlus, FileText, CheckCircle, Sparkles, ChevronRight,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -198,6 +198,8 @@ export default function PlanejamentoLista() {
     });
   }
 
+  const [showEfetivoIA, setShowEfetivoIA] = useState(false);
+
   const filtrados = projetos.filter(p =>
     [p.nome, p.cliente, p.local, p.responsavel].some(v =>
       v?.toLowerCase().includes(busca.toLowerCase())
@@ -260,10 +262,42 @@ export default function PlanejamentoLista() {
           ))}
         </div>
 
-        {/* Efetivo × IA — Visão Geral de Todas as Obras */}
-        {!!companyId && <EfetivoGlobalIA companyId={companyId} />}
+        {/* Efetivo × IA — abre em tela própria (não fica sempre aberto p/ não poluir a lista).
+            Guard: se a empresa for desmarcada/trocada com o painel aberto, volta pro modo lista. */}
+        {showEfetivoIA && !!companyId ? (
+          <div>
+            <div className="flex items-center gap-3 mb-4">
+              <Button
+                variant="outline" size="sm"
+                className="gap-1.5 text-slate-600"
+                onClick={() => setShowEfetivoIA(false)}
+              >
+                <ArrowLeft className="h-4 w-4" /> Voltar aos projetos
+              </Button>
+            </div>
+            {!!companyId && <EfetivoGlobalIA companyId={companyId} />}
+          </div>
+        ) : (
+          <>
+            {!!companyId && (
+              <button
+                onClick={() => setShowEfetivoIA(true)}
+                className="w-full mb-5 text-left rounded-xl border border-slate-200 bg-gradient-to-r from-slate-900 to-slate-800 text-white p-4 flex items-center gap-3 hover:from-slate-800 hover:to-slate-700 transition-colors shadow-sm"
+              >
+                <div className="h-10 w-10 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+                  <Sparkles className="h-5 w-5 text-sky-300" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-sky-300/90">Painel Gerencial</p>
+                  <p className="text-sm font-bold leading-tight">Efetivo × IA — Todas as Obras</p>
+                  <p className="text-[11px] text-slate-300 mt-0.5">Cruza o efetivo de cada obra com o cronograma de 8 semanas e indica realocação ou aviso prévio por equipe.</p>
+                </div>
+                <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-medium text-sky-200 shrink-0">Abrir análise <ChevronRight className="h-4 w-4" /></span>
+                <ChevronRight className="sm:hidden h-5 w-5 text-slate-300 shrink-0" />
+              </button>
+            )}
 
-        {/* Busca */}
+            {/* Busca */}
         <div className="relative mb-4 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
@@ -371,6 +405,8 @@ export default function PlanejamentoLista() {
               </div>
             ))}
           </div>
+        )}
+          </>
         )}
 
         {/* ── Modal Editar Projeto ──────────────────────────────────────────── */}
