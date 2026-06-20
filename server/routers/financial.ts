@@ -4501,7 +4501,7 @@ export const financialRouter = router({
     for (const cid of ids) await _assertFinanceiroCompanyAccess(ctx.user, cid);
     const res = await dbExecute(db, 
       `SELECT id, "companyId", banco, "codigoBanco", agencia, conta,
-              "tipoConta" AS tipo, apelido AS descricao, ativo
+              "tipoConta" AS tipo, apelido AS descricao, ativo, "temTalao"
        FROM company_bank_accounts WHERE "companyId" IN (${inlineIds(ids)}) AND "deletedAt" IS NULL AND ativo = 1 ORDER BY banco ASC`,
       []
     );

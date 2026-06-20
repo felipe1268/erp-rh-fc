@@ -9,9 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MoneyInput } from "@/components/ui/money-input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
-import { Plus, Search, Pencil, Trash2, Landmark, CreditCard, Building2, CheckCircle2, XCircle, Wallet } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Landmark, CreditCard, Building2, CheckCircle2, XCircle, Wallet, BookCopy } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
+import TaloesDialog from "@/pages/financeiro/TaloesDialog";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -25,6 +27,7 @@ type ContaForm = {
   agencia: string;
   conta: string;
   tipoConta: "corrente" | "poupanca";
+  temTalao: boolean;
   saldoInicial: string;
   saldoInicialData: string;
 };
@@ -35,6 +38,7 @@ const emptyForm: ContaForm = {
   agencia: "",
   conta: "",
   tipoConta: "corrente",
+  temTalao: false,
   saldoInicial: "",
   saldoInicialData: "",
 };
@@ -86,6 +90,7 @@ export default function ContasBancarias() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<ContaForm>(emptyForm);
   const [search, setSearch] = useState("");
+  const [taloesConta, setTaloesConta] = useState<any | null>(null);
 
   const filtered = useMemo(() => {
     if (!search) return contas;
@@ -113,6 +118,7 @@ export default function ContasBancarias() {
       agencia: conta.agencia || "",
       conta: conta.conta || "",
       tipoConta: conta.tipoConta || "corrente",
+      temTalao: Number(conta.temTalao) === 1,
       saldoInicial: conta.saldoInicial != null ? String(conta.saldoInicial) : "",
       saldoInicialData: conta.saldoInicialData ? String(conta.saldoInicialData).slice(0, 10) : "",
     });
@@ -148,6 +154,7 @@ export default function ContasBancarias() {
         agencia: form.agencia,
         conta: form.conta,
         tipoConta: form.tipoConta,
+        temTalao: form.temTalao ? 1 : 0,
         ...saldoFields,
       });
     } else {
@@ -156,6 +163,7 @@ export default function ContasBancarias() {
         agencia: form.agencia,
         conta: form.conta,
         tipoConta: form.tipoConta,
+        temTalao: form.temTalao ? 1 : 0,
         ...saldoFields,
       });
     }
@@ -295,6 +303,11 @@ export default function ContasBancarias() {
                           <Badge variant={conta.ativo !== 0 ? "default" : "destructive"} className="text-xs">
                             {conta.ativo !== 0 ? "Ativa" : "Inativa"}
                           </Badge>
+                          {Number(conta.temTalao) === 1 && (
+                            <Badge variant="outline" className="text-xs border-[#1B2A4A]/30 text-[#1B2A4A] gap-1">
+                              <BookCopy className="h-3 w-3" /> Talão
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -326,10 +339,15 @@ export default function ContasBancarias() {
 
                   </div>
 
-                  <div className="flex items-center gap-2 mt-4 pt-3 border-t">
+                  <div className="flex items-center gap-2 mt-4 pt-3 border-t flex-wrap">
                     <Button variant="outline" size="sm" onClick={() => openEdit(conta)}>
                       <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
                     </Button>
+                    {Number(conta.temTalao) === 1 && (
+                      <Button variant="outline" size="sm" className="text-[#1B2A4A]" onClick={() => setTaloesConta(conta)}>
+                        <BookCopy className="h-3.5 w-3.5 mr-1" /> Talões
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"
@@ -445,6 +463,25 @@ export default function ContasBancarias() {
             </div>
 
             <div className="border-t pt-4 mt-1">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <Checkbox
+                  checked={form.temTalao}
+                  onCheckedChange={(v) => setForm(f => ({ ...f, temTalao: v === true }))}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="text-sm font-medium flex items-center gap-1.5">
+                    <BookCopy className="h-4 w-4 text-[#1B2A4A]" /> Esta conta tem talão de cheque
+                  </span>
+                  <span className="block text-xs text-muted-foreground mt-0.5">
+                    Só contas marcadas aparecem no seletor de "Lançar cheque". Após salvar, use o botão
+                    <span className="font-medium"> Talões</span> no card para cadastrar os talões e controlar folhas perdidas.
+                  </span>
+                </span>
+              </label>
+            </div>
+
+            <div className="border-t pt-4 mt-1">
               <div className="flex items-center gap-2 mb-1">
                 <Wallet className="h-4 w-4 text-[#1B2A4A]" />
                 <h3 className="text-sm font-semibold text-[#1B2A4A]">Saldo Inicial</h3>
@@ -489,6 +526,13 @@ export default function ContasBancarias() {
           </div>
         </div>
       </FullScreenDialog>
+
+      <TaloesDialog
+        open={taloesConta != null}
+        onClose={() => setTaloesConta(null)}
+        conta={taloesConta}
+        companyId={companyId}
+      />
           <PrintFooterLGPD />
     </DashboardLayout>
   );

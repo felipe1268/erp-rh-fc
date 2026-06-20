@@ -678,7 +678,205 @@ const chequeRowInputSchema = z.object({
 }).passthrough();
 
 // ─────────────────────────── Router ───────────────────────────
+// ─────────────────────────── Talões de cheque (Rev. 3343) ───────────────────────────
+// Rastreabilidade de FOLHAS: cada talão tem nº do cheque inicial + qtd de folhas.
+// Folha "usada" é DERIVADA cruzando financial_cheques.numero_cheque (nº int) por conta;
+// folhas_status_json guarda só as EXCEÇÕES manuais ({"125":"perdida","130":"cancelada"}).
+type FolhaStatus = "usada" | "disponivel" | "perdida" | "cancelada";
+
+function numCheque(s: any): number | null {
+  const d = soDigitos(s == null ? "" : String(s));
+  return d ? parseInt(d, 10) : null;
+}
+
+// Confere que a conta pertence à empresa (anti-IDOR). Retorna a linha ou lança.
+async function assertContaDaEmpresa(db: any, contaId: number, companyId: number) {
+  const res = await dbExecute(db,
+    `SELECT id, banco, apelido, agencia, conta FROM company_bank_accounts
+       WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`, [contaId, companyId]);
+  if (!res.rows[0]) throw new TRPCError({ code: "FORBIDDEN", message: "Conta bancária não pertence a esta empresa." });
+  return res.rows[0];
+}
+
+// Carrega o talão + confirma acesso à empresa dele (anti-IDOR por id).
+async function carregarTalaoComAcesso(db: any, talaoId: number, ctxUser: any) {
+  const res = await dbExecute(db,
+    `SELECT * FROM financial_cheque_taloes WHERE id=$1 AND excluido_em IS NULL LIMIT 1`, [talaoId]);
+  const t = res.rows[0];
+  if (!t) throw new TRPCError({ code: "NOT_FOUND", message: "Talão não encontrado." });
+  await assertCompanyAccess(ctxUser, t.company_id);
+  return t;
+}
+
 export const chequesRouter = router({
+
+  // Lista talões da empresa (opcionalmente de UMA conta) + grade de folhas derivada.
+  listarTaloes: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    contaBancariaId: z.number().nullable().optional(),
+  })).query(async ({ input, ctx }) => {
+    await assertCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const filtroConta = input.contaBancariaId != null ? ` AND conta_bancaria_id=$2` : "";
+    const params: any[] = input.contaBancariaId != null ? [input.companyId, input.contaBancariaId] : [input.companyId];
+    const talRes = await dbExecute(db,
+      `SELECT * FROM financial_cheque_taloes
+         WHERE company_id=$1 AND excluido_em IS NULL${filtroConta}
+         ORDER BY conta_bancaria_id ASC, numero_inicial ASC`, params);
+    const taloes = talRes.rows;
+    if (taloes.length === 0) return [];
+
+    // Cheques da empresa → mapa por `${contaId}:${numInt}` p/ derivar folha "usada".
+    const chqRes = await dbExecute(db,
+      `SELECT conta_bancaria_id, numero_cheque, valor, fornecedor_nome,
+              data_vencimento, data_compensacao, status
+         FROM financial_cheques WHERE company_id=$1 AND excluido_em IS NULL`, [input.companyId]);
+    const usadas = new Map<string, any>();
+    for (const c of chqRes.rows) {
+      const n = numCheque(c.numero_cheque);
+      if (n == null || c.conta_bancaria_id == null) continue;
+      const k = `${c.conta_bancaria_id}:${n}`;
+      if (!usadas.has(k)) usadas.set(k, c);
+    }
+
+    return taloes.map((t: any) => {
+      let exc: Record<string, string> = {};
+      try { exc = t.folhas_status_json ? JSON.parse(t.folhas_status_json) : {}; } catch { exc = {}; }
+      const ini = Number(t.numero_inicial);
+      const fim = Number(t.numero_final);
+      const folhas: any[] = [];
+      const resumo = { total: 0, usadas: 0, disponiveis: 0, perdidas: 0, canceladas: 0 };
+      for (let n = ini; n <= fim; n++) {
+        const cheque = usadas.get(`${t.conta_bancaria_id}:${n}`);
+        let status: FolhaStatus;
+        if (cheque) status = "usada";
+        else if (exc[String(n)] === "perdida") status = "perdida";
+        else if (exc[String(n)] === "cancelada") status = "cancelada";
+        else status = "disponivel";
+        resumo.total++;
+        if (status === "usada") resumo.usadas++;
+        else if (status === "perdida") resumo.perdidas++;
+        else if (status === "cancelada") resumo.canceladas++;
+        else resumo.disponiveis++;
+        folhas.push({
+          numero: n,
+          status,
+          chequeValor: cheque?.valor != null ? Number(cheque.valor) : null,
+          chequeFornecedor: cheque?.fornecedor_nome ?? null,
+          chequeStatus: cheque?.status ?? null,
+        });
+      }
+      return {
+        id: t.id,
+        contaBancariaId: t.conta_bancaria_id,
+        descricao: t.descricao,
+        numeroInicial: ini,
+        quantidadeFolhas: Number(t.quantidade_folhas),
+        numeroFinal: fim,
+        status: t.status,
+        observacao: t.observacao,
+        criadoPor: t.created_by_name,
+        criadoEm: t.created_at,
+        resumo,
+        folhas,
+      };
+    });
+  }),
+
+  criarTalao: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    contaBancariaId: z.number(),
+    descricao: z.string().max(120).nullable().optional(),
+    numeroInicial: z.number().int().min(0),
+    quantidadeFolhas: z.number().int().min(1).max(1000),
+    observacao: z.string().max(500).nullable().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    await assertCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await assertContaDaEmpresa(db, input.contaBancariaId, input.companyId);
+    const numeroFinal = input.numeroInicial + input.quantidadeFolhas - 1;
+    const res = await dbExecute(db,
+      `INSERT INTO financial_cheque_taloes
+         (company_id, conta_bancaria_id, descricao, numero_inicial, quantidade_folhas,
+          numero_final, observacao, created_by_user_id, created_by_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [input.companyId, input.contaBancariaId, input.descricao ?? null, input.numeroInicial,
+       input.quantidadeFolhas, numeroFinal, input.observacao ?? null, ctx.user.id, ctx.user.name ?? null]);
+    // A conta passa a ter talão (aparece no seletor de "Lançar cheque").
+    await dbExecute(db, `UPDATE company_bank_accounts SET "temTalao"=1 WHERE id=$1`, [input.contaBancariaId]);
+    return { ok: true, id: res.rows[0]?.id };
+  }),
+
+  atualizarTalao: protectedProcedure.input(z.object({
+    id: z.number(),
+    descricao: z.string().max(120).nullable().optional(),
+    numeroInicial: z.number().int().min(0).optional(),
+    quantidadeFolhas: z.number().int().min(1).max(1000).optional(),
+    status: z.enum(["ativo", "encerrado"]).optional(),
+    observacao: z.string().max(500).nullable().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const t = await carregarTalaoComAcesso(db, input.id, ctx.user);
+    const numeroInicial = input.numeroInicial ?? Number(t.numero_inicial);
+    const quantidadeFolhas = input.quantidadeFolhas ?? Number(t.quantidade_folhas);
+    const numeroFinal = numeroInicial + quantidadeFolhas - 1;
+    const descricao = input.descricao !== undefined ? input.descricao : t.descricao;
+    const observacao = input.observacao !== undefined ? input.observacao : t.observacao;
+    const status = input.status ?? t.status;
+    await dbExecute(db,
+      `UPDATE financial_cheque_taloes
+         SET descricao=$1, numero_inicial=$2, quantidade_folhas=$3, numero_final=$4,
+             status=$5, observacao=$6, updated_at=NOW()
+       WHERE id=$7`,
+      [descricao ?? null, numeroInicial, quantidadeFolhas, numeroFinal, status, observacao ?? null, input.id]);
+    return { ok: true };
+  }),
+
+  // Marca UMA folha como perdida/cancelada (ou de volta p/ disponível). Folha já USADA
+  // (com cheque emitido) não pode virar perdida/cancelada — o cheque é a verdade.
+  marcarFolha: protectedProcedure.input(z.object({
+    id: z.number(),
+    numeroFolha: z.number().int().min(0),
+    status: z.enum(["perdida", "cancelada", "disponivel"]),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const t = await carregarTalaoComAcesso(db, input.id, ctx.user);
+    const ini = Number(t.numero_inicial), fim = Number(t.numero_final);
+    if (input.numeroFolha < ini || input.numeroFolha > fim) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: `A folha ${input.numeroFolha} está fora da faixa do talão (${ini}–${fim}).` });
+    }
+    if (input.status !== "disponivel") {
+      // Confere se existe cheque emitido nessa folha (conta + nº) → bloqueia.
+      const chq = await dbExecute(db,
+        `SELECT numero_cheque FROM financial_cheques
+           WHERE company_id=$1 AND conta_bancaria_id=$2 AND excluido_em IS NULL`,
+        [t.company_id, t.conta_bancaria_id]);
+      const usada = chq.rows.some((c: any) => numCheque(c.numero_cheque) === input.numeroFolha);
+      if (usada) throw new TRPCError({ code: "CONFLICT", message: `A folha ${input.numeroFolha} já foi usada (cheque emitido) — não pode ser marcada como perdida/cancelada.` });
+    }
+    let exc: Record<string, string> = {};
+    try { exc = t.folhas_status_json ? JSON.parse(t.folhas_status_json) : {}; } catch { exc = {}; }
+    if (input.status === "disponivel") delete exc[String(input.numeroFolha)];
+    else exc[String(input.numeroFolha)] = input.status;
+    await dbExecute(db,
+      `UPDATE financial_cheque_taloes SET folhas_status_json=$1, updated_at=NOW() WHERE id=$2`,
+      [JSON.stringify(exc), input.id]);
+    return { ok: true };
+  }),
+
+  excluirTalao: protectedProcedure.input(z.object({ id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await carregarTalaoComAcesso(db, input.id, ctx.user);
+      await dbExecute(db, `UPDATE financial_cheque_taloes SET excluido_em=NOW() WHERE id=$1`, [input.id]);
+      return { ok: true };
+    }),
 
   // Relatório dry-run — ZERO gravação.
   importarPreview: protectedProcedure.input(z.object({

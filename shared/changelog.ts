@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3343 — **FINANCEIRO / CONTAS BANCÁRIAS + CONTROLE DE CHEQUES · CONTROLE DE TALÕES DE CHEQUE PARA RASTREABILIDADE
+ * 100%: (1) NO CADASTRO DE CONTAS DÁ PRA MARCAR "ESTA CONTA TEM TALÃO DE CHEQUE"; (2) SÓ CONTAS COM TALÃO APARECEM NO
+ * SELETOR DE "LANÇAR CHEQUE"; (3) CADA CONTA GANHA GESTÃO DE TALÕES (Nº DO CHEQUE INICIAL + QTD DE FOLHAS) COM GRADE
+ * FOLHA-A-FOLHA — USADA / DISPONÍVEL / PERDIDA / CANCELADA — PRA SABER NA HORA SE EXISTE FOLHA PERDIDA. SCHEMA ADITIVO
+ * (1 COLUNA + 1 TABELA VIA SELF-HEAL) + 3 BACKENDS + 2 FRONTS · ADITIVO · ZERO ALTER/DROP/DELETE DESTRUTIVO.**
+ * - PEDIDO (usuário): controle de talões de cheque pra rastreabilidade total — saber quais folhas já foram usadas e,
+ *   principalmente, se alguma folha do talão se PERDEU. Só contas que de fato têm talão devem aparecer ao lançar cheque.
+ * - SCHEMA (aditivo, `drizzle/schema.ts`): (a) `companyBankAccounts.temTalao` (`smallint` default 0); (b) nova tabela
+ *   `financialChequeTaloes` (`financial_cheque_taloes`): `id`, `company_id`, `conta_bancaria_id`, `descricao`,
+ *   `numero_inicial`, `quantidade_folhas`, `numero_final`, `status` (default 'ativo'), `folhas_status_json` (TEXT — só as
+ *   EXCEÇÕES manuais, ex.: `{"125":"perdida"}`), `observacao`, `created_by_user_id/name`, `excluido_em` (soft-delete),
+ *   `created_at/updated_at` + índices por empresa/conta. SELF-HEAL em `server/_core/index.ts` (`[SyncSchema+]`, após o bloco
+ *   `financial_cheques`): `ADD COLUMN IF NOT EXISTS "temTalao"` + `CREATE TABLE IF NOT EXISTS financial_cheque_taloes` +
+ *   2 índices `IF NOT EXISTS`. Nada de ALTER/DROP/DELETE destrutivo.
+ * - BACKEND LEITURA/ESCRITA DE CONTA: `server/routers/folhaPagamento.ts` — `criarContaBancaria`/`atualizarContaBancaria`
+ *   passam a aceitar `temTalao` (flui via `...accountData`/`...data`); `server/routers/financial.ts` `getBankAccounts`
+ *   inclui `"temTalao"` no SELECT pra o front ler o flag.
+ * - BACKEND TALÕES (`server/routers/cheques.ts`, novas procedures, TODAS com `assertCompanyAccess`): `listarTaloes`
+ *   (talões da empresa/conta + GRADE de folhas DERIVADA cruzando `financial_cheques.numero_cheque` — nº inteiro — por
+ *   `${contaId}:${nº}`: folha com cheque emitido = "usada"; senão lê a exceção do JSON; senão "disponível" + resumo por
+ *   situação e valor BRL do cheque quando usada); `criarTalao` (valida conta ∈ empresa anti-IDOR via `assertContaDaEmpresa`,
+ *   calcula `numero_final = inicial + qtd − 1`, marca `conta.temTalao=1`); `atualizarTalao`; `marcarFolha`
+ *   (perdida/cancelada/disponível gravando só a EXCEÇÃO no `folhas_status_json`; BLOQUEIA marcar como perdida/cancelada uma
+ *   folha que já tem cheque emitido — o cheque é a verdade); `excluirTalao` (SOFT via `excluido_em`). `carregarTalaoComAcesso`
+ *   confere acesso à empresa do talão por id (anti-IDOR). `dbExecute` liga params por ORDEM DE APARIÇÃO do `$N` (mantido).
+ * - FRONT: `client/src/pages/ContasBancarias.tsx` — checkbox "Esta conta tem talão de cheque" no form (flui `temTalao` no
+ *   create/update), badge "Talão" no card e botão "Talões" que abre o novo `client/src/pages/financeiro/TaloesDialog.tsx`
+ *   (cadastrar talão, grade de folhas colorida por situação com legenda, marcar folha perdida/cancelada/disponível e excluir
+ *   talão via AlertDialog — sem `window.confirm`). `client/src/pages/financeiro/FinanceiroCheques.tsx` — `contaOpts` agora
+ *   FILTRA `Number(b.temTalao)===1` (só contas com talão aparecem ao lançar cheque). Moeda em BRL (`toLocaleString` pt-BR).
+ * - ESCOPO: 1 schema (1 col + 1 tabela self-heal) + 3 backends + 3 fronts (1 novo). Tenant guard em toda procedure nova.
+ *   RESSALVA: não testável autenticado no ambiente (login bloqueia screenshot); re-publicar p/ o usuário ver no iPad e a
+ *   tabela `financial_cheque_taloes` se auto-criar no boot via self-heal.
+ * - ARQUIVOS: `drizzle/schema.ts`, `server/_core/index.ts`, `server/routers/cheques.ts`, `server/routers/folhaPagamento.ts`,
+ *   `server/routers/financial.ts`, `client/src/pages/ContasBancarias.tsx`, `client/src/pages/financeiro/TaloesDialog.tsx`,
+ *   `client/src/pages/financeiro/FinanceiroCheques.tsx`, `shared/version.ts` (3343), `shared/changelog.ts`, `replit.md`,
+ *   `replit-history.md`.
+ *
  * Rev. 3342 — **FINANCEIRO / DASHBOARD DE CHEQUES · CORREÇÃO: CHEQUES JÁ COMPENSADOS (COM DATA DE COMPENSAÇÃO, MAS COLUNA
  * `status` AINDA "PENDENTE") NÃO APARECIAM COMO "COMPENSADO" NOS GRÁFICOS — CAÍAM EM "PENDENTE" NA PIZZA E NO EMPILHADO.
  * AGORA O DASHBOARD USA O MESMO STATUS EFETIVO DA TELA "CONTROLE DE CHEQUES" (status="compensado" OU dataCompensacao

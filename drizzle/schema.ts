@@ -651,6 +651,7 @@ export const companyBankAccounts = pgTable("company_bank_accounts", {
         cnpjTitular: varchar({ length: 20 }),
         convenio: varchar({ length: 30 }),
         usarParaFolha: smallint("usarParaFolha").default(0),
+        temTalao: smallint("temTalao").default(0),
         ativo: smallint().default(1).notNull(),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
@@ -660,6 +661,32 @@ export const companyBankAccounts = pgTable("company_bank_accounts", {
 },
 (table) => [
         index("cba_company").on(table.companyId),
+]);
+
+// Talões de cheque por conta bancária (Rev. 3343) — rastreabilidade de folhas.
+// Cada talão tem nº do cheque inicial + qtd de folhas; numeroFinal é derivado/gravado.
+// folhasStatusJson guarda só as EXCEÇÕES por folha ({"125":"perdida","130":"cancelada"});
+// folha "usada" é derivada cruzando financial_cheques.numero_cheque; o resto é "disponível".
+export const financialChequeTaloes = pgTable("financial_cheque_taloes", {
+        id: serial().notNull(),
+        companyId: integer("company_id").notNull(),
+        contaBancariaId: integer("conta_bancaria_id").notNull(),
+        descricao: varchar({ length: 120 }),
+        numeroInicial: integer("numero_inicial").notNull(),
+        quantidadeFolhas: integer("quantidade_folhas").notNull(),
+        numeroFinal: integer("numero_final").notNull(),
+        status: text().default('ativo').notNull(),
+        folhasStatusJson: text("folhas_status_json"),
+        observacao: text(),
+        createdByUserId: integer("created_by_user_id"),
+        createdByName: varchar("created_by_name", { length: 255 }),
+        excluidoEm: timestamp("excluido_em", { mode: 'string' }),
+        createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+        updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
+},
+(table) => [
+        index("fct_company").on(table.companyId),
+        index("fct_conta").on(table.contaBancariaId),
 ]);
 
 export const companyDocuments = pgTable("company_documents", {

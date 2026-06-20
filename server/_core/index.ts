@@ -996,6 +996,35 @@ Regras:
           console.log(`[SyncSchema+] Tabela financial_cheques garantida (Controle de Cheques).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA financial_cheques:`, e?.message || e); }
 
+        // Rev. 3343 — Controle de TALÕES de cheque (rastreabilidade de folhas). Flag
+        // "tem talão" na conta + tabela de talões (nº inicial + qtd de folhas; folha
+        // usada/perdida/cancelada). ADD COLUMN/CREATE TABLE IF NOT EXISTS (R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`ALTER TABLE company_bank_accounts ADD COLUMN IF NOT EXISTS "temTalao" SMALLINT DEFAULT 0`);
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS financial_cheque_taloes (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              conta_bancaria_id INTEGER NOT NULL,
+              descricao VARCHAR(120),
+              numero_inicial INTEGER NOT NULL,
+              quantidade_folhas INTEGER NOT NULL,
+              numero_final INTEGER NOT NULL,
+              status TEXT DEFAULT 'ativo' NOT NULL,
+              folhas_status_json TEXT,
+              observacao TEXT,
+              created_by_user_id INTEGER,
+              created_by_name VARCHAR(255),
+              excluido_em TIMESTAMP,
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+              updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_fct_company ON financial_cheque_taloes(company_id) WHERE excluido_em IS NULL`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_fct_conta ON financial_cheque_taloes(conta_bancaria_id) WHERE excluido_em IS NULL`);
+          console.log(`[SyncSchema+] Rev. 3343: coluna temTalao + tabela financial_cheque_taloes garantidas (Controle de Talões).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA financial_cheque_taloes:`, e?.message || e); }
+
         // Rev. 3210 — "CONTROLE DE CARTÃO DE CRÉDITO": cadastro de cartões +
         // faturas (PDF lido por IA) + itens (compras classificáveis por obra/CC/
         // categoria). CADASTRO/CONTROLE, NÃO vira lançamento (igual cheque).

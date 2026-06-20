@@ -309,7 +309,8 @@ export default function FinanceiroCheques() {
     return out.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
   }, [fornecedoresList]);
   const contaOpts: SearchableSelectOption[] = useMemo(() => {
-    const list: any[] = Array.isArray(bankAccounts) ? bankAccounts : [];
+    // Só contas COM talão de cheque emitido (Rev. 3343) — quem não tem talão não emite cheque.
+    const list: any[] = (Array.isArray(bankAccounts) ? bankAccounts : []).filter((b: any) => Number(b.temTalao) === 1);
     return list.map((b: any) => {
       const banco = String(b.descricao || b.banco || "").trim();
       const ag = String(b.agencia || "").trim();

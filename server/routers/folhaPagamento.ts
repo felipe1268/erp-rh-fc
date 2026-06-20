@@ -2466,6 +2466,7 @@ export const folhaPagamentoRouter = router({
       tipoConta: z.enum(['corrente', 'poupanca']).default('corrente'),
       apelido: z.string().optional(),
       cnpjTitular: z.string().optional(),
+      temTalao: z.number().optional(),
       saldoInicial: z.number().optional(),
       saldoInicialData: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     }))
@@ -2495,6 +2496,7 @@ export const folhaPagamentoRouter = router({
       tipoConta: z.enum(['corrente', 'poupanca']).optional(),
       apelido: z.string().optional(),
       cnpjTitular: z.string().optional(),
+      temTalao: z.number().optional(),
       ativo: z.number().optional(),
       saldoInicial: z.number().optional(),
       saldoInicialData: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
