@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3344 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · TODOS OS CONTADORES INTEIROS DO PAINEL AGORA EXIBEM SEPARADOR DE
+ * MILHAR pt-BR (2.434, 2.967, 2.841…) — ANTES SÓ OS VALORES EM R$ ESTAVAM FORMATADOS; AS CONTAGENS (CRÉDITOS, DÉBITOS,
+ * LINHAS DO EXTRATO, CONCILIADOS, NO EXTRATO/ERP, CONTAS, SUGESTÕES) APARECIAM CRUAS (2434, 2967…). 100% FRONT · UX ·
+ * READ-ONLY · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário, no iPad, com 1 print do "Panorama geral do período"): "Todos números separados por ponto e vírgula" —
+ *   isto é, padronizar as CONTAGENS com o mesmo separador de milhar pt-BR já usado nos valores monetários.
+ * - RAIZ: os valores em R$ usam `formatBRL` (Intl pt-BR), mas os contadores inteiros eram interpolados crus no JSX/HTML
+ *   (`{geralTotais?.qtdEntradas ?? 0}`, `{repConc.length}`, `${repLan.length}` etc.), então números grandes saíam sem o
+ *   ponto de milhar.
+ * - CORREÇÃO (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`, 100% front): novo helper `formatInt(v)` =
+ *   `new Intl.NumberFormat("pt-BR").format(Number(v)||0)`. Aplicado em TODOS os contadores visíveis: (a) cards do Panorama
+ *   Geral (créditos/débitos, contas com extrato, conciliados, no extrato/ERP sem lançamento); (b) cabeçalho "Conciliação por
+ *   conta (N)"; (c) linha de cada conta ("N linha(s) no extrato", badges "concil./extrato/ERP"); (d) painéis expandidos por
+ *   conta ("No extrato/ERP, sem... (N)"); (e) diálogo de drill-in (qtd + label); (f) KPIs da visão de conta individual
+ *   ("N de M linha(s)", conciliado/extrato/ERP/sugestões/sem par); (g) cards/cabeçalhos dos PDFs de Conciliação e de Cheques
+ *   Devolvidos. O `%` (pctConciliado/pctConc) segue sem milhar (é percentual). Valores monetários intactos (`formatBRL`).
+ * - ESCOPO: 1 arquivo front. Sem backend/schema. tsc limpo.
+ * - ARQUIVOS: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`, `shared/version.ts` (3344), `shared/changelog.ts`,
+ *   `replit.md`, `replit-history.md`.
+ *
  * Rev. 3343 — **FINANCEIRO / CONTAS BANCÁRIAS + CONTROLE DE CHEQUES · CONTROLE DE TALÕES DE CHEQUE PARA RASTREABILIDADE
  * 100%: (1) NO CADASTRO DE CONTAS DÁ PRA MARCAR "ESTA CONTA TEM TALÃO DE CHEQUE"; (2) SÓ CONTAS COM TALÃO APARECEM NO
  * SELETOR DE "LANÇAR CHEQUE"; (3) CADA CONTA GANHA GESTÃO DE TALÕES (Nº DO CHEQUE INICIAL + QTD DE FOLHAS) COM GRADE

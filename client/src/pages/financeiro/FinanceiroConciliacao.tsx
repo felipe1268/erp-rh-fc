@@ -20,6 +20,10 @@ import { formatConta, formatAgencia } from "@/lib/formatters";
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
+// Rev. 3344 — contadores inteiros com separador de milhar pt-BR (2.434, 2.967…).
+function formatInt(v: any) {
+  return new Intl.NumberFormat("pt-BR").format(Number(v) || 0);
+}
 // Rev. 3198 — máscara BRL pt-BR p/ o input de valor do "Lançar no ERP".
 function maskBRLInput(raw: string) {
   const d = String(raw).replace(/\D/g, "");
@@ -453,7 +457,7 @@ export default function FinanceiroConciliacao() {
   // Rev. 3239 — conciliação de um GRUPO unificado (VR / combustível / manutenção) contra UMA
   // linha do extrato (N lançamentos : 1 linha). Mesma UX do par 1:1, mas envia os itensIds.
   const conciliarGrupoMut = (trpc as any).financial.conciliarGrupoLancamentos.useMutation({
-    onSuccess: (res: any) => { toast({ title: `Grupo conciliado! ${res.conciliados} lançamento(s) baixado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug(); if (!contaBancariaId && periodoDefinido) refetchGeral(); setConfirmGeralConciliar(null); setSelectedStatement(null); setSelectedEntry(null); },
+    onSuccess: (res: any) => { toast({ title: `Grupo conciliado! ${formatInt(res.conciliados)} lançamento(s) baixado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug(); if (!contaBancariaId && periodoDefinido) refetchGeral(); setConfirmGeralConciliar(null); setSelectedStatement(null); setSelectedEntry(null); },
     onError: (e: any) => toast({ title: "Erro ao conciliar grupo", description: e.message, variant: "destructive" }),
   });
   // Rev. 3198 — conciliação do fluxo "Lançar": SEM onError próprio (o erro é tratado
@@ -473,17 +477,17 @@ export default function FinanceiroConciliacao() {
   // Rev. 3169 — Consolidar / desconsolidar o mês de uma vez (fecha/reabre todas as
   // linhas do extrato da conta+período). Repinta o extrato do mês e as bolinhas do ano.
   const consolidarMut = (trpc as any).financial.consolidarMes.useMutation({
-    onSuccess: (res: any) => { toast({ title: `Mês consolidado! ${res.afetados} lançamento(s) marcado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); },
+    onSuccess: (res: any) => { toast({ title: `Mês consolidado! ${formatInt(res.afetados)} lançamento(s) marcado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); },
     onError: (e: any) => toast({ title: "Erro ao consolidar", description: e.message, variant: "destructive" }),
   });
   const desconsolidarMut = (trpc as any).financial.desconsolidarMes.useMutation({
-    onSuccess: (res: any) => { toast({ title: `Mês reaberto! ${res.afetados} lançamento(s) desmarcado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); },
+    onSuccess: (res: any) => { toast({ title: `Mês reaberto! ${formatInt(res.afetados)} lançamento(s) desmarcado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); },
     onError: (e: any) => toast({ title: "Erro ao desconsolidar", description: e.message, variant: "destructive" }),
   });
   // Rev. 3179 — Limpar extrato importado errado (conta+período). Soft-delete no backend.
   const limparMut = (trpc as any).financial.limparExtrato.useMutation({
     onSuccess: (res: any) => {
-      toast({ title: res.afetados > 0 ? `Extrato limpo! ${res.afetados} linha(s) removida(s).` : "Nada para limpar neste período." });
+      toast({ title: res.afetados > 0 ? `Extrato limpo! ${formatInt(res.afetados)} linha(s) removida(s).` : "Nada para limpar neste período." });
       setConfirmLimpar(false);
       refetchSt(); refetchStAno(); refetchAccStatus(); refetchSug(); refetchReport();
     },
@@ -725,7 +729,7 @@ export default function FinanceiroConciliacao() {
         // os pendentes são ilegíveis e já foram marcados — encerra p/ não rodar à toa.
         if (Number(r?.processados ?? 0) === 0) break;
       }
-      toast({ title: "Comprovantes relidos por IA", description: `${feitos} comprovante(s) identificado(s). As sugestões já consideram beneficiário/CNPJ/ID.` });
+      toast({ title: "Comprovantes relidos por IA", description: `${formatInt(feitos)} comprovante(s) identificado(s). As sugestões já consideram beneficiário/CNPJ/ID.` });
       refetchSug(); refetchReport();
     } catch (err: any) {
       toast({ title: "Erro ao reler comprovantes", description: err?.message || "Falha na leitura por IA.", variant: "destructive" });
@@ -791,9 +795,9 @@ export default function FinanceiroConciliacao() {
     const somaBol = bolVis.reduce((s, it) => s + (Number(it?.valor) || 0), 0);
     const total = somaPix + somaBol;
     const chips = [
-      { key: "todos" as const, label: `Todos (${todos.length})` },
-      { key: "pix" as const, label: `PIX (${pixArr.length})` },
-      { key: "boleto" as const, label: `Boletos (${boletoArr.length})` },
+      { key: "todos" as const, label: `Todos (${formatInt(todos.length)})` },
+      { key: "pix" as const, label: `PIX (${formatInt(pixArr.length)})` },
+      { key: "boleto" as const, label: `Boletos (${formatInt(boletoArr.length)})` },
     ];
     return { pixArr, boletoArr, temDados, todos, porFiltro, lista, pixVis, bolVis, somaPix, somaBol, total, termo, chips };
   }, [demoQuery.data, demoFiltro, buscaLeitura]);
@@ -815,9 +819,9 @@ export default function FinanceiroConciliacao() {
     const span = Math.max(1, 100 - base);
     const itens: any[] = [];
     let falhas = 0;
-    setDemoProg({ kind, pct: base, label: `Lendo com IA — 0 de ${n}…` });
+    setDemoProg({ kind, pct: base, label: `Lendo com IA — 0 de ${formatInt(n)}…` });
     for (let i = 0; i < n; i++) {
-      setDemoProg({ kind, pct: base + Math.round((i / n) * span * 0.9), label: `Lendo com IA — arquivo ${i + 1} de ${n}…` });
+      setDemoProg({ kind, pct: base + Math.round((i / n) * span * 0.9), label: `Lendo com IA — arquivo ${formatInt(i + 1)} de ${formatInt(n)}…` });
       try {
         const r: any = await lerDemoArquivoMut.mutateAsync({ companyId, contaBancariaId: parseInt(contaBancariaId), ano, mes: mesSel, tipo: kind, indice: i });
         if (Array.isArray(r?.itens)) itens.push(...r.itens);
@@ -832,12 +836,12 @@ export default function FinanceiroConciliacao() {
       toast({ title: "Erro ao salvar leitura", description: err?.message || "Falha ao gravar a extração.", variant: "destructive" });
       return;
     }
-    setDemoProg({ kind, pct: 100, label: `Concluído · ${itens.length} pagamento(s)` });
+    setDemoProg({ kind, pct: 100, label: `Concluído · ${formatInt(itens.length)} pagamento(s)` });
     await demoQuery.refetch();
     setBuscaLeitura("");
     setDemoFiltro(kind);
     setTimeout(() => setDemoProg(null), 700);
-    if (falhas > 0) toast({ title: `${falhas} arquivo(s) não puderam ser lidos`, description: "Use 'Reler com IA' para tentar novamente.", variant: "destructive" });
+    if (falhas > 0) toast({ title: `${formatInt(falhas)} arquivo(s) não puderam ser lidos`, description: "Use 'Reler com IA' para tentar novamente.", variant: "destructive" });
   }
   function pedirDemo(kind: "pix" | "boleto") { setDemoKind(kind); setTimeout(() => demoInputRef.current?.click(), 0); }
   // Rev. 3236 — aceita VÁRIOS PDFs de uma vez: faz upload de cada (progresso 1→44%),
@@ -853,18 +857,18 @@ export default function FinanceiroConciliacao() {
     if (pdfs.length === 0) { toast({ title: "Use arquivos PDF", description: "Os demonstrativos devem ser PDFs.", variant: "destructive" }); return; }
     const existentes = (kind === "pix" ? demoQuery.data?.pixArquivos?.length : demoQuery.data?.boletoArquivos?.length) || 0;
     const total = pdfs.length;
-    setDemoProg({ kind, pct: 1, label: `Enviando — 0 de ${total}…` });
+    setDemoProg({ kind, pct: 1, label: `Enviando — 0 de ${formatInt(total)}…` });
     try {
       const novos: { url: string; nome: string }[] = [];
       for (let i = 0; i < total; i++) {
-        setDemoProg({ kind, pct: 1 + Math.round((i / total) * 40), label: `Enviando — arquivo ${i + 1} de ${total}…` });
+        setDemoProg({ kind, pct: 1 + Math.round((i / total) * 40), label: `Enviando — arquivo ${formatInt(i + 1)} de ${formatInt(total)}…` });
         const b64 = await _fileToB64(pdfs[i]);
         const up: any = await uploadComprovanteMut.mutateAsync({ fileName: pdfs[i].name, fileBase64: b64, contentType: "application/pdf" });
         novos.push({ url: up.url, nome: pdfs[i].name });
       }
       setDemoProg({ kind, pct: 44, label: "Salvando anexos…" });
       await salvarDemoMut.mutateAsync({ companyId, contaBancariaId: parseInt(contaBancariaId), ano, mes: mesSel, tipo: kind, arquivos: novos });
-      if (pulados > 0) toast({ title: `${pulados} arquivo(s) ignorado(s)`, description: "Apenas PDFs são aceitos." });
+      if (pulados > 0) toast({ title: `${formatInt(pulados)} arquivo(s) ignorado(s)`, description: "Apenas PDFs são aceitos." });
       // Lê TODOS (existentes + novos) com IA, com progresso real 46→100%.
       await lerDemoIA(kind, { baseStart: 46, count: existentes + novos.length });
     } catch (err: any) {
@@ -910,7 +914,7 @@ export default function FinanceiroConciliacao() {
               <p className="text-[11px] text-gray-400 flex items-center gap-1.5">
                 {fmtData(e.data)}
                 <span className={`px-1.5 py-px rounded-full text-[10px] font-medium ${grpColor}`}>{grpLabel}</span>
-                <span className="px-1.5 py-px rounded-full text-[10px] font-medium bg-gray-100 text-gray-600">{e.qtd} itens</span>
+                <span className="px-1.5 py-px rounded-full text-[10px] font-medium bg-gray-100 text-gray-600">{formatInt(e.qtd)} itens</span>
               </p>
               <p className="text-sm font-medium text-gray-700 truncate">{e.descricao || "—"}</p>
               <p className="text-[11px] text-gray-400 truncate">Total unificado · clique para casar com o extrato</p>
@@ -1048,7 +1052,7 @@ export default function FinanceiroConciliacao() {
 
   const conciliarSugMut = (trpc as any).financial.conciliarSugestoes.useMutation({
     onSuccess: (res: any) => {
-      toast({ title: `${res.conciliados} de ${res.total} conciliados e baixados!` });
+      toast({ title: `${formatInt(res.conciliados)} de ${formatInt(res.total)} conciliados e baixados!` });
       setSelSug(new Set());
       setConfirmConciliar(false);
       refetchSt();
@@ -1137,7 +1141,7 @@ export default function FinanceiroConciliacao() {
         return;
       }
       setImportPct(10);
-      setImportLabel(`Extrato lido: ${total} transações. Gravando...`);
+      setImportLabel(`Extrato lido: ${formatInt(total)} transações. Gravando...`);
 
       // Rev. 3179 — ALERTA/BLOQUEIO: extrato de outro mês ≠ mês selecionado. Detecta o
       // mês DOMINANTE (YYYY-MM mais frequente) entre as linhas; havendo mês selecionado
@@ -1178,12 +1182,12 @@ export default function FinanceiroConciliacao() {
         skipped += r?.skipped ?? 0;
         processed += slice.length;
         setImportPct(10 + Math.round((processed / total) * 90));
-        setImportLabel(`Gravando ${Math.min(processed, total)} de ${total} transações...`);
+        setImportLabel(`Gravando ${formatInt(Math.min(processed, total))} de ${formatInt(total)} transações...`);
       }
 
       setImportPct(100);
       setImportLabel("Concluído!");
-      toast({ title: `Importação concluída! ${inserted} inseridos, ${skipped} duplicados ignorados`, description: "Atualizando a conciliação…" });
+      toast({ title: `Importação concluída! ${formatInt(inserted)} inseridos, ${formatInt(skipped)} duplicados ignorados`, description: "Atualizando a conciliação…" });
       setShowImport(false);
       setImportContent("");
       setImportFileName("");
@@ -1269,24 +1273,24 @@ export default function FinanceiroConciliacao() {
     <span><strong>Emitido em:</strong> ${esc(new Date().toLocaleString("pt-BR"))}</span>
   </div>
   <div class="cards">
-    <div class="card"><div class="lbl">Conciliado</div><div class="val blue">${repConc.length} <span style="font-size:11px">(${pctConc}%)</span></div><div class="lbl">${esc(formatBRL(vConc))}</div></div>
-    <div class="card"><div class="lbl">Extrato sem lançamento</div><div class="val red">${repExt.length}</div><div class="lbl">${esc(formatBRL(vExt))}</div></div>
-    <div class="card"><div class="lbl">Lançamentos sem extrato</div><div class="val">${repLan.length}</div><div class="lbl">${esc(formatBRL(vLan))}</div></div>
-    <div class="card"><div class="lbl">Total do extrato</div><div class="val">${totLinhas}</div><div class="lbl">linhas no período</div></div>
+    <div class="card"><div class="lbl">Conciliado</div><div class="val blue">${formatInt(repConc.length)} <span style="font-size:11px">(${pctConc}%)</span></div><div class="lbl">${esc(formatBRL(vConc))}</div></div>
+    <div class="card"><div class="lbl">Extrato sem lançamento</div><div class="val red">${formatInt(repExt.length)}</div><div class="lbl">${esc(formatBRL(vExt))}</div></div>
+    <div class="card"><div class="lbl">Lançamentos sem extrato</div><div class="val">${formatInt(repLan.length)}</div><div class="lbl">${esc(formatBRL(vLan))}</div></div>
+    <div class="card"><div class="lbl">Total do extrato</div><div class="val">${formatInt(totLinhas)}</div><div class="lbl">linhas no período</div></div>
   </div>
-  <h2>1. Extrato conciliado (${repConc.length})</h2>
+  <h2>1. Extrato conciliado (${formatInt(repConc.length)})</h2>
   <table><thead><tr><th>Data</th><th>Descrição (extrato)</th><th>Lançamento casado</th><th class="r">Valor</th></tr></thead>
   <tbody>${rowsConc}</tbody>
   <tfoot><tr><td colspan="3">Total conciliado</td><td class="r">${esc(formatBRL(vConc))}</td></tr></tfoot></table>
-  <h2>2. Extrato SEM lançamento — o que falta (${repExt.length})</h2>
+  <h2>2. Extrato SEM lançamento — o que falta (${formatInt(repExt.length)})</h2>
   <table><thead><tr><th>Data</th><th>Descrição (extrato)</th><th>Tipo</th><th class="r">Valor</th></tr></thead>
   <tbody>${rowsExt}</tbody>
   <tfoot><tr><td colspan="3">Total pendente</td><td class="r">${esc(formatBRL(vExt))}</td></tr></tfoot></table>
-  <h2>3. Lançamentos do sistema sem extrato (${repLan.length})</h2>
+  <h2>3. Lançamentos do sistema sem extrato (${formatInt(repLan.length)})</h2>
   <table><thead><tr><th>Data</th><th>Lançamento</th><th>Obra</th><th class="r">Valor</th></tr></thead>
   <tbody>${rowsLan}</tbody>
   <tfoot><tr><td colspan="3">Total sem extrato</td><td class="r">${esc(formatBRL(vLan))}</td></tr></tfoot></table>
-  ${repSemConta.length ? `<h2>4. Lançamentos sem conta bancária definida (${repSemConta.length})</h2>
+  ${repSemConta.length ? `<h2>4. Lançamentos sem conta bancária definida (${formatInt(repSemConta.length)})</h2>
   <p style="font-size:10px;color:#6b7280;margin:0 0 6px">Não somados ao bloco "ERP sem extrato" — sem conta de origem informada no ERP, aparecem em todas as contas.</p>
   <table><thead><tr><th>Data</th><th>Lançamento</th><th>Obra</th><th class="r">Valor</th></tr></thead>
   <tbody>${rowsSemConta}</tbody>
@@ -1368,7 +1372,7 @@ export default function FinanceiroConciliacao() {
   </div>
   <table><thead>${head}</thead>
   <tbody>${body}</tbody>
-  <tfoot><tr><td colspan="3">Total (${lista.length})</td><td class="r">${esc(formatBRL(total))}</td></tr></tfoot></table>
+  <tfoot><tr><td colspan="3">Total (${formatInt(lista.length)})</td><td class="r">${esc(formatBRL(total))}</td></tr></tfoot></table>
 </body></html>`;
     const w = window.open("", "_blank");
     if (!w) { toast({ title: "Permita pop-ups para gerar o relatório", variant: "destructive" }); return; }
@@ -1434,14 +1438,14 @@ export default function FinanceiroConciliacao() {
     <span><strong>Emitido em:</strong> ${esc(new Date().toLocaleString("pt-BR"))}</span>
   </div>
   <div class="cards">
-    <div class="card"><div class="lbl">Cheques devolvidos</div><div class="val red">${repDevol.length}</div><div class="lbl">${esc(formatBRL(totalDevol))}</div></div>
-    <div class="card"><div class="lbl">Pendentes</div><div class="val amber">${nPend}</div><div class="lbl">sem quitação identificada</div></div>
-    <div class="card"><div class="lbl">Quitados</div><div class="val green">${nQuit}</div><div class="lbl">reapresentado ou outro meio</div></div>
+    <div class="card"><div class="lbl">Cheques devolvidos</div><div class="val red">${formatInt(repDevol.length)}</div><div class="lbl">${esc(formatBRL(totalDevol))}</div></div>
+    <div class="card"><div class="lbl">Pendentes</div><div class="val amber">${formatInt(nPend)}</div><div class="lbl">sem quitação identificada</div></div>
+    <div class="card"><div class="lbl">Quitados</div><div class="val green">${formatInt(nQuit)}</div><div class="lbl">reapresentado ou outro meio</div></div>
   </div>
   <p class="note">Pares de compensação + devolução do mesmo cheque (saldo zero), exibidos no painel "Cheques devolvidos no banco". Documento informativo — nenhuma baixa é feita automaticamente.</p>
   <table><thead><tr><th>Cheque / Identificação</th><th class="r">Valor</th><th>Motivo (alínea Bacen)</th><th>Datas</th><th>Situação</th></tr></thead>
   <tbody>${rows}</tbody>
-  <tfoot><tr><td>Total (${repDevol.length})</td><td class="r">${esc(formatBRL(totalDevol))}</td><td colspan="3"></td></tr></tfoot></table>
+  <tfoot><tr><td>Total (${formatInt(repDevol.length)})</td><td class="r">${esc(formatBRL(totalDevol))}</td><td colspan="3"></td></tr></tfoot></table>
 </body></html>`;
     const w = window.open("", "_blank");
     if (!w) { toast({ title: "Permita pop-ups para gerar o relatório", variant: "destructive" }); return; }
@@ -1748,7 +1752,7 @@ export default function FinanceiroConciliacao() {
                         <div className="min-w-0">
                           <p className="text-[11px] text-emerald-700 font-medium">Total de entradas</p>
                           <p className="text-xl font-bold text-emerald-700 truncate">{formatBRL(geralTotais?.valorEntradas ?? 0)}</p>
-                          <p className="text-[11px] text-emerald-600/80">{geralTotais?.qtdEntradas ?? 0} crédito(s)</p>
+                          <p className="text-[11px] text-emerald-600/80">{formatInt(geralTotais?.qtdEntradas ?? 0)} crédito(s)</p>
                         </div>
                         <Eye className="w-4 h-4 text-emerald-400 shrink-0 ml-auto" />
                       </button>
@@ -1759,7 +1763,7 @@ export default function FinanceiroConciliacao() {
                         <div className="min-w-0">
                           <p className="text-[11px] text-red-700 font-medium">Total de saídas</p>
                           <p className="text-xl font-bold text-red-600 truncate">{formatBRL(geralTotais?.valorSaidas ?? 0)}</p>
-                          <p className="text-[11px] text-red-600/80">{geralTotais?.qtdSaidas ?? 0} débito(s)</p>
+                          <p className="text-[11px] text-red-600/80">{formatInt(geralTotais?.qtdSaidas ?? 0)} débito(s)</p>
                         </div>
                         <Eye className="w-4 h-4 text-red-400 shrink-0 ml-auto" />
                       </button>
@@ -1772,7 +1776,7 @@ export default function FinanceiroConciliacao() {
                           {(() => { const saldo = (geralTotais?.valorEntradas ?? 0) - (geralTotais?.valorSaidas ?? 0); return (
                             <p className={`text-xl font-bold truncate ${saldo >= 0 ? "text-emerald-700" : "text-red-600"}`}>{formatBRL(saldo)}</p>
                           ); })()}
-                          <p className="text-[11px] text-slate-500">{geralTotais?.contas ?? 0} conta(s) com extrato</p>
+                          <p className="text-[11px] text-slate-500">{formatInt(geralTotais?.contas ?? 0)} conta(s) com extrato</p>
                         </div>
                         <Eye className="w-4 h-4 text-slate-400 shrink-0 ml-auto" />
                       </button>
@@ -1782,26 +1786,26 @@ export default function FinanceiroConciliacao() {
                       <button type="button" onClick={() => setPanoramaDrill("conciliados")} title="Ver as linhas já conciliadas do mês" className="rounded-xl border border-green-200 bg-green-50/60 p-3 text-left hover:bg-green-100/70 hover:border-green-300 transition-colors relative">
                         <Eye className="w-3.5 h-3.5 text-green-400 absolute top-2 right-2" />
                         <p className="text-[11px] text-green-700 font-medium">Conciliados</p>
-                        <p className="text-lg font-bold text-green-700">{geralTotais?.conciliados ?? 0}</p>
+                        <p className="text-lg font-bold text-green-700">{formatInt(geralTotais?.conciliados ?? 0)}</p>
                         <p className="text-[11px] text-green-600/80">{formatBRL(geralTotais?.valorConciliado ?? 0)}</p>
                       </button>
                       <button type="button" onClick={() => setPanoramaDrill("extratoSemLanc")} title="Ver as linhas do extrato ainda sem lançamento no ERP" className="rounded-xl border border-rose-200 bg-rose-50/60 p-3 text-left hover:bg-rose-100/70 hover:border-rose-300 transition-colors relative">
                         <Eye className="w-3.5 h-3.5 text-rose-400 absolute top-2 right-2" />
                         <p className="text-[11px] text-rose-700 font-medium">No extrato, sem lançamento</p>
-                        <p className="text-lg font-bold text-rose-700">{geralTotais?.extratoSemLancamento ?? 0}</p>
+                        <p className="text-lg font-bold text-rose-700">{formatInt(geralTotais?.extratoSemLancamento ?? 0)}</p>
                         <p className="text-[11px] text-rose-600/80">{formatBRL(geralTotais?.valorExtratoSemLancamento ?? 0)}</p>
                       </button>
                       <button type="button" onClick={() => setPanoramaDrill("lancSemExtrato")} title="Ver os lançamentos do ERP ainda sem linha no extrato" className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 text-left hover:bg-amber-100/70 hover:border-amber-300 transition-colors relative">
                         <Eye className="w-3.5 h-3.5 text-amber-400 absolute top-2 right-2" />
                         <p className="text-[11px] text-amber-700 font-medium">No ERP, sem extrato</p>
-                        <p className="text-lg font-bold text-amber-700">{geralTotais?.lancamentosSemExtrato ?? 0}</p>
+                        <p className="text-lg font-bold text-amber-700">{formatInt(geralTotais?.lancamentosSemExtrato ?? 0)}</p>
                         <p className="text-[11px] text-amber-600/80">{formatBRL(geralTotais?.valorLancamentosSemExtrato ?? 0)}</p>
                       </button>
                       <button type="button" onClick={() => setPanoramaDrill("pct")} title="Ver o detalhamento do % conciliado por conta" className="rounded-xl border border-blue-200 bg-blue-50/60 p-3 text-left hover:bg-blue-100/70 hover:border-blue-300 transition-colors relative">
                         <Eye className="w-3.5 h-3.5 text-blue-400 absolute top-2 right-2" />
                         <p className="text-[11px] text-blue-700 font-medium">% conciliado</p>
                         <p className="text-lg font-bold text-blue-700">{geralTotais?.pctConciliado ?? 0}%</p>
-                        <p className="text-[11px] text-blue-600/80">{geralTotais?.contas ?? 0} conta(s) com extrato</p>
+                        <p className="text-[11px] text-blue-600/80">{formatInt(geralTotais?.contas ?? 0)} conta(s) com extrato</p>
                       </button>
                     </div>
                     <p className="text-[11px] text-gray-400 mb-4">Como é calculado: <strong>Total de entradas/saídas</strong> = soma dos créditos (entradas) e dos débitos (saídas) de TODO o extrato do mês, somando todas as contas (independe da conciliação). Os 4 cards de conciliação contam as linhas (em módulo) por situação. Cada conta abaixo mostra suas próprias entradas/saídas — cada lançamento segue vinculado à sua conta.</p>
@@ -1810,7 +1814,7 @@ export default function FinanceiroConciliacao() {
                         Conciliar manualmente AQUI no panorama: 1 linha do extrato + 1 lançamento,
                         sempre da MESMA conta, com confirmação. READ-ONLY até confirmar. */}
                     <div className="flex items-center justify-between gap-2 mb-2">
-                      <p className="text-xs font-semibold text-gray-600">Conciliação por conta ({geralContas.length})</p>
+                      <p className="text-xs font-semibold text-gray-600">Conciliação por conta ({formatInt(geralContas.length)})</p>
                       <div className="flex items-center gap-1.5">
                         <Button size="sm" variant="ghost" className="h-7 text-[11px] px-2" onClick={() => setGeralContasExp(new Set(geralContas.map((c: any) => Number(c.contaBancariaId))))}>Expandir todas</Button>
                         <Button size="sm" variant="ghost" className="h-7 text-[11px] px-2" onClick={() => setGeralContasExp(new Set())}>Recolher todas</Button>
@@ -1841,15 +1845,15 @@ export default function FinanceiroConciliacao() {
                               <div className="min-w-0 flex-1">
                                 <p className="text-sm font-semibold text-gray-800 truncate">{c.contaLabel}</p>
                                 <p className="text-[11px] text-gray-400 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                                  <span>{c.linhas} linha(s) no extrato</span>
+                                  <span>{formatInt(c.linhas)} linha(s) no extrato</span>
                                   <span className="text-emerald-600 font-semibold" title="Total de entradas (créditos) no extrato">▼ entradas {formatBRL(t.valorEntradas ?? 0)}</span>
                                   <span className="text-red-600 font-semibold" title="Total de saídas (débitos) no extrato">▲ saídas {formatBRL(t.valorSaidas ?? 0)}</span>
                                 </p>
                               </div>
                               <div className="hidden sm:flex items-center gap-1.5 shrink-0">
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700" title="Conciliados">{t.conciliados ?? 0} concil.</span>
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-100 text-rose-700" title="No extrato, sem lançamento">{t.extratoSemLancamento ?? 0} extrato</span>
-                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700" title="No ERP, sem extrato">{t.lancamentosSemExtrato ?? 0} ERP</span>
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700" title="Conciliados">{formatInt(t.conciliados ?? 0)} concil.</span>
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-100 text-rose-700" title="No extrato, sem lançamento">{formatInt(t.extratoSemLancamento ?? 0)} extrato</span>
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700" title="No ERP, sem extrato">{formatInt(t.lancamentosSemExtrato ?? 0)} ERP</span>
                               </div>
                               <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 ${isConsol ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
                                 {isConsol ? <><CheckCircle className="h-2.5 w-2.5" />Conciliado</> : <><AlertCircle className="h-2.5 w-2.5" />A conciliar</>}
@@ -1866,13 +1870,13 @@ export default function FinanceiroConciliacao() {
                                 </p>
                                 <div className="grid md:grid-cols-2 gap-3">
                                   <div className="rounded-lg border border-rose-100 overflow-hidden">
-                                    <div className="px-3 py-2 bg-rose-50 text-rose-700 text-xs font-semibold flex items-center gap-1.5"><AlertCircle className="w-3.5 h-3.5" />No extrato, sem lançamento ({cExt.length})</div>
+                                    <div className="px-3 py-2 bg-rose-50 text-rose-700 text-xs font-semibold flex items-center gap-1.5"><AlertCircle className="w-3.5 h-3.5" />No extrato, sem lançamento ({formatInt(cExt.length)})</div>
                                     <div className="divide-y max-h-80 overflow-auto">
                                       {cExt.length ? cExt.map((s: any) => renderExtratoRow(s)) : <div className="px-4 py-6 text-center text-xs text-gray-400">Nada pendente no extrato.</div>}
                                     </div>
                                   </div>
                                   <div className="rounded-lg border border-amber-100 overflow-hidden">
-                                    <div className="px-3 py-2 bg-amber-50 text-amber-700 text-xs font-semibold flex items-center gap-1.5"><AlertCircle className="w-3.5 h-3.5" />No ERP, sem extrato ({cLan.length})</div>
+                                    <div className="px-3 py-2 bg-amber-50 text-amber-700 text-xs font-semibold flex items-center gap-1.5"><AlertCircle className="w-3.5 h-3.5" />No ERP, sem extrato ({formatInt(cLan.length)})</div>
                                     <div className="divide-y max-h-80 overflow-auto">
                                       {cLan.length ? cLan.map((e: any) => renderEntryRow(e)) : <div className="px-4 py-6 text-center text-xs text-gray-400">Nada pendente no ERP.</div>}
                                     </div>
@@ -1881,7 +1885,7 @@ export default function FinanceiroConciliacao() {
 
                                 {cDevol.length > 0 && (
                                   <div className="rounded-lg border border-orange-100 overflow-hidden">
-                                    <div className="px-3 py-2 bg-orange-50 text-orange-700 text-xs font-semibold flex items-center gap-1.5"><AlertCircle className="w-3.5 h-3.5" />Cheques devolvidos ({cDevol.length})</div>
+                                    <div className="px-3 py-2 bg-orange-50 text-orange-700 text-xs font-semibold flex items-center gap-1.5"><AlertCircle className="w-3.5 h-3.5" />Cheques devolvidos ({formatInt(cDevol.length)})</div>
                                     <div className="divide-y max-h-48 overflow-auto bg-white">
                                       {cDevol.map((d: any, i: number) => (
                                         <div key={d.id ?? i} className="flex items-center gap-2 px-3 py-2 text-xs">
@@ -1896,7 +1900,7 @@ export default function FinanceiroConciliacao() {
 
                                 <div className="rounded-lg border border-green-100 overflow-hidden">
                                   <button type="button" onClick={() => setGeralConcExp((prev) => { const n = new Set(prev); if (n.has(contaId)) n.delete(contaId); else n.add(contaId); return n; })} className="w-full px-3 py-2 bg-green-50 text-green-700 text-xs font-semibold flex items-center gap-1.5 hover:bg-green-100">
-                                    <CheckCircle className="w-3.5 h-3.5" />Já conciliados ({cConc.length}){concAberto ? <ChevronUp className="w-3.5 h-3.5 ml-auto" /> : <ChevronDown className="w-3.5 h-3.5 ml-auto" />}
+                                    <CheckCircle className="w-3.5 h-3.5" />Já conciliados ({formatInt(cConc.length)}){concAberto ? <ChevronUp className="w-3.5 h-3.5 ml-auto" /> : <ChevronDown className="w-3.5 h-3.5 ml-auto" />}
                                   </button>
                                   {concAberto && (
                                     <div className="divide-y max-h-64 overflow-auto bg-white">
@@ -1922,7 +1926,7 @@ export default function FinanceiroConciliacao() {
                       <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50/60 p-3">
                         <p className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
                           <AlertCircle className="w-4 h-4 text-gray-400" />
-                          Lançamentos sem conta bancária definida ({geralSemConta.length})
+                          Lançamentos sem conta bancária definida ({formatInt(geralSemConta.length)})
                         </p>
                         <p className="text-[11px] text-gray-400 mt-0.5">Não pertencem a nenhuma conta — clique numa linha para ver de onde veio o lançamento e definir a conta bancária.</p>
                         <div className="mt-2 max-h-48 overflow-auto rounded-lg border border-gray-100 bg-white divide-y">
@@ -2040,7 +2044,7 @@ export default function FinanceiroConciliacao() {
                                     <button type="button" onClick={() => removerDemo(slot.kind, idx)} className="text-xs font-medium text-red-500 hover:text-red-700">Remover</button>
                                   </div>
                                 ))}
-                                <p className="text-[11px] text-gray-400">{slot.arquivos.length} arquivo(s) anexado(s)</p>
+                                <p className="text-[11px] text-gray-400">{formatInt(slot.arquivos.length)} arquivo(s) anexado(s)</p>
                               </div>
                             )}
                             <div className="flex items-center gap-2 flex-wrap">
@@ -2055,7 +2059,7 @@ export default function FinanceiroConciliacao() {
                             </div>
                             {Array.isArray(slot.extraido) && (
                               <div className="mt-1.5 flex items-center justify-between gap-2 flex-wrap">
-                                <p className="text-[11px] text-gray-400">Lido por IA{slot.lidoEm ? ` em ${fmtData(slot.lidoEm)}` : ""} · {slot.extraido.length} pagamento(s) · {formatBRL(slot.extraido.reduce((s: number, it: any) => s + (Number(it?.valor) || 0), 0))}</p>
+                                <p className="text-[11px] text-gray-400">Lido por IA{slot.lidoEm ? ` em ${fmtData(slot.lidoEm)}` : ""} · {formatInt(slot.extraido.length)} pagamento(s) · {formatBRL(slot.extraido.reduce((s: number, it: any) => s + (Number(it?.valor) || 0), 0))}</p>
                                 <button type="button" onClick={() => abrirLeituraFull(slot.kind)} className="inline-flex items-center gap-1 text-[11px] font-medium text-violet-600 hover:text-violet-800 hover:underline">
                                   <Maximize2 className="w-3 h-3" />Ver em tela cheia
                                 </button>
@@ -2096,21 +2100,21 @@ export default function FinanceiroConciliacao() {
                       <div className="rounded-xl border border-violet-100 bg-violet-50/70 p-3 flex items-center gap-3">
                         <span className="w-10 h-10 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center shrink-0"><Landmark className="w-5 h-5" /></span>
                         <div className="min-w-0">
-                          <p className="text-[11px] uppercase tracking-wide text-violet-700/80 font-medium">Total geral · {lista.length}</p>
+                          <p className="text-[11px] uppercase tracking-wide text-violet-700/80 font-medium">Total geral · {formatInt(lista.length)}</p>
                           <p className="text-lg font-bold text-violet-700 truncate">{formatBRL(total)}</p>
                         </div>
                       </div>
                       <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-3 flex items-center gap-3">
                         <span className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0"><ArrowDownCircle className="w-5 h-5" /></span>
                         <div className="min-w-0">
-                          <p className="text-[11px] uppercase tracking-wide text-emerald-700/80 font-medium">PIX · {pixVis.length}</p>
+                          <p className="text-[11px] uppercase tracking-wide text-emerald-700/80 font-medium">PIX · {formatInt(pixVis.length)}</p>
                           <p className="text-lg font-bold text-emerald-700 truncate">{formatBRL(somaPix)}</p>
                         </div>
                       </div>
                       <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3 flex items-center gap-3">
                         <span className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0"><FileText className="w-5 h-5" /></span>
                         <div className="min-w-0">
-                          <p className="text-[11px] uppercase tracking-wide text-blue-700/80 font-medium">Boletos · {bolVis.length}</p>
+                          <p className="text-[11px] uppercase tracking-wide text-blue-700/80 font-medium">Boletos · {formatInt(bolVis.length)}</p>
                           <p className="text-lg font-bold text-blue-700 truncate">{formatBRL(somaBol)}</p>
                         </div>
                       </div>
@@ -2162,7 +2166,7 @@ export default function FinanceiroConciliacao() {
                         </table>
                       )}
                     </div>
-                    <p className="text-[11px] text-gray-400">Mostrando {lista.length} de {porFiltro.length}{termo ? ` (filtro "${buscaLeitura.trim()}")` : ""} · A leitura por IA é uma ajuda para identificar quem recebeu — confira sempre no PDF original. Não concilia nada automaticamente.</p>
+                    <p className="text-[11px] text-gray-400">Mostrando {formatInt(lista.length)} de {formatInt(porFiltro.length)}{termo ? ` (filtro "${buscaLeitura.trim()}")` : ""} · A leitura por IA é uma ajuda para identificar quem recebeu — confira sempre no PDF original. Não concilia nada automaticamente.</p>
                   </CardContent>
                 </Card>
               );
@@ -2194,7 +2198,7 @@ export default function FinanceiroConciliacao() {
                     <p className="text-2xl font-bold text-gray-900">{pctConc}<span className="text-base font-semibold text-gray-400">%</span> <span className="text-sm font-medium text-gray-500">conciliado</span></p>
                   </div>
                   <div className="text-right text-xs text-gray-500">
-                    <span className="font-semibold text-blue-700">{repConc.length}</span> de {totLinhas} linha(s) do extrato
+                    <span className="font-semibold text-blue-700">{formatInt(repConc.length)}</span> de {formatInt(totLinhas)} linha(s) do extrato
                   </div>
                 </div>
                 <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
@@ -2203,23 +2207,23 @@ export default function FinanceiroConciliacao() {
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3">
                     <div className="flex items-center gap-1.5 text-xs text-blue-700"><CheckCircle className="w-3.5 h-3.5" />Conciliado</div>
-                    <p className="text-lg font-bold text-blue-700 mt-0.5">{repConc.length}</p>
+                    <p className="text-lg font-bold text-blue-700 mt-0.5">{formatInt(repConc.length)}</p>
                     <p className="text-[11px] text-gray-500">{formatBRL(vConc)}</p>
                   </div>
                   <div className="rounded-xl border border-red-100 bg-red-50/50 p-3">
                     <div className="flex items-center gap-1.5 text-xs text-red-600"><AlertCircle className="w-3.5 h-3.5" />Extrato sem lançamento</div>
-                    <p className="text-lg font-bold text-red-600 mt-0.5">{repExt.length}</p>
+                    <p className="text-lg font-bold text-red-600 mt-0.5">{formatInt(repExt.length)}</p>
                     <p className="text-[11px] text-gray-500">{formatBRL(vExt)}</p>
                   </div>
                   <div className="rounded-xl border border-amber-100 bg-amber-50/50 p-3">
                     <div className="flex items-center gap-1.5 text-xs text-amber-700"><FileText className="w-3.5 h-3.5" />ERP sem extrato</div>
-                    <p className="text-lg font-bold text-amber-700 mt-0.5">{repLan.length}</p>
+                    <p className="text-lg font-bold text-amber-700 mt-0.5">{formatInt(repLan.length)}</p>
                     <p className="text-[11px] text-gray-500">{formatBRL(vLan)}</p>
                   </div>
                   <div className="rounded-xl border border-violet-100 bg-violet-50/50 p-3">
                     <div className="flex items-center gap-1.5 text-xs text-violet-700"><Sparkles className="w-3.5 h-3.5" />Sugestões prontas</div>
-                    <p className="text-lg font-bold text-violet-700 mt-0.5">{sugLoading ? "…" : sugestoes.length}</p>
-                    <p className="text-[11px] text-gray-500">{semMatch.length} sem par</p>
+                    <p className="text-lg font-bold text-violet-700 mt-0.5">{sugLoading ? "…" : formatInt(sugestoes.length)}</p>
+                    <p className="text-[11px] text-gray-500">{formatInt(semMatch.length)} sem par</p>
                   </div>
                 </div>
               </CardContent>
@@ -2298,7 +2302,7 @@ export default function FinanceiroConciliacao() {
                   ) : sugestoes.length === 0 ? (
                     <p className="text-sm text-gray-500 py-6 text-center">
                       Nenhuma sugestão automática para a conta/período selecionados.
-                      {sugData ? ` (${sugData.totalLinhas ?? 0} linha(s) de extrato analisada(s))` : ""}
+                      {sugData ? ` (${formatInt(sugData.totalLinhas ?? 0)} linha(s) de extrato analisada(s))` : ""}
                     </p>
                   ) : (
                     <div className="space-y-3">
@@ -2308,7 +2312,7 @@ export default function FinanceiroConciliacao() {
                         <Button size="sm" variant="outline" onClick={() => setSelSug(new Set())}>Limpar</Button>
                         <Button size="sm" variant="outline" onClick={relerComprovantes} disabled={relerBusy} title="Lê por IA os comprovantes anexados (beneficiário/CNPJ/ID) p/ identificar melhor as sugestões">
                           {relerBusy ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1" />}
-                          {relerBusy ? `Lendo${relerInfo ? ` (${relerInfo.feitos}, faltam ${relerInfo.restantes})` : "..."}` : "Reler comprovantes (IA)"}
+                          {relerBusy ? `Lendo${relerInfo ? ` (${formatInt(relerInfo.feitos)}, faltam ${formatInt(relerInfo.restantes)})` : "..."}` : "Reler comprovantes (IA)"}
                         </Button>
                         <Button
                           size="sm"
@@ -2383,7 +2387,7 @@ export default function FinanceiroConciliacao() {
                       </div>
                       {semMatch.length > 0 && (
                         <p className="text-xs text-gray-400">
-                          {semMatch.length} linha(s) de extrato sem lançamento correspondente (concilie manualmente abaixo).
+                          {formatInt(semMatch.length)} linha(s) de extrato sem lançamento correspondente (concilie manualmente abaixo).
                         </p>
                       )}
                     </div>
@@ -2420,10 +2424,10 @@ export default function FinanceiroConciliacao() {
                         </DialogTitle>
                         <DialogDescription className="text-xs">
                           {periodoLabel} · {panoramaDrill === "pct"
-                            ? `${geralTotais?.conciliados ?? 0} de ${(geralTotais?.conciliados ?? 0) + (geralTotais?.extratoSemLancamento ?? 0)} linha(s) do extrato`
+                            ? `${formatInt(geralTotais?.conciliados ?? 0)} de ${formatInt((geralTotais?.conciliados ?? 0) + (geralTotais?.extratoSemLancamento ?? 0))} linha(s) do extrato`
                             : panoramaDrill === "saldo"
-                              ? `${geralTotais?.contas ?? 0} conta(s) com extrato`
-                              : `${c.itens.length} ${c.qtdLabel}`}
+                              ? `${formatInt(geralTotais?.contas ?? 0)} conta(s) com extrato`
+                              : `${formatInt(c.itens.length)} ${c.qtdLabel}`}
                           {isLista && <> · <span className={`font-semibold ${c.cor}`}>{formatBRL(c.valor)}</span></>}
                         </DialogDescription>
                       </DialogHeader>
@@ -2468,7 +2472,7 @@ export default function FinanceiroConciliacao() {
                                 <div key={cc.contaBancariaId} className="px-3 py-2.5 text-xs">
                                   <div className="flex items-center gap-2 mb-1">
                                     <span className="flex-1 min-w-0 truncate text-gray-700 font-medium">{cc.contaLabel}</span>
-                                    <span className="shrink-0 text-gray-400">{t.conciliados ?? 0}/{base} linha(s)</span>
+                                    <span className="shrink-0 text-gray-400">{formatInt(t.conciliados ?? 0)}/{formatInt(base)} linha(s)</span>
                                     <span className={`font-bold shrink-0 w-12 text-right ${pct >= 100 ? "text-green-600" : pct > 0 ? "text-blue-600" : "text-gray-400"}`}>{pct}%</span>
                                   </div>
                                   <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
@@ -2678,7 +2682,7 @@ export default function FinanceiroConciliacao() {
                             {field("Total da OC", detOrdem.total != null ? formatBRL(Number(detOrdem.total)) : null)}
                             {field("Condição", detOrdem.condicaoPagamento)}
                             {field("Status OC", detOrdem.status)}
-                            {field("Itens", detItens.length ? `${detItens.length} item(ns)` : null)}
+                            {field("Itens", detItens.length ? `${formatInt(detItens.length)} item(ns)` : null)}
                           </div>
                         </div>
                       )}
@@ -2855,7 +2859,7 @@ export default function FinanceiroConciliacao() {
                   <div className="flex items-start justify-between gap-2">
                     <CardTitle className="text-sm flex items-center gap-2 flex-wrap">
                       <RotateCcw className="w-4 h-4 text-amber-500" />
-                      Cheques devolvidos no banco ({repDevol.length})
+                      Cheques devolvidos no banco ({formatInt(repDevol.length)})
                       <span className="font-normal text-[11px] text-gray-400">tentativa de pagamento frustrada — saldo zero</span>
                     </CardTitle>
                     <Button size="sm" variant="outline" className="h-7 shrink-0" onClick={gerarRelatorioDevolvidosPDF}>
@@ -2927,7 +2931,7 @@ export default function FinanceiroConciliacao() {
                   <div className="flex items-center justify-between gap-2">
                     <CardTitle className="text-sm flex items-center gap-2">
                       <AlertCircle className="w-4 h-4 text-red-500" />
-                      No extrato, sem lançamento ({termoBusca ? `${repExtView.length}/${repExt.length}` : repExt.length})
+                      No extrato, sem lançamento ({termoBusca ? `${formatInt(repExtView.length)}/${formatInt(repExt.length)}` : formatInt(repExt.length)})
                     </CardTitle>
                     {repExt.length > 0 && (
                       <div className="flex items-center gap-1 shrink-0">
@@ -2985,7 +2989,7 @@ export default function FinanceiroConciliacao() {
                   <div className="flex items-center justify-between gap-2">
                     <CardTitle className="text-sm flex items-center gap-2">
                       <FileText className="w-4 h-4 text-amber-600" />
-                      No ERP, sem extrato ({termoBusca ? `${repLanView.length}/${repLan.length}` : repLan.length})
+                      No ERP, sem extrato ({termoBusca ? `${formatInt(repLanView.length)}/${formatInt(repLan.length)}` : formatInt(repLan.length)})
                     </CardTitle>
                     {repLan.length > 0 && (
                       <div className="flex items-center gap-1 shrink-0">
@@ -3028,7 +3032,7 @@ export default function FinanceiroConciliacao() {
                     <summary className="flex items-center justify-between cursor-pointer select-none px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50">
                       <span className="flex items-center gap-2">
                         <FileText className="w-4 h-4 text-gray-500" />
-                        Sem conta bancária definida ({repSemConta.length}) · {formatBRL(vSemConta)}
+                        Sem conta bancária definida ({formatInt(repSemConta.length)}) · {formatBRL(vSemConta)}
                       </span>
                       <ChevronRight className="w-4 h-4 text-gray-400 transition-transform group-open:rotate-90" />
                     </summary>
@@ -3062,7 +3066,7 @@ export default function FinanceiroConciliacao() {
                     </div>
                     <Link2 className="w-5 h-5 text-blue-400 shrink-0 self-center" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-[11px] uppercase tracking-wide text-gray-400">Lançamento{lan?.agrupado ? ` · grupo (${lan.qtd} itens)` : ""}</p>
+                      <p className="text-[11px] uppercase tracking-wide text-gray-400">Lançamento{lan?.agrupado ? ` · grupo (${formatInt(lan.qtd)} itens)` : ""}</p>
                       <p className="text-sm font-medium truncate">{lan ? (lan.fornecedorNome || lan.descricao || "—") : "Selecione um lançamento"}</p>
                       {lan && <p className="text-xs text-gray-500">{formatBRL(Math.abs(Number(lan.valor)))}</p>}
                     </div>
@@ -3093,7 +3097,7 @@ export default function FinanceiroConciliacao() {
                 <CardContent className="p-0">
                   <details className="group">
                     <summary className="flex items-center justify-between cursor-pointer select-none px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                      <span className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-600" />Já conciliados ({repConc.length}) · {formatBRL(vConc)}</span>
+                      <span className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-600" />Já conciliados ({formatInt(repConc.length)}) · {formatBRL(vConc)}</span>
                       <ChevronRight className="w-4 h-4 text-gray-400 transition-transform group-open:rotate-90" />
                     </summary>
                     <div className="divide-y divide-gray-100 max-h-[360px] overflow-y-auto border-t">
@@ -3244,7 +3248,7 @@ export default function FinanceiroConciliacao() {
             <AlertDialogHeader>
               <AlertDialogTitle className="flex items-center gap-2"><Trash2 className="w-5 h-5 text-red-600" />Limpar extrato importado?</AlertDialogTitle>
               <AlertDialogDescription>
-                Isso remove as <strong>{(statements ?? []).length}</strong> linha(s) de extrato da conta selecionada no período de <strong>{periodoLabel}</strong>.
+                Isso remove as <strong>{formatInt((statements ?? []).length)}</strong> linha(s) de extrato da conta selecionada no período de <strong>{periodoLabel}</strong>.
                 Os lançamentos do ERP que estavam conciliados com essas linhas voltam a ficar <strong>pendentes</strong> (nada é apagado do ERP).
                 Use quando importou o extrato errado e quer reimportar.
               </AlertDialogDescription>
@@ -3281,7 +3285,7 @@ export default function FinanceiroConciliacao() {
               </div>
               <div className="flex flex-wrap items-center gap-2 pt-3">
                 <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1 text-xs font-medium text-white ring-1 ring-white/20">
-                  <Link2 className="w-3.5 h-3.5" />{sugSelecionadas.length} par{sugSelecionadas.length === 1 ? "" : "es"} selecionado{sugSelecionadas.length === 1 ? "" : "s"}
+                  <Link2 className="w-3.5 h-3.5" />{formatInt(sugSelecionadas.length)} par{sugSelecionadas.length === 1 ? "" : "es"} selecionado{sugSelecionadas.length === 1 ? "" : "s"}
                 </span>
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/20 px-3 py-1 text-xs font-semibold text-emerald-100 ring-1 ring-emerald-300/30 tabular-nums">
                   Total {formatBRL(sugSelecionadas.reduce((acc, s) => acc + Math.abs(s.extratoValor || 0), 0))}
@@ -3316,7 +3320,7 @@ export default function FinanceiroConciliacao() {
                 disabled={conciliarSugMut.isPending || sugSelecionadas.length === 0}
                 onClick={(e: any) => { e.preventDefault(); confirmarConciliacao(); }}
               >
-                {conciliarSugMut.isPending ? "Conciliando..." : `Confirmar conciliação (${sugSelecionadas.length})`}
+                {conciliarSugMut.isPending ? "Conciliando..." : `Confirmar conciliação (${formatInt(sugSelecionadas.length)})`}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -3382,7 +3386,7 @@ export default function FinanceiroConciliacao() {
                 {mismatch && (
                   <>
                     Você selecionou <strong>{MESES[(mismatch.selecionado.length === 7 ? parseInt(mismatch.selecionado.slice(5, 7), 10) : 1) - 1]}/{mismatch.selecionado.slice(0, 4)}</strong>, mas o extrato parece ser de <strong>{MESES[mismatch.mesNum - 1]}/{mismatch.anoNum}</strong>
-                    {mismatch.fora > 0 ? <> ({mismatch.fora} de {mismatch.total} transações fora do mês selecionado)</> : null}.
+                    {mismatch.fora > 0 ? <> ({formatInt(mismatch.fora)} de {formatInt(mismatch.total)} transações fora do mês selecionado)</> : null}.
                     A importação foi <strong>bloqueada</strong> para evitar misturar meses. O que deseja fazer?
                   </>
                 )}
@@ -3623,9 +3627,9 @@ export default function FinanceiroConciliacao() {
             <DialogHeader className="px-4 py-3 border-b shrink-0">
               <DialogTitle className="flex items-center gap-2 text-base">
                 {expandedList === "extrato" ? (
-                  <><AlertCircle className="w-4 h-4 text-red-500" />No extrato, sem lançamento ({termoBusca ? `${repExtView.length}/${repExt.length}` : repExt.length})</>
+                  <><AlertCircle className="w-4 h-4 text-red-500" />No extrato, sem lançamento ({termoBusca ? `${formatInt(repExtView.length)}/${formatInt(repExt.length)}` : formatInt(repExt.length)})</>
                 ) : (
-                  <><FileText className="w-4 h-4 text-amber-600" />No ERP, sem extrato ({termoBusca ? `${repLanView.length}/${repLan.length}` : repLan.length})</>
+                  <><FileText className="w-4 h-4 text-amber-600" />No ERP, sem extrato ({termoBusca ? `${formatInt(repLanView.length)}/${formatInt(repLan.length)}` : formatInt(repLan.length)})</>
                 )}
               </DialogTitle>
             </DialogHeader>
@@ -3714,21 +3718,21 @@ export default function FinanceiroConciliacao() {
               <div className="rounded-xl border border-violet-100 bg-violet-50/70 p-4 flex items-center gap-3">
                 <span className="w-12 h-12 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center shrink-0"><Landmark className="w-6 h-6" /></span>
                 <div className="min-w-0">
-                  <p className="text-[11px] uppercase tracking-wide text-violet-700/80 font-medium">Total geral · {leituraIA.lista.length}</p>
+                  <p className="text-[11px] uppercase tracking-wide text-violet-700/80 font-medium">Total geral · {formatInt(leituraIA.lista.length)}</p>
                   <p className="text-2xl font-bold text-violet-700 truncate">{formatBRL(leituraIA.total)}</p>
                 </div>
               </div>
               <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-4 flex items-center gap-3">
                 <span className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0"><ArrowDownCircle className="w-6 h-6" /></span>
                 <div className="min-w-0">
-                  <p className="text-[11px] uppercase tracking-wide text-emerald-700/80 font-medium">PIX · {leituraIA.pixVis.length}</p>
+                  <p className="text-[11px] uppercase tracking-wide text-emerald-700/80 font-medium">PIX · {formatInt(leituraIA.pixVis.length)}</p>
                   <p className="text-2xl font-bold text-emerald-700 truncate">{formatBRL(leituraIA.somaPix)}</p>
                 </div>
               </div>
               <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-4 flex items-center gap-3">
                 <span className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0"><FileText className="w-6 h-6" /></span>
                 <div className="min-w-0">
-                  <p className="text-[11px] uppercase tracking-wide text-blue-700/80 font-medium">Boletos · {leituraIA.bolVis.length}</p>
+                  <p className="text-[11px] uppercase tracking-wide text-blue-700/80 font-medium">Boletos · {formatInt(leituraIA.bolVis.length)}</p>
                   <p className="text-2xl font-bold text-blue-700 truncate">{formatBRL(leituraIA.somaBol)}</p>
                 </div>
               </div>
@@ -3781,7 +3785,7 @@ export default function FinanceiroConciliacao() {
               )}
             </div>
             <div className="px-5 py-3 border-t shrink-0 bg-gray-50/60">
-              <p className="text-[11px] text-gray-400">Mostrando {leituraIA.lista.length} de {leituraIA.porFiltro.length}{leituraIA.termo ? ` (filtro "${buscaLeitura.trim()}")` : ""} · A leitura por IA é uma ajuda para identificar quem recebeu — confira sempre no PDF original. Não concilia nada automaticamente.</p>
+              <p className="text-[11px] text-gray-400">Mostrando {formatInt(leituraIA.lista.length)} de {formatInt(leituraIA.porFiltro.length)}{leituraIA.termo ? ` (filtro "${buscaLeitura.trim()}")` : ""} · A leitura por IA é uma ajuda para identificar quem recebeu — confira sempre no PDF original. Não concilia nada automaticamente.</p>
             </div>
           </DialogContent>
         </Dialog>
