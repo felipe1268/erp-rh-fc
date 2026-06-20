@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3354 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA — IMPORTAÇÃO DE EXTRATO · (1) CORRIGIDO O ERRO "NÃO CONSEGUI
+ * INTERPRETAR O JSON DA IA" AO IMPORTAR O EXTRATO DO SANTANDER EM PDF — AGORA HÁ UM PARSER DETERMINÍSTICO PRÓPRIO
+ * (SEM IA), IGUAL AO DA CAIXA/BANCO DO BRASIL. (2) O SELETOR DE ARQUIVO PASSA A ACEITAR VÁRIOS EXTRATOS DE UMA VEZ:
+ * O ERP LÊ E CADASTRA CADA UM EM SEQUÊNCIA, E COMO O MÊS/ANO DE CADA LANÇAMENTO SAI DA PRÓPRIA DATA DA LINHA, CADA
+ * EXTRATO CAI NO SEU MÊS CORRETO. 1 PARSER NOVO + 1 GATE NO BACKEND + 1 FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário, com PDF real do Santander de dez/2024): (a) o extrato do Santander em PDF não importa —
+ *   estoura "Não consegui interpretar o JSON da IA"; (b) poder selecionar VÁRIOS PDFs de uma vez e o ERP cadastrar
+ *   cada um no mês/ano certo.
+ * - RAIZ DO BUG (1): o PDF do Santander tem 14 páginas / ~377 linhas de valor; o fallback de extração por IA
+ *   estourava o `maxTokens:16384` e devolvia um JSON TRUNCADO → `JSON.parse` abortava o lote inteiro. Como o PDF é
+ *   texto selecionável, a solução é um parser determinístico (nada de IA).
+ * - PARSER DETERMINÍSTICO (`server/services/santanderPdfParser.ts`, NOVO): state machine sobre o texto do
+ *   `pdf-parse`; ano vem do cabeçalho ("dezembro/2024"); processa a seção entre o header "DataDescrição" e
+ *   "Saldos por Período"; carrega a data corrente só quando o buffer de descrição está vazio; faz `flush` no
+ *   value-line (DD/MM …  -1.234,56); descarta value-line sem descrição (linha de saldo 0,00). VALIDADO contra o
+ *   PDF real: **349 lançamentos, 0 fantasmas, Créditos = Débitos = R$ 1.495.860,19** — bate EXATO com os totais do
+ *   cabeçalho do extrato.
+ * - GATE NO BACKEND (`server/routers/financial.ts`): o parser entra gated por `isSantander` DEPOIS do Banco do
+ *   Brasil e ANTES do fallback de IA, seguindo o padrão per-bank gate já existente (Caixa/BB) — só emite linhas
+ *   quando confirma que é Santander; caso contrário cai pro fallback como antes. READ-ONLY.
+ * - MULTI-ARQUIVO (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): o `<input type="file">` ganhou
+ *   `multiple`; NOVO state `importFiles[]`; `handleFileSelect` lê TODOS os arquivos (PDF→base64 sem prefixo,
+ *   OFX/QFX→texto, resto→CSV; imagens são ignoradas com aviso). `handleImport` itera a fila — analyze + insert por
+ *   arquivo, agregando os totais, com progresso "Arquivo i/N". O ALERTA de mês divergente (Rev. 3179) roda SÓ no
+ *   modo single-file (importar vários é, por natureza, multi-mês; cada lançamento cai no seu mês pela própria data).
+ *   Dedup idempotente por empresa+conta+data+descrição+valor preservado. Os estados single-file (dropzone, botão
+ *   "Importar") seguem sincronizados com o 1º arquivo da fila; fechar o diálogo limpa a fila.
+ * - VALIDAÇÃO: parser testado contra o PDF real (349 lançamentos, totais batendo); tsc limpo nos arquivos tocados.
+ *
  * Rev. 3353 — **FINANCEIRO / MOVIMENTAÇÃO INTERNA (CNPJs/CPFs DO GRUPO, EM CONFIGURAÇÕES FINANCEIRAS) · A TELA
  * GANHOU LAYOUT MAIS MODERNO (LINHAS-CARTÃO COM AVATAR, SELO DE SITUAÇÃO E TIPO DO DOCUMENTO), O CAMPO CNPJ/CPF
  * AGORA TEM MÁSCARA VIVA pt-BR (PONTOS/BARRA/TRAÇO ENQUANTO DIGITA) E, AO DIGITAR O CNPJ COMPLETO (OU A RAIZ DE

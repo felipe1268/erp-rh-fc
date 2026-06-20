@@ -118,6 +118,9 @@ export default function FinanceiroConciliacao() {
   const [importConta, setImportConta] = useState("");
   const [importContent, setImportContent] = useState("");
   const [importFileName, setImportFileName] = useState("");
+  // Rev. 3354 — vários extratos de uma vez: cada arquivo é lido e gravado em sequência;
+  // o mês/ano de cada lançamento sai SOZINHO da data de cada linha (sem campo de mês).
+  const [importFiles, setImportFiles] = useState<{ nome: string; conteudo: string; formato: "ofx" | "csv" | "pdf" }[]>([]);
   const [csvSeparador, setCsvSeparador] = useState(";");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
@@ -1095,111 +1098,152 @@ export default function FinanceiroConciliacao() {
     conciliarSugMut.mutate({ companyId, pares });
   };
 
-  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-    const isImagem = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tif", "tiff", "heic", "heif"].includes(ext);
-    if (isImagem) {
-      e.target.value = "";
+  // Lê UM arquivo → {nome, conteudo, formato}. PDF vai como base64 (sem o prefixo
+  // data:), OFX/CSV como texto ISO-8859-1.
+  function lerArquivoExtrato(file: File): Promise<{ nome: string; conteudo: string; formato: "ofx" | "csv" | "pdf" }> {
+    return new Promise((resolve, reject) => {
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error(`Falha ao ler ${file.name}`));
+      if (ext === "pdf") {
+        reader.onload = (ev) => resolve({ nome: file.name, conteudo: ((ev.target?.result as string) ?? "").replace(/^data:[^,]*,/, ""), formato: "pdf" });
+        reader.readAsDataURL(file);
+      } else {
+        const formato: "ofx" | "csv" = (ext === "ofx" || ext === "qfx") ? "ofx" : "csv";
+        reader.onload = (ev) => resolve({ nome: file.name, conteudo: (ev.target?.result as string) ?? "", formato });
+        reader.readAsText(file, "ISO-8859-1");
+      }
+    });
+  }
+
+  // Rev. 3354 — aceita VÁRIOS arquivos de uma vez. Imagens são ignoradas (com aviso);
+  // cada extrato válido entra na fila e é lido + gravado em sequência no handleImport.
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const all = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (all.length === 0) return;
+    const imgExts = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tif", "tiff", "heic", "heif"];
+    const imagens = all.filter(f => imgExts.includes(f.name.split(".").pop()?.toLowerCase() ?? ""));
+    const validos = all.filter(f => !imgExts.includes(f.name.split(".").pop()?.toLowerCase() ?? ""));
+    if (imagens.length > 0) {
       toast({
-        title: "Imagem não é lida automaticamente",
+        title: imagens.length === all.length ? "Imagem não é lida automaticamente" : `${imagens.length} imagem(ns) ignorada(s)`,
         description: "Extratos em foto/imagem ainda não são interpretados. Envie o PDF gerado pelo internet banking, ou um arquivo OFX/CSV.",
         variant: "destructive",
       });
-      return;
     }
-    setImportFileName(file.name);
-    const reader = new FileReader();
-    if (ext === "pdf") {
-      setImportFormato("pdf");
-      reader.onload = (ev) => {
-        const res = (ev.target?.result as string) ?? "";
-        setImportContent(res.replace(/^data:[^,]*,/, ""));
-      };
-      reader.readAsDataURL(file);
-    } else {
-      if (ext === "ofx" || ext === "qfx") setImportFormato("ofx");
-      else setImportFormato("csv");
-      reader.onload = (ev) => { setImportContent(ev.target?.result as string ?? ""); };
-      reader.readAsText(file, "ISO-8859-1");
+    if (validos.length === 0) return;
+    // Tolerante a falha por arquivo: lê todos, mantém os que deram certo e avisa os que
+    // falharam (um arquivo corrompido não derruba a fila inteira).
+    const resultados = await Promise.allSettled(validos.map(lerArquivoExtrato));
+    const lidos = resultados.filter((r): r is PromiseFulfilledResult<{ nome: string; conteudo: string; formato: "ofx" | "csv" | "pdf" }> => r.status === "fulfilled").map(r => r.value);
+    const falhas = resultados.length - lidos.length;
+    if (falhas > 0) {
+      toast({ title: `${falhas} arquivo(s) não puderam ser lidos`, description: "Os demais foram carregados normalmente.", variant: "destructive" });
     }
+    if (lidos.length === 0) return;
+    // Mantém os estados single-file em sincronia (UI do dropzone, separador CSV e o
+    // botão "Importar" que checa importContent) com o 1º arquivo da fila.
+    setImportFiles(lidos);
+    setImportFileName(lidos.length === 1 ? lidos[0].nome : `${lidos.length} arquivos selecionados`);
+    setImportFormato(lidos[0].formato);
+    setImportContent(lidos[0].conteudo);
   }
 
   async function handleImport(skipMonthCheck = false) {
-    if (!importContent) { toast({ title: "Selecione um arquivo", variant: "destructive" }); return; }
+    if (importFiles.length === 0 && !importContent) { toast({ title: "Selecione um arquivo", variant: "destructive" }); return; }
     if (!importConta) { toast({ title: "Selecione a conta bancária", variant: "destructive" }); return; }
     const contaId = parseInt(importConta);
+    // Rev. 3354 — fila de arquivos (1 ou vários). Cada extrato é analisado e gravado em
+    // sequência; o mês/ano de cada lançamento sai da própria DATA da linha.
+    const files = importFiles.length > 0
+      ? importFiles
+      : [{ nome: importFileName, conteudo: importContent, formato: importFormato }];
+    const multi = files.length > 1;
     setImportRunning(true);
     setImportPct(2);
-    setImportLabel("Lendo e analisando o extrato...");
+    setImportLabel(multi ? `Lendo ${files.length} extratos...` : "Lendo e analisando o extrato...");
+    let grandInserted = 0, grandSkipped = 0, arquivosComDados = 0;
     try {
-      // FASE 1 — analisar (parse no servidor; nada é gravado ainda)
-      const analysis: any = await analyzeMut.mutateAsync({
-        companyId,
-        contaBancariaId: contaId,
-        formato: importFormato,
-        conteudo: importContent,
-        csvSeparador: importFormato === "csv" ? csvSeparador : undefined,
-      });
-      const linhas: any[] = analysis?.lines ?? [];
-      const total = linhas.length;
-      const importadoEm: string = analysis?.importadoEm;
-      if (total === 0) {
-        toast({ title: "Nenhuma transação encontrada no arquivo", variant: "destructive" });
-        return;
-      }
-      setImportPct(10);
-      setImportLabel(`Extrato lido: ${formatInt(total)} transações. Gravando...`);
+      for (let fi = 0; fi < files.length; fi++) {
+        const f = files[fi];
+        const prefix = multi ? `Arquivo ${fi + 1}/${files.length} — ` : "";
+        const baseProgress = (fi / files.length) * 100;
+        const span = 100 / files.length;
 
-      // Rev. 3179 — ALERTA/BLOQUEIO: extrato de outro mês ≠ mês selecionado. Detecta o
-      // mês DOMINANTE (YYYY-MM mais frequente) entre as linhas; havendo mês selecionado
-      // (não "Ano todo") e divergindo, ABORTA a gravação e abre o alerta de decisão.
-      if (!skipMonthCheck && modoData === "mes" && mesSel != null) {
-        const selKey = `${ano}-${String(mesSel).padStart(2, "0")}`;
-        const counts = new Map<string, number>();
-        for (const l of linhas) { const k = String(l?.data ?? "").slice(0, 7); if (k.length === 7) counts.set(k, (counts.get(k) ?? 0) + 1); }
-        let dom = ""; let domN = 0;
-        for (const [k, n] of counts) { if (n > domN) { dom = k; domN = n; } }
-        if (dom && dom !== selKey) {
-          const fora = linhas.filter(l => String(l?.data ?? "").slice(0, 7) !== selKey).length;
-          const [ay, am] = dom.split("-");
-          setMismatch({ detectado: dom, selecionado: selKey, fora, total, anoNum: parseInt(ay, 10), mesNum: parseInt(am, 10) });
-          return; // não grava — usuário decide no alerta (trocar p/ o mês certo ou cancelar)
+        // FASE 1 — analisar (parse no servidor; nada é gravado ainda)
+        setImportLabel(`${prefix}Lendo e analisando...`);
+        const analysis: any = await analyzeMut.mutateAsync({
+          companyId,
+          contaBancariaId: contaId,
+          formato: f.formato,
+          conteudo: f.conteudo,
+          csvSeparador: f.formato === "csv" ? csvSeparador : undefined,
+        });
+        const linhas: any[] = analysis?.lines ?? [];
+        const total = linhas.length;
+        const importadoEm: string = analysis?.importadoEm;
+        if (total === 0) {
+          // Multi-arquivo: avisa e segue pros demais; single: aborta como antes.
+          toast({ title: multi ? `Sem transações em ${f.nome}` : "Nenhuma transação encontrada no arquivo", variant: "destructive" });
+          if (multi) continue;
+          return;
+        }
+        arquivosComDados++;
+        setImportLabel(`${prefix}${formatInt(total)} transações. Gravando...`);
+
+        // Rev. 3179 — ALERTA/BLOQUEIO de mês divergente: SÓ no modo single-file. Importar
+        // VÁRIOS extratos é, por natureza, multi-mês — cada linha cai no seu próprio mês.
+        if (!multi && !skipMonthCheck && modoData === "mes" && mesSel != null) {
+          const selKey = `${ano}-${String(mesSel).padStart(2, "0")}`;
+          const counts = new Map<string, number>();
+          for (const l of linhas) { const k = String(l?.data ?? "").slice(0, 7); if (k.length === 7) counts.set(k, (counts.get(k) ?? 0) + 1); }
+          let dom = ""; let domN = 0;
+          for (const [k, n] of counts) { if (n > domN) { dom = k; domN = n; } }
+          if (dom && dom !== selKey) {
+            const fora = linhas.filter(l => String(l?.data ?? "").slice(0, 7) !== selKey).length;
+            const [ay, am] = dom.split("-");
+            setMismatch({ detectado: dom, selecionado: selKey, fora, total, anoNum: parseInt(ay, 10), mesNum: parseInt(am, 10) });
+            return; // não grava — usuário decide no alerta (trocar p/ o mês certo ou cancelar)
+          }
+        }
+
+        // FASE 2 — gravar em lotes (progresso real = processadas/total deste arquivo)
+        const CHUNK = 40;
+        let processed = 0;
+        for (let i = 0; i < total; i += CHUNK) {
+          const slice = linhas.slice(i, i + CHUNK);
+          const isLast = i + CHUNK >= total;
+          const r: any = await insertBatchMut.mutateAsync({
+            companyId,
+            contaBancariaId: contaId,
+            formato: f.formato,
+            importadoEm,
+            linhas: slice,
+            finalize: isLast,
+            totalInseridos: grandInserted,
+            totalDuplicados: grandSkipped,
+          });
+          grandInserted += r?.inserted ?? 0;
+          grandSkipped += r?.skipped ?? 0;
+          processed += slice.length;
+          setImportPct(Math.min(99, Math.round(baseProgress + (processed / total) * span)));
+          setImportLabel(`${prefix}Gravando ${formatInt(Math.min(processed, total))} de ${formatInt(total)} transações...`);
         }
       }
 
-      // FASE 2 — gravar em lotes (progresso real = processadas/total)
-      const CHUNK = 40;
-      let inserted = 0;
-      let skipped = 0;
-      let processed = 0;
-      for (let i = 0; i < total; i += CHUNK) {
-        const slice = linhas.slice(i, i + CHUNK);
-        const isLast = i + CHUNK >= total;
-        const r: any = await insertBatchMut.mutateAsync({
-          companyId,
-          contaBancariaId: contaId,
-          formato: importFormato,
-          importadoEm,
-          linhas: slice,
-          finalize: isLast,
-          totalInseridos: inserted,
-          totalDuplicados: skipped,
-        });
-        inserted += r?.inserted ?? 0;
-        skipped += r?.skipped ?? 0;
-        processed += slice.length;
-        setImportPct(10 + Math.round((processed / total) * 90));
-        setImportLabel(`Gravando ${formatInt(Math.min(processed, total))} de ${formatInt(total)} transações...`);
-      }
+      if (arquivosComDados === 0) return; // nada gravado; os toasts já avisaram
 
       setImportPct(100);
       setImportLabel("Concluído!");
-      toast({ title: `Importação concluída! ${formatInt(inserted)} inseridos, ${formatInt(skipped)} duplicados ignorados`, description: "Atualizando a conciliação…" });
+      toast({
+        title: `Importação concluída! ${formatInt(grandInserted)} inseridos, ${formatInt(grandSkipped)} duplicados ignorados`,
+        description: multi ? `${arquivosComDados} extratos processados. Atualizando a conciliação…` : "Atualizando a conciliação…",
+      });
       setShowImport(false);
       setImportContent("");
       setImportFileName("");
+      setImportFiles([]);
       // Rev. 3187 — após importar, a conta importada vira a conta ATIVA na própria tela e o
       // relatório/sugestões recarregam ali mesmo (Painel separado aposentado).
       if (contaId) setContaBancariaId(String(contaId));
@@ -3158,7 +3202,7 @@ export default function FinanceiroConciliacao() {
 
         <input ref={comprovInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.heic,.heif,.doc,.docx" onChange={onComprovanteFile} className="hidden" />
 
-        <Dialog open={showImport} onOpenChange={setShowImport}>
+        <Dialog open={showImport} onOpenChange={(o) => { setShowImport(o); if (!o) { setImportContent(""); setImportFileName(""); setImportFiles([]); } }}>
           <DialogContent className="max-w-md max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0">
             <DialogHeader className="px-6 pt-6 pb-4 pr-14 border-b border-gray-100 space-y-0 shrink-0">
               <DialogTitle className="flex items-start gap-3 text-left">
@@ -3201,6 +3245,7 @@ export default function FinanceiroConciliacao() {
                 <input
                   ref={fileInputRef}
                   type="file"
+                  multiple
                   onChange={handleFileSelect}
                   className="hidden"
                 />
@@ -3217,12 +3262,14 @@ export default function FinanceiroConciliacao() {
                     {importContent ? <Check className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
                   </span>
                   <span className="mt-2 block truncate text-sm font-medium text-gray-700">
-                    {importFileName || "Clique para selecionar um arquivo"}
+                    {importFileName || "Clique para selecionar um ou vários arquivos"}
                   </span>
                   <span className="mt-0.5 block text-[11px] text-gray-400">
-                    {importContent
-                      ? `${(importFileName.split(".").pop() || "arquivo").toUpperCase()} · ${(importContent.length / 1024).toFixed(1)} KB carregado`
-                      : "Qualquer formato (OFX, QFX, CSV, PDF, imagem...)"}
+                    {importFiles.length > 1
+                      ? `${importFiles.length} arquivos na fila · cada um vai pro seu mês/ano`
+                      : importContent
+                        ? `${(importFileName.split(".").pop() || "arquivo").toUpperCase()} · ${(importContent.length / 1024).toFixed(1)} KB carregado`
+                        : "Vários de uma vez (OFX, QFX, CSV, PDF...)"}
                   </span>
                 </button>
               </div>
@@ -3247,7 +3294,7 @@ export default function FinanceiroConciliacao() {
               {importFormato === "pdf" && (
                 <p className="flex items-start gap-1.5 text-[11px] text-gray-500">
                   <FileText className="w-3.5 h-3.5 shrink-0 mt-px text-blue-500" />
-                  PDF de extrato bancário detectado — as transações serão extraídas automaticamente (Caixa e Banco do Brasil por leitura direta; demais bancos por IA). Selecione a conta correta acima.
+                  PDF de extrato bancário detectado — as transações serão extraídas automaticamente (Caixa, Banco do Brasil e Santander por leitura direta; demais bancos por IA). Selecione a conta correta acima.
                 </p>
               )}
 
@@ -3272,7 +3319,7 @@ export default function FinanceiroConciliacao() {
 
             <DialogFooter className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 sm:gap-2 shrink-0">
               <Button variant="outline" onClick={() => setShowImport(false)} disabled={importRunning}>Cancelar</Button>
-              <Button onClick={() => handleImport()} disabled={importRunning || !importContent || !importConta}>
+              <Button onClick={() => handleImport()} disabled={importRunning || (importFiles.length === 0 && !importContent) || !importConta}>
                 {importRunning ? `Importando... ${importPct}%` : "Importar"}
               </Button>
             </DialogFooter>

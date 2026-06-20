@@ -35,6 +35,7 @@ import {
 } from "../services/financialKpiService";
 import { runFinancialJobNow } from "../services/financialAutoImportJob";
 import { parseCaixaExtratoPdf } from "../services/caixaPdfParser";
+import { parseSantanderExtratoPdf } from "../services/santanderPdfParser";
 import { parseBancoBrasilExtratoPdf } from "../services/bbPdfParser";
 import { parseExtratoComIA } from "../services/extratoIaParser";
 import {
@@ -408,7 +409,23 @@ async function parseExtratoLines(input: {
         // qualquer outra falha do parser BB: segue pro fallback de IA.
       }
     }
-    // 3) FALLBACK IA: qualquer outro banco (Itaú, Bradesco, Santander...) tem layout
+    // 2.5) SANTANDER: "Extrato Consolidado Inteligente" PJ — PDF de TEXTO selecionável,
+    //    mas grande (10+ páginas / centenas de lançamentos). Pelo fallback de IA o JSON
+    //    estourava o `maxTokens` e vinha truncado ("Não consegui interpretar o JSON da
+    //    IA"). Parser determinístico próprio (SEM IA, sem limite de tamanho).
+    if (lines.length === 0) {
+      try {
+        const st = await parseSantanderExtratoPdf(input.conteudo);
+        // SÓ confiar no parser quando o PDF É MESMO do Santander (per-bank gate).
+        if (st.isSantander) lines = st.lines;
+      } catch (stErr: any) {
+        if (/não é um PDF válido/i.test(stErr?.message || "")) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: stErr.message });
+        }
+        // qualquer outra falha do parser Santander: segue pro fallback de IA.
+      }
+    }
+    // 3) FALLBACK IA: qualquer outro banco (Itaú, Bradesco...) tem layout
     //    diferente e os parsers determinísticos devolvem 0 linhas. Aí lemos via IA.
     if (lines.length === 0) {
       try {
