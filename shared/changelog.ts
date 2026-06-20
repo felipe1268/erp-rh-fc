@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3380 — **FINANCEIRO / CARTÃO DE CRÉDITO · CORREÇÃO DO AUTO-PREENCHIMENTO DE DIA FECHAMENTO E DIA
+ * VENCIMENTO AO CADASTRAR CARTÃO VIA IMPORTAÇÃO DE FATURA: A IA AGORA EXTRAI OS DIAS DIRETAMENTE COMO
+ * NÚMERO INTEIRO (1-31) — ROBUSTO PARA FATURAS QUE SÓ EXIBEM O DIA SEM DATA COMPLETA. BACKEND ADITIVO
+ * (2 NOVOS CAMPOS NO PROMPT+SCHEMA: `diaFechamento` E `diaVencimento`) + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PROBLEMA: após a Rev. 3379, dia fechamento e dia vencimento não preenchiam no modal "Cadastrar cartão"
+ *   ao clicar em "Cadastrar cartão" na tela de importação de faturas. Limite e demais campos (banco/bandeira/
+ *   final4/titular) preenchiam corretamente. Causa-raiz: o auto-fill dependia de `f.fechamento` e `f.vencimento`
+ *   serem strings YYYY-MM-DD para fatiar o dia via `.slice(8,10)`. Porém muitas faturas (incluindo Santander)
+ *   não exibem a data completa de fechamento/vencimento — a IA retorna `null` para esses campos nesses casos,
+ *   então `diaFechamento` e `diaVencimento` ficavam `""` (vazios).
+ * - FIX BACKEND (`server/routers/cartao.ts`, aditivo):
+ *   · `PROMPT_FATURA`: adicionados 2 campos com instrução explícita de extrair SEMPRE o dia (mesmo que
+ *     só apareça como número isolado, ex.: "fecha dia 28", "melhor dia de compra: 29", "corte: 28"):
+ *     `diaFechamento` (inteiro 1-31) e `diaVencimento` (inteiro 1-31).
+ *   · `SCHEMA_FATURA`: adicionados `diaFechamento: {type:"number",nullable:true}` e
+ *     `diaVencimento: {type:"number",nullable:true}`.
+ *   · `normalizarFatura()`: novos campos `diaFechamentoIA` e `diaVencimentoIA` no retorno
+ *     (Number.isFinite guard; propagados via `...norm` no importarPreview).
+ * - FIX FRONT (`client/src/pages/financeiro/FinanceiroCartaoCredito.tsx`, `cadastrarCartaoDoImport`):
+ *   estratégia de duas camadas: prefere `f.diaFechamentoIA` / `f.diaVencimentoIA` (inteiro direto da IA);
+ *   fallback para fatiar a string ISO se esses forem null. Antes: só fatia de string → vazio quando
+ *   a IA não conseguia data completa.
+ * - EFEITO: ao clicar em "Cadastrar cartão" o modal abre com banco, bandeira, final 4, titular, dia
+ *   fechamento, dia vencimento e limite todos pré-preenchidos automaticamente.
+ * - VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
+ *
  * Rev. 3379 — **FINANCEIRO / CARTÃO DE CRÉDITO · CADASTRO DE CARTÃO COM LAYOUT MODERNO (FULLSCREEN REDESIGN)
  * + AUTO-PREENCHIMENTO DA FATURA (IA JÁ LÊ DIA FECHAMENTO, DIA VENCIMENTO E LIMITE DO PDF E PRÉ-CARREGA O
  * FORMULÁRIO) + PAINEL "MELHOR DATA DE COMPRA" CALCULADO AO VIVO (BASE PARA SUGESTÃO DE CARTÃO NO MÓDULO DE
