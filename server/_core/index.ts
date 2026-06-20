@@ -1051,6 +1051,8 @@ Regras:
         // usada/perdida/cancelada). ADD COLUMN/CREATE TABLE IF NOT EXISTS (R-001/R-007/R-010 OK).
         try {
           await db.execute(sql`ALTER TABLE company_bank_accounts ADD COLUMN IF NOT EXISTS "temTalao" SMALLINT DEFAULT 0`);
+          // Rev. 3363 — flag "tem aplicação/resgate automático (varredura diária)" na conta.
+          await db.execute(sql`ALTER TABLE company_bank_accounts ADD COLUMN IF NOT EXISTS "temAplicacaoAutomatica" SMALLINT DEFAULT 0`);
           await db.execute(sql`
             CREATE TABLE IF NOT EXISTS financial_cheque_taloes (
               id SERIAL PRIMARY KEY,

@@ -38,9 +38,76 @@ export interface ExtratoLine {
   saldo: number | null;
 }
 
+// Rev. 3363 — Rendimento de APLICAÇÃO/RESGATE AUTOMÁTICO (CDB ContaMax) apurado no mês.
+// Vem da tabela "Movimentação Mensal CDB ContaMax", linha "Acumulado Mês" — as colunas
+// (Aplicações | Principal Resgatado | Resgates Brutos | RENDIMENTO resgatado (Base IR/IOF) |
+//  IOF | IR | Valor Líquido) reconciliam entre si (bruto − IOF − IR = líquido creditado).
+// Usamos o bruto RESGATADO (base de tributação) — e NÃO o "Total no mês (A+B)" da Posição
+// Consolidada, que inclui rendimento NÃO-resgatado (ainda sem IOF/IR), o que quebraria a
+// identidade bruto − IOF − IR. Sempre PROPOSTO pra confirmação na Conciliação (nunca lança só).
+export interface RendimentoAplicacao {
+  competenciaMes: number; // 1-12 (0 = não identificado no cabeçalho)
+  competenciaAno: number;
+  bruto: number;          // rendimento bruto resgatado no mês (base IR/IOF)
+  iof: number;            // IOF do mês (>= 0)
+  ir: number;             // IR do mês (>= 0)
+  liquido: number;        // bruto - iof - ir
+  fonte: string;          // "santander_contamax"
+}
+
 export interface SantanderParseResult {
   lines: ExtratoLine[];
   isSantander: boolean; // o PDF é mesmo um extrato do Santander?
+  rendimentoAplicacao?: RendimentoAplicacao | null;
+}
+
+// Todos os valores monetários BR de uma string, como números ABSOLUTOS (ignora sinal,
+// que no Santander vem ora como prefixo "-0,75" ora como sufixo "0,75-").
+function moneyMagnitudes(s: string): number[] {
+  const out: number[] = [];
+  const re = /\d{1,3}(?:\.\d{3})*,\d{2}/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s))) out.push(parseFloat(m[0].replace(/\./g, "").replace(",", ".")));
+  return out;
+}
+
+// Linha "só números" (sem letras) — usada p/ juntar a continuação de uma linha quebrada.
+function isPureNumberLine(s: string): boolean {
+  const t = s.trim();
+  if (!t) return false;
+  return !/[A-Za-zÀ-ú]/.test(t) && /\d,\d{2}/.test(t);
+}
+
+// Extrai o rendimento consolidado da seção "Movimentação Mensal CDB ContaMax".
+function parseRendimentoContaMax(
+  rawLines: string[], refMonth: number, refYear: number,
+): RendimentoAplicacao | null {
+  for (let i = 0; i < rawLines.length; i++) {
+    const t = rawLines[i].trim();
+    if (!/^Acumulado\s+(do\s+)?M[êe]s\b/i.test(t)) continue;
+    // Coleta os tokens da própria linha; se quebrou em mais de uma, anexa as linhas
+    // SÓ-NÚMERO imediatamente seguintes (até ter 7 colunas), sem cruzar outro rótulo.
+    let nums = moneyMagnitudes(t);
+    let j = i + 1;
+    while (nums.length < 7 && j < rawLines.length && j <= i + 3 && isPureNumberLine(rawLines[j])) {
+      nums = nums.concat(moneyMagnitudes(rawLines[j]));
+      j++;
+    }
+    if (nums.length < 7) continue;
+    // Colunas: 0=Aplicações 1=Principal 2=ResgatesBrutos 3=RENDIMENTO(base IR/IOF) 4=IOF 5=IR 6=Líquido
+    const bruto = nums[3];
+    const iof = Math.abs(nums[4]);
+    const ir = Math.abs(nums[5]);
+    if (bruto <= 0 && iof <= 0 && ir <= 0) continue; // mês sem rendimento → ignora
+    const liquido = Math.round((bruto - iof - ir) * 100) / 100;
+    return {
+      competenciaMes: refMonth || 0,
+      competenciaAno: refYear,
+      bruto, iof, ir, liquido,
+      fonte: "santander_contamax",
+    };
+  }
+  return null;
 }
 
 // Token monetário BR ("1.234,56") com sufixo opcional "-" (débito).
@@ -200,5 +267,12 @@ export async function parseSantanderExtratoPdf(base64: string): Promise<Santande
     if (part) descParts.push(part);
   }
 
-  return { lines: out, isSantander: true };
+  // Rendimento de aplicação/resgate automático (CDB ContaMax) — varre o TEXTO COMPLETO
+  // (a seção fica DEPOIS da movimentação, fora do laço acima que para em `endMovement`).
+  let rendimentoAplicacao: RendimentoAplicacao | null = null;
+  if (/ContaMax|CDB|Aplica[çc][aã]o\s+Autom/i.test(text)) {
+    rendimentoAplicacao = parseRendimentoContaMax(rawLines, refMonth, refYear);
+  }
+
+  return { lines: out, isSantander: true, rendimentoAplicacao };
 }

@@ -166,6 +166,12 @@ export default function FinanceiroConciliacao() {
   const [confirmLimpar, setConfirmLimpar] = useState(false);
   const [confirmConciliar, setConfirmConciliar] = useState(false);
   const [mismatch, setMismatch] = useState<{ detectado: string; selecionado: string; fora: number; total: number; anoNum: number; mesNum: number } | null>(null);
+  // Rev. 3363 — propostas de RENDIMENTO de aplicação/resgate automático (CDB ContaMax)
+  // detectadas no(s) extrato(s) importado(s). Sempre exibidas pra CONFIRMAÇÃO (opção A:
+  // bruto + IOF + IR separados). Nunca lança sozinho.
+  type RendProposta = { contaBancariaId: number; competenciaMes: number; competenciaAno: number; bruto: number; iof: number; ir: number; fileName: string };
+  const [rendimentoPropostas, setRendimentoPropostas] = useState<RendProposta[]>([]);
+  const [showRendimento, setShowRendimento] = useState(false);
   // Rev. 3319 — PANORAMA: contas expandidas (listas unificadas por conta) + blocos
   // "já conciliados" abertos por conta + confirmação da conciliação 1-a-1 feita no painel.
   const [geralContasExp, setGeralContasExp] = useState<Set<number>>(new Set());
@@ -474,6 +480,7 @@ export default function FinanceiroConciliacao() {
   // devolve linhas) e grava em LOTES; o % = linhas processadas / total.
   const analyzeMut = (trpc as any).financial.analyzeBankStatement.useMutation();
   const insertBatchMut = (trpc as any).financial.insertBankStatementBatch.useMutation();
+  const lancarRendimentoMut = (trpc as any).financial.lancarRendimentoAplicacao.useMutation();
   const [importRunning, setImportRunning] = useState(false);
   const [importPct, setImportPct] = useState(0);
   const [importLabel, setImportLabel] = useState("");
@@ -1164,6 +1171,7 @@ export default function FinanceiroConciliacao() {
     setImportPct(2);
     setImportLabel(multi ? `Lendo ${files.length} extratos...` : "Lendo e analisando o extrato...");
     let grandInserted = 0, grandSkipped = 0, arquivosComDados = 0;
+    const propostasRend: RendProposta[] = [];
     try {
       for (let fi = 0; fi < files.length; fi++) {
         const f = files[fi];
@@ -1191,6 +1199,29 @@ export default function FinanceiroConciliacao() {
         }
         arquivosComDados++;
         setImportLabel(`${prefix}${formatInt(total)} transações. Gravando...`);
+
+        // Rev. 3363 — rendimento de aplicação/resgate automático (CDB ContaMax) detectado?
+        // Guarda a PROPOSTA p/ confirmação após a gravação (nunca lança sozinho).
+        const rend = analysis?.rendimentoAplicacao;
+        if (rend && (Number(rend.bruto) > 0 || Number(rend.iof) > 0 || Number(rend.ir) > 0)) {
+          // Competência: usa o cabeçalho do extrato; se ausente (0), deriva do mês dominante das linhas.
+          let cMes = Number(rend.competenciaMes) || 0;
+          let cAno = Number(rend.competenciaAno) || 0;
+          if (!cMes || !cAno) {
+            const counts = new Map<string, number>();
+            for (const l of linhas) { const k = String(l?.data ?? "").slice(0, 7); if (k.length === 7) counts.set(k, (counts.get(k) ?? 0) + 1); }
+            let dom = ""; let domN = 0;
+            for (const [k, n] of counts) { if (n > domN) { dom = k; domN = n; } }
+            if (dom) { const [ay, am] = dom.split("-"); cAno = parseInt(ay, 10); cMes = parseInt(am, 10); }
+          }
+          if (cMes && cAno) {
+            propostasRend.push({
+              contaBancariaId: contaId, competenciaMes: cMes, competenciaAno: cAno,
+              bruto: Number(rend.bruto) || 0, iof: Number(rend.iof) || 0, ir: Number(rend.ir) || 0,
+              fileName: f.nome,
+            });
+          }
+        }
 
         // Rev. 3179 — ALERTA/BLOQUEIO de mês divergente: SÓ no modo single-file. Importar
         // VÁRIOS extratos é, por natureza, multi-mês — cada linha cai no seu próprio mês.
@@ -1253,11 +1284,44 @@ export default function FinanceiroConciliacao() {
       refetchAccStatus();
       refetchReport();
       refetchSug();
+      // Rev. 3363 — havendo rendimento(s) de aplicação automática detectado(s), abre o
+      // card de confirmação (nunca lança sozinho).
+      if (propostasRend.length > 0) {
+        setRendimentoPropostas(propostasRend);
+        setShowRendimento(true);
+      }
     } catch (e: any) {
       toast({ title: "Erro na importação", description: e?.message || "Falha ao importar o extrato.", variant: "destructive" });
     } finally {
       setImportRunning(false);
       setTimeout(() => { setImportPct(0); setImportLabel(""); }, 500);
+    }
+  }
+
+  // Rev. 3363 — confirma o lançamento dos rendimentos de aplicação automática propostos.
+  async function confirmarRendimentos() {
+    let lancados = 0, jaExistiam = 0;
+    try {
+      for (const p of rendimentoPropostas) {
+        const r: any = await lancarRendimentoMut.mutateAsync({
+          companyId,
+          contaBancariaId: p.contaBancariaId,
+          competenciaMes: p.competenciaMes,
+          competenciaAno: p.competenciaAno,
+          bruto: p.bruto, iof: p.iof, ir: p.ir,
+        });
+        if (r?.alreadyExists) jaExistiam++; else lancados++;
+      }
+      toast({
+        title: lancados > 0 ? `Rendimento lançado! ${lancados} competência(s)` : "Rendimento já estava lançado",
+        description: jaExistiam > 0 ? `${jaExistiam} competência(s) já existiam e foram ignoradas.` : "Receita financeira + IOF + IR registrados.",
+      });
+      setShowRendimento(false);
+      setRendimentoPropostas([]);
+      refetchReport();
+      refetchSt();
+    } catch (e: any) {
+      toast({ title: "Erro ao lançar rendimento", description: e?.message || "Falha ao registrar o rendimento.", variant: "destructive" });
     }
   }
 
@@ -3325,6 +3389,59 @@ export default function FinanceiroConciliacao() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Rev. 3363 — Proposta de RENDIMENTO de aplicação/resgate automático (CDB ContaMax) */}
+        <AlertDialog open={showRendimento} onOpenChange={(o: boolean) => { if (!o && !lancarRendimentoMut.isPending) { setShowRendimento(false); setRendimentoPropostas([]); } }}>
+          <AlertDialogContent className="max-w-lg p-0 gap-0 overflow-hidden">
+            <AlertDialogHeader className="space-y-0 text-left bg-gradient-to-r from-emerald-700 to-emerald-600 px-6 py-5">
+              <div className="flex items-start gap-3">
+                <div className="rounded-full bg-white/15 p-2 shrink-0"><Sparkles className="w-5 h-5 text-white" /></div>
+                <div>
+                  <AlertDialogTitle className="text-white text-lg font-semibold leading-tight">Rendimento de aplicação automática detectado</AlertDialogTitle>
+                  <AlertDialogDescription className="text-white/80 text-xs mt-1 leading-relaxed">
+                    O extrato traz o rendimento apurado da aplicação automática (CDB ContaMax). Confira e confirme para registrar como <b>receita financeira</b> — com IOF e IR lançados separadamente.
+                  </AlertDialogDescription>
+                </div>
+              </div>
+            </AlertDialogHeader>
+            <div className="px-6 py-4 space-y-3 max-h-[50vh] overflow-y-auto">
+              {rendimentoPropostas.map((p, idx) => {
+                const liquido = Math.round((p.bruto - p.iof - p.ir) * 100) / 100;
+                return (
+                  <div key={idx} className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-emerald-800">{String(p.competenciaMes).padStart(2, "0")}/{p.competenciaAno}</span>
+                      <span className="text-[11px] text-gray-500 truncate max-w-[55%]" title={p.fileName}>{p.fileName}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-y-1 text-sm">
+                      <span className="text-gray-600">Rendimento bruto</span>
+                      <span className="text-right font-medium text-emerald-700">{formatBRL(p.bruto)}</span>
+                      <span className="text-gray-600">IOF</span>
+                      <span className="text-right text-red-600">− {formatBRL(p.iof)}</span>
+                      <span className="text-gray-600">IR</span>
+                      <span className="text-right text-red-600">− {formatBRL(p.ir)}</span>
+                      <span className="text-gray-800 font-semibold border-t pt-1 mt-1">Líquido</span>
+                      <span className="text-right font-semibold text-gray-900 border-t pt-1 mt-1">{formatBRL(liquido)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+              <p className="text-[11px] text-gray-500 leading-relaxed">
+                Serão criados lançamentos efetivos: 1 receita (bruto) + 1 despesa de IOF + 1 despesa de IR por competência. Confirmar de novo a mesma competência não duplica.
+              </p>
+            </div>
+            <AlertDialogFooter className="border-t bg-gray-50 px-6 py-4">
+              <AlertDialogCancel disabled={lancarRendimentoMut.isPending}>Agora não</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e: any) => { e.preventDefault(); confirmarRendimentos(); }}
+                disabled={lancarRendimentoMut.isPending}
+                className="bg-emerald-600 hover:bg-emerald-700"
+              >
+                {lancarRendimentoMut.isPending ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" />Lançando...</> : "Lançar rendimento"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Rev. 3179 — Confirmação de "Limpar extrato" (soft-delete por conta + período) */}
         <AlertDialog open={confirmLimpar} onOpenChange={(o: boolean) => { if (!o) setConfirmLimpar(false); }}>

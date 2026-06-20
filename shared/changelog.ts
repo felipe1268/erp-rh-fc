@@ -1,6 +1,58 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3363 — **FINANCEIRO / CONCILIAÇÃO · APLICAÇÃO/RESGATE AUTOMÁTICO (CDB ContaMax / SANTANDER): (1) FLAG POR
+ * CONTA NO CADASTRO ("ESTA CONTA TEM APLICAÇÃO/RESGATE AUTOMÁTICO"); (2) AS LINHAS DE APLICAÇÃO E RESGATE JÁ
+ * CAEM COMO MOVIMENTAÇÃO INTERNA (NÃO-CAIXA) PELO MATCHER EXISTENTE; (3) O RENDIMENTO APURADO NO MÊS É LIDO DO
+ * RODAPÉ DO EXTRATO E PROPOSTO PRA CONFIRMAÇÃO — AO CONFIRMAR, GERA 3 LANÇAMENTOS EFETIVOS: RECEITA FINANCEIRA
+ * (BRUTO) + DESPESA DE IOF + DESPESA DE IR (OPÇÃO A DO USUÁRIO). NUNCA LANÇA SOZINHO. 1 COLUNA NOVA (SELF-HEAL)
+ * + PARSER + 1 MUTATION + 1 CARD/ALERTDIALOG · ZERO ALTER/DROP/DELETE EM DADO TRANSACIONAL.**
+ * - PEDIDO (usuário): contas Santander com "ContaMax" varrem o saldo todo dia (aplica de manhã, resgata à
+ *   noite). Isso polui a conciliação com entradas/saídas que NÃO são caixa real, e o RENDIMENTO da aplicação
+ *   precisa virar receita financeira. Confirmou: opção A = bruto + IOF + IR separados; rendimento SEMPRE
+ *   proposto pra confirmar (nunca lança sozinho).
+ * - CAMADA 1 — FLAG POR CONTA: coluna `temAplicacaoAutomatica` SMALLINT default 0 em `company_bank_accounts`
+ *   (`drizzle/schema.ts`, camelCase quoted seguindo a convenção da tabela) + `ADD COLUMN IF NOT EXISTS
+ *   "temAplicacaoAutomatica"` no bloco `[SyncSchema+]` (`server/_core/index.ts`); input no
+ *   `criarContaBancaria`/`atualizarContaBancaria`
+ *   (`server/routers/folhaPagamento.ts`) e checkbox "Esta conta tem aplicação/resgate automático" em
+ *   `client/src/pages/ContasBancarias.tsx` (interface + emptyForm + load + submit create/update + UI).
+ * - CAMADA 2 — CLASSIFICAÇÃO INTERNA: NÃO precisou de código novo. O `_INTERNO_PATTERNS`
+ *   (`server/routers/financial.ts`) já reconhece "aplica", "resgate", "contamax", "cdb" → as linhas de
+ *   aplicação/resgate automático já são marcadas como movimentação INTERNA (não-caixa) na conciliação.
+ * - CAMADA 3 — RENDIMENTO (PARSER): `server/services/santanderPdfParser.ts` ganhou a interface
+ *   `RendimentoAplicacao` + `parseRendimentoContaMax`, que lê a tabela "Movimentação Mensal CDB ContaMax",
+ *   linha "Acumulado Mês" — colunas `Aplicações | Principal Resgatado | Resgates Brutos | RENDIMENTO resgatado
+ *   (Base IR/IOF) | IOF | IR | Valor Líquido`. Extrai bruto = col Rendimento (índice 3), IOF = abs(índice 4),
+ *   IR = abs(índice 5). DECISÃO DE FONTE: usa o BRUTO RESGATADO (base de tributação) da linha "Acumulado Mês",
+ *   e NÃO o "Total no mês (A+B)" da seção "Posição Consolidada" — porque só o bruto resgatado reconcilia com
+ *   IOF+IR (a identidade bruto − IOF − IR = líquido creditado), enquanto o A+B inclui rendimento NÃO-resgatado
+ *   ainda sem tributação, o que quebraria a soma. DESVIO consciente do aceite do plano (que citava o 0,84 da
+ *   Posição Consolidada): adotado o 0,82 resgatado, internamente consistente; como é sempre proposto pra
+ *   confirmação, o usuário ajusta se quiser. RESSALVA: o layout-fonte é o do pdftotext (`/tmp/extrato.txt`); o
+ *   parser real usa `pdf-parse` — fiz a varredura robusta (linha "Acumulado Mês" + continuação só-números) mas
+ *   falta validar empiricamente contra a saída exata do `pdf-parse` num extrato ContaMax real.
+ * - CAMADA 3 — RENDIMENTO (BACKEND): `parseExtratoLines` (`server/routers/financial.ts`) passou a devolver
+ *   `{ lines, rendimentoAplicacao }` (2 call sites atualizados); `analyzeBankStatement` propaga
+ *   `rendimentoAplicacao` no retorno. NOVA mutation `lancarRendimentoAplicacao`: tenant guard duplo
+ *   (`_assertFinanceiroCompanyAccess` + `_assertContaBancariaPertenceEmpresa`); find-or-create idempotente das
+ *   categorias "Rendimento de Aplicação Financeira" (receita), "IOF sobre Aplicação Financeira" e "IR sobre
+ *   Aplicação Financeira" (despesa) no Plano de Contas (código AUTO-NNNN); cria 3 entries EFETIVAS
+ *   (`status` recebido/pago, `valor_previsto=valor_realizado`, `data` = último dia da competência,
+ *   `conta_bancaria_id` da conta, `conciliado=1`, `origem_modulo='rendimento_aplicacao'`). IDEMPOTENTE
+ *   RACE-SAFE: o dedup por (company + conta_bancaria + ano/mês da competência) roda DENTRO da transação,
+ *   precedido de `pg_advisory_xact_lock(chave)` que serializa por (empresa, conta, ano, mês) — fecha a janela
+ *   do "check-then-insert" sob cliques/chamadas concorrentes (ALTER/índice único é proibido neste projeto, então
+ *   o lock de transação é o caminho). Re-confirmar não duplica. `rendimento_aplicacao`
+ *   NÃO está em `PROJECAO_ORIGENS`, então conta como caixa REAL (aparece no "só real").
+ * - CAMADA 3 — RENDIMENTO (FRONT): `client/src/pages/financeiro/FinanceiroConciliacao.tsx` captura a proposta
+ *   por arquivo no loop de import (competência do cabeçalho; se ausente, deriva do mês dominante das linhas) e,
+ *   após a gravação, abre um `AlertDialog` esmeralda "Rendimento de aplicação automática detectado" mostrando
+ *   bruto/IOF/IR/líquido em BRL por competência + botão "Lançar rendimento" → `lancarRendimentoAplicacao` por
+ *   competência. "Agora não" descarta. Toast distingue lançados × já-existentes.
+ * - VALIDAÇÃO: tsc limpo nos arquivos tocados (0 erros novos; os ~200 erros remanescentes são o ruído
+ *   pré-existente conhecido em `shared/changelog.ts`).
+ *
  * Rev. 3362 — **FINANCEIRO / MOVIMENTAÇÃO INTERNA (CNPJs/CPFs DO GRUPO) · AGORA DÁ PARA EXCLUIR DE VERDADE
  * (HARD DELETE) E TAMBÉM INATIVAR (SOFT) À ESCOLHA: A LIXEIRA ANTES SÓ INATIVAVA; AGORA CADA LINHA TEM 3 AÇÕES
  * — EDITAR · INATIVAR/REATIVAR (REVERSÍVEL) · EXCLUIR DEFINITIVAMENTE (COM CONFIRMAÇÃO). 1 MUTATION NOVA

@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { MoneyInput } from "@/components/ui/money-input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
-import { Plus, Search, Pencil, Trash2, Landmark, CreditCard, Building2, CheckCircle2, XCircle, Wallet, BookCopy } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Landmark, CreditCard, Building2, CheckCircle2, XCircle, Wallet, BookCopy, TrendingUp } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import TaloesDialog from "@/pages/financeiro/TaloesDialog";
 import { useState, useMemo } from "react";
@@ -28,6 +28,7 @@ type ContaForm = {
   conta: string;
   tipoConta: "corrente" | "poupanca";
   temTalao: boolean;
+  temAplicacaoAutomatica: boolean;
   saldoInicial: string;
   saldoInicialData: string;
 };
@@ -39,6 +40,7 @@ const emptyForm: ContaForm = {
   conta: "",
   tipoConta: "corrente",
   temTalao: false,
+  temAplicacaoAutomatica: false,
   saldoInicial: "",
   saldoInicialData: "",
 };
@@ -119,6 +121,7 @@ export default function ContasBancarias() {
       conta: conta.conta || "",
       tipoConta: conta.tipoConta || "corrente",
       temTalao: Number(conta.temTalao) === 1,
+      temAplicacaoAutomatica: Number(conta.temAplicacaoAutomatica) === 1,
       saldoInicial: conta.saldoInicial != null ? String(conta.saldoInicial) : "",
       saldoInicialData: conta.saldoInicialData ? String(conta.saldoInicialData).slice(0, 10) : "",
     });
@@ -155,6 +158,7 @@ export default function ContasBancarias() {
         conta: form.conta,
         tipoConta: form.tipoConta,
         temTalao: form.temTalao ? 1 : 0,
+        temAplicacaoAutomatica: form.temAplicacaoAutomatica ? 1 : 0,
         ...saldoFields,
       });
     } else {
@@ -164,6 +168,7 @@ export default function ContasBancarias() {
         conta: form.conta,
         tipoConta: form.tipoConta,
         temTalao: form.temTalao ? 1 : 0,
+        temAplicacaoAutomatica: form.temAplicacaoAutomatica ? 1 : 0,
         ...saldoFields,
       });
     }
@@ -476,6 +481,24 @@ export default function ContasBancarias() {
                   <span className="block text-xs text-muted-foreground mt-0.5">
                     Só contas marcadas aparecem no seletor de "Lançar cheque". Após salvar, use o botão
                     <span className="font-medium"> Talões</span> no card para cadastrar os talões e controlar folhas perdidas.
+                  </span>
+                </span>
+              </label>
+            </div>
+
+            <div className="border-t pt-4 mt-1">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <Checkbox
+                  checked={form.temAplicacaoAutomatica}
+                  onCheckedChange={(v) => setForm(f => ({ ...f, temAplicacaoAutomatica: v === true }))}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="text-sm font-medium flex items-center gap-1.5">
+                    <TrendingUp className="h-4 w-4 text-[#1B2A4A]" /> Esta conta tem aplicação/resgate automático (varredura diária)
+                  </span>
+                  <span className="block text-xs text-muted-foreground mt-0.5">
+                    Marque se o banco aplica o saldo ocioso no fim do dia e resgata na abertura (ex.: <span className="font-medium">ContaMax / Resgate Automático</span>). Na Conciliação, as linhas de <span className="font-medium">aplicação e resgate</span> são tratadas como <span className="font-medium">movimentação interna</span> (não são entrada/saída de caixa), e o <span className="font-medium">rendimento</span> é proposto como receita financeira.
                   </span>
                 </span>
               </label>

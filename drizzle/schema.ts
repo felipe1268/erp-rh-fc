@@ -652,6 +652,7 @@ export const companyBankAccounts = pgTable("company_bank_accounts", {
         convenio: varchar({ length: 30 }),
         usarParaFolha: smallint("usarParaFolha").default(0),
         temTalao: smallint("temTalao").default(0),
+        temAplicacaoAutomatica: smallint("temAplicacaoAutomatica").default(0),
         ativo: smallint().default(1).notNull(),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),

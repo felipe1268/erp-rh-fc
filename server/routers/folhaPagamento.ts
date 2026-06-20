@@ -2467,6 +2467,7 @@ export const folhaPagamentoRouter = router({
       apelido: z.string().optional(),
       cnpjTitular: z.string().optional(),
       temTalao: z.number().optional(),
+      temAplicacaoAutomatica: z.number().optional(),
       saldoInicial: z.number().optional(),
       saldoInicialData: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     }))
@@ -2497,6 +2498,7 @@ export const folhaPagamentoRouter = router({
       apelido: z.string().optional(),
       cnpjTitular: z.string().optional(),
       temTalao: z.number().optional(),
+      temAplicacaoAutomatica: z.number().optional(),
       ativo: z.number().optional(),
       saldoInicial: z.number().optional(),
       saldoInicialData: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),

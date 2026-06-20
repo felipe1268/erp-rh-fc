@@ -35,7 +35,7 @@ import {
 } from "../services/financialKpiService";
 import { runFinancialJobNow } from "../services/financialAutoImportJob";
 import { parseCaixaExtratoPdf } from "../services/caixaPdfParser";
-import { parseSantanderExtratoPdf } from "../services/santanderPdfParser";
+import { parseSantanderExtratoPdf, type RendimentoAplicacao } from "../services/santanderPdfParser";
 import { parseBancoBrasilExtratoPdf } from "../services/bbPdfParser";
 import { parseExtratoComIA } from "../services/extratoIaParser";
 import {
@@ -369,8 +369,9 @@ async function parseExtratoLines(input: {
   csvColunaDescricao?: number;
   csvColunaValor?: number;
   csvColunaSaldo?: number;
-}): Promise<ExtratoLine[]> {
+}): Promise<{ lines: ExtratoLine[]; rendimentoAplicacao: RendimentoAplicacao | null }> {
   let lines: ExtratoLine[] = [];
+  let rendimentoAplicacao: RendimentoAplicacao | null = null;
 
   if (input.formato === "pdf") {
     // 1) Caminho determinístico: layout em colunas da CAIXA (rápido, sem IA).
@@ -417,7 +418,11 @@ async function parseExtratoLines(input: {
       try {
         const st = await parseSantanderExtratoPdf(input.conteudo);
         // SÓ confiar no parser quando o PDF É MESMO do Santander (per-bank gate).
-        if (st.isSantander) lines = st.lines;
+        if (st.isSantander) {
+          lines = st.lines;
+          // Rev. 3363 — rendimento de aplicação/resgate automático (CDB ContaMax), se houver.
+          rendimentoAplicacao = st.rendimentoAplicacao ?? null;
+        }
       } catch (stErr: any) {
         if (/não é um PDF válido/i.test(stErr?.message || "")) {
           throw new TRPCError({ code: "BAD_REQUEST", message: stErr.message });
@@ -507,7 +512,7 @@ async function parseExtratoLines(input: {
   if (lines.length === 0) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhuma linha válida encontrada no arquivo" });
   }
-  return lines;
+  return { lines, rendimentoAplicacao };
 }
 
 // ─────────────────── Rev. 3193 — LEITURA DE COMPROVANTE (IA de visão) ───────────────────
@@ -6658,7 +6663,7 @@ export const financialRouter = router({
       throw new TRPCError({ code: "FORBIDDEN", message: "Conta bancária não pertence a esta empresa" });
     }
 
-    const lines = await parseExtratoLines(input);
+    const { lines } = await parseExtratoLines(input);
 
     let inserted = 0;
     let skipped = 0;
@@ -6715,8 +6720,140 @@ export const financialRouter = router({
       throw new TRPCError({ code: "FORBIDDEN", message: "Conta bancária não pertence a esta empresa" });
     }
 
-    const lines = await parseExtratoLines(input);
-    return { lines, total: lines.length, importadoEm: new Date().toISOString() };
+    const { lines, rendimentoAplicacao } = await parseExtratoLines(input);
+    return { lines, total: lines.length, importadoEm: new Date().toISOString(), rendimentoAplicacao };
+  }),
+
+  // ─────────── Rev. 3363 — LANÇAR RENDIMENTO DE APLICAÇÃO/RESGATE AUTOMÁTICO ───────────
+  // O extrato Santander de uma conta com aplicação automática (CDB ContaMax) traz, no
+  // rodapé, o rendimento APURADO no mês. O parser propõe { bruto, iof, ir }; o usuário
+  // CONFIRMA na Conciliação (nunca lança sozinho — opção A: bruto + IOF + IR separados).
+  // Esta mutation materializa 3 lançamentos EFETIVOS (receita financeira BRUTA + despesa
+  // IOF + despesa IR), garantindo as categorias no Plano de Contas. IDEMPOTENTE: re-confirmar
+  // o mesmo mês/conta não duplica. Tenant guard duplo (empresa + dono da conta).
+  lancarRendimentoAplicacao: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    contaBancariaId: z.number(),
+    competenciaMes: z.number().min(1).max(12),
+    competenciaAno: z.number().min(2000).max(2100),
+    bruto: z.number().nonnegative(),
+    iof: z.number().nonnegative().default(0),
+    ir: z.number().nonnegative().default(0),
+    observacoes: z.string().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    await _assertContaBancariaPertenceEmpresa(db, input.contaBancariaId, input.companyId);
+
+    const bruto = Math.round(input.bruto * 100) / 100;
+    const iof = Math.round(input.iof * 100) / 100;
+    const ir = Math.round(input.ir * 100) / 100;
+    if (bruto <= 0 && iof <= 0 && ir <= 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum valor de rendimento informado." });
+    }
+
+    // Categoria do Plano de Contas (find-or-create idempotente por nome).
+    const ensureAccount = async (nome: string, tipo: "receita" | "despesa", dre: string): Promise<number> => {
+      const found = rows(await dbExecute(db,
+        `SELECT id FROM financial_accounts WHERE company_id=$1 AND LOWER(nome)=LOWER($2) AND ativo=1 LIMIT 1`,
+        [input.companyId, nome]))[0];
+      if (found?.id) return Number(found.id);
+      const maxRes = rows(await dbExecute(db,
+        `SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(codigo,'[^0-9]','','g') AS INTEGER)),0)+1 AS nxt
+           FROM financial_accounts WHERE company_id=$1 AND codigo LIKE 'AUTO-%'`,
+        [input.companyId]))[0];
+      const codigo = `AUTO-${String(Number(maxRes?.nxt ?? 1)).padStart(4, "0")}`;
+      try {
+        const r = rows(await dbExecute(db,
+          `INSERT INTO financial_accounts (company_id, codigo, nome, tipo, natureza, nivel, conta_pai_id, classificacao_dre, centro_custo_id, ativo, ordem)
+           VALUES ($1,$2,$3,$4,$5,1,NULL,$6,NULL,1,999) RETURNING id`,
+          [input.companyId, codigo, nome, tipo, tipo, dre]));
+        return Number(r[0]?.id);
+      } catch (e: any) {
+        const again = rows(await dbExecute(db,
+          `SELECT id FROM financial_accounts WHERE company_id=$1 AND LOWER(nome)=LOWER($2) AND ativo=1 LIMIT 1`,
+          [input.companyId, nome]))[0];
+        if (again?.id) return Number(again.id);
+        throw e;
+      }
+    };
+
+    // Data = último dia da competência (rendimento creditado no fim do mês).
+    const ultimoDia = new Date(Date.UTC(input.competenciaAno, input.competenciaMes, 0)).getUTCDate();
+    const dataStr = `${input.competenciaAno}-${String(input.competenciaMes).padStart(2, "0")}-${String(ultimoDia).padStart(2, "0")}`;
+    const mesAno = `${String(input.competenciaMes).padStart(2, "0")}/${input.competenciaAno}`;
+    const obs = input.observacoes?.trim() || null;
+
+    const insertEntry = async (
+      tx: any, tipo: "receita" | "despesa", contaId: number, contaNome: string,
+      valor: number, descricao: string, status: "recebido" | "pago",
+    ): Promise<number> => {
+      // dbExecute liga params por ORDEM DE APARIÇÃO — o array segue a ordem do texto.
+      const r = await dbExecute(tx,
+        `INSERT INTO financial_entries
+          (company_id, conta_id, conta_nome, tipo, natureza,
+           valor_previsto, valor_realizado, data_competencia, data_pagamento,
+           status, conta_bancaria_id, descricao, observacoes, conciliado,
+           origem_modulo, origem_descricao, criado_por_id, criado_por_nome, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,'variavel',
+           $5,$6,$7::date,$8::date,
+           $9,$10,$11,$12,1,
+           'rendimento_aplicacao',$13,$14,$15,NOW(),NOW())
+         RETURNING id`,
+        [
+          input.companyId, contaId, contaNome, tipo,
+          valor, valor, dataStr, dataStr,
+          status, input.contaBancariaId, descricao, obs,
+          `CDB ContaMax ${mesAno}`, ctx.user?.id ?? null, ctx.user?.name ?? null,
+        ]);
+      return Number(rows(r)[0]?.id);
+    };
+
+    const ids: number[] = [];
+    let alreadyExists = false;
+    await db.transaction(async (tx: any) => {
+      // Idempotência RACE-SAFE: serializa por (empresa, conta, ano, mês) com advisory lock
+      // de transação (ALTER/índice único é proibido neste projeto). O lock + re-check dentro
+      // da MESMA transação fecha a janela do "check-then-insert" sob chamadas concorrentes.
+      const lockKey = ((input.companyId * 100 + input.contaBancariaId) * 10000 + input.competenciaAno) * 100 + input.competenciaMes;
+      await dbExecute(tx, `SELECT pg_advisory_xact_lock($1::bigint)`, [lockKey]);
+
+      const dupe = rows(await dbExecute(tx,
+        `SELECT id FROM financial_entries
+          WHERE company_id=$1 AND conta_bancaria_id=$2 AND origem_modulo='rendimento_aplicacao'
+            AND EXTRACT(YEAR FROM data_competencia)=$3 AND EXTRACT(MONTH FROM data_competencia)=$4
+          LIMIT 1`,
+        [input.companyId, input.contaBancariaId, input.competenciaAno, input.competenciaMes]
+      ));
+      if (dupe[0]?.id) { alreadyExists = true; return; }
+
+      if (bruto > 0) {
+        const catReceita = await ensureAccount("Rendimento de Aplicação Financeira", "receita", "receita_financeira");
+        ids.push(await insertEntry(tx, "receita", catReceita, "Rendimento de Aplicação Financeira",
+          bruto, `Rendimento de aplicação automática (CDB ContaMax) — ${mesAno}`, "recebido"));
+      }
+      if (iof > 0) {
+        const catIof = await ensureAccount("IOF sobre Aplicação Financeira", "despesa", "despesa_financeira");
+        ids.push(await insertEntry(tx, "despesa", catIof, "IOF sobre Aplicação Financeira",
+          iof, `IOF sobre rendimento de aplicação (CDB ContaMax) — ${mesAno}`, "pago"));
+      }
+      if (ir > 0) {
+        const catIr = await ensureAccount("IR sobre Aplicação Financeira", "despesa", "despesa_financeira");
+        ids.push(await insertEntry(tx, "despesa", catIr, "IR sobre Aplicação Financeira",
+          ir, `IR sobre rendimento de aplicação (CDB ContaMax) — ${mesAno}`, "pago"));
+      }
+    });
+
+    if (alreadyExists) {
+      return { alreadyExists: true, ids: [] as number[] };
+    }
+
+    await createAuditLog({
+      action: "financial_rendimento_aplicacao_created", userId: ctx.user?.id, companyId: input.companyId,
+      details: `Rendimento CDB ${mesAno}: bruto R$${bruto} / IOF R$${iof} / IR R$${ir} (${ids.length} lançamentos)`,
+    });
+    return { alreadyExists: false, ids };
   }),
 
   // FASE 2: gravar um LOTE de linhas (com dedup idempotente). O cliente chama em
