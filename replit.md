@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3393** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FIX "APAGAR" EM LINHA CONCILIADA: `financial_conciliacao_grupo does not exist`. 100% BACKEND · ZERO SCHEMA/ALTER/DROP.** `excluirLinhaExtrato` não tinha o guard `to_regclass` antes da transação — tabela só criada no 1º uso de conciliação em grupo. Fix: checa existência fora da tx, igual ao `desconsolidarMes`. VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
+- **Rev. 3394** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · MODAL "LANÇAMENTO #NNNNN" EM TELA CHEIA + BOTÃO EDITAR COM DROPDOWN DE TODAS AS CONTAS ATIVAS. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Novo mutation `updateEntryClassificacao` (sem restrição de status — pago/recebido reclassificáveis). Frontend: dialog full-screen; botão Editar abre formulário com select de conta (plano de contas), conta bancária (todas as ativas com apelido/banco/agência/conta), obra, forma de pagamento + inputs livres de fornecedor/descrição/observações. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3392** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · "CONFIRMAR: É MOVIMENTAÇÃO INTERNA" CRIA LANÇAMENTO + CONCILIA. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Nova rota `confirmarMovimentacaoInterna`: INSERT em `financial_entries` (tipo=transferencia, natureza=interno, conciliado=1) + UPDATE `bank_statement_lines` + override. Detalhe: `shared/changelog.ts`.
+- **Rev. 3393** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FIX "APAGAR" EM LINHA CONCILIADA: `financial_conciliacao_grupo does not exist`. 100% BACKEND · ZERO SCHEMA/ALTER/DROP.** `excluirLinhaExtrato` não tinha o guard `to_regclass` antes da transação. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
+
+- **Rev. 3392** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · "CONFIRMAR: É MOVIMENTAÇÃO INTERNA" CRIA LANÇAMENTO + CONCILIA. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3391** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · BOTÃO "CONFIRMAR: É MOVIMENTAÇÃO INTERNA" NO MODAL "LANÇAR". 100% FRONTEND · ZERO BACKEND/SCHEMA.** Detalhe: `shared/changelog.ts`.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3389** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · MODAL "LANÇAR NO ERP" EM TELA CHEIA. 100% FRONTEND · ZERO BACKEND/SCHEMA.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3388** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXIBIÇÃO DO SALDO BANCÁRIO EM CADA LINHA DO EXTRATO. BACKEND ADITIVO + FRONT + PARSER BB · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3387** — **FINANCEIRO / CONCILIAÇÃO · PARSER BANCO DO BRASIL: NOVO FORMATO (+)/(-) E LAYOUT MULTI-LINHA. 100% BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### REGRA DE OURO — Cabeçalho de documentos institucionais FC (Rev. 2106+)
 

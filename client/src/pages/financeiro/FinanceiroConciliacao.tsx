@@ -14,7 +14,7 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX, FileSpreadsheet, FileDown, Plus, Maximize2, Minimize2, Search, Users, Building2 } from "lucide-react";
+import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX, FileSpreadsheet, FileDown, Plus, Maximize2, Minimize2, Search, Users, Building2, Pencil } from "lucide-react";
 import { formatConta, formatAgencia } from "@/lib/formatters";
 import { NaturezaOverrideDialog, NaturezaBadge, type LancNaturezaLinha } from "./_NaturezaOverride";
 import { MapaMovimentacaoInternaDialog } from "./_MapaMovimentacaoInterna";
@@ -159,7 +159,16 @@ export default function FinanceiroConciliacao() {
     });
     setDetalheEntryId(s.entryId);
   };
-  const fecharDetalhe = () => { setDetalheEntryId(null); setDetalheExtrato(null); };
+  // Rev. 3394 — estado de edição inline do lançamento na conciliação.
+  const [detEditMode, setDetEditMode] = useState(false);
+  const [detEditForm, setDetEditForm] = useState<{
+    contaId: number | null; contaNome: string;
+    obraId: number | null; obraNome: string;
+    contaBancariaId: number | null;
+    formaPagamento: string; fornecedorNome: string;
+    descricao: string; observacoes: string;
+  } | null>(null);
+  const fecharDetalhe = () => { setDetalheEntryId(null); setDetalheExtrato(null); setDetEditMode(false); setDetEditForm(null); };
   // Rev. 3266 — diálogo de CONFERÊNCIA da identificação por IA (texto roxo clicável).
   // Guarda a linha do extrato (com os campos demo* já vindos do getConciliacaoReport) p/
   // montar o comparativo lado a lado + abrir o PDF do demonstrativo + confirmar/marcar errado.
@@ -1101,6 +1110,46 @@ export default function FinanceiroConciliacao() {
   const detOrigem: any = detailQuery.data?.origemDetalhes;
   const detOrdem: any = detailQuery.data?.ordem;
   const detItens: any[] = detailQuery.data?.itens ?? [];
+  const updateEntryClassif = (trpc as any).financial.updateEntryClassificacao.useMutation({
+    onSuccess: () => {
+      detailQuery.refetch();
+      setDetEditMode(false);
+      setDetEditForm(null);
+      toast({ title: "Lançamento atualizado com sucesso." });
+    },
+    onError: (e: any) => toast({ title: "Erro ao salvar", description: e.message, variant: "destructive" }),
+  });
+  const iniciarEdicaoEntry = () => {
+    if (!detEntry) return;
+    setDetEditForm({
+      contaId: detEntry.contaId ?? null,
+      contaNome: detEntry.contaNome ?? "",
+      obraId: detEntry.obraId ?? null,
+      obraNome: detEntry.obraNome ?? "",
+      contaBancariaId: detEntry.contaBancariaId ?? null,
+      formaPagamento: detEntry.formaPagamento ?? "",
+      fornecedorNome: detEntry.fornecedorNome ?? "",
+      descricao: detEntry.descricao ?? "",
+      observacoes: detEntry.observacoes ?? "",
+    });
+    setDetEditMode(true);
+  };
+  const salvarEdicaoEntry = () => {
+    if (!detEntry || !detEditForm) return;
+    updateEntryClassif.mutate({
+      id: detEntry.id,
+      companyId,
+      contaId: detEditForm.contaId,
+      contaNome: detEditForm.contaNome || null,
+      obraId: detEditForm.obraId,
+      obraNome: detEditForm.obraNome || null,
+      contaBancariaId: detEditForm.contaBancariaId,
+      formaPagamento: detEditForm.formaPagamento || null,
+      fornecedorNome: detEditForm.fornecedorNome || null,
+      descricao: detEditForm.descricao || null,
+      observacoes: detEditForm.observacoes || null,
+    });
+  };
   const field = (label: string, value: any, k?: string) =>
     (value === null || value === undefined || value === "" || value === "—") ? null : (
       <div key={k ?? label} className="min-w-0">
@@ -2772,11 +2821,12 @@ export default function FinanceiroConciliacao() {
 
             {/* Rev. 3177 — Detalhe CONSULTIVO (read-only) do lançamento, aberto ao clicar na sugestão. */}
             <Dialog open={!!detalheEntryId} onOpenChange={(o) => !o && fecharDetalhe()}>
-              <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+              <DialogContent className="max-w-[100vw] w-screen h-[100dvh] rounded-none flex flex-col">
                 <DialogHeader className="shrink-0 pr-14">
                   <DialogTitle className="flex items-center gap-2">
                     <FileText className="w-5 h-5 text-blue-600 shrink-0" />
                     {detEntry ? `Lançamento #${detEntry.id}` : "Lançamento"}
+                    {detEditMode && <span className="text-sm font-normal text-amber-600 ml-1">— editando</span>}
                   </DialogTitle>
                   {detalheExtrato && (
                     <DialogDescription>Confira o item do extrato e o lançamento no ERP antes de validar a conciliação.</DialogDescription>
@@ -2846,6 +2896,139 @@ export default function FinanceiroConciliacao() {
                       Erro ao carregar o lançamento: {(detailQuery.error as any)?.message ?? "tente novamente"}.
                     </div>
                   ) : detEntry ? (
+                    <>
+                    {/* Rev. 3394 — MODO EDIÇÃO inline: corrige classificação do lançamento sem bloqueio de status */}
+                    {detEditMode && detEditForm ? (
+                      <div className="space-y-5 text-sm max-w-2xl mx-auto w-full">
+                        <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 text-xs text-amber-700 flex items-center gap-2">
+                          <Pencil className="w-3.5 h-3.5 shrink-0" />
+                          Edite os campos de classificação. Valores e datas não são alterados aqui.
+                        </div>
+                        {/* Conta (categoria do plano de contas) */}
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-gray-600 uppercase tracking-wide">Conta (Categoria)</Label>
+                          <Select
+                            value={detEditForm.contaId != null ? String(detEditForm.contaId) : "__none__"}
+                            onValueChange={(v) => {
+                              if (v === "__none__") {
+                                setDetEditForm(f => f ? { ...f, contaId: null, contaNome: "" } : f);
+                              } else {
+                                const opt = catOpts.find(o => String(o.id) === v);
+                                setDetEditForm(f => f ? { ...f, contaId: Number(v), contaNome: opt?.nome ?? "" } : f);
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Selecione a conta…" />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-72">
+                              <SelectItem value="__none__">— Sem categoria —</SelectItem>
+                              {catOpts.map(o => (
+                                <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {/* Conta Bancária */}
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-gray-600 uppercase tracking-wide">Conta Bancária</Label>
+                          <Select
+                            value={detEditForm.contaBancariaId != null ? String(detEditForm.contaBancariaId) : "__none__"}
+                            onValueChange={(v) => {
+                              setDetEditForm(f => f ? { ...f, contaBancariaId: v === "__none__" ? null : Number(v) } : f);
+                            }}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Selecione a conta bancária…" />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-72">
+                              <SelectItem value="__none__">— Sem conta bancária —</SelectItem>
+                              {(Array.isArray(bankAccounts) ? bankAccounts : []).map((b: any) => {
+                                const label = b.descricao
+                                  ? `${b.descricao} (${b.banco})`
+                                  : `${b.banco} ${formatAgencia(b.agencia)}/${b.conta}`.trim();
+                                return <SelectItem key={b.id} value={String(b.id)}>{label}</SelectItem>;
+                              })}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {/* Obra */}
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-gray-600 uppercase tracking-wide">Obra</Label>
+                          <Select
+                            value={detEditForm.obraId != null ? String(detEditForm.obraId) : "__none__"}
+                            onValueChange={(v) => {
+                              if (v === "__none__") {
+                                setDetEditForm(f => f ? { ...f, obraId: null, obraNome: "" } : f);
+                              } else {
+                                const opt = obrasOpts.find(o => String(o.id) === v);
+                                setDetEditForm(f => f ? { ...f, obraId: Number(v), obraNome: opt?.nome ?? "" } : f);
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Selecione a obra…" />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-72">
+                              <SelectItem value="__none__">— Sem obra —</SelectItem>
+                              {obrasOpts.map(o => (
+                                <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {/* Forma de Pagamento */}
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-gray-600 uppercase tracking-wide">Forma de Pagamento</Label>
+                          <Select
+                            value={detEditForm.formaPagamento || "__none__"}
+                            onValueChange={(v) => setDetEditForm(f => f ? { ...f, formaPagamento: v === "__none__" ? "" : v } : f)}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Selecione…" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">— Não informado —</SelectItem>
+                              <SelectItem value="pix">PIX</SelectItem>
+                              <SelectItem value="boleto">Boleto</SelectItem>
+                              <SelectItem value="transferencia">Transferência (TED/DOC)</SelectItem>
+                              <SelectItem value="cheque">Cheque</SelectItem>
+                              <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                              <SelectItem value="cartao_credito">Cartão de Crédito</SelectItem>
+                              <SelectItem value="cartao_debito">Cartão de Débito</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {/* Fornecedor/Beneficiário */}
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-gray-600 uppercase tracking-wide">Fornecedor / Beneficiário</Label>
+                          <Input
+                            value={detEditForm.fornecedorNome}
+                            onChange={(e) => setDetEditForm(f => f ? { ...f, fornecedorNome: e.target.value } : f)}
+                            placeholder="Nome do fornecedor ou beneficiário"
+                          />
+                        </div>
+                        {/* Descrição */}
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-gray-600 uppercase tracking-wide">Descrição</Label>
+                          <Input
+                            value={detEditForm.descricao}
+                            onChange={(e) => setDetEditForm(f => f ? { ...f, descricao: e.target.value } : f)}
+                            placeholder="Descrição do lançamento"
+                          />
+                        </div>
+                        {/* Observações */}
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-gray-600 uppercase tracking-wide">Observações</Label>
+                          <Textarea
+                            value={detEditForm.observacoes}
+                            onChange={(e) => setDetEditForm(f => f ? { ...f, observacoes: e.target.value } : f)}
+                            placeholder="Observações adicionais"
+                            rows={3}
+                          />
+                        </div>
+                      </div>
+                    ) : (
                     <div className="space-y-4 text-sm">
                       {/* Cabeçalho */}
                       <div className="flex items-start justify-between gap-3 bg-gray-50 rounded-lg p-3">
@@ -2945,10 +3128,30 @@ export default function FinanceiroConciliacao() {
                         </div>
                       )}
                     </div>
+                    )}
+                    </>
                   ) : null}
                 </div>
-                <DialogFooter className="shrink-0">
-                  <Button variant="outline" onClick={fecharDetalhe}>Fechar</Button>
+                <DialogFooter className="shrink-0 border-t pt-3">
+                  {detEditMode ? (
+                    <>
+                      <Button variant="outline" onClick={() => { setDetEditMode(false); setDetEditForm(null); }} disabled={updateEntryClassif.isPending}>
+                        Cancelar
+                      </Button>
+                      <Button onClick={salvarEdicaoEntry} disabled={updateEntryClassif.isPending} className="bg-[#1B2A4A] hover:bg-[#1B2A4A]/90 text-white">
+                        {updateEntryClassif.isPending ? <><Loader2 className="w-4 h-4 animate-spin mr-1.5" />Salvando…</> : <><CheckCircle className="w-4 h-4 mr-1.5" />Salvar alterações</>}
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button variant="outline" onClick={fecharDetalhe}>Fechar</Button>
+                      {detEntry && (
+                        <Button variant="outline" onClick={iniciarEdicaoEntry} className="gap-1.5">
+                          <Pencil className="w-4 h-4" /> Editar
+                        </Button>
+                      )}
+                    </>
+                  )}
                 </DialogFooter>
               </DialogContent>
             </Dialog>

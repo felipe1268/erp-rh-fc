@@ -3663,6 +3663,63 @@ export const financialRouter = router({
     return { ok: true, changed: true };
   }),
 
+  // Rev. 3394 — CLASSIFICAÇÃO inline de um lançamento diretamente da Conciliação Bancária.
+  // Permite corrigir conta, obra, conta bancária, forma de pagamento, fornecedor, descrição e
+  // observações SEM restrição de status — mesmo pago/recebido pode ser reclassificado
+  // contabilmente. NÃO toca valores nem datas.
+  updateEntryClassificacao: protectedProcedure.input(z.object({
+    id: z.number().int().positive(),
+    companyId: z.number().int().positive(),
+    contaId: z.number().nullable().optional(),
+    contaNome: z.string().nullable().optional(),
+    obraId: z.number().nullable().optional(),
+    obraNome: z.string().nullable().optional(),
+    contaBancariaId: z.number().nullable().optional(),
+    formaPagamento: z.string().nullable().optional(),
+    fornecedorNome: z.string().nullable().optional(),
+    descricao: z.string().nullable().optional(),
+    observacoes: z.string().nullable().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const chk = await dbExecute(db,
+      `SELECT id FROM financial_entries WHERE id=$1 AND company_id=$2`,
+      [input.id, input.companyId]
+    );
+    if (!rows(chk).length) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado." });
+    const sets: string[] = [];
+    const vals: any[] = [];
+    const push = (col: string, v: any) => { sets.push(`${col} = $${vals.length + 1}`); vals.push(v); };
+    if (input.contaId !== undefined)         push("conta_id", input.contaId ?? null);
+    if (input.contaNome !== undefined)       push("conta_nome", input.contaNome?.trim() || null);
+    if (input.obraId !== undefined)          push("obra_id", input.obraId ?? null);
+    if (input.obraNome !== undefined)        push("obra_nome", input.obraNome?.trim() || null);
+    if (input.contaBancariaId !== undefined) push("conta_bancaria_id", input.contaBancariaId ?? null);
+    if (input.formaPagamento !== undefined)  push("forma_pagamento", input.formaPagamento?.trim() || null);
+    if (input.fornecedorNome !== undefined)  push("fornecedor_nome", input.fornecedorNome?.trim() || null);
+    if (input.descricao !== undefined)       push("descricao", input.descricao?.trim() || null);
+    if (input.observacoes !== undefined)     push("observacoes", input.observacoes?.trim() || null);
+    if (sets.length === 0) return { ok: true, changed: false };
+    push("editado_por_id", ctx.user?.id ?? null);
+    push("editado_por_nome", ctx.user?.name ?? null);
+    sets.push(`editado_em = NOW()`);
+    sets.push(`updated_at = NOW()`);
+    vals.push(input.id, input.companyId);
+    await dbExecute(db,
+      `UPDATE financial_entries SET ${sets.join(", ")}
+       WHERE id = $${vals.length - 1} AND company_id = $${vals.length}`,
+      vals
+    );
+    await createAuditLog({
+      action: "financial_entry_classificacao_updated",
+      userId: ctx.user?.id,
+      companyId: input.companyId,
+      details: `Entry ${input.id} RECLASSIFICADO por ${ctx.user?.name ?? "?"} (id=${ctx.user?.id ?? "?"})`,
+    });
+    return { ok: true, changed: true };
+  }),
+
   // Rev. 3025 — RECLASSIFICAÇÃO EM MASSA (categoria=conta_nome/conta_id +
   // centro de custo=obra_nome/obra_id) de VÁRIOS títulos de uma vez, a partir da
   // tela "Lançamentos detalhados" (Análise de Custos → drill-down).

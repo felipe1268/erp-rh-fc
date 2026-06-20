@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3394 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · MODAL "LANÇAMENTO #NNNNN" EM TELA
+ * CHEIA + BOTÃO EDITAR COM CAMPOS DE CLASSIFICAÇÃO. BACKEND ADITIVO + FRONT ·
+ * ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO: modal de detalhe de lançamento em tela cheia + botão Editar que permita
+ *   corrigir conta, conta bancária (com dropdown de todas as contas ativas), obra,
+ *   forma de pagamento, fornecedor, descrição e observações.
+ * - BACKEND: novo mutation `updateEntryClassificacao` — sem restrição de status (pago/
+ *   recebido também pode ser reclassificado contabilmente). Campos aceitos: `contaId`,
+ *   `contaNome`, `obraId`, `obraNome`, `contaBancariaId`, `formaPagamento`,
+ *   `fornecedorNome`, `descricao`, `observacoes`. Tenant-guard via
+ *   `_assertFinanceiroCompanyAccess`. Registra audit log com quem editou.
+ * - FRONTEND: `DialogContent` passou de `max-w-2xl max-h-[90vh]` para
+ *   `max-w-[100vw] w-screen h-[100dvh] rounded-none` (tela cheia). Footer ganhou
+ *   botão "Editar" (view mode) e "Salvar alterações" / "Cancelar" (edit mode).
+ *   Formulário de edição usa os selects já carregados no componente (`catOpts` para
+ *   conta, `bankAccounts` para conta bancária listando TODOS os bancos ativos com
+ *   apelido/banco/agência/conta, `obrasOpts` para obra) + select estático de forma
+ *   de pagamento + inputs de texto para fornecedor/descrição/observações.
+ * - Arquivos: `server/routers/financial.ts` (+`updateEntryClassificacao`),
+ *   `client/src/pages/financeiro/FinanceiroConciliacao.tsx`.
+ *
  * Rev. 3393 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · ERRO "APAGAR" EM LINHA CONCILIADA:
  * `financial_conciliacao_grupo does not exist`. 100% BACKEND · ZERO SCHEMA/ALTER/DROP.**
  * - CAUSA: `excluirLinhaExtrato` fazia `DELETE FROM financial_conciliacao_grupo` dentro
