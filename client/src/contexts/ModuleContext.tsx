@@ -240,6 +240,10 @@ export function ModuleProvider({ children }: { children: ReactNode }) {
     // fixo no módulo de origem.
     const STICKY_AMBIGUOUS: { prefix: string; keepIf: ModuleId[] }[] = [
       { prefix: "/terceiros/contratos", keepIf: ["medicao-terceiros"] },
+      // Rev. 3376 — "Contas Bancárias" aparece nos menus de Financeiro, Cadastro e RH&DP
+      // (mesma rota/tela compartilhada). Quando o usuário JÁ está num desses módulos,
+      // NÃO trocamos a barra lateral — fica fixa no módulo de origem.
+      { prefix: "/contas-bancarias", keepIf: ["financeiro", "cadastro", "rh-dp"] },
     ];
     const sticky = STICKY_AMBIGUOUS.find(
       s => (location === s.prefix || location.startsWith(s.prefix + "/")) && s.keepIf.includes(activeModule),

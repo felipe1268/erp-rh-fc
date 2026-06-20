@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3376 — **FINANCEIRO / MENU · "CONTAS BANCÁRIAS" AGORA MANTÉM A BARRA LATERAL DO MÓDULO DE ORIGEM: AO CLICAR NO
+ * ITEM DENTRO DO MÓDULO FINANCEIRO (OU CADASTRO / RH&DP), O MENU CONTINUA NO MESMO MÓDULO EM VEZ DE TROCAR PARA "RH&DP".
+ * 100% FRONT (ROTEAMENTO DE MÓDULO) · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE · NENHUMA TELA NOVA.**
+ * - PEDIDO (print do iPad nos menus Financeiro e RH): "Quando clicar na aba contas bancárias deve manter a barra
+ *   lateral do módulo financeiro se eu estiver no módulo financeiro. Hoje tá mudando para o RH ou Cadastro, não pode."
+ * - RAIZ: a rota `/contas-bancarias` é COMPARTILHADA (mesma tela aparece nos menus de Financeiro [Rev. 3374],
+ *   Cadastro e RH&DP), mas no `ROUTE_MODULE_MAP` ela está fixada em "rh-dp". O `useEffect` do `ModuleProvider`
+ *   resolve o módulo pela rota e, ao navegar, FORÇAVA `setActiveModule("rh-dp")` — trocando a barra lateral mesmo que
+ *   o usuário já estivesse no Financeiro/Cadastro.
+ * - FIX (`client/src/contexts/ModuleContext.tsx`, lista `STICKY_AMBIGUOUS`): adicionada a entrada
+ *   `{ prefix: "/contas-bancarias", keepIf: ["financeiro", "cadastro", "rh-dp"] }`. O mecanismo "sticky" (já existente
+ *   para `/terceiros/contratos`) faz o `useEffect` dar `return` ANTES do `setActiveModule` quando a rota casa o prefixo
+ *   E o módulo ativo está em `keepIf` — ou seja, mantém o módulo de origem. Se a tela for alcançada por outro caminho
+ *   (ex.: link direto / outro módulo), o comportamento default permanece (cai em "rh-dp" via `ROUTE_MODULE_MAP`).
+ * - EFEITO: estando no Financeiro e clicando "Contas Bancárias" → continua no Financeiro; idem Cadastro e RH&DP.
+ * - VALIDAÇÃO: tsc limpo (ruído pré-existente em `changelog.ts` ignorado).
+ *
  * Rev. 3375 — **FINANCEIRO / CARTÃO DE CRÉDITO · IMPORTAÇÃO DE FATURAS AGORA EM LOTE (VÁRIOS PDFs DE UMA VEZ): A IA LÊ
  * TODOS OS ARQUIVOS, CONSOLIDA AS FATURAS NUM ÚNICO PREVIEW E — (A) QUANDO O FINAL DO CARTÃO É RECONHECIDO, VINCULA A
  * FATURA AO CARTÃO AUTOMATICAMENTE; (B) QUANDO NÃO É RECONHECIDO, OFERECE UM BOTÃO "CADASTRAR CARTÃO" JÁ PRÉ-PREENCHIDO
