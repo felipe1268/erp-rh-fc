@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3373 — **FINANCEIRO / CADASTRO · CONTAS BANCÁRIAS · REDESENHO DA TELA "EDITAR/NOVA CONTA BANCÁRIA" (FORMULÁRIO
+ * EM FULLSCREEN): LAYOUT MODERNO, INTERATIVO E DE FÁCIL VISUALIZAÇÃO — CARTÃO-PREVIEW AO VIVO DA CONTA NO TOPO,
+ * SELEÇÃO RÁPIDA DE BANCO POR CHIPS CLICÁVEIS, CAMPOS AGRUPADOS EM 3 SEÇÕES (IDENTIFICAÇÃO / RECURSOS / SALDO),
+ * RECURSOS (TALÃO + APLICAÇÃO AUTOMÁTICA) COMO CARDS-TOGGLE QUE ACENDEM AO ATIVAR, E RODAPÉ FIXO DE AÇÕES. 100%
+ * FRONT (SÓ APRESENTAÇÃO) · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE · MESMO ESTADO/HANDLERS/MUTATIONS.**
+ * - PEDIDO (print do iPad na tela "Editar Conta Bancária"): "quero um layout moderno interativo e fácil visualização..
+ *   melhore isso mantendo o nosso padrão." A tela antiga era um único bloco vertical de campos com 2 checkboxes
+ *   simples e botões inline — funcional mas sem hierarquia visual.
+ * - FIX/FEATURE (`client/src/pages/ContasBancarias.tsx`, só o bloco do `<FullScreenDialog>` — TODO o estado `form`,
+ *   `handleBancoSelect`, `handleSave`, `createMut`/`updateMut` e validações INALTERADOS):
+ *   (1) CARTÃO-PREVIEW ao vivo no topo — gradiente navy #1B2A4A→#243660→#2d4a7a (padrão FC) mostrando banco, tipo
+ *       (bolinha verde/azul), agência, conta e código, atualizando conforme o usuário digita.
+ *   (2) SELEÇÃO RÁPIDA DE BANCO virou GRID de CHIPS clicáveis (BANCOS_COMUNS) em vez de `<Select>`: chip ativo ganha
+ *       borda/anel navy + check; chama o mesmo `handleBancoSelect`. (O `<Select>` antigo de seleção rápida foi
+ *       substituído; o campo "Código do Banco" manual permanece.)
+ *   (3) 3 SEÇÕES em cards brancos com header-chip+ícone: "Identificação do banco" (chips + Nome/Código/Tipo +
+ *       Agência/Conta, com os MESMOS `formatAgencia`/`formatConta` no onBlur), "Recursos da conta" (os 2 checkboxes
+ *       viraram CARDS-TOGGLE com borda esmeralda + selo "Ativo" quando marcados — mesma semântica `temTalao`/
+ *       `temAplicacaoAutomatica` e mesmos textos explicativos), "Saldo inicial" (MoneyInput + data, inalterado).
+ *   (4) AÇÕES (Cancelar/Salvar) movidas para o `footer` fixo do `FullScreenDialog` (sticky, safe-area iOS); botão
+ *       Salvar mantém `bg-[#1B2A4A] hover:bg-[#243660]` + ícone Check + estado `isPending`.
+ *   (5) Container passou a `max-w-3xl mx-auto`; grids `sm:grid-cols-2` p/ responsividade. Novos ícones lucide
+ *       importados: Hash, Sparkles, Check, Calendar.
+ * - PREFERÊNCIA RESPEITADA: padrão navy #1B2A4A/#243660 mantido; nenhuma mudança de dado/regra/backend.
+ * - VALIDAÇÃO: tsc limpo no arquivo tocado (só ruído pré-existente em `changelog.ts`). App rodando, Neon conectado.
+ *   Validação visual bloqueada pelo login (esperado no preview).
+ *
  * Rev. 3372 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NOVO PAINEL "CONFERIR CHEQUES COM O EXTRATO" (PRÉ-CONFIRMAÇÃO EM
  * LOTE): MOSTRA OS CHEQUES QUE O BANCO COMPENSOU E O CONTROLE JÁ DIZ "COMPENSADO" MAS QUE AINDA NÃO FORAM CONCILIADOS,
  * SEPARADOS EM MATCH FORTE (Nº+VALOR, PRÉ-SELECIONADO) × MATCH FRACO (VALOR+DATA, "CONFIRA ANTES") × DIVERGÊNCIAS (SÓ
