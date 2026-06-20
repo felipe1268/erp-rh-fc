@@ -670,15 +670,33 @@ export async function invokeGeminiVision(params: {
   };
 
   const MAX_RETRIES = 5;
+  const FETCH_TIMEOUT_MS = 90_000; // 90s por tentativa — evita travar nos 95%
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${googleKey}`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${googleKey}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        }
+      );
+    } catch (e: any) {
+      clearTimeout(timer);
+      // AbortError = timeout esgotado → trata como erro transitório e retenta
+      if (e?.name === "AbortError" && attempt < MAX_RETRIES) {
+        const waitMs = Math.min(2000 * Math.pow(2, attempt) + Math.random() * 750, 60000);
+        console.warn(`[Gemini Vision] Timeout ${FETCH_TIMEOUT_MS}ms (tentativa ${attempt + 1}/${MAX_RETRIES + 1}). Aguardando ${Math.round(waitMs)}ms...`);
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
       }
-    );
+      throw e;
+    }
+    clearTimeout(timer);
     if (res.ok) {
       const json: any = await res.json();
       const text = json?.candidates?.[0]?.content?.parts

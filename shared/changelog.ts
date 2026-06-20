@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3381 — **CORREÇÃO CRÍTICA: IMPORTAÇÃO DE FATURA PDF TRAVAVA NOS 95% INDEFINIDAMENTE.
+ * CAUSA: `invokeGeminiVision` (server/_core/llm.ts) USAVA `fetch` SEM TIMEOUT — SE O GEMINI
+ * TRAVASSE (SEM RESPONDER), A REQUISIÇÃO FICAVA PENDURADA PARA SEMPRE E O FRONTEND NUNCA SAÍA
+ * DOS 95%. FIX: `AbortController` DE 90s POR TENTATIVA COM RETRY AUTOMÁTICO. ZERO
+ * SCHEMA/ALTER/DROP/DELETE · 1 ARQUIVO BACKEND (llm.ts).**
+ * - PROBLEMA: o usuário via a barra de progresso subir até 95% (teto assintótico da barra fake)
+ *   e PARAR INDEFINIDAMENTE. O PDF continuava sendo processado pelo Gemini sem resposta — o
+ *   `fetch` sem timeout em Node.js fica aberto até a OS fechar a conexão (pode ser minutos/horas).
+ *   O fallback pro Anthropic NUNCA era acionado porque o `catch` do Gemini só era alcançado se o
+ *   `fetch` lançasse, o que nunca acontecia se a resposta apenas não chegasse.
+ * - FIX (`server/_core/llm.ts`, `invokeGeminiVision`): adicionado `AbortController` com
+ *   `setTimeout(90_000)` (90s) em CADA tentativa do loop de retry. Se o Gemini não responder em
+ *   90s → `AbortError` → tratado como erro transitório → backoff exponencial + nova tentativa
+ *   (até MAX_RETRIES=5). Após esgotar as tentativas → cai pro fallback Anthropic (que tem seu
+ *   próprio comportamento de timeout via SDK). `clearTimeout(timer)` em todo caminho de saída
+ *   (successo, erro HTTP e timeout) para não vazar timers.
+ * - EFEITO: importação de PDF que antes travava 95% indefinido agora: ou responde em <90s
+ *   (caminho normal), ou retenta até 5x com backoff (carga alta), ou cai pro Anthropic e conclui
+ *   com mensagem de erro clara se ambos falharem — nunca trava para sempre.
+ * - VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
+ *
  * Rev. 3380 — **FINANCEIRO / CARTÃO DE CRÉDITO · CORREÇÃO DO AUTO-PREENCHIMENTO DE DIA FECHAMENTO E DIA
  * VENCIMENTO AO CADASTRAR CARTÃO VIA IMPORTAÇÃO DE FATURA: A IA AGORA EXTRAI OS DIAS DIRETAMENTE COMO
  * NÚMERO INTEIRO (1-31) — ROBUSTO PARA FATURAS QUE SÓ EXIBEM O DIA SEM DATA COMPLETA. BACKEND ADITIVO
