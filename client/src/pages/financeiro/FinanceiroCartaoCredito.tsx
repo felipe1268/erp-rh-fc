@@ -555,9 +555,14 @@ export default function FinanceiroCartaoCredito() {
   // facilitar o cadastro do cartão que a fatura não reconheceu.
   function cadastrarCartaoDoImport(f: any) {
     setCartaoEdit(null);
-    // Auto-extrai dia do fechamento e vencimento das datas YYYY-MM-DD da fatura
-    const diaFechamento = f.fechamento ? String(parseInt(f.fechamento.slice(8, 10), 10)) : "";
-    const diaVencimento = f.vencimento ? String(parseInt(f.vencimento.slice(8, 10), 10)) : "";
+    // Prefere o inteiro direto da IA (diaFechamentoIA/diaVencimentoIA) — mais robusto
+    // para faturas que só exibem o dia sem data completa. Fallback: fatiou a string ISO.
+    const diaFechamento = f.diaFechamentoIA != null
+      ? String(f.diaFechamentoIA)
+      : (f.fechamento ? String(parseInt(f.fechamento.slice(8, 10), 10)) : "");
+    const diaVencimento = f.diaVencimentoIA != null
+      ? String(f.diaVencimentoIA)
+      : (f.vencimento ? String(parseInt(f.vencimento.slice(8, 10), 10)) : "");
     const limite = f.limiteTotalCartao != null
       ? maskBRL(String(Math.round(Number(f.limiteTotalCartao) * 100)))
       : "";

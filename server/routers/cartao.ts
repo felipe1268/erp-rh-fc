@@ -167,7 +167,9 @@ Extraia TODAS as faturas contidas no documento. Um PDF pode conter VÁRIOS cart�
 - banco: nome do banco emissor (ex.: "Santander", "Caixa").
 - bandeira: bandeira (ex.: "Mastercard", "Visa").
 - vencimento: data de vencimento da fatura em YYYY-MM-DD.
+- diaVencimento: dia do mês de vencimento da fatura (número inteiro 1-31, ex.: 12). Extraia SEMPRE que houver qualquer menção de vencimento, mesmo que seja só o dia.
 - fechamento: data de fechamento da fatura em YYYY-MM-DD (se houver).
+- diaFechamento: dia do mês de fechamento da fatura (número inteiro 1-31, ex.: 28). Extraia SEMPRE que houver qualquer menção de fechamento/corte, mesmo que seja só o dia (ex.: "fecha dia 28", "corte: 28", "melhor dia de compra: 29 (fecha: 28)").
 - limiteTotalCartao: limite TOTAL do cartão em BRL (número), se aparecer explicitamente na fatura (ex.: "Limite total R$ 20.000,00" ou "Limite do cartão"). Use null se não encontrar.
 - total: valor TOTAL da fatura (número, ponto decimal).
 - totalCompras: soma das compras do período (número), se houver.
@@ -202,7 +204,9 @@ const SCHEMA_FATURA = {
           banco: { type: "string", nullable: true },
           bandeira: { type: "string", nullable: true },
           vencimento: { type: "string", nullable: true },
+          diaVencimento: { type: "number", nullable: true },
           fechamento: { type: "string", nullable: true },
+          diaFechamento: { type: "number", nullable: true },
           limiteTotalCartao: { type: "number", nullable: true },
           total: { type: "number", nullable: true },
           totalCompras: { type: "number", nullable: true },
@@ -315,6 +319,12 @@ function normalizarFatura(raw: any) {
     bandeira: raw?.bandeira != null ? String(raw.bandeira).trim().slice(0, 60) : null,
     vencimento,
     fechamento,
+    // Dias extraídos diretamente pela IA (número inteiro 1-31) — mais confiável
+    // que fatiar a string de data, pois muitas faturas só exibem o dia.
+    diaFechamentoIA: (raw?.diaFechamento != null && Number.isFinite(Number(raw.diaFechamento)))
+      ? Number(raw.diaFechamento) : null,
+    diaVencimentoIA: (raw?.diaVencimento != null && Number.isFinite(Number(raw.diaVencimento)))
+      ? Number(raw.diaVencimento) : null,
     limiteTotalCartao: parseValor(raw?.limiteTotalCartao),
     total: parseValor(raw?.total),
     totalCompras: parseValor(raw?.totalCompras),
