@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3375 — **FINANCEIRO / CARTÃO DE CRÉDITO · IMPORTAÇÃO DE FATURAS AGORA EM LOTE (VÁRIOS PDFs DE UMA VEZ): A IA LÊ
+ * TODOS OS ARQUIVOS, CONSOLIDA AS FATURAS NUM ÚNICO PREVIEW E — (A) QUANDO O FINAL DO CARTÃO É RECONHECIDO, VINCULA A
+ * FATURA AO CARTÃO AUTOMATICAMENTE; (B) QUANDO NÃO É RECONHECIDO, OFERECE UM BOTÃO "CADASTRAR CARTÃO" JÁ PRÉ-PREENCHIDO
+ * (BANCO/BANDEIRA/FINAL/TITULAR EXTRAÍDOS PELA IA) E, AO SALVAR, RE-CASA A(S) FATURA(S) NA HORA. BACKEND ADITIVO
+ * (AUTO-VÍNCULO POR FINAL4 + ORIGEM POR FATURA) + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE · NADA GRAVA SEM CONFIRMAR.**
+ * - PEDIDO (tela `/financeiro/cartao`, "Importar fatura"): "deixa eu subir vários PDFs de fatura de uma vez; a IA lê
+ *   todos; se não reconhecer o cartão, sugere cadastrar; se reconhecer, já vincula a fatura no cartão automaticamente."
+ * - FLUXO ANTERIOR: a importação aceitava 1 PDF por vez (`onArquivoSelecionado` → `importarPreview` → preview de 1
+ *   arquivo → `importarConfirmar`). O vínculo só acontecia se o preview tivesse casado o `final4`; cartão não
+ *   reconhecido entrava como "Não cadastrado" e precisava de vínculo manual posterior pelo botão "Vincular".
+ * - FRONT (`client/src/pages/financeiro/FinanceiroCartaoCredito.tsx`):
+ *   (1) `<input multiple>` no dropzone; novo `onArquivosSelecionados(FileList)` que processa os arquivos EM SÉRIE
+ *       (a IA é 1 chamada por arquivo), mostra "Lendo X/N: nome…" na barra de progresso, ACUMULA todas as faturas num
+ *       preview consolidado (`montarPreview`) e coleta as FALHAS por arquivo (`importFalhas`) sem abortar o lote.
+ *   (2) Cada fatura carrega `origemArquivo` (nome do PDF) — exibido no cabeçalho do card e enviado ao confirmar.
+ *   (3) Cartão NÃO identificado → badge "Não cadastrado" + botão "Cadastrar cartão" (`cadastrarCartaoDoImport`) que
+ *       abre o modal de cartão JÁ pré-preenchido com banco/bandeira/final4/titular da IA. Ao salvar (`salvarCartao`
+ *       captura o `id` retornado por `criarCartao`), `rematchPreview(final4,id)` marca toda fatura do mesmo final4 como
+ *       identificada (cartaoIdSugerido=novo id) sem re-rodar a IA. `importCadastroRef` guarda o final4 do cadastro
+ *       em curso e é limpo ao fechar o modal.
+ *   (4) Cartão identificado → badge "Vínculo automático" (deixa explícito que a fatura já entra ligada).
+ *   (5) Banner vermelho lista os arquivos que a IA não conseguiu ler.
+ * - BACKEND (`server/routers/cartao.ts`, `importarConfirmar`, ADITIVO — mantém tenant guard de `cartaoId` por
+ *   `idsValidos`): (a) novo mapa `final4(4 díg)→id` dos cartões da empresa; quando a fatura vem SEM `cartaoId` mas o
+ *   `cartaoFinal4` casa um cartão cadastrado, vincula automaticamente (cobre o caso de o cartão ter sido criado DEPOIS
+ *   do preview). (b) input ganhou `origemArquivo` POR fatura (opcional); o INSERT usa `f.origemArquivo || origem`
+ *   (top-level), truncado a 255. Dedup idempotente (empresa, cartão, vencimento) preservado.
+ * - SEGURANÇA: `assertCompanyAccess` + `assertAiModuleEnabled("financeiro")` no preview; `cartaoId` só é aceito se
+ *   pertence à empresa do chamador; auto-vínculo por final4 só consulta cartões da PRÓPRIA empresa.
+ * - VALIDAÇÃO: tsc limpo nos arquivos tocados (só ruído pré-existente em `changelog.ts`). App rodando.
+ *
  * Rev. 3374 — **FINANCEIRO · MENU · "CONTAS BANCÁRIAS" AGORA TAMBÉM APARECE NA SEÇÃO "CADASTROS" DO MÓDULO FINANCEIRO
  * (ANTES SÓ EXISTIA NO MÓDULO CADASTRO). ATALHO PARA NÃO PRECISAR TROCAR DE MÓDULO — APONTA PARA A MESMA TELA/ROTA
  * `/contas-bancarias`. 1 LINHA DE MENU · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE · NENHUMA TELA NOVA.**

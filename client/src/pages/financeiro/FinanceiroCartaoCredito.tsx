@@ -210,11 +210,19 @@ export default function FinanceiroCartaoCredito() {
       observacao: cartaoForm.observacao.trim() || undefined,
     };
     try {
+      let novoId: number | null = null;
       if (cartaoEdit) await atualizarCartao.mutateAsync({ id: cartaoEdit.id, ...base });
-      else await criarCartao.mutateAsync(base);
+      else { const r = await criarCartao.mutateAsync(base); novoId = r?.id ?? null; }
       toast({ title: cartaoEdit ? "Cartão atualizado" : "Cartão cadastrado" });
       setCartaoModal(false);
       cartoesQ.refetch();
+      // Cadastro vindo do preview do import → vincula na hora a(s) fatura(s) do mesmo final4.
+      // Usa o final4 EFETIVAMENTE SALVO (cartaoForm), não o capturado na abertura do modal
+      // (o usuário pode ter editado o campo antes de salvar → re-casar pelo valor real).
+      if (novoId && importCadastroRef.current) {
+        rematchPreview(last4(cartaoForm.final4), novoId);
+        importCadastroRef.current = null;
+      }
     } catch (e: any) {
       toast({ title: "Erro ao salvar", description: e?.message || String(e), variant: "destructive" });
     }
@@ -462,7 +470,13 @@ export default function FinanceiroCartaoCredito() {
   // espera e crava 100% ao concluir.
   const [importPct, setImportPct] = useState(0);
   const [importLabel, setImportLabel] = useState("");
+  // Rev. 3375 — import em LOTE: vários PDFs de uma vez. Acompanha "arquivo X de N" e
+  // acumula as falhas (arquivos que a IA não conseguiu ler) sem abortar o resto.
+  const [importFalhas, setImportFalhas] = useState<{ nome: string; erro: string }[]>([]);
   const progTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Quando o modal de cartão é aberto a partir do preview do import (sugestão de
+  // cadastro), guarda o final4 p/ re-casar a(s) fatura(s) assim que o cartão for criado.
+  const importCadastroRef = useRef<string | null>(null);
   const importarPreview = (trpc as any).cartao.importarPreview.useMutation();
   const importarConfirmar = (trpc as any).cartao.importarConfirmar.useMutation();
 
@@ -488,25 +502,93 @@ export default function FinanceiroCartaoCredito() {
 
   function abrirImport() {
     pararProgresso(); setImportPct(0); setImportLabel("");
-    setPreview(null); setArquivoNome(""); setImportModal(true);
+    setPreview(null); setArquivoNome(""); setImportFalhas([]); setImportModal(true);
   }
-  async function onArquivoSelecionado(file: File | undefined) {
-    if (!file || !companyId) return;
-    setImportBusy(true); setPreview(null); setArquivoNome(file.name);
-    iniciarProgresso(`Lendo "${file.name}" com a IA…`);
-    try {
-      const b64 = await fileToBase64(file);
-      const mime = file.type || (file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "application/octet-stream");
-      const res = await importarPreview.mutateAsync({ companyId, fileBase64: b64, mimeType: mime });
-      pararProgresso(); setImportPct(100); setImportLabel("Leitura concluída");
-      setPreview(res);
-    } catch (e: any) {
-      pararProgresso(); setImportPct(0); setImportLabel("");
-      toast({ title: "Falha ao ler a fatura", description: e?.message || String(e), variant: "destructive" });
-    } finally {
-      pararProgresso();
-      setImportBusy(false);
+
+  // Últimos 4 dígitos (normaliza qualquer formato) — usado p/ casar fatura ↔ cartão.
+  const last4 = (s: any) => String(s ?? "").replace(/[^0-9]/g, "").slice(-4);
+
+  // Monta o objeto de preview consolidado (várias faturas de N arquivos) com o resumo.
+  function montarPreview(faturas: any[], ccAdmin: string | null) {
+    return {
+      faturas,
+      resumo: {
+        totalFaturas: faturas.length,
+        totalItens: faturas.reduce((a, f) => a + (f.qtdItens ?? (f.itens?.length ?? 0)), 0),
+        naoIdentificadas: faturas.filter((f) => !f.cartaoIdentificado).length,
+        ccAdministrativo: ccAdmin,
+      },
+    };
+  }
+
+  // Re-casa o preview quando um cartão é cadastrado a partir da sugestão: toda fatura
+  // não identificada com o MESMO final4 passa a apontar pro cartão recém-criado.
+  function rematchPreview(final4: any, cartaoId: number) {
+    const d = last4(final4);
+    if (d.length < 4 || !cartaoId) return;
+    setPreview((prev: any) => {
+      if (!prev) return prev;
+      const faturas = prev.faturas.map((f: any) =>
+        !f.cartaoIdentificado && last4(f.cartaoFinal4) === d
+          ? { ...f, cartaoIdSugerido: cartaoId, cartaoIdentificado: true }
+          : f,
+      );
+      return { faturas, resumo: { ...prev.resumo, naoIdentificadas: faturas.filter((x: any) => !x.cartaoIdentificado).length } };
+    });
+  }
+
+  // Abre o modal de cartão JÁ PRÉ-PREENCHIDO com os dados extraídos pela IA, pra
+  // facilitar o cadastro do cartão que a fatura não reconheceu.
+  function cadastrarCartaoDoImport(f: any) {
+    setCartaoEdit(null);
+    setCartaoForm({
+      ...CARTAO_FORM_INICIAL,
+      banco: f.banco ?? "",
+      bandeira: f.bandeira ?? "",
+      final4: last4(f.cartaoFinal4),
+      titular: f.cartaoTitular ?? "",
+    });
+    importCadastroRef.current = last4(f.cartaoFinal4);
+    setCartaoModal(true);
+  }
+
+  async function onArquivosSelecionados(files: FileList | null) {
+    if (!files || files.length === 0 || !companyId) return;
+    const arr = Array.from(files);
+    setImportBusy(true); setPreview(null); setImportFalhas([]);
+    setArquivoNome(arr.length === 1 ? arr[0].name : `${arr.length} arquivos`);
+    const todasFaturas: any[] = [];
+    const falhas: { nome: string; erro: string }[] = [];
+    let ccAdmin: string | null = null;
+    for (let i = 0; i < arr.length; i++) {
+      const file = arr[i];
+      iniciarProgresso(arr.length > 1 ? `Lendo ${i + 1}/${arr.length}: "${file.name}"…` : `Lendo "${file.name}" com a IA…`);
+      try {
+        const b64 = await fileToBase64(file);
+        const mime = file.type || (file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "application/octet-stream");
+        const res = await importarPreview.mutateAsync({ companyId, fileBase64: b64, mimeType: mime });
+        pararProgresso(); setImportPct(100);
+        if (res?.resumo?.ccAdministrativo && !ccAdmin) ccAdmin = res.resumo.ccAdministrativo;
+        for (const f of (res?.faturas ?? [])) todasFaturas.push({ ...f, origemArquivo: file.name });
+      } catch (e: any) {
+        pararProgresso();
+        falhas.push({ nome: file.name, erro: e?.message || String(e) });
+      }
     }
+    pararProgresso();
+    setImportBusy(false);
+    setImportFalhas(falhas);
+    if (todasFaturas.length === 0) {
+      setImportPct(0); setImportLabel("");
+      toast({
+        title: falhas.length ? "Falha ao ler as faturas" : "Nenhuma fatura encontrada",
+        description: falhas.length ? `${falhas.length} arquivo(s) não puderam ser lidos.` : "A IA não encontrou faturas nos arquivos.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setImportLabel("Leitura concluída");
+    setPreview(montarPreview(todasFaturas, ccAdmin));
   }
   async function confirmarImport() {
     if (!companyId || !preview?.faturas?.length) return;
@@ -514,6 +596,7 @@ export default function FinanceiroCartaoCredito() {
     try {
       const payload = preview.faturas.map((f: any) => ({
         cartaoId: f.cartaoIdSugerido ?? null,
+        origemArquivo: f.origemArquivo ?? null,
         cartaoFinal4: f.cartaoFinal4 ?? null,
         cartaoTitular: f.cartaoTitular ?? null,
         banco: f.banco ?? null, bandeira: f.bandeira ?? null,
@@ -1410,7 +1493,7 @@ export default function FinanceiroCartaoCredito() {
       </Dialog>
 
       {/* ───────────── MODAL CARTÃO (criar/editar) ───────────── */}
-      <Dialog open={cartaoModal} onOpenChange={setCartaoModal}>
+      <Dialog open={cartaoModal} onOpenChange={(v) => { if (!v) importCadastroRef.current = null; setCartaoModal(v); }}>
         <DialogContent resizable={false} className="max-w-xl p-0 overflow-hidden gap-0 flex flex-col max-h-[90vh]">
           <DialogHeader className="shrink-0 border-b bg-gradient-to-r from-[#1B2A4A] to-[#2c3f63] px-6 py-5 text-left">
             <div className="flex items-center gap-3">
@@ -1485,7 +1568,7 @@ export default function FinanceiroCartaoCredito() {
           </div>
 
           <DialogFooter className="shrink-0 border-t bg-muted/30 px-6 py-4">
-            <Button variant="outline" onClick={() => setCartaoModal(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => { importCadastroRef.current = null; setCartaoModal(false); }}>Cancelar</Button>
             <Button onClick={salvarCartao} disabled={criarCartao.isLoading || atualizarCartao.isLoading}>
               {(criarCartao.isLoading || atualizarCartao.isLoading) && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
               Salvar
@@ -1516,10 +1599,11 @@ export default function FinanceiroCartaoCredito() {
                 ) : (
                   <>
                     <Upload className="w-10 h-10 text-gray-400" />
-                    <span className="text-sm text-muted-foreground">Clique para selecionar o PDF da fatura</span>
+                    <span className="text-sm text-muted-foreground">Clique para selecionar os PDFs das faturas</span>
+                    <span className="text-xs text-muted-foreground">Pode selecionar vários de uma vez. Cartão reconhecido pelo final → vincula sozinho; não reconhecido → sugere cadastro.</span>
                   </>
                 )}
-                <input type="file" accept="application/pdf,image/*" className="hidden" disabled={importBusy} onChange={(e) => onArquivoSelecionado(e.target.files?.[0])} />
+                <input type="file" multiple accept="application/pdf,image/*" className="hidden" disabled={importBusy} onChange={(e) => onArquivosSelecionados(e.target.files)} />
               </label>
             )}
             {preview && (
@@ -1530,17 +1614,31 @@ export default function FinanceiroCartaoCredito() {
                   {preview.resumo.naoIdentificadas > 0 && <span className="text-amber-700 flex items-center gap-1"><AlertTriangle className="w-4 h-4" /> {preview.resumo.naoIdentificadas} cartão(ões) não identificado(s)</span>}
                   {preview.resumo.ccAdministrativo && <span className="text-muted-foreground">Encargos → CC "{preview.resumo.ccAdministrativo}"</span>}
                 </div>
+                {importFalhas.length > 0 && (
+                  <div className="text-sm bg-red-50 border border-red-200 rounded p-3 text-red-700">
+                    <div className="flex items-center gap-1 font-semibold mb-1"><AlertTriangle className="w-4 h-4" /> {importFalhas.length} arquivo(s) não puderam ser lidos</div>
+                    <ul className="list-disc pl-5 space-y-0.5">
+                      {importFalhas.map((fa, i) => (<li key={i}><b>{fa.nome}</b>: {fa.erro}</li>))}
+                    </ul>
+                  </div>
+                )}
                 {preview.faturas.map((f: any, idx: number) => (
                   <div key={idx} className="border rounded-lg p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                      <div className="font-semibold flex items-center gap-2">
+                      <div className="font-semibold flex items-center gap-2 flex-wrap">
                         <CreditCard className="w-4 h-4" />
                         {f.banco || "Banco"} · final {f.cartaoFinal4 || "????"}
                         {f.cartaoIdentificado ? (
-                          <Badge className="bg-green-100 text-green-700">Cartão identificado</Badge>
+                          <Badge className="bg-green-100 text-green-700">Vínculo automático</Badge>
                         ) : (
-                          <Badge variant="outline" className="border-amber-400 text-amber-700">Não cadastrado</Badge>
+                          <>
+                            <Badge variant="outline" className="border-amber-400 text-amber-700">Não cadastrado</Badge>
+                            <Button size="sm" variant="outline" className="h-7 border-amber-400 text-amber-700 hover:bg-amber-50" onClick={() => cadastrarCartaoDoImport(f)}>
+                              <PlusCircle className="w-3.5 h-3.5 mr-1" /> Cadastrar cartão
+                            </Button>
+                          </>
                         )}
+                        {f.origemArquivo && <span className="text-[11px] font-normal text-muted-foreground flex items-center gap-1"><FileText className="w-3 h-3" /> {f.origemArquivo}</span>}
                       </div>
                       <div className="text-sm text-muted-foreground">Venc. {fmtData(f.vencimento)} · Total <b className="text-foreground">{formatBRL(f.total)}</b></div>
                     </div>

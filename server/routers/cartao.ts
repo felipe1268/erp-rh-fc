@@ -939,6 +939,7 @@ export const cartaoRouter = router({
     origemArquivo: z.string().max(255).optional(),
     faturas: z.array(z.object({
       cartaoId: z.number().nullable().optional(),
+      origemArquivo: z.string().max(255).nullable().optional(),
       cartaoFinal4: z.string().nullable().optional(),
       cartaoTitular: z.string().nullable().optional(),
       banco: z.string().nullable().optional(),
@@ -976,6 +977,14 @@ export const cartaoRouter = router({
     // depois ler os metadados dele via listarFaturas). cartaoId inválido → null.
     const cartoesDaEmpresa = await carregarCartoes(db, input.companyId);
     const idsValidos = new Set(cartoesDaEmpresa.map((c: any) => c.id));
+    // Auto-vínculo: mapa final4(4 díg)→id p/ casar faturas que vieram SEM cartaoId
+    // (ex.: o cartão foi cadastrado depois do preview, ou o preview não casou). Quando
+    // o final4 reconhece um cartão da empresa, a fatura já entra vinculada.
+    const mapaFinal4 = new Map<string, number>();
+    for (const c of cartoesDaEmpresa) {
+      const d = soDigitos(c.final4).slice(-4);
+      if (d.length === 4 && !mapaFinal4.has(d)) mapaFinal4.set(d, c.id);
+    }
 
     const loteId = randomUUID();
     const origem = (input.origemArquivo || "fatura-pdf").slice(0, 255);
@@ -985,7 +994,15 @@ export const cartaoRouter = router({
       for (const f of input.faturas) {
         const mesRef = f.mesRef ?? (f.vencimento ? parseInt(f.vencimento.slice(5, 7), 10) : null) ?? (f.fechamento ? parseInt(f.fechamento.slice(5, 7), 10) : null);
         const anoRef = f.anoRef ?? (f.vencimento ? parseInt(f.vencimento.slice(0, 4), 10) : null) ?? (f.fechamento ? parseInt(f.fechamento.slice(0, 4), 10) : null);
-        const cartaoId = f.cartaoId != null && idsValidos.has(f.cartaoId) ? f.cartaoId : null;
+        let cartaoId = f.cartaoId != null && idsValidos.has(f.cartaoId) ? f.cartaoId : null;
+        const d4 = f.cartaoFinal4 ? soDigitos(f.cartaoFinal4).slice(-4) : "";
+        // Hardening: se o cartaoId do payload NÃO bate com o final4 da fatura (cliente
+        // re-casou com valor errado), prefere o vínculo correto pelo final4 cadastrado.
+        if (cartaoId != null && d4.length === 4 && mapaFinal4.has(d4) && mapaFinal4.get(d4) !== cartaoId) {
+          cartaoId = mapaFinal4.get(d4)!;
+        }
+        // Reconhecido pelo final4 → vincula automaticamente, mesmo sem cartaoId no payload.
+        if (cartaoId == null && d4.length === 4 && mapaFinal4.has(d4)) cartaoId = mapaFinal4.get(d4)!;
 
         // Dedup: mesma (empresa, cartão, vencimento, total) = re-upload idempotente.
         if (cartaoId != null && f.vencimento) {
@@ -1005,7 +1022,8 @@ export const cartaoRouter = router({
           [
             input.companyId, cartaoId, f.vencimento ?? null, f.fechamento ?? null,
             f.total ?? null, f.totalCompras ?? null, f.faturaAnterior ?? null,
-            f.pagamentos ?? null, mesRef, anoRef, origem, loteId,
+            f.pagamentos ?? null, mesRef, anoRef,
+            (f.origemArquivo || origem).slice(0, 255), loteId,
             // Guarda final4/titular crus quando o cartão não foi identificado, p/ rastreio.
             cartaoId == null ? `Cartão não identificado: final ${f.cartaoFinal4 ?? "?"} · ${f.cartaoTitular ?? ""}`.slice(0, 2000) : null,
           ]);
