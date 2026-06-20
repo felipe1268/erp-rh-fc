@@ -14,6 +14,15 @@ import { removeAccents } from "@/lib/searchUtils";
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 type FeriadoTipo = "nacional" | "estadual" | "municipal" | "ponto_facultativo" | "compensado";
 
+const UF_NOMES: Record<string, string> = {
+  AC: "Acre", AL: "Alagoas", AP: "Amapá", AM: "Amazonas", BA: "Bahia", CE: "Ceará",
+  DF: "Distrito Federal", ES: "Espírito Santo", GO: "Goiás", MA: "Maranhão",
+  MT: "Mato Grosso", MS: "Mato Grosso do Sul", MG: "Minas Gerais", PA: "Pará",
+  PB: "Paraíba", PR: "Paraná", PE: "Pernambuco", PI: "Piauí", RJ: "Rio de Janeiro",
+  RN: "Rio Grande do Norte", RS: "Rio Grande do Sul", RO: "Rondônia", RR: "Roraima",
+  SC: "Santa Catarina", SP: "São Paulo", SE: "Sergipe", TO: "Tocantins",
+};
+
 export default function Feriados() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = selectedCompanyId ? Number(selectedCompanyId) || 0 : 0;
@@ -57,9 +66,42 @@ export default function Feriados() {
     return m;
   }, [obrasAtivas]);
 
-  const seedMut = trpc.feriados.seedNacionais.useMutation({
-    onSuccess: (r) => { toast.success(`${r.feriadosCriados} feriados nacionais inseridos`); refetch(); },
-    onError: (e: any) => toast.error(e.message || "Erro ao inserir"),
+  // Rev. 3355 — UFs com base estadual curada (p/ o seletor do diálogo).
+  const { data: ufsDisponiveis } = trpc.feriados.ufsEstaduaisDisponiveis.useQuery(undefined, { staleTime: 1000 * 60 * 60 });
+  // UFs detectadas nas obras ativas (pré-marcação do seletor).
+  const ufsDasObras = useMemo(() => {
+    const s = new Set<string>();
+    for (const o of (obrasAtivas as any[] | undefined) || []) {
+      const uf = String(o?.estado || '').trim().toUpperCase();
+      if (uf.length === 2) s.add(uf);
+    }
+    return s;
+  }, [obrasAtivas]);
+
+  // Rev. 3355 — diálogo "Baixar Feriados": nacionais (sempre) + estaduais das UFs escolhidas.
+  // Municipais ficam por conta do cadastro manual (sem base pública confiável).
+  const [showBaixar, setShowBaixar] = useState(false);
+  const [ufsBaixar, setUfsBaixar] = useState<Set<string>>(new Set());
+  const abrirBaixar = () => { setUfsBaixar(new Set(ufsDasObras)); setShowBaixar(true); };
+  const toggleUf = (uf: string) => setUfsBaixar(prev => {
+    const n = new Set(prev);
+    if (n.has(uf)) n.delete(uf); else n.add(uf);
+    return n;
+  });
+  const baixarMut = trpc.feriados.baixarFeriados.useMutation({
+    onSuccess: (r: any) => {
+      const ufs = (r?.ufsComFeriado || []).length ? r.ufsComFeriado.join(", ") : "—";
+      toast.success(
+        `${r.nacionaisCriados} nacionais + ${r.estaduaisCriados} estaduais inseridos (UFs: ${ufs}).`,
+        { description: "Feriados municipais não são baixados — cadastre-os manualmente em \"Novo Feriado\"." }
+      );
+      if ((r?.ufsSemBase || []).length) {
+        toast.info(`Sem base estadual para: ${r.ufsSemBase.join(", ")}. Cadastre manualmente se necessário.`);
+      }
+      setShowBaixar(false);
+      refetch();
+    },
+    onError: (e: any) => toast.error(e.message || "Erro ao baixar feriados"),
   });
 
   const criarMut = trpc.feriados.criar.useMutation({
@@ -180,7 +222,7 @@ export default function Feriados() {
           <p className="text-sm text-muted-foreground mt-1">Gerencie feriados nacionais, estaduais e municipais para cálculos de ponto e folha</p>
         </div>
         <DraggableCommandBar barId="feriados" items={[
-          { id: "carregar", node: <Button variant="outline" size="sm" onClick={() => seedMut.mutate({ companyId, companyIds, ano: anoFiltro })} disabled={seedMut.isPending}>{seedMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Download className="w-4 h-4 mr-1" />}Carregar Nacionais {anoFiltro}</Button> },
+          { id: "carregar", node: <Button variant="outline" size="sm" onClick={abrirBaixar} disabled={baixarMut.isPending} title="Baixa feriados nacionais + estaduais (escolha as UFs). Municipais: cadastre manualmente.">{baixarMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Download className="w-4 h-4 mr-1" />}Baixar Feriados {anoFiltro}</Button> },
           { id: "novo", node: <Button size="sm" onClick={abrirNovo}><Plus className="w-4 h-4 mr-1" /> Novo Feriado</Button> },
         ]} />
       </div>
@@ -345,6 +387,61 @@ export default function Feriados() {
             <Button onClick={salvar} disabled={criarMut.isPending || atualizarMut.isPending}>
               {(criarMut.isPending || atualizarMut.isPending) && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
               Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rev. 3355 — Diálogo "Baixar Feriados": nacionais (sempre) + estaduais por UF */}
+      <Dialog open={showBaixar} onOpenChange={setShowBaixar}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Download className="w-4 h-4" /> Baixar Feriados {anoFiltro}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
+              <p className="font-medium flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-600" /> Feriados nacionais</p>
+              <p className="text-muted-foreground text-xs mt-1">
+                Os feriados nacionais ({anoFiltro}) — fixos e móveis (Sexta-Feira Santa, Carnaval e Corpus Christi) — são baixados automaticamente.
+              </p>
+            </div>
+
+            <div>
+              <Label className="text-xs flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> Feriados estaduais — selecione as UFs</Label>
+              {ufsDasObras.size > 0 && (
+                <p className="text-[11px] text-muted-foreground mt-1">UFs das obras ativas vêm pré-marcadas.</p>
+              )}
+              <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-64 overflow-y-auto pr-1">
+                {(ufsDisponiveis as string[] | undefined || []).map(uf => {
+                  const sel = ufsBaixar.has(uf);
+                  const daObra = ufsDasObras.has(uf);
+                  return (
+                    <button
+                      type="button"
+                      key={uf}
+                      onClick={() => toggleUf(uf)}
+                      className={`flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-left text-xs transition-colors ${sel ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground hover:bg-muted/50'}`}
+                    >
+                      {sel ? <CheckCircle2 className="w-3.5 h-3.5 text-primary shrink-0" /> : <CircleSlash className="w-3.5 h-3.5 shrink-0 opacity-40" />}
+                      <span className="font-mono font-semibold">{uf}</span>
+                      <span className="truncate">{UF_NOMES[uf] || ''}{daObra ? ' •' : ''}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-2">
+                Os estaduais só contam como HE de feriado para quem tem a <b>UF preenchida na obra</b> onde bateu ponto. Feriados <b>municipais</b> não têm base pública — cadastre-os em "Novo Feriado".
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBaixar(false)}>Cancelar</Button>
+            <Button
+              onClick={() => baixarMut.mutate({ companyId, companyIds, ano: anoFiltro, ufs: Array.from(ufsBaixar) })}
+              disabled={baixarMut.isPending}
+            >
+              {baixarMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Download className="w-4 h-4 mr-1" />}
+              Baixar {ufsBaixar.size > 0 ? `(nacionais + ${ufsBaixar.size} UF)` : '(só nacionais)'}
             </Button>
           </DialogFooter>
         </DialogContent>

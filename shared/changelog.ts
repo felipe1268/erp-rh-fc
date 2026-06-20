@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3355 — **FOLHA / FERIADOS · NOVO "BAIXAR FERIADOS {ANO}": BAIXA AUTOMATICAMENTE OS FERIADOS NACIONAIS
+ * (FIXOS + MÓVEIS) E, NUM DIÁLOGO, DEIXA O USUÁRIO ESCOLHER AS UFs PARA BAIXAR OS FERIADOS ESTADUAIS (PRÉ-MARCANDO
+ * AS UFs DAS OBRAS ATIVAS, QUANDO PREENCHIDAS). FERIADOS MUNICIPAIS NÃO SÃO BAIXADOS (NÃO HÁ BASE PÚBLICA
+ * CONFIÁVEL) → CADASTRO MANUAL EM "NOVO FERIADO". 1 CONST CURADA (25 UFs) + 1 MUTATION + 1 QUERY + 1 FRONT (DIÁLOGO
+ * COM SELETOR DE UFs) · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário): no módulo Feriados, baixar automaticamente os feriados nacionais + estaduais (detectando as
+ *   UFs das obras) e deixar os municipais para cadastro manual ("BAIXE O QUE VC TEM E OS QUE NÃO TIVER O USUÁRIO
+ *   CADASTRA MANUALMENTE").
+ * - DESCOBERTA DURANTE A VALIDAÇÃO (Neon): as 55 obras ativas estão TODAS com `estado`/`cidade` NULL → a
+ *   auto-detecção da UF pela obra não traria NADA (seria um no-op silencioso). Além disso, o motor de HE da Rev.
+ *   3352 (`getFeriadosObservadosForPeriod`/`isFeriadoObservado`) só trata um feriado ESTADUAL como feriado (HE 100%)
+ *   quando a UF da obra onde a pessoa bateu ponto == UF do feriado. Por isso o caminho honesto é deixar o USUÁRIO
+ *   ESCOLHER as UFs (pré-marcando as detectadas das obras, quando existirem), em vez de depender de um dado que hoje
+ *   está vazio.
+ * - CONST CURADA (`server/routers/feriados.ts`, `FERIADOS_ESTADUAIS`): Record<UF, {nome,data MM-DD}[]> com 25 UFs
+ *   (datas civis estabelecidas; ex.: SP 09/07 "Revolução Constitucionalista", RJ 23/04 "São Jorge" + 20/11
+ *   "Consciência Negra"). A Consciência Negra fica como ESTADUAL nas UFs que a observam (RJ/AL/AP/AM/MT), NÃO como
+ *   nacional, p/ não mudar o comportamento global. DF só "Dia do Evangélico" (sem Fundação de Brasília, evita colidir
+ *   com Tiradentes).
+ * - MUTATION (`baixarFeriados({companyId,companyIds?,ano,ufs?})`): `ensureUserOwnsCompanies` (tenant guard); (1)
+ *   semeia os NACIONAIS fixos (companyId=null, recorrente, observado=1, dedup por data) e (2) os móveis
+ *   (Sexta-Feira Santa observado=1; Carnaval/Corpus facultativos observado=0); (3) semeia os ESTADUAIS das UFs
+ *   ESCOLHIDAS (`input.ufs`), gravados na empresa selecionada (companyId), tipo='estadual', estado=UF, recorrente=1,
+ *   observado=1, dedup por (companyId ou null)+data+nome (idempotente — não recria a cada clique/ano). Retorna
+ *   {nacionaisCriados, estaduaisCriados, ufsComFeriado, ufsSemBase}.
+ * - QUERY (`ufsEstaduaisDisponiveis`): devolve `Object.keys(FERIADOS_ESTADUAIS).sort()` p/ alimentar o seletor do
+ *   diálogo (sem hardcode duplicado no front).
+ * - FRONT (`client/src/pages/Feriados.tsx`): o botão "Baixar Feriados {ano}" agora abre um DIÁLOGO — card fixo
+ *   "Feriados nacionais" (sempre baixados) + grade de UFs (chips toggláveis) pré-marcadas pelas UFs das obras ativas
+ *   (`ufsDasObras`); nota explicando que os estaduais só contam como HE para quem tem a UF preenchida na obra e que
+ *   os municipais são manuais. `UF_NOMES` mapeia o código → nome. O botão de ação mostra "Baixar (nacionais + N UF)".
+ *   A antiga `seedNacionais`/botão "Carregar Nacionais" foi aposentada do front (mutation mantida no backend).
+ * - VALIDAÇÃO: tsc limpo nos arquivos tocados (só o ruído pré-existente de `changelog.ts`); obras conferidas no Neon
+ *   (55 ativas, todas sem UF → seletor manual é o caminho certo). ZERO schema/ALTER/DROP/DELETE.
+ *
  * Rev. 3354 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA — IMPORTAÇÃO DE EXTRATO · (1) CORRIGIDO O ERRO "NÃO CONSEGUI
  * INTERPRETAR O JSON DA IA" AO IMPORTAR O EXTRATO DO SANTANDER EM PDF — AGORA HÁ UM PARSER DETERMINÍSTICO PRÓPRIO
  * (SEM IA), IGUAL AO DA CAIXA/BANCO DO BRASIL. (2) O SELETOR DE ARQUIVO PASSA A ACEITAR VÁRIOS EXTRATOS DE UMA VEZ:

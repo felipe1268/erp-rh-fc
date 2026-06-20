@@ -35,6 +35,102 @@ const FERIADOS_NACIONAIS = [
   { nome: "Natal", data: "12-25", tipo: "nacional" as const },
 ];
 
+// Rev. 3355 — Feriados ESTADUAIS oficiais por UF (data fixa MM-DD), usados pelo
+// "Baixar Feriados": o usuário escolhe as UFs (pré-marcadas pelas UFs das obras
+// ativas, quando preenchidas) e o ERP semeia os feriados do estado correspondente.
+// Lista curada (datas civis estabelecidas). Feriados MUNICIPAIS NÃO entram aqui
+// (não há base pública confiável) → cadastro manual.
+const FERIADOS_ESTADUAIS: Record<string, Array<{ nome: string; data: string }>> = {
+  AC: [
+    { nome: "Dia do Evangélico", data: "01-23" },
+    { nome: "Aniversário do Acre", data: "06-15" },
+    { nome: "Dia da Amazônia", data: "09-05" },
+    { nome: "Assinatura do Tratado de Petrópolis", data: "11-17" },
+  ],
+  AL: [
+    { nome: "São João", data: "06-24" },
+    { nome: "São Pedro", data: "06-29" },
+    { nome: "Emancipação Política de Alagoas", data: "09-16" },
+    { nome: "Consciência Negra", data: "11-20" },
+  ],
+  AP: [
+    { nome: "São José", data: "03-19" },
+    { nome: "Criação do Território Federal do Amapá", data: "09-13" },
+    { nome: "Consciência Negra", data: "11-20" },
+  ],
+  AM: [
+    { nome: "Elevação do Amazonas à Província", data: "09-05" },
+    { nome: "Consciência Negra", data: "11-20" },
+    { nome: "Nossa Senhora da Conceição", data: "12-08" },
+  ],
+  BA: [
+    { nome: "Independência da Bahia", data: "07-02" },
+  ],
+  CE: [
+    { nome: "Data Magna do Ceará", data: "03-25" },
+    { nome: "Nossa Senhora da Assunção", data: "08-15" },
+  ],
+  DF: [
+    { nome: "Dia do Evangélico", data: "11-30" },
+  ],
+  MA: [
+    { nome: "Adesão do Maranhão à Independência", data: "07-28" },
+  ],
+  MT: [
+    { nome: "Consciência Negra", data: "11-20" },
+  ],
+  MS: [
+    { nome: "Criação do Estado de Mato Grosso do Sul", data: "10-11" },
+  ],
+  PA: [
+    { nome: "Adesão do Grão-Pará à Independência", data: "08-15" },
+  ],
+  PB: [
+    { nome: "Homenagem à memória de João Pessoa", data: "07-26" },
+    { nome: "Fundação do Estado da Paraíba", data: "08-05" },
+  ],
+  PR: [
+    { nome: "Emancipação Política do Paraná", data: "12-19" },
+  ],
+  PE: [
+    { nome: "Revolução Pernambucana", data: "03-06" },
+    { nome: "São João", data: "06-24" },
+  ],
+  PI: [
+    { nome: "Dia do Piauí", data: "10-19" },
+  ],
+  RJ: [
+    { nome: "Dia de São Jorge", data: "04-23" },
+    { nome: "Dia da Consciência Negra (Zumbi dos Palmares)", data: "11-20" },
+  ],
+  RN: [
+    { nome: "Mártires de Cunhaú e Uruaçu", data: "10-03" },
+  ],
+  RS: [
+    { nome: "Revolução Farroupilha", data: "09-20" },
+  ],
+  RO: [
+    { nome: "Criação do Estado de Rondônia", data: "01-04" },
+    { nome: "Dia do Evangélico", data: "06-18" },
+  ],
+  RR: [
+    { nome: "Criação do Estado de Roraima", data: "10-05" },
+  ],
+  SC: [
+    { nome: "Dia de Santa Catarina de Alexandria", data: "11-25" },
+  ],
+  SP: [
+    { nome: "Revolução Constitucionalista (9 de Julho)", data: "07-09" },
+  ],
+  SE: [
+    { nome: "Emancipação Política de Sergipe", data: "07-08" },
+  ],
+  TO: [
+    { nome: "Autonomia do Estado do Tocantins", data: "03-18" },
+    { nome: "Criação do Estado do Tocantins", data: "10-05" },
+  ],
+};
+
 // Calcular Páscoa (algoritmo de Meeus/Jones/Butcher)
 function calcularPascoa(ano: number): string {
   const a = ano % 19;
@@ -543,6 +639,104 @@ export const feriadosRouter = router({
       }
 
       return { success: true, feriadosCriados: count };
+    }),
+
+  // Rev. 3355 — UFs com base estadual curada (p/ o seletor do diálogo "Baixar Feriados").
+  ufsEstaduaisDisponiveis: protectedProcedure.query(async () => {
+    return Object.keys(FERIADOS_ESTADUAIS).sort();
+  }),
+
+  // Rev. 3355 — "Baixar Feriados": semeia NACIONAIS (fixos + móveis, globais) e os
+  // ESTADUAIS das UFs ESCOLHIDAS pelo usuário (pré-marcadas pelas UFs das obras
+  // ativas, quando preenchidas). Os estaduais são gravados na empresa selecionada
+  // (companyId) e só contam como HE p/ quem tem a UF preenchida na obra onde bateu
+  // ponto. Feriados MUNICIPAIS NÃO são baixados (sem base pública) → cadastro manual.
+  baixarFeriados: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      ano: z.number(),
+      ufs: z.array(z.string()).optional(), // UFs escolhidas p/ baixar os estaduais
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const ano = input.ano;
+      // IDOR guard: input.companyId é usado na escrita dos estaduais (cmp), então
+      // precisa SEMPRE ser validado — não só quando companyIds vem vazio. Une os dois.
+      const cids = Array.from(new Set(
+        [input.companyId, ...(input.companyIds || [])]
+          .map(Number).filter((n) => Number.isFinite(n)),
+      ));
+      await ensureUserOwnsCompanies(db, ctx.user, cids);
+
+      let nacionaisCriados = 0;
+      let estaduaisCriados = 0;
+
+      // (1) NACIONAIS fixos (globais, dedup por data)
+      for (const f of FERIADOS_NACIONAIS) {
+        const data = `${ano}-${f.data}`;
+        const existing = await db.select({ id: feriados.id }).from(feriados)
+          .where(and(sql`${feriados.companyId} IS NULL`, eq(feriados.data, data)));
+        if (existing.length === 0) {
+          await db.insert(feriados).values({
+            companyId: null, nome: f.nome, data, tipo: f.tipo,
+            recorrente: 1, observado: 1, criadoPor: ctx.user.name ?? 'Sistema',
+          });
+          nacionaisCriados++;
+        }
+      }
+
+      // (2) NACIONAIS móveis (Carnaval/Corpus = facultativo observado=0)
+      for (const f of feriadosMoveis(ano)) {
+        const existing = await db.select({ id: feriados.id }).from(feriados)
+          .where(and(sql`${feriados.companyId} IS NULL`, eq(feriados.data, f.data)));
+        if (existing.length === 0) {
+          await db.insert(feriados).values({
+            companyId: null, nome: f.nome, data: f.data, tipo: f.tipo,
+            recorrente: 0, observado: f.observadoDefault ? 1 : 0, criadoPor: ctx.user.name ?? 'Sistema',
+          });
+          nacionaisCriados++;
+        }
+      }
+
+      // (3) ESTADUAIS — baixa os estaduais das UFs ESCOLHIDAS pelo usuário, gravados
+      // na empresa selecionada (input.companyId). Detecção por obra é só sugestão de
+      // UI (pré-marcação); aqui semeia exatamente o que veio em `input.ufs`. Os
+      // estaduais só contam como HE p/ quem tem a UF preenchida na obra onde bateu ponto.
+      const cmp = Number(input.companyId);
+      const ufsSel = Array.from(new Set((input.ufs || []).map(_normUF).filter((u) => u.length === 2)));
+      const ufsComFeriado = new Set<string>();
+      const ufsSemBase = new Set<string>();
+      for (const uf of ufsSel) {
+        const base = FERIADOS_ESTADUAIS[uf];
+        if (!base) { ufsSemBase.add(uf); continue; }
+        for (const h of base) {
+          const data = `${ano}-${h.data}`;
+          // dedup por (empresa OU global) + data + nome (evita recriar a cada ano/clique)
+          const existing = await db.select({ id: feriados.id }).from(feriados)
+            .where(and(
+              sql`(${feriados.companyId} = ${cmp} OR ${feriados.companyId} IS NULL)`,
+              eq(feriados.data, data),
+              eq(feriados.nome, h.nome),
+            ));
+          if (existing.length === 0) {
+            await db.insert(feriados).values({
+              companyId: cmp, nome: h.nome, data, tipo: 'estadual',
+              recorrente: 1, estado: uf, observado: 1, criadoPor: ctx.user.name ?? 'Sistema',
+            });
+            estaduaisCriados++;
+          }
+          ufsComFeriado.add(uf);
+        }
+      }
+
+      return {
+        success: true,
+        nacionaisCriados,
+        estaduaisCriados,
+        ufsComFeriado: Array.from(ufsComFeriado).sort(),
+        ufsSemBase: Array.from(ufsSemBase).sort(),
+      };
     }),
 
   // Rev. 1840 — Lista todas as datas-feriado dentro de um período (YYYY-MM-DD).
