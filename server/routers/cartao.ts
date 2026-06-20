@@ -632,12 +632,29 @@ export const cartaoRouter = router({
               COUNT(*)::int AS qtd, COALESCE(SUM(i.valor),0) AS total
          ${BASE} AND i.tipo='compra' GROUP BY 1 ORDER BY total DESC LIMIT 15`, P());
 
+    // Rev. 3340 — "onde mais gastamos": top estabelecimentos por VALOR TOTAL
+    // (sem HAVING>1, então inclui compras únicas de alto valor, ao contrário do
+    // corte `estabelecimentos` que exige recorrência). READ-ONLY.
+    const maioresR = await dbExecute(db,
+      `SELECT UPPER(TRIM(i.descricao)) AS est, COUNT(*)::int AS vezes,
+              COUNT(DISTINCT f.mes_ref)::int AS meses, COALESCE(SUM(i.valor),0) AS total,
+              MAX(COALESCE(i.parcela_total,1))::int AS "maxParcelas"
+         ${BASE} AND i.tipo='compra' AND i.descricao IS NOT NULL AND TRIM(i.descricao)<>''
+        GROUP BY 1 ORDER BY total DESC, vezes DESC LIMIT 20`, P());
+    // Rev. 3340 — gasto por CIDADE/local geográfico (coluna i.cidade). READ-ONLY.
+    const porCidadeR = await dbExecute(db,
+      `SELECT COALESCE(NULLIF(UPPER(TRIM(i.cidade)),''),'(sem cidade)') AS cidade,
+              COUNT(*)::int AS qtd, COALESCE(SUM(i.valor),0) AS total
+         ${BASE} AND i.tipo='compra' GROUP BY 1 ORDER BY total DESC LIMIT 15`, P());
+
     const num = (v: any) => (v != null ? parseFloat(v) : 0) || 0;
     return {
       porTipo: porTipoR.rows.map((r: any) => ({ tipo: String(r.tipo || ""), qtd: Number(r.qtd) || 0, total: num(r.total) })),
       porMes: porMesR.rows.map((r: any) => ({ mes: Number(r.mes) || 0, tipo: String(r.tipo || ""), total: num(r.total) })),
       perfilParcelas: perfilR.rows.map((r: any) => ({ parcelas: Number(r.parcelas) || 1, qtd: Number(r.qtd) || 0, total: num(r.total) })),
       estabelecimentos: estabR.rows.map((r: any) => ({ est: String(r.est || ""), vezes: Number(r.vezes) || 0, meses: Number(r.meses) || 0, total: num(r.total), maxParcelas: Number(r.maxParcelas) || 1 })),
+      maioresEstabelecimentos: maioresR.rows.map((r: any) => ({ est: String(r.est || ""), vezes: Number(r.vezes) || 0, meses: Number(r.meses) || 0, total: num(r.total), maxParcelas: Number(r.maxParcelas) || 1 })),
+      porCidade: porCidadeR.rows.map((r: any) => ({ cidade: String(r.cidade || ""), qtd: Number(r.qtd) || 0, total: num(r.total) })),
       encargos: encargosR.rows.map((r: any) => ({ est: String(r.est || ""), qtd: Number(r.qtd) || 0, total: num(r.total) })),
       porObra: porObraR.rows.map((r: any) => ({ obra: String(r.obra || ""), qtd: Number(r.qtd) || 0, total: num(r.total) })),
       porCategoria: porCatR.rows.map((r: any) => ({ cat: String(r.cat || ""), qtd: Number(r.qtd) || 0, total: num(r.total) })),

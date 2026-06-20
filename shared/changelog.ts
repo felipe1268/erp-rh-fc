@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3340 — **FINANCEIRO / DASHBOARD DE CARTÃO DE CRÉDITO · NOVA SEÇÃO "ANÁLISE DETALHADA DAS FATURAS — ITENS" NO
+ * DASHBOARD (`/financeiro/dashboards/cartao`): MAPEIA CADA LANÇAMENTO DAS FATURAS (COMPRAS, ENCARGOS/IOF/JUROS/ANUIDADE,
+ * CRÉDITOS), CRUZA OS MESMOS LOCAIS DE COMPRA (ESTABELECIMENTOS RECORRENTES), MOSTRA "ONDE MAIS GASTAMOS" (TOP POR VALOR +
+ * POR CIDADE), PERFIL DE PARCELAMENTO, ENCARGOS POR NATUREZA E GASTO POR OBRA/CATEGORIA. 1 BACKEND (READ-ONLY, +2 CORTES) +
+ * 1 FRONT · ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário, no iPad, com prints do diálogo "Classificar itens da fatura" e do Dashboard do Cartão): "quero os
+ *   gráficos dos itens dentro de cada fatura, cruzar os mesmos locais de compra e ver onde mais gastamos; vamos mapear tudo,
+ *   cada lançamento — IOF, encargos etc. Quero uma análise detalhada das faturas".
+ * - RAIZ/CONTEXTO: a aba "Gerencial" (Rev. 3332) DENTRO da tela `/financeiro/cartao` JÁ agregava os itens, mas o usuário
+ *   estava olhando o DASHBOARD (`/financeiro/dashboards/cartao`), que só tinha análise no nível de FATURA (faturado×compras,
+ *   comparativo a/a, por cartão/banco, conciliação) — nada por ITEM. Faltava trazer a análise por item pra onde ele estava.
+ * - BACKEND (`server/routers/cartao.ts`, `analiseGerencial` — READ-ONLY, escopo por ANO + cartão opcional): +2 cortes
+ *   aditivos sobre `financial_cartao_itens ⋈ financial_cartao_faturas`: (1) `maioresEstabelecimentos` = top 20 por VALOR
+ *   TOTAL (sem `HAVING COUNT(*)>1`, então inclui compras ÚNICAS de alto valor — ao contrário do corte `estabelecimentos`
+ *   pré-existente, que exige recorrência) → responde "onde mais gastamos"; (2) `porCidade` = soma por `i.cidade`
+ *   (`COALESCE(NULLIF(UPPER(TRIM(cidade)),''),'(sem cidade)')`, top 15) → distribuição geográfica. Ambos seguem o padrão
+ *   `BASE`/`P()` do endpoint (dbExecute liga params por ordem de aparição do placeholder). Aditivos: o consumidor existente
+ *   (aba Gerencial) ignora os campos novos.
+ * - FRONT (`client/src/pages/financeiro/dashboards/DashCartao.tsx`): nova query `analiseGerencial({companyId, ano})` +
+ *   memo `ag` (replica `classifEncargo`/composição/evolução/perfil da aba Gerencial) + seção "Análise detalhada das faturas
+ *   — itens" abaixo dos gráficos de fatura: 5 KPIs (Total em compras-itens, Encargos & juros, % parcelado, Ticket médio,
+ *   Créditos/pagamentos); Composição por tipo (pizza); Evolução mês a mês compras×encargos (barras); "Onde mais gastamos —
+ *   estabelecimentos" (barras h. por valor); "Gasto por cidade/local" (barras h.); tabela "Locais recorrentes — mesmos
+ *   estabelecimentos cruzados" (vezes·meses·gasto); "Encargos por natureza" (IOF/anuidade/juros/multas, barras h.); "Perfil
+ *   de parcelamento" (à vista×Nx); e, quando há classificação, "Gasto por obra" + "Gasto por categoria". Tudo via `_kit`
+ *   (DashHeader/KpiCard/ChartCard/BRLTooltip/PALETTE/formatBRL/formatBRLCompact); "Abrir" leva à tela `/financeiro/cartao`.
+ * - ESCOPO: 1 backend (read-only, +2 cortes SQL) + 1 front. Sem rota/permissão/schema novo. Moeda em BRL via `formatBRL`/
+ *   `formatBRLCompact` (regra de ouro). RESSALVA: não foi possível reproduzir autenticado no ambiente (login bloqueia
+ *   screenshot); re-publicar p/ o usuário ver no iPad.
+ * - ARQUIVOS: `server/routers/cartao.ts`, `client/src/pages/financeiro/dashboards/DashCartao.tsx`, `shared/version.ts`
+ *   (3340), `shared/changelog.ts`, `replit.md`, `replit-history.md`.
+ *
  * Rev. 3339 — **RH / DASHBOARD "CUSTO DE DEMISSÃO EM MASSA" (CDM) · CORREÇÃO: O "CUSTO TOTAL" DOS MEMBROS DA CIPA AGORA
  * INCLUI A INDENIZAÇÃO DO PERÍODO DE ESTABILIDADE (SÚMULA 396 TST) + EMPREGADOS JÁ EM "AVISO" SÃO EXCLUÍDOS DA SIMULAÇÃO.
  * 1 BACKEND (READ-ONLY) + 1 FRONT · BUGFIX/ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.**
