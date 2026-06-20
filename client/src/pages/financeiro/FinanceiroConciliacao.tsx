@@ -275,7 +275,7 @@ export default function FinanceiroConciliacao() {
       obraId: obraDoCheque ? String(obraDoCheque.id) : "",
       contaNome: "",
       centroCustoId: "",
-      fornecedorNome: isEntrada ? "" : (s.chequeFornecedor ?? (temDemo ? (s.demoBeneficiario ?? "") : "")),
+      fornecedorNome: isEntrada ? "" : (s.chequeFornecedor ?? (temDemo && s.demoBeneficiario ? s.demoBeneficiario : ((s.vinculoTipo === "fornecedor" && s.vinculoNome && (s.vinculoVia === "cnpj" || s.vinculoConfianca === "media")) ? String(s.vinculoNome) : ""))),
       clienteId: "",
       clienteNome: clientePrefill,
       formaPagamento: temCheque ? "cheque" : (temFatura ? "cartao" : (temDemo ? demoForma : "")),
@@ -1026,8 +1026,8 @@ export default function FinanceiroConciliacao() {
             </span>
           )}
           {s.vinculoTipo && (
-            <p className={`text-[11px] truncate ${s.vinculoVia === "cnpj" ? "text-emerald-700" : "text-amber-700"}`} title={`${s.vinculoTipo === "cliente" ? "Cliente" : "Fornecedor"} cadastrado: ${s.vinculoNome}${s.vinculoVia === "cnpj" ? " · CNPJ confere com o cadastro" : " · sugestão por nome — confira antes de lançar"}`}>
-              {s.vinculoTipo === "cliente" ? "👤" : "🏢"} {s.vinculoTipo === "cliente" ? "Cliente" : "Fornecedor"}: {s.vinculoNome}{s.vinculoVia === "nome" ? " · sugestão" : ""} <span className="opacity-60">(cadastro)</span>
+            <p className={`text-[11px] truncate ${s.vinculoVia === "cnpj" ? "text-emerald-700" : s.vinculoConfianca === "media" ? "text-amber-700" : "text-gray-500"}`} title={`${s.vinculoTipo === "cliente" ? "Cliente" : "Fornecedor"} cadastrado: ${s.vinculoNome}${s.vinculoVia === "cnpj" ? " · CNPJ confere com o cadastro" : s.vinculoConfianca === "media" ? " · sugestão por nome (boa) — confira antes de lançar" : " · palpite por nome (baixa confiança) — escolha o correto ao lançar"}`}>
+              {s.vinculoTipo === "cliente" ? "👤" : "🏢"} {s.vinculoTipo === "cliente" ? "Cliente" : "Fornecedor"}: {s.vinculoNome}{s.vinculoVia === "nome" ? (s.vinculoConfianca === "media" ? " · sugestão" : " · palpite") : ""} <span className="opacity-60">(cadastro)</span>
             </p>
           )}
         </div>
@@ -3646,6 +3646,16 @@ export default function FinanceiroConciliacao() {
                     <datalist id="lanc-fornecedores">
                       {fornNomes.map((n, i) => <option key={i} value={n} />)}
                     </datalist>
+                    {lancStatement.vinculoTipo === "fornecedor" && lancStatement.vinculoNome && (
+                      <p className="text-[11px] text-gray-500 mt-1 flex items-start gap-1">
+                        <span className="shrink-0">🏢</span>
+                        <span>
+                          {lancStatement.vinculoVia === "cnpj"
+                            ? <>Cadastro <strong>{lancStatement.vinculoNome}</strong> (CNPJ confere) — confira e ajuste se preciso.</>
+                            : <>Sugestão do cadastro: <button type="button" className="font-medium text-blue-600 hover:underline" onClick={() => setLancForm(f => ({ ...f, fornecedorNome: String(lancStatement.vinculoNome) }))}>{lancStatement.vinculoNome}</button> — {lancStatement.vinculoConfianca === "media" ? "boa correspondência por nome" : "palpite (baixa confiança)"}. Escolha o fornecedor correto do cadastro.</>}
+                        </span>
+                      </p>
+                    )}
                   </div>
                 )}
                 <div>

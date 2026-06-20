@@ -1092,24 +1092,72 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
       if (m && m[1]) { const c = m[1].replace(/\D/g, ""); return c.length === 14 ? c : null; }
       return null;
     };
-    const matchCadastro = (l: any, beneficiario: string | null): { tipo: "fornecedor" | "cliente"; id: number; nome: string; via: "cnpj" | "nome" } | null => {
+    // Rev. 3357 — MATCHER DE CADASTRO PONTUADO (substitui o "1º substring vence", que escolhia
+    // qualquer fornecedor curto presente em qualquer pedaço da descrição). Agora tokeniza a
+    // descrição e o nome do cadastro, descarta o RUÍDO bancário/societário (PAG, BOLETO, IBC,
+    // LTDA, COMERCIO…) e pontua cada candidato pelo PESO (tamanho) dos tokens que casam —
+    // exato, prefixo ou similaridade (Dice de bigramas). Vence o de MAIOR peso; só sugere se
+    // casou um token forte (≥4) e ≥50% do peso do nome. A confiança ("media"/"baixa") sai da
+    // folga vs o 2º colocado, p/ a tela mostrar "confira" e o usuário poder corrigir ao lançar.
+    const _STOP_TOKENS = new Set<string>([
+      "PAG","PG","PGTO","PGT","PAGTO","PAGAMENTO","PAGAM","BOLETO","BOL","TIT","TITULO","TITULOS",
+      "IBC","TED","DOC","PIX","TEF","TRANSF","TRANSFERENCIA","COMPENSACAO","COMPENS","CONV","CONVENIO",
+      "REF","REFERENTE","CONTA","CONTAS","DEPOSITO","DEP","SAQUE","CRED","CREDITO","DEB","DEBITO",
+      "FATURA","FAT","NFE","DARF","GPS","FGTS","INSS","COBR","COBRANCA","RECEB","RECEBIMENTO",
+      "LIQ","LIQUIDACAO","CIP","SISPAG","CNPJ","CPF","LTDA","EPP","EIRELI","MEI","CIA",
+      "COM","COMERCIO","COMERCIAL","IND","INDUSTRIA","INDUSTRIAL","SERV","SERVICO","SERVICOS",
+      "DISTRIBUIDORA","REPRESENTACAO","REPRESENTACOES","PRODUTOS","PECAS","MATERIAIS","MATERIAL",
+      "PARA","POR","DAS","DOS","EM","NA","NO",
+    ]);
+    const _tokset = (v: any): string[] =>
+      _normNome(v).split(" ").filter(t => t.length >= 3 && !_STOP_TOKENS.has(t) && !/^\d+$/.test(t));
+    const _bigrams = (s: string): Set<string> => { const g = new Set<string>(); for (let i = 0; i < s.length - 1; i++) g.add(s.slice(i, i + 2)); return g; };
+    const _dice = (a: string, b: string): number => {
+      if (a === b) return 1;
+      if (a.length < 3 || b.length < 3) return 0;
+      const ga = _bigrams(a), gb = _bigrams(b); let inter = 0;
+      for (const g of ga) if (gb.has(g)) inter++;
+      return (2 * inter) / (ga.size + gb.size);
+    };
+    const matchCadastro = (l: any, beneficiario: string | null): { tipo: "fornecedor" | "cliente"; id: number; nome: string; via: "cnpj" | "nome"; confianca: "alta" | "media" | "baixa" } | null => {
       const isEntrada = Number(l.valor) >= 0;
       const idx = isEntrada ? cliIdx : fornIdx;
       const tipo: "fornecedor" | "cliente" = isEntrada ? "cliente" : "fornecedor";
-      // 1) CNPJ na descrição do extrato (forte)
+      // 1) CNPJ na descrição do extrato (forte → alta)
       const c = extrCnpj(l.descricao);
-      if (c) { const hit = idx.porCnpj.get(c); if (hit) return { tipo, id: hit.id, nome: hit.nome, via: "cnpj" }; }
-      // 2) nome do beneficiário (demonstrativo) ou da própria descrição (fraco → "sugestão")
-      for (const cand of [beneficiario, l.descricao]) {
-        const n = _normNome(cand);
-        if (!n || n.length < 4) continue;
-        const exato = idx.porNome.get(n);
-        if (exato) return { tipo, id: exato.id, nome: exato.nome, via: "nome" };
-        for (const [nm, hit] of idx.porNome) {
-          if (nm.length >= 6 && (nm.includes(n) || n.includes(nm))) return { tipo, id: hit.id, nome: hit.nome, via: "nome" };
+      if (c) { const hit = idx.porCnpj.get(c); if (hit) return { tipo, id: hit.id, nome: hit.nome, via: "cnpj", confianca: "alta" }; }
+      // 2) melhor casamento por NOME, pontuado por tokens (beneficiário do demonstrativo + descrição)
+      const descToks = new Set<string>();
+      for (const src of [beneficiario, l.descricao]) for (const t of _tokset(src)) descToks.add(t);
+      if (descToks.size === 0) return null;
+      const perId = new Map<number, { nome: string; weight: number; ratio: number }>();
+      for (const [nm, hit] of idx.porNome) {
+        const candToks = nm.split(" ").filter(t => t.length >= 3 && !_STOP_TOKENS.has(t) && !/^\d+$/.test(t));
+        if (candToks.length === 0) continue;
+        let matched = 0, total = 0, strong = false;
+        for (const ct of candToks) {
+          total += ct.length;
+          let ok = descToks.has(ct);
+          if (!ok) {
+            for (const dt of descToks) {
+              if (ct.length >= 4 && dt.length >= 4 && (dt.startsWith(ct) || ct.startsWith(dt) || _dice(ct, dt) >= 0.82)) { ok = true; break; }
+            }
+          }
+          if (ok) { matched += ct.length; if (ct.length >= 4) strong = true; }
         }
+        if (total === 0) continue;
+        const ratio = matched / total;
+        if (!strong || ratio < 0.5) continue; // descarta casamentos fracos/genéricos
+        const prev = perId.get(hit.id);
+        if (!prev || matched > prev.weight) perId.set(hit.id, { nome: hit.nome, weight: matched, ratio });
       }
-      return null;
+      if (perId.size === 0) return null;
+      const ranked = [...perId.entries()].sort((a, b) => (b[1].weight - a[1].weight) || (b[1].ratio - a[1].ratio));
+      const [bestId, best] = ranked[0];
+      const second = ranked[1]?.[1];
+      const margem = best.weight - (second?.weight ?? 0);
+      const confianca: "media" | "baixa" = (best.ratio >= 0.9 && margem >= 4) ? "media" : "baixa";
+      return { tipo, id: bestId, nome: best.nome, via: "nome", confianca };
     };
 
     // Rev. 3266 — VEREDICTO do usuário sobre a identificação por IA (texto roxo): confirmado
@@ -1192,7 +1240,7 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
       // cartão (`faturaId`) — ali o fornecedor não se aplica.
       if (!out.chequeFornecedorId && !out.faturaId) {
         const vinc = matchCadastro(l, out.demoBeneficiario ?? null);
-        if (vinc) out = { ...out, vinculoTipo: vinc.tipo, vinculoId: vinc.id, vinculoNome: vinc.nome, vinculoVia: vinc.via };
+        if (vinc) out = { ...out, vinculoTipo: vinc.tipo, vinculoId: vinc.id, vinculoNome: vinc.nome, vinculoVia: vinc.via, vinculoConfianca: vinc.confianca };
       }
       return out;
     });

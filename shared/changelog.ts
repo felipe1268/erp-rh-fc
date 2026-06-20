@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3357 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · A SUGESTÃO DE "PROVÁVEL FORNECEDOR/CLIENTE" (TEXTO DO
+ * CADASTRO NA LINHA DO EXTRATO) GANHOU UM ALGORITMO DE CRUZAMENTO MUITO MELHOR (POR TOKENS, PONDERADO POR
+ * TAMANHO, COM FUZZY/DICE E MELHOR-MATCH EM VEZ DO "1º SUBSTRING VENCE") E, NO DIÁLOGO "LANÇAR", A SUGESTÃO É
+ * PRÉ-PREENCHIDA E TOTALMENTE EDITÁVEL P/ O USUÁRIO ESCOLHER O FORNECEDOR CORRETO DO CADASTRO. 1 MATCHER
+ * REESCRITO (BACKEND) + 1 FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário): a indicação de "provável fornecedor" (texto roxo "Fornecedor: X (cadastro)") estava MUITO
+ *   ERRADA. Quer (a) um algoritmo melhor de cruzamento (nome, proximidade/fuzzy) e (b) no momento de "Lançar", um
+ *   campo para ALTERAR e escolher o fornecedor correto do cadastro.
+ * - RAIZ DO BUG (`server/routers/financial.ts`, `matchCadastro`): a etapa por NOME percorria o índice de nomes e
+ *   retornava o PRIMEIRO cadastro cujo nome normalizado fosse substring da descrição INTEIRA do extrato
+ *   (`nm.includes(n) || n.includes(nm)`, `nm.length>=6`), na ORDEM DE INSERÇÃO do Map — sem pontuação nem
+ *   melhor-match. Logo, qualquer fornecedor curto que aparecesse em qualquer pedaço da descrição "vencia"
+ *   arbitrariamente (ex.: "POSTO UMUARAMA — PAG BOLETO IBC — …" casou "COIMBRA").
+ * - NOVO ALGORITMO (`matchCadastro` reescrito): CNPJ na descrição continua o sinal mais FORTE (via "cnpj",
+ *   confiança "alta"). Para o nome: tokeniza descrição + beneficiário (demonstrativo) e o nome do cadastro,
+ *   DESCARTANDO ruído bancário/societário via `_STOP_TOKENS` (PAG, PGTO, BOLETO, IBC, TED, PIX, COMPENSACAO,
+ *   LTDA, EIRELI, COMERCIO, INDUSTRIA, SERVICOS, MATERIAIS, preposições…). Pontua cada candidato pelo PESO
+ *   (tamanho) dos tokens que casam — exato, prefixo ou similaridade por DICE de bigramas (≥0.82) — e exige um
+ *   token FORTE (≥4 chars) casado e ≥50% do peso do nome. VENCE o de MAIOR peso (desempate por ratio); a
+ *   confiança sai da FOLGA vs o 2º colocado: "media" (ratio≥0.9 e folga≥4) ou "baixa" (palpite). Dedup por id do
+ *   cadastro (razão social + nome fantasia pontuam, fica o melhor). Helpers novos `_tokset`/`_bigrams`/`_dice`.
+ * - FRONT (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): (1) na linha do extrato, o texto do vínculo
+ *   reflete a confiança — CNPJ verde; nome "media" = âmbar "· sugestão"; nome "baixa" = cinza "· palpite (baixa
+ *   confiança)" — com tooltip orientando a conferir/escolher ao lançar. (2) No diálogo "Lançar no Contas a Pagar",
+ *   o campo Fornecedor (já um datalist editável do cadastro) passa a ser PRÉ-PREENCHIDO com a sugestão quando a
+ *   confiança é CNPJ/"media"; abaixo do campo há uma nota com a sugestão e um botão "usar" (preenche o nome),
+ *   deixando claro que o usuário deve confirmar/trocar pelo fornecedor correto do cadastro.
+ * - VALIDAÇÃO: tsc limpo nos arquivos tocados (só o ruído pré-existente de `changelog.ts`). ZERO
+ *   schema/ALTER/DROP/DELETE — mudança puramente de leitura/heurística + UI.
+ *
  * Rev. 3356 — **FINANCEIRO / OBRIGAÇÕES FISCAIS · O FILTRO DE PERÍODO FOI TROCADO PELO SELETOR DE ANO + MESES
  * (CHIPS JAN…DEZ COM NAVEGAÇÃO DE ANO, BOTÃO "ANO TODO" E BOLINHA DE STATUS POR MÊS), IGUAL AO PADRÃO JÁ USADO EM
  * CONTAS A RECEBER/PAGAR. SUBSTITUI O SELECT "TODAS AS COMPETÊNCIAS". 100% FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**
