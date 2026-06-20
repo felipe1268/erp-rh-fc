@@ -84,7 +84,7 @@ export default function Revisoes() {
             activeFilter === null ? "ring-2 ring-primary shadow-md" : "hover:border-primary/50"
           }`}
         >
-          <p className={`text-xl font-bold ${activeFilter === null ? "text-primary" : ""}`}>{APP_VERSION_NUMBER}</p>
+          <p className={`text-xl font-bold ${activeFilter === null ? "text-primary" : ""}`}>{APP_VERSION_NUMBER.toLocaleString("pt-BR")}</p>
           <p className="text-[10px] leading-tight text-muted-foreground flex items-center justify-center gap-0.5">
             <ListFilter className="h-3 w-3" /> <span>Total</span>
           </p>
@@ -100,7 +100,7 @@ export default function Revisoes() {
                 isActive ? `ring-2 ${cfg.cardBorder} shadow-md` : "hover:border-primary/50"
               }`}
             >
-              <p className={`text-xl font-bold ${isActive ? "" : ""}`}>{count}</p>
+              <p className={`text-xl font-bold ${isActive ? "" : ""}`}>{count.toLocaleString("pt-BR")}</p>
               <p className="text-[10px] leading-tight text-muted-foreground flex items-center justify-center gap-0.5">
                 {cfg.icon} <span className="truncate">{cfg.label}</span>
               </p>
@@ -119,7 +119,7 @@ export default function Revisoes() {
               <span className="ml-1">{TIPO_CONFIG[activeFilter]?.label}</span>
             </Badge>
           </span>
-          <span className="text-xs">({filteredRevisions.length} {filteredRevisions.length === 1 ? "revisão" : "revisões"})</span>
+          <span className="text-xs">({filteredRevisions.length.toLocaleString("pt-BR")} {filteredRevisions.length === 1 ? "revisão" : "revisões"})</span>
           <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => setActiveFilter(null)}>
             Limpar filtro
           </Button>

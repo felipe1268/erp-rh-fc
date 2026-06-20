@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3378 — **CONTROLE DE REVISÕES · OS NÚMEROS DOS CARDS DE RESUMO (TOTAL / NOVA FUNCIONALIDADE / CORREÇÃO DE BUG /
+ * MELHORIA / SEGURANÇA / PERFORMANCE) AGORA APARECEM COM SEPARADOR DE MILHAR pt-BR (EX.: "1.380" EM VEZ DE "1380").
+ * 100% FRONT (SÓ FORMATAÇÃO DE EXIBIÇÃO) · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE · NENHUMA TELA NOVA.**
+ * - PEDIDO (print da tela "Controle de Revisões"): "separe por ponto e vírgula os números" — i.e. usar o separador de
+ *   milhar pt-BR (ponto) nos números grandes dos cards de KPI.
+ * - FIX (`client/src/pages/Revisoes.tsx`): (1) card "Total" — `APP_VERSION_NUMBER.toLocaleString("pt-BR")`;
+ *   (2) cards por tipo — `count.toLocaleString("pt-BR")`; (3) indicador de filtro "(N revisões)" —
+ *   `filteredRevisions.length.toLocaleString("pt-BR")`. Só apresentação; nenhuma lógica de contagem/filtro alterada.
+ * - EFEITO: 3.378, 1.380, 583, 570, 60, 15 etc. exibidos com ponto de milhar (coerente com a regra de moeda/locale).
+ * - VALIDAÇÃO: tsc limpo (ruído pré-existente em `changelog.ts` ignorado).
+ *
  * Rev. 3377 — **FINANCEIRO / CADASTRO · CONTAS BANCÁRIAS · O CARD DE CADA CONTA AGORA MOSTRA, ALÉM DO BADGE "TALÃO",
  * UM BADGE "APLICAÇÃO AUTOMÁTICA" QUANDO A CONTA TEM APLICAÇÃO/RESGATE AUTOMÁTICO (VARREDURA DIÁRIA) ATIVADO —
  * ASSIM DÁ PRA VER DIRETO NA LISTA, SEM ABRIR PARA EDITAR, SE A CONTA TEM TALÃO DE CHEQUE E/OU APLICAÇÃO AUTOMÁTICA.
