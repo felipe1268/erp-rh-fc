@@ -876,7 +876,7 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
 
     // 2) Extrato SEM lançamento (pendências)
     const pendRes = await dbExecute(db,
-      `SELECT id, data, descricao, valor, tipo
+      `SELECT id, data, descricao, valor, tipo, saldo_apos AS "saldoApos"
          FROM bank_statement_lines
         WHERE company_id=$1 AND conta_bancaria_id=$2 AND data>=$3 AND data<=$4
           AND COALESCE(conciliado,0)=0 AND excluido_em IS NULL

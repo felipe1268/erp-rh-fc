@@ -54,8 +54,11 @@ function brDateToISO(d: string): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// Linhas de saldo/cabeçalho que NÃO são transações (formato novo)
-const RE_SKIP_NOVO = /Saldo Anterior|Saldo do dia|Histórico|Lançamentos|Informações Adicionais|Dia\s+Lote|Total Aplicações|Data de Deb|Juros|Sujeitos a confirm|^SALDO\b/i;
+// Linhas de cabeçalho/rodapé que NÃO contêm valor transacional (formato novo).
+// "Saldo do dia" e "SALDO" NÃO ficam aqui — são tratadas separadamente para capturar o saldo diário.
+const RE_SKIP_NOVO = /Saldo Anterior|Histórico|Lançamentos|Informações Adicionais|Dia\s+Lote|Total Aplicações|Data de Deb|Juros|Sujeitos a confirm/i;
+// Linhas que representam saldo (não são transações) mas têm valor para captura de saldo diário.
+const RE_SALDO_LINHA = /Saldo do dia|^SALDO\b/i;
 
 export async function parseBancoBrasilExtratoPdf(base64: string): Promise<BBParseResult> {
   const clean = base64.replace(/^data:[^,]*,/, "").trim();
@@ -89,15 +92,17 @@ export async function parseBancoBrasilExtratoPdf(base64: string): Promise<BBPars
     const textLines = text.split(/\r?\n/);
     let curDate: string | null = null;
     let curDateDesc = "";
+    // Mapa de saldo final por dia (capturado das linhas "Saldo do dia")
+    const dailySaldo = new Map<string, number>();
 
     for (const rawLine of textLines) {
       const line = rawLine.trim();
       if (!line) continue;
 
-      // Pular cabeçalhos, rodapés e linhas de saldo
+      // Pular cabeçalhos e rodapés puros (não contêm valor)
       if (RE_SKIP_NOVO.test(line)) continue;
 
-      // Linha de data: atualiza estado; data "00/00/0000" é saldo de dia → ignorar
+      // Linha de data: atualiza estado; data "00/00/0000" é marcador de saldo → não atualiza curDate
       const dm = line.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
       if (dm) {
         const dd = dm[1];
@@ -114,7 +119,15 @@ export async function parseBancoBrasilExtratoPdf(base64: string): Promise<BBPars
       if (!moneyMatch || !curDate) continue;
 
       const rawVal = moneyBR(moneyMatch[1]);
-      const valor = moneyMatch[2] === "+" ? rawVal : -rawVal;
+      const sign = moneyMatch[2] === "+" ? 1 : -1;
+
+      // "Saldo do dia" ou "SALDO": captura o saldo diário mas NÃO gera lançamento
+      if (RE_SALDO_LINHA.test(line)) {
+        dailySaldo.set(curDate, sign * rawVal);
+        continue;
+      }
+
+      const valor = sign * rawVal;
 
       // Descrição: prefere texto da linha de data; senão extrai da linha de valor.
       // Na linha de valor, remove: lote (1º grupo de dígitos), documento (2º grupo)
@@ -139,6 +152,17 @@ export async function parseBancoBrasilExtratoPdf(base64: string): Promise<BBPars
 
       // Limpa desc da linha de data para o próximo lançamento do mesmo dia
       curDateDesc = "";
+    }
+
+    // Pós-processamento: atribui o saldo diário ao ÚLTIMO lançamento de cada dia.
+    // (O extrato BB mostra "Saldo do dia" = saldo após todos os lançamentos do dia.)
+    for (const [date, saldo] of dailySaldo) {
+      for (let i = out.length - 1; i >= 0; i--) {
+        if (out[i].data === date) {
+          out[i].saldo = saldo;
+          break;
+        }
+      }
     }
   } else {
     // ─────────────────────────────────────────────────────────────────────────

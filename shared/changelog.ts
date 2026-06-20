@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3388 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXIBIÇÃO DO SALDO BANCÁRIO EM CADA
+ * LINHA DO EXTRATO ("NO EXTRATO, SEM LANÇAMENTO"). BACKEND ADITIVO + FRONT + PARSER BB.
+ * ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PROBLEMA: a lista "No extrato, sem lançamento" mostrava apenas valor da transação;
+ *   sem referência de saldo bancário, o usuário precisava voltar ao PDF do banco para
+ *   conferir o saldo após cada lançamento.
+ * - PARSER BB novo formato (`bbPdfParser.ts`): linhas "Saldo do dia" (antes filtradas
+ *   pelo `RE_SKIP_NOVO`) são agora processadas separadamente via `RE_SALDO_LINHA` —
+ *   o valor é capturado em `dailySaldo` (Map<dateISO, number>). Pós-processamento
+ *   atribui o saldo diário ao ÚLTIMO lançamento de cada dia (o extrato BB mostra
+ *   "Saldo do dia" = saldo após TODOS os lançamentos do dia). Lançamentos anteriores
+ *   do mesmo dia permanecem com `saldo: null` (saldo intermediário não disponível no BB).
+ * - BACKEND (`financial.ts`): query `pendRes` do relatório de conciliação agora inclui
+ *   `saldo_apos AS "saldoApos"` — campo já existia em `bank_statement_lines` e era
+ *   preenchido pelo parser legado C/D, mas não era retornado ao frontend.
+ * - FRONTEND (`FinanceiroConciliacao.tsx`): `renderExtratoRow` agora exibe abaixo do
+ *   valor da transação um subtexto "saldo R$ X.XXX,XX" em cinza (text-[10px] text-gray-400)
+ *   quando `saldoApos != null`. Visible no hover + modo expandido. tooltip: "Saldo
+ *   bancário após este lançamento".
+ * - VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
+ *
  * Rev. 3387 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · PARSER BANCO DO BRASIL: SUPORTE AO
  * NOVO FORMATO "EXTRATO DE CONTA CORRENTE" (INTERNET BANKING PJ) QUE USA (+)/(-)
  * COMO INDICADOR DE CRÉDITO/DÉBITO E LAYOUT MULTI-LINHA. 100% BACKEND ·

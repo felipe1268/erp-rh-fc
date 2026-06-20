@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3388** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXIBIÇÃO DO SALDO BANCÁRIO EM CADA LINHA DO EXTRATO ("NO EXTRATO, SEM LANÇAMENTO"). BACKEND ADITIVO + FRONT + PARSER BB · ZERO SCHEMA/ALTER/DROP/DELETE.** Problema: lista mostrava só o valor da transação, sem referência de saldo. FIX 3 camadas: (1) Parser BB novo formato captura "Saldo do dia" em `dailySaldo` e atribui ao último lançamento do dia; (2) query `pendRes` do relatório inclui `saldo_apos AS "saldoApos"` (campo já existia no banco, não era retornado); (3) `renderExtratoRow` exibe "saldo R$ X" abaixo do valor quando `saldoApos != null`. VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3387** — **FINANCEIRO / CONCILIAÇÃO · PARSER BANCO DO BRASIL: SUPORTE AO NOVO FORMATO "EXTRATO DE CONTA CORRENTE" (INTERNET BANKING PJ) COM (+)/(-) E LAYOUT MULTI-LINHA. 100% BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE · 1 ARQUIVO (bbPdfParser.ts).** Problema: formato legado usava `C`/`D` (uma linha/transação); o novo formato usa `2.100,00 (+)` / `91,66 (-)` com data+descrição em linha separada do lote+documento+valor. Parser retornava 0 linhas → caía na IA (lenta, consome cota, pode errar). FIX: detecta o formato pela presença de `X,XX (+/-)` e aplica algoritmo multi-linha (acumula "data corrente" + "descrição da linha de data"; filtra saldos via regex). 4 transações extraídas corretamente e deterministicamente. VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3386** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXCLUSÃO INDIVIDUAL DE LINHA DO EXTRATO: BOTÃO "APAGAR" EM CADA LINHA (PENDENTES + CONCILIADAS) COM ALERTDIALOG DE CONFIRMAÇÃO. BACKEND ADITIVO (`excluirLinhaExtrato`) + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Problema: "Limpar extrato" apagava TUDO ou nada. FIX: nova mutation `excluirLinhaExtrato` (soft-delete por ID, tenant guard, reverte conciliação vinculada em transação, audit log). Front: botão "Apagar" em cada linha; AlertDialog contextual. VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3386** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXCLUSÃO INDIVIDUAL DE LINHA DO EXTRATO: BOTÃO "APAGAR" EM CADA LINHA (PENDENTES + CONCILIADAS) COM ALERTDIALOG DE CONFIRMAÇÃO. BACKEND ADITIVO (`excluirLinhaExtrato`) + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3385** — **FINANCEIRO / CARTÃO DE CRÉDITO · IMPORTAÇÃO DE VÁRIOS PDFs EM PARALELO: Promise.allSettled (todos simultâneos) · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3383** — **FINANCEIRO / CARTÃO DE CRÉDITO · DEDUP COMPLETO NA IMPORTAÇÃO DE FATURAS — NUNCA DUPLICA. BACKEND ADITIVO + FRONT (TOAST) · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3382** — **FINANCEIRO / CARTÃO DE CRÉDITO · CORREÇÃO DEFINITIVA DO DIA FECHAMENTO E DIA VENCIMENTO NO CADASTRO DE CARTÃO VIA IMPORTAÇÃO DE FATURA: EXTRAÇÃO DO DIA MOVIDA PARA O SERVIDOR (3 CAMADAS: INTEIRO DA IA → SLICE DA ISO → NULL). 100% BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE · 1 ARQUIVO (cartao.ts).** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3381** — **CORREÇÃO CRÍTICA: IMPORTAÇÃO DE FATURA PDF TRAVAVA NOS 95% (fetch SEM TIMEOUT). FIX: AbortController 90s + RETRY. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3380** — **FINANCEIRO / CARTÃO DE CRÉDITO · IA EXTRAI DIA FECHAMENTO/VENCIMENTO COMO INTEIRO (1-31). BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

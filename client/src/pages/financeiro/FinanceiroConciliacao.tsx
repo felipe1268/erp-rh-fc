@@ -1052,7 +1052,12 @@ export default function FinanceiroConciliacao() {
             </p>
           )}
         </div>
-        <p className={`text-sm font-bold shrink-0 ${isEntrada ? "text-emerald-600" : "text-rose-500"}`}>{formatBRL(Math.abs(Number(s.valor)))}</p>
+        <div className="text-right shrink-0">
+          <p className={`text-sm font-bold ${isEntrada ? "text-emerald-600" : "text-rose-500"}`}>{formatBRL(Math.abs(Number(s.valor)))}</p>
+          {s.saldoApos != null && (
+            <p className="text-[10px] text-gray-400 mt-0.5" title="Saldo bancário após este lançamento">saldo {formatBRL(Number(s.saldoApos))}</p>
+          )}
+        </div>
       </button>
       <button
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); abrirLancar(s); }}
