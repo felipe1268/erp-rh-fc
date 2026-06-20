@@ -12,6 +12,7 @@ import {
   PALETTE, formatBRL, formatBRLCompact, DashHeader, KpiCard, ChartCard, EmptyState, BRLTooltip,
   ComparativoAnual, DetailDialog, DetailColumn,
 } from "./_kit";
+import { formatDate } from "@/lib/dateUtils";
 
 const DESTINO = "/financeiro/conciliacao";
 
@@ -71,6 +72,13 @@ export default function DashConciliacao() {
   };
 
   const [det, setDet] = useState(false);
+  // Rev. 3346 — drill-in de CONFERÊNCIA TOTAL: abre TODAS as linhas individuais do extrato.
+  // null = fechado; "entradas" | "saidas" | "todos" define o recorte aberto pelo card clicado.
+  const [lanc, setLanc] = useState<null | "entradas" | "saidas" | "todos">(null);
+
+  const { data: lancamentos, isLoading: lancLoading } = (trpc as any).financial.getConciliacaoLancamentos.useQuery(
+    { companyId, dataInicio, dataFim }, { enabled: !!companyId && lanc !== null }
+  );
 
   const kpis = useMemo(() => {
     let total = 0, conciliadas = 0, valorTotal = 0, valorConciliado = 0, valorEntradas = 0, valorSaidas = 0;
@@ -120,6 +128,59 @@ export default function DashConciliacao() {
     })).sort((a, b) => b.valorTotal - a.valorTotal),
   [statusArr, contasArr]);
 
+  // Rev. 3346 — linhas individuais do extrato p/ a conferência total. O totalizador (totalKey
+  // "valor") DEVE bater com o KPI do card: Entradas soma os créditos (valor exibido = v ≥ 0),
+  // Saídas soma os débitos em módulo (|valor|), "todos" soma o valor com sinal (= saldo líquido).
+  const lancArr: any[] = Array.isArray(lancamentos) ? lancamentos : [];
+  const lancRows = useMemo(() => {
+    if (lanc === null) return [];
+    const recorte = lanc === "entradas"
+      ? lancArr.filter((l) => Number(l.valor) >= 0)
+      : lanc === "saidas"
+        ? lancArr.filter((l) => Number(l.valor) < 0)
+        : lancArr;
+    return recorte.map((l) => {
+      const v = Number(l.valor) || 0;
+      return {
+        data: l.data,
+        conta: nomeConta(l.contaBancariaId),
+        descricao: l.descricao || "—",
+        situacao: Number(l.conciliado) === 1 ? "Conciliado" : "Pendente",
+        // valor exibido em módulo p/ Saídas; com sinal nos demais (bate com o card).
+        valor: lanc === "saidas" ? Math.abs(v) : v,
+      };
+    });
+  }, [lanc, lancArr, contasArr]);
+
+  const LANC_COLS: DetailColumn[] = useMemo(() => [
+    { key: "data", label: "Data", format: (v: any) => formatDate(v) },
+    { key: "conta", label: "Conta bancária" },
+    { key: "descricao", label: "Descrição" },
+    {
+      key: "situacao", label: "Situação", align: "center",
+      format: (v: any) => (
+        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${v === "Conciliado" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+          {v}
+        </span>
+      ),
+    },
+    {
+      key: "valor", label: "Valor (R$)", align: "right",
+      format: (v: any) => {
+        const n = Number(v) || 0;
+        return (
+          <span className={`tabular-nums font-semibold ${lanc === "saidas" || n < 0 ? "text-red-600" : n > 0 ? "text-emerald-600" : "text-slate-500"}`}>
+            {formatBRL(n)}
+          </span>
+        );
+      },
+    },
+  ], [lanc]);
+
+  const lancTitle = lanc === "entradas" ? "Entradas (créditos) — todos os lançamentos"
+    : lanc === "saidas" ? "Saídas (débitos) — todos os lançamentos"
+    : "Movimentação do extrato — todos os lançamentos";
+
   const pizza = useMemo(() => ([
     { name: "Conciliado", value: kpis.valorConciliado },
     { name: "Pendente", value: kpis.valorPendente },
@@ -160,12 +221,12 @@ export default function DashConciliacao() {
           <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 px-1">Movimentação do extrato</h3>
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
             <KpiCard icon={ArrowDownLeft} label="Entradas (créditos)" value={formatBRL(kpis.valorEntradas)} tone="good"
-              sub="Tudo que entrou nas contas" onClick={() => setDet(true)} />
+              sub="Clique p/ conferir cada lançamento" onClick={() => setLanc("entradas")} />
             <KpiCard icon={ArrowUpRight} label="Saídas (débitos)" value={formatBRL(kpis.valorSaidas)} tone="bad"
-              sub="Tudo que saiu das contas" onClick={() => setDet(true)} />
+              sub="Clique p/ conferir cada lançamento" onClick={() => setLanc("saidas")} />
             <KpiCard icon={Scale} label="Saldo líquido" value={formatBRL(kpis.saldoLiquido)}
               tone={kpis.saldoLiquido >= 0 ? "good" : "bad"}
-              sub="Entrou − saiu (o que sobrou no período)" onClick={() => setDet(true)} />
+              sub="Entrou − saiu · clique p/ ver tudo" onClick={() => setLanc("todos")} />
           </div>
           <p className="text-[11px] leading-relaxed text-slate-400 px-1">
             <span className="font-medium text-slate-500">Como é calculado:</span> soma das linhas do extrato bancário
@@ -250,6 +311,15 @@ export default function DashConciliacao() {
           open={det} onOpenChange={setDet}
           title="Conciliação por conta bancária" subtitle={`Ano ${ano} · valores em BRL`}
           columns={COLS} rows={detalheContas} onGoTo={ir} totalKey="saldo"
+        />
+
+        {/* Rev. 3346 — Conferência total: TODAS as linhas individuais do extrato. */}
+        <DetailDialog
+          open={lanc !== null} onOpenChange={(o) => setLanc(o ? lanc : null)}
+          icon={ArrowLeftRight}
+          title={lancLoading ? "Carregando lançamentos…" : lancTitle}
+          subtitle={`Ano ${ano} · ${lancRows.length} lançamento(s) · totalizador confere com o card`}
+          columns={LANC_COLS} rows={lancRows} onGoTo={ir} totalKey="valor"
         />
       </div>
     </DashboardLayout>

@@ -5100,6 +5100,38 @@ export const financialRouter = router({
     });
   }),
 
+  // Rev. 3346 — CONFERÊNCIA TOTAL: lista TODAS as linhas do extrato (todas as contas) no
+  // período p/ o drill-in dos cards Entradas/Saídas/Saldo líquido do Dashboard de Conciliação.
+  // READ-ONLY · não concilia/baixa nada. Tenant guard. O cliente roteia o conta_bancaria_id
+  // pelo cadastro já carregado (nomeConta), então só devolvemos o id da conta aqui.
+  getConciliacaoLancamentos: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    dataInicio: z.string(),
+    dataFim: z.string(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    // dbExecute liga params por ORDEM DE APARIÇÃO do $N: [companyId, dataInicio, dataFim].
+    const res = await dbExecute(db,
+      `SELECT id, data, descricao, valor, tipo,
+              COALESCE(conciliado,0) AS conciliado,
+              conta_bancaria_id AS "contaBancariaId"
+         FROM bank_statement_lines
+        WHERE company_id=$1 AND data>=$2 AND data<=$3 AND excluido_em IS NULL
+        ORDER BY data DESC, id DESC`,
+      [input.companyId, input.dataInicio, input.dataFim]);
+    return rows(res).map((r: any) => ({
+      id: Number(r.id),
+      data: r.data,
+      descricao: r.descricao || "",
+      valor: Number(r.valor) || 0,
+      tipo: r.tipo || "",
+      conciliado: Number(r.conciliado) === 1 ? 1 : 0,
+      contaBancariaId: r.contaBancariaId == null ? null : Number(r.contaBancariaId),
+    }));
+  }),
+
   // Rev. 3248 — Resumo MENSAL do extrato (BRL movimentado + conciliado por mês) p/ a
   // tabela comparativa mês×mês / ano×ano do Dashboard de Conciliação. READ-ONLY.
   getConciliacaoResumoMensal: protectedProcedure.input(z.object({

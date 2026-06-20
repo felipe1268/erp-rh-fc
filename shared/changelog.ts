@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3346 — **FINANCEIRO / DASHBOARD DE CONCILIAÇÃO BANCÁRIA · CONFERÊNCIA TOTAL DE ENTRADAS E SAÍDAS: AGORA OS
+ * CARDS "ENTRADAS (CRÉDITOS)", "SAÍDAS (DÉBITOS)" E "SALDO LÍQUIDO" ABREM TODAS AS LINHAS INDIVIDUAIS DO EXTRATO
+ * (TODAS AS CONTAS) PARA ANÁLISE — ANTES ABRIAM APENAS O RESUMO POR CONTA. 1 BACKEND (READ-ONLY) + 1 FRONT ·
+ * ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário, no iPad, com 2 prints do Dashboard de Conciliação Bancária): "Faça uma conferência total de
+ *   entrada e saída tô achando que tem alguma coisa errada.. quero poder clicar e abrir TODOS os lançamentos para
+ *   análise". Queria o drill-in das LINHAS INDIVIDUAIS do extrato (não só o resumo agregado por conta) clicando nos
+ *   cards de Movimentação.
+ * - RAIZ (comportamento anterior): os 3 cards de "Movimentação do extrato" (`DashConciliacao.tsx`) chamavam todos
+ *   `setDet(true)`, abrindo o MESMO `DetailDialog` com o resumo POR CONTA (`detalheContas`/`getBankAccountsConciliacaoStatus`).
+ *   Não existia caminho para ver cada lançamento individualmente a partir do dashboard, nem endpoint que trouxesse
+ *   TODAS as linhas de TODAS as contas de uma vez (`getBankStatements` exige `contaBancariaId`).
+ * - BACKEND (READ-ONLY · tenant guard): novo `financial.getConciliacaoLancamentos({companyId, dataInicio, dataFim})`
+ *   faz `SELECT id, data, descricao, valor, tipo, conciliado, conta_bancaria_id FROM bank_statement_lines` (excluído_em
+ *   IS NULL) no período, ordenado por data/id desc, com `_assertFinanceiroCompanyAccess`. Não concilia/baixa nada. A
+ *   ordem do array de params respeita a ORDEM DE APARIÇÃO do `$N` (quirk do `dbExecute`): [companyId, dataInicio, dataFim].
+ *   Devolve só `contaBancariaId` (o cliente resolve o rótulo da conta via `nomeConta`, idêntico ao resto do dashboard).
+ * - FRONT (`DashConciliacao.tsx`): novo estado `lanc` (null | "entradas" | "saidas" | "todos"); query lazy (enabled só
+ *   com o diálogo aberto). Os cards de Movimentação passam a abrir o drill-in: Entradas → créditos (valor ≥ 0); Saídas →
+ *   débitos exibidos em MÓDULO; Saldo líquido → TODOS os lançamentos com sinal. Reusa o `DetailDialog` do kit (busca por
+ *   data/conta/descrição + faixa azul FC + totalizador). O `totalKey="valor"` faz o rodapé BATER com o KPI do card
+ *   correspondente (Entradas = Σ créditos; Saídas = Σ |débitos|; Todos = saldo líquido) — é a "conferência" pedida.
+ *   Colunas: Data (`formatDate` do dateUtils, anti-crash iOS), Conta bancária, Descrição, Situação (badge
+ *   Conciliado/Pendente) e Valor (R$) colorido. Os cards da seção "Conciliação" seguem abrindo o resumo por conta.
+ * - ESCOPO: 1 endpoint backend read-only + 1 arquivo front. Sem schema/ALTER/DROP/DELETE. tsc limpo nos arquivos tocados.
+ * - ARQUIVOS: `server/routers/financial.ts` (`getConciliacaoLancamentos`), `client/src/pages/financeiro/dashboards/DashConciliacao.tsx`,
+ *   `shared/version.ts` (3346), `shared/changelog.ts`, `replit.md`, `replit-history.md`.
+ *
  * Rev. 3345 — **FINANCEIRO / DASHBOARDS · CORREÇÃO DE LAYOUT: GRÁFICOS DOS DASHBOARDS FINANCEIROS APARECIAM
  * SOBREPOSTOS (UM GRÁFICO "FANTASMA"/TRANSBORDANDO PINTAVA POR CIMA DO CARD DE BAIXO, EMBARALHANDO TÍTULOS E
  * LISTAS — VISTO NO iPad/Safari NO DASHBOARD DE CARTÃO DE CRÉDITO, SEÇÃO "ANÁLISE DETALHADA DAS FATURAS"). 100%
