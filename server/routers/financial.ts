@@ -3679,6 +3679,7 @@ export const financialRouter = router({
     fornecedorNome: z.string().nullable().optional(),
     descricao: z.string().nullable().optional(),
     observacoes: z.string().nullable().optional(),
+    tipo: z.enum(["despesa", "receita", "transferencia"]).optional(),
   })).mutation(async ({ input, ctx }) => {
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
     const db = await getDb();
@@ -3700,6 +3701,7 @@ export const financialRouter = router({
     if (input.fornecedorNome !== undefined)  push("fornecedor_nome", input.fornecedorNome?.trim() || null);
     if (input.descricao !== undefined)       push("descricao", input.descricao?.trim() || null);
     if (input.observacoes !== undefined)     push("observacoes", input.observacoes?.trim() || null);
+    if (input.tipo !== undefined)            push("tipo", input.tipo);
     if (sets.length === 0) return { ok: true, changed: false };
     push("editado_por_id", ctx.user?.id ?? null);
     push("editado_por_nome", ctx.user?.name ?? null);

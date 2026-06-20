@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3395 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CRIAR LANÇAMENTO MANUAL (SEM EXTRATO) +
+ * SELETOR DÉBITO/CRÉDITO NO FORM DE EDIÇÃO E NO "LANÇAR NO ERP". BACKEND ADITIVO + FRONT ·
+ * ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO: Possibilidade de criar novos lançamentos diretamente na tela de conciliação sem
+ *   precisar partir de uma linha do extrato. Escolher se é débito (despesa) ou crédito (receita).
+ *   Categoria (conta) via Select com TODAS as contas ativas do plano de contas.
+ * - BACKEND: `updateEntryClassificacao` agora aceita campo `tipo` (despesa/receita/transferencia)
+ *   — permite corrigir o tipo contábil de um lançamento existente.
+ * - FRONTEND — Novo modo standalone "Lançar no ERP":
+ *   · Botão "Novo lançamento" na barra do modal expandido (lista ERP/extrato sem par).
+ *   · `abrirLancStandalone()` abre o form sem nenhuma linha de extrato vinculada.
+ *   · Campo "Tipo" vira toggle Débito ↔ Crédito quando standalone; permanece badge read-only
+ *     quando acionado a partir de uma linha real do extrato (comportamento anterior).
+ *   · Categoria alterada de `<Input list="datalist">` para `<Select>` com todas as contas
+ *     ativas — garante seleção correta.
+ *   · Footer: botão "Lançar e conciliar" fica oculto no modo standalone (sem extrato para
+ *     conciliar); só aparece o "Criar lançamento".
+ *   · Handler `submitLancar`: usa `lancForm.tipo` para detectar entrada/saída quando standalone;
+ *     pula o passo de `lancConciliarMut` quando não há `statementLineId`.
+ *   · Todos os labels/placeholders do form adaptados ao modo standalone via guard `id == null`.
+ * - FRONTEND — Form de edição (Rev. 3394): novo toggle Débito/Crédito no topo do form de
+ *   edição inline — permite corrigir o tipo de um lançamento existente.
+ * - Arquivos principais: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`,
+ *   `server/routers/financial.ts`.
+ *
  * Rev. 3394 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · MODAL "LANÇAMENTO #NNNNN" EM TELA
  * CHEIA + BOTÃO EDITAR COM CAMPOS DE CLASSIFICAÇÃO. BACKEND ADITIVO + FRONT ·
  * ZERO SCHEMA/ALTER/DROP/DELETE.**

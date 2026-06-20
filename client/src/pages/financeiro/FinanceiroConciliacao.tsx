@@ -167,6 +167,7 @@ export default function FinanceiroConciliacao() {
     contaBancariaId: number | null;
     formaPagamento: string; fornecedorNome: string;
     descricao: string; observacoes: string;
+    tipo: string;
   } | null>(null);
   const fecharDetalhe = () => { setDetalheEntryId(null); setDetalheExtrato(null); setDetEditMode(false); setDetEditForm(null); };
   // Rev. 3266 — diálogo de CONFERÊNCIA da identificação por IA (texto roxo clicável).
@@ -249,7 +250,7 @@ export default function FinanceiroConciliacao() {
 
   const [lancStatement, setLancStatement] = useState<any | null>(null);
   const [lancBusy, setLancBusy] = useState(false);
-  const [lancForm, setLancForm] = useState({ data: "", valor: "", descricao: "", obraId: "", contaNome: "", centroCustoId: "", fornecedorNome: "", clienteId: "", clienteNome: "", formaPagamento: "" });
+  const [lancForm, setLancForm] = useState({ data: "", valor: "", descricao: "", obraId: "", contaNome: "", contaId: "", centroCustoId: "", fornecedorNome: "", clienteId: "", clienteNome: "", formaPagamento: "", tipo: "despesa" });
   // Rev. 3198 — guarda o lançamento JÁ criado p/ a linha atual: se a conciliação
   // automática falhar, um novo clique tenta SÓ conciliar (não recria → sem duplicidade).
   const lancCreatedRef = useRef<{ stmtId: any; entryId: number } | null>(null);
@@ -298,7 +299,18 @@ export default function FinanceiroConciliacao() {
       clienteId: "",
       clienteNome: clientePrefill,
       formaPagamento: temCheque ? "cheque" : (temFatura ? "cartao" : (temDemo ? demoForma : "")),
+      tipo: isEntrada ? "receita" : "despesa",
+      contaId: "",
     });
+  }
+
+  // Rev. 3395 — Modo standalone: abre o form "Lançar no ERP" sem vínculo com extrato.
+  // Permite criar um lançamento manualmente (débito ou crédito) com seleção de conta.
+  function abrirLancStandalone() {
+    lancCreatedRef.current = null;
+    const today = new Date().toISOString().slice(0, 10);
+    setLancStatement({ id: null, valor: undefined, data: today, contaBancariaId: Number(contaBancariaId) || null });
+    setLancForm({ data: today, valor: "", descricao: "", obraId: "", contaNome: "", contaId: "", centroCustoId: "", fornecedorNome: "", clienteId: "", clienteNome: "", formaPagamento: "", tipo: "despesa" });
   }
 
   // Rev. 3324 — Lança a partir da linha do extrato. ENTRADA → Contas a Receber
@@ -311,7 +323,8 @@ export default function FinanceiroConciliacao() {
     const valor = parseBRLInput(lancForm.valor);
     if (!valor || valor <= 0) { toast({ title: "Informe um valor válido", variant: "destructive" }); return; }
     if (!lancForm.data) { toast({ title: "Informe a data do lançamento", variant: "destructive" }); return; }
-    const entrada = Number(lancStatement.valor) >= 0;
+    const isStandalone = lancStatement?.id == null;
+    const entrada = isStandalone ? lancForm.tipo === "receita" : Number(lancStatement.valor) >= 0;
     const cat = catOpts.find(c => c.nome.trim().toLowerCase() === lancForm.contaNome.trim().toLowerCase());
     const natureza = cat?.natureza === "fixo" || cat?.natureza === "variavel" ? cat.natureza : "variavel";
     const obra = obrasOpts.find(o => String(o.id) === lancForm.obraId);
@@ -357,7 +370,9 @@ export default function FinanceiroConciliacao() {
           } catch (baixaErr: any) {
             if (!/j[áa]\s+recebid/i.test(String(baixaErr?.message ?? ""))) throw baixaErr;
           }
-          await lancConciliarMut.mutateAsync({ companyId, statementLineId: lancStatement.id, entryId });
+          if (!isStandalone) {
+            await lancConciliarMut.mutateAsync({ companyId, statementLineId: lancStatement.id, entryId });
+          }
           lancCreatedRef.current = null;
           if (!contaBancariaId && periodoDefinido) refetchGeral();
         } else {
@@ -398,7 +413,7 @@ export default function FinanceiroConciliacao() {
         entryId = novo?.id;
         if (entryId) lancCreatedRef.current = { stmtId: lancStatement.id, entryId };
       }
-      if (conciliar && entryId) {
+      if (conciliar && entryId && !isStandalone) {
         // Auto-concilia o lançamento com a linha do extrato (onSuccess refaz os fetches).
         // Mutation DEDICADA (sem onError próprio) p/ o erro cair no catch abaixo sem toast duplo.
         await lancConciliarMut.mutateAsync({ companyId, statementLineId: lancStatement.id, entryId });
@@ -1131,6 +1146,7 @@ export default function FinanceiroConciliacao() {
       fornecedorNome: detEntry.fornecedorNome ?? "",
       descricao: detEntry.descricao ?? "",
       observacoes: detEntry.observacoes ?? "",
+      tipo: detEntry.tipo ?? "despesa",
     });
     setDetEditMode(true);
   };
@@ -1148,6 +1164,7 @@ export default function FinanceiroConciliacao() {
       fornecedorNome: detEditForm.fornecedorNome || null,
       descricao: detEditForm.descricao || null,
       observacoes: detEditForm.observacoes || null,
+      tipo: (detEditForm.tipo as any) || undefined,
     });
   };
   const field = (label: string, value: any, k?: string) =>
@@ -2904,6 +2921,26 @@ export default function FinanceiroConciliacao() {
                           <Pencil className="w-3.5 h-3.5 shrink-0" />
                           Edite os campos de classificação. Valores e datas não são alterados aqui.
                         </div>
+                        {/* Tipo: Débito / Crédito */}
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-gray-600 uppercase tracking-wide">Tipo (Débito / Crédito)</Label>
+                          <div className="flex rounded-md border overflow-hidden h-9">
+                            <button
+                              type="button"
+                              onClick={() => setDetEditForm(f => f ? { ...f, tipo: "despesa" } : f)}
+                              className={`flex-1 flex items-center justify-center gap-1.5 text-sm font-medium transition-colors ${detEditForm?.tipo === "despesa" ? "bg-red-500 text-white" : "bg-white text-gray-500 hover:bg-red-50"}`}
+                            >
+                              <ArrowDownCircle className="w-3.5 h-3.5" />Débito (Despesa)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDetEditForm(f => f ? { ...f, tipo: "receita" } : f)}
+                              className={`flex-1 flex items-center justify-center gap-1.5 text-sm font-medium transition-colors border-l ${detEditForm?.tipo === "receita" ? "bg-emerald-500 text-white" : "bg-white text-gray-500 hover:bg-emerald-50"}`}
+                            >
+                              <ArrowUpCircle className="w-3.5 h-3.5" />Crédito (Receita)
+                            </button>
+                          </div>
+                        </div>
                         {/* Conta (categoria do plano de contas) */}
                         <div className="space-y-1.5">
                           <Label className="text-xs font-medium text-gray-600 uppercase tracking-wide">Conta (Categoria)</Label>
@@ -3969,11 +4006,11 @@ export default function FinanceiroConciliacao() {
                   <Plus className="w-5 h-5 text-white" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <DialogTitle className="text-white text-lg font-semibold leading-tight">{lancStatement && Number(lancStatement.valor) >= 0 ? "Lançar no Contas a Receber" : "Lançar no Contas a Pagar"}</DialogTitle>
+                  <DialogTitle className="text-white text-lg font-semibold leading-tight">{lancStatement && (lancStatement.id == null ? lancForm.tipo === "receita" : Number(lancStatement.valor) >= 0) ? "Lançar no Contas a Receber" : "Lançar no Contas a Pagar"}</DialogTitle>
                   <DialogDescription className="text-white/70 text-xs mt-1 leading-relaxed">
-                    {lancStatement && Number(lancStatement.valor) >= 0
-                      ? <>Indique <span className="font-medium text-white/90">quem pagou (cliente)</span> e gere o título em <span className="font-medium text-white/90">Contas a Receber</span>. Concilie com esta linha do extrato agora ou só lance e concilie depois.</>
-                      : <>Indique o <span className="font-medium text-white/90">fornecedor</span> e gere a conta em <span className="font-medium text-white/90">Contas a Pagar</span>. Concilie com esta linha do extrato agora ou só lance e concilie depois.</>}
+                    {lancStatement && (lancStatement.id == null ? lancForm.tipo === "receita" : Number(lancStatement.valor) >= 0)
+                      ? <>Indique <span className="font-medium text-white/90">quem pagou (cliente)</span> e gere o título em <span className="font-medium text-white/90">Contas a Receber</span>{lancStatement.id != null ? <> Concilie com esta linha do extrato agora ou só lance e concilie depois.</> : <>.</>}</>
+                      : <>Indique o <span className="font-medium text-white/90">fornecedor</span> e gere a conta em <span className="font-medium text-white/90">Contas a Pagar</span>{lancStatement.id != null ? <>. Concilie com esta linha do extrato agora ou só lance e concilie depois.</> : <>.</>}</>}
                   </DialogDescription>
                 </div>
               </div>
@@ -4075,10 +4112,10 @@ export default function FinanceiroConciliacao() {
                     . Beneficiário e forma de pagamento já foram pré-preenchidos — confira obra, categoria e centro de custo.
                   </div>
                 )}
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 pt-1">{Number(lancStatement.valor) >= 0 ? "Recebível · valores & data" : "Pagamento · valores & data"}</div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 pt-1">{(lancStatement?.id == null ? lancForm.tipo === "receita" : Number(lancStatement.valor) >= 0) ? "Recebível · valores & data" : "Pagamento · valores & data"}</div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-xs">{Number(lancStatement.valor) >= 0 ? "Data de competência / vencimento" : "Data"}</Label>
+                    <Label className="text-xs">{(lancStatement?.id == null ? lancForm.tipo === "receita" : Number(lancStatement.valor) >= 0) ? "Data de competência / vencimento" : "Data"}</Label>
                     <Input type="date" value={lancForm.data} onChange={(e) => setLancForm(f => ({ ...f, data: e.target.value }))} />
                   </div>
                   <div>
@@ -4094,9 +4131,28 @@ export default function FinanceiroConciliacao() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs">Tipo</Label>
-                    <div className={`h-9 px-3 flex items-center rounded-md border text-sm font-medium ${Number(lancStatement.valor) >= 0 ? "text-green-700 border-green-200 bg-green-50" : "text-red-600 border-red-200 bg-red-50"}`}>
-                      {Number(lancStatement.valor) >= 0 ? "Receita → Contas a Receber" : "Despesa → Contas a Pagar"}
-                    </div>
+                    {lancStatement?.id == null ? (
+                      <div className="flex rounded-md border overflow-hidden h-9">
+                        <button
+                          type="button"
+                          onClick={() => setLancForm(f => ({ ...f, tipo: "despesa" }))}
+                          className={`flex-1 flex items-center justify-center gap-1.5 text-sm font-medium transition-colors ${lancForm.tipo === "despesa" ? "bg-red-500 text-white" : "bg-white text-gray-500 hover:bg-red-50"}`}
+                        >
+                          <ArrowDownCircle className="w-3.5 h-3.5" />Débito
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLancForm(f => ({ ...f, tipo: "receita" }))}
+                          className={`flex-1 flex items-center justify-center gap-1.5 text-sm font-medium transition-colors border-l ${lancForm.tipo === "receita" ? "bg-emerald-500 text-white" : "bg-white text-gray-500 hover:bg-emerald-50"}`}
+                        >
+                          <ArrowUpCircle className="w-3.5 h-3.5" />Crédito
+                        </button>
+                      </div>
+                    ) : (
+                      <div className={`h-9 px-3 flex items-center rounded-md border text-sm font-medium ${Number(lancStatement.valor) >= 0 ? "text-green-700 border-green-200 bg-green-50" : "text-red-600 border-red-200 bg-red-50"}`}>
+                        {Number(lancStatement.valor) >= 0 ? "Receita → Contas a Receber" : "Despesa → Contas a Pagar"}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <Label className="text-xs">Forma de pagamento</Label>
@@ -4117,7 +4173,7 @@ export default function FinanceiroConciliacao() {
                   </div>
                 </div>
                 <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 pt-1">Classificação</div>
-                {Number(lancStatement.valor) >= 0 ? (
+                {(lancStatement?.id == null ? lancForm.tipo === "receita" : Number(lancStatement.valor) >= 0) ? (
                   <div>
                     <Label className="text-xs flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-emerald-600" />Cliente que pagou</Label>
                     <Input
@@ -4166,22 +4222,22 @@ export default function FinanceiroConciliacao() {
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-xs">Categoria</Label>
-                  <Input
-                    list="lanc-categorias"
-                    value={lancForm.contaNome}
-                    onChange={(e) => {
-                      const nome = e.target.value;
-                      const cat = catOpts.find(c => c.nome.trim().toLowerCase() === nome.trim().toLowerCase());
-                      setLancForm(f => ({ ...f, contaNome: nome, centroCustoId: cat?.centroCustoId != null && !f.centroCustoId ? String(cat.centroCustoId) : f.centroCustoId }));
+                  <Label className="text-xs">Categoria (Conta do Plano de Contas)</Label>
+                  <Select
+                    value={lancForm.contaId || "__none__"}
+                    onValueChange={(v) => {
+                      const opt = catOpts.find(c => String(c.id) === v);
+                      setLancForm(f => ({ ...f, contaId: v === "__none__" ? "" : v, contaNome: opt?.nome ?? "", centroCustoId: opt?.centroCustoId != null && !f.centroCustoId ? String(opt.centroCustoId) : f.centroCustoId }));
                     }}
-                    placeholder="Digite ou selecione"
-                  />
-                  <datalist id="lanc-categorias">
-                    {catOpts.map(c => <option key={c.id} value={c.nome} />)}
-                  </datalist>
+                  >
+                    <SelectTrigger><SelectValue placeholder="Selecione a conta" /></SelectTrigger>
+                    <SelectContent className="max-h-64">
+                      <SelectItem value="__none__">— Sem categoria —</SelectItem>
+                      {catOpts.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
-                {Number(lancStatement.valor) < 0 && (
+                {(lancStatement?.id == null ? lancForm.tipo === "despesa" : Number(lancStatement.valor) < 0) && (
                   <div>
                     <Label className="text-xs">Centro de custo</Label>
                     <Select value={lancForm.centroCustoId || "nenhum"} onValueChange={(v) => setLancForm(f => ({ ...f, centroCustoId: v === "nenhum" ? "" : v }))}>
@@ -4194,19 +4250,21 @@ export default function FinanceiroConciliacao() {
                   </div>
                 )}
                 <div>
-                  <Label className="text-xs">Descrição{Number(lancStatement.valor) >= 0 ? " *" : ""}</Label>
-                  <Textarea rows={2} value={lancForm.descricao} onChange={(e) => setLancForm(f => ({ ...f, descricao: e.target.value }))} placeholder={Number(lancStatement.valor) >= 0 ? "Ex.: Medição 03 — Obra X" : "Descrição do pagamento"} />
+                  <Label className="text-xs">Descrição{(lancStatement?.id == null ? lancForm.tipo === "receita" : Number(lancStatement.valor) >= 0) ? " *" : ""}</Label>
+                  <Textarea rows={2} value={lancForm.descricao} onChange={(e) => setLancForm(f => ({ ...f, descricao: e.target.value }))} placeholder={(lancStatement?.id == null ? lancForm.tipo === "receita" : Number(lancStatement.valor) >= 0) ? "Ex.: Medição 03 — Obra X" : "Descrição do pagamento"} />
                 </div>
               </div>
             )}
             <DialogFooter className="shrink-0 border-t bg-gray-50 px-6 py-4 flex-col-reverse gap-2 sm:flex-row sm:gap-2">
               <Button variant="outline" className="w-full sm:w-auto" disabled={lancBusy} onClick={() => setLancStatement(null)}>Cancelar</Button>
               <Button variant="outline" className="w-full sm:w-auto" disabled={lancBusy} onClick={() => submitLancar(false)}>
-                {lancBusy ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Plus className="w-4 h-4 mr-1.5" />}Só lançar
+                {lancBusy ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Plus className="w-4 h-4 mr-1.5" />}{lancStatement?.id == null ? "Criar lançamento" : "Só lançar"}
               </Button>
-              <Button className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700" disabled={lancBusy} onClick={() => submitLancar(true)}>
-                {lancBusy ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Processando...</> : <><Check className="w-4 h-4 mr-1.5" />Lançar e conciliar</>}
-              </Button>
+              {lancStatement?.id != null && (
+                <Button className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700" disabled={lancBusy} onClick={() => submitLancar(true)}>
+                  {lancBusy ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Processando...</> : <><Check className="w-4 h-4 mr-1.5" />Lançar e conciliar</>}
+                </Button>
+              )}
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -4244,6 +4302,9 @@ export default function FinanceiroConciliacao() {
               </Button>
               <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => expandedList && exportarListaPDF(expandedList)} title="Exportar para PDF">
                 <FileDown className="w-3.5 h-3.5 mr-1" />PDF
+              </Button>
+              <Button size="sm" onClick={() => { setExpandedList(null); setTimeout(abrirLancStandalone, 150); }} className="h-7 px-3 text-xs bg-[#1B2A4A] hover:bg-[#2c3f63] gap-1.5 ml-1">
+                <Plus className="w-3.5 h-3.5" />Novo lançamento
               </Button>
             </div>
             {/* Rev. 3221 — Resumo do que está em tela: total de entradas, saídas e o saldo
