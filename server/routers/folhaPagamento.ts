@@ -2442,7 +2442,10 @@ export const folhaPagamentoRouter = router({
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const contas = await db.select().from(companyBankAccounts)
-        .where(companyFilter(companyBankAccounts.companyId, input));
+        .where(and(
+          companyFilter(companyBankAccounts.companyId, input),
+          sql`${companyBankAccounts.deletedAt} IS NULL`,
+        ));
       // Saldo inicial (de abertura) por conta — vive em financial_opening_balances
       // (mesma tabela usada pelo fluxo de caixa/conciliação). 1 linha por conta.
       const saldos = await db.select().from(financialOpeningBalances)
