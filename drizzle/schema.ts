@@ -653,6 +653,12 @@ export const companyBankAccounts = pgTable("company_bank_accounts", {
         usarParaFolha: smallint("usarParaFolha").default(0),
         temTalao: smallint("temTalao").default(0),
         temAplicacaoAutomatica: smallint("temAplicacaoAutomatica").default(0),
+        // Rev. 3384 — Contatos da agência (gerente + endereço/telefone da agência).
+        nomeGerente: varchar("nome_gerente", { length: 150 }),
+        telefoneGerente: varchar("telefone_gerente", { length: 30 }),
+        emailGerente: varchar("email_gerente", { length: 150 }),
+        enderecoAgencia: varchar("endereco_agencia", { length: 300 }),
+        telefoneAgencia: varchar("telefone_agencia", { length: 30 }),
         ativo: smallint().default(1).notNull(),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),

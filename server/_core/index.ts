@@ -925,6 +925,17 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3051: coluna employee_id garantida em company_partners (unificação de sócios).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA company_partners.employee_id:`, e?.message || e); }
 
+        // Rev. 3384 — Contatos da agência bancária: gerente (nome/telefone/email) +
+        // endereço e telefone da agência. ADD COLUMN IF NOT EXISTS (aditivo — R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`ALTER TABLE company_bank_accounts ADD COLUMN IF NOT EXISTS nome_gerente VARCHAR(150)`);
+          await db.execute(sql`ALTER TABLE company_bank_accounts ADD COLUMN IF NOT EXISTS telefone_gerente VARCHAR(30)`);
+          await db.execute(sql`ALTER TABLE company_bank_accounts ADD COLUMN IF NOT EXISTS email_gerente VARCHAR(150)`);
+          await db.execute(sql`ALTER TABLE company_bank_accounts ADD COLUMN IF NOT EXISTS endereco_agencia VARCHAR(300)`);
+          await db.execute(sql`ALTER TABLE company_bank_accounts ADD COLUMN IF NOT EXISTS telefone_agencia VARCHAR(30)`);
+          console.log(`[SyncSchema+] Rev. 3384: colunas de contatos da agência garantidas em company_bank_accounts.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 3384 company_bank_accounts contatos:`, e?.message || e); }
+
         // Rev. 3293 — Arredondamento p/ múltiplos de R$ 1 com CARRY-FORWARD auditável no
         // VALE e na FOLHA mensal. Nova tabela payroll_rounding_ledger (trilha de auditoria,
         // 1 linha por empresa×funcionário×origem×mês) + colunas de auditoria em

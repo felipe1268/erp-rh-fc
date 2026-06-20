@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3384 — **FINANCEIRO / CADASTRO · CONTAS BANCÁRIAS · NOVOS CAMPOS "CONTATOS DA AGÊNCIA":
+ * GERENTE (NOME, TELEFONE, E-MAIL) + AGÊNCIA (ENDEREÇO, TELEFONE). BACKEND ADITIVO (SELFHEAL
+ * [SyncSchema+] + SCHEMA DRIZZLE + ROUTER) + FRONT (NOVA SEÇÃO NO FORMULÁRIO FullScreen) ·
+ * ZERO ALTER/DROP/DELETE.**
+ * - MOTIVAÇÃO: usuário precisa registrar os dados de contato do gerente de relacionamento e o
+ *   endereço/telefone da agência bancária junto do cadastro da conta.
+ * - SCHEMA: 5 novas colunas em `company_bank_accounts` — `nome_gerente VARCHAR(150)`,
+ *   `telefone_gerente VARCHAR(30)`, `email_gerente VARCHAR(150)`, `endereco_agencia VARCHAR(300)`,
+ *   `telefone_agencia VARCHAR(30)`. Adicionadas via `[SyncSchema+]` em `server/_core/index.ts`
+ *   (ADD COLUMN IF NOT EXISTS — aditivo/idempotente) e espelhadas no schema Drizzle
+ *   (`drizzle/schema.ts`, `companyBankAccounts`).
+ * - BACKEND (`server/routers/folhaPagamento.ts`, `criarContaBancaria` + `atualizarContaBancaria`):
+ *   inputs Zod expandidos com os 5 novos campos (todos opcionais). O Drizzle ORM propaga
+ *   automaticamente na escrita (spread `accountData`/`data`) e o `db.select()` do
+ *   `listarContasBancarias` os retorna sem alteração.
+ * - FRONTEND (`client/src/pages/ContasBancarias.tsx`): `ContaForm` type + `emptyForm` + `openEdit`
+ *   + `handleSave` expandidos. Nova seção "Contatos da agência" no formulário FullScreen (entre
+ *   "Recursos da conta" e "Saldo inicial"), com grid 2 colunas: gerente (nome/telefone/email) +
+ *   agência (endereço/telefone). Ícones: `UserCircle2`, `Phone`, `Mail`, `MapPin`.
+ * - VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
+ *
  * Rev. 3383 — **FINANCEIRO / CARTÃO DE CRÉDITO · DEDUP COMPLETO NA IMPORTAÇÃO DE FATURAS: O
  * SISTEMA AGORA VERIFICA SE A FATURA JÁ FOI CADASTRADA E SÓ LANÇA OS ITENS QUE FALTAM — NUNCA
  * DUPLICA. BACKEND ADITIVO + FRONT (TOAST) · ZERO SCHEMA/ALTER/DROP/DELETE.**

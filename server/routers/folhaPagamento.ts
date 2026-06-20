@@ -2473,6 +2473,12 @@ export const folhaPagamentoRouter = router({
       temAplicacaoAutomatica: z.number().optional(),
       saldoInicial: z.number().optional(),
       saldoInicialData: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      // Rev. 3384 — Contatos da agência
+      nomeGerente: z.string().max(150).optional(),
+      telefoneGerente: z.string().max(30).optional(),
+      emailGerente: z.string().max(150).optional(),
+      enderecoAgencia: z.string().max(300).optional(),
+      telefoneAgencia: z.string().max(30).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const { companyIds, saldoInicial, saldoInicialData, ...accountData } = input;
@@ -2505,6 +2511,12 @@ export const folhaPagamentoRouter = router({
       ativo: z.number().optional(),
       saldoInicial: z.number().optional(),
       saldoInicialData: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      // Rev. 3384 — Contatos da agência
+      nomeGerente: z.string().max(150).optional().nullable(),
+      telefoneGerente: z.string().max(30).optional().nullable(),
+      emailGerente: z.string().max(150).optional().nullable(),
+      enderecoAgencia: z.string().max(300).optional().nullable(),
+      telefoneAgencia: z.string().max(30).optional().nullable(),
     }))
     .mutation(async ({ input, ctx }) => {
       const { id, saldoInicial, saldoInicialData, ...data } = input;

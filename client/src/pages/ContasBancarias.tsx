@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { MoneyInput } from "@/components/ui/money-input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
-import { Plus, Search, Pencil, Trash2, Landmark, CreditCard, Building2, CheckCircle2, XCircle, Wallet, BookCopy, TrendingUp, Hash, Sparkles, Check, Calendar } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Landmark, CreditCard, Building2, CheckCircle2, XCircle, Wallet, BookCopy, TrendingUp, Hash, Sparkles, Check, Calendar, Phone, Mail, MapPin, UserCircle2 } from "lucide-react";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import TaloesDialog from "@/pages/financeiro/TaloesDialog";
 import { useState, useMemo } from "react";
@@ -31,6 +31,12 @@ type ContaForm = {
   temAplicacaoAutomatica: boolean;
   saldoInicial: string;
   saldoInicialData: string;
+  // Rev. 3384 — Contatos da agência
+  nomeGerente: string;
+  telefoneGerente: string;
+  emailGerente: string;
+  enderecoAgencia: string;
+  telefoneAgencia: string;
 };
 
 const emptyForm: ContaForm = {
@@ -43,6 +49,11 @@ const emptyForm: ContaForm = {
   temAplicacaoAutomatica: false,
   saldoInicial: "",
   saldoInicialData: "",
+  nomeGerente: "",
+  telefoneGerente: "",
+  emailGerente: "",
+  enderecoAgencia: "",
+  telefoneAgencia: "",
 };
 
 function fmtDataBR(iso?: string | null): string {
@@ -124,6 +135,11 @@ export default function ContasBancarias() {
       temAplicacaoAutomatica: Number(conta.temAplicacaoAutomatica) === 1,
       saldoInicial: conta.saldoInicial != null ? String(conta.saldoInicial) : "",
       saldoInicialData: conta.saldoInicialData ? String(conta.saldoInicialData).slice(0, 10) : "",
+      nomeGerente: conta.nomeGerente || "",
+      telefoneGerente: conta.telefoneGerente || "",
+      emailGerente: conta.emailGerente || "",
+      enderecoAgencia: conta.enderecoAgencia || "",
+      telefoneAgencia: conta.telefoneAgencia || "",
     });
     setDialogOpen(true);
   };
@@ -149,6 +165,14 @@ export default function ContasBancarias() {
       ? { saldoInicial: parseFloat(form.saldoInicial) || 0, saldoInicialData: form.saldoInicialData }
       : {};
 
+    const contatoFields = {
+      nomeGerente: form.nomeGerente.trim() || undefined,
+      telefoneGerente: form.telefoneGerente.trim() || undefined,
+      emailGerente: form.emailGerente.trim() || undefined,
+      enderecoAgencia: form.enderecoAgencia.trim() || undefined,
+      telefoneAgencia: form.telefoneAgencia.trim() || undefined,
+    };
+
     if (editingId) {
       updateMut.mutate({
         id: editingId,
@@ -160,6 +184,7 @@ export default function ContasBancarias() {
         temTalao: form.temTalao ? 1 : 0,
         temAplicacaoAutomatica: form.temAplicacaoAutomatica ? 1 : 0,
         ...saldoFields,
+        ...contatoFields,
       });
     } else {
       createMut.mutate({ companyId, companyIds, banco: form.banco,
@@ -170,6 +195,7 @@ export default function ContasBancarias() {
         temTalao: form.temTalao ? 1 : 0,
         temAplicacaoAutomatica: form.temAplicacaoAutomatica ? 1 : 0,
         ...saldoFields,
+        ...contatoFields,
       });
     }
   };
@@ -613,7 +639,69 @@ export default function ContasBancarias() {
             </div>
           </section>
 
-          {/* ── Seção 3 · Saldo inicial ── */}
+          {/* ── Seção 3 · Contatos da agência (Rev. 3384) ── */}
+          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <header className="flex items-center gap-2.5 px-5 py-3 border-b border-slate-100 bg-slate-50/70">
+              <div className="w-8 h-8 rounded-lg bg-[#1B2A4A]/10 flex items-center justify-center shrink-0">
+                <UserCircle2 className="h-4 w-4 text-[#1B2A4A]" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-[#1B2A4A]">Contatos da agência</h3>
+                <p className="text-[11px] text-slate-400">Gerente de relacionamento e dados da agência — opcional</p>
+              </div>
+            </header>
+            <div className="p-5 space-y-4">
+              {/* Gerente */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <Label className="flex items-center gap-1.5"><UserCircle2 className="h-3.5 w-3.5 text-slate-400" /> Nome do gerente</Label>
+                  <Input
+                    value={form.nomeGerente}
+                    onChange={e => setForm(f => ({ ...f, nomeGerente: e.target.value }))}
+                    placeholder="Ex: João Silva"
+                  />
+                </div>
+                <div>
+                  <Label className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 text-slate-400" /> Telefone do gerente</Label>
+                  <Input
+                    value={form.telefoneGerente}
+                    onChange={e => setForm(f => ({ ...f, telefoneGerente: e.target.value }))}
+                    placeholder="Ex: (11) 91234-5678"
+                  />
+                </div>
+                <div>
+                  <Label className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-slate-400" /> E-mail do gerente</Label>
+                  <Input
+                    type="email"
+                    value={form.emailGerente}
+                    onChange={e => setForm(f => ({ ...f, emailGerente: e.target.value }))}
+                    placeholder="Ex: joao@banco.com.br"
+                  />
+                </div>
+              </div>
+              {/* Agência */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <Label className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-slate-400" /> Endereço da agência</Label>
+                  <Input
+                    value={form.enderecoAgencia}
+                    onChange={e => setForm(f => ({ ...f, enderecoAgencia: e.target.value }))}
+                    placeholder="Ex: Av. Paulista, 1000 — Bela Vista, São Paulo/SP"
+                  />
+                </div>
+                <div>
+                  <Label className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5 text-slate-400" /> Telefone da agência</Label>
+                  <Input
+                    value={form.telefoneAgencia}
+                    onChange={e => setForm(f => ({ ...f, telefoneAgencia: e.target.value }))}
+                    placeholder="Ex: (11) 3456-7890"
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* ── Seção 4 · Saldo inicial ── */}
           <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <header className="flex items-center gap-2.5 px-5 py-3 border-b border-slate-100 bg-slate-50/70">
               <div className="w-8 h-8 rounded-lg bg-[#1B2A4A]/10 flex items-center justify-center shrink-0">
