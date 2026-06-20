@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3379 — **FINANCEIRO / CARTÃO DE CRÉDITO · CADASTRO DE CARTÃO COM LAYOUT MODERNO (FULLSCREEN REDESIGN)
+ * + AUTO-PREENCHIMENTO DA FATURA (IA JÁ LÊ DIA FECHAMENTO, DIA VENCIMENTO E LIMITE DO PDF E PRÉ-CARREGA O
+ * FORMULÁRIO) + PAINEL "MELHOR DATA DE COMPRA" CALCULADO AO VIVO (BASE PARA SUGESTÃO DE CARTÃO NO MÓDULO DE
+ * COMPRAS). BACKEND MÍNIMO ADITIVO (1 CAMPO NO PROMPT DA IA: `limiteTotalCartao`) + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO: (1) layout moderno seguindo regras de ouro; (2) ao importar fatura, cadastrar automaticamente
+ *   dia vencimento, limite, dia fechamento; (3) criar regra "melhor data de compra" p/ fluxo de caixa;
+ *   (4) usar no módulo de compras p/ sugerir cartão ideal.
+ * - BACKEND (`server/routers/cartao.ts`, aditivo): adicionado `limiteTotalCartao` ao `PROMPT_FATURA`
+ *   ("limite TOTAL do cartão em BRL se aparecer explicitamente") e ao `SCHEMA_FATURA`. A IA já extraía
+ *   `fechamento` e `vencimento` como YYYY-MM-DD — os dias são derivados no front.
+ * - FRONT (`client/src/pages/financeiro/FinanceiroCartaoCredito.tsx`):
+ *   (A) REDESIGN MODAL: fullscreen `max-w-2xl`, header navy, **CARTÃO-PREVIEW AO VIVO** (gradiente por
+ *       bandeira via `bandeiraGradiente`, ChipCartao, BandeiraLogo, banco/final4/titular atualizam ao digitar),
+ *       chips clicáveis de BANCO (Santander/Itaú/Bradesco/Caixa/BB/Nubank/Sicredi/Inter/BTG/Outro — chip ativo
+ *       = borda+anel navy+check; "Outro" abre input livre), chips de BANDEIRA (Visa/Mastercard/Elo/Amex/
+ *       Hipercard), 3 SEÇÕES em cards (Identificação · Datas & Limite · Observação) com header-chip+ícone,
+ *       footer fixo Cancelar/Salvar `bg-[#1B2A4A]`. Estado/handlers/mutations INALTERADOS.
+ *   (B) AUTO-FILL `cadastrarCartaoDoImport`: extrai `diaFechamento` ← `f.fechamento.slice(8,10)`,
+ *       `diaVencimento` ← `f.vencimento.slice(8,10)`, `limite` ← `f.limiteTotalCartao` (quando a IA extrai);
+ *       antes só banco/bandeira/final4/titular eram pré-preenchidos.
+ *   (C) `calcMelhorDataCompra(diaFecha, diaVence)`: helper puro (`diaCompra = diaFecha+1` clipado p/ 1 se
+ *       ≥28; `prazoMax = 30 + gapFechaVence`). Exibido como painel "Melhor data de compra" (esmeralda) no
+ *       formulário (cálculo ao vivo enquanto o usuário digita os dias) e como badge no card da lista.
+ *   (D) Constantes `BANCOS_CHIPS` / `BANDEIRAS_CHIPS` + ícones `Zap/Calendar/Hash/Sparkles/ArrowRight/Clock/Check`.
+ * - ESTRUTURA PARA COMPRAS (futuro): dado um dia D, prazo disponível por cartão =
+ *   `30 + (diaVence>diaFecha ? diaVence-diaFecha : diaVence+30-diaFecha)`; maior prazo = cartão sugerido.
+ *   diaFechamento + diaVencimento já persistidos em `financial_cartoes` — zero schema change necessário.
+ * - VALIDAÇÃO: tsc limpo (ruído pré-existente em `changelog.ts` ignorado).
+ *
  * Rev. 3378 — **CONTROLE DE REVISÕES · OS NÚMEROS DOS CARDS DE RESUMO (TOTAL / NOVA FUNCIONALIDADE / CORREÇÃO DE BUG /
  * MELHORIA / SEGURANÇA / PERFORMANCE) AGORA APARECEM COM SEPARADOR DE MILHAR pt-BR (EX.: "1.380" EM VEZ DE "1380").
  * 100% FRONT (SÓ FORMATAÇÃO DE EXIBIÇÃO) · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE · NENHUMA TELA NOVA.**

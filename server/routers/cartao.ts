@@ -168,6 +168,7 @@ Extraia TODAS as faturas contidas no documento. Um PDF pode conter VÁRIOS cart�
 - bandeira: bandeira (ex.: "Mastercard", "Visa").
 - vencimento: data de vencimento da fatura em YYYY-MM-DD.
 - fechamento: data de fechamento da fatura em YYYY-MM-DD (se houver).
+- limiteTotalCartao: limite TOTAL do cartão em BRL (número), se aparecer explicitamente na fatura (ex.: "Limite total R$ 20.000,00" ou "Limite do cartão"). Use null se não encontrar.
 - total: valor TOTAL da fatura (número, ponto decimal).
 - totalCompras: soma das compras do período (número), se houver.
 - faturaAnterior: saldo da fatura anterior (número), se houver.
@@ -202,6 +203,7 @@ const SCHEMA_FATURA = {
           bandeira: { type: "string", nullable: true },
           vencimento: { type: "string", nullable: true },
           fechamento: { type: "string", nullable: true },
+          limiteTotalCartao: { type: "number", nullable: true },
           total: { type: "number", nullable: true },
           totalCompras: { type: "number", nullable: true },
           faturaAnterior: { type: "number", nullable: true },
@@ -313,6 +315,7 @@ function normalizarFatura(raw: any) {
     bandeira: raw?.bandeira != null ? String(raw.bandeira).trim().slice(0, 60) : null,
     vencimento,
     fechamento,
+    limiteTotalCartao: parseValor(raw?.limiteTotalCartao),
     total: parseValor(raw?.total),
     totalCompras: parseValor(raw?.totalCompras),
     faturaAnterior: parseValor(raw?.faturaAnterior),
