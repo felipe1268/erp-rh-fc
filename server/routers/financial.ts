@@ -753,42 +753,83 @@ function _isLancInterno(descricao: any): boolean {
   return _internoRegex.test(String(descricao || ""));
 }
 
+// Rev. 3366 — Token DISTINTIVO do nome de uma empresa do grupo (financial_internal_cnpjs.nome),
+// usado p/ classificar como MOVIMENTAÇÃO INTERNA as linhas em que o banco traz só o NOME (sem o
+// CNPJ) — ex.: "PIX ENVIADO LOCNOW LOCACOES" (o "pix recebido" da mesma empresa casa pelo CNPJ,
+// mas o "pix enviado" às vezes vem sem dígitos → vazava p/ "caixa real"). Pega o 1º token "forte"
+// (≥5 alfanuméricos, sem acento, FORA da stop-list de termos genéricos de razão social), evitando
+// casar um fornecedor qualquer. Empresas com nome só genérico (ex.: "FC Engenharia (própria)" —
+// já coberta pelo regex + CNPJ) devolvem null.
+const _NAME_STOP_TOKENS = new Set([
+  "ltda", "eireli", "epp", "comercio", "comercial", "servicos", "servico", "locacoes",
+  "locacao", "construcao", "construtora", "engenharia", "maquinas", "veiculos", "equipamentos",
+  "transportes", "transporte", "materiais", "material", "industria", "industrias",
+  "empreendimentos", "participacoes", "propria", "proprio", "grupo", "companhia",
+  "representacoes", "distribuidora", "comercializacao", "sociedade", "limitada", "filial",
+  "matriz", "brasil",
+]);
+function _nameTokenForte(nome: any): string | null {
+  const toks = String(nome || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/);
+  for (const t of toks) {
+    if (/^[a-z0-9]{5,}$/.test(t) && !_NAME_STOP_TOKENS.has(t)) return t;
+  }
+  return null;
+}
+
 // Rev. 3351 — Config de MOVIMENTAÇÃO INTERNA por empresa: a base de CNPJs/CPFs cadastrada
 // (financial_internal_cnpjs, ativos) + as exceções por lançamento (financial_internal_overrides).
 // Tudo num único load por request p/ o SQL agregado e o JS NÃO divergirem. Tolerante a tabela
 // ausente (ambiente antes do self-heal) → devolve config vazia.
-async function _loadInternoConfig(db: any, companyId: number): Promise<{ cnpjDigits: string[]; overrides: Map<number, string> }> {
+async function _loadInternoConfig(db: any, companyId: number): Promise<{ cnpjDigits: string[]; nameTokens: string[]; overrides: Map<number, string> }> {
   const cnpjDigits: string[] = [];
+  const nameTokens: string[] = [];
   const overrides = new Map<number, string>();
   try {
-    const r = await dbExecute(db, `SELECT cnpj FROM financial_internal_cnpjs WHERE company_id=$1 AND COALESCE(ativo,1)=1`, [companyId]);
+    const r = await dbExecute(db, `SELECT cnpj, nome FROM financial_internal_cnpjs WHERE company_id=$1 AND COALESCE(ativo,1)=1`, [companyId]);
     for (const x of rows(r)) {
       const d = _soDigitos(x.cnpj);
       if (d.length >= 6) cnpjDigits.push(d); // guarda mínimo p/ não casar lixo
+      // Rev. 3366 — token "forte" do nome p/ casar quando o banco não traz o CNPJ na linha.
+      const tk = _nameTokenForte(x.nome);
+      if (tk) nameTokens.push(tk);
     }
   } catch (e: any) { console.warn(`[internoConfig] skip cnpjs:`, e?.message); }
   try {
     const r = await dbExecute(db, `SELECT line_id AS "lineId", natureza FROM financial_internal_overrides WHERE company_id=$1 AND natureza IN ('efetivo','interno')`, [companyId]);
     for (const x of rows(r)) overrides.set(Number(x.lineId), String(x.natureza));
   } catch (e: any) { console.warn(`[internoConfig] skip overrides:`, e?.message); }
-  return { cnpjDigits, overrides };
+  return { cnpjDigits, nameTokens: Array.from(new Set(nameTokens)), overrides };
 }
 
 // Rev. 3351 — Predicado SQL "é movimentação interna" (regex base OR dígitos da descrição
 // CONTÊM algum CNPJ/CPF cadastrado). `cnpjDigits` é SANITIZADO (só dígitos) antes de chegar
 // aqui → inlining seguro. NÃO inclui a exceção por lançamento (essa entra via LEFT JOIN no
 // CASE de quem usa, pois depende do id da linha).
-function _internoSqlPredicate(cnpjDigits: string[], col = "descricao"): string {
-  const base = `${col} ~* '${_INTERNO_REGEX_SRC}'`;
+// Rev. 3366 — expressão SQL que tira acentos + lowercase de `col`, p/ espelhar EXATAMENTE a
+// normalização do JS (`desc.normalize("NFD").replace(diacríticos).toLowerCase()`) no match por NOME
+// do grupo. Não usa a extensão `unaccent` (criá-la exigiria ALTER/CREATE EXTENSION — proibido);
+// `translate` cobre os diacríticos do português. Os `nameTokens` são puro ASCII minúsculo.
+function _sqlUnaccentLower(col: string): string {
+  return `lower(translate(${col}, 'áàâãäéèêëíìîïóòôõöúùûüçÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ', 'aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC'))`;
+}
+function _internoSqlPredicate(cnpjDigits: string[], col = "descricao", nameTokens: string[] = []): string {
+  const parts: string[] = [`${col} ~* '${_INTERNO_REGEX_SRC}'`];
+  // Rev. 3366 — nomes "fortes" das empresas do grupo (casa quando a linha NÃO traz o CNPJ).
+  // `nameTokens` já vem sanitizado (alfanum ≥5); re-filtra por segurança antes do inlining.
+  // Normaliza acentos+caixa no SQL (`_sqlUnaccentLower`) p/ ESPELHAR o caminho JS (paridade).
+  const safeTok = nameTokens.filter((t) => /^[a-z0-9]{5,}$/.test(t));
+  if (safeTok.length) parts.push(`${_sqlUnaccentLower(col)} ~ '${safeTok.join("|")}'`);
   const safe = cnpjDigits.filter((d) => /^[0-9]{6,20}$/.test(d));
-  if (safe.length === 0) return `(${base})`;
-  const likes = safe.map((d) => `regexp_replace(${col},'[^0-9]','','g') LIKE '%${d}%'`).join(" OR ");
-  return `(${base} OR ${likes})`;
+  if (safe.length) parts.push(...safe.map((d) => `regexp_replace(${col},'[^0-9]','','g') LIKE '%${d}%'`));
+  return `(${parts.join(" OR ")})`;
 }
 
-// Rev. 3351 — Classificação "é interno" de UMA linha já carregada, respeitando a exceção:
-// override 'efetivo' → NÃO interno · 'interno' → interno · senão regex base + CNPJ cadastrado.
-function _isLancInternoRow(row: any, cfg: { cnpjDigits: string[]; overrides: Map<number, string> }): boolean {
+// Rev. 3351/3366 — Classificação "é interno" de UMA linha já carregada, respeitando a exceção:
+// override 'efetivo' → NÃO interno · 'interno' → interno · senão regex base + NOME forte do grupo
+// (Rev. 3366) + CNPJ cadastrado.
+function _isLancInternoRow(row: any, cfg: { cnpjDigits: string[]; nameTokens?: string[]; overrides: Map<number, string> }): boolean {
   const id = Number(row?.id);
   if (Number.isFinite(id)) {
     const ov = cfg.overrides.get(id);
@@ -797,6 +838,11 @@ function _isLancInternoRow(row: any, cfg: { cnpjDigits: string[]; overrides: Map
   }
   const desc = String(row?.descricao || "");
   if (_internoRegex.test(desc)) return true;
+  // Rev. 3366 — nome "forte" da empresa do grupo (linha sem o CNPJ — ex.: "PIX ENVIADO LOCNOW").
+  if (cfg.nameTokens && cfg.nameTokens.length) {
+    const norm = desc.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    if (cfg.nameTokens.some((t) => t && norm.includes(t))) return true;
+  }
   if (cfg.cnpjDigits.length) {
     const d = _soDigitos(desc);
     if (d && cfg.cnpjDigits.some((c) => d.includes(c))) return true;
@@ -5265,7 +5311,7 @@ export const financialRouter = router({
     // (financial_internal_overrides via LEFT JOIN). `cnpjDigits` é sanitizado (só dígitos) →
     // inlining seguro; `internoExpr` é a fonte única do split caixa real × interno.
     const internoCfg = await _loadInternoConfig(db, input.companyId);
-    const internoExpr = `(CASE WHEN ov.natureza='efetivo' THEN FALSE WHEN ov.natureza='interno' THEN TRUE ELSE ${_internoSqlPredicate(internoCfg.cnpjDigits, "b.descricao")} END)`;
+    const internoExpr = `(CASE WHEN ov.natureza='efetivo' THEN FALSE WHEN ov.natureza='interno' THEN TRUE ELSE ${_internoSqlPredicate(internoCfg.cnpjDigits, "b.descricao", internoCfg.nameTokens)} END)`;
     const res = await dbExecute(db,
       `SELECT b.conta_bancaria_id AS "contaBancariaId",
               COUNT(*)::int AS total,

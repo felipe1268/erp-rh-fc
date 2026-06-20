@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3366 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O "PAINEL GERAL DO MÊS" PAROU DE CONTAR COMO "SAÍDA DE CAIXA
+ * REAL" OS PIX/TRANSFERÊNCIAS PARA EMPRESAS DO PRÓPRIO GRUPO QUANDO O BANCO TRAZ SÓ O NOME NA LINHA (SEM O CNPJ).
+ * ANTES, A CLASSIFICAÇÃO "MOVIMENTAÇÃO INTERNA" SÓ CASAVA PELO CNPJ NA DESCRIÇÃO — ENTÃO O "PIX RECEBIDO LOCNOW …
+ * 61.423.062/0001-09" ENTRAVA COMO INTERNO, MAS O "PIX ENVIADO LOCNOW LOCACOES" (MESMA EMPRESA, SEM O CNPJ NA
+ * LINHA) VAZAVA P/ "CAIXA REAL", INFLANDO AS SAÍDAS. AGORA CASA TAMBÉM PELO NOME DISTINTIVO DA EMPRESA DO GRUPO,
+ * DOS DOIS LADOS. SÓ BACKEND (FONTE ÚNICA DE CLASSIFICAÇÃO) · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário): "Saídas (caixa real) de R$ 12,62 mi parece alto demais — o que você sugere?".
+ * - AUDITORIA (Neon, company_id=60002, FC Engenharia, 2026, 2841 linhas): o número está essencialmente CORRETO. O
+ *   giro bruto é entradas 14,27mi / saídas 15,63mi; tirando a movimentação interna (entradas 9,12mi do grupo vs
+ *   saídas internas 3,02mi), sobra o "caixa real" entradas 5,15mi × saídas 12,62mi. A assimetria é REAL (a empresa
+ *   foi bancada pelo grupo/investimento no período — salários, fornecedores via PIX/cheque, empréstimo de 1,55mi).
+ *   As "saídas reais" são legítimas; o card "Saldo líquido −7,46mi" é que engana (compara saídas reais só com as
+ *   ENTRADAS externas, ignorando o aporte do grupo) — fica p/ uma próxima rev.
+ * - DESCOBERTA-CHAVE: revisão das linhas mostrou que (a) "COMPENSAÇÃO INTERNA DE CHEQUE 000NNN" (≈77k) NÃO é
+ *   movimentação interna do grupo — são CHEQUES EMITIDOS PELA PRÓPRIA EMPRESA sendo compensados (dinheiro real
+ *   saindo; "interna" ali é a compensação do banco). MANTIDO como saída real. (b) O ÚNICO vazamento genuíno é a
+ *   linha "PIX ENVIADO LOCNOW LOCACOES Doc 115678" (−R$ 105.000,00): escapou só porque o banco não pôs o CNPJ
+ *   nessa linha — as demais dezenas de PIX p/ a Locnow trazem "61.423.062/0001-09" e já entravam como internas.
+ * - FIX BACKEND (`server/routers/financial.ts`, fonte ÚNICA que propaga p/ os 3 consumidores —
+ *   `getConciliacaoDashboard`, `getBankAccountsConciliacaoStatus` e `getConciliacaoLancamentos`): (1) NOVA const
+ *   `_NAME_STOP_TOKENS` + helper `_nameTokenForte(nome)` que extrai o 1º token "forte" da razão social cadastrada
+ *   (≥5 alfanuméricos, sem acento, FORA da stop-list de termos genéricos de razão social — ltda/locacoes/servicos/
+ *   engenharia/maquinas/…). Ex.: "LOCNOW LOCACOES E SERVICOS DE MAQUINAS…" → "locnow"; "FC Engenharia (própria)"
+ *   → null (já coberta pelo regex base "fc engenharia" + CNPJ). (2) `_loadInternoConfig` passou a `SELECT cnpj,
+ *   nome` e devolve também `nameTokens: string[]` (deduplicado). (3) `_internoSqlPredicate` ganhou 3º param
+ *   `nameTokens` → adiciona `col ~* 'tok1|tok2'` (tokens re-sanitizados `/^[a-z0-9]{5,}$/` antes do inlining →
+ *   seguro contra injeção). (4) `_isLancInternoRow` checa os `nameTokens` contra a descrição normalizada (NFD +
+ *   lowercase + includes). O caller do dashboard de status passou a propagar `internoCfg.nameTokens`.
+ * - VALIDAÇÃO (Neon, simulando o novo predicado): EXATAMENTE 1 linha é reclassificada de "caixa real" p/ interno —
+ *   a PIX ENVIADO LOCNOW de −105.000,00 — ZERO falso-positivo (o único token é "locnow", inequívoco; "FC
+ *   Engenharia" não gera token). tsc limpo nos arquivos tocados (0 erros novos; só o ruído pré-existente de
+ *   `changelog.ts`). RESSALVA: a régua casa por SUBSTRING do token na descrição — nomes do grupo muito genéricos
+ *   (token comum) poderiam casar fornecedor homônimo; mitigado pela stop-list, pelo min-5-chars e pela exceção por
+ *   lançamento (override 'efetivo') já existente. O card "Saldo líquido" enganoso segue como follow-up.
+ *
  * Rev. 3365 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · AS BOLINHAS DE STATUS DA TIMELINE DE MESES (AZUL = "COM
  * LANÇAMENTO", VERDE = "CONSOLIDADO", CINZA = "SEM DADOS") AGORA ACENDEM SEM PRECISAR ABRIR UMA CONTA. ANTES,
  * NA VISÃO "LISTA DE CONTAS" (NENHUMA CONTA SELECIONADA), TODOS OS MESES FICAVAM CINZA MESMO HAVENDO EXTRATO
