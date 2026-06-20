@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3364 — **FOLHA / HORA EXTRA (RELATÓRIO DE PERÍODOS HE) · A FOTO DO COLABORADOR AGORA AMPLIA AO TOCAR —
+ * COM ROBUSTEZ NO iPad/iOS SAFARI. O AVATAR JÁ ABRIA UM LIGHTBOX (Rev. 2196), MAS NO iPad ELE PODIA ABRIR EM
+ * BRANCO (BUG DE COMPOSITING DO RADIX DIALOG NO WebKit) E NÃO HAVIA PISTA VISUAL DE QUE A FOTINHA ERA TOCÁVEL
+ * (SEM HOVER NO TOUCH). AGORA: SELO DE ZOOM PERMANENTE NO AVATAR + LIGHTBOX MAIOR, SEM `transform`, COM FALLBACK
+ * onError E BOTÃO "ABRIR" (NOVA ABA). 100% FRONT · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário, print do iPad): "Quero poder clicar na foto e ela ampliar". O recurso existia desde a
+ *   Rev. 2196 (`fotoZoom`/lightbox), mas em iPad/iOS Safari (a) faltava affordance de toque — o avatar de 32px
+ *   só mostrava `hover:ring`/tooltip "Clique para ampliar", que não aparecem no touch; e (b) o lightbox podia
+ *   renderizar em branco pelo bug conhecido de compositing do Radix Dialog no WebKit (ver memória
+ *   `ios-preview-dialog-blank`).
+ * - FRONT (`client/src/pages/FolhaPagamento.tsx`): (1) o avatar virou um `<button>` com SELO de zoom permanente
+ *   (`ZoomIn` num badge azul no canto, opacidade 80%→100% no hover/active) + `title="Toque para ampliar a foto"`
+ *   + `focus-visible:ring` + `group-active:ring` — fica claro que dá pra tocar mesmo sem hover. (2) O lightbox
+ *   (`<Dialog open={!!fotoZoom}>`) ficou MAIOR (`max-w-2xl`, imagem até `max-h-[78vh]`), a `<img>` recebeu
+ *   `style={{ transform: "none" }}` (evita o trap de compositing-layer em branco do iOS quando há transform
+ *   dentro de modal `position:fixed`), ganhou `onError` que troca pra um fallback "Não foi possível carregar a
+ *   foto aqui · Abrir em nova aba", e o cabeçalho ganhou um link "Abrir" (`ExternalLink`, `target=_blank`) como
+ *   escape hatch garantido. Ícones `ExternalLink`/`ZoomIn` adicionados ao import do `lucide-react`.
+ * - VALIDAÇÃO: tsc limpo no arquivo tocado (0 erros novos; só o ruído pré-existente de `changelog.ts`). ZERO
+ *   mudança de schema/escrita — apenas UI. RESSALVA: a cura do "abre em branco no iPad" segue a memória
+ *   `ios-preview-dialog-blank` (transform-none + escape hatch); falta confirmar empiricamente no iPad do usuário.
+ *
  * Rev. 3363 — **FINANCEIRO / CONCILIAÇÃO · APLICAÇÃO/RESGATE AUTOMÁTICO (CDB ContaMax / SANTANDER): (1) FLAG POR
  * CONTA NO CADASTRO ("ESTA CONTA TEM APLICAÇÃO/RESGATE AUTOMÁTICO"); (2) AS LINHAS DE APLICAÇÃO E RESGATE JÁ
  * CAEM COMO MOVIMENTAÇÃO INTERNA (NÃO-CAIXA) PELO MATCHER EXISTENTE; (3) O RENDIMENTO APURADO NO MÊS É LIDO DO

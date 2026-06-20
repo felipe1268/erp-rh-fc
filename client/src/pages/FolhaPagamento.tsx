@@ -12,7 +12,7 @@ import {
   Eye, Trash2, RefreshCw, ArrowLeft, XCircle, Info, Building2,
   FileSpreadsheet, AlertCircle, ShieldCheck, Clock, TrendingUp, TrendingDown,
   Filter, Briefcase, BarChart3, ChevronDown, ChevronUp, Lightbulb, Wrench, ArrowRight, MapPin, Scale,
-  HardHat, Ban, User, CheckCircle2, Calculator, Zap, Moon, FileCheck, Wallet, Pencil, Save, X, FileDown, PenLine, ClipboardCheck, FileBarChart
+  HardHat, Ban, User, CheckCircle2, Calculator, Zap, Moon, FileCheck, Wallet, Pencil, Save, X, FileDown, PenLine, ClipboardCheck, FileBarChart, ExternalLink, ZoomIn
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import FullScreenDialog from "@/components/FullScreenDialog";
@@ -5496,14 +5496,23 @@ export default function FolhaPagamento() {
                                                         {/* Rev. 2189 — avatar do colaborador (employees.fotoUrl) */}
                                                         <div className="flex items-center gap-2">
                                                           {first.fotoUrl ? (
-                                                            <img
-                                                              src={first.fotoUrl}
-                                                              alt={first.nomeCompleto || `ID ${empKey}`}
-                                                              title="Clique para ampliar"
-                                                              className="w-8 h-8 rounded-full object-cover border border-gray-200 flex-shrink-0 bg-gray-50 cursor-zoom-in hover:ring-2 hover:ring-blue-400 transition"
+                                                            <button
+                                                              type="button"
+                                                              title="Toque para ampliar a foto"
+                                                              aria-label={`Ampliar foto de ${first.nomeCompleto || first.nome || `ID ${empKey}`}`}
                                                               onClick={() => setFotoZoom({ url: first.fotoUrl, nome: first.nomeCompleto || first.nome || `ID ${empKey}` })}
-                                                              onError={(ev) => { (ev.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                                                            />
+                                                              className="relative flex-shrink-0 group rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                                                            >
+                                                              <img
+                                                                src={first.fotoUrl}
+                                                                alt={first.nomeCompleto || `ID ${empKey}`}
+                                                                className="w-8 h-8 rounded-full object-cover border border-gray-200 bg-gray-50 cursor-zoom-in group-hover:ring-2 group-hover:ring-blue-400 group-active:ring-2 group-active:ring-blue-500 transition"
+                                                                onError={(ev) => { (ev.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                                                              />
+                                                              <span className="absolute -bottom-0.5 -right-0.5 bg-blue-600 text-white rounded-full p-0.5 shadow ring-1 ring-white opacity-80 group-hover:opacity-100 group-active:opacity-100">
+                                                                <ZoomIn className="h-2.5 w-2.5" aria-hidden="true" />
+                                                              </span>
+                                                            </button>
                                                           ) : (
                                                             <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-semibold text-gray-600 flex-shrink-0">
                                                               {String(first.nomeCompleto || first.nome || "?").trim().split(/\s+/).slice(0, 2).map((w: string) => w[0]).join("").toUpperCase()}
@@ -8588,20 +8597,45 @@ export default function FolhaPagamento() {
           </DialogContent>
         </Dialog>
 
-        {/* Rev. 2196 — Lightbox da foto do colaborador (clique no avatar
-            do Relatório de Períodos HE amplia pra análise facial). */}
+        {/* Rev. 2196 — Lightbox da foto do colaborador (clique no avatar amplia).
+            Rev. 3364 — robustez iPad/iOS Safari: imagem maior, SEM transform (evita o
+            bug de compositing em branco do Radix Dialog no WebKit), fallback onError e
+            botão "Abrir" (window/nova aba) como escape hatch garantido. */}
         <Dialog open={!!fotoZoom} onOpenChange={(o) => !o && setFotoZoom(null)}>
-          <DialogContent className="max-w-md p-0 overflow-hidden bg-black/95 border-none">
+          <DialogContent className="max-w-2xl p-0 overflow-hidden bg-black/95 border-none">
             <DialogHeader className="px-4 pt-3 pb-2">
-              <DialogTitle className="text-white text-sm font-medium">{fotoZoom?.nome}</DialogTitle>
+              <DialogTitle className="text-white text-sm font-medium flex items-center justify-between gap-2">
+                <span className="truncate">{fotoZoom?.nome}</span>
+                {fotoZoom && (
+                  <a
+                    href={fotoZoom.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 inline-flex items-center gap-1 text-[11px] font-medium text-blue-300 hover:text-blue-200 underline-offset-2 hover:underline"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" /> Abrir
+                  </a>
+                )}
+              </DialogTitle>
             </DialogHeader>
             {fotoZoom && (
-              <div className="flex items-center justify-center p-4 pt-0">
+              <div className="flex items-center justify-center p-4 pt-0 min-h-[220px]">
                 <img
                   src={fotoZoom.url}
                   alt={fotoZoom.nome}
-                  className="max-w-full max-h-[70vh] rounded-lg shadow-2xl object-contain bg-white"
+                  style={{ transform: "none" }}
+                  className="max-w-full max-h-[78vh] rounded-lg shadow-2xl object-contain bg-white"
+                  onError={(ev) => {
+                    const el = ev.currentTarget as HTMLImageElement;
+                    el.style.display = "none";
+                    const fb = el.nextElementSibling as HTMLElement | null;
+                    if (fb) fb.style.display = "flex";
+                  }}
                 />
+                <div style={{ display: "none" }} className="flex-col items-center gap-2 text-center text-white/70 text-sm px-6">
+                  <span>Não foi possível carregar a foto aqui.</span>
+                  <a href={fotoZoom.url} target="_blank" rel="noopener noreferrer" className="text-blue-300 underline">Abrir em nova aba</a>
+                </div>
               </div>
             )}
           </DialogContent>
