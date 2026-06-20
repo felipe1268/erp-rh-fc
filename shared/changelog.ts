@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3389 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · MODAL "LANÇAR NO ERP" EM TELA CHEIA
+ * (FULL SCREEN) EM TODOS OS TAMANHOS DE TELA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE
+ * · 1 LINHA (FinanceiroConciliacao.tsx).**
+ * - PROBLEMA: o modal de lançamento abria em 94vw/92vh em telas grandes (desktop),
+ *   deixando a tela de fundo visível e reduzindo o espaço útil do formulário.
+ * - FIX: removidas as classes `sm:w-[94vw] sm:max-w-4xl sm:h-[92vh] sm:rounded-lg`
+ *   do `<DialogContent>` — o modal agora usa sempre `w-screen h-[100dvh] rounded-none`
+ *   em qualquer breakpoint, ocupando toda a viewport.
+ * - VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
+ *
  * Rev. 3388 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXIBIÇÃO DO SALDO BANCÁRIO EM CADA
  * LINHA DO EXTRATO ("NO EXTRATO, SEM LANÇAMENTO"). BACKEND ADITIVO + FRONT + PARSER BB.
  * ZERO SCHEMA/ALTER/DROP/DELETE.**
