@@ -653,6 +653,10 @@ export const companyBankAccounts = pgTable("company_bank_accounts", {
         usarParaFolha: smallint("usarParaFolha").default(0),
         temTalao: smallint("temTalao").default(0),
         temAplicacaoAutomatica: smallint("temAplicacaoAutomatica").default(0),
+        // Rev. 3398 — Conta Caixa (sem extrato bancário): recebimentos em dinheiro/cheques
+        // de terceiros, pagamentos informais etc. Na Conciliação o modo muda: não importa
+        // extrato OFX/CSV; o usuário confirma manualmente cada entrada/saída registrada no ERP.
+        caixaInterno: smallint("caixaInterno").default(0),
         // Rev. 3384 — Contatos da agência (gerente + endereço/telefone da agência).
         nomeGerente: varchar("nome_gerente", { length: 150 }),
         telefoneGerente: varchar("telefone_gerente", { length: 30 }),

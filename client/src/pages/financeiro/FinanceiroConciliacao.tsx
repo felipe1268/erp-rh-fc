@@ -14,7 +14,7 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX, FileSpreadsheet, FileDown, Plus, Maximize2, Minimize2, Search, Users, Building2, Pencil } from "lucide-react";
+import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX, FileSpreadsheet, FileDown, Plus, Maximize2, Minimize2, Search, Users, Building2, Pencil, Wallet, CircleCheck, CircleDot } from "lucide-react";
 import { formatConta, formatAgencia } from "@/lib/formatters";
 import { NaturezaOverrideDialog, NaturezaBadge, type LancNaturezaLinha } from "./_NaturezaOverride";
 import { MapaMovimentacaoInternaDialog } from "./_MapaMovimentacaoInterna";
@@ -596,12 +596,27 @@ export default function FinanceiroConciliacao() {
     return () => clearTimeout(t);
   }, [sugLoading]);
 
+  // Rev. 3398 — CAIXA INTERNO: query e mutations para contas sem extrato bancário.
+  const contaSelecionadaCaixaInterno = !!(bankAccounts ?? []).find((b: any) => String(b.id) === contaBancariaId && Number(b.caixaInterno) === 1);
+  const { data: caixaData, isFetching: caixaLoading, isError: caixaIsError, error: caixaError, refetch: refetchCaixa } = (trpc as any).financial.getEntradasCaixaInterno.useQuery(
+    { companyId, contaBancariaId: parseInt(contaBancariaId) || 0, dataInicio, dataFim },
+    { enabled: !!companyId && !!contaBancariaId && contaSelecionadaCaixaInterno, retry: false }
+  );
+  const confirmarEntradaMut = (trpc as any).financial.confirmarEntradaCaixa.useMutation({
+    onSuccess: () => { toast({ title: "Entrada confirmada!" }); refetchCaixa(); },
+    onError: (e: any) => { toast({ title: "Erro", description: e.message, variant: "destructive" }); },
+  });
+  const desconciliarEntradaMut = (trpc as any).financial.desconciliarEntradaCaixa.useMutation({
+    onSuccess: () => { toast({ title: "Confirmação desfeita." }); refetchCaixa(); },
+    onError: (e: any) => { toast({ title: "Erro", description: e.message, variant: "destructive" }); },
+  });
+
   // Rev. 3187 — Relatório consolidado da conta/período (3 blocos), agora EMBUTIDO na tela
   // única (o Painel separado foi aposentado). Conciliados, extrato-sem-lançamento e
   // lançamento-sem-extrato vêm de uma fonte só (getConciliacaoReport), READ-ONLY.
   const { data: report, isFetching: reportLoading, isError: reportIsError, error: reportError, refetch: refetchReport } = (trpc as any).financial.getConciliacaoReport.useQuery(
     { companyId, contaBancariaId: parseInt(contaBancariaId) || 0, dataInicio, dataFim },
-    { enabled: !!companyId && !!contaBancariaId, retry: false }
+    { enabled: !!companyId && !!contaBancariaId && !contaSelecionadaCaixaInterno, retry: false }
   );
   // Rev. 3319 — PANORAMA GERAL DO MÊS: quando há um MÊS selecionado mas NENHUMA conta,
   // roda o mesmo motor de conciliação para TODAS as contas com extrato no período e
@@ -1702,54 +1717,68 @@ export default function FinanceiroConciliacao() {
             <p className="text-sm text-gray-500 mt-1">Relacione os lançamentos do sistema com o extrato bancário</p>
           </div>
           <div className="flex items-center gap-2">
-            {contaBancariaId && modoData === "mes" && mesSel != null && mesesStatus[mesSel] !== "vazio" && (
-              mesesStatus[mesSel] === "consolidado" ? (
+            {/* Rev. 3398 — Modo Caixa Interno: sem extrato, sem consolidação */}
+            {contaSelecionadaCaixaInterno ? (
+              <>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-300 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">
+                  <Wallet className="w-3.5 h-3.5" /> Modo Caixa Interno
+                </span>
+                <Button size="sm" className="h-9 bg-violet-600 hover:bg-violet-700" onClick={abrirLancStandalone}>
+                  <Plus className="w-3.5 h-3.5 mr-1.5" />Novo lançamento
+                </Button>
+              </>
+            ) : (
+              <>
+                {contaBancariaId && modoData === "mes" && mesSel != null && mesesStatus[mesSel] !== "vazio" && (
+                  mesesStatus[mesSel] === "consolidado" ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9"
+                      disabled={desconsolidarMut.isPending}
+                      onClick={() => desconsolidarMut.mutate({ companyId, contaBancariaId: parseInt(contaBancariaId), dataInicio, dataFim })}
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                      {desconsolidarMut.isPending ? "Reabrindo..." : `Desconsolidar ${MESES[mesSel - 1]}`}
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 border-green-600 text-green-700 hover:bg-green-50"
+                      disabled={consolidarMut.isPending}
+                      onClick={() => consolidarMut.mutate({ companyId, contaBancariaId: parseInt(contaBancariaId), dataInicio, dataFim })}
+                    >
+                      <CheckCircle className="w-3.5 h-3.5 mr-1.5" />
+                      {consolidarMut.isPending ? "Consolidando..." : `Consolidar ${MESES[mesSel - 1]}`}
+                    </Button>
+                  )
+                )}
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-9"
-                  disabled={desconsolidarMut.isPending}
-                  onClick={() => desconsolidarMut.mutate({ companyId, contaBancariaId: parseInt(contaBancariaId), dataInicio, dataFim })}
+                  className="h-9 border-teal-600 text-teal-700 hover:bg-teal-50"
+                  onClick={() => setShowConferirCheques(true)}
+                  title="Cheques compensados que conferem com o extrato e ainda não foram conciliados — revise e confirme em lote"
                 >
-                  <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
-                  {desconsolidarMut.isPending ? "Reabrindo..." : `Desconsolidar ${MESES[mesSel - 1]}`}
+                  <Link2 className="w-3.5 h-3.5 mr-1.5" />Conferir cheques
                 </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-9 border-green-600 text-green-700 hover:bg-green-50"
-                  disabled={consolidarMut.isPending}
-                  onClick={() => consolidarMut.mutate({ companyId, contaBancariaId: parseInt(contaBancariaId), dataInicio, dataFim })}
-                >
-                  <CheckCircle className="w-3.5 h-3.5 mr-1.5" />
-                  {consolidarMut.isPending ? "Consolidando..." : `Consolidar ${MESES[mesSel - 1]}`}
+                <Button size="sm" className="h-9" onClick={() => { setShowImport(true); setImportConta(contaBancariaId); }}>
+                  <Upload className="w-3.5 h-3.5 mr-1.5" />Importar Extrato
                 </Button>
-              )
-            )}
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-9 border-teal-600 text-teal-700 hover:bg-teal-50"
-              onClick={() => setShowConferirCheques(true)}
-              title="Cheques compensados que conferem com o extrato e ainda não foram conciliados — revise e confirme em lote"
-            >
-              <Link2 className="w-3.5 h-3.5 mr-1.5" />Conferir cheques
-            </Button>
-            <Button size="sm" className="h-9" onClick={() => { setShowImport(true); setImportConta(contaBancariaId); }}>
-              <Upload className="w-3.5 h-3.5 mr-1.5" />Importar Extrato
-            </Button>
-            {contaBancariaId && (statements ?? []).length > 0 && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-9 border-red-500 text-red-600 hover:bg-red-50"
-                disabled={limparMut.isPending}
-                onClick={() => setConfirmLimpar(true)}
-              >
-                <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-                {limparMut.isPending ? "Limpando..." : "Limpar extrato"}
-              </Button>
+                {contaBancariaId && (statements ?? []).length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 border-red-500 text-red-600 hover:bg-red-50"
+                    disabled={limparMut.isPending}
+                    onClick={() => setConfirmLimpar(true)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                    {limparMut.isPending ? "Limpando..." : "Limpar extrato"}
+                  </Button>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -2282,6 +2311,179 @@ export default function FinanceiroConciliacao() {
                 </div>
               );
             })()}
+          </div>
+        ) : contaSelecionadaCaixaInterno ? (
+          /* ══════════════════════════════════════════════════════════════
+             Rev. 3398 — MODO CAIXA INTERNO
+             Conta sem extrato bancário (dinheiro, cheques de terceiros,
+             pagamentos informais). Nenhum OFX/CSV para importar.
+             O usuário registra entradas/saídas normalmente via
+             "Novo lançamento" e confirma cada uma manualmente.
+             ══════════════════════════════════════════════════════════════ */
+          <div className="space-y-4">
+            {/* Banner explicativo */}
+            <div className="rounded-2xl border border-violet-200 bg-violet-50/70 p-5 flex items-start gap-4">
+              <div className="h-12 w-12 rounded-xl bg-violet-100 flex items-center justify-center shrink-0">
+                <Wallet className="h-6 w-6 text-violet-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-base font-bold text-violet-800 mb-1">Conta Caixa Interno — sem extrato bancário</p>
+                <p className="text-sm text-violet-700 leading-relaxed">
+                  Esta conta controla movimentações que <strong>não passam pelo banco</strong>: dinheiro, cheques de clientes, pagamentos informais etc.
+                  Registre os lançamentos normalmente pelo botão <strong>"Novo lançamento"</strong> e clique em <strong>"Confirmar"</strong> em cada um que você já verificou fisicamente.
+                </p>
+              </div>
+              <Button size="sm" className="shrink-0 h-9 bg-violet-600 hover:bg-violet-700" onClick={abrirLancStandalone}>
+                <Plus className="w-3.5 h-3.5 mr-1.5" />Novo lançamento
+              </Button>
+            </div>
+
+            {/* KPIs do período */}
+            {!caixaLoading && !caixaIsError && caixaData && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                  <p className="text-[11px] text-emerald-700 font-medium flex items-center gap-1"><ArrowDownCircle className="w-3.5 h-3.5" /> Entradas</p>
+                  <p className="text-xl font-bold text-emerald-700">{formatBRL(caixaData.totalEntradas ?? 0)}</p>
+                </div>
+                <div className="rounded-xl border border-red-200 bg-red-50/60 p-4">
+                  <p className="text-[11px] text-red-700 font-medium flex items-center gap-1"><ArrowUpCircle className="w-3.5 h-3.5" /> Saídas</p>
+                  <p className="text-xl font-bold text-red-600">{formatBRL(caixaData.totalSaidas ?? 0)}</p>
+                </div>
+                <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+                  <p className="text-[11px] text-amber-700 font-medium flex items-center gap-1"><CircleDot className="w-3.5 h-3.5" /> A confirmar</p>
+                  <p className="text-xl font-bold text-amber-700">{(caixaData.aConfirmar ?? []).length}</p>
+                </div>
+                <div className="rounded-xl border border-green-200 bg-green-50/60 p-4">
+                  <p className="text-[11px] text-green-700 font-medium flex items-center gap-1"><CircleCheck className="w-3.5 h-3.5" /> Confirmadas</p>
+                  <p className="text-xl font-bold text-green-700">{(caixaData.confirmadas ?? []).length}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Loading / Error */}
+            {caixaLoading && (
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-10 text-center text-gray-400 text-sm flex items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin" /> Carregando lançamentos do caixa...
+                </CardContent>
+              </Card>
+            )}
+            {caixaIsError && (
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-6 text-center">
+                  <AlertCircle className="w-8 h-8 mx-auto mb-2 text-red-400" />
+                  <p className="text-sm text-red-700 font-medium">Não foi possível carregar os lançamentos.</p>
+                  <p className="text-xs text-gray-500 mt-1">{(caixaError as any)?.message || "Tente novamente."}</p>
+                  <Button size="sm" variant="outline" onClick={() => refetchCaixa()} className="mt-3 border-red-300 text-red-700 hover:bg-red-100">Tentar de novo</Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* ── A CONFIRMAR ── */}
+            {!caixaLoading && caixaData && (
+              <>
+                <Card className="border-0 shadow-sm">
+                  <CardContent className="p-0">
+                    <div className="flex items-center gap-2 px-5 py-3 border-b border-amber-100 bg-amber-50/60 rounded-t-xl">
+                      <CircleDot className="w-4 h-4 text-amber-600" />
+                      <span className="text-sm font-semibold text-amber-800">A confirmar</span>
+                      <span className="ml-auto text-xs text-amber-600 bg-amber-100 rounded-full px-2 py-0.5 font-medium">{(caixaData.aConfirmar ?? []).length} lançamento(s)</span>
+                    </div>
+                    {(caixaData.aConfirmar ?? []).length === 0 ? (
+                      <div className="p-8 text-center text-gray-400 text-sm">
+                        <CircleCheck className="w-10 h-10 mx-auto mb-3 text-gray-200" />
+                        Tudo confirmado! Nenhum lançamento pendente no período.
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-amber-50">
+                        {(caixaData.aConfirmar ?? []).map((e: any) => {
+                          const isReceita = e.tipo === "receita";
+                          const valor = Math.abs(Number(e.valorRealizado ?? e.valorPrevisto) || 0);
+                          const nome = e.fornecedorNome || e.clienteNome || e.descricao || `Lançamento #${e.id}`;
+                          return (
+                            <div key={e.id} className="flex items-center gap-3 px-5 py-3 hover:bg-amber-50/40 transition-colors">
+                              <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${isReceita ? "bg-emerald-100" : "bg-red-100"}`}>
+                                {isReceita ? <ArrowDownCircle className="h-4 w-4 text-emerald-600" /> : <ArrowUpCircle className="h-4 w-4 text-red-500" />}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-800 truncate">{nome}</p>
+                                <p className="text-xs text-gray-400 flex items-center gap-2 flex-wrap">
+                                  <span>{e.dataCompetencia ? String(e.dataCompetencia).slice(0,10).split("-").reverse().join("/") : "—"}</span>
+                                  {e.obraNome && <span className="text-gray-500">· {e.obraNome}</span>}
+                                  <span className={`font-medium ${e.status === "pago" || e.status === "recebido" ? "text-emerald-600" : "text-amber-600"}`}>· {e.status}</span>
+                                </p>
+                              </div>
+                              <span className={`text-sm font-bold ${isReceita ? "text-emerald-700" : "text-red-600"}`}>
+                                {isReceita ? "+" : "-"}{formatBRL(valor)}
+                              </span>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 border-emerald-400 text-emerald-700 hover:bg-emerald-50 shrink-0"
+                                disabled={confirmarEntradaMut.isPending}
+                                onClick={() => confirmarEntradaMut.mutate({ companyId, entryId: e.id })}
+                              >
+                                <Check className="w-3.5 h-3.5 mr-1" />Confirmar
+                              </Button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* ── CONFIRMADAS ── */}
+                <Card className="border-0 shadow-sm">
+                  <CardContent className="p-0">
+                    <div className="flex items-center gap-2 px-5 py-3 border-b border-green-100 bg-green-50/60 rounded-t-xl">
+                      <CircleCheck className="w-4 h-4 text-green-600" />
+                      <span className="text-sm font-semibold text-green-800">Confirmadas</span>
+                      <span className="ml-auto text-xs text-green-600 bg-green-100 rounded-full px-2 py-0.5 font-medium">{(caixaData.confirmadas ?? []).length} lançamento(s)</span>
+                    </div>
+                    {(caixaData.confirmadas ?? []).length === 0 ? (
+                      <div className="p-8 text-center text-gray-400 text-sm">Nenhum lançamento confirmado neste período.</div>
+                    ) : (
+                      <div className="divide-y divide-green-50">
+                        {(caixaData.confirmadas ?? []).map((e: any) => {
+                          const isReceita = e.tipo === "receita";
+                          const valor = Math.abs(Number(e.valorRealizado ?? e.valorPrevisto) || 0);
+                          const nome = e.fornecedorNome || e.clienteNome || e.descricao || `Lançamento #${e.id}`;
+                          return (
+                            <div key={e.id} className="flex items-center gap-3 px-5 py-3 hover:bg-green-50/40 transition-colors">
+                              <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${isReceita ? "bg-emerald-100" : "bg-red-100"}`}>
+                                {isReceita ? <ArrowDownCircle className="h-4 w-4 text-emerald-600" /> : <ArrowUpCircle className="h-4 w-4 text-red-500" />}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-800 truncate">{nome}</p>
+                                <p className="text-xs text-gray-400 flex items-center gap-2 flex-wrap">
+                                  <span>{e.dataCompetencia ? String(e.dataCompetencia).slice(0,10).split("-").reverse().join("/") : "—"}</span>
+                                  {e.obraNome && <span className="text-gray-500">· {e.obraNome}</span>}
+                                  <CircleCheck className="w-3 h-3 text-green-500" /><span className="text-green-600 font-medium">confirmado</span>
+                                </p>
+                              </div>
+                              <span className={`text-sm font-bold ${isReceita ? "text-emerald-700" : "text-red-600"}`}>
+                                {isReceita ? "+" : "-"}{formatBRL(valor)}
+                              </span>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 text-amber-600 hover:bg-amber-50 shrink-0"
+                                title="Desfazer confirmação"
+                                disabled={desconciliarEntradaMut.isPending}
+                                onClick={() => desconciliarEntradaMut.mutate({ companyId, entryId: e.id })}
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </div>
         ) : (
           <>

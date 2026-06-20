@@ -3830,6 +3830,13 @@ Regras:
           await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_obra_sn_ativo ON obra_sns ("companyId", "obraId", sn) WHERE status = 'ativo'`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3272 dedup obra_sns:`, e?.message || e); }
 
+        // Rev. 3398 — Conta Caixa (sem extrato): flag para contas sem extrato bancário.
+        // ADD COLUMN IF NOT EXISTS é aditivo (R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`ALTER TABLE company_bank_accounts ADD COLUMN IF NOT EXISTS "caixaInterno" smallint DEFAULT 0`);
+          console.log(`[SyncSchema+] Rev. 3398: coluna "caixaInterno" garantida em company_bank_accounts (conta caixa sem extrato).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3398 company_bank_accounts.caixaInterno:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

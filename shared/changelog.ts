@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3398 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CONTA CAIXA INTERNO (SEM EXTRATO
+ * BANCÁRIO). BACKEND ADITIVO + SCHEMA ADITIVO + FRONT · ZERO ALTER/DROP/DELETE.**
+ *
+ * PEDIDO (piloto FC): suporte a contas de "caixa" (dinheiro em espécie, cheques de
+ * clientes, pagamentos informais) que não têm extrato bancário para importar.
+ *
+ * SCHEMA (aditivo):
+ * - `drizzle/schema.ts`: coluna `caixaInterno: smallint("caixaInterno").default(0)` em
+ *   `companyBankAccounts`. Default 0 = conta bancária normal; 1 = Caixa Interno.
+ * - `server/_core/index.ts` [SyncSchema+]: `ALTER TABLE company_bank_accounts ADD COLUMN IF
+ *   NOT EXISTS "caixaInterno" smallint DEFAULT 0` — auto-cure em todo restart.
+ *
+ * BACKEND (aditivo, zero DELETE/DROP):
+ * - `server/routers/folhaPagamento.ts`: `caixaInterno: z.number().optional()` adicionado em
+ *   `criarContaBancaria` e `atualizarContaBancaria`.
+ * - `server/routers/financial.ts`:
+ *   · `getBankAccounts`: SELECT agora inclui a coluna `"caixaInterno"`.
+ *   · `getEntradasCaixaInterno`: nova query — retorna lançamentos da conta no período,
+ *     separados em `aConfirmar` (conciliado=0) e `confirmadas` (conciliado=1), com totais
+ *     `totalEntradas` e `totalSaidas`. JOIN com obras/fornecedores/clientes p/ exibição.
+ *   · `confirmarEntradaCaixa`: marca `conciliado=1` em `financial_entries` (com tenant guard
+ *     assertCompanyAccess + validação que o entry pertence à conta caixa da empresa).
+ *   · `desconciliarEntradaCaixa`: desfaz a confirmação (conciliado=0, sem DELETE).
+ *
+ * FRONTEND:
+ * - `client/src/pages/ContasBancarias.tsx`:
+ *   · `ContaForm` + `emptyForm` + `openEdit` ganham campo `caixaInterno: boolean`.
+ *   · `handleSave` passa `caixaInterno: form.caixaInterno ? 1 : 0` em create e update.
+ *   · Lista de contas: badge roxo "Caixa Interno" (Wallet) quando `caixaInterno=1`.
+ *   · Formulário de edição (seção "Recursos da conta"): novo card checkbox "Conta Caixa
+ *     (sem extrato bancário)" — borda/fundo violeta quando ativo.
+ * - `client/src/pages/financeiro/FinanceiroConciliacao.tsx`:
+ *   · `contaSelecionadaCaixaInterno`: flag derivado de `bankAccounts`.
+ *   · Query `getEntradasCaixaInterno` + mutations `confirmarEntradaMut` /
+ *     `desconciliarEntradaMut` condicionadas ao flag.
+ *   · `getConciliacaoReport` habilitado apenas quando `!contaSelecionadaCaixaInterno`.
+ *   · Header: quando caixaInterno, substituí Importar/Consolidar/Cheques/Limpar pelo
+ *     badge "Modo Caixa Interno" + botão "Novo lançamento" (violeta).
+ *   · Branch principal: inserido terceiro ramo `contaSelecionadaCaixaInterno` entre o
+ *     Panorama Geral e a conciliação normal. Mostra:
+ *     - Banner explicativo + botão "Novo lançamento".
+ *     - KPIs (Entradas / Saídas / A confirmar / Confirmadas).
+ *     - Lista "A confirmar": botão "Confirmar" → `confirmarEntradaMut`.
+ *     - Lista "Confirmadas": botão RotateCcw "Desfazer" → `desconciliarEntradaMut`.
+ *     - Loading / Error states com retry.
+ *
  * Rev. 3397 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FIX CRASH "Cannot read properties of
  * null (reading 'id')" NA TELA DE CONCILIAÇÃO. 100% FRONTEND · ZERO BACKEND/SCHEMA.**
  * - CAUSA RAIZ: Rev. 3395 introduziu o modo "standalone" (lançamento sem extrato) e adicionou

@@ -29,6 +29,7 @@ type ContaForm = {
   tipoConta: "corrente" | "poupanca";
   temTalao: boolean;
   temAplicacaoAutomatica: boolean;
+  caixaInterno: boolean;
   saldoInicial: string;
   saldoInicialData: string;
   // Rev. 3384 — Contatos da agência
@@ -47,6 +48,7 @@ const emptyForm: ContaForm = {
   tipoConta: "corrente",
   temTalao: false,
   temAplicacaoAutomatica: false,
+  caixaInterno: false,
   saldoInicial: "",
   saldoInicialData: "",
   nomeGerente: "",
@@ -133,6 +135,7 @@ export default function ContasBancarias() {
       tipoConta: conta.tipoConta || "corrente",
       temTalao: Number(conta.temTalao) === 1,
       temAplicacaoAutomatica: Number(conta.temAplicacaoAutomatica) === 1,
+      caixaInterno: Number(conta.caixaInterno) === 1,
       saldoInicial: conta.saldoInicial != null ? String(conta.saldoInicial) : "",
       saldoInicialData: conta.saldoInicialData ? String(conta.saldoInicialData).slice(0, 10) : "",
       nomeGerente: conta.nomeGerente || "",
@@ -183,6 +186,7 @@ export default function ContasBancarias() {
         tipoConta: form.tipoConta,
         temTalao: form.temTalao ? 1 : 0,
         temAplicacaoAutomatica: form.temAplicacaoAutomatica ? 1 : 0,
+        caixaInterno: form.caixaInterno ? 1 : 0,
         ...saldoFields,
         ...contatoFields,
       });
@@ -194,6 +198,7 @@ export default function ContasBancarias() {
         tipoConta: form.tipoConta,
         temTalao: form.temTalao ? 1 : 0,
         temAplicacaoAutomatica: form.temAplicacaoAutomatica ? 1 : 0,
+        caixaInterno: form.caixaInterno ? 1 : 0,
         ...saldoFields,
         ...contatoFields,
       });
@@ -342,6 +347,11 @@ export default function ContasBancarias() {
                           {Number(conta.temAplicacaoAutomatica) === 1 && (
                             <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-700 gap-1">
                               <TrendingUp className="h-3 w-3" /> Aplicação automática
+                            </Badge>
+                          )}
+                          {Number(conta.caixaInterno) === 1 && (
+                            <Badge variant="outline" className="text-xs border-violet-300 text-violet-700 gap-1">
+                              <Wallet className="h-3 w-3" /> Caixa Interno
                             </Badge>
                           )}
                         </div>
@@ -632,6 +642,32 @@ export default function ContasBancarias() {
                 </span>
                 {form.temAplicacaoAutomatica && (
                   <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-100 rounded-full px-2 py-0.5">
+                    <Check className="h-3 w-3" /> Ativo
+                  </span>
+                )}
+              </label>
+
+              {/* Caixa Interno (sem extrato bancário) — Rev. 3398 */}
+              <label
+                className={`flex items-start gap-3 rounded-xl border-2 p-4 cursor-pointer transition ${
+                  form.caixaInterno ? "border-violet-300 bg-violet-50/60" : "border-slate-200 bg-white hover:border-slate-300"
+                }`}
+              >
+                <Checkbox
+                  checked={form.caixaInterno}
+                  onCheckedChange={(v) => setForm(f => ({ ...f, caixaInterno: v === true }))}
+                  className="mt-0.5"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                    <Wallet className="h-4 w-4 text-violet-600" /> Conta Caixa (sem extrato bancário)
+                  </span>
+                  <span className="block text-xs text-muted-foreground mt-1 leading-relaxed">
+                    Use para controlar <span className="font-medium">recebimentos em dinheiro</span>, cheques de clientes, pagamentos informais e outras movimentações que não têm extrato bancário. Na Conciliação, esta conta funciona no <span className="font-medium">Modo Caixa</span>: sem importar extrato — você registra os lançamentos normalmente e <span className="font-medium">confirma manualmente</span> cada entrada ou saída conferida.
+                  </span>
+                </span>
+                {form.caixaInterno && (
+                  <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold text-violet-700 bg-violet-100 rounded-full px-2 py-0.5">
                     <Check className="h-3 w-3" /> Ativo
                   </span>
                 )}

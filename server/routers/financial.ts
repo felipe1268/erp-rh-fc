@@ -4751,7 +4751,7 @@ export const financialRouter = router({
     for (const cid of ids) await _assertFinanceiroCompanyAccess(ctx.user, cid);
     const res = await dbExecute(db, 
       `SELECT id, "companyId", banco, "codigoBanco", agencia, conta,
-              "tipoConta" AS tipo, apelido AS descricao, ativo, "temTalao"
+              "tipoConta" AS tipo, apelido AS descricao, ativo, "temTalao", "caixaInterno"
        FROM company_bank_accounts WHERE "companyId" IN (${inlineIds(ids)}) AND "deletedAt" IS NULL AND ativo = 1 ORDER BY banco ASC`,
       []
     );
@@ -5209,6 +5209,104 @@ export const financialRouter = router({
         overrideNatureza: internoCfg.overrides.get(Number(r.id)) ?? null,
       })),
     };
+  }),
+
+  // Rev. 3398 — CAIXA INTERNO: lista todas as entradas de uma conta "caixa" (sem extrato).
+  // Retorna entries divididas em: a_confirmar (conciliado=0) e confirmadas (conciliado=1).
+  // READ-ONLY — não concilia nem baixa nada.
+  getEntradasCaixaInterno: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    contaBancariaId: z.number(),
+    dataInicio: z.string(),
+    dataFim: z.string(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    // Verifica que a conta existe, pertence à empresa e é caixaInterno.
+    const contaRes = await dbExecute(db,
+      `SELECT id, "caixaInterno" FROM company_bank_accounts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+      [input.contaBancariaId, input.companyId]);
+    const conta = rows(contaRes)[0] as any;
+    if (!conta) throw new TRPCError({ code: "NOT_FOUND", message: "Conta bancária não encontrada." });
+    if (Number(conta.caixaInterno) !== 1) throw new TRPCError({ code: "BAD_REQUEST", message: "Esta conta não é do tipo Caixa Interno." });
+    const res = await dbExecute(db,
+      `SELECT e.id,
+              e.data_competencia    AS "dataCompetencia",
+              e.descricao,
+              e.tipo,
+              e.natureza,
+              e.valor_previsto      AS "valorPrevisto",
+              e.valor_realizado     AS "valorRealizado",
+              e.status,
+              e.conciliado,
+              e.fornecedor_nome     AS "fornecedorNome",
+              e.cliente_nome        AS "clienteNome",
+              e.obra_nome           AS "obraNome",
+              e.forma_pagamento     AS "formaPagamento",
+              e.criado_por_nome     AS "criadoPorNome",
+              e.created_at          AS "createdAt"
+         FROM financial_entries e
+        WHERE e.company_id = $1
+          AND e.conta_bancaria_id = $2
+          AND e.status <> 'cancelado'
+          AND e.data_competencia >= $3
+          AND e.data_competencia <= $4
+        ORDER BY e.data_competencia DESC, e.id DESC`,
+      [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim]);
+    const entries = rows(res) as any[];
+    const aConfirmar = entries.filter(e => Number(e.conciliado) !== 1);
+    const confirmadas = entries.filter(e => Number(e.conciliado) === 1);
+    const totalEntradas = entries.filter(e => e.tipo === "receita").reduce((s, e) => s + Math.abs(Number(e.valorRealizado ?? e.valorPrevisto) || 0), 0);
+    const totalSaidas   = entries.filter(e => e.tipo === "despesa").reduce((s, e) => s + Math.abs(Number(e.valorRealizado ?? e.valorPrevisto) || 0), 0);
+    return { aConfirmar, confirmadas, totalEntradas, totalSaidas, total: entries.length };
+  }),
+
+  // Rev. 3398 — confirmar entrada de caixa interno: marca conciliado=1 sem extrato bancário.
+  confirmarEntradaCaixa: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    entryId: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    // Verifica a entry existe, pertence à empresa E à conta caixaInterno.
+    const entryRes = await dbExecute(db,
+      `SELECT e.id, e.conta_bancaria_id AS "contaBancariaId", cba."caixaInterno"
+         FROM financial_entries e
+         JOIN company_bank_accounts cba ON cba.id = e.conta_bancaria_id
+        WHERE e.id=$1 AND e.company_id=$2 AND e.status<>'cancelado' LIMIT 1`,
+      [input.entryId, input.companyId]);
+    const entry = rows(entryRes)[0] as any;
+    if (!entry) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado." });
+    if (Number(entry.caixaInterno) !== 1) throw new TRPCError({ code: "BAD_REQUEST", message: "Esta conta não é do tipo Caixa Interno." });
+    await dbExecute(db,
+      `UPDATE financial_entries SET conciliado=1, data_conciliacao=CURRENT_DATE WHERE id=$1 AND company_id=$2`,
+      [input.entryId, input.companyId]);
+    return { success: true };
+  }),
+
+  // Rev. 3398 — desfazer confirmação de entrada de caixa interno.
+  desconciliarEntradaCaixa: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    entryId: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const entryRes = await dbExecute(db,
+      `SELECT e.id, cba."caixaInterno"
+         FROM financial_entries e
+         JOIN company_bank_accounts cba ON cba.id = e.conta_bancaria_id
+        WHERE e.id=$1 AND e.company_id=$2 LIMIT 1`,
+      [input.entryId, input.companyId]);
+    const entry = rows(entryRes)[0] as any;
+    if (!entry) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado." });
+    if (Number(entry.caixaInterno) !== 1) throw new TRPCError({ code: "BAD_REQUEST", message: "Esta conta não é do tipo Caixa Interno." });
+    await dbExecute(db,
+      `UPDATE financial_entries SET conciliado=0, data_conciliacao=NULL WHERE id=$1 AND company_id=$2`,
+      [input.entryId, input.companyId]);
+    return { success: true };
   }),
 
   // Rev. 3319 — PANORAMA GERAL DO MÊS (sem conta selecionada). Roda o MESMO motor de

@@ -2471,6 +2471,7 @@ export const folhaPagamentoRouter = router({
       cnpjTitular: z.string().optional(),
       temTalao: z.number().optional(),
       temAplicacaoAutomatica: z.number().optional(),
+      caixaInterno: z.number().optional(),
       saldoInicial: z.number().optional(),
       saldoInicialData: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       // Rev. 3384 — Contatos da agência
@@ -2508,6 +2509,7 @@ export const folhaPagamentoRouter = router({
       cnpjTitular: z.string().optional(),
       temTalao: z.number().optional(),
       temAplicacaoAutomatica: z.number().optional(),
+      caixaInterno: z.number().optional(),
       ativo: z.number().optional(),
       saldoInicial: z.number().optional(),
       saldoInicialData: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
