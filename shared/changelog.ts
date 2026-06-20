@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3370 — **FINANCEIRO / DASHBOARD "CONTROLE DE CHEQUES" · NOVA SEÇÃO "CHEQUES DEVOLVIDOS" QUE MOSTRA OS CHEQUES
+ * SEM FUNDO, SUSTADOS, JÁ COMPENSADOS DEPOIS E OUTROS MOTIVOS — COM KPIs, GRÁFICO POR MOTIVO (PIZZA) E POR SITUAÇÃO
+ * (BARRA) + DRILL-IN POR CHEQUE (Nº, FORNECEDOR/OBRA/NF, MOTIVO, DATAS, SITUAÇÃO). 100% FRONT (NOVA QUERY READ-ONLY
+ * A ENDPOINT EXISTENTE) · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE · NADA CONCILIA/BAIXA SOZINHO.**
+ * - PEDIDO (print do iPad na tela "Dashboard · Controle de Cheques", ao lado do gráfico "Cheques por status"):
+ *   "Coloque aqui os cheques sem fundo, os compensados ou outros motivos." Ou seja: trazer os cheques DEVOLVIDOS
+ *   (com seus motivos e a situação de quitação) para o dashboard de cheques, onde hoje só apareciam status
+ *   Compensado/Pendente/Indefinido.
+ * - DESCOBERTA-CHAVE: os MOTIVOS de devolução (sem fundo / sustado / etc.) NÃO EXISTEM na tabela `financial_cheques`.
+ *   Eles são detectados DINAMICAMENTE no extrato bancário (`bank_statement_lines`) pela função `detectarParesEstorno`
+ *   (`shared/chequeMotivos.ts`), que pareia DÉBITO (compensação do cheque) + CRÉDITO (devolução do mesmo cheque) e
+ *   traduz a alínea Bacen. Por isso a fonte da nova seção é a CONCILIAÇÃO, não o cadastro de cheques: o dashboard
+ *   chama `trpc.financial.getConciliacaoReportGeral` (company-wide, já existente) com a janela do ANO inteiro
+ *   (`${ano}-01-01`..`${ano}-12-31`) e lê o array `chequesDevolvidos` (campos `chequeNumero`, `fornecedor`,
+ *   `obraNome`, `nf`, `motivoCodigo`/`motivoTexto`/`motivoGrupo`/`motivoSustado`, `dataDebito`, `dataCredito`,
+ *   `valorCents` e `resolucao{tipo}`).
+ * - FRONT (`client/src/pages/financeiro/dashboards/DashCheques.tsx`): nova query `getConciliacaoReportGeral`
+ *   (enabled !!companyId, incluída no refetch geral) + helpers de módulo (`devValor` = valorCents/100,
+ *   `devResolvido`, `devSituacao`/`devSituacaoCor` p/ reapresentado=compensado/quitado-PIX-TED/sem-quitação,
+ *   `devMotivoLabel`/`devMotivoCor` via `GRUPO_DEVOLUCAO_LABEL` importado de `@shared/chequeMotivos`) + `DEV_COLS`
+ *   (colunas próprias do drill-in, distintas das do cheque normal). useMemos: `devolvidos` (normaliza `valor`
+ *   positivo), `devStats` (qtd/total + baldes sem fundos/sustados/resolvidos/pendentes), `devPorMotivo`
+ *   (agrupado por `motivoGrupo`) e `devPorSituacao` (reapresentado/pix/pendente). Nova seção após o grid de status
+ *   com 4 KPIs (Devolvidos no ano · Sem fundos · Sustados/contraordem · Compensados depois), pizza "Devolvidos por
+ *   motivo", barra "Situação dos devolvidos" e um 2º `DetailDialog` (`detDev`) com `DEV_COLS`. A seção só renderiza
+ *   quando há devolvidos (`devolvidos.length > 0`); se o endpoint falhar/voltar vazio, degrada escondendo a seção.
+ * - PREFERÊNCIA RESPEITADA: conciliação SÓ SUGESTIVA — a seção é puramente informativa/análise; NADA concilia/baixa.
+ * - VALIDAÇÃO: tsc limpo no arquivo tocado (só ruído pré-existente em `changelog.ts`). App rodando, Neon conectado.
+ *
  * Rev. 3369 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · "CHEQUES DEVOLVIDOS" NO PANORAMA GERAL DO MÊS VOLTOU A MOSTRAR
  * AS INFORMAÇÕES DE CADA CHEQUE (Nº, FORNECEDOR/OBRA/NF, MOTIVO DA DEVOLUÇÃO, DATAS E SITUAÇÃO) — ANTES SÓ APARECIA
  * "—  —  R$ valor" EM TODA LINHA. 100% FRONT (CORREÇÃO DE NOMES DE CAMPO) · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**

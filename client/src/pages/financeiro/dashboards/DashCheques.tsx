@@ -7,11 +7,12 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   PieChart, Pie, Cell,
 } from "recharts";
-import { Banknote, ListChecks, CheckCircle2, AlertTriangle, Wallet, Receipt, Clock, BarChart3 } from "lucide-react";
+import { Banknote, ListChecks, CheckCircle2, AlertTriangle, Wallet, Receipt, Clock, BarChart3, Ban, XCircle } from "lucide-react";
 import {
   MESES_ABREV, PALETTE, formatBRL, formatBRLCompact, DashHeader, KpiCard, ChartCard, EmptyState, BRLTooltip,
   ComparativoAnual, DetailDialog, DetailColumn,
 } from "./_kit";
+import { GRUPO_DEVOLUCAO_LABEL } from "@shared/chequeMotivos";
 
 const DESTINO = "/financeiro/cheques";
 const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ") : "—");
@@ -79,6 +80,44 @@ const COLS: DetailColumn[] = [
   { key: "valor", label: "Valor", align: "right", brl: true },
 ];
 
+// ── Cheques DEVOLVIDOS — fonte ÚNICA: conciliação bancária (getConciliacaoReportGeral).
+// Os motivos de devolução (sem fundo/sustado/etc.) NÃO existem na tabela de cheques; só
+// são detectados no extrato pareando débito (compensação) + crédito (devolução) do mesmo
+// cheque. Tudo READ-ONLY — nada concilia/baixa (conciliação só sugestiva).
+const devValor = (d: any): number => (Number(d?.valorCents) || 0) / 100;
+const devResolvido = (d: any): boolean => d?.resolucao?.tipo === "reapresentado" || d?.resolucao?.tipo === "pix";
+const devSituacao = (tipo?: string): string =>
+  tipo === "reapresentado" ? "Reapresentado (compensado)" : tipo === "pix" ? "Quitado (PIX/TED)" : "Sem quitação";
+const devSituacaoCor = (tipo?: string): string =>
+  tipo === "reapresentado" ? "#16a34a" : tipo === "pix" ? "#0ea5e9" : "#ef4444";
+const devMotivoLabel = (d: any): string => {
+  const g = d?.motivoGrupo as keyof typeof GRUPO_DEVOLUCAO_LABEL | null;
+  return g && GRUPO_DEVOLUCAO_LABEL[g] ? GRUPO_DEVOLUCAO_LABEL[g] : "Não informado";
+};
+const devMotivoCor = (label: string): string =>
+  label.startsWith("Sem fundos") ? "#dc2626"
+    : label.startsWith("Sustação") ? "#b91c1c"
+    : label.startsWith("Impedimento") ? "#f59e0b"
+    : label.startsWith("Irregularidade") ? "#a855f7"
+    : label.startsWith("Apresentação") ? "#0ea5e9"
+    : label.startsWith("Operacional") ? "#64748b"
+    : "#94a3b8";
+const devPill = (tipo?: string) => (
+  <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white whitespace-nowrap"
+    style={{ backgroundColor: devSituacaoCor(tipo), printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" } as any}>
+    {devSituacao(tipo)}
+  </span>
+);
+const DEV_COLS: DetailColumn[] = [
+  { key: "chequeNumero", label: "Cheque", format: (v, row) => v || row?.doc || "—" },
+  { key: "fornecedor", label: "Fornecedor / Obra", format: (v, row) => v || row?.obraNome || row?.nf || "—" },
+  { key: "motivoTexto", label: "Motivo", format: (v, row) => (v ? `${row?.motivoCodigo ? `${row.motivoCodigo} · ` : ""}${v}` : "—") },
+  { key: "dataDebito", label: "Compensação", format: (v) => dataBR(v) },
+  { key: "dataCredito", label: "Devolução", format: (v) => dataBR(v) },
+  { key: "resolucao", label: "Situação", align: "center", format: (_v, row) => devPill(row?.resolucao?.tipo) },
+  { key: "valor", label: "Valor", align: "right", brl: true },
+];
+
 export default function DashCheques() {
   const { companyId } = useCompany();
   const [, setLocation] = useLocation();
@@ -89,7 +128,13 @@ export default function DashCheques() {
   const { data: verif, refetch: r2 } = (trpc as any).cheques.verificarExtratoResumo.useQuery({ companyId, ano }, { enabled: !!companyId });
   const { data: lista, isLoading, refetch: r3 } = (trpc as any).cheques.listar.useQuery({ companyId, ano, limit: 2000 }, { enabled: !!companyId });
   const { data: listaPrev } = (trpc as any).cheques.listar.useQuery({ companyId, ano: ano - 1, limit: 2000 }, { enabled: !!companyId });
-  const refetch = () => { r1(); r2(); r3(); };
+  // Cheques devolvidos do ANO — motivos só existem no extrato (conciliação), não na tabela
+  // de cheques. Janela = ano inteiro. READ-ONLY (conciliação só sugestiva).
+  const { data: devReport, refetch: r4 } = (trpc as any).financial.getConciliacaoReportGeral.useQuery(
+    { companyId, dataInicio: `${ano}-01-01`, dataFim: `${ano}-12-31` },
+    { enabled: !!companyId },
+  );
+  const refetch = () => { r1(); r2(); r3(); r4(); };
 
   const rowsResumo: any[] = Array.isArray(resumo) ? resumo : [];
   const cheques: any[] = Array.isArray(lista) ? lista : [];
@@ -97,6 +142,8 @@ export default function DashCheques() {
 
   const [det, setDet] = useState<{ title: string; subtitle?: string; rows: any[] } | null>(null);
   const abrir = (title: string, subtitle: string, list: any[]) => setDet({ title, subtitle, rows: list });
+  const [detDev, setDetDev] = useState<{ title: string; subtitle?: string; rows: any[] } | null>(null);
+  const abrirDev = (title: string, subtitle: string, list: any[]) => setDetDev({ title, subtitle, rows: list });
 
   const kpis = useMemo(() => {
     const qtd = rowsResumo.reduce((s, x) => s + (Number(x.qtd) || 0), 0);
@@ -137,6 +184,48 @@ export default function DashCheques() {
     { name: "Conferidos no extrato", value: Number(verif?.valorJaConferidos) || 0, _kind: "conferido" },
     { name: "Divergências", value: Number(verif?.valorDivergencias) || 0, _kind: "divergente" },
   ]), [verif]);
+
+  // ── Cheques devolvidos (motivos do extrato) — read-only ──
+  const devolvidos = useMemo(() => {
+    const arr: any[] = Array.isArray(devReport?.chequesDevolvidos) ? devReport.chequesDevolvidos : [];
+    return arr.map((d) => ({ ...d, valor: devValor(d) }));
+  }, [devReport]);
+
+  const devStats = useMemo(() => {
+    const val = (a: any[]) => a.reduce((s, d) => s + (Number(d.valor) || 0), 0);
+    const semFundo = devolvidos.filter((d) => d.motivoGrupo === "sem_fundos");
+    const sustados = devolvidos.filter((d) => !!d.motivoSustado);
+    const resolvidos = devolvidos.filter((d) => devResolvido(d));
+    const pendentes = devolvidos.filter((d) => !devResolvido(d));
+    return {
+      qtd: devolvidos.length, total: val(devolvidos),
+      semFundo, sustados, resolvidos, pendentes,
+      valSemFundo: val(semFundo), valSustados: val(sustados), valResolvidos: val(resolvidos), valPendentes: val(pendentes),
+    };
+  }, [devolvidos]);
+
+  const devPorMotivo = useMemo(() => {
+    const m = new Map<string, { value: number; qtd: number }>();
+    for (const d of devolvidos) {
+      const k = devMotivoLabel(d);
+      const cur = m.get(k) || { value: 0, qtd: 0 };
+      cur.value += Number(d.valor) || 0; cur.qtd += 1;
+      m.set(k, cur);
+    }
+    return Array.from(m.entries()).map(([name, v]) => ({ name, value: v.value, qtd: v.qtd })).sort((a, b) => b.value - a.value);
+  }, [devolvidos]);
+
+  const devPorSituacao = useMemo(() => {
+    const order = ["reapresentado", "pix", "pendente"];
+    const m = new Map<string, { value: number; qtd: number }>();
+    for (const d of devolvidos) {
+      const t = devResolvido(d) ? d.resolucao.tipo : "pendente";
+      const cur = m.get(t) || { value: 0, qtd: 0 };
+      cur.value += Number(d.valor) || 0; cur.qtd += 1;
+      m.set(t, cur);
+    }
+    return order.filter((t) => m.has(t)).map((t) => ({ name: devSituacao(t), value: m.get(t)!.value, qtd: m.get(t)!.qtd, _tipo: t }));
+  }, [devolvidos]);
 
   const porMes = useMemo(() => MESES_ABREV.map((m, i) => ({ mes: m, Valor: serieAtual[i] })), [serieAtual]);
 
@@ -269,6 +358,68 @@ export default function DashCheques() {
                 </ResponsiveContainer>
               </ChartCard>
             </div>
+
+            {/* ───────── Cheques devolvidos por motivo ─────────
+                Fonte ÚNICA: conciliação bancária (motivos vivem no extrato, não na tabela
+                de cheques). READ-ONLY — nada concilia/baixa (conciliação só sugestiva). */}
+            {devolvidos.length > 0 && (
+              <>
+                <div className="flex items-center gap-2 pt-2">
+                  <div className="w-9 h-9 rounded-lg bg-red-100 text-red-700 flex items-center justify-center shrink-0">
+                    <Ban className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base md:text-lg font-bold text-slate-800">Cheques devolvidos</h2>
+                    <p className="text-xs text-slate-400">Sem fundo, sustados ou outros motivos · detectados no extrato · {ano} · clique para detalhar</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <KpiCard icon={AlertTriangle} label="Devolvidos no ano" value={String(devStats.qtd)} sub={formatBRL(devStats.total)} tone="bad"
+                    onClick={() => abrirDev("Cheques devolvidos", `Todos os devolvidos de ${ano}`, devolvidos)} />
+                  <KpiCard icon={Ban} label="Sem fundos" value={String(devStats.semFundo.length)} sub={formatBRL(devStats.valSemFundo)} tone="bad"
+                    onClick={() => abrirDev("Cheques sem fundos", "Motivo 11/12 — insuficiência de fundos", devStats.semFundo)} />
+                  <KpiCard icon={XCircle} label="Sustados / contraordem" value={String(devStats.sustados.length)} sub={formatBRL(devStats.valSustados)} tone="warn"
+                    onClick={() => abrirDev("Cheques sustados / contraordem", "Sustação ou oposição pelo emitente", devStats.sustados)} />
+                  <KpiCard icon={CheckCircle2} label="Compensados depois" value={String(devStats.resolvidos.length)} sub={formatBRL(devStats.valResolvidos)} tone="good"
+                    onClick={() => abrirDev("Devolvidos já quitados", "Reapresentados ou quitados via PIX/TED", devStats.resolvidos)} />
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <ChartCard title="Devolvidos por motivo" subtitle="Clique numa fatia para detalhar" onOpen={ir}>
+                    {devPorMotivo.length === 0 ? <EmptyState /> : (
+                      <ResponsiveContainer>
+                        <PieChart>
+                          <Pie data={devPorMotivo} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={95} innerRadius={55} paddingAngle={2}
+                            onClick={(d: any) => { const l = d?.payload?.name; abrirDev(`Devolvidos · ${l}`, "Por motivo de devolução", devolvidos.filter((x) => devMotivoLabel(x) === l)); }}>
+                            {devPorMotivo.map((s, i) => <Cell key={i} fill={devMotivoCor(s.name)} className="cursor-pointer" />)}
+                          </Pie>
+                          <Tooltip content={<BRLTooltip />} />
+                          <Legend wrapperStyle={{ fontSize: 12 }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    )}
+                  </ChartCard>
+
+                  <ChartCard title="Situação dos devolvidos" subtitle="Compensados depois × sem quitação · clique numa barra" onOpen={ir}>
+                    {devPorSituacao.length === 0 ? <EmptyState /> : (
+                      <ResponsiveContainer>
+                        <BarChart data={devPorSituacao} margin={{ top: 8, right: 8, left: 4, bottom: 0 }}
+                          onClick={(st) => barClick(st, (l) => { const b = devPorSituacao.find((x) => x.name === l); if (b) abrirDev(`Devolvidos · ${l}`, "Por situação de quitação", devolvidos.filter((x) => (devResolvido(x) ? x.resolucao.tipo : "pendente") === b._tipo)); })}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
+                          <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#64748b" }} interval={0} />
+                          <YAxis tickFormatter={formatBRLCompact} tick={{ fontSize: 11, fill: "#64748b" }} width={70} />
+                          <Tooltip content={<BRLTooltip />} cursor={{ fill: "#f1f5f9" }} />
+                          <Bar dataKey="value" name="Valor" radius={[4, 4, 0, 0]} maxBarSize={64} className="cursor-pointer">
+                            {devPorSituacao.map((s, i) => <Cell key={i} fill={devSituacaoCor(s._tipo)} />)}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </ChartCard>
+                </div>
+              </>
+            )}
 
             <ChartCard title="Valor de cheques por mês" subtitle="Clique numa barra para ver os cheques do mês" onOpen={ir} height={300}>
               <ResponsiveContainer>
@@ -481,6 +632,12 @@ export default function DashCheques() {
           open={!!det} onOpenChange={(o) => !o && setDet(null)}
           title={det?.title || ""} subtitle={det?.subtitle}
           columns={COLS} rows={det?.rows || []} totalKey="valor" onGoTo={ir}
+        />
+
+        <DetailDialog
+          open={!!detDev} onOpenChange={(o) => !o && setDetDev(null)}
+          title={detDev?.title || ""} subtitle={detDev?.subtitle}
+          columns={DEV_COLS} rows={detDev?.rows || []} totalKey="valor" onGoTo={ir}
         />
       </div>
     </DashboardLayout>
