@@ -43,6 +43,30 @@ export function formatCNPJ(val: unknown): string {
 }
 
 /**
+ * Máscara VIVA pt-BR para CPF/CNPJ (separa por pontos conforme o padrão enquanto digita).
+ * Regra por nº de dígitos: 11 = CPF (000.000.000-00); ≤10 = CNPJ progressivo (cobre a
+ * "raiz de 8" → 00.000.000); 12–14 = CNPJ completo (00.000.000/0000-00). Idempotente
+ * (remove formatação antes de reformatar). Limita a 14 dígitos.
+ */
+export function maskCpfCnpj(val: unknown): string {
+  const d = String(val ?? "").replace(/\D/g, "").slice(0, 14);
+  if (d.length === 11) {
+    return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{1,2})$/, "$1.$2.$3-$4");
+  }
+  if (d.length <= 10) {
+    return d
+      .replace(/^(\d{2})(\d)/, "$1.$2")
+      .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+      .replace(/^(\d{2})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3/$4");
+  }
+  return d
+    .replace(/^(\d{2})(\d)/, "$1.$2")
+    .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/^(\d{2})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3/$4")
+    .replace(/^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d{1,2})$/, "$1.$2.$3/$4-$5");
+}
+
+/**
  * Conta bancária no padrão brasileiro: agrupa o corpo com pontos de milhar e
  * separa o último dígito (verificador) com traço. Ex: "130026093" → "13.002.609-3".
  * Idempotente (remove formatação antes de reformatar). Mantém um eventual sufixo

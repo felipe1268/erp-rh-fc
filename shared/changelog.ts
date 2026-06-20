@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3353 — **FINANCEIRO / MOVIMENTAÇÃO INTERNA (CNPJs/CPFs DO GRUPO, EM CONFIGURAÇÕES FINANCEIRAS) · A TELA
+ * GANHOU LAYOUT MAIS MODERNO (LINHAS-CARTÃO COM AVATAR, SELO DE SITUAÇÃO E TIPO DO DOCUMENTO), O CAMPO CNPJ/CPF
+ * AGORA TEM MÁSCARA VIVA pt-BR (PONTOS/BARRA/TRAÇO ENQUANTO DIGITA) E, AO DIGITAR O CNPJ COMPLETO (OU A RAIZ DE
+ * 8), O "NOME / IDENTIFICAÇÃO" É PUXADO AUTOMATICAMENTE DA BASE DE CADASTRO (EMPRESAS DO GRUPO → FORNECEDORES →
+ * EMPRESAS TERCEIRAS) E, EM ÚLTIMO CASO, DA RECEITA (BrasilAPI). 1 HELPER + 1 ROTA READ-ONLY + 1 FRONT · ZERO
+ * SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário): na tela "Movimentação Interna" da Rev. 3351, (1) deixar o layout mais moderno "no nosso
+ *   padrão"; (2) o CPF/CNPJ separado por pontos conforme o padrão (máscara enquanto digita); (3) ao digitar o CNPJ,
+ *   puxar o nome correto da empresa segundo a base de cadastro.
+ * - MÁSCARA (`client/src/lib/formatters.ts`): NOVO `maskCpfCnpj(val)` — máscara VIVA por nº de dígitos: 11 = CPF
+ *   `000.000.000-00`; ≤10 = CNPJ progressivo (cobre a "raiz de 8" → `00.000.000`); 12–14 = CNPJ completo
+ *   `00.000.000/0000-00`. Idempotente (limpa antes de reformatar), limita a 14 dígitos. Aplicada no `onChange` do
+ *   input e ao abrir a edição (`openCnpjEdit` mascara o `row.cnpj`). O salvar segue gravando só dígitos
+ *   (`soDigitos`), então a máscara é puramente de DIGITAÇÃO/EXIBIÇÃO.
+ * - AUTO-FILL DO NOME (`server/routers/financial.ts`, NOVA query READ-ONLY `consultarCnpj({companyId,cnpj})`):
+ *   tenant guard `_assertFinanceiroCompanyAccess`; normaliza o documento (`_soDigitos`) e busca em CASCATA pelo
+ *   primeiro acerto: (1) `companies` ACESSÍVEIS ao usuário (`getCompaniesForUser` → IN de ids validados) por
+ *   `"razaoSocial"`; (2) `fornecedores` da empresa (`company_id`, `razao_social`); (3) `empresas_terceiras` da
+ *   empresa (`"companyId"`, `razao_social`); (4) só se nada casar E for CNPJ completo (14), Receita via
+ *   `https://brasilapi.com.br/api/cnpj/v1/<digitos>` (host FIXO + cnpj só dígitos → sem SSRF; `fetch` global +
+ *   `AbortController` 4s; try/catch nunca lança). Casamento por igualdade do CNPJ normalizado (14/11) ou por
+ *   PREFIXO da raiz (8). Retorna `{nome, fantasia, fonte:'cadastro'|'receita'|null}`. `dbExecute` liga os params
+ *   por ORDEM DE APARIÇÃO (não pelo número `$N`) — ids inlinados como inteiros validados p/ evitar ambiguidade.
+ * - FRONT (`client/src/pages/financeiro/FinanceiroConfiguracoes.tsx`): `useQuery` LAZY de `consultarCnpj`
+ *   (`enabled` só quando o diálogo está aberto, há empresa e o documento tem 14 ou 8 dígitos; `retry:false`,
+ *   `staleTime` 5min) + `useEffect` que preenche o Nome SÓ se estiver vazio (não sobrescreve o que o usuário
+ *   digitou). Status abaixo do campo Nome: "Buscando nome…", "Nome sugerido pela base de cadastro/Receita" ou
+ *   "Não localizei o nome automaticamente". Tabela modernizada: `border-separate` (linhas-cartão), avatar
+ *   `Building2`, documento monoespaçado com rótulo do tipo (CPF/Raiz CNPJ/CNPJ), selo "Ativo" com ponto verde,
+ *   hover índigo; ações inalteradas.
+ * - VALIDAÇÃO (Neon): `consultarCnpj` testado contra a base real (companies/fornecedores) — retorna a razão social
+ *   pelo CNPJ; raiz de 8 casa por prefixo; documento desconhecido → `nome=null`. tsc limpo nos arquivos tocados.
+ *
  * Rev. 3352 — **FOLHA / HORAS EXTRAS · CALENDÁRIO DE FERIADOS AGORA TEM OBSERVÂNCIA POR EMPRESA E ESCOPO POR
  * CIDADE. PONTO FACULTATIVO (CARNAVAL, CORPUS CHRISTI) NASCE "NÃO SEGUIDO" (DIA NORMAL, SEM HE INDEVIDA) ATÉ O
  * GESTOR MARCAR "SEGUE" — E PODE LIMITAR A QUEM SEGUE POR CIDADE/UF. O CÁLCULO DE HE (E O MEMORIAL) SÓ TRATA O

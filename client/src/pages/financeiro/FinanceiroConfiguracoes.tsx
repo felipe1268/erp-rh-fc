@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
+import { maskCpfCnpj } from "@/lib/formatters";
 import { Switch } from "@/components/ui/switch";
 import { Settings, Users, Plus, Save, RefreshCw, UserCheck, CheckCircle2, Edit3, Loader2,
   Calculator, Receipt, Landmark, Briefcase, Info, AlertCircle, TrendingUp, Wallet, Lightbulb,
@@ -214,9 +215,23 @@ export default function FinanceiroConfiguracoes() {
   function resetCnpjForm() { setCnpjForm({ cnpj: "", nome: "", observacao: "" }); setCnpjEditId(null); }
   function openCnpjEdit(row: any) {
     setCnpjEditId(row.id);
-    setCnpjForm({ cnpj: row.cnpj ?? "", nome: row.nome ?? "", observacao: row.observacao ?? "" });
+    setCnpjForm({ cnpj: maskCpfCnpj(row.cnpj ?? ""), nome: row.nome ?? "", observacao: row.observacao ?? "" });
     setShowCnpjDlg(true);
   }
+  // Rev. 3353 — auto-preenche o Nome pela BASE DE CADASTRO (companies/fornecedores/
+  // terceiros) ou Receita ao digitar o CNPJ completo (14) / raiz (8). Só preenche se o
+  // campo Nome estiver vazio (não sobrescreve o que o usuário digitou).
+  const cnpjDigits = soDigitos(cnpjForm.cnpj);
+  const canLookupCnpj = showCnpjDlg && !!companyId && (cnpjDigits.length === 14 || cnpjDigits.length === 8);
+  const cnpjLookup = (trpc as any).financial.consultarCnpj.useQuery(
+    { companyId, cnpj: cnpjDigits },
+    { enabled: canLookupCnpj, retry: false, staleTime: 5 * 60 * 1000 }
+  );
+  useEffect(() => {
+    const info = cnpjLookup.data;
+    if (info?.nome && !cnpjForm.nome.trim()) setCnpjForm(f => ({ ...f, nome: info.nome }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cnpjLookup.data]);
   const createCnpjMut = (trpc as any).financial.createInternalCnpj.useMutation({
     onSuccess: () => { toast({ title: "CNPJ interno cadastrado!" }); setShowCnpjDlg(false); resetCnpjForm(); refetchCnpjs(); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
@@ -594,31 +609,43 @@ export default function FinanceiroConfiguracoes() {
                     <p className="text-xs mt-1">Cadastre as empresas do grupo para separar o caixa real da movimentação interna.</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                  <div className="overflow-x-auto -mx-1 px-1">
+                    <table className="w-full text-sm border-separate border-spacing-y-1.5">
                       <thead>
-                        <tr className="text-left text-[11px] uppercase tracking-wide text-gray-400 border-b">
-                          <th className="py-2 pr-3 font-medium">Documento</th>
-                          <th className="py-2 pr-3 font-medium">Nome / Identificação</th>
-                          <th className="py-2 pr-3 font-medium">Observação</th>
-                          <th className="py-2 pr-3 font-medium text-center">Situação</th>
-                          <th className="py-2 pl-3 font-medium text-right">Ações</th>
+                        <tr className="text-left text-[11px] uppercase tracking-wide text-gray-400">
+                          <th className="py-1 px-3 font-medium">Documento</th>
+                          <th className="py-1 px-3 font-medium">Nome / Identificação</th>
+                          <th className="py-1 px-3 font-medium">Observação</th>
+                          <th className="py-1 px-3 font-medium text-center">Situação</th>
+                          <th className="py-1 px-3 font-medium text-right">Ações</th>
                         </tr>
                       </thead>
                       <tbody>
                         {(internalCnpjs ?? []).map((row: any) => {
                           const ativo = Number(row.ativo) !== 0;
+                          const d = soDigitos(row.cnpj);
+                          const tipoDoc = d.length === 11 ? "CPF" : d.length === 8 ? "Raiz CNPJ" : "CNPJ";
                           return (
-                            <tr key={row.id} className={`border-b last:border-0 ${ativo ? "" : "opacity-50"}`}>
-                              <td className="py-2 pr-3 font-mono text-[13px] text-gray-800 whitespace-nowrap">{formatDoc(row.cnpj)}</td>
-                              <td className="py-2 pr-3 text-gray-700">{row.nome || <span className="text-gray-300">—</span>}</td>
-                              <td className="py-2 pr-3 text-gray-500 text-xs max-w-[260px] truncate" title={row.observacao || ""}>{row.observacao || <span className="text-gray-300">—</span>}</td>
-                              <td className="py-2 pr-3 text-center">
-                                {ativo
-                                  ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5 text-[11px] font-medium">Ativo</span>
-                                  : <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 text-gray-500 px-2 py-0.5 text-[11px] font-medium">Inativo</span>}
+                            <tr key={row.id} className={`group transition-colors ${ativo ? "bg-white hover:bg-indigo-50/50" : "bg-gray-50/70 opacity-60"}`}>
+                              <td className="py-2 px-3 rounded-l-xl border-y border-l border-gray-100 whitespace-nowrap">
+                                <div className="flex items-center gap-2.5">
+                                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${ativo ? "bg-indigo-50 text-indigo-600" : "bg-gray-100 text-gray-400"}`}>
+                                    <Building2 className="w-4 h-4" />
+                                  </div>
+                                  <div className="leading-tight">
+                                    <div className="font-mono text-[13px] text-gray-800 tracking-tight">{formatDoc(row.cnpj)}</div>
+                                    <div className="text-[10px] uppercase tracking-wide text-gray-400">{tipoDoc}</div>
+                                  </div>
+                                </div>
                               </td>
-                              <td className="py-2 pl-3 text-right whitespace-nowrap">
+                              <td className="py-2 px-3 border-y border-gray-100 text-gray-800 font-medium">{row.nome || <span className="text-gray-300 font-normal">—</span>}</td>
+                              <td className="py-2 px-3 border-y border-gray-100 text-gray-500 text-xs max-w-[260px] truncate" title={row.observacao || ""}>{row.observacao || <span className="text-gray-300">—</span>}</td>
+                              <td className="py-2 px-3 border-y border-gray-100 text-center">
+                                {ativo
+                                  ? <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 text-emerald-700 px-2.5 py-0.5 text-[11px] font-medium ring-1 ring-emerald-100"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Ativo</span>
+                                  : <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 text-gray-500 px-2.5 py-0.5 text-[11px] font-medium">Inativo</span>}
+                              </td>
+                              <td className="py-2 px-3 rounded-r-xl border-y border-r border-gray-100 text-right whitespace-nowrap">
                                 <Button variant="ghost" size="sm" className="h-7 px-2 text-gray-500 hover:text-indigo-700" onClick={() => openCnpjEdit(row)}>
                                   <Edit3 className="w-3.5 h-3.5" />
                                 </Button>
@@ -831,7 +858,7 @@ export default function FinanceiroConfiguracoes() {
                 <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">CNPJ / CPF *</label>
                 <Input
                   value={cnpjForm.cnpj}
-                  onChange={e => setCnpjForm(f => ({ ...f, cnpj: e.target.value }))}
+                  onChange={e => setCnpjForm(f => ({ ...f, cnpj: maskCpfCnpj(e.target.value) }))}
                   placeholder="00.000.000/0000-00 ou raiz de 8 dígitos"
                   className="mt-1 h-9 font-mono"
                   inputMode="numeric"
@@ -850,6 +877,19 @@ export default function FinanceiroConfiguracoes() {
                   placeholder="Ex.: FC Engenharia, Imobiliária do grupo…"
                   className="mt-1 h-9"
                 />
+                {canLookupCnpj && (
+                  cnpjLookup.isFetching ? (
+                    <p className="text-[11px] text-indigo-500 mt-1 flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" />Buscando nome pelo documento…
+                    </p>
+                  ) : cnpjLookup.data?.nome ? (
+                    <p className="text-[11px] text-emerald-600 mt-1 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" />Nome sugerido {cnpjLookup.data.fonte === "receita" ? "pela Receita (BrasilAPI)" : "pela base de cadastro"}.
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-gray-400 mt-1">Não localizei o nome automaticamente — preencha manualmente.</p>
+                  )
+                )}
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Observação</label>

@@ -1,5 +1,5 @@
 import { router, protectedProcedure } from "../_core/trpc";
-import { getDb, createAuditLog, getUserCompanyLinks } from "../db";
+import { getDb, createAuditLog, getUserCompanyLinks, getCompaniesForUser } from "../db";
 import { resolveCompanyIds } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -5262,6 +5262,82 @@ export const financialRouter = router({
   // real) + exceção por lançamento. R-007: sem DELETE em prod — inativação é soft (ativo=0).
 
   // Lista a base de CNPJs internos da empresa. `includeInactive` → tela de gestão.
+  // Rev. 3353 — CONSULTA o nome de uma empresa pelo CNPJ/CPF digitado p/ AUTO-PREENCHER
+  // o "Nome / Identificação" na Movimentação Interna. Ordem: BASE DE CADASTRO interna
+  // (companies acessíveis ao usuário → fornecedores → empresas terceiras da empresa) e,
+  // só se não achar E for CNPJ completo (14 díg.), cai na Receita via BrasilAPI (host
+  // FIXO + cnpj só dígitos → sem SSRF). READ-ONLY, tenant-safe. Falha de qualquer fonte
+  // nunca derruba a consulta (retorna nome=null). Aceita CNPJ (14), CPF (11) ou raiz (8).
+  consultarCnpj: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    cnpj: z.string().min(8),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const digits = _soDigitos(input.cnpj);
+    if (![8, 11, 14].includes(digits.length)) return { nome: null, fantasia: null, fonte: null };
+    const isRaiz = digits.length === 8;
+    // normaliza o cnpj guardado e casa por igualdade (11/14) ou por prefixo da raiz (8).
+    // O ordinal $N é passado por chamada para deixar a intenção explícita (não depende
+    // do binding por ordem-de-aparição do dbExecute).
+    const matchSql = (ph: string) => isRaiz
+      ? `LEFT(regexp_replace(cnpj,'[^0-9]','','g'), 8) = ${ph}`
+      : `regexp_replace(cnpj,'[^0-9]','','g') = ${ph}`;
+
+    // 1) BASE DE CADASTRO — companies acessíveis ao usuário (nome = razão social).
+    try {
+      const comps = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const ids = (comps as any[]).map((c: any) => Number(c.id)).filter((n) => Number.isFinite(n));
+      if (ids.length) {
+        const idList = ids.join(",");
+        const r = await dbExecute(db,
+          `SELECT "razaoSocial" AS nome, "nomeFantasia" AS fantasia FROM companies
+            WHERE ${matchSql("$1")} AND id IN (${idList}) LIMIT 1`,
+          [digits]);
+        const row = rows(r)[0] as any;
+        if (row?.nome) return { nome: String(row.nome), fantasia: row.fantasia ?? null, fonte: "cadastro" as const };
+      }
+    } catch (e: any) { console.error("[consultarCnpj] companies:", e?.message); }
+
+    // 2) Fornecedores da empresa.
+    try {
+      const r = await dbExecute(db,
+        `SELECT razao_social AS nome, nome_fantasia AS fantasia FROM fornecedores
+          WHERE company_id=$1 AND ${matchSql("$2")} LIMIT 1`,
+        [input.companyId, digits]);
+      const row = rows(r)[0] as any;
+      if (row?.nome) return { nome: String(row.nome), fantasia: row.fantasia ?? null, fonte: "cadastro" as const };
+    } catch (e: any) { console.error("[consultarCnpj] fornecedores:", e?.message); }
+
+    // 3) Empresas terceiras da empresa.
+    try {
+      const r = await dbExecute(db,
+        `SELECT razao_social AS nome, nome_fantasia AS fantasia FROM empresas_terceiras
+          WHERE "companyId"=$1 AND ${matchSql("$2")} LIMIT 1`,
+        [input.companyId, digits]);
+      const row = rows(r)[0] as any;
+      if (row?.nome) return { nome: String(row.nome), fantasia: row.fantasia ?? null, fonte: "cadastro" as const };
+    } catch (e: any) { console.error("[consultarCnpj] empresas_terceiras:", e?.message); }
+
+    // 4) Receita (BrasilAPI) — só CNPJ completo. Host FIXO + cnpj só dígitos → sem SSRF.
+    if (digits.length === 14) {
+      try {
+        const ac = new AbortController();
+        const t = setTimeout(() => ac.abort(), 4000);
+        const resp = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`, { signal: ac.signal });
+        clearTimeout(t);
+        if (resp.ok) {
+          const j: any = await resp.json();
+          const nome = j?.razao_social || j?.nome_fantasia;
+          if (nome) return { nome: String(nome), fantasia: j?.nome_fantasia ?? null, fonte: "receita" as const };
+        }
+      } catch (e: any) { console.error("[consultarCnpj] brasilapi:", e?.message); }
+    }
+
+    return { nome: null, fantasia: null, fonte: null };
+  }),
+
   listInternalCnpjs: protectedProcedure.input(z.object({
     companyId: z.number(),
     includeInactive: z.boolean().optional(),
