@@ -50,7 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3392** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · "CONFIRMAR: É MOVIMENTAÇÃO INTERNA" CRIA LANÇAMENTO + CONCILIA. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Nova rota `confirmarMovimentacaoInterna`: INSERT em `financial_entries` (tipo=transferencia, natureza=interno, conciliado=1) + UPDATE `bank_statement_lines` + override. Lançamento aparece no fluxo de caixa mas é excluído do P&L por `natureza="interno"`. VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
+- **Rev. 3393** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FIX "APAGAR" EM LINHA CONCILIADA: `financial_conciliacao_grupo does not exist`. 100% BACKEND · ZERO SCHEMA/ALTER/DROP.** `excluirLinhaExtrato` não tinha o guard `to_regclass` antes da transação — tabela só criada no 1º uso de conciliação em grupo. Fix: checa existência fora da tx, igual ao `desconsolidarMes`. VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3392** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · "CONFIRMAR: É MOVIMENTAÇÃO INTERNA" CRIA LANÇAMENTO + CONCILIA. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Nova rota `confirmarMovimentacaoInterna`: INSERT em `financial_entries` (tipo=transferencia, natureza=interno, conciliado=1) + UPDATE `bank_statement_lines` + override. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
 

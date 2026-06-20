@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3393 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · ERRO "APAGAR" EM LINHA CONCILIADA:
+ * `financial_conciliacao_grupo does not exist`. 100% BACKEND · ZERO SCHEMA/ALTER/DROP.**
+ * - CAUSA: `excluirLinhaExtrato` fazia `DELETE FROM financial_conciliacao_grupo` dentro
+ *   da transação sem verificar se a tabela existe. No Postgres, um statement que falha
+ *   dentro de uma transação a envenena inteira (SQLSTATE 25P02). `desconsolidarMes` já
+ *   tinha o guard correto (`to_regclass` fora da tx) mas `excluirLinhaExtrato` não.
+ * - FIX: adiciona `to_regclass('public.financial_conciliacao_grupo')` ANTES da
+ *   transação; a remoção da tabela-link só roda se `temGrupo=true`.
+ * - VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
+ *
  * Rev. 3392 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · "CONFIRMAR: É MOVIMENTAÇÃO INTERNA"
  * AGORA CRIA LANÇAMENTO + CONCILIA EM 1 CLIQUE. BACKEND ADITIVO + FRONT ·
  * ZERO SCHEMA/ALTER/DROP/DELETE.**

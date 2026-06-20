@@ -6597,6 +6597,13 @@ export const financialRouter = router({
     const linha = rows(linhaRes)[0] as any;
     if (!linha) throw new TRPCError({ code: "NOT_FOUND", message: "Linha não encontrada ou já excluída" });
 
+    // Rev. 3393 — mesmo padrão do desconsolidarMes: checar a existência de
+    // financial_conciliacao_grupo ANTES da transação (to_regclass), pois um statement
+    // que falha dentro de uma transação Postgres a envenena inteira (SQLSTATE 25P02).
+    const grupoChk = await dbExecute(db,
+      `SELECT to_regclass('public.financial_conciliacao_grupo') AS reg`, []);
+    const temGrupo = !!( rows(grupoChk)[0] as any)?.reg;
+
     await db.transaction(async (tx: any) => {
       // 1) Se estava conciliada, reverte o flag do lançamento vinculado
       if (linha.entryId) {
@@ -6604,11 +6611,13 @@ export const financialRouter = router({
           `UPDATE financial_entries SET conciliado=0, data_conciliacao=NULL
             WHERE id=$1 AND company_id=$2`,
           [linha.entryId, input.companyId]);
-        // Remove também da tabela de grupo (N:1), se existir
-        await dbExecute(tx,
-          `DELETE FROM financial_conciliacao_grupo
-            WHERE statement_line_id=$1 AND company_id=$2`,
-          [input.linhaId, input.companyId]);
+        // Remove também da tabela de grupo (N:1) — só quando a tabela existe.
+        if (temGrupo) {
+          await dbExecute(tx,
+            `DELETE FROM financial_conciliacao_grupo
+              WHERE statement_line_id=$1 AND company_id=$2`,
+            [input.linhaId, input.companyId]);
+        }
       }
       // 2) Soft-delete da linha
       await dbExecute(tx,
