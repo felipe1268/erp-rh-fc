@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3345 — **FINANCEIRO / DASHBOARDS · CORREÇÃO DE LAYOUT: GRÁFICOS DOS DASHBOARDS FINANCEIROS APARECIAM
+ * SOBREPOSTOS (UM GRÁFICO "FANTASMA"/TRANSBORDANDO PINTAVA POR CIMA DO CARD DE BAIXO, EMBARALHANDO TÍTULOS E
+ * LISTAS — VISTO NO iPad/Safari NO DASHBOARD DE CARTÃO DE CRÉDITO, SEÇÃO "ANÁLISE DETALHADA DAS FATURAS"). 100%
+ * FRONT · BUGFIX/UX · READ-ONLY · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário, no iPad, com 1 print): "Arrume a tela tá com informações sobrepostas resolva isso de vez".
+ * - RAIZ: o container de gráfico do `ChartCard` (`client/src/pages/financeiro/dashboards/_kit.tsx`, usado pelos 5
+ *   dashboards financeiros) reservava a altura via `<div style={{width:"100%", height}}>` SEM `overflow`/`position`.
+ *   O `ResponsiveContainer` do Recharts, no Safari/iOS, ocasionalmente pinta o SVG MAIOR que a `height` reservada
+ *   (render "fantasma"/stale durante o resize/scroll). Como o `<div>` não recortava nada, o excesso vazava para fora
+ *   da caixa e era pintado POR CIMA do(s) card(s) seguinte(s) — o layout raiz é fluxo normal (`space-y-5`), então a
+ *   única forma de sobreposição é justamente um filho transbordando a própria caixa.
+ * - CORREÇÃO (1 ponto único, `_kit.tsx`): o container de gráfico passou a `className="relative w-full isolate
+ *   overflow-hidden"` (mantendo `style={{height}}`). O `overflow-hidden` recorta qualquer SVG-fantasma à caixa de
+ *   altura reservada (impede o vazamento sobre os cards de baixo); `relative`+`isolate` estabelecem contexto de
+ *   empilhamento próprio. Como o Recharts SEMPRE dimensiona o gráfico para caber na caixa (height:100% do container),
+ *   o recorte só remove o excesso espúrio — nunca conteúdo legítimo. Conserta os 5 dashboards de uma vez.
+ * - RESSALVA: tooltips do Recharts que eventualmente extrapolem a borda do card podem ficar levemente recortados —
+ *   tradeoff aceitável frente ao layout quebrado; na prática surgem dentro da área do gráfico.
+ * - ESCOPO: 1 arquivo front (componente compartilhado). Sem backend/schema. tsc limpo.
+ * - ARQUIVOS: `client/src/pages/financeiro/dashboards/_kit.tsx`, `shared/version.ts` (3345), `shared/changelog.ts`,
+ *   `replit.md`, `replit-history.md`.
+ *
  * Rev. 3344 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · TODOS OS CONTADORES INTEIROS DO PAINEL AGORA EXIBEM SEPARADOR DE
  * MILHAR pt-BR (2.434, 2.967, 2.841…) — ANTES SÓ OS VALORES EM R$ ESTAVAM FORMATADOS; AS CONTAGENS (CRÉDITOS, DÉBITOS,
  * LINHAS DO EXTRATO, CONCILIADOS, NO EXTRATO/ERP, CONTAS, SUGESTÕES) APARECIAM CRUAS (2434, 2967…). 100% FRONT · UX ·

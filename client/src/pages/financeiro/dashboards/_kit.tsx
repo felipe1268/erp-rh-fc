@@ -148,7 +148,7 @@ export function ChartCard({
           </button>
         )}
       </div>
-      <div style={{ width: "100%", height }}>{children}</div>
+      <div className="relative w-full isolate overflow-hidden" style={{ height }}>{children}</div>
     </Card>
   );
 }
