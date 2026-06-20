@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3342 — **FINANCEIRO / DASHBOARD DE CHEQUES · CORREÇÃO: CHEQUES JÁ COMPENSADOS (COM DATA DE COMPENSAÇÃO, MAS COLUNA
+ * `status` AINDA "PENDENTE") NÃO APARECIAM COMO "COMPENSADO" NOS GRÁFICOS — CAÍAM EM "PENDENTE" NA PIZZA E NO EMPILHADO.
+ * AGORA O DASHBOARD USA O MESMO STATUS EFETIVO DA TELA "CONTROLE DE CHEQUES" (status="compensado" OU dataCompensacao
+ * preenchida ⇒ COMPENSADO). 100% FRONT · BUGFIX · READ-ONLY · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário, no iPad, com 2 prints — Dashboard de cheques + tela Controle de Cheques): "Tem vários cheque que já
+ *   foram compensados mas não tá mostrando nos gráficos". Nos prints, a tela "Controle de Cheques" lista dezenas de cheques
+ *   com selo verde "Compensado · DD/MM", mas a pizza "Cheques por status" do Dashboard mostrava a maioria como Pendente.
+ * - RAIZ: a tela "Controle de Cheques" (`FinanceiroCheques.tsx`) deriva o selo via `jaCompensado = status==="compensado"
+ *   || !!dataCompensacao` — ou seja, um cheque com DATA DE COMPENSAÇÃO preenchida conta como compensado mesmo que a coluna
+ *   `status` no banco ainda esteja "pendente" (caso comum após conferência/baixa). Já o Dashboard agregava por status CRU:
+ *   a pizza vinha de `cheques.resumo` (backend `GROUP BY status`) e o empilhado "Evolução mensal por status" lia `c.status`
+ *   direto. Logo, todo compensado-por-data caía em "Pendente".
+ * - CORREÇÃO (`client/src/pages/financeiro/dashboards/DashCheques.tsx`, 100% front): (1) novo helper `statusEf(c)` que
+ *   espelha o `jaCompensado` da lista — `status==="compensado" || dataCompensacao ⇒ "compensado"`, senão o `status` cru.
+ *   (2) `porStatus` (pizza) deixou de vir do `rowsResumo` (backend) e passou a ser AGREGADO CLIENT-SIDE a partir da LISTA
+ *   `cheques` (que já traz `dataCompensacao` via `cheques.listar`), somando valor/qtd por `statusEf` e ordenando por valor.
+ *   (3) `statusKeys` e `evolStatus` (barras empilhadas) agora classificam por `statusEf(c)` em vez de `c.status`. (4) os
+ *   filtros de clique (fatia da pizza e segmento do empilhado) passaram a casar por `statusEf(c)` p/ o `DetailDialog` abrir
+ *   exatamente os cheques da situação clicada. O KPI grand-total ("Cheques no ano") segue vindo do `resumo` (inalterado).
+ * - POR QUE FRONT-ONLY (não mexer no backend `resumo`): a query `cheques.resumo` (GROUP BY status) também alimenta a PRÉVIA
+ *   DE LIMPEZA da tela `FinanceiroCheques` (mapa por status cru); reescrever seu GROUP BY mudaria aquelas contagens. Derivar
+ *   o status efetivo no Dashboard a partir da lista (que já tem `dataCompensacao`) garante PARIDADE EXATA com o selo da tela
+ *   de cheques sem efeitos colaterais. RESSALVA: `cheques.listar` tem `limit:2000` (todas as outras análises do dashboard já
+ *   dependem dessa lista) — ok no volume atual (~492/ano); se um ano passar de 2000 cheques, a pizza subamostraria.
+ * - ESCOPO: 1 arquivo front. Sem query/rota/permissão/schema. Moeda em BRL via `formatBRL`/`formatBRLCompact` intacta.
+ *   RESSALVA: não testável autenticado no ambiente (login bloqueia screenshot); re-publicar p/ o usuário ver no iPad.
+ * - ARQUIVOS: `client/src/pages/financeiro/dashboards/DashCheques.tsx`, `shared/version.ts` (3342), `shared/changelog.ts`,
+ *   `replit.md`, `replit-history.md`.
+ *
  * Rev. 3341 — **FINANCEIRO / DASHBOARD DE CHEQUES · GRÁFICO "EVOLUÇÃO MENSAL POR STATUS": CORES FIXAS POR SITUAÇÃO
  * (PENDENTE=VERMELHO, COMPENSADO=VERDE, INDEFINIDO=ÂMBAR) + CLIQUE NO SEGMENTO ABRE OS CHEQUES DAQUELE MÊS NAQUELA
  * SITUAÇÃO + EIXO X RESPONSIVO (TODOS OS MESES VISÍVEIS). MESMAS CORES FIXAS NA PIZZA "CHEQUES POR STATUS". 100% FRONT ·

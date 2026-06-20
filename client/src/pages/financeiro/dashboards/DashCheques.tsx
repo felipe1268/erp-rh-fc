@@ -27,6 +27,12 @@ const statusColor = (s: string): string | null => {
 };
 const dataBR = (d?: string) => (d ? String(d).slice(0, 10).split("-").reverse().join("/") : "—");
 
+// Status EFETIVO do cheque — espelha a tela "Controle de Cheques" (FinanceiroCheques: jaCompensado).
+// Um cheque com data de compensação preenchida conta como COMPENSADO mesmo que a coluna `status`
+// ainda esteja "pendente" (era a causa de "compensados não aparecerem nos gráficos").
+const statusEf = (c: any): string =>
+  (String(c?.status || "").toLowerCase() === "compensado" || c?.dataCompensacao) ? "compensado" : String(c?.status || "—");
+
 // ── Helpers da Análise gerencial (Rev. 3333) — read-only, client-side ──
 // new Date("YYYY-MM-DDT00:00:00") é seguro no iOS (≠ formato com espaço).
 const toDate = (s?: string) => { if (!s) return null; const d = new Date(String(s).slice(0, 10) + "T00:00:00"); return isNaN(d.getTime()) ? null : d; };
@@ -95,10 +101,21 @@ export default function DashCheques() {
   }, [chequesPrev]);
   const totalPrev = useMemo(() => seriePrev.reduce((s, v) => s + v, 0), [seriePrev]);
 
-  const porStatus = useMemo(() =>
-    rowsResumo.map((x) => ({ name: cap(x.status), value: Number(x.total) || 0, qtd: Number(x.qtd) || 0, _key: x.status }))
-      .filter((x) => x.value > 0 || x.qtd > 0),
-  [rowsResumo]);
+  // Agregado por status EFETIVO (vem da LISTA, que traz dataCompensacao) — substitui o resumo
+  // do backend (GROUP BY status cru), que classificava compensados-por-data como "Pendente".
+  const porStatus = useMemo(() => {
+    const m = new Map<string, { value: number; qtd: number }>();
+    for (const c of cheques) {
+      const k = statusEf(c);
+      const cur = m.get(k) || { value: 0, qtd: 0 };
+      cur.value += Number(c.valor) || 0; cur.qtd += 1;
+      m.set(k, cur);
+    }
+    return Array.from(m.entries())
+      .map(([k, v]) => ({ name: cap(k), value: v.value, qtd: v.qtd, _key: k }))
+      .filter((x) => x.value > 0 || x.qtd > 0)
+      .sort((a, b) => b.value - a.value);
+  }, [cheques]);
 
   const conferencia = useMemo(() => ([
     { name: "Confere — falta marcar", value: Number(verif?.valorAConferir) || 0, _kind: "confere" },
@@ -130,10 +147,10 @@ export default function DashCheques() {
     return { qtd, total, ticket, qtdDevol: devol.length, valDevol, taxaDevol, qtdConc: conc.length, pctConc, prazoMedio: nDias > 0 ? somaDias / nDias : null, nDias };
   }, [cheques]);
 
-  const statusKeys = useMemo(() => Array.from(new Set(cheques.map((c) => String(c.status || "—")))), [cheques]);
+  const statusKeys = useMemo(() => Array.from(new Set(cheques.map((c) => statusEf(c)))), [cheques]);
   const evolStatus = useMemo(() => {
     const base = MESES_ABREV.map((m) => { const o: any = { mes: m }; statusKeys.forEach((k) => (o[cap(k)] = 0)); return o; });
-    for (const c of cheques) { const mi = (Number(c.mes) || 0) - 1; if (mi < 0 || mi > 11) continue; base[mi][cap(c.status || "—")] += Number(c.valor) || 0; }
+    for (const c of cheques) { const mi = (Number(c.mes) || 0) - 1; if (mi < 0 || mi > 11) continue; base[mi][cap(statusEf(c))] += Number(c.valor) || 0; }
     return base;
   }, [cheques, statusKeys]);
 
@@ -209,7 +226,7 @@ export default function DashCheques() {
                     <PieChart>
                       <Pie data={porStatus} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={95}
                         innerRadius={55} paddingAngle={2}
-                        onClick={(d: any) => { const k = d?.payload?._key; abrir(`Cheques · ${d?.payload?.name}`, "Por situação", cheques.filter((c) => c.status === k)); }}>
+                        onClick={(d: any) => { const k = d?.payload?._key; abrir(`Cheques · ${d?.payload?.name}`, "Por situação", cheques.filter((c) => statusEf(c) === k)); }}>
                         {porStatus.map((s, i) => <Cell key={i} fill={statusColor(s._key) ?? PALETTE[i % PALETTE.length]} className="cursor-pointer" />)}
                       </Pie>
                       <Tooltip content={<BRLTooltip />} />
@@ -316,7 +333,7 @@ export default function DashCheques() {
                           const l = d?.payload?.mes; if (l == null) return;
                           const mi = MESES_ABREV.indexOf(l) + 1;
                           abrir(`Cheques · ${l}/${ano} · ${cap(k)}`, "Cheques do mês nesta situação",
-                            cheques.filter((c) => Number(c.mes) === mi && cap(c.status || "—") === cap(k)));
+                            cheques.filter((c) => Number(c.mes) === mi && cap(statusEf(c)) === cap(k)));
                         }}
                       />
                     ))}
