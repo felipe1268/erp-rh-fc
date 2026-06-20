@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3341 — **FINANCEIRO / DASHBOARD DE CHEQUES · GRÁFICO "EVOLUÇÃO MENSAL POR STATUS": CORES FIXAS POR SITUAÇÃO
+ * (PENDENTE=VERMELHO, COMPENSADO=VERDE, INDEFINIDO=ÂMBAR) + CLIQUE NO SEGMENTO ABRE OS CHEQUES DAQUELE MÊS NAQUELA
+ * SITUAÇÃO + EIXO X RESPONSIVO (TODOS OS MESES VISÍVEIS). MESMAS CORES FIXAS NA PIZZA "CHEQUES POR STATUS". 100% FRONT ·
+ * UX/BUGFIX · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário, no iPad, com print do dashboard `/financeiro/dashboards/cheques`): "Pendente deve ficar vermelho,
+ *   compensado verde e outra cor para o indefinido; quero o gráfico responsivo tbm; quando clicar quero ver as informações".
+ * - RAIZ: o gráfico empilhado "Evolução mensal por status" colorava cada série pela ordem de `PALETTE[i % n]` (Rev. 3333),
+ *   então a cor de cada situação dependia da ORDEM em que os status apareciam nos dados — Pendente saía azul/roxo,
+ *   Indefinido verde e Compensado laranja, sem semântica. O clique era só no nível do MÊS inteiro (chart `onClick`), não
+ *   por situação. O eixo X usava `interval` automático, podendo esconder meses em telas estreitas.
+ * - CORREÇÃO (`client/src/pages/financeiro/dashboards/DashCheques.tsx`): (1) novo helper `statusColor(s)` — normaliza
+ *   (lowercase + remove acento) e mapeia por substring: `pend`→#ef4444 (vermelho), `compens`→#16a34a (verde),
+ *   `indefin`/vazio/"—"→#f59e0b (âmbar), `devolv`/`susta`→#b91c1c (vermelho escuro); demais caem na PALETTE. (2) cada `<Bar>`
+ *   empilhado usa `fill={statusColor(k) ?? PALETTE[...]}` e ganhou `onClick` PRÓPRIO que lê `payload.mes` + a chave da série
+ *   → abre o `DetailDialog` com os cheques `mes === mi && cap(status) === cap(k)` (mês + situação). Removido o `onClick` do
+ *   nível do `<BarChart>` (era genérico por mês e sobrescrevia o do segmento). (3) eixo X com `interval={0}` + `tickMargin`
+ *   + fonte 10 → todos os 12 meses sempre visíveis (responsivo); `YAxis width` 70→56 p/ ganhar área. (4) a pizza "Cheques
+ *   por status" passou a colorir via `statusColor(s._key)` (mesma semântica). `<ResponsiveContainer>` já garantia a largura
+ *   fluida. Subtítulo atualizado p/ "clique num segmento (mês + situação)".
+ * - ESCOPO: 100% front, 1 arquivo. Sem query/rota/permissão/schema. Moeda em BRL via `formatBRL`/`formatBRLCompact` intacta.
+ *   RESSALVA: não testável autenticado no ambiente (login bloqueia screenshot); re-publicar p/ o usuário ver no iPad.
+ * - ARQUIVOS: `client/src/pages/financeiro/dashboards/DashCheques.tsx`, `shared/version.ts` (3341), `shared/changelog.ts`,
+ *   `replit.md`, `replit-history.md`.
+ *
  * Rev. 3340 — **FINANCEIRO / DASHBOARD DE CARTÃO DE CRÉDITO · NOVA SEÇÃO "ANÁLISE DETALHADA DAS FATURAS — ITENS" NO
  * DASHBOARD (`/financeiro/dashboards/cartao`): MAPEIA CADA LANÇAMENTO DAS FATURAS (COMPRAS, ENCARGOS/IOF/JUROS/ANUIDADE,
  * CRÉDITOS), CRUZA OS MESMOS LOCAIS DE COMPRA (ESTABELECIMENTOS RECORRENTES), MOSTRA "ONDE MAIS GASTAMOS" (TOP POR VALOR +

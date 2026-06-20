@@ -15,6 +15,16 @@ import {
 
 const DESTINO = "/financeiro/cheques";
 const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ") : "—");
+
+// Cor fixa por situação do cheque (pedido do usuário): pendente=vermelho, compensado=verde, indefinido=âmbar.
+const statusColor = (s: string): string | null => {
+  const n = String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  if (n.includes("pend")) return "#ef4444";                          // vermelho
+  if (n.includes("compens")) return "#16a34a";                        // verde
+  if (n.includes("indefin") || n === "" || n === "-" || n === "—") return "#f59e0b"; // âmbar
+  if (n.includes("devolv") || n.includes("susta")) return "#b91c1c";  // vermelho escuro
+  return null; // demais → paleta padrão
+};
 const dataBR = (d?: string) => (d ? String(d).slice(0, 10).split("-").reverse().join("/") : "—");
 
 // ── Helpers da Análise gerencial (Rev. 3333) — read-only, client-side ──
@@ -200,7 +210,7 @@ export default function DashCheques() {
                       <Pie data={porStatus} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={95}
                         innerRadius={55} paddingAngle={2}
                         onClick={(d: any) => { const k = d?.payload?._key; abrir(`Cheques · ${d?.payload?.name}`, "Por situação", cheques.filter((c) => c.status === k)); }}>
-                        {porStatus.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} className="cursor-pointer" />)}
+                        {porStatus.map((s, i) => <Cell key={i} fill={statusColor(s._key) ?? PALETTE[i % PALETTE.length]} className="cursor-pointer" />)}
                       </Pie>
                       <Tooltip content={<BRLTooltip />} />
                       <Legend wrapperStyle={{ fontSize: 12 }} />
@@ -285,18 +295,30 @@ export default function DashCheques() {
                 onClick={() => abrir("Cheques conciliados", "Conciliados com o banco", cheques.filter((c) => Number(c.conciliado) === 1))} />
             </div>
 
-            <ChartCard title="Evolução mensal por status" subtitle="Valor emitido empilhado por situação · clique num mês" onOpen={ir} height={300}>
+            <ChartCard title="Evolução mensal por status" subtitle="Valor emitido empilhado por situação · clique num segmento (mês + situação) para ver os cheques" onOpen={ir} height={300}>
               {evolStatus.length === 0 ? <EmptyState /> : (
                 <ResponsiveContainer>
-                  <BarChart data={evolStatus} margin={{ top: 8, right: 8, left: 4, bottom: 0 }}
-                    onClick={(st) => barClick(st, (l) => { const mi = MESES_ABREV.indexOf(l) + 1; abrir(`Cheques · ${l}/${ano}`, "Cheques do mês", cheques.filter((c) => Number(c.mes) === mi)); })}>
+                  <BarChart data={evolStatus} margin={{ top: 8, right: 8, left: 4, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
-                    <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#64748b" }} />
-                    <YAxis tickFormatter={formatBRLCompact} tick={{ fontSize: 11, fill: "#64748b" }} width={70} />
+                    <XAxis dataKey="mes" interval={0} tickMargin={6} tick={{ fontSize: 10, fill: "#64748b" }} />
+                    <YAxis tickFormatter={formatBRLCompact} tick={{ fontSize: 11, fill: "#64748b" }} width={56} />
                     <Tooltip content={<BRLTooltip />} cursor={{ fill: "#f1f5f9" }} />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
                     {statusKeys.map((k, i) => (
-                      <Bar key={k} dataKey={cap(k)} stackId="st" fill={PALETTE[i % PALETTE.length]} maxBarSize={38} className="cursor-pointer" />
+                      <Bar
+                        key={k}
+                        dataKey={cap(k)}
+                        stackId="st"
+                        fill={statusColor(k) ?? PALETTE[i % PALETTE.length]}
+                        maxBarSize={38}
+                        className="cursor-pointer"
+                        onClick={(d: any) => {
+                          const l = d?.payload?.mes; if (l == null) return;
+                          const mi = MESES_ABREV.indexOf(l) + 1;
+                          abrir(`Cheques · ${l}/${ano} · ${cap(k)}`, "Cheques do mês nesta situação",
+                            cheques.filter((c) => Number(c.mes) === mi && cap(c.status || "—") === cap(k)));
+                        }}
+                      />
                     ))}
                   </BarChart>
                 </ResponsiveContainer>
