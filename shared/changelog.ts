@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3385 — **FINANCEIRO / CARTÃO DE CRÉDITO · IMPORTAÇÃO DE VÁRIOS PDFs EM PARALELO:
+ * O LOOP SEQUENCIAL (N × 90s) FOI SUBSTITUÍDO POR Promise.allSettled → TODOS OS PDFs
+ * SÃO ENVIADOS À IA SIMULTANEAMENTE (TEMPO TOTAL ≈ O DO PDF MAIS LENTO). 100% FRONT ·
+ * ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * - PROBLEMA: importar 3 PDFs levava 3 × 90s = 4,5 min mínimo. O loop `for` anterior
+ *   esperava cada arquivo terminar antes de enviar o próximo para a IA. Se um arquivo
+ *   falhava silenciosamente, os seguintes ficavam sem contexto de erro e o usuário perdia
+ *   itens sem perceber ("lançamento incorreto").
+ * - FIX (`FinanceiroCartaoCredito.tsx`, `onArquivosSelecionados`): trocado o `for` sequencial
+ *   por `Promise.allSettled(arr.map(async (file) => ...))`. Todas as chamadas
+ *   `importarPreview.mutateAsync` são disparadas ao mesmo tempo; `allSettled` nunca
+ *   aborta as demais quando uma falha — garante que todos os PDFs que a IA conseguiu
+ *   ler cheguem ao preview, mesmo que algum erro ocorra no meio.
+ * - PROGRESSO: a barra agora mostra "Processando N arquivo(s) em paralelo…" e o label
+ *   atualiza ao vivo: "X/N arquivo(s) concluído(s)…" conforme cada uma vai terminando.
+ *   Ao final, se houver falhas parciais, o label indica "Leitura concluída — N arquivo(s)
+ *   com falha" e os erros continuam aparecendo no painel vermelho do preview.
+ * - RESULTADO: 3 PDFs = ~90s (1 paralelo) em vez de ~270s (sequencial).
+ * - VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
+ *
  * Rev. 3384 — **FINANCEIRO / CADASTRO · CONTAS BANCÁRIAS · NOVOS CAMPOS "CONTATOS DA AGÊNCIA":
  * GERENTE (NOME, TELEFONE, E-MAIL) + AGÊNCIA (ENDEREÇO, TELEFONE). BACKEND ADITIVO (SELFHEAL
  * [SyncSchema+] + SCHEMA DRIZZLE + ROUTER) + FRONT (NOVA SEÇÃO NO FORMULÁRIO FullScreen) ·

@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3384** — **FINANCEIRO / CADASTRO · CONTAS BANCÁRIAS · NOVOS CAMPOS "CONTATOS DA AGÊNCIA": GERENTE (NOME, TELEFONE, E-MAIL) + AGÊNCIA (ENDEREÇO, TELEFONE). BACKEND ADITIVO (SELFHEAL [SyncSchema+] + SCHEMA DRIZZLE + ROUTER) + FRONT (NOVA SEÇÃO NO FORMULÁRIO FULLSCREEN) · ZERO ALTER/DROP/DELETE.** 5 novas colunas em `company_bank_accounts` via ADD COLUMN IF NOT EXISTS (`nome_gerente`, `telefone_gerente`, `email_gerente`, `endereco_agencia`, `telefone_agencia`). Schema Drizzle, inputs Zod dos mutations (`criarContaBancaria`/`atualizarContaBancaria`) e `ContasBancarias.tsx` atualizados. Nova seção "Contatos da agência" no formulário (entre "Recursos" e "Saldo inicial"), com ícones `UserCircle2`/`Phone`/`Mail`/`MapPin`. VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
+- **Rev. 3385** — **FINANCEIRO / CARTÃO DE CRÉDITO · IMPORTAÇÃO DE VÁRIOS PDFs EM PARALELO: LOOP SEQUENCIAL (N × 90s) SUBSTITUÍDO POR Promise.allSettled → TODOS OS PDFs ENVIADOS À IA SIMULTANEAMENTE. 100% FRONT · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Problema: importar 3 PDFs levava 3 × 90s ≈ 4,5 min. O `for` sequencial esperava cada arquivo terminar antes do próximo. FIX (`onArquivosSelecionados`): `Promise.allSettled(arr.map(...))` — todas as chamadas `importarPreview.mutateAsync` são disparadas ao mesmo tempo; `allSettled` nunca aborta as demais quando uma falha. Progresso atualiza ao vivo: "X/N concluído(s)…". Resultado: 3 PDFs ≈ 90s (em vez de 270s). VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3383** — **FINANCEIRO / CARTÃO DE CRÉDITO · DEDUP COMPLETO NA IMPORTAÇÃO DE FATURAS: O SISTEMA AGORA VERIFICA SE A FATURA JÁ FOI CADASTRADA E SÓ LANÇA OS ITENS QUE FALTAM — NUNCA DUPLICA. BACKEND ADITIVO + FRONT (TOAST) · ZERO SCHEMA/ALTER/DROP/DELETE.** Problema: reimportar PDF duplicava fatura e todos os itens. A lógica antiga fazia `continue` ao encontrar duplicata — pulava header E itens (itens novos nunca entravam). FIX (`importarConfirmar`): dedup em 2 níveis: (1) FATURA: `(company_id, cartao_id, vencimento)` já existe → reusa `faturaId` existente; (2) ITEM: checa `(fatura_id, data, descricao, valor)` com NULL-safe antes de cada INSERT — duplicata pula, novo entra. Toast atualizado com todos os contadores. Resultado: reimport idempotente. VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
+- **Rev. 3384** — **FINANCEIRO / CADASTRO · CONTAS BANCÁRIAS · NOVOS CAMPOS "CONTATOS DA AGÊNCIA": GERENTE (NOME, TELEFONE, E-MAIL) + AGÊNCIA (ENDEREÇO, TELEFONE). BACKEND ADITIVO (SELFHEAL [SyncSchema+] + SCHEMA DRIZZLE + ROUTER) + FRONT (NOVA SEÇÃO NO FORMULÁRIO FULLSCREEN) · ZERO ALTER/DROP/DELETE.** 5 novas colunas em `company_bank_accounts` via ADD COLUMN IF NOT EXISTS. Schema Drizzle, inputs Zod dos mutations e `ContasBancarias.tsx` atualizados. Nova seção "Contatos da agência" no formulário. VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
+
+- **Rev. 3383** — **FINANCEIRO / CARTÃO DE CRÉDITO · DEDUP COMPLETO NA IMPORTAÇÃO DE FATURAS — NUNCA DUPLICA. BACKEND ADITIVO + FRONT (TOAST) · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3382** — **FINANCEIRO / CARTÃO DE CRÉDITO · CORREÇÃO DEFINITIVA DO DIA FECHAMENTO E DIA VENCIMENTO NO CADASTRO DE CARTÃO VIA IMPORTAÇÃO DE FATURA: EXTRAÇÃO DO DIA MOVIDA PARA O SERVIDOR (3 CAMADAS: INTEIRO DA IA → SLICE DA ISO → NULL). 100% BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE · 1 ARQUIVO (cartao.ts).** Detalhe: `shared/changelog.ts`.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3380** — **FINANCEIRO / CARTÃO DE CRÉDITO · IA EXTRAI DIA FECHAMENTO/VENCIMENTO COMO INTEIRO (1-31). BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3379** — **FINANCEIRO / CARTÃO DE CRÉDITO · CADASTRO DE CARTÃO COM LAYOUT MODERNO + AUTO-PREENCHIMENTO DA FATURA + PAINEL "MELHOR DATA DE COMPRA". BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3378** — **CONTROLE DE REVISÕES · SEPARADOR DE MILHAR pt-BR NOS CARDS DE RESUMO. 100% FRONT · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** FIX (`Revisoes.tsx`). Detalhe: `shared/changelog.ts`.
 
 ### REGRA DE OURO — Cabeçalho de documentos institucionais FC (Rev. 2106+)
 

@@ -583,39 +583,71 @@ export default function FinanceiroCartaoCredito() {
   async function onArquivosSelecionados(files: FileList | null) {
     if (!files || files.length === 0 || !companyId) return;
     const arr = Array.from(files);
+    const total = arr.length;
     setImportBusy(true); setPreview(null); setImportFalhas([]);
-    setArquivoNome(arr.length === 1 ? arr[0].name : `${arr.length} arquivos`);
-    const todasFaturas: any[] = [];
-    const falhas: { nome: string; erro: string }[] = [];
-    let ccAdmin: string | null = null;
-    for (let i = 0; i < arr.length; i++) {
-      const file = arr[i];
-      iniciarProgresso(arr.length > 1 ? `Lendo ${i + 1}/${arr.length}: "${file.name}"…` : `Lendo "${file.name}" com a IA…`);
-      try {
+    setArquivoNome(total === 1 ? arr[0].name : `${total} arquivos`);
+
+    // Rev. 3385 — PARALLEL: todos os PDFs são enviados à IA simultaneamente.
+    // O loop sequencial anterior multiplicava o tempo (N × 90s); agora todos
+    // rodam em paralelo → tempo total ≈ o do PDF mais lento (~90s para qualquer N).
+    let concluidos = 0;
+    iniciarProgresso(
+      total === 1
+        ? `Lendo "${arr[0].name}" com a IA…`
+        : `Processando ${total} arquivo(s) em paralelo…`
+    );
+
+    // Dispara todas as chamadas ao mesmo tempo; allSettled nunca lança mesmo se
+    // uma falhar — garante que o restante não seja abortado.
+    const resultados = await Promise.allSettled(
+      arr.map(async (file): Promise<{ file: File; res: any }> => {
         const b64 = await fileToBase64(file);
         const mime = file.type || (file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "application/octet-stream");
         const res = await importarPreview.mutateAsync({ companyId, fileBase64: b64, mimeType: mime });
-        pararProgresso(); setImportPct(100);
+        // Atualiza label ao vivo conforme cada arquivo vai concluindo
+        concluidos++;
+        if (total > 1) setImportLabel(`${concluidos}/${total} arquivo(s) concluído(s)…`);
+        return { file, res };
+      })
+    );
+
+    pararProgresso();
+    const todasFaturas: any[] = [];
+    const falhas: { nome: string; erro: string }[] = [];
+    let ccAdmin: string | null = null;
+
+    // allSettled preserva a ordem do array — parea resultado com arr[i] pelo índice
+    for (let i = 0; i < resultados.length; i++) {
+      const r = resultados[i];
+      const file = arr[i];
+      if (r.status === "fulfilled") {
+        const res = r.value.res;
         if (res?.resumo?.ccAdministrativo && !ccAdmin) ccAdmin = res.resumo.ccAdministrativo;
         for (const f of (res?.faturas ?? [])) todasFaturas.push({ ...f, origemArquivo: file.name });
-      } catch (e: any) {
-        pararProgresso();
-        falhas.push({ nome: file.name, erro: e?.message || String(e) });
+      } else {
+        falhas.push({ nome: file.name, erro: (r.reason as any)?.message || String(r.reason) });
       }
     }
-    pararProgresso();
+
     setImportBusy(false);
     setImportFalhas(falhas);
     if (todasFaturas.length === 0) {
       setImportPct(0); setImportLabel("");
       toast({
         title: falhas.length ? "Falha ao ler as faturas" : "Nenhuma fatura encontrada",
-        description: falhas.length ? `${falhas.length} arquivo(s) não puderam ser lidos.` : "A IA não encontrou faturas nos arquivos.",
+        description: falhas.length
+          ? `${falhas.length} arquivo(s) não puderam ser lidos.`
+          : "A IA não encontrou faturas nos arquivos.",
         variant: "destructive",
       });
       return;
     }
-    setImportLabel("Leitura concluída");
+    setImportPct(100);
+    setImportLabel(
+      falhas.length
+        ? `Leitura concluída — ${falhas.length} arquivo(s) com falha`
+        : "Leitura concluída"
+    );
     setPreview(montarPreview(todasFaturas, ccAdmin));
   }
   async function confirmarImport() {
