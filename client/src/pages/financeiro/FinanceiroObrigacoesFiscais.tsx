@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,9 @@ import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, CheckCircle, AlertTriangle, Calendar } from "lucide-react";
+import { Plus, CheckCircle, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
+
+const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -43,7 +45,8 @@ const STATUS_COLORS: Record<string, string> = {
 export default function FinanceiroObrigacoesFiscais() {
   const { companyId } = useCompany();
   const { toast } = useToast();
-  const [mesFilter, setMesFilter] = useState("all");
+  const [ano, setAno] = useState(new Date().getFullYear());
+  const [mesSel, setMesSel] = useState(new Date().getMonth() + 1); // 0 = ano todo
   const [statusFilter, setStatusFilter] = useState("all");
   const [showNew, setShowNew] = useState(false);
   const [showPay, setShowPay] = useState<any | null>(null);
@@ -62,19 +65,40 @@ export default function FinanceiroObrigacoesFiscais() {
     status: "a_pagar",
   });
 
-  const meses = Array.from({ length: 12 }, (_, i) => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - i);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  });
-
   const { data: obrigacoes, isLoading, refetch } = (trpc as any).financial.getTaxObligations.useQuery(
-    {
-      companyId,
-      mesCompetencia: mesFilter !== "all" ? mesFilter : undefined,
-      status: statusFilter !== "all" ? statusFilter : undefined,
-    },
+    { companyId },
     { enabled: !!companyId }
+  );
+
+  const todas = (obrigacoes ?? []) as any[];
+  const hoje = new Date().toISOString().split("T")[0];
+
+  // Status por mês (do ano selecionado): verde = todas pagas; azul = tem guia(s) não pagas; cinza = sem dados.
+  const mesesStatus = useMemo(() => {
+    const map: Record<number, "consolidado" | "lancamento" | "vazio"> = {};
+    for (let m = 1; m <= 12; m++) map[m] = "vazio";
+    for (const o of todas) {
+      if (typeof o.mesCompetencia !== "string" || o.mesCompetencia.slice(0, 4) !== String(ano)) continue;
+      const m = parseInt(o.mesCompetencia.slice(5, 7), 10);
+      if (!(m >= 1 && m <= 12)) continue;
+      if (o.status !== "pago" && o.status !== "cancelado") { map[m] = "lancamento"; }
+      else if (map[m] === "vazio") { map[m] = "consolidado"; }
+    }
+    return map;
+  }, [todas, ano]);
+
+  // Obrigações do ANO e do MÊS selecionado (mesSel === 0 => ano todo).
+  const doAno = useMemo(
+    () => todas.filter((o) => typeof o.mesCompetencia === "string" && o.mesCompetencia.slice(0, 4) === String(ano)),
+    [todas, ano],
+  );
+  const mesData = useMemo(
+    () => (mesSel === 0 ? doAno : doAno.filter((o) => parseInt(String(o.mesCompetencia).slice(5, 7), 10) === mesSel)),
+    [doAno, mesSel],
+  );
+  const filtradas = useMemo(
+    () => (statusFilter === "all" ? mesData : mesData.filter((o) => o.status === statusFilter)),
+    [mesData, statusFilter],
   );
 
   const createMut = (trpc as any).financial.createTaxObligation.useMutation({
@@ -87,12 +111,11 @@ export default function FinanceiroObrigacoesFiscais() {
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
 
-  const aPagar = (obrigacoes ?? []).filter((o: any) => o.status === "a_pagar");
-  const pagas = (obrigacoes ?? []).filter((o: any) => o.status === "pago");
+  const aPagar = mesData.filter((o: any) => o.status === "a_pagar");
+  const pagas = mesData.filter((o: any) => o.status === "pago");
   const totalAPagar = aPagar.reduce((s: number, o: any) => s + Number(o.valorTotal ?? 0), 0);
   const totalPago = pagas.reduce((s: number, o: any) => s + Number(o.valorTotal ?? 0), 0);
 
-  const hoje = new Date().toISOString().split("T")[0];
   const vencidas = aPagar.filter((o: any) => o.dataVencimento < hoje);
 
   function handleSave() {
@@ -155,43 +178,88 @@ export default function FinanceiroObrigacoesFiscais() {
           </Card>
         </div>
 
-        {/* Filtros */}
+        {/* Navegação Ano + Meses (mesmo padrão de Contas a Receber/Pagar) */}
         <Card className="border-0 shadow-sm">
-          <CardContent className="p-4 flex flex-wrap gap-3">
-            <Select value={mesFilter} onValueChange={setMesFilter}>
-              <SelectTrigger className="w-40">
-                <Calendar className="w-4 h-4 mr-2 text-gray-400" />
-                <SelectValue placeholder="Competência" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as Competências</SelectItem>
-                {meses.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-36">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="a_pagar">A Pagar</SelectItem>
-                <SelectItem value="pago">Pago</SelectItem>
-                <SelectItem value="atrasado">Atrasado</SelectItem>
-              </SelectContent>
-            </Select>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <button onClick={() => setAno((a) => a - 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-base font-bold text-gray-800 min-w-[3.5rem] text-center">{ano}</span>
+                <button onClick={() => setAno((a) => a + 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setMesSel((m) => (m === 0 ? new Date().getMonth() + 1 : 0))}
+                  className={`ml-1 px-3 py-1 rounded-lg border text-xs font-semibold transition-all
+                    ${mesSel === 0
+                      ? "border-orange-500 bg-orange-50 text-orange-700 shadow-sm"
+                      : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                    }`}
+                >
+                  Ano todo
+                </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />A pagar</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Tudo pago</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Sem dados</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+              {MESES.map((m, i) => {
+                const numMes = i + 1;
+                const status = mesesStatus[numMes];
+                const isSelected = mesSel === numMes;
+                return (
+                  <button
+                    key={m}
+                    onClick={() => setMesSel(numMes)}
+                    className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
+                      ${isSelected
+                        ? "border-orange-500 bg-orange-50 text-orange-700 shadow-sm"
+                        : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"
+                      }`}
+                  >
+                    <span>{m}</span>
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      status === "consolidado" ? "bg-green-500" :
+                      status === "lancamento" ? "bg-blue-500" :
+                      "bg-gray-300"
+                    }`} />
+                  </button>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
+
+        {/* Filtro de status */}
+        <div className="flex justify-end">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-36">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="a_pagar">A Pagar</SelectItem>
+              <SelectItem value="pago">Pago</SelectItem>
+              <SelectItem value="atrasado">Atrasado</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
         {/* Lista */}
         <Card className="border-0 shadow-sm">
           <CardContent className="p-0">
             {isLoading ? (
               <div className="p-8 text-center text-gray-500">Carregando...</div>
-            ) : (obrigacoes ?? []).length === 0 ? (
+            ) : filtradas.length === 0 ? (
               <div className="p-8 text-center text-gray-400">Nenhuma obrigação encontrada.</div>
             ) : (
               <div className="divide-y divide-gray-100">
-                {(obrigacoes ?? []).map((ob: any) => {
+                {filtradas.map((ob: any) => {
                   const isVencida = ob.status === "a_pagar" && ob.dataVencimento < hoje;
                   return (
                     <div key={ob.id} className={`px-5 py-4 flex items-center justify-between hover:bg-gray-50 ${isVencida ? "bg-red-50/30" : ""}`}>

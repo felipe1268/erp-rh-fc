@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3356 — **FINANCEIRO / OBRIGAÇÕES FISCAIS · O FILTRO DE PERÍODO FOI TROCADO PELO SELETOR DE ANO + MESES
+ * (CHIPS JAN…DEZ COM NAVEGAÇÃO DE ANO, BOTÃO "ANO TODO" E BOLINHA DE STATUS POR MÊS), IGUAL AO PADRÃO JÁ USADO EM
+ * CONTAS A RECEBER/PAGAR. SUBSTITUI O SELECT "TODAS AS COMPETÊNCIAS". 100% FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário): aplicar na tela "Obrigações Fiscais" o mesmo seletor de ano + meses (Jan…Dez com chips,
+ *   "Ano todo", legenda de status) que já existe em `FinanceiroContasAReceberTitulos.tsx`, no lugar do filtro atual
+ *   (Select "Todas as Competências" + Select de status).
+ * - DECISÃO DE DADOS: o backend `getTaxObligations` filtrava por `mesCompetencia` EXATO ("YYYY-MM"). Como obrigações
+ *   fiscais são baixo volume (poucas guias/mês), a query passou a buscar TODAS as obrigações da empresa (só
+ *   `companyId`) e o filtro de ano/mês/status é feito no CLIENTE — exatamente como a tela de Títulos faz —, o que
+ *   permite pintar a bolinha de status de CADA mês do ano sem N requisições.
+ * - FRONT (`client/src/pages/financeiro/FinanceiroObrigacoesFiscais.tsx`): novos states `ano`
+ *   (default = ano atual) e `mesSel` (1..12, default = mês atual; 0 = "Ano todo"). Card de navegação com
+ *   ChevronLeft/Right (± ano), label do ano, botão "Ano todo" (toggla `mesSel` 0↔mês atual) e grade
+ *   `grid-cols-6 sm:grid-cols-12` dos 12 meses. `mesesStatus` (useMemo) deriva por mês do ano selecionado:
+ *   VERDE/"consolidado" = há guia(s) e TODAS pagas (ou canceladas); AZUL/"lancamento" = há guia(s) a pagar; CINZA =
+ *   sem dados. Legenda "A pagar / Tudo pago / Sem dados". Memos `doAno` → `mesData` (recorte do mês/ano) → `filtradas`
+ *   (recorte adicional pelo Select de status, mantido num canto). Cor de seleção laranja (paleta da tela).
+ * - KPIs (A Pagar / Vencidas / Pagas) passam a refletir o PERÍODO selecionado (`mesData`), não mais o conjunto
+ *   server-filtrado; a lista usa `filtradas`; o empty-state usa `filtradas.length`.
+ * - VALIDAÇÃO: tsc limpo no arquivo tocado (só o ruído pré-existente de `changelog.ts`). Removidos imports/states
+ *   órfãos (`Calendar`, `meses`, `mesFilter`). ZERO schema/ALTER/DROP/DELETE.
+ *
  * Rev. 3355 — **FOLHA / FERIADOS · NOVO "BAIXAR FERIADOS {ANO}": BAIXA AUTOMATICAMENTE OS FERIADOS NACIONAIS
  * (FIXOS + MÓVEIS) E, NUM DIÁLOGO, DEIXA O USUÁRIO ESCOLHER AS UFs PARA BAIXAR OS FERIADOS ESTADUAIS (PRÉ-MARCANDO
  * AS UFs DAS OBRAS ATIVAS, QUANDO PREENCHIDAS). FERIADOS MUNICIPAIS NÃO SÃO BAIXADOS (NÃO HÁ BASE PÚBLICA
