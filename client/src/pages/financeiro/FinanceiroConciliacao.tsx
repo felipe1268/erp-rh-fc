@@ -18,6 +18,7 @@ import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Ar
 import { formatConta, formatAgencia } from "@/lib/formatters";
 import { NaturezaOverrideDialog, NaturezaBadge, type LancNaturezaLinha } from "./_NaturezaOverride";
 import { MapaMovimentacaoInternaDialog } from "./_MapaMovimentacaoInterna";
+import { ConferirChequesExtratoDialog } from "./_ConferirChequesExtrato";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -563,6 +564,8 @@ export default function FinanceiroConciliacao() {
   const [ovRow, setOvRow] = useState<LancNaturezaLinha | null>(null);
   // Rev. 3368 — mapa "Movimentação interna do grupo" (montante por contraparte).
   const [showMapaInterno, setShowMapaInterno] = useState(false);
+  // Rev. 3372 — painel "Conferir cheques com o extrato" (pré-confirmação em lote).
+  const [showConferirCheques, setShowConferirCheques] = useState(false);
   const drill = useMemo(() => {
     const contas: any[] = reportGeral?.contas ?? [];
     const conc: any[] = [];
@@ -1603,6 +1606,15 @@ export default function FinanceiroConciliacao() {
                 </Button>
               )
             )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 border-teal-600 text-teal-700 hover:bg-teal-50"
+              onClick={() => setShowConferirCheques(true)}
+              title="Cheques compensados que conferem com o extrato e ainda não foram conciliados — revise e confirme em lote"
+            >
+              <Link2 className="w-3.5 h-3.5 mr-1.5" />Conferir cheques
+            </Button>
             <Button size="sm" className="h-9" onClick={() => { setShowImport(true); setImportConta(contaBancariaId); }}>
               <Upload className="w-3.5 h-3.5 mr-1.5" />Importar Extrato
             </Button>
@@ -2703,6 +2715,19 @@ export default function FinanceiroConciliacao() {
               dataInicio={dataInicio}
               dataFim={dataFim}
               periodoLabel={`${fmtData(dataInicio)} – ${fmtData(dataFim)}`}
+            />
+
+            {/* Rev. 3372 — pré-confirmação "Conferir cheques com o extrato". Cheque é
+                indexado por ano/mês (mes_ref): no modo "Mês" filtra o mês; em "Ano todo",
+                "Período" e "Dia" usa o ANO inteiro (não há range arbitrário por cheque). */}
+            <ConferirChequesExtratoDialog
+              open={showConferirCheques}
+              onOpenChange={setShowConferirCheques}
+              companyId={companyId}
+              ano={ano}
+              mes={modoData === "mes" ? mesSel : null}
+              periodoLabel={modoData === "mes" ? (mesSel != null ? `${MESES[mesSel - 1]}/${ano}` : `Ano ${ano}`) : `Ano ${ano}`}
+              onDone={() => { refetchReport(); if (!contaBancariaId && periodoDefinido) refetchGeral(); }}
             />
 
             {/* Rev. 3177 — Detalhe CONSULTIVO (read-only) do lançamento, aberto ao clicar na sugestão. */}

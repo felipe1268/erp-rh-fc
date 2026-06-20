@@ -154,6 +154,10 @@ function classificarExtrato(status: any, m: MatchExtrato) {
   return {
     extratoEncontrado: m.encontrado,
     extratoData: m.dataExtrato,
+    // Rev. 3372 — expõe a FORÇA do match (nº+valor = forte; valor+data = fraco) p/ o
+    // painel de pré-confirmação separar "match forte" (auto-marcável) de "match fraco"
+    // (confira antes). `forte` só faz sentido quando o cheque foi encontrado.
+    extratoForte: m.encontrado && m.forte,
     extratoConfirmado: m.encontrado && compensado,
     extratoDivergente: m.encontrado && !compensado,
     extratoDevolvido: m.devolvido,
@@ -1129,14 +1133,28 @@ export const chequesRouter = router({
     let confirmados = 0, divergencias = 0, jaConferidos = 0, naoEncontrados = 0, aConferir = 0;
     // Rev. 3242 — totais BRL p/ os cards de "extrato" no front (qtd + valor, igual aos demais).
     let valorConfirmados = 0, valorDivergencias = 0, valorJaConferidos = 0, valorAConferir = 0;
+    // Rev. 3372 — separa "a conferir" por força do match: forte (nº+valor, auto-marcável)
+    // × fraco (valor+data, confira antes). Painel de pré-confirmação na Conciliação usa isso.
+    let aConferirForte = 0, aConferirFraco = 0, valorAConferirForte = 0, valorAConferirFraco = 0;
     const divergenciasLista: any[] = [];
+    const aConferirLista: any[] = [];
     for (const c of (res.rows as any[])) {
       const cls = classificarExtrato(c.status, matchCheque(c));
       const v = Number(c.valor) || 0;
       if (cls.extratoConfirmado) {
         confirmados++; valorConfirmados += v;
         if (Number(c.conciliado) === 1) { jaConferidos++; valorJaConferidos += v; }
-        else { aConferir++; valorAConferir += v; }
+        else {
+          aConferir++; valorAConferir += v;
+          if (cls.extratoForte) { aConferirForte++; valorAConferirForte += v; }
+          else { aConferirFraco++; valorAConferirFraco += v; }
+          aConferirLista.push({
+            id: c.id, numeroCheque: c.numeroCheque, fornecedorNome: c.fornecedorNome,
+            valor: v, status: c.status, forte: cls.extratoForte,
+            dataCompensacao: c.dataCompensacao, dataVencimento: c.dataVencimento,
+            dataExtrato: cls.extratoData, mes: c.mes, ano: c.ano,
+          });
+        }
       } else if (cls.extratoDivergente) {
         divergencias++; valorDivergencias += v;
         divergenciasLista.push({
@@ -1150,9 +1168,12 @@ export const chequesRouter = router({
       }
     }
     divergenciasLista.sort((a, b) => (b.valor - a.valor));
+    // Forte primeiro (auto-marcável no topo), depois por valor desc.
+    aConferirLista.sort((a, b) => (Number(b.forte) - Number(a.forte)) || (b.valor - a.valor));
     return {
       confirmados, divergencias, jaConferidos, naoEncontrados, aConferir, divergenciasLista,
       valorConfirmados, valorDivergencias, valorJaConferidos, valorAConferir,
+      aConferirForte, aConferirFraco, valorAConferirForte, valorAConferirFraco, aConferirLista,
     };
   }),
 
@@ -1165,6 +1186,12 @@ export const chequesRouter = router({
     companyId: z.number(),
     ano: z.number().int().optional(),
     mes: z.number().int().min(1).max(12).optional(),
+    // Rev. 3372 — SUBSET opcional: o painel de pré-confirmação manda só os IDs que o
+    // usuário deixou marcados (forte pré-selecionado + fraco escolhido a dedo). Vazio/null
+    // = comportamento legado (marca TODOS os confirmados do período). NUNCA confia no id
+    // cru — cada um é re-validado por `extratoConfirmado` abaixo, então um id "fabricado"
+    // ou de cheque divergente jamais é marcado.
+    ids: z.array(z.number().int()).optional(),
   })).mutation(async ({ input, ctx }) => {
     await assertCompanyAccess(ctx.user, input.companyId);
     const db = await getDb();
@@ -1179,6 +1206,9 @@ export const chequesRouter = router({
          FROM financial_cheques
         WHERE company_id=$1 AND excluido_em IS NULL${extra}`, params);
     const matchCheque = await montarMatcherExtrato(db, input.companyId);
+    // Filtro de subset (re-validação acontece via classificarExtrato; isto é só p/ honrar
+    // a deseleção do usuário). Set vazio só é restritivo quando `ids` veio explícito.
+    const idSet = (input.ids && input.ids.length > 0) ? new Set(input.ids) : null;
     const alvos: { id: number; dt: string }[] = [];
     // Rev. 3247 — já conferidos mas SEM data de compensação preenchida → backfill com a
     // data em que o banco compensou (extratoData), garantindo informação correta p/ análise.
@@ -1193,6 +1223,7 @@ export const chequesRouter = router({
           if (!c.dataCompensacao) backfill.push({ id: c.id, dt });
           continue;
         }
+        if (idSet && !idSet.has(Number(c.id))) continue; // usuário deselecionou este
         alvos.push({ id: c.id, dt });
       } else if (cls.extratoDivergente) {
         divergencias++;

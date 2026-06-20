@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3372 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NOVO PAINEL "CONFERIR CHEQUES COM O EXTRATO" (PRÉ-CONFIRMAÇÃO EM
+ * LOTE): MOSTRA OS CHEQUES QUE O BANCO COMPENSOU E O CONTROLE JÁ DIZ "COMPENSADO" MAS QUE AINDA NÃO FORAM CONCILIADOS,
+ * SEPARADOS EM MATCH FORTE (Nº+VALOR, PRÉ-SELECIONADO) × MATCH FRACO (VALOR+DATA, "CONFIRA ANTES") × DIVERGÊNCIAS (SÓ
+ * ALERTA). O USUÁRIO REVISA, (DES)MARCA E CONFIRMA — NADA É MARCADO SOZINHO. BACKEND ADITIVO (READ-ONLY + SUBSET DE
+ * IDS NA AÇÃO EXISTENTE) + 1 COMPONENTE FRONT · ZERO SCHEMA/ALTER/DROP/DELETE · NADA BAIXA FINANCEIRAMENTE.**
+ * - PEDIDO (conceitual, do piloto FC): "se o cheque foi compensado e verificado no extrato, já não poderia dar baixa
+ *   automática, ou ter uma tela de resumo indicando para o usuário fazer a confirmação? Na tela de conciliação
+ *   bancária." RESPOSTA DE PRODUTO: baixa 100% automática NÃO (match fraco engana, divergências precisam ser vistas, e
+ *   a regra de ouro do FC é "conciliação SÓ SUGESTIVA"). Caminho escolhido: TELA DE RESUMO/PRÉ-CONFIRMAÇÃO em lote, com
+ *   o humano no comando — exatamente a 2ª opção que o usuário levantou.
+ * - CONCEITO (3 estados distintos, reforçado na UI): "Compensado" = controle interno; "Confere com o extrato" = leitura
+ *   read-only que casa nº+valor (forte) OU valor+data (fraco); "Conciliado" = selo definitivo (coluna `conciliado` 0/1)
+ *   que o usuário carimba. O painel transforma os "confere mas falta marcar" numa fila revisável.
+ * - BACKEND (`server/routers/cheques.ts`), TUDO ADITIVO:
+ *   (1) `classificarExtrato` passou a expor `extratoForte` (= encontrado && match forte nº+valor) p/ o front separar os
+ *       grupos sem refazer o matching.
+ *   (2) `verificarExtratoResumo` (READ-ONLY, não grava nada) passou a devolver, além dos contadores já existentes,
+ *       `aConferirLista` (cada cheque: id, numeroCheque, fornecedorNome, valor, status, `forte`, datas, mes/ano) +
+ *       contadores/valores `aConferirForte`/`aConferirFraco`/`valorAConferirForte`/`valorAConferirFraco`. Ordena forte
+ *       primeiro, depois por valor desc.
+ *   (3) `conferirExtrato` (a AÇÃO de marcar conciliado=1, já existente, idempotente) ganhou input OPCIONAL `ids: number[]`:
+ *       quando enviado, marca SÓ esse subconjunto (honra a deseleção do usuário); vazio/ausente = legado (todos os
+ *       confirmados do período). SEGURANÇA: o id NUNCA é confiado cru — cada cheque é RE-VALIDADO por `extratoConfirmado`
+ *       antes de marcar, então id fabricado ou de cheque divergente jamais vira conciliado. Mantém `assertCompanyAccess`,
+ *       cast `::date`, e backfill da data de compensação.
+ * - FRONT — NOVO COMPONENTE `client/src/pages/financeiro/_ConferirChequesExtrato.tsx` (segue o padrão de
+ *   `_MapaMovimentacaoInterna.tsx`): Dialog com 3 blocos — ✅ Match forte (pré-marcado), ⚠️ Match fraco (desmarcado,
+ *   "confira antes"), ❗ Divergências (read-only, nunca selecionável). Checkbox por linha + "marcar/desmarcar todos" por
+ *   grupo; rodapé com qtd+valor selecionados e botão "Conferir N" → AlertDialog de REVISÃO → `conferirExtrato({ids})`.
+ *   Seed da seleção num único `useEffect` chaveado pela identidade dos ids dos fortes (evita corrida de hidratação).
+ *   Invalida `verificarExtratoResumo`+`cheques.listar` no sucesso. Acionado por um botão "Conferir cheques" na toolbar
+ *   da `FinanceiroConciliacao.tsx`; período = ano/mês do seletor (mês só no modo "Mês"; senão ano inteiro, pois cheque é
+ *   indexado por `mes_ref`/`ano_ref`, não por range arbitrário).
+ * - PREFERÊNCIA RESPEITADA: conciliação SÓ SUGESTIVA — o painel só sugere; aplicar passa por AlertDialog e marca apenas
+ *   o selo de conferência (conciliado=1 + data de compensação), SEM baixa financeira e SEM mudar o status do controle.
+ * - VALIDAÇÃO: tsc limpo nos 2 arquivos tocados + no componente novo (só ruído pré-existente em `changelog.ts`). App
+ *   rodando, Neon conectado. Validação visual bloqueada pelo login (esperado no preview).
+ *
  * Rev. 3371 — **FINANCEIRO / DASHBOARD "CONTROLE DE CHEQUES" · GRÁFICOS DE PIZZA (DONUT) "CHEQUES POR STATUS" E
  * "DEVOLVIDOS POR MOTIVO" VIRARAM GRÁFICOS DE COLUNAS/BARRAS, PARA FICAR MAIS LEGÍVEL E ORGANIZADO (PREFERÊNCIA DO
  * USUÁRIO POR GRÁFICOS DE COLUNAS). 100% FRONT (TROCA DE TIPO DE GRÁFICO) · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE ·
