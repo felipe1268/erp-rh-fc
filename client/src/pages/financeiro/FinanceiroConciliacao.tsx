@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX, FileSpreadsheet, FileDown, Plus, Maximize2, Minimize2, Search, Users, Building2 } from "lucide-react";
 import { formatConta, formatAgencia } from "@/lib/formatters";
 import { NaturezaOverrideDialog, NaturezaBadge, type LancNaturezaLinha } from "./_NaturezaOverride";
+import { MapaMovimentacaoInternaDialog } from "./_MapaMovimentacaoInterna";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -560,6 +561,8 @@ export default function FinanceiroConciliacao() {
   const [panoramaDrill, setPanoramaDrill] = useState<null | "entradas" | "saidas" | "saldo" | "interno" | "conciliados" | "extratoSemLanc" | "lancSemExtrato" | "pct">(null);
   // Rev. 3351 — exceção por lançamento (caixa real × movimentação interna).
   const [ovRow, setOvRow] = useState<LancNaturezaLinha | null>(null);
+  // Rev. 3368 — mapa "Movimentação interna do grupo" (montante por contraparte).
+  const [showMapaInterno, setShowMapaInterno] = useState(false);
   const drill = useMemo(() => {
     const contas: any[] = reportGeral?.contas ?? [];
     const conc: any[] = [];
@@ -1903,6 +1906,17 @@ export default function FinanceiroConciliacao() {
                         <Eye className="w-4 h-4 text-indigo-400 shrink-0 ml-auto" />
                       </button>
                     </div>
+                    {/* Rev. 3368 — atalho p/ o mapa da movimentação interna por contraparte. */}
+                    <div className="mb-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowMapaInterno(true)}
+                        className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-indigo-300 bg-indigo-50/40 px-3 py-2 text-xs font-medium text-indigo-700 hover:bg-indigo-100/60 transition-colors"
+                      >
+                        <ArrowLeftRight className="w-3.5 h-3.5" />
+                        Ver mapa da movimentação interna por contraparte (Locnow, sócios, aplicação…)
+                      </button>
+                    </div>
                     {/* KPIs agregados da empresa no mês */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                       <button type="button" onClick={() => setPanoramaDrill("conciliados")} title="Ver as linhas já conciliadas do mês" className="rounded-xl border border-green-200 bg-green-50/60 p-3 text-left hover:bg-green-100/70 hover:border-green-300 transition-colors relative">
@@ -2662,6 +2676,16 @@ export default function FinanceiroConciliacao() {
               open={!!ovRow} onOpenChange={(o) => { if (!o) setOvRow(null); }}
               companyId={companyId} line={ovRow}
               onDone={() => { setOvRow(null); refetchGeral(); }}
+            />
+
+            {/* Rev. 3368 — mapa da movimentação interna por contraparte (só conferência). */}
+            <MapaMovimentacaoInternaDialog
+              open={showMapaInterno}
+              onOpenChange={setShowMapaInterno}
+              companyId={companyId}
+              dataInicio={dataInicio}
+              dataFim={dataFim}
+              periodoLabel={`${fmtData(dataInicio)} – ${fmtData(dataFim)}`}
             />
 
             {/* Rev. 3177 — Detalhe CONSULTIVO (read-only) do lançamento, aberto ao clicar na sugestão. */}

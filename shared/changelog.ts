@@ -1,6 +1,49 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3368 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · (A) UMA RECEITA DE CLIENTE QUE ESTAVA CAINDO COMO "MOVIMENTAÇÃO
+ * INTERNA" VOLTOU PARA O "CAIXA REAL"; (B) NOVO "MAPA DA MOVIMENTAÇÃO INTERNA DO GRUPO" QUE MOSTRA QUANTO ENTROU/SAIU
+ * COM CADA CONTRAPARTE (LOCNOW, SÓCIOS, APLICAÇÃO/RESGATE, TRANSF. ENTRE CONTAS PRÓPRIAS) NO PERÍODO. SÓ BACKEND
+ * (1 PADRÃO REMOVIDO + 1 ENDPOINT READ-ONLY) + 1 FRONT (DIÁLOGO) · ZERO SCHEMA/ALTER/DROP/DELETE · NADA CONCILIA SOZINHO.**
+ * - PEDIDO (usuário): (A) "corrigir os números" da movimentação interna + (B) "um relatório da movimentação interna
+ *   do grupo". Escolheu fazer AS DUAS.
+ * - DIAGNÓSTICO (auditoria Neon, company_id=60002, 2026): a hipótese inicial de um "vazamento de ~3mi" estava ERRADA.
+ *   A régua de classificação JÁ pega 2,87mi de débitos como internos via espelho (nome/CNPJ do grupo); só ~178k
+ *   "vazam com espelho" e, ao inspecionar linha a linha, são quase todos FORNECEDOR REAL (Hotel Consagrado, Ferragens
+ *   Santa Rita, etc.) batendo em VALOR REDONDO por coincidência. Conclusão: casar movimentação interna por VALOR+DATA
+ *   é PERIGOSO (geraria falso-positivo apagando saída legítima) → NÃO implementado auto-matching. A assimetria
+ *   (entrou 9,17mi / saiu 4,56mi do grupo) é dinheiro REAL — o grupo bancando a FC no período.
+ * - ÚNICO ERRO REAL ENCONTRADO: o recebimento da **Arquidiocese de Aparecida (R$ 53.344,75)** — receita de CLIENTE —
+ *   estava sendo classificado como INTERNO porque a régua tinha o padrão GENÉRICO `"credito transf internet"` na
+ *   lista `_INTERNO_PATTERNS`. Esse é um rótulo padrão do extrato da Caixa que também aparece em TED de cliente.
+ * - FIX (A) (`server/routers/financial.ts`, `_INTERNO_PATTERNS` ~L748): REMOVIDO o padrão `"credito transf internet"`.
+ *   As transferências internas LEGÍTIMAS seguem classificadas pelos casadores por nome/CNPJ do grupo (token forte +
+ *   `regexp_replace` de dígitos) e pelo rótulo `"fc engenharia"` — não dependem do padrão genérico. Efeito cirúrgico:
+ *   a Arquidiocese sai de "interno" e volta p/ "caixa real" (entradas externas), sem mexer em nenhuma outra linha.
+ *   (Reclassificação pontual continua possível via exceção por lançamento — `financial_internal_overrides`.)
+ * - FEATURE (B) (`server/routers/financial.ts`, NOVO endpoint READ-ONLY `getMovimentacaoInternaGrupo`): recebe
+ *   `{companyId, dataInicio, dataFim}`, valida acesso (`_assertFinanceiroCompanyAccess`), usa a MESMA fonte única do
+ *   split caixa real × interno (`internoExpr` = exceção por lançamento → régua base via `_internoSqlPredicate`) e
+ *   AGREGA a movimentação interna do período POR CONTRAPARTE. Os baldes são DINÂMICOS: vêm de `financial_internal_cnpjs`
+ *   (cada empresa/CPF do grupo cadastrado vira um balde, casando por CNPJ OU nome forte), mais 3 baldes fixos —
+ *   "Aplicação / Resgate (CDB próprio)", "Transferência entre contas próprias" e "Outras internas". A prioridade
+ *   segue a ordem do CASE (1ª que casar vence). Retorna `{periodo, buckets[{label,tipo,entrou,saiu,liquido,qtd}],
+ *   totais{entrou,saiu,liquido,bruto,qtd}, lines[]}`. `dbExecute` liga params por ORDEM DE APARIÇÃO do $N
+ *   (`[companyId, dataInicio, dataFim]`). 100% READ-ONLY — só LÊ `bank_statement_lines` (excl. `excluido_em`), não
+ *   concilia/baixa/reclassifica.
+ * - FRONT (B) (`client/src/pages/financeiro/_MapaMovimentacaoInterna.tsx`, NOVO; botão+state em
+ *   `FinanceiroConciliacao.tsx`): diálogo com cabeçalho de totais (entrou/saiu/líquido + bruto), tabela de baldes
+ *   ordenada por giro (|entrou|+|saiu|) com ícone por tipo, e drill-in expansível por balde mostrando as linhas;
+ *   cada linha é clicável e abre o `NaturezaOverrideDialog` já existente p/ reclassificar pontualmente (caixa real ×
+ *   interno). Botão "Ver mapa da movimentação interna por contraparte" inserido logo abaixo dos cards do panorama,
+ *   respeitando o período (`dataInicio`/`dataFim`) já no escopo. NÃO criou rota/menu/permissão nova.
+ * - PREFERÊNCIA RESPEITADA: conciliação SÓ SUGESTIVA — o mapa é CONFERÊNCIA; nada concilia/baixa/reclassifica sem o
+ *   usuário confirmar (a reclassificação pontual passa pelo diálogo de natureza, com motivo).
+ * - NOTA: "Julio Ferraz Projetos" NÃO é do grupo (sócios diferentes) — mantido cadastrado SÓ temporariamente p/
+ *   conciliar o passado; aparece como balde próprio no mapa até ser inativado.
+ * - VALIDAÇÃO: tsc limpo nos arquivos tocados (`financial.ts`, `_MapaMovimentacaoInterna.tsx`, `FinanceiroConciliacao.tsx`);
+ *   só o ruído pré-existente de `changelog.ts`.
+ *
  * Rev. 3367 — **FINANCEIRO / CADASTRO · CONTAS BANCÁRIAS · O BOTÃO "EXCLUIR" AGORA REALMENTE TIRA A CONTA DA LISTA.
  * ANTES, AO CLICAR EM "EXCLUIR" E CONFIRMAR, A CONTA CONTINUAVA APARECENDO NO ERP (E NOS CARDS "TOTAL DE CONTAS" /
  * "ATIVAS") COMO SE NADA TIVESSE ACONTECIDO. SÓ BACKEND (1 FILTRO) · ZERO SCHEMA/ALTER/DROP/DELETE.**

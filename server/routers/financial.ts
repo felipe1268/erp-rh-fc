@@ -743,8 +743,15 @@ async function _baixarComprovante(url: string): Promise<{ base64: string; conten
 // READ-ONLY · só CLASSIFICA p/ separar "caixa real (externo)" da movimentação interna —
 // não concilia/baixa/oculta nada. O usuário confere a lista completa pelo drill-in.
 const _INTERNO_PATTERNS = [
+  // Rev. 3368 — REMOVIDO "credito transf internet": é um rótulo GENÉRICO do banco (Caixa)
+  // que também aparece em TED de CLIENTE (ex.: recebimento da Arquidiocese de Aparecida,
+  // R$ 53.344,75) → vazava receita real p/ dentro de "movimentação interna". As transferências
+  // internas LEGÍTIMAS já carregam o nome/CNPJ do grupo ("fc engenharia" abaixo OU CNPJ
+  // cadastrado), então continuam sendo classificadas como internas por esses casadores — sem
+  // depender deste rótulo genérico. (Caso precise reclassificar 1 linha pontual, use a exceção
+  // por lançamento em financial_internal_overrides.)
   "transfer.*entre contas", "transf interna", "transferencia interna",
-  "credito transf internet", "aplica", "resgate", "contamax", "rdb", "cdb",
+  "aplica", "resgate", "contamax", "rdb", "cdb",
   "fundo de invest", "fc engenharia",
 ];
 const _INTERNO_REGEX_SRC = _INTERNO_PATTERNS.join("|");
@@ -5410,6 +5417,106 @@ export const financialRouter = router({
       overrideNatureza: r.overrideNatureza || null,
       overrideMotivo: r.overrideMotivo || null,
     }));
+  }),
+
+  // Rev. 3368 — MAPA DE MOVIMENTAÇÃO INTERNA DO GRUPO. READ-ONLY · agrega a movimentação
+  // interna do período POR CONTRAPARTE (cada empresa/CPF do grupo cadastrado + aplicação/
+  // resgate + transferência entre contas próprias + outras), pra o gestor VER o montante
+  // movimentado com cada uma enquanto separa as empresas. Usa a MESMA fonte única do split
+  // caixa real × interno (`internoExpr`, exceção por lançamento + régua base) — não recalcula,
+  // não concilia, não reclassifica nada. Os baldes por empresa são DINÂMICOS (vêm de
+  // financial_internal_cnpjs), então empresas novas aparecem sozinhas no mapa.
+  getMovimentacaoInternaGrupo: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    dataInicio: z.string(),
+    dataFim: z.string(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const internoCfg = await _loadInternoConfig(db, input.companyId);
+    // Exceção por lançamento (ov) tem a palavra final; senão a régua base (regex + nome + CNPJ).
+    const internoExpr = `(CASE WHEN ov.natureza='efetivo' THEN FALSE WHEN ov.natureza='interno' THEN TRUE ELSE ${_internoSqlPredicate(internoCfg.cnpjDigits, "b.descricao", internoCfg.nameTokens)} END)`;
+    // Baldes por contraparte — ordem = prioridade do CASE (1ª que casar vence):
+    //   aplicação/resgate (próprio) → cada empresa cadastrada (CNPJ OU nome forte) →
+    //   transferência entre contas próprias (rótulo genérico) → outras internas.
+    const APLIC_LABEL = "Aplicação / Resgate (CDB próprio)";
+    const TRANSF_LABEL = "Transferência entre contas próprias";
+    const OUTRAS_LABEL = "Outras internas";
+    const ents = rows(await dbExecute(db,
+      `SELECT cnpj, nome FROM financial_internal_cnpjs WHERE company_id=$1 AND COALESCE(ativo,1)=1 ORDER BY id`,
+      [input.companyId]));
+    // Rev. 3368 — escapa aspas simples E neutraliza `$<dígito>` no label: o `dbExecute`
+    // liga params varrendo o TEXTO da query por `$N`, então um nome cadastrado com "$1"
+    // quebraria o bind. Removendo só o `$` quando seguido de dígito (raríssimo em razão
+    // social) o label segue legível e a query, segura.
+    const esc = (s: string) => String(s || "").replace(/\$(?=\d)/g, "").replace(/'/g, "''");
+    const grupoLabels: string[] = [];
+    const cases: string[] = [];
+    cases.push(`WHEN b.descricao ~* 'aplica|resgate|contamax|rdb|cdb|fundo de invest' THEN '${esc(APLIC_LABEL)}'`);
+    for (const e of ents) {
+      const d = _soDigitos(e.cnpj);
+      const tk = _nameTokenForte(e.nome);
+      const conds: string[] = [];
+      if (d.length >= 6) conds.push(`regexp_replace(b.descricao,'[^0-9]','','g') LIKE '%${d}%'`);
+      if (tk && /^[a-z0-9]{5,}$/.test(tk)) conds.push(`${_sqlUnaccentLower("b.descricao")} ~ '${tk}'`);
+      if (!conds.length) continue;
+      const label = String(e.nome || "").trim() || `CNPJ ${d}`;
+      grupoLabels.push(label);
+      cases.push(`WHEN ${conds.join(" OR ")} THEN '${esc(label)}'`);
+    }
+    cases.push(`WHEN b.descricao ~* 'transfer.*entre contas|transf interna|transferencia interna|fc engenharia' THEN '${esc(TRANSF_LABEL)}'`);
+    const bucketExpr = `CASE ${cases.join(" ")} ELSE '${esc(OUTRAS_LABEL)}' END`;
+    // dbExecute liga params por ORDEM DE APARIÇÃO do $N: [companyId, dataInicio, dataFim].
+    const res = await dbExecute(db,
+      `SELECT b.id, b.data, b.descricao, b.valor,
+              b.conta_bancaria_id AS "contaBancariaId",
+              COALESCE(b.conciliado,0) AS conciliado,
+              ov.natureza AS "overrideNatureza", ov.motivo AS "overrideMotivo",
+              (${bucketExpr}) AS bucket
+         FROM bank_statement_lines b
+         LEFT JOIN financial_internal_overrides ov
+           ON ov.line_id=b.id AND ov.company_id=b.company_id AND ov.natureza IN ('efetivo','interno')
+        WHERE b.company_id=$1 AND b.data>=$2 AND b.data<=$3 AND b.excluido_em IS NULL
+          AND ${internoExpr}
+        ORDER BY b.data DESC, b.id DESC`,
+      [input.companyId, input.dataInicio, input.dataFim]);
+    const grupoSet = new Set(grupoLabels);
+    const tipoDe = (label: string): "aplicacao" | "grupo" | "transf" | "outras" =>
+      label === APLIC_LABEL ? "aplicacao" : label === TRANSF_LABEL ? "transf"
+        : label === OUTRAS_LABEL ? "outras" : grupoSet.has(label) ? "grupo" : "outras";
+    const map = new Map<string, { label: string; tipo: string; entrou: number; saiu: number; qtd: number }>();
+    const lines = rows(res).map((r: any) => {
+      const valor = Number(r.valor) || 0;
+      const bucket = String(r.bucket || OUTRAS_LABEL);
+      const b = map.get(bucket) || { label: bucket, tipo: tipoDe(bucket), entrou: 0, saiu: 0, qtd: 0 };
+      if (valor >= 0) b.entrou += valor; else b.saiu += Math.abs(valor);
+      b.qtd += 1;
+      map.set(bucket, b);
+      return {
+        id: Number(r.id),
+        data: r.data,
+        descricao: r.descricao || "",
+        valor,
+        contaBancariaId: r.contaBancariaId == null ? null : Number(r.contaBancariaId),
+        conciliado: Number(r.conciliado) === 1 ? 1 : 0,
+        bucket,
+        overrideNatureza: r.overrideNatureza || null,
+        overrideMotivo: r.overrideMotivo || null,
+      };
+    });
+    const buckets = Array.from(map.values())
+      .map((b) => ({ ...b, liquido: b.entrou - b.saiu }))
+      .sort((a, z) => (z.entrou + z.saiu) - (a.entrou + a.saiu));
+    const totais = buckets.reduce(
+      (acc, b) => ({ entrou: acc.entrou + b.entrou, saiu: acc.saiu + b.saiu, qtd: acc.qtd + b.qtd }),
+      { entrou: 0, saiu: 0, qtd: 0 });
+    return {
+      periodo: { dataInicio: input.dataInicio, dataFim: input.dataFim },
+      buckets,
+      totais: { ...totais, liquido: totais.entrou - totais.saiu, bruto: totais.entrou + totais.saiu },
+      lines,
+    };
   }),
 
   // ─────────────────── MOVIMENTAÇÃO INTERNA (Rev. 3351) ───────────────────
