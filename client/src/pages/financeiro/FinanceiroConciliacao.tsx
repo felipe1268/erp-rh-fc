@@ -538,6 +538,21 @@ export default function FinanceiroConciliacao() {
       setConfirmExcluirLinha(null);
     },
   });
+  // Rev. 3396 — Desfaz a conciliação de uma linha SEM excluí-la do extrato.
+  // A linha volta para "No extrato, sem lançamento" e o lançamento do ERP
+  // retorna para pendente (a_pagar / a_receber).
+  const [confirmDesconciliar, setConfirmDesconciliar] = useState<{ id: number; descricao: string; valor: number } | null>(null);
+  const desconciliarMut = (trpc as any).financial.desconciliarLinha.useMutation({
+    onSuccess: () => {
+      toast({ title: "Conciliação desfeita", description: "A linha voltou para o extrato pendente e o lançamento do ERP está como pendente." });
+      setConfirmDesconciliar(null);
+      refetchSt(); refetchStAno(); refetchAccStatus(); refetchSug(); refetchReport();
+    },
+    onError: (e: any) => {
+      toast({ title: "Erro ao desfazer conciliação", description: e.message, variant: "destructive" });
+      setConfirmDesconciliar(null);
+    },
+  });
   // Rev. 3392 — Confirmar movimentação interna: cria lançamento tipo "transferencia"/
   // natureza "interno" + concilia a linha do extrato em 1 clique.
   const naturezaInternaMut = (trpc as any).financial.confirmarMovimentacaoInterna.useMutation({
@@ -3596,11 +3611,11 @@ export default function FinanceiroConciliacao() {
                           <p className={`text-sm font-bold shrink-0 ${Number(c.valor) >= 0 ? "text-green-600" : "text-red-500"}`}>{formatBRL(Math.abs(Number(c.valor)))}</p>
                           <button
                             type="button"
-                            onClick={() => setConfirmExcluirLinha({ id: c.id, descricao: c.descricao || "—", valor: Number(c.valor), conciliado: true })}
-                            title="Remover esta linha do extrato (reverte a conciliação)"
-                            className="shrink-0 p-1.5 rounded-md text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            onClick={() => setConfirmDesconciliar({ id: c.id, descricao: c.descricao || "—", valor: Number(c.valor) })}
+                            title="Desfazer conciliação — a linha volta ao extrato pendente e o lançamento do ERP fica como pendente"
+                            className="shrink-0 p-1.5 rounded-md text-gray-300 hover:text-amber-600 hover:bg-amber-50 transition-colors"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <RotateCcw className="w-4 h-4" />
                           </button>
                         </div>
                       ))}
@@ -3825,6 +3840,40 @@ export default function FinanceiroConciliacao() {
                 }}
               >
                 {excluirLinhaMut.isPending ? "Removendo..." : "Sim, remover linha"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Rev. 3396 — Desfazer conciliação (sem excluir a linha do extrato) */}
+        <AlertDialog open={!!confirmDesconciliar} onOpenChange={(o: boolean) => { if (!o && !desconciliarMut.isPending) setConfirmDesconciliar(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <RotateCcw className="w-5 h-5 text-amber-600" />Desfazer conciliação?
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-sm text-gray-600">
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs">
+                    <p className="font-medium text-gray-700 truncate">{confirmDesconciliar?.descricao}</p>
+                    <p className={`font-bold mt-0.5 ${(confirmDesconciliar?.valor ?? 0) >= 0 ? "text-emerald-600" : "text-red-500"}`}>{formatBRL(Math.abs(confirmDesconciliar?.valor ?? 0))}</p>
+                  </div>
+                  <p>A linha voltará para <strong>"No extrato, sem lançamento"</strong> e o lançamento do ERP voltará para <strong>pendente</strong> (a pagar / a receber).</p>
+                  <p className="text-[11px] text-gray-400">A linha <em>não</em> é excluída — você poderá conciliá-la com outro lançamento.</p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={desconciliarMut.isPending}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-amber-600 hover:bg-amber-700"
+                disabled={desconciliarMut.isPending}
+                onClick={(e: any) => {
+                  e.preventDefault();
+                  if (confirmDesconciliar) desconciliarMut.mutate({ companyId, linhaId: confirmDesconciliar.id });
+                }}
+              >
+                {desconciliarMut.isPending ? "Desfazendo..." : "Sim, desfazer conciliação"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

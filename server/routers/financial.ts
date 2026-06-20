@@ -6696,6 +6696,89 @@ export const financialRouter = router({
     return { ok: true };
   }),
 
+  // Rev. 3396 — Desfaz a conciliação de UMA linha do extrato SEM apagá-la.
+  // Diferente de excluirLinhaExtrato (que faz soft-delete), este endpoint apenas
+  // remove o vínculo: a linha volta para "No extrato, sem lançamento" e o
+  // lançamento do ERP volta para pendente (a_pagar / a_receber).
+  desconciliarLinha: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    linhaId: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+
+    // Tenant guard + ler o entry_id vinculado à linha
+    const linhaRes = await dbExecute(db,
+      `SELECT id, entry_id AS "entryId", conciliado
+         FROM bank_statement_lines
+        WHERE id=$1 AND company_id=$2 AND excluido_em IS NULL LIMIT 1`,
+      [input.linhaId, input.companyId]);
+    const linha = rows(linhaRes)[0] as any;
+    if (!linha) throw new TRPCError({ code: "NOT_FOUND", message: "Linha não encontrada ou já excluída." });
+
+    // Checar financial_conciliacao_grupo FORA da transação (to_regclass) — mesmo
+    // padrão de desconsolidarMes / excluirLinhaExtrato (evita envenenar a txn).
+    const grupoChk = await dbExecute(db,
+      `SELECT to_regclass('public.financial_conciliacao_grupo') AS reg`, []);
+    const temGrupo = !!(rows(grupoChk)[0] as any)?.reg;
+
+    await db.transaction(async (tx: any) => {
+      // 1) Reverter todos os lançamentos vinculados por grupo (N:1)
+      if (temGrupo) {
+        const grupoRes = await dbExecute(tx,
+          `SELECT entry_id FROM financial_conciliacao_grupo
+            WHERE statement_line_id=$1 AND company_id=$2`,
+          [input.linhaId, input.companyId]);
+        const entryIds = rows(grupoRes).map((r: any) => r.entry_id).filter(Boolean) as number[];
+        if (entryIds.length) {
+          await dbExecute(tx,
+            `UPDATE financial_entries
+                SET conciliado=0, data_conciliacao=NULL,
+                    status = CASE
+                      WHEN status='pago'     THEN 'a_pagar'
+                      WHEN status='recebido' THEN 'a_receber'
+                      ELSE status END
+              WHERE id = ANY($1::int[]) AND company_id=$2`,
+            [entryIds, input.companyId]);
+        }
+        await dbExecute(tx,
+          `DELETE FROM financial_conciliacao_grupo
+            WHERE statement_line_id=$1 AND company_id=$2`,
+          [input.linhaId, input.companyId]);
+      }
+
+      // 2) Reverter o lançamento vinculado diretamente no entry_id da linha (1:1)
+      if (linha.entryId) {
+        await dbExecute(tx,
+          `UPDATE financial_entries
+              SET conciliado=0, data_conciliacao=NULL,
+                  status = CASE
+                    WHEN status='pago'     THEN 'a_pagar'
+                    WHEN status='recebido' THEN 'a_receber'
+                    ELSE status END
+            WHERE id=$1 AND company_id=$2`,
+          [linha.entryId, input.companyId]);
+      }
+
+      // 3) Desconciliar a linha do extrato SEM soft-delete — ela volta p/ a fila
+      await dbExecute(tx,
+        `UPDATE bank_statement_lines
+            SET conciliado=0, entry_id=NULL
+          WHERE id=$1 AND company_id=$2`,
+        [input.linhaId, input.companyId]);
+    });
+
+    await createAuditLog(db, {
+      userId: ctx.user?.id,
+      action: "bank_statement_line_desconciliar",
+      details: `Desconciliação da linha #${input.linhaId} (entryId=${linha.entryId ?? "grupo"}) — linha mantida no extrato, lançamento revertido a pendente.`,
+      companyId: input.companyId,
+    });
+
+    return { ok: true };
+  }),
+
   // ─────────────────── RÉGUA DE COBRANÇA ───────────────────
 
   getCollectionRules: protectedProcedure.input(z.object({ companyId: z.number() })).query(async ({ input }) => {

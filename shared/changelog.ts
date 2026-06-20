@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3396 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DESFAZER CONCILIAÇÃO SEM EXCLUIR A
+ * LINHA DO EXTRATO. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PROBLEMA: ao cancelar uma conciliação, `excluirLinhaExtrato` fazia soft-delete
+ *   da linha (excluido_em=NOW()), fazendo o item sumir de ambas as listas. O usuário
+ *   não conseguia re-conciliar corretamente.
+ * - BACKEND: nova mutation `desconciliarLinha` que apenas desfaz o vínculo:
+ *   · UPDATE bank_statement_lines SET conciliado=0, entry_id=NULL (SEM excluido_em).
+ *   · UPDATE financial_entries SET conciliado=0, data_conciliacao=NULL,
+ *     status = CASE pago→a_pagar / recebido→a_receber END.
+ *   · DELETE FROM financial_conciliacao_grupo (grupo N:1, com guard to_regclass
+ *     fora da transação — mesmo padrão de desconsolidarMes / excluirLinhaExtrato).
+ *   · Audit log `bank_statement_line_desconciliar`.
+ * - FRONTEND: na seção "Já conciliados", o botão Trash2 foi substituído por
+ *   RotateCcw (âmbar) que chama `desconciliarMut` (mutation nova) em vez de
+ *   `excluirLinhaMut`. Novo AlertDialog "Desfazer conciliação?" informa o usuário
+ *   que a linha NÃO será excluída e voltará para "No extrato, sem lançamento",
+ *   enquanto o lançamento do ERP volta para pendente.
+ * - Arquivos principais: `server/routers/financial.ts`,
+ *   `client/src/pages/financeiro/FinanceiroConciliacao.tsx`.
+ *
  * Rev. 3395 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CRIAR LANÇAMENTO MANUAL (SEM EXTRATO) +
  * SELETOR DÉBITO/CRÉDITO NO FORM DE EDIÇÃO E NO "LANÇAR NO ERP". BACKEND ADITIVO + FRONT ·
  * ZERO SCHEMA/ALTER/DROP/DELETE.**
