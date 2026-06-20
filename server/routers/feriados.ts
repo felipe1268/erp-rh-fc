@@ -54,8 +54,13 @@ function calcularPascoa(ano: number): string {
   return `${ano}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
 }
 
-// Feriados móveis baseados na Páscoa
-function feriadosMoveis(ano: number): Array<{ nome: string; data: string; tipo: "nacional" }> {
+// Feriados móveis baseados na Páscoa.
+// Rev. 3352 — Carnaval e Corpus Christi são PONTO FACULTATIVO no Brasil (não há lei
+// federal que os declare feriado): nascem `observadoDefault: false` → cada empresa
+// decide se "segue". A Sexta-Feira Santa é feriado nacional (Lei 9.093/95) →
+// `observadoDefault: true`.
+type FeriadoTipo = "nacional" | "estadual" | "municipal" | "ponto_facultativo" | "compensado";
+function feriadosMoveis(ano: number): Array<{ nome: string; data: string; tipo: FeriadoTipo; observadoDefault: boolean }> {
   const pascoa = new Date(calcularPascoa(ano) + 'T12:00:00Z');
   
   const carnaval = new Date(pascoa);
@@ -70,10 +75,146 @@ function feriadosMoveis(ano: number): Array<{ nome: string; data: string; tipo: 
   const fmt = (d: Date) => d.toISOString().split('T')[0];
   
   return [
-    { nome: "Carnaval", data: fmt(carnaval), tipo: "nacional" },
-    { nome: "Sexta-Feira Santa", data: fmt(sextaSanta), tipo: "nacional" },
-    { nome: "Corpus Christi", data: fmt(corpusChristi), tipo: "nacional" },
+    { nome: "Carnaval", data: fmt(carnaval), tipo: "ponto_facultativo", observadoDefault: false },
+    { nome: "Sexta-Feira Santa", data: fmt(sextaSanta), tipo: "nacional", observadoDefault: true },
+    { nome: "Corpus Christi", data: fmt(corpusChristi), tipo: "ponto_facultativo", observadoDefault: false },
   ];
+}
+
+// Rev. 3352 — normalização de cidade/UF p/ casar `obras.cidade` × `feriados.cidade`
+// (ambos free-text): minúsculas, sem acento, trim, espaços colapsados.
+function _normCidade(s: string | null | undefined): string {
+  return String(s || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().trim().replace(/\s+/g, " ");
+}
+function _normUF(s: string | null | undefined): string {
+  return String(s || "").toUpperCase().trim();
+}
+
+// Rev. 3352 — escopo geográfico DERIVADO de cidade/estado (independe do `tipo`):
+// cidade preenchida → municipal; senão estado → estadual; senão → nacional.
+type FeriadoEscopo = "nacional" | "estadual" | "municipal";
+function _escopoDe(estado: string | null | undefined, cidade: string | null | undefined): FeriadoEscopo {
+  if (cidade && String(cidade).trim()) return "municipal";
+  if (estado && String(estado).trim()) return "estadual";
+  return "nacional";
+}
+
+export type FeriadoOcorrencia = {
+  data: string;           // YYYY-MM-DD
+  escopo: FeriadoEscopo;
+  estado: string | null;  // UF normalizada (estadual/municipal)
+  cidade: string | null;  // cidade normalizada (municipal)
+  observado: boolean;
+  nome: string;
+};
+
+// Rev. 3352 — Fonte ÚNICA city/observância-aware p/ a FOLHA/HE. Devolve as ocorrências
+// de feriado no período (banco + defaults nacionais/móveis), cada uma com escopo
+// geográfico e flag `observado`. Defaults são SUPRIMIDOS por NOME quando já existe um
+// registro no banco com o mesmo nome (copy-on-write: assim que o gestor decide a
+// observância de um default, o registro persistido manda).
+//
+// ⚠️ TENANT: NÃO valida ownership dos companyIds — o caller garante origem confiável
+// (ex.: `period.companyId` lido do banco).
+export async function getFeriadosObservadosForPeriod(
+  db: any,
+  companyIds: number[],
+  dataInicio: string,
+  dataFim: string,
+): Promise<FeriadoOcorrencia[]> {
+  const out: FeriadoOcorrencia[] = [];
+  if (!dataInicio || !dataFim || dataInicio > dataFim) return out;
+  const cids = (companyIds || []).filter((n) => Number.isFinite(Number(n)));
+  if (cids.length === 0) return out;
+
+  const rows = await db
+    .select({
+      data: feriados.data, recorrente: feriados.recorrente, nome: feriados.nome,
+      estado: feriados.estado, cidade: feriados.cidade, observado: feriados.observado,
+    })
+    .from(feriados)
+    .where(and(
+      eq(feriados.ativo, 1),
+      sql`(${feriados.companyId} IS NULL OR ${feriados.companyId} IN (${sql.join(cids.map((c) => sql`${c}`), sql`, `)}))`,
+    ));
+
+  const yIni = parseInt(dataInicio.slice(0, 4), 10);
+  const yFim = parseInt(dataFim.slice(0, 4), 10);
+  const nomesBanco = new Set<string>();
+
+  const push = (data: string, nome: string, estado: any, cidade: any, observado: boolean) => {
+    out.push({
+      data, nome,
+      escopo: _escopoDe(estado, cidade),
+      estado: estado ? _normUF(estado) : null,
+      cidade: cidade ? _normCidade(cidade) : null,
+      observado,
+    });
+  };
+
+  for (const f of rows) {
+    nomesBanco.add(String(f.nome || "").toLowerCase().trim());
+    const raw = String(f.data);
+    const obs = Number(f.observado) === 1;
+    if (f.recorrente === 1) {
+      const md = raw.length >= 10 ? raw.slice(5) : raw;
+      for (let y = yIni; y <= yFim; y++) {
+        const ds = `${y}-${md}`;
+        if (ds >= dataInicio && ds <= dataFim) push(ds, f.nome, f.estado, f.cidade, obs);
+      }
+    } else {
+      if (raw >= dataInicio && raw <= dataFim) push(raw, f.nome, f.estado, f.cidade, obs);
+    }
+  }
+
+  // Defaults nacionais fixos (observado=true) + móveis (observadoDefault) — suprimidos
+  // por NOME quando o banco já tem o mesmo feriado (copy-on-write).
+  for (let y = yIni; y <= yFim; y++) {
+    for (const f of FERIADOS_NACIONAIS) {
+      if (nomesBanco.has(f.nome.toLowerCase().trim())) continue;
+      const ds = `${y}-${f.data}`;
+      if (ds >= dataInicio && ds <= dataFim) push(ds, f.nome, null, null, true);
+    }
+    for (const f of feriadosMoveis(y)) {
+      if (nomesBanco.has(f.nome.toLowerCase().trim())) continue;
+      if (f.data >= dataInicio && f.data <= dataFim) push(f.data, f.nome, null, null, f.observadoDefault);
+    }
+  }
+  return out;
+}
+
+// Index por data → ocorrências, p/ checagem O(1) no loop de HE.
+export function indexFeriadosObservados(ocorrencias: FeriadoOcorrencia[]): Map<string, FeriadoOcorrencia[]> {
+  const idx = new Map<string, FeriadoOcorrencia[]>();
+  for (const o of ocorrencias) {
+    const arr = idx.get(o.data);
+    if (arr) arr.push(o); else idx.set(o.data, [o]);
+  }
+  return idx;
+}
+
+// Rev. 3352 — o dia `dateStr` é feriado OBSERVADO para quem trabalhou na cidade/UF
+// informada? nacional vale p/ todos; estadual exige UF igual; municipal exige cidade
+// igual. Basta UMA ocorrência aplicável observada (obrigatório nacional sempre ganha).
+export function isFeriadoObservado(
+  idx: Map<string, FeriadoOcorrencia[]>,
+  dateStr: string,
+  cidade: string | null | undefined,
+  estado: string | null | undefined,
+): boolean {
+  const arr = idx.get(dateStr);
+  if (!arr || arr.length === 0) return false;
+  const c = _normCidade(cidade);
+  const uf = _normUF(estado);
+  for (const o of arr) {
+    if (!o.observado) continue;
+    if (o.escopo === "nacional") return true;
+    if (o.escopo === "estadual" && o.estado && uf && o.estado === uf) return true;
+    if (o.escopo === "municipal" && o.cidade && c && o.cidade === c) return true;
+  }
+  return false;
 }
 
 // Rev. 2216 — helper reusável (sem auth) para construir Set<YYYY-MM-DD> de
@@ -164,38 +305,48 @@ export const feriadosRouter = router({
         return f.data;
       }));
 
-      const nacionaisFixos = FERIADOS_NACIONAIS.filter(f => !existentes.has(f.data)).map(f => ({
-        id: 0,
-        companyId: null,
-        nome: f.nome,
-        data: `${ano}-${f.data}`,
-        tipo: f.tipo,
-        recorrente: 1,
-        estado: null,
-        cidade: null,
-        ativo: 1,
-        criadoPor: 'Sistema',
-        createdAt: null,
-        updatedAt: null,
-        isDefault: true,
-      }));
+      // Rev. 3352 — suprime defaults por NOME quando já há registro no banco (copy-on-write),
+      // pois o registro persistido carrega a observância escolhida pelo gestor.
+      const nomesBanco = new Set(filtrados.map(f => String(f.nome || '').toLowerCase().trim()));
 
-      // Adicionar feriados móveis
-      const moveis = feriadosMoveis(ano).filter(f => !existentes.has(f.data.substring(5))).map(f => ({
-        id: 0,
-        companyId: null,
-        nome: f.nome,
-        data: f.data,
-        tipo: f.tipo,
-        recorrente: 0,
-        estado: null,
-        cidade: null,
-        ativo: 1,
-        criadoPor: 'Sistema',
-        createdAt: null,
-        updatedAt: null,
-        isDefault: true,
-      }));
+      const nacionaisFixos = FERIADOS_NACIONAIS
+        .filter(f => !existentes.has(f.data) && !nomesBanco.has(f.nome.toLowerCase().trim()))
+        .map(f => ({
+          id: 0,
+          companyId: null,
+          nome: f.nome,
+          data: `${ano}-${f.data}`,
+          tipo: f.tipo,
+          recorrente: 1,
+          estado: null,
+          cidade: null,
+          ativo: 1,
+          observado: 1, // obrigatório nacional: observado por padrão
+          criadoPor: 'Sistema',
+          createdAt: null,
+          updatedAt: null,
+          isDefault: true,
+        }));
+
+      // Adicionar feriados móveis (Carnaval/Corpus = facultativo observado=0 por padrão)
+      const moveis = feriadosMoveis(ano)
+        .filter(f => !existentes.has(f.data.substring(5)) && !nomesBanco.has(f.nome.toLowerCase().trim()))
+        .map(f => ({
+          id: 0,
+          companyId: null,
+          nome: f.nome,
+          data: f.data,
+          tipo: f.tipo,
+          recorrente: 0,
+          estado: null,
+          cidade: null,
+          ativo: 1,
+          observado: f.observadoDefault ? 1 : 0,
+          criadoPor: 'Sistema',
+          createdAt: null,
+          updatedAt: null,
+          isDefault: true,
+        }));
 
       return [...filtrados.map(f => ({ ...f, isDefault: false })), ...nacionaisFixos, ...moveis]
         .sort((a, b) => {
@@ -213,9 +364,15 @@ export const feriadosRouter = router({
       recorrente: z.boolean().default(true),
       estado: z.string().optional(),
       cidade: z.string().optional(),
+      observado: z.boolean().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
+      // Rev. 3352 — observado default por tipo: facultativo nasce 0 (empresa decide se
+      // segue), demais nascem 1. Override explícito do form prevalece.
+      const observado = input.observado !== undefined
+        ? (input.observado ? 1 : 0)
+        : (input.tipo === 'ponto_facultativo' ? 0 : 1);
       await db.insert(feriados).values({
         companyId: input.companyId,
         nome: input.nome,
@@ -224,6 +381,7 @@ export const feriadosRouter = router({
         recorrente: input.recorrente ? 1 : 0,
         estado: input.estado || null,
         cidade: input.cidade || null,
+        observado,
         criadoPor: ctx.user.name ?? 'Sistema',
       });
       return { success: true };
@@ -238,6 +396,9 @@ export const feriadosRouter = router({
       tipo: z.enum(['nacional','estadual','municipal','ponto_facultativo','compensado']).optional(),
       recorrente: z.boolean().optional(),
       ativo: z.boolean().optional(),
+      estado: z.string().nullable().optional(),
+      cidade: z.string().nullable().optional(),
+      observado: z.boolean().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
@@ -248,8 +409,77 @@ export const feriadosRouter = router({
       if (rest.tipo !== undefined) updateData.tipo = rest.tipo;
       if (rest.recorrente !== undefined) updateData.recorrente = rest.recorrente ? 1 : 0;
       if (rest.ativo !== undefined) updateData.ativo = rest.ativo ? 1 : 0;
+      if (rest.estado !== undefined) updateData.estado = rest.estado || null;
+      if (rest.cidade !== undefined) updateData.cidade = rest.cidade || null;
+      if (rest.observado !== undefined) updateData.observado = rest.observado ? 1 : 0;
       await db.update(feriados).set(updateData).where(eq(feriados.id, id));
       return { success: true };
+    }),
+
+  // Rev. 3352 — Define a OBSERVÂNCIA (empresa segue ou não) de um feriado, com
+  // copy-on-write para os defaults nacionais/móveis (que só existem injetados no
+  // `listar` com id=0): se o registro já existe (id>0) faz UPDATE; senão materializa
+  // um registro da empresa com a observância escolhida. Espelha tipo/estado/cidade.
+  definirObservancia: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      id: z.number().optional(),        // 0/undefined = default (copy-on-write)
+      nome: z.string().min(1),
+      data: z.string(),                  // YYYY-MM-DD
+      tipo: z.enum(['nacional','estadual','municipal','ponto_facultativo','compensado']).default('nacional'),
+      recorrente: z.boolean().default(true),
+      estado: z.string().nullable().optional(),
+      cidade: z.string().nullable().optional(),
+      observado: z.boolean(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      await ensureUserOwnsCompanies(db, ctx.user, [input.companyId]);
+      const obs = input.observado ? 1 : 0;
+
+      // Registro real: UPDATE direto (com guard de empresa — global companyId NULL
+      // também é editável por quem tem acesso, mas só promovendo cópia da empresa).
+      if (input.id && input.id > 0) {
+        const existing = await db.select({ companyId: feriados.companyId })
+          .from(feriados).where(eq(feriados.id, input.id)).limit(1);
+        const row = existing[0];
+        if (row && row.companyId === input.companyId) {
+          await db.update(feriados).set({ observado: obs }).where(eq(feriados.id, input.id));
+          return { success: true, mode: "update" as const };
+        }
+        // Registro global (companyId NULL) ou de outra empresa → cai no copy-on-write.
+      }
+
+      // Copy-on-write: procura registro já materializado p/ esta empresa+nome.
+      const mmdd = input.data.length >= 10 ? input.data.slice(5) : input.data;
+      const dupe = await db.select({ id: feriados.id })
+        .from(feriados)
+        .where(and(
+          eq(feriados.companyId, input.companyId),
+          eq(feriados.nome, input.nome),
+          eq(feriados.ativo, 1),
+          input.recorrente
+            ? sql`RIGHT(${feriados.data}, 5) = ${mmdd}`
+            : eq(feriados.data, input.data),
+        ))
+        .limit(1);
+      if (dupe[0]) {
+        await db.update(feriados).set({ observado: obs }).where(eq(feriados.id, dupe[0].id));
+        return { success: true, mode: "update" as const };
+      }
+
+      await db.insert(feriados).values({
+        companyId: input.companyId,
+        nome: input.nome,
+        data: input.data,
+        tipo: input.tipo,
+        recorrente: input.recorrente ? 1 : 0,
+        estado: input.estado || null,
+        cidade: input.cidade || null,
+        observado: obs,
+        criadoPor: ctx.user.name ?? 'Sistema',
+      });
+      return { success: true, mode: "insert" as const };
     }),
 
   // Excluir feriado
@@ -284,13 +514,14 @@ export const feriadosRouter = router({
             data,
             tipo: f.tipo,
             recorrente: 1,
+            observado: 1, // obrigatório nacional
             criadoPor: ctx.user.name ?? 'Sistema',
           });
           count++;
         }
       }
 
-      // Feriados móveis
+      // Feriados móveis (Carnaval/Corpus = facultativo observado=0 por padrão)
       for (const f of feriadosMoveis(ano)) {
         const existing = await db.select().from(feriados)
           .where(and(
@@ -304,6 +535,7 @@ export const feriadosRouter = router({
             data: f.data,
             tipo: f.tipo,
             recorrente: 0,
+            observado: f.observadoDefault ? 1 : 0,
             criadoPor: ctx.user.name ?? 'Sistema',
           });
           count++;

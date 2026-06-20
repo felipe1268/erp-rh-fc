@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3352 — **FOLHA / HORAS EXTRAS · CALENDÁRIO DE FERIADOS AGORA TEM OBSERVÂNCIA POR EMPRESA E ESCOPO POR
+ * CIDADE. PONTO FACULTATIVO (CARNAVAL, CORPUS CHRISTI) NASCE "NÃO SEGUIDO" (DIA NORMAL, SEM HE INDEVIDA) ATÉ O
+ * GESTOR MARCAR "SEGUE" — E PODE LIMITAR A QUEM SEGUE POR CIDADE/UF. O CÁLCULO DE HE (E O MEMORIAL) SÓ TRATA O
+ * DIA COMO FERIADO (JORNADA ESPERADA=0 → HE 100%) QUANDO ELE É OBSERVADO NA CIDADE DA OBRA ONDE A PESSOA BATEU
+ * PONTO NAQUELE DIA. 1 COLUNA NOVA (SELF-HEAL) + BACKEND (HELPERS + CRUD + NOVA MUTATION) + 2 ROTAS DE HE + 1
+ * FRONT · ZERO ALTER/DROP/DELETE EM DADOS EXISTENTES.**
+ * - PEDIDO (usuário, com print da tela "Editar Feriado" do Corpus Christi): o Carnaval e o Corpus Christi não são
+ *   feriado nacional obrigatório — são ponto facultativo, e CADA cidade/obra decide se "segue". Hoje qualquer feriado
+ *   cadastrado força HE 100% para todo mundo. Precisa: (1) marcar por feriado se a empresa SEGUE (observa) ou não;
+ *   (2) quando seguir um facultativo, dizer EM QUAL CIDADE ele vale (senão vale p/ todas); (3) o HE só pode tratar
+ *   o dia como feriado para quem trabalhou na cidade que segue aquele feriado.
+ * - MODELAGEM (self-heal `[SyncSchema+]` em `server/_core/index.ts` + `drizzle/schema.ts`): coluna nova
+ *   `feriados.observado smallint DEFAULT 1 NOT NULL` (1=empresa segue/observa; 0=dia normal). Backfill ÚNICO no boot
+ *   que cria a coluna: `UPDATE feriados SET observado=0 WHERE tipo='ponto_facultativo'` — roda só na criação da coluna,
+ *   NUNCA re-flipa escolha posterior do gestor (copy-on-write). Escopo geográfico continua DERIVADO de cidade/estado
+ *   (cidade→municipal; estado→estadual; senão nacional), ambos free-text casados por normalização (sem acento, minúsc.).
+ * - BACKEND (`server/routers/feriados.ts`, FONTE ÚNICA): `feriadosMoveis` reclassificado — Carnaval/Corpus = tipo
+ *   'ponto_facultativo' `observadoDefault=false`; Sexta-Feira Santa = nacional `observadoDefault=true`. NOVO
+ *   `getFeriadosObservadosForPeriod(db,companyIds,ini,fim)` devolve as ocorrências do período (banco + defaults
+ *   nacionais/móveis) com `{data,escopo,estado,cidade,observado,nome}`; defaults SUPRIMIDOS por NOME quando já há row
+ *   no banco (copy-on-write). NOVO `indexFeriadosObservados` + `isFeriadoObservado(idx,data,cidade,estado)` (nacional
+ *   vale p/ todos; estadual exige UF; municipal exige cidade). `criar`/`atualizar` aceitam `observado`/`cidade`/`estado`
+ *   (default por tipo: facultativo→0, demais→1); `listar` injeta `observado` nos defaults; `seedNacionais` grava
+ *   `observado`. NOVA mutation `definirObservancia` (copy-on-write: id>0 → UPDATE da row da empresa; default/global →
+ *   materializa cópia da empresa; tenant guard via `ensureUserOwnsCompanies`).
+ * - HE / MONEY PATH (`server/routers/horasExtras.ts`): `computeHEForPeriod` e `memorialCalculo` agora trazem
+ *   `tr."obraId"` + `LEFT JOIN obras o` (cidade/estado/nome) no SELECT (o DISTINCT ON já escolhe 1 registro por
+ *   emp/dia → a cidade do feriado é a da obra desse registro); o teste `feriadosSet.has(dateStr)` virou
+ *   `isFeriadoObservado(idx,dateStr,obraCidade,obraEstado)`. Removido o uso de `getFeriadosSetForPeriod` no HE
+ *   (função permanece exportada). O memorial passa a expor `obra`/`cidade` no detalhe do dia.
+ * - FRONT (`client/src/pages/Feriados.tsx`): cada linha ganha selo clicável "Segue / Não segue" (chama
+ *   `definirObservancia`, copy-on-write nos defaults), badge "facultativo" + selo de cidade/UF. O diálogo ganha campos
+ *   Cidade/UF (com aviso "vazio = todas") e o seletor "A empresa segue (observa)?"; ao trocar o tipo p/ facultativo num
+ *   feriado novo, o observado cai p/ 0. Marcar um facultativo como "segue" SEM cidade abre o diálogo pedindo a cidade.
+ * - VALIDAÇÃO (Neon): coluna `observado` presente (default 1); facultativos backfillados; HE deixa de forçar feriado
+ *   quando o dia não é observado na cidade da obra. tsc limpo nos arquivos tocados (ruído pré-existente do
+ *   changelog.ts ignorado).
+ *
  * Rev. 3351 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · A "MOVIMENTAÇÃO INTERNA" (DINHEIRO QUE SÓ GIRA ENTRE AS
  * CONTAS/EMPRESAS DA PRÓPRIA FC) AGORA TEM UMA BASE DE CNPJs/CPFs CADASTRÁVEL (NOVA ABA EM CONFIGURAÇÕES
  * FINANCEIRAS) — ALÉM DA HEURÍSTICA POR TEXTO DA Rev. 3349. A CLASSIFICAÇÃO É SIMÉTRICA (VALE PARA ENTRADA E

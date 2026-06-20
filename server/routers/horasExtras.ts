@@ -6,7 +6,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { parseBRL } from "../utils/parseBRL";
-import { getFeriadosSetForPeriod } from "./feriados";
+import { getFeriadosObservadosForPeriod, indexFeriadosObservados, isFeriadoObservado } from "./feriados";
 
 // ============================================================
 // HELPERS (mirrored from payrollEngine — kept private here)
@@ -67,10 +67,11 @@ async function computeHEForPeriod(
   dataFim: string,
   cargaHorariaDiaria: number
 ) {
-  // Rev. 2216 — Set<YYYY-MM-DD> de feriados aplicáveis (nacionais fixos +
-  // móveis + custom do banco). Trata feriado como domingo: jornada esperada
-  // = 0 (toda hora trabalhada vira HE) e percentual = he_domingos_feriados.
-  const feriadosSet = await getFeriadosSetForPeriod(db, [companyId], dataInicio, dataFim);
+  // Rev. 3352 — feriados city/observância-aware: só conta como feriado (jornada
+  // esperada=0 → HE 100%) quando OBSERVADO e aplicável à CIDADE/UF da obra onde a
+  // pessoa bateu ponto naquele dia. Facultativo não-observado = dia normal.
+  const feriadosOcorr = await getFeriadosObservadosForPeriod(db, [companyId], dataInicio, dataFim);
+  const feriadosIdx = indexFeriadosObservados(feriadosOcorr);
 
   // Rev. 2179 — pré-carrega o conjunto de (employeeId, data) coberto por
   // solicitações de HE aprovadas no intervalo, para classificar cada dia
@@ -94,12 +95,17 @@ async function computeHEForPeriod(
 
   // Agrupa por (employeeId, data) pegando o maior horasTrabalhadas — evita dupla contagem de importações.
   // Também traz `atrasos` para descontar do HE bruto antes do pagamento (saldo líquido).
+  // Rev. 3352 — traz a obra do registro (cidade/estado) p/ resolver feriado por CIDADE.
+  // O DISTINCT ON escolhe 1 registro por (emp,dia) → a cidade do feriado é a da obra
+  // desse registro (maior horasTrabalhadas).
   const trRaws = ((await db.execute(sql`
     SELECT DISTINCT ON (tr."employeeId", tr.data)
-           tr."employeeId", tr.data, tr."horasTrabalhadas", tr.atrasos,
+           tr."employeeId", tr.data, tr."horasTrabalhadas", tr.atrasos, tr."obraId",
+           o.cidade AS "obraCidade", o.estado AS "obraEstado",
            e."jornadaTrabalho", e."nomeCompleto", e."valorHora", e."salarioBase", e."horasMensais"
     FROM time_records tr
     JOIN employees e ON e.id = tr."employeeId"
+    LEFT JOIN obras o ON o.id = tr."obraId"
     WHERE tr."companyId" = ${companyId}
       AND tr.data >= ${dataInicio}::date
       AND tr.data <= ${dataFim}::date
@@ -133,9 +139,10 @@ async function computeHEForPeriod(
     }
 
     if (trabMins > 0) {
-      // Rev. 2216 — feriado é tratado como domingo: jornada esperada = 0
-      // (toda hora trabalhada vira HE) e bucket "fim de semana" (HE 100%).
-      const isFeriado = feriadosSet.has(dateStr);
+      // Rev. 3352 — feriado tratado como domingo (jornada esperada=0 → HE 100%)
+      // SÓ se for OBSERVADO na cidade/UF da obra desse registro. Facultativo
+      // não-observado = dia normal.
+      const isFeriado = isFeriadoObservado(feriadosIdx, dateStr, r.obraCidade, r.obraEstado);
       const expectedMins = isFeriado ? 0 : getExpectedMins(r.jornadaTrabalho, dateStr, cargaHorariaDiaria);
       const heMins = Math.max(0, trabMins - expectedMins);
       if (heMins > 0) {
@@ -393,35 +400,38 @@ export const horasExtrasRouter = router({
       const emp = empRows[0];
       const valorHora = parseBRL(String(emp.valorHora || emp.salarioBase || "0")) || 0;
 
+      // Rev. 3352 — traz obra (cidade/estado) do registro p/ resolver feriado por cidade.
       const trRows = ((await db.execute(sql`
-        SELECT DISTINCT ON (data)
-          data, "horasTrabalhadas", atrasos, entrada1, saida1, entrada2, saida2, fonte
-        FROM time_records
-        WHERE "employeeId" = ${input.employeeId}
-          AND "companyId" = ${Number(period.companyId)}
-          AND data >= ${period.dataInicio}::date
-          AND data <= ${period.dataFim}::date
+        SELECT DISTINCT ON (tr.data)
+          tr.data, tr."horasTrabalhadas", tr.atrasos, tr.entrada1, tr.saida1, tr.entrada2, tr.saida2, tr.fonte,
+          tr."obraId", o.cidade AS "obraCidade", o.estado AS "obraEstado", o.nome AS "obraNome"
+        FROM time_records tr
+        LEFT JOIN obras o ON o.id = tr."obraId"
+        WHERE tr."employeeId" = ${input.employeeId}
+          AND tr."companyId" = ${Number(period.companyId)}
+          AND tr.data >= ${period.dataInicio}::date
+          AND tr.data <= ${period.dataFim}::date
           AND (
-            ("horasTrabalhadas" IS NOT NULL AND "horasTrabalhadas" != '' AND "horasTrabalhadas" != '0:00')
-            OR (atrasos IS NOT NULL AND atrasos != '' AND atrasos != '0:00')
+            (tr."horasTrabalhadas" IS NOT NULL AND tr."horasTrabalhadas" != '' AND tr."horasTrabalhadas" != '0:00')
+            OR (tr.atrasos IS NOT NULL AND tr.atrasos != '' AND tr.atrasos != '0:00')
           )
-        ORDER BY data, "horasTrabalhadas" DESC
+        ORDER BY tr.data, tr."horasTrabalhadas" DESC
       `)) as any).rows || [];
 
-      // Rev. 2216 — feriados do período (nacionais fixos + móveis + custom).
-      // `period.dataInicio/dataFim` pode vir como Date (driver pg) ou string —
-      // `.toISOString().slice(0,10)` evita garbage tipo "Mon May 01 2026..." que
-      // o `String(date).slice(0,10)` produziria.
+      // Rev. 3352 — feriados city/observância-aware (vê T002). `period.dataInicio/dataFim`
+      // pode vir como Date (driver pg) ou string — `.toISOString().slice(0,10)` evita
+      // garbage tipo "Mon May 01 2026...".
       const toIsoDate = (v: any): string =>
         v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
       const dataIniStr = toIsoDate(period.dataInicio);
       const dataFimStr = toIsoDate(period.dataFim);
-      const feriadosSet = await getFeriadosSetForPeriod(
+      const feriadosOcorr = await getFeriadosObservadosForPeriod(
         db,
         [Number(period.companyId)],
         dataIniStr,
         dataFimStr,
       );
+      const feriadosIdx = indexFeriadosObservados(feriadosOcorr);
 
       const dias: any[] = [];
       const diasAtraso: any[] = [];
@@ -434,8 +444,9 @@ export const horasExtrasRouter = router({
         const atrasoMins = parseTime(String(r.atrasos || "0:00")) || 0;
         const dateStr = r.data instanceof Date ? r.data.toISOString().slice(0, 10) : String(r.data).slice(0, 10);
         const dow = new Date(dateStr + "T12:00:00Z").getUTCDay();
-        // Rev. 2216 — feriado força jornada esperada = 0 (toda hora vira HE) e percentual 100%.
-        const isFeriado = feriadosSet.has(dateStr);
+        // Rev. 3352 — feriado força jornada=0 (HE 100%) SÓ se observado na cidade/UF
+        // da obra desse registro. Facultativo não-observado = dia normal.
+        const isFeriado = isFeriadoObservado(feriadosIdx, dateStr, r.obraCidade, r.obraEstado);
         const expectedMins = isFeriado ? 0 : getExpectedMins(emp.jornadaTrabalho, dateStr, criteria.cargaHorariaDiaria);
         const heMins = trabMins > 0 ? Math.max(0, trabMins - expectedMins) : 0;
 
@@ -475,6 +486,8 @@ export const horasExtrasRouter = router({
           horarios: `${r.entrada1 || "--:--"}-${r.saida1 || "--:--"} ${r.entrada2 || "--:--"}-${r.saida2 || "--:--"}`,
           fonte: r.fonte || "",
           feriado: isFeriado,
+          obra: r.obraNome || null,
+          cidade: r.obraCidade || null,
         });
       }
 

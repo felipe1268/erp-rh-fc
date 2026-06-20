@@ -800,6 +800,22 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3181: coluna excluido_em garantida em bank_statement_lines (soft-delete de extrato).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA bank_statement_lines.excluido_em:`, e?.message || e); }
 
+        // Rev. 3352 — feriados.observado: a empresa ADOTA (segue) o feriado?
+        // Cria a coluna SÓ se não existir (idempotente) e, NESSE ÚNICO momento, faz o
+        // backfill dos facultativos → observado=0 (empresa decide se segue). Em boots
+        // seguintes NÃO re-flipa nada, preservando a escolha manual do gestor.
+        try {
+          const ferCol = (await db.execute(sql`
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'feriados' AND column_name = 'observado' LIMIT 1
+          `)) as any;
+          if (!ferCol?.rows?.length) {
+            await db.execute(sql`ALTER TABLE feriados ADD COLUMN observado smallint DEFAULT 1 NOT NULL`);
+            await db.execute(sql`UPDATE feriados SET observado = 0 WHERE tipo = 'ponto_facultativo'`);
+            console.log(`[SyncSchema+] Rev. 3352: coluna observado criada em feriados (+ facultativos→não-observado).`);
+          }
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA feriados.observado:`, e?.message || e); }
+
         // Rev. 2767 — "% Previsto" LITERAL por semana (Texto10 capturado em cada
         // upload da aba Avanço). Coluna JSON; ADD COLUMN IF NOT EXISTS (R-001/R-007/R-010 OK).
         try {

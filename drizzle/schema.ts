@@ -1860,6 +1860,10 @@ export const feriados = pgTable("feriados", {
         estado: varchar({ length: 2 }),
         cidade: varchar({ length: 100 }),
         ativo: smallint().default(1).notNull(),
+        // Rev. 3352 — observado: a empresa ADOTA (segue) este feriado? 1=sim (jornada
+        // esperada=0 → HE 100% no dia), 0=não (dia normal). Obrigatórios nascem 1;
+        // facultativos (Carnaval/Corpus/ponto_facultativo) nascem 0 (empresa decide se segue).
+        observado: smallint().default(1).notNull(),
         criadoPor: varchar({ length: 255 }),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
