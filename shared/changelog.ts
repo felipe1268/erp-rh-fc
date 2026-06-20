@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3358 — **FOLHA / FERIADOS · O DIÁLOGO "BAIXAR FERIADOS {ANO}" GANHOU UM LAYOUT MODERNO COM AS CORES
+ * INSTITUCIONAIS DA FC (FAIXA AZUL NO TOPO COM ÍCONE, CARD VERDE DOS NACIONAIS, CHIPS DE UF COM SELO/CHECK E
+ * PONTINHO ÂMBAR P/ AS UFs DAS OBRAS) + ATALHOS "TODAS"/"LIMPAR" E CONTADOR DE UFs SELECIONADAS. 100% FRONT ·
+ * UX · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário): "melhore o layout usando nossas cores e facilidade e modernidade" (print do diálogo
+ *   "Baixar Feriados 2026" da tela de Feriados, introduzido na Rev. 3355).
+ * - CORES DE MARCA FC: `--primary` = `oklch(0.35 0.12 260)` (azul institucional ~#1B2A4A) e o acento âmbar/dourado
+ *   (`--sidebar-primary` `oklch(0.78 0.15 80)`). O novo layout usa o azul na faixa-cabeçalho e nos chips
+ *   selecionados, e o âmbar como marcador das UFs vindas das obras ativas.
+ * - FRONT (`client/src/pages/Feriados.tsx`, só o diálogo "Baixar Feriados"):
+ *   • `DialogContent` agora `p-0 gap-0 overflow-hidden max-w-xl`; CABEÇALHO vira uma faixa
+ *     `bg-gradient-to-br from-primary to-primary/85` com ícone Download num badge translúcido, título + subtítulo
+ *     ("Nacionais automáticos · estaduais por UF · municipais manuais").
+ *   • Card "Feriados nacionais incluídos" redesenhado (borda/realce esmeralda, ícone em badge).
+ *   • Seção "Feriados estaduais" ganhou cabeçalho com contador `{n} selec.` (badge azul) e dois atalhos
+ *     `Button ghost` "Todas"/"Limpar" (novos handlers `selecionarTodasUfs`/`limparUfs`); aviso das UFs pré-marcadas
+ *     com pontinho âmbar.
+ *   • CHIPS de UF reestilizados: sigla num quadradinho mono (azul preenchido quando selecionado), nome da UF,
+ *     pontinho âmbar quando é UF de obra ativa, e CheckCircle quando selecionado; hover com borda azul suave.
+ *   • Rodapé `border-t bg-muted/30`; texto do botão "Baixar nacionais + N UF" / "Baixar só nacionais".
+ * - SEM mudança de comportamento: a mutation `baixarFeriados({companyId, companyIds, ano, ufs})` e a query
+ *   `ufsEstaduaisDisponiveis` continuam idênticas; só a apresentação mudou.
+ * - VALIDAÇÃO: tsc limpo no arquivo tocado.
+ *
  * Rev. 3357 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · A SUGESTÃO DE "PROVÁVEL FORNECEDOR/CLIENTE" (TEXTO DO
  * CADASTRO NA LINHA DO EXTRATO) GANHOU UM ALGORITMO DE CRUZAMENTO MUITO MELHOR (POR TOKENS, PONDERADO POR
  * TAMANHO, COM FUZZY/DICE E MELHOR-MATCH EM VEZ DO "1º SUBSTRING VENCE") E, NO DIÁLOGO "LANÇAR", A SUGESTÃO É

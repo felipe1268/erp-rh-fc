@@ -88,6 +88,8 @@ export default function Feriados() {
     if (n.has(uf)) n.delete(uf); else n.add(uf);
     return n;
   });
+  const selecionarTodasUfs = () => setUfsBaixar(new Set((ufsDisponiveis as string[] | undefined) || []));
+  const limparUfs = () => setUfsBaixar(new Set());
   const baixarMut = trpc.feriados.baixarFeriados.useMutation({
     onSuccess: (r: any) => {
       const ufs = (r?.ufsComFeriado || []).length ? r.ufsComFeriado.join(", ") : "—";
@@ -392,26 +394,60 @@ export default function Feriados() {
         </DialogContent>
       </Dialog>
 
-      {/* Rev. 3355 — Diálogo "Baixar Feriados": nacionais (sempre) + estaduais por UF */}
+      {/* Rev. 3355 — Diálogo "Baixar Feriados": nacionais (sempre) + estaduais por UF · layout modernizado Rev. 3358 */}
       <Dialog open={showBaixar} onOpenChange={setShowBaixar}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Download className="w-4 h-4" /> Baixar Feriados {anoFiltro}</DialogTitle>
+        <DialogContent className="max-w-xl p-0 gap-0 overflow-hidden">
+          {/* Cabeçalho com faixa de marca FC (azul institucional) */}
+          <DialogHeader className="space-y-0">
+            <div className="bg-gradient-to-br from-primary to-primary/85 px-6 py-5 text-primary-foreground">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm">
+                  <Download className="h-5 w-5" />
+                </div>
+                <div>
+                  <DialogTitle className="text-lg font-semibold text-primary-foreground">Baixar Feriados {anoFiltro}</DialogTitle>
+                  <p className="text-xs text-primary-foreground/75 mt-0.5">Nacionais automáticos · estaduais por UF · municipais manuais</p>
+                </div>
+              </div>
+            </div>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
-              <p className="font-medium flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-600" /> Feriados nacionais</p>
-              <p className="text-muted-foreground text-xs mt-1">
-                Os feriados nacionais ({anoFiltro}) — fixos e móveis (Sexta-Feira Santa, Carnaval e Corpus Christi) — são baixados automaticamente.
-              </p>
+
+          <div className="px-6 py-5 space-y-5">
+            {/* Card nacionais */}
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-emerald-900">Feriados nacionais incluídos</p>
+                  <p className="text-xs text-emerald-700/90 mt-0.5 leading-relaxed">
+                    Fixos e móveis de {anoFiltro} (Sexta-Feira Santa, Carnaval e Corpus Christi) são baixados automaticamente.
+                  </p>
+                </div>
+              </div>
             </div>
 
+            {/* Estaduais */}
             <div>
-              <Label className="text-xs flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> Feriados estaduais — selecione as UFs</Label>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <Label className="text-sm font-semibold flex items-center gap-1.5">
+                  <MapPin className="w-4 h-4 text-primary" /> Feriados estaduais
+                  {ufsBaixar.size > 0 && (
+                    <span className="ml-1 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">{ufsBaixar.size} selec.</span>
+                  )}
+                </Label>
+                <div className="flex items-center gap-1">
+                  <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs text-primary hover:bg-primary/10" onClick={selecionarTodasUfs}>Todas</Button>
+                  <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground" onClick={limparUfs} disabled={ufsBaixar.size === 0}>Limpar</Button>
+                </div>
+              </div>
               {ufsDasObras.size > 0 && (
-                <p className="text-[11px] text-muted-foreground mt-1">UFs das obras ativas vêm pré-marcadas.</p>
+                <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" /> UFs das obras ativas já vêm pré-marcadas.
+                </p>
               )}
-              <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-64 overflow-y-auto pr-1">
+              <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-64 overflow-y-auto pr-1">
                 {(ufsDisponiveis as string[] | undefined || []).map(uf => {
                   const sel = ufsBaixar.has(uf);
                   const daObra = ufsDasObras.has(uf);
@@ -420,28 +456,31 @@ export default function Feriados() {
                       type="button"
                       key={uf}
                       onClick={() => toggleUf(uf)}
-                      className={`flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-left text-xs transition-colors ${sel ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground hover:bg-muted/50'}`}
+                      title={daObra ? 'UF de obra ativa' : undefined}
+                      className={`group relative flex items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-all ${sel ? 'border-primary bg-primary/10 text-foreground shadow-sm' : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:bg-muted/50'}`}
                     >
-                      {sel ? <CheckCircle2 className="w-3.5 h-3.5 text-primary shrink-0" /> : <CircleSlash className="w-3.5 h-3.5 shrink-0 opacity-40" />}
-                      <span className="font-mono font-semibold">{uf}</span>
-                      <span className="truncate">{UF_NOMES[uf] || ''}{daObra ? ' •' : ''}</span>
+                      <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md font-mono text-[11px] font-bold ${sel ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>{uf}</span>
+                      <span className="truncate flex-1 font-medium">{UF_NOMES[uf] || ''}</span>
+                      {daObra && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" title="UF de obra ativa" />}
+                      {sel && <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-primary" />}
                     </button>
                   );
                 })}
               </div>
-              <p className="text-[10px] text-muted-foreground mt-2">
-                Os estaduais só contam como HE de feriado para quem tem a <b>UF preenchida na obra</b> onde bateu ponto. Feriados <b>municipais</b> não têm base pública — cadastre-os em "Novo Feriado".
+              <p className="text-[11px] text-muted-foreground mt-3 leading-relaxed rounded-lg bg-muted/40 px-3 py-2">
+                Os estaduais só contam como HE de feriado para quem tem a <b className="text-foreground">UF preenchida na obra</b> onde bateu ponto. Feriados <b className="text-foreground">municipais</b> não têm base pública — cadastre-os em "Novo Feriado".
               </p>
             </div>
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="px-6 py-4 border-t bg-muted/30">
             <Button variant="outline" onClick={() => setShowBaixar(false)}>Cancelar</Button>
             <Button
               onClick={() => baixarMut.mutate({ companyId, companyIds, ano: anoFiltro, ufs: Array.from(ufsBaixar) })}
               disabled={baixarMut.isPending}
             >
-              {baixarMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Download className="w-4 h-4 mr-1" />}
-              Baixar {ufsBaixar.size > 0 ? `(nacionais + ${ufsBaixar.size} UF)` : '(só nacionais)'}
+              {baixarMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Download className="w-4 h-4 mr-1.5" />}
+              Baixar {ufsBaixar.size > 0 ? `nacionais + ${ufsBaixar.size} UF` : 'só nacionais'}
             </Button>
           </DialogFooter>
         </DialogContent>
