@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3362 — **FINANCEIRO / MOVIMENTAÇÃO INTERNA (CNPJs/CPFs DO GRUPO) · AGORA DÁ PARA EXCLUIR DE VERDADE
+ * (HARD DELETE) E TAMBÉM INATIVAR (SOFT) À ESCOLHA: A LIXEIRA ANTES SÓ INATIVAVA; AGORA CADA LINHA TEM 3 AÇÕES
+ * — EDITAR · INATIVAR/REATIVAR (REVERSÍVEL) · EXCLUIR DEFINITIVAMENTE (COM CONFIRMAÇÃO). 1 MUTATION NOVA
+ * (BACKEND) + 1 FRONT · A EXCLUSÃO É UM DELETE REAL, MAS RESTRITO A ESTA TABELA DE CADASTRO RECADASTRÁVEL.**
+ * - PEDIDO (usuário): "Quero poder excluir mesmo e inativar tbm se eu quiser" — na aba Movimentação Interna,
+ *   a única ação de remoção (ícone lixeira) fazia soft-delete (`ativo=0`); o usuário quer poder APAGAR de vez
+ *   além de poder só inativar.
+ * - BACKEND (`server/routers/financial.ts`): NOVA mutation `purgeInternalCnpj` que faz `DELETE FROM
+ *   financial_internal_cnpjs WHERE id=$1 AND company_id=$2 RETURNING id` (tenant guard via
+ *   `_assertFinanceiroCompanyAccess` + escopo por id+company_id). A `deleteInternalCnpj` antiga continua sendo
+ *   o SOFT-delete (inativa). RESSALVA R-007: o DELETE real é aplicado SÓ a esta tabela de CADASTRO interno
+ *   (lista de CNPJs/CPFs do grupo p/ classificar movimentação interna) — é recadastrável e NÃO toca dado
+ *   transacional/financeiro; foi pedido EXPLÍCITO do usuário, por isso a exceção pontual à regra-padrão.
+ * - FRONT (`client/src/pages/financeiro/FinanceiroConfiguracoes.tsx`): a coluna "Ações" passou a ter 3 botões
+ *   por linha — Editar (lápis), Inativar (`PowerOff` âmbar) p/ ativos ou Reativar (`Power` esmeralda) p/
+ *   inativos, e Excluir (`Trash2` vermelho). O Excluir abre um `AlertDialog` de confirmação (mostra documento +
+ *   nome, avisa "não pode ser desfeita", sugere usar Inativar p/ remoção reversível) — evita `window.confirm`
+ *   (que exibe o domínio replit.dev). Mutation `purgeCnpjMut` + state `cnpjToPurge`.
+ * - VALIDAÇÃO: tsc limpo nos 2 arquivos tocados.
+ *
  * Rev. 3361 — **FINANCEIRO / MOVIMENTAÇÃO INTERNA (CNPJs/CPFs DO GRUPO) · CORRIGIDO "NÃO LOCALIZEI O NOME
  * AUTOMATICAMENTE": A CONSULTA DE NOME PELA RECEITA (BrasilAPI) ESTAVA SENDO BLOQUEADA COM HTTP 403 PORQUE O
  * `fetch` DO NODE (undici) NÃO MANDAVA `User-Agent` — O WAF DA BrasilAPI REJEITA REQUISIÇÕES SEM UA (O curl

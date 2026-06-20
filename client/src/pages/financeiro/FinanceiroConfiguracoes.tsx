@@ -14,7 +14,8 @@ import { maskCpfCnpj } from "@/lib/formatters";
 import { Switch } from "@/components/ui/switch";
 import { Settings, Users, Plus, Save, RefreshCw, UserCheck, CheckCircle2, Edit3, Loader2,
   Calculator, Receipt, Landmark, Briefcase, Info, AlertCircle, TrendingUp, Wallet, Lightbulb,
-  PiggyBank, BadgePercent, Sparkles, Zap, ArrowLeftRight, Building2, Trash2, Power } from "lucide-react";
+  PiggyBank, BadgePercent, Sparkles, Zap, ArrowLeftRight, Building2, Trash2, Power, PowerOff } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -249,6 +250,11 @@ export default function FinanceiroConfiguracoes() {
     onSuccess: () => { toast({ title: "CNPJ interno inativado." }); refetchCnpjs(); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
+  const purgeCnpjMut = (trpc as any).financial.purgeInternalCnpj.useMutation({
+    onSuccess: () => { toast({ title: "CNPJ interno excluído definitivamente." }); setCnpjToPurge(null); refetchCnpjs(); },
+    onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+  const [cnpjToPurge, setCnpjToPurge] = useState<any | null>(null);
   function handleSaveCnpj() {
     const digits = soDigitos(cnpjForm.cnpj);
     if (digits.length < 6) { toast({ title: "CNPJ/CPF inválido", description: "Informe ao menos 6 dígitos (ideal: a raiz de 8 do CNPJ).", variant: "destructive" }); return; }
@@ -651,20 +657,24 @@ export default function FinanceiroConfiguracoes() {
                                   : <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 text-gray-500 px-2.5 py-0.5 text-[11px] font-medium">Inativo</span>}
                               </td>
                               <td className="py-2 px-3 rounded-r-xl border-y border-r border-gray-100 text-right whitespace-nowrap">
-                                <Button variant="ghost" size="sm" className="h-7 px-2 text-gray-500 hover:text-indigo-700" onClick={() => openCnpjEdit(row)}>
+                                <Button variant="ghost" size="sm" className="h-7 px-2 text-gray-500 hover:text-indigo-700" title="Editar" onClick={() => openCnpjEdit(row)}>
                                   <Edit3 className="w-3.5 h-3.5" />
                                 </Button>
                                 {ativo ? (
-                                  <Button variant="ghost" size="sm" className="h-7 px-2 text-gray-500 hover:text-red-600" disabled={deleteCnpjMut.isPending}
+                                  <Button variant="ghost" size="sm" className="h-7 px-2 text-gray-500 hover:text-amber-600" title="Inativar (reversível)" disabled={deleteCnpjMut.isPending}
                                     onClick={() => deleteCnpjMut.mutate({ id: row.id, companyId })}>
-                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <PowerOff className="w-3.5 h-3.5" />
                                   </Button>
                                 ) : (
-                                  <Button variant="ghost" size="sm" className="h-7 px-2 text-gray-500 hover:text-emerald-700" disabled={updateCnpjMut.isPending}
+                                  <Button variant="ghost" size="sm" className="h-7 px-2 text-gray-500 hover:text-emerald-700" title="Reativar" disabled={updateCnpjMut.isPending}
                                     onClick={() => updateCnpjMut.mutate({ id: row.id, companyId, ativo: true })}>
                                     <Power className="w-3.5 h-3.5" />
                                   </Button>
                                 )}
+                                <Button variant="ghost" size="sm" className="h-7 px-2 text-gray-500 hover:text-red-600" title="Excluir definitivamente" disabled={purgeCnpjMut.isPending}
+                                  onClick={() => setCnpjToPurge(row)}>
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
                               </td>
                             </tr>
                           );
@@ -958,6 +968,37 @@ export default function FinanceiroConfiguracoes() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Confirmação de EXCLUSÃO DEFINITIVA do CNPJ/CPF interno */}
+        <AlertDialog open={!!cnpjToPurge} onOpenChange={(o) => { if (!o) setCnpjToPurge(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir definitivamente?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {cnpjToPurge && (
+                  <>
+                    Você vai <strong>apagar de vez</strong> o registro{" "}
+                    <span className="font-mono">{formatDoc(cnpjToPurge.cnpj)}</span>
+                    {cnpjToPurge.nome ? <> — {cnpjToPurge.nome}</> : null}.
+                    {" "}Essa ação <strong>não pode ser desfeita</strong> (para apenas tirar da regra sem apagar, use o botão <em>Inativar</em>).
+                  </>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={purgeCnpjMut.isPending}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-600 hover:bg-red-700 text-white"
+                disabled={purgeCnpjMut.isPending}
+                onClick={(e) => { e.preventDefault(); if (cnpjToPurge) purgeCnpjMut.mutate({ id: cnpjToPurge.id, companyId }); }}
+              >
+                {purgeCnpjMut.isPending
+                  ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Excluindo…</>
+                  : <><Trash2 className="w-3.5 h-3.5 mr-1.5" />Excluir definitivamente</>}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </DashboardLayout>
   );

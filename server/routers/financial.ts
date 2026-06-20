@@ -5511,7 +5511,7 @@ export const financialRouter = router({
     return { ok: true };
   }),
 
-  // Soft-delete (R-007): inativa (ativo=0), nunca apaga.
+  // Soft-delete: inativa (ativo=0), nunca apaga. Reversível pelo botão "reativar".
   deleteInternalCnpj: protectedProcedure.input(z.object({
     id: z.number(),
     companyId: z.number(),
@@ -5521,6 +5521,24 @@ export const financialRouter = router({
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
     const res = await dbExecute(db,
       `UPDATE financial_internal_cnpjs SET ativo=0, updated_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING id`,
+      [input.id, input.companyId]);
+    if (rows(res).length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "CNPJ interno não encontrado." });
+    return { ok: true };
+  }),
+
+  // Rev. 3362 — Exclusão DEFINITIVA (hard delete) a pedido EXPLÍCITO do usuário. Diferente do
+  // soft-delete acima, apaga a linha de vez. Aplica-se SÓ a esta tabela de CADASTRO interno
+  // (lista de CNPJs/CPFs do grupo p/ classificar movimentação interna) — é recadastrável e NÃO
+  // toca dado transacional/financeiro. Escopo amarrado por id + company_id (tenant guard).
+  purgeInternalCnpj: protectedProcedure.input(z.object({
+    id: z.number(),
+    companyId: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const res = await dbExecute(db,
+      `DELETE FROM financial_internal_cnpjs WHERE id=$1 AND company_id=$2 RETURNING id`,
       [input.id, input.companyId]);
     if (rows(res).length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "CNPJ interno não encontrado." });
     return { ok: true };
