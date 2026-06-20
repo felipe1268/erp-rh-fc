@@ -514,6 +514,7 @@ const menuSectionsFinanceiro: MenuSection[] = [
       { icon: BookOpen,      label: "Plano de Contas",   path: "/financeiro/plano-de-contas" },
       { icon: Tag,           label: "Categorias",        path: "/financeiro/categorias" },
       { icon: Layers,        label: "Centros de Custo",  path: "/financeiro/centros-de-custo" },
+      { icon: Landmark,      label: "Contas Bancárias",  path: "/contas-bancarias" },
       { icon: Settings2,     label: "Configurações",     path: "/financeiro/configuracoes" },
     ],
   },

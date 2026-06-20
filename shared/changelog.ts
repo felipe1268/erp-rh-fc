@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3374 — **FINANCEIRO · MENU · "CONTAS BANCÁRIAS" AGORA TAMBÉM APARECE NA SEÇÃO "CADASTROS" DO MÓDULO FINANCEIRO
+ * (ANTES SÓ EXISTIA NO MÓDULO CADASTRO). ATALHO PARA NÃO PRECISAR TROCAR DE MÓDULO — APONTA PARA A MESMA TELA/ROTA
+ * `/contas-bancarias`. 1 LINHA DE MENU · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE · NENHUMA TELA NOVA.**
+ * - PEDIDO (prints do iPad dos menus Cadastro e Financeiro): "no módulo financeiro, coloca o cadastro da conta
+ *   bancária tbm. ajuda a não precisar ficar mudando de módulo.. só replica do módulo de cadastro para cá tbm."
+ * - FIX (`client/src/components/DashboardLayout.tsx`, `menuSectionsFinanceiro` › seção "Cadastros"): adicionado
+ *   `{ icon: Landmark, label: "Contas Bancárias", path: "/contas-bancarias" }` entre "Centros de Custo" e
+ *   "Configurações". Mesma ROTA já existente (compartilhada com o módulo Cadastro) — `ContasBancarias` já está
+ *   registrado em `App.tsx` (`/contas-bancarias`) e a FEATURE `contas-bancarias` (route `/contas-bancarias`) já existe
+ *   em `shared/modules.ts`, então o filtro de menu (`individualCheck` → `routeToFeatureKey` → `canAccessFeature`)
+ *   resolve a permissão sem precisar de novo registro. `Landmark` já estava importado no DashboardLayout.
+ * - EFEITO: quem tem acesso à feature "Contas Bancárias" vê o item nos DOIS menus (Cadastro e Financeiro); Admin
+ *   Master vê sempre. Nada muda no comportamento da tela em si (a Rev. 3373 redesenhou o formulário).
+ * - VALIDAÇÃO: tsc limpo no arquivo tocado (só ruído pré-existente em `changelog.ts`). App rodando.
+ *
  * Rev. 3373 — **FINANCEIRO / CADASTRO · CONTAS BANCÁRIAS · REDESENHO DA TELA "EDITAR/NOVA CONTA BANCÁRIA" (FORMULÁRIO
  * EM FULLSCREEN): LAYOUT MODERNO, INTERATIVO E DE FÁCIL VISUALIZAÇÃO — CARTÃO-PREVIEW AO VIVO DA CONTA NO TOPO,
  * SELEÇÃO RÁPIDA DE BANCO POR CHIPS CLICÁVEIS, CAMPOS AGRUPADOS EM 3 SEÇÕES (IDENTIFICAÇÃO / RECURSOS / SALDO),
