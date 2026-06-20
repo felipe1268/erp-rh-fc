@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3339 — **RH / DASHBOARD "CUSTO DE DEMISSÃO EM MASSA" (CDM) · CORREÇÃO: O "CUSTO TOTAL" DOS MEMBROS DA CIPA AGORA
+ * INCLUI A INDENIZAÇÃO DO PERÍODO DE ESTABILIDADE (SÚMULA 396 TST) + EMPREGADOS JÁ EM "AVISO" SÃO EXCLUÍDOS DA SIMULAÇÃO.
+ * 1 BACKEND (READ-ONLY) + 1 FRONT · BUGFIX/ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário, no iPad, com print do CDM): "para os membros da CIPA o sistema não está calculando a indenização por
+ *   estabilidade no custo de demitir; a tag CIPA aparece mas o Custo Total ignora esse passivo".
+ * - BUG1 (estabilidade CIPA fora do custo): a tag "CIPA" (Rev. 1936) era apenas VISUAL. O dashboard simula SEMPRE dispensa
+ *   pelo empregador (tipo `empregador_*`), então demitir um cipeiro com estabilidade VIGENTE gera custo ADICIONAL =
+ *   remuneração do período restante de estabilidade (salários + 13º + férias+1/3 + FGTS 8% — `calcularIndenizacaoEstabilidade`
+ *   em `server/utils/rescisaoCalc.ts`). Esse valor NÃO entrava no `total`, subestimando o passivo real.
+ * - BUG2 (empregado em "Aviso" entrava na simulação): o `activeWhere` não excluía quem já está com `employees.status='Aviso'`
+ *   (aviso prévio em curso) — esses não devem ser "demitidos de novo" na simulação de massa.
+ * - CORREÇÃO BACKEND (`server/routers/dashboards.ts`, `getDashCustoDemissaoMassa`): (1) import de `calcularIndenizacaoEstabilidade`;
+ *   (2) `activeWhere` ganhou `sql\`${employees.status} <> 'Aviso'\``; (3) no `.map`, p/ cada linha lê `cipaByEmp.get(r.id)`
+ *   (Map já carregado, só membros Ativos c/ estabilidade vigente) e, havendo `fimEstabilidade` futuro, computa
+ *   `calcularIndenizacaoEstabilidade({salarioBase: salario, dataDesligamento: dataRef, fimEstabilidade})`; expõe
+ *   `indenizacaoEstabilidade` + `cipaDiasEstabilidade` no retorno; (4) `total` passou a `totalOficialLiquido +
+ *   totalComplementar + indenizacaoEstabilidade` (em não-cipeiros é 0 → sem efeito). Isso propaga p/ o TOTAL GERAL, o KPI
+ *   "Custo Total Estimado", o sort e o comboAgregado. READ-ONLY: nenhuma rota/permissão/schema novo.
+ * - CORREÇÃO FRONT (`client/src/pages/dashboards/DashAvisoPrevio.tsx`): (a) célula "Custo Total" ganhou sub-linha âmbar
+ *   "+estab {valor}" (molde da "+compl" roxa) quando `indenizacaoEstabilidade>0`; (b) tooltip do badge "CIPA" enriquecido c/ o
+ *   valor da indenização e os dias restantes; (c) modal `DetalheCalculoModal` ganhou card âmbar "INDENIZAÇÃO DE ESTABILIDADE"
+ *   (Súm. 396 TST, dias restantes + estável-até) — necessário porque o modal recalcula via `avisoPrevio.avisoPrevio.calcular`,
+ *   que NÃO traz estabilidade; o card lê `row.indenizacaoEstabilidade`/`row.cipaFimEstabilidade`/`row.cipaDiasEstabilidade`
+ *   vindos do CDM. Moeda em BRL via `fmt`/`fmtBRL` (regra de ouro).
+ * - ESCOPO: RH (Custo de Demissão em Massa). Aditivo + bugfix. A indenização de estabilidade é custo EVENTUAL (só se demitir
+ *   o cipeiro com estabilidade vigente); o combo "Gerar em lote" recalcula server-side sem ela (intencional — verba eventual,
+ *   não automática). RESSALVA: não foi possível reproduzir autenticado no ambiente (login bloqueia screenshot); re-publicar.
+ * - ARQUIVOS: `server/routers/dashboards.ts`, `client/src/pages/dashboards/DashAvisoPrevio.tsx`, `shared/version.ts` (3339),
+ *   `shared/changelog.ts`, `replit.md`, `replit-history.md`.
+ *
  * Rev. 3338 — **FINANCEIRO / DASHBOARD DE CONCILIAÇÃO BANCÁRIA · NOVA COLUNA "SALDO (R$)" NA TABELA "CONCILIAÇÃO POR CONTA
  * BANCÁRIA" (DETAIL DIALOG), = ENTRADAS − SAÍDAS POR CONTA, COLORIDA (VERDE=POSITIVO, VERMELHO=NEGATIVO) + LINHA DE TOTAL
  * NO RODAPÉ CONSOLIDANDO O SALDO GERAL — PRA VER DE RELANCE SE O PERÍODO FECHOU POSITIVO OU NEGATIVO. 100% FRONT ·

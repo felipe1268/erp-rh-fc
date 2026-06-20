@@ -1090,7 +1090,7 @@ export default function DashAvisoPrevio() {
                                     {l.isCipa && (
                                       <span
                                         className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-100 text-orange-800 border border-orange-300 shrink-0"
-                                        title={`CIPA — estável até ${l.cipaFimEstabilidade ? new Date(l.cipaFimEstabilidade + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}${l.cipaCargo ? ` (${l.cipaCargo})` : ''}. Dispensa sem justa causa vedada — CF Art. 10 II 'a' ADCT.`}
+                                        title={`CIPA — estável até ${l.cipaFimEstabilidade ? new Date(l.cipaFimEstabilidade + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}${l.cipaCargo ? ` (${l.cipaCargo})` : ''}. Dispensa sem justa causa vedada — CF Art. 10 II 'a' ADCT.${((l as any).indenizacaoEstabilidade ?? 0) > 0 ? ` Indenização de estabilidade (Súm. 396 TST) p/ os ${(l as any).cipaDiasEstabilidade ?? 0} dias restantes: ${fmtBRL((l as any).indenizacaoEstabilidade)} — JÁ somada ao Custo Total.` : ''}`}
                                       >
                                         CIPA
                                       </span>
@@ -1124,11 +1124,17 @@ export default function DashAvisoPrevio() {
                                   )}
                                 </td>
                                 <td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground border-b border-border/50">{fmtBRL(l.multaFGTS)}</td>
-                                <td className="py-1.5 px-2 text-right tabular-nums font-bold text-red-700 border-b border-border/50" title={(l as any).totalOficialBruto != null ? `Oficial bruto: ${fmtBRL((l as any).totalOficialBruto)} − Descontos legais (INSS+IRRF+pensão+sindical): ${fmtBRL((l as any).totalDescontos ?? 0)} = Oficial líquido: ${fmtBRL((l as any).totalOficialLiquido ?? l.totalOficial)}${l.totalComplementar > 0 ? ` + Complementar: ${fmtBRL(l.totalComplementar)}` : ''}` : undefined}>
+                                <td className="py-1.5 px-2 text-right tabular-nums font-bold text-red-700 border-b border-border/50" title={(l as any).totalOficialBruto != null ? `Oficial bruto: ${fmtBRL((l as any).totalOficialBruto)} − Descontos legais (INSS+IRRF+pensão+sindical): ${fmtBRL((l as any).totalDescontos ?? 0)} = Oficial líquido: ${fmtBRL((l as any).totalOficialLiquido ?? l.totalOficial)}${l.totalComplementar > 0 ? ` + Complementar: ${fmtBRL(l.totalComplementar)}` : ''}${((l as any).indenizacaoEstabilidade ?? 0) > 0 ? ` + Indenização estabilidade CIPA (Súm. 396 TST): ${fmtBRL((l as any).indenizacaoEstabilidade)}` : ''}` : undefined}>
                                   {fmtBRL(l.total)}
                                   {l.totalComplementar > 0 && (
                                     <div className="text-[9px] font-normal text-violet-700 mt-0.5">
                                       +compl {fmtBRL(l.totalComplementar)}
+                                    </div>
+                                  )}
+                                  {/* Rev. 3339 — Sub-linha da indenização de estabilidade CIPA somada ao Custo Total. */}
+                                  {((l as any).indenizacaoEstabilidade ?? 0) > 0 && (
+                                    <div className="text-[9px] font-normal text-orange-700 mt-0.5" title={`Indenização de estabilidade CIPA (Súm. 396 TST) — ${(l as any).cipaDiasEstabilidade ?? 0} dias restantes`}>
+                                      +estab {fmtBRL((l as any).indenizacaoEstabilidade)}
                                     </div>
                                   )}
                                 </td>
@@ -2374,6 +2380,29 @@ function DetalheCalculoModal({
                   </div>
                 )}
               </div>
+
+              {/* Rev. 3339 — Card ÂMBAR: INDENIZAÇÃO DE ESTABILIDADE CIPA (Súm. 396
+                  TST). Custo ADICIONAL e eventual de demitir um cipeiro com
+                  estabilidade vigente sem justa causa. Vem do CDM (row), já somado
+                  ao "Custo Total" da linha — exibido aqui em separado pra transparência. */}
+              {((row as any).indenizacaoEstabilidade ?? 0) > 0 && (
+                <div className="rounded-xl border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50 overflow-hidden shadow-md shadow-amber-300/20">
+                  <div className="flex items-start justify-between gap-3 p-4 border-b border-amber-200 bg-white/40">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-amber-700 tracking-wider">
+                        <AlertTriangle className="h-3.5 w-3.5" /> Estabilidade CIPA — custo adicional
+                      </div>
+                      <h3 className="text-base sm:text-lg font-bold text-amber-900 mt-0.5">INDENIZAÇÃO DE ESTABILIDADE</h3>
+                      <p className="text-[10px] text-amber-700/80 mt-0.5">
+                        Súmula 396 TST — {(row as any).cipaDiasEstabilidade ?? 0} dias restantes
+                        {row.cipaFimEstabilidade ? ` (estável até ${fmtData(row.cipaFimEstabilidade)})` : ''}.
+                        Salários + 13º + férias+1/3 + FGTS 8% do período. <strong>Já incluso</strong> no Custo Total da tabela.
+                      </p>
+                    </div>
+                    <span className="text-xl sm:text-2xl font-extrabold text-amber-800 tabular-nums whitespace-nowrap">{fmt((row as any).indenizacaoEstabilidade)}</span>
+                  </div>
+                </div>
+              )}
 
               {/* Card ROXO: RESCISÃO COMPLEMENTAR */}
               {pc && (

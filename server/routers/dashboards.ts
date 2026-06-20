@@ -15,7 +15,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, desc, count, asc, isNull, inArray } from "drizzle-orm";
 import { parseBRL } from "../utils/parseBRL";
-import { calcularRescisaoCompleta, calcularRescisaoComplementar, calcularDiasAvisoTotal, calcularDiasAviso, calcularDescontosRescisao, type DescontosRescisaoContext } from "../utils/rescisaoCalc";
+import { calcularRescisaoCompleta, calcularRescisaoComplementar, calcularDiasAvisoTotal, calcularDiasAviso, calcularDescontosRescisao, calcularIndenizacaoEstabilidade, type DescontosRescisaoContext } from "../utils/rescisaoCalc";
 import { carregarMultaFgtsPorEmpresa } from "../utils/rescisaoMultaCfg";
 import { invokeLLM } from "../_core/llm";
 
@@ -2550,6 +2550,13 @@ async function getDashCustoDemissaoMassa(
     // por acaso). Atestados curtos ≤15d (ônus empregador) NÃO mudam status no
     // sistema — ficam só no espelho de ponto.
     sql`${employees.status} <> 'Recluso'`,
+    // Rev. 3339 — Excluir quem JÁ está em aviso prévio (status='Aviso').
+    // User (20/06/2026, screenshot CDM): "funcionário que já está de aviso não
+    // pode aparecer na lista". O módulo Aviso Prévio seta employees.status='Aviso'
+    // ao criar o aviso (avisoPrevioFerias.ts L511); mantê-lo na simulação de
+    // Custo de Demissão em Massa dupla-contava o passivo (o aviso dele já está
+    // em curso) e poluía a lista de "quem eu ainda posso/preciso demitir".
+    sql`${employees.status} <> 'Aviso'`,
     sql`NOT (
       ${employees.status} = 'Afastado'
       AND (
@@ -2976,6 +2983,27 @@ async function getDashCustoDemissaoMassa(
         }
         if (tempoAnos < 0) { tempoAnos = 0; tempoMeses = 0; tempoDias = 0; }
       }
+      // Rev. 3339 — INDENIZAÇÃO DO PERÍODO DE ESTABILIDADE CIPA (Súmula 396 TST).
+      // User (20/06/2026, screenshot CDM): "para os membros da CIPA não está
+      // calculando a indenização por estabilidade no custo". Membro da CIPA com
+      // estabilidade ainda VIGENTE (cipa_members.fimEstabilidade futuro), se
+      // dispensado pelo empregador SEM justa causa, gera custo ADICIONAL =
+      // remuneração do período restante de estabilidade (salários + 13º +
+      // férias+1/3 + FGTS 8% — calcularIndenizacaoEstabilidade). O CDM simula
+      // SEMPRE dispensa do empregador (tipo empregador_*), então é sempre
+      // aplicável quando há estabilidade futura. Antes a tag CIPA (Rev. 1936)
+      // era só VISUAL e o "Custo Total" NÃO contemplava essa indenização,
+      // subestimando o passivo real de demitir um cipeiro. Soma-se ao `total`.
+      const cipaInfoRow = cipaByEmp.get(r.id);
+      const estabCalc = cipaInfoRow?.fimEstabilidade
+        ? calcularIndenizacaoEstabilidade({
+            salarioBase: salario,
+            dataDesligamento: dataRef,
+            fimEstabilidade: cipaInfoRow.fimEstabilidade,
+          })
+        : null;
+      const indenizacaoEstabilidade = estabCalc?.aplicavel ? parseFloat(estabCalc.total) : 0;
+      const cipaDiasEstabilidade = estabCalc?.aplicavel ? estabCalc.diasRestantes : 0;
       return {
         id: r.id,
         nomeCompleto: r.nomeCompleto,
@@ -3019,6 +3047,11 @@ async function getDashCustoDemissaoMassa(
         isCipa: cipaByEmp.has(r.id),
         cipaCargo: cipaByEmp.get(r.id)?.cargo ?? null,
         cipaFimEstabilidade: cipaByEmp.get(r.id)?.fimEstabilidade ?? null,
+        // Rev. 3339 — Indenização do período de estabilidade CIPA (Súmula 396
+        // TST) somada ao `total`. `cipaDiasEstabilidade` = dias restantes de
+        // estabilidade a partir da dataRef (base do cálculo).
+        indenizacaoEstabilidade,
+        cipaDiasEstabilidade,
         // Rev. 1930 — Devolve `diasAvisoEstimado` (que respeita o `tipo` —
         // 30 fixos no Trabalhado / 30+3·ano no Indenizado conforme L2476),
         // não `previsao.diasAvisoTotal` (que SEMPRE retorna o cálculo legal
@@ -3048,7 +3081,11 @@ async function getDashCustoDemissaoMassa(
         totalOficialLiquido,
         totalDescontos,
         totalComplementar,
-        total: totalOficialLiquido + totalComplementar,
+        // Rev. 3339 — `total` agora inclui a indenização de estabilidade CIPA
+        // (quando aplicável). Em não-cipeiros `indenizacaoEstabilidade=0`, sem
+        // efeito. Isso faz o "Custo Total" da linha, o TOTAL GERAL e o KPI
+        // "Custo Total Estimado" refletirem o passivo real de demitir cipeiros.
+        total: totalOficialLiquido + totalComplementar + indenizacaoEstabilidade,
       };
     })
     .sort((a, b) => b.total - a.total);
