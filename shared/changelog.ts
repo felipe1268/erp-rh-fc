@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3348 — **FOLHA DE PAGAMENTO / HORAS EXTRAS · DRILL-IN DOS DIAS: AGORA DÁ PRA CLICAR DIRETO NAS HORAS
+ * ("HE ÚTEIS", "HE FIM SEM." E "TOTAL HE") DE CADA FUNCIONÁRIO PARA ABRIR O DETALHAMENTO DIA A DIA DAS HORAS
+ * EXTRAS — ANTES O DETALHE SÓ ABRIA POR UM ÍCONE DISCRETO AO LADO DO "VALOR HE", QUE PASSAVA DESPERCEBIDO.
+ * 100% FRONT · UX · READ-ONLY · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário, no iPad, com 1 print da tela "Folha de Pagamento" → módulo de Horas Extras / Destinação):
+ *   "Quero poder clicar e ver os dias das horas extras, quero ver detalhadamente".
+ * - RAIZ: o detalhamento dia a dia JÁ EXISTIA — o dialog "Memorial de Cálculo" (`memorialHePeriodId`/
+ *   `memorialEmployeeId` + query `horasExtras.memorialCalculo`, que devolve `dias[]` com data, dia da semana,
+ *   horários, horas trabalhadas, jornada, HE, adicional, fórmula e valor por dia). Só que o único gatilho para
+ *   abri-lo era um `<FileText>` pequeno (roxo claro) ao lado do "Valor HE", fácil de não notar. As células das
+ *   HORAS em si (HE Úteis / HE Fim Sem. / Total HE) não eram clicáveis.
+ * - CORREÇÃO (`client/src/pages/FolhaPagamento.tsx`, 100% front): no `forEach` que monta cada linha da tabela do
+ *   módulo HE, novo helper local `abrirMemorial()` (mesma validação período/funcionário do botão existente:
+ *   `setMemorialHePeriodId(perId)` + `setMemorialEmployeeId(empKey)`). As três células de horas passam a renderizar
+ *   um `<button>` com `onClick={(ev)=>{ev.stopPropagation(); abrirMemorial();}}` (hover roxo + sublinhado +
+ *   `cursor-pointer`, `title="Ver os dias dessas horas extras"`) QUANDO há HE (>0); quando é "—"/zero, fica texto
+ *   simples não-clicável. O ícone `<FileText>` do "Valor HE" continua funcionando (caminho redundante mantido).
+ * - ESCOPO: 1 arquivo front. Nenhum endpoint novo (reusa `memorialCalculo`, já read-only). Sem backend/schema/
+ *   ALTER/DROP/DELETE. tsc limpo.
+ * - ARQUIVOS: `client/src/pages/FolhaPagamento.tsx`, `shared/version.ts` (3348), `shared/changelog.ts`,
+ *   `replit.md`, `replit-history.md`.
+ *
  * Rev. 3347 — **FINANCEIRO / DASHBOARD DE CHEQUES · DRILL-IN POR PRAZO DE COMPENSAÇÃO (E DEMAIS RECORTES): A COLUNA
  * "STATUS" DA TABELA DE DETALHE AGORA EXIBE UM SELO COLORIDO (COMPENSADO=VERDE, PENDENTE=VERMELHO, INDEFINIDO=ÂMBAR,
  * DEVOLVIDO/SUSTADO=VERMELHO ESCURO) EM VEZ DE TEXTO CRU — PARA FICAR CLARO NA TELA, NA IMPRESSÃO E NO RELATÓRIO/PDF.

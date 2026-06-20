@@ -5477,6 +5477,17 @@ export default function FolhaPagamento() {
                                                 const origem = e.origem || "sem_solicitacao";
                                                 const isFirst = idx === 0;
                                                 const isLast  = idx === items.length - 1;
+                                                // Rev. 3348 — abrir o Memorial de Cálculo (detalhamento dia a dia
+                                                // das horas extras) clicando nas próprias horas, não só no ícone.
+                                                const abrirMemorial = () => {
+                                                  const perId = Number(p.id);
+                                                  if (!empKey || !perId) {
+                                                    toast.error(`Não foi possível abrir o detalhamento: dados ausentes (período=${perId}, funcionário=${empKey})`);
+                                                    return;
+                                                  }
+                                                  setMemorialHePeriodId(perId);
+                                                  setMemorialEmployeeId(empKey);
+                                                };
                                                 rows.push(
                                                   <tr key={e.id}
                                                     className={`hover:bg-white/80 ${dest === "banco_horas" ? "bg-blue-50/30" : ""} ${isLast ? "border-b border-gray-200" : "border-b border-gray-50"}`}>
@@ -5531,12 +5542,32 @@ export default function FolhaPagamento() {
                                                       )}
                                                     </td>
                                                     <td className="text-right py-2 px-2 text-xs text-muted-foreground">
-                                                      {e.heUtilMins > 0 ? minsToHHMM(e.heUtilMins) : "—"}
+                                                      {e.heUtilMins > 0 ? (
+                                                        <button type="button" onClick={(ev) => { ev.stopPropagation(); abrirMemorial(); }}
+                                                          title="Ver os dias dessas horas extras"
+                                                          className="hover:text-purple-700 hover:underline focus-visible:ring-2 focus-visible:ring-purple-300 rounded cursor-pointer">
+                                                          {minsToHHMM(e.heUtilMins)}
+                                                        </button>
+                                                      ) : "—"}
                                                     </td>
                                                     <td className="text-right py-2 px-2 text-xs text-muted-foreground">
-                                                      {e.heFimMins > 0 ? minsToHHMM(e.heFimMins) : "—"}
+                                                      {e.heFimMins > 0 ? (
+                                                        <button type="button" onClick={(ev) => { ev.stopPropagation(); abrirMemorial(); }}
+                                                          title="Ver os dias dessas horas extras"
+                                                          className="hover:text-purple-700 hover:underline focus-visible:ring-2 focus-visible:ring-purple-300 rounded cursor-pointer">
+                                                          {minsToHHMM(e.heFimMins)}
+                                                        </button>
+                                                      ) : "—"}
                                                     </td>
-                                                    <td className="text-right py-2 px-2 font-medium">{minsToHHMM(e.heTotalMins)}</td>
+                                                    <td className="text-right py-2 px-2 font-medium">
+                                                      {e.heTotalMins > 0 ? (
+                                                        <button type="button" onClick={(ev) => { ev.stopPropagation(); abrirMemorial(); }}
+                                                          title="Ver os dias dessas horas extras"
+                                                          className="hover:text-purple-700 hover:underline focus-visible:ring-2 focus-visible:ring-purple-300 rounded cursor-pointer font-medium">
+                                                          {minsToHHMM(e.heTotalMins)}
+                                                        </button>
+                                                      ) : minsToHHMM(e.heTotalMins)}
+                                                    </td>
                                                     <td className="text-right py-2 px-2 font-bold text-purple-700">
                                                       <span className="inline-flex items-center gap-1">
                                                         {formatBRL(Number(e.valorHETotal))}
