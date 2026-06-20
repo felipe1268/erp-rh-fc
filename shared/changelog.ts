@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3387 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · PARSER BANCO DO BRASIL: SUPORTE AO
+ * NOVO FORMATO "EXTRATO DE CONTA CORRENTE" (INTERNET BANKING PJ) QUE USA (+)/(-)
+ * COMO INDICADOR DE CRÉDITO/DÉBITO E LAYOUT MULTI-LINHA. 100% BACKEND ·
+ * ZERO SCHEMA/ALTER/DROP/DELETE · 1 ARQUIVO (bbPdfParser.ts).**
+ * - PROBLEMA: o parser determinístico do BB (`bbPdfParser.ts`) foi escrito para o
+ *   formato LEGADO (uma linha por transação, valor com indicador `C`/`D`). O
+ *   "Extrato de Conta Corrente" do Internet Banking PJ usa um formato diferente:
+ *   valor como `2.100,00 (+)` ou `91,66 (-)`, e cada transação ocupa DUAS linhas
+ *   (1ª: data + descrição opcional; 2ª: lote + documento + valor). O parser antigo
+ *   retornava 0 linhas → caía no fallback da IA (Gemini/Anthropic), que é lento,
+ *   consome cota e pode errar nos valores.
+ * - ANÁLISE DO EXTRATO BB (Ag. 1451-6 / Conta 37400-8, Jun/2026):
+ *   · 15/06/2026 — Tarifa Pacote de Serviços: R$ 1,44 (D)
+ *   · 17/06/2026 — PIX Recebido FC ENGENHAR (CNPJ 29353906000171): R$ 2.100,00 (C)
+ *   · 17/06/2026 — Tarifa Pacote de Serviços: R$ 91,66 (D)
+ *   · 18/06/2026 — Empréstimo: R$ 1.996,42 (D)
+ *   NÃO são transações: Saldo Anterior, "Saldo do dia" (×3), SALDO final.
+ * - FIX (`server/services/bbPdfParser.ts`): detecção de formato via presença de
+ *   `\d+,\d{2}\s*\([+-]\)` no texto. Quando detectado, usa o algoritmo MULTI-LINHA:
+ *   percorre as linhas mantendo "data corrente" e "descrição da linha de data";
+ *   ao encontrar uma linha de valor (`(+)/(-)`) que não seja saldo, gera o
+ *   lançamento com a data + descrição acumulados. Linhas de saldo filtradas via
+ *   regex (`RE_SKIP_NOVO`): "Saldo Anterior", "Saldo do dia", "SALDO", cabeçalhos.
+ *   Para a descrição: usa o texto após a data na linha de data (ex.: "Tarifa
+ *   Pacote de Serviços"); se vazio, extrai da linha de valor removendo lote (1º
+ *   grupo de dígitos), documento (2º grupo) e o token monetário.
+ *   O formato legado (C/D) continua funcionando no branch `else`.
+ * - RESULTADO: 4 transações extraídas corretamente, sem IA, determinístico.
+ * - VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
+ *
  * Rev. 3386 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXCLUSÃO INDIVIDUAL DE LINHA DO EXTRATO:
  * BOTÃO "APAGAR" EM CADA LINHA (PENDENTES + CONCILIADAS) COM ALERTDIALOG DE CONFIRMAÇÃO.
  * BACKEND ADITIVO (`excluirLinhaExtrato`) + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**
