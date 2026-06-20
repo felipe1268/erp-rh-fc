@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3367 — **FINANCEIRO / CADASTRO · CONTAS BANCÁRIAS · O BOTÃO "EXCLUIR" AGORA REALMENTE TIRA A CONTA DA LISTA.
+ * ANTES, AO CLICAR EM "EXCLUIR" E CONFIRMAR, A CONTA CONTINUAVA APARECENDO NO ERP (E NOS CARDS "TOTAL DE CONTAS" /
+ * "ATIVAS") COMO SE NADA TIVESSE ACONTECIDO. SÓ BACKEND (1 FILTRO) · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário, print do iPad em "Contas Bancárias"): "quando clicar em delete precisa apagar a conta do
+ *   ERP.. hoje não apaga".
+ * - RAIZ: a mutation `folha.excluirContaBancaria` JÁ fazia o soft-delete corretamente (seta `deletedAt`/`deletedBy`/
+ *   `deletedByUserId` na linha de `company_bank_accounts`, com guard anti-IDOR via `assertContaCompanyAccess`).
+ *   O furo estava do lado da LEITURA: `folha.listarContasBancarias` selecionava `company_bank_accounts` filtrando
+ *   APENAS por `companyFilter(companyId)` — SEM `deletedAt IS NULL`. Resultado: a conta "excluída" voltava na
+ *   próxima leitura como se nunca tivesse sido apagada (e os cards de contagem do topo, que derivam da mesma lista,
+ *   seguiam contando ela). As demais leituras de contas bancárias (motor de folha em `payrollEngine.ts`) já
+ *   filtravam `deletedAt IS NULL` — só esta lista de cadastro estava fora do padrão.
+ * - FIX (`server/routers/folhaPagamento.ts`, `listarContasBancarias`): o `where` passou a ser
+ *   `and(companyFilter(...), sql`${companyBankAccounts.deletedAt} IS NULL`)`, espelhando o padrão já usado em
+ *   `employees`/`payrollEngine`. Soft-delete preservado (mantém histórico/auditoria e NÃO órfã `bank_statement_lines`/
+ *   `financial_entries` que referenciam a conta — coerente com R-001/R-007/R-010: nada de hard DELETE).
+ * - VALIDAÇÃO: tsc limpo no arquivo tocado (0 erros novos; só o ruído pré-existente de `changelog.ts`). Efeito:
+ *   conta excluída some imediatamente da lista (o front já dava `refetch()` no onSuccess) e os cards "Total/Ativas"
+ *   recalculam sozinhos.
+ *
  * Rev. 3366 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · O "PAINEL GERAL DO MÊS" PAROU DE CONTAR COMO "SAÍDA DE CAIXA
  * REAL" OS PIX/TRANSFERÊNCIAS PARA EMPRESAS DO PRÓPRIO GRUPO QUANDO O BANCO TRAZ SÓ O NOME NA LINHA (SEM O CNPJ).
  * ANTES, A CLASSIFICAÇÃO "MOVIMENTAÇÃO INTERNA" SÓ CASAVA PELO CNPJ NA DESCRIÇÃO — ENTÃO O "PIX RECEBIDO LOCNOW …
