@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3369 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · "CHEQUES DEVOLVIDOS" NO PANORAMA GERAL DO MÊS VOLTOU A MOSTRAR
+ * AS INFORMAÇÕES DE CADA CHEQUE (Nº, FORNECEDOR/OBRA/NF, MOTIVO DA DEVOLUÇÃO, DATAS E SITUAÇÃO) — ANTES SÓ APARECIA
+ * "—  —  R$ valor" EM TODA LINHA. 100% FRONT (CORREÇÃO DE NOMES DE CAMPO) · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (print do iPad em "Conciliação Bancária" → bloco "Cheques devolvidos (38)"): "Precisa aparecer as
+ *   informações dos cheques, arrumar isso." Na tela, cada linha do bloco mostrava só dois travessões ("—  —") e o
+ *   valor à direita; nenhum dado do cheque.
+ * - RAIZ: o bloco "Cheques devolvidos" do PANORAMA GERAL DO MÊS (`FinanceiroConciliacao.tsx`, ramo `cDevol`) lia
+ *   campos que NÃO EXISTEM no objeto retornado pelo backend: `d.data`, `d.descricao` e `d.chequeFornecedor`. O
+ *   endpoint (`getBankStatements` / panorama) monta cada cheque devolvido como par de estorno com os campos
+ *   `chequeNumero`, `fornecedor`, `obraNome`, `nf`, `motivoCodigo`/`motivoTexto`/`motivoSustado`, `dataDebito`,
+ *   `dataCredito`, `valor`/`valorCents` e `resolucao{tipo}`. Como os nomes não batiam, `fmtData(d.data)` e
+ *   `d.descricao || d.chequeFornecedor` resolviam para "—" em TODA linha. A versão DETALHADA ("Abrir conta" →
+ *   `repDevol`) já lia os nomes certos e mostrava tudo; só o resumo do panorama estava fora do padrão.
+ * - FIX (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`, render de `cDevol`): passou a usar os MESMOS
+ *   campos do bloco detalhado — "Cheque nº {chequeNumero}" (fallback "Doc {doc}"), badge "Mot. {motivoCodigo} ·
+ *   {motivoTexto}" (vermelho se sustado, âmbar caso contrário), linha de identificação `[fornecedor · obraNome ·
+ *   NF nf]`, "Comp. {dataDebito} → devol. {dataCredito}" e um selo de situação derivado de `resolucao.tipo`
+ *   (✓ reapresentado / ✓ quitado (PIX/TED) / ⚠ sem quitação). Valor segue `formatBRL(|valor| ou valorCents/100)`.
+ *   `key` trocada p/ `grupoId` (estável). NENHUMA mudança de dados — só leitura correta do que o backend já enviava.
+ * - PREFERÊNCIA RESPEITADA: conciliação SÓ SUGESTIVA — bloco é informativo/conferência; nada concilia/baixa.
+ * - VALIDAÇÃO: tsc limpo no arquivo tocado (só ruído pré-existente em `changelog.ts`). App rodando, Neon conectado.
+ *
  * Rev. 3368 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · (A) UMA RECEITA DE CLIENTE QUE ESTAVA CAINDO COMO "MOVIMENTAÇÃO
  * INTERNA" VOLTOU PARA O "CAIXA REAL"; (B) NOVO "MAPA DA MOVIMENTAÇÃO INTERNA DO GRUPO" QUE MOSTRA QUANTO ENTROU/SAIU
  * COM CADA CONTRAPARTE (LOCNOW, SÓCIOS, APLICAÇÃO/RESGATE, TRANSF. ENTRE CONTAS PRÓPRIAS) NO PERÍODO. SÓ BACKEND

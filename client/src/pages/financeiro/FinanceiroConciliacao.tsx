@@ -2023,13 +2023,30 @@ export default function FinanceiroConciliacao() {
                                   <div className="rounded-lg border border-orange-100 overflow-hidden">
                                     <div className="px-3 py-2 bg-orange-50 text-orange-700 text-xs font-semibold flex items-center gap-1.5"><AlertCircle className="w-3.5 h-3.5" />Cheques devolvidos ({formatInt(cDevol.length)})</div>
                                     <div className="divide-y max-h-48 overflow-auto bg-white">
-                                      {cDevol.map((d: any, i: number) => (
-                                        <div key={d.id ?? i} className="flex items-center gap-2 px-3 py-2 text-xs">
-                                          <span className="text-gray-400 shrink-0 w-16">{fmtData(d.data)}</span>
-                                          <span className="flex-1 min-w-0 truncate text-gray-700">{d.descricao || d.chequeFornecedor || "—"}</span>
-                                          <span className="font-semibold shrink-0 text-rose-500">{formatBRL(Math.abs(Number(d.valor) || 0))}</span>
-                                        </div>
-                                      ))}
+                                      {cDevol.map((d: any, i: number) => {
+                                        const res = d.resolucao ?? { tipo: "pendente" };
+                                        const ident = [d.fornecedor, d.obraNome, d.nf ? `NF ${d.nf}` : ""].filter(Boolean).join(" · ");
+                                        return (
+                                          <div key={d.grupoId ?? d.id ?? i} className="px-3 py-2 text-xs">
+                                            <div className="flex items-center gap-2">
+                                              <span className="flex-1 min-w-0 truncate font-medium text-gray-800">
+                                                Cheque {d.chequeNumero ? `nº ${d.chequeNumero}` : (d.doc ? `Doc ${d.doc}` : "—")}
+                                                {d.motivoCodigo != null && (
+                                                  <span className={`ml-1.5 px-1 py-px rounded-full text-[10px] font-medium ${d.motivoSustado ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`} title={d.motivoTexto ?? ""}>
+                                                    Mot. {d.motivoCodigo}{d.motivoTexto ? ` · ${d.motivoTexto}` : ""}
+                                                  </span>
+                                                )}
+                                              </span>
+                                              <span className="font-semibold shrink-0 text-rose-500">{formatBRL(Math.abs(Number(d.valor) || (d.valorCents ? d.valorCents / 100 : 0)))}</span>
+                                            </div>
+                                            {ident && <p className="text-[11px] text-gray-500 truncate">{ident}</p>}
+                                            <p className="text-[10px] text-gray-400 truncate">
+                                              Comp. {fmtData(d.dataDebito)} → devol. {fmtData(d.dataCredito)}
+                                              {res.tipo === "reapresentado" ? " · ✓ reapresentado" : res.tipo === "pix" ? " · ✓ quitado (PIX/TED)" : " · ⚠ sem quitação"}
+                                            </p>
+                                          </div>
+                                        );
+                                      })}
                                     </div>
                                   </div>
                                 )}
