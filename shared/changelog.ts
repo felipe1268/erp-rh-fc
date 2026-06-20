@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3359 — **FINANCEIRO / MOVIMENTAÇÃO INTERNA (CNPJs/CPFs DO GRUPO) · AO EDITAR UM REGISTRO SEMEADO E DIGITAR
+ * O CNPJ, O "NOME / IDENTIFICAÇÃO" NÃO ERA PREENCHIDO PORQUE O NOME BUSCADO (CADASTRO/RECEITA-BrasilAPI) NÃO
+ * SOBRESCREVIA O PLACEHOLDER "(VALIDAR NOME)". AGORA O AUTO-PREENCHIMENTO TRATA O PLACEHOLDER COMO VAZIO E A
+ * SUGESTÃO APARECE COM O NOME COMPLETO + BOTÃO "USAR ESTE NOME". 100% FRONT · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário, print da aba "Movimentação Interna" → "Editar CNPJ/CPF interno"): digitou o CNPJ
+ *   `61.423.062/0001-09` (= "LOCNOW LOCACOES E SERVICOS DE MAQUINAS VEICULOS E EQUIPAMENTOS LTDA") e o nome não veio;
+ *   pediu p/ buscar na base nacional.
+ * - RAIZ (`client/src/pages/financeiro/FinanceiroConfiguracoes.tsx`): os registros semeados nascem com o NOME
+ *   placeholder "Empresa do grupo (validar nome)". O efeito de auto-preenchimento da Rev. 3353 só escrevia o nome
+ *   buscado quando `!cnpjForm.nome.trim()` (campo VAZIO) — então, ao EDITAR um registro semeado, o placeholder
+ *   bloqueava a sugestão (o backend `consultarCnpj` continuava achando o nome, mas o front o ignorava). Além disso
+ *   a notinha verde só dizia "Nome sugerido pela base de cadastro" SEM mostrar QUAL nome.
+ * - CORREÇÃO (front-only):
+ *   • Helpers `nomeEhPlaceholder` (regex `/\(validar nome\)/i`) e `nomeSubstituivel` (vazio OU placeholder); o
+ *     `useEffect` de auto-preenchimento passa a sobrescrever quando `nomeSubstituivel(cnpjForm.nome)`.
+ *   • A notinha verde agora MOSTRA o nome sugerido em negrito + a fonte ("Receita / BrasilAPI" ou "base de
+ *     cadastro") e ganhou um botão "usar este nome" (só aparece quando o nome atual ≠ a sugestão) que aplica a
+ *     sugestão com 1 clique — útil mesmo quando o usuário já digitou um nome custom e quer trocar.
+ * - SEM mudança de backend: `consultarCnpj` (cascata companies→fornecedores→empresas_terceiras→BrasilAPI) e as
+ *   mutations continuam idênticas; só o comportamento de preenchimento do campo Nome no front mudou.
+ * - VALIDAÇÃO: tsc limpo no arquivo tocado; BrasilAPI confirma a razão social do CNPJ do print.
+ *
  * Rev. 3358 — **FOLHA / FERIADOS · O DIÁLOGO "BAIXAR FERIADOS {ANO}" GANHOU UM LAYOUT MODERNO COM AS CORES
  * INSTITUCIONAIS DA FC (FAIXA AZUL NO TOPO COM ÍCONE, CARD VERDE DOS NACIONAIS, CHIPS DE UF COM SELO/CHECK E
  * PONTINHO ÂMBAR P/ AS UFs DAS OBRAS) + ATALHOS "TODAS"/"LIMPAR" E CONTADOR DE UFs SELECIONADAS. 100% FRONT ·

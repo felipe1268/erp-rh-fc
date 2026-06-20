@@ -221,6 +221,11 @@ export default function FinanceiroConfiguracoes() {
   // Rev. 3353 — auto-preenche o Nome pela BASE DE CADASTRO (companies/fornecedores/
   // terceiros) ou Receita ao digitar o CNPJ completo (14) / raiz (8). Só preenche se o
   // campo Nome estiver vazio (não sobrescreve o que o usuário digitou).
+  // Rev. 3359 — os registros semeados nascem com o placeholder "(validar nome)"; ele NÃO é
+  // um nome de verdade, então tratamos como vazio para o auto-preenchimento sobrescrever
+  // (antes o nome buscado na Receita/cadastro era ignorado ao EDITAR um registro semeado).
+  const nomeEhPlaceholder = (n: string) => /\(validar nome\)/i.test((n ?? "").trim());
+  const nomeSubstituivel = (n: string) => !(n ?? "").trim() || nomeEhPlaceholder(n);
   const cnpjDigits = soDigitos(cnpjForm.cnpj);
   const canLookupCnpj = showCnpjDlg && !!companyId && (cnpjDigits.length === 14 || cnpjDigits.length === 8);
   const cnpjLookup = (trpc as any).financial.consultarCnpj.useQuery(
@@ -229,7 +234,7 @@ export default function FinanceiroConfiguracoes() {
   );
   useEffect(() => {
     const info = cnpjLookup.data;
-    if (info?.nome && !cnpjForm.nome.trim()) setCnpjForm(f => ({ ...f, nome: info.nome }));
+    if (info?.nome && nomeSubstituivel(cnpjForm.nome)) setCnpjForm(f => ({ ...f, nome: info.nome }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cnpjLookup.data]);
   const createCnpjMut = (trpc as any).financial.createInternalCnpj.useMutation({
@@ -883,9 +888,21 @@ export default function FinanceiroConfiguracoes() {
                       <Loader2 className="w-3 h-3 animate-spin" />Buscando nome pelo documento…
                     </p>
                   ) : cnpjLookup.data?.nome ? (
-                    <p className="text-[11px] text-emerald-600 mt-1 flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" />Nome sugerido {cnpjLookup.data.fonte === "receita" ? "pela Receita (BrasilAPI)" : "pela base de cadastro"}.
-                    </p>
+                    <div className="mt-1 flex items-start gap-2 flex-wrap">
+                      <p className="text-[11px] text-emerald-600 flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 shrink-0" />
+                        <span>Sugestão {cnpjLookup.data.fonte === "receita" ? "(Receita / BrasilAPI)" : "(base de cadastro)"}: <span className="font-semibold">{cnpjLookup.data.nome}</span></span>
+                      </p>
+                      {cnpjForm.nome.trim() !== String(cnpjLookup.data.nome).trim() && (
+                        <button
+                          type="button"
+                          onClick={() => setCnpjForm(f => ({ ...f, nome: cnpjLookup.data.nome }))}
+                          className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-700 underline shrink-0"
+                        >
+                          usar este nome
+                        </button>
+                      )}
+                    </div>
                   ) : (
                     <p className="text-[11px] text-gray-400 mt-1">Não localizei o nome automaticamente — preencha manualmente.</p>
                   )
