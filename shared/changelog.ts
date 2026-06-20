@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3377 — **FINANCEIRO / CADASTRO · CONTAS BANCÁRIAS · O CARD DE CADA CONTA AGORA MOSTRA, ALÉM DO BADGE "TALÃO",
+ * UM BADGE "APLICAÇÃO AUTOMÁTICA" QUANDO A CONTA TEM APLICAÇÃO/RESGATE AUTOMÁTICO (VARREDURA DIÁRIA) ATIVADO —
+ * ASSIM DÁ PRA VER DIRETO NA LISTA, SEM ABRIR PARA EDITAR, SE A CONTA TEM TALÃO DE CHEQUE E/OU APLICAÇÃO AUTOMÁTICA.
+ * 100% FRONT (SÓ EXIBIÇÃO DE BADGE) · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE · NENHUMA TELA NOVA.**
+ * - PEDIDO (prints da lista de Contas Bancárias e da tela de edição): "preciso que tenha na tela a informação se a
+ *   conta tem talão de cheque e se tem aplicação e resgate automático." O badge "Talão" já existia na lista; faltava
+ *   sinalizar a aplicação/resgate automático (a info só era visível abrindo a conta em "Editar").
+ * - FIX (`client/src/pages/ContasBancarias.tsx`, header do card da conta): logo após o badge "Talão" (renderizado
+ *   quando `Number(conta.temTalao) === 1`), adicionado um novo `<Badge>` "Aplicação automática" (ícone `TrendingUp`,
+ *   borda/texto esmeralda p/ diferenciar do navy do Talão) condicionado a `Number(conta.temAplicacaoAutomatica) === 1`.
+ *   O campo `temAplicacaoAutomatica` já vinha na query da lista (o `openEdit` já o lia) — nenhuma mudança de backend.
+ * - EFEITO: na lista, contas com talão mostram "Talão", contas com varredura diária mostram "Aplicação automática"
+ *   (uma ou ambas, conforme a configuração da conta).
+ * - VALIDAÇÃO: tsc limpo (ruído pré-existente em `changelog.ts` ignorado).
+ *
  * Rev. 3376 — **FINANCEIRO / MENU · "CONTAS BANCÁRIAS" AGORA MANTÉM A BARRA LATERAL DO MÓDULO DE ORIGEM: AO CLICAR NO
  * ITEM DENTRO DO MÓDULO FINANCEIRO (OU CADASTRO / RH&DP), O MENU CONTINUA NO MESMO MÓDULO EM VEZ DE TROCAR PARA "RH&DP".
  * 100% FRONT (ROTEAMENTO DE MÓDULO) · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE · NENHUMA TELA NOVA.**

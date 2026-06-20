@@ -313,6 +313,11 @@ export default function ContasBancarias() {
                               <BookCopy className="h-3 w-3" /> Talão
                             </Badge>
                           )}
+                          {Number(conta.temAplicacaoAutomatica) === 1 && (
+                            <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-700 gap-1">
+                              <TrendingUp className="h-3 w-3" /> Aplicação automática
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     </div>
