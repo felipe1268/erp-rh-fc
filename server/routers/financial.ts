@@ -6498,6 +6498,57 @@ export const financialRouter = router({
     return { ok: true, afetados };
   }),
 
+  // Rev. 3386 — Soft-delete de UMA linha do extrato (granular — sem limpar o período todo).
+  // Mesmo mecanismo do limparExtrato: reverte conciliação vinculada + marca excluido_em.
+  // Permite corrigir lançamentos importados errados sem apagar tudo.
+  excluirLinhaExtrato: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    linhaId: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+
+    // Verifica que a linha existe e pertence à empresa (tenant guard)
+    const linhaRes = await dbExecute(db,
+      `SELECT id, conta_bancaria_id AS "contaBancariaId", conciliado, entry_id AS "entryId"
+         FROM bank_statement_lines
+        WHERE id=$1 AND company_id=$2 AND excluido_em IS NULL LIMIT 1`,
+      [input.linhaId, input.companyId]);
+    const linha = rows(linhaRes)[0] as any;
+    if (!linha) throw new TRPCError({ code: "NOT_FOUND", message: "Linha não encontrada ou já excluída" });
+
+    await db.transaction(async (tx: any) => {
+      // 1) Se estava conciliada, reverte o flag do lançamento vinculado
+      if (linha.entryId) {
+        await dbExecute(tx,
+          `UPDATE financial_entries SET conciliado=0, data_conciliacao=NULL
+            WHERE id=$1 AND company_id=$2`,
+          [linha.entryId, input.companyId]);
+        // Remove também da tabela de grupo (N:1), se existir
+        await dbExecute(tx,
+          `DELETE FROM financial_conciliacao_grupo
+            WHERE statement_line_id=$1 AND company_id=$2`,
+          [input.linhaId, input.companyId]);
+      }
+      // 2) Soft-delete da linha
+      await dbExecute(tx,
+        `UPDATE bank_statement_lines
+            SET excluido_em=NOW(), conciliado=0, entry_id=NULL
+          WHERE id=$1 AND company_id=$2`,
+        [input.linhaId, input.companyId]);
+    });
+
+    await createAuditLog(db, {
+      userId: ctx.user?.id,
+      action: "bank_statement_line_delete",
+      details: `Exclusão de linha de extrato #${input.linhaId} (conta ${linha.contaBancariaId})`,
+      companyId: input.companyId,
+    });
+
+    return { ok: true };
+  }),
+
   // ─────────────────── RÉGUA DE COBRANÇA ───────────────────
 
   getCollectionRules: protectedProcedure.input(z.object({ companyId: z.number() })).query(async ({ input }) => {

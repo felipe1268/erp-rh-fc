@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3386 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXCLUSÃO INDIVIDUAL DE LINHA DO EXTRATO:
+ * BOTÃO "APAGAR" EM CADA LINHA (PENDENTES + CONCILIADAS) COM ALERTDIALOG DE CONFIRMAÇÃO.
+ * BACKEND ADITIVO (`excluirLinhaExtrato`) + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PROBLEMA: o único mecanismo de correção disponível era "Limpar extrato" — que apaga
+ *   TODAS as linhas do período de uma vez. Quando só 1 ou 2 linhas foram importadas erradas,
+ *   o usuário era obrigado a limpar tudo e reimportar do zero.
+ * - BACKEND (`financial.ts`, `excluirLinhaExtrato`): nova mutation que faz soft-delete de
+ *   UMA linha por ID. Valida que a linha pertence à empresa (tenant guard). Em transação:
+ *   (1) reverte `financial_entries.conciliado=0, data_conciliacao=NULL` para o lançamento
+ *   vinculado (se houver); (2) remove o registro de grupo N:1
+ *   (`financial_conciliacao_grupo`); (3) marca `excluido_em=NOW()` na linha. Audit log
+ *   gravado. O dedup de importação ignora linhas soft-deleted → pode reimportar o mesmo
+ *   arquivo sem duplicar.
+ * - FRONTEND (`FinanceiroConciliacao.tsx`):
+ *   · Botão "Apagar" (ícone Trash2) ao final de cada linha da lista "Extrato sem lançamento".
+ *   · Botão Trash2 (hover vermelho) em cada linha da seção "Já conciliados".
+ *   · AlertDialog de confirmação contextual: se a linha estava conciliada, avisa que o
+ *     lançamento do ERP volta a pendente; se pendente, avisa que é reversível reimportando.
+ *   · Após sucesso: refetch de todos os relatórios (extrato, status de conta, sugestões).
+ * - VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
+ *
  * Rev. 3385 — **FINANCEIRO / CARTÃO DE CRÉDITO · IMPORTAÇÃO DE VÁRIOS PDFs EM PARALELO:
  * O LOOP SEQUENCIAL (N × 90s) FOI SUBSTITUÍDO POR Promise.allSettled → TODOS OS PDFs
  * SÃO ENVIADOS À IA SIMULTANEAMENTE (TEMPO TOTAL ≈ O DO PDF MAIS LENTO). 100% FRONT ·

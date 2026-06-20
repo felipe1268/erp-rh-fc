@@ -166,6 +166,8 @@ export default function FinanceiroConciliacao() {
   const [demoConf, setDemoConf] = useState<any | null>(null);
   // Rev. 3179 — "Limpar extrato" (confirmação) + alerta de extrato de outro mês.
   const [confirmLimpar, setConfirmLimpar] = useState(false);
+  // Rev. 3386 — exclusão individual de linha do extrato
+  const [confirmExcluirLinha, setConfirmExcluirLinha] = useState<{ id: number; descricao: string; valor: number; conciliado: boolean } | null>(null);
   const [confirmConciliar, setConfirmConciliar] = useState(false);
   const [mismatch, setMismatch] = useState<{ detectado: string; selecionado: string; fora: number; total: number; anoNum: number; mesNum: number } | null>(null);
   // Rev. 3363 — propostas de RENDIMENTO de aplicação/resgate automático (CDB ContaMax)
@@ -499,6 +501,18 @@ export default function FinanceiroConciliacao() {
       refetchSt(); refetchStAno(); refetchAccStatus(); refetchSug(); refetchReport();
     },
     onError: (e: any) => toast({ title: "Erro ao limpar extrato", description: e.message, variant: "destructive" }),
+  });
+  // Rev. 3386 — exclusão individual (soft-delete) de uma linha do extrato.
+  const excluirLinhaMut = (trpc as any).financial.excluirLinhaExtrato.useMutation({
+    onSuccess: () => {
+      toast({ title: "Linha removida do extrato", description: "Se estava conciliada, o lançamento do ERP voltou a pendente." });
+      setConfirmExcluirLinha(null);
+      refetchSt(); refetchStAno(); refetchAccStatus(); refetchSug(); refetchReport();
+    },
+    onError: (e: any) => {
+      toast({ title: "Erro ao remover linha", description: e.message, variant: "destructive" });
+      setConfirmExcluirLinha(null);
+    },
   });
 
   const { data: sugData, isFetching: sugLoading, refetch: refetchSug } = (trpc as any).financial.sugerirConciliacao.useQuery(
@@ -1047,6 +1061,14 @@ export default function FinanceiroConciliacao() {
       >
         <Plus className="w-4 h-4" />
         <span className="text-[10px] font-medium leading-none">Lançar</span>
+      </button>
+      <button
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmExcluirLinha({ id: s.id, descricao: s.descricao || "—", valor: Number(s.valor), conciliado: false }); }}
+        title="Remover esta linha do extrato (importada incorretamente)"
+        className="shrink-0 px-2.5 flex flex-col items-center justify-center gap-0.5 border-l border-gray-100 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+      >
+        <Trash2 className="w-4 h-4" />
+        <span className="text-[10px] font-medium leading-none">Apagar</span>
       </button>
     </div>
     );
@@ -3307,13 +3329,21 @@ export default function FinanceiroConciliacao() {
                     </summary>
                     <div className="divide-y divide-gray-100 max-h-[360px] overflow-y-auto border-t">
                       {repConc.map((c: any) => (
-                        <div key={c.id} className="px-4 py-3 flex items-center justify-between gap-3">
-                          <div className="min-w-0">
+                        <div key={c.id} className="px-4 py-3 flex items-center gap-3">
+                          <div className="min-w-0 flex-1">
                             <p className="text-xs text-gray-500">{fmtData(c.data)}</p>
                             <p className="text-sm text-gray-700 truncate max-w-[260px]">{c.descricao || "—"}</p>
                             <p className="text-xs text-gray-400 truncate max-w-[260px]">↔ {c.entryFornecedor || c.entryDescricao || `Lançamento #${c.entryId ?? ""}`}</p>
                           </div>
                           <p className={`text-sm font-bold shrink-0 ${Number(c.valor) >= 0 ? "text-green-600" : "text-red-500"}`}>{formatBRL(Math.abs(Number(c.valor)))}</p>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmExcluirLinha({ id: c.id, descricao: c.descricao || "—", valor: Number(c.valor), conciliado: true })}
+                            title="Remover esta linha do extrato (reverte a conciliação)"
+                            className="shrink-0 p-1.5 rounded-md text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -3504,6 +3534,44 @@ export default function FinanceiroConciliacao() {
         </AlertDialog>
 
         {/* Rev. 3179 — Confirmação de "Limpar extrato" (soft-delete por conta + período) */}
+        {/* Rev. 3386 — Confirmação de exclusão de linha individual do extrato */}
+        <AlertDialog open={!!confirmExcluirLinha} onOpenChange={(o: boolean) => { if (!o && !excluirLinhaMut.isPending) setConfirmExcluirLinha(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <Trash2 className="w-5 h-5 text-red-600" />Remover linha do extrato?
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-sm text-gray-600">
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs">
+                    <p className="font-medium text-gray-700 truncate">{confirmExcluirLinha?.descricao}</p>
+                    <p className={`font-bold mt-0.5 ${(confirmExcluirLinha?.valor ?? 0) >= 0 ? "text-emerald-600" : "text-red-500"}`}>{formatBRL(Math.abs(confirmExcluirLinha?.valor ?? 0))}</p>
+                  </div>
+                  {confirmExcluirLinha?.conciliado ? (
+                    <p>Esta linha <strong>está conciliada</strong>. Ao removê-la, o lançamento do ERP vinculado volta a ficar <strong>pendente</strong> (nada é apagado do ERP).</p>
+                  ) : (
+                    <p>A linha será removida do extrato. Se quiser reimportá-la futuramente, basta importar o extrato novamente.</p>
+                  )}
+                  <p className="text-[11px] text-gray-400">Esta ação é reversível reimportando o arquivo de extrato.</p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={excluirLinhaMut.isPending}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-600 hover:bg-red-700"
+                disabled={excluirLinhaMut.isPending}
+                onClick={(e: any) => {
+                  e.preventDefault();
+                  if (confirmExcluirLinha) excluirLinhaMut.mutate({ companyId, linhaId: confirmExcluirLinha.id });
+                }}
+              >
+                {excluirLinhaMut.isPending ? "Removendo..." : "Sim, remover linha"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         <AlertDialog open={confirmLimpar} onOpenChange={(o: boolean) => { if (!o) setConfirmLimpar(false); }}>
           <AlertDialogContent>
             <AlertDialogHeader>

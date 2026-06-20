@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3385** — **FINANCEIRO / CARTÃO DE CRÉDITO · IMPORTAÇÃO DE VÁRIOS PDFs EM PARALELO: LOOP SEQUENCIAL (N × 90s) SUBSTITUÍDO POR Promise.allSettled → TODOS OS PDFs ENVIADOS À IA SIMULTANEAMENTE. 100% FRONT · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Problema: importar 3 PDFs levava 3 × 90s ≈ 4,5 min. O `for` sequencial esperava cada arquivo terminar antes do próximo. FIX (`onArquivosSelecionados`): `Promise.allSettled(arr.map(...))` — todas as chamadas `importarPreview.mutateAsync` são disparadas ao mesmo tempo; `allSettled` nunca aborta as demais quando uma falha. Progresso atualiza ao vivo: "X/N concluído(s)…". Resultado: 3 PDFs ≈ 90s (em vez de 270s). VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
+- **Rev. 3386** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXCLUSÃO INDIVIDUAL DE LINHA DO EXTRATO: BOTÃO "APAGAR" EM CADA LINHA (PENDENTES + CONCILIADAS) COM ALERTDIALOG DE CONFIRMAÇÃO. BACKEND ADITIVO (`excluirLinhaExtrato`) + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Problema: "Limpar extrato" apagava TUDO ou nada — sem granularidade para corrigir 1 linha errada. FIX: nova mutation `excluirLinhaExtrato` (soft-delete por ID, tenant guard, reverte conciliação vinculada em transação, audit log). Front: botão "Apagar" (Trash2) em cada linha das seções "Extrato sem lançamento" e "Já conciliados"; AlertDialog contextual informa se reverte conciliação. VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3384** — **FINANCEIRO / CADASTRO · CONTAS BANCÁRIAS · NOVOS CAMPOS "CONTATOS DA AGÊNCIA": GERENTE (NOME, TELEFONE, E-MAIL) + AGÊNCIA (ENDEREÇO, TELEFONE). BACKEND ADITIVO (SELFHEAL [SyncSchema+] + SCHEMA DRIZZLE + ROUTER) + FRONT (NOVA SEÇÃO NO FORMULÁRIO FULLSCREEN) · ZERO ALTER/DROP/DELETE.** 5 novas colunas em `company_bank_accounts` via ADD COLUMN IF NOT EXISTS. Schema Drizzle, inputs Zod dos mutations e `ContasBancarias.tsx` atualizados. Nova seção "Contatos da agência" no formulário. VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
+- **Rev. 3385** — **FINANCEIRO / CARTÃO DE CRÉDITO · IMPORTAÇÃO DE VÁRIOS PDFs EM PARALELO: LOOP SEQUENCIAL (N × 90s) SUBSTITUÍDO POR Promise.allSettled → TODOS OS PDFs ENVIADOS À IA SIMULTANEAMENTE. 100% FRONT · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Problema: importar 3 PDFs levava 3 × 90s ≈ 4,5 min. FIX (`onArquivosSelecionados`): `Promise.allSettled(arr.map(...))` — todos disparados ao mesmo tempo; `allSettled` nunca aborta. Progresso: "X/N concluído(s)…". Resultado: 3 PDFs ≈ 90s. VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
+
+- **Rev. 3384** — **FINANCEIRO / CADASTRO · CONTAS BANCÁRIAS · NOVOS CAMPOS "CONTATOS DA AGÊNCIA". BACKEND ADITIVO (SELFHEAL [SyncSchema+] + SCHEMA DRIZZLE + ROUTER) + FRONT · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3383** — **FINANCEIRO / CARTÃO DE CRÉDITO · DEDUP COMPLETO NA IMPORTAÇÃO DE FATURAS — NUNCA DUPLICA. BACKEND ADITIVO + FRONT (TOAST) · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3381** — **CORREÇÃO CRÍTICA: IMPORTAÇÃO DE FATURA PDF TRAVAVA NOS 95% (fetch SEM TIMEOUT). FIX: AbortController 90s + RETRY. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3380** — **FINANCEIRO / CARTÃO DE CRÉDITO · IA EXTRAI DIA FECHAMENTO/VENCIMENTO COMO INTEIRO (1-31). BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3379** — **FINANCEIRO / CARTÃO DE CRÉDITO · CADASTRO DE CARTÃO COM LAYOUT MODERNO + AUTO-PREENCHIMENTO DA FATURA + PAINEL "MELHOR DATA DE COMPRA". BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### REGRA DE OURO — Cabeçalho de documentos institucionais FC (Rev. 2106+)
 
