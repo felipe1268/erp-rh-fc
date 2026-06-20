@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3383 — **FINANCEIRO / CARTÃO DE CRÉDITO · DEDUP COMPLETO NA IMPORTAÇÃO DE FATURAS: O
+ * SISTEMA AGORA VERIFICA SE A FATURA JÁ FOI CADASTRADA E SÓ LANÇA OS ITENS QUE FALTAM — NUNCA
+ * DUPLICA. BACKEND ADITIVO + FRONT (TOAST) · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PROBLEMA: reimportar um PDF (ou um lote com faturas repetidas) criava fatura duplicada e
+ *   duplicava todos os itens. A lógica antiga fazia `continue` ao encontrar duplicata da fatura,
+ *   o que pulava o header MAS também pulava os itens — se houvesse itens novos desde o último
+ *   import, eles nunca entravam.
+ * - FIX BACKEND (`server/routers/cartao.ts`, `importarConfirmar`): dedup em 2 níveis:
+ *   1) FATURA: se já existe `(company_id, cartao_id, vencimento)` não-excluída → reaproveita o
+ *      `faturaId` existente em vez de inserir novo header (incrementa `faturasPuladas`).
+ *   2) ITEM: para cada item, verifica `(fatura_id, data, descricao, valor)` antes de inserir —
+ *      se já existe, pula (incrementa `itensPulados`); senão insere normalmente. A query usa
+ *      `OR (col IS NULL AND $N IS NULL)` para comparar valores nulos corretamente.
+ *   Resultado: reimport idempotente — fatura existente continua a mesma, itens já registrados
+ *   não são duplicados, itens novos (ex.: ajuste posterior da fatura) entram normalmente.
+ * - FIX FRONT (`FinanceiroCartaoCredito.tsx`): toast de conclusão agora exibe todos os contadores:
+ *   "X fatura(s) nova(s) · Y item(ns) adicionado(s) · Z fatura(s) já existia(m) · W item(ns) já existia(m)".
+ * - VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
+ *
  * Rev. 3382 — **FINANCEIRO / CARTÃO DE CRÉDITO · CORREÇÃO DEFINITIVA DO DIA FECHAMENTO E DIA
  * VENCIMENTO NO CADASTRO DE CARTÃO VIA IMPORTAÇÃO DE FATURA: EXTRAÇÃO DO DIA MOVIDA PARA O
  * SERVIDOR (3 CAMADAS: INTEIRO DA IA → SLICE DA ISO → NULL). 100% BACKEND · ZERO

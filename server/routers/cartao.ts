@@ -1015,7 +1015,7 @@ export const cartaoRouter = router({
 
     const loteId = randomUUID();
     const origem = (input.origemArquivo || "fatura-pdf").slice(0, 255);
-    let faturasInseridas = 0, itensInseridos = 0, faturasPuladas = 0;
+    let faturasInseridas = 0, itensInseridos = 0, faturasPuladas = 0, itensPulados = 0;
 
     await db.transaction(async (tx: any) => {
       for (const f of input.faturas) {
@@ -1031,35 +1031,71 @@ export const cartaoRouter = router({
         // Reconhecido pelo final4 → vincula automaticamente, mesmo sem cartaoId no payload.
         if (cartaoId == null && d4.length === 4 && mapaFinal4.has(d4)) cartaoId = mapaFinal4.get(d4)!;
 
-        // Dedup: mesma (empresa, cartão, vencimento, total) = re-upload idempotente.
+        // ── DEDUP FATURA ──────────────────────────────────────────────────────────
+        // Se a fatura (empresa + cartão + vencimento) já existe → reaproveita o id
+        // existente em vez de inserir um duplicado. Itens novos ainda serão inseridos.
+        // Quando cartaoId=null (cartão não identificado) ainda insere normalmente para
+        // não perder informação.
+        let faturaId: number | null = null;
+        let faturaJaExistia = false;
+
         if (cartaoId != null && f.vencimento) {
           const dup = await dbExecute(tx,
             `SELECT id FROM financial_cartao_faturas
               WHERE company_id=$1 AND cartao_id=$2 AND vencimento=$3 AND excluido_em IS NULL LIMIT 1`,
             [input.companyId, cartaoId, f.vencimento]);
-          if (dup.rows.length > 0) { faturasPuladas++; continue; }
+          if (dup.rows.length > 0) {
+            faturaId = dup.rows[0].id as number;
+            faturaJaExistia = true;
+            faturasPuladas++;
+          }
         }
 
-        const fatRes = await dbExecute(tx,
-          `INSERT INTO financial_cartao_faturas
-             (company_id, cartao_id, vencimento, fechamento, total, total_compras,
-              fatura_anterior, pagamentos, mes_ref, ano_ref, origem_arquivo, lote_id,
-              observacao, created_at, updated_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),NOW()) RETURNING id`,
-          [
-            input.companyId, cartaoId, f.vencimento ?? null, f.fechamento ?? null,
-            f.total ?? null, f.totalCompras ?? null, f.faturaAnterior ?? null,
-            f.pagamentos ?? null, mesRef, anoRef,
-            (f.origemArquivo || origem).slice(0, 255), loteId,
-            // Guarda final4/titular crus quando o cartão não foi identificado, p/ rastreio.
-            cartaoId == null ? `Cartão não identificado: final ${f.cartaoFinal4 ?? "?"} · ${f.cartaoTitular ?? ""}`.slice(0, 2000) : null,
-          ]);
-        const faturaId = fatRes.rows[0]?.id;
-        faturasInseridas++;
+        if (!faturaJaExistia) {
+          const fatRes = await dbExecute(tx,
+            `INSERT INTO financial_cartao_faturas
+               (company_id, cartao_id, vencimento, fechamento, total, total_compras,
+                fatura_anterior, pagamentos, mes_ref, ano_ref, origem_arquivo, lote_id,
+                observacao, created_at, updated_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),NOW()) RETURNING id`,
+            [
+              input.companyId, cartaoId, f.vencimento ?? null, f.fechamento ?? null,
+              f.total ?? null, f.totalCompras ?? null, f.faturaAnterior ?? null,
+              f.pagamentos ?? null, mesRef, anoRef,
+              (f.origemArquivo || origem).slice(0, 255), loteId,
+              // Guarda final4/titular crus quando o cartão não foi identificado, p/ rastreio.
+              cartaoId == null ? `Cartão não identificado: final ${f.cartaoFinal4 ?? "?"} · ${f.cartaoTitular ?? ""}`.slice(0, 2000) : null,
+            ]);
+          faturaId = fatRes.rows[0]?.id ?? null;
+          faturasInseridas++;
+        }
 
+        if (faturaId == null) continue; // segurança: INSERT sem RETURNING id
+
+        // ── DEDUP ITENS ───────────────────────────────────────────────────────────
+        // Para cada item: verifica se já existe na fatura antes de inserir.
+        // Chave de dedup: (fatura_id, data, descricao, valor) — combinação que
+        // identifica unicamente uma transação dentro de uma fatura.
         for (const it of f.itens) {
           let tipo = normTxt(it.tipo);
           if (!TIPOS_ITEM.includes(tipo as any)) tipo = "compra";
+
+          const descTrunc = it.descricao != null ? String(it.descricao).slice(0, 300) : null;
+          const valorNum = it.valor ?? null;
+          const dataStr = it.data ?? null;
+
+          // Checa duplicata pelo trio data+descricao+valor dentro da mesma fatura.
+          const dupItem = await dbExecute(tx,
+            `SELECT id FROM financial_cartao_itens
+              WHERE fatura_id=$1
+                AND (data=$2 OR (data IS NULL AND $2::text IS NULL))
+                AND descricao=$3
+                AND (valor=$4 OR (valor IS NULL AND $4::numeric IS NULL))
+                AND excluido_em IS NULL
+              LIMIT 1`,
+            [faturaId, dataStr, descTrunc, valorNum]);
+          if (dupItem.rows.length > 0) { itensPulados++; continue; }
+
           await dbExecute(tx,
             `INSERT INTO financial_cartao_itens
                (company_id, fatura_id, cartao_id, data, descricao, cidade, valor, moeda,
@@ -1069,16 +1105,13 @@ export const cartaoRouter = router({
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW(),NOW())`,
             [
               input.companyId, faturaId, cartaoId,
-              it.data ?? null,
-              // Trunca p/ caber nas colunas VARCHAR (cliente pode mandar string > limite,
-              // o que abortaria o lote inteiro) — mesmos limites de normalizarFatura.
-              it.descricao != null ? String(it.descricao).slice(0, 300) : null,
+              dataStr,
+              descTrunc,
               it.cidade != null ? String(it.cidade).slice(0, 120) : null,
-              it.valor ?? null,
+              valorNum,
               it.moeda != null ? String(it.moeda).slice(0, 10).toUpperCase() : "BRL",
               it.cotacao ?? null, it.valorOrigem ?? null,
               it.parcelaAtual ?? null, it.parcelaTotal ?? null, tipo,
-              // Encargo já entra com o CC sugerido "Administrativo/Financeiro".
               it.centroCustoSugeridoId ?? null,
               it.centroCustoSugeridoNome != null ? String(it.centroCustoSugeridoNome).slice(0, 255) : null,
               it.centroCustoSugeridoNome != null ? String(it.centroCustoSugeridoNome).slice(0, 255) : null, "sugerido",
@@ -1088,6 +1121,6 @@ export const cartaoRouter = router({
       }
     });
 
-    return { ok: true, faturasInseridas, itensInseridos, faturasPuladas, loteId };
+    return { ok: true, faturasInseridas, itensInseridos, faturasPuladas, itensPulados, loteId };
   }),
 });

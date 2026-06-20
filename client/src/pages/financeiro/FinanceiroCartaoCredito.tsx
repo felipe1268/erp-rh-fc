@@ -644,7 +644,7 @@ export default function FinanceiroCartaoCredito() {
       const res = await importarConfirmar.mutateAsync({ companyId, origemArquivo: arquivoNome, faturas: payload });
       toast({
         title: "Importação concluída",
-        description: `${res.faturasInseridas} fatura(s) · ${res.itensInseridos} item(ns)${res.faturasPuladas ? ` · ${res.faturasPuladas} já existia(m)` : ""}`,
+        description: `${res.faturasInseridas} fatura(s) nova(s) · ${res.itensInseridos} item(ns) adicionado(s)${res.faturasPuladas ? ` · ${res.faturasPuladas} fatura(s) já existia(m)` : ""}${(res as any).itensPulados ? ` · ${(res as any).itensPulados} item(ns) já existia(m)` : ""}`,
       });
       setImportModal(false); setPreview(null);
       faturasQ.refetch(); resumoMensalQ.refetch();
