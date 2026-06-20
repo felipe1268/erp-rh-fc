@@ -5033,6 +5033,45 @@ export const financialRouter = router({
     return rows(res);
   }),
 
+  // Rev. 3365 — STATUS POR MÊS p/ pintar as bolinhas da timeline de meses. Antes a tela
+  // usava getBankStatements do ano da CONTA SELECIONADA (enabled só com conta escolhida),
+  // então na visão "lista de contas" (sem conta selecionada) TODOS os meses ficavam cinza
+  // mesmo havendo extrato. Aqui agregamos por mês do ano para a EMPRESA inteira (ou só
+  // para uma conta, se informada), independente de conta selecionada. READ-ONLY.
+  getBankStatementsMonthlyStatus: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    ano: z.number(),
+    contaBancariaId: z.number().optional(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    // dbExecute liga params por ORDEM DE APARIÇÃO do $N. Mantemos a ordem:
+    // [companyId, dataInicio, dataFim, (contaBancariaId)].
+    const conds = [`company_id=$1`, `data>=$2`, `data<=$3`, `excluido_em IS NULL`];
+    const vals: any[] = [input.companyId, `${input.ano}-01-01`, `${input.ano}-12-31`];
+    if (input.contaBancariaId) { conds.push(`conta_bancaria_id=$4`); vals.push(input.contaBancariaId); }
+    const res = await dbExecute(db,
+      `SELECT EXTRACT(MONTH FROM data)::int AS mes,
+              COUNT(*)::int AS total,
+              SUM(CASE WHEN COALESCE(conciliado,0)=1 THEN 1 ELSE 0 END)::int AS conciliadas
+         FROM bank_statement_lines
+        WHERE ${conds.join(" AND ")}
+        GROUP BY 1`,
+      vals
+    );
+    return rows(res).map((r: any) => {
+      const total = Number(r.total) || 0;
+      const conciliadas = Number(r.conciliadas) || 0;
+      return {
+        mes: Number(r.mes),
+        total,
+        conciliadas,
+        status: total === 0 ? "vazio" : conciliadas >= total ? "consolidado" : "lancamento",
+      };
+    });
+  }),
+
   // Rev. 3178 — RELATÓRIO DE CONCILIAÇÃO (read-only) para o Workspace full-screen e PDF.
   // Devolve, para a conta + período: (1) linhas do extrato JÁ conciliadas com o lançamento
   // casado (descrição/fornecedor/valor/data), (2) linhas do extrato AINDA sem lançamento

@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3365 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · AS BOLINHAS DE STATUS DA TIMELINE DE MESES (AZUL = "COM
+ * LANÇAMENTO", VERDE = "CONSOLIDADO", CINZA = "SEM DADOS") AGORA ACENDEM SEM PRECISAR ABRIR UMA CONTA. ANTES,
+ * NA VISÃO "LISTA DE CONTAS" (NENHUMA CONTA SELECIONADA), TODOS OS MESES FICAVAM CINZA MESMO HAVENDO EXTRATO
+ * CADASTRADO (EX.: EXTRATO LANÇADO EM DEZ SEM ABRIR A CONTA) — PORQUE A QUERY QUE PINTAVA AS BOLINHAS SÓ RODAVA
+ * COM UMA CONTA ESCOLHIDA. 1 ENDPOINT READ-ONLY NOVO + TROCA DE FONTE NO FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário, print do iPad — tela Conciliação Bancária, ano 2025/Dez): "por que não fica azul quando
+ *   tem lançamento? Em dezembro de 2025 eu fiz um cadastro de extrato". O card da conta Santander - FC -
+ *   Aparecida mostrava "A conciliar" (badge azul, via `getBankAccountsConciliacaoStatus`), CONFIRMANDO que há
+ *   extrato em Dez/2025 — mas a bolinha de Dez na timeline de meses continuava cinza.
+ * - RAIZ: as bolinhas (`mesesStatus`) eram alimentadas por uma query `getBankStatements` do ano inteiro da
+ *   CONTA SELECIONADA, com `enabled: !!companyId && !!contaBancariaId` (Rev. 3165). Na visão "lista de contas"
+ *   o `contaBancariaId` está vazio → a query nem dispara → `statementsAno` fica `undefined` → todos os 12 meses
+ *   caem em "vazio" (cinza). Os badges dos cards acendiam porque vêm de OUTRA query (`accStatus`, que não exige
+ *   conta), daí a inconsistência visual (card azul × bolinha cinza).
+ * - FIX BACKEND (`server/routers/financial.ts`): NOVO endpoint READ-ONLY `getBankStatementsMonthlyStatus`
+ *   (input `{ companyId, ano, contaBancariaId? }`) que agrega `bank_statement_lines` por mês do ano
+ *   (`EXTRACT(MONTH FROM data)`, `COUNT(*)`, soma de `conciliado=1`) para a EMPRESA inteira (ou só para uma
+ *   conta, se informada), com `_assertFinanceiroCompanyAccess` (tenant guard) e `excluido_em IS NULL`. Devolve
+ *   por mês `{ mes, total, conciliadas, status }` onde status = vazio | consolidado (todas conciliadas) |
+ *   lancamento (tem pendência). Params na ORDEM DE APARIÇÃO do `$N` exigida pelo `dbExecute`
+ *   ([companyId, dataInicio, dataFim, contaBancariaId?]).
+ * - FIX FRONT (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): a query das bolinhas passou a usar o
+ *   novo endpoint com `enabled: !!companyId` (roda SEMPRE) e `contaBancariaId` OPCIONAL — sem conta agrega
+ *   todas as contas da empresa; com conta escolhida, restringe àquela conta (comportamento anterior preservado
+ *   pra quem abre uma conta). O `mesesStatus` agora só lê o `status` já calculado por mês (sem reparsear datas
+ *   no cliente). Os nomes `statementsAno`/`refetchStAno` foram mantidos, então os 8 pontos de refetch pós-
+ *   conciliação/consolidação/limpeza continuam repintando as bolinhas sem mudança.
+ * - VALIDAÇÃO: tsc limpo nos arquivos tocados (0 erros novos; só o ruído pré-existente de `changelog.ts`). ZERO
+ *   mudança de schema/escrita — endpoint READ-ONLY. RESSALVA: o agregado agora é da EMPRESA quando nenhuma conta
+ *   está aberta (decisão coerente com a visão "lista de contas"); ao abrir uma conta, volta a ser por conta.
+ *
  * Rev. 3364 — **FOLHA / HORA EXTRA (RELATÓRIO DE PERÍODOS HE) · A FOTO DO COLABORADOR AGORA AMPLIA AO TOCAR —
  * COM ROBUSTEZ NO iPad/iOS SAFARI. O AVATAR JÁ ABRIA UM LIGHTBOX (Rev. 2196), MAS NO iPad ELE PODIA ABRIR EM
  * BRANCO (BUG DE COMPOSITING DO RADIX DIALOG NO WebKit) E NÃO HAVIA PISTA VISUAL DE QUE A FOTINHA ERA TOCÁVEL

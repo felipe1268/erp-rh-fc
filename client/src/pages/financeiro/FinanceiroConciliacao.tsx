@@ -419,11 +419,14 @@ export default function FinanceiroConciliacao() {
     { enabled: !!companyId && !!contaBancariaId }
   );
 
-  // Rev. 3165 — Extrato do ANO inteiro (apenas p/ pintar as bolinhas de status de cada mês),
-  // independente do mês selecionado na timeline. Só busca quando há conta escolhida.
-  const { data: statementsAno, refetch: refetchStAno } = (trpc as any).financial.getBankStatements.useQuery(
-    { companyId, contaBancariaId: parseInt(contaBancariaId) || 0, dataInicio: `${ano}-01-01`, dataFim: `${ano}-12-31` },
-    { enabled: !!companyId && !!contaBancariaId }
+  // Rev. 3365 — Status POR MÊS p/ pintar as bolinhas da timeline. Agora roda SEM exigir
+  // conta selecionada: na visão "lista de contas" agrega o extrato de TODAS as contas da
+  // empresa no ano; quando uma conta é escolhida, restringe a ela. Antes (Rev. 3165) usava
+  // getBankStatements do ano com `enabled: !!contaBancariaId` → sem conta, todos os meses
+  // ficavam cinza mesmo havendo extrato (ex.: extrato cadastrado em Dez sem conta aberta).
+  const { data: statementsAno, refetch: refetchStAno } = (trpc as any).financial.getBankStatementsMonthlyStatus.useQuery(
+    { companyId, ano, contaBancariaId: parseInt(contaBancariaId) || undefined },
+    { enabled: !!companyId }
   );
   // Rev. 3170 — Status de conciliação POR CONTA no período selecionado, p/ pintar cada
   // card de conta (verde = extrato subido e 100% conciliado; azul = tem pendência;
@@ -438,24 +441,15 @@ export default function FinanceiroConciliacao() {
     return map;
   }, [accStatus]);
 
+  // Rev. 3365 — agora consome a agregação por mês vinda do backend
+  // (getBankStatementsMonthlyStatus): cada linha já traz { mes, total, conciliadas, status }.
   const mesesStatus: Record<number, "consolidado" | "lancamento" | "vazio"> = useMemo(() => {
     const map: Record<number, "consolidado" | "lancamento" | "vazio"> = {};
     for (let m = 1; m <= 12; m++) map[m] = "vazio";
-    const byMonth: Record<number, { total: number; pend: number }> = {};
-    for (const s of (statementsAno ?? [])) {
-      if (!s?.data) continue;
-      const raw = String(s.data);
-      const d = new Date(raw.length > 10 ? raw : raw + "T00:00:00");
-      if (isNaN(d.getTime())) continue;
-      const m = d.getMonth() + 1;
-      const b = byMonth[m] ?? { total: 0, pend: 0 };
-      b.total++;
-      if (!s.conciliado) b.pend++;
-      byMonth[m] = b;
-    }
-    for (let m = 1; m <= 12; m++) {
-      const b = byMonth[m];
-      map[m] = !b || b.total === 0 ? "vazio" : b.pend === 0 ? "consolidado" : "lancamento";
+    for (const r of (statementsAno ?? [])) {
+      const m = Number(r?.mes);
+      if (!m || m < 1 || m > 12) continue;
+      map[m] = r.status === "consolidado" ? "consolidado" : r.status === "lancamento" ? "lancamento" : "vazio";
     }
     return map;
   }, [statementsAno]);
