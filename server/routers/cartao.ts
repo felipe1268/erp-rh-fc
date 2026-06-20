@@ -319,12 +319,26 @@ function normalizarFatura(raw: any) {
     bandeira: raw?.bandeira != null ? String(raw.bandeira).trim().slice(0, 60) : null,
     vencimento,
     fechamento,
-    // Dias extraídos diretamente pela IA (número inteiro 1-31) — mais confiável
-    // que fatiar a string de data, pois muitas faturas só exibem o dia.
-    diaFechamentoIA: (raw?.diaFechamento != null && Number.isFinite(Number(raw.diaFechamento)))
-      ? Number(raw.diaFechamento) : null,
-    diaVencimentoIA: (raw?.diaVencimento != null && Number.isFinite(Number(raw.diaVencimento)))
-      ? Number(raw.diaVencimento) : null,
+    // diaFechamentoIA / diaVencimentoIA: dia do mês (1-31) para pré-preencher o
+    // formulário de cadastro de cartão. Estratégia em 3 camadas (da mais direta
+    // à menos):
+    // 1) Campo inteiro que a IA extrai diretamente (diaFechamento / diaVencimento).
+    // 2) Fatia do dia da string ISO que normItemDate já normalizou (slice(8,10)).
+    // 3) null → frontend mostra vazio (campo obrigatório que o usuário preenche).
+    diaFechamentoIA: (() => {
+      const fromIA = (raw?.diaFechamento != null && Number.isFinite(Number(raw.diaFechamento)))
+        ? Number(raw.diaFechamento) : null;
+      if (fromIA != null) return fromIA;
+      if (fechamento) { const d = parseInt(fechamento.slice(8, 10), 10); return d > 0 ? d : null; }
+      return null;
+    })(),
+    diaVencimentoIA: (() => {
+      const fromIA = (raw?.diaVencimento != null && Number.isFinite(Number(raw.diaVencimento)))
+        ? Number(raw.diaVencimento) : null;
+      if (fromIA != null) return fromIA;
+      if (vencimento) { const d = parseInt(vencimento.slice(8, 10), 10); return d > 0 ? d : null; }
+      return null;
+    })(),
     limiteTotalCartao: parseValor(raw?.limiteTotalCartao),
     total: parseValor(raw?.total),
     totalCompras: parseValor(raw?.totalCompras),

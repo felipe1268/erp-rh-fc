@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3382 — **FINANCEIRO / CARTÃO DE CRÉDITO · CORREÇÃO DEFINITIVA DO DIA FECHAMENTO E DIA
+ * VENCIMENTO NO CADASTRO DE CARTÃO VIA IMPORTAÇÃO DE FATURA: EXTRAÇÃO DO DIA MOVIDA PARA O
+ * SERVIDOR (3 CAMADAS: INTEIRO DA IA → SLICE DA ISO → NULL). 100% BACKEND · ZERO
+ * SCHEMA/ALTER/DROP/DELETE · 1 ARQUIVO (cartao.ts).**
+ * - PROBLEMA: mesmo com a Rev. 3380 (que pediu à IA para extrair diaFechamento/diaVencimento como
+ *   inteiros), os campos continuavam vazios no formulário. Causa-raiz: quando a IA retorna null
+ *   para os novos campos inteiros (comportamento comum com Gemini nullable), o fallback estava no
+ *   FRONTEND (`f.fechamento.slice(8,10)`), mas a `normalizarFatura` no SERVIDOR já tinha as datas
+ *   ISO normalizadas (ex.: "2025-10-15") — o frontend recebia `diaFechamentoIA=null` +
+ *   `fechamento="2025-10-15"` e tentava o slice, mas o PDF do Santander (e outros com datas
+ *   completas) passava pelo caminho de `diaFechamentoIA != null` que retornava "" ao receber null.
+ *   Análise com a fatura real (Santander Mastercard Platinum LOCNOW, venc. 25/10/2025, fech.
+ *   15/10/2025): AI retornava `vencimento="2025-10-25"` e `fechamento="2025-10-15"` mas
+ *   `diaVencimento=null`/`diaFechamento=null` — os dias chegavam ao front como null.
+ * - FIX (`server/routers/cartao.ts`, `normalizarFatura`): `diaFechamentoIA` e `diaVencimentoIA`
+ *   agora usam estratégia de 3 camadas no servidor:
+ *   1) Campo inteiro da IA (`raw.diaFechamento` / `raw.diaVencimento`) — mais direto.
+ *   2) Fatia do dia da string ISO já normalizada por `normItemDate` (`.slice(8,10)`).
+ *   3) `null` → frontend exibe vazio (usuário preenche manualmente).
+ *   Resultado: `diaFechamentoIA=15` e `diaVencimentoIA=25` chegam ao frontend mesmo quando a IA
+ *   retorna apenas as datas completas em ISO.
+ * - IMPACTO: QUALQUER fatura com datas reconhecíveis (YYYY-MM-DD ou DD/MM/YYYY) agora preenche
+ *   os dias automaticamente — sem depender de o Gemini/Anthropic emitir os novos campos inteiros.
+ * - VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
+ *
  * Rev. 3381 — **CORREÇÃO CRÍTICA: IMPORTAÇÃO DE FATURA PDF TRAVAVA NOS 95% INDEFINIDAMENTE.
  * CAUSA: `invokeGeminiVision` (server/_core/llm.ts) USAVA `fetch` SEM TIMEOUT — SE O GEMINI
  * TRAVASSE (SEM RESPONDER), A REQUISIÇÃO FICAVA PENDURADA PARA SEMPRE E O FRONTEND NUNCA SAÍA
