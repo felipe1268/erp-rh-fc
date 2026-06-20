@@ -514,14 +514,15 @@ export default function FinanceiroConciliacao() {
       setConfirmExcluirLinha(null);
     },
   });
-  // Rev. 3391 — marca linha do extrato como "movimentação interna" direto do modal "Lançar".
-  const naturezaInternaMut = (trpc as any).financial.setLancamentoNatureza.useMutation({
+  // Rev. 3392 — Confirmar movimentação interna: cria lançamento tipo "transferencia"/
+  // natureza "interno" + concilia a linha do extrato em 1 clique.
+  const naturezaInternaMut = (trpc as any).financial.confirmarMovimentacaoInterna.useMutation({
     onSuccess: () => {
-      toast({ title: "Registrado como movimentação interna", description: "A linha não aparecerá mais como pendência de caixa real." });
+      toast({ title: "Lançado como movimentação interna", description: "Linha conciliada. O lançamento ficará catalogado como transferência interna do grupo." });
       setLancStatement(null);
       refetchSt(); refetchStAno(); refetchAccStatus(); refetchSug(); refetchReport(); if (!contaBancariaId && periodoDefinido) refetchGeral();
     },
-    onError: (e: any) => toast({ title: "Não foi possível classificar", description: e?.message ?? "Tente novamente.", variant: "destructive" }),
+    onError: (e: any) => toast({ title: "Não foi possível lançar como interna", description: e?.message ?? "Tente novamente.", variant: "destructive" }),
   });
 
   const { data: sugData, isFetching: sugLoading, refetch: refetchSug } = (trpc as any).financial.sugerirConciliacao.useQuery(
@@ -3832,8 +3833,6 @@ export default function FinanceiroConciliacao() {
                           naturezaInternaMut.mutate({
                             companyId,
                             lineId: Number(lancStatement.id),
-                            natureza: "interno",
-                            motivo: "Confirmado como movimentação interna pelo usuário ao tentar lançar",
                           });
                         }}
                         className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"

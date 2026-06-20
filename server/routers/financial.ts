@@ -5789,6 +5789,74 @@ export const financialRouter = router({
     return { ok: true, natureza: input.natureza };
   }),
 
+  // Rev. 3392 — Confirmar movimentação interna: marca + cria lançamento tipo "transferencia"/
+  // natureza "interno" + concilia em 1 clique. Não cria título no Contas a Receber nem
+  // Contas a Pagar; o lançamento fica catalogado como "Movimentação Interna — Grupo FC"
+  // para relatórios excluírem pelo campo natureza="interno".
+  // ZERO ALTER/DROP/DELETE — só INSERT + UPDATE.
+  confirmarMovimentacaoInterna: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    lineId: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    // 1. Lê a linha do extrato (tenant guard + dados para criar o lançamento).
+    const lnRes = await dbExecute(db,
+      `SELECT id, conta_bancaria_id AS "contaBancariaId", data, descricao, valor, conciliado
+       FROM bank_statement_lines
+       WHERE id=$1 AND company_id=$2 AND excluido_em IS NULL`,
+      [input.lineId, input.companyId]);
+    if (rows(lnRes).length === 0)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Linha do extrato não encontrada." });
+    const ln = rows(lnRes)[0] as any;
+    if (Number(ln.conciliado) === 1)
+      throw new TRPCError({ code: "CONFLICT", message: "Esta linha já está conciliada." });
+    const contaBancariaId = Number(ln.contaBancariaId);
+    const valor = Math.abs(Number(ln.valor));
+    const data = (ln.data ?? "").slice(0, 10) || new Date().toISOString().slice(0, 10);
+    const descricao = `[Mov. Interna] ${(ln.descricao ?? "").trim()}`.trim();
+    // 2. Cria o lançamento do tipo "transferencia" com natureza "interno".
+    //    status "pago" = já realizado (veio do extrato bancário).
+    //    conciliado=1 + data_conciliacao = hoje (concilia junto).
+    // NOTA: dbExecute liga params por ORDEM DE APARIÇÃO do $N (o número é cosmético).
+    const entryRes = await dbExecute(db,
+      `INSERT INTO financial_entries
+       (company_id, tipo, natureza, valor_previsto, valor_realizado,
+        data_competencia, data_pagamento, status, conta_bancaria_id,
+        descricao, conciliado, data_conciliacao,
+        criado_por_id, criado_por_nome, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,CURRENT_DATE,$12,$13,NOW(),NOW())
+       RETURNING id`,
+      [
+        input.companyId, "transferencia", "interno", valor, valor,
+        data, data, "pago", contaBancariaId,
+        descricao, 1,
+        ctx.user?.id ?? null, ctx.user?.name ?? null,
+      ]
+    );
+    const entryId = (rows(entryRes)[0] as any)?.id;
+    if (!entryId)
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro ao criar lançamento interno." });
+    // 3. Concilia a linha do extrato → entry_id aponta para o lançamento criado.
+    const updRes = await dbExecute(db,
+      `UPDATE bank_statement_lines SET conciliado=1, entry_id=$1
+       WHERE id=$2 AND company_id=$3 AND excluido_em IS NULL RETURNING id`,
+      [entryId, input.lineId, input.companyId]);
+    if (rows(updRes).length === 0)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Linha do extrato não encontrada ao conciliar." });
+    // 4. Grava override "interno" para badge + aviso em reaberturas futuras.
+    const motivo = "Lançado automaticamente como movimentação interna — Grupo FC";
+    await dbExecute(db,
+      `INSERT INTO financial_internal_overrides (company_id, line_id, natureza, motivo, criado_por)
+       VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (company_id, line_id)
+       DO UPDATE SET natureza=$6, motivo=$7, updated_at=NOW()`,
+      [input.companyId, input.lineId, "interno", motivo, ctx.user?.name ?? null, "interno", motivo]);
+    await createAuditLog({ action: "financial_mov_interna_confirmada", userId: ctx.user?.id, companyId: input.companyId, details: `Linha #${input.lineId} → Lançamento #${entryId} (Mov. Interna R$${valor})` });
+    return { ok: true, entryId };
+  }),
+
   // Rev. 3248 — Resumo MENSAL do extrato (BRL movimentado + conciliado por mês) p/ a
   // tabela comparativa mês×mês / ano×ano do Dashboard de Conciliação. READ-ONLY.
   getConciliacaoResumoMensal: protectedProcedure.input(z.object({

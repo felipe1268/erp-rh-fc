@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3392 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · "CONFIRMAR: É MOVIMENTAÇÃO INTERNA"
+ * AGORA CRIA LANÇAMENTO + CONCILIA EM 1 CLIQUE. BACKEND ADITIVO + FRONT ·
+ * ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PROBLEMA: o botão da Rev. 3391 apenas marcava a linha como "interna" e fechava o
+ *   modal — o dinheiro entrava na conta mas ficava sem registro no ERP, gerando
+ *   discrepância no fluxo de caixa e nas análises futuras.
+ * - FIX: nova rota `confirmarMovimentacaoInterna` executa atomicamente 3 ações:
+ *   (1) INSERT em `financial_entries` com `tipo="transferencia"`, `natureza="interno"`,
+ *   `status="pago"`, `conciliado=1`, `data_conciliacao=CURRENT_DATE`, `valor`/`data`/
+ *   `descricao` copiados da linha do extrato com prefixo "[Mov. Interna]";
+ *   (2) UPDATE `bank_statement_lines` SET conciliado=1, entry_id=<novo id>;
+ *   (3) INSERT ON CONFLICT em `financial_internal_overrides` com natureza="interno".
+ * - Por usar `tipo="transferencia"` + `natureza="interno"` o lançamento É EXCLUÍDO
+ *   automaticamente do P&L/Contas a Receber mas APARECE no fluxo de caixa (dinheiro
+ *   realmente movimentou). Filtros de relatório usam `natureza="interno"` como chave.
+ * - Frontend: `naturezaInternaMut` aponta para a nova rota; onClick simplificado
+ *   (companyId + lineId apenas — sem natureza/motivo manual).
+ * - Guard de idempotência: `conciliado=1` na linha → CONFLICT 409 com mensagem clara.
+ * - VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
+ *
  * Rev. 3391 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · BOTÃO "CONFIRMAR: É MOVIMENTAÇÃO
  * INTERNA" NO MODAL "LANÇAR" — AÇÃO DIRETA A PARTIR DO AVISO DE DETECÇÃO AUTOMÁTICA.
  * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
