@@ -5385,12 +5385,16 @@ export const financialRouter = router({
       if (row?.nome) return { nome: String(row.nome), fantasia: row.fantasia ?? null, fonte: "cadastro" as const };
     } catch (e: any) { console.error("[consultarCnpj] empresas_terceiras:", e?.message); }
 
-    // 4) Receita (BrasilAPI) — só CNPJ completo. Host FIXO + cnpj só dígitos → sem SSRF.
+    // 4) Receita (BrasilAPI → ReceitaWS) — só CNPJ completo. Host FIXO + cnpj só dígitos → sem SSRF.
+    // O User-Agent é OBRIGATÓRIO: o fetch do Node (undici) sem UA leva 403 do WAF da BrasilAPI
+    // (curl passa porque manda `curl/x`). Sem o header a Receita devolvia 403 e o nome vinha null.
     if (digits.length === 14) {
+      const headers = { "User-Agent": "FC-ERP/1.0 (financeiro)", Accept: "application/json" };
+      // 4a) BrasilAPI (gratuita, sem rate-limit agressivo).
       try {
         const ac = new AbortController();
-        const t = setTimeout(() => ac.abort(), 4000);
-        const resp = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`, { signal: ac.signal });
+        const t = setTimeout(() => ac.abort(), 5000);
+        const resp = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`, { signal: ac.signal, headers });
         clearTimeout(t);
         if (resp.ok) {
           const j: any = await resp.json();
@@ -5398,6 +5402,20 @@ export const financialRouter = router({
           if (nome) return { nome: String(nome), fantasia: j?.nome_fantasia ?? null, fonte: "receita" as const };
         }
       } catch (e: any) { console.error("[consultarCnpj] brasilapi:", e?.message); }
+      // 4b) Fallback ReceitaWS — se a BrasilAPI cair/voltar vazia.
+      try {
+        const ac = new AbortController();
+        const t = setTimeout(() => ac.abort(), 5000);
+        const resp = await fetch(`https://receitaws.com.br/v1/cnpj/${digits}`, { signal: ac.signal, headers });
+        clearTimeout(t);
+        if (resp.ok) {
+          const j: any = await resp.json();
+          const nome = j?.nome || j?.fantasia;
+          if (nome && String(j?.status ?? "").toUpperCase() !== "ERROR") {
+            return { nome: String(nome), fantasia: j?.fantasia ?? null, fonte: "receita" as const };
+          }
+        }
+      } catch (e: any) { console.error("[consultarCnpj] receitaws:", e?.message); }
     }
 
     return { nome: null, fantasia: null, fonte: null };

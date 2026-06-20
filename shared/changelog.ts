@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3361 — **FINANCEIRO / MOVIMENTAÇÃO INTERNA (CNPJs/CPFs DO GRUPO) · CORRIGIDO "NÃO LOCALIZEI O NOME
+ * AUTOMATICAMENTE": A CONSULTA DE NOME PELA RECEITA (BrasilAPI) ESTAVA SENDO BLOQUEADA COM HTTP 403 PORQUE O
+ * `fetch` DO NODE (undici) NÃO MANDAVA `User-Agent` — O WAF DA BrasilAPI REJEITA REQUISIÇÕES SEM UA (O curl
+ * PASSAVA POR MANDAR `curl/x`). AGORA O ENDPOINT MANDA `User-Agent`/`Accept` E GANHOU FALLBACK PARA O ReceitaWS
+ * SE A BrasilAPI CAIR/VOLTAR VAZIA. 100% BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário, print "Editar CNPJ/CPF interno"): digitou `09.014.246/0001-97` (= "Q XIANQUAN PRESENTES")
+ *   e a tela mostrou "Não localizei o nome automaticamente — preencha manualmente", mesmo o CNPJ existindo na
+ *   Receita.
+ * - RAIZ (`server/routers/financial.ts`, endpoint `consultarCnpj` etapa 4): o `fetch` nativo do Node (undici)
+ *   para `https://brasilapi.com.br/api/cnpj/v1/<digits>` SEM header `User-Agent` recebia **HTTP 403** do
+ *   WAF/CDN da BrasilAPI; como `resp.ok` era false, o endpoint caía no `return { nome: null }` e o front exibia
+ *   "Não localizei". O curl funcionava (manda `User-Agent: curl/x`), o que mascarava a causa em testes manuais.
+ *   Confirmado empiricamente: mesmo CNPJ via undici sem UA = 403; com UA = 200 + `razao_social`.
+ * - CORREÇÃO (backend-only): a chamada à Receita passa `headers: { "User-Agent": "FC-ERP/1.0 (financeiro)",
+ *   Accept: "application/json" }`; timeout subiu de 4s→5s; e foi adicionado um FALLBACK para o ReceitaWS
+ *   (`https://receitaws.com.br/v1/cnpj/<digits>`, lê `j.nome`/`j.fantasia`, ignora `status==="ERROR"`) caso a
+ *   BrasilAPI falhe ou volte sem nome. Host FIXO + cnpj só dígitos → mantém sem SSRF; READ-ONLY; tenant-safe.
+ * - VALIDAÇÃO: tsc limpo no arquivo tocado; teste via undici confirma 200 + nome em ambas as fontes com UA.
+ *
  * Rev. 3360 — **FINANCEIRO / CARTÃO DE CRÉDITO · ABA GERENCIAL · DRILL-IN: AGORA DÁ PARA CLICAR EM QUALQUER
  * GRÁFICO/LINHA DA ANÁLISE (PIZZA DE COMPOSIÇÃO, BARRAS DE EVOLUÇÃO MÊS A MÊS, PERFIL DE PARCELAMENTO, ENCARGOS
  * POR NATUREZA, ESTABELECIMENTOS RECORRENTES, GASTO POR OBRA E POR CATEGORIA) E ABRIR UM DIÁLOGO COM TODOS OS
