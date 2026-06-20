@@ -1017,9 +1017,12 @@ export default function FinanceiroConciliacao() {
           {isEntrada ? <ArrowDownCircle className="w-5 h-5" /> : <ArrowUpCircle className="w-5 h-5" />}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] text-gray-400 flex items-center gap-1.5">
+          <p className="text-[11px] text-gray-400 flex items-center gap-1.5 flex-wrap">
             {fmtData(s.data)}
-            <span className={`px-1.5 py-px rounded-full text-[10px] font-medium ${isEntrada ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-600"}`}>{isEntrada ? "Entrada" : "Saída"}</span>
+            {s.interno
+              ? <span className="px-1.5 py-px rounded-full text-[10px] font-medium bg-indigo-100 text-indigo-700">Mov. interna</span>
+              : <span className={`px-1.5 py-px rounded-full text-[10px] font-medium ${isEntrada ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-600"}`}>{isEntrada ? "Entrada" : "Saída"}</span>
+            }
           </p>
           <p className="text-sm font-medium text-gray-700 truncate">{s.descricao || "—"}</p>
           {s.chequeFornecedor && (
@@ -3801,6 +3804,16 @@ export default function FinanceiroConciliacao() {
                     <p className="mt-3 text-sm text-gray-700 break-words border-t border-black/5 pt-2 leading-relaxed">{lancStatement.descricao}</p>
                   )}
                 </div>
+                {/* Rev. 3390 — Aviso quando o extrato detecta movimentação interna */}
+                {lancStatement.interno && lancStatement.overrideNatureza !== "efetivo" && (
+                  <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900 flex gap-2.5">
+                    <span className="text-lg leading-none mt-px shrink-0">⚠️</span>
+                    <div>
+                      <p className="font-semibold mb-0.5">Possível movimentação interna</p>
+                      <p className="text-xs text-amber-800 leading-relaxed">Esta transação parece ser uma transferência entre contas da própria FC (o CNPJ ou nome da empresa foi identificado na descrição). Normalmente não gera lançamento real — confirme antes de prosseguir.</p>
+                    </div>
+                  </div>
+                )}
                 {lancStatement.chequeFornecedor && (
                   <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2 text-xs text-emerald-800">
                     🪙 Identificado no <strong>Controle de Cheques</strong>: cheque nº <strong>{lancStatement.chequeNumero ?? "—"}</strong> — <strong>{lancStatement.chequeFornecedor}</strong>

@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3390 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CLASSIFICAÇÃO "MOVIMENTAÇÃO INTERNA"
+ * NO DRILL-IN DE CONTA INDIVIDUAL: BADGE "MOV. INTERNA" + AVISO NO MODAL "LANÇAR".
+ * BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * - PROBLEMA: `getConciliacaoReport` (conta individual) retornava `extratoSemLancamento`
+ *   SEM o campo `interno` — a classificação era aplicada apenas no Panorama Geral
+ *   (`getConciliacaoReportGeral`, linha 5208). Resultado: a linha "Pix - Recebido 18/02
+ *   13:38 29353906000171 FC ENGENHAR" aparecia como "Entrada" normal, sem indicar que
+ *   o CNPJ 29.353.906/0001-71 = FC Engenharia (própria) está cadastrado como interno.
+ * - FIX BACKEND (`financial.ts`, `getConciliacaoReport`): antes de retornar, carrega
+ *   `internoCfg` via `_loadInternoConfig` e remapeia `extratoSemLancamento` adicionando
+ *   `interno: _isLancInternoRow(r, internoCfg)` e `overrideNatureza`. Mesma régua do
+ *   Panorama — paridade garantida.
+ * - FIX FRONTEND — badge na linha (`renderExtratoRow`): quando `s.interno === true`,
+ *   exibe badge "Mov. interna" (roxo/indigo) em vez do badge "Entrada"/"Saída".
+ * - FIX FRONTEND — aviso no modal "Lançar": quando `lancStatement.interno === true`
+ *   (e sem override "efetivo"), exibe banner âmbar "Possível movimentação interna" com
+ *   explicação de que o CNPJ/nome da empresa foi identificado na descrição.
+ * - Override `efetivo` em `financial_internal_overrides` desativa o aviso (usuário já
+ *   confirmou que é caixa real).
+ * - VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
+ *
  * Rev. 3389 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · MODAL "LANÇAR NO ERP" EM TELA CHEIA
  * (FULL SCREEN) EM TODOS OS TAMANHOS DE TELA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE
  * · 1 LINHA (FinanceiroConciliacao.tsx).**

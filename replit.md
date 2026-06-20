@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3390** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · BADGE "MOV. INTERNA" NO DRILL-IN + AVISO NO MODAL "LANÇAR". BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Problema: `getConciliacaoReport` (conta individual) não aplicava `_isLancInternoRow` — FC Engenharia (CNPJ 29.353.906/0001-71) aparecia como "Entrada" normal. FIX: backend carrega `internoCfg` e remapeia `extratoSemLancamento` com `interno`+`overrideNatureza`; front exibe badge "Mov. interna" (indigo) e banner âmbar no modal. VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3389** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · MODAL "LANÇAR NO ERP" EM TELA CHEIA (FULL SCREEN) EM TODOS OS TAMANHOS DE TELA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE · 1 LINHA (FinanceiroConciliacao.tsx).** Removidas classes `sm:w-[94vw] sm:max-w-4xl sm:h-[92vh] sm:rounded-lg` — modal sempre `w-screen h-[100dvh] rounded-none`. VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3388** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXIBIÇÃO DO SALDO BANCÁRIO EM CADA LINHA DO EXTRATO ("NO EXTRATO, SEM LANÇAMENTO"). BACKEND ADITIVO + FRONT + PARSER BB · ZERO SCHEMA/ALTER/DROP/DELETE.** Problema: lista mostrava só o valor da transação, sem referência de saldo. FIX 3 camadas: (1) Parser BB novo formato captura "Saldo do dia" em `dailySaldo` e atribui ao último lançamento do dia; (2) query `pendRes` do relatório inclui `saldo_apos AS "saldoApos"` (campo já existia no banco, não era retornado); (3) `renderExtratoRow` exibe "saldo R$ X" abaixo do valor quando `saldoApos != null`. VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3388** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXIBIÇÃO DO SALDO BANCÁRIO EM CADA LINHA DO EXTRATO. BACKEND ADITIVO + FRONT + PARSER BB · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3387** — **FINANCEIRO / CONCILIAÇÃO · PARSER BANCO DO BRASIL: SUPORTE AO NOVO FORMATO "EXTRATO DE CONTA CORRENTE" (INTERNET BANKING PJ) COM (+)/(-) E LAYOUT MULTI-LINHA. 100% BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE · 1 ARQUIVO (bbPdfParser.ts).** Detalhe: `shared/changelog.ts`.
 
@@ -63,10 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3385** — **FINANCEIRO / CARTÃO DE CRÉDITO · IMPORTAÇÃO DE VÁRIOS PDFs EM PARALELO: Promise.allSettled (todos simultâneos) · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3384** — **FINANCEIRO / CADASTRO · CONTAS BANCÁRIAS · NOVOS CAMPOS "CONTATOS DA AGÊNCIA". BACKEND ADITIVO (SELFHEAL [SyncSchema+] + SCHEMA DRIZZLE + ROUTER) + FRONT · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3383** — **FINANCEIRO / CARTÃO DE CRÉDITO · DEDUP COMPLETO NA IMPORTAÇÃO DE FATURAS — NUNCA DUPLICA. BACKEND ADITIVO + FRONT (TOAST) · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3380** — **FINANCEIRO / CARTÃO DE CRÉDITO · IA EXTRAI DIA FECHAMENTO/VENCIMENTO COMO INTEIRO (1-31). BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### REGRA DE OURO — Cabeçalho de documentos institucionais FC (Rev. 2106+)
 

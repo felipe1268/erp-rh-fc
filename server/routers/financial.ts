@@ -5138,7 +5138,18 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
-    return _computeConciliacaoReport(db, input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim);
+    // Rev. 3390 — aplica a mesma classificação "interno" que o Panorama Geral já usa,
+    // p/ o drill-in de conta individual também receber o flag e o front exibir o badge.
+    const internoCfg = await _loadInternoConfig(db, input.companyId);
+    const rep = await _computeConciliacaoReport(db, input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim);
+    return {
+      ...rep,
+      extratoSemLancamento: rep.extratoSemLancamento.map((r: any) => ({
+        ...r,
+        interno: _isLancInternoRow(r, internoCfg),
+        overrideNatureza: internoCfg.overrides.get(Number(r.id)) ?? null,
+      })),
+    };
   }),
 
   // Rev. 3319 — PANORAMA GERAL DO MÊS (sem conta selecionada). Roda o MESMO motor de
