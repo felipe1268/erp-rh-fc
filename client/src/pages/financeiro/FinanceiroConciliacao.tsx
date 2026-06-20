@@ -514,6 +514,15 @@ export default function FinanceiroConciliacao() {
       setConfirmExcluirLinha(null);
     },
   });
+  // Rev. 3391 — marca linha do extrato como "movimentação interna" direto do modal "Lançar".
+  const naturezaInternaMut = (trpc as any).financial.setLancamentoNatureza.useMutation({
+    onSuccess: () => {
+      toast({ title: "Registrado como movimentação interna", description: "A linha não aparecerá mais como pendência de caixa real." });
+      setLancStatement(null);
+      refetchSt(); refetchStAno(); refetchAccStatus(); refetchSug(); refetchReport(); if (!contaBancariaId && periodoDefinido) refetchGeral();
+    },
+    onError: (e: any) => toast({ title: "Não foi possível classificar", description: e?.message ?? "Tente novamente.", variant: "destructive" }),
+  });
 
   const { data: sugData, isFetching: sugLoading, refetch: refetchSug } = (trpc as any).financial.sugerirConciliacao.useQuery(
     { companyId, contaBancariaId: parseInt(contaBancariaId) || 0, dataInicio, dataFim, toleranciaDias },
@@ -3804,13 +3813,36 @@ export default function FinanceiroConciliacao() {
                     <p className="mt-3 text-sm text-gray-700 break-words border-t border-black/5 pt-2 leading-relaxed">{lancStatement.descricao}</p>
                   )}
                 </div>
-                {/* Rev. 3390 — Aviso quando o extrato detecta movimentação interna */}
+                {/* Rev. 3390/3391 — Aviso + ação quando o extrato detecta movimentação interna */}
                 {lancStatement.interno && lancStatement.overrideNatureza !== "efetivo" && (
-                  <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900 flex gap-2.5">
-                    <span className="text-lg leading-none mt-px shrink-0">⚠️</span>
-                    <div>
-                      <p className="font-semibold mb-0.5">Possível movimentação interna</p>
-                      <p className="text-xs text-amber-800 leading-relaxed">Esta transação parece ser uma transferência entre contas da própria FC (o CNPJ ou nome da empresa foi identificado na descrição). Normalmente não gera lançamento real — confirme antes de prosseguir.</p>
+                  <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
+                    <div className="flex gap-2.5">
+                      <span className="text-lg leading-none mt-px shrink-0">⚠️</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold mb-0.5">Possível movimentação interna</p>
+                        <p className="text-xs text-amber-800 leading-relaxed">O CNPJ ou nome desta empresa está cadastrado como movimentação interna. Transferências entre contas do grupo não geram lançamento — confirme antes de prosseguir.</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-amber-200">
+                      <button
+                        type="button"
+                        disabled={naturezaInternaMut.isPending || lancBusy}
+                        onClick={() => {
+                          if (!lancStatement?.id) return;
+                          naturezaInternaMut.mutate({
+                            companyId,
+                            lineId: Number(lancStatement.id),
+                            natureza: "interno",
+                            motivo: "Confirmado como movimentação interna pelo usuário ao tentar lançar",
+                          });
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                      >
+                        {naturezaInternaMut.isPending
+                          ? <><span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin inline-block" />Salvando…</>
+                          : <>✓ Confirmar: é movimentação interna</>}
+                      </button>
+                      <p className="text-[10px] text-amber-700 self-center leading-tight">Registra como interna e fecha esta tela. Não gera lançamento.</p>
                     </div>
                   </div>
                 )}

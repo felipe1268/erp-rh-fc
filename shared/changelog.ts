@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3391 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · BOTÃO "CONFIRMAR: É MOVIMENTAÇÃO
+ * INTERNA" NO MODAL "LANÇAR" — AÇÃO DIRETA A PARTIR DO AVISO DE DETECÇÃO AUTOMÁTICA.
+ * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * - PROBLEMA: o banner âmbar da Rev. 3390 avisava sobre movimentação interna mas o
+ *   usuário tinha que: fechar o modal → achar o botão de reclassificação na linha →
+ *   abrir o `NaturezaOverrideDialog` → digitar motivo → salvar (5 passos).
+ * - FIX: botão "✓ Confirmar: é movimentação interna" diretamente no banner. Clique único:
+ *   (1) chama `setLancamentoNatureza(natureza:"interno", motivo:"Confirmado como
+ *   movimentação interna pelo usuário ao tentar lançar")` — sem necessidade de digitar
+ *   motivo (pré-preenchido); (2) fecha o modal; (3) refaz relatório + geral + status.
+ * - Mutation `naturezaInternaMut` adicionada em FinanceiroConciliacao.tsx ao lado das
+ *   demais mutations (limparMut, excluirLinhaMut). Spinner durante isPending. Botão
+ *   desabilitado durante lancBusy (outra operação em curso).
+ * - O NaturezaOverrideDialog completo (com as 3 opções) continua disponível no drill-in
+ *   do Panorama Geral p/ casos mais complexos (override "efetivo" / "auto").
+ * - VALIDAÇÃO: tsc limpo. Detalhe: `shared/changelog.ts`.
+ *
  * Rev. 3390 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CLASSIFICAÇÃO "MOVIMENTAÇÃO INTERNA"
  * NO DRILL-IN DE CONTA INDIVIDUAL: BADGE "MOV. INTERNA" + AVISO NO MODAL "LANÇAR".
  * BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
