@@ -714,6 +714,23 @@ async function _baixarComprovante(url: string): Promise<{ base64: string; conten
 
 // Rev. 3319 — Motor de conciliação extraído de getConciliacaoReport p/ reuso no panorama
 // geral do mês (getConciliacaoReportGeral roda este motor por conta). READ-ONLY.
+// Rev. 3349 — HEURÍSTICA ÚNICA de "MOVIMENTAÇÃO INTERNA" (transferência entre contas
+// próprias da FC, varredura automática de aplicação/resgate e PIX/TED intra-FC). Fonte
+// ÚNICA: a mesma lista de padrões gera o predicado SQL (`descricao ~* '<src>'`) e o helper
+// JS (`_isLancInterno`), p/ o Dashboard de Conciliação e o Panorama Geral NÃO divergirem.
+// READ-ONLY · só CLASSIFICA p/ separar "caixa real (externo)" da movimentação interna —
+// não concilia/baixa/oculta nada. O usuário confere a lista completa pelo drill-in.
+const _INTERNO_PATTERNS = [
+  "transfer.*entre contas", "transf interna", "transferencia interna",
+  "credito transf internet", "aplica", "resgate", "contamax", "rdb", "cdb",
+  "fundo de invest", "fc engenharia",
+];
+const _INTERNO_REGEX_SRC = _INTERNO_PATTERNS.join("|");
+const _internoRegex = new RegExp(_INTERNO_REGEX_SRC, "i");
+function _isLancInterno(descricao: any): boolean {
+  return _internoRegex.test(String(descricao || ""));
+}
+
 async function _computeConciliacaoReport(db: any, companyId: number, contaBancariaId: number, dataInicio: string, dataFim: string) {
   const input = { companyId, contaBancariaId, dataInicio, dataFim };
     const p = [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim];
@@ -4961,6 +4978,9 @@ export const financialRouter = router({
     const somaSaidas = (arr: any[]) => arr.reduce((a: number, x: any) => { const v = Number(x.valor) || 0; return v < 0 ? a + Math.abs(v) : a; }, 0);
     const qtdEntradas = (arr: any[]) => arr.reduce((a: number, x: any) => (Number(x.valor) || 0) > 0 ? a + 1 : a, 0);
     const qtdSaidas = (arr: any[]) => arr.reduce((a: number, x: any) => (Number(x.valor) || 0) < 0 ? a + 1 : a, 0);
+    // Rev. 3349 — separa "movimentação interna" (transf. entre contas, aplicação/resgate,
+    // intra-FC) do "caixa real (externo)". `_isLancInterno` é a fonte única (mesma do SQL).
+    const soInternas = (arr: any[]) => arr.filter((x: any) => _isLancInterno(x.descricao));
 
     for (const c of contas) {
       const contaId = Number(c.id);
@@ -4968,8 +4988,8 @@ export const financialRouter = router({
       const tag = { contaBancariaId: contaId, contaBanco: c.banco ?? null, contaDescricao: c.descricao ?? null, contaLabel };
       const rep: any = await _computeConciliacaoReport(db, input.companyId, contaId, input.dataInicio, input.dataFim);
 
-      const conc = (rep.conciliados ?? []).map((r: any) => ({ ...r, ...tag }));
-      const ext = (rep.extratoSemLancamento ?? []).map((r: any) => ({ ...r, ...tag }));
+      const conc = (rep.conciliados ?? []).map((r: any) => ({ ...r, ...tag, interno: _isLancInterno(r.descricao) }));
+      const ext = (rep.extratoSemLancamento ?? []).map((r: any) => ({ ...r, ...tag, interno: _isLancInterno(r.descricao) }));
       const dev = (rep.chequesDevolvidos ?? []).map((r: any) => ({ ...r, ...tag }));
       // Rev. 3319 — grupos sintéticos (`grp:vr|YYYY-MM`, etc.) NÃO trazem a conta no id; no
       // panorama (várias contas concatenadas) dois grupos de contas diferentes colidiriam no
@@ -4992,6 +5012,8 @@ export const financialRouter = router({
       const somaAbs = (arr: any[]) => arr.reduce((a: number, x: any) => a + Math.abs(Number(x.valor) || 0), 0);
       // Extrato completo da conta (conciliado + pendente) p/ a movimentação entrada/saída.
       const extratoConta = [...conc, ...ext];
+      // Rev. 3349 — subset interno desta conta (transf. entre contas/aplicação/intra-FC).
+      const intConta = soInternas(extratoConta);
       contasOut.push({
         ...tag,
         linhas: Number(c.linhas) || 0,
@@ -5012,12 +5034,22 @@ export const financialRouter = router({
           valorSaidas: somaSaidas(extratoConta),
           qtdEntradas: qtdEntradas(extratoConta),
           qtdSaidas: qtdSaidas(extratoConta),
+          // Rev. 3349 — split caixa real (externo) × movimentação interna.
+          valorEntradasInternas: somaEntradas(intConta),
+          valorSaidasInternas: somaSaidas(intConta),
+          valorEntradasExternas: somaEntradas(extratoConta) - somaEntradas(intConta),
+          valorSaidasExternas: somaSaidas(extratoConta) - somaSaidas(intConta),
+          qtdEntradasInternas: qtdEntradas(intConta),
+          qtdSaidasInternas: qtdSaidas(intConta),
         },
       });
     }
 
     const somaAbs = (arr: any[]) => arr.reduce((a: number, x: any) => a + Math.abs(Number(x.valor) || 0), 0);
     const totalExtrato = conciliados.length + extratoSemLancamento.length;
+    // Rev. 3349 — extrato global p/ o split caixa real (externo) × movimentação interna.
+    const extratoGlobal = [...conciliados, ...extratoSemLancamento];
+    const intGlobal = soInternas(extratoGlobal);
     return {
       contas: contasOut,
       conciliados,
@@ -5039,10 +5071,17 @@ export const financialRouter = router({
         valorLancamentosSemExtrato: somaAbs(lancamentosSemExtrato),
         valorLancamentosSemConta: somaAbs(lancamentosSemConta),
         // Rev. 3322 — movimentação agregada (todas as contas com extrato no mês).
-        valorEntradas: somaEntradas([...conciliados, ...extratoSemLancamento]),
-        valorSaidas: somaSaidas([...conciliados, ...extratoSemLancamento]),
-        qtdEntradas: qtdEntradas([...conciliados, ...extratoSemLancamento]),
-        qtdSaidas: qtdSaidas([...conciliados, ...extratoSemLancamento]),
+        valorEntradas: somaEntradas(extratoGlobal),
+        valorSaidas: somaSaidas(extratoGlobal),
+        qtdEntradas: qtdEntradas(extratoGlobal),
+        qtdSaidas: qtdSaidas(extratoGlobal),
+        // Rev. 3349 — split caixa real (externo) × movimentação interna (agregado).
+        valorEntradasInternas: somaEntradas(intGlobal),
+        valorSaidasInternas: somaSaidas(intGlobal),
+        valorEntradasExternas: somaEntradas(extratoGlobal) - somaEntradas(intGlobal),
+        valorSaidasExternas: somaSaidas(extratoGlobal) - somaSaidas(intGlobal),
+        qtdEntradasInternas: qtdEntradas(intGlobal),
+        qtdSaidasInternas: qtdSaidas(intGlobal),
       },
     };
   }),
@@ -5072,7 +5111,15 @@ export const financialRouter = router({
               COALESCE(SUM(CASE WHEN COALESCE(conciliado,0)=1 AND valor>=0 THEN valor ELSE 0 END),0) AS "valorConciliadoEntradas",
               COALESCE(SUM(CASE WHEN COALESCE(conciliado,0)=1 AND valor<0 THEN ABS(valor) ELSE 0 END),0) AS "valorConciliadoSaidas",
               SUM(CASE WHEN COALESCE(conciliado,0)<>1 AND valor>=0 THEN 1 ELSE 0 END)::int AS "pendentesEntradas",
-              SUM(CASE WHEN COALESCE(conciliado,0)<>1 AND valor<0 THEN 1 ELSE 0 END)::int AS "pendentesSaidas"
+              SUM(CASE WHEN COALESCE(conciliado,0)<>1 AND valor<0 THEN 1 ELSE 0 END)::int AS "pendentesSaidas",
+              -- Rev. 3349 — MOVIMENTAÇÃO INTERNA (transf. entre contas próprias, varredura de
+              -- aplicação/resgate, PIX/TED intra-FC). Mesma heurística do Panorama (fonte única,
+              -- _INTERNO_REGEX_SRC). O front exibe "caixa real (externo)" = bruto − interno + um
+              -- card "Movimentação interna". Literal controlado (sem input do usuário) → seguro.
+              COALESCE(SUM(CASE WHEN valor>=0 AND descricao ~* '${_INTERNO_REGEX_SRC}' THEN valor ELSE 0 END),0) AS "valorEntradasInternas",
+              COALESCE(SUM(CASE WHEN valor<0 AND descricao ~* '${_INTERNO_REGEX_SRC}' THEN ABS(valor) ELSE 0 END),0) AS "valorSaidasInternas",
+              SUM(CASE WHEN descricao ~* '${_INTERNO_REGEX_SRC}' AND valor>=0 THEN 1 ELSE 0 END)::int AS "qtdEntradasInternas",
+              SUM(CASE WHEN descricao ~* '${_INTERNO_REGEX_SRC}' AND valor<0 THEN 1 ELSE 0 END)::int AS "qtdSaidasInternas"
          FROM bank_statement_lines
         WHERE company_id=$1 AND data>=$2 AND data<=$3 AND excluido_em IS NULL
         GROUP BY conta_bancaria_id`,
@@ -5095,6 +5142,11 @@ export const financialRouter = router({
         valorConciliadoSaidas: Number(r.valorConciliadoSaidas) || 0,
         pendentesEntradas: Number(r.pendentesEntradas) || 0,
         pendentesSaidas: Number(r.pendentesSaidas) || 0,
+        // Rev. 3349 — split caixa real (externo) × movimentação interna p/ os cards.
+        valorEntradasInternas: Number(r.valorEntradasInternas) || 0,
+        valorSaidasInternas: Number(r.valorSaidasInternas) || 0,
+        qtdEntradasInternas: Number(r.qtdEntradasInternas) || 0,
+        qtdSaidasInternas: Number(r.qtdSaidasInternas) || 0,
         status: total === 0 ? "vazio" : conciliadas >= total ? "consolidado" : "lancamento",
       };
     });
@@ -5129,6 +5181,8 @@ export const financialRouter = router({
       tipo: r.tipo || "",
       conciliado: Number(r.conciliado) === 1 ? 1 : 0,
       contaBancariaId: r.contaBancariaId == null ? null : Number(r.contaBancariaId),
+      // Rev. 3349 — flag p/ o drill-in separar "caixa real" da movimentação interna.
+      interno: _isLancInterno(r.descricao),
     }));
   }),
 

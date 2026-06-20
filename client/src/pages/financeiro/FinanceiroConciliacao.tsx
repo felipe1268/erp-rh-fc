@@ -14,7 +14,7 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX, FileSpreadsheet, FileDown, Plus, Maximize2, Minimize2, Search, Users, Building2 } from "lucide-react";
+import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX, FileSpreadsheet, FileDown, Plus, Maximize2, Minimize2, Search, Users, Building2 } from "lucide-react";
 import { formatConta, formatAgencia } from "@/lib/formatters";
 
 function formatBRL(v: number) {
@@ -551,7 +551,8 @@ export default function FinanceiroConciliacao() {
   // Rev. 3327 — DRILL-IN DOS CARDS DO PANORAMA: cada card de cima vira clicável e abre um
   // diálogo com TODAS as linhas que compõem aquele número. Os dados já vêm no report (por
   // conta); aqui apenas achatamos para a empresa toda. READ-ONLY (nada concilia/baixa).
-  const [panoramaDrill, setPanoramaDrill] = useState<null | "entradas" | "saidas" | "saldo" | "conciliados" | "extratoSemLanc" | "lancSemExtrato" | "pct">(null);
+  // Rev. 3349 — "interno" abre a movimentação interna (transf. entre contas/aplicação/intra-FC).
+  const [panoramaDrill, setPanoramaDrill] = useState<null | "entradas" | "saidas" | "saldo" | "interno" | "conciliados" | "extratoSemLanc" | "lancSemExtrato" | "pct">(null);
   const drill = useMemo(() => {
     const contas: any[] = reportGeral?.contas ?? [];
     const conc: any[] = [];
@@ -564,8 +565,12 @@ export default function FinanceiroConciliacao() {
     }
     // Movimentação do extrato = conciliado + pendente (mesma base do backend p/ entradas/saídas).
     const extratoTodo = [...conc, ...ext];
-    const entradas = extratoTodo.filter((x: any) => (Number(x.valor) || 0) > 0);
-    const saidas = extratoTodo.filter((x: any) => (Number(x.valor) || 0) < 0);
+    // Rev. 3349 — entradas/saídas são CAIXA REAL (externo, !interno); "interno" abre só a
+    // movimentação interna (transf. entre contas/aplicação/intra-FC). Tag `interno` vem do backend.
+    const extratoExt = extratoTodo.filter((x: any) => !x.interno);
+    const entradas = extratoExt.filter((x: any) => (Number(x.valor) || 0) > 0);
+    const saidas = extratoExt.filter((x: any) => (Number(x.valor) || 0) < 0);
+    const interno = extratoTodo.filter((x: any) => x.interno);
     const ordPorData = (a: any, b: any) => String(a.data ?? "").localeCompare(String(b.data ?? ""));
     return {
       conciliados: [...conc].sort(ordPorData),
@@ -573,6 +578,7 @@ export default function FinanceiroConciliacao() {
       lancSemExtrato: [...lan].sort(ordPorData),
       entradas: [...entradas].sort(ordPorData),
       saidas: [...saidas].sort(ordPorData),
+      interno: [...interno].sort(ordPorData),
     };
   }, [reportGeral]);
   // Ao carregar o panorama, abre por padrão as contas com pendências (extrato OU ERP).
@@ -1744,41 +1750,52 @@ export default function FinanceiroConciliacao() {
                     {/* Rev. 3322 — MOVIMENTAÇÃO DO MÊS (entradas × saídas), somando todas as
                         contas com extrato. Crédito = entrada; débito = saída. Independe do
                         status de conciliação — é o quanto entrou e saiu no banco. */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
-                      <button type="button" onClick={() => setPanoramaDrill("entradas")} title="Ver todas as entradas (créditos) do mês" className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 flex items-center gap-3 text-left hover:bg-emerald-100/70 hover:border-emerald-300 transition-colors">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+                      <button type="button" onClick={() => setPanoramaDrill("entradas")} title="Ver as entradas (créditos) do CAIXA REAL — sem movimentação interna" className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 flex items-center gap-3 text-left hover:bg-emerald-100/70 hover:border-emerald-300 transition-colors">
                         <div className="h-10 w-10 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
                           <ArrowDownCircle className="w-5 h-5 text-emerald-600" />
                         </div>
                         <div className="min-w-0">
-                          <p className="text-[11px] text-emerald-700 font-medium">Total de entradas</p>
-                          <p className="text-xl font-bold text-emerald-700 truncate">{formatBRL(geralTotais?.valorEntradas ?? 0)}</p>
-                          <p className="text-[11px] text-emerald-600/80">{formatInt(geralTotais?.qtdEntradas ?? 0)} crédito(s)</p>
+                          <p className="text-[11px] text-emerald-700 font-medium">Entradas (caixa real)</p>
+                          <p className="text-xl font-bold text-emerald-700 truncate">{formatBRL(geralTotais?.valorEntradasExternas ?? 0)}</p>
+                          <p className="text-[11px] text-emerald-600/80">{formatInt((geralTotais?.qtdEntradas ?? 0) - (geralTotais?.qtdEntradasInternas ?? 0))} crédito(s) externo(s)</p>
                         </div>
                         <Eye className="w-4 h-4 text-emerald-400 shrink-0 ml-auto" />
                       </button>
-                      <button type="button" onClick={() => setPanoramaDrill("saidas")} title="Ver todas as saídas (débitos) do mês" className="rounded-xl border border-red-200 bg-red-50/70 p-3 flex items-center gap-3 text-left hover:bg-red-100/70 hover:border-red-300 transition-colors">
+                      <button type="button" onClick={() => setPanoramaDrill("saidas")} title="Ver as saídas (débitos) do CAIXA REAL — sem movimentação interna" className="rounded-xl border border-red-200 bg-red-50/70 p-3 flex items-center gap-3 text-left hover:bg-red-100/70 hover:border-red-300 transition-colors">
                         <div className="h-10 w-10 rounded-lg bg-red-100 flex items-center justify-center shrink-0">
                           <ArrowUpCircle className="w-5 h-5 text-red-600" />
                         </div>
                         <div className="min-w-0">
-                          <p className="text-[11px] text-red-700 font-medium">Total de saídas</p>
-                          <p className="text-xl font-bold text-red-600 truncate">{formatBRL(geralTotais?.valorSaidas ?? 0)}</p>
-                          <p className="text-[11px] text-red-600/80">{formatInt(geralTotais?.qtdSaidas ?? 0)} débito(s)</p>
+                          <p className="text-[11px] text-red-700 font-medium">Saídas (caixa real)</p>
+                          <p className="text-xl font-bold text-red-600 truncate">{formatBRL(geralTotais?.valorSaidasExternas ?? 0)}</p>
+                          <p className="text-[11px] text-red-600/80">{formatInt((geralTotais?.qtdSaidas ?? 0) - (geralTotais?.qtdSaidasInternas ?? 0))} débito(s) externo(s)</p>
                         </div>
                         <Eye className="w-4 h-4 text-red-400 shrink-0 ml-auto" />
                       </button>
-                      <button type="button" onClick={() => setPanoramaDrill("saldo")} title="Ver o resumo do saldo (entradas × saídas) por conta" className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex items-center gap-3 text-left hover:bg-slate-100/70 hover:border-slate-300 transition-colors">
+                      <button type="button" onClick={() => setPanoramaDrill("saldo")} title="Ver o resumo do saldo (caixa real) por conta" className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex items-center gap-3 text-left hover:bg-slate-100/70 hover:border-slate-300 transition-colors">
                         <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
                           <Landmark className="w-5 h-5 text-slate-600" />
                         </div>
                         <div className="min-w-0">
-                          <p className="text-[11px] text-slate-600 font-medium">Saldo do mês (entradas − saídas)</p>
-                          {(() => { const saldo = (geralTotais?.valorEntradas ?? 0) - (geralTotais?.valorSaidas ?? 0); return (
+                          <p className="text-[11px] text-slate-600 font-medium">Saldo do mês (caixa real)</p>
+                          {(() => { const saldo = (geralTotais?.valorEntradasExternas ?? 0) - (geralTotais?.valorSaidasExternas ?? 0); return (
                             <p className={`text-xl font-bold truncate ${saldo >= 0 ? "text-emerald-700" : "text-red-600"}`}>{formatBRL(saldo)}</p>
                           ); })()}
                           <p className="text-[11px] text-slate-500">{formatInt(geralTotais?.contas ?? 0)} conta(s) com extrato</p>
                         </div>
                         <Eye className="w-4 h-4 text-slate-400 shrink-0 ml-auto" />
+                      </button>
+                      <button type="button" onClick={() => setPanoramaDrill("interno")} title="Ver a movimentação interna (transf. entre contas, aplicação/resgate, intra-FC)" className="rounded-xl border border-indigo-200 bg-indigo-50/70 p-3 flex items-center gap-3 text-left hover:bg-indigo-100/70 hover:border-indigo-300 transition-colors">
+                        <div className="h-10 w-10 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0">
+                          <ArrowLeftRight className="w-5 h-5 text-indigo-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[11px] text-indigo-700 font-medium">Movimentação interna</p>
+                          <p className="text-xl font-bold text-indigo-700 truncate">{formatBRL((geralTotais?.valorEntradasInternas ?? 0) + (geralTotais?.valorSaidasInternas ?? 0))}</p>
+                          <p className="text-[11px] text-indigo-600/80">{formatInt((geralTotais?.qtdEntradasInternas ?? 0) + (geralTotais?.qtdSaidasInternas ?? 0))} lançamento(s)</p>
+                        </div>
+                        <Eye className="w-4 h-4 text-indigo-400 shrink-0 ml-auto" />
                       </button>
                     </div>
                     {/* KPIs agregados da empresa no mês */}
@@ -1808,7 +1825,7 @@ export default function FinanceiroConciliacao() {
                         <p className="text-[11px] text-blue-600/80">{formatInt(geralTotais?.contas ?? 0)} conta(s) com extrato</p>
                       </button>
                     </div>
-                    <p className="text-[11px] text-gray-400 mb-4">Como é calculado: <strong>Total de entradas/saídas</strong> = soma dos créditos (entradas) e dos débitos (saídas) de TODO o extrato do mês, somando todas as contas (independe da conciliação). Os 4 cards de conciliação contam as linhas (em módulo) por situação. Cada conta abaixo mostra suas próprias entradas/saídas — cada lançamento segue vinculado à sua conta.</p>
+                    <p className="text-[11px] text-gray-400 mb-4">Como é calculado: <strong>Entradas/Saídas (caixa real)</strong> = créditos/débitos do extrato do mês que NÃO são movimentação interna (transferência entre contas da própria FC, varredura de aplicação/resgate, PIX/TED intra-FC), somando todas as contas (independe da conciliação). A <strong>Movimentação interna</strong> reúne esses lançamentos num card à parte — só conferência, não entram no caixa real. Os 4 cards de conciliação contam as linhas (em módulo) por situação. Cada conta abaixo mostra o giro total dela (externo + interno).</p>
 
                     {/* Listas unificadas, agrupadas por conta (cada linha pertence à sua conta).
                         Conciliar manualmente AQUI no panorama: 1 linha do extrato + 1 lançamento,
@@ -2403,9 +2420,10 @@ export default function FinanceiroConciliacao() {
               <DialogContent resizable={false} className="max-w-2xl w-[calc(100vw-1rem)] sm:w-auto max-h-[88vh] flex flex-col p-0 gap-0">
                 {(() => {
                   const cfg: Record<string, { titulo: string; icone: any; cor: string; itens: any[]; tipo: "extrato" | "entry"; valor: number; qtdLabel: string }> = {
-                    entradas: { titulo: "Entradas do mês (créditos)", icone: ArrowDownCircle, cor: "text-emerald-600", itens: drill.entradas, tipo: "extrato", valor: geralTotais?.valorEntradas ?? 0, qtdLabel: "crédito(s)" },
-                    saidas: { titulo: "Saídas do mês (débitos)", icone: ArrowUpCircle, cor: "text-red-600", itens: drill.saidas, tipo: "extrato", valor: geralTotais?.valorSaidas ?? 0, qtdLabel: "débito(s)" },
-                    saldo: { titulo: "Saldo do mês — entradas × saídas", icone: Landmark, cor: "text-slate-600", itens: [], tipo: "extrato", valor: (geralTotais?.valorEntradas ?? 0) - (geralTotais?.valorSaidas ?? 0), qtdLabel: "" },
+                    entradas: { titulo: "Entradas do mês (créditos · caixa real)", icone: ArrowDownCircle, cor: "text-emerald-600", itens: drill.entradas, tipo: "extrato", valor: geralTotais?.valorEntradasExternas ?? 0, qtdLabel: "crédito(s)" },
+                    saidas: { titulo: "Saídas do mês (débitos · caixa real)", icone: ArrowUpCircle, cor: "text-red-600", itens: drill.saidas, tipo: "extrato", valor: geralTotais?.valorSaidasExternas ?? 0, qtdLabel: "débito(s)" },
+                    saldo: { titulo: "Saldo do mês — caixa real (externo)", icone: Landmark, cor: "text-slate-600", itens: [], tipo: "extrato", valor: (geralTotais?.valorEntradasExternas ?? 0) - (geralTotais?.valorSaidasExternas ?? 0), qtdLabel: "" },
+                    interno: { titulo: "Movimentação interna — transf. entre contas, aplicação/resgate, intra-FC", icone: ArrowLeftRight, cor: "text-indigo-600", itens: drill.interno, tipo: "extrato", valor: (geralTotais?.valorEntradasInternas ?? 0) + (geralTotais?.valorSaidasInternas ?? 0), qtdLabel: "lançamento(s)" },
                     conciliados: { titulo: "Linhas conciliadas do mês", icone: CheckCircle, cor: "text-green-600", itens: drill.conciliados, tipo: "extrato", valor: geralTotais?.valorConciliado ?? 0, qtdLabel: "linha(s)" },
                     extratoSemLanc: { titulo: "No extrato, sem lançamento no ERP", icone: AlertCircle, cor: "text-rose-600", itens: drill.extratoSemLanc, tipo: "extrato", valor: geralTotais?.valorExtratoSemLancamento ?? 0, qtdLabel: "linha(s)" },
                     lancSemExtrato: { titulo: "No ERP, sem linha no extrato", icone: FileText, cor: "text-amber-600", itens: drill.lancSemExtrato, tipo: "entry", valor: geralTotais?.valorLancamentosSemExtrato ?? 0, qtdLabel: "lançamento(s)" },
@@ -2438,14 +2456,15 @@ export default function FinanceiroConciliacao() {
                           <div className="space-y-2">
                             <div className="grid grid-cols-2 gap-3 mb-3">
                               <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
-                                <p className="text-[11px] text-emerald-700 font-medium">Entradas</p>
-                                <p className="text-base font-bold text-emerald-700">{formatBRL(geralTotais?.valorEntradas ?? 0)}</p>
+                                <p className="text-[11px] text-emerald-700 font-medium">Entradas (caixa real)</p>
+                                <p className="text-base font-bold text-emerald-700">{formatBRL(geralTotais?.valorEntradasExternas ?? 0)}</p>
                               </div>
                               <div className="rounded-lg border border-red-200 bg-red-50/60 p-3">
-                                <p className="text-[11px] text-red-700 font-medium">Saídas</p>
-                                <p className="text-base font-bold text-red-600">{formatBRL(geralTotais?.valorSaidas ?? 0)}</p>
+                                <p className="text-[11px] text-red-700 font-medium">Saídas (caixa real)</p>
+                                <p className="text-base font-bold text-red-600">{formatBRL(geralTotais?.valorSaidasExternas ?? 0)}</p>
                               </div>
                             </div>
+                            <p className="text-[10px] text-gray-400 -mt-1 mb-2">As barras por conta abaixo mostram o giro TOTAL de cada conta (externo + interno); os cards de cima são só o caixa real.</p>
                             <div className="rounded-lg border border-gray-100 divide-y">
                               {geralContas.map((cc: any) => {
                                 const t = cc.totais ?? {};

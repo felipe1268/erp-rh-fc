@@ -74,7 +74,8 @@ export default function DashConciliacao() {
   const [det, setDet] = useState(false);
   // Rev. 3346 — drill-in de CONFERÊNCIA TOTAL: abre TODAS as linhas individuais do extrato.
   // null = fechado; "entradas" | "saidas" | "todos" define o recorte aberto pelo card clicado.
-  const [lanc, setLanc] = useState<null | "entradas" | "saidas" | "todos">(null);
+  // Rev. 3349 — "interno" abre a movimentação interna (transf. entre contas/aplicação/intra-FC).
+  const [lanc, setLanc] = useState<null | "entradas" | "saidas" | "todos" | "interno">(null);
 
   const { data: lancamentos, isLoading: lancLoading } = (trpc as any).financial.getConciliacaoLancamentos.useQuery(
     { companyId, dataInicio, dataFim }, { enabled: !!companyId && lanc !== null }
@@ -83,6 +84,8 @@ export default function DashConciliacao() {
   const kpis = useMemo(() => {
     let total = 0, conciliadas = 0, valorTotal = 0, valorConciliado = 0, valorEntradas = 0, valorSaidas = 0;
     let valorConciliadoEntradas = 0, valorConciliadoSaidas = 0, pendentesEntradas = 0, pendentesSaidas = 0;
+    // Rev. 3349 — acumula a movimentação INTERNA (transf. entre contas/aplicação/intra-FC).
+    let valorEntradasInternas = 0, valorSaidasInternas = 0, qtdEntradasInternas = 0, qtdSaidasInternas = 0;
     for (const s of statusArr) {
       total += Number(s.total) || 0;
       conciliadas += Number(s.conciliadas) || 0;
@@ -94,6 +97,10 @@ export default function DashConciliacao() {
       valorConciliadoSaidas += Number(s.valorConciliadoSaidas) || 0;
       pendentesEntradas += Number(s.pendentesEntradas) || 0;
       pendentesSaidas += Number(s.pendentesSaidas) || 0;
+      valorEntradasInternas += Number(s.valorEntradasInternas) || 0;
+      valorSaidasInternas += Number(s.valorSaidasInternas) || 0;
+      qtdEntradasInternas += Number(s.qtdEntradasInternas) || 0;
+      qtdSaidasInternas += Number(s.qtdSaidasInternas) || 0;
     }
     const valorPendente = Math.max(valorTotal - valorConciliado, 0);
     // Rev. 3316 — pendente SEPARADO por direção (não somar crédito + débito como se
@@ -102,10 +109,18 @@ export default function DashConciliacao() {
     const valorPendenteSaidas = Math.max(valorSaidas - valorConciliadoSaidas, 0);
     const pct = valorTotal > 0 ? (valorConciliado / valorTotal) * 100 : 0;
     const saldoLiquido = valorEntradas - valorSaidas;
+    // Rev. 3349 — CAIXA REAL (externo) = bruto − interno. O usuário (opção 1) pediu que os
+    // cards de movimentação reflitam o caixa real e a movimentação interna fique num card à parte.
+    const valorEntradasExternas = Math.max(valorEntradas - valorEntradasInternas, 0);
+    const valorSaidasExternas = Math.max(valorSaidas - valorSaidasInternas, 0);
+    const saldoExterno = valorEntradasExternas - valorSaidasExternas;
+    const valorInternoTotal = valorEntradasInternas + valorSaidasInternas;
     return {
       total, conciliadas, pendentes: Math.max(total - conciliadas, 0),
       valorTotal, valorConciliado, valorPendente, valorEntradas, valorSaidas, saldoLiquido, pct,
       valorPendenteEntradas, valorPendenteSaidas, pendentesEntradas, pendentesSaidas,
+      valorEntradasInternas, valorSaidasInternas, qtdEntradasInternas, qtdSaidasInternas,
+      valorEntradasExternas, valorSaidasExternas, saldoExterno, valorInternoTotal,
       contas: statusArr.length,
     };
   }, [statusArr]);
@@ -134,11 +149,16 @@ export default function DashConciliacao() {
   const lancArr: any[] = Array.isArray(lancamentos) ? lancamentos : [];
   const lancRows = useMemo(() => {
     if (lanc === null) return [];
+    // Rev. 3349 — "entradas"/"saidas"/"todos" são CAIXA REAL (externo, !interno); "interno"
+    // abre só a movimentação interna. Assim o totalizador bate com cada card respectivo.
+    const ext = lancArr.filter((l) => !l.interno);
     const recorte = lanc === "entradas"
-      ? lancArr.filter((l) => Number(l.valor) >= 0)
+      ? ext.filter((l) => Number(l.valor) >= 0)
       : lanc === "saidas"
-        ? lancArr.filter((l) => Number(l.valor) < 0)
-        : lancArr;
+        ? ext.filter((l) => Number(l.valor) < 0)
+        : lanc === "interno"
+          ? lancArr.filter((l) => l.interno)
+          : ext;
     return recorte.map((l) => {
       const v = Number(l.valor) || 0;
       return {
@@ -177,9 +197,10 @@ export default function DashConciliacao() {
     },
   ], [lanc]);
 
-  const lancTitle = lanc === "entradas" ? "Entradas (créditos) — todos os lançamentos"
-    : lanc === "saidas" ? "Saídas (débitos) — todos os lançamentos"
-    : "Movimentação do extrato — todos os lançamentos";
+  const lancTitle = lanc === "entradas" ? "Entradas (créditos · caixa real) — todos os lançamentos"
+    : lanc === "saidas" ? "Saídas (débitos · caixa real) — todos os lançamentos"
+    : lanc === "interno" ? "Movimentação interna — transf. entre contas, aplicação/resgate e intra-FC"
+    : "Movimentação do extrato (caixa real) — todos os lançamentos";
 
   const pizza = useMemo(() => ([
     { name: "Conciliado", value: kpis.valorConciliado },
@@ -218,21 +239,25 @@ export default function DashConciliacao() {
         {/* Rev. 3282 — Movimentação separada em Entradas / Saídas / Saldo líquido (o giro
             bruto vira subtítulo, p/ não confundir entrada+saída somadas com "o que sobrou"). */}
         <div className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 px-1">Movimentação do extrato</h3>
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-            <KpiCard icon={ArrowDownLeft} label="Entradas (créditos)" value={formatBRL(kpis.valorEntradas)} tone="good"
-              sub="Clique p/ conferir cada lançamento" onClick={() => setLanc("entradas")} />
-            <KpiCard icon={ArrowUpRight} label="Saídas (débitos)" value={formatBRL(kpis.valorSaidas)} tone="bad"
-              sub="Clique p/ conferir cada lançamento" onClick={() => setLanc("saidas")} />
-            <KpiCard icon={Scale} label="Saldo líquido" value={formatBRL(kpis.saldoLiquido)}
-              tone={kpis.saldoLiquido >= 0 ? "good" : "bad"}
-              sub="Entrou − saiu · clique p/ ver tudo" onClick={() => setLanc("todos")} />
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 px-1">Movimentação do extrato · caixa real</h3>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <KpiCard icon={ArrowDownLeft} label="Entradas (caixa real)" value={formatBRL(kpis.valorEntradasExternas)} tone="good"
+              sub="Externo · clique p/ conferir" onClick={() => setLanc("entradas")} />
+            <KpiCard icon={ArrowUpRight} label="Saídas (caixa real)" value={formatBRL(kpis.valorSaidasExternas)} tone="bad"
+              sub="Externo · clique p/ conferir" onClick={() => setLanc("saidas")} />
+            <KpiCard icon={Scale} label="Saldo líquido (caixa real)" value={formatBRL(kpis.saldoExterno)}
+              tone={kpis.saldoExterno >= 0 ? "good" : "bad"}
+              sub="Entrou − saiu (externo) · clique p/ ver" onClick={() => setLanc("todos")} />
+            <KpiCard icon={ArrowLeftRight} label="Movimentação interna" value={formatBRL(kpis.valorInternoTotal)} tone="default"
+              sub={`${kpis.qtdEntradasInternas + kpis.qtdSaidasInternas} lançamento(s) · clique p/ conferir`} onClick={() => setLanc("interno")} />
           </div>
           <p className="text-[11px] leading-relaxed text-slate-400 px-1">
             <span className="font-medium text-slate-500">Como é calculado:</span> soma das linhas do extrato bancário
-            importado no período. <strong>Entradas</strong> = linhas de crédito (valor ≥ 0); <strong>Saídas</strong> = linhas
-            de débito (valor &lt; 0, somadas em módulo); <strong>Saldo líquido</strong> = entradas − saídas. Linhas excluídas
-            não entram na conta.
+            importado no período, separando o <strong>caixa real (externo)</strong> da <strong>movimentação interna</strong>.
+            <strong> Entradas/Saídas (caixa real)</strong> = créditos/débitos que NÃO são transferência entre as contas da
+            própria FC, varredura de aplicação/resgate nem PIX/TED intra-FC; <strong>Saldo líquido</strong> = entradas − saídas
+            (só externo). A <strong>Movimentação interna</strong> reúne esses lançamentos num card à parte — só conferência, não
+            entram no caixa real. Linhas excluídas não entram na conta.
           </p>
         </div>
 

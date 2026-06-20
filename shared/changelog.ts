@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3349 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA (DASHBOARD + PANORAMA GERAL) · OS TOTAIS "ENTRADAS / SAÍDAS /
+ * SALDO" AGORA MOSTRAM O CAIXA REAL (EXTERNO): A MOVIMENTAÇÃO INTERNA (TRANSFERÊNCIA ENTRE CONTAS DA PRÓPRIA FC,
+ * VARREDURA DE APLICAÇÃO/RESGATE E PIX/TED INTRA-FC) FOI TIRADA DOS TOTAIS E GANHOU UM CARD SEPARADO
+ * "MOVIMENTAÇÃO INTERNA" COM DRILL-IN PARA CONFERÊNCIA — ANTES O DINHEIRO QUE SÓ "GIRAVA" ENTRE AS CONTAS DA
+ * EMPRESA INFLAVA O QUE ENTROU/SAIU DE VERDADE. 1 BACKEND (READ-ONLY) + 2 FRONTS · CLASSIFICAÇÃO · ZERO
+ * SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário): "Faça uma conferência total de entrada e saída, tô achando que tem alguma coisa errada" —
+ *   os totais de Entradas/Saídas estavam altos demais porque incluíam transferências da empresa para ela mesma
+ *   (uma conta manda, outra recebe → conta 2x e não é caixa que entrou/saiu de verdade). Decisão (OPÇÃO 1): tirar
+ *   essa movimentação interna dos totais e exibi-la num card à parte, só para conferência (nada é ocultado).
+ * - RAIZ: tanto o Dashboard de Conciliação (`DashConciliacao.tsx`) quanto o Panorama Geral do mês
+ *   (`FinanceiroConciliacao.tsx`) somavam TODOS os créditos/débitos do extrato como Entradas/Saídas, sem distinguir
+ *   o que era caixa real (cliente/fornecedor/folha) do que era apenas dinheiro girando entre as contas da própria FC.
+ *   Validação no banco real (company 60002, 2026): ~31,8% do giro bruto em R$ era movimentação interna (290 de 2.841
+ *   linhas) — o suficiente para distorcer a leitura.
+ * - HEURÍSTICA ÚNICA (`server/routers/financial.ts`, READ-ONLY): nova const de módulo `_INTERNO_PATTERNS`
+ *   (["transfer.*entre contas","transf interna","transferencia interna","credito transf internet","aplica",
+ *   "resgate","contamax","rdb","cdb","fundo de invest","fc engenharia"]) → `_INTERNO_REGEX_SRC` (join "|") alimenta
+ *   AO MESMO TEMPO o predicado SQL (`descricao ~* '<src>'`) e o helper JS `_isLancInterno(descricao)` (RegExp `i`).
+ *   FONTE ÚNICA = Dashboard e Panorama NÃO divergem. Os padrões não contêm `$`, então são seguros para interpolar
+ *   inline no SQL (o `dbExecute` liga `$N` por ordem de aparição e nada colide). Só CLASSIFICA — não concilia/baixa/
+ *   oculta nada; a lista completa fica acessível pelo drill-in.
+ * - BACKEND (3 endpoints, todos READ-ONLY): `getConciliacaoReportGeral` passou a TAGUEAR cada linha
+ *   (conciliada/pendente) com `interno` e a devolver, por conta e no agregado, `valorEntradas/SaidasInternas` +
+ *   `qtdEntradas/SaidasInternas`, com `valorEntradasExternas = bruto − interna` (idem saídas) — o "caixa real".
+ *   `getConciliacaoLancamentos` ganhou o campo `interno` por linha (p/ o drill filtrar). `getBankAccountsConciliacaoStatus`
+ *   ganhou as colunas SQL `valorEntradas/SaidasInternas` + `qtdEntradas/SaidasInternas` (mesmo `~* '<src>'`).
+ * - FRONT DASHBOARD (`client/src/pages/financeiro/dashboards/DashConciliacao.tsx`): os KPIs de Movimentação passam a
+ *   exibir Entradas/Saídas/Saldo EXTERNOS (`valorEntradasExternas`/`valorSaidasExternas`/saldo externo); novo
+ *   KpiCard "Movimentação interna" (ícone `ArrowLeftRight`, tone "default") com o total interno; o estado `lanc` do
+ *   drill ganhou o valor "interno" e a tabela filtra por `l.interno`; títulos/textos explicativos atualizados.
+ * - FRONT PANORAMA (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): os 3 cards de cima viram "(caixa real)"
+ *   (lendo os campos externos) + 4º card "Movimentação interna" (indigo, `ArrowLeftRight`); a grade passou a
+ *   `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4`; `panoramaDrill` ganhou o caso "interno"; o memo `drill` separa
+ *   `entradas`/`saidas` (externas, `!interno`) de `interno`; o `cfg` do diálogo ganhou a entrada "interno"; o resumo
+ *   do diálogo "Saldo" usa os valores externos com nota de que as barras por conta mostram o giro TOTAL.
+ * - RESSALVA DOCUMENTADA: os sub-resumos POR CONTA (barras do "Saldo" e badges por conta) seguem mostrando o GIRO
+ *   TOTAL de cada conta (externo + interno) — só os TOTAIS agregados e os cards de cima separam externo × interno.
+ *   Textos explicativos deixam isso claro. A heurística é por DESCRIÇÃO (não há flag de "interno" na origem); novos
+ *   padrões de transferência interna podem ser acrescentados em `_INTERNO_PATTERNS` no futuro.
+ * - ESCOPO: 1 backend (server/routers/financial.ts, só leitura) + 2 fronts. Sem schema/ALTER/DROP/DELETE. tsc limpo
+ *   (só o ruído pré-existente do próprio changelog.ts). Validado contra o Neon real.
+ * - ARQUIVOS: `server/routers/financial.ts`, `client/src/pages/financeiro/dashboards/DashConciliacao.tsx`,
+ *   `client/src/pages/financeiro/FinanceiroConciliacao.tsx`, `shared/version.ts` (3349), `shared/changelog.ts`,
+ *   `replit.md`, `replit-history.md`.
+ *
  * Rev. 3348 — **FOLHA DE PAGAMENTO / HORAS EXTRAS · DRILL-IN DOS DIAS: AGORA DÁ PRA CLICAR DIRETO NAS HORAS
  * ("HE ÚTEIS", "HE FIM SEM." E "TOTAL HE") DE CADA FUNCIONÁRIO PARA ABRIR O DETALHAMENTO DIA A DIA DAS HORAS
  * EXTRAS — ANTES O DETALHE SÓ ABRIA POR UM ÍCONE DISCRETO AO LADO DO "VALOR HE", QUE PASSAVA DESPERCEBIDO.
