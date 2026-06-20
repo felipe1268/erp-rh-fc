@@ -18,7 +18,7 @@ import {
   CreditCard, Upload, Loader2, CheckCircle, AlertTriangle, Trash2, Pencil,
   ChevronLeft, ChevronRight, PlusCircle, ListTree, FileText, Building2, ShieldAlert,
   Search, Layers, BarChart3, TrendingUp, TrendingDown, Minus,
-  PieChart as PieIcon, Repeat, Percent, Store, Receipt, Wallet,
+  PieChart as PieIcon, Repeat, Percent, Store, Receipt, Wallet, ListFilter,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from "recharts";
 
@@ -359,8 +359,8 @@ export default function FinanceiroCartaoCredito() {
       .filter((x) => x.value > 0);
 
     // Evolução mês a mês (barras agrupadas): compra × encargo × |crédito|.
-    const porMesMap = new Map<number, { mes: string; compra: number; encargo: number; credito: number }>();
-    for (let m = 1; m <= 12; m++) porMesMap.set(m, { mes: MESES[m], compra: 0, encargo: 0, credito: 0 });
+    const porMesMap = new Map<number, { mes: string; mesNum: number; compra: number; encargo: number; credito: number }>();
+    for (let m = 1; m <= 12; m++) porMesMap.set(m, { mes: MESES[m], mesNum: m, compra: 0, encargo: 0, credito: 0 });
     for (const r of d.porMes) {
       const slot = porMesMap.get(r.mes);
       if (!slot) continue;
@@ -404,6 +404,15 @@ export default function FinanceiroCartaoCredito() {
       obrasClassificadas, categoriasClassificadas, temDados,
     };
   }, [gerencialRaw]);
+
+  // ── Drill-in: clicar num ponto do gráfico abre os lançamentos por trás ──
+  const [drill, setDrill] = useState<{ titulo: string; sub: string; filtro: Record<string, any> } | null>(null);
+  const abrirDrill = (titulo: string, sub: string, filtro: Record<string, any>) => setDrill({ titulo, sub, filtro });
+  const drillQ = (trpc as any).cartao.itensDrill.useQuery(
+    { companyId: companyId!, ano, ...(cartaoFiltro != null ? { cartaoId: cartaoFiltro } : {}), ...(drill?.filtro ?? {}) },
+    { enabled: !!companyId && !!drill && aba === "gerencial" },
+  );
+  const drillData = drillQ.data as { itens: any[]; qtd: number; total: number; truncado: boolean } | undefined;
 
   const excluirFatura = (trpc as any).cartao.excluirFatura.useMutation();
   const [faturaExcluir, setFaturaExcluir] = useState<any | null>(null);
@@ -1073,15 +1082,19 @@ export default function FinanceiroCartaoCredito() {
                       <div className="h-[280px] w-full" role="img" aria-label="Gráfico de pizza da composição da fatura por tipo">
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
-                            <Pie data={gerencial.composicao} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={58} outerRadius={92} paddingAngle={2}>
-                              {gerencial.composicao.map((c) => (<Cell key={c.key} fill={c.color} />))}
+                            <Pie
+                              data={gerencial.composicao} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={58} outerRadius={92} paddingAngle={2}
+                              className="cursor-pointer focus:outline-none"
+                              onClick={(_: any, idx: number) => { const c = gerencial.composicao[idx]; if (c) abrirDrill(c.name, `${formatBRL(c.value)} · ${c.qtd} ${c.qtd === 1 ? "lançamento" : "lançamentos"}`, { tipo: c.key }); }}
+                            >
+                              {gerencial.composicao.map((c) => (<Cell key={c.key} fill={c.color} className="cursor-pointer focus:outline-none" />))}
                             </Pie>
                             <Tooltip formatter={(v: any, n: any) => [formatBRL(Number(v)), n]} />
                             <Legend verticalAlign="bottom" height={36} formatter={(v) => <span className="text-xs text-gray-600">{v}</span>} />
                           </PieChart>
                         </ResponsiveContainer>
                       </div>
-                      <p className="mt-1 text-center text-[11px] text-muted-foreground">Créditos/pagamentos mostrados em valor absoluto.</p>
+                      <p className="mt-1 text-center text-[11px] text-muted-foreground">Créditos/pagamentos em valor absoluto · clique numa fatia para ver os lançamentos.</p>
                     </CardContent>
                   </Card>
 
@@ -1101,9 +1114,9 @@ export default function FinanceiroCartaoCredito() {
                               <YAxis tickFormatter={(v) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })} tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={false} tickLine={false} width={84} />
                               <Tooltip formatter={(v: any, n: any) => [formatBRL(Number(v)), n]} cursor={{ fill: "rgba(27,42,74,0.05)" }} />
                               <Legend verticalAlign="top" height={28} formatter={(v) => <span className="text-xs text-gray-600">{v}</span>} />
-                              <Bar dataKey="compra" name="Compras" fill="#1B2A4A" radius={[4, 4, 0, 0]} maxBarSize={26} />
-                              <Bar dataKey="encargo" name="Encargos" fill="#dc2626" radius={[4, 4, 0, 0]} maxBarSize={26} />
-                              <Bar dataKey="credito" name="Créditos" fill="#059669" radius={[4, 4, 0, 0]} maxBarSize={26} />
+                              <Bar dataKey="compra" name="Compras" fill="#1B2A4A" radius={[4, 4, 0, 0]} maxBarSize={26} className="cursor-pointer" onClick={(d: any) => { const r = d?.payload ?? d; if (r?.mesNum && r.compra) abrirDrill(`Compras — ${r.mes}/${ano}`, formatBRL(r.compra), { tipo: "compra", mes: r.mesNum }); }} />
+                              <Bar dataKey="encargo" name="Encargos" fill="#dc2626" radius={[4, 4, 0, 0]} maxBarSize={26} className="cursor-pointer" onClick={(d: any) => { const r = d?.payload ?? d; if (r?.mesNum && r.encargo) abrirDrill(`Encargos — ${r.mes}/${ano}`, formatBRL(r.encargo), { tipo: "encargo", mes: r.mesNum }); }} />
+                              <Bar dataKey="credito" name="Créditos" fill="#059669" radius={[4, 4, 0, 0]} maxBarSize={26} className="cursor-pointer" onClick={(d: any) => { const r = d?.payload ?? d; if (r?.mesNum && r.credito) abrirDrill(`Créditos/Pagamentos — ${r.mes}/${ano}`, formatBRL(r.credito), { tipo: "credito", mes: r.mesNum }); }} />
                             </BarChart>
                           </ResponsiveContainer>
                         </div>
@@ -1131,8 +1144,8 @@ export default function FinanceiroCartaoCredito() {
                               <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={false} tickLine={false} />
                               <YAxis tickFormatter={(v) => (v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })} tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={false} tickLine={false} width={84} />
                               <Tooltip formatter={(v: any) => formatBRL(Number(v))} labelFormatter={(l: any) => `${l}`} cursor={{ fill: "rgba(27,42,74,0.05)" }} />
-                              <Bar dataKey="total" name="Valor" radius={[6, 6, 0, 0]} maxBarSize={48}>
-                                {gerencial.perfil.map((p) => (<Cell key={p.parcelas} fill={p.parcelas > 1 ? "#2c3f63" : "#1B2A4A"} />))}
+                              <Bar dataKey="total" name="Valor" radius={[6, 6, 0, 0]} maxBarSize={48} className="cursor-pointer" onClick={(d: any) => { const r = d?.payload ?? d; if (r) abrirDrill(`Compras ${r.label}`, `${formatBRL(r.total)} · ${r.qtd} ${r.qtd === 1 ? "compra" : "compras"}`, { tipo: "compra", parcelas: r.parcelas <= 1 ? 1 : r.parcelas }); }}>
+                                {gerencial.perfil.map((p) => (<Cell key={p.parcelas} fill={p.parcelas > 1 ? "#2c3f63" : "#1B2A4A"} className="cursor-pointer" />))}
                               </Bar>
                             </BarChart>
                           </ResponsiveContainer>
@@ -1160,13 +1173,18 @@ export default function FinanceiroCartaoCredito() {
                             const max = gerencial.encargosNatureza[0].total || 1;
                             const pct = Math.max(3, (e.total / max) * 100);
                             return (
-                              <div key={e.nome} className="flex items-center gap-2">
+                              <button
+                                key={e.nome} type="button"
+                                onClick={() => abrirDrill(`Encargos — ${e.nome}`, `${formatBRL(e.total)} · ${e.qtd} ${e.qtd === 1 ? "lançamento" : "lançamentos"}`, { natureza: e.nome })}
+                                className="flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left transition-colors hover:bg-red-50"
+                                title={`Ver lançamentos de ${e.nome}`}
+                              >
                                 <span className="w-28 shrink-0 truncate text-xs text-gray-600" title={e.nome}>{e.nome}</span>
                                 <div className="relative h-6 flex-1 overflow-hidden rounded-md bg-gray-100">
                                   <div className="absolute inset-y-0 left-0 rounded-md bg-gradient-to-r from-red-500 to-red-400" style={{ width: `${pct}%` }} />
                                 </div>
                                 <span className="w-24 shrink-0 text-right text-xs font-semibold tabular-nums text-gray-800">{formatBRL(e.total)}</span>
-                              </div>
+                              </button>
                             );
                           })}
                           <div className="mt-3 flex items-center justify-between border-t pt-2 text-sm font-semibold">
@@ -1204,7 +1222,11 @@ export default function FinanceiroCartaoCredito() {
                           </thead>
                           <tbody>
                             {gerencial.estabelecimentos.map((e) => (
-                              <tr key={e.est} className="border-t transition-colors hover:bg-blue-50/40">
+                              <tr
+                                key={e.est}
+                                onClick={() => abrirDrill(e.est, `${e.vezes}x · ${e.meses} ${e.meses === 1 ? "mês" : "meses"} · ${formatBRL(e.total)}`, { tipo: "compra", estabelecimento: e.est })}
+                                className="cursor-pointer border-t transition-colors hover:bg-blue-50/40"
+                              >
                                 <td className="px-3 py-2 font-medium text-gray-800">{e.est}</td>
                                 <td className="px-3 py-2 text-center tabular-nums">
                                   <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">{e.vezes}x</Badge>
@@ -1245,13 +1267,18 @@ export default function FinanceiroCartaoCredito() {
                             const pct = Math.max(3, (o.total / max) * 100);
                             const semObra = o.obra === "(sem obra)";
                             return (
-                              <div key={o.obra} className="flex items-center gap-2">
+                              <button
+                                key={o.obra} type="button"
+                                onClick={() => abrirDrill(semObra ? "Compras sem obra" : `Obra — ${o.obra}`, `${formatBRL(o.total)} · ${o.qtd} ${o.qtd === 1 ? "compra" : "compras"}`, { tipo: "compra", obra: o.obra })}
+                                className="flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left transition-colors hover:bg-blue-50"
+                                title={`Ver compras de ${o.obra}`}
+                              >
                                 <span className={`w-32 shrink-0 truncate text-xs ${semObra ? "italic text-gray-400" : "text-gray-600"}`} title={o.obra}>{o.obra}</span>
                                 <div className="relative h-6 flex-1 overflow-hidden rounded-md bg-gray-100">
                                   <div className="absolute inset-y-0 left-0 rounded-md" style={{ width: `${pct}%`, background: semObra ? "#cbd5e1" : "linear-gradient(90deg,#1B2A4A,#2c3f63)" }} />
                                 </div>
                                 <span className="w-24 shrink-0 text-right text-xs font-semibold tabular-nums text-gray-800">{formatBRL(o.total)}</span>
-                              </div>
+                              </button>
                             );
                           })}
                         </div>
@@ -1281,13 +1308,18 @@ export default function FinanceiroCartaoCredito() {
                             const pct = Math.max(3, (c.total / max) * 100);
                             const semCat = c.cat === "(sem categoria)";
                             return (
-                              <div key={c.cat} className="flex items-center gap-2">
+                              <button
+                                key={c.cat} type="button"
+                                onClick={() => abrirDrill(semCat ? "Compras sem categoria" : `Categoria — ${c.cat}`, `${formatBRL(c.total)} · ${c.qtd} ${c.qtd === 1 ? "compra" : "compras"}`, { tipo: "compra", categoria: c.cat })}
+                                className="flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left transition-colors hover:bg-blue-50"
+                                title={`Ver compras de ${c.cat}`}
+                              >
                                 <span className={`w-32 shrink-0 truncate text-xs ${semCat ? "italic text-gray-400" : "text-gray-600"}`} title={c.cat}>{c.cat}</span>
                                 <div className="relative h-6 flex-1 overflow-hidden rounded-md bg-gray-100">
                                   <div className="absolute inset-y-0 left-0 rounded-md" style={{ width: `${pct}%`, background: semCat ? "#cbd5e1" : "linear-gradient(90deg,#1B2A4A,#2c3f63)" }} />
                                 </div>
                                 <span className="w-24 shrink-0 text-right text-xs font-semibold tabular-nums text-gray-800">{formatBRL(c.total)}</span>
-                              </div>
+                              </button>
                             );
                           })}
                         </div>
@@ -1302,6 +1334,80 @@ export default function FinanceiroCartaoCredito() {
           </div>
         )}
       </div>
+
+      {/* ───────────── DRILL-IN: lançamentos por trás do gráfico ───────────── */}
+      <Dialog open={!!drill} onOpenChange={(o) => { if (!o) setDrill(null); }}>
+        <DialogContent resizable={false} className="max-w-4xl p-0 overflow-hidden gap-0 flex flex-col max-h-[90vh]">
+          <DialogHeader className="shrink-0 border-b bg-gradient-to-r from-[#1B2A4A] to-[#2c3f63] px-6 py-5 text-left">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25">
+                <ListFilter className="h-5 w-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <DialogTitle className="truncate text-base font-semibold text-white">{drill?.titulo}</DialogTitle>
+                <DialogDescription className="text-xs text-white/70">{drill?.sub} · {ano}{cartaoFiltro != null ? " · cartão filtrado" : ""}</DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="min-h-0 flex-1 overflow-auto">
+            {drillQ.isLoading ? (
+              <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Carregando lançamentos…
+              </div>
+            ) : drillQ.isError ? (
+              <div className="py-16 text-center text-sm text-red-600">Erro ao carregar os lançamentos. Tente novamente.</div>
+            ) : !drillData || drillData.itens.length === 0 ? (
+              <div className="py-16 text-center text-sm text-muted-foreground">Nenhum lançamento encontrado para este recorte.</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 z-10 bg-gray-50 text-xs text-gray-500">
+                  <tr>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-left font-semibold">Data</th>
+                    <th className="px-3 py-2.5 text-left font-semibold">Descrição</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-left font-semibold">Cartão</th>
+                    <th className="px-3 py-2.5 text-left font-semibold">Obra / Categoria</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-center font-semibold">Parcela</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold">Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {drillData.itens.map((it: any, idx: number) => {
+                    const parc = (it.parcelaTotal ?? 0) > 1 ? `${it.parcelaAtual}/${it.parcelaTotal}` : "À vista";
+                    const cartaoLbl = [it.cartaoBanco, it.cartaoFinal4 ? `•${it.cartaoFinal4}` : null].filter(Boolean).join(" ");
+                    return (
+                      <tr key={idx} className="border-t hover:bg-gray-50/60">
+                        <td className="whitespace-nowrap px-3 py-2 tabular-nums text-gray-600">{fmtData(it.data)}</td>
+                        <td className="px-3 py-2 font-medium text-gray-800">
+                          <span className="block max-w-[280px] truncate" title={it.descricao}>{it.descricao || "—"}</span>
+                          {it.cidade ? <span className="text-[11px] text-gray-400">{it.cidade}</span> : null}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2 text-xs text-gray-500">{cartaoLbl || "—"}</td>
+                        <td className="px-3 py-2 text-xs text-gray-600">
+                          <span className="block max-w-[200px] truncate" title={it.obraNome || ""}>{it.obraNome || <span className="italic text-gray-400">(sem obra)</span>}</span>
+                          {it.categoriaNome ? <span className="block max-w-[200px] truncate text-[11px] text-gray-400" title={it.categoriaNome}>{it.categoriaNome}</span> : null}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2 text-center text-xs text-gray-500">{parc}</td>
+                        <td className={`whitespace-nowrap px-3 py-2 text-right font-semibold tabular-nums ${Number(it.valor) < 0 ? "text-emerald-600" : "text-gray-800"}`}>{formatBRL(Number(it.valor))}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          <div className="shrink-0 border-t bg-muted/30 px-6 py-3">
+            {drillData && drillData.truncado ? (
+              <p className="mb-2 text-[11px] text-amber-600">Exibindo os primeiros {drillData.itens.length} lançamentos (recorte muito grande). Refine o filtro para ver todos.</p>
+            ) : null}
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-600">{drillData ? `${drillData.qtd} ${drillData.qtd === 1 ? "lançamento" : "lançamentos"}` : "—"}</span>
+              <span className="font-semibold tabular-nums text-[#1B2A4A]">{drillData ? formatBRL(drillData.total) : ""}</span>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ───────────── MODAL CARTÃO (criar/editar) ───────────── */}
       <Dialog open={cartaoModal} onOpenChange={setCartaoModal}>

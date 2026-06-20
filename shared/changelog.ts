@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3360 — **FINANCEIRO / CARTÃO DE CRÉDITO · ABA GERENCIAL · DRILL-IN: AGORA DÁ PARA CLICAR EM QUALQUER
+ * GRÁFICO/LINHA DA ANÁLISE (PIZZA DE COMPOSIÇÃO, BARRAS DE EVOLUÇÃO MÊS A MÊS, PERFIL DE PARCELAMENTO, ENCARGOS
+ * POR NATUREZA, ESTABELECIMENTOS RECORRENTES, GASTO POR OBRA E POR CATEGORIA) E ABRIR UM DIÁLOGO COM TODOS OS
+ * LANÇAMENTOS INDIVIDUAIS POR TRÁS DAQUELE NÚMERO. 1 ENDPOINT READ-ONLY (BACKEND) + 1 FRONT · ZERO
+ * SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário): na aba "Gerencial" do Cartão de Crédito, poder clicar nos gráficos e ver "o que está por
+ *   trás de cada ponto" — a lista dos lançamentos que compõem aquele agregado.
+ * - BACKEND (`server/routers/cartao.ts`, NOVO endpoint READ-ONLY `itensDrill` logo após `analiseGerencial`):
+ *   recebe os MESMOS recortes da análise (companyId, ano, cartaoId?, tipo?, mes?, parcelas?, natureza?,
+ *   estabelecimento?, obra?, categoria?) e devolve os ITENS individuais (`{ itens[], qtd, total, truncado }`,
+ *   LIMIT 1000). `parcelas`: 1 = à vista (`parcela_total<=1`), >1 = N parcelas exatas, -1 = qualquer parcelado.
+ *   `natureza` força `tipo='encargo'` e usa um CASE SQL que ESPELHA a precedência do `classifEncargo` do front
+ *   (IOF > Anuidade > Juros > Multa/Mora > Seguro > Tarifas > Outros). Usa o helper `ph()` que empilha o param ao
+ *   emitir o placeholder (o `dbExecute` liga params por ORDEM DE APARIÇÃO). Tenant guard `assertCompanyAccess`.
+ *   JOIN `financial_cartao_faturas` (ano/mes/excluido) + LEFT JOIN `financial_cartoes` (banco/final4).
+ * - FRONT (`client/src/pages/financeiro/FinanceiroCartaoCredito.tsx`): state `drill {titulo,sub,filtro}` + helper
+ *   `abrirDrill` + query lazy `cartao.itensDrill` (enabled só com `drill` e aba="gerencial"); `mesNum` adicionado
+ *   ao `evolucao` p/ drill por mês. onClick em: pizza (via índice → `composicao[idx]`), 3 barras de evolução
+ *   (compra/encargo/credito, lendo `d.payload`), barra de perfil (à vista/Nx), linhas de encargo por natureza,
+ *   linhas de estabelecimentos recorrentes, linhas por obra e por categoria — todas com `cursor-pointer`/hover.
+ *   Diálogo com cabeçalho navy (#1B2A4A), resumo (qtd + total), tabela (Data, Descrição/Cidade, Cartão,
+ *   Obra/Categoria, Parcela, Valor) e aviso quando truncado em 1000.
+ * - VALIDAÇÃO: tsc limpo nos 2 arquivos tocados. ZERO mudança de schema/escrita.
+ *
  * Rev. 3359 — **FINANCEIRO / MOVIMENTAÇÃO INTERNA (CNPJs/CPFs DO GRUPO) · AO EDITAR UM REGISTRO SEMEADO E DIGITAR
  * O CNPJ, O "NOME / IDENTIFICAÇÃO" NÃO ERA PREENCHIDO PORQUE O NOME BUSCADO (CADASTRO/RECEITA-BrasilAPI) NÃO
  * SOBRESCREVIA O PLACEHOLDER "(VALIDAR NOME)". AGORA O AUTO-PREENCHIMENTO TRATA O PLACEHOLDER COMO VAZIO E A

@@ -661,6 +661,107 @@ export const cartaoRouter = router({
     };
   }),
 
+  // ── Drill-in: lançamentos por trás de um ponto do gráfico (READ-ONLY) ──
+  // Recebe os MESMOS recortes da `analiseGerencial` (tipo, mês, parcelas,
+  // natureza do encargo, estabelecimento, obra, categoria) e devolve os ITENS
+  // individuais que compõem aquele número. Zero gravação.
+  itensDrill: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    ano: z.number().int(),
+    cartaoId: z.number().optional(),
+    tipo: z.enum(["compra", "encargo", "credito"]).optional(),
+    mes: z.number().int().min(1).max(12).optional(),
+    // 1 = à vista; >1 = N parcelas exatas; -1 = qualquer parcelado (>1)
+    parcelas: z.number().int().optional(),
+    natureza: z.string().max(60).optional(),
+    estabelecimento: z.string().max(255).optional(),
+    obra: z.string().max(255).optional(),
+    categoria: z.string().max(255).optional(),
+  })).query(async ({ input, ctx }) => {
+    await assertCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    // dbExecute liga params por ORDEM DE APARIÇÃO → emitir o placeholder e
+    // empilhar o valor juntos garante o casamento texto↔array.
+    const params: unknown[] = [];
+    let p = 0;
+    const ph = (v: unknown) => { params.push(v); return `$${++p}`; };
+
+    // CASE da natureza do encargo: ESPELHA exatamente a precedência do
+    // classifEncargo do front (IOF > Anuidade > Juros > Multa/Mora > Seguro > Tarifas > Outros).
+    const descUpper = `UPPER(COALESCE(i.descricao,''))`;
+    const naturezaCase = `CASE
+        WHEN ${descUpper} LIKE '%IOF%' THEN 'IOF'
+        WHEN ${descUpper} LIKE '%ANUIDADE%' THEN 'Anuidade'
+        WHEN ${descUpper} LIKE '%JURO%' THEN 'Juros'
+        WHEN ${descUpper} LIKE '%MULTA%' OR ${descUpper} LIKE '%MORA%' THEN 'Multa/Mora'
+        WHEN ${descUpper} LIKE '%SEGURO%' THEN 'Seguro'
+        WHEN ${descUpper} LIKE '%TARIFA%' OR ${descUpper} LIKE '%TAXA%' THEN 'Tarifas'
+        ELSE 'Outros encargos' END`;
+
+    let where = `i.company_id=${ph(input.companyId)} AND i.excluido_em IS NULL AND f.ano_ref=${ph(input.ano)} AND f.excluido_em IS NULL`;
+    if (input.cartaoId != null) where += ` AND i.cartao_id=${ph(input.cartaoId)}`;
+    // natureza só faz sentido em encargo → força o tipo.
+    const tipoEfetivo = input.natureza ? "encargo" : input.tipo;
+    if (tipoEfetivo) where += ` AND i.tipo=${ph(tipoEfetivo)}`;
+    if (input.mes != null) where += ` AND f.mes_ref=${ph(input.mes)}`;
+    if (input.parcelas != null) {
+      if (input.parcelas === 1) where += ` AND COALESCE(i.parcela_total,1)<=1`;
+      else if (input.parcelas === -1) where += ` AND COALESCE(i.parcela_total,1)>1`;
+      else where += ` AND COALESCE(i.parcela_total,1)=${ph(input.parcelas)}`;
+    }
+    if (input.estabelecimento) where += ` AND UPPER(TRIM(i.descricao))=${ph(input.estabelecimento.toUpperCase())}`;
+    if (input.obra) {
+      where += input.obra === "(sem obra)"
+        ? ` AND COALESCE(NULLIF(TRIM(i.obra_nome),''),'(sem obra)')='(sem obra)'`
+        : ` AND TRIM(i.obra_nome)=${ph(input.obra)}`;
+    }
+    if (input.categoria) {
+      where += input.categoria === "(sem categoria)"
+        ? ` AND COALESCE(NULLIF(TRIM(i.categoria_nome),''),'(sem categoria)')='(sem categoria)'`
+        : ` AND TRIM(i.categoria_nome)=${ph(input.categoria)}`;
+    }
+    if (input.natureza) where += ` AND (${naturezaCase})=${ph(input.natureza)}`;
+
+    const BASE = `FROM financial_cartao_itens i
+        JOIN financial_cartao_faturas f ON f.id = i.fatura_id AND f.company_id = i.company_id AND f.excluido_em IS NULL
+        LEFT JOIN financial_cartoes c ON c.id = i.cartao_id AND c.company_id = i.company_id AND c.excluido_em IS NULL
+       WHERE ${where}`;
+
+    const itensR = await dbExecute(db,
+      `SELECT i.id, i.data, i.descricao, i.cidade, i.valor, i.tipo,
+              i.parcela_atual AS "parcelaAtual", i.parcela_total AS "parcelaTotal",
+              i.obra_nome AS "obraNome", i.categoria_nome AS "categoriaNome",
+              i.centro_custo_nome AS "centroCustoNome",
+              f.mes_ref AS "mesRef", f.ano_ref AS "anoRef",
+              c.banco AS "cartaoBanco", c.final4 AS "cartaoFinal4"
+         ${BASE}
+        ORDER BY i.data NULLS LAST, ABS(i.valor) DESC, i.id
+        LIMIT 1000`, [...params]);
+
+    const num = (v: any) => (v != null ? parseFloat(v) : 0) || 0;
+    const itens = itensR.rows.map((r: any) => ({
+      id: Number(r.id),
+      data: r.data ?? null,
+      descricao: r.descricao ?? null,
+      cidade: r.cidade ?? null,
+      valor: num(r.valor),
+      tipo: String(r.tipo || ""),
+      parcelaAtual: r.parcelaAtual != null ? Number(r.parcelaAtual) : null,
+      parcelaTotal: r.parcelaTotal != null ? Number(r.parcelaTotal) : null,
+      obraNome: r.obraNome ?? null,
+      categoriaNome: r.categoriaNome ?? null,
+      centroCustoNome: r.centroCustoNome ?? null,
+      mesRef: r.mesRef != null ? Number(r.mesRef) : null,
+      anoRef: r.anoRef != null ? Number(r.anoRef) : null,
+      cartaoBanco: r.cartaoBanco ?? null,
+      cartaoFinal4: r.cartaoFinal4 ?? null,
+    }));
+    const total = itens.reduce((a, it) => a + it.valor, 0);
+    return { itens, qtd: itens.length, total, truncado: itens.length >= 1000 };
+  }),
+
   excluirFatura: protectedProcedure.input(z.object({
     id: z.number(), companyId: z.number(),
   })).mutation(async ({ input, ctx }) => {
