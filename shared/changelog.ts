@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3347 — **FINANCEIRO / DASHBOARD DE CHEQUES · DRILL-IN POR PRAZO DE COMPENSAÇÃO (E DEMAIS RECORTES): A COLUNA
+ * "STATUS" DA TABELA DE DETALHE AGORA EXIBE UM SELO COLORIDO (COMPENSADO=VERDE, PENDENTE=VERMELHO, INDEFINIDO=ÂMBAR,
+ * DEVOLVIDO/SUSTADO=VERMELHO ESCURO) EM VEZ DE TEXTO CRU — PARA FICAR CLARO NA TELA, NA IMPRESSÃO E NO RELATÓRIO/PDF.
+ * 100% FRONT · UX · READ-ONLY · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário, no iPad, com 1 print do drill-in "Cheques · 1–7 dias / Por prazo de compensação"): "Coloque cor no
+ *   status para ficar claro na impressão e relatório". O status (ex.: "Compensado") aparecia como texto preto cru na
+ *   tabela do drill-in, indistinguível ao imprimir/exportar.
+ * - RAIZ: a coluna "Status" do `COLS` do `DetailDialog` (`DashCheques.tsx`) renderizava apenas `cap(v)` (texto). A tela
+ *   operacional "Controle de Cheques" já tinha selo colorido (`statusBadge`), mas o drill-in do DASHBOARD não.
+ * - CORREÇÃO (`client/src/pages/financeiro/dashboards/DashCheques.tsx`, 100% front): novo helper `statusPill(s)` que
+ *   reusa a MESMA régua de cor dos gráficos (`statusColor` — Rev. 3341: pendente=#ef4444, compensado=#16a34a,
+ *   indefinido=#f59e0b, devolvido/sustado=#b91c1c) e renderiza um selo arredondado com texto branco. A coluna "Status"
+ *   passa a `align:"center"` e `format:(_v,row)=>statusPill(statusEf(row))` — usa o status EFETIVO (compensado-por-data
+ *   conta como Compensado, igual ao resto do dashboard). `printColorAdjust:"exact"` + `WebkitPrintColorAdjust:"exact"`
+ *   inline GARANTEM que a cor de fundo saia na IMPRESSÃO/PDF (sem isso o browser descarta backgrounds no print).
+ * - ESCOPO: 1 arquivo front. Sem backend/schema/ALTER/DROP/DELETE. tsc limpo.
+ * - ARQUIVOS: `client/src/pages/financeiro/dashboards/DashCheques.tsx`, `shared/version.ts` (3347),
+ *   `shared/changelog.ts`, `replit.md`, `replit-history.md`.
+ *
  * Rev. 3346 — **FINANCEIRO / DASHBOARD DE CONCILIAÇÃO BANCÁRIA · CONFERÊNCIA TOTAL DE ENTRADAS E SAÍDAS: AGORA OS
  * CARDS "ENTRADAS (CRÉDITOS)", "SAÍDAS (DÉBITOS)" E "SALDO LÍQUIDO" ABREM TODAS AS LINHAS INDIVIDUAIS DO EXTRATO
  * (TODAS AS CONTAS) PARA ANÁLISE — ANTES ABRIAM APENAS O RESUMO POR CONTA. 1 BACKEND (READ-ONLY) + 1 FRONT ·

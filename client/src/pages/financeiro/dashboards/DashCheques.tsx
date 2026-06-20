@@ -27,6 +27,21 @@ const statusColor = (s: string): string | null => {
 };
 const dataBR = (d?: string) => (d ? String(d).slice(0, 10).split("-").reverse().join("/") : "—");
 
+// Rev. 3347 — selo de status COLORIDO p/ o drill-in (e impressão/relatório). Usa a MESMA
+// régua de cor dos gráficos (statusColor): pendente=vermelho, compensado=verde, indefinido=âmbar,
+// devolvido/sustado=vermelho escuro. `print-color-adjust:exact` inline garante a cor no print/PDF.
+const statusPill = (s: string) => {
+  const cor = statusColor(s) ?? "#64748b"; // slate fallback
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white whitespace-nowrap"
+      style={{ backgroundColor: cor, printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" } as any}
+    >
+      {cap(s)}
+    </span>
+  );
+};
+
 // Status EFETIVO do cheque — espelha a tela "Controle de Cheques" (FinanceiroCheques: jaCompensado).
 // Um cheque com data de compensação preenchida conta como COMPENSADO mesmo que a coluna `status`
 // ainda esteja "pendente" (era a causa de "compensados não aparecerem nos gráficos").
@@ -60,7 +75,7 @@ const COLS: DetailColumn[] = [
   { key: "bancoNome", label: "Banco", format: (v) => v || "—" },
   { key: "dataVencimento", label: "Vencimento", format: (v) => dataBR(v) },
   { key: "dataCompensacao", label: "Compensação", format: (v) => dataBR(v) },
-  { key: "status", label: "Status", format: (v) => cap(v) },
+  { key: "status", label: "Status", align: "center", format: (_v, row) => statusPill(statusEf(row)) },
   { key: "valor", label: "Valor", align: "right", brl: true },
 ];
 
