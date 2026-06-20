@@ -162,7 +162,10 @@ export default function DashCheques() {
     return { qtd, total, ticket, qtdDevol: devol.length, valDevol, taxaDevol, qtdConc: conc.length, pctConc, prazoMedio: nDias > 0 ? somaDias / nDias : null, nDias };
   }, [cheques]);
 
-  const statusKeys = useMemo(() => Array.from(new Set(cheques.map((c) => statusEf(c)))), [cheques]);
+  const statusKeys = useMemo(() => {
+    const rank = (s: string) => { const t = String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim(); if (t.includes("compens")) return 0; if (t.includes("pend")) return 1; return 2; };
+    return Array.from(new Set(cheques.map((c) => statusEf(c)))).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  }, [cheques]);
   const evolStatus = useMemo(() => {
     const base = MESES_ABREV.map((m) => { const o: any = { mes: m }; statusKeys.forEach((k) => (o[cap(k)] = 0)); return o; });
     for (const c of cheques) { const mi = (Number(c.mes) || 0) - 1; if (mi < 0 || mi > 11) continue; base[mi][cap(statusEf(c))] += Number(c.valor) || 0; }

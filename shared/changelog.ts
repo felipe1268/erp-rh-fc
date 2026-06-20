@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3350 — **FINANCEIRO / DASHBOARD DE CHEQUES · GRÁFICO "EVOLUÇÃO MENSAL POR STATUS": O VERDE (COMPENSADO)
+ * AGORA FICA NA BASE DA BARRA EMPILHADA E AS DEMAIS SITUAÇÕES (PENDENTE / INDEFINIDO) SOBEM POR CIMA DELE —
+ * ANTES A ORDEM DO EMPILHAMENTO SEGUIA A ORDEM EM QUE OS STATUS APARECIAM NOS DADOS (VARIÁVEL/IMPREVISÍVEL).
+ * 100% FRONT · UX · READ-ONLY · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * - PEDIDO (usuário, no iPad, com print do gráfico "Evolução mensal por status"): "Verde começa e depois sobre
+ *   ele vem as demais" — ou seja, Compensado (verde) deve ser a base da barra e Pendente/Indefinido empilham acima.
+ * - RAIZ: as `<Bar stackId="st">` eram geradas a partir de `statusKeys`, que vinha de
+ *   `Array.from(new Set(cheques.map(statusEf)))` — ou seja, a ordem do empilhamento (a 1ª Bar fica na BASE no
+ *   Recharts) dependia da ordem em que cada situação aparecia na lista de cheques, podendo colocar Pendente
+ *   (vermelho) na base.
+ * - CORREÇÃO (`client/src/pages/financeiro/dashboards/DashCheques.tsx`, 100% front): `statusKeys` passou a ser
+ *   ORDENADO por um `rank` fixo — `compens`→0 (base), `pend`→1, demais (`indefin`/vazio)→2 — com desempate por
+ *   `localeCompare`. Como a 1ª `<Bar>` do stack fica embaixo, o Compensado (verde) vira a base e Pendente/Indefinido
+ *   sobem por cima. Cores (`statusColor`) e o clique de drill por segmento (mês + situação) inalterados; a legenda
+ *   passa a seguir a mesma ordem.
+ *
  * Rev. 3349 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA (DASHBOARD + PANORAMA GERAL) · OS TOTAIS "ENTRADAS / SAÍDAS /
  * SALDO" AGORA MOSTRAM O CAIXA REAL (EXTERNO): A MOVIMENTAÇÃO INTERNA (TRANSFERÊNCIA ENTRE CONTAS DA PRÓPRIA FC,
  * VARREDURA DE APLICAÇÃO/RESGATE E PIX/TED INTRA-FC) FOI TIRADA DOS TOTAIS E GANHOU UM CARD SEPARADO
