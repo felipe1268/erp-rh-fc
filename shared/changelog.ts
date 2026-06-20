@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3371 — **FINANCEIRO / DASHBOARD "CONTROLE DE CHEQUES" · GRÁFICOS DE PIZZA (DONUT) "CHEQUES POR STATUS" E
+ * "DEVOLVIDOS POR MOTIVO" VIRARAM GRÁFICOS DE COLUNAS/BARRAS, PARA FICAR MAIS LEGÍVEL E ORGANIZADO (PREFERÊNCIA DO
+ * USUÁRIO POR GRÁFICOS DE COLUNAS). 100% FRONT (TROCA DE TIPO DE GRÁFICO) · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE ·
+ * NADA CONCILIA/BAIXA SOZINHO.**
+ * - PEDIDO (print do iPad na tela "Dashboard · Controle de Cheques", mostrando os dois donuts no topo e na seção
+ *   "Cheques devolvidos"): "Quero gráficos melhores e mais organizado gosto dos gráficos de colunas." Ou seja: trocar
+ *   os gráficos de pizza/rosca por gráficos de colunas/barras, que o usuário considera mais limpos e organizados.
+ * - FIX (`client/src/pages/financeiro/dashboards/DashCheques.tsx`), SÓ TROCA DE COMPONENTE DE GRÁFICO (mesmos dados,
+ *   mesmas cores, mesmo drill-in):
+ *   (1) "Cheques por status" (`porStatus`): de `<PieChart>/<Pie>` (donut innerRadius 55) para `<BarChart>` de COLUNAS
+ *       VERTICAIS (CartesianGrid + XAxis dataKey="name" + YAxis tickFormatter={formatBRLCompact} width 70 + Tooltip
+ *       BRLTooltip), com `<Cell>` por item mantendo `statusColor(_key)` (pendente=vermelho/compensado=verde/
+ *       indefinido=âmbar) e fallback PALETTE. Clique na coluna abre o mesmo drill (`abrir` filtrando `statusEf === _key`)
+ *       via helper `barClick(st, build)`.
+ *   (2) "Devolvidos por motivo" (`devPorMotivo`): de donut para `<BarChart layout="vertical">` (BARRAS HORIZONTAIS —
+ *       rótulos longos como "Irregularidade no cheque"/"Impedimento ao pagamento" ficam legíveis), XAxis type="number"
+ *       tickFormatter={formatBRLCompact}, YAxis type="category" dataKey="name" width 150, `<Cell>` por item mantendo
+ *       `devMotivoCor(name)`. Clique abre `abrirDev` filtrando `devMotivoLabel === name`.
+ *   Os gráficos "Conferência com o extrato" e "Situação dos devolvidos" JÁ eram de barras e não mudaram.
+ * - LIMPEZA: `PieChart` e `Pie` removidos do import de `recharts` (sem mais uso); `Legend` permanece (gráfico
+ *   empilhado "Evolução mensal por status" ainda usa). `Cell` permanece.
+ * - PREFERÊNCIA RESPEITADA: conciliação SÓ SUGESTIVA — os gráficos são puramente informativos; NADA concilia/baixa.
+ * - VALIDAÇÃO: tsc limpo no arquivo tocado (só ruído pré-existente em `changelog.ts`). App rodando, Neon conectado.
+ *
  * Rev. 3370 — **FINANCEIRO / DASHBOARD "CONTROLE DE CHEQUES" · NOVA SEÇÃO "CHEQUES DEVOLVIDOS" QUE MOSTRA OS CHEQUES
  * SEM FUNDO, SUSTADOS, JÁ COMPENSADOS DEPOIS E OUTROS MOTIVOS — COM KPIs, GRÁFICO POR MOTIVO (PIZZA) E POR SITUAÇÃO
  * (BARRA) + DRILL-IN POR CHEQUE (Nº, FORNECEDOR/OBRA/NF, MOTIVO, DATAS, SITUAÇÃO). 100% FRONT (NOVA QUERY READ-ONLY

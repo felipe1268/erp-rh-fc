@@ -4,8 +4,7 @@ import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useCompany } from "@/hooks/useCompany";
 import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  PieChart, Pie, Cell,
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Cell,
 } from "recharts";
 import { Banknote, ListChecks, CheckCircle2, AlertTriangle, Wallet, Receipt, Clock, BarChart3, Ban, XCircle } from "lucide-react";
 import {
@@ -327,18 +326,19 @@ export default function DashCheques() {
         ) : (
           <>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <ChartCard title="Cheques por status" subtitle="Clique numa fatia para detalhar" onOpen={ir}>
+              <ChartCard title="Cheques por status" subtitle="Clique numa coluna para detalhar" onOpen={ir}>
                 {porStatus.length === 0 ? <EmptyState /> : (
                   <ResponsiveContainer>
-                    <PieChart>
-                      <Pie data={porStatus} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={95}
-                        innerRadius={55} paddingAngle={2}
-                        onClick={(d: any) => { const k = d?.payload?._key; abrir(`Cheques · ${d?.payload?.name}`, "Por situação", cheques.filter((c) => statusEf(c) === k)); }}>
-                        {porStatus.map((s, i) => <Cell key={i} fill={statusColor(s._key) ?? PALETTE[i % PALETTE.length]} className="cursor-pointer" />)}
-                      </Pie>
-                      <Tooltip content={<BRLTooltip />} />
-                      <Legend wrapperStyle={{ fontSize: 12 }} />
-                    </PieChart>
+                    <BarChart data={porStatus} margin={{ top: 8, right: 8, left: 4, bottom: 0 }}
+                      onClick={(st) => barClick(st, (l) => { const b = porStatus.find((x) => x.name === l); if (b) abrir(`Cheques · ${b.name}`, "Por situação", cheques.filter((c) => statusEf(c) === b._key)); })}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
+                      <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} interval={0} />
+                      <YAxis tickFormatter={formatBRLCompact} tick={{ fontSize: 11, fill: "#64748b" }} width={70} />
+                      <Tooltip content={<BRLTooltip />} cursor={{ fill: "#f1f5f9" }} />
+                      <Bar dataKey="value" name="Valor" radius={[4, 4, 0, 0]} maxBarSize={64} className="cursor-pointer">
+                        {porStatus.map((s, i) => <Cell key={i} fill={statusColor(s._key) ?? PALETTE[i % PALETTE.length]} />)}
+                      </Bar>
+                    </BarChart>
                   </ResponsiveContainer>
                 )}
               </ChartCard>
@@ -386,17 +386,19 @@ export default function DashCheques() {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <ChartCard title="Devolvidos por motivo" subtitle="Clique numa fatia para detalhar" onOpen={ir}>
+                  <ChartCard title="Devolvidos por motivo" subtitle="Clique numa barra para detalhar" onOpen={ir}>
                     {devPorMotivo.length === 0 ? <EmptyState /> : (
                       <ResponsiveContainer>
-                        <PieChart>
-                          <Pie data={devPorMotivo} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={95} innerRadius={55} paddingAngle={2}
-                            onClick={(d: any) => { const l = d?.payload?.name; abrirDev(`Devolvidos · ${l}`, "Por motivo de devolução", devolvidos.filter((x) => devMotivoLabel(x) === l)); }}>
-                            {devPorMotivo.map((s, i) => <Cell key={i} fill={devMotivoCor(s.name)} className="cursor-pointer" />)}
-                          </Pie>
-                          <Tooltip content={<BRLTooltip />} />
-                          <Legend wrapperStyle={{ fontSize: 12 }} />
-                        </PieChart>
+                        <BarChart data={devPorMotivo} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}
+                          onClick={(st) => barClick(st, (l) => abrirDev(`Devolvidos · ${l}`, "Por motivo de devolução", devolvidos.filter((x) => devMotivoLabel(x) === l)))}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" horizontal={false} />
+                          <XAxis type="number" tickFormatter={formatBRLCompact} tick={{ fontSize: 11, fill: "#64748b" }} />
+                          <YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 11, fill: "#475569" }} />
+                          <Tooltip content={<BRLTooltip />} cursor={{ fill: "#f1f5f9" }} />
+                          <Bar dataKey="value" name="Valor" radius={[0, 4, 4, 0]} maxBarSize={26} className="cursor-pointer">
+                            {devPorMotivo.map((s, i) => <Cell key={i} fill={devMotivoCor(s.name)} />)}
+                          </Bar>
+                        </BarChart>
                       </ResponsiveContainer>
                     )}
                   </ChartCard>
