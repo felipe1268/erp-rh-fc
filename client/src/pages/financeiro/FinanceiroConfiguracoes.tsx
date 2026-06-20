@@ -13,10 +13,19 @@ import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { Settings, Users, Plus, Save, RefreshCw, UserCheck, CheckCircle2, Edit3, Loader2,
   Calculator, Receipt, Landmark, Briefcase, Info, AlertCircle, TrendingUp, Wallet, Lightbulb,
-  PiggyBank, BadgePercent, Sparkles, Zap } from "lucide-react";
+  PiggyBank, BadgePercent, Sparkles, Zap, ArrowLeftRight, Building2, Trash2, Power } from "lucide-react";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+}
+
+// Rev. 3351 — só dígitos + máscara CNPJ (14) / CPF (11) p/ exibição da base interna.
+function soDigitos(v: string) { return (v || "").replace(/\D/g, ""); }
+function formatDoc(v: string) {
+  const d = soDigitos(v);
+  if (d.length === 14) return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+  if (d.length === 11) return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4");
+  return d || v || "";
 }
 
 // Rev. 2094 — Defaults brasileiros típicos por regime tributário.
@@ -194,6 +203,42 @@ export default function FinanceiroConfiguracoes() {
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
 
+  // ── Rev. 3351 — Base de CNPJs/CPFs internos (movimentação que NÃO é caixa real) ──
+  const [showCnpjDlg, setShowCnpjDlg] = useState(false);
+  const [cnpjEditId, setCnpjEditId] = useState<number | null>(null);
+  const [cnpjForm, setCnpjForm] = useState({ cnpj: "", nome: "", observacao: "" });
+  const { data: internalCnpjs, refetch: refetchCnpjs } = (trpc as any).financial.listInternalCnpjs.useQuery(
+    { companyId, includeInactive: true },
+    { enabled: !!companyId }
+  );
+  function resetCnpjForm() { setCnpjForm({ cnpj: "", nome: "", observacao: "" }); setCnpjEditId(null); }
+  function openCnpjEdit(row: any) {
+    setCnpjEditId(row.id);
+    setCnpjForm({ cnpj: row.cnpj ?? "", nome: row.nome ?? "", observacao: row.observacao ?? "" });
+    setShowCnpjDlg(true);
+  }
+  const createCnpjMut = (trpc as any).financial.createInternalCnpj.useMutation({
+    onSuccess: () => { toast({ title: "CNPJ interno cadastrado!" }); setShowCnpjDlg(false); resetCnpjForm(); refetchCnpjs(); },
+    onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+  const updateCnpjMut = (trpc as any).financial.updateInternalCnpj.useMutation({
+    onSuccess: () => { toast({ title: "CNPJ interno atualizado!" }); setShowCnpjDlg(false); resetCnpjForm(); refetchCnpjs(); },
+    onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+  const deleteCnpjMut = (trpc as any).financial.deleteInternalCnpj.useMutation({
+    onSuccess: () => { toast({ title: "CNPJ interno inativado." }); refetchCnpjs(); },
+    onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+  function handleSaveCnpj() {
+    const digits = soDigitos(cnpjForm.cnpj);
+    if (digits.length < 6) { toast({ title: "CNPJ/CPF inválido", description: "Informe ao menos 6 dígitos (ideal: a raiz de 8 do CNPJ).", variant: "destructive" }); return; }
+    if (cnpjEditId) {
+      updateCnpjMut.mutate({ id: cnpjEditId, companyId, cnpj: digits, nome: cnpjForm.nome || null, observacao: cnpjForm.observacao || null });
+    } else {
+      createCnpjMut.mutate({ companyId, cnpj: digits, nome: cnpjForm.nome || undefined, observacao: cnpjForm.observacao || undefined });
+    }
+  }
+
   function handleSaveTax() {
     updateTaxMut.mutate({
       companyId,
@@ -302,6 +347,9 @@ export default function FinanceiroConfiguracoes() {
             </TabsTrigger>
             <TabsTrigger value="socios" className="data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 gap-1.5">
               <Users className="w-4 h-4" />Sócios / Pró-labore
+            </TabsTrigger>
+            <TabsTrigger value="interno" className="data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 gap-1.5">
+              <ArrowLeftRight className="w-4 h-4" />Movimentação Interna
             </TabsTrigger>
           </TabsList>
 
@@ -516,6 +564,94 @@ export default function FinanceiroConfiguracoes() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* ===================== ABA MOVIMENTAÇÃO INTERNA (Rev. 3351) ===================== */}
+          <TabsContent value="interno" className="mt-4 space-y-4">
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <ArrowLeftRight className="w-4 h-4 text-indigo-600" />CNPJs / CPFs do Grupo (Movimentação Interna)
+                    </CardTitle>
+                    <p className="text-xs text-gray-500 mt-1 max-w-2xl leading-relaxed">
+                      Cadastre aqui os CNPJs/CPFs das <strong>empresas do próprio grupo</strong> (e contas ligadas).
+                      Movimentações de e para esses documentos <strong>não contam como caixa real</strong> na Conciliação
+                      Bancária — são tratadas como <strong>movimentação interna</strong>, de forma simétrica (entrada <em>e</em> saída).
+                      Dica: cadastre só a <strong>raiz de 8 dígitos</strong> do CNPJ para pegar todas as filiais.
+                    </p>
+                  </div>
+                  <Button onClick={() => { resetCnpjForm(); setShowCnpjDlg(true); }} disabled={!companyId} className="bg-indigo-600 hover:bg-indigo-700 text-white flex-shrink-0">
+                    <Plus className="w-4 h-4 mr-1.5" />Novo CNPJ/CPF
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {(internalCnpjs ?? []).length === 0 ? (
+                  <div className="text-center py-10 text-gray-400">
+                    <Building2 className="w-10 h-10 mx-auto mb-2 opacity-40" />
+                    <p className="text-sm">Nenhum CNPJ/CPF interno cadastrado.</p>
+                    <p className="text-xs mt-1">Cadastre as empresas do grupo para separar o caixa real da movimentação interna.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-[11px] uppercase tracking-wide text-gray-400 border-b">
+                          <th className="py-2 pr-3 font-medium">Documento</th>
+                          <th className="py-2 pr-3 font-medium">Nome / Identificação</th>
+                          <th className="py-2 pr-3 font-medium">Observação</th>
+                          <th className="py-2 pr-3 font-medium text-center">Situação</th>
+                          <th className="py-2 pl-3 font-medium text-right">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(internalCnpjs ?? []).map((row: any) => {
+                          const ativo = Number(row.ativo) !== 0;
+                          return (
+                            <tr key={row.id} className={`border-b last:border-0 ${ativo ? "" : "opacity-50"}`}>
+                              <td className="py-2 pr-3 font-mono text-[13px] text-gray-800 whitespace-nowrap">{formatDoc(row.cnpj)}</td>
+                              <td className="py-2 pr-3 text-gray-700">{row.nome || <span className="text-gray-300">—</span>}</td>
+                              <td className="py-2 pr-3 text-gray-500 text-xs max-w-[260px] truncate" title={row.observacao || ""}>{row.observacao || <span className="text-gray-300">—</span>}</td>
+                              <td className="py-2 pr-3 text-center">
+                                {ativo
+                                  ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5 text-[11px] font-medium">Ativo</span>
+                                  : <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 text-gray-500 px-2 py-0.5 text-[11px] font-medium">Inativo</span>}
+                              </td>
+                              <td className="py-2 pl-3 text-right whitespace-nowrap">
+                                <Button variant="ghost" size="sm" className="h-7 px-2 text-gray-500 hover:text-indigo-700" onClick={() => openCnpjEdit(row)}>
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </Button>
+                                {ativo ? (
+                                  <Button variant="ghost" size="sm" className="h-7 px-2 text-gray-500 hover:text-red-600" disabled={deleteCnpjMut.isPending}
+                                    onClick={() => deleteCnpjMut.mutate({ id: row.id, companyId })}>
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                ) : (
+                                  <Button variant="ghost" size="sm" className="h-7 px-2 text-gray-500 hover:text-emerald-700" disabled={updateCnpjMut.isPending}
+                                    onClick={() => updateCnpjMut.mutate({ id: row.id, companyId, ativo: true })}>
+                                    <Power className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <div className="mt-4 bg-amber-50 border border-amber-100 rounded-lg p-3 text-[11px] text-amber-800 leading-relaxed flex gap-2">
+                  <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <span>
+                    Um lançamento específico que bate nessa base mas é, na verdade, um <strong>crédito efetivo</strong>
+                    (ex.: empréstimo entre empresas, capitalização) pode ser marcado individualmente como
+                    "efetivo" direto no drill-in da <strong>Conciliação Bancária</strong> — sem precisar mexer nesta lista.
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
 
         {/* Modal novo sócio — Rev. 2093: regras de ouro + seletor de funcionários sócios (Colaboradores) */}
@@ -671,6 +807,73 @@ export default function FinanceiroConfiguracoes() {
                 className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 {createPartnerMut.isPending ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Salvando…</> : <><Plus className="w-3.5 h-3.5 mr-1.5" />Cadastrar Sócio</>}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal CNPJ/CPF interno — Rev. 3351 */}
+        <Dialog open={showCnpjDlg} onOpenChange={(v) => { if (!v) { setShowCnpjDlg(false); resetCnpjForm(); } else setShowCnpjDlg(true); }}>
+          <DialogContent className="max-w-md p-0 overflow-hidden">
+            <div className="px-5 pt-4 pb-3 bg-gradient-to-br from-indigo-600 to-violet-600 text-white">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-lg bg-white/15 ring-2 ring-white/30 flex items-center justify-center">
+                  <ArrowLeftRight className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold">{cnpjEditId ? "Editar CNPJ/CPF interno" : "Novo CNPJ/CPF interno"}</h3>
+                  <p className="text-[11px] text-indigo-100">Empresa do grupo — movimentação não conta como caixa real</p>
+                </div>
+              </div>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <div>
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">CNPJ / CPF *</label>
+                <Input
+                  value={cnpjForm.cnpj}
+                  onChange={e => setCnpjForm(f => ({ ...f, cnpj: e.target.value }))}
+                  placeholder="00.000.000/0000-00 ou raiz de 8 dígitos"
+                  className="mt-1 h-9 font-mono"
+                  inputMode="numeric"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  {soDigitos(cnpjForm.cnpj).length >= 6
+                    ? <>Será salvo como <span className="font-mono text-gray-600">{soDigitos(cnpjForm.cnpj)}</span> ({formatDoc(cnpjForm.cnpj)}).</>
+                    : "Informe ao menos 6 dígitos. Dica: a raiz de 8 dígitos do CNPJ pega todas as filiais."}
+                </p>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Nome / Identificação</label>
+                <Input
+                  value={cnpjForm.nome}
+                  onChange={e => setCnpjForm(f => ({ ...f, nome: e.target.value }))}
+                  placeholder="Ex.: FC Engenharia, Imobiliária do grupo…"
+                  className="mt-1 h-9"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Observação</label>
+                <Input
+                  value={cnpjForm.observacao}
+                  onChange={e => setCnpjForm(f => ({ ...f, observacao: e.target.value }))}
+                  placeholder="Opcional — motivo, vínculo…"
+                  className="mt-1 h-9"
+                />
+              </div>
+            </div>
+            <DialogFooter className="px-5 pb-4">
+              <Button type="button" variant="outline" onClick={() => { setShowCnpjDlg(false); resetCnpjForm(); }} disabled={createCnpjMut.isPending || updateCnpjMut.isPending}>
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                onClick={handleSaveCnpj}
+                disabled={createCnpjMut.isPending || updateCnpjMut.isPending || soDigitos(cnpjForm.cnpj).length < 6}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white"
+              >
+                {(createCnpjMut.isPending || updateCnpjMut.isPending)
+                  ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Salvando…</>
+                  : <><Save className="w-3.5 h-3.5 mr-1.5" />{cnpjEditId ? "Salvar" : "Cadastrar"}</>}
               </Button>
             </DialogFooter>
           </DialogContent>

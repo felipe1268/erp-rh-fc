@@ -865,6 +865,40 @@ Regras:
           console.log(`[SyncSchema+] Tabela dds_participacoes_terceiros garantida.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA dds_participacoes_terceiros:`, e?.message || e); }
 
+        // Rev. 3351 — MOVIMENTAÇÃO INTERNA configurável: base de CNPJs/CPFs do grupo +
+        // exceção por lançamento. Aditivo (CREATE TABLE IF NOT EXISTS — R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS financial_internal_cnpjs (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              cnpj VARCHAR(20) NOT NULL,
+              nome VARCHAR(255),
+              observacao TEXT,
+              ativo SMALLINT DEFAULT 1 NOT NULL,
+              criado_por VARCHAR(255),
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+              updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_fic_company ON financial_internal_cnpjs(company_id)`);
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS financial_internal_overrides (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              line_id INTEGER NOT NULL,
+              natureza VARCHAR(20) NOT NULL,
+              motivo TEXT,
+              criado_por VARCHAR(255),
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+              updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_fio_company ON financial_internal_overrides(company_id)`);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_fio_company_line ON financial_internal_overrides(company_id, line_id)`);
+          console.log(`[SyncSchema+] Rev. 3351: tabelas financial_internal_cnpjs + financial_internal_overrides garantidas (movimentação interna configurável).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 3351 movimentação interna:`, e?.message || e); }
+
         // Rev. 3051 — Unificação dos sócios: company_partners ganha employee_id para
         // vincular o registro financeiro (pró-labore/%/PIX) ao colaborador sócio
         // (employees tipoContrato='Socio'), tornando o painel "Configurações → Sócios"

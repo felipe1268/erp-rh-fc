@@ -1,6 +1,47 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3351 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · A "MOVIMENTAÇÃO INTERNA" (DINHEIRO QUE SÓ GIRA ENTRE AS
+ * CONTAS/EMPRESAS DA PRÓPRIA FC) AGORA TEM UMA BASE DE CNPJs/CPFs CADASTRÁVEL (NOVA ABA EM CONFIGURAÇÕES
+ * FINANCEIRAS) — ALÉM DA HEURÍSTICA POR TEXTO DA Rev. 3349. A CLASSIFICAÇÃO É SIMÉTRICA (VALE PARA ENTRADA E
+ * SAÍDA) E CADA LANÇAMENTO PODE TER UMA EXCEÇÃO MANUAL ("MARCAR COMO EFETIVO: EMPRÉSTIMO/CAPITALIZAÇÃO" OU
+ * "MARCAR COMO INTERNO") COM MOTIVO OBRIGATÓRIO, REVISÁVEL PELO DRILL-IN. 2 TABELAS NOVAS (SELF-HEAL) +
+ * BACKEND READ-ONLY/CRUD + 3 FRONTS · CLASSIFICAÇÃO · ZERO ALTER/DROP/DELETE EM DADOS EXISTENTES.**
+ * - PEDIDO (usuário): a heurística por texto (Rev. 3349) é um bom começo, mas as transferências entre as
+ *   empresas do grupo (CNPJs distintos) não caem na regra de texto. Quer uma LISTA CADASTRÁVEL de CNPJs internos
+ *   (revisável: incluir/excluir), classificação valendo nos DOIS sentidos (entrada e saída), e a possibilidade de
+ *   marcar um lançamento específico como "efetivo" mesmo casando com a regra (ex.: um crédito de empréstimo/
+ *   capitalização de sócio que ENTRA de verdade no caixa) — com motivo. Semear a base com os CNPJs já identificados;
+ *   o usuário valida/exclui depois.
+ * - MODELAGEM (self-heal `[SyncSchema+]` em `server/_core/index.ts` + `drizzle/schema.ts`): duas tabelas novas,
+ *   ambas só com `CREATE TABLE IF NOT EXISTS` (nada toca dado existente). `financial_internal_cnpjs`
+ *   (company_id, cnpj[só dígitos], nome, observacao, ativo, criado_por, timestamps) = a base de CNPJs/CPFs do grupo;
+ *   `financial_internal_overrides` (company_id, line_id→bank_statement_lines.id, natureza['efetivo'|'interno'|'auto'],
+ *   motivo, criado_por, timestamps, UNIQUE(company_id,line_id)) = a exceção por lançamento.
+ * - BACKEND (`server/routers/financial.ts`, FONTE ÚNICA p/ não divergir): `_loadInternoConfig(db,companyId)` carrega
+ *   num único load os dígitos ativos + o mapa de overrides; o predicado SQL passou a ser a regex base da Rev. 3349
+ *   (`descricao ~* '<src>'`) OR "dígitos da descrição contêm qualquer CNPJ cadastrado"
+ *   (`regexp_replace(descricao,'[^0-9]','','g') LIKE '%<cnpj>%'`), e o helper JS `_isLancInterno` espelha a MESMA
+ *   lógica; SOBRE isso aplica-se o override por id (efetivo→nunca interno; interno→sempre interno; auto→regra). Os 3
+ *   endpoints READ-ONLY (`getConciliacaoReportGeral`, `getConciliacaoLancamentos`, `getBankAccountsConciliacaoStatus`)
+ *   já consomem essa config; `getConciliacaoReportGeral` ainda devolve `overrideNatureza` por linha p/ o badge. CRUD:
+ *   `listInternalCnpjs`/`createInternalCnpj`/`updateInternalCnpj`/`deleteInternalCnpj` (soft `ativo=0`) e
+ *   `setLancamentoNatureza` (upsert do override; `auto` = limpar; motivo obrigatório p/ efetivo/interno). Todos com
+ *   `_assertFinanceiroCompanyAccess` (tenant guard).
+ * - FRONTS: (1) nova aba "Movimentação Interna" em `FinanceiroConfiguracoes.tsx` (tabela + dialog com máscara
+ *   CNPJ/CPF, nome, observação, ativar/desativar). (2) Componente compartilhado `_NaturezaOverride.tsx`
+ *   (`NaturezaBadge` + `NaturezaOverrideDialog`) usado nos drill-ins. (3) `DashConciliacao.tsx` e
+ *   `FinanceiroConciliacao.tsx` ganham, nas listas de lançamentos do drill-in, o selo de natureza + o botão
+ *   "Classificar" (efetivo/interno/auto + motivo) → ao salvar, refazem as queries de conciliação.
+ * - SEED (company 60002, no Neon): 61423062000109, 39411544000181, 09014246000197, 17235263000182,
+ *   29353906000171 (FC própria), 52013165000100, 23999351000153 e o CPF 23404688848 — todos `ativo=1` com rótulo
+ *   "validar". (Os PIX de arranjo de pagamento 00360305/90400888/60701190 foram DELIBERADAMENTE NÃO semeados — são
+ *   instituições de pagamento, não empresas do grupo.)
+ * - VALIDAÇÃO (Neon, company 60002, 2026): com a base semeada, a movimentação interna sobe de ~31,8% (só texto,
+ *   Rev. 3349) para ~43,7% do giro bruto (394 de 2.841 linhas); caixa real = Entradas externas R$ 4.362.797,59 e
+ *   Saídas externas R$ 12.465.225,53. Nada é ocultado/baixado — só classificado; o usuário revisa pela nova aba e
+ *   pelas exceções por lançamento.
+ *
  * Rev. 3350 — **FINANCEIRO / DASHBOARD DE CHEQUES · GRÁFICO "EVOLUÇÃO MENSAL POR STATUS": O VERDE (COMPENSADO)
  * AGORA FICA NA BASE DA BARRA EMPILHADA E AS DEMAIS SITUAÇÕES (PENDENTE / INDEFINIDO) SOBEM POR CIMA DELE —
  * ANTES A ORDEM DO EMPILHAMENTO SEGUIA A ORDEM EM QUE OS STATUS APARECIAM NOS DADOS (VARIÁVEL/IMPREVISÍVEL).

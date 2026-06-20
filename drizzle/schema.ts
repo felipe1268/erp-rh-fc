@@ -7409,6 +7409,44 @@ export const financialCostCenters = pgTable("financial_cost_centers", {
   createdAt: timestamp({ mode: "string" }).defaultNow().notNull(),
 }, (t) => [index("idx_fcc_company").on(t.companyId)]);
 
+// Rev. 3351 — Base configurável de CNPJs/CPFs que representam MOVIMENTAÇÃO INTERNA
+// (transferência entre contas do próprio grupo FC, capitalização entre empresas-irmãs,
+// PIX/TED intra-grupo). A Conciliação consulta esta base e NÃO conta esses lançamentos
+// como caixa real (externo) — aplicado SIMETRICAMENTE em entrada E saída p/ corrigir a
+// assimetria da heurística por regex (que pegava o crédito mas não a perna do débito).
+// `cnpj` guarda só DÍGITOS (sem máscara); o match é "dígitos da descrição CONTÊM os dígitos
+// cadastrados" (registrar a raiz de 8 dígitos pega todas as filiais).
+export const financialInternalCnpjs = pgTable("financial_internal_cnpjs", {
+  id: serial().notNull(),
+  companyId: integer("company_id").notNull(),
+  cnpj: varchar({ length: 20 }).notNull(),
+  nome: varchar({ length: 255 }),
+  observacao: text(),
+  ativo: smallint().default(1).notNull(),
+  criadoPor: varchar("criado_por", { length: 255 }),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [index("idx_fic_company").on(t.companyId)]);
+
+// Rev. 3351 — EXCEÇÃO por lançamento: o usuário pode dizer que um lançamento específico,
+// embora bata na base interna, é na verdade um CRÉDITO EFETIVO (ex.: empréstimo da empresa X
+// p/ a Y, capitalização) — ou o contrário (forçar interno). `natureza`: 'efetivo' tira do
+// interno (volta p/ caixa real) · 'interno' força interno · 'auto' = sem exceção (volta à
+// regra automática). `line_id` = bank_statement_lines.id.
+export const financialInternalOverrides = pgTable("financial_internal_overrides", {
+  id: serial().notNull(),
+  companyId: integer("company_id").notNull(),
+  lineId: integer("line_id").notNull(),
+  natureza: varchar({ length: 20 }).notNull(),
+  motivo: text(),
+  criadoPor: varchar("criado_por", { length: 255 }),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_fio_company").on(t.companyId),
+  uniqueIndex("uq_fio_company_line").on(t.companyId, t.lineId),
+]);
+
 // 7. Extrato bancário (conciliação)
 export const bankStatementLines = pgTable("bank_statement_lines", {
   id: serial().notNull(),

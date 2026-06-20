@@ -731,6 +731,57 @@ function _isLancInterno(descricao: any): boolean {
   return _internoRegex.test(String(descricao || ""));
 }
 
+// Rev. 3351 — Config de MOVIMENTAÇÃO INTERNA por empresa: a base de CNPJs/CPFs cadastrada
+// (financial_internal_cnpjs, ativos) + as exceções por lançamento (financial_internal_overrides).
+// Tudo num único load por request p/ o SQL agregado e o JS NÃO divergirem. Tolerante a tabela
+// ausente (ambiente antes do self-heal) → devolve config vazia.
+async function _loadInternoConfig(db: any, companyId: number): Promise<{ cnpjDigits: string[]; overrides: Map<number, string> }> {
+  const cnpjDigits: string[] = [];
+  const overrides = new Map<number, string>();
+  try {
+    const r = await dbExecute(db, `SELECT cnpj FROM financial_internal_cnpjs WHERE company_id=$1 AND COALESCE(ativo,1)=1`, [companyId]);
+    for (const x of rows(r)) {
+      const d = _soDigitos(x.cnpj);
+      if (d.length >= 6) cnpjDigits.push(d); // guarda mínimo p/ não casar lixo
+    }
+  } catch (e: any) { console.warn(`[internoConfig] skip cnpjs:`, e?.message); }
+  try {
+    const r = await dbExecute(db, `SELECT line_id AS "lineId", natureza FROM financial_internal_overrides WHERE company_id=$1 AND natureza IN ('efetivo','interno')`, [companyId]);
+    for (const x of rows(r)) overrides.set(Number(x.lineId), String(x.natureza));
+  } catch (e: any) { console.warn(`[internoConfig] skip overrides:`, e?.message); }
+  return { cnpjDigits, overrides };
+}
+
+// Rev. 3351 — Predicado SQL "é movimentação interna" (regex base OR dígitos da descrição
+// CONTÊM algum CNPJ/CPF cadastrado). `cnpjDigits` é SANITIZADO (só dígitos) antes de chegar
+// aqui → inlining seguro. NÃO inclui a exceção por lançamento (essa entra via LEFT JOIN no
+// CASE de quem usa, pois depende do id da linha).
+function _internoSqlPredicate(cnpjDigits: string[], col = "descricao"): string {
+  const base = `${col} ~* '${_INTERNO_REGEX_SRC}'`;
+  const safe = cnpjDigits.filter((d) => /^[0-9]{6,20}$/.test(d));
+  if (safe.length === 0) return `(${base})`;
+  const likes = safe.map((d) => `regexp_replace(${col},'[^0-9]','','g') LIKE '%${d}%'`).join(" OR ");
+  return `(${base} OR ${likes})`;
+}
+
+// Rev. 3351 — Classificação "é interno" de UMA linha já carregada, respeitando a exceção:
+// override 'efetivo' → NÃO interno · 'interno' → interno · senão regex base + CNPJ cadastrado.
+function _isLancInternoRow(row: any, cfg: { cnpjDigits: string[]; overrides: Map<number, string> }): boolean {
+  const id = Number(row?.id);
+  if (Number.isFinite(id)) {
+    const ov = cfg.overrides.get(id);
+    if (ov === "efetivo") return false;
+    if (ov === "interno") return true;
+  }
+  const desc = String(row?.descricao || "");
+  if (_internoRegex.test(desc)) return true;
+  if (cfg.cnpjDigits.length) {
+    const d = _soDigitos(desc);
+    if (d && cfg.cnpjDigits.some((c) => d.includes(c))) return true;
+  }
+  return false;
+}
+
 async function _computeConciliacaoReport(db: any, companyId: number, contaBancariaId: number, dataInicio: string, dataFim: string) {
   const input = { companyId, contaBancariaId, dataInicio, dataFim };
     const p = [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim];
@@ -4942,6 +4993,8 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    // Rev. 3351 — base de CNPJs internos + exceções por lançamento (1 load p/ todo o motor).
+    const internoCfg = await _loadInternoConfig(db, input.companyId);
 
     // Contas COM extrato (linhas não excluídas) no período + dados cadastrais p/ rótulo.
     // Rev. 3321 — `dbExecute` liga params por ORDEM DE APARIÇÃO do `$N` no texto ($N é
@@ -4978,9 +5031,10 @@ export const financialRouter = router({
     const somaSaidas = (arr: any[]) => arr.reduce((a: number, x: any) => { const v = Number(x.valor) || 0; return v < 0 ? a + Math.abs(v) : a; }, 0);
     const qtdEntradas = (arr: any[]) => arr.reduce((a: number, x: any) => (Number(x.valor) || 0) > 0 ? a + 1 : a, 0);
     const qtdSaidas = (arr: any[]) => arr.reduce((a: number, x: any) => (Number(x.valor) || 0) < 0 ? a + 1 : a, 0);
-    // Rev. 3349 — separa "movimentação interna" (transf. entre contas, aplicação/resgate,
-    // intra-FC) do "caixa real (externo)". `_isLancInterno` é a fonte única (mesma do SQL).
-    const soInternas = (arr: any[]) => arr.filter((x: any) => _isLancInterno(x.descricao));
+    // Rev. 3349/3351 — separa "movimentação interna" (transf. entre contas, aplicação/resgate,
+    // intra-FC + CNPJs do grupo cadastrados) do "caixa real (externo)", respeitando a exceção
+    // por lançamento. `_isLancInternoRow` é a fonte única (mesma régua do JS dos drill-ins).
+    const soInternas = (arr: any[]) => arr.filter((x: any) => _isLancInternoRow(x, internoCfg));
 
     for (const c of contas) {
       const contaId = Number(c.id);
@@ -4988,8 +5042,8 @@ export const financialRouter = router({
       const tag = { contaBancariaId: contaId, contaBanco: c.banco ?? null, contaDescricao: c.descricao ?? null, contaLabel };
       const rep: any = await _computeConciliacaoReport(db, input.companyId, contaId, input.dataInicio, input.dataFim);
 
-      const conc = (rep.conciliados ?? []).map((r: any) => ({ ...r, ...tag, interno: _isLancInterno(r.descricao) }));
-      const ext = (rep.extratoSemLancamento ?? []).map((r: any) => ({ ...r, ...tag, interno: _isLancInterno(r.descricao) }));
+      const conc = (rep.conciliados ?? []).map((r: any) => ({ ...r, ...tag, interno: _isLancInternoRow(r, internoCfg), overrideNatureza: internoCfg.overrides.get(Number(r.id)) ?? null }));
+      const ext = (rep.extratoSemLancamento ?? []).map((r: any) => ({ ...r, ...tag, interno: _isLancInternoRow(r, internoCfg), overrideNatureza: internoCfg.overrides.get(Number(r.id)) ?? null }));
       const dev = (rep.chequesDevolvidos ?? []).map((r: any) => ({ ...r, ...tag }));
       // Rev. 3319 — grupos sintéticos (`grp:vr|YYYY-MM`, etc.) NÃO trazem a conta no id; no
       // panorama (várias contas concatenadas) dois grupos de contas diferentes colidiriam no
@@ -5097,32 +5151,40 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    // Rev. 3351 — predicado de movimentação interna agora é DINÂMICO (regex base + CNPJs do
+    // grupo cadastrados em financial_internal_cnpjs) e respeita a EXCEÇÃO por lançamento
+    // (financial_internal_overrides via LEFT JOIN). `cnpjDigits` é sanitizado (só dígitos) →
+    // inlining seguro; `internoExpr` é a fonte única do split caixa real × interno.
+    const internoCfg = await _loadInternoConfig(db, input.companyId);
+    const internoExpr = `(CASE WHEN ov.natureza='efetivo' THEN FALSE WHEN ov.natureza='interno' THEN TRUE ELSE ${_internoSqlPredicate(internoCfg.cnpjDigits, "b.descricao")} END)`;
     const res = await dbExecute(db,
-      `SELECT conta_bancaria_id AS "contaBancariaId",
+      `SELECT b.conta_bancaria_id AS "contaBancariaId",
               COUNT(*)::int AS total,
-              SUM(CASE WHEN COALESCE(conciliado,0)=1 THEN 1 ELSE 0 END)::int AS conciliadas,
-              COALESCE(SUM(ABS(valor)),0) AS "valorTotal",
-              COALESCE(SUM(CASE WHEN COALESCE(conciliado,0)=1 THEN ABS(valor) ELSE 0 END),0) AS "valorConciliado",
+              SUM(CASE WHEN COALESCE(b.conciliado,0)=1 THEN 1 ELSE 0 END)::int AS conciliadas,
+              COALESCE(SUM(ABS(b.valor)),0) AS "valorTotal",
+              COALESCE(SUM(CASE WHEN COALESCE(b.conciliado,0)=1 THEN ABS(b.valor) ELSE 0 END),0) AS "valorConciliado",
               -- Rev. 3282 — split p/ os cards "Entradas" e "Saídas" (giro bruto = entradas+saídas).
-              COALESCE(SUM(CASE WHEN valor>=0 THEN valor ELSE 0 END),0) AS "valorEntradas",
-              COALESCE(SUM(CASE WHEN valor<0 THEN ABS(valor) ELSE 0 END),0) AS "valorSaidas",
+              COALESCE(SUM(CASE WHEN b.valor>=0 THEN b.valor ELSE 0 END),0) AS "valorEntradas",
+              COALESCE(SUM(CASE WHEN b.valor<0 THEN ABS(b.valor) ELSE 0 END),0) AS "valorSaidas",
               -- Rev. 3316 — conciliado e pendente SEPARADOS por direção (crédito × débito)
               -- p/ o card "A conciliar" não somar entrada+saída como se fossem o mesmo sinal.
-              COALESCE(SUM(CASE WHEN COALESCE(conciliado,0)=1 AND valor>=0 THEN valor ELSE 0 END),0) AS "valorConciliadoEntradas",
-              COALESCE(SUM(CASE WHEN COALESCE(conciliado,0)=1 AND valor<0 THEN ABS(valor) ELSE 0 END),0) AS "valorConciliadoSaidas",
-              SUM(CASE WHEN COALESCE(conciliado,0)<>1 AND valor>=0 THEN 1 ELSE 0 END)::int AS "pendentesEntradas",
-              SUM(CASE WHEN COALESCE(conciliado,0)<>1 AND valor<0 THEN 1 ELSE 0 END)::int AS "pendentesSaidas",
-              -- Rev. 3349 — MOVIMENTAÇÃO INTERNA (transf. entre contas próprias, varredura de
-              -- aplicação/resgate, PIX/TED intra-FC). Mesma heurística do Panorama (fonte única,
-              -- _INTERNO_REGEX_SRC). O front exibe "caixa real (externo)" = bruto − interno + um
-              -- card "Movimentação interna". Literal controlado (sem input do usuário) → seguro.
-              COALESCE(SUM(CASE WHEN valor>=0 AND descricao ~* '${_INTERNO_REGEX_SRC}' THEN valor ELSE 0 END),0) AS "valorEntradasInternas",
-              COALESCE(SUM(CASE WHEN valor<0 AND descricao ~* '${_INTERNO_REGEX_SRC}' THEN ABS(valor) ELSE 0 END),0) AS "valorSaidasInternas",
-              SUM(CASE WHEN descricao ~* '${_INTERNO_REGEX_SRC}' AND valor>=0 THEN 1 ELSE 0 END)::int AS "qtdEntradasInternas",
-              SUM(CASE WHEN descricao ~* '${_INTERNO_REGEX_SRC}' AND valor<0 THEN 1 ELSE 0 END)::int AS "qtdSaidasInternas"
-         FROM bank_statement_lines
-        WHERE company_id=$1 AND data>=$2 AND data<=$3 AND excluido_em IS NULL
-        GROUP BY conta_bancaria_id`,
+              COALESCE(SUM(CASE WHEN COALESCE(b.conciliado,0)=1 AND b.valor>=0 THEN b.valor ELSE 0 END),0) AS "valorConciliadoEntradas",
+              COALESCE(SUM(CASE WHEN COALESCE(b.conciliado,0)=1 AND b.valor<0 THEN ABS(b.valor) ELSE 0 END),0) AS "valorConciliadoSaidas",
+              SUM(CASE WHEN COALESCE(b.conciliado,0)<>1 AND b.valor>=0 THEN 1 ELSE 0 END)::int AS "pendentesEntradas",
+              SUM(CASE WHEN COALESCE(b.conciliado,0)<>1 AND b.valor<0 THEN 1 ELSE 0 END)::int AS "pendentesSaidas",
+              -- Rev. 3349/3351 — MOVIMENTAÇÃO INTERNA (transf. entre contas próprias, aplicação/
+              -- resgate, PIX/TED intra-grupo + CNPJs cadastrados). Aplicado SIMETRICAMENTE em
+              -- entrada E saída; a exceção por lançamento (ov) tem a palavra final. O front exibe
+              -- "caixa real (externo)" = bruto − interno + card "Movimentação interna".
+              COALESCE(SUM(CASE WHEN b.valor>=0 AND ${internoExpr} THEN b.valor ELSE 0 END),0) AS "valorEntradasInternas",
+              COALESCE(SUM(CASE WHEN b.valor<0 AND ${internoExpr} THEN ABS(b.valor) ELSE 0 END),0) AS "valorSaidasInternas",
+              SUM(CASE WHEN ${internoExpr} AND b.valor>=0 THEN 1 ELSE 0 END)::int AS "qtdEntradasInternas",
+              SUM(CASE WHEN ${internoExpr} AND b.valor<0 THEN 1 ELSE 0 END)::int AS "qtdSaidasInternas"
+         FROM bank_statement_lines b
+         LEFT JOIN financial_internal_overrides ov
+           ON ov.line_id=b.id AND ov.company_id=b.company_id AND ov.natureza IN ('efetivo','interno')
+        WHERE b.company_id=$1 AND b.data>=$2 AND b.data<=$3 AND b.excluido_em IS NULL
+        GROUP BY b.conta_bancaria_id`,
       [input.companyId, input.dataInicio, input.dataFim]);
     return rows(res).map((r: any) => {
       const total = Number(r.total) || 0;
@@ -5164,14 +5226,19 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    // Rev. 3351 — base de CNPJs internos + exceções por lançamento p/ classificar cada linha.
+    const internoCfg = await _loadInternoConfig(db, input.companyId);
     // dbExecute liga params por ORDEM DE APARIÇÃO do $N: [companyId, dataInicio, dataFim].
     const res = await dbExecute(db,
-      `SELECT id, data, descricao, valor, tipo,
-              COALESCE(conciliado,0) AS conciliado,
-              conta_bancaria_id AS "contaBancariaId"
-         FROM bank_statement_lines
-        WHERE company_id=$1 AND data>=$2 AND data<=$3 AND excluido_em IS NULL
-        ORDER BY data DESC, id DESC`,
+      `SELECT b.id, b.data, b.descricao, b.valor, b.tipo,
+              COALESCE(b.conciliado,0) AS conciliado,
+              b.conta_bancaria_id AS "contaBancariaId",
+              ov.natureza AS "overrideNatureza", ov.motivo AS "overrideMotivo"
+         FROM bank_statement_lines b
+         LEFT JOIN financial_internal_overrides ov
+           ON ov.line_id=b.id AND ov.company_id=b.company_id AND ov.natureza IN ('efetivo','interno')
+        WHERE b.company_id=$1 AND b.data>=$2 AND b.data<=$3 AND b.excluido_em IS NULL
+        ORDER BY b.data DESC, b.id DESC`,
       [input.companyId, input.dataInicio, input.dataFim]);
     return rows(res).map((r: any) => ({
       id: Number(r.id),
@@ -5181,9 +5248,160 @@ export const financialRouter = router({
       tipo: r.tipo || "",
       conciliado: Number(r.conciliado) === 1 ? 1 : 0,
       contaBancariaId: r.contaBancariaId == null ? null : Number(r.contaBancariaId),
-      // Rev. 3349 — flag p/ o drill-in separar "caixa real" da movimentação interna.
-      interno: _isLancInterno(r.descricao),
+      // Rev. 3349/3351 — flag p/ o drill-in separar "caixa real" da movimentação interna
+      // (regex base + CNPJs cadastrados + exceção por lançamento).
+      interno: _isLancInternoRow(r, internoCfg),
+      // Rev. 3351 — exceção aplicada nessa linha (p/ o drill-in mostrar o selo + motivo).
+      overrideNatureza: r.overrideNatureza || null,
+      overrideMotivo: r.overrideMotivo || null,
     }));
+  }),
+
+  // ─────────────────── MOVIMENTAÇÃO INTERNA (Rev. 3351) ───────────────────
+  // Base configurável de CNPJs/CPFs do GRUPO (contrapartes cuja movimentação NÃO é caixa
+  // real) + exceção por lançamento. R-007: sem DELETE em prod — inativação é soft (ativo=0).
+
+  // Lista a base de CNPJs internos da empresa. `includeInactive` → tela de gestão.
+  listInternalCnpjs: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    includeInactive: z.boolean().optional(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const ativoFilter = input.includeInactive ? "" : "AND COALESCE(ativo,1)=1";
+    const res = await dbExecute(db,
+      `SELECT id, company_id AS "companyId", cnpj, nome, observacao, ativo,
+              criado_por AS "criadoPor", created_at AS "createdAt", updated_at AS "updatedAt"
+         FROM financial_internal_cnpjs
+        WHERE company_id=$1 ${ativoFilter}
+        ORDER BY ativo DESC, nome ASC NULLS LAST, cnpj ASC`,
+      [input.companyId]);
+    return rows(res).map((r: any) => ({
+      id: Number(r.id),
+      companyId: Number(r.companyId),
+      cnpj: r.cnpj || "",
+      nome: r.nome || null,
+      observacao: r.observacao || null,
+      ativo: Number(r.ativo) === 0 ? 0 : 1,
+      criadoPor: r.criadoPor || null,
+      createdAt: r.createdAt || null,
+      updatedAt: r.updatedAt || null,
+    }));
+  }),
+
+  createInternalCnpj: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    cnpj: z.string().min(6),
+    nome: z.string().optional(),
+    observacao: z.string().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const digits = _soDigitos(input.cnpj);
+    if (digits.length < 6) throw new TRPCError({ code: "BAD_REQUEST", message: "CNPJ/CPF inválido (mínimo 6 dígitos)." });
+    // Evita duplicata ATIVA do mesmo documento na empresa (reativa se existir inativo).
+    const dup = await dbExecute(db,
+      `SELECT id, ativo FROM financial_internal_cnpjs WHERE company_id=$1 AND cnpj=$2 ORDER BY id DESC LIMIT 1`,
+      [input.companyId, digits]);
+    const existing = rows(dup)[0];
+    if (existing) {
+      await dbExecute(db,
+        `UPDATE financial_internal_cnpjs SET ativo=1, nome=$1, observacao=$2, updated_at=NOW() WHERE id=$3 AND company_id=$4`,
+        [input.nome ?? null, input.observacao ?? null, Number(existing.id), input.companyId]);
+      return { id: Number(existing.id), reativado: true };
+    }
+    const res = await dbExecute(db,
+      `INSERT INTO financial_internal_cnpjs (company_id, cnpj, nome, observacao, ativo, criado_por)
+       VALUES ($1,$2,$3,$4,1,$5) RETURNING id`,
+      [input.companyId, digits, input.nome ?? null, input.observacao ?? null, ctx.user?.name ?? null]);
+    await createAuditLog({ action: "financial_internal_cnpj_created", userId: ctx.user?.id, companyId: input.companyId, details: `CNPJ interno cadastrado: ${digits}${input.nome ? ` (${input.nome})` : ""}` });
+    return { id: rows(res)[0]?.id };
+  }),
+
+  updateInternalCnpj: protectedProcedure.input(z.object({
+    id: z.number(),
+    companyId: z.number(),
+    cnpj: z.string().min(6).optional(),
+    nome: z.string().nullable().optional(),
+    observacao: z.string().nullable().optional(),
+    ativo: z.boolean().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const sets: string[] = [];
+    const vals: any[] = [];
+    let i = 1;
+    if (input.cnpj !== undefined) {
+      const d = _soDigitos(input.cnpj);
+      if (d.length < 6) throw new TRPCError({ code: "BAD_REQUEST", message: "CNPJ/CPF inválido (mínimo 6 dígitos)." });
+      sets.push(`cnpj=$${i++}`); vals.push(d);
+    }
+    if (input.nome !== undefined)       { sets.push(`nome=$${i++}`);       vals.push(input.nome); }
+    if (input.observacao !== undefined) { sets.push(`observacao=$${i++}`); vals.push(input.observacao); }
+    if (input.ativo !== undefined)      { sets.push(`ativo=$${i++}`);      vals.push(input.ativo ? 1 : 0); }
+    if (sets.length === 0) return { ok: true, noop: true };
+    sets.push(`updated_at=NOW()`);
+    vals.push(input.id, input.companyId);
+    const res = await dbExecute(db,
+      `UPDATE financial_internal_cnpjs SET ${sets.join(", ")} WHERE id=$${i++} AND company_id=$${i++} RETURNING id`,
+      vals);
+    if (rows(res).length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "CNPJ interno não encontrado." });
+    return { ok: true };
+  }),
+
+  // Soft-delete (R-007): inativa (ativo=0), nunca apaga.
+  deleteInternalCnpj: protectedProcedure.input(z.object({
+    id: z.number(),
+    companyId: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const res = await dbExecute(db,
+      `UPDATE financial_internal_cnpjs SET ativo=0, updated_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING id`,
+      [input.id, input.companyId]);
+    if (rows(res).length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "CNPJ interno não encontrado." });
+    return { ok: true };
+  }),
+
+  // Exceção por lançamento: marca um crédito/débito como 'efetivo' (volta p/ caixa real,
+  // ex.: empréstimo/capitalização), 'interno' (força interno) ou 'auto' (remove a exceção,
+  // volta à regra automática). Upsert por (company, line). 'auto' grava natureza='auto'
+  // (a config só lê 'efetivo'/'interno') em vez de DELETE — respeita R-007.
+  setLancamentoNatureza: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    lineId: z.number(),
+    natureza: z.enum(["efetivo", "interno", "auto"]),
+    motivo: z.string().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    // Garante que a linha pertence à empresa (tenant guard).
+    const ln = await dbExecute(db,
+      `SELECT id FROM bank_statement_lines WHERE id=$1 AND company_id=$2`,
+      [input.lineId, input.companyId]);
+    if (rows(ln).length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado nesta empresa." });
+    // Rev. 3351 — motivo OBRIGATÓRIO p/ exceção manual (efetivo/interno); 'auto' limpa.
+    // Validação no servidor (não só na UI) p/ não dar pra burlar via chamada direta da API.
+    const motivoTrim = (input.motivo ?? "").trim();
+    if (input.natureza !== "auto" && motivoTrim.length === 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Informe o motivo da classificação manual." });
+    }
+    const motivo = input.natureza === "auto" ? null : motivoTrim;
+    // dbExecute liga params por ORDEM DE APARIÇÃO do $N: company, line, natureza, motivo,
+    // criadoPor, natureza, motivo.
+    await dbExecute(db,
+      `INSERT INTO financial_internal_overrides (company_id, line_id, natureza, motivo, criado_por)
+       VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (company_id, line_id)
+       DO UPDATE SET natureza=$6, motivo=$7, updated_at=NOW()`,
+      [input.companyId, input.lineId, input.natureza, motivo, ctx.user?.name ?? null, input.natureza, motivo]);
+    await createAuditLog({ action: "financial_lancamento_natureza_set", userId: ctx.user?.id, companyId: input.companyId, details: `Lançamento #${input.lineId} marcado como '${input.natureza}'${motivo ? `: ${motivo}` : ""}` });
+    return { ok: true, natureza: input.natureza };
   }),
 
   // Rev. 3248 — Resumo MENSAL do extrato (BRL movimentado + conciliado por mês) p/ a

@@ -13,6 +13,7 @@ import {
   ComparativoAnual, DetailDialog, DetailColumn,
 } from "./_kit";
 import { formatDate } from "@/lib/dateUtils";
+import { NaturezaOverrideDialog, NaturezaBadge, type LancNaturezaLinha } from "../_NaturezaOverride";
 
 const DESTINO = "/financeiro/conciliacao";
 
@@ -77,9 +78,12 @@ export default function DashConciliacao() {
   // Rev. 3349 — "interno" abre a movimentação interna (transf. entre contas/aplicação/intra-FC).
   const [lanc, setLanc] = useState<null | "entradas" | "saidas" | "todos" | "interno">(null);
 
-  const { data: lancamentos, isLoading: lancLoading } = (trpc as any).financial.getConciliacaoLancamentos.useQuery(
+  const { data: lancamentos, isLoading: lancLoading, refetch: rLanc } = (trpc as any).financial.getConciliacaoLancamentos.useQuery(
     { companyId, dataInicio, dataFim }, { enabled: !!companyId && lanc !== null }
   );
+
+  // Rev. 3351 — exceção por lançamento (caixa real × movimentação interna).
+  const [ovRow, setOvRow] = useState<LancNaturezaLinha | null>(null);
 
   const kpis = useMemo(() => {
     let total = 0, conciliadas = 0, valorTotal = 0, valorConciliado = 0, valorEntradas = 0, valorSaidas = 0;
@@ -162,6 +166,13 @@ export default function DashConciliacao() {
     return recorte.map((l) => {
       const v = Number(l.valor) || 0;
       return {
+        // Rev. 3351 — campos crus p/ a ação de exceção por lançamento.
+        _id: Number(l.id),
+        _interno: !!l.interno,
+        _overrideNatureza: l.overrideNatureza ?? null,
+        _overrideMotivo: l.overrideMotivo ?? null,
+        _valorBruto: v,
+        _descricao: l.descricao || "—",
         data: l.data,
         conta: nomeConta(l.contaBancariaId),
         descricao: l.descricao || "—",
@@ -194,6 +205,27 @@ export default function DashConciliacao() {
           </span>
         );
       },
+    },
+    // Rev. 3351 — exceção por lançamento: marcar como efetivo (caixa real) / interno.
+    {
+      key: "_acao", label: "Classificação", align: "center",
+      format: (_v: any, row: any) => (
+        <div className="flex items-center justify-center gap-1.5">
+          <NaturezaBadge natureza={row._overrideNatureza} />
+          <button
+            type="button"
+            onClick={() => setOvRow({
+              id: Number(row._id), descricao: row._descricao, valor: Number(row._valorBruto),
+              interno: !!row._interno, overrideNatureza: row._overrideNatureza, overrideMotivo: row._overrideMotivo,
+            })}
+            disabled={!row._id}
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition disabled:opacity-40"
+            title="Marcar como caixa real (efetivo) ou movimentação interna"
+          >
+            Classificar
+          </button>
+        </div>
+      ),
     },
   ], [lanc]);
 
@@ -345,6 +377,13 @@ export default function DashConciliacao() {
           title={lancLoading ? "Carregando lançamentos…" : lancTitle}
           subtitle={`Ano ${ano} · ${lancRows.length} lançamento(s) · totalizador confere com o card`}
           columns={LANC_COLS} rows={lancRows} onGoTo={ir} totalKey="valor"
+        />
+
+        {/* Rev. 3351 — exceção por lançamento (caixa real × movimentação interna). */}
+        <NaturezaOverrideDialog
+          open={!!ovRow} onOpenChange={(o) => { if (!o) setOvRow(null); }}
+          companyId={companyId} line={ovRow}
+          onDone={() => { setOvRow(null); rLanc(); r2(); r3(); }}
         />
       </div>
     </DashboardLayout>

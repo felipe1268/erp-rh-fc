@@ -16,6 +16,7 @@ import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX, FileSpreadsheet, FileDown, Plus, Maximize2, Minimize2, Search, Users, Building2 } from "lucide-react";
 import { formatConta, formatAgencia } from "@/lib/formatters";
+import { NaturezaOverrideDialog, NaturezaBadge, type LancNaturezaLinha } from "./_NaturezaOverride";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -553,6 +554,8 @@ export default function FinanceiroConciliacao() {
   // conta); aqui apenas achatamos para a empresa toda. READ-ONLY (nada concilia/baixa).
   // Rev. 3349 — "interno" abre a movimentação interna (transf. entre contas/aplicação/intra-FC).
   const [panoramaDrill, setPanoramaDrill] = useState<null | "entradas" | "saidas" | "saldo" | "interno" | "conciliados" | "extratoSemLanc" | "lancSemExtrato" | "pct">(null);
+  // Rev. 3351 — exceção por lançamento (caixa real × movimentação interna).
+  const [ovRow, setOvRow] = useState<LancNaturezaLinha | null>(null);
   const drill = useMemo(() => {
     const contas: any[] = reportGeral?.contas ?? [];
     const conc: any[] = [];
@@ -2511,6 +2514,8 @@ export default function FinanceiroConciliacao() {
                               const isEntrada = v >= 0;
                               const primario = it.fornecedorNome || it.descricao || it.entryFornecedor || it.entryDescricao || (it.entryId ? `Lançamento #${it.entryId}` : "—");
                               const podeDetalhar = c.tipo === "entry" && it.id != null && !it.agrupado && !String(it.id).includes("#");
+                              // Rev. 3351 — linha de extrato (id numérico) pode ser reclassificada (efetivo × interno).
+                              const podeClassificar = c.tipo === "extrato" && it.id != null && !String(it.id).includes("#") && Number.isFinite(Number(it.id));
                               return (
                                 <div key={it.id ?? i} className="flex items-center gap-2 px-3 py-2 text-xs">
                                   <span className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${isEntrada ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"}`}>
@@ -2521,7 +2526,13 @@ export default function FinanceiroConciliacao() {
                                     <p className="truncate text-gray-700">{primario}</p>
                                     {it.contaLabel && <p className="truncate text-[10px] text-gray-400">{it.contaLabel}</p>}
                                   </div>
+                                  <NaturezaBadge natureza={it.overrideNatureza} />
                                   <span className={`font-semibold shrink-0 ${isEntrada ? "text-emerald-600" : "text-rose-500"}`}>{formatBRL(Math.abs(v))}</span>
+                                  {podeClassificar && (
+                                    <button type="button" onClick={() => setOvRow({ id: Number(it.id), descricao: it.descricao || primario, valor: v, interno: !!it.interno, overrideNatureza: it.overrideNatureza ?? null })} title="Marcar como caixa real (efetivo) ou movimentação interna" className="shrink-0 p-1 rounded-md text-gray-300 hover:text-indigo-600 hover:bg-indigo-50">
+                                      <ArrowLeftRight className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
                                   {podeDetalhar && (
                                     <button type="button" onClick={() => { setPanoramaDrill(null); setDetalheEntryId(Number(it.id)); }} title="Ver detalhes e origem do lançamento" className="shrink-0 p-1 rounded-md text-gray-300 hover:text-blue-600 hover:bg-blue-50">
                                       <Eye className="w-3.5 h-3.5" />
@@ -2543,6 +2554,13 @@ export default function FinanceiroConciliacao() {
                 })()}
               </DialogContent>
             </Dialog>
+
+            {/* Rev. 3351 — exceção por lançamento (caixa real × movimentação interna). */}
+            <NaturezaOverrideDialog
+              open={!!ovRow} onOpenChange={(o) => { if (!o) setOvRow(null); }}
+              companyId={companyId} line={ovRow}
+              onDone={() => { setOvRow(null); refetchGeral(); }}
+            />
 
             {/* Rev. 3177 — Detalhe CONSULTIVO (read-only) do lançamento, aberto ao clicar na sugestão. */}
             <Dialog open={!!detalheEntryId} onOpenChange={(o) => !o && fecharDetalhe()}>
