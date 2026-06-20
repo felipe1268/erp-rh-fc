@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3397 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FIX CRASH "Cannot read properties of
+ * null (reading 'id')" NA TELA DE CONCILIAÇÃO. 100% FRONTEND · ZERO BACKEND/SCHEMA.**
+ * - CAUSA RAIZ: Rev. 3395 introduziu o modo "standalone" (lançamento sem extrato) e adicionou
+ *   a expressão `lancStatement.id != null` nos dois braços do ternário que preenche a
+ *   `DialogDescription` do modal "Lançar no ERP" (linhas 4061–4062). O ramo falso do ternário
+ *   é ativado quando `lancStatement && (lancStatement.id == null ? ...)` é falsy — ou seja,
+ *   exatamente quando `lancStatement` é `null`. Durante o fechamento do dialog (Radix UI
+ *   mantém o conteúdo montado durante a animação de saída), `lancStatement` já é `null` mas
+ *   o JSX ainda renderiza, causando `TypeError: Cannot read properties of null (reading 'id')`.
+ * - CORREÇÃO: `lancStatement.id` → `lancStatement?.id` nos dois braços (`.id != null`).
+ *   O `?.` retorna `undefined` quando `lancStatement` é null, e `undefined != null` = false,
+ *   exibindo apenas o ponto final — comportamento idêntico ao esperado.
+ * - Arquivo: `client/src/pages/financeiro/FinanceiroConciliacao.tsx` (2 caracteres de diff).
+ *
  * Rev. 3396 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DESFAZER CONCILIAÇÃO SEM EXCLUIR A
  * LINHA DO EXTRATO. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**
  * - PROBLEMA: ao cancelar uma conciliação, `excluirLinhaExtrato` fazia soft-delete

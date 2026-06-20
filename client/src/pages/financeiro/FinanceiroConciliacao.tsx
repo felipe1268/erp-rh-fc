@@ -4058,8 +4058,8 @@ export default function FinanceiroConciliacao() {
                   <DialogTitle className="text-white text-lg font-semibold leading-tight">{lancStatement && (lancStatement.id == null ? lancForm.tipo === "receita" : Number(lancStatement.valor) >= 0) ? "Lançar no Contas a Receber" : "Lançar no Contas a Pagar"}</DialogTitle>
                   <DialogDescription className="text-white/70 text-xs mt-1 leading-relaxed">
                     {lancStatement && (lancStatement.id == null ? lancForm.tipo === "receita" : Number(lancStatement.valor) >= 0)
-                      ? <>Indique <span className="font-medium text-white/90">quem pagou (cliente)</span> e gere o título em <span className="font-medium text-white/90">Contas a Receber</span>{lancStatement.id != null ? <> Concilie com esta linha do extrato agora ou só lance e concilie depois.</> : <>.</>}</>
-                      : <>Indique o <span className="font-medium text-white/90">fornecedor</span> e gere a conta em <span className="font-medium text-white/90">Contas a Pagar</span>{lancStatement.id != null ? <>. Concilie com esta linha do extrato agora ou só lance e concilie depois.</> : <>.</>}</>}
+                      ? <>Indique <span className="font-medium text-white/90">quem pagou (cliente)</span> e gere o título em <span className="font-medium text-white/90">Contas a Receber</span>{lancStatement?.id != null ? <> Concilie com esta linha do extrato agora ou só lance e concilie depois.</> : <>.</>}</>
+                      : <>Indique o <span className="font-medium text-white/90">fornecedor</span> e gere a conta em <span className="font-medium text-white/90">Contas a Pagar</span>{lancStatement?.id != null ? <>. Concilie com esta linha do extrato agora ou só lance e concilie depois.</> : <>.</>}</>}
                   </DialogDescription>
                 </div>
               </div>

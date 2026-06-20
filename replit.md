@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3397** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FIX CRASH "Cannot read properties of null (reading 'id')". 100% FRONTEND · ZERO BACKEND/SCHEMA.** Causa raiz: Rev. 3395 introduziu `lancStatement.id` sem `?.` nos dois ramos do ternário da `DialogDescription` do modal "Lançar no ERP". O ramo falso é ativado quando `lancStatement` é `null` (Radix UI mantém o conteúdo do Dialog montado durante a animação de fechamento). Correção: `lancStatement?.id` em 2 pontos. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3396** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DESFAZER CONCILIAÇÃO SEM EXCLUIR A LINHA DO EXTRATO. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Bug: `excluirLinhaExtrato` fazia soft-delete da linha ao cancelar conciliação — item sumia das duas listas. Nova mutation `desconciliarLinha`: desfaz só o vínculo (`conciliado=0, entry_id=NULL` na linha; `status pago→a_pagar / recebido→a_receber` no entry; DELETE do grupo N:1 com guard `to_regclass`). Frontend: botão Trash2 nos "Já conciliados" virou RotateCcw (âmbar) que chama `desconciliarMut` + AlertDialog dedicado "Desfazer conciliação?". Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3395** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CRIAR LANÇAMENTO MANUAL SEM EXTRATO + SELETOR DÉBITO/CRÉDITO NO FORM DE EDIÇÃO E NO "LANÇAR NO ERP". BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Botão "Novo lançamento" no modal expandido abre o form sem vínculo de extrato; toggle Débito/Crédito determina se cria em Contas a Pagar ou Receber; Categoria virou `<Select>` com todas as contas ativas; form de edição (3394) ganhou o mesmo toggle para corrigir tipo de lançamento existente; `updateEntryClassificacao` aceita campo `tipo`. Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3395** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CRIAR LANÇAMENTO MANUAL SEM EXTRATO + SELETOR DÉBITO/CRÉDITO NO FORM DE EDIÇÃO E NO "LANÇAR NO ERP". BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3394** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · MODAL "LANÇAMENTO #NNNNN" EM TELA CHEIA + BOTÃO EDITAR COM DROPDOWN DE TODAS AS CONTAS ATIVAS. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3392** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · "CONFIRMAR: É MOVIMENTAÇÃO INTERNA" CRIA LANÇAMENTO + CONCILIA. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3391** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · BOTÃO "CONFIRMAR: É MOVIMENTAÇÃO INTERNA" NO MODAL "LANÇAR". 100% FRONTEND · ZERO BACKEND/SCHEMA.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3390** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · BADGE "MOV. INTERNA" NO DRILL-IN + AVISO NO MODAL "LANÇAR". BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### REGRA DE OURO — Cabeçalho de documentos institucionais FC (Rev. 2106+)
 
