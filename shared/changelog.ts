@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3439 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NÚMERO DA OC NO LANÇAMENTO + LINK
+ * "ABRIR OC". BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PROBLEMA: lançamentos de OC (origem `compras`/`compra_oc`) na conciliação bancária
+ * não exibiam o número da OC (ex.: "OC-0042") nem permitiam navegar diretamente para
+ * a OC no módulo Compras. O financeiro precisava sair da tela, ir p/ Compras e buscar
+ * manualmente o documento.
+ *
+ * SOLUÇÃO:
+ * — Backend (`lancRes` + `semContaRes`): adicionado
+ *   `LEFT JOIN compras_ordens co ON e.origem_modulo IN ('compras','compra_oc') AND co.id = e.origem_id`
+ *   para trazer `co.numero_oc AS "ocNumero"` e `e.origem_id AS "origemId"` em ambas as
+ *   queries de pendência da conciliação. Zero parâmetros novos; ordem dos $N preservada.
+ * — Frontend (`renderEntryRow`): badge `🛒 OC-XXXX` (roxo) na linha do lançamento; clique
+ *   navega para `/compras/ordens?destaque=<origemId>` (URL param já suportado pelo Ordens.tsx).
+ * — Frontend (lançamentos "sem conta"): mesma badge clicável substituindo o badge genérico
+ *   de `origemModulo`.
+ * — Frontend (modal de detalhe): card "Ordem de Compra" ganha botão "Abrir OC ↗" no
+ *   cabeçalho do card, além dos campos já existentes (fornecedor, NF, total, condição,
+ *   status, itens).
+ *
+ * Arquivos: `server/routers/financial.ts` (lancRes + semContaRes),
+ *           `client/src/pages/financeiro/FinanceiroConciliacao.tsx` (renderEntryRow,
+ *           bloco sem-conta, modal detalhe OC card).
+ *
  * Rev. 3438 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXCLUIR SAÍDA DE ALMOXARIFADO DA
  * CONCILIAÇÃO. 100% BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *

@@ -1280,6 +1280,16 @@ export default function FinanceiroConciliacao() {
             {fmtData(e.data)}
             {(isPix || isBoleto) && <span className={`px-1.5 py-px rounded-full text-[10px] font-medium ${isPix ? "bg-emerald-100 text-emerald-700" : "bg-orange-100 text-orange-700"}`}>{isPix ? "PIX" : "Boleto"}</span>}
             {e.contaNome && <span className="px-1.5 py-px rounded-full text-[10px] font-medium bg-blue-50 text-blue-600 border border-blue-100" title={`Conta no ERP: ${e.contaNome}`}>🏦 {e.contaNome}</span>}
+            {e.ocNumero && (
+              <button
+                type="button"
+                onClick={(ev) => { ev.stopPropagation(); window.location.href = `/compras/ordens?destaque=${e.origemId}`; }}
+                className="px-1.5 py-px rounded-full text-[10px] font-semibold bg-violet-100 text-violet-700 hover:bg-violet-200 transition-colors"
+                title={`Abrir Ordem de Compra ${e.ocNumero}`}
+              >
+                🛒 {e.ocNumero}
+              </button>
+            )}
           </p>
           <p className="text-sm font-medium text-gray-700 break-words">{e.fornecedorNome || e.descricao || "—"}</p>
           {e.obraNome && <p className="text-xs text-gray-400 break-words">{e.obraNome}</p>}
@@ -2746,7 +2756,10 @@ export default function FinanceiroConciliacao() {
                             >
                               <span className="text-gray-400 shrink-0 w-16">{fmtData(e.data)}</span>
                               <span className="flex-1 min-w-0 truncate text-gray-700">{e.fornecedorNome || e.descricao || "—"}</span>
-                              {e.origemModulo && <span className="hidden sm:inline-block shrink-0 px-1.5 py-px rounded-full text-[10px] font-medium bg-gray-100 text-gray-500 truncate max-w-[120px]">{e.origemModulo}</span>}
+                              {e.ocNumero
+                                ? <button type="button" onClick={(ev) => { ev.stopPropagation(); window.location.href = `/compras/ordens?destaque=${e.origemId}`; }} className="hidden sm:inline-flex shrink-0 items-center px-1.5 py-px rounded-full text-[10px] font-semibold bg-violet-100 text-violet-700 hover:bg-violet-200 transition-colors" title={`Abrir OC ${e.ocNumero}`}>🛒 {e.ocNumero}</button>
+                                : e.origemModulo && <span className="hidden sm:inline-block shrink-0 px-1.5 py-px rounded-full text-[10px] font-medium bg-gray-100 text-gray-500 truncate max-w-[120px]">{e.origemModulo}</span>
+                              }
                               <span className={`font-semibold shrink-0 ${e.tipo === "receita" ? "text-emerald-600" : "text-rose-500"}`}>{formatBRL(Math.abs(Number(e.valor) || 0))}</span>
                               <Eye className="w-3.5 h-3.5 text-gray-300 shrink-0" />
                             </button>
@@ -4138,6 +4151,16 @@ export default function FinanceiroConciliacao() {
                           <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
                             <div className="bg-gray-100/80 border-b px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
                               <FileText className="w-3.5 h-3.5 text-violet-500" /> Ordem de Compra {detOrdem.numeroOc ?? ""}
+                              {detEntry?.origemId && (
+                                <button
+                                  type="button"
+                                  onClick={() => { window.location.href = `/compras/ordens?destaque=${detEntry.origemId}`; }}
+                                  className="ml-auto flex items-center gap-1 text-[10px] font-semibold text-violet-600 hover:text-violet-800 bg-violet-50 hover:bg-violet-100 px-2 py-0.5 rounded-full transition-colors"
+                                  title="Abrir a Ordem de Compra no módulo Compras"
+                                >
+                                  <ExternalLink className="w-3 h-3" /> Abrir OC
+                                </button>
+                              )}
                             </div>
                             <div className="p-4 grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
                               {field("Fornecedor (OC)", detOrdem.fornecedorNome)}

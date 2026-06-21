@@ -1531,6 +1531,8 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
               e.forma_pagamento AS "formaPagamento", e.comprovante_url AS "comprovanteUrl",
               e.comprovante_beneficiario AS "comprovanteBeneficiario",
               e.origem_modulo AS "origemModulo",
+              e.origem_id AS "origemId",
+              co.numero_oc AS "ocNumero",
               COALESCE(NULLIF(TRIM(ff.posto),''), NULLIF(TRIM(fm.fornecedor),'')) AS "frotaFornecedor",
               COALESCE(NULLIF(TRIM(pc.nome_fantasia),''), NULLIF(TRIM(pc.razao_social),'')) AS "parceiroFornecedor",
               COALESCE(NULLIF(TRIM(pjemp."nomeCompleto"),''), NULLIF(TRIM(pjc."razaoSocialPrestador"),'')) AS "pjFornecedor",
@@ -1543,6 +1545,7 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
          LEFT JOIN pj_payments pjp ON e.origem_modulo='pagamento_pj' AND pjp.id = e.origem_id AND pjp."companyId" = e.company_id
          LEFT JOIN employees pjemp ON pjemp.id = pjp."employeeId" AND pjemp."companyId" = e.company_id
          LEFT JOIN pj_contracts pjc ON pjc.id = pjp."contractId" AND pjc."companyId" = e.company_id
+         LEFT JOIN compras_ordens co ON e.origem_modulo IN ('compras','compra_oc') AND co.id = e.origem_id AND co.company_id = e.company_id
         WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
           AND e.conta_bancaria_id=$2
           AND ${sqlNotProjecao("e.origem_modulo")}
@@ -1569,6 +1572,8 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
               e.forma_pagamento AS "formaPagamento", e.comprovante_url AS "comprovanteUrl",
               e.comprovante_beneficiario AS "comprovanteBeneficiario",
               e.origem_modulo AS "origemModulo",
+              e.origem_id AS "origemId",
+              co.numero_oc AS "ocNumero",
               COALESCE(NULLIF(TRIM(ff.posto),''), NULLIF(TRIM(fm.fornecedor),'')) AS "frotaFornecedor",
               COALESCE(NULLIF(TRIM(pc.nome_fantasia),''), NULLIF(TRIM(pc.razao_social),'')) AS "parceiroFornecedor",
               COALESCE(NULLIF(TRIM(pjemp."nomeCompleto"),''), NULLIF(TRIM(pjc."razaoSocialPrestador"),'')) AS "pjFornecedor",
@@ -1583,6 +1588,7 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
          LEFT JOIN pj_payments pjp ON e.origem_modulo='pagamento_pj' AND pjp.id = e.origem_id AND pjp."companyId" = e.company_id
          LEFT JOIN employees pjemp ON pjemp.id = pjp."employeeId" AND pjemp."companyId" = e.company_id
          LEFT JOIN pj_contracts pjc ON pjc.id = pjp."contractId" AND pjc."companyId" = e.company_id
+         LEFT JOIN compras_ordens co ON e.origem_modulo IN ('compras','compra_oc') AND co.id = e.origem_id AND co.company_id = e.company_id
          LEFT JOIN LATERAL (
            SELECT b.id AS "sugLineId",
                   b.conta_bancaria_id AS "sugContaId",
