@@ -295,11 +295,11 @@ export default function Clientes() {
                 <div className="p-4">
                   <div className="flex items-start justify-between gap-2 mb-3">
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-slate-800 text-sm leading-tight line-clamp-2">
+                      <h3 className="font-semibold text-slate-800 text-sm leading-tight line-clamp-2 uppercase">
                         {c.razaoSocial}
                       </h3>
                       {c.nomeFantasia && c.nomeFantasia !== c.razaoSocial && (
-                        <p className="text-xs text-slate-500 mt-0.5 truncate">{c.nomeFantasia}</p>
+                        <p className="text-xs text-slate-500 mt-0.5 truncate uppercase">{c.nomeFantasia}</p>
                       )}
                     </div>
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${c.tipo === "PJ" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>

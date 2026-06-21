@@ -1,6 +1,13 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3452 — **CLIENTES · NOMES EXIBIDOS SEMPRE EM CAIXA ALTA NA LISTAGEM. 100% FRONTEND ·
+ * ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Adicionada classe CSS `uppercase` (text-transform: uppercase) nos elementos `razaoSocial`
+ * e `nomeFantasia` dos cards da página Clientes. O valor no banco não é alterado — apenas
+ * a exibição na tela é transformada, independente de como o usuário digitou.
+ * Arquivo: `client/src/pages/Clientes.tsx`.
+ *
  * Rev. 3451 — **OBRAS · MÚLTIPLOS CLIENTES POR OBRA (DONOS DA OBRA). BACKEND ADITIVO +
  * FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
