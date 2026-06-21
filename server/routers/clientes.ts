@@ -14,6 +14,17 @@ const integracaoFields = {
   integracaoProcedimento:  z.string().optional(),
 };
 
+// Rev. 3453 — campos PF
+const pfFields = {
+  rg:             z.string().optional(),
+  orgaoEmissor:   z.string().optional(),
+  dataNascimento: z.string().nullable().optional(),
+  estadoCivil:    z.string().optional(),
+  sexo:           z.string().optional(),
+  profissao:      z.string().optional(),
+  nacionalidade:  z.string().optional(),
+};
+
 export const clientesRouter = router({
   list: protectedProcedure
     .input(z.object({ companyId: z.number() }))
@@ -50,6 +61,7 @@ export const clientesRouter = router({
       contatoEmail:    z.string().optional(),
       observacoes:     z.string().optional(),
       ...integracaoFields,
+      ...pfFields,
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -82,6 +94,13 @@ export const clientesRouter = router({
         integracaoEmail:         input.integracaoEmail,
         integracaoPlataforma:    input.integracaoPlataforma,
         integracaoProcedimento:  input.integracaoProcedimento,
+        rg:                      input.rg,
+        orgaoEmissor:            input.orgaoEmissor,
+        dataNascimento:          input.dataNascimento || null,
+        estadoCivil:             input.estadoCivil,
+        sexo:                    input.sexo,
+        profissao:               input.profissao,
+        nacionalidade:           input.nacionalidade,
       }).returning();
       return row;
     }),
@@ -112,6 +131,7 @@ export const clientesRouter = router({
       observacoes:     z.string().optional(),
       ativo:           z.boolean().optional(),
       ...integracaoFields,
+      ...pfFields,
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();

@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3453** — **CLIENTES · CAMPOS PF (DATA NASCIMENTO, RG, ÓRGÃO EMISSOR, ESTADO CIVIL, SEXO, PROFISSÃO, NACIONALIDADE) + LEMBRETE DE ANIVERSÁRIO. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** 7 colunas adicionadas via ADD COLUMN IF NOT EXISTS no `[SyncSchema+]`. Seção "Dados Pessoais" no form (só PF). Indicador de aniversário no card: hoje=badge âmbar 🎂, ≤7 dias=azul, demais=cinza com idade. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3452** — **CLIENTES · NOMES EXIBIDOS SEMPRE EM CAIXA ALTA NA LISTAGEM. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Classe CSS `uppercase` adicionada em `razaoSocial` e `nomeFantasia` nos cards da página Clientes. Valor no banco intocado — só a exibição é transformada. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3451** — **OBRAS · MÚLTIPLOS CLIENTES POR OBRA (DONOS DA OBRA). BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Nova tabela `obra_clientes` (junction) criada via CREATE TABLE IF NOT EXISTS. 3 novas procedures (`listClientes`, `addCliente`, `removeCliente`). Seção "Clientes adicionais" com chips + combobox no formulário de edição de obra. `obras.cliente` intocado — backward compat total. Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3451** — **OBRAS · MÚLTIPLOS CLIENTES POR OBRA (DONOS DA OBRA). BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3450** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CRIAR CLIENTE INLINE NO FORM "LANÇAR NO CONTAS A RECEBER". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

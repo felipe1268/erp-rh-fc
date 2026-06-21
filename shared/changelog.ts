@@ -1,6 +1,50 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3453 — **CLIENTES · CAMPOS DE PESSOA FÍSICA (DATA DE NASCIMENTO, RG, ÓRGÃO EMISSOR,
+ * ESTADO CIVIL, SEXO, PROFISSÃO, NACIONALIDADE) + LEMBRETE DE ANIVERSÁRIO NA LISTAGEM.
+ * BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
+ *
+ * PROBLEMA: clientes PF (Pessoa Física) não tinham campos de dados pessoais além do CPF,
+ * tornando impossível registrar RG, data de nascimento e outras informações essenciais.
+ * Também não havia nenhum lembrete de aniversário para clientes PF.
+ *
+ * SOLUÇÃO — aditiva em 4 camadas:
+ *
+ * 1. BANCO (ADD COLUMN IF NOT EXISTS — R-001/R-007/R-010 OK):
+ *    - `rg VARCHAR(20)`
+ *    - `orgao_emissor VARCHAR(30)`
+ *    - `data_nascimento DATE`
+ *    - `estado_civil VARCHAR(20)`
+ *    - `sexo VARCHAR(10)`
+ *    - `profissao VARCHAR(100)`
+ *    - `nacionalidade VARCHAR(50)`
+ *    Adicionadas via bloco `[SyncSchema+]` em `server/_core/index.ts`.
+ *
+ * 2. SCHEMA DRIZZLE (`drizzle/schema.ts`): 7 novas colunas mapeadas na tabela `clientes`.
+ *
+ * 3. ROUTER (`server/routers/clientes.ts`): `pfFields` adicionado ao Zod input de `criar`
+ *    e `atualizar`, com repasse completo para o INSERT/UPDATE do Drizzle.
+ *
+ * 4. FRONTEND (`client/src/pages/Clientes.tsx`):
+ *    - `EMPTY_FORM` e `abrirEditar` recebem os 7 novos campos.
+ *    - Nova seção "Dados Pessoais" (fundo esmeralda, visível só quando tipo === "PF")
+ *      inserida após o bloco de Logo, antes de Endereço. Campos: Data de Nascimento
+ *      (input[type=date]), RG (font-mono), Órgão Emissor (uppercase automático), Estado
+ *      Civil (select), Sexo (select), Profissão, Nacionalidade.
+ *    - Preview de aniversário DENTRO do campo Data de Nascimento no form: se o dia de hoje
+ *      for o aniversário exibe "🎂 Aniversário hoje! N anos"; se faltar ≤7 dias mostra
+ *      "<Cake> Em N dias".
+ *    - Indicador de aniversário no CARD da listagem (para todos os clientes PF com
+ *      dataNascimento):
+ *        · Hoje: badge âmbar "🎂 Aniversário HOJE! N anos"
+ *        · ≤7 dias: linha azul "<Cake> Aniversário em N dias (DD/MM/AAAA)"
+ *        · Demais: linha cinza "<Cake> DD/MM/AAAA · N anos"
+ *    - Helper `calcAniversario()` puro (sem side-effects): lê a string ISO YYYY-MM-DD,
+ *      calcula próxima ocorrência do mês/dia em relação a hoje (considera passado no ano →
+ *      avança para o próximo ano), retorna { ehHoje, proximoDias, dataFormatada, idadeCompleta }.
+ *    - Constantes `ESTADO_CIVIL_OPTS` e `SEXO_OPTS` definidas no topo do arquivo.
+ *
  * Rev. 3452 — **CLIENTES · NOMES EXIBIDOS SEMPRE EM CAIXA ALTA NA LISTAGEM. 100% FRONTEND ·
  * ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Adicionada classe CSS `uppercase` (text-transform: uppercase) nos elementos `razaoSocial`

@@ -10,8 +10,34 @@ import { toast } from "sonner";
 import {
   Plus, Search, Pencil, Trash2, UserCheck, Building2, Phone, Mail,
   MapPin, Loader2, AlertCircle, CheckCircle2, CheckCircle, User, ShieldCheck,
-  Image as ImageIcon, Upload, X,
+  Image as ImageIcon, Upload, X, Cake,
 } from "lucide-react";
+
+// Rev. 3453 — helpers de aniversário
+function calcAniversario(dataNascimento: string | null | undefined): {
+  ehHoje: boolean;
+  proximoDias: number | null;
+  dataFormatada: string | null;
+  idadeCompleta: number | null;
+} {
+  if (!dataNascimento) return { ehHoje: false, proximoDias: null, dataFormatada: null, idadeCompleta: null };
+  const hoje = new Date();
+  const [ano, mes, dia] = dataNascimento.split("-").map(Number);
+  if (!ano || !mes || !dia) return { ehHoje: false, proximoDias: null, dataFormatada: null, idadeCompleta: null };
+  const dataFormatada = `${String(dia).padStart(2,"0")}/${String(mes).padStart(2,"0")}/${ano}`;
+  const idadeCompleta = hoje.getFullYear() - ano - (
+    (hoje.getMonth() + 1 < mes) || (hoje.getMonth() + 1 === mes && hoje.getDate() < dia) ? 1 : 0
+  );
+  const aniEsteAno = new Date(hoje.getFullYear(), mes - 1, dia);
+  if (aniEsteAno < hoje) aniEsteAno.setFullYear(hoje.getFullYear() + 1);
+  const diffMs = aniEsteAno.getTime() - new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()).getTime();
+  const proximoDias = Math.round(diffMs / (1000 * 60 * 60 * 24));
+  const ehHoje = proximoDias === 0;
+  return { ehHoje, proximoDias, dataFormatada, idadeCompleta };
+}
+
+const ESTADO_CIVIL_OPTS = ["Solteiro(a)", "Casado(a)", "Divorciado(a)", "Viúvo(a)", "União Estável", "Separado(a)"];
+const SEXO_OPTS = ["Masculino", "Feminino", "Outro", "Prefiro não informar"];
 
 const DIAS_SEMANA = [
   { key: "seg", label: "Seg" },
@@ -54,6 +80,14 @@ const EMPTY_FORM = {
   integracaoEmail:         "",
   integracaoPlataforma:    "",
   integracaoProcedimento:  "",
+  // Rev. 3453 — campos PF
+  rg:             "",
+  orgaoEmissor:   "",
+  dataNascimento: "",
+  estadoCivil:    "",
+  sexo:           "",
+  profissao:      "",
+  nacionalidade:  "",
 };
 
 export default function Clientes() {
@@ -183,6 +217,13 @@ export default function Clientes() {
       integracaoEmail:         c.integracaoEmail ?? "",
       integracaoPlataforma:    c.integracaoPlataforma ?? "",
       integracaoProcedimento:  c.integracaoProcedimento ?? "",
+      rg:             c.rg ?? "",
+      orgaoEmissor:   c.orgaoEmissor ?? "",
+      dataNascimento: c.dataNascimento ?? "",
+      estadoCivil:    c.estadoCivil ?? "",
+      sexo:           c.sexo ?? "",
+      profissao:      c.profissao ?? "",
+      nacionalidade:  c.nacionalidade ?? "",
     });
     setEditandoId(c.id);
     setCnpjPreenchido(true);
@@ -343,6 +384,30 @@ export default function Clientes() {
                         <span className="truncate">Contato: {c.contatoNome}</span>
                       </div>
                     )}
+                    {/* Rev. 3453 — aniversário PF */}
+                    {c.tipo === "PF" && c.dataNascimento && (() => {
+                      const { ehHoje, proximoDias, dataFormatada, idadeCompleta } = calcAniversario(c.dataNascimento);
+                      if (ehHoje) return (
+                        <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-0.5">
+                          <span className="text-base leading-none">🎂</span>
+                          <span className="text-[11px] font-semibold text-amber-700">
+                            Aniversário HOJE! {idadeCompleta} anos
+                          </span>
+                        </div>
+                      );
+                      if (proximoDias !== null && proximoDias <= 7) return (
+                        <div className="flex items-center gap-1.5 text-blue-600">
+                          <Cake className="h-3.5 w-3.5 shrink-0" />
+                          <span className="text-[11px]">Aniversário em {proximoDias} dia{proximoDias !== 1 ? "s" : ""} ({dataFormatada})</span>
+                        </div>
+                      );
+                      return (
+                        <div className="flex items-center gap-1.5 text-slate-400">
+                          <Cake className="h-3.5 w-3.5 shrink-0" />
+                          <span className="text-[11px]">{dataFormatada} · {idadeCompleta} anos</span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -521,6 +586,101 @@ export default function Clientes() {
                   </label>
                 </div>
               </div>
+
+              {/* Dados Pessoais PF — Rev. 3453 */}
+              {form.tipo === "PF" && (
+                <div className="bg-emerald-50 rounded-lg p-3 space-y-3 border border-emerald-100">
+                  <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide flex items-center gap-1.5">
+                    <User className="h-3.5 w-3.5" /> Dados Pessoais
+                  </p>
+
+                  {/* Linha 1: Data de Nascimento + RG + Órgão Emissor */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <Label className="text-xs font-medium">Data de Nascimento</Label>
+                      <Input
+                        type="date"
+                        value={form.dataNascimento}
+                        onChange={e => setForm(f => ({ ...f, dataNascimento: e.target.value }))}
+                        className="mt-1"
+                      />
+                      {form.dataNascimento && (() => {
+                        const { ehHoje, proximoDias, idadeCompleta } = calcAniversario(form.dataNascimento);
+                        if (ehHoje) return <p className="mt-1 text-[11px] text-amber-700 font-semibold flex items-center gap-1">🎂 Aniversário hoje! {idadeCompleta} anos</p>;
+                        if (proximoDias !== null && proximoDias <= 7) return <p className="mt-1 text-[11px] text-blue-600 flex items-center gap-1"><Cake className="h-3 w-3" /> Em {proximoDias} dia{proximoDias !== 1 ? "s" : ""}</p>;
+                        return null;
+                      })()}
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium">RG</Label>
+                      <Input
+                        value={form.rg}
+                        onChange={e => setForm(f => ({ ...f, rg: e.target.value }))}
+                        className="mt-1 font-mono"
+                        placeholder="00.000.000-0"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium">Órgão Emissor</Label>
+                      <Input
+                        value={form.orgaoEmissor}
+                        onChange={e => setForm(f => ({ ...f, orgaoEmissor: e.target.value.toUpperCase() }))}
+                        className="mt-1"
+                        placeholder="SSP/SP"
+                        maxLength={30}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Linha 2: Estado Civil + Sexo + Profissão */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <Label className="text-xs font-medium">Estado Civil</Label>
+                      <select
+                        value={form.estadoCivil}
+                        onChange={e => setForm(f => ({ ...f, estadoCivil: e.target.value }))}
+                        className="mt-1 w-full text-xs border border-input rounded-md px-2 py-1.5 bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        <option value="">Selecionar...</option>
+                        {ESTADO_CIVIL_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium">Sexo</Label>
+                      <select
+                        value={form.sexo}
+                        onChange={e => setForm(f => ({ ...f, sexo: e.target.value }))}
+                        className="mt-1 w-full text-xs border border-input rounded-md px-2 py-1.5 bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        <option value="">Selecionar...</option>
+                        {SEXO_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium">Profissão</Label>
+                      <Input
+                        value={form.profissao}
+                        onChange={e => setForm(f => ({ ...f, profissao: e.target.value }))}
+                        className="mt-1"
+                        placeholder="Engenheiro, Arquiteto..."
+                      />
+                    </div>
+                  </div>
+
+                  {/* Linha 3: Nacionalidade */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <Label className="text-xs font-medium">Nacionalidade</Label>
+                      <Input
+                        value={form.nacionalidade}
+                        onChange={e => setForm(f => ({ ...f, nacionalidade: e.target.value }))}
+                        className="mt-1"
+                        placeholder="Brasileiro(a)"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Endereço */}
               <div className="bg-slate-50 rounded-lg p-3 space-y-3">

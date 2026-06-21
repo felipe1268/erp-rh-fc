@@ -3848,6 +3848,19 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3437: colunas ciclo_* garantidas em empresas_terceiras (ciclo de fechamento de fornecedor).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3437 empresas_terceiras.ciclo_*:`, e?.message || e); }
 
+        // Rev. 3453 — Dados PF de clientes (data_nascimento, rg, orgao_emissor, estado_civil,
+        // sexo, profissao, nacionalidade). ADD COLUMN IF NOT EXISTS (R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`ALTER TABLE clientes ADD COLUMN IF NOT EXISTS rg VARCHAR(20)`);
+          await db.execute(sql`ALTER TABLE clientes ADD COLUMN IF NOT EXISTS orgao_emissor VARCHAR(30)`);
+          await db.execute(sql`ALTER TABLE clientes ADD COLUMN IF NOT EXISTS data_nascimento DATE`);
+          await db.execute(sql`ALTER TABLE clientes ADD COLUMN IF NOT EXISTS estado_civil VARCHAR(20)`);
+          await db.execute(sql`ALTER TABLE clientes ADD COLUMN IF NOT EXISTS sexo VARCHAR(10)`);
+          await db.execute(sql`ALTER TABLE clientes ADD COLUMN IF NOT EXISTS profissao VARCHAR(100)`);
+          await db.execute(sql`ALTER TABLE clientes ADD COLUMN IF NOT EXISTS nacionalidade VARCHAR(50)`);
+          console.log(`[SyncSchema+] Rev. 3453: colunas PF (rg/orgao_emissor/data_nascimento/estado_civil/sexo/profissao/nacionalidade) garantidas em clientes.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3453 clientes PF:`, e?.message || e); }
+
         // Rev. 3451 — Múltiplos clientes por obra. CREATE TABLE/INDEX IF NOT EXISTS
         // (R-001/R-007/R-010 OK — sem ALTER/DROP/DELETE).
         try {
