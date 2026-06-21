@@ -1,4 +1,5 @@
 import { useMemo, useState, useRef, useEffect, Fragment } from "react";
+import { createPortal } from "react-dom";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -5557,215 +5558,195 @@ export default function FinanceiroConciliacao() {
           </DialogContent>
         </Dialog>
 
-        {/* Rev. 3427 — Dialog full-screen moderno: Vincular cheque devolvido a PIX/TED */}
-        <Dialog open={vincularPixDlg != null} onOpenChange={(o) => { if (!o) { setVincularPixDlg(null); setVincularPixSel(null); setVincularPixBusca(""); setVincularPixSoProximos(false); } }}>
-          <DialogContent className="dlg-fullscreen shadow-2xl">
-            {vincularPixDlg && (() => {
-              const chq = vincularPixDlg.cheque;
-              const valCents = chq.valorCents ?? Math.round(Math.abs(Number(chq.valor ?? 0)) * 100);
-              const limiarProxCents = Math.max(Math.round(valCents * 0.15), 200); // ±15% ou R$2
-              const pixRe = /pix|ted\b|transf/i;
-              const candidatasPix = repExtRaw
-                .filter((l: any) => Number(l.valor) < 0 && !l.reversal && pixRe.test(String(l.descricao ?? "")))
-                .sort((a: any, b: any) => {
-                  const da = Math.abs(Math.abs(Math.round(Number(a.valor) * 100)) - valCents);
-                  const db2 = Math.abs(Math.abs(Math.round(Number(b.valor) * 100)) - valCents);
-                  return da - db2;
-                });
-              const buscaNorm = vincularPixBusca.trim().toLowerCase();
-              const candidatasFiltradas = candidatasPix
-                .filter((l: any) => {
-                  if (vincularPixSoProximos) {
-                    const diff = Math.abs(Math.abs(Math.round(Number(l.valor) * 100)) - valCents);
-                    if (diff > limiarProxCents) return false;
-                  }
-                  if (!buscaNorm) return true;
-                  return String(l.descricao ?? "").toLowerCase().includes(buscaNorm)
-                    || String(fmtData(l.data)).includes(buscaNorm)
-                    || String(formatBRL(Math.abs(Number(l.valor)))).includes(buscaNorm);
-                });
-              const nProximos = candidatasPix.filter((l: any) => Math.abs(Math.abs(Math.round(Number(l.valor) * 100)) - valCents) <= limiarProxCents).length;
-              const closeDialog = () => { setVincularPixDlg(null); setVincularPixSel(null); setVincularPixBusca(""); setVincularPixSoProximos(false); };
-              return (
-                <>
-                  {/* ── HEADER ESCURO ── */}
-                  <div className="shrink-0 bg-gradient-to-br from-indigo-900 via-indigo-800 to-indigo-700 text-white px-5 pt-5 pb-4">
-                    {/* Título + fechar */}
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-white/15 rounded-xl p-2.5">
-                          <ArrowLeftRight className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <DialogTitle className="text-white text-base font-bold leading-tight">Vincular cheque devolvido a PIX/TED</DialogTitle>
-                          <DialogDescription className="text-indigo-300 text-xs mt-0.5">Selecione o PIX/TED que substituiu este cheque</DialogDescription>
-                        </div>
+        {/* Rev. 3429 — Portal full-screen nativo (sem Radix Dialog) */}
+        {vincularPixDlg != null && createPortal((() => {
+          const chq = vincularPixDlg.cheque;
+          const valCents = chq.valorCents ?? Math.round(Math.abs(Number(chq.valor ?? 0)) * 100);
+          const limiarProxCents = Math.max(Math.round(valCents * 0.15), 200);
+          const pixRe = /pix|ted\b|transf/i;
+          const candidatasPix = repExtRaw
+            .filter((l: any) => Number(l.valor) < 0 && !l.reversal && pixRe.test(String(l.descricao ?? "")))
+            .sort((a: any, b: any) => {
+              const da = Math.abs(Math.abs(Math.round(Number(a.valor) * 100)) - valCents);
+              const db2 = Math.abs(Math.abs(Math.round(Number(b.valor) * 100)) - valCents);
+              return da - db2;
+            });
+          const buscaNorm = vincularPixBusca.trim().toLowerCase();
+          const candidatasFiltradas = candidatasPix.filter((l: any) => {
+            if (vincularPixSoProximos) {
+              if (Math.abs(Math.abs(Math.round(Number(l.valor) * 100)) - valCents) > limiarProxCents) return false;
+            }
+            if (!buscaNorm) return true;
+            return String(l.descricao ?? "").toLowerCase().includes(buscaNorm)
+              || String(fmtData(l.data)).includes(buscaNorm)
+              || String(formatBRL(Math.abs(Number(l.valor)))).includes(buscaNorm);
+          });
+          const nProximos = candidatasPix.filter((l: any) => Math.abs(Math.abs(Math.round(Number(l.valor) * 100)) - valCents) <= limiarProxCents).length;
+          const closeDialog = () => { setVincularPixDlg(null); setVincularPixSel(null); setVincularPixBusca(""); setVincularPixSoProximos(false); };
+          return (
+            <>
+              {/* Backdrop */}
+              <div style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.55)" }} onClick={closeDialog} />
+              {/* Painel full-screen */}
+              <div style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", flexDirection: "column", background: "#fff", overflow: "hidden" }}>
+                {/* ── HEADER ── */}
+                <div style={{ flexShrink: 0, background: "linear-gradient(135deg,#1e1b4b,#3730a3,#4338ca)", color: "#fff", padding: "20px 20px 16px" }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ background: "rgba(255,255,255,0.15)", borderRadius: 12, padding: 10 }}>
+                        <ArrowLeftRight style={{ width: 20, height: 20 }} />
                       </div>
-                      <button type="button" onClick={closeDialog} className="text-white/60 hover:text-white transition-colors rounded-lg p-1.5 hover:bg-white/10">
-                        <X className="w-5 h-5" />
+                      <div>
+                        <p style={{ fontWeight: 700, fontSize: 15, margin: 0 }}>Vincular cheque devolvido a PIX/TED</p>
+                        <p style={{ fontSize: 11, color: "#a5b4fc", margin: "2px 0 0" }}>Selecione o PIX/TED que substituiu este cheque</p>
+                      </div>
+                    </div>
+                    <button type="button" onClick={closeDialog} style={{ background: "rgba(255,255,255,0.1)", border: "none", borderRadius: 8, padding: 8, cursor: "pointer", color: "#fff", display: "flex", alignItems: "center" }}>
+                      <X style={{ width: 20, height: 20 }} />
+                    </button>
+                  </div>
+                  {/* Card cheque */}
+                  <div style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 16, padding: "12px 16px", display: "flex", alignItems: "center", gap: 16 }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <p style={{ fontWeight: 600, fontSize: 14, margin: 0 }}>Cheque Doc {chq.doc ?? chq.chequeNumero}</p>
+                      {chq.fornecedor && <p style={{ fontSize: 11, color: "#c7d2fe", margin: "2px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{chq.fornecedor}</p>}
+                      <p style={{ fontSize: 11, color: "#818cf8", margin: "2px 0 0" }}>Devolvido em {fmtData(chq.dataCredito)}</p>
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <p style={{ fontWeight: 700, fontSize: 20, margin: 0, fontVariantNumeric: "tabular-nums" }}>{formatBRL(Math.abs(Number(chq.valor ?? 0)))}</p>
+                      <p style={{ fontSize: 10, color: "#818cf8", margin: "2px 0 0" }}>valor do cheque</p>
+                    </div>
+                  </div>
+                  {/* Busca */}
+                  <div style={{ position: "relative", marginTop: 12 }}>
+                    <Search style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", width: 16, height: 16, color: "rgba(255,255,255,0.4)", pointerEvents: "none" }} />
+                    <input
+                      type="text"
+                      placeholder="Buscar por descrição, data ou valor…"
+                      value={vincularPixBusca}
+                      onChange={e => setVincularPixBusca(e.target.value)}
+                      autoFocus
+                      style={{ width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 12, paddingLeft: 40, paddingRight: vincularPixBusca ? 36 : 14, paddingTop: 10, paddingBottom: 10, color: "#fff", fontSize: 14, outline: "none" }}
+                    />
+                    {vincularPixBusca && (
+                      <button type="button" onClick={() => setVincularPixBusca("")} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.5)", display: "flex" }}>
+                        <X style={{ width: 16, height: 16 }} />
                       </button>
+                    )}
+                  </div>
+                </div>
+                {/* ── FILTROS ── */}
+                <div style={{ flexShrink: 0, background: "#f9fafb", borderBottom: "1px solid #e5e7eb", padding: "8px 16px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={() => setVincularPixSoProximos(v => !v)}
+                    style={{ display: "flex", alignItems: "center", gap: 6, borderRadius: 999, padding: "4px 12px", fontSize: 12, fontWeight: 500, border: `1px solid ${vincularPixSoProximos ? "#4f46e5" : "#d1d5db"}`, background: vincularPixSoProximos ? "#4f46e5" : "#fff", color: vincularPixSoProximos ? "#fff" : "#4b5563", cursor: "pointer" }}
+                  >
+                    {vincularPixSoProximos ? "✓" : "◎"} Só próximos ({nProximos})
+                  </button>
+                  <span style={{ fontSize: 12, color: "#9ca3af", marginLeft: "auto" }}>
+                    {candidatasFiltradas.length} resultado{candidatasFiltradas.length !== 1 ? "s" : ""}{buscaNorm ? ` · "${vincularPixBusca}"` : ""}
+                  </span>
+                </div>
+                {/* ── SUGESTÃO ── */}
+                {vincularPixDlg.pixPreSel && !vincularPixSel && (
+                  <div style={{ flexShrink: 0, margin: "12px 16px 0", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 12, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                    <CheckCircle style={{ width: 16, height: 16, color: "#3b82f6", flexShrink: 0 }} />
+                    <div style={{ minWidth: 0, flex: 1, fontSize: 12, color: "#1e40af" }}>
+                      <p style={{ fontWeight: 600, margin: 0 }}>Sugestão automática</p>
+                      <p style={{ margin: "1px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#2563eb" }}>{vincularPixDlg.pixPreSel.descricao}</p>
                     </div>
-                    {/* Card do cheque */}
-                    <div className="bg-white/10 border border-white/20 rounded-2xl px-4 py-3 flex items-center gap-4">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-white font-semibold text-sm">Cheque Doc {chq.doc ?? chq.chequeNumero}</p>
-                        {chq.fornecedor && <p className="text-indigo-200 text-xs truncate mt-0.5">{chq.fornecedor}</p>}
-                        <p className="text-indigo-300 text-xs mt-0.5">Devolvido em {fmtData(chq.dataCredito)}</p>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className="text-white font-bold text-xl tabular-nums">{formatBRL(Math.abs(Number(chq.valor ?? 0)))}</p>
-                        <p className="text-indigo-300 text-[10px] mt-0.5">valor do cheque</p>
-                      </div>
-                    </div>
-                    {/* Barra de busca */}
-                    <div className="relative mt-3">
-                      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40 pointer-events-none" />
-                      <input
-                        type="text"
-                        placeholder="Buscar por descrição, data ou valor…"
-                        value={vincularPixBusca}
-                        onChange={e => setVincularPixBusca(e.target.value)}
-                        className="w-full bg-white/10 border border-white/20 rounded-xl pl-10 pr-10 py-2.5 text-white text-sm placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-white/30 focus:bg-white/15"
-                        autoFocus
-                      />
-                      {vincularPixBusca && (
-                        <button type="button" onClick={() => setVincularPixBusca("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white">
-                          <X className="w-4 h-4" />
-                        </button>
+                    <button type="button" style={{ fontSize: 12, color: "#1d4ed8", fontWeight: 600, textDecoration: "underline", background: "none", border: "none", cursor: "pointer", flexShrink: 0 }} onClick={() => setVincularPixSel(vincularPixDlg.pixPreSel)}>Usar</button>
+                  </div>
+                )}
+                {/* ── LISTA ── */}
+                <div style={{ flex: 1, overflowY: "auto", background: "#f9fafb", padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+                  {candidatasFiltradas.length === 0 ? (
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 160, textAlign: "center", gap: 8 }}>
+                      <span style={{ fontSize: 32 }}>🔍</span>
+                      <p style={{ fontSize: 14, fontWeight: 500, color: "#4b5563", margin: 0 }}>{buscaNorm ? "Nenhum resultado para a busca" : vincularPixSoProximos ? "Nenhum PIX/TED próximo ao valor" : "Nenhum PIX/TED no extrato"}</p>
+                      {(buscaNorm || vincularPixSoProximos) && (
+                        <button type="button" style={{ fontSize: 12, color: "#4f46e5", textDecoration: "underline", background: "none", border: "none", cursor: "pointer" }} onClick={() => { setVincularPixBusca(""); setVincularPixSoProximos(false); }}>Limpar filtros</button>
                       )}
                     </div>
-                  </div>
-
-                  {/* ── BARRA DE FILTROS ── */}
-                  <div className="shrink-0 bg-gray-50 border-b px-4 py-2 flex items-center gap-3 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => setVincularPixSoProximos(v => !v)}
-                      className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium border transition-all ${vincularPixSoProximos ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600 border-gray-300 hover:border-indigo-400 hover:text-indigo-600"}`}
-                    >
-                      <span>{vincularPixSoProximos ? "✓" : "◎"}</span>
-                      Só próximos ao valor ({nProximos})
-                    </button>
-                    <span className="text-xs text-gray-400 ml-auto">
-                      {candidatasFiltradas.length} resultado{candidatasFiltradas.length !== 1 ? "s" : ""}
-                      {buscaNorm ? ` · "${vincularPixBusca}"` : ""}
-                    </span>
-                  </div>
-
-                  {/* ── SUGESTÃO AUTO ── */}
-                  {vincularPixDlg.pixPreSel && !vincularPixSel && (
-                    <div className="shrink-0 mx-4 mt-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 flex items-center gap-3">
-                      <CheckCircle className="w-4 h-4 text-blue-500 shrink-0" />
-                      <div className="min-w-0 flex-1 text-xs text-blue-800">
-                        <p className="font-semibold">Sugestão identificada automaticamente</p>
-                        <p className="truncate text-blue-600">{vincularPixDlg.pixPreSel.descricao}</p>
+                  ) : candidatasFiltradas.map((l: any) => {
+                    const isSelected = vincularPixSel?.id === l.id;
+                    const diffCents = Math.abs(Math.abs(Math.round(Number(l.valor) * 100)) - valCents);
+                    const isExact = diffCents === 0;
+                    const isProx = diffCents <= limiarProxCents;
+                    const pctDiff = valCents > 0 ? Math.round(diffCents / valCents * 100) : 0;
+                    const proximidadeLabel = isExact ? "= exato" : isProx ? `±${pctDiff}%` : null;
+                    const badgeStyle: React.CSSProperties = isExact
+                      ? { background: "#d1fae5", color: "#065f46", border: "1px solid #a7f3d0", borderRadius: 999, fontSize: 10, fontWeight: 600, padding: "1px 7px" }
+                      : isProx ? { background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a", borderRadius: 999, fontSize: 10, fontWeight: 600, padding: "1px 7px" }
+                      : { background: "#f3f4f6", color: "#6b7280", border: "1px solid #e5e7eb", borderRadius: 999, fontSize: 10, fontWeight: 600, padding: "1px 7px" };
+                    const cardBorder = isSelected ? "2px solid #4f46e5" : isExact ? "2px solid #6ee7b7" : isProx ? "2px solid #fde68a" : "2px solid #e5e7eb";
+                    const cardBg = isSelected ? "#eef2ff" : "#fff";
+                    return (
+                      <button
+                        key={l.id}
+                        type="button"
+                        style={{ width: "100%", textAlign: "left", border: cardBorder, borderRadius: 12, padding: "12px 14px", background: cardBg, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, boxShadow: isSelected ? "0 2px 8px rgba(79,70,229,0.15)" : "none" }}
+                        onClick={() => setVincularPixSel(isSelected ? null : l)}
+                      >
+                        <div style={{ flexShrink: 0, width: 20, height: 20, borderRadius: "50%", border: `2px solid ${isSelected ? "#4f46e5" : "#d1d5db"}`, background: isSelected ? "#4f46e5" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          {isSelected && <Check style={{ width: 12, height: 12, color: "#fff" }} />}
+                        </div>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <p style={{ margin: 0, fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: isSelected ? "#312e81" : "#111827" }}>{l.descricao}</p>
+                          <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b7280" }}>{fmtData(l.data)}</p>
+                        </div>
+                        <div style={{ flexShrink: 0, textAlign: "right" }}>
+                          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: isSelected ? "#4338ca" : isExact ? "#047857" : "#111827" }}>{formatBRL(Math.abs(Number(l.valor)))}</p>
+                          {proximidadeLabel && <span style={badgeStyle}>{proximidadeLabel}</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* ── FOOTER ── */}
+                <div style={{ flexShrink: 0, borderTop: "1px solid #e5e7eb", background: "#fff", padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+                  {vincularPixSel && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 12, padding: "8px 12px" }}>
+                      <CheckCircle style={{ width: 16, height: 16, color: "#16a34a", flexShrink: 0 }} />
+                      <div style={{ minWidth: 0, flex: 1, fontSize: 12, color: "#166534" }}>
+                        <p style={{ fontWeight: 600, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{vincularPixSel.descricao}</p>
+                        <p style={{ margin: "1px 0 0", color: "#16a34a" }}>{fmtData(vincularPixSel.data)} · {formatBRL(Math.abs(Number(vincularPixSel.valor)))}</p>
                       </div>
-                      <button type="button" className="text-xs text-blue-700 font-semibold underline shrink-0" onClick={() => setVincularPixSel(vincularPixDlg.pixPreSel)}>Usar</button>
+                      <button type="button" onClick={() => setVincularPixSel(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", display: "flex", flexShrink: 0 }}><X style={{ width: 16, height: 16 }} /></button>
                     </div>
                   )}
-
-                  {/* ── LISTA ── */}
-                  <div className="flex-1 overflow-y-auto bg-gray-50 px-4 py-3">
-                    {candidatasFiltradas.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center h-40 text-center gap-2">
-                        <div className="text-3xl">🔍</div>
-                        <p className="text-sm font-medium text-gray-600">{buscaNorm ? "Nenhum resultado para a busca" : vincularPixSoProximos ? "Nenhum PIX/TED próximo ao valor" : "Nenhum PIX/TED no extrato"}</p>
-                        {(buscaNorm || vincularPixSoProximos) && (
-                          <button type="button" className="text-xs text-indigo-600 underline" onClick={() => { setVincularPixBusca(""); setVincularPixSoProximos(false); }}>Limpar filtros</button>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex flex-col gap-2">
-                        {candidatasFiltradas.map((l: any) => {
-                          const isSelected = vincularPixSel?.id === l.id;
-                          const diffCents = Math.abs(Math.abs(Math.round(Number(l.valor) * 100)) - valCents);
-                          const isExact = diffCents === 0;
-                          const isProx = diffCents <= limiarProxCents;
-                          const pctDiff = valCents > 0 ? Math.round(diffCents / valCents * 100) : 0;
-                          const proximidadeLabel = isExact ? "= valor exato" : isProx ? `±${pctDiff}%` : null;
-                          const proximidadeCls = isExact
-                            ? "text-emerald-700 bg-emerald-100 border-emerald-200"
-                            : isProx ? "text-amber-700 bg-amber-100 border-amber-200"
-                            : "text-gray-500 bg-gray-100 border-gray-200";
-                          const borderCls = isSelected ? "border-indigo-500 bg-indigo-50 shadow-md" : isExact ? "border-emerald-300 bg-white" : isProx ? "border-amber-200 bg-white" : "border-gray-200 bg-white";
-                          return (
-                            <button
-                              key={l.id}
-                              type="button"
-                              className={`w-full text-left rounded-xl border-2 px-4 py-3 transition-all hover:shadow-sm ${borderCls}`}
-                              onClick={() => setVincularPixSel(isSelected ? null : l)}
-                            >
-                              <div className="flex items-center gap-3">
-                                {/* Ícone de seleção */}
-                                <div className={`shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? "bg-indigo-600 border-indigo-600" : "border-gray-300"}`}>
-                                  {isSelected && <Check className="w-3 h-3 text-white" />}
-                                </div>
-                                {/* Info */}
-                                <div className="min-w-0 flex-1">
-                                  <p className={`text-sm font-medium truncate ${isSelected ? "text-indigo-900" : "text-gray-800"}`}>{l.descricao}</p>
-                                  <p className="text-xs text-gray-500 mt-0.5">{fmtData(l.data)}</p>
-                                </div>
-                                {/* Valor + badge proximidade */}
-                                <div className="shrink-0 text-right">
-                                  <p className={`font-bold text-sm tabular-nums ${isSelected ? "text-indigo-700" : isExact ? "text-emerald-700" : "text-gray-800"}`}>
-                                    {formatBRL(Math.abs(Number(l.valor)))}
-                                  </p>
-                                  {proximidadeLabel && (
-                                    <span className={`text-[10px] font-semibold rounded-full px-2 py-0.5 border ${proximidadeCls}`}>{proximidadeLabel}</span>
-                                  )}
-                                </div>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
+                  <div style={{ display: "flex", gap: 12 }}>
+                    <Button variant="outline" style={{ flex: 1 }} onClick={closeDialog} disabled={vincularChequePix.isPending}>Cancelar</Button>
+                    <Button
+                      style={{ flex: 1, background: "#4f46e5", color: "#fff", fontWeight: 600 }}
+                      disabled={!vincularPixSel || vincularChequePix.isPending || !vincularPixDlg?.cheque?.chequeNumero}
+                      onClick={async () => {
+                        if (!vincularPixSel || !vincularPixDlg?.cheque?.chequeNumero || !companyId) return;
+                        try {
+                          const res = await vincularChequePix.mutateAsync({
+                            companyId: Number(companyId),
+                            numeroCheque: String(vincularPixDlg.cheque.chequeNumero),
+                            pixData: String(vincularPixSel.data ?? "").slice(0, 10),
+                            pixDescricao: vincularPixSel.descricao ?? undefined,
+                            pixValor: vincularPixSel.valor != null ? Math.abs(Number(vincularPixSel.valor)) : undefined,
+                          });
+                          toast({ title: "Cheque vinculado ao PIX/TED", description: `${res.updated > 0 ? "Controle de Cheques atualizado com sucesso." : "Nenhum cheque encontrado com este número."}` });
+                          closeDialog();
+                          refetchReport();
+                        } catch (err: any) {
+                          toast({ title: "Erro ao vincular", description: String(err?.message ?? err), variant: "destructive" });
+                        }
+                      }}
+                    >
+                      {vincularChequePix.isPending ? <><Loader2 style={{ width: 16, height: 16, marginRight: 4 }} className="animate-spin" />Salvando…</> : <>✓ Confirmar vínculo</>}
+                    </Button>
                   </div>
-
-                  {/* ── FOOTER ── */}
-                  <div className="shrink-0 border-t bg-white px-4 py-3 flex flex-col gap-2">
-                    {vincularPixSel && (
-                      <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
-                        <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <div className="min-w-0 flex-1 text-xs text-emerald-800">
-                          <p className="font-semibold truncate">{vincularPixSel.descricao}</p>
-                          <p className="text-emerald-600">{fmtData(vincularPixSel.data)} · {formatBRL(Math.abs(Number(vincularPixSel.valor)))}</p>
-                        </div>
-                        <button type="button" onClick={() => setVincularPixSel(null)} className="shrink-0 text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
-                      </div>
-                    )}
-                    <div className="flex gap-3">
-                      <Button variant="outline" className="flex-1" onClick={closeDialog} disabled={vincularChequePix.isPending}>Cancelar</Button>
-                      <Button
-                        className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold"
-                        disabled={!vincularPixSel || vincularChequePix.isPending || !vincularPixDlg?.cheque?.chequeNumero}
-                        onClick={async () => {
-                          if (!vincularPixSel || !vincularPixDlg?.cheque?.chequeNumero || !companyId) return;
-                          try {
-                            const res = await vincularChequePix.mutateAsync({
-                              companyId: Number(companyId),
-                              numeroCheque: String(vincularPixDlg.cheque.chequeNumero),
-                              pixData: String(vincularPixSel.data ?? "").slice(0, 10),
-                              pixDescricao: vincularPixSel.descricao ?? undefined,
-                              pixValor: vincularPixSel.valor != null ? Math.abs(Number(vincularPixSel.valor)) : undefined,
-                            });
-                            toast({ title: "Cheque vinculado ao PIX/TED", description: `${res.updated > 0 ? "Controle de Cheques atualizado com sucesso." : "Nenhum cheque encontrado com este número."}` });
-                            closeDialog();
-                            refetchReport();
-                          } catch (err: any) {
-                            toast({ title: "Erro ao vincular", description: String(err?.message ?? err), variant: "destructive" });
-                          }
-                        }}
-                      >
-                        {vincularChequePix.isPending ? <><Loader2 className="w-4 h-4 animate-spin mr-1" />Salvando…</> : <>✓ Confirmar vínculo</>}
-                      </Button>
-                    </div>
-                  </div>
-                </>
-              );
-            })()}
-          </DialogContent>
-        </Dialog>
+                </div>
+              </div>
+            </>
+          );
+        })(), document.body)}
 
         {/* Rev. 3413 — Dialog inline "Cadastrar nova obra" acionado pelo botão "+ Nova obra" */}
         <Dialog open={lancNewObraOpen} onOpenChange={(o) => { if (!o) setLancNewObraOpen(false); }}>

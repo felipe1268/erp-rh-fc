@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3429 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO DEFINITIVA: DIALOG
+ * "VINCULAR PIX/TED" SUBSTITUÍDO POR createPortal NATIVO. 100% FRONTEND ·
+ * ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Radix Dialog + CSS !important não resolveram: o portal do Radix ainda tinha
+ * interferência de z-index / transform do layout. Solução definitiva: substituído por
+ * `createPortal(<div style={{position:"fixed",inset:0,zIndex:9999}}>, document.body)`.
+ * Backdrop z-index 9998, painel z-index 9999, todos os estilos via `style={}` inline
+ * (não Tailwind/Radix). Layout: header gradient indigo, filtro "Só próximos", lista de
+ * cards, footer com resumo do selecionado.
+ * Adicionado `import { createPortal } from "react-dom"`.
+ *
  * Rev. 3428 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO: DIALOG "VINCULAR PIX/TED"
  * CORTADO/MAL-POSICIONADO (REV. 3427). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
