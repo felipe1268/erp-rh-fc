@@ -2304,10 +2304,12 @@ export default function FinanceiroConciliacao() {
                       const isConsol = accSt === "consolidado";
                       const isLanc = accSt === "lancamento";
                       // Rev. 3405+ — contas sem extrato (vazio) ficam visualmente apagadas
-                      const isSemExtrato = !isConsol && !isLanc;
+                      // Rev. 3423 — Caixa Interno com confirmações NÃO é "sem extrato"
+                      const isCaixaInterno = Number(b.caixaInterno) === 1;
                       // Rev. 3420 — qtd de conciliações feitas (p/ destaque no card "A conciliar")
                       const { conciliadas: nConcil = 0, total: nTotal = 0 } = accConciliadasMap[Number(b.id)] ?? {};
-                      const temConciliacoes = isLanc && nConcil > 0;
+                      const isSemExtrato = !isConsol && !isLanc && !(isCaixaInterno && nTotal > 0);
+                      const temConciliacoes = (isLanc || isCaixaInterno) && nConcil > 0;
                       const pctConcil = nTotal > 0 ? Math.round(nConcil / nTotal * 100) : 0;
                       const cardCls = isSel
                         ? (isConsol
@@ -2368,9 +2370,10 @@ export default function FinanceiroConciliacao() {
                                 : isLanc ? "bg-blue-100 text-blue-700"
                                 : "bg-gray-100 text-gray-500"
                               }`}>
-                                {isConsol ? <><CheckCircle className="h-2.5 w-2.5" />Conciliado</>
-                                  : temConciliacoes ? <><CheckCircle className="h-2.5 w-2.5" />{nConcil}/{nTotal} conciliados</>
+                                {isConsol ? <><CheckCircle className="h-2.5 w-2.5" />{isCaixaInterno ? "Confirmado" : "Conciliado"}</>
+                                  : temConciliacoes ? <><CheckCircle className="h-2.5 w-2.5" />{nConcil}/{nTotal} {isCaixaInterno ? "confirmados" : "conciliados"}</>
                                   : isLanc ? <><AlertCircle className="h-2.5 w-2.5" />A conciliar</>
+                                  : isCaixaInterno ? "Sem confirmações"
                                   : "Sem extrato"}
                               </span>
                               {temConciliacoes && (

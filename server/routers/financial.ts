@@ -5542,7 +5542,31 @@ export const financialRouter = router({
          LEFT JOIN financial_internal_overrides ov
            ON ov.line_id=b.id AND ov.company_id=b.company_id AND ov.natureza IN ('efetivo','interno')
         WHERE b.company_id=$1 AND b.data>=$2 AND b.data<=$3 AND b.excluido_em IS NULL
-        GROUP BY b.conta_bancaria_id`,
+        GROUP BY b.conta_bancaria_id
+        UNION ALL
+        -- Rev. 3423 — Caixa Interno: contar confirmações (financial_entries) p/ destacar o card
+        SELECT e.conta_bancaria_id AS "contaBancariaId",
+               COUNT(*)::int AS total,
+               SUM(CASE WHEN COALESCE(e.conciliado,0)=1 THEN 1 ELSE 0 END)::int AS conciliadas,
+               COALESCE(SUM(ABS(COALESCE(e.valor_realizado, e.valor_previsto, 0))),0) AS "valorTotal",
+               COALESCE(SUM(CASE WHEN COALESCE(e.conciliado,0)=1 THEN ABS(COALESCE(e.valor_realizado, e.valor_previsto, 0)) ELSE 0 END),0) AS "valorConciliado",
+               0::numeric AS "valorEntradas",
+               0::numeric AS "valorSaidas",
+               0::numeric AS "valorConciliadoEntradas",
+               0::numeric AS "valorConciliadoSaidas",
+               0::int AS "pendentesEntradas",
+               0::int AS "pendentesSaidas",
+               0::numeric AS "valorEntradasInternas",
+               0::numeric AS "valorSaidasInternas",
+               0::int AS "qtdEntradasInternas",
+               0::int AS "qtdSaidasInternas"
+          FROM financial_entries e
+          JOIN company_bank_accounts cba ON cba.id=e.conta_bancaria_id AND cba."caixaInterno"=1 AND cba."companyId"=$1 AND cba."deletedAt" IS NULL
+         WHERE e.company_id=$1
+           AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) >= $2::date
+           AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) <= $3::date
+           AND COALESCE(e.excluido, false) = false
+         GROUP BY e.conta_bancaria_id`,
       [input.companyId, input.dataInicio, input.dataFim]);
     return rows(res).map((r: any) => {
       const total = Number(r.total) || 0;

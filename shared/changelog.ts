@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3423 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CARD DA CONTA CAIXA INTERNO EM DESTAQUE
+ * QUANDO HÁ CONFIRMAÇÕES NO PERÍODO. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Pedido: conta "CAIXA INTERNO - ADM" ficava sempre cinza/apagada (isSemExtrato=true)
+ * mesmo quando o usuário confirmava lançamentos, pois o backend `getBankAccountsConciliacaoStatus`
+ * só lia `bank_statement_lines` (CI não tem linhas lá).
+ *
+ * Solução:
+ * - Backend (aditivo): UNION ALL com consulta em `financial_entries` filtrando contas
+ *   `caixaInterno=1`. Conta total e confirmadas (conciliado=1) no período. Retorna 0 para
+ *   métricas de extrato (entradas/saídas internas etc.) que não se aplicam ao CI.
+ * - Frontend: `isCaixaInterno = Number(b.caixaInterno) === 1`;
+ *   `isSemExtrato` excludes CI accounts with nTotal > 0;
+ *   `temConciliacoes` triggers for CI (`isLanc || isCaixaInterno`).
+ *   Badge mostra "N/Total confirmados" (não "conciliados") para CI;
+ *   card sem nenhuma confirmação mostra "Sem confirmações" (não "Sem extrato").
+ *
+ * Arquivos: server/routers/financial.ts (UNION ALL em getBankAccountsConciliacaoStatus),
+ * client/src/pages/financeiro/FinanceiroConciliacao.tsx (isCaixaInterno + badge text).
+ *
  * Rev. 3422 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · BOTÃO ⚡ "VINCULAR PIX/TED SUBSTITUTO"
  * NOS CARDS DE CHEQUE DEVOLVIDO SEM QUITAÇÃO IDENTIFICADA. 100% FRONTEND ·
  * ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**

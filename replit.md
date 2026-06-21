@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3423** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CARD DA CONTA CAIXA INTERNO EM DESTAQUE QUANDO HÁ CONFIRMAÇÕES NO PERÍODO. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Backend: UNION ALL em `getBankAccountsConciliacaoStatus` lê `financial_entries` de contas `caixaInterno=1` (total + confirmadas). Front: `isCaixaInterno` libera destaque esmeralda/verde igual às demais contas; badge mostra "N/Total confirmados"; sem confirmações = "Sem confirmações". Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3422** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · BOTÃO ⚡ "VINCULAR PIX/TED SUBSTITUTO" NOS CARDS DE CHEQUE DEVOLVIDO SEM QUITAÇÃO IDENTIFICADA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Cards "Sem quitação" ganham botão verde ⚡ "Vincular PIX/TED substituto" (mesmo estilo do auto-detectado), abrindo o dialog de vínculo manual. Guard ampliado para `chequeNumero || doc`. `Zap` importado. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3421** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · % DE CONCILIAÇÃO NO CARD DE CONTA + % TOTAL NO PILL DO MÊS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Card: barra de progresso + "N%" abaixo de Ag./conta (verde=100%, esmeralda=parcial, azul=0%). Pill do mês: "N%" entre o nome e a bolinha, agregando todas as contas do mês. Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3421** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · % DE CONCILIAÇÃO NO CARD DE CONTA + % TOTAL NO PILL DO MÊS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3420** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CARD DE CONTA COM DESTAQUE VERDE QUANDO HÁ CONCILIAÇÕES FEITAS NO PERÍODO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3418** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "TROCAR LANÇAMENTO VINCULADO" — SUGESTÕES POR VALOR PRÓXIMO + LAYOUT MODERNO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3417** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FIX TDZ CRASH "Cannot access lancForm before initialization" + FIX "MOVIMENTAÇÃO INTERNA" FALSO-POSITIVO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3416** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · VINCULAR CHEQUE DEVOLVIDO A PIX/TED SUBSTITUTO — SUGESTÃO AUTOMÁTICA + VÍNCULO MANUAL + CONTROLE DE CHEQUES ATUALIZADO. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 
 ### REGRA DE OURO — Cabeçalho de documentos institucionais FC (Rev. 2106+)
