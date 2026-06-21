@@ -4371,22 +4371,20 @@ export default function FinanceiroConciliacao() {
                                   </div>
                                 </div>
                               ) : (
-                                <div className="mt-1">
-                                  <p className="text-[11px] text-amber-700 flex items-center gap-1">
-                                    <AlertCircle className="w-3.5 h-3.5" /> Sem quitação identificada no período — analisar (reapresentar, cobrar ou substituir).
+                                /* Rev. 3424 — botão ⚡ inline à direita da mensagem (não abaixo) */
+                                <div className="mt-1 flex items-center gap-2">
+                                  <p className="text-[11px] text-amber-700 flex items-center gap-1 min-w-0 flex-1">
+                                    <AlertCircle className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Sem quitação identificada no período — analisar (reapresentar, cobrar ou substituir).</span>
                                   </p>
-                                  {/* Rev. 3422 — botão ⚡ em destaque p/ vincular PIX/TED nos cards pendentes */}
-                                  <div className="flex items-center gap-2 flex-wrap mt-1">
-                                    {(d.chequeNumero || d.doc) && (
-                                      <button
-                                        type="button"
-                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
-                                        onClick={() => { setVincularPixSel(null); setVincularPixDlg({ cheque: d, pixPreSel: null }); }}
-                                      >
-                                        <Zap className="w-3 h-3" /> Vincular PIX/TED substituto
-                                      </button>
-                                    )}
-                                  </div>
+                                  {(d.chequeNumero || d.doc) && (
+                                    <button
+                                      type="button"
+                                      className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+                                      onClick={() => { setVincularPixSel(null); setVincularPixDlg({ cheque: d, pixPreSel: null }); }}
+                                    >
+                                      <Zap className="w-3 h-3" /> Vincular PIX/TED
+                                    </button>
+                                  )}
                                 </div>
                               )}
                             </div>

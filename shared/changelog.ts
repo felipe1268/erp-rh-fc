@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3424 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CHEQUES DEVOLVIDOS — BOTÃO ⚡ "VINCULAR
+ * PIX/TED" INLINE À DIREITA DA MENSAGEM "SEM QUITAÇÃO". 100% FRONTEND ·
+ * ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Layout anterior: botão verde ficava em linha separada abaixo do texto "Sem quitação
+ * identificada no período". Novo layout: texto e botão na mesma linha flex — texto
+ * (`flex-1 truncate`) à esquerda, botão (`shrink-0`) fixo à direita. Label encurtado para
+ * "Vincular PIX/TED" (cabe melhor na linha). AlertCircle com `shrink-0` para não comprimir.
+ *
+ * Arquivo: client/src/pages/financeiro/FinanceiroConciliacao.tsx.
+ *
  * Rev. 3423 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CARD DA CONTA CAIXA INTERNO EM DESTAQUE
  * QUANDO HÁ CONFIRMAÇÕES NO PERÍODO. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
