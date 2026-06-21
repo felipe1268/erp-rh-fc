@@ -5153,7 +5153,7 @@ export default function FinanceiroConciliacao() {
                   <div key={s.statementLineId} className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50/80 transition-colors">
                     <div className="flex-1 min-w-0">
                       <div className="text-[10px] text-gray-400 uppercase tracking-wide font-medium">Extrato</div>
-                      <div className="truncate text-gray-800">{s.extratoDescricao || "—"}</div>
+                      <div className="break-words text-gray-800">{s.extratoDescricao || "—"}</div>
                       <div className="text-xs text-gray-500 tabular-nums">{fmtData(s.extratoData)} · {formatBRL(Math.abs(s.extratoValor))}</div>
                     </div>
                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-50 shrink-0">
@@ -5165,7 +5165,7 @@ export default function FinanceiroConciliacao() {
                         {overrideSug[s.statementLineId] && <span className="px-1 py-px rounded text-[9px] font-bold bg-amber-100 text-amber-700">MANUAL</span>}
                       </div>
                       {(() => { const ov = overrideSug[s.statementLineId]; return (<>
-                        <div className={`truncate font-medium ${ov ? "text-amber-700" : "text-blue-700"}`}>{ov ? (ov.fornecedorNome || ov.descricao || "—") : (s.entryFornecedor || s.entryDescricao || "—")}</div>
+                        <div className={`break-words font-medium ${ov ? "text-amber-700" : "text-blue-700"}`}>{ov ? (ov.fornecedorNome || ov.descricao || "—") : (s.entryFornecedor || s.entryDescricao || "—")}</div>
                         <div className="text-xs text-gray-500 tabular-nums">{ov ? `${fmtData(ov.data)} · ${formatBRL(Math.abs(ov.valor))}` : `${fmtData(s.entryData)} · ${formatBRL(Math.abs(s.entryValor))}`}</div>
                       </>); })()}
                     </div>
