@@ -50,21 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3440** — **COMPRAS / FORNECEDORES · SEÇÃO "CICLO DE FECHAMENTO" NO CADASTRO DO FORNECEDOR. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** `listarFornecedores` passa a carregar os 5 campos de ciclo via `empresas_terceiras` (JOIN por `fornecedor_id`). `atualizarFornecedor` aceita e persiste `cicloPagamento`/`cicloDiaFechamento`/`cicloNumParcelas`/`cicloPrazoParcela`/`cicloFormaPagamento`. Formulário de edição ganha seção laranja "Ciclo de Fechamento" com select de ciclo, dia, forma de pagamento, nº parcelas e prazo. Detalhe: `shared/changelog.ts`.
+- **Rev. 3441** — **CONCILIAÇÃO BANCÁRIA / PANORAMA · VARREDURA DE OC / OS / LOCAÇÃO POR MÊS. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Nova rota `getOcsPorMes` varre todas as ordens ativas e agrupa por mês de referência financeira (dataVencimento → dataEntregaPrevista → created_at). Seção laranja "OC / OS / Locação por mês" no Panorama Geral: cada mês colapsável com totais e lista individual (badge tipo + fornecedor + status + valor). Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3439** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NÚMERO DA OC NO LANÇAMENTO + LINK "ABRIR OC". BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** `lancRes`/`semContaRes` ganham LEFT JOIN em `compras_ordens` para trazer `ocNumero`+`origemId`. Badge `🛒 OC-XXXX` (roxo) na linha; clique navega p/ `/compras/ordens?destaque=<id>`. Card "Ordem de Compra" do detalhe ganha botão "Abrir OC ↗". Detalhe: `shared/changelog.ts`.
+- **Rev. 3440** — **COMPRAS / FORNECEDORES · SEÇÃO "CICLO DE FECHAMENTO" NO CADASTRO DO FORNECEDOR. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** `listarFornecedores` passa a carregar os 5 campos de ciclo via `empresas_terceiras` (JOIN por `fornecedor_id`). `atualizarFornecedor` aceita e persiste `cicloPagamento`/`cicloDiaFechamento`/`cicloNumParcelas`/`cicloPrazoParcela`/`cicloFormaPagamento`. Formulário de edição ganha seção laranja "Ciclo de Fechamento" com select de ciclo, dia, forma de pagamento, nº parcelas e prazo. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
 
+- **Rev. 3439** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NÚMERO DA OC NO LANÇAMENTO + LINK "ABRIR OC". BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3438** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXCLUIR SAÍDA DE ALMOXARIFADO. 100% BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3437** — **FINANCEIRO + FORNECEDORES · CICLO DE FECHAMENTO COM PARCELAMENTO. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** 5 colunas de ciclo em `empresas_terceiras` + agrupador `fechamento_forn` + parcelas sub-seção na conciliação. Detalhe: `shared/changelog.ts`.
+- **Rev. 3437** — **FINANCEIRO + FORNECEDORES · CICLO DE FECHAMENTO COM PARCELAMENTO. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3435** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · VALE ALIMENTAÇÃO AGRUPADO (igual ao VR). BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3434** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · "NO ERP, SEM EXTRATO" — EXIBE CONTA BANCÁRIA DO LANÇAMENTO. 100% FRONTEND · ZERO BACKEND.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3433** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO iOS: "THE STRING DID NOT MATCH THE EXPECTED PATTERN" → MENSAGEM AMIGÁVEL + fmtData SAFE PARA iOS. 100% FRONTEND · ZERO BACKEND.** Detalhe: `shared/changelog.ts`.
 
 
 ### REGRA DE OURO — Cabeçalho de documentos institucionais FC (Rev. 2106+)

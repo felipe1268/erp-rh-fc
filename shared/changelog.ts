@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3441 — **CONCILIAÇÃO BANCÁRIA / PANORAMA · VARREDURA DE OC / OS / LOCAÇÃO POR MÊS.
+ * BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PEDIDO: "Faça uma varredura e mapeei todas OC ou OS ou locação e coloque nos seus meses correspondente."
+ *
+ * SOLUÇÃO:
+ * 1. Nova rota `financial.getOcsPorMes` (backend):
+ *    - Input: companyId + dataInicio + dataFim (mesmos parâmetros do panorama).
+ *    - Consulta `compras_ordens` WHERE status NOT IN ('cancelada','rascunho').
+ *    - Data de referência = dataVencimento → dataEntregaPrevista → created_at
+ *      (ambas as colunas varchar; CTE normaliza YYYY-MM-DD e DD/MM/YYYY via CASE+regex).
+ *    - Retorno: `{ meses: [{mes, itens, qtdOc, totalOc, qtdOs, totalOs, qtdLocacao, totalLocacao, total}], qtdGeral, totalGeral }`.
+ *    - Tipo diferenciado: isLocacao=true → Locação; tipo in (servico|pacote) → OS; demais → OC.
+ * 2. Seção "OC / OS / Locação por mês" no Panorama Geral (`FinanceiroConciliacao.tsx`):
+ *    - Aparece entre os cards de KPI e a lista "Conciliação por conta".
+ *    - Cada mês: linha colapsável laranja com totais por tipo (📦 OC · 🔧 OS · 🚛 Loc.).
+ *    - Expandido: lista individual com badge tipo + número OC + fornecedor + status + valor.
+ *    - Expand/recolher todas.
+ *
+ * ARQUIVOS: `server/routers/financial.ts`, `client/src/pages/financeiro/FinanceiroConciliacao.tsx`,
+ *           `shared/version.ts`, `shared/changelog.ts`, `replit.md`.
+ *
  * Rev. 3440 — **COMPRAS / FORNECEDORES · SEÇÃO "CICLO DE FECHAMENTO" NO CADASTRO DO FORNECEDOR.
  * BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *

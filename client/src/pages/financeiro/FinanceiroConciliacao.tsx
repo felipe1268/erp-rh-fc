@@ -843,6 +843,11 @@ export default function FinanceiroConciliacao() {
     { companyId, dataInicio, dataFim },
     { enabled: geralAtivo, retry: false }
   );
+  // Rev. 3441 — varredura OC/OS/Locação por mês (panorama)
+  const { data: ocsMesData, isFetching: ocsMesLoading } = (trpc as any).financial.getOcsPorMes.useQuery(
+    { companyId, dataInicio, dataFim },
+    { enabled: geralAtivo, retry: false }
+  );
   const geralTotais: any = reportGeral?.totais ?? null;
   const geralContas: any[] = reportGeral?.contas ?? [];
   const geralSemConta: any[] = reportGeral?.lancamentosSemConta ?? [];
@@ -855,6 +860,8 @@ export default function FinanceiroConciliacao() {
   // conta); aqui apenas achatamos para a empresa toda. READ-ONLY (nada concilia/baixa).
   // Rev. 3349 — "interno" abre a movimentação interna (transf. entre contas/aplicação/intra-FC).
   const [panoramaDrill, setPanoramaDrill] = useState<null | "entradas" | "saidas" | "saldo" | "interno" | "conciliados" | "extratoSemLanc" | "lancSemExtrato" | "pct">(null);
+  // Rev. 3441 — meses expandidos no painel OC/OS/Locação
+  const [ocsMesExp, setOcsMesExp] = useState<Set<string>>(new Set());
   // Rev. 3351 — exceção por lançamento (caixa real × movimentação interna).
   const [ovRow, setOvRow] = useState<LancNaturezaLinha | null>(null);
   // Rev. 3368 — mapa "Movimentação interna do grupo" (montante por contraparte).
@@ -2608,6 +2615,80 @@ export default function FinanceiroConciliacao() {
                       </button>
                     </div>
                     <p className="text-[11px] text-gray-400 mb-4">Como é calculado: <strong>Entradas/Saídas (caixa real)</strong> = créditos/débitos do extrato do mês que NÃO são movimentação interna (transferência entre contas da própria FC, varredura de aplicação/resgate, PIX/TED intra-FC), somando todas as contas (independe da conciliação). A <strong>Movimentação interna</strong> reúne esses lançamentos num card à parte — só conferência, não entram no caixa real. Os 4 cards de conciliação contam as linhas (em módulo) por situação. Cada conta abaixo mostra o giro total dela (externo + interno).</p>
+
+                    {/* Rev. 3441 — OC / OS / Locação por mês */}
+                    {ocsMesLoading ? (
+                      <div className="flex items-center gap-2 text-xs text-gray-400 mb-4 px-1">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Carregando OCs / OS…
+                      </div>
+                    ) : (ocsMesData?.meses ?? []).length > 0 ? (
+                      <div className="mb-5">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <p className="text-xs font-semibold text-gray-600">
+                            OC / OS / Locação por mês
+                            <span className="ml-1.5 text-gray-400 font-normal">
+                              {formatInt(ocsMesData?.qtdGeral ?? 0)} ordens · {formatBRL(ocsMesData?.totalGeral ?? 0)}
+                            </span>
+                          </p>
+                          <div className="flex items-center gap-1">
+                            <Button size="sm" variant="ghost" className="h-7 text-[11px] px-2"
+                              onClick={() => setOcsMesExp(new Set((ocsMesData?.meses ?? []).map((m: any) => m.mes)))}>
+                              Expandir todas
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-7 text-[11px] px-2"
+                              onClick={() => setOcsMesExp(new Set())}>
+                              Recolher
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          {(ocsMesData?.meses ?? []).map((m: any) => {
+                            const exp = ocsMesExp.has(m.mes);
+                            const [anoM, mmM] = (m.mes as string).split("-");
+                            const mesLabel = (() => { try { return new Date(Number(anoM), Number(mmM) - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" }); } catch { return m.mes; } })();
+                            return (
+                              <div key={m.mes} className="rounded-xl border border-orange-200 bg-orange-50/40">
+                                <button
+                                  type="button"
+                                  className="w-full flex items-center gap-2 p-3 text-left hover:bg-orange-50/80 transition-colors rounded-xl"
+                                  onClick={() => setOcsMesExp(prev => { const n = new Set(prev); if (n.has(m.mes)) n.delete(m.mes); else n.add(m.mes); return n; })}
+                                >
+                                  {exp ? <ChevronUp className="w-4 h-4 text-orange-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-orange-400 shrink-0" />}
+                                  <FileText className="w-4 h-4 text-orange-500 shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold text-orange-900 capitalize">{mesLabel}</p>
+                                    <p className="text-[11px] text-orange-700/70 flex flex-wrap gap-x-3">
+                                      {m.qtdOc > 0 && <span>📦 {m.qtdOc} OC · {formatBRL(m.totalOc)}</span>}
+                                      {m.qtdOs > 0 && <span>🔧 {m.qtdOs} OS · {formatBRL(m.totalOs)}</span>}
+                                      {m.qtdLocacao > 0 && <span>🚛 {m.qtdLocacao} Loc. · {formatBRL(m.totalLocacao)}</span>}
+                                    </p>
+                                  </div>
+                                  <p className="text-sm font-bold text-orange-800 shrink-0">{formatBRL(m.total)}</p>
+                                </button>
+                                {exp && (
+                                  <div className="px-3 pb-3 space-y-1">
+                                    {(m.itens as any[]).map((it) => {
+                                      const tipoLabel = it.isLocacao ? "Loc." : it.tipo === "servico" ? "OS" : it.tipo === "pacote" ? "Pacote" : "OC";
+                                      const tipoCls   = it.isLocacao ? "bg-blue-100 text-blue-700" : (it.tipo === "servico" || it.tipo === "pacote") ? "bg-purple-100 text-purple-700" : "bg-orange-100 text-orange-700";
+                                      const stCls     = it.status === "entregue" || it.status === "entregue_parcial" ? "bg-green-100 text-green-700" : it.status === "emitida" || it.status === "aprovada" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600";
+                                      return (
+                                        <div key={it.id} className="flex items-center gap-2 rounded-lg border border-orange-100 bg-white px-3 py-2">
+                                          <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold shrink-0 ${tipoCls}`}>{tipoLabel}</span>
+                                          <p className="text-xs font-semibold text-gray-800 shrink-0">{it.numeroOc}</p>
+                                          <p className="text-[11px] text-gray-500 truncate flex-1" title={it.fornecedorNome ?? ""}>{it.fornecedorNome || "—"}</p>
+                                          <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 ${stCls}`}>{it.status}</span>
+                                          <p className="text-xs font-bold text-gray-800 shrink-0">{formatBRL(Number(it.total))}</p>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
 
                     {/* Listas unificadas, agrupadas por conta (cada linha pertence à sua conta).
                         Conciliar manualmente AQUI no panorama: 1 linha do extrato + 1 lançamento,

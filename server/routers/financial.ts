@@ -5660,6 +5660,91 @@ export const financialRouter = router({
     };
   }),
 
+  // Rev. 3441 — Varredura de OC / OS / Locação por mês para o Panorama da Conciliação.
+  // Agrupa TODAS as ordens ativas (não cancelada/rascunho) pelo mês de referência financeira:
+  // prioridade dataVencimento → dataEntregaPrevista → created_at. READ-ONLY.
+  getOcsPorMes: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    dataInicio: z.string(),
+    dataFim:    z.string(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+
+    const res = await dbExecute(db,
+      `WITH oc_data AS (
+         SELECT co.id,
+                co.numero_oc              AS "numeroOc",
+                co.tipo,
+                co.is_locacao             AS "isLocacao",
+                co.obra_id                AS "obraId",
+                co.fornecedor_nome        AS "fornecedorNome",
+                COALESCE(co.total, 0)     AS total,
+                co.status,
+                co.aprovacao_status       AS "aprovacaoStatus",
+                co.data_vencimento        AS "dataVencimento",
+                co.data_entrega_prevista  AS "dataEntregaPrevista",
+                CASE
+                  WHEN co.data_vencimento ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+                       THEN co.data_vencimento::date
+                  WHEN co.data_vencimento ~ '^[0-9]{2}/[0-9]{2}/[0-9]{4}$'
+                       THEN to_date(co.data_vencimento, 'DD/MM/YYYY')
+                  WHEN co.data_entrega_prevista ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+                       THEN co.data_entrega_prevista::date
+                  WHEN co.data_entrega_prevista ~ '^[0-9]{2}/[0-9]{2}/[0-9]{4}$'
+                       THEN to_date(co.data_entrega_prevista, 'DD/MM/YYYY')
+                  ELSE DATE(co.created_at)
+                END AS data_ref
+           FROM compras_ordens co
+          WHERE co.company_id = $1
+            AND co.status NOT IN ('cancelada', 'rascunho')
+       )
+       SELECT *, to_char(data_ref, 'YYYY-MM') AS "mesRef"
+         FROM oc_data
+        WHERE data_ref BETWEEN $2::date AND $3::date
+        ORDER BY data_ref ASC, id ASC`,
+      [input.companyId, input.dataInicio, input.dataFim]);
+
+    const itensFlat = rows(res);
+
+    // Agrupar por mês
+    const byMes: Record<string, any[]> = {};
+    for (const r of itensFlat) {
+      const m = String(r.mesRef);
+      if (!byMes[m]) byMes[m] = [];
+      byMes[m].push(r);
+    }
+
+    const meses = Object.keys(byMes).sort().map(mes => {
+      const lista = byMes[mes];
+      const isLoc  = (r: any) => r.isLocacao;
+      const isOs   = (r: any) => !r.isLocacao && (r.tipo === "servico" || r.tipo === "pacote");
+      const isOc   = (r: any) => !r.isLocacao && r.tipo !== "servico" && r.tipo !== "pacote";
+      const soma   = (arr: any[]) => arr.reduce((a, r) => a + (Number(r.total) || 0), 0);
+
+      const locacoes = lista.filter(isLoc);
+      const os       = lista.filter(isOs);
+      const ocs      = lista.filter(isOc);
+
+      return {
+        mes,
+        itens: lista,
+        qtd: lista.length,
+        total: soma(lista),
+        qtdOc: ocs.length,      totalOc: soma(ocs),
+        qtdOs: os.length,       totalOs: soma(os),
+        qtdLocacao: locacoes.length, totalLocacao: soma(locacoes),
+      };
+    });
+
+    return {
+      meses,
+      qtdGeral: itensFlat.length,
+      totalGeral: itensFlat.reduce((a, r) => a + (Number(r.total) || 0), 0),
+    };
+  }),
+
   // Rev. 3170 — Status de conciliação POR CONTA no período, p/ pintar cada card de conta
   // na tela de Conciliação: "consolidado" (tem extrato e 100% conciliado), "lancamento"
   // (tem extrato com pendências) ou "vazio" (sem linhas no período). READ-ONLY.
