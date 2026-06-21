@@ -1439,33 +1439,33 @@ export default function FinanceiroConciliacao() {
   // "Confirmar conciliação". Frontend-only (o backend já era query-only p/ sugerir).
   const conciliarSelecionadas = () => {
     if (selSug.size === 0) { toast({ title: "Selecione ao menos uma sugestão", variant: "destructive" }); return; }
-    setConfirmAiState("loading");
+    // Rev. 3407 — IA NÃO dispara automaticamente (economiza tokens). Usuário clica no botão "Verificar com IA".
+    setConfirmAiState("idle");
     setConfirmAiChecked(new Set());
     setConfirmConciliar(true);
-    // Rev. 3404 — dispara análise IA dos pares selecionados em background (sem bloquear o dialog)
+  };
+  // Rev. 3407 — disparo manual da análise IA no dialog de confirmação
+  const dispararConfirmAI = () => {
     const itensSel = sugestoes.filter((s: any) => selSug.has(s.statementLineId));
-    if (itensSel.length > 0) {
-      analisarLoteMut.mutateAsync({
-        companyId,
-        itens: itensSel.map((s: any) => ({
-          statementLineId: s.statementLineId,
-          entryId: s.entryId,
-          extratoDescricao: s.extratoDescricao ?? "",
-          extratoData: s.extratoData ?? undefined,
-          extratoValor: s.extratoValor ?? undefined,
-        })),
-      }).then((res: any) => {
-        const resultados = res.resultados ?? [];
-        setConfirmAiState({ resultados });
-        const preChecked = new Set<string>();
-        for (const r of resultados) {
-          r.sugestoes.forEach((_: any, i: number) => preChecked.add(`${r.statementLineId}-${i}`));
-        }
-        setConfirmAiChecked(preChecked);
-      }).catch(() => setConfirmAiState("error"));
-    } else {
-      setConfirmAiState("idle");
-    }
+    if (!itensSel.length) return;
+    setConfirmAiState("loading");
+    setConfirmAiChecked(new Set());
+    analisarLoteMut.mutateAsync({
+      companyId,
+      itens: itensSel.map((s: any) => ({
+        statementLineId: s.statementLineId,
+        entryId: s.entryId,
+        extratoDescricao: s.extratoDescricao ?? "",
+        extratoData: s.extratoData ?? undefined,
+        extratoValor: s.extratoValor ?? undefined,
+      })),
+    }).then((res: any) => {
+      const resultados = res.resultados ?? [];
+      setConfirmAiState({ resultados });
+      const preChecked = new Set<string>();
+      for (const r of resultados) r.sugestoes.forEach((_: any, i: number) => preChecked.add(`${r.statementLineId}-${i}`));
+      setConfirmAiChecked(preChecked);
+    }).catch(() => setConfirmAiState("error"));
   };
   const confirmarConciliacao = () => {
     if (conciliarSugMut.isPending) return; // blindagem contra clique duplo
@@ -4664,7 +4664,7 @@ export default function FinanceiroConciliacao() {
             apenas sugestiva; o usuário revisa cada par (extrato → lançamento + valores)
             e só então confirma. Nada é gravado sem este passo. */}
         <AlertDialog open={confirmConciliar} onOpenChange={(o: boolean) => { if (!o && !conciliarSugMut.isPending) { setConfirmConciliar(false); setConfirmAiState("idle"); setConfirmAiChecked(new Set()); } }}>
-          <AlertDialogContent className="max-w-2xl p-0 gap-0 overflow-hidden">
+          <AlertDialogContent className="max-w-2xl w-[calc(100vw-1.5rem)] sm:w-auto p-0 gap-0 overflow-hidden">
             <AlertDialogHeader className="space-y-0 text-left bg-gradient-to-r from-[#1B2A4A] to-[#2c3f63] px-6 py-5">
               <div className="flex items-start gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 ring-1 ring-white/25 shrink-0">
@@ -4707,7 +4707,16 @@ export default function FinanceiroConciliacao() {
                 ))}
               </div>
             </div>
-            {/* Rev. 3404 — Seção de análise IA inline no dialog de confirmação */}
+            {/* Rev. 3407 — Seção de análise IA inline: disparo MANUAL (não automático) */}
+            {confirmAiState === "idle" && (
+              <div className="px-6 py-2.5 border-t bg-gray-50 flex items-center justify-between gap-3">
+                <span className="text-[11px] text-gray-400">Quer verificar as classificações antes de confirmar?</span>
+                <Button size="sm" variant="outline" onClick={dispararConfirmAI}
+                  className="h-7 text-xs border-violet-200 text-violet-700 hover:bg-violet-50 shrink-0">
+                  <Sparkles className="w-3.5 h-3.5 mr-1" />Verificar com IA
+                </Button>
+              </div>
+            )}
             {confirmAiState === "loading" && (
               <div className="px-6 py-2.5 bg-violet-50 border-t flex items-center gap-2 text-xs text-violet-700">
                 <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
@@ -4715,8 +4724,9 @@ export default function FinanceiroConciliacao() {
               </div>
             )}
             {confirmAiState === "error" && (
-              <div className="px-6 py-2 bg-red-50 border-t text-xs text-red-600 flex items-center gap-1.5">
-                <span className="font-medium">IA indisponível</span> — verifique as classificações manualmente se necessário.
+              <div className="px-6 py-2 bg-red-50 border-t text-xs text-red-600 flex items-center justify-between gap-2">
+                <span><span className="font-medium">IA indisponível</span> — verifique manualmente.</span>
+                <button className="text-[11px] underline underline-offset-2 text-red-500 shrink-0" onClick={dispararConfirmAI}>Tentar novamente</button>
               </div>
             )}
             {typeof confirmAiState === "object" && (() => {

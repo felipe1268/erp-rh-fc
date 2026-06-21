@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3407 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · IA NO DIALOG DE CONFIRMAÇÃO VIRA
+ * BOTÃO MANUAL + FIX LAYOUT CORTADO NO MOBILE. 100% FRONTEND ·
+ * ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * AJUSTE 1 — IA sob demanda (não automática):
+ * - `conciliarSelecionadas` não dispara mais a análise IA automaticamente ao abrir o dialog
+ *   (eliminando consumo involuntário de tokens a cada clique em "Conciliar selecionadas").
+ * - `confirmAiState` inicia em "idle" e só muda para "loading" quando o usuário clicar no
+ *   botão "✦ Verificar com IA" que aparece na faixa inferior do dialog.
+ * - Novo helper `dispararConfirmAI` concentra a lógica de chamada (mesmo comportamento de
+ *   antes, mas acionado pelo usuário). Botão "Tentar novamente" no estado de erro.
+ *
+ * AJUSTE 2 — Dialog não corta no mobile/tablet:
+ * - `AlertDialogContent` ganha `w-[calc(100vw-1.5rem)]` para telas pequenas e `sm:w-auto`
+ *   para telas maiores, evitando que o botão "Confirmar" fique fora da viewport em iPads.
+ *
  * Rev. 3406 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CARDS DE CONTA SEM EXTRATO FICAM
  * CINZA/APAGADOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
