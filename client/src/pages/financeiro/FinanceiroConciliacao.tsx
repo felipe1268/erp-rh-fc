@@ -300,6 +300,8 @@ export default function FinanceiroConciliacao() {
     }
     return out.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   }, [lancObras]);
+  // Rev. 3417 — declarado AQUI (antes dos useMemos que dependem dele) para evitar TDZ
+  const [lancForm, setLancForm] = useState({ data: "", valor: "", descricao: "", obraId: "", contaNome: "", contaId: "", centroCustoId: "", fornecedorNome: "", clienteId: "", clienteNome: "", formaPagamento: "", tipo: "despesa" });
   // Rev. 3413 — obras filtradas pelo cliente selecionado no form
   const obrasParaLanc = useMemo(() => {
     const cn = (lancForm?.clienteNome ?? "").trim().toLowerCase();
@@ -362,7 +364,6 @@ export default function FinanceiroConciliacao() {
   const [lancNewObraOpen, setLancNewObraOpen] = useState(false);
   const [lancNewObraNome, setLancNewObraNome] = useState("");
   const criarObraMut = (trpc as any).obras.create.useMutation();
-  const [lancForm, setLancForm] = useState({ data: "", valor: "", descricao: "", obraId: "", contaNome: "", contaId: "", centroCustoId: "", fornecedorNome: "", clienteId: "", clienteNome: "", formaPagamento: "", tipo: "despesa" });
   // Rev. 3198 — guarda o lançamento JÁ criado p/ a linha atual: se a conciliação
   // automática falhar, um novo clique tenta SÓ conciliar (não recria → sem duplicidade).
   const lancCreatedRef = useRef<{ stmtId: any; entryId: number } | null>(null);
