@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3413 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FORM "LANÇAR NO ERP" — COMBOBOXES
+ * FILTRÁVEIS + FILTRO OBRA POR CLIENTE + DIALOG "CADASTRAR NOVA OBRA".
+ * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Motivação: Selects e inputs do form "Lançar no ERP" não tinham busca/filtro inline,
+ * dificultando a seleção em listas longas de obras, categorias, CCs e clientes.
+ *
+ * O quê foi feito:
+ * 1. Componente `LancCombo` (fora do componente principal, reutilizável) — input com
+ *    dropdown filtrável por substring, opção "nenhuma" opcional e botão X p/ limpar.
+ *    onMouseDown (não onClick) nos itens evita que o onBlur feche antes da seleção.
+ * 2. Todos os 6 campos do form trocados por LancCombo:
+ *    - Forma de pagamento: lista fixa `FORMAS_PAG_OPTS`; value = label do id selecionado.
+ *    - Cliente que pagou: combobox sobre `clienteOpts`; ao selecionar, limpa obraId p/ refiltrar.
+ *    - Fornecedor: combobox sobre `fornNomes`.
+ *    - Obra: combobox sobre `obrasParaLanc` (derivado filtrado) + botão "+ Nova obra".
+ *    - Categoria: combobox sobre `catOpts`; auto-preenche CC se a categoria tiver padrão.
+ *    - Centro de custo: combobox sobre `ccOpts`.
+ * 3. `obrasOpts` passou a incluir campo `cliente` (string do campo obras.cliente).
+ * 4. `obrasParaLanc` — memo derivado: quando `lancForm.clienteNome` estiver preenchido,
+ *    filtra obras cujo `.cliente` inclui o nome selecionado; fallback = todas as obras.
+ * 5. Estados adicionados: `lancObraDisplay` / `lancCCDisplay` (texto visível nos inputs
+ *    de campos ID-based) + `lancNewObraOpen` / `lancNewObraNome`.
+ * 6. Dialog "Cadastrar nova obra": campo nome + ctx do cliente pré-preenchido → chama
+ *    `obras.create`, refetch da lista, auto-seleciona a nova obra no form.
+ * 7. `abrirLancar` e `abrirLancStandalone` resetam os estados de display.
+ *
+ * Arquivos: client/src/pages/financeiro/FinanceiroConciliacao.tsx.
+ *
  * Rev. 3412 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "LANÇAR NO ERP" FULL SCREEN
  * NO MOBILE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *

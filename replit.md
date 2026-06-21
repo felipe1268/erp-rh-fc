@@ -50,13 +50,15 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3413** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FORM "LANÇAR NO ERP" — COMBOBOXES FILTRÁVEIS + FILTRO OBRA POR CLIENTE + DIALOG "CADASTRAR NOVA OBRA". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Componente `LancCombo` (input+dropdown filtrável por substring, onMouseDown p/ evitar fechar no blur). Todos os 6 campos do form (Forma de pagamento, Cliente, Fornecedor, Obra, Categoria, CC) trocados por `LancCombo`. `obrasParaLanc` filtra obras pelo `clienteNome` selecionado. Botão "+ Nova obra" abre dialog inline que chama `obras.create`, refetch e auto-seleciona. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3412** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "LANÇAR NO ERP" FULL SCREEN NO MOBILE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `resizable={false}` zera o `sizeStyle`; override de `top-0 left-0 translate-x-0 translate-y-0 max-h-[100dvh] border-0 shadow-none` no className elimina o posicionamento centralizado e a cap de 92dvh. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3411** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SUGESTÕES NÃO RECARREGAM APÓS CADA CONCILIAÇÃO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `onSuccess` não chama mais `refetchSug()`. Novo estado `conciliadosIds` filtra localmente os itens já confirmados. Botão "Reanalisar" continua fazendo análise completa quando solicitado. Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3410** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · TROCA MANUAL DE LANÇAMENTO NA SUGESTÃO AUTOMÁTICA. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** `getEntries` ganha `busca` (ILIKE). Botão "trocar" (⇌) em cada linha de sugestão abre dialog de busca autocomplete. Override armazenado por `statementLineId` — badge âmbar "MANUAL", botão "desfazer". `confirmarConciliacao` usa entryId do override quando presente. Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3411** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SUGESTÕES NÃO RECARREGAM APÓS CADA CONCILIAÇÃO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3410** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · TROCA MANUAL DE LANÇAMENTO NA SUGESTÃO AUTOMÁTICA. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3409** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FIX DEFINITIVO DO LAYOUT CORTADO NO DIALOG "CONFIRMAR CONCILIAÇÃO?". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

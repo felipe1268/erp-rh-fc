@@ -57,6 +57,62 @@ function bancoCor(banco?: string): { bg: string; text: string } {
   return { bg: "bg-gray-100", text: "text-gray-700" };
 }
 
+// Rev. 3413 — Combobox filtrável reutilizado nos campos do "Lançar no ERP"
+const FORMAS_PAG_OPTS = [
+  { id: "pix", label: "Pix" }, { id: "boleto", label: "Boleto" },
+  { id: "transferencia", label: "Transferência" }, { id: "cheque", label: "Cheque" },
+  { id: "debito_automatico", label: "Débito automático" }, { id: "cartao", label: "Cartão" },
+  { id: "dinheiro", label: "Dinheiro" }, { id: "deposito", label: "Depósito" },
+];
+function LancCombo({ value, onChangeText, onSelect, options, placeholder = "Buscar…", noneLabel, onClear }: {
+  value: string; onChangeText?: (s: string) => void;
+  onSelect: (opt: { id: string | number; label: string } | null) => void;
+  options: { id: string | number; label: string }[];
+  placeholder?: string; noneLabel?: string; onClear?: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const filtered = value.trim()
+    ? options.filter(o => o.label.toLowerCase().includes(value.trim().toLowerCase()))
+    : options;
+  return (
+    <div className="relative">
+      <input
+        value={value}
+        onChange={e => { onChangeText?.(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 160)}
+        placeholder={placeholder}
+        className="w-full h-9 pl-3 pr-7 text-sm rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+      />
+      {value && onClear && (
+        <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          onMouseDown={e => { e.preventDefault(); onClear(); }}>
+          <X className="w-3.5 h-3.5" />
+        </button>
+      )}
+      {open && (
+        <div className="absolute z-[200] top-full mt-1 left-0 right-0 bg-white rounded-md border border-gray-200 shadow-xl max-h-56 overflow-y-auto">
+          {noneLabel && (
+            <button type="button" className="w-full text-left px-3 py-2 text-sm text-gray-400 hover:bg-gray-50 border-b border-gray-100"
+              onMouseDown={e => { e.preventDefault(); onSelect(null); setOpen(false); }}>
+              {noneLabel}
+            </button>
+          )}
+          {filtered.map(o => (
+            <button key={o.id} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 border-b border-gray-50 last:border-0"
+              onMouseDown={e => { e.preventDefault(); onSelect(o); setOpen(false); }}>
+              {o.label}
+            </button>
+          ))}
+          {filtered.length === 0 && !noneLabel && (
+            <div className="px-3 py-2 text-sm text-gray-400">Nenhum resultado</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function FinanceiroConciliacao() {
   const { companyId } = useCompany();
   const { toast } = useToast();
@@ -232,17 +288,24 @@ export default function FinanceiroConciliacao() {
   // Carrega obras/categorias/centros de custo/fornecedores p/ o usuário completar o
   // lançamento (data, conta e valor já vêm pré-preenchidos do extrato). Após criar,
   // auto-concilia com a linha do extrato (mesma mutation da conciliação manual).
-  const { data: lancObras } = (trpc as any).obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
+  const { data: lancObras, refetch: refetchLancObras } = (trpc as any).obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
   const { data: lancAccounts } = (trpc as any).financial.getAccounts.useQuery({ companyId, ativo: true }, { enabled: !!companyId });
   const { data: lancCostCenters } = (trpc as any).financial.getCostCenters.useQuery({ companyId }, { enabled: !!companyId });
   const { data: lancFornecedores } = (trpc as any).compras.listarFornecedores.useQuery({ companyId, ativo: true }, { enabled: !!companyId });
-  const obrasOpts: { id: number; nome: string }[] = useMemo(() => {
-    const seen = new Set<string>(); const out: { id: number; nome: string }[] = [];
+  const obrasOpts: { id: number; nome: string; cliente: string }[] = useMemo(() => {
+    const seen = new Set<string>(); const out: { id: number; nome: string; cliente: string }[] = [];
     for (const o of (Array.isArray(lancObras) ? lancObras : [])) {
-      const nome = String(o?.nome ?? "").trim(); if (!nome || seen.has(nome)) continue; seen.add(nome); out.push({ id: Number(o.id), nome });
+      const nome = String(o?.nome ?? "").trim(); if (!nome || seen.has(nome)) continue; seen.add(nome); out.push({ id: Number(o.id), nome, cliente: String(o.cliente ?? "").trim() });
     }
     return out.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   }, [lancObras]);
+  // Rev. 3413 — obras filtradas pelo cliente selecionado no form
+  const obrasParaLanc = useMemo(() => {
+    const cn = (lancForm?.clienteNome ?? "").trim().toLowerCase();
+    if (!cn) return obrasOpts;
+    const match = obrasOpts.filter(o => o.cliente.toLowerCase() === cn || o.cliente.toLowerCase().includes(cn));
+    return match.length > 0 ? match : obrasOpts;
+  }, [obrasOpts, lancForm?.clienteNome]);
   const catOpts: { id: number; nome: string; natureza: string | null; centroCustoId: number | null }[] = useMemo(() => {
     const out: { id: number; nome: string; natureza: string | null; centroCustoId: number | null }[] = [];
     for (const a of (Array.isArray(lancAccounts) ? lancAccounts : [])) {
@@ -280,6 +343,12 @@ export default function FinanceiroConciliacao() {
 
   const [lancStatement, setLancStatement] = useState<any | null>(null);
   const [lancBusy, setLancBusy] = useState(false);
+  // Rev. 3413 — estados para comboboxes e dialog de nova obra
+  const [lancObraDisplay, setLancObraDisplay] = useState("");
+  const [lancCCDisplay, setLancCCDisplay] = useState("");
+  const [lancNewObraOpen, setLancNewObraOpen] = useState(false);
+  const [lancNewObraNome, setLancNewObraNome] = useState("");
+  const criarObraMut = (trpc as any).obras.create.useMutation();
   const [lancForm, setLancForm] = useState({ data: "", valor: "", descricao: "", obraId: "", contaNome: "", contaId: "", centroCustoId: "", fornecedorNome: "", clienteId: "", clienteNome: "", formaPagamento: "", tipo: "despesa" });
   // Rev. 3198 — guarda o lançamento JÁ criado p/ a linha atual: se a conciliação
   // automática falhar, um novo clique tenta SÓ conciliar (não recria → sem duplicidade).
@@ -318,6 +387,9 @@ export default function FinanceiroConciliacao() {
       : "";
     // Rev. 3324 — ENTRADA: pré-preenche o cliente pagador (vínculo de cadastro ou beneficiário lido por IA).
     const clientePrefill = isEntrada ? (s.vinculoTipo === "cliente" && s.vinculoNome ? String(s.vinculoNome) : (s.demoBeneficiario ? String(s.demoBeneficiario) : "")) : "";
+    const obraNomePrefill = obraDoCheque ? obraDoCheque.nome : "";
+    setLancObraDisplay(obraNomePrefill);
+    setLancCCDisplay("");
     setLancForm({
       data: String(s.data ?? "").slice(0, 10),
       valor: maskBRLInput(String(Math.round(abs * 100))),
@@ -340,6 +412,8 @@ export default function FinanceiroConciliacao() {
     lancCreatedRef.current = null;
     const today = new Date().toISOString().slice(0, 10);
     setLancStatement({ id: null, valor: undefined, data: today, contaBancariaId: Number(contaBancariaId) || null });
+    setLancObraDisplay("");
+    setLancCCDisplay("");
     setLancForm({ data: today, valor: "", descricao: "", obraId: "", contaNome: "", contaId: "", centroCustoId: "", fornecedorNome: "", clienteId: "", clienteNome: "", formaPagamento: "", tipo: "despesa" });
   }
 
@@ -5137,49 +5211,48 @@ export default function FinanceiroConciliacao() {
                   </div>
                   <div>
                     <Label className="text-xs">Forma de pagamento</Label>
-                    <Select value={lancForm.formaPagamento || "nenhuma"} onValueChange={(v) => setLancForm(f => ({ ...f, formaPagamento: v === "nenhuma" ? "" : v }))}>
-                      <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="nenhuma">—</SelectItem>
-                        <SelectItem value="pix">Pix</SelectItem>
-                        <SelectItem value="boleto">Boleto</SelectItem>
-                        <SelectItem value="transferencia">Transferência</SelectItem>
-                        <SelectItem value="cheque">Cheque</SelectItem>
-                        <SelectItem value="debito_automatico">Débito automático</SelectItem>
-                        <SelectItem value="cartao">Cartão</SelectItem>
-                        <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                        <SelectItem value="deposito">Depósito</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <LancCombo
+                      value={FORMAS_PAG_OPTS.find(f => f.id === lancForm.formaPagamento)?.label ?? ""}
+                      onChangeText={() => {}}
+                      onSelect={(opt) => setLancForm(f => ({ ...f, formaPagamento: opt ? String(opt.id) : "" }))}
+                      options={FORMAS_PAG_OPTS}
+                      placeholder="— (nenhuma) —"
+                      noneLabel="— (nenhuma) —"
+                      onClear={() => setLancForm(f => ({ ...f, formaPagamento: "" }))}
+                    />
                   </div>
                 </div>
                 <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 pt-1">Classificação</div>
                 {(lancStatement?.id == null ? lancForm.tipo === "receita" : Number(lancStatement.valor) >= 0) ? (
                   <div>
                     <Label className="text-xs flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-emerald-600" />Cliente que pagou</Label>
-                    <Input
-                      list="lanc-clientes"
+                    <LancCombo
                       value={lancForm.clienteNome}
-                      onChange={(e) => setLancForm(f => ({ ...f, clienteNome: e.target.value }))}
+                      onChangeText={(s) => setLancForm(f => ({ ...f, clienteNome: s, clienteId: "", obraId: "", }))}
+                      onSelect={(opt) => {
+                        if (!opt) { setLancForm(f => ({ ...f, clienteNome: "", clienteId: "", obraId: "" })); setLancObraDisplay(""); return; }
+                        setLancForm(f => ({ ...f, clienteNome: opt.label, clienteId: String(opt.id), obraId: "" }));
+                        setLancObraDisplay("");
+                      }}
+                      options={clienteOpts.map(c => ({ id: c.id, label: c.nome }))}
                       placeholder="Digite ou selecione o cliente"
+                      noneLabel="— (sem cliente) —"
+                      onClear={() => { setLancForm(f => ({ ...f, clienteNome: "", clienteId: "", obraId: "" })); setLancObraDisplay(""); }}
                     />
-                    <datalist id="lanc-clientes">
-                      {clienteOpts.map((c) => <option key={c.id} value={c.nome} />)}
-                    </datalist>
                     <p className="text-[11px] text-gray-400 mt-1">Selecione do cadastro de clientes para o título entrar com o pagador correto no Contas a Receber.</p>
                   </div>
                 ) : (
                   <div>
                     <Label className="text-xs flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5 text-red-600" />Fornecedor</Label>
-                    <Input
-                      list="lanc-fornecedores"
+                    <LancCombo
                       value={lancForm.fornecedorNome}
-                      onChange={(e) => setLancForm(f => ({ ...f, fornecedorNome: e.target.value }))}
+                      onChangeText={(s) => setLancForm(f => ({ ...f, fornecedorNome: s }))}
+                      onSelect={(opt) => setLancForm(f => ({ ...f, fornecedorNome: opt ? opt.label : "" }))}
+                      options={fornNomes.map((n, i) => ({ id: i, label: n }))}
                       placeholder="Digite ou selecione"
+                      noneLabel="— (sem fornecedor) —"
+                      onClear={() => setLancForm(f => ({ ...f, fornecedorNome: "" }))}
                     />
-                    <datalist id="lanc-fornecedores">
-                      {fornNomes.map((n, i) => <option key={i} value={n} />)}
-                    </datalist>
                     {lancStatement.vinculoTipo === "fornecedor" && lancStatement.vinculoNome && (
                       <p className="text-[11px] text-gray-500 mt-1 flex items-start gap-1">
                         <span className="shrink-0">🏢</span>
@@ -5193,41 +5266,52 @@ export default function FinanceiroConciliacao() {
                   </div>
                 )}
                 <div>
-                  <Label className="text-xs">Obra</Label>
-                  <Select value={lancForm.obraId || "nenhuma"} onValueChange={(v) => setLancForm(f => ({ ...f, obraId: v === "nenhuma" ? "" : v }))}>
-                    <SelectTrigger><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="nenhuma">— Sem obra —</SelectItem>
-                      {obrasOpts.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <Label className="text-xs">Obra{lancForm.clienteNome ? <span className="text-[10px] text-blue-600 font-normal ml-1">filtrado por cliente</span> : ""}</Label>
+                    <button type="button" className="text-[11px] text-blue-600 hover:underline flex items-center gap-0.5"
+                      onClick={() => { setLancNewObraNome(""); setLancNewObraOpen(true); }}>
+                      <Plus className="w-3 h-3" />Nova obra
+                    </button>
+                  </div>
+                  <LancCombo
+                    value={lancObraDisplay}
+                    onChangeText={(s) => { setLancObraDisplay(s); if (!s) setLancForm(f => ({ ...f, obraId: "" })); }}
+                    onSelect={(opt) => { if (!opt) { setLancForm(f => ({ ...f, obraId: "" })); setLancObraDisplay(""); return; } setLancForm(f => ({ ...f, obraId: String(opt.id) })); setLancObraDisplay(opt.label); }}
+                    options={obrasParaLanc.map(o => ({ id: o.id, label: o.nome }))}
+                    placeholder="— Sem obra —"
+                    noneLabel="— Sem obra —"
+                    onClear={() => { setLancForm(f => ({ ...f, obraId: "" })); setLancObraDisplay(""); }}
+                  />
                 </div>
                 <div>
                   <Label className="text-xs">Categoria (Conta do Plano de Contas)</Label>
-                  <Select
-                    value={lancForm.contaId || "__none__"}
-                    onValueChange={(v) => {
-                      const opt = catOpts.find(c => String(c.id) === v);
-                      setLancForm(f => ({ ...f, contaId: v === "__none__" ? "" : v, contaNome: opt?.nome ?? "", centroCustoId: opt?.centroCustoId != null && !f.centroCustoId ? String(opt.centroCustoId) : f.centroCustoId }));
+                  <LancCombo
+                    value={lancForm.contaNome}
+                    onChangeText={(s) => setLancForm(f => ({ ...f, contaNome: s, contaId: "" }))}
+                    onSelect={(opt) => {
+                      if (!opt) { setLancForm(f => ({ ...f, contaId: "", contaNome: "" })); return; }
+                      const catOpt = catOpts.find(c => c.id === Number(opt.id));
+                      setLancForm(f => ({ ...f, contaId: String(opt.id), contaNome: opt.label, centroCustoId: catOpt?.centroCustoId != null && !f.centroCustoId ? String(catOpt.centroCustoId) : f.centroCustoId }));
+                      if (catOpt?.centroCustoId != null) { const cc = ccOpts.find(c => c.id === catOpt.centroCustoId); if (cc) setLancCCDisplay(cc.nome); }
                     }}
-                  >
-                    <SelectTrigger><SelectValue placeholder="Selecione a conta" /></SelectTrigger>
-                    <SelectContent className="max-h-64">
-                      <SelectItem value="__none__">— Sem categoria —</SelectItem>
-                      {catOpts.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                    options={catOpts.map(c => ({ id: c.id, label: c.nome }))}
+                    placeholder="— Sem categoria —"
+                    noneLabel="— Sem categoria —"
+                    onClear={() => setLancForm(f => ({ ...f, contaId: "", contaNome: "" }))}
+                  />
                 </div>
                 {(lancStatement?.id == null ? lancForm.tipo === "despesa" : Number(lancStatement.valor) < 0) && (
                   <div>
                     <Label className="text-xs">Centro de custo</Label>
-                    <Select value={lancForm.centroCustoId || "nenhum"} onValueChange={(v) => setLancForm(f => ({ ...f, centroCustoId: v === "nenhum" ? "" : v }))}>
-                      <SelectTrigger><SelectValue placeholder="Selecione o centro de custo" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="nenhum">— Sem centro de custo —</SelectItem>
-                        {ccOpts.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <LancCombo
+                      value={lancCCDisplay}
+                      onChangeText={(s) => { setLancCCDisplay(s); if (!s) setLancForm(f => ({ ...f, centroCustoId: "" })); }}
+                      onSelect={(opt) => { if (!opt) { setLancForm(f => ({ ...f, centroCustoId: "" })); setLancCCDisplay(""); return; } setLancForm(f => ({ ...f, centroCustoId: String(opt.id) })); setLancCCDisplay(opt.label); }}
+                      options={ccOpts.map(c => ({ id: c.id, label: c.nome }))}
+                      placeholder="— Sem centro de custo —"
+                      noneLabel="— Sem centro de custo —"
+                      onClear={() => { setLancForm(f => ({ ...f, centroCustoId: "" })); setLancCCDisplay(""); }}
+                    />
                   </div>
                 )}
                 <div>
@@ -5246,6 +5330,57 @@ export default function FinanceiroConciliacao() {
                   {lancBusy ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Processando...</> : <><Check className="w-4 h-4 mr-1.5" />Lançar e conciliar</>}
                 </Button>
               )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 3413 — Dialog inline "Cadastrar nova obra" acionado pelo botão "+ Nova obra" */}
+        <Dialog open={lancNewObraOpen} onOpenChange={(o) => { if (!o) setLancNewObraOpen(false); }}>
+          <DialogContent className="max-w-sm w-full">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <Plus className="w-4 h-4 text-blue-600" />Cadastrar nova obra
+              </DialogTitle>
+              <DialogDescription className="text-xs">A obra será criada e automaticamente selecionada no formulário.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 py-1">
+              <div>
+                <Label className="text-xs">Nome da obra *</Label>
+                <Input
+                  value={lancNewObraNome}
+                  onChange={e => setLancNewObraNome(e.target.value)}
+                  placeholder="Ex.: Residencial Flores — Bloco A"
+                  autoFocus
+                />
+              </div>
+              {lancForm.clienteNome && (
+                <div className="text-[11px] text-blue-600 flex items-center gap-1">
+                  <Users className="w-3 h-3" />Cliente: <strong>{lancForm.clienteNome}</strong> será vinculado à obra.
+                </div>
+              )}
+            </div>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" size="sm" onClick={() => setLancNewObraOpen(false)}>Cancelar</Button>
+              <Button
+                size="sm"
+                disabled={!lancNewObraNome.trim() || criarObraMut.isPending}
+                onClick={async () => {
+                  if (!lancNewObraNome.trim() || !companyId) return;
+                  try {
+                    const nova = await criarObraMut.mutateAsync({ companyId: Number(companyId), nome: lancNewObraNome.trim(), cliente: lancForm.clienteNome || undefined, status: "Em_Andamento" });
+                    await refetchLancObras();
+                    const novaId = String(nova?.id ?? nova);
+                    setLancForm(f => ({ ...f, obraId: novaId }));
+                    setLancObraDisplay(lancNewObraNome.trim());
+                    setLancNewObraOpen(false);
+                    toast({ title: "Obra criada", description: lancNewObraNome.trim() });
+                  } catch (err: any) {
+                    toast({ title: "Erro ao criar obra", description: String(err?.message ?? err), variant: "destructive" });
+                  }
+                }}
+              >
+                {criarObraMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Plus className="w-4 h-4 mr-1" />}Criar obra
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
