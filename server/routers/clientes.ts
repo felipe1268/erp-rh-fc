@@ -136,6 +136,8 @@ export const clientesRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       const { id, companyId, ...data } = input;
+      // Rev. 3455 — sanitizar campos de data: string vazia → null (Postgres rejeita "" em col DATE)
+      if ("dataNascimento" in data) data.dataNascimento = data.dataNascimento || null;
       await db.update(clientes).set({ ...data, atualizadoEm: new Date().toISOString() }).where(and(eq(clientes.id, id), eq(clientes.companyId, companyId)));
       return { success: true };
     }),
