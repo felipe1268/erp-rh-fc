@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3454** — **CONCILIAÇÃO BANCÁRIA · CACHE PERSISTENTE DA ANÁLISE IA (BATCH). BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Nova tabela `bank_conciliation_ai_cache` (CREATE TABLE IF NOT EXISTS). 2 procedures: `getAiConciliacaoCache` + `saveAiConciliacaoCache`. Frontend hidrata `batchAiResults` do banco ao montar (sem re-análise). Botão exibe badge "cache" + "Reanalisar" separado. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3453** — **CLIENTES · CAMPOS PF (DATA NASCIMENTO, RG, ÓRGÃO EMISSOR, ESTADO CIVIL, SEXO, PROFISSÃO, NACIONALIDADE) + LEMBRETE DE ANIVERSÁRIO. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** 7 colunas adicionadas via ADD COLUMN IF NOT EXISTS no `[SyncSchema+]`. Seção "Dados Pessoais" no form (só PF). Indicador de aniversário no card: hoje=badge âmbar 🎂, ≤7 dias=azul, demais=cinza com idade. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3452** — **CLIENTES · NOMES EXIBIDOS SEMPRE EM CAIXA ALTA NA LISTAGEM. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Classe CSS `uppercase` adicionada em `razaoSocial` e `nomeFantasia` nos cards da página Clientes. Valor no banco intocado — só a exibição é transformada. Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3452** — **CLIENTES · NOMES EXIBIDOS SEMPRE EM CAIXA ALTA NA LISTAGEM. 100% FRONTEND.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3451** — **OBRAS · MÚLTIPLOS CLIENTES POR OBRA (DONOS DA OBRA). BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

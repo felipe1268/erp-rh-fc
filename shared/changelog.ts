@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3454 — **CONCILIAÇÃO BANCÁRIA · CACHE PERSISTENTE DA ANÁLISE IA (BATCH).
+ * BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
+ *
+ * PROBLEMA: o resultado da análise "Analisar todas com IA" ficava apenas em React state
+ * (batchAiResults), sendo descartado a cada navegação. O usuário precisava re-executar
+ * a cara análise em lote a cada acesso à tela, desperdiçando tempo e créditos de IA.
+ *
+ * SOLUÇÃO — cache persistente em banco:
+ * 1. BANCO: nova tabela `bank_conciliation_ai_cache` via CREATE TABLE IF NOT EXISTS.
+ *    Chave única: (company_id, conta_bancaria_id, data_inicio, data_fim).
+ *    Campos: resultados_json JSONB, analisado_em TIMESTAMP.
+ * 2. SCHEMA DRIZZLE: `bankConciliationAiCache` exportado de `drizzle/schema.ts`.
+ * 3. ROUTER (`server/routers/financial.ts`):
+ *    - `getAiConciliacaoCache` (query) — lê o resultado salvo para o período/conta.
+ *    - `saveAiConciliacaoCache` (mutation) — INSERT … ON CONFLICT DO UPDATE.
+ * 4. FRONTEND (`FinanceiroConciliacao.tsx`):
+ *    - `aiCacheQ` — query do cache (staleTime: Infinity, sem refetch em foco).
+ *    - `useEffect` hidrata `batchAiResults` do banco ao montar (SEM re-análise).
+ *    - Segundo `useEffect` limpa o estado ao trocar de conta/período.
+ *    - Após `analisarTodas` concluir: chama `saveAiCacheMut` automaticamente.
+ *    - Botão: quando há resultado em cache → mostra "Relatório IA (N divergências)
+ *      [cache]" + botão "Reanalisar" separado. Tooltip mostra data/hora da análise.
+ *    - "Reanalisar" limpa o estado e re-executa, sobrescrevendo o cache.
+ *
  * Rev. 3453 — **CLIENTES · CAMPOS DE PESSOA FÍSICA (DATA DE NASCIMENTO, RG, ÓRGÃO EMISSOR,
  * ESTADO CIVIL, SEXO, PROFISSÃO, NACIONALIDADE) + LEMBRETE DE ANIVERSÁRIO NA LISTAGEM.
  * BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.**

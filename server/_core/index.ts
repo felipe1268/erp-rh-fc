@@ -3848,6 +3848,27 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3437: colunas ciclo_* garantidas em empresas_terceiras (ciclo de fechamento de fornecedor).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3437 empresas_terceiras.ciclo_*:`, e?.message || e); }
 
+        // Rev. 3454 — Cache persistente de análise IA da Conciliação Bancária.
+        // Evita re-análise cara a cada mount; usuário re-analisa explicitamente.
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS bank_conciliation_ai_cache (
+              id              SERIAL PRIMARY KEY,
+              company_id      INTEGER NOT NULL,
+              conta_bancaria_id INTEGER NOT NULL,
+              data_inicio     VARCHAR(10) NOT NULL,
+              data_fim        VARCHAR(10) NOT NULL,
+              resultados_json JSONB NOT NULL DEFAULT '{}',
+              analisado_em    TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await db.execute(sql`
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_ai_concil_cache
+            ON bank_conciliation_ai_cache(company_id, conta_bancaria_id, data_inicio, data_fim)
+          `);
+          console.log(`[SyncSchema+] Rev. 3454: tabela bank_conciliation_ai_cache garantida (cache IA conciliação).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3454 bank_conciliation_ai_cache:`, e?.message || e); }
+
         // Rev. 3453 — Dados PF de clientes (data_nascimento, rg, orgao_emissor, estado_civil,
         // sexo, profissao, nacionalidade). ADD COLUMN IF NOT EXISTS (R-001/R-007/R-010 OK).
         try {

@@ -11415,4 +11415,53 @@ export const financialRouter = router({
     });
     return { updated };
   }),
+
+  // Rev. 3454 — Cache persistente de análise IA da Conciliação Bancária.
+  getAiConciliacaoCache: protectedProcedure
+    .input(z.object({
+      companyId:        z.number(),
+      contaBancariaId:  z.number(),
+      dataInicio:       z.string(),
+      dataFim:          z.string(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) return { resultados: null, analisadoEm: null };
+      await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+      const res = await dbExecute(db,
+        `SELECT resultados_json, analisado_em
+         FROM bank_conciliation_ai_cache
+         WHERE company_id=$1 AND conta_bancaria_id=$2 AND data_inicio=$3 AND data_fim=$4
+         LIMIT 1`,
+        [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim]);
+      const row = rows(res)[0] as any;
+      if (!row) return { resultados: null, analisadoEm: null };
+      return {
+        resultados: row.resultados_json as Record<string, any>,
+        analisadoEm: row.analisado_em as string,
+      };
+    }),
+
+  saveAiConciliacaoCache: protectedProcedure
+    .input(z.object({
+      companyId:        z.number(),
+      contaBancariaId:  z.number(),
+      dataInicio:       z.string(),
+      dataFim:          z.string(),
+      resultados:       z.record(z.string(), z.any()),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+      await dbExecute(db,
+        `INSERT INTO bank_conciliation_ai_cache
+           (company_id, conta_bancaria_id, data_inicio, data_fim, resultados_json, analisado_em)
+         VALUES ($1, $2, $3, $4, $5::jsonb, NOW())
+         ON CONFLICT (company_id, conta_bancaria_id, data_inicio, data_fim)
+         DO UPDATE SET resultados_json=$5::jsonb, analisado_em=NOW()`,
+        [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim,
+         JSON.stringify(input.resultados)]);
+      return { ok: true };
+    }),
 });

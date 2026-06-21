@@ -6340,6 +6340,18 @@ export const fornecedores = pgTable("fornecedores", {
   atualizadoEm:     timestamp("atualizado_em", { mode: 'string' }).defaultNow().notNull(),
 });
 
+// Rev. 3454 — Cache persistente de análise IA da Conciliação Bancária.
+// Evita re-análise cara a cada mount; usuário re-analisa explicitamente.
+export const bankConciliationAiCache = pgTable("bank_conciliation_ai_cache", {
+  id:               serial().primaryKey(),
+  companyId:        integer("company_id").notNull(),
+  contaBancariaId:  integer("conta_bancaria_id").notNull(),
+  dataInicio:       varchar("data_inicio", { length: 10 }).notNull(),
+  dataFim:          varchar("data_fim", { length: 10 }).notNull(),
+  resultadosJson:   jsonb("resultados_json").notNull().default({}),
+  analisadoEm:      timestamp("analisado_em", { mode: "string" }).defaultNow().notNull(),
+});
+
 export const clientes = pgTable("clientes", {
   id:               serial().primaryKey(),
   companyId:        integer("company_id").notNull(),

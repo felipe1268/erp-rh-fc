@@ -274,6 +274,9 @@ export default function FinanceiroConciliacao() {
   const [batchApplying, setBatchApplying] = useState(false);
   const [batchApplyProgress, setBatchApplyProgress] = useState<{ done: number; total: number } | null>(null);
   const [batchShowOnlyProblems, setBatchShowOnlyProblems] = useState(true);
+  // Rev. 3454 — cache persistente: controla se o resultado atual veio do banco (não re-analisa ao montar)
+  const [batchAiFromCache, setBatchAiFromCache] = useState(false);
+  const [batchAiCachedAt, setBatchAiCachedAt] = useState<string | null>(null);
   // Rev. 3404 — AI inline no dialog "Confirmar conciliação?"
   type ConfirmAiState = "idle" | "loading" | "error" | { resultados: BatchResult[] };
   const [confirmAiState, setConfirmAiState] = useState<ConfirmAiState>("idle");
@@ -1517,10 +1520,33 @@ export default function FinanceiroConciliacao() {
   };
   // Rev. 3403 — LOTE: mutation + funções de análise em batch + aplicar relatório
   const analisarLoteMut = (trpc as any).financial.analisarLoteSugestoesComIA.useMutation();
-  const analisarTodas = async () => {
+  // Rev. 3454 — cache persistente: carrega resultado salvo ao abrir a conta/período
+  const aiCacheQ = (trpc as any).financial.getAiConciliacaoCache.useQuery(
+    { companyId, contaBancariaId: parseInt(contaBancariaId) || 0, dataInicio, dataFim },
+    { enabled: !!companyId && !!contaBancariaId, staleTime: Infinity, refetchOnWindowFocus: false }
+  );
+  const saveAiCacheMut = (trpc as any).financial.saveAiConciliacaoCache.useMutation();
+  // Hidrata o estado local com o resultado salvo no banco (uma única vez, ao carregar)
+  useEffect(() => {
+    if (!aiCacheQ.data?.resultados || batchAiLoading) return;
+    const resultados = aiCacheQ.data.resultados as Record<number, any>;
+    if (Object.keys(resultados).length === 0) return;
+    setBatchAiResults(resultados);
+    setBatchAiFromCache(true);
+    setBatchAiCachedAt(aiCacheQ.data.analisadoEm ?? null);
+  }, [aiCacheQ.data]);
+  // Limpa o estado do cache ao trocar de conta ou período
+  useEffect(() => {
+    setBatchAiResults({});
+    setBatchAiFromCache(false);
+    setBatchAiCachedAt(null);
+  }, [contaBancariaId, dataInicio, dataFim]);
+  const analisarTodas = async (forcar = false) => {
     if (!sugestoes.length || batchAiLoading) return;
     setBatchAiLoading(true);
     setBatchAiResults({});
+    setBatchAiFromCache(false);
+    setBatchAiCachedAt(null);
     setBatchAiProgress({ done: 0, total: sugestoes.length });
     const CHUNK = 30;
     const novoResults: Record<number, any> = {};
@@ -1550,6 +1576,14 @@ export default function FinanceiroConciliacao() {
     }
     setBatchAiResults(novoResults);
     setBatchAiLoading(false);
+    // Persiste no banco para evitar re-análise no próximo acesso
+    saveAiCacheMut.mutate({
+      companyId,
+      contaBancariaId: parseInt(contaBancariaId) || 0,
+      dataInicio,
+      dataFim,
+      resultados: novoResults as any,
+    });
     const preChecked = new Set<string>();
     for (const [slid, r] of Object.entries(novoResults)) {
       (r as any).sugestoes.forEach((_: any, idx: number) => preChecked.add(`${slid}-${idx}`));
@@ -3492,20 +3526,44 @@ export default function FinanceiroConciliacao() {
                           {relerBusy ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1" />}
                           {relerBusy ? `Lendo${relerInfo ? ` (${formatInt(relerInfo.feitos)}, faltam ${formatInt(relerInfo.restantes)})` : "..."}` : "Reler comprovantes (IA)"}
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={batchAiLoading ? undefined : Object.keys(batchAiResults).length > 0 ? () => setShowBatchReport(true) : analisarTodas}
-                          disabled={batchAiLoading || !sugestoes.length}
-                          title="Analisa TODAS as sugestões de uma só vez e gera relatório de divergências de classificação"
-                          className={Object.keys(batchAiResults).length > 0 && !batchAiLoading ? "border-violet-400 text-violet-700 hover:bg-violet-50" : ""}
-                        >
-                          {batchAiLoading
-                            ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" />{`Analisando (${batchAiProgress?.done ?? 0}/${batchAiProgress?.total ?? 0})…`}</>
-                            : Object.keys(batchAiResults).length > 0
-                            ? <><Sparkles className="w-4 h-4 mr-1" />{`Relatório IA (${Object.values(batchAiResults).filter((r: any) => r.sugestoes.length > 0).length} divergências)`}</>
-                            : <><Sparkles className="w-4 h-4 mr-1" />Analisar todas com IA</>}
-                        </Button>
+                        {/* Rev. 3454 — botão IA com cache persistente */}
+                        {Object.keys(batchAiResults).length > 0 && !batchAiLoading ? (
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setShowBatchReport(true)}
+                              className="border-violet-400 text-violet-700 hover:bg-violet-50"
+                              title={batchAiFromCache && batchAiCachedAt ? `Análise salva em ${new Date(batchAiCachedAt).toLocaleString("pt-BR")}` : "Relatório da análise IA"}
+                            >
+                              <Sparkles className="w-4 h-4 mr-1" />
+                              {`Relatório IA (${Object.values(batchAiResults).filter((r: any) => r.sugestoes.length > 0).length} divergências)`}
+                              {batchAiFromCache && <span className="ml-1 text-[10px] bg-violet-100 text-violet-600 px-1 rounded">cache</span>}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => analisarTodas(true)}
+                              disabled={!sugestoes.length}
+                              title="Descarta o cache e re-executa a análise com IA"
+                              className="text-slate-500 hover:text-violet-700 px-2"
+                            >
+                              Reanalisar
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={batchAiLoading ? undefined : analisarTodas}
+                            disabled={batchAiLoading || !sugestoes.length}
+                            title="Analisa TODAS as sugestões de uma só vez e gera relatório de divergências de classificação"
+                          >
+                            {batchAiLoading
+                              ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" />{`Analisando (${batchAiProgress?.done ?? 0}/${batchAiProgress?.total ?? 0})…`}</>
+                              : <><Sparkles className="w-4 h-4 mr-1" />Analisar todas com IA</>}
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           className="ml-auto"
