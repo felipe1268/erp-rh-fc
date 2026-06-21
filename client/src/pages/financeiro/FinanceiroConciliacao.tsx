@@ -360,7 +360,7 @@ export default function FinanceiroConciliacao() {
     return out.sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [lancFornecedores]);
   // Rev. 3324 — clientes p/ "Lançar no Contas a Receber" (indicar quem pagou).
-  const { data: lancClientes } = (trpc as any).clientes.list.useQuery({ companyId }, { enabled: !!companyId });
+  const { data: lancClientes, refetch: refetchLancClientes } = (trpc as any).clientes.list.useQuery({ companyId }, { enabled: !!companyId });
   const clienteOpts: { id: number; nome: string }[] = useMemo(() => {
     const seen = new Set<string>(); const out: { id: number; nome: string }[] = [];
     for (const c of (Array.isArray(lancClientes) ? lancClientes : [])) {
@@ -410,6 +410,10 @@ export default function FinanceiroConciliacao() {
   const [lancNewObraOpen, setLancNewObraOpen] = useState(false);
   const [lancNewObraNome, setLancNewObraNome] = useState("");
   const criarObraMut = (trpc as any).obras.create.useMutation();
+  // Rev. 3450 — dialog inline "Novo cliente"
+  const [lancNewClienteOpen, setLancNewClienteOpen] = useState(false);
+  const [lancNewClienteNome, setLancNewClienteNome] = useState("");
+  const criarClienteMut = (trpc as any).clientes.criar.useMutation();
   // Rev. 3446 — dialogs inline "Nova categoria" e "Novo centro de custo"
   const [lancNewCatOpen, setLancNewCatOpen] = useState(false);
   const [lancNewCatNome, setLancNewCatNome] = useState("");
@@ -5626,7 +5630,12 @@ export default function FinanceiroConciliacao() {
                 <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 pt-1">Classificação</div>
                 {(lancStatement?.id == null ? lancForm.tipo === "receita" : Number(lancStatement.valor) >= 0) ? (
                   <div>
-                    <Label className="text-xs flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-emerald-600" />Cliente que pagou</Label>
+                    <Label className="text-xs flex items-center gap-1.5 justify-between w-full">
+                      <span className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-emerald-600" />Cliente que pagou</span>
+                      <button type="button" onClick={() => { setLancNewClienteNome(""); setLancNewClienteOpen(true); }} className="text-blue-600 hover:text-blue-800 font-medium text-[11px] flex items-center gap-0.5 transition-colors">
+                        <Plus className="w-3 h-3" />Novo cliente
+                      </button>
+                    </Label>
                     <LancCombo
                       value={lancForm.clienteNome}
                       onChangeText={(s) => setLancForm(f => ({ ...f, clienteNome: s, clienteId: "", obraId: "", }))}
@@ -6120,6 +6129,53 @@ export default function FinanceiroConciliacao() {
                 }}
               >
                 {criarObraMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Plus className="w-4 h-4 mr-1" />}Criar obra
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 3450 — Dialog inline "Novo cliente" */}
+        <Dialog open={lancNewClienteOpen} onOpenChange={(o) => { if (!o) setLancNewClienteOpen(false); }}>
+          <DialogContent className="max-w-sm w-full">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <Plus className="w-4 h-4 text-emerald-600" />Cadastrar novo cliente
+              </DialogTitle>
+              <DialogDescription className="text-xs">O cliente será criado e automaticamente selecionado no formulário.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 py-1">
+              <div>
+                <Label className="text-xs">Nome / Razão Social *</Label>
+                <Input
+                  value={lancNewClienteNome}
+                  onChange={e => setLancNewClienteNome(e.target.value)}
+                  placeholder="Ex.: Bauminas Química Ltda."
+                  autoFocus
+                  onKeyDown={e => { if (e.key === "Enter" && lancNewClienteNome.trim()) e.currentTarget.blur(); }}
+                />
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" size="sm" onClick={() => setLancNewClienteOpen(false)}>Cancelar</Button>
+              <Button
+                size="sm"
+                disabled={!lancNewClienteNome.trim() || criarClienteMut.isPending}
+                onClick={async () => {
+                  if (!lancNewClienteNome.trim() || !companyId) return;
+                  try {
+                    const novo = await criarClienteMut.mutateAsync({ companyId: Number(companyId), razaoSocial: lancNewClienteNome.trim() });
+                    await refetchLancClientes();
+                    const novoId = String(novo?.id ?? novo);
+                    setLancForm(f => ({ ...f, clienteNome: lancNewClienteNome.trim(), clienteId: novoId, obraId: "" }));
+                    setLancObraDisplay("");
+                    setLancNewClienteOpen(false);
+                    toast({ title: "Cliente criado", description: lancNewClienteNome.trim() });
+                  } catch (err: any) {
+                    toast({ title: "Erro ao criar cliente", description: String(err?.message ?? err), variant: "destructive" });
+                  }
+                }}
+              >
+                {criarClienteMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Plus className="w-4 h-4 mr-1" />}Criar cliente
               </Button>
             </DialogFooter>
           </DialogContent>

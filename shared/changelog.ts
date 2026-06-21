@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3450 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CRIAR CLIENTE INLINE NO FORM "LANÇAR NO
+ * CONTAS A RECEBER". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PROBLEMA: no form "Lançar no Contas a Receber" da Conciliação Bancária, o campo
+ * "Cliente que pagou" exigia que o usuário saísse para cadastrar um cliente novo, perdendo
+ * o contexto da linha do extrato em análise.
+ *
+ * SOLUÇÃO (espelho dos botões "+ Nova obra", "+ Nova categoria" e "+ Novo CC" já existentes):
+ * - Botão "+ Novo cliente" adicionado ao lado direito do label "Cliente que pagou".
+ * - Abre Dialog inline com campo único "Nome / Razão Social *".
+ * - Chama `clientes.criar` com `razaoSocial` + `companyId`.
+ * - Após criar, faz refetch de `lancClientes` e auto-seleciona o novo cliente no form.
+ * - `refetch` exposto na query `lancClientes` (antes desestruturava só `data`).
+ *
+ * Arquivos: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`.
+ *
  * Rev. 3449 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SUGESTÕES AUTOMÁTICAS — FILTRO ESTRITO
  * DE DATA NOS ENTRIES (SEM BUFFER). BACKEND ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
