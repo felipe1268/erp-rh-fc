@@ -493,7 +493,7 @@ export default function FinanceiroConciliacao() {
     onError: (e: any) => toast({ title: "Erro ao conciliar grupo", description: e.message, variant: "destructive" }),
   });
   // Rev. 3399 — Conciliação de lançamento SEM conta bancária via sugestão automática.
-  const [confirmSemConta, setConfirmSemConta] = React.useState<{ entry: any; sug: any } | null>(null);
+  const [confirmSemConta, setConfirmSemConta] = useState<{ entry: any; sug: any } | null>(null);
   const conciliarSemContaMut = (trpc as any).financial.conciliarSemContaComExtrato.useMutation({
     onSuccess: () => {
       toast({ title: "Lançamento vinculado e conciliado!", description: `Conta bancária preenchida automaticamente.` });
@@ -3762,7 +3762,7 @@ export default function FinanceiroConciliacao() {
                       )}
                       <div className="divide-y divide-gray-100 max-h-[520px] overflow-y-auto">
                         {repSemConta.map((e: any) => (
-                          <React.Fragment key={e.id}>
+                          <div key={e.id}>
                             {renderEntryRow(e)}
                             {e.sugLineId && (
                               <div className="mx-4 mb-2 rounded-lg border border-blue-200 bg-blue-50/80 px-3 py-2 flex items-center gap-2">
@@ -3787,7 +3787,7 @@ export default function FinanceiroConciliacao() {
                                 </Button>
                               </div>
                             )}
-                          </React.Fragment>
+                          </div>
                         ))}
                       </div>
                     </div>
