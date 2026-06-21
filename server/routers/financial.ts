@@ -5465,23 +5465,39 @@ export const financialRouter = router({
   confirmarEntradaCaixa: protectedProcedure.input(z.object({
     companyId: z.number(),
     entryId: z.number(),
+    // Rev. 3445 — obrigatório quando o lançamento é "sem conta" (conta_bancaria_id IS NULL);
+    // será vinculado à conta Caixa Interno informada e conciliado em seguida.
+    contaBancariaId: z.number().optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
-    // Verifica a entry existe, pertence à empresa E à conta caixaInterno.
+    // Verifica a entry existe e pertence à empresa (LEFT JOIN p/ aceitar sem-conta).
     const entryRes = await dbExecute(db,
       `SELECT e.id, e.conta_bancaria_id AS "contaBancariaId", cba."caixaInterno"
          FROM financial_entries e
-         JOIN company_bank_accounts cba ON cba.id = e.conta_bancaria_id
+         LEFT JOIN company_bank_accounts cba ON cba.id = e.conta_bancaria_id
         WHERE e.id=$1 AND e.company_id=$2 AND e.status<>'cancelado' LIMIT 1`,
       [input.entryId, input.companyId]);
     const entry = rows(entryRes)[0] as any;
     if (!entry) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado." });
-    if (Number(entry.caixaInterno) !== 1) throw new TRPCError({ code: "BAD_REQUEST", message: "Esta conta não é do tipo Caixa Interno." });
-    await dbExecute(db,
-      `UPDATE financial_entries SET conciliado=1, data_conciliacao=CURRENT_DATE WHERE id=$1 AND company_id=$2`,
-      [input.entryId, input.companyId]);
+    if (entry.contaBancariaId != null) {
+      // Lançamento já tem conta — deve ser caixaInterno (comportamento original).
+      if (Number(entry.caixaInterno) !== 1) throw new TRPCError({ code: "BAD_REQUEST", message: "Esta conta não é do tipo Caixa Interno." });
+      await dbExecute(db,
+        `UPDATE financial_entries SET conciliado=1, data_conciliacao=CURRENT_DATE WHERE id=$1 AND company_id=$2`,
+        [input.entryId, input.companyId]);
+    } else {
+      // Rev. 3445 — sem conta: vincular à conta Caixa Interno informada e confirmar.
+      if (!input.contaBancariaId) throw new TRPCError({ code: "BAD_REQUEST", message: "Informe a conta caixa para vincular este lançamento." });
+      const cbaRes = await dbExecute(db,
+        `SELECT id FROM company_bank_accounts WHERE id=$1 AND company_id=$2 AND "caixaInterno"=1 LIMIT 1`,
+        [input.contaBancariaId, input.companyId]);
+      if (rows(cbaRes).length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Conta caixa inválida ou não é do tipo Caixa Interno." });
+      await dbExecute(db,
+        `UPDATE financial_entries SET conciliado=1, data_conciliacao=CURRENT_DATE, conta_bancaria_id=$1 WHERE id=$2 AND company_id=$3`,
+        [input.contaBancariaId, input.entryId, input.companyId]);
+    }
     return { success: true };
   }),
 
@@ -6422,6 +6438,12 @@ export const financialRouter = router({
       `UPDATE financial_entries SET conciliado=1, data_conciliacao=CURRENT_DATE WHERE id=$1 AND company_id=$2`,
       [input.entryId, input.companyId]
     );
+    // Rev. 3445 — sem conta: vincular à conta da linha do extrato após conciliação.
+    if (entryConta == null) {
+      await dbExecute(db,
+        `UPDATE financial_entries SET conta_bancaria_id=$1 WHERE id=$2 AND company_id=$3 AND conta_bancaria_id IS NULL`,
+        [lineConta, input.entryId, input.companyId]);
+    }
     // Rev. 2693 — se for perna de transferência, concilia a perna irmã junto.
     await dbExecute(db,
       `UPDATE financial_entries sib SET conciliado=1, data_conciliacao=CURRENT_DATE
@@ -6486,21 +6508,23 @@ export const financialRouter = router({
       // como ÚLTIMO item do array (aparece por último no texto, na cláusula de conta).
       const lineConta = Number(ln.contaBancariaId);
       // 2) Baixa de TODOS os membros. CRÍTICO: `dbExecute` liga params por ORDEM DE APARIÇÃO
-      //    TEXTUAL ($N é cosmético/ignorado). Como o `data_pagamento` (cláusula SET) aparece
-      //    ANTES do `IN (...)` no texto, ele PRECISA ser o 1º placeholder e o 1º item do array,
-      //    senão `dataPg` cairia no IN e um id cairia no ::date. Ordem: dataPg → ids → companyId.
-      const ph = ids.map((_, i) => `$${i + 2}`).join(",");
+      //    TEXTUAL ($N é cosmético/ignorado). Ordem de aparição no texto:
+      //    $1=dataPg (SET data_pagamento), $2=lineConta (SET conta_bancaria_id COALESCE),
+      //    $3…$N+2=ids (IN), $N+3=companyId (WHERE), $N+4=lineConta (WHERE conta check).
+      //    Rev. 3445 — conta_bancaria_id = COALESCE(...) vincula entradas sem-conta à conta da linha.
+      const ph = ids.map((_, i) => `$${i + 3}`).join(",");
       const upd = await dbExecute(tx,
         `UPDATE financial_entries
             SET conciliado=1, data_conciliacao=CURRENT_DATE,
                 status = CASE WHEN tipo='receita' THEN 'recebido' ELSE 'pago' END,
                 data_pagamento = COALESCE(data_pagamento, $1::date),
-                valor_realizado = COALESCE(valor_realizado, valor_previsto)
-          WHERE id IN (${ph}) AND company_id=$${ids.length + 2}
+                valor_realizado = COALESCE(valor_realizado, valor_previsto),
+                conta_bancaria_id = COALESCE(conta_bancaria_id, $2)
+          WHERE id IN (${ph}) AND company_id=$${ids.length + 3}
             AND COALESCE(conciliado,0)=0 AND status <> 'cancelado'
-            AND (conta_bancaria_id IS NULL OR conta_bancaria_id = $${ids.length + 3})
+            AND (conta_bancaria_id IS NULL OR conta_bancaria_id = $${ids.length + 4})
           RETURNING id`,
-        [dataPg, ...ids, input.companyId, lineConta]);
+        [dataPg, lineConta, ...ids, input.companyId, lineConta]);
       const okIds = rows(upd).map((r: any) => Number(r.id));
       conciliados = okIds.length;
       if (conciliados === 0) {

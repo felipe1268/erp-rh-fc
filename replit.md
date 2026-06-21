@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3445** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SEÇÃO "SEM CONTA" NO CAIXA INTERNO + VÍNCULO DE CONTA AO CONCILIAR. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** (1) `getConciliacaoReport` habilitado para Caixa Interno (removido guard `!contaSelecionadaCaixaInterno`); (2) bloco "Sem conta" âmbar adicionado na seção Caixa Interno com botão "Confirmar" por item; (3) `confirmarEntradaCaixa` aceita entry sem conta (LEFT JOIN + valida contaBancariaId caixaInterno + UPDATE conta+conciliado); (4) `conciliarLancamento` vincula `conta_bancaria_id` pós-conciliação se era NULL; (5) `conciliarGrupoLancamentos` inclui `COALESCE(conta_bancaria_id,$lineConta)` no SET. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3444** — **COMPRAS/PJ · LANÇAMENTOS PJ DUPLICADOS NA CONCILIAÇÃO BANCÁRIA — DEDUP E CAP DE VALOR. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** 3 camadas: (1) `_agruparConciliacao` filtra itens duplicados por `(data,|valor|,descricao)` sem DELETE; (2) `gerarPrevisoesDoContrato` deduplica por `employeeId` (não `contractId`) + cap de `valorMensal`; (3) `pj.pagamentos.create` verifica existência e cap antes do INSERT. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3443** — **CONCILIAÇÃO BANCÁRIA / LANÇAR NO ERP · FORMA DE PAGAMENTO AUTO-DETECTADA DO TEXTO DO EXTRATO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Regex `\bPIX\b`/`\bTED\b`/`\bBOLETO\b` sobre o texto bruto da linha do extrato pré-preenche o campo "Forma de pagamento" no form de lançamento. Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3443** — **CONCILIAÇÃO BANCÁRIA / LANÇAR NO ERP · FORMA DE PAGAMENTO AUTO-DETECTADA DO TEXTO DO EXTRATO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3442** — **COMPRAS / OC + COTAÇÃO · FORMA DE PAGAMENTO PRÉ-PREENCHIDA DO CICLO DO FORNECEDOR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -63,14 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3440** — **COMPRAS / FORNECEDORES · SEÇÃO "CICLO DE FECHAMENTO" NO CADASTRO DO FORNECEDOR. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3439** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NÚMERO DA OC NO LANÇAMENTO + LINK "ABRIR OC". BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3438** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXCLUIR SAÍDA DE ALMOXARIFADO. 100% BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3437** — **FINANCEIRO + FORNECEDORES · CICLO DE FECHAMENTO COM PARCELAMENTO. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3435** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · VALE ALIMENTAÇÃO AGRUPADO (igual ao VR). BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3434** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · "NO ERP, SEM EXTRATO" — EXIBE CONTA BANCÁRIA DO LANÇAMENTO. 100% FRONTEND · ZERO BACKEND.** Detalhe: `shared/changelog.ts`.
 
 
 ### REGRA DE OURO — Cabeçalho de documentos institucionais FC (Rev. 2106+)

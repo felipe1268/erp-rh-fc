@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3445 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SEÇÃO "SEM CONTA" NO CAIXA INTERNO +
+ * VÍNCULO DE CONTA AO CONCILIAR. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PROBLEMA: A seção "Sem conta bancária definida" não aparecia quando o usuário estava na conta
+ * CAIXA INTERNO - ADM (query `getConciliacaoReport` desabilitada para `contaSelecionadaCaixaInterno`).
+ * Além disso, ao conciliar uma entrada "sem conta" em qualquer conta (extrato normal ou Caixa Interno),
+ * o campo `conta_bancaria_id` da `financial_entry` permanecia NULL — o lançamento continuava "solto"
+ * mesmo após ser conciliado, aparecendo em todas as contas indefinidamente.
+ *
+ * CORREÇÕES:
+ *
+ * 1. **Frontend — `getConciliacaoReport` habilitado para Caixa Interno**: removido o guard
+ *    `&& !contaSelecionadaCaixaInterno` da opção `enabled`. A query já retorna `lancamentosSemConta`
+ *    de forma independente da conta selecionada (usa `conta_bancaria_id IS NULL`, ignora extrato).
+ *
+ * 2. **Frontend — bloco "Sem conta" no modo Caixa Interno**: adicionado card âmbar após a seção
+ *    "Confirmadas", com lista paginável (max-h-72) e botão "Confirmar" por item. Ao confirmar,
+ *    chama `confirmarEntradaCaixa` com `contaBancariaId` da conta atual.
+ *
+ * 3. **Backend `confirmarEntradaCaixa`** — aceita agora entradas `conta_bancaria_id IS NULL`:
+ *    - Se a entry já tem conta → comportamento original (valida caixaInterno=1, marca conciliado).
+ *    - Se a entry é sem conta → valida que `input.contaBancariaId` é uma conta `caixaInterno=1`
+ *      da empresa, depois faz UPDATE com `conta_bancaria_id + conciliado=1` em uma operação.
+ *    - JOIN trocado de INNER para LEFT JOIN para não excluir sem-conta da seleção.
+ *
+ * 4. **Backend `conciliarLancamento`** — após o UPDATE de conciliado=1, se `entryConta == null`,
+ *    executa UPDATE adicional `SET conta_bancaria_id=$lineConta WHERE conta_bancaria_id IS NULL`.
+ *
+ * 5. **Backend `conciliarGrupoLancamentos`** — SET do UPDATE principal passou a incluir
+ *    `conta_bancaria_id = COALESCE(conta_bancaria_id, $lineConta)`. Parâmetros reordenados:
+ *    `[dataPg, lineConta, ...ids, companyId, lineConta]`; `ph` starts at $3 (antes $2).
+ *
+ * Arquivos: `server/routers/financial.ts` (confirmarEntradaCaixa, conciliarLancamento,
+ * conciliarGrupoLancamentos), `client/src/pages/financeiro/FinanceiroConciliacao.tsx`.
+ *
  * Rev. 3444 — **COMPRAS/PJ · LANÇAMENTOS PJ DUPLICADOS NA CONCILIAÇÃO BANCÁRIA — DEDUP E CAP DE VALOR.
  * BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *

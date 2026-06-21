@@ -840,7 +840,9 @@ export default function FinanceiroConciliacao() {
   // lançamento-sem-extrato vêm de uma fonte só (getConciliacaoReport), READ-ONLY.
   const { data: report, isFetching: reportLoading, isError: reportIsError, error: reportError, refetch: refetchReport } = (trpc as any).financial.getConciliacaoReport.useQuery(
     { companyId, contaBancariaId: parseInt(contaBancariaId) || 0, dataInicio, dataFim },
-    { enabled: !!companyId && !!contaBancariaId && !contaSelecionadaCaixaInterno, retry: false }
+    // Rev. 3445 — habilitado também p/ Caixa Interno: não tem extrato, mas precisa do bloco
+    // "Sem conta bancária definida" (lancamentosSemConta) p/ o usuário vincular lançamentos.
+    { enabled: !!companyId && !!contaBancariaId, retry: false }
   );
   // Rev. 3319 — PANORAMA GERAL DO MÊS: quando há um MÊS selecionado mas NENHUMA conta,
   // roda o mesmo motor de conciliação para TODAS as contas com extrato no período e
@@ -3075,6 +3077,59 @@ export default function FinanceiroConciliacao() {
                   </CardContent>
                 </Card>
               </>
+            )}
+
+            {/* Rev. 3445 — Sem conta bancária definida: aparece no Caixa Interno também.
+                Ao confirmar, vincula o lançamento a esta conta e marca conciliado=1. */}
+            {repSemConta.length > 0 && (
+              <Card className="border-0 shadow-sm ring-1 ring-amber-100 bg-amber-50/20">
+                <CardContent className="p-0">
+                  <div className="flex items-center gap-2 px-5 py-3 border-b border-amber-100">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span className="text-sm font-semibold text-gray-700">
+                      Sem conta bancária definida ({repSemConta.length}) · {formatBRL(vSemConta)}
+                    </span>
+                    <span className="text-[11px] text-gray-400 ml-1">— confirmar vincula à conta atual</span>
+                  </div>
+                  <div className="divide-y divide-amber-50 max-h-72 overflow-y-auto">
+                    {repSemConta.map((e: any) => {
+                      const isReceita = e.tipo === "receita";
+                      const valor = Math.abs(Number(e.valor) || 0);
+                      const nome = e.fornecedorNome || e.descricao || `Lançamento #${e.id}`;
+                      return (
+                        <div key={e.id} className="flex items-center gap-3 px-5 py-3 hover:bg-amber-50/40 transition-colors">
+                          <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${isReceita ? "bg-emerald-100" : "bg-red-100"}`}>
+                            {isReceita ? <ArrowDownCircle className="h-4 w-4 text-emerald-600" /> : <ArrowUpCircle className="h-4 w-4 text-red-500" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-800 truncate" title={nome}>{nome}</p>
+                            <p className="text-xs text-gray-400">
+                              {e.data ? String(e.data).slice(0,10).split("-").reverse().join("/") : "—"}
+                              {e.obraNome && <span className="text-gray-500"> · {e.obraNome}</span>}
+                            </p>
+                          </div>
+                          <span className={`text-sm font-bold shrink-0 ${isReceita ? "text-emerald-700" : "text-red-600"}`}>
+                            {isReceita ? "+" : "-"}{formatBRL(valor)}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 shrink-0 border-violet-300 text-violet-700 hover:bg-violet-50 text-xs gap-1"
+                            disabled={confirmarEntradaMut.isPending}
+                            onClick={() => confirmarEntradaMut.mutate({
+                              companyId,
+                              entryId: e.id,
+                              contaBancariaId: parseInt(contaBancariaId),
+                            })}
+                          >
+                            <CircleCheck className="w-3.5 h-3.5" />Confirmar
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </div>
         ) : (
