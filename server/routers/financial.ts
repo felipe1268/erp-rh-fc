@@ -5542,37 +5542,35 @@ export const financialRouter = router({
          LEFT JOIN financial_internal_overrides ov
            ON ov.line_id=b.id AND ov.company_id=b.company_id AND ov.natureza IN ('efetivo','interno')
         WHERE b.company_id=$1 AND b.data>=$2 AND b.data<=$3 AND b.excluido_em IS NULL
-        GROUP BY b.conta_bancaria_id
-        UNION ALL
-        -- Rev. 3423 — Caixa Interno: contar confirmações (financial_entries) p/ destacar o card
-        SELECT e.conta_bancaria_id AS "contaBancariaId",
-               COUNT(*)::int AS total,
-               SUM(CASE WHEN COALESCE(e.conciliado,0)=1 THEN 1 ELSE 0 END)::int AS conciliadas,
-               COALESCE(SUM(ABS(COALESCE(e.valor_realizado, e.valor_previsto, 0))),0) AS "valorTotal",
-               COALESCE(SUM(CASE WHEN COALESCE(e.conciliado,0)=1 THEN ABS(COALESCE(e.valor_realizado, e.valor_previsto, 0)) ELSE 0 END),0) AS "valorConciliado",
-               0::numeric AS "valorEntradas",
-               0::numeric AS "valorSaidas",
-               0::numeric AS "valorConciliadoEntradas",
-               0::numeric AS "valorConciliadoSaidas",
-               0::int AS "pendentesEntradas",
-               0::int AS "pendentesSaidas",
-               0::numeric AS "valorEntradasInternas",
-               0::numeric AS "valorSaidasInternas",
-               0::int AS "qtdEntradasInternas",
-               0::int AS "qtdSaidasInternas"
-          FROM financial_entries e
-          JOIN company_bank_accounts cba ON cba.id=e.conta_bancaria_id AND cba."caixaInterno"=1 AND cba."companyId"=$1 AND cba."deletedAt" IS NULL
-         WHERE e.company_id=$1
-           AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) >= $2::date
-           AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) <= $3::date
-           AND COALESCE(e.excluido, false) = false
-         GROUP BY e.conta_bancaria_id`,
+        GROUP BY b.conta_bancaria_id`,
       [input.companyId, input.dataInicio, input.dataFim]);
-    return rows(res).map((r: any) => {
+    // Rev. 3423 — Caixa Interno: segunda query separada p/ evitar UNION ALL com params reutilizados
+    // (dbExecute renumera $N sequencialmente; UNION ALL com $1/$2/$3 repetidos causa syntax error).
+    const resCi = await dbExecute(db,
+      `SELECT e.conta_bancaria_id AS "contaBancariaId",
+              COUNT(*)::int AS total,
+              SUM(CASE WHEN COALESCE(e.conciliado,0)=1 THEN 1 ELSE 0 END)::int AS conciliadas
+         FROM financial_entries e
+         JOIN company_bank_accounts cba ON cba.id=e.conta_bancaria_id
+        WHERE e.company_id=$1
+          AND cba."companyId"=$2
+          AND cba."caixaInterno"=1
+          AND cba."deletedAt" IS NULL
+          AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) >= $3::date
+          AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) <= $4::date
+          AND COALESCE(e.excluido, false) = false
+        GROUP BY e.conta_bancaria_id`,
+      [input.companyId, input.companyId, input.dataInicio, input.dataFim]);
+    const ciMap: Record<number, { total: number; conciliadas: number }> = {};
+    for (const r of rows(resCi)) ciMap[Number(r.contaBancariaId)] = { total: Number(r.total) || 0, conciliadas: Number(r.conciliadas) || 0 };
+    const seenIds = new Set<number>();
+    const mapped = rows(res).map((r: any) => {
+      const id = Number(r.contaBancariaId);
+      seenIds.add(id);
       const total = Number(r.total) || 0;
       const conciliadas = Number(r.conciliadas) || 0;
       return {
-        contaBancariaId: Number(r.contaBancariaId),
+        contaBancariaId: id,
         total,
         conciliadas,
         // Rev. 3248 — BRL movimentado p/ os dashboards (READ-ONLY; |valor| pois débito vem negativo).
@@ -5594,6 +5592,23 @@ export const financialRouter = router({
         status: total === 0 ? "vazio" : conciliadas >= total ? "consolidado" : "lancamento",
       };
     });
+    // Rev. 3423 — acrescenta contas CI que só aparecem em ciMap (sem bank_statement_lines)
+    for (const [idStr, ci] of Object.entries(ciMap)) {
+      const id = Number(idStr);
+      if (seenIds.has(id)) continue;
+      mapped.push({
+        contaBancariaId: id,
+        total: ci.total, conciliadas: ci.conciliadas,
+        valorTotal: 0, valorConciliado: 0,
+        valorEntradas: 0, valorSaidas: 0,
+        valorConciliadoEntradas: 0, valorConciliadoSaidas: 0,
+        pendentesEntradas: 0, pendentesSaidas: 0,
+        valorEntradasInternas: 0, valorSaidasInternas: 0,
+        qtdEntradasInternas: 0, qtdSaidasInternas: 0,
+        status: ci.total === 0 ? "vazio" : ci.conciliadas >= ci.total ? "consolidado" : "lancamento",
+      });
+    }
+    return mapped;
   }),
 
   // Rev. 3346 — CONFERÊNCIA TOTAL: lista TODAS as linhas do extrato (todas as contas) no
