@@ -3837,6 +3837,17 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3398: coluna "caixaInterno" garantida em company_bank_accounts (conta caixa sem extrato).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3398 company_bank_accounts.caixaInterno:`, e?.message || e); }
 
+        // Rev. 3437 — Ciclo de fechamento de fornecedor: agrupa compras por período e divide
+        // em parcelas (cheque/PIX/boleto). ADD COLUMN IF NOT EXISTS (R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`ALTER TABLE empresas_terceiras ADD COLUMN IF NOT EXISTS ciclo_pagamento VARCHAR(20)`);
+          await db.execute(sql`ALTER TABLE empresas_terceiras ADD COLUMN IF NOT EXISTS ciclo_dia_fechamento INTEGER`);
+          await db.execute(sql`ALTER TABLE empresas_terceiras ADD COLUMN IF NOT EXISTS ciclo_num_parcelas INTEGER DEFAULT 1`);
+          await db.execute(sql`ALTER TABLE empresas_terceiras ADD COLUMN IF NOT EXISTS ciclo_prazo_parcela INTEGER DEFAULT 30`);
+          await db.execute(sql`ALTER TABLE empresas_terceiras ADD COLUMN IF NOT EXISTS ciclo_forma_pagamento VARCHAR(20)`);
+          console.log(`[SyncSchema+] Rev. 3437: colunas ciclo_* garantidas em empresas_terceiras (ciclo de fechamento de fornecedor).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3437 empresas_terceiras.ciclo_*:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

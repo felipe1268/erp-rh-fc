@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3437 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA + FORNECEDORES · CICLO DE FECHAMENTO
+ * DE FORNECEDOR COM PARCELAMENTO. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PROBLEMA: fornecedores de material (ex: Ferragens Santa Rita) acumulam dezenas de compras
+ * avulsas num período (semanal/quinzenal/mensal) e pagam tudo num único cheque/PIX parcelado.
+ * A conciliação não conseguia casar individualmente.
+ *
+ * SOLUÇÃO:
+ * - **Cadastro do Fornecedor** (`empresas_terceiras`): nova seção "Ciclo de Fechamento"
+ *   com 5 campos: `ciclo_pagamento` (avista/semanal/quinzenal/mensal/personalizado),
+ *   `ciclo_dia_fechamento` (dia do mês ou N dias), `ciclo_num_parcelas` (1-12×),
+ *   `ciclo_prazo_parcela` (dias entre parcelas), `ciclo_forma_pagamento` (cheque/PIX/boleto).
+ * - **Agrupador da Conciliação** (`_agruparConciliacao` em financial.ts): carrega mapa de
+ *   fornecedores com ciclo configurado (query `empresas_terceiras`). Entradas cujo
+ *   `fornecedorNome` normalizado coincide → grupo `fechamento_forn` (badge laranja).
+ *   Gera array `parcelas[]` com valor/vencimento de cada cheque. Helpers de janela:
+ *   `_cicloWindow`, `_cicloWindowLabel`, `_cicloFechamentoDate`, `_calcParcelas`.
+ * - **Conciliação (frontend)**: badge "Fechamento" laranja; seção expandível "Parcelas de
+ *   Pagamento" mostra cada cheque/PIX com parcela N/total, vencimento e valor.
+ * - Self-heal: 5 `ADD COLUMN IF NOT EXISTS` em `empresas_terceiras` (R-001/R-007/R-010 OK).
+ *
  * Rev. 3436 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CARD "SUGESTÃO" NO BLOCO SEM CONTA —
  * TEXTO DA DESCRIÇÃO NÃO MAIS TRANSBORDAVA/SOBREPOSTO. 100% FRONTEND · ZERO BACKEND.**
  *

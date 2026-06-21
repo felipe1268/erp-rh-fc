@@ -1215,8 +1215,8 @@ export default function FinanceiroConciliacao() {
     // Rev. 3239 — linha SINTÉTICA de grupo (VR/combustível/manutenção unificados).
     if (e.agrupado) {
       const expandido = gruposExpandidos.has(String(e.id));
-      const grpLabel = e.grupoTipo === "vr" ? "Vale Refeição" : e.grupoTipo === "va" ? "Vale Alimentação" : e.grupoTipo === "combustivel" ? "Combustível" : e.grupoTipo === "parceiro" ? "Parceiro" : e.grupoTipo === "pj" ? "Pagamento PJ" : "Manutenção";
-      const grpColor = e.grupoTipo === "vr" ? "bg-amber-100 text-amber-700" : e.grupoTipo === "va" ? "bg-lime-100 text-lime-700" : e.grupoTipo === "combustivel" ? "bg-sky-100 text-sky-700" : e.grupoTipo === "parceiro" ? "bg-fuchsia-100 text-fuchsia-700" : e.grupoTipo === "pj" ? "bg-indigo-100 text-indigo-700" : "bg-violet-100 text-violet-700";
+      const grpLabel = e.grupoTipo === "vr" ? "Vale Refeição" : e.grupoTipo === "va" ? "Vale Alimentação" : e.grupoTipo === "combustivel" ? "Combustível" : e.grupoTipo === "parceiro" ? "Parceiro" : e.grupoTipo === "pj" ? "Pagamento PJ" : e.grupoTipo === "fechamento_forn" ? "Fechamento" : "Manutenção";
+      const grpColor = e.grupoTipo === "vr" ? "bg-amber-100 text-amber-700" : e.grupoTipo === "va" ? "bg-lime-100 text-lime-700" : e.grupoTipo === "combustivel" ? "bg-sky-100 text-sky-700" : e.grupoTipo === "parceiro" ? "bg-fuchsia-100 text-fuchsia-700" : e.grupoTipo === "pj" ? "bg-indigo-100 text-indigo-700" : e.grupoTipo === "fechamento_forn" ? "bg-orange-100 text-orange-700" : "bg-violet-100 text-violet-700";
       const itens: any[] = Array.isArray(e.itens) ? e.itens : [];
       return (
         <div key={e.id} className={`border-b last:border-b-0 ${selectedEntry === e.id ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}>
@@ -1245,6 +1245,21 @@ export default function FinanceiroConciliacao() {
                   <span className="text-gray-400 shrink-0 w-16">{fmtData(it.data)}</span>
                   <span className="flex-1 min-w-0 truncate">{it.fornecedorNome || it.descricao || "—"}</span>
                   <span className="font-medium text-rose-500 shrink-0">{formatBRL(Math.abs(Number(it.valor)))}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {e.grupoTipo === "fechamento_forn" && Array.isArray(e.parcelas) && e.parcelas.length > 0 && (
+            <div className="bg-orange-50/60 px-4 py-2 border-t border-orange-100">
+              <p className="text-[10px] font-semibold text-orange-700 uppercase tracking-wide mb-1.5">
+                Parcelas de Pagamento
+                {e.cicloFormaPagamento && <span className="ml-1.5 normal-case font-normal text-orange-500">· {e.cicloFormaPagamento === "cheque" ? "Cheque" : e.cicloFormaPagamento === "pix" ? "PIX" : e.cicloFormaPagamento === "boleto" ? "Boleto" : "Transferência"}</span>}
+              </p>
+              {e.parcelas.map((p: any) => (
+                <div key={p.num} className="flex items-center gap-2 py-0.5 text-xs">
+                  <span className="shrink-0 w-10 font-medium text-orange-600">{p.num}/{p.total}</span>
+                  <span className="flex-1 text-gray-500">venc. {fmtData(p.vencimento)}</span>
+                  <span className="font-medium text-rose-500">{formatBRL(Math.abs(Number(p.valor)))}</span>
                 </div>
               ))}
             </div>

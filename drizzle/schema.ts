@@ -3956,6 +3956,12 @@ export const empresasTerceiras = pgTable("empresas_terceiras", {
   formaPagamento: text(),
   pixChave: varchar("pix_chave", { length: 255 }),
   pixTipoChave: text(),
+  // Ciclo de fechamento (agrupamento de compras na conciliação)
+  cicloPagamento: varchar("ciclo_pagamento", { length: 20 }),
+  cicloDiaFechamento: integer("ciclo_dia_fechamento"),
+  cicloNumParcelas: integer("ciclo_num_parcelas").default(1),
+  cicloPrazoParcela: integer("ciclo_prazo_parcela").default(30),
+  cicloFormaPagamento: varchar("ciclo_forma_pagamento", { length: 20 }),
   // Vínculo com cadastro de fornecedor (Compras)
   fornecedorId: integer("fornecedor_id"),
   // Status

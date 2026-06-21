@@ -555,6 +555,11 @@ export const terceirosRouter = router({
         pixChave: z.string().optional(),
         pixTipoChave: z.enum(["cpf", "cnpj", "email", "telefone", "aleatoria"]).optional(),
         observacoes: z.string().optional(),
+        cicloPagamento: z.enum(["avista", "semanal", "quinzenal", "mensal", "personalizado"]).optional(),
+        cicloDiaFechamento: z.number().int().min(1).max(365).optional(),
+        cicloNumParcelas: z.number().int().min(1).max(24).optional(),
+        cicloPrazoParcela: z.number().int().min(1).max(365).optional(),
+        cicloFormaPagamento: z.enum(["cheque", "pix", "boleto", "transferencia"]).optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         await _assertCompanyAccess(ctx.user, input);
@@ -621,6 +626,11 @@ export const terceirosRouter = router({
         pixTipoChave: z.enum(["cpf", "cnpj", "email", "telefone", "aleatoria"]).optional(),
         status: z.enum(["ativa", "suspensa", "inativa"]).optional(),
         observacoes: z.string().optional(),
+        cicloPagamento: z.enum(["avista", "semanal", "quinzenal", "mensal", "personalizado"]).optional(),
+        cicloDiaFechamento: z.number().int().min(1).max(365).optional(),
+        cicloNumParcelas: z.number().int().min(1).max(24).optional(),
+        cicloPrazoParcela: z.number().int().min(1).max(365).optional(),
+        cicloFormaPagamento: z.enum(["cheque", "pix", "boleto", "transferencia"]).optional(),
         // Documentos
         pgrUrl: z.string().optional(),
         pgrValidade: z.string().optional(),

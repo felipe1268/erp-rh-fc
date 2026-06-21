@@ -155,7 +155,81 @@ function _normNomeConc(s: any): string {
 // cai (objetivo: a lista deixa de ter centenas de linhas). Cada grupo é uma linha
 // SINTÉTICA {id:"grp:…" (string), agrupado:true, itensIds:[…], qtd, valor=soma, …}.
 // READ-ONLY (só formata o retorno; nada é gravado aqui).
-function _agruparConciliacao(arr: any[]): any[] {
+// Rev. 3437 — Calcula a janela de fechamento de um lançamento dado o ciclo do fornecedor.
+function _cicloWindow(dateStr: string, ciclo: string): string {
+  const d = new Date(dateStr + "T12:00:00Z");
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = d.getUTCDate();
+  if (ciclo === "mensal" || ciclo === "personalizado") return `${yyyy}-${mm}`;
+  if (ciclo === "quinzenal") return `${yyyy}-${mm}-${day <= 15 ? "01" : "16"}`;
+  if (ciclo === "semanal") {
+    const jan1 = new Date(Date.UTC(yyyy, 0, 1));
+    const week = Math.ceil(((d.getTime() - jan1.getTime()) / 86400000 + jan1.getUTCDay() + 1) / 7);
+    return `${yyyy}-W${String(week).padStart(2, "0")}`;
+  }
+  return `${yyyy}-${mm}`;
+}
+
+// Rev. 3437 — Etiqueta legível da janela de fechamento.
+function _cicloWindowLabel(window: string, ciclo: string): string {
+  const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  if (ciclo === "semanal" && window.includes("W")) {
+    const [yyyy, w] = window.split("-W");
+    return `Sem. ${w}/${yyyy}`;
+  }
+  if (ciclo === "quinzenal" && window.length === 10) {
+    const [yyyy, mm, dd] = window.split("-");
+    const mes = MESES[parseInt(mm, 10) - 1] ?? mm;
+    return `${dd === "01" ? "1ª" : "2ª"} quinz. ${mes} ${yyyy}`;
+  }
+  if (window.length === 7) {
+    const [yyyy, mm] = window.split("-");
+    return `${MESES[parseInt(mm, 10) - 1] ?? mm} ${yyyy}`;
+  }
+  return window;
+}
+
+// Rev. 3437 — Calcula o último dia da janela de fechamento (data de referência para vencimentos).
+function _cicloFechamentoDate(window: string, ciclo: string): string {
+  if (ciclo === "semanal" && window.includes("W")) {
+    const [yyyy, ww] = window.split("-W");
+    const jan4 = new Date(Date.UTC(parseInt(yyyy), 0, 4));
+    const startOfWeek = new Date(jan4.getTime() - (jan4.getUTCDay() || 7) * 86400000 + parseInt(ww) * 7 * 86400000);
+    const sun = new Date(startOfWeek.getTime() + 6 * 86400000);
+    return sun.toISOString().slice(0, 10);
+  }
+  if (ciclo === "quinzenal" && window.length === 10) {
+    const [yyyy, mm, dd] = window.split("-");
+    if (dd === "01") return `${yyyy}-${mm}-15`;
+    const lastDay = new Date(Date.UTC(parseInt(yyyy), parseInt(mm), 0));
+    return lastDay.toISOString().slice(0, 10);
+  }
+  if (window.length === 7) {
+    const [yyyy, mm] = window.split("-");
+    const lastDay = new Date(Date.UTC(parseInt(yyyy), parseInt(mm), 0));
+    return lastDay.toISOString().slice(0, 10);
+  }
+  return window;
+}
+
+// Rev. 3437 — Gera array de parcelas de pagamento do fechamento.
+function _calcParcelas(total: number, numParcelas: number, prazoDias: number, dataFechamento: string): any[] {
+  if (!numParcelas || numParcelas <= 1) return [];
+  const parcelas: any[] = [];
+  const valorBase = Math.floor((total / numParcelas) * 100) / 100;
+  const resto = Math.round((total - valorBase * numParcelas) * 100) / 100;
+  const dtFech = new Date(dataFechamento + "T12:00:00Z");
+  for (let i = 0; i < numParcelas; i++) {
+    const dt = new Date(dtFech.getTime() + prazoDias * i * 86400000);
+    const venc = dt.toISOString().slice(0, 10);
+    const valor = i === numParcelas - 1 ? valorBase + resto : valorBase;
+    parcelas.push({ num: i + 1, total: numParcelas, valor, vencimento: venc });
+  }
+  return parcelas;
+}
+
+function _agruparConciliacao(arr: any[], supplierCycleMap: Map<string, any> = new Map()): any[] {
   const GRUP: Record<string, string> = {
     beneficio_vr: "vr",
     beneficio_va: "va",
@@ -167,9 +241,54 @@ function _agruparConciliacao(arr: any[]): any[] {
   };
   const passthrough: any[] = [];
   const groups = new Map<string, any>();
+  const cycleGroups = new Map<string, any>(); // Rev. 3437 — fechamento_forn
   for (const r of arr) {
     const tipoG = GRUP[String(r.origemModulo ?? "")];
-    if (!tipoG) { passthrough.push(r); continue; }
+    if (!tipoG) {
+      // Rev. 3437 — checar se o fornecedor tem ciclo de fechamento configurado
+      if (supplierCycleMap.size) {
+        const fornNorm = _normNomeConc(String(r.fornecedorNome || ""));
+        const cycleConfig = fornNorm ? supplierCycleMap.get(fornNorm) : undefined;
+        if (cycleConfig && cycleConfig.cicloPagamento && cycleConfig.cicloPagamento !== "avista") {
+          const dataStr = typeof r.data === "string"
+            ? r.data.slice(0, 10)
+            : (r.data ? new Date(r.data).toISOString().slice(0, 10) : "");
+          const win = dataStr ? _cicloWindow(dataStr, cycleConfig.cicloPagamento) : "0000-00";
+          const chave = `fech|${fornNorm}|${win}`;
+          let cg = cycleGroups.get(chave);
+          if (!cg) {
+            cg = {
+              id: `grp:${chave}`,
+              agrupado: true,
+              grupoTipo: "fechamento_forn",
+              descricao: `${r.fornecedorNome || "Fornecedor"} · ${_cicloWindowLabel(win, cycleConfig.cicloPagamento)}`,
+              fornecedorNome: r.fornecedorNome || null,
+              obraNome: null,
+              valor: 0,
+              tipo: "despesa",
+              status: r.status,
+              data: dataStr,
+              dataMin: dataStr || "9999-12-31",
+              dataMax: dataStr || "0000-01-01",
+              qtd: 0,
+              itensIds: [] as number[],
+              itens: [] as any[],
+              _cicloConfig: cycleConfig,
+              _cicloWindow: win,
+            };
+            cycleGroups.set(chave, cg);
+          }
+          cg.valor += Number(r.valor) || 0;
+          cg.qtd += 1;
+          cg.itensIds.push(r.id);
+          cg.itens.push({ id: r.id, descricao: r.descricao, fornecedorNome: r.fornecedorNome, valor: Number(r.valor) || 0, data: dataStr });
+          if (dataStr && dataStr < cg.dataMin) cg.dataMin = dataStr;
+          if (dataStr && dataStr > cg.dataMax) { cg.dataMax = dataStr; cg.data = dataStr; }
+          continue;
+        }
+      }
+      passthrough.push(r); continue;
+    }
     const dataStr = typeof r.data === "string"
       ? r.data.slice(0, 10)
       : (r.data ? new Date(r.data).toISOString().slice(0, 10) : "");
@@ -245,6 +364,20 @@ function _agruparConciliacao(arr: any[]): any[] {
     }
     delete g._fornCount;
     out.push(g);
+  }
+  // Rev. 3437 — finalizar grupos de fechamento de fornecedor (ciclo configurado)
+  for (const cg of cycleGroups.values()) {
+    const cfg = cg._cicloConfig;
+    const win = cg._cicloWindow;
+    const dataFech = _cicloFechamentoDate(win, cfg.cicloPagamento);
+    const numParcelas = Number(cfg.cicloNumParcelas) || 1;
+    const prazoDias = Number(cfg.cicloPrazoParcela) || 30;
+    cg.cicloFormaPagamento = cfg.cicloFormaPagamento || null;
+    cg.cicloNumParcelas = numParcelas;
+    cg.parcelas = _calcParcelas(cg.valor, numParcelas, prazoDias, dataFech);
+    delete cg._cicloConfig;
+    delete cg._cicloWindow;
+    out.push(cg);
   }
   out.sort((a, b) => String(a.data || "").localeCompare(String(b.data || "")) || String(a.id).localeCompare(String(b.id)));
   return out;
@@ -1477,14 +1610,33 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
         ORDER BY data ASC, e.id ASC`,
       [input.companyId, input.dataInicio, input.dataFim]);
 
+    // Rev. 3437 — Carregar ciclos de fechamento de fornecedores configurados para o período.
+    // Usado pelo agrupador para criar grupos "fechamento_forn" na conciliação.
+    const cycleRows = await dbExecute(db,
+      `SELECT COALESCE(NULLIF(TRIM(nome_fantasia),''), TRIM(razao_social)) AS nome,
+              ciclo_pagamento AS "cicloPagamento",
+              ciclo_dia_fechamento AS "cicloDiaFechamento",
+              ciclo_num_parcelas AS "cicloNumParcelas",
+              ciclo_prazo_parcela AS "cicloPrazoParcela",
+              ciclo_forma_pagamento AS "cicloFormaPagamento"
+         FROM empresas_terceiras
+        WHERE company_id=$1 AND deleted_at IS NULL
+          AND ciclo_pagamento IS NOT NULL AND ciclo_pagamento <> 'avista'`,
+      [input.companyId]);
+    const supplierCycleMap = new Map<string, any>();
+    for (const r of rows(cycleRows)) {
+      if (r.nome) supplierCycleMap.set(_normNomeConc(String(r.nome)), r);
+    }
+
     return {
       conciliados: rows(concRes),
       extratoSemLancamento,
       chequesDevolvidos,
       // Rev. 3239 — UNIFICA VR (por mês) + combustível/manutenção (por fornecedor) nas duas
       // listas de pendência. SOMA preservada; só a contagem cai (lista enxuta).
-      lancamentosSemExtrato: _agruparConciliacao(rows(lancRes)),
-      lancamentosSemConta: _agruparConciliacao(rows(semContaRes)),
+      // Rev. 3437 — passa o mapa de ciclos de fornecedores para agrupamento por fechamento.
+      lancamentosSemExtrato: _agruparConciliacao(rows(lancRes), supplierCycleMap),
+      lancamentosSemConta: _agruparConciliacao(rows(semContaRes), supplierCycleMap),
     };
 }
 

@@ -539,6 +539,70 @@ export default function EmpresasTerceiras() {
                     </>
                   )}
                 </div>
+
+                {/* Ciclo de Fechamento */}
+                <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider pt-2">Ciclo de Fechamento</h4>
+                <p className="text-xs text-gray-500 -mt-2">Define como as compras deste fornecedor são agrupadas para pagamento na Conciliação Bancária.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Ciclo de Pagamento</Label>
+                    <Select value={form.cicloPagamento || "avista"} onValueChange={(v) => setForm({ ...form, cicloPagamento: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="avista">À vista (sem agrupamento)</SelectItem>
+                        <SelectItem value="semanal">Semanal</SelectItem>
+                        <SelectItem value="quinzenal">Quinzenal</SelectItem>
+                        <SelectItem value="mensal">Mensal</SelectItem>
+                        <SelectItem value="personalizado">Personalizado (N dias)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {form.cicloPagamento === "mensal" && (
+                    <div>
+                      <Label>Dia de Fechamento</Label>
+                      <input type="number" min={1} max={28} value={form.cicloDiaFechamento || ""} onChange={(e) => setForm({ ...form, cicloDiaFechamento: Number(e.target.value) || undefined })} placeholder="Ex: 30" className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm" />
+                    </div>
+                  )}
+                  {form.cicloPagamento === "personalizado" && (
+                    <div>
+                      <Label>A cada quantos dias</Label>
+                      <input type="number" min={1} max={365} value={form.cicloDiaFechamento || ""} onChange={(e) => setForm({ ...form, cicloDiaFechamento: Number(e.target.value) || undefined })} placeholder="Ex: 45" className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm" />
+                    </div>
+                  )}
+                  {form.cicloPagamento && form.cicloPagamento !== "avista" && (
+                    <>
+                      <div>
+                        <Label>Forma de Pagamento do Fechamento</Label>
+                        <Select value={form.cicloFormaPagamento || ""} onValueChange={(v) => setForm({ ...form, cicloFormaPagamento: v })}>
+                          <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="cheque">Cheque</SelectItem>
+                            <SelectItem value="pix">PIX</SelectItem>
+                            <SelectItem value="boleto">Boleto</SelectItem>
+                            <SelectItem value="transferencia">Transferência</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Parcelas</Label>
+                        <Select value={String(form.cicloNumParcelas || 1)} onValueChange={(v) => setForm({ ...form, cicloNumParcelas: Number(v) })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => (
+                              <SelectItem key={n} value={String(n)}>{n === 1 ? "À vista (1×)" : `${n}×`}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {(form.cicloNumParcelas || 1) > 1 && (
+                        <div>
+                          <Label>Prazo entre Parcelas (dias)</Label>
+                          <input type="number" min={1} max={365} value={form.cicloPrazoParcela || 30} onChange={(e) => setForm({ ...form, cicloPrazoParcela: Number(e.target.value) || 30 })} placeholder="30" className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm" />
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             )}
 
