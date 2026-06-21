@@ -1969,14 +1969,21 @@ export const appRouter = router({
         return rows;
       }),
     // Rev. 3451 — Vincula um cliente adicional à obra (ON CONFLICT DO NOTHING = idempotente)
+    // Rev. 3454-hotfix: try/catch expõe o erro PG real (antes só mostrava "Failed query: insert...")
     addCliente: protectedProcedure
       .input(z.object({ obraId: z.number(), clienteId: z.number(), companyId: z.number() }))
       .mutation(async ({ input }) => {
         const db = await getDb();
-        await db
-          .insert(obraClientes)
-          .values({ obraId: input.obraId, clienteId: input.clienteId, companyId: input.companyId })
-          .onConflictDoNothing();
+        try {
+          await db
+            .insert(obraClientes)
+            .values({ obraId: input.obraId, clienteId: input.clienteId, companyId: input.companyId })
+            .onConflictDoNothing();
+        } catch (e: any) {
+          const detail = (e?.cause as any)?.message ?? (e?.cause as any)?.detail ?? e?.detail ?? "";
+          const msg = detail ? `Erro ao vincular cliente — ${detail}` : (e?.message ?? String(e));
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: msg });
+        }
         return { success: true };
       }),
     // Rev. 3451 — Remove vínculo de cliente da obra

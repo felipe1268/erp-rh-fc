@@ -2621,10 +2621,12 @@ export const obras = pgTable("obras", {
 
 // Rev. 3451 — Múltiplos clientes por obra (tabela de junção).
 // A coluna obras.cliente continua como "nome principal" para backward compat.
+// Rev. 3454-hotfix: sem .references() — obras.id não tem .primaryKey() no schema Drizzle;
+//   FK inline causava falha silenciosa no CREATE TABLE e a tabela nunca era criada.
 export const obraClientes = pgTable("obra_clientes", {
   id: serial().primaryKey(),
-  obraId: integer("obra_id").notNull().references(() => obras.id, { onDelete: "cascade" }),
-  clienteId: integer("cliente_id").notNull().references(() => clientes.id, { onDelete: "cascade" }),
+  obraId: integer("obra_id").notNull(),
+  clienteId: integer("cliente_id").notNull(),
   companyId: integer("company_id").notNull(),
   criadoEm: timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
 },

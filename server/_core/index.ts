@@ -3884,20 +3884,28 @@ Regras:
 
         // Rev. 3451 — Múltiplos clientes por obra. CREATE TABLE/INDEX IF NOT EXISTS
         // (R-001/R-007/R-010 OK — sem ALTER/DROP/DELETE).
+        // Rev. 3454-hotfix: removidos FK REFERENCES (obras.id não tem .primaryKey() no schema Drizzle →
+        //   CREATE TABLE falhava silenciosamente → tabela nunca criada → INSERT throw "relation not found").
+        //   Padrão correto neste codebase: plain INTEGER, sem FK inline.
         try {
           await db.execute(sql`
             CREATE TABLE IF NOT EXISTS obra_clientes (
               id SERIAL PRIMARY KEY,
-              obra_id INTEGER NOT NULL REFERENCES obras(id) ON DELETE CASCADE,
-              cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+              obra_id INTEGER NOT NULL,
+              cliente_id INTEGER NOT NULL,
               company_id INTEGER NOT NULL,
               criado_em TIMESTAMP DEFAULT NOW() NOT NULL
             )
           `);
+          // ADD COLUMN IF NOT EXISTS garante que versões criadas sem company_id sejam corrigidas
+          await db.execute(sql`ALTER TABLE obra_clientes ADD COLUMN IF NOT EXISTS obra_id INTEGER NOT NULL DEFAULT 0`);
+          await db.execute(sql`ALTER TABLE obra_clientes ADD COLUMN IF NOT EXISTS cliente_id INTEGER NOT NULL DEFAULT 0`);
+          await db.execute(sql`ALTER TABLE obra_clientes ADD COLUMN IF NOT EXISTS company_id INTEGER NOT NULL DEFAULT 0`);
+          await db.execute(sql`ALTER TABLE obra_clientes ADD COLUMN IF NOT EXISTS criado_em TIMESTAMP DEFAULT NOW() NOT NULL`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_obra_clientes_obra ON obra_clientes(obra_id)`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_obra_clientes_cliente ON obra_clientes(cliente_id)`);
           await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_obra_cliente ON obra_clientes(obra_id, cliente_id)`);
-          console.log(`[SyncSchema+] Rev. 3451: tabela obra_clientes garantida (múltiplos clientes por obra).`);
+          console.log(`[SyncSchema+] Rev. 3451+hotfix: tabela obra_clientes garantida (sem FK inline; colunas garantidas via ADD COLUMN IF NOT EXISTS).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3451 obra_clientes:`, e?.message || e); }
 
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
