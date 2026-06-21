@@ -202,6 +202,10 @@ export default function FinanceiroConciliacao() {
   const [confirmLimpar, setConfirmLimpar] = useState(false);
   // Rev. 3386 — exclusão individual de linha do extrato
   const [confirmExcluirLinha, setConfirmExcluirLinha] = useState<{ id: number; descricao: string; valor: number; conciliado: boolean } | null>(null);
+  // Rev. 3410 — troca manual de lançamento vinculado na sugestão
+  const [overrideSug, setOverrideSug] = useState<Record<number, { entryId: number; fornecedorNome: string; descricao: string; valor: number; data: string | null; obraNome?: string }>>({});
+  const [trocandoLine, setTrocandoLine] = useState<{ statementLineId: number; extratoDescricao: string } | null>(null);
+  const [buscaTroca, setBuscaTroca] = useState("");
   const [confirmConciliar, setConfirmConciliar] = useState(false);
   const [mismatch, setMismatch] = useState<{ detectado: string; selecionado: string; fora: number; total: number; anoNum: number; mesNum: number } | null>(null);
   // Rev. 3363 — propostas de RENDIMENTO de aplicação/resgate automático (CDB ContaMax)
@@ -469,6 +473,11 @@ export default function FinanceiroConciliacao() {
       conciliado: conciliadoFilter !== "all" ? conciliadoFilter === "conciliado" : undefined,
     },
     { enabled: !!companyId && !!contaBancariaId }
+  );
+  // Rev. 3410 — busca de lançamentos para troca manual de match
+  const { data: entriesTroca, isFetching: entriesTrocaFetching } = (trpc as any).financial.getEntries.useQuery(
+    { companyId, busca: buscaTroca.trim().length >= 2 ? buscaTroca.trim() : undefined, excluirCronograma: true, limit: 25 },
+    { enabled: !!trocandoLine && buscaTroca.trim().length >= 2 }
   );
 
   // Rev. 3365 — Status POR MÊS p/ pintar as bolinhas da timeline. Agora roda SEM exigir
@@ -1469,7 +1478,7 @@ export default function FinanceiroConciliacao() {
   };
   const confirmarConciliacao = () => {
     if (conciliarSugMut.isPending) return; // blindagem contra clique duplo
-    const pares = sugSelecionadas.map(s => ({ statementLineId: s.statementLineId, entryId: s.entryId }));
+    const pares = sugSelecionadas.map(s => ({ statementLineId: s.statementLineId, entryId: overrideSug[s.statementLineId]?.entryId ?? s.entryId }));
     if (pares.length === 0) { setConfirmConciliar(false); return; }
     conciliarSugMut.mutate({ companyId, pares });
   };
@@ -3121,21 +3130,50 @@ export default function FinanceiroConciliacao() {
                                 )}
                               </button>
                               <ArrowRight className="w-4 h-4 text-gray-300 shrink-0" />
-                              <button
-                                type="button"
-                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); abrirDetalheSug(s); }}
-                                title="Ver detalhes do lançamento"
-                                className="flex-1 min-w-0 text-left rounded-md -m-1 p-1 hover:bg-blue-50 transition-colors group/lan"
-                              >
-                                <div className="text-xs text-gray-400 uppercase tracking-wide mb-0.5 flex items-center gap-1">
-                                  Lançamento <Eye className="w-3 h-3 text-blue-400 opacity-0 group-hover/lan:opacity-100 transition-opacity" />
-                                </div>
-                                <div className="text-sm font-medium truncate text-blue-700 group-hover/lan:underline">{s.entryFornecedor || s.entryDescricao || "—"}</div>
-                                <div className="text-xs text-gray-500 truncate">
-                                  {fmtData(s.entryData)} · {formatBRL(Math.abs(s.entryValor))}
-                                  {s.entryObra ? ` · ${s.entryObra}` : ""}
-                                </div>
-                              </button>
+                              {/* Rev. 3410 — lançamento com suporte a troca manual */}
+                              <div className="flex-1 min-w-0">
+                                {(() => {
+                                  const ov = overrideSug[s.statementLineId];
+                                  return (
+                                    <>
+                                      <div className="text-xs text-gray-400 uppercase tracking-wide mb-0.5 flex items-center gap-1">
+                                        Lançamento
+                                        {ov && <span className="ml-1 px-1 py-px rounded text-[9px] font-bold bg-amber-100 text-amber-700">MANUAL</span>}
+                                      </div>
+                                      <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!ov) abrirDetalheSug(s); }} className="text-left w-full group/lan">
+                                        <div className={`text-sm font-medium truncate group-hover/lan:underline ${ov ? "text-amber-700" : "text-blue-700"}`}>
+                                          {ov ? (ov.fornecedorNome || ov.descricao || "—") : (s.entryFornecedor || s.entryDescricao || "—")}
+                                        </div>
+                                        <div className="text-xs text-gray-500 truncate">
+                                          {ov
+                                            ? `${fmtData(ov.data)} · ${formatBRL(Math.abs(ov.valor))}${ov.obraNome ? ` · ${ov.obraNome}` : ""}`
+                                            : `${fmtData(s.entryData)} · ${formatBRL(Math.abs(s.entryValor))}${s.entryObra ? ` · ${s.entryObra}` : ""}`}
+                                        </div>
+                                      </button>
+                                      <div className="flex items-center gap-1 mt-1">
+                                        <button
+                                          type="button"
+                                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setTrocandoLine({ statementLineId: s.statementLineId, extratoDescricao: s.extratoDescricao || "" }); setBuscaTroca(""); }}
+                                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-blue-200 hover:text-blue-600 transition-colors"
+                                          title="Trocar lançamento vinculado"
+                                        >
+                                          <ArrowLeftRight className="w-2.5 h-2.5" /> trocar
+                                        </button>
+                                        {ov && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOverrideSug(prev => { const n = { ...prev }; delete n[s.statementLineId]; return n; }); }}
+                                            className="inline-flex items-center gap-1 px-1 py-0.5 rounded text-[10px] font-medium text-red-400 hover:text-red-600 transition-colors"
+                                            title="Desfazer troca"
+                                          >
+                                            <X className="w-2.5 h-2.5" /> desfazer
+                                          </button>
+                                        )}
+                                      </div>
+                                    </>
+                                  );
+                                })()}
+                              </div>
                               <div className="flex flex-col items-end gap-1 shrink-0">
                                 {/* Rev. 3405 — score numérico de confiança */}
                                 <span className={`inline-flex items-center justify-center min-w-[2.8rem] px-1.5 py-0.5 rounded-full text-[11px] font-bold tabular-nums ${
@@ -4727,9 +4765,14 @@ export default function FinanceiroConciliacao() {
                       <ArrowRight className="w-3.5 h-3.5 text-blue-400" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-[10px] text-gray-400 uppercase tracking-wide font-medium">Lançamento</div>
-                      <div className="truncate text-blue-700 font-medium">{s.entryFornecedor || s.entryDescricao || "—"}</div>
-                      <div className="text-xs text-gray-500 tabular-nums">{fmtData(s.entryData)} · {formatBRL(Math.abs(s.entryValor))}</div>
+                      <div className="text-[10px] text-gray-400 uppercase tracking-wide font-medium flex items-center gap-1">
+                        Lançamento
+                        {overrideSug[s.statementLineId] && <span className="px-1 py-px rounded text-[9px] font-bold bg-amber-100 text-amber-700">MANUAL</span>}
+                      </div>
+                      {(() => { const ov = overrideSug[s.statementLineId]; return (<>
+                        <div className={`truncate font-medium ${ov ? "text-amber-700" : "text-blue-700"}`}>{ov ? (ov.fornecedorNome || ov.descricao || "—") : (s.entryFornecedor || s.entryDescricao || "—")}</div>
+                        <div className="text-xs text-gray-500 tabular-nums">{ov ? `${fmtData(ov.data)} · ${formatBRL(Math.abs(ov.valor))}` : `${fmtData(s.entryData)} · ${formatBRL(Math.abs(s.entryValor))}`}</div>
+                      </>); })()}
                     </div>
                   </div>
                 ))}
@@ -5516,6 +5559,87 @@ export default function FinanceiroConciliacao() {
           </Dialog>
         );
       })()}
+
+      {/* Rev. 3410 — Dialog de troca manual de lançamento na sugestão de conciliação */}
+      <Dialog open={!!trocandoLine} onOpenChange={(o) => { if (!o) { setTrocandoLine(null); setBuscaTroca(""); } }}>
+        <DialogContent style={{ maxWidth: "min(38rem, calc(100vw - 1.5rem))" }} className="p-0 gap-0">
+          <DialogHeader className="px-5 pt-5 pb-3 border-b">
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <ArrowLeftRight className="w-4 h-4 text-blue-600 shrink-0" />
+              Trocar lançamento vinculado
+            </DialogTitle>
+            {trocandoLine && (
+              <DialogDescription className="text-xs text-gray-500 truncate mt-0.5">
+                Extrato: {trocandoLine.extratoDescricao}
+              </DialogDescription>
+            )}
+          </DialogHeader>
+          <div className="px-5 py-3 border-b">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <input
+                autoFocus
+                value={buscaTroca}
+                onChange={(e) => setBuscaTroca(e.target.value)}
+                placeholder="Buscar por descrição ou fornecedor…"
+                className="w-full pl-8 pr-3 py-2 text-sm rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            {buscaTroca.trim().length < 2 && (
+              <p className="text-[11px] text-gray-400 mt-1.5">Digite ao menos 2 caracteres para buscar lançamentos do ERP.</p>
+            )}
+          </div>
+          <div className="max-h-[42vh] overflow-y-auto divide-y">
+            {entriesTrocaFetching && (
+              <div className="flex items-center gap-2 px-5 py-4 text-sm text-gray-400">
+                <Loader2 className="w-4 h-4 animate-spin" /> Buscando…
+              </div>
+            )}
+            {!entriesTrocaFetching && buscaTroca.trim().length >= 2 && (entriesTroca?.data ?? []).length === 0 && (
+              <div className="px-5 py-4 text-sm text-gray-400">Nenhum lançamento encontrado.</div>
+            )}
+            {(entriesTroca?.data ?? []).map((e: any) => {
+              const nome = e.fornecedorNome || e.frotaFornecedor || e.pjFornecedor || e.descricao || "—";
+              const valor = e.valorRealizado ?? e.valorPrevisto ?? 0;
+              const data = e.dataCompetencia ?? e.dataVencimento ?? null;
+              return (
+                <button
+                  key={e.id}
+                  type="button"
+                  className="w-full text-left px-5 py-3 hover:bg-blue-50 transition-colors group"
+                  onClick={() => {
+                    if (!trocandoLine) return;
+                    setOverrideSug(prev => ({
+                      ...prev,
+                      [trocandoLine.statementLineId]: {
+                        entryId: e.id,
+                        fornecedorNome: nome,
+                        descricao: e.descricao || "",
+                        valor: Number(valor),
+                        data,
+                        obraNome: e.obraNome || undefined,
+                      }
+                    }));
+                    setTrocandoLine(null);
+                    setBuscaTroca("");
+                  }}
+                >
+                  <div className="font-medium text-sm text-blue-700 group-hover:underline truncate">{nome}</div>
+                  <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                    <span className="tabular-nums">{formatBRL(Math.abs(Number(valor)))}</span>
+                    {data && <span>· {fmtData(data)}</span>}
+                    {e.obraNome && <span>· {e.obraNome}</span>}
+                    {e.contaNome && <span className="text-gray-400">· {e.contaNome}</span>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <div className="px-5 py-3 border-t bg-gray-50 flex justify-end">
+            <Button size="sm" variant="outline" onClick={() => { setTrocandoLine(null); setBuscaTroca(""); }}>Cancelar</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

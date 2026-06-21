@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3409** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FIX DEFINITIVO DO LAYOUT CORTADO NO DIALOG "CONFIRMAR CONCILIAÇÃO?". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `tailwind-merge` neutralizava `sm:max-w-2xl`; corrigido com `style={{ maxWidth: "min(42rem, calc(100vw - 1.5rem))" }}` CSS inline puro. Dialog nunca > 672px nem extrapola o viewport. Detalhe: `shared/changelog.ts`.
+- **Rev. 3410** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · TROCA MANUAL DE LANÇAMENTO NA SUGESTÃO AUTOMÁTICA. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** `getEntries` ganha `busca` (ILIKE). Botão "trocar" (⇌) em cada linha de sugestão abre dialog de busca autocomplete. Override armazenado por `statementLineId` — badge âmbar "MANUAL", botão "desfazer". `confirmarConciliacao` usa entryId do override quando presente. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3408** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · BARRA DE PROGRESSO 0-100% COM MARCADORES E RÓTULO INLINE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Barra `h-2.5` fina substituída por barra `h-6` larga com gradiente azul→verde (100%). Rótulo "N%" dentro da barra, marcadores 0/25/50/75/100%. Detalhe: `shared/changelog.ts`.
+- **Rev. 3409** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FIX DEFINITIVO DO LAYOUT CORTADO NO DIALOG "CONFIRMAR CONCILIAÇÃO?". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `tailwind-merge` neutralizava `sm:max-w-2xl`; corrigido com `style={{ maxWidth: "min(42rem, calc(100vw - 1.5rem))" }}` CSS inline puro. Dialog nunca > 672px nem extrapola o viewport. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
 

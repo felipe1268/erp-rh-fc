@@ -1796,6 +1796,7 @@ export const financialRouter = router({
     // Rev. 3136 — exclui as PROJEÇÕES do cronograma da listagem (tela de Lançamentos),
     // que precisa mostrar só caixa REAL. Opcional → default mantém o comportamento atual.
     excluirCronograma: z.boolean().optional(),
+    busca: z.string().optional(),
     limit: z.number().default(100),
     offset: z.number().default(0),
   })).query(async ({ input }) => {
@@ -1832,6 +1833,8 @@ export const financialRouter = router({
       );
     }
     if (input.origemModulo) { conds.push(`e.origem_modulo=$${i++}`); vals.push(input.origemModulo); }
+    // Rev. 3410 — busca textual em descrição e fornecedor (para trocar match de conciliação)
+    if (input.busca) { conds.push(`(e.descricao ILIKE $${i++} OR COALESCE(e.fornecedor_nome,'') ILIKE $${i++})`); vals.push(`%${input.busca}%`, `%${input.busca}%`); }
     // Rev. 3136 — as projeções do cronograma (origem 'cronograma_atividade') NÃO são
     // caixa real (são o valor de contrato distribuído mês a mês), então saem da tela de
     // Lançamentos. Literal (sem placeholder) → não interfere na ligação posicional.

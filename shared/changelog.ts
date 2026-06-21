@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3410 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · TROCA MANUAL DE LANÇAMENTO
+ * NA SUGESTÃO AUTOMÁTICA. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Motivação: o usuário pode discordar do match automático (extrato → lançamento ERP)
+ * e quer vincular um lançamento diferente antes de confirmar a conciliação.
+ *
+ * Backend (financial.ts / getEntries):
+ * - Novo param `busca: z.string().optional()` — filtra `descricao ILIKE` OR
+ *   `fornecedor_nome ILIKE`. Posicional correto (cada $N empurra valor separado em vals[]).
+ *
+ * Frontend (FinanceiroConciliacao.tsx):
+ * - Estado `overrideSug: Record<statementLineId, {entryId,fornecedorNome,descricao,valor,data,obraNome}>`.
+ * - Estado `trocandoLine` + `buscaTroca` para controlar o dialog de busca.
+ * - Query `entriesTroca` (lazy: enabled quando dialog aberto + busca >= 2 chars).
+ * - Cada linha de sugestão ganha botão **"trocar"** (ArrowLeftRight) abaixo do lançamento.
+ *   → Abre dialog com campo de busca autocomplete + lista de resultados clicáveis.
+ *   → Se há override: badge âmbar "MANUAL" + lançamento em laranja + botão "desfazer" (×).
+ * - Dialog de confirmação: exibe lançamento com override quando presente (badge MANUAL).
+ * - `confirmarConciliacao`: usa `overrideSug[id].entryId` quando disponível.
+ *
  * Rev. 3409 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FIX DEFINITIVO DO LAYOUT CORTADO
  * NO DIALOG "CONFIRMAR CONCILIAÇÃO?". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
