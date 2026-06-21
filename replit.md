@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3451** — **OBRAS · MÚLTIPLOS CLIENTES POR OBRA (DONOS DA OBRA). BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Nova tabela `obra_clientes` (junction) criada via CREATE TABLE IF NOT EXISTS. 3 novas procedures (`listClientes`, `addCliente`, `removeCliente`). Seção "Clientes adicionais" com chips + combobox no formulário de edição de obra. `obras.cliente` intocado — backward compat total. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3450** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CRIAR CLIENTE INLINE NO FORM "LANÇAR NO CONTAS A RECEBER". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Botão "+ Novo cliente" adicionado ao lado do label "Cliente que pagou". Dialog inline com campo Nome/Razão Social; chama `clientes.criar` e auto-seleciona após criar. Espelha o padrão "+ Nova obra" / "+ Nova categoria". Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3449** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SUGESTÕES AUTOMÁTICAS — FILTRO ESTRITO DE DATA NOS ENTRIES (SEM BUFFER). BACKEND ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.** Removido o buffer ±7d da Rev. 3448: agora entries elegíveis = exatamente [dataInicio, dataFim]. Em modo "Mês Janeiro" só entries de Jan-01 a Jan-31 entram; em "Ano todo" cobre o ano inteiro. Tolerância do usuário controla apenas o δ por par. Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3449** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SUGESTÕES AUTOMÁTICAS — FILTRO ESTRITO DE DATA NOS ENTRIES (SEM BUFFER). BACKEND ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3446** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CRIAR CATEGORIA E CENTRO DE CUSTO INLINE NO FORM "LANÇAR NO ERP". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

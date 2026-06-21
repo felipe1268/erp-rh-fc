@@ -128,6 +128,25 @@ export default function Obras() {
 
   const clientesQ = trpc.clientes.list.useQuery({ companyId }, { enabled: !!companyId });
   const clientes = clientesQ.data ?? [];
+
+  // Rev. 3451 — Múltiplos clientes por obra
+  const obraClientesQ = (trpc as any).obras.listClientes.useQuery(
+    { obraId: editingId ?? 0 },
+    { enabled: !!editingId }
+  );
+  const obraClientesVinculados: { id: number; clienteId: number; razaoSocial: string; nomeFantasia?: string }[] = obraClientesQ.data ?? [];
+  const addClienteObraMut = (trpc as any).obras.addCliente.useMutation({
+    onSuccess: () => { obraClientesQ.refetch(); },
+    onError: (e: any) => toast.error(`Erro ao vincular cliente: ${e.message}`),
+  });
+  const removeClienteObraMut = (trpc as any).obras.removeCliente.useMutation({
+    onSuccess: () => { obraClientesQ.refetch(); },
+    onError: (e: any) => toast.error(`Erro ao desvincular cliente: ${e.message}`),
+  });
+  const [clienteAdicionalOpen, setClienteAdicionalOpen] = useState(false);
+  const [clienteAdicionalBusca, setClienteAdicionalBusca] = useState("");
+  const clienteAdicionalRef = useRef<HTMLDivElement>(null);
+
   const criarClienteMut = trpc.clientes.criar.useMutation({
     onSuccess: (novo: any) => {
       clientesQ.refetch();
@@ -871,6 +890,85 @@ export default function Obras() {
                 )}
               </div>
             </div>
+
+            {/* ── CLIENTES ADICIONAIS (Rev. 3451 — múltiplos donos da obra) ── */}
+            {editingId && (
+              <div className="sm:col-span-2" ref={clienteAdicionalRef}>
+                <Label className="flex items-center gap-1.5 mb-1">
+                  <UserCheck className="h-3.5 w-3.5 text-indigo-500" />
+                  Clientes adicionais
+                  <span className="text-[10px] text-slate-400 font-normal ml-1">(quando há mais de um dono da obra)</span>
+                </Label>
+                {/* Chips dos clientes já vinculados */}
+                {obraClientesVinculados.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {obraClientesVinculados.map((oc) => (
+                      <span key={oc.id} className="inline-flex items-center gap-1 bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs font-medium rounded-full px-2.5 py-0.5">
+                        {oc.nomeFantasia && oc.nomeFantasia !== oc.razaoSocial ? oc.nomeFantasia : oc.razaoSocial}
+                        <button
+                          type="button"
+                          className="ml-0.5 text-indigo-400 hover:text-red-500 transition-colors"
+                          disabled={removeClienteObraMut.isPending}
+                          onClick={() => removeClienteObraMut.mutate({ id: oc.id })}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {/* Combobox para adicionar */}
+                <div className="relative">
+                  <Input
+                    value={clienteAdicionalOpen ? clienteAdicionalBusca : ""}
+                    onChange={e => { setClienteAdicionalBusca(e.target.value); setClienteAdicionalOpen(true); }}
+                    onFocus={() => { setClienteAdicionalBusca(""); setClienteAdicionalOpen(true); }}
+                    placeholder="Adicionar outro cliente…"
+                    className="pr-8 text-sm"
+                  />
+                  <Plus
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 cursor-pointer"
+                    onClick={() => setClienteAdicionalOpen(o => !o)}
+                  />
+                  {clienteAdicionalOpen && (() => {
+                    const jaVinculados = new Set(obraClientesVinculados.map((c) => c.clienteId));
+                    const q = clienteAdicionalBusca.toLowerCase();
+                    const opts = clientes.filter((c: any) => {
+                      if (jaVinculados.has(c.id)) return false;
+                      if (!q) return true;
+                      return (c.razaoSocial || "").toLowerCase().includes(q) || (c.nomeFantasia || "").toLowerCase().includes(q);
+                    });
+                    return (
+                      <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        {opts.length === 0 ? (
+                          <div className="px-3 py-3 text-center text-sm text-slate-400">Nenhum cliente disponível.</div>
+                        ) : opts.map((c: any) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            className="w-full text-left px-3 py-2.5 hover:bg-indigo-50 flex items-start gap-2 border-b border-slate-50 last:border-0"
+                            disabled={addClienteObraMut.isPending}
+                            onClick={() => {
+                              addClienteObraMut.mutate({ obraId: editingId!, clienteId: c.id, companyId });
+                              setClienteAdicionalOpen(false);
+                              setClienteAdicionalBusca("");
+                            }}
+                          >
+                            <UserCheck className="h-4 w-4 text-indigo-400 shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-sm font-medium text-slate-800">{c.razaoSocial}</p>
+                              {c.nomeFantasia && c.nomeFantasia !== c.razaoSocial && (
+                                <p className="text-xs text-slate-500">{c.nomeFantasia}</p>
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
 
             {/* ── LOGO DO CLIENTE (somente leitura — replica o cadastro do Cliente) ── */}
             <div>

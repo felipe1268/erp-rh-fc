@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3451 — **OBRAS · MÚLTIPLOS CLIENTES POR OBRA (DONOS DA OBRA). BACKEND ADITIVO +
+ * FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PROBLEMA: o campo "Cliente" da obra era single-select (texto livre). Quando uma obra
+ * tem dois ou mais clientes donos não havia como registrar o segundo.
+ *
+ * SOLUÇÃO — tabela de junção aditiva `obra_clientes`:
+ * - Nova tabela `obra_clientes (id, obra_id, cliente_id, company_id, criado_em)` criada
+ *   via CREATE TABLE IF NOT EXISTS no bloco [SyncSchema+] (R-001/R-007/R-010 OK).
+ * - Schema Drizzle: `obraClientes` exportado de `drizzle/schema.ts` (sem ALTER).
+ * - 3 novas procedures em `server/routers.ts`:
+ *     · `obras.listClientes({ obraId })` — lista clientes vinculados (JOIN clientes).
+ *     · `obras.addCliente({ obraId, clienteId, companyId })` — insere com ON CONFLICT DO NOTHING.
+ *     · `obras.removeCliente({ id })` — remove pelo PK da linha de junção.
+ * - Frontend `client/src/pages/Obras.tsx`: nova seção "Clientes adicionais" visível
+ *   SOMENTE em modo edição (editingId != null). Mostra chips dos clientes vinculados com
+ *   botão × para desvincular, e combobox filtrado (exclui já vinculados) para adicionar.
+ * - `obras.cliente` (campo texto principal) não é tocado — backward compat total com
+ *   todas as telas que leem o cliente principal (Databook, Portal, etc.).
+ *
  * Rev. 3450 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CRIAR CLIENTE INLINE NO FORM "LANÇAR NO
  * CONTAS A RECEBER". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *

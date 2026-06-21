@@ -44,7 +44,7 @@ import {
 import { DEFAULT_PERMISSIONS, MODULE_KEYS, EMPLOYEE_STATUS_DESLIGADOS } from "../shared/modules";
 import { getDb, encerrarContratosPjDoFuncionario } from "./db";
 import { normalizeCidadeInput } from "../shared/normalizeCidade";
-import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory, employeeTerminationChecklist, asos, trainings, sstIntegracaoRegistros, employeeIntegrations, contractCounters, almoxarifadoItens, obraFuncionarios } from "../drizzle/schema";
+import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory, employeeTerminationChecklist, asos, trainings, sstIntegracaoRegistros, employeeIntegrations, contractCounters, almoxarifadoItens, obraFuncionarios, obraClientes, clientes } from "../drizzle/schema";
 import { eq, and, sql, or, ilike, isNull, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "./companyHelper";
 import type { ProfileType } from "../shared/modules";
@@ -1948,6 +1948,43 @@ export const appRouter = router({
           action: "UPDATE", module: "obras", entityType: "obra", entityId: input.sourceId,
           details: `Obra mesclada com obra ID ${input.targetId} — todos os registros de ponto, inconsistências e alocações migrados`,
         });
+        return { success: true };
+      }),
+    // Rev. 3451 — Lista clientes vinculados à obra (tabela obra_clientes)
+    listClientes: protectedProcedure
+      .input(z.object({ obraId: z.number() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        const rows = await db
+          .select({
+            id: obraClientes.id,
+            clienteId: obraClientes.clienteId,
+            razaoSocial: clientes.razaoSocial,
+            nomeFantasia: clientes.nomeFantasia,
+          })
+          .from(obraClientes)
+          .innerJoin(clientes, eq(clientes.id, obraClientes.clienteId))
+          .where(eq(obraClientes.obraId, input.obraId))
+          .orderBy(clientes.razaoSocial);
+        return rows;
+      }),
+    // Rev. 3451 — Vincula um cliente adicional à obra (ON CONFLICT DO NOTHING = idempotente)
+    addCliente: protectedProcedure
+      .input(z.object({ obraId: z.number(), clienteId: z.number(), companyId: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        await db
+          .insert(obraClientes)
+          .values({ obraId: input.obraId, clienteId: input.clienteId, companyId: input.companyId })
+          .onConflictDoNothing();
+        return { success: true };
+      }),
+    // Rev. 3451 — Remove vínculo de cliente da obra
+    removeCliente: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        await db.delete(obraClientes).where(eq(obraClientes.id, input.id));
         return { success: true };
       }),
     // Lista colaboradores com cargos de liderança para o campo "Engenheiro Responsável"

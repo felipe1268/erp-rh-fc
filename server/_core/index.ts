@@ -3848,6 +3848,24 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3437: colunas ciclo_* garantidas em empresas_terceiras (ciclo de fechamento de fornecedor).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3437 empresas_terceiras.ciclo_*:`, e?.message || e); }
 
+        // Rev. 3451 — Múltiplos clientes por obra. CREATE TABLE/INDEX IF NOT EXISTS
+        // (R-001/R-007/R-010 OK — sem ALTER/DROP/DELETE).
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS obra_clientes (
+              id SERIAL PRIMARY KEY,
+              obra_id INTEGER NOT NULL REFERENCES obras(id) ON DELETE CASCADE,
+              cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+              company_id INTEGER NOT NULL,
+              criado_em TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_obra_clientes_obra ON obra_clientes(obra_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_obra_clientes_cliente ON obra_clientes(cliente_id)`);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_obra_cliente ON obra_clientes(obra_id, cliente_id)`);
+          console.log(`[SyncSchema+] Rev. 3451: tabela obra_clientes garantida (múltiplos clientes por obra).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3451 obra_clientes:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

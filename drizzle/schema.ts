@@ -2619,6 +2619,20 @@ export const obras = pgTable("obras", {
         index("idx_obra_status").on(table.companyId, table.status),
 ]);
 
+// Rev. 3451 — Múltiplos clientes por obra (tabela de junção).
+// A coluna obras.cliente continua como "nome principal" para backward compat.
+export const obraClientes = pgTable("obra_clientes", {
+  id: serial().primaryKey(),
+  obraId: integer("obra_id").notNull().references(() => obras.id, { onDelete: "cascade" }),
+  clienteId: integer("cliente_id").notNull().references(() => clientes.id, { onDelete: "cascade" }),
+  companyId: integer("company_id").notNull(),
+  criadoEm: timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+},
+(t) => [
+  index("idx_obra_clientes_obra").on(t.obraId),
+  index("idx_obra_clientes_cliente").on(t.clienteId),
+]);
+
 export const payroll = pgTable("payroll", {
         id: serial().notNull(),
         companyId: integer().notNull(),
