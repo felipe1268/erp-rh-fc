@@ -1622,7 +1622,7 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
               ciclo_prazo_parcela AS "cicloPrazoParcela",
               ciclo_forma_pagamento AS "cicloFormaPagamento"
          FROM empresas_terceiras
-        WHERE company_id=$1 AND deleted_at IS NULL
+        WHERE "companyId"=$1 AND deleted_at IS NULL
           AND ciclo_pagamento IS NOT NULL AND ciclo_pagamento <> 'avista'`,
       [input.companyId]);
     const supplierCycleMap = new Map<string, any>();
