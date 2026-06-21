@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3419 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CONCILIAR PIX RÁPIDO A PARTIR DO CARD DO
+ * CHEQUE DEVOLVIDO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Contexto: cheque devolvido pago via PIX/TED substituto. O ERP já identifica a linha PIX
+ * automaticamente (`res.tipo="pix"`, `res.lineId`), mas não havia como conciliar a linha
+ * com o lançamento ERP diretamente — o usuário precisava buscar os dois itens manualmente
+ * na conciliação manual (esquerda + direita).
+ *
+ * Solução: botão verde "⚡ Conciliar PIX no extrato" no card do cheque (visível quando
+ * `res.tipo="pix"` E `res.lineId` existe). Abre dialog "Conciliar PIX no extrato":
+ *   - Cabeçalho verde com dados do cheque (nº, fornecedor, valor).
+ *   - Seção verde "Linha PIX no extrato" — mostra a descrição/valor/data da linha PIX
+ *     já identificada (encontrada via `repExtRaw.find(l => l.id === res.lineId)`). Se a
+ *     linha não estiver no período atual, mostra aviso âmbar.
+ *   - Campo de busca pré-preenchido com o nome do fornecedor do cheque.
+ *   - Lista de lançamentos ERP (query `getEntries`, enabled quando dialog aberto) com
+ *     seleção por clique (radio visual), badge "= valor exato" ou "Δ N%".
+ *   - Botão "⚡ Conciliar agora" → chama `conciliarPixMut` (reutiliza endpoint
+ *     `conciliarLancamento` com `statementLineId=res.lineId` e `entryId` selecionado)
+ *     → fecha dialog, toast, refetch de todos os painéis.
+ *
+ * Não modifica o fluxo "Vincular a PIX/TED" (Rev. 3416) — os dois botões coexistem:
+ *   · "✓ Confirmar e registrar no Controle de Cheques" → grava status no financial_cheques
+ *   · "⚡ Conciliar PIX no extrato" → concilia extrato ↔ ERP (conciliarLancamento)
+ *
+ * Arquivos: client/src/pages/financeiro/FinanceiroConciliacao.tsx
+ *   (estados conciliarPixDlg/Entry/Busca, query entriesConciliarPix, mutation conciliarPixMut,
+ *    botão no card res.tipo=pix, dialog JSX).
+ *
  * Rev. 3418 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "TROCAR LANÇAMENTO VINCULADO" —
  * SUGESTÕES POR VALOR PRÓXIMO + LAYOUT MODERNO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *

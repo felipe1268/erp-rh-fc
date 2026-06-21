@@ -356,6 +356,10 @@ export default function FinanceiroConciliacao() {
   const [vincularPixDlg, setVincularPixDlg] = useState<{ cheque: any; pixPreSel: any | null } | null>(null);
   const [vincularPixSel, setVincularPixSel] = useState<any | null>(null);
   const vincularChequePix = (trpc as any).financial.vincularChequePix.useMutation();
+  // Rev. 3419 — Conciliar PIX rápido a partir do card do cheque devolvido
+  const [conciliarPixDlg, setConciliarPixDlg] = useState<{ cheque: any; pixLineId: number; pixLine: any | null } | null>(null);
+  const [conciliarPixEntry, setConciliarPixEntry] = useState<any | null>(null);
+  const [buscaConciliarPix, setBuscaConciliarPix] = useState("");
   // Rev. 3413 — estados para comboboxes e dialog de nova obra
   const [lancObraDisplay, setLancObraDisplay] = useState("");
   const [lancCCDisplay, setLancCCDisplay] = useState("");
@@ -574,6 +578,11 @@ export default function FinanceiroConciliacao() {
     { companyId, busca: buscaTroca.trim().length >= 1 ? buscaTroca.trim() : undefined, excluirCronograma: true, limit: 50 },
     { enabled: !!trocandoLine }
   );
+  // Rev. 3419 — Conciliar PIX rápido: busca lançamentos ERP para o dialog do cheque devolvido
+  const { data: entriesConciliarPix, isFetching: entriesConciliarPixFetching } = (trpc as any).financial.getEntries.useQuery(
+    { companyId, busca: buscaConciliarPix.trim().length >= 1 ? buscaConciliarPix.trim() : (conciliarPixDlg?.cheque?.fornecedor ?? undefined), excluirCronograma: true, limit: 50 },
+    { enabled: !!conciliarPixDlg }
+  );
 
   // Rev. 3365 — Status POR MÊS p/ pintar as bolinhas da timeline. Agora roda SEM exigir
   // conta selecionada: na visão "lista de contas" agrega o extrato de TODAS as contas da
@@ -630,6 +639,16 @@ export default function FinanceiroConciliacao() {
       setConfirmSemConta(null);
     },
     onError: (e: any) => toast({ title: "Erro ao conciliar", description: e.message, variant: "destructive" }),
+  });
+  // Rev. 3419 — Conciliar PIX rápido: mutation dedicada que fecha o dialog ao concluir
+  const conciliarPixMut = (trpc as any).financial.conciliarLancamento.useMutation({
+    onSuccess: () => {
+      toast({ title: "PIX conciliado!", description: "Linha do extrato vinculada ao lançamento ERP." });
+      setConciliarPixDlg(null); setConciliarPixEntry(null); setBuscaConciliarPix("");
+      refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug();
+      if (!contaBancariaId && periodoDefinido) refetchGeral();
+    },
+    onError: (e: any) => toast({ title: "Erro ao conciliar PIX", description: e.message, variant: "destructive" }),
   });
   // Rev. 3198 — conciliação do fluxo "Lançar": SEM onError próprio (o erro é tratado
   // no catch do submitLancar, preservando o id criado p/ não duplicar no retry).
@@ -4259,19 +4278,35 @@ export default function FinanceiroConciliacao() {
                                   <p className="text-[11px] text-blue-700 flex items-center gap-1">
                                     <CheckCircle className="w-3.5 h-3.5" /> Quitado por outro meio (PIX/TED) em {fmtData(res.data)}{res.descricao ? ` — ${String(res.descricao).slice(0, 60)}` : ""}.
                                   </p>
-                                  {d.chequeNumero && (
-                                    <button
-                                      type="button"
-                                      className="mt-1 text-[11px] text-blue-600 hover:text-blue-800 underline"
-                                      onClick={() => {
-                                        const pixLine = repExtRaw.find((l: any) => l.id === res.lineId);
-                                        setVincularPixSel(pixLine ?? null);
-                                        setVincularPixDlg({ cheque: d, pixPreSel: pixLine ?? null });
-                                      }}
-                                    >
-                                      ✓ Confirmar e registrar no Controle de Cheques
-                                    </button>
-                                  )}
+                                  <div className="flex items-center gap-2 flex-wrap mt-1">
+                                    {d.chequeNumero && (
+                                      <button
+                                        type="button"
+                                        className="text-[11px] text-blue-600 hover:text-blue-800 underline"
+                                        onClick={() => {
+                                          const pixLine = repExtRaw.find((l: any) => l.id === res.lineId);
+                                          setVincularPixSel(pixLine ?? null);
+                                          setVincularPixDlg({ cheque: d, pixPreSel: pixLine ?? null });
+                                        }}
+                                      >
+                                        ✓ Confirmar e registrar no Controle de Cheques
+                                      </button>
+                                    )}
+                                    {res.lineId && (
+                                      <button
+                                        type="button"
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+                                        onClick={() => {
+                                          const pixLine = repExtRaw.find((l: any) => l.id === res.lineId);
+                                          setConciliarPixDlg({ cheque: d, pixLineId: res.lineId, pixLine: pixLine ?? null });
+                                          setBuscaConciliarPix(d.fornecedor ?? "");
+                                          setConciliarPixEntry(null);
+                                        }}
+                                      >
+                                        ⚡ Conciliar PIX no extrato
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                               ) : (
                                 <div className="mt-1">
@@ -5945,6 +5980,133 @@ export default function FinanceiroConciliacao() {
           </Dialog>
         );
       })()}
+
+      {/* Rev. 3419 — Dialog "Conciliar PIX rápido" a partir do card do cheque devolvido */}
+      <Dialog open={!!conciliarPixDlg} onOpenChange={(o) => { if (!o) { setConciliarPixDlg(null); setConciliarPixEntry(null); setBuscaConciliarPix(""); } }}>
+        <DialogContent style={{ maxWidth: "min(44rem, calc(100vw - 1rem))" }} className="p-0 gap-0 overflow-hidden">
+          {/* Cabeçalho */}
+          <div className="bg-emerald-700 px-5 pt-4 pb-4">
+            <div className="flex items-center gap-2 text-white">
+              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                <CheckCircle className="w-4 h-4 text-white" />
+              </div>
+              <div className="min-w-0">
+                <div className="font-semibold text-sm leading-tight">Conciliar PIX no extrato</div>
+                {conciliarPixDlg && (
+                  <div className="text-[11px] text-emerald-100 truncate mt-0.5">
+                    Cheque {conciliarPixDlg.cheque.chequeNumero ? `nº ${conciliarPixDlg.cheque.chequeNumero}` : ""} · {conciliarPixDlg.cheque.fornecedor ?? "—"} · {formatBRL(Math.abs(Number(conciliarPixDlg.cheque.valor) || (conciliarPixDlg.cheque.valorCents ? conciliarPixDlg.cheque.valorCents / 100 : 0)))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          {/* Linha do extrato PIX (já identificada) */}
+          {conciliarPixDlg && (
+            <div className="px-4 py-3 bg-emerald-50 border-b border-emerald-100">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 mb-1 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" /> Linha PIX no extrato (lado esquerdo)
+              </div>
+              {conciliarPixDlg.pixLine ? (
+                <div className="text-sm">
+                  <div className="font-medium text-gray-800 truncate">{conciliarPixDlg.pixLine.descricao ?? "—"}</div>
+                  <div className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
+                    <span className="tabular-nums font-semibold text-gray-700">{formatBRL(Math.abs(Number(conciliarPixDlg.pixLine.valor)))}</span>
+                    <span className="text-gray-300">·</span>
+                    <span>{fmtData(conciliarPixDlg.pixLine.data)}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-xs text-amber-700">Linha do extrato não encontrada no período atual. Verifique se o PIX está no mês selecionado.</div>
+              )}
+            </div>
+          )}
+          {/* Seleção do lançamento ERP */}
+          <div className="px-4 pt-3 pb-1">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-2 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" /> Selecione o lançamento ERP correspondente (lado direito)
+            </div>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <input
+                autoFocus
+                value={buscaConciliarPix}
+                onChange={(e) => { setBuscaConciliarPix(e.target.value); setConciliarPixEntry(null); }}
+                placeholder="Buscar por fornecedor, descrição ou conta…"
+                className="w-full pl-8 pr-3 py-2 text-sm rounded-md border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+          {conciliarPixEntry && (
+            <div className="mx-4 mt-2 px-3 py-2 rounded-md bg-blue-50 border border-blue-200 flex items-start gap-2">
+              <CheckCircle className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-blue-800 truncate">{conciliarPixEntry.fornecedorNome || conciliarPixEntry.descricao || "—"}</div>
+                <div className="text-[11px] text-blue-600">{formatBRL(Math.abs(Number(conciliarPixEntry.valorRealizado ?? conciliarPixEntry.valorPrevisto ?? 0)))} · {fmtData(conciliarPixEntry.dataCompetencia ?? conciliarPixEntry.dataVencimento)}</div>
+              </div>
+              <button type="button" className="ml-auto shrink-0 text-blue-400 hover:text-blue-600" onClick={() => setConciliarPixEntry(null)}><X className="w-3.5 h-3.5" /></button>
+            </div>
+          )}
+          <div className="max-h-[38vh] overflow-y-auto border-t mt-2">
+            {entriesConciliarPixFetching && <div className="flex items-center gap-2 px-4 py-4 text-sm text-gray-400"><Loader2 className="w-4 h-4 animate-spin" /> Buscando…</div>}
+            {!entriesConciliarPixFetching && (entriesConciliarPix?.data ?? []).length === 0 && (
+              <div className="px-4 py-4 text-sm text-gray-400 text-center">Nenhum lançamento encontrado. Tente outro termo de busca.</div>
+            )}
+            <div className="divide-y">
+              {(entriesConciliarPix?.data ?? []).map((e: any) => {
+                const nome = e.fornecedorNome || e.frotaFornecedor || e.pjFornecedor || e.descricao || "—";
+                const valor = Math.abs(Number(e.valorRealizado ?? e.valorPrevisto ?? 0));
+                const data = e.dataCompetencia ?? e.dataVencimento ?? null;
+                const isSelected = conciliarPixEntry?.id === e.id;
+                const valRef = conciliarPixDlg ? Math.abs(Number(conciliarPixDlg.cheque.valor) || (conciliarPixDlg.cheque.valorCents ? conciliarPixDlg.cheque.valorCents / 100 : 0)) : 0;
+                const exato = valRef > 0 && Math.abs(valor - valRef) < 0.015;
+                const diffPct = valRef > 0 && !exato ? Math.round(Math.abs(valor - valRef) / valRef * 100) : null;
+                return (
+                  <button key={e.id} type="button"
+                    className={`w-full text-left px-4 py-3 transition-colors flex items-start gap-3 ${isSelected ? "bg-blue-50 ring-1 ring-inset ring-blue-300" : "hover:bg-gray-50"}`}
+                    onClick={() => setConciliarPixEntry(isSelected ? null : e)}
+                  >
+                    <div className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${isSelected ? "border-blue-600 bg-blue-600" : "border-gray-300"}`}>
+                      {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white block" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm text-blue-700 truncate">{nome}</div>
+                      <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                        <span className="tabular-nums font-medium text-gray-700">{formatBRL(valor)}</span>
+                        {data && <><span className="text-gray-300">·</span><span>{fmtData(data)}</span></>}
+                        {e.obraNome && <><span className="text-gray-300">·</span><span>{e.obraNome}</span></>}
+                        {e.contaNome && <><span className="text-gray-300">·</span><span className="text-gray-400 italic">{e.contaNome}</span></>}
+                      </div>
+                    </div>
+                    <div className="shrink-0 mt-0.5">
+                      {exato
+                        ? <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">= valor exato</span>
+                        : diffPct !== null
+                          ? <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold tabular-nums ${diffPct <= 5 ? "bg-blue-100 text-blue-700" : diffPct <= 20 ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500"}`}>Δ {diffPct}%</span>
+                          : null}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="px-4 py-3 border-t bg-gray-50 flex justify-between items-center gap-3">
+            <span className="text-[11px] text-gray-400">Selecione o lançamento ERP para vincular ao PIX do extrato</span>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button size="sm" variant="outline" onClick={() => { setConciliarPixDlg(null); setConciliarPixEntry(null); setBuscaConciliarPix(""); }}>Cancelar</Button>
+              <Button size="sm"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                disabled={!conciliarPixEntry || !conciliarPixDlg?.pixLine || conciliarPixMut.isPending}
+                onClick={() => {
+                  if (!conciliarPixEntry || !conciliarPixDlg?.pixLineId || !companyId) return;
+                  conciliarPixMut.mutate({ companyId, statementLineId: conciliarPixDlg.pixLineId, entryId: conciliarPixEntry.id });
+                }}
+              >
+                {conciliarPixMut.isPending ? <><Loader2 className="w-4 h-4 animate-spin mr-1" />Conciliando…</> : <>⚡ Conciliar agora</>}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Rev. 3418 — Dialog de troca manual: sugestões por valor próximo + layout melhorado */}
       <Dialog open={!!trocandoLine} onOpenChange={(o) => { if (!o) { setTrocandoLine(null); setBuscaTroca(""); } }}>
