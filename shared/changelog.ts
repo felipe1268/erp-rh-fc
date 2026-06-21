@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3461 — **CONCILIAÇÃO BANCÁRIA · BOTÃO OLHO NOS ITENS "JÁ CONCILIADOS" DO PANORAMA.
+ * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Cada linha da seção "Já conciliados" no panorama ganhou um botão 👁 (azul) que abre
+ * o dialog de detalhe do lançamento ERP vinculado (`c.entryId`). Útil para verificar
+ * categoria, fornecedor, obra e comprovante sem sair da tela de conciliação.
+ * Textos da linha também corrigidos de `truncate` → `break-words` (padrão de dialogs/listas).
+ *
  * Rev. 3460 — **CONCILIAÇÃO BANCÁRIA · FIX LAYOUT DIALOG "CONFIRMAR CONCILIAÇÃO?" — TEXTO NÃO CORTA.
  * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *

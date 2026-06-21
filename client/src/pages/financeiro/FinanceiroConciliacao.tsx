@@ -5007,10 +5007,20 @@ export default function FinanceiroConciliacao() {
                         <div key={c.id} className="px-4 py-3 flex items-center gap-3">
                           <div className="min-w-0 flex-1">
                             <p className="text-xs text-gray-500">{fmtData(c.data)}</p>
-                            <p className="text-sm text-gray-700 truncate max-w-[260px]">{c.descricao || "—"}</p>
-                            <p className="text-xs text-gray-400 truncate max-w-[260px]">↔ {c.entryFornecedor || c.entryDescricao || `Lançamento #${c.entryId ?? ""}`}</p>
+                            <p className="text-sm text-gray-700 break-words">{c.descricao || "—"}</p>
+                            <p className="text-xs text-gray-400 break-words">↔ {c.entryFornecedor || c.entryDescricao || `Lançamento #${c.entryId ?? ""}`}</p>
                           </div>
                           <p className={`text-sm font-bold shrink-0 ${Number(c.valor) >= 0 ? "text-green-600" : "text-red-500"}`}>{formatBRL(Math.abs(Number(c.valor)))}</p>
+                          {c.entryId && (
+                            <button
+                              type="button"
+                              onClick={() => setDetalheEntryId(Number(c.entryId))}
+                              title="Ver detalhes do lançamento conciliado"
+                              className="shrink-0 p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => setConfirmDesconciliar({ id: c.id, descricao: c.descricao || "—", valor: Number(c.valor) })}
