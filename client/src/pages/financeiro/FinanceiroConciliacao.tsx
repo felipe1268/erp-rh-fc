@@ -66,7 +66,7 @@ function _msgErroConc(msg?: string): string {
     l.includes("aborted") ||
     l.includes("timed out") ||
     l.includes("tempo limite")
-  ) return "Falha de conexão. Verifique sua internet e toque em "Tentar novamente".";
+  ) return 'Falha de conexão. Verifique sua internet e toque em "Tentar novamente".';
   return msg;
 }
 
