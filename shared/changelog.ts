@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3438 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXCLUIR SAÍDA DE ALMOXARIFADO DA
+ * CONCILIAÇÃO. 100% BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PROBLEMA: lançamentos de origem `almoxarifado_saida` (botão "DAR INSUMO" — saída de
+ * consumíveis do almoxarifado para funcionários) apareciam no bloco "Sem conta bancária
+ * definida" da Conciliação Bancária. O usuário via itens como "Consumo material: DISCO
+ * PARA CONCRETO IRWIN 4 3/8 110 MM" e não conseguia casá-los com nenhuma linha de extrato
+ * (o que é correto: saída de almoxarifado é rateio de custo interno, sem movimento bancário).
+ *
+ * CAUSA: o bridge `financialIntegrationBridge.ts` gera um `financial_entry` para cada
+ * saída de insumo, com `conta_bancaria_id = NULL` e `status = "pago"`. Esses lançamentos
+ * caíam no bloco "sem conta" da conciliação porque a query não os excluía.
+ *
+ * REGRA: conciliação bancária casa apenas entradas com **fato gerador bancário real**
+ * (OC paga → `compra_oc`, folha → `beneficio_vr/va`, frota, etc.). Rateio de custo
+ * interno (`almoxarifado_saida`, `almoxarifado`) não tem extrato correspondente e NUNCA
+ * deve aparecer na conciliação. O custo já está capturado na `compra_oc` que originou
+ * a entrada do item no estoque.
+ *
+ * FIX: adicionado `AND e.origem_modulo NOT IN ('almoxarifado_saida','almoxarifado')`
+ * nas duas queries da conciliação (`lancRes` com conta + `semContaRes` sem conta).
+ *
  * Rev. 3437 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA + FORNECEDORES · CICLO DE FECHAMENTO
  * DE FORNECEDOR COM PARCELAMENTO. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *

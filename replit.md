@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3438** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXCLUIR SAÍDA DE ALMOXARIFADO. 100% BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.** `almoxarifado_saida`/`almoxarifado` excluídos das 2 queries da conciliação — são rateio de custo interno sem movimento bancário; o custo real já está na `compra_oc`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3437** — **FINANCEIRO + FORNECEDORES · CICLO DE FECHAMENTO COM PARCELAMENTO. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Cadastro do fornecedor ganha seção "Ciclo de Fechamento" (semanal/quinzenal/mensal/personalizado + N parcelas + prazo). Conciliação agrupa automaticamente por fornecedor+janela → badge laranja "Fechamento" + sub-seção de parcelas com vencimento. 5 colunas via self-heal. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3436** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CARD "SUGESTÃO" SEM CONTA — TEXTO SOBREPOSTO CORRIGIDO. 100% FRONTEND · ZERO BACKEND.** `truncate` em span inline → `break-all` em bloco; layout 2 linhas (descrição + data/valor/conta); botão não sobrepõe mais. Detalhe: `shared/changelog.ts`.
