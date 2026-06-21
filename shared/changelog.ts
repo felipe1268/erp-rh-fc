@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3399 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SUGESTÃO DE CONCILIAÇÃO PARA
+ * LANÇAMENTOS SEM CONTA BANCÁRIA. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PEDIDO (piloto FC): lançamentos sem `conta_bancaria_id` ficavam em todas as contas mas
+ * sem possibilidade de conciliação automatizada. A Rev. 3399 adiciona casamento automático
+ * por valor (±R$0,02) + data (±5 dias) entre esses lançamentos e linhas não-conciliadas de
+ * qualquer conta da empresa — sugestão suave, conciliação só com confirmação explícita.
+ *
+ * BACKEND (aditivo, zero schema/ALTER/DROP/DELETE):
+ * - `server/routers/financial.ts` — `getConciliacaoReport`:
+ *   · Query `semContaRes` ampliada com LEFT JOIN LATERAL contra `bank_statement_lines`
+ *     (JOIN `company_bank_accounts` p/ nome da conta). Subquery ordena por menor delta de
+ *     data e depois de valor, LIMIT 1. Campos adicionados ao SELECT:
+ *     `sugLineId`, `sugContaId`, `sugBanco`, `sugContaDesc`, `sugData`, `sugDesc`, `sugValor`.
+ *   · Quando não há match o LATERAL retorna NULL (LEFT JOIN) → campos ficam null no payload,
+ *     frontend não exibe a suggestion bar.
+ * - `server/routers/financial.ts` — nova mutation `conciliarSemContaComExtrato`:
+ *   · Tenant guard `_assertFinanceiroCompanyAccess`.
+ *   · Verifica linha do extrato (excluido_em IS NULL + conciliado=0) → lê conta_bancaria_id.
+ *   · Verifica lançamento (status≠cancelado + conciliado=0 + conta_bancaria_id IS NULL).
+ *   · UPDATE bank_statement_lines SET conciliado=1, entry_id=... (RETURNING como guard dupla).
+ *   · UPDATE financial_entries SET conta_bancaria_id=..., conciliado=1, data_conciliacao=CURRENT_DATE.
+ *   · Audit log `financial_conciliar_sem_conta`.
+ *
+ * FRONTEND (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`):
+ * - Estado `confirmSemConta: {entry,sug}|null` + mutation `conciliarSemContaMut`.
+ * - Seção "Sem conta bancária definida": trocado `{repSemConta.map(renderEntryRow)}` por
+ *   `React.Fragment` por item — abaixo de cada row (se `e.sugLineId` existir) aparece uma
+ *   suggestion bar azul com: ícone Sparkles + descrição/data/valor/conta + botão "Conciliar".
+ * - Contador global acima da lista: "N sugestão(ões) encontrada(s)" (visível só se ≥1).
+ * - `AlertDialog` de confirmação: mostra lançamento (fornecedorNome, data, valor, aviso
+ *   "Sem conta → será preenchida automaticamente") vs linha do extrato (desc, data, valor,
+ *   conta). Botão "Confirmar conciliação" chama `conciliarSemContaMut.mutate({...})`.
+ * - `onSuccess` invalida report + st + stAno + accStatus + sug + geral (se panorama).
+ *
  * Rev. 3398 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CONTA CAIXA INTERNO (SEM EXTRATO
  * BANCÁRIO). BACKEND ADITIVO + SCHEMA ADITIVO + FRONT · ZERO ALTER/DROP/DELETE.**
  *

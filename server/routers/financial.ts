@@ -1424,6 +1424,9 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
     // compartilhado `p` (4 itens, com a conta na posição 2) desalinhava: o contaBancariaId
     // caía na 1ª comparação de DATA → "invalid input syntax for type date: 2". Usa um array
     // dedicado SEM a conta e placeholders $1,$2,$3 em ordem.
+    // Rev. 3399 — LATERAL: para cada lançamento sem conta, busca a melhor linha de extrato
+    // (qualquer conta da empresa) que case pelo valor (±R$0,02) e data (±5 dias).
+    // O ERP sugere o par, mas a conciliação só ocorre com confirmação explícita do usuário.
     const semContaRes = await dbExecute(db,
       `SELECT e.id, e.descricao, e.fornecedor_nome AS "fornecedorNome", e.obra_nome AS "obraNome",
               COALESCE(e.valor_realizado, e.valor_previsto) AS valor, e.tipo, e.status,
@@ -1433,7 +1436,9 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
               COALESCE(NULLIF(TRIM(ff.posto),''), NULLIF(TRIM(fm.fornecedor),'')) AS "frotaFornecedor",
               COALESCE(NULLIF(TRIM(pc.nome_fantasia),''), NULLIF(TRIM(pc.razao_social),'')) AS "parceiroFornecedor",
               COALESCE(NULLIF(TRIM(pjemp."nomeCompleto"),''), NULLIF(TRIM(pjc."razaoSocialPrestador"),'')) AS "pjFornecedor",
-              COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) AS data
+              COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) AS data,
+              sug."sugLineId", sug."sugContaId", sug."sugBanco", sug."sugContaDesc",
+              sug."sugData", sug."sugDesc", sug."sugValor"
          FROM financial_entries e
          LEFT JOIN fleet_fuel_records ff ON e.origem_modulo='frota_abastecimento' AND ff.id = e.origem_id
          LEFT JOIN fleet_maintenances fm ON e.origem_modulo='frota_manutencao' AND fm.id = e.origem_id
@@ -1442,6 +1447,26 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
          LEFT JOIN pj_payments pjp ON e.origem_modulo='pagamento_pj' AND pjp.id = e.origem_id AND pjp."companyId" = e.company_id
          LEFT JOIN employees pjemp ON pjemp.id = pjp."employeeId" AND pjemp."companyId" = e.company_id
          LEFT JOIN pj_contracts pjc ON pjc.id = pjp."contractId" AND pjc."companyId" = e.company_id
+         LEFT JOIN LATERAL (
+           SELECT b.id AS "sugLineId",
+                  b.conta_bancaria_id AS "sugContaId",
+                  ba.banco AS "sugBanco",
+                  COALESCE(NULLIF(TRIM(ba.descricao),''), ba.banco) AS "sugContaDesc",
+                  b.data::text AS "sugData",
+                  b.descricao AS "sugDesc",
+                  b.valor AS "sugValor"
+           FROM bank_statement_lines b
+           JOIN company_bank_accounts ba ON ba.id = b.conta_bancaria_id
+           WHERE b.company_id = e.company_id
+             AND b.excluido_em IS NULL
+             AND COALESCE(b.conciliado,0) = 0
+             AND ABS(ABS(b.valor) - ABS(COALESCE(e.valor_realizado, e.valor_previsto))) <= 0.02
+             AND ABS(b.data - COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia)) <= 5
+           ORDER BY ABS(b.data - COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia)) ASC,
+                    ABS(ABS(b.valor) - ABS(COALESCE(e.valor_realizado, e.valor_previsto))) ASC,
+                    b.id ASC
+           LIMIT 1
+         ) sug ON TRUE
         WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
           AND e.conta_bancaria_id IS NULL
           AND ${sqlNotProjecao("e.origem_modulo")}
@@ -6792,6 +6817,60 @@ export const financialRouter = router({
     });
 
     return { ok: true };
+  }),
+
+  // Rev. 3399 — Concilia um lançamento SEM conta bancária com uma linha do extrato.
+  // Além da conciliação normal (conciliado=1 em ambos), atualiza conta_bancaria_id do
+  // lançamento com a conta da linha do extrato (preenchendo o campo que estava vazio).
+  // Guard: lançamento deve ter conta_bancaria_id IS NULL; linha deve não estar conciliada.
+  // ZERO ALTER/DROP/DELETE.
+  conciliarSemContaComExtrato: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    entryId: z.number(),
+    statementLineId: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+
+    // 1. Busca linha do extrato (tenant guard) → obtém conta_bancaria_id
+    const lnRes = await dbExecute(db,
+      `SELECT id, conta_bancaria_id AS "contaBancariaId"
+       FROM bank_statement_lines
+       WHERE id=$1 AND company_id=$2 AND excluido_em IS NULL AND COALESCE(conciliado,0)=0`,
+      [input.statementLineId, input.companyId]);
+    if (rows(lnRes).length === 0)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Linha do extrato não encontrada ou já conciliada." });
+    const contaBancariaId = Number((rows(lnRes)[0] as any).contaBancariaId);
+
+    // 2. Busca lançamento (tenant guard) → deve estar sem conta + não conciliado
+    const enRes = await dbExecute(db,
+      `SELECT id, conta_bancaria_id AS "contaBancariaId"
+       FROM financial_entries
+       WHERE id=$1 AND company_id=$2 AND status <> 'cancelado' AND COALESCE(conciliado,0)=0`,
+      [input.entryId, input.companyId]);
+    if (rows(enRes).length === 0)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado ou já conciliado." });
+    if ((rows(enRes)[0] as any).contaBancariaId != null)
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Este lançamento já tem conta bancária definida — use a conciliação normal." });
+
+    // 3. Concilia a linha (RETURNING como guard de dupla-conciliação)
+    const updLine = await dbExecute(db,
+      `UPDATE bank_statement_lines SET conciliado=1, entry_id=$1
+       WHERE id=$2 AND company_id=$3 AND excluido_em IS NULL RETURNING id`,
+      [input.entryId, input.statementLineId, input.companyId]);
+    if (rows(updLine).length === 0)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Linha do extrato não encontrada ao conciliar." });
+
+    // 4. Vincula conta + marca conciliado no lançamento
+    await dbExecute(db,
+      `UPDATE financial_entries
+       SET conta_bancaria_id=$1, conciliado=1, data_conciliacao=CURRENT_DATE
+       WHERE id=$2 AND company_id=$3`,
+      [contaBancariaId, input.entryId, input.companyId]);
+
+    await createAuditLog({ action: "financial_conciliar_sem_conta", userId: ctx.user?.id, companyId: input.companyId, details: `Entry #${input.entryId} vinculado à conta ${contaBancariaId} e conciliado com linha #${input.statementLineId}` });
+    return { ok: true, contaBancariaId };
   }),
 
   // Rev. 3396 — Desfaz a conciliação de UMA linha do extrato SEM apagá-la.

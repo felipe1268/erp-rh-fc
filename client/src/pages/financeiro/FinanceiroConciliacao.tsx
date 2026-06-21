@@ -492,6 +492,17 @@ export default function FinanceiroConciliacao() {
     onSuccess: (res: any) => { toast({ title: `Grupo conciliado! ${formatInt(res.conciliados)} lançamento(s) baixado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug(); if (!contaBancariaId && periodoDefinido) refetchGeral(); setConfirmGeralConciliar(null); setSelectedStatement(null); setSelectedEntry(null); },
     onError: (e: any) => toast({ title: "Erro ao conciliar grupo", description: e.message, variant: "destructive" }),
   });
+  // Rev. 3399 — Conciliação de lançamento SEM conta bancária via sugestão automática.
+  const [confirmSemConta, setConfirmSemConta] = React.useState<{ entry: any; sug: any } | null>(null);
+  const conciliarSemContaMut = (trpc as any).financial.conciliarSemContaComExtrato.useMutation({
+    onSuccess: () => {
+      toast({ title: "Lançamento vinculado e conciliado!", description: `Conta bancária preenchida automaticamente.` });
+      refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug();
+      if (!contaBancariaId && periodoDefinido) refetchGeral();
+      setConfirmSemConta(null);
+    },
+    onError: (e: any) => toast({ title: "Erro ao conciliar", description: e.message, variant: "destructive" }),
+  });
   // Rev. 3198 — conciliação do fluxo "Lançar": SEM onError próprio (o erro é tratado
   // no catch do submitLancar, preservando o id criado p/ não duplicar no retry).
   const lancConciliarMut = (trpc as any).financial.conciliarLancamento.useMutation({
@@ -3742,8 +3753,42 @@ export default function FinanceiroConciliacao() {
                       <p className="px-4 py-2 text-[11px] text-gray-500 bg-gray-50/60">
                         Estes lançamentos não têm conta bancária informada no ERP — por isso aparecem em todas as contas e <strong>não entram no número "ERP sem extrato"</strong> acima. Você pode casá-los com o extrato desta conta normalmente.
                       </p>
-                      <div className="divide-y divide-gray-100 max-h-[420px] overflow-y-auto">
-                        {repSemConta.map((e: any) => renderEntryRow(e))}
+                      {/* Rev. 3399 — contador de sugestões encontradas */}
+                      {repSemConta.some((e: any) => e.sugLineId) && (
+                        <div className="mx-4 mt-2 mb-1 flex items-center gap-1.5 text-[11px] text-blue-700">
+                          <Sparkles className="w-3 h-3 text-blue-500" />
+                          <span>{repSemConta.filter((e: any) => e.sugLineId).length} sugestão(ões) de conciliação encontrada(s) · clique em "Conciliar" para vincular</span>
+                        </div>
+                      )}
+                      <div className="divide-y divide-gray-100 max-h-[520px] overflow-y-auto">
+                        {repSemConta.map((e: any) => (
+                          <React.Fragment key={e.id}>
+                            {renderEntryRow(e)}
+                            {e.sugLineId && (
+                              <div className="mx-4 mb-2 rounded-lg border border-blue-200 bg-blue-50/80 px-3 py-2 flex items-center gap-2">
+                                <Sparkles className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                                <div className="flex-1 min-w-0 text-xs text-blue-800">
+                                  <span className="font-semibold">Sugestão: </span>
+                                  <span className="truncate">{e.sugDesc || "—"}</span>
+                                  <span className="text-blue-600 mx-1">·</span>
+                                  <span>{e.sugData ? String(e.sugData).slice(0,10).split("-").reverse().join("/") : "—"}</span>
+                                  <span className="text-blue-600 mx-1">·</span>
+                                  <span className="font-medium">{formatBRL(Math.abs(Number(e.sugValor)))}</span>
+                                  <span className="text-blue-500 mx-1">·</span>
+                                  <span className="text-blue-600">{e.sugContaDesc || e.sugBanco || "—"}</span>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="shrink-0 h-7 border-blue-400 text-blue-700 hover:bg-blue-100 text-xs gap-1"
+                                  onClick={() => setConfirmSemConta({ entry: e, sug: e })}
+                                >
+                                  <Link2 className="w-3 h-3" />Conciliar
+                                </Button>
+                              </div>
+                            )}
+                          </React.Fragment>
+                        ))}
                       </div>
                     </div>
                   </details>
@@ -4076,6 +4121,55 @@ export default function FinanceiroConciliacao() {
                 }}
               >
                 {desconciliarMut.isPending ? "Desfazendo..." : "Sim, desfazer conciliação"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Rev. 3399 — AlertDialog: conciliação de lançamento sem conta bancária */}
+        <AlertDialog open={!!confirmSemConta} onOpenChange={(o: boolean) => { if (!o && !conciliarSemContaMut.isPending) setConfirmSemConta(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <Link2 className="w-5 h-5 text-blue-600" />Confirmar conciliação
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3 text-sm">
+                  <p className="text-gray-600">O ERP encontrou uma correspondência no extrato. Confirme o par para conciliar e vincular a conta automaticamente.</p>
+                  {confirmSemConta && (
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 divide-y divide-gray-200 text-[13px]">
+                      <div className="flex items-start gap-2 px-3 py-2">
+                        <ArrowUpCircle className="w-4 h-4 text-rose-500 mt-0.5 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-800 truncate">{confirmSemConta.entry.fornecedorNome || confirmSemConta.entry.descricao || `Lançamento #${confirmSemConta.entry.id}`}</p>
+                          <p className="text-gray-500 text-xs">{confirmSemConta.entry.data ? String(confirmSemConta.entry.data).slice(0,10).split("-").reverse().join("/") : "—"} · {confirmSemConta.entry.obraNome || "sem obra"} · <strong>{formatBRL(Math.abs(Number(confirmSemConta.entry.valor)))}</strong></p>
+                          <p className="text-amber-600 text-[11px] font-medium mt-0.5">Sem conta bancária → será preenchido automaticamente</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2 px-3 py-2 bg-blue-50/60">
+                        <FileText className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-800 truncate">{confirmSemConta.sug.sugDesc || "—"}</p>
+                          <p className="text-gray-500 text-xs">{confirmSemConta.sug.sugData ? String(confirmSemConta.sug.sugData).slice(0,10).split("-").reverse().join("/") : "—"} · <strong>{formatBRL(Math.abs(Number(confirmSemConta.sug.sugValor)))}</strong></p>
+                          <p className="text-blue-600 text-[11px] font-medium mt-0.5">Conta: {confirmSemConta.sug.sugContaDesc || confirmSemConta.sug.sugBanco || "—"}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={conciliarSemContaMut.isPending}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-blue-600 hover:bg-blue-700"
+                disabled={conciliarSemContaMut.isPending}
+                onClick={() => {
+                  if (confirmSemConta)
+                    conciliarSemContaMut.mutate({ companyId, entryId: confirmSemConta.entry.id, statementLineId: confirmSemConta.sug.sugLineId });
+                }}
+              >
+                {conciliarSemContaMut.isPending ? "Conciliando..." : "Confirmar conciliação"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
