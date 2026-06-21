@@ -1471,7 +1471,16 @@ export default function Ordens() {
                           <CommandItem
                             key={f.id}
                             value={`${f.nomeFantasia ?? ""} ${f.razaoSocial ?? ""}`}
-                            onSelect={() => { setForm(p => ({ ...p, fornecedorId: String(f.id) })); setFornecedorPopoverOpen(false); }}
+                            onSelect={() => {
+                              // Rev. 3442 — pré-preenche formaPagamento do ciclo do fornecedor
+                              const cicloFP = (f as any).cicloFormaPagamento as string | undefined;
+                              setForm(p => ({
+                                ...p,
+                                fornecedorId: String(f.id),
+                                ...(cicloFP ? { formaPagamento: cicloFP } : {}),
+                              }));
+                              setFornecedorPopoverOpen(false);
+                            }}
                             className="cursor-pointer"
                           >
                             <Check className={`mr-2 h-4 w-4 shrink-0 ${form.fornecedorId === String(f.id) ? "opacity-100" : "opacity-0"}`} />

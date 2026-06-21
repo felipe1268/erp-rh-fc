@@ -1616,13 +1616,17 @@ export default function Cotacoes() {
     const persistedTransp = p.transportadora ?? "";
     const persistedModulo = p.moduloMedicao ?? "";
     const persistedNumParc = p.numeroParcelas ? Number(p.numeroParcelas) : 0;
+    // Rev. 3442 — fallback: se o fornecedor tem cicloFormaPagamento e ainda não há valor salvo,
+    // pré-preenche como sugestão (o comprador pode alterar livremente).
+    const fornCicloFP = (fornecedores.find((x: any) => x.id === fId) as any)?.cicloFormaPagamento ?? "";
+    const formaEfetiva = persistedForma || fornCicloFP;
 
     // Seed estritamente quando a chave está `undefined` (nunca foi inicializada nesta sessão).
     // String vazia "" é tratada como intenção do usuário de limpar o campo — não sobrescreve.
     setEditPrazo(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedPrazo });
     setEditCondPag(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedCond });
     setEditTipoPag(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedTipo });
-    setEditFormaPag(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedForma });
+    setEditFormaPag(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: formaEfetiva });
     setEditFreteTipo(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedFreteTipo });
     setEditValorFrete(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedValorFrete });
     setEditTransportadora(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedTransp });

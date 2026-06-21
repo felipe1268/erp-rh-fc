@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3442 — **COMPRAS / OC + COTAÇÃO · FORMA DE PAGAMENTO PRÉ-PREENCHIDA DO CICLO DO FORNECEDOR.
+ * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PEDIDO: a forma de pagamento definida no "Ciclo de Fechamento" do fornecedor deve ser pré-preenchida
+ * como sugestão na cotação e na OC — o comprador pode alterar livremente.
+ *
+ * SOLUÇÃO:
+ * 1. `Ordens.tsx` — ao selecionar o fornecedor no popover da OC manual, o `onSelect` agora lê
+ *    `f.cicloFormaPagamento` (já disponível em `listarFornecedores` desde Rev. 3440) e, se
+ *    definido, injeta o valor em `form.formaPagamento`. Campo continua editável.
+ * 2. `Cotacoes.tsx` — no `useEffect` que semeia os campos do modal de Condições de Pagamento,
+ *    antes de setar `editFormaPag` a forma salva (`persistedForma`), calcula `formaEfetiva` como
+ *    `persistedForma || cicloFormaPagamento do fornecedor` — se ainda não houver valor registrado
+ *    para aquele participante, pré-preenche do ciclo. A regra de seed (só quando `prev[fId] ===
+ *    undefined`) garante que edições manuais não salvas não são sobrescritas.
+ *
+ * ARQUIVOS: `client/src/pages/compras/Ordens.tsx`, `client/src/pages/compras/Cotacoes.tsx`,
+ *           `shared/version.ts`, `shared/changelog.ts`, `replit.md`.
+ *
  * Rev. 3441 — **CONCILIAÇÃO BANCÁRIA / PANORAMA · VARREDURA DE OC / OS / LOCAÇÃO POR MÊS.
  * BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
