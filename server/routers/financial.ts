@@ -5,7 +5,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { storagePut, dbRetrieve } from "../storage";
-import { invokeGeminiVision } from "../_core/llm";
+import { invokeGeminiVision, invokeLLM } from "../_core/llm";
 import { assertAiModuleEnabled } from "../_core/aiConfig";
 import { seedPlanoDeConta, ensureTaxConfig } from "../services/financialSeedAccounts";
 import { runAllAutoImports } from "../services/financialAutoImport";
@@ -6871,6 +6871,128 @@ export const financialRouter = router({
 
     await createAuditLog({ action: "financial_conciliar_sem_conta", userId: ctx.user?.id, companyId: input.companyId, details: `Entry #${input.entryId} vinculado à conta ${contaBancariaId} e conciliado com linha #${input.statementLineId}` });
     return { ok: true, contaBancariaId };
+  }),
+
+  // Rev. 3401 — ANÁLISE POR IA DA CONCILIAÇÃO: compara a descrição do extrato bancário
+  // com a classificação atual do lançamento no ERP (nome, categoria, descrição) e devolve
+  // sugestões de correção. Gatilho MANUAL pelo usuário — não roda automaticamente.
+  // READ-ONLY no banco: só consulta, não grava nada. Gateado pelo toggle IA "financeiro".
+  // ZERO ALTER/DROP/DELETE.
+  analisarConciliacaoComIA: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    entryId: z.number(),
+    extratoDescricao: z.string(),
+    extratoData: z.string().optional().nullable(),
+    extratoValor: z.number().optional().nullable(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    await assertAiModuleEnabled(input.companyId, "financeiro");
+
+    // 1. Buscar o lançamento completo com categoria e obra
+    const entRes = await dbExecute(db,
+      `SELECT e.id, e.tipo,
+              e.conta_id AS "contaId",
+              fa.nome AS "contaNome",
+              e.fornecedor_nome AS "fornecedorNome",
+              e.descricao,
+              e.origem_modulo AS "origemModulo",
+              ob.nome AS "obraNome"
+       FROM financial_entries e
+       LEFT JOIN financial_accounts fa ON fa.id = e.conta_id
+       LEFT JOIN obras ob ON ob.id = e.obra_id
+       WHERE e.id=$1 AND e.company_id=$2 LIMIT 1`,
+      [input.entryId, input.companyId]);
+    const entry = rows(entRes)[0] as any;
+    if (!entry) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado." });
+
+    // 2. Buscar categorias ativas (até 100) para o modelo poder sugerir IDs válidos
+    const catRes = await dbExecute(db,
+      `SELECT id, nome, tipo FROM financial_accounts
+       WHERE company_id=$1 AND ativo=1
+       ORDER BY tipo ASC, nome ASC LIMIT 100`,
+      [input.companyId]);
+    const categorias = rows(catRes) as any[];
+    const catList = categorias.map((c: any) => `${c.id}|${c.nome}|${c.tipo}`).join("\n");
+
+    // 3. Prompt estruturado
+    const prompt = [
+      "Você é um auditor financeiro brasileiro. Analise se o LANÇAMENTO NO ERP está corretamente classificado em relação ao EXTRATO BANCÁRIO.",
+      "",
+      "EXTRATO BANCÁRIO (fonte de verdade do que realmente ocorreu):",
+      `  Descrição: "${input.extratoDescricao}"`,
+      `  Data: ${input.extratoData || "não informada"}`,
+      `  Valor: ${input.extratoValor != null ? `R$ ${Number(input.extratoValor).toFixed(2)}` : "não informado"}`,
+      "",
+      "LANÇAMENTO NO ERP (pode conter erros de cadastro):",
+      `  Nome/Fornecedor: "${entry.fornecedorNome || "—"}"`,
+      `  Descrição interna: "${entry.descricao || "—"}"`,
+      `  Tipo: ${entry.tipo || "—"}`,
+      `  Categoria atual: "${entry.contaNome || "sem categoria"}" (ID: ${entry.contaId || "nenhum"})`,
+      `  Origem: ${entry.origemModulo || "manual"}`,
+      "",
+      "CATEGORIAS DISPONÍVEIS (formato: ID|Nome|tipo):",
+      catList,
+      "",
+      "TAREFA: compare a descrição do extrato com a classificação do ERP e identifique campos incorretos.",
+      'Responda SOMENTE com este JSON: {"ok":true,"resumo":"frase curta","sugestoes":[{"campo":"fornecedorNome","valorAtual":"X","sugestao":"Y","motivo":"Z"},{"campo":"contaId","valorAtual":"nome atual","sugestao":"nome sugerido","motivo":"Z","contaIdSugerido":123},{"campo":"descricao","valorAtual":"X","sugestao":"Y","motivo":"Z"}]}',
+      "",
+      "REGRAS:",
+      "- Para campo contaId: contaIdSugerido DEVE ser um ID numérico da lista acima.",
+      "- Só sugira quando tiver certeza pelo texto do extrato.",
+      "- Se tudo estiver correto: ok:true, sugestoes:[].",
+      "- Máximo 3 sugestões.",
+      "- Nenhum texto fora do JSON.",
+    ].join("\n");
+
+    // 4. Invocar IA (Gemini Flash rápido → fallback Claude)
+    let raw = "";
+    try {
+      const result = await invokeLLM({
+        fast: true,
+        messages: [{ role: "user", content: prompt }],
+        maxTokens: 600,
+      });
+      raw = (result.choices?.[0]?.message?.content as string) ?? "";
+    } catch (err: any) {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Falha na análise por IA: " + String(err?.message ?? "").slice(0, 120) });
+    }
+
+    // 5. Parse robusto
+    let obj: any = { ok: true, resumo: "", sugestoes: [] };
+    try { obj = JSON.parse(raw); } catch {
+      const m = raw.match(/\{[\s\S]*\}/);
+      if (m) { try { obj = JSON.parse(m[0]); } catch { /* usa default */ } }
+    }
+
+    // 6. Sanitizar output da IA (whitelist defensiva — nunca confiar no modelo)
+    const CAMPOS_VALIDOS = ["fornecedorNome", "contaId", "descricao"];
+    const sugestoes = (Array.isArray(obj.sugestoes) ? obj.sugestoes : [])
+      .slice(0, 4)
+      .filter((s: any) => s && CAMPOS_VALIDOS.includes(s.campo))
+      .map((s: any) => {
+        const contaIdSugerido = s.campo === "contaId" && s.contaIdSugerido
+          ? (categorias.find((c: any) => c.id === Number(s.contaIdSugerido)) ? Number(s.contaIdSugerido) : null)
+          : null;
+        const contaNomeSugerida = contaIdSugerido
+          ? (categorias.find((c: any) => c.id === contaIdSugerido) as any)?.nome ?? null
+          : null;
+        return {
+          campo: String(s.campo),
+          valorAtual: String(s.valorAtual ?? "").slice(0, 200),
+          sugestao: String(s.sugestao ?? "").slice(0, 200),
+          motivo: String(s.motivo ?? "").slice(0, 300),
+          contaIdSugerido,
+          contaNomeSugerida,
+        };
+      });
+
+    return {
+      ok: Boolean(obj.ok),
+      resumo: String(obj.resumo ?? "").slice(0, 400),
+      sugestoes,
+    };
   }),
 
   // Rev. 3396 — Desfaz a conciliação de UMA linha do extrato SEM apagá-la.

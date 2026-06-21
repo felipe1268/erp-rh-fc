@@ -1,6 +1,48 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3401 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · ANÁLISE DA CLASSIFICAÇÃO COM IA
+ * (ON-DEMAND). BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PEDIDO: botão "Verificar classificação com IA" dentro do card "Conferência da
+ * conciliação" (dialog do lançamento, aberto via sugestão de conciliação). A IA compara
+ * a descrição do extrato bancário com a classificação atual do lançamento no ERP
+ * (nome/fornecedor, categoria, descrição) e sugere correções — o usuário escolhe quais
+ * aceitar e aplica em um clique.
+ *
+ * FLUXO:
+ * 1. Usuário abre o dialog do lançamento a partir de uma sugestão de conciliação
+ *    (onde o extrato está disponível).
+ * 2. Card "Conferência da conciliação" exibe nova faixa separada por `border-t`:
+ *    - Estado inicial: botão "Verificar classificação com IA" (Sparkles, violeta).
+ *    - Loading: spinner + texto.
+ *    - Resultado: pill de resumo (verde = ok / âmbar = divergência) + lista de sugestões
+ *      clicáveis com checkbox (campo, valor atual ↔ sugerido, motivo).
+ *    - Botão "Aplicar N correção(ões)": chama `updateEntryClassificacao` com os campos
+ *      marcados; fecha a análise após salvar com sucesso.
+ *    - Botão "Descartar análise" / "Fechar análise" desmonta o painel sem gravar.
+ * 3. O estado `aiAnalise`/`aiCheckeds` é resetado ao fechar o dialog (`fecharDetalhe`) ou
+ *    ao abrir outro lançamento (`abrirDetalheSug`).
+ *
+ * BACKEND (`server/routers/financial.ts` — mutation `analisarConciliacaoComIA`):
+ * - Busca o lançamento (tipo, contaNome, fornecedorNome, descricao, origemModulo).
+ * - Busca até 100 categorias ativas da empresa (whitelist para evitar alucinação de ID).
+ * - Monta prompt estruturado em pt-BR com o extrato e a classificação atual.
+ * - Invoca `invokeLLM({ fast: true })` → Gemini Flash (fallback Claude).
+ * - Parse robusto do JSON retornado (try → regex fallback).
+ * - SANITIZAÇÃO defensiva: só aceita campos da whitelist `["fornecedorNome","contaId","descricao"]`;
+ *   para `contaId`, o `contaIdSugerido` é validado contra a lista real de categorias
+ *   (alucinação de ID ≠ null → descartado silenciosamente).
+ * - Gateado por `assertAiModuleEnabled(companyId, "financeiro")`.
+ * - 100% READ-ONLY no banco (SELECT only); não grava nada. Zero ALTER/DROP/DELETE.
+ *
+ * ARQUIVOS TOCADOS:
+ * - `server/routers/financial.ts`: import `invokeLLM`; mutation `analisarConciliacaoComIA`.
+ * - `client/src/pages/financeiro/FinanceiroConciliacao.tsx`: estados `aiAnalise`/`aiCheckeds`;
+ *   reset em `fecharDetalhe`/`abrirDetalheSug`; mutation `analisarConciliacaoMut`; helpers
+ *   `dispararAnaliseIA`/`aplicarCorrecoesSugeridas`; UI no card de Conferência.
+ * - `shared/version.ts`: bump Rev. 3401.
+ *
  * Rev. 3400 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · REDESIGN FULL-SCREEN DO MODAL
  * "LANÇAMENTO #NNNNN". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *

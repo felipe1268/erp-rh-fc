@@ -146,6 +146,7 @@ export default function FinanceiroConciliacao() {
     entryValor?: number; deltaDias?: number; confianca?: string; identificadoVia?: string | null;
   }>(null);
   const abrirDetalheSug = (s: any) => {
+    setAiAnalise(null); setAiCheckeds(new Set());
     setDetalheExtrato({
       data: s.extratoData ?? null,
       descricao: s.extratoDescricao ?? null,
@@ -169,7 +170,12 @@ export default function FinanceiroConciliacao() {
     descricao: string; observacoes: string;
     tipo: string;
   } | null>(null);
-  const fecharDetalhe = () => { setDetalheEntryId(null); setDetalheExtrato(null); setDetEditMode(false); setDetEditForm(null); };
+  // Rev. 3401 — análise IA da conciliação (on-demand, gatilho manual)
+  type AiSugestao = { campo: string; valorAtual: string; sugestao: string; motivo: string; contaIdSugerido: number | null; contaNomeSugerida: string | null };
+  type AiAnaliseState = null | "loading" | "error" | { ok: boolean; resumo: string; sugestoes: AiSugestao[] };
+  const [aiAnalise, setAiAnalise] = useState<AiAnaliseState>(null);
+  const [aiCheckeds, setAiCheckeds] = useState<Set<number>>(new Set());
+  const fecharDetalhe = () => { setDetalheEntryId(null); setDetalheExtrato(null); setDetEditMode(false); setDetEditForm(null); setAiAnalise(null); setAiCheckeds(new Set()); };
   // Rev. 3266 — diálogo de CONFERÊNCIA da identificação por IA (texto roxo clicável).
   // Guarda a linha do extrato (com os campos demo* já vindos do getConciliacaoReport) p/
   // montar o comparativo lado a lado + abrir o PDF do demonstrativo + confirmar/marcar errado.
@@ -1171,10 +1177,42 @@ export default function FinanceiroConciliacao() {
       detailQuery.refetch();
       setDetEditMode(false);
       setDetEditForm(null);
+      setAiAnalise(null);
       toast({ title: "Lançamento atualizado com sucesso." });
     },
     onError: (e: any) => toast({ title: "Erro ao salvar", description: e.message, variant: "destructive" }),
   });
+  // Rev. 3401 — análise IA on-demand: compara extrato × ERP e sugere correções de classificação.
+  const analisarConciliacaoMut = (trpc as any).financial.analisarConciliacaoComIA.useMutation({
+    onMutate: () => { setAiAnalise("loading"); setAiCheckeds(new Set()); },
+    onSuccess: (data: any) => {
+      setAiAnalise(data);
+      setAiCheckeds(new Set((data.sugestoes ?? []).map((_: any, i: number) => i)));
+    },
+    onError: (e: any) => { setAiAnalise("error"); toast({ title: "Erro na análise IA", description: e.message, variant: "destructive" }); },
+  });
+  const dispararAnaliseIA = () => {
+    if (!detEntry || !detalheExtrato) return;
+    analisarConciliacaoMut.mutate({
+      companyId,
+      entryId: detEntry.id,
+      extratoDescricao: detalheExtrato.descricao ?? "",
+      extratoData: detalheExtrato.data ?? undefined,
+      extratoValor: detalheExtrato.valor ?? undefined,
+    });
+  };
+  const aplicarCorrecoesSugeridas = () => {
+    if (!detEntry || typeof aiAnalise !== "object" || aiAnalise === null || aiAnalise === "error") return;
+    const sels = (aiAnalise as any).sugestoes.filter((_: any, i: number) => aiCheckeds.has(i));
+    if (!sels.length) { toast({ title: "Nenhuma sugestão selecionada." }); return; }
+    const patch: any = { id: detEntry.id, companyId };
+    for (const s of sels) {
+      if (s.campo === "fornecedorNome") patch.fornecedorNome = s.sugestao;
+      else if (s.campo === "contaId" && s.contaIdSugerido) { patch.contaId = s.contaIdSugerido; patch.contaNome = s.contaNomeSugerida || s.sugestao; }
+      else if (s.campo === "descricao") patch.descricao = s.sugestao;
+    }
+    updateEntryClassif.mutate(patch);
+  };
   const iniciarEdicaoEntry = () => {
     if (!detEntry) return;
     setDetEditForm({
@@ -3170,6 +3208,106 @@ export default function FinanceiroConciliacao() {
                               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-violet-100 text-violet-700 text-xs font-semibold">
                                 <Sparkles className="w-3 h-3" /> {detalheExtrato.identificadoVia}
                               </span>
+                            )}
+                          </div>
+
+                          {/* ── Rev. 3401 — Análise IA da classificação (on-demand) ── */}
+                          <div className="border-t border-gray-100">
+                            {/* Botão inicial */}
+                            {aiAnalise === null && (
+                              <button
+                                type="button"
+                                onClick={dispararAnaliseIA}
+                                disabled={!detEntry || analisarConciliacaoMut.isPending}
+                                className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                              >
+                                <Sparkles className="w-4 h-4" />
+                                Verificar classificação com IA
+                              </button>
+                            )}
+                            {/* Loading */}
+                            {aiAnalise === "loading" && (
+                              <div className="flex items-center gap-2 px-4 py-3 text-sm text-violet-600">
+                                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                                Analisando classificação do lançamento…
+                              </div>
+                            )}
+                            {/* Erro */}
+                            {aiAnalise === "error" && (
+                              <div className="flex items-center justify-between gap-2 px-4 py-3 text-sm">
+                                <span className="text-red-600 flex items-center gap-1.5"><AlertCircle className="w-4 h-4" /> Falha na análise.</span>
+                                <button type="button" onClick={dispararAnaliseIA} className="text-xs text-violet-600 underline hover:text-violet-800">Tentar novamente</button>
+                              </div>
+                            )}
+                            {/* Resultado */}
+                            {typeof aiAnalise === "object" && aiAnalise !== null && (
+                              <div className="p-4 space-y-3">
+                                {/* Resumo */}
+                                <div className={`flex items-start gap-2 text-sm font-medium rounded-lg px-3 py-2 ${
+                                  (aiAnalise as any).sugestoes.length === 0
+                                    ? "bg-emerald-50 text-emerald-700"
+                                    : "bg-amber-50 text-amber-800"
+                                }`}>
+                                  {(aiAnalise as any).sugestoes.length === 0
+                                    ? <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                                    : <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />}
+                                  <span>{(aiAnalise as any).resumo || ((aiAnalise as any).sugestoes.length === 0 ? "Classificação está correta." : "Foram encontradas divergências.")}</span>
+                                </div>
+
+                                {/* Lista de sugestões */}
+                                {(aiAnalise as any).sugestoes.length > 0 && (
+                                  <>
+                                    <p className="text-[11px] text-gray-500 font-medium uppercase tracking-wide">Clique para marcar/desmarcar as correções a aplicar:</p>
+                                    <div className="space-y-2">
+                                      {(aiAnalise as any).sugestoes.map((s: any, i: number) => (
+                                        <div
+                                          key={i}
+                                          onClick={() => setAiCheckeds(prev => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n; })}
+                                          className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer select-none transition-colors ${aiCheckeds.has(i) ? "border-amber-300 bg-amber-50" : "border-gray-200 bg-gray-50 hover:border-gray-300"}`}
+                                        >
+                                          <div className={`mt-0.5 w-4 h-4 rounded flex items-center justify-center shrink-0 border-2 transition-colors ${aiCheckeds.has(i) ? "bg-amber-500 border-amber-500" : "border-gray-300"}`}>
+                                            {aiCheckeds.has(i) && <CheckCircle className="w-2.5 h-2.5 text-white" />}
+                                          </div>
+                                          <div className="min-w-0 flex-1">
+                                            <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1">
+                                              {s.campo === "fornecedorNome" ? "Nome / Fornecedor" : s.campo === "contaId" ? "Categoria" : "Descrição"}
+                                            </div>
+                                            <div className="flex items-center gap-1.5 flex-wrap text-xs">
+                                              <span className="line-through text-gray-400">{s.valorAtual || "—"}</span>
+                                              <span className="text-gray-400">→</span>
+                                              <span className="font-semibold text-gray-900">{s.sugestao}</span>
+                                            </div>
+                                            <div className="text-[11px] text-gray-500 mt-0.5">{s.motivo}</div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+
+                                    <div className="flex items-center justify-between gap-3 pt-1">
+                                      <button type="button" onClick={() => setAiAnalise(null)} className="text-xs text-gray-400 hover:text-gray-600">
+                                        Descartar análise
+                                      </button>
+                                      <Button
+                                        size="sm"
+                                        onClick={aplicarCorrecoesSugeridas}
+                                        disabled={aiCheckeds.size === 0 || updateEntryClassif.isPending}
+                                        className="bg-amber-500 hover:bg-amber-600 text-white gap-1.5 text-xs"
+                                      >
+                                        {updateEntryClassif.isPending
+                                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                          : <CheckCircle className="w-3.5 h-3.5" />}
+                                        Aplicar {aiCheckeds.size} correção{aiCheckeds.size !== 1 ? "ões" : ""}
+                                      </Button>
+                                    </div>
+                                  </>
+                                )}
+
+                                {(aiAnalise as any).sugestoes.length === 0 && (
+                                  <button type="button" onClick={() => setAiAnalise(null)} className="text-xs text-gray-400 hover:text-gray-600">
+                                    Fechar análise
+                                  </button>
+                                )}
+                              </div>
                             )}
                           </div>
                         </div>
