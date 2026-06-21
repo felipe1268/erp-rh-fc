@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3405** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SCORE DE CONFIANÇA 0-100% + SUGESTÃO AUTOMÁTICA POR HISTÓRICO (SEM IA). BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Badge "Alta/Média" substituído por pill com percentual colorido (≥80% azul, 60-79% âmbar, <60% cinza). Histórico: query batch varre conciliações anteriores e retorna padrão (fornecedor+categoria) mais frequente para cada descrição de extrato. Badge verde "ERP ×N" indica quantas vezes aquele padrão foi usado. Sistema aprende progressivamente sem IA. Detalhe: `shared/changelog.ts`.
+- **Rev. 3406** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CARDS DE CONTA SEM EXTRATO FICAM CINZA/APAGADOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Contas sem extrato carregado ficam com borda tracejada, fundo quase transparente, ícone e texto em cinza, opacidade 60% (hover→80%). Seleção azul sobrepõe o efeito. Contas com extrato (azul/verde) não mudam. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3404** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · ANÁLISE IA INLINE NO DIALOG "CONFIRMAR CONCILIAÇÃO?" (ANTES DO OK FINAL). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Ao clicar "Conciliar selecionadas", a IA analisa os pares em background e exibe resultado inline no dialog: loading (violeta) → tudo OK (verde) ou seção âmbar com checkboxes por divergência + botão "Aplicar N correções antes de confirmar". Usuário corrige e confirma no mesmo fluxo. Reutiliza `analisarLoteSugestoesComIA` (Rev. 3403). Detalhe: `shared/changelog.ts`.
+- **Rev. 3405** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SCORE DE CONFIANÇA 0-100% + SUGESTÃO AUTOMÁTICA POR HISTÓRICO (SEM IA). BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Badge "Alta/Média" substituído por pill com percentual colorido (≥80% azul, 60-79% âmbar, <60% cinza). Histórico: query batch retorna padrão (fornecedor+categoria) mais frequente para cada descrição de extrato. Badge verde "ERP ×N". Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
+
+- **Rev. 3404** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · ANÁLISE IA INLINE NO DIALOG "CONFIRMAR CONCILIAÇÃO?" (ANTES DO OK FINAL). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3403** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · BOTÃO "ANALISAR TODAS COM IA" + RELATÓRIO DE CLASSIFICAÇÃO EM LOTE + NOMES PADRONIZADOS. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3401** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · ANÁLISE DA CLASSIFICAÇÃO COM IA (ON-DEMAND). BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3400** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · REDESIGN FULL-SCREEN DO MODAL "LANÇAMENTO #NNNNN". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3399** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SUGESTÃO DE CONCILIAÇÃO PARA LANÇAMENTOS SEM CONTA BANCÁRIA. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### REGRA DE OURO — Cabeçalho de documentos institucionais FC (Rev. 2106+)
 

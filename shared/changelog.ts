@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3406 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CARDS DE CONTA SEM EXTRATO FICAM
+ * CINZA/APAGADOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Contas bancárias sem extrato carregado (`accSt === "vazio"`) e não selecionadas ganham
+ * tratamento visual de "inativo": borda tracejada (`border-dashed`), fundo quase transparente,
+ * ícone e texto em cinza claro, opacidade 60% (hover→80%). Ao selecionar a conta, o destaque
+ * azul normal sobrepõe o efeito apagado. Contas com extrato (azul = pendente, verde = conciliada)
+ * não mudam. Arquivo: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`.
+ *
  * Rev. 3405 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SCORE DE CONFIANÇA 0-100% +
  * SUGESTÃO AUTOMÁTICA POR HISTÓRICO (SEM IA). BACKEND ADITIVO + FRONT ·
  * ZERO SCHEMA/ALTER/DROP/DELETE.**

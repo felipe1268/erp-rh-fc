@@ -2138,6 +2138,8 @@ export default function FinanceiroConciliacao() {
                       const accSt = accStatusMap[Number(b.id)] ?? "vazio";
                       const isConsol = accSt === "consolidado";
                       const isLanc = accSt === "lancamento";
+                      // Rev. 3405+ — contas sem extrato (vazio) ficam visualmente apagadas
+                      const isSemExtrato = !isConsol && !isLanc;
                       const cardCls = isSel
                         ? (isConsol
                             ? "border-green-500 bg-green-50 ring-1 ring-green-200 shadow-sm"
@@ -2146,7 +2148,7 @@ export default function FinanceiroConciliacao() {
                             ? "border-green-300 bg-green-50/60 hover:border-green-400"
                             : isLanc
                               ? "border-blue-200 bg-white hover:border-blue-300 hover:bg-blue-50/40"
-                              : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50");
+                              : "border-dashed border-gray-200 bg-gray-50/40 hover:border-gray-300 hover:bg-gray-50/70 opacity-60 hover:opacity-80");
                       return (
                         <button
                           key={b.id}
@@ -2156,8 +2158,8 @@ export default function FinanceiroConciliacao() {
                           onClick={() => setContaBancariaId(isSel ? "" : String(b.id))}
                           className={`relative flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${cardCls}`}
                         >
-                          <div className={`relative h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${cor.bg}`}>
-                            <Landmark className={`h-[18px] w-[18px] ${cor.text}`} />
+                          <div className={`relative h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${isSemExtrato && !isSel ? "bg-gray-100" : cor.bg}`}>
+                            <Landmark className={`h-[18px] w-[18px] ${isSemExtrato && !isSel ? "text-gray-400" : cor.text}`} />
                             {isSel && (
                               <span className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full flex items-center justify-center ring-2 ring-white ${isConsol ? "bg-green-500" : "bg-blue-500"}`}>
                                 <Check className="h-2.5 w-2.5 text-white" />
@@ -2165,10 +2167,10 @@ export default function FinanceiroConciliacao() {
                             )}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm font-semibold text-gray-800 truncate">
+                            <p className={`text-sm font-semibold truncate ${isSemExtrato && !isSel ? "text-gray-400" : "text-gray-800"}`}>
                               {b.banco}{desc ? ` · ${desc}` : ""}
                             </p>
-                            <p className="text-xs text-gray-500 font-mono tracking-wide truncate">
+                            <p className={`text-xs font-mono tracking-wide truncate ${isSemExtrato && !isSel ? "text-gray-400" : "text-gray-500"}`}>
                               Ag. {formatAgencia(b.agencia)} / {formatConta(b.conta)}
                             </p>
                             <span className={`mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${
