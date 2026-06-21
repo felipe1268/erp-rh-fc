@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3462 — **CONCILIAÇÃO BANCÁRIA · CAMPO "FORNECEDOR / BENEFICIÁRIO" NO FORM DE EDIÇÃO
+ * SUBSTITUÍDO POR COMBOBOX COM BUSCA NO CADASTRO DE FORNECEDORES.
+ * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PROBLEMA: campo era um `<Input>` de texto livre, permitindo digitação avulsa que não
+ * coincide com o cadastro real de fornecedores do ERP (1205 empresas cadastradas).
+ *
+ * SOLUÇÃO: substitui o `<Input>` pelo `LancCombo` já existente na tela (mesmo componente
+ * usado no form "Lançar no Contas a Pagar"). O combobox filtra em tempo real os nomes
+ * de `fornNomes` (derivado de `lancFornecedores` com `includeAllGroup: true`, todos os
+ * grupos FC). Comportamento:
+ *   - Digitar no campo filtra a lista → selecionar confirma (badge "✓ confirmado")
+ *   - Enquanto digita sem selecionar → badge "selecione da lista ↓"
+ *   - Botão limpar zera seleção
+ *   - Ao abrir edição, campo pré-preenchido com fornecedor atual do lançamento
+ *   - `fecharDetalhe` e `iniciarEdicaoEntry` sincronizam `detEditFornDisplay`
+ *
  * Rev. 3461 — **CONCILIAÇÃO BANCÁRIA · BOTÃO OLHO NOS ITENS "JÁ CONCILIADOS" DO PANORAMA.
  * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *

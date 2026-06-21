@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3461** — **CONCILIAÇÃO BANCÁRIA · BOTÃO OLHO NOS ITENS "JÁ CONCILIADOS" DO PANORAMA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Botão 👁 em cada linha abre o dialog de detalhe do lançamento ERP vinculado; textos da linha: `truncate` → `break-words`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3462** — **CONCILIAÇÃO BANCÁRIA · CAMPO "FORNECEDOR / BENEFICIÁRIO" NO FORM DE EDIÇÃO VIRA COMBOBOX COM BUSCA NO CADASTRO (1205 FORNECEDORES). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `<Input>` livre substituído por `LancCombo` + `fornNomes` (mesmo padrão do form "Lançar"). Pré-preenche com fornecedor atual; badge "✓ confirmado" / "selecione da lista". Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3460** — **CONCILIAÇÃO BANCÁRIA · FIX LAYOUT DIALOG "CONFIRMAR CONCILIAÇÃO?" — TEXTO DO EXTRATO NÃO CORTA MAIS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Removido `truncate`, aplicado `break-words` + `overflow-hidden` no container — texto longo do ID bancário quebra em linhas sem vazar. Detalhe: `shared/changelog.ts`.
+- **Rev. 3461** — **CONCILIAÇÃO BANCÁRIA · BOTÃO OLHO NOS ITENS "JÁ CONCILIADOS" DO PANORAMA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Botão 👁 em cada linha abre o dialog de detalhe do lançamento ERP vinculado; textos da linha: `truncate` → `break-words`. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
 

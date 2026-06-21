@@ -199,6 +199,8 @@ export default function FinanceiroConciliacao() {
   const [manualLanSel, setManualLanSel] = useState<any | null>(null);
   // Rev. 3459 — flag para abrir o dialog de detalhe JÁ em modo edição (atalho do botão lápis).
   const [pendingEditMode, setPendingEditMode] = useState(false);
+  // Rev. 3462 — display do combobox de fornecedor no form de edição (análogo a lancFornDisplay).
+  const [detEditFornDisplay, setDetEditFornDisplay] = useState("");
   // Rev. 3239 — grupos expandidos (mostra os lançamentos-membro inline).
   const [gruposExpandidos, setGruposExpandidos] = useState<Set<string>>(new Set());
   // Rev. 3205 — expandir uma das listas de pendência em tela cheia p/ analisar melhor.
@@ -288,7 +290,7 @@ export default function FinanceiroConciliacao() {
   type ConfirmAiState = "idle" | "loading" | "error" | { resultados: BatchResult[] };
   const [confirmAiState, setConfirmAiState] = useState<ConfirmAiState>("idle");
   const [confirmAiChecked, setConfirmAiChecked] = useState<Set<string>>(new Set());
-  const fecharDetalhe = () => { setDetalheEntryId(null); setDetalheExtrato(null); setDetEditMode(false); setDetEditForm(null); setAiAnalise(null); setAiCheckeds(new Set()); setPendingEditMode(false); };
+  const fecharDetalhe = () => { setDetalheEntryId(null); setDetalheExtrato(null); setDetEditMode(false); setDetEditForm(null); setAiAnalise(null); setAiCheckeds(new Set()); setPendingEditMode(false); setDetEditFornDisplay(""); };
   // Rev. 3266 — diálogo de CONFERÊNCIA da identificação por IA (texto roxo clicável).
   // Guarda a linha do extrato (com os campos demo* já vindos do getConciliacaoReport) p/
   // montar o comparativo lado a lado + abrir o PDF do demonstrativo + confirmar/marcar errado.
@@ -1700,6 +1702,7 @@ export default function FinanceiroConciliacao() {
       observacoes: detEntry.observacoes ?? "",
       tipo: detEntry.tipo ?? "despesa",
     });
+    setDetEditFornDisplay(detEntry.fornecedorNome ?? "");
     setDetEditMode(true);
   };
   const salvarEdicaoEntry = () => {
@@ -4317,8 +4320,28 @@ export default function FinanceiroConciliacao() {
                             </div>
                             {/* Fornecedor */}
                             <div className="space-y-1.5">
-                              <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Fornecedor / Beneficiário</Label>
-                              <Input value={detEditForm.fornecedorNome} onChange={(e) => setDetEditForm(f => f ? { ...f, fornecedorNome: e.target.value } : f)} placeholder="Nome do fornecedor ou beneficiário" />
+                              <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                                Fornecedor / Beneficiário
+                                {detEditFornDisplay && !detEditForm.fornecedorNome && (
+                                  <span className="text-[10px] text-amber-600 font-normal">selecione da lista ↓</span>
+                                )}
+                                {detEditForm.fornecedorNome && (
+                                  <span className="text-[10px] text-emerald-600 font-normal">✓ confirmado</span>
+                                )}
+                              </Label>
+                              <LancCombo
+                                value={detEditFornDisplay}
+                                onChangeText={(s) => { setDetEditFornDisplay(s); setDetEditForm(f => f ? { ...f, fornecedorNome: "" } : f); }}
+                                onSelect={(opt) => {
+                                  if (!opt) { setDetEditFornDisplay(""); setDetEditForm(f => f ? { ...f, fornecedorNome: "" } : f); return; }
+                                  setDetEditFornDisplay(opt.label);
+                                  setDetEditForm(f => f ? { ...f, fornecedorNome: opt.label } : f);
+                                }}
+                                options={fornNomes.map((n, i) => ({ id: i, label: n }))}
+                                placeholder="Buscar fornecedor do cadastro…"
+                                noneLabel="— (sem fornecedor) —"
+                                onClear={() => { setDetEditFornDisplay(""); setDetEditForm(f => f ? { ...f, fornecedorNome: "" } : f); }}
+                              />
                             </div>
                             {/* Descrição */}
                             <div className="space-y-1.5">
