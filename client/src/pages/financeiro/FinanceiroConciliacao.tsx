@@ -1,4 +1,5 @@
 import { useMemo, useState, useRef, useEffect, Fragment } from "react";
+import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -343,6 +344,12 @@ export default function FinanceiroConciliacao() {
 
   const [lancStatement, setLancStatement] = useState<any | null>(null);
   const [lancBusy, setLancBusy] = useState(false);
+  const { user } = useAuth();
+  const isAdminMaster = user?.role === "admin_master";
+  // Rev. 3414 — excluir lançamento "sem extrato" diretamente na conciliação (só admin_master)
+  const [deleteEntryTarget, setDeleteEntryTarget] = useState<{ id: number; nome: string; valor: number; status: string } | null>(null);
+  const [deleteEntryMotivo, setDeleteEntryMotivo] = useState("");
+  const deleteEntryMut = (trpc as any).financial.deleteEntry.useMutation();
   // Rev. 3413 — estados para comboboxes e dialog de nova obra
   const [lancObraDisplay, setLancObraDisplay] = useState("");
   const [lancCCDisplay, setLancCCDisplay] = useState("");
@@ -1179,6 +1186,16 @@ export default function FinanceiroConciliacao() {
         ) : (
           <button type="button" onClick={() => pedirComprovante(e.id)} disabled={comprovBusy === e.id} title="Anexar comprovante (PIX/boleto/recibo)" className="shrink-0 p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 disabled:opacity-50">
             {comprovBusy === e.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
+          </button>
+        )}
+        {isAdminMaster && e.status !== "pago" && e.status !== "recebido" && (
+          <button
+            type="button"
+            title="Excluir lançamento (Admin Master)"
+            className="shrink-0 p-1.5 rounded-md text-gray-300 hover:text-red-600 hover:bg-red-50"
+            onClick={() => { setDeleteEntryMotivo(""); setDeleteEntryTarget({ id: Number(e.id), nome: e.fornecedorNome || e.descricao || `#${e.id}`, valor: Math.abs(Number(e.valor)), status: e.status ?? "" }); }}
+          >
+            <Trash2 className="w-4 h-4" />
           </button>
         )}
       </div>
@@ -5330,6 +5347,62 @@ export default function FinanceiroConciliacao() {
                   {lancBusy ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Processando...</> : <><Check className="w-4 h-4 mr-1.5" />Lançar e conciliar</>}
                 </Button>
               )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 3414 — Dialog confirmar exclusão de lançamento (só admin_master) */}
+        <Dialog open={deleteEntryTarget != null} onOpenChange={(o) => { if (!o) setDeleteEntryTarget(null); }}>
+          <DialogContent className="max-w-sm w-full">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base text-red-700">
+                <Trash2 className="w-4 h-4" />Excluir lançamento do ERP
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                Esta ação é permanente. O lançamento será removido do Contas a Pagar/Receber.
+              </DialogDescription>
+            </DialogHeader>
+            {deleteEntryTarget && (
+              <div className="space-y-3 py-1">
+                <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm">
+                  <p className="font-medium text-gray-800 truncate">{deleteEntryTarget.nome}</p>
+                  <p className="text-xs text-gray-500">{formatBRL(deleteEntryTarget.valor)}</p>
+                </div>
+                <div>
+                  <Label className="text-xs">Motivo da exclusão <span className="text-red-500">*</span></Label>
+                  <Textarea
+                    rows={2}
+                    value={deleteEntryMotivo}
+                    onChange={e => setDeleteEntryMotivo(e.target.value)}
+                    placeholder="Descreva o motivo (mín. 5 caracteres)"
+                    autoFocus
+                  />
+                  {deleteEntryMotivo.length > 0 && deleteEntryMotivo.length < 5 && (
+                    <p className="text-[11px] text-red-500 mt-0.5">Mínimo 5 caracteres.</p>
+                  )}
+                </div>
+              </div>
+            )}
+            <DialogFooter className="gap-2">
+              <Button variant="outline" size="sm" onClick={() => setDeleteEntryTarget(null)} disabled={deleteEntryMut.isPending}>Cancelar</Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={deleteEntryMotivo.trim().length < 5 || deleteEntryMut.isPending || !deleteEntryTarget}
+                onClick={async () => {
+                  if (!deleteEntryTarget || !companyId) return;
+                  try {
+                    await deleteEntryMut.mutateAsync({ id: deleteEntryTarget.id, companyId: Number(companyId), motivo: deleteEntryMotivo.trim() });
+                    setDeleteEntryTarget(null);
+                    toast({ title: "Lançamento excluído", description: deleteEntryTarget.nome });
+                    refetchReport?.();
+                  } catch (err: any) {
+                    toast({ title: "Erro ao excluir", description: String(err?.message ?? err), variant: "destructive" });
+                  }
+                }}
+              >
+                {deleteEntryMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Trash2 className="w-4 h-4 mr-1" />}Excluir
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

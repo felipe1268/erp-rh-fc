@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3414 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXCLUIR LANÇAMENTO "NO ERP, SEM
+ * EXTRATO" DIRETAMENTE NA TELA DE CONCILIAÇÃO (SÓ ADMIN_MASTER).
+ * 100% FRONTEND + REUSO DE ENDPOINT EXISTENTE · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Motivação: ao lançar retroativamente pode haver erros; na hora da conciliação o
+ * admin_master precisa apagar o lançamento incorreto sem sair da tela.
+ *
+ * O quê foi feito:
+ * 1. `useAuth` importado; `isAdminMaster = user?.role === "admin_master"` derivado.
+ * 2. Botão 🗑 adicionado ao final de cada linha individual em `renderEntryRow`:
+ *    - Só aparece quando `isAdminMaster === true`.
+ *    - Não aparece para entradas com `status === "pago"` ou `"recebido"` (backend também
+ *      bloqueia, mas a UI poupa o clique e o erro desnecessário).
+ *    - Ícone cinza claro por padrão, vermelho ao hover — não polui visualmente para admins.
+ * 3. Dialog de confirmação com campo "Motivo" (mín. 5 chars, obrigatório):
+ *    - Mostra nome e valor do lançamento.
+ *    - Botão "Excluir" só habilita quando motivo ≥ 5 chars.
+ *    - Chama `financial.deleteEntry` (endpoint já existente com auditLog).
+ *    - Em sucesso: fecha dialog + toast + `refetchReport()`.
+ *    - Em erro: toast de erro com a mensagem do backend.
+ * 4. Estados: `deleteEntryTarget` / `deleteEntryMotivo`; mutation `deleteEntryMut`.
+ *
+ * Nota: grupos agrupados (VR/combustível/etc.) não têm botão de exclusão — ação não
+ * faz sentido no contexto de lotes unificados (excluir item a item no módulo de origem).
+ *
+ * Arquivos: client/src/pages/financeiro/FinanceiroConciliacao.tsx.
+ *
  * Rev. 3413 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FORM "LANÇAR NO ERP" — COMBOBOXES
  * FILTRÁVEIS + FILTRO OBRA POR CLIENTE + DIALOG "CADASTRAR NOVA OBRA".
  * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
