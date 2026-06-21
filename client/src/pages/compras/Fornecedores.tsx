@@ -234,6 +234,12 @@ const EMPTY_FORM = {
   dataAbertura: "", regimeTributario: "", inscricaoEstadual: "", inscricaoMunicipal: "",
   representanteLegal: "", representanteCpf: "", representanteCargo: "",
   socios: [] as Socio[],
+  // Rev. 3440 — Ciclo de Fechamento
+  cicloPagamento: "" as string,
+  cicloDiaFechamento: "" as string,
+  cicloNumParcelas: "" as string,
+  cicloPrazoParcela: "" as string,
+  cicloFormaPagamento: "" as string,
 };
 
 export default function Fornecedores() {
@@ -391,6 +397,12 @@ export default function Fornecedores() {
       categorias: Array.isArray(f.categorias) ? f.categorias : [], observacoes: f.observacoes ?? "",
       isPrestadorServico: !!(f as any).isPrestadorServico,
       isFornecedor: (f as any).isFornecedor === undefined ? true : !!(f as any).isFornecedor,
+      // Rev. 3440 — Ciclo de Fechamento
+      cicloPagamento: (f as any).cicloPagamento ?? "",
+      cicloDiaFechamento: (f as any).cicloDiaFechamento != null ? String((f as any).cicloDiaFechamento) : "",
+      cicloNumParcelas: (f as any).cicloNumParcelas != null ? String((f as any).cicloNumParcelas) : "",
+      cicloPrazoParcela: (f as any).cicloPrazoParcela != null ? String((f as any).cicloPrazoParcela) : "",
+      cicloFormaPagamento: (f as any).cicloFormaPagamento ?? "",
     });
     setEditando(f.id);
     setErroCNPJ(null);
@@ -590,10 +602,20 @@ export default function Fornecedores() {
 
   function salvar() {
     if (!form.razaoSocial.trim()) { toast.error("Razão Social é obrigatória."); return; }
+    // Rev. 3440 — converter campos de ciclo: string→number/null/enum para o backend
+    const parseCicloInt = (v: string) => { const n = parseInt(v); return isNaN(n) ? null : n; };
+    const cicloFields = {
+      cicloPagamento: (form.cicloPagamento && form.cicloPagamento !== "avista") ? form.cicloPagamento as any : null,
+      cicloDiaFechamento: parseCicloInt(form.cicloDiaFechamento),
+      cicloNumParcelas: parseCicloInt(form.cicloNumParcelas),
+      cicloPrazoParcela: parseCicloInt(form.cicloPrazoParcela),
+      cicloFormaPagamento: form.cicloFormaPagamento || null,
+    };
+    const { cicloPagamento: _cp, cicloDiaFechamento: _cd, cicloNumParcelas: _cn, cicloPrazoParcela: _cpr, cicloFormaPagamento: _cf, ...restForm } = form;
     if (editando) {
-      atualizarMut.mutate({ id: editando, ...form });
+      atualizarMut.mutate({ id: editando, ...restForm, ...cicloFields });
     } else {
-      criarMut.mutate({ companyId, ...form });
+      criarMut.mutate({ companyId, ...restForm });
     }
   }
 
@@ -1345,6 +1367,85 @@ export default function Fornecedores() {
                           <p className="text-xs text-slate-400 text-center py-3">Nenhuma categoria encontrada</p>
                         )}
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Rev. 3440 — Ciclo de Fechamento */}
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-orange-100 flex items-center justify-center">
+                        <CreditCard className="h-3.5 w-3.5 text-orange-600" />
+                      </div>
+                      <span className="text-xs font-bold text-slate-700">Ciclo de Fechamento</span>
+                      <span className="ml-auto text-[10px] text-slate-400">Agrupa compras na conciliação bancária</span>
+                    </div>
+                    <div className="p-4 space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-xs text-slate-600 mb-1 block">Ciclo de fechamento</Label>
+                          <Select value={form.cicloPagamento || "avista"} onValueChange={v => setForm(p => ({ ...p, cicloPagamento: v === "avista" ? "" : v }))}>
+                            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="avista">À vista (sem agrupamento)</SelectItem>
+                              <SelectItem value="semanal">Semanal</SelectItem>
+                              <SelectItem value="quinzenal">Quinzenal</SelectItem>
+                              <SelectItem value="mensal">Mensal</SelectItem>
+                              <SelectItem value="personalizado">Personalizado (N dias)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-slate-600 mb-1 block">Dia de fechamento</Label>
+                          <Input
+                            type="number" min={1} max={31}
+                            value={form.cicloDiaFechamento}
+                            onChange={e => setForm(p => ({ ...p, cicloDiaFechamento: e.target.value }))}
+                            className="h-8 text-xs" placeholder="ex: 30"
+                            disabled={!form.cicloPagamento}
+                          />
+                        </div>
+                      </div>
+                      {form.cicloPagamento && (
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <Label className="text-xs text-slate-600 mb-1 block">Forma de pagamento</Label>
+                            <Select value={form.cicloFormaPagamento || ""} onValueChange={v => setForm(p => ({ ...p, cicloFormaPagamento: v }))}>
+                              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="pix">PIX</SelectItem>
+                                <SelectItem value="boleto">Boleto</SelectItem>
+                                <SelectItem value="cheque">Cheque</SelectItem>
+                                <SelectItem value="transferencia">Transferência</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-xs text-slate-600 mb-1 block">Nº de parcelas</Label>
+                            <Input
+                              type="number" min={1} max={24}
+                              value={form.cicloNumParcelas}
+                              onChange={e => setForm(p => ({ ...p, cicloNumParcelas: e.target.value }))}
+                              className="h-8 text-xs" placeholder="ex: 3"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-slate-600 mb-1 block">Prazo entre parcelas (dias)</Label>
+                            <Input
+                              type="number" min={0} max={365}
+                              value={form.cicloPrazoParcela}
+                              onChange={e => setForm(p => ({ ...p, cicloPrazoParcela: e.target.value }))}
+                              className="h-8 text-xs" placeholder="ex: 30"
+                            />
+                          </div>
+                        </div>
+                      )}
+                      {form.cicloPagamento && (
+                        <p className="text-[10px] text-orange-600 bg-orange-50 rounded px-2 py-1">
+                          Na conciliação, as compras deste fornecedor serão agrupadas em
+                          {form.cicloFormaPagamento === "cheque" ? ` ${form.cicloNumParcelas || 1} cheque(s)` : " 1 lançamento"} por período
+                          {form.cicloNumParcelas && Number(form.cicloNumParcelas) > 1 ? `, parcelado em ${form.cicloNumParcelas}×` : ""}.
+                        </p>
+                      )}
                     </div>
                   </div>
 

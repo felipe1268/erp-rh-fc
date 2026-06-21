@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3440 — **COMPRAS / FORNECEDORES · SEÇÃO "CICLO DE FECHAMENTO" NO CADASTRO DO FORNECEDOR.
+ * BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * CONTEXTO: a Rev. 3437 criou as 5 colunas de ciclo em `empresas_terceiras` e o agrupador
+ * `fechamento_forn` na conciliação bancária, mas o formulário de cadastro/edição de
+ * fornecedores (Compras → Empresas Terceiras) não tinha campo para configurar esses valores.
+ * O único jeito de setar o ciclo era via módulo Terceiros (outra tela).
+ *
+ * SOLUÇÃO:
+ * 1. `compras.listarFornecedores` passa a incluir os 5 campos do ciclo via LEFT JOIN em
+ *    `empresas_terceiras` (WHERE fornecedor_id IN (...) + company_id + deleted_at IS NULL),
+ *    mesclado como propriedades extras no objeto retornado.
+ * 2. `compras.atualizarFornecedor` aceita os 5 campos opcionais
+ *    (`cicloPagamento`, `cicloDiaFechamento`, `cicloNumParcelas`, `cicloPrazoParcela`,
+ *    `cicloFormaPagamento`) e, quando presentes, faz
+ *    `UPDATE empresas_terceiras SET ciclo_* WHERE fornecedor_id=$id AND company_id=$cid`.
+ * 3. `Fornecedores.tsx` ganha seção "Ciclo de Fechamento" laranja no final do formulário:
+ *    - Select: avista / semanal / quinzenal / mensal / personalizado
+ *    - Input numérico: dia de fechamento (1–31)
+ *    - [se ciclo ≠ avista] Select forma de pagamento: PIX / Boleto / Cheque / Transferência
+ *    - [se ciclo ≠ avista] Input: nº de parcelas (1–24)
+ *    - [se ciclo ≠ avista] Input: prazo entre parcelas em dias (0–365)
+ *    - Preview textual da regra configurada
+ * 4. `salvar()` converte strings do form para number/null antes de enviar ao backend.
+ *
+ * ARQUIVOS: `server/routers/compras.ts`, `client/src/pages/compras/Fornecedores.tsx`,
+ *           `shared/version.ts`, `shared/changelog.ts`, `replit.md`.
+ *
  * Rev. 3439 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NÚMERO DA OC NO LANÇAMENTO + LINK
  * "ABRIR OC". BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *

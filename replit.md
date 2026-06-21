@@ -50,39 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3440** — **COMPRAS / FORNECEDORES · SEÇÃO "CICLO DE FECHAMENTO" NO CADASTRO DO FORNECEDOR. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** `listarFornecedores` passa a carregar os 5 campos de ciclo via `empresas_terceiras` (JOIN por `fornecedor_id`). `atualizarFornecedor` aceita e persiste `cicloPagamento`/`cicloDiaFechamento`/`cicloNumParcelas`/`cicloPrazoParcela`/`cicloFormaPagamento`. Formulário de edição ganha seção laranja "Ciclo de Fechamento" com select de ciclo, dia, forma de pagamento, nº parcelas e prazo. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3439** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NÚMERO DA OC NO LANÇAMENTO + LINK "ABRIR OC". BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** `lancRes`/`semContaRes` ganham LEFT JOIN em `compras_ordens` para trazer `ocNumero`+`origemId`. Badge `🛒 OC-XXXX` (roxo) na linha; clique navega p/ `/compras/ordens?destaque=<id>`. Card "Ordem de Compra" do detalhe ganha botão "Abrir OC ↗". Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3438** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXCLUIR SAÍDA DE ALMOXARIFADO. 100% BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.** `almoxarifado_saida`/`almoxarifado` excluídos das 2 queries da conciliação — são rateio de custo interno sem movimento bancário; o custo real já está na `compra_oc`. Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3437** — **FINANCEIRO + FORNECEDORES · CICLO DE FECHAMENTO COM PARCELAMENTO. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Cadastro do fornecedor ganha seção "Ciclo de Fechamento" (semanal/quinzenal/mensal/personalizado + N parcelas + prazo). Conciliação agrupa automaticamente por fornecedor+janela → badge laranja "Fechamento" + sub-seção de parcelas com vencimento. 5 colunas via self-heal. Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3435** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · VALE ALIMENTAÇÃO AGRUPADO (igual ao VR). BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** `beneficio_va`/`beneficio_va_projetado` → tipoG="va" no agrupador; 1 linha por mês "Vale Alimentação YYYY-MM" com total + expandir. Badge verde lima diferencia do VR (âmbar). Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3434** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · "NO ERP, SEM EXTRATO" — EXIBE CONTA BANCÁRIA DO LANÇAMENTO. 100% FRONTEND · ZERO BACKEND.** Badge azul "🏦 contaNome" inline na linha do item; ajuda a identificar de qual conta partiu uma movimentação interna. Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3433** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO iOS: "THE STRING DID NOT MATCH THE EXPECTED PATTERN" → MENSAGEM AMIGÁVEL + fmtData SAFE PARA iOS. 100% FRONTEND · ZERO BACKEND.** `fmtData` normaliza espaço→T antes de `new Date()`; `_msgErroConc()` mapeia erros crípticos do WebKit para mensagem de "falha de conexão" em ambos os cards de erro. Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3432** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "CONCILIAR PIX NO EXTRATO" — TEXTOS CORTADOS CORRIGIDOS. REGRA: DIALOGS NUNCA TRUNCAM. 100% FRONTEND · ZERO BACKEND.** `truncate` → `break-words`/`break-all` no header, descrição PIX, item selecionado e lista. Regra gravada em memória. Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3431** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO: "OUTROS MESES" RETORNAVA ZERO — LIKE COM `|` NÃO É OR NO POSTGRESQL. BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.** `LIKE '%(PIX|TED|TRANSF)%'` é literal. Fix: 3 LIKE separados com OR. Adicionado `valorRef` + `ORDER BY ABS(valor+valorRef)`. Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3430** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "VINCULAR PIX/TED" — BUSCA EM OUTROS MESES. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Nova rota `searchPixTedOutrosMeses` consulta `bank_statement_lines` num range ±meses (padrão: 1 antes + 6 depois). Botão "🗓 Outros meses" no filtro do dialog: acrescenta seção azul de resultados de outros meses abaixo do período atual. Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3429** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO DEFINITIVA: DIALOG "VINCULAR PIX/TED" SUBSTITUÍDO POR createPortal NATIVO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Radix Dialog + CSS !important não resolveram posicionamento. Substituído por `createPortal(<div style={{position:"fixed",inset:0,zIndex:9999}}>, document.body)` — backdrop z-9998, painel z-9999, estilos inline. `import { createPortal } from "react-dom"` adicionado. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
 
-- **Rev. 3428** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "VINCULAR PIX/TED" — REDESIGN FULL-SCREEN MODERNO + FILTRO "SÓ PRÓXIMOS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3438** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXCLUIR SAÍDA DE ALMOXARIFADO. 100% BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3426** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO: TODAS AS CONTAS CINZA APÓS REV. 3423. BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3437** — **FINANCEIRO + FORNECEDORES · CICLO DE FECHAMENTO COM PARCELAMENTO. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** 5 colunas de ciclo em `empresas_terceiras` + agrupador `fechamento_forn` + parcelas sub-seção na conciliação. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3425** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "VINCULAR PIX/TED" — TELA CHEIA + BUSCA EM TEMPO REAL + FILTRO SOMENTE PIX/TED. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3435** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · VALE ALIMENTAÇÃO AGRUPADO (igual ao VR). BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3424** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CHEQUES DEVOLVIDOS — BOTÃO ⚡ "VINCULAR PIX/TED" INLINE À DIREITA DA MENSAGEM "SEM QUITAÇÃO". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3434** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · "NO ERP, SEM EXTRATO" — EXIBE CONTA BANCÁRIA DO LANÇAMENTO. 100% FRONTEND · ZERO BACKEND.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3423** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CARD DA CONTA CAIXA INTERNO EM DESTAQUE QUANDO HÁ CONFIRMAÇÕES NO PERÍODO. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3422** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · BOTÃO ⚡ "VINCULAR PIX/TED SUBSTITUTO" NOS CARDS DE CHEQUE DEVOLVIDO SEM QUITAÇÃO IDENTIFICADA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3433** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO iOS: "THE STRING DID NOT MATCH THE EXPECTED PATTERN" → MENSAGEM AMIGÁVEL + fmtData SAFE PARA iOS. 100% FRONTEND · ZERO BACKEND.** Detalhe: `shared/changelog.ts`.
 
 
 ### REGRA DE OURO — Cabeçalho de documentos institucionais FC (Rev. 2106+)
