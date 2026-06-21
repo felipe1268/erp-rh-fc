@@ -1649,6 +1649,16 @@ export const appRouter = router({
     listActiveAll: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(async ({ input }) => {
       return getObrasByCompanyActive(input.companyId, input.companyIds);
     }),
+    listClienteVinculos: protectedProcedure.input(z.object({ companyId: z.number() })).query(async ({ input }) => {
+      const db = await getDb();
+      const rows = await db.$client.query(`
+        SELECT oc.obra_id AS "obraId", oc.cliente_id AS "clienteId"
+        FROM obra_clientes oc
+        JOIN obras ON obras.id = oc.obra_id
+        WHERE obras."companyId" = $1
+      `, [input.companyId]);
+      return rows.rows as { obraId: number; clienteId: number }[];
+    }),
     listForAlmoxarifado: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(async ({ input, ctx }) => {
       const isAdmin = ctx.user.role === 'admin' || ctx.user.role === 'admin_master';
       if (isAdmin) return getObrasByCompanyActive(input.companyId, input.companyIds);

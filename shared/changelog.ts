@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3455 — **CONCILIAÇÃO BANCÁRIA · LANÇAR NO CONTAS A RECEBER — DUAS CORREÇÕES:
+ * (1) CAMPO CLIENTE SELECIONÁVEL NO iOS/TABLET; (2) FILTRO DE OBRA CONSIDERA obra_clientes.
+ * BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
+ *
+ * PROBLEMA 1 — campo "Cliente que pagou" no iPhone/iPad: ao tocar um item da lista do
+ * LancCombo, o iOS dispara `blur` ~300 ms antes de `mousedown` (atraso sintético do Safari),
+ * fazendo o `setTimeout(160 ms)` fechar o dropdown ANTES da seleção ser registrada. O
+ * usuário tocava uma opção mas o campo não era preenchido.
+ *
+ * CORREÇÃO 1 (FinanceiroConciliacao.tsx — LancCombo):
+ * - Adicionado `onTouchEnd` (com `e.preventDefault()`) em todos os botões de opção e no
+ *   "noneLabel". `onTouchEnd` dispara imediatamente ao soltar o dedo, antes do ciclo de
+ *   eventos sintéticos, garantindo que a seleção ocorra antes do blur.
+ * - Timeout do `onBlur` aumentado de 160 ms → 300 ms (margem extra para dispositivos lentos).
+ *
+ * PROBLEMA 2 — obra da BAUMINAS aparecia como "— Sem obra —": a obra foi vinculada via a
+ * tabela junction `obra_clientes` (Rev. 3451 — múltiplos clientes por obra), mas o filtro
+ * `obrasParaLanc` só consultava a coluna texto legado `obras.cliente`. A obra não aparecia
+ * na lista filtrada (nem como match, pois o campo texto era de outro cliente).
+ *
+ * CORREÇÃO 2:
+ * - Nova procedure `obras.listClienteVinculos` (server/routers.ts): retorna todos os pares
+ *   `{obraId, clienteId}` da `obra_clientes` para a empresa (JOIN com obras).
+ * - Frontend: query `obraClientesVinculos` carrega os vínculos em background.
+ * - `clienteOpts` e `lancClientes` movidos para ANTES de `obrasParaLanc` (necessário p/ TDZ).
+ * - `obrasParaLanc` agora faz UNIÃO de dois match-sets:
+ *   (a) texto legado (`obras.cliente` normalizado — remove pontos e espaços finais);
+ *   (b) junction table (`obra_clientes.cliente_id` = `clienteId` resolvido: usa
+ *       `lancForm.clienteId` quando selecionado na lista, ou fuzzy-match por nome em
+ *       `clienteOpts` quando pré-preenchido pelo detectar-vinculo da IA).
+ *   Fallback: se a união for vazia, exibe TODAS as obras (comportamento anterior mantido).
+ *
  * Rev. 3454 — **CONCILIAÇÃO BANCÁRIA · CACHE PERSISTENTE DA ANÁLISE IA (BATCH).
  * BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
  *

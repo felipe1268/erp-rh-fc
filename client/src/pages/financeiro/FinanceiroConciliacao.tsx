@@ -105,7 +105,7 @@ function LancCombo({ value, onChangeText, onSelect, options, placeholder = "Busc
         value={value}
         onChange={e => { onChangeText?.(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 160)}
+        onBlur={() => setTimeout(() => setOpen(false), 300)}
         placeholder={placeholder}
         className="w-full h-9 pl-3 pr-7 text-sm rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
       />
@@ -119,13 +119,15 @@ function LancCombo({ value, onChangeText, onSelect, options, placeholder = "Busc
         <div className="absolute z-[200] top-full mt-1 left-0 right-0 bg-white rounded-md border border-gray-200 shadow-xl max-h-56 overflow-y-auto">
           {noneLabel && (
             <button type="button" className="w-full text-left px-3 py-2 text-sm text-gray-400 hover:bg-gray-50 border-b border-gray-100"
-              onMouseDown={e => { e.preventDefault(); onSelect(null); setOpen(false); }}>
+              onMouseDown={e => { e.preventDefault(); onSelect(null); setOpen(false); }}
+              onTouchEnd={e => { e.preventDefault(); onSelect(null); setOpen(false); }}>
               {noneLabel}
             </button>
           )}
           {filtered.map(o => (
             <button key={o.id} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 border-b border-gray-50 last:border-0"
-              onMouseDown={e => { e.preventDefault(); onSelect(o); setOpen(false); }}>
+              onMouseDown={e => { e.preventDefault(); onSelect(o); setOpen(false); }}
+              onTouchEnd={e => { e.preventDefault(); onSelect(o); setOpen(false); }}>
               {o.label}
             </button>
           ))}
@@ -322,6 +324,18 @@ export default function FinanceiroConciliacao() {
   const { data: lancAccounts, refetch: refetchLancAccounts } = (trpc as any).financial.getAccounts.useQuery({ companyId, ativo: true }, { enabled: !!companyId });
   const { data: lancCostCenters, refetch: refetchLancCostCenters } = (trpc as any).financial.getCostCenters.useQuery({ companyId }, { enabled: !!companyId });
   const { data: lancFornecedores } = (trpc as any).compras.listarFornecedores.useQuery({ companyId, ativo: true }, { enabled: !!companyId });
+  // Rev. 3455 — movido p/ antes de obrasParaLanc (era linha 366) p/ resolver clienteId na filtragem
+  const { data: lancClientes, refetch: refetchLancClientes } = (trpc as any).clientes.list.useQuery({ companyId }, { enabled: !!companyId });
+  const clienteOpts: { id: number; nome: string }[] = useMemo(() => {
+    const seen = new Set<string>(); const out: { id: number; nome: string }[] = [];
+    for (const c of (Array.isArray(lancClientes) ? lancClientes : [])) {
+      const nome = String(c?.nomeFantasia ?? c?.razaoSocial ?? "").trim();
+      if (!nome || seen.has(nome.toLowerCase())) continue; seen.add(nome.toLowerCase()); out.push({ id: Number(c.id), nome });
+    }
+    return out.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  }, [lancClientes]);
+  // Rev. 3455 — vínculos obra↔cliente via junction table (obra_clientes, Rev. 3451)
+  const { data: obraClientesVinculos } = (trpc as any).obras.listClienteVinculos.useQuery({ companyId }, { enabled: !!companyId });
   const obrasOpts: { id: number; nome: string; cliente: string }[] = useMemo(() => {
     const seen = new Set<string>(); const out: { id: number; nome: string; cliente: string }[] = [];
     for (const o of (Array.isArray(lancObras) ? lancObras : [])) {
@@ -331,13 +345,28 @@ export default function FinanceiroConciliacao() {
   }, [lancObras]);
   // Rev. 3417 — declarado AQUI (antes dos useMemos que dependem dele) para evitar TDZ
   const [lancForm, setLancForm] = useState({ data: "", valor: "", descricao: "", obraId: "", contaNome: "", contaId: "", centroCustoId: "", fornecedorNome: "", clienteId: "", clienteNome: "", formaPagamento: "", tipo: "despesa" });
-  // Rev. 3413 — obras filtradas pelo cliente selecionado no form
+  // Rev. 3455 — obras filtradas pelo cliente selecionado (texto legado + junction table obra_clientes)
   const obrasParaLanc = useMemo(() => {
     const cn = (lancForm?.clienteNome ?? "").trim().toLowerCase();
     if (!cn) return obrasOpts;
-    const match = obrasOpts.filter(o => o.cliente.toLowerCase() === cn || o.cliente.toLowerCase().includes(cn));
-    return match.length > 0 ? match : obrasOpts;
-  }, [obrasOpts, lancForm?.clienteNome]);
+    const normalize = (s: string) => s.toLowerCase().replace(/[.\s]+$/, "").trim();
+    const cnNorm = normalize(cn);
+    const textMatch = obrasOpts.filter(o => {
+      const oc = normalize(o.cliente);
+      return oc === cnNorm || oc.includes(cnNorm) || cnNorm.includes(oc);
+    });
+    const vinculos = Array.isArray(obraClientesVinculos) ? obraClientesVinculos : [];
+    const resolvedId = lancForm.clienteId
+      ? Number(lancForm.clienteId)
+      : clienteOpts.find(c => normalize(c.nome) === cnNorm || normalize(c.nome).includes(cnNorm) || cnNorm.includes(normalize(c.nome)))?.id ?? null;
+    const junctionIds = resolvedId
+      ? new Set(vinculos.filter((v: any) => Number(v.clienteId) === resolvedId).map((v: any) => Number(v.obraId)))
+      : new Set<number>();
+    const junctionMatch = obrasOpts.filter(o => junctionIds.has(o.id));
+    const allIds = new Set([...textMatch.map(o => o.id), ...junctionMatch.map(o => o.id)]);
+    const merged = obrasOpts.filter(o => allIds.has(o.id));
+    return merged.length > 0 ? merged : obrasOpts;
+  }, [obrasOpts, lancForm?.clienteNome, lancForm?.clienteId, obraClientesVinculos, clienteOpts]);
   const catOpts: { id: number; nome: string; natureza: string | null; centroCustoId: number | null }[] = useMemo(() => {
     const out: { id: number; nome: string; natureza: string | null; centroCustoId: number | null }[] = [];
     for (const a of (Array.isArray(lancAccounts) ? lancAccounts : [])) {
@@ -362,17 +391,6 @@ export default function FinanceiroConciliacao() {
     }
     return out.sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [lancFornecedores]);
-  // Rev. 3324 — clientes p/ "Lançar no Contas a Receber" (indicar quem pagou).
-  const { data: lancClientes, refetch: refetchLancClientes } = (trpc as any).clientes.list.useQuery({ companyId }, { enabled: !!companyId });
-  const clienteOpts: { id: number; nome: string }[] = useMemo(() => {
-    const seen = new Set<string>(); const out: { id: number; nome: string }[] = [];
-    for (const c of (Array.isArray(lancClientes) ? lancClientes : [])) {
-      const nome = String(c?.nomeFantasia ?? c?.razaoSocial ?? "").trim();
-      if (!nome || seen.has(nome.toLowerCase())) continue; seen.add(nome.toLowerCase()); out.push({ id: Number(c.id), nome });
-    }
-    return out.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
-  }, [lancClientes]);
-
   const [lancStatement, setLancStatement] = useState<any | null>(null);
   const [lancBusy, setLancBusy] = useState(false);
   const { user } = useAuth();
