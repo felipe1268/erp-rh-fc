@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3436 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CARD "SUGESTÃO" NO BLOCO SEM CONTA —
+ * TEXTO DA DESCRIÇÃO NÃO MAIS TRANSBORDAVA/SOBREPOSTO. 100% FRONTEND · ZERO BACKEND.**
+ *
+ * `truncate` em `<span>` inline não funciona (só em bloco); descrições longas de extrato
+ * (hashes PIX tipo E003603052026…) transbordavam e sobrepoiam o botão "Conciliar".
+ * Fix: card reestruturado em dois níveis: linha 1 = título "Sugestão:" + descrição com
+ * `break-all`; linha 2 = data · valor · conta (flex-wrap). Botão fica alinhado ao topo
+ * direito com `items-start`. Regra do-not-truncate aplicada (Rev. 3432).
+ *
  * Rev. 3435 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · VALE ALIMENTAÇÃO AGRUPADO NA
  * CONCILIAÇÃO (igual ao VR). BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *

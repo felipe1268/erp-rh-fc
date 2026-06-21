@@ -4568,22 +4568,23 @@ export default function FinanceiroConciliacao() {
                           <div key={e.id}>
                             {renderEntryRow(e)}
                             {e.sugLineId && (
-                              <div className="mx-4 mb-2 rounded-lg border border-blue-200 bg-blue-50/80 px-3 py-2 flex items-center gap-2">
-                                <Sparkles className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                              <div className="mx-4 mb-2 rounded-lg border border-blue-200 bg-blue-50/80 px-3 py-2 flex items-start gap-2">
+                                <Sparkles className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />
                                 <div className="flex-1 min-w-0 text-xs text-blue-800">
-                                  <span className="font-semibold">Sugestão: </span>
-                                  <span className="truncate">{e.sugDesc || "—"}</span>
-                                  <span className="text-blue-600 mx-1">·</span>
-                                  <span>{e.sugData ? String(e.sugData).slice(0,10).split("-").reverse().join("/") : "—"}</span>
-                                  <span className="text-blue-600 mx-1">·</span>
-                                  <span className="font-medium">{formatBRL(Math.abs(Number(e.sugValor)))}</span>
-                                  <span className="text-blue-500 mx-1">·</span>
-                                  <span className="text-blue-600">{e.sugContaDesc || e.sugBanco || "—"}</span>
+                                  <p className="font-semibold mb-0.5">Sugestão:</p>
+                                  <p className="break-all leading-snug text-blue-700">{e.sugDesc || "—"}</p>
+                                  <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-blue-600">
+                                    <span>{e.sugData ? String(e.sugData).slice(0,10).split("-").reverse().join("/") : "—"}</span>
+                                    <span>·</span>
+                                    <span className="font-medium text-blue-800">{formatBRL(Math.abs(Number(e.sugValor)))}</span>
+                                    <span>·</span>
+                                    <span>{e.sugContaDesc || e.sugBanco || "—"}</span>
+                                  </p>
                                 </div>
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="shrink-0 h-7 border-blue-400 text-blue-700 hover:bg-blue-100 text-xs gap-1"
+                                  className="shrink-0 h-7 border-blue-400 text-blue-700 hover:bg-blue-100 text-xs gap-1 mt-0.5"
                                   onClick={() => setConfirmSemConta({ entry: e, sug: e })}
                                 >
                                   <Link2 className="w-3 h-3" />Conciliar
