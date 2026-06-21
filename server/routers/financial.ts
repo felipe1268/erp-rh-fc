@@ -1451,7 +1451,7 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
            SELECT b.id AS "sugLineId",
                   b.conta_bancaria_id AS "sugContaId",
                   ba.banco AS "sugBanco",
-                  COALESCE(NULLIF(TRIM(ba.descricao),''), ba.banco) AS "sugContaDesc",
+                  COALESCE(NULLIF(TRIM(ba.apelido),''), ba.banco) AS "sugContaDesc",
                   b.data::text AS "sugData",
                   b.descricao AS "sugDesc",
                   b.valor AS "sugValor"
