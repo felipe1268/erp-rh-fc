@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3458 — **CONCILIAÇÃO BANCÁRIA · CONCILIAÇÃO MANUAL 1:1 (CLIQUE NO EXTRATO + CLIQUE NO ERP
+ * + "CONCILIAR PAR"). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PROBLEMA: quando o nome no extrato não bate com o lançamento do ERP (erro de digitação,
+ * nome abreviado, lançamento retroativo), a conciliação automática por sugestão falha e o
+ * usuário não tinha como vincular os itens manualmente de forma simples.
+ *
+ * SOLUÇÃO: fluxo de seleção manual de 3 passos:
+ *   1. Clicar numa linha do painel "No extrato, sem lançamento" → linha destaca (borda azul).
+ *   2. Clicar num lançamento do painel "No ERP, sem extrato" → linha destaca.
+ *   3. Aparece uma barra azul entre os painéis mostrando o par selecionado (descrição + valor
+ *      de cada lado + diferença Δ se os valores divergirem) com botão "Conciliar par".
+ *   4. "Conciliar par" abre o dialog existente "Confirmar conciliação?" (mesmo fluxo atual —
+ *      exige confirmação explícita do usuário antes de gravar). Confirmar → chama
+ *      `conciliarLancamento` (mutation existente) ou `conciliarGrupoLancamentos` (se ERP agrupado).
+ *
+ * IMPLEMENTAÇÃO (FinanceiroConciliacao.tsx):
+ *   - Dois novos estados: `manualExtSel` e `manualLanSel` (guardam o objeto completo clicado).
+ *   - Click de `renderExtratoRow` (painel esquerdo) salva `manualExtSel`.
+ *   - Click de `renderEntryRow` (painel direito, item normal e agrupado) salva `manualLanSel`.
+ *   - Barra de confirmação renderizada abaixo do grid dos dois painéis,
+ *     visível somente quando ambos os estados estão preenchidos.
+ *   - Botão "Limpar seleção" desfaz ambas as seleções.
+ *   - Estados limpos em: conciliação bem-sucedida + troca de conta bancária.
+ *   - Reutiliza 100% o dialog `confirmGeralConciliar` e as mutations já existentes —
+ *     não há novo endpoint, não há novo dialog, zero risco de regressão.
+ *
  * Rev. 3457 — **CONCILIAÇÃO BANCÁRIA · DROPDOWN "FORNECEDOR" NO FORM "LANÇAR NO CONTAS A PAGAR"
  * AGORA MOSTRA TODOS OS FORNECEDORES DO GRUPO FC. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *

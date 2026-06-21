@@ -194,6 +194,9 @@ export default function FinanceiroConciliacao() {
   const [selectedStatement, setSelectedStatement] = useState<number | null>(null);
   // Rev. 3239 — pode ser um id numérico (lançamento individual) OU um id de GRUPO ("grp:…").
   const [selectedEntry, setSelectedEntry] = useState<number | string | null>(null);
+  // Rev. 3458 — objetos completos para conciliação manual (clique no extrato + clique no ERP).
+  const [manualExtSel, setManualExtSel] = useState<any | null>(null);
+  const [manualLanSel, setManualLanSel] = useState<any | null>(null);
   // Rev. 3239 — grupos expandidos (mostra os lançamentos-membro inline).
   const [gruposExpandidos, setGruposExpandidos] = useState<Set<string>>(new Set());
   // Rev. 3205 — expandir uma das listas de pendência em tela cheia p/ analisar melhor.
@@ -724,13 +727,13 @@ export default function FinanceiroConciliacao() {
   }, [statementsAno]);
 
   const conciliarMut = (trpc as any).financial.conciliarLancamento.useMutation({
-    onSuccess: () => { toast({ title: "Conciliação registrada!" }); refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug(); if (!contaBancariaId && periodoDefinido) refetchGeral(); setConfirmGeralConciliar(null); setSelectedStatement(null); setSelectedEntry(null); },
+    onSuccess: () => { toast({ title: "Conciliação registrada!" }); refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug(); if (!contaBancariaId && periodoDefinido) refetchGeral(); setConfirmGeralConciliar(null); setSelectedStatement(null); setSelectedEntry(null); setManualExtSel(null); setManualLanSel(null); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
   // Rev. 3239 — conciliação de um GRUPO unificado (VR / combustível / manutenção) contra UMA
   // linha do extrato (N lançamentos : 1 linha). Mesma UX do par 1:1, mas envia os itensIds.
   const conciliarGrupoMut = (trpc as any).financial.conciliarGrupoLancamentos.useMutation({
-    onSuccess: (res: any) => { toast({ title: `Grupo conciliado! ${formatInt(res.conciliados)} lançamento(s) baixado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug(); if (!contaBancariaId && periodoDefinido) refetchGeral(); setConfirmGeralConciliar(null); setSelectedStatement(null); setSelectedEntry(null); },
+    onSuccess: (res: any) => { toast({ title: `Grupo conciliado! ${formatInt(res.conciliados)} lançamento(s) baixado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug(); if (!contaBancariaId && periodoDefinido) refetchGeral(); setConfirmGeralConciliar(null); setSelectedStatement(null); setSelectedEntry(null); setManualExtSel(null); setManualLanSel(null); },
     onError: (e: any) => toast({ title: "Erro ao conciliar grupo", description: e.message, variant: "destructive" }),
   });
   // Rev. 3399 — Conciliação de lançamento SEM conta bancária via sugestão automática.
@@ -960,7 +963,7 @@ export default function FinanceiroConciliacao() {
   useEffect(() => { if (!geralAtivo) { setGeralExpInit(false); setGeralContasExp(new Set()); } }, [geralAtivo]);
   // Rev. 3319 — limpa a seleção (extrato/lançamento) e o diálogo ao trocar de modo
   // (panorama ↔ conta específica), pra não carregar seleção residual de um modo no outro.
-  useEffect(() => { setSelectedStatement(null); setSelectedEntry(null); setConfirmGeralConciliar(null); }, [contaBancariaId]);
+  useEffect(() => { setSelectedStatement(null); setSelectedEntry(null); setConfirmGeralConciliar(null); setManualExtSel(null); setManualLanSel(null); }, [contaBancariaId]);
   // Rev. 3266 — grava o veredicto da conferência da identificação por IA (confirmado/errado/
   // desfazer). NÃO concilia/baixa nada — só registra. Após salvar, refaz o report p/ a tela
   // refletir o ✓/✗ na linha e fecha o diálogo.
@@ -1280,7 +1283,7 @@ export default function FinanceiroConciliacao() {
             <span className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-rose-50 text-rose-500">
               <ArrowUpCircle className="w-5 h-5" />
             </span>
-            <button onClick={() => setSelectedEntry(selectedEntry === e.id ? null : e.id)} className="flex-1 min-w-0 text-left">
+            <button onClick={() => { const sel = selectedEntry === e.id ? null : e.id; setSelectedEntry(sel); setManualLanSel(sel === null ? null : e); }} className="flex-1 min-w-0 text-left">
               <p className="text-[11px] text-gray-400 flex items-center gap-1.5">
                 {fmtData(e.data)}
                 <span className={`px-1.5 py-px rounded-full text-[10px] font-medium ${grpColor}`}>{grpLabel}</span>
@@ -1331,7 +1334,7 @@ export default function FinanceiroConciliacao() {
         <span className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${isReceita ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"}`}>
           {isReceita ? <ArrowDownCircle className="w-5 h-5" /> : <ArrowUpCircle className="w-5 h-5" />}
         </span>
-        <button onClick={() => setSelectedEntry(selectedEntry === e.id ? null : e.id)} className="flex-1 min-w-0 text-left">
+        <button onClick={() => { const sel = selectedEntry === e.id ? null : e.id; setSelectedEntry(sel); setManualLanSel(sel === null ? null : e); }} className="flex-1 min-w-0 text-left">
           <p className="text-[11px] text-gray-400 flex items-center gap-1.5 flex-wrap">
             {fmtData(e.data)}
             {(isPix || isBoleto) && <span className={`px-1.5 py-px rounded-full text-[10px] font-medium ${isPix ? "bg-emerald-100 text-emerald-700" : "bg-orange-100 text-orange-700"}`}>{isPix ? "PIX" : "Boleto"}</span>}
@@ -1383,7 +1386,7 @@ export default function FinanceiroConciliacao() {
       className={`flex items-stretch ${selectedStatement === s.id ? "bg-blue-50 border-l-2 border-l-blue-500" : ""}`}
     >
       <button
-        onClick={() => setSelectedStatement(selectedStatement === s.id ? null : s.id)}
+        onClick={() => { const sel = selectedStatement === s.id ? null : s.id; setSelectedStatement(sel); setManualExtSel(sel === null ? null : s); }}
         className="flex-1 min-w-0 px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-50 transition-colors"
       >
         <span className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${isEntrada ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"}`}>
@@ -4827,6 +4830,57 @@ export default function FinanceiroConciliacao() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Rev. 3458 — Barra de conciliação manual: aparece quando o usuário selecionou
+                uma linha do extrato (painel esquerdo) E um lançamento do ERP (painel direito).
+                Chama o mesmo dialog "Confirmar conciliação?" do fluxo automático. */}
+            {manualExtSel && manualLanSel && (() => {
+              const delta = Math.abs(Math.abs(Number(manualExtSel.valor) || 0) - Math.abs(Number(manualLanSel.valor) || 0));
+              const isDiff = delta > 0.009;
+              return (
+                <div className="rounded-xl border-2 border-blue-400 bg-blue-50 shadow-md px-4 py-3 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                  <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-2 items-center">
+                    {/* Extrato selecionado */}
+                    <div className="min-w-0 bg-white rounded-lg px-3 py-2 border border-rose-200">
+                      <p className="text-[10px] text-rose-600 font-semibold uppercase tracking-wide mb-0.5">Extrato selecionado</p>
+                      <p className="text-sm font-medium text-gray-800 truncate">{manualExtSel.descricao || "—"}</p>
+                      <p className="text-xs text-gray-500 tabular-nums">{fmtData(manualExtSel.data)} · <span className="font-semibold text-rose-600">{formatBRL(Math.abs(Number(manualExtSel.valor) || 0))}</span></p>
+                    </div>
+                    {/* Seta central */}
+                    <div className="hidden sm:flex flex-col items-center gap-1 px-1 shrink-0">
+                      <ArrowRight className="w-5 h-5 text-blue-500" />
+                      {isDiff && (
+                        <span className="text-[10px] font-semibold text-amber-600 bg-amber-100 rounded px-1.5 py-px whitespace-nowrap">Δ {formatBRL(delta)}</span>
+                      )}
+                    </div>
+                    {/* ERP selecionado */}
+                    <div className="min-w-0 bg-white rounded-lg px-3 py-2 border border-amber-200">
+                      <p className="text-[10px] text-amber-600 font-semibold uppercase tracking-wide mb-0.5">Lançamento ERP selecionado</p>
+                      <p className="text-sm font-medium text-blue-700 truncate">{manualLanSel.fornecedorNome || manualLanSel.descricao || "—"}</p>
+                      <p className="text-xs text-gray-500 tabular-nums">{fmtData(manualLanSel.data)} · <span className="font-semibold text-amber-600">{formatBRL(Math.abs(Number(manualLanSel.valor) || 0))}</span></p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-3 text-xs text-gray-500 border-gray-300"
+                      onClick={() => { setSelectedStatement(null); setSelectedEntry(null); setManualExtSel(null); setManualLanSel(null); }}
+                    >
+                      Limpar seleção
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-8 px-4 text-xs bg-blue-600 hover:bg-blue-700 text-white flex-1 sm:flex-none"
+                      onClick={() => setConfirmGeralConciliar({ ext: manualExtSel, lan: manualLanSel })}
+                    >
+                      <Link2 className="w-3.5 h-3.5 mr-1.5" />
+                      Conciliar par
+                    </Button>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Rev. 3188 — Lançamentos SEM conta bancária definida (conta_bancaria_id NULL).
                 Bloco à parte, fora do número da conta: o ERP não sabe de qual banco saíram,
