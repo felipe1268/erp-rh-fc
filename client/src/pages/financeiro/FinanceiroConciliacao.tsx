@@ -4692,7 +4692,7 @@ export default function FinanceiroConciliacao() {
             apenas sugestiva; o usuário revisa cada par (extrato → lançamento + valores)
             e só então confirma. Nada é gravado sem este passo. */}
         <AlertDialog open={confirmConciliar} onOpenChange={(o: boolean) => { if (!o && !conciliarSugMut.isPending) { setConfirmConciliar(false); setConfirmAiState("idle"); setConfirmAiChecked(new Set()); } }}>
-          <AlertDialogContent className="sm:max-w-2xl p-0 gap-0 overflow-hidden">
+          <AlertDialogContent className="p-0 gap-0 overflow-hidden" style={{ maxWidth: "min(42rem, calc(100vw - 1.5rem))" }}>
             <AlertDialogHeader className="space-y-0 text-left bg-gradient-to-r from-[#1B2A4A] to-[#2c3f63] px-6 py-5">
               <div className="flex items-start gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 ring-1 ring-white/25 shrink-0">

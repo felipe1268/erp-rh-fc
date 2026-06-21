@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3409 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FIX DEFINITIVO DO LAYOUT CORTADO
+ * NO DIALOG "CONFIRMAR CONCILIAÇÃO?". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * - Causa-raiz: `tailwind-merge` dentro de `cn()` do shadcn pode neutralizar a classe
+ *   `sm:max-w-2xl` adicionada via `className`, mantendo o `sm:max-w-lg` padrão (512px)
+ *   ou o `max-w-[calc(100%-2rem)]` base em cenários de precedência inesperada.
+ * - Solução: substituir o controle de largura por `style={{ maxWidth: "min(42rem, calc(100vw - 1.5rem))" }}`
+ *   (CSS inline puro, imune a tailwind-merge). Resultado: dialog nunca ultrapassa 672px
+ *   nem extrapola o viewport (margem 0,75rem em cada lado). Botão "Confirmar" sempre visível.
+ *
  * Rev. 3408 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · BARRA DE PROGRESSO 0-100% COM
  * MARCADORES E RÓTULO INLINE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
