@@ -1,3 +1,4 @@
+- [Dialog no-truncate rule](dialog-no-truncate.md) — dialogs NUNCA truncam texto; use break-words/break-all; truncate só em linhas compactas de tabela com title= tooltip.
 - [Which DB the app uses](db-connection.md) — `executeSql` tool hits the Replit Postgres (`DATABASE_URL`/helium), but the app reads `NEON_DATABASE_URL`. To inspect REAL app data, query Neon.
 - [Importar planilha financeira FC](financeiro-excel-import.md) — abas mensais têm linha TOTAL no rodapé (dobra o import; filtrar por regex DD/MM/AAAA); memoizar de-para fuzzy + execute_values; nohup& não sobrevive entre tool calls.
 - [Revision registry](revision-registry.md) — "Controle de Revisões" auto-registra via parse JSDoc do changelog.ts (NÃO carregar como módulo=OOM); array congelou na 1878; version sem UNIQUE → UPDATE não DELETE.

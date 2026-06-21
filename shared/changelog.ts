@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3432 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "CONCILIAR PIX NO EXTRATO" —
+ * TEXTOS CORTADOS CORRIGIDOS. REGRA GERAL: DIALOGS NUNCA TRUNCAM TEXTO.
+ * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Removidos todos os `truncate` do dialog: cabeçalho, descrição da linha PIX (hashes longos),
+ * item selecionado e lista de lançamentos. Trocados por `break-words` (textos normais) e
+ * `break-all` (IDs/hashes de banco). Regra memorizada: em dialogs, NUNCA truncar — usar
+ * break-words/break-all; em linhas compactas de tabela, truncate OK com `title` tooltip.
+ *
  * Rev. 3431 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO: "OUTROS MESES" RETORNAVA
  * ZERO — LIKE COM `|` NÃO É OR NO POSTGRESQL. BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *

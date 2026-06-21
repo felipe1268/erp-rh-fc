@@ -6211,7 +6211,7 @@ export default function FinanceiroConciliacao() {
               <div className="min-w-0">
                 <div className="font-semibold text-sm leading-tight">Conciliar PIX no extrato</div>
                 {conciliarPixDlg && (
-                  <div className="text-[11px] text-emerald-100 truncate mt-0.5">
+                  <div className="text-[11px] text-emerald-100 mt-0.5 break-words">
                     Cheque {conciliarPixDlg.cheque.chequeNumero ? `nº ${conciliarPixDlg.cheque.chequeNumero}` : ""} · {conciliarPixDlg.cheque.fornecedor ?? "—"} · {formatBRL(Math.abs(Number(conciliarPixDlg.cheque.valor) || (conciliarPixDlg.cheque.valorCents ? conciliarPixDlg.cheque.valorCents / 100 : 0)))}
                   </div>
                 )}
@@ -6226,7 +6226,7 @@ export default function FinanceiroConciliacao() {
               </div>
               {conciliarPixDlg.pixLine ? (
                 <div className="text-sm">
-                  <div className="font-medium text-gray-800 truncate">{conciliarPixDlg.pixLine.descricao ?? "—"}</div>
+                  <div className="font-medium text-gray-800 break-all leading-snug">{conciliarPixDlg.pixLine.descricao ?? "—"}</div>
                   <div className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
                     <span className="tabular-nums font-semibold text-gray-700">{formatBRL(Math.abs(Number(conciliarPixDlg.pixLine.valor)))}</span>
                     <span className="text-gray-300">·</span>
@@ -6258,7 +6258,7 @@ export default function FinanceiroConciliacao() {
             <div className="mx-4 mt-2 px-3 py-2 rounded-md bg-blue-50 border border-blue-200 flex items-start gap-2">
               <CheckCircle className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
               <div className="min-w-0">
-                <div className="text-xs font-semibold text-blue-800 truncate">{conciliarPixEntry.fornecedorNome || conciliarPixEntry.descricao || "—"}</div>
+                <div className="text-xs font-semibold text-blue-800 break-words">{conciliarPixEntry.fornecedorNome || conciliarPixEntry.descricao || "—"}</div>
                 <div className="text-[11px] text-blue-600">{formatBRL(Math.abs(Number(conciliarPixEntry.valorRealizado ?? conciliarPixEntry.valorPrevisto ?? 0)))} · {fmtData(conciliarPixEntry.dataCompetencia ?? conciliarPixEntry.dataVencimento)}</div>
               </div>
               <button type="button" className="ml-auto shrink-0 text-blue-400 hover:text-blue-600" onClick={() => setConciliarPixEntry(null)}><X className="w-3.5 h-3.5" /></button>
@@ -6287,7 +6287,7 @@ export default function FinanceiroConciliacao() {
                       {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white block" />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm text-blue-700 truncate">{nome}</div>
+                      <div className="font-medium text-sm text-blue-700 break-words">{nome}</div>
                       <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
                         <span className="tabular-nums font-medium text-gray-700">{formatBRL(valor)}</span>
                         {data && <><span className="text-gray-300">·</span><span>{fmtData(data)}</span></>}

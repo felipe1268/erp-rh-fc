@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3432** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "CONCILIAR PIX NO EXTRATO" — TEXTOS CORTADOS CORRIGIDOS. REGRA: DIALOGS NUNCA TRUNCAM. 100% FRONTEND · ZERO BACKEND.** `truncate` → `break-words`/`break-all` no header, descrição PIX, item selecionado e lista. Regra gravada em memória. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3431** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO: "OUTROS MESES" RETORNAVA ZERO — LIKE COM `|` NÃO É OR NO POSTGRESQL. BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.** `LIKE '%(PIX|TED|TRANSF)%'` é literal. Fix: 3 LIKE separados com OR. Adicionado `valorRef` + `ORDER BY ABS(valor+valorRef)`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3430** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "VINCULAR PIX/TED" — BUSCA EM OUTROS MESES. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Nova rota `searchPixTedOutrosMeses` consulta `bank_statement_lines` num range ±meses (padrão: 1 antes + 6 depois). Botão "🗓 Outros meses" no filtro do dialog: acrescenta seção azul de resultados de outros meses abaixo do período atual. Detalhe: `shared/changelog.ts`.
