@@ -524,16 +524,16 @@ export default function Empresas() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className={`h-8 w-8 ${isDefaultCompany ? "text-yellow-500 hover:text-yellow-600" : "text-muted-foreground/40 hover:text-yellow-500 opacity-0 group-hover:opacity-100"} transition-all`}
+                        className={`h-8 w-8 ${isDefaultCompany ? "text-yellow-500 hover:text-yellow-600" : "text-muted-foreground/40 hover:text-yellow-500"} transition-all`}
                         onClick={() => toggleDefault(c.id)}
                         title={isDefaultCompany ? "Remover como padrão" : "Definir como empresa padrão"}
                       >
                         <Star className={`h-4 w-4 ${isDefaultCompany ? "fill-yellow-500" : ""}`} />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => openEdit(c)}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 transition-opacity" onClick={() => openEdit(c)}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => {
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive transition-opacity" onClick={() => {
                         if (confirm("Tem certeza que deseja excluir esta empresa?")) deleteMut.mutate({ id: c.id });
                       }}>
                         <Trash2 className="h-3.5 w-3.5" />
