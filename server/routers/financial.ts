@@ -7023,6 +7023,7 @@ export const financialRouter = router({
 
     // 1. Buscar todos os lançamentos em uma query
     const entryIds = input.itens.map(i => i.entryId);
+    // dbExecute não suporta array JS como parâmetro de ANY(); inlinear IDs inteiros é seguro
     const entRes = await dbExecute(db,
       `SELECT e.id, e.tipo,
               e.conta_id AS "contaId",
@@ -7032,8 +7033,8 @@ export const financialRouter = router({
               e.origem_modulo AS "origemModulo"
        FROM financial_entries e
        LEFT JOIN financial_accounts fa ON fa.id = e.conta_id
-       WHERE e.id = ANY($1::int[]) AND e.company_id=$2`,
-      [entryIds, input.companyId]);
+       WHERE e.id IN (${entryIds.map(Number).join(",")}) AND e.company_id=$1`,
+      [input.companyId]);
     const entryMap: Record<number, any> = {};
     for (const r of rows(entRes)) { entryMap[(r as any).id] = r; }
 
