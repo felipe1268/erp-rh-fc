@@ -624,6 +624,18 @@ export default function FinanceiroConciliacao() {
     }
     return map;
   }, [statementsAno]);
+  // Rev. 3421 — % de conciliação por mês (todas as contas agregadas), para o pill do mês
+  const mesesPct: Record<number, number> = useMemo(() => {
+    const map: Record<number, number> = {};
+    for (const r of (statementsAno ?? [])) {
+      const m = Number(r?.mes);
+      if (!m || m < 1 || m > 12) continue;
+      const total = Number(r.total) || 0;
+      const conciliadas = Number(r.conciliadas) || 0;
+      map[m] = total > 0 ? Math.round(conciliadas / total * 100) : 0;
+    }
+    return map;
+  }, [statementsAno]);
 
   const conciliarMut = (trpc as any).financial.conciliarLancamento.useMutation({
     onSuccess: () => { toast({ title: "Conciliação registrada!" }); refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug(); if (!contaBancariaId && periodoDefinido) refetchGeral(); setConfirmGeralConciliar(null); setSelectedStatement(null); setSelectedEntry(null); },
@@ -2212,18 +2224,27 @@ export default function FinanceiroConciliacao() {
                     const num = i + 1;
                     const status = mesesStatus[num];
                     const isSelected = mesSel === num;
+                    const pct = mesesPct[num]; // Rev. 3421 — % total do mês (todas as contas)
+                    const hasPct = pct != null && status !== "vazio";
                     return (
                       <button
                         key={m}
                         type="button"
                         onClick={() => setMesSel(num)}
-                        className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
+                        className={`relative flex flex-col items-center gap-0.5 py-2 rounded-lg border text-xs font-medium transition-all
                           ${isSelected
                             ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
                             : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"
                           }`}
                       >
                         <span>{m}</span>
+                        {hasPct && (
+                          <span className={`text-[9px] font-semibold tabular-nums leading-none ${
+                            status === "consolidado" ? (isSelected ? "text-green-700" : "text-green-600") :
+                            status === "lancamento" ? (isSelected ? "text-blue-600" : "text-blue-500") :
+                            "text-gray-400"
+                          }`}>{pct}%</span>
+                        )}
                         <span className={`w-1.5 h-1.5 rounded-full ${
                           status === "consolidado" ? "bg-green-500" :
                           status === "lancamento" ? "bg-blue-500" :
@@ -2325,6 +2346,20 @@ export default function FinanceiroConciliacao() {
                             <p className={`text-xs font-mono tracking-wide truncate ${isSemExtrato && !isSel ? "text-gray-400" : "text-gray-500"}`}>
                               Ag. {formatAgencia(b.agencia)} / {formatConta(b.conta)}
                             </p>
+                            {/* Rev. 3421 — % de conciliação sempre visível abaixo do agência/conta */}
+                            {!isSemExtrato && nTotal > 0 && (
+                              <div className="mt-0.5 flex items-center gap-1.5">
+                                <div className="flex-1 h-1 rounded-full bg-gray-200 overflow-hidden max-w-[80px]">
+                                  <div
+                                    className={`h-full rounded-full transition-all ${isConsol ? "bg-green-500" : pctConcil > 0 ? "bg-emerald-500" : "bg-blue-400"}`}
+                                    style={{ width: `${pctConcil}%` }}
+                                  />
+                                </div>
+                                <span className={`text-[10px] font-semibold tabular-nums shrink-0 ${isConsol ? "text-green-700" : pctConcil > 0 ? "text-emerald-700" : "text-blue-500"}`}>
+                                  {pctConcil}%
+                                </span>
+                              </div>
+                            )}
                             {/* Rev. 3420 — badge de status com destaque verde quando tem conciliações feitas */}
                             <div className="mt-1 flex items-center gap-1 flex-wrap">
                               <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${

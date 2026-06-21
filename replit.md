@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3421** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · % DE CONCILIAÇÃO NO CARD DE CONTA + % TOTAL NO PILL DO MÊS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Card: barra de progresso + "N%" abaixo de Ag./conta (verde=100%, esmeralda=parcial, azul=0%). Pill do mês: "N%" entre o nome e a bolinha, agregando todas as contas do mês. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3420** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CARD DE CONTA COM DESTAQUE VERDE QUANDO HÁ CONCILIAÇÕES FEITAS NO PERÍODO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Card esmeralda (em vez de azul puro) + badge "N/Total conciliados" + badge âmbar "N%" quando há progresso parcial. Zero backend (dados já vinham no accStatus). Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3419** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CONCILIAR PIX RÁPIDO A PARTIR DO CARD DO CHEQUE DEVOLVIDO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Botão verde "⚡ Conciliar PIX no extrato" no card quando PIX já identificado. Dialog: linha PIX fixada no topo + busca pré-preenchida pelo fornecedor + lista ERP com badge Δ% + "⚡ Conciliar agora" → conciliarLancamento direto. Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3419** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CONCILIAR PIX RÁPIDO A PARTIR DO CARD DO CHEQUE DEVOLVIDO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3418** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "TROCAR LANÇAMENTO VINCULADO" — SUGESTÕES POR VALOR PRÓXIMO + LAYOUT MODERNO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

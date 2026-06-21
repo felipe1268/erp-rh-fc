@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3421 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · % DE CONCILIAÇÃO NO CARD DE CONTA +
+ * % TOTAL NO PILL DO MÊS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Pedido: mostrar o percentual de conclusão abaixo de cada conta e o percentual total no
+ * pill do mês (levando em consideração todas as contas, consolidadas ou pendentes).
+ *
+ * Solução (100% front, dados já existiam nos payloads existentes):
+ *
+ * CARD DE CONTA (accConciliadasMap, já montado na Rev. 3420):
+ *   - Barra de progresso horizontal fina (`h-1`, max-width 80px) colorida abaixo de
+ *     Ag./conta: verde-500 se 100%, esmeralda-500 se parcial, azul-400 se 0%.
+ *   - Percentual numérico ao lado: "N%" na mesma cor da barra.
+ *   - Só aparece quando `!isSemExtrato && nTotal > 0` (não exibe barra vazia em contas
+ *     sem extrato importado).
+ *
+ * PILL DO MÊS (mesesPct useMemo, novo):
+ *   - `getBankStatementsMonthlyStatus` já retorna `total` e `conciliadas` por mês.
+ *   - `mesesPct` calcula `round(conciliadas/total*100)` por mês.
+ *   - Pill exibe o % em texto `9px` entre o nome do mês e a bolinha de status:
+ *       · verde se "consolidado" · azul se "lancamento" (inclui destaque quando selecionado)
+ *   - Só aparece quando `status !== "vazio"` (meses sem extrato continuam limpos).
+ *
+ * Arquivos: client/src/pages/financeiro/FinanceiroConciliacao.tsx
+ *   (mesesPct useMemo; pills MESES com hasPct+span; cards de conta com barra+% abaixo de Ag.).
+ *
  * Rev. 3420 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CARD DE CONTA COM DESTAQUE VERDE QUANDO
  * HÁ CONCILIAÇÕES FEITAS NO PERÍODO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
