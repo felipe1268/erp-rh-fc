@@ -3673,6 +3673,15 @@ export default function FinanceiroConciliacao() {
                                         >
                                           <ArrowLeftRight className="w-2.5 h-2.5" /> trocar
                                         </button>
+                                        {/* Rev. 3464 — editar o cadastro do lançamento ERP diretamente da sugestão */}
+                                        <button
+                                          type="button"
+                                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); const eid = ov?.entryId ?? s.entryId; if (eid) { setDetalheEntryId(Number(eid)); setPendingEditMode(true); } }}
+                                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border border-gray-200 text-gray-500 hover:bg-amber-50 hover:border-amber-200 hover:text-amber-600 transition-colors"
+                                          title="Editar dados do lançamento (categoria, fornecedor, obra…)"
+                                        >
+                                          <Pencil className="w-2.5 h-2.5" /> editar
+                                        </button>
                                         {ov && (
                                           <button
                                             type="button"

@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3464 — **CONCILIAÇÃO BANCÁRIA · BOTÃO "EDITAR" NO LANÇAMENTO DE CADA SUGESTÃO AUTOMÁTICA.
+ * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Cada linha da lista "Sugestões Automáticas de Conciliação" ganhou um botão "✏ editar"
+ * ao lado do "⇄ trocar", no bloco do lançamento ERP. Clicar abre o dialog de detalhe
+ * já em modo de edição (mesmo mecanismo `pendingEditMode` das demais telas).
+ * Suporta tanto a sugestão original (`s.entryId`) quanto a troca manual (`ov.entryId`).
+ *
  * Rev. 3463 — **CONCILIAÇÃO BANCÁRIA · COMBOBOX FORNECEDOR CORRIGIDO — EXIBE NOME FANTASIA
  * EM VEZ DE RAZÃO SOCIAL. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
