@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3411 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SUGESTÕES AUTOMÁTICAS NÃO
+ * RECARREGAM APÓS CADA CONCILIAÇÃO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Problema: `conciliarSugMut.onSuccess` chamava `refetchSug()`, disparando a análise
+ * completa de sugestões a cada confirmação — mesmo que o usuário fosse conciliar
+ * item a item.
+ *
+ * Solução: filtragem LOCAL dos itens já conciliados.
+ * - Novo estado `conciliadosIds: Set<number>` acumula os `statementLineId`s confirmados.
+ * - `sugestoes` passa a ser `sugData?.sugestoes.filter(s => !conciliadosIds.has(id))`.
+ * - `onSuccess` recebe `variables` (padrão tRPC) → extrai os ids dos pares confirmados
+ *   → adiciona a `conciliadosIds` → item some instantaneamente da lista SEM re-análise.
+ * - `overrideSug` é limpo para os ids conciliados (consistência do estado local).
+ * - Botão "Reanalisar" (já existente) limpa `conciliadosIds` + `refetchSug()` →
+ *   análise completa só quando o usuário explicitamente pedir.
+ *
  * Rev. 3410 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · TROCA MANUAL DE LANÇAMENTO
  * NA SUGESTÃO AUTOMÁTICA. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *

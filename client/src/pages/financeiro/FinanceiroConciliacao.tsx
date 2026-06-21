@@ -126,6 +126,8 @@ export default function FinanceiroConciliacao() {
   const [csvSeparador, setCsvSeparador] = useState(";");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
+  // Rev. 3411 — IDs de linhas já conciliadas nesta sessão (filtradas localmente sem re-análise)
+  const [conciliadosIds, setConciliadosIds] = useState<Set<number>>(new Set());
   const [toleranciaDias, setToleranciaDias] = useState(() => new Date(_now.getFullYear(), _now.getMonth() + 1, 0).getDate());
   // Re-sincroniza a tolerância com os dias exatos do mês ao trocar de mês/ano.
   useEffect(() => { setToleranciaDias(diasDoMes); }, [diasDoMes]);
@@ -612,7 +614,8 @@ export default function FinanceiroConciliacao() {
     { companyId, contaBancariaId: parseInt(contaBancariaId) || 0, dataInicio, dataFim, toleranciaDias },
     { enabled: !!companyId && !!contaBancariaId && mostrarSugestoes }
   );
-  const sugestoes: any[] = sugData?.sugestoes ?? [];
+  // Rev. 3411 — filtra localmente as linhas já conciliadas (sem re-análise automática)
+  const sugestoes: any[] = (sugData?.sugestoes ?? []).filter((s: any) => !conciliadosIds.has(s.statementLineId));
   const semMatch: any[] = sugData?.semMatch ?? [];
   // Rev. 3201 — fonte ÚNICA dos pares selecionados (contador + render do diálogo + payload),
   // p/ o número exibido nunca divergir do que será efetivamente enviado.
@@ -1422,14 +1425,18 @@ export default function FinanceiroConciliacao() {
     );
 
   const conciliarSugMut = (trpc as any).financial.conciliarSugestoes.useMutation({
-    onSuccess: (res: any) => {
+    onSuccess: (res: any, variables: any) => {
       toast({ title: `${formatInt(res.conciliados)} de ${formatInt(res.total)} conciliados e baixados!` });
+      // Rev. 3411 — remove localmente os itens conciliados SEM re-rodar a análise completa.
+      // O usuário usa "Reanalisar" quando quiser uma nova análise do que sobrou.
+      const reconciliados = new Set<number>((variables?.pares ?? []).map((p: any) => Number(p.statementLineId)));
+      setConciliadosIds(prev => new Set([...prev, ...reconciliados]));
       setSelSug(new Set());
       setConfirmConciliar(false);
+      setOverrideSug(prev => { const n = { ...prev }; reconciliados.forEach(id => delete n[id]); return n; });
       refetchSt();
       refetchStAno();
       refetchAccStatus();
-      refetchSug();
       refetchReport();
     },
     onError: (e: any) => { setConfirmConciliar(false); toast({ title: "Erro ao conciliar", description: e.message, variant: "destructive" }); },
@@ -3017,7 +3024,7 @@ export default function FinanceiroConciliacao() {
                       <Button
                         size="sm"
                         variant={mostrarSugestoes ? "outline" : "default"}
-                        onClick={() => { setMostrarSugestoes(true); setSelSug(new Set()); if (mostrarSugestoes) refetchSug(); }}
+                        onClick={() => { setMostrarSugestoes(true); setSelSug(new Set()); setConciliadosIds(new Set()); if (mostrarSugestoes) refetchSug(); }}
                         disabled={sugLoading}
                       >
                         <Sparkles className="w-4 h-4 mr-1" />

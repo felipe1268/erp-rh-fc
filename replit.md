@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3411** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SUGESTÕES NÃO RECARREGAM APÓS CADA CONCILIAÇÃO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `onSuccess` não chama mais `refetchSug()`. Novo estado `conciliadosIds` filtra localmente os itens já confirmados. Botão "Reanalisar" continua fazendo análise completa quando solicitado. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3410** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · TROCA MANUAL DE LANÇAMENTO NA SUGESTÃO AUTOMÁTICA. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** `getEntries` ganha `busca` (ILIKE). Botão "trocar" (⇌) em cada linha de sugestão abre dialog de busca autocomplete. Override armazenado por `statementLineId` — badge âmbar "MANUAL", botão "desfazer". `confirmarConciliacao` usa entryId do override quando presente. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3409** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FIX DEFINITIVO DO LAYOUT CORTADO NO DIALOG "CONFIRMAR CONCILIAÇÃO?". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `tailwind-merge` neutralizava `sm:max-w-2xl`; corrigido com `style={{ maxWidth: "min(42rem, calc(100vw - 1.5rem))" }}` CSS inline puro. Dialog nunca > 672px nem extrapola o viewport. Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3409** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FIX DEFINITIVO DO LAYOUT CORTADO NO DIALOG "CONFIRMAR CONCILIAÇÃO?". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3407** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · IA NO DIALOG DE CONFIRMAÇÃO VIRA BOTÃO MANUAL + FIX LAYOUT CORTADO NO MOBILE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3405** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SCORE DE CONFIANÇA 0-100% + SUGESTÃO AUTOMÁTICA POR HISTÓRICO (SEM IA). BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3404** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · ANÁLISE IA INLINE NO DIALOG "CONFIRMAR CONCILIAÇÃO?" (ANTES DO OK FINAL). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3403** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · BOTÃO "ANALISAR TODAS COM IA" + RELATÓRIO DE CLASSIFICAÇÃO EM LOTE + NOMES PADRONIZADOS. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### REGRA DE OURO — Cabeçalho de documentos institucionais FC (Rev. 2106+)
 
