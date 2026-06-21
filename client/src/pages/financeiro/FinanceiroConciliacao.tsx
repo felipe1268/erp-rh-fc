@@ -197,6 +197,8 @@ export default function FinanceiroConciliacao() {
   // Rev. 3458 — objetos completos para conciliação manual (clique no extrato + clique no ERP).
   const [manualExtSel, setManualExtSel] = useState<any | null>(null);
   const [manualLanSel, setManualLanSel] = useState<any | null>(null);
+  // Rev. 3459 — flag para abrir o dialog de detalhe JÁ em modo edição (atalho do botão lápis).
+  const [pendingEditMode, setPendingEditMode] = useState(false);
   // Rev. 3239 — grupos expandidos (mostra os lançamentos-membro inline).
   const [gruposExpandidos, setGruposExpandidos] = useState<Set<string>>(new Set());
   // Rev. 3205 — expandir uma das listas de pendência em tela cheia p/ analisar melhor.
@@ -286,7 +288,7 @@ export default function FinanceiroConciliacao() {
   type ConfirmAiState = "idle" | "loading" | "error" | { resultados: BatchResult[] };
   const [confirmAiState, setConfirmAiState] = useState<ConfirmAiState>("idle");
   const [confirmAiChecked, setConfirmAiChecked] = useState<Set<string>>(new Set());
-  const fecharDetalhe = () => { setDetalheEntryId(null); setDetalheExtrato(null); setDetEditMode(false); setDetEditForm(null); setAiAnalise(null); setAiCheckeds(new Set()); };
+  const fecharDetalhe = () => { setDetalheEntryId(null); setDetalheExtrato(null); setDetEditMode(false); setDetEditForm(null); setAiAnalise(null); setAiCheckeds(new Set()); setPendingEditMode(false); };
   // Rev. 3266 — diálogo de CONFERÊNCIA da identificação por IA (texto roxo clicável).
   // Guarda a linha do extrato (com os campos demo* já vindos do getConciliacaoReport) p/
   // montar o comparativo lado a lado + abrir o PDF do demonstrativo + confirmar/marcar errado.
@@ -1355,6 +1357,7 @@ export default function FinanceiroConciliacao() {
         </button>
         <p className={`text-sm font-bold shrink-0 ${isReceita ? "text-emerald-600" : "text-rose-500"}`}>{formatBRL(Math.abs(Number(e.valor)))}</p>
         <button type="button" onClick={() => setDetalheEntryId(e.id)} title="Ver detalhes" className="shrink-0 p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50"><Eye className="w-4 h-4" /></button>
+        <button type="button" onClick={() => { setDetalheEntryId(e.id); setPendingEditMode(true); }} title="Editar lançamento (nome, categoria, fornecedor…)" className="shrink-0 p-1.5 rounded-md text-gray-400 hover:text-amber-600 hover:bg-amber-50"><Pencil className="w-4 h-4" /></button>
         {e.comprovanteUrl ? (
           <a href={e.comprovanteUrl} target="_blank" rel="noreferrer" title="Comprovante anexado — abrir" className="shrink-0 p-1.5 rounded-md text-green-600 hover:bg-green-50"><Paperclip className="w-4 h-4" /></a>
         ) : (
@@ -1679,6 +1682,10 @@ export default function FinanceiroConciliacao() {
     setConfirmAiState({ resultados: updated });
     setConfirmAiChecked(new Set());
   };
+  // Rev. 3459 — quando o botão lápis é clicado antes do detalhe carregar,
+  // aguarda o detEntry ficar disponível e entra em modo de edição automaticamente.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (pendingEditMode && detEntry) { iniciarEdicaoEntry(); setPendingEditMode(false); } }, [detEntry, pendingEditMode]);
   const iniciarEdicaoEntry = () => {
     if (!detEntry) return;
     setDetEditForm({

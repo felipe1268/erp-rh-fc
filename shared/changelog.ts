@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3459 — **CONCILIAÇÃO BANCÁRIA · BOTÃO LÁPIS DE EDIÇÃO RÁPIDA NAS LINHAS "NO ERP, SEM EXTRATO".
+ * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PROBLEMA: para corrigir nome, categoria, fornecedor ou obra de um lançamento do ERP
+ * na tela de conciliação, o usuário precisava: (1) clicar 👁 → (2) esperar carregar →
+ * (3) rolar até o botão "Editar" no rodapé do dialog. Três cliques e scroll.
+ *
+ * SOLUÇÃO: botão ✏️ (lápis laranja) diretamente em cada linha do painel "No ERP, sem extrato".
+ * Clicar nele abre o dialog de detalhe JÁ em modo edição (sem passo intermediário).
+ * Mecanismo: `pendingEditMode` state + useEffect que dispara `iniciarEdicaoEntry()`
+ * assim que `detEntry` termina de carregar (não bloqueia se dado já estiver em cache).
+ * `fecharDetalhe` limpa o flag para não vazar entre aberturas.
+ *
+ * O form de edição já cobria todos os campos solicitados:
+ *   - Tipo (Débito/Crédito)
+ *   - Categoria (Conta)
+ *   - Conta Bancária
+ *   - Obra
+ *   - Forma de Pagamento
+ *   - Fornecedor / Beneficiário
+ *   - Descrição
+ *   - Observações
+ *
  * Rev. 3458 — **CONCILIAÇÃO BANCÁRIA · CONCILIAÇÃO MANUAL 1:1 (CLIQUE NO EXTRATO + CLIQUE NO ERP
  * + "CONCILIAR PAR"). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
