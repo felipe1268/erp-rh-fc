@@ -366,6 +366,7 @@ export default function FinanceiroConciliacao() {
         companyId: Number(companyId),
         contaBancariaId: parseInt(contaBancariaId) || 0,
         dataRef: vincularPixDlg?.cheque?.dataCredito?.slice(0, 10) ?? "2000-01-01",
+        valorRef: vincularPixDlg?.cheque?.valor != null ? Math.abs(Number(vincularPixDlg.cheque.valor)) : undefined,
         mesesAntes: 1,
         mesesDepois: 6,
         busca: vincularPixBusca || undefined,

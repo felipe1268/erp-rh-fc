@@ -11046,6 +11046,7 @@ export const financialRouter = router({
     companyId: z.number(),
     contaBancariaId: z.number(),
     dataRef: z.string(),       // YYYY-MM-DD — data do cheque devolvido
+    valorRef: z.number().optional(), // valor absoluto do cheque em reais (para ordenar por proximidade)
     mesesAntes: z.number().min(0).max(12).default(1),
     mesesDepois: z.number().min(0).max(12).default(6),
     busca: z.string().optional(),
@@ -11053,7 +11054,6 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await assertCompanyAccess(ctx, input.companyId);
-    const pixRe = "%(PIX|TED|TRANSF)%";
     const r = await dbExecute(db,
       `SELECT id, data, descricao, valor, conciliado, entry_id AS "entryId"
          FROM bank_statement_lines
@@ -11061,14 +11061,16 @@ export const financialRouter = router({
           AND conta_bancaria_id=$2
           AND excluido_em IS NULL
           AND valor < 0
-          AND tipo='debito'
-          AND UPPER(descricao) LIKE $3
-          AND data >= ($4::date - ($5 || ' months')::interval)::date
-          AND data <= ($4::date + ($6 || ' months')::interval)::date
-        ORDER BY data DESC, id DESC
+          AND (UPPER(descricao) LIKE '%PIX%'
+            OR UPPER(descricao) LIKE '%TED%'
+            OR UPPER(descricao) LIKE '%TRANSF%')
+          AND data >= ($3::date - ($4 || ' months')::interval)::date
+          AND data <= ($3::date + ($5 || ' months')::interval)::date
+        ORDER BY ABS(valor + $6::numeric) ASC, data DESC, id DESC
         LIMIT 200`,
-      [input.companyId, input.contaBancariaId, pixRe,
-       input.dataRef, String(input.mesesAntes), String(input.mesesDepois)]);
+      [input.companyId, input.contaBancariaId,
+       input.dataRef, String(input.mesesAntes), String(input.mesesDepois),
+       String(input.valorRef ?? 0)]);
     let linhas = rows(r) as any[];
     if (input.busca) {
       const b = input.busca.toLowerCase();

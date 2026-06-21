@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3431 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO: "OUTROS MESES" RETORNAVA
+ * ZERO — LIKE COM `|` NÃO É OR NO POSTGRESQL. BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * `LIKE '%(PIX|TED|TRANSF)%'` é literal em SQL (o `|` não funciona como regex OR). Fix:
+ * três condições LIKE separadas com OR. Adicionado `valorRef` no input e `ORDER BY
+ * ABS(valor+valorRef)` para ordenar por proximidade de valor. Frontend passa `valorRef`
+ * com o valor absoluto do cheque. Detalhe: `shared/changelog.ts`.
+ *
  * Rev. 3430 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "VINCULAR PIX/TED" — BUSCA EM
  * OUTROS MESES. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *

@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3431** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO: "OUTROS MESES" RETORNAVA ZERO — LIKE COM `|` NÃO É OR NO POSTGRESQL. BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.** `LIKE '%(PIX|TED|TRANSF)%'` é literal. Fix: 3 LIKE separados com OR. Adicionado `valorRef` + `ORDER BY ABS(valor+valorRef)`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3430** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "VINCULAR PIX/TED" — BUSCA EM OUTROS MESES. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Nova rota `searchPixTedOutrosMeses` consulta `bank_statement_lines` num range ±meses (padrão: 1 antes + 6 depois). Botão "🗓 Outros meses" no filtro do dialog: acrescenta seção azul de resultados de outros meses abaixo do período atual. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3429** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO DEFINITIVA: DIALOG "VINCULAR PIX/TED" SUBSTITUÍDO POR createPortal NATIVO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Radix Dialog + CSS !important não resolveram posicionamento. Substituído por `createPortal(<div style={{position:"fixed",inset:0,zIndex:9999}}>, document.body)` — backdrop z-9998, painel z-9999, estilos inline. `import { createPortal } from "react-dom"` adicionado. Detalhe: `shared/changelog.ts`.
