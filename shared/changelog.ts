@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3420 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CARD DE CONTA COM DESTAQUE VERDE QUANDO
+ * HÁ CONCILIAÇÕES FEITAS NO PERÍODO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Problema: contas com extrato importado e ALGUMAS conciliações feitas mostravam exatamente
+ * o mesmo card azul "A conciliar" de contas sem nenhuma conciliação — não havia como distinguir
+ * progresso sem abrir a conta.
+ *
+ * Solução (100% front, dados já existiam no payload de `getBankAccountsConciliacaoStatus`):
+ *   - `accConciliadasMap` extrai `{ conciliadas, total }` por conta do accStatus existente.
+ *   - `temConciliacoes = isLanc && nConcil > 0`
+ *   - Card com `temConciliacoes=true` ganha borda e fundo VERDE-ESMERALDA (`emerald`) em vez
+ *     do azul puro — diferente do verde pleno do "Conciliado" (100%), sinalizando progresso parcial.
+ *   - Badge substitui "A conciliar" por "N/Total conciliados" (verde esmeralda) + badge âmbar "N%".
+ *   - Selecionado: ring esmeralda em vez de ring azul.
+ *   - Estados: 100% = verde (Conciliado) · parcial = esmeralda (N/Total) · zero = azul (A conciliar) · sem extrato = cinza.
+ *
+ * Arquivos: client/src/pages/financeiro/FinanceiroConciliacao.tsx
+ *   (accConciliadasMap useMemo, temConciliacoes/pctConcil vars, cardCls condicional, badge JSX).
+ *
  * Rev. 3419 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CONCILIAR PIX RÁPIDO A PARTIR DO CARD DO
  * CHEQUE DEVOLVIDO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *

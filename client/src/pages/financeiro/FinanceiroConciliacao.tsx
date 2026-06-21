@@ -605,6 +605,12 @@ export default function FinanceiroConciliacao() {
     for (const a of (accStatus ?? [])) map[Number(a.contaBancariaId)] = a.status;
     return map;
   }, [accStatus]);
+  // Rev. 3420 — qtd de linhas já conciliadas por conta (para o badge verde no card "A conciliar")
+  const accConciliadasMap: Record<number, { conciliadas: number; total: number }> = useMemo(() => {
+    const map: Record<number, { conciliadas: number; total: number }> = {};
+    for (const a of (accStatus ?? [])) map[Number(a.contaBancariaId)] = { conciliadas: Number(a.conciliadas) || 0, total: Number(a.total) || 0 };
+    return map;
+  }, [accStatus]);
 
   // Rev. 3365 — agora consome a agregação por mês vinda do backend
   // (getBankStatementsMonthlyStatus): cada linha já traz { mes, total, conciliadas, status }.
@@ -2278,14 +2284,22 @@ export default function FinanceiroConciliacao() {
                       const isLanc = accSt === "lancamento";
                       // Rev. 3405+ — contas sem extrato (vazio) ficam visualmente apagadas
                       const isSemExtrato = !isConsol && !isLanc;
+                      // Rev. 3420 — qtd de conciliações feitas (p/ destaque no card "A conciliar")
+                      const { conciliadas: nConcil = 0, total: nTotal = 0 } = accConciliadasMap[Number(b.id)] ?? {};
+                      const temConciliacoes = isLanc && nConcil > 0;
+                      const pctConcil = nTotal > 0 ? Math.round(nConcil / nTotal * 100) : 0;
                       const cardCls = isSel
                         ? (isConsol
                             ? "border-green-500 bg-green-50 ring-1 ring-green-200 shadow-sm"
-                            : "border-blue-500 bg-blue-50 ring-1 ring-blue-200 shadow-sm")
+                            : temConciliacoes
+                              ? "border-emerald-400 bg-emerald-50/60 ring-1 ring-emerald-200 shadow-sm"
+                              : "border-blue-500 bg-blue-50 ring-1 ring-blue-200 shadow-sm")
                         : (isConsol
                             ? "border-green-300 bg-green-50/60 hover:border-green-400"
                             : isLanc
-                              ? "border-blue-200 bg-white hover:border-blue-300 hover:bg-blue-50/40"
+                              ? temConciliacoes
+                                ? "border-emerald-300 bg-emerald-50/30 hover:border-emerald-400 hover:bg-emerald-50/50"
+                                : "border-blue-200 bg-white hover:border-blue-300 hover:bg-blue-50/40"
                               : "border-dashed border-gray-200 bg-gray-50/40 hover:border-gray-300 hover:bg-gray-50/70 opacity-60 hover:opacity-80");
                       return (
                         <button
@@ -2311,15 +2325,25 @@ export default function FinanceiroConciliacao() {
                             <p className={`text-xs font-mono tracking-wide truncate ${isSemExtrato && !isSel ? "text-gray-400" : "text-gray-500"}`}>
                               Ag. {formatAgencia(b.agencia)} / {formatConta(b.conta)}
                             </p>
-                            <span className={`mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                              isConsol ? "bg-green-100 text-green-700"
-                              : isLanc ? "bg-blue-100 text-blue-700"
-                              : "bg-gray-100 text-gray-500"
-                            }`}>
-                              {isConsol ? <><CheckCircle className="h-2.5 w-2.5" />Conciliado</>
-                                : isLanc ? <><AlertCircle className="h-2.5 w-2.5" />A conciliar</>
-                                : "Sem extrato"}
-                            </span>
+                            {/* Rev. 3420 — badge de status com destaque verde quando tem conciliações feitas */}
+                            <div className="mt-1 flex items-center gap-1 flex-wrap">
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                isConsol ? "bg-green-100 text-green-700"
+                                : temConciliacoes ? "bg-emerald-100 text-emerald-700"
+                                : isLanc ? "bg-blue-100 text-blue-700"
+                                : "bg-gray-100 text-gray-500"
+                              }`}>
+                                {isConsol ? <><CheckCircle className="h-2.5 w-2.5" />Conciliado</>
+                                  : temConciliacoes ? <><CheckCircle className="h-2.5 w-2.5" />{nConcil}/{nTotal} conciliados</>
+                                  : isLanc ? <><AlertCircle className="h-2.5 w-2.5" />A conciliar</>
+                                  : "Sem extrato"}
+                              </span>
+                              {temConciliacoes && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 tabular-nums">
+                                  {pctConcil}%
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </button>
                       );
