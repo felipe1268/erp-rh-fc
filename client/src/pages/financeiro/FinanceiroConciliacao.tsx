@@ -5559,10 +5559,7 @@ export default function FinanceiroConciliacao() {
 
         {/* Rev. 3427 — Dialog full-screen moderno: Vincular cheque devolvido a PIX/TED */}
         <Dialog open={vincularPixDlg != null} onOpenChange={(o) => { if (!o) { setVincularPixDlg(null); setVincularPixSel(null); setVincularPixBusca(""); setVincularPixSoProximos(false); } }}>
-          <DialogContent
-            className="flex flex-col gap-0 p-0 border-0 shadow-2xl rounded-none"
-            style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, width: "100vw", height: "100vh", maxWidth: "100vw", maxHeight: "100vh", transform: "none", margin: 0 }}
-          >
+          <DialogContent className="dlg-fullscreen shadow-2xl">
             {vincularPixDlg && (() => {
               const chq = vincularPixDlg.cheque;
               const valCents = chq.valorCents ?? Math.round(Math.abs(Number(chq.valor ?? 0)) * 100);

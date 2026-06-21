@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3428 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO: DIALOG "VINCULAR PIX/TED"
+ * CORTADO/MAL-POSICIONADO (REV. 3427). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * O Radix/shadcn DialogContent aplica `left: 50%; top: 50%; transform: translate(-50%,-50%)`
+ * + `max-w-lg` como classes base. O inline style e os prefixos `!` do Tailwind v4 não
+ * sobrescrevem esses valores de forma confiável.
+ * Fix: nova classe CSS `.dlg-fullscreen` em `client/src/index.css` com `!important` real
+ * em TODOS os atributos de posicionamento (`fixed; top:0; left:0; right:0; bottom:0;
+ * width:100vw; height:100dvh; max-width:none; max-height:none; transform:none; margin:0;
+ * border-radius:0; display:flex; flex-direction:column; overflow:hidden; animation:none`).
+ * DialogContent usa `className="dlg-fullscreen shadow-2xl"`.
+ *
  * Rev. 3427 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "VINCULAR PIX/TED" —
  * REDESIGN FULL-SCREEN MODERNO + FILTRO "SÓ PRÓXIMOS". 100% FRONTEND ·
  * ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**

@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3427** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "VINCULAR PIX/TED" — REDESIGN FULL-SCREEN MODERNO + FILTRO "SÓ PRÓXIMOS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Full-screen real (override Radix: `fixed; top:0; left:0; 100vw×100vh; transform:none`); header gradient indigo com card do cheque + busca glassmorphism; toggle "Só próximos (±15%)"; cards com borda colorida (verde=exato, âmbar=próximo) + badge %; footer contextual com resumo do selecionado. Detalhe: `shared/changelog.ts`.
+- **Rev. 3428** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO: DIALOG "VINCULAR PIX/TED" CORTADO/MAL-POSICIONADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Radix/shadcn aplica `left:50%; top:50%; transform:translate(-50%,-50%); max-w-lg` como classes base que inline style e `!` Tailwind v4 não sobrescrevem. Fix: classe CSS `.dlg-fullscreen` em `index.css` com `!important` real em todos os atributos de posicionamento. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3426** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO: TODAS AS CONTAS CINZA APÓS REV. 3423. BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Query CI (`resCi`) referenciava `e.excluido` (inexistente em `financial_entries`); erro 42703 derrubava TODO o endpoint deixando todas as contas cinza. Fix: linha removida. Detalhe: `shared/changelog.ts`.
+- **Rev. 3427** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "VINCULAR PIX/TED" — REDESIGN FULL-SCREEN MODERNO + FILTRO "SÓ PRÓXIMOS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Full-screen; header gradient indigo com card do cheque + busca glassmorphism; toggle "Só próximos (±15%)"; cards com borda colorida + badge %; footer contextual. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
+
+- **Rev. 3426** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO: TODAS AS CONTAS CINZA APÓS REV. 3423. BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3425** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "VINCULAR PIX/TED" — TELA CHEIA + BUSCA EM TEMPO REAL + FILTRO SOMENTE PIX/TED. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -63,12 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3423** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CARD DA CONTA CAIXA INTERNO EM DESTAQUE QUANDO HÁ CONFIRMAÇÕES NO PERÍODO. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3422** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · BOTÃO ⚡ "VINCULAR PIX/TED SUBSTITUTO" NOS CARDS DE CHEQUE DEVOLVIDO SEM QUITAÇÃO IDENTIFICADA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3421** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · % DE CONCILIAÇÃO NO CARD DE CONTA + % TOTAL NO PILL DO MÊS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3420** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CARD DE CONTA COM DESTAQUE VERDE QUANDO HÁ CONCILIAÇÕES FEITAS NO PERÍODO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3419** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CONCILIAR PIX RÁPIDO A PARTIR DO CARD DO CHEQUE DEVOLVIDO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 
 ### REGRA DE OURO — Cabeçalho de documentos institucionais FC (Rev. 2106+)

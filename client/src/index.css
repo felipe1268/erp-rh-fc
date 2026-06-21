@@ -858,3 +858,26 @@ html, body, * {
 .leaflet-control {
   z-index: 800 !important;
 }
+
+/* Rev. 3427 — override Radix Dialog positioning para full-screen real */
+.dlg-fullscreen {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  max-width: none !important;
+  max-height: none !important;
+  transform: none !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  border: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  gap: 0 !important;
+  animation: none !important;
+}
