@@ -68,51 +68,72 @@ async function gerarPrevisoesDoContrato(
   const totalMeses = (aFim * 12 + (mFim - 1)) - (aIni * 12 + (mIni - 1)) + 1;
   if (totalMeses <= 0) return 0;
 
-  // Pré-carrega os pares (mes, tipo) já existentes para esse contrato.
+  // Rev. 3444 — Pré-carrega os pares (mes, tipo) já existentes para este FUNCIONÁRIO
+  // (não só para o contractId), evitando duplicatas quando o contrato é revisado e gera
+  // um novo contractId — o antigo já criou entradas para os mesmos meses.
   const existentes = await db.select({
     mes: pjPayments.mesReferencia,
     tipo: pjPayments.tipo,
-  }).from(pjPayments).where(eq(pjPayments.contractId, contrato.id));
+    valor: pjPayments.valor,
+  }).from(pjPayments).where(eq(pjPayments.employeeId, contrato.employeeId));
   const jaTem = new Set<string>(
     (existentes as any[]).map((r) => `${r.mes}::${r.tipo}`),
   );
+  // Cap: soma de valores já gerados por mês para este funcionário (não pode exceder valorMensal).
+  const somaExistentePorMes = new Map<string, number>();
+  for (const r of existentes as any[]) {
+    somaExistentePorMes.set(r.mes, (somaExistentePorMes.get(r.mes) ?? 0) + parseFloat(r.valor || "0"));
+  }
 
   const linhas: any[] = [];
   for (let i = 0; i < totalMeses; i++) {
     const { ano, mes } = addMeses(aIni, mIni, i);
     const mesRef = `${ano}-${String(mes).padStart(2, "0")}`;
 
+    // Rev. 3444 — Cap: soma acumulada no mês p/ este funcionário (inclui entradas pendentes +
+    // as que serão criadas agora no loop) não pode exceder valorMensal do contrato.
+    const somaAcum = somaExistentePorMes.get(mesRef) ?? 0;
+
     // Adiantamento: mesmo mês de referência
     if (!jaTem.has(`${mesRef}::adiantamento`)) {
-      linhas.push({
-        contractId: contrato.id,
-        companyId: contrato.companyId,
-        employeeId: contrato.employeeId,
-        mesReferencia: mesRef,
-        tipo: "adiantamento",
-        valor: valorAdiant,
-        descricao: `Adiantamento ${percAdiant}% — ${mesRef}`,
-        dataPrevista: dataIsoSegura(ano, mes, diaAdiant),
-        status: "pendente",
-        criadoPor,
-      });
+      const vAdiant = parseFloat(valorAdiant);
+      if (somaAcum + vAdiant <= valorMensal * 1.001) {
+        linhas.push({
+          contractId: contrato.id,
+          companyId: contrato.companyId,
+          employeeId: contrato.employeeId,
+          mesReferencia: mesRef,
+          tipo: "adiantamento",
+          valor: valorAdiant,
+          descricao: `Adiantamento ${percAdiant}% — ${mesRef}`,
+          dataPrevista: dataIsoSegura(ano, mes, diaAdiant),
+          status: "pendente",
+          criadoPor,
+        });
+        somaExistentePorMes.set(mesRef, somaAcum + vAdiant);
+      }
     }
 
     // Fechamento: mês seguinte ao de referência
     if (!jaTem.has(`${mesRef}::fechamento`)) {
-      const prox = addMeses(ano, mes, 1);
-      linhas.push({
-        contractId: contrato.id,
-        companyId: contrato.companyId,
-        employeeId: contrato.employeeId,
-        mesReferencia: mesRef,
-        tipo: "fechamento",
-        valor: valorFech,
-        descricao: `Fechamento ${percFech}% — ${mesRef}`,
-        dataPrevista: dataIsoSegura(prox.ano, prox.mes, diaFech),
-        status: "pendente",
-        criadoPor,
-      });
+      const vFech = parseFloat(valorFech);
+      const somaAcumFech = somaExistentePorMes.get(mesRef) ?? 0;
+      if (somaAcumFech + vFech <= valorMensal * 1.001) {
+        const prox = addMeses(ano, mes, 1);
+        linhas.push({
+          contractId: contrato.id,
+          companyId: contrato.companyId,
+          employeeId: contrato.employeeId,
+          mesReferencia: mesRef,
+          tipo: "fechamento",
+          valor: valorFech,
+          descricao: `Fechamento ${percFech}% — ${mesRef}`,
+          dataPrevista: dataIsoSegura(prox.ano, prox.mes, diaFech),
+          status: "pendente",
+          criadoPor,
+        });
+        somaExistentePorMes.set(mesRef, somaAcumFech + vFech);
+      }
     }
   }
 
@@ -986,6 +1007,46 @@ export const pjContractsRouter = router({
       }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
+        // Rev. 3444 — Dedup: impede inserção de (employeeId, mesReferencia, tipo) duplicado
+        // independente do contractId (protege contra revisão de contrato + double-click).
+        const existente = await db.select({ id: pjPayments.id })
+          .from(pjPayments)
+          .where(and(
+            eq(pjPayments.employeeId, input.employeeId),
+            eq(pjPayments.mesReferencia, input.mesReferencia),
+            eq(pjPayments.tipo, input.tipo),
+          ))
+          .limit(1);
+        if (existente.length > 0) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: `Já existe lançamento PJ de "${input.tipo}" para este prestador em ${input.mesReferencia}.`,
+          });
+        }
+        // Cap: soma existente + novo não pode exceder valorMensal do contrato
+        const [contrato, somaRes] = await Promise.all([
+          db.select({ valorMensal: pjContracts.valorMensal })
+            .from(pjContracts)
+            .where(eq(pjContracts.id, input.contractId))
+            .limit(1),
+          db.select({ soma: pjPayments.valor })
+            .from(pjPayments)
+            .where(and(
+              eq(pjPayments.employeeId, input.employeeId),
+              eq(pjPayments.mesReferencia, input.mesReferencia),
+            )),
+        ]);
+        if (contrato.length > 0) {
+          const valorMensal = parseFloat((contrato[0] as any).valorMensal || "0") || 0;
+          const somaAtual = (somaRes as any[]).reduce((acc: number, r: any) => acc + parseFloat(r.soma || "0"), 0);
+          const novoValor = parseFloat(input.valor || "0");
+          if (valorMensal > 0 && somaAtual + novoValor > valorMensal * 1.001) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `Total ultrapassaria o valor mensal do contrato (R$ ${valorMensal.toFixed(2)}). Soma atual: R$ ${somaAtual.toFixed(2)}, novo lançamento: R$ ${novoValor.toFixed(2)}.`,
+            });
+          }
+        }
         await db.insert(pjPayments).values({
           ...input,
           descricao: input.descricao || null,

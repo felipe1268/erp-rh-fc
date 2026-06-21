@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3444 — **COMPRAS/PJ · LANÇAMENTOS PJ DUPLICADOS NA CONCILIAÇÃO BANCÁRIA — DEDUP E CAP DE VALOR.
+ * BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PROBLEMA: A conciliação bancária exibia lançamentos PJ duplicados (ex.: ANDRE FIGUEIREDO AUGUSTO
+ * com 4 itens = 2×adiantamento + 2×fechamento, totalizando R$24.000 num contrato de R$8.000).
+ * A origem era que `gerarPrevisoesDoContrato` deduplicava por `(contractId, mesReferencia, tipo)`:
+ * ao revisar o contrato (novo contractId), gerava novas entradas em `pj_payments` para os mesmos
+ * meses — `importPJToFinancial` as materializava todas em `financial_entries`, e
+ * `_agruparConciliacao` as exibia sem filtro.
+ *
+ * CORREÇÕES (3 camadas, nenhuma DELETE/ALTER/DROP):
+ *
+ * 1. **`_agruparConciliacao` (financial.ts) — dedup de exibição**: grupos PJ agora mantêm um
+ *    `_pjSeenKeys: Set<string>` por (data, |valor|, descricao). Itens com chave repetida são
+ *    silenciosamente descartados da exibição — valor do grupo e contagem NÃO os incluem.
+ *    Corrige dados ruins já existentes no banco sem DELETE.
+ *
+ * 2. **`gerarPrevisoesDoContrato` (pjContracts.ts) — dedup por funcionário**: a pré-carga de
+ *    pares existentes passou de `WHERE contractId=X` para `WHERE employeeId=X` — abrange TODOS
+ *    os contratos do mesmo prestador. Duplicata por revisão de contrato (novo contractId) não é
+ *    mais gerada. Adicionado mapa `somaExistentePorMes` como cap: adiantamento + fechamento do
+ *    mês não são inseridos se a soma ultrapassar `valorMensal` (tolerância 0.1% para arredondamento).
+ *
+ * 3. **`pj.pagamentos.create` (pjContracts.ts) — guard no insert manual**: antes do INSERT,
+ *    verifica `(employeeId, mesReferencia, tipo)` — lança CONFLICT se já existir. Em seguida
+ *    verifica cap: soma atual + novo valor ≤ valorMensal do contrato (BAD_REQUEST se exceder).
+ *    Consultas em paralelo (Promise.all) para minimizar latência.
+ *
+ * Arquivos: server/routers/financial.ts, server/routers/pjContracts.ts.
+ * Nenhuma migration, nenhum ALTER, nenhum DROP, nenhum DELETE.
+ *
  * Rev. 3443 — **CONCILIAÇÃO BANCÁRIA / LANÇAR NO ERP · FORMA DE PAGAMENTO AUTO-DETECTADA DO TEXTO DO EXTRATO.
  * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *

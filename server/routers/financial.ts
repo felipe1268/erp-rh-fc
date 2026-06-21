@@ -334,8 +334,17 @@ function _agruparConciliacao(arr: any[], supplierCycleMap: Map<string, any> = ne
         itensIds: [] as number[],
         itens: [] as any[],
         _fornCount: new Map<string, number>(),
+        _pjSeenKeys: tipoG === "pj" ? new Set<string>() : undefined,
       };
       groups.set(chave, g);
+    }
+    // Rev. 3444 — PJ: dedup por (data, |valor|, descricao) dentro do grupo p/ absorver
+    // duplicatas que existem no banco (geradas por revisão de contrato com novo contractId).
+    // A entrada duplicada NÃO entra nos itens nem no valor total do grupo.
+    if (tipoG === "pj" && g._pjSeenKeys) {
+      const dupKey = `${dataStr}|${Math.abs(Number(r.valor))}|${String(r.descricao ?? "").trim()}`;
+      if ((g._pjSeenKeys as Set<string>).has(dupKey)) continue;
+      (g._pjSeenKeys as Set<string>).add(dupKey);
     }
     g.valor += Number(r.valor) || 0;
     g.qtd += 1;
