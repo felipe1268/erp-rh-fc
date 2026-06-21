@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3446 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CRIAR CATEGORIA E CENTRO DE CUSTO INLINE
+ * NO FORM "LANÇAR NO ERP". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PROBLEMA: no form de lançamento da Conciliação Bancária, os campos "Categoria" e
+ * "Centro de custo" exigiam que o usuário saísse da tela para cadastrar um registro novo —
+ * fluxo interrompido e perda do contexto do extrato.
+ *
+ * SOLUÇÃO (espelho do "+ Nova obra" já existente):
+ *
+ * 1. **Botão "+ Nova categoria"** ao lado do label "Categoria (Conta do Plano de Contas)":
+ *    abre Dialog inline com campos Nome + Tipo (Despesa/Receita). O tipo é pré-preenchido
+ *    com base na direção da transação (valor < 0 → Despesa; valor ≥ 0 → Receita).
+ *    Chama `financial.createAccount` com `escopo="categoria"` e `natureza` derivada do tipo.
+ *    Após criar, faz refetch de `lancAccounts` e auto-seleciona a nova categoria no form.
+ *
+ * 2. **Botão "+ Novo centro de custo"** ao lado do label "Centro de custo":
+ *    abre Dialog inline com campo Nome. Chama `financial.createCostCenter` com
+ *    `tipo="Operacional"` (padrão; editável depois na tela dedicada). Após criar, faz refetch
+ *    de `lancCostCenters` e auto-seleciona o novo CC no form + atualiza o display.
+ *
+ * 3. **refetch exposto** nas queries `lancAccounts` e `lancCostCenters` (antes
+ *    desestruturavam só `data`).
+ *
+ * Arquivos: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`.
+ *
  * Rev. 3445 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SEÇÃO "SEM CONTA" NO CAIXA INTERNO +
  * VÍNCULO DE CONTA AO CONCILIAR. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *

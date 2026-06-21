@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3445** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SEÇÃO "SEM CONTA" NO CAIXA INTERNO + VÍNCULO DE CONTA AO CONCILIAR. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** (1) `getConciliacaoReport` habilitado para Caixa Interno (removido guard `!contaSelecionadaCaixaInterno`); (2) bloco "Sem conta" âmbar adicionado na seção Caixa Interno com botão "Confirmar" por item; (3) `confirmarEntradaCaixa` aceita entry sem conta (LEFT JOIN + valida contaBancariaId caixaInterno + UPDATE conta+conciliado); (4) `conciliarLancamento` vincula `conta_bancaria_id` pós-conciliação se era NULL; (5) `conciliarGrupoLancamentos` inclui `COALESCE(conta_bancaria_id,$lineConta)` no SET. Detalhe: `shared/changelog.ts`.
+- **Rev. 3446** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CRIAR CATEGORIA E CENTRO DE CUSTO INLINE NO FORM "LANÇAR NO ERP". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Botões "+ Nova categoria" e "+ Novo centro de custo" adicionados ao lado dos respectivos labels. Dialogs inline (espelho do "+ Nova obra"): categoria usa `financial.createAccount` com `escopo="categoria"` + tipo pré-preenchido pela direção da transação; centro de custo usa `financial.createCostCenter` tipo="Operacional". Refetch exposto nas queries lancAccounts/lancCostCenters. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3444** — **COMPRAS/PJ · LANÇAMENTOS PJ DUPLICADOS NA CONCILIAÇÃO BANCÁRIA — DEDUP E CAP DE VALOR. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** 3 camadas: (1) `_agruparConciliacao` filtra itens duplicados por `(data,|valor|,descricao)` sem DELETE; (2) `gerarPrevisoesDoContrato` deduplica por `employeeId` (não `contractId`) + cap de `valorMensal`; (3) `pj.pagamentos.create` verifica existência e cap antes do INSERT. Detalhe: `shared/changelog.ts`.
+- **Rev. 3445** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SEÇÃO "SEM CONTA" NO CAIXA INTERNO + VÍNCULO DE CONTA AO CONCILIAR. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** (1) `getConciliacaoReport` habilitado para Caixa Interno; (2) bloco âmbar com botão "Confirmar" por item; (3) `confirmarEntradaCaixa` aceita entry sem conta; (4) `conciliarLancamento`/`conciliarGrupoLancamentos` vinculam `conta_bancaria_id` após conciliar. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
+
+- **Rev. 3444** — **COMPRAS/PJ · LANÇAMENTOS PJ DUPLICADOS NA CONCILIAÇÃO BANCÁRIA — DEDUP E CAP DE VALOR. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3443** — **CONCILIAÇÃO BANCÁRIA / LANÇAR NO ERP · FORMA DE PAGAMENTO AUTO-DETECTADA DO TEXTO DO EXTRATO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3441** — **CONCILIAÇÃO BANCÁRIA / PANORAMA · VARREDURA DE OC / OS / LOCAÇÃO POR MÊS. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3440** — **COMPRAS / FORNECEDORES · SEÇÃO "CICLO DE FECHAMENTO" NO CADASTRO DO FORNECEDOR. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3439** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · NÚMERO DA OC NO LANÇAMENTO + LINK "ABRIR OC". BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 
 ### REGRA DE OURO — Cabeçalho de documentos institucionais FC (Rev. 2106+)

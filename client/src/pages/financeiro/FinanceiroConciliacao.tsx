@@ -314,8 +314,8 @@ export default function FinanceiroConciliacao() {
   // lançamento (data, conta e valor já vêm pré-preenchidos do extrato). Após criar,
   // auto-concilia com a linha do extrato (mesma mutation da conciliação manual).
   const { data: lancObras, refetch: refetchLancObras } = (trpc as any).obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
-  const { data: lancAccounts } = (trpc as any).financial.getAccounts.useQuery({ companyId, ativo: true }, { enabled: !!companyId });
-  const { data: lancCostCenters } = (trpc as any).financial.getCostCenters.useQuery({ companyId }, { enabled: !!companyId });
+  const { data: lancAccounts, refetch: refetchLancAccounts } = (trpc as any).financial.getAccounts.useQuery({ companyId, ativo: true }, { enabled: !!companyId });
+  const { data: lancCostCenters, refetch: refetchLancCostCenters } = (trpc as any).financial.getCostCenters.useQuery({ companyId }, { enabled: !!companyId });
   const { data: lancFornecedores } = (trpc as any).compras.listarFornecedores.useQuery({ companyId, ativo: true }, { enabled: !!companyId });
   const obrasOpts: { id: number; nome: string; cliente: string }[] = useMemo(() => {
     const seen = new Set<string>(); const out: { id: number; nome: string; cliente: string }[] = [];
@@ -408,6 +408,14 @@ export default function FinanceiroConciliacao() {
   const [lancNewObraOpen, setLancNewObraOpen] = useState(false);
   const [lancNewObraNome, setLancNewObraNome] = useState("");
   const criarObraMut = (trpc as any).obras.create.useMutation();
+  // Rev. 3446 — dialogs inline "Nova categoria" e "Novo centro de custo"
+  const [lancNewCatOpen, setLancNewCatOpen] = useState(false);
+  const [lancNewCatNome, setLancNewCatNome] = useState("");
+  const [lancNewCatTipo, setLancNewCatTipo] = useState<"despesa" | "receita">("despesa");
+  const criarCategoriaMut = (trpc as any).financial.createAccount.useMutation();
+  const [lancNewCCOpen, setLancNewCCOpen] = useState(false);
+  const [lancNewCCNome, setLancNewCCNome] = useState("");
+  const criarCCMut = (trpc as any).financial.createCostCenter.useMutation();
   // Rev. 3198 — guarda o lançamento JÁ criado p/ a linha atual: se a conciliação
   // automática falhar, um novo clique tenta SÓ conciliar (não recria → sem duplicidade).
   const lancCreatedRef = useRef<{ stmtId: any; entryId: number } | null>(null);
@@ -5672,7 +5680,13 @@ export default function FinanceiroConciliacao() {
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Categoria (Conta do Plano de Contas)</Label>
+                  <div className="flex items-center justify-between mb-0.5">
+                    <Label className="text-xs">Categoria (Conta do Plano de Contas)</Label>
+                    <button type="button" className="text-[11px] text-blue-600 hover:underline flex items-center gap-0.5"
+                      onClick={() => { setLancNewCatNome(""); setLancNewCatTipo(lancStatement?.id == null ? (lancForm.tipo as "despesa"|"receita") : (Number(lancStatement.valor) < 0 ? "despesa" : "receita")); setLancNewCatOpen(true); }}>
+                      <Plus className="w-3 h-3" />Nova categoria
+                    </button>
+                  </div>
                   <LancCombo
                     value={lancForm.contaNome}
                     onChangeText={(s) => setLancForm(f => ({ ...f, contaNome: s, contaId: "" }))}
@@ -5690,7 +5704,13 @@ export default function FinanceiroConciliacao() {
                 </div>
                 {(lancStatement?.id == null ? lancForm.tipo === "despesa" : Number(lancStatement.valor) < 0) && (
                   <div>
-                    <Label className="text-xs">Centro de custo</Label>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <Label className="text-xs">Centro de custo</Label>
+                      <button type="button" className="text-[11px] text-blue-600 hover:underline flex items-center gap-0.5"
+                        onClick={() => { setLancNewCCNome(""); setLancNewCCOpen(true); }}>
+                        <Plus className="w-3 h-3" />Novo centro de custo
+                      </button>
+                    </div>
                     <LancCombo
                       value={lancCCDisplay}
                       onChangeText={(s) => { setLancCCDisplay(s); if (!s) setLancForm(f => ({ ...f, centroCustoId: "" })); }}
@@ -6083,6 +6103,116 @@ export default function FinanceiroConciliacao() {
                 }}
               >
                 {criarObraMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Plus className="w-4 h-4 mr-1" />}Criar obra
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 3446 — Dialog inline "Nova categoria" */}
+        <Dialog open={lancNewCatOpen} onOpenChange={(o) => { if (!o) setLancNewCatOpen(false); }}>
+          <DialogContent className="max-w-sm w-full">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <Plus className="w-4 h-4 text-blue-600" />Nova categoria
+              </DialogTitle>
+              <DialogDescription className="text-xs">A categoria será criada e automaticamente selecionada no formulário.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 py-1">
+              <div>
+                <Label className="text-xs">Nome *</Label>
+                <Input
+                  value={lancNewCatNome}
+                  onChange={e => setLancNewCatNome(e.target.value)}
+                  placeholder="Ex.: Manutenção Predial"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Tipo</Label>
+                <select
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                  value={lancNewCatTipo}
+                  onChange={e => setLancNewCatTipo(e.target.value as "despesa" | "receita")}
+                >
+                  <option value="despesa">Despesa</option>
+                  <option value="receita">Receita</option>
+                </select>
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" size="sm" onClick={() => setLancNewCatOpen(false)}>Cancelar</Button>
+              <Button
+                size="sm"
+                disabled={!lancNewCatNome.trim() || criarCategoriaMut.isPending}
+                onClick={async () => {
+                  if (!lancNewCatNome.trim() || !companyId) return;
+                  try {
+                    const nova = await criarCategoriaMut.mutateAsync({
+                      companyId: Number(companyId),
+                      nome: lancNewCatNome.trim(),
+                      tipo: lancNewCatTipo,
+                      natureza: lancNewCatTipo === "despesa" ? "debito" : "credito",
+                      escopo: "categoria",
+                    });
+                    await refetchLancAccounts();
+                    setLancForm(f => ({ ...f, contaId: String(nova?.id ?? nova), contaNome: lancNewCatNome.trim() }));
+                    setLancNewCatOpen(false);
+                    toast({ title: "Categoria criada", description: lancNewCatNome.trim() });
+                  } catch (err: any) {
+                    toast({ title: "Erro ao criar categoria", description: String(err?.message ?? err), variant: "destructive" });
+                  }
+                }}
+              >
+                {criarCategoriaMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Plus className="w-4 h-4 mr-1" />}Criar categoria
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 3446 — Dialog inline "Novo centro de custo" */}
+        <Dialog open={lancNewCCOpen} onOpenChange={(o) => { if (!o) setLancNewCCOpen(false); }}>
+          <DialogContent className="max-w-sm w-full">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <Plus className="w-4 h-4 text-blue-600" />Novo centro de custo
+              </DialogTitle>
+              <DialogDescription className="text-xs">O centro de custo será criado e automaticamente selecionado no formulário.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 py-1">
+              <div>
+                <Label className="text-xs">Nome *</Label>
+                <Input
+                  value={lancNewCCNome}
+                  onChange={e => setLancNewCCNome(e.target.value)}
+                  placeholder="Ex.: Administrativo — Sede"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" size="sm" onClick={() => setLancNewCCOpen(false)}>Cancelar</Button>
+              <Button
+                size="sm"
+                disabled={!lancNewCCNome.trim() || criarCCMut.isPending}
+                onClick={async () => {
+                  if (!lancNewCCNome.trim() || !companyId) return;
+                  try {
+                    const novo = await criarCCMut.mutateAsync({
+                      companyId: Number(companyId),
+                      nome: lancNewCCNome.trim(),
+                      tipo: "Operacional",
+                    });
+                    await refetchLancCostCenters();
+                    setLancForm(f => ({ ...f, centroCustoId: String(novo?.id ?? novo) }));
+                    setLancCCDisplay(lancNewCCNome.trim());
+                    setLancNewCCOpen(false);
+                    toast({ title: "Centro de custo criado", description: lancNewCCNome.trim() });
+                  } catch (err: any) {
+                    toast({ title: "Erro ao criar centro de custo", description: String(err?.message ?? err), variant: "destructive" });
+                  }
+                }}
+              >
+                {criarCCMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Plus className="w-4 h-4 mr-1" />}Criar centro de custo
               </Button>
             </DialogFooter>
           </DialogContent>
