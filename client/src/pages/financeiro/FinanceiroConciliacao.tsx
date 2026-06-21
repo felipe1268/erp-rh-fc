@@ -358,7 +358,20 @@ export default function FinanceiroConciliacao() {
   const [vincularPixSel, setVincularPixSel] = useState<any | null>(null);
   const [vincularPixBusca, setVincularPixBusca] = useState("");
   const [vincularPixSoProximos, setVincularPixSoProximos] = useState(false);
+  const [vincularPixOutrosMeses, setVincularPixOutrosMeses] = useState(false);
   const vincularChequePix = (trpc as any).financial.vincularChequePix.useMutation();
+  const { data: vincularPixOutrosMesesData, isFetching: vincularPixOutrosMesesFetching } =
+    (trpc as any).financial.searchPixTedOutrosMeses.useQuery(
+      {
+        companyId: Number(companyId),
+        contaBancariaId: parseInt(contaBancariaId) || 0,
+        dataRef: vincularPixDlg?.cheque?.dataCredito?.slice(0, 10) ?? "2000-01-01",
+        mesesAntes: 1,
+        mesesDepois: 6,
+        busca: vincularPixBusca || undefined,
+      },
+      { enabled: !!vincularPixOutrosMeses && !!vincularPixDlg && !!companyId && !!contaBancariaId }
+    );
   // Rev. 3419 — Conciliar PIX rápido a partir do card do cheque devolvido
   const [conciliarPixDlg, setConciliarPixDlg] = useState<{ cheque: any; pixLineId: number; pixLine: any | null } | null>(null);
   const [conciliarPixEntry, setConciliarPixEntry] = useState<any | null>(null);
@@ -5582,7 +5595,19 @@ export default function FinanceiroConciliacao() {
               || String(formatBRL(Math.abs(Number(l.valor)))).includes(buscaNorm);
           });
           const nProximos = candidatasPix.filter((l: any) => Math.abs(Math.abs(Math.round(Number(l.valor) * 100)) - valCents) <= limiarProxCents).length;
-          const closeDialog = () => { setVincularPixDlg(null); setVincularPixSel(null); setVincularPixBusca(""); setVincularPixSoProximos(false); };
+          // Mescla resultados de outros meses (sem duplicar IDs já presentes no período atual)
+          const idsAtual = new Set(candidatasPix.map((l: any) => l.id));
+          const linhasOutrosMeses: any[] = vincularPixOutrosMeses
+            ? (vincularPixOutrosMesesData?.linhas ?? [])
+                .filter((l: any) => !idsAtual.has(l.id))
+                .filter((l: any) => {
+                  if (!buscaNorm) return true;
+                  return String(l.descricao ?? "").toLowerCase().includes(buscaNorm)
+                    || String(fmtData(l.data)).includes(buscaNorm)
+                    || String(formatBRL(Math.abs(Number(l.valor)))).includes(buscaNorm);
+                })
+            : [];
+          const closeDialog = () => { setVincularPixDlg(null); setVincularPixSel(null); setVincularPixBusca(""); setVincularPixSoProximos(false); setVincularPixOutrosMeses(false); };
           return (
             <>
               {/* Backdrop */}
@@ -5636,13 +5661,20 @@ export default function FinanceiroConciliacao() {
                   </div>
                 </div>
                 {/* ── FILTROS ── */}
-                <div style={{ flexShrink: 0, background: "#f9fafb", borderBottom: "1px solid #e5e7eb", padding: "8px 16px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ flexShrink: 0, background: "#f9fafb", borderBottom: "1px solid #e5e7eb", padding: "8px 16px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <button
                     type="button"
                     onClick={() => setVincularPixSoProximos(v => !v)}
-                    style={{ display: "flex", alignItems: "center", gap: 6, borderRadius: 999, padding: "4px 12px", fontSize: 12, fontWeight: 500, border: `1px solid ${vincularPixSoProximos ? "#4f46e5" : "#d1d5db"}`, background: vincularPixSoProximos ? "#4f46e5" : "#fff", color: vincularPixSoProximos ? "#fff" : "#4b5563", cursor: "pointer" }}
+                    style={{ display: "flex", alignItems: "center", gap: 5, borderRadius: 999, padding: "4px 10px", fontSize: 12, fontWeight: 500, border: `1px solid ${vincularPixSoProximos ? "#4f46e5" : "#d1d5db"}`, background: vincularPixSoProximos ? "#4f46e5" : "#fff", color: vincularPixSoProximos ? "#fff" : "#4b5563", cursor: "pointer" }}
                   >
                     {vincularPixSoProximos ? "✓" : "◎"} Só próximos ({nProximos})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVincularPixOutrosMeses(v => !v)}
+                    style={{ display: "flex", alignItems: "center", gap: 5, borderRadius: 999, padding: "4px 10px", fontSize: 12, fontWeight: 500, border: `1px solid ${vincularPixOutrosMeses ? "#0891b2" : "#d1d5db"}`, background: vincularPixOutrosMeses ? "#0891b2" : "#fff", color: vincularPixOutrosMeses ? "#fff" : "#4b5563", cursor: "pointer" }}
+                  >
+                    {vincularPixOutrosMesesFetching ? "⏳" : vincularPixOutrosMeses ? "✓" : "🗓"} Outros meses
                   </button>
                   <span style={{ fontSize: 12, color: "#9ca3af", marginLeft: "auto" }}>
                     {candidatasFiltradas.length} resultado{candidatasFiltradas.length !== 1 ? "s" : ""}{buscaNorm ? ` · "${vincularPixBusca}"` : ""}
@@ -5703,6 +5735,56 @@ export default function FinanceiroConciliacao() {
                       </button>
                     );
                   })}
+
+                  {/* ── OUTROS MESES ── */}
+                  {vincularPixOutrosMeses && (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                        <div style={{ flex: 1, height: 1, background: "#e0f2fe" }} />
+                        <span style={{ fontSize: 11, fontWeight: 600, color: "#0891b2", whiteSpace: "nowrap" }}>
+                          {vincularPixOutrosMesesFetching ? "Buscando…" : `Outros meses (${linhasOutrosMeses.length})`}
+                        </span>
+                        <div style={{ flex: 1, height: 1, background: "#e0f2fe" }} />
+                      </div>
+                      {!vincularPixOutrosMesesFetching && linhasOutrosMeses.length === 0 && (
+                        <p style={{ textAlign: "center", fontSize: 12, color: "#9ca3af", margin: "8px 0" }}>Nenhum PIX/TED encontrado nos outros meses</p>
+                      )}
+                      {linhasOutrosMeses.map((l: any) => {
+                        const isSelected = vincularPixSel?.id === l.id;
+                        const diffCents = Math.abs(Math.abs(Math.round(Number(l.valor) * 100)) - valCents);
+                        const isExact = diffCents === 0;
+                        const isProx = diffCents <= limiarProxCents;
+                        const pctDiff = valCents > 0 ? Math.round(diffCents / valCents * 100) : 0;
+                        const proximidadeLabel = isExact ? "= exato" : isProx ? `±${pctDiff}%` : null;
+                        const badgeStyle: React.CSSProperties = isExact
+                          ? { background: "#d1fae5", color: "#065f46", border: "1px solid #a7f3d0", borderRadius: 999, fontSize: 10, fontWeight: 600, padding: "1px 7px" }
+                          : isProx ? { background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a", borderRadius: 999, fontSize: 10, fontWeight: 600, padding: "1px 7px" }
+                          : { background: "#f3f4f6", color: "#6b7280", border: "1px solid #e5e7eb", borderRadius: 999, fontSize: 10, fontWeight: 600, padding: "1px 7px" };
+                        const cardBorder = isSelected ? "2px solid #0891b2" : "2px solid #e0f2fe";
+                        const cardBg = isSelected ? "#ecfeff" : "#f0f9ff";
+                        return (
+                          <button
+                            key={`om-${l.id}`}
+                            type="button"
+                            style={{ width: "100%", textAlign: "left", border: cardBorder, borderRadius: 12, padding: "12px 14px", background: cardBg, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, marginBottom: 8, boxShadow: isSelected ? "0 2px 8px rgba(8,145,178,0.15)" : "none" }}
+                            onClick={() => setVincularPixSel(isSelected ? null : l)}
+                          >
+                            <div style={{ flexShrink: 0, width: 20, height: 20, borderRadius: "50%", border: `2px solid ${isSelected ? "#0891b2" : "#a5f3fc"}`, background: isSelected ? "#0891b2" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              {isSelected && <Check style={{ width: 12, height: 12, color: "#fff" }} />}
+                            </div>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <p style={{ margin: 0, fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: isSelected ? "#164e63" : "#0c4a6e" }}>{l.descricao}</p>
+                              <p style={{ margin: "2px 0 0", fontSize: 12, color: "#0e7490" }}>{fmtData(l.data)} {l.conciliado ? <span style={{ color: "#6b7280", fontSize: 10 }}>· já conciliado</span> : null}</p>
+                            </div>
+                            <div style={{ flexShrink: 0, textAlign: "right" }}>
+                              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: isSelected ? "#0891b2" : "#0c4a6e" }}>{formatBRL(Math.abs(Number(l.valor)))}</p>
+                              {proximidadeLabel && <span style={badgeStyle}>{proximidadeLabel}</span>}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
                 {/* ── FOOTER ── */}
                 <div style={{ flexShrink: 0, borderTop: "1px solid #e5e7eb", background: "#fff", padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>

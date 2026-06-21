@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3430** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "VINCULAR PIX/TED" — BUSCA EM OUTROS MESES. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Nova rota `searchPixTedOutrosMeses` consulta `bank_statement_lines` num range ±meses (padrão: 1 antes + 6 depois). Botão "🗓 Outros meses" no filtro do dialog: acrescenta seção azul de resultados de outros meses abaixo do período atual. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3429** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO DEFINITIVA: DIALOG "VINCULAR PIX/TED" SUBSTITUÍDO POR createPortal NATIVO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Radix Dialog + CSS !important não resolveram posicionamento. Substituído por `createPortal(<div style={{position:"fixed",inset:0,zIndex:9999}}>, document.body)` — backdrop z-9998, painel z-9999, estilos inline. `import { createPortal } from "react-dom"` adicionado. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3428** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "VINCULAR PIX/TED" — REDESIGN FULL-SCREEN MODERNO + FILTRO "SÓ PRÓXIMOS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Full-screen; header gradient indigo com card do cheque + busca glassmorphism; toggle "Só próximos (±15%)"; cards com borda colorida + badge %; footer contextual. Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3428** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "VINCULAR PIX/TED" — REDESIGN FULL-SCREEN MODERNO + FILTRO "SÓ PRÓXIMOS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3426** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO: TODAS AS CONTAS CINZA APÓS REV. 3423. BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3430 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "VINCULAR PIX/TED" — BUSCA EM
+ * OUTROS MESES. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Nova rota tRPC `searchPixTedOutrosMeses`: consulta `bank_statement_lines` direto, filtra
+ * PIX|TED|TRANSF, valor < 0, entre `dataRef - mesesAntes` e `dataRef + mesesDepois`
+ * (padrão: 1 mês antes, 6 meses depois), busca textual opcional. Novo botão "🗓 Outros meses"
+ * no filtro do dialog: ao ativar, busca no banco e acrescenta seção de resultados azuis
+ * (fundo #f0f9ff, borda #e0f2fe) abaixo dos resultados do período atual, sem duplicar IDs.
+ * Estado `vincularPixOutrosMeses` zerado no `closeDialog`.
+ *
  * Rev. 3429 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO DEFINITIVA: DIALOG
  * "VINCULAR PIX/TED" SUBSTITUÍDO POR createPortal NATIVO. 100% FRONTEND ·
  * ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**

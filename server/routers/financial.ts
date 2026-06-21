@@ -11040,6 +11040,43 @@ export const financialRouter = router({
     return { lancados, pulados, solicitados: input.ids.length };
   }),
 
+  // Rev. 3430 — Busca PIX/TED em bank_statement_lines além do mês carregado na conciliação.
+  // Útil quando o cheque foi devolvido num mês e o PIX/TED substituto saiu em outro mês.
+  searchPixTedOutrosMeses: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    contaBancariaId: z.number(),
+    dataRef: z.string(),       // YYYY-MM-DD — data do cheque devolvido
+    mesesAntes: z.number().min(0).max(12).default(1),
+    mesesDepois: z.number().min(0).max(12).default(6),
+    busca: z.string().optional(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await assertCompanyAccess(ctx, input.companyId);
+    const pixRe = "%(PIX|TED|TRANSF)%";
+    const r = await dbExecute(db,
+      `SELECT id, data, descricao, valor, conciliado, entry_id AS "entryId"
+         FROM bank_statement_lines
+        WHERE company_id=$1
+          AND conta_bancaria_id=$2
+          AND excluido_em IS NULL
+          AND valor < 0
+          AND tipo='debito'
+          AND UPPER(descricao) LIKE $3
+          AND data >= ($4::date - ($5 || ' months')::interval)::date
+          AND data <= ($4::date + ($6 || ' months')::interval)::date
+        ORDER BY data DESC, id DESC
+        LIMIT 200`,
+      [input.companyId, input.contaBancariaId, pixRe,
+       input.dataRef, String(input.mesesAntes), String(input.mesesDepois)]);
+    let linhas = rows(r) as any[];
+    if (input.busca) {
+      const b = input.busca.toLowerCase();
+      linhas = linhas.filter((l: any) => String(l.descricao ?? "").toLowerCase().includes(b));
+    }
+    return { linhas };
+  }),
+
   // Rev. 3416 — Vincula um cheque devolvido a um pagamento substituto (PIX/TED).
   // Grava no Controle de Cheques: status='compensado_pix', data_compensacao, observacao.
   // Usado tanto para a sugestão automática (usuário confirma) quanto para vínculo manual.
