@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3416** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · VINCULAR CHEQUE DEVOLVIDO A PIX/TED SUBSTITUTO — SUGESTÃO AUTOMÁTICA + VÍNCULO MANUAL + CONTROLE DE CHEQUES ATUALIZADO. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Endpoint `vincularChequePix`: UPDATE financial_cheques status='compensado_pix' + data + observacao; match por dígitos do número. Dialog: lista de saídas do extrato ordenada por proximidade de valor; badges "= valor exato"/"PIX/TED". Auto-detectado → "Confirmar e registrar"; pendente → "Vincular manualmente". Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3415** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CAMPO FORNECEDOR "LANÇAR NO ERP" RESTRITO AO CADASTRO — SUGESTÃO AUTOMÁTICA MAS SELEÇÃO OBRIGATÓRIA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `lancFornDisplay` separa texto visível do valor confirmado. `onChangeText` zera confirmação; `onSelect` confirma. Label muda para âmbar "selecione da lista" ou verde "✓ confirmado". Pré-preenchimentos (cheque/vinculo) vão só para display — usuário clica no item para confirmar. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3414** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXCLUIR LANÇAMENTO "NO ERP, SEM EXTRATO" NA TELA DE CONCILIAÇÃO (SÓ ADMIN_MASTER). 100% FRONTEND + REUSO DE ENDPOINT EXISTENTE · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Botão 🗑 em cada linha individual; oculto para status=pago/recebido e não-admin_master. Dialog de confirmação com campo "Motivo" (mín. 5 chars). Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3414** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXCLUIR LANÇAMENTO "NO ERP, SEM EXTRATO" NA TELA DE CONCILIAÇÃO (SÓ ADMIN_MASTER). 100% FRONTEND + REUSO DE ENDPOINT EXISTENTE · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3412** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "LANÇAR NO ERP" FULL SCREEN NO MOBILE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

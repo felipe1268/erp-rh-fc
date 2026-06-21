@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3416 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · VINCULAR CHEQUE DEVOLVIDO A PIX/TED
+ * SUBSTITUTO — SUGESTÃO AUTOMÁTICA + VÍNCULO MANUAL + ATUALIZAÇÃO DO CONTROLE DE CHEQUES.
+ * BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Contexto: cheque devolvido (sem fundos, assinatura etc.) é reprocessado via PIX direto
+ * ao fornecedor. O ERP já detectava o par compensação+devolução e tentava encontrar o PIX
+ * automaticamente — mas era read-only (nada era gravado). Usuário precisava de:
+ *   (a) Confirmar a sugestão automática e registrar no Controle de Cheques.
+ *   (b) Vincular manualmente quando o PIX vem de outro período ou valor diferente.
+ *
+ * Backend — novo endpoint `financial.vincularChequePix`:
+ *   - Input: { companyId, numeroCheque, pixData, pixDescricao?, pixValor? }
+ *   - UPDATE financial_cheques: status='compensado_pix', data_compensacao, observacao += nota
+ *   - Match por regexp_replace(numero_cheque,'[^0-9]','','g') (tolerante a formatação)
+ *   - assertCompanyAccess + auditLog "cheque_vinculado_pix"
+ *   - Retorna { updated: number }
+ *
+ * Frontend — painel "Cheques devolvidos":
+ *   - resolucao.tipo="pix" (auto-detectado): botão "✓ Confirmar e registrar no Controle"
+ *     → abre dialog com a linha pré-selecionada; usuário confirma 1 clique.
+ *   - resolucao.tipo="pendente": botão "↔ Vincular a PIX/TED substituto manualmente"
+ *     → abre dialog com lista de saídas do extrato (sem lançamento), ordenadas por
+ *       proximidade de valor; badges "= valor exato" e "PIX/TED" para facilitar.
+ *   - Dialog: header com cheque info (doc, fornecedor, valor, data devolução);
+ *     lista scrollável de candidatas; seleção toggle; footer Cancelar + Confirmar vínculo.
+ *   - Após confirm: toast + refetchReport(); dialog fecha.
+ *
+ * Arquivos: server/routers/financial.ts, client/src/pages/financeiro/FinanceiroConciliacao.tsx.
+ *
  * Rev. 3415 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CAMPO FORNECEDOR NO "LANÇAR NO ERP"
  * RESTRITO AO CADASTRO DE FORNECEDORES — SUGESTÃO AUTOMÁTICA MAS SELEÇÃO OBRIGATÓRIA.
  * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**

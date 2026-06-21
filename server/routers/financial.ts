@@ -11001,4 +11001,39 @@ export const financialRouter = router({
 
     return { lancados, pulados, solicitados: input.ids.length };
   }),
+
+  // Rev. 3416 — Vincula um cheque devolvido a um pagamento substituto (PIX/TED).
+  // Grava no Controle de Cheques: status='compensado_pix', data_compensacao, observacao.
+  // Usado tanto para a sugestão automática (usuário confirma) quanto para vínculo manual.
+  vincularChequePix: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    numeroCheque: z.string().min(1),
+    pixData: z.string().min(1),
+    pixDescricao: z.string().optional(),
+    pixValor: z.number().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await assertCompanyAccess(ctx, input.companyId);
+    const nota = `Pago via PIX/TED em ${input.pixData}${input.pixDescricao ? `: ${input.pixDescricao.slice(0, 200)}` : ""}`;
+    const r = await dbExecute(db,
+      `UPDATE financial_cheques
+          SET status='compensado_pix',
+              data_compensacao=COALESCE(data_compensacao, $1::date),
+              observacao=CASE WHEN observacao IS NULL OR observacao='' THEN $2 ELSE observacao || E'\n' || $2 END,
+              updated_at=NOW()
+        WHERE company_id=$3
+          AND excluido_em IS NULL
+          AND regexp_replace(numero_cheque,'[^0-9]','','g') = regexp_replace($4,'[^0-9]','','g')
+        RETURNING id`,
+      [input.pixData, nota, input.companyId, input.numeroCheque]);
+    const updated = rows(r).length;
+    await createAuditLog({
+      action: "cheque_vinculado_pix",
+      userId: ctx.user?.id,
+      companyId: input.companyId,
+      details: `Cheque nº ${input.numeroCheque} marcado como compensado_pix em ${input.pixData}${input.pixDescricao ? ` — ${input.pixDescricao.slice(0, 100)}` : ""}`,
+    });
+    return { updated };
+  }),
 });

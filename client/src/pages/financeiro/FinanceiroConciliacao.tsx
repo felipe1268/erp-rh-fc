@@ -350,6 +350,10 @@ export default function FinanceiroConciliacao() {
   const [deleteEntryTarget, setDeleteEntryTarget] = useState<{ id: number; nome: string; valor: number; status: string } | null>(null);
   const [deleteEntryMotivo, setDeleteEntryMotivo] = useState("");
   const deleteEntryMut = (trpc as any).financial.deleteEntry.useMutation();
+  // Rev. 3416 — Vincular cheque devolvido a PIX/TED substituto
+  const [vincularPixDlg, setVincularPixDlg] = useState<{ cheque: any; pixPreSel: any | null } | null>(null);
+  const [vincularPixSel, setVincularPixSel] = useState<any | null>(null);
+  const vincularChequePix = (trpc as any).financial.vincularChequePix.useMutation();
   // Rev. 3413 — estados para comboboxes e dialog de nova obra
   const [lancObraDisplay, setLancObraDisplay] = useState("");
   const [lancCCDisplay, setLancCCDisplay] = useState("");
@@ -4250,13 +4254,39 @@ export default function FinanceiroConciliacao() {
                                   <CheckCircle className="w-3.5 h-3.5" /> Quitado: cheque reapresentado e compensado em {fmtData(res.data)}.
                                 </p>
                               ) : res.tipo === "pix" ? (
-                                <p className="text-[11px] text-blue-700 mt-1 flex items-center gap-1">
-                                  <CheckCircle className="w-3.5 h-3.5" /> Quitado por outro meio (PIX/TED) em {fmtData(res.data)}{res.descricao ? ` — ${res.descricao}` : ""}.
-                                </p>
+                                <div className="mt-1">
+                                  <p className="text-[11px] text-blue-700 flex items-center gap-1">
+                                    <CheckCircle className="w-3.5 h-3.5" /> Quitado por outro meio (PIX/TED) em {fmtData(res.data)}{res.descricao ? ` — ${String(res.descricao).slice(0, 60)}` : ""}.
+                                  </p>
+                                  {d.chequeNumero && (
+                                    <button
+                                      type="button"
+                                      className="mt-1 text-[11px] text-blue-600 hover:text-blue-800 underline"
+                                      onClick={() => {
+                                        const pixLine = repExtRaw.find((l: any) => l.id === res.lineId);
+                                        setVincularPixSel(pixLine ?? null);
+                                        setVincularPixDlg({ cheque: d, pixPreSel: pixLine ?? null });
+                                      }}
+                                    >
+                                      ✓ Confirmar e registrar no Controle de Cheques
+                                    </button>
+                                  )}
+                                </div>
                               ) : (
-                                <p className="text-[11px] text-amber-700 mt-1 flex items-center gap-1">
-                                  <AlertCircle className="w-3.5 h-3.5" /> Sem quitação identificada no período — analisar (reapresentar, cobrar ou substituir).
-                                </p>
+                                <div className="mt-1">
+                                  <p className="text-[11px] text-amber-700 flex items-center gap-1">
+                                    <AlertCircle className="w-3.5 h-3.5" /> Sem quitação identificada no período — analisar (reapresentar, cobrar ou substituir).
+                                  </p>
+                                  {d.chequeNumero && (
+                                    <button
+                                      type="button"
+                                      className="mt-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium underline"
+                                      onClick={() => { setVincularPixSel(null); setVincularPixDlg({ cheque: d, pixPreSel: null }); }}
+                                    >
+                                      ↔ Vincular a PIX/TED substituto manualmente
+                                    </button>
+                                  )}
+                                </div>
                               )}
                             </div>
                           </div>
@@ -5421,6 +5451,127 @@ export default function FinanceiroConciliacao() {
                 }}
               >
                 {deleteEntryMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Trash2 className="w-4 h-4 mr-1" />}Excluir
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 3416 — Dialog: Vincular cheque devolvido a PIX/TED substituto */}
+        <Dialog open={vincularPixDlg != null} onOpenChange={(o) => { if (!o) { setVincularPixDlg(null); setVincularPixSel(null); } }}>
+          <DialogContent className="max-w-lg w-full max-h-[90vh] flex flex-col gap-0 p-0">
+            <DialogHeader className="px-5 pt-5 pb-3 border-b shrink-0">
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <ArrowLeftRight className="w-4 h-4 text-indigo-600" />Vincular cheque devolvido a PIX/TED
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                Selecione a linha do extrato que representa o pagamento substituto. O Controle de Cheques será atualizado com status <strong>compensado via PIX/TED</strong>.
+              </DialogDescription>
+            </DialogHeader>
+            {vincularPixDlg && (() => {
+              const chq = vincularPixDlg.cheque;
+              const valCents = chq.valorCents ?? 0;
+              // Lista de saídas do extrato (sem lançamento) como candidatas — ordena por proximidade de valor
+              const candidatas = repExtRaw
+                .filter((l: any) => Number(l.valor) < 0 && !l.reversal)
+                .sort((a: any, b: any) => {
+                  const da = Math.abs(Math.abs(Math.round(Number(a.valor) * 100)) - valCents);
+                  const db2 = Math.abs(Math.abs(Math.round(Number(b.valor) * 100)) - valCents);
+                  return da - db2;
+                });
+              const [mostraTodasCand, setMostraTodasCand] = [false, () => {}]; void mostraTodasCand; void setMostraTodasCand;
+              return (
+                <div className="flex flex-col min-h-0 flex-1">
+                  {/* Info do cheque */}
+                  <div className="px-5 py-3 bg-amber-50 border-b text-sm shrink-0">
+                    <p className="font-semibold text-amber-900">Cheque Doc {chq.doc ?? chq.chequeNumero}</p>
+                    {chq.fornecedor && <p className="text-amber-800 text-xs">{chq.fornecedor}</p>}
+                    <p className="text-amber-700 text-xs mt-0.5">{formatBRL(Math.abs(Number(chq.valor ?? 0)))} · devolvido em {fmtData(chq.dataCredito)}</p>
+                  </div>
+                  {/* Se vier com pré-seleção (auto-detectado): mostrar destaque */}
+                  {vincularPixDlg.pixPreSel && !vincularPixSel && (
+                    <div className="px-5 py-3 bg-blue-50 border-b text-xs text-blue-800 shrink-0">
+                      <p className="font-semibold flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" />Sugestão automática identificada:</p>
+                      <p className="mt-0.5 truncate">{vincularPixDlg.pixPreSel.descricao}</p>
+                      <p className="text-blue-600">{fmtData(vincularPixDlg.pixPreSel.data)} · {formatBRL(Math.abs(Number(vincularPixDlg.pixPreSel.valor)))}</p>
+                      <button type="button" className="mt-1 underline text-blue-700 hover:text-blue-900" onClick={() => setVincularPixSel(vincularPixDlg.pixPreSel)}>Usar esta sugestão →</button>
+                    </div>
+                  )}
+                  {/* Selecionado */}
+                  {vincularPixSel && (
+                    <div className="px-5 py-2 bg-emerald-50 border-b text-xs text-emerald-800 shrink-0 flex items-start gap-2">
+                      <CheckCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold">Selecionado:</p>
+                        <p className="truncate">{vincularPixSel.descricao}</p>
+                        <p>{fmtData(vincularPixSel.data)} · {formatBRL(Math.abs(Number(vincularPixSel.valor)))}</p>
+                      </div>
+                      <button type="button" className="text-gray-400 hover:text-gray-600 shrink-0" onClick={() => setVincularPixSel(null)}>✕</button>
+                    </div>
+                  )}
+                  {/* Lista de candidatas */}
+                  <div className="flex-1 overflow-y-auto">
+                    {candidatas.length === 0 ? (
+                      <p className="p-5 text-sm text-gray-500 text-center">Nenhuma saída encontrada no extrato deste período.<br/>Importe o extrato do mês em que o PIX foi feito para vincular.</p>
+                    ) : (
+                      <div className="divide-y">
+                        {candidatas.map((l: any) => {
+                          const isSelected = vincularPixSel?.id === l.id;
+                          const diffCents = Math.abs(Math.abs(Math.round(Number(l.valor) * 100)) - valCents);
+                          const isExact = diffCents === 0;
+                          const looksLikePix = /pix|ted\b|doc\b|transf/i.test(String(l.descricao ?? ""));
+                          return (
+                            <button
+                              key={l.id}
+                              type="button"
+                              className={`w-full text-left px-5 py-2.5 text-xs transition-colors hover:bg-gray-50 ${isSelected ? "bg-indigo-50 border-l-2 border-indigo-500" : ""}`}
+                              onClick={() => setVincularPixSel(isSelected ? null : l)}
+                            >
+                              <div className="flex items-start gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-medium text-gray-800 truncate">{l.descricao}</p>
+                                  <p className="text-gray-500">{fmtData(l.data)} · {formatBRL(Math.abs(Number(l.valor)))}</p>
+                                </div>
+                                <div className="shrink-0 flex flex-col items-end gap-0.5">
+                                  {isExact && <span className="text-[10px] bg-emerald-100 text-emerald-700 rounded px-1">= valor exato</span>}
+                                  {looksLikePix && <span className="text-[10px] bg-blue-100 text-blue-700 rounded px-1">PIX/TED</span>}
+                                  {isSelected && <CheckCircle className="w-3.5 h-3.5 text-indigo-600" />}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+            <DialogFooter className="px-5 py-3 border-t shrink-0 flex flex-row gap-2 justify-end">
+              <Button variant="outline" size="sm" onClick={() => { setVincularPixDlg(null); setVincularPixSel(null); }} disabled={vincularChequePix.isPending}>Cancelar</Button>
+              <Button
+                size="sm"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                disabled={!vincularPixSel || vincularChequePix.isPending || !vincularPixDlg?.cheque?.chequeNumero}
+                onClick={async () => {
+                  if (!vincularPixSel || !vincularPixDlg?.cheque?.chequeNumero || !companyId) return;
+                  try {
+                    const res = await vincularChequePix.mutateAsync({
+                      companyId: Number(companyId),
+                      numeroCheque: String(vincularPixDlg.cheque.chequeNumero),
+                      pixData: String(vincularPixSel.data ?? "").slice(0, 10),
+                      pixDescricao: vincularPixSel.descricao ?? undefined,
+                      pixValor: vincularPixSel.valor != null ? Math.abs(Number(vincularPixSel.valor)) : undefined,
+                    });
+                    toast({ title: "Cheque vinculado ao PIX/TED", description: `${res.updated > 0 ? "Controle de Cheques atualizado com sucesso." : "Nenhum cheque encontrado com este número — verifique o Controle de Cheques."}` });
+                    setVincularPixDlg(null);
+                    setVincularPixSel(null);
+                    refetchReport();
+                  } catch (err: any) {
+                    toast({ title: "Erro ao vincular", description: String(err?.message ?? err), variant: "destructive" });
+                  }
+                }}
+              >
+                {vincularChequePix.isPending ? <><Loader2 className="w-4 h-4 animate-spin mr-1" />Salvando…</> : <>✓ Confirmar vínculo</>}
               </Button>
             </DialogFooter>
           </DialogContent>
