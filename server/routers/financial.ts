@@ -5558,7 +5558,6 @@ export const financialRouter = router({
           AND cba."deletedAt" IS NULL
           AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) >= $3::date
           AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) <= $4::date
-          AND COALESCE(e.excluido, false) = false
         GROUP BY e.conta_bancaria_id`,
       [input.companyId, input.companyId, input.dataInicio, input.dataFim]);
     const ciMap: Record<number, { total: number; conciliadas: number }> = {};

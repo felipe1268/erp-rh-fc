@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3426 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO: TODAS AS CONTAS CINZA APÓS
+ * REV. 3423. BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Bug: query CI adicionada na Rev. 3423 referenciava `e.excluido` em `financial_entries`,
+ * mas essa coluna não existe nessa tabela (erro Postgres 42703). O erro derrubava todo o
+ * endpoint `getBankAccountsConciliacaoStatus`, fazendo TODAS as contas ficarem cinza
+ * ("Sem extrato") independente de terem extrato ou conciliações reais.
+ *
+ * Fix: removida a cláusula `AND COALESCE(e.excluido, false) = false` da query CI.
+ * Arquivo: server/routers/financial.ts (query `resCi`).
+ *
  * Rev. 3425 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "VINCULAR PIX/TED" — TELA CHEIA
  * + BUSCA EM TEMPO REAL + FILTRO SOMENTE PIX/TED. 100% FRONTEND ·
  * ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
