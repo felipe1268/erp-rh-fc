@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3427 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "VINCULAR PIX/TED" —
+ * REDESIGN FULL-SCREEN MODERNO + FILTRO "SÓ PRÓXIMOS". 100% FRONTEND ·
+ * ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Redesign completo do dialog de vinculação de cheque devolvido a PIX/TED:
+ * 1. **Full-screen real**: `position:fixed; top:0; left:0; width:100vw; height:100vh;
+ *    transform:none` (override do Radix Dialog que centrava com translate(-50%,-50%)).
+ * 2. **Header escuro**: gradient indigo-900→indigo-700 com card do cheque (valor em
+ *    destaque, fornecedor, data de devolução) + botão X + busca integrada estilo glassmorphism.
+ * 3. **Filtro "Só próximos"**: botão toggle que filtra a lista para PIX/TED com valor
+ *    dentro de ±15% do cheque (ou ±R$2 mínimo). Exibe contagem de próximos no label.
+ * 4. **Cards modernos**: cada item é um card com borda colorida (verde=exato, âmbar=próximo,
+ *    cinza=longe), ícone de seleção circular, valor em destaque e badge de proximidade
+ *    ("= valor exato" / "±N%"). Selecionado: borda indigo + shadow.
+ * 5. **Footer contextual**: resume o item selecionado (se houver) antes dos botões;
+ *    botão Confirmar `flex-1` (tela cheia horizontal).
+ * 6. State `vincularPixSoProximos` adicionado (reset no fechamento).
+ *
+ * Arquivo: client/src/pages/financeiro/FinanceiroConciliacao.tsx.
+ *
  * Rev. 3426 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO: TODAS AS CONTAS CINZA APÓS
  * REV. 3423. BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *

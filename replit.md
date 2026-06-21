@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3426** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO: TODAS AS CONTAS CINZA APÓS REV. 3423. BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Query CI (`resCi`) referenciava `e.excluido` (inexistente em `financial_entries`); erro 42703 derrubava TODO o endpoint `getBankAccountsConciliacaoStatus` deixando todas as contas cinza. Fix: linha removida. Detalhe: `shared/changelog.ts`.
+- **Rev. 3427** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "VINCULAR PIX/TED" — REDESIGN FULL-SCREEN MODERNO + FILTRO "SÓ PRÓXIMOS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Full-screen real (override Radix: `fixed; top:0; left:0; 100vw×100vh; transform:none`); header gradient indigo com card do cheque + busca glassmorphism; toggle "Só próximos (±15%)"; cards com borda colorida (verde=exato, âmbar=próximo) + badge %; footer contextual com resumo do selecionado. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3425** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "VINCULAR PIX/TED" — TELA CHEIA + BUSCA EM TEMPO REAL + FILTRO SOMENTE PIX/TED. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Dialog `96vw × 92vh`; lista exibe só PIX/TED/TRANSF (regex); campo de busca ao lado do cheque filtra em tempo real por descrição/data/valor; contador de resultados; `autoFocus`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3426** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO: TODAS AS CONTAS CINZA APÓS REV. 3423. BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Query CI (`resCi`) referenciava `e.excluido` (inexistente em `financial_entries`); erro 42703 derrubava TODO o endpoint deixando todas as contas cinza. Fix: linha removida. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
+
+- **Rev. 3425** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "VINCULAR PIX/TED" — TELA CHEIA + BUSCA EM TEMPO REAL + FILTRO SOMENTE PIX/TED. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3424** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CHEQUES DEVOLVIDOS — BOTÃO ⚡ "VINCULAR PIX/TED" INLINE À DIREITA DA MENSAGEM "SEM QUITAÇÃO". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
