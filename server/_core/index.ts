@@ -3908,6 +3908,14 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3451+hotfix: tabela obra_clientes garantida (sem FK inline; colunas garantidas via ADD COLUMN IF NOT EXISTS).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3451 obra_clientes:`, e?.message || e); }
 
+        // Rev. 3466 — quem fez a conciliação bancária + timestamp com hora (ADD COLUMN IF NOT EXISTS — R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS conciliado_em TIMESTAMP`);
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS conciliado_por_id INTEGER`);
+          await db.execute(sql`ALTER TABLE financial_entries ADD COLUMN IF NOT EXISTS conciliado_por_nome TEXT`);
+          console.log(`[SyncSchema+] Rev. 3466: colunas conciliado_em/conciliado_por_id/conciliado_por_nome garantidas em financial_entries.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3466 financial_entries conciliado_por:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

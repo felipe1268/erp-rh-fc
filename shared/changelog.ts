@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3466 — **CONCILIAÇÃO BANCÁRIA · CAMPO "CONCILIADO" EXIBE QUEM CONCILIOU + DATA/HORA
+ * NO PADRÃO BRASILEIRO (DD/MM/AAAA HH:MM). BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
+ *
+ * BACKEND (`server/routers/financial.ts`, `server/_core/index.ts`):
+ * - `[SyncSchema+]` garante 3 novas colunas em `financial_entries` via ADD COLUMN IF NOT EXISTS:
+ *   `conciliado_em TIMESTAMP`, `conciliado_por_id INTEGER`, `conciliado_por_nome TEXT`.
+ * - 7 writers de `conciliado=1` atualizados para gravar `conciliado_em=NOW()`,
+ *   `conciliado_por_id` e `conciliado_por_nome` (via `ctx.user?.id / ctx.user?.name`):
+ *   confirmarEntradaCaixa (2 paths), conciliarManual, sibling-transferência, conciliacaoGrupo,
+ *   conciliarSugestoes (sugestões individuais), conciliarSemConta.
+ * - `getEntryDetalhe` SELECT estendido com as 3 novas colunas.
+ * - Atenção: `dbExecute` liga params por ORDEM DE APARIÇÃO no texto (não pelo $N); cada UPDATE
+ *   foi reescrito com params em ordem sequencial de aparição.
+ *
+ * FRONTEND (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`):
+ * - Campo "Conciliado" no card "Dados financeiros":
+ *   · Timestamp formatado via `toLocaleString("pt-BR", { timeZone:"America/Sao_Paulo" })` →
+ *     "Sim · DD/MM/AAAA HH:MM"; fallback para data só (dataConciliacao) em lançamentos antigos.
+ *   · Linha "por {nome}" em verde emerald abaixo da data/hora.
+ *   · Banco/agência/conta (Rev. 3465) mantidos na linha seguinte.
+ *
  * Rev. 3465 — **CONCILIAÇÃO BANCÁRIA · CAMPO "CONCILIADO" NO DETALHE DO LANÇAMENTO EXIBE
  * BANCO, AGÊNCIA E CONTA QUANDO CONCILIADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *

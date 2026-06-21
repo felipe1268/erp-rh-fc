@@ -2750,6 +2750,7 @@ export const financialRouter = router({
               codigo_barras AS "codigoBarras",
               cheque_numero AS "chequeNumero", cheque_banco AS "chequeBanco", cheque_data_bom_para AS "chequeDataBomPara",
               conciliado, data_conciliacao AS "dataConciliacao", extrato_banco_descricao AS "extratoBancoDescricao",
+              conciliado_em AS "conciliadoEm", conciliado_por_id AS "conciliadoPorId", conciliado_por_nome AS "conciliadoPorNome",
               descricao, observacoes, motivo_cancelamento AS "motivoCancelamento",
               criado_por_id AS "criadoPorId", criado_por_nome AS "criadoPorNome",
               aprovado_por_id AS "aprovadoPorId", aprovado_por_nome AS "aprovadoPorNome",
@@ -5485,8 +5486,8 @@ export const financialRouter = router({
       // Lançamento já tem conta — deve ser caixaInterno (comportamento original).
       if (Number(entry.caixaInterno) !== 1) throw new TRPCError({ code: "BAD_REQUEST", message: "Esta conta não é do tipo Caixa Interno." });
       await dbExecute(db,
-        `UPDATE financial_entries SET conciliado=1, data_conciliacao=CURRENT_DATE WHERE id=$1 AND company_id=$2`,
-        [input.entryId, input.companyId]);
+        `UPDATE financial_entries SET conciliado=1, data_conciliacao=CURRENT_DATE, conciliado_em=NOW(), conciliado_por_id=$1, conciliado_por_nome=$2 WHERE id=$3 AND company_id=$4`,
+        [ctx.user?.id ?? null, ctx.user?.name ?? null, input.entryId, input.companyId]);
     } else {
       // Rev. 3445 — sem conta: vincular à conta Caixa Interno informada e confirmar.
       if (!input.contaBancariaId) throw new TRPCError({ code: "BAD_REQUEST", message: "Informe a conta caixa para vincular este lançamento." });
@@ -5495,8 +5496,8 @@ export const financialRouter = router({
         [input.contaBancariaId, input.companyId]);
       if (rows(cbaRes).length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Conta caixa inválida ou não é do tipo Caixa Interno." });
       await dbExecute(db,
-        `UPDATE financial_entries SET conciliado=1, data_conciliacao=CURRENT_DATE, conta_bancaria_id=$1 WHERE id=$2 AND company_id=$3`,
-        [input.contaBancariaId, input.entryId, input.companyId]);
+        `UPDATE financial_entries SET conciliado=1, data_conciliacao=CURRENT_DATE, conciliado_em=NOW(), conciliado_por_id=$1, conciliado_por_nome=$2, conta_bancaria_id=$3 WHERE id=$4 AND company_id=$5`,
+        [ctx.user?.id ?? null, ctx.user?.name ?? null, input.contaBancariaId, input.entryId, input.companyId]);
     }
     return { success: true };
   }),
@@ -6434,9 +6435,9 @@ export const financialRouter = router({
     if (rows(lnRes).length === 0) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Linha do extrato não encontrada ou já removida." });
     }
-    await dbExecute(db, 
-      `UPDATE financial_entries SET conciliado=1, data_conciliacao=CURRENT_DATE WHERE id=$1 AND company_id=$2`,
-      [input.entryId, input.companyId]
+    await dbExecute(db,
+      `UPDATE financial_entries SET conciliado=1, data_conciliacao=CURRENT_DATE, conciliado_em=NOW(), conciliado_por_id=$1, conciliado_por_nome=$2 WHERE id=$3 AND company_id=$4`,
+      [ctx.user?.id ?? null, ctx.user?.name ?? null, input.entryId, input.companyId]
     );
     // Rev. 3445 — sem conta: vincular à conta da linha do extrato após conciliação.
     if (entryConta == null) {
@@ -6446,14 +6447,14 @@ export const financialRouter = router({
     }
     // Rev. 2693 — se for perna de transferência, concilia a perna irmã junto.
     await dbExecute(db,
-      `UPDATE financial_entries sib SET conciliado=1, data_conciliacao=CURRENT_DATE
+      `UPDATE financial_entries sib SET conciliado=1, data_conciliacao=CURRENT_DATE, conciliado_em=NOW(), conciliado_por_id=$1, conciliado_por_nome=$2
        FROM financial_entries cur
-       WHERE cur.id=$1 AND cur.company_id=$2
+       WHERE cur.id=$3 AND cur.company_id=$4
          AND cur.tipo='transferencia' AND cur.transferencia_grupo_id IS NOT NULL
          AND sib.transferencia_grupo_id = cur.transferencia_grupo_id
          AND sib.company_id = cur.company_id AND sib.id <> cur.id
          AND COALESCE(sib.conciliado,0)=0`,
-      [input.entryId, input.companyId]
+      [ctx.user?.id ?? null, ctx.user?.name ?? null, input.entryId, input.companyId]
     );
     return { ok: true };
   }),
@@ -6508,23 +6509,25 @@ export const financialRouter = router({
       // como ÚLTIMO item do array (aparece por último no texto, na cláusula de conta).
       const lineConta = Number(ln.contaBancariaId);
       // 2) Baixa de TODOS os membros. CRÍTICO: `dbExecute` liga params por ORDEM DE APARIÇÃO
-      //    TEXTUAL ($N é cosmético/ignorado). Ordem de aparição no texto:
+      //    TEXTUAL ($N é cosmético/ignorado). Ordem de aparição no texto (Rev. 3466+):
       //    $1=dataPg (SET data_pagamento), $2=lineConta (SET conta_bancaria_id COALESCE),
-      //    $3…$N+2=ids (IN), $N+3=companyId (WHERE), $N+4=lineConta (WHERE conta check).
+      //    $3=userId (SET conciliado_por_id), $4=userName (SET conciliado_por_nome),
+      //    $5…$N+4=ids (IN), $N+5=companyId (WHERE), $N+6=lineConta (WHERE conta check).
       //    Rev. 3445 — conta_bancaria_id = COALESCE(...) vincula entradas sem-conta à conta da linha.
-      const ph = ids.map((_, i) => `$${i + 3}`).join(",");
+      const ph = ids.map((_, i) => `$${i + 5}`).join(",");
       const upd = await dbExecute(tx,
         `UPDATE financial_entries
             SET conciliado=1, data_conciliacao=CURRENT_DATE,
                 status = CASE WHEN tipo='receita' THEN 'recebido' ELSE 'pago' END,
                 data_pagamento = COALESCE(data_pagamento, $1::date),
                 valor_realizado = COALESCE(valor_realizado, valor_previsto),
-                conta_bancaria_id = COALESCE(conta_bancaria_id, $2)
-          WHERE id IN (${ph}) AND company_id=$${ids.length + 3}
+                conta_bancaria_id = COALESCE(conta_bancaria_id, $2),
+                conciliado_em = NOW(), conciliado_por_id = $3, conciliado_por_nome = $4
+          WHERE id IN (${ph}) AND company_id=$${ids.length + 5}
             AND COALESCE(conciliado,0)=0 AND status <> 'cancelado'
-            AND (conta_bancaria_id IS NULL OR conta_bancaria_id = $${ids.length + 4})
+            AND (conta_bancaria_id IS NULL OR conta_bancaria_id = $${ids.length + 6})
           RETURNING id`,
-        [dataPg, lineConta, ...ids, input.companyId, lineConta]);
+        [dataPg, lineConta, ctx.user?.id ?? null, ctx.user?.name ?? null, ...ids, input.companyId, lineConta]);
       const okIds = rows(upd).map((r: any) => Number(r.id));
       conciliados = okIds.length;
       if (conciliados === 0) {
@@ -6973,10 +6976,11 @@ export const financialRouter = router({
             SET conciliado=1, data_conciliacao=CURRENT_DATE,
                 status = CASE WHEN tipo='receita' THEN 'recebido' ELSE 'pago' END,
                 data_pagamento = COALESCE(data_pagamento, $1::date),
-                valor_realizado = COALESCE(valor_realizado, valor_previsto)
-          WHERE id=$2 AND company_id=$3 AND COALESCE(conciliado,0)=0 AND status <> 'cancelado'
+                valor_realizado = COALESCE(valor_realizado, valor_previsto),
+                conciliado_em = NOW(), conciliado_por_id = $2, conciliado_por_nome = $3
+          WHERE id=$4 AND company_id=$5 AND COALESCE(conciliado,0)=0 AND status <> 'cancelado'
           RETURNING id`,
-        [dataPg, p.entryId, input.companyId]);
+        [dataPg, ctx.user?.id ?? null, ctx.user?.name ?? null, p.entryId, input.companyId]);
       if (rows(upd).length === 0) {
         // 3) Lançamento já estava conciliado/cancelado (ou tomado por outro par) → DESFAZ a reserva
         //    da linha p/ não deixar a linha conciliada apontando p/ um lançamento sem baixa.
@@ -7250,9 +7254,10 @@ export const financialRouter = router({
     // 4. Vincula conta + marca conciliado no lançamento
     await dbExecute(db,
       `UPDATE financial_entries
-       SET conta_bancaria_id=$1, conciliado=1, data_conciliacao=CURRENT_DATE
-       WHERE id=$2 AND company_id=$3`,
-      [contaBancariaId, input.entryId, input.companyId]);
+       SET conta_bancaria_id=$1, conciliado=1, data_conciliacao=CURRENT_DATE,
+           conciliado_em=NOW(), conciliado_por_id=$2, conciliado_por_nome=$3
+       WHERE id=$4 AND company_id=$5`,
+      [contaBancariaId, ctx.user?.id ?? null, ctx.user?.name ?? null, input.entryId, input.companyId]);
 
     await createAuditLog({ action: "financial_conciliar_sem_conta", userId: ctx.user?.id, companyId: input.companyId, details: `Entry #${input.entryId} vinculado à conta ${contaBancariaId} e conciliado com linha #${input.statementLineId}` });
     return { ok: true, contaBancariaId };

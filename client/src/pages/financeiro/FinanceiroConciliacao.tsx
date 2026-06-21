@@ -4390,8 +4390,16 @@ export default function FinanceiroConciliacao() {
                                 <div className="min-w-0">
                                   <div className="text-[11px] text-gray-400 uppercase tracking-wide">Conciliado</div>
                                   <div className={`break-words ${isConcil ? "text-emerald-700 font-medium" : "text-gray-800"}`}>
-                                    {isConcil ? `Sim${detEntry.dataConciliacao ? ` · ${fmtData(detEntry.dataConciliacao)}` : ""}` : "Não"}
+                                    {isConcil ? (() => {
+                                      const ts = detEntry.conciliadoEm
+                                        ? (() => { try { const d = new Date(String(detEntry.conciliadoEm).replace(" ","T")); return isNaN(d.getTime()) ? null : d.toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit", timeZone:"America/Sao_Paulo" }); } catch { return null; } })()
+                                        : (detEntry.dataConciliacao ? fmtData(detEntry.dataConciliacao) : null);
+                                      return ts ? `Sim · ${ts}` : "Sim";
+                                    })() : "Não"}
                                   </div>
+                                  {isConcil && detEntry.conciliadoPorNome && (
+                                    <div className="text-[11px] text-emerald-600 mt-0.5 break-words">por {detEntry.conciliadoPorNome}</div>
+                                  )}
                                   {contaBanc && (
                                     <div className="text-[11px] text-gray-500 mt-0.5 break-words">
                                       🏦 {contaBanc.apelido ? `${contaBanc.apelido} · ` : ""}{contaBanc.banco}
