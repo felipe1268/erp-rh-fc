@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3435 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · VALE ALIMENTAÇÃO AGRUPADO NA
+ * CONCILIAÇÃO (igual ao VR). BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * `beneficio_va` e `beneficio_va_projetado` adicionados ao mapa GRUP do agrupador
+ * `_agruparConciliacao` (servidor) com tipoG="va". Chave = `va|YYYY-MM` → agrupa todos
+ * os lançamentos de VA do mesmo mês em UMA linha sintética "Vale Alimentação YYYY-MM"
+ * com total somado e os funcionários expandíveis (mesmo padrão do VR). Badge verde
+ * (`bg-lime-100 text-lime-700`) diferencia o VA do VR (âmbar) no frontend.
+ * Resultado: a lista de conciliação deixa de exibir uma linha por funcionário e mostra
+ * apenas 1 linha consolidada por mês — exatamente como o boleto é pago.
+ *
  * Rev. 3434 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · "NO ERP, SEM EXTRATO" — EXIBE
  * CONTA BANCÁRIA DO LANÇAMENTO ERP. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *

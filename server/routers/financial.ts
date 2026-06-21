@@ -158,6 +158,8 @@ function _normNomeConc(s: any): string {
 function _agruparConciliacao(arr: any[]): any[] {
   const GRUP: Record<string, string> = {
     beneficio_vr: "vr",
+    beneficio_va: "va",
+    beneficio_va_projetado: "va",
     frota_abastecimento: "combustivel",
     frota_manutencao: "manutencao",
     parceiro_lancamento: "parceiro",
@@ -173,9 +175,9 @@ function _agruparConciliacao(arr: any[]): any[] {
       : (r.data ? new Date(r.data).toISOString().slice(0, 10) : "");
     const ym = dataStr.slice(0, 7);
     let chave: string; let label: string;
-    if (tipoG === "vr") {
-      chave = `vr|${ym}`;
-      label = `Vale Refeição ${ym}`;
+    if (tipoG === "vr" || tipoG === "va") {
+      chave = `${tipoG}|${ym}`;
+      label = tipoG === "va" ? `Vale Alimentação ${ym}` : `Vale Refeição ${ym}`;
     } else {
       // combustível / manutenção → fornecedor da Frota; parceiro → parceiro conveniado;
       // pj → prestador (contratado PJ — pj_payments→employees/pj_contracts). Rev. 3261.
@@ -232,7 +234,7 @@ function _agruparConciliacao(arr: any[]): any[] {
   }
   const out: any[] = [...passthrough];
   for (const g of groups.values()) {
-    if (g.grupoTipo === "vr") {
+    if (g.grupoTipo === "vr" || g.grupoTipo === "va") {
       g.fornecedorNome = null;
     } else if (g._fornCount.size) {
       let best = ""; let bestN = -1;
