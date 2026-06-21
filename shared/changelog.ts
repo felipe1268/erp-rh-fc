@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3425 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "VINCULAR PIX/TED" — TELA CHEIA
+ * + BUSCA EM TEMPO REAL + FILTRO SOMENTE PIX/TED. 100% FRONTEND ·
+ * ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Melhorias no dialog "Vincular cheque devolvido a PIX/TED":
+ * 1. Tamanho: `max-w-[96vw] h-[92vh]` (quase tela cheia, antes era `max-w-lg max-h-[90vh]`).
+ * 2. Filtro PIX-only: lista exibe SOMENTE saídas que correspondem a PIX/TED/TRANSF (regex
+ *    `/pix|ted\b|transf/i`). Antes mostrava todas as saídas do extrato + badge PIX/TED.
+ * 3. Busca em tempo real: input de texto na barra do cheque (à direita) filtra a lista por
+ *    descrição, data ou valor enquanto o usuário digita. Estado `vincularPixBusca`.
+ *    Limpo ao fechar o dialog. Botão "Limpar filtro" quando há busca ativa.
+ * 4. Contador de resultados: "N PIX/TED encontrados (somente PIX/TED)" / "para 'termo'".
+ * 5. `autoFocus` no campo de busca ao abrir.
+ *
+ * Arquivo: client/src/pages/financeiro/FinanceiroConciliacao.tsx.
+ *
  * Rev. 3424 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CHEQUES DEVOLVIDOS — BOTÃO ⚡ "VINCULAR
  * PIX/TED" INLINE À DIREITA DA MENSAGEM "SEM QUITAÇÃO". 100% FRONTEND ·
  * ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**

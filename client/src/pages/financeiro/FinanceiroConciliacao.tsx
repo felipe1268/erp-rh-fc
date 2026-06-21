@@ -355,6 +355,7 @@ export default function FinanceiroConciliacao() {
   // Rev. 3416 — Vincular cheque devolvido a PIX/TED substituto
   const [vincularPixDlg, setVincularPixDlg] = useState<{ cheque: any; pixPreSel: any | null } | null>(null);
   const [vincularPixSel, setVincularPixSel] = useState<any | null>(null);
+  const [vincularPixBusca, setVincularPixBusca] = useState("");
   const vincularChequePix = (trpc as any).financial.vincularChequePix.useMutation();
   // Rev. 3419 — Conciliar PIX rápido a partir do card do cheque devolvido
   const [conciliarPixDlg, setConciliarPixDlg] = useState<{ cheque: any; pixLineId: number; pixLine: any | null } | null>(null);
@@ -5556,8 +5557,8 @@ export default function FinanceiroConciliacao() {
         </Dialog>
 
         {/* Rev. 3416 — Dialog: Vincular cheque devolvido a PIX/TED substituto */}
-        <Dialog open={vincularPixDlg != null} onOpenChange={(o) => { if (!o) { setVincularPixDlg(null); setVincularPixSel(null); } }}>
-          <DialogContent className="max-w-lg w-full max-h-[90vh] flex flex-col gap-0 p-0">
+        <Dialog open={vincularPixDlg != null} onOpenChange={(o) => { if (!o) { setVincularPixDlg(null); setVincularPixSel(null); setVincularPixBusca(""); } }}>
+          <DialogContent className="max-w-[96vw] w-full h-[92vh] flex flex-col gap-0 p-0">
             <DialogHeader className="px-5 pt-5 pb-3 border-b shrink-0">
               <DialogTitle className="flex items-center gap-2 text-base">
                 <ArrowLeftRight className="w-4 h-4 text-indigo-600" />Vincular cheque devolvido a PIX/TED
@@ -5569,22 +5570,40 @@ export default function FinanceiroConciliacao() {
             {vincularPixDlg && (() => {
               const chq = vincularPixDlg.cheque;
               const valCents = chq.valorCents ?? 0;
-              // Lista de saídas do extrato (sem lançamento) como candidatas — ordena por proximidade de valor
-              const candidatas = repExtRaw
-                .filter((l: any) => Number(l.valor) < 0 && !l.reversal)
+              // Rev. 3425 — lista somente PIX/TED (saídas do extrato), ordena por proximidade de valor
+              const pixRe = /pix|ted\b|transf/i;
+              const candidatasPix = repExtRaw
+                .filter((l: any) => Number(l.valor) < 0 && !l.reversal && pixRe.test(String(l.descricao ?? "")))
                 .sort((a: any, b: any) => {
                   const da = Math.abs(Math.abs(Math.round(Number(a.valor) * 100)) - valCents);
                   const db2 = Math.abs(Math.abs(Math.round(Number(b.valor) * 100)) - valCents);
                   return da - db2;
                 });
-              const [mostraTodasCand, setMostraTodasCand] = [false, () => {}]; void mostraTodasCand; void setMostraTodasCand;
+              const buscaNorm = vincularPixBusca.trim().toLowerCase();
+              const candidatas = buscaNorm
+                ? candidatasPix.filter((l: any) => String(l.descricao ?? "").toLowerCase().includes(buscaNorm) || String(fmtData(l.data)).includes(buscaNorm) || String(formatBRL(Math.abs(Number(l.valor)))).includes(buscaNorm))
+                : candidatasPix;
               return (
                 <div className="flex flex-col min-h-0 flex-1">
-                  {/* Info do cheque */}
-                  <div className="px-5 py-3 bg-amber-50 border-b text-sm shrink-0">
-                    <p className="font-semibold text-amber-900">Cheque Doc {chq.doc ?? chq.chequeNumero}</p>
-                    {chq.fornecedor && <p className="text-amber-800 text-xs">{chq.fornecedor}</p>}
-                    <p className="text-amber-700 text-xs mt-0.5">{formatBRL(Math.abs(Number(chq.valor ?? 0)))} · devolvido em {fmtData(chq.dataCredito)}</p>
+                  {/* Info do cheque + busca lado a lado */}
+                  <div className="px-5 py-3 bg-amber-50 border-b shrink-0 flex items-center gap-4">
+                    <div className="min-w-0 flex-1 text-sm">
+                      <p className="font-semibold text-amber-900">Cheque Doc {chq.doc ?? chq.chequeNumero}</p>
+                      {chq.fornecedor && <p className="text-amber-800 text-xs truncate">{chq.fornecedor}</p>}
+                      <p className="text-amber-700 text-xs mt-0.5">{formatBRL(Math.abs(Number(chq.valor ?? 0)))} · devolvido em {fmtData(chq.dataCredito)}</p>
+                    </div>
+                    {/* Rev. 3425 — campo de busca em tempo real */}
+                    <div className="relative shrink-0 w-56">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                      <input
+                        type="text"
+                        placeholder="Filtrar por descrição, valor…"
+                        value={vincularPixBusca}
+                        onChange={e => setVincularPixBusca(e.target.value)}
+                        className="w-full pl-7 pr-3 py-1.5 text-xs rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
+                        autoFocus
+                      />
+                    </div>
                   </div>
                   {/* Se vier com pré-seleção (auto-detectado): mostrar destaque */}
                   {vincularPixDlg.pixPreSel && !vincularPixSel && (
@@ -5607,17 +5626,30 @@ export default function FinanceiroConciliacao() {
                       <button type="button" className="text-gray-400 hover:text-gray-600 shrink-0" onClick={() => setVincularPixSel(null)}>✕</button>
                     </div>
                   )}
+                  {/* Contador */}
+                  <div className="px-5 py-1.5 border-b bg-gray-50 shrink-0 flex items-center gap-2">
+                    <span className="text-[11px] text-gray-500">
+                      {candidatas.length === 0 ? "Nenhum resultado" : `${candidatas.length} PIX/TED encontrado${candidatas.length !== 1 ? "s" : ""}`}
+                      {buscaNorm ? ` para "${vincularPixBusca}"` : " (somente PIX/TED)"}
+                    </span>
+                    {buscaNorm && (
+                      <button type="button" className="text-[11px] text-indigo-600 hover:underline" onClick={() => setVincularPixBusca("")}>Limpar filtro</button>
+                    )}
+                  </div>
                   {/* Lista de candidatas */}
                   <div className="flex-1 overflow-y-auto">
                     {candidatas.length === 0 ? (
-                      <p className="p-5 text-sm text-gray-500 text-center">Nenhuma saída encontrada no extrato deste período.<br/>Importe o extrato do mês em que o PIX foi feito para vincular.</p>
+                      <p className="p-5 text-sm text-gray-500 text-center">
+                        {buscaNorm ? "Nenhum PIX/TED com esse termo." : "Nenhum PIX/TED encontrado no extrato deste período."}
+                        <br/>
+                        <span className="text-xs">{!buscaNorm && "Importe o extrato do mês em que o PIX foi feito para vincular."}</span>
+                      </p>
                     ) : (
                       <div className="divide-y">
                         {candidatas.map((l: any) => {
                           const isSelected = vincularPixSel?.id === l.id;
                           const diffCents = Math.abs(Math.abs(Math.round(Number(l.valor) * 100)) - valCents);
                           const isExact = diffCents === 0;
-                          const looksLikePix = /pix|ted\b|doc\b|transf/i.test(String(l.descricao ?? ""));
                           return (
                             <button
                               key={l.id}
@@ -5632,7 +5664,7 @@ export default function FinanceiroConciliacao() {
                                 </div>
                                 <div className="shrink-0 flex flex-col items-end gap-0.5">
                                   {isExact && <span className="text-[10px] bg-emerald-100 text-emerald-700 rounded px-1">= valor exato</span>}
-                                  {looksLikePix && <span className="text-[10px] bg-blue-100 text-blue-700 rounded px-1">PIX/TED</span>}
+                                  <span className="text-[10px] bg-blue-100 text-blue-700 rounded px-1">PIX/TED</span>
                                   {isSelected && <CheckCircle className="w-3.5 h-3.5 text-indigo-600" />}
                                 </div>
                               </div>
