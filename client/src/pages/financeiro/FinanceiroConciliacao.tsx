@@ -5140,7 +5140,7 @@ export default function FinanceiroConciliacao() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <AlertDialogTitle className="text-white text-lg font-semibold leading-tight">Confirmar conciliação?</AlertDialogTitle>
-                  <AlertDialogDescription className="text-white/70 text-xs mt-1 leading-relaxed">
+                  <AlertDialogDescription className="text-white/70 text-xs mt-1 leading-relaxed break-words">
                     As sugestões são apenas automáticas — a baixa dos lançamentos só é aplicada após a sua confirmação.
                   </AlertDialogDescription>
                 </div>
@@ -5240,7 +5240,7 @@ export default function FinanceiroConciliacao() {
                       const sug = sugSelecionadas.find((s: any) => s.statementLineId === r.statementLineId);
                       return (
                         <div key={r.statementLineId} className="px-6 py-2.5">
-                          <p className="text-[11px] text-gray-500 mb-1.5 truncate" title={sug?.extratoDescricao ?? ""}>{sug?.extratoDescricao ?? "—"} <span className="text-gray-400">→ {sug?.entryFornecedor || sug?.entryDescricao || "—"}</span></p>
+                          <p className="text-[11px] text-gray-500 mb-1.5 break-words">{sug?.extratoDescricao ?? "—"} <span className="text-gray-400">→ {sug?.entryFornecedor || sug?.entryDescricao || "—"}</span></p>
                           {r.sugestoes.map((sg: AiSugestao, idx: number) => {
                             const key = `${r.statementLineId}-${idx}`;
                             const ck = confirmAiChecked.has(key);
