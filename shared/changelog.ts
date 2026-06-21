@@ -1,6 +1,47 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3403 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · BOTÃO "ANALISAR TODAS COM IA" +
+ * RELATÓRIO DE CLASSIFICAÇÃO EM LOTE + NOMES PADRONIZADOS. BACKEND ADITIVO + FRONT ·
+ * ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PEDIDO: ao invés de clicar "✦ IA" em cada linha individualmente (Rev. 3402), um botão
+ * único que processa TODAS as sugestões de uma vez e gera um relatório consolidado para o
+ * usuário decidir em massa quais correções aplicar. Adicionalmente: prompts aprimorados para
+ * sugerir nomes padronizados e limpos (sem IDs de PIX, códigos de transação, datas embutidas).
+ *
+ * BACKEND (`server/routers/financial.ts`):
+ * - Nova mutation `analisarLoteSugestoesComIA`: recebe até 40 pares extrato×ERP de uma só vez,
+ *   faz UMA chamada ao LLM (vs. N chamadas individuais no modelo anterior), retorna análise
+ *   de cada par. Busca todos os lançamentos em uma query, categorias ativas, monta lista JSON
+ *   de pares, chama `invokeLLM({ fast: true })`, sanitiza output (whitelist + validação de IDs
+ *   de categoria), mapeia statementLineId de volta. Gateado por `assertAiModuleEnabled`.
+ * - Prompts melhorados (`analisarConciliacaoComIA` + `analisarLoteSugestoesComIA`): regra
+ *   explícita de nome PADRONIZADO e LIMPO para campo `fornecedorNome` — remover IDs de PIX
+ *   (E003603...), códigos de transação, datas e números de conta embutidos. Exemplos incluídos:
+ *   'DEBITO DE IOF' → 'IOF — Imposto sobre Operações Financeiras'; 'UNIMED FELIPE - PAG BOLETO'
+ *   → 'Unimed'. Facilita filtros e relatórios futuros.
+ *
+ * FRONTEND (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`):
+ * - Estados: `batchAiResults`, `batchAiLoading`, `batchAiProgress`, `showBatchReport`,
+ *   `batchApplyChecked`, `batchApplying`, `batchApplyProgress`, `batchShowOnlyProblems`.
+ * - Mutation `analisarLoteMut` + função assíncrona `analisarTodas`: divide sugestões em chunks
+ *   de 30, chama `analisarLoteSugestoesComIA` por chunk, acumula resultados, pré-marca todas
+ *   as correções encontradas, abre o relatório.
+ * - Função `aplicarBatchCorrecoes`: agrupa correções por entryId, chama
+ *   `updateEntryClassificacao` para cada um em série com progresso visual.
+ * - Botão "Analisar todas com IA" na toolbar (ao lado de "Reler comprovantes"):
+ *   * Idle → "Analisar todas com IA" (Sparkles)
+ *   * Loading → "Analisando (N/Total)…" (Loader2 spin)
+ *   * Pronto → "Relatório IA (X divergências)" (violeta) — clica p/ abrir novamente
+ * - Dialog "Relatório de Classificação IA":
+ *   * Header: pills "N com divergências" (âmbar) + "N classificados OK" (verde)
+ *   * Filtro toggle: "Apenas divergências" / "Todos"
+ *   * "Marcar todas correções" / "Desmarcar todas"
+ *   * Lista scrollável: cada item mostra extrato→ERP, resumo da IA, lista de sugestões com
+ *     checkboxes (Nome/Beneficiário, Categoria, Descrição — campo, valor atual → sugerido, motivo)
+ *   * Footer: contador de selecionadas + botão "Aplicar N correções" (âmbar) com progresso inline
+ *
  * Rev. 3402 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · ANÁLISE IA INLINE NAS LINHAS DE
  * SUGESTÃO (SEM ABRIR O DIALOG). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *

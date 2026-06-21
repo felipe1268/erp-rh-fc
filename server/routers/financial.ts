@@ -6940,6 +6940,13 @@ export const financialRouter = router({
       "",
       "REGRAS:",
       "- Para campo contaId: contaIdSugerido DEVE ser um ID numérico da lista acima.",
+      "- Para campo fornecedorNome: sugira sempre um nome PADRONIZADO e LIMPO — sem códigos de transação,",
+      "  IDs de PIX (ex: E00360305...), datas embutidas, números de agência/conta, ou chaves aleatórias.",
+      "  Use o nome real da empresa/pessoa quando identificável no texto.",
+      "  Exemplos: 'E00360305202602112021ae8a43bfdae - PAG BO...' → 'Felipe Costa Alves' (se identificável) ou 'Pagamento Boleto — Banco do Brasil';",
+      "  'DEBITO DE IOF' → 'IOF — Imposto sobre Operações Financeiras';",
+      "  'UNIMED FELIPE - PAG BOLETO IBC - PORTO S...' → 'Unimed';",
+      "  'COBRANÇA DE JUROS' → 'Juros Bancários — CEF'.",
       "- Só sugira quando tiver certeza pelo texto do extrato.",
       "- Se tudo estiver correto: ok:true, sugestoes:[].",
       "- Máximo 3 sugestões.",
@@ -6993,6 +7000,145 @@ export const financialRouter = router({
       resumo: String(obj.resumo ?? "").slice(0, 400),
       sugestoes,
     };
+  }),
+
+  // Rev. 3403 — ANÁLISE EM LOTE POR IA: recebe até 40 pares extrato×ERP numa só chamada,
+  // faz UMA chamada ao LLM e retorna análise de cada par. Gatilho do botão "Analisar todas
+  // com IA" na toolbar de sugestões. READ-ONLY no banco. ZERO ALTER/DROP/DELETE.
+  analisarLoteSugestoesComIA: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    itens: z.array(z.object({
+      statementLineId: z.number(),
+      entryId: z.number(),
+      extratoDescricao: z.string(),
+      extratoData: z.string().optional().nullable(),
+      extratoValor: z.number().optional().nullable(),
+    })).max(40),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    await assertAiModuleEnabled(input.companyId, "financeiro");
+    if (!input.itens.length) return { resultados: [] };
+
+    // 1. Buscar todos os lançamentos em uma query
+    const entryIds = input.itens.map(i => i.entryId);
+    const entRes = await dbExecute(db,
+      `SELECT e.id, e.tipo,
+              e.conta_id AS "contaId",
+              fa.nome AS "contaNome",
+              e.fornecedor_nome AS "fornecedorNome",
+              e.descricao,
+              e.origem_modulo AS "origemModulo"
+       FROM financial_entries e
+       LEFT JOIN financial_accounts fa ON fa.id = e.conta_id
+       WHERE e.id = ANY($1::int[]) AND e.company_id=$2`,
+      [entryIds, input.companyId]);
+    const entryMap: Record<number, any> = {};
+    for (const r of rows(entRes)) { entryMap[(r as any).id] = r; }
+
+    // 2. Categorias ativas (até 100)
+    const catRes = await dbExecute(db,
+      `SELECT id, nome, tipo FROM financial_accounts
+       WHERE company_id=$1 AND ativo=1
+       ORDER BY tipo ASC, nome ASC LIMIT 100`,
+      [input.companyId]);
+    const categorias = rows(catRes) as any[];
+    const catList = categorias.map((c: any) => `${c.id}|${c.nome}|${c.tipo}`).join("\n");
+
+    // 3. Montar lista de pares para o prompt
+    const pares = input.itens.map((item, idx) => {
+      const e = entryMap[item.entryId];
+      return {
+        seq: idx + 1,
+        statementLineId: item.statementLineId,
+        extrato: `${item.extratoDescricao}${item.extratoData ? ` · ${item.extratoData}` : ""}${item.extratoValor != null ? ` · R$${Number(item.extratoValor).toFixed(2)}` : ""}`,
+        erpNome: e?.fornecedorNome || "—",
+        erpCategoria: e ? `${e.contaNome || "sem categoria"} (ID:${e.contaId || "0"})` : "—",
+        erpDescricao: e?.descricao || "—",
+        erpTipo: e?.tipo || "—",
+      };
+    });
+
+    const prompt = [
+      "Você é um auditor financeiro brasileiro. Para CADA par abaixo, analise se o LANÇAMENTO NO ERP está correto em relação ao EXTRATO BANCÁRIO.",
+      "",
+      "CATEGORIAS DISPONÍVEIS (ID|Nome|tipo):",
+      catList,
+      "",
+      `PARES (${pares.length} itens — analise todos):`,
+      JSON.stringify(pares),
+      "",
+      "Responda APENAS com JSON (sem markdown):",
+      '{"resultados":[{"seq":1,"ok":true,"resumo":"frase curta","sugestoes":[{"campo":"fornecedorNome"|"contaId"|"descricao","valorAtual":"X","sugestao":"Y","motivo":"Z","contaIdSugerido":123}]},...]}',
+      "",
+      "REGRAS:",
+      "- seq corresponde ao seq do par (analise TODOS os pares).",
+      "- contaIdSugerido DEVE ser ID numérico da lista de categorias (ou omita).",
+      "- ok:true e sugestoes:[] quando o par estiver correto.",
+      "- Máximo 3 sugestões por par.",
+      "- Para campo fornecedorNome: sugira sempre um nome PADRONIZADO e LIMPO — sem códigos de transação,",
+      "  IDs de PIX, datas embutidas, números de agência/conta ou chaves aleatórias.",
+      "  Use o nome real da empresa/pessoa quando identificável no texto do extrato.",
+      "  Exemplos de limpeza: 'E00360305202602...-PAG BO...' → nome do beneficiário real ou tipo de operação limpo;",
+      "  'DEBITO DE IOF' → 'IOF — Imposto sobre Operações Financeiras';",
+      "  'UNIMED FELIPE - PAG BOLETO IBC' → 'Unimed'; 'COBRANÇA DE JUROS' → 'Juros Bancários'.",
+      "- Responda SÓ o JSON.",
+    ].join("\n");
+
+    // 4. LLM call
+    let raw = "";
+    try {
+      const result = await invokeLLM({ fast: true, messages: [{ role: "user", content: prompt }], maxTokens: 4000 });
+      raw = (result.choices?.[0]?.message?.content as string) ?? "";
+    } catch (err: any) {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Falha na análise em lote: " + String(err?.message ?? "").slice(0, 120) });
+    }
+
+    // 5. Parse robusto
+    let obj: any = { resultados: [] };
+    try { obj = JSON.parse(raw); } catch {
+      const m = raw.match(/\{[\s\S]*\}/);
+      if (m) { try { obj = JSON.parse(m[0]); } catch { /* usa default */ } }
+    }
+
+    // 6. Sanitizar + mapear statementLineId de volta
+    const CAMPOS_VALIDOS = ["fornecedorNome", "contaId", "descricao"];
+    const resultados = (Array.isArray(obj.resultados) ? obj.resultados : [])
+      .map((r: any) => {
+        const idx = Number(r.seq ?? 0) - 1;
+        const item = input.itens[idx];
+        if (!item) return null;
+        const sugestoes = (Array.isArray(r.sugestoes) ? r.sugestoes : [])
+          .slice(0, 4)
+          .filter((s: any) => s && CAMPOS_VALIDOS.includes(s.campo))
+          .map((s: any) => {
+            const contaIdSugerido = s.campo === "contaId" && s.contaIdSugerido
+              ? (categorias.find((c: any) => c.id === Number(s.contaIdSugerido)) ? Number(s.contaIdSugerido) : null)
+              : null;
+            const contaNomeSugerida = contaIdSugerido
+              ? (categorias.find((c: any) => c.id === contaIdSugerido) as any)?.nome ?? null
+              : null;
+            return {
+              campo: String(s.campo),
+              valorAtual: String(s.valorAtual ?? "").slice(0, 200),
+              sugestao: String(s.sugestao ?? "").slice(0, 200),
+              motivo: String(s.motivo ?? "").slice(0, 300),
+              contaIdSugerido,
+              contaNomeSugerida,
+            };
+          });
+        return {
+          statementLineId: item.statementLineId,
+          entryId: item.entryId,
+          ok: Boolean(r.ok),
+          resumo: String(r.resumo ?? "").slice(0, 400),
+          sugestoes,
+        };
+      })
+      .filter(Boolean);
+
+    return { resultados };
   }),
 
   // Rev. 3396 — Desfaz a conciliação de UMA linha do extrato SEM apagá-la.

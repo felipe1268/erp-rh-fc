@@ -179,6 +179,16 @@ export default function FinanceiroConciliacao() {
   const [rowAiOpenId, setRowAiOpenId] = useState<number | null>(null);
   const [rowAiAnalise, setRowAiAnalise] = useState<AiAnaliseState>(null);
   const [rowAiCheckeds, setRowAiCheckeds] = useState<Set<number>>(new Set());
+  // Rev. 3403 — Análise em LOTE + relatório de classificação
+  type BatchResult = { statementLineId: number; entryId: number; ok: boolean; resumo: string; sugestoes: AiSugestao[] };
+  const [batchAiResults, setBatchAiResults] = useState<Record<number, BatchResult>>({});
+  const [batchAiLoading, setBatchAiLoading] = useState(false);
+  const [batchAiProgress, setBatchAiProgress] = useState<{ done: number; total: number } | null>(null);
+  const [showBatchReport, setShowBatchReport] = useState(false);
+  const [batchApplyChecked, setBatchApplyChecked] = useState<Set<string>>(new Set());
+  const [batchApplying, setBatchApplying] = useState(false);
+  const [batchApplyProgress, setBatchApplyProgress] = useState<{ done: number; total: number } | null>(null);
+  const [batchShowOnlyProblems, setBatchShowOnlyProblems] = useState(true);
   const fecharDetalhe = () => { setDetalheEntryId(null); setDetalheExtrato(null); setDetEditMode(false); setDetEditForm(null); setAiAnalise(null); setAiCheckeds(new Set()); };
   // Rev. 3266 — diálogo de CONFERÊNCIA da identificação por IA (texto roxo clicável).
   // Guarda a linha do extrato (com os campos demo* já vindos do getConciliacaoReport) p/
@@ -1251,6 +1261,80 @@ export default function FinanceiroConciliacao() {
     updateEntryClassif.mutate(patch, {
       onSuccess: () => { setRowAiOpenId(null); setRowAiAnalise(null); setRowAiCheckeds(new Set()); },
     });
+  };
+  // Rev. 3403 — LOTE: mutation + funções de análise em batch + aplicar relatório
+  const analisarLoteMut = (trpc as any).financial.analisarLoteSugestoesComIA.useMutation();
+  const analisarTodas = async () => {
+    if (!sugestoes.length || batchAiLoading) return;
+    setBatchAiLoading(true);
+    setBatchAiResults({});
+    setBatchAiProgress({ done: 0, total: sugestoes.length });
+    const CHUNK = 30;
+    const novoResults: Record<number, any> = {};
+    try {
+      for (let i = 0; i < sugestoes.length; i += CHUNK) {
+        const chunk = sugestoes.slice(i, i + CHUNK);
+        const res = await analisarLoteMut.mutateAsync({
+          companyId,
+          itens: chunk.map((s: any) => ({
+            statementLineId: s.statementLineId,
+            entryId: s.entryId,
+            extratoDescricao: s.extratoDescricao ?? "",
+            extratoData: s.extratoData ?? undefined,
+            extratoValor: s.extratoValor ?? undefined,
+          })),
+        });
+        for (const r of (res.resultados ?? [])) {
+          novoResults[r.statementLineId] = r;
+        }
+        setBatchAiProgress({ done: Math.min(i + CHUNK, sugestoes.length), total: sugestoes.length });
+      }
+    } catch (e: any) {
+      toast({ title: "Erro na análise em lote", description: e.message, variant: "destructive" });
+      setBatchAiLoading(false);
+      setBatchAiProgress(null);
+      return;
+    }
+    setBatchAiResults(novoResults);
+    setBatchAiLoading(false);
+    const preChecked = new Set<string>();
+    for (const [slid, r] of Object.entries(novoResults)) {
+      (r as any).sugestoes.forEach((_: any, idx: number) => preChecked.add(`${slid}-${idx}`));
+    }
+    setBatchApplyChecked(preChecked);
+    setShowBatchReport(true);
+  };
+  const aplicarBatchCorrecoes = async () => {
+    const byEntry: Record<number, { patch: any; entryId: number }> = {};
+    for (const key of batchApplyChecked) {
+      const [slidStr, idxStr] = key.split("-");
+      const slid = Number(slidStr);
+      const idx = Number(idxStr);
+      const r = batchAiResults[slid];
+      if (!r || !r.sugestoes[idx]) continue;
+      const sg = r.sugestoes[idx];
+      if (!byEntry[r.entryId]) byEntry[r.entryId] = { patch: { id: r.entryId, companyId }, entryId: r.entryId };
+      const p = byEntry[r.entryId].patch;
+      if (sg.campo === "fornecedorNome") p.fornecedorNome = sg.sugestao;
+      else if (sg.campo === "contaId" && sg.contaIdSugerido) { p.contaId = sg.contaIdSugerido; p.contaNome = sg.contaNomeSugerida || sg.sugestao; }
+      else if (sg.campo === "descricao") p.descricao = sg.sugestao;
+    }
+    const entradas = Object.values(byEntry);
+    if (!entradas.length) { toast({ title: "Nenhuma correção selecionada." }); return; }
+    setBatchApplying(true);
+    setBatchApplyProgress({ done: 0, total: entradas.length });
+    let done = 0;
+    for (const { patch } of entradas) {
+      try { await updateEntryClassif.mutateAsync(patch); } catch { /* continua */ }
+      done++;
+      setBatchApplyProgress({ done, total: entradas.length });
+    }
+    setBatchApplying(false);
+    setBatchApplyProgress(null);
+    setShowBatchReport(false);
+    setBatchAiResults({});
+    setBatchApplyChecked(new Set());
+    toast({ title: `${done} lançamento(s) corrigido(s) com sucesso.` });
   };
   const iniciarEdicaoEntry = () => {
     if (!detEntry) return;
@@ -2889,6 +2973,20 @@ export default function FinanceiroConciliacao() {
                         <Button size="sm" variant="outline" onClick={relerComprovantes} disabled={relerBusy} title="Lê por IA os comprovantes anexados (beneficiário/CNPJ/ID) p/ identificar melhor as sugestões">
                           {relerBusy ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1" />}
                           {relerBusy ? `Lendo${relerInfo ? ` (${formatInt(relerInfo.feitos)}, faltam ${formatInt(relerInfo.restantes)})` : "..."}` : "Reler comprovantes (IA)"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={batchAiLoading ? undefined : Object.keys(batchAiResults).length > 0 ? () => setShowBatchReport(true) : analisarTodas}
+                          disabled={batchAiLoading || !sugestoes.length}
+                          title="Analisa TODAS as sugestões de uma só vez e gera relatório de divergências de classificação"
+                          className={Object.keys(batchAiResults).length > 0 && !batchAiLoading ? "border-violet-400 text-violet-700 hover:bg-violet-50" : ""}
+                        >
+                          {batchAiLoading
+                            ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" />{`Analisando (${batchAiProgress?.done ?? 0}/${batchAiProgress?.total ?? 0})…`}</>
+                            : Object.keys(batchAiResults).length > 0
+                            ? <><Sparkles className="w-4 h-4 mr-1" />{`Relatório IA (${Object.values(batchAiResults).filter((r: any) => r.sugestoes.length > 0).length} divergências)`}</>
+                            : <><Sparkles className="w-4 h-4 mr-1" />Analisar todas com IA</>}
                         </Button>
                         <Button
                           size="sm"
@@ -5074,6 +5172,149 @@ export default function FinanceiroConciliacao() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Rev. 3403 — Dialog: Relatório de Classificação em Lote */}
+      {showBatchReport && (() => {
+        const allResults = Object.values(batchAiResults);
+        const withProblems = allResults.filter((r: any) => r.sugestoes.length > 0);
+        const okItems = allResults.filter((r: any) => r.sugestoes.length === 0);
+        const displayed = batchShowOnlyProblems ? withProblems : allResults;
+        const totalChecked = batchApplyChecked.size;
+        const CAMPO_LABEL: Record<string, string> = { fornecedorNome: "Nome/Beneficiário", contaId: "Categoria", descricao: "Descrição" };
+        const toggleCheckAll = () => {
+          if (batchApplyChecked.size > 0) { setBatchApplyChecked(new Set()); return; }
+          const all = new Set<string>();
+          for (const r of withProblems) r.sugestoes.forEach((_: any, i: number) => all.add(`${r.statementLineId}-${i}`));
+          setBatchApplyChecked(all);
+        };
+        return (
+          <Dialog open onOpenChange={v => { if (!v && !batchApplying) setShowBatchReport(false); }}>
+            <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col p-0 gap-0">
+              {/* Header */}
+              <div className="px-5 pt-5 pb-3 border-b shrink-0">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-base font-semibold flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-violet-600" />
+                      Relatório de Classificação IA
+                    </h2>
+                    <p className="text-xs text-gray-500 mt-0.5">{allResults.length} sugestões analisadas</p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap justify-end shrink-0">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-amber-100 text-amber-800">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
+                      {withProblems.length} com divergências
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                      {okItems.length} classificados OK
+                    </span>
+                  </div>
+                </div>
+                {/* Controles da lista */}
+                <div className="flex items-center gap-2 mt-3 flex-wrap">
+                  <button
+                    className={`text-xs px-3 py-1 rounded-full border transition-colors ${batchShowOnlyProblems ? "bg-amber-50 border-amber-300 text-amber-800 font-medium" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+                    onClick={() => setBatchShowOnlyProblems(true)}
+                  >Apenas divergências ({withProblems.length})</button>
+                  <button
+                    className={`text-xs px-3 py-1 rounded-full border transition-colors ${!batchShowOnlyProblems ? "bg-gray-100 border-gray-300 text-gray-800 font-medium" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+                    onClick={() => setBatchShowOnlyProblems(false)}
+                  >Todos ({allResults.length})</button>
+                  {withProblems.length > 0 && (
+                    <button className="text-xs text-violet-700 underline underline-offset-2 ml-2" onClick={toggleCheckAll}>
+                      {batchApplyChecked.size > 0 ? "Desmarcar todas" : "Marcar todas correções"}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Body scrollável */}
+              <div className="flex-1 overflow-y-auto divide-y">
+                {displayed.length === 0 && (
+                  <p className="text-sm text-gray-500 py-10 text-center">Nenhum item {batchShowOnlyProblems ? "com divergências" : ""} encontrado.</p>
+                )}
+                {displayed.map((r: any) => {
+                  const sug = r as BatchResult;
+                  const hasProblem = sug.sugestoes.length > 0;
+                  return (
+                    <div key={sug.statementLineId} className={`px-5 py-3.5 ${hasProblem ? "" : "opacity-60"}`}>
+                      {/* Linha principal: extrato → ERP */}
+                      <div className="flex items-start gap-2 mb-2">
+                        <span className={`mt-0.5 shrink-0 w-2 h-2 rounded-full ${hasProblem ? "bg-amber-400" : "bg-emerald-400"}`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs text-gray-500">Extrato:</span>
+                            <span className="text-xs font-medium text-gray-800 truncate max-w-[280px]" title={sugestoes.find((s: any) => s.statementLineId === sug.statementLineId)?.extratoDescricao ?? ""}>{sugestoes.find((s: any) => s.statementLineId === sug.statementLineId)?.extratoDescricao ?? "—"}</span>
+                            <span className="text-gray-300">→</span>
+                            <span className="text-xs text-gray-500">ERP:</span>
+                            <span className="text-xs font-medium text-gray-800 truncate max-w-[200px]">{sugestoes.find((s: any) => s.statementLineId === sug.statementLineId)?.entryFornecedor ?? "—"}</span>
+                          </div>
+                          <p className={`text-[11px] mt-0.5 ${hasProblem ? "text-amber-700" : "text-emerald-700"}`}>{sug.resumo}</p>
+                        </div>
+                      </div>
+                      {/* Sugestões com checkbox */}
+                      {sug.sugestoes.map((sg: AiSugestao, idx: number) => {
+                        const key = `${sug.statementLineId}-${idx}`;
+                        const checked = batchApplyChecked.has(key);
+                        return (
+                          <label key={key} className="flex items-start gap-2.5 ml-4 mt-1.5 cursor-pointer group">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={e => {
+                                const next = new Set(batchApplyChecked);
+                                e.target.checked ? next.add(key) : next.delete(key);
+                                setBatchApplyChecked(next);
+                              }}
+                              className="mt-0.5 accent-violet-600 shrink-0"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">{CAMPO_LABEL[sg.campo] ?? sg.campo}</span>
+                                <span className="text-[11px] line-through text-gray-400 max-w-[160px] truncate" title={sg.valorAtual}>{sg.valorAtual || "—"}</span>
+                                <span className="text-gray-300 text-[10px]">→</span>
+                                <span className="text-[11px] font-semibold text-violet-800 max-w-[200px] truncate" title={sg.campo === "contaId" ? (sg.contaNomeSugerida || sg.sugestao) : sg.sugestao}>
+                                  {sg.campo === "contaId" ? (sg.contaNomeSugerida || sg.sugestao) : sg.sugestao}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-gray-500 mt-0.5">{sg.motivo}</p>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Footer */}
+              <div className="px-5 py-3 border-t shrink-0 bg-gray-50/60 flex items-center justify-between gap-3">
+                <div className="text-xs text-gray-500">
+                  {batchApplying
+                    ? <span className="flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" />{`Aplicando… (${batchApplyProgress?.done ?? 0}/${batchApplyProgress?.total ?? 0})`}</span>
+                    : totalChecked > 0
+                    ? `${totalChecked} correção(ões) selecionada(s)`
+                    : "Selecione as correções para aplicar"}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setShowBatchReport(false)} disabled={batchApplying}>Fechar</Button>
+                  <Button
+                    size="sm"
+                    onClick={aplicarBatchCorrecoes}
+                    disabled={batchApplying || totalChecked === 0}
+                    className="bg-amber-500 hover:bg-amber-600 text-white border-amber-500"
+                  >
+                    {batchApplying
+                      ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" />Aplicando…</>
+                      : <><CheckCircle className="w-4 h-4 mr-1" />{`Aplicar ${totalChecked} correção(ões)`}</>}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
     </DashboardLayout>
   );
 }
