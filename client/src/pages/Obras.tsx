@@ -129,20 +129,6 @@ export default function Obras() {
   const clientesQ = trpc.clientes.list.useQuery({ companyId }, { enabled: !!companyId });
   const clientes = clientesQ.data ?? [];
 
-  // Rev. 3451 — Múltiplos clientes por obra
-  const obraClientesQ = (trpc as any).obras.listClientes.useQuery(
-    { obraId: editingId ?? 0 },
-    { enabled: !!editingId }
-  );
-  const obraClientesVinculados: { id: number; clienteId: number; razaoSocial: string; nomeFantasia?: string }[] = obraClientesQ.data ?? [];
-  const addClienteObraMut = (trpc as any).obras.addCliente.useMutation({
-    onSuccess: () => { obraClientesQ.refetch(); },
-    onError: (e: any) => toast.error(`Erro ao vincular cliente: ${e.message}`),
-  });
-  const removeClienteObraMut = (trpc as any).obras.removeCliente.useMutation({
-    onSuccess: () => { obraClientesQ.refetch(); },
-    onError: (e: any) => toast.error(`Erro ao desvincular cliente: ${e.message}`),
-  });
   const [clienteAdicionalOpen, setClienteAdicionalOpen] = useState(false);
   const [clienteAdicionalBusca, setClienteAdicionalBusca] = useState("");
   const clienteAdicionalRef = useRef<HTMLDivElement>(null);
@@ -204,6 +190,22 @@ export default function Obras() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+
+  // Rev. 3451 — Múltiplos clientes por obra (movido para após editingId — fix Rev. 3453)
+  const obraClientesQ = (trpc as any).obras.listClientes.useQuery(
+    { obraId: editingId ?? 0 },
+    { enabled: !!editingId }
+  );
+  const obraClientesVinculados: { id: number; clienteId: number; razaoSocial: string; nomeFantasia?: string }[] = obraClientesQ.data ?? [];
+  const addClienteObraMut = (trpc as any).obras.addCliente.useMutation({
+    onSuccess: () => { obraClientesQ.refetch(); },
+    onError: (e: any) => toast.error(`Erro ao vincular cliente: ${e.message}`),
+  });
+  const removeClienteObraMut = (trpc as any).obras.removeCliente.useMutation({
+    onSuccess: () => { obraClientesQ.refetch(); },
+    onError: (e: any) => toast.error(`Erro ao desvincular cliente: ${e.message}`),
+  });
+
   const [mesclarDialog, setMesclarDialog] = useState<{ open: boolean; sourceObra: any | null }>({ open: false, sourceObra: null });
   const [mesclarTargetId, setMesclarTargetId] = useState<number | null>(null);
   const [form, setForm] = useState<ObraForm>(emptyForm);
