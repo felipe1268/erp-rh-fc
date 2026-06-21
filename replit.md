@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3417** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FIX "MOVIMENTAÇÃO INTERNA" FALSO-POSITIVO EM CHEQUES COM FORNECEDOR IDENTIFICADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** CEF inclui CNPJ do correntista (FC) na descrição do cheque → classifica como "interno". Fix: `&& !lancStatement.chequeFornecedor` na condição do aviso âmbar. Se Controle de Cheques tem fornecedor externo, aviso é suprimido. Detalhe: `shared/changelog.ts`.
+- **Rev. 3418** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "TROCAR LANÇAMENTO VINCULADO" — SUGESTÕES POR VALOR PRÓXIMO + LAYOUT MODERNO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Sem busca: dois grupos ("Valor próximo" ≤20% diff, ordenado por menor diferença, badge Δ% / "= valor exato") e "Outros". Com busca: badge Δ% por item. Cabeçalho azul #1B2A4A com valor do extrato; dialog 42rem; lista 52vh. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3416** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · VINCULAR CHEQUE DEVOLVIDO A PIX/TED SUBSTITUTO — SUGESTÃO AUTOMÁTICA + VÍNCULO MANUAL + CONTROLE DE CHEQUES ATUALIZADO. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Endpoint `vincularChequePix`: UPDATE financial_cheques status='compensado_pix' + data + observacao; match por dígitos do número. Dialog: lista de saídas do extrato ordenada por proximidade de valor; badges "= valor exato"/"PIX/TED". Detalhe: `shared/changelog.ts`.
+- **Rev. 3417** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FIX "MOVIMENTAÇÃO INTERNA" FALSO-POSITIVO EM CHEQUES COM FORNECEDOR IDENTIFICADO + FIX TDZ CRASH "Cannot access lancForm before initialization". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Fix interno: `&& !lancStatement.chequeFornecedor`; Fix TDZ: moveu `useState(lancForm)` para antes do `useMemo` que o referenciava. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
+
+- **Rev. 3416** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · VINCULAR CHEQUE DEVOLVIDO A PIX/TED SUBSTITUTO — SUGESTÃO AUTOMÁTICA + VÍNCULO MANUAL + CONTROLE DE CHEQUES ATUALIZADO. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3415** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CAMPO FORNECEDOR "LANÇAR NO ERP" RESTRITO AO CADASTRO — SUGESTÃO AUTOMÁTICA MAS SELEÇÃO OBRIGATÓRIA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

@@ -263,7 +263,7 @@ export default function FinanceiroConciliacao() {
   const [confirmExcluirLinha, setConfirmExcluirLinha] = useState<{ id: number; descricao: string; valor: number; conciliado: boolean } | null>(null);
   // Rev. 3410 — troca manual de lançamento vinculado na sugestão
   const [overrideSug, setOverrideSug] = useState<Record<number, { entryId: number; fornecedorNome: string; descricao: string; valor: number; data: string | null; obraNome?: string }>>({});
-  const [trocandoLine, setTrocandoLine] = useState<{ statementLineId: number; extratoDescricao: string } | null>(null);
+  const [trocandoLine, setTrocandoLine] = useState<{ statementLineId: number; extratoDescricao: string; extratoValor?: number } | null>(null);
   const [buscaTroca, setBuscaTroca] = useState("");
   const [confirmConciliar, setConfirmConciliar] = useState(false);
   const [mismatch, setMismatch] = useState<{ detectado: string; selecionado: string; fora: number; total: number; anoNum: number; mesNum: number } | null>(null);
@@ -3263,7 +3263,7 @@ export default function FinanceiroConciliacao() {
                                       <div className="flex items-center gap-1 mt-1">
                                         <button
                                           type="button"
-                                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setTrocandoLine({ statementLineId: s.statementLineId, extratoDescricao: s.extratoDescricao || "" }); setBuscaTroca(""); }}
+                                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setTrocandoLine({ statementLineId: s.statementLineId, extratoDescricao: s.extratoDescricao || "", extratoValor: Math.abs(Number(s.extratoValor ?? 0)) }); setBuscaTroca(""); }}
                                           className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-blue-200 hover:text-blue-600 transition-colors"
                                           title="Trocar lançamento vinculado"
                                         >
@@ -5946,79 +5946,176 @@ export default function FinanceiroConciliacao() {
         );
       })()}
 
-      {/* Rev. 3410 — Dialog de troca manual de lançamento na sugestão de conciliação */}
+      {/* Rev. 3418 — Dialog de troca manual: sugestões por valor próximo + layout melhorado */}
       <Dialog open={!!trocandoLine} onOpenChange={(o) => { if (!o) { setTrocandoLine(null); setBuscaTroca(""); } }}>
-        <DialogContent style={{ maxWidth: "min(38rem, calc(100vw - 1.5rem))" }} className="p-0 gap-0">
-          <DialogHeader className="px-5 pt-5 pb-3 border-b">
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <ArrowLeftRight className="w-4 h-4 text-blue-600 shrink-0" />
-              Trocar lançamento vinculado
-            </DialogTitle>
-            {trocandoLine && (
-              <DialogDescription className="text-xs text-gray-500 truncate mt-0.5">
-                Extrato: {trocandoLine.extratoDescricao}
-              </DialogDescription>
-            )}
-          </DialogHeader>
-          <div className="px-5 py-3 border-b">
+        <DialogContent style={{ maxWidth: "min(42rem, calc(100vw - 1rem))" }} className="p-0 gap-0 overflow-hidden">
+          {/* Cabeçalho */}
+          <div className="bg-[#1B2A4A] px-5 pt-5 pb-4">
+            <div className="flex items-center gap-2 text-white">
+              <div className="w-8 h-8 rounded-full bg-white/15 flex items-center justify-center shrink-0">
+                <ArrowLeftRight className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <div className="font-semibold text-sm leading-tight">Trocar lançamento vinculado</div>
+                {trocandoLine && (
+                  <div className="text-[11px] text-blue-200 truncate mt-0.5 max-w-[26rem]">
+                    Extrato: {trocandoLine.extratoDescricao}
+                    {trocandoLine.extratoValor ? <span className="ml-2 font-semibold text-white/90">{formatBRL(trocandoLine.extratoValor)}</span> : null}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          {/* Busca */}
+          <div className="px-4 py-3 border-b bg-gray-50">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
               <input
                 autoFocus
                 value={buscaTroca}
                 onChange={(e) => setBuscaTroca(e.target.value)}
-                placeholder="Buscar por descrição ou fornecedor…"
-                className="w-full pl-8 pr-3 py-2 text-sm rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Buscar por descrição, fornecedor ou conta…"
+                className="w-full pl-8 pr-3 py-2 text-sm rounded-md border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
           </div>
-          <div className="max-h-[42vh] overflow-y-auto divide-y">
+          {/* Lista */}
+          <div className="max-h-[52vh] overflow-y-auto">
             {entriesTrocaFetching && (
-              <div className="flex items-center gap-2 px-5 py-4 text-sm text-gray-400">
+              <div className="flex items-center gap-2 px-5 py-5 text-sm text-gray-400">
                 <Loader2 className="w-4 h-4 animate-spin" /> Buscando…
               </div>
             )}
-            {!entriesTrocaFetching && buscaTroca.trim().length >= 2 && (entriesTroca?.data ?? []).length === 0 && (
-              <div className="px-5 py-4 text-sm text-gray-400">Nenhum lançamento encontrado.</div>
+            {!entriesTrocaFetching && buscaTroca.trim().length >= 1 && (entriesTroca?.data ?? []).length === 0 && (
+              <div className="px-5 py-5 text-sm text-gray-400 text-center">Nenhum lançamento encontrado.</div>
             )}
-            {(entriesTroca?.data ?? []).map((e: any) => {
-              const nome = e.fornecedorNome || e.frotaFornecedor || e.pjFornecedor || e.descricao || "—";
-              const valor = e.valorRealizado ?? e.valorPrevisto ?? 0;
-              const data = e.dataCompetencia ?? e.dataVencimento ?? null;
-              return (
-                <button
-                  key={e.id}
-                  type="button"
-                  className="w-full text-left px-5 py-3 hover:bg-blue-50 transition-colors group"
-                  onClick={() => {
-                    if (!trocandoLine) return;
-                    setOverrideSug(prev => ({
-                      ...prev,
-                      [trocandoLine.statementLineId]: {
-                        entryId: e.id,
-                        fornecedorNome: nome,
-                        descricao: e.descricao || "",
-                        valor: Number(valor),
-                        data,
-                        obraNome: e.obraNome || undefined,
-                      }
-                    }));
-                    setTrocandoLine(null);
-                    setBuscaTroca("");
-                  }}
-                >
-                  <div className="font-medium text-sm text-blue-700 group-hover:underline truncate">{nome}</div>
-                  <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-2 flex-wrap">
-                    <span className="tabular-nums">{formatBRL(Math.abs(Number(valor)))}</span>
-                    {data && <span>· {fmtData(data)}</span>}
-                    {e.obraNome && <span>· {e.obraNome}</span>}
-                    {e.contaNome && <span className="text-gray-400">· {e.contaNome}</span>}
+            {!entriesTrocaFetching && (() => {
+              const allEntries: any[] = entriesTroca?.data ?? [];
+              const valRef = trocandoLine?.extratoValor ?? 0;
+              const busca = buscaTroca.trim();
+
+              // Com busca: mostra resultados simples
+              if (busca.length >= 1) {
+                return (
+                  <div className="divide-y">
+                    {allEntries.map((e: any) => {
+                      const nome = e.fornecedorNome || e.frotaFornecedor || e.pjFornecedor || e.descricao || "—";
+                      const valor = Math.abs(Number(e.valorRealizado ?? e.valorPrevisto ?? 0));
+                      const data = e.dataCompetencia ?? e.dataVencimento ?? null;
+                      const diffPct = valRef > 0 ? Math.round(Math.abs(valor - valRef) / valRef * 100) : null;
+                      const exato = valRef > 0 && Math.abs(valor - valRef) < 0.015;
+                      return (
+                        <button key={e.id} type="button"
+                          className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors group flex items-start gap-3"
+                          onClick={() => {
+                            if (!trocandoLine) return;
+                            setOverrideSug(prev => ({ ...prev, [trocandoLine.statementLineId]: { entryId: e.id, fornecedorNome: nome, descricao: e.descricao || "", valor: Number(e.valorRealizado ?? e.valorPrevisto ?? 0), data, obraNome: e.obraNome || undefined } }));
+                            setTrocandoLine(null); setBuscaTroca("");
+                          }}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm text-blue-700 group-hover:underline truncate">{nome}</div>
+                            <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                              <span className="tabular-nums font-medium text-gray-700">{formatBRL(valor)}</span>
+                              {data && <><span className="text-gray-300">·</span><span>{fmtData(data)}</span></>}
+                              {e.obraNome && <><span className="text-gray-300">·</span><span>{e.obraNome}</span></>}
+                              {e.contaNome && <><span className="text-gray-300">·</span><span className="text-gray-400 italic">{e.contaNome}</span></>}
+                            </div>
+                          </div>
+                          <div className="shrink-0 mt-0.5">
+                            {exato
+                              ? <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">= valor exato</span>
+                              : diffPct !== null
+                                ? <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold tabular-nums ${diffPct <= 5 ? "bg-blue-100 text-blue-700" : diffPct <= 20 ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500"}`}>Δ {diffPct}%</span>
+                                : null}
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
-                </button>
+                );
+              }
+
+              // Sem busca: dois grupos — valor próximo (≤20% diff) + demais
+              const comValor = valRef > 0 ? [...allEntries].sort((a, b) => {
+                const va = Math.abs(Number(a.valorRealizado ?? a.valorPrevisto ?? 0));
+                const vb = Math.abs(Number(b.valorRealizado ?? b.valorPrevisto ?? 0));
+                return Math.abs(va - valRef) - Math.abs(vb - valRef);
+              }) : allEntries;
+
+              const proximos = valRef > 0 ? comValor.filter(e => {
+                const v = Math.abs(Number(e.valorRealizado ?? e.valorPrevisto ?? 0));
+                return Math.abs(v - valRef) / valRef <= 0.20;
+              }) : [];
+              const demais = valRef > 0 ? comValor.filter(e => {
+                const v = Math.abs(Number(e.valorRealizado ?? e.valorPrevisto ?? 0));
+                return Math.abs(v - valRef) / valRef > 0.20;
+              }) : comValor;
+
+              const renderEntry = (e: any, destaque: boolean) => {
+                const nome = e.fornecedorNome || e.frotaFornecedor || e.pjFornecedor || e.descricao || "—";
+                const valor = Math.abs(Number(e.valorRealizado ?? e.valorPrevisto ?? 0));
+                const data = e.dataCompetencia ?? e.dataVencimento ?? null;
+                const exato = valRef > 0 && Math.abs(valor - valRef) < 0.015;
+                const diffPct = valRef > 0 && !exato ? Math.round(Math.abs(valor - valRef) / valRef * 100) : null;
+                return (
+                  <button key={e.id} type="button"
+                    className={`w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors group flex items-start gap-3 ${destaque ? "bg-blue-50/40" : ""}`}
+                    onClick={() => {
+                      if (!trocandoLine) return;
+                      setOverrideSug(prev => ({ ...prev, [trocandoLine.statementLineId]: { entryId: e.id, fornecedorNome: nome, descricao: e.descricao || "", valor: Number(e.valorRealizado ?? e.valorPrevisto ?? 0), data, obraNome: e.obraNome || undefined } }));
+                      setTrocandoLine(null); setBuscaTroca("");
+                    }}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm text-blue-700 group-hover:underline truncate">{nome}</div>
+                      <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                        <span className="tabular-nums font-medium text-gray-700">{formatBRL(valor)}</span>
+                        {data && <><span className="text-gray-300">·</span><span>{fmtData(data)}</span></>}
+                        {e.obraNome && <><span className="text-gray-300">·</span><span>{e.obraNome}</span></>}
+                        {e.contaNome && <><span className="text-gray-300">·</span><span className="text-gray-400 italic">{e.contaNome}</span></>}
+                      </div>
+                    </div>
+                    <div className="shrink-0 mt-0.5">
+                      {exato
+                        ? <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">= valor exato</span>
+                        : diffPct !== null
+                          ? <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold tabular-nums ${diffPct <= 5 ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>Δ {diffPct}%</span>
+                          : null}
+                    </div>
+                  </button>
+                );
+              };
+
+              return (
+                <>
+                  {proximos.length > 0 && (
+                    <>
+                      <div className="px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border-b border-emerald-100 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                        Valor próximo ao extrato ({formatBRL(valRef)})
+                      </div>
+                      <div className="divide-y">{proximos.map(e => renderEntry(e, true))}</div>
+                    </>
+                  )}
+                  {demais.length > 0 && (
+                    <>
+                      <div className="px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 bg-gray-50 border-b border-gray-100 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-gray-400 inline-block" />
+                        {proximos.length > 0 ? "Outros lançamentos" : "Lançamentos recentes"}
+                      </div>
+                      <div className="divide-y">{demais.map(e => renderEntry(e, false))}</div>
+                    </>
+                  )}
+                  {allEntries.length === 0 && (
+                    <div className="px-5 py-5 text-sm text-gray-400 text-center">Digite para buscar lançamentos.</div>
+                  )}
+                </>
               );
-            })}
+            })()}
           </div>
-          <div className="px-5 py-3 border-t bg-gray-50 flex justify-end">
+          <div className="px-4 py-3 border-t bg-gray-50 flex justify-between items-center">
+            <span className="text-[11px] text-gray-400">Selecione um lançamento para substituir o vínculo</span>
             <Button size="sm" variant="outline" onClick={() => { setTrocandoLine(null); setBuscaTroca(""); }}>Cancelar</Button>
           </div>
         </DialogContent>

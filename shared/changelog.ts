@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3418 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "TROCAR LANÇAMENTO VINCULADO" —
+ * SUGESTÕES POR VALOR PRÓXIMO + LAYOUT MODERNO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Pedido: ao abrir o dialog de troca de vínculo, aparecer lançamentos com valores
+ * parecidos ao do extrato em destaque, e melhorar o layout da tela.
+ *
+ * Solução:
+ * - `trocandoLine` ganhou campo `extratoValor` (valor absoluto da linha do extrato).
+ * - Sem texto de busca: lista dividida em dois grupos — "Valor próximo ao extrato"
+ *   (diff ≤ 20% do valor de referência, fundo azul-claro, ordenado por menor diferença)
+ *   e "Outros lançamentos" / "Lançamentos recentes". Badge "Δ N%" em cada item
+ *   (verde ≤5%, âmbar ≤20%); badge "= valor exato" em verde quando a diferença < R$ 0,02.
+ * - Com texto de busca: mostra resultados normais + badge Δ% de cada item vs. extrato.
+ * - Layout: cabeçalho azul escuro (#1B2A4A) com ícone em círculo, valor do extrato
+ *   exibido no cabeçalho; barra de busca em fundo cinza; rodapé com instrução e botão Cancelar.
+ *   Dialog mais largo (42rem) e lista com max-h: 52vh.
+ *
+ * Arquivos: client/src/pages/financeiro/FinanceiroConciliacao.tsx
+ *   (trocandoLine type, setTrocandoLine call site, dialog JSX reescrito).
+ *
  * Rev. 3417 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FIX "MOVIMENTAÇÃO INTERNA" FALSO-POSITIVO
  * EM CHEQUES COM FORNECEDOR IDENTIFICADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
