@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3414** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXCLUIR LANÇAMENTO "NO ERP, SEM EXTRATO" NA TELA DE CONCILIAÇÃO (SÓ ADMIN_MASTER). 100% FRONTEND + REUSO DE ENDPOINT EXISTENTE · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Botão 🗑 (cinza/hover vermelho) em cada linha individual de `renderEntryRow`; oculto para status=pago/recebido e para não-admin_master. Dialog de confirmação com campo "Motivo" (mín. 5 chars); chama `financial.deleteEntry` + `refetchReport()` em sucesso. Detalhe: `shared/changelog.ts`.
+- **Rev. 3415** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CAMPO FORNECEDOR "LANÇAR NO ERP" RESTRITO AO CADASTRO — SUGESTÃO AUTOMÁTICA MAS SELEÇÃO OBRIGATÓRIA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `lancFornDisplay` separa texto visível do valor confirmado. `onChangeText` zera confirmação; `onSelect` confirma. Label muda para âmbar "selecione da lista" ou verde "✓ confirmado". Pré-preenchimentos (cheque/vinculo) vão só para display — usuário clica no item para confirmar. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3413** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FORM "LANÇAR NO ERP" — COMBOBOXES FILTRÁVEIS + FILTRO OBRA POR CLIENTE + DIALOG "CADASTRAR NOVA OBRA". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Componente `LancCombo` (input+dropdown filtrável por substring, onMouseDown p/ evitar fechar no blur). Todos os 6 campos do form trocados por `LancCombo`. `obrasParaLanc` filtra obras pelo `clienteNome`. Botão "+ Nova obra" abre dialog inline. Detalhe: `shared/changelog.ts`.
+- **Rev. 3414** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXCLUIR LANÇAMENTO "NO ERP, SEM EXTRATO" NA TELA DE CONCILIAÇÃO (SÓ ADMIN_MASTER). 100% FRONTEND + REUSO DE ENDPOINT EXISTENTE · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Botão 🗑 em cada linha individual; oculto para status=pago/recebido e não-admin_master. Dialog de confirmação com campo "Motivo" (mín. 5 chars). Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
 

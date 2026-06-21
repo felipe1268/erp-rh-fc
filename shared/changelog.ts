@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3415 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CAMPO FORNECEDOR NO "LANÇAR NO ERP"
+ * RESTRITO AO CADASTRO DE FORNECEDORES — SUGESTÃO AUTOMÁTICA MAS SELEÇÃO OBRIGATÓRIA.
+ * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Problema: campo Fornecedor aceitava texto livre — usuário podia lançar com fornecedor
+ * inexistente no cadastro, sem vínculo formal com os fornecedores do ERP.
+ *
+ * Correção:
+ * 1. Estado `lancFornDisplay` (display do input, análogo a `lancObraDisplay`/`lancCCDisplay`).
+ *    `lancForm.fornecedorNome` só é preenchido ao clicar numa opção do dropdown (confirmação).
+ * 2. `onChangeText` atualiza `lancFornDisplay` e ZERA `lancForm.fornecedorNome` (desfaz
+ *    confirmação anterior se o usuário edita o texto após selecionar).
+ * 3. Feedback visual no label:
+ *    - Amarelo "selecione da lista para confirmar ↓" quando há display mas nenhum confirmado.
+ *    - Verde "✓ confirmado" quando o fornecedor está confirmado do cadastro.
+ * 4. `abrirLancar`: sugestão pré-existente (cheque, demo, vinculo) vai SOMENTE para
+ *    `lancFornDisplay` (pré-filtra o dropdown); `lancForm.fornecedorNome` começa vazio.
+ * 5. `abrirLancStandalone`: zera `lancFornDisplay`.
+ * 6. Hint de vínculo: botão "Sugestão" pré-preenche o display (não confirma) + texto
+ *    orientativo "clique no nome para pré-filtrar, depois selecione da lista".
+ *
+ * Arquivos: client/src/pages/financeiro/FinanceiroConciliacao.tsx.
+ *
  * Rev. 3414 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXCLUIR LANÇAMENTO "NO ERP, SEM
  * EXTRATO" DIRETAMENTE NA TELA DE CONCILIAÇÃO (SÓ ADMIN_MASTER).
  * 100% FRONTEND + REUSO DE ENDPOINT EXISTENTE · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**

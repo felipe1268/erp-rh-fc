@@ -353,6 +353,8 @@ export default function FinanceiroConciliacao() {
   // Rev. 3413 — estados para comboboxes e dialog de nova obra
   const [lancObraDisplay, setLancObraDisplay] = useState("");
   const [lancCCDisplay, setLancCCDisplay] = useState("");
+  // Rev. 3415 — fornecedor só pode vir do cadastro; display ≠ valor confirmado
+  const [lancFornDisplay, setLancFornDisplay] = useState("");
   const [lancNewObraOpen, setLancNewObraOpen] = useState(false);
   const [lancNewObraNome, setLancNewObraNome] = useState("");
   const criarObraMut = (trpc as any).obras.create.useMutation();
@@ -395,8 +397,12 @@ export default function FinanceiroConciliacao() {
     // Rev. 3324 — ENTRADA: pré-preenche o cliente pagador (vínculo de cadastro ou beneficiário lido por IA).
     const clientePrefill = isEntrada ? (s.vinculoTipo === "cliente" && s.vinculoNome ? String(s.vinculoNome) : (s.demoBeneficiario ? String(s.demoBeneficiario) : "")) : "";
     const obraNomePrefill = obraDoCheque ? obraDoCheque.nome : "";
+    // Rev. 3415 — sugestão de fornecedor vai só no display (pré-filtra o dropdown);
+    // lancForm.fornecedorNome começa vazio — usuário deve confirmar clicando no item.
+    const fornSugestao = isEntrada ? "" : (s.chequeFornecedor ?? (temDemo && s.demoBeneficiario ? s.demoBeneficiario : ((s.vinculoTipo === "fornecedor" && s.vinculoNome && (s.vinculoVia === "cnpj" || s.vinculoConfianca === "media")) ? String(s.vinculoNome) : "")));
     setLancObraDisplay(obraNomePrefill);
     setLancCCDisplay("");
+    setLancFornDisplay(fornSugestao);
     setLancForm({
       data: String(s.data ?? "").slice(0, 10),
       valor: maskBRLInput(String(Math.round(abs * 100))),
@@ -404,7 +410,7 @@ export default function FinanceiroConciliacao() {
       obraId: obraDoCheque ? String(obraDoCheque.id) : "",
       contaNome: "",
       centroCustoId: "",
-      fornecedorNome: isEntrada ? "" : (s.chequeFornecedor ?? (temDemo && s.demoBeneficiario ? s.demoBeneficiario : ((s.vinculoTipo === "fornecedor" && s.vinculoNome && (s.vinculoVia === "cnpj" || s.vinculoConfianca === "media")) ? String(s.vinculoNome) : ""))),
+      fornecedorNome: "",
       clienteId: "",
       clienteNome: clientePrefill,
       formaPagamento: temCheque ? "cheque" : (temFatura ? "cartao" : (temDemo ? demoForma : "")),
@@ -421,6 +427,7 @@ export default function FinanceiroConciliacao() {
     setLancStatement({ id: null, valor: undefined, data: today, contaBancariaId: Number(contaBancariaId) || null });
     setLancObraDisplay("");
     setLancCCDisplay("");
+    setLancFornDisplay("");
     setLancForm({ data: today, valor: "", descricao: "", obraId: "", contaNome: "", contaId: "", centroCustoId: "", fornecedorNome: "", clienteId: "", clienteNome: "", formaPagamento: "", tipo: "despesa" });
   }
 
@@ -5260,23 +5267,35 @@ export default function FinanceiroConciliacao() {
                   </div>
                 ) : (
                   <div>
-                    <Label className="text-xs flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5 text-red-600" />Fornecedor</Label>
+                    <Label className="text-xs flex items-center gap-1.5">
+                      <Building2 className="w-3.5 h-3.5 text-red-600" />Fornecedor
+                      {lancFornDisplay && !lancForm.fornecedorNome && (
+                        <span className="text-[10px] text-amber-600 font-normal ml-1">selecione da lista para confirmar ↓</span>
+                      )}
+                      {lancForm.fornecedorNome && (
+                        <span className="text-[10px] text-emerald-600 font-normal ml-1">✓ confirmado</span>
+                      )}
+                    </Label>
                     <LancCombo
-                      value={lancForm.fornecedorNome}
-                      onChangeText={(s) => setLancForm(f => ({ ...f, fornecedorNome: s }))}
-                      onSelect={(opt) => setLancForm(f => ({ ...f, fornecedorNome: opt ? opt.label : "" }))}
+                      value={lancFornDisplay}
+                      onChangeText={(s) => { setLancFornDisplay(s); setLancForm(f => ({ ...f, fornecedorNome: "" })); }}
+                      onSelect={(opt) => {
+                        if (!opt) { setLancFornDisplay(""); setLancForm(f => ({ ...f, fornecedorNome: "" })); return; }
+                        setLancFornDisplay(opt.label);
+                        setLancForm(f => ({ ...f, fornecedorNome: opt.label }));
+                      }}
                       options={fornNomes.map((n, i) => ({ id: i, label: n }))}
-                      placeholder="Digite ou selecione"
+                      placeholder="Buscar fornecedor do cadastro…"
                       noneLabel="— (sem fornecedor) —"
-                      onClear={() => setLancForm(f => ({ ...f, fornecedorNome: "" }))}
+                      onClear={() => { setLancFornDisplay(""); setLancForm(f => ({ ...f, fornecedorNome: "" })); }}
                     />
                     {lancStatement.vinculoTipo === "fornecedor" && lancStatement.vinculoNome && (
                       <p className="text-[11px] text-gray-500 mt-1 flex items-start gap-1">
                         <span className="shrink-0">🏢</span>
                         <span>
                           {lancStatement.vinculoVia === "cnpj"
-                            ? <>Cadastro <strong>{lancStatement.vinculoNome}</strong> (CNPJ confere) — confira e ajuste se preciso.</>
-                            : <>Sugestão do cadastro: <button type="button" className="font-medium text-blue-600 hover:underline" onClick={() => setLancForm(f => ({ ...f, fornecedorNome: String(lancStatement.vinculoNome) }))}>{lancStatement.vinculoNome}</button> — {lancStatement.vinculoConfianca === "media" ? "boa correspondência por nome" : "palpite (baixa confiança)"}. Escolha o fornecedor correto do cadastro.</>}
+                            ? <>Cadastro <strong>{lancStatement.vinculoNome}</strong> (CNPJ confere) — busque e selecione na lista acima para confirmar.</>
+                            : <>Sugestão: <button type="button" className="font-medium text-blue-600 hover:underline" onClick={() => { setLancFornDisplay(String(lancStatement.vinculoNome)); setLancForm(f => ({ ...f, fornecedorNome: "" })); }}>{lancStatement.vinculoNome}</button> — {lancStatement.vinculoConfianca === "media" ? "boa correspondência por nome" : "palpite (baixa confiança)"}. Clique no nome acima para pré-filtrar, depois selecione da lista.</>}
                         </span>
                       </p>
                     )}
