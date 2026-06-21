@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3443** — **CONCILIAÇÃO BANCÁRIA / LANÇAR NO ERP · FORMA DE PAGAMENTO AUTO-DETECTADA DO TEXTO DO EXTRATO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Regex `\bPIX\b`/`\bTED\b`/`\bBOLETO\b` sobre o texto bruto da linha do extrato pré-preenche o campo "Forma de pagamento" no form de lançamento. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3442** — **COMPRAS / OC + COTAÇÃO · FORMA DE PAGAMENTO PRÉ-PREENCHIDA DO CICLO DO FORNECEDOR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Ao selecionar o fornecedor na OC manual e ao abrir o modal de condições na cotação, `cicloFormaPagamento` é injetado como sugestão — o comprador pode alterar. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3441** — **CONCILIAÇÃO BANCÁRIA / PANORAMA · VARREDURA DE OC / OS / LOCAÇÃO POR MÊS. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Nova rota `getOcsPorMes` varre todas as ordens ativas e agrupa por mês de referência financeira (dataVencimento → dataEntregaPrevista → created_at). Seção laranja "OC / OS / Locação por mês" no Panorama Geral: cada mês colapsável com totais e lista individual (badge tipo + fornecedor + status + valor). Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3441** — **CONCILIAÇÃO BANCÁRIA / PANORAMA · VARREDURA DE OC / OS / LOCAÇÃO POR MÊS. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3440** — **COMPRAS / FORNECEDORES · SEÇÃO "CICLO DE FECHAMENTO" NO CADASTRO DO FORNECEDOR. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

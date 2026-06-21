@@ -462,7 +462,14 @@ export default function FinanceiroConciliacao() {
       fornecedorNome: "",
       clienteId: "",
       clienteNome: clientePrefill,
-      formaPagamento: temCheque ? "cheque" : (temFatura ? "cartao" : (temDemo ? demoForma : "")),
+      formaPagamento: temCheque ? "cheque" : (temFatura ? "cartao" : (temDemo ? demoForma : (() => {
+        // Detecção por palavras-chave no texto do extrato (fallback quando não há cheque/fatura/demo IA)
+        const d = descBase.toUpperCase();
+        if (/\bPIX\b/.test(d))    return "pix";
+        if (/\bTED\b/.test(d))    return "transferencia";
+        if (/\bBOLETO\b/.test(d)) return "boleto";
+        return "";
+      })())),
       tipo: isEntrada ? "receita" : "despesa",
       contaId: "",
     });

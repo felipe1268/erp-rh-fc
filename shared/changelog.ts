@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3443 — **CONCILIAÇÃO BANCÁRIA / LANÇAR NO ERP · FORMA DE PAGAMENTO AUTO-DETECTADA DO TEXTO DO EXTRATO.
+ * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PEDIDO: se a linha do extrato contiver PIX, TED ou BOLETO no texto, pré-preencher
+ * automaticamente o campo "Forma de pagamento" no form "Lançar no Contas a Receber/Pagar".
+ *
+ * SOLUÇÃO: no `abrirLancar`, a inicialização de `formaPagamento` já cobria cheque/cartão/demo-IA.
+ * Adicionado fallback final com IIFE que testa regex `\bPIX\b`, `\bTED\b` e `\bBOLETO\b` sobre
+ * `descBase` (texto bruto do extrato). Valores mapeados: PIX→"pix", TED→"transferencia",
+ * BOLETO→"boleto". Campo continua editável — usuário só confirma se necessário.
+ *
+ * ARQUIVOS: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`,
+ *           `shared/version.ts`, `shared/changelog.ts`, `replit.md`.
+ *
  * Rev. 3442 — **COMPRAS / OC + COTAÇÃO · FORMA DE PAGAMENTO PRÉ-PREENCHIDA DO CICLO DO FORNECEDOR.
  * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
