@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3434** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · "NO ERP, SEM EXTRATO" — EXIBE CONTA BANCÁRIA DO LANÇAMENTO. 100% FRONTEND · ZERO BACKEND.** Badge azul "🏦 contaNome" inline na linha do item; ajuda a identificar de qual conta partiu uma movimentação interna. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3433** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO iOS: "THE STRING DID NOT MATCH THE EXPECTED PATTERN" → MENSAGEM AMIGÁVEL + fmtData SAFE PARA iOS. 100% FRONTEND · ZERO BACKEND.** `fmtData` normaliza espaço→T antes de `new Date()`; `_msgErroConc()` mapeia erros crípticos do WebKit para mensagem de "falha de conexão" em ambos os cards de erro. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3432** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "CONCILIAR PIX NO EXTRATO" — TEXTOS CORTADOS CORRIGIDOS. REGRA: DIALOGS NUNCA TRUNCAM. 100% FRONTEND · ZERO BACKEND.** `truncate` → `break-words`/`break-all` no header, descrição PIX, item selecionado e lista. Regra gravada em memória. Detalhe: `shared/changelog.ts`.

@@ -1261,12 +1261,13 @@ export default function FinanceiroConciliacao() {
           {isReceita ? <ArrowDownCircle className="w-5 h-5" /> : <ArrowUpCircle className="w-5 h-5" />}
         </span>
         <button onClick={() => setSelectedEntry(selectedEntry === e.id ? null : e.id)} className="flex-1 min-w-0 text-left">
-          <p className="text-[11px] text-gray-400 flex items-center gap-1.5">
+          <p className="text-[11px] text-gray-400 flex items-center gap-1.5 flex-wrap">
             {fmtData(e.data)}
             {(isPix || isBoleto) && <span className={`px-1.5 py-px rounded-full text-[10px] font-medium ${isPix ? "bg-emerald-100 text-emerald-700" : "bg-orange-100 text-orange-700"}`}>{isPix ? "PIX" : "Boleto"}</span>}
+            {e.contaNome && <span className="px-1.5 py-px rounded-full text-[10px] font-medium bg-blue-50 text-blue-600 border border-blue-100" title={`Conta no ERP: ${e.contaNome}`}>🏦 {e.contaNome}</span>}
           </p>
-          <p className="text-sm font-medium text-gray-700 truncate">{e.fornecedorNome || e.descricao || "—"}</p>
-          {e.obraNome && <p className="text-xs text-gray-400 truncate">{e.obraNome}</p>}
+          <p className="text-sm font-medium text-gray-700 break-words">{e.fornecedorNome || e.descricao || "—"}</p>
+          {e.obraNome && <p className="text-xs text-gray-400 break-words">{e.obraNome}</p>}
         </button>
         <p className={`text-sm font-bold shrink-0 ${isReceita ? "text-emerald-600" : "text-rose-500"}`}>{formatBRL(Math.abs(Number(e.valor)))}</p>
         <button type="button" onClick={() => setDetalheEntryId(e.id)} title="Ver detalhes" className="shrink-0 p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50"><Eye className="w-4 h-4" /></button>

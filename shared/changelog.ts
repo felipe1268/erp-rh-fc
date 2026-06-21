@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3434 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · "NO ERP, SEM EXTRATO" — EXIBE
+ * CONTA BANCÁRIA DO LANÇAMENTO ERP. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Na lista "No ERP, sem extrato", cada item agora mostra um badge azul "🏦 <contaNome>"
+ * inline com a data e os demais badges (PIX/Boleto). O campo `contaNome` já vinha no
+ * payload de `lancamentosSemExtrato` (coluna `conta_nome` da query). Útil principalmente
+ * para movimentações internas (transferência entre contas): fica claro de qual conta
+ * partiu o lançamento do ERP sem precisar abrir o detalhe.
+ * Aproveitado para trocar `truncate` → `break-words` nos textos da linha (regra global
+ * de dialogs/listas, per Rev. 3432).
+ *
  * Rev. 3433 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO iOS: "THE STRING DID NOT
  * MATCH THE EXPECTED PATTERN" → MENSAGEM AMIGÁVEL + fmtData SAFE PARA iOS.
  * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
