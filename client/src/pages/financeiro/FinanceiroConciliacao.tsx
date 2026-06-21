@@ -4980,7 +4980,7 @@ export default function FinanceiroConciliacao() {
 
         {/* Rev. 3198 — Lançar no ERP direto do item do extrato (data/conta/valor pré-preenchidos) */}
         <Dialog open={lancStatement != null} onOpenChange={(o: boolean) => { if (!o && !lancBusy) setLancStatement(null); }}>
-          <DialogContent className="max-w-none w-screen h-[100dvh] p-0 gap-0 flex flex-col rounded-none overflow-hidden [&_[data-slot=dialog-close]]:text-white/80 [&_[data-slot=dialog-close]]:hover:text-white [&_[data-slot=dialog-maximize]]:hidden">
+          <DialogContent resizable={false} className="max-w-none w-screen h-[100dvh] max-h-[100dvh] top-0 left-0 translate-x-0 translate-y-0 border-0 shadow-none p-0 gap-0 flex flex-col rounded-none overflow-hidden [&_[data-slot=dialog-close]]:text-white/80 [&_[data-slot=dialog-close]]:hover:text-white [&_[data-slot=dialog-maximize]]:hidden">
             <DialogHeader className="shrink-0 space-y-0 text-left bg-gradient-to-r from-[#1B2A4A] to-[#2c3f63] px-6 py-5">
               <div className="flex items-start gap-3 pr-12">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 ring-1 ring-white/25 shrink-0">

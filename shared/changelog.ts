@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3412 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "LANÇAR NO ERP" FULL SCREEN
+ * NO MOBILE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Problema: DialogContent base tem `top-[50%] left-[50%] translate-x[-50%] translate-y[-50%]
+ * max-h-[92dvh]` + `sizeStyle` do `resizable` adicionava `width: min(512px, 100vw-1rem)` —
+ * resultado: janela centralizada com margens laterais e altura capeada em 92dvh.
+ *
+ * Correção: `resizable={false}` (zera sizeStyle) + className com override explícito:
+ * `top-0 left-0 translate-x-0 translate-y-0 max-h-[100dvh] border-0 shadow-none`.
+ * Dialogo ocupa exatamente 100dvh × 100vw sem gaps laterais, bordas ou sombra.
+ *
  * Rev. 3411 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SUGESTÕES AUTOMÁTICAS NÃO
  * RECARREGAM APÓS CADA CONCILIAÇÃO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
