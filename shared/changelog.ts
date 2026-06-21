@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3417 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FIX "MOVIMENTAÇÃO INTERNA" FALSO-POSITIVO
+ * EM CHEQUES COM FORNECEDOR IDENTIFICADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Causa-raiz: banco CEF inclui o CNPJ do correntista (FC Engenharia) no campo de descrição
+ * "DEBITO CHEQUE PAG AGENCIA - 29.353.906/0001-71". Esse CNPJ está em financial_internal_cnpjs
+ * → classificação como "interno". Mas o CNPJ na linha é o EMITENTE do cheque, não o beneficiário.
+ * Quando o Controle de Cheques já identificou o cheque e preencheu `chequeFornecedor` (fornecedor
+ * externo), o CNPJ da descrição não é da contraparte → aviso de "movimentação interna" é incorreto.
+ *
+ * Correção: adicionado `&& !lancStatement.chequeFornecedor` na condição de exibição do aviso
+ * âmbar no dialog "Lançar no ERP". Se o cheque tem fornecedor no Controle de Cheques, o bloco
+ * de confirmação de interno é suprimido — o usuário segue direto para o lançamento.
+ *
+ * Arquivo: client/src/pages/financeiro/FinanceiroConciliacao.tsx (linha do `lancStatement.interno`).
+ *
  * Rev. 3416 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · VINCULAR CHEQUE DEVOLVIDO A PIX/TED
  * SUBSTITUTO — SUGESTÃO AUTOMÁTICA + VÍNCULO MANUAL + ATUALIZAÇÃO DO CONTROLE DE CHEQUES.
  * BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**

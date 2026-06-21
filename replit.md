@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3416** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · VINCULAR CHEQUE DEVOLVIDO A PIX/TED SUBSTITUTO — SUGESTÃO AUTOMÁTICA + VÍNCULO MANUAL + CONTROLE DE CHEQUES ATUALIZADO. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Endpoint `vincularChequePix`: UPDATE financial_cheques status='compensado_pix' + data + observacao; match por dígitos do número. Dialog: lista de saídas do extrato ordenada por proximidade de valor; badges "= valor exato"/"PIX/TED". Auto-detectado → "Confirmar e registrar"; pendente → "Vincular manualmente". Detalhe: `shared/changelog.ts`.
+- **Rev. 3417** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FIX "MOVIMENTAÇÃO INTERNA" FALSO-POSITIVO EM CHEQUES COM FORNECEDOR IDENTIFICADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** CEF inclui CNPJ do correntista (FC) na descrição do cheque → classifica como "interno". Fix: `&& !lancStatement.chequeFornecedor` na condição do aviso âmbar. Se Controle de Cheques tem fornecedor externo, aviso é suprimido. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3415** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CAMPO FORNECEDOR "LANÇAR NO ERP" RESTRITO AO CADASTRO — SUGESTÃO AUTOMÁTICA MAS SELEÇÃO OBRIGATÓRIA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `lancFornDisplay` separa texto visível do valor confirmado. `onChangeText` zera confirmação; `onSelect` confirma. Label muda para âmbar "selecione da lista" ou verde "✓ confirmado". Pré-preenchimentos (cheque/vinculo) vão só para display — usuário clica no item para confirmar. Detalhe: `shared/changelog.ts`.
+- **Rev. 3416** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · VINCULAR CHEQUE DEVOLVIDO A PIX/TED SUBSTITUTO — SUGESTÃO AUTOMÁTICA + VÍNCULO MANUAL + CONTROLE DE CHEQUES ATUALIZADO. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Endpoint `vincularChequePix`: UPDATE financial_cheques status='compensado_pix' + data + observacao; match por dígitos do número. Dialog: lista de saídas do extrato ordenada por proximidade de valor; badges "= valor exato"/"PIX/TED". Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
+
+- **Rev. 3415** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CAMPO FORNECEDOR "LANÇAR NO ERP" RESTRITO AO CADASTRO — SUGESTÃO AUTOMÁTICA MAS SELEÇÃO OBRIGATÓRIA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3414** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · EXCLUIR LANÇAMENTO "NO ERP, SEM EXTRATO" NA TELA DE CONCILIAÇÃO (SÓ ADMIN_MASTER). 100% FRONTEND + REUSO DE ENDPOINT EXISTENTE · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

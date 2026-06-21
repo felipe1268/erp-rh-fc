@@ -5164,7 +5164,7 @@ export default function FinanceiroConciliacao() {
                   )}
                 </div>
                 {/* Rev. 3390/3391 — Aviso + ação quando o extrato detecta movimentação interna */}
-                {lancStatement.interno && lancStatement.overrideNatureza !== "efetivo" && (
+                {lancStatement.interno && lancStatement.overrideNatureza !== "efetivo" && !lancStatement.chequeFornecedor && (
                   <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
                     <div className="flex gap-2.5">
                       <span className="text-lg leading-none mt-px shrink-0">⚠️</span>
