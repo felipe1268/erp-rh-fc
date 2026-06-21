@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3457** — **CONCILIAÇÃO BANCÁRIA · DROPDOWN "FORNECEDOR" NO FORM "LANÇAR NO CONTAS A PAGAR" CORRIGIDO — MOSTRA TODOS OS FORNECEDORES DO GRUPO FC. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** `listarFornecedores` ganha `includeAllGroup: true` (busca em todas as empresas acessíveis ao usuário via `getCompaniesForUser`). Filtro `ativo=true` agora aceita `NULL` (cadastros antigos). Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3456** — **OBRAS · DIALOGS DE CONFIRMAÇÃO (EXCLUIR / LIBERAR SN / MESCLAR) SUBSTITUÍDOS POR AlertDialog shadcn. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `window.confirm()` mostrava domínio Replit feio no iOS. 3 estados + 3 `<AlertDialog>` com botão destrutivo p/ excluir, liberar SN e mesclar obras. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3455** — **CONCILIAÇÃO BANCÁRIA · LANÇAR NO C/RECEBER — (1) LANCCOMBO SELECIONÁVEL NO iOS/TABLET + (2) FILTRO DE OBRA CONSIDERA obra_clientes + (3) HOTFIX clientes.atualizar dataNascimento "" → null. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3455** — **CONCILIAÇÃO BANCÁRIA · LANÇAR NO C/RECEBER — (1) LANCCOMBO SELECIONÁVEL NO iOS/TABLET + (2) FILTRO DE OBRA CONSIDERA obra_clientes + (3) HOTFIX clientes.atualizar dataNascimento "" → null. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3454** — **CONCILIAÇÃO BANCÁRIA · CACHE PERSISTENTE DA ANÁLISE IA (BATCH). BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

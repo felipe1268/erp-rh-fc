@@ -323,7 +323,11 @@ export default function FinanceiroConciliacao() {
   const { data: lancObras, refetch: refetchLancObras } = (trpc as any).obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
   const { data: lancAccounts, refetch: refetchLancAccounts } = (trpc as any).financial.getAccounts.useQuery({ companyId, ativo: true }, { enabled: !!companyId });
   const { data: lancCostCenters, refetch: refetchLancCostCenters } = (trpc as any).financial.getCostCenters.useQuery({ companyId }, { enabled: !!companyId });
-  const { data: lancFornecedores } = (trpc as any).compras.listarFornecedores.useQuery({ companyId, ativo: true }, { enabled: !!companyId });
+  // Rev. 3457 — includeAllGroup: true → retorna fornecedores de TODAS as empresas
+  // do grupo (não só a empresa corrente), corrigindo o bug onde a lista ficava vazia
+  // quando os fornecedores estavam cadastrados em outra empresa do grupo FC.
+  // ativo: undefined → inclui fornecedores com ativo=NULL (cadastros antigos) além dos ativo=true.
+  const { data: lancFornecedores } = (trpc as any).compras.listarFornecedores.useQuery({ companyId, includeAllGroup: true }, { enabled: !!companyId });
   // Rev. 3455 — movido p/ antes de obrasParaLanc (era linha 366) p/ resolver clienteId na filtragem
   const { data: lancClientes, refetch: refetchLancClientes } = (trpc as any).clientes.list.useQuery({ companyId }, { enabled: !!companyId });
   const clienteOpts: { id: number; nome: string }[] = useMemo(() => {

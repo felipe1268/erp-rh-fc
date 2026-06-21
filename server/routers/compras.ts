@@ -1300,18 +1300,39 @@ export const comprasRouter = router({
 
   listarFornecedores: protectedProcedure
     .input(z.object({
-      companyId: z.number(),
-      busca:     z.string().optional(),
-      categoria: z.string().optional(),
-      ativo:     z.boolean().optional(),
+      companyId:       z.number(),
+      busca:           z.string().optional(),
+      categoria:       z.string().optional(),
+      ativo:           z.boolean().optional(),
+      // Rev. 3457 — quando true, retorna fornecedores de TODAS as empresas
+      // acessíveis ao usuário (não só a empresa corrente). Usado na conciliação
+      // para que o dropdown mostre todos os fornecedores do grupo FC, independente
+      // de qual empresa está selecionada no contexto.
+      includeAllGroup: z.boolean().optional(),
     }))
     .query(async ({ input, ctx }) => {
       await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
+
+      // Rev. 3457 — expandir para todas as empresas do grupo quando solicitado
+      let companyIds: number[] = [input.companyId];
+      if (input.includeAllGroup) {
+        const userCos = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+        if (userCos.length > 0) {
+          companyIds = userCos.map((c: any) => Number(c.id)).filter((n: number) => Number.isFinite(n));
+        }
+      }
+
       const rows = await db.select().from(fornecedores)
         .where(and(
-          eq(fornecedores.companyId, input.companyId),
-          input.ativo !== undefined ? eq(fornecedores.ativo, input.ativo) : undefined,
+          companyIds.length === 1
+            ? eq(fornecedores.companyId, companyIds[0])
+            : inArray(fornecedores.companyId, companyIds),
+          input.ativo !== undefined
+            ? (input.ativo
+                ? or(eq(fornecedores.ativo, true), isNull(fornecedores.ativo))
+                : eq(fornecedores.ativo, false))
+            : undefined,
         ))
         .orderBy(asc(fornecedores.razaoSocial));
 

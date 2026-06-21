@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3457 — **CONCILIAÇÃO BANCÁRIA · DROPDOWN "FORNECEDOR" NO FORM "LANÇAR NO CONTAS A PAGAR"
+ * AGORA MOSTRA TODOS OS FORNECEDORES DO GRUPO FC. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * PROBLEMA: o campo "Fornecedor" no form "Lançar no Contas a Pagar" da conciliação
+ * retornava lista vazia (ou parcial) ao buscar fornecedores como "Melo encanamento".
+ * Causa-raiz dupla:
+ *   1. `listarFornecedores` filtrava ESTRITAMENTE pelo `companyId` atual. No grupo FC
+ *      existem múltiplas empresas ("FC Engenharia", "FC – Aparecida" etc.); fornecedores
+ *      cadastrados em uma empresa do grupo não apareciam quando a conciliação estava
+ *      aberta em outra empresa.
+ *   2. Filtro `ativo = true` (SQL strict equality) excluía linhas com `ativo = NULL`
+ *      (cadastros antigos criados antes da coluna existir com default).
+ *
+ * CORREÇÃO:
+ * Backend (`server/routers/compras.ts`):
+ *   - Novo campo `includeAllGroup?: boolean` na input de `listarFornecedores`.
+ *   - Quando `true`, chama `getCompaniesForUser(userId, role)` e filtra por
+ *     `companyId IN (todos os ids acessíveis)` via `inArray(...)`.
+ *   - Filtro `ativo: true` passa a usar `OR(ativo = true, ativo IS NULL)` em vez de
+ *     `ativo = true` estrito, incluindo cadastros antigos com `ativo = NULL`.
+ *   - Totalmente backward-compatible: chamadas sem `includeAllGroup` continuam filtrando
+ *     pela empresa exata (comportamento anterior, sem quebrar a tela Fornecedores).
+ *
+ * Frontend (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`):
+ *   - Query `lancFornecedores` passa `includeAllGroup: true` e remove `ativo: true`
+ *     (sem filtro explícito → NULL incluído pela nova lógica OR do backend).
+ *
  * Rev. 3456 — **OBRAS · DIALOGS DE CONFIRMAÇÃO (EXCLUIR / LIBERAR SN / MESCLAR) SUBSTITUÍDOS
  * POR AlertDialog shadcn. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
