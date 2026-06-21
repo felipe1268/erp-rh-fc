@@ -220,6 +220,8 @@ export default function FinanceiroConciliacao() {
     return Array.from(set).sort((a, b) => a - b);
   }, [diasDoMes]);
   const [selSug, setSelSug] = useState<Set<number>>(new Set());
+  // Rev. 3447 — IDs de sugestões descartadas pelo usuário (local; limpa no Reanalisar)
+  const [sugDescartadas, setSugDescartadas] = useState<Set<number>>(new Set());
   // Rev. 3177 — clicar no lançamento das sugestões abre um detalhe CONSULTIVO (read-only).
   const [detalheEntryId, setDetalheEntryId] = useState<number | null>(null);
   // Rev. 3264 — clicar TAMBÉM no item do extrato abre o detalhe + bloco de conferência (extrato × ERP) p/ validar a conciliação.
@@ -800,7 +802,8 @@ export default function FinanceiroConciliacao() {
     { enabled: !!companyId && !!contaBancariaId && mostrarSugestoes }
   );
   // Rev. 3411 — filtra localmente as linhas já conciliadas (sem re-análise automática)
-  const sugestoes: any[] = (sugData?.sugestoes ?? []).filter((s: any) => !conciliadosIds.has(s.statementLineId));
+  // Rev. 3447 — também exclui linhas descartadas manualmente pelo usuário
+  const sugestoes: any[] = (sugData?.sugestoes ?? []).filter((s: any) => !conciliadosIds.has(s.statementLineId) && !sugDescartadas.has(s.statementLineId));
   const semMatch: any[] = sugData?.semMatch ?? [];
   // Rev. 3201 — fonte ÚNICA dos pares selecionados (contador + render do diálogo + payload),
   // p/ o número exibido nunca divergir do que será efetivamente enviado.
@@ -3428,7 +3431,7 @@ export default function FinanceiroConciliacao() {
                       <Button
                         size="sm"
                         variant={mostrarSugestoes ? "outline" : "default"}
-                        onClick={() => { setMostrarSugestoes(true); setSelSug(new Set()); setConciliadosIds(new Set()); if (mostrarSugestoes) refetchSug(); }}
+                        onClick={() => { setMostrarSugestoes(true); setSelSug(new Set()); setConciliadosIds(new Set()); setSugDescartadas(new Set()); if (mostrarSugestoes) refetchSug(); }}
                         disabled={sugLoading}
                       >
                         <Sparkles className="w-4 h-4 mr-1" />
@@ -3626,6 +3629,20 @@ export default function FinanceiroConciliacao() {
                                 >
                                   <Sparkles className="w-2.5 h-2.5" />
                                   {rowAiOpenId === s.statementLineId && rowAiAnalise === "loading" ? "…" : "IA"}
+                                </button>
+                                {/* Rev. 3447 — descartar sugestão: linha volta p/ "No extrato, sem lançamento" */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault(); e.stopPropagation();
+                                    setSugDescartadas(prev => new Set([...prev, s.statementLineId]));
+                                    setSelSug(prev => { const n = new Set(prev); n.delete(s.statementLineId); return n; });
+                                    toast({ title: "Sugestão descartada", description: "A linha aparece agora em \"No extrato, sem lançamento\"." });
+                                  }}
+                                  title="Descartar esta sugestão — a linha volta para 'No extrato, sem lançamento'"
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold transition-colors border bg-white border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600"
+                                >
+                                  <X className="w-2.5 h-2.5" /> ignorar
                                 </button>
                               </div>
                             </label>

@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3447 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · BOTÃO "IGNORAR" POR LINHA DE SUGESTÃO
+ * AUTOMÁTICA — LINHA RETORNA PARA "NO EXTRATO, SEM LANÇAMENTO".
+ * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PROBLEMA: na seção "Sugestões Automáticas de Conciliação", não havia como dispensar uma
+ * sugestão individual sem conciliar ou trocar o lançamento. Linhas incorretamente sugeridas
+ * ficavam presas no painel e causavam confusão sobre o estado real do extrato.
+ *
+ * SOLUÇÃO:
+ *
+ * 1. **Estado `sugDescartadas` (Set<number>)** adicionado próximo ao `selSug` —
+ *    armazena os `statementLineId` das sugestões descartadas pelo usuário na sessão atual.
+ *
+ * 2. **Filtro em `sugestoes`** atualizado para excluir também os IDs presentes em
+ *    `sugDescartadas` (além dos já-conciliados presentes em `conciliadosIds`).
+ *
+ * 3. **Botão "✕ ignorar"** adicionado ao final de cada linha de sugestão (ao lado do
+ *    botão IA), com borda vermelha suave. Ao clicar:
+ *    - adiciona o `statementLineId` ao Set `sugDescartadas`;
+ *    - remove da seleção ativa (`selSug`);
+ *    - dispara toast "Sugestão descartada — A linha aparece agora em 'No extrato, sem lançamento'".
+ *    A linha do extrato já constava em `repExt` (vinda de `getConciliacaoReport.extratoSemLancamento`
+ *    — query independente, filtra apenas `conciliado=0`), portanto aparece imediatamente na
+ *    tabela "No extrato, sem lançamento" sem qualquer chamada adicional ao backend.
+ *
+ * 4. **Reanalisar** reseta `sugDescartadas` junto com `selSug` e `conciliadosIds`,
+ *    trazendo de volta todas as sugestões frescas da nova análise.
+ *
+ * Arquivos: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`.
+ *
  * Rev. 3446 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CRIAR CATEGORIA E CENTRO DE CUSTO INLINE
  * NO FORM "LANÇAR NO ERP". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
