@@ -3107,9 +3107,23 @@ export default function FinanceiroConciliacao() {
                                 </div>
                               </button>
                               <div className="flex flex-col items-end gap-1 shrink-0">
-                                <Badge variant={s.confianca === "alta" ? "default" : "secondary"}>
-                                  {s.confianca === "alta" ? "Alta" : "Média"}
-                                </Badge>
+                                {/* Rev. 3405 — score numérico de confiança */}
+                                <span className={`inline-flex items-center justify-center min-w-[2.8rem] px-1.5 py-0.5 rounded-full text-[11px] font-bold tabular-nums ${
+                                  (s.scoreConfianca ?? (s.confianca === "alta" ? 85 : 60)) >= 80
+                                    ? "bg-blue-100 text-blue-700"
+                                    : (s.scoreConfianca ?? 60) >= 60
+                                      ? "bg-amber-100 text-amber-700"
+                                      : "bg-gray-100 text-gray-500"
+                                }`} title={`Confiança: ${s.scoreConfianca ?? (s.confianca === "alta" ? 85 : 60)}%`}>
+                                  {s.scoreConfianca ?? (s.confianca === "alta" ? 85 : 60)}%
+                                </span>
+                                {/* Rev. 3405 — badge "Padrão ERP" quando há histórico */}
+                                {s.padraoErp && (
+                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-px rounded text-[10px] font-medium bg-emerald-100 text-emerald-700" title={`Padrão identificado ${s.padraoErp.freq}× em conciliações anteriores → ${s.padraoErp.fornecedorNome}${s.padraoErp.contaNome ? " · " + s.padraoErp.contaNome : ""}`}>
+                                    <CheckCircle className="w-2.5 h-2.5 shrink-0" />
+                                    ERP ×{s.padraoErp.freq}
+                                  </span>
+                                )}
                                 {s.identificadoVia && (
                                   <span className="inline-flex items-center gap-1 px-1.5 py-px rounded text-[10px] font-medium bg-violet-100 text-violet-700" title={s.entryComprovanteBeneficiario ? `Comprovante: ${s.entryComprovanteBeneficiario}` : `Identificado pelo comprovante (${s.identificadoVia})`}>
                                     <Sparkles className="w-2.5 h-2.5" /> {s.identificadoVia}

@@ -6520,6 +6520,12 @@ export const financialRouter = router({
       const ambiguo = (ambiguasPorLinha.get(c.linha.id) ?? 1) > 1;
       const ems = entDate(c.entry);
       const viaLabel = c.via === "txid" ? "ID da transação" : c.via === "documento" ? "CNPJ/CPF" : c.via === "beneficiario" ? "beneficiário" : null;
+      // Rev. 3405 — score numérico de confiança (0-100)
+      const scoreConfianca = c.via
+        ? Math.max(70, 95 - c.delta * 3)
+        : ambiguo
+          ? Math.max(40, 55 - c.delta * 3)
+          : c.delta === 0 ? 85 : c.delta === 1 ? 78 : c.delta <= 3 ? 70 : Math.max(50, 65 - c.delta * 2);
       sugestoes.push({
         statementLineId: c.linha.id, entryId: c.entry.id,
         extratoData: c.linha.data, extratoDescricao: c.linha.descricao, extratoValor: Number(c.linha.valor),
@@ -6530,6 +6536,7 @@ export const financialRouter = router({
         deltaDias: c.delta,
         // Identificado pelo comprovante → "alta" mesmo que o valor fosse ambíguo.
         confianca: c.via ? "alta" : ((!ambiguo && c.delta <= 1) ? "alta" : "media"),
+        scoreConfianca,
         identificadoVia: viaLabel,
         entryComprovanteBeneficiario: c.entry.comprovanteBeneficiario ?? null,
       });
@@ -6544,6 +6551,41 @@ export const financialRouter = router({
         if (!s.identificadoVia) s.identificadoVia = `cheque nº ${chq.numero}`;
       }
     }
+    // Rev. 3405 — Enriquece sugestões com padrão histórico de conciliações anteriores (sem IA).
+    // Para cada descrição de extrato, busca qual (fornecedor, categoria) foi usado na maioria
+    // das vezes que aquela descrição foi conciliada — sugere automaticamente sem chamar LLM.
+    try {
+      const uniquePrefixes = [...new Set(sugestoes.map((s: any) =>
+        (String(s.extratoDescricao ?? "")).toUpperCase().trim().slice(0, 30)
+      ))].filter(Boolean);
+      if (uniquePrefixes.length > 0) {
+        const safeEsc = (s: string) => s.replace(/'/g, "''");
+        const valClauses = uniquePrefixes.map(p => `('${safeEsc(p)}')`).join(",");
+        const histRes = await dbExecute(db, `
+          WITH prefixes(p) AS (VALUES ${valClauses})
+          SELECT p, e.fornecedor_nome, e.conta_id, fa.nome AS conta_nome, COUNT(*) AS freq
+          FROM prefixes
+          JOIN bank_statement_lines bsl ON UPPER(LEFT(TRIM(bsl.descricao), 30)) = p
+          JOIN financial_entries e ON e.id = bsl.entry_id
+          LEFT JOIN financial_accounts fa ON fa.id = e.conta_id
+          WHERE bsl.company_id=$1 AND bsl.conciliado=1 AND bsl.excluido_em IS NULL
+            AND e.fornecedor_nome IS NOT NULL AND e.company_id=$1
+          GROUP BY p, e.fornecedor_nome, e.conta_id, fa.nome
+          ORDER BY p, freq DESC
+        `, [input.companyId]);
+        // Mapa: prefix → melhor match histórico (1ª linha = maior freq)
+        const histMap = new Map<string, { fornecedorNome: string; contaId: number | null; contaNome: string | null; freq: number }>();
+        for (const r of rows(histRes) as any[]) {
+          const p = String(r.p);
+          if (!histMap.has(p)) histMap.set(p, { fornecedorNome: r.fornecedor_nome, contaId: r.conta_id ?? null, contaNome: r.conta_nome ?? null, freq: Number(r.freq) });
+        }
+        for (const s of sugestoes) {
+          const prefix = (String(s.extratoDescricao ?? "")).toUpperCase().trim().slice(0, 30);
+          const hist = histMap.get(prefix);
+          if (hist) s.padraoErp = hist;
+        }
+      }
+    } catch { /* não bloquear sugestões por falha no histórico */ }
     const matched = new Set(sugestoes.map(s => s.statementLineId));
     const semMatch = linhas.filter(l => !matched.has(l.id))
       .map(l => {

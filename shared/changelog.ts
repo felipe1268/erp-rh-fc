@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3405 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SCORE DE CONFIANÇA 0-100% +
+ * SUGESTÃO AUTOMÁTICA POR HISTÓRICO (SEM IA). BACKEND ADITIVO + FRONT ·
+ * ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PEDIDO: (1) exibir percentual de 0-100% de confiança nas sugestões (não só "Alta/Média");
+ * (2) quando o ERP já conciliou a mesma descrição de extrato antes, sugerir automaticamente
+ * o mesmo padrão sem precisar de IA.
+ *
+ * FEATURE 1 — Score numérico de confiança:
+ * - Backend (`sugerirConciliacao`): calcula `scoreConfianca` (0-100) para cada sugestão.
+ *   Fórmula: via comprovante (txid/doc/beneficiário) = base 95 − delta×3, mín 70.
+ *   Sem via, não ambíguo: delta=0→85, delta=1→78, delta≤3→70, delta>7→50.
+ *   Ambíguo: base 55 − delta×3, mín 40.
+ * - Frontend: substitui badge "Alta/Média" por pill com % colorido:
+ *   ≥80% → azul, 60-79% → âmbar, <60% → cinza.
+ *
+ * FEATURE 2 — Padrão ERP por histórico (sem IA):
+ * - Backend: após montar as sugestões, roda 1 query batch com WITH prefixes(p) AS (VALUES ...)
+ *   que varre `bank_statement_lines` conciliadas (conciliado=1) e retorna, por prefixo de
+ *   descrição (30 chars normalizados), o par (fornecedor_nome, conta_id, conta_nome) mais
+ *   frequente. Enriquece cada sugestão com `padraoErp: { fornecedorNome, contaId, contaNome, freq }`.
+ *   Falha da query é silenciosa (try/catch) — não bloqueia as sugestões.
+ * - Frontend: badge verde "ERP ×N" abaixo do score quando há padrão identificado.
+ *   Tooltip: "Padrão identificado N× em conciliações anteriores → NomeFornecedor · Categoria".
+ *   Com o tempo a base cresce e o ERP aprende os padrões da empresa (autoClassificação progressiva).
+ *
  * Rev. 3404 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · ANÁLISE IA INLINE NO DIALOG "CONFIRMAR
  * CONCILIAÇÃO?" (ANTES DO OK FINAL). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
