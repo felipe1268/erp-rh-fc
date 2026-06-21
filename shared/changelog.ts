@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3460 — **CONCILIAÇÃO BANCÁRIA · FIX LAYOUT DIALOG "CONFIRMAR CONCILIAÇÃO?" — TEXTO NÃO CORTA.
+ * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PROBLEMA: textos longos do extrato bancário (ex.: ID E003603052026… + nome + doc) quebravam o
+ * layout do dialog "Confirmar conciliação?" — o `truncate` sem `overflow-hidden` no container pai
+ * fazia o texto vazar horizontalmente para fora do card, ou cortava o conteúdo violando o padrão
+ * de dialogs do ERP (dialogs NUNCA truncam texto).
+ *
+ * CORREÇÃO:
+ * - Removido `truncate` das duas linhas de descrição (extrato e lançamento ERP).
+ * - Aplicado `break-words` em seu lugar → texto longo quebra em múltiplas linhas, sem corte.
+ * - Adicionado `overflow-hidden` no container `border rounded-lg` para contenção correta.
+ * - Linha "Diferença (Δ)" ganhou `gap-4` + `shrink-0` no valor para nunca colidir.
+ *
  * Rev. 3459 — **CONCILIAÇÃO BANCÁRIA · BOTÃO LÁPIS DE EDIÇÃO RÁPIDA NAS LINHAS "NO ERP, SEM EXTRATO".
  * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *

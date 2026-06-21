@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3459** — **CONCILIAÇÃO BANCÁRIA · BOTÃO LÁPIS DE EDIÇÃO RÁPIDA NAS LINHAS "NO ERP, SEM EXTRATO". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Ícone ✏️ em cada linha do painel ERP abre o dialog de detalhe já em modo edição (nome, categoria, fornecedor, obra, forma pagamento, descrição, observações). `pendingEditMode` + useEffect auto-dispara `iniciarEdicaoEntry()` após load. Detalhe: `shared/changelog.ts`.
+- **Rev. 3460** — **CONCILIAÇÃO BANCÁRIA · FIX LAYOUT DIALOG "CONFIRMAR CONCILIAÇÃO?" — TEXTO DO EXTRATO NÃO CORTA MAIS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Removido `truncate`, aplicado `break-words` + `overflow-hidden` no container — texto longo do ID bancário quebra em linhas sem vazar. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3458** — **CONCILIAÇÃO BANCÁRIA · CONCILIAÇÃO MANUAL 1:1 (CLIQUE NO EXTRATO + CLIQUE NO ERP + "CONCILIAR PAR"). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Seleção de par manual via clique nas duas listas + barra azul de confirmação com Δ de valor + abre dialog existente "Confirmar conciliação?". Estados limpos em conciliação bem-sucedida + troca de conta. Detalhe: `shared/changelog.ts`.
+- **Rev. 3459** — **CONCILIAÇÃO BANCÁRIA · BOTÃO LÁPIS DE EDIÇÃO RÁPIDA NAS LINHAS "NO ERP, SEM EXTRATO". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Ícone ✏️ em cada linha do painel ERP abre o dialog de detalhe já em modo edição (nome, categoria, fornecedor, obra, forma pagamento, descrição, observações). `pendingEditMode` + useEffect auto-dispara `iniciarEdicaoEntry()` após load. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
 
