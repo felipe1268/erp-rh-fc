@@ -476,10 +476,10 @@ export default function FinanceiroConciliacao() {
     },
     { enabled: !!companyId && !!contaBancariaId }
   );
-  // Rev. 3410 — busca de lançamentos para troca manual de match
+  // Rev. 3411 — lista abre imediatamente; busca filtra em tempo real quando digitada
   const { data: entriesTroca, isFetching: entriesTrocaFetching } = (trpc as any).financial.getEntries.useQuery(
-    { companyId, busca: buscaTroca.trim().length >= 2 ? buscaTroca.trim() : undefined, excluirCronograma: true, limit: 25 },
-    { enabled: !!trocandoLine && buscaTroca.trim().length >= 2 }
+    { companyId, busca: buscaTroca.trim().length >= 1 ? buscaTroca.trim() : undefined, excluirCronograma: true, limit: 50 },
+    { enabled: !!trocandoLine }
   );
 
   // Rev. 3365 — Status POR MÊS p/ pintar as bolinhas da timeline. Agora roda SEM exigir
@@ -5592,9 +5592,6 @@ export default function FinanceiroConciliacao() {
                 className="w-full pl-8 pr-3 py-2 text-sm rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
-            {buscaTroca.trim().length < 2 && (
-              <p className="text-[11px] text-gray-400 mt-1.5">Digite ao menos 2 caracteres para buscar lançamentos do ERP.</p>
-            )}
           </div>
           <div className="max-h-[42vh] overflow-y-auto divide-y">
             {entriesTrocaFetching && (
