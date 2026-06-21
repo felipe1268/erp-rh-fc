@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3400 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · REDESIGN FULL-SCREEN DO MODAL
+ * "LANÇAMENTO #NNNNN". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PEDIDO: tela full-screen com layout moderno para o dialog de detalhe do lançamento
+ * (aberto ao clicar no olho de qualquer lançamento ou ao clicar numa sugestão).
+ *
+ * MUDANÇAS (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`):
+ * - `DialogContent`: `p-0 gap-0` (sem padding padrão; cada seção gerencia o próprio).
+ * - **Header colorido** fixo (navy `#1B2A4A` para despesa, `emerald-700` para receita):
+ *   · Sobrescrito em `#N` pequeno + nome principal em `text-xl font-bold text-white`.
+ *   · Badges tipo (Receita/Despesa), natureza e obra.
+ *   · Valor em `text-2xl font-bold tabular-nums text-white` + pill de status colorida.
+ *   · Botão X circular no canto superior direito (substitui o X padrão do Radix).
+ * - **Body** em `bg-gray-50` com `max-w-2xl mx-auto` e seções em **cards brancos** com
+ *   cabeçalho cinza `text-[10px] uppercase tracking-wider`:
+ *   · Card "Dados financeiros" — valores previsto/realizado, datas, forma, parcela, conciliado.
+ *   · Card "Classificação" — conta, obra, origem, criado por.
+ *   · Card "Cheque / Código de Barras" — condicional, só aparece quando há dados.
+ *   · Card "Descrições e observações" — condicional, agrupa todos os campos de texto.
+ *   · Card "Anexos" — botões com ícone + ExternalLink, condicional.
+ *   · Card "Ordem de Compra" — condicional.
+ *   · Card "Origem genérica" — condicional (folha/frota/cronograma etc.).
+ * - **Bloco Conferência** (quando aberto via sugestão) redesenhado: header azul escuro +
+ *   cards lado a lado com fundo diferenciado + pills de confiança/delta maiores.
+ * - **Modo edição** (detEditMode): redesenhado com card único com header âmbar + campos
+ *   com `Label` uppercase; `b.descricao` → `b.apelido` no Select de Conta Bancária.
+ * - **Footer** fixo `border-t bg-white`: botões Fechar + Editar com hover navy.
+ *
  * Rev. 3399 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SUGESTÃO DE CONCILIAÇÃO PARA
  * LANÇAMENTOS SEM CONTA BANCÁRIA. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *

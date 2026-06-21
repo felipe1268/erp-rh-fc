@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3399** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SUGESTÃO DE CONCILIAÇÃO PARA LANÇAMENTOS SEM CONTA BANCÁRIA. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Lançamentos sem `conta_bancaria_id` recebem sugestão automática de casamento contra linhas do extrato (LEFT JOIN LATERAL por valor ±R$0,02 + data ±5 dias). Suggestion bar azul (Sparkles) aparece inline abaixo de cada row na seção "Sem conta bancária definida"; contador global acima da lista. Ao clicar "Conciliar", AlertDialog exibe o par (lançamento vs. extrato) antes de confirmar. Na confirmação, a mutation `conciliarSemContaComExtrato` preenche `conta_bancaria_id` e marca conciliado em ambos. Detalhe: `shared/changelog.ts`.
+- **Rev. 3400** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · REDESIGN FULL-SCREEN DO MODAL "LANÇAMENTO #NNNNN". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Header colorido fixo (navy despesa / emerald receita) com nome em destaque, valor em `text-2xl` e pill de status. Body em `bg-gray-50` com seções em cards brancos: Dados financeiros, Classificação, Cheque/Código (condicional), Descrições (condicional), Anexos (condicional), OC e Origem. Conferência da conciliação redesenhada com header azul + cards diferenciados + pills maiores. Modo edição em card único com header âmbar. Footer fixo com botões Fechar/Editar. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3398** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CONTA CAIXA INTERNO (SEM EXTRATO BANCÁRIO). BACKEND ADITIVO + SCHEMA ADITIVO + FRONT · ZERO ALTER/DROP/DELETE.** Novo flag `caixaInterno` em `company_bank_accounts` (schema + self-heal). Contas marcadas entram no "Modo Caixa Interno" na Conciliação: sem OFX/CSV, sem botões de extrato — exibe KPIs (entradas/saídas/a confirmar/confirmadas), lista "A confirmar" com botão Confirmar e lista "Confirmadas" com botão Desfazer. Header troca Importar/Consolidar/Cheques pelo badge roxo "Modo Caixa Interno" + "Novo lançamento". Cadastro de contas ganha checkbox + badge violeta. Detalhe: `shared/changelog.ts`.
+- **Rev. 3399** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SUGESTÃO DE CONCILIAÇÃO PARA LANÇAMENTOS SEM CONTA BANCÁRIA. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Lançamentos sem `conta_bancaria_id` recebem sugestão automática de casamento contra linhas do extrato (LEFT JOIN LATERAL por valor ±R$0,02 + data ±5 dias). Suggestion bar azul (Sparkles) inline; mutation `conciliarSemContaComExtrato` preenche conta e concilia. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
+
+- **Rev. 3398** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CONTA CAIXA INTERNO (SEM EXTRATO BANCÁRIO). BACKEND ADITIVO + SCHEMA ADITIVO + FRONT · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3397** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FIX CRASH "Cannot read properties of null (reading 'id')". 100% FRONTEND · ZERO BACKEND/SCHEMA.** Detalhe: `shared/changelog.ts`.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3395** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CRIAR LANÇAMENTO MANUAL SEM EXTRATO + SELETOR DÉBITO/CRÉDITO NO FORM DE EDIÇÃO E NO "LANÇAR NO ERP". BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3394** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · MODAL "LANÇAMENTO #NNNNN" EM TELA CHEIA + BOTÃO EDITAR COM DROPDOWN DE TODAS AS CONTAS ATIVAS. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3393** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FIX "APAGAR" EM LINHA CONCILIADA: `financial_conciliacao_grupo does not exist`. 100% BACKEND · ZERO SCHEMA/ALTER/DROP.** Detalhe: `shared/changelog.ts`.
 
 ### REGRA DE OURO — Cabeçalho de documentos institucionais FC (Rev. 2106+)
 

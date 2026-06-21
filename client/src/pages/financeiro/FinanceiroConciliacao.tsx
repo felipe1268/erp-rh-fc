@@ -3065,359 +3065,363 @@ export default function FinanceiroConciliacao() {
             />
 
             {/* Rev. 3177 — Detalhe CONSULTIVO (read-only) do lançamento, aberto ao clicar na sugestão. */}
+            {/* Rev. 3399 — Dialog full-screen moderno: header colorido + seções em cards */}
             <Dialog open={!!detalheEntryId} onOpenChange={(o) => !o && fecharDetalhe()}>
-              <DialogContent className="max-w-[100vw] w-screen h-[100dvh] rounded-none flex flex-col">
-                <DialogHeader className="shrink-0 pr-14">
-                  <DialogTitle className="flex items-center gap-2">
-                    <FileText className="w-5 h-5 text-blue-600 shrink-0" />
-                    {detEntry ? `Lançamento #${detEntry.id}` : "Lançamento"}
-                    {detEditMode && <span className="text-sm font-normal text-amber-600 ml-1">— editando</span>}
-                  </DialogTitle>
-                  {detalheExtrato && (
-                    <DialogDescription>Confira o item do extrato e o lançamento no ERP antes de validar a conciliação.</DialogDescription>
-                  )}
-                </DialogHeader>
-                <div className="flex-1 min-h-0 overflow-y-auto pr-1">
-                  {/* Rev. 3264 — bloco de CONFERÊNCIA (extrato × ERP) quando aberto a partir de uma sugestão. */}
-                  {detalheExtrato && (() => {
-                    const vExtrato = Math.abs(Number(detalheExtrato.valor) || 0);
-                    const vEntry = Math.abs(Number(detEntry?.valorRealizado ?? detEntry?.valorPrevisto ?? detalheExtrato.entryValor ?? 0));
-                    const dv = Math.abs(vExtrato - vEntry);
-                    const igual = dv < 0.005;
-                    return (
-                      <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50/40 p-3">
-                        <div className="text-[11px] font-semibold uppercase tracking-wide text-blue-700 mb-2 flex items-center gap-1.5">
-                          <Link2 className="w-3.5 h-3.5" /> Conferência da conciliação
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div className="rounded-md bg-white border p-2.5 min-w-0">
-                            <div className="text-[10px] uppercase tracking-wide text-gray-400 mb-0.5">Extrato (banco)</div>
-                            <div className="text-sm font-medium text-gray-900 break-words">{detalheExtrato.descricao || "—"}</div>
-                            <div className="text-xs text-gray-500 mt-0.5">{fmtData(detalheExtrato.data)}</div>
-                            <div className="text-base font-bold tabular-nums text-gray-900 mt-1">{formatBRL(vExtrato)}</div>
-                            {detalheExtrato.chequeFornecedor && (
-                              <div className="text-[11px] text-emerald-700 mt-1 truncate" title={`Cheque nº ${detalheExtrato.chequeNumero} — ${detalheExtrato.chequeFornecedor}`}>
-                                🪙 Cheque nº {detalheExtrato.chequeNumero} · {detalheExtrato.chequeFornecedor}
-                              </div>
-                            )}
-                          </div>
-                          <div className="rounded-md bg-white border p-2.5 min-w-0">
-                            <div className="text-[10px] uppercase tracking-wide text-blue-400 mb-0.5">Lançamento (ERP)</div>
-                            <div className="text-sm font-medium text-blue-700 break-words">{detEntry ? (detEntry.fornecedorNome || detEntry.descricao || detEntry.contaNome || "Lançamento") : (detailQuery.isLoading ? "Carregando…" : "—")}</div>
-                            <div className="text-xs text-gray-500 mt-0.5">{detEntry ? fmtData(detEntry.dataPagamento ?? detEntry.dataVencimento ?? detEntry.dataCompetencia) : ""}</div>
-                            <div className="text-base font-bold tabular-nums text-blue-700 mt-1">{formatBRL(vEntry)}</div>
-                          </div>
-                        </div>
-                        <div className="mt-2 flex items-center gap-2 flex-wrap text-xs">
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium ${igual ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-                            {igual ? <CheckCircle className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
-                            {igual ? "Valores idênticos" : `Δ valor ${formatBRL(dv)}`}
-                          </span>
-                          {detalheExtrato.deltaDias != null && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium">
-                              {detalheExtrato.deltaDias === 0 ? "Mesmo dia" : `±${detalheExtrato.deltaDias} dia(s)`}
+              <DialogContent className="max-w-[100vw] w-screen h-[100dvh] rounded-none flex flex-col p-0 gap-0">
+                {/* ── HEADER colorido ── */}
+                <div className={`shrink-0 px-5 pt-5 pb-4 ${detEntry?.tipo === "receita" ? "bg-emerald-700" : "bg-[#1B2A4A]"}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-widest text-white/50 mb-0.5">
+                        {detEntry ? `Lançamento #${detEntry.id}` : "Lançamento"}
+                        {detEditMode && <span className="ml-2 text-amber-300">— editando</span>}
+                      </p>
+                      <h2 className="text-xl font-bold text-white leading-tight break-words">
+                        {detailQuery.isLoading ? "Carregando…" : (detEntry?.fornecedorNome || detEntry?.descricao || detEntry?.contaNome || "Lançamento")}
+                      </h2>
+                      <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                        {detEntry && (
+                          <>
+                            <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${detEntry.tipo === "receita" ? "bg-emerald-600 text-emerald-100" : "bg-red-600/70 text-red-100"}`}>
+                              {detEntry.tipo === "receita" ? <ArrowDownCircle className="w-3 h-3" /> : <ArrowUpCircle className="w-3 h-3" />}
+                              {detEntry.tipo === "receita" ? "Receita" : "Despesa"}
                             </span>
-                          )}
-                          {detalheExtrato.confianca && (
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium ${detalheExtrato.confianca === "alta" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"}`}>
-                              Confiança {detalheExtrato.confianca === "alta" ? "alta" : "média"}
-                            </span>
-                          )}
-                          {detalheExtrato.identificadoVia && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-medium">
-                              <Sparkles className="w-3 h-3" /> {detalheExtrato.identificadoVia}
-                            </span>
-                          )}
-                        </div>
+                            {detEntry.natureza && <span className="text-xs text-white/60">· {detEntry.natureza}</span>}
+                            {detEntry.obraNome && <span className="text-xs text-white/60 truncate max-w-[160px]">· {detEntry.obraNome}</span>}
+                          </>
+                        )}
                       </div>
-                    );
-                  })()}
-                  {detailQuery.isLoading ? (
-                    <div className="py-12 text-center text-gray-500 text-sm flex items-center justify-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" /> Carregando lançamento…
                     </div>
-                  ) : detailQuery.error ? (
-                    <div className="py-12 text-center text-red-600 text-sm">
-                      Erro ao carregar o lançamento: {(detailQuery.error as any)?.message ?? "tente novamente"}.
-                    </div>
-                  ) : detEntry ? (
-                    <>
-                    {/* Rev. 3394 — MODO EDIÇÃO inline: corrige classificação do lançamento sem bloqueio de status */}
-                    {detEditMode && detEditForm ? (
-                      <div className="space-y-5 text-sm max-w-2xl mx-auto w-full">
-                        <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 text-xs text-amber-700 flex items-center gap-2">
-                          <Pencil className="w-3.5 h-3.5 shrink-0" />
-                          Edite os campos de classificação. Valores e datas não são alterados aqui.
-                        </div>
-                        {/* Tipo: Débito / Crédito */}
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-medium text-gray-600 uppercase tracking-wide">Tipo (Débito / Crédito)</Label>
-                          <div className="flex rounded-md border overflow-hidden h-9">
-                            <button
-                              type="button"
-                              onClick={() => setDetEditForm(f => f ? { ...f, tipo: "despesa" } : f)}
-                              className={`flex-1 flex items-center justify-center gap-1.5 text-sm font-medium transition-colors ${detEditForm?.tipo === "despesa" ? "bg-red-500 text-white" : "bg-white text-gray-500 hover:bg-red-50"}`}
-                            >
-                              <ArrowDownCircle className="w-3.5 h-3.5" />Débito (Despesa)
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDetEditForm(f => f ? { ...f, tipo: "receita" } : f)}
-                              className={`flex-1 flex items-center justify-center gap-1.5 text-sm font-medium transition-colors border-l ${detEditForm?.tipo === "receita" ? "bg-emerald-500 text-white" : "bg-white text-gray-500 hover:bg-emerald-50"}`}
-                            >
-                              <ArrowUpCircle className="w-3.5 h-3.5" />Crédito (Receita)
-                            </button>
-                          </div>
-                        </div>
-                        {/* Conta (categoria do plano de contas) */}
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-medium text-gray-600 uppercase tracking-wide">Conta (Categoria)</Label>
-                          <Select
-                            value={detEditForm.contaId != null ? String(detEditForm.contaId) : "__none__"}
-                            onValueChange={(v) => {
-                              if (v === "__none__") {
-                                setDetEditForm(f => f ? { ...f, contaId: null, contaNome: "" } : f);
-                              } else {
-                                const opt = catOpts.find(o => String(o.id) === v);
-                                setDetEditForm(f => f ? { ...f, contaId: Number(v), contaNome: opt?.nome ?? "" } : f);
-                              }
-                            }}
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder="Selecione a conta…" />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-72">
-                              <SelectItem value="__none__">— Sem categoria —</SelectItem>
-                              {catOpts.map(o => (
-                                <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        {/* Conta Bancária */}
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-medium text-gray-600 uppercase tracking-wide">Conta Bancária</Label>
-                          <Select
-                            value={detEditForm.contaBancariaId != null ? String(detEditForm.contaBancariaId) : "__none__"}
-                            onValueChange={(v) => {
-                              setDetEditForm(f => f ? { ...f, contaBancariaId: v === "__none__" ? null : Number(v) } : f);
-                            }}
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder="Selecione a conta bancária…" />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-72">
-                              <SelectItem value="__none__">— Sem conta bancária —</SelectItem>
-                              {(Array.isArray(bankAccounts) ? bankAccounts : []).map((b: any) => {
-                                const label = b.descricao
-                                  ? `${b.descricao} (${b.banco})`
-                                  : `${b.banco} ${formatAgencia(b.agencia)}/${b.conta}`.trim();
-                                return <SelectItem key={b.id} value={String(b.id)}>{label}</SelectItem>;
-                              })}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        {/* Obra */}
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-medium text-gray-600 uppercase tracking-wide">Obra</Label>
-                          <Select
-                            value={detEditForm.obraId != null ? String(detEditForm.obraId) : "__none__"}
-                            onValueChange={(v) => {
-                              if (v === "__none__") {
-                                setDetEditForm(f => f ? { ...f, obraId: null, obraNome: "" } : f);
-                              } else {
-                                const opt = obrasOpts.find(o => String(o.id) === v);
-                                setDetEditForm(f => f ? { ...f, obraId: Number(v), obraNome: opt?.nome ?? "" } : f);
-                              }
-                            }}
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder="Selecione a obra…" />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-72">
-                              <SelectItem value="__none__">— Sem obra —</SelectItem>
-                              {obrasOpts.map(o => (
-                                <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        {/* Forma de Pagamento */}
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-medium text-gray-600 uppercase tracking-wide">Forma de Pagamento</Label>
-                          <Select
-                            value={detEditForm.formaPagamento || "__none__"}
-                            onValueChange={(v) => setDetEditForm(f => f ? { ...f, formaPagamento: v === "__none__" ? "" : v } : f)}
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder="Selecione…" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__none__">— Não informado —</SelectItem>
-                              <SelectItem value="pix">PIX</SelectItem>
-                              <SelectItem value="boleto">Boleto</SelectItem>
-                              <SelectItem value="transferencia">Transferência (TED/DOC)</SelectItem>
-                              <SelectItem value="cheque">Cheque</SelectItem>
-                              <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                              <SelectItem value="cartao_credito">Cartão de Crédito</SelectItem>
-                              <SelectItem value="cartao_debito">Cartão de Débito</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        {/* Fornecedor/Beneficiário */}
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-medium text-gray-600 uppercase tracking-wide">Fornecedor / Beneficiário</Label>
-                          <Input
-                            value={detEditForm.fornecedorNome}
-                            onChange={(e) => setDetEditForm(f => f ? { ...f, fornecedorNome: e.target.value } : f)}
-                            placeholder="Nome do fornecedor ou beneficiário"
-                          />
-                        </div>
-                        {/* Descrição */}
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-medium text-gray-600 uppercase tracking-wide">Descrição</Label>
-                          <Input
-                            value={detEditForm.descricao}
-                            onChange={(e) => setDetEditForm(f => f ? { ...f, descricao: e.target.value } : f)}
-                            placeholder="Descrição do lançamento"
-                          />
-                        </div>
-                        {/* Observações */}
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-medium text-gray-600 uppercase tracking-wide">Observações</Label>
-                          <Textarea
-                            value={detEditForm.observacoes}
-                            onChange={(e) => setDetEditForm(f => f ? { ...f, observacoes: e.target.value } : f)}
-                            placeholder="Observações adicionais"
-                            rows={3}
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                    <div className="space-y-4 text-sm">
-                      {/* Cabeçalho */}
-                      <div className="flex items-start justify-between gap-3 bg-gray-50 rounded-lg p-3">
-                        <div className="min-w-0">
-                          <div className="text-base font-semibold text-gray-900 break-words">
-                            {detEntry.fornecedorNome || detEntry.descricao || detEntry.contaNome || "Lançamento"}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                            {detEntry.tipo === "despesa" ? <ArrowDownCircle className="w-3.5 h-3.5 text-red-500" /> : <ArrowUpCircle className="w-3.5 h-3.5 text-green-600" />}
-                            <span className="capitalize">{detEntry.tipo ?? "—"}</span>
-                            {detEntry.natureza ? <span className="text-gray-400">· {detEntry.natureza}</span> : null}
-                          </div>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <div className={`text-lg font-bold ${detEntry.tipo === "despesa" ? "text-red-600" : "text-green-700"}`}>
+                    <div className="shrink-0 text-right">
+                      {detEntry && (
+                        <>
+                          <div className="text-2xl font-bold tabular-nums text-white">
                             {formatBRL(Number(detEntry.valorRealizado ?? detEntry.valorPrevisto ?? 0))}
                           </div>
-                          <Badge variant={detEntry.status === "pago" || detEntry.status === "recebido" ? "default" : detEntry.status === "cancelado" ? "destructive" : "secondary"} className="mt-1 capitalize">
+                          <span className={`inline-block mt-1 text-[11px] font-semibold uppercase tracking-wide px-2.5 py-0.5 rounded-full ${
+                            detEntry.status === "pago" || detEntry.status === "recebido" ? "bg-emerald-500/80 text-white"
+                            : detEntry.status === "cancelado" ? "bg-red-500/80 text-white"
+                            : "bg-white/20 text-white"
+                          }`}>
                             {detEntry.status ?? "—"}
-                          </Badge>
-                        </div>
-                      </div>
-
-                      {/* Campos principais */}
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                        {field("Valor Previsto", detEntry.valorPrevisto != null ? formatBRL(Number(detEntry.valorPrevisto)) : null)}
-                        {field("Valor Realizado", detEntry.valorRealizado != null ? formatBRL(Number(detEntry.valorRealizado)) : null)}
-                        {field("Data Competência", fmtData(detEntry.dataCompetencia))}
-                        {field("Data Vencimento", fmtData(detEntry.dataVencimento))}
-                        {field("Data Pagamento", fmtData(detEntry.dataPagamento))}
-                        {field("Forma de Pagamento", detEntry.formaPagamento)}
-                        {field("Conta", detEntry.contaNome)}
-                        {field("Obra", detEntry.obraNome)}
-                        {field("Parcela", detEntry.parcelaTotal ? `${detEntry.parcelaNumero ?? 1}/${detEntry.parcelaTotal}` : null)}
-                        {field("Cheque nº", detEntry.chequeNumero ? `${detEntry.chequeNumero}${detEntry.chequeBanco ? ` · ${detEntry.chequeBanco}` : ""}` : null)}
-                        {field("Cheque bom para", fmtData(detEntry.chequeDataBomPara))}
-                        {field("Código de Barras", detEntry.codigoBarras)}
-                        {field("Conciliado", Number(detEntry.conciliado) === 1 ? `Sim${detEntry.dataConciliacao ? ` (${fmtData(detEntry.dataConciliacao)})` : ""}` : "Não")}
-                        {field("Dias em Atraso", Number(detEntry.diasAtraso) > 0 ? `${detEntry.diasAtraso} dia(s)` : null)}
-                        {field("Origem", detEntry.origemModulo)}
-                        {field("Criado por", detEntry.criadoPorNome)}
-                      </div>
-
-                      {(detEntry.descricao || detEntry.origemDescricao || detEntry.observacoes || detEntry.extratoBancoDescricao) && (
-                        <div className="space-y-2 border-t pt-3">
-                          {field("Descrição", detEntry.descricao)}
-                          {field("Origem (detalhe)", detEntry.origemDescricao)}
-                          {field("Observações", detEntry.observacoes)}
-                          {field("Descrição no Extrato", detEntry.extratoBancoDescricao)}
-                          {detEntry.status === "cancelado" ? field("Motivo do Cancelamento", detEntry.motivoCancelamento) : null}
-                        </div>
-                      )}
-
-                      {/* Anexos / comprovante */}
-                      {(detEntry.comprovanteUrl || detEntry.anexoUrl) && (
-                        <div className="flex flex-wrap gap-2 border-t pt-3">
-                          {detEntry.comprovanteUrl && (
-                            <a href={detEntry.comprovanteUrl} target="_blank" rel="noreferrer"
-                               className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border border-blue-200 text-blue-700 hover:bg-blue-50">
-                              <Paperclip className="w-3.5 h-3.5" /> Comprovante <ExternalLink className="w-3 h-3" />
-                            </a>
-                          )}
-                          {detEntry.anexoUrl && (
-                            <a href={detEntry.anexoUrl} target="_blank" rel="noreferrer"
-                               className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border border-blue-200 text-blue-700 hover:bg-blue-50">
-                              <Paperclip className="w-3.5 h-3.5" /> {detEntry.anexoNome || "Anexo"} <ExternalLink className="w-3 h-3" />
-                            </a>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Ordem de Compra de origem */}
-                      {detOrdem && (
-                        <div className="border-t pt-3 space-y-2">
-                          <div className="font-medium text-gray-700 flex items-center gap-1.5"><FileText className="w-4 h-4 text-violet-600" /> Ordem de Compra {detOrdem.numeroOc ?? ""}</div>
-                          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                            {field("Fornecedor (OC)", detOrdem.fornecedorNome)}
-                            {field("Nota Fiscal", detOrdem.numeroNf)}
-                            {field("Total da OC", detOrdem.total != null ? formatBRL(Number(detOrdem.total)) : null)}
-                            {field("Condição", detOrdem.condicaoPagamento)}
-                            {field("Status OC", detOrdem.status)}
-                            {field("Itens", detItens.length ? `${formatInt(detItens.length)} item(ns)` : null)}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Origem genérica (folha, cronograma, frota, etc.) */}
-                      {detOrigem && (
-                        <div className="border-t pt-3 space-y-2">
-                          <div className="font-medium text-gray-700">{detOrigem.titulo}</div>
-                          {detOrigem.subtitulo && <div className="text-xs text-gray-500">{detOrigem.subtitulo}</div>}
-                          {Array.isArray(detOrigem.campos) && (
-                            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                              {detOrigem.campos.map((c: any, i: number) => field(c.label ?? `Campo ${i + 1}`, c.kind === "date" ? fmtData(c.value) : (c.value ?? "—"), `campo-${i}`))}
-                            </div>
-                          )}
-                        </div>
+                          </span>
+                        </>
                       )}
                     </div>
-                    )}
-                    </>
-                  ) : null}
+                  </div>
+                  {/* close button */}
+                  <button
+                    onClick={fecharDetalhe}
+                    className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-                <DialogFooter className="shrink-0 border-t pt-3">
+
+                {/* ── BODY scrollável ── */}
+                <div className="flex-1 min-h-0 overflow-y-auto bg-gray-50">
+                  <div className="max-w-2xl mx-auto w-full px-4 py-5 space-y-4">
+
+                    {/* Conferência da conciliação (quando aberto via sugestão) */}
+                    {detalheExtrato && (() => {
+                      const vExtrato = Math.abs(Number(detalheExtrato.valor) || 0);
+                      const vEntry = Math.abs(Number(detEntry?.valorRealizado ?? detEntry?.valorPrevisto ?? detalheExtrato.entryValor ?? 0));
+                      const dv = Math.abs(vExtrato - vEntry);
+                      const igual = dv < 0.005;
+                      return (
+                        <div className="rounded-xl border border-blue-200 bg-white overflow-hidden shadow-sm">
+                          <div className="bg-blue-600 px-4 py-2.5 flex items-center gap-2">
+                            <Link2 className="w-3.5 h-3.5 text-blue-100" />
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-blue-100">Conferência da conciliação</span>
+                          </div>
+                          <div className="p-4 grid grid-cols-2 gap-3">
+                            <div className="rounded-lg bg-gray-50 border p-3 min-w-0">
+                              <div className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold mb-1.5">Extrato (banco)</div>
+                              <div className="text-sm font-semibold text-gray-900 break-words leading-snug">{detalheExtrato.descricao || "—"}</div>
+                              <div className="text-xs text-gray-400 mt-0.5">{fmtData(detalheExtrato.data)}</div>
+                              <div className="text-base font-bold tabular-nums text-gray-800 mt-1.5">{formatBRL(vExtrato)}</div>
+                              {detalheExtrato.chequeFornecedor && (
+                                <div className="text-[11px] text-emerald-700 mt-1 truncate">🪙 Cheque nº {detalheExtrato.chequeNumero} · {detalheExtrato.chequeFornecedor}</div>
+                              )}
+                            </div>
+                            <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 min-w-0">
+                              <div className="text-[10px] uppercase tracking-wide text-blue-400 font-semibold mb-1.5">Lançamento (ERP)</div>
+                              <div className="text-sm font-semibold text-blue-800 break-words leading-snug">{detEntry ? (detEntry.fornecedorNome || detEntry.descricao || detEntry.contaNome || "Lançamento") : "—"}</div>
+                              <div className="text-xs text-gray-400 mt-0.5">{detEntry ? fmtData(detEntry.dataPagamento ?? detEntry.dataVencimento ?? detEntry.dataCompetencia) : ""}</div>
+                              <div className="text-base font-bold tabular-nums text-blue-700 mt-1.5">{formatBRL(vEntry)}</div>
+                            </div>
+                          </div>
+                          <div className="px-4 pb-3 flex items-center gap-2 flex-wrap">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${igual ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                              {igual ? <CheckCircle className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                              {igual ? "Valores idênticos" : `Δ ${formatBRL(dv)}`}
+                            </span>
+                            {detalheExtrato.deltaDias != null && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-semibold">
+                                {detalheExtrato.deltaDias === 0 ? "Mesmo dia" : `±${detalheExtrato.deltaDias} dia(s)`}
+                              </span>
+                            )}
+                            {detalheExtrato.confianca && (
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${detalheExtrato.confianca === "alta" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"}`}>
+                                Confiança {detalheExtrato.confianca === "alta" ? "alta" : "média"}
+                              </span>
+                            )}
+                            {detalheExtrato.identificadoVia && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-violet-100 text-violet-700 text-xs font-semibold">
+                                <Sparkles className="w-3 h-3" /> {detalheExtrato.identificadoVia}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Loading / error */}
+                    {detailQuery.isLoading && (
+                      <div className="py-16 text-center text-gray-400 text-sm flex flex-col items-center gap-3">
+                        <Loader2 className="w-6 h-6 animate-spin text-gray-300" />
+                        Carregando lançamento…
+                      </div>
+                    )}
+                    {detailQuery.error && (
+                      <div className="py-16 text-center text-red-500 text-sm">
+                        Erro ao carregar: {(detailQuery.error as any)?.message ?? "tente novamente"}.
+                      </div>
+                    )}
+
+                    {detEntry && (
+                      <>
+                      {/* ── MODO EDIÇÃO ── */}
+                      {detEditMode && detEditForm ? (
+                        <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                          <div className="bg-amber-50 border-b border-amber-100 px-4 py-3 flex items-center gap-2 text-amber-700 text-xs font-medium">
+                            <Pencil className="w-3.5 h-3.5 shrink-0" />
+                            Edite os campos de classificação. Valores e datas não são alterados aqui.
+                          </div>
+                          <div className="p-4 space-y-5">
+                            {/* Tipo */}
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tipo</Label>
+                              <div className="flex rounded-lg border overflow-hidden h-10">
+                                <button type="button" onClick={() => setDetEditForm(f => f ? { ...f, tipo: "despesa" } : f)}
+                                  className={`flex-1 flex items-center justify-center gap-1.5 text-sm font-medium transition-colors ${detEditForm?.tipo === "despesa" ? "bg-red-500 text-white" : "bg-white text-gray-500 hover:bg-red-50"}`}>
+                                  <ArrowDownCircle className="w-3.5 h-3.5" />Débito (Despesa)
+                                </button>
+                                <button type="button" onClick={() => setDetEditForm(f => f ? { ...f, tipo: "receita" } : f)}
+                                  className={`flex-1 flex items-center justify-center gap-1.5 text-sm font-medium transition-colors border-l ${detEditForm?.tipo === "receita" ? "bg-emerald-500 text-white" : "bg-white text-gray-500 hover:bg-emerald-50"}`}>
+                                  <ArrowUpCircle className="w-3.5 h-3.5" />Crédito (Receita)
+                                </button>
+                              </div>
+                            </div>
+                            {/* Conta categoria */}
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Conta (Categoria)</Label>
+                              <Select value={detEditForm.contaId != null ? String(detEditForm.contaId) : "__none__"}
+                                onValueChange={(v) => { if (v === "__none__") { setDetEditForm(f => f ? { ...f, contaId: null, contaNome: "" } : f); } else { const opt = catOpts.find(o => String(o.id) === v); setDetEditForm(f => f ? { ...f, contaId: Number(v), contaNome: opt?.nome ?? "" } : f); } }}>
+                                <SelectTrigger className="w-full"><SelectValue placeholder="Selecione a conta…" /></SelectTrigger>
+                                <SelectContent className="max-h-72">
+                                  <SelectItem value="__none__">— Sem categoria —</SelectItem>
+                                  {catOpts.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            {/* Conta bancária */}
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Conta Bancária</Label>
+                              <Select value={detEditForm.contaBancariaId != null ? String(detEditForm.contaBancariaId) : "__none__"}
+                                onValueChange={(v) => setDetEditForm(f => f ? { ...f, contaBancariaId: v === "__none__" ? null : Number(v) } : f)}>
+                                <SelectTrigger className="w-full"><SelectValue placeholder="Selecione a conta bancária…" /></SelectTrigger>
+                                <SelectContent className="max-h-72">
+                                  <SelectItem value="__none__">— Sem conta bancária —</SelectItem>
+                                  {(Array.isArray(bankAccounts) ? bankAccounts : []).map((b: any) => {
+                                    const label = b.apelido ? `${b.apelido} (${b.banco})` : `${b.banco} ${formatAgencia(b.agencia)}/${b.conta}`.trim();
+                                    return <SelectItem key={b.id} value={String(b.id)}>{label}</SelectItem>;
+                                  })}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            {/* Obra */}
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Obra</Label>
+                              <Select value={detEditForm.obraId != null ? String(detEditForm.obraId) : "__none__"}
+                                onValueChange={(v) => { if (v === "__none__") { setDetEditForm(f => f ? { ...f, obraId: null, obraNome: "" } : f); } else { const opt = obrasOpts.find(o => String(o.id) === v); setDetEditForm(f => f ? { ...f, obraId: Number(v), obraNome: opt?.nome ?? "" } : f); } }}>
+                                <SelectTrigger className="w-full"><SelectValue placeholder="Selecione a obra…" /></SelectTrigger>
+                                <SelectContent className="max-h-72">
+                                  <SelectItem value="__none__">— Sem obra —</SelectItem>
+                                  {obrasOpts.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            {/* Forma de pagamento */}
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Forma de Pagamento</Label>
+                              <Select value={detEditForm.formaPagamento || "__none__"} onValueChange={(v) => setDetEditForm(f => f ? { ...f, formaPagamento: v === "__none__" ? "" : v } : f)}>
+                                <SelectTrigger className="w-full"><SelectValue placeholder="Selecione…" /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">— Não informado —</SelectItem>
+                                  <SelectItem value="pix">PIX</SelectItem>
+                                  <SelectItem value="boleto">Boleto</SelectItem>
+                                  <SelectItem value="transferencia">Transferência (TED/DOC)</SelectItem>
+                                  <SelectItem value="cheque">Cheque</SelectItem>
+                                  <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                                  <SelectItem value="cartao_credito">Cartão de Crédito</SelectItem>
+                                  <SelectItem value="cartao_debito">Cartão de Débito</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            {/* Fornecedor */}
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Fornecedor / Beneficiário</Label>
+                              <Input value={detEditForm.fornecedorNome} onChange={(e) => setDetEditForm(f => f ? { ...f, fornecedorNome: e.target.value } : f)} placeholder="Nome do fornecedor ou beneficiário" />
+                            </div>
+                            {/* Descrição */}
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Descrição</Label>
+                              <Input value={detEditForm.descricao} onChange={(e) => setDetEditForm(f => f ? { ...f, descricao: e.target.value } : f)} placeholder="Descrição do lançamento" />
+                            </div>
+                            {/* Observações */}
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Observações</Label>
+                              <Textarea value={detEditForm.observacoes} onChange={(e) => setDetEditForm(f => f ? { ...f, observacoes: e.target.value } : f)} placeholder="Observações adicionais" rows={3} />
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                      <>
+                        {/* ── Card: Dados financeiros ── */}
+                        <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                          <div className="bg-gray-100/80 border-b px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">Dados financeiros</div>
+                          <div className="p-4 grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
+                            {field("Valor Previsto", detEntry.valorPrevisto != null ? formatBRL(Number(detEntry.valorPrevisto)) : null)}
+                            {field("Valor Realizado", detEntry.valorRealizado != null ? formatBRL(Number(detEntry.valorRealizado)) : null)}
+                            {field("Data Competência", fmtData(detEntry.dataCompetencia))}
+                            {field("Data Vencimento", fmtData(detEntry.dataVencimento))}
+                            {field("Data Pagamento", fmtData(detEntry.dataPagamento))}
+                            {field("Forma de Pagamento", detEntry.formaPagamento)}
+                            {field("Parcela", detEntry.parcelaTotal ? `${detEntry.parcelaNumero ?? 1}/${detEntry.parcelaTotal}` : null)}
+                            {field("Conciliado", Number(detEntry.conciliado) === 1 ? `Sim${detEntry.dataConciliacao ? ` (${fmtData(detEntry.dataConciliacao)})` : ""}` : "Não")}
+                            {Number(detEntry.diasAtraso) > 0 && field("Dias em Atraso", `${detEntry.diasAtraso} dia(s)`)}
+                          </div>
+                        </div>
+
+                        {/* ── Card: Classificação ── */}
+                        <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                          <div className="bg-gray-100/80 border-b px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">Classificação</div>
+                          <div className="p-4 grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
+                            {field("Conta (Categoria)", detEntry.contaNome)}
+                            {field("Obra", detEntry.obraNome)}
+                            {field("Origem", detEntry.origemModulo)}
+                            {field("Criado por", detEntry.criadoPorNome)}
+                          </div>
+                        </div>
+
+                        {/* ── Card: Cheque (se aplicável) ── */}
+                        {(detEntry.chequeNumero || detEntry.codigoBarras) && (
+                          <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                            <div className="bg-gray-100/80 border-b px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">Cheque / Código de Barras</div>
+                            <div className="p-4 grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
+                              {field("Cheque nº", detEntry.chequeNumero ? `${detEntry.chequeNumero}${detEntry.chequeBanco ? ` · ${detEntry.chequeBanco}` : ""}` : null)}
+                              {field("Cheque bom para", fmtData(detEntry.chequeDataBomPara))}
+                              {field("Código de Barras", detEntry.codigoBarras)}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ── Card: Textos ── */}
+                        {(detEntry.descricao || detEntry.origemDescricao || detEntry.observacoes || detEntry.extratoBancoDescricao || detEntry.motivoCancelamento) && (
+                          <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                            <div className="bg-gray-100/80 border-b px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">Descrições e observações</div>
+                            <div className="p-4 space-y-3 text-sm">
+                              {detEntry.descricao && field("Descrição", detEntry.descricao)}
+                              {detEntry.origemDescricao && field("Origem (detalhe)", detEntry.origemDescricao)}
+                              {detEntry.observacoes && field("Observações", detEntry.observacoes)}
+                              {detEntry.extratoBancoDescricao && field("Descrição no Extrato", detEntry.extratoBancoDescricao)}
+                              {detEntry.status === "cancelado" && detEntry.motivoCancelamento && field("Motivo do Cancelamento", detEntry.motivoCancelamento)}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ── Card: Anexos ── */}
+                        {(detEntry.comprovanteUrl || detEntry.anexoUrl) && (
+                          <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                            <div className="bg-gray-100/80 border-b px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">Anexos</div>
+                            <div className="p-4 flex flex-wrap gap-2">
+                              {detEntry.comprovanteUrl && (
+                                <a href={detEntry.comprovanteUrl} target="_blank" rel="noreferrer"
+                                   className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium">
+                                  <Paperclip className="w-3.5 h-3.5" /> Comprovante <ExternalLink className="w-3 h-3 opacity-60" />
+                                </a>
+                              )}
+                              {detEntry.anexoUrl && (
+                                <a href={detEntry.anexoUrl} target="_blank" rel="noreferrer"
+                                   className="inline-flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium">
+                                  <Paperclip className="w-3.5 h-3.5" /> {detEntry.anexoNome || "Anexo"} <ExternalLink className="w-3 h-3 opacity-60" />
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ── Card: Ordem de Compra ── */}
+                        {detOrdem && (
+                          <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                            <div className="bg-gray-100/80 border-b px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
+                              <FileText className="w-3.5 h-3.5 text-violet-500" /> Ordem de Compra {detOrdem.numeroOc ?? ""}
+                            </div>
+                            <div className="p-4 grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
+                              {field("Fornecedor (OC)", detOrdem.fornecedorNome)}
+                              {field("Nota Fiscal", detOrdem.numeroNf)}
+                              {field("Total da OC", detOrdem.total != null ? formatBRL(Number(detOrdem.total)) : null)}
+                              {field("Condição", detOrdem.condicaoPagamento)}
+                              {field("Status OC", detOrdem.status)}
+                              {detItens.length > 0 && field("Itens", `${formatInt(detItens.length)} item(ns)`)}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ── Card: Origem genérica ── */}
+                        {detOrigem && (
+                          <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
+                            <div className="bg-gray-100/80 border-b px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">{detOrigem.titulo}</div>
+                            <div className="p-4">
+                              {detOrigem.subtitulo && <p className="text-xs text-gray-500 mb-3">{detOrigem.subtitulo}</p>}
+                              {Array.isArray(detOrigem.campos) && (
+                                <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
+                                  {detOrigem.campos.map((c: any, i: number) => field(c.label ?? `Campo ${i + 1}`, c.kind === "date" ? fmtData(c.value) : (c.value ?? "—"), `campo-${i}`))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                      )}
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* ── FOOTER fixo ── */}
+                <div className="shrink-0 border-t bg-white px-5 py-3 flex items-center justify-end gap-3">
                   {detEditMode ? (
                     <>
                       <Button variant="outline" onClick={() => { setDetEditMode(false); setDetEditForm(null); }} disabled={updateEntryClassif.isPending}>
                         Cancelar
                       </Button>
-                      <Button onClick={salvarEdicaoEntry} disabled={updateEntryClassif.isPending} className="bg-[#1B2A4A] hover:bg-[#1B2A4A]/90 text-white">
-                        {updateEntryClassif.isPending ? <><Loader2 className="w-4 h-4 animate-spin mr-1.5" />Salvando…</> : <><CheckCircle className="w-4 h-4 mr-1.5" />Salvar alterações</>}
+                      <Button onClick={salvarEdicaoEntry} disabled={updateEntryClassif.isPending} className="bg-[#1B2A4A] hover:bg-[#1B2A4A]/90 text-white gap-1.5">
+                        {updateEntryClassif.isPending ? <><Loader2 className="w-4 h-4 animate-spin" />Salvando…</> : <><CheckCircle className="w-4 h-4" />Salvar alterações</>}
                       </Button>
                     </>
                   ) : (
                     <>
                       <Button variant="outline" onClick={fecharDetalhe}>Fechar</Button>
                       {detEntry && (
-                        <Button variant="outline" onClick={iniciarEdicaoEntry} className="gap-1.5">
+                        <Button variant="outline" onClick={iniciarEdicaoEntry} className="gap-1.5 border-[#1B2A4A] text-[#1B2A4A] hover:bg-[#1B2A4A]/5">
                           <Pencil className="w-4 h-4" /> Editar
                         </Button>
                       )}
                     </>
                   )}
-                </DialogFooter>
+                </div>
               </DialogContent>
             </Dialog>
 
