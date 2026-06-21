@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3422 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · BOTÃO ⚡ "VINCULAR PIX/TED SUBSTITUTO"
+ * NOS CARDS DE CHEQUE DEVOLVIDO SEM QUITAÇÃO IDENTIFICADA. 100% FRONTEND ·
+ * ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Pedido: adicionar o botão ⚡ (igual ao que existe nos cards com PIX auto-detectado)
+ * nos cards de cheque devolvido que mostram "Sem quitação identificada no período".
+ *
+ * Solução (100% front, zero backend):
+ *   - No branch `res.tipo === "pendente"` do map de `repDevol`, substituiu o link de
+ *     texto "↔ Vincular a PIX/TED substituto manualmente" por um botão ⚡ verde com
+ *     a mesma aparência do botão "⚡ Conciliar PIX no extrato" (bg-emerald-600, font-semibold,
+ *     rounded, text-[11px]).
+ *   - Guard ampliado de `d.chequeNumero` para `d.chequeNumero || d.doc`, incluindo cheques
+ *     identificados só pelo número de documento.
+ *   - Icone `Zap` adicionado ao import de lucide-react.
+ *   - Ação abre `vincularPixDlg` (mesmo dialog de Rev. 3416) com `pixPreSel: null`,
+ *     permitindo ao usuário selecionar manualmente o PIX/TED do extrato que quitou o cheque.
+ *
+ * Arquivos: client/src/pages/financeiro/FinanceiroConciliacao.tsx
+ *   (import Zap; branch "pendente" do repDevol.map — botão ⚡ em destaque).
+ *
  * Rev. 3421 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · % DE CONCILIAÇÃO NO CARD DE CONTA +
  * % TOTAL NO PILL DO MÊS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *

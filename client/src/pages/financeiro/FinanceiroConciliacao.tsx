@@ -15,7 +15,7 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX, FileSpreadsheet, FileDown, Plus, Maximize2, Minimize2, Search, Users, Building2, Pencil, Wallet, CircleCheck, CircleDot } from "lucide-react";
+import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX, FileSpreadsheet, FileDown, Plus, Maximize2, Minimize2, Search, Users, Building2, Pencil, Wallet, CircleCheck, CircleDot, Zap } from "lucide-react";
 import { formatConta, formatAgencia } from "@/lib/formatters";
 import { NaturezaOverrideDialog, NaturezaBadge, type LancNaturezaLinha } from "./_NaturezaOverride";
 import { MapaMovimentacaoInternaDialog } from "./_MapaMovimentacaoInterna";
@@ -4372,15 +4372,18 @@ export default function FinanceiroConciliacao() {
                                   <p className="text-[11px] text-amber-700 flex items-center gap-1">
                                     <AlertCircle className="w-3.5 h-3.5" /> Sem quitação identificada no período — analisar (reapresentar, cobrar ou substituir).
                                   </p>
-                                  {d.chequeNumero && (
-                                    <button
-                                      type="button"
-                                      className="mt-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-medium underline"
-                                      onClick={() => { setVincularPixSel(null); setVincularPixDlg({ cheque: d, pixPreSel: null }); }}
-                                    >
-                                      ↔ Vincular a PIX/TED substituto manualmente
-                                    </button>
-                                  )}
+                                  {/* Rev. 3422 — botão ⚡ em destaque p/ vincular PIX/TED nos cards pendentes */}
+                                  <div className="flex items-center gap-2 flex-wrap mt-1">
+                                    {(d.chequeNumero || d.doc) && (
+                                      <button
+                                        type="button"
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+                                        onClick={() => { setVincularPixSel(null); setVincularPixDlg({ cheque: d, pixPreSel: null }); }}
+                                      >
+                                        <Zap className="w-3 h-3" /> Vincular PIX/TED substituto
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                               )}
                             </div>
