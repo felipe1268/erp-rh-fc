@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3401** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · ANÁLISE DA CLASSIFICAÇÃO COM IA (ON-DEMAND). BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Botão "Verificar classificação com IA" (Sparkles, violeta) dentro do card "Conferência da conciliação" (dialog do lançamento, disponível quando aberto via sugestão de conciliação). A IA compara a descrição do extrato bancário com a classificação atual do ERP (nome/fornecedor, categoria, descrição) e devolve sugestões; o usuário marca quais aceitar e aplica em um clique via `updateEntryClassificacao`. Backend: mutation `analisarConciliacaoComIA` — busca lançamento + 100 categorias ativas, invoca `invokeLLM(fast:true)`, sanitiza output (whitelist de campos + validação de IDs de categoria), gateado por `assertAiModuleEnabled("financeiro")`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3402** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · ANÁLISE IA INLINE NAS LINHAS DE SUGESTÃO (SEM ABRIR O DIALOG). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Botão "✦ IA" adicionado diretamente em cada linha da lista de sugestões de conciliação. Clicar uma vez dispara a análise e expande um painel inline (violeta) logo abaixo da linha: loading → resultado com checkboxes → "Aplicar N correções" (âmbar) ou "Descartar". Reutiliza a mutation `analisarConciliacaoComIA` (Rev. 3401); estado separado `rowAiOpenId`/`rowAiAnalise`/`rowAiCheckeds`. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3400** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · REDESIGN FULL-SCREEN DO MODAL "LANÇAMENTO #NNNNN". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Header colorido fixo (navy despesa / emerald receita) com nome em destaque, valor em `text-2xl` e pill de status. Body em `bg-gray-50` com seções em cards brancos: Dados financeiros, Classificação, Cheque/Código (condicional), Descrições (condicional), Anexos (condicional), OC e Origem. Conferência da conciliação redesenhada com header azul + cards diferenciados + pills maiores. Modo edição em card único com header âmbar. Footer fixo com botões Fechar/Editar. Detalhe: `shared/changelog.ts`.
+- **Rev. 3401** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · ANÁLISE DA CLASSIFICAÇÃO COM IA (ON-DEMAND). BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Mutation `analisarConciliacaoComIA` + botão "Verificar classificação com IA" no card "Conferência da conciliação" do dialog do lançamento. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
+
+- **Rev. 3400** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · REDESIGN FULL-SCREEN DO MODAL "LANÇAMENTO #NNNNN". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3399** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SUGESTÃO DE CONCILIAÇÃO PARA LANÇAMENTOS SEM CONTA BANCÁRIA. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3397** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · FIX CRASH "Cannot read properties of null (reading 'id')". 100% FRONTEND · ZERO BACKEND/SCHEMA.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3396** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DESFAZER CONCILIAÇÃO SEM EXCLUIR A LINHA DO EXTRATO. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3395** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CRIAR LANÇAMENTO MANUAL SEM EXTRATO + SELETOR DÉBITO/CRÉDITO NO FORM DE EDIÇÃO E NO "LANÇAR NO ERP". BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### REGRA DE OURO — Cabeçalho de documentos institucionais FC (Rev. 2106+)
 

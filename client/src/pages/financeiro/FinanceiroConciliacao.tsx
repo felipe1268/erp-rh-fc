@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useState, useRef, useEffect, Fragment } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -175,6 +175,10 @@ export default function FinanceiroConciliacao() {
   type AiAnaliseState = null | "loading" | "error" | { ok: boolean; resumo: string; sugestoes: AiSugestao[] };
   const [aiAnalise, setAiAnalise] = useState<AiAnaliseState>(null);
   const [aiCheckeds, setAiCheckeds] = useState<Set<number>>(new Set());
+  // Rev. 3402 — AI inline nas linhas de sugestão (sem precisar abrir o dialog)
+  const [rowAiOpenId, setRowAiOpenId] = useState<number | null>(null);
+  const [rowAiAnalise, setRowAiAnalise] = useState<AiAnaliseState>(null);
+  const [rowAiCheckeds, setRowAiCheckeds] = useState<Set<number>>(new Set());
   const fecharDetalhe = () => { setDetalheEntryId(null); setDetalheExtrato(null); setDetEditMode(false); setDetEditForm(null); setAiAnalise(null); setAiCheckeds(new Set()); };
   // Rev. 3266 — diálogo de CONFERÊNCIA da identificação por IA (texto roxo clicável).
   // Guarda a linha do extrato (com os campos demo* já vindos do getConciliacaoReport) p/
@@ -1212,6 +1216,41 @@ export default function FinanceiroConciliacao() {
       else if (s.campo === "descricao") patch.descricao = s.sugestao;
     }
     updateEntryClassif.mutate(patch);
+  };
+  // Rev. 3402 — mutation IA para as linhas inline da lista de sugestões
+  const rowAiMut = (trpc as any).financial.analisarConciliacaoComIA.useMutation({
+    onMutate: () => { setRowAiAnalise("loading"); setRowAiCheckeds(new Set()); },
+    onSuccess: (data: any) => {
+      setRowAiAnalise(data);
+      setRowAiCheckeds(new Set((data.sugestoes ?? []).map((_: any, i: number) => i)));
+    },
+    onError: (e: any) => { setRowAiAnalise("error"); toast({ title: "Erro na análise IA", description: e.message, variant: "destructive" }); },
+  });
+  const dispararRowAI = (s: any) => {
+    setRowAiOpenId(s.statementLineId);
+    setRowAiAnalise("loading");
+    setRowAiCheckeds(new Set());
+    rowAiMut.mutate({
+      companyId,
+      entryId: s.entryId,
+      extratoDescricao: s.extratoDescricao ?? "",
+      extratoData: s.extratoData ?? undefined,
+      extratoValor: s.extratoValor ?? undefined,
+    });
+  };
+  const aplicarRowCorrecoes = (s: any) => {
+    if (typeof rowAiAnalise !== "object" || rowAiAnalise === null) return;
+    const sels = (rowAiAnalise as any).sugestoes.filter((_: any, i: number) => rowAiCheckeds.has(i));
+    if (!sels.length) { toast({ title: "Nenhuma sugestão selecionada." }); return; }
+    const patch: any = { id: s.entryId, companyId };
+    for (const sg of sels) {
+      if (sg.campo === "fornecedorNome") patch.fornecedorNome = sg.sugestao;
+      else if (sg.campo === "contaId" && sg.contaIdSugerido) { patch.contaId = sg.contaIdSugerido; patch.contaNome = sg.contaNomeSugerida || sg.sugestao; }
+      else if (sg.campo === "descricao") patch.descricao = sg.sugestao;
+    }
+    updateEntryClassif.mutate(patch, {
+      onSuccess: () => { setRowAiOpenId(null); setRowAiAnalise(null); setRowAiCheckeds(new Set()); },
+    });
   };
   const iniciarEdicaoEntry = () => {
     if (!detEntry) return;
@@ -2872,53 +2911,159 @@ export default function FinanceiroConciliacao() {
                         </div>
                         <div className="divide-y">
                         {sugestoes.map(s => (
-                          <label key={s.statementLineId} className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer">
-                            <Checkbox checked={selSug.has(s.statementLineId)} onCheckedChange={() => toggleSug(s.statementLineId)} />
-                            <button
-                              type="button"
-                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); abrirDetalheSug(s); }}
-                              title="Ver detalhes e conferir a conciliação"
-                              className="flex-1 min-w-0 text-left rounded-md -m-1 p-1 hover:bg-gray-100 transition-colors group/ext"
-                            >
-                              <div className="text-xs text-gray-400 uppercase tracking-wide mb-0.5 flex items-center gap-1">
-                                Extrato <Eye className="w-3 h-3 text-gray-400 opacity-0 group-hover/ext:opacity-100 transition-opacity" />
-                              </div>
-                              <div className="text-sm font-medium truncate group-hover/ext:underline">{s.extratoDescricao || "—"}</div>
-                              <div className="text-xs text-gray-500">{fmtData(s.extratoData)} · {formatBRL(Math.abs(s.extratoValor))}</div>
-                              {s.chequeFornecedor && (
-                                <div className="text-[11px] text-emerald-700 truncate" title={`Cheque nº ${s.chequeNumero} — ${s.chequeFornecedor}`}>
-                                  🪙 Cheque nº {s.chequeNumero} · {s.chequeFornecedor}
+                          <Fragment key={s.statementLineId}>
+                            <label className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer">
+                              <Checkbox checked={selSug.has(s.statementLineId)} onCheckedChange={() => toggleSug(s.statementLineId)} />
+                              <button
+                                type="button"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); abrirDetalheSug(s); }}
+                                title="Ver detalhes e conferir a conciliação"
+                                className="flex-1 min-w-0 text-left rounded-md -m-1 p-1 hover:bg-gray-100 transition-colors group/ext"
+                              >
+                                <div className="text-xs text-gray-400 uppercase tracking-wide mb-0.5 flex items-center gap-1">
+                                  Extrato <Eye className="w-3 h-3 text-gray-400 opacity-0 group-hover/ext:opacity-100 transition-opacity" />
                                 </div>
-                              )}
-                            </button>
-                            <ArrowRight className="w-4 h-4 text-gray-300 shrink-0" />
-                            <button
-                              type="button"
-                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); abrirDetalheSug(s); }}
-                              title="Ver detalhes do lançamento"
-                              className="flex-1 min-w-0 text-left rounded-md -m-1 p-1 hover:bg-blue-50 transition-colors group/lan"
-                            >
-                              <div className="text-xs text-gray-400 uppercase tracking-wide mb-0.5 flex items-center gap-1">
-                                Lançamento <Eye className="w-3 h-3 text-blue-400 opacity-0 group-hover/lan:opacity-100 transition-opacity" />
+                                <div className="text-sm font-medium truncate group-hover/ext:underline">{s.extratoDescricao || "—"}</div>
+                                <div className="text-xs text-gray-500">{fmtData(s.extratoData)} · {formatBRL(Math.abs(s.extratoValor))}</div>
+                                {s.chequeFornecedor && (
+                                  <div className="text-[11px] text-emerald-700 truncate" title={`Cheque nº ${s.chequeNumero} — ${s.chequeFornecedor}`}>
+                                    🪙 Cheque nº {s.chequeNumero} · {s.chequeFornecedor}
+                                  </div>
+                                )}
+                              </button>
+                              <ArrowRight className="w-4 h-4 text-gray-300 shrink-0" />
+                              <button
+                                type="button"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); abrirDetalheSug(s); }}
+                                title="Ver detalhes do lançamento"
+                                className="flex-1 min-w-0 text-left rounded-md -m-1 p-1 hover:bg-blue-50 transition-colors group/lan"
+                              >
+                                <div className="text-xs text-gray-400 uppercase tracking-wide mb-0.5 flex items-center gap-1">
+                                  Lançamento <Eye className="w-3 h-3 text-blue-400 opacity-0 group-hover/lan:opacity-100 transition-opacity" />
+                                </div>
+                                <div className="text-sm font-medium truncate text-blue-700 group-hover/lan:underline">{s.entryFornecedor || s.entryDescricao || "—"}</div>
+                                <div className="text-xs text-gray-500 truncate">
+                                  {fmtData(s.entryData)} · {formatBRL(Math.abs(s.entryValor))}
+                                  {s.entryObra ? ` · ${s.entryObra}` : ""}
+                                </div>
+                              </button>
+                              <div className="flex flex-col items-end gap-1 shrink-0">
+                                <Badge variant={s.confianca === "alta" ? "default" : "secondary"}>
+                                  {s.confianca === "alta" ? "Alta" : "Média"}
+                                </Badge>
+                                {s.identificadoVia && (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-px rounded text-[10px] font-medium bg-violet-100 text-violet-700" title={s.entryComprovanteBeneficiario ? `Comprovante: ${s.entryComprovanteBeneficiario}` : `Identificado pelo comprovante (${s.identificadoVia})`}>
+                                    <Sparkles className="w-2.5 h-2.5" /> {s.identificadoVia}
+                                  </span>
+                                )}
+                                <span className="text-[10px] text-gray-400">{s.deltaDias === 0 ? "mesmo dia" : `±${s.deltaDias}d`}</span>
+                                {/* Rev. 3402 — botão IA inline */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault(); e.stopPropagation();
+                                    if (rowAiOpenId === s.statementLineId) { setRowAiOpenId(null); setRowAiAnalise(null); setRowAiCheckeds(new Set()); }
+                                    else { dispararRowAI(s); }
+                                  }}
+                                  title="Verificar classificação com IA"
+                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold transition-colors border ${
+                                    rowAiOpenId === s.statementLineId
+                                      ? "bg-violet-200 border-violet-300 text-violet-900"
+                                      : "bg-white border-violet-200 text-violet-600 hover:bg-violet-50"
+                                  }`}
+                                >
+                                  <Sparkles className="w-2.5 h-2.5" />
+                                  {rowAiOpenId === s.statementLineId && rowAiAnalise === "loading" ? "…" : "IA"}
+                                </button>
                               </div>
-                              <div className="text-sm font-medium truncate text-blue-700 group-hover/lan:underline">{s.entryFornecedor || s.entryDescricao || "—"}</div>
-                              <div className="text-xs text-gray-500 truncate">
-                                {fmtData(s.entryData)} · {formatBRL(Math.abs(s.entryValor))}
-                                {s.entryObra ? ` · ${s.entryObra}` : ""}
+                            </label>
+
+                            {/* Painel IA inline expandido abaixo da linha */}
+                            {rowAiOpenId === s.statementLineId && rowAiAnalise !== null && (
+                              <div className="border-b bg-violet-50/70 px-4 py-3 space-y-2.5">
+                                {rowAiAnalise === "loading" && (
+                                  <div className="flex items-center gap-2 text-sm text-violet-600">
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                                    Analisando classificação do lançamento…
+                                  </div>
+                                )}
+                                {rowAiAnalise === "error" && (
+                                  <div className="flex items-center justify-between gap-2 text-sm">
+                                    <span className="text-red-600 flex items-center gap-1.5"><AlertCircle className="w-4 h-4" /> Falha na análise.</span>
+                                    <button type="button" onClick={() => dispararRowAI(s)} className="text-xs text-violet-600 underline hover:text-violet-800">Tentar novamente</button>
+                                  </div>
+                                )}
+                                {typeof rowAiAnalise === "object" && rowAiAnalise !== null && (
+                                  <>
+                                    <div className={`flex items-start gap-2 text-xs font-medium rounded-lg px-3 py-2 ${
+                                      (rowAiAnalise as any).sugestoes.length === 0
+                                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                        : "bg-amber-50 text-amber-800 border border-amber-200"
+                                    }`}>
+                                      {(rowAiAnalise as any).sugestoes.length === 0
+                                        ? <CheckCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                                        : <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />}
+                                      <span>{(rowAiAnalise as any).resumo || ((rowAiAnalise as any).sugestoes.length === 0 ? "Classificação está correta." : "Foram encontradas divergências.")}</span>
+                                    </div>
+
+                                    {(rowAiAnalise as any).sugestoes.length > 0 && (
+                                      <>
+                                        <div className="space-y-1.5">
+                                          {(rowAiAnalise as any).sugestoes.map((sg: any, i: number) => (
+                                            <div
+                                              key={i}
+                                              onClick={() => setRowAiCheckeds(prev => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n; })}
+                                              className={`flex items-start gap-2 rounded-lg border p-2.5 cursor-pointer select-none transition-colors text-xs ${
+                                                rowAiCheckeds.has(i) ? "border-amber-300 bg-amber-50" : "border-gray-200 bg-white hover:border-gray-300"
+                                              }`}
+                                            >
+                                              <div className={`mt-0.5 w-3.5 h-3.5 rounded border-2 shrink-0 flex items-center justify-center transition-colors ${
+                                                rowAiCheckeds.has(i) ? "bg-amber-500 border-amber-500" : "border-gray-300"
+                                              }`}>
+                                                {rowAiCheckeds.has(i) && <CheckCircle className="w-2 h-2 text-white" />}
+                                              </div>
+                                              <div className="min-w-0 flex-1">
+                                                <div className="font-bold text-[10px] text-gray-500 uppercase tracking-wide mb-0.5">
+                                                  {sg.campo === "fornecedorNome" ? "Nome / Fornecedor" : sg.campo === "contaId" ? "Categoria" : "Descrição"}
+                                                </div>
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                  <span className="line-through text-gray-400">{sg.valorAtual || "—"}</span>
+                                                  <span className="text-gray-400">→</span>
+                                                  <span className="font-semibold text-gray-900">{sg.sugestao}</span>
+                                                </div>
+                                                <div className="text-gray-500 mt-0.5">{sg.motivo}</div>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                        <div className="flex items-center justify-between gap-3">
+                                          <button type="button" onClick={() => { setRowAiOpenId(null); setRowAiAnalise(null); setRowAiCheckeds(new Set()); }} className="text-[11px] text-gray-400 hover:text-gray-600">
+                                            Descartar
+                                          </button>
+                                          <Button size="sm"
+                                            onClick={() => aplicarRowCorrecoes(s)}
+                                            disabled={rowAiCheckeds.size === 0 || updateEntryClassif.isPending}
+                                            className="bg-amber-500 hover:bg-amber-600 text-white gap-1.5 text-[11px] h-7"
+                                          >
+                                            {updateEntryClassif.isPending
+                                              ? <Loader2 className="w-3 h-3 animate-spin" />
+                                              : <CheckCircle className="w-3 h-3" />}
+                                            Aplicar {rowAiCheckeds.size} correção{rowAiCheckeds.size !== 1 ? "ões" : ""}
+                                          </Button>
+                                        </div>
+                                      </>
+                                    )}
+
+                                    {(rowAiAnalise as any).sugestoes.length === 0 && (
+                                      <button type="button" onClick={() => setRowAiOpenId(null)} className="text-[11px] text-gray-400 hover:text-gray-600">
+                                        Fechar
+                                      </button>
+                                    )}
+                                  </>
+                                )}
                               </div>
-                            </button>
-                            <div className="flex flex-col items-end gap-1 shrink-0">
-                              <Badge variant={s.confianca === "alta" ? "default" : "secondary"}>
-                                {s.confianca === "alta" ? "Alta" : "Média"}
-                              </Badge>
-                              {s.identificadoVia && (
-                                <span className="inline-flex items-center gap-1 px-1.5 py-px rounded text-[10px] font-medium bg-violet-100 text-violet-700" title={s.entryComprovanteBeneficiario ? `Comprovante: ${s.entryComprovanteBeneficiario}` : `Identificado pelo comprovante (${s.identificadoVia})`}>
-                                  <Sparkles className="w-2.5 h-2.5" /> {s.identificadoVia}
-                                </span>
-                              )}
-                              <span className="text-[10px] text-gray-400">{s.deltaDias === 0 ? "mesmo dia" : `±${s.deltaDias}d`}</span>
-                            </div>
-                          </label>
+                            )}
+                          </Fragment>
                         ))}
                         </div>
                       </div>

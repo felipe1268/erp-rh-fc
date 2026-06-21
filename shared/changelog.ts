@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3402 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · ANÁLISE IA INLINE NAS LINHAS DE
+ * SUGESTÃO (SEM ABRIR O DIALOG). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PEDIDO: o botão "Verificar classificação com IA" era acessível apenas dentro do dialog
+ * do lançamento (Rev. 3401), obrigando o usuário a abrir e fechar o detalhe para cada
+ * sugestão. Solicitação: disponibilizar direto na linha da lista de sugestões.
+ *
+ * MUDANÇAS (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`):
+ * - Import `Fragment` adicionado ao import do React.
+ * - Estados `rowAiOpenId`/`rowAiAnalise`/`rowAiCheckeds` — controle do painel inline
+ *   por linha (apenas 1 painel aberto por vez; abrir outra linha fecha a anterior).
+ * - Mutation `rowAiMut` — reutiliza `analisarConciliacaoComIA` com estado próprio.
+ * - Helpers `dispararRowAI(s)` + `aplicarRowCorrecoes(s)` — disparo e aplicação
+ *   com limpeza do estado inline via callback `onSuccess` da mutation.
+ * - Cada linha de sugestão passa de `<label key=...>` para `<Fragment key=...>` +
+ *   `<label>` + painel condicional abaixo:
+ *     * Coluna "Confiança": botão "✦ IA" pequeno (violeta, `text-[10px]`) com
+ *       `e.stopPropagation()` para não marcar o checkbox ao clicar.
+ *     * Painel `bg-violet-50/70 border-b` expandido logo abaixo da linha quando
+ *       `rowAiOpenId === s.statementLineId`: loading → erro → resultado com checkboxes
+ *       e botão "Aplicar N correções" (âmbar) → fecha e limpa ao aplicar ou ao clicar
+ *       "Descartar".
+ * - Fluxo: clicar "IA" uma vez abre e dispara a análise; clicar novamente fecha.
+ *
  * Rev. 3401 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · ANÁLISE DA CLASSIFICAÇÃO COM IA
  * (ON-DEMAND). BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
