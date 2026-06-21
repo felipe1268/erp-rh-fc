@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3433 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO iOS: "THE STRING DID NOT
+ * MATCH THE EXPECTED PATTERN" → MENSAGEM AMIGÁVEL + fmtData SAFE PARA iOS.
+ * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Dois problemas combinados no iPad/Safari:
+ * 1. `fmtData()` passava timestamps PG com espaço (`"2026-01-15 12:00:00"`) diretamente
+ *    para `new Date()` sem normalizar; iOS Safari rejeita esse formato com
+ *    `"The string did not match the expected pattern."`. Fix: `v.replace(" ", "T")` antes
+ *    de construir o Date.
+ * 2. Card de erro exibia a mensagem crua do WebKit, ilegível para o usuário. Adicionada
+ *    helper `_msgErroConc()` que detecta os erros crípticos do iOS (did not match,
+ *    load failed, failed to fetch, networkerror, aborted, timed out…) e os substitui
+ *    por "Falha de conexão. Verifique sua internet e toque em Tentar novamente.". Mensagens
+ *    legítimas do servidor (ex.: "Empresa não encontrada") passam inalteradas.
+ *    Aplicado em AMBOS os cards de erro (getConciliacaoReport + getConciliacaoReportGeral).
+ *
  * Rev. 3432 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "CONCILIAR PIX NO EXTRATO" —
  * TEXTOS CORTADOS CORRIGIDOS. REGRA GERAL: DIALOGS NUNCA TRUNCAM TEXTO.
  * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**

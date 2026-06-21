@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3433** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO iOS: "THE STRING DID NOT MATCH THE EXPECTED PATTERN" → MENSAGEM AMIGÁVEL + fmtData SAFE PARA iOS. 100% FRONTEND · ZERO BACKEND.** `fmtData` normaliza espaço→T antes de `new Date()`; `_msgErroConc()` mapeia erros crípticos do WebKit para mensagem de "falha de conexão" em ambos os cards de erro. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3432** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · DIALOG "CONCILIAR PIX NO EXTRATO" — TEXTOS CORTADOS CORRIGIDOS. REGRA: DIALOGS NUNCA TRUNCAM. 100% FRONTEND · ZERO BACKEND.** `truncate` → `break-words`/`break-all` no header, descrição PIX, item selecionado e lista. Regra gravada em memória. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3431** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CORREÇÃO: "OUTROS MESES" RETORNAVA ZERO — LIKE COM `|` NÃO É OR NO POSTGRESQL. BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.** `LIKE '%(PIX|TED|TRANSF)%'` é literal. Fix: 3 LIKE separados com OR. Adicionado `valorRef` + `ORDER BY ABS(valor+valorRef)`. Detalhe: `shared/changelog.ts`.

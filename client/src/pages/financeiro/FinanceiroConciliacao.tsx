@@ -42,9 +42,32 @@ function parseBRLInput(masked: string) {
 function fmtData(v: any) {
   if (!v) return "—";
   try {
-    const d = typeof v === "string" ? new Date(v.length > 10 ? v : v + "T00:00:00") : new Date(v);
+    let s: string | null = null;
+    if (typeof v === "string") {
+      // normaliza "YYYY-MM-DD HH:MM:SS" (espaço) → "YYYY-MM-DD THH:MM:SS" p/ iOS Safari
+      s = v.length > 10 ? v.replace(" ", "T") : v + "T00:00:00";
+    }
+    const d = s ? new Date(s) : new Date(v);
     return isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR");
   } catch { return "—"; }
+}
+
+/** Mapeia erros crípticos do iOS Safari para mensagens amigáveis. */
+function _msgErroConc(msg?: string): string {
+  if (!msg) return "Falha ao consultar o relatório. Tente novamente.";
+  const l = msg.toLowerCase();
+  if (
+    l.includes("did not match the expected pattern") ||
+    l.includes("load failed") ||
+    l.includes("failed to fetch") ||
+    l.includes("networkerror") ||
+    l.includes("network connection") ||
+    l.includes("the operation couldn't be completed") ||
+    l.includes("aborted") ||
+    l.includes("timed out") ||
+    l.includes("tempo limite")
+  ) return "Falha de conexão. Verifique sua internet e toque em "Tentar novamente".";
+  return msg;
 }
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -2460,7 +2483,7 @@ export default function FinanceiroConciliacao() {
                   <div className="p-6 text-center">
                     <AlertCircle className="w-8 h-8 mx-auto mb-2 text-red-400" />
                     <p className="text-sm text-red-700 font-medium">Não consegui montar o panorama.</p>
-                    <p className="text-xs text-gray-500 mt-1">{geralError?.message || "Tente novamente."}</p>
+                    <p className="text-xs text-gray-500 mt-1">{_msgErroConc(geralError?.message)}</p>
                     <Button size="sm" variant="outline" onClick={() => refetchGeral()} className="mt-3 border-red-300 text-red-700 hover:bg-red-100">Tentar de novo</Button>
                   </div>
                 ) : geralContas.length === 0 ? (
@@ -3120,7 +3143,7 @@ export default function FinanceiroConciliacao() {
                     <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
                     <div>
                       <p className="text-sm font-semibold text-red-800">Não foi possível carregar a conciliação</p>
-                      <p className="text-xs text-red-700 mt-0.5">{reportError?.message || "Falha ao consultar o relatório. Os números abaixo podem estar incompletos."}</p>
+                      <p className="text-xs text-red-700 mt-0.5">{_msgErroConc(reportError?.message)}</p>
                     </div>
                   </div>
                   <Button size="sm" variant="outline" onClick={() => refetchReport()} className="border-red-300 text-red-700 hover:bg-red-100">
