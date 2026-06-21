@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3465 — **CONCILIAÇÃO BANCÁRIA · CAMPO "CONCILIADO" NO DETALHE DO LANÇAMENTO EXIBE
+ * BANCO, AGÊNCIA E CONTA QUANDO CONCILIADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * No dialog de detalhe do lançamento (seção "Dados financeiros"), o campo "Conciliado"
+ * passou a exibir, logo abaixo de "Sim · DD/MM/AAAA", uma linha com o ícone 🏦 e os dados
+ * da conta bancária vinculada: apelido (se houver), banco, agência e número da conta.
+ * A lógica cruza `detEntry.contaBancariaId` com o array `bankAccounts` já carregado
+ * na tela — sem nenhuma nova chamada ao backend.
+ * Quando não conciliado ou sem conta bancária, o comportamento anterior é mantido.
+ *
  * Rev. 3464 — **CONCILIAÇÃO BANCÁRIA · BOTÃO "EDITAR" NO LANÇAMENTO DE CADA SUGESTÃO AUTOMÁTICA.
  * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *

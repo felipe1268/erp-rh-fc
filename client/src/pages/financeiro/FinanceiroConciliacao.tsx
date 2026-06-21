@@ -4380,7 +4380,29 @@ export default function FinanceiroConciliacao() {
                             {field("Data Pagamento", fmtData(detEntry.dataPagamento))}
                             {field("Forma de Pagamento", detEntry.formaPagamento)}
                             {field("Parcela", detEntry.parcelaTotal ? `${detEntry.parcelaNumero ?? 1}/${detEntry.parcelaTotal}` : null)}
-                            {field("Conciliado", Number(detEntry.conciliado) === 1 ? `Sim${detEntry.dataConciliacao ? ` (${fmtData(detEntry.dataConciliacao)})` : ""}` : "Não")}
+                            {/* Rev. 3465 — conciliado exibe banco/agência/conta quando disponível */}
+                            {(() => {
+                              const isConcil = Number(detEntry.conciliado) === 1;
+                              const contaBanc = isConcil && detEntry.contaBancariaId
+                                ? (bankAccounts ?? []).find((b: any) => b.id === detEntry.contaBancariaId)
+                                : null;
+                              return (
+                                <div className="min-w-0">
+                                  <div className="text-[11px] text-gray-400 uppercase tracking-wide">Conciliado</div>
+                                  <div className={`break-words ${isConcil ? "text-emerald-700 font-medium" : "text-gray-800"}`}>
+                                    {isConcil ? `Sim${detEntry.dataConciliacao ? ` · ${fmtData(detEntry.dataConciliacao)}` : ""}` : "Não"}
+                                  </div>
+                                  {contaBanc && (
+                                    <div className="text-[11px] text-gray-500 mt-0.5 break-words">
+                                      🏦 {contaBanc.apelido ? `${contaBanc.apelido} · ` : ""}{contaBanc.banco}
+                                      {(contaBanc.agencia || contaBanc.conta)
+                                        ? ` · Ag. ${formatAgencia(contaBanc.agencia ?? "")}/${formatConta(contaBanc.conta ?? "")}`
+                                        : ""}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
                             {Number(detEntry.diasAtraso) > 0 && field("Dias em Atraso", `${detEntry.diasAtraso} dia(s)`)}
                           </div>
                         </div>

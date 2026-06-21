@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3464** — **CONCILIAÇÃO BANCÁRIA · BOTÃO "EDITAR" NO LANÇAMENTO ERP DE CADA SUGESTÃO AUTOMÁTICA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Botão "✏ editar" ao lado de "⇄ trocar" abre o dialog de detalhe já em modo edição; funciona com sugestão original e com troca manual. Detalhe: `shared/changelog.ts`.
+- **Rev. 3465** — **CONCILIAÇÃO BANCÁRIA · CAMPO "CONCILIADO" NO DETALHE DO LANÇAMENTO EXIBE BANCO, AGÊNCIA E CONTA QUANDO CONCILIADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Linha 🏦 com apelido/banco/agência/conta aparece logo abaixo de "Sim · data" no card "Dados financeiros". Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3463** — **CONCILIAÇÃO BANCÁRIA · COMBOBOX FORNECEDOR CORRIGIDO — EXIBE NOME FANTASIA (NOME COMERCIAL) EM VEZ DE RAZÃO SOCIAL + CNPJ. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `fornNomes` agora prioriza `nomeFantasia` → `razaoSocial` (fallback). Afeta form "Editar" e form "Lançar". Detalhe: `shared/changelog.ts`.
+- **Rev. 3464** — **CONCILIAÇÃO BANCÁRIA · BOTÃO "EDITAR" NO LANÇAMENTO ERP DE CADA SUGESTÃO AUTOMÁTICA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Botão "✏ editar" ao lado de "⇄ trocar" abre o dialog de detalhe já em modo edição; funciona com sugestão original e com troca manual. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
 
