@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3408 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · BARRA DE PROGRESSO 0-100% COM
+ * MARCADORES E RÓTULO INLINE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * - Barra de progresso substituída: de `h-2.5` fina para `h-6` larga com gradiente azul
+ *   (→ verde quando 100%).
+ * - Rótulo "N%" exibido DENTRO da barra preenchida (branco, drop-shadow) quando pctConc > 8%,
+ *   ou à direita em cinza quando ≤ 8% (barra muito estreita para caber o texto).
+ * - Marcadores de referência abaixo da barra: 0% · 25% · 50% · 75% · 100%.
+ *   O "100%" fica verde/bold quando conciliação completa.
+ * - Restante do card (KPIs 4 quadradinhos) sem alteração.
+ *
  * Rev. 3407 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · IA NO DIALOG DE CONFIRMAÇÃO VIRA
  * BOTÃO MANUAL + FIX LAYOUT CORTADO NO MOBILE. 100% FRONTEND ·
  * ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**

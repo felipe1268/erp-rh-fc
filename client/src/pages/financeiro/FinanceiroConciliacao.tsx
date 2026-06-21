@@ -2918,14 +2918,42 @@ export default function FinanceiroConciliacao() {
                 <div className="flex items-end justify-between flex-wrap gap-2">
                   <div>
                     <p className="text-xs text-gray-500">Progresso da conciliação · {periodoLabel}</p>
-                    <p className="text-2xl font-bold text-gray-900">{pctConc}<span className="text-base font-semibold text-gray-400">%</span> <span className="text-sm font-medium text-gray-500">conciliado</span></p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {pctConc}<span className="text-base font-semibold text-gray-400">%</span>
+                      {" "}<span className="text-sm font-medium text-gray-500">conciliado</span>
+                    </p>
                   </div>
                   <div className="text-right text-xs text-gray-500">
                     <span className="font-semibold text-blue-700">{formatInt(repConc.length)}</span> de {formatInt(totLinhas)} linha(s) do extrato
                   </div>
                 </div>
-                <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
-                  <div className={`h-full rounded-full transition-all duration-500 ${pctConc >= 100 ? "bg-green-500" : "bg-blue-600"}`} style={{ width: `${pctConc}%` }} />
+                {/* Barra de progresso larga com marcadores 0–25–50–75–100 */}
+                <div className="space-y-1">
+                  <div className="relative h-6 w-full rounded-full bg-gray-100 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-700 ${pctConc >= 100 ? "bg-gradient-to-r from-green-400 to-green-500" : "bg-gradient-to-r from-blue-500 to-blue-600"}`}
+                      style={{ width: `${pctConc}%` }}
+                    />
+                    {/* rótulo flutuante dentro da barra */}
+                    {pctConc > 8 && (
+                      <span className="absolute left-3 top-0 h-full flex items-center text-xs font-bold text-white drop-shadow-sm">
+                        {pctConc}%
+                      </span>
+                    )}
+                    {pctConc <= 8 && (
+                      <span className="absolute left-2 top-0 h-full flex items-center text-xs font-semibold text-gray-400">
+                        {pctConc}%
+                      </span>
+                    )}
+                  </div>
+                  {/* marcadores 0 / 25 / 50 / 75 / 100 */}
+                  <div className="flex justify-between text-[10px] text-gray-400 px-0.5 select-none">
+                    <span>0%</span>
+                    <span>25%</span>
+                    <span>50%</span>
+                    <span>75%</span>
+                    <span className={pctConc >= 100 ? "text-green-600 font-semibold" : ""}>100%</span>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3">

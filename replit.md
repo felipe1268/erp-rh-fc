@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3407** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · IA NO DIALOG DE CONFIRMAÇÃO VIRA BOTÃO MANUAL + FIX LAYOUT CORTADO NO MOBILE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** IA não dispara mais automaticamente ao abrir "Confirmar conciliação?" — economiza tokens. Botão "Verificar com IA" para uso explícito + "Tentar novamente" no erro. Dialog ganha `w-[calc(100vw-1.5rem)] sm:w-auto` para não cortar o botão Confirmar em iPads. Detalhe: `shared/changelog.ts`.
+- **Rev. 3408** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · BARRA DE PROGRESSO 0-100% COM MARCADORES E RÓTULO INLINE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Barra `h-2.5` fina substituída por barra `h-6` larga com gradiente azul→verde (100%). Rótulo "N%" exibido dentro da barra preenchida (branco) ou à direita em cinza (≤8%). Marcadores abaixo: 0% · 25% · 50% · 75% · 100% (verde/bold quando completo). Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3406** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CARDS DE CONTA SEM EXTRATO FICAM CINZA/APAGADOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Contas sem extrato carregado ficam com borda tracejada, fundo quase transparente, ícone e texto em cinza, opacidade 60% (hover→80%). Seleção azul sobrepõe o efeito. Detalhe: `shared/changelog.ts`.
+- **Rev. 3407** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · IA NO DIALOG DE CONFIRMAÇÃO VIRA BOTÃO MANUAL + FIX LAYOUT CORTADO NO MOBILE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** IA não dispara mais automaticamente ao abrir "Confirmar conciliação?" — economiza tokens. Botão "Verificar com IA" para uso explícito + "Tentar novamente" no erro. Dialog ganha `sm:max-w-2xl` para não cortar o botão Confirmar em iPads. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
+
+- **Rev. 3406** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CARDS DE CONTA SEM EXTRATO FICAM CINZA/APAGADOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3405** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SCORE DE CONFIANÇA 0-100% + SUGESTÃO AUTOMÁTICA POR HISTÓRICO (SEM IA). BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3403** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · BOTÃO "ANALISAR TODAS COM IA" + RELATÓRIO DE CLASSIFICAÇÃO EM LOTE + NOMES PADRONIZADOS. BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3402** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · ANÁLISE IA INLINE NAS LINHAS DE SUGESTÃO (SEM ABRIR O DIALOG). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3401** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · ANÁLISE DA CLASSIFICAÇÃO COM IA (ON-DEMAND). BACKEND ADITIVO + FRONT · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### REGRA DE OURO — Cabeçalho de documentos institucionais FC (Rev. 2106+)
 
