@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3456 — **OBRAS · DIALOGS DE CONFIRMAÇÃO (EXCLUIR / LIBERAR SN / MESCLAR) SUBSTITUÍDOS
+ * POR AlertDialog shadcn. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PROBLEMA: `window.confirm()` / `confirm()` mostra no iOS Safari o domínio técnico do Replit
+ * ("b41aedae-…picard.replit.dev diz") como título do popup, além de não poder ser estilizado
+ * e ter comportamento inconsistente em WebViews.
+ *
+ * CORREÇÃO (Obras.tsx):
+ * - Import de `AlertDialog`/`AlertDialogContent`/`AlertDialogHeader`/… adicionado.
+ * - 3 estados: `confirmDeleteId`, `confirmRemoveSnId`, `confirmMesclarOpen`.
+ * - `handleDelete` e `handleRemoveSn` agora apenas setam o estado (sem confirm()).
+ * - Botão "Confirmar Mesclagem" setam `confirmMesclarOpen` em vez de `window.confirm()`.
+ * - 3 `<AlertDialog>` renderizados no final do JSX (excluir obra, liberar SN, mesclar).
+ * - Mesclagem: descrição com nome da obra de origem + aviso de irreversibilidade.
+ * - Excluir: botão destrutivo (variant destructive) para reforçar criticidade.
+ *
  * Rev. 3455 — **CONCILIAÇÃO BANCÁRIA · LANÇAR NO CONTAS A RECEBER — DUAS CORREÇÕES:
  * (1) CAMPO CLIENTE SELECIONÁVEL NO iOS/TABLET; (2) FILTRO DE OBRA CONSIDERA obra_clientes.
  * BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.**

@@ -5,6 +5,7 @@ import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -208,6 +209,10 @@ export default function Obras() {
 
   const [mesclarDialog, setMesclarDialog] = useState<{ open: boolean; sourceObra: any | null }>({ open: false, sourceObra: null });
   const [mesclarTargetId, setMesclarTargetId] = useState<number | null>(null);
+  // Rev. 3455 — confirmações sem window.confirm (feio no iOS)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [confirmRemoveSnId, setConfirmRemoveSnId] = useState<number | null>(null);
+  const [confirmMesclarOpen, setConfirmMesclarOpen] = useState(false);
   const [form, setForm] = useState<ObraForm>(emptyForm);
   // Jornada de Trabalho da OBRA (por dia da semana). Estado separado (chaves dinâmicas
   // jornada_<dia>_entrada/intervalo/saida) que vira JSON no submit e prevalece sobre a do funcionário.
@@ -525,9 +530,7 @@ export default function Obras() {
   };
 
   const handleDelete = (id: number) => {
-    if (confirm("Tem certeza que deseja excluir esta obra?")) {
-      deleteMut.mutate({ id });
-    }
+    setConfirmDeleteId(id);
   };
 
   const handleAddSn = (forceShare?: boolean) => {
@@ -541,9 +544,7 @@ export default function Obras() {
   };
 
   const handleRemoveSn = (id: number) => {
-    if (confirm("Deseja liberar este SN? Ele ficará disponível para outras obras.")) {
-      removeSnMut.mutate({ id });
-    }
+    setConfirmRemoveSnId(id);
   };
 
   // Validação em tempo real do SN
@@ -1933,8 +1934,7 @@ export default function Obras() {
               className="bg-amber-600 hover:bg-amber-700 text-white"
               onClick={() => {
                 if (!mesclarDialog.sourceObra || !mesclarTargetId) return;
-                if (!window.confirm(`Confirma mesclar "${mesclarDialog.sourceObra.nome}" (ID ${mesclarDialog.sourceObra.id}) → obra destino ID ${mesclarTargetId}?\n\nTodos os registros de ponto serão migrados e a obra de origem será excluída. Esta ação não pode ser desfeita.`)) return;
-                mesclarMut.mutate({ sourceId: mesclarDialog.sourceObra.id, targetId: mesclarTargetId });
+                setConfirmMesclarOpen(true);
               }}
             >
               {mesclarMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Mesclando...</> : "Confirmar Mesclagem"}
@@ -2216,6 +2216,56 @@ function ConvencaoSection({ companyId, obraId, usarMatriz, convencaoId, onChange
           </div>
         )}
       </div>
+
+      {/* Rev. 3455 — AlertDialogs (substituem window.confirm) */}
+      <AlertDialog open={confirmDeleteId !== null} onOpenChange={o => { if (!o) setConfirmDeleteId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir obra</AlertDialogTitle>
+            <AlertDialogDescription>Tem certeza que deseja excluir esta obra? Esta ação não pode ser desfeita.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmDeleteId(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { if (confirmDeleteId != null) deleteMut.mutate({ id: confirmDeleteId }); setConfirmDeleteId(null); }}>
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmRemoveSnId !== null} onOpenChange={o => { if (!o) setConfirmRemoveSnId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Liberar SN</AlertDialogTitle>
+            <AlertDialogDescription>Deseja liberar este SN? Ele ficará disponível para outras obras.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmRemoveSnId(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { if (confirmRemoveSnId != null) removeSnMut.mutate({ id: confirmRemoveSnId }); setConfirmRemoveSnId(null); }}>
+              Liberar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmMesclarOpen} onOpenChange={o => { if (!o) setConfirmMesclarOpen(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Mesclagem</AlertDialogTitle>
+            <AlertDialogDescription>
+              {mesclarDialog.sourceObra && <>Mesclar <strong>{mesclarDialog.sourceObra.nome}</strong> (ID {mesclarDialog.sourceObra.id}) → obra destino ID {mesclarTargetId}?<br /><br />Todos os registros de ponto serão migrados e a obra de origem será excluída. <strong>Esta ação não pode ser desfeita.</strong></>}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmMesclarOpen(false)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={() => { setConfirmMesclarOpen(false); if (mesclarDialog.sourceObra && mesclarTargetId) mesclarMut.mutate({ sourceId: mesclarDialog.sourceObra.id, targetId: mesclarTargetId }); }}>
+              Confirmar Mesclagem
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

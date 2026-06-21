@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3455** — **CONCILIAÇÃO BANCÁRIA · LANÇAR NO C/RECEBER — (1) LANCCOMBO SELECIONÁVEL NO iOS/TABLET + (2) FILTRO DE OBRA CONSIDERA obra_clientes. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Fix iOS: `onTouchEnd` + `e.preventDefault()` nos botões do dropdown (blur sintético do Safari fechava antes do mousedown); timeout blur 160→300 ms. Fix obra: nova procedure `obras.listClienteVinculos` (JOIN obra_clientes×obras); `obrasParaLanc` faz UNIÃO texto-legado + junction table, com resolução fuzzy de clienteId via clienteOpts. Detalhe: `shared/changelog.ts`.
+- **Rev. 3456** — **OBRAS · DIALOGS DE CONFIRMAÇÃO (EXCLUIR / LIBERAR SN / MESCLAR) SUBSTITUÍDOS POR AlertDialog shadcn. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `window.confirm()` mostrava domínio Replit feio no iOS. 3 estados + 3 `<AlertDialog>` com botão destrutivo p/ excluir, liberar SN e mesclar obras. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3454** — **CONCILIAÇÃO BANCÁRIA · CACHE PERSISTENTE DA ANÁLISE IA (BATCH). BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Nova tabela `bank_conciliation_ai_cache` (CREATE TABLE IF NOT EXISTS). 2 procedures: `getAiConciliacaoCache` + `saveAiConciliacaoCache`. Frontend hidrata `batchAiResults` do banco ao montar (sem re-análise). Botão exibe badge "cache" + "Reanalisar" separado. Detalhe: `shared/changelog.ts`.
+- **Rev. 3455** — **CONCILIAÇÃO BANCÁRIA · LANÇAR NO C/RECEBER — (1) LANCCOMBO SELECIONÁVEL NO iOS/TABLET + (2) FILTRO DE OBRA CONSIDERA obra_clientes + (3) HOTFIX clientes.atualizar dataNascimento "" → null. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
+
+- **Rev. 3454** — **CONCILIAÇÃO BANCÁRIA · CACHE PERSISTENTE DA ANÁLISE IA (BATCH). BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3453** — **CLIENTES · CAMPOS PF (DATA NASCIMENTO, RG, ÓRGÃO EMISSOR, ESTADO CIVIL, SEXO, PROFISSÃO, NACIONALIDADE) + LEMBRETE DE ANIVERSÁRIO. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -63,10 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3451** — **OBRAS · MÚLTIPLOS CLIENTES POR OBRA (DONOS DA OBRA). BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3450** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CRIAR CLIENTE INLINE NO FORM "LANÇAR NO CONTAS A RECEBER". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3449** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SUGESTÕES AUTOMÁTICAS — FILTRO ESTRITO DE DATA NOS ENTRIES (SEM BUFFER). BACKEND ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3446** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CRIAR CATEGORIA E CENTRO DE CUSTO INLINE NO FORM "LANÇAR NO ERP". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 
 ### REGRA DE OURO — Cabeçalho de documentos institucionais FC (Rev. 2106+)
