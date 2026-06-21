@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3463 — **CONCILIAÇÃO BANCÁRIA · COMBOBOX FORNECEDOR CORRIGIDO — EXIBE NOME FANTASIA
+ * EM VEZ DE RAZÃO SOCIAL. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PROBLEMA: o memo `fornNomes` priorizava `razaoSocial` sobre `nomeFantasia`. No cadastro
+ * FC, `razaoSocial` frequentemente contém o CNPJ + nome do sócio-administrador
+ * (ex.: "22.460.882 JHONATAN CLAUDINO DE MELO"), enquanto o nome visível no ERP
+ * é o campo `nomeFantasia` (ex.: "MELO ENCANAMENTO PREDIAL").
+ *
+ * CORREÇÃO: invertida a prioridade → `nomeFantasia` (nome comercial) primeiro, com
+ * fallback para `razaoSocial` quando não há nome fantasia cadastrado.
+ * O `nomeFantasia` é exatamente o que o ERP exibe na tela de Fornecedores.
+ *
+ * EFEITO: corrige AMBOS os comboboxes que usam `fornNomes` — o do form "Editar
+ * lançamento" (Rev. 3462) e o do form "Lançar no Contas a Pagar".
+ *
  * Rev. 3462 — **CONCILIAÇÃO BANCÁRIA · CAMPO "FORNECEDOR / BENEFICIÁRIO" NO FORM DE EDIÇÃO
  * SUBSTITUÍDO POR COMBOBOX COM BUSCA NO CADASTRO DE FORNECEDORES.
  * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**

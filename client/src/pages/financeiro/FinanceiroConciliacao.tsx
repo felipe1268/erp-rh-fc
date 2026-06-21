@@ -397,7 +397,10 @@ export default function FinanceiroConciliacao() {
   const fornNomes: string[] = useMemo(() => {
     const seen = new Set<string>(); const out: string[] = [];
     for (const f of (Array.isArray(lancFornecedores) ? lancFornecedores : [])) {
-      const nome = String(f?.nome ?? f?.razaoSocial ?? f?.nomeFantasia ?? f?.fantasia ?? "").trim();
+      // Rev. 3463 — prioridade: nomeFantasia (nome comercial) → razaoSocial (fallback).
+      // razaoSocial frequentemente traz CNPJ prefixado + nome do sócio, o que não é o
+      // nome pelo qual a empresa é conhecida. nomeFantasia é o nome visível no ERP.
+      const nome = String(f?.nomeFantasia ?? f?.razaoSocial ?? "").trim();
       if (!nome || seen.has(nome.toLowerCase())) continue; seen.add(nome.toLowerCase()); out.push(nome);
     }
     return out.sort((a, b) => a.localeCompare(b, "pt-BR"));
