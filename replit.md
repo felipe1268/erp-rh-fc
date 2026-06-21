@@ -50,7 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3448** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SUGESTÕES AUTOMÁTICAS — FILTRO DE JANELA DE DATA NOS LANÇAMENTOS DO ERP. BACKEND ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.** Query de entries da `sugerirConciliacao` ganhara filtro `COALESCE(data_pagamento, data_vencimento, data_competencia) BETWEEN dataInicio-7 AND dataFim+7`. Buffer ±7 dias cobre viradas de mês legítimas; a tolerância do usuário continua controlando apenas o δ por par. Resultado: lançamentos de dez/2025 não aparecem mais como candidatos para extrato de jan/2026. Detalhe: `shared/changelog.ts`.
+- **Rev. 3449** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SUGESTÕES AUTOMÁTICAS — FILTRO ESTRITO DE DATA NOS ENTRIES (SEM BUFFER). BACKEND ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.** Removido o buffer ±7d da Rev. 3448: agora entries elegíveis = exatamente [dataInicio, dataFim]. Em modo "Mês Janeiro" só entries de Jan-01 a Jan-31 entram; em "Ano todo" cobre o ano inteiro. Tolerância do usuário controla apenas o δ por par. Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3448** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SUGESTÕES AUTOMÁTICAS — FILTRO DE JANELA DE DATA NOS LANÇAMENTOS DO ERP. BACKEND ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3447** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · BOTÃO "IGNORAR" POR LINHA DE SUGESTÃO AUTOMÁTICA — LINHA RETORNA PARA "NO EXTRATO, SEM LANÇAMENTO". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Botão "✕ ignorar" adicionado ao final de cada linha das Sugestões Automáticas. Ao clicar: linha some do painel de sugestões (estado local `sugDescartadas`) e aparece imediatamente na tabela "No extrato, sem lançamento" (já constava em `repExt`, que é independente). Toast confirma. "Reanalisar" reseta as descartadas junto com os demais estados. Detalhe: `shared/changelog.ts`.
 

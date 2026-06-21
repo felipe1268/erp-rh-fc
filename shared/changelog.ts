@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3449 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SUGESTÕES AUTOMÁTICAS — FILTRO ESTRITO
+ * DE DATA NOS ENTRIES (SEM BUFFER). BACKEND ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PROBLEMA: a Rev. 3448 introduziu um buffer de ±7 dias, o que ainda permitia que entries de
+ * fevereiro aparecessem como sugestões para extrato de janeiro (ex.: entry 02/02 para extrato
+ * 23/01, delta=10d < tol=31). O usuário confirmou: em modo "Mês", apenas entries do próprio
+ * mês devem ser candidatos — sem exceções.
+ *
+ * SOLUÇÃO — buffer removido (ENTRY_BUFFER = 0):
+ * ```sql
+ * COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia)
+ *   >= $dataInicio::date
+ *   AND <= $dataFim::date
+ * ```
+ * Quando o usuário está em modo "Mês Janeiro": apenas entries com data Jan-01 a Jan-31 são
+ * elegíveis. Quando em "Ano todo": dataInicio=01/01 e dataFim=31/12, cobrindo o ano inteiro.
+ * A tolerância (tol) do usuário continua controlando apenas o δ interno de cada par
+ * extrato↔lançamento, não a janela de seleção do pool.
+ *
+ * Arquivos: `server/routers/financial.ts` (`sugerirConciliacao`).
+ *
  * Rev. 3448 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SUGESTÕES AUTOMÁTICAS — FILTRO DE JANELA
  * DE DATA NOS LANÇAMENTOS DO ERP. BACKEND ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *

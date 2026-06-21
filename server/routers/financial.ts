@@ -6710,12 +6710,13 @@ export const financialRouter = router({
     if (linhas.length === 0) return { sugestoes: [], semMatch: [], totalLinhas: 0 };
 
     // Lançamentos elegíveis: não conciliados, não cancelados, da conta (ou sem conta).
-    // Rev. 3448 — janela de data nos entries: período analisado ±7 dias de buffer (cobre virada
-    // de mês). Sem esse filtro, com tolerância=31 dias, entries de dezembro apareciam como
-    // candidatos para extrato de janeiro (ex.: 06/01 - 21d = 16/12 < tol=31). O ENTRY_BUFFER
-    // de 7 dias é FIXO e independente da tolerância configurada pelo usuário — essa tolerância
-    // continua controlando apenas o δ permitido em cada par extrato↔lançamento.
-    const ENTRY_BUFFER = 7;
+    // Rev. 3449 — filtro ESTRITO de data nos entries: apenas lançamentos cujo COALESCE
+    // (data_pagamento, data_vencimento, data_competencia) cai dentro do período analisado
+    // [dataInicio, dataFim] exato, sem buffer. Quando o usuário está em modo "Mês" (ex.:
+    // Janeiro) só entries de janeiro entram no pool; entradas de dezembro ou fevereiro são
+    // excluídas independente da tolerância configurada. Em modo "Ano todo" dataInicio=01/01
+    // e dataFim=31/12, então o ano inteiro fica elegível. A tolerância (tol) continua
+    // controlando apenas o δ de data permitido dentro de cada par extrato↔lançamento.
     const entConds: string[] = [
       `e.company_id=$1`,
       `COALESCE(e.conciliado,0)=0`,
@@ -6726,11 +6727,11 @@ export const financialRouter = router({
     const entVals: any[] = [input.companyId, input.contaBancariaId];
     let ei = 3;
     if (input.dataInicio) {
-      entConds.push(`COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) >= $${ei++}::date - ${ENTRY_BUFFER}`);
+      entConds.push(`COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) >= $${ei++}::date`);
       entVals.push(input.dataInicio);
     }
     if (input.dataFim) {
-      entConds.push(`COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) <= $${ei++}::date + ${ENTRY_BUFFER}`);
+      entConds.push(`COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) <= $${ei++}::date`);
       entVals.push(input.dataFim);
     }
     const entRes = await dbExecute(db,
