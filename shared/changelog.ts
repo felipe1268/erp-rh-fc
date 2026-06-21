@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3404 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · ANÁLISE IA INLINE NO DIALOG "CONFIRMAR
+ * CONCILIAÇÃO?" (ANTES DO OK FINAL). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PEDIDO: ter a análise de classificação diretamente no dialog de confirmação, antes de dar o
+ * ok final — assim o usuário pode corrigir divergências no mesmo fluxo, sem precisar fechar o
+ * dialog, ir ao relatório lote, aplicar, e voltar a confirmar.
+ *
+ * MUDANÇAS (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`):
+ * - Estados: `confirmAiState` (idle|loading|error|{resultados}) + `confirmAiChecked` (Set<string>).
+ * - `conciliarSelecionadas` (que abre o dialog): dispara `analisarLoteSugestoesComIA` em background
+ *   imediatamente ao abrir o dialog — sem bloquear a abertura. O dialog já aparece com os pares
+ *   e um banner "Verificando classificações com IA…" (violeta). Quando a análise termina (1-2s),
+ *   a seção atualiza automaticamente com o resultado.
+ * - `aplicarConfirmCorrecoes`: agrupa as correções marcadas por entryId e aplica via
+ *   `updateEntryClassificacao`, limpa as sugestões aplicadas do estado sem fechar o dialog.
+ *   Usuário pode então revisar o que sobrou e clicar "Confirmar conciliação".
+ * - `onOpenChange` do AlertDialog: reseta `confirmAiState` + `confirmAiChecked` ao fechar.
+ * - Seção IA no corpo do AlertDialog (entre a lista de pares e o footer):
+ *   * Loading: banner violeta "Verificando classificações com IA…" (spinner).
+ *   * Error: banner vermelho discreto (não bloqueia confirmação).
+ *   * Tudo OK: banner verde "IA verificou N classificações — tudo OK" (CheckCircle).
+ *   * Com divergências:
+ *     - Header âmbar com contagem + link "Marcar todas" / "Desmarcar todas".
+ *     - Lista scrollável (max-h-48) de pares com problemas: extrato→ERP + sugestões
+ *       com checkboxes (campo riscado → sugerido em violeta, motivo).
+ *     - Botão "Aplicar N correções antes de confirmar" (âmbar) — aplica sem fechar o dialog.
+ *
  * Rev. 3403 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · BOTÃO "ANALISAR TODAS COM IA" +
  * RELATÓRIO DE CLASSIFICAÇÃO EM LOTE + NOMES PADRONIZADOS. BACKEND ADITIVO + FRONT ·
  * ZERO SCHEMA/ALTER/DROP/DELETE.**

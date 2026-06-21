@@ -189,6 +189,10 @@ export default function FinanceiroConciliacao() {
   const [batchApplying, setBatchApplying] = useState(false);
   const [batchApplyProgress, setBatchApplyProgress] = useState<{ done: number; total: number } | null>(null);
   const [batchShowOnlyProblems, setBatchShowOnlyProblems] = useState(true);
+  // Rev. 3404 — AI inline no dialog "Confirmar conciliação?"
+  type ConfirmAiState = "idle" | "loading" | "error" | { resultados: BatchResult[] };
+  const [confirmAiState, setConfirmAiState] = useState<ConfirmAiState>("idle");
+  const [confirmAiChecked, setConfirmAiChecked] = useState<Set<string>>(new Set());
   const fecharDetalhe = () => { setDetalheEntryId(null); setDetalheExtrato(null); setDetEditMode(false); setDetEditForm(null); setAiAnalise(null); setAiCheckeds(new Set()); };
   // Rev. 3266 — diálogo de CONFERÊNCIA da identificação por IA (texto roxo clicável).
   // Guarda a linha do extrato (com os campos demo* já vindos do getConciliacaoReport) p/
@@ -1336,6 +1340,37 @@ export default function FinanceiroConciliacao() {
     setBatchApplyChecked(new Set());
     toast({ title: `${done} lançamento(s) corrigido(s) com sucesso.` });
   };
+  // Rev. 3404 — Aplicar correções inline no dialog "Confirmar conciliação?"
+  const aplicarConfirmCorrecoes = async () => {
+    if (typeof confirmAiState !== "object") return;
+    const byEntry: Record<number, any> = {};
+    for (const key of confirmAiChecked) {
+      const [slidStr, idxStr] = key.split("-");
+      const r = (confirmAiState as any).resultados.find((x: any) => x.statementLineId === Number(slidStr));
+      if (!r) continue;
+      const sg = r.sugestoes[Number(idxStr)];
+      if (!sg) continue;
+      if (!byEntry[r.entryId]) byEntry[r.entryId] = { patch: { id: r.entryId, companyId }, entryId: r.entryId };
+      const p = byEntry[r.entryId].patch;
+      if (sg.campo === "fornecedorNome") p.fornecedorNome = sg.sugestao;
+      else if (sg.campo === "contaId" && sg.contaIdSugerido) { p.contaId = sg.contaIdSugerido; p.contaNome = sg.contaNomeSugerida || sg.sugestao; }
+      else if (sg.campo === "descricao") p.descricao = sg.sugestao;
+    }
+    const entradas = Object.values(byEntry);
+    if (!entradas.length) return;
+    for (const { patch } of entradas) {
+      try { await updateEntryClassif.mutateAsync(patch); } catch { /* continua */ }
+    }
+    toast({ title: `${entradas.length} lançamento(s) corrigido(s).` });
+    // Limpa as sugestões aplicadas do estado de confirmação
+    const applied = new Set(confirmAiChecked);
+    const updated = (confirmAiState as any).resultados.map((r: any) => ({
+      ...r,
+      sugestoes: r.sugestoes.filter((_: any, i: number) => !applied.has(`${r.statementLineId}-${i}`)),
+    }));
+    setConfirmAiState({ resultados: updated });
+    setConfirmAiChecked(new Set());
+  };
   const iniciarEdicaoEntry = () => {
     if (!detEntry) return;
     setDetEditForm({
@@ -1404,7 +1439,33 @@ export default function FinanceiroConciliacao() {
   // "Confirmar conciliação". Frontend-only (o backend já era query-only p/ sugerir).
   const conciliarSelecionadas = () => {
     if (selSug.size === 0) { toast({ title: "Selecione ao menos uma sugestão", variant: "destructive" }); return; }
+    setConfirmAiState("loading");
+    setConfirmAiChecked(new Set());
     setConfirmConciliar(true);
+    // Rev. 3404 — dispara análise IA dos pares selecionados em background (sem bloquear o dialog)
+    const itensSel = sugestoes.filter((s: any) => selSug.has(s.statementLineId));
+    if (itensSel.length > 0) {
+      analisarLoteMut.mutateAsync({
+        companyId,
+        itens: itensSel.map((s: any) => ({
+          statementLineId: s.statementLineId,
+          entryId: s.entryId,
+          extratoDescricao: s.extratoDescricao ?? "",
+          extratoData: s.extratoData ?? undefined,
+          extratoValor: s.extratoValor ?? undefined,
+        })),
+      }).then((res: any) => {
+        const resultados = res.resultados ?? [];
+        setConfirmAiState({ resultados });
+        const preChecked = new Set<string>();
+        for (const r of resultados) {
+          r.sugestoes.forEach((_: any, i: number) => preChecked.add(`${r.statementLineId}-${i}`));
+        }
+        setConfirmAiChecked(preChecked);
+      }).catch(() => setConfirmAiState("error"));
+    } else {
+      setConfirmAiState("idle");
+    }
   };
   const confirmarConciliacao = () => {
     if (conciliarSugMut.isPending) return; // blindagem contra clique duplo
@@ -4586,7 +4647,7 @@ export default function FinanceiroConciliacao() {
         {/* Rev. 3201 — Confirmação OBRIGATÓRIA da conciliação: a sugestão automática é
             apenas sugestiva; o usuário revisa cada par (extrato → lançamento + valores)
             e só então confirma. Nada é gravado sem este passo. */}
-        <AlertDialog open={confirmConciliar} onOpenChange={(o: boolean) => { if (!o && !conciliarSugMut.isPending) setConfirmConciliar(false); }}>
+        <AlertDialog open={confirmConciliar} onOpenChange={(o: boolean) => { if (!o && !conciliarSugMut.isPending) { setConfirmConciliar(false); setConfirmAiState("idle"); setConfirmAiChecked(new Set()); } }}>
           <AlertDialogContent className="max-w-2xl p-0 gap-0 overflow-hidden">
             <AlertDialogHeader className="space-y-0 text-left bg-gradient-to-r from-[#1B2A4A] to-[#2c3f63] px-6 py-5">
               <div className="flex items-start gap-3">
@@ -4630,6 +4691,92 @@ export default function FinanceiroConciliacao() {
                 ))}
               </div>
             </div>
+            {/* Rev. 3404 — Seção de análise IA inline no dialog de confirmação */}
+            {confirmAiState === "loading" && (
+              <div className="px-6 py-2.5 bg-violet-50 border-t flex items-center gap-2 text-xs text-violet-700">
+                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                Verificando classificações com IA…
+              </div>
+            )}
+            {confirmAiState === "error" && (
+              <div className="px-6 py-2 bg-red-50 border-t text-xs text-red-600 flex items-center gap-1.5">
+                <span className="font-medium">IA indisponível</span> — verifique as classificações manualmente se necessário.
+              </div>
+            )}
+            {typeof confirmAiState === "object" && (() => {
+              const resultados = (confirmAiState as any).resultados as BatchResult[];
+              const withProbs = resultados.filter(r => r.sugestoes.length > 0);
+              const okCount = resultados.filter(r => r.sugestoes.length === 0).length;
+              const checkedCount = confirmAiChecked.size;
+              const CAMPO_LABEL: Record<string, string> = { fornecedorNome: "Nome", contaId: "Categoria", descricao: "Descrição" };
+              const toggleAllConf = () => {
+                if (confirmAiChecked.size > 0) { setConfirmAiChecked(new Set()); return; }
+                const all = new Set<string>();
+                for (const r of withProbs) r.sugestoes.forEach((_: any, i: number) => all.add(`${r.statementLineId}-${i}`));
+                setConfirmAiChecked(all);
+              };
+              if (withProbs.length === 0) {
+                return (
+                  <div className="px-6 py-2.5 bg-emerald-50 border-t text-xs text-emerald-700 flex items-center gap-2">
+                    <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>IA verificou {resultados.length} classificação(ões) — <strong>tudo OK</strong></span>
+                    {okCount > 0 && <span className="text-emerald-600 ml-auto">{okCount} pares</span>}
+                  </div>
+                );
+              }
+              return (
+                <div className="border-t">
+                  <div className="px-6 py-2 bg-amber-50 flex items-center justify-between gap-2">
+                    <span className="text-xs text-amber-800 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 shrink-0 text-amber-600" />
+                      <strong>{withProbs.length}</strong> classificação(ões) a revisar
+                      {okCount > 0 && <span className="text-amber-600 font-normal">· {okCount} OK</span>}
+                    </span>
+                    <button className="text-[11px] text-amber-700 underline underline-offset-2 shrink-0" onClick={toggleAllConf}>
+                      {checkedCount > 0 ? "Desmarcar todas" : "Marcar todas"}
+                    </button>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto divide-y bg-amber-50/30">
+                    {withProbs.map((r: BatchResult) => {
+                      const sug = sugSelecionadas.find((s: any) => s.statementLineId === r.statementLineId);
+                      return (
+                        <div key={r.statementLineId} className="px-6 py-2.5">
+                          <p className="text-[11px] text-gray-500 mb-1.5 truncate" title={sug?.extratoDescricao ?? ""}>{sug?.extratoDescricao ?? "—"} <span className="text-gray-400">→ {sug?.entryFornecedor || sug?.entryDescricao || "—"}</span></p>
+                          {r.sugestoes.map((sg: AiSugestao, idx: number) => {
+                            const key = `${r.statementLineId}-${idx}`;
+                            const ck = confirmAiChecked.has(key);
+                            return (
+                              <label key={key} className="flex items-start gap-2 mt-1 cursor-pointer group">
+                                <input type="checkbox" checked={ck} onChange={e => {
+                                  const next = new Set(confirmAiChecked);
+                                  e.target.checked ? next.add(key) : next.delete(key);
+                                  setConfirmAiChecked(next);
+                                }} className="mt-0.5 accent-violet-600 shrink-0" />
+                                <span className="text-[11px] leading-snug">
+                                  <span className="text-[9px] font-semibold uppercase tracking-wide text-gray-400 mr-1">{CAMPO_LABEL[sg.campo] ?? sg.campo}</span>
+                                  <span className="line-through text-gray-400">{sg.valorAtual || "—"}</span>
+                                  <span className="text-gray-400 mx-1">→</span>
+                                  <span className="font-semibold text-violet-800">{sg.campo === "contaId" ? (sg.contaNomeSugerida || sg.sugestao) : sg.sugestao}</span>
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {checkedCount > 0 && (
+                    <div className="px-6 py-2 border-t bg-amber-50 flex justify-end">
+                      <Button size="sm" onClick={aplicarConfirmCorrecoes}
+                        className="h-7 text-xs bg-amber-500 hover:bg-amber-600 text-white border-amber-500">
+                        <CheckCircle className="w-3.5 h-3.5 mr-1" />
+                        Aplicar {checkedCount} correção(ões) antes de confirmar
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             <AlertDialogFooter className="border-t bg-gray-50 px-6 py-4">
               <AlertDialogCancel disabled={conciliarSugMut.isPending}>Cancelar</AlertDialogCancel>
               <AlertDialogAction
