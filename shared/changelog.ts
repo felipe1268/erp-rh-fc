@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3448 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SUGESTÕES AUTOMÁTICAS — FILTRO DE JANELA
+ * DE DATA NOS LANÇAMENTOS DO ERP. BACKEND ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * PROBLEMA: a query de lançamentos elegíveis para sugestão não tinha filtro de data,
+ * buscando TODOS os lançamentos não-conciliados independente do mês. Com tolerância=31 dias
+ * (padrão "mês"), um lançamento de 16/12/2025 entrava como candidato para extrato de
+ * 06/01/2026 (diferença=21d < tol=31). Resultado: sugestões com lançamentos de outros meses
+ * apareciam no painel, gerando confusão.
+ *
+ * SOLUÇÃO — `ENTRY_BUFFER = 7 dias` fixo:
+ * Adicionada condição no WHERE da query de entries:
+ * ```sql
+ * COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia)
+ *   BETWEEN $dataInicio::date - 7 AND $dataFim::date + 7
+ * ```
+ * O buffer de ±7 dias cobre viradas de mês legítimas (ex.: pagamento 28/12 que só aparece
+ * no extrato em 04/01). O `tol` configurado pelo usuário continua controlando apenas o δ
+ * permitido em cada par extrato↔lançamento — não mais a janela de elegibilidade dos entries.
+ * Com Jan/2026 e buffer=7: entries elegíveis = 25/12 a 07/02.
+ * Dec-16 e Dec-23 ficam excluídos (eram os casos reportados).
+ *
+ * Arquivos: `server/routers/financial.ts` (`sugerirConciliacao`).
+ *
  * Rev. 3447 — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · BOTÃO "IGNORAR" POR LINHA DE SUGESTÃO
  * AUTOMÁTICA — LINHA RETORNA PARA "NO EXTRATO, SEM LANÇAMENTO".
  * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**

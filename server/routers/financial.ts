@@ -6710,6 +6710,29 @@ export const financialRouter = router({
     if (linhas.length === 0) return { sugestoes: [], semMatch: [], totalLinhas: 0 };
 
     // Lançamentos elegíveis: não conciliados, não cancelados, da conta (ou sem conta).
+    // Rev. 3448 — janela de data nos entries: período analisado ±7 dias de buffer (cobre virada
+    // de mês). Sem esse filtro, com tolerância=31 dias, entries de dezembro apareciam como
+    // candidatos para extrato de janeiro (ex.: 06/01 - 21d = 16/12 < tol=31). O ENTRY_BUFFER
+    // de 7 dias é FIXO e independente da tolerância configurada pelo usuário — essa tolerância
+    // continua controlando apenas o δ permitido em cada par extrato↔lançamento.
+    const ENTRY_BUFFER = 7;
+    const entConds: string[] = [
+      `e.company_id=$1`,
+      `COALESCE(e.conciliado,0)=0`,
+      `e.status <> 'cancelado'`,
+      sqlNotProjecao("e.origem_modulo"),
+      `(e.conta_bancaria_id=$2 OR e.conta_bancaria_id IS NULL)`,
+    ];
+    const entVals: any[] = [input.companyId, input.contaBancariaId];
+    let ei = 3;
+    if (input.dataInicio) {
+      entConds.push(`COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) >= $${ei++}::date - ${ENTRY_BUFFER}`);
+      entVals.push(input.dataInicio);
+    }
+    if (input.dataFim) {
+      entConds.push(`COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) <= $${ei++}::date + ${ENTRY_BUFFER}`);
+      entVals.push(input.dataFim);
+    }
     const entRes = await dbExecute(db,
       `SELECT e.id, e.tipo, e.valor_previsto AS "valorPrevisto", e.valor_realizado AS "valorRealizado",
               e.data_competencia AS "dataCompetencia", e.data_vencimento AS "dataVencimento",
@@ -6719,10 +6742,8 @@ export const financialRouter = router({
               e.comprovante_documento AS "comprovanteDocumento",
               e.comprovante_txid AS "comprovanteTxid"
        FROM financial_entries e
-       WHERE e.company_id=$1 AND COALESCE(e.conciliado,0)=0 AND e.status <> 'cancelado'
-         AND ${sqlNotProjecao("e.origem_modulo")}
-         AND (e.conta_bancaria_id=$2 OR e.conta_bancaria_id IS NULL)`,
-      [input.companyId, input.contaBancariaId]);
+       WHERE ${entConds.join(" AND ")}`,
+      entVals);
     const entries = rows(entRes) as any[];
 
     // Controle de Cheques — FONTE DE IDENTIFICAÇÃO p/ as linhas anônimas do extrato

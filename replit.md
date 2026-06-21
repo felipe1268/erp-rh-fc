@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3448** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SUGESTÕES AUTOMÁTICAS — FILTRO DE JANELA DE DATA NOS LANÇAMENTOS DO ERP. BACKEND ADITIVO · ZERO SCHEMA/ALTER/DROP/DELETE.** Query de entries da `sugerirConciliacao` ganhara filtro `COALESCE(data_pagamento, data_vencimento, data_competencia) BETWEEN dataInicio-7 AND dataFim+7`. Buffer ±7 dias cobre viradas de mês legítimas; a tolerância do usuário continua controlando apenas o δ por par. Resultado: lançamentos de dez/2025 não aparecem mais como candidatos para extrato de jan/2026. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3447** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · BOTÃO "IGNORAR" POR LINHA DE SUGESTÃO AUTOMÁTICA — LINHA RETORNA PARA "NO EXTRATO, SEM LANÇAMENTO". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Botão "✕ ignorar" adicionado ao final de cada linha das Sugestões Automáticas. Ao clicar: linha some do painel de sugestões (estado local `sugDescartadas`) e aparece imediatamente na tabela "No extrato, sem lançamento" (já constava em `repExt`, que é independente). Toast confirma. "Reanalisar" reseta as descartadas junto com os demais estados. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3446** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CRIAR CATEGORIA E CENTRO DE CUSTO INLINE NO FORM "LANÇAR NO ERP". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Botões "+ Nova categoria" e "+ Novo centro de custo" adicionados ao lado dos respectivos labels. Dialogs inline (espelho do "+ Nova obra"): categoria usa `financial.createAccount` com `escopo="categoria"` + tipo pré-preenchido pela direção da transação; centro de custo usa `financial.createCostCenter` tipo="Operacional". Refetch exposto nas queries lancAccounts/lancCostCenters. Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3446** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CRIAR CATEGORIA E CENTRO DE CUSTO INLINE NO FORM "LANÇAR NO ERP". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3445** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · SEÇÃO "SEM CONTA" NO CAIXA INTERNO + VÍNCULO DE CONTA AO CONCILIAR. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3443** — **CONCILIAÇÃO BANCÁRIA / LANÇAR NO ERP · FORMA DE PAGAMENTO AUTO-DETECTADA DO TEXTO DO EXTRATO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3442** — **COMPRAS / OC + COTAÇÃO · FORMA DE PAGAMENTO PRÉ-PREENCHIDA DO CICLO DO FORNECEDOR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3441** — **CONCILIAÇÃO BANCÁRIA / PANORAMA · VARREDURA DE OC / OS / LOCAÇÃO POR MÊS. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 
 ### REGRA DE OURO — Cabeçalho de documentos institucionais FC (Rev. 2106+)
