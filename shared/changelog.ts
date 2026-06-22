@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3491 — **CATEGORIAS FINANCEIRAS · DIAGNÓSTICO E AJUSTE COMPLETO. NEON · ZERO ALTER/DROP.**
+ * 18 categorias corrigidas (conta_pai_id errado/nulo):
+ *   ACORDO PREFEITURAS→4.3, APLICAÇÕES FINANCEIRAS→7.3 Invest, AQUISIÇÃO EQUIPAMENTOS→3.3,
+ *   COMISSÕES ADM→5.1 (estava em 4.7.1), CONSIGNADO→7.2, CUSTO DE OBRA→3 CDO (estava em 3.9!),
+ *   DÍVIDAS TRIBUTÁRIAS→9.1 DAS (estava em 2.1!), EMPRÉSTIMOS→7.1, ESTORNO→1.2,
+ *   FINANCIAMENTOS→7.1, MONITORAMENTO VEICULAR→5.7, PENSÃO ALIMENTÍCIA→3.1.1,
+ *   PENSÃO ALIM. FÉRIAS→3.1.2, RETIRADA SÓCIOS→4.1, TÍTULO CAPITALIZ.→7.2,
+ *   VALE ADIANTAMENTO→4.7.4, VALE ALIMENTAÇÃO OBRA→3.1.4 (estava em 4.7.4 adm!),
+ *   CELULAR CORPORATIVO→4.12.
+ * 1 inativação: TRANSFERÊNCIA BANCÁRIA (não é uma categoria válida).
+ * 2 correções no plano: FERRAMENTAS E CONSUMÍVEIS pai→3.2, CUSTAS JUDICIAIS pai→6.
+ * 11 novas categorias criadas (contas do plano sem cobertura):
+ *   AUTO-0102 ELÉTRICA E HIDRÁULICA - OBRA (3.2.3),
+ *   AUTO-0103 DEVOLUÇÃO / ESTORNO DE COMPRAS (3.2.5),
+ *   AUTO-0104 COMBUSTÍVEL - EQUIPAMENTOS (3.3.2),
+ *   AUTO-0105 SEGURO DE OBRA (3.7),
+ *   AUTO-0106 SEGURO EMPRESARIAL (4.5),
+ *   AUTO-0107 SEGURO DE VEÍCULOS (5.10),
+ *   AUTO-0108 FERRAMENTAS E CONSUMÍVEIS - OBRA (3.2.4),
+ *   AUTO-0109 HOSPEDAGEM - VIAGENS (5.9),
+ *   AUTO-0110 TOPOGRAFIA - OBRA (3.11),
+ *   AUTO-0111 CUSTAS PROCESSUAIS (6.3),
+ *   AUTO-0112 IRPJ - IMPOSTO RESULTADO (9.2),
+ *   AUTO-0113 CSLL - IMPOSTO RESULTADO (9.3).
+ *
  * Rev. 3490 — **PLANO DE CONTAS · MODAL SCROLL CORRIGIDO NO MOBILE/TABLET. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * DialogContent virou flex-col + overflow-hidden; corpo usa flex-1 overflow-y-auto (rola);
  * footer usa shrink-0 (fixo no rodapé — nunca sai da tela); altura 92svh (viewport dinâmico).
