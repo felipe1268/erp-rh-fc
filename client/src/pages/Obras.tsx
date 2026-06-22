@@ -2033,6 +2033,55 @@ export default function Obras() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Rev. 3455 — AlertDialogs (substituem window.confirm) */}
+      <AlertDialog open={confirmDeleteId !== null} onOpenChange={o => { if (!o) setConfirmDeleteId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir obra</AlertDialogTitle>
+            <AlertDialogDescription>Tem certeza que deseja excluir esta obra? Esta ação não pode ser desfeita.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmDeleteId(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { if (confirmDeleteId != null) deleteMut.mutate({ id: confirmDeleteId }); setConfirmDeleteId(null); }}>
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmRemoveSnId !== null} onOpenChange={o => { if (!o) setConfirmRemoveSnId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Liberar SN</AlertDialogTitle>
+            <AlertDialogDescription>Deseja liberar este SN? Ele ficará disponível para outras obras.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmRemoveSnId(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { if (confirmRemoveSnId != null) removeSnMut.mutate({ id: confirmRemoveSnId }); setConfirmRemoveSnId(null); }}>
+              Liberar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmMesclarOpen} onOpenChange={o => { if (!o) setConfirmMesclarOpen(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Mesclagem</AlertDialogTitle>
+            <AlertDialogDescription>
+              {mesclarDialog.sourceObra && <>Mesclar <strong>{mesclarDialog.sourceObra.nome}</strong> (ID {mesclarDialog.sourceObra.id}) → obra destino ID {mesclarTargetId}?<br /><br />Todos os registros de ponto serão migrados e a obra de origem será excluída. <strong>Esta ação não pode ser desfeita.</strong></>}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmMesclarOpen(false)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={() => { setConfirmMesclarOpen(false); if (mesclarDialog.sourceObra && mesclarTargetId) mesclarMut.mutate({ sourceId: mesclarDialog.sourceObra.id, targetId: mesclarTargetId }); }}>
+              Confirmar Mesclagem
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }
@@ -2216,56 +2265,6 @@ function ConvencaoSection({ companyId, obraId, usarMatriz, convencaoId, onChange
           </div>
         )}
       </div>
-
-      {/* Rev. 3455 — AlertDialogs (substituem window.confirm) */}
-      <AlertDialog open={confirmDeleteId !== null} onOpenChange={o => { if (!o) setConfirmDeleteId(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir obra</AlertDialogTitle>
-            <AlertDialogDescription>Tem certeza que deseja excluir esta obra? Esta ação não pode ser desfeita.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setConfirmDeleteId(null)}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => { if (confirmDeleteId != null) deleteMut.mutate({ id: confirmDeleteId }); setConfirmDeleteId(null); }}>
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={confirmRemoveSnId !== null} onOpenChange={o => { if (!o) setConfirmRemoveSnId(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Liberar SN</AlertDialogTitle>
-            <AlertDialogDescription>Deseja liberar este SN? Ele ficará disponível para outras obras.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setConfirmRemoveSnId(null)}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { if (confirmRemoveSnId != null) removeSnMut.mutate({ id: confirmRemoveSnId }); setConfirmRemoveSnId(null); }}>
-              Liberar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={confirmMesclarOpen} onOpenChange={o => { if (!o) setConfirmMesclarOpen(false); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar Mesclagem</AlertDialogTitle>
-            <AlertDialogDescription>
-              {mesclarDialog.sourceObra && <>Mesclar <strong>{mesclarDialog.sourceObra.nome}</strong> (ID {mesclarDialog.sourceObra.id}) → obra destino ID {mesclarTargetId}?<br /><br />Todos os registros de ponto serão migrados e a obra de origem será excluída. <strong>Esta ação não pode ser desfeita.</strong></>}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setConfirmMesclarOpen(false)}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction className="bg-amber-600 hover:bg-amber-700 text-white"
-              onClick={() => { setConfirmMesclarOpen(false); if (mesclarDialog.sourceObra && mesclarTargetId) mesclarMut.mutate({ sourceId: mesclarDialog.sourceObra.id, targetId: mesclarTargetId }); }}>
-              Confirmar Mesclagem
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3470 — **OBRAS · BUGFIX CRÍTICO — AlertDialogs (confirmDeleteId / confirmRemoveSnId /
+ * confirmMesclarOpen) ESTAVAM DENTRO DO RETURN DE ConvencaoSection EM VEZ DO RETURN DE
+ * Obras(). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * CAUSA: na Rev. 3456 (substituição de window.confirm por AlertDialog), os 3 AlertDialogs
+ * foram acidentalmente colocados dentro do return do componente auxiliar `ConvencaoSection`
+ * (linha 2042+), que é uma função separada sem acesso ao estado do componente pai `Obras()`.
+ * Resultado: ReferenceError "Can't find variable: confirmDeleteId" ao abrir /obras.
+ *
+ * FIX: movidos os 3 AlertDialogs para dentro do return de `Obras()`, logo antes de
+ * `</DashboardLayout>`. ConvencaoSection agora fecha corretamente sem referências externas.
+ *
  * Rev. 3469 — **CONCILIAÇÃO BANCÁRIA · CAMPO OBRA NO DIALOG DE EDIÇÃO — TEXTO LIVRE
  * DA PLANILHA (obraNome) SEMPRE VISÍVEL NO MODO EDIÇÃO. 100% FRONTEND · ZERO BACKEND.**
  * "📋 Da planilha: X" aparece SEMPRE abaixo do select quando obraNome existe — mesmo

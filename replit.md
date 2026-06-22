@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3470** — **OBRAS · BUGFIX CRÍTICO — AlertDialogs (confirmDeleteId / confirmRemoveSnId / confirmMesclarOpen) MOVIDOS DE ConvencaoSection PARA O RETURN DE Obras(). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** ReferenceError "Can't find variable: confirmDeleteId" ao abrir /obras. Causa: Rev. 3456 colocou os dialogs no componente auxiliar sem acesso ao estado do pai. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3469** — **CONCILIAÇÃO BANCÁRIA · CAMPO OBRA NO DIALOG DE EDIÇÃO — "📋 Da planilha: X" SEMPRE VISÍVEL NO MODO EDIÇÃO (NÃO SÓ QUANDO obraId É NULL). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Texto cinza neutro exibido abaixo do select sempre que obraNome existe, inclusive após auto-match. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3468** — **CONCILIAÇÃO BANCÁRIA · DIALOG DE EDIÇÃO — CAMPO OBRA: AUTO-MATCH CASE-INSENSITIVE + HINT QUANDO NÃO CASA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Auto-match em `obrasOpts`; hint âmbar se sem match. Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3468** — **CONCILIAÇÃO BANCÁRIA · DIALOG DE EDIÇÃO — CAMPO OBRA: AUTO-MATCH CASE-INSENSITIVE + HINT QUANDO NÃO CASA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Auto-match em `obrasOpts`; hint âmbar se sem match. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3466** — **CONCILIAÇÃO BANCÁRIA · CAMPO "CONCILIADO" EXIBE QUEM CONCILIOU + DATA/HORA BR (DD/MM/AAAA HH:MM). BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** 3 colunas novas via SyncSchema+ (`conciliado_em`, `conciliado_por_id`, `conciliado_por_nome`); 7 writers atualizados; UI exibe "Sim · DD/MM HH:MM" + "por {nome}" em verde. Detalhe: `shared/changelog.ts`.
 
