@@ -1129,19 +1129,6 @@ export default function FinanceiroConciliacao() {
     if (filterConcTipo === "saida")   return repConc.filter((r: any) => Number(r.valor) < 0);
     return repConc;
   })();
-  // Rev. 3533 — IDs de linhas do extrato com possível duplicidade (mesmo data+valor aparece
-  // mais de uma vez na lista "sem lançamento"). Usado p/ exibir badge âmbar de alerta.
-  const possivelDuplicataIds = useMemo(() => {
-    const cnt = new Map<string, number[]>();
-    for (const r of repExt) {
-      const k = `${r.data}|${Number(r.valor).toFixed(2)}`;
-      if (!cnt.has(k)) cnt.set(k, []);
-      cnt.get(k)!.push(Number(r.id));
-    }
-    const ids = new Set<number>();
-    for (const [, arr] of cnt) { if (arr.length > 1) arr.forEach(id => ids.add(id)); }
-    return ids;
-  }, [repExt]);
   // Rev. 3188 — lançamentos SEM conta bancária definida vêm num bloco próprio e NÃO entram
   // no número da conta (antes apareciam/contavam em todas as contas, inflando "ERP sem extrato").
   const repSemConta: any[] = report?.lancamentosSemConta ?? [];
@@ -1522,9 +1509,6 @@ export default function FinanceiroConciliacao() {
               ? <span className="px-1.5 py-px rounded-full text-[10px] font-medium bg-indigo-100 text-indigo-700">Mov. interna</span>
               : <span className={`px-1.5 py-px rounded-full text-[10px] font-medium ${isEntrada ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-600"}`}>{isEntrada ? "Entrada" : "Saída"}</span>
             }
-            {possivelDuplicataIds.has(Number(s.id)) && (
-              <span className="px-1.5 py-px rounded-full text-[10px] font-medium bg-amber-100 text-amber-700" title="Há múltiplos lançamentos com mesmo valor e data neste extrato — verifique se são transações distintas (ex.: títulos de capitalização)">⚠ Duplicata</span>
-            )}
           </p>
           <p className="text-sm font-medium text-gray-700 truncate">{s.descricao || "—"}</p>
           {s.chequeFornecedor && (
