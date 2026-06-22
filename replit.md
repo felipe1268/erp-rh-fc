@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3509** — **CONCILIAÇÃO · BUGFIX MOVIMENTAÇÃO INTERNA: ITEM PERMANECIA NA LISTA APÓS CONFIRMAR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `onSuccess` agora adiciona `lineId` ao `dismissedStmtIds` + chama `refetchReport()`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3508** — **PLANO DE CONTAS · COLAPSO/EXPANSÃO TODOS OS NÍVEIS + FECHAR/EXPANDIR TUDO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Botões "Fechar tudo"/"Expandir tudo" no header; chevron em qualquer nível com filhos; visual recolhido=destaque cinza. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3507** — **PLANO DE CONTAS · COLAPSO/EXPANSÃO DE GRUPOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Chevron clicável em toda conta com filhos; `collapsedIds` + `visibleFiltered`; busca ativa suspende o colapso. Detalhe: `shared/changelog.ts`.

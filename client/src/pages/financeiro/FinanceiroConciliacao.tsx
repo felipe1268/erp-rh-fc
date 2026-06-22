@@ -862,10 +862,11 @@ export default function FinanceiroConciliacao() {
   // Rev. 3392 — Confirmar movimentação interna: cria lançamento tipo "transferencia"/
   // natureza "interno" + concilia a linha do extrato em 1 clique.
   const naturezaInternaMut = (trpc as any).financial.confirmarMovimentacaoInterna.useMutation({
-    onSuccess: () => {
+    onSuccess: (_: any, variables: any) => {
       toast({ title: "Lançado como movimentação interna", description: "Linha conciliada. O lançamento ficará catalogado como transferência interna do grupo." });
+      if (variables?.lineId) setDismissedStmtIds((prev: Set<number>) => { const n = new Set(prev); n.add(Number(variables.lineId)); return n; });
       setLancStatement(null);
-      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true);
+      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true); refetchReport();
     },
     onError: (e: any) => toast({ title: "Não foi possível lançar como interna", description: e?.message ?? "Tente novamente.", variant: "destructive" }),
   });

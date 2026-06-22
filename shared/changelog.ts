@@ -1,6 +1,13 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3509 — **CONCILIAÇÃO · BUGFIX MOVIMENTAÇÃO INTERNA: ITEM PERMANECIA NA LISTA APÓS CONFIRMAR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * `naturezaInternaMut.onSuccess` não adicionava `lineId` ao `dismissedStmtIds` nem chamava
+ * `refetchReport()`. Resultado: item ficava em "No extrato, sem lançamento"; segundo clique
+ * retornava "Esta linha já está conciliada" (backend correto, frontend desatualizado).
+ * Fix: `onSuccess(_,variables)` adiciona `variables.lineId` ao `dismissedStmtIds` +
+ * chama `refetchReport()` igual às demais mutations de conciliação. Arquivo: `FinanceiroConciliacao.tsx`.
+ *
  * Rev. 3508 — **PLANO DE CONTAS · COLAPSO/EXPANSÃO EM TODOS OS NÍVEIS + FECHAR/EXPANDIR TUDO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Extensão da Rev. 3507: chevron clicável em QUALQUER nível que tenha filhos (não só raiz).
  * Botões "Fechar tudo" (colapsa todos os grupos de uma vez) e "Expandir tudo" (limpa
