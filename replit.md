@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3495** — **CATEGORIAS RECEITA · 7 NOVAS AUTO-0123…AUTO-0129 COM CC VINCULADO. NEON · ZERO ALTER/DROP.** Medição de Obra, Aditivo, Consultoria, Receitas Diversas, Rendimento, Juros, Desconto. Os 3 sistemas cobrem receitas e despesas simetricamente. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3494** — **CENTROS DE CUSTO · REFATORAÇÃO + MAPEAMENTO COMPLETO CATEGORIAS↔CC. NEON · ZERO ALTER/DROP.** 6 CCs renomeados; CC-0010 inativado (duplicata); 2 novos (PASSIVOS E DÍVIDAS, JURÍDICO); 106 categorias mapeadas para CCs coerentes com o plano. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3493** — **PLANO DE CONTAS · GRUPO 10 — PASSIVOS E DÍVIDAS. NEON · ZERO ALTER/DROP.** Novo grupo raiz para medir alavancagem: 3 subgrupos (Tributárias, Bancárias, Fornecedores), 8 folhas, 9 categorias AUTO. Categorias existentes redirecionadas. Detalhe: `shared/changelog.ts`.
