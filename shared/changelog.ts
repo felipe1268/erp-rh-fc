@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3519 — **FORNECEDORES · BUGFIX LAYOUT MODAL — BOTÃO "SALVAR ALTERAÇÕES" CORTADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * O footer com `sticky bottom-0` estava dentro do div scrollável (`overflow-y-auto`),
+ * ficando preso ao fundo do scroll em vez do modal — quando o conteúdo cresceu
+ * (seção "Regras especiais por produto"), o botão sumia. Fix: `DialogContent` virou
+ * `flex flex-col`; div scrollável recebeu `flex-1` (sem `maxHeight` inline duplicado);
+ * footer movido para fora do scroll com `shrink-0`. Padrão idêntico ao Rev. 3490
+ * (Plano de Contas). Arquivo: `client/src/pages/compras/Fornecedores.tsx`.
+ *
  * Rev. 3518 — **CHEQUES + LANÇAMENTOS · PADRONIZAÇÃO NOME FANTASIA COMO EXIBIÇÃO PRIMÁRIA NO DROPDOWN DE FORNECEDORES. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Dois dropdowns de busca de fornecedor usavam `razaoSocial || nomeFantasia`
  * (ordem invertida em relação ao restante do app). Corrigido para

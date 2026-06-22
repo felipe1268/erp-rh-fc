@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3518** — **CHEQUES + LANÇAMENTOS · PADRONIZAÇÃO NOME FANTASIA COMO EXIBIÇÃO PRIMÁRIA NO DROPDOWN DE FORNECEDORES. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `nomeFantasia || razaoSocial` nos dois dropdowns de favorecido (FinanceiroCheques + FinanceiroLancamentos). Documentos legais mantêm razaoSocial. Detalhe: `shared/changelog.ts`.
+- **Rev. 3519** — **FORNECEDORES · BUGFIX LAYOUT MODAL — BOTÃO "SALVAR ALTERAÇÕES" CORTADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `DialogContent` → `flex flex-col`; corpo scroll `flex-1`; footer `shrink-0` fora do scroll. Botão sempre visível independente do conteúdo. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3517** — **CONCILIAÇÃO · BUGFIX PARSER EXTRATO PDF CAIXA: LINHA DE CONTINUAÇÃO VAZAVA COMO DESCRIÇÃO DA PRÓXIMA TRANSAÇÃO. 100% BACKEND · ZERO FRONTEND/SCHEMA/ALTER/DROP/DELETE.** `consumed` Set<number> marca a linha `isTimeEff` + continuações logo abaixo; loop de `lead` para ao encontrar linha consumida. Ex.: "ALLUCK" não vaza mais para "DEB PIX CHAVE - ANDERSON BRAGA DA SILVA". Detalhe: `shared/changelog.ts`.
+- **Rev. 3518** — **CHEQUES + LANÇAMENTOS · PADRONIZAÇÃO NOME FANTASIA COMO EXIBIÇÃO PRIMÁRIA NO DROPDOWN DE FORNECEDORES. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `nomeFantasia || razaoSocial` nos dois dropdowns de favorecido (FinanceiroCheques + FinanceiroLancamentos). Documentos legais mantêm razaoSocial. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3511** — **CONCILIAÇÃO · SHEET DE DETALHE AO DUPLO-CLIQUE/DUPLO-TOQUE EM AMBAS AS LISTAS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Duplo-clique em extrato → Sheet lateral (valor, saldo, descrição completa, cheque/fatura/IA/vínculo, ações Lançar/Apagar). Duplo-clique no ERP → abre dialog detalhe existente (👁). Detalhe: `shared/changelog.ts`.
 

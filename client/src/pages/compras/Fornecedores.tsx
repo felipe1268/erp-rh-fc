@@ -923,10 +923,10 @@ export default function Fornecedores() {
 
       {/* Modal de Cadastro/Edição — Tela Paisagem */}
       <Dialog open={modalAberto} onOpenChange={v => !v && fecharModal()}>
-        <DialogContent className="max-w-[95vw] w-[1200px] max-h-[90vh] overflow-hidden p-0 gap-0 [&>[data-slot=dialog-close]]:top-6 [&>[data-slot=dialog-close]]:right-5" resizable={false} showCloseButton={false}>
+        <DialogContent className="max-w-[95vw] w-[1200px] max-h-[90vh] overflow-hidden p-0 gap-0 flex flex-col [&>[data-slot=dialog-close]]:top-6 [&>[data-slot=dialog-close]]:right-5" resizable={false} showCloseButton={false}>
           <DialogHeader className="sr-only"><DialogTitle>{editando ? "Editar Empresa Terceira" : "Cadastro de Empresa Terceira"}</DialogTitle></DialogHeader>
 
-          <div className="overflow-y-auto bg-slate-50" style={{ maxHeight: "90vh" }}>
+          <div className="overflow-y-auto flex-1 bg-slate-50">
             {/* Header com info do fornecedor */}
             <div className="bg-white border-b border-slate-200 px-6 py-5">
               <div className="flex items-center gap-3 mb-4">
@@ -1609,16 +1609,17 @@ export default function Fornecedores() {
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="sticky bottom-0 border-t border-slate-200 bg-white px-6 py-3 flex items-center justify-between">
-              <p className="text-xs text-slate-400">Campos com * são obrigatórios</p>
-              <div className="flex gap-3">
-                <Button variant="outline" onClick={fecharModal}>Cancelar</Button>
-                <Button onClick={salvar} disabled={criarMut.isPending || atualizarMut.isPending} className="bg-blue-600 hover:bg-blue-700 text-white px-6 gap-2">
-                  {(criarMut.isPending || atualizarMut.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                  {editando ? "Salvar Alterações" : "Cadastrar Empresa Terceira"}
-                </Button>
-              </div>
+          </div>
+
+          {/* Footer fixo fora do scroll */}
+          <div className="shrink-0 border-t border-slate-200 bg-white px-6 py-3 flex items-center justify-between">
+            <p className="text-xs text-slate-400">Campos com * são obrigatórios</p>
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={fecharModal}>Cancelar</Button>
+              <Button onClick={salvar} disabled={criarMut.isPending || atualizarMut.isPending} className="bg-blue-600 hover:bg-blue-700 text-white px-6 gap-2">
+                {(criarMut.isPending || atualizarMut.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                {editando ? "Salvar Alterações" : "Cadastrar Empresa Terceira"}
+              </Button>
             </div>
           </div>
         </DialogContent>
