@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3487** — **PLANO DE CONTAS · MODAL "NOVA CONTA" SIMPLIFICADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Campo "Natureza" removido — derivado automático do Tipo. Removidos textos verbosos de Código, Nome e descrição do grupo pai. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3486** — **PLANO DE CONTAS · CONTAS IMP REMOVIDAS: LANÇAMENTOS MIGRADOS + CONTAS RECODIFICADAS. NEON · ZERO ALTER/DROP/DELETE.** 8 IMP com equivalente → lançamentos migrados + ativo=0 (Comissão→5.1, Manut.Veículos→5.7, Pgto Empréstimo→7.1, Transporte→3.5, Assessoria Jur→6.1, Custas→6.2, Marketing/Com.Visual→5.2). 7 IMP recodificadas sem migração (5.9 Hospedagem, 5.10 Seguro Veículos, 4.11 Guias FGTS, 3.11 Topografia, 4.12 Telefone Celular, 5.11 Compra Terreno, 7.3 Invest.Financeiros). Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3485** — **PLANO DE CONTAS · CONTAS IMP-001…IMP-015 RECLASSIFICADAS. UPDATE NO NEON · ZERO ALTER/DROP/DELETE.** Todas tinham lançamentos → não excluídas. Movidas para grupos: Despesas Variáveis (8 contas), Despesas Administrativas (2), Custos de Obra (1), Despesas Financeiras (2), Despesas Jurídicas (2). nivel=2, tipo e natureza corrigidos. Detalhe: `shared/changelog.ts`.

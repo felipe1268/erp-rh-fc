@@ -19,7 +19,7 @@ import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
 import {
   Plus, Search, BookOpen, Pencil, Trash2, Check, ChevronsUpDown,
-  ChevronRight, Layers, Tag, ArrowRight, Info, HelpCircle,
+  ChevronRight, Layers, Tag, ArrowRight, Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -86,6 +86,10 @@ const TIPO_META: Record<string, { color: string; bar: string }> = {
   receita_financeira: { color: "bg-teal-100    text-teal-800    border-teal-200",    bar: "bg-teal-400"    },
   imposto_resultado:  { color: "bg-slate-100   text-slate-700   border-slate-200",   bar: "bg-slate-400"   },
 };
+
+function naturezaFromTipo(tipo: string): string {
+  return (tipo === "receita_bruta" || tipo === "receita_financeira") ? "credora" : "devedora";
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -310,7 +314,7 @@ export default function FinanceiroPlanoDeConta() {
           codigo: suggestNextCode(String(pai.codigo), allCodigos),
           nivel: (Number(pai.nivel) || 1) + 1,
           tipo: pai.tipo,
-          natureza: pai.natureza,
+          natureza: naturezaFromTipo(pai.tipo),
         });
         setDialogOpen(true);
         return;
@@ -350,7 +354,7 @@ export default function FinanceiroPlanoDeConta() {
       codigo: suggestNextCode(String(pai.codigo), allCodigos),
       nivel: (Number(pai.nivel) || 1) + 1,
       tipo: f.id ? f.tipo : pai.tipo,
-      natureza: f.id ? f.natureza : pai.natureza,
+      natureza: f.id ? f.natureza : naturezaFromTipo(pai.tipo),
     }));
   }
 
@@ -369,7 +373,6 @@ export default function FinanceiroPlanoDeConta() {
   }
 
   const paiSelecionado = form.contaPaiId ? eligibleParents.find((c: any) => String(c.id) === form.contaPaiId) : null;
-  const tipoAtual = TIPOS.find(t => t.value === form.tipo);
 
   const countByTipo = useMemo(() => {
     const m: Record<string, number> = {};
@@ -604,11 +607,8 @@ export default function FinanceiroPlanoDeConta() {
               {/* ── Grupo pai ── */}
               <div>
                 <Label className="text-sm font-semibold text-slate-800">
-                  Dentro de qual grupo?
+                  Dentro de qual grupo? <span className="text-slate-400 font-normal text-xs">(opcional — deixe vazio para conta raiz)</span>
                 </Label>
-                <p className="text-[11px] text-slate-500 mt-0.5 mb-2">
-                  Escolha uma conta existente para criar uma <strong>subconta</strong> (ex: "1.1 dentro de 1"), ou deixe em branco para criar um <strong>grupo principal</strong> (nível raiz).
-                </p>
                 <Popover open={paiPopoverOpen} onOpenChange={setPaiPopoverOpen}>
                   <PopoverTrigger asChild>
                     <button
@@ -687,14 +687,11 @@ export default function FinanceiroPlanoDeConta() {
               <div className="grid grid-cols-[140px,1fr] gap-3">
                 <div>
                   <Label className="text-sm font-semibold text-slate-800">Código *</Label>
-                  <p className="text-[11px] text-slate-500 mt-0.5 mb-1.5">
-                    Identificador único. Ex: <code>1</code>, <code>1.1</code>, <code>1.1.2</code>
-                  </p>
                   <Input
+                    className="mt-1.5 font-mono"
                     value={form.codigo}
                     onChange={e => setForm(f => ({ ...f, codigo: e.target.value }))}
                     placeholder={paiSelecionado ? `${paiSelecionado.codigo}.X` : "Ex: 1"}
-                    className="font-mono"
                   />
                   {paiSelecionado && (
                     <p className="text-[10px] text-blue-500 mt-1">Gerado automaticamente — você pode editar.</p>
@@ -702,10 +699,8 @@ export default function FinanceiroPlanoDeConta() {
                 </div>
                 <div>
                   <Label className="text-sm font-semibold text-slate-800">Nome *</Label>
-                  <p className="text-[11px] text-slate-500 mt-0.5 mb-1.5">
-                    Nome descritivo que aparece nos relatórios.
-                  </p>
                   <Input
+                    className="mt-1.5"
                     value={form.nome}
                     onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
                     placeholder="Ex: Receitas de Obras"
@@ -717,11 +712,8 @@ export default function FinanceiroPlanoDeConta() {
               {/* ── Tipo ── */}
               <div>
                 <Label className="text-sm font-semibold text-slate-800">Tipo</Label>
-                <p className="text-[11px] text-slate-500 mt-0.5 mb-1.5">
-                  Classifica a conta no DRE e nos relatórios financeiros.
-                </p>
-                <Select value={form.tipo} onValueChange={v => setForm(f => ({ ...f, tipo: v }))}>
-                  <SelectTrigger>
+                <Select value={form.tipo} onValueChange={v => setForm(f => ({ ...f, tipo: v, natureza: naturezaFromTipo(v) }))}>
+                  <SelectTrigger className="mt-1.5">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -733,37 +725,6 @@ export default function FinanceiroPlanoDeConta() {
                         </div>
                       </SelectItem>
                     ))}
-                  </SelectContent>
-                </Select>
-                {tipoAtual && (
-                  <p className="text-[11px] text-slate-500 mt-1 flex items-start gap-1">
-                    <HelpCircle className="w-3 h-3 mt-0.5 shrink-0 text-slate-400" />
-                    {tipoAtual.desc}
-                  </p>
-                )}
-              </div>
-
-              {/* ── Natureza ── */}
-              <div>
-                <Label className="text-sm font-semibold text-slate-800">Natureza</Label>
-                <p className="text-[11px] text-slate-500 mt-0.5 mb-1.5">
-                  Define como o saldo se comporta: <strong>Credora</strong> = receitas e passivos · <strong>Devedora</strong> = despesas e ativos.
-                </p>
-                <Select value={form.natureza} onValueChange={v => setForm(f => ({ ...f, natureza: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="credora">
-                      <div>
-                        <div className="font-medium">Credora</div>
-                        <div className="text-[11px] text-slate-500">Contas de receita, passivo e patrimônio</div>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="devedora">
-                      <div>
-                        <div className="font-medium">Devedora</div>
-                        <div className="text-[11px] text-slate-500">Contas de despesa, custo e ativo</div>
-                      </div>
-                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>

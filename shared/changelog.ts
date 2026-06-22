@@ -1,6 +1,13 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3487 — **PLANO DE CONTAS · MODAL "NOVA CONTA" SIMPLIFICADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Campo "Natureza" removido do formulário — agora é derivado automaticamente do Tipo
+ *   (receita_bruta/receita_financeira → credora; demais → devedora).
+ * Removidos: hint duplicado abaixo do Tipo, descrições verbose de Código e Nome,
+ *   texto longo em "Dentro de qual grupo?" (substituído por legenda inline curta).
+ * Imports limpos: HelpCircle e tipoAtual removidos.
+ *
  * Rev. 3486 — **PLANO DE CONTAS · CONTAS IMP REMOVIDAS: LANÇAMENTOS MIGRADOS + CONTAS RECODIFICADAS.
  * ZERO FRONTEND · UPDATES NO NEON · ZERO ALTER/DROP/DELETE.**
  * 8 IMP com equivalente na estrutura → lançamentos migrados para a conta correta + ativo=0:
