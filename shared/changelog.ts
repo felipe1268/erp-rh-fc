@@ -1,6 +1,13 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3513 — **CONCILIAÇÃO · SHEET DO EXTRATO REDESENHADO — PADRÃO VISUAL IGUAL AO DIALOG DO ERP. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Cabeçalho azul-escuro (#1B2A4A) com "LINHA DO EXTRATO #id", descrição em branco, valor no canto
+ * direito, saldo colorido, badges de tipo (Entrada/Saída/Mov.interna). Corpo com seções estruturadas
+ * com label maiúsculo: DADOS DO EXTRATO (data, valor, saldo, descrição), CHEQUE, FATURA DE CARTÃO,
+ * IDENTIFICAÇÃO POR IA, VÍNCULO CADASTRADO. Rodapé com botão "Lançar no ERP" azul-escuro + "Apagar".
+ * Arquivo: FinanceiroConciliacao.tsx (Sheet stmtDetailRow).
+ *
  * Rev. 3512 — **CONCILIAÇÃO · BUGFIX FILTRO ENTRADA/SAÍDA NO ERP INVERTIDO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * `repLanView` filtrava por `valor >= 0 / < 0` (lógica do extrato), mas lançamentos do ERP usam
  * `tipo = "receita"/"despesa"` — o valor é sempre positivo. Resultado: "Entrada" mostrava despesas

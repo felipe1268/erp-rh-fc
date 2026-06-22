@@ -7256,7 +7256,7 @@ export default function FinanceiroConciliacao() {
           </div>
         </DialogContent>
       </Dialog>
-    {/* Rev. 3511 — Sheet de detalhe de linha do extrato (duplo-clique / duplo-toque) */}
+    {/* Rev. 3513 — Sheet de detalhe do extrato — padrão visual igual ao dialog do ERP */}
     <Sheet open={!!stmtDetailRow} onOpenChange={(o) => { if (!o) setStmtDetailRow(null); }}>
       <SheetContent side="right" className="w-full sm:max-w-md flex flex-col gap-0 p-0 overflow-y-auto">
         {stmtDetailRow && (() => {
@@ -7264,96 +7264,190 @@ export default function FinanceiroConciliacao() {
           const isEnt = Number(s.valor) >= 0;
           return (
             <>
-              {/* Cabeçalho colorido */}
-              <div className={`px-6 py-5 ${isEnt ? "bg-emerald-50" : "bg-rose-50"}`}>
-                <SheetHeader className="mb-3">
-                  <SheetTitle className={`text-base font-semibold ${isEnt ? "text-emerald-800" : "text-rose-800"}`}>
-                    {isEnt ? "Entrada no extrato" : "Saída no extrato"}
+              {/* Cabeçalho azul-escuro — mesmo padrão do dialog do ERP */}
+              <div className="bg-[#1B2A4A] px-6 pt-8 pb-5 relative">
+                <SheetHeader className="mb-1">
+                  <SheetTitle className="text-xs font-semibold text-blue-300 uppercase tracking-widest">
+                    LINHA DO EXTRATO #{s.id}
                   </SheetTitle>
                 </SheetHeader>
-                <p className={`text-3xl font-bold ${isEnt ? "text-emerald-700" : "text-rose-600"}`}>
-                  {isEnt ? "+" : "−"}{formatBRL(Math.abs(Number(s.valor)))}
+                <p className="text-white text-xl font-bold break-words leading-snug mt-1 pr-24">
+                  {s.descricao || "—"}
                 </p>
-                {s.saldoApos != null && (
-                  <p className={`text-xs mt-1 ${Number(s.saldoApos) < 0 ? "text-red-500" : "text-emerald-600"}`}>
-                    Saldo após: {formatBRL(Number(s.saldoApos))}
-                  </p>
-                )}
-              </div>
-
-              {/* Corpo */}
-              <div className="flex-1 px-6 py-4 space-y-4">
-
-                {/* Data + tipo */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-medium text-gray-500">Data:</span>
-                  <span className="text-sm text-gray-800">{fmtData(s.data)}</span>
+                <p className="absolute top-8 right-6 text-right">
+                  <span className="text-white text-2xl font-bold block">{formatBRL(Math.abs(Number(s.valor)))}</span>
+                  {s.saldoApos != null && (
+                    <span className={`text-xs font-medium block mt-0.5 ${Number(s.saldoApos) < 0 ? "text-red-300" : "text-emerald-300"}`}>
+                      saldo {formatBRL(Number(s.saldoApos))}
+                    </span>
+                  )}
+                </p>
+                <div className="flex items-center gap-2 flex-wrap mt-3">
                   {s.interno
-                    ? <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">Mov. interna</span>
-                    : <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${isEnt ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-600"}`}>{isEnt ? "Entrada" : "Saída"}</span>
+                    ? <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-500 text-white flex items-center gap-1"><ArrowLeftRight className="w-3 h-3" /> Mov. interna</span>
+                    : isEnt
+                      ? <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500 text-white flex items-center gap-1"><ArrowDownCircle className="w-3 h-3" /> Entrada</span>
+                      : <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500 text-white flex items-center gap-1"><ArrowUpCircle className="w-3 h-3" /> Saída</span>
                   }
+                  <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-white/10 text-white">extrato</span>
+                </div>
+              </div>
+
+              {/* Seções */}
+              <div className="flex-1 px-5 py-4 space-y-4 overflow-y-auto">
+
+                {/* DADOS DO EXTRATO */}
+                <div className="rounded-lg border border-gray-200">
+                  <div className="px-4 py-2 border-b border-gray-100 bg-gray-50 rounded-t-lg">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Dados do Extrato</p>
+                  </div>
+                  <div className="px-4 py-3 grid grid-cols-2 gap-x-4 gap-y-3">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Data</p>
+                      <p className="text-sm text-gray-800 mt-0.5">{fmtData(s.data)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Valor</p>
+                      <p className={`text-sm font-semibold mt-0.5 ${isEnt ? "text-emerald-600" : "text-rose-600"}`}>{formatBRL(Math.abs(Number(s.valor)))}</p>
+                    </div>
+                    {s.saldoApos != null && (
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Saldo após</p>
+                        <p className={`text-sm font-semibold mt-0.5 ${Number(s.saldoApos) < 0 ? "text-red-500" : "text-emerald-600"}`}>{formatBRL(Number(s.saldoApos))}</p>
+                      </div>
+                    )}
+                    <div className="col-span-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Descrição completa</p>
+                      <p className="text-sm text-gray-800 mt-0.5 break-words leading-relaxed">{s.descricao || "—"}</p>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Descrição completa */}
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Descrição</p>
-                  <p className="text-sm text-gray-800 break-words leading-relaxed">{s.descricao || "—"}</p>
-                </div>
-
-                {/* Cheque */}
+                {/* CHEQUE */}
                 {s.chequeFornecedor && (
-                  <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 space-y-1">
-                    <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">🪙 Cheque</p>
-                    <p className="text-sm text-gray-800">Nº {s.chequeNumero ?? "—"} · {s.chequeFornecedor}</p>
-                    {s.chequeObraNome && <p className="text-xs text-gray-500">Obra: {s.chequeObraNome}</p>}
-                    {s.chequeNf && <p className="text-xs text-gray-500">NF: {s.chequeNf}</p>}
-                    {s.chequeVencimento && <p className="text-xs text-gray-500">Vencimento: {fmtData(s.chequeVencimento)}</p>}
+                  <div className="rounded-lg border border-amber-200">
+                    <div className="px-4 py-2 border-b border-amber-100 bg-amber-50 rounded-t-lg">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700">🪙 Cheque</p>
+                    </div>
+                    <div className="px-4 py-3 grid grid-cols-2 gap-x-4 gap-y-3">
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Número</p>
+                        <p className="text-sm text-gray-800 mt-0.5">{s.chequeNumero ?? "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Fornecedor</p>
+                        <p className="text-sm text-gray-800 mt-0.5 break-words">{s.chequeFornecedor}</p>
+                      </div>
+                      {s.chequeObraNome && (
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Obra</p>
+                          <p className="text-sm text-gray-800 mt-0.5">{s.chequeObraNome}</p>
+                        </div>
+                      )}
+                      {s.chequeNf && (
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">NF</p>
+                          <p className="text-sm text-gray-800 mt-0.5">{s.chequeNf}</p>
+                        </div>
+                      )}
+                      {s.chequeVencimento && (
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Vencimento</p>
+                          <p className="text-sm text-gray-800 mt-0.5">{fmtData(s.chequeVencimento)}</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
-                {/* Fatura cartão */}
+                {/* FATURA CARTÃO */}
                 {s.faturaId && !s.chequeFornecedor && (
-                  <div className="rounded-lg bg-violet-50 border border-violet-200 px-4 py-3 space-y-1">
-                    <p className="text-xs font-semibold text-violet-700 uppercase tracking-wide">💳 Fatura de cartão</p>
-                    <p className="text-sm text-gray-800">{s.faturaCartao ?? "—"}{s.faturaMesRef ? ` · ${String(s.faturaMesRef).padStart(2,"0")}/${s.faturaAnoRef ?? ""}` : ""}</p>
-                    {s.faturaVencimento && <p className="text-xs text-gray-500">Vencimento: {fmtData(s.faturaVencimento)}</p>}
-                    {s.faturaTotal != null && <p className="text-xs text-gray-500">Total da fatura: {formatBRL(Math.abs(Number(s.faturaTotal)))}</p>}
+                  <div className="rounded-lg border border-violet-200">
+                    <div className="px-4 py-2 border-b border-violet-100 bg-violet-50 rounded-t-lg">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-violet-700">💳 Fatura de Cartão</p>
+                    </div>
+                    <div className="px-4 py-3 grid grid-cols-2 gap-x-4 gap-y-3">
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Cartão</p>
+                        <p className="text-sm text-gray-800 mt-0.5">{s.faturaCartao ?? "—"}</p>
+                      </div>
+                      {s.faturaMesRef && (
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Referência</p>
+                          <p className="text-sm text-gray-800 mt-0.5">{String(s.faturaMesRef).padStart(2,"0")}/{s.faturaAnoRef ?? ""}</p>
+                        </div>
+                      )}
+                      {s.faturaVencimento && (
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Vencimento</p>
+                          <p className="text-sm text-gray-800 mt-0.5">{fmtData(s.faturaVencimento)}</p>
+                        </div>
+                      )}
+                      {s.faturaTotal != null && (
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Total da fatura</p>
+                          <p className="text-sm text-gray-800 mt-0.5">{formatBRL(Math.abs(Number(s.faturaTotal)))}</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
-                {/* Demonstrativo IA */}
+                {/* IDENTIFICAÇÃO POR IA */}
                 {(s.demoBeneficiario || s.demoTipo) && (
-                  <div className={`rounded-lg border px-4 py-3 space-y-1 ${s.demoVeredicto === "confirmado" ? "bg-emerald-50 border-emerald-200" : s.demoVeredicto === "errado" ? "bg-rose-50 border-rose-200" : "bg-violet-50 border-violet-200"}`}>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">
-                      {s.demoTipo === "boleto" ? "🧾 Boleto" : "💸 " + (s.demoTipo === "ted" ? "TED" : "PIX")} identificado por IA
-                      {s.demoVeredicto === "confirmado" && <span className="ml-2 text-emerald-700">✓ Conferido</span>}
-                      {s.demoVeredicto === "errado" && <span className="ml-2 text-rose-700">✗ Marcado como errado</span>}
-                    </p>
-                    {s.demoBeneficiario && <p className="text-sm text-gray-800 break-words">Beneficiário: {s.demoBeneficiario}</p>}
-                    {s.demoDocumento && <p className="text-xs text-gray-500">Documento: {s.demoDocumento}</p>}
-                    {s.demoMatch === "valor" && <p className="text-xs text-amber-600">Correspondência só por valor — confirme antes de lançar</p>}
+                  <div className={`rounded-lg border ${s.demoVeredicto === "confirmado" ? "border-emerald-200" : s.demoVeredicto === "errado" ? "border-rose-200" : "border-violet-200"}`}>
+                    <div className={`px-4 py-2 border-b rounded-t-lg ${s.demoVeredicto === "confirmado" ? "bg-emerald-50 border-emerald-100" : s.demoVeredicto === "errado" ? "bg-rose-50 border-rose-100" : "bg-violet-50 border-violet-100"}`}>
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-violet-700">
+                        {s.demoTipo === "boleto" ? "🧾 Boleto" : "💸 " + (s.demoTipo === "ted" ? "TED" : "PIX")} · Identificado por IA
+                        {s.demoVeredicto === "confirmado" && <span className="ml-2 text-emerald-700">✓ Conferido</span>}
+                        {s.demoVeredicto === "errado" && <span className="ml-2 text-rose-700">✗ Errado</span>}
+                      </p>
+                    </div>
+                    <div className="px-4 py-3 grid grid-cols-2 gap-x-4 gap-y-3">
+                      {s.demoBeneficiario && (
+                        <div className="col-span-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Beneficiário</p>
+                          <p className="text-sm text-gray-800 mt-0.5 break-words">{s.demoBeneficiario}</p>
+                        </div>
+                      )}
+                      {s.demoDocumento && (
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Documento</p>
+                          <p className="text-sm text-gray-800 mt-0.5">{s.demoDocumento}</p>
+                        </div>
+                      )}
+                      {s.demoMatch === "valor" && (
+                        <div className="col-span-2">
+                          <p className="text-xs text-amber-600">⚠ Correspondência só por valor — confirme antes de lançar</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
-                {/* Vínculo cadastrado */}
+                {/* VÍNCULO CADASTRADO */}
                 {s.vinculoTipo && (
-                  <div className={`rounded-lg border px-4 py-3 space-y-1 ${s.vinculoVia === "cnpj" ? "bg-emerald-50 border-emerald-200" : s.vinculoConfianca === "media" ? "bg-amber-50 border-amber-200" : "bg-gray-50 border-gray-200"}`}>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">
-                      {s.vinculoTipo === "cliente" ? "👤 Cliente cadastrado" : "🏢 Fornecedor cadastrado"}
-                      {s.vinculoVia === "cnpj" && <span className="ml-2 text-emerald-700">· CNPJ confere</span>}
-                      {s.vinculoVia === "nome" && s.vinculoConfianca === "media" && <span className="ml-2 text-amber-700">· sugestão por nome</span>}
-                      {s.vinculoVia === "nome" && s.vinculoConfianca !== "media" && <span className="ml-2 text-gray-500">· palpite por nome</span>}
-                    </p>
-                    <p className="text-sm text-gray-800 break-words">{s.vinculoNome}</p>
+                  <div className={`rounded-lg border ${s.vinculoVia === "cnpj" ? "border-emerald-200" : s.vinculoConfianca === "media" ? "border-amber-200" : "border-gray-200"}`}>
+                    <div className={`px-4 py-2 border-b rounded-t-lg ${s.vinculoVia === "cnpj" ? "bg-emerald-50 border-emerald-100" : s.vinculoConfianca === "media" ? "bg-amber-50 border-amber-100" : "bg-gray-50 border-gray-100"}`}>
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-gray-600">
+                        {s.vinculoTipo === "cliente" ? "👤 Cliente Cadastrado" : "🏢 Fornecedor Cadastrado"}
+                        {s.vinculoVia === "cnpj" && <span className="ml-2 text-emerald-700">· CNPJ confere</span>}
+                        {s.vinculoVia === "nome" && s.vinculoConfianca === "media" && <span className="ml-2 text-amber-700">· sugestão por nome</span>}
+                        {s.vinculoVia === "nome" && s.vinculoConfianca !== "media" && <span className="ml-2 text-gray-500">· palpite</span>}
+                      </p>
+                    </div>
+                    <div className="px-4 py-3">
+                      <p className="text-sm text-gray-800 break-words">{s.vinculoNome}</p>
+                    </div>
                   </div>
                 )}
 
               </div>
 
-              {/* Rodapé com ações */}
-              <div className="px-6 py-4 border-t bg-gray-50 flex flex-col gap-2">
+              {/* Rodapé */}
+              <div className="px-5 py-4 border-t bg-white flex flex-col gap-2 shrink-0">
                 <Button
-                  className="w-full"
+                  className="w-full bg-[#1B2A4A] hover:bg-[#243660] text-white"
                   onClick={() => { setStmtDetailRow(null); abrirLancar(s); }}
                 >
                   <Plus className="w-4 h-4 mr-2" /> Lançar no ERP
