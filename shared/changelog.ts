@@ -1,6 +1,52 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3479 — **DASHBOARD CONCILIAÇÃO BANCÁRIA · EXPANSÃO MASSIVA DE KPIs E GRÁFICOS:
+ * TOP FORNECEDORES, POR CATEGORIA, POR BANCO, SALDO ACUMULADO, % CONCILIAÇÃO POR MÊS
+ * E MUITO MAIS. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
+ *
+ * **Contexto:** O usuário pediu máximo detalhe no Dashboard · Conciliação Bancária —
+ * mais KPIs, detalhamento por fornecedor, por categoria de lançamento, o que mais foi
+ * pago por banco, e mais gráficos em geral.
+ *
+ * **Backend — nova procedure `getConciliacaoDashExtra` (READ-ONLY):**
+ * Roda 5 queries paralelas em `financial_entries` + `bank_statement_lines`:
+ * (1) Top 20 fornecedores por saídas (despesas do ERP agrupadas por `fornecedor_nome`);
+ * (2) Top 15 categorias de despesa (agrupado por `conta_nome`, tipo=despesa);
+ * (3) Top 15 categorias de receita (agrupado por `conta_nome`, tipo=receita);
+ * (4) Top 15 obras por volume (despesas + receitas, group by `obra_nome`);
+ * (5) Extremos do extrato: maior entrada, maior saída, # descrições únicas, # contas;
+ * (6) Distribuição mensal de entradas/saídas por conta bancária.
+ * Todos os valores usam `COALESCE(valor_realizado, valor_previsto, 0)` e filtragem
+ * por `EXTRACT(YEAR FROM COALESCE(data_competencia, data_vencimento, created_at::date))`.
+ *
+ * **Frontend — DashConciliacao.tsx completamente expandido:**
+ *
+ * Nova seção "Métricas adicionais do extrato" (6 KPI cards):
+ *   Ticket médio · Maior entrada · Maior saída · Contas bancárias · Fornecedores únicos
+ *   · Descrições únicas do extrato.
+ *
+ * Novos gráficos (10 gráficos novos, além dos 3 existentes):
+ * 1. **Entradas vs Saídas por mês** — barras lado a lado (extrato importado);
+ * 2. **% Conciliado por mês** — ComposedChart (barras + linha), varia de 0–100%;
+ * 3. **Saldo acumulado ao longo do ano** — AreaChart com gradiente azul;
+ * 4. **Saídas por conta bancária** — barras horizontais, destaque vermelho;
+ * 5. **Entradas por conta bancária** — barras horizontais, destaque verde;
+ * 6. **Entradas × Saídas por conta (comparativo direto)** — barras duplas horizontais;
+ * 7. **Ranking de fornecedores** — TopListCard com minibar + gráfico horizontal colorido;
+ * 8. **Top categorias despesa** — donut pie com 8 fatias + ranking com minibar;
+ * 9. **Top categorias receita** — barras horizontais + ranking com minibar;
+ * 10. **Despesas × Receitas por obra** — barras empilhadas horizontais + ranking.
+ *
+ * Novos dialogs de detalhe: Fornecedores · Categorias Despesa · Categorias Receita ·
+ * Obras (abrem tabela completa com todos os itens + totalizador).
+ *
+ * Componentes utilitários adicionados no próprio arquivo: `SectionTitle`, `MiniBar`,
+ * `TopListCard` (ranking com minibar — reutilizável em outros dashboards).
+ *
+ * Arquivo backend: `server/routers/financial.ts` (+procedure getConciliacaoDashExtra).
+ * Arquivo frontend: `client/src/pages/financeiro/dashboards/DashConciliacao.tsx`.
+ *
  * Rev. 3478 — **CONCILIAÇÃO BANCÁRIA · RELATÓRIO NÃO RECARREGA AUTOMATICAMENTE A CADA
  * AÇÃO — USUÁRIO CONTROLA VIA BOTÃO "ATUALIZAR". 100% FRONTEND · ZERO BACKEND/SCHEMA/
  * ALTER/DROP/DELETE.**

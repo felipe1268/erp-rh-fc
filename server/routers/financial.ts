@@ -11469,4 +11469,129 @@ export const financialRouter = router({
          JSON.stringify(input.resultados)]);
       return { ok: true };
     }),
+
+  // Rev. 3479 — DASHBOARD CONCILIAÇÃO · EXTRA: top fornecedores, categorias, obras e
+  // extremos do extrato (maior entrada/saída). Alimenta os novos KPIs e gráficos do
+  // DashConciliacao.tsx. READ-ONLY · ZERO ALTER/DROP/DELETE.
+  getConciliacaoDashExtra: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    ano: z.number(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const yr = input.ano;
+    const cid = input.companyId;
+
+    // Helper p/ normalizar rows.
+    const R = (r: any) => rows(r) as any[];
+
+    // 1. Top fornecedores por saídas (despesas registradas no ERP).
+    const fornRes = await dbExecute(db,
+      `SELECT NULLIF(TRIM(fornecedor_nome),'') AS nome,
+              COUNT(*)::int AS qtd,
+              COALESCE(SUM(ABS(COALESCE(valor_realizado,valor_previsto,0))),0) AS total
+         FROM financial_entries
+        WHERE company_id=$1 AND tipo='despesa'
+          AND EXTRACT(YEAR FROM COALESCE(data_competencia,data_vencimento,created_at::date))=$2
+          AND NULLIF(TRIM(fornecedor_nome),'') IS NOT NULL
+        GROUP BY 1 ORDER BY 3 DESC LIMIT 20`,
+      [cid, yr]);
+
+    // 2. Top categorias – despesas.
+    const catDespRes = await dbExecute(db,
+      `SELECT NULLIF(TRIM(conta_nome),'') AS nome,
+              COUNT(*)::int AS qtd,
+              COALESCE(SUM(ABS(COALESCE(valor_realizado,valor_previsto,0))),0) AS total
+         FROM financial_entries
+        WHERE company_id=$1 AND tipo='despesa'
+          AND EXTRACT(YEAR FROM COALESCE(data_competencia,data_vencimento,created_at::date))=$2
+          AND NULLIF(TRIM(conta_nome),'') IS NOT NULL
+        GROUP BY 1 ORDER BY 3 DESC LIMIT 15`,
+      [cid, yr]);
+
+    // 3. Top categorias – receitas.
+    const catRecRes = await dbExecute(db,
+      `SELECT NULLIF(TRIM(conta_nome),'') AS nome,
+              COUNT(*)::int AS qtd,
+              COALESCE(SUM(ABS(COALESCE(valor_realizado,valor_previsto,0))),0) AS total
+         FROM financial_entries
+        WHERE company_id=$1 AND tipo='receita'
+          AND EXTRACT(YEAR FROM COALESCE(data_competencia,data_vencimento,created_at::date))=$2
+          AND NULLIF(TRIM(conta_nome),'') IS NOT NULL
+        GROUP BY 1 ORDER BY 3 DESC LIMIT 15`,
+      [cid, yr]);
+
+    // 4. Top obras por volume financeiro (despesas + receitas).
+    const obrasRes = await dbExecute(db,
+      `SELECT NULLIF(TRIM(obra_nome),'') AS nome,
+              COUNT(*)::int AS qtd,
+              COALESCE(SUM(CASE WHEN tipo='despesa' THEN ABS(COALESCE(valor_realizado,valor_previsto,0)) ELSE 0 END),0) AS despesas,
+              COALESCE(SUM(CASE WHEN tipo='receita' THEN ABS(COALESCE(valor_realizado,valor_previsto,0)) ELSE 0 END),0) AS receitas
+         FROM financial_entries
+        WHERE company_id=$1
+          AND EXTRACT(YEAR FROM COALESCE(data_competencia,data_vencimento,created_at::date))=$2
+          AND NULLIF(TRIM(obra_nome),'') IS NOT NULL
+        GROUP BY 1 ORDER BY (despesas+receitas) DESC LIMIT 15`,
+      [cid, yr]);
+
+    // 5. Maior entrada e maior saída do extrato bancário no período.
+    const extremosRes = await dbExecute(db,
+      `SELECT MAX(CASE WHEN valor>0 THEN valor ELSE 0 END)  AS "maiorEntrada",
+              MIN(CASE WHEN valor<0 THEN valor ELSE 0 END)  AS "maiorSaida",
+              COUNT(DISTINCT NULLIF(TRIM(descricao),''))    AS "descUnicas",
+              COUNT(DISTINCT conta_bancaria_id)             AS "contasAtivas"
+         FROM bank_statement_lines
+        WHERE company_id=$1 AND excluido_em IS NULL
+          AND EXTRACT(YEAR FROM data)=$2`,
+      [cid, yr]);
+
+    // 6. Distribuição mensal de entradas e saídas POR CONTA BANCÁRIA
+    //    (p/ o heatmap/sparkline de "o que mais foi pago por banco por mês").
+    const porContaMesRes = await dbExecute(db,
+      `SELECT conta_bancaria_id AS "contaBancariaId",
+              EXTRACT(MONTH FROM data)::int AS mes,
+              COALESCE(SUM(CASE WHEN valor>0 THEN valor ELSE 0 END),0) AS entradas,
+              COALESCE(SUM(CASE WHEN valor<0 THEN ABS(valor) ELSE 0 END),0) AS saidas
+         FROM bank_statement_lines
+        WHERE company_id=$1 AND excluido_em IS NULL
+          AND EXTRACT(YEAR FROM data)=$2
+        GROUP BY 1,2 ORDER BY 1,2`,
+      [cid, yr]);
+
+    const ext = R(extremosRes)[0] ?? {};
+    return {
+      topFornecedores: R(fornRes).map((r) => ({
+        nome: String(r.nome || ""),
+        qtd: Number(r.qtd) || 0,
+        total: Number(r.total) || 0,
+      })),
+      topCategoriasDespesa: R(catDespRes).map((r) => ({
+        nome: String(r.nome || ""),
+        qtd: Number(r.qtd) || 0,
+        total: Number(r.total) || 0,
+      })),
+      topCategoriasReceita: R(catRecRes).map((r) => ({
+        nome: String(r.nome || ""),
+        qtd: Number(r.qtd) || 0,
+        total: Number(r.total) || 0,
+      })),
+      topObras: R(obrasRes).map((r) => ({
+        nome: String(r.nome || ""),
+        qtd: Number(r.qtd) || 0,
+        despesas: Number(r.despesas) || 0,
+        receitas: Number(r.receitas) || 0,
+      })),
+      maiorEntrada: Number(ext.maiorEntrada) || 0,
+      maiorSaida: Math.abs(Number(ext.maiorSaida) || 0),
+      descUnicas: Number(ext.descUnicas) || 0,
+      contasAtivas: Number(ext.contasAtivas) || 0,
+      porContaMes: R(porContaMesRes).map((r) => ({
+        contaBancariaId: r.contaBancariaId == null ? null : Number(r.contaBancariaId),
+        mes: Number(r.mes) || 0,
+        entradas: Number(r.entradas) || 0,
+        saidas: Number(r.saidas) || 0,
+      })),
+    };
+  }),
 });
