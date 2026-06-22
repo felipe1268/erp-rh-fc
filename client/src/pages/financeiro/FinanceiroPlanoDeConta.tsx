@@ -18,32 +18,72 @@ import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
 import {
   Plus, Search, BookOpen, Sprout, Pencil, Trash2, Check, ChevronsUpDown,
-  ChevronRight, Layers, Tag, ArrowRight,
+  ChevronRight, Layers, Tag, ArrowRight, Info, HelpCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ─── Tipos e constantes ────────────────────────────────────────────────────────
 
 const TIPOS = [
-  { value: "receita_bruta",       label: "Receita Bruta",          group: "receita" },
-  { value: "deducao_receita",     label: "Dedução da Receita",      group: "receita" },
-  { value: "custo_obra",          label: "Custo de Obra",           group: "custo"   },
-  { value: "despesa_fixa",        label: "Despesa Fixa",            group: "despesa" },
-  { value: "despesa_variavel",    label: "Despesa Variável",        group: "despesa" },
-  { value: "despesa_financeira",  label: "Despesa Financeira",      group: "despesa" },
-  { value: "receita_financeira",  label: "Receita Financeira",      group: "receita" },
-  { value: "imposto_resultado",   label: "Imposto s/ Resultado",    group: "imposto" },
+  {
+    value: "receita_bruta",
+    label: "Receita Bruta",
+    desc: "Faturamento da empresa: obras, serviços prestados, medições.",
+    group: "receita",
+  },
+  {
+    value: "deducao_receita",
+    label: "Dedução da Receita",
+    desc: "Impostos sobre vendas (ISS, PIS, COFINS), devoluções.",
+    group: "receita",
+  },
+  {
+    value: "custo_obra",
+    label: "Custo de Obra",
+    desc: "Material, mão de obra e subcontratados diretamente na obra.",
+    group: "custo",
+  },
+  {
+    value: "despesa_fixa",
+    label: "Despesa Fixa",
+    desc: "Gastos mensais que não variam: aluguel, salários admin.",
+    group: "despesa",
+  },
+  {
+    value: "despesa_variavel",
+    label: "Despesa Variável",
+    desc: "Gastos que variam conforme a operação: combustível, viagem.",
+    group: "despesa",
+  },
+  {
+    value: "despesa_financeira",
+    label: "Despesa Financeira",
+    desc: "Juros, tarifas bancárias, IOF, multas.",
+    group: "despesa",
+  },
+  {
+    value: "receita_financeira",
+    label: "Receita Financeira",
+    desc: "Rendimentos de aplicações, juros recebidos.",
+    group: "receita",
+  },
+  {
+    value: "imposto_resultado",
+    label: "Imposto s/ Resultado",
+    desc: "IRPJ, CSLL — impostos sobre o lucro da empresa.",
+    group: "imposto",
+  },
 ];
 
-const TIPO_META: Record<string, { color: string; bar: string; dot: string }> = {
-  receita_bruta:      { color: "bg-emerald-100 text-emerald-800 border-emerald-200", bar: "bg-emerald-400", dot: "#10b981" },
-  deducao_receita:    { color: "bg-yellow-100  text-yellow-800  border-yellow-200",  bar: "bg-yellow-400",  dot: "#eab308" },
-  custo_obra:         { color: "bg-orange-100  text-orange-800  border-orange-200",  bar: "bg-orange-400",  dot: "#f97316" },
-  despesa_fixa:       { color: "bg-red-100     text-red-800     border-red-200",     bar: "bg-red-400",     dot: "#ef4444" },
-  despesa_variavel:   { color: "bg-pink-100    text-pink-800    border-pink-200",    bar: "bg-pink-400",    dot: "#ec4899" },
-  despesa_financeira: { color: "bg-violet-100  text-violet-800  border-violet-200",  bar: "bg-violet-400",  dot: "#8b5cf6" },
-  receita_financeira: { color: "bg-teal-100    text-teal-800    border-teal-200",    bar: "bg-teal-400",    dot: "#14b8a6" },
-  imposto_resultado:  { color: "bg-slate-100   text-slate-700   border-slate-200",   bar: "bg-slate-400",   dot: "#64748b" },
+const TIPO_META: Record<string, { color: string; bar: string }> = {
+  receita_bruta:      { color: "bg-emerald-100 text-emerald-800 border-emerald-200", bar: "bg-emerald-400" },
+  deducao_receita:    { color: "bg-yellow-100  text-yellow-800  border-yellow-200",  bar: "bg-yellow-400"  },
+  custo_obra:         { color: "bg-orange-100  text-orange-800  border-orange-200",  bar: "bg-orange-400"  },
+  despesa_fixa:       { color: "bg-red-100     text-red-800     border-red-200",     bar: "bg-red-400"     },
+  despesa_variavel:   { color: "bg-pink-100    text-pink-800    border-pink-200",    bar: "bg-pink-400"    },
+  despesa_financeira: { color: "bg-violet-100  text-violet-800  border-violet-200",  bar: "bg-violet-400"  },
+  receita_financeira: { color: "bg-teal-100    text-teal-800    border-teal-200",    bar: "bg-teal-400"    },
+  imposto_resultado:  { color: "bg-slate-100   text-slate-700   border-slate-200",   bar: "bg-slate-400"   },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -65,7 +105,10 @@ function suggestNextCode(parentCodigo: string, allCodigos: string[]): string {
     return String(raizes.length ? Math.max(...raizes) + 1 : 1);
   }
   const prefix = `${parentCodigo}.`;
-  const filhos = allCodigos.filter((c) => c.startsWith(prefix)).map((c) => Number(c.slice(prefix.length).split(".")[0])).filter((n) => Number.isFinite(n) && n > 0);
+  const filhos = allCodigos
+    .filter((c) => c.startsWith(prefix))
+    .map((c) => Number(c.slice(prefix.length).split(".")[0]))
+    .filter((n) => Number.isFinite(n) && n > 0);
   return `${parentCodigo}.${filhos.length ? Math.max(...filhos) + 1 : 1}`;
 }
 
@@ -80,6 +123,99 @@ const EMPTY_FORM: FormState = {
   nivel: 1, contaPaiId: "", classificacaoDRE: "", ordem: "0",
 };
 
+// ─── Sub-componente: legenda de cores ─────────────────────────────────────────
+
+function LegendaCard() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border border-blue-100 bg-blue-50 rounded-lg p-3">
+      <button
+        className="w-full flex items-center justify-between text-left"
+        onClick={() => setOpen(v => !v)}
+      >
+        <span className="flex items-center gap-2 text-xs font-medium text-blue-700">
+          <Info className="w-3.5 h-3.5" />
+          Como funciona o Plano de Contas?
+        </span>
+        <ChevronRight className={cn("w-3.5 h-3.5 text-blue-400 transition-transform", open && "rotate-90")} />
+      </button>
+
+      {open && (
+        <div className="mt-3 space-y-3">
+          {/* Hierarquia */}
+          <div>
+            <p className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1.5">Hierarquia (níveis)</p>
+            <div className="space-y-1 text-xs text-slate-600">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-slate-700 shrink-0" />
+                <span><strong>Grupo principal</strong> — ex: <code className="bg-white px-1 rounded">1 RECEITAS BRUTAS</code> — aparece em negrito, com barra colorida</span>
+              </div>
+              <div className="flex items-center gap-2 pl-3">
+                <ChevronRight className="w-3 h-3 text-slate-400 shrink-0" />
+                <span><strong>Subconta</strong> — ex: <code className="bg-white px-1 rounded">1.1 Rec. de Engenharia</code> — criada dentro de um grupo</span>
+              </div>
+              <div className="flex items-center gap-2 pl-6">
+                <ChevronRight className="w-3 h-3 text-slate-400 shrink-0" />
+                <span><strong>Detalhe</strong> — ex: <code className="bg-white px-1 rounded">1.1.1 Medições de Obras</code> — nível mais específico</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Tipos */}
+          <div>
+            <p className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1.5">O que significa cada tipo (cor da barra)</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+              {TIPOS.map(t => {
+                const meta = TIPO_META[t.value];
+                return (
+                  <div key={t.value} className="flex items-start gap-2">
+                    <Badge className={cn("text-[10px] border shrink-0 mt-0.5", meta.color)}>{t.label}</Badge>
+                    <span className="text-[11px] text-slate-500">{t.desc}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Natureza */}
+          <div>
+            <p className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1.5">Natureza da conta</p>
+            <div className="space-y-1 text-[11px] text-slate-600">
+              <div className="flex items-start gap-2">
+                <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 shrink-0">credora</span>
+                <span>Contas de <strong>receita e passivo</strong> — aumentam com entradas de dinheiro.</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-700 shrink-0">devedora</span>
+                <span>Contas de <strong>despesa e ativo</strong> — aumentam com saídas de dinheiro.</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Botões da lista */}
+          <div>
+            <p className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1.5">Botões em cada linha</p>
+            <div className="space-y-1 text-[11px] text-slate-600">
+              <div className="flex items-center gap-2">
+                <span className="p-1 bg-white border rounded"><Plus className="w-3 h-3 text-blue-500" /></span>
+                <span>Cria uma <strong>subconta</strong> dentro desta conta</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="p-1 bg-white border rounded"><Pencil className="w-3 h-3 text-slate-500" /></span>
+                <span><strong>Edita</strong> o nome, tipo ou natureza</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="p-1 bg-white border rounded"><Trash2 className="w-3 h-3 text-red-400" /></span>
+                <span><strong>Exclui</strong> a conta (bloqueado se tiver lançamentos)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export default function FinanceiroPlanoDeConta() {
@@ -92,6 +228,7 @@ export default function FinanceiroPlanoDeConta() {
   const [paiPopoverOpen, setPaiPopoverOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
   const [showAvancado, setShowAvancado] = useState(false);
+  const [confirmSeed, setConfirmSeed] = useState(false);
 
   const { data: contas, isLoading, refetch } = (trpc as any).financial.getAccounts.useQuery(
     { companyId, escopo: "plano", ativo: true, tipo: tipoFilter !== "all" ? tipoFilter : undefined },
@@ -181,7 +318,8 @@ export default function FinanceiroPlanoDeConta() {
     if (!pai) return;
     const allCodigos = allContas.filter((c) => c.id !== form.id).map((c) => String(c.codigo));
     setForm((f) => ({
-      ...f, contaPaiId: paiId, codigo: suggestNextCode(String(pai.codigo), allCodigos),
+      ...f, contaPaiId: paiId,
+      codigo: suggestNextCode(String(pai.codigo), allCodigos),
       nivel: (Number(pai.nivel) || 1) + 1,
       tipo: f.id ? f.tipo : pai.tipo,
       natureza: f.id ? f.natureza : pai.natureza,
@@ -203,8 +341,8 @@ export default function FinanceiroPlanoDeConta() {
   }
 
   const paiSelecionado = form.contaPaiId ? eligibleParents.find((c: any) => String(c.id) === form.contaPaiId) : null;
+  const tipoAtual = TIPOS.find(t => t.value === form.tipo);
 
-  // Contadores por grupo de tipo
   const countByTipo = useMemo(() => {
     const m: Record<string, number> = {};
     for (const c of allContas) m[c.tipo] = (m[c.tipo] ?? 0) + 1;
@@ -213,7 +351,7 @@ export default function FinanceiroPlanoDeConta() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-5">
+      <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-4">
 
         {/* ── Header ── */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -225,9 +363,13 @@ export default function FinanceiroPlanoDeConta() {
             <p className="text-sm text-slate-500 mt-0.5">{allContas.length} conta(s) cadastrada(s)</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => seedMut.mutate({ companyId })} disabled={seedMut.isPending}>
+            <Button
+              variant="outline" size="sm"
+              onClick={() => setConfirmSeed(true)}
+              disabled={seedMut.isPending}
+            >
               <Sprout className="w-4 h-4 mr-1.5 text-emerald-600" />
-              {seedMut.isPending ? "Carregando..." : "Carregar Padrão"}
+              {seedMut.isPending ? "Carregando..." : "Carregar Padrão FC"}
             </Button>
             <Button size="sm" onClick={() => openCreate()} className="bg-blue-600 hover:bg-blue-700 text-white">
               <Plus className="w-4 h-4 mr-1.5" />Nova Conta
@@ -235,12 +377,17 @@ export default function FinanceiroPlanoDeConta() {
           </div>
         </div>
 
-        {/* ── Chips de tipo (resumo visual) ── */}
+        {/* ── Legenda ── */}
+        <LegendaCard />
+
+        {/* ── Chips de tipo ── */}
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setTipoFilter("all")}
             className={cn("text-xs px-3 py-1 rounded-full border font-medium transition-colors",
-              tipoFilter === "all" ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-600 border-slate-200 hover:border-slate-400")}
+              tipoFilter === "all"
+                ? "bg-slate-800 text-white border-slate-800"
+                : "bg-white text-slate-600 border-slate-200 hover:border-slate-400")}
           >
             Todos
           </button>
@@ -251,6 +398,7 @@ export default function FinanceiroPlanoDeConta() {
               <button
                 key={t.value}
                 onClick={() => setTipoFilter(t.value)}
+                title={t.desc}
                 className={cn("text-xs px-3 py-1 rounded-full border font-medium transition-colors",
                   active ? `${meta.color} border-current` : "bg-white text-slate-500 border-slate-200 hover:border-slate-300")}
               >
@@ -264,7 +412,12 @@ export default function FinanceiroPlanoDeConta() {
         {/* ── Busca ── */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <Input className="pl-9 bg-white" placeholder="Buscar por código ou nome..." value={search} onChange={e => setSearch(e.target.value)} />
+          <Input
+            className="pl-9 bg-white"
+            placeholder="Buscar por código ou nome..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
         </div>
 
         {/* ── Lista de contas ── */}
@@ -276,7 +429,9 @@ export default function FinanceiroPlanoDeConta() {
               <div className="p-10 text-center text-slate-400">
                 <BookOpen className="w-10 h-10 mx-auto mb-3 text-slate-300" />
                 <p className="font-medium">Nenhuma conta cadastrada.</p>
-                <p className="text-sm mt-1">Clique em "Carregar Padrão" para usar o plano FC Engenharia.</p>
+                <p className="text-sm mt-1">
+                  Clique em <strong>"+ Nova Conta"</strong> para criar do zero, ou em <strong>"Carregar Padrão FC"</strong> para usar o modelo FC Engenharia.
+                </p>
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
@@ -284,6 +439,7 @@ export default function FinanceiroPlanoDeConta() {
                   const nivel = Number(c.nivel) || 1;
                   const meta = TIPO_META[c.tipo] ?? TIPO_META.despesa_fixa;
                   const tipoLabel = TIPOS.find(t => t.value === c.tipo)?.label ?? c.tipo;
+                  const tipoDesc = TIPOS.find(t => t.value === c.tipo)?.desc ?? "";
                   const isRaiz = nivel === 1;
 
                   return (
@@ -294,28 +450,23 @@ export default function FinanceiroPlanoDeConta() {
                         isRaiz && "bg-slate-50/70",
                       )}
                     >
-                      {/* Barra colorida lateral por tipo */}
+                      {/* Barra colorida lateral */}
                       <div className={cn("w-1 self-stretch flex-shrink-0", isRaiz ? meta.bar : "bg-transparent")} />
 
-                      {/* Indentação com marcador de hierarquia */}
+                      {/* Conteúdo com indentação */}
                       <div
                         className="flex items-center gap-2 flex-1 min-w-0 py-2.5 pr-3"
                         style={{ paddingLeft: `${12 + (nivel - 1) * 22}px` }}
                       >
-                        {/* Indicador de nível */}
                         {nivel > 1 && (
                           <ChevronRight className="w-3 h-3 text-slate-300 flex-shrink-0" />
                         )}
-
-                        {/* Código */}
                         <span className={cn(
                           "font-mono flex-shrink-0 text-right",
                           isRaiz ? "text-xs font-bold text-slate-700 w-16" : "text-[11px] text-slate-400 w-16",
                         )}>
                           {c.codigo}
                         </span>
-
-                        {/* Nome */}
                         <span className={cn(
                           "truncate flex-1",
                           nivel === 1 ? "text-sm font-bold text-slate-900" :
@@ -328,13 +479,19 @@ export default function FinanceiroPlanoDeConta() {
 
                       {/* Badges + ações */}
                       <div className="flex items-center gap-1.5 pr-3 shrink-0">
-                        <Badge className={cn("text-[11px] border hidden sm:inline-flex", meta.color)}>
+                        <Badge
+                          className={cn("text-[11px] border hidden sm:inline-flex", meta.color)}
+                          title={tipoDesc}
+                        >
                           {tipoLabel}
                         </Badge>
-                        <span className={cn(
-                          "text-[11px] px-2 py-0.5 rounded-full hidden md:inline-block",
-                          c.natureza === "credora" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700",
-                        )}>
+                        <span
+                          className={cn(
+                            "text-[11px] px-2 py-0.5 rounded-full hidden md:inline-block",
+                            c.natureza === "credora" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700",
+                          )}
+                          title={c.natureza === "credora" ? "Credora — conta de receita ou passivo" : "Devedora — conta de despesa ou ativo"}
+                        >
                           {c.natureza}
                         </span>
 
@@ -342,21 +499,21 @@ export default function FinanceiroPlanoDeConta() {
                         <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity ml-1">
                           <button
                             className="p-1.5 rounded hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors"
-                            title="Adicionar subconta"
+                            title="Criar subconta dentro desta"
                             onClick={() => openCreate(c.id)}
                           >
                             <Plus className="w-3.5 h-3.5" />
                           </button>
                           <button
                             className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
-                            title="Editar"
+                            title="Editar esta conta"
                             onClick={() => openEdit(c)}
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                           <button
                             className="p-1.5 rounded hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors"
-                            title="Excluir"
+                            title="Excluir esta conta"
                             onClick={() => setDeleteTarget(c)}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -373,7 +530,7 @@ export default function FinanceiroPlanoDeConta() {
 
         {/* ── Modal Nova / Editar ── */}
         <Dialog open={dialogOpen} onOpenChange={(o) => o ? setDialogOpen(true) : closeDialog()}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Tag className="w-4 h-4 text-blue-600" />
@@ -381,15 +538,15 @@ export default function FinanceiroPlanoDeConta() {
               </DialogTitle>
             </DialogHeader>
 
-            <div className="space-y-4 pt-1">
+            <div className="space-y-5 pt-1">
 
-              {/* ── Conta Pai ─────────────────────────────────────────────── */}
+              {/* ── Grupo pai ── */}
               <div>
-                <Label className="text-sm font-medium text-slate-700">
+                <Label className="text-sm font-semibold text-slate-800">
                   Dentro de qual grupo?
                 </Label>
-                <p className="text-[11px] text-slate-400 mb-1.5">
-                  Escolha uma conta existente para criar uma subconta, ou deixe em branco para criar um grupo principal.
+                <p className="text-[11px] text-slate-500 mt-0.5 mb-2">
+                  Escolha uma conta existente para criar uma <strong>subconta</strong> (ex: "1.1 dentro de 1"), ou deixe em branco para criar um <strong>grupo principal</strong> (nível raiz).
                 </p>
                 <Popover open={paiPopoverOpen} onOpenChange={setPaiPopoverOpen}>
                   <PopoverTrigger asChild>
@@ -409,7 +566,7 @@ export default function FinanceiroPlanoDeConta() {
                       ) : (
                         <span className="text-slate-400 flex items-center gap-1.5">
                           <Layers className="w-3.5 h-3.5" />
-                          Grupo principal (sem pai)
+                          Grupo principal (conta de nível 1)
                         </span>
                       )}
                       <div className="flex items-center gap-1 shrink-0 ml-2">
@@ -463,55 +620,91 @@ export default function FinanceiroPlanoDeConta() {
                 </Popover>
               </div>
 
-              {/* ── Separador visual ── */}
               <div className="h-px bg-slate-100" />
 
-              {/* ── Código (auto) + Nome ── */}
+              {/* ── Código + Nome ── */}
               <div className="grid grid-cols-[140px,1fr] gap-3">
                 <div>
-                  <Label className="text-sm">Código *</Label>
+                  <Label className="text-sm font-semibold text-slate-800">Código *</Label>
+                  <p className="text-[11px] text-slate-500 mt-0.5 mb-1.5">
+                    Identificador único. Ex: <code>1</code>, <code>1.1</code>, <code>1.1.2</code>
+                  </p>
                   <Input
                     value={form.codigo}
                     onChange={e => setForm(f => ({ ...f, codigo: e.target.value }))}
-                    placeholder={paiSelecionado ? `${paiSelecionado.codigo}.X` : "Ex: 4"}
+                    placeholder={paiSelecionado ? `${paiSelecionado.codigo}.X` : "Ex: 1"}
                     className="font-mono"
                   />
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    {paiSelecionado ? "Gerado automaticamente — você pode editar." : "Número ou código livre."}
-                  </p>
+                  {paiSelecionado && (
+                    <p className="text-[10px] text-blue-500 mt-1">Gerado automaticamente — você pode editar.</p>
+                  )}
                 </div>
                 <div>
-                  <Label className="text-sm">Nome *</Label>
+                  <Label className="text-sm font-semibold text-slate-800">Nome *</Label>
+                  <p className="text-[11px] text-slate-500 mt-0.5 mb-1.5">
+                    Nome descritivo que aparece nos relatórios.
+                  </p>
                   <Input
                     value={form.nome}
                     onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
-                    placeholder="Nome da conta"
+                    placeholder="Ex: Receitas de Obras"
                     autoFocus
                   />
                 </div>
               </div>
 
-              {/* ── Tipo + Natureza ── */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-sm">Tipo</Label>
-                  <Select value={form.tipo} onValueChange={v => setForm(f => ({ ...f, tipo: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {TIPOS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-sm">Natureza</Label>
-                  <Select value={form.natureza} onValueChange={v => setForm(f => ({ ...f, natureza: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="devedora">Devedora</SelectItem>
-                      <SelectItem value="credora">Credora</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              {/* ── Tipo ── */}
+              <div>
+                <Label className="text-sm font-semibold text-slate-800">Tipo</Label>
+                <p className="text-[11px] text-slate-500 mt-0.5 mb-1.5">
+                  Classifica a conta no DRE e nos relatórios financeiros.
+                </p>
+                <Select value={form.tipo} onValueChange={v => setForm(f => ({ ...f, tipo: v }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIPOS.map(t => (
+                      <SelectItem key={t.value} value={t.value}>
+                        <div>
+                          <div className="font-medium">{t.label}</div>
+                          <div className="text-[11px] text-slate-500">{t.desc}</div>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {tipoAtual && (
+                  <p className="text-[11px] text-slate-500 mt-1 flex items-start gap-1">
+                    <HelpCircle className="w-3 h-3 mt-0.5 shrink-0 text-slate-400" />
+                    {tipoAtual.desc}
+                  </p>
+                )}
+              </div>
+
+              {/* ── Natureza ── */}
+              <div>
+                <Label className="text-sm font-semibold text-slate-800">Natureza</Label>
+                <p className="text-[11px] text-slate-500 mt-0.5 mb-1.5">
+                  Define como o saldo se comporta: <strong>Credora</strong> = receitas e passivos · <strong>Devedora</strong> = despesas e ativos.
+                </p>
+                <Select value={form.natureza} onValueChange={v => setForm(f => ({ ...f, natureza: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="credora">
+                      <div>
+                        <div className="font-medium">Credora</div>
+                        <div className="text-[11px] text-slate-500">Contas de receita, passivo e patrimônio</div>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="devedora">
+                      <div>
+                        <div className="font-medium">Devedora</div>
+                        <div className="text-[11px] text-slate-500">Contas de despesa, custo e ativo</div>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* ── Avançado (colapsível) ── */}
@@ -522,16 +715,22 @@ export default function FinanceiroPlanoDeConta() {
                   className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1 transition-colors"
                 >
                   <ChevronRight className={cn("w-3 h-3 transition-transform", showAvancado && "rotate-90")} />
-                  Configurações avançadas (DRE · Ordem)
+                  Configurações avançadas (Classificação DRE · Ordem de exibição)
                 </button>
                 {showAvancado && (
-                  <div className="grid grid-cols-2 gap-3 mt-2">
+                  <div className="mt-3 space-y-3">
                     <div>
-                      <Label className="text-sm">Classificação DRE</Label>
+                      <Label className="text-sm font-semibold text-slate-800">Classificação DRE</Label>
+                      <p className="text-[11px] text-slate-500 mt-0.5 mb-1.5">
+                        Código para agrupamento no Demonstrativo de Resultado. Ex: <code>3.1</code>. Opcional.
+                      </p>
                       <Input value={form.classificacaoDRE} onChange={e => setForm(f => ({ ...f, classificacaoDRE: e.target.value }))} placeholder="Opcional" />
                     </div>
                     <div>
-                      <Label className="text-sm">Ordem</Label>
+                      <Label className="text-sm font-semibold text-slate-800">Ordem de exibição</Label>
+                      <p className="text-[11px] text-slate-500 mt-0.5 mb-1.5">
+                        Número que define a posição desta conta nos relatórios. Menor número aparece primeiro.
+                      </p>
                       <Input type="number" value={form.ordem} onChange={e => setForm(f => ({ ...f, ordem: e.target.value }))} />
                     </div>
                   </div>
@@ -539,7 +738,7 @@ export default function FinanceiroPlanoDeConta() {
               </div>
             </div>
 
-            <DialogFooter className="mt-2">
+            <DialogFooter className="mt-4">
               <Button variant="outline" onClick={closeDialog}>Cancelar</Button>
               <Button
                 onClick={handleSave}
@@ -552,7 +751,39 @@ export default function FinanceiroPlanoDeConta() {
           </DialogContent>
         </Dialog>
 
-        {/* ── Confirm excluir ── */}
+        {/* ── Confirmação Carregar Padrão ── */}
+        <AlertDialog open={confirmSeed} onOpenChange={setConfirmSeed}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <Sprout className="w-4 h-4 text-emerald-600" />
+                Carregar Plano de Contas Padrão FC?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="space-y-2">
+                <p>
+                  Esta ação vai criar automaticamente um conjunto de contas pré-definidas para FC Engenharia — grupos de receita, custo de obra, despesas fixas, variáveis, financeiras e impostos.
+                </p>
+                <p className="text-amber-600 font-medium">
+                  ⚠️ As contas que já existem não serão apagadas. Serão adicionadas apenas as que ainda não existem.
+                </p>
+                <p>
+                  Se preferir criar seu próprio plano do zero, clique em <strong>Cancelar</strong> e use o botão <strong>"+ Nova Conta"</strong>.
+                </p>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar — vou criar do zero</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => { seedMut.mutate({ companyId }); setConfirmSeed(false); }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                Sim, carregar padrão FC
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* ── Confirmação excluir ── */}
         <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>

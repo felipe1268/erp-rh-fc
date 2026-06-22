@@ -50,11 +50,15 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3481** — **PLANO DE CONTAS · LEGENDAS COMPLETAS + CONFIRMAÇÃO "CARREGAR PADRÃO" + DESCRIÇÕES EM TODOS OS CAMPOS DO FORMULÁRIO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Painel colapsível "Como funciona o Plano de Contas?" explica hierarquia (3 níveis), todos os 8 tipos com descrição prática, Credora × Devedora e os 3 botões de ação. "Carregar Padrão FC" agora abre AlertDialog de confirmação explicando o que será criado e oferecendo alternativa "criar do zero". Formulário: todos os campos com subtexto explicativo; Tipo e Natureza com descrição em cada opção do Select; hint abaixo do Tipo repete a descrição do tipo selecionado. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3480** — **PLANO DE CONTAS · NOVO LAYOUT: CHIPS DE TIPO, BARRA COLORIDA LATERAL POR TIPO, BOTÃO "+ SUBCONTA" INLINE NO HOVER, FORMULÁRIO REORGANIZADO COM CAMPOS AVANÇADOS COLAPSÍVEIS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Lista: barra colorida 1px na raiz (cor por tipo), ícone `ChevronRight` nas filhas, fundo diferenciado nas raízes, botão `+` no hover abre formulário pré-preenchido com aquela conta como pai. Filtros: Select de tipo substituído por chips pill horizontais com contagem. Formulário: "Conta Pai" renomeado para "Dentro de qual grupo?" + subtexto explicativo; "Sem pai (conta raiz)" virou "Grupo principal (sem pai)" com ícone; campo "Nível" removido (era derivado, confundia); DRE/Ordem movidos para seção "Configurações avançadas" colapsível; Código+Nome lado a lado. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3479** — **DASHBOARD CONCILIAÇÃO BANCÁRIA · EXPANSÃO MASSIVA DE KPIs E GRÁFICOS: TOP FORNECEDORES, POR CATEGORIA, POR BANCO, SALDO ACUMULADO, % CONCILIAÇÃO POR MÊS. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Nova procedure `getConciliacaoDashExtra` (5 queries: top fornecedores/categorias despesa/receita/obras/extremos do extrato). No frontend: +6 KPI cards (ticket médio, maior entrada/saída, contas ativas, fornecedores únicos, descrições únicas), +10 novos gráficos (entradas×saídas/mês, % conciliado/mês via ComposedChart, saldo acumulado AreaChart, saídas/entradas/comparativo por banco, ranking fornecedores com minibar + horizontal bar, donut+ranking categorias despesa, bar+ranking categorias receita, stacked bar obras+ranking), +4 DetailDialogs de detalhe. Componentes auxiliares `SectionTitle`/`MiniBar`/`TopListCard` adicionados no próprio arquivo. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
+
+- **Rev. 3480** — **PLANO DE CONTAS · NOVO LAYOUT: CHIPS DE TIPO, BARRA COLORIDA LATERAL, BOTÃO "+ SUBCONTA" INLINE, CAMPO "NÍVEL" REMOVIDO, DRE/ORDEM COLAPSÍVEIS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3478** — **CONCILIAÇÃO BANCÁRIA · RELATÓRIO NÃO RECARREGA AUTOMATICAMENTE A CADA AÇÃO — USUÁRIO CONTROLA VIA BOTÃO "ATUALIZAR". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -63,8 +67,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3476** — **FORNECEDORES · BUGFIX: BOTÃO "BUSCAR CNPJ" BLOQUEADO NO MODO EDIÇÃO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3475** — **EMPRESAS TERCEIRAS · AUTO-PREENCHIMENTO DA FICHA AO DIGITAR O CNPJ (14 DÍGITOS). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3468** — **CONCILIAÇÃO BANCÁRIA · DIALOG DE EDIÇÃO — CAMPO OBRA: AUTO-MATCH CASE-INSENSITIVE + HINT QUANDO NÃO CASA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 
 ### REGRA DE OURO — Cabeçalho de documentos institucionais FC (Rev. 2106+)

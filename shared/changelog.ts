@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3481 — **PLANO DE CONTAS · LEGENDAS COMPLETAS + CONFIRMAÇÃO "CARREGAR PADRÃO" +
+ * DESCRIÇÕES EM TODOS OS CAMPOS DO FORMULÁRIO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * **Contexto:** Usuário não entendia o que eram as contas IMP-001…IMP-015 (criadas pelo
+ * "Carregar Padrão" sem aviso), não sabia o que significava cada campo do formulário
+ * (Tipo, Natureza, Código) nem o que representavam as cores e badges da lista.
+ *
+ * **Painel de legenda colapsível ("Como funciona o Plano de Contas?"):**
+ * Explica a hierarquia em 3 níveis (grupo principal → subconta → detalhe) com exemplos
+ * de código (1, 1.1, 1.1.1). Lista todos os 8 tipos com descrição prática de cada um.
+ * Explica Credora × Devedora com exemplos. Mostra os 3 botões (+ / lápis / lixeira)
+ * com o que cada um faz.
+ *
+ * **Confirmação antes de "Carregar Padrão FC":**
+ * Ao clicar, abre AlertDialog explicando o que vai acontecer (quais contas serão criadas,
+ * que as existentes não serão apagadas) e oferece opção de cancelar para criar do zero.
+ * Botão secundário renomeado para "Cancelar — vou criar do zero" para deixar clara a alternativa.
+ *
+ * **Formulário — descrição em todos os campos:**
+ * - "Dentro de qual grupo?": subtexto explica subconta × grupo principal com exemplo.
+ * - "Código": explica identificador único com exemplos (1, 1.1, 1.1.2).
+ * - "Tipo": cada SelectItem tem título + descrição prática; hint abaixo do Select repete
+ *   a descrição do tipo selecionado (ícone HelpCircle).
+ * - "Natureza": cada SelectItem tem título + descrição; label explica Credora × Devedora
+ *   de forma clara.
+ * - "Configurações avançadas": DRE tem exemplo de código + "Opcional"; Ordem explica
+ *   que menor número aparece primeiro.
+ *
+ * **Arquivo alterado:** `client/src/pages/financeiro/FinanceiroPlanoDeConta.tsx`
+ *
  * Rev. 3480 — **PLANO DE CONTAS · NOVO LAYOUT: CHIPS DE TIPO, BARRA COLORIDA LATERAL,
  * BOTÃO "+ SUBCONTA" INLINE, FORMULÁRIO REORGANIZADO COM CAMPOS AVANÇADOS COLAPSÍVEIS.
  * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
