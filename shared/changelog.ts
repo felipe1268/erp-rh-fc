@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3511 — **CONCILIAÇÃO · SHEET DE DETALHE AO DUPLO-CLIQUE/DUPLO-TOQUE EM AMBAS AS LISTAS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Duplo-clique (desktop) ou duplo-toque (mobile) em qualquer item de "No extrato, sem lançamento"
+ * abre Sheet lateral com: valor grande colorido, saldo após, data, tipo, descrição completa,
+ * bloco cheque / fatura / demonstrativo IA / vínculo cadastrado, ações "Lançar" e "Apagar".
+ * Duplo-clique em qualquer item de "No ERP, sem extrato" abre o dialog de detalhe já existente
+ * (mesmo que o botão 👁 faz hoje).
+ * Arquivos: FinanceiroConciliacao.tsx (Sheet + onDoubleClick em renderExtratoRow e renderEntryRow).
+ *
  * Rev. 3510 — **CONCILIAÇÃO · SALDO ACUMULADO COLORIDO: VERMELHO SE NEGATIVO, VERDE SE POSITIVO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * `saldoApos` nas linhas do extrato estava sempre `text-gray-400`.
  * Agora: `< 0 → text-red-500`; `≥ 0 → text-emerald-600`. Arquivo: `FinanceiroConciliacao.tsx` (linha `saldoApos`).

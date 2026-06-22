@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter, AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -221,6 +222,8 @@ export default function FinanceiroConciliacao() {
   const [filterExtTipo, setFilterExtTipo] = useState<"all" | "entrada" | "saida">("all");
   const [filterLanTipo, setFilterLanTipo] = useState<"all" | "entrada" | "saida">("all");
   const [filterConcTipo, setFilterConcTipo] = useState<"all" | "entrada" | "saida">("all");
+  // Rev. 3511 — linha do extrato selecionada p/ exibir sheet de detalhe (duplo-clique/toque).
+  const [stmtDetailRow, setStmtDetailRow] = useState<any | null>(null);
   // Rev. 3500 — IDs de linhas do extrato que já foram lançadas/conciliadas nesta sessão.
   // Remoção IMEDIATA da lista "No extrato, sem lançamento" antes do próximo refetch.
   const [dismissedStmtIds, setDismissedStmtIds] = useState<Set<number>>(new Set());
@@ -1353,7 +1356,7 @@ export default function FinanceiroConciliacao() {
             <span className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-rose-50 text-rose-500">
               <ArrowUpCircle className="w-5 h-5" />
             </span>
-            <button onClick={() => { const sel = selectedEntry === e.id ? null : e.id; setSelectedEntry(sel); setManualLanSel(sel === null ? null : e); }} className="flex-1 min-w-0 text-left">
+            <button onClick={() => { const sel = selectedEntry === e.id ? null : e.id; setSelectedEntry(sel); setManualLanSel(sel === null ? null : e); }} onDoubleClick={(ev) => { ev.preventDefault(); setDetalheEntryId(e.id); }} title="Duplo clique para ver detalhes completos" className="flex-1 min-w-0 text-left">
               <p className="text-[11px] text-gray-400 flex items-center gap-1.5">
                 {fmtData(e.data)}
                 <span className={`px-1.5 py-px rounded-full text-[10px] font-medium ${grpColor}`}>{grpLabel}</span>
@@ -1404,7 +1407,7 @@ export default function FinanceiroConciliacao() {
         <span className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${isReceita ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"}`}>
           {isReceita ? <ArrowDownCircle className="w-5 h-5" /> : <ArrowUpCircle className="w-5 h-5" />}
         </span>
-        <button onClick={() => { const sel = selectedEntry === e.id ? null : e.id; setSelectedEntry(sel); setManualLanSel(sel === null ? null : e); }} className="flex-1 min-w-0 text-left">
+        <button onClick={() => { const sel = selectedEntry === e.id ? null : e.id; setSelectedEntry(sel); setManualLanSel(sel === null ? null : e); }} onDoubleClick={(ev) => { ev.preventDefault(); setDetalheEntryId(e.id); }} title="Duplo clique para ver detalhes completos" className="flex-1 min-w-0 text-left">
           <p className="text-[11px] text-gray-400 flex items-center gap-1.5 flex-wrap">
             {fmtData(e.data)}
             {(isPix || isBoleto) && <span className={`px-1.5 py-px rounded-full text-[10px] font-medium ${isPix ? "bg-emerald-100 text-emerald-700" : "bg-orange-100 text-orange-700"}`}>{isPix ? "PIX" : "Boleto"}</span>}
@@ -1458,6 +1461,8 @@ export default function FinanceiroConciliacao() {
     >
       <button
         onClick={() => { const sel = selectedStatement === s.id ? null : s.id; setSelectedStatement(sel); setManualExtSel(sel === null ? null : s); }}
+        onDoubleClick={(e) => { e.preventDefault(); setStmtDetailRow(s); }}
+        title="Duplo clique para ver detalhes completos"
         className="flex-1 min-w-0 px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-50 transition-colors"
       >
         <span className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${isEntrada ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"}`}>
@@ -7251,6 +7256,122 @@ export default function FinanceiroConciliacao() {
           </div>
         </DialogContent>
       </Dialog>
+    {/* Rev. 3511 — Sheet de detalhe de linha do extrato (duplo-clique / duplo-toque) */}
+    <Sheet open={!!stmtDetailRow} onOpenChange={(o) => { if (!o) setStmtDetailRow(null); }}>
+      <SheetContent side="right" className="w-full sm:max-w-md flex flex-col gap-0 p-0 overflow-y-auto">
+        {stmtDetailRow && (() => {
+          const s = stmtDetailRow;
+          const isEnt = Number(s.valor) >= 0;
+          return (
+            <>
+              {/* Cabeçalho colorido */}
+              <div className={`px-6 py-5 ${isEnt ? "bg-emerald-50" : "bg-rose-50"}`}>
+                <SheetHeader className="mb-3">
+                  <SheetTitle className={`text-base font-semibold ${isEnt ? "text-emerald-800" : "text-rose-800"}`}>
+                    {isEnt ? "Entrada no extrato" : "Saída no extrato"}
+                  </SheetTitle>
+                </SheetHeader>
+                <p className={`text-3xl font-bold ${isEnt ? "text-emerald-700" : "text-rose-600"}`}>
+                  {isEnt ? "+" : "−"}{formatBRL(Math.abs(Number(s.valor)))}
+                </p>
+                {s.saldoApos != null && (
+                  <p className={`text-xs mt-1 ${Number(s.saldoApos) < 0 ? "text-red-500" : "text-emerald-600"}`}>
+                    Saldo após: {formatBRL(Number(s.saldoApos))}
+                  </p>
+                )}
+              </div>
+
+              {/* Corpo */}
+              <div className="flex-1 px-6 py-4 space-y-4">
+
+                {/* Data + tipo */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-medium text-gray-500">Data:</span>
+                  <span className="text-sm text-gray-800">{fmtData(s.data)}</span>
+                  {s.interno
+                    ? <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">Mov. interna</span>
+                    : <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${isEnt ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-600"}`}>{isEnt ? "Entrada" : "Saída"}</span>
+                  }
+                </div>
+
+                {/* Descrição completa */}
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Descrição</p>
+                  <p className="text-sm text-gray-800 break-words leading-relaxed">{s.descricao || "—"}</p>
+                </div>
+
+                {/* Cheque */}
+                {s.chequeFornecedor && (
+                  <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 space-y-1">
+                    <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">🪙 Cheque</p>
+                    <p className="text-sm text-gray-800">Nº {s.chequeNumero ?? "—"} · {s.chequeFornecedor}</p>
+                    {s.chequeObraNome && <p className="text-xs text-gray-500">Obra: {s.chequeObraNome}</p>}
+                    {s.chequeNf && <p className="text-xs text-gray-500">NF: {s.chequeNf}</p>}
+                    {s.chequeVencimento && <p className="text-xs text-gray-500">Vencimento: {fmtData(s.chequeVencimento)}</p>}
+                  </div>
+                )}
+
+                {/* Fatura cartão */}
+                {s.faturaId && !s.chequeFornecedor && (
+                  <div className="rounded-lg bg-violet-50 border border-violet-200 px-4 py-3 space-y-1">
+                    <p className="text-xs font-semibold text-violet-700 uppercase tracking-wide">💳 Fatura de cartão</p>
+                    <p className="text-sm text-gray-800">{s.faturaCartao ?? "—"}{s.faturaMesRef ? ` · ${String(s.faturaMesRef).padStart(2,"0")}/${s.faturaAnoRef ?? ""}` : ""}</p>
+                    {s.faturaVencimento && <p className="text-xs text-gray-500">Vencimento: {fmtData(s.faturaVencimento)}</p>}
+                    {s.faturaTotal != null && <p className="text-xs text-gray-500">Total da fatura: {formatBRL(Math.abs(Number(s.faturaTotal)))}</p>}
+                  </div>
+                )}
+
+                {/* Demonstrativo IA */}
+                {(s.demoBeneficiario || s.demoTipo) && (
+                  <div className={`rounded-lg border px-4 py-3 space-y-1 ${s.demoVeredicto === "confirmado" ? "bg-emerald-50 border-emerald-200" : s.demoVeredicto === "errado" ? "bg-rose-50 border-rose-200" : "bg-violet-50 border-violet-200"}`}>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">
+                      {s.demoTipo === "boleto" ? "🧾 Boleto" : "💸 " + (s.demoTipo === "ted" ? "TED" : "PIX")} identificado por IA
+                      {s.demoVeredicto === "confirmado" && <span className="ml-2 text-emerald-700">✓ Conferido</span>}
+                      {s.demoVeredicto === "errado" && <span className="ml-2 text-rose-700">✗ Marcado como errado</span>}
+                    </p>
+                    {s.demoBeneficiario && <p className="text-sm text-gray-800 break-words">Beneficiário: {s.demoBeneficiario}</p>}
+                    {s.demoDocumento && <p className="text-xs text-gray-500">Documento: {s.demoDocumento}</p>}
+                    {s.demoMatch === "valor" && <p className="text-xs text-amber-600">Correspondência só por valor — confirme antes de lançar</p>}
+                  </div>
+                )}
+
+                {/* Vínculo cadastrado */}
+                {s.vinculoTipo && (
+                  <div className={`rounded-lg border px-4 py-3 space-y-1 ${s.vinculoVia === "cnpj" ? "bg-emerald-50 border-emerald-200" : s.vinculoConfianca === "media" ? "bg-amber-50 border-amber-200" : "bg-gray-50 border-gray-200"}`}>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+                      {s.vinculoTipo === "cliente" ? "👤 Cliente cadastrado" : "🏢 Fornecedor cadastrado"}
+                      {s.vinculoVia === "cnpj" && <span className="ml-2 text-emerald-700">· CNPJ confere</span>}
+                      {s.vinculoVia === "nome" && s.vinculoConfianca === "media" && <span className="ml-2 text-amber-700">· sugestão por nome</span>}
+                      {s.vinculoVia === "nome" && s.vinculoConfianca !== "media" && <span className="ml-2 text-gray-500">· palpite por nome</span>}
+                    </p>
+                    <p className="text-sm text-gray-800 break-words">{s.vinculoNome}</p>
+                  </div>
+                )}
+
+              </div>
+
+              {/* Rodapé com ações */}
+              <div className="px-6 py-4 border-t bg-gray-50 flex flex-col gap-2">
+                <Button
+                  className="w-full"
+                  onClick={() => { setStmtDetailRow(null); abrirLancar(s); }}
+                >
+                  <Plus className="w-4 h-4 mr-2" /> Lançar no ERP
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full text-red-600 border-red-200 hover:bg-red-50"
+                  onClick={() => { setStmtDetailRow(null); setConfirmExcluirLinha({ id: s.id, descricao: s.descricao || "—", valor: Number(s.valor), conciliado: false }); }}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" /> Apagar linha do extrato
+                </Button>
+              </div>
+            </>
+          );
+        })()}
+      </SheetContent>
+    </Sheet>
+
     </DashboardLayout>
   );
 }

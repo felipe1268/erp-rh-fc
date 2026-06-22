@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3511** — **CONCILIAÇÃO · SHEET DE DETALHE AO DUPLO-CLIQUE/DUPLO-TOQUE EM AMBAS AS LISTAS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Duplo-clique em extrato → Sheet lateral (valor, saldo, descrição completa, cheque/fatura/IA/vínculo, ações Lançar/Apagar). Duplo-clique no ERP → abre dialog detalhe existente (👁). Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3510** — **CONCILIAÇÃO · SALDO COLORIDO: VERMELHO SE NEGATIVO, VERDE SE POSITIVO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `saldoApos` nas linhas do extrato: `<0 → text-red-500`, `≥0 → text-emerald-600`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3509** — **CONCILIAÇÃO · BUGFIX MOVIMENTAÇÃO INTERNA: ITEM PERMANECIA NA LISTA APÓS CONFIRMAR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `onSuccess` agora adiciona `lineId` ao `dismissedStmtIds` + chama `refetchReport()`. Detalhe: `shared/changelog.ts`.
