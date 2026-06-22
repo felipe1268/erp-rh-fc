@@ -3655,9 +3655,18 @@ export default function FinanceiroConciliacao() {
                                         {ov && <span className="ml-1 px-1 py-px rounded text-[9px] font-bold bg-amber-100 text-amber-700">MANUAL</span>}
                                       </div>
                                       <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!ov) abrirDetalheSug(s); }} className="text-left w-full group/lan">
-                                        <div className={`text-sm font-medium truncate group-hover/lan:underline ${ov ? "text-amber-700" : "text-blue-700"}`}>
-                                          {ov ? (ov.fornecedorNome || ov.descricao || "—") : (s.entryFornecedor || s.entryDescricao || "—")}
-                                        </div>
+                                        {(() => {
+                                          const title = ov ? (ov.fornecedorNome || ov.descricao || "—") : (s.entryFornecedor || s.entryDescricao || "—");
+                                          const subDesc = ov
+                                            ? (ov.fornecedorNome && ov.descricao ? ov.descricao : null)
+                                            : (s.entryFornecedor && s.entryDescricao ? s.entryDescricao : null);
+                                          return (
+                                            <>
+                                              <div className={`text-sm font-medium truncate group-hover/lan:underline ${ov ? "text-amber-700" : "text-blue-700"}`}>{title}</div>
+                                              {subDesc && <div className="text-[11px] text-gray-400 truncate">{subDesc}</div>}
+                                            </>
+                                          );
+                                        })()}
                                         <div className="text-xs text-gray-500 truncate">
                                           {ov
                                             ? `${fmtData(ov.data)} · ${formatBRL(Math.abs(ov.valor))}${ov.obraNome ? ` · ${ov.obraNome}` : ""}`

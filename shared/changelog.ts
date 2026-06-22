@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3467 — **CONCILIAÇÃO BANCÁRIA · SUGESTÕES AUTOMÁTICAS — LANÇAMENTO EXIBE FORNECEDOR
+ * COMO TÍTULO PRINCIPAL + DESCRIÇÃO COMO SUBTÍTULO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * No card de lançamento de cada sugestão (e nas trocas manuais), a linha de identificação
+ * agora exibe `fornecedorNome` como título principal (em azul/âmbar) quando disponível.
+ * Quando tanto fornecedor quanto descrição existem, a descrição aparece como subtítulo
+ * em cinza claro (11px, truncado) logo abaixo do título. Se não há fornecedor, a descrição
+ * continua como título (fallback). Isso facilita a conciliação para entradas como medições
+ * de contratos onde o nome do fornecedor é mais identificável do que o texto da descrição.
+ *
  * Rev. 3466 — **CONCILIAÇÃO BANCÁRIA · CAMPO "CONCILIADO" EXIBE QUEM CONCILIOU + DATA/HORA
  * NO PADRÃO BRASILEIRO (DD/MM/AAAA HH:MM). BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
  *
