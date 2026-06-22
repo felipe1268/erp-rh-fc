@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3485** — **PLANO DE CONTAS · CONTAS IMP-001…IMP-015 RECLASSIFICADAS. UPDATE NO NEON · ZERO ALTER/DROP/DELETE.** Todas tinham lançamentos → não excluídas. Movidas para grupos: Despesas Variáveis (8 contas), Despesas Administrativas (2), Custos de Obra (1), Despesas Financeiras (2), Despesas Jurídicas (2). nivel=2, tipo e natureza corrigidos. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3484** — **PLANO DE CONTAS · BOTÃO "CARREGAR PADRÃO FC" DEFINITIVAMENTE REMOVIDO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Usuário quer só criação manual via "+ Nova Conta". Removidos: Sprout, confirmSeed, seedMut, botão, AlertDialog. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3483** — **PLANO DE CONTAS · CHECKBOXES PARA SELEÇÃO MÚLTIPLA + EXCLUSÃO EM LOTE + BOTÕES SEMPRE VISÍVEIS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Checkbox em cada linha + "Selecionar todas" no topo. Barra vermelha aparece ao marcar itens com botão "Excluir N selecionada(s)". AlertDialog de confirmação antes de excluir. Exclusão sequencial com relatório ok/fail. Botões +Subconta/Editar/Excluir agora sempre visíveis (sem hover-only). Linha selecionada com fundo azul. Detalhe: `shared/changelog.ts`.

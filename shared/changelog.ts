@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3485 — **PLANO DE CONTAS · CONTAS IMP-001…IMP-015 RECLASSIFICADAS PARA OS GRUPOS CORRETOS.
+ * ZERO FRONTEND · UPDATE NO NEON · ZERO ALTER/DROP/DELETE.**
+ * Todas as 15 contas tinham lançamentos → não foram excluídas; foram movidas via UPDATE.
+ * IMP-001/002/003/004/008/011/014/015 → pai=72 (5 Despesas Variáveis, despesa_variavel)
+ * IMP-005/010 → pai=60 (4 Despesas Administrativas, despesa_fixa)
+ * IMP-006 Topografia → pai=51 (3 Custos Diretos das Obras, custo_obra)
+ * IMP-007/012 → pai=80 (7 Despesas Financeiras, despesa_financeira)
+ * IMP-009/013 → pai=246 (6 Despesas Jurídicas, despesa_variavel)
+ * Todos com nivel=2, natureza=devedora.
+ *
  * Rev. 3484 — **PLANO DE CONTAS · BOTÃO "CARREGAR PADRÃO FC" DEFINITIVAMENTE REMOVIDO.
  * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Usuário confirmou: só quer criar contas manualmente via "+ Nova Conta".
