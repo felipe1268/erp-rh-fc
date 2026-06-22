@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3531** — **PONTO DIXI · BUGFIX BATIDAS DIXI IGNORADAS QUANDO EXISTE APONTAMENTO DE CAMPO. BACKEND PONTUAL · ZERO ALTER/DROP.** Importador usava Set "empId_data": qualquer registro existente bloqueava o dia inteiro. Fix: Set→Map com fonte+batidas; fonte='campo' → MERGE (une+ordena+reatribui slots+recalcula totais); fonte=manual → proteção total mantida. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3530** — **FORNECEDORES · BUGFIX CICLO/REGRAS SUMINDO AO SALVAR. BACKEND PONTUAL · ZERO ALTER/DROP.** `atualizarFornecedor` fazia só UPDATE em `empresasTerceiras`; sem linha vinculada → dados sumiam. Fix: upsert (SELECT→UPDATE ou INSERT). Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3529** — **FINANCEIRO · NOVA CATEGORIA "IMPOSTOS E TAXAS" (AUTO-0137). NEON · ZERO ALTER/DROP.** SyncSchema+ insere a categoria (despesa/devedora, nível 1) para toda empresa sem ela. Cobre retenções de contrato público, ISS, IOF operacional. Detalhe: `shared/changelog.ts`.

@@ -388,6 +388,8 @@ export const dixiPontoRouter = router({
       // ===== PROCESSAR REGISTROS =====
       const timeRecordsToInsert: any[] = [];
       const inconsistenciesToInsert: any[] = [];
+      // Rev. 3531 — guarda expectedMinutes/isDiaFolga por "empId_data" para uso no merge
+      const dixiExpectedMap = new Map<string, { expectedMinutes: number; isDiaFolga: boolean }>();
       const afdMarcacoesToInsert: any[] = [];
       let unmatchedCpfs: string[] = [];
       const mesesAfetados = new Set<string>();
@@ -544,6 +546,8 @@ export const dixiPontoRouter = router({
           }
 
           const isOddPunches = filtered.length % 2 !== 0;
+          // Rev. 3531 — salva metadados para possível merge com Apontamento de Campo
+          dixiExpectedMap.set(`${emp.id}_${data}`, { expectedMinutes, isDiaFolga });
 
           timeRecordsToInsert.push({
             companyId: input.companyId,
@@ -597,12 +601,30 @@ export const dixiPontoRouter = router({
         );
       }
 
-      // Buscar registros protegidos (manuais e apontamentos) para não duplicar
-      const protectedRecords = new Set<string>();
+      // Rev. 3531 — Busca registros existentes com batidas para poder mesclar Apontamento de Campo + Dixi
+      // (antes era Set simples: qualquer existente bloqueava o dia inteiro do Dixi)
+      const protectedRecords = new Map<string, {
+        id: number;
+        fonte: string | null;
+        entrada1: string | null;
+        saida1: string | null;
+        entrada2: string | null;
+        saida2: string | null;
+        entrada3: string | null;
+        saida3: string | null;
+      }>();
       for (const mesRef of Array.from(mesesAfetados)) {
         const existing = await db.select({
+          id: timeRecords.id,
           employeeId: timeRecords.employeeId,
           data: timeRecords.data,
+          fonte: timeRecords.fonte,
+          entrada1: timeRecords.entrada1,
+          saida1: timeRecords.saida1,
+          entrada2: timeRecords.entrada2,
+          saida2: timeRecords.saida2,
+          entrada3: timeRecords.entrada3,
+          saida3: timeRecords.saida3,
         }).from(timeRecords).where(
           and(
             companyFilter(timeRecords.companyId, input),
@@ -611,22 +633,99 @@ export const dixiPontoRouter = router({
           )
         );
         for (const r of existing) {
-          protectedRecords.add(`${r.employeeId}_${r.data}`);
+          protectedRecords.set(`${r.employeeId}_${r.data}`, {
+            id: r.id,
+            fonte: r.fonte,
+            entrada1: r.entrada1,
+            saida1: r.saida1,
+            entrada2: r.entrada2,
+            saida2: r.saida2,
+            entrada3: r.entrada3,
+            saida3: r.saida3,
+          });
         }
       }
 
-      // Filtrar registros DIXI que conflitam com registros protegidos
-      const filteredRecords = timeRecordsToInsert.filter(r => {
-        const key = `${r.employeeId}_${r.data}`;
-        return !protectedRecords.has(key);
-      });
+      // Separar: inserir normalmente / mesclar com Apontamento de Campo / ignorar (manual)
+      const toInsert: any[] = [];
+      const toMerge: Array<{
+        existingId: number;
+        existingPunches: string[];
+        dixi: any;
+        expectedMinutes: number;
+        isDiaFolga: boolean;
+      }> = [];
 
-      // Insert time records (excluindo dias já com registro manual/apontamento)
-      if (filteredRecords.length > 0) {
-        const batchSize = 50;
-        for (let i = 0; i < filteredRecords.length; i += batchSize) {
-          await db.insert(timeRecords).values(filteredRecords.slice(i, i + batchSize));
+      for (const r of timeRecordsToInsert) {
+        const key = `${r.employeeId}_${r.data}`;
+        const prot = protectedRecords.get(key);
+        if (!prot) {
+          toInsert.push(r);
+        } else if (prot.fonte === 'campo') {
+          // Apontamento de Campo: mescla a entrada do apontamento com as batidas do Dixi
+          const existingPunches = [prot.entrada1, prot.saida1, prot.entrada2, prot.saida2, prot.entrada3, prot.saida3]
+            .filter((p): p is string => !!p);
+          const meta = dixiExpectedMap.get(key) ?? { expectedMinutes: 480, isDiaFolga: false };
+          toMerge.push({ existingId: prot.id, existingPunches, dixi: r, ...meta });
         }
+        // fonte=manual ou qualquer outro → mantém proteção (descarta Dixi)
+      }
+
+      // Inserir dias novos
+      if (toInsert.length > 0) {
+        const batchSize = 50;
+        for (let i = 0; i < toInsert.length; i += batchSize) {
+          await db.insert(timeRecords).values(toInsert.slice(i, i + batchSize));
+        }
+      }
+
+      // Mesclar Apontamento de Campo com batidas Dixi complementares
+      for (const { existingId, existingPunches, dixi, expectedMinutes, isDiaFolga } of toMerge) {
+        const dixiPunches = [dixi.entrada1, dixi.saida1, dixi.entrada2, dixi.saida2, dixi.entrada3, dixi.saida3]
+          .filter((p): p is string => !!p);
+        // Une, deduplica (janela 2 min), ordena
+        const allPunches = [...existingPunches, ...dixiPunches].sort();
+        const merged: string[] = [];
+        for (const h of allPunches) {
+          if (merged.length === 0) { merged.push(h); continue; }
+          const last = merged[merged.length - 1];
+          const [lh, lm] = last.split(":").map(Number);
+          const [ch, cm] = h.split(":").map(Number);
+          if (Math.abs((ch * 60 + cm) - (lh * 60 + lm)) >= 2) merged.push(h);
+        }
+        const [me1 = "", ms1 = "", me2 = "", ms2 = "", me3 = "", ms3 = ""] = merged;
+        let mergedTotal = 0;
+        if (me1 && ms1) mergedTotal += diffMinutes(me1, ms1);
+        if (me2 && ms2) mergedTotal += diffMinutes(me2, ms2);
+        if (me3 && ms3) mergedTotal += diffMinutes(me3, ms3);
+
+        const diffBruto = mergedTotal - expectedMinutes;
+        let heMin = 0;
+        let atrasoMin = 0;
+        let faltasMerge = "0";
+        if (isDiaFolga && mergedTotal > 0) {
+          heMin = mergedTotal;
+        } else if (diffBruto > 0) {
+          heMin = diffBruto > tolSaida ? diffBruto : 0;
+        } else if (diffBruto < 0 && mergedTotal > 0) {
+          const atrasoReal = Math.abs(diffBruto);
+          if (atrasoReal >= faltaApos) faltasMerge = "1";
+          else if (atrasoReal > tolAtraso) atrasoMin = atrasoReal;
+        }
+
+        await db.update(timeRecords).set({
+          entrada1: me1 || null,
+          saida1: ms1 || null,
+          entrada2: me2 || null,
+          saida2: ms2 || null,
+          entrada3: me3 || null,
+          saida3: ms3 || null,
+          horasTrabalhadas: minutesToHHMM(mergedTotal),
+          horasExtras: heMin > 0 ? minutesToHHMM(heMin) : "0:00",
+          atrasos: atrasoMin > 0 ? minutesToHHMM(atrasoMin) : "0:00",
+          faltas: faltasMerge,
+          batidasBrutas: JSON.stringify(merged),
+        }).where(eq(timeRecords.id, existingId));
       }
 
       // Insert inconsistencies

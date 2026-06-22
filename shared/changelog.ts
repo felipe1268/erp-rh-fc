@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3531 — **PONTO DIXI · BUGFIX BATIDAS DIXI IGNORADAS QUANDO EXISTE APONTAMENTO DE CAMPO. BACKEND PONTUAL · ZERO ALTER/DROP.**
+ * Cenário: funcionário não bateu entrada no Dixi mas tem Apontamento de Campo no mesmo dia;
+ * as demais batidas (saída almoço, volta, saída final) existiam no Dixi mas sumiam no Espelho.
+ * Causa: importador usava Set de chaves "empId_data" para proteção — qualquer registro existente
+ * bloqueava o dia inteiro, descartando silenciosamente todas as batidas Dixi do dia.
+ * Fix: Set → Map com fonte+batidas. Lógica nova em 3 caminhos:
+ *   1. Sem registro → INSERT normal (comportamento anterior)
+ *   2. fonte='campo' → MERGE: une batidas existentes + Dixi, deduplica (janela 2 min), ordena,
+ *      reatribui slots (entrada1/saida1/...) e recalcula horasTrabalhadas/extras/atrasos/faltas.
+ *      O Apontamento continua como âncora (entrada1 protegida), Dixi complementa os demais slots.
+ *   3. fonte=manual → mantém proteção total (Dixi descartado — comportamento anterior).
+ * Arquivo: server/routers/dixiPonto.ts
+ *
  * Rev. 3530 — **FORNECEDORES · BUGFIX CICLO/REGRAS SUMINDO AO SALVAR. BACKEND PONTUAL · ZERO ALTER/DROP.**
  * `atualizarFornecedor` (server/routers/compras.ts) fazia apenas UPDATE em `empresasTerceiras`
  * WHERE fornecedor_id=id. Se o fornecedor não tinha linha lá (criado sem CNPJ ou antes do ciclo),
