@@ -6178,6 +6178,21 @@ export default function FinanceiroConciliacao() {
               </div>
             )}
             <DialogFooter className="shrink-0 border-t bg-gray-50 px-6 py-4 flex-col-reverse gap-2 sm:flex-row sm:gap-2">
+              {/* Botão manual de movimentação interna — sempre disponível quando há linha de extrato */}
+              {lancStatement?.id != null && (
+                <Button
+                  variant="ghost"
+                  type="button"
+                  className="w-full sm:w-auto sm:mr-auto text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                  disabled={naturezaInternaMut.isPending || lancBusy}
+                  onClick={() => naturezaInternaMut.mutate({ companyId, lineId: Number(lancStatement.id) })}
+                  title="Registrar esta linha como transferência interna entre contas do grupo (não gera lançamento no Contas a Pagar/Receber)"
+                >
+                  {naturezaInternaMut.isPending
+                    ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />Salvando…</>
+                    : <><ArrowLeftRight className="w-4 h-4 mr-1.5" />É movimentação interna</>}
+                </Button>
+              )}
               <Button variant="outline" className="w-full sm:w-auto" disabled={lancBusy} onClick={() => setLancStatement(null)}>Cancelar</Button>
               <Button variant="outline" className="w-full sm:w-auto" disabled={lancBusy} onClick={() => submitLancar(false)}>
                 {lancBusy ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Plus className="w-4 h-4 mr-1.5" />}{lancStatement?.id == null ? "Criar lançamento" : "Só lançar"}

@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3528** — **CONCILIAÇÃO · BOTÃO "É MOVIMENTAÇÃO INTERNA" NO DIALOG DE LANÇAMENTO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Botão ghost indigo no footer esquerdo do dialog Lançar — disponível mesmo sem detecção automática; chama `confirmarMovimentacaoInterna` e fecha sem gerar lançamento. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3527** — **CONCILIAÇÃO · FORMA DE PAGAMENTO "DÉBITO EM CONTA". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Adicionada opção `debito_em_conta` no Select de Forma de Pagamento do dialog de edição. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3526** — **CONCILIAÇÃO · CATEGORIA COM BUSCA POR TEXTO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Campo "Conta (Categoria)" no dialog de edição trocado de Select simples para `SearchableSelect` (busca com normalização NFD). Detalhe: `shared/changelog.ts`.

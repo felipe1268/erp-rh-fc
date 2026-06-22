@@ -1,6 +1,12 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3528 — **CONCILIAÇÃO · BOTÃO "É MOVIMENTAÇÃO INTERNA" NO DIALOG DE LANÇAMENTO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Botão ghost indigo "⇄ É movimentação interna" adicionado no footer esquerdo do dialog
+ * "Lançar no Contas a Receber/Pagar". Disponível sempre que houver linha de extrato (id != null),
+ * mesmo quando o ERP não detectou automaticamente. Chama `confirmarMovimentacaoInterna`
+ * (mesma mutation do aviso âmbar automático). Fecha a tela e concilia a linha sem gerar lançamento.
+ *
  * Rev. 3527 — **CONCILIAÇÃO · FORMA DE PAGAMENTO "DÉBITO EM CONTA". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Adicionado `SelectItem value="debito_em_conta"` no Select de Forma de Pagamento
  * do dialog de edição de lançamento (`FinanceiroConciliacao.tsx`).
