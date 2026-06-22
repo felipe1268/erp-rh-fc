@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3534** — **CONCILIAÇÃO · LIMPAR EXTRATOS DE TODAS AS CONTAS DO PERÍODO (BULK). BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Novo endpoint `limparExtratoMes` (sem filtro de conta): soft-delete de todas as linhas do extrato no período + reverte conciliação dos lançamentos vinculados. Botão ghost vermelho "Limpar todos extratos do período" ao lado do label "Conta Bancária" — só aparece quando há período definido. AlertDialog com aviso âmbar explicando que afeta todas as contas. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3533** — **CONCILIAÇÃO · BUGFIX DEDUP DE EXTRATO DESCARTAVA LANÇAMENTOS IDÊNTICOS LEGÍTIMOS. BACKEND + FRONTEND · ZERO ALTER/DROP/DELETE.** Chave de dedup `(data, descricao, valor)` descartava 6 de 7 débitos de capitalização idênticos. Fix: adiciona `saldo_apos` à chave (`$6::numeric IS NULL OR saldo_apos=$6`) — cada linha tem saldo diferente → todas inseridas. Compatível com OFX sem saldo (IS NULL → passa). Badge âmbar "⚠ Duplicata" nas linhas com mesmo valor+data. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3532** — **CONCILIAÇÃO · BUGFIX TOLERÂNCIA DE DATA NA SUGESTÃO AUTOMÁTICA. BACKEND + FRONTEND · ZERO ALTER/DROP/DELETE.** `toleranciaDias` estava inicializado com `diasDoMes` (ex: 31) e re-sincronizado a cada troca de mês via useEffect — sistema enviava `tol=31` ao backend aceitando pares com até 31 dias de diferença. Fix: default → 0 (mesmo dia) em ambas as telas + localStorage cap 7d + backend fallback 0 + confiança "alta" agora exige `delta===0` (antes `<=1`). Detalhe: `shared/changelog.ts`.
@@ -61,8 +63,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3529** — **FINANCEIRO · NOVA CATEGORIA "IMPOSTOS E TAXAS" (AUTO-0137). NEON · ZERO ALTER/DROP.** SyncSchema+ insere a categoria (despesa/devedora, nível 1) para toda empresa sem ela. Cobre retenções de contrato público, ISS, IOF operacional. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3528** — **CONCILIAÇÃO · BOTÃO "É MOVIMENTAÇÃO INTERNA" NO DIALOG DE LANÇAMENTO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Botão ghost indigo no footer esquerdo do dialog Lançar — disponível mesmo sem detecção automática; chama `confirmarMovimentacaoInterna` e fecha sem gerar lançamento. Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3527** — **CONCILIAÇÃO · FORMA DE PAGAMENTO "DÉBITO EM CONTA". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Adicionada opção `debito_em_conta` no Select de Forma de Pagamento do dialog de edição. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3526** — **CONCILIAÇÃO · CATEGORIA COM BUSCA POR TEXTO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Campo "Conta (Categoria)" no dialog de edição trocado de Select simples para `SearchableSelect` (busca com normalização NFD). Detalhe: `shared/changelog.ts`.
 

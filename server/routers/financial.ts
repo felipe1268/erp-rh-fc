@@ -7169,6 +7169,47 @@ export const financialRouter = router({
     return { ok: true, afetados };
   }),
 
+  // Rev. 3534 — Limpar extratos de TODAS as contas da empresa no período (bulk).
+  // Mesmo mecanismo do limparExtrato, mas sem filtro de conta — afeta todas as contas.
+  // Usado na fase de validação do sistema para reimportar extratos do mês zerado.
+  limparExtratoMes: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    dataInicio: z.string(),
+    dataFim: z.string(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+
+    let afetados = 0;
+    await db.transaction(async (tx: any) => {
+      // 1) Reverte conciliação dos lançamentos vinculados às linhas a remover.
+      await dbExecute(tx,
+        `UPDATE financial_entries e SET conciliado=0, data_conciliacao=NULL
+           FROM bank_statement_lines l
+          WHERE l.company_id=$1 AND l.data>=$2 AND l.data<=$3
+            AND l.excluido_em IS NULL AND COALESCE(l.conciliado,0)=1 AND l.entry_id IS NOT NULL
+            AND e.id=l.entry_id AND e.company_id=l.company_id`,
+        [input.companyId, input.dataInicio, input.dataFim]);
+      // 2) Soft-delete de todas as linhas do extrato no período.
+      const res = await dbExecute(tx,
+        `UPDATE bank_statement_lines SET excluido_em=NOW(), conciliado=0, entry_id=NULL
+          WHERE company_id=$1 AND data>=$2 AND data<=$3 AND excluido_em IS NULL
+          RETURNING id`,
+        [input.companyId, input.dataInicio, input.dataFim]);
+      afetados = rows(res).length;
+    });
+
+    await createAuditLog(db, {
+      userId: ctx.user?.id,
+      action: "bank_statement_clear_all",
+      details: `Limpeza TOTAL de extrato (empresa ${input.companyId}, ${input.dataInicio}..${input.dataFim}): ${afetados} linha(s) removida(s)`,
+      companyId: input.companyId,
+    });
+
+    return { ok: true, afetados };
+  }),
+
   // Rev. 3386 — Soft-delete de UMA linha do extrato (granular — sem limpar o período todo).
   // Mesmo mecanismo do limparExtrato: reverte conciliação vinculada + marca excluido_em.
   // Permite corrigir lançamentos importados errados sem apagar tudo.

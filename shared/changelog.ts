@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3534 — **CONCILIAÇÃO · LIMPAR EXTRATOS DE TODAS AS CONTAS DO PERÍODO (BULK). BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ * Contexto: durante a validação do sistema é comum precisar zerar o extrato do mês inteiro e reimportar.
+ * O fluxo anterior exigia entrar em cada conta individualmente e clicar "Limpar extrato" — N cliques.
+ * Fix: novo endpoint `limparExtratoMes` (backend) sem filtro de conta — afeta todas as contas da empresa
+ * no período. Mesmo mecanismo do `limparExtrato` individual: (1) reverte `conciliado/data_conciliacao`
+ * nos `financial_entries` vinculados, (2) soft-delete (`excluido_em=NOW()`) das linhas do extrato.
+ * Nenhum lançamento do ERP é excluído. Grava auditoria `bank_statement_clear_all`.
+ * Frontend: botão ghost vermelho "Limpar todos extratos do período" aparece ao lado do label
+ * "Conta Bancária" sempre que há um período definido. Abre AlertDialog com aviso âmbar
+ * destacando que afeta TODAS as contas do período. Limpeza dispara refetch de status/ano/report.
+ * Arquivos: `server/routers/financial.ts` (+endpoint limparExtratoMes),
+ *            `client/src/pages/financeiro/FinanceiroConciliacao.tsx` (+state/mutation/button/dialog).
+ *
  * Rev. 3533 — **CONCILIAÇÃO · BUGFIX DEDUP DE EXTRATO DESCARTAVA LANÇAMENTOS IDÊNTICOS LEGÍTIMOS. BACKEND + FRONTEND · ZERO ALTER/DROP/DELETE.**
  * Causa: a chave de dedup do importador era `(company_id, conta_bancaria_id, data, descricao, valor)`.
  * Quando o extrato contém N transações com mesmo valor/data/histórico (ex.: 7 débitos de capitalização

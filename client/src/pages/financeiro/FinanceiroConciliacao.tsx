@@ -327,6 +327,8 @@ export default function FinanceiroConciliacao() {
   const [demoConf, setDemoConf] = useState<any | null>(null);
   // Rev. 3179 — "Limpar extrato" (confirmação) + alerta de extrato de outro mês.
   const [confirmLimpar, setConfirmLimpar] = useState(false);
+  // Rev. 3534 — "Limpar TODAS as contas do mês" (bulk).
+  const [showLimparMesDlg, setShowLimparMesDlg] = useState(false);
   // Rev. 3386 — exclusão individual de linha do extrato
   const [confirmExcluirLinha, setConfirmExcluirLinha] = useState<{ id: number; descricao: string; valor: number; conciliado: boolean } | null>(null);
   // Rev. 3410 — troca manual de lançamento vinculado na sugestão
@@ -829,6 +831,15 @@ export default function FinanceiroConciliacao() {
       refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true);
     },
     onError: (e: any) => toast({ title: "Erro ao limpar extrato", description: e.message, variant: "destructive" }),
+  });
+  // Rev. 3534 — Limpar extratos de TODAS as contas do mês (bulk — validação do sistema).
+  const limparExtratoMesMut = (trpc as any).financial.limparExtratoMes.useMutation({
+    onSuccess: (res: any) => {
+      toast({ title: res.afetados > 0 ? `Extratos limpos! ${formatInt(res.afetados)} linha(s) removida(s) de todas as contas.` : "Nenhuma linha encontrada neste período." });
+      setShowLimparMesDlg(false);
+      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true);
+    },
+    onError: (e: any) => { toast({ title: "Erro ao limpar extratos", description: e.message, variant: "destructive" }); setShowLimparMesDlg(false); },
   });
   // Rev. 3386 — exclusão individual (soft-delete) de uma linha do extrato.
   const excluirLinhaMut = (trpc as any).financial.excluirLinhaExtrato.useMutation({
@@ -2574,7 +2585,21 @@ export default function FinanceiroConciliacao() {
                 )}
               </div>
               <div>
-                <p className="text-xs text-gray-500 mb-2">Conta Bancária</p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-gray-500">Conta Bancária</p>
+                  {periodoDefinido && (
+                    <button
+                      type="button"
+                      onClick={() => setShowLimparMesDlg(true)}
+                      disabled={limparExtratoMesMut.isPending}
+                      className="flex items-center gap-1 text-[11px] text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-0.5 rounded transition-colors disabled:opacity-50"
+                      title="Remove todos os extratos importados de todas as contas neste período. Os lançamentos do ERP ficam intactos."
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      Limpar todos extratos do período
+                    </button>
+                  )}
+                </div>
                 {(bankAccounts ?? []).length === 0 ? (
                   <p className="text-sm text-gray-400 py-2">Nenhuma conta bancária cadastrada.</p>
                 ) : (
@@ -5644,6 +5669,41 @@ export default function FinanceiroConciliacao() {
                 onClick={(e: any) => { e.preventDefault(); limparMut.mutate({ companyId, contaBancariaId: parseInt(contaBancariaId), dataInicio, dataFim }); }}
               >
                 {limparMut.isPending ? "Limpando..." : "Sim, limpar extrato"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Rev. 3534 — Limpar TODOS os extratos do período (todas as contas). */}
+        <AlertDialog open={showLimparMesDlg} onOpenChange={(o: boolean) => { if (!o && !limparExtratoMesMut.isPending) setShowLimparMesDlg(false); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <Trash2 className="w-5 h-5 text-red-600" />
+                Limpar extratos de todas as contas?
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-sm text-gray-600">
+                  <p>
+                    Isso remove <strong>todas as linhas de extrato</strong> de <strong>todas as contas bancárias</strong> no período de <strong>{periodoLabel}</strong>.
+                  </p>
+                  <p>
+                    Os lançamentos do ERP que estavam conciliados voltam a ficar <strong>pendentes</strong> — nada é excluído do ERP.
+                  </p>
+                  <p className="text-amber-700 bg-amber-50 rounded px-3 py-2 text-[12px]">
+                    ⚠ Use apenas para reimportar extratos durante a validação do sistema. Esta ação afeta <strong>todas as contas</strong> do período de uma vez.
+                  </p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={limparExtratoMesMut.isPending}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-600 hover:bg-red-700"
+                disabled={limparExtratoMesMut.isPending}
+                onClick={(e: any) => { e.preventDefault(); limparExtratoMesMut.mutate({ companyId, dataInicio, dataFim }); }}
+              >
+                {limparExtratoMesMut.isPending ? "Limpando..." : "Sim, limpar todos os extratos"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
