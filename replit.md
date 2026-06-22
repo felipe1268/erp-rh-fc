@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3526** — **CONCILIAÇÃO · CATEGORIA COM BUSCA POR TEXTO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Campo "Conta (Categoria)" no dialog de edição trocado de Select simples para `SearchableSelect` (busca com normalização NFD). Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3525** — **FINANCEIRO · INATIVAR "MEDIÇÃO DE PROJETO" (AUTO-0136). NEON · ZERO ALTER/DROP/DELETE.** Criada por engano na Rev.3524 (já existe "CONSULTORIA E PROJETOS"). SyncSchema+ faz soft-delete (`ativo=0`). Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3523** — **OBRAS · BUGFIX TIPO "PROJETOS" — ZOD ENUM NO BACKEND. BACKEND PONTUAL · ZERO ALTER/DROP.** `z.enum` nos 2 endpoints de criar/editar obra (server/routers.ts) não incluía `"projeto"` → erro ao salvar. Corrigido. Detalhe: `shared/changelog.ts`.

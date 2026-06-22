@@ -20,6 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX, FileSpreadsheet, FileDown, Plus, Maximize2, Minimize2, Search, Users, Building2, Pencil, Wallet, CircleCheck, CircleDot, Zap } from "lucide-react";
 import { formatConta, formatAgencia } from "@/lib/formatters";
 import { NaturezaOverrideDialog, NaturezaBadge, type LancNaturezaLinha } from "./_NaturezaOverride";
+import { SearchableSelect } from "@/components/SearchableSelect";
 import { MapaMovimentacaoInternaDialog } from "./_MapaMovimentacaoInterna";
 import { ConferirChequesExtratoDialog } from "./_ConferirChequesExtrato";
 
@@ -4406,14 +4407,16 @@ export default function FinanceiroConciliacao() {
                             {/* Conta categoria */}
                             <div className="space-y-1.5">
                               <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Conta (Categoria)</Label>
-                              <Select value={detEditForm.contaId != null ? String(detEditForm.contaId) : "__none__"}
-                                onValueChange={(v) => { if (v === "__none__") { setDetEditForm(f => f ? { ...f, contaId: null, contaNome: "" } : f); } else { const opt = catOpts.find(o => String(o.id) === v); setDetEditForm(f => f ? { ...f, contaId: Number(v), contaNome: opt?.nome ?? "" } : f); } }}>
-                                <SelectTrigger className="w-full"><SelectValue placeholder="Selecione a conta…" /></SelectTrigger>
-                                <SelectContent className="max-h-72">
-                                  <SelectItem value="__none__">— Sem categoria —</SelectItem>
-                                  {catOpts.filter(o => !detEditForm?.tipo || o.tipo === detEditForm.tipo).map(o => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
-                                </SelectContent>
-                              </Select>
+                              <SearchableSelect
+                                value={detEditForm.contaId != null ? String(detEditForm.contaId) : "__none__"}
+                                onValueChange={(v) => { if (v === "__none__") { setDetEditForm(f => f ? { ...f, contaId: null, contaNome: "" } : f); } else { const opt = catOpts.find(o => String(o.id) === v); setDetEditForm(f => f ? { ...f, contaId: Number(v), contaNome: opt?.nome ?? "" } : f); } }}
+                                placeholder="Selecione a conta…"
+                                searchPlaceholder="Digitar para filtrar…"
+                                options={[
+                                  { value: "__none__", label: "— Sem categoria —" },
+                                  ...catOpts.filter(o => !detEditForm?.tipo || o.tipo === detEditForm.tipo).map(o => ({ value: String(o.id), label: o.nome })),
+                                ]}
+                              />
                             </div>
                             {/* Conta bancária */}
                             <div className="space-y-1.5">

@@ -1,6 +1,12 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3526 — **CONCILIAÇÃO · CATEGORIA COM BUSCA POR TEXTO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Campo "Conta (Categoria)" no dialog de edição de lançamento substituído de `Select` simples
+ * para `SearchableSelect` (Popover + input de busca com normalização NFD).
+ * O usuário digita para filtrar em tempo real sem rolar a lista inteira.
+ * `FinanceiroConciliacao.tsx` — import + troca do bloco Select.
+ *
  * Rev. 3525 — **FINANCEIRO · INATIVAR "MEDIÇÃO DE PROJETO" (AUTO-0136). NEON · ZERO ALTER/DROP/DELETE.**
  * Categoria criada por engano na Rev.3524 — já existe "CONSULTORIA E PROJETOS" para o mesmo caso.
  * SyncSchema+ executa `UPDATE financial_accounts SET ativo=0 WHERE LOWER(nome)='medição de projeto'
