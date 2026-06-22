@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3471 — **OBRAS · BUGFIX — STATUS COM VALOR LEGADO NO BANCO CAUSAVA ReferenceError
+ * AO SALVAR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * CAUSA: `openEdit` fazia `obra.status || "Planejamento"` — se o DB tivesse um valor
+ * não-nulo mas fora do enum (ex: "Em Andamento" com espaço, legado), o Select ficava
+ * sem match e o submit enviava o valor inválido, causando erro Zod no backend:
+ * `invalid_value: expected one of "Planejamento"|"Em_Andamento"|...`.
+ *
+ * FIX: (1) `openEdit` normaliza: `STATUS_OPTIONS.some(s.value===obra.status) ? obra.status : "Planejamento"`.
+ * (2) Guard duplo em `handleSave`/cleanForm: se `cleanForm.status` não está na lista → "Planejamento".
+ *
  * Rev. 3470 — **OBRAS · BUGFIX CRÍTICO — AlertDialogs (confirmDeleteId / confirmRemoveSnId /
  * confirmMesclarOpen) ESTAVAM DENTRO DO RETURN DE ConvencaoSection EM VEZ DO RETURN DE
  * Obras(). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**

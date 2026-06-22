@@ -347,7 +347,7 @@ export default function Obras() {
       cliente: obra.cliente || "",
       responsavel: obra.responsavel || "",
       responsavelId: obra.responsavelId ?? null,
-      status: obra.status || "Planejamento",
+      status: STATUS_OPTIONS.some(s => s.value === obra.status) ? obra.status : "Planejamento",
       cep: obra.cep || "", endereco: obra.endereco || "",
       dataInicio: obra.dataInicio || "", dataPrevisaoFim: obra.dataPrevisaoFim || "",
       observacoes: obra.observacoes || "",
@@ -522,6 +522,9 @@ export default function Obras() {
     ) as any;
     cleanForm.nome = nomeEfetivo;
     cleanForm.jornadaTrabalho = comporJornadaObra();
+    if (cleanForm.status && !STATUS_OPTIONS.some((s: any) => s.value === cleanForm.status)) {
+      cleanForm.status = "Planejamento";
+    }
     if (editingId) {
       updateMut.mutate({ id: editingId, ...cleanForm } as any);
     } else {

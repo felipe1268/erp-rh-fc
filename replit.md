@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3470** — **OBRAS · BUGFIX CRÍTICO — AlertDialogs (confirmDeleteId / confirmRemoveSnId / confirmMesclarOpen) MOVIDOS DE ConvencaoSection PARA O RETURN DE Obras(). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** ReferenceError "Can't find variable: confirmDeleteId" ao abrir /obras. Causa: Rev. 3456 colocou os dialogs no componente auxiliar sem acesso ao estado do pai. Detalhe: `shared/changelog.ts`.
+- **Rev. 3471** — **OBRAS · BUGFIX — STATUS LEGADO DO BANCO (FORA DO ENUM) CAUSAVA ERRO AO SALVAR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `openEdit` normaliza `obra.status` via `STATUS_OPTIONS.some` → fallback "Planejamento"; guard duplo em `handleSave`. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3469** — **CONCILIAÇÃO BANCÁRIA · CAMPO OBRA NO DIALOG DE EDIÇÃO — "📋 Da planilha: X" SEMPRE VISÍVEL NO MODO EDIÇÃO (NÃO SÓ QUANDO obraId É NULL). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Texto cinza neutro exibido abaixo do select sempre que obraNome existe, inclusive após auto-match. Detalhe: `shared/changelog.ts`.
+- **Rev. 3470** — **OBRAS · BUGFIX CRÍTICO — AlertDialogs (confirmDeleteId / confirmRemoveSnId / confirmMesclarOpen) MOVIDOS DE ConvencaoSection PARA O RETURN DE Obras(). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** ReferenceError "Can't find variable: confirmDeleteId" ao abrir /obras. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
 
