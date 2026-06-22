@@ -1,6 +1,13 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3530 — **FORNECEDORES · BUGFIX CICLO/REGRAS SUMINDO AO SALVAR. BACKEND PONTUAL · ZERO ALTER/DROP.**
+ * `atualizarFornecedor` (server/routers/compras.ts) fazia apenas UPDATE em `empresasTerceiras`
+ * WHERE fornecedor_id=id. Se o fornecedor não tinha linha lá (criado sem CNPJ ou antes do ciclo),
+ * o UPDATE batia em 0 linhas e todos os dados de ciclo + regras_produto_json sumiam silenciosamente.
+ * Fix: upsert — primeiro SELECT para verificar existência; se existe → UPDATE (caminho antigo);
+ * se não existe → INSERT mínimo (companyId, razaoSocial, cnpj, status, fornecedorId) + cicloPayload.
+ *
  * Rev. 3529 — **FINANCEIRO · NOVA CATEGORIA "IMPOSTOS E TAXAS" (AUTO-0137). NEON · ZERO ALTER/DROP.**
  * SyncSchema+ insere `IMPOSTOS E TAXAS` (despesa/devedora, nível 1, sem pai) para toda empresa
  * que ainda não a tenha. Cobre retenções de contrato público, ISS, IOF operacional e tributos

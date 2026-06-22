@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3530** — **FORNECEDORES · BUGFIX CICLO/REGRAS SUMINDO AO SALVAR. BACKEND PONTUAL · ZERO ALTER/DROP.** `atualizarFornecedor` fazia só UPDATE em `empresasTerceiras`; sem linha vinculada → dados sumiam. Fix: upsert (SELECT→UPDATE ou INSERT). Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3529** — **FINANCEIRO · NOVA CATEGORIA "IMPOSTOS E TAXAS" (AUTO-0137). NEON · ZERO ALTER/DROP.** SyncSchema+ insere a categoria (despesa/devedora, nível 1) para toda empresa sem ela. Cobre retenções de contrato público, ISS, IOF operacional. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3528** — **CONCILIAÇÃO · BOTÃO "É MOVIMENTAÇÃO INTERNA" NO DIALOG DE LANÇAMENTO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Botão ghost indigo no footer esquerdo do dialog Lançar — disponível mesmo sem detecção automática; chama `confirmarMovimentacaoInterna` e fecha sem gerar lançamento. Detalhe: `shared/changelog.ts`.

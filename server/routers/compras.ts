@@ -1579,6 +1579,8 @@ export const comprasRouter = router({
         .where(eq(fornecedores.id, id));
       // Rev. 3440 — sync ciclo de fechamento → empresas_terceiras (WHERE fornecedor_id=id)
       // Rev. 3514 — inclui cicloDataReferencia
+      // Rev. 3530 — upsert: se não existir linha em empresasTerceiras para este fornecedor,
+      //   cria-a primeiro (fornecedores sem CNPJ ou criados antes do ciclo perdiam dados silenciosamente).
       const cicloPayload: Record<string, any> = {};
       if (cicloPagamento !== undefined) cicloPayload.cicloPagamento = cicloPagamento;
       if (cicloDiaFechamento !== undefined) cicloPayload.cicloDiaFechamento = cicloDiaFechamento;
@@ -1588,13 +1590,34 @@ export const comprasRouter = router({
       if (cicloDataReferencia !== undefined) cicloPayload.cicloDataReferencia = cicloDataReferencia;
       if (regrasProdutoJson !== undefined) cicloPayload.regrasProdutoJson = regrasProdutoJson;
       if (Object.keys(cicloPayload).length > 0) {
-        await db.update(empresasTerceiras)
-          .set(cicloPayload)
+        const [existsTerceira] = await db
+          .select({ id: empresasTerceiras.id })
+          .from(empresasTerceiras)
           .where(and(
             eq((empresasTerceiras as any).fornecedorId, id),
             eq(empresasTerceiras.companyId, (existing as any).companyId),
             isNull(empresasTerceiras.deletedAt),
-          ));
+          ))
+          .limit(1);
+        if (existsTerceira) {
+          await db.update(empresasTerceiras)
+            .set(cicloPayload)
+            .where(and(
+              eq((empresasTerceiras as any).fornecedorId, id),
+              eq(empresasTerceiras.companyId, (existing as any).companyId),
+              isNull(empresasTerceiras.deletedAt),
+            ));
+        } else {
+          // Cria a linha mínima + campos de ciclo/regras já preenchidos
+          await db.insert(empresasTerceiras).values({
+            companyId: (existing as any).companyId,
+            razaoSocial: upperCaseEmpresa((existing as any).razaoSocial || (existing as any).nomeFantasia || "Fornecedor"),
+            cnpj: (existing as any).cnpj || "",
+            status: "ativa",
+            fornecedorId: id,
+            ...cicloPayload,
+          } as any);
+        }
       }
       return { success: true };
     }),
