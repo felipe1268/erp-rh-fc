@@ -3932,28 +3932,24 @@ Regras:
         // que ainda não a tenha. Cobre retenções, ISS, IOF operacional e demais tributos
         // não detalhados nas categorias específicas (IRPJ/CSLL/IOF). Idempotente.
         try {
-          await db.execute(sql`
-            INSERT INTO financial_accounts
-              (company_id, codigo, nome, tipo, natureza, nivel, conta_pai_id, centro_custo_id, ativo, ordem)
-            SELECT DISTINCT
-              fa.company_id,
-              'AUTO-0137',
-              'IMPOSTOS E TAXAS',
-              'despesa',
-              'devedora',
-              1,
-              NULL,
-              NULL,
-              1,
-              999
-            FROM financial_accounts fa
+          // natureza deve ser 'fixo'|'variavel' para categorias (não 'devedora' que é do Plano de Contas)
+          // NOT EXISTS também verifica codigo para evitar conflito caso exista registro inativo
+          const companiesNeeding0137 = await db.$client.query(`
+            SELECT DISTINCT company_id FROM financial_accounts fa
             WHERE NOT EXISTS (
               SELECT 1 FROM financial_accounts ex
               WHERE ex.company_id = fa.company_id
-                AND LOWER(ex.nome) = 'impostos e taxas'
-                AND ex.ativo = 1
+                AND (LOWER(ex.nome) = 'impostos e taxas' OR ex.codigo = 'AUTO-0137')
             )
           `);
+          for (const row of companiesNeeding0137.rows) {
+            await db.$client.query(`
+              INSERT INTO financial_accounts
+                (company_id, codigo, nome, tipo, natureza, nivel, conta_pai_id, centro_custo_id, ativo, ordem)
+              VALUES ($1, 'AUTO-0137', 'IMPOSTOS E TAXAS', 'despesa', 'variavel', 1, NULL, NULL, 1, 999)
+              ON CONFLICT DO NOTHING
+            `, [row.company_id]);
+          }
           console.log(`[SyncSchema+] Rev. 3529: categoria "IMPOSTOS E TAXAS" (AUTO-0137) garantida em todas as empresas.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3529 IMPOSTOS E TAXAS:`, e?.message || e); }
 
