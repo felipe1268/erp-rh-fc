@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -594,62 +593,78 @@ export default function FinanceiroPlanoDeConta() {
 
         {/* ── Modal Nova / Editar ── */}
         <Dialog open={dialogOpen} onOpenChange={(o) => o ? setDialogOpen(true) : closeDialog()}>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Tag className="w-4 h-4 text-blue-600" />
-                {form.id ? "Editar Conta" : "Nova Conta"}
-              </DialogTitle>
-            </DialogHeader>
+          <DialogContent className="max-w-xl w-full max-h-[92vh] overflow-y-auto p-0 gap-0 rounded-2xl">
 
-            <div className="space-y-5 pt-1">
+            {/* Cabeçalho colorido por tipo */}
+            {(() => {
+              const meta = TIPO_META[form.tipo] ?? TIPO_META["custo_obra"];
+              const tipoLabel = TIPOS.find(t => t.value === form.tipo)?.label;
+              return (
+                <div className={cn("rounded-t-2xl px-6 py-4 flex items-center gap-3 border-b border-black/5", meta.color.split(" ")[0])}>
+                  <div className={cn("p-2 rounded-xl border", meta.color)}>
+                    <Tag className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-base font-bold text-slate-800 leading-tight">
+                      {form.id ? "Editar Conta" : "Nova Conta"}
+                    </DialogTitle>
+                    {tipoLabel && (
+                      <span className={cn("text-[11px] font-medium px-2 py-0.5 rounded-full border inline-block mt-0.5", meta.color)}>
+                        {tipoLabel}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="px-6 pt-5 pb-2 space-y-5">
 
               {/* ── Grupo pai ── */}
               <div>
-                <Label className="text-sm font-semibold text-slate-800">
-                  Dentro de qual grupo? <span className="text-slate-400 font-normal text-xs">(opcional — deixe vazio para conta raiz)</span>
-                </Label>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+                  Grupo pai <span className="normal-case font-normal text-slate-400">(vazio = conta raiz)</span>
+                </p>
                 <Popover open={paiPopoverOpen} onOpenChange={setPaiPopoverOpen}>
                   <PopoverTrigger asChild>
                     <button
                       type="button"
                       className={cn(
-                        "w-full flex items-center justify-between rounded-md border px-3 h-10 text-sm bg-white transition-colors",
-                        paiPopoverOpen ? "border-blue-400 ring-2 ring-blue-100" : "border-slate-200 hover:border-slate-300",
+                        "w-full flex items-center justify-between rounded-xl border px-4 h-12 text-sm bg-slate-50 transition-all",
+                        paiPopoverOpen ? "border-blue-400 ring-2 ring-blue-100 bg-white" : "border-slate-200 hover:border-blue-300 hover:bg-white",
                       )}
                     >
                       {paiSelecionado ? (
                         <span className="flex items-center gap-2 text-slate-900 truncate">
-                          <span className="font-mono text-xs text-slate-500">{paiSelecionado.codigo}</span>
-                          <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
-                          <span className="truncate">{paiSelecionado.nome}</span>
+                          <span className="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 shrink-0">{paiSelecionado.codigo}</span>
+                          <span className="truncate font-medium">{paiSelecionado.nome}</span>
                         </span>
                       ) : (
-                        <span className="text-slate-400 flex items-center gap-1.5">
-                          <Layers className="w-3.5 h-3.5" />
-                          Grupo principal (conta de nível 1)
+                        <span className="text-slate-400 flex items-center gap-2">
+                          <Layers className="w-4 h-4" />
+                          <span>Grupo principal (nível raiz)</span>
                         </span>
                       )}
                       <div className="flex items-center gap-1 shrink-0 ml-2">
                         {paiSelecionado && (
                           <span
-                            className="text-slate-400 hover:text-red-500 px-1 text-base leading-none"
+                            className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-red-100 text-slate-400 hover:text-red-500 text-lg leading-none transition-colors"
                             role="button"
                             tabIndex={-1}
                             onClick={(e) => { e.stopPropagation(); e.preventDefault(); onPickParent(""); setPaiPopoverOpen(false); }}
                           >×</span>
                         )}
-                        <ChevronsUpDown className="w-3.5 h-3.5 text-slate-400" />
+                        <ChevronsUpDown className="w-4 h-4 text-slate-400" />
                       </div>
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start" sideOffset={4}>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-xl shadow-lg" align="start" sideOffset={4}>
                     <Command filter={(v, q) => {
                       const n = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                       return n(v).includes(n(q)) ? 1 : 0;
                     }}>
-                      <CommandInput placeholder="Buscar conta..." />
-                      <CommandList className="max-h-72">
+                      <CommandInput placeholder="Buscar conta..." className="h-11" />
+                      <CommandList className="max-h-64">
                         <CommandEmpty className="py-6 text-center text-sm text-slate-400">Nenhuma conta encontrada.</CommandEmpty>
                         <CommandGroup>
                           <CommandItem
@@ -681,26 +696,24 @@ export default function FinanceiroPlanoDeConta() {
                 </Popover>
               </div>
 
-              <div className="h-px bg-slate-100" />
-
               {/* ── Código + Nome ── */}
-              <div className="grid grid-cols-[140px,1fr] gap-3">
+              <div className="grid grid-cols-[120px,1fr] gap-3">
                 <div>
-                  <Label className="text-sm font-semibold text-slate-800">Código *</Label>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Código *</p>
                   <Input
-                    className="mt-1.5 font-mono"
+                    className="h-12 font-mono text-base rounded-xl bg-slate-50 border-slate-200 focus:bg-white"
                     value={form.codigo}
                     onChange={e => setForm(f => ({ ...f, codigo: e.target.value }))}
                     placeholder={paiSelecionado ? `${paiSelecionado.codigo}.X` : "Ex: 1"}
                   />
                   {paiSelecionado && (
-                    <p className="text-[10px] text-blue-500 mt-1">Gerado automaticamente — você pode editar.</p>
+                    <p className="text-[10px] text-blue-500 mt-1 leading-tight">Auto-gerado · editável</p>
                   )}
                 </div>
                 <div>
-                  <Label className="text-sm font-semibold text-slate-800">Nome *</Label>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Nome *</p>
                   <Input
-                    className="mt-1.5"
+                    className="h-12 text-base rounded-xl bg-slate-50 border-slate-200 focus:bg-white"
                     value={form.nome}
                     onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
                     placeholder="Ex: Receitas de Obras"
@@ -709,67 +722,87 @@ export default function FinanceiroPlanoDeConta() {
                 </div>
               </div>
 
-              {/* ── Tipo ── */}
+              {/* ── Tipo — grid de chips ── */}
               <div>
-                <Label className="text-sm font-semibold text-slate-800">Tipo</Label>
-                <Select value={form.tipo} onValueChange={v => setForm(f => ({ ...f, tipo: v, natureza: naturezaFromTipo(v) }))}>
-                  <SelectTrigger className="mt-1.5">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIPOS.map(t => (
-                      <SelectItem key={t.value} value={t.value}>
-                        <div>
-                          <div className="font-medium">{t.label}</div>
-                          <div className="text-[11px] text-slate-500">{t.desc}</div>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Tipo</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {TIPOS.map(t => {
+                    const meta = TIPO_META[t.value];
+                    const selected = form.tipo === t.value;
+                    return (
+                      <button
+                        key={t.value}
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, tipo: t.value, natureza: naturezaFromTipo(t.value) }))}
+                        className={cn(
+                          "flex flex-col items-start gap-0.5 rounded-xl border-2 px-3 py-2.5 text-left transition-all",
+                          selected
+                            ? cn("border-current shadow-sm", meta.color)
+                            : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white text-slate-600",
+                        )}
+                      >
+                        <span className={cn("w-2 h-2 rounded-full mb-0.5", meta.bar)} />
+                        <span className="text-xs font-semibold leading-tight">{t.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {form.tipo && (
+                  <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
+                    {TIPOS.find(t => t.value === form.tipo)?.desc}
+                  </p>
+                )}
               </div>
 
               {/* ── Avançado (colapsível) ── */}
-              <div>
+              <div className="border border-slate-100 rounded-xl overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setShowAvancado(v => !v)}
-                  className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1 transition-colors"
+                  className="w-full flex items-center justify-between px-4 py-3 text-xs text-slate-500 hover:bg-slate-50 transition-colors"
                 >
-                  <ChevronRight className={cn("w-3 h-3 transition-transform", showAvancado && "rotate-90")} />
-                  Configurações avançadas (Classificação DRE · Ordem de exibição)
+                  <span className="font-medium">Configurações avançadas</span>
+                  <ChevronRight className={cn("w-3.5 h-3.5 transition-transform", showAvancado && "rotate-90")} />
                 </button>
                 {showAvancado && (
-                  <div className="mt-3 space-y-3">
+                  <div className="px-4 pb-4 pt-1 space-y-3 border-t border-slate-100 bg-slate-50">
                     <div>
-                      <Label className="text-sm font-semibold text-slate-800">Classificação DRE</Label>
-                      <p className="text-[11px] text-slate-500 mt-0.5 mb-1.5">
-                        Código para agrupamento no Demonstrativo de Resultado. Ex: <code>3.1</code>. Opcional.
-                      </p>
-                      <Input value={form.classificacaoDRE} onChange={e => setForm(f => ({ ...f, classificacaoDRE: e.target.value }))} placeholder="Opcional" />
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Classificação DRE</p>
+                      <Input
+                        className="h-10 rounded-lg bg-white"
+                        value={form.classificacaoDRE}
+                        onChange={e => setForm(f => ({ ...f, classificacaoDRE: e.target.value }))}
+                        placeholder="Opcional — ex: 3.1"
+                      />
                     </div>
                     <div>
-                      <Label className="text-sm font-semibold text-slate-800">Ordem de exibição</Label>
-                      <p className="text-[11px] text-slate-500 mt-0.5 mb-1.5">
-                        Número que define a posição desta conta nos relatórios. Menor número aparece primeiro.
-                      </p>
-                      <Input type="number" value={form.ordem} onChange={e => setForm(f => ({ ...f, ordem: e.target.value }))} />
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Ordem de exibição</p>
+                      <Input
+                        type="number"
+                        className="h-10 rounded-lg bg-white"
+                        value={form.ordem}
+                        onChange={e => setForm(f => ({ ...f, ordem: e.target.value }))}
+                      />
                     </div>
                   </div>
                 )}
               </div>
+
             </div>
 
-            <DialogFooter className="mt-4">
-              <Button variant="outline" onClick={closeDialog}>Cancelar</Button>
+            {/* Footer com botões touch-friendly */}
+            <div className="px-6 py-4 flex flex-col-reverse sm:flex-row gap-2 sm:justify-end border-t border-slate-100 bg-white rounded-b-2xl">
+              <Button variant="outline" onClick={closeDialog} className="h-11 rounded-xl px-6 text-sm">
+                Cancelar
+              </Button>
               <Button
                 onClick={handleSave}
                 disabled={createMut.isPending || updateMut.isPending}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                className="h-11 rounded-xl px-8 text-sm bg-blue-600 hover:bg-blue-700 text-white font-semibold"
               >
-                {createMut.isPending || updateMut.isPending ? "Salvando..." : "Salvar"}
+                {createMut.isPending || updateMut.isPending ? "Salvando..." : form.id ? "Salvar alterações" : "Criar conta"}
               </Button>
-            </DialogFooter>
+            </div>
           </DialogContent>
         </Dialog>
 

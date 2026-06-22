@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3488 — **PLANO DE CONTAS · MODAL REDESENHADO — LAYOUT MODERNO RESPONSIVO (TABLET/PC/MOBILE). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Cabeçalho colorido dinâmico por Tipo (usa paleta do TIPO_META).
+ * Seletor de Tipo substituído por grid de chips coloridos (2 col mobile / 4 col tablet+PC).
+ * Cada chip mostra bolinha colorida + nome; descrição textual aparece abaixo do grid.
+ * Inputs com h-12 rounded-xl bg-slate-50 — área de toque maior.
+ * Configurações avançadas em card colapsível bordado.
+ * Footer com botões h-11 rounded-xl, empilhados no mobile, em linha no desktop.
+ *
  * Rev. 3487 — **PLANO DE CONTAS · MODAL "NOVA CONTA" SIMPLIFICADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Campo "Natureza" removido do formulário — agora é derivado automaticamente do Tipo
  *   (receita_bruta/receita_financeira → credora; demais → devedora).
