@@ -1,6 +1,13 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3540 — **FERIADOS · BOTÃO APAGAR SEMPRE VISÍVEL + ALERTDIALOG DE CONFIRMAÇÃO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Botão lixeira existia mas tinha `opacity-0 group-hover:opacity-100` — invisível em
+ * touch/iPad onde não há hover. Removido o opacity-0; botão agora sempre visível
+ * (cinza neutro, vermelho no hover). Clique abre AlertDialog de confirmação com nome
+ * do feriado antes de excluir — evita exclusão acidental.
+ * Arquivo: `client/src/pages/Feriados.tsx`.
+ *
  * Rev. 3539 — **FERIADOS · BUGFIX DUPLICATA NA LISTA — GLOBAL (companyId=null) + EMPRESA APARECIAM JUNTOS. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  * Causa: `listar` buscava `companyId=X OR companyId=NULL` sem deduplicar. Quando existiam
  * um registro global (NULL) E uma cópia da empresa para o mesmo feriado, ambos iam para

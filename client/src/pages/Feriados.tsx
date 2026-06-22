@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Calendar, Plus, Trash2, Download, Upload, Search, Loader2, CheckCircle2, CircleSlash, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { removeAccents } from "@/lib/searchUtils";
@@ -166,6 +167,7 @@ export default function Feriados() {
   // Rev. 3352 — para defaults (id=0) o "editar" vira definirObservancia (copy-on-write).
   // Guarda o registro original p/ saber se é default.
   const [editOrig, setEditOrig] = useState<any>(null);
+  const [confirmExcluir, setConfirmExcluir] = useState<{ id: number; nome: string } | null>(null);
   const abrirEditar = (f: any) => {
     setEditId(f.id || null);
     setEditOrig(f);
@@ -292,8 +294,8 @@ export default function Feriados() {
                           {observado ? 'Segue' : 'Não segue'}
                         </button>
                         {!!f.id && (
-                          <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0" onClick={e => { e.stopPropagation(); excluirMut.mutate({ id: f.id }); }}>
-                            <Trash2 className="w-3 h-3 text-destructive" />
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={e => { e.stopPropagation(); setConfirmExcluir({ id: f.id, nome: f.nome }); }}>
+                            <Trash2 className="w-3 h-3" />
                           </Button>
                         )}
                       </div>
@@ -393,6 +395,28 @@ export default function Feriados() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* AlertDialog confirmação de exclusão */}
+      <AlertDialog open={!!confirmExcluir} onOpenChange={open => { if (!open) setConfirmExcluir(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir feriado?</AlertDialogTitle>
+            <AlertDialogDescription>
+              "<strong>{confirmExcluir?.nome}</strong>" será removido da lista. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { if (confirmExcluir) { excluirMut.mutate({ id: confirmExcluir.id }); setConfirmExcluir(null); } }}
+            >
+              {excluirMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Trash2 className="w-4 h-4 mr-1" />}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Rev. 3355 — Diálogo "Baixar Feriados": nacionais (sempre) + estaduais por UF · layout modernizado Rev. 3358 */}
       <Dialog open={showBaixar} onOpenChange={setShowBaixar}>
