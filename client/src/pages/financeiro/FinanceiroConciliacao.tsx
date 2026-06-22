@@ -4465,6 +4465,7 @@ export default function FinanceiroConciliacao() {
                                   <SelectItem value="dinheiro">Dinheiro</SelectItem>
                                   <SelectItem value="cartao_credito">Cartão de Crédito</SelectItem>
                                   <SelectItem value="cartao_debito">Cartão de Débito</SelectItem>
+                                  <SelectItem value="debito_em_conta">Débito em Conta</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>

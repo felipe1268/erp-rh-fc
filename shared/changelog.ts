@@ -1,6 +1,10 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3527 — **CONCILIAÇÃO · FORMA DE PAGAMENTO "DÉBITO EM CONTA". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Adicionado `SelectItem value="debito_em_conta"` no Select de Forma de Pagamento
+ * do dialog de edição de lançamento (`FinanceiroConciliacao.tsx`).
+ *
  * Rev. 3526 — **CONCILIAÇÃO · CATEGORIA COM BUSCA POR TEXTO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Campo "Conta (Categoria)" no dialog de edição de lançamento substituído de `Select` simples
  * para `SearchableSelect` (Popover + input de busca com normalização NFD).
