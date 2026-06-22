@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3523** — **OBRAS · BUGFIX TIPO "PROJETOS" — ZOD ENUM NO BACKEND. BACKEND PONTUAL · ZERO ALTER/DROP.** `z.enum` nos 2 endpoints de criar/editar obra (server/routers.ts) não incluía `"projeto"` → erro ao salvar. Corrigido. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3522** — **OBRAS · RENOMEAR TIPO "APENAS PROJETO" → "PROJETOS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Label do chip renomeado; valor no banco (`projeto`) inalterado. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3521** — **OBRAS · NOVO TIPO DE CONTRATO "APENAS PROJETO". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** 4ª opção verde no chip "Tipo de Contrato" do formulário Nova Obra. Schema `varchar(30)` aceita o valor "projeto" sem ALTER TABLE. Detalhe: `shared/changelog.ts`.

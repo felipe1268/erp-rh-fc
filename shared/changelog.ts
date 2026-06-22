@@ -1,6 +1,10 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3523 — **OBRAS · BUGFIX TIPO "PROJETOS" — ZOD ENUM NO BACKEND. BACKEND PONTUAL · ZERO ALTER/DROP.**
+ * `z.enum(["global","mdo","adm"])` em 2 endpoints de `server/routers.ts` (criar e editar obra)
+ * não incluía `"projeto"` → erro "Invalid option" ao salvar. Adicionado `"projeto"` aos 2 enums.
+ *
  * Rev. 3522 — **OBRAS · RENOMEAR TIPO "APENAS PROJETO" → "PROJETOS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Label do chip `value:"projeto"` alterado de "Apenas Projeto" para "Projetos".
  * Valor gravado no banco (`projeto`) não muda — obras já cadastradas não são afetadas.
