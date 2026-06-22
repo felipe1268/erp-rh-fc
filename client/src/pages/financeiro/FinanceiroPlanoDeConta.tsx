@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
@@ -228,6 +229,9 @@ export default function FinanceiroPlanoDeConta() {
   const [paiPopoverOpen, setPaiPopoverOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
   const [showAvancado, setShowAvancado] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkConfirm, setBulkConfirm] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const { data: contas, isLoading, refetch } = (trpc as any).financial.getAccounts.useQuery(
     { companyId, escopo: "plano", ativo: true, tipo: tipoFilter !== "all" ? tipoFilter : undefined },
@@ -248,6 +252,36 @@ export default function FinanceiroPlanoDeConta() {
     onSuccess: (r: any) => { toast({ title: "Conta excluída!", description: `${r.codigo} — ${r.nome}` }); setDeleteTarget(null); refetch(); },
     onError: (e: any) => toast({ title: "Não foi possível excluir", description: e.message, variant: "destructive" }),
   });
+
+  async function handleBulkDelete() {
+    setBulkDeleting(true);
+    let ok = 0; let fail = 0;
+    for (const id of Array.from(selectedIds)) {
+      try {
+        await deleteMut.mutateAsync({ id, companyId } as any);
+        ok++;
+      } catch { fail++; }
+    }
+    setBulkDeleting(false);
+    setBulkConfirm(false);
+    setSelectedIds(new Set());
+    refetch();
+    if (fail === 0) toast({ title: `${ok} conta(s) excluída(s) com sucesso.` });
+    else toast({ title: `${ok} excluída(s), ${fail} não puderam ser excluídas.`, variant: "destructive" });
+  }
+
+  function toggleSelect(id: number) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === filtered.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filtered.map((c: any) => c.id)));
+  }
 
   const sortedContas = useMemo(() => [...allContas].sort((a, b) => cmpCodigo(a.codigo, b.codigo)), [allContas]);
   const filtered = useMemo(() => sortedContas.filter((c: any) => {
@@ -407,6 +441,26 @@ export default function FinanceiroPlanoDeConta() {
           />
         </div>
 
+        {/* ── Barra de seleção múltipla ── */}
+        {selectedIds.size > 0 && (
+          <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-lg px-4 py-2.5">
+            <span className="text-sm font-medium text-red-700">
+              {selectedIds.size} conta(s) selecionada(s)
+            </span>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => setSelectedIds(new Set())}
+                className="h-7 text-xs border-red-200 text-red-600 hover:bg-red-100">
+                Cancelar
+              </Button>
+              <Button size="sm" onClick={() => setBulkConfirm(true)}
+                className="h-7 text-xs bg-red-600 hover:bg-red-700 text-white">
+                <Trash2 className="w-3 h-3 mr-1" />
+                Excluir {selectedIds.size} selecionada(s)
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* ── Lista de contas ── */}
         <Card className="border border-slate-200 shadow-sm overflow-hidden">
           <CardContent className="p-0">
@@ -420,35 +474,58 @@ export default function FinanceiroPlanoDeConta() {
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
+                {/* Cabeçalho "selecionar todos" */}
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border-b border-slate-100">
+                  <Checkbox
+                    checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                    onCheckedChange={toggleSelectAll}
+                    className="w-4 h-4"
+                    aria-label="Selecionar todas"
+                  />
+                  <span className="text-xs text-slate-400">Selecionar todas</span>
+                </div>
+
                 {filtered.map((c: any) => {
                   const nivel = Number(c.nivel) || 1;
                   const meta = TIPO_META[c.tipo] ?? TIPO_META.despesa_fixa;
                   const tipoLabel = TIPOS.find(t => t.value === c.tipo)?.label ?? c.tipo;
                   const tipoDesc = TIPOS.find(t => t.value === c.tipo)?.desc ?? "";
                   const isRaiz = nivel === 1;
+                  const isSel = selectedIds.has(c.id);
 
                   return (
                     <div
                       key={c.id}
                       className={cn(
                         "flex items-center gap-0 hover:bg-slate-50 group transition-colors",
-                        isRaiz && "bg-slate-50/70",
+                        isRaiz && !isSel && "bg-slate-50/70",
+                        isSel && "bg-blue-50",
                       )}
                     >
                       {/* Barra colorida lateral */}
                       <div className={cn("w-1 self-stretch flex-shrink-0", isRaiz ? meta.bar : "bg-transparent")} />
 
+                      {/* Checkbox */}
+                      <div className="pl-2 pr-1 flex items-center self-stretch">
+                        <Checkbox
+                          checked={isSel}
+                          onCheckedChange={() => toggleSelect(c.id)}
+                          className="w-4 h-4"
+                          aria-label={`Selecionar ${c.nome}`}
+                        />
+                      </div>
+
                       {/* Conteúdo com indentação */}
                       <div
-                        className="flex items-center gap-2 flex-1 min-w-0 py-2.5 pr-3"
-                        style={{ paddingLeft: `${12 + (nivel - 1) * 22}px` }}
+                        className="flex items-center gap-2 flex-1 min-w-0 py-2.5 pr-1"
+                        style={{ paddingLeft: `${8 + (nivel - 1) * 20}px` }}
                       >
                         {nivel > 1 && (
                           <ChevronRight className="w-3 h-3 text-slate-300 flex-shrink-0" />
                         )}
                         <span className={cn(
                           "font-mono flex-shrink-0 text-right",
-                          isRaiz ? "text-xs font-bold text-slate-700 w-16" : "text-[11px] text-slate-400 w-16",
+                          isRaiz ? "text-xs font-bold text-slate-700 w-16" : "text-[11px] text-slate-400 w-14",
                         )}>
                           {c.codigo}
                         </span>
@@ -463,7 +540,7 @@ export default function FinanceiroPlanoDeConta() {
                       </div>
 
                       {/* Badges + ações */}
-                      <div className="flex items-center gap-1.5 pr-3 shrink-0">
+                      <div className="flex items-center gap-1 pr-2 shrink-0">
                         <Badge
                           className={cn("text-[11px] border hidden sm:inline-flex", meta.color)}
                           title={tipoDesc}
@@ -472,16 +549,16 @@ export default function FinanceiroPlanoDeConta() {
                         </Badge>
                         <span
                           className={cn(
-                            "text-[11px] px-2 py-0.5 rounded-full hidden md:inline-block",
+                            "text-[11px] px-2 py-0.5 rounded-full hidden lg:inline-block",
                             c.natureza === "credora" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700",
                           )}
-                          title={c.natureza === "credora" ? "Credora — conta de receita ou passivo" : "Devedora — conta de despesa ou ativo"}
+                          title={c.natureza === "credora" ? "Credora" : "Devedora"}
                         >
                           {c.natureza}
                         </span>
 
-                        {/* Ações — sempre visíveis em touch, hover no desktop */}
-                        <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity ml-1">
+                        {/* Ações — sempre visíveis */}
+                        <div className="flex items-center gap-0.5 ml-1">
                           <button
                             className="p-1.5 rounded hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors"
                             title="Criar subconta dentro desta"
@@ -755,6 +832,28 @@ export default function FinanceiroPlanoDeConta() {
                 className="bg-red-600 hover:bg-red-700 text-white"
               >
                 {deleteMut.isPending ? "Excluindo..." : "Excluir"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* ── Confirmação excluir múltiplos ── */}
+        <AlertDialog open={bulkConfirm} onOpenChange={(o) => !o && setBulkConfirm(false)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir {selectedIds.size} conta(s)?</AlertDialogTitle>
+              <AlertDialogDescription>
+                As contas selecionadas serão desativadas. Contas com lançamentos ou subcontas vinculadas serão puladas automaticamente.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={bulkDeleting}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {bulkDeleting ? "Excluindo..." : `Excluir ${selectedIds.size} conta(s)`}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

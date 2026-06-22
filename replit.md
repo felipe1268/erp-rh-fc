@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3483** — **PLANO DE CONTAS · CHECKBOXES PARA SELEÇÃO MÚLTIPLA + EXCLUSÃO EM LOTE + BOTÕES SEMPRE VISÍVEIS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Checkbox em cada linha + "Selecionar todas" no topo. Barra vermelha aparece ao marcar itens com botão "Excluir N selecionada(s)". AlertDialog de confirmação antes de excluir. Exclusão sequencial com relatório ok/fail. Botões +Subconta/Editar/Excluir agora sempre visíveis (sem hover-only). Linha selecionada com fundo azul. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3482** — **PLANO DE CONTAS · BOTÃO "CARREGAR PADRÃO FC" REMOVIDO A PEDIDO DO USUÁRIO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Usuário quer montar o plano do zero. Removidos: botão, state `confirmSeed`, AlertDialog de confirmação, import `Sprout`, mutation `seedMut`. Estado vazio agora diz "Clique em + Nova Conta para começar." Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3481** — **PLANO DE CONTAS · LEGENDAS COMPLETAS + CONFIRMAÇÃO "CARREGAR PADRÃO" + DESCRIÇÕES EM TODOS OS CAMPOS DO FORMULÁRIO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Painel colapsível "Como funciona o Plano de Contas?" explica hierarquia (3 níveis), todos os 8 tipos com descrição prática, Credora × Devedora e os 3 botões de ação. "Carregar Padrão FC" agora abre AlertDialog de confirmação explicando o que será criado e oferecendo alternativa "criar do zero". Formulário: todos os campos com subtexto explicativo; Tipo e Natureza com descrição em cada opção do Select; hint abaixo do Tipo repete a descrição do tipo selecionado. Detalhe: `shared/changelog.ts`.

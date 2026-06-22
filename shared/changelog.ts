@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3483 — **PLANO DE CONTAS · CHECKBOXES PARA SELEÇÃO MÚLTIPLA + EXCLUSÃO EM LOTE + BOTÕES SEMPRE VISÍVEIS.
+ * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Checkbox em cada linha (+ "Selecionar todas" no topo). Ao marcar qualquer item, aparece
+ * barra vermelha com contagem e botão "Excluir N selecionada(s)". Confirmação via AlertDialog
+ * antes de excluir. Exclusão sequencial via `deleteMut.mutateAsync`; itens bloqueados são pulados
+ * e o resultado reporta ok/fail. Botões Editar/Excluir/+Subconta agora sempre visíveis (sem
+ * `sm:opacity-0`). Linha selecionada fica com fundo `bg-blue-50`.
+ * Arquivo: `client/src/pages/financeiro/FinanceiroPlanoDeConta.tsx`
+ *
  * Rev. 3482 — **PLANO DE CONTAS · BOTÃO "CARREGAR PADRÃO FC" REMOVIDO A PEDIDO DO USUÁRIO.
  * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Usuário quer cadastrar o próprio plano do zero. Removidos: botão, state confirmSeed,
