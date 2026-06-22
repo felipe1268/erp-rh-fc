@@ -1086,8 +1086,8 @@ export default function FinanceiroConciliacao() {
   })();
   const repLanView: any[] = (() => {
     let arr = termoBusca ? repLan.filter(matchBusca) : repLan;
-    if (filterLanTipo === "entrada") arr = arr.filter((r: any) => Number(r.valor) >= 0);
-    if (filterLanTipo === "saida")   arr = arr.filter((r: any) => Number(r.valor) < 0);
+    if (filterLanTipo === "entrada") arr = arr.filter((r: any) => r.tipo === "receita");
+    if (filterLanTipo === "saida")   arr = arr.filter((r: any) => r.tipo === "despesa");
     return arr;
   })();
   const repConcView: any[] = (() => {

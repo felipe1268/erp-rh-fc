@@ -1,6 +1,12 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3512 — **CONCILIAÇÃO · BUGFIX FILTRO ENTRADA/SAÍDA NO ERP INVERTIDO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * `repLanView` filtrava por `valor >= 0 / < 0` (lógica do extrato), mas lançamentos do ERP usam
+ * `tipo = "receita"/"despesa"` — o valor é sempre positivo. Resultado: "Entrada" mostrava despesas
+ * e "Saída" mostrava receitas. Fix: `filterLanTipo === "entrada" → tipo==="receita"` e
+ * `filterLanTipo === "saida" → tipo==="despesa"`. Arquivo: FinanceiroConciliacao.tsx (linha repLanView).
+ *
  * Rev. 3511 — **CONCILIAÇÃO · SHEET DE DETALHE AO DUPLO-CLIQUE/DUPLO-TOQUE EM AMBAS AS LISTAS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Duplo-clique (desktop) ou duplo-toque (mobile) em qualquer item de "No extrato, sem lançamento"
  * abre Sheet lateral com: valor grande colorido, saldo após, data, tipo, descrição completa,
