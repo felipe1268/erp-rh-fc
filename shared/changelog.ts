@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3533 — **CONCILIAÇÃO · BUGFIX DEDUP DE EXTRATO DESCARTAVA LANÇAMENTOS IDÊNTICOS LEGÍTIMOS. BACKEND + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ * Causa: a chave de dedup do importador era `(company_id, conta_bancaria_id, data, descricao, valor)`.
+ * Quando o extrato contém N transações com mesmo valor/data/histórico (ex.: 7 débitos de capitalização
+ * XS4 no mesmo dia, R$ 109,83 cada), o 1º INSERT passava e os demais 6 eram descartados silenciosamente.
+ * Fix backend (Fase 1 + Fase 2): adiciona `saldo_apos` à chave de dedup.
+ *   Condição SQL: `AND ($6::numeric IS NULL OR saldo_apos=$6)`.
+ *   Quando saldo é NOT NULL (PDF da Caixa): cada lançamento tem saldo diferente → todos inseridos.
+ *   Quando saldo é NULL (OFX sem saldo): `$6 IS NULL` → cláusula verdadeira p/ qualquer saldo_apos
+ *   → mesma proteção anti-reimport de antes.
+ * Fix frontend (FinanceiroConciliacao.tsx): `possivelDuplicataIds` useMemo agrupa linhas por
+ * `(data, valor)`; quando o grupo tem >1 linha, todas recebem badge âmbar "⚠ Duplicata" com
+ * tooltip explicando o motivo — alerta visual sem impedir operação.
+ *
  * Rev. 3532 — **CONCILIAÇÃO · BUGFIX TOLERÂNCIA DE DATA NA SUGESTÃO AUTOMÁTICA. BACKEND + FRONTEND · ZERO ALTER/DROP/DELETE.**
  * Causa: `toleranciaDias` era inicializado com `diasDoMes` (ex: 31) em ambas as telas de conciliação,
  * e em `FinanceiroConciliacao.tsx` havia um `useEffect` que FORÇAVA reset para `diasDoMes` ao trocar de

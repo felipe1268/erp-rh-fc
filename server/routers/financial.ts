@@ -7999,9 +7999,14 @@ export const financialRouter = router({
     let skipped = 0;
     const importadoEm = new Date().toISOString();
     for (const line of lines) {
+      // Rev. 3533 — dedup inclui saldo_apos quando presente: lançamentos legítimos com
+      // mesmo valor/data/descricao mas saldos diferentes (ex: N capitalizações iguais
+      // no mesmo dia) deixam de ser descartados. Quando saldo é null (OFX sem saldo),
+      // $6::numeric IS NULL → cláusula é verdadeira para qualquer saldo_apos (compat).
+      const salParam = line.saldo ?? null;
       const existing = await dbExecute(db, 
-        `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND excluido_em IS NULL LIMIT 1`,
-        [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor]
+        `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND ($6::numeric IS NULL OR saldo_apos=$6) AND excluido_em IS NULL LIMIT 1`,
+        [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor, salParam]
       );
       if (rows(existing).length > 0) { skipped++; continue; }
       await dbExecute(db, 
@@ -8220,9 +8225,11 @@ export const financialRouter = router({
     let inserted = 0;
     let skipped = 0;
     for (const line of input.linhas) {
+      // Rev. 3533 — mesmo fix da Fase 1: saldo_apos integra a chave de dedup.
+      const salParam = line.saldo ?? null;
       const existing = await dbExecute(db,
-        `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND excluido_em IS NULL LIMIT 1`,
-        [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor]
+        `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND ($6::numeric IS NULL OR saldo_apos=$6) AND excluido_em IS NULL LIMIT 1`,
+        [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor, salParam]
       );
       if (rows(existing).length > 0) { skipped++; continue; }
       await dbExecute(db,

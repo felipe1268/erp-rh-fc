@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3533** — **CONCILIAÇÃO · BUGFIX DEDUP DE EXTRATO DESCARTAVA LANÇAMENTOS IDÊNTICOS LEGÍTIMOS. BACKEND + FRONTEND · ZERO ALTER/DROP/DELETE.** Chave de dedup `(data, descricao, valor)` descartava 6 de 7 débitos de capitalização idênticos. Fix: adiciona `saldo_apos` à chave (`$6::numeric IS NULL OR saldo_apos=$6`) — cada linha tem saldo diferente → todas inseridas. Compatível com OFX sem saldo (IS NULL → passa). Badge âmbar "⚠ Duplicata" nas linhas com mesmo valor+data. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3532** — **CONCILIAÇÃO · BUGFIX TOLERÂNCIA DE DATA NA SUGESTÃO AUTOMÁTICA. BACKEND + FRONTEND · ZERO ALTER/DROP/DELETE.** `toleranciaDias` estava inicializado com `diasDoMes` (ex: 31) e re-sincronizado a cada troca de mês via useEffect — sistema enviava `tol=31` ao backend aceitando pares com até 31 dias de diferença. Fix: default → 0 (mesmo dia) em ambas as telas + localStorage cap 7d + backend fallback 0 + confiança "alta" agora exige `delta===0` (antes `<=1`). Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3531** — **PONTO DIXI · BUGFIX BATIDAS DIXI IGNORADAS QUANDO EXISTE APONTAMENTO DE CAMPO. BACKEND PONTUAL · ZERO ALTER/DROP.** Importador usava Set "empId_data": qualquer registro existente bloqueava o dia inteiro. Fix: Set→Map com fonte+batidas; fonte='campo' → MERGE (une+ordena+reatribui slots+recalcula totais); fonte=manual → proteção total mantida. Detalhe: `shared/changelog.ts`.
