@@ -1,6 +1,11 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3489 — **PLANO DE CONTAS · CAMPO CÓDIGO READ-ONLY — GERADO AUTOMATICAMENTE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Input de Código substituído por div read-only com badge "auto" verde.
+ * Exibe "—" quando ainda sem pai/código; preenchido automaticamente ao escolher grupo.
+ * Usuário não consegue mais digitar ou alterar o código manualmente.
+ *
  * Rev. 3488 — **PLANO DE CONTAS · MODAL REDESENHADO — LAYOUT MODERNO RESPONSIVO (TABLET/PC/MOBILE). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Cabeçalho colorido dinâmico por Tipo (usa paleta do TIPO_META).
  * Seletor de Tipo substituído por grid de chips coloridos (2 col mobile / 4 col tablet+PC).
