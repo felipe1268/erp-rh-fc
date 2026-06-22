@@ -1,6 +1,10 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3497 — **CATEGORIAS · MESCLA MÃO DE OBRA TERCEIRIZADA + SUBEMPREITEIRO. NEON · ZERO ALTER/DROP.**
+ * AUTO-0022 renomeado para "MÃO DE OBRA TERCEIRIZADA / SUBEMPREITEIRO" (pai=3.1.3, CC Obras).
+ * AUTO-0131 (SUBEMPREITEIRO - MÃO DE OBRA) inativado — sem lançamentos, sem perda de dados.
+ *
  * Rev. 3496 — **PLANO GRUPO 3 · MÃO DE OBRA PJ E SUBEMPREITEIRO. NEON · ZERO ALTER/DROP.**
  * AUTO-0130 MÃO DE OBRA PJ → 3.1.3 Serviços PJ/Terceirizados, CC Obras.
  * AUTO-0131 SUBEMPREITEIRO - MÃO DE OBRA → 3.4.1 Serviços Especializados, CC Obras.
