@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3517 — **CONCILIAÇÃO · BUGFIX PARSER EXTRATO PDF CAIXA: LINHA DE CONTINUAÇÃO DA TRANSAÇÃO ANTERIOR VAZAVA COMO DESCRIÇÃO DA PRÓXIMA. 100% BACKEND · ZERO FRONTEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Causa-raiz: o parser lia apenas a linha `isTimeEff` como trail, mas a linha de
+ * continuação imediatamente abaixo dela (ex.: "ALLUCK", "E003603...") ficava solta
+ * e era capturada pelo loop de `lead` da transação seguinte, gerando descrições
+ * como "ALLUCK - DEB PIX CHAVE - ANDERSON BRAGA DA SILVA". Fix: `consumed`
+ * Set<number> marca como usadas a linha `isTimeEff` + todas as linhas de
+ * continuação puras logo após (sem valor/data/cabeçalho). O loop de `lead`
+ * para ao encontrar um índice consumido. Válido para N linhas de continuação
+ * (loop, não só i+2). Arquivo: `server/services/caixaPdfParser.ts`.
+ *
  * Rev. 3516 — **FORNECEDORES · REGRAS ESPECIAIS DE PAGAMENTO POR PRODUTO. BACKEND + SCHEMA ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
  * Nova seção "Regras especiais por produto" no cadastro de fornecedores (editando). O
  * usuário define N regras com: palavra-chave do produto (ex.: "Cimento"), forma de

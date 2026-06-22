@@ -100,6 +100,13 @@ export async function parseCaixaExtratoPdf(base64: string): Promise<ExtratoLine[
   });
 
   // 3) Percorre as linhas e materializa cada transação a partir da LINHA-VALOR.
+  //
+  // "consumed": conjunto de índices de linhas já vinculadas a uma transação como
+  // trail (Data Efetiva + linhas de continuação abaixo dela, ex.: "ALLUCK",
+  // "E003603..."). O loop de lead da transação seguinte para ao encontrar uma
+  // linha consumida, evitando que a continuação da transação anterior seja
+  // capturada indevidamente como tipo/descrição da próxima.
+  const consumed = new Set<number>();
   const out: ExtratoLine[] = [];
   for (let i = 0; i < P.length; i++) {
     const r = P[i];
@@ -114,17 +121,32 @@ export async function parseCaixaExtratoPdf(base64: string): Promise<ExtratoLine[
     if (!dataBR) continue;
 
     // Histórico "solto" imediatamente acima da linha da data (ex.: "PIX RECEBIDO").
+    // Para ao encontrar linha já consumida pela transação anterior (trail).
     const lead: string[] = [];
     for (let j = di - 1; j >= 0; j--) {
+      if (consumed.has(j)) break;
       const p = P[j];
       if (p.isHeader || p.isSaldoDia || p.valor !== null || p.isTimeEff || p.date) break;
       if (p.descCol) lead.unshift(p.descCol);
       else break;
     }
 
-    // Contraparte/CNPJ: linha da Data Efetiva logo abaixo da linha-valor.
+    // Contraparte/CNPJ: linha da Data Efetiva (isTimeEff) logo abaixo da linha-valor
+    // + quaisquer linhas de continuação logo após (ex.: abreviação do favorecido,
+    // chave E003603...). Todas marcadas como consumed para não vazar para a próxima.
     let trail = "";
-    if (i + 1 < P.length && P[i + 1].isTimeEff && P[i + 1].descCol) trail = P[i + 1].descCol;
+    if (i + 1 < P.length && P[i + 1].isTimeEff) {
+      consumed.add(i + 1);
+      if (P[i + 1].descCol) trail = P[i + 1].descCol;
+      // Captura linhas extras de continuação imediatamente após o isTimeEff.
+      for (let k = i + 2; k < P.length; k++) {
+        const pk = P[k];
+        if (pk.isHeader || pk.isSaldoDia || pk.valor !== null || pk.isTimeEff || pk.date) break;
+        if (!pk.descCol) break;
+        consumed.add(k);
+        trail = trail ? `${trail} ${pk.descCol}` : pk.descCol;
+      }
+    }
 
     const docNum = r.doc && r.doc !== "000000" ? r.doc : null;
     let descricao = [...lead, r.descCol, trail].filter(Boolean).join(" - ").replace(/\s+/g, " ").trim();
