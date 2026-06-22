@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3499 — **MÚTUOS INTERCOMPANY · 4 CATEGORIAS AUTO + 4 NÓS NO PLANO. NEON · ZERO ALTER/DROP.**
+ * Fundamento legal: mútuo entre coligadas exige contrato + juros mínimos SELIC (art. 464 RIR/2018).
+ * Plano de Contas: 10.4 Mútuos Intercompany (pai=10, despesa_financeira);
+ *   10.4.1 Mútuo Concedido ao Grupo (nivel 3); 10.4.2 Mútuo Recebido do Grupo (nivel 3);
+ *   8.4 Juros e Repasses Intercompany (pai=8 RECEITAS FINANCEIRAS, receita_financeira).
+ * Categorias AUTO: AUTO-0132 MÚTUO CONCEDIDO INTERCOMPANY (despesa, CC PASSIVOS E DÍVIDAS);
+ *   AUTO-0133 MÚTUO RECEBIDO INTERCOMPANY (receita, CC PASSIVOS E DÍVIDAS);
+ *   AUTO-0134 JUROS PAGOS S/ MÚTUO INTERCOMPANY (despesa, CC FINANCEIRO);
+ *   AUTO-0135 JUROS RECEBIDOS S/ MÚTUO INTERCOMPANY (receita, CC FINANCEIRO).
+ * IDs Neon: 10.4=493, 10.4.1=494, 10.4.2=495, 8.4=496, AUTO-0132=497, AUTO-0133=498, AUTO-0134=499, AUTO-0135=500.
+ *
  * Rev. 3498 — **CONCILIAÇÃO · BUGFIX DROPDOWN CATEGORIAS: ESCOPO + TIPO + DUPLICATA SEM CATEGORIA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * 3 correções: (1) getAccounts passa escopo:"categoria" → exclui nós do plano da lista;
  * (2) catOpts inclui campo tipo; opções filtradas por receita/despesa conforme sinal do extrato;

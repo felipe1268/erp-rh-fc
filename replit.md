@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3499** — **MÚTUOS INTERCOMPANY · 4 CATEGORIAS AUTO-0132…0135 + SUBGRUPOS 10.4 E 8.4 NO PLANO. NEON · ZERO ALTER/DROP.** Fundamento: art. 464 RIR/2018 (mútuo entre coligadas exige contrato+juros SELIC). AUTO-0132 MÚTUO CONCEDIDO (despesa/CC PASSIVOS); AUTO-0133 MÚTUO RECEBIDO (receita/CC PASSIVOS); AUTO-0134 JUROS PAGOS (despesa/CC FINANCEIRO); AUTO-0135 JUROS RECEBIDOS (receita/CC FINANCEIRO). Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3498** — **CONCILIAÇÃO · BUGFIX DROPDOWN CATEGORIAS: ESCOPO + TIPO + DUPLICATA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** escopo:"categoria" exclui nós do plano; filtro por tipo receita/despesa; duplicata "Sem categoria" eliminada. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3497** — **CATEGORIAS · MESCLA MÃO DE OBRA TERCEIRIZADA + SUBEMPREITEIRO. NEON · ZERO ALTER/DROP.** AUTO-0022 renomeado para "MÃO DE OBRA TERCEIRIZADA / SUBEMPREITEIRO"; AUTO-0131 inativado. Detalhe: `shared/changelog.ts`.
