@@ -338,8 +338,8 @@ export default function FinanceiroPlanoDeConta() {
                           {c.natureza}
                         </span>
 
-                        {/* Ações — aparecem no hover */}
-                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ml-1">
+                        {/* Ações — sempre visíveis em touch, hover no desktop */}
+                        <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity ml-1">
                           <button
                             className="p-1.5 rounded hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors"
                             title="Adicionar subconta"
