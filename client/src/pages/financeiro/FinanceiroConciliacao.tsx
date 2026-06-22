@@ -349,7 +349,7 @@ export default function FinanceiroConciliacao() {
   // lançamento (data, conta e valor já vêm pré-preenchidos do extrato). Após criar,
   // auto-concilia com a linha do extrato (mesma mutation da conciliação manual).
   const { data: lancObras, refetch: refetchLancObras } = (trpc as any).obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
-  const { data: lancAccounts, refetch: refetchLancAccounts } = (trpc as any).financial.getAccounts.useQuery({ companyId, ativo: true }, { enabled: !!companyId });
+  const { data: lancAccounts, refetch: refetchLancAccounts } = (trpc as any).financial.getAccounts.useQuery({ companyId, ativo: true, escopo: "categoria" }, { enabled: !!companyId });
   const { data: lancCostCenters, refetch: refetchLancCostCenters } = (trpc as any).financial.getCostCenters.useQuery({ companyId }, { enabled: !!companyId });
   // Rev. 3457 — includeAllGroup: true → retorna fornecedores de TODAS as empresas
   // do grupo (não só a empresa corrente), corrigindo o bug onde a lista ficava vazia
@@ -399,11 +399,11 @@ export default function FinanceiroConciliacao() {
     const merged = obrasOpts.filter(o => allIds.has(o.id));
     return merged.length > 0 ? merged : obrasOpts;
   }, [obrasOpts, lancForm?.clienteNome, lancForm?.clienteId, obraClientesVinculos, clienteOpts]);
-  const catOpts: { id: number; nome: string; natureza: string | null; centroCustoId: number | null }[] = useMemo(() => {
-    const out: { id: number; nome: string; natureza: string | null; centroCustoId: number | null }[] = [];
+  const catOpts: { id: number; nome: string; tipo: string; natureza: string | null; centroCustoId: number | null }[] = useMemo(() => {
+    const out: { id: number; nome: string; tipo: string; natureza: string | null; centroCustoId: number | null }[] = [];
     for (const a of (Array.isArray(lancAccounts) ? lancAccounts : [])) {
       const nome = String(a?.nome ?? "").trim(); if (!nome) continue;
-      out.push({ id: Number(a.id), nome, natureza: a.natureza ?? null, centroCustoId: a.centroCustoId ?? null });
+      out.push({ id: Number(a.id), nome, tipo: String(a?.tipo ?? ""), natureza: a.natureza ?? null, centroCustoId: a.centroCustoId ?? null });
     }
     return out.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   }, [lancAccounts]);
@@ -4348,7 +4348,7 @@ export default function FinanceiroConciliacao() {
                                 <SelectTrigger className="w-full"><SelectValue placeholder="Selecione a conta…" /></SelectTrigger>
                                 <SelectContent className="max-h-72">
                                   <SelectItem value="__none__">— Sem categoria —</SelectItem>
-                                  {catOpts.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
+                                  {catOpts.filter(o => !detEditForm?.tipo || o.tipo === detEditForm.tipo).map(o => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
                                 </SelectContent>
                               </Select>
                             </div>
@@ -6010,8 +6010,8 @@ export default function FinanceiroConciliacao() {
                       setLancForm(f => ({ ...f, contaId: String(opt.id), contaNome: opt.label, centroCustoId: catOpt?.centroCustoId != null && !f.centroCustoId ? String(catOpt.centroCustoId) : f.centroCustoId }));
                       if (catOpt?.centroCustoId != null) { const cc = ccOpts.find(c => c.id === catOpt.centroCustoId); if (cc) setLancCCDisplay(cc.nome); }
                     }}
-                    options={catOpts.map(c => ({ id: c.id, label: c.nome }))}
-                    placeholder="— Sem categoria —"
+                    options={catOpts.filter(c => { const isEntrada = lancStatement?.id == null ? lancForm.tipo === "receita" : Number(lancStatement?.valor ?? 0) >= 0; return c.tipo === (isEntrada ? "receita" : "despesa"); }).map(c => ({ id: c.id, label: c.nome }))}
+                    placeholder="Pesquisar categoria…"
                     noneLabel="— Sem categoria —"
                     onClear={() => setLancForm(f => ({ ...f, contaId: "", contaNome: "" }))}
                   />

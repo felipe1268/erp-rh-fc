@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3498** — **CONCILIAÇÃO · BUGFIX DROPDOWN CATEGORIAS: ESCOPO + TIPO + DUPLICATA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** escopo:"categoria" exclui nós do plano; filtro por tipo receita/despesa; duplicata "Sem categoria" eliminada. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3497** — **CATEGORIAS · MESCLA MÃO DE OBRA TERCEIRIZADA + SUBEMPREITEIRO. NEON · ZERO ALTER/DROP.** AUTO-0022 renomeado para "MÃO DE OBRA TERCEIRIZADA / SUBEMPREITEIRO"; AUTO-0131 inativado. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3496** — **PLANO GRUPO 3 · MÃO DE OBRA PJ E SUBEMPREITEIRO. NEON · ZERO ALTER/DROP.** AUTO-0130 MÃO DE OBRA PJ (3.1.3) e AUTO-0131 SUBEMPREITEIRO - MÃO DE OBRA (3.4.1). Distinção: CLT direto × PJ × Terceirizada × Subempreiteiro. Detalhe: `shared/changelog.ts`.

@@ -1,6 +1,12 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3498 — **CONCILIAÇÃO · BUGFIX DROPDOWN CATEGORIAS: ESCOPO + TIPO + DUPLICATA SEM CATEGORIA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * 3 correções: (1) getAccounts passa escopo:"categoria" → exclui nós do plano da lista;
+ * (2) catOpts inclui campo tipo; opções filtradas por receita/despesa conforme sinal do extrato;
+ * (3) placeholder do LancCombo mudado p/ "Pesquisar categoria…" eliminando o 2º "Sem categoria".
+ * detEditForm também filtra por tipo (receita/despesa).
+ *
  * Rev. 3497 — **CATEGORIAS · MESCLA MÃO DE OBRA TERCEIRIZADA + SUBEMPREITEIRO. NEON · ZERO ALTER/DROP.**
  * AUTO-0022 renomeado para "MÃO DE OBRA TERCEIRIZADA / SUBEMPREITEIRO" (pai=3.1.3, CC Obras).
  * AUTO-0131 (SUBEMPREITEIRO - MÃO DE OBRA) inativado — sem lançamentos, sem perda de dados.
