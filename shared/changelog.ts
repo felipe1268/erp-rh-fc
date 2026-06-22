@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3507 — **PLANO DE CONTAS · COLAPSO/EXPANSÃO DE GRUPOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Qualquer conta com filhos ganha um chevron clicável que recolhe/expande o grupo.
+ * Estado: `collapsedIds` (Set<number>). Derivados: `hasChildrenSet` (IDs com filhos),
+ * `collapsedCodigoPrefixes` (prefixos "X."), `visibleFiltered` (filtered sem filhos ocultos).
+ * Quando há busca ativa, tudo permanece visível (colapso suspenso).
+ * Chevron roda 90° quando expandido; folhas (sem filhos) mostram espaçador neutro.
+ * Arquivo: `FinanceiroPlanoDeConta.tsx`.
+ *
  * Rev. 3506 — **CONCILIAÇÃO · LAYOUT DOS HEADERS SEM SOBREPOSIÇÃO — 2 LINHAS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Título e controles (filtros + Excel/PDF/Expandir) sobrepunham no mobile/tablet.
  * Headers dos cards "No extrato, sem lançamento" e "No ERP, sem extrato" refatorados:

@@ -235,6 +235,7 @@ export default function FinanceiroPlanoDeConta() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkConfirm, setBulkConfirm] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [collapsedIds, setCollapsedIds] = useState<Set<number>>(new Set());
 
   const { data: contas, isLoading, refetch } = (trpc as any).financial.getAccounts.useQuery(
     { companyId, escopo: "plano", ativo: true, tipo: tipoFilter !== "all" ? tipoFilter : undefined },
@@ -291,6 +292,42 @@ export default function FinanceiroPlanoDeConta() {
     const q = search.toLowerCase();
     return c.codigo.toLowerCase().includes(q) || c.nome.toLowerCase().includes(q);
   }), [sortedContas, search]);
+
+  const hasChildrenSet = useMemo(() => {
+    const s = new Set<number>();
+    for (const c of sortedContas) {
+      if (!c.contaPaiId) continue;
+      s.add(Number(c.contaPaiId));
+    }
+    return s;
+  }, [sortedContas]);
+
+  const collapsedCodigoPrefixes = useMemo(() => {
+    const prefixes: string[] = [];
+    for (const id of collapsedIds) {
+      const conta = sortedContas.find((c: any) => c.id === id);
+      if (conta) prefixes.push(`${conta.codigo}.`);
+    }
+    return prefixes;
+  }, [collapsedIds, sortedContas]);
+
+  const visibleFiltered = useMemo(() => {
+    if (collapsedIds.size === 0 || search) return filtered;
+    return filtered.filter((c: any) => {
+      for (const prefix of collapsedCodigoPrefixes) {
+        if (String(c.codigo).startsWith(prefix)) return false;
+      }
+      return true;
+    });
+  }, [filtered, collapsedIds, collapsedCodigoPrefixes, search]);
+
+  function toggleCollapse(id: number) {
+    setCollapsedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
 
   const eligibleParents = useMemo(() => {
     const editingCodigo = form.id ? allContas.find((c) => c.id === form.id)?.codigo : null;
@@ -486,13 +523,15 @@ export default function FinanceiroPlanoDeConta() {
                   <span className="text-xs text-slate-400">Selecionar todas</span>
                 </div>
 
-                {filtered.map((c: any) => {
+                {visibleFiltered.map((c: any) => {
                   const nivel = Number(c.nivel) || 1;
                   const meta = TIPO_META[c.tipo] ?? TIPO_META.despesa_fixa;
                   const tipoLabel = TIPOS.find(t => t.value === c.tipo)?.label ?? c.tipo;
                   const tipoDesc = TIPOS.find(t => t.value === c.tipo)?.desc ?? "";
                   const isRaiz = nivel === 1;
                   const isSel = selectedIds.has(c.id);
+                  const hasKids = hasChildrenSet.has(c.id);
+                  const isCollapsed = collapsedIds.has(c.id);
 
                   return (
                     <div
@@ -521,8 +560,18 @@ export default function FinanceiroPlanoDeConta() {
                         className="flex items-center gap-2 flex-1 min-w-0 py-2.5 pr-1"
                         style={{ paddingLeft: `${8 + (nivel - 1) * 20}px` }}
                       >
-                        {nivel > 1 && (
-                          <ChevronRight className="w-3 h-3 text-slate-300 flex-shrink-0" />
+                        {/* Botão colapso/expansão */}
+                        {hasKids ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleCollapse(c.id)}
+                            className="p-0.5 rounded hover:bg-slate-200 transition-colors flex-shrink-0"
+                            title={isCollapsed ? "Expandir grupo" : "Recolher grupo"}
+                          >
+                            <ChevronRight className={cn("w-3.5 h-3.5 text-slate-400 transition-transform", !isCollapsed && "rotate-90")} />
+                          </button>
+                        ) : (
+                          nivel > 1 && <span className="w-4 flex-shrink-0" />
                         )}
                         <span className={cn(
                           "font-mono flex-shrink-0 text-right",
