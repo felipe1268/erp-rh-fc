@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3545 — **BUILD DE PRODUÇÃO · BUGFIX OOM NO VITE BUILD — CHUNKS GRANULARES + HEAP REDUZIDO. ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Causa-raiz: o build de produção (`pnpm build`) morria silenciosamente após "4679 modules
+ * transformed" com exit code -1 (SIGKILL do OS). Root cause: Rollup tentava manter o grafo
+ * completo de 4679 módulos em memória ao mesmo tempo para gerar chunks, e `NODE_OPTIONS=
+ * '--max-old-space-size=8192'` pedia 8 GB num ambiente com ~4.4 GB disponíveis sem swap →
+ * o kernel matava o processo sem mensagem de erro.
+ * Fix 1 — `vite.config.ts`: `manualChunks` expandido de 4 para 10 buckets (vendor-react,
+ * vendor-radix, vendor-icons, vendor-trpc, vendor-forms, vendor-dates, vendor-motion,
+ * vendor-pdf + os 4 originais three/webifc/xlsx/charts). Chunks menores = pico de memória
+ * do Rollup menor por "lote" de geração.
+ * Fix 2 — `package.json`: `--max-old-space-size` reduzido de 8192 → 3584 MB no Vite e no
+ * esbuild do servidor. Com um teto realista o Node.js faz GC agressivo em vez de acumular
+ * heap até ser morto pelo OS.
+ * Arquivos: `vite.config.ts`, `package.json`.
+ *
  * Rev. 3544 — **IMPORTAÇÃO DE EXTRATO · BUGFIX CRÍTICO `$6` DUPLICADO → `42601 syntax error at or near ")"`. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  * Causa-raiz: a query de dedup da importação de extrato bancário (linhas de bank_statement_lines)
  * usava `$6` DUAS vezes na mesma string SQL:

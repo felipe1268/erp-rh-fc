@@ -27,18 +27,35 @@ export default defineConfig({
     cssMinify: 'esbuild',
     reportCompressedSize: false,
     cssCodeSplit: true,
+    // Rev. 3545 — chunks mais granulares para reduzir pico de memória do Rollup
+    // durante o build de produção (OOM com 4679 módulos + 8GB de heap pedido).
     rollupOptions: {
       output: {
-        // Rev. 1777 — separa libs pesadas em vendor chunks próprios pra
-        // (a) reduzir o bundle do BimViewer (~4MB → ~1MB)
-        // (b) permitir cache compartilhado entre rotas que usem THREE/web-ifc
         manualChunks(id) {
-          if (id.includes("node_modules")) {
-            if (id.includes("/three/")) return "vendor-three";
-            if (id.includes("/web-ifc")) return "vendor-webifc";
-            if (id.includes("/exceljs/") || id.includes("/xlsx/")) return "vendor-xlsx";
-            if (id.includes("/recharts/") || id.includes("/d3-")) return "vendor-charts";
-          }
+          if (!id.includes("node_modules")) return undefined;
+          // ── heavy standalone libs ──────────────────────────────────────────
+          if (id.includes("/three/"))                  return "vendor-three";
+          if (id.includes("/web-ifc"))                 return "vendor-webifc";
+          if (id.includes("/pdfjs-dist/"))             return "vendor-pdf";
+          if (id.includes("/exceljs/") || id.includes("/xlsx/")) return "vendor-xlsx";
+          // ── charts / data-viz ─────────────────────────────────────────────
+          if (id.includes("/recharts/") || id.includes("/d3-") || id.includes("/d3/") || id.includes("/victory")) return "vendor-charts";
+          // ── icons (lucide é grande, ~3 MB minificado) ────────────────────
+          if (id.includes("/lucide-react/"))           return "vendor-icons";
+          // ── radix-ui (muitos pacotes individuais) ─────────────────────────
+          if (id.includes("/@radix-ui/"))              return "vendor-radix";
+          // ── framer-motion ─────────────────────────────────────────────────
+          if (id.includes("/framer-motion/"))          return "vendor-motion";
+          // ── tRPC + tanstack-query ─────────────────────────────────────────
+          if (id.includes("/@trpc/") || id.includes("/@tanstack/")) return "vendor-trpc";
+          // ── react core ────────────────────────────────────────────────────
+          if (id.includes("/react-dom/") || id.includes("/react/") || id.includes("/scheduler/")) return "vendor-react";
+          // ── form / validation ─────────────────────────────────────────────
+          if (id.includes("/react-hook-form/") || id.includes("/zod/") || id.includes("/@hookform/")) return "vendor-forms";
+          // ── date / i18n utils ─────────────────────────────────────────────
+          if (id.includes("/date-fns/") || id.includes("/dayjs/") || id.includes("/luxon/")) return "vendor-dates";
+          // ── tudo mais de node_modules ─────────────────────────────────────
+          return "vendor-misc";
         },
       },
     },
