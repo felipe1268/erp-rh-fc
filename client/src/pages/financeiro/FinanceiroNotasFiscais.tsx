@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ import {
   Plus, Search, FileText, ExternalLink, Edit2, Trash2, Eye,
   Link, Link2Off, CheckCircle, Clock, AlertTriangle, RefreshCw,
   Building2, Calendar, Banknote, Receipt, X, ChevronDown, ChevronUp,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Upload, Loader2,
 } from "lucide-react";
 
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
@@ -145,6 +145,8 @@ export default function FinanceiroNotasFiscais() {
   const [tab, setTab] = useState<"dados" | "tributacao" | "vinculo">("dados");
   const [vincularEntryId, setVincularEntryId] = useState("");
   const [vincularStmtId, setVincularStmtId] = useState("");
+  const [isParsing, setIsParsing] = useState(false);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const listQuery = trpc.fiscalNotes.list.useQuery(
     {
@@ -204,6 +206,60 @@ export default function FinanceiroNotasFiscais() {
     onSuccess: () => { toast({ title: "Extrato vinculado!" }); setDetalheNf(null); listQuery.refetch(); },
     onError: (e) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
+  const parsePdfMut = trpc.fiscalNotes.parsePdf.useMutation({
+    onError: (e) => {
+      setIsParsing(false);
+      toast({ title: "Erro ao ler PDF", description: e.message, variant: "destructive" });
+    },
+  });
+
+  async function handlePdfUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !companyId) return;
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      toast({ title: "Selecione um arquivo PDF", variant: "destructive" });
+      return;
+    }
+    setIsParsing(true);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const parsed = await parsePdfMut.mutateAsync({ companyId, pdfBase64: base64 });
+      setEditingId(null);
+      setForm({
+        ...emptyForm(),
+        numeroNf:           parsed.numeroNf ?? "",
+        serie:              parsed.serie ?? "",
+        chaveAcesso:        parsed.chaveAcesso ?? "",
+        dataEmissao:        parsed.dataEmissao ?? new Date().toISOString().slice(0, 10),
+        dataCompetencia:    parsed.dataCompetencia ?? "",
+        dataVencimento:     parsed.dataVencimento ?? "",
+        tomadorCnpj:        parsed.tomadorCnpj ?? "",
+        tomadorRazaoSocial: parsed.tomadorRazaoSocial ?? "",
+        descricaoServico:   parsed.descricaoServico ?? "",
+        valorBruto:         formatBRL(parsed.valorBruto),
+        deducoesTotal:      formatBRL(parsed.deducoesTotal),
+        baseCalculoIss:     parsed.baseCalculoIss != null ? formatBRL(parsed.baseCalculoIss) : "",
+        aliquotaIss:        parsed.aliquotaIss != null ? String(parsed.aliquotaIss) : "",
+        issRetido:          formatBRL(parsed.issRetido),
+        retencaoInss:       formatBRL(parsed.retencaoInss),
+        retencaoIrrf:       formatBRL(parsed.retencaoIrrf),
+        retencaoPisCofins:  formatBRL(parsed.retencaoPisCofins),
+        valorLiquido:       formatBRL(parsed.valorLiquido),
+        arquivoNome:        file.name,
+      });
+      setTab("dados");
+      setDialogOpen(true);
+      toast({ title: "PDF lido com sucesso!", description: "Confira os dados e salve a NF-e." });
+    } finally {
+      setIsParsing(false);
+      if (pdfInputRef.current) pdfInputRef.current.value = "";
+    }
+  }
 
   function openNew() {
     setEditingId(null);
@@ -308,9 +364,29 @@ export default function FinanceiroNotasFiscais() {
             </h1>
             <p className="text-sm text-slate-500 mt-0.5">NFs emitidas pela FC Engenharia — controle e cruzamento com extrato</p>
           </div>
-          <Button onClick={openNew} className="bg-indigo-600 hover:bg-indigo-700 gap-2 shrink-0">
-            <Plus className="h-4 w-4" /> Nova NF-e
-          </Button>
+          <div className="flex gap-2 shrink-0">
+            <input
+              ref={pdfInputRef}
+              type="file"
+              accept=".pdf,application/pdf"
+              className="hidden"
+              onChange={handlePdfUpload}
+            />
+            <Button
+              variant="outline"
+              onClick={() => pdfInputRef.current?.click()}
+              disabled={isParsing}
+              className="gap-2"
+            >
+              {isParsing
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Lendo PDF...</>
+                : <><Upload className="h-4 w-4" /> Importar PDF</>
+              }
+            </Button>
+            <Button onClick={openNew} className="bg-indigo-600 hover:bg-indigo-700 gap-2">
+              <Plus className="h-4 w-4" /> Nova NF-e
+            </Button>
+          </div>
         </div>
 
         {/* KPI cards */}

@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3547 — **NOTAS FISCAIS (NFS-e) · IMPORTAÇÃO DE PDF (DANFSe) COM EXTRAÇÃO AUTOMÁTICA VIA IA. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ * Novo botão "Importar PDF" no header da página NF-e: o usuário seleciona o PDF da DANFSe e a IA
+ * (Gemini Vision → fallback Anthropic) extrai automaticamente todos os campos — número, série, chave
+ * de acesso, datas (emissão/competência/vencimento), tomador (CNPJ + razão social), descrição do
+ * serviço, valores (bruto / deduções / BC ISSQN / alíquota / ISS / INSS / IRRF / PIS-COFINS /
+ * líquido) — e pré-preenche o formulário de cadastro para revisão antes de salvar.
+ * Backend: novo endpoint tRPC `fiscalNotes.parsePdf` com prompt DANFSE específico, helpers
+ * `salvageNfJson`/`parseValorNf`/`normDataNf`, Gemini→Anthropic fallback (mesmo padrão do extrato).
+ * Frontend: `useRef` para o `<input type="file" hidden>`, mutation `parsePdfMut`, handler assíncrono
+ * `handlePdfUpload` (FileReader→base64→parsePdf→preenche form→abre dialog). Estado `isParsing` com
+ * spinner no botão. CNPJ normalizado (14 dígitos); nome do arquivo pré-preenchido em `arquivoNome`.
+ * Arquivos: `server/routers/fiscalNotes.ts`, `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3546 — **NOTAS FISCAIS (NFS-e) · FILTRO PADRÃO DE ANO/MÊS (TIMELINE). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Adicionado o seletor padrão de Ano + 12 pills de mês (idêntico ao de Lançamentos e Contas a Pagar)
  * na página FinanceiroNotasFiscais. Navegação por chevron ◀/▶ no ano; botão "Ano todo" (mesSel=null);

@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3547** — **NOTAS FISCAIS (NFS-e) · IMPORTAÇÃO DE PDF (DANFSe) COM EXTRAÇÃO AUTOMÁTICA VIA IA. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Botão "Importar PDF" no header: usuário seleciona o PDF da DANFSe → Gemini Vision (→ Anthropic fallback) extrai todos os campos → pré-preenche formulário para revisão. Endpoint `fiscalNotes.parsePdf` com prompt DANFSe específico. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3546** — **NOTAS FISCAIS (NFS-e) · FILTRO PADRÃO DE ANO/MÊS (TIMELINE). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Seletor de Ano (◀/▶) + botão "Ano todo" + 12 pills de mês com bolinhas de status (verde=todas conciliadas, azul=em aberto, cinza=sem NFs). Mês corrente pré-selecionado. Query anual separada para os dots; listQuery passa `ano`+`mes` ao backend. KPIs e tabela refletem o período ativo. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3545** — **BUILD DE PRODUÇÃO · BUGFIX OOM NO VITE BUILD — CHUNKS GRANULARES + HEAP REDUZIDO. ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Build morria silenciosamente após "4679 modules transformed" (exit -1, SIGKILL). Causa: Rollup mantinha grafo completo em RAM + `--max-old-space-size=8192` em ambiente com ~4.4 GB disponíveis sem swap. Fix 1: `manualChunks` expandido de 4 → 10 buckets. Fix 2: heap reduzido de 8192 → 3584 MB no `package.json`. Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3545** — **BUILD DE PRODUÇÃO · BUGFIX OOM NO VITE BUILD — CHUNKS GRANULARES + HEAP REDUZIDO. ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3544** — **IMPORTAÇÃO DE EXTRATO · BUGFIX CRÍTICO `$6` DUPLICADO → `42601 syntax error at or near ")"`. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

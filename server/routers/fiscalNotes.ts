@@ -5,6 +5,90 @@ import { fiscalNotes } from "../../drizzle/schema";
 import { eq, and, desc, ilike, or, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { getUserCompanyLinks } from "../db";
+import { invokeGeminiVision, invokeAnthropicVision } from "../_core/llm";
+
+// ─── Prompt e helpers para parsing de DANFSe ───────────────────────────────
+
+const PROMPT_DANFSE = `Você é um extrator de NOTA FISCAL DE SERVIÇO ELETRÔNICA (NFS-e / DANFSe) brasileira em PDF.
+Extraia os campos abaixo com precisão. Devolva SOMENTE JSON válido, sem texto adicional.
+
+Campos esperados:
+- "numeroNf": número da NFS-e (string, ex.: "55")
+- "serie": série da DPS (string, pode ser null)
+- "chaveAcesso": chave de acesso da NFS-e (string de dígitos, ex.: "35184042...")
+- "dataEmissao": data de emissão no formato "YYYY-MM-DD"
+- "dataCompetencia": competência da NFS-e no formato "YYYY-MM-DD" (se vier como MM/YYYY ou DD/MM/YYYY converta)
+- "dataVencimento": data de vencimento do pagamento no formato "YYYY-MM-DD" (procure em "Data de Vencimento:" na descrição do serviço, pode ser null)
+- "tomadorCnpj": CNPJ do tomador apenas os dígitos (14 chars), sem pontos ou traços (ex.: "30653585000100"), null se CPF/não houver
+- "tomadorRazaoSocial": razão social do tomador do serviço (string)
+- "descricaoServico": descrição completa do serviço prestado (string)
+- "valorBruto": valor do serviço (número, use ponto decimal, ex.: 20572.29)
+- "deducoesTotal": total de deduções/reduções (número, 0 se não houver)
+- "baseCalculoIss": base de cálculo do ISS/ISSQN (número, null se não houver)
+- "aliquotaIss": alíquota do ISS em % (número, ex.: 5.0, null se não houver)
+- "issRetido": valor do ISSQN retido pelo tomador (número, 0 se não houver — use "ISSQN Apurado" ou "ISSQN Retido")
+- "retencaoInss": valor da Contribuição Previdenciária RETIDA pelo tomador (número, 0 se não houver — NÃO confundir com débito apuração própria)
+- "retencaoIrrf": valor do IRRF retido pelo tomador (número, 0 se não houver — "-" = 0)
+- "retencaoPisCofins": valor de PIS/COFINS/CSLL RETIDO pelo tomador (número, 0 se não houver — "Contribuições Sociais - Retidas"; NÃO usar "Débito Apuração Própria")
+- "valorLiquido": valor líquido da NFS-e (número)
+
+REGRAS:
+- Valores em reais: converta "R$ 1.234,56" para 1234.56; "-" ou vazio = 0 ou null conforme tipo.
+- Datas: DD/MM/AAAA → AAAA-MM-DD; DD/MM/AAAA HH:MM:SS → só a data.
+- Responda SOMENTE com JSON: { "numeroNf": "...", "serie": null, ... }`;
+
+function salvageNfJson(text: string): any {
+  if (!text) throw new Error("IA não retornou conteúdo.");
+  try { return JSON.parse(text); } catch { /* fallback */ }
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start > -1 && end > start) {
+    try { return JSON.parse(text.slice(start, end + 1)); } catch { /* segue */ }
+  }
+  throw new Error("Não consegui interpretar o JSON da IA.");
+}
+
+function parseValorNf(v: any): number {
+  if (v == null || v === "" || v === "-") return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  let s = String(v).replace(/[R$\s]/g, "").replace(/\./g, "").replace(",", ".");
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function normDataNf(v: any): string | null {
+  if (!v) return null;
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  // MM/YYYY → primeiro dia do mês
+  m = s.match(/^(\d{2})\/(\d{4})/);
+  if (m) return `${m[2]}-${m[1]}-01`;
+  return null;
+}
+
+async function invocarIANfe(base64: string): Promise<string> {
+  if (process.env.GOOGLE_API_KEY) {
+    try {
+      return await invokeGeminiVision({
+        prompt: PROMPT_DANFSE,
+        base64,
+        mimeType: "application/pdf",
+        maxTokens: 4096,
+        thinking: "off",
+      });
+    } catch (e: any) {
+      console.warn(`[fiscalNotesIA] Gemini falhou, tentando Anthropic: ${e?.message}`);
+    }
+  }
+  return invokeAnthropicVision({
+    prompt: PROMPT_DANFSE + "\nResponda SOMENTE com JSON válido.",
+    files: [{ base64, mimeType: "application/pdf" }],
+    maxTokens: 4096,
+  });
+}
 
 async function _assertNfAccess(ctxUser: any, companyId: number) {
   if (!ctxUser?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
@@ -233,6 +317,45 @@ export const fiscalNotesRouter = router({
         .set({ status: "cancelada", updatedAt: now })
         .where(and(eq(fiscalNotes.id, input.id), eq(fiscalNotes.companyId, input.companyId)));
       return { success: true };
+    }),
+
+  parsePdf: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      pdfBase64: z.string(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertNfAccess(ctx.user, input.companyId);
+      const clean = input.pdfBase64.replace(/^data:[^,]*,/, "").trim();
+      const buf = Buffer.from(clean, "base64");
+      if (buf.length < 5 || buf.subarray(0, 5).toString("latin1") !== "%PDF-") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "O arquivo enviado não é um PDF válido." });
+      }
+      const txt = await invocarIANfe(clean);
+      const raw = salvageNfJson(txt);
+
+      const cnpjRaw = raw.tomadorCnpj ? String(raw.tomadorCnpj).replace(/\D/g, "") : null;
+
+      return {
+        numeroNf:           raw.numeroNf ? String(raw.numeroNf) : "",
+        serie:              raw.serie ? String(raw.serie) : null,
+        chaveAcesso:        raw.chaveAcesso ? String(raw.chaveAcesso).replace(/\D/g, "") : null,
+        dataEmissao:        normDataNf(raw.dataEmissao) ?? new Date().toISOString().slice(0, 10),
+        dataCompetencia:    normDataNf(raw.dataCompetencia),
+        dataVencimento:     normDataNf(raw.dataVencimento),
+        tomadorCnpj:        cnpjRaw?.length === 14 ? cnpjRaw : null,
+        tomadorRazaoSocial: raw.tomadorRazaoSocial ? String(raw.tomadorRazaoSocial).trim() : null,
+        descricaoServico:   raw.descricaoServico ? String(raw.descricaoServico).trim() : null,
+        valorBruto:         parseValorNf(raw.valorBruto),
+        deducoesTotal:      parseValorNf(raw.deducoesTotal),
+        baseCalculoIss:     raw.baseCalculoIss != null ? parseValorNf(raw.baseCalculoIss) : null,
+        aliquotaIss:        raw.aliquotaIss != null ? parseFloat(String(raw.aliquotaIss)) : null,
+        issRetido:          parseValorNf(raw.issRetido),
+        retencaoInss:       parseValorNf(raw.retencaoInss),
+        retencaoIrrf:       parseValorNf(raw.retencaoIrrf),
+        retencaoPisCofins:  parseValorNf(raw.retencaoPisCofins),
+        valorLiquido:       parseValorNf(raw.valorLiquido),
+      };
     }),
 
   listByEntry: protectedProcedure
