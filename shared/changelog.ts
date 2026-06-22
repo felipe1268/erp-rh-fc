@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3535 — **PAINEL RH · BUGFIX PRORROGAR/EFETIVAR/DESLIGAR EXPERIÊNCIA — `dataEvento` NULL + `registradoPor` TIPO ERRADO. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ * Causa: 4 chamadas a `createEmployeeHistory` usavam campo `data:` (inexistente) em vez de `dataEvento:`.
+ * Como `dataEvento` é NOT NULL sem default, o INSERT falhava com erro de constraint.
+ * Além disso, `registradoPor: ctx.user.name` (string) era passado numa coluna `integer` (user ID).
+ * Fix: nos 4 endpoints (`prorrogarExperiencia`, `efetivarExperiencia`, `desligarExperiencia`,
+ * `marcarNaoRenovarExperiencia`) renomeado `data:` → `dataEvento:` e trocado
+ * `registradoPor: ctx.user.name` → `registradoPor: ctx.user.id`.
+ * Arquivo: `server/routers.ts` (linhas ~922/939/971/1018).
+ *
  * Rev. 3534 — **CONCILIAÇÃO · LIMPAR EXTRATOS DE TODAS AS CONTAS DO PERÍODO (BULK). BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
  * Contexto: durante a validação do sistema é comum precisar zerar o extrato do mês inteiro e reimportar.
  * O fluxo anterior exigia entrar em cada conta individualmente e clicar "Limpar extrato" — N cliques.

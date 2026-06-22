@@ -919,7 +919,7 @@ export const appRouter = router({
         experienciaObs: input.obs || null,
       } as any);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'colaboradores', entityType: 'employee', entityId: input.employeeId, details: `Contrato de experiência PRORROGADO para 2º período. ${input.obs || ''}` });
-      await createEmployeeHistory({ employeeId: input.employeeId, companyId: input.companyId, tipo: 'Outros' as any, descricao: `Contrato de experiência prorrogado para 2º período por ${ctx.user.name}. ${input.obs || ''}`, data: new Date().toISOString().split('T')[0], registradoPor: ctx.user.name ?? 'Sistema' } as any);
+      await createEmployeeHistory({ employeeId: input.employeeId, companyId: input.companyId, tipo: 'Outros' as any, descricao: `Contrato de experiência prorrogado para 2º período por ${ctx.user.name}. ${input.obs || ''}`, dataEvento: new Date().toISOString().split('T')[0], registradoPor: ctx.user.id ?? null } as any);
       return { success: true };
     }),
     efetivarExperiencia: protectedProcedure.input(z.object({
@@ -936,7 +936,7 @@ export const appRouter = router({
         experienciaObs: input.obs || null,
       } as any);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'colaboradores', entityType: 'employee', entityId: input.employeeId, details: `Colaborador EFETIVADO após período de experiência. ${input.obs || ''}` });
-      await createEmployeeHistory({ employeeId: input.employeeId, companyId: input.companyId, tipo: 'Outros' as any, descricao: `Colaborador efetivado após período de experiência por ${ctx.user.name}. ${input.obs || ''}`, data: new Date().toISOString().split('T')[0], registradoPor: ctx.user.name ?? 'Sistema' } as any);
+      await createEmployeeHistory({ employeeId: input.employeeId, companyId: input.companyId, tipo: 'Outros' as any, descricao: `Colaborador efetivado após período de experiência por ${ctx.user.name}. ${input.obs || ''}`, dataEvento: new Date().toISOString().split('T')[0], registradoPor: ctx.user.id ?? null } as any);
       return { success: true };
     }),
     desligarExperiencia: protectedProcedure.input(z.object({
@@ -968,7 +968,7 @@ export const appRouter = router({
         experienciaObs: input.obs || null,
       } as any);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'colaboradores', entityType: 'employee', entityId: input.employeeId, details: `Colaborador DESLIGADO durante período de experiência. Motivo: ${input.motivo}` });
-      await createEmployeeHistory({ employeeId: input.employeeId, companyId: input.companyId, tipo: 'Desligamento' as any, descricao: `Desligado durante período de experiência por ${ctx.user.name}. Motivo: ${input.motivo}`, data: new Date().toISOString().split('T')[0], registradoPor: ctx.user.name ?? 'Sistema' } as any);
+      await createEmployeeHistory({ employeeId: input.employeeId, companyId: input.companyId, tipo: 'Desligamento' as any, descricao: `Desligado durante período de experiência por ${ctx.user.name}. Motivo: ${input.motivo}`, dataEvento: new Date().toISOString().split('T')[0], registradoPor: ctx.user.id ?? null } as any);
       // Auto-desalocação de obra
       try {
         const allocations = await checkEmployeeAllocations([input.employeeId]);
@@ -1015,7 +1015,7 @@ export const appRouter = router({
         experienciaNaoRenovarPor: input.naoRenovar ? (ctx.user.name ?? 'Sistema') : null,
       } as any);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'colaboradores', entityType: 'employee', entityId: input.employeeId, details: input.naoRenovar ? 'Contrato de experiência PRÉ-MARCADO como "não renovar" (aviso de não renovação).' : 'Pré-marcação "não renovar" do contrato de experiência REMOVIDA.' });
-      await createEmployeeHistory({ employeeId: input.employeeId, companyId: input.companyId, tipo: 'Outros' as any, descricao: input.naoRenovar ? `Contrato de experiência pré-marcado como "não renovar" por ${ctx.user.name}.` : `Pré-marcação "não renovar" removida por ${ctx.user.name}.`, data: hoje, registradoPor: ctx.user.name ?? 'Sistema' } as any);
+      await createEmployeeHistory({ employeeId: input.employeeId, companyId: input.companyId, tipo: 'Outros' as any, descricao: input.naoRenovar ? `Contrato de experiência pré-marcado como "não renovar" por ${ctx.user.name}.` : `Pré-marcação "não renovar" removida por ${ctx.user.name}.`, dataEvento: hoje, registradoPor: ctx.user.id ?? null } as any);
       return { success: true };
     }),
 
