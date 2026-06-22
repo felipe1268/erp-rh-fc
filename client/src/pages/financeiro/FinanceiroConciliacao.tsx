@@ -217,6 +217,8 @@ export default function FinanceiroConciliacao() {
   const [manualLanSel, setManualLanSel] = useState<any | null>(null);
   // Rev. 3459 — flag para abrir o dialog de detalhe JÁ em modo edição (atalho do botão lápis).
   const [pendingEditMode, setPendingEditMode] = useState(false);
+  // Rev. 3504 — filtro Entrada/Saída na lista "No extrato, sem lançamento".
+  const [filterExtTipo, setFilterExtTipo] = useState<"all" | "entrada" | "saida">("all");
   // Rev. 3500 — IDs de linhas do extrato que já foram lançadas/conciliadas nesta sessão.
   // Remoção IMEDIATA da lista "No extrato, sem lançamento" antes do próximo refetch.
   const [dismissedStmtIds, setDismissedStmtIds] = useState<Set<number>>(new Set());
@@ -1070,7 +1072,12 @@ export default function FinanceiroConciliacao() {
     ].filter(Boolean).join(" "));
     return alvo.includes(termoBusca);
   };
-  const repExtView: any[] = termoBusca ? repExt.filter(matchBusca) : repExt;
+  const repExtView: any[] = (() => {
+    let arr = termoBusca ? repExt.filter(matchBusca) : repExt;
+    if (filterExtTipo === "entrada") arr = arr.filter((r: any) => Number(r.valor) >= 0);
+    if (filterExtTipo === "saida")   arr = arr.filter((r: any) => Number(r.valor) < 0);
+    return arr;
+  })();
   const repLanView: any[] = termoBusca ? repLan.filter(matchBusca) : repLan;
   // Rev. 3188 — lançamentos SEM conta bancária definida vêm num bloco próprio e NÃO entram
   // no número da conta (antes apareciam/contavam em todas as contas, inflando "ERP sem extrato").
@@ -4898,10 +4905,28 @@ export default function FinanceiroConciliacao() {
                   <div className="flex items-center justify-between gap-2">
                     <CardTitle className="text-sm flex items-center gap-2">
                       <AlertCircle className="w-4 h-4 text-red-500" />
-                      No extrato, sem lançamento ({termoBusca ? `${formatInt(repExtView.length)}/${formatInt(repExt.length)}` : formatInt(repExt.length)})
+                      No extrato, sem lançamento ({termoBusca || filterExtTipo !== "all" ? `${formatInt(repExtView.length)}/${formatInt(repExt.length)}` : formatInt(repExt.length)})
                     </CardTitle>
                     {repExt.length > 0 && (
                       <div className="flex items-center gap-1 shrink-0">
+                        {/* Rev. 3504 — filtro Entrada / Saída */}
+                        <div className="flex items-center rounded-md border border-gray-200 overflow-hidden text-xs">
+                          <button
+                            type="button"
+                            onClick={() => setFilterExtTipo("all")}
+                            className={`px-2 py-1 transition-colors ${filterExtTipo === "all" ? "bg-gray-700 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                          >Todos</button>
+                          <button
+                            type="button"
+                            onClick={() => setFilterExtTipo(filterExtTipo === "entrada" ? "all" : "entrada")}
+                            className={`px-2 py-1 border-l border-gray-200 transition-colors ${filterExtTipo === "entrada" ? "bg-green-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                          >Entrada</button>
+                          <button
+                            type="button"
+                            onClick={() => setFilterExtTipo(filterExtTipo === "saida" ? "all" : "saida")}
+                            className={`px-2 py-1 border-l border-gray-200 transition-colors ${filterExtTipo === "saida" ? "bg-red-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                          >Saída</button>
+                        </div>
                         <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => exportarListaExcel("extrato")} title="Exportar para Excel">
                           <FileSpreadsheet className="w-3.5 h-3.5 mr-1" />Excel
                         </Button>
@@ -6600,7 +6625,7 @@ export default function FinanceiroConciliacao() {
             <DialogHeader className="px-4 py-3 border-b shrink-0">
               <DialogTitle className="flex items-center gap-2 text-base">
                 {expandedList === "extrato" ? (
-                  <><AlertCircle className="w-4 h-4 text-red-500" />No extrato, sem lançamento ({termoBusca ? `${formatInt(repExtView.length)}/${formatInt(repExt.length)}` : formatInt(repExt.length)})</>
+                  <><AlertCircle className="w-4 h-4 text-red-500" />No extrato, sem lançamento ({termoBusca || filterExtTipo !== "all" ? `${formatInt(repExtView.length)}/${formatInt(repExt.length)}` : formatInt(repExt.length)})</>
                 ) : (
                   <><FileText className="w-4 h-4 text-amber-600" />No ERP, sem extrato ({termoBusca ? `${formatInt(repLanView.length)}/${formatInt(repLan.length)}` : formatInt(repLan.length)})</>
                 )}
@@ -6621,6 +6646,13 @@ export default function FinanceiroConciliacao() {
                   </button>
                 )}
               </div>
+              {expandedList === "extrato" && (
+                <div className="flex items-center rounded-md border border-gray-200 overflow-hidden text-xs shrink-0">
+                  <button type="button" onClick={() => setFilterExtTipo("all")} className={`px-2 py-1 transition-colors ${filterExtTipo === "all" ? "bg-gray-700 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Todos</button>
+                  <button type="button" onClick={() => setFilterExtTipo(filterExtTipo === "entrada" ? "all" : "entrada")} className={`px-2 py-1 border-l border-gray-200 transition-colors ${filterExtTipo === "entrada" ? "bg-green-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Entrada</button>
+                  <button type="button" onClick={() => setFilterExtTipo(filterExtTipo === "saida" ? "all" : "saida")} className={`px-2 py-1 border-l border-gray-200 transition-colors ${filterExtTipo === "saida" ? "bg-red-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Saída</button>
+                </div>
+              )}
               <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => expandedList && exportarListaExcel(expandedList)} title="Exportar para Excel">
                 <FileSpreadsheet className="w-3.5 h-3.5 mr-1" />Excel
               </Button>

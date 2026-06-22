@@ -1,6 +1,12 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3504 — **CONCILIAÇÃO · FILTRO ENTRADA/SAÍDA NA LISTA "NO EXTRATO, SEM LANÇAMENTO". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Segmented-control "Todos / Entrada / Saída" adicionado no header da seção
+ * e também na visão expandida (tela cheia). Filtra `repExtView` pelo sinal de `valor`
+ * (>=0 = entrada, <0 = saída). Contador do header exibe N/Total quando filtro ativo.
+ * Arquivo: `FinanceiroConciliacao.tsx`.
+ *
  * Rev. 3503 — **CONCILIAÇÃO · REPORT REFETCH AUTOMÁTICO APÓS CONCILIAR/LANÇAR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Após qualquer conciliação bem-sucedida, `refetchReport()` era omitido — só `setReportStale(true)`
  * era chamado, exigindo clique manual em "Atualizar" para ver "Já conciliados" atualizado.
