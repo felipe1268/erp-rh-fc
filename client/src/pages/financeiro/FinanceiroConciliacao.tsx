@@ -217,8 +217,10 @@ export default function FinanceiroConciliacao() {
   const [manualLanSel, setManualLanSel] = useState<any | null>(null);
   // Rev. 3459 — flag para abrir o dialog de detalhe JÁ em modo edição (atalho do botão lápis).
   const [pendingEditMode, setPendingEditMode] = useState(false);
-  // Rev. 3504 — filtro Entrada/Saída na lista "No extrato, sem lançamento".
+  // Rev. 3504/3505 — filtros Entrada/Saída por seção.
   const [filterExtTipo, setFilterExtTipo] = useState<"all" | "entrada" | "saida">("all");
+  const [filterLanTipo, setFilterLanTipo] = useState<"all" | "entrada" | "saida">("all");
+  const [filterConcTipo, setFilterConcTipo] = useState<"all" | "entrada" | "saida">("all");
   // Rev. 3500 — IDs de linhas do extrato que já foram lançadas/conciliadas nesta sessão.
   // Remoção IMEDIATA da lista "No extrato, sem lançamento" antes do próximo refetch.
   const [dismissedStmtIds, setDismissedStmtIds] = useState<Set<number>>(new Set());
@@ -1078,7 +1080,17 @@ export default function FinanceiroConciliacao() {
     if (filterExtTipo === "saida")   arr = arr.filter((r: any) => Number(r.valor) < 0);
     return arr;
   })();
-  const repLanView: any[] = termoBusca ? repLan.filter(matchBusca) : repLan;
+  const repLanView: any[] = (() => {
+    let arr = termoBusca ? repLan.filter(matchBusca) : repLan;
+    if (filterLanTipo === "entrada") arr = arr.filter((r: any) => Number(r.valor) >= 0);
+    if (filterLanTipo === "saida")   arr = arr.filter((r: any) => Number(r.valor) < 0);
+    return arr;
+  })();
+  const repConcView: any[] = (() => {
+    if (filterConcTipo === "entrada") return repConc.filter((r: any) => Number(r.valor) >= 0);
+    if (filterConcTipo === "saida")   return repConc.filter((r: any) => Number(r.valor) < 0);
+    return repConc;
+  })();
   // Rev. 3188 — lançamentos SEM conta bancária definida vêm num bloco próprio e NÃO entram
   // no número da conta (antes apareciam/contavam em todas as contas, inflando "ERP sem extrato").
   const repSemConta: any[] = report?.lancamentosSemConta ?? [];
@@ -4981,10 +4993,15 @@ export default function FinanceiroConciliacao() {
                   <div className="flex items-center justify-between gap-2">
                     <CardTitle className="text-sm flex items-center gap-2">
                       <FileText className="w-4 h-4 text-amber-600" />
-                      No ERP, sem extrato ({termoBusca ? `${formatInt(repLanView.length)}/${formatInt(repLan.length)}` : formatInt(repLan.length)})
+                      No ERP, sem extrato ({termoBusca || filterLanTipo !== "all" ? `${formatInt(repLanView.length)}/${formatInt(repLan.length)}` : formatInt(repLan.length)})
                     </CardTitle>
                     {repLan.length > 0 && (
                       <div className="flex items-center gap-1 shrink-0">
+                        <div className="flex items-center rounded-md border border-gray-200 overflow-hidden text-xs">
+                          <button type="button" onClick={() => setFilterLanTipo("all")} className={`px-2 py-1 transition-colors ${filterLanTipo === "all" ? "bg-gray-700 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Todos</button>
+                          <button type="button" onClick={() => setFilterLanTipo(filterLanTipo === "entrada" ? "all" : "entrada")} className={`px-2 py-1 border-l border-gray-200 transition-colors ${filterLanTipo === "entrada" ? "bg-green-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Entrada</button>
+                          <button type="button" onClick={() => setFilterLanTipo(filterLanTipo === "saida" ? "all" : "saida")} className={`px-2 py-1 border-l border-gray-200 transition-colors ${filterLanTipo === "saida" ? "bg-red-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Saída</button>
+                        </div>
                         <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => exportarListaExcel("erp")} title="Exportar para Excel">
                           <FileSpreadsheet className="w-3.5 h-3.5 mr-1" />Excel
                         </Button>
@@ -5175,11 +5192,18 @@ export default function FinanceiroConciliacao() {
                 <CardContent className="p-0">
                   <details className="group">
                     <summary className="flex items-center justify-between cursor-pointer select-none px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                      <span className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-600" />Já conciliados ({formatInt(repConc.length)}) · {formatBRL(vConc)}</span>
-                      <ChevronRight className="w-4 h-4 text-gray-400 transition-transform group-open:rotate-90" />
+                      <span className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-600" />Já conciliados ({filterConcTipo !== "all" ? `${formatInt(repConcView.length)}/` : ""}{formatInt(repConc.length)}) · {formatBRL(vConc)}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center rounded-md border border-gray-200 overflow-hidden text-xs" onClick={(e) => e.preventDefault()}>
+                          <button type="button" onClick={() => setFilterConcTipo("all")} className={`px-2 py-1 transition-colors ${filterConcTipo === "all" ? "bg-gray-700 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Todos</button>
+                          <button type="button" onClick={() => setFilterConcTipo(filterConcTipo === "entrada" ? "all" : "entrada")} className={`px-2 py-1 border-l border-gray-200 transition-colors ${filterConcTipo === "entrada" ? "bg-green-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Entrada</button>
+                          <button type="button" onClick={() => setFilterConcTipo(filterConcTipo === "saida" ? "all" : "saida")} className={`px-2 py-1 border-l border-gray-200 transition-colors ${filterConcTipo === "saida" ? "bg-red-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Saída</button>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-gray-400 transition-transform group-open:rotate-90" />
+                      </div>
                     </summary>
                     <div className="divide-y divide-gray-100 max-h-[360px] overflow-y-auto border-t">
-                      {repConc.map((c: any) => (
+                      {repConcView.map((c: any) => (
                         <div key={c.id} className="px-4 py-3 flex items-center gap-3">
                           <div className="min-w-0 flex-1">
                             <p className="text-xs text-gray-500">{fmtData(c.data)}</p>
@@ -6627,7 +6651,7 @@ export default function FinanceiroConciliacao() {
                 {expandedList === "extrato" ? (
                   <><AlertCircle className="w-4 h-4 text-red-500" />No extrato, sem lançamento ({termoBusca || filterExtTipo !== "all" ? `${formatInt(repExtView.length)}/${formatInt(repExt.length)}` : formatInt(repExt.length)})</>
                 ) : (
-                  <><FileText className="w-4 h-4 text-amber-600" />No ERP, sem extrato ({termoBusca ? `${formatInt(repLanView.length)}/${formatInt(repLan.length)}` : formatInt(repLan.length)})</>
+                  <><FileText className="w-4 h-4 text-amber-600" />No ERP, sem extrato ({termoBusca || filterLanTipo !== "all" ? `${formatInt(repLanView.length)}/${formatInt(repLan.length)}` : formatInt(repLan.length)})</>
                 )}
               </DialogTitle>
             </DialogHeader>
@@ -6651,6 +6675,13 @@ export default function FinanceiroConciliacao() {
                   <button type="button" onClick={() => setFilterExtTipo("all")} className={`px-2 py-1 transition-colors ${filterExtTipo === "all" ? "bg-gray-700 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Todos</button>
                   <button type="button" onClick={() => setFilterExtTipo(filterExtTipo === "entrada" ? "all" : "entrada")} className={`px-2 py-1 border-l border-gray-200 transition-colors ${filterExtTipo === "entrada" ? "bg-green-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Entrada</button>
                   <button type="button" onClick={() => setFilterExtTipo(filterExtTipo === "saida" ? "all" : "saida")} className={`px-2 py-1 border-l border-gray-200 transition-colors ${filterExtTipo === "saida" ? "bg-red-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Saída</button>
+                </div>
+              )}
+              {expandedList === "erp" && (
+                <div className="flex items-center rounded-md border border-gray-200 overflow-hidden text-xs shrink-0">
+                  <button type="button" onClick={() => setFilterLanTipo("all")} className={`px-2 py-1 transition-colors ${filterLanTipo === "all" ? "bg-gray-700 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Todos</button>
+                  <button type="button" onClick={() => setFilterLanTipo(filterLanTipo === "entrada" ? "all" : "entrada")} className={`px-2 py-1 border-l border-gray-200 transition-colors ${filterLanTipo === "entrada" ? "bg-green-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Entrada</button>
+                  <button type="button" onClick={() => setFilterLanTipo(filterLanTipo === "saida" ? "all" : "saida")} className={`px-2 py-1 border-l border-gray-200 transition-colors ${filterLanTipo === "saida" ? "bg-red-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Saída</button>
                 </div>
               )}
               <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => expandedList && exportarListaExcel(expandedList)} title="Exportar para Excel">

@@ -1,6 +1,12 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3505 — **CONCILIAÇÃO · FILTRO ENTRADA/SAÍDA NAS SEÇÕES "NO ERP, SEM EXTRATO" E "JÁ CONCILIADOS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Mesmo padrão da Rev. 3504: segmented-control "Todos/Entrada/Saída" adicionado ao
+ * header de "No ERP, sem extrato" e ao summary de "Já conciliados" (colapsável).
+ * `filterLanTipo` → `repLanView`; `filterConcTipo` → `repConcView`.
+ * Visão expandida do ERP também recebe o filtro. Arquivo: `FinanceiroConciliacao.tsx`.
+ *
  * Rev. 3504 — **CONCILIAÇÃO · FILTRO ENTRADA/SAÍDA NA LISTA "NO EXTRATO, SEM LANÇAMENTO". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Segmented-control "Todos / Entrada / Saída" adicionado no header da seção
  * e também na visão expandida (tela cheia). Filtra `repExtView` pelo sinal de `valor`
