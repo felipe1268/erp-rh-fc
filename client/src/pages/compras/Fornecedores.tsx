@@ -406,7 +406,7 @@ export default function Fornecedores() {
     });
     setEditando(f.id);
     setErroCNPJ(null);
-    lastFetchedCNPJ.current = (f.cnpj ?? "").replace(/\D/g, "");
+    lastFetchedCNPJ.current = "";
     setModalAberto(true);
   }
 

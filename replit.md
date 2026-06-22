@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3475** — **EMPRESAS TERCEIRAS · AUTO-PREENCHIMENTO DA FICHA AO DIGITAR O CNPJ (14 DÍGITOS). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** useEffect+debounce 600ms dispara BrasilAPI ao completar 14 dígitos; guard lastFetchedCnpj evita re-busca; onBlur redundante removido. Detalhe: `shared/changelog.ts`.
+- **Rev. 3476** — **FORNECEDORES · BUGFIX: BOTÃO "BUSCAR CNPJ" BLOQUEADO NO MODO EDIÇÃO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `abrirEditar()` pré-setava `lastFetchedCNPJ.current` com o CNPJ existente → guard bloqueava o botão; fix: reset para `""` na abertura. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3474** — **OBRAS · DATA DE INÍCIO NOS CARDS EM DD/MM/AAAA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** "Início: 2026-01-01" → "Início: 01/01/2026". Detalhe: `shared/changelog.ts`.
+- **Rev. 3475** — **EMPRESAS TERCEIRAS · AUTO-PREENCHIMENTO DA FICHA AO DIGITAR O CNPJ (14 DÍGITOS). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** useEffect+debounce 600ms dispara BrasilAPI ao completar 14 dígitos; guard lastFetchedCnpj evita re-busca; onBlur redundante removido. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
 

@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3476 — **FORNECEDORES · BUGFIX: BOTÃO "BUSCAR CNPJ" BLOQUEADO NO MODO EDIÇÃO.
+ * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * `abrirEditar()` pré-carregava `lastFetchedCNPJ.current` com o CNPJ existente,
+ * o que fazia o guard `if (cnpj === lastFetchedCNPJ.current) return` disparar
+ * imediatamente ao clicar em "Buscar", retornando sem fazer nada. O `useEffect`
+ * de auto-fetch já tem o guard `!editando`, então o pre-set era redundante e
+ * destrutivo. Fix: `lastFetchedCNPJ.current = ""` ao abrir edição.
+ *
  * Rev. 3475 — **EMPRESAS TERCEIRAS · AUTO-PREENCHIMENTO DA FICHA AO DIGITAR O CNPJ
  * (14 DÍGITOS → BrasilAPI). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
