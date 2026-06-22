@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3544** — **IMPORTAÇÃO DE EXTRATO · BUGFIX CRÍTICO `$6` DUPLICADO → `42601 syntax error at or near ")"`. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Query de dedup usava `$6` duas vezes na mesma string — o helper `dbExecute` divide por `/\$\d+/g`, então o segundo `$6` recebia `params[6]=undefined` → Postgres via `saldo_apos=)` → syntax error. Afetava toda importação PDF (Caixa/BB/Santander/IA). Existia em 2 lugares (1 fase + 2 fases). Fix: segundo `$6` → `$7`, `salParam` passado 2× no array. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3543** — **NOTAS FISCAIS (NFS-e) · NOVO MÓDULO "CONTROLE DE NOTAS FISCAIS" NA ABA MOVIMENTAÇÕES. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Nova tabela `fiscal_notes` via SyncSchema+ (número NF, série, chave de acesso, datas, tomador, obra/BM, valores bruto/retenções/líquido, status automático, vínculo com `financial_entries` e `bank_statement_lines`). Router tRPC completo (list/criar/atualizar/vincularLancamento/vincularExtrato/excluir). Página com KPIs por status, tabela filtrável, dialog 3 abas (Dados/Tributação/Vínculo), cálculo automático do valor líquido, dialog de vínculo, AlertDialog de cancelamento. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3542** — **DESLIGAMENTO NA EXPERIÊNCIA · BUGFIX FGTS 40% INDEVIDO NO TÉRMINO NO PRAZO. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Término no prazo = vencimento natural do contrato → sem multa FGTS (art. 18 Lei 8.036/90). Condição corrigida: `multaFGTS` só calculada quando `iniciativa==='empregador' && antecipado`. Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3542** — **DESLIGAMENTO NA EXPERIÊNCIA · BUGFIX FGTS 40% INDEVIDO NO TÉRMINO NO PRAZO. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3541** — **DESLIGAMENTO NA EXPERIÊNCIA · 4 TIPOS DE ENCERRAMENTO + ART. 479/480 + AVISO EM "AVISOS PRÉVIOS". BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

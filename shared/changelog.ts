@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3544 — **IMPORTAÇÃO DE EXTRATO · BUGFIX CRÍTICO `$6` DUPLICADO → `42601 syntax error at or near ")"`. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ * Causa-raiz: a query de dedup da importação de extrato bancário (linhas de bank_statement_lines)
+ * usava `$6` DUAS vezes na mesma string SQL:
+ *   `AND ($6::numeric IS NULL OR saldo_apos=$6)`
+ * O helper `dbExecute` divide a query por regex `/\$\d+/g`, gerando N+1 partes para N placeholders
+ * únicos. Com `$6` repetido → 8 partes mas apenas 6 params → `params[6] = undefined` → Drizzle
+ * emite um token vazio na posição do segundo `$6` → Postgres recebe `saldo_apos=)` → erro 42601
+ * `syntax error at or near ")"`. Afetava TODA importação de extrato PDF da Caixa (e qualquer outro
+ * banco) que extraísse o saldo_apos das linhas. Existia em DOIS lugares: importação em 1 fase
+ * (`importarExtratoBancario`) e importação em 2 fases – fase 2 (`commitBankStatementBatch`).
+ * Fix: segundo `$6` renomeado para `$7`; `salParam` passado duas vezes no array de params.
+ * Arquivos: `server/routers/financial.ts` (linhas 8049 e 8272 — ambas corrigidas).
+ *
  * Rev. 3543 — **NOTAS FISCAIS (NFS-e) · NOVO MÓDULO "CONTROLE DE NOTAS FISCAIS" NA ABA MOVIMENTAÇÕES. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
  * Nova tabela `fiscal_notes` (via self-heal CREATE TABLE IF NOT EXISTS): número NF, série,
  * chave de acesso, datas (emissão/competência/vencimento), tomador (CNPJ + razão social),

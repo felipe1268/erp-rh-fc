@@ -8044,10 +8044,13 @@ export const financialRouter = router({
       // mesmo valor/data/descricao mas saldos diferentes (ex: N capitalizações iguais
       // no mesmo dia) deixam de ser descartados. Quando saldo é null (OFX sem saldo),
       // $6::numeric IS NULL → cláusula é verdadeira para qualquer saldo_apos (compat).
+      // Rev. 3544 bugfix: $6 aparecia 2x na mesma query → dbExecute (split por $\d+)
+      // atribuía params[6]=undefined ao 2º $6 → SQL: saldo_apos=) → 42601 syntax error.
+      // Fix: segundo $6 virou $7 e salParam passado duas vezes no array.
       const salParam = line.saldo ?? null;
       const existing = await dbExecute(db, 
-        `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND ($6::numeric IS NULL OR saldo_apos=$6) AND excluido_em IS NULL LIMIT 1`,
-        [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor, salParam]
+        `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND ($6::numeric IS NULL OR saldo_apos=$7) AND excluido_em IS NULL LIMIT 1`,
+        [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor, salParam, salParam]
       );
       if (rows(existing).length > 0) { skipped++; continue; }
       await dbExecute(db, 
@@ -8267,10 +8270,11 @@ export const financialRouter = router({
     let skipped = 0;
     for (const line of input.linhas) {
       // Rev. 3533 — mesmo fix da Fase 1: saldo_apos integra a chave de dedup.
+      // Rev. 3544 bugfix: $6 aparecia 2x → segundo $6 virou $7 + salParam passado 2x.
       const salParam = line.saldo ?? null;
       const existing = await dbExecute(db,
-        `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND ($6::numeric IS NULL OR saldo_apos=$6) AND excluido_em IS NULL LIMIT 1`,
-        [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor, salParam]
+        `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND ($6::numeric IS NULL OR saldo_apos=$7) AND excluido_em IS NULL LIMIT 1`,
+        [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor, salParam, salParam]
       );
       if (rows(existing).length > 0) { skipped++; continue; }
       await dbExecute(db,
