@@ -1,6 +1,13 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3469 — **CONCILIAÇÃO BANCÁRIA · CAMPO OBRA NO DIALOG DE EDIÇÃO — TEXTO LIVRE
+ * DA PLANILHA (obraNome) SEMPRE VISÍVEL NO MODO EDIÇÃO. 100% FRONTEND · ZERO BACKEND.**
+ * "📋 Da planilha: X" aparece SEMPRE abaixo do select quando obraNome existe — mesmo
+ * quando o auto-match (Rev. 3468) encontrou a obra e pré-selecionou o FK. Antes só
+ * aparecia quando obraId era null. Hint âmbar de alerta removido; substituído por texto
+ * cinza neutro para não confundir o usuário quando a obra já está selecionada.
+ *
  * Rev. 3468 — **CONCILIAÇÃO BANCÁRIA · DIALOG DE EDIÇÃO — CAMPO OBRA MOSTRA O NOME
  * IMPORTADO DA PLANILHA (obraNome) QUANDO obraId É NULL. AUTO-MATCH POR NOME + HINT ÂMBAR.
  * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**

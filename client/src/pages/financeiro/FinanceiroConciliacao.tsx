@@ -4330,10 +4330,10 @@ export default function FinanceiroConciliacao() {
                                   {obrasOpts.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
                                 </SelectContent>
                               </Select>
-                              {/* Rev. 3468 — hint: quando obraId é null mas obraNome vem da planilha */}
-                              {detEditForm.obraId == null && detEditForm.obraNome && (
-                                <p className="text-[11px] text-amber-600 flex items-center gap-1">
-                                  <span>⚠</span> Na planilha: <span className="font-medium">{detEditForm.obraNome}</span> — selecione a obra correspondente acima
+                              {/* Rev. 3468 — texto livre da planilha: sempre visível no modo edição */}
+                              {detEditForm.obraNome && (
+                                <p className="text-[11px] text-gray-400 flex items-center gap-1">
+                                  📋 Da planilha: <span className="font-medium text-gray-500">{detEditForm.obraNome}</span>
                                 </p>
                               )}
                             </div>

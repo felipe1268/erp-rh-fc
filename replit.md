@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3468** — **CONCILIAÇÃO BANCÁRIA · DIALOG DE EDIÇÃO — CAMPO OBRA MOSTRA NOME DA PLANILHA (obraNome) QUANDO obraId É NULL: AUTO-MATCH POR NOME + HINT ÂMBAR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Auto-match case-insensitive em `obrasOpts`; se não casa, hint "⚠ Na planilha: X" aparece abaixo do select. Detalhe: `shared/changelog.ts`.
+- **Rev. 3469** — **CONCILIAÇÃO BANCÁRIA · CAMPO OBRA NO DIALOG DE EDIÇÃO — "📋 Da planilha: X" SEMPRE VISÍVEL NO MODO EDIÇÃO (NÃO SÓ QUANDO obraId É NULL). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Texto cinza neutro exibido abaixo do select sempre que obraNome existe, inclusive após auto-match. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3467** — **CONCILIAÇÃO BANCÁRIA · SUGESTÕES — LANÇAMENTO EXIBE FORNECEDOR COMO TÍTULO + DESCRIÇÃO COMO SUBTÍTULO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Quando `fornecedorNome` existe, aparece como título azul/âmbar; a descrição fica como subtítulo cinza logo abaixo. Detalhe: `shared/changelog.ts`.
+- **Rev. 3468** — **CONCILIAÇÃO BANCÁRIA · DIALOG DE EDIÇÃO — CAMPO OBRA: AUTO-MATCH CASE-INSENSITIVE + HINT QUANDO NÃO CASA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Auto-match em `obrasOpts`; hint âmbar se sem match. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
 
