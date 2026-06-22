@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3502** — **CATEGORIAS · BUSCA SEM ACENTO (NORMALIZE NFD). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Busca não normalizava acentos: "Mutuo" não achava "MÚTUO". `norm()` aplica NFD+strip em query e nome. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3501** — **CONCILIAÇÃO · REMOÇÃO OTIMISTA DE "JÁ CONCILIADOS" APÓS DESCONCILIAR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `dismissedConcIds` Set remove o item de `repConc` imediatamente; ID capturado via `variables.linhaId` no onSuccess; `useEffect([report])` zera ambos os sets no próximo "Atualizar". Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3500** — **CONCILIAÇÃO · REMOÇÃO OTIMISTA DA LISTA "NO EXTRATO, SEM LANÇAMENTO" APÓS LANÇAR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `dismissedStmtIds` Set remove o item imediatamente após sucesso; contador do header atualiza junto; `useEffect([report])` limpa o set no próximo "Atualizar". Detalhe: `shared/changelog.ts`.

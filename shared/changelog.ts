@@ -1,6 +1,11 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3502 — **CATEGORIAS · BUSCA SEM ACENTO (NORMALIZE NFD). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Busca em FinanceiroCategorias.tsx não normalizava acentos: "Mutuo" não encontrava "MÚTUO".
+ * Corrigido via `normalize("NFD").replace(/[\u0300-\u036f]/g,"")` em `norm()` aplicada
+ * tanto na query quanto no nome/código de cada item. Arquivo: `FinanceiroCategorias.tsx`.
+ *
  * Rev. 3501 — **CONCILIAÇÃO · REMOÇÃO OTIMISTA DE "JÁ CONCILIADOS" APÓS DESCONCILIAR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Mesmo padrão da Rev. 3500: ao desfazer uma conciliação com sucesso, o item some
  * imediatamente de "Já conciliados" sem precisar de refresh. `dismissedConcIds: Set<number>`

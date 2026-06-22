@@ -121,15 +121,17 @@ export default function FinanceiroCategorias() {
     onError: (e: any) => toast({ title: "Não foi possível excluir", description: e.message, variant: "destructive" }),
   });
 
-  // Lista filtrada + dedup visual (case-insensitive por nome dentro do mesmo tipo).
+  // Lista filtrada + dedup visual (case-insensitive + sem acento por nome dentro do mesmo tipo).
   const categorias: Categoria[] = useMemo(() => {
     const list: any[] = Array.isArray(accounts) ? accounts : [];
-    const q = search.trim().toLowerCase();
+    const norm = (s: string) =>
+      String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const q = norm(search.trim());
     return list
       .filter((a) => (showInactive ? true : a.ativo === 1))
       .filter((a) => (filterTipo === "all" ? true : String(a.tipo) === filterTipo))
       .filter((a) => (filterCC === "all" ? true : String(a.centroCustoId ?? "") === filterCC))
-      .filter((a) => !q || String(a.nome).toLowerCase().includes(q) || String(a.codigo).toLowerCase().includes(q))
+      .filter((a) => !q || norm(a.nome).includes(q) || norm(a.codigo).includes(q))
       .sort((a, b) => String(a.nome).localeCompare(String(b.nome), "pt-BR"));
   }, [accounts, search, filterTipo, filterCC, showInactive]);
 
