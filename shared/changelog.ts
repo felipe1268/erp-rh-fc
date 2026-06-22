@@ -1,6 +1,13 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3506 — **CONCILIAÇÃO · LAYOUT DOS HEADERS SEM SOBREPOSIÇÃO — 2 LINHAS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Título e controles (filtros + Excel/PDF/Expandir) sobrepunham no mobile/tablet.
+ * Headers dos cards "No extrato, sem lançamento" e "No ERP, sem extrato" refatorados:
+ * linha 1 = título (full-width); linha 2 = filtros (esquerda) + ações (direita).
+ * `space-y-1.5` no CardHeader, `flex items-center justify-between` na linha de controles.
+ * Arquivo: `FinanceiroConciliacao.tsx`.
+ *
  * Rev. 3505 — **CONCILIAÇÃO · FILTRO ENTRADA/SAÍDA NAS SEÇÕES "NO ERP, SEM EXTRATO" E "JÁ CONCILIADOS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Mesmo padrão da Rev. 3504: segmented-control "Todos/Entrada/Saída" adicionado ao
  * header de "No ERP, sem extrato" e ao summary de "Já conciliados" (colapsável).

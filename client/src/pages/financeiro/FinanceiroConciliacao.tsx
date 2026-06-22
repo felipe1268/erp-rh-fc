@@ -4913,44 +4913,26 @@ export default function FinanceiroConciliacao() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Esquerda: no extrato, sem lançamento */}
               <Card className="border-0 shadow-sm">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4 text-red-500" />
-                      No extrato, sem lançamento ({termoBusca || filterExtTipo !== "all" ? `${formatInt(repExtView.length)}/${formatInt(repExt.length)}` : formatInt(repExt.length)})
-                    </CardTitle>
-                    {repExt.length > 0 && (
-                      <div className="flex items-center gap-1 shrink-0">
-                        {/* Rev. 3504 — filtro Entrada / Saída */}
-                        <div className="flex items-center rounded-md border border-gray-200 overflow-hidden text-xs">
-                          <button
-                            type="button"
-                            onClick={() => setFilterExtTipo("all")}
-                            className={`px-2 py-1 transition-colors ${filterExtTipo === "all" ? "bg-gray-700 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
-                          >Todos</button>
-                          <button
-                            type="button"
-                            onClick={() => setFilterExtTipo(filterExtTipo === "entrada" ? "all" : "entrada")}
-                            className={`px-2 py-1 border-l border-gray-200 transition-colors ${filterExtTipo === "entrada" ? "bg-green-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
-                          >Entrada</button>
-                          <button
-                            type="button"
-                            onClick={() => setFilterExtTipo(filterExtTipo === "saida" ? "all" : "saida")}
-                            className={`px-2 py-1 border-l border-gray-200 transition-colors ${filterExtTipo === "saida" ? "bg-red-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
-                          >Saída</button>
-                        </div>
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => exportarListaExcel("extrato")} title="Exportar para Excel">
-                          <FileSpreadsheet className="w-3.5 h-3.5 mr-1" />Excel
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => exportarListaPDF("extrato")} title="Exportar para PDF">
-                          <FileDown className="w-3.5 h-3.5 mr-1" />PDF
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => setExpandedList("extrato")} title="Expandir em tela cheia">
-                          <Maximize2 className="w-3.5 h-3.5 mr-1" />Expandir
-                        </Button>
+                <CardHeader className="pb-2 space-y-1.5">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                    No extrato, sem lançamento ({termoBusca || filterExtTipo !== "all" ? `${formatInt(repExtView.length)}/${formatInt(repExt.length)}` : formatInt(repExt.length)})
+                  </CardTitle>
+                  {repExt.length > 0 && (
+                    <div className="flex items-center justify-between gap-2">
+                      {/* Rev. 3504/3506 — filtro Entrada / Saída */}
+                      <div className="flex items-center rounded-md border border-gray-200 overflow-hidden text-xs">
+                        <button type="button" onClick={() => setFilterExtTipo("all")} className={`px-2.5 py-1 transition-colors ${filterExtTipo === "all" ? "bg-gray-700 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Todos</button>
+                        <button type="button" onClick={() => setFilterExtTipo(filterExtTipo === "entrada" ? "all" : "entrada")} className={`px-2.5 py-1 border-l border-gray-200 transition-colors ${filterExtTipo === "entrada" ? "bg-green-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Entrada</button>
+                        <button type="button" onClick={() => setFilterExtTipo(filterExtTipo === "saida" ? "all" : "saida")} className={`px-2.5 py-1 border-l border-gray-200 transition-colors ${filterExtTipo === "saida" ? "bg-red-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Saída</button>
                       </div>
-                    )}
-                  </div>
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => exportarListaExcel("extrato")} title="Exportar para Excel"><FileSpreadsheet className="w-3.5 h-3.5 mr-1" />Excel</Button>
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => exportarListaPDF("extrato")} title="Exportar para PDF"><FileDown className="w-3.5 h-3.5 mr-1" />PDF</Button>
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => setExpandedList("extrato")} title="Expandir em tela cheia"><Maximize2 className="w-3.5 h-3.5 mr-1" />Expandir</Button>
+                      </div>
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent className="p-0">
                   {reportLoading ? (
@@ -4989,31 +4971,25 @@ export default function FinanceiroConciliacao() {
 
               {/* Direita: no ERP, sem extrato + comprovantes */}
               <Card className="border-0 shadow-sm">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-amber-600" />
-                      No ERP, sem extrato ({termoBusca || filterLanTipo !== "all" ? `${formatInt(repLanView.length)}/${formatInt(repLan.length)}` : formatInt(repLan.length)})
-                    </CardTitle>
-                    {repLan.length > 0 && (
-                      <div className="flex items-center gap-1 shrink-0">
-                        <div className="flex items-center rounded-md border border-gray-200 overflow-hidden text-xs">
-                          <button type="button" onClick={() => setFilterLanTipo("all")} className={`px-2 py-1 transition-colors ${filterLanTipo === "all" ? "bg-gray-700 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Todos</button>
-                          <button type="button" onClick={() => setFilterLanTipo(filterLanTipo === "entrada" ? "all" : "entrada")} className={`px-2 py-1 border-l border-gray-200 transition-colors ${filterLanTipo === "entrada" ? "bg-green-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Entrada</button>
-                          <button type="button" onClick={() => setFilterLanTipo(filterLanTipo === "saida" ? "all" : "saida")} className={`px-2 py-1 border-l border-gray-200 transition-colors ${filterLanTipo === "saida" ? "bg-red-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Saída</button>
-                        </div>
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => exportarListaExcel("erp")} title="Exportar para Excel">
-                          <FileSpreadsheet className="w-3.5 h-3.5 mr-1" />Excel
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => exportarListaPDF("erp")} title="Exportar para PDF">
-                          <FileDown className="w-3.5 h-3.5 mr-1" />PDF
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => setExpandedList("erp")} title="Expandir em tela cheia">
-                          <Maximize2 className="w-3.5 h-3.5 mr-1" />Expandir
-                        </Button>
+                <CardHeader className="pb-2 space-y-1.5">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-amber-600 shrink-0" />
+                    No ERP, sem extrato ({termoBusca || filterLanTipo !== "all" ? `${formatInt(repLanView.length)}/${formatInt(repLan.length)}` : formatInt(repLan.length)})
+                  </CardTitle>
+                  {repLan.length > 0 && (
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center rounded-md border border-gray-200 overflow-hidden text-xs">
+                        <button type="button" onClick={() => setFilterLanTipo("all")} className={`px-2.5 py-1 transition-colors ${filterLanTipo === "all" ? "bg-gray-700 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Todos</button>
+                        <button type="button" onClick={() => setFilterLanTipo(filterLanTipo === "entrada" ? "all" : "entrada")} className={`px-2.5 py-1 border-l border-gray-200 transition-colors ${filterLanTipo === "entrada" ? "bg-green-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Entrada</button>
+                        <button type="button" onClick={() => setFilterLanTipo(filterLanTipo === "saida" ? "all" : "saida")} className={`px-2.5 py-1 border-l border-gray-200 transition-colors ${filterLanTipo === "saida" ? "bg-red-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Saída</button>
                       </div>
-                    )}
-                  </div>
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => exportarListaExcel("erp")} title="Exportar para Excel"><FileSpreadsheet className="w-3.5 h-3.5 mr-1" />Excel</Button>
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => exportarListaPDF("erp")} title="Exportar para PDF"><FileDown className="w-3.5 h-3.5 mr-1" />PDF</Button>
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-gray-600" onClick={() => setExpandedList("erp")} title="Expandir em tela cheia"><Maximize2 className="w-3.5 h-3.5 mr-1" />Expandir</Button>
+                      </div>
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent className="p-0">
                   {reportLoading ? (

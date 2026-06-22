@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3506** — **CONCILIAÇÃO · LAYOUT HEADERS SEM SOBREPOSIÇÃO (2 LINHAS). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Título em linha 1 (full-width); filtros+ações em linha 2 (justify-between). Resolve sobreposição no mobile/tablet nos cards "No extrato" e "No ERP". Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3505** — **CONCILIAÇÃO · FILTRO ENTRADA/SAÍDA EM "NO ERP, SEM EXTRATO" E "JÁ CONCILIADOS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `filterLanTipo`/`filterConcTipo` + `repConcView`; botões nas 2 seções e na visão expandida. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3504** — **CONCILIAÇÃO · FILTRO ENTRADA/SAÍDA NA LISTA "NO EXTRATO, SEM LANÇAMENTO". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Segmented-control "Todos/Entrada/Saída" no header da seção e na visão expandida; contador exibe N/Total quando filtro ativo. Detalhe: `shared/changelog.ts`.
