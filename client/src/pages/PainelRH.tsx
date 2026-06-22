@@ -61,6 +61,9 @@ export default function PainelRH() {
   const [expAction, setExpAction] = useState<{ type: 'prorrogar' | 'efetivar' | 'desligar'; emp: any } | null>(null);
   const [expMotivo, setExpMotivo] = useState('');
   const [expObs, setExpObs] = useState('');
+  const [expIniciativa, setExpIniciativa] = useState<'empregador' | 'empregado'>('empregador');
+  const [expAntecipado, setExpAntecipado] = useState(false);
+  const [expDataDesligamento, setExpDataDesligamento] = useState('');
   const utils = trpc.useUtils();
   const prorrogarMut = trpc.employees.prorrogarExperiencia.useMutation({
     onSuccess: () => { utils.home.getData.invalidate(); setExpAction(null); setExpObs(''); toast.success('Contrato de experiência prorrogado para o 2º período.'); },
@@ -71,7 +74,7 @@ export default function PainelRH() {
     onError: (e) => toast.error(e.message || 'Não foi possível efetivar o colaborador.'),
   });
   const desligarMut = trpc.employees.desligarExperiencia.useMutation({
-    onSuccess: () => { utils.home.getData.invalidate(); setExpAction(null); setExpMotivo(''); setExpObs(''); toast.success('Colaborador desligado durante a experiência.'); },
+    onSuccess: () => { utils.home.getData.invalidate(); setExpAction(null); setExpMotivo(''); setExpObs(''); setExpIniciativa('empregador'); setExpAntecipado(false); setExpDataDesligamento(''); toast.success('Colaborador desligado durante a experiência. Aviso criado em Avisos Prévios.'); },
     onError: (e) => toast.error(e.message || 'Não foi possível desligar o colaborador.'),
   });
   // Rev. 3022 — pré-marcação "não renovar" (flag de intenção, reversível)
@@ -360,7 +363,7 @@ export default function PainelRH() {
               ) : null}
 
               {/* Dialog de Ação de Experiência */}
-              <Dialog open={!!expAction} onOpenChange={v => !v && setExpAction(null)}>
+              <Dialog open={!!expAction} onOpenChange={v => { if (!v) { setExpAction(null); setExpIniciativa('empregador'); setExpAntecipado(false); setExpDataDesligamento(''); } }}>
                 <DialogContent className="max-w-md">
                   <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
@@ -375,21 +378,75 @@ export default function PainelRH() {
                         <p className="text-sm font-semibold">{expAction.emp.nome}</p>
                         <p className="text-xs text-muted-foreground">{expAction.emp.funcao} · {expAction.emp.tipo === '30_30' ? '30+30' : '45+45'} dias · {expAction.emp.status === 'prorrogado' ? '2º período' : '1º período'}</p>
                       </div>
-                      {expAction.type === 'desligar' ? (
+
+                      {expAction.type === 'desligar' ? (<>
+                        {/* Quem está encerrando */}
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground block mb-1.5">Quem está encerrando o contrato *</label>
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => setExpIniciativa('empregador')} className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${expIniciativa === 'empregador' ? 'bg-red-600 text-white border-red-600' : 'border-gray-200 text-muted-foreground hover:bg-gray-50'}`}>
+                              Empresa (Empregador)
+                            </button>
+                            <button type="button" onClick={() => setExpIniciativa('empregado')} className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${expIniciativa === 'empregado' ? 'bg-amber-600 text-white border-amber-600' : 'border-gray-200 text-muted-foreground hover:bg-gray-50'}`}>
+                              Funcionário (Pedido)
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Prazo vs Antecipado */}
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground block mb-1.5">Tipo de encerramento *</label>
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => setExpAntecipado(false)} className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${!expAntecipado ? 'bg-slate-700 text-white border-slate-700' : 'border-gray-200 text-muted-foreground hover:bg-gray-50'}`}>
+                              No prazo previsto
+                            </button>
+                            <button type="button" onClick={() => setExpAntecipado(true)} className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${expAntecipado ? 'bg-orange-600 text-white border-orange-600' : 'border-gray-200 text-muted-foreground hover:bg-gray-50'}`}>
+                              Antecipado
+                            </button>
+                          </div>
+                          {expAntecipado && (
+                            <p className="text-[11px] text-orange-700 mt-1.5 bg-orange-50 rounded px-2 py-1">
+                              {expIniciativa === 'empregador'
+                                ? 'Art. 479 CLT — empresa pagará ao funcionário 50% dos dias restantes do contrato.'
+                                : 'Art. 480 CLT — funcionário deverá indenizar a empresa em 50% dos dias restantes (salvo empresa dispensar).'}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Data do desligamento */}
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground block mb-1">Data do desligamento</label>
+                          <Input type="date" value={expDataDesligamento} onChange={e => setExpDataDesligamento(e.target.value)} max={new Date().toISOString().split('T')[0]} className="h-9" />
+                          <p className="text-[10px] text-muted-foreground mt-0.5">Deixe em branco para usar a data de hoje.</p>
+                        </div>
+
                         <div>
                           <label className="text-xs font-medium text-muted-foreground">Motivo do desligamento *</label>
-                          <Textarea value={expMotivo} onChange={e => setExpMotivo(e.target.value)} placeholder="Descreva o motivo..." className="mt-1" rows={3} />
+                          <Textarea value={expMotivo} onChange={e => setExpMotivo(e.target.value)} placeholder="Descreva o motivo..." className="mt-1" rows={2} />
                         </div>
-                      ) : null}
+                      </>) : null}
+
                       <div>
                         <label className="text-xs font-medium text-muted-foreground">Observações (opcional)</label>
                         <Textarea value={expObs} onChange={e => setExpObs(e.target.value)} placeholder="Observações adicionais..." className="mt-1" rows={2} />
                       </div>
                       <div className="flex justify-end gap-2">
-                        <Button variant="outline" onClick={() => setExpAction(null)}>Cancelar</Button>
+                        <Button variant="outline" onClick={() => { setExpAction(null); setExpIniciativa('empregador'); setExpAntecipado(false); setExpDataDesligamento(''); }}>Cancelar</Button>
                         {expAction.type === 'prorrogar' ? <Button className="bg-blue-600 hover:bg-blue-700 text-white" disabled={prorrogarMut.isPending} onClick={() => prorrogarMut.mutate({ employeeId: expAction.emp.id, companyId: (expAction.emp.companyId ?? companyId)!, obs: expObs || undefined })}>{prorrogarMut.isPending ? 'Prorrogando...' : 'Confirmar Prorrogação'}</Button> : null}
                         {expAction.type === 'efetivar' ? <Button className="bg-green-600 hover:bg-green-700 text-white" disabled={efetivarMut.isPending} onClick={() => efetivarMut.mutate({ employeeId: expAction.emp.id, companyId: (expAction.emp.companyId ?? companyId)!, obs: expObs || undefined })}>{efetivarMut.isPending ? 'Efetivando...' : 'Confirmar Efetivação'}</Button> : null}
-                        {expAction.type === 'desligar' ? <Button variant="destructive" disabled={desligarMut.isPending || !expMotivo.trim()} onClick={() => desligarMut.mutate({ employeeId: expAction.emp.id, companyId: (expAction.emp.companyId ?? companyId)!, motivo: expMotivo, obs: expObs || undefined })}>{desligarMut.isPending ? 'Desligando...' : 'Confirmar Desligamento'}</Button> : null}
+                        {expAction.type === 'desligar' ? (
+                          <Button variant="destructive" disabled={desligarMut.isPending || !expMotivo.trim()} onClick={() => desligarMut.mutate({
+                            employeeId: expAction.emp.id,
+                            companyId: (expAction.emp.companyId ?? companyId)!,
+                            motivo: expMotivo,
+                            obs: expObs || undefined,
+                            iniciativa: expIniciativa,
+                            antecipado: expAntecipado,
+                            dataDesligamento: expDataDesligamento || undefined,
+                          })}>
+                            {desligarMut.isPending ? 'Desligando...' : 'Confirmar Desligamento'}
+                          </Button>
+                        ) : null}
                       </div>
                     </div>
                   ) : null}

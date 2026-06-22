@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3541 — **DESLIGAMENTO NA EXPERIÊNCIA · 4 TIPOS DE ENCERRAMENTO + ART. 479/480 + AVISO EM "AVISOS PRÉVIOS". BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ * Antes, "Desligar na Experiência" tinha apenas campo de motivo, sem registrar aviso prévio
+ * nem distinguir a iniciativa. Agora o endpoint aceita `iniciativa` (empregador/empregado),
+ * `antecipado` (boolean) e `dataDesligamento` (opcional, default=hoje).
+ *
+ * Lógica de rescisão calculada no backend:
+ * — `calcularRescisaoCompleta` com `tipo='empregado_indenizado'` (diasAviso=0) gera base.
+ * — Empregador (qualquer): `multaFGTS = fgtsEstimado × 0,4` se configurado.
+ * — Antecipado empregador: `multa479 = salarioDia × diasRestantes ÷ 2` (CLT art. 479).
+ * — Antecipado empregado: `multa480 = salarioDia × diasRestantes ÷ 2` (CLT art. 480, desconto).
+ * Dias restantes = fim do contrato de experiência − dataDesligamento (mesma régua do Painel RH).
+ * Insert em `termination_notices` (`tipo = empregador_indenizado | empregado_indenizado`,
+ * `diasAviso=0`, `status='em_andamento'`) → aviso aparece em "Avisos Prévios em Andamento".
+ * `categoriaDesligamento` definida conforme iniciativa (Término de contrato / Pedido de demissão).
+ *
+ * Frontend (PainelRH.tsx): dialog expandido com 2 chips "Quem encerra" + 2 chips "No prazo / Antecipado"
+ * + aviso Art. 479/480 contextual + campo de data opcional. Estados `expIniciativa`, `expAntecipado`,
+ * `expDataDesligamento` adicionados; resetados no onSuccess e no fechar dialog.
+ *
+ * Novos imports em `server/routers.ts`: `terminationNotices` (schema), `calcularRescisaoCompleta` +
+ * `calcularAnosServico` (rescisaoCalc), `getIncluirMultaFgts` (rescisaoMultaCfg),
+ * `diasFeriasNoMesDaSaida` (avisoPrevioFerias). ZERO ALTER TABLE / DROP / DELETE.
+ * Arquivos: `server/routers.ts`, `client/src/pages/PainelRH.tsx`.
+ *
  * Rev. 3540 — **FERIADOS · BOTÃO APAGAR SEMPRE VISÍVEL + ALERTDIALOG DE CONFIRMAÇÃO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Botão lixeira existia mas tinha `opacity-0 group-hover:opacity-100` — invisível em
  * touch/iPad onde não há hover. Removido o opacity-0; botão agora sempre visível

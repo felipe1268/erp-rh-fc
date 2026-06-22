@@ -44,7 +44,10 @@ import {
 import { DEFAULT_PERMISSIONS, MODULE_KEYS, EMPLOYEE_STATUS_DESLIGADOS } from "../shared/modules";
 import { getDb, encerrarContratosPjDoFuncionario } from "./db";
 import { normalizeCidadeInput } from "../shared/normalizeCidade";
-import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory, employeeTerminationChecklist, asos, trainings, sstIntegracaoRegistros, employeeIntegrations, contractCounters, almoxarifadoItens, obraFuncionarios, obraClientes, clientes } from "../drizzle/schema";
+import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory, employeeTerminationChecklist, asos, trainings, sstIntegracaoRegistros, employeeIntegrations, contractCounters, almoxarifadoItens, obraFuncionarios, obraClientes, clientes, terminationNotices } from "../drizzle/schema";
+import { calcularRescisaoCompleta, calcularAnosServico } from "./utils/rescisaoCalc";
+import { getIncluirMultaFgts } from "./utils/rescisaoMultaCfg";
+import { diasFeriasNoMesDaSaida } from "./routers/avisoPrevioFerias";
 import { eq, and, sql, or, ilike, isNull, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "./companyHelper";
 import type { ProfileType } from "../shared/modules";
@@ -944,6 +947,9 @@ export const appRouter = router({
       companyId: z.number(),
       motivo: z.string().min(1),
       obs: z.string().optional(),
+      iniciativa: z.enum(['empregador', 'empregado']).default('empregador'),
+      antecipado: z.boolean().default(false),
+      dataDesligamento: z.string().optional(),
     })).mutation(async ({ input, ctx }) => {
       const emp = await getEmployeeById(input.employeeId, input.companyId);
       if (!emp) throw new TRPCError({ code: 'NOT_FOUND', message: 'Colaborador não encontrado' });
@@ -956,19 +962,122 @@ export const appRouter = router({
           throw new TRPCError({ code: 'BAD_REQUEST', message: `Não é possível desligar: ${pendentes.length} item(ns) obrigatório(s) pendente(s) na checklist de desligamento: ${pendentes.map(p => p.label).join(', ')}` });
         }
       }
+      const hoje = new Date().toISOString().split('T')[0];
+      const dataDesl = input.dataDesligamento || hoje;
+      const iniciativa = input.iniciativa;
+      const antecipado = input.antecipado;
+      const categoriaDesl = iniciativa === 'empregado' ? 'Pedido de demissão' : 'Término de contrato';
+
       await updateEmployee(input.employeeId, input.companyId, {
         experienciaStatus: 'desligado_experiencia',
         status: 'Desligado',
-        dataDemissao: new Date().toISOString().split('T')[0],
-        dataDesligamentoEfetiva: new Date().toISOString().split('T')[0],
-        categoriaDesligamento: 'Término de contrato',
+        dataDemissao: dataDesl,
+        dataDesligamentoEfetiva: dataDesl,
+        categoriaDesligamento: categoriaDesl,
         motivoDesligamento: input.motivo,
         desligadoPor: ctx.user.name ?? 'Sistema',
         desligadoUserId: ctx.user.id,
         experienciaObs: input.obs || null,
       } as any);
-      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'colaboradores', entityType: 'employee', entityId: input.employeeId, details: `Colaborador DESLIGADO durante período de experiência. Motivo: ${input.motivo}` });
-      await createEmployeeHistory({ employeeId: input.employeeId, companyId: input.companyId, tipo: 'Desligamento' as any, descricao: `Desligado durante período de experiência por ${ctx.user.name}. Motivo: ${input.motivo}`, dataEvento: new Date().toISOString().split('T')[0], registradoPor: ctx.user.id ?? null } as any);
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'colaboradores', entityType: 'employee', entityId: input.employeeId, details: `Colaborador DESLIGADO durante período de experiência. Iniciativa: ${iniciativa}. ${antecipado ? 'ANTECIPADO. ' : ''}Motivo: ${input.motivo}` });
+      await createEmployeeHistory({ employeeId: input.employeeId, companyId: input.companyId, tipo: 'Desligamento' as any, descricao: `Desligado durante período de experiência por ${ctx.user.name}. Iniciativa: ${iniciativa}. ${antecipado ? 'Antecipado. ' : ''}Motivo: ${input.motivo}`, dataEvento: dataDesl, registradoPor: ctx.user.id ?? null } as any);
+
+      // --- Gerar aviso prévio / termination notice ---
+      try {
+        const salarioBase = parseFloat(String((emp as any).salarioBase || '0'));
+        const dataAdmissao = String((emp as any).dataAdmissao || dataDesl).split('T')[0];
+
+        // Calcular fim do contrato de experiência (mesma régua da Análise de Experiência)
+        const expTipo: string = (emp as any).experienciaTipo || '30_30';
+        const inicioRaw = (emp as any).experienciaInicio || dataAdmissao;
+        const inicioExp = String(inicioRaw).split('T')[0];
+        const dias1Exp = expTipo === '30_30' ? 30 : 45;
+        const dias2Exp = expTipo === '30_30' ? 60 : 90;
+        const dtInicioExp = new Date(inicioExp + 'T12:00:00');
+        const dtFim1Exp = new Date(dtInicioExp); dtFim1Exp.setDate(dtFim1Exp.getDate() + dias1Exp - 1);
+        const dtFim2Exp = new Date(dtInicioExp); dtFim2Exp.setDate(dtFim2Exp.getDate() + dias2Exp - 1);
+        const isProrrogado = ((emp as any).experienciaStatus || '') === 'prorrogado';
+        const dtFimExp = isProrrogado ? dtFim2Exp : dtFim1Exp;
+        const fimExp = dtFimExp.toISOString().split('T')[0];
+
+        // Dias restantes do contrato para Art. 479/480
+        const dtDesl = new Date(dataDesl + 'T12:00:00');
+        const diasRestantesExp = Math.max(0, Math.round((dtFimExp.getTime() - dtDesl.getTime()) / (1000 * 60 * 60 * 24)));
+
+        // Dias trabalhados no mês de saída
+        const diasFeriasMes = await diasFeriasNoMesDaSaida(db, input.employeeId, dataDesl);
+        const diasTrabalhadosMes = Math.max(1, dtDesl.getDate() - diasFeriasMes);
+
+        // Calcular rescisão base (sem aviso prévio — tipo empregado_indenizado garante diasAviso=0)
+        const previsaoBase = calcularRescisaoCompleta({
+          salarioBase,
+          dataAdmissao,
+          dataDesligamento: dataDesl,
+          dataFimAviso: dataDesl,
+          tipo: 'empregado_indenizado',
+          vrDiario: 0,
+          diasTrabalhadosMes,
+          periodosVencidosOverride: 0,
+          diasVencidosOverride: 0,
+          incluirMultaFgts: false,
+        });
+
+        const salarioDia = salarioBase / 30;
+
+        // Multa FGTS 40% — só empregador (empresa demite)
+        const incluirMultaFgts = await getIncluirMultaFgts(db, input.companyId);
+        const multaFGTS = (iniciativa === 'empregador' && incluirMultaFgts)
+          ? parseFloat(String(previsaoBase.fgtsEstimado || '0')) * 0.4
+          : 0;
+
+        // Art. 479 — empregador antecipa: paga metade dos dias restantes ao empregado
+        const multa479 = (iniciativa === 'empregador' && antecipado && diasRestantesExp > 0)
+          ? (salarioDia * diasRestantesExp) / 2
+          : 0;
+
+        // Art. 480 — empregado antecipa: desconta metade dos dias restantes (empresa cobra)
+        const multa480 = (iniciativa === 'empregado' && antecipado && diasRestantesExp > 0)
+          ? (salarioDia * diasRestantesExp) / 2
+          : 0;
+
+        const totalBase = parseFloat(String(previsaoBase.total || '0'));
+        const totalFinal = totalBase + multaFGTS + multa479 - multa480;
+        const anosServico = calcularAnosServico(dataAdmissao, dataDesl);
+
+        const previsaoFinal = {
+          ...previsaoBase,
+          multaFGTS: multaFGTS.toFixed(2),
+          multa479: multa479.toFixed(2),
+          multa480: multa480.toFixed(2),
+          diasRestantesExp,
+          fimContrato: fimExp,
+          isExperiencia: true,
+          iniciativa,
+          antecipado,
+          total: totalFinal.toFixed(2),
+        };
+
+        const tipoNotice = iniciativa === 'empregador' ? 'empregador_indenizado' : 'empregado_indenizado';
+
+        await db.insert(terminationNotices).values({
+          companyId: input.companyId,
+          employeeId: input.employeeId,
+          tipo: tipoNotice,
+          dataInicio: dataDesl,
+          dataFim: dataDesl,
+          diasAviso: 0,
+          anosServico,
+          reducaoJornada: 'nenhuma',
+          salarioBase: salarioBase.toFixed(2),
+          previsaoRescisao: JSON.stringify(previsaoFinal),
+          valorEstimadoTotal: totalFinal.toFixed(2),
+          status: 'em_andamento',
+          observacoes: [input.motivo, input.obs].filter(Boolean).join(' | ') || null,
+          criadoPor: ctx.user.name ?? 'Sistema',
+          criadoPorUserId: ctx.user.id ?? null,
+        } as any);
+      } catch (e) { console.error('[DesligarExperiencia] Erro ao criar termination notice:', e); }
+
       // Auto-desalocação de obra
       try {
         const allocations = await checkEmployeeAllocations([input.employeeId]);

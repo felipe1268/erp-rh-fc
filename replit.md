@@ -50,19 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3541** — **DESLIGAMENTO NA EXPERIÊNCIA · 4 TIPOS DE ENCERRAMENTO + ART. 479/480 + AVISO EM "AVISOS PRÉVIOS". BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Dialog "Desligar na Experiência" expandido: chips "Empresa / Funcionário" + chips "No prazo / Antecipado" + aviso Art. 479/480 contextual + campo de data. Backend: `iniciativa`, `antecipado`, `dataDesligamento` no input; calcula rescisão com `calcularRescisaoCompleta` (diasAviso=0) + multa FGTS 40% (empregador) + multa Art. 479 ou 480 (antecipado); insere em `termination_notices` → aviso aparece em "Avisos Prévios em Andamento". Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3540** — **FERIADOS · BOTÃO APAGAR SEMPRE VISÍVEL + ALERTDIALOG DE CONFIRMAÇÃO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Botão lixeira estava com `opacity-0 group-hover:opacity-100` — invisível em touch/iPad. Removido opacity-0; botão sempre visível. Clique abre AlertDialog com confirmação antes de excluir. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3539** — **FERIADOS · BUGFIX DUPLICATA NA LISTA — GLOBAL + EMPRESA APARECIAM JUNTOS. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** `listar` trazia ambos (companyId=null + companyId=empresa) sem deduplicar. Fix: suprime o global quando existe cópia da empresa com mesmo nome+mmdd. Detalhe: `shared/changelog.ts`.
+### Revisões recentes (one-liners)
 
-- **Rev. 3538** — **FERIADOS · BUGFIX CADASTRAR FERIADO COM CIDADE VAZIA — ZOD REJEITAVA `null`. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** `cidade: z.string().optional()` rejeita `null` que o frontend envia quando o campo fica em branco. Fix: `z.string().nullish()` em `cidade` e `estado`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3539** — **FERIADOS · BUGFIX DUPLICATA NA LISTA — GLOBAL + EMPRESA APARECIAM JUNTOS. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3537** — **FERIADOS · BUGFIX `RIGHT()` EM COLUNA DATE — BAIXAR FERIADOS FALHAVA. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** `RIGHT(data, 5)` em coluna DATE sem cast → Postgres rejeitava. Fix: `RIGHT(data::text, 5)` nos 2 lugares. Detalhe: `shared/changelog.ts`.
+- **Rev. 3538** — **FERIADOS · BUGFIX CADASTRAR FERIADO COM CIDADE VAZIA — ZOD REJEITAVA `null`. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3536** — **FOLHA DE PAGAMENTO · BUGFIX `Loader2` NÃO IMPORTADO — PÁGINA CRASHAVA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `Loader2` usado mas ausente no import lucide-react → `ReferenceError` derrubava a tela inteira. Adicionado ao import. Detalhe: `shared/changelog.ts`.
+- **Rev. 3537** — **FERIADOS · BUGFIX `RIGHT()` EM COLUNA DATE — BAIXAR FERIADOS FALHAVA. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3535** — **PAINEL RH · BUGFIX PRORROGAR/EFETIVAR/DESLIGAR EXPERIÊNCIA — `dataEvento` NULL + `registradoPor` TIPO ERRADO. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** 4 callers de `createEmployeeHistory` passavam `data:` (inexistente) → `dataEvento` NOT NULL quebrava. Também passavam `registradoPor: ctx.user.name` (string) numa coluna `integer`. Fix: `data:` → `dataEvento:` + `ctx.user.name` → `ctx.user.id` nos 4 endpoints. Detalhe: `shared/changelog.ts`.
+- **Rev. 3536** — **FOLHA DE PAGAMENTO · BUGFIX `Loader2` NÃO IMPORTADO — PÁGINA CRASHAVA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3534** — **CONCILIAÇÃO · LIMPAR EXTRATOS DE TODAS AS CONTAS DO PERÍODO (BULK). BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Novo endpoint `limparExtratoMes` (sem filtro de conta): soft-delete de todas as linhas do extrato no período + reverte conciliação dos lançamentos vinculados. Botão ghost vermelho "Limpar todos extratos do período" ao lado do label "Conta Bancária" — só aparece quando há período definido. AlertDialog com aviso âmbar explicando que afeta todas as contas. Detalhe: `shared/changelog.ts`.
+- **Rev. 3535** — **PAINEL RH · BUGFIX PRORROGAR/EFETIVAR/DESLIGAR EXPERIÊNCIA — `dataEvento` NULL + `registradoPor` TIPO ERRADO. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3532** — **CONCILIAÇÃO · BUGFIX TOLERÂNCIA DE DATA NA SUGESTÃO AUTOMÁTICA. BACKEND + FRONTEND · ZERO ALTER/DROP/DELETE.** `toleranciaDias` estava inicializado com `diasDoMes` (ex: 31) e re-sincronizado a cada troca de mês via useEffect — sistema enviava `tol=31` ao backend aceitando pares com até 31 dias de diferença. Fix: default → 0 (mesmo dia) em ambas as telas + localStorage cap 7d + backend fallback 0 + confiança "alta" agora exige `delta===0` (antes `<=1`). Detalhe: `shared/changelog.ts`.
 
