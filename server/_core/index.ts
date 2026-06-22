@@ -3928,6 +3928,35 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3516: coluna regras_produto_json garantida em empresas_terceiras.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3516 empresas_terceiras.regras_produto_json:`, e?.message || e); }
 
+        // Rev. 3529 — categoria AUTO-0137 "IMPOSTOS E TAXAS" (despesa) para toda empresa
+        // que ainda não a tenha. Cobre retenções, ISS, IOF operacional e demais tributos
+        // não detalhados nas categorias específicas (IRPJ/CSLL/IOF). Idempotente.
+        try {
+          await db.execute(sql`
+            INSERT INTO financial_accounts
+              (company_id, codigo, nome, tipo, natureza, nivel, conta_pai_id, centro_custo_id, ativo, ordem)
+            SELECT DISTINCT
+              fa.company_id,
+              'AUTO-0137',
+              'IMPOSTOS E TAXAS',
+              'despesa',
+              'devedora',
+              1,
+              NULL,
+              NULL,
+              1,
+              999
+            FROM financial_accounts fa
+            WHERE NOT EXISTS (
+              SELECT 1 FROM financial_accounts ex
+              WHERE ex.company_id = fa.company_id
+                AND LOWER(ex.nome) = 'impostos e taxas'
+                AND ex.ativo = 1
+            )
+          `);
+          console.log(`[SyncSchema+] Rev. 3529: categoria "IMPOSTOS E TAXAS" (AUTO-0137) garantida em todas as empresas.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3529 IMPOSTOS E TAXAS:`, e?.message || e); }
+
         // Rev. 3525 — inativar "MEDIÇÃO DE PROJETO" (AUTO-0136) criada por engano na Rev.3524.
         // Já existe "CONSULTORIA E PROJETOS" que cobre o mesmo caso de uso.
         // Soft-delete (ativo=0) — R-001/R-007/R-010 OK (sem DELETE/DROP).

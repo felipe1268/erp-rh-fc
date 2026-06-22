@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3529** — **FINANCEIRO · NOVA CATEGORIA "IMPOSTOS E TAXAS" (AUTO-0137). NEON · ZERO ALTER/DROP.** SyncSchema+ insere a categoria (despesa/devedora, nível 1) para toda empresa sem ela. Cobre retenções de contrato público, ISS, IOF operacional. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3528** — **CONCILIAÇÃO · BOTÃO "É MOVIMENTAÇÃO INTERNA" NO DIALOG DE LANÇAMENTO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Botão ghost indigo no footer esquerdo do dialog Lançar — disponível mesmo sem detecção automática; chama `confirmarMovimentacaoInterna` e fecha sem gerar lançamento. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3527** — **CONCILIAÇÃO · FORMA DE PAGAMENTO "DÉBITO EM CONTA". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Adicionada opção `debito_em_conta` no Select de Forma de Pagamento do dialog de edição. Detalhe: `shared/changelog.ts`.

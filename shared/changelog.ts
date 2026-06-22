@@ -1,6 +1,11 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3529 — **FINANCEIRO · NOVA CATEGORIA "IMPOSTOS E TAXAS" (AUTO-0137). NEON · ZERO ALTER/DROP.**
+ * SyncSchema+ insere `IMPOSTOS E TAXAS` (despesa/devedora, nível 1, sem pai) para toda empresa
+ * que ainda não a tenha. Cobre retenções de contrato público, ISS, IOF operacional e tributos
+ * avulsos não cobertos pelas categorias específicas (IRPJ/CSLL). Idempotente via NOT EXISTS.
+ *
  * Rev. 3528 — **CONCILIAÇÃO · BOTÃO "É MOVIMENTAÇÃO INTERNA" NO DIALOG DE LANÇAMENTO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Botão ghost indigo "⇄ É movimentação interna" adicionado no footer esquerdo do dialog
  * "Lançar no Contas a Receber/Pagar". Disponível sempre que houver linha de extrato (id != null),
