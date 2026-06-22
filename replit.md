@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3548** — **NOTAS FISCAIS (NFS-e) · IMPORTAÇÃO DE MÚLTIPLOS PDFs EM LOTE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Seleção múltipla de PDFs: arquivo único abre formulário de revisão; ≥2 arquivos abre Dialog de lote com barra de progresso, tabela de resultados (NF#/data/tomador/valor/status), checkboxes por linha, "Cadastrar N NF-e(s)" em lote. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3547** — **NOTAS FISCAIS (NFS-e) · IMPORTAÇÃO DE PDF (DANFSe) COM EXTRAÇÃO AUTOMÁTICA VIA IA. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Botão "Importar PDF" no header: usuário seleciona o PDF da DANFSe → Gemini Vision (→ Anthropic fallback) extrai todos os campos → pré-preenche formulário para revisão. Endpoint `fiscalNotes.parsePdf` com prompt DANFSe específico. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3546** — **NOTAS FISCAIS (NFS-e) · FILTRO PADRÃO DE ANO/MÊS (TIMELINE). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Seletor de Ano (◀/▶) + botão "Ano todo" + 12 pills de mês com bolinhas de status (verde=todas conciliadas, azul=em aberto, cinza=sem NFs). Mês corrente pré-selecionado. Query anual separada para os dots; listQuery passa `ano`+`mes` ao backend. KPIs e tabela refletem o período ativo. Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3546** — **NOTAS FISCAIS (NFS-e) · FILTRO PADRÃO DE ANO/MÊS (TIMELINE). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3545** — **BUILD DE PRODUÇÃO · BUGFIX OOM NO VITE BUILD — CHUNKS GRANULARES + HEAP REDUZIDO. ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

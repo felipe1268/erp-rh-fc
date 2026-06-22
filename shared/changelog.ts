@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3548 — **NOTAS FISCAIS (NFS-e) · IMPORTAÇÃO DE MÚLTIPLOS PDFs EM LOTE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Seleção múltipla de PDFs: o mesmo botão "Importar PDF" agora aceita N arquivos (atributo `multiple`).
+ * Fluxo de arquivo único: mantido igual (abre formulário de revisão para editar antes de salvar).
+ * Fluxo em lote (≥2 arquivos): abre Dialog de lote imediatamente → barra de progresso animada
+ * enquanto a IA lê os PDFs sequencialmente → tabela com colunas: arquivo, NF#, data emissão,
+ * tomador, valor líquido, status (Aguardando / spinner / OK / Erro). Checkbox por linha + "Selecionar
+ * todos" no header; PDFs com erro ficam desmarcados automaticamente. Botão "Cadastrar N NF-e(s)"
+ * salva todas as linhas selecionadas em lote via `criarMut.mutateAsync` sequencial; toast final
+ * exibe quantas foram cadastradas vs. com erro. Dialog bloqueia fechar durante processamento.
+ * Arquivos: `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx` (BatchItem type, batchOpen/
+ * batchItems/batchSaving states, handlePdfUpload refatorado, handleSalvarLote, Dialog de revisão).
+ *
  * Rev. 3547 — **NOTAS FISCAIS (NFS-e) · IMPORTAÇÃO DE PDF (DANFSe) COM EXTRAÇÃO AUTOMÁTICA VIA IA. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
  * Novo botão "Importar PDF" no header da página NF-e: o usuário seleciona o PDF da DANFSe e a IA
  * (Gemini Vision → fallback Anthropic) extrai automaticamente todos os campos — número, série, chave

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
@@ -56,6 +56,15 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   recebida:   { label: "Recebida",   color: "bg-blue-100 text-blue-800 border-blue-200" },
   conciliada: { label: "Conciliada", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
   cancelada:  { label: "Cancelada",  color: "bg-red-100 text-red-700 border-red-200" },
+};
+
+type BatchItem = {
+  id: string;
+  fileName: string;
+  parsed: any | null;
+  error: string | null;
+  status: "pending" | "processing" | "ok" | "error";
+  selected: boolean;
 };
 
 type NF = {
@@ -147,6 +156,9 @@ export default function FinanceiroNotasFiscais() {
   const [vincularStmtId, setVincularStmtId] = useState("");
   const [isParsing, setIsParsing] = useState(false);
   const pdfInputRef = useRef<HTMLInputElement>(null);
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [batchItems, setBatchItems] = useState<BatchItem[]>([]);
+  const [batchSaving, setBatchSaving] = useState(false);
 
   const listQuery = trpc.fiscalNotes.list.useQuery(
     {
@@ -214,51 +226,143 @@ export default function FinanceiroNotasFiscais() {
   });
 
   async function handlePdfUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || !companyId) return;
-    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-      toast({ title: "Selecione um arquivo PDF", variant: "destructive" });
+    const files = Array.from(e.target.files ?? []).filter(
+      f => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf")
+    );
+    if (!files.length || !companyId) return;
+    if (pdfInputRef.current) pdfInputRef.current.value = "";
+
+    // Arquivo único → fluxo original (abre formulário para revisão)
+    if (files.length === 1) {
+      const file = files[0];
+      setIsParsing(true);
+      try {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        const parsed = await parsePdfMut.mutateAsync({ companyId, pdfBase64: base64 });
+        setEditingId(null);
+        setForm({
+          ...emptyForm(),
+          numeroNf:           parsed.numeroNf ?? "",
+          serie:              parsed.serie ?? "",
+          chaveAcesso:        parsed.chaveAcesso ?? "",
+          dataEmissao:        parsed.dataEmissao ?? new Date().toISOString().slice(0, 10),
+          dataCompetencia:    parsed.dataCompetencia ?? "",
+          dataVencimento:     parsed.dataVencimento ?? "",
+          tomadorCnpj:        parsed.tomadorCnpj ?? "",
+          tomadorRazaoSocial: parsed.tomadorRazaoSocial ?? "",
+          descricaoServico:   parsed.descricaoServico ?? "",
+          valorBruto:         formatBRL(parsed.valorBruto),
+          deducoesTotal:      formatBRL(parsed.deducoesTotal),
+          baseCalculoIss:     parsed.baseCalculoIss != null ? formatBRL(parsed.baseCalculoIss) : "",
+          aliquotaIss:        parsed.aliquotaIss != null ? String(parsed.aliquotaIss) : "",
+          issRetido:          formatBRL(parsed.issRetido),
+          retencaoInss:       formatBRL(parsed.retencaoInss),
+          retencaoIrrf:       formatBRL(parsed.retencaoIrrf),
+          retencaoPisCofins:  formatBRL(parsed.retencaoPisCofins),
+          valorLiquido:       formatBRL(parsed.valorLiquido),
+          arquivoNome:        file.name,
+        });
+        setTab("dados");
+        setDialogOpen(true);
+        toast({ title: "PDF lido com sucesso!", description: "Confira os dados e salve a NF-e." });
+      } catch (err: any) {
+        toast({ title: "Erro ao ler PDF", description: err?.message, variant: "destructive" });
+      } finally {
+        setIsParsing(false);
+      }
       return;
     }
+
+    // Múltiplos arquivos → fluxo em lote
+    const items: BatchItem[] = files.map((f, i) => ({
+      id: `${Date.now()}-${i}`,
+      fileName: f.name,
+      parsed: null,
+      error: null,
+      status: "pending" as const,
+      selected: true,
+    }));
+    setBatchItems(items);
+    setBatchOpen(true);
     setIsParsing(true);
-    try {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      const parsed = await parsePdfMut.mutateAsync({ companyId, pdfBase64: base64 });
-      setEditingId(null);
-      setForm({
-        ...emptyForm(),
-        numeroNf:           parsed.numeroNf ?? "",
-        serie:              parsed.serie ?? "",
-        chaveAcesso:        parsed.chaveAcesso ?? "",
-        dataEmissao:        parsed.dataEmissao ?? new Date().toISOString().slice(0, 10),
-        dataCompetencia:    parsed.dataCompetencia ?? "",
-        dataVencimento:     parsed.dataVencimento ?? "",
-        tomadorCnpj:        parsed.tomadorCnpj ?? "",
-        tomadorRazaoSocial: parsed.tomadorRazaoSocial ?? "",
-        descricaoServico:   parsed.descricaoServico ?? "",
-        valorBruto:         formatBRL(parsed.valorBruto),
-        deducoesTotal:      formatBRL(parsed.deducoesTotal),
-        baseCalculoIss:     parsed.baseCalculoIss != null ? formatBRL(parsed.baseCalculoIss) : "",
-        aliquotaIss:        parsed.aliquotaIss != null ? String(parsed.aliquotaIss) : "",
-        issRetido:          formatBRL(parsed.issRetido),
-        retencaoInss:       formatBRL(parsed.retencaoInss),
-        retencaoIrrf:       formatBRL(parsed.retencaoIrrf),
-        retencaoPisCofins:  formatBRL(parsed.retencaoPisCofins),
-        valorLiquido:       formatBRL(parsed.valorLiquido),
-        arquivoNome:        file.name,
-      });
-      setTab("dados");
-      setDialogOpen(true);
-      toast({ title: "PDF lido com sucesso!", description: "Confira os dados e salve a NF-e." });
-    } finally {
-      setIsParsing(false);
-      if (pdfInputRef.current) pdfInputRef.current.value = "";
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      setBatchItems(prev => prev.map((it, idx) => idx === i ? { ...it, status: "processing" } : it));
+      try {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        const parsed = await parsePdfMut.mutateAsync({ companyId, pdfBase64: base64 });
+        setBatchItems(prev => prev.map((it, idx) =>
+          idx === i ? { ...it, status: "ok", parsed } : it
+        ));
+      } catch (err: any) {
+        setBatchItems(prev => prev.map((it, idx) =>
+          idx === i ? { ...it, status: "error", error: err?.message ?? "Erro desconhecido", selected: false } : it
+        ));
+      }
     }
+    setIsParsing(false);
+  }
+
+  async function handleSalvarLote() {
+    if (!companyId) return;
+    const selecionados = batchItems.filter(it => it.selected && it.status === "ok" && it.parsed);
+    if (!selecionados.length) return;
+    setBatchSaving(true);
+    let ok = 0; let fail = 0;
+    for (const item of selecionados) {
+      const p = item.parsed;
+      try {
+        await criarMut.mutateAsync({
+          companyId,
+          numeroNf:           p.numeroNf ?? "s/n",
+          serie:              p.serie || null,
+          chaveAcesso:        p.chaveAcesso || null,
+          dataEmissao:        p.dataEmissao ?? new Date().toISOString().slice(0, 10),
+          dataCompetencia:    p.dataCompetencia || null,
+          dataVencimento:     p.dataVencimento || null,
+          tomadorCnpj:        p.tomadorCnpj || null,
+          tomadorRazaoSocial: p.tomadorRazaoSocial || null,
+          obraId:             null,
+          obraNome:           null,
+          bmReferencia:       null,
+          descricaoServico:   p.descricaoServico || null,
+          valorBruto:         p.valorBruto ?? 0,
+          deducoesTotal:      p.deducoesTotal ?? 0,
+          baseCalculoIss:     p.baseCalculoIss ?? null,
+          aliquotaIss:        p.aliquotaIss ?? null,
+          issRetido:          p.issRetido ?? 0,
+          retencaoInss:       p.retencaoInss ?? 0,
+          retencaoIrrf:       p.retencaoIrrf ?? 0,
+          retencaoPisCofins:  p.retencaoPisCofins ?? 0,
+          valorLiquido:       p.valorLiquido ?? 0,
+          arquivoUrl:         null,
+          arquivoNome:        item.fileName,
+          observacoes:        null,
+        });
+        setBatchItems(prev => prev.map(it => it.id === item.id ? { ...it, status: "ok" } : it));
+        ok++;
+      } catch {
+        fail++;
+      }
+    }
+    setBatchSaving(false);
+    listQuery.refetch();
+    toast({
+      title: `${ok} NF-e(s) cadastrada(s)${fail ? ` — ${fail} com erro` : ""}`,
+      variant: fail && !ok ? "destructive" : "default",
+    });
+    if (ok > 0) setBatchOpen(false);
   }
 
   function openNew() {
@@ -369,6 +473,7 @@ export default function FinanceiroNotasFiscais() {
               ref={pdfInputRef}
               type="file"
               accept=".pdf,application/pdf"
+              multiple
               className="hidden"
               onChange={handlePdfUpload}
             />
@@ -883,6 +988,123 @@ export default function FinanceiroNotasFiscais() {
             </DialogContent>
           </Dialog>
         )}
+
+        {/* ─── Dialog Importação em Lote ─── */}
+        <Dialog open={batchOpen} onOpenChange={v => { if (!isParsing && !batchSaving) setBatchOpen(v); }}>
+          <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Upload className="h-5 w-5 text-indigo-600" />
+                Importação em Lote — {batchItems.length} PDF(s)
+              </DialogTitle>
+              <DialogDescription>
+                {isParsing
+                  ? `Lendo PDFs... ${batchItems.filter(i => i.status === "ok" || i.status === "error").length} de ${batchItems.length} concluídos`
+                  : `${batchItems.filter(i => i.selected && i.status === "ok").length} selecionada(s) para cadastrar`
+                }
+              </DialogDescription>
+            </DialogHeader>
+
+            {/* Barra de progresso */}
+            {isParsing && (
+              <div className="w-full bg-slate-100 rounded-full h-2">
+                <div
+                  className="bg-indigo-600 h-2 rounded-full transition-all"
+                  style={{ width: `${(batchItems.filter(i => i.status === "ok" || i.status === "error").length / batchItems.length) * 100}%` }}
+                />
+              </div>
+            )}
+
+            {/* Tabela de resultados */}
+            <div className="flex-1 overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-white border-b">
+                  <tr className="text-left text-slate-500 text-xs">
+                    <th className="py-2 px-2 w-8">
+                      <input
+                        type="checkbox"
+                        checked={batchItems.filter(i => i.status === "ok").every(i => i.selected)}
+                        onChange={e => setBatchItems(prev => prev.map(it =>
+                          it.status === "ok" ? { ...it, selected: e.target.checked } : it
+                        ))}
+                      />
+                    </th>
+                    <th className="py-2 px-2">Arquivo</th>
+                    <th className="py-2 px-2">NF #</th>
+                    <th className="py-2 px-2">Data</th>
+                    <th className="py-2 px-2">Tomador</th>
+                    <th className="py-2 px-2 text-right">Valor Líq.</th>
+                    <th className="py-2 px-2 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {batchItems.map(item => (
+                    <tr key={item.id} className={`border-b last:border-0 ${item.selected && item.status === "ok" ? "bg-indigo-50/40" : ""}`}>
+                      <td className="py-2 px-2">
+                        {item.status === "ok" && (
+                          <input
+                            type="checkbox"
+                            checked={item.selected}
+                            onChange={e => setBatchItems(prev => prev.map(it =>
+                              it.id === item.id ? { ...it, selected: e.target.checked } : it
+                            ))}
+                          />
+                        )}
+                      </td>
+                      <td className="py-2 px-2 max-w-[160px]">
+                        <span className="text-slate-600 truncate block" title={item.fileName}>
+                          {item.fileName}
+                        </span>
+                      </td>
+                      <td className="py-2 px-2 font-mono font-medium">
+                        {item.parsed?.numeroNf ?? "—"}
+                      </td>
+                      <td className="py-2 px-2 text-slate-600 whitespace-nowrap">
+                        {item.parsed?.dataEmissao
+                          ? new Date(item.parsed.dataEmissao + "T12:00:00").toLocaleDateString("pt-BR")
+                          : "—"}
+                      </td>
+                      <td className="py-2 px-2 max-w-[180px]">
+                        <span className="truncate block text-slate-700" title={item.parsed?.tomadorRazaoSocial ?? ""}>
+                          {item.parsed?.tomadorRazaoSocial ?? "—"}
+                        </span>
+                      </td>
+                      <td className="py-2 px-2 text-right font-medium">
+                        {item.parsed?.valorLiquido != null ? formatBRL(item.parsed.valorLiquido) : "—"}
+                      </td>
+                      <td className="py-2 px-2 text-center">
+                        {item.status === "pending"    && <span className="text-slate-400 text-xs">Aguardando</span>}
+                        {item.status === "processing" && <Loader2 className="h-4 w-4 animate-spin text-indigo-500 mx-auto" />}
+                        {item.status === "ok"         && <span className="inline-flex items-center gap-1 text-emerald-700 text-xs font-medium"><CheckCircle className="h-3.5 w-3.5" /> OK</span>}
+                        {item.status === "error"      && (
+                          <span className="inline-flex items-center gap-1 text-red-600 text-xs font-medium" title={item.error ?? ""}>
+                            <AlertTriangle className="h-3.5 w-3.5" /> Erro
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <DialogFooter className="shrink-0 flex-col sm:flex-row gap-2 pt-2 border-t">
+              <Button variant="outline" onClick={() => setBatchOpen(false)} disabled={isParsing || batchSaving}>
+                Fechar
+              </Button>
+              <Button
+                className="bg-indigo-600 hover:bg-indigo-700 gap-2"
+                onClick={handleSalvarLote}
+                disabled={isParsing || batchSaving || !batchItems.some(i => i.selected && i.status === "ok")}
+              >
+                {batchSaving
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
+                  : <><CheckCircle className="h-4 w-4" /> Cadastrar {batchItems.filter(i => i.selected && i.status === "ok").length} NF-e(s)</>
+                }
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* ─── AlertDialog Cancelar NF ─── */}
         <AlertDialog open={!!deleteTarget} onOpenChange={v => !v && setDeleteTarget(null)}>
