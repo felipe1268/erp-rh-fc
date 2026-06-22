@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3539** — **FERIADOS · BUGFIX DUPLICATA NA LISTA — GLOBAL + EMPRESA APARECIAM JUNTOS. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** `listar` trazia ambos (companyId=null + companyId=empresa) sem deduplicar. Fix: suprime o global quando existe cópia da empresa com mesmo nome+mmdd. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3538** — **FERIADOS · BUGFIX CADASTRAR FERIADO COM CIDADE VAZIA — ZOD REJEITAVA `null`. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** `cidade: z.string().optional()` rejeita `null` que o frontend envia quando o campo fica em branco. Fix: `z.string().nullish()` em `cidade` e `estado`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3537** — **FERIADOS · BUGFIX `RIGHT()` EM COLUNA DATE — BAIXAR FERIADOS FALHAVA. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** `RIGHT(data, 5)` em coluna DATE sem cast → Postgres rejeitava. Fix: `RIGHT(data::text, 5)` nos 2 lugares. Detalhe: `shared/changelog.ts`.

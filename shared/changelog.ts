@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3539 — **FERIADOS · BUGFIX DUPLICATA NA LISTA — GLOBAL (companyId=null) + EMPRESA APARECIAM JUNTOS. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ * Causa: `listar` buscava `companyId=X OR companyId=NULL` sem deduplicar. Quando existiam
+ * um registro global (NULL) E uma cópia da empresa para o mesmo feriado, ambos iam para
+ * `filtrados` → tela mostrava "Nossa Senhora Aparecida" duas vezes.
+ * Fix: após filtrar por ano, build de `companyKeys` (chave nome+mmdd dos registros da empresa);
+ * registros globais com chave já presente em `companyKeys` são suprimidos. Registro da
+ * empresa sempre tem precedência — global é o fallback quando não há cópia específica.
+ * Arquivo: `server/routers/feriados.ts`.
+ *
  * Rev. 3538 — **FERIADOS · BUGFIX CADASTRAR FERIADO COM CIDADE VAZIA — ZOD REJEITAVA `null`. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  * `cidade: z.string().optional()` aceita `undefined` mas não `null`. Frontend envia `null` quando
  * o campo "Cidade" fica em branco ("Vazio = todas"). Fix: `z.string().nullish()` em `cidade` e

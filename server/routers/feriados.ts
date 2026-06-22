@@ -388,11 +388,22 @@ export const feriadosRouter = router({
         .orderBy(feriados.data);
 
       // Filtrar por ano (considerando recorrentes)
-      const filtrados = result.filter(f => {
-        if (f.recorrente) {
-          return true; // Recorrentes aparecem sempre
-        }
+      const filtradosRaw = result.filter(f => {
+        if (f.recorrente) return true;
         return f.data.startsWith(String(ano));
+      });
+
+      // Rev. 3539 — dedup: se existir registro da empresa (companyId≠null) E global
+      // (companyId=null) com mesmo nome+mmdd, suprime o global para evitar duplicata.
+      const companyKeys = new Set(
+        filtradosRaw
+          .filter(f => f.companyId !== null)
+          .map(f => `${String(f.nome || '').toLowerCase().trim()}|${f.recorrente ? f.data.slice(-5) : f.data}`)
+      );
+      const filtrados = filtradosRaw.filter(f => {
+        if (f.companyId !== null) return true; // sempre mantém registro da empresa
+        const key = `${String(f.nome || '').toLowerCase().trim()}|${f.recorrente ? f.data.slice(-5) : f.data}`;
+        return !companyKeys.has(key); // suprime o global se já há cópia da empresa
       });
 
       // Adicionar feriados nacionais fixos que não estão no banco
