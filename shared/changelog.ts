@@ -1,6 +1,13 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3494 — **CENTROS DE CUSTO · REFATORAÇÃO + MAPEAMENTO COMPLETO CATEGORIAS↔CC. NEON · ZERO ALTER/DROP.**
+ * CCs renomeados: OBRAS E PROJETOS, RECURSOS HUMANOS, FINANCEIRO, COMERCIAL, ADMINISTRATIVO, FROTA E VEÍCULOS.
+ * CC-0010 (DESPESAS FINANCEIRAS) inativado por ser duplicata do financeiro.
+ * 2 novos CCs: CC-0012 PASSIVOS E DÍVIDAS (para grupo 10), CC-0013 JURÍDICO.
+ * 106 categorias mapeadas para seus CCs: obras(33), rh(20), adm(21), fin(10), pass(10), frota(7), jur(3), com(2).
+ * Os 10 nós estruturais do plano de contas ficam sem CC (correto — são grupos, não categorias de lançamento).
+ *
  * Rev. 3493 — **PLANO DE CONTAS · GRUPO 10 — PASSIVOS E DÍVIDAS. NEON · ZERO ALTER/DROP.**
  * Novo grupo raiz "10 · PASSIVOS E DÍVIDAS" para medir alavancagem da empresa.
  * 3 subgrupos: 10.1 Obrigações Tributárias em Aberto, 10.2 Dívidas Bancárias e Financeiras, 10.3 Acordos e Parcelamentos - Fornecedores.
