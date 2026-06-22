@@ -1365,6 +1365,7 @@ export const comprasRouter = router({
           cicloNumParcelas: empresasTerceiras.cicloNumParcelas,
           cicloPrazoParcela: empresasTerceiras.cicloPrazoParcela,
           cicloFormaPagamento: empresasTerceiras.cicloFormaPagamento,
+          cicloDataReferencia: (empresasTerceiras as any).cicloDataReferencia,
         }).from(empresasTerceiras)
           .where(and(
             inArray((empresasTerceiras as any).fornecedorId, fornIds),
@@ -1533,15 +1534,17 @@ export const comprasRouter = router({
       observacoes:     z.string().optional(),
       ativo:           z.boolean().optional(),
       // Rev. 3440 — Ciclo de Fechamento (gravado em empresas_terceiras via fornecedor_id)
-      cicloPagamento:      z.enum(["avista", "semanal", "quinzenal", "mensal", "personalizado"]).optional().nullable(),
-      cicloDiaFechamento:  z.number().int().min(1).max(31).optional().nullable(),
+      // Rev. 3514 — adicionado "quinzenal_semana" + cicloDataReferencia
+      cicloPagamento:      z.enum(["avista", "semanal", "quinzenal", "quinzenal_semana", "mensal", "personalizado"]).optional().nullable(),
+      cicloDiaFechamento:  z.number().int().min(0).max(31).optional().nullable(),
       cicloNumParcelas:    z.number().int().min(1).max(24).optional().nullable(),
       cicloPrazoParcela:   z.number().int().min(0).max(365).optional().nullable(),
       cicloFormaPagamento: z.enum(["cheque", "pix", "boleto", "transferencia"]).optional().nullable(),
+      cicloDataReferencia: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-      const { id, categorias, socios, cicloPagamento, cicloDiaFechamento, cicloNumParcelas, cicloPrazoParcela, cicloFormaPagamento, ...rest } = input;
+      const { id, categorias, socios, cicloPagamento, cicloDiaFechamento, cicloNumParcelas, cicloPrazoParcela, cicloFormaPagamento, cicloDataReferencia, ...rest } = input;
       // Tenant auth + anti-duplicidade no MESMO módulo (fornecedores) ao editar.
       const [existing] = await db.select().from(fornecedores).where(eq(fornecedores.id, id));
       if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Fornecedor não encontrado." });
@@ -1572,12 +1575,14 @@ export const comprasRouter = router({
         .set(data)
         .where(eq(fornecedores.id, id));
       // Rev. 3440 — sync ciclo de fechamento → empresas_terceiras (WHERE fornecedor_id=id)
+      // Rev. 3514 — inclui cicloDataReferencia
       const cicloPayload: Record<string, any> = {};
       if (cicloPagamento !== undefined) cicloPayload.cicloPagamento = cicloPagamento;
       if (cicloDiaFechamento !== undefined) cicloPayload.cicloDiaFechamento = cicloDiaFechamento;
       if (cicloNumParcelas !== undefined) cicloPayload.cicloNumParcelas = cicloNumParcelas;
       if (cicloPrazoParcela !== undefined) cicloPayload.cicloPrazoParcela = cicloPrazoParcela;
       if (cicloFormaPagamento !== undefined) cicloPayload.cicloFormaPagamento = cicloFormaPagamento;
+      if (cicloDataReferencia !== undefined) cicloPayload.cicloDataReferencia = cicloDataReferencia;
       if (Object.keys(cicloPayload).length > 0) {
         await db.update(empresasTerceiras)
           .set(cicloPayload)

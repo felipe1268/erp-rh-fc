@@ -156,13 +156,26 @@ function _normNomeConc(s: any): string {
 // SINTÉTICA {id:"grp:…" (string), agrupado:true, itensIds:[…], qtd, valor=soma, …}.
 // READ-ONLY (só formata o retorno; nada é gravado aqui).
 // Rev. 3437 — Calcula a janela de fechamento de um lançamento dado o ciclo do fornecedor.
-function _cicloWindow(dateStr: string, ciclo: string): string {
+// Rev. 3514 — adicionado suporte a "quinzenal_semana": ciclo quinzenal ancorado num dia
+//             da semana específico a partir de uma data de referência.
+function _cicloWindow(dateStr: string, ciclo: string, refDate?: string | null): string {
   const d = new Date(dateStr + "T12:00:00Z");
   const yyyy = d.getUTCFullYear();
   const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
   const day = d.getUTCDate();
   if (ciclo === "mensal" || ciclo === "personalizado") return `${yyyy}-${mm}`;
   if (ciclo === "quinzenal") return `${yyyy}-${mm}-${day <= 15 ? "01" : "16"}`;
+  if (ciclo === "quinzenal_semana") {
+    // refDate é uma data (YYYY-MM-DD) que foi um dia de fechamento real.
+    // Fechamentos ocorrem a cada 14 dias a partir dela.
+    // A janela de um lançamento = a data de fechamento que "cobre" o lançamento,
+    // ou seja, o menor múltiplo-de-14-dias-a-partir-de-ref ≥ dataStr.
+    const ref = new Date((refDate || dateStr) + "T12:00:00Z");
+    const diffDays = (d.getTime() - ref.getTime()) / 86400000;
+    const period = Math.ceil(diffDays / 14);
+    const closing = new Date(ref.getTime() + period * 14 * 86400000);
+    return closing.toISOString().slice(0, 10);
+  }
   if (ciclo === "semanal") {
     const jan1 = new Date(Date.UTC(yyyy, 0, 1));
     const week = Math.ceil(((d.getTime() - jan1.getTime()) / 86400000 + jan1.getUTCDay() + 1) / 7);
@@ -177,6 +190,11 @@ function _cicloWindowLabel(window: string, ciclo: string): string {
   if (ciclo === "semanal" && window.includes("W")) {
     const [yyyy, w] = window.split("-W");
     return `Sem. ${w}/${yyyy}`;
+  }
+  if (ciclo === "quinzenal_semana" && window.length === 10) {
+    const [yyyy, mm, dd] = window.split("-");
+    const mes = MESES[parseInt(mm, 10) - 1] ?? mm;
+    return `Quinz. até ${dd}/${mes.slice(0,3)} ${yyyy}`;
   }
   if (ciclo === "quinzenal" && window.length === 10) {
     const [yyyy, mm, dd] = window.split("-");
@@ -199,6 +217,8 @@ function _cicloFechamentoDate(window: string, ciclo: string): string {
     const sun = new Date(startOfWeek.getTime() + 6 * 86400000);
     return sun.toISOString().slice(0, 10);
   }
+  // Rev. 3514 — para quinzenal_semana a janela já É a data de fechamento (YYYY-MM-DD).
+  if (ciclo === "quinzenal_semana" && window.length === 10) return window;
   if (ciclo === "quinzenal" && window.length === 10) {
     const [yyyy, mm, dd] = window.split("-");
     if (dd === "01") return `${yyyy}-${mm}-15`;
@@ -253,7 +273,7 @@ function _agruparConciliacao(arr: any[], supplierCycleMap: Map<string, any> = ne
           const dataStr = typeof r.data === "string"
             ? r.data.slice(0, 10)
             : (r.data ? new Date(r.data).toISOString().slice(0, 10) : "");
-          const win = dataStr ? _cicloWindow(dataStr, cycleConfig.cicloPagamento) : "0000-00";
+          const win = dataStr ? _cicloWindow(dataStr, cycleConfig.cicloPagamento, cycleConfig.cicloDataReferencia) : "0000-00";
           const chave = `fech|${fornNorm}|${win}`;
           let cg = cycleGroups.get(chave);
           if (!cg) {
@@ -1635,7 +1655,8 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
               ciclo_dia_fechamento AS "cicloDiaFechamento",
               ciclo_num_parcelas AS "cicloNumParcelas",
               ciclo_prazo_parcela AS "cicloPrazoParcela",
-              ciclo_forma_pagamento AS "cicloFormaPagamento"
+              ciclo_forma_pagamento AS "cicloFormaPagamento",
+              ciclo_data_referencia AS "cicloDataReferencia"
          FROM empresas_terceiras
         WHERE "companyId"=$1 AND deleted_at IS NULL
           AND ciclo_pagamento IS NOT NULL AND ciclo_pagamento <> 'avista'`,

@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3515 — **LANÇAMENTOS FINANCEIROS · AGRUPAMENTO POR PERÍODO (MÊS) NA LISTA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Quando a lista contém lançamentos de mais de um mês (ex.: "Ano todo"), a tela
+ * insere automaticamente cabeçalhos de período entre os grupos mensais. Cada cabeçalho
+ * exibe: ícone de calendário, nome do mês+ano, contagem de lançamentos, total receitas
+ * (+R$), total despesas (-R$) e resultado (= R$) com cor verde/vermelho. Ativação
+ * automática por `uniqueYms.size > 1` no IIFE `displayRows` (2ª passagem após agrupamento
+ * Frota/PJ). Pré-calcula totais por YYYY-MM para evitar re-varredura no render. Sticky
+ * no scroll (z-10) para identificação visual durante rolagem. Compatível com os
+ * agrupamentos Frota e PJ já existentes (period headers envolvem os grupos). Arquivo:
+ * client/src/pages/financeiro/FinanceiroLancamentos.tsx.
+ *
+ * Rev. 3514 — **FORNECEDORES · CICLO QUINZENAL POR DIA DA SEMANA (quinzenal_semana). BACKEND + SCHEMA ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
+ * Nova opção "Quinzenal (dia da semana)" no cadastro de fornecedor. Ao selecionar, o usuário
+ * escolhe o dia da semana (0=Dom … 6=Sáb) e informa uma data de referência (um fechamento real
+ * passado ou futuro). O motor `_cicloWindow()` calcula a janela via `Math.ceil(diffDays/14)` a
+ * partir da referência — todas as compras cujo menor múltiplo de 14 dias ≥ data do lançamento
+ * pertencem ao mesmo grupo na Conciliação Bancária. Etiqueta: "Quinz. até DD/Mês AAAA".
+ * Schema: nova coluna `ciclo_data_referencia VARCHAR(10)` em `empresas_terceiras` via
+ * `[SyncSchema+] ADD COLUMN IF NOT EXISTS`. `ciclo_dia_fechamento` reutilizado (0–6 = dia da
+ * semana). Backend: `financial.ts` (_cicloWindow/Label/FechamentoDate), `compras.ts` (zod +
+ * save + read). Frontend: `Fornecedores.tsx` (Select condicional dia-da-semana + Input date ref).
+ * Arquivos: drizzle/schema.ts, server/_core/index.ts, server/routers/financial.ts,
+ * server/routers/compras.ts, client/src/pages/compras/Fornecedores.tsx.
+ *
  * Rev. 3513 — **CONCILIAÇÃO · SHEET DO EXTRATO REDESENHADO — PADRÃO VISUAL IGUAL AO DIALOG DO ERP. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Cabeçalho azul-escuro (#1B2A4A) com "LINHA DO EXTRATO #id", descrição em branco, valor no canto
  * direito, saldo colorido, badges de tipo (Entrada/Saída/Mov.interna). Corpo com seções estruturadas

@@ -240,6 +240,8 @@ const EMPTY_FORM = {
   cicloNumParcelas: "" as string,
   cicloPrazoParcela: "" as string,
   cicloFormaPagamento: "" as string,
+  // Rev. 3514 — data de referência para ciclo quinzenal_semana
+  cicloDataReferencia: "" as string,
 };
 
 export default function Fornecedores() {
@@ -403,6 +405,7 @@ export default function Fornecedores() {
       cicloNumParcelas: (f as any).cicloNumParcelas != null ? String((f as any).cicloNumParcelas) : "",
       cicloPrazoParcela: (f as any).cicloPrazoParcela != null ? String((f as any).cicloPrazoParcela) : "",
       cicloFormaPagamento: (f as any).cicloFormaPagamento ?? "",
+      cicloDataReferencia: (f as any).cicloDataReferencia ?? "",
     });
     setEditando(f.id);
     setErroCNPJ(null);
@@ -610,8 +613,9 @@ export default function Fornecedores() {
       cicloNumParcelas: parseCicloInt(form.cicloNumParcelas),
       cicloPrazoParcela: parseCicloInt(form.cicloPrazoParcela),
       cicloFormaPagamento: form.cicloFormaPagamento || null,
+      cicloDataReferencia: (form.cicloPagamento === "quinzenal_semana" && form.cicloDataReferencia) ? form.cicloDataReferencia : null,
     };
-    const { cicloPagamento: _cp, cicloDiaFechamento: _cd, cicloNumParcelas: _cn, cicloPrazoParcela: _cpr, cicloFormaPagamento: _cf, ...restForm } = form;
+    const { cicloPagamento: _cp, cicloDiaFechamento: _cd, cicloNumParcelas: _cn, cicloPrazoParcela: _cpr, cicloFormaPagamento: _cf, cicloDataReferencia: _cdr, ...restForm } = form;
     if (editando) {
       atualizarMut.mutate({ id: editando, ...restForm, ...cicloFields });
     } else {
@@ -1383,28 +1387,59 @@ export default function Fornecedores() {
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <Label className="text-xs text-slate-600 mb-1 block">Ciclo de fechamento</Label>
-                          <Select value={form.cicloPagamento || "avista"} onValueChange={v => setForm(p => ({ ...p, cicloPagamento: v === "avista" ? "" : v }))}>
+                          <Select value={form.cicloPagamento || "avista"} onValueChange={v => setForm(p => ({ ...p, cicloPagamento: v === "avista" ? "" : v, cicloDiaFechamento: "", cicloDataReferencia: "" }))}>
                             <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="avista">À vista (sem agrupamento)</SelectItem>
                               <SelectItem value="semanal">Semanal</SelectItem>
-                              <SelectItem value="quinzenal">Quinzenal</SelectItem>
+                              <SelectItem value="quinzenal">Quinzenal (1–15 / 16–fim)</SelectItem>
+                              <SelectItem value="quinzenal_semana">Quinzenal (dia da semana)</SelectItem>
                               <SelectItem value="mensal">Mensal</SelectItem>
                               <SelectItem value="personalizado">Personalizado (N dias)</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
-                        <div>
-                          <Label className="text-xs text-slate-600 mb-1 block">Dia de fechamento</Label>
-                          <Input
-                            type="number" min={1} max={31}
-                            value={form.cicloDiaFechamento}
-                            onChange={e => setForm(p => ({ ...p, cicloDiaFechamento: e.target.value }))}
-                            className="h-8 text-xs" placeholder="ex: 30"
-                            disabled={!form.cicloPagamento}
-                          />
-                        </div>
+                        {form.cicloPagamento === "quinzenal_semana" ? (
+                          <div>
+                            <Label className="text-xs text-slate-600 mb-1 block">Dia da semana</Label>
+                            <Select value={form.cicloDiaFechamento} onValueChange={v => setForm(p => ({ ...p, cicloDiaFechamento: v }))}>
+                              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="0">Domingo</SelectItem>
+                                <SelectItem value="1">Segunda-feira</SelectItem>
+                                <SelectItem value="2">Terça-feira</SelectItem>
+                                <SelectItem value="3">Quarta-feira</SelectItem>
+                                <SelectItem value="4">Quinta-feira</SelectItem>
+                                <SelectItem value="5">Sexta-feira</SelectItem>
+                                <SelectItem value="6">Sábado</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ) : (
+                          <div>
+                            <Label className="text-xs text-slate-600 mb-1 block">Dia de fechamento</Label>
+                            <Input
+                              type="number" min={1} max={31}
+                              value={form.cicloDiaFechamento}
+                              onChange={e => setForm(p => ({ ...p, cicloDiaFechamento: e.target.value }))}
+                              className="h-8 text-xs" placeholder="ex: 30"
+                              disabled={!form.cicloPagamento}
+                            />
+                          </div>
+                        )}
                       </div>
+                      {form.cicloPagamento === "quinzenal_semana" && (
+                        <div>
+                          <Label className="text-xs text-slate-600 mb-1 block">Data de referência</Label>
+                          <Input
+                            type="date"
+                            value={form.cicloDataReferencia}
+                            onChange={e => setForm(p => ({ ...p, cicloDataReferencia: e.target.value }))}
+                            className="h-8 text-xs"
+                          />
+                          <p className="text-[10px] text-slate-400 mt-1">Uma data que foi (ou será) um dia real de fechamento. Os próximos fechamentos ocorrerão a cada 14 dias.</p>
+                        </div>
+                      )}
                       {form.cicloPagamento && (
                         <div className="grid grid-cols-3 gap-3">
                           <div>

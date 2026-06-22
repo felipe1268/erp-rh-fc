@@ -203,6 +203,8 @@ function isTransportErr(msg?: string | null): boolean {
 
 // Rev. 3133 — timeline de meses (padrão Contas a Receber/Pagar).
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+// Rev. 3514 — nomes completos para cabeçalhos de período
+const MESES_FULL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
 const INITIAL_FORM = {
   modoRecorrente: false,
@@ -968,28 +970,80 @@ export default function FinanceiroLancamentos() {
   const grupoKeyOf = (l: any): string | null => frotaGrupoOf(l)?.key ?? pjGrupoOf(l)?.key ?? null;
   type DisplayRow =
     | { kind: "entry"; l: any }
-    | { kind: "group"; groupKind: "frota" | "pj"; key: string; label: string; tipoKey: string; members: any[] };
+    | { kind: "group"; groupKind: "frota" | "pj"; key: string; label: string; tipoKey: string; members: any[] }
+    // Rev. 3514 — separador de período (cabeçalho de mês na lista)
+    | { kind: "period"; ym: string; label: string; receita: number; despesa: number; count: number };
   const displayRows: DisplayRow[] = (() => {
-    if (!agrupar) return lancamentos.map((l: any) => ({ kind: "entry", l } as DisplayRow));
+    // 1ª passagem: agrupa Frota/PJ (lógica anterior intacta)
     const rows: DisplayRow[] = [];
-    const byKey = new Map<string, Extract<DisplayRow, { kind: "group" }>>();
-    for (const l of lancamentos) {
-      const fg = frotaGrupoOf(l);
-      const pg = fg ? null : pjGrupoOf(l);
-      if (!fg && !pg) { rows.push({ kind: "entry", l }); continue; }
-      const key = fg ? fg.key : pg!.key;
-      let grp = byKey.get(key);
-      if (!grp) {
-        grp = fg
-          ? { kind: "group", groupKind: "frota", key: fg.key, label: fg.label, tipoKey: fg.tipoKey, members: [] }
-          : { kind: "group", groupKind: "pj", key: pg!.key, label: pg!.label, tipoKey: "pj", members: [] };
-        byKey.set(key, grp);
-        rows.push(grp);
+    if (agrupar) {
+      const byKey = new Map<string, Extract<DisplayRow, { kind: "group" }>>();
+      for (const l of lancamentos) {
+        const fg = frotaGrupoOf(l);
+        const pg = fg ? null : pjGrupoOf(l);
+        if (!fg && !pg) { rows.push({ kind: "entry", l }); continue; }
+        const key = fg ? fg.key : pg!.key;
+        let grp = byKey.get(key);
+        if (!grp) {
+          grp = fg
+            ? { kind: "group", groupKind: "frota", key: fg.key, label: fg.label, tipoKey: fg.tipoKey, members: [] }
+            : { kind: "group", groupKind: "pj", key: pg!.key, label: pg!.label, tipoKey: "pj", members: [] };
+          byKey.set(key, grp);
+          rows.push(grp);
+        }
+        grp.members.push(l);
       }
-      grp.members.push(l);
+      // Grupos com 1 item só voltam a ser linha normal.
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        if (r.kind === "group" && r.members.length === 1) rows[i] = { kind: "entry", l: r.members[0] };
+      }
+    } else {
+      for (const l of lancamentos) rows.push({ kind: "entry", l });
     }
-    // Grupos com 1 item só voltam a ser linha normal.
-    return rows.map((r) => (r.kind === "group" && r.members.length === 1 ? { kind: "entry", l: r.members[0] } : r));
+
+    // Rev. 3514 — 2ª passagem: injeta cabeçalhos de período quando há > 1 mês.
+    // Determina o YYYY-MM de cada linha pelo dataCompetencia (ou dataMin nos grupos).
+    const getYm = (r: DisplayRow): string => {
+      if (r.kind === "entry") return (r.l.dataCompetencia ?? r.l.dataVencimento ?? "").slice(0, 7) || "0000-00";
+      if (r.kind === "group") {
+        const m0 = r.members[0];
+        return (m0?.dataCompetencia ?? m0?.dataVencimento ?? "").slice(0, 7) || "0000-00";
+      }
+      return "0000-00";
+    };
+    const uniqueYms = new Set(rows.map(getYm));
+    if (uniqueYms.size <= 1) return rows; // mês único — sem cabeçalhos
+
+    // Pré-calcula totais por período
+    const ymTotals = new Map<string, { receita: number; despesa: number; count: number }>();
+    for (const r of rows) {
+      const ym = getYm(r);
+      if (!ymTotals.has(ym)) ymTotals.set(ym, { receita: 0, despesa: 0, count: 0 });
+      const t = ymTotals.get(ym)!;
+      const items: any[] = r.kind === "entry" ? [r.l] : r.kind === "group" ? r.members : [];
+      for (const it of items) {
+        t.count++;
+        if (it.status !== "cancelado") {
+          if (it.tipo === "receita") t.receita += Number(it.valorPrevisto ?? 0);
+          else t.despesa += Number(it.valorPrevisto ?? 0);
+        }
+      }
+    }
+    const final: DisplayRow[] = [];
+    let lastYm = "";
+    for (const r of rows) {
+      const ym = getYm(r);
+      if (ym !== lastYm) {
+        const [yyyy, mm] = ym.split("-");
+        const mesNome = MESES_FULL[parseInt(mm, 10) - 1] ?? mm;
+        const t = ymTotals.get(ym) ?? { receita: 0, despesa: 0, count: 0 };
+        final.push({ kind: "period", ym, label: `${mesNome} ${yyyy}`, ...t });
+        lastYm = ym;
+      }
+      final.push(r);
+    }
+    return final;
   })();
   // Membros do grupo aberto no diálogo de detalhe (recalculado da lista atual).
   const grupoMembros = grupoKey
@@ -1258,6 +1312,26 @@ export default function FinanceiroLancamentos() {
                 ) : (
                   <div className="divide-y divide-gray-100">
                     {displayRows.map((row) => {
+                      // Rev. 3514 — cabeçalho de período (separador de mês)
+                      if (row.kind === "period") {
+                        const resultado = row.receita - row.despesa;
+                        return (
+                          <div key={`period-${row.ym}`} className="px-5 py-2.5 bg-slate-100 border-y border-slate-200 flex items-center gap-2 sticky top-0 z-10">
+                            <Calendar className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                            <span className="text-sm font-bold text-slate-700 flex-1">{row.label}</span>
+                            <span className="text-xs font-medium text-slate-400">{row.count} lançamento{row.count !== 1 ? "s" : ""}</span>
+                            {row.receita > 0 && (
+                              <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 rounded px-1.5 py-0.5">+{formatBRL(row.receita)}</span>
+                            )}
+                            {row.despesa > 0 && (
+                              <span className="text-xs font-semibold text-red-500 bg-red-50 rounded px-1.5 py-0.5">-{formatBRL(row.despesa)}</span>
+                            )}
+                            <span className={`text-xs font-bold rounded px-1.5 py-0.5 ${resultado >= 0 ? "text-emerald-700 bg-emerald-100" : "text-red-600 bg-red-100"}`}>
+                              ={formatBRL(resultado)}
+                            </span>
+                          </div>
+                        );
+                      }
                       if (row.kind === "group") {
                         const Icon = row.groupKind === "pj" ? Briefcase : (FROTA_GRUPO_ICONS[row.tipoKey] ?? Truck);
                         const grpSelIds: number[] = row.members.filter((m: any) => m.status !== "cancelado").map((m: any) => m.id);

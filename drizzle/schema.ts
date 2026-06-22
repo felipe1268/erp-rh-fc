@@ -3978,6 +3978,8 @@ export const empresasTerceiras = pgTable("empresas_terceiras", {
   cicloNumParcelas: integer("ciclo_num_parcelas").default(1),
   cicloPrazoParcela: integer("ciclo_prazo_parcela").default(30),
   cicloFormaPagamento: varchar("ciclo_forma_pagamento", { length: 20 }),
+  // Rev. 3514 — ciclo quinzenal ancorado no dia da semana
+  cicloDataReferencia: varchar("ciclo_data_referencia", { length: 10 }),
   // Vínculo com cadastro de fornecedor (Compras)
   fornecedorId: integer("fornecedor_id"),
   // Status

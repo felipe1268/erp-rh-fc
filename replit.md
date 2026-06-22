@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3513** — **CONCILIAÇÃO · SHEET DO EXTRATO REDESENHADO — PADRÃO VISUAL IGUAL AO DIALOG DO ERP. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Cabeçalho #1B2A4A, seções DADOS DO EXTRATO / CHEQUE / FATURA / IA / VÍNCULO, rodapé com botão azul-escuro. Detalhe: `shared/changelog.ts`.
+- **Rev. 3515** — **LANÇAMENTOS FINANCEIROS · AGRUPAMENTO POR PERÍODO (MÊS) NA LISTA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Cabeçalhos de mês automáticos quando há lançamentos de múltiplos períodos; mostra receita/despesa/resultado por mês; sticky no scroll; compatível com agrupamentos Frota e PJ. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3512** — **CONCILIAÇÃO · BUGFIX FILTRO ENTRADA/SAÍDA NO ERP INVERTIDO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `repLanView` usava sinal do valor (lógica extrato); lançamentos ERP usam `tipo="receita"/"despesa"`. Fix: filtrar por `tipo`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3514** — **FORNECEDORES · CICLO QUINZENAL POR DIA DA SEMANA (`quinzenal_semana`). BACKEND + SCHEMA ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Nova opção no cadastro; usuário escolhe dia da semana + data de referência. `_cicloWindow()` calcula janelas via `Math.ceil(diffDays/14)` a partir da ref. Nova coluna `ciclo_data_referencia` via `[SyncSchema+]`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3511** — **CONCILIAÇÃO · SHEET DE DETALHE AO DUPLO-CLIQUE/DUPLO-TOQUE EM AMBAS AS LISTAS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Duplo-clique em extrato → Sheet lateral (valor, saldo, descrição completa, cheque/fatura/IA/vínculo, ações Lançar/Apagar). Duplo-clique no ERP → abre dialog detalhe existente (👁). Detalhe: `shared/changelog.ts`.
 

@@ -3916,6 +3916,12 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3466: colunas conciliado_em/conciliado_por_id/conciliado_por_nome garantidas em financial_entries.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3466 financial_entries conciliado_por:`, e?.message || e); }
 
+        // Rev. 3514 — data de referência para ciclo quinzenal ancorado no dia da semana (ADD COLUMN IF NOT EXISTS — R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`ALTER TABLE empresas_terceiras ADD COLUMN IF NOT EXISTS ciclo_data_referencia VARCHAR(10)`);
+          console.log(`[SyncSchema+] Rev. 3514: coluna ciclo_data_referencia garantida em empresas_terceiras.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3514 empresas_terceiras.ciclo_data_referencia:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
