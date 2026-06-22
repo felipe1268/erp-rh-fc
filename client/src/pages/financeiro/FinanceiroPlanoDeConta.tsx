@@ -252,7 +252,6 @@ export default function FinanceiroPlanoDeConta() {
     onSuccess: (r: any) => { toast({ title: "Conta excluída!", description: `${r.codigo} — ${r.nome}` }); setDeleteTarget(null); refetch(); },
     onError: (e: any) => toast({ title: "Não foi possível excluir", description: e.message, variant: "destructive" }),
   });
-
   async function handleBulkDelete() {
     setBulkDeleting(true);
     let ok = 0; let fail = 0;

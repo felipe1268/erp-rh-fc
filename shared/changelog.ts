@@ -1,6 +1,11 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3484 — **PLANO DE CONTAS · BOTÃO "CARREGAR PADRÃO FC" DEFINITIVAMENTE REMOVIDO.
+ * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Usuário confirmou: só quer criar contas manualmente via "+ Nova Conta".
+ * Removidos: Sprout import, confirmSeed state, seedMut mutation, botão, AlertDialog.
+ *
  * Rev. 3483 — **PLANO DE CONTAS · CHECKBOXES PARA SELEÇÃO MÚLTIPLA + EXCLUSÃO EM LOTE + BOTÕES SEMPRE VISÍVEIS.
  * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Checkbox em cada linha (+ "Selecionar todas" no topo). Ao marcar qualquer item, aparece
