@@ -1,6 +1,11 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3537 — **FERIADOS · BUGFIX `RIGHT()` EM COLUNA DATE — BAIXAR FERIADOS FALHAVA. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ * `RIGHT(feriados.data, 5)` usava função de texto em coluna DATE — Postgres rejeita sem cast explícito.
+ * Fix: `RIGHT(feriados.data::text, 5)` nos 2 lugares (dedup de recorrente + verificação de conflito).
+ * Arquivo: `server/routers/feriados.ts`.
+ *
  * Rev. 3536 — **FOLHA DE PAGAMENTO · BUGFIX `Loader2` NÃO IMPORTADO — PÁGINA CRASHAVA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * `Loader2` usado na linha de "Carregando relatório..." mas ausente no import de lucide-react. Adicionado.
  * Arquivo: `client/src/pages/FolhaPagamento.tsx`.

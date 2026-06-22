@@ -555,7 +555,7 @@ export const feriadosRouter = router({
           eq(feriados.nome, input.nome),
           eq(feriados.ativo, 1),
           input.recorrente
-            ? sql`RIGHT(${feriados.data}, 5) = ${mmdd}`
+            ? sql`RIGHT(${feriados.data}::text, 5) = ${mmdd}`
             : eq(feriados.data, input.data),
         ))
         .limit(1);
@@ -818,7 +818,7 @@ export const feriadosRouter = router({
         .where(and(
           sql`(${feriados.companyId} = ${input.companyId} OR ${feriados.companyId} IS NULL)`,
           eq(feriados.ativo, 1),
-          sql`(${feriados.data} = ${input.data} OR (${feriados.recorrente} = 1 AND RIGHT(${feriados.data}, 5) = ${mmdd}))`,
+          sql`(${feriados.data}::text = ${input.data} OR (${feriados.recorrente} = 1 AND RIGHT(${feriados.data}::text, 5) = ${mmdd}))`,
         ));
 
       // Verificar também feriados móveis
