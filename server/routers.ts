@@ -1024,9 +1024,10 @@ export const appRouter = router({
 
         const salarioDia = salarioBase / 30;
 
-        // Multa FGTS 40% — só empregador (empresa demite)
+        // Multa FGTS 40% — só empregador ANTECIPADO (rescisão sem justa causa antes do prazo)
+        // Término no prazo = vencimento natural do contrato → sem multa (art. 18 Lei 8.036/90)
         const incluirMultaFgts = await getIncluirMultaFgts(db, input.companyId);
-        const multaFGTS = (iniciativa === 'empregador' && incluirMultaFgts)
+        const multaFGTS = (iniciativa === 'empregador' && antecipado && incluirMultaFgts)
           ? parseFloat(String(previsaoBase.fgtsEstimado || '0')) * 0.4
           : 0;
 

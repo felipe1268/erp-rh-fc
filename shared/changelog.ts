@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3542 — **DESLIGAMENTO NA EXPERIÊNCIA · BUGFIX FGTS 40% INDEVIDO NO TÉRMINO NO PRAZO. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ * Causa: `multaFGTS` era calculada para qualquer `iniciativa==='empregador'`, inclusive no
+ * término no prazo. O término no prazo é vencimento natural do contrato de experiência —
+ * NÃO é rescisão sem justa causa → multa de 40% do FGTS não é devida (art. 18 Lei 8.036/90).
+ * Fix: condição alterada para `iniciativa==='empregador' && antecipado` — multa só quando
+ * a empresa rompe ANTES do prazo contratual (aí sim configura rescisão imotivada).
+ * Arquivo: `server/routers.ts`.
+ *
  * Rev. 3541 — **DESLIGAMENTO NA EXPERIÊNCIA · 4 TIPOS DE ENCERRAMENTO + ART. 479/480 + AVISO EM "AVISOS PRÉVIOS". BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
  * Antes, "Desligar na Experiência" tinha apenas campo de motivo, sem registrar aviso prévio
  * nem distinguir a iniciativa. Agora o endpoint aceita `iniciativa` (empregador/empregado),
