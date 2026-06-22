@@ -1,6 +1,10 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3522 — **OBRAS · RENOMEAR TIPO "APENAS PROJETO" → "PROJETOS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Label do chip `value:"projeto"` alterado de "Apenas Projeto" para "Projetos".
+ * Valor gravado no banco (`projeto`) não muda — obras já cadastradas não são afetadas.
+ *
  * Rev. 3521 — **OBRAS · NOVO TIPO DE CONTRATO "APENAS PROJETO". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Adicionado `{ value: "projeto", label: "Apenas Projeto", color: "bg-green-100 text-green-800",
  * desc: "Somente elaboração e entrega de projeto" }` ao array `TIPO_CONTRATO_OPTIONS` em `Obras.tsx`.

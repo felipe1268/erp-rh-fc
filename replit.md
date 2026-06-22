@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3522** — **OBRAS · RENOMEAR TIPO "APENAS PROJETO" → "PROJETOS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Label do chip renomeado; valor no banco (`projeto`) inalterado. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3521** — **OBRAS · NOVO TIPO DE CONTRATO "APENAS PROJETO". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** 4ª opção verde no chip "Tipo de Contrato" do formulário Nova Obra. Schema `varchar(30)` aceita o valor "projeto" sem ALTER TABLE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3520** — **CONCILIAÇÃO · SELEÇÃO MÚLTIPLA EM "JÁ CONCILIADOS" PARA DESFAZER EM LOTE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Checkbox por linha + "Selecionar todos" no header; botão âmbar "Desfazer N selecionado(s)"; AlertDialog de confirmação; execução sequencial silenciosa com toast final. Detalhe: `shared/changelog.ts`.
