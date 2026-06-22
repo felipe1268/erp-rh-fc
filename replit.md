@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3471** — **OBRAS · BUGFIX — STATUS LEGADO DO BANCO (FORA DO ENUM) CAUSAVA ERRO AO SALVAR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `openEdit` normaliza `obra.status` via `STATUS_OPTIONS.some` → fallback "Planejamento"; guard duplo em `handleSave`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3472** — **OBRAS · DATA DE INÍCIO NOS CARDS EM MM/AAAA (FORMATO BRASILEIRO). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** "Início: 2026-01-01" → "Início: 01/2026". Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3470** — **OBRAS · BUGFIX CRÍTICO — AlertDialogs (confirmDeleteId / confirmRemoveSnId / confirmMesclarOpen) MOVIDOS DE ConvencaoSection PARA O RETURN DE Obras(). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** ReferenceError "Can't find variable: confirmDeleteId" ao abrir /obras. Detalhe: `shared/changelog.ts`.
+- **Rev. 3471** — **OBRAS · BUGFIX — STATUS LEGADO DO BANCO (FORA DO ENUM) CAUSAVA ERRO AO SALVAR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `openEdit` normaliza `obra.status` via `STATUS_OPTIONS.some` → fallback "Planejamento"; guard duplo em `handleSave`. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
 

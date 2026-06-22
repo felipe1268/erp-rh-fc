@@ -673,7 +673,7 @@ export default function Obras() {
                     )}
                     {obra.dataInicio && (
                       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                        <Calendar className="h-3.5 w-3.5" /> Início: {obra.dataInicio}
+                        <Calendar className="h-3.5 w-3.5" /> Início: {obra.dataInicio.slice(5,7)}/{obra.dataInicio.slice(0,4)}
                       </div>
                     )}
                     {/* Skills summary for this obra */}

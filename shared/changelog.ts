@@ -1,6 +1,11 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3472 — **OBRAS · DATA DE INÍCIO NOS CARDS EXIBIDA EM MM/AAAA (FORMATO BRASILEIRO).
+ * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Antes: "Início: 2026-01-01". Agora: "Início: 01/2026". Extração direta da string
+ * ISO (`slice(5,7)+"/"+slice(0,4)`) — zero parsing, zero risco de fuso horário.
+ *
  * Rev. 3471 — **OBRAS · BUGFIX — STATUS COM VALOR LEGADO NO BANCO CAUSAVA ReferenceError
  * AO SALVAR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
