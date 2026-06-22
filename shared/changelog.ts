@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3518 — **CHEQUES + LANÇAMENTOS · PADRONIZAÇÃO NOME FANTASIA COMO EXIBIÇÃO PRIMÁRIA NO DROPDOWN DE FORNECEDORES. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Dois dropdowns de busca de fornecedor usavam `razaoSocial || nomeFantasia`
+ * (ordem invertida em relação ao restante do app). Corrigido para
+ * `nomeFantasia || razaoSocial` em `FinanceiroCheques.tsx` (modal "Lançar cheque
+ * manualmente") e `FinanceiroLancamentos.tsx` (dropdown de favorecido em
+ * lançamento). Documentos legais/impressos (aviso prévio, orçamento, contratos)
+ * mantêm `razaoSocial` como fonte primária — correto por norma fiscal.
+ *
  * Rev. 3517 — **CONCILIAÇÃO · BUGFIX PARSER EXTRATO PDF CAIXA: LINHA DE CONTINUAÇÃO DA TRANSAÇÃO ANTERIOR VAZAVA COMO DESCRIÇÃO DA PRÓXIMA. 100% BACKEND · ZERO FRONTEND/SCHEMA/ALTER/DROP/DELETE.**
  * Causa-raiz: o parser lia apenas a linha `isTimeEff` como trail, mas a linha de
  * continuação imediatamente abaixo dela (ex.: "ALLUCK", "E003603...") ficava solta

@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3517** — **CONCILIAÇÃO · BUGFIX PARSER EXTRATO PDF CAIXA: LINHA DE CONTINUAÇÃO VAZAVA COMO DESCRIÇÃO DA PRÓXIMA TRANSAÇÃO. 100% BACKEND · ZERO FRONTEND/SCHEMA/ALTER/DROP/DELETE.** `consumed` Set<number> marca a linha `isTimeEff` + continuações logo abaixo; loop de `lead` para ao encontrar linha consumida. Ex.: "ALLUCK" não vaza mais para "DEB PIX CHAVE - ANDERSON BRAGA DA SILVA". Detalhe: `shared/changelog.ts`.
+- **Rev. 3518** — **CHEQUES + LANÇAMENTOS · PADRONIZAÇÃO NOME FANTASIA COMO EXIBIÇÃO PRIMÁRIA NO DROPDOWN DE FORNECEDORES. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `nomeFantasia || razaoSocial` nos dois dropdowns de favorecido (FinanceiroCheques + FinanceiroLancamentos). Documentos legais mantêm razaoSocial. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3516** — **FORNECEDORES · REGRAS ESPECIAIS DE PAGAMENTO POR PRODUTO. BACKEND + SCHEMA ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Seção "Regras especiais por produto" no form de fornecedor: palavra-chave (ex.: Cimento), forma pagamento, nº máx. parcelas, prazo. Salva em `empresas_terceiras.regras_produto_json` via `[SyncSchema+]`. Cotações: banner violeta aparece quando item da OC bate com a palavra-chave (NFD-normalized). Extensível — suporta N produtos. Detalhe: `shared/changelog.ts`.
+- **Rev. 3517** — **CONCILIAÇÃO · BUGFIX PARSER EXTRATO PDF CAIXA: LINHA DE CONTINUAÇÃO VAZAVA COMO DESCRIÇÃO DA PRÓXIMA TRANSAÇÃO. 100% BACKEND · ZERO FRONTEND/SCHEMA/ALTER/DROP/DELETE.** `consumed` Set<number> marca a linha `isTimeEff` + continuações logo abaixo; loop de `lead` para ao encontrar linha consumida. Ex.: "ALLUCK" não vaza mais para "DEB PIX CHAVE - ANDERSON BRAGA DA SILVA". Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3511** — **CONCILIAÇÃO · SHEET DE DETALHE AO DUPLO-CLIQUE/DUPLO-TOQUE EM AMBAS AS LISTAS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Duplo-clique em extrato → Sheet lateral (valor, saldo, descrição completa, cheque/fatura/IA/vínculo, ações Lançar/Apagar). Duplo-clique no ERP → abre dialog detalhe existente (👁). Detalhe: `shared/changelog.ts`.
 

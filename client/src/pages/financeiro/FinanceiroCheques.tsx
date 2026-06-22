@@ -299,7 +299,7 @@ export default function FinanceiroCheques() {
     const seen = new Set<string>();
     const out: SearchableSelectOption[] = [];
     for (const f of list) {
-      const nome = String(f.razaoSocial || f.nomeFantasia || "").trim();
+      const nome = String(f.nomeFantasia || f.razaoSocial || "").trim();
       if (!nome) continue;
       const k = String(f.id);
       if (seen.has(k)) continue;

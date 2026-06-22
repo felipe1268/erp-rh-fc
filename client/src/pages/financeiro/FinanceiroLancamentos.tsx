@@ -608,7 +608,7 @@ export default function FinanceiroLancamentos() {
     const seen = new Set<string>();
     const out: any[] = [];
     for (const f of list) {
-      const nome = String(f.razaoSocial || f.nomeFantasia || "").trim();
+      const nome = String(f.nomeFantasia || f.razaoSocial || "").trim();
       if (!nome) continue;
       const k = nome.toLowerCase();
       if (seen.has(k)) continue;
