@@ -1,6 +1,13 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3521 — **OBRAS · NOVO TIPO DE CONTRATO "APENAS PROJETO". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Adicionado `{ value: "projeto", label: "Apenas Projeto", color: "bg-green-100 text-green-800",
+ * desc: "Somente elaboração e entrega de projeto" }` ao array `TIPO_CONTRATO_OPTIONS` em `Obras.tsx`.
+ * A badge, o chip de seleção no formulário Nova Obra e o badge na listagem são gerados
+ * dinamicamente — nenhuma outra alteração necessária. Schema: `varchar(30)` sem enum,
+ * aceita o valor "projeto" sem ALTER TABLE.
+ *
  * Rev. 3520 — **CONCILIAÇÃO · SELEÇÃO MÚLTIPLA EM "JÁ CONCILIADOS" PARA DESFAZER EM LOTE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Checkbox em cada linha da seção "Já conciliados" + checkbox "Selecionar todos"
  * (visíveis no filtro ativo) no header. Ao selecionar ≥1 item aparece botão âmbar

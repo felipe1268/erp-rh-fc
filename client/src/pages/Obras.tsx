@@ -85,6 +85,7 @@ const TIPO_CONTRATO_OPTIONS = [
   { value: "global", label: "Empreitada Global", color: "bg-blue-100 text-blue-800", desc: "MDO + Material + Equipamentos" },
   { value: "mdo", label: "Fornecimento de MDO", color: "bg-amber-100 text-amber-800", desc: "MDO + Gerenciamento de Material (% sobre compras)" },
   { value: "adm", label: "ADM Geral", color: "bg-purple-100 text-purple-800", desc: "% sobre tudo que foi gasto na obra" },
+  { value: "projeto", label: "Apenas Projeto", color: "bg-green-100 text-green-800", desc: "Somente elaboração e entrega de projeto" },
 ];
 
 const emptyForm: ObraForm = {

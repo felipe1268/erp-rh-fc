@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3521** — **OBRAS · NOVO TIPO DE CONTRATO "APENAS PROJETO". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** 4ª opção verde no chip "Tipo de Contrato" do formulário Nova Obra. Schema `varchar(30)` aceita o valor "projeto" sem ALTER TABLE. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3520** — **CONCILIAÇÃO · SELEÇÃO MÚLTIPLA EM "JÁ CONCILIADOS" PARA DESFAZER EM LOTE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Checkbox por linha + "Selecionar todos" no header; botão âmbar "Desfazer N selecionado(s)"; AlertDialog de confirmação; execução sequencial silenciosa com toast final. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3519** — **FORNECEDORES · BUGFIX LAYOUT MODAL — BOTÃO "SALVAR ALTERAÇÕES" CORTADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `DialogContent` → `flex flex-col`; corpo scroll `flex-1`; footer `shrink-0` fora do scroll. Botão sempre visível independente do conteúdo. Detalhe: `shared/changelog.ts`.
@@ -61,8 +63,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3509** — **CONCILIAÇÃO · BUGFIX MOVIMENTAÇÃO INTERNA: ITEM PERMANECIA NA LISTA APÓS CONFIRMAR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `onSuccess` agora adiciona `lineId` ao `dismissedStmtIds` + chama `refetchReport()`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3508** — **PLANO DE CONTAS · COLAPSO/EXPANSÃO TODOS OS NÍVEIS + FECHAR/EXPANDIR TUDO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Botões "Fechar tudo"/"Expandir tudo" no header; chevron em qualquer nível com filhos; visual recolhido=destaque cinza. Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3507** — **PLANO DE CONTAS · COLAPSO/EXPANSÃO DE GRUPOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Chevron clicável em toda conta com filhos; `collapsedIds` + `visibleFiltered`; busca ativa suspende o colapso. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3506** — **CONCILIAÇÃO · LAYOUT HEADERS SEM SOBREPOSIÇÃO (2 LINHAS). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Título em linha 1 (full-width); filtros+ações em linha 2 (justify-between). Resolve sobreposição no mobile/tablet nos cards "No extrato" e "No ERP". Detalhe: `shared/changelog.ts`.
 
